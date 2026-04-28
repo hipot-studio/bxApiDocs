@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Calendar\Synchronization\Public\Command\Push;
 
+use Bitrix\Calendar\Synchronization\Internal\Exception\PushException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Messenger\Queue;
 use Bitrix\Calendar\Synchronization\Internal\Repository\PushRepository;
 use Bitrix\Calendar\Synchronization\Internal\Service\Push\PushProcessorInterface;
@@ -23,14 +24,11 @@ class HandlePushCommandHandler
 	}
 
 	/**
-	 * @param HandlePushCommand $command
-	 *
-	 * @return void
-	 *
 	 * @throws ArgumentException
 	 * @throws ObjectException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
+	 * @throws PushException
 	 */
 	public function __invoke(HandlePushCommand $command): void
 	{

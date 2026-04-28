@@ -9,5 +9,5 @@ enum DepthLevel
 	case NONE;
 	case FIRST;
 	case FULL;
-	case  WITHOUT_PARENT;
+	case WITHOUT_PARENT;
 }

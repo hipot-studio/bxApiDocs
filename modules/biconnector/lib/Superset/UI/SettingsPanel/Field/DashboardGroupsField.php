@@ -35,6 +35,7 @@ final class DashboardGroupsField extends EntityEditorField
 		}
 
 		$paramList = UrlParameter\ScopeMap::getParamList();
+		$requiredParamList = UrlParameter\ScopeMap::getRequiredParamList();
 
 		if (!$ormDashboard->isGroupsFilled())
 		{
@@ -46,6 +47,7 @@ final class DashboardGroupsField extends EntityEditorField
 			'SCOPE' => $scope,
 			'PARAMS' => $arrayParams,
 			'PARAM_LIST' => $paramList,
+			'REQUIRED_PARAM_LIST' => $requiredParamList,
 			'IS_ALLOWED_CLEAR_GROUPS' => AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS),
 		];
 	}

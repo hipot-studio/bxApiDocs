@@ -692,11 +692,16 @@ abstract class BaseComponent extends Crm\Component\Base
 
 			if (isset($options['startWorkFlows']) && $options['startWorkFlows'])
 			{
-				\CCrmBizProcHelper::AutoStartWorkflows(
-					$entityTypeID,
-					$entityID,
-					\CCrmBizProcEventType::Create,
-					$errors
+				$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+					new Crm\Integration\BizProc\Starter\Dto\DocumentDto($entityTypeID, (int)$entityID)
+				);
+				$starter->runProcess(
+					new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+						actualFields: $fields,
+						previousFields: [],
+						userId: (int)$currentUserId,
+					),
+					\CCrmBizProcEventType::Create
 				);
 			}
 		}
@@ -939,11 +944,16 @@ abstract class BaseComponent extends Crm\Component\Base
 
 			if (isset($options['startWorkFlows']) && $options['startWorkFlows'])
 			{
-				\CCrmBizProcHelper::AutoStartWorkflows(
-					$entityTypeID,
-					$entityID,
-					\CCrmBizProcEventType::Edit,
-					$errors
+				$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+					new Crm\Integration\BizProc\Starter\Dto\DocumentDto($entityTypeID, $entityID)
+				);
+				$starter->runProcess(
+					new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+						actualFields: $fields,
+						previousFields: $presentFields,
+						userId: (int)$currentUserId,
+					),
+					\CCrmBizProcEventType::Edit
 				);
 			}
 		}

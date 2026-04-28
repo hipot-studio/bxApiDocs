@@ -53,6 +53,11 @@ class AutoTaskStatus extends BaseEvent
 		return [$this->message->getAuthorId()];
 	}
 
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
+	}
+
 	public function getTarget(): ?Chat
 	{
 		return null;

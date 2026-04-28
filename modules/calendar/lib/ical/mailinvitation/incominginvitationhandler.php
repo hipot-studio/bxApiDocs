@@ -4,6 +4,7 @@
 namespace Bitrix\Calendar\ICal\MailInvitation;
 
 
+use Bitrix\Calendar\ICal\Basic\ICalUtil;
 use Bitrix\Calendar\ICal\Builder\Attendee;
 use Bitrix\Calendar\ICal\Builder\AttendeesCollection;
 
@@ -48,6 +49,13 @@ abstract class IncomingInvitationHandler
 		}
 
 		return $attendeesCollection;
+	}
+
+	protected function isPortalEvent(array $localEvent): bool
+	{
+		$meetingHost = (int)($localEvent['MEETING_HOST'] ?? 0);
+
+		return $meetingHost > 0 && !ICalUtil::isMailUser($meetingHost);
 	}
 
 	/**

@@ -999,7 +999,7 @@ class CUser extends CDBResult
 		return implode(",", $this->GetUserGroupArray());
 	}
 
-	public static function GetSubordinateGroups(int $userID = null): array
+	public static function GetSubordinateGroups(?int $userID = null): array
 	{
 		global $USER;
 
@@ -2402,12 +2402,14 @@ class CUser extends CDBResult
 			}
 		}
 
+		$captchaChecked = false;
 		if (Option::get('main', 'captcha_restoring_password', 'N') == 'Y')
 		{
 			if (!($APPLICATION->CaptchaCheckCode($captcha_word, $captcha_sid)))
 			{
 				return ["MESSAGE" => GetMessage("main_user_captcha_error") . "<br>", "TYPE" => "ERROR"];
 			}
+			$captchaChecked = true;
 		}
 
 		$phoneAuth = ($arParams["PHONE_NUMBER"] != '' && Option::get('main', 'new_user_phone_auth', 'N') == 'Y');
@@ -2503,7 +2505,7 @@ class CUser extends CDBResult
 				if ($policyLoginAttempts > 0 && $loginAttempts > $policyLoginAttempts)
 				{
 					$APPLICATION->SetNeedCAPTHA(true);
-					if (!$APPLICATION->CaptchaCheckCode($captcha_word, $captcha_sid))
+					if (!$captchaChecked && !$APPLICATION->CaptchaCheckCode($captcha_word, $captcha_sid))
 					{
 						return ["MESSAGE" => GetMessage("main_user_captcha_error") . "<br>", "TYPE" => "ERROR"];
 					}
@@ -6089,7 +6091,7 @@ class CUser extends CDBResult
 		return $this->context;
 	}
 
-	protected static function clearTagCache(int $ID, bool $realUser, array $fields = null)
+	protected static function clearTagCache(int $ID, bool $realUser, ?array $fields = null)
 	{
 		global $CACHE_MANAGER;
 

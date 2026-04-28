@@ -18,9 +18,7 @@ trait ClientTrait
 			$clientCollections[] = $entity->getClientCollection();
 		}
 
-		Container::getProviderManager()::getCurrentProvider()
-			?->getClientProvider()
-			?->loadClientDataForCollection(...$clientCollections);
+		Container::getCrmClientDataLoader()->loadDataForCollection(...$clientCollections);
 
 		return $this;
 	}

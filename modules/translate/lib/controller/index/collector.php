@@ -3,7 +3,9 @@ namespace Bitrix\Translate\Controller\Index;
 
 use Bitrix\Translate;
 
-
+/**
+ * @internal
+ */
 class Collector extends Translate\Controller\Controller
 {
 	const SETTING_ID = 'TRANSLATE_INDEX';

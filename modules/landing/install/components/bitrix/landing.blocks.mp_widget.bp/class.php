@@ -1,7 +1,7 @@
 <?php
 
-use Bitrix\Landing\Mainpage;
 use Bitrix\Iblock\ElementTable;
+use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Lists\Api\Request\ServiceFactory\GetAverageIBlockTemplateDurationRequest;
 use Bitrix\Lists\Api\Service\ServiceFactory\ServiceFactory;
 use Bitrix\Main\Config\Option;
@@ -56,7 +56,7 @@ class LandingBlocksMainpageWidgetBP extends LandingBlocksMainpageWidgetBase
 	protected function getData(): void
 	{
 		$this->arResult['SHOW_EMPTY_STATE'] = false;
-		if (Mainpage\Manager::isUseDemoData())
+		if (Vibe::isUseDemoData())
 		{
 			$data = $this->getDemoData();
 		}

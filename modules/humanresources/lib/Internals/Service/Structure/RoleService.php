@@ -8,7 +8,7 @@ use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Service\Container;
 
 /**
- * Public Role service
+ * Internal Role service
  */
 class RoleService
 {
@@ -31,5 +31,47 @@ class RoleService
 		}
 
 		return $roleHelperService->getById($headId);
+	}
+
+	/**
+	 * Return deputy role object depending on node type.
+	 */
+	public function getDeputyRoleByNodeType(NodeEntityType $nodeType): ?Item\Role
+	{
+		$roleHelperService = Container::getRoleHelperService();
+
+		$deputyId = match ($nodeType) {
+			NodeEntityType::DEPARTMENT => $roleHelperService->getDeputyRoleId(),
+			NodeEntityType::TEAM => $roleHelperService->getTeamDeputyRoleId(),
+			default => null,
+		};
+
+		if (!$deputyId)
+		{
+			return null;
+		}
+
+		return $roleHelperService->getById($deputyId);
+	}
+
+	/**
+	 * Return employee role object depending on node type.
+	 */
+	public function getEmployeeRoleByNodeType(NodeEntityType $nodeType): ?Item\Role
+	{
+		$roleHelperService = Container::getRoleHelperService();
+
+		$employeeId = match ($nodeType) {
+			NodeEntityType::DEPARTMENT => $roleHelperService->getEmployeeRoleId(),
+			NodeEntityType::TEAM => $roleHelperService->getTeamEmployeeRoleId(),
+			default => null,
+		};
+
+		if (!$employeeId)
+		{
+			return null;
+		}
+
+		return $roleHelperService->getById($employeeId);
 	}
 }

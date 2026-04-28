@@ -22,6 +22,7 @@ final class Dictionary
 	public const CATEGORY_BANNERS = 'banners';
 	public const CATEGORY_SYSTEM_INFORM = 'system_inform';
 	public const CATEGORY_FUNNELS = 'funnels';
+	public const CATEGORY_IMPORT_OPERATIONS = 'import_operations';
 
 	// region Event const
 	public const EVENT_ENTITY_ADD_OPEN = 'entity_add_open';
@@ -64,6 +65,11 @@ final class Dictionary
 	public const EVENT_WA_CONNECT = 'wa_connect';
 	public const EVENT_WA_TIMELINE = 'wa_timeline';
 	public const EVENT_WA_DELETE = 'wa_delete';
+
+	public const EVENT_IMPORT_VIEW = 'view';
+	public const EVENT_IMPORT_EDIT = 'edit';
+	public const EVENT_IMPORT_CREATE = 'create';
+	public const EVENT_IMPORT_CANCEL = 'cancel';
 	// endregion
 
 	// region Type const
@@ -179,6 +185,7 @@ final class Dictionary
 	public const ELEMENT_WA_NOTE = 'wa_note';
 	public const ELEMENT_WA_NOTE_DELETE = 'wa_note_delete';
 	public const ELEMENT_WA_MESSAGE_DELETE = 'wa_message_delete';
+	public const ELEMENT_MIGRATION_BUTTON = 'migration_button';
 	// endregion
 
 	// region Status const

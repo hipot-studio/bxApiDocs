@@ -153,6 +153,9 @@ class WebFormScenarioService
 			case BaseScenario::SCENARIO_BOOKING_AUTO_SELECTION:
 			case BaseScenario::SCENARIO_BOOKING_ANY_RESOURCE:
 			case BaseScenario::SCENARIO_BOOKING_MANUAL_SETTINGS:
+			case BaseScenario::SCENARIO_BOOKING_AUTO_SELECTION_SERVICES:
+			case BaseScenario::SCENARIO_BOOKING_ANY_RESOURCE_SERVICES:
+			case BaseScenario::SCENARIO_BOOKING_MANUAL_SETTINGS_SERVICES:
 				return $this->prepareBookingScenario($baseScenario);
 			case BaseScenario::SCENARIO_CALLBACK:
 				return $this->prepareCallbackScenario($baseScenario);
@@ -337,7 +340,14 @@ class WebFormScenarioService
 	{
 		$scenarioOptionBuilder = (new ScenarioOptionBuilder())
 			->addAgreements(true)
-			->useBookingResourceAutoSelection($baseScenario->getId() === BaseScenario::SCENARIO_BOOKING_AUTO_SELECTION)
+			->useBookingResourceAutoSelection(in_array(
+				$baseScenario->getId(),
+				[
+					BaseScenario::SCENARIO_BOOKING_AUTO_SELECTION,
+					BaseScenario::SCENARIO_BOOKING_AUTO_SELECTION_SERVICES,
+				],
+				true,
+			))
 			->addCaptcha(true)
 			->setButtonCaption(Loc::getMessage('CRM_SERVICE_FORM_SCENARIO_BOOKING_BUTTON'))
 			->addRecaptcha()
@@ -390,7 +400,8 @@ class WebFormScenarioService
 
 		$this->prepareDealAndResponsibilitiesConfiguration($scenarioOptionBuilder);
 
-		return $baseScenario->setCategory(ScenarioCategory::BOOKING)
+		return $baseScenario
+			->setCategory(ScenarioCategory::BOOKING)
 			->setExpertModeMenuItems($this->getExpertModeDefaultItems())
 			->prepareBuilder($scenarioOptionBuilder)
 		;

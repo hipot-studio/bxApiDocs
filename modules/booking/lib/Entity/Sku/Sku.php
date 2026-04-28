@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Entity\Sku;
 
 use Bitrix\Booking\Entity\EntityInterface;
+use Bitrix\Main\Loader;
 
 class Sku implements EntityInterface
 {
@@ -63,6 +64,23 @@ class Sku implements EntityInterface
 		return $this;
 	}
 
+	public function getCurrencyFormatString(): string|null
+	{
+		if (!$this->currencyId)
+		{
+			return null;
+		}
+
+		if (!Loader::includeModule('crm'))
+		{
+			return null;
+		}
+
+		$format = \CCrmCurrency::GetCurrencyFormatParams('RUB');
+
+		return $format['FORMAT_STRING'] ?? null;
+	}
+
 	public function getPermissions(): array
 	{
 		return $this->permissions;
@@ -82,6 +100,7 @@ class Sku implements EntityInterface
 			'name' => $this->name,
 			'price' => $this->price,
 			'currencyId' => $this->currencyId,
+			'currencyFormat' => $this->getCurrencyFormatString(),
 			'permissions' => $this->permissions,
 		];
 	}
@@ -94,6 +113,6 @@ class Sku implements EntityInterface
 			->setPrice($props['price'] ?? null)
 			->setCurrencyId($props['currencyId'] ?? null)
 			->setPermissions($props['permissions'] ?? [])
-		;
+			;
 	}
 }

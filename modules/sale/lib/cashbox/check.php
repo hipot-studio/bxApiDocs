@@ -3,15 +3,16 @@
 namespace Bitrix\Sale\Cashbox;
 
 use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Sale\BasketItem;
 use Bitrix\Sale\Cashbox\Internals\CheckRelatedEntitiesTable;
 use Bitrix\Sale\Order;
 use Bitrix\Sale\PayableBasketItem;
 use Bitrix\Sale\Payment;
-use Bitrix\Sale\PriceMaths;
 use Bitrix\Sale\Registry;
 use Bitrix\Sale\Result;
 use Bitrix\Sale\Helpers\Admin;
+use Bitrix\Sale\Public\Dto\BasketItemCalculationInput;
 use Bitrix\Sale\Shipment;
 use Bitrix\Sale\ShipmentItem;
 
@@ -444,7 +445,14 @@ abstract class Check extends AbstractCheck
 
 					$item = $this->extractDataFromBasketItem($basketItem);
 
-					$item['SUM'] = PriceMaths::roundPrecision($basketItem->getPriceWithVat() * $payableItem->getQuantity());
+					$basketCalculator = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+					$basketCalculationInput = new BasketItemCalculationInput(
+						basePrice: $basketItem->getPriceWithVat(),
+						quantity: $payableItem->getQuantity(),
+						vatRate: (float)$basketItem->getVatRate() * 100,
+						vatIncluded: true,
+					);
+					$item['SUM'] = $basketCalculator->calculate($basketCalculationInput)->totalCalculation->totalPrice;
 					$item['QUANTITY'] = (float)$payableItem->getQuantity();
 
 					$result['PRODUCTS'][] = $item;
@@ -508,8 +516,15 @@ abstract class Check extends AbstractCheck
 					}
 					else
 					{
-						$item['SUM'] = PriceMaths::roundPrecision($basketItem->getPriceWithVat() * $shipmentItem->getQuantity());
-						$item['QUANTITY'] = (float)$shipmentItem->getQuantity();
+					$shipCalc = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+					$shipCalcInput = new BasketItemCalculationInput(
+						basePrice: $basketItem->getPriceWithVat(),
+						quantity: $shipmentItem->getQuantity(),
+						vatRate: (float)$basketItem->getVatRate() * 100,
+						vatIncluded: true,
+					);
+					$item['SUM'] = $shipCalc->calculate($shipCalcInput)->totalCalculation->totalPrice;
+					$item['QUANTITY'] = (float)$shipmentItem->getQuantity();
 
 						$shipmentItemStoreCollection = $shipmentItem->getShipmentItemStoreCollection();
 						if (isset($shipmentItemStoreCollection[0]))

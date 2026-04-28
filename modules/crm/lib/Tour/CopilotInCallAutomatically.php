@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Tour;
 
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\BaasManager;
 use Bitrix\Main\Localization\Loc;
 
 final class CopilotInCallAutomatically extends CopilotInCall
@@ -57,7 +58,7 @@ final class CopilotInCallAutomatically extends CopilotInCall
 	{
 		return parent::isShowEnabled()
 			&& AIManager::isAiCallAutomaticProcessingAllowed()
-			&& AIManager::isBaasServiceHasPackage()
+			&& BaasManager::hasPackage()
 		;
 	}
 }

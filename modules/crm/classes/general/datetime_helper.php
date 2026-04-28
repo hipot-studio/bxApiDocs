@@ -149,7 +149,7 @@ class CCrmDateTimeHelper
 		return Main\Application::getConnection()->getSqlHelper()->convertToDb($date, new DatetimeField('D'));
 	}
 
-	private static function getUserTimezoneOffset(int $userId = null): int
+	private static function getUserTimezoneOffset(?int $userId = null, ?DateTime $now = null): int
 	{
 		static $offsets = [];
 
@@ -159,9 +159,19 @@ class CCrmDateTimeHelper
 			$userId = $currentUser;
 		}
 
+		$offsetUserId = ($currentUser === $userId ? null : $userId); // must be null for current user
+
+		if (!is_null($now)) // can't cache offsets for different dates
+		{
+			return ($userId > 0
+				? CTimeZone::GetOffset($offsetUserId, false, $now)
+				: 0
+			);
+		}
+
 		if (!isset($offsets[$userId]))
 		{
-			$offsets[$userId] = (int)($userId > 0 ? CTimeZone::GetOffset($currentUser === $userId ? null : $userId) : 0);
+			$offsets[$userId] = ($userId > 0 ? CTimeZone::GetOffset($offsetUserId) : 0);
 		}
 
 		return $offsets[$userId] ?: 0;
@@ -179,8 +189,8 @@ class CCrmDateTimeHelper
 	public static function getUserTime(DateTime $serverTime, int $userId = null, bool $isForced = false): DateTime
 	{
 		$offset = $isForced
-			? CTimeZone::GetOffset($userId, true)
-			: self::getUserTimezoneOffset($userId);
+			? CTimeZone::GetOffset($userId, true, $serverTime)
+			: self::getUserTimezoneOffset($userId, $serverTime);
 
 		$time = clone $serverTime;
 		if ($offset)
@@ -281,5 +291,55 @@ class CCrmDateTimeHelper
 		}
 
 		return 4;
+	}
+
+	/**
+	 * Creates DateTime object from string in user timezone with datetime context
+	 * Similar to \Bitrix\Main\Type\DateTime::createFromUserTime but can be used with arbitrary user
+	 *
+	 * @param string $dateTime
+	 * @param int $userId
+	 * @return DateTime|null
+	 */
+	public static function createFromUserTime(string $dateTime, int $userId): DateTime
+	{
+		if ($userId === Container::getInstance()->getContext()->getUserId())
+		{
+			return DateTime::createFromUserTime($dateTime);
+		}
+
+		$dateTimeObject = new DateTime($dateTime);
+		$timeOffset = self::getUserTimezoneOffset($userId, $dateTimeObject);
+
+		if (!$timeOffset)
+		{
+			return $dateTimeObject;
+		}
+
+		return $dateTimeObject->add(($timeOffset > 0 ? '-' : '') . 'PT' . abs($timeOffset) . 'S');
+	}
+
+	public static function getCurrentUserTimezone(): string
+	{
+		global $USER;
+		if (!is_object($USER))
+		{
+			return '';
+		}
+
+		$timeZone = (string)$USER->GetParam('TIME_ZONE');
+		if (empty($timeZone))
+		{
+			if (\CTimeZone::IsAutoTimeZone($USER->GetParam('AUTO_TIME_ZONE')))
+			{
+				if (($cookie = \CTimeZone::getTzCookie()) !== null)
+				{
+					// auto time zone from the cookie
+					$timeZone = $cookie;
+				}
+			}
+		}
+
+		return $timeZone;
 	}
 }

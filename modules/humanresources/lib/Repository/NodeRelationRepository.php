@@ -20,10 +20,9 @@ use Bitrix\HumanResources\Type\RelationEntityType;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\HumanResources\Contract;
 use InvalidArgumentException;
 
-class NodeRelationRepository implements Contract\Repository\NodeRelationRepository
+class NodeRelationRepository
 {
 	private readonly EventSenderService $eventSenderService;
 	private readonly NodeRepository $nodeRepository;

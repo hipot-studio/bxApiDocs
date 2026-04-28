@@ -383,6 +383,11 @@ class Config
 			$fields["CHECK_AVAILABLE"] = 'N';
 		}
 
+		if (isset($params['SHOW_NOTIFICATION_REDIRECT']))
+		{
+			$fields['SHOW_NOTIFICATION_REDIRECT'] = $params['SHOW_NOTIFICATION_REDIRECT'] === 'Y' ? 'Y' : 'N';
+		}
+
 		if (isset($params['WATCH_TYPING']))
 		{
 			$fields['WATCH_TYPING'] = $params['WATCH_TYPING'] == 'Y'? 'Y': 'N';

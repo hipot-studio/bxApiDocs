@@ -15,7 +15,7 @@ class DepartmentChangeParentTool extends NodeChangeParentTool
 
 	public function getName(): string
 	{
-		return 'change_parent';
+		return 'department_change_parent';
 	}
 
 	public function getDescription(): string

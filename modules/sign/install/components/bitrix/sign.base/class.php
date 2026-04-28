@@ -8,14 +8,17 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
 use Bitrix\Sign;
+use Bitrix\Sign\Trait\Components\NotAvailableStubTrait;
 
 Loc::loadMessages(__FILE__);
 
+\Bitrix\Main\Loader::includeModule('sign');
 \CBitrixComponent::includeComponentClass('bitrix:sign.ui');
 
 abstract class SignBaseComponent extends \CBitrixComponent
 {
 	use SignUiComponent;
+	use NotAvailableStubTrait;
 
 	/**
 	 * Required params of component.
@@ -383,6 +386,8 @@ abstract class SignBaseComponent extends \CBitrixComponent
 
 		$return = true;
 
+		$this->setDefaultTitle();
+
 		if (!Main\Loader::includeModule($this->baseModuleName))
 		{
 			showError(Loc::getMessage('SIGN_CMP_BASE_ERROR_MODULE_SIGN_NOT_INSTALLED', [
@@ -401,11 +406,7 @@ abstract class SignBaseComponent extends \CBitrixComponent
 
 		if ($return && !Sign\Config\Storage::instance()->isAvailable())
 		{
-			$this->setParam('PAGE_TITLE', Loc::getMessage('SIGN_CMP_BASE_HIDDEN_PAGE'));
-			$this->setParam('PAGE_URL_DOCUMENT', null);
-			$this->setParam('PAGE_URL_B2E_DOCUMENT', null);
-			$this->setParam('PAGE_URL_EDIT', null);
-			$this->includeComponentTemplate('not-available', $this->getPath() . '/../sign.base/templates/.default');
+			$this->includeNotAvailableTemplate();
 			$return = false;
 		}
 
@@ -490,10 +491,9 @@ abstract class SignBaseComponent extends \CBitrixComponent
 
 		if ($accessDenied)
 		{
-			$this->addError(
-				'ACCESS_RESTRICTED',
-				Loc::getMessage('SIGN_CMP_BASE_ERROR_ACCESS_DENIED')
-			);
+			$this->includeAccessDeniedTemplate();
+
+			return false;
 		}
 
 		return !$accessDenied;
@@ -512,5 +512,30 @@ abstract class SignBaseComponent extends \CBitrixComponent
 		$this->accessController ??= new Sign\Access\AccessController(CurrentUser::get()->getId());
 
 		return $this->accessController;
+	}
+
+	protected function includeAccessDeniedTemplate(): void
+	{
+		$this->clearPageUrlParams();
+		$this->renderNotAvailableStub(stubType: self::STUB_TYPE_NO_ACCESS);
+	}
+
+	protected function includeNotAvailableTemplate(): void
+	{
+		$this->clearPageUrlParams();
+		$this->renderNotAvailableStub();
+	}
+	
+	private function clearPageUrlParams(): void
+	{
+		$this->setParam('PAGE_URL_DOCUMENT', null);
+		$this->setParam('PAGE_URL_B2E_DOCUMENT', null);
+		$this->setParam('PAGE_URL_EDIT', null);
+	}
+
+	private function setDefaultTitle(): void
+	{
+		global $APPLICATION;
+		$APPLICATION->SetTitle(Loc::getMessage('SIGN_CMP_DEFAULT_PAGE_TITLE'));
 	}
 }

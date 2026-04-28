@@ -122,11 +122,6 @@ final class ScreeningRepeatSaleItem extends AbstractOperation
 		// operation is not used in the timeline
 	}
 
-	protected static function notifyAboutLimitExceededError(Result $result): void
-	{
-		// not implemented yet
-	}
-
 	protected static function extractPayloadFromAIResult(\Bitrix\AI\Result $result, EO_Queue $job): Dto
 	{
 		$json = self::extractPayloadPrettifiedData($result);
@@ -199,20 +194,17 @@ final class ScreeningRepeatSaleItem extends AbstractOperation
 		}
 
 		$screeningItem->setCategory($payload->category);
-		$result = $screeningItem->save();
+		$screeningItem->save();
 
-		if ($payload->isRepeatSalePossible && $result->isSuccess())
+		$waitingItemsCount = RepeatSaleAiScreeningTable::query()
+			->where('DESIRED_CREATION_DATE', new Main\Type\Date())
+			->whereNull('AI_OPINION')
+			->queryCountTotal()
+		;
+
+		if ((int)$waitingItemsCount === 0)
 		{
-			$waitingItemsCount = RepeatSaleAiScreeningTable::query()
-				->where('DESIRED_CREATION_DATE', new Main\Type\Date())
-				->whereNull('AI_OPINION')
-				->queryCountTotal()
-			;
-
-			if ((int)$waitingItemsCount === 0)
-			{
-				Scheduler::getInstance()->addChildrenJobsToQueueIfNotExists($segmentId);
-			}
+			Scheduler::getInstance()->addChildrenJobsToQueueIfNotExists($segmentId);
 		}
 	}
 

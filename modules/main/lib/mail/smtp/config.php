@@ -59,7 +59,7 @@ class Config
 
 	protected ?CloudOAuthRefreshData $cloudOAuthRefreshData = null;
 
-	public function __construct(array $params = null)
+	public function __construct(?array $params = null)
 	{
 		if (!empty($params))
 		{
@@ -178,7 +178,7 @@ class Config
 		return Main\Loader::includeModule('mail') && class_exists('Bitrix\Mail\Smtp');
 	}
 
-	public function check(&$error = null, Main\ErrorCollection &$errors = null)
+	public function check(&$error = null, ?Main\ErrorCollection &$errors = null)
 	{
 		$error = null;
 		$errors = null;

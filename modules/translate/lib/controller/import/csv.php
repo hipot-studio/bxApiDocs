@@ -6,7 +6,9 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Translate;
 
-
+/**
+ * @internal
+ */
 class Csv
 	extends Translate\Controller\Controller
 	implements Translate\Controller\IProcessParameters

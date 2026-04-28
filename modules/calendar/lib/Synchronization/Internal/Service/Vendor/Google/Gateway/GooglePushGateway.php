@@ -8,7 +8,6 @@ use Bitrix\Calendar\Sync\Connection\Connection;
 use Bitrix\Calendar\Synchronization\Internal\Entity\Push\Push;
 use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
 use Bitrix\Calendar\Synchronization\Internal\Exception\ApiException;
-use Bitrix\Calendar\Synchronization\Internal\Exception\Exception;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitExceededException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
@@ -29,7 +28,6 @@ class GooglePushGateway extends AbstractGoogleGateway
 	 * @return PushResponse|null
 	 *
 	 * @throws ApiException
-	 * @throws Exception
 	 * @throws DtoValidationException
 	 * @throws NotAuthorizedException
 	 * @throws NoResponseException
@@ -46,13 +44,13 @@ class GooglePushGateway extends AbstractGoogleGateway
 		$requestData = new PushCreateRequest(
 			$sectionConnection->getId(),
 			ChannelType::SectionConnection,
-			$sectionConnection->getSection()?->getOwner()->getId()
+			$sectionConnection->getSection()?->getOwner()->getId(),
 		);
 
 		$this->request(
 			HttpClient::HTTP_POST,
 			self::BASE_PATH . sprintf('/calendars/%s/events/watch', urlencode($sectionConnection->getVendorSectionId())),
-			Json::encode($requestData, JSON_UNESCAPED_SLASHES) // @todo Change to $this->encode
+			Json::encode($requestData, JSON_UNESCAPED_SLASHES), // @todo Change to $this->encode
 		);
 
 		if ($this->isRequestSuccess())
@@ -71,7 +69,6 @@ class GooglePushGateway extends AbstractGoogleGateway
 	 * @throws ApiException
 	 * @throws ArgumentException
 	 * @throws DtoValidationException
-	 * @throws Exception
 	 * @throws NoResponseException
 	 * @throws NotAuthorizedException
 	 * @throws RateLimitExceededException
@@ -81,13 +78,13 @@ class GooglePushGateway extends AbstractGoogleGateway
 		$requestData = new PushCreateRequest(
 			$connection->getName(),
 			ChannelType::Connection,
-			$connection->getOwner()->getId()
+			$connection->getOwner()->getId(),
 		);
 
 		$this->request(
 			HttpClient::HTTP_POST,
 			self::BASE_PATH . '/users/me/calendarList/watch',
-			Json::encode($requestData, JSON_UNESCAPED_SLASHES) // @todo Change to $this->encode
+			Json::encode($requestData, JSON_UNESCAPED_SLASHES), // @todo Change to $this->encode
 		);
 
 		if ($this->isRequestSuccess())

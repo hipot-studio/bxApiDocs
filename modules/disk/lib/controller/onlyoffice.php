@@ -4,12 +4,10 @@ namespace Bitrix\Disk\Controller;
 
 use Bitrix\Disk;
 use Bitrix\Disk\Document;
-use Bitrix\Disk\Document\OnlyOffice\BlankFileData;
 use Bitrix\Disk\Document\Models;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internals\Engine;
-use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\User;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
@@ -17,7 +15,6 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
-use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\ActionFilter\ContentType;
 use Bitrix\Main\Engine\ActionFilter\Csrf;
 use Bitrix\Main\Engine\ActionFilter\HttpMethod;
@@ -28,13 +25,9 @@ use Bitrix\Main\Engine\Router;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\HttpResponse;
-use Bitrix\Main\Loader;
-use Bitrix\Main\Security\Cipher;
-use Bitrix\Main\Security\SecurityException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\MimeType;
 use Bitrix\Ui;
 
@@ -467,12 +460,28 @@ final class OnlyOffice extends Engine\Controller
 		Application::getInstance()->addBackgroundJob(function () use ($status, $documentSession){
 			$this->processStatusToInfoModel($documentSession, $status);
 		});
-		$this->logUsageMetrics($documentSession, $payloadData);
+
+		$userDocumentSessions = [];
+
+		$userIdsForSessions = array_map(
+			callback: fn(array $action) => (int)($action['userid'] ?? null),
+			array: $payloadData['actions'] ?? [],
+		);
+
+		if (!empty($userIdsForSessions))
+		{
+			$userDocumentSessions = $this->getDocumentSessionsByKeyForUsers(
+				documentSessionHash: $documentSession->getExternalHash(),
+				userIds: $userIdsForSessions,
+			);
+		}
+
+		$this->logUsageMetrics($documentSession, $payloadData, $userDocumentSessions);
 
 		switch ($status)
 		{
 			case self::STATUS_IS_BEING_EDITED:
-				$this->handleDocumentIsEditing($documentSession, $payloadData);
+				$this->handleDocumentIsEditing($documentSession, $payloadData, $userDocumentSessions);
 				break;
 
 			case self::STATUS_IS_READY_FOR_SAVE:
@@ -485,7 +494,7 @@ final class OnlyOffice extends Engine\Controller
 				break;
 
 			case self::STATUS_CLOSE_WITHOUT_CHANGES:
-				$this->handleDocumentClosedWithoutChanges($documentSession, $payloadData);
+				$this->handleDocumentClosedWithoutChanges($documentSession);
 				break;
 
 			case self::STATUS_FORCE_SAVE:
@@ -553,10 +562,7 @@ final class OnlyOffice extends Engine\Controller
 
 	}
 
-	protected function handleDocumentClosedWithoutChanges(
-		Models\DocumentSession $documentSession,
-		array $payloadData,
-	): void
+	protected function handleDocumentClosedWithoutChanges(Models\DocumentSession $documentSession): void
 	{
 		AddEventToStatFile(
 			'disk',
@@ -566,6 +572,8 @@ final class OnlyOffice extends Engine\Controller
 			'without_changes',
 			0
 		);
+
+		$this->sendSessionEndAnalyticsEvent($documentSession);
 
 		$this->deactivateDocumentSessions($documentSession->getExternalHash());
 		$documentInfo = $documentSession->getInfo();
@@ -578,25 +586,13 @@ final class OnlyOffice extends Engine\Controller
 		{
 			$this->commentAttachedObjectsOnBackground($documentSession);
 		}
-
-		$userId = $payloadData['actions'][0]['userid'] ?? null;
-		$userDocumentSession = null;
-
-		if (is_string($userId) || is_int($userId))
-		{
-			$userId = (int)$userId;
-			$userDocumentSession = $this->getDocumentSessionsByKeyForUser($documentSession->getExternalHash(), $userId);
-
-			if ($userDocumentSession instanceof DocumentSession)
-			{
-				$this->sendUserSessionEndAnalyticsEvent($userDocumentSession);
-			}
-		}
-
-		$this->sendSessionEndAnalyticsEvent($userDocumentSession ?? $documentSession);
 	}
 
-	protected function handleDocumentIsEditing(Models\DocumentSession $documentSession, array $payloadData): void
+	protected function handleDocumentIsEditing(
+		Models\DocumentSession $documentSession,
+		array $payloadData,
+		array $userDocumentSessions,
+	): void
 	{
 		if ($payloadData['status'] !== self::STATUS_IS_BEING_EDITED)
 		{
@@ -613,27 +609,12 @@ final class OnlyOffice extends Engine\Controller
 			$documentInfo->setUserCount(count($onlineUsers));
 		}
 
-		$userIds = [];
-		$actions = $payloadData['actions'] ?? [];
-		foreach ($actions as $action)
-		{
-			$userId = (int)($action['userid'] ?? null);
-			$userIds[] = $userId;
-		}
-
-		if (!$userIds)
-		{
-			return;
-		}
-
-		$sessions = $this->getDocumentSessionsByKeyForUsers($documentSession->getExternalHash(), $userIds);
-
 		$actions = $payloadData['actions'] ?? [];
 		foreach ($actions as $action)
 		{
 			$type = $action['type'] ?? null;
 			$userId = (int)($action['userid'] ?? null);
-			$userSession = $sessions[$userId] ?? null;
+			$userSession = $userDocumentSessions[$userId] ?? null;
 
 			if (!$userSession)
 			{
@@ -645,7 +626,6 @@ final class OnlyOffice extends Engine\Controller
 				if (!in_array($userId, $onlineUsers, true))
 				{
 					$userSession->setAsNonActive();
-					$this->sendUserSessionEndAnalyticsEvent($userSession);
 				}
 			}
 			elseif (($type === self::STATUS_IS_BEING_EDITED) && $userSession->isNonActive())
@@ -653,130 +633,6 @@ final class OnlyOffice extends Engine\Controller
 				$userSession->setAsActive();
 			}
 		}
-
-		if (
-			count($onlineUsers) === 1
-			&& ($actions[0]['type'] ?? null) === 1
-			&& ($actions[0]['userid'] ?? null) === $payloadData['users'][0]
-		)
-		{
-			$this->sendSessionStartAnalyticsEvent($documentSession);
-		}
-	}
-
-	protected function sendUserSessionEndAnalyticsEvent(DocumentSession $documentSession): void
-	{
-		Application::getInstance()->addBackgroundJob(function () use ($documentSession) {
-			$analyticsEvent = (new AnalyticsEvent(
-				event: 'user_session_end',
-				tool: 'docs',
-				category: 'docs',
-			))
-				->setUserId($documentSession->getUserId())
-				->setType($documentSession->isEdit() ? 'edit' : 'view')
-				->setP2("sessionHash_{$documentSession->getExternalHash()}")
-				->setP5("sessionId_{$documentSession->getId()}")
-			;
-
-			$domain = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getDomain();
-
-			if (is_string($domain))
-			{
-				$analyticsEvent->setSection($domain);
-			}
-
-			$file = $documentSession->getFile();
-
-			if ($file instanceof Disk\File)
-			{
-				$docType = Disk\Analytics\Enum\DocumentTypeEnum::getByExtension($file->getExtension());
-
-				if ($docType instanceof Disk\Analytics\Enum\DocumentTypeEnum)
-				{
-					$analyticsEvent->setP3($docType->value);
-				}
-
-				$analyticsEvent->setP4("fileId_{$file->getId()}");
-			}
-
-			$analyticsEvent->send();
-		});
-	}
-
-	protected function sendSessionStartAnalyticsEvent(DocumentSession $documentSession): void
-	{
-		Application::getInstance()->addBackgroundJob(function () use ($documentSession) {
-			$analyticsEvent = (new AnalyticsEvent(
-				event: 'session_start',
-				tool: 'docs',
-				category: 'docs',
-			))
-				->setUserId($documentSession->getUserId())
-				->setType($documentSession->isEdit() ? 'edit' : 'view')
-				->setP2("sessionHash_{$documentSession->getExternalHash()}")
-			;
-
-			$domain = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getDomain();
-
-			if (is_string($domain))
-			{
-				$analyticsEvent->setSection($domain);
-			}
-
-			$file = $documentSession->getFile();
-
-			if ($file instanceof Disk\File)
-			{
-				$docType = Disk\Analytics\Enum\DocumentTypeEnum::getByExtension($file->getExtension());
-
-				if ($docType instanceof Disk\Analytics\Enum\DocumentTypeEnum)
-				{
-					$analyticsEvent->setP3($docType->value);
-				}
-
-				$analyticsEvent->setP4("fileId_{$file->getId()}");
-			}
-
-			$analyticsEvent->send();
-		});
-	}
-
-	protected function sendSessionEndAnalyticsEvent(DocumentSession $documentSession): void
-	{
-		Application::getInstance()->addBackgroundJob(function () use ($documentSession) {
-			$analyticsEvent = (new AnalyticsEvent(
-				event: 'session_end',
-				tool: 'docs',
-				category: 'docs',
-			))
-				->setUserId($documentSession->getUserId())
-				->setType($documentSession->isEdit() ? 'edit' : 'view')
-				->setP2("sessionHash_{$documentSession->getExternalHash()}")
-			;
-
-			$domain = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getDomain();
-
-			if (is_string($domain))
-			{
-				$analyticsEvent->setSection($domain);
-			}
-
-			$file = $documentSession->getFile();
-
-			if ($file instanceof Disk\File)
-			{
-				$docType = Disk\Analytics\Enum\DocumentTypeEnum::getByExtension($file->getExtension());
-
-				if ($docType instanceof Disk\Analytics\Enum\DocumentTypeEnum)
-				{
-					$analyticsEvent->setP3($docType->value);
-				}
-
-				$analyticsEvent->setP4("fileId_{$file->getId()}");
-			}
-
-			$analyticsEvent->send();
-		});
 	}
 
 	protected function getDocumentSessionsByKeyForUsers(string $documentSessionHash, array $userIds): array
@@ -795,19 +651,6 @@ final class OnlyOffice extends Engine\Controller
 		}
 
 		return $byUser;
-	}
-
-	protected function getDocumentSessionsByKeyForUser(string $documentSessionHash, int $userId): ?DocumentSession
-	{
-		$sessions = DocumentSession::getModelList([
-			'filter' => [
-				'=EXTERNAL_HASH' => $documentSessionHash,
-				'=USER_ID' => $userId,
-			],
-			'limit' => 1,
-		]);
-
-		return $sessions[0] ?? null;
 	}
 
 	/**
@@ -882,6 +725,8 @@ final class OnlyOffice extends Engine\Controller
 				'with_changes',
 				0
 			);
+
+			$this->sendSessionEndAnalyticsEvent($documentSession);
 		}
 
 		if (empty($payloadData['url']))
@@ -969,7 +814,11 @@ final class OnlyOffice extends Engine\Controller
 		}
 	}
 
-	private function logUsageMetrics(Models\DocumentSession $documentSession, array $payloadData): void
+	private function logUsageMetrics(
+		Models\DocumentSession $documentSession,
+		array $payloadData,
+		array $userDocumentSessions,
+	): void
 	{
 		$server = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getServer();
 		$actions = $payloadData['actions'] ?? [];
@@ -977,13 +826,25 @@ final class OnlyOffice extends Engine\Controller
 		{
 			$type = $action['type'] ?? null;
 			$userId = (int)($action['userid'] ?? null);
+			$userDocumentSession = $userDocumentSessions[$userId] ?? null;
+
 			if ($type === self::ACTION_TYPE_DISCONNECT)
 			{
 				AddEventToStatFile('disk', 'disk_oo_user_disconnect', $documentSession->getExternalHash(), $server, '', $userId);
+
+				if ($userDocumentSession instanceof DocumentSession)
+				{
+					$this->sendUserSessionEndAnalyticsEvent($userDocumentSession, $userId);
+				}
 			}
-			else if ($type === self::STATUS_IS_BEING_EDITED)
+			elseif ($type === self::STATUS_IS_BEING_EDITED)
 			{
 				AddEventToStatFile('disk', 'disk_oo_user_join', $documentSession->getExternalHash(), $server, '', $userId);
+
+				if ($userDocumentSession instanceof DocumentSession)
+				{
+					$this->sendUserSessionStartAnalyticsEvent($userDocumentSession, $userId);
+				}
 			}
 		}
 	}
@@ -1308,5 +1169,110 @@ final class OnlyOffice extends Engine\Controller
 				]
 			));
 		}
+	}
+
+	protected function sendSessionEndAnalyticsEvent(DocumentSession $documentSession): void
+	{
+		Application::getInstance()->addBackgroundJob(function () use ($documentSession) {
+			$analyticsEvent = (new AnalyticsEvent(
+				event: 'session_end',
+				tool: 'docs',
+				category: 'docs',
+			))
+				->setUserId(0)
+				->setP2("sessionHash_{$documentSession->getExternalHash()}")
+			;
+
+			$openType = Disk\Analytics\Enum\OpenTypeEnum::getByDocumentSessionType($documentSession->getType());
+
+			if ($openType instanceof Disk\Analytics\Enum\OpenTypeEnum)
+			{
+				$analyticsEvent->setType($openType->value);
+			}
+
+			$domain = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getDomain();
+
+			if (is_string($domain))
+			{
+				$analyticsEvent->setSection($domain);
+			}
+
+			$file = $documentSession->getFile();
+
+			if ($file instanceof Disk\File)
+			{
+				$docType = Disk\Analytics\Enum\DocumentTypeEnum::getByExtension($file->getExtension());
+
+				if ($docType instanceof Disk\Analytics\Enum\DocumentTypeEnum)
+				{
+					$analyticsEvent->setP3($docType->value);
+				}
+
+				$analyticsEvent->setP4("fileId_{$file->getId()}");
+			}
+
+			$analyticsEvent->send();
+		});
+	}
+
+	protected function sendUserSessionStartAnalyticsEvent(DocumentSession $documentSession, int $userId): void
+	{
+		$this->sendUserSessionAnalyticsEvent($documentSession, $userId, true);
+	}
+
+	protected function sendUserSessionEndAnalyticsEvent(DocumentSession $documentSession, int $userId): void
+	{
+		$this->sendUserSessionAnalyticsEvent($documentSession, $userId, false);
+	}
+
+	protected function sendUserSessionAnalyticsEvent(
+		DocumentSession $documentSession,
+		int $userId,
+		bool $isStart,
+	): void
+	{
+		Application::getInstance()->addBackgroundJob(function () use ($documentSession, $userId, $isStart) {
+			$event = $isStart ? 'user_session_start' : 'user_session_end';
+
+			$analyticsEvent = (new AnalyticsEvent(
+				event: $event,
+				tool: 'docs',
+				category: 'docs',
+			))
+				->setUserId($userId)
+				->setP2("sessionHash_{$documentSession->getExternalHash()}")
+				->setP5("sessionId_{$documentSession->getId()}")
+			;
+
+			$openType = Disk\Analytics\Enum\OpenTypeEnum::getByDocumentSessionType($documentSession->getType());
+
+			if ($openType instanceof Disk\Analytics\Enum\OpenTypeEnum)
+			{
+				$analyticsEvent->setType($openType->value);
+			}
+
+			$domain = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getDomain();
+
+			if (is_string($domain))
+			{
+				$analyticsEvent->setSection($domain);
+			}
+
+			$file = $documentSession->getFile();
+
+			if ($file instanceof Disk\File)
+			{
+				$docType = Disk\Analytics\Enum\DocumentTypeEnum::getByExtension($file->getExtension());
+
+				if ($docType instanceof Disk\Analytics\Enum\DocumentTypeEnum)
+				{
+					$analyticsEvent->setP3($docType->value);
+				}
+
+				$analyticsEvent->setP4("fileId_{$file->getId()}");
+			}
+
+			$analyticsEvent->send();
+		});
 	}
 }

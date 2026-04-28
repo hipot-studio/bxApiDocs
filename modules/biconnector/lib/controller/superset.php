@@ -4,35 +4,26 @@ namespace Bitrix\BIConnector\Controller;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Access\Install\AccessInstaller;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
-use Bitrix\BIConnector\Superset\ActionFilter\BIConstructorAccess;
 use Bitrix\BIConnector\Superset\Cache\CacheManager;
-use Bitrix\BIConnector\Superset\SystemDashboardManager;
-use Bitrix\Intranet\ActionFilter\IntranetUser;
+use Bitrix\BIConnector\Superset\DomainLinkService;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\BIConnector;
 
 class Superset extends Controller
 {
 	public function getDefaultPreFilters()
 	{
-		$additionalFilters = [
-			new BIConstructorAccess(),
-		];
-
+		$prefilters = parent::getDefaultPreFilters();
 		if (Loader::includeModule('intranet'))
 		{
-			$additionalFilters[] = new IntranetUser();
+			$prefilters[] = new \Bitrix\Intranet\ActionFilter\IntranetUser();
 		}
 
-		return [
-			...parent::getDefaultPreFilters(),
-			...$additionalFilters,
-		];
+		return $prefilters;
 	}
 
 	public function onStartupMetricSendAction(): void
@@ -74,5 +65,54 @@ class Superset extends Controller
 		return [
 			'timeoutToNextClearCache' => $cacheManager->getNextClearTimeout(),
 		];
+	}
+
+	public function deleteLocalAction(bool $disableTool = false): void
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_DELETE_LOCAL_ERROR_ONLY_BOX')));
+
+			return;
+		}
+
+		if (!AccessController::getCurrent()->getUser()->isAdmin())
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_DELETE_LOCAL_ERROR_RIGHTS')));
+
+			return;
+		}
+
+		SupersetInitializer::clearSupersetData();
+		SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
+		AccessInstaller::install();
+
+		if ($disableTool && Loader::includeModule('intranet'))
+		{
+			(new \Bitrix\Intranet\Settings\Tools\BIConstructor())->disable(false);
+		}
+	}
+
+	public function linkAddressAction(): void
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_LINK_ADDRESS_ERROR_ONLY_BOX')));
+
+			return;
+		}
+
+		if (!AccessController::getCurrent()->getUser()->isAdmin())
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_LINK_ADDRESS_ERROR_RIGHTS')));
+
+			return;
+		}
+
+		$result = DomainLinkService::getInstance()->linkAddress();
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+		}
 	}
 }

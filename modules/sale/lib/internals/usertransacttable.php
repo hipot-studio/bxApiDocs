@@ -95,6 +95,7 @@ class UserTransactTable extends DataManager
 			'AMOUNT' =>
 				(new FloatField('AMOUNT'))
 					->configureDefaultValue(0.0000)
+					->configureScale(8)
 			,
 			'CURRENCY' =>
 				(new StringField('CURRENCY'))

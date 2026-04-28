@@ -18,7 +18,7 @@ class FileLogger extends Logger
 	 * @param string $fileName Absulute path.
 	 * @param int|null $maxSize Maximum size of the log file.
 	 */
-	public function __construct(string $fileName, int $maxSize = null)
+	public function __construct(string $fileName, ?int $maxSize = null)
 	{
 		$this->fileName = $fileName;
 

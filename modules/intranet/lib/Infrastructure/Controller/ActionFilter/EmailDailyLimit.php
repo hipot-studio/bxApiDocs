@@ -3,9 +3,9 @@
 namespace Bitrix\Intranet\Infrastructure\Controller\ActionFilter;
 
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Intranet\Public\Event\Invitation\OnCheckLimitEvent;
 use Bitrix\Intranet\Public\Type\Collection\InvitationCollection;
 use Bitrix\Intranet\Internals\InvitationTable;
-use Bitrix\Intranet\Invitation\Register;
 use Bitrix\Main\Engine;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
@@ -17,14 +17,14 @@ use Bitrix\Main\Type\DateTime;
 class EmailDailyLimit extends Engine\ActionFilter\Base
 {
 	public function __construct(
-		private int $maxInvitationsAtTime = 0,
-		private int $dailyEmailLimit = 0,
+		private readonly int $maxInvitationsAtTime = 0,
+		private readonly int $dailyEmailLimit = 0,
 	)
 	{
 		parent::__construct();
 	}
 
-	public static function createByDefault()
+	public static function createByDefault(): self
 	{
 		$dailyEmailLimit = 0;
 		if (
@@ -53,7 +53,14 @@ class EmailDailyLimit extends Engine\ActionFilter\Base
 		$pastEmailInvitationNumber = InvitationTable::query()
 			->where('INVITATION_TYPE', \Bitrix\Intranet\Invitation::TYPE_EMAIL)
 			->where('DATE_CREATE', '>', $date)
-			->queryCountTotal();
+			->queryCountTotal()
+		;
+
+		$pastPhoneInvitationNumber = InvitationTable::query()
+			->where('INVITATION_TYPE', \Bitrix\Intranet\Invitation::TYPE_PHONE)
+			->where('DATE_CREATE', '>', $date)
+			->queryCountTotal()
+		;
 
 		if (
 			$this->dailyEmailLimit > 0
@@ -61,7 +68,7 @@ class EmailDailyLimit extends Engine\ActionFilter\Base
 		)
 		{
 			$this->addError(new Error(
-				Loc::getMessage("INTRANET_INVITATION_DAILY_EMAIL_LIMIT_EXCEEDED")
+				Loc::getMessage("INTRANET_INVITATION_DAILY_EMAIL_LIMIT_EXCEEDED"),
 			));
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
@@ -70,8 +77,23 @@ class EmailDailyLimit extends Engine\ActionFilter\Base
 		if ($invitationCollection->countEmailInvitation() > $this->maxInvitationsAtTime)
 		{
 			$this->addError(new Error(
-				Loc::getMessage("INTRANET_INVITATION_EMAIL_LIMIT_EXCEEDED")
+				Loc::getMessage("INTRANET_INVITATION_EMAIL_LIMIT_EXCEEDED"),
 			));
+
+			return new EventResult(EventResult::ERROR, null, null, $this);
+		}
+
+		$event = new OnCheckLimitEvent(
+			$pastEmailInvitationNumber,
+			$pastPhoneInvitationNumber,
+			$invitationCollection->countEmailInvitation(),
+			$invitationCollection->countPhoneInvitation(),
+		);
+		$event->send();
+		$errors = $event->getErrorCollection();
+		if (!$errors->isEmpty())
+		{
+			$this->addErrors($errors->toArray());
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
 		}
@@ -90,7 +112,7 @@ class EmailDailyLimit extends Engine\ActionFilter\Base
 		return null;
 	}
 
-	private static function getMaxEmailCount()
+	private static function getMaxEmailCount(): int
 	{
 		if (Loader::includeModule('bitrix24'))
 		{

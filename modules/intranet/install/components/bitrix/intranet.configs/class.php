@@ -552,12 +552,6 @@ final class IntranetConfigsComponent extends CBitrixComponent
 				COption::SetOptionString("bitrix24", "buy_tariff_by_all", "N", false);
 		}
 
-		// tasks
-		if (isset($_POST["create_overdue_chats"]) && $_POST["create_overdue_chats"] <> '')
-			COption::SetOptionString("tasks", "create_overdue_chats", "Y", false);
-		else
-			COption::SetOptionString("tasks", "create_overdue_chats", "N", false);
-
 		\Bitrix\Main\Config\Option::set(
 			'main',
 			'collect_geo_data',

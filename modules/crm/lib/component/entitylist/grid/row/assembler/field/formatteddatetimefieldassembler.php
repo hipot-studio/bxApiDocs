@@ -23,7 +23,7 @@ class FormattedDateTimeFieldAssembler extends FieldAssembler
 		$this->userNow = \CCrmDateTimeHelper::getUserTime(new DateTime());
 	}
 
-	protected function prepareColumn($value)
+	protected function prepareColumn($value): string
 	{
 		if (!($value instanceof DateTime))
 		{

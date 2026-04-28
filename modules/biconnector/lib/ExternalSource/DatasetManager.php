@@ -25,7 +25,7 @@ class DatasetManager
 	 *
 	 * @return Main\Result
 	 */
-	public static function add(array $dataset, array $fields, array $settings = [], int $sourceId = null): Main\Result
+	public static function add(array $dataset, array $fields, array $settings = [], ?int $sourceId = null): Main\Result
 	{
 		$result = new Main\Result();
 
@@ -48,7 +48,7 @@ class DatasetManager
 				$result->addError(
 					$error instanceof Main\Error
 						? $error
-						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_ADD_ERROR'))
+						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_ADD_ERROR_MSGVER_1'))
 				);
 
 				return $result;
@@ -111,40 +111,10 @@ class DatasetManager
 		if ($result->isSuccess())
 		{
 			$connection->commitTransaction();
-
-			$event = new Main\Event(
-				'biconnector',
-				self::EVENT_ON_AFTER_ADD_DATASET,
-				[
-					'dataset' => self::getById($id),
-				]
-			);
-			$event->send();
-
-			foreach ($event->getResults() as $eventResult)
-			{
-				if ($eventResult->getType() === Main\EventResult::ERROR)
-				{
-					$error = $eventResult->getParameters();
-					$result->addError(
-						$error instanceof Main\Error
-							? $error
-							: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_ADD_ERROR'))
-					);
-				}
-			}
-
-			if ($result->isSuccess())
-			{
-				$result->setData([
-					'id' => $id,
-					'dataset' => $datasetAddResult->getData(),
-				]);
-			}
-			else
-			{
-				self::delete($id);
-			}
+			$result->setData([
+				'id' => $id,
+				'dataset' => $datasetAddResult->getData(),
+			]);
 		}
 		else
 		{
@@ -158,7 +128,7 @@ class DatasetManager
 		array $dataset,
 		array $fields,
 		array $settings,
-		int $sourceId = null
+		?int $sourceId = null
 	): Main\Result
 	{
 		$result = new Main\Result();
@@ -182,7 +152,7 @@ class DatasetManager
 			{
 				$result->addError(
 					new Main\Error(
-						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_ALREADY_EXIST_ERROR')
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_ALREADY_EXIST_ERROR_MSGVER_1')
 					)
 				);
 			}
@@ -247,7 +217,7 @@ class DatasetManager
 				$result->addError(
 					$error instanceof Main\Error
 						? $error
-						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_UPDATE_ERROR'))
+						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_UPDATE_ERROR_MSGVER_1'))
 				);
 
 				return $result;
@@ -377,19 +347,6 @@ class DatasetManager
 		);
 		$event->send();
 
-		foreach ($event->getResults() as $eventResult)
-		{
-			if ($eventResult->getType() === Main\EventResult::ERROR)
-			{
-				$error = $eventResult->getParameters();
-				$result->addError(
-					$error instanceof Main\Error
-						? $error
-						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_UPDATE_ERROR'))
-				);
-			}
-		}
-
 		return $result;
 	}
 
@@ -410,7 +367,7 @@ class DatasetManager
 		{
 			$result->addError(
 				new Main\Error(
-					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_NOT_FOUND')
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_NOT_FOUND_MSGVER_1')
 				)
 			);
 
@@ -507,46 +464,10 @@ class DatasetManager
 			return $result;
 		}
 
-		$connection = Main\Application::getInstance()->getConnection();
-		$connection->startTransaction();
-
 		$datasetDeleteResult = Internal\ExternalDatasetTable::delete($id);
-		if ($datasetDeleteResult->isSuccess())
-		{
-			$event = new Main\Event(
-				'biconnector',
-				self::EVENT_ON_AFTER_DELETE_DATASET,
-				[
-					'dataset' => $dataset,
-				]
-			);
-			$event->send();
-
-			foreach ($event->getResults() as $eventResult)
-			{
-				if ($eventResult->getType() === Main\EventResult::ERROR)
-				{
-					$error = $eventResult->getParameters();
-					$result->addError(
-						$error instanceof Main\Error
-							? $error
-							: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DELETE_ERROR'))
-					);
-				}
-			}
-		}
-		else
+		if (!$datasetDeleteResult->isSuccess())
 		{
 			$result->addErrors($datasetDeleteResult->getErrors());
-		}
-
-		if ($result->isSuccess())
-		{
-			$connection->commitTransaction();
-		}
-		else
-		{
-			$connection->rollbackTransaction();
 		}
 
 		return $result;

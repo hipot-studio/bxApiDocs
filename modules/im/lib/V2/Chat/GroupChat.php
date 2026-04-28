@@ -111,7 +111,7 @@ class GroupChat extends Chat
 			return $result->addErrors($paramsResult->getErrors());
 		}
 
-		$chat = new static($params);
+		$chat = new static($params, $this->context);
 		$chat->onBeforeAdd();
 		$chat->save();
 
@@ -246,6 +246,8 @@ class GroupChat extends Chat
 		[$users, $structureNodes] = Structure::splitEntities($params['MEMBER_ENTITIES'] ?? []);
 
 		$params['MANAGERS'] = array_unique(array_merge($params['MANAGERS'], [$params['AUTHOR_ID']]));
+		$params['MANAGERS'] = array_map('intval', $params['MANAGERS']);
+		$params['USERS'] = array_map('intval', $params['USERS']);
 		$params['USERS'] = array_unique(array_merge($params['USERS'], $params['MANAGERS'], $users));
 		$params['STRUCTURE_NODES'] = $structureNodes;
 

@@ -17,7 +17,7 @@ class StringField extends DatasetField
 	 * @param array $dictionary
 	 * @return $this
 	 */
-	public function setDictionary(array $dictionary, string $dictionaryDefaultCase = null): static
+	public function setDictionary(array $dictionary, ?string $dictionaryDefaultCase = null): static
 	{
 		$this->dictionary = $dictionary;
 		$this->dictionaryDefaultCase = $dictionaryDefaultCase;

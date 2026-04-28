@@ -35,6 +35,8 @@ class ResourceType extends BaseController
 		array $sort = [],
 	): Entity\ResourceType\ResourceTypeCollection
 	{
+		$navigation->allowAllRecords(true)->initFromUri();
+
 		return (new ResourceTypeProvider())->getList(
 			new GridParams(
 				limit: $navigation->getLimit(),

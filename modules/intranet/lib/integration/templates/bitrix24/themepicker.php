@@ -75,7 +75,7 @@ class ThemePicker
 		}
 
 		$this->templateId = $templateId;
-		$this->templatePath = defined('SITE_TEMPLATE_PATH') ? SITE_TEMPLATE_PATH : \getLocalPath('templates/'.$templateId, BX_PERSONAL_ROOT);
+		$this->templatePath = \getLocalPath('templates/'.$templateId, BX_PERSONAL_ROOT);
 		$this->siteId = is_string($siteId)? mb_substr(preg_replace("/[^a-z0-9_]/i", "", $siteId), 0, 2) : SITE_ID;
 		if (in_array($entityType, self::VALID_ENTITY_TYPE_LIST))
 		{

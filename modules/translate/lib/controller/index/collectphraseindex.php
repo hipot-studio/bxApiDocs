@@ -7,6 +7,8 @@ use Bitrix\Translate\Index;
 
 /**
  * The phrases index harvester.
+ *
+ * @internal
  */
 class CollectPhraseIndex
 	extends Translate\Controller\Action

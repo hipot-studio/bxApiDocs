@@ -4,6 +4,7 @@ namespace Bitrix\Sale\Delivery\ExtraServices;
 
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sale\PriceMaths;
 
 Loc::loadMessages(__FILE__);
 
@@ -90,7 +91,7 @@ class Enum extends Base
 
 	protected static function getValueHtml($name, $id, $title = "", $price = "", $currency = "")
 	{
-		$price = roundEx((float)$price, SALE_VALUE_PRECISION);
+		$price = PriceMaths::roundPrecision((float)$price);
 		$currency = htmlspecialcharsbx((string)$currency);
 
 		return Loc::getMessage("DELIVERY_EXTRA_SERVICE_ENUM_NAME").
@@ -105,7 +106,7 @@ class Enum extends Base
 			return "";
 
 		foreach($prices as $id => $price)
-			$prices[$id] = roundEx(floatval($price), SALE_VALUE_PRECISION);
+			$prices[$id] = PriceMaths::roundPrecision((float)$price);
 
 		return "(function(value){var prices=".\CUtil::PhpToJSObject($prices)."; return prices[value]['PRICE'];})(this.value)";
 	}

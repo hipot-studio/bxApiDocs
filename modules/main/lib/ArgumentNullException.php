@@ -7,7 +7,7 @@ namespace Bitrix\Main;
  */
 class ArgumentNullException extends ArgumentException
 {
-	public function __construct($parameter, \Throwable $previous = null)
+	public function __construct($parameter, ?\Throwable $previous = null)
 	{
 		$message = "Argument '{$parameter}' is null or empty";
 		parent::__construct($message, $parameter, $previous);

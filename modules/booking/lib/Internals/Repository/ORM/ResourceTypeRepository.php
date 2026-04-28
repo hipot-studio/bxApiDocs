@@ -180,6 +180,7 @@ class ResourceTypeRepository implements ResourceTypeRepositoryInterface
 			->setTemplateTypeDelayed($resourceType->getTemplateTypeDelayed())
 			->setDelayedDelay($resourceType->getDelayedNotificationDelay())
 			->setDelayedCounterDelay($resourceType->getDelayedCounterDelay())
+			->setSenderCode($resourceType->getSenderCode())
 			->save()
 		;
 		if (!$notificationSettingsSaveResult->isSuccess())
@@ -225,6 +226,7 @@ class ResourceTypeRepository implements ResourceTypeRepositoryInterface
 			->setTemplateTypeDelayed($resourceType->getTemplateTypeDelayed())
 			->setDelayedDelay($resourceType->getDelayedNotificationDelay())
 			->setDelayedCounterDelay($resourceType->getDelayedCounterDelay())
+			->setSenderCode($resourceType->getSenderCode())
 			->save()
 		;
 		if (!$notificationSettingsSaveResult->isSuccess())

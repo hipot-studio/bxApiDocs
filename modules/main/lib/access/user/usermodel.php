@@ -45,6 +45,10 @@ abstract class UserModel
 	{
 	}
 
+	abstract public function getRoles(): array;
+
+	abstract public function getPermission(string $permissionId): ?int;
+
 	public function getUserId(): int
 	{
 		return $this->userId;
@@ -123,6 +127,7 @@ abstract class UserModel
 
 			foreach ($res as $row)
 			{
+				$this->accessCodes[] = $row['ACCESS_CODE']; // mantis 0224146
 				$signature = (new AccessCode($row['ACCESS_CODE']))->getSignature();
 				if ($signature)
 				{
@@ -130,7 +135,7 @@ abstract class UserModel
 				}
 			}
 
-			$this->accessCodes = array_values($this->accessCodes);
+			$this->accessCodes = array_unique(array_values($this->accessCodes));
 
 			if (
 				Loader::includeModule('humanresources')
@@ -141,28 +146,10 @@ abstract class UserModel
 			}
 
 			// add employee access code
-			if (!\Bitrix\Main\ModuleManager::isModuleInstalled('intranet'))
-            {
-                return $this->accessCodes;
-            }
-
-            $user = UserTable::getList([
-                'select' => ['UF_DEPARTMENT'],
-                'filter' => [
-                    '=ID' => $this->userId,
-                ],
-                'limit' => 1
-            ])->fetch();
-
-            if (
-                $user
-                && is_array($user['UF_DEPARTMENT'])
-                && count($user['UF_DEPARTMENT'])
-                && !empty(array_values($user['UF_DEPARTMENT'])[0])
-            )
-            {
-                $this->accessCodes[] = AccessCode::ACCESS_EMPLOYEE . '0';
-            }
+			if ($this->isEmployee())
+			{
+				$this->accessCodes[] = AccessCode::ACCESS_EMPLOYEE . '0';
+			}
 		}
 		return $this->accessCodes;
 	}
@@ -172,7 +159,48 @@ abstract class UserModel
 		return (new UserSubordinate($this->userId))->getSubordinate($userId);
 	}
 
-	abstract public function getRoles(): array;
+	protected function isEmployee(): bool
+	{
+		if (!\Bitrix\Main\ModuleManager::isModuleInstalled('intranet'))
+		{
+			return false;
+		}
 
-	abstract public function getPermission(string $permissionId): ?int;
+		$currentUser = CurrentUser::get();
+		if ((int)$currentUser->getId() === $this->userId)
+		{
+			$userData = (\CUser::GetByID($this->userId))->arResult;
+			if (
+				is_array($userData)
+				&& isset($userData[0]['ID'])
+				&& (int)$userData[0]['ID'] === $this->userId
+				&& !empty($userData[0]['UF_DEPARTMENT'])
+			)
+			{
+				return true;
+			}
+
+			return false;
+		}
+
+		$user = UserTable::getList([
+			'select' => ['UF_DEPARTMENT'],
+			'filter' => [
+				'=ID' => $this->userId,
+			],
+			'limit' => 1
+		])->fetch();
+
+		if (
+			$user
+			&& is_array($user['UF_DEPARTMENT'])
+			&& count($user['UF_DEPARTMENT'])
+			&& !empty(array_values($user['UF_DEPARTMENT'])[0])
+		)
+		{
+			return true;
+		}
+
+		return false;
+	}
 }

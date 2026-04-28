@@ -7,6 +7,7 @@ use Bitrix\Calendar\Integration\Socialservices\Auth\GoogleAuthHelper;
 use Bitrix\Calendar\Integration\Pull\PushCommand;
 use Bitrix\Calendar\Sync\Connection\Connection;
 use Bitrix\Calendar\Sync\Managers\ServiceBase;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AuthorizationException;
 use Bitrix\Calendar\Util;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
@@ -44,7 +45,6 @@ abstract class Manager extends ServiceBase
 	}
 
 	/**
-	 *
 	 * @param bool $force
 	 *
 	 * @return bool is success
@@ -58,17 +58,24 @@ abstract class Manager extends ServiceBase
 		if (!isset(self::$httpClients[$userId]) || $force)
 		{
 			$httpClient = new HttpClient();
-			$oAuthEntity = GoogleAuthHelper::getUserAuthEntity($userId);
-
-			if ($oAuthEntity->getToken())
+			try
 			{
-				$httpClient->setHeader('Authorization', 'Bearer ' . $oAuthEntity->getToken());
-				$httpClient->setHeader('Content-Type', 'application/json');
-				$httpClient->setHeader('Referer', \Bitrix\Calendar\Sync\Util\Helper::getDomain());
+				$oAuthEntity = GoogleAuthHelper::getUserAuthEntity($userId);
 
-				unset($oAuthEntity);
+				if ($oAuthEntity->getToken())
+				{
+					$httpClient->setHeader('Authorization', 'Bearer ' . $oAuthEntity->getToken());
+					$httpClient->setHeader('Content-Type', 'application/json');
+					$httpClient->setHeader('Referer', \Bitrix\Calendar\Sync\Util\Helper::getDomain());
+
+					unset($oAuthEntity);
+				}
+				else
+				{
+					$success = false;
+				}
 			}
-			else
+			catch (AuthorizationException)
 			{
 				$success = false;
 			}
@@ -140,7 +147,17 @@ abstract class Manager extends ServiceBase
 	protected function handleUnauthorize(Connection $connection)
 	{
 		$userId = $connection->getOwner()->getId();
-		$oAuth = GoogleAuthHelper::getUserAuthEntity($userId);
+		try
+		{
+			$oAuth = GoogleAuthHelper::getUserAuthEntity($userId);
+		}
+		catch (AuthorizationException)
+		{
+			$this->deactivateConnection();
+
+			return;
+		}
+
 		$userTokenInfo = GoogleAuthHelper::getStoredTokens($userId);
 		$refreshResult = false;
 

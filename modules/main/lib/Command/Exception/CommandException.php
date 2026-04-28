@@ -12,7 +12,7 @@ class CommandException extends SystemException
 	public function __construct(
 		public readonly CommandInterface $command,
 		$message = '',
-		\Throwable $previous = null
+		?\Throwable $previous = null
 	)
 	{
 		parent::__construct($message, previous: $previous);

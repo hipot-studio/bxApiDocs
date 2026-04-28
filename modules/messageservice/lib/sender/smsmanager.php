@@ -11,6 +11,9 @@ use Bitrix\MessageService\MessageType;
 use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\MessageService\Sender\Result\SendMessage;
 
+/**
+ * @internal
+ */
 class SmsManager
 {
 	public const ON_MESSAGE_SUCCESSFULLY_SENT_EVENT = 'OnMessageSuccessfullySent';

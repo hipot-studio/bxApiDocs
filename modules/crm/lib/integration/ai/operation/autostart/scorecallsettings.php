@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\AI\Operation\Autostart;
 
 use Bitrix\Crm\Copilot\CallAssessment\Enum\AutoCheckType;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\BaasManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
@@ -25,8 +26,8 @@ final class ScoreCallSettings implements AutoStartInterface
 		if (
 			!(
 				AIManager::isAiCallAutomaticProcessingAllowed()
-				&& AIManager::isBaasServiceHasPackage()
 				&& AIManager::isEnabledInGlobalSettings(GlobalSetting::CallAssessment)
+				&& BaasManager::hasPackage()
 			)
 		)
 		{

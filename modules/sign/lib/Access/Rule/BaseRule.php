@@ -55,9 +55,9 @@ class BaseRule extends AbstractRule
 			return false;
 		}
 
-		if ($item instanceof Document && $item->isTemplated() && $this->checkDocumentTemplateAccess($action, $item, $user))
+		if ($item instanceof Document && $item->isTemplated())
 		{
-			return true;
+			return $this->checkDocumentTemplateAccess($action, $item, $user);
 		}
 
 		if ($this->checkBinarySignPermission($permissionId))
@@ -110,15 +110,20 @@ class BaseRule extends AbstractRule
 	private function checkDocumentTemplateAccess(string $action, Document $item, UserModel $user): bool
 	{
 		$permissionId = ActionDictionary::getPermissionIdByAction($action);
-		$permissionId = self::DOCUMENT_TO_TEMPLATE_PERMISSIONS_MAP[$permissionId] ?? null;
-		if ($permissionId === null)
+		$templatePermissionId = self::DOCUMENT_TO_TEMPLATE_PERMISSIONS_MAP[$permissionId] ?? null;
+
+		if ($templatePermissionId === null)
 		{
-			return false;
+			if (!in_array($permissionId, self::DOCUMENT_TO_TEMPLATE_PERMISSIONS_MAP, true))
+			{
+				return false;
+			}
+			$templatePermissionId = $permissionId;
 		}
 
 		$ownerId = $item->getOwnerId();
 
-		return $this->checkSignPermission($permissionId, $user, $ownerId);
+		return $this->checkSignPermission($templatePermissionId, $user, $ownerId);
 	}
 
 	private function checkSignPermission(string|int $permissionId, UserModel $user, ?int $itemOwnerId = null): bool

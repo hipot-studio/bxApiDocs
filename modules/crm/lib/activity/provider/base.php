@@ -513,6 +513,10 @@ class Base
 		return new Main\Result();
 	}
 
+	public static function onAfterRecycleBinErase(array $activityFields, ?array $params = null): void
+	{
+	}
+
 	public static function checkPostponePermission($entityId, array $activity, $userId)
 	{
 		return \CCrmActivity::CheckItemUpdatePermission(

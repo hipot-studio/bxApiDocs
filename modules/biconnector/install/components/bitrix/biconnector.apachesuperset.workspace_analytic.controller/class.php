@@ -18,7 +18,7 @@ Loader::includeModule("biconnector");
 
 class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 {
-	private const URL_TEMPLATE_DATASET = 'dataset';
+	private const URL_TEMPLATE_TABLE = 'table';
 	private const URL_TEMPLATE_STATISTICS = 'statistics';
 	private const URL_TEMPLATE_SOURCE = 'source';
 	private const URL_TEMPLATE_UNUSED_ELEMENTS = 'unused_elements';
@@ -42,7 +42,7 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 			return;
 		}
 
-		if (!SupersetInitializer::isSupersetExist())
+		if (!\Bitrix\BIConnector\Superset\DomainLinkService::getInstance()->isLinked())
 		{
 			LocalRedirect('/bi/dashboard');
 		}
@@ -130,7 +130,7 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 	private static function getTemplateUrls(): array
 	{
 		return [
-			self::URL_TEMPLATE_DATASET => 'bi/dataset/',
+			self::URL_TEMPLATE_TABLE => 'bi/table/',
 			self::URL_TEMPLATE_STATISTICS => 'bi/statistics/',
 			self::URL_TEMPLATE_SOURCE => 'bi/source/',
 			self::URL_TEMPLATE_UNUSED_ELEMENTS => 'bi/unused_elements/',

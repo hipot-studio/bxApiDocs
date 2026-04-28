@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Controller\Sticker;
 
-use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
 use Bitrix\Im\V2\Controller\Filter\ExternalUserTypeFilter;
+use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Integration\UI\Sticker\PendingFileCollection;
 use Bitrix\Im\V2\Message\Sticker\CustomPacks\StickerUuid;
 use Bitrix\Im\V2\Message\Sticker\PackItem;
@@ -46,7 +46,7 @@ class Pack extends BaseController
 		return array_merge(
 			parent::getDefaultPreFilters(),
 			[
-				new ExternalUserTypeFilter(),
+				new ExternalUserTypeFilter([UserGuest::AUTH_ID]),
 			]
 		);
 	}

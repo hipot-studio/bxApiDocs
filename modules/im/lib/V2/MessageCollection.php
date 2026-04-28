@@ -17,10 +17,13 @@ use Bitrix\Im\V2\Message\Reaction\ReactionPopupItem;
 use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Message\Sticker\StickerCollection;
+use Bitrix\Im\V2\Reading\Counter\CountersProvider;
+use Bitrix\Im\V2\Reading\View\ViewProvider;
 use Bitrix\Im\V2\TariffLimit\DateFilterable;
 use Bitrix\Im\V2\TariffLimit\FilterResult;
 use Bitrix\Imbot\Bot\CopilotChatBot;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -121,6 +124,27 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	public function getIds(): array
 	{
 		return $this->getPrimaryIds();
+	}
+
+	public function save(bool $isGroupSave = false): Result
+	{
+		// Preload params for persisted messages to avoid N+1 in Message::fillMessageOut during prepareFields.
+		if (!$this->isParamsFilled() && !empty($this->getIds()))
+		{
+			$this->fillParams();
+		}
+
+		$result = parent::save($isGroupSave);
+		$this->invalidateParamsFillState();
+
+		return $result;
+	}
+
+	public function invalidateParamsFillState(): self
+	{
+		$this->isParamsFilled = false;
+
+		return $this;
 	}
 
 
@@ -493,11 +517,12 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 			return $this;
 		}
 
-		$readStatuses = (new ReadService())->getReadStatusesByMessageIds($this->getIds());
+		$provider = ServiceLocator::getInstance()->get(CountersProvider::class);
+		$unreadStatuses = $provider->getUnreadStatuses($this->getIds(), $this->getContext()->getUserId());
 
 		foreach ($this as $message)
 		{
-			$message->setUnread(!($readStatuses[$message->getMessageId()]));
+			$message->setUnread($unreadStatuses[$message->getId()] ?? false);
 		}
 
 		$this->isUnreadFilled = true;
@@ -526,7 +551,9 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 			$notOwnMessages[] = $message->getMessageId();
 		}
 
-		$viewStatuses = (new ReadService())->getViewStatusesByMessageIds($notOwnMessages);
+		$userId = $this->getContext()->getUserId();
+		$provider = ServiceLocator::getInstance()->get(ViewProvider::class);
+		$viewStatuses = $provider->getViewStatuses($notOwnMessages, $userId);
 
 		foreach ($notOwnMessages as $notOwnMessageId)
 		{

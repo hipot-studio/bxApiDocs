@@ -1,7 +1,6 @@
 <?php
 namespace Bitrix\Crm\Integration\Rest\Configuration;
 
-use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
@@ -92,7 +91,7 @@ class Manifest
 			'EXPORT_ACTION_DESCRIPTION' => Loc::getMessage("CRM_CONFIGURATION_MANIFEST_ACTION_DESCRIPTION_CRM_SMART_ROBOTS"),
 		];
 
-		if (RestrictionManager::getAutomatedSolutionExportImportRestriction()->hasPermission())
+		if (!(new \Bitrix\Crm\Restriction\AutomatedSolutionImportedLimit())->isRestricted())
 		{
 			$manifestList[] = [
 				'CODE' => 'automated_solution',

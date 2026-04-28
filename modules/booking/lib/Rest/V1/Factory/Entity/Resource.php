@@ -211,6 +211,11 @@ class Resource extends EntityFactory
 			$resource->setDelayedCounterDelay((int)$fields['DELAYED_COUNTER_DELAY']);
 		}
 
+		if (isset($fields['SENDER_CODE']))
+		{
+			$resource->setSenderCode((string)$fields['SENDER_CODE']);
+		}
+
 		if (isset($fields['IS_MAIN']))
 		{
 			$resource->setMain((bool)$fields['IS_MAIN']);

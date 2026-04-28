@@ -93,7 +93,7 @@ class Rest extends Base
 		return true;
 	}
 
-	public function connect(ExternalSourceSettingsCollection $settings = null): Result
+	public function connect(?ExternalSourceSettingsCollection $settings = null): Result
 	{
 		$result = new Result();
 

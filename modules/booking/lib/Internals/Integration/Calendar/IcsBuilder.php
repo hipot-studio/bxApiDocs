@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Integration\Calendar;
 
 use Bitrix\Booking\Entity\Booking\Booking;
-use Bitrix\Booking\Internals\Integration\Crm\MyCompany;
+use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\Feature\BookingConfirmContext;
 use Bitrix\Booking\Internals\Service\Feature\BookingConfirmLink;
 use Bitrix\Booking\Internals\Service\Rrule;
@@ -202,7 +202,7 @@ class IcsBuilder
 		$primaryResource = $booking->getResourceCollection()->getFirstCollectionItem();
 		$resourceType = $primaryResource->getType()?->getName();
 		$resourceName = $primaryResource->getName();
-		$companyName = MyCompany::getName() ?? '';
+		$companyName = Container::getMyCompanyProvider()->getName() ?? '';
 
 		return Loc::getMessage('BOOKING_INTEGRATION_CALENDAR_ICS_NAME_TPL', [
 			'#RESOURCE_TYPE#' => $resourceType,

@@ -12,7 +12,7 @@ class Parameter
 	/** @var \Closure */
 	private $externalNameConstructor;
 
-	public function __construct(string $className, \Closure $constructor, \Closure $externalNameConstructor = null)
+	public function __construct(string $className, \Closure $constructor, ?\Closure $externalNameConstructor = null)
 	{
 		$this
 			->setClassName($className)

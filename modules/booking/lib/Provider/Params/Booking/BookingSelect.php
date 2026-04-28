@@ -60,6 +60,11 @@ class BookingSelect implements SelectInterface
 			$result[] = 'CLIENT_NOTE';
 		}
 
+		if (in_array('PAYMENT', $this->select, true))
+		{
+			$result[] = 'PAYMENT';
+		}
+
 		return $result;
 	}
 }

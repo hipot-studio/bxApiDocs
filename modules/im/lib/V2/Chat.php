@@ -17,14 +17,13 @@ use Bitrix\Im\V2\Integration\Call\CallToken;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Integration\AI\Restriction;
 use Bitrix\Im\V2\Integration\Socialnetwork\Group;
-use Bitrix\Im\V2\Message\Counter\CounterType;
-use Bitrix\Im\V2\Message\CounterService;
-use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\Message\Send\MentionService;
 use Bitrix\Im\V2\Message\Send\PushService;
 use Bitrix\Im\V2\Message\Send\SendingService;
 use Bitrix\Im\V2\Message\Send\SendResult;
 use Bitrix\Im\V2\Permission\Action;
+use Bitrix\Im\V2\Reading\Counter\Infrastructure\CountersEventHandler;
+use Bitrix\Im\V2\Reading\View\ViewProvider;
 use Bitrix\Im\V2\Recent\Config\ChatRecentConfig;
 use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
@@ -40,6 +39,7 @@ use Bitrix\Im\V2\SharingLink\Entity\LinkEntityType;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
@@ -259,7 +259,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	protected ?int $messageCount = null;
 
 	protected ?int $userCount = null;
-	protected ?int $userCounter = null;
 
 	protected ?int $prevMessageId = null;
 
@@ -299,8 +298,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	protected Background $background;
 	protected TextFieldEnabled $textFieldEnabled;
 
-	protected ?ReadService $readService = null;
-
 	protected RecentConfigManager $recentConfigManager;
 
 	protected RelationProvider $relationProvider;
@@ -312,8 +309,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	/**
 	 * @param int|array|EO_Chat|null $source
 	 */
-	public function __construct($source = null)
+	public function __construct($source = null, ?Context $context = null)
 	{
+		$this->setContext($context);
 		$this->initByDefault();
 
 		if (!empty($source))
@@ -778,7 +776,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$this->updateStateAfterMessageSend($message, $sendingConfig);
 
 		$this->getMentionService($sendingConfig)->setContext($authorContext)->onMessageSend($message);
-		$counters = $this->updateCountersAfterMessageSend($message, $sendingConfig)->getResult()['COUNTERS'] ?? [];
+		$counters = $this->updateCountersAfterMessageSend($message, $sendingConfig);
 		$this->getPushService($message, $sendingConfig)->setContext($authorContext)->sendPush($counters);
 		$sendingService->fireEventAfterMessageSend($this, $message);
 		(new Im\V2\Link\LinkFacade($sendingConfig))->setContext($authorContext)->saveLinksFromMessage($message);
@@ -1002,7 +1000,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return new Result();
 	}
 
-	protected function updateCountersAfterMessageSend(Message $message, SendingConfig $sendingConfig): Result
+	protected function updateCountersAfterMessageSend(Message $message, SendingConfig $sendingConfig): Im\V2\Reading\Counter\Entity\UsersCounterMap
 	{
 		$counterRecipients = $this->getCounterRecipients($sendingConfig);
 
@@ -1011,11 +1009,16 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			unset($counterRecipients[$message->getAuthorId()]);
 		}
 
-		return $this
-			->getReadService()
-			->withContextUser($message->getContext()->getUserId())
-			->onAfterMessageSend($message, $this->getPullRecipients(), $counterRecipients)
+		$pullRecipients = $this->getPullRecipients();
+		$recipientRelations = $pullRecipients
+			->filter(fn (Relation $relation) => isset($counterRecipients[$relation->getUserId()]))
 		;
+
+		return $this->getNewMessageHandler()->handleWithCounters(
+			$message,
+			$recipientRelations,
+			$pullRecipients->getUserIds(),
+		);
 	}
 
 	protected function getCounterRecipients(SendingConfig $sendingConfig): array
@@ -1121,119 +1124,45 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		}
 	}
 
-	public function read(bool $onlyRecent = false, bool $byEvent = false): Result
+	public function isReadable(int $userId): bool
 	{
-		Im\Recent::unread($this->getDialogId(), false, $this->getContext()->getUserId());
-
-		if ($onlyRecent)
-		{
-			$lastId = $this->getReadService()->getLastMessageIdInChat($this->chatId);
-
-			return (new Result())->setResult([
-				'CHAT_ID' => $this->chatId,
-				'LAST_ID' => $lastId,
-				'COUNTER' => $this->getReadService()->getCounterService()->getByChat($this->chatId),
-				'VIEWED_MESSAGES' => [],
-			]);
-		}
-
-		return $this->readAllMessages($byEvent);
+		return true;
 	}
 
+	/**
+	 * @deprecated
+	 * @use \Bitrix\Im\V2\Reading\Reader::readAllInChat
+	 */
 	public function readAllMessages(bool $byEvent = false): Result
 	{
-		return $this->readMessages(null, $byEvent);
+		return $this->getReader()->readAllInChat($this->getId(), $this->getContext()->getUserId());
 	}
 
+	/**
+	 * @deprecated
+	 * @use \Bitrix\Im\V2\Reading\Reader::read
+	 * or
+	 * @use \Bitrix\Im\V2\Reading\Reader::readAllInChat
+	 */
 	public function readMessages(?MessageCollection $messages, bool $byEvent = false): Result
 	{
-		$result = new Result();
+		$result =
+			$messages === null
+				? $this->getReader()->readAllInChat($this->getId(), $this->getContext()->getUserId())
+				: $this->getReader()->read($messages, $this->getContext()->getUserId(), $byEvent)
+		;
 
-		if (isset($messages))
+		if (!$result->isSuccess())
 		{
-			$messages = $messages->filterByChatId($this->chatId);
-
-			if ($messages->count() === 0)
-			{
-				return $result->addError(new MessageError(MessageError::MESSAGE_NOT_FOUND));
-			}
+			return $result;
 		}
 
-		$readService = $this->getReadService();
-		$startId = $readService->getLastIdByChatId($this->chatId);
-		$readResult = isset($messages) ? $readService->read($messages, $this) :  $readService->readAllInChat($this->chatId);
-		$counter = $readResult->getResult()['COUNTER'] ?? 0;
-		$viewedMessages = $readResult->getResult()['VIEWED_MESSAGES'] ?? new MessageCollection();
-
-		$lastId = $readService->getLastIdByChatId($this->chatId);
-
-		$notOwnMessages = $viewedMessages->filter(fn (Message $message) => $message->getAuthorId() !== $this->getContext()->getUserId());
-
-		if (Main\Loader::includeModule('pull'))
-		{
-			CIMNotify::DeleteBySubTag("IM_MESS_{$this->getChatId()}_{$this->getContext()->getUserId()}", false, false);
-			CPushManager::DeleteFromQueueBySubTag($this->getContext()->getUserId(), 'IM_MESS');
-			$this->sendPushRead($notOwnMessages, $lastId, $counter);
-		}
-
-		$this->sendEventRead($startId, $lastId, $counter, $byEvent);
-
-		return $result->setResult([
-			'CHAT_ID' => $this->chatId,
-			'LAST_ID' => $lastId,
-			'COUNTER' => $counter,
-			'VIEWED_MESSAGES' => $notOwnMessages->getIds(),
-		]);
-	}
-
-	public function readTo(Message $message, bool $byEvent = false): Result
-	{
-		$readService = $this->getReadService();
-		$startId = $message->getMessageId();
-		$readResult = $readService->readTo($message);
-		$counter = $readResult->getResult()['COUNTER'] ?? 0;
-
-		$viewedMessages = $readResult->getResult()['VIEWED_MESSAGES'];
-		$messageCollection = new MessageCollection();
-		foreach ($viewedMessages as $messageId)
-		{
-			$viewedMessage = new Message();
-			$viewedMessage->setMessageId((int)$messageId);
-			$messageCollection->add($viewedMessage);
-		}
-
-		$lastId = $readService->getLastIdByChatId($this->chatId);
-
-		if (Main\Loader::includeModule('pull'))
-		{
-			CIMNotify::DeleteBySubTag("IM_MESS_{$this->getChatId()}_{$this->getContext()->getUserId()}", false, false);
-			CPushManager::DeleteFromQueueBySubTag($this->getContext()->getUserId(), 'IM_MESS');
-			$this->sendPushRead($messageCollection, $lastId, $counter);
-		}
-
-		$this->sendEventRead($startId, $lastId, $counter, $byEvent);
-
-		$result = new Result();
-		return $result->setResult([
-			'CHAT_ID' => $this->chatId,
-			'LAST_ID' => $lastId,
-			'COUNTER' => $counter,
-			'VIEWED_MESSAGES' => $viewedMessages,
-		]);
+		return new Result();
 	}
 
 	public function sendPushUpdateMessage(Message $message): void
 	{
 		return;
-	}
-
-	protected function sendPushRead(MessageCollection $messages, int $lastId, int $counter): void
-	{
-		if ($this->getType() === self::ENTITY_TYPE_LIVECHAT || !$this->getContext()->getUser()->isConnector())
-		{
-			$this->sendPushReadSelf($messages, $lastId, $counter);
-		}
-		$this->sendPushReadOpponent($messages, $lastId);
 	}
 
 	public function startRecordVoice(): void
@@ -1264,89 +1193,16 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	abstract protected function getPushService(Message $message, SendingConfig $config): PushService;
 
-	protected function sendPushReadSelf(MessageCollection $messages, int $lastId, int $counter): void
+	public function getChatMessageStatus(): string
 	{
-		$selfRelation = $this->getSelfRelation();
+		$lastMessageId = $this->getLastMessageId();
 
-		$muted = isset($selfRelation) ? $selfRelation->getNotifyBlock() : false;
-		\Bitrix\Pull\Event::add($this->getContext()->getUserId(), [
-			'module_id' => 'im',
-			'command' => 'readMessageChat',
-			'params' => [
-				'dialogId' => $this->getDialogId(),
-				'chatId' => $this->getChatId(),
-				'parentChatId' => $this->getParentChatId(),
-				'type' => $this->getExtendedType(),
-				'lastId' => $lastId,
-				'counter' => $counter,
-				'muted' => $muted ?? false,
-				'unread' => Im\Recent::isUnread($this->getContext()->getUserId(), $this->getType(), $this->getDialogId()),
-				'lines' => $this->getType() === IM_MESSAGE_OPEN_LINE,
-				'viewedMessages' => $messages->getIds(),
-				'counterType' => $this->getCounterType(),
-				'recentConfig' => $this->getRecentConfig()->toPullFormat(),
-			],
-			'extra' => \Bitrix\Im\Common::getPullExtra()
-		]);
-	}
-
-	protected function sendPushReadOpponent(MessageCollection $messages, int $lastId): array
-	{
-		$viewedMessageIds = $messages->getIds();
-		$pushMessage = [
-			'module_id' => 'im',
-			'command' => 'readMessageChatOpponent',
-			'expiry' => 600,
-			'params' => [
-				'dialogId' => $this->getDialogId(),
-				'chatId' => $this->chatId,
-				'userId' => $this->getContext()->getUserId(),
-				'userName' => $this->getContext()->getUser()->getName(),
-				'lastId' => $lastId,
-				'date' => (new DateTime())->format('c'),
-				'viewedMessages' => $viewedMessageIds,
-				'chatMessageStatus' => $this->getReadService()->getChatMessageStatus($this->chatId),
-			],
-			'extra' => \Bitrix\Im\Common::getPullExtra()
-		];
-		if ($this->getType() === Chat::IM_TYPE_COMMENT)
+		if ($lastMessageId === 0)
 		{
-			\CPullWatch::AddToStack('IM_PUBLIC_COMMENT_' . $this->getParentChatId(), $pushMessage);
-		}
-		else
-		{
-			\Bitrix\Pull\Event::add($this->getUsersForPush(), $pushMessage);
-		}
-		$lastMessageId = $this->getReadService()->getLastMessageIdInChat($this->chatId);
-		$maxViewedMessageId = !empty($viewedMessageIds) ? max($viewedMessageIds) : 0;
-
-		if ($this->needToSendPublicPull())
-		{
-			\CPullWatch::AddToStack("IM_PUBLIC_{$this->chatId}", $pushMessage);
-		}
-		if ($this->getType() === Chat::IM_TYPE_OPEN_CHANNEL && $maxViewedMessageId === $lastMessageId)
-		{
-			Im\V2\Chat\OpenChannelChat::sendSharedPull($pushMessage);
+			return \IM_MESSAGE_STATUS_RECEIVED;
 		}
 
-		return $pushMessage;
-	}
-
-	protected function sendEventRead(int $startId, int $endId, int $counter, bool $byEvent): void
-	{
-		foreach (\GetModuleEvents("im", "OnAfterChatRead", true) as $arEvent)
-		{
-			\ExecuteModuleEventEx($arEvent, array(Array(
-				'CHAT_ID' => $this->chatId,
-				'CHAT_ENTITY_TYPE' => $this->getEntityType(),
-				'CHAT_ENTITY_ID' => $this->getEntityId(),
-				'START_ID' => $startId,
-				'END_ID' => $endId,
-				'COUNT' => $counter,
-				'USER_ID' => $this->getContext()->getUserId(),
-				'BY_EVENT' => $byEvent
-			)));
-		}
+		return (new Message($lastMessageId))->isNotifyRead() ? \IM_MESSAGE_STATUS_DELIVERED : \IM_MESSAGE_STATUS_RECEIVED;
 	}
 
 	public function getLastMessageViews(): array
@@ -1374,7 +1230,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'FOR_NOT_VIEWERS' => $defaultViewInfo,
 		];
 
-		$readService = $this->getReadService();
+		$viewProvider = $this->getViewProvider();
 
 		$lastMessageInChat = $this->getLastMessageId() ?? 0;
 
@@ -1383,7 +1239,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return $defaultValue;
 		}
 
-		$messageViewers = $readService->getViewedService()->getMessageViewersIds($lastMessageInChat);
+		$messageViewers = $viewProvider->getViewerIds($lastMessageInChat);
 		$countOfView = count($messageViewers);
 
 		$firstViewers = [];
@@ -1398,7 +1254,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			$firstViewers[$messageViewer] = $messageViewer;
 		}
 
-		$datesOfViews = $readService->getViewedService()->getDateViewedByMessageIdForEachUser($lastMessageInChat, $firstViewers);
+		$datesOfViews = $viewProvider->getDatesViewedByMessageIdsForUsers($lastMessageInChat, $firstViewers);
 
 		$firstViewersWithDate = [];
 
@@ -2428,22 +2284,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return $this->userCount ?? 0;
 	}
 
-	public function setUserCounter(?int $userCounter): self
-	{
-		$this->userCounter = $userCounter;
-		return $this;
-	}
-
-	public function getUserCounter(): ?int
-	{
-		if ($this->userCounter === null)
-		{
-			$this->userCounter = $this->getReadService()->getCounterService()->getByChat($this->getChatId());
-		}
-
-		return $this->userCounter;
-	}
-
 	// prev Message Id
 	public function setPrevMessageId(int $prevMessageId): self
 	{
@@ -2511,15 +2351,24 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return new DateTime;
 	}
 
-	protected function getReadService(): ReadService
+	protected function getReader(): Im\V2\Reading\Reader
 	{
-		if ($this->readService === null)
-		{
-			$this->readService = new ReadService();
-			$this->readService->setContext($this->context);
-		}
+		return ServiceLocator::getInstance()->get(Im\V2\Reading\Reader::class);
+	}
 
-		return $this->readService;
+	protected function getViewProvider(): ViewProvider
+	{
+		return ServiceLocator::getInstance()->get(ViewProvider::class);
+	}
+
+	protected function getCountersProvider(): Im\V2\Reading\Counter\CountersProvider
+	{
+		return ServiceLocator::getInstance()->get(Im\V2\Reading\Counter\CountersProvider::class);
+	}
+
+	protected function getNewMessageHandler(): Im\V2\Reading\Infrastructure\NewMessageHandler
+	{
+		return ServiceLocator::getInstance()->get(Im\V2\Reading\Infrastructure\NewMessageHandler::class);
 	}
 
 	/**
@@ -3190,10 +3039,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	protected function getValidUsersToAdd(array $userIds): array
 	{
 		$userIds = Group::filterAddedUsersToChatBySonetRestriction($userIds, $this->getContext()->getUserId());
-
-		if ($this->getContext()->getUser()->isExtranet())
+		if ($this->getContext()->getUserId() !== 0)
 		{
-			$userIds = Im\Integration\Socialnetwork\Extranet::filterUserList($userIds) ?: [];
+			$userIds = Im\Integration\Socialnetwork\Extranet::filterUserList($userIds, $this->getContext()->getUserId()) ?: [];
 		}
 
 		$usersToAdd = [];
@@ -3229,16 +3077,30 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return;
 		}
 
+		$dialogId = 'chat' . $this->getId();
+		$chatId = $this->getId();
+		$eventPayload = new \Bitrix\Im\V2\Event\EventPayload();
+		$logger = new EventLog\EventLogger();
+		$allUserIds = $this->getRelations()->getUserIds();
+
+		$eventPayloads = [];
+
 		foreach ($usersToAdd as $userId)
 		{
-			$relation = $this->getRelations()->getByUserId($userId, $this->getId());
+			$relation = $this->getRelations()->getByUserId($userId, $chatId);
 			if ($relation === null)
 			{
 				continue;
 			}
+
+			$eventPayloads[] = fn() => $eventPayload->welcomeMessage($dialogId, [
+				'CHAT_ID' => $chatId,
+				'USER_ID' => $userId,
+			]);
+
 			if ($relation->getUser()->isBot())
 			{
-				IM\Bot::onJoinChat('chat'.$this->getId(), [
+				IM\Bot::onJoinChat($dialogId, [
 					'CHAT_TYPE' => $this->getType(),
 					'MESSAGE_TYPE' => $this->getType(),
 					'BOT_ID' => $userId,
@@ -3250,6 +3112,15 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 					"ACCESS_HISTORY" => (int)$relation->getStartCounter() === 0,
 				]);
 			}
+		}
+
+		try
+		{
+			$logger->logUserChatEvent('ONIMV2JOINCHAT', $eventPayloads, $chatId, $allUserIds);
+		}
+		catch (\Throwable)
+		{
+			// Event logging should not break chat operations.
 		}
 
 		if (!empty($this->getEntityType()))
@@ -3636,7 +3507,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	public function setContext(?Context $context): self
 	{
 		$this->defaultSaveContext($context);
-		$this->getReadService()->setContext($context);
 		$this->role = null;
 
 		return $this;
@@ -3755,7 +3625,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		}
 
 		$additionalFields = [
-			'counter' => $this->getUserCounter(),
 			'dateCreate' => $this->getDateCreate()?->format('c'),
 			'lastMessageId' => $this->getLastMessageId(),
 			'lastMessageViews' => Im\Common::toJson($this->getLastMessageViews()),
@@ -3968,8 +3837,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	protected function onAfterMute(bool $isMuted, int $userId): Result
 	{
-		(new CounterService($userId))->updateIsMuted($this->getId(), $isMuted);
-		(new Im\V2\Pull\Event\ChatMute($this, $userId, $isMuted))->send();
+		ServiceLocator::getInstance()->get(CountersEventHandler::class)->onMuteChanged($this->getId(), $userId, $isMuted);
+		$counter = $this->getCountersProvider()->getForUser($this->getId(), $userId);
+		(new Im\V2\Pull\Event\ChatMute($this, $userId, $isMuted, $counter))->send();
 		(new Im\V2\Chat\Event\Legacy\AfterChatMuteNotifyEvent($this, $userId, $isMuted))->send();
 
 		return new Result();

@@ -2,7 +2,7 @@
 
 namespace Bitrix\Intranet\Controller\license;
 
-use Bitrix\Intranet\ActionFilter\AdminUser;
+use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Intranet\License;
@@ -14,7 +14,7 @@ class Widget extends Controller
 	public function getDefaultPreFilters(): array
 	{
 		$prefilters = parent::getDefaultPreFilters();
-		$prefilters[] = new AdminUser();
+		$prefilters[] = new IntranetUser();
 
 		return $prefilters;
 	}

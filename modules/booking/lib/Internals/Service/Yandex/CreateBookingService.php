@@ -22,8 +22,8 @@ use Bitrix\Booking\Internals\Exception\Yandex\ResourceNotFoundException;
 use Bitrix\Booking\Internals\Exception\Yandex\ServiceNotFoundException;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
 use Bitrix\Booking\Internals\Integration\Catalog\SkuProviderConfig;
-use Bitrix\Booking\Internals\Integration\Crm\Contact\ContactDto;
-use Bitrix\Booking\Internals\Integration\Crm\Contact\ContactService;
+use Bitrix\Booking\Internals\Integration\Crm\ContactSearcher\ContactDto;
+use Bitrix\Booking\Internals\Integration\Crm\ContactSearcher\ContactSearcherService;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Result;
@@ -36,7 +36,7 @@ class CreateBookingService
 	public function __construct(
 		private readonly ResourceRepositoryInterface $resourceRepository,
 		private readonly ServiceSkuProvider $serviceSkuProvider,
-		private readonly ContactService $contactService,
+		private readonly ContactSearcherService $contactSearcherService,
 		private readonly FindResourceService $findResourceService,
 	)
 	{
@@ -142,7 +142,7 @@ class CreateBookingService
 
 	private function findOrCreateContact(CreateBookingUser $user): int|null
 	{
-		return $this->contactService->findOrCreate(
+		return $this->contactSearcherService->findOrCreate(
 			(new ContactDto($user->getName()))
 				->setEmail($user->getEmail())
 				->setPhone($user->getPhone())

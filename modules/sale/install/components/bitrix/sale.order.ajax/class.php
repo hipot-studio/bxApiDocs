@@ -3593,15 +3593,16 @@ class SaleOrderAjax extends \CBitrixComponent
 		$arResult['BASKET_PRICE_DISCOUNT_DIFF_VALUE'] = $basket->getBasePrice() - $basket->getPrice();
 		$arResult['BASKET_PRICE_DISCOUNT_DIFF'] = SaleFormatCurrency($arResult['BASKET_PRICE_DISCOUNT_DIFF_VALUE'], $this->order->getCurrency());
 
-		$arResult['DISCOUNT_PRICE'] = Sale\PriceMaths::roundPrecision(
-			$this->order->getDiscountPrice() + ($arResult['PRICE_WITHOUT_DISCOUNT_VALUE'] - $arResult['ORDER_PRICE'])
+		$arResult['DISCOUNT_PRICE'] = Sale\PriceMaths::roundByFormatCurrency(
+			$this->order->getDiscountPrice() + ($arResult['PRICE_WITHOUT_DISCOUNT_VALUE'] - $arResult['ORDER_PRICE']),
+			$this->order->getCurrency(),
 		);
 		$arResult['DISCOUNT_PRICE_FORMATED'] = SaleFormatCurrency($arResult['DISCOUNT_PRICE'], $this->order->getCurrency());
 
-		$arResult['DELIVERY_PRICE'] = Sale\PriceMaths::roundPrecision($this->order->getDeliveryPrice());
+		$arResult['DELIVERY_PRICE'] = Sale\PriceMaths::roundByFormatCurrency($this->order->getDeliveryPrice(), $this->order->getCurrency());
 		$arResult['DELIVERY_PRICE_FORMATED'] = SaleFormatCurrency($arResult['DELIVERY_PRICE'], $this->order->getCurrency());
 
-		$arResult['ORDER_TOTAL_PRICE'] = Sale\PriceMaths::roundPrecision($this->order->getPrice());
+		$arResult['ORDER_TOTAL_PRICE'] = Sale\PriceMaths::roundByFormatCurrency($this->order->getPrice(), $this->order->getCurrency());
 		$arResult['ORDER_TOTAL_PRICE_FORMATED'] = SaleFormatCurrency($arResult['ORDER_TOTAL_PRICE'], $this->order->getCurrency());
 	}
 
@@ -4650,10 +4651,10 @@ class SaleOrderAjax extends \CBitrixComponent
 				{
 					if ($calcResult->isSuccess())
 					{
-						$arDelivery['PRICE'] = Sale\PriceMaths::roundPrecision($calcResult->getPrice());
+						$arDelivery['PRICE'] = Sale\PriceMaths::roundByFormatCurrency($calcResult->getPrice(), $calcOrder->getCurrency());
 						$arDelivery['PRICE_FORMATED'] = SaleFormatCurrency($arDelivery['PRICE'], $calcOrder->getCurrency());
 
-						$currentCalcDeliveryPrice = Sale\PriceMaths::roundPrecision($calcOrder->getDeliveryPrice());
+						$currentCalcDeliveryPrice = Sale\PriceMaths::roundByFormatCurrency($calcOrder->getDeliveryPrice(), $calcOrder->getCurrency());
 						if ($currentCalcDeliveryPrice >= 0 && $arDelivery['PRICE'] != $currentCalcDeliveryPrice)
 						{
 							$arDelivery['DELIVERY_DISCOUNT_PRICE'] = $currentCalcDeliveryPrice;

@@ -98,7 +98,7 @@ class HttpClient implements Log\LoggerAwareInterface, ClientInterface, Http\Debu
 	 *      "responseBuilder" Http\ResponseBuilderInterface Response builder.
 	 * 	Almost all options can be set separately with setters.
 	 */
-	public function __construct(array $options = null)
+	public function __construct(?array $options = null)
 	{
 		$this->headers = new HttpHeaders();
 

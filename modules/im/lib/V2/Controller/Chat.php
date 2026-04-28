@@ -32,13 +32,14 @@ use Bitrix\Im\V2\Controller\Filter\ExtendPullWatchPrefilter;
 use Bitrix\Im\V2\Entity\File\ChatAvatar;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Reading\Reader;
+use Bitrix\Im\V2\Reading\RecentReader;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Im\V2\Chat\Update\UpdateService;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\SharingLink\ChatLink;
 use Bitrix\Im\V2\SharingLink\SharingLinkError;
-use Bitrix\Im\V2\SharingLink\SharingLinkFactory;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -369,20 +370,32 @@ class Chat extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.read
 	 */
-	public function readAction(\Bitrix\Im\V2\Chat $chat, string $onlyRecent = 'N'): ?array
+	public function readAction(
+		CurrentUser $user,
+		\Bitrix\Im\V2\Chat $chat,
+		Reader $reader,
+		RecentReader $recentReader,
+		string $onlyRecent = 'N',
+	): ?array
 	{
-		$result = $chat->read($this->convertCharToBool($onlyRecent));
+		$userId = (int)$user->getId();
 
-		return $this->convertKeysToCamelCase($result->getResult());
+		$result =
+			$this->convertCharToBool($onlyRecent)
+				? $recentReader->read($userId, $chat->getId())
+				: $reader->readAllInChat($chat->getId(), $userId)
+		;
+
+		return $this->formReadResult($chat, $result);
 	}
 
 	/**
 	 * @restMethod im.v2.Chat.readByType
 	 */
-	public function readByTypeAction(CurrentUser $user, Type $chatType): ?array
+	public function readByTypeAction(CurrentUser $user, Reader $reader, Type $chatType): ?array
 	{
-		$readService = new Message\ReadService((int)$user->getId());
-		$readService->readAllByType($chatType);
+		$userId = (int)$user->getId();
+		$reader->readAllByType($chatType, $userId);
 
 		return ['result' => true];
 	}
@@ -390,10 +403,9 @@ class Chat extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.readAll
 	 */
-	public function readAllAction(CurrentUser $user): ?array
+	public function readAllAction(CurrentUser $user, Reader $reader): ?array
 	{
-		$readService = new Message\ReadService((int)$user->getId());
-		$readService->readAll();
+		$reader->readAll((int)$user->getId());
 
 		return ['result' => true];
 	}

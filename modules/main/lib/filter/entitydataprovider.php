@@ -23,7 +23,7 @@ abstract class EntityDataProvider extends DataProvider
 	 * @return Field
 	 * @throws Main\NotImplementedException
 	 */
-	protected function createField($fieldID, array $params = null)
+	protected function createField($fieldID, ?array $params = null)
 	{
 		if(!is_array($params))
 		{

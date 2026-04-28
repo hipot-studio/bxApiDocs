@@ -1,6 +1,6 @@
 <?php
 
-use Bitrix\Landing\Mainpage;
+use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -30,7 +30,7 @@ class LandingBlocksMainpageWidgetExample extends LandingBlocksMainpageWidgetBase
 	protected function getData(): void
 	{
 		$this->arResult['SHOW_EMPTY_STATE'] = false;
-		if (Mainpage\Manager::isUseDemoData())
+		if (Vibe::isUseDemoData())
 		{
 			$usersData = $this->getDemoData();
 		}

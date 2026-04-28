@@ -18,7 +18,7 @@ class ArgumentOutOfRangeException extends ArgumentException
 	 * @param null $upperLimit Upper limit of the allowable values
 	 * @param \Throwable | null $previous
 	 */
-	public function __construct($parameter, $lowerLimit = null, $upperLimit = null, \Throwable $previous = null)
+	public function __construct($parameter, $lowerLimit = null, $upperLimit = null, ?\Throwable $previous = null)
 	{
 		if (is_array($lowerLimit))
 		{

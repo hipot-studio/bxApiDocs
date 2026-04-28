@@ -14,6 +14,7 @@ use Bitrix\HumanResources\Access\Permission\PermissionVariablesDictionary;
 use Bitrix\HumanResources\Access\StructureAccessController;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\NodeEntityType;
+use Bitrix\HumanResources\Config\Storage;
 
 abstract class NodeBaseTool extends ToolContract
 {
@@ -28,6 +29,7 @@ abstract class NodeBaseTool extends ToolContract
 	 */
 	public function canList(int $userId): bool
 	{
+
 		$user = UserModel::createFromId($userId);
 
 		if ($user->isAdmin())

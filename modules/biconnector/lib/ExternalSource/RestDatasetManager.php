@@ -12,6 +12,89 @@ use Bitrix\Main\Result;
 
 final class RestDatasetManager extends DatasetManager
 {
+	public static function addWithDataset(array $dataset, array $fields, array $settings = [], ?int $sourceId = null): Result
+	{
+		$result = parent::add($dataset, $fields, $settings, $sourceId);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		$datasetId = $result->getData()['id'];
+
+		$event = new Event(
+			'biconnector',
+			self::EVENT_ON_AFTER_ADD_DATASET,
+			[
+				'dataset' => self::getById($datasetId),
+			]
+		);
+		$event->send();
+
+		foreach ($event->getResults() as $eventResult)
+		{
+			if ($eventResult->getType() === EventResult::ERROR)
+			{
+				$error = $eventResult->getParameters();
+				$result->addError(
+					$error instanceof Error
+						? $error
+						: new Error('Error adding dataset')
+				);
+			}
+		}
+
+		if (!$result->isSuccess())
+		{
+			self::delete($datasetId);
+		}
+
+		return $result;
+	}
+
+	public static function deleteWithDataset(int $id): Result
+	{
+		$connection = Application::getInstance()->getConnection();
+		$connection->startTransaction();
+
+		$result = parent::delete($id);
+		if (!$result->isSuccess())
+		{
+			$connection->rollbackTransaction();
+
+			return $result;
+		}
+
+		$event = new Event(
+			'biconnector',
+			self::EVENT_ON_AFTER_DELETE_DATASET,
+			[
+				'dataset' => self::getById($id),
+			]
+		);
+		$event->send();
+
+		foreach ($event->getResults() as $eventResult)
+		{
+			if ($eventResult->getType() === EventResult::ERROR)
+			{
+				$error = $eventResult->getParameters();
+				$result->addError(
+					$error instanceof Error
+						? $error
+						: new Error('Error deleting dataset')
+				);
+				$connection->rollbackTransaction();
+
+				return $result;
+			}
+		}
+
+		$connection->commitTransaction();
+
+		return $result;
+	}
+
 	public static function updateFieldsByDatasetId(
 		ExternalDataset $dataset,
 		array $fieldsToAdd = [],
@@ -110,7 +193,7 @@ final class RestDatasetManager extends DatasetManager
 		array $dataset,
 		array $fields,
 		array $settings,
-		int $sourceId = null
+		?int $sourceId = null
 	): Result
 	{
 		$result = parent::checkAndPrepareBeforeAdd($dataset, $fields, $settings, $sourceId);

@@ -2,18 +2,23 @@
 
 namespace Bitrix\Bizproc\Workflow\Template\Converter;
 
+use Bitrix\Bizproc\Activity\Enum\ActivityNodeType;
+use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Result;
 use Bitrix\Bizproc\Internal\Helper\Activity\ActivityHelper;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Main\Error;
 use CBPDocumentEventType;
 
-final class SequentialToNodeWorkflow
+class SequentialToNodeWorkflow
 {
 	private const MANUAL_START_TRIGGER = 'ManualStartTrigger';
 	private const EDIT_DOCUMENT_TRIGGER = 'EditDocumentTrigger';
 	private const CREATE_DOCUMENT_TRIGGER = 'CreateDocumentTrigger';
-	private array $rootActivity;
+	protected const COLUMN_SIZE = 300;
+	protected const ROW_SIZE = 100;
+
+	protected array $rootActivity;
 	private bool $isSystem = false;
 	private int $autoExecute = \CBPDocumentEventType::None;
 	private array $positions = [];
@@ -33,18 +38,31 @@ final class SequentialToNodeWorkflow
 
 	public static function makeByTemplateId(int $templateId): static
 	{
-		$row = WorkflowTemplateTable::query()
-			->where('ID', $templateId)
-			->setSelect(['TEMPLATE', 'IS_SYSTEM', 'AUTO_EXECUTE'])
-			->exec()
-			->fetch()
-		;
-
+		$row = static::getTemplateRow($templateId);
 		if (!$row)
 		{
 			throw new \CBPArgumentException("Template ID $templateId does not exist");
 		}
 
+		return static::makeByTemplateRow($row);
+	}
+
+	private static function getTemplateRow(int $templateId): ?array
+	{
+		$row = WorkflowTemplateTable::query()
+			->where('ID', $templateId)
+			->setSelect([
+				'TEMPLATE', 'IS_SYSTEM', 'AUTO_EXECUTE', 'NAME', 'DESCRIPTION', 'PARAMETERS', 'VARIABLES', 'CONSTANTS'
+			])
+			->exec()
+			->fetch()
+		;
+
+		return $row ?: null;
+	}
+
+	private static function makeByTemplateRow(array $row): static
+	{
 		$instance = new static($row['TEMPLATE']);
 		$instance->setIsSystem($row['IS_SYSTEM'] === 'Y');
 		$instance->setAutoExecute((int)$row['AUTO_EXECUTE']);
@@ -61,6 +79,38 @@ final class SequentialToNodeWorkflow
 			$template = $instance->convert();
 
 			\CBPWorkflowTemplateLoader::update($templateId, ['TEMPLATE' => $template], true);
+		}
+		catch (\Exception $exception)
+		{
+			$result->addError(new Error($exception->getMessage()));
+		}
+
+		return $result;
+	}
+
+	public static function addByTemplateId(int $sourceId): Result
+	{
+		$result = new Result();
+		try
+		{
+			$row = static::getTemplateRow($sourceId);
+			if (!$row)
+			{
+				throw new \CBPArgumentException("Template ID $sourceId does not exist");
+			}
+
+			$instance = static::makeByTemplateRow($row);
+			$template = $instance->convert();
+
+			unset($row['ID']);
+			$row['NAME'] .= ' (Nodes)';
+			$row['TEMPLATE'] = $template;
+			$row['DOCUMENT_TYPE'] = Workflow::getComplexType();
+			$row['AUTO_EXECUTE'] = 0;
+
+			$newId = \CBPWorkflowTemplateLoader::add($row, true);
+
+			$result->setData(['id' => $newId]);
 		}
 		catch (\Exception $exception)
 		{
@@ -117,32 +167,28 @@ final class SequentialToNodeWorkflow
 		];
 	}
 
-	private function createTriggers(): array
+	protected function createTriggers(): array
 	{
 		$merge = $this->createMergeNode();
-		$this->setPosition($merge['Name'], 5, 1);
+		$this->setPosition($merge['Name'], 1, 1.5);
 
 		$children = [$merge];
 		$links = [];
 
 		$triggers = [];
 
-		if (is_null($this->startTrigger))
-		{
-			if ($this->autoExecute & CBPDocumentEventType::Create)
-			{
-				$triggers[] = self::CREATE_DOCUMENT_TRIGGER;
-			}
-			if ($this->autoExecute & CBPDocumentEventType::Edit)
-			{
-				$triggers[] = self::EDIT_DOCUMENT_TRIGGER;
-			}
-		}
-		else
+		if (!is_null($this->startTrigger))
 		{
 			$triggers[] = $this->startTrigger;
 		}
-
+		if ($this->autoExecute & CBPDocumentEventType::Create)
+		{
+			$triggers[] = self::CREATE_DOCUMENT_TRIGGER;
+		}
+		if ($this->autoExecute & CBPDocumentEventType::Edit)
+		{
+			$triggers[] = self::EDIT_DOCUMENT_TRIGGER;
+		}
 
 		foreach ($triggers as $triggerType)
 		{
@@ -154,7 +200,7 @@ final class SequentialToNodeWorkflow
 			$this->movePositionDown($merge['Name']);
 		}
 
-		$this->movePositionRight($merge['Name']);
+		$this->movePosition($merge['Name'], -1, 1);
 
 		return [$merge['Name'], $links, $children];
 	}
@@ -180,7 +226,7 @@ final class SequentialToNodeWorkflow
 		];
 	}
 
-	private function optimizeChildren(array $links, array $children): array
+	protected function optimizeChildren(array $links, array $children): array
 	{
 		// remove all merge blocks, replace links
 		$mergeNames = [];
@@ -222,7 +268,7 @@ final class SequentialToNodeWorkflow
 		return [array_values($links), array_values($children)];
 	}
 
-	private function createRootActivity(array $links, array $children): array
+	protected function createRootActivity(array $links, array $children): array
 	{
 		foreach ($children as &$child)
 		{
@@ -233,81 +279,74 @@ final class SequentialToNodeWorkflow
 		return NodesToTemplate::createNodeRootActivity($links, $children);
 	}
 
-	private function makeNodeSettings(array $activity): array
+	protected function makeNodeSettings(array $activity): array
 	{
 		$row = $this->getRow($activity['Name']);
 		$column = $this->getColumn($activity['Name']);
+		$ports = [];
+		$runtime = \CBPRuntime::getRuntime();
+		$nodeType = ActivityNodeType::SIMPLE;
 
-		$ports = [
-			'input' => [],
-			'output' => [],
-		];
 		if (!str_ends_with($activity['Type'], 'Trigger'))
 		{
-			$ports['input'][] = [
+			$ports[] = [
+				'type' => 'input',
 				'id' => 'i0',
-				'position' => 1,
 			];
 		}
-
-		if ($activity['Type'] === 'WhileActivity' || $activity['Type'] === 'ForEachActivity')
+		else
 		{
-			array_push(
-				$ports['output'],
-				[
-					'id' => 'o0',
-					'position' => 1,
-					'title' => 'выход',
-				],
-				[
-					'id' => 'o1',
-					'position' => 0,
-					'title' => 'итерация',
-				],
-			);
+			$nodeType = ActivityNodeType::TRIGGER;
+		}
+
+		if (
+			$activity['Type'] === 'WhileActivity'
+			|| $activity['Type'] === 'ForEachActivity'
+			|| $activity['Type'] === 'ApproveActivity'
+			|| $activity['Type'] === 'RequestInformationOptionalActivity'
+		)
+		{
+			$nodeType = ActivityNodeType::COMPLEX;
+			$ports = $runtime->getActivityDescription($activity['Type'])['NODE_SETTINGS']['ports'] ?? $ports;
 		}
 		elseif ($activity['Type'] === 'IfElseActivity')
 		{
+			$nodeType = ActivityNodeType::COMPLEX;
 			foreach ($activity['Properties']['Conditions'] as $i => $condition)
 			{
-				$ports['output'][] = [
+				$ports[] = [
+					'type' => 'output',
 					'id' => "o{$i}",
-					'position' => $i,
 					'title' => $condition['Title'],
 				];
 			}
 		}
-		elseif ($activity['Type'] === 'ApproveActivity' || $activity['Type'] === 'RequestInformationOptionalActivity')
+		elseif ($activity['Type'] === 'ListenActivity')
 		{
-			$titleYes = $activity['Type'] === 'ApproveActivity' ? 'Да' : 'Ок';
-			$titleNo = $activity['Type'] === 'ApproveActivity' ? 'Нет' : 'Отмена';
-			array_push(
-				$ports['output'],
-				[
-					'id' => 'o0',
-					'position' => 0,
-					'title' => $titleYes,
-				],
-				[
-					'id' => 'o1',
-					'position' => 1,
-					'title' => $titleNo,
-				]
-			);
+			$nodeType = ActivityNodeType::COMPLEX;
+			foreach ($activity['Children'] as $i => $child)
+			{
+				$ports[] = [
+					'type' => 'output',
+					'id' => "o{$i}",
+					'title' => $child['Properties']['Title'],
+				];
+			}
 		}
 		else
 		{
-			$ports['output'][] = [
+			$ports[] = [
+				'type' => 'output',
 				'id' => 'o0',
-				'position' => 1,
 			];
 		}
 
-		return [
+		$node = [
 			'id' => $activity['Name'],
+			'type' => $nodeType->value,
 			'position' => [
-				'x' => $column * 500,
-				'y' => $row * 70,
+				'x' => $column * static::COLUMN_SIZE,
+				'y' => $row * static::ROW_SIZE,
 			],
 			'dimensions' => [
 				'width' => null,
@@ -320,8 +359,20 @@ final class SequentialToNodeWorkflow
 			],
 			'ports' => $ports,
 		];
+
+		if ($activity['Type'] === 'EmptyBlockActivity')
+		{
+			$node['type'] = ActivityNodeType::FRAME->value;
+			$node['position']['x'] -= 15;
+			$node['position']['y'] -= 15;
+			$node['dimensions']['width'] = $activity['width'] ?? null;
+			$node['dimensions']['height'] = $activity['height'] ?? null;
+			$node['node']['frameColorName'] = 'orange';
+		}
+
+		return $node;
 	}
-	private function setPosition(string $name, ?float $row = null, ?float $column = null): void
+	protected function setPosition(string $name, ?float $row = null, ?float $column = null): void
 	{
 		$this->positions[$name] ??= [0, 0];
 		if (isset($row))
@@ -334,27 +385,46 @@ final class SequentialToNodeWorkflow
 		}
 	}
 
-	private function setChildPositionNextColumn(string $parentName, string $childName): void
+	protected function setChildPositionNextColumn(string $parentName, string $childName): void
 	{
 		$this->setPosition($childName, $this->getRow($parentName), $this->getColumn($parentName) + 1);
 	}
 
-	private function setChildPositionNextRow(string $parentName, string $childName): void
+	protected function setChildPositionNextRow(string $parentName, string $childName, int $step = 1): void
 	{
-		$this->setPosition($childName, $this->getRow($parentName) + 1, $this->getColumn($parentName));
+		$this->setPosition($childName, $this->getRow($parentName) + $step, $this->getColumn($parentName));
 	}
 
-	private function movePositionDown(string $name): void
+	protected function movePosition(string $name, float $rowShift = 0, float $columnShift = 0): void
+	{
+		$this->setPosition(
+			$name,
+			$this->getRow($name) + $rowShift,
+			$this->getColumn($name) + $columnShift
+		);
+	}
+
+	protected function movePositionUp(string $name): void
+	{
+		$this->setPosition($name, row: $this->getRow($name) - 1);
+	}
+
+	protected function movePositionDown(string $name): void
 	{
 		$this->setPosition($name, row: $this->getRow($name) + 1);
 	}
 
-	private function movePositionRight(string $name): void
+	protected function movePositionRight(string $name): void
 	{
 		$this->setPosition($name, column: $this->getColumn($name) + 1);
 	}
 
-	private function copyPosition(string $parentName, string $childName): void
+	protected function movePositionLeft(string $name): void
+	{
+		$this->setPosition($name, column: $this->getColumn($name) - 1);
+	}
+
+	protected function copyPosition(string $parentName, string $childName): void
 	{
 		$this->setPosition($childName, $this->getRow($parentName), $this->getColumn($parentName));
 	}
@@ -373,17 +443,24 @@ final class SequentialToNodeWorkflow
 		return [max(array_column($pos, 0)), min(array_column($pos, 1))];
 	}
 
-	private function getRow(string $name): int
+	private function getBottomRightPosition(array $parentNames): array
+	{
+		$pos = array_intersect_key($this->positions, array_flip($parentNames));
+
+		return [max(array_column($pos, 0)), max(array_column($pos, 1))];
+	}
+
+	protected function getRow(string $name): float
 	{
 		return $this->positions[$name][0] ?? 0;
 	}
 
-	private function getColumn(string $name): int
+	protected function getColumn(string $name): float
 	{
 		return $this->positions[$name][1] ?? 0;
 	}
 
-	private function createLink(string $outputName, string $inputName): array
+	protected function createLink(string $outputName, string $inputName): array
 	{
 		return [$outputName, $inputName];
 	}
@@ -402,7 +479,7 @@ final class SequentialToNodeWorkflow
 		return $links;
 	}
 
-	private function createMergeNode($mergeFlow = false): array
+	protected function createMergeNode($mergeFlow = false): array
 	{
 		$title = null;
 		if ($mergeFlow)
@@ -432,7 +509,7 @@ final class SequentialToNodeWorkflow
 		}
 	}
 
-	private function convertChildren(string $outputName, array $children): array
+	protected function convertChildren(string $outputName, array $children): array
 	{
 		$newLinks = [];
 		$newChildren = [];
@@ -456,7 +533,7 @@ final class SequentialToNodeWorkflow
 		return [$parentOutputName, $newLinks, $newChildren];
 	}
 
-	private function convertChild(string $outputName, array $child): array
+	protected function convertChild(string $outputName, array $child): array
 	{
 		\CBPActivity::includeActivityFile($child['Type']);
 		$instance = \CBPActivity::createInstance($child['Type'], $child['Name']);
@@ -509,7 +586,20 @@ final class SequentialToNodeWorkflow
 			return [$outputName, [], []];
 		}
 
-		return $this->convertChildren($outputName, $children);
+		$row = $this->getRow($outputName);
+		$column = $this->getColumn($outputName);
+		$this->setChildPositionNextRow($outputName, $activity['Name']);
+
+		[$parentOutputName, $newLinks, $newChildren] = $this->convertChildren($outputName, $children);
+
+		[$row2, $col2] = $this->getBottomRightPosition(array_column($newChildren, 'Name'));
+
+		$activity['width'] = ($col2 - $column + 1) * static::COLUMN_SIZE;
+		$activity['height'] = ($row2 - $row) * static::ROW_SIZE;
+
+		$newChildren[] = $activity;
+
+		return [$parentOutputName, $newLinks, $newChildren];
 	}
 
 	private function convertIterableActivity(string $outputName, array $activity): array
@@ -525,7 +615,8 @@ final class SequentialToNodeWorkflow
 		// link parent
 		$links[] = $this->createLink($outputName, $activity['Name']);
 		// link true-loop
-		$links[] = $this->createLink($childOutputName, $activity['Name']);
+		$loopPortName = $activity['Type'] === 'WhileActivity' ? ':i0' : ':i1';
+		$links[] = $this->createLink($childOutputName, $activity['Name'] . $loopPortName);
 
 		unset($activity['Children']);
 
@@ -545,7 +636,8 @@ final class SequentialToNodeWorkflow
 	private function convertBranchableActivity(string $outputName, array $activity): array
 	{
 		$mergeFlow = $activity['Type'] === 'ParallelActivity';
-		$singlePort = $activity['Type'] === 'ListenActivity';
+		$isListen = $activity['Type'] === 'ListenActivity';
+		$listenChildren = [];
 		$branches = $activity['Children'] ?? null;
 
 		if (empty($branches))
@@ -573,7 +665,7 @@ final class SequentialToNodeWorkflow
 
 		foreach ($branches as $i => $branch)
 		{
-			$branchPortId = $parentOutputName . ($singlePort ? '' : ":o{$i}");
+			$branchPortId = $parentOutputName . ":o{$i}";
 			$this->setChildPositionNextRow($parentOutputName, $branchPortId);
 			if ($i === 0)
 			{
@@ -590,9 +682,14 @@ final class SequentialToNodeWorkflow
 					column: $this->getColumn($branchPortId) + $rows
 				);
 			}
-			$rows += $this->countChildrenRows($branch['Children'] ?? []) + 1;
+			$branchChildren = $branch['Children'] ?? [];
+			if ($isListen)
+			{
+				$listenChildren[] = array_shift($branchChildren);
+			}
+			$rows += $this->countChildrenRows($branchChildren) + 1;
 
-			[$childOutputName, $links, $children] = $this->convertChildren($branchPortId, $branch['Children'] ?? []);
+			[$childOutputName, $links, $children] = $this->convertChildren($branchPortId, $branchChildren);
 
 			array_push($allChildren, ...$children);
 			array_push($allLinks, ...$links);
@@ -605,6 +702,10 @@ final class SequentialToNodeWorkflow
 			$activity['Properties']['Conditions'] = array_column($branches, 'Properties');
 		}
 		unset($activity['Children']);
+		if ($activity['Type'] === 'ListenActivity')
+		{
+			$activity['Children'] = $listenChildren;
+		}
 
 		$merge = $this->createMergeNode($mergeFlow);
 		$this->setPosition($merge['Name'], ...$this->getBottomLeftPosition([$activity['Name'], ...$tails]));
@@ -623,13 +724,6 @@ final class SequentialToNodeWorkflow
 		if ($mergeFlow)
 		{
 			$activity['Type'] = 'Merge';
-		}
-		if ($singlePort)
-		{
-			$this->setPosition(
-				$activity['Name'],
-				row: $this->getRow($outputName),
-			);
 		}
 
 		return [$merge['Name'], $allLinks, [$activity, ...$allChildren]];

@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Superset\Scope\MenuItem;
 
 use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 
 final class MenuItemCreatorProfile extends BaseMenuItemCreator
@@ -20,7 +21,16 @@ final class MenuItemCreatorProfile extends BaseMenuItemCreator
 		{
 			$dashboardId = $dashboard->getId();
 
+			$marketAccessManager = MarketAccessManager::getInstance();
+			$isMarketAvailable = $marketAccessManager->isDashboardAvailableByType($dashboard->getType());
+
 			$onClick = $this->createDashboardOpenEventFromMenu($dashboard, $params);
+
+			if (!$isMarketAvailable)
+			{
+				$onClick = $this->getOpenTariffSliderScript();
+			}
+
 			if (
 				$this->isAvailableByTariff()
 				&& $dashboard->getStatus() === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED
@@ -39,7 +49,7 @@ final class MenuItemCreatorProfile extends BaseMenuItemCreator
 				'TEXT' => $dashboard->getTitle(),
 				'ON_CLICK' => $onClick,
 				'IS_ACTIVE' => false,
-				'IS_LOCKED' => !$this->isAvailableByTariff(),
+				'IS_LOCKED' => !$this->isAvailableByTariff() || !$isMarketAvailable,
 			];
 		}
 

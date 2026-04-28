@@ -5,6 +5,7 @@ namespace Bitrix\HumanResources\Repository;
 use Bitrix\HumanResources\Access\AuthProvider\StructureAuthProvider;
 use Bitrix\HumanResources\Command\Structure\Node\NodeOrderCommand;
 use Bitrix\HumanResources\Contract;
+use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Service\EventSenderService;
 use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Enum\EventName;
@@ -18,6 +19,7 @@ use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Model;
 use Bitrix\HumanResources\Model\NodePathTable;
 use Bitrix\HumanResources\Model\NodeTable;
+use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
@@ -32,29 +34,27 @@ use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
-use Bitrix\HumanResources\Type\AccessCodeType;
 
+/**
+ * For selecting nodes, use the public node service methods.
+ * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+ * @see \Bitrix\HumanResources\Public\Service\NodeService
+ */
 class NodeRepository implements Contract\Repository\NodeRepository
 {
 	protected readonly Contract\Util\CacheManager $cacheManager;
 	protected readonly EventSenderService $eventSenderService;
 	private readonly StructureAuthProvider $structureAuthProvider;
-	/** @var list<NodeEntityType> */
-	protected array $selectableNodeEntityTypes = [NodeEntityType::DEPARTMENT];
 
-	protected const DEFAULT_TTL = 3600;
-
-	public function __construct(
-		?StructureAuthProvider $structureAuthProvider = null,
-	)
+	public function __construct()
 	{
 		$this->cacheManager = Container::getCacheManager();
 		$this->cacheManager->setTtl(86400*7);
+		$this->structureAuthProvider = Container::getStructureAuthProvider();
 		$this->eventSenderService = Container::getEventSenderService();
-		$this->structureAuthProvider = $structureAuthProvider ?? Container::getStructureAuthProvider();
 	}
 
-	public function mapItemToModel(Model\Node $nodeEntity, Item\Node $node): Model\Node
+	public function mapItemToModel(Model\Node $nodeEntity, Node $node): Model\Node
 	{
 		return $nodeEntity
 			->setStructureId($node->structureId)
@@ -71,12 +71,13 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		;
 	}
 
-	protected function convertModelToItem(Model\Node $node): Item\Node
+	protected function convertModelToItem(Model\Node $node): Node
 	{
 		$nodeId = $node->getId();
 		$accessCode = $node->getAccessCode()?->current();
 		$depth = $node->getChildNodes()?->current();
-		return new Item\Node(
+
+		return new Node(
 			name: $node->getName(),
 			type: NodeEntityType::tryFrom($node->getType()),
 			structureId: $node->getStructureId(),
@@ -96,14 +97,14 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		);
 	}
 
-	protected function convertModelArrayToItem(array $node): Item\Node
+	protected function convertModelArrayToItem(array $node): Node
 	{
 		$accessCode =
 			$node['HUMANRESOURCES_MODEL_NODE_ACCESS_CODE_ACCESS_CODE']
 			?? AccessCodeHelper::makeCodeByTypeAndId((int)($node['ID'] ?? 0))
 		;
 
-		return new Item\Node(
+		return new Node(
 			name: $node['NAME'] ?? null,
 			type: NodeEntityType::tryFrom($node['TYPE'] ?? '') ?? null,
 			structureId: $node['STRUCTURE_ID'] ?? null,
@@ -124,19 +125,19 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	}
 
 	/**
-	 * @param \Bitrix\HumanResources\Item\Node $node
+	 * @param Node $node
 	 *
-	 * @return \Bitrix\HumanResources\Item\Node
-	 * @throws \Bitrix\HumanResources\Exception\CreationFailedException
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\SystemException
+	 * @return Node
+	 * @throws CreationFailedException
+	 * @throws ArgumentException
+	 * @throws SystemException
 	 */
-	public function create(Item\Node $node): Item\Node
+	public function create(Node $node): Node
 	{
 		if (is_null($node->structureId))
 		{
 			throw (new CreationFailedException())->setErrors(
-				new ErrorCollection([new Error('No structure for node')])
+				new ErrorCollection([new Error('No structure for node')]),
 			);
 		}
 		$nodeEntity = NodeTable::getEntity()->createObject();
@@ -146,12 +147,14 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		$this->prepareSort($node);
 
 		$result = $this->mapItemToModel($nodeEntity, $node)
-			->save();
+			->save()
+		;
 
 		if (!$result->isSuccess())
 		{
 			throw (new CreationFailedException())
-				->setErrors($result->getErrorCollection());
+				->setErrors($result->getErrorCollection())
+			;
 		}
 
 		$node->id = $result->getId();
@@ -161,7 +164,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 			EventName::OnNodeAdded,
 			[
 				'node' => $node,
-			]
+			],
 		);
 		$this->structureAuthProvider->recalculateCodesForNode($node);
 
@@ -175,9 +178,9 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
-	 * @throws UpdateFailedException
+	 * @throws UpdateFailedException|WrongStructureItemException
 	 */
-	public function update(Item\Node $node): Item\Node
+	public function update(Node $node): Node
 	{
 		if (!$node->id)
 		{
@@ -232,7 +235,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 				|| $parentChanged
 			)
 			{
-				foreach ($this->getParentOf($node) as $parent)
+				foreach (PublicContainer::getNodeService()->findParentsByNodeId($node->id) as $parent)
 				{
 					if (
 						$parent->id !== $nodeCache->id
@@ -313,115 +316,55 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	}
 
 	/**
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * Finds all departments for a given user.
+	 *
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllByNodeMemberId() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByMemberEntityId()
 	 */
-	public function findAllByUserId(int $userId, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): Item\Collection\NodeCollection
+	public function findAllByUserId(int $userId, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): NodeCollection
 	{
-		$nodeItems = new Item\Collection\NodeCollection();
-		$query = $this->getNodeQueryWithPreparedTypeFilter()
-			->setSelect(['*'])
-			->addSelect('ACCESS_CODE')
-			->addSelect('CHILD_NODES')
-			->registerRuntimeField(
-				'nm',
-				new Reference(
-					'nm',
-					Model\NodeMemberTable::class,
-					Join::on('this.ID', 'ref.NODE_ID'),
-				),
-			)
-			->where('nm.ENTITY_ID', $userId)
-			->where('nm.ENTITY_TYPE', MemberEntityType::USER->name)
-			->cacheJoins(true)
-			->setCacheTtl(86400)
-		;
-
-		$query = $this->setNodeActiveFilter($query, $activeFilter);
-		$nodes = $query->fetchCollection();
-		foreach ($nodes as $nodeEntity)
-		{
-			$node = $this->convertModelToItem($nodeEntity);
-			$nodeItems->add($node);
-		}
-
-		return $nodeItems;
+		return PublicContainer::getNodeService()->findAllByMemberEntityId(
+			memberEntityId: $userId,
+			nodeActiveFilter: $activeFilter,
+		);
 	}
 
 	/**
+	 * Internal repository method for getting a Node by id. Use public node service instead.
+	 *
 	 * @param int $nodeId
 	 * @param bool $needDepth
-	 *
-	 * @return \Bitrix\HumanResources\Item\Node|null
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
-	 */
-	public function getById(int $nodeId, bool $needDepth = false): ?Item\Node
-	{
-		if ($needDepth)
-		{
-			return $this->getByIdWithDepth($nodeId);
-		}
-
-		$nodeCacheKey = sprintf(self::NODE_ENTITY_CACHE_KEY, $nodeId);
-
-		$nodeCache = $this->cacheManager->getData($nodeCacheKey);
-		if ($nodeCache)
-		{
-			$nodeCache['type'] = NodeEntityType::tryFrom($nodeCache['type']);
-			$nodeCache['createdAt'] = null;
-			$nodeCache['updatedAt'] = null;
-
-			return new Item\Node(...$nodeCache);
-		}
-
-		$query = NodeTable::query()
-			->setSelect(['*', 'ACCESS_CODE',])
-			->where('ID', $nodeId)
-			->setLimit(1)
-		;
-
-		$node = $query->fetchObject();
-		$convertedNode = $node !== null ? $this->convertModelToItem($node) : null;
-		if ($convertedNode)
-		{
-			$this->cacheManager->setData($nodeCacheKey, $convertedNode);
-
-			return $convertedNode;
-		}
-
-		return null;
-	}
-
-	/**
-	 *
-	 * returns node data with depth level
-	 *
-	 * @param int $nodeId
 	 *
 	 * @return Node|null
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
+	 *
+	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::getById() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::getById()
+	 *
 	 */
-	public function getByIdWithDepth(int $nodeId): ?Item\Node
+	public function getById(int $nodeId, bool $needDepth = false): ?Node
 	{
-		$query = NodeTable::query()
-				->setSelect(['*', 'ACCESS_CODE', 'CHILD_NODES'])
-				->where('ID', $nodeId)
-				->where('PARENT_NODES.CHILD_ID', $nodeId)
-				->addOrder('CHILD_NODES.DEPTH', 'DESC')
-				->setLimit(1)
-				->setCacheTtl(86400)
-				->cacheJoins(true)
-		;
+		return PublicContainer::getNodeService()->getById($nodeId, $needDepth);
+	}
 
-		$node = $query->fetchObject();
-
-		return $node !== null ? $this->convertModelToItem($node) : null;
+	/**
+	 * Internal repository method for getting a Node by id with depth. Use public node service instead.
+	 *
+	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::getById() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::getById()
+	 *
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function getByIdWithDepth(int $nodeId): ?Node
+	{
+		return PublicContainer::getNodeService()->getById($nodeId, needDepth: true);
 	}
 
 	private function removeNodeCache(int $nodeId): void
@@ -431,126 +374,57 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	}
 
 	/**
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
-	 * @throws \Bitrix\Main\ArgumentException
+	 * Internal repository method for getting child node IDs for a given nodeId (returns only departments).
+	 *
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllChildrenByNodeId() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findChildrenByNodeIds()
 	 */
 	public function getAllChildIdsByNodeId(int $nodeId): array
 	{
-		$nodesList = NodePathTable::query()
-			->setSelect(['CHILD_ID'])
-			->where('PARENT_ID', $nodeId)
-			->fetchAll()
-		;
-
-		$nodes = [];
-		foreach ($nodesList as $node)
-		{
-			$nodes[] = $node['CHILD_ID'];
-		}
-
-		return $nodes;
+		return PublicContainer::getNodeService()->findChildrenByNodeIds(
+			nodeIds: [$nodeId],
+			nodeTypes: [NodeEntityType::DEPARTMENT],
+		)->getIds();
 	}
 
 	/**
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
-	 * @throws \Bitrix\Main\SystemException
+	 * Internal repository method for getting parent nodeCollection.
+	 *
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllParentsByNodeId() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findParentsByNodeId()
 	 */
 	public function getParentOf(
 		Item\Node $node,
-		DepthLevel|int $depthLevel = DepthLevel::FIRST
-	): Item\Collection\NodeCollection
+		DepthLevel|int $depthLevel = DepthLevel::FIRST,
+	): NodeCollection
 	{
-		$nodeCollection = new Item\Collection\NodeCollection();
-		if (!$node->id)
-		{
-			return $nodeCollection;
-		}
-
-		$nodeQuery = $this->getNodeQueryWithPreparedTypeFilter()
-			->setSelect(['*'])
-			->addSelect('ACCESS_CODE')
-			->addSelect('CHILD_NODES')
-			->where('PARENT_NODES.CHILD_ID', $node->id)
-			->addOrder('CHILD_NODES.DEPTH', 'DESC')
-			->setCacheTtl(self::DEFAULT_TTL)
-			->cacheJoins(true)
-			;
-
-		if ($depthLevel === DepthLevel::FIRST)
-		{
-			$nodeQuery->where('CHILD_NODES.DEPTH', 1);
-		}
-
-		if (is_int($depthLevel))
-		{
-			if ($node->depth === null)
-			{
-				$node = $this->getById($node->id, true);
-			}
-
-			$nodeQuery->where('CHILD_NODES.DEPTH', '>=', $node->depth - $depthLevel);
-		}
-
-		$nodeModelCollection = $nodeQuery->fetchAll();
-		foreach ($nodeModelCollection as $node)
-		{
-			$nodeCollection->add($this->convertModelArrayToItem($node));
-		}
-
-		return $nodeCollection;
+		return PublicContainer::getNodeService()->findParentsByNodeId(
+			$node->id,
+			depthLevel: $depthLevel,
+		);
 	}
 
 	/**
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
-	 * @throws \Bitrix\Main\SystemException
+	 * Internal repository method for getting child nodeCollection for a given node (returns only departments).
+	 *
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllChildrenByNodeId() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findChildrenByNodeIds()
 	 */
 	public function getChildOf(
 		Item\Node $node,
 		DepthLevel|int $depthLevel = DepthLevel::FIRST,
 		NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
-	): Item\Collection\NodeCollection
+	): NodeCollection
 	{
-		$nodeCollection = new Item\Collection\NodeCollection();
-		if (!$node->id)
-		{
-			return $nodeCollection;
-		}
-
-		$nodeQuery = $this->getNodeQueryWithPreparedTypeFilter()
-			->setSelect(['*'])
-			->addSelect('ACCESS_CODE')
-			->addSelect('CHILD_NODES')
-			->where('CHILD_NODES.PARENT_ID', $node->id)
-			->setOrder([
-				'CHILD_NODES.DEPTH' => 'ASC',
-				'SORT' => 'ASC',
-			])
-			->setCacheTtl(self::DEFAULT_TTL)
-			->cacheJoins(true)
-		;
-		if ($depthLevel === DepthLevel::FIRST)
-		{
-			$nodeQuery->where('CHILD_NODES.DEPTH', 1);
-		}
-
-		if (is_int($depthLevel))
-		{
-			$nodeQuery->where('CHILD_NODES.DEPTH', '<=', $depthLevel);
-		}
-
-		$nodeQuery = $this->setNodeActiveFilter($nodeQuery, $activeFilter);
-
-		$nodeModelArray = $nodeQuery->fetchAll();
-
-		return !$nodeModelArray
-			? $nodeCollection
-			: $this->convertModelArrayToItemByArray($nodeModelArray)
-			;
+		return PublicContainer::getNodeService()->findChildrenByNodeIds(
+			nodeIds: [$node->id],
+			nodeTypes: [NodeEntityType::DEPARTMENT],
+			depthLevel: $depthLevel,
+			activeFilter: $activeFilter,
+		);
 	}
 
 	/**
@@ -559,11 +433,11 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function findAllByUserIdAndRoleId(int $userId, int $roleId, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): Item\Collection\NodeCollection
+	public function findAllByUserIdAndRoleId(int $userId, int $roleId, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): NodeCollection
 	{
-		$nodeItems = new Item\Collection\NodeCollection();
+		$nodeItems = new NodeCollection();
 		$query =
-			$this->getNodeQueryWithPreparedTypeFilter()
+			NodeTable::query()
 				->setSelect(['*'])
 				->addSelect('ACCESS_CODE')
 				->addSelect('CHILD_NODES')
@@ -595,128 +469,75 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	}
 
 	/**
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
-	 */
-	public function getByAccessCode(string $accessCode): ?Item\Node
-	{
-		static $nodes = [];
-
-		if (isset($nodes[$accessCode]))
-		{
-			return $nodes[$accessCode];
-		}
-
-		$nodeByAccessCode = $this->extractIdByAccessCodeAndFind($accessCode);
-		if ($nodeByAccessCode)
-		{
-			$nodes[$accessCode] = $nodeByAccessCode;
-
-			return $nodeByAccessCode;
-		}
-
-		$accessCode = str_replace('DR', 'D', $accessCode);
-
-		$node = NodeTable::query()
-			->setSelect(['*'])
-			->addSelect('ACCESS_CODE')
-			->where('ACCESS_CODE.ACCESS_CODE', $accessCode)
-			->setLimit(1)
-			->setCacheTtl(86400)
-			->cacheJoins(true)
-			->exec()
-			->fetch();
-
-		$nodes[$accessCode] = !$node ? null : $this->convertModelArrayToItem($node);
-
-		return $nodes[$accessCode];
-	}
-
-	/**
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
-	 */
-	public function getRootNodeByStructureId(int $structureId): ?Item\Node
-	{
-		$node = NodeTable::query()
-			->setSelect(['*'])
-			->addSelect('ACCESS_CODE')
-			->where('STRUCTURE_ID', $structureId)
-			->where('PARENT_ID', 0)
-			->setCacheTtl(86400)
-			->fetchObject();
-
-		return $node !== null ? $this->convertModelToItem($node) : null;
-	}
-
-	/**
-	 * @param int $structureId
+	 * Internal repository method for getting a Node by access code. Use public node service instead.
 	 *
-	 * @return \Bitrix\HumanResources\Item\Collection\NodeCollection
-	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
-	 */
-	public function getAllByStructureId(int $structureId, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): Item\Collection\NodeCollection
-	{
-		$nodeItems = new Item\Collection\NodeCollection();
-		$query =
-			$this->getNodeQueryWithPreparedTypeFilter()
-				->setSelect(['*'])
-				->addSelect('ACCESS_CODE')
-				->where('STRUCTURE_ID', $structureId)
-				->addOrder('SORT')
-				->cacheJoins(true)
-				->setCacheTtl(self::DEFAULT_TTL)
-		;
-
-		$query = $this->setNodeActiveFilter($query, $activeFilter);
-		$result = $query->exec();
-		while ($nodeEntity = $result->fetch())
-		{
-			$node = $this->convertModelArrayToItem($nodeEntity);
-			$nodeItems->add($node);
-		}
-
-		return $nodeItems;
-	}
-
-	/**
+	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::getByAccessCode() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::getByAccessCode()
+	 *
 	 * @throws ArgumentException
-	 * @throws WrongStructureItemException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function getAllPagedByStructureId(int $structureId, int $limit = 10, int $offset = 0, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): Item\Collection\NodeCollection
+	public function getByAccessCode(string $accessCode): ?Node
 	{
-		$nodeItems = new Item\Collection\NodeCollection();
-		$query =
-			$this->getNodeQueryWithPreparedTypeFilter()
-				->setSelect(['*'])
-				->addSelect('ACCESS_CODE')
-				->setLimit($limit)
-				->setOffset($offset)
-				->setOrder(['ID' => 'ASC'])
-				->where('STRUCTURE_ID', $structureId)
-		;
-		$query = $this->setNodeActiveFilter($query, $activeFilter);
-		$nodeEntities = $query->fetchAll();
+		return PublicContainer::getNodeService()->getByAccessCode($accessCode);
+	}
 
-		foreach ($nodeEntities as $nodeEntity)
-		{
-			$nodeItems->add($this->convertModelArrayToItem($nodeEntity));
-		}
+	/**
+	 * Internal repository method for getting a root Node. Use public node service instead.
+	 *
+	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::getRootNode() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::getRootNode()
+	 *
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function getRootNodeByStructureId(int $structureId): ?Node
+	{
+		return PublicContainer::getNodeService()->getRootNode($structureId);
+	}
 
-		return $nodeItems;
+	/**
+	 * Internal repository method for getting all departments.
+	 *
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAll() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAll()
+	 */
+	public function getAllByStructureId(int $structureId, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): NodeCollection
+	{
+		return PublicContainer::getNodeService()->findAll(
+			structureId:  $structureId,
+			limit: 0,
+			activeFilter: $activeFilter,
+		);
+	}
+
+	/**
+	 * Internal repository method for getting all departments (paginated).
+	 *
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAll() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAll()
+	 */
+	public function getAllPagedByStructureId(int $structureId, int $limit = 10, int $offset = 0, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): NodeCollection
+	{
+		return PublicContainer::getNodeService()->findAll(
+			structureId: $structureId,
+			activeFilter: $activeFilter,
+			limit: $limit,
+			offset: $offset,
+		);
 	}
 
 	public function hasChild(Item\Node $node): bool
 	{
 		$nodeQuery =
-			$this->getNodeQueryWithPreparedTypeFilter()
+			NodeTable::query()
+				->where('TYPE', NodeEntityType::DEPARTMENT->value)
 				->where('CHILD_NODES.PARENT_ID', $node->id)
 				->where('CHILD_NODES.DEPTH', 1)
 				->setLimit(1)
@@ -726,7 +547,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		return (bool)$nodeQuery->fetch();
 	}
 
-	public function isAncestor(Item\Node $node, Item\Node $targetNode): bool
+	public function isAncestor(Node $node, Node $targetNode): bool
 	{
 		if (
 			!is_null($node->depth)
@@ -753,9 +574,9 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	 * @param int $nodeId
 	 *
 	 * @return void
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\SystemException
-	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 * @throws ObjectPropertyException|DeleteFailedException
 	 */
 	public function deleteById(int $nodeId): void
 	{
@@ -777,80 +598,26 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	}
 
 	/**
-	 * @param list<string> $departments
+	 * Internal repository method for getting nodes by access codes. Use public node service instead.
 	 *
-	 * @return \Bitrix\HumanResources\Item\Collection\NodeCollection
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
-	 * @throws WrongStructureItemException
+	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::getByAccessCode() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByAccessCodes()
 	 */
-	public function findAllByAccessCodes(array $departments): Item\Collection\NodeCollection
+	public function findAllByAccessCodes(array $departments): NodeCollection
 	{
-		if (empty($departments))
-		{
-			return new Item\Collection\NodeCollection();
-		}
-
-		$iBlockAccessCodes = [];
-		$nodeIds = [];
-		foreach ($departments as $accessCode)
-		{
-			$id = AccessCodeHelper::extractIdFromCode($accessCode);
-			if ($id)
-			{
-				$nodeIds[] = $id;
-
-				continue;
-			}
-
-			$accessCode = str_replace('DR', 'D', $accessCode);
-
-			$iBlockAccessCodes[] = $accessCode;
-		}
-
-		$findByAccessCodeCollection = new Item\Collection\NodeCollection();
-		$findByIdsCollection = new Item\Collection\NodeCollection();
-		if (!empty($iBlockAccessCodes))
-		{
-			$nodeModelArray =
-				$this->getNodeQueryWithPreparedTypeFilter()
-					->setSelect(['*'])
-					->addSelect('ACCESS_CODE')
-					->addSelect('CHILD_NODES')
-					->whereIn('ACCESS_CODE.ACCESS_CODE', $iBlockAccessCodes)
-					->cacheJoins(true)
-					->setCacheTtl(86400)
-					->fetchAll()
-			;
-
-			if ($nodeModelArray)
-			{
-				$findByAccessCodeCollection = $this->convertModelArrayToItemByArray($nodeModelArray);
-			}
-		}
-
-		if (!empty($nodeIds))
-		{
-			$findByIdsCollection = $this->findAllByIds($nodeIds);
-		}
-
-		if ($findByAccessCodeCollection->empty())
-		{
-			return $findByIdsCollection;
-		}
-
-		if ($findByIdsCollection->empty())
-		{
-			return $findByAccessCodeCollection;
-		}
-
-		return new Item\Collection\NodeCollection(
-			...$findByAccessCodeCollection->getValues(),
-			...$findByIdsCollection->getValues(),
+		return PublicContainer::getNodeService()->findAllByAccessCodes(
+			accessCodes: $departments
 		);
 	}
 
+	/**
+	 * Internal repository method for getting departments by name. Use public node service instead.
+	 *
+	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::getByAccessCode() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByName()
+	 */
 	public function getNodesByName(
 		int $structureId,
 		?string $name,
@@ -859,182 +626,75 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		DepthLevel|int $depth = DepthLevel::FULL,
 		bool $strict = false,
 		NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
-	): Item\Collection\NodeCollection
+	): NodeCollection
 	{
-		$nodeCollection = new Item\Collection\NodeCollection();
-		$nodeQuery = $this->getNodeQueryWithPreparedTypeFilter()
-			->setSelect(['*'])
-			->addSelect('ACCESS_CODE')
-			->addSelect('CHILD_NODES')
-			->where('STRUCTURE_ID', $structureId)
-			->setCacheTtl(self::DEFAULT_TTL)
-			->cacheJoins(true)
-		;
-		$nodeQuery = $this->setNodeActiveFilter($nodeQuery, $activeFilter);
-
-		if (!empty($name))
-		{
-			if (!$strict)
-			{
-				$nodeQuery->whereLike('NAME', '%' . $name . '%');
-			}
-			else
-			{
-				$nodeQuery->where('NAME', $name);
-			}
-		}
-
-		if ($limit)
-		{
-			$nodeQuery->setLimit($limit);
-		}
-
-		if (is_null($parentId) && $depth === DepthLevel::FULL)
-		{
-			$nodeQuery->where('CHILD_NODES.DEPTH', 0);
-			$nodeModelArray = $nodeQuery->fetchAll();
-
-			return !$nodeModelArray
-				? $nodeCollection
-				: $this->convertModelArrayToItemByArray($nodeModelArray)
-			;
-		}
-
-		if (is_null($parentId))
-		{
-			try
-			{
-				$rootNode = self::getRootNodeByStructureId($structureId);
-			}
-			catch (ObjectPropertyException|ArgumentException|SystemException $e)
-			{
-				return $nodeCollection;
-			}
-
-			if (!$rootNode)
-			{
-				return $nodeCollection;
-			}
-			$parentId = $rootNode->id;
-		}
-		$nodeQuery->where('CHILD_NODES.PARENT_ID', $parentId);
-
-		if ($depth === DepthLevel::FIRST)
-		{
-			$nodeQuery->where('CHILD_NODES.DEPTH', 1);
-		}
-
-		if ($depth === DepthLevel::FULL)
-		{
-			$nodeQuery->where('CHILD_NODES.DEPTH', '>', 0);
-		}
-
-		if (is_int($depth))
-		{
-			$nodeQuery->where('CHILD_NODES.DEPTH', '<', $depth + 1);
-		}
-
-		$nodeModelArray = $nodeQuery->fetchAll();
-
-		return !$nodeModelArray
-			? new Item\Collection\NodeCollection()
-			: $this->convertModelArrayToItemByArray($nodeModelArray)
-		;
+		return PublicContainer::getNodeService()->findAllByName(
+			name: $name,
+			structureId: $structureId,
+			parentIds: $parentId !== null ? [$parentId] : null,
+			depthLevel: $depth,
+			strict: $strict,
+			activeFilter: $activeFilter,
+			limit: $limit,
+		);
 	}
 
-	/**
-	 * @param list<NodeEntityType> $selectableNodeEntityTypes
-	 */
-	public function setSelectableNodeEntityTypes(array $selectableNodeEntityTypes): static
+	protected function convertModelArrayToItemByCollection(Model\NodeCollection $models): NodeCollection
 	{
-		$this->selectableNodeEntityTypes = $selectableNodeEntityTypes;
-
-		return $this;
-	}
-
-	protected function convertModelArrayToItemByCollection(Model\NodeCollection $models): Item\Collection\NodeCollection
-	{
-		return new Item\Collection\NodeCollection(
+		return new NodeCollection(
 			...array_map([$this, 'convertModelToItem'],
-			$models->getAll()
+			$models->getAll(),
 		));
 	}
 
-	protected function convertModelArrayToItemByArray(array $nodeModelArray)
+	protected function convertModelArrayToItemByArray(array $nodeModelArray): NodeCollection
 	{
-		return new Item\Collection\NodeCollection(
+		return new NodeCollection(
 			...array_map([$this, 'convertModelArrayToItem'],
-			$nodeModelArray
+			$nodeModelArray,
 		));
 	}
 
 	/**
-	 * Get child nodes of a node collection.
+	 * Internal repository method for getting child nodeCollection for a given nodeCollection (returns only departments).
 	 *
-	 * @param Item\Collection\NodeCollection $nodeCollection The parent node collection.
-	 * @param DepthLevel $depthLevel [optional] The depth level of child nodes. Default is DepthLevel::FIRST.
-	 *
-	 * @return Item\Collection\NodeCollection The child node collection.
-	 *
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\SystemException
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllChildrenByNodeIds() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findChildrenByNodeIds()
 	 */
 	public function getChildOfNodeCollection(
-		Item\Collection\NodeCollection $nodeCollection,
+		NodeCollection $nodeCollection,
 		DepthLevel|int $depthLevel = DepthLevel::FIRST,
 		NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
-	): Item\Collection\NodeCollection
+	): NodeCollection
 	{
-		$resultNodeCollection = new Item\Collection\NodeCollection();
-		if ($nodeCollection->empty())
+		$parentIds = $nodeCollection->getIds();
+		if (empty($parentIds))
 		{
-			return $resultNodeCollection;
+			return new NodeCollection();
 		}
 
-		$parentIds = array_column($nodeCollection->getItemMap(), 'id');
-		$nodeQuery = $this->getNodeQueryWithPreparedTypeFilter()
-			  ->setSelect(['*'])
-			  ->addSelect('ACCESS_CODE')
-			  ->addSelect('CHILD_NODES')
-			  ->whereIn('CHILD_NODES.PARENT_ID', $parentIds)
-			  ->setCacheTtl(self::DEFAULT_TTL)
-			  ->cacheJoins(true)
-		;
-		if ($depthLevel === DepthLevel::FIRST)
-		{
-			$nodeQuery->where('CHILD_NODES.DEPTH', 1);
-		}
-
-		if (is_int($depthLevel))
-		{
-			$nodeQuery->where('CHILD_NODES.DEPTH', '<=', $depthLevel);
-		}
-
-		$nodeQuery = $this->setNodeActiveFilter($nodeQuery, $activeFilter);
-
-		$nodeModelArray = $nodeQuery->fetchAll();
-
-		return !$nodeModelArray
-			? $resultNodeCollection
-			: $this->convertModelArrayToItemByArray($nodeModelArray)
-		;
+		return PublicContainer::getNodeService()->findChildrenByNodeIds(
+			nodeIds: $parentIds,
+			nodeTypes: [NodeEntityType::DEPARTMENT],
+			depthLevel: $depthLevel,
+			activeFilter: $activeFilter,
+		);
 	}
 
-	public function findAllByXmlId(string $xmlId, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): Item\Collection\NodeCollection
+	/**
+	 * Internal repository method for getting nodes by xmlId. Use public node service instead.
+	 *
+	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::getByAccessCode() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByXmlId()
+	 */
+	public function findAllByXmlId(string $xmlId, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): NodeCollection
 	{
-		$query = NodeTable::query()
-			->setSelect(['*', 'ACCESS_CODE', 'CHILD_NODES'])
-			->where('XML_ID', $xmlId)
-		;
-
-		$query = $this->setNodeActiveFilter($query, $activeFilter);
-		$nodeModelArray = $query->fetchAll();
-
-		return !$nodeModelArray
-			? new Item\Collection\NodeCollection()
-			: $this->convertModelArrayToItemByArray($nodeModelArray)
-		;
+		return PublicContainer::getNodeService()->findAllByXmlId(
+			xmlId: $xmlId,
+			activeFilter: $activeFilter,
+		);
 	}
 
 	protected function setNodeActiveFilter(Query $query, NodeActiveFilter $activeFilter): Query
@@ -1115,43 +775,26 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	}
 
 	/**
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 * @throws ArgumentException
+	 * Internal repository method for departments by ids.
+	 *
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllChildrenByNodeIds() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByIds()
 	 */
 	public function findAllByIds(
 		array $departmentIds,
 		NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
-	): Item\Collection\NodeCollection
+	): NodeCollection
 	{
 		if (empty($departmentIds))
 		{
-			return new Item\Collection\NodeCollection();
+			return new NodeCollection();
 		}
 
-		$query = $this->getNodeQueryWithPreparedTypeFilter()
-			->setSelect([
-				'ID',
-				'TYPE',
-				'PARENT_ID',
-				'STRUCTURE_ID',
-				'ACTIVE',
-				'GLOBAL_ACTIVE',
-				'NAME'
-			])
-			->addSelect('ACCESS_CODE')
-			->addSelect('CHILD_NODES')
-			->whereIn('ID', $departmentIds)
-			->setCacheTtl(self::DEFAULT_TTL)
-			->cacheJoins(true)
-		;
-
-		$query = $this->setNodeActiveFilter($query, $activeFilter);
-		$nodeModelArray = $query->fetchAll();
-
-		return !$nodeModelArray
-			? new Item\Collection\NodeCollection()
-			: $this->convertModelArrayToItemByArray($nodeModelArray);
+		return PublicContainer::getNodeService()->findAllByIds(
+			nodeIds: $departmentIds,
+			activeFilter: $activeFilter,
+		);
 	}
 
 	/**
@@ -1164,7 +807,7 @@ class NodeRepository implements Contract\Repository\NodeRepository
 	 */
 	private function prepareSort(Node $node): void
 	{
-		$lastSibling = $this->getNodeQueryWithPreparedTypeFilter()
+		$lastSibling = NodeTable::query()
 			->where('PARENT_ID', $node->parentId)
 			->setSelect(['SORT'])
 			->addOrder('SORT', 'DESC')
@@ -1176,74 +819,5 @@ class NodeRepository implements Contract\Repository\NodeRepository
 		{
 			$node->sort = $lastSibling->getSort() + NodeOrderCommand::ORDER_STEP;
 		}
-	}
-
-	protected function getNodeQueryWithPreparedTypeFilter(): Query
-	{
-		$query = NodeTable::query();
-		if (!empty($this->selectableNodeEntityTypes))
-		{
-			$query->whereIn(
-				'TYPE',
-				array_map(static fn(NodeEntityType $type) => $type->value, $this->selectableNodeEntityTypes),
-			);
-		}
-
-		return $query;
-	}
-
-	private function extractIdByAccessCodeAndFind(string $accessCode): ?Node
-	{
-		foreach (AccessCodeType::getTeamTypes() as $type)
-		{
-			if (!str_starts_with($accessCode, $type->value))
-			{
-				continue;
-			}
-
-			$id = AccessCodeHelper::extractIdFromCode($accessCode, $type);
-			if (!$id)
-			{
-				continue;
-			}
-
-			$node = $this->getById($id);
-			if (!$node?->isTeam())
-			{
-				return null;
-			}
-
-			return $node;
-		}
-
-		foreach (AccessCodeType::getDepartmentTypes() as $type)
-		{
-			if (!str_starts_with($accessCode, $type->value))
-			{
-				continue;
-			}
-
-			$id = (int)AccessCodeHelper::extractIdFromCode($accessCode, $type);
-			if (!$id)
-			{
-				continue;
-			}
-
-			$node = $this->getById($id);
-			if (!$node?->isDepartment())
-			{
-				return null;
-			}
-
-			return $node;
-		}
-
-		$id = AccessCodeHelper::extractIdFromCode($accessCode);
-		if ($id)
-		{
-			return $this->getById($id);
-		}
-
-		return null;
 	}
 }

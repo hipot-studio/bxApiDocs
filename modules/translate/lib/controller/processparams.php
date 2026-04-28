@@ -7,6 +7,7 @@ use Bitrix\Translate;
  * Manages process session parameters.
  *
  * @implements Translate\Controller\IProcessParameters
+ * @internal
  */
 trait ProcessParams
 {

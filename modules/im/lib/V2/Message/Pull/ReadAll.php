@@ -22,6 +22,11 @@ class ReadAll extends BaseEvent
 		return [$this->userId];
 	}
 
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
+	}
+
 	protected function getBasePullParamsInternal(): array
 	{
 		return [];

@@ -18,8 +18,8 @@ use Bitrix\Security\Mfa\OtpType;
 
 class CIntranetOtpInfoComponent extends CBitrixComponent
 {
-	private const CACHE_TTL = 900;
-	private const CACHE_ID_PREFIX = 'otp_banner_type_';
+	private const SESSION_BANNER_TTL = 900;
+	private const SESSION_BANNER_KEY = 'otp_banner_type';
 
 	private CurrentUser $currentUser;
 	private OtpSettings $otpSettings;
@@ -42,10 +42,13 @@ class CIntranetOtpInfoComponent extends CBitrixComponent
 		$mobilePush = MobilePush::createByDefault();
 		$this->arResult['OLD_OTP_POPUP'] = true;
 
+		$isLegacyOtpAllowed = $mobilePush->isLegacyOtpAllowedByUserId((int)$this->currentUser->getId());
+
 		if (
-			$this->arResult['DEFAULT_OTP_TYPE'] === OtpType::Push
-			|| (
-				$mobilePush->getPromoteMode()->isGreaterOrEqual(PromoteMode::Medium)
+			!$isLegacyOtpAllowed
+			&& (
+				$this->arResult['DEFAULT_OTP_TYPE'] === OtpType::Push
+				|| $mobilePush->getPromoteMode()->isGreaterOrEqual(PromoteMode::Medium)
 			)
 		) {
 			$type = $this->getBannerType();
@@ -58,11 +61,10 @@ class CIntranetOtpInfoComponent extends CBitrixComponent
 			$this->arResult['OLD_OTP_POPUP'] = false;
 			$this->arResult['TRUST_DEVICE_CONFIRMATION'] = $type === OtpBannerType::TRUST_DEVICE_CONFIRMATION;
 			$this->arResult['TRUST_PHONE_NUMBER_CONFIRMATION'] = $type === OtpBannerType::TRUST_PHONE_NUMBER_CONFIRMATION;
+			$this->arResult['RECONNECT_TRUSTED_DEVICE'] = $type === OtpBannerType::RECONNECT_TRUSTED_DEVICE;
 
 			if (!$this->arResult['TRUST_DEVICE_CONFIRMATION'])
 			{
-				$mobilePush = MobilePush::createByDefault();
-
 				$this->arResult['pushOtpConfig'] = [
 					'type' => $type->value,
 					'gracePeriod' => $this->otpSettings
@@ -71,6 +73,12 @@ class CIntranetOtpInfoComponent extends CBitrixComponent
 						?->getTimestamp(),
 					'settingsUrl' => Portal::getInstance()->getSettings()->getSettingsUrl(),
 					'promoteMode' => $mobilePush->getPromoteMode()->value,
+					'deviceName' => $this->otpSettings
+						->getPersonalSettingsByUserId((int)$this->currentUser->getId())
+						?->getInitParams()['deviceInfo']['displayModel'] ?? null,
+					'devicePlatform' => $this->otpSettings
+						->getPersonalSettingsByUserId((int)$this->currentUser->getId())
+						?->getInitParams()['deviceInfo']['platform'] ?? null,
 					...($this->otpSettings->getPersonalSettingsByUserId((int)$this->currentUser->getId())?->getOtpConfig() ?? []),
 				];
 			}
@@ -105,23 +113,16 @@ class CIntranetOtpInfoComponent extends CBitrixComponent
 
 	private function getBannerType(): ?OtpBannerType
 	{
-		$userId = (int)$this->currentUser->getId();
-		$cacheId = self::CACHE_ID_PREFIX . $userId;
-		$cacheDir = '/otp/user_id/' . substr(md5((string)$userId), -2) . '/' . $userId . '/';
-		$cache = Application::getInstance()->getCache();
+		$session = Application::getInstance()->getLocalSession(self::SESSION_BANNER_KEY);
+		$lastCheckTime = $session->get('lastCheckTime');
 
-		if ($cache->initCache(self::CACHE_TTL, $cacheId, $cacheDir))
+		if ($lastCheckTime !== null && (time() - $lastCheckTime) < self::SESSION_BANNER_TTL)
 		{
 			return null;
 		}
 
 		$type = (new BannerTypeFactory())->create();
-
-		if ($type === null)
-		{
-			$cache->startDataCache();
-			$cache->endDataCache(true);
-		}
+		$session->set('lastCheckTime', time());
 
 		return $type;
 	}

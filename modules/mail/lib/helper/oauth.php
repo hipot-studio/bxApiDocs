@@ -322,7 +322,14 @@ abstract class OAuth
 			));
 		}
 
-		return $this->oauthEntity->getAuthUrl($this->getRedirect(false), $state);
+		$redirect = $this->getRedirect(false);
+
+		if ($this->oauthEntity instanceof \CMailRu2Interface)
+		{
+			return $this->oauthEntity->getAuthUrl($redirect, $state, true);
+		}
+
+		return $this->oauthEntity->getAuthUrl($redirect, $state);
 	}
 
 	/**

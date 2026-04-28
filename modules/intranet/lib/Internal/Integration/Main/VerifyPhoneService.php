@@ -29,7 +29,10 @@ class VerifyPhoneService
 
 	public static function createFor2Fa(User $user): self
 	{
-		TwoFaNetworkSender::useIfCloud();
+		if (Loader::includeModule('messageservice'))
+		{
+			TwoFaNetworkSender::useIfCloud();
+		}
 
 		return new self($user);
 	}
@@ -95,7 +98,7 @@ class VerifyPhoneService
 			return false;
 		}
 
-		return IsModuleInstalled('bitrix24')
+		return (IsModuleInstalled('bitrix24') && IsModuleInstalled('messageservice'))
 			|| (
 				Loader::includeModule('messageservice')
 				&& \Bitrix\MessageService\Sender\SmsManager::getUsableSender()

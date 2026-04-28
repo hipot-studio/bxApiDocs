@@ -171,6 +171,8 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 			self::SUPPORTED_ACTIVITY_TYPE,
 			[
 				'DESCRIPTION',
+				'PROVIDER_TYPE_ID',
+				'ASSOCIATED_ENTITY_ID',
 			]
 		);
 
@@ -185,7 +187,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 
 		if (is_array($activity))
 		{
-			Email::uncompressActivity($activity);
+			Email::uncompressActivityDescription($activity);
 
 			if (isset($activity['DESCRIPTION']))
 			{

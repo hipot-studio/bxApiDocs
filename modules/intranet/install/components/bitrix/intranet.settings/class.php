@@ -8,7 +8,6 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 use Bitrix\Crm\Integration\Landing\RequisitesLanding;
 use Bitrix\Intranet\Settings\CommunicationSettings;
 use Bitrix\Intranet\Settings\EmployeeSettings;
-use Bitrix\Intranet\Settings\MainPageSettings;
 use Bitrix\Intranet\Settings\RequisiteSettings;
 use Bitrix\Intranet\Settings\ScheduleSettings;
 use Bitrix\Intranet\Settings\SecuritySettings;
@@ -57,12 +56,6 @@ class SettingsComponent extends CBitrixComponent implements Controllerable, Erro
 			SecuritySettings::class,
 			ConfigurationSettings::class,
 		];
-
-		$access = new MainPage\Access;
- 		if ($access->canView())
-		{
-			array_splice($providerClasses, 2, 0, MainPageSettings::class);
-		}
 
 		$providers = [];
 		$sort = 0;

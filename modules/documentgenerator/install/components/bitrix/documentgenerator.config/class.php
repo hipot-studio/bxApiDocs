@@ -16,7 +16,7 @@ class DocumentGeneratorConfigComponent extends CBitrixComponent implements \Bitr
 			return;
 		}
 
-		if(!\Bitrix\DocumentGenerator\Driver::getInstance()->getUserPermissions()->canModifySettings())
+		if(!$this->hasAccess())
 		{
 			$this->showError(Loc::getMessage('DOCGEN_CONFIG_PERMISSIONS_ERROR'));
 			return;
@@ -36,6 +36,11 @@ class DocumentGeneratorConfigComponent extends CBitrixComponent implements \Bitr
 		$APPLICATION->SetTitle($this->arResult['TITLE']);
 
 		$this->includeComponentTemplate();
+	}
+
+	private function hasAccess(): bool
+	{
+		return \Bitrix\DocumentGenerator\Driver::getInstance()->getUserPermissions()->canModifySettings();
 	}
 
 	protected function showError($error)
@@ -58,6 +63,10 @@ class DocumentGeneratorConfigComponent extends CBitrixComponent implements \Bitr
 	public function saveConfigAction(array $config)
 	{
 		if(!Loader::includeModule('documentgenerator'))
+		{
+			return;
+		}
+		if (!$this->hasAccess())
 		{
 			return;
 		}

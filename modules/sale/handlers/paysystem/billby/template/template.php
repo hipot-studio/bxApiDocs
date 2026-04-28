@@ -3,6 +3,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die();
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sale\PriceMaths;
 
 Loc::loadMessages(__FILE__);
 ?>
@@ -389,19 +390,7 @@ if ($params['BILLBY_PAYER_SHOW'] == 'Y')
 <br>
 
 <?php
-// Precision
-$currencyFormat = CCurrencyLang::GetFormatDescription($params['CURRENCY']);
-if ($currencyFormat === false)
-	$currencyFormat = CCurrencyLang::GetDefaultValues();
-$currencyPrecision = (int)$currencyFormat['DECIMALS'];
-if ($currencyPrecision <= 0)
-	$currencyPrecision = 2;
-$salePrecision = (int)Bitrix\Main\Config\Option::get('sale', 'value_precision', 2);
-if ($salePrecision <= 0)
-	$salePrecision = 2;
-$salePrecision = min($salePrecision, SALE_VALUE_PRECISION);
-$precision = min($salePrecision, $currencyPrecision);
-
+$currency = $params['CURRENCY'];
 $cells = array();
 $props = array();
 
@@ -503,16 +492,16 @@ foreach ($params['BASKET_ITEMS'] as $basketItem)
 				$data = $basketItem["MEASURE_NAME"] ? htmlspecialcharsbx($basketItem["MEASURE_NAME"]) : Loc::getMessage('SALE_HPS_BILLBY_BASKET_MEASURE_DEFAULT');
 				break;
 			case 'PRICE':
-				$data = SaleFormatCurrency($basketItem['PRICE'], $basketItem['CURRENCY'], true);
+				$data = PriceMaths::roundByFormatCurrency($basketItem['PRICE'], $basketItem['CURRENCY']);
 				break;
 			case 'SUM':
-				$data = SaleFormatCurrency($basketItemSum, $basketItem['CURRENCY'], true);
+				$data = PriceMaths::roundByFormatCurrency($basketItemSum, $basketItem['CURRENCY']);
 				break;
 			case 'VAT_RATE':
 				if ($basketItem['VAT_RATE'] == 0.0)
 					$data = htmlspecialcharsbx(Loc::getMessage('SALE_HPS_BILLBY_TOTAL_VAT_RATE_NO'));
 				else
-					$data = roundEx($basketItem['VAT_RATE'] * 100, $precision)."%";
+					$data = round($basketItem['VAT_RATE'] * 100, 2)."%";
 				break;
 			case 'VAT_SUM':
 				if ($basketItem['VAT_RATE'] == 0.0)
@@ -540,11 +529,11 @@ foreach ($params['BASKET_ITEMS'] as $basketItem)
 			$props[$n][] = htmlspecialcharsbx(sprintf("%s: %s", $basketPropertyItem["NAME"], $basketPropertyItem["VALUE"]));
 		}
 	}
-	$sum += roundEx(doubleval($basketItem['PRICE'] * $basketItem['QUANTITY']), $precision);
+	$sum += PriceMaths::roundByFormatCurrency($basketItem['PRICE'] * $basketItem['QUANTITY'], $currency);
 	$vat = max($vat, $basketItem['VAT_RATE']);
-	$totalSum += roundEx($basketItemSum, $precision);
-	$totalVatSum += roundEx($basketItemVatSum, $precision);
-	$totalSumWithVat += roundEx($basketItemTotal, $precision);
+	$totalSum += PriceMaths::roundByFormatCurrency($basketItemSum, $currency);
+	$totalVatSum += PriceMaths::roundByFormatCurrency($basketItemVatSum, $currency);
+	$totalSumWithVat += PriceMaths::roundByFormatCurrency($basketItemTotal, $currency);
 }
 
 if ($params['DELIVERY_PRICE'] > 0)
@@ -587,35 +576,35 @@ if ($params['DELIVERY_PRICE'] > 0)
 				$data = '';
 				break;
 			case 'PRICE':
-				$data = SaleFormatCurrency($params['DELIVERY_PRICE'], $params['CURRENCY'], true);
+				$data = PriceMaths::roundByFormatCurrency($params['DELIVERY_PRICE'], $currency);
 				break;
 			case 'SUM':
-				$data = SaleFormatCurrency($basketItemSum, $params['CURRENCY'], true);
+				$data = PriceMaths::roundByFormatCurrency($basketItemSum, $currency);
 				break;
 			case 'VAT_RATE':
 				if ($vat == 0.0)
 					$data = htmlspecialcharsbx(Loc::getMessage('SALE_HPS_BILLBY_TOTAL_VAT_RATE_NO'));
 				else
-					$data = roundEx($vat * 100, $precision)."%";
+					$data = roundEx($vat * 100, 2)."%";
 				break;
 			case 'VAT_SUM':
 				if ($vat == 0.0)
 					$data = htmlspecialcharsbx(Loc::getMessage('SALE_HPS_BILLBY_TOTAL_VAT_SUM_NO'));
 				else
-					$data = SaleFormatCurrency($basketItemVatSum, $params['CURRENCY'], true);
+					$data = PriceMaths::roundByFormatCurrency($basketItemVatSum, $currency);
 				break;
 			case 'TOTAL':
-				$data = SaleFormatCurrency($basketItemTotal, $params['CURRENCY'], true);
+				$data = PriceMaths::roundByFormatCurrency($basketItemTotal, $currency);
 				break;
 		}
 
 		if ($data !== null)
 			$cells[$n][$columnId] = $data;
 	}
-	$sum += roundEx(doubleval($params['DELIVERY_PRICE']), $precision);
-	$totalSum += roundEx($basketItemSum, $precision);
-	$totalVatSum += roundEx($basketItemVatSum, $precision);
-	$totalSumWithVat += roundEx($basketItemTotal, $precision);
+	$sum += PriceMaths::roundByFormatCurrency($params['DELIVERY_PRICE'], $currency);
+	$totalSum += PriceMaths::roundByFormatCurrency($basketItemSum, $currency);
+	$totalVatSum += PriceMaths::roundByFormatCurrency($basketItemVatSum, $currency);
+	$totalSumWithVat += PriceMaths::roundByFormatCurrency($basketItemTotal, $currency);
 }
 
 $totalRowIsLast = false;
@@ -630,7 +619,7 @@ if ($params['BILLBY_TOTAL_SHOW'] == 'Y')
 		switch ($colCode)
 		{
 			case 'SUM':
-				$value = SaleFormatCurrency($totalSum, $params['CURRENCY'], true);
+				$value = PriceMaths::roundByFormatCurrency($totalSum, $currency);
 				break;
 			case 'VAT_RATE':
 				$value = Loc::getMessage('SALE_HPS_BILLBY_TOTAL_VAT_RATE_X');
@@ -639,10 +628,10 @@ if ($params['BILLBY_TOTAL_SHOW'] == 'Y')
 				if ($totalVatSum == 0.0)
 					$value = htmlspecialcharsbx(Loc::getMessage('SALE_HPS_BILLBY_TOTAL_VAT_SUM_NO'));
 				else
-					$value = SaleFormatCurrency($totalVatSum, $params['CURRENCY'], true);
+					$value = PriceMaths::roundByFormatCurrency($totalVatSum, $currency);
 				break;
 			case 'TOTAL':
-				$value = SaleFormatCurrency($totalSumWithVat, $params['CURRENCY'], true);
+				$value = PriceMaths::roundByFormatCurrency($totalSumWithVat, $currency);
 				break;
 			default:
 				$skip = true;
@@ -681,7 +670,7 @@ if ($params['BILLBY_TOTAL_SHOW'] == 'Y')
 					($tax["IS_IN_PRICE"] == "Y") ? Loc::getMessage('SALE_HPS_BILLBY_INCLUDING') : "",
 					$tax["TAX_NAME"],
 					($vat <= 0 && $tax["IS_PERCENT"] == "Y")
-						? sprintf(' (%s%%)', roundEx($tax["VALUE"], $precision))
+						? sprintf(' (%s%%)', PriceMaths::roundByFormatCurrency($tax["VALUE"], $currency))
 						: ""
 				));
 				$cells[$n][$arColumnKeys[$columnCount-1]] = SaleFormatCurrency($tax["VALUE_MONEY"], $params['CURRENCY'], true);
@@ -796,9 +785,9 @@ for ($n = 1; $n <= $rowsCnt; $n++):
 	$inWords = in_array($params['CURRENCY'], array("RUR", "RUB", "UAH", "KZT", "BYR", "BYN"));
 	echo Loc::getMessage('SALE_HPS_BILLBY_TOTAL_VAT').': ';
 	if ($inWords)
-		echo htmlspecialcharsbx(Number2Word_Rus(roundEx($totalVatSum, $precision), "Y", $params['CURRENCY']));
+		echo htmlspecialcharsbx(Number2Word_Rus(PriceMaths::roundByFormatCurrency($totalVatSum, $currency), "Y", $params['CURRENCY']));
 	else
-		echo htmlspecialcharsbx(SaleFormatCurrency(roundEx($totalVatSum, $precision), $params['CURRENCY'], false));
+		echo htmlspecialcharsbx(SaleFormatCurrency($totalVatSum, $currency));
 	unset($totalVatSum);
 	?><br><br><?
 	echo Loc::getMessage('SALE_HPS_BILLBY_TOTAL_SUM_WITH_VAT').': ';

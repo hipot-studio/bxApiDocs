@@ -12,4 +12,14 @@ final class Email extends Type
 	public const VALUE_TYPE_HOME = 'HOME';
 	public const VALUE_TYPE_MAILING = 'MAILING';
 	public const VALUE_TYPE_OTHER = 'OTHER';
+
+	public function getValueTypes(): array
+	{
+		return [
+			self::VALUE_TYPE_WORK,
+			self::VALUE_TYPE_HOME,
+			self::VALUE_TYPE_MAILING,
+			self::VALUE_TYPE_OTHER,
+		];
+	}
 }

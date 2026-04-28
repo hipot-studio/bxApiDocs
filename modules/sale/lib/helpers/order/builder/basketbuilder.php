@@ -4,6 +4,7 @@ namespace Bitrix\Sale\Helpers\Order\Builder;
 use Bitrix\Catalog\Product;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Date;
 use Bitrix\Sale\BasketItem;
@@ -1010,9 +1011,23 @@ abstract class BasketBuilder
 
 		if ($vatIncludedFrom === 'Y' && $vatIncludedFromFirstItem === 'N')
 		{
-			$calculator = new \Bitrix\Sale\Tax\VatCalculator($product['VAT_RATE']);
-			$price = $calculator->allocate($product['PRICE']);
-			$basePrice = $calculator->allocate($product['BASE_PRICE']);
+			$itemCalculator = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+
+			$priceInput = new \Bitrix\Sale\Public\Dto\BasketItemCalculationInput(
+				basePrice: (float)$product['PRICE'],
+				quantity: 1.0,
+				vatRate: (float)$product['VAT_RATE'] * 100,
+				vatIncluded: true,
+			);
+			$price = $itemCalculator->calculate($priceInput)->priceNetto;
+
+			$basePriceInput = new \Bitrix\Sale\Public\Dto\BasketItemCalculationInput(
+				basePrice: (float)$product['BASE_PRICE'],
+				quantity: 1.0,
+				vatRate: (float)$product['VAT_RATE'] * 100,
+				vatIncluded: true,
+			);
+			$basePrice = $itemCalculator->calculate($basePriceInput)->priceNetto;
 		}
 
 		$product['PRICE'] = $price;

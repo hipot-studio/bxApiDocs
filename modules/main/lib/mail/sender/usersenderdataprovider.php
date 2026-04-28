@@ -38,8 +38,6 @@ final class UserSenderDataProvider
 
 		$senders = [];
 
-		$userFormattedName = self::getUserFormattedName($userId);
-
 		$sendersList = SenderTable::query()
 			->setSelect(['ID', 'NAME', 'EMAIL', 'USER_ID', 'OPTIONS'])
 			->where('IS_CONFIRMED')
@@ -81,18 +79,7 @@ final class UserSenderDataProvider
 				}
 			}
 
-			if (
-				$userId !== $sender['USER_ID']
-				&& self::getUserFormattedName($sender['USER_ID']) === $sender['NAME']
-			)
-			{
-				$sender['NAME'] = $userFormattedName ?? $sender['NAME'];
-			}
-			else
-			{
-				$sender['NAME'] = trim($sender['NAME']) ?: $userFormattedName;
-			}
-
+			$sender['NAME'] = self::getSenderNameBySender($sender, $userId);
 			$sender['EMAIL'] = mb_strtolower($sender['EMAIL']);
 
 			$senders[] = [
@@ -141,9 +128,9 @@ final class UserSenderDataProvider
 	}
 
 	/**
-	 * Returns a list of available senders for user
+	 * Returns a list of available senders for user filtered by email
 	 */
-	public static function getUserAvailableSendersByEmail(string $email, int $userId = null): ?array
+	public static function getUserAvailableSendersByEmail(string $email, ?int $userId = null): ?array
 	{
 		$isAdmin = false;
 		if (!$userId)
@@ -174,7 +161,6 @@ final class UserSenderDataProvider
 			$senderListQuery->where('PARENT_MODULE_ID', 'main');
 		}
 
-		$userFormattedName = self::getUserFormattedName($userId);
 		$senderList = $senderListQuery->fetchAll();
 		$userData = [];
 		foreach ($senderList as $sender)
@@ -202,13 +188,7 @@ final class UserSenderDataProvider
 			$canEdit = $ownerId === $userId || $isAdmin;
 			$isOwner = $ownerId === $userId;
 
-			if (
-				$userId !== $ownerId
-				&& self::getUserFormattedName((int)$sender['USER_ID']) === $sender['NAME']
-			)
-			{
-				$sender['NAME'] = $userFormattedName ?? $sender['NAME'];
-			}
+			$sender['NAME'] = self::getSenderNameBySender($sender, $userId);
 
 			$senders[] = [
 				'id' => (int)$sender['ID'],
@@ -274,7 +254,7 @@ final class UserSenderDataProvider
 					->where('PARENT_MODULE_ID', 'mail')
 					->where('PARENT_ID', $mailbox['ID'])
 					->setLimit(1)
-					->fetchObject()
+					->fetch()
 				;
 			}
 
@@ -287,25 +267,7 @@ final class UserSenderDataProvider
 			$senderName = trim($mailbox['USERNAME'] ?? '');
 			if ($sender)
 			{
-				$sender['USER_ID'] = (int)$sender['USER_ID'];
-				if (empty($sender['NAME']) && empty($mailbox['USERNAME']))
-				{
-					$senderName = self::getUserFormattedName($sender['USER_ID']);
-				}
-
-				if (!empty($mailbox['USERNAME']))
-				{
-					if ($sender['NAME'] !== $mailbox['USERNAME'])
-					{
-						SenderTable::update($sender['ID'], ['NAME' => $senderName]);
-					}
-				}
-
-				if (empty($senderName) && $sender['NAME'])
-				{
-					$senderName = $sender['NAME'];
-					MailboxTable::update($mailbox['ID'], ['USERNAME' => $senderName]);
-				}
+				$senderName = self::getSenderNameBySender($sender, $userId);
 
 				if (!isset($userData[$sender['USER_ID']]))
 				{
@@ -315,16 +277,10 @@ final class UserSenderDataProvider
 				$canEdit = $sender['USER_ID'] === $userId || $isAdmin;
 				$isOwner = $sender['USER_ID'] === $userId;
 			}
-
-			if (
-				empty($senderName)
-				|| (
-					$userId !== (int)$mailbox['USER_ID']
-					&& self::getUserFormattedName((int)$mailbox['USER_ID']) === $senderName
-				)
-			)
+			else
 			{
-				$senderName = $currentUserFormattedName ?? $senderName;
+				$useSenderName = $mailbox['OPTIONS']['useSenderName'] ?? !empty($senderName) && $senderName !== $userFormattedName;
+				$senderName = $useSenderName ? $senderName : $currentUserFormattedName;
 			}
 
 			if (!empty($sender['USER_ID']))
@@ -336,7 +292,7 @@ final class UserSenderDataProvider
 			$senders[] = [
 				'id' => $sender['ID'] ?? $mailbox['ID'],
 				'mailboxId' => $sender['PARENT_ID'] ?? $mailbox['ID'],
-				'name' => !empty($senderName) ? $senderName : $userFormattedName,
+				'name' => !empty($senderName) ? $senderName : $currentUserFormattedName,
 				'type' => $sender ? self::MAILBOX_SENDER_TYPE : self::MAILBOX_TYPE,
 				'email' => $mailbox['EMAIL'],
 				'userId' => $sender['USER_ID'] ?? $mailbox['USER_ID'],
@@ -432,6 +388,39 @@ final class UserSenderDataProvider
 		return $transitionalData;
 	}
 
+	public static function getSenderNameBySender(array $sender, int $userId): string
+	{
+		$senderName = trim($sender['NAME'] ?? '');
+		$userName = self::getUserFormattedName($userId);
+		$useSenderName = self::shouldUseCustomSenderName($sender);
+
+		return $useSenderName ? $senderName : $userName;
+	}
+
+	public static function shouldUseCustomSenderName(array $sender): bool
+	{
+		$ownerId = (int)($sender['USER_ID'] ?? 0);
+		$senderName = $sender['NAME'] ?? '';
+
+		if (isset($sender['OPTIONS']['useSenderName']))
+		{
+			return $sender['OPTIONS']['useSenderName'] && !empty($senderName);
+		}
+
+		if (!$ownerId)
+		{
+			return false;
+		}
+
+
+		if (empty($senderName) || self::getUserFormattedName($ownerId) === $senderName)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
 	public static function getUserFormattedName(?int $userId = null): ?string
 	{
 		if (!$userId)
@@ -472,7 +461,7 @@ final class UserSenderDataProvider
 		return "{$senderName} <{$email}>";
 	}
 
-	public static function getSenderNameByMailboxId(int $mailboxId, bool $getSenderWithoutSmtp = false): ?array
+	public static function getSenderInfoByMailboxId(int $mailboxId, bool $getSenderWithoutSmtp = false): ?array
 	{
 		$sender = SenderTable::query()
 			->setSelect(['*'])
@@ -516,11 +505,6 @@ final class UserSenderDataProvider
 		];
 	}
 
-	private static function getMailboxConfigPath(int $mailboxId): string
-	{
-		return str_replace('#id#', $mailboxId, Config\Option::get('intranet', 'path_mail_config', SITE_DIR . 'mail/'));
-	}
-
 	public static function getUserInfo(int $userId): ?array
 	{
 		static $userInfo = [];
@@ -562,6 +546,27 @@ final class UserSenderDataProvider
 		return $userInfo[$userId];
 	}
 
+	public static function isAdmin(): bool
+	{
+		$currentUser = Main\Engine\CurrentUser::get();
+
+		return $currentUser->isAdmin() || $currentUser->canDoOperation('bitrix24_config');
+	}
+
+	/**
+	 * @deprecated
+	 * @see self::getSenderInfoByMailboxId()
+	 */
+	public static function getSenderNameByMailboxId(int $mailboxId, bool $getSenderWithoutSmtp = false): ?array
+	{
+		return self::getSenderInfoByMailboxId($mailboxId, $getSenderWithoutSmtp);
+	}
+
+	private static function getMailboxConfigPath(int $mailboxId): string
+	{
+		return str_replace('#id#', $mailboxId, Config\Option::get('intranet', 'path_mail_config', SITE_DIR . 'mail/'));
+	}
+
 	private static function canUseMailboxTable(): bool
 	{
 		return Loader::includeModule('mail') && class_exists('Bitrix\Mail\MailboxTable');
@@ -575,13 +580,6 @@ final class UserSenderDataProvider
 			Loader::includeModule('bitrix24')
 			|| (($defaultMailConfiguration['enabled'] ?? false) === true)
 		;
-	}
-
-	public static function isAdmin(): bool
-	{
-		$currentUser = Main\Engine\CurrentUser::get();
-
-		return $currentUser->isAdmin() || $currentUser->canDoOperation('bitrix24_config');
 	}
 
 	private static function getUserData(int $userId): ?array

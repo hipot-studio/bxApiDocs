@@ -4,9 +4,9 @@ namespace Bitrix\Sale\Cashbox;
 
 use Bitrix\Main;
 use Bitrix\Catalog;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization;
-use Bitrix\Sale\Cashbox\Internals;
-use Bitrix\Sale\PriceMaths;
+use Bitrix\Sale\Public\Dto\BasketItemCalculationInput;
 
 Localization\Loc::loadMessages(__FILE__);
 
@@ -64,7 +64,13 @@ class CashboxBitrix extends Cashbox
 
 			if (isset($item['discount']) && is_array($item['discount']))
 			{
-				$discountValue = PriceMaths::roundPrecision($item['base_price']*$item['quantity']) - $item['sum'];
+				$basketCalculator = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+				$discountInput = new BasketItemCalculationInput(
+					basePrice: (float)$item['base_price'],
+					quantity: (float)$item['quantity'],
+				);
+
+				$discountValue = $basketCalculator->calculate($discountInput)->totalCalculation->totalBasePrice - $item['sum'];
 				$value['discount'] = $discountValue;
 
 				$discountType = $item['discount']['discount_type'] === 'P' ? 1 : 0;

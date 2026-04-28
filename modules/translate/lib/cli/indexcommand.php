@@ -5,7 +5,9 @@ namespace Bitrix\Translate\Cli;
 use Bitrix\Translate;
 use Symfony\Component\Console;
 
-
+/**
+ * @internal
+ */
 class IndexCommand extends Console\Command\Command
 {
 	/**

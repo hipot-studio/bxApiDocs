@@ -4,7 +4,10 @@ namespace Bitrix\Translate\Controller;
 
 /**
  * Manages process session parameters.
+ *
+ * @internal
  */
+
 interface IProcessParameters
 {
 

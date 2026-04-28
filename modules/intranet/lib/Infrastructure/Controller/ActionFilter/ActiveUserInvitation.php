@@ -3,6 +3,8 @@
 namespace Bitrix\Intranet\Infrastructure\Controller\ActionFilter;
 
 use Bitrix\Intranet\Contract\Repository\UserRepository;
+use Bitrix\Intranet\Entity\Collection\UserCollection;
+use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Public\Type\Collection\InvitationCollection;
 use Bitrix\Intranet\Internal\Integration\Socialnetwork\ExternalAuthType;
 use Bitrix\Main\Engine;
@@ -10,6 +12,8 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Intranet\Component\UserProfile;
+use Bitrix\Intranet\Service\UserService;
 
 class ActiveUserInvitation extends Engine\ActionFilter\Base
 {
@@ -44,16 +48,33 @@ class ActiveUserInvitation extends Engine\ActionFilter\Base
 			(new ExternalAuthType())->getAllTypeList(),
 		);
 
+		$firedUserList = [];
+
 		if (!$emailUserCollection->empty())
 		{
-			$emailList = $emailUserCollection->map(fn($user) => $user->getLogin());
-			$this->addError(new Error(
-				Loc::getMessage("INTRANET_INVITATION_USER_EXIST_ERROR", [
-					"#EMAIL_LIST#" => implode(', ', $emailList),
-				]),
-				'EMAIL_EXIST_ERROR',
-				['emailList' => $emailList],
-			));
+			$emailList = $this
+				->filterUserCollectionByActivity($emailUserCollection, true)
+				->map(fn($user) => $user->getLogin())
+			;
+
+			$mapFields = ['id', 'login', 'email', 'name', 'photo', 'role', 'phoneNumber', 'position', 'profileUrl'];
+			$firedUserList = $this
+				->filterUserCollectionByActivity($emailUserCollection, false)
+				->map(fn(User $user) => $this->mapUserFields($user, $mapFields))
+			;
+
+			if (!empty($emailList))
+			{
+				$this->addError(new Error(
+					Loc::getMessage("INTRANET_INVITATION_USER_EXIST_ERROR", [
+						"#EMAIL_LIST#" => implode(', ', $emailList),
+					]),
+					'EMAIL_EXIST_ERROR',
+					[
+						'emailList' => $emailList,
+					],
+				));
+			}
 		}
 
 		$phoneUserCollection = $this->userRepository->findActivatedUsersByLogins(
@@ -63,18 +84,43 @@ class ActiveUserInvitation extends Engine\ActionFilter\Base
 
 		if (!$phoneUserCollection->empty())
 		{
-			$phoneList = $phoneUserCollection->map(fn($user) => $user->getLogin());
-			$this->addError(new Error(
-				Loc::getMessage("INTRANET_INVITATION_USER_PHONE_EXIST_ERROR", [
-					"#PHONE_LIST#" => implode(', ', $phoneList),
-				]),
-				'PHONE_EXIST_ERROR',
-				['phoneList' => $phoneList],
-			));
+			$phoneList = $this
+				->filterUserCollectionByActivity($phoneUserCollection, true)
+				->map(fn($user) => $user->getLogin())
+			;
+
+			$mapFields = ['id', 'login', 'name', 'photo', 'role', 'phoneNumber', 'position', 'profileUrl'];
+			$firedUserList = array_merge($firedUserList,
+				$this
+					->filterUserCollectionByActivity($phoneUserCollection, false)
+					->map(fn(User $user) => $this->mapUserFields($user, $mapFields))
+			);
+
+			if (!empty($phoneList))
+			{
+				$this->addError(new Error(
+					Loc::getMessage("INTRANET_INVITATION_USER_PHONE_EXIST_ERROR", [
+						"#PHONE_LIST#" => implode(', ', $phoneList),
+					]),
+					'PHONE_EXIST_ERROR',
+					['phoneList' => $phoneList],
+				));
+			}
 		}
 
 		if ($this->errorCollection->isEmpty())
 		{
+			$firedUserListLogins = array_map(fn($user) => $user['login'], $firedUserList);
+
+			$invitationCollection = $invitationCollection->filter(
+				fn($invitation) => !in_array($invitation->getLogin(), $firedUserListLogins, true)
+			);
+
+			$arguments['invitationCollection'] = $invitationCollection;
+			$arguments['firedUserList'] = $firedUserList;
+
+			$action->setArguments($arguments);
+
 			return null;
 		}
 
@@ -92,5 +138,52 @@ class ActiveUserInvitation extends Engine\ActionFilter\Base
 		}
 
 		return null;
+	}
+
+	private function filterUserCollectionByActivity(UserCollection $userCollection, bool $isActive): UserCollection
+	{
+		return $userCollection
+			->filter(fn(User $user) => $user->getActive() === $isActive);
+	}
+
+	private function mapUserFields(User $user, array $fields): array
+	{
+		$userData = [];
+
+		foreach ($fields as $field)
+		{
+			switch ($field)
+			{
+				case 'id':
+					$userData['id'] = $user->getId();
+					break;
+				case 'login':
+					$userData['login'] = $user->getLogin();
+					break;
+				case 'email':
+					$userData['email'] = $user->getEmail();
+					break;
+				case 'name':
+					$userData['name'] = $user->getFormattedName();
+					break;
+				case 'photo':
+					$userData['photo'] = UserProfile::getUserPhoto($user->getPersonalPhoto(), 40);
+					break;
+				case 'role':
+					$userData['role'] = $user->getRole();
+					break;
+				case 'phoneNumber':
+					$userData['phoneNumber'] = $user->getPhoneNumber();
+					break;
+				case 'position':
+					$userData['position'] = $user->getWorkPosition();
+					break;
+				case 'profileUrl':
+					$userData['profileUrl'] = (new UserService())->getDetailUrl($user->getId());
+					break;
+			}
+		}
+
+		return $userData;
 	}
 }

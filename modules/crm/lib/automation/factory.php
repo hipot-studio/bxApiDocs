@@ -422,7 +422,7 @@ class Factory
 	/**
 	 * @return Trigger\BaseTrigger[] Registered triggers array.
 	 */
-	private static function getTriggerRegistry()
+	public static function getTriggerRegistry()
 	{
 		if (self::$triggerRegistry === null)
 		{
@@ -556,7 +556,7 @@ class Factory
 	 * @param int $entityId
 	 * @return Converter\Result|null
 	 */
-	private static function shiftConversionResult($entityTypeId, $entityId)
+	public static function shiftConversionResult($entityTypeId, $entityId)
 	{
 		$key = $entityTypeId. '_' .$entityId;
 		$result = isset(self::$conversionResults[$key]) ? self::$conversionResults[$key] : null;

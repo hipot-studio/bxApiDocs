@@ -3,6 +3,9 @@ namespace Bitrix\Translate\IO;
 
 use Bitrix\Translate;
 
+/**
+ * @internal
+ */
 class FileSystemHelper
 {
 	/**

@@ -14,7 +14,7 @@ class MainFirstPage implements FirstPage
 {
 	public function getName(): string
 	{
-		return Loc::getMessage('INTRANET_MAIN_PAGE_NAME') ?? '';
+		return Loc::getMessage('INTRANET_WELCOME_PAGE_NAME') ?? '';
 	}
 
 	public function getLink(): string
@@ -45,7 +45,7 @@ class MainFirstPage implements FirstPage
 			$settingsUrl = substr($settingsUrl, 1);
 		}
 
-		return SITE_DIR . "{$settingsUrl}?page=mainpage";
+		return SITE_DIR . "{$settingsUrl}?page=welcome";
 	}
 
 	public function getUri(): Uri

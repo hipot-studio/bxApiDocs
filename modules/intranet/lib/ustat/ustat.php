@@ -8,6 +8,7 @@
 
 namespace Bitrix\Intranet\UStat;
 
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Intranet\Repository\HrDepartmentRepository;
 use Bitrix\Intranet\User;
 use Bitrix\Main;
@@ -148,9 +149,7 @@ class UStat
 		// avoid bots
 		if (Main\Loader::includeModule('im'))
 		{
-			$botCache = \Bitrix\Im\Bot::getListCache();
-
-			if (isset($botCache[$userId]))
+			if (BotData::getInstance((int)$userId)->exists())
 			{
 				return false;
 			}

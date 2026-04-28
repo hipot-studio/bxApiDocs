@@ -206,6 +206,26 @@ class TemplateFolderRelationRepository
 		return $this->extractItemFromModel($model);
 	}
 
+	/**
+	 * @param list<int> $entityIds
+	 */
+	public function areAllEntitiesInSameParent(array $entityIds, EntityType $entityType): bool
+	{
+		if (count($entityIds) <= 1)
+		{
+			return true;
+		}
+
+		$row = TemplateFolderRelationTable::query()
+			->addSelect(new \Bitrix\Main\ORM\Fields\ExpressionField('PARENT_COUNT', 'COUNT(DISTINCT %s)', 'PARENT_ID'))
+			->whereIn('ENTITY_ID', $entityIds)
+			->where('ENTITY_TYPE', $entityType->value)
+			->fetch()
+		;
+
+		return $row && (int)$row['PARENT_COUNT'] <= 1;
+	}
+
 	public function getTemplateIdsByIdsMap(array $folderIds): TemplateFolderRelationCollection
 	{
 		if (empty($folderIds))

@@ -19,9 +19,9 @@ use Bitrix\Main\Repository\RepositoryInterface;
 use Bitrix\Main\SystemException;
 use Exception;
 
-class EventConnectionRepository implements RepositoryInterface
+readonly class EventConnectionRepository implements RepositoryInterface
 {
-	public function __construct(private readonly EventConnectionMapper $mapper)
+	public function __construct(private EventConnectionMapper $mapper)
 	{
 	}
 
@@ -286,6 +286,45 @@ class EventConnectionRepository implements RepositoryInterface
 		if (!$result->isSuccess())
 		{
 			throw new PersistenceException('Unable to delete event connection', null, $result->getErrors());
+		}
+	}
+
+	/**
+	 * @throws PersistenceException
+	 */
+	public function deleteBySectionAndConnection(int $sectionId, int $connectionId): void
+	{
+		try
+		{
+			// The method deleteByFilter works only in one table context (without joins)
+			$queryResult = EventConnectionTable::query()
+				->setSelect(['ID'])
+				->where('CONNECTION_ID', $connectionId)
+				->where('EVENT.SECTION_ID', $sectionId)
+				->exec()
+			;
+
+			$ids = [];
+
+			while ($ormModel = $queryResult->fetch())
+			{
+				$ids[] = (int)$ormModel['ID'];
+			}
+
+			if (empty($ids))
+			{
+				return;
+			}
+
+			$filter = new ConditionTree();
+
+			$filter->whereIn('ID', $ids);
+
+			EventConnectionTable::deleteByFilter($filter);
+		}
+		catch (Exception $e)
+		{
+			throw new PersistenceException($e->getMessage(), previous: $e);
 		}
 	}
 

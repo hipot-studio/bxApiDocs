@@ -118,10 +118,8 @@ class CIntranetUserProfilePasswordComponent extends \CBitrixComponent implements
 			$this->errorCollection[] = new Error($USER->LAST_ERROR);
 			return null;
 		}
-		else
-		{
-			return true;
-		}
+
+		return true;
 	}
 
 	public function getFieldInfo()
@@ -188,5 +186,6 @@ class CIntranetUserProfilePasswordComponent extends \CBitrixComponent implements
 
 		$this->includeComponentTemplate();
 	}
+
 }
 ?>

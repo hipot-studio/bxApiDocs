@@ -24,11 +24,11 @@ class InviteLinkGenerator
 		return new self(AttachJwtTokenToUrlCommand::createDefaultInstance($inviteToken));
 	}
 
-	public static function createByPayloadWithUserLang(array $payload, string $userLang = LANGUAGE_ID): ?self
+	public static function createByPayloadWithParams(array $payload, array $params): ?self
 	{
 		$inviteToken = self::createInviteToken($payload);
 
-		return new self(AttachJwtTokenToUrlCommand::createInstanceWithUserLang($inviteToken, $userLang));
+		return new self(AttachJwtTokenToUrlCommand::createInstanceWithParams($inviteToken, $params));
 	}
 
 	public static function createByCollabId(int $collabId, string $userLang = LANGUAGE_ID): ?self
@@ -53,10 +53,12 @@ class InviteLinkGenerator
 			'link_code' => $linkCodeGenerator->getOrGenerate()->getCode(),
 		];
 
-		return self::createByPayloadWithUserLang($payload, $userLang);
+		$params = ['user_lang' => $userLang];
+
+		return self::createByPayloadWithParams($payload, $params);
 	}
 
-	public static function createByDepartmentsIds(array $departmentsIds): ?self
+	public static function createByDepartmentsIds(array $departmentsIds, array $params = []): ?self
 	{
 		if (empty($departmentsIds))
 		{
@@ -71,7 +73,7 @@ class InviteLinkGenerator
 			'link_code' => $linkCodeGenerator->getOrGenerate()->getCode(),
 		];
 
-		return self::createByPayload($payload);
+		return self::createByPayloadWithParams($payload, $params);
 	}
 
 	private static function createInviteToken($payload): string

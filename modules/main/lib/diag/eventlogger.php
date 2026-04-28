@@ -20,7 +20,7 @@ class EventLogger extends Logger
 	 * @param string|null $auditType
 	 * @param callable|null $callback Should return an array with fields for CEventLog::Add(). function (array $context, string $message): array
 	 */
-	public function __construct(string $module = null, string $auditType = null, callable $callback = null)
+	public function __construct(?string $module = null, ?string $auditType = null, ?callable $callback = null)
 	{
 		$this->module = $module;
 		$this->auditType = $auditType;

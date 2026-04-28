@@ -17,6 +17,8 @@ use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Type\Document\InitiatedByType;
 use Bitrix\Sign\Type\ProviderCode;
 use Bitrix\Sign\Item\Integration\Crm\MyCompany;
+use Bitrix\Sign\Item\Integration\Crm\MyCompanyCollection;
+use Bitrix\Sign\Service\Integration\Crm\MyCompanyService;
 use Bitrix\Main;
 use CRestServer;
 use CRestUtil;
@@ -49,34 +51,22 @@ final class CompanyProvider extends IRestService
 	public static function list(array $query, $start, CRestServer $restServer): array
 	{
 		self::checkAuth($restServer);
-		self::checkAccess(['sign.b2e', 'crm', 'humanresources.hcmlink'], $restServer);
+		self::checkAccess(['sign.b2e', 'crm'], $restServer);
 		self::checkAccessToActions([
 			ActionDictionary::ACTION_B2E_DOCUMENT_ADD,
 		]);
 
-		if (!Loader::includeModule('humanresources'))
-		{
-			throw new RestException('humanresources module is not installed');
-		}
-
 		$companyUuid = (string)($query['companyUuid'] ?? '');
 		$companyCrmId = (int)($query['companyCrmId'] ?? '');
-		if ($companyUuid)
-		{
-			$company = Container::instance()->getHcmLinkService()->getCompanyByUniqueId($companyUuid);
-		}
-		elseif ($companyCrmId)
-		{
-			$company = Container::instance()->getHcmLinkService()->getCompanyByMyCompanyId($companyCrmId);
-		}
-		else
+
+		if (!$companyUuid && !$companyCrmId)
 		{
 			throw new RestException("Parameter 'companyUuid' or 'companyCrmId' is required");
 		}
 
-		if ($company === null)
+		if ($companyUuid)
 		{
-			throw new ObjectNotFoundException("Company was not found.");
+			self::checkAccess(['humanresources.hcmlink'], $restServer);
 		}
 
 		$language = $query['language'] ?? 'en';
@@ -100,11 +90,14 @@ final class CompanyProvider extends IRestService
 		{
 			$providerVisibilityService = Container::instance()->getProviderVisibilityService();
 			$myCompanyService = Container::instance()->getCrmMyCompanyService();
-			$myCompanies = $myCompanyService->listWithTaxIds(inIds: [$company->myCompanyId], checkRequisitePermissions: true);
-			$myCompany = $myCompanies->toArray()[0] ?? null;
+			[$myCompanies, $myCompany] = self::getMyCompany($companyUuid, $companyCrmId, $myCompanyService);
 			if (!$myCompany)
 			{
-				throw new ObjectNotFoundException("My company {$company->myCompanyId} not found");
+				throw new ObjectNotFoundException("Company was not found.");
+			}
+			if (empty($myCompany->taxId))
+			{
+				throw new RestException("Unable to access company requisites. Check that the user has CRM permissions and the company has a tax ID configured.");
 			}
 			$registeredCompaniesOperation = new GetRegisteredCompanies(
 				myCompanies: $myCompanies,
@@ -192,6 +185,40 @@ final class CompanyProvider extends IRestService
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @return array{0: MyCompanyCollection, 1: ?MyCompany}
+	 */
+	private static function getMyCompany(
+		string $companyUuid,
+		int $companyCrmId,
+		MyCompanyService $myCompanyService,
+	): array
+	{
+		if ($companyUuid)
+		{
+			if (!Loader::includeModule('humanresources'))
+			{
+				return [new MyCompanyCollection(), null];
+			}
+
+			$company = Container::instance()->getHcmLinkService()->getCompanyByUniqueId($companyUuid);
+			if ($company === null)
+			{
+				return [new MyCompanyCollection(), null];
+			}
+
+			$myCompanies = $myCompanyService->listWithTaxIds(inIds: [$company->myCompanyId], checkRequisitePermissions: true);
+			$myCompany = $myCompanies->toArray()[0] ?? null;
+
+			return [$myCompanies, $myCompany];
+		}
+
+		$myCompanies = $myCompanyService->listWithTaxIds(inIds: [$companyCrmId], checkRequisitePermissions: true);
+		$myCompany = $myCompanies->toArray()[0] ?? null;
+
+		return [$myCompanies, $myCompany];
 	}
 
 	/**

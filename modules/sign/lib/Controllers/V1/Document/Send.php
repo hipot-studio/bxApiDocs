@@ -18,10 +18,12 @@ use Bitrix\Sign\Type\MemberStatus;
 
 class Send extends \Bitrix\Sign\Engine\Controller
 {
-	#[Attribute\ActionAccess(ActionDictionary::ACTION_DOCUMENT_EDIT)]
 	public function getMembersForResendAction(array $memberIds): array
 	{
-		if (count($memberIds) === 0)
+		if (
+			count($memberIds) === 0
+			|| !$this->getAccessController()->check(ActionDictionary::ACTION_DOCUMENT_EDIT)
+		)
 		{
 			return ['readyMembers' => []];
 		}

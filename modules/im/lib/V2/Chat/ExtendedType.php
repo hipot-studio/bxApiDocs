@@ -27,4 +27,5 @@ enum ExtendedType: string
 	case Tasks = 'TASKS';
 	case Call = 'CALL';
 	case Lines = 'LINES';
+	case System = 'SYSTEM';
 }

@@ -33,7 +33,7 @@ class YandexDlCollectionComponent extends CBitrixComponent
 		}
 
 		$this->arResult['SHOW_TITLE'] = $this->arParams['SHOW_TITLE'];
-		$this->arResult['ACCESS_KEY'] = $accessKey ? $accessKey . LANGUAGE_ID : '';
+		$this->arResult['ACCESS_KEY'] = $accessKey ?: '';
 		$this->arResult['CONNECT_LINK'] = 'https://datalens.yandex.ru/connections/new/bitrix24';
 
 		$this->includeComponentTemplate();

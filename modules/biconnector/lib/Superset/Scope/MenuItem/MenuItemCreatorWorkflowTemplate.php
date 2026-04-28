@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Superset\Scope\MenuItem;
 
 use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 
 final class MenuItemCreatorWorkflowTemplate extends BaseMenuItemCreator
@@ -17,16 +18,23 @@ final class MenuItemCreatorWorkflowTemplate extends BaseMenuItemCreator
 		$menuItems = [];
 		foreach ($dashboards as $dashboard)
 		{
+			$onClick =
+				!MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType())
+					? $this->getOpenTariffSliderScript()
+					: $this->createDashboardOpenEventFromMenu($dashboard, $params)
+			;
+
 			$menuItems[] = [
 				'ID' => "BIC_WORKFLOW_DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),
 				'IS_LOCKED' => !$this->isAvailableByTariff(),
-				'ON_CLICK' => $this->createDashboardOpenEventFromMenu($dashboard, $params),
+				'ON_CLICK' => $onClick,
 				'URL' => $this->getDetailUrl(
 					$dashboard,
 					$params,
 					['openFrom' => $this->getOpenFrom()]
 				),
+				'IS_AVAILABLE_WITHOUT_MARKET_SUB' => MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType()),
 			];
 		}
 

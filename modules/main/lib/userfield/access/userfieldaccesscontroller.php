@@ -18,13 +18,13 @@ class UserFieldAccessController extends BaseAccessController
 		return $controller->checkByItemsId($action, $itemId, $params);
 	}
 
-	public function checkByItemsId(string $action, iterable $itemId = null, $params = null): array
+	public function checkByItemsId(string $action, ?iterable $itemId = null, $params = null): array
 	{
 		$items = $this->loadItems($itemId);
 		return $this->massCheck($action, $items, $params);
 	}
 
-	protected function loadItems(iterable $itemsId = null): array
+	protected function loadItems(?iterable $itemsId = null): array
 	{
 		$userFieldModels = [];
 		foreach ($itemsId as $itemId){
@@ -34,7 +34,7 @@ class UserFieldAccessController extends BaseAccessController
 		return $userFieldModels;
 	}
 
-	public function massCheck(string $action, array $items = null, $params = null): array
+	public function massCheck(string $action, ?array $items = null, $params = null): array
 	{
 		$ruleName = $this->getRuleName($action);
 
@@ -46,7 +46,7 @@ class UserFieldAccessController extends BaseAccessController
 		return (new $ruleName($this))->executeMass($items, $params);
 	}
 
-	protected function loadItem(int $itemId = null): AccessibleItem
+	protected function loadItem(?int $itemId = null): AccessibleItem
 	{
 		if ($itemId)
 		{

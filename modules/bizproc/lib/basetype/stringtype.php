@@ -20,6 +20,40 @@ class StringType extends Base
 		return FieldType::STRING;
 	}
 
+	
+	/**
+	 * Get formats list.
+	 * @return array
+	 */
+	public static function getFormats()
+	{
+		$formats = parent::getFormats();
+
+		$userSpecificFormats = [
+			'bbcodetouser' => [
+				'callable' => 'formatValueBbcodeToUser',
+				'separator' => ', ',
+			],
+		];
+
+		return array_merge($formats, $userSpecificFormats);
+	}
+
+	protected static function formatValueBbcodeToUser(FieldType $fieldType, $value)
+	{
+		$results = [];
+
+		foreach ((array)$value as $item)
+		{
+			if (is_string($item) && preg_match('/\[USER\s*=\s*(\d+)\]/i', $item, $matches))
+			{
+				$results[] = 'user_' . $matches[1];
+			}
+		}
+
+		return implode(', ', $results);
+	}
+	
 	/**
 	 * Normalize single value.
 	 *

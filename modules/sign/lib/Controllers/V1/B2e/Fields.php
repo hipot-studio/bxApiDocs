@@ -2,15 +2,14 @@
 
 namespace Bitrix\Sign\Controllers\V1\B2e;
 
-use Bitrix\Sign\Access\AccessController;
+use Bitrix\Main;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Attribute\Access\LogicOr;
 use Bitrix\Sign\Attribute\ActionAccess;
 use Bitrix\Sign\Engine\Controller;
-use Bitrix\Main;
-use Bitrix\Crm;
-use Bitrix\Sign\Service;
-use Bitrix\Sign\Type\Field\FrontFieldCategory;
+use Bitrix\HumanResources;
+use Bitrix\Sign\Service\Document\FieldService;
 
 class Fields extends Controller
 {
@@ -18,59 +17,25 @@ class Fields extends Controller
 		new ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_READ),
 		new ActionAccess(ActionDictionary::ACTION_B2E_TEMPLATE_READ),
 	)]
-	public function loadAction(array $options = []): array
+	public function loadAction(
+		FieldService $fieldService,
+		array $options = [],
+	): array
 	{
-		if (!\CModule::IncludeModule('crm'))
+		$currentUserId = (int)CurrentUser::get()->getId();
+		if ($currentUserId < 1)
 		{
-			$this->addError(new Main\Error('Module `crm` is not installed'));
+			$this->addError(new Main\Error('User not found'));
+
 			return [];
 		}
 
-		$crmFieldsData = (new Crm\Controller\Form\Fields\Selector())->getDataAction($options);
-		$crmFieldsData['options']['permissions']['userField']['addByCategory'] =
-			$this->getAddByCategoryPermissions($crmFieldsData)
-		;
-		$crmFieldsData['fields'] = array_merge(
-			$crmFieldsData['fields'],
-			Service\Container::instance()->getServiceProfileProvider()->getFieldsForSelector(),
-			Service\Container::instance()->getMemberDynamicFieldProvider()->getFieldsForSelector(),
-		);
+		$fieldsDataResult = $fieldService->loadByUserId($currentUserId, $options);
+		if (!$fieldsDataResult->isSuccess())
+		{
+			return [];
+		}
 
-		return $crmFieldsData;
-	}
-
-	/**
-	 * @param array $crmFieldsData
-	 *
-	 * @return array<string, bool>
-	 */
-	private function getAddByCategoryPermissions(array $crmFieldsData): array
-	{
-		$currentUserId = (int)\Bitrix\Main\Engine\CurrentUser::get()->getId();
-		$accessController = new AccessController($currentUserId);
-
-		return [
-			FrontFieldCategory::PROFILE->value =>
-				$accessController->check(ActionDictionary::ACTION_B2E_PROFILE_FIELDS_ADD)
-			,
-			FrontFieldCategory::DYNAMIC_MEMBER->value =>
-				$accessController->check(ActionDictionary::ACTION_B2E_TEMPLATE_ADD)
-			,
-		] + $this->getOtherCategoriesAddPermissions($crmFieldsData);
-	}
-
-	/**
-	 * @param array{fields: array, options: array} $crmFieldsData
-	 *
-	 * @return array<string, bool>
-	 */
-	private function getOtherCategoriesAddPermissions(array $crmFieldsData): array
-	{
-		$otherCategories = array_keys((array)($crmFieldsData['fields'] ?? []));
-		$otherCategoriesAddPermission = (bool)($crmFieldsData['options']['permissions']['userField']['add'] ?? false);
-
-		$arrayPermission = array_fill(0, count($otherCategories), $otherCategoriesAddPermission);
-
-		return array_combine($otherCategories, $arrayPermission);
+		return $fieldsDataResult->getData();
 	}
 }

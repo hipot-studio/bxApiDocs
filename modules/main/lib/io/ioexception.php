@@ -16,7 +16,7 @@ class IoException extends \Bitrix\Main\SystemException
 	 * @param string $path Path that generated exception.
 	 * @param \Throwable | null $previous
 	 */
-	public function __construct($message = "", $path = "", \Throwable $previous = null)
+	public function __construct($message = "", $path = "", ?\Throwable $previous = null)
 	{
 		parent::__construct($message, 120, '', 0, $previous);
 		$this->path = $path;

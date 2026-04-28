@@ -205,6 +205,12 @@ final class Deal extends Factory
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Progress],
 				'CLASS' => Field\Stage::class,
 			],
+			Item::FIELD_NAME_PREVIOUS_STAGE_ID => [
+				'TYPE' => Field::TYPE_CRM_STATUS,
+				'CRM_STATUS_TYPE' => $this->getStagesEntityId(),
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Progress, \CCrmFieldInfoAttr::ReadOnly],
+				'CLASS' => Field\PreviousStageId::class,
+			],
 			Item::FIELD_NAME_STAGE_SEMANTIC_ID => [
 				'TYPE' => Field::TYPE_STRING,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::ReadOnly, \CCrmFieldInfoAttr::NotDisplayed],

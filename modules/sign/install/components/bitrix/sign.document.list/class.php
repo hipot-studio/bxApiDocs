@@ -125,7 +125,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 	{
 		if (!Storage::instance()->isB2eAvailable())
 		{
-			showError('access denied');
+			$this->includeNotAvailableTemplate();
 			return;
 		}
 

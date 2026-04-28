@@ -3,6 +3,7 @@
 use Bitrix\Main\Application;
 use Bitrix\Main\ModuleTable;
 use Bitrix\Main\Service\Version\BitrixVm;
+use Bitrix\Main\Config\Option;
 
 class CSiteCheckerTest
 {
@@ -693,15 +694,16 @@ class CSiteCheckerTest
 		{
 			$body = str_repeat($body, 8000);
 		}
+		$additionalParams = Option::get("main", "mail_additional_parameters");
 
 		$startTime = microtime(true);
 		if ($big)
 		{
-			$val = mail("hosting_test@bitrixsoft.com", "Bitrix site checker" . $eol . "\tmultiline subject", $body, 'BCC: noreply@bitrixsoft.com');
+			$val = mail("hosting_test@bitrixsoft.com", "Bitrix site checker" . $eol . "\tmultiline subject", $body, 'BCC: noreply@bitrixsoft.com', $additionalParams);
 		}
 		else
 		{
-			$val = mail("hosting_test@bitrixsoft.com", "Bitrix site checker", $body);
+			$val = mail("hosting_test@bitrixsoft.com", "Bitrix site checker", $body, '', $additionalParams);
 		}
 		$endTime = microtime(true);
 		$time = round($endTime - $startTime, 2);
@@ -1366,7 +1368,6 @@ class CSiteCheckerTest
 	function check_update()
 	{
 		$ServerIP = COption::GetOptionString("main", "update_site", "www.1c-bitrix.ru");
-		$ServerPort = 80;
 
 		$proxyAddr = COption::GetOptionString("main", "update_site_proxy_addr", "");
 		$proxyPort = COption::GetOptionString("main", "update_site_proxy_port", "");
@@ -1388,8 +1389,10 @@ class CSiteCheckerTest
 		}
 		else
 		{
-			$requestIP = $ServerIP;
-			$requestPort = $ServerPort;
+			$https = COption::GetOptionString("main", "update_use_https", "N") == "Y";
+
+			$requestIP = ($https ? 'tls://' : '') . $ServerIP;
+			$requestPort = ($https ? 443 : 80);
 		}
 
 		$strRequest = "";
@@ -1439,7 +1442,7 @@ class CSiteCheckerTest
 		}
 		else
 		{
-			if (\Bitrix\Main\Config\Option::get("updateserverlight", "is_turned_on", "N") === "Y")
+			if (Option::get("updateserverlight", "is_turned_on", "N") === "Y")
 			{
 				return true;
 			}

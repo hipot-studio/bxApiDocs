@@ -16,4 +16,5 @@ final class SecuritySettingsDto extends Dto
 	public bool $isHighPushOtpPromote;
 	public RightsDto $takeScreenshotRights;
 	public RightsDto $copyTextRights;
+	public bool $isLoginHistoryAvailable;
 }

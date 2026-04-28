@@ -15,7 +15,7 @@ class DepartmentEditEmployeesTool extends NodeEditEmployeesTool
 
 	public function getName(): string
 	{
-		return 'edit_employees';
+		return 'department_edit_employees';
 	}
 
 	public function getDescription(): string

@@ -276,12 +276,42 @@ class EventForBookingService
 			return true;
 		}
 
-		if ($this->isClientsChanged($prevBooking, $currentBooking))
+		if (
+			$this->isClientsChanged($prevBooking, $currentBooking)
+			|| $this->isSkusChanged($prevBooking, $currentBooking)
+			|| $this->isResourcesChanged($prevBooking, $currentBooking)
+		)
 		{
 			return true;
 		}
 
 		return false;
+	}
+
+	private function isResourcesChanged(Booking $prevBooking, Booking $currentBooking): bool
+	{
+		if ($prevBooking->getResourceCollection()->count() !== $currentBooking->getResourceCollection()->count())
+		{
+			return true;
+		}
+
+		return !$prevBooking->getResourceCollection()
+			->diff($currentBooking->getResourceCollection())
+			->isEmpty()
+		;
+	}
+
+	private function isSkusChanged(Booking $prevBooking, Booking $currentBooking): bool
+	{
+		if ($prevBooking->getSkuCollection()->count() !== $currentBooking->getSkuCollection()->count())
+		{
+			return true;
+		}
+
+		return !$prevBooking->getSkuCollection()
+			->diff($currentBooking->getSkuCollection())
+			->isEmpty()
+		;
 	}
 
 	private function isClientsChanged(Booking $prevBooking, Booking $currentBooking): bool

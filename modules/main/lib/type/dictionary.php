@@ -14,7 +14,7 @@ class Dictionary implements \ArrayAccess, \Iterator, \Countable, \JsonSerializab
 	 *
 	 * @param array | null $values
 	 */
-	public function __construct(array $values = null)
+	public function __construct(?array $values = null)
 	{
 		if($values !== null)
 		{

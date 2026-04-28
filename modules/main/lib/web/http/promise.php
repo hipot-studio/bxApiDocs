@@ -42,7 +42,7 @@ abstract class Promise implements PromiseInterface
 	/**
 	 * @inheritdoc
 	 */
-	public function then(callable $onFulfilled = null, callable $onRejected = null)
+	public function then(?callable $onFulfilled = null, ?callable $onRejected = null)
 	{
 		$state = $this->getState();
 

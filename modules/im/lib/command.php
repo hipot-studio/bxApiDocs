@@ -8,6 +8,7 @@
 
 namespace Bitrix\Im;
 
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Main,
 	Bitrix\Main\Localization\Loc,
 	Bitrix\Main\DB\Exception;
@@ -246,6 +247,12 @@ class Command
 		}
 
 		$update = Array();
+		if (isset($updateFields['COMMAND']) && $updateFields['COMMAND'] !== '')
+		{
+			$update['COMMAND'] = mb_substr($updateFields['COMMAND'], 0, 1) == '/'
+				? mb_substr($updateFields['COMMAND'], 1)
+				: $updateFields['COMMAND'];
+		}
 		if (isset($updateFields['CLASS']) && !empty($updateFields['CLASS']))
 		{
 			$update['CLASS'] = $updateFields['CLASS'];
@@ -382,6 +389,15 @@ class Command
 				call_user_func_array(array($params["CLASS"], $params["METHOD_COMMAND_ADD"]), Array($messageId, $messageFields));
 			}
 		}
+
+		try
+		{
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logCommandAdd($commandList, 'ONIMBOTV2COMMANDADD', $messageId, $messageFields);
+		}
+		catch (\Throwable)
+		{
+		}
+
 		unset(
 			$messageFields['COMMAND'],
 			$messageFields['COMMAND_ID'],
@@ -389,10 +405,7 @@ class Command
 			$messageFields['COMMAND_CONTEXT']
 		);
 
-		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImCommandAdd") as $event)
-		{
-			ExecuteModuleEventEx($event, Array($commandList, $messageId, $messageFields));
-		}
+		Bot::fireRestEventsPerItem('onImCommandAdd', 'onImBotV2CommandAdd', $commandList, [$messageId, $messageFields]);
 
 		return true;
 	}
@@ -629,13 +642,15 @@ class Command
 		$isExtranet = \Bitrix\Im\User::getInstance($messageFields['FROM_USER_ID'])->isExtranet();
 
 		$commands = self::getListCache();
-		$bots = Bot::getListCache();
 		foreach ($commands as $value)
 		{
 			$chatEntityType = $messageFields['CHAT_ENTITY_TYPE'] ?? null;
 			if (
 				$chatEntityType === 'LIVECHAT'
-				|| ($chatEntityType === 'LINES' && $bots[$value['BOT_ID']]['OPENLINE'] != 'Y')
+				|| (
+					$chatEntityType === 'LINES'
+					&& BotData::getInstance((int)$value['BOT_ID'])->getOpenline() !== 'Y'
+				)
 			)
 			{
 				continue;

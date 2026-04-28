@@ -4,6 +4,9 @@ namespace Bitrix\Crm\Recurring\Entity\Item;
 use Bitrix\Crm\Automation;
 use Bitrix\Crm\Binding\DealContactTable;
 use Bitrix\Crm\DealRecurTable;
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Observer\ObserverManager;
 use Bitrix\Crm\Recurring;
 use Bitrix\Crm\Service\Container;
@@ -373,15 +376,13 @@ class DealExist extends DealEntity
 
 	protected function onAfterDealExpose($newId, array $newDealFields)
 	{
-		\CCrmBizProcHelper::AutoStartWorkflows(
-			\CCrmOwnerType::Deal,
-			$newId,
-			\CCrmBizProcEventType::Create,
-			$arErrors
+		$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Deal, (int)$newId));
+		$starter->runOnDocumentAdd(
+			new RunDataDto(
+				actualFields: $newDealFields,
+				userId: 0,
+			)
 		);
-
-		$starter = new Automation\Starter(\CCrmOwnerType::Deal, $newId);
-		$starter->runOnAdd();
 
 		$event = new Main\Event("crm", static::ON_DEAL_RECURRING_EXPOSE_EVENT, [
 			'ID' => $this->id,

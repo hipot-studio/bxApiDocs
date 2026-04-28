@@ -11,6 +11,10 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
+use Bitrix\BIConnector\ExternalSource\SupersetIntegration;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\SupersetController;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\BiConnector\Settings;
@@ -19,7 +23,9 @@ use Bitrix\BIConnector\ExternalSource\Const;
 use Bitrix\BIConnector\ExternalSource\FieldType;
 use Bitrix\BIConnector\ExternalSource\DatasetManager;
 use Bitrix\BIConnector\ExternalSource\Source;
+use Bitrix\BIConnector\Configuration\DataTimezone;
 use Bitrix\Main\Type;
+use Bitrix\Main\Web\Uri;
 
 class DatasetImportComponent extends CBitrixComponent
 {
@@ -49,6 +55,21 @@ class DatasetImportComponent extends CBitrixComponent
 				'connectionIsSupportMapping' => (($arParams['connection']['connectionIsSupportMapping'] ?? '') === 'true'),
 			];
 			$arParams['connection'] = $connection;
+		}
+
+		if (!is_array($arParams['sectionsConfig'] ?? null))
+		{
+			$arParams['sectionsConfig'] = [];
+		}
+		elseif (!empty($arParams['sectionsConfig']))
+		{
+			foreach ($arParams['sectionsConfig'] as $section => $config)
+			{
+				foreach ($config as $key => $value)
+				{
+					$arParams['sectionsConfig'][$section][$key] = $value === 'true';
+				}
+			}
 		}
 
 		if (empty($arParams['sourceId']))
@@ -89,7 +110,9 @@ class DatasetImportComponent extends CBitrixComponent
 					FieldType::DateTime->value => Const\DateTime::Ymd_dash_His_colon->value,
 					FieldType::Double->value => Const\DoubleDelimiter::DOT->value,
 					FieldType::Money->value => Const\MoneyDelimiter::DOT->value,
+					FieldType::Timezone->value => DataTimezone::getTimezone(),
 				],
+				'sectionsConfig' => $this->arParams['sectionsConfig'],
 			],
 		];
 
@@ -112,27 +135,103 @@ class DatasetImportComponent extends CBitrixComponent
 		}
 	}
 
+	private function loadSupersetDatasets(ExternalSource\Internal\ExternalDataset $dataset): array
+	{
+		if (!SupersetInitializer::isSupersetReady())
+		{
+			return [];
+		}
+
+		$supersetIntegration = new SupersetIntegration();
+		$datasetsResult = $supersetIntegration->loadSupersetDatasets($dataset);
+
+		if ($datasetsResult->isSuccess())
+		{
+			return $datasetsResult->getData();
+		}
+
+		return [];
+	}
+
+	private function getPhysicalDatasetCreateUrl(ExternalSource\Internal\ExternalDataset $dataset, array $externalDatasets): ?string
+	{
+		if(empty($dataset->getName()) || !SupersetInitializer::isSupersetReady())
+		{
+			return null;
+		}
+
+		$hasPhysicalDataset = false;
+		if (!empty($externalDatasets))
+		{
+			foreach ($externalDatasets as $externalDataset)
+			{
+				if (isset($externalDataset['is_virtual']) && $externalDataset['is_virtual'] === false)
+				{
+					$hasPhysicalDataset = true;
+					break;
+				}
+			}
+		}
+
+		if ($hasPhysicalDataset)
+		{
+			return null;
+		}
+
+		$integrator = Integrator::getInstance();
+		$response = $integrator->getDatasetCreateUrl($dataset->getName());
+		if ($response->hasErrors())
+		{
+			return null;
+		}
+		$responseData = $response->getData();
+
+		return $responseData['url'] ? $this->getSupersetLoginUrl($responseData['url']) : null;
+	}
+
+	private function getVirtualDatasetCreateUrl(ExternalSource\Internal\ExternalDataset $dataset): ?string
+	{
+		if (empty($dataset->getName()) || !SupersetInitializer::isSupersetReady())
+		{
+			return null;
+		}
+
+		$integrator = Integrator::getInstance();
+		$response = $integrator->getDatasetCreateUrl($dataset->getName(), true);
+		if ($response->hasErrors())
+		{
+			return null;
+		}
+		$responseData = $response->getData();
+
+		return $responseData['url'] ? $this->getSupersetLoginUrl($responseData['url']) : null;
+	}
+
+	private function getSupersetLoginUrl(string $editUrl): string
+	{
+		$loginUrl = (new SupersetController(Integrator::getInstance()))->getLoginUrl();
+		if ($loginUrl)
+		{
+			$url = new Uri($loginUrl);
+			$url->addParams([
+				'next' => $editUrl,
+			]);
+
+			return $url->getLocator();
+		}
+
+		return $editUrl;
+	}
+
 	private function loadDataset(): void
 	{
 		$datasetId = $this->arParams['datasetId'];
 		$dataset = DatasetManager::getById($datasetId);
 		if (!$dataset)
 		{
-			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_DATASET_NOT_FOUND');
+			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_DATASET_NOT_FOUND_MSGVER_1');
 			$this->includeComponentTemplate();
 			Application::getInstance()->terminate();
-		}
-
-		if ($dataset->getExternalId())
-		{
-			$supersetIntegration = new ExternalSource\SupersetIntegration();
-			$datasetResult = $supersetIntegration->loadDataset($dataset);
-			if (!$datasetResult->isSuccess())
-			{
-				$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_DATASET_NOT_FOUND');
-				$this->includeComponentTemplate();
-				Application::getInstance()->terminate();
-			}
 		}
 
 		$datasetFields = DatasetManager::getDatasetFieldsById($datasetId);
@@ -152,7 +251,7 @@ class DatasetImportComponent extends CBitrixComponent
 				if (!$source->getActive())
 				{
 					$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_CONNECTION_NOT_ACTIVE');
-					$this->arResult['ERROR_DESCRIPTIONS'][] = Loc::getMessage('BICONNECTOR_CONNECTION_NOT_ACTIVE_DESC');
+					$this->arResult['ERROR_DESCRIPTIONS'][] = Loc::getMessage('BICONNECTOR_CONNECTION_NOT_ACTIVE_DESC_MSGVER_1');
 					$this->includeComponentTemplate();
 					Application::getInstance()->terminate();
 				}
@@ -170,13 +269,44 @@ class DatasetImportComponent extends CBitrixComponent
 					;
 				}
 
-				$result['connectionProperties'] = [
+				$connectionProperties = [
 					'connectionId' => $source->getId(),
 					'connectionType' => $source->getType(),
 					'connectionName' => $source->getTitle(),
 					'tableName' => $dataset->getExternalName(),
 					'connectionIsSupportMapping' => $isSupportMapping ?? false,
 				];
+
+				$externalDatasets = $result['datasetProperties']['externalDatasets'] ?? [];
+				$createPhysicalUrl = $this->getPhysicalDatasetCreateUrl($dataset, $externalDatasets);
+				if ($createPhysicalUrl !== null)
+				{
+					$connectionProperties['createPhysicalDatasetUrl'] = $createPhysicalUrl;
+				}
+
+				$createVirtualUrl = $this->getVirtualDatasetCreateUrl($dataset);
+				if ($createVirtualUrl !== null)
+				{
+					$connectionProperties['createVirtualDatasetUrl'] = $createVirtualUrl;
+				}
+
+				$result['connectionProperties'] = $connectionProperties;
+			}
+		}
+
+		if ($dataset->getEnumType() === ExternalSource\Type::Csv)
+		{
+			$externalDatasets = $result['datasetProperties']['externalDatasets'] ?? [];
+			$createPhysicalUrl = $this->getPhysicalDatasetCreateUrl($dataset, $externalDatasets);
+			if ($createPhysicalUrl !== null)
+			{
+				$result['datasetProperties']['createPhysicalDatasetUrl'] = $createPhysicalUrl;
+			}
+
+			$createVirtualUrl = $this->getVirtualDatasetCreateUrl($dataset);
+			if ($createVirtualUrl !== null)
+			{
+				$result['datasetProperties']['createVirtualDatasetUrl'] = $createVirtualUrl;
 			}
 		}
 
@@ -199,6 +329,7 @@ class DatasetImportComponent extends CBitrixComponent
 			'description' => $dataset->getDescription() ?? '',
 			'externalCode' => $dataset->getExternalCode() ?? '',
 			'externalName' => $dataset->getExternalName() ?? '',
+			'externalDatasets' => $this->loadSupersetDatasets($dataset),
 		];
 	}
 
@@ -228,6 +359,7 @@ class DatasetImportComponent extends CBitrixComponent
 			FieldType::Date->value => '',
 			FieldType::DateTime->value => '',
 			FieldType::Double->value => '',
+			FieldType::Timezone->value => '',
 		];
 
 		foreach ($datasetSettings as $setting)
@@ -289,6 +421,7 @@ class DatasetImportComponent extends CBitrixComponent
 		{
 			if ($value instanceof Type\DateTime)
 			{
+				$value->setTimeZone(DataTimezone::getConfigTimezone());
 				$result[] = $value->format('Y-m-d H:i:s');
 			}
 			elseif ($value instanceof Type\Date)
@@ -371,6 +504,7 @@ class DatasetImportComponent extends CBitrixComponent
 						'value' => Const\MoneyDelimiter::DOT->value,
 					],
 				],
+				FieldType::Timezone->value => $this->getTimezones(),
 			],
 			'encodings' => [
 				[
@@ -398,7 +532,23 @@ class DatasetImportComponent extends CBitrixComponent
 			],
 			'reservedNames' => ExternalSource\SupersetServiceIntegration::getTableList(),
 			'connections' => $this->getExternalConnections(),
+			'isSupersetReady' => SupersetInitializer::isSupersetReady(),
 		];
+	}
+
+	private function getTimezones(): array
+	{
+		$timezones = [];
+		foreach (\CTimeZone::GetZones() as $code => $name)
+		{
+			$timezones[] = [
+				'value' => $code,
+				'title' => $name,
+				'type' => 'value',
+			];
+		}
+
+		return $timezones;
 	}
 
 	private function getExternalConnections(): array

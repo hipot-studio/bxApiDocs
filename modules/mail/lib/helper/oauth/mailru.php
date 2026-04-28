@@ -18,6 +18,7 @@ class Mailru extends Mail\Helper\OAuth
 		$this->oauthEntity->addScope(array(
 			'userinfo',
 			'mail.imap',
+			'offline_access',
 		));
 	}
 
@@ -58,7 +59,6 @@ if (Main\Loader::includeModule('socialservices'))
 
 	class MailruInterface extends \CMailRu2Interface
 	{
-
 		public function getStorageTokens()
 		{
 			return false;

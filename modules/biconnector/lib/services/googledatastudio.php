@@ -13,9 +13,9 @@ class GoogleDataStudio extends Service
 {
 	protected static $serviceId = 'gds';
 	public static $dateFormats = [
-		'datetime_format' => '%Y%m%d%H%i%s',
+		'datetime_format' => 'YYYYMMDDHHMISS',
 		'datetime_format_php' => 'YmdHis',
-		'date_format' => '%Y%m%d',
+		'date_format' => 'YYYYMMDD',
 		'date_format_php' => 'Ymd',
 	];
 

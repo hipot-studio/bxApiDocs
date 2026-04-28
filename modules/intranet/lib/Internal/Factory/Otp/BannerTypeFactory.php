@@ -14,6 +14,10 @@ use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\TrustDeviceConfirmation;
 use Bitrix\Intranet\Internal\Service\Otp\TrustPhoneNumberConfirmation;
+use Bitrix\Intranet\Internal\Service\Otp\DeviceReconnect;
+use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Type\Date;
 
 class BannerTypeFactory
@@ -32,21 +36,17 @@ class BannerTypeFactory
 		$this->pushOtp = MobilePush::createByDefault();
 	}
 
-	private function getPersonalOtp(): ?PersonalOtp
-	{
-		if ($this->personalOtp === null)
-		{
-			$this->personalOtp = $this->settingsOtp->getPersonalSettingsByUserId($this->user->getId());
-		}
-
-		return $this->personalOtp;
-	}
-
 	public function create(): ?OtpBannerType
 	{
 		if ($this->user->getId() <= 0)
 		{
 			return null;
+		}
+
+		$deviceReconnect = new DeviceReconnect();
+		if ($deviceReconnect->shouldShowReconnect() && $this->getPersonalOtp()?->isActivated())
+		{
+			return OtpBannerType::RECONNECT_TRUSTED_DEVICE;
 		}
 
 		$type = $this->getType();
@@ -74,6 +74,11 @@ class BannerTypeFactory
 		}
 
 		return null;
+	}
+
+	public static function onLicenseChanged(): void
+	{
+		Option::set('intranet', 'otp_banner_license_delay', time() + 86400 * 7);
 	}
 
 	private function getType(): ?OtpBannerType
@@ -134,6 +139,11 @@ class BannerTypeFactory
 
 	private function canShow(OtpBannerType $type): bool
 	{
+		if (!$this->canShowByLicense($type))
+		{
+			return false;
+		}
+
 		$lastShow = \CUserOptions::GetOption('intranet', 'push_otp_popup_last_show', null);
 
 		if (empty($lastShow) || !is_string($lastShow))
@@ -141,7 +151,7 @@ class BannerTypeFactory
 			return true;
 		}
 
-		$lastShowType = \CUserOptions::GetOption('intranet', 'push_otp_popup_last_type', null);
+		$lastShowType = \CUserOptions::GetOption('intranet', 'push_otp_popup_last_show_type', null);
 		$lastShowType = $lastShowType && is_int($lastShowType) ? OtpBannerType::tryFrom($lastShowType) : null;
 
 		if (
@@ -177,5 +187,46 @@ class BannerTypeFactory
 		}
 
 		return $daysSinceLastShow > 0;
+	}
+
+	private function getPersonalOtp(): ?PersonalOtp
+	{
+		if ($this->personalOtp === null)
+		{
+			$this->personalOtp = $this->settingsOtp->getPersonalSettingsByUserId($this->user->getId());
+		}
+
+		return $this->personalOtp;
+	}
+
+	private function canShowByLicense(OtpBannerType $type): bool
+	{
+		if (!in_array($type, [
+			OtpBannerType::ONLY_ADMIN_ENABLED_NEW_2FA,
+			OtpBannerType::ENABLED_OLD_2FA,
+			OtpBannerType::DISABLED_ALL_2FA,
+		], true))
+		{
+			return true;
+		}
+
+		if (Loader::includeModule('bitrix24') && (\CBitrix24::isLicensePaid() || \CBitrix24::IsNfrLicense()))
+		{
+			$delayByLicense = (int)Option::get('intranet', 'otp_banner_license_delay', 0);
+
+			if ($delayByLicense > 0)
+			{
+				return $delayByLicense < time();
+			}
+
+			return true;
+		}
+
+		if (Application::getInstance()->getLicense()->isTimeBound())
+		{
+			return true;
+		}
+
+		return false;
 	}
 }

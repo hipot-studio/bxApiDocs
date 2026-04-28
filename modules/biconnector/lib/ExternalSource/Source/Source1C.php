@@ -2,7 +2,7 @@
 
 namespace Bitrix\BIConnector\ExternalSource\Source;
 
-use Bitrix\BIConnector\ExternalSource\FieldType;
+use Bitrix\BIConnector\Configuration\DataTimezone;
 use Bitrix\BIConnector\ExternalSource\Internal\EO_ExternalSource;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetField;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetFieldTable;
@@ -16,7 +16,6 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
@@ -164,6 +163,7 @@ class Source1C extends Base
 			'select' => $selectFields,
 			'columnNames' => $query['columnNames'],
 			'filters' => $query['filter'] ?? [],
+			'timezone' => DataTimezone::getTimezone(),
 		];
 
 		if (isset($query['limit']))

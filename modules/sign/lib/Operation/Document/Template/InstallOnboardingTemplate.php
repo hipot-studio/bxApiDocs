@@ -3,6 +3,7 @@
 namespace Bitrix\Sign\Operation\Document\Template;
 
 use Bitrix\Main;
+use Bitrix\Sign\Config\Const\OnboardingTemplate;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Contract\Operation;
 use Bitrix\Sign\Operation\Document\UnserializePortableBlank;
@@ -14,6 +15,9 @@ use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Sign\Document\TemplateService;
 use Bitrix\Sign\Service\Sign\PresetTemplatesService;
 
+/**
+ * @see GetOrInstallOnboardingTemplate
+ */
 class InstallOnboardingTemplate implements Operation
 {
 	private readonly B2eTariffRestrictionService $b2eTariffRestrictionService;
@@ -59,7 +63,7 @@ class InstallOnboardingTemplate implements Operation
 			return $result;
 		}
 
-		$filesystemEntry = $this->presetTemplatesService->getSerializedTemplatePathByName($this->storage->getOnboardingTemplateName());
+		$filesystemEntry = $this->presetTemplatesService->getSerializedTemplatePathByName(OnboardingTemplate::FILE_NAME);
 		if (!$filesystemEntry || !$filesystemEntry->isExists() || !$filesystemEntry->isFile())
 		{
 			return Result::createByErrorMessage("Unexpected filesystem entry for onboarding template");

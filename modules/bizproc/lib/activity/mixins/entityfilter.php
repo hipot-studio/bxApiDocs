@@ -128,6 +128,11 @@ trait EntityFilter
 				continue;
 			}
 
+			if (\CBPHelper::isEmptyValue($value) && in_array($operator, ['@', '!@'], true))
+			{
+				continue;
+			}
+
 			$filter[$i][] = $this->createRowFilter($operator, $condition->getField(), $value);
 
 			if ($joiner === ConditionGroup::JOINER_OR)

@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Common\RegistryEntryImplementation;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Relation\Reason;
 use Bitrix\Im\V2\Rest\RestEntity;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Type\DateTime;
 
 class Relation implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity
@@ -330,6 +331,18 @@ class Relation implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity
 	{
 		$this->lastId = $lastId;
 		return $this;
+	}
+
+	public function updateLastId(int $lastId): ?int
+	{
+		$newLastId = new SqlExpression('(CASE WHEN ?# > ?i THEN ?# ELSE ?i END)', 'LAST_ID', $lastId, 'LAST_ID', $lastId);
+		RelationTable::updateByFilter(
+			['=CHAT_ID' => $this->chatId, '=USER_ID' => $this->userId],
+			['LAST_ID' => $newLastId]
+		);
+		$this->fillActual(['LAST_ID']);
+
+		return $this->getLastId();
 	}
 
 	public function getLastSendId(): ?int

@@ -3,15 +3,20 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Chat\Event\Legacy\Dto;
 
+use Bitrix\Im\V2\Reading\Counter\CountersProvider;
+use Bitrix\Main\DI\ServiceLocator;
+
 class Chat
 {
 	protected \Bitrix\Im\V2\Chat $chat;
 	protected int $userId;
+	protected CountersProvider $countersProvider;
 
-	public function __construct(\Bitrix\Im\V2\Chat $chat, int $userId)
+	public function __construct(\Bitrix\Im\V2\Chat $chat, int $userId, ?CountersProvider $countersProvider = null)
 	{
 		$this->chat = $chat->withContextUser($userId);
 		$this->userId = $userId;
+		$this->countersProvider = $countersProvider ?? ServiceLocator::getInstance()->get(CountersProvider::class);
 	}
 
 	public function toArray(): array
@@ -36,7 +41,7 @@ class Chat
 			'AVATAR' => $this->chat->getAvatar(),
 			'COLOR' => $this->chat->getColor(true),
 			'TYPE' => $this->chat->getExtendedType(),
-			'COUNTER' => $this->chat->getUserCounter(),
+			'COUNTER' => $this->countersProvider->getForUser($this->chat->getId(), $this->userId),
 			'USER_COUNTER' => $this->chat->getUserCount(),
 			'MESSAGE_COUNT' => $this->chat->getMessageCount(),
 			'UNREAD_ID' => $this->chat->getUnreadId(),

@@ -3,7 +3,7 @@
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Landing\Manager;
-use Bitrix\Landing\Mainpage;
+use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -45,7 +45,7 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 	protected function getData(): void
 	{
 		$useDemoData = false;
-		if (Mainpage\Manager::isUseDemoData())
+		if (Vibe::isUseDemoData())
 		{
 			$data = $this->getDemoData();
 		}

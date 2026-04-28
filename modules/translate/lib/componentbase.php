@@ -8,6 +8,9 @@ use Bitrix\Main\Localization;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Translate;
 
+/**
+ * @internal
+ */
 
 abstract class ComponentBase
 	extends \CBitrixComponent

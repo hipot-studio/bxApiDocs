@@ -11,6 +11,7 @@ use Bitrix\HumanResources\Builder\Structure\Filter\SelectionCondition\BaseSelect
 use Bitrix\HumanResources\Builder\Structure\NodeDataBuilder;
 use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Exception\NodeAccessFilterException;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Repository\NodeRepository;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Service\Access\Structure\StructureAccessService;
@@ -118,14 +119,10 @@ final class NodeAccessFilter extends BaseSelectionConditionFilter
 
 	private function getAllUserNodeIds(int $userId, NodeEntityType $nodeEntityType = NodeEntityType::DEPARTMENT): array
 	{
-		$nodeRepository = new NodeRepository();
-		if ($nodeEntityType === NodeEntityType::TEAM)
-		{
-			$nodeRepository->setSelectableNodeEntityTypes([$nodeEntityType]);
-		}
-
-		$nodeCollection = $nodeRepository->findAllByUserId($userId);
-		$nodeRepository->setSelectableNodeEntityTypes([NodeEntityType::DEPARTMENT]);
+		$nodeCollection = InternalContainer::getNodeRepository()->findAllByMemberEntityId(
+			entityId: $userId,
+			nodeTypes: [$nodeEntityType],
+		);
 
 		$nodeIds = [];
 		foreach ($nodeCollection as $node)

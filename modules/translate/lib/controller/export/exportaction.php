@@ -10,7 +10,7 @@ use Bitrix\Translate\Index;
  * Harvester of the lang files disposition.
  *
  * @method array run(string $path, bool $runBefore)
- *
+ * @internal
  */
 abstract class ExportAction extends Translate\Controller\Action
 {

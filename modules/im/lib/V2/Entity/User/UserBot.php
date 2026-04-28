@@ -113,4 +113,9 @@ class UserBot extends User
 	{
 		return $this->getBotData()->isHidden();
 	}
+
+	public function getBotCode(): string
+	{
+		return $this->getBotData()->getCode();
+	}
 }

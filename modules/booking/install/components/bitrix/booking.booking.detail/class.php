@@ -37,7 +37,7 @@ class BookingDetailComponent extends BookingBaseComponent implements \Bitrix\Mai
 			}
 
 			$this->setResult('booking', $booking->toArray());
-			$this->setResult('company', \Bitrix\Booking\Internals\Integration\Crm\MyCompany::getName() ?? '');
+			$this->setResult('company', \Bitrix\Booking\Internals\Container::getMyCompanyProvider()->getName() ?? '');
 		}
 		catch (Throwable $e)
 		{

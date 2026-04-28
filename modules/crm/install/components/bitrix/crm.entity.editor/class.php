@@ -118,7 +118,6 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		$hasBBCodeFields = false;
 		$htmlFieldNames = [];
 		$bbFieldNames = [];
-		$isUfAddressConverterEnabled = $this->isUfAddressConvertionEnabled();
 		foreach($this->arResult['ENTITY_FIELDS'] as $index => $field)
 		{
 			$name = $field['name'] ?? '';
@@ -145,24 +144,6 @@ class CCrmEntityEditorComponent extends UIFormComponent
 			if ($name === 'LINK' && $typeName === 'multifield')
 			{
 				continue;
-			}
-
-			if (
-				$isUfAddressConverterEnabled
-				&& $typeName === 'userField'
-				&& is_array($field['data'])
-				&& is_array($field['data']['fieldInfo'])
-				&& isset($field['data']['fieldInfo']['USER_TYPE_ID'])
-				&& $field['data']['fieldInfo']['USER_TYPE_ID'] === 'address'
-				&& (!isset($field['data']['fieldInfo']['MULTIPLE'])
-					|| $field['data']['fieldInfo']['MULTIPLE'] === 'N'))
-			{
-				if (!is_array($field['data']['options'] ?? null))
-				{
-					$this->arResult['ENTITY_FIELDS'][$index]['data']['options'] = [];
-				}
-				$this->arResult['ENTITY_FIELDS'][$index]['data']['options']['canActivateUfAddressConverter'] =
-				$field['data']['options']['canActivateUfAddressConverter'] = 'Y';
 			}
 
 			$availableFields[$name] = $field;
@@ -907,51 +888,6 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		}
 
 		return $typeList;
-	}
-
-	protected function isUfAddressConvertionEnabled()
-	{
-		$result = false;
-
-		if (($this->entityTypeID === CCrmOwnerType::Lead
-				|| $this->entityTypeID === CCrmOwnerType::Deal
-				|| $this->entityTypeID === CCrmOwnerType::Contact
-				|| $this->entityTypeID === CCrmOwnerType::Company)
-			&& EntityAuthorization::isAuthorized()
-			&& CCrmAuthorizationHelper::CheckConfigurationUpdatePermission())
-		{
-			$companyAgent = CompanyAddressConvertAgent::getInstance();
-			$companyUfAgent = CompanyUfAddressConvertAgent::getInstance();
-			$companyUfAgentAllowed = (
-				!$companyAgent->isEnabled() &&
-				$companyUfAgent->isEnabled() &&
-				!$companyUfAgent->isActive() &&
-				in_array($this->entityTypeID, $companyUfAgent->getAllowedEntityTypes(), true)
-			);
-			$contactAgent = ContactAddressConvertAgent::getInstance();
-			$contactUfAgent = ContactUfAddressConvertAgent::getInstance();
-			$contactUfAgentAllowed = (
-				!$contactAgent->isEnabled() &&
-				$contactUfAgent->isEnabled() &&
-				!$contactUfAgent->isActive() &&
-				in_array($this->entityTypeID, $contactUfAgent->getAllowedEntityTypes(), true)
-			);
-			switch ($this->entityTypeID)
-			{
-				case CCrmOwnerType::Lead:
-				case CCrmOwnerType::Deal:
-					$result = ($companyUfAgentAllowed && $contactUfAgentAllowed);
-					break;
-				case CCrmOwnerType::Company:
-					$result = $companyUfAgentAllowed;
-					break;
-				case CCrmOwnerType::Contact:
-					$result = $contactUfAgentAllowed;
-					break;
-			}
-		}
-
-		return $result;
 	}
 
 	protected function prepareRestrictions(): void

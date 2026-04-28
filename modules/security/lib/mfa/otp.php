@@ -6,6 +6,7 @@ use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type;
 use Bitrix\Main\Security\Sign\BadSignatureException;
@@ -14,6 +15,9 @@ use Bitrix\Main\Security\Random;
 use Bitrix\Main\Text\Base32;
 use Bitrix\Main\Security\Mfa\OtpAlgorithm;
 use Bitrix\Main\Authentication\Policy;
+use Bitrix\Main\Context;
+use Bitrix\Main\Security\Mfa\TotpAlgorithm;
+use Bitrix\Main\Event;
 
 Loc::loadMessages(__FILE__);
 
@@ -28,7 +32,7 @@ class Otp
 
 	protected array $initParams = [];
 	protected $regenerated = false;
-	/* @var \Bitrix\Main\Context $context */
+	/* @var Context $context */
 	protected $context = null;
 	protected $userId = null;
 	protected $userLogin = null;
@@ -76,12 +80,7 @@ class Otp
 			throw new ArgumentTypeException('userId', 'positive integer');
 		}
 
-		$userInfo = UserTable::getList([
-			'filter' => ['=USER_ID' => $userId],
-			'select' => ['ACTIVE', 'USER_ID', 'SECRET', 'INIT_PARAMS', 'PARAMS', 'TYPE', 'ATTEMPTS', 'INITIAL_DATE', 'SKIP_MANDATORY', 'DEACTIVATE_UNTIL', 'USER_ACTIVE' => 'USER.ACTIVE'],
-		]);
-
-		$userInfo = $userInfo->fetch();
+		$userInfo = static::getUserData($userId);
 
 		if (!$userInfo)
 		{
@@ -185,12 +184,12 @@ class Otp
 	}
 
 	/**
-	 * Reinitialize OTP (generate new secret, set default algo, etc), must be called before connect new device
+	 * Reinitialize OTP (generate new secret, set default algo, etc.), must be called before connect new device
 	 *
 	 * @param null $newSecret Using custom secret.
 	 * @return $this
 	 */
-	public function regenerate($newSecret = null)
+	public function regenerate($newSecret = null, OtpType $type = null)
 	{
 		if (!$newSecret)
 		{
@@ -199,7 +198,7 @@ class Otp
 
 		$this->regenerated = true;
 		return $this
-			->setType(static::getDefaultType())
+			->setType($type ?? static::getDefaultType())
 			->setAttempts(0)
 			->setSkipMandatory(false)
 			->setInitialDate(new Type\DateTime)
@@ -237,7 +236,7 @@ class Otp
 
 	/**
 	 * Check is verifying attempts reached according to group security policy
-	 * May be used for show Captcha or what ever you want
+	 * May be used for show Captcha or whatever you want
 	 *
 	 * @return bool
 	 */
@@ -319,8 +318,9 @@ class Otp
 	 */
 	public function save()
 	{
+		$userId = $this->getUserId();
 		$fields = [
-			'USER_ID' => $this->getUserId(),
+			'USER_ID' => $userId,
 			'ACTIVE' => $this->isActivated() ? 'Y' : 'N',
 			'TYPE' => $this->getType()->value,
 			'INIT_PARAMS' => $this->getInitParams(),
@@ -340,12 +340,13 @@ class Otp
 			}
 
 			// Clear recovery codes when we connect new device
-			RecoveryCodesTable::clearByUser($this->getUserId());
+			RecoveryCodesTable::clearByUser($userId);
 		}
 
+		// merge is possible, MergeByDefaultTrait is used
 		$result = UserTable::add($fields);
 
-		$this->clearGlobalCache();
+		static::cleanCache($userId);
 
 		return $result->isSuccess();
 	}
@@ -357,7 +358,10 @@ class Otp
 	 */
 	public function delete()
 	{
-		UserTable::delete($this->getUserId());
+		$userId = $this->getUserId();
+
+		UserTable::delete($userId);
+		static::cleanCache($userId);
 
 		return $this;
 	}
@@ -809,7 +813,7 @@ class Otp
 	/**
 	 * Returns context of the current request.
 	 *
-	 * @return \Bitrix\Main\Context
+	 * @return Context
 	 */
 	public function getContext()
 	{
@@ -824,10 +828,10 @@ class Otp
 	/**
 	 * Set context of the current request.
 	 *
-	 * @param \Bitrix\Main\Context $context Application context.
+	 * @param Context $context Application context.
 	 * @return $this
 	 */
-	public function setContext(\Bitrix\Main\Context $context)
+	public function setContext(Context $context)
 	{
 		$this->context = $context;
 
@@ -1079,16 +1083,6 @@ class Otp
 	}
 
 	/**
-	 * Check if OTP record exists in DB
-	 *
-	 * @return bool
-	 */
-	protected function isDbRecordExists()
-	{
-		return UserTable::getRowById($this->getUserId()) !== null;
-	}
-
-	/**
 	 * Return needed group security policy
 	 *
 	 * @return Policy\RulesCollection
@@ -1101,20 +1095,6 @@ class Otp
 		}
 
 		return $this->userGroupPolicy;
-	}
-
-	/**
-	 * Clear cache for this OTP in global scope
-	 *
-	 * @return $this
-	 */
-	protected function clearGlobalCache()
-	{
-		$cache_dir = '/otp/user_id/' . substr(md5($this->getUserId()), -2) . '/' . $this->getUserId() . '/';
-		$cache = new \CPHPCache;
-		$cache->CleanDir($cache_dir);
-
-		return $this;
 	}
 
 	/**
@@ -1149,7 +1129,7 @@ class Otp
 			)
 			{
 				// Grace full period ends. We must reject authorization and defer reject reason
-				if (!$otp->isDbRecordExists() && static::getSkipMandatoryDays())
+				if (!static::getUserData($otp->getUserId()) && static::getSkipMandatoryDays())
 				{
 					// If mandatory enabled and user never use OTP - let us deffer initialization
 					$otp->defer(static::getSkipMandatoryDays());
@@ -1278,7 +1258,7 @@ class Otp
 		$algo = $otp->getAlgorithm();
 
 		//code value only for TOTP
-		if ($otp->getType() === OtpType::Totp && $algo instanceof \Bitrix\Main\Security\Mfa\TotpAlgorithm)
+		if ($otp->getType() === OtpType::Totp && $algo instanceof TotpAlgorithm)
 		{
 			//value based on the current time
 			$timeCode = $algo->timecode(time());
@@ -1291,7 +1271,7 @@ class Otp
 			"code" => $code,
 		];
 
-		$event = new \Bitrix\Main\Event("security", "onOtpRequired", $eventParams);
+		$event = new Event("security", "onOtpRequired", $eventParams);
 		$event->send();
 	}
 
@@ -1536,5 +1516,58 @@ class Otp
 		}
 
 		return false;
+	}
+
+	protected static function getCacheTtl()
+	{
+		$cacheFlags = Configuration::getValue('cache_flags');
+		return $cacheFlags['otp_users'] ?? 86400;
+	}
+
+	protected static function getCacheDir(int $userId): string
+	{
+		$hash = md5($userId);
+		return '/otp/' . substr($hash, 0, 2) . '/' . substr($hash, 2, 2) . '/';
+	}
+
+	protected static function getUserData(int $userId): ?array
+	{
+		$cache = Application::getInstance()->getManagedCache();
+		$cacheTtl = static::getCacheTtl();
+
+		if ($cacheTtl !== false)
+		{
+			$cacheId = "otp_users_{$userId}";
+			$cacheDir = static::getCacheDir($userId);
+
+			if ($cache->read($cacheTtl, $cacheId, $cacheDir))
+			{
+				return $cache->get($cacheId);
+			}
+		}
+
+		// note USER.ACTIVE - need a special handling on user change
+		$userInfo = UserTable::getRowById($userId, [
+			'select' => ['ACTIVE', 'USER_ID', 'SECRET', 'INIT_PARAMS', 'PARAMS', 'TYPE', 'ATTEMPTS', 'INITIAL_DATE', 'SKIP_MANDATORY', 'DEACTIVATE_UNTIL', 'USER_ACTIVE' => 'USER.ACTIVE'],
+		]);
+
+		if ($cacheTtl !== false)
+		{
+			$cache->set($cacheId, $userInfo);
+		}
+
+		return $userInfo;
+	}
+
+	public static function cleanCache(int $userId): void
+	{
+		if (static::getCacheTtl() !== false)
+		{
+			$cacheId = "otp_users_{$userId}";
+			$cacheDir = static::getCacheDir($userId);
+
+			$cache = Application::getInstance()->getManagedCache();
+			$cache->clean($cacheId, $cacheDir);
+		}
 	}
 }

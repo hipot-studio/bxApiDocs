@@ -35,8 +35,8 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 	public const ERROR_CODE_EXCEEDED_LIMIT = 'exceeded_limit';
 	public const ERROR_CODE_COULD_NOT_LOCK = 'could_not_lock';
 	protected const SESSION_LIMIT_SLIDER_KEY = 'disk.limitSlider';
-	protected const LIMIT_SLIDER_TARIFF = 'tariff';
-	protected const LIMIT_SLIDER_TARIFF_ID = 'limit_v2_disk_onlyoffice_edit';
+	protected const LIMIT_SLIDER_TARIFF_CODE = 'limit_v2_disk_onlyoffice_edit';
+	protected const LIMIT_SLIDER_OWN_SERVER_BOX = 'limit_disk_onlyoffice_own_server_box';
 	protected const LIMIT_SLIDER_FEEDBACK_FORM = 'feedbackForm';
 	protected const AUTO_FORCE_RELOAD_AFTER = 300_000; // 5 minutes in ms
 
@@ -46,6 +46,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 	protected OnlyOffice\Configuration $onlyOfficeConfiguration;
 	protected OnlyOffice\RestrictionManager $restrictionManager;
 	protected Disk\Integration\Baas\BaasSessionBoostService $sessionBoostService;
+	protected Disk\Public\Provider\CustomServerAvailabilityProvider $customServerAvailabilityProvider;
 	private bool $unifiedLinkAccessOnly = false;
 	private bool $unifiedLinkMode = false;
 
@@ -60,6 +61,11 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		}
 
 		$this->sessionBoostService = new Disk\Integration\Baas\BaasSessionBoostService();
+
+		$this->customServerAvailabilityProvider =
+			ServiceLocator::getInstance()
+				->get(Disk\Public\Provider\CustomServerAvailabilityProvider::class)
+		;
 
 		return parent::processBeforeAction($actionName);
 	}
@@ -110,6 +116,14 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		}
 		/** @var Disk\Document\Models\DocumentSession $documentSession */
 		$documentSession = $this->arParams['DOCUMENT_SESSION'];
+
+		if ($this->isCustomServerUnavailable())
+		{
+			$documentSession->setAsNonActive();
+			$this->includeComponentTemplate('custom-server-unavailable');
+
+			return;
+		}
 
 		$bitrix24Scenario = new OnlyOffice\Bitrix24Scenario();
 		if ($documentSession->isEdit())
@@ -357,6 +371,15 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		}
 	}
 
+	protected function isCustomServerUnavailable(): bool
+	{
+		$customServerType = Disk\Configuration::getDefaultViewerCustomConfigType();
+
+		return
+			$customServerType instanceof Disk\Internal\Enum\CustomServerTypes &&
+			!$this->customServerAvailabilityProvider->isAvailableForUse();
+	}
+
  	/**
 	 * Fill necessary params for show selected slider.
 	 * @return void
@@ -374,7 +397,6 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 		if (!IsModuleInstalled('bitrix24'))
 		{
-			$this->arResult['LIMIT_SLIDER'] = $limitSlider;
 			switch ($limitSlider)
 			{
 				case self::LIMIT_SLIDER_FEEDBACK_FORM:
@@ -386,6 +408,8 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 					{
 						$fromDomain = Application::getInstance()->getContext()->getRequest()->getHttpHost();
 					}
+
+					$this->arResult['LIMIT_SLIDER'] = $limitSlider;
 
 					$this->arResult['LIMIT_SLIDER_FEEDBACK_FORM_PARAMS'] = [
 						'forms' => Json::encode([
@@ -408,9 +432,10 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 					];
 
 					break;
-				case self::LIMIT_SLIDER_TARIFF:
+				case self::LIMIT_SLIDER_TARIFF_CODE:
 				default:
-					$this->arResult['LIMIT_SLIDER_TARIFF_ID'] = self::LIMIT_SLIDER_TARIFF_ID;
+					$this->arResult['LIMIT_SLIDER'] = 'infoHelper';
+					$this->arResult['LIMIT_SLIDER_INFO_HELPER_CODE'] = $limitSlider;
 			}
 		}
 	}
@@ -707,13 +732,24 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 	{
 		if (!$this->sessionBoostService->isAvailable())
 		{
-			$limitSlider = $isTariffExtendable ? self::LIMIT_SLIDER_TARIFF : self::LIMIT_SLIDER_FEEDBACK_FORM;
+			if ($isTariffExtendable)
+			{
+				$limitSlider = self::LIMIT_SLIDER_TARIFF_CODE;
+			}
+			elseif ($this->customServerAvailabilityProvider->isAvailableForBuy())
+			{
+				$limitSlider = self::LIMIT_SLIDER_OWN_SERVER_BOX;
+			}
+			else
+			{
+				$limitSlider = self::LIMIT_SLIDER_FEEDBACK_FORM;
+			}
 
 			$this->getSession()->set(self::SESSION_LIMIT_SLIDER_KEY, $limitSlider);
 		}
 		else
 		{
-			$this->getSession()->set(self::SESSION_LIMIT_SLIDER_KEY, self::LIMIT_SLIDER_TARIFF);
+			$this->getSession()->set(self::SESSION_LIMIT_SLIDER_KEY, self::LIMIT_SLIDER_TARIFF_CODE);
 		}
 
 		$documentSession->transformToView();

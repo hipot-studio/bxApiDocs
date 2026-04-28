@@ -10,6 +10,7 @@ use Bitrix\HumanResources\Access\Permission\PermissionDictionary;
 use Bitrix\HumanResources\Access\Permission\PermissionVariablesDictionary;
 use Bitrix\HumanResources\Access\StructureActionDictionary;
 use Bitrix\HumanResources\Command\Structure\Node\SaveNodeChatsCommand;
+use Bitrix\HumanResources\Config\Storage;
 use Bitrix\HumanResources\Exception\CommandException;
 use Bitrix\HumanResources\Exception\CommandValidateException;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\NodeBaseTool;
@@ -156,6 +157,11 @@ abstract class NodeSaveCommunicationsTool extends NodeBaseTool
 
 	public function canList(int $userId): bool
 	{
+		if (!Storage::instance()->isCompanyStructureConverted())
+		{
+			return false;
+		}
+
 		$user = UserModel::createFromId($userId);
 
 		if ($user->isAdmin())

@@ -13,7 +13,7 @@ class DepartmentGetCommunicationsTool extends NodeGetCommunicationsTool
 
 	public function getName(): string
 	{
-		return 'show_communications';
+		return 'department_show_communications';
 	}
 
 	public function getDescription(): string

@@ -124,4 +124,9 @@ abstract class BaseMenuItemCreator
 
 		return "window.open(`{$url}`, '_blank');";
 	}
+
+	protected function getOpenTariffSliderScript(): string
+	{
+		return "top.BX.UI.InfoHelper.show('limit_benefit_market_active')";
+	}
 }

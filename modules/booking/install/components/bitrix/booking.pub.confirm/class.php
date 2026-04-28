@@ -93,7 +93,7 @@ class BookingPubConfirmComponent extends BookingBaseComponent implements \Bitrix
 			$this->setResult('booking', $booking->toArray());
 			$this->setResult('hash', $hash);
 			$this->setResult('context', $this->getPageContext($booking, $context));
-			$this->setResult('company', \Bitrix\Booking\Internals\Integration\Crm\MyCompany::getName() ?? '');
+			$this->setResult('company', \Bitrix\Booking\Internals\Container::getMyCompanyProvider()->getName() ?? '');
 			$this->setResult('currentLang', Loc::getCurrentLang());
 			$this->setResult('bitrix24Link', $this->getBitrix24Link());
 		}

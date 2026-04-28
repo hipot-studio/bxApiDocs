@@ -187,7 +187,7 @@ class Sender extends Providers\Edna\Sender
 		$contentType = Constants::CONTENT_TYPE_TEXT;
 		$messageBody = trim($messageFields['MESSAGE_BODY']);
 
-		if (!$this->isRuRegion() && Loader::includeModule('disk') && preg_match('/^http.+~.+$/', $messageBody))
+		if (Loader::includeModule('disk') && preg_match('/^http.+~.+$/', $messageBody))
 		{
 			$fileUri = \CBXShortUri::GetUri($messageBody);
 			if ($fileUri)

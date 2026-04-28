@@ -39,6 +39,7 @@ class Loader
 	/** @deprecated */
 	const ALPHA_UPPER = "QWERTYUIOPLKJHGFDSAZXCVBNM";
 
+	protected static $documentRoot = null;
 	protected static $safeModeModules = ["main" => true, "fileman" => true];
 	protected static $loadedModules = ["main" => true];
 	protected static $semiloadedModules = [];
@@ -253,12 +254,12 @@ class Loader
 	 */
 	public static function getDocumentRoot()
 	{
-		static $documentRoot = null;
-		if ($documentRoot === null)
+		if (static::$documentRoot === null)
 		{
-			$documentRoot = rtrim($_SERVER["DOCUMENT_ROOT"], "/\\");
+			static::$documentRoot = rtrim($_SERVER["DOCUMENT_ROOT"], "/\\");
 		}
-		return $documentRoot;
+
+		return static::$documentRoot;
 	}
 
 	/**
@@ -376,11 +377,7 @@ class Loader
 			return;
 		}
 
-		static $documentRoot = null;
-		if ($documentRoot === null)
-		{
-			$documentRoot = self::getDocumentRoot();
-		}
+		$documentRoot = self::getDocumentRoot();
 
 		if (isset(self::$autoLoadClasses[$classLower]))
 		{
@@ -584,10 +581,8 @@ class Loader
 		{
 			return $root . "/bitrix/" . $path;
 		}
-		else
-		{
-			return false;
-		}
+
+		return false;
 	}
 
 	/**
@@ -657,7 +652,7 @@ class Loader
 
 class LoaderException extends \Exception
 {
-	public function __construct($message = "", $code = 0, \Exception $previous = null)
+	public function __construct($message = "", $code = 0, ?\Exception $previous = null)
 	{
 		parent::__construct($message, $code, $previous);
 	}

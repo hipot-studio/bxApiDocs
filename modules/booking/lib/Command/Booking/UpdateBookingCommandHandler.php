@@ -6,7 +6,6 @@ namespace Bitrix\Booking\Command\Booking;
 
 use Bitrix\Booking\Command\Booking\Trait\BookingChangesTrait;
 use Bitrix\Booking\Entity;
-use Bitrix\Booking\Internals\Exception\Booking\CreateBookingException;
 use Bitrix\Booking\Internals\Exception\Booking\UpdateBookingException;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\Exception;
@@ -119,18 +118,13 @@ class UpdateBookingCommandHandler
 					throw new UpdateBookingException();
 				}
 
-				// load booking external clients info
-				Container::getProviderManager()::getCurrentProvider()
-					?->getClientProvider()
-					?->loadClientDataForCollection($booking->getClientCollection());
+				Container::getCrmClientDataLoader()->loadDataForCollection($booking->getClientCollection());
 
 				Container::getDealForBookingService()->onBookingUpdated($currentBooking, $booking);
 
 				$this->bookingProvider->withExternalData(new Entity\Booking\BookingCollection($booking));
 
-				Container::getProviderManager()::getCurrentProvider()
-					?->getDataProvider()
-					?->updateBindings($booking, $currentBooking);
+				Container::getCrmDealClientSynchronizer()->setClientToDeal($booking, $currentBooking);
 
 				$this->journalService->append(
 					new JournalEvent(

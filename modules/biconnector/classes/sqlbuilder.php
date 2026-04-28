@@ -1,66 +1,97 @@
 <?php
 
+use Bitrix\BIConnector\Manager;
+use Bitrix\Main\DB\Connection;
+use Bitrix\Main\DB\SqlHelper;
+
 class CBIConnectorSqlBuilder extends CSQLWhere
 {
 	protected $select;
+
+	protected ?Connection $connection = null;
 	protected array $selectFieldNames = [];
+
+	public function setConnection(Connection $connection): self
+	{
+		$this->connection = $connection;
+
+		return $this;
+	}
+
+	/**
+	 * @throws \Bitrix\Main\Config\ConfigurationException
+	 */
+	private function getSqlHelper(): SqlHelper
+	{
+		if (empty($this->connection))
+		{
+			$manager = Manager::getInstance();
+
+			$this->connection = $manager->getDatabaseConnection();
+		}
+
+		return $this->connection->getSqlHelper();
+	}
 
 	public function SetSelect($selectedFields, $options = [])
 	{
-		global $DB;
-
 		$this->select = [];
+		$sqlHelper = $this->getSqlHelper();
+		$selectedTimezone = \Bitrix\BIConnector\Configuration\DataTimezone::getTimezoneOffset();
+
 		foreach ($selectedFields as $fieldName => $fieldInfo)
 		{
 			$this->selectFieldNames[] = $fieldName;
-			if ($fieldInfo['FIELD_TYPE'] === 'datetime' && isset($options['datetime_format']))
-			{
-				$this->select[] = sprintf(
-					'date_format(%s, \'%s\') AS `%s`',
-					$fieldInfo['FIELD_NAME'],
-					$DB->forSql($options['datetime_format']),
-					$fieldName
-				);
-			}
-			elseif ($fieldInfo['FIELD_TYPE'] === 'date' && isset($options['date_format']))
-			{
-				$this->select[] = sprintf(
-					'date_format(%s, \'%s\') AS `%s`',
-					$fieldInfo['FIELD_NAME'],
-					$DB->forSql($options['date_format']),
-					$fieldName
-				);
-			}
-			else
-			{
-				$this->select[] = sprintf(
-					'%s AS `%s`',
-					$fieldInfo['FIELD_NAME'],
-					$fieldName
-				);
-			}
 
-			if (!isset($this->c_joins[$fieldName]))
-			{
-				$this->c_joins[$fieldName] = 1;
-			}
-			else
-			{
-				$this->c_joins[$fieldName]++;
-			}
+			$formattedFieldName = $this->formatFieldExpression($fieldInfo, $options, $sqlHelper, $selectedTimezone);
+
+			$this->select[] = sprintf('%s AS %s', $formattedFieldName, $sqlHelper->quote($fieldName));
+
+			$this->c_joins[$fieldName] = ($this->c_joins[$fieldName] ?? 0) + 1;
 
 			if (isset($fieldInfo['TABLE_ALIAS']))
 			{
-				if (!isset($this->l_joins[$fieldInfo['TABLE_ALIAS']]))
-				{
-					$this->l_joins[$fieldInfo['TABLE_ALIAS']] = 1;
-				}
-				else
-				{
-					$this->l_joins[$fieldInfo['TABLE_ALIAS']]++;
-				}
+				$this->l_joins[$fieldInfo['TABLE_ALIAS']] = ($this->l_joins[$fieldInfo['TABLE_ALIAS']] ?? 0) + 1;
 			}
 		}
+	}
+
+	private function formatFieldExpression(array $fieldInfo, array $options, SqlHelper $sqlHelper, ?string $timezone): string
+	{
+		$fieldName = $fieldInfo['FIELD_NAME'];
+
+		if (($fieldInfo['IS_FIELD_NAME_PREPARED'] ?? 'Y') === 'N')
+		{
+			$fieldName = $sqlHelper->quote($fieldName);
+		}
+
+		if ($fieldInfo['FIELD_TYPE'] === 'datetime' && isset($options['datetime_format']))
+		{
+			$fieldExpression = $this->applyTimezoneConversion($fieldName, $sqlHelper, $timezone);
+
+			return $sqlHelper->formatDate($options['datetime_format'], $fieldExpression);
+		}
+
+		if ($fieldInfo['FIELD_TYPE'] === 'date' && isset($options['date_format']))
+		{
+			return $sqlHelper->formatDate($options['date_format'], $fieldName);
+		}
+
+		return $fieldName;
+	}
+
+	private function applyTimezoneConversion(string $fieldName, SqlHelper $sqlHelper, ?string $timezone): string
+	{
+		if ($timezone && $sqlHelper instanceof \Bitrix\BIConnector\DB\BiSqlHelperInterface)
+		{
+			return $sqlHelper->convertTimezone(
+				$fieldName,
+				$sqlHelper->getSessionTimezoneExpression(),
+				$timezone
+			);
+		}
+
+		return $fieldName;
 	}
 
 	public function GetSelect()

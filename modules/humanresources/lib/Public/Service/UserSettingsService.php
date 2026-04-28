@@ -26,9 +26,13 @@ class UserSettingsService
 	}
 
 	/**
-	 * Get nodes that should participate in business processes for the given user.
-	 * These are nodes that user is a part of, except for nodes that are
-	 * in UserSettingsType::BusinessProcExcludeNodes settings values
+	 * Get nodes whose heads participate in business processes for the given user.
+	 *
+	 * Relevant for concurrent employment: when a user belongs to multiple departments,
+	 * the structure administrator can exclude specific nodes to avoid dual subordination
+	 * in business process approvals.
+	 *
+	 * Returns all user's department nodes minus those listed in BusinessProcExcludeNodes.
 	 *
 	 * @param int $userId
 	 * @return array<int>
@@ -43,8 +47,42 @@ class UserSettingsService
 			UserSettingsType::BusinessProcExcludeNodes
 		]);
 
-		$excludedNodeIds = $entityCollection->map(static fn($entity) => (int)$entity->settingsValue);
+		return $this->getNodeIdsByExcludedIds($userId, $entityCollection->getIntSettingsValues());
+	}
 
+	/**
+	 * Get nodes whose heads receive reports from the given user.
+	 *
+	 * Relevant for concurrent employment: when a user belongs to multiple departments,
+	 * the structure administrator can exclude specific nodes to avoid dual subordination
+	 * in reports approval.
+	 *
+	 * Returns all user's department nodes minus those listed in ReportsExcludeNodes.
+	 *
+	 * @param int $userId
+	 * @return int[]
+	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function getReportsAuthoritySettings(int $userId): array
+	{
+		$entityCollection = $this->userSettingsRepository->getByUserAndTypes($userId, [
+			UserSettingsType::ReportsExcludeNodes
+		]);
+
+		return $this->getNodeIdsByExcludedIds($userId, $entityCollection->getIntSettingsValues());
+	}
+
+	/**
+	 * @param int $userId
+	 * @param int[] $excludedNodeIds
+	 * @return int[]
+	 * @throws \Bitrix\Main\ArgumentException
+	 */
+	private function getNodeIdsByExcludedIds(int $userId, array $excludedNodeIds): array
+	{
 		$nodeMemberCollection =
 			(new NodeMemberDataBuilder())
 				->addFilter(
@@ -58,8 +96,7 @@ class UserSettingsService
 						),
 					),
 				)
-				->getAll()
-		;
+				->getAll();
 
 		return $nodeMemberCollection->getNodeIds();
 	}

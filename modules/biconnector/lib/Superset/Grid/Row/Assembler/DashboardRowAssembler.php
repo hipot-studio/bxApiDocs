@@ -9,7 +9,7 @@ class DashboardRowAssembler extends RowAssembler
 {
 	private ?DashboardSettings $settings;
 
-	public function __construct(array $visibleColumnIds, DashboardSettings $settings = null)
+	public function __construct(array $visibleColumnIds, ?DashboardSettings $settings = null)
 	{
 		$this->settings = $settings;
 

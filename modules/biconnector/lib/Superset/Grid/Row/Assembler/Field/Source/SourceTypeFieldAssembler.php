@@ -32,10 +32,17 @@ class SourceTypeFieldAssembler extends FieldAssembler
 
 		if ($source)
 		{
-			$style = "--ui-icon-size: 24px; min-width: 24px; min-height: 24px";
-			$icon = "<div class='{$source['ICON_CLASS']}' style='{$style}'><i></i></div>";
+			if (!empty($source['ICON_CLASS']))
+			{
+				$style = "--ui-icon-size: 24px; min-width: 24px; min-height: 24px";
+				$icon = "<div class='{$source['ICON_CLASS']}' style='{$style}'><i></i></div>";
+			}
+			else
+			{
+				$iconUrl = "/bitrix/images/biconnector/database-connections/{$source['CODE']}.svg";
+				$icon = "<span class='biconnector-grid-source-icon ui-icon' style='background-image: url({$iconUrl});'></span>";
+			}
 			$name = htmlspecialcharsbx($source['NAME']);
-
 			return <<<HTML
 					<span class="biconnector-grid-type-cell" >
 						$icon

@@ -22,7 +22,7 @@ class IpMaskRule extends GreaterRule
 	 * @param string $value
 	 * @param array|null $options
 	 */
-	public function __construct($title, string $value = '0.0.0.0', array $options = null)
+	public function __construct($title, string $value = '0.0.0.0', ?array $options = null)
 	{
 		parent::__construct($title, $value, $options);
 	}

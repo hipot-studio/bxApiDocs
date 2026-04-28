@@ -15,7 +15,7 @@ class DepartmentMoveEmployeesTool extends NodeMoveEmployeesTool
 
 	public function getName(): string
 	{
-		return 'move_employees';
+		return 'department_move_employees';
 	}
 
 	public function getDescription(): string

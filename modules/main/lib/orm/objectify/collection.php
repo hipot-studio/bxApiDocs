@@ -76,7 +76,7 @@ abstract class Collection implements \ArrayAccess, \Iterator, \Countable
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
-	final public function __construct(Entity $entity = null)
+	final public function __construct(?Entity $entity = null)
 	{
 		if (empty($entity))
 		{

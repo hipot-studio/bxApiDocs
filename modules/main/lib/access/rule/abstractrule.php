@@ -26,5 +26,5 @@ abstract class AbstractRule implements RuleInterface
 		$this->user = $controller->getUser();
 	}
 
-	abstract public function execute(AccessibleItem $item = null, $params = null): bool;
+	abstract public function execute(?AccessibleItem $item = null, $params = null): bool;
 }

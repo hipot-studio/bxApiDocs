@@ -358,7 +358,7 @@ class Deal extends Entity
 			$filterOptions->setCurrentFilterPresetId($filterId);
 		}
 
-		$filterFieldsValues = $filterOptions->GetFilter($result);
+		$filterFieldsValues = $this->getFilterOptionFields($filterOptions, $result);
 		$this->getContactDataProvider()->prepareFilter($result, $filterFieldsValues);
 		$this->getCompanyDataProvider()->prepareFilter($result, $filterFieldsValues);
 
@@ -396,6 +396,7 @@ class Deal extends Entity
 					$field['NAME'],
 					[
 						'ORDER_STAGE',
+						'PREVIOUS_STAGE_ID',
 						'DELIVERY_STAGE',
 						'PAYMENT_STAGE',
 						'PAYMENT_PAID',

@@ -287,13 +287,21 @@ class Messenger
 		}
 	}
 
+	/**
+	 * @deprecated use self::updateTaskFromTaskItem
+	 */
 	public function updateTask(TaskObject $task): void
+	{
+		$this->updateTaskFromTaskItem(TaskItem::initByTaskObject($task));
+	}
+
+	public function updateTaskFromTaskItem(TaskItem $taskItem): void
 	{
 		try
 		{
 			$taskService = new TaskService();
 
-			$taskService->updateTask(TaskItem::initByTaskObject($task));
+			$taskService->updateTask($taskItem);
 		}
 		catch (\Bitrix\Main\SystemException $exception)
 		{

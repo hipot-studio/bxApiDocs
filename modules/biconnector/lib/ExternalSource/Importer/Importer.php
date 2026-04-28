@@ -12,6 +12,7 @@ abstract class Importer
 	private FieldCollection $importerFieldCollection;
 	private Main\DB\Connection|Main\Data\Connection $connection;
 	private BIConnector\TableBuilder\FieldCollection $tableBuilderFieldCollection;
+	private \DateTimeZone $datasetTimezone;
 
 	public function __construct(Settings $settings)
 	{
@@ -20,6 +21,7 @@ abstract class Importer
 		$this->settings = $settings;
 		$this->reader = $settings->reader;
 		$this->importerFieldCollection = $settings->fieldCollection;
+		$this->datasetTimezone = $settings->timeZone;
 	}
 
 	/**
@@ -275,7 +277,8 @@ abstract class Importer
 				$format = $field->format;
 				$result = BIConnector\ExternalSource\TypeConverter::convertToDateTime(
 					$value,
-					$format
+					$format,
+					$this->datasetTimezone
 				);
 
 				break;

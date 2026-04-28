@@ -98,6 +98,11 @@ abstract class Dataset
 		return $result;
 	}
 
+	protected function getDataConnection(): Connection
+	{
+		return $this->dataConnection;
+	}
+
 	/**
 	 * @return array
 	 */
@@ -170,14 +175,17 @@ abstract class Dataset
 		);
 	}
 
-	/**
-	 * @param string $code
-	 *
-	 * @return string
-	 */
 	public function getAliasFieldName(string $code): string
 	{
-		return $this->getSqlHelper()->quote("{$this->getSqlTableAlias()}.{$code}");
+		$code = $this->getSqlHelper()->quote($code);
+		$tableAlias = $this->getSqlTableAlias();
+		if (!empty($tableAlias))
+		{
+			$tableAlias = $this->getSqlHelper()->quote($tableAlias);
+			$code = "{$tableAlias}.{$code}";
+		}
+
+		return $code;
 	}
 
 	/**

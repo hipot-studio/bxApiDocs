@@ -9,7 +9,7 @@ use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Main\Localization\Loc;
 
-class EntityChat extends GroupChat
+class EntityChat extends ExternalChat
 {
 	protected const ENTITY_SEPARATOR = '|';
 

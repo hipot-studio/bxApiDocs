@@ -7,6 +7,7 @@ use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Exclusion\Applicability;
 use Bitrix\Crm\Exclusion\Manager;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Main\Error;
 use Bitrix\Main\ObjectException;
@@ -14,6 +15,13 @@ use Bitrix\Main\Result;
 
 final class Exclusion extends Base
 {
+	protected function getSelect(): array
+	{
+		return [
+			Item::FIELD_NAME_ID,
+		];
+	}
+
 	protected function processItem(Factory $factory, Item $item, PreparedData $data): Result
 	{
 		$result = new Result();
@@ -23,8 +31,9 @@ final class Exclusion extends Base
 			return $result->addError(ErrorCode::getAccessDeniedError());
 		}
 
+		$identifier = ItemIdentifier::createByItem($item);
 
-		$applicabilityResult = Applicability::checkApplicability($item->getEntityTypeId(), $item->getId());
+		$applicabilityResult = Applicability::checkApplicability($identifier->getEntityTypeId(), $identifier->getEntityId());
 		if (!$applicabilityResult->isSuccess())
 		{
 			return $result->addErrors($applicabilityResult->getErrors());
@@ -32,7 +41,7 @@ final class Exclusion extends Base
 
 		try
 		{
-			Manager::excludeEntity($item->getEntityTypeId(), $item->getId());
+			Manager::excludeEntity($identifier->getEntityTypeId(), $identifier->getEntityId());
 		}
 		catch (ObjectException $deletionException)
 		{

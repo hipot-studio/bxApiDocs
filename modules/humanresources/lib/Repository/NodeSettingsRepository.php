@@ -66,8 +66,12 @@ class NodeSettingsRepository
 
 		foreach ($entityCollection as $entity)
 		{
-			$nodeSettings = $this->convertModelArrayToItem($entity);
-			$itemsCollection->add($nodeSettings);
+			// prevent possible invalid setting_type
+			if (NodeSettingsType::tryFrom($entity['SETTINGS_TYPE']) !== null)
+			{
+				$nodeSettings = $this->convertModelArrayToItem($entity);
+				$itemsCollection->add($nodeSettings);
+			}
 		}
 
 		return $itemsCollection;
@@ -135,18 +139,36 @@ class NodeSettingsRepository
 
 	/**
 	 * @param int $nodeId
-	 * @param NodeSettingsType $settingsType
+	 * @param array|NodeSettingsType $settingsType
+	 * @param mixed|null $values
 	 * @return void
 	 * @throws DeleteFailedException
 	 */
-	public function removeByTypeAndNodeId(int $nodeId, NodeSettingsType $settingsType): void
+	public function removeByTypeAndNodeId(int $nodeId, array|NodeSettingsType $settingsType, mixed $values = null): void
 	{
+		$typesToDelete = is_array($settingsType)
+			? array_map(static fn(NodeSettingsType $type) => $type->value, $settingsType)
+			: [$settingsType->value]
+		;
+
+		if (empty($typesToDelete))
+		{
+			return;
+		}
+
 		try
 		{
-			NodeSettingsTable::deleteByFilter([
+			$filter = [
 				'=NODE_ID' => $nodeId,
-				'@SETTINGS_TYPE' => $settingsType->value,
-			]);
+				'=SETTINGS_TYPE' => $typesToDelete,
+			];
+
+			if (!empty($values))
+			{
+				$filter['=SETTINGS_VALUE'] = $values;
+			}
+
+			NodeSettingsTable::deleteByFilter($filter);
 		}
 		catch (\Exception)
 		{

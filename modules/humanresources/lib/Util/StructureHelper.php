@@ -14,23 +14,27 @@ use Bitrix\Main\SystemException;
 
 class StructureHelper
 {
+	private static ?Item\Structure $defaultStructure = null;
+	private static ?Item\Node $rootDepartment = null;
+
 	public static function getDefaultStructure(): ?Item\Structure
 	{
-		static $structure = null;
-
-		if (!$structure)
+		if (!self::$defaultStructure)
 		{
-			$structure = Container::getStructureRepository()
+			self::$defaultStructure = Container::getStructureRepository()
 				->getByXmlId(Item\Structure::DEFAULT_STRUCTURE_XML_ID);
-			;
 		}
 
-		if (!$structure)
-		{
-			return null;
-		}
+		return self::$defaultStructure;
+	}
 
-		return $structure;
+	/**
+	 * Resets cached default structure and root department. Intended for use in tests.
+	 */
+	public static function resetDefaultStructureCache(): void
+	{
+		self::$defaultStructure = null;
+		self::$rootDepartment = null;
 	}
 	/**
 	 * @return Node|null
@@ -41,20 +45,17 @@ class StructureHelper
 	 */
 	public static function getRootStructureDepartment(): ?Item\Node
 	{
-		static $rootDepartment = null;
-
-		if ($rootDepartment)
+		if (self::$rootDepartment)
 		{
-			return $rootDepartment;
+			return self::$rootDepartment;
 		}
 
 		if ($structure = self::getDefaultStructure())
 		{
-			$rootDepartment =  Container::getNodeRepository()->getRootNodeByStructureId($structure->id);
-
+			self::$rootDepartment = Container::getNodeRepository()->getRootNodeByStructureId($structure->id);
 		}
 
-		return $rootDepartment;
+		return self::$rootDepartment;
 	}
 
 	/**

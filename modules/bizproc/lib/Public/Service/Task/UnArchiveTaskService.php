@@ -16,7 +16,7 @@ class UnArchiveTaskService
 		$this->archives = !is_array($archives) ? [$archives] : $archives;
 	}
 
-	public function getTasks(?int $limit = null, ?array $sort = null): array
+	public function getTasks(?int $limit = null, ?array $sort = null, bool $raw = false): array
 	{
 		$decodedData = [];
 		foreach ($this->archives as $archive)
@@ -24,7 +24,7 @@ class UnArchiveTaskService
 			$chunk = self::decodeTasksArchive($archive);
 			foreach ($chunk as $row)
 			{
-				$decodedData[$row[0]] = $row;
+				$decodedData[$row[ArchiveTaskService::TASK_ID]] = $row;
 
 				if (!is_null($sort) && (!is_null($limit) && count($decodedData) >= $limit))
 				{
@@ -40,6 +40,11 @@ class UnArchiveTaskService
 		if ($limit)
 		{
 			$decodedData = array_slice($decodedData, 0, $limit);
+		}
+
+		if ($raw)
+		{
+			return $decodedData;
 		}
 
 		foreach ($decodedData as &$task)
@@ -62,7 +67,7 @@ class UnArchiveTaskService
 		foreach ($this->archives as $archive)
 		{
 			$chunk = self::decodeTasksArchive($archive);
-			$task = current(array_filter($chunk, fn($chunk) => $chunk[0] === $taskId));
+			$task = current(array_filter($chunk, fn($chunk) => $chunk[ArchiveTaskService::TASK_ID] === $taskId));
 
 			if ($task)
 			{
@@ -76,13 +81,13 @@ class UnArchiveTaskService
 	private function prepareTaskData(array $task): array
 	{
 		$task = [
-			'ID' => $task[0] ?? null,
-			'NAME' => $task[1] ?? null,
-			'DESCRIPTION' => $task[2] ?? null,
-			'STATUS' => $task[3] ?? null,
-			'CREATED_DATE' => $task[4] ?? null,
-			'MODIFIED' => $task[5] ?? null,
-			'USERS' => $task[6] ?? [],
+			'ID' => $task[ArchiveTaskService::TASK_ID] ?? null,
+			'NAME' => $task[ArchiveTaskService::TASK_NAME] ?? null,
+			'DESCRIPTION' => $task[ArchiveTaskService::TASK_DESCRIPTION] ?? null,
+			'STATUS' => $task[ArchiveTaskService::TASK_STATUS] ?? null,
+			'CREATED_DATE' => $task[ArchiveTaskService::TASK_CREATED_DATE] ?? null,
+			'MODIFIED' => $task[ArchiveTaskService::TASK_MODIFIED] ?? null,
+			'USERS' => $task[ArchiveTaskService::TASK_USERS] ?? [],
 		];
 
 		if (isset($task['CREATED_DATE']))
@@ -92,11 +97,10 @@ class UnArchiveTaskService
 		$task['MODIFIED'] = DateTime::createFromTimestamp($task['MODIFIED']);
 		foreach ($task['USERS'] as &$taskUser)
 		{
-
 			$taskUser = [
-				'USER_ID' => $taskUser[0] ?? null,
-				'STATUS' => $taskUser[1] ?? null,
-				'DATE_UPDATE' => $taskUser[2] ?? null,
+				'USER_ID' => $taskUser[ArchiveTaskService::USER_ID] ?? null,
+				'STATUS' => $taskUser[ArchiveTaskService::USER_STATUS] ?? null,
+				'DATE_UPDATE' => $taskUser[ArchiveTaskService::USER_DATE_UPDATE] ?? null,
 			];
 
 			$taskUser['DATE_UPDATE'] = DateTime::createFromTimestamp($taskUser['DATE_UPDATE']);
@@ -108,12 +112,12 @@ class UnArchiveTaskService
 	private function getColumnsMap(array $sort): array
 	{
 		$map = [
-			'ID' => 0,
-			'NAME' => 1,
-			'DESCRIPTION' => 2,
-			'STATUS' => 3,
-			'CREATED_DATE' => 4,
-			'MODIFIED' => 5,
+			'ID' => ArchiveTaskService::TASK_ID,
+			'NAME' => ArchiveTaskService::TASK_NAME,
+			'DESCRIPTION' => ArchiveTaskService::TASK_DESCRIPTION,
+			'STATUS' => ArchiveTaskService::TASK_STATUS,
+			'CREATED_DATE' => ArchiveTaskService::TASK_CREATED_DATE,
+			'MODIFIED' => ArchiveTaskService::TASK_MODIFIED,
 		];
 
 		$newSort = [];

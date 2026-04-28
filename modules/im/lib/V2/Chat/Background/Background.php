@@ -21,7 +21,12 @@ class Background
 	{
 		$background = $this->params->get(Params::BACKGROUND_ID)?->getValue();
 
-		return $background ? (string)$background : null;
+		if (!$background)
+		{
+			return null;
+		}
+
+		return BackgroundId::normalize((string)$background);
 	}
 
 	public function set(?string $value): self
@@ -60,7 +65,7 @@ class Background
 		(new ChatFieldsUpdate($chat, $updateField))->send();
 	}
 
-	public static function validateBackgroundId(mixed $value): ?string
+	public static function normalizeBackgroundId(mixed $value): ?string
 	{
 		if (!isset($value) || $value === '' || !is_string($value))
 		{

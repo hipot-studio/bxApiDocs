@@ -481,7 +481,7 @@ class EntityUFDataProvider extends DataProvider
 	 * @param array|null $params Field parameters (optional).
 	 * @return Field
 	 */
-	protected function createField($fieldID, array $params = null)
+	protected function createField($fieldID, ?array $params = null)
 	{
 		return new Field($this, $fieldID, $params);
 	}

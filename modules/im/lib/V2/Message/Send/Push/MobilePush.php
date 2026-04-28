@@ -7,6 +7,8 @@ use Bitrix\Im\User;
 use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
+use Bitrix\Im\V2\Relation;
+use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
@@ -104,11 +106,17 @@ class MobilePush
 	{
 		$pushUserSkip = [];
 		$pushUserSend = [];
-		$activeUserRelations = [];
+		$activeUserRelations = new RelationCollection();
 
 		if ($this->config->addRecent())
 		{
 			$activeUserRelations = $this->message->getChat()->getUsersToNotify();
+		}
+
+		$pushRecipients = $this->config->getPushRecipients();
+		if ($pushRecipients !== null)
+		{
+			$activeUserRelations = $activeUserRelations->filter(fn(Relation $relation) => isset($pushRecipients[(int)$relation->getUserId()]));
 		}
 
 		foreach ($activeUserRelations as $relation)
@@ -137,7 +145,6 @@ class MobilePush
 		$attachmentSuffix = self::getAttachmentSuffixForPush($params['params']);
 		$pushText = $this->prepareMessageForPush($params['params']);
 		unset($params['params']['message']['text_push']);
-		unset($params['params']['message']['params'][Message\Params::STICKER_PARAMS]);
 
 		$chatTitle = mb_substr(htmlspecialcharsback($params['params']['chat'][$params['params']['chatId']]['name']), 0, 32);
 		$chatType = $params['params']['chat'][$params['params']['chatId']]['type'];
@@ -235,7 +242,6 @@ class MobilePush
 		$attachmentSuffix = self::getAttachmentSuffixForPush($params['params']);
 		$pushText = $this->prepareMessageForPush($params['params']);
 		unset($params['params']['message']['text_push']);
-		unset($params['params']['message']['params'][Message\Params::STICKER_PARAMS]);
 
 		if (isset($params['params']['system']) && $params['params']['system'] == 'Y')
 		{
@@ -607,6 +613,11 @@ class MobilePush
 			$result['message'] = $message;
 		}
 
+		if (isset($event['stickers'][0]))
+		{
+			$result['sticker'] = $event['stickers'][0];
+		}
+
 		$indexToNameMap = [
 			'chat' => 1,
 			'chatId' => 2,
@@ -614,6 +625,7 @@ class MobilePush
 			'dialogId' => 4,
 			'files' => 5,
 			'message' => 6,
+			'sticker' => 7,
 			'users' => 8,
 			'name' => 9,
 			'avatar' => 10,
@@ -652,6 +664,11 @@ class MobilePush
 			'params' => 63,
 			'senderId' => 64,
 			'system' => 601,
+
+			'uri' => 70,
+			'packId' => 71,
+			'packType' => 72,
+			'sort' => 73,
 
 			'extension' => 80,
 			'image' => 81,

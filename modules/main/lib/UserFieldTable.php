@@ -107,7 +107,7 @@ class UserFieldTable extends ORM\Data\DataManager
 		);
 	}
 
-	public static function getLabelsReference(string $referenceName = null, string $languageId = null): ORM\Fields\Relations\Reference
+	public static function getLabelsReference(?string $referenceName = null, ?string $languageId = null): ORM\Fields\Relations\Reference
 	{
 		if(!$referenceName)
 		{
@@ -142,7 +142,7 @@ class UserFieldTable extends ORM\Data\DataManager
 		];
 	}
 
-	public static function getLabelsSelect(string $referenceName = null): array
+	public static function getLabelsSelect(?string $referenceName = null): array
 	{
 		if(!$referenceName)
 		{

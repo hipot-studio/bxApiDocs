@@ -43,6 +43,7 @@ class ImOpenLinesComponentLinesEdit extends CBitrixComponent implements Controll
 
 	protected const BOOL_PARAMS_FORM = [
 		'CHECK_AVAILABLE',
+		'SHOW_NOTIFICATION_REDIRECT',
 		'CHECK_ONLINE',
 		'CRM',
 		'CRM_CHAT_TRACKER',
@@ -916,8 +917,8 @@ class ImOpenLinesComponentLinesEdit extends CBitrixComponent implements Controll
 		$this->arResult['BOT_LIST'] = [];
 		if (Loader::includeModule('im'))
 		{
-			$list = Im\Bot::getListCache(Im\Bot::LIST_OPENLINE);
-			foreach ($list as $botId => $botData)
+			$botIds = Im\Bot::getAllOpenLineBotIds();
+			foreach ($botIds as $botId)
 			{
 				$this->arResult['BOT_LIST'][$botId] = Im\User::getInstance($botId)->getFullName();
 			}

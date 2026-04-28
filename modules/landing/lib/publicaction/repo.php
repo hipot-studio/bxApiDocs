@@ -284,7 +284,7 @@ class Repo
 				(array)$manifest['block']['type'],
 				function ($type) use ($error) {
 					$notAllowedBlockTypes = [
-						Site\Type::SCOPE_CODE_MAINPAGE,
+						Site\Type::SCOPE_CODE_VIBE,
 					];
 					if (in_array(mb_strtolower($type), $notAllowedBlockTypes))
 					{

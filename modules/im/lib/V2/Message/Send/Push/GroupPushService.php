@@ -4,10 +4,11 @@ namespace Bitrix\Im\V2\Message\Send\Push;
 
 use Bitrix\Im\V2\Message\Send\PushService;
 use Bitrix\Im\V2\Pull\Event\MessageSend;
+use Bitrix\Im\V2\Reading\Counter\Entity\UsersCounterMap;
 
 class GroupPushService extends PushService
 {
-	public function sendPush(array $counters = []): void
+	public function sendPush(UsersCounterMap $counters): void
 	{
 		if (!$this->isPullEnable())
 		{

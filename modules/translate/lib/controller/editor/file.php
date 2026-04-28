@@ -4,7 +4,9 @@ namespace Bitrix\Translate\Controller\Editor;
 use Bitrix\Main;
 use Bitrix\Translate;
 
-
+/**
+ * @internal
+ */
 class File
 	extends Translate\Controller\Controller
 {

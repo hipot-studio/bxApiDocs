@@ -2,12 +2,14 @@
 
 namespace Bitrix\BIConnector\ExternalSource;
 
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\ExternalSource;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
+use Bitrix\BIConnector\Superset\ExternalSource\ExternalSql\SourceProvider;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
@@ -83,6 +85,50 @@ class SourceManager
 			}
 		}
 
+		if (self::isExternalSqlConnectionsAvailable())
+		{
+			$defaultPorts = [
+				ExternalSource\Type::Mysql->value => 3306,
+				ExternalSource\Type::Pgsql->value => 5432,
+			];
+
+			foreach (SourceProvider::getExternalSqlTypes() as $type)
+			{
+				$result[$type] = [
+					[
+						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_HOST'),
+						'type' => ExternalSource\SourceSettingType::String->value,
+						'code' => 'host',
+						'placeholder' => 'http://localhost_23740259475',
+					],
+					[
+						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PORT'),
+						'type' => ExternalSource\SourceSettingType::Int->value,
+						'code' => 'port',
+						'placeholder' => $defaultPorts[$type] ?? '3306',
+					],
+					[
+						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_USERNAME'),
+						'type' => ExternalSource\SourceSettingType::String->value,
+						'code' => 'login',
+						'placeholder' => 'user',
+					],
+					[
+						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD'),
+						'type' => ExternalSource\SourceSettingType::String->value,
+						'code' => 'password',
+						'placeholder' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD'),
+					],
+					[
+						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_DATABASE'),
+						'type' => ExternalSource\SourceSettingType::String->value,
+						'code' => 'database',
+						'placeholder' => 'example_db',
+					],
+				];
+			}
+		}
+
 		return $result;
 	}
 
@@ -98,6 +144,21 @@ class SourceManager
 				'code' => ExternalSource\Type::Source1C->value,
 				'type' => ExternalSource\Type::Source1C->value,
 				'name' => '1C',
+			];
+		}
+
+		if (self::isExternalSqlConnectionsAvailable())
+		{
+			$result[] = [
+				'code' => ExternalSource\Type::Mysql->value,
+				'type' => ExternalSource\Type::Mysql->value,
+				'name' => 'MySQL',
+			];
+
+			$result[] = [
+				'code' => ExternalSource\Type::Pgsql->value,
+				'type' => ExternalSource\Type::Pgsql->value,
+				'name' => 'PostgreSQL',
 			];
 		}
 
@@ -125,6 +186,11 @@ class SourceManager
 		$region = Application::getInstance()->getLicense()->getRegion();
 
 		return in_array($region, ['ru', 'by', 'kz']);
+	}
+
+	public static function isExternalSqlConnectionsAvailable(): bool
+	{
+		return Feature::isExternalSqlDatasetEnabled();
 	}
 
 	public static function isExternalConnectionsAvailable(): bool

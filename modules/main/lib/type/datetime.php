@@ -17,7 +17,7 @@ class DateTime extends Date
 	 *
 	 * @throws Main\ObjectException
 	 */
-	public function __construct($time = null, $format = null, \DateTimeZone $timezone = null)
+	public function __construct($time = null, $format = null, ?\DateTimeZone $timezone = null)
 	{
 		if ($timezone === null)
 		{
@@ -83,7 +83,7 @@ class DateTime extends Date
 	 *
 	 * @return string
 	 */
-	public function toString(Context\Culture $culture = null)
+	public function toString(?Context\Culture $culture = null)
 	{
 		if ($this->userTimeEnabled && \CTimeZone::Enabled())
 		{
@@ -215,7 +215,7 @@ class DateTime extends Date
 	 *
 	 * @return string
 	 */
-	protected static function getCultureFormat(Context\Culture $culture = null)
+	protected static function getCultureFormat(?Context\Culture $culture = null)
 	{
 		if ($culture)
 		{

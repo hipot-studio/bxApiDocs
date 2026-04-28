@@ -1,12 +1,14 @@
 <?php
 namespace Bitrix\Crm\Automation\Trigger;
 
+use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Service\Container;
 Use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 Loc::loadMessages(__FILE__);
 
@@ -113,5 +115,20 @@ class InvoiceTrigger extends BaseTrigger
 	public static function getGroup(): array
 	{
 		return ['payment'];
+	}
+
+	public static function getNodeDescription(): string
+	{
+		return Loc::getMessage('CRM_AUTOMATION_TRIGGER_INVOICE_NODE_DESCRIPTION') ?? '';
+	}
+
+	public static function getNodeColor(): int
+	{
+		return ActivityColorIndex::GREEN->value;
+	}
+
+	public static function getNodeIcon(): string
+	{
+		return Outline::INVOICE->name;
 	}
 }

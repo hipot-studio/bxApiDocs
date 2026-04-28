@@ -4,7 +4,9 @@ namespace Bitrix\Landing\Site\Scope;
 use \Bitrix\Landing\Role;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\Domain;
+use \Bitrix\Landing\Site as LandingSite;
 use \Bitrix\Landing\Site\Scope;
+use \Bitrix\Landing\Transfer\Requisite\FinishRedirectLinkDto;
 
 class Knowledge extends Scope
 {
@@ -90,5 +92,15 @@ class Knowledge extends Scope
 			'YACOUNTER',
 			'COOKIES'
 		];
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public static function onTransferFinishRedirectUrlGet(int $siteId): ?FinishRedirectLinkDto
+	{
+		return new FinishRedirectLinkDto(
+			href: LandingSite::getPublicUrl($siteId),
+		);
 	}
 }

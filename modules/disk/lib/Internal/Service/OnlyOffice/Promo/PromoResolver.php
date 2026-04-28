@@ -53,7 +53,7 @@ class PromoResolver
 	{
 		$sliderCode = $this->sessionBoostService->isAvailable() ? self::LIMIT_SLIDER_EXTENDABLE_TARIFFS_WITH_BOOSTS : self::LIMIT_SLIDER_EXTENDABLE_TARIFFS;
 
-		return new PromoDto(PromoType::Slider, $sliderCode);
+		return new PromoDto(PromoType::SliderWithPopup, $sliderCode);
 	}
 
 	private function getPromoForLargeEnterprise(): PromoDto

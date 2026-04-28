@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Integration\AI\Queue;
 
 use Bitrix\AI\Result;
+use Bitrix\Im\V2\Integration\AI\CopilotError;
 use Bitrix\Im\V2\Integration\AI\Restriction;
 use Bitrix\Im\V2\Integration\AI\TaskCreationManager;
 use Bitrix\Im\V2\Integration\AI\Transcription\Item\Status;
@@ -40,19 +41,7 @@ class TranscriptionJob extends QueueJob
 		);
 
 		$transcribeManager = new TranscribeManager($fileId, $diskFileId, $chatId, $messageId);
-
-		if (!empty($text) && mb_strlen($text) <= TranscribeManager::MAX_TRANSCRIPTION_CHARS)
-		{
-			$transcribeFileItem = $transcribeManager->createFileItem(Status::Success, trim($text));
-			$transcribeResult = new TranscribeResult($transcribeFileItem);
-		}
-		else
-		{
-			$transcribeFileItem = $transcribeManager->createErrorFileItem();
-			$error = new Error('', 'MAX_TRANSCRIPTION_CHARS');
-			$transcribeResult = (new TranscribeResult($transcribeFileItem))->addError($error);
-		}
-
+		$transcribeResult = $this->getTranscribeResult($text ?? '', $transcribeManager);
 		$transcribeManager->handleTranscriptionResponse($transcribeResult, $launchType);
 
 		if (
@@ -61,9 +50,35 @@ class TranscriptionJob extends QueueJob
 		)
 		{
 			$message = new Message($messageId);
-			(new TaskCreationManager($message, $transcribeFileItem->getPlainText(), $fileId, $diskFileId))
-				->sendAiQuery();
+			(new TaskCreationManager($message, $transcribeResult->getFileItem()->getPlainText(), $fileId, $diskFileId))
+				->sendAiQuery()
+			;
 		}
+	}
+
+	protected function getTranscribeResult(string $text, TranscribeManager $transcribeManager): TranscribeResult
+	{
+		$text = trim($text);
+
+		if (empty($text))
+		{
+			$transcribeFileItem = $transcribeManager->createErrorFileItem();
+			$error = new Error('', CopilotError::TRANSCRIPTION_TEXT_ERROR);
+
+			return (new TranscribeResult($transcribeFileItem))->addError($error);
+		}
+
+		if (mb_strlen($text) > TranscribeManager::MAX_TRANSCRIPTION_CHARS)
+		{
+			$transcribeFileItem = $transcribeManager->createErrorFileItem();
+			$error = new Error('', CopilotError::MAX_TRANSCRIPTION_CHARS);
+
+			return (new TranscribeResult($transcribeFileItem))->addError($error);
+		}
+
+		$transcribeFileItem = $transcribeManager->createFileItem(Status::Success, $text);
+
+		return new TranscribeResult($transcribeFileItem);
 	}
 
 	public function processFailedJob(): void

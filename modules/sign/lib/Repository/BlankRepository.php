@@ -52,6 +52,7 @@ class BlankRepository
 			->setDateCreate(new DateTime())
 			->setDateModify(new DateTime())
 			->setForTemplate($item->forTemplate)
+			->setHasPlaceholders($item->hasPlaceholders)
 			->save()
 		;
 		if ($result->isSuccess())
@@ -168,6 +169,7 @@ class BlankRepository
 			scenario: BlankScenario::getScenarioById($model->getScenario()),
 			createdById: $model->getCreatedById(),
 			forTemplate:  $model->getForTemplate() ?? false,
+			hasPlaceholders: $model->getHasPlaceholders() ?? false,
 		);
 	}
 
@@ -221,6 +223,7 @@ class BlankRepository
 			->setFileId($blankModel->getFileId())
 			->setScenario($blankModel->getScenario())
 			->setForTemplate($blankItem->forTemplate)
+			->setHasPlaceholders($blankItem->hasPlaceholders)
 			->save()
 		;
 

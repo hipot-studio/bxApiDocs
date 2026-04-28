@@ -212,8 +212,8 @@ class YandexCheckoutHandler
 	protected function getTemplateParams(Payment $payment, $template, $additionalParams = []) : array
 	{
 		$params = [
-			'SUM' => PriceMaths::roundPrecision($payment->getSum()),
-			'CURRENCY' => $payment->getField('CURRENCY'),
+			'SUM' => PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency()),
+			'CURRENCY' => $payment->getCurrency(),
 		];
 
 		if ($template === 'template')
@@ -538,8 +538,8 @@ class YandexCheckoutHandler
 		return [
 			'description' => $this->getPaymentDescription($payment),
 			'amount' => [
-				'value' => (string)PriceMaths::roundPrecision($payment->getSum()),
-				'currency' => $payment->getField('CURRENCY'),
+				'value' => (string)PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency()),
+				'currency' => $payment->getCurrency(),
 			],
 			'capture' => true,
 			'metadata' => [
@@ -980,11 +980,12 @@ class YandexCheckoutHandler
 	 */
 	private function isSumCorrect(Payment $payment, array $paymentData)
 	{
+		$currency = $payment->getCurrency();
 		PaySystem\Logger::addDebugInfo(
-			__CLASS__.': yandexSum='.PriceMaths::roundPrecision($paymentData['amount']['value'])."; paymentSum=".PriceMaths::roundPrecision($payment->getSum())
+			__CLASS__.': yandexSum='.PriceMaths::roundByFormatCurrency($paymentData['amount']['value'], $currency)."; paymentSum=".PriceMaths::roundByFormatCurrency($payment->getSum(), $currency)
 		);
 
-		return PriceMaths::roundPrecision($paymentData['amount']['value']) === PriceMaths::roundPrecision($payment->getSum());
+		return PriceMaths::roundByFormatCurrency($paymentData['amount']['value'], $currency) === PriceMaths::roundByFormatCurrency($payment->getSum(), $currency);
 	}
 
 	/**
@@ -1039,9 +1040,10 @@ class YandexCheckoutHandler
 		}
 
 		$response = $sendResult->getData();
-
-		if ($response['status'] === static::PAYMENT_STATUS_SUCCEEDED
-			&& PriceMaths::roundPrecision($response['amount']['value']) === PriceMaths::roundPrecision($refundableSum)
+		$currency = $payment->getCurrency();
+		if (
+			$response['status'] === static::PAYMENT_STATUS_SUCCEEDED
+			&& PriceMaths::roundByFormatCurrency($response['amount']['value'], $currency) === PriceMaths::roundByFormatCurrency($refundableSum, $currency)
 		)
 		{
 			$result->setOperationType(PaySystem\ServiceResult::MONEY_LEAVING);
@@ -1094,7 +1096,7 @@ class YandexCheckoutHandler
 
 		$params = array(
 			'amount' => array(
-				'value' => (string)PriceMaths::roundPrecision($sum),
+				'value' => (string)PriceMaths::roundByFormatCurrency($sum, $payment->getField('CURRENCY')),
 				'currency' => $payment->getField('CURRENCY')
 			)
 		);
@@ -1208,7 +1210,7 @@ class YandexCheckoutHandler
 		return array(
 			'payment_id' => $payment->getField('PS_INVOICE_ID'),
 			'amount' => array(
-				'value' => (string)PriceMaths::roundPrecision($refundableSum),
+				'value' => (string)PriceMaths::roundByFormatCurrency($refundableSum, $payment->getField('CURRENCY')),
 				'currency' => $payment->getField('CURRENCY'),
 			),
 		);

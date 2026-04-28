@@ -595,7 +595,7 @@ class MainMailFormComponent extends CBitrixComponent implements Controllerable
 	 *
 	 * @return array{isSharingFeatureEnabled: bool, sharingUrl?: string}
 	 */
-	public function getCalendarSharingLinkAction(string $entityType = null, int $entityId = null): array
+	public function getCalendarSharingLinkAction(?string $entityType = null, ?int $entityId = null): array
 	{
 		if (!Loader::includeModule('calendar'))
 		{

@@ -8,7 +8,7 @@ class StyleInliner
 	 * @param array $styleList
 	 * @return array
 	 */
-	public static function inlineDocument(Document $document, array $styleList = null)
+	public static function inlineDocument(Document $document, ?array $styleList = null)
 	{
 		if(!$styleList)
 		{
@@ -25,7 +25,7 @@ class StyleInliner
 		}
 	}
 
-	public static function inlineHtml($html, array $styleList = null)
+	public static function inlineHtml($html, ?array $styleList = null)
 	{
 		$document = new Document;
 		$document->loadHTML($html);

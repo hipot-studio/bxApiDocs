@@ -3,7 +3,9 @@
 namespace Bitrix\Sale\Cashbox;
 
 use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Sale;
+use Bitrix\Sale\Public\Dto\BasketItemCalculationInput;
 
 Main\Localization\Loc::loadMessages(__FILE__);
 
@@ -47,6 +49,8 @@ class CreditCheck extends Check
 	}
 
 	/**
+	 * Set entities and calculate sum using centralized calculation services.
+	 *
 	 * @param array $entities
 	 * @throws Main\ArgumentException
 	 * @throws Main\ArgumentNullException
@@ -68,19 +72,45 @@ class CreditCheck extends Check
 					$this->setField('CURRENCY', $entity->getOrder()->getCurrency());
 				}
 
-				$sum = $entity->getPrice();
-				$shipmentItemCollection = $entity->getShipmentItemCollection();
-
-				/** @var Sale\ShipmentItem $item */
-				foreach ($shipmentItemCollection as $item)
-				{
-					$basketItem = $item->getBasketItem();
-					$sum += Sale\PriceMaths::roundPrecision($item->getQuantity() * $basketItem->getPrice());
-				}
-
+				$sum = $this->calculateShipmentSum($entity);
 				$this->setField('SUM', $sum);
 			}
 		}
+	}
+
+	/**
+	 * Calculate total sum for shipment including delivery and items.
+	 *
+	 * Uses BasketItemCalculator service for consistent calculations.
+	 *
+	 * @param Sale\Shipment $shipment
+	 * @return float Total sum rounded to precision
+	 */
+	protected function calculateShipmentSum(Sale\Shipment $shipment): float
+	{
+		$sum = $shipment->getPrice();
+		$shipmentItemCollection = $shipment->getShipmentItemCollection();
+		$calculator = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+
+		/** @var Sale\ShipmentItem $item */
+		foreach ($shipmentItemCollection as $item)
+		{
+			$basketItem = $item->getBasketItem();
+			if ($basketItem === null)
+			{
+				continue;
+			}
+
+			$input = new BasketItemCalculationInput(
+				basePrice: (float)$basketItem->getPrice(),
+				quantity: (float)$item->getQuantity(),
+			);
+
+			$result = $calculator->calculate($input);
+			$sum += $result->totalCalculation->totalPrice;
+		}
+
+		return Sale\PriceMaths::roundPrecision($sum);
 	}
 
 	/**

@@ -14,7 +14,7 @@ use Psr\Http\Message\StreamInterface;
 
 class Response extends Message implements ResponseInterface
 {
-	public function __construct(int $statusCode, array $headers = null, StreamInterface $body = null, string $version = null, string $reasonPhrase = '')
+	public function __construct(int $statusCode, ?array $headers = null, ?StreamInterface $body = null, ?string $version = null, string $reasonPhrase = '')
 	{
 		parent::__construct($headers, $body, $version);
 

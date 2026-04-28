@@ -19,12 +19,18 @@ class ExternalDatasetActionDataProvider extends DataProvider
 			return [];
 		}
 
-		return [
+		$actions = [
 			new OpenDatasetAction(),
-			new CreateChartAction(),
 			new ExportCsvDatasetAction(),
 			new DeleteDatasetAction(),
 		];
+
+		if (SupersetInitializer::isSupersetReady())
+		{
+			$actions[] = new CreateExternalDatasetAction();
+		}
+
+		return $actions;
 	}
 
 	public function prepareControls(array $rawFields): array
@@ -34,16 +40,8 @@ class ExternalDatasetActionDataProvider extends DataProvider
 		foreach ($this->prepareActions() as $actionsItem)
 		{
 			if (
-				$rawFields['IS_DELETED'] === true &&
-				!($actionsItem instanceof DeleteDatasetAction)
-			)
-			{
-				continue;
-			}
-
-			if (
-				$rawFields['TYPE'] !== Type::Csv->value &&
-				$actionsItem instanceof ExportCsvDatasetAction
+				$rawFields['TYPE'] !== Type::Csv->value
+				&& $actionsItem instanceof ExportCsvDatasetAction
 			)
 			{
 				continue;

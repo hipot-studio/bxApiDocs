@@ -21,7 +21,6 @@ final class ServiceFactory
 			Seo\Analytics\Service::getInstance(),
 			Seo\Retargeting\Service::getInstance(),
 			Seo\Marketing\Service::getInstance(),
-			Seo\Catalog\Service::getInstance()
 		];
 	}
 

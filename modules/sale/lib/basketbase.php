@@ -6,7 +6,6 @@ use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Basket\RefreshFactory;
 use Bitrix\Sale\Basket\RefreshStrategy;
-use Bitrix\Sale\Internals;
 use Bitrix\Sale\Internals\CollectableEntity;
 
 Loc::loadMessages(__FILE__);

@@ -10,6 +10,9 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Translate;
 use Bitrix\Translate\Index;
 
+/**
+ * @internal
+ */
 
 abstract class PhraseFts extends DataManager
 {

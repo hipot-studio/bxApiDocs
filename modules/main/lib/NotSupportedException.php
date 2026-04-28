@@ -7,7 +7,7 @@ namespace Bitrix\Main;
  */
 class NotSupportedException extends SystemException
 {
-	public function __construct($message = "", \Throwable $previous = null)
+	public function __construct($message = "", ?\Throwable $previous = null)
 	{
 		parent::__construct($message, 150, '', 0, $previous);
 	}

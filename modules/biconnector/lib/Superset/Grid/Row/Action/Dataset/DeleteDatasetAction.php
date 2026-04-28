@@ -6,6 +6,7 @@ use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use CUtil;
 
 class DeleteDatasetAction extends BaseAction
 {
@@ -26,13 +27,14 @@ class DeleteDatasetAction extends BaseAction
 
 	public function getControl(array $rawFields): ?array
 	{
-		$datasetId = $rawFields['ID'];
-		if (!$datasetId)
+		$datasetId = (int)$rawFields['ID'];
+		$datasetType = CUtil::JSEscape($rawFields['TYPE']);
+		if (!$datasetId && !$datasetType)
 		{
 			return null;
 		}
 
-		$this->onclick = "BX.BIConnector.ExternalDatasetManager.Instance.deleteDataset({$datasetId})";
+		$this->onclick = "BX.BIConnector.ExternalDatasetManager.Instance.deleteDataset({$datasetId}, \"{$datasetType}\")";
 
 		return parent::getControl($rawFields);
 	}

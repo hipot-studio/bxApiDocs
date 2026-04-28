@@ -8,9 +8,9 @@
 namespace Bitrix\Sale;
 
 use Bitrix\Main,
+	Bitrix\Main\DI\ServiceLocator,
 	Bitrix\Main\Localization\Loc,
 	Bitrix\Sale\Discount\Context,
-	Bitrix\Sale\Compatible,
 	Bitrix\Sale\Discount\RuntimeCache,
 	Bitrix\Currency;
 
@@ -5763,15 +5763,32 @@ abstract class DiscountBase
 	{
 		$basePrice = (float)$basePrice;
 		if ($basePrice <= 0)
+		{
 			return null;
+		}
+
 		$discount = (float)$discount;
 		if ($discount > $basePrice)
+		{
 			return null;
+		}
 
-		$result = round(100*$discount/$basePrice, 0);
-		if ($result < 0)
-			$result = 0;
-		return $result;
+		try
+		{
+			$calculator = ServiceLocator::getInstance()->get('sale.discountCalculator');
+			$rate = $calculator->calculateDiscountRate($basePrice, $basePrice - $discount);
+			$result = (int)$rate;
+			if ($result < 0)
+			{
+				$result = 0;
+			}
+
+			return $result;
+		}
+		catch (\Exception $e)
+		{
+			return null;
+		}
 	}
 
 	/**

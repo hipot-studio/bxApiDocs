@@ -570,7 +570,8 @@ class StatusTable extends Entity\DataManager
 	public static function getStatusesList(string $entityId): array
 	{
 		$statusList = [];
-		foreach (static::loadStatusesByEntityId($entityId) as $status)
+
+		foreach (static::getStatusesByEntityId($entityId) as $status)
 		{
 			$statusId = $status['STATUS_ID'];
 			$statusList[$statusId] = $status['NAME'];

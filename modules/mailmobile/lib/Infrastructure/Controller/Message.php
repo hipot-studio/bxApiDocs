@@ -8,11 +8,15 @@ use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Helper\MailContact;
 use Bitrix\Mail\Helper\Dto\MailMessageChain;
+use Bitrix\Mail\Helper\Message\Loader\FilterPreset;
+use Bitrix\Mail\Helper\Message\Loader\MessageFilter;
 use Bitrix\Mail\Internals\MailMessageAttachmentTable;
 use Bitrix\Mail\MailMessageTable;
 use Bitrix\MailMobile\FileUploader\MailUploaderController;
+use Bitrix\MailMobile\Internal\Services\MessageLoader;
 use Bitrix\MailMobile\Public\Service\MailSenderService;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Db\SqlQueryException;
 use Bitrix\Mail\Internals\MailContactTable;
@@ -26,6 +30,7 @@ use Bitrix\Main\Mail\Sender;
 use Bitrix\Main\Mail\SenderSendCounter;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\Web\Json;
 use Bitrix\UI\FileUploader\Uploader;
 use CBXSanitizer;
@@ -37,7 +42,6 @@ use Bitrix\Intranet;
 
 class Message extends Controller
 {
-	public const MAIL_MESSAGE_TYPE = 0;
 	public const CRM_MESSAGE_TYPE = 1;
 
 	protected function getDefaultPreFilters(): array
@@ -73,6 +77,110 @@ class Message extends Controller
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @throws Main\LoaderException
+	 * @throws Main\ArgumentException
+	 * @throws Main\ObjectPropertyException
+	 * @throws Main\SystemException
+	 */
+	public function getMessageListAction(PageNavigation $navigation, ?string $tabId = null, ?int $mailboxId = null, ?string $presetId = null, array $filterParams = []): array
+	{
+		if (!$this->includeRequiredModules())
+		{
+			return ['mailboxIsNotAvailable' => true];
+		}
+
+		$selectedDirPath = isset($filterParams['DIR']) && is_scalar($filterParams['DIR'])
+			? (string)$filterParams['DIR']
+			: null
+		;
+		$previousSeenMailboxId = (int)\CUserOptions::getOption(
+			'mail',
+			'previous_seen_mailbox_id',
+			0
+		);
+		$mailboxId = !$mailboxId
+			? $previousSeenMailboxId
+			: $mailboxId
+		;
+
+		$mailboxHelper = Mailbox::findBy($mailboxId);
+		if (($mailboxHelper !== null) && $previousSeenMailboxId !== $mailboxId)
+		{
+			\CUserOptions::SetOption('mail', 'previous_seen_mailbox_id', $mailboxId);
+		}
+		elseif ($previousSeenMailboxId !== 0 && $mailboxHelper === null)
+		{
+			$mailboxHelper = Mailbox::findBy($previousSeenMailboxId);
+		}
+
+		if ($mailboxHelper === null)
+		{
+			return ['mailboxIsNotAvailable' => true];
+		}
+
+		$mailboxDirsHelper = $mailboxHelper->getDirsHelper();
+		$defaultDirPath = $mailboxDirsHelper->getDefaultDirPath(true);
+		$defaultDir = $mailboxDirsHelper->getDirByPath($defaultDirPath);
+		$selectedDir = $mailboxDirsHelper->getDirByPath($selectedDirPath);
+		if (empty($defaultDir) || !$defaultDir->isSync())
+		{
+			return ['mailboxIsNotAvailable' => true];
+		}
+
+		if ($tabId)
+		{
+			$currentDir = $selectedDir ?? $defaultDir;
+			$isOutcomeDir = $currentDir->isOutcome() ?? false;
+			$targetPath = match ($tabId)
+			{
+				'unread' => $isOutcomeDir ? $mailboxDirsHelper->getIncomePath(true) : null,
+				'sent' => $mailboxDirsHelper->getOutcomePath(true),
+				default => null,
+			};
+
+			$targetDir = $mailboxDirsHelper->getDirByPath($targetPath);
+			$currentDir = $targetDir?->isSync()
+				? $targetDir
+				: $currentDir
+			;
+		}
+
+		$currentDir = $currentDir ?? $defaultDir;
+		$currentDirPath = $currentDir->getPath(true);
+		$filter = (new MessageFilter([$mailboxId], $filterParams))->addPreset($presetId, $mailboxId);
+
+		return [
+			'items' => MessageLoader::getMessageList(
+				$filter,
+				$navigation,
+				$currentDir->isOutcome() ?? false,
+			),
+			'dirs' => $mailboxDirsHelper->buildDirectoryTreeForContextMenu($mailboxId, $mailboxHelper),
+			'currentMailboxId' => $mailboxId,
+			'currentFolderPath' => $currentDirPath,
+			'startEmailSender' => $mailboxHelper->getMailbox()['EMAIL'],
+			'mailboxIsNotAvailable' => false,
+		];
+	}
+
+	/**
+	 * @param int $mailboxId
+	 * @return array
+	 * @throws ArgumentNullException
+	 */
+	public function getFilterPresetsAction(int $mailboxId = 0): array
+	{
+		if (!$mailboxId)
+		{
+			$mailboxId = (int)\CUserOptions::getOption('mail', 'previous_seen_mailbox_id', 0);
+		}
+
+		return [
+			'presets' => FilterPreset::getAllPresets($mailboxId),
+		];
 	}
 
 	//todo: Move to Mail module

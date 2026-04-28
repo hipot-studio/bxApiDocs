@@ -41,14 +41,16 @@ class ConfigurationSettings extends AbstractSettings
 	private const TIME_FORMAT_VALUE_24 = 24;
 	private const TIME_FORMAT_VALUE_12 = 12;
 	private bool $isBitrix24;
-	private bool $isBIConnectorAvailable;
+	private bool $isBiBuilderAvailable;
+	private bool $isBiAnalyticsAvailable;
 	private ?DateTime $dateTime = null;
 
 	public function __construct(array $data = [])
 	{
 		parent::__construct($data);
 		$this->isBitrix24 = IsModuleInstalled("bitrix24");
-		$this->isBIConnectorAvailable = BIConnectorSettingsService::isAvailable();
+		$this->isBiBuilderAvailable = BIConnectorSettingsService::isBiBuilderAvailable();
+		$this->isBiAnalyticsAvailable = BiConnectorSettingsService::isBiAnalyticsAvailable();
 	}
 
 	public function validate(): ErrorCollection
@@ -100,9 +102,10 @@ class ConfigurationSettings extends AbstractSettings
 		$this->setCollectGeoData();
 		$this->setShowSettingsAllUsers();
 
-		if ($this->isBIConnectorAvailable)
+		if ($this->isBiBuilderAvailable || $this->isBiAnalyticsAvailable)
 		{
 			$this->setBIConnectorDashboardLanguage();
+			$this->setBIConnectorDashboardTimezone();
 		}
 
 		return new Result();
@@ -215,6 +218,17 @@ class ConfigurationSettings extends AbstractSettings
 		)
 		{
 			BIConnectorSettingsService::setLanguage($this->data["biconnectorDashboardLanguage"]);
+		}
+	}
+
+	private function setBIConnectorDashboardTimezone(): void
+	{
+		if (
+			isset($this->data["biconnectorDashboardTimezone"])
+			&& $this->data["biconnectorDashboardTimezone"] !== BIConnectorSettingsService::getCurrentTimezone()
+		)
+		{
+			BIConnectorSettingsService::setTimezone($this->data["biconnectorDashboardTimezone"]);
 		}
 	}
 
@@ -446,16 +460,20 @@ class ConfigurationSettings extends AbstractSettings
 			false
 		);
 
-		if ($this->isBIConnectorAvailable)
+		if ($this->isBiAnalyticsAvailable)
 		{
 			$data['sectionBIConnector'] = new Section(
 				'settings-configuration-section-biconnector',
-				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_BICONNECTOR_DASHBOARD_LANGUAGE'),
+				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_BICONNECTOR'),
 				'ui-icon-set --graphs-settings',
 				false
 			);
 
-			$data["biconnectorDashboardLanguage"] = $this->getBIConnectorDashboardLanguage();
+			if ($this->isBiBuilderAvailable)
+			{
+				$data['biconnectorDashboardLanguage'] = $this->getBIConnectorDashboardLanguage();
+			}
+			$data['biconnectorDashboardTimezone'] = $this->getBIConnectorDashboardTimezone();
 		}
 
 		$data['sectionOther'] = new Section(
@@ -551,7 +569,7 @@ class ConfigurationSettings extends AbstractSettings
 
 		$values = [];
 
-		$languages = \Bitrix\Intranet\Util::getTemplateLanguages();
+		$languages = BIConnectorSettingsService::getLanguageList();
 
 		foreach ($languages as $code => $language)
 		{
@@ -568,6 +586,32 @@ class ConfigurationSettings extends AbstractSettings
 			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_BICONNECTOR_DASHBOARD_LANGUAGE'),
 			$values,
 			$currentLanguage,
+		);
+	}
+
+	private function getBIConnectorDashboardTimezone(): Selector
+	{
+		$currentTimezone = BIConnectorSettingsService::getCurrentTimezone();
+
+		$values = [];
+
+		$timezones = \CTimeZone::GetZones();
+
+		foreach ($timezones as $code => $name)
+		{
+			$values[] = [
+				'value' => $code,
+				'name' => $name,
+				'selected' => $currentTimezone === $code,
+			];
+		}
+
+		return new Selector(
+			'settings-configuration-field-biconnector-dashboard-timezone',
+			'biconnectorDashboardTimezone',
+			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_BICONNECTOR_DASHBOARD_TIMEZONE'),
+			$values,
+			$currentTimezone,
 		);
 	}
 
@@ -825,10 +869,14 @@ class ConfigurationSettings extends AbstractSettings
 			$searchSections['settings-configuration-section-maps_in_crm'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_MAPS_LIST');
 		}
 
-		if ($this->isBIConnectorAvailable)
+		if ($this->isBiAnalyticsAvailable)
 		{
-			$searchSections['settings-configuration-section-biconnector'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_BICONNECTOR_DASHBOARD_LANGUAGE');
-			$searchSections['biconnectorDashboardLanguage'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_BICONNECTOR_DASHBOARD_LANGUAGE');
+			$searchSections['settings-configuration-section-biconnector'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_BICONNECTOR');
+			if ($this->isBiBuilderAvailable)
+			{
+				$searchSections['biconnectorDashboardLanguage'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_BICONNECTOR_DASHBOARD_LANGUAGE');
+			}
+			$searchSections['biconnectorDashboardTimezone'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_BICONNECTOR_DASHBOARD_TIMEZONE');
 		}
 
 		$searchEngine = SearchEngine::initWithDefaultFormatter($searchSections + [

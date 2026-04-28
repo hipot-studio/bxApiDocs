@@ -25,4 +25,9 @@ abstract class BaseStickerEvent extends BaseEvent
 	{
 		return null;
 	}
+
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return true;
+	}
 }

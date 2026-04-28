@@ -238,7 +238,7 @@ class Date
 	 *
 	 * @return string
 	 */
-	public function toString(Context\Culture $culture = null)
+	public function toString(?Context\Culture $culture = null)
 	{
 		$format = static::getFormat($culture);
 		return $this->format($format);
@@ -261,7 +261,7 @@ class Date
 	 *
 	 * @return string
 	 */
-	public static function getFormat(Context\Culture $culture = null)
+	public static function getFormat(?Context\Culture $culture = null)
 	{
 		static $defaultCulture = null;
 
@@ -290,7 +290,7 @@ class Date
 	 *
 	 * @return string
 	 */
-	protected static function getCultureFormat(Context\Culture $culture = null)
+	protected static function getCultureFormat(?Context\Culture $culture = null)
 	{
 		if ($culture)
 		{

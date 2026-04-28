@@ -458,7 +458,7 @@ abstract class SqlHelper
 	 *
 	 * @return string Value to write to column.
 	 */
-	public function convertToDb($value, ORM\Fields\IReadable $field = null)
+	public function convertToDb($value, ?ORM\Fields\IReadable $field = null)
 	{
 		if ($value === null)
 		{
@@ -760,7 +760,7 @@ abstract class SqlHelper
 	 *
 	 * @return \Bitrix\Main\ORM\Fields\ScalarField
 	 */
-	abstract public function getFieldByColumnType($name, $type, array $parameters = null);
+	abstract public function getFieldByColumnType($name, $type, ?array $parameters = null);
 
 	/**
 	 * Returns ascending order specifier for ORDER BY clause.

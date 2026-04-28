@@ -10,6 +10,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Im;
 use Bitrix\Im\Bot\Keyboard;
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\ImBot;
 use Bitrix\ImBot\Log;
 use Bitrix\ImBot\ItrMenu;
@@ -1348,8 +1349,8 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 			return false;
 		}
 
-		$bot = Im\Bot::getCache($messageFields['BOT_ID']);
-		if (mb_substr($bot['CODE'], 0, 7) != parent::BOT_CODE)
+		$botData = BotData::getInstance((int)$messageFields['BOT_ID']);
+		if (!$botData->exists() || mb_substr($botData->getCode(), 0, 7) !== parent::BOT_CODE)
 		{
 			return false;
 		}
@@ -2780,11 +2781,11 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 			return false;
 		}
 
-		$botCache = Im\Bot::getCache(self::getBotId());
-		if (!empty($botCache['APP_ID']) && $botCache['APP_ID'] !== self::getBotCode())
+		$appId = BotData::getInstance(self::getBotId())->getAppId();
+		if (!empty($appId) && $appId !== self::getBotCode())
 		{
-			Option::delete(self::MODULE_ID, ['name' => parent::BOT_CODE.'_'.$botCache['APP_ID']."_bot_id"]);
-			Option::set(self::MODULE_ID, parent::BOT_CODE.'_'.self::getBotCode()."_bot_id", self::getBotId());
+			Option::delete(self::MODULE_ID, ['name' => parent::BOT_CODE . '_' . $appId . '_bot_id']);
+			Option::set(self::MODULE_ID, parent::BOT_CODE . '_' .self::getBotCode() . '_bot_id', self::getBotId());
 		}
 
 		$botParams = [
@@ -2805,14 +2806,13 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 			]
 		];
 
-		$botData = Im\User::getInstance(self::getBotId());
+		$user = Im\User::getInstance(self::getBotId());
 		$userAvatar = Im\User::uploadAvatar(self::getBotAvatar(), self::getBotId());
-		if ($userAvatar && $botData->getAvatarId() != $userAvatar)
+		if ($userAvatar && $user->getAvatarId() != $userAvatar)
 		{
 			$botParams['PROPERTIES']['PERSONAL_PHOTO'] = $userAvatar;
 		}
 
-		Im\Bot::clearCache();
 		Im\Bot::update(['BOT_ID' => self::getBotId()], $botParams);
 
 		self::registerCommands(self::getBotId());

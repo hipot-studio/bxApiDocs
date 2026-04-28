@@ -34,6 +34,7 @@ final class NodeMemberDataBuilder extends BaseDataBuilder
 	private readonly NodeMemberMapper $mapper;
 	private readonly RoleRepository $roleRepository;
 	private readonly RoleCollection $roleCollection;
+	protected int $cacheTtl = 86400;
 
 	protected array $select = [
 		'ID',

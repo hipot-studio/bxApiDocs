@@ -14,6 +14,9 @@ use Bitrix\MessageService\Sender\Result;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * @internal
+ */
 class Message
 {
 	public const EVENT_MESSAGE_UPDATED = 'messageUpdated';

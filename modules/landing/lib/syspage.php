@@ -9,7 +9,7 @@ class Syspage
 	 * Allowed types.
 	 * @var array
 	 */
-	protected static $allowedTypes = array(
+	protected static array $allowedTypes = array(
 		'mainpage',
 		'catalog',
 		'personal',

@@ -12,61 +12,7 @@ class Intranet extends \IRestService
 	{
 		return [
 			'mobile.intranet.departments.get' => ['callback' => [__CLASS__, 'getDepartments'], 'options' => ['private' => false]],
-			'mobile.intranet.stresslevel.sharedata.get' => ['callback' => [__CLASS__, 'getStressShareData'], 'options' => ['private' => false]],
 		];
-	}
-
-	/**
-	 * @param null $params
-	 * @param $offset
-	 * @param \CRestServer $server
-	 * @return |null
-	 * @throws SystemException
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\LoaderException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \ImagickException
-	 */
-	public static function getStressShareData($params = null, $offset, \CRestServer $server)
-	{
-		Loader::includeModule("intranet");
-		$stressLevelInstance = new \Bitrix\Intranet\Component\UserProfile\StressLevel\Img();
-		$image = $stressLevelInstance->getImage([
-			'factor' => 4,
-			'checkSSL'=>false
-		]);
-
-		if($image)
-		{
-			$entityCodes = [
-				"groups"=>"SG",
-				"users"=>"U",
-				"departments"=>"DR",
-			];
-
-			$params["recipients"] = array_reduce(array_keys($params["recipients"]), function($res, $type) use ($params, $entityCodes){
-
-				$prefix = $entityCodes[$type];
-				if($prefix && is_array($params["recipients"][$type]))
-				{
-					$res = array_merge($res, array_map(function($item) use ($prefix){
-						return "{$prefix}{$item}";
-					}, $params["recipients"][$type]));
-				}
-
-				return $res;
-
-			}, []);
-
-			$params["files"] = [["stress.png", base64_encode($image->getImageBlob())]];
-		}
-		else
-		{
-			throw new SystemException("Can't create image", 0);
-		}
-
-
-		return $params;
 	}
 
 	public static function getDepartments($arParams, $offset, \CRestServer $server)

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Infrastructure\Controller\Integration\AiAgent;
 
+use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Result\AiAgentStartResult;
 use CBPWorkflowTemplateUser;
 
 use Bitrix\Main\Engine\JsonController;
@@ -58,7 +59,7 @@ class Template extends JsonController
 
 		$this->addErrors($startResult->getErrors());
 
-		return [];
+		return $startResult->getData();
 	}
 
 	public function copyAndStartAction(int $templateId): array
@@ -103,7 +104,7 @@ class Template extends JsonController
 			return [];
 		}
 
-		return $this->prepareCopyAndStartResponseData($copyResult);
+		return $this->prepareCopyAndStartResponseData($copyResult, $startResult);
 	}
 
 	/**
@@ -127,17 +128,21 @@ class Template extends JsonController
 		return $this->aiAgentGridHelper->getRowFieldsByTemplateId($templateId);
 	}
 
-	private function prepareCopyAndStartResponseData(Result $result): array
+	private function prepareCopyAndStartResponseData(Result $copyResult, AiAgentStartResult $startResult): array
 	{
-		$data = $result->getData();
-		$rawFields = $data['rawTemplateFields'] ?? [];
+		$data = $copyResult->getData();
+		$rawFields = (array)($data['rawTemplateFields'] ?? []);
 
 		if (empty($rawFields))
 		{
 			return [];
 		}
 
-		return $this->aiAgentGridHelper->prepareGridRowDataFromTemplateFields($rawFields);
+		$gridFields = $this->aiAgentGridHelper->prepareGridRowDataFromTemplateFields($rawFields);
+
+		return $gridFields + [
+			AiAgentStartResult::SETUP_TEMPLATE_DATA => $startResult->setupTemplateEvent?->toArray()
+		];
 	}
 
 	private function isAgentsFeatureAvailable(): bool

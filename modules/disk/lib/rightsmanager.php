@@ -6,11 +6,11 @@ use Bitrix\Disk\Document\TrackedObject;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\Error\IErrorable;
+use Bitrix\Disk\Internals\ObjectPathTable;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internals\Rights\SetupSession;
 use Bitrix\Disk\Internals\Rights\Table\TmpSimpleRight;
 use Bitrix\Disk\Internals\RightTable;
-use Bitrix\Disk\Internals\SimpleRightTable;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -25,29 +25,29 @@ use Bitrix\Main\Type\Collection;
 
 class RightsManager implements IErrorable
 {
-	const ERROR_COULD_NOT_SET_NEGATIVE_RIGHT = 'DISK_RIGHTS_22002';
+	public const ERROR_COULD_NOT_SET_NEGATIVE_RIGHT = 'DISK_RIGHTS_22002';
 
-	const OP_READ      = 'disk_read';
-	const OP_ADD       = 'disk_add';
-	const OP_EDIT      = 'disk_edit';
-	const OP_SHARING   = 'disk_sharing';
-	const OP_DELETE    = 'disk_delete';
-	const OP_DESTROY   = 'disk_destroy';
-	const OP_RESTORE   = 'disk_restore';
-	const OP_SETTINGS  = 'disk_settings';
-	const OP_RIGHTS    = 'disk_rights';
-	const OP_START_BP  = 'disk_start_bp';
-	const OP_CREATE_WF = 'disk_create_wf';
+	public const OP_READ      = 'disk_read';
+	public const OP_ADD       = 'disk_add';
+	public const OP_EDIT      = 'disk_edit';
+	public const OP_SHARING   = 'disk_sharing';
+	public const OP_DELETE    = 'disk_delete';
+	public const OP_DESTROY   = 'disk_destroy';
+	public const OP_RESTORE   = 'disk_restore';
+	public const OP_SETTINGS  = 'disk_settings';
+	public const OP_RIGHTS    = 'disk_rights';
+	public const OP_START_BP  = 'disk_start_bp';
+	public const OP_CREATE_WF = 'disk_create_wf';
 
-	const TASK_READ    = 'disk_access_read';
-	const TASK_EDIT    = 'disk_access_edit';
-	const TASK_ADD     = 'disk_access_add';
-	const TASK_SHARING = 'disk_access_sharing';
-	const TASK_FULL    = 'disk_access_full';
+	public const TASK_READ    = 'disk_access_read';
+	public const TASK_EDIT    = 'disk_access_edit';
+	public const TASK_ADD     = 'disk_access_add';
+	public const TASK_SHARING = 'disk_access_sharing';
+	public const TASK_FULL    = 'disk_access_full';
 
-	const DOMAIN_SHARING = 'share';
-	const DOMAIN_BIZPROC = 'bp';
-	const DOMAIN_BASE    = null;
+	public const DOMAIN_SHARING = 'share';
+	public const DOMAIN_BIZPROC = 'bp';
+	public const DOMAIN_BASE    = null;
 	private int $backgroundJobPriority = 10_000;
 
 	/** @var  ErrorCollection */
@@ -55,11 +55,11 @@ class RightsManager implements IErrorable
 	/** @var  array */
 	protected $accessTasks;
 	/** @var array  */
-	private $operationsByTask = array();
+	private $operationsByTask = [];
 
 	public function __construct()
 	{
-		$this->errorCollection = new ErrorCollection;
+		$this->errorCollection = new ErrorCollection();
 	}
 
 	/**
@@ -147,32 +147,6 @@ class RightsManager implements IErrorable
 		return true;
 	}
 
-	private function validateNegativeRights(BaseObject $object, array $rights)
-	{
-		$negativeRights = array();
-		foreach ($rights as $right)
-		{
-			if (!empty($right['NEGATIVE']))
-			{
-				$negativeRights[$right['TASK_ID'] . '-' . $right['ACCESS_CODE']] = true;
-			}
-		}
-
-		if ($negativeRights)
-		{
-			foreach ($this->getParentsRights($object->getId()) as $right)
-			{
-				if (empty($right['NEGATIVE']) &&
-					isset($negativeRights[$right['TASK_ID'] . '-' . $right['ACCESS_CODE']]))
-				{
-					unset($negativeRights[$right['TASK_ID'] . '-' . $right['ACCESS_CODE']]);
-				}
-			}
-		}
-
-		return count($negativeRights) == 0;
-	}
-
 	/**
 	 * Recalculate rights after move
 	 * @param \Bitrix\Disk\BaseObject|BaseObject $object
@@ -238,25 +212,25 @@ class RightsManager implements IErrorable
 
 	public function getSpecificRights(BaseObject $object)
 	{
-		return RightTable::getList(array(
-			'filter' => array(
+		return RightTable::getList([
+			'filter' => [
 				'OBJECT_ID' => $object->getId(),
-			),
-		))->fetchAll();
+			],
+		])->fetchAll();
 	}
 
 	public function getAllListNormalizeRights(BaseObject $object)
 	{
 		$query = new Query(RightTable::getEntity());
 		$rights = $query
-			->setSelect(array('*', 'DEPTH_LEVEL' => 'PATH_PARENT.DEPTH_LEVEL',))
-			->setFilter(array(
+			->setSelect(['*', 'DEPTH_LEVEL' => 'PATH_PARENT.DEPTH_LEVEL'])
+			->setFilter([
 				'PATH_PARENT.OBJECT_ID' => $object->getId(),
-			))
+			])
 			->exec()
 			->fetchAll()
 		;
-		Collection::sortByColumn($rights, array('DEPTH_LEVEL' => SORT_DESC));
+		Collection::sortByColumn($rights, ['DEPTH_LEVEL' => SORT_DESC]);
 
 		return $this->uniqualizeRightsOnObject($rights);
 	}
@@ -265,15 +239,15 @@ class RightsManager implements IErrorable
 	{
 		$query = new Query(RightTable::getEntity());
 		$rights = $query
-			->setSelect(array('*', 'DEPTH_LEVEL' => 'PATH_PARENT.DEPTH_LEVEL',))
-			->setFilter(array(
+			->setSelect(['*', 'DEPTH_LEVEL' => 'PATH_PARENT.DEPTH_LEVEL'])
+			->setFilter([
 				'PATH_PARENT.OBJECT_ID' => $object->getId(),
 				'USER_ACCESS.USER_ID' => $userId,
-			))
+			])
 			->exec()
 			->fetchAll()
 		;
-		Collection::sortByColumn($rights, array('DEPTH_LEVEL' => SORT_DESC));
+		Collection::sortByColumn($rights, ['DEPTH_LEVEL' => SORT_DESC]);
 
 		return $this->uniqualizeRightsOnObject($rights);
 	}
@@ -285,7 +259,7 @@ class RightsManager implements IErrorable
 			return false;
 		}
 
-		return $this->set($object, array());
+		return $this->set($object, []);
 	}
 
 	public function deleteByDomain(BaseObject $object, $domain)
@@ -304,7 +278,7 @@ class RightsManager implements IErrorable
 			return true;
 		}
 
-		return $this->append($object, array());
+		return $this->append($object, []);
 	}
 
 	public function append(BaseObject $object, array $rights)
@@ -369,18 +343,16 @@ class RightsManager implements IErrorable
 
 	private function isEqual(array $right1, array $right2)
 	{
-		return 	$right1['TASK_ID'] == $right2['TASK_ID'] &&
-				$right1['NEGATIVE'] == $right2['NEGATIVE'] &&
-				$right1['ACCESS_CODE'] === $right2['ACCESS_CODE']
-		;
+		return 	$right1['TASK_ID'] == $right2['TASK_ID']
+				&& $right1['NEGATIVE'] == $right2['NEGATIVE']
+				&& $right1['ACCESS_CODE'] === $right2['ACCESS_CODE'];
 	}
 
 	private function isOpposite(array $right1, array $right2)
 	{
-		return 	$right1['TASK_ID'] == $right2['TASK_ID'] &&
-				$right1['NEGATIVE'] != $right2['NEGATIVE'] &&
-				$right1['ACCESS_CODE'] === $right2['ACCESS_CODE']
-		;
+		return 	$right1['TASK_ID'] == $right2['TASK_ID']
+				&& $right1['NEGATIVE'] != $right2['NEGATIVE']
+				&& $right1['ACCESS_CODE'] === $right2['ACCESS_CODE'];
 	}
 
 	/**
@@ -391,7 +363,7 @@ class RightsManager implements IErrorable
 	 */
 	private function uniqualizeRightsOnObject(array $rights)
 	{
-		$idToDelete = array();
+		$idToDelete = [];
 		$rights = array_values($rights);
 		foreach ($rights as $i => $right)
 		{
@@ -413,7 +385,7 @@ class RightsManager implements IErrorable
 		}
 		unset($id);
 
-		$byKey = array();
+		$byKey = [];
 		foreach($rights as $right)
 		{
 			$uniqueKey = $right['ACCESS_CODE'] . '-' . $right['TASK_ID'] . '-' . $right['NEGATIVE'];
@@ -429,7 +401,7 @@ class RightsManager implements IErrorable
 
 	private function deleteInternal(BaseObject $object, $domain = null)
 	{
-		$filter = array('OBJECT_ID' => $object->getId());
+		$filter = ['OBJECT_ID' => $object->getId()];
 		if($domain !== null)
 		{
 			$filter['DOMAIN'] = $domain;
@@ -452,7 +424,7 @@ class RightsManager implements IErrorable
 
 	public function getIdBySharingDomain($domain)
 	{
-		return mb_substr($domain, mb_strlen(self::DOMAIN_SHARING.'-'));
+		return mb_substr($domain, mb_strlen(self::DOMAIN_SHARING . '-'));
 	}
 
 	public function getBizProcDomain($id)
@@ -496,6 +468,7 @@ class RightsManager implements IErrorable
 
 			$this->operationsByTask[$taskId] = \CTask::getOperations($taskId, true);
 		}
+
 		return $this->operationsByTask[$taskId];
 	}
 
@@ -528,15 +501,15 @@ class RightsManager implements IErrorable
 	{
 		$query = new Query(RightTable::getEntity());
 		$rights = $query
-			->setSelect(array('*', 'DEPTH_LEVEL' => 'PATH_PARENT.DEPTH_LEVEL',))
-			->setFilter(array(
+			->setSelect(['*', 'DEPTH_LEVEL' => 'PATH_PARENT.DEPTH_LEVEL'])
+			->setFilter([
 				'PATH_PARENT.OBJECT_ID' => $objectId,
 				'!PATH_PARENT.PARENT_ID' => $objectId,
-			))
+			])
 			->exec()
 			->fetchAll()
 		;
-		Collection::sortByColumn($rights, array('DEPTH_LEVEL' => SORT_DESC));
+		Collection::sortByColumn($rights, ['DEPTH_LEVEL' => SORT_DESC]);
 
 		return $rights;
 	}
@@ -550,11 +523,11 @@ class RightsManager implements IErrorable
 	{
 		$query = new Query(RightTable::getEntity());
 		$query
-			->setSelect(array('*', 'DEPTH_LEVEL' => 'PATH_CHILD.DEPTH_LEVEL',))
-			->setFilter(array(
+			->setSelect(['*', 'DEPTH_LEVEL' => 'PATH_CHILD.DEPTH_LEVEL'])
+			->setFilter([
 				'PATH_CHILD.PARENT_ID' => $objectId,
 				'!PATH_CHILD.OBJECT_ID' => $objectId,
-			))
+			])
 		;
 
 		return $query->exec()->fetchAll();
@@ -577,11 +550,11 @@ class RightsManager implements IErrorable
 	{
 		$query = new Query(RightTable::getEntity());
 		$query
-			->setSelect(array('*'))
-			->setFilter(array(
+			->setSelect(['*'])
+			->setFilter([
 				'PATH_CHILD.PARENT_ID' => $objectId,
 				'PATH_CHILD.DEPTH_LEVEL' => 1,
-			))
+			])
 		;
 
 		return $query->exec()->fetchAll();
@@ -662,7 +635,7 @@ class RightsManager implements IErrorable
 	public function getUserOperationsByObject($objectId, $userId)
 	{
 		return $this->reformatRightsToOperations(
-			$this->getUserRightsByObject($objectId, $userId)
+			$this->getUserRightsByObject($objectId, $userId),
 		);
 	}
 
@@ -722,13 +695,13 @@ class RightsManager implements IErrorable
 				INNER JOIN b_user_access uaccess ON r.ACCESS_CODE = uaccess.ACCESS_CODE
 
 			WHERE o.PARENT_ID = {$parentId} AND uaccess.USER_ID = {$userId} {$restrictById}
-		"
+		",
 		);
 
 		$needToLoadByLink = false;
 		while ($row = $query->fetch())
 		{
-			$rightsByObjectId[$row['O_OBJECT_ID']][] = array(
+			$rightsByObjectId[$row['O_OBJECT_ID']][] = [
 				'ACCESS_CODE' => $row['ACCESS_CODE'],
 				'NAME' => $row['NAME'],
 				'TASK_ID' => $row['TASK_ID'],
@@ -736,7 +709,7 @@ class RightsManager implements IErrorable
 				'NEGATIVE' => $row['NEGATIVE'],
 				'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
 				'OBJECT_ID' => $row['O_OBJECT_ID'],
-			);
+			];
 
 			if ($row['O_REAL_OBJECT_ID'] != $row['O_OBJECT_ID'])
 			{
@@ -766,12 +739,12 @@ class RightsManager implements IErrorable
 				INNER JOIN b_user_access uaccess ON r.ACCESS_CODE = uaccess.ACCESS_CODE
 
 			WHERE o.PARENT_ID = {$parentId} AND uaccess.USER_ID = {$userId} AND o.ID <> o.REAL_OBJECT_ID {$restrictById}
-		"
+		",
 		);
 
 		while ($row = $query->fetch())
 		{
-			$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = array(
+			$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = [
 				'ACCESS_CODE' => $row['ACCESS_CODE'],
 				'NAME' => $row['NAME'],
 				'TASK_ID' => $row['TASK_ID'],
@@ -779,7 +752,7 @@ class RightsManager implements IErrorable
 				'NEGATIVE' => $row['NEGATIVE'],
 				'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
 				'OBJECT_ID' => $row['O_OBJECT_ID'],
-			);
+			];
 		}
 	}
 
@@ -801,12 +774,12 @@ class RightsManager implements IErrorable
 				INNER JOIN b_operation op ON task_op.OPERATION_ID = op.ID
 
 			WHERE o.PARENT_ID = {$parentId} AND o.CREATED_BY = {$userId} AND r.ACCESS_CODE = 'CR' {$restrictById}
-		"
+		",
 		);
 
 		while ($row = $query->fetch())
 		{
-			$rightsByObjectId[$row['O_OBJECT_ID']][] = array(
+			$rightsByObjectId[$row['O_OBJECT_ID']][] = [
 				'ACCESS_CODE' => 'CR',
 				'NAME' => $row['NAME'],
 				'TASK_ID' => $row['TASK_ID'],
@@ -814,11 +787,11 @@ class RightsManager implements IErrorable
 				'NEGATIVE' => $row['NEGATIVE'],
 				'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
 				'OBJECT_ID' => $row['O_OBJECT_ID'],
-			);
+			];
 
 			if ($row['O_REAL_OBJECT_ID'] != $row['O_OBJECT_ID'])
 			{
-				$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = array(
+				$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = [
 					'ACCESS_CODE' => 'CR',
 					'NAME' => $row['NAME'],
 					'TASK_ID' => $row['TASK_ID'],
@@ -826,7 +799,7 @@ class RightsManager implements IErrorable
 					'NEGATIVE' => $row['NEGATIVE'],
 					'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
 					'OBJECT_ID' => $row['O_OBJECT_ID'],
-				);
+				];
 			}
 		}
 	}
@@ -849,12 +822,12 @@ class RightsManager implements IErrorable
 				INNER JOIN b_operation op ON task_op.OPERATION_ID = op.ID
 
 			WHERE o.PARENT_ID = {$parentId} AND r.ACCESS_CODE = 'AU' {$restrictById}
-		"
+		",
 		);
 
 		while ($row = $query->fetch())
 		{
-			$rightsByObjectId[$row['O_OBJECT_ID']][] = array(
+			$rightsByObjectId[$row['O_OBJECT_ID']][] = [
 				'ACCESS_CODE' => 'AU',
 				'NAME' => $row['NAME'],
 				'TASK_ID' => $row['TASK_ID'],
@@ -862,11 +835,11 @@ class RightsManager implements IErrorable
 				'NEGATIVE' => $row['NEGATIVE'],
 				'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
 				'OBJECT_ID' => $row['O_OBJECT_ID'],
-			);
+			];
 
 			if ($row['O_REAL_OBJECT_ID'] != $row['O_OBJECT_ID'])
 			{
-				$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = array(
+				$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = [
 					'ACCESS_CODE' => 'AU',
 					'NAME' => $row['NAME'],
 					'TASK_ID' => $row['TASK_ID'],
@@ -874,7 +847,7 @@ class RightsManager implements IErrorable
 					'NEGATIVE' => $row['NEGATIVE'],
 					'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
 					'OBJECT_ID' => $row['O_OBJECT_ID'],
-				);
+				];
 			}
 		}
 	}
@@ -959,20 +932,24 @@ class RightsManager implements IErrorable
 		switch($taskName1)
 		{
 			case 'disk_access_read':
-				RightsManager::TASK_READ;
+				self::TASK_READ;
 				$taskName1Pos = 2;
+
 				break;
 			case 'disk_access_add':
-				RightsManager::TASK_ADD;
+				self::TASK_ADD;
 				$taskName1Pos = 3;
+
 				break;
 			case 'disk_access_edit':
-				RightsManager::TASK_EDIT;
+				self::TASK_EDIT;
 				$taskName1Pos = 4;
+
 				break;
 			case 'disk_access_full':
-				RightsManager::TASK_FULL;
+				self::TASK_FULL;
 				$taskName1Pos = 5;
+
 				break;
 			default:
 				//unknown task names
@@ -981,20 +958,24 @@ class RightsManager implements IErrorable
 		switch($taskName2)
 		{
 			case 'disk_access_read':
-				RightsManager::TASK_READ;
+				self::TASK_READ;
 				$taskName2Pos = 2;
+
 				break;
 			case 'disk_access_add':
-				RightsManager::TASK_ADD;
+				self::TASK_ADD;
 				$taskName2Pos = 3;
+
 				break;
 			case 'disk_access_edit':
-				RightsManager::TASK_EDIT;
+				self::TASK_EDIT;
 				$taskName2Pos = 4;
+
 				break;
 			case 'disk_access_full':
-				RightsManager::TASK_FULL;
+				self::TASK_FULL;
 				$taskName2Pos = 5;
+
 				break;
 			default:
 				//unknown task names
@@ -1005,7 +986,7 @@ class RightsManager implements IErrorable
 			return 0;
 		}
 
-		return $taskName1Pos > $taskName2Pos? 1 : -1;
+		return $taskName1Pos > $taskName2Pos ? 1 : -1;
 	}
 
 	/**
@@ -1041,9 +1022,9 @@ class RightsManager implements IErrorable
 			return $this;
 		}
 
-		$this->accessTasks = array();
+		$this->accessTasks = [];
 		/** @noinspection PhpUndefinedClassInspection */
-		$query = \CTask::getList(array('ID' => 'asc'), array('MODULE_ID' => 'disk',));
+		$query = \CTask::getList(['ID' => 'asc'], ['MODULE_ID' => 'disk']);
 		while($task = $query->fetch())
 		{
 			$this->accessTasks[$task['ID']] = $task;
@@ -1059,7 +1040,7 @@ class RightsManager implements IErrorable
 	 */
 	private function insertRightsInternal(BaseObject $object, array $rights)
 	{
-		$rightsToInsert = array();
+		$rightsToInsert = [];
 		foreach ($rights as $right)
 		{
 			if (isset($right['NEGATIVE']))
@@ -1076,13 +1057,13 @@ class RightsManager implements IErrorable
 				$right['DOMAIN'] = null;
 			}
 
-			$rightsToInsert[] = array(
+			$rightsToInsert[] = [
 				'OBJECT_ID' => $object->getId(),
 				'TASK_ID' => $right['TASK_ID'],
 				'ACCESS_CODE' => $right['ACCESS_CODE'],
 				'DOMAIN' => $right['DOMAIN'],
 				'NEGATIVE' => $right['NEGATIVE'],
-			);
+			];
 		}
 
 		RightTable::insertBatch($rightsToInsert);
@@ -1105,7 +1086,7 @@ class RightsManager implements IErrorable
 	 */
 	private function reformatRightsToOperations(array $rights)
 	{
-		$operations = array();
+		$operations = [];
 		foreach($rights as $right)
 		{
 			$key = $right['TASK_ID'] . '-' . $right['ACCESS_CODE'];
@@ -1115,18 +1096,19 @@ class RightsManager implements IErrorable
 				{
 					unset($operations[$key]);
 				}
+
 				continue;
 			}
 
 			if(!isset($key))
 			{
-				$operations[$key] = array();
+				$operations[$key] = [];
 			}
 			$operations[$key][] = $right['NAME'];
 		}
 		unset($right);
 
-		$operationNames = array();
+		$operationNames = [];
 		foreach($operations as $key => $item)
 		{
 			$operationNames = array_merge($operationNames, array_values($item));
@@ -1135,7 +1117,7 @@ class RightsManager implements IErrorable
 		$values = array_values(array_unique($operationNames));
 
 		//https://bugs.php.net/bug.php?id=29972
-		return $values? array_combine($values, $values) : array();
+		return $values ? array_combine($values, $values) : [];
 	}
 
 	/**
@@ -1148,45 +1130,46 @@ class RightsManager implements IErrorable
 	{
 		$query = new Query(RightTable::getEntity());
 		$rights = $query
-			->setSelect(array(
+			->setSelect([
 				'ACCESS_CODE',
 				'TASK_ID',
 				'NEGATIVE',
 				'NAME' => 'TASK_OPERATION.OPERATION.NAME',
 				'DEPTH_LEVEL' => 'PATH_PARENT.DEPTH_LEVEL',
-			))
-			->setFilter(array(
+			])
+			->setFilter([
 				'PATH_PARENT.OBJECT_ID' => $objectId,
 				'USER_ACCESS.USER_ID' => $userId,
-			))->exec()->fetchAll();
+			])->exec()->fetchAll()
+		;
 
 		$query = new Query(RightTable::getEntity());
 		$query
 			->setSelect(
-				array(
+				[
 					'ACCESS_CODE',
 					'TASK_ID',
 					'NEGATIVE',
 					'NAME' => 'TASK_OPERATION.OPERATION.NAME',
 					'DEPTH_LEVEL' => 'PATH_PARENT.DEPTH_LEVEL',
-				)
+				],
 			)
 			->setFilter(
-				array(
+				[
 					'LOGIC' => 'OR',
-					array(
+					[
 						'PATH_PARENT.OBJECT_ID' => $objectId,
 						'=ACCESS_CODE' => 'CR',
-					),
-					array(
+					],
+					[
 						'PATH_PARENT.OBJECT_ID' => $objectId,
 						'=ACCESS_CODE' => 'AU',
-					)
-				)
+					],
+				],
 			)
 		;
 
-		$creatorRights = array();
+		$creatorRights = [];
 		foreach($query->exec()->fetchAll() as $additionalRight)
 		{
 			if($additionalRight['ACCESS_CODE'] === 'AU')
@@ -1203,7 +1186,7 @@ class RightsManager implements IErrorable
 		{
 			$query = new Query(ObjectTable::getEntity());
 			$query
-				->setSelect(array('CREATED_BY'))
+				->setSelect(['CREATED_BY'])
 				->addFilter('=ID', $objectId)
 			;
 			$creatorData = $query->exec()->fetch();
@@ -1213,7 +1196,7 @@ class RightsManager implements IErrorable
 			}
 		}
 
-		Collection::sortByColumn($rights, array('DEPTH_LEVEL' => SORT_DESC));
+		Collection::sortByColumn($rights, ['DEPTH_LEVEL' => SORT_DESC]);
 
 		$event = new Event('disk', 'OnRetrievingUserRights', ['userId' => $userId, 'objectId' => $objectId, 'rights' => $rights]);
 		$event->send();
@@ -1238,7 +1221,7 @@ class RightsManager implements IErrorable
 	public function addRightsCheck(
 		Security\SecurityContext $securityContext,
 		array $parameters,
-		array $specificColumns
+		array $specificColumns,
 	): array {
 		$parameters['filter'] ??= [];
 		$parameters['runtime'] ??= [];
@@ -1247,7 +1230,7 @@ class RightsManager implements IErrorable
 			'RIGHTS_CHECK',
 			'CASE WHEN ' . $securityContext->getSqlExpressionForList('%1$s', '%2$s') . ' THEN 1 ELSE 0 END',
 			$specificColumns,
-			['data_type' => 'boolean']
+			['data_type' => 'boolean'],
 		);
 
 		$parameters['filter'] instanceof ConditionTree
@@ -1260,11 +1243,11 @@ class RightsManager implements IErrorable
 
 final class SimpleReBuilder
 {
-	const SCENARIO_AS_NEW_LEAF = 'leaf';
-	const SCENARIO_FULL_RECALC = 'recalc';
-	const SCENARIO_SKIP        = 'skip';
+	private const SCENARIO_AS_NEW_LEAF = 'leaf';
+	private const SCENARIO_FULL_RECALC = 'recalc';
+	private const SCENARIO_SKIP = 'skip';
 
-	private const BATCH_SIZE = 5_000;
+	private const BATCH_SIZE = 1_000;
 
 	/** @var \Bitrix\Disk\BaseObject */
 	protected $object;
@@ -1272,10 +1255,22 @@ final class SimpleReBuilder
 	protected $specificRights;
 	/** @var array */
 	protected $simpleRights;
-	/** @var array */
-	protected $simpleRightsFromParent;
+	/**
+	 * Compact readable rights state keyed by the TASK_ID + ACCESS_CODE pair.
+	 *
+	 * The key format is TASK_ID|ACCESS_CODE and the value stores ACCESS_CODE.
+	 *
+	 * @var array<string, string>
+	 */
+	protected array $readableRightsState;
 	/** @var array */
 	protected $parentRights;
+	/** @var array<int, bool> */
+	private array $readableTaskIdMap = [];
+	/** @var \Bitrix\Main\DB\Connection */
+	protected $connection;
+	/** @var \Bitrix\Main\DB\SqlHelper */
+	protected $sqlHelper;
 	/** @var  SetupSession */
 	protected $setupSession;
 	/** @var string */
@@ -1285,6 +1280,8 @@ final class SimpleReBuilder
 	{
 		$this->object = $object;
 		$this->specificRights = $specificRights;
+		$this->connection = Application::getConnection();
+		$this->sqlHelper = $this->connection->getSqlHelper();
 		$this->setupSession = SetupSession::register($this->object->getId());
 	}
 
@@ -1296,7 +1293,7 @@ final class SimpleReBuilder
 		$this->scenario = self::SCENARIO_FULL_RECALC;
 
 		$this->runByOnceObject();
-		//$this->fillChildren();
+
 		$this->fillDescendants();
 
 		$this->finalize();
@@ -1328,38 +1325,134 @@ final class SimpleReBuilder
 
 	private function runByOnceObject()
 	{
-		$this->simpleRights = $this->uniqualizeSimpleRights(
-			$this->getNewSimpleRight(
-				$this->specificRights,
-				$this->getParentRights(),
-				$this->getSimpleRightsFromParent()
-		));
-		$items = array();
+		$this->readableRightsState = $this->buildReadableRightsState(
+			$this->buildReadableRightsStateFromParentRights($this->getParentRights()),
+			$this->specificRights,
+		);
+		$this->simpleRights = $this->buildSimpleRightsFromReadableRightsState($this->readableRightsState);
+		$items = [];
 		foreach($this->simpleRights as $right)
 		{
-			$items[] = array(
+			$items[] = [
 				'OBJECT_ID' => $this->object->getId(),
 				'ACCESS_CODE' => $right['ACCESS_CODE'],
-			);
+			];
 		}
 		unset($right);
 
 		TmpSimpleRight::insertBatchBySessionId($items, $this->setupSession->getId());
 	}
 
-	private function uniqualizeSimpleRights(array $rights)
+	/**
+	 * Builds compact readable rights state from parent rights and keeps only effective read permissions.
+	 *
+	 * The resulting state is keyed by the TASK_ID + ACCESS_CODE pair.
+	 *
+	 * @param array $parentRights
+	 * @return array
+	 */
+	private function buildReadableRightsStateFromParentRights(array $parentRights): array
 	{
-		$byKey = array();
-		foreach ($rights as $right)
+		$readableRightsState = [];
+
+		foreach ($parentRights as $parentRight)
 		{
-			if(!isset($byKey[$right['ACCESS_CODE']]))
+			if (!$this->isReadableTaskId((int)$parentRight['TASK_ID']))
 			{
-				$byKey[$right['ACCESS_CODE']] = $right;
+				continue;
 			}
+
+			$stateKey = $this->getReadableRightsStateKey((int)$parentRight['TASK_ID'], (string)$parentRight['ACCESS_CODE']);
+			if (empty($parentRight['NEGATIVE']))
+			{
+				$readableRightsState[$stateKey] = (string)$parentRight['ACCESS_CODE'];
+
+				continue;
+			}
+
+			unset($readableRightsState[$stateKey]);
+		}
+		unset($parentRight);
+
+		return $readableRightsState;
+	}
+
+	/**
+	 * Applies object-specific read rights to inherited readable state and returns effective read permissions.
+	 * Formula: child_read_state = (parent_read_state - local_negative_read_pairs) + local_positive_read_pairs.
+	 *
+	 * Both input and output state are keyed by the TASK_ID + ACCESS_CODE pair.
+	 *
+	 * @param array $parentReadableRightsState
+	 * @param array $specificRights
+	 * @return array
+	 */
+	private function buildReadableRightsState(array $parentReadableRightsState, array $specificRights): array
+	{
+		$readableRightsState = $parentReadableRightsState;
+
+		foreach ($specificRights as $right)
+		{
+			if (
+				!$this->isReadableTaskId((int)$right['TASK_ID'])
+				|| empty($right['NEGATIVE'])
+			)
+			{
+				continue;
+			}
+
+			unset($readableRightsState[$this->getReadableRightsStateKey((int)$right['TASK_ID'], (string)$right['ACCESS_CODE'])]);
+		}
+
+		foreach ($specificRights as $right)
+		{
+			if (
+				!$this->isReadableTaskId((int)$right['TASK_ID'])
+				|| !empty($right['NEGATIVE'])
+			)
+			{
+				continue;
+			}
+
+			$readableRightsState[$this->getReadableRightsStateKey((int)$right['TASK_ID'], (string)$right['ACCESS_CODE'])] = (string)$right['ACCESS_CODE'];
 		}
 		unset($right);
 
-		return array_values($byKey);
+		return $readableRightsState;
+	}
+
+	/**
+	 * Converts pair-based readable rights state to unique simple rights grouped by access code.
+	 *
+	 * @param array $readableRightsState
+	 * @return array
+	 */
+	private function buildSimpleRightsFromReadableRightsState(array $readableRightsState): array
+	{
+		$simpleRights = [];
+		foreach ($readableRightsState as $accessCode)
+		{
+			if (!isset($simpleRights[$accessCode]))
+			{
+				$simpleRights[$accessCode] = [
+					'ACCESS_CODE' => $accessCode,
+				];
+			}
+		}
+
+		return array_values($simpleRights);
+	}
+
+	/**
+	 * Builds a readable rights state key in the TASK_ID|ACCESS_CODE format.
+	 *
+	 * @param int $taskId
+	 * @param string $accessCode
+	 * @return string
+	 */
+	private function getReadableRightsStateKey(int $taskId, string $accessCode): string
+	{
+		return $taskId . '|' . $accessCode;
 	}
 
 	private function getParentRights()
@@ -1369,214 +1462,28 @@ final class SimpleReBuilder
 			return $this->parentRights;
 		}
 		$this->parentRights = Driver::getInstance()->getRightsManager()->getParentsRights($this->object->getId());
-		Collection::sortByColumn($this->parentRights, array('DEPTH_LEVEL' => SORT_DESC));
+		Collection::sortByColumn($this->parentRights, ['DEPTH_LEVEL' => SORT_DESC]);
 
 		return $this->parentRights;
 	}
 
-	private function getNewSimpleRight(array $specificRights, array $parentRights, array $parentSimpleRights)
+	private function isReadableTaskId(int $taskId): bool
 	{
-		list($canRead, $mayCannotRead) = $this->splitRightsByReadable($specificRights);
-		if(count($mayCannotRead))
+		if (!$this->readableTaskIdMap)
 		{
-			//analyze negative + positive read rights. Clean pair
 			$rightsManager = Driver::getInstance()->getRightsManager();
-			$readableRightsFromParents = array();
-			foreach($parentRights as $parentRight)
+			foreach ($rightsManager->getTasks() as $task)
 			{
-				if(!$rightsManager->containsOperationInTask($rightsManager::OP_READ, $parentRight['TASK_ID']))
+				$taskIdValue = (int)$task['ID'];
+				if ($rightsManager->containsOperationInTask($rightsManager::OP_READ, $taskIdValue))
 				{
-					continue;
-				}
-				$key = $parentRight['TASK_ID'] . '-' . $parentRight['ACCESS_CODE'];
-				if(empty($parentRight['NEGATIVE']))
-				{
-					$readableRightsFromParents[$key] = $parentRight;
-					continue;
-				}
-				elseif(isset($readableRightsFromParents[$key]))
-				{
-					unset($readableRightsFromParents[$key]);
+					$this->readableTaskIdMap[$taskIdValue] = true;
 				}
 			}
-			unset($parentRight);
-			//clean parent read right if we have negative right on this task_id + access_code
-			foreach($readableRightsFromParents as $i => $right)
-			{
-				if(isset($mayCannotRead[$right['ACCESS_CODE']]))
-				{
-					foreach($mayCannotRead[$right['ACCESS_CODE']] as $cannotReadRight)
-					{
-						if($cannotReadRight['TASK_ID'] == $right['TASK_ID'])
-						{
-							unset($readableRightsFromParents[$i]);
-							break;
-						}
-					}
-					unset($cannotReadRight);
-				}
-			}
-			unset($right);
-			//in $readableRightsFromParents stay only readable rights by task and access code.
-			$simpleRights = $readableRightsFromParents;
-		}
-		else
-		{
-			$simpleRights = $parentSimpleRights;
-		}
-		foreach($canRead as $accessCode => $rights)
-		{
-			$simpleRights = array_merge($simpleRights, $rights);
-		}
-		unset($accessCode, $rights);
-
-		return $simpleRights;
-	}
-
-	private function getSimpleRightsFromParent()
-	{
-		if($this->simpleRightsFromParent !== null)
-		{
-			return $this->simpleRightsFromParent;
+			unset($task);
 		}
 
-		if($this->object->getParentId())
-		{
-			$this->simpleRightsFromParent = SimpleRightTable::getList(array('filter' => array(
-				'OBJECT_ID' => $this->object->getParentId(),
-			)))->fetchAll();
-		}
-		else
-		{
-			$this->simpleRightsFromParent = array();
-		}
-
-		return $this->simpleRightsFromParent;
-	}
-
-	private function splitRightsByReadable(array $specificRights)
-	{
-		$rightsManager = Driver::getInstance()->getRightsManager();
-		$canRead = $cannotRead = array();
-		foreach ($specificRights as $right)
-		{
-			if($rightsManager->containsOperationInTask($rightsManager::OP_READ, $right['TASK_ID']))
-			{
-				if(empty($right['NEGATIVE']))
-				{
-					if(!isset($canRead[$right['ACCESS_CODE']]))
-					{
-						$canRead[$right['ACCESS_CODE']] = array();
-					}
-					$canRead[$right['ACCESS_CODE']][] = $right;
-				}
-				else
-				{
-					if(!isset($cannotRead[$right['ACCESS_CODE']]))
-					{
-						$cannotRead[$right['ACCESS_CODE']] = array();
-					}
-					$cannotRead[$right['ACCESS_CODE']][] = $right;
-				}
-			}
-		}
-		unset($right);
-
-		return array($canRead, $cannotRead);
-	}
-
-	/**
-	 * @deprecated
-	 * @see fillDescendants
-	 * @return void
-	 * @throws ArgumentException
-	 */
-	private function fillChildren()
-	{
-		if ($this->object instanceof File)
-		{
-			return;
-		}
-
-		$specificRightsByObjectId = [
-			$this->object->getId() => $this->specificRights,
-		];
-		//store all rights on object (all inherited rights)
-		$inheritedRightsByObjectId = [
-			$this->object->getId() => $this->getParentRights(),
-		];
-
-		$childrenRights = Driver::getInstance()->getRightsManager()->getDescendantsRights($this->object->getId());
-		if (!$childrenRights)
-		{
-			TmpSimpleRight::fillDescendants($this->object->getId(), $this->setupSession->getId());
-
-			return;
-		}
-
-		//store all specific rights on object
-		foreach ($childrenRights as $right)
-		{
-			if (!isset($specificRightsByObjectId[$right['OBJECT_ID']]))
-			{
-				$specificRightsByObjectId[$right['OBJECT_ID']] = [];
-			}
-			$specificRightsByObjectId[$right['OBJECT_ID']][] = $right;
-		}
-		unset($right, $childrenRights);
-
-		$simpleRightsByObjectId = [
-			$this->object->getId() => $this->simpleRights,
-		];
-
-		$query = ObjectTable::getDescendants($this->object->getId(), ['select' => ['ID', 'PARENT_ID']]);
-		while ($object = $query->fetch())
-		{
-			//specific rights on object
-			if (!isset($specificRightsByObjectId[$object['ID']]))
-			{
-				$specificRightsByObjectId[$object['ID']] = [];
-			}
-			if (!isset($inheritedRightsByObjectId[$object['ID']]))
-			{
-				$inheritedRightsByObjectId[$object['ID']] = [];
-			}
-			if (!isset($simpleRightsByObjectId[$object['PARENT_ID']]))
-			{
-				$simpleRightsByObjectId[$object['PARENT_ID']] = [];
-			}
-			if (isset($inheritedRightsByObjectId[$object['PARENT_ID']]))
-			{
-				$inheritedRightsByObjectId[$object['ID']] = array_merge(
-					$inheritedRightsByObjectId[$object['PARENT_ID']],
-					($specificRightsByObjectId[$object['PARENT_ID']] ?: []),
-				);
-			}
-			else
-			{
-				$inheritedRightsByObjectId[$object['PARENT_ID']] = [];
-			}
-
-			$simpleRightsByObjectId[$object['ID']] = $this->uniqualizeSimpleRights(
-				$this->getNewSimpleRight(
-					$specificRightsByObjectId[$object['ID']],
-					$inheritedRightsByObjectId[$object['ID']],
-					$simpleRightsByObjectId[$object['PARENT_ID']],
-			));
-
-			$items = [];
-			foreach ($simpleRightsByObjectId[$object['ID']] as $right)
-			{
-				$items[] = [
-					'OBJECT_ID' => $object['ID'],
-					'ACCESS_CODE' => $right['ACCESS_CODE'],
-				];
-			}
-			unset($right);
-
-			TmpSimpleRight::insertBatchBySessionId($items, $this->setupSession->getId());
-		}
-		unset($object);
+		return isset($this->readableTaskIdMap[$taskId]);
 	}
 
 	/**
@@ -1602,8 +1509,8 @@ final class SimpleReBuilder
 			return;
 		}
 
-		$offset = 0;
-		$hasItems = true;
+		$lastDepthLevel = 0;
+		$lastObjectId = 0;
 		$rootDepthLevel = 0;
 
 		// initialize rights
@@ -1612,33 +1519,43 @@ final class SimpleReBuilder
 				$rootFolderId => $this->specificRights,
 			],
 		];
-		$inheritedRightsByObjectId = [
+		$readableRightsStateByObjectId = [
 			$rootDepthLevel => [
-				$rootFolderId => $this->getParentRights(),
+				$rootFolderId => $this->readableRightsState,
 			],
 		];
-		$simpleRights = [
+		$simpleRightsByObjectId = [
 			$rootDepthLevel => [
 				$rootFolderId => $this->simpleRights,
 			],
 		];
 
 		$hierarchyLevel = 1;
-		while ($hasItems)
+		while (true)
 		{
-			$descendants = $this->getDescendants($rootFolderId, $offset);
+			$descendants = $this->getDescendants($rootFolderId, $lastDepthLevel, $lastObjectId);
 
 			if (empty($descendants))
 			{
-				$hasItems = false;
-
-				continue;
+				break;
 			}
 
-			$offset += self::BATCH_SIZE;
+			$lastDescendant = end($descendants);
+			$lastDepthLevel = (int)$lastDescendant['DEPTH_LEVEL'];
+			$lastObjectId = (int)$lastDescendant['ID'];
+			reset($descendants);
 
-			$objectIds = array_column($descendants, 'ID');
-			$depthLevels = array_combine($objectIds, array_column($descendants, 'DEPTH_LEVEL'));
+			$objectIds = [];
+			$depthLevels = [];
+			foreach ($descendants as $descendant)
+			{
+				$objectId = (int)$descendant['ID'];
+				$objectIds[] = $objectId;
+				$depthLevels[$objectId] = (int)$descendant['DEPTH_LEVEL'];
+			}
+			unset($descendant, $lastDescendant);
+
+			$objectIdsWithChildren = $this->getObjectIdsWithChildren($objectIds);
 
 			$descendantsSpecificRights = $this->getSpecificRightsForObjects($objectIds);
 			foreach ($descendantsSpecificRights as $descendantRight)
@@ -1647,42 +1564,32 @@ final class SimpleReBuilder
 				$descendantRightObjectDepthLevel = $depthLevels[$descendantRightObjectId];
 				$specificRightsByObjectId[$descendantRightObjectDepthLevel][$descendantRightObjectId][] = $descendantRight;
 			}
+			unset($descendantRight, $descendantsSpecificRights);
 
 			$allItems = [];
 			foreach ($descendants as $descendant)
 			{
 				$objectId = (int)$descendant['ID'];
 				$parentId = (int)$descendant['PARENT_ID'];
-				$hasChildren = $descendant['IS_LEAF'] === '0';
+				$hasChildren = isset($objectIdsWithChildren[$objectId]);
 				$depthLevel = (int)$descendant['DEPTH_LEVEL'];
 				$prevDepthLevel = $depthLevel - 1;
 
-				$inheritedRights = [];
-				$parentSimpleRights = $simpleRights[$prevDepthLevel][$parentId] ?? [];
+				$parentReadableRightsState = $readableRightsStateByObjectId[$prevDepthLevel][$parentId] ?? [];
+				$parentSimpleRights = $simpleRightsByObjectId[$prevDepthLevel][$parentId]
+					?? $this->buildSimpleRightsFromReadableRightsState($parentReadableRightsState);
 				$specificRights = $specificRightsByObjectId[$depthLevel][$objectId] ?? [];
 
-				//calculate inherited rights
-				if (isset($inheritedRightsByObjectId[$prevDepthLevel][$parentId]))
+				if (empty($specificRights))
 				{
-					$inheritedRights = $inheritedRightsByObjectId[$prevDepthLevel][$parentId];
-					$specificParentRights = $specificRightsByObjectId[$prevDepthLevel][$parentId] ?? [];
-					foreach ($specificParentRights as $parentSpecificRight)
-					{
-						$inheritedRights[] = $parentSpecificRight;
-					}
+					$descendantReadableRightsState = $parentReadableRightsState;
+					$descendantSimpleRights = $parentSimpleRights;
 				}
 				else
 				{
-					$inheritedRightsByObjectId[$prevDepthLevel][$parentId] = [];
+					$descendantReadableRightsState = $this->buildReadableRightsState($parentReadableRightsState, $specificRights);
+					$descendantSimpleRights = $this->buildSimpleRightsFromReadableRightsState($descendantReadableRightsState);
 				}
-
-				$descendantSimpleRights = $this->uniqualizeSimpleRights(
-					$this->getNewSimpleRight(
-						$specificRights,
-						$inheritedRights,
-						$parentSimpleRights,
-					),
-				);
 
 				foreach ($descendantSimpleRights as $right)
 				{
@@ -1690,13 +1597,19 @@ final class SimpleReBuilder
 						'OBJECT_ID' => $objectId,
 						'ACCESS_CODE' => $right['ACCESS_CODE'],
 					];
+
+					if (count($allItems) >= self::BATCH_SIZE)
+					{
+						$this->flushSimpleRightItems($allItems);
+					}
 				}
+				unset($right);
 
 				// save only if needed for next levels
 				if ($hasChildren)
 				{
-					$inheritedRightsByObjectId[$depthLevel][$objectId] = $inheritedRights;
-					$simpleRights[$depthLevel][$objectId] = $descendantSimpleRights;
+					$readableRightsStateByObjectId[$depthLevel][$objectId] = $descendantReadableRightsState;
+					$simpleRightsByObjectId[$depthLevel][$objectId] = $descendantSimpleRights;
 				}
 
 				// cleanup memory
@@ -1705,57 +1618,107 @@ final class SimpleReBuilder
 					$grandParentDepthLevel = $prevDepthLevel - 1;
 					unset(
 						$specificRightsByObjectId[$grandParentDepthLevel],
-						$inheritedRightsByObjectId[$grandParentDepthLevel],
-						$simpleRights[$grandParentDepthLevel],
+						$readableRightsStateByObjectId[$grandParentDepthLevel],
+						$simpleRightsByObjectId[$grandParentDepthLevel],
 					);
 					$hierarchyLevel = $depthLevel;
 				}
-			}
 
-			if (!empty($allItems))
-			{
-				TmpSimpleRight::insertBatchBySessionId($allItems, $this->setupSession->getId());
+				unset($parentReadableRightsState, $parentSimpleRights, $specificRights, $descendantReadableRightsState, $descendantSimpleRights);
 			}
+			unset($descendant);
+
+			$this->flushSimpleRightItems($allItems);
+			unset($allItems, $descendants, $objectIds, $depthLevels, $objectIdsWithChildren);
 		}
+	}
+
+	private function flushSimpleRightItems(array &$items): void
+	{
+		if (empty($items))
+		{
+			return;
+		}
+
+		TmpSimpleRight::insertBatchBySessionId($items, $this->setupSession->getId());
+		$items = [];
 	}
 
 	/**
 	 * @param int $rootFolderId
-	 * @param int $offset
+	 * @param int $lastDepthLevel
+	 * @param int $lastObjectId
 	 * @return array
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
-	public function getDescendants(int $rootFolderId, int $offset): array
+	private function getDescendants(int $rootFolderId, int $lastDepthLevel, int $lastObjectId): array
 	{
-		return ObjectTable::getDescendants($rootFolderId, [
-			'select' => ['ID', 'PARENT_ID', 'DEPTH_LEVEL' => 'PATH_CHILD.DEPTH_LEVEL', 'IS_LEAF'],
-			'offset' => $offset,
-			'limit' => self::BATCH_SIZE,
-			'order' => ['DEPTH_LEVEL' => 'ASC'],
-			'runtime' => [
-				new \Bitrix\Main\ORM\Fields\ExpressionField(
-					'IS_LEAF',
-					'CASE WHEN NOT EXISTS(
-							SELECT 1 
-							FROM b_disk_object_path sub_path 
-							WHERE sub_path.PARENT_ID = %s 
-							AND sub_path.DEPTH_LEVEL = 1
-						) THEN 1 ELSE 0 END',
-					['ID'],
-				),
-			],
-		])->fetchAll();
+		$rootFolderId = (int)$rootFolderId;
+		$lastDepthLevel = (int)$lastDepthLevel;
+		$lastObjectId = (int)$lastObjectId;
+
+		$pathTableName = $this->sqlHelper->quote(ObjectPathTable::getTableName());
+		$objectTableName = $this->sqlHelper->quote(ObjectTable::getTableName());
+		$seekCondition = '';
+		if ($lastDepthLevel > 0 || $lastObjectId > 0)
+		{
+			$seekCondition = "
+				AND (
+					path.DEPTH_LEVEL > {$lastDepthLevel}
+					OR (path.DEPTH_LEVEL = {$lastDepthLevel} AND path.OBJECT_ID > {$lastObjectId})
+				)
+			";
+		}
+
+		$sql = "
+			SELECT
+				path.OBJECT_ID AS ID,
+				object_table.PARENT_ID,
+				path.DEPTH_LEVEL
+			FROM {$pathTableName} path
+				INNER JOIN {$objectTableName} object_table ON object_table.ID = path.OBJECT_ID
+			WHERE
+				path.PARENT_ID = {$rootFolderId}
+				AND path.OBJECT_ID <> {$rootFolderId}
+				{$seekCondition}
+			ORDER BY path.DEPTH_LEVEL ASC, path.OBJECT_ID ASC
+		";
+
+		return $this->connection->query($this->sqlHelper->getTopSql($sql, self::BATCH_SIZE))->fetchAll();
+	}
+
+	private function getObjectIdsWithChildren(array $objectIds): array
+	{
+		if (empty($objectIds))
+		{
+			return [];
+		}
+
+		$pathTableName = $this->sqlHelper->quote(ObjectPathTable::getTableName());
+		$objectIdsSql = implode(', ', array_map('intval', array_unique($objectIds)));
+		$rows = $this->connection->query("SELECT DISTINCT path.PARENT_ID AS OBJECT_ID FROM {$pathTableName} path WHERE path.DEPTH_LEVEL = 1 AND path.PARENT_ID IN ({$objectIdsSql})")->fetchAll();
+
+		$objectIdsWithChildren = [];
+		foreach ($rows as $row)
+		{
+			$objectIdsWithChildren[(int)$row['OBJECT_ID']] = true;
+		}
+		unset($row);
+
+		return $objectIdsWithChildren;
 	}
 
 	private function getSpecificRightsForObjects(array $objectIds): array
 	{
-		return RightTable::getList([
-			'select' => ['*'],
-			'filter' => [
-				'@OBJECT_ID' => $objectIds,
-			],
-		])->fetchAll();
+		if (empty($objectIds))
+		{
+			return [];
+		}
+
+		$objectIdsSql = implode(', ', array_map('intval', array_unique($objectIds)));
+
+		return $this->connection->query("SELECT OBJECT_ID, ACCESS_CODE, TASK_ID, NEGATIVE FROM b_disk_right WHERE OBJECT_ID IN ({$objectIdsSql}) ORDER BY OBJECT_ID ASC")->fetchAll();
 	}
 }
 
@@ -1773,10 +1736,10 @@ final class RightsSetter implements Internals\Error\IErrorable
 	/** @var array */
 	protected $parentRights;
 	/** @var array */
-	protected $rights = array();
+	protected $rights = [];
 
 	/** @var array */
-	protected $currentRightsOnObject = array();
+	protected $currentRightsOnObject = [];
 
 	/**
 	 * Constructor RightsSetter.
@@ -1818,24 +1781,22 @@ final class RightsSetter implements Internals\Error\IErrorable
 		}
 		unset($currentRight);
 
-		return empty($right['NEGATIVE'])?
-			$this->appendOnePositive($right, $hadOppositeRight) : $this->appendOneNegative($right, $hadOppositeRight);
+		return empty($right['NEGATIVE'])
+			? $this->appendOnePositive($right, $hadOppositeRight) : $this->appendOneNegative($right, $hadOppositeRight);
 	}
 
 	private function isEqual(array $right1, array $right2)
 	{
-		return 	$right1['TASK_ID'] == $right2['TASK_ID'] &&
-				$right1['NEGATIVE'] == $right2['NEGATIVE'] &&
-				$right1['ACCESS_CODE'] == $right2['ACCESS_CODE']
-		;
+		return 	$right1['TASK_ID'] == $right2['TASK_ID']
+				&& $right1['NEGATIVE'] == $right2['NEGATIVE']
+				&& $right1['ACCESS_CODE'] == $right2['ACCESS_CODE'];
 	}
 
 	private function isOpposite(array $right1, array $right2)
 	{
-		return 	$right1['TASK_ID'] == $right2['TASK_ID'] &&
-				$right1['NEGATIVE'] != $right2['NEGATIVE'] &&
-				$right1['ACCESS_CODE'] == $right2['ACCESS_CODE']
-		;
+		return 	$right1['TASK_ID'] == $right2['TASK_ID']
+				&& $right1['NEGATIVE'] != $right2['NEGATIVE']
+				&& $right1['ACCESS_CODE'] == $right2['ACCESS_CODE'];
 	}
 
 	private function appendOnePositive(array $right, $hadOppositeRight = false)
@@ -1869,7 +1830,7 @@ final class RightsSetter implements Internals\Error\IErrorable
 		}
 		else
 		{
-			$objectIds = array();
+			$objectIds = [];
 			foreach($conflictRightsInSubTree as $conflictRight)
 			{
 				$objectIds[] = $conflictRight['OBJECT_ID'];
@@ -1884,7 +1845,7 @@ final class RightsSetter implements Internals\Error\IErrorable
 					NOT EXISTS(
 						SELECT 'x' FROM b_disk_object_path pp
 							WHERE pp.OBJECT_ID = p.OBJECT_ID AND
-							pp.PARENT_ID IN (" . implode(',', $objectIds)  . ") )
+							pp.PARENT_ID IN (" . implode(',', $objectIds) . ") )
 			");
 		}
 
@@ -1936,7 +1897,7 @@ final class RightsSetter implements Internals\Error\IErrorable
 
 	private function splitNegativeAndPositive(array $rights)
 	{
-		$negative = $positive = array();
+		$negative = $positive = [];
 		foreach($rights as $i => $right)
 		{
 			if(empty($right['NEGATIVE']))
@@ -1950,7 +1911,7 @@ final class RightsSetter implements Internals\Error\IErrorable
 		}
 		unset($right);
 
-		return array($negative, $positive);
+		return [$negative, $positive];
 	}
 
 	private function appendOneNegative(array $right, $hadOppositeRight = false)
@@ -1959,6 +1920,7 @@ final class RightsSetter implements Internals\Error\IErrorable
 		if(!$isValidNegaviteRight && !$hadOppositeRight)
 		{
 			$this->errorCollection->addOne(new Error('Invalid negative right'));
+
 			return false;
 		}
 
@@ -2001,7 +1963,7 @@ final class RightsSetter implements Internals\Error\IErrorable
 		}
 		else
 		{
-			$objectIds = array();
+			$objectIds = [];
 			foreach($conflictRightsInSubTree as $conflictRight)
 			{
 				$objectIds[] = $conflictRight['OBJECT_ID'];
@@ -2016,7 +1978,7 @@ final class RightsSetter implements Internals\Error\IErrorable
 					NOT EXISTS(
 						SELECT 'x' FROM b_disk_object_path pp
 							WHERE pp.OBJECT_ID = p.OBJECT_ID AND
-							pp.PARENT_ID IN (" . implode(',', $objectIds)  . ") )
+							pp.PARENT_ID IN (" . implode(',', $objectIds) . ") )
 			");
 		}
 
@@ -2034,8 +1996,10 @@ final class RightsSetter implements Internals\Error\IErrorable
 				if($result->isSuccess())
 				{
 					$this->errorCollection->addFromResult($result);
+
 					return false;
 				}
+
 				return true;
 			}
 		}
@@ -2066,11 +2030,13 @@ final class RightsSetter implements Internals\Error\IErrorable
 			if($this->isEqual($parentRight, $right))
 			{
 				$firstNegative = true;
+
 				break;
 			}
 			if($this->isOpposite($parentRight, $right))
 			{
 				$firstNegative = false;
+
 				break;
 			}
 		}
@@ -2107,7 +2073,6 @@ final class RightsSetter implements Internals\Error\IErrorable
 		//shame. It is false.
 	}
 
-
 	private function getCurrentRightsOnObject()
 	{
 		if($this->currentRightsOnObject !== null)
@@ -2126,7 +2091,7 @@ final class RightsSetter implements Internals\Error\IErrorable
 			return $this->parentRights;
 		}
 		$this->parentRights = Driver::getInstance()->getRightsManager()->getParentsRights($this->object->getId());
-		Collection::sortByColumn($this->parentRights, array('DEPTH_LEVEL' => SORT_DESC));
+		Collection::sortByColumn($this->parentRights, ['DEPTH_LEVEL' => SORT_DESC]);
 
 		return $this->parentRights;
 	}
@@ -2236,13 +2201,13 @@ final class SimpleRightBuilder
 		")->fetchAll();
 
 		$rightsManager = Driver::getInstance()->getRightsManager();
-		Collection::sortByColumn($negativeNodes, array('DEPTH_LEVEL' => SORT_ASC));
+		Collection::sortByColumn($negativeNodes, ['DEPTH_LEVEL' => SORT_ASC]);
 		foreach($negativeNodes as $negativeNode)
 		{
-			$nodeObject = BaseObject::buildFromArray(array(
+			$nodeObject = BaseObject::buildFromArray([
 				'ID' => $negativeNode['OBJECT_ID'],
 				'TYPE' => ObjectTable::TYPE_FOLDER,
-			));
+			]);
 
 			$runClean = true;
 			foreach($rightsManager->getAllListNormalizeRights($nodeObject) as $right)
@@ -2253,12 +2218,13 @@ final class SimpleRightBuilder
 				}
 				//the right goes from parent
 				if(
-					!empty($right['NEGATIVE']) &&
-					$right['OBJECT_ID'] != $negativeNode['OBJECT_ID'] &&
-					$right['TASK_ID'] == $negativeNode['TASK_ID']
+					!empty($right['NEGATIVE'])
+					&& $right['OBJECT_ID'] != $negativeNode['OBJECT_ID']
+					&& $right['TASK_ID'] == $negativeNode['TASK_ID']
 				)
 				{
 					$runClean = false;
+
 					break;
 				}
 				if(!empty($right['NEGATIVE']))
@@ -2269,6 +2235,7 @@ final class SimpleRightBuilder
 				if($rightsManager->containsOperationInTask($rightsManager::OP_READ, $right['TASK_ID']))
 				{
 					$runClean = false;
+
 					break;
 				}
 			}
@@ -2322,7 +2289,7 @@ final class SimpleRightBuilder
 					NOT EXISTS(
 						SELECT 'x' FROM b_disk_object_path pp
 							WHERE pp.OBJECT_ID = p.OBJECT_ID AND
-							pp.PARENT_ID IN (" . implode(',', $objectIds)  . ") )
+							pp.PARENT_ID IN (" . implode(',', $objectIds) . ") )
 			");
 		}
 	}
@@ -2348,7 +2315,7 @@ final class SimpleRightBuilder
 				r.ACCESS_CODE = '{$accessCode}'
 		")->fetchAll();
 
-		$ids = array();
+		$ids = [];
 		foreach($rights as $i => $right)
 		{
 			$ids[] = $right['OBJECT_ID'];
@@ -2404,7 +2371,7 @@ final class SimpleRightBuilder
 		}
 		else
 		{
-			$ids = array();
+			$ids = [];
 			foreach($this->getTasksWithOperationRead() as $task)
 			{
 				$ids[] = (int)$task['ID'];
@@ -2421,7 +2388,7 @@ final class SimpleRightBuilder
 				SELECT DISTINCT pathchild.OBJECT_ID, r.ACCESS_CODE FROM b_disk_object_path path
 				    INNER JOIN b_disk_right r ON r.OBJECT_ID = path.OBJECT_ID
 				    INNER JOIN b_disk_object_path pathchild ON pathchild.PARENT_ID = r.OBJECT_ID
-				WHERE path.PARENT_ID = {$this->objectId} AND r.NEGATIVE = 0 AND r.TASK_ID IN (" . implode(', ', $ids) .")
+				WHERE path.PARENT_ID = {$this->objectId} AND r.NEGATIVE = 0 AND r.TASK_ID IN (" . implode(', ', $ids) . ")
 			");
 		}
 
@@ -2437,7 +2404,7 @@ final class SimpleRightBuilder
 		$rightsManager = Driver::getInstance()->getRightsManager();
 
 		$tasks = $rightsManager->getTasks();
-		$readableTasks = array();
+		$readableTasks = [];
 		foreach($tasks as $task)
 		{
 			if($rightsManager->containsOperationInTask($rightsManager::OP_READ, $task['ID']))

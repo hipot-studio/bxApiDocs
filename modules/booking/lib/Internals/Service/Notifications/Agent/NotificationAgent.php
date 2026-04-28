@@ -7,8 +7,8 @@ namespace Bitrix\Booking\Internals\Service\Notifications\Agent;
 use Bitrix\Booking\Entity\Booking\Booking;
 use Bitrix\Booking\Entity\Booking\BookingVisitStatus;
 use Bitrix\Booking\Entity\Enum\Notification\ReminderNotificationDelay;
-use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
+use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
 use Bitrix\Booking\Internals\Service\SqlHelper;
 use Bitrix\Booking\Internals\Service\Time;
@@ -50,7 +50,7 @@ class NotificationAgent
 		(new BookingHandlerService())->handleBookings(
 			array_column($bookingIdRows, 'ID'),
 			static function (Booking $booking) use ($notificationType) {
-				Container::getMessageSender()->send($booking, $notificationType);
+				Container::getMessageSenderPicker()->pickByBooking($booking)?->send($booking, $notificationType);
 			}
 		);
 	}
@@ -150,7 +150,7 @@ class NotificationAgent
 		(new BookingHandlerService())->handleBookings(
 			$bookingIds,
 			static function (Booking $booking) {
-				Container::getMessageSender()->send($booking, NotificationType::Confirmation);
+				Container::getMessageSenderPicker()->pickByBooking($booking)?->send($booking, NotificationType::Confirmation);
 			}
 		);
 	}
@@ -260,7 +260,7 @@ class NotificationAgent
 		(new BookingHandlerService())->handleBookings(
 			$bookingIds,
 			static function (Booking $booking) {
-				Container::getMessageSender()->send($booking, NotificationType::Reminder);
+				Container::getMessageSenderPicker()->pickByBooking($booking)?->send($booking, NotificationType::Reminder);
 			}
 		);
 	}

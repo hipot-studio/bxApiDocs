@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Repository;
 
 use Bitrix\Booking\Entity;
+use Bitrix\Booking\Entity\Booking\BookingCollection;
 use Bitrix\Booking\Provider\Params\FilterInterface;
 use Bitrix\Main\ORM\Query\Query;
 
@@ -42,4 +43,6 @@ interface BookingRepositoryInterface
 	public function remove(int $id): void;
 
 	public function withSkus(Entity\Booking\BookingCollection $collection): self;
+
+	public function withClientData(BookingCollection $collection): self;
 }

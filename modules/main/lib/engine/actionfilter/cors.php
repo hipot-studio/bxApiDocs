@@ -26,7 +26,7 @@ final class Cors extends Base
 	 * @param string|null $origin Origin. NULL - take from Origin header, '*' or like 'https://example.com'.
 	 * @param bool $credentials Set header `Access-Control-Allow-Credentials`.
 	 */
-	public function __construct(string $origin = null, bool $credentials = false)
+	public function __construct(?string $origin = null, bool $credentials = false)
 	{
 		$this->origin = $origin;
 		$this->credentials = $credentials;

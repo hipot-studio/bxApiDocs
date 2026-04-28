@@ -5,6 +5,9 @@ namespace Bitrix\Translate;
 use Bitrix\Main;
 use Bitrix\Translate;
 
+/**
+ * @internal
+ */
 
 class Settings
 	extends Translate\IO\File
@@ -198,7 +201,7 @@ class Settings
 
 		try
 		{
-			if ($content <> '')
+			if ($content != '')
 			{
 				if (parent::putContents("<". "?php\nreturn ". $content. "\n?". '>') === false)
 				{
@@ -242,8 +245,7 @@ class Settings
 	 *
 	 * @return string|null
 	 */
-	#[\ReturnTypeWillChange]
-	public function offsetGet($code)
+	public function offsetGet($code): mixed
 	{
 		if (isset($this->options[$code]))
 		{
@@ -287,8 +289,7 @@ class Settings
 	 *
 	 * @return array|null
 	 */
-	#[\ReturnTypeWillChange]
-	public function current()
+	public function current(): mixed
 	{
 		$code = $this->optionCodes[$this->dataPosition];
 

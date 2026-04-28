@@ -6,7 +6,9 @@ use Bitrix\Main;
 
 /**
  * @implements \Bitrix\Translate\IErrorable
+ * @internal
  */
+
 trait Error
 {
 	/** @var Main\ErrorCollection */

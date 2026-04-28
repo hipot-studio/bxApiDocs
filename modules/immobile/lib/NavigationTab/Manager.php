@@ -2,6 +2,7 @@
 
 namespace Bitrix\ImMobile\NavigationTab;
 
+use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Main\EventManager;
@@ -333,9 +334,9 @@ class Manager
 			'IS_BETA_AVAILABLE' => Settings::isBetaAvailable(),
 			'IS_COPILOT_SELECT_MODEL_ENABLED' => Settings::isCopilotSelectModelEnabled(),
 			'IS_CHAT_LOCAL_STORAGE_AVAILABLE' => Settings::isChatLocalStorageAvailable(),
-			'SHOULD_SHOW_CHAT_V2_UPDATE_HINT' => Settings::shouldShowChatV2UpdateHint(),
 			'IS_AI_ASSISTANT_MCP_SELECTOR_AVAILABLE' => Settings::isAiAssistantMcpSelectorAvailable(),
 			'IS_OPENLINES_IN_MESSENGER_V2_AVAILABLE' => Settings::isOpenlinesInMessengerV2Available(),
+			'IS_RECENT_FILTER_AVAILABLE' => Settings::isRecentFilterAvailable(),
 			'IS_TASKS_RECENT_LIST_AVAILABLE' => Settings::isTasksRecentListAvailable(),
 			'IS_AUTO_TASKS_ENABLED' => Settings::isAutoTaskEnabled(),
 			'IS_AUTO_TASKS_UI_AVAILABLE' => Settings::isAutoTaskUIAvailable(),
@@ -360,6 +361,7 @@ class Manager
 			'CAN_USE_AUDIO_PANEL' => $this->canUseAudioPanel(),
 			'COPILOT_DATA' => $copilot,
 			'COPILOT_AVAILABLE_ENGINES' => $this->getAvailableEngines(),
+			'COPILOT_BOT_NAME' => $this->getCopilotBotName(),
 		];
 	}
 
@@ -498,5 +500,15 @@ class Manager
 		$engineManager = new EngineManager();
 
 		return $engineManager->getAvailableEnginesForRest();
+	}
+
+	private function getCopilotBotName(): string
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return '';
+		}
+
+		return CopilotNameResolver::getInstance()->getName();
 	}
 }

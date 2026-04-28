@@ -6,6 +6,7 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
@@ -56,6 +57,13 @@ final class CopyAction extends BaseAction
 				from: 'grid_menu',
 			})
 		JS;
+
+		if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($rawFields['TYPE']))
+		{
+			$this->onclick = "BX.UI.InfoHelper.show(\"limit_benefit_market_active\")";
+
+			return parent::getControl($rawFields);
+		}
 
 		$this->onclick = $onClickHandler;
 

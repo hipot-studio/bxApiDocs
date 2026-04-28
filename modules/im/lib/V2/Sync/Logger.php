@@ -4,13 +4,14 @@ namespace Bitrix\Im\V2\Sync;
 
 use Bitrix\Im\Model\EO_Log_Collection;
 use Bitrix\Im\Model\LogTable;
+use Bitrix\Im\Model\UserTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Main\UserTable;
 use Bitrix\Pull\Model\PushTable;
 
 class Logger
@@ -201,7 +202,7 @@ class Logger
 		foreach ($allUsers as $userId)
 		{
 			$user = User::getInstance($userId);
-			$isRealUser = !in_array($user->getExternalAuthId(), UserTable::getExternalUserTypes(), true);
+			$isRealUser = !in_array($user->getExternalAuthId(), UserTable::filterExternalUserTypes([UserGuest::AUTH_ID]), true);
 			if ($isRealUser && $user->isActive())
 			{
 				$this->allowedUsers[$userId] = $userId;

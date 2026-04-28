@@ -7,6 +7,8 @@ namespace Bitrix\Calendar\Integration\Socialservices\Auth;
 use Bitrix\Calendar\Internal\Integration\Socialservices\Auth\AbstractAuthService;
 use Bitrix\Calendar\Synchronization\Internal\Exception\LogicException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Repository\RepositoryReadException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AuthorizationException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use CGoogleOAuthInterface;
@@ -19,16 +21,16 @@ class GoogleAuthHelper extends AbstractAuthService
 	 * @return CGoogleOAuthInterface
 	 *
 	 * @throws RepositoryReadException
+	 * @throws AuthorizationException
+	 * @throws NotAuthorizedException
 	 */
 	public static function getUserAuthEntity(int $userId): CGoogleOAuthInterface
 	{
-		/** @noinspection PhpUnhandledExceptionInspection */
 		if (!Loader::includeModule('socialservices'))
 		{
 			throw new LogicException('The module "socialservices" did not loaded but user is authorized');
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
 		if (\CSocServGoogleProxyOAuth::isProxyAuth())
 		{
 			$auth = new \CSocServGoogleProxyOAuth($userId);
@@ -39,29 +41,22 @@ class GoogleAuthHelper extends AbstractAuthService
 		}
 
 		$authEntity = $auth->getEntityOAuth();
+
 		$authEntity->addScope([
 			'https://www.googleapis.com/auth/calendar',
-			'https://www.googleapis.com/auth/calendar.readonly'
+			'https://www.googleapis.com/auth/calendar.readonly',
 		]);
 		$authEntity->removeScope('https://www.googleapis.com/auth/drive');
 
 		$authEntity->setUser($userId);
 
-		$tokens = self::getStoredTokens($userId);
+		$authEntity->GetAccessToken();
 
-		if ($tokens)
+		if (!$authEntity->GetAccessToken())
 		{
-			$authEntity->setToken($tokens['OATOKEN']);
-			$authEntity->setAccessTokenExpires($tokens['OATOKEN_EXPIRES']);
-			$authEntity->setRefreshToken($tokens['REFRESH_TOKEN']);
-		}
-
-		if (!$authEntity->checkAccessToken())
-		{
-			$authEntity->getNewAccessToken(
-				$authEntity->getRefreshToken(),
-				$userId,
-				true,
+			throw new AuthorizationException(
+				sprintf('Unable to get Google OAuth token for user %d', $userId),
+				401,
 			);
 		}
 

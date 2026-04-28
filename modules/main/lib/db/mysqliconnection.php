@@ -132,7 +132,7 @@ class MysqliConnection extends MysqlCommonConnection
 	/**
 	 * @inheritDoc
 	 */
-	protected function queryInternal($sql, array $binds = null, Diag\SqlTrackerQuery $trackerQuery = null)
+	protected function queryInternal($sql, ?array $binds = null, ?Diag\SqlTrackerQuery $trackerQuery = null)
 	{
 		$this->connectInternal();
 
@@ -155,7 +155,7 @@ class MysqliConnection extends MysqlCommonConnection
 	/**
 	 * @inheritDoc
 	 */
-	protected function createResult($result, Diag\SqlTrackerQuery $trackerQuery = null)
+	protected function createResult($result, ?Diag\SqlTrackerQuery $trackerQuery = null)
 	{
 		return new MysqliResult($result, $this, $trackerQuery);
 	}

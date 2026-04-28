@@ -114,11 +114,14 @@ abstract class ViewComponent extends \CBitrixComponent
 			}
 			elseif(isset($this->arParams['TEMPLATE_ID']) && isset($this->arParams['PROVIDER']) && isset($this->arParams['VALUE']))
 			{
-				if(!$userPermissions->canModifyDocuments())
+				$templateId = (int)$this->arParams['TEMPLATE_ID'];
+
+				if(!$userPermissions->canCreateDocumentOnTemplate($templateId))
 				{
 					return $result->addError(new Error(Loc::getMessage('DOCGEN_DOCUMENT_MODIFY_PERMISSION_ERROR')));
 				}
-				$template = Template::loadById($this->arParams['TEMPLATE_ID']);
+
+				$template = Template::loadById($templateId);
 				if($template && !$template->isDeleted())
 				{
 					$template->setSourceType($this->arParams['PROVIDER']);

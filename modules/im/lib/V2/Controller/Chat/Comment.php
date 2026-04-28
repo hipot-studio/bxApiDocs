@@ -6,6 +6,7 @@ use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Controller\BaseController;
 use Bitrix\Im\V2\Controller\Filter\ChatTypeFilter;
+use Bitrix\Im\V2\Reading\Reader;
 
 class Comment extends BaseController
 {
@@ -51,9 +52,9 @@ class Comment extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.Comment.readAll
 	 */
-	public function readAllAction(Chat\ChannelChat $chat): ?array
+	public function readAllAction(Chat\ChannelChat $chat, Reader $reader): ?array
 	{
-		$chat->realAllComments();
+		$reader->readChildren($chat, $this->getCurrentUser()->getId());
 
 		return ['result' => true];
 	}

@@ -24,7 +24,6 @@ class CControllerGroup
 			unset($arFields['ID']);
 		}
 
-		global $DB;
 		if (($ID === false || is_set($arFields, 'NAME')) && $arFields['NAME'] == '')
 		{
 			$arMsg[] = ['id' => 'NAME', 'text' => GetMessage('CTRLR_GRP_ERR_NAME')];
@@ -53,7 +52,7 @@ class CControllerGroup
 		}
 		if ($ID === false && !is_set($arFields, 'DATE_CREATE'))
 		{
-			$arFields['~DATE_CREATE'] = $DB->CurrentTimeFunction();
+			$arFields['~DATE_CREATE'] = CDatabase::CurrentTimeFunction();
 		}
 
 		return true;
@@ -74,7 +73,7 @@ class CControllerGroup
 		}
 
 		unset($arFields['TIMESTAMP_X']);
-		$arFields['~TIMESTAMP_X'] = $DB->CurrentTimeFunction();
+		$arFields['~TIMESTAMP_X'] = CDatabase::CurrentTimeFunction();
 
 		$ID = $DB->Add('b_controller_group', $arFields, ['DESCRIPTION', 'INSTALL_INFO', 'UNINSTALL_INFO', 'INSTALL_PHP', 'UNINSTALL_PHP']);
 
@@ -123,7 +122,7 @@ class CControllerGroup
 		}
 
 		unset($arFields['TIMESTAMP_X']);
-		$arFields['~TIMESTAMP_X'] = $DB->CurrentTimeFunction();
+		$arFields['~TIMESTAMP_X'] = CDatabase::CurrentTimeFunction();
 
 		$arUpdateBinds = [];
 		$strUpdate = $DB->PrepareUpdateBind('b_controller_group', $arFields, '', false, $arUpdateBinds);
@@ -358,7 +357,7 @@ class CControllerGroup
 		}
 
 		$arUpdateFields = [
-			'~DATE_CREATE' => $DB->CurrentTimeFunction(),
+			'~DATE_CREATE' => CDatabase::CurrentTimeFunction(),
 			'INIT_EXECUTE' => ($php_script ?: false),
 			'INIT_EXECUTE_PARAMS' => ($arParameters ? serialize($arParameters) : false),
 		];
@@ -373,7 +372,7 @@ class CControllerGroup
 		';
 
 		$arInsertFields = [
-			'~DATE_CREATE' => $DB->CurrentTimeFunction(),
+			'~DATE_CREATE' => CDatabase::CurrentTimeFunction(),
 			'TASK_ID' => $task_id,
 			'INIT_EXECUTE' => ($php_script ?: false),
 			'INIT_EXECUTE_PARAMS' => ($arParameters ? serialize($arParameters) : false),

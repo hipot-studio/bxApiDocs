@@ -25,7 +25,7 @@ abstract class Rule implements \JsonSerializable
 	 * @param mixed $value
 	 * @param array|null $options
 	 */
-	public function __construct($title, $value = 0, array $options = null)
+	public function __construct($title, $value = 0, ?array $options = null)
 	{
 		$this->title = $title;
 		$this->value = $value;

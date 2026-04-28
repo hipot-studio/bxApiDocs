@@ -253,7 +253,7 @@ class Action
 				'connectorId' => Option::get('biconnector', GoogleDataStudio::OPTION_DEPLOYMENT_ID),
 				'connectorConfig' => Json::encode([
 					'server_name' => Option::get('main', 'server_name', $host),
-					'key' => $accessKey . LANGUAGE_ID,
+					'key' => $accessKey,
 					'table' => $content['DATA']['table'] ?? '',
 				]),
 				'reportTemplateId' => $content['DATA']['reportTemplateId'],

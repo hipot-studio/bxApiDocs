@@ -1,6 +1,8 @@
 <?php
 
 use Bitrix\Ldap\Internal\ImageType;
+use Bitrix\Ldap\Internal\Networking\Ip;
+use Bitrix\Ldap\Internal\Networking\Subnet;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -62,181 +64,6 @@ class CLdapUtil
 		return $arSyncFields;
 	}
 
-	public static function MkOperationFilter($key)
-	{
-		if(mb_substr($key, 0, 1) == "!")
-		{
-			$key = mb_substr($key, 1);
-			$cOperationType = "N";
-		}
-		elseif(mb_substr($key, 0, 1) == "?")
-		{
-			$key = mb_substr($key, 1);
-			$cOperationType = "?";
-		}
-		elseif(mb_substr($key, 0, 2) == ">=")
-		{
-			$key = mb_substr($key, 2);
-			$cOperationType = "GE";
-		}
-		elseif(mb_substr($key, 0, 1) == ">")
-		{
-			$key = mb_substr($key, 1);
-			$cOperationType = "G";
-		}
-		elseif(mb_substr($key, 0, 2) == "<=")
-		{
-			$key = mb_substr($key, 2);
-			$cOperationType = "LE";
-		}
-		elseif(mb_substr($key, 0, 1) == "<")
-		{
-			$key = mb_substr($key, 1);
-			$cOperationType = "L";
-		}
-		else
-			$cOperationType = "E";
-
-		return Array("FIELD"=>$key, "OPERATION"=>$cOperationType);
-	}
-
-	public static function FilterCreate($fname, $vals, $type, $cOperationType=false, $bSkipEmpty = true)
-	{
-		return CLdapUtil::FilterCreateEx($fname, $vals, $type, $bFullJoin, $cOperationType, $bSkipEmpty);
-	}
-
-	public static function FilterCreateEx($fname, $vals, $type, &$bFullJoin, $cOperationType=false, $bSkipEmpty = true)
-	{
-		global $DB;
-		if(!is_array($vals))
-			$vals=Array($vals);
-
-		if(count($vals)<1)
-			return "";
-		if(is_bool($cOperationType))
-		{
-			if($cOperationType===true)
-				$cOperationType = "N";
-			else
-				$cOperationType = "E";
-		}
-
-		if($cOperationType=="G")
-			$strOperation = ">";
-		elseif($cOperationType=="GE")
-			$strOperation = ">=";
-		elseif($cOperationType=="LE")
-			$strOperation = "<=";
-		elseif($cOperationType=="L")
-			$strOperation = "<";
-		else
-			$strOperation = "=";
-
-		$bFullJoin = false;
-		$bWasLeftJoin = false;
-
-		$res = Array();
-		for($i=0, $c=count($vals); $i < $c; $i++)
-		{
-			$val = $vals[$i];
-			if(!$bSkipEmpty || $val <> '' || (is_bool($val) && $val===false))
-			{
-				switch ($type)
-				{
-				case "string_equal":
-					if($cOperationType=="?")
-					{
-						if($val <> '')
-							$res[] = GetFilterQuery($fname, $val, "N");
-					}
-					else
-					{
-						if($val == '')
-							$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL OR ".$DB->Length($fname)."<=0)";
-						else
-							$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".CLdapUtil::_Upper($fname).$strOperation.CLdapUtil::_Upper("'".$DB->ForSql($val)."'").")";
-					}
-					break;
-				case "string":
-					if($cOperationType=="?")
-					{
-						if($val <> '')
-						{
-							$sr = GetFilterQuery($fname, $val, "Y", array(), "N");
-							if($sr != "0")
-								$res[] = $sr;
-						}
-					}
-					else
-					{
-						if($val == '')
-							$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL OR ".$DB->Length($fname)."<=0)";
-						else
-							if($strOperation=="=")
-								$res[] = ($cOperationType == "N" ? " " . $fname . " IS NULL OR NOT " : "") . "(" . $fname . " LIKE '" . $DB->ForSqlLike($val) . "')";
-							else
-								$res[] = ($cOperationType == "N" ? " " . $fname . " IS NULL OR NOT " : "") . "(" . $fname . " " . $strOperation . " '" . $DB->ForSql($val) . "')";
-					}
-					break;
-				case "date":
-					if($val == '')
-						$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL)";
-					else
-						$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".$fname." ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "FULL").")";
-					break;
-				case "number":
-					if($cOperationType=="?")
-					{
-						$sqlHelper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
-
-						$res[] = "(" . $sqlHelper->castToChar($fname) . " LIKE '%" . $DB->ForSqlLike(trim($val)) . "%' AND " . $fname . " IS NOT NULL)";
-					}
-					else
-					{
-						if($val == '')
-							$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL)";
-						else
-							$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".$fname." ".$strOperation." '".DoubleVal($val)."')";
-					}
-					break;
-				case "number_above":
-					if($val == '')
-						$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL)";
-					else
-						$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".$fname." ".$strOperation." '".$DB->ForSql($val)."')";
-					break;
-				}
-
-				// we need this conditions to do INNER JOIN
-				if($val <> '' && $cOperationType!="N")
-					$bFullJoin = true;
-				else
-					$bWasLeftJoin = true;
-			}
-		}
-
-		$strResult = "";
-		for($i=0, $c=count($res); $i < $c; $i++)
-		{
-			if($i>0)
-				$strResult .= ($cOperationType=="N"?" AND ":" OR ");
-			$strResult .= "(".$res[$i].")";
-		}
-		if($strResult!="")
-			$strResult = "(".$strResult.")";
-
-		if($bFullJoin && $bWasLeftJoin && $cOperationType!="N")
-			$bFullJoin = false;
-
-		return $strResult;
-	}
-
-	public static function _Upper($str)
-	{
-		global $DB;
-		return ($DB->type === 'PGSQL' ? 'UPPER(' . $str . ')' : $str);
-	}
-
 	// gets department list from system (iblock) for displaying in select box
 	public static function getDepartmentListFromSystem($arFilter = Array())
 	{
@@ -296,25 +123,31 @@ class CLdapUtil
 
 	public static function OnAfterUserAuthorizeHandler()
 	{
-		if(defined("LDAP_NO_PORT_REDIRECTION"))
+		if (defined('LDAP_NO_PORT_REDIRECTION'))
+		{
 			return false;
+		}
 
 		global $USER;
 
-		if($USER->IsAuthorized())
+		if ($USER->IsAuthorized())
 		{
-			$authNet = COption::GetOptionString("ldap", 'bitrixvm_auth_net', '');
+			$subnet = Subnet::forAuthentication();
+			if ($subnet && Ip::current()->outsideOf($subnet))
+			{
+				return false;
+			}
 
-			if (trim($authNet))
-				if(self::IsIpFromNet($_SERVER['REMOTE_ADDR'],$authNet)===false)
-					return false;
+			$backUrl = $_GET['back_url'] ?? '/';
 
-			$backUrl = isset($_GET['back_url']) ? $_GET['back_url'] : "/";
-
-			if ($_SERVER['SERVER_PORT'] == '8890')
-				LocalRedirect('http://'.$_SERVER["SERVER_NAME"].$backUrl);
-			if ($_SERVER['SERVER_PORT'] == '8891')
-				LocalRedirect('https://'.$_SERVER["SERVER_NAME"].$backUrl);
+			if ($_SERVER['SERVER_PORT'] === '8890')
+			{
+				LocalRedirect('http://' . $_SERVER['SERVER_NAME'] . $backUrl);
+			}
+			elseif ($_SERVER['SERVER_PORT'] === '8891')
+			{
+				LocalRedirect('https://' . $_SERVER['SERVER_NAME'] . $backUrl);
+			}
 		}
 
 		return true;
@@ -327,25 +160,31 @@ class CLdapUtil
 
 	public static function bitrixVMAuthorize()
 	{
-		if(defined("LDAP_NO_PORT_REDIRECTION"))
+		if (defined('LDAP_NO_PORT_REDIRECTION'))
+		{
 			return false;
+		}
 
 		global $USER, $APPLICATION;
 
-		if(!$USER->IsAuthorized())
+		if (!$USER->IsAuthorized())
 		{
-			$authNet = COption::GetOptionString("ldap", 'bitrixvm_auth_net', '');
+			$subnet = Subnet::forAuthentication();
+			if ($subnet && Ip::current()->outsideOf($subnet))
+			{
+				return false;
+			}
 
-			if (trim($authNet))
-				if(self::IsIpFromNet($_SERVER['REMOTE_ADDR'],$authNet)===false)
-					return false;
+			$backUrl = mb_strlen($APPLICATION->GetCurPage()) > 1 ? '?back_url=' . rawurlencode($APPLICATION->GetCurUri()) : '';
 
-			$backUrl= mb_strlen($APPLICATION->GetCurPage()) > 1 ? "?back_url=".rawurlencode($APPLICATION->GetCurUri()) : "";
-
-			if ($_SERVER['SERVER_PORT'] == '80')
-				LocalRedirect('http://'.$_SERVER["SERVER_NAME"].':8890/'.$backUrl, true);
-			elseif (($_SERVER['SERVER_PORT'] == '443'))
-				LocalRedirect('https://'.$_SERVER["SERVER_NAME"].':8891/'.$backUrl, true);
+			if ($_SERVER['SERVER_PORT'] === '80')
+			{
+				LocalRedirect('http://' . $_SERVER['SERVER_NAME'] . ':8890/' . $backUrl, true);
+			}
+			elseif (($_SERVER['SERVER_PORT'] === '443'))
+			{
+				LocalRedirect('https://' . $_SERVER['SERVER_NAME'] . ':8891/' . $backUrl, true);
+			}
 		}
 
 		return true;
@@ -380,53 +219,17 @@ class CLdapUtil
 	}
 
 	/**
-	 * decides if ip address is from given network/mask;network1/mask1;network2/mask2;...
+	 * Decides if ip address is from given network/mask;network1/mask1;network2/mask2;...
+	 * @deprecated Use \Bitrix\Ldap\Internal\Networking\Subnet instead
 	 * @param string $ip - valid ip address  - xxx.xxx.xxx.xxx
 	 * @param string $netsAndMasks - valid mask/network - xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx;xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx;... or xxx.xxx.xxx.xxx/xx;xxx.xxx.xxx.xxx/xx;...
 	 * @return bool true - if in, bool false - not in, or bad params
 	 */
 	public static function IsIpFromNet($ip, $netsAndMasks)
 	{
-		if((string)$ip === "")
-		{
-			return false;
-		}
+		$subnet = new Subnet((string)$netsAndMasks);
 
-		if((string)$netsAndMasks === "")
-		{
-			return false;
-		}
-
-		$arNetsMasks = explode(";", $netsAndMasks);
-
-		foreach ($arNetsMasks as $netAndMask)
-		{
-			$netAndMask = trim($netAndMask);
-
-			if(!$netAndMask)
-				continue;
-
-			if((!preg_match("#^(\d{1,3}\.){3,3}(\d{1,3})/(\d{1,3}\.){3,3}(\d{1,3})$#",$netAndMask) && !preg_match("#^(\d{1,3}\.){3,3}(\d{1,3})/(\d{1,3})$#",$netAndMask)) || !preg_match("#^(\d{1,3}\.){3,3}(\d{1,3})$#",$ip))
-				continue;
-
-			$arNetAndMask = explode("/", $netAndMask);
-
-			$net = $arNetAndMask[0];
-
-			if(mb_strpos($arNetAndMask[1], ".") !== false) 										//xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx
-				$mask = $arNetAndMask[1];
-			else 																			//xxx.xxx.xxx.xxx/xx -> xxx.xxx.xxx.xxx/xxx.xxx.xxx.xxx
-				$mask=long2ip('11111111111111111111111111111111'<<(32-$arNetAndMask[1]));
-
-			$newNet = long2ip(ip2long($ip) & ip2long($mask));
-
-			if($newNet == $net)
-				return true;
-			else
-				continue;
-		}
-
-		return false;
+		return $subnet->includes((string)$ip);
 	}
 
 	/**
@@ -444,6 +247,10 @@ class CLdapUtil
 			: $imageType->value;
 	}
 
+	/**
+	 * @deprecated
+	 * @return bool
+	 */
 	public static function isLdapPaginationAviable(): bool
 	{
 		return true;
@@ -452,6 +259,7 @@ class CLdapUtil
 	/**
 	 * Returns true id defined net range for redirection
 	 * on ntlm authorization ports 8890, 8891
+	 * @deprecated
 	 * @return bool
 	 */
 	public static function isNtlmRedirectNetRangeDefined()
@@ -461,24 +269,31 @@ class CLdapUtil
 	}
 
 	/**
-	 * @param string $serverPort Server port.
-	 * @return bool|string Port for outlook connection.
+	 * @deprecated
+	 * @param string|false $serverPort Server port.
+	 * @return string|false Port for outlook connection.
 	 */
 	public static function getTargetPort($serverPort = false)
 	{
-		if($serverPort === false)
-			$serverPort = $_SERVER["SERVER_PORT"];
+		if ($serverPort === false)
+		{
+			$serverPort = $_SERVER['SERVER_PORT'];
+		}
 
 		$result = false;
 
-		$vmAuth = COption::GetOptionString("ldap", "bitrixvm_auth_support","N") == "Y";
-		$useNtlm = COption::GetOptionString("ldap", "use_ntlm","N") == "Y";
+		$vmAuth = \COption::GetOptionString('ldap', 'bitrixvm_auth_support', 'N') === 'Y';
+		$useNtlm = \COption::GetOptionString('ldap', 'use_ntlm', 'N') === 'Y';
 		$isNtlmOn = $vmAuth && $useNtlm;
 
-		if($serverPort == "80")
-			$result = $isNtlmOn ? "8890" : "80";
-		elseif($serverPort == "443")
-			$result = $isNtlmOn ? "8891" : "443";
+		if ($serverPort === '80')
+		{
+			$result = $isNtlmOn ? '8890' : '80';
+		}
+		elseif ($serverPort == '443')
+		{
+			$result = $isNtlmOn ? '8891' : '443';
+		}
 
 		return $result;
 	}

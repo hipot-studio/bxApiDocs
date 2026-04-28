@@ -26,7 +26,7 @@ class TextWatermark extends Watermark
 	 * @param string $font Full path to a ttf font file.
 	 * @param Color|null $color Text color.
 	 */
-	public function __construct($text, $font, Color $color = null)
+	public function __construct($text, $font, ?Color $color = null)
 	{
 		parent::__construct();
 

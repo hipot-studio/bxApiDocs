@@ -207,6 +207,11 @@ class BaseButton implements Contract\Renderable
 		$attributes = clone $this->getAttributeCollection();
 		$this->appendDefaultJsonOption($attributes);
 
+		if ($this->isDisabled() === false)
+		{
+			$attributes['tabindex'] = "0";
+		}
+
 		switch ($tagName)
 		{
 			case Tag::LINK:
@@ -587,11 +592,15 @@ class BaseButton implements Contract\Renderable
 	{
 		if ($flag === false)
 		{
-			unset($this->getAttributeCollection()['disabled']);
+			unset(
+				$this->getAttributeCollection()['disabled'],
+				$this->getAttributeCollection()['tabindex']
+			);
 		}
 		else
 		{
 			$this->getAttributeCollection()['disabled'] = true;
+			$this->getAttributeCollection()['tabindex'] = "0";
 		}
 
 		return $this;

@@ -20,7 +20,9 @@ class Feature
 	private const TEAM_REPORT_SETTINGS_ARE_AVAILABLE_OPTION_NAME = 'team_reports_settings_available';
 	private const DEPUTY_GET_REPORTS_IS_AVAILABLE_OPTION_NAME = 'deputy_get_reports_available';
 	private const DEPARTMENT_REPORTS_SETTINGS_ARE_AVAILABLE_OPTION_NAME = 'department_reports_settings_available';
-	private const MULTIPLE_USERS_SETTINGS_ARE_AVAILABLE_OPTION_NAME = 'multiple_users_settings_available';
+	private const MULTIPLE_USERS_BP_SETTINGS_ARE_AVAILABLE_OPTION_NAME = 'multiple_users_settings_available';
+	private const MULTIPLE_USERS_REPORT_SETTINGS_ARE_AVAILABLE_OPTION_NAME = 'multiple_users_report_settings_available';
+	private const TEAM_REPORT_EXCEPTIONS_ARE_AVAILABLE_OPTION_NAME = 'team_report_exceptions_available';
 
 	public function isHcmLinkAvailable(): bool
 	{
@@ -64,9 +66,19 @@ class Feature
 		return $this->getOptionValue(self::DEPARTMENT_REPORTS_SETTINGS_ARE_AVAILABLE_OPTION_NAME, 'N') === 'Y';
 	}
 
-	public function areMultipleUsersSettingsAvailable(): bool
+	public function areMultipleUsersBPSettingsAvailable(): bool
 	{
-		return $this->getOptionValue(self::MULTIPLE_USERS_SETTINGS_ARE_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+		return $this->getOptionValue(self::MULTIPLE_USERS_BP_SETTINGS_ARE_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+	}
+
+	public function areMultipleUsersReportSettingsAvailable(): bool
+	{
+		return $this->getOptionValue(self::MULTIPLE_USERS_REPORT_SETTINGS_ARE_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+	}
+
+	public function areTeamReportExceptionsAvailable(): bool
+	{
+		return $this->getOptionValue(self::TEAM_REPORT_EXCEPTIONS_ARE_AVAILABLE_OPTION_NAME, 'N') === 'Y';
 	}
 
 	public function setDeputyApprovesBPAvailable(bool $value): void

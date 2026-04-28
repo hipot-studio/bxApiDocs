@@ -158,6 +158,23 @@ class BotTable extends Main\Entity\DataManager
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateBotCode'),
 			),
+			'EVENT_MODE' => array(
+				'data_type' => 'string',
+				'default_value' => \Bitrix\Im\Bot::EVENT_MODE_WEBHOOK,
+				'validation' => array(__CLASS__, 'validateEventMode'),
+			),
+		);
+	}
+
+	/**
+	 * Returns validators for EVENT_MODE field.
+	 *
+	 * @return array
+	 */
+	public static function validateEventMode()
+	{
+		return array(
+			new Main\Entity\Validator\Length(null, 10),
 		);
 	}
 
@@ -290,6 +307,7 @@ class BotTable extends Main\Entity\DataManager
 			'HIDDEN',
 			'REACTIONS_ENABLED',
 			'BACKGROUND_ID',
+			'EVENT_MODE',
 		];
 
 		return !empty(array_intersect($cacheInvalidatingFields, array_keys($updatedFields)));

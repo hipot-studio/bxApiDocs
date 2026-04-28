@@ -7,13 +7,14 @@ namespace Bitrix\Intranet\User\Command;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Exception\UpdateFailedException;
 use Bitrix\Intranet\Exception\WrongIdException;
+use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Access\UserActionDictionary;
 use Bitrix\Main\Command\AbstractCommand;
 use Bitrix\Main\Error;
+use Bitrix\Main\Event;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Result;
-use Bitrix\Main\Validation\ValidationResult;
 
 /**
  * Delete user if invited
@@ -23,6 +24,9 @@ use Bitrix\Main\Validation\ValidationResult;
  */
 class DeleteOrFireUserCommand extends AbstractCommand
 {
+	private ?User $firedUser = null;
+	private bool $wasIntegrator = false;
+
 	public function __construct(
 		public readonly User $user,
 	)
@@ -32,6 +36,8 @@ class DeleteOrFireUserCommand extends AbstractCommand
 	protected function execute(): Result
 	{
 		$result = new Result();
+
+		$this->wasIntegrator = $this->user->isIntegrator();
 
 		$userService = ServiceContainer::getInstance()->getUserService();
 		$isActionAvailable = $userService->isActionAvailableForUser($this->user, UserActionDictionary::FIRE)
@@ -45,9 +51,9 @@ class DeleteOrFireUserCommand extends AbstractCommand
 		try
 		{
 			$userRepository = ServiceContainer::getInstance()->userRepository();
-			$userService = ServiceContainer::getInstance()->getUserService();
 			$handler = new DeleteOrFireUserHandler($userRepository, $userService);
 			$handler($this);
+			$this->firedUser = $this->resolveFiredUser($userRepository);
 
 			return $result;
 		}
@@ -68,7 +74,36 @@ class DeleteOrFireUserCommand extends AbstractCommand
 	public function toArray(): array
 	{
 		return [
-			'user' => $this->user->toArray()
+			'user' => $this->user->toArray(),
 		];
+	}
+
+	protected function afterRun(): void
+	{
+		if ($this->firedUser && $this->wasIntegrator)
+		{
+			(new Event('intranet', 'onIntegratorUserFired', [
+				'user' => $this->firedUser,
+			]))->send();
+		}
+	}
+
+	private function resolveFiredUser(UserRepository $userRepository): ?User
+	{
+		$userId = (int)$this->user->getId();
+
+		if ($userId <= 0)
+		{
+			return null;
+		}
+
+		$updatedUser = $userRepository->getUserById($userId);
+
+		if (!$updatedUser || $updatedUser->getActive() !== false)
+		{
+			return null;
+		}
+
+		return $updatedUser;
 	}
 }

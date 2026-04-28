@@ -7,7 +7,7 @@ use Bitrix\Main\Web\HttpClient;
 
 class Facebook extends Oembed
 {
-	public function handle(HtmlDocument $document, HttpClient $httpClient = null)
+	public function handle(HtmlDocument $document, ?HttpClient $httpClient = null)
 	{
 		parent::handle($document);
 

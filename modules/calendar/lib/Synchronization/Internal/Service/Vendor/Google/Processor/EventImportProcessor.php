@@ -43,7 +43,7 @@ class EventImportProcessor extends AbstractEventImportProcessor
 
 		foreach ($externalEvents as $vendorId => $externalEventData)
 		{
-			$localEventData = $this->map->get($vendorId);
+			$localEventData = $this->map->get((string)$vendorId);
 
 			if (!$this->shouldEventBeProceed($externalEventData, $localEventData))
 			{

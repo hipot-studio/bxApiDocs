@@ -124,8 +124,8 @@ class WooppayHandler extends Sale\PaySystem\ServiceHandler implements Sale\PaySy
 	private function getTemplateParams(Sale\Payment $payment): array
 	{
 		return [
-			'sum' => Sale\PriceMaths::roundPrecision($payment->getSum()),
-			'currency' => $payment->getField('CURRENCY'),
+			'sum' => Sale\PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency()),
+			'currency' => $payment->getCurrency(),
 		];
 	}
 
@@ -837,13 +837,14 @@ class WooppayHandler extends Sale\PaySystem\ServiceHandler implements Sale\PaySy
 	 */
 	private function isSumCorrect(Sale\Payment $payment, $sum): bool
 	{
+		$currency = $payment->getCurrency();
 		Sale\PaySystem\Logger::addDebugInfo(
 			__CLASS__
-			.': WooppaySum = '.Sale\PriceMaths::roundPrecision($sum)
-			.'; paymentSum = '.Sale\PriceMaths::roundPrecision($payment->getSum())
+			. ': WooppaySum = ' . Sale\PriceMaths::roundByFormatCurrency($sum, $currency)
+			. '; paymentSum = ' . Sale\PriceMaths::roundByFormatCurrency($payment->getSum(), $currency)
 		);
 
-		return Sale\PriceMaths::roundPrecision($sum) === Sale\PriceMaths::roundPrecision($payment->getSum());
+		return Sale\PriceMaths::roundByFormatCurrency($sum, $currency) === Sale\PriceMaths::roundByFormatCurrency($payment->getSum(), $currency);
 	}
 
 	/**

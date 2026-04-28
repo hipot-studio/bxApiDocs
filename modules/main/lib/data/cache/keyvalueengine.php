@@ -21,6 +21,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 	protected static bool $isConnected = false;
 	protected static array $baseDirVersion = [];
 	protected static array $initDirPartitions = [];
+	protected static array $cleanPath = [];
 	protected string $sid = 'BX';
 	protected bool $useLock = false;
 	protected int $ttlMultiplier = 2;
@@ -475,8 +476,18 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 		{
 			$baseListKey = $this->sid . '|' . $baseDirVersion . '|' . self::BX_BASE_LIST;
 			$baseListKeyPartition = $this->getPartition($initListKeyPartition);
-			$this->addToSet($baseListKey . $baseListKeyPartition, $keyPrefix);
-			$this->addToSet($baseListKey, $baseListKeyPartition);
+
+			if (!isset(self::$cleanPath[$baseListKey][$baseListKeyPartition]))
+			{
+				$this->addToSet($baseListKey, $baseListKeyPartition);
+				self::$cleanPath[$baseListKey][$baseListKeyPartition] = true;
+			}
+
+			if (!isset(self::$cleanPath[$baseListKey][$baseListKeyPartition][$keyPrefix]))
+			{
+				$this->addToSet($baseListKey . $baseListKeyPartition, $keyPrefix);
+				self::$cleanPath[$baseListKey][$baseListKeyPartition][$keyPrefix] = true;
+			}
 		}
 
 		if (Cache::getShowCacheStat())
@@ -575,6 +586,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 
 				$this->set($this->sid . '|needClean', 3600, 'Y');
 				$this->del($baseListKey);
+				unset(self::$cleanPath[$baseListKey]);
 				$this->useLock = $useLock;
 			}
 

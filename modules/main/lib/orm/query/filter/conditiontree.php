@@ -654,7 +654,7 @@ class ConditionTree
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
-	protected function convertValue($value, IReadable $field = null)
+	protected function convertValue($value, ?IReadable $field = null)
 	{
 		// any sql expression
 		if ($value instanceof SqlExpression)
@@ -707,7 +707,7 @@ class ConditionTree
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
-	protected function convertValues($values, IReadable $field = null)
+	protected function convertValues($values, ?IReadable $field = null)
 	{
 		foreach ($values as $k => $value)
 		{

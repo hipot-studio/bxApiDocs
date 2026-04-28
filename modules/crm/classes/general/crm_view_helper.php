@@ -2332,7 +2332,7 @@ class CCrmViewHelper
 			return '';
 		}
 
-		Extension::load('crm.stage.permission-checker');
+		Extension::load(['crm.stage.permission-checker', 'intranet.old-interface.intranet-common']);
 		\Bitrix\Main\Page\Asset::getInstance()->addJs('/bitrix/js/crm/progress_control.js');
 		\Bitrix\Main\Page\Asset::getInstance()->addJs('/bitrix/js/crm/partial_entity_editor.js');
 		\Bitrix\Main\Page\Asset::getInstance()->addCss('/bitrix/js/crm/css/crm.css');

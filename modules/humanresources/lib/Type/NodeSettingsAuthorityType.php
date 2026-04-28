@@ -13,6 +13,7 @@ enum NodeSettingsAuthorityType: string
 {
 	case DepartmentHead = 'HEAD';
 	case DepartmentDeputy = 'DEPUTY_HEAD';
+	case AllDepartmentHeads = 'ALL_DEPARTMENT_HEADS';
 	case DepartmentEmployee = 'EMPLOYEE';
 	case TeamHead = 'TEAM_HEAD';
 	case TeamDeputy = 'TEAM_DEPUTY';

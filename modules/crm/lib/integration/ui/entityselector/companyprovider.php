@@ -18,7 +18,7 @@ class CompanyProvider extends EntityProvider
 	protected bool $showPhones = false;
 	protected bool $showMails = false;
 	protected bool $hideReadMoreLink = false;
-	protected $categoryId;
+	protected int $categoryId;
 
 	use FilterByIds;
 	use FilterByEmails;
@@ -76,7 +76,7 @@ class CompanyProvider extends EntityProvider
 
 	protected function getCategoryId(): int
 	{
-		return $this->options['categoryId'];
+		return $this->categoryId;
 	}
 
 	protected function fetchEntryIds(array $filter): array

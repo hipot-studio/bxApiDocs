@@ -57,6 +57,7 @@ final class Registry
 
 	private static $registryMap = [];
 	private static $registryObjects = [];
+	private static bool $disableEvents = false;
 	private $type = '';
 	private static $initData = [
 		Registry::REGISTRY_TYPE_ORDER => [
@@ -146,6 +147,11 @@ final class Registry
 	{
 		self::$registryMap = self::$initData;
 
+		if (self::$disableEvents)
+		{
+			return;
+		}
+
 		$event = new Main\Event('sale', self::EVENT_ON_INIT_REGISTRY_LIST);
 		$event->send();
 		$resultList = $event->getResults();
@@ -221,6 +227,16 @@ final class Registry
 	{
 		self::$registryMap = [];
 		self::$registryObjects = [];
+	}
+
+	public static function disableEvents() : void
+	{
+		self::$disableEvents = true;
+	}
+
+	public static function enableEvents() : void
+	{
+		self::$disableEvents = false;
 	}
 
 	/**

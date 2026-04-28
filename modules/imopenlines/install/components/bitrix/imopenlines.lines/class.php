@@ -63,7 +63,7 @@ class CImOpenLinesListComponent extends \CBitrixComponent
 			$result[$id] = $config;
 		}
 
-		$this->arResult['PERM_CAN_EDIT'] = true;
+		$this->arResult['PERM_CAN_EDIT'] = $this->userPermissions->canModifyLines();
 		$this->arResult['LINES'] = $result;
 		$this->arResult['PUBLIC_PATH'] = \Bitrix\ImOpenLines\Common::getContactCenterPublicFolder();
 		$this->arResult['PATH_TO_EDIT'] = \Bitrix\ImOpenLines\Common::getContactCenterPublicFolder() . 'lines_edit/?ID=#ID#';

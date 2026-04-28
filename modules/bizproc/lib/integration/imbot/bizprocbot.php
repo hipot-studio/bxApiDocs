@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Integration\ImBot;
 
 use Bitrix\Bizproc\Error;
+use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
 use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Result;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
@@ -193,6 +194,15 @@ class BizprocBot extends Base
 		$chatId = (int)($messageFields[self::MESSAGE_FIELD_TO_CHAT_ID] ?? $messageFields['CHAT_ID'] ?? 0);
 		if ($botId === 0 || $chatId === 0)
 		{
+			return false;
+		}
+
+		$aiAgentsFeature = new AiAgentsFeature();
+		if (!$aiAgentsFeature->isAvailable())
+		{
+			$dialogId = (string)($messageFields[self::FIELD_DIALOG_ID] ?? '');
+			self::sendError($botId, $dialogId, (string)Loc::getMessage('BIZPROC_IMBOT_BIZPROCBOT_UNAVAILABLE_BY_TARIFF'));
+
 			return false;
 		}
 

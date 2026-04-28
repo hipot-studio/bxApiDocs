@@ -20,6 +20,7 @@ use Bitrix\Im\V2\Message\Delete\DeleteService;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Message\MessageService;
 use Bitrix\Im\V2\Permission\Action;
+use Bitrix\Im\V2\Reading\Reader;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
@@ -152,18 +153,11 @@ class Message extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.Message.read
 	 */
-	public function readAction(MessageCollection $messages): ?array
+	public function readAction(Reader $reader, CurrentUser $user, MessageCollection $messages): ?array
 	{
-		$readResult = Chat::getInstance($messages->getCommonChatId())->readMessages($messages);
+		$readResult = $reader->read($messages, (int)$user->getId());
 
-		if (!$readResult->isSuccess())
-		{
-			$this->addErrors($readResult->getErrors());
-
-			return null;
-		}
-
-		return $this->convertKeysToCamelCase($readResult->getResult());
+		return $this->formReadResult($messages->getCommonChat(), $readResult);
 	}
 
 	/**

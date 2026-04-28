@@ -19,6 +19,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardUrlParameterT
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\Main\Config\Option;
@@ -75,22 +76,37 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->arResult['EMBEDDED_DEBUG_MODE'] = $embeddedDebugMode === 'Y';
 	}
 
-	public function executeComponent()
+	private function isComponentAvailable(): bool
 	{
 		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED)
 		{
-			LocalRedirect('/bi/dashboard/');
+			return false;
 		}
 
 		if (!Feature::isBuilderEnabled())
 		{
-			LocalRedirect('/bi/dashboard/');
+			return false;
 		}
 
 		if (
 			Loader::includeModule('intranet')
 			&& !ToolsManager::getInstance()->checkAvailabilityByToolId('crm_bi')
 		)
+		{
+			return false;
+		}
+
+		if (!Superset\DomainLinkService::getInstance()->isLinked())
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	public function executeComponent()
+	{
+		if (!$this->isComponentAvailable())
 		{
 			LocalRedirect('/bi/dashboard/');
 		}
@@ -140,6 +156,14 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			;
 
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage($errorCode);
+			$this->includeComponentTemplate();
+
+			return;
+		}
+
+		if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($this->dashboard->getType()))
+		{
+			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BI_CONNECTOR_SUPERSET_MARKET_DASHBOARD_IS_NOT_AVAILABLE_BY_SUB');
 			$this->includeComponentTemplate();
 
 			return;
@@ -214,7 +238,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->arResult['IS_USE_EXTERNAL_DATASETS'] = $this->dashboard->isUseExternalDatasets();
 		$this->arResult['CAN_SEND_STARTUP_METRIC'] = self::canSendStartupSupersetMetric();
 
-		$this->logDashboardApp();
+		MarketDashboardManager::getInstance()->logDashboardActivity($this->dashboard);
 
 		if (!Feature::isCheckPermissionsByGroup())
 		{
@@ -347,30 +371,5 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			$supersetStatus === SupersetInitializer::SUPERSET_STATUS_READY
 			&& !$metricAlreadySend
 		);
-	}
-
-	private function logDashboardApp(): void
-	{
-		if (!$this->dashboard->getAppId())
-		{
-			return;
-		}
-
-		$clientId = SupersetDashboardTable::getList([
-			'select' => [
-				'REST_APP_CLIENT_ID' => 'APP.CLIENT_ID'
-			],
-			'filter' => [
-				'=APP_ID' => $this->dashboard->getAppId()
-			],
-			'limit' => 1,
-		])->fetch()['REST_APP_CLIENT_ID'] ?? '';
-
-		if ($clientId)
-		{
-			\Bitrix\Rest\UsageStatTable::logBISuperset($clientId, $this->dashboard->getType());
-		}
-
-		\Bitrix\Rest\UsageStatTable::finalize();
 	}
 }

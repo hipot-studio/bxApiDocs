@@ -5,16 +5,24 @@ namespace Bitrix\Main\Controller\Mail;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Mail;
 use Bitrix\Main;
+use Bitrix\Main\Mail;
+use Bitrix\Main\Mail\Sender\UserSenderDataProvider;
 use Bitrix\Main\Error;
 
 class Sender extends Controller
 {
 	public function getSenderDataAction(int $senderId): ?array
 	{
-		$sender = \Bitrix\Main\Mail\Internal\SenderTable::getById($senderId)->fetch();
+		$checkResult = Main\Mail\Sender::canEditSender($senderId);
+		if (!$checkResult->isSuccess())
+		{
+			$this->addErrors($checkResult->getErrors());
 
+			return null;
+		}
+
+		$sender = Main\Mail\Sender::getById($senderId);
 		if (!$sender)
 		{
 			return null;
@@ -39,6 +47,7 @@ class Sender extends Controller
 				'email' => $sender['EMAIL'],
 				'name' => !empty($sender['NAME']) ? $sender['NAME'] : Mail\Sender\UserSenderDataProvider::getUserFormattedName((int)$sender['USER_ID']),
 				'isPublic' => (int)$sender['IS_PUBLIC'] === 1,
+				'useName' => Mail\Sender\UserSenderDataProvider::shouldUseCustomSenderName($sender),
 			]
 		);
 	}
@@ -50,12 +59,27 @@ class Sender extends Controller
 
 	public function getSenderTransitionalDataAction(int $senderId): ?array
 	{
+		if (!$this->canAccessSender($senderId))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIN_MAIL_SENDER_EDIT_ERROR')));
+
+			return null;
+		}
+
 		return Mail\Sender\UserSenderDataProvider::getSenderTransitionalData($senderId);
 	}
 
 	public function getSenderByMailboxIdAction(int $mailboxId, bool $getSenderWithoutSmtp = false): ?array
 	{
-		return Mail\Sender\UserSenderDataProvider::getSenderNameByMailboxId($mailboxId, $getSenderWithoutSmtp);
+		$senders = Main\Mail\Sender::getByParentId($mailboxId, 'mail');
+		if (!empty($senders) && !$this->canAccessSender((int)$senders[0]['ID']))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIN_MAIL_SENDER_EDIT_ERROR')));
+
+			return null;
+		}
+
+		return Mail\Sender\UserSenderDataProvider::getSenderInfoByMailboxId($mailboxId, $getSenderWithoutSmtp);
 	}
 
 	public function getDefaultSenderNameAction(): string
@@ -65,29 +89,34 @@ class Sender extends Controller
 
 	public function submitSenderAction(array $data): ?array
 	{
-		$name = trim((string)($data['name'] ?? ''));
-		$public = $data['public'] === 'Y';
-		$userId = (int)CurrentUser::get()->getId();
+		$userId = (int)$this->getCurrentUser()?->getId();
+		if (!$userId)
+		{
+			$this->addError(new Error('User not found', 'ERR_NO_USER'));
 
+			return null;
+		}
+
+		$useName = ($data['useName'] ?? 'N') === 'Y';
+		$name = $useName ? (trim($data['name'] ?? '')) : '';
 		$email = mb_strtolower(trim((string)($data['email'] ?? '')));
-		if (!check_email($email, true))
+		$isPublic = ($data['public'] ?? 'N') === 'Y';
+		$smtp =  $data['smtp'] ?? [];
+
+		if (empty($smtp) || !is_array($smtp))
 		{
-			$errorCode = empty($email) ? 'MAIN_CONTROLLER_MAIL_SENDER_EMPTY_EMAIL' : 'MAIN_CONTROLLER_MAIL_SENDER_INVALID_EMAIL';
-			$this->addError(new Error(Loc::getMessage($errorCode), 'ERR_INVALID_EMAIL'));
+			$this->addError(new Error(Loc::getMessage('MAIN_CONTROLLER_MAIL_SENDER_AJAX_ERROR'), 'ERR_EMAIL'));
 
 			return null;
 		}
 
-		$senderId = (int)($data['id'] ?? null);
-		if (!$senderId && Mail\Sender::hasUserSenderWithEmail($email))
-		{
-			$this->addError(new Error(Loc::getMessage('MAIN_CONTROLLER_MAIL_SENDER_EXISTS_SENDER'), 'ERR_EXISTS_SENDER'));
+		$fields = [
+			'NAME' => $name,
+			'EMAIL' => $email,
+			'IS_PUBLIC' => $isPublic,
+		];
 
-			return null;
-		}
-
-		$smtp = $data['smtp'] ?? [];
-
+		$senderId = (int)($data['id'] ?? 0);
 		if ($senderId)
 		{
 			$checkResult = Main\Mail\Sender::canEditSender($senderId);
@@ -98,92 +127,65 @@ class Sender extends Controller
 				return null;
 			}
 
-			$sender = Mail\Internal\SenderTable::getById($senderId)->fetch();
-			$userId = (int)$sender['USER_ID'];
-			if (!empty($smtp) && empty($smtp['password']) && $sender['OPTIONS']['smtp'])
-			{
-				$smtp['password'] = $sender['OPTIONS']['smtp']['password'];
-			}
-		}
-
-		if (!empty($smtp))
-		{
-			if (!is_array($smtp))
-			{
-				$this->addError(new Error(Loc::getMessage('MAIN_CONTROLLER_MAIL_SENDER_AJAX_ERROR'), 'ERR_EMAIL'));
-
-				return null;
-			}
-
-			$result = Mail\Sender::prepareSmtpConfigForSender($smtp);
-
-			if (!$result->isSuccess())
-			{
-				$error = $result->getErrors()[0];
-				$this->addError(new Error($error->getMessage(), 'ERR_SMTP_CONFIG'));
-
-				return null;
-			}
-		}
-
-		$fields = [
-			'NAME' => $name,
-			'EMAIL' => $email,
-			'USER_ID' => $userId,
-			'IS_CONFIRMED' => true,
-			'IS_PUBLIC' => $public,
-			'OPTIONS' => [],
-		];
-
-		if (!empty($smtp))
-		{
 			$fields['OPTIONS']['smtp'] = $smtp;
-		}
-
-		if (!$senderId)
-		{
-			$result = Main\Mail\Sender::add($fields);
-
-			if (!empty($result['error']))
-			{
-				$this->addError($result['error']);
-
-				return null;
-			}
-
-			if (!empty($result['errors']))
-			{
-				$this->addError($result['errors'][0]);
-
-				return null;
-			}
-
-			$senderId = $result['senderId'] ?? null;
-		}
-		else
-		{
-			$updateResult = Mail\Internal\SenderTable::update($senderId, $fields);
-
-			if(!$updateResult->isSuccess())
+			$fields['OPTIONS']['useSenderName'] = $useName;
+			$updateResult = Mail\Sender::updateSender($senderId, $fields);
+			if (!$updateResult->isSuccess())
 			{
 				$this->addError($updateResult->getErrors()[0]);
 
 				return null;
 			}
+
+			return [
+				'senderId' => $senderId,
+				'name' => UserSenderDataProvider::getSenderNameBySender($fields, $userId),
+			];
 		}
 
-		if ($smtp && $smtp['limit'] !== null)
+		if (Mail\Sender::hasUserSenderWithEmail($email))
 		{
-			Main\Mail\Sender::setEmailLimit($email, $smtp['limit']);
+			$this->addError(new Error(Loc::getMessage('MAIN_CONTROLLER_MAIL_SENDER_EXISTS_SENDER'), 'ERR_EXISTS_SENDER'));
+
+			return null;
 		}
-		elseif ($smtp && !isset($smtp['limit']))
+
+		$result = Mail\Sender::prepareSmtpConfigForSender($smtp);
+		if (!$result->isSuccess())
 		{
-			Main\Mail\Sender::removeEmailLimit($email);
+			$error = $result->getErrors()[0];
+			$this->addError(new Error($error->getMessage(), 'ERR_SMTP_CONFIG'));
+
+			return null;
 		}
+
+		$fields['USER_ID'] = $userId;
+		$fields['IS_CONFIRMED'] = true;
+		$fields['OPTIONS']['smtp'] = $smtp;
+		$fields['OPTIONS']['useSenderName'] = $useName;
+
+		$result = Main\Mail\Sender::add($fields);
+
+		if (!empty($result['error']))
+		{
+			$this->addError($result['error']);
+
+			return null;
+		}
+
+		if (!empty($result['errors']))
+		{
+			$this->addError($result['errors'][0]);
+
+			return null;
+		}
+
+		$this->prepareLimits($smtp, $email);
+		$senderId = $result['senderId'] ?? 0;
 
 		return [
-			'senderId' => $senderId ?? null,
-			'name' => !empty($name) ? $name : Mail\Sender\UserSenderDataProvider::getUserFormattedName($userId),
+			'senderId' => $senderId,
+			'name' => UserSenderDataProvider::getSenderNameBySender($fields, $userId),
 		];
 	}
 
@@ -244,6 +246,62 @@ class Sender extends Controller
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
+		}
+	}
+
+	private function canAccessSender(int $senderId): bool
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		if (!$userId)
+		{
+			return false;
+		}
+
+		$sender = Main\Mail\Sender::getById($senderId);
+		if (!$sender)
+		{
+			return false;
+		}
+
+		if (UserSenderDataProvider::isAdmin())
+		{
+			return true;
+		}
+
+		if ((int)$sender['USER_ID'] === $userId)
+		{
+			return true;
+		}
+
+		if ((int)($sender['IS_PUBLIC'] ?? 0) === 1)
+		{
+			return true;
+		}
+
+		if (
+			$sender['PARENT_MODULE_ID'] === 'mail'
+			&& Main\Loader::includeModule('mail')
+		)
+		{
+			$userMailboxes = \Bitrix\Mail\MailboxTable::getUserMailboxes($userId);
+			if (isset($userMailboxes[$sender['PARENT_ID']]))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function prepareLimits(array $smtp, string $email): void
+	{
+		if ($smtp && $smtp['limit'] !== null)
+		{
+			Main\Mail\Sender::setEmailLimit($email, $smtp['limit']);
+		}
+		elseif ($smtp && !isset($smtp['limit']))
+		{
+			Main\Mail\Sender::removeEmailLimit($email);
 		}
 	}
 }

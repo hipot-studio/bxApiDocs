@@ -59,7 +59,7 @@ class TrustDeviceConfirmation
 		return [
 			'settingsPath' => SITE_DIR . 'company/personal/user/' . $this->userId . '/common_security/?page=otpConnected',
 			'device' => $deviceInfo['displayModel'] ?? '',
-			'platform' => in_array(strtolower($deviceInfo['platform']), ['android', 'ios']) ? strtolower($deviceInfo['platform']) : 'unknown',
+			'platform' => in_array(strtolower($deviceInfo['platform'] ?? ''), ['android', 'ios']) ? strtolower($deviceInfo['platform']) : 'unknown',
 			...$this->personalOtpSettings->getOtpConfig(),
 			'isDeactivated' => !$this->personalOtpSettings->isActivated(),
 			'canSendSms' => (new VerifyPhoneService(new User($this->userId)))->canSendSms(),

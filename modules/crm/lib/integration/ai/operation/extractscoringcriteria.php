@@ -75,7 +75,7 @@ final class ExtractScoringCriteria extends AbstractOperation
 
 	protected static function notifyAboutLimitExceededError(Result $result): void
 	{
-		// not implemented yet
+		// operation is not used in the timeline
 	}
 
 	protected static function onAfterSuccessfulJobFinish(Result $result, ?Context $context = null): void

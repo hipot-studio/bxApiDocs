@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Bitrix\Calendar\Synchronization\Public\Command\Push\Google;
 
+use Bitrix\Calendar\Synchronization\Internal\Exception\PushException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Push\PushManager;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\SystemException;
 
 class SubscribeToPushCommandHandler
@@ -26,7 +28,9 @@ class SubscribeToPushCommandHandler
 	 * @throws ArgumentException
 	 * @throws ObjectException
 	 * @throws ObjectPropertyException
+	 * @throws PushException
 	 * @throws SystemException
+	 * @throws PersistenceException
 	 */
 	public function __invoke(SubscribeToPushCommand $command): void
 	{

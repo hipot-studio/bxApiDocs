@@ -17,6 +17,7 @@ use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Manager;
+use Bitrix\BIConnector\Superset\Config\DatasetSettings;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
@@ -101,6 +102,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$this->initCreateButton();
 		$this->prepareSecondDbConnectWarning();
 		$this->prepareDeleteInstanceWarning();
+		$this->prepareDatasetTypingWarning();
 		$this->arResult['NEED_SHOW_DRAFT_GUIDE'] = $this->isNeedShowGuide('draft_guide');
 		$this->arResult['SUPERSET_STATUS'] = SupersetInitializer::getSupersetStatus();
 	}
@@ -359,6 +361,11 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		{
 			$this->arResult['SHOW_SECOND_DB_KEY_UPDATE'] = true;
 		}
+	}
+
+	private function prepareDatasetTypingWarning(): void
+	{
+		$this->arResult['SHOW_DATASET_TYPING_WARNING'] = !DatasetSettings::isTypingEnabled();
 	}
 
 	private function prepareDeleteInstanceWarning(): void

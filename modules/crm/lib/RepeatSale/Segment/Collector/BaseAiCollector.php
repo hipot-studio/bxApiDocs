@@ -10,7 +10,7 @@ use CCrmOwnerType;
 
 abstract class BaseAiCollector extends BaseCollector
 {
-	protected function createSegmentData(int $entityTypeId, array $filter): SegmentDataInterface
+	protected function createSegmentData(int $entityTypeId, array $filter, int $minimumDaysAfterLastClosedEntity): SegmentDataInterface
 	{
 		if ($entityTypeId !== CCrmOwnerType::Deal)
 		{

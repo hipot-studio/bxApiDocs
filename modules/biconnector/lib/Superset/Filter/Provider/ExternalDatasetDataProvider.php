@@ -29,7 +29,7 @@ class ExternalDatasetDataProvider extends EntityDataProvider
 	{
 		$result = [
 			'TYPE' => $this->createField('TYPE', [
-				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TITLE_TYPE'),
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TITLE_TYPE_MSGVER_1'),
 				'default' => true,
 				'type' => 'list',
 				'partial' => true,
@@ -111,6 +111,12 @@ class ExternalDatasetDataProvider extends EntityDataProvider
 			if (Loader::includeModule('rest'))
 			{
 				$items[ExternalSource\Type::Rest->value] = Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_REST');
+			}
+
+			if (ExternalSource\SourceManager::isExternalSqlConnectionsAvailable())
+			{
+				$items[ExternalSource\Type::Mysql->value] = Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_MYSQL');
+				$items[ExternalSource\Type::Pgsql->value] = Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_PGSQL');
 			}
 
 			return [

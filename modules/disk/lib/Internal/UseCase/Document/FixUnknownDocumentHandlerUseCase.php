@@ -4,9 +4,9 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\UseCase\Document;
 
 use Bitrix\Disk\Document\BitrixHandler;
+use Bitrix\Disk\Public\Command\ChangeDefaultViewerServiceCommand;
 use Bitrix\Main\Diag\ExceptionHandler;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Disk\Configuration;
 use Bitrix\Main\Application;
 use CAdminNotify;
 use Throwable;
@@ -26,7 +26,7 @@ class FixUnknownDocumentHandlerUseCase
 	{
 		try
 		{
-			Configuration::setDefaultViewerService(BitrixHandler::getCode());
+			(new ChangeDefaultViewerServiceCommand(BitrixHandler::getCode()))->run();
 
 			$this->notifyPortalAdmin();
 		}

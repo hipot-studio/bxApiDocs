@@ -21,9 +21,9 @@ class ApacheSupersetControlPanelWorkspaceAnalytic extends CBitrixComponent
 		$menuItems = [
 			[
 				'ID' => 'DATASETS',
-				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_DATASETS'),
-				'URL' => '/bi/dataset/?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER',
-				'IS_ACTIVE' => $currentPage === '/bi/dataset/',
+				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_DATASETS_MSGVER_1'),
+				'URL' => '/bi/table/?IFRAME=Y&IFRAME_TYPE=SIDE_SLIDER',
+				'IS_ACTIVE' => $currentPage === '/bi/table/',
 			],
 			[
 				'ID' => 'CONNECTIONS',

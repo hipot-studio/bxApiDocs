@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Im\Integration\Socialnetwork;
 
+use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Main\Localization\Loc;
 
 class Extranet
@@ -122,18 +123,7 @@ class Extranet
 			return true;
 		}
 
-		$extranetUsers = [];
-		$groups = self::getGroup([], $currentUserId, $filterActiveUser);
-		if (is_array($groups))
-		{
-			foreach ($groups as $group)
-			{
-				foreach ($group['USERS'] as $uid)
-				{
-					$extranetUsers[$uid] = $uid;
-				}
-			}
-		}
+		$extranetUsers = self::getAccessibleExtranetUsers($currentUserId, $filterActiveUser);
 
 		return isset($extranetUsers[$userId]);
 	}
@@ -151,8 +141,57 @@ class Extranet
 			return [];
 		}
 
+		return
+			User::getInstance((int)$currentUserId)->isExtranet()
+				? self::filterByExtranet((int)$currentUserId, $userList)
+				: self::filterByIntranet((int)$currentUserId, $userList)
+		;
+	}
+
+	protected static function filterByExtranet(int $currentUserId, array $userList): array
+	{
+		$extranetUsers = self::getAccessibleExtranetUsers($currentUserId);
+
+		return array_filter($userList, static function($userId) use ($extranetUsers) {
+			return isset($extranetUsers[$userId]);
+		});
+	}
+
+	protected static function filterByIntranet(int $currentUserId, array $userList): array
+	{
+		$intranetUsers = [];
+		$extranetUsers = [];
+
+		foreach ($userList as $userId)
+		{
+			if (User::getInstance($userId)->isExtranet())
+			{
+				$extranetUsers[$userId] = $userId;
+			}
+			else
+			{
+				$intranetUsers[$userId] = $userId;
+			}
+		}
+
+		if (empty($extranetUsers))
+		{
+			return $intranetUsers;
+		}
+
+		$accessibleExtranetUsers = self::getAccessibleExtranetUsers($currentUserId);
+		$extranetUsers = array_filter($extranetUsers, static function($userId) use ($accessibleExtranetUsers) {
+			return isset($accessibleExtranetUsers[$userId]);
+		});
+
+		return array_merge($intranetUsers, $extranetUsers);
+	}
+
+	protected static function getAccessibleExtranetUsers(int $currentUserId, bool $filterActiveUser = true): array
+	{
 		$extranetUsers = [$currentUserId => $currentUserId];
-		$groups = self::getGroup([], $currentUserId);
+		$groups = self::getGroup([], $currentUserId, $filterActiveUser);
+
 		if (is_array($groups))
 		{
 			foreach ($groups as $group)
@@ -164,8 +203,6 @@ class Extranet
 			}
 		}
 
-		return array_filter($userList, function($userId) use ($extranetUsers) {
-			return isset($extranetUsers[$userId]);
-		});
+		return $extranetUsers;
 	}
 }

@@ -8,6 +8,8 @@ use Bitrix\Main\Localization\Loc;
 
 /**
  * Wipe empty parent folders.
+ *
+ * @internal
  */
 class WipeEmpty
 	extends Translate\Controller\Editor\Operation

@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
@@ -124,6 +125,7 @@ class SupersetDashboardProvider extends BaseProvider
 				'type' => $dashboard->getType(),
 				'createdById' => $dashboard->getOrmObject()->getCreatedById(),
 				'status' => $dashboard->getStatus(),
+				'isAvailable' => MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType()),
 			],
 		];
 

@@ -8,7 +8,7 @@ use Bitrix\Main\UI\PageNavigation;
 
 abstract class SearchAction extends Engine\Action
 {
-	final public function run($searchQuery, array $options = null, PageNavigation $pageNavigation = null)
+	final public function run($searchQuery, ?array $options = null, ?PageNavigation $pageNavigation = null)
 	{
 		$searchQuery = $this->prepareSearchQuery($searchQuery);
 		if (!$searchQuery)
@@ -57,7 +57,7 @@ abstract class SearchAction extends Engine\Action
 		return trim($searchQuery);
 	}
 
-	protected function provideLimits($searchQuery, array $options = null)
+	protected function provideLimits($searchQuery, ?array $options = null)
 	{
 		return [];
 	}
@@ -71,5 +71,5 @@ abstract class SearchAction extends Engine\Action
 	 *
 	 * @return ResultItem[]
 	 */
-	abstract function provideData($searchQuery, array $options = null, PageNavigation $pageNavigation = null);
+	abstract function provideData($searchQuery, ?array $options = null, ?PageNavigation $pageNavigation = null);
 }

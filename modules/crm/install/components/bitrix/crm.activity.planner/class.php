@@ -400,7 +400,7 @@ class CrmActivityPlannerComponent extends \Bitrix\Crm\Component\Base
 					{
 						if ((int)$fromActivity['TYPE_ID'] === CCrmActivityType::Email)
 						{
-							Activity\Provider\Email::uncompressActivity($fromActivity);
+							Activity\Provider\Email::uncompressActivityDescription($fromActivity);
 						}
 
 						$activity['DESCRIPTION'] = $fromActivity['DESCRIPTION'];
@@ -516,7 +516,7 @@ class CrmActivityPlannerComponent extends \Bitrix\Crm\Component\Base
 
 		if ((int)$activity['TYPE_ID'] === CCrmActivityType::Email)
 		{
-			Activity\Provider\Email::uncompressActivity($activity);
+			Activity\Provider\Email::uncompressActivityDescription($activity);
 		}
 
 		$activity += $this->getHtmlDescriptionFields($activity);

@@ -1,7 +1,6 @@
 <?php
 namespace Bitrix\BIConnector\Integration\Crm;
 
-use Bitrix\Main\Localization\Loc;
 
 class LeadUserField
 {
@@ -87,76 +86,72 @@ class LeadUserField
 				$dbType = call_user_func_array([$userField['USER_TYPE']['CLASS_NAME'], 'getdbcolumntype'], [$userField]);
 			}
 
-			if ($dbType === 'date' && $userField['MULTIPLE'] == 'N')
-			{
-				$result['crm_lead_uf']['FIELDS'][$userField['FIELD_NAME']] = [
-					'FIELD_DESCRIPTION' => $userField['EDIT_FORM_LABEL'],
-					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'LUF.' . $userField['FIELD_NAME'],
-					'FIELD_TYPE' => 'date',
-				];
-			}
-			elseif ($dbType === 'datetime' && $userField['MULTIPLE'] == 'N')
-			{
-				$result['crm_lead_uf']['FIELDS'][$userField['FIELD_NAME']] = [
-					'FIELD_DESCRIPTION' => $userField['EDIT_FORM_LABEL'],
-					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'LUF.' . $userField['FIELD_NAME'],
-					'FIELD_TYPE' => 'datetime',
-				];
-			}
-			else
-			{
-				$result['crm_lead_uf']['FIELDS'][$userField['FIELD_NAME']] = [
-					'FIELD_DESCRIPTION' => $userField['EDIT_FORM_LABEL'],
-					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'LUF.' . $userField['FIELD_NAME'],
-					'FIELD_TYPE' => 'string',
-					'CALLBACK' => function($value, $dateFormats) use($userField, $dbType)
+			$result['crm_lead_uf']['FIELDS'][$userField['FIELD_NAME']] = [
+				'FIELD_DESCRIPTION' => $userField['EDIT_FORM_LABEL'],
+				'IS_METRIC' => 'N',
+				'FIELD_NAME' => 'LUF.' . $userField['FIELD_NAME'],
+				'FIELD_TYPE' => (
+					$userField['MULTIPLE'] === 'N'
+					&& \Bitrix\BIConnector\Superset\Config\DatasetSettings::isTypingEnabled()
+				) ? $userField['USER_TYPE_ID'] : 'string',
+				'CALLBACK' => function($value, $dateFormats) use($userField, $dbType)
+				{
+					global $USER_FIELD_MANAGER;
+
+					if ($dbType === 'date' || $dbType === 'datetime')
 					{
-						global $USER_FIELD_MANAGER;
-
-						if ($dbType === 'date')
+						if ($value === null || $value === '')
 						{
-							return \Bitrix\BIConnector\PrettyPrinter::formatUserFieldAsDate($userField, $value, $dateFormats['date_format_php']);
+							return null;
 						}
 
-						if ($dbType === 'datetime')
-						{
-							return \Bitrix\BIConnector\PrettyPrinter::formatUserFieldAsDate($userField, $value, $dateFormats['datetime_format_php']);
-						}
+						$format =
+							$dbType === 'date'
+								? $dateFormats['date_format_php']
+								: $dateFormats['datetime_format_php']
+						;
 
-						$cacheKey = serialize($value);
-						$cachedResult = \Bitrix\BIConnector\MemoryCache::get($userField['ID'], $cacheKey);
-						if (isset($cachedResult))
+						return \Bitrix\BIConnector\PrettyPrinter::formatUserFieldAsDate($userField, $value, $format);
+					}
+
+					if (
+						$userField['USER_TYPE_ID'] === \Bitrix\Main\UserField\Types\BooleanType::USER_TYPE_ID
+						&& \Bitrix\BIConnector\Superset\Config\DatasetSettings::isTypingEnabled()
+					)
+					{
+						return (bool)$value;
+					}
+
+					$cacheKey = serialize($value);
+					$cachedResult = \Bitrix\BIConnector\MemoryCache::get($userField['ID'], $cacheKey);
+					if (isset($cachedResult))
+					{
+						return $cachedResult;
+					}
+					else
+					{
+						if ($userField['MULTIPLE'] == 'Y')
 						{
-							return $cachedResult;
+							$result = $USER_FIELD_MANAGER->onAfterFetch(
+								$userField,
+								unserialize($value, ['allowed_classes' => \Bitrix\BIConnector\PrettyPrinter::$allowedUnserializeClassesList])
+							);
 						}
 						else
 						{
-							if ($userField['MULTIPLE'] == 'Y')
-							{
-								$result = $USER_FIELD_MANAGER->onAfterFetch(
-									$userField,
-									unserialize($value, ['allowed_classes' => \Bitrix\BIConnector\PrettyPrinter::$allowedUnserializeClassesList])
-								);
-							}
-							else
-							{
-								$result = $USER_FIELD_MANAGER->onAfterFetch($userField, $value);
-							}
-
-							$localUF = $userField;
-							$localUF['VALUE'] = $result;
-
-							$returnResult = \Bitrix\BIConnector\UserField\ProxyUserFieldManager::getText($localUF);
-							\Bitrix\BIConnector\MemoryCache::set($userField['ID'], $cacheKey, $returnResult);
-
-							return $returnResult;
+							$result = [$USER_FIELD_MANAGER->onAfterFetch($userField, $value)];
 						}
+
+						$localUF = $userField;
+						$localUF['VALUE'] = $result;
+
+						$returnResult = \Bitrix\BIConnector\UserField\ProxyUserFieldManager::getText($localUF);
+						\Bitrix\BIConnector\MemoryCache::set($userField['ID'], $cacheKey, $returnResult);
+
+						return $returnResult;
 					}
-				];
-			}
+				}
+			];
 		}
 
 		$messages = \Bitrix\Main\Localization\Loc::loadLanguageFile(__FILE__, $languageId);

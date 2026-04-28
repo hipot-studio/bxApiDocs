@@ -278,58 +278,6 @@ class PrivateChat extends Chat
 		return new Message\Send\Push\PrivatePushService($message, $config);
 	}
 
-	protected function sendPushReadSelf(MessageCollection $messages, int $lastId, int $counter): void
-	{
-		$companionId = $this->getDialogId();
-
-		$selfRelation = $this->getSelfRelation();
-		$muted = isset($selfRelation) ? $selfRelation->getNotifyBlock() : false;
-
-		\Bitrix\Pull\Event::add($this->getContext()->getUserId(), [
-			'module_id' => 'im',
-			'command' => 'readMessage',
-			'params' => [
-				'dialogId' => $companionId,
-				'chatId' => $this->getChatId(),
-				'senderId' => $this->getContext()->getUserId(),
-				'id' => (int)$companionId,
-				'userId' => (int)$companionId,
-				'lastId' => $lastId,
-				'counter' => $counter,
-				'muted' => $muted ?? false,
-				'unread' => Recent::isUnread($this->getContext()->getUserId(), $this->getType(), $this->getDialogId() ?? ''),
-				'viewedMessages' => $messages->getIds(),
-				'counterType' => $this->getCounterType(),
-				'recentConfig' => $this->getRecentConfig()->toPullFormat(),
-			],
-			'extra' => \Bitrix\Im\Common::getPullExtra()
-		]);
-	}
-
-	protected function sendPushReadOpponent(MessageCollection $messages, int $lastId): array
-	{
-		$companionId = $this->getDialogId();
-		$pushMessage = [
-			'module_id' => 'im',
-			'command' => 'readMessageOpponent',
-			'expiry' => 3600,
-			'params' => [
-				'dialogId' => $this->getContext()->getUserId(),
-				'chatId' => $this->getChatId(),
-				'userId' =>  $this->getContext()->getUserId(),
-				'userName' => User::getInstance($this->getContext()->getUserId())->getFullName(false),
-				'lastId' => $lastId,
-				'date' => (new DateTime())->format('c'),
-				'chatMessageStatus' => $this->getReadService()->getChatMessageStatus($this->getChatId()),
-				'viewedMessages' => $messages->getIds(),
-			],
-			'extra' => \Bitrix\Im\Common::getPullExtra()
-		];
-		\Bitrix\Pull\Event::add($companionId, $pushMessage);
-
-		return $pushMessage;
-	}
-
 	protected function sendEventRead(int $startId, int $endId, int $counter, bool $byEvent): void
 	{
 		foreach(GetModuleEvents("im", "OnAfterUserRead", true) as $arEvent)
@@ -487,7 +435,8 @@ class PrivateChat extends Chat
 
 		$botJoinFields = [
 			'CHAT_TYPE' => \IM_MESSAGE_PRIVATE,
-			'MESSAGE_TYPE' => \IM_MESSAGE_PRIVATE
+			'MESSAGE_TYPE' => \IM_MESSAGE_PRIVATE,
+			'CHAT_ID' => $chat->getChatId(),
 		];
 		if (
 			User::getInstance($params['FROM_USER_ID'])->isExists()

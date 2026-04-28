@@ -71,4 +71,9 @@ class ChatUserLeave extends BaseChatEvent
 	{
 		return array_values($this->relations->getUserIds());
 	}
+
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
+	}
 }

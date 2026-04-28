@@ -12,7 +12,7 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Sign\Type\Field\FrontFieldCategory;
 use Bitrix\Sign\Type\FieldType;
 
-final class MemberDynamicFieldInfoProvider extends InfoProvider
+class MemberDynamicFieldInfoProvider extends InfoProvider
 {
 	public const USER_FIELD_ENTITY_ID = 'SIGN_MEMBER_DYNAMIC';
 

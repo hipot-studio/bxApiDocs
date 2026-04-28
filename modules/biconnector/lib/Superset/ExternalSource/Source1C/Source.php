@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset\ExternalSource\Source1C;
 
+use Bitrix\BIConnector\ExternalSource\SourceManager;
 use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\Superset\ExternalSource;
 use Bitrix\Main\Localization\Loc;
@@ -28,6 +29,11 @@ final class Source implements ExternalSource\Source
 	public function isConnected(): bool
 	{
 		return $this->isConnected;
+	}
+
+	public function isAvailable(): bool
+	{
+		return SourceManager::is1cConnectionsAvailable();
 	}
 
 	public function getTitle(): string

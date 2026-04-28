@@ -306,29 +306,43 @@ class DocumentGeneratorManager
 
 	final public static function onDocumentTransformationComplete(Event $event): bool
 	{
-		$documentId = (int)$event->getParameter('documentId');
-		if ($documentId > 0 && self::getInstance()->isEnabled())
+		try
 		{
-			$document = Document::loadById($documentId);
-			if ($document)
+			$documentId = (int)$event->getParameter('documentId');
+			if ($documentId <= 0 || !self::getInstance()->isEnabled())
 			{
-				$provider = $document->getProvider();
-				if ($provider instanceof DataProvider\CrmEntityDataProvider)
-				{
-					$owner = $provider->getTimelineItemIdentifier();
-
-					if ($owner)
-					{
-						DocumentController::getInstance()->onDocumentTransformationComplete(
-							$documentId,
-							[
-								'ENTITY_TYPE_ID' => $owner->getEntityTypeId(),
-								'ENTITY_ID' => $owner->getEntityId()
-							],
-						);
-					}
-				}
+				return true;
 			}
+
+			$document = Document::loadById($documentId);
+			if (!$document)
+			{
+				return true;
+			}
+
+			$provider = $document->getProvider();
+			if (!$provider instanceof DataProvider\CrmEntityDataProvider)
+			{
+				return true;
+			}
+
+			$owner = $provider->getTimelineItemIdentifier();
+			if (!$owner)
+			{
+				return true;
+			}
+
+			DocumentController::getInstance()->onDocumentTransformationComplete(
+				$documentId,
+				[
+					'ENTITY_TYPE_ID' => $owner->getEntityTypeId(),
+					'ENTITY_ID' => $owner->getEntityId(),
+				],
+			);
+		}
+		catch (\Throwable $throwable)
+		{
+			\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($throwable);
 		}
 
 		return true;

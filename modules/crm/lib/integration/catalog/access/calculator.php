@@ -86,20 +86,29 @@ class Calculator
 		$this->updateDiscount();
 	}
 
-	public function calculateDiscount(float $newDiscountRate): void
+	public function calculateDiscount(float $discountValue): void
 	{
-		if ($this->product['DISCOUNT_RATE'] === $newDiscountRate)
+		if (
+			(
+				$this->isDiscountPercentage()
+				&& $this->product['DISCOUNT_RATE'] === $discountValue
+			)
+			|| (
+				$this->isDiscountMonetary()
+				&& $this->product['DISCOUNT_SUM'] === $discountValue
+			)
+		)
 		{
 			return;
 		}
 
-		if ($newDiscountRate === 0.0)
+		if ($discountValue === 0.0)
 		{
 			$this->clearResultPrices();
 		}
 		elseif ($this->isDiscountPercentage())
 		{
-			$this->setField('DISCOUNT_RATE', $newDiscountRate);
+			$this->setField('DISCOUNT_RATE', $discountValue);
 
 			$this->updateResultPrices();
 
@@ -110,7 +119,7 @@ class Calculator
 		}
 		elseif ($this->isDiscountMonetary())
 		{
-			$this->setField('DISCOUNT_SUM', $newDiscountRate);
+			$this->setField('DISCOUNT_SUM', $discountValue);
 
 			$this->updateResultPrices();
 

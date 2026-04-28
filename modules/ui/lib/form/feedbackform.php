@@ -2,6 +2,7 @@
 
 namespace Bitrix\UI\Form;
 
+use Bitrix\Intranet\Internal\Integration\Main\Integrator\IntegratorInfoService;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -49,17 +50,33 @@ class FeedbackForm
 	public function getPresets(): array
 	{
 		$presets = $this->presets;
-		$presets['b24_plan'] = $this->isCloud ? \CBitrix24::getLicenseType() : '';
+		$presets['b24_plan'] = $this->isCloud
+			? \CBitrix24::getLicenseType()
+			: implode(', ', Application::getInstance()->getLicense()->getCodes());
 		$presets['b24_plan_date_to'] = (
 		$this->isCloud
 			? ConvertTimeStamp(Option::get('main', '~controller_group_till', time()))
-			: ''
+			: Application::getInstance()->getLicense()->getExpireDate()?->getTimestamp()
 		);
-		$presets['b24_partner_id'] = (
-		($this->isCloud && method_exists('CBitrix24', 'getPartnerId'))
-			? \CBitrix24::getPartnerId()
-			: ''
-		);
+
+		if (
+			!$this->isCloud
+			&& Loader::includeModule('intranet')
+			&& class_exists('\Bitrix\Intranet\Internal\Integration\Main\Integrator\IntegratorInfoService')
+		)
+		{
+			$partnerParams = IntegratorInfoService::createByDefault()->getIntegratorInfo();
+			$presets['b24_partner_id'] = $partnerParams->id ?? '';
+			$presets['b24_partner_name'] = $partnerParams->name ?? '';
+		}
+		else
+		{
+			$partnerParams = method_exists('CBitrix24', 'getPartnerFormParams')
+					? \CBitrix24::getPartnerFormParams()
+					: [];
+			$presets['b24_partner_id'] = $partnerParams['partnerId'] ?? '';
+			$presets['b24_partner_name'] = $partnerParams['partnerName'] ?? '';
+		}
 
 		$presets['hosturl'] = Main\Engine\UrlManager::getInstance()->getHostUrl();
 		$presets['hostname'] = parse_url($presets['hosturl'], PHP_URL_HOST);

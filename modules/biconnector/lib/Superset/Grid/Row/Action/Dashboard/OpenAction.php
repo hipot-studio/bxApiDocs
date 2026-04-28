@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dashboard;
 
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
@@ -49,6 +50,13 @@ final class OpenAction extends BaseAction
 			(str_contains($rawFields['DETAIL_URL'], '?') ? '&' : '?')
 			. 'openFrom=grid'
 		;
+
+		if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($rawFields['TYPE']))
+		{
+			$this->onclick = "BX.UI.InfoHelper.show(\"limit_benefit_market_active\")";
+
+			return parent::getControl($rawFields);
+		}
 
 		$this->onclick = "window.open(`{$rawFields['DETAIL_URL']}`, '_blank');";
 

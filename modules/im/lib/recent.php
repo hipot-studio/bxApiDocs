@@ -29,6 +29,9 @@ use Bitrix\Im\V2\Message\Param;
 use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\Pull\Event\ChatPin;
 use Bitrix\Im\V2\Pull\Event\RecentUpdate;
+use Bitrix\Im\V2\Reading\Counter\CountersProvider;
+use Bitrix\Im\V2\Reading\Counter\Entity\ChatsCounterMap;
+use Bitrix\Im\V2\Reading\RecentReader;
 use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
@@ -38,6 +41,7 @@ use Bitrix\Imbot\Bot\CopilotChatBot;
 use Bitrix\Main\Application, Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -49,7 +53,6 @@ Loc::loadMessages(__FILE__);
 
 class Recent
 {
-	private static array $unreadElementCache = [];
 	private const PINNED_CHATS_LIMIT = 45;
 
 	static private bool $limitError = false;
@@ -62,6 +65,7 @@ class Recent
 		$skipChat = $options['SKIP_CHAT'] ?? null;
 		$skipDialog = $options['SKIP_DIALOG'] ?? null;
 		$byChatIds = isset($options['CHAT_IDS']);
+		$withCounters = ($options['WITH_COUNTERS'] ?? 'Y') === 'Y';
 
 		if (isset($options['FORCE_OPENLINES']) && $options['FORCE_OPENLINES'] === 'Y')
 		{
@@ -131,6 +135,10 @@ class Recent
 		}
 		elseif (!$byChatIds)
 		{
+			if (!CopilotChat::isHistoryAvailable())
+			{
+				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT;
+			}
 			if ($options['SKIP_OPENLINES'] === 'Y')
 			{
 				$skipTypes[] = IM_MESSAGE_OPEN_LINE;
@@ -171,7 +179,7 @@ class Recent
 		$result = [];
 		$orm = \Bitrix\Im\Model\RecentTable::getList($ormParams);
 		$rows = $orm->fetchAll();
-		$rows = self::prepareRows($rows, $userId);
+		$rows = self::prepareRows($rows, $userId, withCounters: $withCounters);
 		foreach ($rows as $row)
 		{
 			$isUser = $row['ITEM_TYPE'] == IM_MESSAGE_PRIVATE;
@@ -192,6 +200,7 @@ class Recent
 			$item = self::formatRow($row, [
 				'GENERAL_CHAT_ID' => $generalChatId,
 				'GET_ORIGINAL_TEXT' => $options['GET_ORIGINAL_TEXT'] ?? null,
+				'WITH_COUNTERS' => $withCounters,
 			]);
 			if (!$item)
 			{
@@ -264,6 +273,7 @@ class Recent
 		$unreadOnly = isset($options['UNREAD_ONLY']) && $options['UNREAD_ONLY'] === 'Y';
 		$shortInfo = isset($options['SHORT_INFO']) && $options['SHORT_INFO'] === 'Y';
 		$parseText = $options['PARSE_TEXT'] ?? null;
+		$withCounters = ($options['WITH_COUNTERS'] ?? 'Y') === 'Y';
 
 		$showOpenlines = (
 			\Bitrix\Main\Loader::includeModule('imopenlines')
@@ -302,6 +312,10 @@ class Recent
 		else
 		{
 			$skipTypes = [];
+			if (!CopilotChat::isHistoryAvailable())
+			{
+				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT;
+			}
 			if ($options['SKIP_OPENLINES'] === 'Y')
 			{
 				$skipTypes[] = IM_MESSAGE_OPEN_LINE;
@@ -322,10 +336,6 @@ class Recent
 			if (!RecentConfigManager::EXTERNAL_CHAT_USE_DEFAULT_RECENT_SECTION)
 			{
 				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_EXTERNAL;
-			}
-			if (!CopilotChat::isActive())
-			{
-				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT;
 			}
 			if (!empty($skipTypes))
 			{
@@ -385,7 +395,7 @@ class Recent
 		$messagesAutoDeleteConfigs = [];
 
 		$rows = $orm->fetchAll();
-		$rows = self::prepareRows($rows, $userId, $shortInfo);
+		$rows = self::prepareRows($rows, $userId, $shortInfo, $withCounters);
 		foreach ($rows as $row)
 		{
 			$counter++;
@@ -410,6 +420,7 @@ class Recent
 				'GET_ORIGINAL_TEXT' => $options['GET_ORIGINAL_TEXT'] ?? null,
 				'SHORT_INFO' => $shortInfo,
 				'PARSE_TEXT' => $parseText,
+				'WITH_COUNTERS' => $withCounters,
 			]);
 			if (!$item)
 			{
@@ -707,6 +718,7 @@ class Recent
 			'CHAT_ID' => 'CHAT.ID',
 			'CHAT_TITLE' => 'CHAT.TITLE',
 			'CHAT_TYPE' => 'CHAT.TYPE',
+			'CHAT_PARENT_ID' => 'CHAT.PARENT_ID',
 			'CHAT_AVATAR' => 'CHAT.AVATAR',
 			'CHAT_AUTHOR_ID' => 'CHAT.AUTHOR_ID',
 			'CHAT_COLOR' => 'CHAT.COLOR',
@@ -731,7 +743,6 @@ class Recent
 			'CHAT_MANAGE_SETTINGS' => 'CHAT.MANAGE_SETTINGS',
 			'CHAT_LAST_MESSAGE_STATUS_BOOL' => 'MESSAGE.NOTIFY_READ',
 			'RELATION_LAST_ID' => 'RELATION.LAST_ID',
-			'CHAT_PARENT_ID' => 'CHAT.PARENT_ID',
 			'CHAT_PARENT_MID' => 'CHAT.PARENT_MID',
 			'CHAT_ENTITY_ID' => 'CHAT.ENTITY_ID',
 			'CHAT_ENTITY_DATA_1' => 'CHAT.ENTITY_DATA_1',
@@ -848,6 +859,10 @@ class Recent
 		{
 			$filter['@ITEM_CID'] = $chatIds; // todo: add index
 		}
+		else
+		{
+			$filter['=CHAT_PARENT_ID'] = 0;
+		}
 
 		return [
 			'select' => $select,
@@ -861,6 +876,7 @@ class Recent
 		$generalChatId = (int)$options['GENERAL_CHAT_ID'];
 		$withoutCommonUsers = isset($options['WITHOUT_COMMON_USERS']) && $options['WITHOUT_COMMON_USERS'] === true;
 		$shortInfo = isset($options['SHORT_INFO']) && $options['SHORT_INFO'];
+		$withCounters = $options['WITH_COUNTERS'] ?? true;
 
 		$isUser = $row['ITEM_TYPE'] == IM_MESSAGE_PRIVATE;
 		$id = $isUser? (int)$row['ITEM_ID']: 'chat'.$row['ITEM_ID'];
@@ -871,7 +887,7 @@ class Recent
 			return null;
 		}
 
-		$item = self::formatItem($row,$options, $shortInfo, $isUser, $id);
+		$item = self::formatItem($row,$options, $shortInfo, $isUser, $id, $withCounters);
 
 		if ($isUser)
 		{
@@ -1062,33 +1078,38 @@ class Recent
 		array $options,
 		bool $shortInfo,
 		bool $isUser,
-		mixed $id
+		mixed $id,
+		bool $withCounters
 	): array
 	{
 		$message = self::formatMessage($row, $options, $shortInfo);
 
 		if ($shortInfo)
 		{
-			return [
+			$item = [
 				'ID' => $id,
 				'CHAT_ID' => (int)$row['CHAT_ID'],
 				'TYPE' => $isUser ? 'user' : 'chat',
 				'MESSAGE' => $message,
-				'COUNTER' => (int)$row['COUNTER'],
 				'PINNED' => $row['PINNED'] === 'Y',
 				'UNREAD' => $row['UNREAD'] === 'Y',
 				'DATE_LAST_ACTIVITY' => $row['DATE_LAST_ACTIVITY'],
 			];
+			if ($withCounters)
+			{
+				$item['COUNTER'] = (int)$row['COUNTER'];
+			}
+
+			return $item;
 		}
 
-		return [
+		$item = [
 			'ID' => $id,
 			'CHAT_ID' => (int)$row['CHAT_ID'],
 			'TYPE' => $isUser ? 'user' : 'chat',
 			'AVATAR' => [],
 			'TITLE' => [],
 			'MESSAGE' => $message,
-			'COUNTER' => (int)$row['COUNTER'],
 			'LAST_ID' => (int)($row['RELATION_LAST_ID'] ?? 0),
 			'PINNED' => $row['PINNED'] === 'Y',
 			'UNREAD' => $row['UNREAD'] === 'Y',
@@ -1096,6 +1117,12 @@ class Recent
 			'DATE_UPDATE' => $row['DATE_UPDATE'],
 			'DATE_LAST_ACTIVITY' => $row['DATE_LAST_ACTIVITY'],
 		];
+		if ($withCounters)
+		{
+			$item['COUNTER'] = (int)$row['COUNTER'];
+		}
+
+		return $item;
 	}
 
 	private static function formatChat(array $row, bool $shortInfo, int $generalChatId): array
@@ -1718,174 +1745,15 @@ class Recent
 			return false;
 		}
 
-		$unread = $unread === true? 'Y': 'N';
+		$chatId = Dialog::getChatId($dialogId, $userId);
+		$reader = ServiceLocator::getInstance()->get(RecentReader::class);
+		$result =
+			$unread
+				? $reader->unread($userId, $chatId, $markedId ?? 0)
+				: $reader->read($userId, $chatId)
+		;
 
-		$element = self::getUnreadElement($userId, $itemTypes, $dialogId);
-
-		if (!$element)
-		{
-			return false;
-		}
-		if ($element['UNREAD'] === $unread && !isset($markedId))
-		{
-			return true;
-		}
-
-		self::$unreadElementCache[$userId][$dialogId] = null;
-
-		$updatedFields = [
-			'UNREAD' => $unread,
-			'DATE_UPDATE' => new \Bitrix\Main\Type\DateTime(),
-		];
-
-		if ($unread === 'N')
-		{
-			$markedId = 0;
-		}
-		if (isset($markedId))
-		{
-			$updatedFields['MARKED_ID'] = $markedId;
-		}
-
-		\Bitrix\Im\Model\RecentTable::update(
-			[
-				'USER_ID' => $element['USER_ID'],
-				'ITEM_TYPE' => $element['ITEM_TYPE'],
-				'ITEM_ID' => $element['ITEM_ID'],
-			],
-			$updatedFields
-		);
-
-		self::clearCache($element['USER_ID']);
-		//\Bitrix\Im\Counter::clearCache($element['USER_ID']);
-		CounterService::clearCache((int)$element['USER_ID']);
-		$chatId = (int)$element['ITEM_CID'];
-		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
-		Sync\Logger::getInstance()->add(
-			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chatId),
-			$userId,
-			$chat
-		);
-
-		$pullInclude = \Bitrix\Main\Loader::includeModule("pull");
-		if ($pullInclude)
-		{
-			$readService = new ReadService($userId);
-			$counter = $readService->getCounterService()->getByChatWithOverflow($chatId);
-
-			Event::add(
-				$userId,
-				[
-					'module_id' => 'im',
-					'command' => 'chatUnread',
-					'expiry' => 3600,
-					'params' => [
-						'chatId' => $chatId,
-						'dialogId' => $dialogId,
-						'active' => $unread === 'Y',
-						'muted' => $element['MUTED'] === 'Y',
-						'counter' => $counter,
-						'markedId' => $markedId ?? $element['MARKED_ID'],
-						'lines' => $element['ITEM_TYPE'] === IM_MESSAGE_OPEN_LINE,
-						'counterType' => $chat->getCounterType(),
-						'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
-					],
-					'extra' => \Bitrix\Im\Common::getPullExtra()
-				]
-			);
-		}
-
-		return true;
-	}
-
-	private static function getUnreadElement(int $userId, ?string $itemTypes, $dialogId): array|false
-	{
-		if (self::$unreadElementCache[$userId][$dialogId] !== null)
-		{
-			return self::$unreadElementCache[$userId][$dialogId];
-		}
-
-		$id = $dialogId;
-		if (mb_substr($dialogId, 0, 4) === 'chat')
-		{
-			if ($itemTypes === null)
-			{
-				$itemTypes = \Bitrix\Im\Chat::getTypes();
-			}
-
-			$id = mb_substr($dialogId, 4);
-		}
-		else
-		{
-			$itemTypes = IM_MESSAGE_PRIVATE;
-		}
-
-		self::$unreadElementCache[$userId][$dialogId] = \Bitrix\Im\Model\RecentTable::getList([
-			'select' => [
-				'USER_ID',
-				'ITEM_TYPE',
-				'ITEM_ID',
-				'UNREAD',
-				'MUTED' => 'RELATION.NOTIFY_BLOCK',
-				'ITEM_CID',
-				'MARKED_ID',
-				'ENTITY_TYPE' => 'CHAT.ENTITY_TYPE',
-			],
-			'filter' => [
-				'=USER_ID' => $userId,
-				'=ITEM_TYPE' => $itemTypes,
-				'=ITEM_ID' => $id
-			]
-		])->fetch();
-
-		return self::$unreadElementCache[$userId][$dialogId];
-	}
-
-	public static function readAll(int $userId): void
-	{
-		self::readByFilter($userId);
-	}
-
-	public static function readByType(int $userId, Type $type): void
-	{
-		if ($type->entityType)
-		{
-			$chatIds = \Bitrix\Im\Model\RecentTable::query()
-				->setSelect(['ITEM_CID'])
-				->where('USER_ID', $userId)
-				->where('UNREAD', 'Y')
-				->where('ITEM_TYPE', $type->literal)
-				->where('CHAT.ENTITY_TYPE', $type->entityType)
-				->fetchAll();
-
-			$chatIds = array_map('intval', array_column($chatIds, 'ITEM_CID'));
-
-			if (empty($chatIds))
-			{
-				return;
-			}
-
-			$filter = ['=ITEM_CID' => $chatIds];
-		}
-		else
-		{
-			$filter = ['=ITEM_TYPE' => $type->literal];
-		}
-
-		self::readByFilter($userId, $filter);
-	}
-
-	private static function readByFilter(int $userId, array $filter = []): void
-	{
-		$filter['=UNREAD'] = 'Y';
-		$filter['=USER_ID'] = $userId;
-		\Bitrix\Im\Model\RecentTable::updateByFilter(
-			$filter,
-			[
-				'UNREAD' => 'N',
-				'MARKED_ID' => 0,
-			]
-		);
+		return $result->isSuccess();
 	}
 
 	public static function isUnread(int $userId, string $itemType, string $dialogId): bool
@@ -2136,10 +2004,14 @@ class Recent
 		$cache->cleanDir('/bx/imc/recent'.($userId ? Common::getCacheUserPostfix($userId) : ''));
 	}
 
-	protected static function prepareRows(array $rows, int $userId, bool $shortInfo = false): array
+	protected static function prepareRows(array $rows, int $userId, bool $shortInfo = false, bool $withCounters = true): array
 	{
 		[$messageIds, $chatIds] = self::getKeysForFetchAdditionalEntities($rows);
-		$counters = (new CounterService($userId))->getForEachChat($chatIds);
+		$counters = ChatsCounterMap::fromArray([]);
+		if ($withCounters)
+		{
+			$counters = ServiceLocator::getInstance()->get(CountersProvider::class)->getForUserByChatIds($userId, $chatIds);
+		}
 		$params = $shortInfo ? [] : self::getMessageParams($messageIds);
 
 		return self::fillRows($rows, $params, $counters, $userId);
@@ -2254,7 +2126,7 @@ class Recent
 		return $params;
 	}
 
-	protected static function fillRows(array $rows, array $params, array $counters, int $userId): array
+	protected static function fillRows(array $rows, array $params, ChatsCounterMap $counters, int $userId): array
 	{
 		foreach ($rows as $key => $row)
 		{
@@ -2262,7 +2134,7 @@ class Recent
 			$messageId = (int)($row['ITEM_MID'] ?? 0);
 			$boolStatus = $row['CHAT_LAST_MESSAGE_STATUS_BOOL'] ?? 'N';
 
-			$rows[$key]['COUNTER'] = $counters[$chatId] ?? 0;
+			$rows[$key]['COUNTER'] = $counters->getByChatId($chatId);
 			$rows[$key]['CHAT_LAST_MESSAGE_STATUS'] = $boolStatus === 'Y' ? \IM_MESSAGE_STATUS_DELIVERED : \IM_MESSAGE_STATUS_RECEIVED;
 			$rows[$key]['MESSAGE_CODE'] = $rows[$key]['MESSAGE_CODE'] ?? $params[$messageId]['CODE'] ?? null;
 			$rows[$key]['MESSAGE_ATTACH'] = $params[$messageId]['ATTACH']['VALUE'] ?? null;

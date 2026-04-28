@@ -77,7 +77,7 @@ abstract class Node
 		return $this->parentNode;
 	}
 
-	public function setParentNode(Node $node = null)
+	public function setParentNode(?Node $node = null)
 	{
 		$this->parentNode = $node;
 	}
@@ -267,7 +267,7 @@ abstract class Node
 		$this->insertBefore($newChild);
 	}
 
-	public function insertBefore(Node $newChild, Node $refChild = null, $removeExist = true)
+	public function insertBefore(Node $newChild, ?Node $refChild = null, $removeExist = true)
 	{
 		if($newChild->getOwnerDocument() !== $this->getOwnerDocument())
 		{
@@ -346,7 +346,7 @@ abstract class Node
 		throw new DomException('Not implemented');
 	}
 
-	public function isEqual(Node $node = null)
+	public function isEqual(?Node $node = null)
 	{
 		if($node && $node === $this)
 		{

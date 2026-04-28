@@ -435,19 +435,24 @@ class CCrmBizProcHelper
 		return 'BX.Bizproc.Starter.showTemplates(' . $starterConfig . ', {})';
 	}
 
-	public static function sendOperationsAnalytics(string $eventName, CBPActivity $activity, string $eventSection): void
+	public static function sendOperationsAnalytics(
+		string $eventName,
+		CBPActivity $activity,
+		string $eventSection,
+		?string $eventTool='crm',
+	): void
 	{
 		$activityClassName = (new ReflectionClass($activity))->getShortName();
 		$eventType = str_replace('CBP', '', $activityClassName);
 		if ($activity->getRootActivity()->getDocumentEventType() === CBPDocumentEventType::Automation)
 		{
-			self::sendRobotOperationsAnalytics($eventName, $eventType, strtolower($eventSection));
+			self::sendRobotOperationsAnalytics($eventTool, $eventName, $eventType, strtolower($eventSection));
 		}
 	}
 
-	private static function sendRobotOperationsAnalytics(string $eventName, string $eventType, string $section): void
+	private static function sendRobotOperationsAnalytics(string $eventTool, string $eventName, string $eventType, string $section): void
 	{
-		$event = new AnalyticsEvent($eventName, 'crm', 'robot_operations');
+		$event = new AnalyticsEvent($eventName, $eventTool, 'robot_operations');
 		$event
 			->setSection($section)
 			->setType($eventType)

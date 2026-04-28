@@ -63,7 +63,7 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 			return;
 		}
 
-		if(!$this->factory->isCategoriesEnabled() && $this->factory->getEntityTypeId() !== \CCrmOwnerType::Lead)
+		if (!$this->isSalesTunnelsEnabled($this->factory))
 		{
 			$this->addError(new Error(Loc::getMessage('CRM_SALES_TUNNELS_ENTITY_CATEGORY_DISABLED2')));
 
@@ -954,5 +954,19 @@ HTML;
 
 			'openSliderLabel' => $openSlider,
 		];
+	}
+
+	private function isSalesTunnelsEnabled(Crm\Service\Factory $factory): bool
+	{
+		$availabilityMap = [
+			CCrmOwnerType::Lead => true,
+			CCrmOwnerType::Contact => false,
+			CCrmOwnerType::Company => false,
+		];
+
+		return
+			$availabilityMap[$factory->getEntityTypeId()]
+			?? $factory->isCategoriesEnabled()
+		;
 	}
 }

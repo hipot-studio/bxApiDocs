@@ -128,6 +128,13 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 
 	private function loadRows(): void
 	{
+		if (!\Bitrix\BIConnector\Integration\Superset\SupersetInitializer::isSupersetReady())
+		{
+			$this->grid->setRawRows([]);
+
+			return;
+		}
+
 		$integrator = Bitrix\BIConnector\Integration\Superset\Integrator\Integrator::getInstance();
 		$pagination = $this->grid->getPagination();
 		$page = $pagination?->getCurrentPage();
@@ -278,24 +285,6 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 			);
 
 			return null;
-		}
-
-		$workspaceDatasets = \Bitrix\BIConnector\ExternalSource\DatasetManager::getList(['=EXTERNAL_ID' => $datasetExternalIds]);
-		foreach ($workspaceDatasets as $workspaceDataset)
-		{
-			$deleteResult = DatasetManager::delete($workspaceDataset->getId());
-			if (!$deleteResult->isSuccess())
-			{
-				$this->errorCollection->add($deleteResult->getErrors());
-
-				return null;
-			}
-			$elements = array_filter($elements, static function($item) use ($workspaceDataset) {
-				return
-					!($item['elementType'] === self::ELEMENT_TYPE_DATASET
-					&& (int)$item['elementId'] === $workspaceDataset->getExternalId())
-				;
-			});
 		}
 
 		if ($elements)

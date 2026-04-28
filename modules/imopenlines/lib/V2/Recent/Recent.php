@@ -166,7 +166,10 @@ class Recent extends \Bitrix\Im\V2\Recent\Recent
 		if (isset($sortPointer))
 		{
 			$filterField = $statusGroup === StatusGroup::ANSWERED ? 'DATE_MESSAGE' : 'ITEM_OLID';
-			$query->where($filterField, $comparisonSign, $sortPointer);
+			$filterValue = ($filterField === 'DATE_MESSAGE' && is_int($sortPointer))
+				? DateTime::createFromTimestamp($sortPointer)
+				: $sortPointer;
+			$query->where($filterField, $comparisonSign, $filterValue);
 		}
 
 		return $query;

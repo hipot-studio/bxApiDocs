@@ -7,9 +7,12 @@ use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Application\Config\PreloadedEntities;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Promotion\Internals\DeviceType;
 use Bitrix\Im\V2\Integration\AI\EngineManager;
+use Bitrix\Im\V2\Reading\Counter\Entity\UserCounters;
+use Bitrix\Im\V2\Reading\Counter\UserCountersCollector;
 use Bitrix\ImOpenLines\V2\Status\Status;
 use Bitrix\Im\V2\TariffLimit\Limit;
 use Bitrix\Intranet\Portal;
@@ -33,6 +36,10 @@ class Config implements \JsonSerializable
 
 	public function jsonSerialize(): array
 	{
+		$countersCollection = $this->getCounters();
+		$counters = $countersCollection->toRestFormat();
+		$notificationCounter = $countersCollection->getNotificationCounter();
+
 		return [
 			'node' => self::NODE,
 			'preloadedList' => $this->getPreloadedList(),
@@ -41,7 +48,8 @@ class Config implements \JsonSerializable
 			'marketApps' => $this->getMarketApps(),
 			'isCurrentUserAdmin' => $this->getCurrentUser()->isAdmin(),
 			'loggerConfig' => $this->getLoggerConfig(),
-			'counters' => $this->getCounters(),
+			'counters' => $counters,
+			'notificationCounter' => $notificationCounter,
 			'settings' => $this->getSettings(),
 			'promoList' => $this->getPromoList(),
 			'phoneSettings' => $this->getPhoneSettings(),
@@ -113,6 +121,7 @@ class Config implements \JsonSerializable
 			'JSON' => 'Y',
 			'GET_ORIGINAL_TEXT' => 'Y',
 			'SHORT_INFO' => 'Y',
+			'WITH_COUNTERS' => 'N',
 		]) ?: [];
 	}
 
@@ -153,9 +162,9 @@ class Config implements \JsonSerializable
 		return \Bitrix\Im\Settings::getLoggerConfig();
 	}
 
-	protected function getCounters(): array
+	protected function getCounters(): UserCounters
 	{
-		return (new \Bitrix\Im\V2\Message\CounterService($this->getContext()->getUserId()))->get();
+		return ServiceLocator::getInstance()->get(UserCountersCollector::class)->get($this->getContext()->getUserId());
 	}
 
 	protected function getSettings(): array
@@ -217,6 +226,7 @@ class Config implements \JsonSerializable
 	{
 		return [
 			'availableEngines' => (new EngineManager())->getAvailableEnginesForRest(),
+			'botName' => CopilotNameResolver::getInstance()->getName(),
 		];
 	}
 

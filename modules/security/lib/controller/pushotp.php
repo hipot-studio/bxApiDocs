@@ -149,6 +149,7 @@ class PushOtp extends Main\Engine\Controller
 					'channelTag' => $channelTag,
 					'geoData' => $geoData,
 					'browser' => $browserData,
+					'targetDeviceId' => $otpParams['DEVICE_INFO']['id'] ?? null,
 			],
 		]);
 

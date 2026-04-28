@@ -13,7 +13,7 @@ class DepartmentShowTool extends NodeShowTool
 
 	public function getName(): string
 	{
-		return 'show';
+		return 'department_show';
 	}
 
 	public function getDescription(): string

@@ -24,7 +24,7 @@ class Field
 	protected ?string $subtype = null;
 	protected ?array $exclude = null;
 
-	public function __construct(DataProvider $dataProvider, $id, array $params = null)
+	public function __construct(DataProvider $dataProvider, $id, ?array $params = null)
 	{
 		$this->dataProvider = $dataProvider;
 		$this->id = $id;
@@ -233,7 +233,7 @@ class Field
 	 * @param array|null $options Options array.
 	 * @return array
 	 */
-	public function toArray(array $options = null)
+	public function toArray(?array $options = null)
 	{
 		if(!is_array($options))
 		{

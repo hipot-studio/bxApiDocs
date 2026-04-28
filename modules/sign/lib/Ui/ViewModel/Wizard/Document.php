@@ -2,6 +2,9 @@
 
 namespace Bitrix\Sign\Ui\ViewModel\Wizard;
 
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkService;
@@ -21,6 +24,11 @@ final class Document implements Arrayable
 		$this->hcmLinkService = Container::instance()->getHcmLinkService();
 	}
 
+	/**
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 * @throws ArgumentException
+	 */
 	public function toArray(): array
 	{
 		$hcmLinkCompanyId = null;
@@ -66,6 +74,7 @@ final class Document implements Arrayable
 			'dateStatusChanged' => $this->document->dateStatusChanged,
 			'dateSignUntil' => $this->document->dateSignUntil,
 			'previewUrl' => $this->blankService->getPreviewUrl((int)$this->document->blankId),
+			'hasPlaceholders' => $this->blankService->hasPlaceholders((int)$this->document->blankId),
 
 			'externalDateCreateSourceType' => $this->document->externalDateCreateSourceType,
 			'hcmLinkDateSettingId' => $this->document->hcmLinkDateSettingId,

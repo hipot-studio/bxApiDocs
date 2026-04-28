@@ -10,16 +10,13 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Bitrix24\Feature;
-use Bitrix\Bitrix24\License\Market;
 use Bitrix\Call\Settings;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Type;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\AI\Tuning\Defaults;
-use Bitrix\AI\Integration\Baas\BaasTokenService;
 
 /**
  * @internal
@@ -184,13 +181,9 @@ class CallAISettings
 		if ($enabled === null)
 		{
 			$enabled = false;
-			if (Loader::includeModule('bitrix24'))
+			if (Loader::includeModule('rest'))
 			{
-				$enabled = (Market::isPaidVersion() || Market::isTrialVersion());
-			}
-			if (!$enabled && Loader::includeModule('baas'))
-			{
-				$enabled = ServiceLocator::getInstance()->get(BaasTokenService::class)?->isMarketAvailable() ?? false;
+				$enabled = \Bitrix\Rest\Marketplace\Client::isSubscriptionAvailable();
 			}
 		}
 

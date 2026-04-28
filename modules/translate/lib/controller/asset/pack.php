@@ -9,6 +9,8 @@ use Bitrix\Translate;
 
 /**
  * Harvester of the lang folder disposition.
+ *
+ * @internal
  */
 class Pack
 	extends Translate\Controller\Action

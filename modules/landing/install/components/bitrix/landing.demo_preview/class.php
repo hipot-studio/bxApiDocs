@@ -9,6 +9,7 @@ use Bitrix\Landing\Hook\Page\Theme;
 use Bitrix\Landing\Site\Type;
 use Bitrix\Landing\Rights;
 use \Bitrix\Landing\Mainpage;
+use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main\Config\Option;
 use \Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
@@ -30,7 +31,10 @@ class LandingSiteDemoPreviewComponent extends LandingSiteDemoComponent
 
 		if ($init)
 		{
-			$this->checkParam('SITE_ID', 0);
+			$this->checkParam('SITE_ID', null);
+			$this->checkParam('REPLACE_SITE_ID', null);
+			$this->checkParam('REPLACE_LID', null);
+			$this->checkParam('FOLDER_ID', null);
 			$this->checkParam('LANG_ID', '');
 			$this->checkParam('ADMIN_SECTION', 'N');
 			$this->checkParam('CODE', '');
@@ -111,7 +115,7 @@ class LandingSiteDemoPreviewComponent extends LandingSiteDemoComponent
 				// folder
 				if ($this->request($this->arParams['ACTION_FOLDER']))
 				{
-					$this->arResult['FOLDER_ID'] = (int)$this->request($this->arParams['ACTION_FOLDER']);
+					$this->arParams['FOLDER_ID'] = (int)$this->request($this->arParams['ACTION_FOLDER']);
 				}
 
 				// replace landing instead create new
@@ -125,10 +129,14 @@ class LandingSiteDemoPreviewComponent extends LandingSiteDemoComponent
 					$this->arParams['IS_CRM_FORM'] = 'Y';
 				}
 
-				if ($this->arParams['TYPE'] === Type::SCOPE_CODE_MAINPAGE)
+				if (
+					$this->arParams['TYPE'] === Type::SCOPE_CODE_VIBE
+					&& $this->arParams['REPLACE_SITE_ID'] !== null
+				)
 				{
-					$manager = new Mainpage\Manager();
-					$this->arParams['MAINPAGE_EXISTS'] = (bool)$manager->getConnectedPageId();
+					$this->arParams['IS_VIBE'] = true;
+					$vibe = Vibe::createBySiteId((int)$this->arParams['REPLACE_SITE_ID']);
+					$this->arParams['IS_VIBE_EXISTS'] = $vibe && ((int)$vibe->getLandingId() > 0);
 				}
 			}
 			else

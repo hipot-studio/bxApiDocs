@@ -45,6 +45,11 @@ class ContactProvider extends EntityProvider
 		return \CCrmOwnerType::Contact;
 	}
 
+	protected function getCategoryId(): int
+	{
+		return $this->categoryId;
+	}
+
 	protected function fetchEntryIds(array $filter): array
 	{
 		if (!($this->options['allowAllCategories'] ?? false))

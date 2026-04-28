@@ -30,6 +30,7 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Main\Application;
 
 class CAllCrmActivity
 {
@@ -95,6 +96,10 @@ class CAllCrmActivity
 			$params['PRESERVE_CREATION_TIME'] = $options['PRESERVE_CREATION_TIME'];
 		}
 
+		$currentUserId = (int)($options['CURRENT_USER'] ?? CCrmPerms::GetCurrentUserID());
+		$options['CURRENT_USER'] = $currentUserId;
+		$params['CURRENT_USER'] = $currentUserId;
+
 		if (!self::rebuildFieldsForDataBase('ADD', $arFields, 0, $params))
 		{
 			return false;
@@ -138,12 +143,16 @@ class CAllCrmActivity
 			$arFields['THREAD_ID'] = 0;
 		}
 
-		self::NormalizeDateTimeFields($arFields);
-
 		$beforeEvents = GetModuleEvents('crm', 'OnBeforeCrmActivityAdd');
 		while ($arEvent = $beforeEvents->Fetch())
 		{
 			ExecuteModuleEventEx($arEvent, array(&$arFields));
+		}
+
+		if (isset($arFields['PROVIDER_ID']) && $arFields['PROVIDER_ID'] === Provider\Email::getId())
+		{
+			$uncompressedDescription = $arFields['DESCRIPTION'] ?? '';
+			Provider\Email::compressActivityDescription($arFields);
 		}
 
 		$originalSubject = null;
@@ -164,9 +173,12 @@ class CAllCrmActivity
 		$arFields['OWNER_ID'] = (int)$arFields['OWNER_ID'];
 		$arFields['OWNER_TYPE_ID'] = (int)$arFields['OWNER_TYPE_ID'];
 
+		$fieldsToAdd = $arFields;
+		self::NormalizeDateTimeFields($fieldsToAdd, $currentUserId);
+
 		$ID = $DB->Add(
 			CCrmActivity::TABLE_NAME,
-			$arFields,
+			$fieldsToAdd,
 			['DESCRIPTION', 'STORAGE_ELEMENT_IDS', 'SETTINGS', 'PROVIDER_PARAMS', 'PROVIDER_DATA']
 		);
 		if(is_string($ID) && $ID !== '')
@@ -180,6 +192,21 @@ class CAllCrmActivity
 			self::RegisterError(array('text' => "DB connection was lost."));
 			return false;
 		}
+
+		if (
+			isset($arFields['PROVIDER_ID'], $arFields['PROVIDER_TYPE_ID'])
+			&& $arFields['PROVIDER_ID'] === Provider\Email::getId()
+			&& $arFields['PROVIDER_TYPE_ID'] === Provider\Email::TYPE_EMAIL_COMPRESSED
+			&& !$isRestoration
+		)
+		{
+			Provider\Email::addMailBodyBinding(
+				$ID,
+				CCrmOwnerType::Activity,
+				$uncompressedDescription ?? $arFields['DESCRIPTION'] ?? '',
+			);
+		}
+
 		if (!is_null($originalSubject))
 		{
 			$arFields['SUBJECT'] = $originalSubject;
@@ -238,7 +265,7 @@ class CAllCrmActivity
 			);
 		}
 
-		self::SaveBindings($ID, $arBindings, false, false, false);
+		$arBindings = self::SaveBindings($ID, $arBindings, false, false, false);
 		if(isset($arFields['COMMUNICATIONS']) && is_array($arFields['COMMUNICATIONS']))
 		{
 			self::SaveCommunications($ID, $arFields['COMMUNICATIONS'], $arFields, false, false);
@@ -465,11 +492,12 @@ class CAllCrmActivity
 			return false; // is not exists
 		}
 
+		$currentUserId = (int)($params['CURRENT_USER'] ?? CCrmPerms::GetCurrentUserID());
+		$options['CURRENT_USER'] = $currentUserId;
+
 		$checkFieldParams = ['PREVIOUS_FIELDS' => $arPrevEntity];
-		if (isset($options['CURRENT_USER']))
-		{
-			$checkFieldParams['CURRENT_USER'] = $options['CURRENT_USER'];
-		}
+		$checkFieldParams['CURRENT_USER'] = $currentUserId;
+
 		if (isset($options['INITIATED_BY_CALENDAR']))
 		{
 			$checkFieldParams['INITIATED_BY_CALENDAR'] = $options['INITIATED_BY_CALENDAR'];
@@ -583,11 +611,29 @@ class CAllCrmActivity
 			unset($arFields['PARENT_ID'], $arFields['THREAD_ID']);
 		}
 
-		self::NormalizeDateTimeFields($arFields);
-
 		if(isset($arFields['ID']))
 		{
 			unset($arFields['ID']);
+		}
+
+		if (
+			isset($arFields['DESCRIPTION'], $arFields['PROVIDER_ID'], $arFields['PROVIDER_TYPE_ID'])
+			&& $arFields['PROVIDER_ID'] === Provider\Email::getId()
+			&& $arFields['PROVIDER_TYPE_ID'] === Provider\Email::TYPE_EMAIL_COMPRESSED
+		)
+		{
+			$oldBody = Provider\Email::getBodyByMailId((int)$ID);
+			$oldBodyId = $oldBody?->getId() ?? 0;
+			$oldDescriptionFull = $oldBody?->getBody() ?? '';
+
+			if ($oldDescriptionFull !== $arFields['DESCRIPTION'])
+			{
+				$hasMailBodyChanged = true;
+				$uncompressedDescription = $arFields['DESCRIPTION'];
+				$deleteOldBody = Provider\Email::doesBodyHaveExactlyOneBinding($oldBodyId);
+			}
+
+			Provider\Email::compressActivityDescription($arFields);
 		}
 
 		if (isset($arFields['SUBJECT']))
@@ -606,7 +652,11 @@ class CAllCrmActivity
 		}
 
 		self::getInstance()->normalizeEntityFields($arFields);
-		$sql = 'UPDATE '.CCrmActivity::TABLE_NAME.' SET '.$DB->PrepareUpdate(CCrmActivity::TABLE_NAME, $arFields).' WHERE ID = '.$ID;
+
+		$fieldsToUpdate = $arFields;
+		self::NormalizeDateTimeFields($fieldsToUpdate, $currentUserId);
+
+		$sql = 'UPDATE '.CCrmActivity::TABLE_NAME.' SET '.$DB->PrepareUpdate(CCrmActivity::TABLE_NAME, $fieldsToUpdate).' WHERE ID = '.$ID;
 
 		if(!empty($arRecordBindings))
 		{
@@ -625,6 +675,21 @@ class CAllCrmActivity
 				'UPDATE %s SET THREAD_ID = %u WHERE THREAD_ID = %u',
 				\CCrmActivity::TABLE_NAME, $arFields['THREAD_ID'], $ID
 			));
+		}
+
+		if (
+			isset($hasMailBodyChanged, $arFields['PROVIDER_ID'], $arFields['PROVIDER_TYPE_ID'])
+			&& $hasMailBodyChanged === true
+			&& $arFields['PROVIDER_ID'] === Provider\Email::getId()
+			&& $arFields['PROVIDER_TYPE_ID'] === Provider\Email::TYPE_EMAIL_COMPRESSED
+		)
+		{
+			Provider\Email::deleteBindingByMailId($ID, $deleteOldBody);
+			Provider\Email::addMailBodyBinding(
+				$ID,
+				CCrmOwnerType::Activity,
+				$uncompressedDescription ?? $arFields['DESCRIPTION'] ?? '',
+			);
 		}
 
 		$arFields['SETTINGS'] = isset($arFields['SETTINGS']) ? unserialize($arFields['SETTINGS'], ['allowed_classes' => false]) : array();
@@ -654,7 +719,7 @@ class CAllCrmActivity
 			$bindingsChanged = !self::IsBindingsEquals($arBindings, $arPrevBindings);
 			if($bindingsChanged)
 			{
-				self::SaveBindings($ID, $arBindings, false, false, false);
+				$arBindings = self::SaveBindings($ID, $arBindings, false, false, false);
 				$needRegisterUncompletedActivities = true;
 			}
 		}
@@ -1506,58 +1571,25 @@ class CAllCrmActivity
 
 		return array_unique($result, SORT_NUMERIC);
 	}
-	protected static function NormalizeDateTimeFields(&$arFields)
+	protected static function NormalizeDateTimeFields(&$arFields, int $userId): void
 	{
-		global $DB;
+		$dateFields = [
+			'START_TIME',
+			'END_TIME',
+			'DEADLINE',
+		];
 
-		//With format 'MM/DD/YYYY H:MI:SS TT' call MakeTimeStamp("01/01/1970 01:00 PM") will not work.;
-		if(isset($arFields['START_TIME']))
+		foreach ($dateFields as $dateField)
 		{
-			$arFields['START_TIME'] = CCrmDateTimeHelper::NormalizeDateTime($arFields['START_TIME']);
-		}
-
-		if(isset($arFields['END_TIME']))
-		{
-			$arFields['END_TIME'] = CCrmDateTimeHelper::NormalizeDateTime($arFields['END_TIME']);
-		}
-
-		if(isset($arFields['DEADLINE']))
-		{
-			$arFields['DEADLINE'] = CCrmDateTimeHelper::NormalizeDateTime($arFields['DEADLINE']);
-		}
-
-		$offset = isset($arFields['TIME_ZONE_OFFSET']) ? (int)$arFields['TIME_ZONE_OFFSET'] : 0;
-		if($offset !== 0)
-		{
-			CTimeZone::Disable();
-
-			if(isset($arFields['START_TIME']))
+			if (isset($arFields[$dateField]) && $arFields[$dateField] != '')
 			{
-				$arFields['~START_TIME'] = $DB->CharToDateFunction(
-					CCrmDateTimeHelper::SubtractOffset($arFields['START_TIME'], $offset)
-				);
-				unset($arFields['START_TIME']);
+				$dateTimeValue = CCrmDateTimeHelper::createFromUserTime($arFields[$dateField], $userId);
+				$arFields['~' . $dateField] = Application::getConnection()->getSqlHelper()->convertToDbDateTime($dateTimeValue);
+				unset($arFields[$dateField]);
 			}
-
-			if(isset($arFields['END_TIME']))
-			{
-				$arFields['~END_TIME'] = $DB->CharToDateFunction(
-					CCrmDateTimeHelper::SubtractOffset($arFields['END_TIME'], $offset)
-				);
-				unset($arFields['END_TIME']);
-			}
-
-			if(isset($arFields['DEADLINE']))
-			{
-				$arFields['~DEADLINE'] = $DB->CharToDateFunction(
-					CCrmDateTimeHelper::SubtractOffset($arFields['DEADLINE'], $offset)
-				);
-				unset($arFields['DEADLINE']);
-			}
-
-			CTimeZone::Enable();
 		}
 	}
+
 	public static function GetFieldsInfo()
 	{
 		if(!self::$FIELD_INFOS)
@@ -1819,6 +1851,28 @@ class CAllCrmActivity
 			$params = array();
 		}
 
+		$currentUserID = (int)($params['CURRENT_USER'] ?? CCrmPerms::GetCurrentUserID());
+
+		$dateFieldsToCheck = self::getDateTimeFields();
+		foreach ($dateFieldsToCheck as $dateField)
+		{
+			if (isset($fields[$dateField]) && $fields[$dateField] != '')
+			{
+				$fields[$dateField] = CCrmDateTimeHelper::NormalizeDateTime($fields[$dateField]);
+				if (!CheckDateTime($fields[$dateField]))
+				{
+					self::registerError([
+						'text' => Loc::getMessage(
+							'CRM_ERROR_FIELD_INCORRECT',
+							[
+								'%FIELD_NAME%' => Loc::getMessage('CRM_ACTIVITY_FIELD_' . $dateField)
+							]
+						),
+					]);
+				}
+			}
+		}
+
 		if($action == 'ADD')
 		{
 			// Validation
@@ -1918,8 +1972,7 @@ class CAllCrmActivity
 
 			if(!isset($fields['AUTHOR_ID']))
 			{
-				$currentUserId = CCrmPerms::GetCurrentUserID();
-				$fields['AUTHOR_ID'] = $currentUserId > 0 ? $currentUserId : $fields['RESPONSIBLE_ID'];
+				$fields['AUTHOR_ID'] = $currentUserID > 0 ? $currentUserID : $fields['RESPONSIBLE_ID'];
 			}
 
 			if(!isset($fields['EDITOR_ID']))
@@ -1972,9 +2025,6 @@ class CAllCrmActivity
 		{
 			$prevFields = isset($params['PREVIOUS_FIELDS']) && is_array($params['PREVIOUS_FIELDS'])
 				? $params['PREVIOUS_FIELDS'] : null;
-
-			$currentUserID = isset($params['CURRENT_USER'])
-				? (int)$params['CURRENT_USER'] : CCrmPerms::GetCurrentUserID();
 
 			if(!is_array($prevFields) && !self::Exists($ID, false))
 			{
@@ -2060,32 +2110,6 @@ class CAllCrmActivity
 			}
 
 			unset($fields['DEADLINE'], $fields['~DEADLINE']);
-		}
-
-		$dateFieldsToCheck = [
-			'START_DATE',
-			'END_TIME',
-			'DEADLINE',
-			'CREATED',
-			'LAST_UPDATED',
-		];
-		foreach ($dateFieldsToCheck as $dateField)
-		{
-			if (
-				isset($fields[$dateField])
-				&& $fields[$dateField] != ''
-				&& !CheckDateTime($fields[$dateField])
-			)
-			{
-				self::registerError([
-					'text' => Loc::getMessage(
-						'CRM_ERROR_FIELD_INCORRECT',
-						[
-							'%FIELD_NAME%' => Loc::getMessage('CRM_ACTIVITY_FIELD_' . $dateField)
-						]
-					),
-				]);
-			}
 		}
 
 		$provider = self::GetActivityProvider($action === 'ADD' ? $fields : $prevFields);
@@ -2740,6 +2764,26 @@ class CAllCrmActivity
 			$result['WHERE'] = implode(' AND ', $sqlData['WHERE']);
 		}
 
+		if (empty($arSelectFields))
+		{
+			$dateTimeFields = self::getDateTimeFields();
+		}
+		else
+		{
+			$dateTimeFields = array_intersect($arSelectFields, self::getDateTimeFields());
+		}
+
+		if (!empty($dateTimeFields))
+		{
+			$tableAlias = $sender->GetTableAlias();
+			$result['SELECT'] = '';
+			foreach ($dateTimeFields as $dateTimeField)
+			{
+				$result['SELECT'] .= ', ' . $tableAlias. '.' . $dateTimeField . ' AS ' . $dateTimeField . '_RAW';
+			}
+		}
+
+
 		return !empty($result) ? $result : false;
 	}
 	protected static function PrepareAssociationsSave(&$arNew, &$arOld, &$arAdd, &$arDelete)
@@ -2774,7 +2818,7 @@ class CAllCrmActivity
 		}
 
 	}
-	public static function SaveBindings($ID, $arBindings, $registerEvents = true, $checkPerms = true, $registerBindingsChanges = true)
+	public static function SaveBindings($ID, $arBindings, $registerEvents = true, $checkPerms = true, $registerBindingsChanges = true): array
 	{
 		$result = array();
 		foreach($arBindings as $arBinding)
@@ -2796,6 +2840,8 @@ class CAllCrmActivity
 		$effectiveBindings = array_values($result);
 		CCrmActivity::DoSaveBindings($ID, $effectiveBindings, $registerBindingsChanges);
 		Crm\Timeline\ActivityController::synchronizeBindings($ID, $effectiveBindings);
+
+		return $effectiveBindings;
 	}
 	public static function GetBindings($ID)
 	{
@@ -4621,11 +4667,12 @@ class CAllCrmActivity
 			return false;
 		}
 
-		$arFields = array();
-		self::SetFromCalendarEvent($eventID, $arEventFields, $arFields);
+		$arFields = [];
+		$options = [];
+		self::SetFromCalendarEvent($eventID, $arEventFields, $arFields, $options);
 		if(isset($arFields['BINDINGS']) && count($arFields['BINDINGS']) > 0)
 		{
-			return self::Add($arFields, $checkPerms, $regEvent);
+			return self::Add($arFields, $checkPerms, $regEvent, $options);
 		}
 	}
 	// Event handlers -->
@@ -4711,7 +4758,7 @@ class CAllCrmActivity
 		return self::Add($arFields, false, false);
 	}
 	// <-- Contract
-	private static function SetFromCalendarEvent($eventID, &$arEventFields, &$arFields)
+	private static function SetFromCalendarEvent($eventID, &$arEventFields, &$arFields, &$options)
 	{
 		$isNew = !(isset($arFields['ID']) && (int)$arFields['ID'] > 0);
 		$isCall = (isset($arFields['TYPE_ID']) && (int)$arFields['TYPE_ID'] === CCrmActivityType::Call);
@@ -4824,8 +4871,8 @@ class CAllCrmActivity
 			global $USER;
 			if ($userID > 0 && !$USER?->getId())
 			{
-				//Try to use event owner timezone strictly. In case of work under agent.
-				$arFields['TIME_ZONE_OFFSET'] = CTimeZone::GetOffset($userID, true);
+				// calendar sync in agent has no user context, so set user directly:
+				$options['CURRENT_USER'] = $userID;
 			}
 
 			$arFields['START_TIME'] = CCalendar::Date($fromTs);
@@ -4969,7 +5016,17 @@ class CAllCrmActivity
 					return;
 				}
 
-				self::SetFromCalendarEvent($eventID, $arEventFields, $arEntity);
+				$options = [
+					'SKIP_CALENDAR_EVENT' => true,
+					'REGISTER_SONET_EVENT' => true,
+					'INITIATED_BY_CALENDAR' => true,
+				];
+				self::SetFromCalendarEvent($eventID, $arEventFields, $arEntity, $options);
+				if ($userId > 0)
+				{
+					$options['CURRENT_USER'] = $userId;
+				}
+
 				// Update activity if bindings are found overwise delete unbound activity
 				if (isset($arEntity['BINDINGS']) && !empty($arEntity['BINDINGS']))
 				{
@@ -4978,12 +5035,7 @@ class CAllCrmActivity
 						$arEntity,
 						false,
 						true,
-						[
-							'SKIP_CALENDAR_EVENT' => true,
-							'REGISTER_SONET_EVENT' => true,
-							'CURRENT_USER' => $userId > 0 ? $userId : null,
-							'INITIATED_BY_CALENDAR' => true,
-						]
+						$options
 					);
 				}
 				else
@@ -4994,17 +5046,19 @@ class CAllCrmActivity
 			else
 			{
 				$arFields = [];
-				self::SetFromCalendarEvent($eventID, $arEventFields, $arFields);
+				$options = [
+					'SKIP_CALENDAR_EVENT' => true,
+					'REGISTER_SONET_EVENT' => true,
+					'INITIATED_BY_CALENDAR' => true,
+				];
+				self::SetFromCalendarEvent($eventID, $arEventFields, $arFields, $options);
 				if (isset($arFields['BINDINGS']) && !empty($arFields['BINDINGS']))
 				{
 					self::Add(
 						$arFields,
 						false,
-						true, [
-							'SKIP_CALENDAR_EVENT' => true,
-							'REGISTER_SONET_EVENT' => true,
-							'INITIATED_BY_CALENDAR' => true,
-						]
+						true,
+						$options
 					);
 				}
 			}
@@ -8368,6 +8422,15 @@ class CAllCrmActivity
 	{
 		return \Bitrix\Crm\Integration\Bitrix24Manager::isFeatureEnabled('calendar_location');
 	}
+
+	public static function getDateTimeFields(): array
+	{
+		return array_keys(
+			array_filter(self::GetFields(), static function($field) {
+				return $field['TYPE'] === 'datetime';
+			})
+		);
+	}
 }
 
 class CCrmActivityType
@@ -9041,6 +9104,15 @@ class CCrmActivityEmailSender
 				$postingCharset = $arSupportedCharset[0];
 			}
 		}
+
+		if (
+			isset($arFields['PROVIDER_TYPE_ID'])
+			&& $arFields['PROVIDER_TYPE_ID'] === Provider\Email::TYPE_EMAIL_COMPRESSED
+		)
+		{
+			Provider\Email::uncompressActivityDescription($arFields);
+		}
+
 		//<-- Try to resolve posting charset
 		$subject = isset($arFields['SUBJECT']) ? $arFields['SUBJECT'] : '';
 		$description = isset($arFields['DESCRIPTION']) ? $arFields['DESCRIPTION'] : '';

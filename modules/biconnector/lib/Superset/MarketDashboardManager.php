@@ -91,9 +91,14 @@ final class MarketDashboardManager
 			return $result;
 		}
 
+		$type = self::isSystemAppByAppCode($appCode)
+			? SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM
+			: SupersetDashboardTable::DASHBOARD_TYPE_MARKET
+		;
+
 		if (SupersetInitializer::isSupersetExist())
 		{
-			$response = $this->integrator->importDashboard($filePath, $appCode);
+			$response = $this->integrator->importDashboard($filePath, $appCode, $type);
 			if ($response->hasErrors())
 			{
 				MarketDashboardLogger::logErrors($response->getErrors(),[
@@ -131,11 +136,6 @@ final class MarketDashboardManager
 			$dashboardStatus = SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED;
 		}
 
-		$type = self::isSystemAppByAppCode($appCode)
-			? SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM
-			: SupersetDashboardTable::DASHBOARD_TYPE_MARKET
-		;
-
 		$dashboard = SupersetDashboardTable::getList([
 			'select' => ['ID', 'APP_ID', 'EXTERNAL_ID', 'STATUS'],
 			'filter' => ['=APP_ID' => $appCode],
@@ -153,7 +153,7 @@ final class MarketDashboardManager
 			&& $dashboard->getExternalId() !== $externalDashboardId
 		)
 		{
-			$this->integrator->deleteDashboard([$dashboard->getExternalId()]);
+			$this->integrator->deleteDashboard([$dashboard->getExternalId()], $dashboard->getType() === SupersetDashboardTable::DASHBOARD_TYPE_MARKET);
 		}
 
 		$isDashboardExists = $dashboard->getExternalId() > 0;
@@ -456,7 +456,26 @@ final class MarketDashboardManager
 		{
 			if (SupersetInitializer::isSupersetExist())
 			{
-				$response = $this->integrator->deleteDashboard([$originalDashboard->getExternalId()]);
+				$relatedItemsResult = $this->getMarketDashboardReusedEntities([$originalDashboard->getId()]);
+				if (!$relatedItemsResult->isSuccess())
+				{
+					MarketDashboardLogger::logErrors($relatedItemsResult->getErrors(), [
+						'message' => 'Failed to get related entities for market dashboard during deletion',
+					]);
+					$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_DELETE_PROXY')));
+
+					return $result;
+				}
+
+				$relatedItems = $relatedItemsResult->getData();
+				if (!empty($relatedItems[$originalDashboard->getId()]))
+				{
+					$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_HAS_RELATED_ENTITIES')));
+
+					return $result;
+				}
+
+				$response = $this->integrator->deleteDashboard([$originalDashboard->getExternalId()], $originalDashboard->getType() === SupersetDashboardTable::DASHBOARD_TYPE_MARKET);
 				if ($response->hasErrors())
 				{
 					if ($response->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
@@ -663,5 +682,105 @@ final class MarketDashboardManager
 	public static function getDefaultDashboardGroupScope(): string
 	{
 		return ScopeService::BIC_SCOPE_CRM;
+	}
+
+	/**
+	 * Gets list of dashboards entities (datasets, charts) that re-used in another dashboards
+	 *
+	 * @param int[] $dashboardIds Array of dashboard IDs
+	 * @return Result
+	 */
+	public function getMarketDashboardReusedEntities(array $dashboardIds): Result
+	{
+		return (new DashboardRelationsFinder($this->integrator))
+			->getMarketDashboardReusedEntities($dashboardIds)
+		;
+	}
+
+
+	private function getDashboardRelationsWithMarketDashboards(Model\Dashboard $dashboard): Result
+	{
+		return (new DashboardRelationsFinder($this->integrator))
+			->findRelatedMarketDashboards($dashboard)
+		;
+	}
+
+	public function logDashboardActivity(Model\Dashboard $dashboard): void
+	{
+		$isMarketAppDashboard = !$dashboard->isCustomDashboard() && !empty($dashboard->getAppId());
+		if ($isMarketAppDashboard)
+		{
+			$this->logMarketDashboardActivity($dashboard);
+		}
+		else
+		{
+			$this->logCustomDashboardActivity($dashboard);
+		}
+	}
+
+	private function logMarketDashboardActivity(Model\Dashboard $dashboard): void
+	{
+		$clientId = SupersetDashboardTable::getList([
+			'select' => [
+				'REST_APP_CLIENT_ID' => 'APP.CLIENT_ID'
+			],
+			'filter' => [
+				'=APP_ID' => $dashboard->getAppId()
+			],
+		])->fetch()['REST_APP_CLIENT_ID'] ?? '';
+
+		if ($clientId)
+		{
+			\Bitrix\Rest\UsageStatTable::logBISuperset($clientId, $dashboard->getType());
+			\Bitrix\Rest\UsageStatTable::finalize();
+		}
+	}
+
+	private function logCustomDashboardActivity(Model\Dashboard $dashboard): void
+	{
+		$getRelationsResult = $this->getDashboardRelationsWithMarketDashboards($dashboard);
+
+		if (!$getRelationsResult->isSuccess())
+		{
+			MarketDashboardLogger::logErrors($getRelationsResult->getErrors(), [
+				'message' => 'Cannot get related market dashboards to custom dashboard while log dashboard activity',
+			]);
+		}
+
+		/** @var Model\Dashboard[] $relatedDashboards */
+		$relatedDashboards = $getRelationsResult->getData();
+
+		$appIds = [];
+		foreach ($relatedDashboards as $relatedDashboard)
+		{
+			if (
+				$relatedDashboard->isMarketDashboard() && $relatedDashboard->getAppId()
+			)
+			{
+				$appIds[] = $relatedDashboard->getAppId();
+			}
+		}
+
+		$clientIds = SupersetDashboardTable::getList([
+			'select' => [
+				'REST_APP_CLIENT_ID' => 'APP.CLIENT_ID'
+			],
+			'filter' => [
+				'=APP_ID' => $appIds
+			],
+		])
+			->fetchAll()
+		;
+
+		$clientIds = array_filter(array_unique(array_column($clientIds, 'REST_APP_CLIENT_ID')));
+		foreach ($clientIds as $clientId)
+		{
+			\Bitrix\Rest\UsageStatTable::logBISuperset($clientId, SupersetDashboardTable::DASHBOARD_TYPE_MARKET);
+		}
+
+		if (!empty($clientIds))
+		{
+			\Bitrix\Rest\UsageStatTable::finalize();
+		}
 	}
 }

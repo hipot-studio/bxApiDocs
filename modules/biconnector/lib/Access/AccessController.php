@@ -33,7 +33,7 @@ final class AccessController extends BaseAccessController
 	 *
 	 * @return AccessibleItem|null
 	 */
-	protected function loadItem(int $itemId = null): ?AccessibleItem
+	protected function loadItem(?int $itemId = null): ?AccessibleItem
 	{
 		if ($itemId)
 		{
@@ -76,7 +76,7 @@ final class AccessController extends BaseAccessController
 	 * @return bool
 	 * @throws UnknownActionException
 	 */
-	public function check(string $action, AccessibleItem $item = null, $params = null): bool
+	public function check(string $action, ?AccessibleItem $item = null, $params = null): bool
 	{
 		$params ??= [];
 		if (is_array($params))

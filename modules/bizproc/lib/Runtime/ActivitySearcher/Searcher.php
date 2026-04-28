@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Runtime\ActivitySearcher;
 
 use Bitrix\Bizproc\Activity\ActivityDescription;
-use Bitrix\Bizproc\Activity\Mixins\ActivityFilterChecker;
+use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Bizproc\RestActivityTable;
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Activity\Mixins\ActivityDescriptionBuilder;
@@ -85,9 +85,13 @@ class Searcher
 						continue;
 					}
 
-					$description = $this->includeActivityDescription($folder, $dirName, $documentType);
-					//Support multiple types
-					$activityType = (array)($description['TYPE'] ?? null);
+					$activityDescription = $this->includeActivityDescription($folder, $dirName, $documentType);
+					if (!$activityDescription)
+					{
+						continue;
+					}
+
+					$activityType = $activityDescription->getType();
 					foreach ($activityType as $i => $singleType)
 					{
 						$activityType[$i] = mb_strtolower(trim($singleType));
@@ -95,8 +99,8 @@ class Searcher
 
 					if (count(array_intersect($targetTypes, $activityType)) > 0)
 					{
-						$description['PATH_TO_ACTIVITY'] = $folder . '/' . $dirName;
-						$activities->add($key, $this->buildActivityDescription($description));
+						$activityDescription->setPathToActivity($folder . '/' . $dirName);
+						$activities->add($key, $activityDescription);
 					}
 				}
 			}
@@ -151,15 +155,9 @@ class Searcher
 		}
 
 		$activityDescription = $this->includeActivityDescriptionByDirectoryPath($dirPath);
-		if (empty($activityDescription))
-		{
-			return null;
-		}
 
-		return $this
-			->buildActivityDescription($activityDescription)
-			->setPathToActivity($dirPath)
-		;
+		return $activityDescription?->setPathToActivity($dirPath);
+
 	}
 
 	/**
@@ -233,34 +231,30 @@ class Searcher
 			return $normalizedCode;
 		}
 
-		$isRestActivity = $this->isRestActivityCode($normalizedCode);
 
-		if (
-			!$this->isCorrectActivityCode($normalizedCode)
-			|| (!$this->isActivityExists($normalizedCode) && !$isRestActivity)
-		)
-		{
-			return false;
-		}
-
-		if ($isRestActivity)
+		if ($this->isRestActivityCode($normalizedCode))
 		{
 			$internalCode = $this->extractRestInternalCode($normalizedCode);
 			$activity = $this->findRestActivityByInternalCode($internalCode);
 
-			eval(
-				'class CBP'
-				. CBPRuntime::REST_ACTIVITY_PREFIX
-				. $internalCode
-				. ' extends CBPRestActivity {const REST_ACTIVITY_ID = '
-				. ($activity ? $activity['ID'] : 0)
-				. ';}'
-			);
+			$restLoadedActivityCode =
+				Container::instance()
+					->getEvalService()
+					->defineRestActivityClass($internalCode, $activity ? (int)$activity['ID'] : 0);
+			if ($restLoadedActivityCode)
+			{
+				$this->addLoadedActivity($restLoadedActivityCode);
 
-			$restLoadedActivity = CBPRuntime::REST_ACTIVITY_PREFIX . $internalCode;
-			$this->addLoadedActivity($restLoadedActivity);
+				return $restLoadedActivityCode;
+			}
+		}
 
-			return $restLoadedActivity;
+		if (
+			!$this->isCorrectActivityCode($normalizedCode)
+			|| !$this->isActivityExists($normalizedCode)
+		)
+		{
+			return false;
 		}
 
 		[$filePath, $dirPath] = $this->findActivityFile($normalizedCode);
@@ -367,22 +361,44 @@ class Searcher
 		return is_array($activity) ? $activity : null;
 	}
 
-	private function includeActivityDescription(string $folder, string $dir, ?array $documentType): array
+	private function includeActivityDescription(string $folder, string $dir, ?array $documentType): ?ActivityDescription
 	{
 		$arActivityDescription = []; // forbidden to rename
 		$this->loadLocalization($folder . '/' . $dir, self::DESCRIPTION_FILE_NAME);
-		include($folder . '/' . $dir . '/' . self::DESCRIPTION_FILE_NAME);
 
-		return is_array($arActivityDescription) ? $arActivityDescription : [];
+		$result = include($folder . '/' . $dir . '/' . self::DESCRIPTION_FILE_NAME);
+
+		if ($result instanceof \Bitrix\Bizproc\Activity\ActivityDescription)
+		{
+			return $result;
+		}
+
+		if (is_array($arActivityDescription) && !empty($arActivityDescription))
+		{
+			return $this->buildActivityDescription($arActivityDescription);
+		}
+
+		return null;
 	}
 
-	private function includeActivityDescriptionByDirectoryPath(string $dirPath): array
+	private function includeActivityDescriptionByDirectoryPath(string $dirPath): ?ActivityDescription
 	{
 		$arActivityDescription = []; // forbidden to rename
 		$this->loadLocalization($dirPath, self::DESCRIPTION_FILE_NAME);
-		include($dirPath . '/' . self::DESCRIPTION_FILE_NAME);
 
-		return is_array($arActivityDescription) ? $arActivityDescription : [];
+		$result = include($dirPath . '/' . self::DESCRIPTION_FILE_NAME);
+
+		if ($result instanceof \Bitrix\Bizproc\Activity\ActivityDescription)
+		{
+			return $result;
+		}
+
+		if (is_array($arActivityDescription) && !empty($arActivityDescription))
+		{
+			return $this->buildActivityDescription($arActivityDescription);
+		}
+
+		return null;
 	}
 
 	private function loadLocalization(string $path, string $filename): void

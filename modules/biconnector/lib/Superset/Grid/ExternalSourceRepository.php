@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Superset\Grid;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\BIConnector\ExternalSource\SourceManager;
+use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\Superset\ExternalSource\CrmTracking\SourceProvider;
 use Bitrix\Crm\Tracking\Internals\SourceTable;
 use Bitrix\Crm\Tracking\Provider;
@@ -40,19 +41,37 @@ class ExternalSourceRepository
 		if (SourceManager::is1cConnectionsAvailable())
 		{
 			$actualSourceList[] = [
-				'CODE' => '1c',
+				'CODE' => Type::Source1C->value,
 				'ICON_CLASS' => 'ui-icon ui-icon-service-1c',
 				'NAME' => '1C',
+			];
+		}
+
+		if (SourceManager::isExternalSqlConnectionsAvailable())
+		{
+			$actualSourceList[] = [
+				'CODE' => Type::Pgsql->value,
+				'NAME' => 'PostgreSQL',
+			];
+
+			$actualSourceList[] = [
+				'CODE' => Type::Mysql->value,
+				'NAME' => 'MySQL',
 			];
 		}
 
 		if (Loader::includeModule('rest'))
 		{
 			$actualSourceList[] = [
-				'CODE' => 'rest',
+				'CODE' => Type::Rest->value,
 				'NAME' => 'REST',
 			];
 		}
+
+		$actualSourceList[] = [
+			'CODE' => Type::Csv->value,
+			'NAME' => Type::Csv->value,
+		];
 
 		return $actualSourceList;
 	}
@@ -89,6 +108,7 @@ class ExternalSourceRepository
 			->setSelect($this->getBiconnectorSourceSelect())
 			->addSelect(new ExpressionField('MODULE', '\'BI\''))
 			->setFilter($this->grid->getOrmFilter())
+			->addFilter('=TYPE', $this->getAvailableTypes())
 			->unionAll(SourceTable::query()
 				->setSelect($this->getCrmSourceTableSelect())
 				->addSelect(new ExpressionField('DESCRIPTION', 'NULL'))
@@ -107,6 +127,11 @@ class ExternalSourceRepository
 		}
 
 		return $result;
+	}
+
+	private function getAvailableTypes(): array
+	{
+		return array_column(self::getStaticSourceList(), 'CODE');
 	}
 
 	private function getBiconnectorSourceSelect(): array

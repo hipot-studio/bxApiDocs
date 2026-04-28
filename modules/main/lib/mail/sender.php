@@ -16,13 +16,33 @@ class Sender
 	public const MAIN_SENDER_SMTP_LIMIT_DECREASE = 'MainSenderSmtpLimitDecrease';
 	private const MAIN_SENDER_SMTP_SERVER_PATTERN = '/^([a-z0-9-]+\.)+[a-z0-9-]{2,20}$/i';
 
+	private static array $senderCache = [];
+
 	public static function add(array $fields)
 	{
 		$fields['NAME'] = $fields['NAME'] ?? '';
-		if (
-			$fields['NAME'] !== ''
-			&& $fields['NAME'] !== Sender\UserSenderDataProvider::getUserFormattedName()
-		)
+
+		if (empty($fields['OPTIONS']) || !is_array($fields['OPTIONS']))
+		{
+			$fields['OPTIONS'] = [];
+		}
+
+		$ownerId = (int)($fields['USER_ID'] ?? 0) ?: null;
+		$ownerName = Sender\UserSenderDataProvider::getUserFormattedName($ownerId);
+		if (isset($fields['OPTIONS']['useSenderName']))
+		{
+			if ($fields['OPTIONS']['useSenderName'] && $fields['NAME'] === '')
+			{
+				$fields['NAME'] = $ownerName;
+			}
+
+			if (!$fields['OPTIONS']['useSenderName'])
+			{
+				$fields['NAME'] = '';
+			}
+		}
+
+		if ($fields['NAME'] !== '')
 		{
 			$checkResult = self::checkSenderNameCharacters($fields['NAME']);
 			if (!$checkResult->isSuccess())
@@ -31,10 +51,6 @@ class Sender
 			];
 		}
 
-		if (empty($fields['OPTIONS']) || !is_array($fields['OPTIONS']))
-		{
-			$fields['OPTIONS'] = array();
-		}
 
 		self::checkEmail($fields, $error, $errors);
 		if ($error || $errors)
@@ -96,6 +112,14 @@ class Sender
 		$updateFields = [];
 		$result = new UpdateResult();
 
+		$sender = self::getById($senderId);
+		if (!$sender)
+		{
+			$result->addError(new Error(Loc::getMessage('MAIN_MAIL_SENDER_UNKNOWN_SENDER_ERROR')));
+
+			return $result;
+		}
+
 		if ($checkSenderAccess)
 		{
 			$checkResult = self::canEditSender($senderId);
@@ -107,19 +131,17 @@ class Sender
 			}
 		}
 
-		$sender = Internal\SenderTable::getById($senderId)->fetch();
-
-		if (!empty($fields['EMAIL']) && $fields['EMAIL'] !== $sender['EMAIL'])
+		if (is_string($fields['EMAIL']) && $fields['EMAIL'] !== $sender['EMAIL'])
 		{
-			$updateFields['EMAIL'] = (string)$fields['EMAIL'];
+			$updateFields['EMAIL'] = $fields['EMAIL'];
 		}
 
-		if (!empty($fields['IS_PUBLIC']) && $fields['IS_PUBLIC'] !== $sender['IS_PUBLIC'])
+		if (isset($fields['IS_PUBLIC']) && (int)$fields['IS_PUBLIC'] !== (int)$sender['IS_PUBLIC'])
 		{
 			$updateFields['IS_PUBLIC'] = (int)$fields['IS_PUBLIC'] === 1 ? 1 : 0;
 		}
 
-		if (!empty($fields['OPTIONS']['smtp']) && empty($fields['OPTIONS']['smtp']['password']))
+		if (isset($fields['OPTIONS']['smtp']) && empty($fields['OPTIONS']['smtp']['password']))
 		{
 			$fields['OPTIONS']['smtp']['password'] = $sender['OPTIONS']['smtp']['password'];
 		}
@@ -140,12 +162,29 @@ class Sender
 			$updateFields['OPTIONS'] = $sender['OPTIONS'];
 		}
 
-		if (
-			!is_null($fields['NAME'])
-			&& $fields['NAME'] !== $sender['NAME']
-		)
+		if (isset($fields['OPTIONS']['useSenderName']))
 		{
-			$name = (string)$fields['NAME'];
+			$sender['OPTIONS']['useSenderName'] = (bool)$fields['OPTIONS']['useSenderName'];
+			$updateFields['OPTIONS'] = $sender['OPTIONS'];
+
+			if (
+				$sender['OPTIONS']['useSenderName']
+				&& (!is_string($fields['NAME']) || $fields['NAME'] === '')
+				&& ($sender['NAME'] ?? '') === ''
+			)
+			{
+				$fields['NAME'] = Sender\UserSenderDataProvider::getUserFormattedName((int)$sender['USER_ID']);
+			}
+
+			if (!$sender['OPTIONS']['useSenderName'])
+			{
+				$fields['NAME'] = '';
+			}
+		}
+
+		if (is_string($fields['NAME']) && $fields['NAME'] !== $sender['NAME'])
+		{
+			$name = $fields['NAME'];
 			$checkResult = self::checkSenderNameCharacters($name);
 			if (!$checkResult->isSuccess())
 			{
@@ -169,6 +208,11 @@ class Sender
 		{
 			$result = Internal\SenderTable::update($senderId, $updateFields);
 
+			if ($result->isSuccess())
+			{
+				unset(self::$senderCache[$senderId]);
+			}
+
 			if (!empty($updateFields['OPTIONS']['smtp']['limit']))
 			{
 				self::setEmailLimit($sender['EMAIL'], $updateFields['OPTIONS']['smtp']['limit']);
@@ -184,7 +228,7 @@ class Sender
 	 * @param null $error
 	 * @param Main\ErrorCollection|null $errors
 	 */
-	public static function checkEmail(&$fields, &$error = null, Main\ErrorCollection &$errors = null)
+	public static function checkEmail(&$fields, &$error = null, ?Main\ErrorCollection &$errors = null)
 	{
 
 		if (empty($fields['IS_CONFIRMED']) && !empty($fields['OPTIONS']['smtp']))
@@ -259,9 +303,9 @@ class Sender
 		}
 	}
 
-	public static function delete(array $sendersId): void
+	public static function delete(array $senderIds): void
 	{
-		foreach ($sendersId as $senderId)
+		foreach ($senderIds as $senderId)
 		{
 			$id = (int)$senderId;
 			$currentSender = Internal\SenderTable::getById($id)->fetch();
@@ -276,6 +320,7 @@ class Sender
 			{
 				continue;
 			}
+			unset(self::$senderCache[$id]);
 
 			$aliasesForPossibleDeletion = [];
 			if (!empty($currentSender['OPTIONS']['smtp']['server']) && empty(self::getPublicSmtpSenderByEmail($currentSender['EMAIL'], $id)) && $currentSender['USER_ID'])
@@ -308,6 +353,7 @@ class Sender
 				foreach ($aliases as $alias)
 				{
 					SenderTable::delete($alias['ID']);
+					unset(self::$senderCache[(int)$alias['ID']]);
 				}
 			}
 		}
@@ -317,6 +363,49 @@ class Sender
 	{
 		$cache = new \CPHPCache();
 		$cache->clean($email, '/main/mail/smtp');
+	}
+
+	public static function getById(int $senderId): ?array
+	{
+		if (!$senderId)
+		{
+			return null;
+		}
+
+		if (array_key_exists($senderId, self::$senderCache))
+		{
+			return self::$senderCache[$senderId];
+		}
+
+		$row = Internal\SenderTable::getById($senderId)->fetch();
+		self::$senderCache[$senderId] = $row ?: null;
+
+		return self::$senderCache[$senderId];
+	}
+
+	public static function getByParentId(int $parentId, string $parentModuleId = 'mail'): array
+	{
+		return Internal\SenderTable::query()
+			->setSelect(['*'])
+			->where('PARENT_MODULE_ID', $parentModuleId)
+			->where('PARENT_ID', $parentId)
+			->fetchAll()
+		;
+	}
+
+	public static function getByEmail(string $email, ?int $userId = null): array
+	{
+		$query = SenderTable::query()
+			->setSelect(['*'])
+			->where('EMAIL', $email)
+		;
+
+		if ($userId)
+		{
+			$query->where('USER_ID', $userId);
+		}
+
+		return $query->fetchAll();
 	}
 
 	public static function getCustomSmtp($email)
@@ -693,16 +782,12 @@ class Sender
 	/**
 	 * checks if the user has a non-mailbox sender with the given email
 	*/
-	public static function hasUserSenderWithEmail(string $email, int $userId = null): bool
+	public static function hasUserSenderWithEmail(string $email, ?int $userId = null): bool
 	{
-		if (!($userId > 0))
+		$userId = $userId ?: (int)CurrentUser::get()->getId();
+		if (!$userId)
 		{
-			global $USER;
-
-			if (is_object($USER) && $USER->isAuthorized())
-			{
-				$userId = $USER->getId();
-			}
+			return false;
 		}
 
 		$filter = [
@@ -727,11 +812,14 @@ class Sender
 		return false;
 	}
 
+	/**
+	 * checks if the user can edit sender
+	 */
 	public static function canEditSender(int $senderId): Main\Result
 	{
 		$result = new Main\Result();
 
-		$sender = Internal\SenderTable::getById($senderId)->fetch();
+		$sender = self::getById($senderId);
 		if (!$sender)
 		{
 			$result->addError(new Error(Loc::getMessage('MAIN_MAIL_SENDER_UNKNOWN_SENDER_ERROR')));
@@ -761,7 +849,7 @@ class Sender
 	/**
 	 * get first public sender with smtp-server settings, one sender can be excluded by id
 	 */
-	public static function 	getPublicSmtpSenderByEmail(string $email, int $senderId = null, bool $onlyWithSmtp = true): ?int
+	public static function 	getPublicSmtpSenderByEmail(string $email, ?int $senderId = null, bool $onlyWithSmtp = true): ?int
 	{
 		$filter = [
 			'=IS_CONFIRMED' => true,

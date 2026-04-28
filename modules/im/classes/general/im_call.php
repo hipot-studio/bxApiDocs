@@ -1,6 +1,10 @@
 <?
 IncludeModuleLangFile(__FILE__);
 
+/**
+ * @internal
+ * @deprecated
+ */
 class CIMCall
 {
 	public static function Invite($arParams)

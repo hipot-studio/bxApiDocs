@@ -630,7 +630,7 @@ class Message
 
 		foreach ($recipients as $recipient)
 		{
-			$id = MailRecipientProvider::buildRecipientProviderId(($recipient['ENTITY_TYPE_NAME'] ?? $recipient['ENTITY_TYPE']), $recipient['ENTITY_ID'], ($recipient['VALUE_TYPE'] ?? MailRecipientProvider::EMAIL_TYPE_WORK), $recipient['VALUE']);
+			$id = MailRecipientProvider::buildRecipientProviderId(($recipient['ENTITY_TYPE_NAME'] ?? $recipient['ENTITY_TYPE']), $recipient['ENTITY_ID'], $recipient['VALUE']);
 			$items[] = [MailRecipientProvider::PROVIDER_ENTITY_ID, $id];
 			$itemsIds[] = $id;
 		}
@@ -1175,7 +1175,9 @@ class Message
 			self::SUPPORTED_ACTIVITY_TYPE,
 			[
 				'DESCRIPTION',
-			]
+				'PROVIDER_TYPE_ID',
+				'ASSOCIATED_ENTITY_ID',
+			],
 		);
 
 		$checkActivities = self::checkActivityPermission(self::PERMISSION_READ, $activities);
@@ -1188,7 +1190,7 @@ class Message
 
 		if (is_array($activity))
 		{
-			Email::uncompressActivity($activity);
+			Email::uncompressActivityDescription($activity);
 			if (isset($activity['DESCRIPTION']))
 			{
 				$body['HTML'] = $activity['DESCRIPTION'];

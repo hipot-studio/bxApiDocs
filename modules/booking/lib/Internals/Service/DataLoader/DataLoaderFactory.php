@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Service\DataLoader;
 
-use Bitrix\Booking\Entity\ExternalData\ItemType\CatalogSkuItemType;
 use Bitrix\Booking\Entity\ExternalData\ItemType\CrmDealItemType;
 use Bitrix\Booking\Internals\Container;
 

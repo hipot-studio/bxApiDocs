@@ -10,6 +10,7 @@ use Bitrix\Main\Web\HttpClient;
 use Bitrix\Sale\BusinessValue;
 use Bitrix\Sale\PaySystem;
 use Bitrix\Sale\Payment;
+use Bitrix\Sale\PriceMaths;
 
 Loc::loadMessages(__FILE__);
 
@@ -72,13 +73,14 @@ class YandexHandler
 		$cause = Loc::getMessage('SALE_HPS_YANDEX_CUSTOMER_REJECTION');
 
 		$shopId = $this->getBusinessValue($payment, 'YANDEX_SHOP_ID');
+		$paymentCurrency = $this->getBusinessValue($payment, 'PAYMENT_CURRENCY');
 		$request = '
 			<returnPaymentRequest
 				clientOrderId=\''.$payment->getId().'\'
 				requestDT=\''.$requestDT.'\'
 				invoiceId=\''.$payment->getField('PS_INVOICE_ID').'\'
 				shopId=\''.$shopId.'\'
-				amount=\''.number_format($refundableSum, 2, '.', '').'\'
+				amount=\'' . PriceMaths::roundByFormatCurrency($refundableSum, $paymentCurrency, 2) . '\'
 				currency=\''.$currency.'\'
 				cause=\''.$cause.'\'
 	        />';
@@ -195,12 +197,12 @@ class YandexHandler
 	{
 		$sum = $request->get('orderSumAmount');
 		$paymentSum = $this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY');
-
+		$currency = $payment->getField('CURRENCY');
 		PaySystem\Logger::addDebugInfo(
-			'Yandex: yandexSum='.round($sum, 2)."; paymentSum=".round($paymentSum, 2)
+			'Yandex: yandexSum='.PriceMaths::roundByFormatCurrency($sum, $currency, 2)."; paymentSum=".PriceMaths::roundByFormatCurrency($paymentSum, $currency, 2)
 		);
 
-		return round($paymentSum, 2) == round($sum, 2);
+		return PriceMaths::roundByFormatCurrency($paymentSum, $currency, 2) == PriceMaths::roundByFormatCurrency($sum, $currency, 2);
 	}
 
 	/**

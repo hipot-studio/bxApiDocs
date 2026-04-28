@@ -69,7 +69,7 @@ class Sender
 		{
 			$results[] = $this->sendByTag('IM_PUBLIC_'. $chat->getChatId(), $pull);
 		}
-		if ($chat->getType() === Chat::IM_TYPE_OPEN_CHANNEL)
+		if ($chat->getType() === Chat::IM_TYPE_OPEN_CHANNEL && $event->shouldSendSharedPull())
 		{
 			$results[] = $this->sendSharedPull($pull);
 		}

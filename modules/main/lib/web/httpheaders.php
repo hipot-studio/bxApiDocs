@@ -26,7 +26,7 @@ class HttpHeaders implements IteratorAggregate
 	/**
 	 * @param string[] | string[][] | null $headers
 	 */
-	public function __construct(array $headers = null)
+	public function __construct(?array $headers = null)
 	{
 		if ($headers !== null)
 		{

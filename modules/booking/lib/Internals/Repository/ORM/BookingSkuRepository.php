@@ -29,6 +29,7 @@ class BookingSkuRepository implements BookingSkuRepositoryInterface
 			$props = [
 				'BOOKING_ID' => $bookingId,
 				'SKU_ID' => $sku->getId(),
+				'PRODUCT_ROW_ID' => $sku->getProductRowId(),
 			];
 
 			$data[] = $props;

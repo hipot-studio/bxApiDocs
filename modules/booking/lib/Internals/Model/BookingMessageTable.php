@@ -57,15 +57,12 @@ final class BookingMessageTable extends DataManager
 				->addValidator(new LengthValidator(1, 255))
 				->configureRequired(),
 
-			(new StringField('SENDER_MODULE_ID'))
-				->addValidator(new LengthValidator(1, 255))
-				->configureRequired(),
-
 			(new StringField('SENDER_CODE'))
 				->addValidator(new LengthValidator(1, 255))
 				->configureRequired(),
 
-			(new IntegerField('EXTERNAL_MESSAGE_ID'))
+			(new StringField('EXTERNAL_MESSAGE_ID'))
+				->addValidator(new LengthValidator(1, 255))
 				->configureRequired(),
 
 			(new DatetimeField('CREATED_AT')),

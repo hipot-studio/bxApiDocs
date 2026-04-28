@@ -15,6 +15,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\UserAgent\Platform;
 use Bitrix\Im;
 use Bitrix\Im\Bot\Keyboard;
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\ImBot;
 use Bitrix\ImBot\Log;
@@ -1208,8 +1209,8 @@ class Network extends Base implements NetworkBot
 	 */
 	protected static function checkMessageRestriction(array $messageFields): bool
 	{
-		$bot = Im\Bot::getCache($messageFields['BOT_ID']);
-		if (mb_substr($bot['CODE'], 0, 7) != self::BOT_CODE)
+		$botData = BotData::getInstance((int)$messageFields['BOT_ID']);
+		if (!$botData->exists() || mb_substr($botData->getCode(), 0, 7) !== self::BOT_CODE)
 		{
 			return false;
 		}
@@ -1597,21 +1598,9 @@ class Network extends Base implements NetworkBot
 
 		if (!empty($messageFields['BOT_CODE']))
 		{
-			$list = Im\Bot::getListCache();
-			foreach ($list as $botData)
-			{
-				if ($botData['TYPE'] != Im\Bot::TYPE_NETWORK)
-				{
-					continue;
-				}
+			$messageFields['BOT_ID'] = Im\Bot::getNetworkBotIdByAppId($messageFields['BOT_CODE']);
 
-				if ($messageFields['BOT_CODE'] == $botData['APP_ID'])
-				{
-					$messageFields['BOT_ID'] = (int)$botData['BOT_ID'];
-					break;
-				}
-			}
-			if ((int)$messageFields['BOT_ID'] <= 0)
+			if (!$messageFields['BOT_ID'])
 			{
 				return false;
 			}
@@ -1751,12 +1740,12 @@ class Network extends Base implements NetworkBot
 			$needUpdateBotFields = true;
 			$needUpdateBotAvatar = true;
 
-			$bot = Im\Bot::getCache($messageFields['BOT_ID']);
-			$botClass = $bot['CLASS'];
+			$botData = BotData::getInstance((int)$messageFields['BOT_ID']);
+			$botClass = $botData->getClass();
 
 			if (
-				!empty($bot['MODULE_ID'])
-				&& Loader::includeModule($bot['MODULE_ID'])
+				!empty($botData->getModuleId())
+				&& Loader::includeModule($botData->getModuleId())
 				&& class_exists($botClass)
 				&& is_subclass_of($botClass, Imbot\Bot\NetworkBot::class)
 			)
@@ -1783,20 +1772,20 @@ class Network extends Base implements NetworkBot
 
 			if ($needUpdateBotFields || $needUpdateBotAvatar)
 			{
-				$botData = Im\User::getInstance($messageFields['BOT_ID']);
+				$user = Im\User::getInstance($messageFields['BOT_ID']);
 
 				if ($needUpdateBotFields)
 				{
 					$updateFields = [];
-					if ($messageFields['LINE']['NAME'] != htmlspecialcharsback($botData->getName()))
+					if ($messageFields['LINE']['NAME'] != htmlspecialcharsback($user->getName()))
 					{
 						$updateFields['NAME'] = $messageFields['LINE']['NAME'];
 					}
-					if ($messageFields['LINE']['DESC'] != htmlspecialcharsback($botData->getWorkPosition()))
+					if ($messageFields['LINE']['DESC'] != htmlspecialcharsback($user->getWorkPosition()))
 					{
 						$updateFields['WORK_POSITION'] = $messageFields['LINE']['DESC'];
 					}
-					if ($messageFields['LINE']['WELCOME_MESSAGE'] != $bot['TEXT_PRIVATE_WELCOME_MESSAGE'])
+					if ($messageFields['LINE']['WELCOME_MESSAGE'] != $botData->getTextPrivateWelcomeMessage())
 					{
 						Im\Bot::update(['BOT_ID' => $messageFields['BOT_ID']], [
 							'TEXT_PRIVATE_WELCOME_MESSAGE' => $messageFields['LINE']['WELCOME_MESSAGE']
@@ -1813,7 +1802,7 @@ class Network extends Base implements NetworkBot
 					if (!empty($messageFields['LINE']['AVATAR']))
 					{
 						$botAvatar = Im\User::uploadAvatar($messageFields['LINE']['AVATAR'], $messageFields['BOT_ID']);
-						if ($botAvatar && $botData->getAvatarId() != $botAvatar)
+						if ($botAvatar && $user->getAvatarId() != $botAvatar)
 						{
 							Im\Bot::update(
 								['BOT_ID' => $messageFields['BOT_ID']],
@@ -1823,7 +1812,7 @@ class Network extends Base implements NetworkBot
 					}
 					elseif (isset($messageFields['LINE']['AVATAR']))
 					{
-						if ($botData->getAvatarId())
+						if ($user->getAvatarId())
 						{
 							Im\Bot::update(
 								['BOT_ID' => $messageFields['BOT_ID']],
@@ -1840,11 +1829,8 @@ class Network extends Base implements NetworkBot
 		if ($connectorMid)
 		{
 			$connectorMessage = new Im\V2\Message($connectorMid);
-			$chat = \Bitrix\Im\V2\Chat::getInstance($connectorMessage->getChatId());
-			$chat
-				->withContextUser(static::getBotId())
-				->readTo($connectorMessage, true)
-			;
+			$botId = static::getBotId() ?: (int)$messageFields['BOT_ID'];
+			ServiceLocator::getInstance()->get(Im\V2\Reading\Reader::class)->readTo($connectorMessage, $botId);
 		}
 
 		if ($messageId > 0)
@@ -2224,18 +2210,21 @@ class Network extends Base implements NetworkBot
 	 */
 	public static function onChatStart($dialogId, $joinFields)
 	{
-		$botData = Im\Bot::getListCache();
+		$botData = BotData::getInstance((int)$joinFields['BOT_ID']);
 
 		if (
-			($bot = $botData[$joinFields['BOT_ID']])
-			&& $bot["TEXT_PRIVATE_WELCOME_MESSAGE"] <> ''
-			&& $joinFields['CHAT_TYPE'] == \IM_MESSAGE_PRIVATE
+			$botData->exists()
+			&& $botData->getTextPrivateWelcomeMessage() !== ''
+			&& $joinFields['CHAT_TYPE'] === \IM_MESSAGE_PRIVATE
 		)
 		{
 			$messageFields = [
 				'DIALOG_ID' => $joinFields['USER_ID'],
 				'FROM_USER_ID' => $joinFields['BOT_ID'],
-				'MESSAGE' => static::replacePlaceholders($bot['TEXT_PRIVATE_WELCOME_MESSAGE'], $joinFields['USER_ID']),
+				'MESSAGE' => static::replacePlaceholders(
+					$botData->getTextPrivateWelcomeMessage(),
+					$joinFields['USER_ID']
+				),
 				'URL_PREVIEW' => 'N',
 				'PARAMS' => [self::MESSAGE_PARAM_ALLOW_QUOTE => 'N'],
 			];
@@ -2710,10 +2699,10 @@ class Network extends Base implements NetworkBot
 
 			if ($grantAccess)
 			{
-				$botData = Im\Bot::getCache($messageFields['TO_USER_ID']);
-				if ($botData['CLASS'] === __CLASS__)
+				$botData = BotData::getInstance((int)$messageFields['TO_USER_ID']);
+				if (!empty($botData->getClass()) && $botData->getClass() === __CLASS__)
 				{
-					return self::unRegister($botData['APP_ID']);
+					return self::unRegister($botData->getAppId());
 				}
 			}
 		}
@@ -4212,6 +4201,7 @@ class Network extends Base implements NetworkBot
 				$send['AVATAR'] = mb_substr($fileTmp['src'], 0, 4) == 'http'
 					? $fileTmp['src']
 					: ImBot\Http::getServerAddress().$fileTmp['src'];
+				$send['AVATAR'] = Main\Web\Uri::urnEncode($send['AVATAR']);
 			}
 		}
 
@@ -4309,6 +4299,7 @@ class Network extends Base implements NetworkBot
 					$update['FIELDS']['AVATAR'] = mb_substr($fileTmp['src'], 0, 4) == 'http'
 						? $fileTmp['src']
 						: ImBot\Http::getServerAddress(). $fileTmp['src'];
+					$update['FIELDS']['AVATAR'] = Main\Web\Uri::urnEncode($update['FIELDS']['AVATAR']);
 				}
 			}
 		}

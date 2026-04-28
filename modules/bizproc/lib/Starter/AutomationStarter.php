@@ -73,7 +73,8 @@ final class AutomationStarter extends BaseTypeStarter
 		}
 
 		$context = new Context();
-		if ($this->config->scenario === Scenario::onDocumentAdd)
+
+		if ($this->config->scenario === Scenario::onDocumentAdd && $this->context->isManualOperation())
 		{
 			$context->setIsManual();
 		}

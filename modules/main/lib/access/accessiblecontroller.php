@@ -32,9 +32,9 @@ interface AccessibleController
 	 */
 	public function getEntityFilter(string $action, string $entityName, $params = null): ?array;
 
-	public function checkByItemId(string $action, int $itemId = null, $params = null): bool;
+	public function checkByItemId(string $action, ?int $itemId = null, $params = null): bool;
 
-	public function check(string $action, AccessibleItem $item = null, $params = null): bool;
+	public function check(string $action, ?AccessibleItem $item = null, $params = null): bool;
 
 	public function batchCheck(array $request, AccessibleItem $item): array;
 }

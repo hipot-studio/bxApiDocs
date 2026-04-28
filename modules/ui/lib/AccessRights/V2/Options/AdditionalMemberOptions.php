@@ -11,6 +11,7 @@ class AdditionalMemberOptions implements JsonSerializable, Arrayable
 	private ?bool $addProjectsProviderTab = null;
 	private ?bool $addStructureTeamsProviderTab = null;
 	private ?bool $useStructureDepartmentsProviderTab = null;
+	private ?bool $addStructureRolesProviderTab = null;
 
 	public function getAddUserGroupsProviderTab(): ?bool
 	{
@@ -48,6 +49,18 @@ class AdditionalMemberOptions implements JsonSerializable, Arrayable
 		return $this;
 	}
 
+	public function getAddStructureRolesProviderTab(): ?bool
+	{
+		return $this->addStructureRolesProviderTab;
+	}
+
+	public function setAddStructureRolesProviderTab(?bool $addStructureRolesProviderTab): self
+	{
+		$this->addStructureRolesProviderTab = $addStructureRolesProviderTab;
+
+		return $this;
+	}
+
 	public function getUseStructureDepartmentsProviderTab(): ?bool
 	{
 		return $this->useStructureDepartmentsProviderTab;
@@ -67,6 +80,7 @@ class AdditionalMemberOptions implements JsonSerializable, Arrayable
 			'addProjectsProviderTab' => $this->getAddProjectsProviderTab(),
 			'addStructureTeamsProviderTab' => $this->getAddStructureTeamsProviderTab(),
 			'useStructureDepartmentsProviderTab' => $this->getUseStructureDepartmentsProviderTab(),
+			'addStructureRolesProviderTab' => $this->getAddStructureRolesProviderTab(),
 		];
 	}
 

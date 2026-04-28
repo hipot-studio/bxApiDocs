@@ -38,6 +38,7 @@ class User
 		private ?string $lid = null,
 		private ?string $languageId = null,
 		private ?string $personalMobile = null,
+		private ?string $workPosition = null,
 		private ?string $password = null,
 		private mixed $ufCrmEntity = null, //UF_USER_CRM_ENTITY
 		private ?Date $lastLogin = null,
@@ -392,6 +393,16 @@ class User
 		return $currentUserId > 0 && $this->id === $currentUserId;
 	}
 
+	public function getWorkPosition(): ?string
+	{
+		return $this->workPosition;
+	}
+
+	public function setWorkPosition(?string $workPosition): void
+	{
+		$this->workPosition = $workPosition;
+	}
+		
 	/**
 	 * @return InvitationType|null
 	 */

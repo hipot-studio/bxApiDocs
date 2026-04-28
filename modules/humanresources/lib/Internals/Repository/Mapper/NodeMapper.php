@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\HumanResources\Internals\Repository\Mapper;
 
+use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\Node;
+use Bitrix\HumanResources\Model;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Util\AccessCodeHelper;
 
@@ -38,4 +40,39 @@ class NodeMapper
 			colorName: $node['COLOR_NAME'] ?? null,
 		);
 	}
+
+	public function convertFromOrmArrayToNodeCollection(array $nodeModelArray): NodeCollection
+	{
+		return new NodeCollection(
+			...array_map([$this, 'convertFromOrmArray'],
+				 $nodeModelArray,
+			));
+	}
+
+	public function convertFromModel(Model\Node $node): Node
+	{
+		$nodeId = $node->getId();
+		$accessCode = $node->getAccessCode()?->current();
+		$depth = $node->getChildNodes()?->current();
+
+		return new Node(
+			name: $node->getName(),
+			type: NodeEntityType::tryFrom($node->getType()),
+			structureId: $node->getStructureId(),
+			accessCode: $accessCode ? $accessCode->getAccessCode() : AccessCodeHelper::makeCodeByTypeAndId($nodeId),
+			id: $nodeId,
+			parentId: $node->getParentId(),
+			depth: $depth ? $depth->getDepth() : null,
+			createdBy: $node->getCreatedBy(),
+			createdAt: $node->getCreatedAt(),
+			updatedAt: $node->getUpdatedAt(),
+			xmlId: $node->getXmlId(),
+			active: $node->getActive(),
+			globalActive: $node->getGlobalActive(),
+			sort: $node->getSort(),
+			description: $node->getDescription(),
+			colorName: $node->getColorName(),
+		);
+	}
+
 }

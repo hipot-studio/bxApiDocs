@@ -11,7 +11,8 @@ use Bitrix\Calendar\Sync\Dictionary;
 use Bitrix\Calendar\Synchronization\Internal\Entity\Push\EntityType;
 use Bitrix\Calendar\Synchronization\Internal\Entity\Push\Push;
 use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
-use Bitrix\Calendar\Synchronization\Internal\Exception\ApiException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AuthorizationException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitExceededException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Model\PushTable;
 use Bitrix\Calendar\Synchronization\Internal\Model\SectionConnectionTable;
@@ -114,7 +115,7 @@ class RenewPushAgent
 
 					return;
 				}
-				catch (NotAuthorizedException)
+				catch (NotAuthorizedException|AuthorizationException|RateLimitExceededException)
 				{
 					return;
 				}
@@ -151,7 +152,11 @@ class RenewPushAgent
 				{
 					$vendorPushManager->subscribeConnection($connection);
 				}
-				catch (ApiException)
+				catch (NotAuthorizedException|AuthorizationException|RateLimitExceededException)
+				{
+					return;
+				}
+				catch (Exception)
 				{
 				}
 			}

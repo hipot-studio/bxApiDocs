@@ -31,7 +31,7 @@ class MainButton extends BaseContent
 			return Loc::getMessage('INTRANET_LICENSE_WIDGET_MAIN_BUTTON_TEXT_DEMO') ?? '';
 		}
 
-		return Loc::getMessage('INTRANET_LICENSE_WIDGET_MAIN_BUTTON_TEXT') ?? '';
+		return Loc::getMessage('INTRANET_LICENSE_WIDGET_MAIN_BUTTON_TEXT_MSGVER_1') ?? '';
 	}
 
 	public function getClassName(): string

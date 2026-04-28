@@ -141,9 +141,6 @@ final class BookingTable extends DataManager
 			(new OneToMany('MESSAGES', BookingMessageTable::class, 'BOOKING'))
 				->configureJoinType(Join::TYPE_LEFT),
 
-			(new OneToMany('FAILURE_LOG_ITEMS', BookingMessageFailureLogTable::class, 'BOOKING'))
-				->configureJoinType(Join::TYPE_LEFT),
-
 			(new Reference(
 				'NOTE',
 				NotesTable::class,
@@ -160,6 +157,14 @@ final class BookingTable extends DataManager
 				Join::on('this.ID', 'ref.ENTITY_ID')
 					->where('ref.ENTITY_TYPE', EntityType::Booking->value)
 					->where('ref.NOTE_TYPE', NoteType::Client->value)
+			))
+				->configureJoinType(Join::TYPE_LEFT)
+				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW),
+
+			(new Reference(
+				'PAYMENT',
+				BookingPaymentTable::class,
+				Join::on('this.ID', 'ref.BOOKING_ID')
 			))
 				->configureJoinType(Join::TYPE_LEFT)
 				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW),

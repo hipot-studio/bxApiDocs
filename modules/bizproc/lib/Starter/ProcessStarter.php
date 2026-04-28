@@ -8,6 +8,8 @@ use Bitrix\Bizproc\Activity\Mixins\ApplyRulesChecker;
 use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTriggerTable;
+use Bitrix\Crm\Automation\Trigger\BaseTrigger;
+use CBPCrmAutomationTrigger;
 
 final class ProcessStarter extends BaseTypeStarter
 {
@@ -117,7 +119,7 @@ final class ProcessStarter extends BaseTypeStarter
 		}
 
 		$code = $event->getCode();
-		if (!$code || !$event->isProcessTrigger())
+		if (!$code)
 		{
 			return true; // automation trigger
 		}
@@ -147,6 +149,10 @@ final class ProcessStarter extends BaseTypeStarter
 		}
 
 		$triggers = $query->exec();
+		if (is_subclass_of($event->getTriggerName(), BaseTrigger::class))
+		{
+			$code = str_replace('CBP', '', CBPCrmAutomationTrigger::class);
+		}
 
 		$result = true;
 		while ($trigger = $triggers->fetch())
@@ -178,7 +184,7 @@ final class ProcessStarter extends BaseTypeStarter
 				$startParameters[\CBPDocument::PARAM_IGNORE_SIMULTANEOUS_PROCESSES_LIMIT] = true;
 			}
 
-			$parameters = $this->validateParameters($templateId, $trigger['PARAMETERS'], $document->complexType);
+			$parameters = $this->validateParameters($templateId, $trigger['PARAMETERS'], $document?->complexType);
 			if ($parameters === null)
 			{
 				continue;

@@ -10,8 +10,10 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Permission;
+use Bitrix\Im\V2\Reading\Counter\CountersUpdater;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 
 class Converter
 {
@@ -167,12 +169,13 @@ class Converter
 
 	protected function deleteChildrenCounters(): self
 	{
-		$chatIds = CounterService::getChildrenWithCounters($this->getChat());
-
-		if (!empty($chatIds))
-		{
-			MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatIds]);
-		}
+		ServiceLocator::getInstance()
+			->get(CountersUpdater::class)
+			->delete()
+			->byParent($this->getChat()->getId())
+			->forAllUsers()
+			->execute()
+		;
 
 		return $this;
 	}

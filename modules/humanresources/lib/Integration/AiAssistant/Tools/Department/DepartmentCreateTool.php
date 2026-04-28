@@ -15,7 +15,7 @@ class DepartmentCreateTool extends NodeCreateTool
 
 	public function getName(): string
 	{
-		return 'create';
+		return 'department_create';
 	}
 
 	public function getDescription(): string

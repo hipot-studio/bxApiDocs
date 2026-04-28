@@ -639,7 +639,7 @@ In addition to the Google Terms of Service (http://www.google.com/accounts/TOS),
 				->setLicence(static::LICENCE_MIT),
 
 			// ui/install/js/ui/vue3/vue
-			(new static("Vue v3.5.4"))
+			(new static("Vue v3.5.28"))
 				->setCopyright("2018-present Yuxi (Evan) You and Vue contributors")
 				->setProductUrl("https://vuejs.org/")
 				->setLicence(static::LICENCE_MIT),
@@ -657,14 +657,14 @@ In addition to the Google Terms of Service (http://www.google.com/accounts/TOS),
 				->setLicence(static::LICENCE_MIT),
 
 			// ui/install/js/ui/vue3/router
-			(new static("Vue-router v4.4.4"))
-				->setCopyright("Copyright 2024 Eduardo San Martin Morote")
+			(new static("Vue-router v5.0.2"))
+				->setCopyright("Copyright 2026 Eduardo San Martin Morote")
 				->setProductUrl("https://router.vuejs.org/")
 				->setLicence(static::LICENCE_MIT),
 
 			// ui/install/js/ui/vue3/pinia
-			(new static("Pinia v2.2.2"))
-				->setCopyright("Copyright 2024 Eduardo San Martin Morote")
+			(new static("Pinia v3.0.4"))
+				->setCopyright("Copyright 2025 Eduardo San Martin Morote")
 				->setProductUrl("https://pinia.vuejs.org/")
 				->setLicence(static::LICENCE_MIT),
 
@@ -888,6 +888,18 @@ In addition to the Google Terms of Service (http://www.google.com/accounts/TOS),
 				->setProductUrl('https://github.com/toji/gl-matrix')
 				->setLicence(static::LICENCE_MIT)
 				->setLicenceUrl('https://github.com/toji/gl-matrix/blob/master/LICENSE.md'),
+
+			(new static("quickselect"))
+				->setCopyright("Copyright (c) 2024, Vladimir Agafonkin")
+				->setProductUrl('https://github.com/mourner/quickselect')
+				->setLicence(Copyright::LICENCE_ISC)
+				->setLicenceUrl('https://github.com/mourner/quickselect/blob/main/LICENSE.md'),
+
+			(new static("rbush"))
+				->setCopyright("Copyright (c) 2024 Volodymyr Agafonkin")
+				->setProductUrl('https://github.com/mourner/rbush')
+				->setLicence(Copyright::LICENCE_MIT)
+				->setLicenceUrl('https://github.com/mourner/rbush/blob/main/LICENSE.md'),
 		];
 	}
 }

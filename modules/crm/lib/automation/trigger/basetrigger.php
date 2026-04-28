@@ -2,11 +2,15 @@
 
 namespace Bitrix\Crm\Automation\Trigger;
 
+use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Starter\Enum\Scenario;
+use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Crm\Automation\Factory;
 use Bitrix\Crm\Integration\BizProc\Starter\Mixins\Dto\TriggerBindingDocumentsDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Mixins\TriggerBindingDocumentsTrait;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 if (!Main\Loader::includeModule('bizproc'))
 {
@@ -123,6 +127,22 @@ class BaseTrigger extends \Bitrix\Bizproc\Automation\Trigger\BaseTrigger
 			$trigger->setInputData($inputData);
 		}
 
+		if (Starter::isEnabled())
+		{
+			Starter::getByScenario(Scenario::onEvent)
+				->addEvent(
+					$trigger::class,
+					[],
+					[
+						'INPUT_DATA' => $inputData,
+						'TARGET' => $automationTarget,
+						'TRIGGER_CLASS' => $trigger::class,
+					]
+				)
+				->start()
+			;
+		}
+
 		return $trigger->send();
 	}
 
@@ -191,5 +211,25 @@ class BaseTrigger extends \Bitrix\Bizproc\Automation\Trigger\BaseTrigger
 		}
 
 		return true;
+	}
+
+	public static function getNodeName(): string
+	{
+		return static::getName();
+	}
+
+	public static function getNodeDescription(): string
+	{
+		return static::getDescription();
+	}
+
+	public static function getNodeColor(): int
+	{
+		return ActivityColorIndex::CYAN->value;
+	}
+
+	public static function getNodeIcon(): string
+	{
+		return Outline::ACTIVITY->name;
 	}
 }

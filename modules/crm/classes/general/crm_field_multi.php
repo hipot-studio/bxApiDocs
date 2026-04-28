@@ -991,19 +991,29 @@ class CCrmFieldMulti
 					continue;
 				}
 
-				$arData = explode(';', $arFields[$key]);
-				if (
-					in_array($entityId, ['EMAIL', 'PHONE','WEB'])
-					&&
-					count($arData) == 1
-				)
+				$arData = $arFields[$key];
+				if (is_string($arData))
 				{
-					$arData = explode(',', $arFields[$key]);
-					if ($entityId == 'EMAIL' && count($arData) == 1)
+					$arData = explode(';', $arFields[$key]);
+					if (
+						in_array($entityId, ['EMAIL', 'PHONE','WEB'])
+						&&
+						count($arData) == 1
+					)
 					{
-						$arData = explode(' ', $arFields[$key]);
+						$arData = explode(',', $arFields[$key]);
+						if ($entityId == 'EMAIL' && count($arData) == 1)
+						{
+							$arData = explode(' ', $arFields[$key]);
+						}
 					}
 				}
+
+				if (!is_array($arData))
+				{
+					$arData = [$arData];
+				}
+
 				foreach($arData as $data)
 				{
 					if (!empty($data))

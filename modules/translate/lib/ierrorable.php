@@ -4,6 +4,10 @@ namespace Bitrix\Translate;
 
 use Bitrix\Main;
 
+/**
+ * @internal
+ */
+
 interface IErrorable extends Main\Errorable
 {
 	/**

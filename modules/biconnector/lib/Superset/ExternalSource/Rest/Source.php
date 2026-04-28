@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Superset\ExternalSource\Rest;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnector;
 use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\Superset\ExternalSource;
+use Bitrix\Main\Loader;
 
 final class Source implements ExternalSource\Source
 {
@@ -30,6 +31,11 @@ final class Source implements ExternalSource\Source
 	public function isConnected(): bool
 	{
 		return $this->isConnected;
+	}
+
+	public function isAvailable(): bool
+	{
+		return Loader::includeModule('rest');
 	}
 
 	public function getTitle(): string

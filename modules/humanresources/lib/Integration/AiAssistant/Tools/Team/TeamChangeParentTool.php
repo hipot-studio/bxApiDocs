@@ -13,7 +13,7 @@ class TeamChangeParentTool extends NodeChangeParentTool
 
 	public function getName(): string
 	{
-		return 'change_parent';
+		return 'team_change_parent';
 	}
 
 	public function getDescription(): string

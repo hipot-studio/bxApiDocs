@@ -10,6 +10,18 @@ final class Parameters
 {
 	protected array $values = [];
 
+	public static function createFromTemplateParameters(int $templateId, array $templateParameters): self
+	{
+		$values = [];
+		foreach ($templateParameters as $key => $property)
+		{
+			$normalized = FieldType::normalizeProperty($property);
+			$values[$key] = $normalized['Default'];
+		}
+
+		return new self([$templateId => $values]);
+	}
+
 	public function __construct(array $values)
 	{
 		$this->values = $values;

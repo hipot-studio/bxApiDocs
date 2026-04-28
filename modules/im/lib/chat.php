@@ -10,7 +10,9 @@ use Bitrix\Im\V2\Chat\GeneralChat;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
 use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 use Bitrix\Im\V2\Message\Delete\DisappearService;
-use Bitrix\Im\V2\Message\ReadService;
+use Bitrix\Im\V2\Reading\Counter\CountersProvider;
+use Bitrix\Im\V2\Reading\Counter\Provider\UnreadPositionProvider;
+use Bitrix\Im\V2\Reading\View\ViewProvider;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response\Converter;
@@ -228,14 +230,14 @@ class Chat
 		}
 
 		// region New counter
-		// todo: select counter only if it's need
 		if (!isset($params['WITHOUT_COUNTERS']) || $params['WITHOUT_COUNTERS'] !== 'Y')
 		{
-
-			$readService = new ReadService();
-			$counters = $readService->getCounterService()->getByChatForEachUsers($chatId, $userIds);
-			$lastIdInChat = $readService->getLastMessageIdInChat($chatId);
-			$lastReads = $readService->getViewedService()->getDateViewedByMessageIdForEachUser($lastIdInChat, $userIds);
+			$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+			$countersProvider = ServiceLocator::getInstance()->get(CountersProvider::class);
+			$viewProvider = ServiceLocator::getInstance()->get(ViewProvider::class);
+			$counters = $countersProvider->getForUsers($chatId, $userIds);
+			$lastIdInChat = $chat->getLastMessageId();
+			$lastReads = $viewProvider->getDatesViewedByMessageIdsForUsers($lastIdInChat, $userIds);
 			foreach ($relations as $userId => $relation)
 			{
 				$counter = $counters[$userId] ?? 0;
@@ -359,10 +361,10 @@ class Chat
 			return false;
 		}
 
-		$readService = new ReadService($userId);
-
-		$chatData['RELATION_UNREAD_ID'] = $readService->getCounterService()->getIdFirstUnreadMessage($chatId) ?? 0;
-		$chatData['RELATION_COUNTER'] = $readService->getCounterService()->getByChat($chatId);
+		$unreadPositionProvider = ServiceLocator::getInstance()->get(UnreadPositionProvider::class);
+		$countersProvider = ServiceLocator::getInstance()->get(CountersProvider::class);
+		$chatData['RELATION_UNREAD_ID'] = $unreadPositionProvider->getForChat($chatId, $userId);
+		$chatData['RELATION_COUNTER'] = $countersProvider->getForUser($chatId, $userId);
 		$chatData['RELATION_START_ID'] = (int)$chatData['RELATION_START_ID'];
 
 		if (isset($options['LIMIT']))
@@ -1277,8 +1279,6 @@ class Chat
 		}
 
 		$userId = \Bitrix\Im\Common::getUserId();
-		$readService = new ReadService($userId);
-
 		$chatIds = [];
 
 		foreach ($chats as $chat)
@@ -1286,14 +1286,16 @@ class Chat
 			$chatIds[] = (int)$chat['ID'];
 		}
 
-		$counters = $readService->getCounterService()->getForEachChat($chatIds);
-		$unreadIds = $readService->getCounterService()->getIdFirstUnreadMessageForEachChats($chatIds);
+		$provider = ServiceLocator::getInstance()->get(CountersProvider::class);
+		$unreadPositionsProvider = ServiceLocator::getInstance()->get(UnreadPositionProvider::class);
+		$counters = $provider->getForUserByChatIds($userId, $chatIds);
+		$unreadIds = $unreadPositionsProvider->getForChats($chatIds, $userId);
 		$markedIds = Recent::getMarkedIdByChatIds($userId, $chatIds);
 
 		foreach ($chats as $key => $chat)
 		{
 			$id = (int)$chat['ID'];
-			$chats[$key]['RELATION_COUNTER'] = $counters[$id] ?? 0;
+			$chats[$key]['RELATION_COUNTER'] = $counters->getByChatId($id);
 			$chats[$key]['RELATION_UNREAD_ID'] = $unreadIds[$id] ?? 0;
 			$chats[$key]['MARKED_ID'] = $markedIds[$id] ?? 0;
 		}

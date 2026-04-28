@@ -173,13 +173,13 @@ class OrderShipment
 		$customPriceDelivery = isset($post['CUSTOM_PRICE_DELIVERY']) ? htmlspecialcharsbx($post['CUSTOM_PRICE_DELIVERY']) : $data['CUSTOM_PRICE_DELIVERY'];
 		$customWeightDelivery = isset($post['CUSTOM_WEIGHT_DELIVERY']) ? htmlspecialcharsbx($post['CUSTOM_WEIGHT_DELIVERY']) : $data['CUSTOM_WEIGHT_DELIVERY'];
 
-		$basePriceDelivery = round(
+		$basePriceDelivery = Sale\PriceMaths::roundByFormatCurrency(
 			(float)($post['BASE_PRICE_DELIVERY'] ?? $data['BASE_PRICE_DELIVERY'] ?? 0.0),
-			2
+			$data['CURRENCY']
 		);
-		$priceDelivery = round(
+		$priceDelivery = Sale\PriceMaths::roundByFormatCurrency(
 			(float)($post['PRICE_DELIVERY'] ?? $data['PRICE_DELIVERY'] ?? 0.0),
-			2
+			$data['CURRENCY']
 		);
 
 		$weight = $post['WEIGHT'] ?? $data['WEIGHT'] ?? 0;

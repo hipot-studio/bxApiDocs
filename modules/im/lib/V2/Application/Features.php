@@ -27,6 +27,7 @@ class Features
 		public readonly bool $chatDepartments,
 		public readonly bool $copilotActive,
 		public readonly bool $copilotAvailable,
+		public readonly bool $copilotHistoryAccess,
 		public readonly bool $sidebarLinks,
 		public readonly bool $sidebarFiles,
 		public readonly bool $sidebarBriefs,
@@ -56,7 +57,12 @@ class Features
 		public readonly bool $aiAssistantMcpSelectorAvailable,
 		public readonly bool $videoNoteTranscriptionAvailable,
 		public readonly bool $isCopilotReasoningAvailable,
+		public readonly bool $isTextFormatToolbarAvailable,
+		public readonly bool $isCounterV3Available,
 		public readonly bool $isCopilotFileUploadAvailable,
+		public readonly bool $isMountedTasksCardAvailable,
+		public readonly bool $isBitrixGptV2Available,
+		public readonly bool $isAddingUserByMentionAvailable,
 	){}
 
 	public static function get(): self
@@ -72,40 +78,46 @@ class Features
 	private static function createCurrent(): self
 	{
 		return new self(
-			!Settings::isLegacyChatActivated(),
-			Structure::isSyncAvailable(),
-			CopilotChat::isActive(),
-			CopilotChat::isAvailable(),
-			Option::get('im', 'im_link_url_migration', 'N') === 'Y',
-			Option::get('im', 'im_link_file_migration', 'N') === 'Y',
-			Documents::getResumesOfCallStatus() === Documents::ENABLED,
-			Zoom::isActive(),
-			Zoom::isAvailable(),
-			self::isImOpenLinesV2Available(),
-			self::isGiphyAvailable(),
-			Collab::isAvailable(),
-			Collab::isCreationAvailable(),
-			CollaberService::getInstance()->isEnabledCollabersInvitation(),
-			self::isInviteByPhoneAvailable(),
-			self::isInviteByLinkAvailable(),
-			DocumentSign::isAvailable(),
-			Invitation::isAvailable(),
-			Invitation::isChangeLanguageAvailable(),
-			self::isVoteCreationAvailable(),
-			self::isMessagesAutoDeleteEnabled(),
-			self::isCopilotSelectModelAvailable(),
-			Structure::isTeamsAvailable(),
-			self::isDesktopRedirectAvailable(),
-			self::isAiAssistantAvailable(),
-			self::isCopilotMentionAvailable(),
-			self::isAiFileTranscriptionAvailable(),
-			self::isChatSharingLinkAvailable(),
-			self::isTasksRecentListAvailable(),
-			self::isUnreadRecentModeAvailable(),
-			self::isAiAssistantMcpSelectorAvailable(),
-			self::isVideoNoteTranscriptionAvailable(),
-			self::isCopilotReasoningAvailable(),
-			self::isCopilotFileUploadAvailable(),
+			chatV2: !Settings::isLegacyChatActivated(),
+			chatDepartments: Structure::isSyncAvailable(),
+			copilotActive: CopilotChat::isActive(),
+			copilotAvailable: CopilotChat::isAvailable(),
+			copilotHistoryAccess: CopilotChat::isHistoryAvailable(),
+			sidebarLinks: Option::get('im', 'im_link_url_migration', 'N') === 'Y',
+			sidebarFiles: Option::get('im', 'im_link_file_migration', 'N') === 'Y',
+			sidebarBriefs: Documents::getResumesOfCallStatus() === Documents::ENABLED,
+			zoomActive: Zoom::isActive(),
+			zoomAvailable: Zoom::isAvailable(),
+			openLinesV2: self::isImOpenLinesV2Available(),
+			giphyAvailable: self::isGiphyAvailable(),
+			collabAvailable: Collab::isAvailable(),
+			collabCreationAvailable: Collab::isCreationAvailable(),
+			enabledCollabersInvitation: CollaberService::getInstance()->isEnabledCollabersInvitation(),
+			inviteByPhoneAvailable: self::isInviteByPhoneAvailable(),
+			inviteByLinkAvailable: self::isInviteByLinkAvailable(),
+			documentSignAvailable: DocumentSign::isAvailable(),
+			intranetInviteAvailable: Invitation::isAvailable(),
+			changeInviteLanguageAvailable: Invitation::isChangeLanguageAvailable(),
+			voteCreationAvailable: self::isVoteCreationAvailable(),
+			messagesAutoDeleteEnabled: self::isMessagesAutoDeleteEnabled(),
+			isCopilotSelectModelAvailable: self::isCopilotSelectModelAvailable(),
+			teamsInStructureAvailable: Structure::isTeamsAvailable(),
+			isDesktopRedirectAvailable: self::isDesktopRedirectAvailable(),
+			aiAssistantAvailable: self::isAiAssistantAvailable(),
+			isCopilotMentionAvailable: self::isCopilotMentionAvailable(),
+			aiFileTranscriptionAvailable: self::isAiFileTranscriptionAvailable(),
+			chatSharingLinkAvailable: self::isChatSharingLinkAvailable(),
+			isTasksRecentListAvailable: self::isTasksRecentListAvailable(),
+			unreadRecentModeAvailable: self::isUnreadRecentModeAvailable(),
+			aiAssistantMcpSelectorAvailable: self::isAiAssistantMcpSelectorAvailable(),
+			videoNoteTranscriptionAvailable: self::isVideoNoteTranscriptionAvailable(),
+			isCopilotReasoningAvailable: self::isCopilotReasoningAvailable(),
+			isTextFormatToolbarAvailable: self::isTextFormatToolbarAvailable(),
+			isCounterV3Available: self::isCounterV3Available(),
+			isCopilotFileUploadAvailable: self::isCopilotFileUploadAvailable(),
+			isMountedTasksCardAvailable: self::isMountedTasksCardAvailable(),
+			isBitrixGptV2Available: self::isBitrixGptV2Available(),
+			isAddingUserByMentionAvailable: self::isAddingUserByMentionAvailable(),
 		);
 	}
 
@@ -154,7 +166,7 @@ class Features
 
 	public static function isCopilotSelectModelAvailable(): bool
 	{
-		return Option::get('im', 'copilot_select_model_activated', 'N') === 'Y';
+		return true;
 	}
 
 	public static function isDesktopRedirectAvailable(): bool
@@ -174,19 +186,12 @@ class Features
 			return false;
 		}
 
-		if (\CUserOptions::GetOption('im', 'copilot_mention_user', 'N') === 'Y')
-		{
-			return true;
-		}
-
-		return Option::get('im', 'copilot_mention', 'N') === 'Y';
+		return true;
 	}
 
 	public static function isAiFileTranscriptionAvailable(): bool
 	{
-		return Option::get('im', 'file_transcription_available', 'N') === 'Y'
-			&& ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive()
-		;
+		return ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive();
 	}
 
 	public static function isChatSharingLinkAvailable(): bool
@@ -201,9 +206,7 @@ class Features
 
 	public static function isVideoNoteTranscriptionAvailable(): bool
 	{
-		return Option::get('im', 'video_note_transcription_available', 'N') === 'Y'
-			&& ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive()
-		;
+		return ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive();
 	}
 
 	public static function isUnreadRecentModeAvailable(): bool
@@ -216,14 +219,9 @@ class Features
 		return Loader::includeModule('tasks');
 	}
 
-	public static function isTranscriptionEmotionsAvailable(): bool
-	{
-		return Option::get('im', 'transcription_emotions_available', 'N') === 'Y';
-	}
-
 	public static function isCopilotReasoningAvailable(): bool
 	{
-		return Option::get('im', 'copilot_reasoning_available', 'N') === 'Y';
+		return true;
 	}
 
 	public static function isAiAssistantMcpSelectorAvailable(): bool
@@ -231,8 +229,33 @@ class Features
 		return Option::get('im', 'ai_assistant_mcp_selector_available', 'N') === 'Y';
 	}
 
+	public static function isTextFormatToolbarAvailable(): bool
+	{
+		return Option::get('im', 'text_format_toolbar_available', 'N') === 'Y';
+	}
+
+	public static function isCounterV3Available(): bool
+	{
+		return Option::get('im', 'counter_v3_available', 'N') === 'Y';
+	}
+
 	public static function isCopilotFileUploadAvailable(): bool
 	{
 		return Option::get('im', 'copilot_file_upload_available', 'N') === 'Y';
+	}
+
+	public static function isMountedTasksCardAvailable(): bool
+	{
+		return Option::get('im', 'mounted_tasks_card_available', 'N') === 'Y';
+	}
+
+	public static function isBitrixGptV2Available(): bool
+	{
+		return Option::get('aiassistant', 'show_chat_in_right_panel', 'N') === 'Y';
+	}
+
+	public static function isAddingUserByMentionAvailable(): bool
+	{
+		return Option::get('im', 'adding_user_by_mention_available', 'N') === 'Y';
 	}
 }

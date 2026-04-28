@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Integration\Superset;
 
 use Bitrix\BIConnector\Access\Install\AccessInstaller;
+use Bitrix\BIConnector\Configuration\DataTimezone;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
 use Bitrix\BIConnector\Superset\Config\ConfigContainer;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
@@ -10,7 +11,9 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
 use Bitrix\BIConnector\Superset\ActionFilter\ProxyAuth;
+use Bitrix\BIConnector\Superset\Config\DatasetSettings;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
+use Bitrix\BIConnector\Superset\DomainLinkService;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\KeyManager;
 use Bitrix\BIConnector\Superset\Logger\Logger;
@@ -345,6 +348,11 @@ final class SupersetInitializer
 	 */
 	public static function refreshSupersetDomainConnection(): ?string
 	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return null;
+		}
+
 		$allowedStatuses = [
 			self::SUPERSET_STATUS_READY,
 			self::SUPERSET_STATUS_LOAD,
@@ -469,7 +477,7 @@ final class SupersetInitializer
 	}
 
 	/**
-	 * Clears all data abount BI Constructor - tables and market apps.
+	 * Clears all <b>LOCAL</b> data abount BI Constructor - tables and market apps.
 	 *
 	 * @return void
 	 */
@@ -539,6 +547,9 @@ final class SupersetInitializer
 		Option::delete('biconnector', ['name' => SystemDashboardManager::SYSTEM_DASHBOARDS_DELETED_CODES_OPTION]);
 		Option::delete('biconnector', ['name' => '~superset_init_required_dataset_table_hash']);
 		Option::delete('biconnector', ['name' => '~superset_init_required_dataset_last_attempt']);
+		Option::delete('biconnector', ['name' => DatasetSettings::TYPING_OPTION_NAME]);
+		Option::delete('biconnector', ['name' => DatasetSettings::TYPING_LOCK_OPTION_NAME]);
+		Option::delete('biconnector', ['name' => DataTimezone::OPTION_NAME]);
 
 		\CUserOptions::DeleteOptionsByName('main.ui.filter', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
 		\CUserOptions::DeleteOptionsByName('main.ui.filter.presets', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
@@ -546,6 +557,7 @@ final class SupersetInitializer
 		\CUserOptions::DeleteOptionsByName('biconnector', 'top_menu_dashboards');
 		\CUserOptions::DeleteOptionsByName('biconnector', 'grid_pinned_dashboards');
 
+		DomainLinkService::getInstance()->clearUnlinkedStatus();
 		Registrar::getRegistrar()->clear(__CLASS__ . '::' . __FUNCTION__);
 
 		SupersetDashboardTagTable::deleteByFilter(['>ID' => 0]);

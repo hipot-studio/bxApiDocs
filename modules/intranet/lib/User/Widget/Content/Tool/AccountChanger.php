@@ -20,10 +20,13 @@ class AccountChanger extends BaseTool
 
 	public function getConfiguration(): array
 	{
+		$paths = $this->getPaths();
+
 		return [
 			'type' => $this->getType(),
 			'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_TOOL_ACCOUNT_CHANGER_TITLE'),
-			'path' => $this->getPath(),
+			'path' => $paths['passportPath'],
+			'loginPath' => $paths['loginPath'],
 		];
 	}
 
@@ -47,10 +50,21 @@ class AccountChanger extends BaseTool
 		return 'unavailable';
 	}
 
-	private function getPath(): string
+	private function getPaths(): array
 	{
-		return $this->getType() === 'network' && Loader::includeModule('socialservices')
-			? rtrim(CSocServBitrix24Net::NETWORK_URL, '/') . '/passport/view/'
-			: '';
+		if ($this->getType() === 'network' && Loader::includeModule('socialservices'))
+		{
+			$networkPath = rtrim(CSocServBitrix24Net::NETWORK_URL, '/');
+
+			return [
+				'passportPath' => $networkPath . '/passport/view/',
+				'loginPath' => $networkPath . '/portal/list/',
+			];
+		}
+
+		return [
+			'passportPath' => '',
+			'loginPath' => '',
+		];
 	}
 }

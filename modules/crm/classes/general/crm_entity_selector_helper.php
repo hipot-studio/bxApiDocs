@@ -260,11 +260,15 @@ class CCrmEntitySelectorHelper
 
 				if ($requireMultifields)
 				{
-					$phoneCountryList = static::getPhoneCountryList('CONTACT', $entityID);
-
 					// advanced info - phone number, e-mail
 					$obRes = CCrmFieldMulti::GetList(['ID' => 'asc'], ['ENTITY_ID' => 'CONTACT', 'ELEMENT_ID' => $entityID]);
+					$multifields = [];
 					while ($arRes = $obRes->Fetch())
+					{
+						$multifields[$arRes['ID']] = $arRes;
+					}
+					$phoneCountryList = CCrmFieldMulti::GetPhoneCountryList(array_keys($multifields));
+					foreach ($multifields as $arRes)
 					{
 						if (
 							$arRes['TYPE_ID'] === 'PHONE'
@@ -299,7 +303,7 @@ class CCrmEntitySelectorHelper
 								'VALUE_TYPE' => $arRes['VALUE_TYPE'],
 								'VALUE' => $arRes['VALUE'],
 								'VALUE_EXTRA' => [
-									'COUNTRY_CODE' => $phoneCountryList[$multiFieldId] ?? ''
+									'COUNTRY_CODE' => $phoneCountryList[$arRes['ID']] ?? ''
 								],
 								'VALUE_FORMATTED' => $formattedValue,
 								'COMPLEX_ID' => $arRes['COMPLEX_ID'],
@@ -430,11 +434,15 @@ class CCrmEntitySelectorHelper
 
 				if ($requireMultifields)
 				{
-					$phoneCountryList = static::getPhoneCountryList('COMPANY', $entityID);
-
 					// advanced info - phone number, e-mail
 					$obRes = CCrmFieldMulti::GetList(['ID' => 'asc'], ['ENTITY_ID' => 'COMPANY', 'ELEMENT_ID' => $entityID]);
+					$multifields = [];
 					while ($arRes = $obRes->Fetch())
+					{
+						$multifields[$arRes['ID']] = $arRes;
+					}
+					$phoneCountryList = CCrmFieldMulti::GetPhoneCountryList(array_keys($multifields));
+					foreach ($multifields as $arRes)
 					{
 						if ($arRes['TYPE_ID'] === 'PHONE' || $arRes['TYPE_ID'] === 'EMAIL')
 						{
@@ -543,11 +551,15 @@ class CCrmEntitySelectorHelper
 
 				if ($requireMultifields)
 				{
-					$phoneCountryList = static::getPhoneCountryList('LEAD', $entityID);
-
 					// advanced info - phone number, e-mail
 					$obRes = CCrmFieldMulti::GetList(['ID' => 'asc'], ['ENTITY_ID' => 'LEAD', 'ELEMENT_ID' => $entityID]);
+					$multifields = [];
 					while ($arRes = $obRes->Fetch())
+					{
+						$multifields[$arRes['ID']] = $arRes;
+					}
+					$phoneCountryList = CCrmFieldMulti::GetPhoneCountryList(array_keys($multifields));
+					foreach ($multifields as $arRes)
 					{
 						if ($arRes['TYPE_ID'] === 'PHONE' || $arRes['TYPE_ID'] === 'EMAIL')
 						{
@@ -578,7 +590,7 @@ class CCrmEntitySelectorHelper
 								'VALUE_TYPE' => $arRes['VALUE_TYPE'],
 								'VALUE' => $arRes['VALUE'],
 								'VALUE_EXTRA' => [
-									'COUNTRY_CODE' => $phoneCountryList[$multiFieldId] ?? ''
+									'COUNTRY_CODE' => $phoneCountryList[$arRes['ID']] ?? ''
 								],
 								'VALUE_FORMATTED' => $formattedValue,
 								'COMPLEX_ID' => $arRes['COMPLEX_ID'],

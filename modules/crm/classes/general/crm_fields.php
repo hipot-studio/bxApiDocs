@@ -8,6 +8,7 @@ use Bitrix\Iblock\UserField\Types\SectionType;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\UI\Extension;
 
 class CCrmFields
 {
@@ -553,6 +554,73 @@ class CCrmFields
 					'type' => 'custom',
 					'value' => $sVal
 				);
+			break;
+
+			case 'employee':
+				$employeeSelectorExtension = 'intranet.userfield.employee.employee-selector';
+
+				if (
+					Loader::includeModule('intranet')
+					&& Extension::register($employeeSelectorExtension)
+				)
+				{
+					Extension::load($employeeSelectorExtension);
+
+					$isMultiple = $fieldValue['MULTIPLE'] === 'Y' ? 'true' : 'false';
+
+					$selectedUserIds = $fieldValue['SETTINGS']['DEFAULT_VALUE'] ?? [];
+					$selectedUserIds = is_array($selectedUserIds) ? $selectedUserIds : [];
+					$selectedUserIds = Main\Web\Json::encode($selectedUserIds);
+
+					$html = <<<HTML
+							<div class="crm-employee-selector-container" style="width: 257px"></div>
+							<script>
+								BX.ready(() => {
+									void BX
+										.Runtime
+										.loadExtension('{$employeeSelectorExtension}')
+										.then(({ EmployeeSelector }) => {
+											const multipleCheckbox = document.querySelector("input[type='checkbox'][name='MULTIPLE']");
+											let isMultiple = {$isMultiple};
+											if (multipleCheckbox)
+											{
+												isMultiple = multipleCheckbox.checked;
+											}
+
+											let selector = null;
+											const createSelector = () => {
+												selector = new EmployeeSelector({
+													container: document.querySelector('.crm-employee-selector-container'),
+													fieldName: 'DEFAULT_VALUE',
+													isMultiple,
+													preselectedUserIds: {$selectedUserIds},
+												});
+											};
+
+											createSelector();
+											
+											if (multipleCheckbox)
+											{
+												multipleCheckbox.onchange = () => {
+													isMultiple = multipleCheckbox.checked;
+													selector.destroy();
+													
+													createSelector();
+												};
+											}
+										})
+									;
+								});
+							</script>
+						HTML;
+
+					$arFields[] = array(
+						'id' => 'DEFAULT_VALUE',
+						'name' => Loc::getMessage('CRM_FIELDS_DEFAULT_VALUE'),
+						'type' => 'custom',
+						'value' => $html,
+					);
+				}
 			break;
 		}
 		return $arFields;

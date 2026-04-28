@@ -16,7 +16,7 @@ class ArgumentTypeException extends ArgumentException
 	 * @param string $requiredType Required type
 	 * @param \Exception | null $previous
 	 */
-	public function __construct($parameter, $requiredType = "", \Throwable $previous = null)
+	public function __construct($parameter, $requiredType = "", ?\Throwable $previous = null)
 	{
 		if (!empty($requiredType))
 		{

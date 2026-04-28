@@ -58,6 +58,27 @@ class Recent
 		}
 	}
 
+	public static function removeRecentForUserIds(int $chatId, array $userIds): void
+	{
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		RecentTable::deleteByFilter([
+			'=CHAT_ID' => $chatId,
+			'@USER_ID' => $userIds,
+		]);
+
+		if (Loader::includeModule('im'))
+		{
+			foreach ($userIds as $userId)
+			{
+				CounterService::clearCache($userId);
+			}
+		}
+	}
+
 	public static function removeRecent(int $userId, int $chatId): Result
 	{
 		$result = RecentTable::delete([

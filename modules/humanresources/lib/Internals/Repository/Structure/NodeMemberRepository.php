@@ -319,6 +319,7 @@ final class NodeMemberRepository
 	 * @param int $parentUserId - id of a user that have to be in a higher node than $childUserId.
 	 * $parentUserId node must be connected to $childUserId node either directly or through a chain of child nodes
 	 * @param int $childUserId - id of a user that have to be in a lower node than $childUserId
+	 * @param array<NodeEntityType>|null $nodeTypes - optional filter by node entity types (e.g., DEPARTMENT, TEAM)
 	 * @return array Array of arrays with keys:
 	 * - MEMBER_1_ID: ID of the parent user's node member record
 	 * - MEMBER_1_ROLE_ID: Role ID of the parent user in their node
@@ -329,9 +330,23 @@ final class NodeMemberRepository
 	 * - MEMBER_2_ROLE_ID: Role ID of the child user in their node
 	 * @throws \Bitrix\Main\DB\SqlQueryException
 	 */
-	public function getConnectedNodePathsForUsers(int $parentUserId, int $childUserId): array
+	public function getConnectedNodePathsForUsers(
+		int $parentUserId,
+		int $childUserId,
+		?array $nodeTypes = null,
+	): array
 	{
 		$connection = Application::getConnection();
+
+		$nodeTypeCondition = '';
+		if (!empty($nodeTypes))
+		{
+			$nodeTypeValues = array_map(
+				static fn(NodeEntityType $type) => "'" . $connection->getSqlHelper()->forSql($type->value) . "'",
+				$nodeTypes,
+			);
+			$nodeTypeCondition = ' AND b_hr_structure_node.TYPE IN (' . implode(', ', $nodeTypeValues) . ')';
+		}
 
 		// Query logic:
 		// 1. select all node paths of the first user
@@ -357,10 +372,10 @@ JOIN (SELECT b_hr_structure_node_member.ID AS MEMBER_ID,
 	FROM b_hr_structure_node_member
 	JOIN b_hr_structure_node_member_role ON b_hr_structure_node_member.ID = b_hr_structure_node_member_role.MEMBER_ID
 	JOIN b_hr_structure_node ON b_hr_structure_node_member.NODE_ID = b_hr_structure_node.ID
-	WHERE b_hr_structure_node_member.ENTITY_TYPE = 'USER' AND b_hr_structure_node_member.ENTITY_ID = $childUserId
+	WHERE b_hr_structure_node_member.ENTITY_TYPE = 'USER' AND b_hr_structure_node_member.ENTITY_ID = $childUserId{$nodeTypeCondition}
 ) AS MEMBER_2 ON b_hr_structure_node_path.CHILD_ID = MEMBER_2.NODE_ID
 	AND MEMBER_2.STRUCTURE_ID = b_hr_structure_node.STRUCTURE_ID
-WHERE b_hr_structure_node_member.ENTITY_TYPE = 'USER' AND b_hr_structure_node_member.ENTITY_ID = $parentUserId;
+WHERE b_hr_structure_node_member.ENTITY_TYPE = 'USER' AND b_hr_structure_node_member.ENTITY_ID = $parentUserId{$nodeTypeCondition};
 SQL;
 
 		return $connection->query($sql)->fetchAll();

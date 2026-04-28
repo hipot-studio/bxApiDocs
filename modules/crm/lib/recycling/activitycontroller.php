@@ -536,6 +536,11 @@ class ActivityController extends BaseController
 			$provider::deleteAssociatedEntity($associatedEntityID, $fields, $deleteParams);
 		}
 
+		if ($provider)
+		{
+			$provider::onAfterRecycleBinErase($fields, $params);
+		}
+
 		Relation::deleteByRecycleBin($recyclingEntityID);
 
 		unset($this->entityIdToRecyclingEntityId[$entityID]);

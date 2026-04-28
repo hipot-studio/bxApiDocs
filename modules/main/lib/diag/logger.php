@@ -102,6 +102,9 @@ abstract class Logger extends Log\AbstractLogger
 	}
 
 	/**
+	 * @deprecated 26.300.0 use LoggerFactory
+	 * @see \Bitrix\Main\Diag\LoggerFactory
+	 *
 	 * Creates a logger by its ID based on .settings.php.
 	 * 'loggers' => [
 	 * 		'logger.id' => [
@@ -116,58 +119,12 @@ abstract class Logger extends Log\AbstractLogger
 	 * ]
 	 * @param string $id A logger ID.
 	 * @param array $params An optional params to be passed to a closure in settings.
+	 *
 	 * @return static|null
 	 */
 	public static function create(string $id, $params = [])
 	{
-		$loggersConfig = Config\Configuration::getValue('loggers');
-
-		$logger = null;
-
-		if (isset($loggersConfig[$id]))
-		{
-			$config = $loggersConfig[$id];
-
-			if (isset($config['className']))
-			{
-				$class = $config['className'];
-
-				$args = $config['constructorParams'] ?? [];
-				if ($args instanceof \Closure)
-				{
-					$args = $args();
-				}
-
-				$logger = new $class(...array_values($args));
-			}
-			elseif (isset($config['constructor']))
-			{
-				$closure = $config['constructor'];
-				if ($closure instanceof \Closure)
-				{
-					$logger = $closure(...array_values($params));
-				}
-			}
-
-			if ($logger instanceof static)
-			{
-				if (isset($config['level']))
-				{
-					$logger->setLevel($config['level']);
-				}
-
-				if (isset($config['formatter']))
-				{
-					$serviceLocator = DI\ServiceLocator::getInstance();
-					if ($serviceLocator->has($config['formatter']))
-					{
-						$logger->setFormatter($serviceLocator->get($config['formatter']));
-					}
-				}
-			}
-		}
-
-		return $logger;
+		return (new LoggerFactory(false))->createById($id, $params, false, false);
 	}
 
 	protected function getFormatter()

@@ -163,9 +163,9 @@ class Auth
 					'=PASSWORD' => $auth[static::$authQueryParams['PASSWORD']],
 					'=ACTIVE' => PasswordTable::ACTIVE,
 				],
-				'select' => ['ID']
+				'select' => ['ID'],
+				'cache' => ['ttl' => 86400],
 			])->fetch();
-
 			if (!$passwordInfo)
 			{
 				$passwordInfo = static::checkOldPassword($userInfo['ID'], $auth[static::$authQueryParams['PASSWORD']]);

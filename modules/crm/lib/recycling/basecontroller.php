@@ -691,11 +691,14 @@ abstract class BaseController
 	//region Business Process
 	protected function startRecoveryWorkflows($entityID)
 	{
-		\CCrmBizProcHelper::AutoStartWorkflows(
-			$this->getEntityTypeID(),
-			$entityID,
-			\CCrmBizProcEventType::Create,
-			$errors
+		$starter = new \Bitrix\Crm\Integration\BizProc\Starter\CrmStarter(
+			new \Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto($this->getEntityTypeID(), (int)$entityID)
+		);
+		$starter->runProcess(
+			new \Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+				userId: 0, // (int)Main\Engine\CurrentUser::get()->getId();
+			),
+			\CCrmBizProcEventType::Create
 		);
 	}
 	//endregion

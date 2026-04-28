@@ -13,7 +13,7 @@ class DepartmentGetChildrenTool extends NodeGetChildrenTool
 
 	public function getName(): string
 	{
-		return 'get_children';
+		return 'department_get_children';
 	}
 
 	public function getDescription(): string

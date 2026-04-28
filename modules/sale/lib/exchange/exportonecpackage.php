@@ -3,6 +3,7 @@ namespace Bitrix\Sale\Exchange;
 
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Sale\BasketItem;
 use Bitrix\Sale\Exchange\Entity\EntityImport;
@@ -21,6 +22,8 @@ use Bitrix\Sale\Internals\Entity;
 use Bitrix\Sale\Order;
 use Bitrix\Sale\Payment;
 use Bitrix\Sale\Result;
+use Bitrix\Sale\Public\Dto\BasketItemCalculationInput;
+use Bitrix\Sale\PriceMaths;
 use Bitrix\Sale\Shipment;
 
 abstract class ExportOneCPackage extends ExportOneCBase
@@ -360,7 +363,7 @@ abstract class ExportOneCPackage extends ExportOneCBase
 		$orderTax = 0;
 		foreach ($taxes as $tax)
 		{
-			$tax["VALUE_MONEY"] = roundEx($tax["VALUE_MONEY"], 2);
+			$tax["VALUE_MONEY"] = PriceMaths::roundByFormatCurrency($tax["VALUE_MONEY"], $tax["CURRENCY"] ?? 0);
 			$orderTax += $tax["VALUE_MONEY"];
 		}
 		return $orderTax;
@@ -378,24 +381,36 @@ abstract class ExportOneCPackage extends ExportOneCBase
 		$shipmentFields = $item->getFieldValues();
 		/** @var Shipment $shipmemt */
 		$shipmemt = $item->getEntity();
-		if($shipmemt->getPrice()>0)
+		if ($shipmemt->getPrice()>0)
 		{
 			$vatRate = 0;
 			$vatSum = 0;
+			$calculator = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
 			$order = $shipmemt->getParentOrder();
 			/** @var BasketItem $basket */
 			foreach ($order->getBasket() as $basket)
 			{
-				$vatRate = (float)$basket->getVatRate();
-				$basketVatSum = $basket->getPrice()/($vatRate+1) * $vatRate;
-				$vatSum += roundEx($basketVatSum * $basket->getQuantity(), 2);
+				$vatRate = (float)$basket->getVatRate() * 100;
+				$basketInput = new BasketItemCalculationInput(
+					basePrice: $basket->getPrice(),
+					quantity: $basket->getQuantity(),
+					vatRate: $vatRate,
+					vatIncluded: true,
+				);
+				$vatSum += PriceMaths::roundByFormatCurrency($calculator->calculate($basketInput)->totalCalculation->totalVatValue, $order->getCurrency());
 			}
 
-			$tax = roundEx((($shipmemt->getPrice() / ($vatRate+1)) * $vatRate), 2);
+			$shipmentInput = new BasketItemCalculationInput(
+				basePrice: $shipmemt->getPrice(),
+				quantity: 1.0,
+				vatRate: $vatRate,
+				vatIncluded: true,
+			);
+			$tax = PriceMaths::roundByFormatCurrency($calculator->calculate($shipmentInput)->vatAmount, $order->getCurrency());
 
-			if($orderTax > $vatSum && $orderTax == roundEx($vatSum + $tax, 2))
+			if($orderTax > $vatSum && $orderTax == PriceMaths::roundByFormatCurrency($vatSum + $tax, $order->getCurrency()))
 			{
-				$result = array('VAT_RATE'=>$vatRate*100);
+				$result = ['VAT_RATE' => $vatRate];
 			}
 		}
 		return $result;

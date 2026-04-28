@@ -5,12 +5,11 @@ use Bitrix\Crm;
 //IncludeModuleLangFile(__FILE__);
 class LeadDuplicateChecker extends DuplicateChecker
 {
-	protected $useStrictComparison = false;
-
 	public function __construct()
 	{
 		parent::__construct(\CCrmOwnerType::Lead);
 	}
+
 	public function findDuplicates(Crm\EntityAdapter $adapter, DuplicateSearchParams $params)
 	{
 		$result = array();
@@ -62,18 +61,5 @@ class LeadDuplicateChecker extends DuplicateChecker
 			}
 		}
 		return $result;
-	}
-	public function isStrictComparison()
-	{
-		return $this->useStrictComparison;
-	}
-	public function setStrictComparison($useStrictComparison)
-	{
-		if(!is_bool($useStrictComparison))
-		{
-			throw new Main\ArgumentTypeException('useStrictComparison', 'boolean');
-		}
-
-		$this->useStrictComparison = $useStrictComparison;
 	}
 }

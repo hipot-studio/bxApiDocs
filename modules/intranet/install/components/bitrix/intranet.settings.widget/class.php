@@ -5,15 +5,15 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
-use Bitrix\Intranet\MainPage\Publisher;
 use Bitrix\Main\Loader;
+use Bitrix\Intranet\MainPage\Publisher;
+use Bitrix\Intranet\MainPage;
 use Bitrix\Intranet;
 use Bitrix\Main\UI\Spotlight;
 use Bitrix\Security\Mfa\Otp;
 use Bitrix\Intranet\Settings\Widget\Requisite;
 use Bitrix\Main\Engine\Response\AjaxJson;
 use Bitrix\Bitrix24;
-use Bitrix\Intranet\MainPage;
 
 class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitrix\Main\Engine\Contract\Controllerable
 {
@@ -260,10 +260,12 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 					{
 						self::$cachedResult['SPOTLIGHT'] = true;
 					}
+					$integration = Intranet\Integration\Landing\Vibe\MainPage::getInstance();
 					if (
-						$spotlightAfterFirstCreate->isAvailable()
+						isset($integration)
+						&& $integration->getVibe()->isReady()
+						&& $spotlightAfterFirstCreate->isAvailable()
 						&& Loader::includeModule('landing')
-						&& (new Bitrix\Landing\Mainpage\Manager)->isReady()
 						&& !((new Publisher)->isPublished())
 					)
 					{

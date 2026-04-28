@@ -1,6 +1,8 @@
 <?if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die();?><?
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sale\PriceMaths;
+
 Loc::loadMessages(__FILE__);
 
 $arPaySysAction["ENCODING"] = "";
@@ -396,19 +398,7 @@ $arCurFormat = CCurrencyLang::GetCurrencyFormat($params['CURRENCY']);
 $currency = preg_replace('/(^|[^&])#/', '${1}', $arCurFormat['FORMAT_STRING']);
 	$currency = strip_tags($currency);
 
-// Precision
-$currencyFormat = CCurrencyLang::GetFormatDescription($params['CURRENCY']);
-if ($currencyFormat === false)
-	$currencyFormat = CCurrencyLang::GetDefaultValues();
-$currencyPrecision = (int)$currencyFormat['DECIMALS'];
-if ($currencyPrecision <= 0)
-	$currencyPrecision = 2;
-$salePrecision = (int)Bitrix\Main\Config\Option::get('sale', 'value_precision', 2);
-if ($salePrecision <= 0)
-	$salePrecision = 2;
-$salePrecision = min($salePrecision, SALE_VALUE_PRECISION);
-$precision = min($salePrecision, $currencyPrecision);
-
+$currency = $params['CURRENCY'];
 
 $columnList = array('NUMBER', 'NAME', 'QUANTITY', 'MEASURE', 'PRICE', 'SUM', 'VAT_RATE', 'VAT_SUM', 'TOTAL');
 $arCols = array();
@@ -532,7 +522,7 @@ if (count($params['BASKET_ITEMS']) > 0)
 					if ($basketItem['VAT_RATE'] == 0.0)
 						$data = CSalePdf::prepareToPdf(Loc::getMessage('SALE_HPS_BILLBY_TOTAL_VAT_RATE_NO'));
 					else
-						$data = CSalePdf::prepareToPdf(roundEx($basketItem['VAT_RATE'] * 100, $precision)."%");
+						$data = CSalePdf::prepareToPdf(roundEx($basketItem['VAT_RATE'] * 100, 2)."%");
 					$arCols[$columnId]['IS_DIGIT'] = true;
 					break;
 				case 'VAT_SUM':
@@ -571,11 +561,11 @@ if (count($params['BASKET_ITEMS']) > 0)
 			$arProps[$n][] = $pdf::prepareToPdf(sprintf("%s: %s", $basketPropertyItem["NAME"], $basketPropertyItem["VALUE"]));
 		}
 
-		$sum += roundEx(doubleval($basketItem['PRICE'] * $basketItem['QUANTITY']), $precision);
+		$sum += PriceMaths::roundByFormatCurrency($basketItem['PRICE'] * $basketItem['QUANTITY'], $currency);
 		$vat = max($vat, $basketItem['VAT_RATE']);
-		$totalSum += roundEx($basketItemSum, $precision);
-		$totalVatSum += roundEx($basketItemVatSum, $precision);
-		$totalSumWithVat += roundEx($basketItemTotal, $precision);
+		$totalSum += PriceMaths::roundByFormatCurrency($basketItemSum, $currency);
+		$totalVatSum += PriceMaths::roundByFormatCurrency($basketItemVatSum, $currency);
+		$totalSumWithVat += PriceMaths::roundByFormatCurrency($basketItemTotal, $currency);
 	}
 
 	if ($params['DELIVERY_PRICE'] > 0)
@@ -631,7 +621,7 @@ if (count($params['BASKET_ITEMS']) > 0)
 					if ($vat == 0.0)
 						$data = CSalePdf::prepareToPdf(Loc::getMessage('SALE_HPS_BILLBY_TOTAL_VAT_RATE_NO'));
 					else
-						$data = CSalePdf::prepareToPdf(roundEx($vat * 100, $precision)."%");
+						$data = CSalePdf::prepareToPdf(roundEx($vat * 100, 2)."%");
 					$arCols[$columnId]['IS_DIGIT'] = true;
 					break;
 				case 'VAT_SUM':
@@ -652,10 +642,10 @@ if (count($params['BASKET_ITEMS']) > 0)
 				$arCells[$n][$columnId] = $data;
 		}
 
-		$sum += roundEx(doubleval($params['DELIVERY_PRICE']), $precision);
-		$totalSum += roundEx($basketItemSum, $precision);
-		$totalVatSum += roundEx($basketItemVatSum, $precision);
-		$totalSumWithVat += roundEx($basketItemTotal, $precision);
+		$sum += PriceMaths::roundByFormatCurrency($params['DELIVERY_PRICE'], $currency);
+		$totalSum += PriceMaths::roundByFormatCurrency($basketItemSum, $currency);
+		$totalVatSum += PriceMaths::roundByFormatCurrency($basketItemVatSum, $currency);
+		$totalSumWithVat += PriceMaths::roundByFormatCurrency($basketItemTotal, $currency);
 	}
 
 	$totalRowIsLast = false;
@@ -737,9 +727,9 @@ if (count($params['BASKET_ITEMS']) > 0)
 						"%s%s%s:",
 						($tax["IS_IN_PRICE"] == "Y") ? Loc::getMessage('SALE_HPS_BILLBY_INCLUDING') : "",
 						$tax["TAX_NAME"],
-						($vat <= 0 && $tax["IS_PERCENT"] == "Y") ? sprintf(' (%s%%)', roundEx($tax["VALUE"], $precision)) : ""
+						($vat <= 0 && $tax["IS_PERCENT"] == "Y") ? sprintf(' (%s%%)', roundEx($tax["VALUE"], 2)) : ""
 					));
-					$arCells[$n][$arColumnKeys[$columnCount-1]] = CSalePdf::prepareToPdf(SaleFormatCurrency($tax["VALUE_MONEY"], $params['CURRENCY'], true));
+					$arCells[$n][$arColumnKeys[$columnCount-1]] = CSalePdf::prepareToPdf(PriceMaths::roundByFormatCurrency($tax["VALUE_MONEY"], $currency));
 				}
 			}
 		}
@@ -752,7 +742,7 @@ if (count($params['BASKET_ITEMS']) > 0)
 				$arCells[$n][$arColumnKeys[$i]] = null;
 
 			$arCells[$n][$arColumnKeys[$columnCount-2]] = CSalePdf::prepareToPdf(Loc::getMessage('SALE_HPS_BILLBY_TOTAL_PAID'));
-			$arCells[$n][$arColumnKeys[$columnCount-1]] = CSalePdf::prepareToPdf(SaleFormatCurrency($params['SUM_PAID'], $params['CURRENCY'], true));
+			$arCells[$n][$arColumnKeys[$columnCount-1]] = CSalePdf::prepareToPdf(PriceMaths::roundByFormatCurrency($params['SUM_PAID'], $currency));
 		}
 
 		if ($params['DISCOUNT_PRICE'] > 0)
@@ -763,7 +753,7 @@ if (count($params['BASKET_ITEMS']) > 0)
 				$arCells[$n][$arColumnKeys[$i]] = null;
 
 			$arCells[$n][$arColumnKeys[$columnCount-2]] = CSalePdf::prepareToPdf(Loc::getMessage('SALE_HPS_BILLBY_TOTAL_DISCOUNT'));
-			$arCells[$n][$arColumnKeys[$columnCount-1]] = CSalePdf::prepareToPdf(SaleFormatCurrency($params['DISCOUNT_PRICE'], $params['CURRENCY'], true));
+			$arCells[$n][$arColumnKeys[$columnCount-1]] = CSalePdf::prepareToPdf(PriceMaths::roundByFormatCurrency($params['DISCOUNT_PRICE'], $currency));
 		}
 
 		if (!$totalRowIsLast)
@@ -775,7 +765,7 @@ if (count($params['BASKET_ITEMS']) > 0)
 				$arCells[$n][$arColumnKeys[$i]] = null;
 
 			$arCells[$n][$arColumnKeys[$columnCount - 2]] = CSalePdf::prepareToPdf(Loc::getMessage('SALE_HPS_BILLBY_TOTAL_SUM'));
-			$arCells[$n][$arColumnKeys[$columnCount - 1]] = CSalePdf::prepareToPdf(SaleFormatCurrency($params['SUM'], $params['CURRENCY'], true));
+			$arCells[$n][$arColumnKeys[$columnCount - 1]] = CSalePdf::prepareToPdf(PriceMaths::roundByFormatCurrency($params['SUM'], $currency));
 		}
 	}
 
@@ -947,9 +937,9 @@ if ($params['BILLBY_TOTAL_SHOW'] == 'Y')
 	$pdf->Ln(5);
 	$text = Loc::getMessage('SALE_HPS_BILLBY_TOTAL_VAT').': ';
 	if ($inWords)
-		$text .= Number2Word_Rus(roundEx($totalVatSum, $precision), "Y", $params['CURRENCY']);
+		$text .= Number2Word_Rus(PriceMaths::roundByFormatCurrency($totalVatSum, $currency), "Y", $params['CURRENCY']);
 	else
-		$text .= SaleFormatCurrency(roundEx($totalVatSum, $precision), $params['CURRENCY'], false);
+		$text .= SaleFormatCurrency($totalVatSum, $currency);
 	unset($totalVatSum);
 	if (!empty($text))
 	{

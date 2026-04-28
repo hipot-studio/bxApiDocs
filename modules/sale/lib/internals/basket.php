@@ -180,7 +180,10 @@ class BasketTable extends Main\Entity\DataManager
 			),
 
 			new Main\Entity\FloatField(
-				'PRICE'
+				'PRICE',
+				array(
+					'scale' => 8
+				)
 			),
 
 			'CURRENCY' => array(
@@ -190,7 +193,10 @@ class BasketTable extends Main\Entity\DataManager
 			),
 
 			new Main\Entity\FloatField(
-				'BASE_PRICE'
+				'BASE_PRICE',
+				array(
+					'scale' => 8
+				)
 			),
 
 			'VAT_INCLUDED' => array(
@@ -279,7 +285,8 @@ class BasketTable extends Main\Entity\DataManager
 			new Main\Entity\FloatField(
 				'DISCOUNT_PRICE',
 				array(
-					'default_value' => '0.00'
+					'default_value' => '0.0',
+					'scale' => 8
 				)
 			),
 
@@ -307,7 +314,10 @@ class BasketTable extends Main\Entity\DataManager
 			),
 
 			new Main\Entity\FloatField(
-				'VAT_RATE'
+				'VAT_RATE',
+				array(
+					'scale' => 4
+				)
 			),
 
 			new Main\Entity\ExpressionField(

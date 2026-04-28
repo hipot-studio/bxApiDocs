@@ -266,8 +266,7 @@ final class TranscribeManager
 		{
 			$markers = ['type' => $fileType];
 			if (
-				Features::isTranscriptionEmotionsAvailable()
-				&& (new Restriction())->isTranscriptionEmotionsActive()
+				(new Restriction())->isTranscriptionEmotionsActive()
 			)
 			{
 				$markers['detectEmotions'] = true;

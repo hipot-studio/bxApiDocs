@@ -20,7 +20,7 @@ enum Tools: string
 		{
 			'STORE' => self::Shop,
 			Type::SCOPE_CODE_KNOWLEDGE, Type::SCOPE_CODE_GROUP => self::Knowledge,
-			Type::SCOPE_CODE_MAINPAGE => self::Vibe,
+			Type::SCOPE_CODE_VIBE => self::Vibe,
 			default => self::Site,
 		};
 	}

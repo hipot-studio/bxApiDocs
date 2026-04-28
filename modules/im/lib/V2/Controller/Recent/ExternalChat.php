@@ -3,9 +3,7 @@
 namespace Bitrix\Im\V2\Controller\Recent;
 
 use Bitrix\Im\V2\Controller\BaseController;
-use Bitrix\Im\V2\Recent\RecentError;
 use Bitrix\Im\V2\Recent\RecentExternalChat;
-use Bitrix\Main\Type\DateTime;
 
 class ExternalChat extends BaseController
 {
@@ -16,17 +14,15 @@ class ExternalChat extends BaseController
 	{
 		if (isset($filter['lastMessageDate']))
 		{
-			if (!DateTime::isCorrect($filter['lastMessageDate'], \DateTimeInterface::RFC3339))
+			$filter['lastMessageDate'] = $this->getDateOrSetError($filter['lastMessageDate']);
+			if ($filter['lastMessageDate'] === null)
 			{
-				$this->addError(new RecentError(RecentError::WRONG_DATETIME_FORMAT));
-
 				return null;
 			}
-
-			$filter['lastMessageDate'] = new DateTime($filter['lastMessageDate'], \DateTimeInterface::RFC3339);
 		}
 
 		$limit = $this->getLimit($limit);
+		$filter['parentId'] = 0;
 		$recent = RecentExternalChat::getExternalChats($type, $limit, $filter);
 
 		return $this->toRestFormatWithPaginationData([$recent], $limit, $recent->count());

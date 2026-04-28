@@ -6,7 +6,6 @@ use Bitrix\Disk;
 use Bitrix\Disk\Document;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\Error\Error;
-use Bitrix\Disk\UserConfiguration;
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Security\Cipher;
@@ -39,30 +38,15 @@ final class B24Documents extends Engine\Controller
 			return;
 		}
 
-		$configuration = new Document\OnlyOffice\Configuration();
-		$cloudRegistrationData = $configuration->getCloudRegistrationData();
-		if (!$cloudRegistrationData)
+		$unregisterCloudClientResult = (new Disk\Public\Command\UnregisterCloudClientCommand())->run();
+
+		if ($unregisterCloudClientResult->isSuccess())
 		{
-			return;
-		}
-
-		$serviceUrl = $cloudRegistrationData['serverHost'];
-		$cloudRegistration = (new Document\OnlyOffice\Cloud\Registration($serviceUrl))
-			->setLanguageId($languageId)
-		;
-
-		$result = $cloudRegistration->unregisterPortal();
-		if ($result->isSuccess())
-		{
-			$configuration->resetCloudRegistration();
-			UserConfiguration::resetDocumentServiceForAllUsers();
-
 			Disk\Configuration::setDefaultViewerService(Document\BitrixHandler::getCode());
-			Document\Models\DocumentSessionTable::clearTable();
 		}
 		else
 		{
-			$this->addErrors($result->getErrors());
+			$this->addErrors($unregisterCloudClientResult->getErrors());
 		}
 	}
 
@@ -88,11 +72,14 @@ final class B24Documents extends Engine\Controller
 		$result = $cloudRegistration->registerPortal();
 		if ($result->isSuccess() && isset($result->getData()['client']))
 		{
+			(new Disk\Public\Command\ChangeDefaultViewerServiceCommand(
+				code: Document\OnlyOffice\OnlyOfficeHandler::getCode(),
+			))->run();
+
 			$configuration->storeCloudRegistration($result->getData()['client']);
 
 			Option::set('disk', 'documents_enabled', 'Y');
 			Option::set('disk', 'disk_onlyoffice_server', $result->getData()['documentServer']['host']);
-			Disk\Configuration::setDefaultViewerService(Document\OnlyOffice\OnlyOfficeHandler::getCode());
 		}
 		else
 		{

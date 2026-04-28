@@ -44,6 +44,8 @@ class UserPack
 		$packIds = [];
 
 		$userPackCollection = $this->getUserPacks();
+		$lastUserPackId = $userPackCollection->offsetGet($lastId)?->id ?? null;
+
 		foreach ($userPackCollection as $userPack)
 		{
 			if (count($packIds) >= $limit)
@@ -51,7 +53,7 @@ class UserPack
 				break;
 			}
 
-			if ($lastId !== null && $userPack->id > $lastId)
+			if ($lastUserPackId !== null && $userPack->id >= $lastUserPackId)
 			{
 				continue;
 			}

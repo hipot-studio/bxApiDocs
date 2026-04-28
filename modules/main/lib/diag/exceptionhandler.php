@@ -137,7 +137,7 @@ class ExceptionHandler
 	 *
 	 * @return void
 	 */
-	public function setHandlerLog(ExceptionHandlerLog $handlerLog = null)
+	public function setHandlerLog(?ExceptionHandlerLog $handlerLog = null)
 	{
 		$this->handlerLog = $handlerLog;
 	}

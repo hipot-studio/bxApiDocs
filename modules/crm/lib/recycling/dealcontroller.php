@@ -33,18 +33,43 @@ class DealController extends BaseController
 
 	public static function getFieldNames()
 	{
-		return array(
+		return [
 			'ID',
-			'DATE_CREATE', 'DATE_MODIFY', 'CREATED_BY_ID', 'MODIFY_BY_ID',
-			'ASSIGNED_BY_ID', 'OPENED', 'LEAD_ID', 'COMPANY_ID', 'CONTACT_ID', 'QUOTE_ID',
-			'TITLE', 'CATEGORY_ID', 'STAGE_ID', 'IS_RECURRING', 'IS_RETURN_CUSTOMER',
-			'CLOSED', 'TYPE_ID', 'CURRENCY_ID', 'OPPORTUNITY', 'TAX_VALUE', 'PROBABILITY',
-			'COMMENTS', 'BEGINDATE', 'CLOSEDATE',
-			'LOCATION_ID', 'WEBFORM_ID', 'SOURCE_ID', 'SOURCE_DESCRIPTION',
-			'ORIGINATOR_ID', 'ORIGIN_ID',
+			'DATE_CREATE',
+			'DATE_MODIFY',
+			'CREATED_BY_ID',
+			'MODIFY_BY_ID',
+			'ASSIGNED_BY_ID',
+			'OPENED',
+			'LEAD_ID',
+			'COMPANY_ID',
+			'CONTACT_ID',
+			'QUOTE_ID',
+			'TITLE',
+			'CATEGORY_ID',
+			'STAGE_ID',
+			'PREVIOUS_STAGE_ID',
+			'IS_RECURRING',
+			'IS_RETURN_CUSTOMER',
+			'CLOSED',
+			'TYPE_ID',
+			'CURRENCY_ID',
+			'OPPORTUNITY',
+			'TAX_VALUE',
+			'PROBABILITY',
+			'COMMENTS',
+			'BEGINDATE',
+			'CLOSEDATE',
+			'LOCATION_ID',
+			'WEBFORM_ID',
+			'SOURCE_ID',
+			'SOURCE_DESCRIPTION',
+			'ORIGINATOR_ID',
+			'ORIGIN_ID',
 			'ADDITIONAL_INFO',
-			'MOVED_BY_ID', 'MOVED_TIME',
-		);
+			'MOVED_BY_ID',
+			'MOVED_TIME',
+		];
 	}
 
 	/**

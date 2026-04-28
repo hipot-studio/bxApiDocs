@@ -245,6 +245,7 @@ class UserRepository implements UserRepositoryContract
 				'CONFIRM_CODE',
 				'LOGIN',
 				'EMAIL',
+				'PERSONAL_PHOTO',
 				'EXTERNAL_AUTH_ID',
 				'XML_ID',
 				'AUTH_PHONE_NUMBER' => 'PHONE_AUTH.PHONE_NUMBER',

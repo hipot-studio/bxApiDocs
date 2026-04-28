@@ -97,7 +97,11 @@ class Import extends Operation\Add
 	{
 		$result = new Result();
 
-		$canSetSystemFields = Container::getInstance()->getUserPermissions($this->getContext()->getUserId())->isAdmin();
+		$canSetSystemFields = Container::getInstance()
+			->getUserPermissions($this->getContext()->getUserId())
+			->isAdminForEntity($this->item->getEntityTypeId(), $this->item->getCategoryIdForPermissions())
+		;
+
 		if ($canSetSystemFields)
 		{
 			$createdTime = $systemFieldsValues[Item::FIELD_NAME_CREATED_TIME];
@@ -123,8 +127,8 @@ class Import extends Operation\Add
 				if ($minPossibleUpdatedTime->getTimestamp() > $updatedTime->getTimestamp())
 				{
 					$result->addError($this->getFieldCompareValueError(
+						Item::FIELD_NAME_CREATED_TIME,
 						Item::FIELD_NAME_UPDATED_TIME,
-						Item::FIELD_NAME_CREATED_TIME
 					));
 				}
 				if ($updatedTime->getTimestamp() > (new DateTime())->getTimestamp())

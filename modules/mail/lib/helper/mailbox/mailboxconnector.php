@@ -335,7 +335,15 @@ final class MailboxConnector
 		}
 
 		$mailboxConnectDTO->messageMaxAge ??= self::MESSAGE_MAX_AGE;
-		$mailboxData['OPTIONS']['sync_from'] = strtotime('today UTC 00:00' . sprintf('-%u days', $mailboxConnectDTO->messageMaxAge));
+
+		if ($mailboxConnectDTO->messageMaxAge < 0)
+		{
+			unset($mailboxData['OPTIONS']['sync_from']);
+		}
+		else
+		{
+			$mailboxData['OPTIONS']['sync_from'] = strtotime('today UTC 00:00' . sprintf('-%u days', $mailboxConnectDTO->messageMaxAge));
+		}
 
 		if (!$defaultCrm)
 		{
@@ -366,7 +374,13 @@ final class MailboxConnector
 			return [];
 		}
 
-		return $this->createMailboxInternal($mailboxData, $senderFields, $isOAuth, $mailboxConnectDTO->syncAfterConnection);
+		return $this->createMailboxInternal(
+			$mailboxData,
+			$senderFields,
+			$isOAuth,
+			$mailboxConnectDTO->syncAfterConnection,
+			$mailboxConnectDTO->shareAccess,
+		);
 	}
 
 	public function getMailboxConnectionData(AbstractMailboxConnectDTO $mailboxConnectDTO): ?array
@@ -537,7 +551,7 @@ final class MailboxConnector
 			'SERVER'      => $mailboxConnectDTO->service['SERVER'] ?: trim($mailboxConnectDTO->server),
 			'PORT'        => $mailboxConnectDTO->service['PORT'] ?: $mailboxConnectDTO->port,
 			'USE_TLS'     => $mailboxConnectDTO->service['ENCRYPTION'] ?: $useTls,
-			'LINK'        => $mailboxConnectDTO->service['LINK'],
+			'LINK' => $mailboxConnectDTO->service['LINK'] ?? trim($mailboxConnectDTO->link),
 			'PERIOD_CHECK' => 60 * 24,
 			'OPTIONS'     => [
 				'flags'     => [],
@@ -549,9 +563,20 @@ final class MailboxConnector
 			'SERVICE_NAME' => $mailboxConnectDTO->service['NAME'],
 		];
 
-		if (($mailboxConnectDTO->service['UPLOAD_OUTGOING'] ?? 'Y') === 'N')
+		$serviceUploadOutgoing = $mailboxConnectDTO->service['UPLOAD_OUTGOING'] ?? '';
+		if ($serviceUploadOutgoing === 'N')
 		{
 			$mailboxData['OPTIONS']['flags'][] = 'deny_upload';
+		}
+
+		if (empty($serviceUploadOutgoing) && !$mailboxConnectDTO->uploadOutgoing)
+		{
+			$mailboxData['OPTIONS']['flags'][] = 'deny_upload';
+		}
+
+		if (!is_null($mailboxConnectDTO->useSenderName))
+		{
+			$mailboxData['OPTIONS']['useSenderName'] = $mailboxConnectDTO->useSenderName;
 		}
 
 		return $mailboxData;
@@ -688,29 +713,14 @@ final class MailboxConnector
 			'OPTIONS' => ['source' => 'mail.client.config'],
 		];
 
-		$mailboxSenders = Main\Mail\Internal\SenderTable::query()
-			->setSelect(['ID', 'OPTIONS'])
-			->where('IS_CONFIRMED', true)
-			->where('EMAIL', $senderFields['EMAIL'])
-			->where('USER_ID', $senderFields['USER_ID'])
-			->fetchAll()
-		;
-
-		$smtpConfirmed = $this->findReusableSmtpConfig($mailboxSenders);
-
 		$useSsl = $mailboxConnectDTO->sslSmtp;
 		$smtpConfig = [
-			'server'   => $service['SMTP_SERVER'] ?: trim($mailboxConnectDTO->serverSmtp),
-			'port'     => $service['SMTP_PORT'] ?: $mailboxConnectDTO->portSmtp,
+			'server' => $service['SMTP_SERVER'] ?: trim($mailboxConnectDTO->serverSmtp),
+			'port' => $service['SMTP_PORT'] ?: $mailboxConnectDTO->portSmtp,
 			'protocol' => ($service['SMTP_ENCRYPTION'] ?: $useSsl) === 'Y' ? 'smtps' : 'smtp',
-			'login'    => $service['SMTP_LOGIN_AS_IMAP'] === 'Y' ? $mailboxData['LOGIN'] : $mailboxConnectDTO->loginSmtp,
+			'login' => $service['SMTP_LOGIN_AS_IMAP'] === 'Y' ? $mailboxData['LOGIN'] : $mailboxConnectDTO->loginSmtp,
 			'password' => '',
 		];
-
-		if (!empty($smtpConfirmed) && is_array($smtpConfirmed))
-		{
-			$smtpConfig = array_filter($smtpConfig) + $smtpConfirmed;
-		}
 
 		$isLimitEnabledAndExist = $mailboxConnectDTO->useLimitSmtp && $mailboxConnectDTO->limitSmtp !== null;
 		if ($isLimitEnabledAndExist)
@@ -768,6 +778,11 @@ final class MailboxConnector
 
 		$senderFields['OPTIONS']['smtp'] = $smtpConfig;
 
+		if (isset($mailboxData['OPTIONS']['useSenderName']))
+		{
+			$senderFields['OPTIONS']['useSenderName'] = $mailboxData['OPTIONS']['useSenderName'];
+		}
+
 		return $senderFields;
 	}
 
@@ -824,6 +839,7 @@ final class MailboxConnector
 		?array $senderFields,
 		bool $isOAuth,
 		string $syncAfterConnection,
+		array $access = [],
 	): array
 	{
 		$mailboxId = \CMailbox::add($mailboxData);
@@ -838,7 +854,7 @@ final class MailboxConnector
 
 		addEventToStatFile('mail', 'add_mailbox', $mailboxData['SERVICE_NAME'], 'success');
 
-		if (!empty($senderFields) && empty($senderFields['IS_CONFIRMED']))
+		if (!empty($senderFields))
 		{
 			$result = self::appendSender($senderFields, '', (int)$mailboxId);
 
@@ -864,11 +880,7 @@ final class MailboxConnector
 			}
 		}
 
-		Mail\Internals\MailboxAccessTable::add([
-			'MAILBOX_ID' => $mailboxId,
-			'TASK_ID' => 0,
-			'ACCESS_CODE' => 'U' . $mailboxData['USER_ID'],
-		]);
+		$this->applyMailboxShareAccess($access, $mailboxData['USER_ID'], $mailboxId);
 
 		if (in_array('crm_connect', $mailboxData['OPTIONS']['flags'] ?? [], true))
 		{
@@ -1005,5 +1017,50 @@ final class MailboxConnector
 		\CAgent::addAgent(sprintf('Bitrix\Mail\Helper::deleteMailboxAgent(%u);', $mailbox['ID']), 'mail', 'N', 60);
 
 		return $result;
+	}
+
+	/**
+	 * @param string[] $access Access codes list (e.g., 'U1', 'DR5', 'D10')
+	 */
+	private function applyMailboxShareAccess(
+		array $access,
+		int $userId,
+		int $mailboxId,
+	): void
+	{
+		$ownerAccessCode = 'U' . $userId;
+		if (empty($access))
+		{
+			Mail\Internals\MailboxAccessTable::add([
+				'MAILBOX_ID' => $mailboxId,
+				'TASK_ID' => 0,
+				'ACCESS_CODE' => $ownerAccessCode,
+			]);
+
+			return;
+		}
+
+		$uniqueAccess = array_unique($access);
+		$sharedMailboxesLimit = LicenseManager::getSharedMailboxesLimit();
+		if (count($uniqueAccess) > 1 && $sharedMailboxesLimit >= 0)
+		{
+			$alreadySharedMailboxesIds = Mail\Helper\Mailbox\SharedMailboxesManager::getSharedMailboxesIds();
+			if (count($alreadySharedMailboxesIds) >= $sharedMailboxesLimit && !in_array($mailboxId, $alreadySharedMailboxesIds))
+			{
+				$uniqueAccess = [$ownerAccessCode];
+			}
+		}
+
+		$rowsToAdd = [];
+		foreach ($uniqueAccess as $item)
+		{
+			$rowsToAdd[] = [
+				'MAILBOX_ID' => $mailboxId,
+				'TASK_ID' => 0,
+				'ACCESS_CODE' => $item,
+			];
+		}
+
+		Mail\Internals\MailboxAccessTable::addMulti($rowsToAdd, true);
 	}
 }

@@ -22,6 +22,7 @@ abstract class ErrorCode
 	public const REMOVING_DISABLED = 'REMOVING_DISABLED';
 	public const MULTIPLE_BINDINGS = 'MULTIPLE_BINDINGS';
 	public const RESTRICTED_BY_TARIFF = 'RESTRICTED_BY_TARIFF';
+	public const FEATURE_DISABLED = 'FEATURE_DISABLED';
 
 	protected static function loadMessages(): void
 	{
@@ -88,8 +89,6 @@ abstract class ErrorCode
 
 	public static function getOwnerNotFoundError(): Error
 	{
-		static::loadMessages();
-
 		return new Error(
 			'Owner was not found',
 			static::OWNER_NOT_FOUND
@@ -98,8 +97,6 @@ abstract class ErrorCode
 
 	public static function getRequiredArgumentMissingError(string $argumentName): Error
 	{
-		static::loadMessages();
-
 		return new Error(
 			"Argument '{$argumentName}' is required",
 			static::REQUIRED_ARG_MISSING,
@@ -111,11 +108,17 @@ abstract class ErrorCode
 
 	public static function getMultipleBindingsError(): Error
 	{
-		static::loadMessages();
-
 		return new Error(
 			'Entity has multiple bindings',
 			static::MULTIPLE_BINDINGS
+		);
+	}
+
+	public static function getFeatureDisabledError(): Error
+	{
+		return new Error(
+			'Feature disabled',
+			static::FEATURE_DISABLED,
 		);
 	}
 

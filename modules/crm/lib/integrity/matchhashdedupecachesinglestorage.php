@@ -25,7 +25,7 @@ class MatchHashDedupeCacheSingleStorage
 
 	public static function isEnabled(): bool
 	{
-		return (Option::get('crm', '~enable_duplicate_table_cache', 'N') === 'Y'); // temporary disabled by default due to infrastructure overload
+		return (Option::get('crm', '~enable_duplicate_table_cache', 'Y') === 'Y');
 	}
 
 	public static function dropExpired(): void

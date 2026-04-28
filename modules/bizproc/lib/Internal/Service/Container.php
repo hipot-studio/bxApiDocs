@@ -49,4 +49,9 @@ class Container
 	{
 		return static::getService('bizproc.runtime.activitysearcher.searcher');
 	}
+
+	public function getEvalService(): EvalService
+	{
+		return static::getService('bizproc.service.eval');
+	}
 }

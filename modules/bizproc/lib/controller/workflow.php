@@ -78,8 +78,19 @@ class Workflow extends Base
 		];
 
 		$data['biMenu'] = $this->getBiMenu($workflowState->getWorkflowTemplateId());
+		$data['isBiBuilderDisabled'] = $this->isBiBuilderDisabled();
 
 		return $data;
+	}
+
+	private function isBiBuilderDisabled(): bool
+	{
+		if (!Loader::includeModule('biconnector'))
+		{
+			return true;
+		}
+
+		return !\Bitrix\BIConnector\Configuration\Feature::isBuilderEnabled();
 	}
 
 	private function getBiMenu(int $workflowTemplateId): ?array

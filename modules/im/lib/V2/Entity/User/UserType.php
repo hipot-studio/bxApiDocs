@@ -8,4 +8,5 @@ enum UserType: string
 	case BOT = 'bot';
 	case EXTRANET = 'extranet';
 	case COLLABER = 'collaber';
+	case GUEST = 'guest';
 }

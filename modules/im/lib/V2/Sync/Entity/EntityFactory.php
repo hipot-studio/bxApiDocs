@@ -7,18 +7,16 @@ use Bitrix\Im\V2\Sync\Event;
 
 class EntityFactory
 {
-	/**
-	 * @param Event[] $events
-	 * @return Entities
-	 */
-	public function createEntities(array $events): Entities
+	public function createEntities(array $logEvents): Entities
 	{
 		$messages = new Messages();
 		$chats = new Chats();
 		$pins = new PinMessages();
 
-		foreach ($events as $event)
+		foreach ($logEvents as $logEvent)
 		{
+			$event = Event::initByEntity($logEvent);
+
 			switch ($event->entityType)
 			{
 				case Event::CHAT_ENTITY:

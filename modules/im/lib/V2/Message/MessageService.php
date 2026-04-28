@@ -6,9 +6,12 @@ use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Notification\ChatProvider;
+use Bitrix\Im\V2\Reading\Notification\Cleaner;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 
 class MessageService
@@ -91,11 +94,11 @@ class MessageService
 		return $result->setResult(new MessageCollection($ormCollection));
 	}
 
-	public static function deleteByChatId(int $chatId, int $userId): Result
+	public static function deleteNotificationsByChatId(int $chatId, int $userId): Result
 	{
+		ServiceLocator::getInstance()->get(ChatProvider::class)->prime($userId, $chatId);
 		MessageTable::deleteBatch(['=CHAT_ID' => $chatId]);
-		$readService = new ReadService($userId);
-		$readService->deleteByChatId($chatId);
+		ServiceLocator::getInstance()->get(Cleaner::class)->onDeleteAllNotifications($userId);
 
 		return new Result();
 	}

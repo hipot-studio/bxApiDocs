@@ -57,6 +57,4 @@ class GetPrintVersionPdfUrl implements Contract\Operation
 
 		return $result;
 	}
-
-
 }

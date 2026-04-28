@@ -4,6 +4,9 @@ namespace Bitrix\Translate\Index\Internals;
 
 use Bitrix\Main;
 
+/**
+ * @internal
+ */
 
 trait BulkOperation
 {
@@ -250,7 +253,7 @@ trait BulkOperation
 						$val = \array_map(array($sqlHelper, 'forSql'), $val);
 						$where[] = "$key IN('".\implode("', '", $val)."')";
 					}
-					elseif (\is_string($val) && $val <> '')
+					elseif (\is_string($val) && $val != '')
 					{
 						$where[] = "$key IN(".$val.')';
 					}
@@ -264,7 +267,7 @@ trait BulkOperation
 						$val = \array_map(array($sqlHelper, 'forSql'), $val);
 						$where[] = "$key NOT IN('".\implode("', '", $val)."')";
 					}
-					elseif (\is_string($val) && $val <> '')
+					elseif (\is_string($val) && $val != '')
 					{
 						$where[] = "$key NOT IN(".$val.')';
 					}

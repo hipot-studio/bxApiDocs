@@ -41,7 +41,7 @@ class ClientTypeRepository implements ClientTypeRepositoryInterface
 			limit: 1,
 			filter: $filter,
 		)->getFirstCollectionItem();
-}
+	}
 
 	public function getList(
 		int|null $limit = null,

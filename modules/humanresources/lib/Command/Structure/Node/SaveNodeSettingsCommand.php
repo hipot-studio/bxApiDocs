@@ -29,29 +29,10 @@ class SaveNodeSettingsCommand extends AbstractCommand
 				return false;
 			}
 
-			// if the $key is of getCasesWithAuthorityTypeValue, check if each $settingType value is a valid NodeSettingsAuthorityType
-			if (
-				!in_array(NodeSettingsType::from($type), NodeSettingsType::getCasesWithAuthorityTypeValue(), true)
-				|| ($this->node->type === NodeEntityType::TEAM && !isset($setting['values']))
-				|| (isset($setting['values'])
-					&& (!is_array($setting['values'])
-						|| !array_reduce(
-							$setting['values'],
-							fn($carry, $item) => $carry && NodeSettingsAuthorityType::tryFrom($item) !== null,
-							true
-						)
-					)
-				)
+			if ($this->checkIfAuthorityTypeInvalid($nodeSettingType, $setting, $unavailableBpTypes, $unavailableReportsTypes)
+				|| ($this->checkIfUserIdsTypeInvalid($nodeSettingType, $setting))
+				|| ($this->checkIfBooleanTypeInvalid($nodeSettingType, $setting))
 			)
-			{
-				return false;
-			}
-
-			$typesToCheck = $nodeSettingType === NodeSettingsType::BusinessProcAuthority
-				? $unavailableBpTypes
-				: $unavailableReportsTypes
-			;
-			if (is_array($setting['values']) && !empty(array_intersect($setting['values'], $typesToCheck)))
 			{
 				return false;
 			}
@@ -77,6 +58,61 @@ class SaveNodeSettingsCommand extends AbstractCommand
 		return new Result();
 	}
 
+	private function checkIfAuthorityTypeInvalid(
+		NodeSettingsType $nodeSettingType,
+		array $setting,
+		array $unavailableBpTypes,
+		array $unavailableReportsTypes
+	): bool
+	{
+		if (!$nodeSettingType->isAuthorityType())
+		{
+			return false;
+		}
+
+		if (
+			(isset($setting['values']))
+			&& (!is_array($setting['values'])
+				|| !array_reduce(
+					$setting['values'],
+					fn($carry, $item) => $carry && NodeSettingsAuthorityType::tryFrom($item) !== null,
+					true
+				)
+			)
+		)
+		{
+			return true;
+		}
+
+		$typesToCheck = $nodeSettingType === NodeSettingsType::BusinessProcAuthority
+			? $unavailableBpTypes
+			: $unavailableReportsTypes
+		;
+		if (!empty(array_intersect($setting['values'] ?? [], $typesToCheck)))
+		{
+			return true;
+		}
+
+		return false;
+	}
+
+	private function checkIfUserIdsTypeInvalid(NodeSettingsType $nodeSettingType, array $setting): bool
+	{
+		return ($nodeSettingType->isUserIdsType())
+			&& isset($setting['values'])
+			&& !is_array($setting['values'])
+		;
+	}
+
+	private function checkIfBooleanTypeInvalid(NodeSettingsType $nodeSettingType, array $setting): bool
+	{
+		return $nodeSettingType->isBooleanType()
+			&& (!isset($setting['value'])
+				|| !in_array($setting['value'], ['Y', 'N'])
+			)
+		;
+	}
+
 	/**
 	 * @return array<string>
 	 */
@@ -96,10 +132,18 @@ class SaveNodeSettingsCommand extends AbstractCommand
 			NodeSettingsAuthorityType::TeamHead->value,
 			NodeSettingsAuthorityType::TeamDeputy->value,
 			NodeSettingsAuthorityType::TeamEmployee->value,
+			NodeSettingsAuthorityType::AllDepartmentHeads->value,
 		] : [];
+		$unavailableSettingsTypes = $type !== NodeSettingsType::ReportsAuthority
+			? [NodeSettingsAuthorityType::AllDepartmentHeads->value]
+			: []
+		;
+
 		return array_merge([NodeSettingsAuthorityType::DepartmentEmployee->value],
 			$unavailableDeputyTypes,
 			$unavailableTeamTypes,
+			$unavailableSettingsTypes,
 		);
 	}
 }
+

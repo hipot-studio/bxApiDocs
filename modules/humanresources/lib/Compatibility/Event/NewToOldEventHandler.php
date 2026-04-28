@@ -63,11 +63,7 @@ class NewToOldEventHandler
 				return;
 			}
 
-			$nodeRepository = new \Bitrix\HumanResources\Repository\NodeRepository();
-			$nodeRepository->setSelectableNodeEntityTypes([
-				NodeEntityType::DEPARTMENT,
-				NodeEntityType::TEAM,
-			]);
+			$nodeRepository = Container::getNodeRepository();
 			$parent =
 				$node->parentId
 				? $nodeRepository
@@ -86,9 +82,6 @@ class NewToOldEventHandler
 			$companyStructureConverter->createBackwardAccessCode($node, $newDepartmentId);
 
 			$nodeRepository->update($node);
-			$nodeRepository->setSelectableNodeEntityTypes([
-				NodeEntityType::DEPARTMENT,
-			]);
 		}
 		catch (\Exception $e)
 		{

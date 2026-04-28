@@ -66,7 +66,7 @@ class ChatHide extends BaseChatEvent
 		return match ($extendedType)
 		{
 			Chat\ExtendedType::OpenChannel->value => [RecentConfigManager::DEFAULT_SECTION_NAME],
-			default => [$this->chat->getRecentSections()],
+			default => $this->chat->getRecentSections(),
 		};
 	}
 }

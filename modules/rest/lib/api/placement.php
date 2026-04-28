@@ -131,7 +131,7 @@ class Placement extends \IRestService
 		$scopeList[] = \CRestUtil::GLOBAL_SCOPE;
 
 		$placementList = static::getPlacementList($server, $scopeList);
-		$placementInfo = $placementList[$placement];
+		$placementInfo = $placementList[$placement] ?? null;
 
 		if (is_array($placementInfo) && (!isset($placementInfo['private']) || !$placementInfo['private']))
 		{
@@ -696,8 +696,7 @@ class Placement extends \IRestService
 
 		foreach($scopeList as $scope)
 		{
-			if(
-				isset($serviceDescription[$scope])
+			if (!empty($serviceDescription[$scope][\CRestUtil::PLACEMENTS])
 				&& is_array($serviceDescription[$scope][\CRestUtil::PLACEMENTS])
 			)
 			{

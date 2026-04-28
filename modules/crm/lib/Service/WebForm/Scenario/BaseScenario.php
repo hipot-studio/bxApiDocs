@@ -61,6 +61,9 @@ class BaseScenario
 	public const SCENARIO_BOOKING_AUTO_SELECTION = 'booking_auto_selection';
 	public const SCENARIO_BOOKING_ANY_RESOURCE = 'booking_any_resource';
 	public const SCENARIO_BOOKING_MANUAL_SETTINGS = 'booking_manual_settings';
+	public const SCENARIO_BOOKING_AUTO_SELECTION_SERVICES = 'booking_auto_selection_services';
+	public const SCENARIO_BOOKING_ANY_RESOURCE_SERVICES = 'booking_any_resource_services';
+	public const SCENARIO_BOOKING_MANUAL_SETTINGS_SERVICES = 'booking_manual_settings_services';
 	public const SCENARIO_EXPERT = 'expert';
 	public const SCENARIO_FACEBOOK = 'facebook';
 	public const SCENARIO_FEEDBACK = 'feedback';
@@ -95,6 +98,9 @@ class BaseScenario
 		self::SCENARIO_BOOKING_AUTO_SELECTION => '/bitrix/images/crm/webform/icons/online.svg',
 		self::SCENARIO_BOOKING_ANY_RESOURCE => '/bitrix/images/crm/webform/icons/online.svg',
 		self::SCENARIO_BOOKING_MANUAL_SETTINGS => '/bitrix/images/crm/webform/icons/online.svg',
+		self::SCENARIO_BOOKING_AUTO_SELECTION_SERVICES => '/bitrix/images/crm/webform/icons/online.svg',
+		self::SCENARIO_BOOKING_ANY_RESOURCE_SERVICES => '/bitrix/images/crm/webform/icons/online.svg',
+		self::SCENARIO_BOOKING_MANUAL_SETTINGS_SERVICES => '/bitrix/images/crm/webform/icons/online.svg',
 		self::SCENARIO_EXPERT => '/bitrix/images/crm/webform/icons/service.svg',
 		self::SCENARIO_FACEBOOK => '/bitrix/images/crm/webform/icons/facebook.svg',
 		self::SCENARIO_FEEDBACK => '/bitrix/images/crm/webform/icons/feedback.svg',

@@ -13,17 +13,24 @@ trait DepartmentParameterTrait
 		return new ExactParameter(
 			DepartmentCollection::class,
 			'departmentCollection',
-			function($className, ?array $departmentIds = null): ?DepartmentCollection {
+			function($className, ?array $departmentIds = null) {
+				$permission = Integration\HumanResources\PermissionInvitation::createByCurrentUser();
 				if (!$departmentIds)
 				{
 					$departmentCollection = new DepartmentCollection();
-					$departmentCollection->add(Integration\HumanResources\PermissionInvitation::createByCurrentUser()->findFirstPossibleAvailableDepartment());
+					if($department = $permission->findFirstPossibleAvailableDepartment())
+					{
+						$departmentCollection->add($department);
+					}
 
 					return $departmentCollection;
 				}
+				$departmentCollection = (new Integration\HumanResources\Department())->getByIds($departmentIds);
 
-				return (new Integration\HumanResources\Department())->getByIds($departmentIds);
-			}
+				return $departmentCollection->filter(function ($department) use ($permission) {
+					return $permission->canInviteToDepartment($department);
+				});
+			},
 		);
 	}
 }

@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Controller\V1;
 
 use Bitrix\Booking\Controller\V1\Response\MessageStatusGetResponse;
-use Bitrix\Booking\Internals\Model\BookingMessageTable;
-use Bitrix\Booking\Internals\Service\Notifications\MessageSenderPicker;
+use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
+use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderPicker;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
 use Bitrix\Booking\Provider\BookingProvider;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
@@ -24,12 +25,16 @@ class MessageStatus extends BaseController
 	private const SEMANTIC_FAILURE = 'failure';
 
 	private BookingProvider $bookingProvider;
+	private MessageSenderPicker $messageSenderPicker;
+	private BookingMessageRepositoryInterface $bookingMessageRepository;
 
 	public function __construct(Request $request = null)
 	{
 		parent::__construct($request);
 
 		$this->bookingProvider = new BookingProvider();
+		$this->messageSenderPicker = Container::getMessageSenderPicker();
+		$this->bookingMessageRepository = Container::getBookingMessageRepository();
 	}
 
 	public function getAction(int $bookingId): MessageStatusGetResponse|null
@@ -57,42 +62,33 @@ class MessageStatus extends BaseController
 			);
 		}
 
-		$lastSentMessage = BookingMessageTable::getList([
-			'select' => [
-				'NOTIFICATION_TYPE',
-				'EXTERNAL_MESSAGE_ID',
-				'CREATED_AT',
-			],
-			'filter' => [
-				'=BOOKING_ID' => $bookingId,
-			],
-			'order' => [
-				'CREATED_AT' => 'DESC',
-			],
-			'limit' => 1,
-		])->fetch();
+		$lastSentMessage = $this->bookingMessageRepository->getLastByBookingId($bookingId);
 
+		$notSentResponse = new MessageStatusGetResponse(
+			title: Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_STATUS_SMS_TO_CLIENT'),
+			description: Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_STATUS_NOT_SENT'),
+			semantic: self::SEMANTIC_SECONDARY,
+		);
 		if (!$lastSentMessage)
 		{
-			return new MessageStatusGetResponse(
-				title: Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_STATUS_SMS_TO_CLIENT'),
-				description: Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_STATUS_NOT_SENT'),
-				semantic: self::SEMANTIC_SECONDARY,
-			);
+			return $notSentResponse;
 		}
 
-		$messageStatus = MessageSenderPicker::pickByBooking($booking)->getMessageStatus(
-			(int)$lastSentMessage['EXTERNAL_MESSAGE_ID']
-		);
+		$messageSender = $this->messageSenderPicker->pickByBooking($booking);
+		if (!$messageSender)
+		{
+			return $notSentResponse;
+		}
 
-		$title = NotificationType::getName($lastSentMessage['NOTIFICATION_TYPE']);;
+		$messageStatus = $messageSender->getMessageStatus($lastSentMessage->getExternalMessageId());
+		$title = NotificationType::getName($lastSentMessage->getNotificationType()->value);
 		$description = $messageStatus->getName();
 
 		/**
 		 * Replace description and semantic for confirmation type of message in case it has been already confirmed
 		 */
 		if (
-			$lastSentMessage['NOTIFICATION_TYPE'] === NotificationType::Confirmation->value
+			$lastSentMessage->getNotificationType() === NotificationType::Confirmation
 			&& $booking->isConfirmed()
 		)
 		{
@@ -104,8 +100,8 @@ class MessageStatus extends BaseController
 		}
 
 		$semanticsMap = [
-			\Bitrix\Booking\Entity\Message\MessageStatus::SEMANTIC_SUCCESS => self::SEMANTIC_PRIMARY,
-			\Bitrix\Booking\Entity\Message\MessageStatus::SEMANTIC_FAILURE => self::SEMANTIC_FAILURE,
+			\Bitrix\Booking\Internals\Service\Notifications\MessageStatus::SEMANTIC_SUCCESS => self::SEMANTIC_PRIMARY,
+			\Bitrix\Booking\Internals\Service\Notifications\MessageStatus::SEMANTIC_FAILURE => self::SEMANTIC_FAILURE,
 		];
 
 		return new MessageStatusGetResponse(

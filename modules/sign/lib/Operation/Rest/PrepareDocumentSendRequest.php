@@ -226,7 +226,14 @@ final class PrepareDocumentSendRequest implements Contract\Operation
 		{
 			return [Result::createByErrorData(message: "[{$fieldName}] invalid role {$memberRequestData->getRole()}"), null];
 		}
-		if ($company && ($memberRequestData->getEmployeeId() || $memberRequestData->getEmployeeCode())) {
+		$isEmployeeDataFilled = ($memberRequestData->getEmployeeId() || $memberRequestData->getEmployeeCode());
+		if ($isEmployeeDataFilled && !$company)
+		{
+			return [Result::createByErrorData(message: "[{$fieldName}] Employee ID/code requires an HCM linked company. Use userId."), null];
+		}
+
+		if ($company && $isEmployeeDataFilled)
+		{
 			if ($memberRequestData->getEmployeeCode())
 			{
 				$employee = $this->hcmLinkService->getEmployeesByUnique($company->id, $memberRequestData->getEmployeeCode());
@@ -280,36 +287,57 @@ final class PrepareDocumentSendRequest implements Contract\Operation
 	}
 
 	/**
-	 * @param CompanyRequestData $companyRequestData
+	 * @param CompanyRequestData|null $companyRequestData
 	 * @return array<Main\Result, ?HcmLinkCompany, ?MyCompany>
 	 */
-	public function getCompany(CompanyRequestData $companyRequestData): array
+	private function getCompany(?CompanyRequestData $companyRequestData): array
 	{
+		if (!$companyRequestData)
+		{
+			return [Result::createByErrorData(message: '[company] Company data is required.'), null, null];
+		}
+
 		if ($companyRequestData->getUuid())
 		{
 			$company = $this->hcmLinkService->getCompanyByUniqueId($companyRequestData->getUuid());
+			if ($company === null)
+			{
+				return [Result::createByErrorData(message: "[company] Company was not found."), null, null];
+			}
+
+			$myCompanies = $this->myCompanyService->listWithTaxIds(inIds: [$company->myCompanyId], checkRequisitePermissions: true);
+			$myCompany = $myCompanies->toArray()[0] ?? null;
+			if (!$myCompany)
+			{
+				return [Result::createByErrorData(message: "[company] Could not find company ID {$company->myCompanyId} in the CRM."), null, null];
+			}
+			if (empty($myCompany->taxId))
+			{
+				return [Result::createByErrorData(message: "[company] Unable to access company requisites. Check that the user has CRM permissions and the company has a tax ID configured."), null, null];
+			}
+
+			return [new Main\Result(), $company, $myCompany];
 		}
 		elseif ($companyRequestData->getCrmId())
 		{
-			$company = $this->hcmLinkService->getCompanyByMyCompanyId($companyRequestData->getCrmId());
+			$crmCompanyId = $companyRequestData->getCrmId();
+			$myCompanies = $this->myCompanyService->listWithTaxIds(inIds: [$crmCompanyId], checkRequisitePermissions: true);
+			$myCompany = $myCompanies->toArray()[0] ?? null;
+			if (!$myCompany)
+			{
+				return [Result::createByErrorData(message: "[company] Could not find company ID {$crmCompanyId} in the CRM."), null, null];
+			}
+			if (empty($myCompany->taxId))
+			{
+				return [Result::createByErrorData(message: "[company] Unable to access company requisites. Check that the user has CRM permissions and the company has a tax ID configured."), null, null];
+			}
+
+			return [new Main\Result(), null, $myCompany];
 		}
 		else
 		{
 			return [Result::createByErrorData(message: '[company] Company ID is required.'), null, null];
 		}
-		if ($company === null)
-		{
-			return [Result::createByErrorData(message: "[company] Company was not found."), null, null];
-		}
-
-		$myCompanies = $this->myCompanyService->listWithTaxIds(inIds: [$company->myCompanyId], checkRequisitePermissions: false);
-		$myCompany = $myCompanies->toArray()[0] ?? null;
-		if (!$myCompany)
-		{
-			return [Result::createByErrorData(message: "[company] Could not find company ID {$company->myCompanyId} in the CRM."), null, null];
-		}
-
-		return [new Main\Result(), $company, $myCompany];
 	}
 
 	private function validateRegionTypeCode(?string $regionTypeCode): Main\Result
@@ -431,9 +459,9 @@ final class PrepareDocumentSendRequest implements Contract\Operation
 
 		$this->fillConfig = new Item\Document\Config\DocumentFillConfig(
 			sourceFiles: [$sourceFile],
-			crmCompanyId: $this->myCompany?->id,
+			crmCompanyId: $this->myCompany->id,
 			signersList: $this->signers,
-			assigneeEntityId: $this->myCompany?->id,
+			assigneeEntityId: $this->myCompany->id,
 			representativeUser: $this->representative,
 			companyProviderUid: $request->fields->getCompanyProviderUid(),
 			regionDocumentType: $request->fields->getRegionDocumentType(),

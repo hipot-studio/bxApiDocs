@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\ResponsibleQueue\Entity;
 
+use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\ArrayField;
@@ -46,10 +47,10 @@ class QueueConfigTable extends DataManager
 			->configureSize(64)
 		;
 		$map[] = $fieldRepository
-			->getCreatedTime('CREATED_AT', true)
+			->getCreatedTime('CREATED_AT', FieldCaptionGender::Feminine)
 		;
 		$map[] = $fieldRepository
-			->getUpdatedTime('UPDATED_AT', true)
+			->getUpdatedTime('UPDATED_AT', FieldCaptionGender::Feminine)
 		;
 		$map[] = (new ArrayField('SETTINGS'))
 			->configureRequired()

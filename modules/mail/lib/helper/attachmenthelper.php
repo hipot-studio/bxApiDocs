@@ -655,15 +655,17 @@ class AttachmentHelper
 		$newAttachments = $this->saveAttachmentsToDB($this->message, $newAttachments);
 
 		$this->message = $this->createMessageWithBody($this->message);
+		$originalBody = $this->message->body;
+
+		$this->message = $this->replaceContentIdWithAttachmentId($this->message, $newAttachments);
 
 		$attachmentsEmbeddedInMessageBody = $this->getAttachmentsEmbeddedInMessageBody($this->message);
 
 		$messageWithUpdatedBody = $this->createMessageWithReplacedAttachmentsInBody($this->message, $attachmentsEmbeddedInMessageBody, $newAttachments);
+		$this->message->body = $messageWithUpdatedBody->body;
 
-		if ($this->message->body !== $messageWithUpdatedBody->body)
+		if ($originalBody !== $this->message->body)
 		{
-			$this->message->body = $messageWithUpdatedBody->body;
-
 			MailMessageTable::update(
 				$this->message->id,
 				[
@@ -689,6 +691,35 @@ class AttachmentHelper
 		}
 
 		return true;
+	}
+
+	public function getBody(): ?string
+	{
+		return $this->message?->body;
+	}
+
+	private function replaceContentIdWithAttachmentId(MessageStructure $messageStructure, array $newAttachments): MessageStructure
+	{
+		$extendedStructure = clone $messageStructure;
+
+		if (is_null($extendedStructure->body))
+		{
+			return $extendedStructure;
+		}
+
+		foreach ($newAttachments as $attachment)
+		{
+			if (!empty($attachment->contentId) && !is_null($attachment->attachmentId))
+			{
+				$extendedStructure->body = Message::replaceBodyInlineImgContentId(
+					$extendedStructure->body,
+					$attachment->contentId,
+					$attachment->attachmentId,
+				);
+			}
+		}
+
+		return $extendedStructure;
 	}
 
 	/**

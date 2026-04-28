@@ -42,6 +42,8 @@ class AnnualSummaryTable extends DataManager
 				->configureRequired(),
 			(new TextField('VALUE'))
 				->configureNullable(),
+			(new IntegerField('TOTAL'))
+				->configureRequired(),
 		];
 	}
 }

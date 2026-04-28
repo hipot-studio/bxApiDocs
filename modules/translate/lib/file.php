@@ -657,7 +657,7 @@ class File extends Translate\IO\File implements \Iterator, \Countable, \ArrayAcc
 		}
 		unset($phraseId, $phrase, $row);
 
-		if ($content <> '')
+		if ($content != '')
 		{
 			\set_error_handler(
 				function ($severity, $message, $file, $line)
@@ -1128,8 +1128,7 @@ class File extends Translate\IO\File implements \Iterator, \Countable, \ArrayAcc
 	 *
 	 * @return int|null
 	 */
-	#[\ReturnTypeWillChange]
-	public function key()
+	public function key(): mixed
 	{
 		return $this->messageCodes[$this->dataPosition] ?: null;
 	}

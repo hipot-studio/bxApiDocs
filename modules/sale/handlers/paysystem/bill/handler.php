@@ -73,13 +73,14 @@ class BillHandler
 		/** @var \Bitrix\Sale\Order $order */
 		$order = $paymentCollection->getOrder();
 
+		$currency = $payment->getCurrency();
 		$extraParams = array(
 			'ACCOUNT_NUMBER' => (IsModuleInstalled('intranet')) ? $order->getField('ACCOUNT_NUMBER') : $payment->getField('ACCOUNT_NUMBER'),
 			'CURRENCY' => $payment->getField('CURRENCY'),
 			'DATE_BILL' => $payment->getField('DATE_BILL'),
-			'SUM' => Sale\PriceMaths::roundPrecision($order->getPrice()),
-			'SUM_PAID' => Sale\PriceMaths::roundPrecision($paymentCollection->getPaidSum()),
-			'DISCOUNT_PRICE' => Sale\PriceMaths::roundPrecision($order->getDiscountPrice())
+			'SUM' => Sale\PriceMaths::roundByFormatCurrency($order->getPrice(), $currency),
+			'SUM_PAID' => Sale\PriceMaths::roundByFormatCurrency($paymentCollection->getPaidSum(), $currency),
+			'DISCOUNT_PRICE' => Sale\PriceMaths::roundByFormatCurrency($order->getDiscountPrice(), $currency)
 		);
 
 		$taxes = $order->getTax();
@@ -94,7 +95,7 @@ class BillHandler
 			if (!$shipment->isSystem())
 			{
 				$extraParams['DELIVERY_NAME'] = $shipment->getDeliveryName();
-				$extraParams['DELIVERY_PRICE'] = $shipment->getPrice();
+				$extraParams['DELIVERY_PRICE'] = Sale\PriceMaths::roundByFormatCurrency($shipment->getPrice(), $currency);
 				$extraParams['DELIVERY_VAT_RATE'] = $shipment->getVatRate();
 				break;
 			}
@@ -133,7 +134,7 @@ class BillHandler
 				'NAME' => $basketItem->getField("NAME"),
 				'IS_VAT_IN_PRICE' => $basketItem->isVatInPrice(),
 				'PRODUCT_ID' => $basketItem->getProductId(),
-				'PRICE' => $basketItem->getPrice(),
+				'PRICE' => Sale\PriceMaths::roundByFormatCurrency($basketItem->getPrice(), $basketItem->getCurrency()),
 				'VAT_RATE' => $basketItem->getVatRate(),
 				'QUANTITY' => $basketItem->getQuantity(),
 				'MEASURE_NAME' => $basketItem->getField("MEASURE_NAME"),

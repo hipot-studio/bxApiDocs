@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings;
 
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\BaasManager;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
@@ -41,7 +42,7 @@ final class CallChannelSettings extends BaseChannelSettings
 
 		if (
 			$checkAutomaticProcessingParams
-			&& !(AIManager::isAiCallAutomaticProcessingAllowed() && AIManager::isBaasServiceHasPackage())
+			&& !(AIManager::isAiCallAutomaticProcessingAllowed() && BaasManager::hasPackage())
 		)
 		{
 			return false;
@@ -113,13 +114,30 @@ final class CallChannelSettings extends BaseChannelSettings
 
 	public static function getDefault(): self
 	{
+		if (self::isRuZone())
+		{
+			return new self(
+				[
+					TranscribeCallRecording::TYPE_ID,
+					SummarizeCallTranscription::TYPE_ID,
+					FillItemFieldsFromCallTranscription::TYPE_ID,
+				],
+				true,
+				[
+					self::DEFAULT_CALL_DIRECTION,
+				]
+			);
+		}
+
 		return new self(
 			[
 				SummarizeCallTranscription::TYPE_ID,
 				FillItemFieldsFromCallTranscription::TYPE_ID,
 			],
 			false,
-			[self::DEFAULT_CALL_DIRECTION]
+			[
+				self::DEFAULT_CALL_DIRECTION,
+			]
 		);
 	}
 }

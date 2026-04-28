@@ -18,8 +18,10 @@ use Bitrix\Im\V2\Message\MessageService;
 use Bitrix\Im\V2\Message\Sticker\PackType;
 use Bitrix\Im\V2\Message\Sticker\StickerError;
 use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Reading\ReadResult;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Im\V2\Rest\RestConvertible;
+use Bitrix\Im\V2\Rest\RestError;
 use Bitrix\Im\V2\SharingLink\SharingLinkError;
 use Bitrix\Im\V2\SharingLink\SharingLinkFactory;
 use Bitrix\Im\V2\SharingLink\SharingLink;
@@ -27,6 +29,7 @@ use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\Response\Converter;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Type\ParameterDictionary;
 
 abstract class BaseController extends Controller
@@ -297,5 +300,34 @@ abstract class BaseController extends Controller
 		}
 
 		return $packType;
+	}
+
+	protected function formReadResult(\Bitrix\Im\V2\Chat $chat, ReadResult $readResult): ?array
+	{
+		if (!$readResult->isSuccess())
+		{
+			$this->addErrors($readResult->getErrors());
+
+			return null;
+		}
+
+		return [
+			'chatId' => $chat->getId(),
+			'lastId' => $chat->getLastId(),
+			'counter' => $readResult->getCounter(),
+			'viewedMessages' => $readResult->getViewedMessages()?->getIds() ?? [],
+		];
+	}
+
+	protected function getDateOrSetError(string $date): ?DateTime
+	{
+		if (!DateTime::isCorrect($date, \DateTimeInterface::RFC3339))
+		{
+			$this->addError(new RestError(RestError::WRONG_DATETIME_FORMAT));
+
+			return null;
+		}
+
+		return new DateTime($date, \DateTimeInterface::RFC3339);
 	}
 }

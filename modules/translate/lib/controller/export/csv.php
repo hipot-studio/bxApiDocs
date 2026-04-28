@@ -8,7 +8,9 @@ use Bitrix\Main\HttpResponse;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Translate;
 
-
+/**
+ * @internal
+ */
 class Csv
 	extends Translate\Controller\Controller
 	implements Translate\Controller\IProcessParameters

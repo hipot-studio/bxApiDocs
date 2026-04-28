@@ -18,7 +18,7 @@ class RecentChannel extends Recent
 		$userId = Locator::getContext()->getUserId();
 
 		$filter['userId'] = $userId;
-		$recentFilter = new RecentFilter($filter);
+		$recentFilter = RecentFilter::fromArray($filter);
 		$recentParams = new RecentParams(
 			filter: $recentFilter,
 			limit: $limit
@@ -51,6 +51,10 @@ class RecentChannel extends Recent
 		if (isset($lastMessageId))
 		{
 			$query->where('LAST_MESSAGE_ID', '<', $lastMessageId);
+		}
+		if ($recentParams->filter->parentChatId !== null)
+		{
+			$query->where('PARENT_ID', $recentParams->filter->parentChatId);
 		}
 
 		return $query->fetchAll();

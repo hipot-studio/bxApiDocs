@@ -38,13 +38,9 @@ class TypeRegistry
 		$this->load();
 	}
 
-	/**
-	 * @param string $recentSection
-	 * @return Type[]
-	 */
-	public function getByRecentSection(string $recentSection): array
+	public function getConditionByRecentSection(string $recentSection): TypeCondition
 	{
-		return $this->byRecentSection[$recentSection] ?? [];
+		return new TypeCondition(include: $this->byRecentSection[$recentSection] ?? []);
 	}
 
 	public function getByExtendedType(string $type): Type
@@ -137,6 +133,7 @@ class TypeRegistry
 			ExtendedType::OpenChat->value => [Chat::IM_TYPE_OPEN],
 			ExtendedType::General->value => [Chat::IM_TYPE_OPEN, ExtendedType::General->value],
 			ExtendedType::Copilot->value => [Chat::IM_TYPE_COPILOT],
+			ExtendedType::System->value => [Chat::IM_TYPE_SYSTEM],
 		];
 
 		foreach ($withLiteral as $extendedType => $typeInfo)

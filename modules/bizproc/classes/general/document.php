@@ -350,12 +350,17 @@ class CBPDocument
 
 		static $useDelays;
 		$useDelays ??= (Main\Config\Option::get('bizproc', 'disable_start_workflow_delay') !== 'Y');
+		$shouldStartLater = $useDelays && $startDelay !== null;
+		if ($shouldStartLater)
+		{
+			$parameters[static::PARAM_IGNORE_SIMULTANEOUS_PROCESSES_LIMIT] = true;
+		}
 
 		try
 		{
 			$wi = CBPRuntime::GetRuntime()->createWorkflow($workflowTemplateId, $documentId, $parameters, $parentWorkflow);
 			self::setUsedDocumentFields($wi, $workflowTemplateId);
-			if ($useDelays && $startDelay !== null)
+			if ($shouldStartLater)
 			{
 				$wi->startLater($startDelay);
 			}

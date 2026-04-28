@@ -3,6 +3,7 @@ namespace Bitrix\Landing\Internals;
 
 use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\Entity;
+use \Bitrix\Main\ORM;
 
 Loc::loadMessages(__FILE__);
 
@@ -22,7 +23,7 @@ Loc::loadMessages(__FILE__);
  * @method static \Bitrix\Landing\Internals\EO_Block wakeUpObject($row)
  * @method static \Bitrix\Landing\Internals\EO_Block_Collection wakeUpCollection($rows)
  */
-class BlockTable extends Entity\DataManager
+class BlockTable extends ORM\Data\DataManager
 {
 	/**
 	 * Returns DB table name for entity.

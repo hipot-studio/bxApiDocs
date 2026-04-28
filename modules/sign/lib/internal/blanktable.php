@@ -102,6 +102,10 @@ class BlankTable extends Entity\DataManager
 				->configureValues(0, 1)
 				->configureDefaultValue(false)
 			,
+			'HAS_PLACEHOLDERS' => (new Entity\BooleanField('HAS_PLACEHOLDERS'))
+				->configureValues(0, 1)
+				->configureDefaultValue(false)
+			,
 		];
 	}
 

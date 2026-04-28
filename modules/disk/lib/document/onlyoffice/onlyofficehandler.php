@@ -30,9 +30,9 @@ class OnlyOfficeHandler extends DocumentHandler implements FileCreatable, IViewe
 		return Main\Localization\Loc::getMessage('DISK_ONLYOFFICE_HANDLER_NAME');
 	}
 
-	public static function isEnabled(): bool
+	public static function isEnabled(bool $original = false): bool
 	{
-		$secretKey = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getSecretKey();
+		$secretKey = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getSecretKey($original);
 		$isEnabledDocuments = \Bitrix\Disk\Configuration::isEnabledDocuments();
 
 		return $secretKey && $isEnabledDocuments;

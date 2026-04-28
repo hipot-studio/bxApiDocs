@@ -8,6 +8,8 @@ use Bitrix\Translate\Index;
 
 /**
  * Harvester of phrases using search result with index.
+ *
+ * @internal
  */
 class ExportFileSearch
 	extends ExportAction

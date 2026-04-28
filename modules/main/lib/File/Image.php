@@ -96,7 +96,7 @@ class Image
 	 * @param Image\Color|null $bgColor
 	 * @return bool
 	 */
-	public function rotate($angle, Image\Color $bgColor = null)
+	public function rotate($angle, ?Image\Color $bgColor = null)
 	{
 		if($bgColor === null)
 		{

@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Controller\ExternalSource;
 use Bitrix\Main;
 use Bitrix\Main\SystemException;
 use Bitrix\BIConnector\ExternalSource;
+use Bitrix\BIConnector\Configuration\DataTimezone;
 
 final class FileImporter
 {
@@ -14,7 +15,7 @@ final class FileImporter
 	private ExternalSource\Type $type;
 	private string $name;
 
-	public function __construct(int $datasetId, array $settings = null)
+	public function __construct(int $datasetId, ?array $settings = null)
 	{
 		$this->datasetId = $datasetId;
 		$this->settings = $settings;
@@ -70,7 +71,8 @@ final class FileImporter
 		return new ExternalSource\Importer\Settings(
 			tableName: $this->getTableName(),
 			reader: $this->getReader(),
-			fieldCollection: $fieldCollection
+			fieldCollection: $fieldCollection,
+			timeZone: $this->getTimezone($datasetSettings)
 		);
 	}
 
@@ -126,5 +128,22 @@ final class FileImporter
 	private function getReader(): ExternalSource\FileReader\Base
 	{
 		return ExternalSource\FileReader\Factory::getReader($this->type, $this->settings);
+	}
+
+	private function getTimezone(ExternalSource\Internal\ExternalDatasetFieldFormatCollection $datasetSettings): \DateTimeZone
+	{
+		if ($datasetSettings->getFormatByType(ExternalSource\FieldType::Timezone))
+		{
+			$timezone = $datasetSettings->getFormatByType(ExternalSource\FieldType::Timezone);
+			try
+			{
+				return new \DateTimeZone($timezone);
+			}
+			catch (\Exception)
+			{
+			}
+		}
+
+		return DataTimezone::getDefaultTimezone();
 	}
 }

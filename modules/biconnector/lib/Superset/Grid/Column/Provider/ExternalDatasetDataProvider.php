@@ -23,7 +23,7 @@ class ExternalDatasetDataProvider extends DataProvider
 		$result[] =
 			$this->createColumn('TYPE')
 				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_COLUMN_TITLE_TYPE_MSGVER_1'))
+				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_COLUMN_TITLE_TYPE_MSGVER_2'))
 				->setAlign('left')
 				->setDefault(true)
 		;

@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Pull\Event\InputActionNotify;
 use Bitrix\Im\V2\Pull\Event\StartWriting;
 use Bitrix\Im\V2\Result;
+use Bitrix\Im\V2\Application\Context;
 
 class Action implements AccessCheckable
 {
@@ -69,7 +70,17 @@ class Action implements AccessCheckable
 
 	public function setStatusMessageCode(?string $statusMessageCode): self
 	{
-		$this->statusMessageCode = $statusMessageCode;
+		if ($statusMessageCode !== null)
+		{
+			$platform = Context::getCurrent()->isMobile()
+				? Platform::MOBILE
+				: Platform::WEB;
+
+			$allowedCodes = StatusMessageProvider::get($platform);
+			$this->statusMessageCode = isset($allowedCodes[$statusMessageCode])
+				? $statusMessageCode
+				: null;
+		}
 
 		return $this;
 	}

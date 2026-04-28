@@ -4,14 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\QuickAccess\FileInfo;
 
-use Bitrix\Disk\AttachedObject;
-use Bitrix\Disk\BaseObject;
-use Bitrix\Disk\File;
-use Bitrix\Disk\QuickAccess\Storage\ScopeStorage;
-use Bitrix\Disk\TypeFile;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Web\MimeType;
-use Bitrix\Main\Web\Uri;
 
 /**
  * Get file info from b_file by file id

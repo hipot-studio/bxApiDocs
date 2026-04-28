@@ -16,7 +16,7 @@ class ErrorCollection extends Dictionary
 	 * Constructor ErrorCollection.
 	 * @param Error[] $values Initial errors in the collection.
 	 */
-	public function __construct(array $values = null)
+	public function __construct(?array $values = null)
 	{
 		if($values)
 		{

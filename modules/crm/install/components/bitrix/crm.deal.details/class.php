@@ -1319,6 +1319,15 @@ class CCrmDealDetailsComponent
 				'data' => array('lineCount' => 6),
 				'editable' => true
 			),
+			[
+				'name' => 'PREVIOUS_STAGE_ID',
+				'title' => Loc::getMessage('CRM_TYPE_ITEM_FIELD_PREVIOUS_STAGE_ID'),
+				'type' => 'list',
+				'editable' => false,
+				'enableAttributes' => false,
+				'mergeable' => true,
+				'data' => ['items' => \CCrmInstantEditorHelper::PrepareListOptions($allStages)],
+			],
 			array(
 				'name' => 'STAGE_ID',
 				'title' => Loc::getMessage('CRM_DEAL_FIELD_STAGE_ID'),
@@ -2055,6 +2064,15 @@ class CCrmDealDetailsComponent
 				$this->entityID,
 				$this->entityData,
 			);
+		}
+
+		if (isset($this->entityData['PREVIOUS_STAGE_ID']))
+		{
+			$allStages = DealCategory::getStageList($this->categoryID);
+			if (!isset($allStages[$this->entityData['PREVIOUS_STAGE_ID']]))
+			{
+				$this->entityData['PREVIOUS_STAGE_ID'] = '';
+			}
 		}
 
 		//region Responsible

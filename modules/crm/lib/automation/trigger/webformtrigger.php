@@ -2,7 +2,9 @@
 
 namespace Bitrix\Crm\Automation\Trigger;
 
+use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 class WebFormTrigger extends BaseTrigger
 {
@@ -69,5 +71,20 @@ class WebFormTrigger extends BaseTrigger
 			fn ($form) => ['value' => $form['ID'], 'name' => $form['NAME']],
 			$forms
 		);
+	}
+
+	public static function getNodeDescription(): string
+	{
+		return Loc::getMessage('CRM_AUTOMATION_TRIGGER_WEBFORM_NODE_DESCRIPTION') ?? '';
+	}
+
+	public static function getNodeColor(): int
+	{
+		return ActivityColorIndex::GREEN->value;
+	}
+
+	public static function getNodeIcon(): string
+	{
+		return Outline::FORM->name;
 	}
 }

@@ -7,6 +7,7 @@ namespace Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google;
 use Bitrix\Calendar\Integration\Socialservices\Auth\GoogleAuthHelper;
 use Bitrix\Calendar\Sync\Util\Helper;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Repository\RepositoryReadException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AuthorizationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Gateway\GoogleEventGateway;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Gateway\GooglePushGateway;
@@ -31,6 +32,7 @@ class GoogleGatewayProvider
 	private array $pushGateways = [];
 
 	/**
+	 * @throws AuthorizationException
 	 * @throws NotAuthorizedException
 	 */
 	public function getSectionGateway(int $userId): ?GoogleSectionGateway
@@ -53,6 +55,7 @@ class GoogleGatewayProvider
 	}
 
 	/**
+	 * @throws AuthorizationException
 	 * @throws NotAuthorizedException
 	 */
 	public function getEventGateway(int $userId): ?GoogleEventGateway
@@ -75,6 +78,7 @@ class GoogleGatewayProvider
 	}
 
 	/**
+	 * @throws AuthorizationException
 	 * @throws NotAuthorizedException
 	 */
 	public function getPushGateway(int $userId): ?GooglePushGateway
@@ -97,11 +101,13 @@ class GoogleGatewayProvider
 	}
 
 	/**
+	 * @throws AuthorizationException
 	 * @throws NotAuthorizedException
 	 */
 	private function buildHttpClient(int $userId): ?HttpClient
 	{
 		$httpClient = new HttpClient();
+
 		try
 		{
 			$authEntity = GoogleAuthHelper::getUserAuthEntity($userId);
@@ -111,7 +117,7 @@ class GoogleGatewayProvider
 			throw new NotAuthorizedException(
 				sprintf('Unable to get user auth entity: "%s"', $e->getMessage()),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 

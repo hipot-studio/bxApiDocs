@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\QuickAccess\FileInfo;
 
+use Bitrix\Disk\Public\TypeFileMap;
+
 class FileInfoDto
 {
 	public function __construct (
@@ -16,7 +18,8 @@ class FileInfoDto
 		public readonly string $filename,
 		public readonly string $contentType,
 		public readonly int $expirationTime,
-		public ?FileInfoDto $preview = null,
+		public readonly ?TypeFileMap $typeFile,
+		public ?self $preview = null,
 	)
 	{
 	}
@@ -33,6 +36,7 @@ class FileInfoDto
 			'filename' => $this->filename ?? '0',
 			'contentType' => $this->contentType ?? '0',
 			'expirationTime' => $this->expirationTime ?? 0,
+			'typeFile' => $this->typeFile?->value ?? '',
 		];
 
 		if (isset($this->preview))

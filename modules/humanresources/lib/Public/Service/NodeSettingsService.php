@@ -130,4 +130,26 @@ class NodeSettingsService
 
 		return $result;
 	}
+
+	/**
+	 * @param array $nodeIds
+	 * @return array
+	 * @throws \Bitrix\HumanResources\Exception\WrongStructureItemException
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function getTeamReportExceptionsSettingsForNodes(array $nodeIds): array
+	{
+		$entityCollection = $this->nodeSettingsRepository->getByNodesAndTypes($nodeIds, [NodeSettingsType::TeamReportExceptions]);
+
+		$result = [];
+		foreach ($entityCollection as $entity)
+		{
+			$result[$entity->nodeId] ??= [];
+			$result[$entity->nodeId][] = (int)$entity->settingsValue;
+		}
+
+		return $result;
+	}
 }

@@ -9,6 +9,7 @@ final class ContextDto
 	public function __construct(
 		public readonly string $moduleId,
 		public readonly Face $face = Face::WEB,
+		public readonly bool $isManual = false,
 	)
 	{}
 }

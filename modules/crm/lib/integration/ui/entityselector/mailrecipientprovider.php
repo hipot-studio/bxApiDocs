@@ -13,9 +13,12 @@ class MailRecipientProvider extends BaseProvider
 {
 	public const PROVIDER_ENTITY_ID = 'mail_recipient';
 	public const EMAIL_TYPE_ID = 'email';
-	public const EMAIL_TYPE_WORK = 'WORK';
 	public const EMAIL_ID_EMPTY = 0;
 	private const TAB_ID_FOR_EMAIL = 'recents';
+
+	private const SPLIT_INDEX_ENTITY_TYPE = 0;
+	private const SPLIT_INDEX_ENTITY_ID = 1;
+	private const SPLIT_INDEX_EMAIL = 2;
 
 	private const NAMES_OF_ENTITIES_WITH_AVATARS = [
 		'company',
@@ -53,13 +56,13 @@ class MailRecipientProvider extends BaseProvider
 
 		foreach ($items as $item)
 		{
-			$ids[]=$item->getId();
+			$ids[] = $item->getId();
 		}
 
 		$this->accessibleItemIds = array_merge($this->accessibleItemIds, $ids);
 	}
 
-	public static function buildRecipientProviderId($entityTypeName, $entityId, $emailType, $email): string
+	public static function buildRecipientProviderId($entityTypeName, $entityId, $email): string
 	{
 		if (is_null($entityTypeName))
 		{
@@ -72,8 +75,6 @@ class MailRecipientProvider extends BaseProvider
 			.','.
 			(int)$entityId
 			.','.
-			mb_strtolower(trim($emailType))
-			.','.
 			$DB->ForSql(mb_strtolower(trim($email)))
 		);
 	}
@@ -81,12 +82,11 @@ class MailRecipientProvider extends BaseProvider
 	private static function getDataByProviderId(string $id): array
 	{
 		$splitId =  explode(',', $id);
-		$entityTypeId = $splitId[0];
+		$entityTypeId = $splitId[self::SPLIT_INDEX_ENTITY_TYPE];
 
 		$data = [
-			'ENTITY_ID' => (int)$splitId[1],
-			'EMAIL_TYPE' => mb_strtoupper($splitId[2]),
-			'EMAIL' => $splitId[3],
+			'ENTITY_ID' => (int)$splitId[self::SPLIT_INDEX_ENTITY_ID],
+			'EMAIL' => $splitId[self::SPLIT_INDEX_EMAIL],
 		];
 
 		if ($entityTypeId === self::EMAIL_TYPE_ID)
@@ -95,7 +95,7 @@ class MailRecipientProvider extends BaseProvider
 		}
 		else
 		{
-			$data['ENTITY_TYPE_ID'] = \CCrmOwnerType::ResolveID($splitId[0]);
+			$data['ENTITY_TYPE_ID'] = \CCrmOwnerType::ResolveID($splitId[self::SPLIT_INDEX_ENTITY_TYPE]);
 		}
 
 		return $data;
@@ -138,7 +138,7 @@ class MailRecipientProvider extends BaseProvider
 
 					$item = new Item(
 						[
-							'id' => self::buildRecipientProviderId($baseItem->getEntityId(), $baseItem->getId(), $field['VALUE_TYPE'], $email),
+							'id' => self::buildRecipientProviderId($baseItem->getEntityId(), $baseItem->getId(), $email),
 							'entityId' => self::PROVIDER_ENTITY_ID,
 							'tabs' => $baseItem->getTabs(),
 							'title' => $title,
@@ -222,7 +222,7 @@ class MailRecipientProvider extends BaseProvider
 				$itemCollection->add(
 					new Item(
 						[
-							'id' => self::buildRecipientProviderId($entityType, $entityId, self::EMAIL_TYPE_WORK, $email),
+							'id' => self::buildRecipientProviderId($entityType, $entityId, $email),
 							'entityId' => self::PROVIDER_ENTITY_ID,
 							'tabs' => self::TAB_ID_FOR_EMAIL,
 							'title' => $email,

@@ -386,6 +386,7 @@ class Chat
 
 				if($result->isSuccess())
 				{
+					$removedUserIds = [];
 					$relations = \CIMChat::GetRelationById($this->chat['ID'], false, true, false);
 					foreach ($relations as $relation)
 					{
@@ -404,8 +405,11 @@ class Chat
 						)
 						{
 							$chat->DeleteUser($this->chat['ID'], $relation['USER_ID'], false, true);
+							$removedUserIds[] = $relation['USER_ID'];
 						}
 					}
+
+					Recent::removeRecentForUserIds($this->chat['ID'], $removedUserIds);
 
 					$this->update([
 						'AUTHOR_ID' => $userId
@@ -2912,6 +2916,8 @@ class Chat
 		{
 			if (!$fakeMessageId)
 			{
+				$skipNotification = false;
+
 				if (count($userList) == 1)
 				{
 					$toUserId = $userList[0];
@@ -2923,9 +2929,20 @@ class Chat
 
 					if ($hasOtherOperators)
 					{
-						$message = Loc::getMessage('IMOL_CHAT_OPERATOR_STARTED_DAY', [
+						$message = Loc::getMessage('IMOL_CHAT_OPERATOR_STARTED_DAY_MSGVER_1', [
 							'#USER#' => '[USER=' . $toUserId . '][/USER]'
 						]);
+
+						$lineId = (int)self::parseLinesChatEntityId($this->chat['ENTITY_ID'])['lineId'];
+						$config = ConfigTable::getRow([
+							'select' => ['SHOW_NOTIFICATION_REDIRECT'],
+							'filter' => ['=ID' => $lineId],
+						]);
+
+						if (!is_array($config) || $config['SHOW_NOTIFICATION_REDIRECT'] !== 'Y')
+						{
+							$skipNotification = true;
+						}
 					}
 					else
 					{
@@ -2944,14 +2961,22 @@ class Chat
 					$message = Loc::getMessage('IMOL_CHAT_ASSIGN_OPERATOR_LIST_NEW');
 				}
 
-				$messageId = Im::addMessage([
+				$messageFields = [
 					"TO_CHAT_ID" => $this->chat['ID'],
 					"FROM_USER_ID" => 0,
 					"MESSAGE" => $message,
 					"SYSTEM" => 'Y',
 					"IMPORTANT_CONNECTOR" => 'N',
-					'FAKE_RELATION' => $fakeRelation
-				]);
+					'FAKE_RELATION' => $fakeRelation,
+				];
+
+				if ($skipNotification)
+				{
+					$messageFields['PUSH'] = 'N';
+					$messageFields['PARAMS']['NOTIFY'] = 'N';
+				}
+
+				$messageId = Im::addMessage($messageFields);
 			}
 			else
 			{

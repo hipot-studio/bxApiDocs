@@ -9,9 +9,7 @@ use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\SelectionCondition\Node\NodeAccessFilter;
 use Bitrix\HumanResources\Builder\Structure\NodeDataBuilder;
 use Bitrix\HumanResources\Config\Feature;
-use Bitrix\HumanResources\Internals\Attribute;
 use Bitrix\HumanResources\Command\Structure\Node\NodeOrderCommand;
-use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Contract\Service\NodeService;
 use Bitrix\HumanResources\Engine\Controller;
 use Bitrix\HumanResources\Exception\CommandException;
@@ -19,10 +17,11 @@ use Bitrix\HumanResources\Exception\CommandValidateException;
 use Bitrix\HumanResources\Exception\CreationFailedException;
 use Bitrix\HumanResources\Exception\DeleteFailedException;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
+use Bitrix\HumanResources\Internals\Attribute;
 use Bitrix\HumanResources\Internals\Attribute\Access\LogicOr;
 use Bitrix\HumanResources\Internals\Attribute\StructureActionAccess;
 use Bitrix\HumanResources\Item;
-use Bitrix\HumanResources\Repository\Access\PermissionRestrictedNodeRepository;
+use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\AccessibleItemType;
 use Bitrix\HumanResources\Type\IntegerCollection;
@@ -40,12 +39,10 @@ final class Node extends Controller
 {
 	private const ERROR_TEAMS_DISABLED = 'ERROR_TEAMS_DISABLED';
 	private readonly NodeService $nodeService;
-	private readonly NodeRepository $nodeRepository;
 
 	public function __construct(Request $request = null)
 	{
 		$this->nodeService = Container::getNodeService();
-		$this->nodeRepository = new PermissionRestrictedNodeRepository();
 
 		parent::__construct($request);
 	}
@@ -218,14 +215,11 @@ final class Node extends Controller
 			return [];
 		}
 
-		$this->nodeRepository->setSelectableNodeEntityTypes([
-			NodeEntityType::DEPARTMENT,
-			NodeEntityType::TEAM,
-		]);
-		$nodeCollection = $this->nodeRepository->findAllByUserId($currentUserId);
-		$this->nodeRepository->setSelectableNodeEntityTypes([
-			NodeEntityType::DEPARTMENT,
-		]);
+		$nodeCollection = PublicContainer::getNodeService()->findAllByMemberEntityId(
+			memberEntityId: $currentUserId,
+			nodeTypes: [NodeEntityType::DEPARTMENT, NodeEntityType::TEAM],
+			structureAction: StructureAction::ViewAction,
+		);
 
 		return array_column($nodeCollection->getItemMap(), 'id');
 	}
@@ -259,19 +253,12 @@ final class Node extends Controller
 			return $result;
 		}
 
-		$nodeCollection =
-			(new NodeDataBuilder())
-				->addFilter(
-					new NodeFilter(
-						idFilter: new IdFilter(new IntegerCollection(...$nodeIds)),
-						entityTypeFilter: NodeTypeFilter::fromNodeTypes([NodeEntityType::DEPARTMENT, NodeEntityType::TEAM]),
-						structureId: $structure->id,
-						active: true,
-						accessFilter: new NodeAccessFilter(StructureAction::ViewAction),
-					),
-				)
-				->getAll()
-		;
+		$nodeCollection = PublicContainer::getNodeService()->findAllByIds(
+			nodeIds: $nodeIds,
+			structureId: $structure->id,
+			nodeTypes: [NodeEntityType::DEPARTMENT, NodeEntityType::TEAM],
+			structureAction: StructureAction::ViewAction,
+		);
 
 		foreach ($nodeCollection as $node)
 		{
@@ -308,19 +295,12 @@ final class Node extends Controller
 			return $result;
 		}
 
-		$nodeCollection =
-			(new NodeDataBuilder())
-				->addFilter(
-					new NodeFilter(
-						idFilter: new IdFilter(new IntegerCollection(...$nodeIds)),
-						entityTypeFilter: NodeTypeFilter::fromNodeTypes([NodeEntityType::DEPARTMENT, NodeEntityType::TEAM]),
-						structureId: $structure->id,
-						active: true,
-						accessFilter: new NodeAccessFilter(StructureAction::ViewAction),
-					)
-				)
-				->getAll()
-		;
+		$nodeCollection = PublicContainer::getNodeService()->findAllByIds(
+			nodeIds: $nodeIds,
+			structureId: $structure->id,
+			nodeTypes: [NodeEntityType::DEPARTMENT, NodeEntityType::TEAM],
+			structureAction: StructureAction::ViewAction,
+		);
 
 		foreach ($nodeCollection as $node)
 		{

@@ -9,6 +9,7 @@ use Bitrix\Crm\Recurring\Calculator;
 use Bitrix\Crm\Recurring\Entity;
 use Bitrix\Crm\Recurring\Manager;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Service\Operation\CopyResult;
 use Bitrix\Crm\Timeline\DynamicRecurringController;
 use Bitrix\Main;
@@ -172,13 +173,41 @@ class DynamicExist extends DynamicEntity
 
 	private function copyTemplateItem(Factory $factory): CopyResult
 	{
-		return $factory
-			->getCopyOperation($this->templateItem)
+		$templateItem = $this->templateItem;
+
+		$operation = $factory
+			->getCopyOperation($templateItem)
 			->disableCheckAccess()
 			->disableCheckFields()
 			->disableSaveToTimeline()
-			->launch()
 		;
+
+		$operation->addCopyAddAction(
+			Operation::ACTION_BEFORE_SAVE,
+			new class($this->templateItem) extends Operation\Action {
+				private Item $templateItem;
+
+				public function __construct(Item $templateItem)
+				{
+					parent::__construct();
+
+					$this->templateItem = $templateItem;
+				}
+
+				public function process(Item $item): Result
+				{
+					$createdBy = $this->templateItem->getCreatedBy();
+					if ($createdBy > 0)
+					{
+						$item->setCreatedBy($this->templateItem->getCreatedBy());
+					}
+
+					return new Result();
+				}
+			},
+		);
+
+		return $operation->launch();
 	}
 
 	protected function setFieldNoDemand($name, $value): void

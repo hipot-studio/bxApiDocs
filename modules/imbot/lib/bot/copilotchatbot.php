@@ -4,8 +4,14 @@ namespace Bitrix\Imbot\Bot;
 
 use Bitrix\AI\Context;
 use Bitrix\Ai\Services\MarkdownToBBCodeTranslationService;
+use Bitrix\AiAssistant\Core\Dto\MessageDto;
+use Bitrix\AiAssistant\Core\Enum\MessageType;
+use Bitrix\AiAssistant\Core\Repository\MessageParamsRepository;
+use Bitrix\AiAssistant\Core\Service\AiBot;
 use Bitrix\Im\V2\Analytics\CopilotAnalytics;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Entity\User\Data\BotData;
+use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\Im\V2\Integration\AI\SimpleHistoryBuilder;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\MessageCollection;
@@ -135,7 +141,11 @@ class CopilotChatBot extends Base
 		$botProps = array_merge(self::BOT_PROPERTIES, [
 			'LANG' => $languageId,// preferred language
 			'PROPERTIES' => [
-				'NAME' => Loc::getMessage('IMBOT_COPILOT_BOT_NAME', null, $languageId),
+				'NAME' => Loc::getMessage(
+					'IMBOT_COPILOT_BOT_NAME_MSGVER_1',
+					['#COPILOT_NAME#' => self::getBotName()],
+					$languageId
+				),
 				'COLOR' => 'COPILOT',
 			]
 		]);
@@ -283,14 +293,18 @@ class CopilotChatBot extends Base
 			return false;
 		}
 
-		$botCache = Im\Bot::getCache(self::getBotId());
+		$botDataLang = BotData::getInstance(self::getBotId())->getLang();
 
-		$languageId = $botCache['LANG'] ?: Loc::getCurrentLang();
+		$languageId = !empty($botDataLang) ? $botDataLang : Loc::getCurrentLang();
 		Loc::loadLanguageFile(__FILE__, $languageId);
 
 		$newData = array_merge(self::BOT_PROPERTIES, [
 			'PROPERTIES' => [
-				'NAME' => Loc::getMessage('IMBOT_COPILOT_BOT_NAME', null, $languageId),
+				'NAME' => Loc::getMessage(
+					'IMBOT_COPILOT_BOT_NAME_MSGVER_1',
+					['#COPILOT_NAME#' => self::getBotName()],
+					$languageId
+				),
 				'COLOR' => 'COPILOT',
 			]
 		]);
@@ -305,7 +319,6 @@ class CopilotChatBot extends Base
 			}
 		}
 
-		Im\Bot::clearCache();
 		Im\Bot::update(['BOT_ID' => self::getBotId()], $newData);
 
 		return true;
@@ -343,6 +356,16 @@ class CopilotChatBot extends Base
 
 		if (!Loader::includeModule('ai'))
 		{
+			return false;
+		}
+
+		if (!Chat\CopilotChat::isActive())
+		{
+			self::sendError((int)$messageFields['TO_CHAT_ID'], Loc::getMessage(
+				'IMBOT_COPILOT_ERROR_NOT_ACTIVE_MSGVER_1',
+				['#COPILOT_NAME#' => self::getBotName()]
+			));
+
 			return false;
 		}
 
@@ -477,6 +500,11 @@ class CopilotChatBot extends Base
 		return $result->isSuccess();
 	}
 
+	private static function isAiAssistantMentionEnabled(): bool
+	{
+		return Option::get(self::MODULE_ID, 'bitrixgpt_agent_mention', 'N') === 'Y';
+	}
+
 	public static function onExternalMention(int $messageId, array $messageFields): bool
 	{
 		if (!self::isExternalMentionAvailable($messageFields))
@@ -484,7 +512,88 @@ class CopilotChatBot extends Base
 			return false;
 		}
 
+		if (Loader::includeModule('aiassistant') && self::isAiAssistantMentionEnabled())
+		{
+			return self::handleExternalMentionViaAiAssistant($messageId, $messageFields);
+		}
+
 		return self::processMessageAdd($messageId, $messageFields, true);
+	}
+
+	private static function handleExternalMentionViaAiAssistant(int $messageId, array $messageFields): bool
+	{
+		if (!self::checkMessageRestriction($messageFields))
+		{
+			return false;
+		}
+
+		$chatId = (int)$messageFields['TO_CHAT_ID'];
+		$userId = (int)$messageFields['FROM_USER_ID'];
+		$chat = Im\V2\Chat::getInstance($chatId);
+
+		$preparedFields = \CIMMessenger::prepareFieldsForMessageObject($messageFields);
+		$preparedFields['ID'] = $messageId;
+		$targetMessage = (new Message())->fill(['PARAMS' => $preparedFields['PARAMS'] ?? []]);
+		$targetMessage->load($preparedFields);
+
+		if ($targetMessage->getAuthorId() === self::getBotId())
+		{
+			return false;
+		}
+
+		$originalMessage = (new Message())
+			->setMessage($messageFields['MESSAGE_ORIGINAL'])
+			->setChatId($chat->getId())
+			->setChat($chat)
+		;
+
+		if (!self::checkBotMention($originalMessage))
+		{
+			return false;
+		}
+
+		if ($chat->getRelationByUserId(self::getBotId()))
+		{
+			$messages = MessageCollection::createFromArray([$targetMessage]);
+			$chat
+				->withContextUser(self::getBotId())
+				->readMessages($messages, true)
+			;
+		}
+
+		self::sendTyping($chatId);
+
+		// Strip bot mention markup [USER=botId]Name[/USER] from the message text
+		$rawContent = $messageFields['MESSAGE_ORIGINAL'] ?? $messageFields['MESSAGE'];
+		$content = trim(preg_replace('/\[USER=' . self::getBotId() . '\][^\[]*\[\/USER\]\s*/u', '', $rawContent));
+
+		$params = [
+			'messageType' => MessageType::Default->value,
+			'senderBotId' => self::getBotId(),
+			'beforeMessageId' => $messageId,
+			'chatMode' => 'inline',
+		];
+		$messageDto = new MessageDto(
+			id: $messageId,
+			chatId: $chatId,
+			authorId: $userId,
+			type: MessageType::Default,
+			content: $content,
+			params: $params,
+			dateCreate: $targetMessage->getDateCreate()?->format(\DateTimeInterface::ATOM),
+		);
+		ServiceLocator::getInstance()->get(MessageParamsRepository::class)?->setMessageParams(
+			$messageId,
+			$chatId,
+			$params
+		);
+
+		ServiceLocator::getInstance()
+					  ->get(AiBot::class)
+					  ->handleIncomingMessage($messageDto)
+		;
+
+		return true;
 	}
 
 	private static function replaceAiMentions(?string $messageText, ?int $chatId): ?string
@@ -925,8 +1034,11 @@ class CopilotChatBot extends Base
 			is_array($customData) && !empty($customData['msgBBCode']) => $customData['msgBBCode'],
 			is_array($customData) && !empty($customData['msgPlainText']) => $customData['msgPlainText'],
 			$error->getCode() === self::LIMIT_IS_EXCEEDED_BAAS => Loc::getMessage(
-				'IMBOT_COPILOT_ERROR_LIMIT_BAAS',
-				['#LINK#' => '/online/?FEATURE_PROMOTER=limit_boost_copilot']
+				'IMBOT_COPILOT_ERROR_LIMIT_BAAS_MSGVER_1',
+				[
+					'#LINK#' => '/online/?FEATURE_PROMOTER=limit_boost_copilot',
+					'#COPILOT_NAME#' => self::getBotName(),
+				]
 			),
 			$error->getCode() === 'NETWORK' => Loc::getMessage('IMBOT_COPILOT_ERROR_NETWORK_MSGVER_1'),
 			(bool)$error->getMessage() => $error->getMessage(),
@@ -987,7 +1099,10 @@ class CopilotChatBot extends Base
 				elseif (!$engine->isAvailableByTariff())
 				{
 					$checkResult->addError(new Error(
-						Loc::getMessage('IMBOT_COPILOT_TARIFF_RESTRICTION') ?? 'AI service unavailable by tariff',
+						Loc::getMessage(
+							'IMBOT_COPILOT_TARIFF_RESTRICTION_MSGVER_1',
+							['#COPILOT_NAME#' => self::getBotName()]
+						) ?? 'AI service unavailable by tariff',
 						self::ERROR_TARIFF
 					));
 				}
@@ -1022,9 +1137,13 @@ class CopilotChatBot extends Base
 		if (!$isB24)
 		{
 			return new Error(
-				Loc::getMessage('IMBOT_COPILOT_AGREEMENT_RESTRICTION_BOX', [
-					'#LINK#' => '/online/?AI_UX_TRIGGER=box_agreement',
-				]) ?? 'AI service agreement must be accepted',
+				Loc::getMessage(
+					'IMBOT_COPILOT_AGREEMENT_RESTRICTION_BOX_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => self::getBotName(),
+						'#LINK#' => '/online/?AI_UX_TRIGGER=box_agreement',
+					]
+				) ?? 'AI service agreement must be accepted',
 				self::ERROR_AGREEMENT
 			);
 		}
@@ -1035,15 +1154,22 @@ class CopilotChatBot extends Base
 		)
 		{
 			return new Error(
-				Loc::getMessage('IMBOT_COPILOT_AGREEMENT_RESTRICTION_ADMIN', [
-					'#LINK#' => '/',
-				]) ?? 'AI service agreement must be accepted',
+				Loc::getMessage(
+					'IMBOT_COPILOT_AGREEMENT_RESTRICTION_ADMIN_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => self::getBotName(),
+						'#LINK#' => '/',
+					]
+				) ?? 'AI service agreement must be accepted',
 				self::ERROR_AGREEMENT
 			);
 		}
 
 		return new Error(
-			Loc::getMessage('IMBOT_COPILOT_AGREEMENT_RESTRICTION_USER') ?? 'AI service agreement must be accepted',
+			Loc::getMessage(
+				'IMBOT_COPILOT_AGREEMENT_RESTRICTION_USER_MSGVER_1',
+				['#COPILOT_NAME#' => self::getBotName()]
+			) ?? 'AI service agreement must be accepted',
 			self::ERROR_AGREEMENT
 		);
 	}
@@ -1295,7 +1421,10 @@ class CopilotChatBot extends Base
 		return new EventResult(
 			EventResult::SUCCESS,
 			[
-				'IMBOT_COPILOT_INPUT_ACTION_THINKING' => Loc::getMessage('IMBOT_COPILOT_INPUT_ACTION_THINKING'),
+				'IMBOT_COPILOT_INPUT_ACTION_THINKING' => Loc::getMessage(
+					'IMBOT_COPILOT_INPUT_ACTION_THINKING_MSGVER_1',
+					['#COPILOT_NAME#' => self::getBotName()]
+				),
 			],
 			self::MODULE_ID
 		);
@@ -1367,6 +1496,16 @@ class CopilotChatBot extends Base
 	public static function isMemoryContextEnabled(): bool
 	{
 		return Option::get(self::MODULE_ID, 'enableCopilotMemoryContext', 'N') === 'Y';
+	}
+
+	protected static function getBotName(): string
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return 'CoPilot';
+		}
+
+		return CopilotNameResolver::getInstance()->getName();
 	}
 
 	//endregion

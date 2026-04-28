@@ -2,19 +2,16 @@
 
 namespace Bitrix\BizprocDesigner\Infrastructure\Controller;
 
-use Bitrix\Bizproc\Activity\ActivityDescription;
-use Bitrix\Bizproc\Activity\Dto\NodePorts;
-use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Api;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Public\Command\WorkflowTemplate\UpdateWorkflowTemplate\UpdateWorkflowTemplateCommand;
-use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Workflow\Template\Converter\NodesToTemplate;
+use Bitrix\Bizproc\Workflow\Template\Converter\TemplateToNodes;
 use Bitrix\Bizproc\Workflow\Template\Converter\SequentialToNodeWorkflow;
+use Bitrix\Bizproc\Workflow\Template\Converter\StateMachineToNodeWorkflow;
 use Bitrix\BizprocDesigner\Infrastructure\Enum\StartTrigger;
 use Bitrix\Main\Application;
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -28,11 +25,33 @@ class Diagram extends JsonController
 		Loader::requireModule('bizproc');
 	}
 
-	public function getAction(int $templateId = 0, ?array $documentType = null, ?string $startTrigger = null): ?array
+	public function getAction(
+		int $templateId = 0,
+		?array $documentType = null,
+		?string $startTrigger = null,
+		?string $editBlock = null,
+	): ?array
 	{
 		$validatedStartTrigger = $this->validateStartTrigger($startTrigger);
 
 		$data = $this->getTemplateData($templateId, $documentType, $validatedStartTrigger);
+
+		//todo: proto
+		if ($data && $editBlock)
+		{
+			foreach ($data['blocks'] as $block)
+			{
+				if ($block['id'] === $editBlock && !empty($block['activity']['Children']))
+				{
+					[$blocks, $connections] = (new TemplateToNodes($block['activity']['Children']))->convert();
+					$data['blocks'] = $blocks;
+					$data['connections'] = $connections;
+					$data['publishedBlocks'] = [];
+					$data['publishedConnection'] = [];
+					break;
+				}
+			}
+		}
 
 		if ($data)
 		{
@@ -79,11 +98,7 @@ class Diagram extends JsonController
 
 		if ($this->getTpl($diagramData['templateId'])?->getType() !== Api\Enum\Template\WorkflowTemplateType::Nodes->value)
 		{
-			$this->addError(
-				new Error(Loc::getMessage('BIZPROCDESIGNER_CONTROLLER_DIAGRAM_ERROR_TEMPLATE_TYPE'))
-			);
-
-			return null;
+			return ['templateDraftId' => 0];
 		}
 
 		return $this->saveTemplateDraft(
@@ -138,7 +153,11 @@ class Diagram extends JsonController
 		}
 
 		$draftId = 0;
-		if ($tpl->getType() !== Api\Enum\Template\WorkflowTemplateType::Nodes->value)
+
+		if (
+			$tpl->getType() !== Api\Enum\Template\WorkflowTemplateType::Nodes->value
+			&& !defined('\Bitrix\Bizproc\Dev\ENV')
+		)
 		{
 			$this->addError(
 				new Error(Loc::getMessage('BIZPROCDESIGNER_CONTROLLER_DIAGRAM_ERROR_TEMPLATE_TYPE'))
@@ -157,24 +176,14 @@ class Diagram extends JsonController
 		{
 			$tplData = $tpl->getTemplate();
 		}
-		$tpl = $tpl->collectValues();
 		$trackOn = (int)\Bitrix\Main\Config\Option::get('bizproc', 'tpl_track_on_' . $id, 0);
-		$root = $tplData[0];
 
-		$blocks = $this->createBlocks($root[NodesToTemplate::ELEMENT_CHILDREN], $documentType);
-		$connections = $this->createConnections(
-			$root[NodesToTemplate::ELEMENT_PROPERTIES][NodesToTemplate::PROPERTY_LINKS]
-		);
-
-		$publishedRoot = $tpl['TEMPLATE'][0];
-		$publishedBlocks = $this->createBlocks($publishedRoot[NodesToTemplate::ELEMENT_CHILDREN], $documentType);
-		$publishedConnection = $this->createConnections(
-			$publishedRoot[NodesToTemplate::ELEMENT_PROPERTIES][NodesToTemplate::PROPERTY_LINKS]
-		);
+		[$blocks, $connections] = (new TemplateToNodes($tplData))->convert();
+		[$publishedBlocks, $publishedConnection] = (new TemplateToNodes($tpl->getTemplate()))->convert();
 
 		return [
-			'template' => array_merge($tpl, ['TRACK_ON' => $trackOn]),
-			'templateId' => $tpl['ID'],
+			'template' => array_merge($tpl->collectValues(), ['TRACK_ON' => $trackOn]),
+			'templateId' => $tpl->getId(),
 			'draftId' => $draftId,
 			'documentType' => $documentType,
 			'documentTypeSigned' => \CBPDocument::signDocumentType($documentType),
@@ -183,27 +192,6 @@ class Diagram extends JsonController
 			'publishedBlocks' => $publishedBlocks,
 			'publishedConnection' => $publishedConnection,
 		];
-	}
-
-	private function transformBlockActivities(array $activities): array
-	{
-		foreach ($activities as &$activity)
-		{
-			$activity['ReturnProperties'] = $this->getActivityReturnProperties($activity);
-		}
-
-		return $activities;
-	}
-
-	private function getActivityReturnProperties(array|string $activityOrCode): array
-	{
-		$props = \CBPRuntime::getRuntime()->getActivityReturnProperties($activityOrCode);
-		foreach ($props as $id => &$prop)
-		{
-			$prop['Id'] = $id;
-		}
-
-		return array_values($props);
 	}
 
 	/**
@@ -364,140 +352,6 @@ class Diagram extends JsonController
 		}
 
 		return $result->getData();
-	}
-
-	/**
-	 * @param array $activities
-	 * @return array|array[]
-	 */
-	private function createBlocks(array $activities, ?array $documentType): array
-	{
-		/** @var Searcher $searcher */
-		$searcher = ServiceLocator::getInstance()->get('bizproc.runtime.activitysearcher.searcher');
-
-		$defaultActivities =
-			$searcher->searchByType(
-				[ActivityType::NODE->value, ActivityType::TRIGGER->value],
-				$documentType
-			)
-				->filter(static fn(ActivityDescription $description) => !$description->getExcluded())
-				->sort()
-		;
-
-		$iconMap = [];
-		/* @var ActivityDescription $activity*/
-		foreach ($defaultActivities as $activity)
-		{
-			$class  = $activity->getClass();
-			if (!$class)
-			{
-				continue;
-			}
-
-			if ($activity->getPresets())
-			{
-				foreach ($activity->getPresets() as $preset)
-				{
-					$presetActivity = $activity->applyPreset($preset);
-					$id = $class . '_' .  $preset['ID'];
-					$iconMap[$id] = [
-						'CODE' => $presetActivity->getIcon(),
-						'COLOR' => $presetActivity->getColorIndex(),
-					];
-				}
-			}
-			else
-			{
-				$iconMap[$class] = [
-					'CODE' => $activity->getIcon(),
-					'COLOR' => $activity->getColorIndex(),
-				];
-			}
-		}
-
-		return array_map(
-			static function ($child) use ($iconMap) {
-				$node = $child['Node'];
-				unset($child['Node']);
-
-				$nodeType = $node['type'] ?? 'simple';
-				if (str_ends_with($child['Type'], 'Trigger'))
-				{
-					$nodeType = 'trigger';
-				}
-
-				$activityType = $child['Type'] ?? null;
-				if (isset($child['PresetId']))
-				{
-					$activityType .= '_' . $child['PresetId'];
-				}
-
-				$icon = $activityType && isset($iconMap[$activityType]['CODE']) ? $iconMap[$activityType]['CODE'] : null;
-				$color = $activityType && isset($iconMap[$activityType]['COLOR']) ? $iconMap[$activityType]['COLOR'] : null;
-
-				return [
-					'id' => $node['id'],
-					'type' => $nodeType,
-					'position' => $node['position'],
-					'dimensions' => $node['dimensions'],
-					'ports' => NodePorts::fromArray($node['ports'])->toArray(), // normalize ports structure
-					'activity' => $child,
-					'node' => [
-						'type' => $nodeType,
-						'title' => $node['node']['title'],
-						'colorIndex' => $color,
-						'frameColorName' => $node['node']['frameColorName'] ?? null,
-						'icon' => $icon,
-						'updated' => $node['node']['updated'] ?? null,
-						'published' => $node['node']['published'] ?? null,
-					],
-				];
-			},
-			$this->transformBlockActivities($activities)
-		);
-	}
-
-	/**
-	 * @param mixed $links
-	 * @return array|array[]
-	 */
-	private function createConnections(mixed $links): array
-	{
-		return array_map(
-			static function (array $link) {
-				[$sourceBlockId, $targetBlockId, $createdAt] = array_pad($link, 3, null);
-
-				$sourcePortId = 'o0';
-				$targetPortId = 'i0';
-
-				if (str_contains($sourceBlockId, ':'))
-				{
-					[$sourceBlockId, $sourcePortId] = explode(':', $sourceBlockId);
-				}
-
-				if (str_contains($targetBlockId, ':'))
-				{
-					[$targetBlockId, $targetPortId] = explode(':', $targetBlockId);
-				}
-
-				$type = null;
-				if ($sourcePortId[0] === 'a' && $targetPortId[0] === 't')
-				{
-					$type = 'aux';
-				}
-
-				return [
-					'id' => "{$sourceBlockId}_{$targetBlockId}_{$sourcePortId}_{$targetPortId}",
-					'sourceBlockId' => $sourceBlockId,
-					'sourcePortId' => $sourcePortId,
-					'targetBlockId' => $targetBlockId,
-					'targetPortId' => $targetPortId,
-					'type' => $type,
-					'createdAt' => $createdAt,
-				];
-			},
-			$links,
-		);
 	}
 
 	/**

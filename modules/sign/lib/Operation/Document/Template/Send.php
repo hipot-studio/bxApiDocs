@@ -9,6 +9,7 @@ use Bitrix\Sign\Helper\Field\NameHelper;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Document\BindingCollection;
 use Bitrix\Sign\Item\Document\Template;
+use Bitrix\Sign\Item\Document\Config\DocumentBlankReplacementConfig;
 use Bitrix\Sign\Item\Field;
 use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Item\MemberCollection;
@@ -55,6 +56,7 @@ final class Send implements Contract\Operation
 		private readonly ?int $sendFromUserId = null,
 		private readonly ?int $representativeUserId = null,
 		private readonly ?MemberCollection $memberList = null,
+		private readonly ?DocumentBlankReplacementConfig $blankReplacementConfig = null,
 		?DocumentService $documentService = null,
 		?ProfileProvider $profileProvider = null,
 		?MemberDynamicFieldInfoProvider $dynamicFieldProvider = null,
@@ -120,106 +122,56 @@ final class Send implements Contract\Operation
 			}
 		}
 
-		$result = (new Operation\Document\Copy(
-			document: $document,
+		$createResult = (new CreateDocumentFromTemplate(
+			template: $this->template,
+			templateDocument: $document,
 			createdByUserId: $this->responsibleUserId,
 			bindings: $this->bindings,
+			blankReplacementConfig: $this->blankReplacementConfig,
 		))->launch();
-		if (!$result instanceof CreateDocumentResult)
+		if (!$createResult instanceof CreateDocumentResult)
 		{
-			return $result;
+			return $createResult;
 		}
 
-		$newDocument = $result->document;
-
-		if ($newDocument->id === null)
-		{
-			return Result::createByErrorData(message: 'Document is not created.');
-		}
-
-		$newDocument->title = $this->template->title;
-		$result = $this->documentRepository->update($newDocument);
-		if (!$result->isSuccess())
-		{
-			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
-			if (!$rollbackResult->isSuccess())
-			{
-				return $rollbackResult;
-			}
-
-			return $result;
-		}
+		$newDocument = $createResult->document;
 
 		$result = $this->updateMembers($newDocument);
 		if (!$result->isSuccess())
 		{
-			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
-			if (!$rollbackResult->isSuccess())
-			{
-				return $rollbackResult;
-			}
-
-			return $result;
+			return $this->rollbackOnFailure($result, $newDocument);
 		}
 
 		$result = $this->fillFields($newDocument->id);
 		if (!$result->isSuccess())
 		{
-			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
-			if (!$rollbackResult->isSuccess())
-			{
-				return $rollbackResult;
-			}
-
-			return $result;
+			return $this->rollbackOnFailure($result, $newDocument);
 		}
 
 		$result = $this->configureAndStart($newDocument);
 		if (!$result->isSuccess())
 		{
-			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
-			if (!$rollbackResult->isSuccess())
-			{
-				return $rollbackResult;
-			}
-
-			return $result;
+			return $this->rollbackOnFailure($result, $newDocument);
 		}
 
 		$setSmartDocumentAssignedByIdResult = $this->setSmartDocumentAssignedById($newDocument);
 		if (!$setSmartDocumentAssignedByIdResult->isSuccess())
 		{
-			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
-			if (!$rollbackResult->isSuccess())
-			{
-				return $rollbackResult;
-			}
-
-			return $setSmartDocumentAssignedByIdResult;
+			return $this->rollbackOnFailure($setSmartDocumentAssignedByIdResult, $newDocument);
 		}
 
 		$employeeMember = $this->memberRepository->getByDocumentIdWithRole($newDocument->id, Role::SIGNER);
 		if ($employeeMember === null)
 		{
-			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
-			if (!$rollbackResult->isSuccess())
-			{
-				return $rollbackResult;
-			}
-
-			return (new Result())->addError(new Error('Employee member not found'));
+			$result = (new Result())->addError(new Error('Employee member not found'));
+			return $this->rollbackOnFailure($result, $newDocument);
 		}
 
 		$assigneeMember = $this->memberRepository->getByDocumentIdWithRole($newDocument->id, Role::ASSIGNEE);
 		if ($assigneeMember === null)
 		{
-			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
-			if (!$rollbackResult->isSuccess())
-			{
-				return $rollbackResult;
-			}
-
-			return (new Result())->addError(new Error('Assignee member not found'));
+			$result = (new Result())->addError(new Error('Assignee member not found'));
+			return $this->rollbackOnFailure($result, $newDocument);
 		}
 
 		return new SendResult($newDocument, $employeeMember, $assigneeMember);
@@ -269,6 +221,22 @@ final class Send implements Contract\Operation
 		);
 
 		return $operation->launch();
+	}
+
+	private function rollbackOnFailure(Main\Result $result, Document $document): Main\Result
+	{
+		if ($result->isSuccess() || $document->id === null)
+		{
+			return $result;
+		}
+
+		$rollbackResult = $this->documentService->rollbackDocument($document->id);
+		if (!$rollbackResult->isSuccess())
+		{
+			$result->addErrors($rollbackResult->getErrors());
+		}
+
+		return $result;
 	}
 
 	private function configureAndStart(Document $newDocument): Main\Result

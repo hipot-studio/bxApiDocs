@@ -24,7 +24,10 @@ class Field implements Contract\Item
 		public ?Item\Field\ItemCollection $items = null,
 		public ?FieldCollection $subfields = null,
 		public ?bool $required = null,
-	) {}
+		public ?string $alias = null,
+	)
+	{
+	}
 
 	public function isTypeFile(): bool
 	{

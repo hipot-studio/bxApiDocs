@@ -106,7 +106,10 @@ class B2eCompany extends Controller
 		];
 	}
 
-	#[ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
+	#[LogicOr(
+		new ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT),
+		new ActionAccess(ActionDictionary::ACTION_B2E_TEMPLATE_EDIT),
+	)]
 	public function deleteAction(string $id): array
 	{
 		$response = $this->container->getCompanyService()->delete($id);
@@ -210,7 +213,10 @@ class B2eCompany extends Controller
 		return $companies;
 	}
 
-	#[ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
+	#[LogicOr(
+		new ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT),
+		new ActionAccess(ActionDictionary::ACTION_B2E_TEMPLATE_EDIT),
+	)]
 	public function registerAction(
 		string $taxId,
 		string $providerCode,

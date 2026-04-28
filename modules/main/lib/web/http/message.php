@@ -23,7 +23,7 @@ class Message implements MessageInterface
 	 * @param StreamInterface | null  $body
 	 * @param string | null $version
 	 */
-	public function __construct(array $headers = null, StreamInterface $body = null, string $version = null)
+	public function __construct(?array $headers = null, ?StreamInterface $body = null, ?string $version = null)
 	{
 		$this->headers = new HttpHeaders($headers);
 

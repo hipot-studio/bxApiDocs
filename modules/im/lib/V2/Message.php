@@ -12,9 +12,12 @@ use Bitrix\Im\V2\Message\Send\ImportantUsers;
 use Bitrix\Im\V2\Message\Sticker\PackType;
 use Bitrix\Im\V2\Message\Sticker\StickerItem;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
+use Bitrix\Im\V2\Reading\Counter\CountersProvider;
+use Bitrix\Im\V2\Reading\View\ViewProvider;
 use Bitrix\Im\V2\TariffLimit\DateFilterable;
 use Bitrix\Im\V2\TariffLimit\FilterResult;
 use Bitrix\Im\V2\TariffLimit\Limit;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\Type\DateTime;
@@ -218,6 +221,11 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			}
 
 			$this->params = new Params();
+
+			if ($this->getRegistry() instanceof MessageCollection)
+			{
+				$this->getRegistry()->invalidateParamsFillState();
+			}
 		}
 
 		return $result;
@@ -452,7 +460,10 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		}
 
 		$messageIds = [$this->getMessageId()];
-		$this->isUnread = !(new ReadService())->getReadStatusesByMessageIds($messageIds)[$this->getMessageId()];
+		$userId = $this->getContext()->getUserId();
+		$provider = ServiceLocator::getInstance()->get(CountersProvider::class);
+		$unreadStatuses = $provider->getUnreadStatuses($messageIds, $userId);
+		$this->isUnread = $unreadStatuses[$this->getMessageId()] ?? false;
 
 		return $this->isUnread;
 	}
@@ -478,8 +489,11 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			return $this->isViewed;
 		}
 
+		$userId = $this->getContext()->getUserId();
 		$messageIds = [$this->getMessageId()];
-		$this->isViewed = (new ReadService())->getViewStatusesByMessageIds($messageIds)[$this->getMessageId()];
+		$provider = ServiceLocator::getInstance()->get(ViewProvider::class);
+		$viewStatuses = $provider->getViewStatuses($messageIds, $userId);
+		$this->isViewed = $viewStatuses[$this->getMessageId()];
 
 		return $this->isViewed;
 	}
@@ -1875,7 +1889,9 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		$messageShortInfo = $option['MESSAGE_SHORT_INFO'] ?? false;
 		$onlyCommonRest = [
 			'id' => $this->getId(),
+			'chatId' => $this->getChatId(),
 			'chat_id' => $this->getChatId(),
+			'authorId' => $authorId,
 			'author_id' => $authorId,
 			'date' => isset($dateCreate) ? $dateCreate->format('c') : null,
 			'text' => $this->getFormattedMessage(),

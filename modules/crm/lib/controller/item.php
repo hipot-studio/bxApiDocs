@@ -25,6 +25,7 @@ use Bitrix\Main\NotSupportedException;
 use Bitrix\Main\ORM\Fields\Relations\Relation;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Main\ArgumentException;
 
 class Item extends Base
 {
@@ -462,7 +463,15 @@ class Item extends Base
 
 		$isUseOriginalUfNames = ($useOriginalUfNames === 'Y');
 		$fields = $this->convertFieldNamesToUpper($fields, $isUseOriginalUfNames);
-		$this->processFields($item, $fields, $factory->getFieldsCollection());
+		try
+		{
+			$this->processFields($item, $fields, $factory->getFieldsCollection());
+		}
+		catch (ArgumentException $exception)
+		{
+			$this->addError(new Error($exception->getMessage(), $exception->getCode()));
+			return null;
+		}
 
 		$operation = $factory->getAddOperation($item);
 		if (
@@ -527,7 +536,16 @@ class Item extends Base
 
 		$isUseOriginalUfNames = ($useOriginalUfNames === 'Y');
 		$fields = $this->convertFieldNamesToUpper($fields, $isUseOriginalUfNames);
-		$this->processFields($item, $fields, $factory->getFieldsCollection());
+
+		try
+		{
+			$this->processFields($item, $fields, $factory->getFieldsCollection());
+		}
+		catch (ArgumentException $exception)
+		{
+			$this->addError(new Error($exception->getMessage(), $exception->getCode()));
+			return null;
+		}
 
 		$operation = $factory->getUpdateOperation($item);
 		if (
@@ -601,7 +619,16 @@ class Item extends Base
 		$item = $factory->createItem();
 
 		$fields = $this->convertFieldNamesToUpper($fields, $isUseOriginalUfNames);
-		$this->processFields($item, $fields, $factory->getFieldsCollection());
+
+		try
+		{
+			$this->processFields($item, $fields, $factory->getFieldsCollection());
+		}
+		catch (ArgumentException $exception)
+		{
+			$this->addError(new Error($exception->getMessage(), $exception->getCode()));
+			return null;
+		}
 
 		if (!empty($fmValues) && $item->hasField(\Bitrix\Crm\Item::FIELD_NAME_FM))
 		{

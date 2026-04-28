@@ -11,14 +11,15 @@ use Bitrix\Bizproc\Api\Response\WorkflowTemplateService as WorkflowTemplateRespo
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable;
+use Bitrix\Bizproc\Internal\Service\Trigger\Schedule\ScheduledTriggerSyncService;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Query\Query;
 
 class WorkflowTemplateService
 {
 	private const TRACK_ON_INTERVAL = 7 * 86400; // 7 days in seconds
-
 	private WorkflowAccessService $accessService;
 
 	public function __construct(?WorkflowAccessService $accessService = null)
@@ -27,7 +28,7 @@ class WorkflowTemplateService
 	}
 
 	public function getList(
-		WorkflowTemplateRequest\GridTemplateRequest $request
+		WorkflowTemplateRequest\GridTemplateRequest $request,
 	): WorkflowTemplateResponse\GridTemplateResponse
 	{
 		$query = WorkflowTemplateTable::query()
@@ -43,15 +44,9 @@ class WorkflowTemplateService
 				'CREATED_USER',
 				'USER',
 			])
+			->where('CREATED_BY', $request->getFilterUserId())
 			->where('TYPE', WorkflowTemplateType::Nodes->value)
 			->whereNull('SYSTEM_CODE')
-			->where(
-				Query::filter()
-					->logic('or')
-					->where(Query::filter()->where('USER_ID', $request->getFilterUserId()))
-					->where(Query::filter()->where('UPDATED_BY', $request->getFilterUserId()))
-					->where(Query::filter()->where('CREATED_BY', $request->getFilterUserId()))
-			)
 			->setOrder($request->getOrder())
 			->setLimit($request->getLimit())
 			->countTotal(true)
@@ -72,7 +67,7 @@ class WorkflowTemplateService
 				Query::filter()
 					->logic('or')
 					->whereLike('NAME', "%$searchQuery%")
-					->whereLike('DESCRIPTION', "%$searchQuery%")
+					->whereLike('DESCRIPTION', "%$searchQuery%"),
 			);
 		}
 
@@ -85,7 +80,7 @@ class WorkflowTemplateService
 	}
 
 	public function prepareParameters(
-		WorkflowTemplateRequest\PrepareParametersRequest $request
+		WorkflowTemplateRequest\PrepareParametersRequest $request,
 	): WorkflowTemplateResponse\PrepareParametersResponse
 	{
 		try
@@ -95,7 +90,7 @@ class WorkflowTemplateService
 		catch (\CBPArgumentNullException $e)
 		{
 			return WorkflowTemplateResponse\PrepareParametersResponse::createError(
-				\Bitrix\Bizproc\Error::createFromThrowable($e)
+				\Bitrix\Bizproc\Error::createFromThrowable($e),
 			);
 		}
 
@@ -127,13 +122,13 @@ class WorkflowTemplateService
 		}
 
 		$errors = [];
-		$response =
-			(new WorkflowTemplateResponse\PrepareParametersResponse())
+		$response
+			= (new WorkflowTemplateResponse\PrepareParametersResponse())
 				->setRawParameters($parameters)
 				->setParameters(
 					\CBPWorkflowTemplateLoader::checkWorkflowParameters(
-						$request->templateParameters, $parameters, $request->complexDocumentType, $errors
-					)
+						$request->templateParameters, $parameters, $request->complexDocumentType, $errors,
+					),
 				)
 		;
 
@@ -149,7 +144,7 @@ class WorkflowTemplateService
 	}
 
 	public function setConstants(
-		WorkflowTemplateRequest\SetConstantsRequest $request
+		WorkflowTemplateRequest\SetConstantsRequest $request,
 	): WorkflowTemplateResponse\SetConstantsResponse
 	{
 		if ($request->templateId <= 0)
@@ -175,7 +170,7 @@ class WorkflowTemplateService
 			!\CBPDocument::canUserOperateDocumentType(
 				\CBPCanUserOperateOperation::CreateWorkflow,
 				$request->userId,
-				$request->complexDocumentType
+				$request->complexDocumentType,
 			)
 		)
 		{
@@ -193,7 +188,7 @@ class WorkflowTemplateService
 				templateParameters: $constants,
 				requestParameters: $request->requestConstants,
 				complexDocumentType: $request->complexDocumentType,
-			)
+			),
 		);
 
 		if (!$preparedResult->isSuccess())
@@ -209,33 +204,40 @@ class WorkflowTemplateService
 
 		try
 		{
-			\CBPWorkflowTemplateLoader::update($request->templateId, ['CONSTANTS' => $constants]);
+			$user = new \CBPWorkflowTemplateUser($request->userId);
+			\CBPWorkflowTemplateLoader::update($request->templateId, [
+				'CONSTANTS' => $constants,
+				'USER_ID' => $user->getId(),
+				'MODIFIER_USER' => $user,
+			]);
 		}
 		catch (\Exception $e)
 		{
 			return WorkflowTemplateResponse\SetConstantsResponse::createError(
-				new Error('something go wrong, try again')
+				new Error('something go wrong, try again'),
 			);
 		}
+
+		ServiceLocator::getInstance()->get(ScheduledTriggerSyncService::class)?->syncByTemplate($request->templateId);
 
 		return WorkflowTemplateResponse\SetConstantsResponse::createOk();
 	}
 
 	public function prepareStartParameters(
-		WorkflowTemplateRequest\PrepareStartParametersRequest $request
+		WorkflowTemplateRequest\PrepareStartParametersRequest $request,
 	): WorkflowTemplateResponse\PrepareStartParametersResponse
 	{
 		if ($request->templateId <= 0)
 		{
 			return WorkflowTemplateResponse\PrepareStartParametersResponse::createError(
-				new Error('negative template id')
+				new Error('negative template id'),
 			);
 		}
 
 		if ($request->targetUserId <= 0)
 		{
 			return WorkflowTemplateResponse\PrepareStartParametersResponse::createError(
-				new Error('negative target user id')
+				new Error('negative target user id'),
 			);
 		}
 
@@ -248,8 +250,8 @@ class WorkflowTemplateService
 			return WorkflowTemplateResponse\PrepareStartParametersResponse::createError(Error::createFromThrowable($e));
 		}
 
-		$template =
-			\CBPWorkflowTemplateLoader::getList(
+		$template
+			= \CBPWorkflowTemplateLoader::getList(
 				[],
 				[
 					'ID' => $request->templateId,
@@ -259,14 +261,13 @@ class WorkflowTemplateService
 				],
 				false,
 				false,
-				['ID', 'PARAMETERS']
-			)->fetch()
-		;
+			['ID', 'PARAMETERS'],
+		)->fetch();
 
 		if (!$template)
 		{
 			return WorkflowTemplateResponse\PrepareStartParametersResponse::createError(
-				new Error('template not found')
+				new Error('template not found'),
 			);
 		}
 
@@ -277,14 +278,14 @@ class WorkflowTemplateService
 				new WorkflowTemplateRequest\PrepareParametersRequest(
 					$template['PARAMETERS'],
 					$request->requestParameters,
-					$request->complexDocumentType
-				)
+					$request->complexDocumentType,
+				),
 			);
 
 			if (!$preparedParameters->isSuccess())
 			{
 				return (new WorkflowTemplateResponse\PrepareStartParametersResponse())->addErrors(
-					$preparedParameters->getErrors()
+					$preparedParameters->getErrors(),
 				);
 			}
 
@@ -298,7 +299,7 @@ class WorkflowTemplateService
 	}
 
 	public function saveTemplate(
-		WorkflowTemplateRequest\SaveTemplateRequest $request
+		WorkflowTemplateRequest\SaveTemplateRequest $request,
 	): WorkflowTemplateResponse\SaveTemplateResponse
 	{
 		$response = new WorkflowTemplateResponse\SaveTemplateResponse();
@@ -310,7 +311,7 @@ class WorkflowTemplateService
 			{
 				$errorMsg = ErrorMessage::INVALID_PARAM_ARG->getError([
 					'#PARAM#' => 'DOCUMENT_TYPE',
-					'#VALUE#' => $documentType
+					'#VALUE#' => $documentType,
 				]);
 				$response->addError($errorMsg);
 
@@ -320,7 +321,7 @@ class WorkflowTemplateService
 			if (!$this->accessService->canCreateWorkflow($documentType, $request->user->getId()))
 			{
 				$response->addError(
-					ErrorMessage::ACCESS_DENIED->getError()
+					ErrorMessage::ACCESS_DENIED->getError(),
 				);
 
 				return $response;
@@ -384,7 +385,7 @@ class WorkflowTemplateService
 	}
 
 	public function importTemplate(
-		WorkflowTemplateRequest\ImportTemplateRequest $request
+		WorkflowTemplateRequest\ImportTemplateRequest $request,
 	): WorkflowTemplateResponse\ImportTemplateResponse
 	{
 		$response = new WorkflowTemplateResponse\ImportTemplateResponse();
@@ -394,7 +395,7 @@ class WorkflowTemplateService
 		{
 			$errorMsg = ErrorMessage::INVALID_PARAM_ARG->getError([
 				'#PARAM#' => 'DOCUMENT_TYPE',
-				'#VALUE#' => $documentType
+				'#VALUE#' => $documentType,
 			]);
 			$response->addError($errorMsg);
 
@@ -404,7 +405,7 @@ class WorkflowTemplateService
 		if ($request->checkAccess && !$this->accessService->canCreateWorkflow($documentType, $request->user->getId()))
 		{
 			$response->addError(
-				ErrorMessage::IMPORT_ACCESS_DENIED->getError()
+				ErrorMessage::IMPORT_ACCESS_DENIED->getError(),
 			);
 
 			return $response;
@@ -414,9 +415,7 @@ class WorkflowTemplateService
 		$file = $request->file;
 		if (is_uploaded_file($file['tmp_name']))
 		{
-			$fileHandle = fopen($file['tmp_name'], 'rb');
-			$data = fread($fileHandle, filesize($file['tmp_name']));
-			fclose($fileHandle);
+			$data = (new \Bitrix\Main\IO\File($file['tmp_name']))->getContents();
 
 			try
 			{
@@ -426,7 +425,7 @@ class WorkflowTemplateService
 					$request->autostart,
 					$request->name,
 					$request->description,
-					$data
+					$data,
 				);
 			}
 			catch (\Throwable $exception)
@@ -455,7 +454,7 @@ class WorkflowTemplateService
 		return [
 			$parameters['MODULE_ID'],
 			$parameters['ENTITY'],
-			$parameters['DOCUMENT_TYPE']
+			$parameters['DOCUMENT_TYPE'],
 		];
 	}
 
@@ -470,7 +469,7 @@ class WorkflowTemplateService
 		{
 			$errorMsg = ErrorMessage::INVALID_PARAM_ARG->getError([
 				'#PARAM#' => 'DOCUMENT_TYPE',
-				'#VALUE#' => $documentType
+				'#VALUE#' => $documentType,
 			]);
 			$response->addError($errorMsg);
 
@@ -480,7 +479,7 @@ class WorkflowTemplateService
 		if ($request->checkAccess && !$this->accessService->canCreateWorkflow($documentType, $request->user->getId()))
 		{
 			$response->addError(
-				ErrorMessage::EXPORT_ACCESS_DENIED->getError()
+				ErrorMessage::EXPORT_ACCESS_DENIED->getError(),
 			);
 
 			return $response;
@@ -495,13 +494,13 @@ class WorkflowTemplateService
 			return $response;
 		}
 
-		$response->setTemplateData((string) $bp);
+		$response->setTemplateData((string)$bp);
 
 		return $response;
 	}
 
 	public function saveTemplateDraft(
-		WorkflowTemplateRequest\SaveTemplateDraftRequest $request
+		WorkflowTemplateRequest\SaveTemplateDraftRequest $request,
 	): WorkflowTemplateResponse\SaveTemplateDraftResponse
 	{
 		$response = new WorkflowTemplateResponse\SaveTemplateDraftResponse();
@@ -513,7 +512,7 @@ class WorkflowTemplateService
 			{
 				$errorMsg = ErrorMessage::INVALID_PARAM_ARG->getError([
 					'#PARAM#' => 'DOCUMENT_TYPE',
-					'#VALUE#' => $documentType
+					'#VALUE#' => $documentType,
 				]);
 				$response->addError($errorMsg);
 
@@ -523,7 +522,7 @@ class WorkflowTemplateService
 			if ($this->accessService->canCreateWorkflow($documentType, $request->user->getId()))
 			{
 				$response->addError(
-					ErrorMessage::ACCESS_DENIED->getError()
+					ErrorMessage::ACCESS_DENIED->getError(),
 				);
 
 				return $response;
@@ -537,7 +536,7 @@ class WorkflowTemplateService
 				$request->parameters,
 				$request->fields,
 				$request->user,
-				$request->checkAccess
+				$request->checkAccess,
 			);
 			$template = WorkflowTemplate::createFromRequest($saveRequest);
 			$templateId = $template->getTemplateId() > 0 ? $template->getTemplateId() : null;
@@ -579,7 +578,7 @@ class WorkflowTemplateService
 						'TEMPLATE_ID' => $templateId,
 						'TEMPLATE_DATA' => $tpl->collectValues(),
 						'USER_ID' => $request->user->getId(),
-						'CREATED' => new \Bitrix\Main\Type\DateTime()
+						'CREATED' => new \Bitrix\Main\Type\DateTime(),
 					],
 				);
 			}
@@ -592,7 +591,7 @@ class WorkflowTemplateService
 					'TEMPLATE_ID' => $templateId,
 					'TEMPLATE_DATA' => $tpl->collectValues(),
 					'USER_ID' => $request->user->getId(),
-					'CREATED' => new \Bitrix\Main\Type\DateTime()
+					'CREATED' => new \Bitrix\Main\Type\DateTime(),
 				]);
 			}
 
@@ -615,7 +614,7 @@ class WorkflowTemplateService
 	}
 
 	public function loadTemplateDraft(
-		WorkflowTemplateRequest\LoadTemplateDraftRequest $request
+		WorkflowTemplateRequest\LoadTemplateDraftRequest $request,
 	): WorkflowTemplateResponse\LoadTemplateResponse
 	{
 		$response = new WorkflowTemplateResponse\LoadTemplateResponse();

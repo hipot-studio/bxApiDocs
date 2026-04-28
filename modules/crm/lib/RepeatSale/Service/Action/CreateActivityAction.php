@@ -6,6 +6,7 @@ use Bitrix\Crm\Activity\Analytics\Dictionary;
 use Bitrix\Crm\Activity\Entity;
 use Bitrix\Crm\Activity\Provider\RepeatSale;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\BaasManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\Analytics\Builder\Activity\AddActivityEvent;
 use Bitrix\Crm\Item;
@@ -140,6 +141,6 @@ final class CreateActivityAction implements ActionInterface
 			return false;
 		}
 
-		return AIManager::isBaasServiceHasPackage();
+		return BaasManager::hasPackage();
 	}
 }

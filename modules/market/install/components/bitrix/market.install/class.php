@@ -129,16 +129,13 @@ class MarketInstallComponent extends CBitrixComponent
 		}
 
 		$scopeList = ScopeManager::getInstance()->listScope();
-		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/rest/scope.php');
 		$result['SCOPE_DENIED'] = [];
 		if (is_array($result['APP']['RIGHTS']))
 		{
+			$result['APP']['RIGHTS'] = Rights::prepare($result['APP']['RIGHTS']);
+
 			foreach ($result['APP']['RIGHTS'] as $key => $scope)
 			{
-				$result['APP']['RIGHTS'][$key] = [
-					'TITLE' => Loc::getMessage('REST_SCOPE_' . mb_strtoupper($key)) ?: $scope,
-					'DESCRIPTION' => Loc::getMessage('REST_SCOPE_' . mb_strtoupper($key) . '_DESCRIPTION')
-				];
 				if (!in_array($key, $scopeList, true))
 				{
 					$result['SCOPE_DENIED'][$key] = 1;

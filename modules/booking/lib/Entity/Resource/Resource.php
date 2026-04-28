@@ -47,6 +47,7 @@ class Resource implements EntityInterface
 	private string $templateTypeDelayed;
 	private int $delayedNotificationDelay = 300; // 5 minutes
 	private int $delayedCounterDelay = 300; // 5 minutes
+	private string $senderCode = 'bitrix24';
 
 	private int|null $createdBy = null;
 	private int|null $createdAt = null;
@@ -399,6 +400,18 @@ class Resource implements EntityInterface
 		return $this;
 	}
 
+	public function getSenderCode(): string
+	{
+		return $this->senderCode;
+	}
+
+	public function setSenderCode(string $senderCode): self
+	{
+		$this->senderCode = $senderCode;
+
+		return $this;
+	}
+
 	public function getCreatedBy(): int|null
 	{
 		return $this->createdBy;
@@ -560,6 +573,7 @@ class Resource implements EntityInterface
 			'templateTypeDelayed' => $this->templateTypeDelayed,
 			'delayedNotificationDelay' => $this->delayedNotificationDelay,
 			'delayedCounterDelay' => $this->delayedCounterDelay,
+			'senderCode' => $this->senderCode,
 			'createdBy' => $this->createdBy,
 			'createdAt' => $this->createdAt,
 			'updatedAt' => $this->updatedAt,
@@ -669,6 +683,11 @@ class Resource implements EntityInterface
 		if (isset($props['delayedCounterDelay']))
 		{
 			$resource->setDelayedCounterDelay((int)$props['delayedCounterDelay']);
+		}
+
+		if (isset($props['senderCode']))
+		{
+			$resource->setSenderCode((string)$props['senderCode']);
 		}
 
 		if (isset($props['isMain']))

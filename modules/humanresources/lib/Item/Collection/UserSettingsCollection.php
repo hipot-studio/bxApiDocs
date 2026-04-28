@@ -9,4 +9,11 @@ use Bitrix\HumanResources\Item;
  */
 class UserSettingsCollection extends BaseCollection
 {
+	/**
+	 * @return array<int>
+	 */
+	public function getIntSettingsValues(): array
+	{
+		return $this->map(static fn($entity) => (int)$entity->settingsValue);
+	}
 }

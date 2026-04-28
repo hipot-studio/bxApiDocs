@@ -7,15 +7,19 @@ use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 use Bitrix\Crm\Integration\AI\Operation\Payload\CalcMarkersInterface;
 use Bitrix\Crm\Integration\AI\Operation\Payload\PayloadInterface;
+use Bitrix\Crm\Integration\AI\Operation\Payload\SandboxInterface;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\RepeatSale\DataCollector\CopilotMarkerLimitManager;
 use Bitrix\Crm\RepeatSale\DataCollector\DataCollectorManager;
+use Bitrix\Crm\RepeatSale\Sandbox\SandboxManager;
 use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
 use Bitrix\Main\Web\Json;
 use CCrmOwnerType;
 
-final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInterface
+final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInterface, SandboxInterface
 {
+	private array $dataForCalcMarkers = [];
+
 	public function getPayloadCode(): string
 	{
 		return 'repeat_sales_prompt';
@@ -30,47 +34,73 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 
 	public function calcMarkers(): array
 	{
-		$activity = $this->getActivity();
-		if (empty($activity))
+		if ($this->isUseDataFromSandbox())
 		{
-			return []; // no activity
+			$segmentId = (int)($this->dataForCalcMarkers['segmentId'] ?? 0);
+			$clientEntityTypeId = (int)($this->dataForCalcMarkers['clientEntityTypeId'] ?? 0);
+			$clientEntityId = (int)($this->dataForCalcMarkers['clientEntityId'] ?? 0);
+			$entityIdentifier = $this->identifier;
+		}
+		else
+		{
+			$activity = $this->getActivity();
+			if (empty($activity))
+			{
+				return []; // no activity
+			}
+
+			$providerParams = $activity['PROVIDER_PARAMS'] ?? [];
+			$segmentId = (int)($activity['PROVIDER_PARAMS']['SEGMENT_ID'] ?? 0);
+			$clientEntityTypeId = (int)($providerParams['BASE_ENTITY_TYPE_ID'] ?? $providerParams['CLIENT_ENTITY_TYPE_ID'] ?? 0);
+			$clientEntityId = (int)($providerParams['BASE_ENTITY_ID'] ?? $providerParams['CLIENT_ENTITY_ID'] ?? 0);
+			$entityIdentifier = (new Orchestrator())->findPossibleFillFieldsTarget($this->identifier->getEntityId());
 		}
 
-		$segmentData = $this->getSegmentData($activity);
-		$crmData = $this->getCrmData($activity);
+		$segmentData = $this->getSegmentData($segmentId);
+		$crmData = $this->getCrmData($clientEntityTypeId, $clientEntityId, $entityIdentifier);
 		if (empty($segmentData) || empty($crmData))
 		{
 			return []; // no data
 		}
 
+		$segmentData = in_array('segment_data', $this->encodedMarkers, true)
+			? Json::encode(['client_segment' => $segmentData])
+			: ['client_segment' => $segmentData];
+		$crmDataSufficient = $this->isCrmDataSufficient($crmData);
+		$crmData = in_array('crm_data', $this->encodedMarkers, true)
+			? Json::encode($crmData)
+			: $crmData;
+
 		return [
-			'segment_data' => in_array('segment_data', $this->encodedMarkers, true)
-				? Json::encode(['client_segment' => $segmentData])
-				: ['client_segment' => $segmentData],
-			'crm_data' => in_array('crm_data', $this->encodedMarkers, true)
-				? Json::encode($crmData)
-				: $crmData,
-			'crm_data_sufficient' => $this->isCrmDataSufficient($crmData),
+			'segment_data' => $segmentData,
+			'crm_data' => $crmData,
+			'crm_data_sufficient' => $crmDataSufficient,
 		];
 	}
 
-	private function getCrmData(array $activity): array
+	private function isUseDataFromSandbox(): bool
 	{
-		$providerParams = $activity['PROVIDER_PARAMS'] ?? [];
-		$clientEntityTypeId = (int)($providerParams['BASE_ENTITY_TYPE_ID'] ?? $providerParams['CLIENT_ENTITY_TYPE_ID'] ?? 0);
-		$clientEntityId = (int)($providerParams['BASE_ENTITY_ID'] ?? $providerParams['CLIENT_ENTITY_ID'] ?? 0);
+		return !empty($this->dataForCalcMarkers) && SandboxManager::getInstance()->isAvailableSandboxMode();
+	}
+
+	private function getSegmentData(int $segmentId): array
+	{
+		if ($segmentId <= 0)
+		{
+			return [];
+		}
+
+		return RepeatSaleSegmentController::getInstance()->collectCopilotData($segmentId);
+	}
+
+	private function getCrmData(int $clientEntityTypeId, int $clientEntityId, ?ItemIdentifier $entityIdentifier): array
+	{
 		if ($clientEntityTypeId <= 0 || $clientEntityId <= 0)
 		{
 			return []; // no client
 		}
 
-		$entityIdentifier = (new Orchestrator())->findPossibleFillFieldsTarget($this->identifier->getEntityId());
-		if (!$entityIdentifier)
-		{
-			return []; // no owner entity
-		}
-
-		if ($entityIdentifier->getEntityTypeId() !== CCrmOwnerType::Deal)
+		if ($entityIdentifier?->getEntityTypeId() !== CCrmOwnerType::Deal)
 		{
 			return []; // currently only deal supported
 		}
@@ -79,19 +109,8 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 			$entityIdentifier,
 			new ItemIdentifier($clientEntityTypeId, $clientEntityId),
 			AIManager::logger(),
-			$this->userId
+			$this->userId,
 		))->collectCopilotData();
-	}
-
-	private function getSegmentData(array $activity): array
-	{
-		$segmentId = (int)($activity['PROVIDER_PARAMS']['SEGMENT_ID'] ?? 0);
-		if ($segmentId <= 0)
-		{
-			return [];
-		}
-
-		return RepeatSaleSegmentController::getInstance()->collectCopilotData($segmentId);
 	}
 
 	private function isCrmDataSufficient(array $data): bool
@@ -103,16 +122,15 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 		}
 
 		$limit = CopilotMarkerLimitManager::getInstance()->getCommunicationFieldsLimit();
-		$filtered =  array_filter(
-			$dealList,
-			static function (array $item) use ($limit): bool
-			{
-				$communicationData = $item['communication_data'] ?? [];
+		$callback = static fn(array $item): bool => TextHelper::countCharactersInArrayFlexible($item['communication_data'] ?? []) > $limit;
 
-				return TextHelper::countCharactersInArrayFlexible($communicationData) > $limit;
-			},
-		);
+		return !empty(array_filter($dealList, $callback));
+	}
 
-		return !empty($filtered);
+	public function setSandboxData(array $data): self
+	{
+		$this->dataForCalcMarkers = $data;
+
+		return $this;
 	}
 }

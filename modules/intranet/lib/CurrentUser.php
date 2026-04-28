@@ -31,6 +31,7 @@ class CurrentUser
 	private ?array $userFields;
 
 	private static CurrentUser $instance;
+	private ?string $phoneNumber = null;
 
 	public static function get(): CurrentUser
 	{
@@ -116,5 +117,22 @@ class CurrentUser
 	public function getExternalAuthId(): ?string
 	{
 		return isset($this->userFields['EXTERNAL_AUTH_ID']) ? (string)$this->userFields['EXTERNAL_AUTH_ID'] : null;
+	}
+
+	public function getPhoneNumber(): string
+	{
+		if ($this->phoneNumber === null)
+		{
+			$phones = array_filter(
+				[
+					$this->userFields['PERSONAL_MOBILE'] ?? '',
+					$this->userFields['PERSONAL_PHONE'] ?? '',
+					$this->userFields['WORK_PHONE'] ?? '',
+				],
+			);
+			$this->phoneNumber = (string)reset($phones);
+		}
+
+		return $this->phoneNumber ??= '';
 	}
 }

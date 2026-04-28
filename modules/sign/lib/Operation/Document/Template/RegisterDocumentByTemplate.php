@@ -9,14 +9,12 @@ use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Result\CreateDocumentResult;
 use Bitrix\Sign\Result\Result;
 use Bitrix\Sign\Service\Container;
-use Bitrix\Sign\Service\Sign\DocumentService;
 use Bitrix\Sign\Type\Document\InitiatedByType;
 use Bitrix\Sign\Type\Template\Status;
 use Bitrix\Sign\Type\Template\Visibility;
 
 class RegisterDocumentByTemplate implements Operation
 {
-	private readonly DocumentService $documentService;
 	private readonly DocumentRepository $documentRepository;
 
 	public function __construct(
@@ -26,7 +24,6 @@ class RegisterDocumentByTemplate implements Operation
 		private readonly bool $excludeRejected = true,
 	)
 	{
-		$this->documentService = Container::instance()->getDocumentService();
 		$this->documentRepository = Container::instance()->getDocumentRepository();
 	}
 
@@ -65,32 +62,11 @@ class RegisterDocumentByTemplate implements Operation
 			);
 		}
 
-		$createResult = (new \Bitrix\Sign\Operation\Document\Copy(
-			document: $templateDocument,
+		return (new CreateDocumentFromTemplate(
+			template: $this->template,
+			templateDocument: $templateDocument,
 			createdByUserId: $this->sendFromUserId,
 			excludeRejected: $this->excludeRejected,
 		))->launch();
-		if (!$createResult instanceof CreateDocumentResult)
-		{
-			return $createResult;
-		}
-
-		$newDocument = $createResult->document;
-		if ($newDocument->id === null)
-		{
-			return Result::createByErrorData(message: 'Document is not created.');
-		}
-
-		$newDocument->title = $this->template->title;
-		$result = $this->documentRepository->update($newDocument);
-		if (!$result->isSuccess())
-		{
-			$rollbackResult = $this->documentService->rollbackDocument($newDocument->id);
-			$result->addErrors($rollbackResult->getErrors());
-
-			return $result;
-		}
-
-		return $createResult;
 	}
 }

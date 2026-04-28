@@ -43,13 +43,16 @@ foreach ($modules as $moduleId => $_)
 	{
 		if (\Bitrix\Main\Loader::includeModule($moduleId))
 		{
+			$moduleCommands = [];
 			foreach ($config['commands'] as $commandClass)
 			{
 				if (is_a($commandClass, \Symfony\Component\Console\Command\Command::class, true))
 				{
-					$application->add(new $commandClass());
+					$moduleCommands[] = new $commandClass();
 				}
 			}
+
+			$application->addCommands($moduleCommands);
 		}
 	}
 }

@@ -91,19 +91,20 @@ final class Document extends IRestService
 	public static function sendAction(array $query, $start, CRestServer $restServer): array
 	{
 		self::checkAuth($restServer);
-		self::checkAccess(['sign.b2e', 'crm', 'humanresources.hcmlink'], $restServer);
+		self::checkAccess(['sign.b2e', 'crm'], $restServer);
 		self::checkAccessToActions([
 			ActionDictionary::ACTION_B2E_DOCUMENT_ADD,
 		]);
 
-		if (!Loader::includeModule('humanresources'))
-		{
-			throw new RestException('humanresources module is not installed');
-		}
-
 		$language = $query['language'] ?? 'en';
 
 		$request = self::getDocumentSendRequest($query);
+
+		if (self::isHcmLinkScopeRequired($request))
+		{
+			self::checkAccess(['humanresources.hcmlink'], $restServer);
+		}
+		
 		$prepareDocumentOperation = new PrepareDocumentSendRequest(
 			request: $request,
 		);
@@ -142,7 +143,7 @@ final class Document extends IRestService
 	public static function getAction(array $query, $start, CRestServer $restServer): array
 	{
 		self::checkAuth($restServer);
-		self::checkAccess(['sign.b2e', 'crm', 'humanresources.hcmlink'], $restServer);
+		self::checkAccess(['sign.b2e', 'crm'], $restServer);
 		self::checkAccessToActions([
 			ActionDictionary::ACTION_B2E_DOCUMENT_READ,
 		]);
@@ -179,6 +180,36 @@ final class Document extends IRestService
 	private static function getDocumentSendRequest(array $query): SignDocumentRequest {
 
 		return SignDocumentRequest::fromArray($query);
+	}
+
+	private static function isHcmLinkScopeRequired(SignDocumentRequest $request): bool
+	{
+		$fields = $request->fields ?? null;
+		if ($fields === null)
+		{
+			return false;
+		}
+
+		if ($fields->getCompany()?->getUuid())
+		{
+			return true;
+		}
+
+		foreach ($fields->getMembers() as $member)
+		{
+			if ($member->getEmployeeCode() || $member->getEmployeeId())
+			{
+				return true;
+			}
+		}
+
+		$responsible = $fields->getResponsible();
+		if ($responsible && ($responsible->getEmployeeCode() || $responsible->getEmployeeId()))
+		{
+			return true;
+		}
+
+		return false;
 	}
 
 	/**

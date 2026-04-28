@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset\Scope\MenuItem;
 
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\Main;
 use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
@@ -18,13 +19,21 @@ final class MenuItemCreatorShop extends BaseMenuItemCreator
 		$menuItems = [];
 		foreach ($dashboards as $dashboard)
 		{
+			$isMarketAvailable = MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType());
+
+			$onClick =
+				!$isMarketAvailable
+					? $this->getOpenTariffSliderScript()
+					: $this->createDashboardOpenEventFromMenu($dashboard, $params)
+			;
+
 			$menuItems[] = [
 				'items_id' => "BIC_DASHBOARD_{$dashboard->getId()}",
 				'parent_menu' => 'menu_bic_dashboards',
 				'text' => $dashboard->getTitle(),
 				'title' => $dashboard->getTitle(),
-				'on_click' => $this->createDashboardOpenEventFromMenu($dashboard, $params),
-				'is_locked' => !$this->isAvailableByTariff(),
+				'on_click' => $onClick,
+				'is_locked' => !$this->isAvailableByTariff() || !$isMarketAvailable,
 			];
 		}
 

@@ -41,14 +41,25 @@ class MailboxAccess extends MailAccess
 		return (bool)$query->fetch();
 	}
 
-	public static function hasCurrentUserAccessToMailbox(int $mailboxId, bool $withSharedMailboxes = false): bool
+	public static function hasUserAccessToMailbox(int $mailboxId, int $userId, bool $withSharedMailboxes = false): bool
 	{
 		if (!$withSharedMailboxes)
 		{
-			return false;
+			$mailbox = MailboxTable::getById($mailboxId)->fetch();
+			if (!$mailbox)
+			{
+				return false;
+			}
+
+			return (int)$mailbox['USER_ID'] === $userId;
 		}
 
-		return self::isMailboxSharedWithUser($mailboxId, self::getCurrentUserId());
+		return self::isMailboxSharedWithUser($mailboxId, $userId);
+	}
+
+	public static function hasCurrentUserAccessToMailbox(int $mailboxId, bool $withSharedMailboxes = false): bool
+	{
+		return self::hasUserAccessToMailbox($mailboxId, self::getCurrentUserId(), $withSharedMailboxes);
 	}
 
 	public static function hasCurrentUserAnyAccessToMailbox(int $mailboxId): bool

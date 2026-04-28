@@ -32,6 +32,7 @@ use Bitrix\Sign\Type\DocumentScenario;
 use Bitrix\Sign\Type\DocumentStatus;
 use Bitrix\Sign\Type\FieldType;
 use Bitrix\Sign\Type\Member\ChannelType;
+use Throwable;
 
 class ConfigureDocument implements Contract\Operation
 {
@@ -51,6 +52,8 @@ class ConfigureDocument implements Contract\Operation
 	private readonly Logger $logger;
 	private readonly Service\Integration\HumanResources\HcmLinkService $hcmLinkService;
 	private readonly Service\Integration\HumanResources\HcmLinkFieldService $hcmLinkFieldService;
+	private Service\Placeholder\FieldAlias\FieldAliasService $fieldAliasService;
+	private bool $documentHasPlaceholders = false;
 
 	public function __construct(
 		private readonly string $uid,
@@ -58,8 +61,7 @@ class ConfigureDocument implements Contract\Operation
 		?Service\Sign\MemberService $memberService = null,
 		?MemberRepository $memberRepository = null,
 		?RequiredFieldRepository $requiredFieldRepository = null,
-	)
-	{
+	) {
 		$container = Service\Container::instance();
 		$this->fieldsFillRequestValueFactory = new Factory\Api\Property\Request\Field\Fill\Value();
 		$this->fieldFactory = new Factory\Field();
@@ -74,9 +76,10 @@ class ConfigureDocument implements Contract\Operation
 		$this->apiDocumentSigningService = $container->getApiDocumentSigningService();
 		$this->signBlockService = $container->getSignBlockService();
 		$this->providerCodeService = $container->getProviderCodeService();
-		$this->logger = Logger::getInstance();
+		$this->logger = $container->getLogger();
 		$this->hcmLinkService = $container->getHcmLinkService();
 		$this->hcmLinkFieldService = $container->getHcmLinkFieldService();
+		$this->fieldAliasService = $container->getFieldAliasService();
 	}
 
 	public function launch(): Main\Result
@@ -90,6 +93,9 @@ class ConfigureDocument implements Contract\Operation
 		{
 			return (new Main\Result())->addError(new Main\Error('Document doesnt contains blank'));
 		}
+
+		$blank = Service\Container::instance()->getSignBlankService()->getById($document->blankId);
+		$this->documentHasPlaceholders = $blank?->hasPlaceholders ?? false;
 
 		if (Type\DocumentScenario::isB2eScenarioByDocument($document))
 		{
@@ -108,7 +114,7 @@ class ConfigureDocument implements Contract\Operation
 			return (new Main\Result())->addError(new Main\Error(
 				message: 'Document has improper status',
 				code: 'SIGN_DOCUMENT_INCORRECT_STATUS',
-				customData:	[
+				customData: [
 					'has' => $document->status,
 					'expected' => [DocumentStatus::UPLOADED],
 				],
@@ -215,10 +221,10 @@ class ConfigureDocument implements Contract\Operation
 		}
 
 		$memberFieldsCollection = $this->signBlockService
-		   ->loadBlocksAndDataByDocument(
+			->loadBlocksAndDataByDocument(
 			   document: $document,
 			   skipSecurity: true,
-		   )
+			)
 		;
 		if (!$memberFieldsCollection->isSuccess())
 		{
@@ -231,6 +237,16 @@ class ConfigureDocument implements Contract\Operation
 		}
 
 		$requiredFields = $this->createRequiredFields($document, $members);
+		
+		foreach ($requiredFields as $requiredField)
+		{
+			$memberForField = $members->findFirstByParty($requiredField->party);
+			if ($memberForField !== null)
+			{
+				$requiredField->alias = $this->generateFieldAlias($requiredField->name, $memberForField, $document);
+			}
+		}
+		
 		$requestBlocks = new BlockCollection();
 		$registeredFields = new Item\FieldCollection(...$requiredFields);
 		$requestFields = new FieldCollection(...array_map(
@@ -248,8 +264,7 @@ class ConfigureDocument implements Contract\Operation
 			);
 			$requestBlock->style = $block->style === null
 				? null
-				: Block\BlockStyle::createFromBlockItemStyle($block->style)
-			;
+				: Block\BlockStyle::createFromBlockItemStyle($block->style);
 			if ($memberWithBlockRole === null && $block->party !== 0)
 			{
 				return (new Main\Result())->addError(new Main\Error("Block has party: `{$block->party}` but member with party: `{$block->party}` doesnt exist"));
@@ -337,6 +352,31 @@ class ConfigureDocument implements Contract\Operation
 	private function createFields(Item\Block $block, ?Item\Member $member, Item\Document $document): Item\FieldCollection
 	{
 		$fields = $this->fieldFactory->createByBlocks(new Item\BlockCollection($block), $member, $document);
+		
+		$placeholderAlias = $block->data['placeholderAlias'] ?? null;
+		
+		if ($member !== null)
+		{
+			foreach ($fields as $field)
+			{
+				$parsed = NameHelper::parse($field->name);
+
+				if (!empty($parsed['subfieldCode']))
+				{
+					continue;
+				}
+				
+				if (is_string($placeholderAlias) && !empty($placeholderAlias))
+				{
+					$field->alias = $placeholderAlias;
+				}
+				else
+				{
+					$field->alias = $this->generateFieldAlias($field->name, $member, $document);
+				}
+			}
+		}
+		
 		if (!BlockCode::isCommon($block->code))
 		{
 			return $fields;
@@ -368,6 +408,39 @@ class ConfigureDocument implements Contract\Operation
 		$firstField->values = $value === null ? null : new Item\Field\ValueCollection($value);
 
 		return $fields;
+	}
+	
+	private function generateFieldAlias(string $fieldName, Item\Member $member, Item\Document $document): ?string
+	{
+		if (!$this->documentHasPlaceholders)
+		{
+			return null;
+		}
+
+		try
+		{
+			$context = Service\Placeholder\FieldAlias\AliasContext::fromDocumentAndMember(
+				$document,
+				$member,
+			);
+			
+			return $this->fieldAliasService->toAlias($fieldName, $context);
+		}
+		catch (Throwable $e)
+		{
+			$this->logger->error(
+				"Failed to generate field alias for field '{$fieldName}': {$e->getMessage()}",
+				[
+					'exception' => $e,
+					'fieldName' => $fieldName,
+					'memberId' => $member->id,
+					'documentId' => $document->id,
+					'documentUid' => $document->uid,
+				],
+			);
+			
+			return null;
+		}
 	}
 
 	private function createRequiredFields(
@@ -587,7 +660,7 @@ class ConfigureDocument implements Contract\Operation
 		if ($someoneNotFilled)
 		{
 			return (new Main\Result())->addError(new Main\Error(
-				Main\Localization\Loc::getMessage('SIGN_OPERATION_CONFIGURE_DOCUMENT_HCMLINK_NOT_ALL_MAPPED')
+				Main\Localization\Loc::getMessage('SIGN_OPERATION_CONFIGURE_DOCUMENT_HCMLINK_NOT_ALL_MAPPED'),
 			));
 		}
 
@@ -618,36 +691,33 @@ class ConfigureDocument implements Contract\Operation
 		if (
 			$document->externalDateCreateSourceType === Type\Document\ExternalDateCreateSourceType::HCMLINK
 			&& !$this->hcmLinkFieldService->isDateSettingFieldById($document->hcmLinkDateSettingId)
-		)
-		{
+		) {
 			return (new Main\Result())->addError(
 				new Main\Error(
-					Main\Localization\Loc::getMessage('SIGN_OPERATION_CONFIGURE_DOCUMENT_HCMLINK_SETTING_INVALID_DATE')
-				)
+					Main\Localization\Loc::getMessage('SIGN_OPERATION_CONFIGURE_DOCUMENT_HCMLINK_SETTING_INVALID_DATE'),
+				),
 			);
 		}
 
 		if (
 			$document->externalIdSourceType === Type\Document\ExternalIdSourceType::HCMLINK
 			&& !$this->hcmLinkFieldService->isExternalIdSettingFieldById($document->hcmLinkExternalIdSettingId)
-		)
-		{
+		) {
 			return (new Main\Result())->addError(
 				new Main\Error(
-					Main\Localization\Loc::getMessage('SIGN_OPERATION_CONFIGURE_DOCUMENT_HCMLINK_SETTING_INVALID_EXTERNAL_ID')
-				)
+					Main\Localization\Loc::getMessage('SIGN_OPERATION_CONFIGURE_DOCUMENT_HCMLINK_SETTING_INVALID_EXTERNAL_ID'),
+				),
 			);
 		}
 
 		if (
 			$document->hcmLinkDocumentTypeSettingId > 0
 			&& !$this->hcmLinkFieldService->isDocumentTypeSettingFieldById($document->hcmLinkDocumentTypeSettingId)
-		)
-		{
+		) {
 			return (new Main\Result())->addError(
 				new Main\Error(
-					Main\Localization\Loc::getMessage('SIGN_OPERATION_CONFIGURE_DOCUMENT_HCMLINK_SETTING_INVALID_DOCUMENT_TYPE')
-				)
+					Main\Localization\Loc::getMessage('SIGN_OPERATION_CONFIGURE_DOCUMENT_HCMLINK_SETTING_INVALID_DOCUMENT_TYPE'),
+				),
 			);
 		}
 

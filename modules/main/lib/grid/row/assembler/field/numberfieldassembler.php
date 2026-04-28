@@ -57,7 +57,7 @@ class NumberFieldAssembler extends FieldAssembler
 	 *
 	 * @return self
 	 */
-	public static function createForContext(bool $isFloat, array $columnIds, ?Settings $settings = null, Context $context = null): self
+	public static function createForContext(bool $isFloat, array $columnIds, ?Settings $settings = null, ?Context $context = null): self
 	{
 		$context ??= Context::getCurrent();
 

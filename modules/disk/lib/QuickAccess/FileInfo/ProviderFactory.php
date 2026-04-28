@@ -10,7 +10,7 @@ use Bitrix\Disk\BaseObject;
 class ProviderFactory
 {
 	/**
-	 * FileInfoProviderInterface[] - registered providers for file info
+	 * @var class-string<ProviderInterface>[] - list of class names that implement ProviderInterface
 	 */
 	private array $registered = [];
 

@@ -262,6 +262,12 @@ class Operator
 		$chat = new Chat($this->chatId);
 		$chat->setSilentMode($active);
 
+		$session = \Bitrix\ImOpenLines\V2\Session\Session::getInstanceByChatId($this->chatId);
+		if ($session)
+		{
+			$session->setSilentMode($active);
+		}
+
 		return true;
 	}
 

@@ -3,10 +3,11 @@
 namespace Bitrix\Im\V2\Message\Send\Push;
 
 use Bitrix\Im\V2\Message\Send\PushService;
+use Bitrix\Im\V2\Reading\Counter\Entity\UsersCounterMap;
 
 class PrivatePushService extends PushService
 {
-	public function sendPush(array $counters = []): void
+	public function sendPush(UsersCounterMap $counters): void
 	{
 		if (!$this->isPullEnable() || !$this->sendingConfig->addRecent())
 		{
@@ -22,7 +23,7 @@ class PrivatePushService extends PushService
 		}
 	}
 
-	protected function getPullMessages(array $counters): array
+	protected function getPullMessages(UsersCounterMap $counters): array
 	{
 		$chat = $this->message->getChat();
 		$basePullMessage = $this->getBasePullMessage();
@@ -52,7 +53,7 @@ class PrivatePushService extends PushService
 		];
 	}
 
-	protected function getPullMessage(array $basePullMessage, int $userId, int $opponentId, array $counters): array
+	protected function getPullMessage(array $basePullMessage, int $userId, int $opponentId, UsersCounterMap $counters): array
 	{
 		$basePullMessage['params']['dialogId'] = $opponentId;
 		$basePullMessage['params']['counter'] = $counters[$userId] ?? 0;

@@ -41,8 +41,6 @@ class AccessService
 		$userId = (int)$this->getCurrentUserAccessModel()?->getUserId();
 		if ($userId <= 0)
 		{
-			showError('Access denied');
-
 			return;
 		}
 
@@ -51,7 +49,10 @@ class AccessService
 		$this->templateFolderRepository = $templateFolderRepository ?? $container->getTemplateFolderRepository();
 	}
 
-	public function prepareQueryFilterByTemplatePermission(?ConditionTree $queryFilter = null): ConditionTree
+	public function prepareQueryFilterByTemplatePermission(
+		?ConditionTree $queryFilter = null,
+		int $permissionId = SignPermissionDictionary::SIGN_B2E_TEMPLATE_READ,
+	): ConditionTree
 	{
 		if ($queryFilter === null)
 		{
@@ -74,9 +75,9 @@ class AccessService
 			return $queryFilter;
 		}
 
-		$templateReadPermission = $this->getValueForPermissionFromCurrentUser(SignPermissionDictionary::SIGN_B2E_TEMPLATE_READ);
+		$permissionValue = $this->getValueForPermissionFromCurrentUser($permissionId);
 
-		return match ($templateReadPermission)
+		return match ($permissionValue)
 		{
 			\Bitrix\Crm\Service\UserPermissions::PERMISSION_ALL => $queryFilter,
 			\Bitrix\Crm\Service\UserPermissions::PERMISSION_SELF => $queryFilter->where('CREATED_BY_ID', $user->getUserId()),
@@ -268,6 +269,17 @@ class AccessService
 			ActionDictionary::ACTION_B2E_TEMPLATE_EDIT,
 			$item,
 		);
+	}
+
+	public function hasAccessToEditFolderById(int $folderId): bool
+	{
+		$folder = $this->templateFolderRepository->getById($folderId);
+		if ($folder === null)
+		{
+			return false;
+		}
+
+		return $this->hasAccessToEdit($folder);
 	}
 
 	public function hasAccessToDelete(Contract\Item $item): bool

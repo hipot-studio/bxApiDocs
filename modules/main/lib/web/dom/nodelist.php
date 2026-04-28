@@ -41,7 +41,7 @@ class NodeList implements \Iterator {
 	protected $position = 0;
 	protected $values = array();
 
-	public function __construct(array $values = null)
+	public function __construct(?array $values = null)
 	{
 		if($values === null)
 		{

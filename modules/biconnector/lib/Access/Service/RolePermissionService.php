@@ -169,7 +169,7 @@ final class RolePermissionService
 	 *
 	 * @return Result
 	 */
-	public function saveRole(string $name, int $roleId = null): Result
+	public function saveRole(string $name, ?int $roleId = null): Result
 	{
 		$result = new Result();
 

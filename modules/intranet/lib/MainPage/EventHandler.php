@@ -18,7 +18,7 @@ class EventHandler
 			&& !Feature::isFeatureEnabledFor('main_page', $event->getParameter('licenseType'))
 		)
 		{
-			(new Publisher)->withdraw();
+			(new Publisher())->withdraw();
 		}
 
 		ToolsManager::getInstance()->getFirstPageChanger()->changeForAllUsers(LeftMenu\Menu::getDefaultSiteId());

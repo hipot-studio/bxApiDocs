@@ -13,7 +13,6 @@ use Bitrix\Calendar\Synchronization\Internal\Model\PushTable;
 use Bitrix\Calendar\Synchronization\Internal\Repository\Mapper\PushMapper;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
-use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity\EntityCollection;
 use Bitrix\Main\Entity\EntityInterface;
 use Bitrix\Main\NotSupportedException;
@@ -83,6 +82,12 @@ class PushRepository implements RepositoryInterface
 		return $this->getById(new PushId(EntityType::SectionConnection->value, $id));
 	}
 
+	/**
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 * @throws \Bitrix\Main\ObjectException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 */
 	public function getByChannelAndResource(string $channelId, string $resourceId): ?Push
 	{
 		$ormModel = PushTable::query()
@@ -134,17 +139,7 @@ class PushRepository implements RepositoryInterface
 	{
 		try
 		{
-			$result = PushTable::add($push->toArray());
-		}
-		catch (SqlQueryException $e)
-		{
-			// If there is a race situation
-			if ($e->getCode() === 400 && str_starts_with($e->getDatabaseMessage(), '(1062)'))
-			{
-				return;
-			}
-
-			throw new PersistenceException($e->getMessage(), $e);
+			$result = PushTable::addInsertIgnore($push->toArray());
 		}
 		catch (Exception $e)
 		{

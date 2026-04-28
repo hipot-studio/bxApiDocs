@@ -41,6 +41,7 @@ class ResourceType implements EntityInterface
 	private string $templateTypeDelayed;
 	private int $delayedNotificationDelay = 300; // 5 minutes
 	private int $delayedCounterDelay = 300; // 5 minutes
+	private string $senderCode = 'bitrix24';
 
 	public function __construct()
 	{
@@ -343,6 +344,18 @@ class ResourceType implements EntityInterface
 		return $this;
 	}
 
+	public function getSenderCode(): string
+	{
+		return $this->senderCode;
+	}
+
+	public function setSenderCode(string $senderCode): self
+	{
+		$this->senderCode = $senderCode;
+
+		return $this;
+	}
+
 	public function toArray(): array
 	{
 		return [
@@ -369,6 +382,7 @@ class ResourceType implements EntityInterface
 			'templateTypeDelayed' => $this->templateTypeDelayed,
 			'delayedNotificationDelay' => $this->delayedNotificationDelay,
 			'delayedCounterDelay' => $this->delayedCounterDelay,
+			'senderCode' => $this->senderCode,
 		];
 	}
 
@@ -457,6 +471,11 @@ class ResourceType implements EntityInterface
 		if (isset($props['delayedCounterDelay']))
 		{
 			$resourceType->setDelayedCounterDelay((int)$props['delayedCounterDelay']);
+		}
+
+		if (isset($props['senderCode']))
+		{
+			$resourceType->setSenderCode((string)$props['senderCode']);
 		}
 
 		return $resourceType;

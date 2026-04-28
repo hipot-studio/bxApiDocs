@@ -23,6 +23,7 @@ use Bitrix\Main\Entity;
  */
 class WorkflowInstanceTable extends Entity\DataManager
 {
+	use Main\ORM\Data\Internal\DeleteByFilterTrait;
 	const LOCKED_TIME_INTERVAL = 300;
 
 	/**

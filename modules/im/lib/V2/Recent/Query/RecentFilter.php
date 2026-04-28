@@ -2,30 +2,53 @@
 
 namespace Bitrix\Im\V2\Recent\Query;
 
+use Bitrix\Im\V2\Chat\Type\Query\TypeFilter;
+use Bitrix\Im\V2\Chat\Type\TypeCondition;
+use Bitrix\Im\V2\Chat\Type\TypeRegistry;
+use Bitrix\Im\V2\Common\WithableTrait;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Provider\Params\FilterInterface;
 use Bitrix\Main\Type\DateTime;
 
+/**
+ * @method self with(?int $userId = null,?DateTime $lastMessageDate = null,?int $lastMessageId = null,bool $unreadOnly = null,array $chatIds = null,?string $recentSection = null,?int $parentChatId = null,?TypeCondition $typeCondition = null,)
+ */
 class RecentFilter implements FilterInterface
 {
-	public readonly ?int $userId;
-	public readonly ?string $itemType;
-	public readonly ?string $entityType;
-	public readonly ?DateTime $lastMessageDate;
-	public readonly ?int $lastMessageId;
-	public readonly bool $unreadOnly;
-	public readonly array $chatIds;
+	use WithableTrait;
 
-	public function __construct(array $filter = [])
+	public function __construct(
+		public readonly ?int $userId = null,
+		public readonly ?DateTime $lastMessageDate = null,
+		public readonly ?int $lastMessageId = null,
+		public readonly bool $unreadOnly = false,
+		public readonly array $chatIds = [],
+		public readonly ?string $recentSection = null,
+		public readonly ?int $parentChatId = null,
+		public readonly ?TypeCondition $typeCondition = null,
+		private readonly ?TypeRegistry $typeRegistry = null,
+	) {}
+
+	public static function fromArray(array $filter = [], ?TypeRegistry $typeRegistry = null): self
 	{
-		$this->userId = isset($filter['userId']) ? (int)$filter['userId'] : null;
-		$this->itemType = isset($filter['itemType']) ? (string)$filter['itemType'] : null;
-		$this->entityType = isset($filter['entityType']) ? (string)$filter['entityType'] : null;
-		$this->lastMessageDate = $filter['lastMessageDate'] ?? null;
-		$this->lastMessageId = isset($filter['lastMessageId']) ? (int)$filter['lastMessageId'] : null;
-		$this->unreadOnly = isset($filter['unread']) && $filter['unread'] === 'Y';
-		$this->chatIds = is_array($filter['chatIds'] ?? null) ? $filter['chatIds'] : [];
+		return new self(
+			userId: isset($filter['userId']) ? (int)$filter['userId'] : null,
+			lastMessageDate: $filter['lastMessageDate'] instanceof DateTime ? $filter['lastMessageDate'] : null,
+			lastMessageId: isset($filter['lastMessageId']) ? (int)$filter['lastMessageId'] : null,
+			unreadOnly: isset($filter['unread']) && $filter['unread'] === 'Y',
+			chatIds: is_array($filter['chatIds'] ?? null) ? $filter['chatIds'] : [],
+			recentSection: isset($filter['recentSection']) ? (string)$filter['recentSection'] : null,
+			parentChatId: isset($filter['parentId']) ? (int)$filter['parentId'] : null,
+			typeCondition: $filter['typeCondition'] instanceof TypeCondition ? $filter['typeCondition'] : null,
+			typeRegistry: $typeRegistry,
+		);
+	}
+
+	public function isPossible(): bool
+	{
+		return $this->resolveTypeCondition()->isPossible();
 	}
 
 	public function prepareFilter(): ConditionTree
@@ -37,14 +60,11 @@ class RecentFilter implements FilterInterface
 			$result->where('USER_ID', $this->userId);
 		}
 
-		if (isset($this->itemType))
-		{
-			$result->where('ITEM_TYPE', $this->itemType);
-		}
+		$this->applyTypeConditionFilter($result);
 
-		if (isset($this->entityType))
+		if (isset($this->parentChatId))
 		{
-			$result->where('CHAT.ENTITY_TYPE', $this->entityType);
+			$result->where('CHAT.PARENT_ID', $this->parentChatId);
 		}
 
 		if (isset($this->lastMessageDate))
@@ -62,7 +82,7 @@ class RecentFilter implements FilterInterface
 			$result->whereIn('ITEM_CID', $this->chatIds);
 		}
 
-		if (isset($this->unreadOnly) && $this->unreadOnly)
+		if ($this->unreadOnly)
 		{
 			$result->where(
 				Query::filter()
@@ -74,5 +94,33 @@ class RecentFilter implements FilterInterface
 		}
 
 		return $result;
+	}
+
+	private function resolveTypeCondition(): TypeCondition
+	{
+		$condition = $this->typeCondition ?? new TypeCondition();
+
+		if (isset($this->recentSection))
+		{
+			$sectionCondition = $this->getTypeRegistry()->getConditionByRecentSection($this->recentSection);
+			$condition = $condition->merge($sectionCondition);
+		}
+
+		return $condition;
+	}
+
+	private function applyTypeConditionFilter(ConditionTree $result): void
+	{
+		$condition = $this->resolveTypeCondition();
+
+		if ($condition->hasConditions())
+		{
+			$result->where((new TypeFilter($condition))->toConditionTree());
+		}
+	}
+
+	private function getTypeRegistry(): TypeRegistry
+	{
+		return $this->typeRegistry ?? ServiceLocator::getInstance()->get(TypeRegistry::class);
 	}
 }

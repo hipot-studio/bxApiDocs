@@ -92,8 +92,16 @@ final class Calendar extends Base
 	{
 		if (isset($this->blockData['from']))
 		{
-			$start = (DateTime::createFromTimestamp($this->blockData['from'] / 1000))->toString();
-			$end = (DateTime::createFromTimestamp($this->blockData['to'] / 1000))->toString();
+			$from = $this->blockData['from'];
+			$to = $this->blockData['to'];
+
+			// for compatibility with robots @see \CBPCrmCreateToDoActivity::prepareCalendarSettings
+			$isMilliseconds = static fn(int $timestamp) => strlen((string)floor($timestamp)) >= 13;
+			$from = $isMilliseconds($from) ? $from / 1000 : $from;
+			$to = $isMilliseconds($to) ? $to / 1000 : $to;
+
+			$start = (DateTime::createFromTimestamp($from))->toString();
+			$end = (DateTime::createFromTimestamp($to))->toString();
 
 			$fields = [
 				'DEADLINE' => $start,
@@ -162,20 +170,6 @@ final class Calendar extends Base
 			'START_TIME' => $start,
 			'END_TIME' => $deadline->add('PT' . $eventData['DT_LENGTH'] . 'S')->toString(),
 		];
-
-		// @todo changing existing activity
-		/*$selectedUserIds = $this->blockData['selectedUserIds'] ?? null;
-		if (!empty($selectedUserIds) && is_array($selectedUserIds))
-		{
-			$fields['IS_MEETING'] = true;
-			$fields['ATTENDEES_CODES'] = array_map(static fn($userId) => 'U'.$userId, $selectedUserIds);
-		}
-
-		$location = $this->blockData['location'] ?? null;
-		if (!empty($location))
-		{
-			$fields['LOCATION'] = $location;
-		}*/
 
 		$entity->appendAdditionalFields($fields);
 	}

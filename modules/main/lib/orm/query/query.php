@@ -998,7 +998,7 @@ class Query
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function fetch(\Bitrix\Main\Text\Converter $converter = null)
+	public function fetch(?\Bitrix\Main\Text\Converter $converter = null)
 	{
 		return $this->exec()->fetch($converter);
 	}
@@ -1012,7 +1012,7 @@ class Query
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function fetchAll(\Bitrix\Main\Text\Converter $converter = null)
+	public function fetchAll(?\Bitrix\Main\Text\Converter $converter = null)
 	{
 		return $this->exec()->fetchAll($converter);
 	}

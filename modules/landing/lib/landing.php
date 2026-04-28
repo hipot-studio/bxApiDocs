@@ -1639,7 +1639,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 							$urls['LANDING'][$lid] = \htmlspecialcharsbx($urls['LANDING'][$lid]);
 						}
 						$urls['LANDING'][$lid] .= ($isIframe ? '?IFRAME=Y' : '');
-						if (Site\Type::getCurrentScopeId() === Site\Type::SCOPE_CODE_MAINPAGE)
+						if (Site\Type::getCurrentScopeId() === Site\Type::SCOPE_CODE_VIBE)
 						{
 							$urls['BLOCK'][$bid] = '#' . $anchorsPublicId[$bid];
 						}

@@ -5,7 +5,6 @@ namespace Bitrix\Crm\MessageSender\MassWhatsApp;
 use Bitrix\Crm\Activity\Provider\Sms\MessageDto;
 use Bitrix\Crm\Activity\Provider\Sms\Sender;
 use Bitrix\Crm\Activity\Provider\Sms\SenderExtra;
-use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\MessageSender\Channel\ErrorCode;
 use Bitrix\Crm\Traits\Singleton;
@@ -29,13 +28,11 @@ final class SendItem
 		$this->templateCreator = TemplateCreator::getInstance();
 	}
 
-	public function execute(Item $item, TemplateParams $params): Result
+	public function execute(ItemIdentifier $itemIdentifier, TemplateParams $params): Result
 	{
 		$result = new Result();
 
-		$messageTo = $this->messageDataRepo->getMessageTo(
-			new ItemIdentifier($item->getEntityTypeId(), $item->getId())
-		);
+		$messageTo = $this->messageDataRepo->getMessageTo($itemIdentifier);
 		if (empty($messageTo))
 		{
 			$result->addError(new Error(Loc::getMessage('CRM_MASS_WHATSAPP_SENDITEM_NO_PHONE')));
@@ -53,7 +50,7 @@ final class SendItem
 		}
 
 		$tplResult = $this->templateCreator->prepareTemplate(
-			new ItemIdentifier($item->getEntityTypeId(), $item->getId()),
+			$itemIdentifier,
 			$params->messageBody,
 			$params->messageTemplate
 		);
@@ -77,10 +74,8 @@ final class SendItem
 			sentMessageTag: SenderExtra::SENT_MESSAGE_TAG_GROUP_WHATSAPP_MESSAGE,
 		);
 
-		$owner = new ItemIdentifier($item->getEntityTypeId(), $item->getId());
-
-		$sender = (new Sender($owner, $message, $senderExtra));
-		$sender->setEntityIdentifier($owner);
+		$sender = (new Sender($itemIdentifier, $message, $senderExtra));
+		$sender->setEntityIdentifier($itemIdentifier);
 
 		return $sender->send();
 	}

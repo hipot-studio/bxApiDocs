@@ -24,6 +24,11 @@ class Type
 		return $this->extendedType;
 	}
 
+	public function getFilterKey(): string
+	{
+		return $this->literal . ':' . ($this->entityType ?? '');
+	}
+
 	public function allowsDynamic(): bool
 	{
 		return $this->literal === Chat::IM_TYPE_CHAT || $this->literal === Chat::IM_TYPE_OPEN;

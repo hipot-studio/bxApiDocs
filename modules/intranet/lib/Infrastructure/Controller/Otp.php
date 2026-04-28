@@ -19,6 +19,7 @@ use Bitrix\Intranet\Internal\Integration\Security\RecoveryCodes;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
 use Bitrix\Intranet\Public\Command\Otp\Notification\SendRequestRecoverAccessCommand;
+use Bitrix\Intranet\Public\Command\Otp\SetLegacyOtpAllowedCommand;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
@@ -360,8 +361,38 @@ class Otp extends Controller
 		}
 
 		return $this->forward(PushOtp::class, 'sendMobilePush', [
-			'channelTag' => $channelTag
+			'channelTag' => $channelTag,
 		]);
+	}
+
+	public function setLegacyOtpAllowedAction(int $userId, string $allowed): bool
+	{
+		$user = (new UserRepository())->getUserById($userId);
+
+		if (!$user)
+		{
+			$this->addError(new Error('User not found'));
+
+			return false;
+		}
+
+		if (!(new UserPermission($user))->canEdit())
+		{
+			$this->addError(new Error('No rights'));
+
+			return false;
+		}
+
+		$result = (new SetLegacyOtpAllowedCommand($user, $allowed === 'Y'))->run();
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return false;
+		}
+
+		return true;
 	}
 
 	/**
@@ -387,7 +418,7 @@ class Otp extends Controller
 		return (new PersonalOtp($user))->getOtpConfig();
 	}
 
-	public function logoutAllAction(User $user): void
+	public function logoutAllAction(User $user, string $keepTrustedDevice = 'N'): void
 	{
 		if (!$user->isCurrent())
 		{
@@ -396,7 +427,16 @@ class Otp extends Controller
 			return;
 		}
 
-		(new LogoutService($user))->logoutAll();
+		$logoutService = new LogoutService($user);
+
+		if ($keepTrustedDevice === 'Y')
+		{
+			$logoutService->logoutAllExceptTrustedDevice();
+		}
+		else
+		{
+			$logoutService->logoutAll();
+		}
 	}
 
 	public function resetOtpSessionAction(): void

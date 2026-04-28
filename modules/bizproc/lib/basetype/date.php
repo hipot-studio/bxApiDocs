@@ -133,7 +133,6 @@ class Date extends Base
 		$offset = ($value instanceof Value\Date) ? $value->getOffset() : 0;
 
 		$className = static::generateControlClassName($fieldType, $field);
-		$renderResult = '';
 		$isPublicControl = $renderMode & FieldType::RENDER_MODE_PUBLIC;
 
 		if ($isPublicControl && $allowSelection)
@@ -510,7 +509,7 @@ class Date extends Base
 		return $value;
 	}
 
-	private static function getZones()
+	public static function getZones()
 	{
 		$serverOffset = (new \DateTime())->getOffset();
 

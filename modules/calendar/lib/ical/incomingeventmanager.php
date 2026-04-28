@@ -5,6 +5,7 @@ namespace Bitrix\Calendar\ICal;
 use Bitrix\Calendar\ICal\Builder\AttendeesCollection;
 use Bitrix\Calendar\ICal\MailInvitation\Helper;
 use Bitrix\Calendar\ICal\MailInvitation\IncomingInvitationRequestHandler;
+use Bitrix\Calendar\Internals\EventTable;
 use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Main\IO\FileNotFoundException;
@@ -57,7 +58,7 @@ class IncomingEventManager
 		$uid = $params['event']['DAV_XML_ID'];
 		$emailUser = $params['event']['ATTENDEES_MAIL'][0];
 		$userId = ICalUtil::getUserIdByEmail($emailUser);
-		$localEvent = ICalUtil::getEventByUId($userId, $uid);
+		$localEvent = self::getEventByUId($userId, $uid);
 
 		if (!empty($localEvent))
 		{
@@ -80,7 +81,7 @@ class IncomingEventManager
 
 		if (is_array($attachments))
 		{
-			foreach($attachments as $key => $file)
+			foreach($attachments as $file)
 			{
 				if ($file['type'] === OutcomingEventManager::CONTENT_TYPE)
 				{
@@ -89,11 +90,11 @@ class IncomingEventManager
 					{
 						$fileContent = $fileObject->getContents();
 					}
-					catch (FileNotFoundException $e)
+					catch (FileNotFoundException)
 					{
 						die();
 					}
-					$icalComponent = static::getDataInfo($fileContent);
+					[$icalEvent, $method] = static::getDataInfo($fileContent);
 
 					if ($method === Dictionary::METHODS['reply'])
 					{
@@ -109,7 +110,7 @@ class IncomingEventManager
 		$event = $params['event'];
 		$userId = $params['userId'];
 
-		$originalValue = ICalUtil::getEventByUId($userId, $event['DAV_XML_ID']);
+		$originalValue = self::getEventByUId($userId, $event['DAV_XML_ID']);
 		if (!empty($originalValue))
 		{
 			$deleteParams = [
@@ -123,7 +124,6 @@ class IncomingEventManager
 
 	public static function getDataInfo($data, $params = []): array
 	{
-
 		$attachmentManager = IncomingAttachmentManager::getInstance([
 			'data' => $data,
 		]);
@@ -277,7 +277,7 @@ class IncomingEventManager
 			];
 		}
 
-		$originalValue = ICalUtil::getEventByUId($userId, $event['DAV_XML_ID']);
+		$originalValue = self::getEventByUId($userId, $event['DAV_XML_ID']);
 		$event['ID'] = $originalValue ? $originalValue['ID'] : 0;
 
 		return $event;
@@ -386,5 +386,17 @@ class IncomingEventManager
 			$res[] = $attachment['filename'] . ' (' . $attachment['link'] . ')';
 		}
 		return implode(', ', $res);
+	}
+
+	private static function getEventByUId($userId, $uid): ?array
+	{
+		return EventTable::getList([
+			'filter' => [
+				'=DAV_XML_ID' => $uid,
+				'=OWNER_ID' => $userId,
+				'=DELETED' => 'N',
+			],
+			'limit' => 1,
+		])->fetch() ?: null;
 	}
 }

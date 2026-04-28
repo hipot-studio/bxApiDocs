@@ -28,7 +28,7 @@ class Oembed extends Parser
 	 * @param HtmlDocument $document HTML document.
 	 * @param HttpClient|null $httpClient
 	 */
-	public function handle(HtmlDocument $document, HttpClient $httpClient = null)
+	public function handle(HtmlDocument $document, ?HttpClient $httpClient = null)
 	{
 		if(!$this->detectOembedLink($document) || $this->metadataUrl == '')
 		{

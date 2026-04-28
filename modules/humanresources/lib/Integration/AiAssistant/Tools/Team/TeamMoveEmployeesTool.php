@@ -13,7 +13,7 @@ class TeamMoveEmployeesTool extends NodeMoveEmployeesTool
 
 	public function getName(): string
 	{
-		return 'move_employees';
+		return 'team_move_employees';
 	}
 
 	public function getDescription(): string

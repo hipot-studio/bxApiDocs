@@ -29,6 +29,7 @@ class Restriction
 	private const SETTING_AUTO_TASK_CREATION = 'im_allow_auto_task_creation_after_transcription';
 	private const SETTING_TRANSCRIPTION_EMOTIONS = 'im_allow_file_transcription_emotions_generate';
 	private const PORTAL_ZONE_BLACKLIST = ['cn'];
+	private const EMOTION_TRANSCRIPTION_PORTAL_ZONES_WHITE_LIST = ['ru', 'by'];
 	private const TRANSCRIPTION_QUALITY = 'transcribe_chat_voice_messages'; /** @see Quality::QUALITIES */
 
 	private static ?bool $isCopilotActive = null;
@@ -72,6 +73,16 @@ class Restriction
 		return self::$isAvailable;
 	}
 
+	public function isHistoryAvailable(): bool
+	{
+		if (!Loader::includeModule('ai'))
+		{
+			return false;
+		}
+
+		return $this->isAvailable();
+	}
+
 	public static function onTuningLoad(): EventResult
 	{
 		$result = new EventResult;
@@ -82,15 +93,24 @@ class Restriction
 		if (!empty(Engine::getListAvailable(self::AI_TEXT_CATEGORY)))
 		{
 			$groups['im_copilot_chat'] = [
-				'title' => Loc::getMessage('IM_RESTRICTION_COPILOT_GROUP_MSGVER_1'),
+				'title' => Loc::getMessage(
+					'IM_RESTRICTION_COPILOT_GROUP_MSGVER_2',
+					['#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName()]
+				),
 				'description' => Loc::getMessage('IM_RESTRICTION_COPILOT_DESCRIPTION'),
 				'helpdesk' => '18505482',
 			];
 
 			$items[self::SETTING_COPILOT_CHAT] = [
 				'group' => 'im_copilot_chat',
-				'title' => Loc::getMessage('IM_RESTRICTION_COPILOT_TITLE'),
-				'header' => Loc::getMessage('IM_RESTRICTION_COPILOT_HEADER'),
+				'title' => Loc::getMessage(
+					'IM_RESTRICTION_COPILOT_TITLE_MSGVER_1',
+					['#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName()]
+				),
+				'header' => Loc::getMessage(
+					'IM_RESTRICTION_COPILOT_HEADER_MSGVER_1',
+					['#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName()]
+				),
 				'type' => \Bitrix\AI\Tuning\Type::BOOLEAN,
 				'default' => self::DEFAULT_COPILOT_ENABLED,
 				'sort' => 100,
@@ -107,59 +127,62 @@ class Restriction
 
 			$itemRelations[self::SETTING_COPILOT_CHAT] = [self::SETTING_COPILOT_CHAT_PROVIDER];
 
-			if (Option::get('im', 'file_transcription_available', 'N') === 'Y')
-			{
-				$items[self::SETTING_TRANSCRIPTION] = [
+			$items[self::SETTING_TRANSCRIPTION] = [
+				'group' => 'im_copilot_chat',
+				'title' => Loc::getMessage('IM_RESTRICTION_TRANSCRIPTION_TITLE'),
+				'header' => Loc::getMessage(
+					'IM_RESTRICTION_TRANSCRIPTION_HEADER_MSGVER_1',
+					['#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName()]
+				),
+				'type' => \Bitrix\AI\Tuning\Type::BOOLEAN,
+				'default' => self::DEFAULT_TRANSCRIPTION_ENABLED,
+				'sort' => 140,
+			];
+
+			$items[self::SETTING_TRANSCRIPTION_PROVIDER] = array_merge(
+				[
 					'group' => 'im_copilot_chat',
-					'title' => Loc::getMessage('IM_RESTRICTION_TRANSCRIPTION_TITLE'),
-					'header' => Loc::getMessage('IM_RESTRICTION_TRANSCRIPTION_HEADER'),
+					'title' => Loc::getMessage('IM_RESTRICTION_TRANSCRIPTION_PROVIDER_TITLE'),
+					'sort' => 160,
+				],
+				Defaults::getProviderSelectFieldParams(
+					self::AI_AUDIO_CATEGORY,
+					new Quality(self::TRANSCRIPTION_QUALITY)
+				)
+			);
+
+			$itemRelations[self::SETTING_TRANSCRIPTION] = [self::SETTING_TRANSCRIPTION_PROVIDER];
+
+			if (self::isEmotionTranscriptionAllowedInPortalZone())
+			{
+				$items[self::SETTING_TRANSCRIPTION_EMOTIONS] = [
+					'group' => 'im_copilot_chat',
+					'title' => Loc::getMessage('IM_RESTRICTION_TRANSCRIPTION_EMOTIONS_TITLE'),
+					'header' => Loc::getMessage(
+						'IM_RESTRICTION_TRANSCRIPTION_EMOTIONS_HEADER_MSGVER_1',
+						['#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName()]
+					),
 					'type' => \Bitrix\AI\Tuning\Type::BOOLEAN,
-					'default' => self::DEFAULT_TRANSCRIPTION_ENABLED,
-					'sort' => 140,
+					'default' => self::DEFAULT_TRANSCRIPTION_EMOTIONS_ENABLED,
+					'sort' => 180,
 				];
 
-				$items[self::SETTING_TRANSCRIPTION_PROVIDER] = array_merge(
-					[
-						'group' => 'im_copilot_chat',
-						'title' => Loc::getMessage('IM_RESTRICTION_TRANSCRIPTION_PROVIDER_TITLE'),
-						'sort' => 160,
-					],
-					Defaults::getProviderSelectFieldParams(
-						self::AI_AUDIO_CATEGORY,
-						new Quality(self::TRANSCRIPTION_QUALITY)
-					)
-				);
-
-				$itemRelations[self::SETTING_TRANSCRIPTION] = [self::SETTING_TRANSCRIPTION_PROVIDER];
-
-				if (Option::get('im', 'transcription_emotions_available', 'N') === 'Y')
-				{
-					$items[self::SETTING_TRANSCRIPTION_EMOTIONS] = [
-						'group' => 'im_copilot_chat',
-						'title' => Loc::getMessage('IM_RESTRICTION_TRANSCRIPTION_EMOTIONS_TITLE'),
-						'header' => Loc::getMessage('IM_RESTRICTION_TRANSCRIPTION_EMOTIONS_HEADER'),
-						'type' => \Bitrix\AI\Tuning\Type::BOOLEAN,
-						'default' => self::DEFAULT_TRANSCRIPTION_EMOTIONS_ENABLED,
-						'sort' => 180,
-					];
-
-					$itemRelations[self::SETTING_TRANSCRIPTION][] = self::SETTING_TRANSCRIPTION_EMOTIONS;
-				}
-
-				if (Option::get('im', 'ai_task_creation_available', 'N') === 'Y')
-				{
-					$items[self::SETTING_AUTO_TASK_CREATION] = [
-						'group' => 'im_copilot_chat',
-						'title' => Loc::getMessage('IM_RESTRICTION_AUTO_TASK_CREATION_TITLE'),
-						'header' => Loc::getMessage('IM_RESTRICTION_AUTO_TASK_CREATION_HEADER'),
-						'type' => \Bitrix\AI\Tuning\Type::BOOLEAN,
-						'default' => self::DEFAULT_AUTO_TASK_CREATION_ENABLED,
-						'sort' => 200,
-					];
-
-					$itemRelations[self::SETTING_TRANSCRIPTION][] = self::SETTING_AUTO_TASK_CREATION;
-				}
+				$itemRelations[self::SETTING_TRANSCRIPTION][] = self::SETTING_TRANSCRIPTION_EMOTIONS;
 			}
+
+			$items[self::SETTING_AUTO_TASK_CREATION] = [
+				'group' => 'im_copilot_chat',
+				'title' => Loc::getMessage('IM_RESTRICTION_AUTO_TASK_CREATION_TITLE'),
+				'header' => Loc::getMessage(
+					'IM_RESTRICTION_AUTO_TASK_CREATION_HEADER_MSGVER_1',
+					['#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName()]
+				),
+				'type' => \Bitrix\AI\Tuning\Type::BOOLEAN,
+				'default' => self::DEFAULT_AUTO_TASK_CREATION_ENABLED,
+				'sort' => 200,
+			];
+
+			$itemRelations[self::SETTING_TRANSCRIPTION][] = self::SETTING_AUTO_TASK_CREATION;
 		}
 
 		$result->modifyFields([
@@ -225,7 +248,10 @@ class Restriction
 
 	private function isTranscriptionEmotionsOptionEnabled(): bool
 	{
-		if (!$this->isTranscriptionActive())
+		if (
+			!self::isEmotionTranscriptionAllowedInPortalZone()
+			|| !$this->isTranscriptionActive()
+		)
 		{
 			return false;
 		}
@@ -237,10 +263,7 @@ class Restriction
 
 	private function isAiAutoTaskCreationOptionEnabled(): bool
 	{
-		if (
-			Option::get('im', 'ai_task_creation_available', 'N') !== 'Y'
-			|| !$this->isTranscriptionActive()
-		)
+		if (!$this->isTranscriptionActive())
 		{
 			return false;
 		}
@@ -256,5 +279,12 @@ class Restriction
 		$portalZone = Application::getInstance()->getLicense()->getRegion() ?? 'ru';
 
 		return !in_array($portalZone, self::PORTAL_ZONE_BLACKLIST, true);
+	}
+
+	private static function isEmotionTranscriptionAllowedInPortalZone(): bool
+	{
+		$portalZone = Application::getInstance()->getLicense()->getRegion() ?? 'ru';
+
+		return in_array($portalZone, self::EMOTION_TRANSCRIPTION_PORTAL_ZONES_WHITE_LIST, true);
 	}
 }

@@ -6,6 +6,8 @@ use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\ExternalSource\Viewer;
 use Bitrix\BIConnector\ExternalSource\FieldType;
 use Bitrix\BIConnector\ExternalSource\TypeConverter;
+use Bitrix\BIConnector\Configuration\DataTimezone;
+use Bitrix\Main\Type\Date;
 
 final class DatasetViewer
 {
@@ -15,12 +17,36 @@ final class DatasetViewer
 	private ?array $file = null;
 	private array $fields;
 	private array $settings;
+	private ?\DateTimeZone $datasetTimezone = null;
+	private \DateTimeZone $configTimezone;
 
 	public function __construct(Type $type, array $fields, array $settings)
 	{
 		$this->type = $type;
 		$this->fields = $fields;
 		$this->settings = $settings;
+
+		$this->initTimeZones();
+	}
+
+	private function isCsv(): bool
+	{
+		return $this->type === Type::Csv;
+	}
+
+	private function isRest(): bool
+	{
+		return $this->type === Type::Rest;
+	}
+
+	private function isSource1C(): bool
+	{
+		return $this->type === Type::Source1C;
+	}
+
+	private function isExternal(): bool
+	{
+		return $this->isRest() || $this->isSource1C();
 	}
 
 	public function setSourceId(?int $id): self
@@ -290,43 +316,53 @@ final class DatasetViewer
 
 					case FieldType::Double:
 						$delimiter = $formats[FieldType::Double->value];
-						$data[$rowIndex][$columnIndex] = TypeConverter::convertToDouble(
-							$columnValue,
-							delimiter: $delimiter
-						);
+						$data[$rowIndex][$columnIndex] = TypeConverter::convertToDouble($columnValue, delimiter: $delimiter);
 
 						break;
 
 					case FieldType::Date:
+						$data[$rowIndex][$columnIndex] = '';
 						$format = $formats[FieldType::Date->value];
-						$value = TypeConverter::convertToDate(
-							$columnValue,
-							$format
-						);
-						if ($value)
+						if ($columnValue instanceof Date)
 						{
-							$data[$rowIndex][$columnIndex] = $value->format('Y-m-d');
+							$data[$rowIndex][$columnIndex] = $columnValue->format('Y-m-d');
 						}
 						else
 						{
-							$data[$rowIndex][$columnIndex] = '';
+							$value = TypeConverter::convertToDate($columnValue, $format);
+							if ($value)
+							{
+								$data[$rowIndex][$columnIndex] = $value->format('Y-m-d');
+							}
 						}
 
 						break;
 
 					case FieldType::DateTime:
+						$data[$rowIndex][$columnIndex] = '';
 						$format = $formats[FieldType::DateTime->value];
-						$value = TypeConverter::convertToDateTime(
-							$columnValue,
-							$format
-						);
-						if ($value)
+
+						if ($columnValue instanceof Date)
 						{
-							$data[$rowIndex][$columnIndex] = $value->format('Y-m-d H:i:s');
+							$value = $columnValue;
+						}
+						elseif ($this->isNeedApplyTimezoneOffset())
+						{
+							$value = TypeConverter::convertToDateTime($columnValue, $format, $this->datasetTimezone);
 						}
 						else
 						{
-							$data[$rowIndex][$columnIndex] = '';
+							$value = TypeConverter::convertToDateTime($columnValue, $format);
+						}
+
+						if ($value)
+						{
+							if ($this->isNeedApplyTimezoneOffset())
+							{
+								$value->setTimeZone($this->configTimezone);
+							}
+
+							$data[$rowIndex][$columnIndex] = $value->format('Y-m-d H:i:s');
 						}
 
 						break;
@@ -334,10 +370,7 @@ final class DatasetViewer
 					case FieldType::Money:
 						$delimiter = $formats[FieldType::Money->value];
 						$data[$rowIndex][$columnIndex] = self::formatMoney(
-							TypeConverter::convertToMoney(
-								$columnValue,
-								delimiter: $delimiter
-							)
+							TypeConverter::convertToMoney($columnValue, delimiter: $delimiter)
 						);
 
 						break;
@@ -366,7 +399,7 @@ final class DatasetViewer
 			return true;
 		}
 
-		if ($this->type === Type::Rest || $this->type === Type::Source1C)
+		if ($this->isExternal())
 		{
 			return true;
 		}
@@ -381,7 +414,7 @@ final class DatasetViewer
 
 	private function prepareCode(string $name): string
 	{
-		if ($this->type === Type::Rest)
+		if ($this->isRest())
 		{
 			return $name;
 		}
@@ -393,5 +426,35 @@ final class DatasetViewer
 		}
 
 		return $transliteratedName;
+	}
+
+	private function initTimeZones(): void
+	{
+		$timezone = array_filter($this->settings, static function ($setting) {
+			return $setting['TYPE'] === FieldType::Timezone->value && !empty($setting['FORMAT']);
+		});
+
+		if ($timezone)
+		{
+			try
+			{
+				$this->datasetTimezone = new \DateTimeZone(current($timezone)['FORMAT']);
+			}
+			catch (\Exception)
+			{
+			}
+		}
+
+		if ($this->datasetTimezone === null)
+		{
+			$this->datasetTimezone = DataTimezone::getDefaultTimezone();
+		}
+
+		$this->configTimezone = DataTimezone::getConfigTimezone();
+	}
+
+	private function isNeedApplyTimezoneOffset(): bool
+	{
+		return $this->isCsv();
 	}
 }

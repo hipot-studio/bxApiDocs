@@ -51,7 +51,7 @@ class Factory
 	 * @return Filter
 	 * @throws Main\NotSupportedException
 	 */
-	public static function createEntityFilter($entityTypeName, array $settingsParams, array $additionalParams = null)
+	public static function createEntityFilter($entityTypeName, array $settingsParams, ?array $additionalParams = null)
 	{
 		$methods = self::prepareMethods();
 		if(isset($methods[$entityTypeName]))

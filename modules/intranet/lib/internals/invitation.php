@@ -7,11 +7,8 @@
  */
 namespace Bitrix\Intranet\Internals;
 
-use Bitrix\Main\Entity;
-use Bitrix\Main\ORM\Fields\Relations\Reference;
-use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\Access\Entity\DataManager;
 use Bitrix\Main\Type;
-use Bitrix\Rest\AppTable;
 
 /**
  * Class InvitationTable
@@ -26,19 +23,20 @@ use Bitrix\Rest\AppTable;
  * @method static EO_Invitation_Result getById($id)
  * @method static EO_Invitation_Result getList(array $parameters = [])
  * @method static EO_Invitation_Entity getEntity()
- * @method static \Bitrix\Intranet\Internals\EO_Invitation createObject($setDefaultValues = true)
- * @method static \Bitrix\Intranet\Internals\EO_Invitation_Collection createCollection()
- * @method static \Bitrix\Intranet\Internals\EO_Invitation wakeUpObject($row)
- * @method static \Bitrix\Intranet\Internals\EO_Invitation_Collection wakeUpCollection($rows)
+ * @method static EO_Invitation createObject($setDefaultValues = true)
+ * @method static EO_Invitation_Collection createCollection()
+ * @method static EO_Invitation wakeUpObject($row)
+ * @method static EO_Invitation_Collection wakeUpCollection($rows)
+ * @method static int getCount(array $filter = [], array $cache = [])
  */
-class InvitationTable extends Entity\DataManager
+class InvitationTable extends DataManager
 {
 	/**
 	 * Get table name.
 	 *
 	 * @return string
 	 */
-	public static function getTableName()
+	public static function getTableName(): string
 	{
 		return 'b_intranet_invitation';
 	}
@@ -48,7 +46,7 @@ class InvitationTable extends Entity\DataManager
 	 *
 	 * @return array
 	 */
-	public static function getMap()
+	public static function getMap(): array
 	{
 		return [
 			'ID' => [

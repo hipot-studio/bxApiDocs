@@ -25,7 +25,7 @@ class Context
 
 	protected $keepAlive;
 
-	public function __construct(array $params = null)
+	public function __construct(?array $params = null)
 	{
 		if (!empty($params))
 		{

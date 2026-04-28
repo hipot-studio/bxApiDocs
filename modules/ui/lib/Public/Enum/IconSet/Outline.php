@@ -628,4 +628,11 @@ enum Outline: string
 	case TEXT_FORMAT_RESET = 'o-text-format-reset';
 	case SPOILER = 'o-spoiler';
 	case OPEN_NEW = 'o-open-new';
+	case VIDEO_RECORD_2 = 'o-video-record-2';
+	case THREE_PERSONS_CHECK = 'o-three-persons-check';
+	case PACKAGE_RECEIVE = 'o-package-receive';
+	case PACKAGE_CANCEL = 'o-package-cancel';
+	case LOWER_LEFT_ARROW = 'o-lower-left-arrow';
+	case MAIL_PLUS = 'o-mail-plus';
+	case MESSAGES_MULTI = 'o-messages-multi';
 }

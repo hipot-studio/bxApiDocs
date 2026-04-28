@@ -630,7 +630,7 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 			$row = [
 				'name' => $basketItem->getField('NAME'),
 				'amount' => $basketItem->getQuantity(),
-				'price' => $basketItem->getPriceWithVat(),
+				'price' => PriceMaths::roundByFormatCurrency($basketItem->getPriceWithVat(), $basketItem->getCurrency()),
 			];
 
 			$vat = $basketItem->getVatRate();
@@ -658,7 +658,7 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 				$row = [
 					'name' => $basketItem->getField('NAME'),
 					'amount' => $basketItem->getQuantity(),
-					'price' => $basketItem->getPriceWithVat(),
+					'price' => PriceMaths::roundByFormatCurrency($basketItem->getPriceWithVat(), $basketItem->getCurrency()),
 				];
 
 				$vat = $basketItem->getVatRate();
@@ -881,7 +881,8 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 	 */
 	protected function isInvoiceSumCorrect(Payment $payment): bool
 	{
-		$paymentSum = PriceMaths::roundPrecision($payment->getSum());
+		$currency = $payment->getCurrency();
+		$paymentSum = PriceMaths::roundByFormatCurrency($payment->getSum(), $currency);
 		$invoiceSum = $this->getInvoiceSum($payment);
 
 		$this->addDebugInfo(
@@ -889,7 +890,7 @@ class TBankBusinessHandler extends PaySystem\BaseServiceHandler implements Restr
 			[
 				'invoiceSum' => $invoiceSum,
 				'paymentSum' => $paymentSum,
-			]
+			],
 		);
 
 		return $paymentSum === $invoiceSum;

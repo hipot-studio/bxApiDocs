@@ -85,7 +85,7 @@ class Controller implements Errorable, Controllerable
 	 * Constructor Controller.
 	 * @param Request|null $request
 	 */
-	public function __construct(Request $request = null)
+	public function __construct(?Request $request = null)
 	{
 		$this->scope = self::SCOPE_AJAX;
 		$this->errorCollection = new ErrorCollection;
@@ -104,7 +104,7 @@ class Controller implements Errorable, Controllerable
 	 * @return HttpResponse|mixed
 	 * @throws SystemException
 	 */
-	public function forward($controller, string $actionName, array $parameters = null)
+	public function forward($controller, string $actionName, ?array $parameters = null)
 	{
 		if (is_string($controller))
 		{
@@ -749,7 +749,7 @@ class Controller implements Errorable, Controllerable
 	 *
 	 * @return array|null
 	 */
-	final protected function buildFilters(array $config = null): array
+	final protected function buildFilters(?array $config = null): array
 	{
 		if ($config === null)
 		{
@@ -935,7 +935,7 @@ class Controller implements Errorable, Controllerable
 		return $listOfActions[$actionName];
 	}
 
-	final protected function setActionConfig($actionName, array $config = null): self
+	final protected function setActionConfig($actionName, ?array $config = null): self
 	{
 		$this->configurationOfActions[$actionName] = $config;
 

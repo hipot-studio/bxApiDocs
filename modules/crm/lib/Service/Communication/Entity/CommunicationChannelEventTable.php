@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Communication\Entity;
 
+use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
 use Bitrix\Main\DI\ServiceLocator;
 
 /**
@@ -47,8 +48,8 @@ class CommunicationChannelEventTable extends \Bitrix\Main\ORM\Data\DataManager
 			->configureRequired()
 			->configureSerializationJson()
 		;
-		$map[] = $fieldRepository->getCreatedTime('CREATED_AT', true);
-		$map[] = $fieldRepository->getUpdatedTime('UPDATED_AT', true);
+		$map[] = $fieldRepository->getCreatedTime('CREATED_AT', FieldCaptionGender::Feminine);
+		$map[] = $fieldRepository->getUpdatedTime('UPDATED_AT', FieldCaptionGender::Feminine);
 
 		return $map;
 	}

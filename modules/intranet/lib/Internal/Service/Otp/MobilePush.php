@@ -10,6 +10,7 @@ use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Web\Json;
 use Bitrix\Security\Mfa\OtpType;
@@ -17,6 +18,7 @@ use Bitrix\Security\Mfa\OtpType;
 class MobilePush
 {
 	private bool $isAvailable;
+	private ?array $legacyOtpAllowedUserIds = null;
 
 	/**
 	 * @throws LoaderException
@@ -55,6 +57,74 @@ class MobilePush
 		return $this->otpSettings->getDefaultType() === OtpType::Push;
 	}
 
+	public function isLegacyOtpAllowed(): bool
+	{
+		return Option::get('intranet', 'legacy_otp_allowed', 'N') === 'Y';
+	}
+
+	public function isLegacyOtpAllowedByUserId(int $userId): bool
+	{
+		return $this->isLegacyOtpAllowed()
+			&& in_array($userId, $this->getLegacyOtpAllowedUserIds(), true);
+	}
+
+	public function getLegacyOtpAllowedUserIds(): array
+	{
+		if ($this->legacyOtpAllowedUserIds !== null)
+		{
+			return $this->legacyOtpAllowedUserIds;
+		}
+
+		try
+		{
+			$json = Option::get('intranet', 'legacy_otp_allowed_users', '[]');
+			$userIds = Json::decode($json);
+		}
+		catch (\Exception)
+		{
+			$userIds = [];
+		}
+
+		if (!is_array($userIds))
+		{
+			$userIds = [];
+		}
+
+		$this->legacyOtpAllowedUserIds = array_map(static fn($id) => (int)$id, $userIds);
+
+		return $this->legacyOtpAllowedUserIds;
+	}
+
+	/**
+	 * @throws ArgumentOutOfRangeException
+	 */
+	public function addLegacyOtpAllowedUserId(int $userId): void
+	{
+		$userIds = $this->getLegacyOtpAllowedUserIds();
+
+		if (!in_array($userId, $userIds, true))
+		{
+			$userIds[] = $userId;
+			Option::set('intranet', 'legacy_otp_allowed_users', Json::encode($userIds));
+			$this->legacyOtpAllowedUserIds = $userIds;
+		}
+	}
+
+	/**
+	 * @throws ArgumentOutOfRangeException
+	 */
+	public function removeLegacyOtpAllowedUserId(int $userId): void
+	{
+		$userIds = $this->getLegacyOtpAllowedUserIds();
+		$filtered = array_values(array_filter($userIds, static fn(int $id) => $id !== $userId));
+
+		if (count($filtered) !== count($userIds))
+		{
+			Option::set('intranet', 'legacy_otp_allowed_users', Json::encode($filtered));
+			$this->legacyOtpAllowedUserIds = $filtered;
+		}
+	}
+
 	public function gracePeriodEnabled(): bool
 	{
 		return $this->getGracePeriod() > 0;
@@ -91,7 +161,9 @@ class MobilePush
 
 	public function getPromoteMode(): PromoteMode
 	{
-		return PromoteMode::tryFrom(Option::get('intranet', 'security_mode', 'disable')) ?? PromoteMode::Disable;
+		$defaultPromoteMode = ModuleManager::isModuleInstalled('bitrix24') ? PromoteMode::Medium : PromoteMode::Personal;
+
+		return PromoteMode::tryFrom(Option::get('intranet', 'security_mode', $defaultPromoteMode->value)) ?? PromoteMode::Disable;
 	}
 
 	public function isGracePeriodEnded(): bool
@@ -103,8 +175,7 @@ class MobilePush
 
 	public function canUsePersonalModeByUserId(int $userId): bool
 	{
-		return $this->getPromoteMode() === PromoteMode::Personal
-			&& \CUserOptions::GetOption('intranet', 'personal_security_mode', 'N', $userId) === 'Y';
+		return true;
 	}
 
 	public function makeMandatory(): void
@@ -181,9 +252,7 @@ class MobilePush
 	public function getDefaultGracePeriodSchedule(): array
 	{
 		return [
-			['daysFrom' => 0, 'daysTo' => 3, 'showEveryDays' => 1],
-			['daysFrom' => 3, 'daysTo' => 23, 'showEveryDays' => 5],
-			['daysFrom' => 23, 'daysTo' => null, 'showEveryDays' => 1],
+			['daysFrom' => 0, 'daysTo' => null, 'showEveryDays' => 1],
 		];
 	}
 

@@ -13,7 +13,9 @@ use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Integration;
 use Bitrix\Booking\Internals\Integration\Notifications\TemplateRepository;
 use Bitrix\Booking\Internals\Integration\Notifications\LegalEntityProvider;
-use Bitrix\Booking\Internals\Service\Notifications\MessageSenderPicker;
+use Bitrix\Booking\Internals\Service\LicenseChecker;
+use Bitrix\Booking\Internals\Service\Notifications\MessageSender;
+use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderPicker;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
 use Bitrix\Booking\Internals\Service\OptionDictionary;
 use Bitrix\Booking\Internals\Service\Time;
@@ -28,6 +30,8 @@ class ResourceWizard extends BaseController
 	private int $userId;
 	private TemplateRepository $templateRepository;
 	private LegalEntityProvider $notificationsLegalEntityProvider;
+	private MessageSenderPicker $messageSenderPicker;
+	private LicenseChecker $licenseChecker;
 
 	public function __construct(Request $request = null)
 	{
@@ -36,6 +40,8 @@ class ResourceWizard extends BaseController
 		$this->userId = (int)CurrentUser::get()->getId();
 		$this->templateRepository = new TemplateRepository();
 		$this->notificationsLegalEntityProvider = new LegalEntityProvider();
+		$this->messageSenderPicker = Container::getMessageSenderPicker();
+		$this->licenseChecker = Container::getLicenseChecker();
 	}
 
 	public function getAction(CurrentUser $currentUser): ResourceWizardResponseResponse|null
@@ -65,17 +71,16 @@ class ResourceWizard extends BaseController
 	private function getNotificationsSettings(): array
 	{
 		$notificationsExpanded = $this->getNotificationsExpanded();
-		$messageSender = MessageSenderPicker::pickCurrent();
 
 		return [
-			'showLicenseWarning' => !$messageSender->checkLicense(),
-			'senders' => [
-				[
-					'moduleId' => $messageSender->getModuleId(),
-					'code' => $messageSender->getCode(),
-					'canUse' => $messageSender->canUse(),
+			'showLicenseWarning' => !$this->licenseChecker->isPaidOrBox(),
+			'senders' => array_map(
+				static fn (MessageSender\BaseMessageSender $sender) => [
+					'code' => $sender->getCode(),
+					'canUse' => $sender->canUse(),
 				],
-			],
+				$this->messageSenderPicker->getSenders(),
+			),
 			'notifications' => array_map(
 				fn (NotificationType $notificationType) => [
 					'type' => $notificationType->value,

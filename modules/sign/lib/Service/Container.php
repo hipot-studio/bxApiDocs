@@ -7,6 +7,7 @@ use Bitrix\Sign\Access\AccessController\AccessControllerFactory;
 use Bitrix\Sign\Access\Model\UserModelRepository;
 use Bitrix\Sign\Access\Service\AccessService;
 use Bitrix\Sign\Access\Service\RolePermissionService;
+use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Factory\Access\AccessibleItemFactory;
 use Bitrix\Sign\Repository;
 use Bitrix\Sign\Connector;
@@ -16,7 +17,6 @@ use Bitrix\Sign\Contract;
 use Bitrix\Sign\Service\B2e\CompanyService;
 use Bitrix\Sign\Service\Providers\ProviderVisibilityService;
 use Bitrix\Sign\Service\Sign\Document\TemplateFolderService;
-use Bitrix\Sign\Service\Sign\Document\TemplateGridService;
 use Psr\Container\ContainerInterface;
 
 class Container
@@ -122,6 +122,11 @@ class Container
 	public function getApiDocumentPageService(): Api\Document\PageService
 	{
 		return self::getService('sign.service.api.document.page');
+	}
+
+	public function getApiDocumentPlaceholderService(): Api\Document\ApiDocumentPlaceholderService
+	{
+		return self::getService('sign.service.api.document.placeholder');
 	}
 
 	public function getApiDocumentSigningService(): Api\Document\SigningService
@@ -492,6 +497,26 @@ class Container
 		return static::getService('sign.service.preset.templates');
 	}
 
+	public function getFieldAliasService(): Service\Placeholder\FieldAlias\FieldAliasService
+	{
+		return static::getService('sign.service.placeholder.fieldAlias');
+	}
+
+	public function getAliasRoleResolver(): Service\Placeholder\FieldAlias\AliasRoleResolver
+	{
+		return static::getService('sign.service.placeholder.aliasRoleResolver');
+	}
+
+	public function getLogger(): Logger
+	{
+		return static::getService('sign.debug.logger');
+	}
+
+	public function getPlaceholderBlockService(): Service\Sign\PlaceholderBlockService
+	{
+		return self::getService('sign.service.placeholder.block');
+	}
+
 	public function getAccessUserModelRepository(): UserModelRepository
 	{
 		return static::getService('sign.repository.access.userModel');
@@ -575,5 +600,25 @@ class Container
 	public function getCompanyService(): CompanyService
 	{
 		return static::getService('sign.service.b2e.company');
+	}
+
+	public function getDocumentFieldService(): Document\FieldService
+	{
+		return self::getService('sign.service.document.field');
+	}
+
+	public function getCrmFieldSelectorService(): Service\Integration\Crm\FieldSelectorService
+	{
+		return static::getService('sign.service.integration.crm.fieldSelector');
+	}
+
+	public function getDocumentFieldAccessService(): Document\FieldAccessService
+	{
+		return self::getService('sign.service.document.fieldAccess');
+	}
+
+	public function getDocumentPlaceholderCacheService(): Document\Placeholder\PlaceholderCacheService
+	{
+		return self::getService('sign.service.document.placeholder.placeholderCache');
 	}
 }

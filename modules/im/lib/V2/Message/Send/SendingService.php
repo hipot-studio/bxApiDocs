@@ -181,6 +181,18 @@ class SendingService
 		$botService = (new BotService($this->sendingConfig))->setContext($this->context);
 		$botService->runMessageCommand($message->getId(), $compatibleFields);
 
+		try
+		{
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logUserMessageEvent(
+				'ONIMV2MESSAGEADD',
+				fn() => (new \Bitrix\Im\V2\Event\EventPayload())->messageAdd($message->getMessageId(), $compatibleFields),
+				$compatibleFields
+			);
+		}
+		catch (\Throwable)
+		{
+		}
+
 		return $result;
 	}
 

@@ -62,11 +62,6 @@ class CControllerCounter
 			$arFields['COUNTER_FORMAT'] = false;
 		}
 
-		if (($ID === false || array_key_exists('COMMAND', $arFields)) && $arFields['COMMAND'] == '')
-		{
-			$arMsg[] = ['id' => 'COMMAND', 'text' => GetMessage('CTRL_COUNTER_ERR_COMMAND')];
-		}
-
 		if (!empty($arMsg))
 		{
 			$e = new CAdminException($arMsg);
@@ -123,9 +118,9 @@ class CControllerCounter
 		}
 
 		unset($arFields['TIMESTAMP_X']);
-		$arFields['~TIMESTAMP_X'] = $DB->CurrentTimeFunction();
+		$arFields['~TIMESTAMP_X'] = CDatabase::CurrentTimeFunction();
 
-		$ID = $DB->Add('b_controller_counter', $arFields, ['COMMAND']);
+		$ID = $DB->Add('b_controller_counter', $arFields);
 
 		if (array_key_exists('CONTROLLER_GROUP_ID', $arFields))
 		{
@@ -142,7 +137,7 @@ class CControllerCounter
 			$counterHistory->setUserId(is_object($USER) ? $USER->GetID() : 0);
 			$counterHistory->setName($arCounter['NAME']);
 			$counterHistory->setCommandFrom('');
-			$counterHistory->setCommandTo($arCounter['COMMAND']);
+			$counterHistory->setCommandTo($arCounter['COMMAND_FILE'] ?: $arCounter['COMMAND']);
 			$counterHistory->save();
 		}
 
@@ -159,39 +154,47 @@ class CControllerCounter
 			return false;
 		}
 
-		if (array_key_exists('COMMAND', $arFields))
+		$counterHistory = null;
+		if (
+			(array_key_exists('COMMAND', $arFields) && $arFields['COMMAND'])
+			|| (array_key_exists('COMMAND_FILE', $arFields) && $arFields['COMMAND_FILE'])
+		)
 		{
 			$rsCounter = $DB->Query('select * from b_controller_counter where ID = ' . $ID);
 			$arCounter = $rsCounter->Fetch();
-			if ($arCounter and $arCounter['COMMAND'] != $arFields['COMMAND'])
+			if (
+				$arCounter
+				&& (
+					$arCounter['COMMAND'] != $arFields['COMMAND']
+					|| $arCounter['COMMAND_FILE'] != $arFields['COMMAND_FILE']
+				)
+			)
 			{
 				$counterHistory = \Bitrix\Controller\CounterHistoryTable::createObject();
 				$counterHistory->setCounterId($ID);
 				$counterHistory->setTimestampX(new \Bitrix\Main\Type\DateTime());
 				$counterHistory->setUserId(is_object($USER) ? $USER->GetID() : 0);
 				$counterHistory->setName($arFields['NAME'] ?? $arCounter['NAME']);
-				$counterHistory->setCommandFrom($arCounter['COMMAND']);
-				$counterHistory->setCommandTo($arFields['COMMAND']);
-				$counterHistory->save();
+				$counterHistory->setCommandFrom($arCounter['COMMAND_FILE'] ?: $arCounter['COMMAND']);
+				$counterHistory->setCommandTo($arFields['COMMAND_FILE'] ?: $arFields['COMMAND']);
 			}
 		}
 		unset($arFields['TIMESTAMP_X']);
-		$arFields['~TIMESTAMP_X'] = $DB->CurrentTimeFunction();
+		$arFields['~TIMESTAMP_X'] = CDatabase::CurrentTimeFunction();
 
-		$arUpdateBinds = [];
-		$strUpdate = $DB->PrepareUpdateBind('b_controller_counter', $arFields, '', false, $arUpdateBinds);
-
-		$strSql = 'UPDATE b_controller_counter SET ' . $strUpdate . ' WHERE ID=' . $ID;
-
-		$arBinds = [];
-		foreach ($arUpdateBinds as $field_id)
+		$strUpdate = $DB->PrepareUpdate('b_controller_counter', $arFields);
+		if ($strUpdate)
 		{
-			$arBinds[$field_id] = $arFields[$field_id];
-		}
+			$strSql = 'UPDATE b_controller_counter SET ' . $strUpdate . ' WHERE ID=' . $ID;
+			if (!$DB->Query($strSql))
+			{
+				return false;
+			}
 
-		if (!$DB->QueryBind($strSql, $arBinds))
-		{
-			return false;
+			if ($counterHistory)
+			{
+				$counterHistory->save();
+			}
 		}
 
 		if (array_key_exists('CONTROLLER_GROUP_ID', $arFields))
@@ -250,7 +253,7 @@ class CControllerCounter
 			$counterHistory->setTimestampX(new \Bitrix\Main\Type\DateTime());
 			$counterHistory->setUserId(is_object($USER) ? $USER->GetID() : 0);
 			$counterHistory->setName($arCounter['NAME']);
-			$counterHistory->setCommandFrom($arCounter['COMMAND']);
+			$counterHistory->setCommandFrom($arCounter['COMMAND_FILE'] ?: $arCounter['COMMAND']);
 			$counterHistory->setCommandTo('');
 			$counterHistory->save();
 		}
@@ -368,11 +371,7 @@ class CControllerCounter
 
 		$rs = $DB->Query('
 			SELECT
-				cc.ID
-				,cc.NAME
-				,cc.COUNTER_TYPE
-				,cc.COUNTER_FORMAT
-				,cc.COMMAND
+				cc.*
 			FROM
 				b_controller_member cm
 				INNER JOIN b_controller_counter_group ccg ON ccg.CONTROLLER_GROUP_ID = cm.CONTROLLER_GROUP_ID
@@ -463,7 +462,7 @@ class CControllerCounter
 				{
 					if (!isset($memberCounterValues[$CONTROLLER_COUNTER_ID]) || $newValues !== $memberCounterValues[$CONTROLLER_COUNTER_ID])
 					{
-						$insertValues[$CONTROLLER_COUNTER_ID] = '(' . $CONTROLLER_MEMBER_ID . ',' . $CONTROLLER_COUNTER_ID . ',' . intval($value) . ',' . roundDB($value) . ',' . $sqlDate . ',\'' . $DB->ForSQL($value, 255) . '\')';
+						$insertValues[$CONTROLLER_COUNTER_ID] = '(' . $CONTROLLER_MEMBER_ID . ',' . $CONTROLLER_COUNTER_ID . ',' . intval($value) . ',' . roundDB($value) . ',' . $sqlDate . ',\'' . $DB->ForSql($value, 255) . '\')';
 					}
 					unset($memberCounterValues[$CONTROLLER_COUNTER_ID]);
 				}
@@ -608,5 +607,82 @@ class CControllerCounter
 		');
 
 		return new CControllerCounterResult($result);
+	}
+
+	public static function checkCommandSyntax($command)
+	{
+		if (!$command)
+		{
+			return 'empty command';
+		}
+
+		if (!function_exists('token_get_all'))
+		{
+			return '';
+		}
+
+		$tokens = token_get_all('<?php ' . $command);
+		$line = 1;
+		$curly_braces_balance = 0;
+		foreach ($tokens as $i => $token)
+		{
+			if (is_array($token))
+			{
+				if (
+					($token[0] === T_OPEN_TAG || $token[0] === T_OPEN_TAG_WITH_ECHO)
+					&& $i > 0
+				)
+				{
+					return 'line: ' . $line . ' error: open tag usage is not allowed.';
+				}
+				elseif ($token[0] === T_CLOSE_TAG)
+				{
+					return 'line: ' . $line . ' error: close tag usage is not allowed.';
+				}
+				elseif ($token[0] === T_WHITESPACE)
+				{
+					$p = 0;
+					while (($p = strpos($token[1], "\n", $p)) !== false)
+					{
+						$line++;
+						$p++;
+					}
+				}
+			}
+			elseif ($token === '{')
+			{
+				$curly_braces_balance++;
+			}
+			elseif ($token === '}')
+			{
+				$curly_braces_balance--;
+				if ($curly_braces_balance < 0)
+				{
+					return 'line: ' . $line . ' error: unexpected token "}".';
+				}
+			}
+		}
+
+		$strCommand = "if (false) {\n";
+		$strCommand .= '  ' . $command . "\n";
+		$strCommand .= "}\n";
+		$strCommand .= "return true;\n";
+
+		$check = null;
+		try
+		{
+			$check = @eval($strCommand);
+		}
+		catch (Throwable $e)
+		{
+			$check = 'line: ' . ($e->getLine() - 1) . ' error: ' . $e->getMessage() . '.';
+		}
+
+		if ($check !== true)
+		{
+			return $check;
+		}
+
+		return '';
 	}
 }

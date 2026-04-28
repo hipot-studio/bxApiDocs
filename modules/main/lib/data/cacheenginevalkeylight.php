@@ -6,6 +6,8 @@ use Bitrix\Main\Type\DateTime;
 
 class CacheEngineValKeyLight extends CacheEngineRedis
 {
+	protected int $serializer = \Redis::SERIALIZER_PHP;
+
 	public function __construct(array $options = [])
 	{
 		parent::__construct($options);
@@ -15,7 +17,9 @@ class CacheEngineValKeyLight extends CacheEngineRedis
 	protected function configure($options = []): array
 	{
 		$config = parent::configure($options);
-		$config['serializer'] = 1;
+
+		$this->serializer = $config['serializer'] ?? (defined('\Redis::SERIALIZER_IGBINARY') ? \Redis::SERIALIZER_IGBINARY : \Redis::SERIALIZER_PHP);
+
 		return $config;
 	}
 
@@ -28,6 +32,7 @@ class CacheEngineValKeyLight extends CacheEngineRedis
 
 		$baseDirVersion = $this->getBaseDirVersion($baseDir);
 		$initDirKey = $this->getKeyPrefix($baseDirVersion, $initDir);
+		$baseListKey = $this->sid . '|' . $baseDirVersion . '|' . self::BX_BASE_LIST;
 
 		if ($filename != '')
 		{
@@ -36,6 +41,10 @@ class CacheEngineValKeyLight extends CacheEngineRedis
 		elseif ($initDir != '')
 		{
 			$this->del($initDirKey);
+			if ($this->fullClean)
+			{
+				unset(static::$cleanPath[$baseListKey][$initDirKey]);
+			}
 		}
 		else
 		{
@@ -44,9 +53,7 @@ class CacheEngineValKeyLight extends CacheEngineRedis
 				$useLock = $this->useLock;
 				$this->useLock = false;
 
-				$baseList = $this->sid . '|' . $baseDirVersion . '|' . self::BX_BASE_LIST;
-
-				$paths = $this->getSet($baseList);
+				$paths = $this->getSet($baseListKey);
 				foreach ($paths as $path)
 				{
 					$this->addCleanPath([
@@ -59,12 +66,14 @@ class CacheEngineValKeyLight extends CacheEngineRedis
 				unset($paths);
 
 				$this->set($this->sid . '|needClean', 3600, 'Y');
-				$this->del($baseList);
+				$this->del($baseListKey);
+				unset(static::$cleanPath[$baseListKey]);
 				$this->useLock = $useLock;
 			}
 
 			$baseDirKey = $this->getBaseDirKey($baseDir);
 			$this->del($baseDirKey);
+
 			unset(static::$baseDirVersion[$baseDirKey]);
 		}
 	}
@@ -75,13 +84,18 @@ class CacheEngineValKeyLight extends CacheEngineRedis
 		$initDirKey = $this->getKeyPrefix($baseDirVersion, $initDir);
 		$exp = $this->ttlMultiplier * (int)$ttl;
 
-		$data = serialize($vars);
+		$data = $this->serialize($vars);
 		$this->rawCommand('HSETEX', $initDirKey, 'EX', $exp, 'FIELDS', '1', $filename, $data);
 
 		if ($this->fullClean)
 		{
 			$baseListKey = $this->sid . '|' . $baseDirVersion . '|' . self::BX_BASE_LIST;
-			$this->addToSet($baseListKey, $initDirKey);
+
+			if (!isset(self::$cleanPath[$baseListKey][$initDirKey]))
+			{
+				$this->addToSet($baseListKey, $initDirKey);
+				self::$cleanPath[$baseListKey][$initDirKey] = true;
+			}
 		}
 
 		if (Cache::getShowCacheStat())
@@ -99,7 +113,7 @@ class CacheEngineValKeyLight extends CacheEngineRedis
 
 		if (Cache::getShowCacheStat())
 		{
-			$this->read = strlen(serialize($vars));
+			$this->read = strlen($this->serialize($vars));
 			$this->path = $baseDir . $initDir . $filename;
 		}
 
@@ -122,39 +136,28 @@ class CacheEngineValKeyLight extends CacheEngineRedis
 		$count = (int)self::$engine->get($this->sid . '|delCount');
 		if ($count < 1)
 		{
-			$count = 1;
+			$count = 10;
 		}
 
+		$delKey = [];
 		$step = $count + $delta;
-		for ($i = 0; $i < $step; $i++)
+		$paths = self::$engine->rPop($this->sid . '/cacheCleanPath', $step);
+		foreach (($paths ?: []) as $path)
 		{
-			$finished = true;
-			$paths = self::$engine->rPop($this->sid . '/cacheCleanPath');
-			if ($paths)
+			if ($path)
 			{
-				$this->del($paths['PREFIX']);
-
-				if ($finished)
-				{
-					$deleted++;
-				}
-				elseif (time() > $etime)
-				{
-					self::$engine->lPush($this->sid . '/cacheCleanPath', $paths);
-					break;
-				}
-			}
-			else
-			{
-				break;
+				$delKey[] = $path['PREFIX'];
+				$deleted++;
 			}
 		}
 
-		if ($deleted > $count)
+		$this->del($delKey);
+
+		if ($deleted > $count && time() < $etime)
 		{
 			self::$engine->setex($this->sid . '|delCount', 604800, $deleted);
 		}
-		elseif ($deleted < $count && $count > 1)
+		elseif (($deleted < $count || time() > $etime) && $count > 1)
 		{
 			self::$engine->setex($this->sid . '|delCount', 604800, --$count);
 		}
@@ -165,5 +168,15 @@ class CacheEngineValKeyLight extends CacheEngineRedis
 		}
 
 		$this->unlock($this->sid . '|cacheClean');
+	}
+
+	protected function serialize($data): string|false
+	{
+		if ($this->serializer == \Redis::SERIALIZER_IGBINARY)
+		{
+			return igbinary_serialize($data);
+		}
+
+		return serialize($data);
 	}
 }

@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Crm\Service;
 
+use Bitrix\Crm\Decorator\JsonSerializable\ClearNullValues;
 use Bitrix\Crm\Integration\Intranet\SystemPageProvider\ActivityPage;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\ItemIdentifier;
@@ -24,8 +25,10 @@ use Bitrix\Main\HttpRequest;
 use Bitrix\Main\IO\Directory;
 use Bitrix\Main\IO\Path;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Page\Asset;
 use Bitrix\Main\SiteTable;
 use Bitrix\Main\Type\Date;
+use Bitrix\Main\UI\Extension;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
 use CComponentEngine;
@@ -68,6 +71,8 @@ class Router
 
 	protected ?PageResolver $pageResolver = null;
 	protected ?PageFactory $pageFactory = null;
+
+	protected static bool $isBindAnchorsRendered = false;
 
 	public function __construct()
 	{
@@ -234,6 +239,32 @@ class Router
 		}
 
 		return $anchors;
+	}
+
+	public function renderBindAnchors(): void
+	{
+		if (static::$isBindAnchorsRendered)
+		{
+			return;
+		}
+
+		Asset::getInstance()->addJs('/bitrix/components/bitrix/crm.router/templates/.default/script.js');
+
+		Extension::load(['sidepanel']);
+		$jsonAnchors = Json::encode(ClearNullValues::decorateList($this->getSidePanelAnchors()));
+
+		echo <<<HTML
+			<script>
+				BX.ready(() => {
+					const anchors = ({$jsonAnchors});
+					anchors.forEach((anchor) => {
+						BX.Crm.Component.Router.bindAnchor(anchor.roots, anchor.rule);
+					});
+				});
+			</script>
+		HTML;
+
+		static::$isBindAnchorsRendered = true;
 	}
 
 	public function getEntityTypeByComponent(string $componentName, array $componentParams): int
@@ -1804,5 +1835,12 @@ class Router
 		}
 
 		return $type;
+	}
+
+	public function getImportUrl(int $entityTypeId): Uri
+	{
+		$root = $this->customRoots[$entityTypeId] ?? $this->getDefaultRoot();
+
+		return new Uri("{$root}type/{$entityTypeId}/import/");
 	}
 }

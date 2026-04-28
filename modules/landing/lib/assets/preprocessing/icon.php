@@ -319,6 +319,75 @@ class Icon
 	}
 
 	/**
+	 * Returns the preload font file that matches vendor CSS.
+	 *
+	 * @param string $vendorName Vendor folder code.
+	 *
+	 * @return string|null
+	 */
+	protected static function getPreferredFontPath(string $vendorName): ?string
+	{
+		static $fontPathByVendor = [];
+
+		if (!array_key_exists($vendorName, $fontPathByVendor))
+		{
+			$preferredFontPath = null;
+			$iconsPath = self::getIconsPath($vendorName);
+			$iconSrc = Config::get('icon_src');
+
+			if ($iconsPath && $iconSrc)
+			{
+				$stylesFile = $iconsPath . '/' . self::RULE_ICON_FILE_NAME;
+				$cssContent = File::isFileExists($stylesFile) ? File::getFileContents($stylesFile) : '';
+				$fontCandidates = [];
+
+				if (
+					$cssContent
+					&& preg_match(
+						'/' . preg_quote(self::ICON_FONT_FILE_NAME_2, '/') . '(?![[:alnum:]])/',
+						$cssContent,
+					)
+				)
+				{
+					$fontCandidates[] = self::ICON_FONT_FILE_NAME_2;
+				}
+
+				if (
+					$cssContent
+					&& preg_match(
+						'/' . preg_quote(self::ICON_FONT_FILE_NAME, '/') . '(?![[:alnum:]])/',
+						$cssContent,
+					)
+				)
+				{
+					$fontCandidates[] = self::ICON_FONT_FILE_NAME;
+				}
+
+				if (!$fontCandidates)
+				{
+					$fontCandidates = [
+						self::ICON_FONT_FILE_NAME_2,
+						self::ICON_FONT_FILE_NAME,
+					];
+				}
+
+				foreach ($fontCandidates as $fontFileName)
+				{
+					if (File::isFileExists($iconsPath . '/' . $fontFileName))
+					{
+						$preferredFontPath = $iconSrc . $vendorName . '/' . $fontFileName;
+						break;
+					}
+				}
+			}
+
+			$fontPathByVendor[$vendorName] = $preferredFontPath;
+		}
+
+		return $fontPathByVendor[$vendorName] ?? null;
+	}
+
+	/**
 	 * Parses icon file and returns content for each icon class.
 	 * @param string $vendorName Vendor folder code.
 	 * @return array
@@ -502,10 +571,11 @@ class Icon
 			$blockAssets['icon'] = self::updateIconsBeforeView($blockAssets['icon']);
 			foreach ($blockAssets['icon'] as $vendorName => $icons)
 			{
-				$fontFile = $iconSrc . $vendorName . '/' . self::ICON_FONT_FILE_NAME;
-				$assetsManager->addAsset($fontFile);
-				$fontFile2 = $iconSrc . $vendorName . '/' . self::ICON_FONT_FILE_NAME_2;
-				$assetsManager->addAsset($fontFile2);
+				$fontFile = self::getPreferredFontPath($vendorName);
+				if ($fontFile)
+				{
+					$assetsManager->addAsset($fontFile);
+				}
 
 				$stylesFile = $iconSrc . $vendorName . '/' . self::RULE_ICON_FILE_NAME;
 				$assetsManager->addAsset($stylesFile);

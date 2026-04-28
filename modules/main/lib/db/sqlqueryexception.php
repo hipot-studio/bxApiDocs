@@ -16,7 +16,7 @@ class SqlQueryException extends SqlException
 	 * @param string $query Sql query text.
 	 * @param \Throwable | null $previous The previous exception used for the exception chaining.
 	 */
-	public function __construct($message = "", $databaseMessage = "", $query = "", \Throwable $previous = null)
+	public function __construct($message = "", $databaseMessage = "", $query = "", ?\Throwable $previous = null)
 	{
 		parent::__construct($message, $databaseMessage, $previous);
 		$this->query = $query;

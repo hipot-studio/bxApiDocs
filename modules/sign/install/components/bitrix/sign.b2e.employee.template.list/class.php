@@ -90,7 +90,7 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 
 		if (!Storage::instance()->isB2eAvailable())
 		{
-			showError((string)Loc::getMessage('SIGN_B2E_EMPLOYEE_TEMPLATE_LIST_B2E_NOT_ACTIVATED'));
+			$this->includeNotAvailableTemplate();
 
 			return;
 		}
@@ -105,21 +105,21 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 
 		if ($this->fromCompanyTemplateSendMode() && ($isB2eRestrictedInCurrentTariff || $notAccess || !$isTemplateFolderGroupingAllowed))
 		{
-			showError('Access denied');
+			$this->includeAccessDeniedTemplate();
 
 			return;
 		}
 
 		if (!Feature::instance()->isDocumentTemplatesAvailable())
 		{
-			showError((string)Loc::getMessage('SIGN_B2E_EMPLOYEE_TEMPLATE_LIST_TO_EMPLOYEE_NOT_ACTIVATED'));
+			$this->includeAccessDeniedTemplate();
 
 			return;
 		}
 
 		if (!$accessController->check(ActionDictionary::ACTION_B2E_TEMPLATE_READ))
 		{
-			showError('Access denied');
+			$this->includeAccessDeniedTemplate();
 
 			return;
 		}
@@ -128,7 +128,7 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 		{
 			if (!Feature::instance()->isTemplateFolderGroupingAllowed())
 			{
-				showError('Access denied');
+				$this->includeAccessDeniedTemplate();
 
 				return;
 			}
@@ -143,7 +143,7 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 
 			if (!$accessController->checkByItem(ActionDictionary::ACTION_B2E_TEMPLATE_READ, $folder))
 			{
-				showError('Access denied');
+				$this->includeAccessDeniedTemplate();
 
 				return;
 			}
@@ -1028,6 +1028,11 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 			SignPermissionDictionary::SIGN_B2E_TEMPLATE_CREATE,
 		);
 		if (!$canCreate)
+		{
+			return null;
+		}
+
+		if ($this->isFolderContentMode() && !$this->templateAccessService->hasAccessToEditFolderById($this->folderId))
 		{
 			return null;
 		}

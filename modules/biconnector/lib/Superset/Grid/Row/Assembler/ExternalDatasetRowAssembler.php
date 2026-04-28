@@ -10,7 +10,7 @@ class ExternalDatasetRowAssembler extends RowAssembler
 {
 	private ?ExternalDatasetSettings $settings;
 
-	public function __construct(array $visibleColumnIds, ExternalDatasetSettings $settings = null)
+	public function __construct(array $visibleColumnIds, ?ExternalDatasetSettings $settings = null)
 	{
 		$this->settings = $settings;
 

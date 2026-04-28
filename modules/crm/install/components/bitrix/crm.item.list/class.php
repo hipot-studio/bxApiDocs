@@ -7,6 +7,7 @@ use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
 use Bitrix\Crm\Component\EntityList\NearestActivity;
 use Bitrix\Crm\Component\EntityList\NearestActivity\ManagerFactory;
+use Bitrix\Crm\Component\EntityList\Settings\ImportItem;
 use Bitrix\Crm\Component\EntityList\UserField\GridHeaders;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Field;
@@ -415,6 +416,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		$grid['TOTAL_ROWS_COUNT_HTML'] = $rowCountHtml;
 		$grid['AJAX_MODE'] = ($this->arParams['ajaxMode'] ?? 'Y');
 		$grid['ALLOW_ROWS_SORT'] = false;
+		$grid['ALLOW_PIN_HEADER'] = !$this->isEmbedded();
 		$grid['AJAX_OPTION_JUMP'] = 'N';
 		$grid['AJAX_OPTION_STYLE'] = 'N';
 		$grid['AJAX_OPTION_HISTORY'] = 'N';
@@ -724,6 +726,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 
 		FieldsTransform\UserBasedField::applyTransformWrapper($filter);
+		FieldsTransform\DateTimeField::applyTimezoneOffset($this->entityTypeId, $filter);
 
 		// transform ACTIVITY_COUNTER|ACTIVITY_RESPONSIBLE_IDS filter to real filter params
 		CCrmEntityHelper::applySubQueryBasedFiltersWrapper(
@@ -1550,6 +1553,16 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		)
 		{
 			$settingsItems[] = ['delimiter' => true];
+
+			$importItem = (new ImportItem($this->entityTypeId))
+				->setCategoryId($this->category?->getId())
+			;
+
+			if ($importItem->canShow())
+			{
+				$settingsItems[] = $importItem->toArray();
+			}
+
 			$settingsItems[] = [
 				'text' => Loc::getMessage('CRM_TYPE_ITEM_EXPORT_CSV'),
 				'href' => '',

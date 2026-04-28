@@ -13,6 +13,7 @@ use \Bitrix\Landing\Rights;
 use \Bitrix\Landing\Connector;
 use \Bitrix\Landing\TemplateRef;
 use \Bitrix\Landing\Site;
+use Bitrix\Landing\Vibe\Vibe;
 use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Landing\Restriction;
 
@@ -571,7 +572,7 @@ class LandingEditComponent extends LandingBaseFormComponent
 
 	protected function modifyResultByType(): array
 	{
-		if ($this->arParams['TYPE'] === Site\Type::SCOPE_CODE_MAINPAGE)
+		if ($this->arParams['TYPE'] === Site\Type::SCOPE_CODE_VIBE)
 		{
 			// only simple templates
 			$this->arResult['TEMPLATES'] = array_filter($this->arResult['TEMPLATES'], function ($template)
@@ -592,6 +593,9 @@ class LandingEditComponent extends LandingBaseFormComponent
 
 			$this->arResult['AI_TEXT_AVAILABLE'] = false;
 			$this->arResult['AI_IMAGE_AVAILABLE'] = false;
+
+			$vibe = Vibe::createBySiteId($this->arParams['SITE_ID']);
+			$this->arResult['VIBE_PUBLIC_URL'] = $vibe?->getUrlPublic();
 		}
 
 		return $this->arResult;

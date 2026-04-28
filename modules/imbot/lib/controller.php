@@ -1,5 +1,8 @@
 <?php
+
 namespace Bitrix\ImBot;
+
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 
 /**
  * Class Controller
@@ -24,17 +27,21 @@ class Controller
 
 			if (!empty($params['BOT_ID']))
 			{
-				$bot = \Bitrix\Im\Bot::getCache($params['BOT_ID']);
-				if ($bot && class_exists($bot['CLASS']) && method_exists($bot['CLASS'], 'onAnswerAdd'))
+				$className = BotData::getInstance($params['BOT_ID'])->getClass();
+				if (
+					!empty($className)
+					&& class_exists($className)
+					&& method_exists($className, 'onAnswerAdd')
+				)
 				{
-					return call_user_func_array(array($bot['CLASS'], 'onAnswerAdd'), array($command, $params));
+					return call_user_func_array([$className, 'onAnswerAdd'], [$command, $params]);
 				}
 			}
 
 			$className = '\\Bitrix\\ImBot\\Bot\\'.ucfirst($botName);
 			if (
-				class_exists($className, true) &&
-				method_exists($className, 'onAnswerAdd')
+				class_exists($className)
+				&& method_exists($className, 'onAnswerAdd')
 			)
 			{
 				return call_user_func_array([$className, 'onAnswerAdd'], [$command, $params]);

@@ -7,8 +7,10 @@ use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Message\ReadService;
+use Bitrix\Im\V2\Reading\Notification\Reader;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\AutoWire\Parameter;
+use Bitrix\Main\Engine\CurrentUser;
 
 class Notify extends BaseController
 {
@@ -53,15 +55,8 @@ class Notify extends BaseController
 	/**
 	 * @restMethod im.v2.Notify.read
 	 */
-	public function readAction(MessageCollection $notifications): ?array
+	public function readAction(Reader $reader, MessageCollection $notifications): ?array
 	{
-		$notifyChat = NotifyChat::getByUser();
-		if (!$notifyChat)
-		{
-			return null;
-		}
-
-		$chatId = $notifyChat->getChatId();
 		if ($notifications->count() === 0)
 		{
 			$this->addError(new Error(
@@ -71,8 +66,7 @@ class Notify extends BaseController
 			return null;
 		}
 
-		$readService = new ReadService();
-		$readResult = $readService->readUserNotifications($notifications, $chatId);
+		$readResult = $reader->read($notifications);
 
 		if (!$readResult->isSuccess())
 		{
@@ -87,24 +81,9 @@ class Notify extends BaseController
 	/**
 	 * @restMethod im.v2.Notify.readAll
 	 */
-	public function readAllAction(?MessageCollection $excludeNotifications = null): ?array
+	public function readAllAction(Reader $reader, CurrentUser $user, ?MessageCollection $excludeNotifications = null): ?array
 	{
-		$notifyChat = NotifyChat::getByUser();
-		if (!$notifyChat)
-		{
-			return null;
-		}
-
-		$chatId = $notifyChat->getChatId();
-		$readService = new ReadService();
-		$readResult = $readService->readAllNotifications($chatId, $excludeNotifications);
-
-		if (!$readResult->isSuccess())
-		{
-			$this->addErrors($readResult->getErrors());
-
-			return null;
-		}
+		$readResult = $reader->readAll((int)$user->getId(), $excludeNotifications);
 
 		return $this->convertKeysToCamelCase($readResult->getResult());
 	}

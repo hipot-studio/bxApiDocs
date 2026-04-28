@@ -9,6 +9,7 @@ namespace Bitrix\Crm;
 
 use Bitrix\Crm\Binding\QuoteContactTable;
 use Bitrix\Crm\Integration\StorageType;
+use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
 use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
@@ -91,25 +92,37 @@ class QuoteTable extends DataManager
 		$map = [
 			$fieldRepository->getId(),
 
-			$fieldRepository->getCreatedTime('DATE_CREATE'),
+			$fieldRepository->getCreatedTime(
+				'DATE_CREATE',
+				FieldCaptionGender::Neutral,
+			),
 
 			$fieldRepository->getShortDate(
 				'DATE_CREATE_SHORT',
 				['DATE_CREATE'],
 			),
 
-			$fieldRepository->getUpdatedTime('DATE_MODIFY'),
+			$fieldRepository->getUpdatedTime(
+				'DATE_MODIFY',
+				FieldCaptionGender::Neutral,
+			),
 
 			$fieldRepository->getShortDate(
 				'DATE_MODIFY_SHORT',
 				['DATE_MODIFY'],
 			),
 
-			$fieldRepository->getCreatedBy('CREATED_BY_ID'),
+			$fieldRepository->getCreatedBy(
+				'CREATED_BY_ID',
+				FieldCaptionGender::Neutral,
+			),
 
 			(new Reference('CREATED_BY', UserTable::class, Join::on('this.CREATED_BY_ID', 'ref.ID'))),
 
-			$fieldRepository->getUpdatedBy('MODIFY_BY_ID'),
+			$fieldRepository->getUpdatedBy(
+				'MODIFY_BY_ID',
+				FieldCaptionGender::Neutral,
+			),
 
 			(new Reference('MODIFY_BY', UserTable::class, Join::on('this.MODIFY_BY_ID', 'ref.ID'))),
 

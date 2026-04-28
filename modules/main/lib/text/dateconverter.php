@@ -559,7 +559,7 @@ class DateConverter
 	 * @return \Bitrix\Main\Type\DateTime
 	 *
 	 */
-	private static function createDateUsingMetrics($type, $metric, &$metricModificator = array(), \Bitrix\Main\Type\DateTime $date = null)
+	private static function createDateUsingMetrics($type, $metric, &$metricModificator = array(), ?\Bitrix\Main\Type\DateTime $date = null)
 	{
 		$defaultDate = $date? $date: new \Bitrix\Main\Type\DateTime();
 		$metricModificator = is_array($metricModificator)? $metricModificator: array();
@@ -949,7 +949,7 @@ class DateConverter
 	 * @return \Bitrix\Main\Type\DateTime
 	 *
 	 */
-	private static function getDateOfDayOfCurrentWeek($nameOfday, \Bitrix\Main\Type\DateTime $date = null)
+	private static function getDateOfDayOfCurrentWeek($nameOfday, ?\Bitrix\Main\Type\DateTime $date = null)
 	{
 		$date = $date? $date: new \Bitrix\Main\Type\DateTime();
 

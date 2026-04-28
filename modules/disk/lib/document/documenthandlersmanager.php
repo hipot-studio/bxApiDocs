@@ -7,12 +7,20 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\Contract\CloudImportInterface;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internal\Enum\CustomServerTypes;
+use Bitrix\Disk\Internal\Interface\CustomServerInterface;
+use Bitrix\Disk\Internal\Service\CustomServerConfigsMapper;
+use Bitrix\Disk\Internal\Service\OnlyOffice\Handlers\CustomOnlyOfficeServerHandler;
+use Bitrix\Disk\Internal\Service\R7\Handlers\CustomR7ServerHandler;
 use Bitrix\Disk\Internal\UseCase\Document\FixUnknownDocumentHandlerUseCase;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
+use Bitrix\Disk\Public\Provider\CustomServerAvailabilityProvider;
+use Bitrix\Disk\Public\Provider\CustomServerProvider;
 use Bitrix\Disk\UI\Viewer\Renderer\Board;
 use Bitrix\Disk\User;
 use Bitrix\Disk\UserConfiguration;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
@@ -28,11 +36,28 @@ class DocumentHandlersManager
 	protected $errorCollection;
 	protected $userId;
 	private ?FixUnknownDocumentHandlerUseCase $fixUnknownDocumentHandlerUseCase = null;
+	protected CustomServerAvailabilityProvider $customServerAvailability;
+	protected CustomServerProvider $customServerProvider;
+	protected CustomServerConfigsMapper $customServerConfigsMapper;
 
 	public function __construct($user)
 	{
 		$this->errorCollection = new ErrorCollection;
 		$this->userId = User::resolveUserId($user);
+
+		$this->customServerAvailability =
+			ServiceLocator
+				::getInstance()
+				->get(CustomServerAvailabilityProvider::class)
+		;
+
+		$this->customServerProvider = ServiceLocator::getInstance()->get(CustomServerProvider::class);
+
+		$this->customServerConfigsMapper =
+			ServiceLocator
+				::getInstance()
+				->get(CustomServerConfigsMapper::class)
+		;
 
 		$this->buildDocumentHandlerList();
 	}
@@ -182,12 +207,18 @@ class DocumentHandlersManager
 	 *
 	 * @return DocumentHandler[]
 	 */
-	public function getHandlersForView()
+	public function getHandlersForView(): array
 	{
 		$list = array();
 		foreach($this->getHandlers() as $code => $handler)
 		{
-			if($handler instanceof IViewer)
+			if(
+				$handler instanceof IViewer &&
+				(
+					$code !== OnlyOfficeHandler::getCode() ||
+					OnlyOfficeHandler::isEnabled(true)
+				)
+			)
 			{
 				$list[$code] = $handler;
 			}
@@ -238,8 +269,20 @@ class DocumentHandlersManager
 	protected function buildDocumentHandlerList()
 	{
 		$this->documentHandlerList = [];
+		$r7CustomServer = $this->customServerProvider->getFirstByType(CustomServerTypes::R7);
+		$onlyOfficeCustomServer = $this->customServerProvider->getFirstByType(CustomServerTypes::OnlyOffice);
 
-		if (OnlyOfficeHandler::isEnabled())
+		$isCustomR7Enabled =
+			$r7CustomServer instanceof CustomServerInterface &&
+			$this->customServerAvailability->isAvailableCustomServerForView($r7CustomServer)
+		;
+
+		$isCustomOnlyOfficeEnabled =
+			$onlyOfficeCustomServer instanceof CustomServerInterface &&
+			$this->customServerAvailability->isAvailableCustomServerForView($onlyOfficeCustomServer)
+		;
+
+		if (OnlyOfficeHandler::isEnabled(true) || $isCustomR7Enabled || $isCustomOnlyOfficeEnabled)
 		{
 			$this->documentHandlerList[OnlyOfficeHandler::getCode()] = OnlyOfficeHandler::class;
 		}
@@ -261,6 +304,20 @@ class DocumentHandlersManager
 		if (MyOfficeHandler::isEnabled() && MyOfficeHandler::getPredefinedUser($this->userId))
 		{
 			$this->documentHandlerList[MyOfficeHandler::getCode()] = MyOfficeHandler::class;
+		}
+
+		if ($isCustomR7Enabled)
+		{
+			CustomR7ServerHandler::setCustomServer($r7CustomServer);
+
+			$this->documentHandlerList[CustomR7ServerHandler::getCode()] = CustomR7ServerHandler::class;
+		}
+
+		if ($isCustomOnlyOfficeEnabled)
+		{
+			CustomOnlyOfficeServerHandler::setCustomServer($onlyOfficeCustomServer);
+
+			$this->documentHandlerList[CustomOnlyOfficeServerHandler::getCode()] = CustomOnlyOfficeServerHandler::class;
 		}
 
 		$event = new Event(Driver::INTERNAL_MODULE_ID, 'onDocumentHandlerBuildList');
@@ -322,6 +379,18 @@ class DocumentHandlersManager
 		return $this->errorCollection->getErrorByCode($code);
 	}
 
+	public function getDefaultViewerServiceForView(): ?string
+	{
+		$code = Configuration::getDefaultViewerServiceCode();
+
+		if (!is_string($code))
+		{
+			return null;
+		}
+
+		return $this->getCustomHandlerCodeByNormalCode($code) ?? $code;
+	}
+
 	public static function additionalPreviewManagersList(Event $event)
 	{
 		$renderersList = [
@@ -329,6 +398,30 @@ class DocumentHandlersManager
 		];
 
 		$event->addResult(new EventResult(EventResult::SUCCESS, $renderersList));
+	}
+
+	protected function getCustomHandlerCodeByNormalCode(string $code): ?string
+	{
+		$customConfigType = Configuration::getDefaultViewerCustomConfigType();
+
+		if (!$customConfigType instanceof CustomServerTypes)
+		{
+			return null;
+		}
+
+		$customServer = $this->customServerProvider->getFirstByType($customConfigType);
+
+		if (!$customServer instanceof CustomServerInterface)
+		{
+			return null;
+		}
+
+		if (!$this->customServerAvailability->isAvailableCustomServerForView($customServer))
+		{
+			return null;
+		}
+
+		return $this->customServerConfigsMapper->getForNormalCodes()[$code][$customConfigType->value] ?? null;
 	}
 
 	private function fixUnknownDocumentHandlerForView(): void

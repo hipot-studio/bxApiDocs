@@ -175,9 +175,9 @@ class EntityDetails extends Controller
 		return array_column($tabs['tabs'], 'id');
 	}
 
-	public function getAvailableEntityTypesAction(): array
+	public function getAvailableEntityTypesAction(array $categories = []): array
 	{
-		return FactoryProvider::getFactoriesMetaData();
+		return FactoryProvider::getFactoriesMetaData($categories);
 	}
 
 	private function getEntityIdFromSourceList(): int

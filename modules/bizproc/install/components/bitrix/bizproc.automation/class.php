@@ -382,7 +382,7 @@ class BizprocAutomationComponent extends \Bitrix\Bizproc\Automation\Component\Ba
 			'NEW_ENTITIES_BUTTON_SHOW_HINT' => $this->shouldShowNewEntitiesButtonHint(),
 		];
 
-		$this->prepareDelayMinLimitResult();
+		$this->prepareDelayLimitsResult();
 		$this->includeComponentTemplate();
 	}
 
@@ -503,10 +503,12 @@ HTML;
 		return;
 	}
 
-	private function prepareDelayMinLimitResult()
+	private function prepareDelayLimitsResult(): void
 	{
 		$this->arResult['DELAY_MIN_LIMIT_M'] = 0;
 		$this->arResult['DELAY_MIN_LIMIT_LABEL'] = '';
+		$this->arResult['DELAY_MAX_LIMIT_D'] = 0;
+		$this->arResult['DELAY_MAX_LIMIT_LABEL'] = '';
 
 		$delayMinLimit = CBPSchedulerService::getDelayMinLimit();
 		if ($delayMinLimit)
@@ -514,6 +516,15 @@ HTML;
 			$this->arResult['DELAY_MIN_LIMIT_M'] = intdiv($delayMinLimit,60);
 			$this->arResult['DELAY_MIN_LIMIT_LABEL'] = Loc::getMessage('BIZPROC_AUTOMATION_DELAY_MIN_LIMIT', [
 				'#VAL#' => \CBPHelper::FormatTimePeriod($delayMinLimit)
+			]);
+		}
+
+		$delayMaxDays = CBPSchedulerService::getDelayMaxDays();
+		if ($delayMaxDays)
+		{
+			$this->arResult['DELAY_MAX_LIMIT_D'] = $delayMaxDays;
+			$this->arResult['DELAY_MAX_LIMIT_LABEL'] = Loc::getMessage('BIZPROC_AUTOMATION_DELAY_MAX_LIMIT', [
+				'#VAL#' => $delayMaxDays
 			]);
 		}
 	}

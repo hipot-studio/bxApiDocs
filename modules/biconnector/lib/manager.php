@@ -295,7 +295,7 @@ class Manager
 	/**
 	 * Returns database connection binded with last checked key.
 	 *
-	 * @return \Bitrix\BIConnector\DB\MysqliConnection
+	 * @return \Bitrix\Main\DB\Connection
 	 * @see \Bitrix\BIConnector\Manager::checkAccessKey
 	 */
 	public function getDatabaseConnection()
@@ -594,6 +594,9 @@ class Manager
 
 	/**
 	 * Is current user an admin.
+	 *
+	 * @deprecated Use \Bitrix\BIConnector\Access\AccessController::getCurrent()->getUser()->isAdmin() instead.
+	 * @see \Bitrix\BIConnector\Access\AccessController::getCurrent()
 	 *
 	 * @return bool
 	 */

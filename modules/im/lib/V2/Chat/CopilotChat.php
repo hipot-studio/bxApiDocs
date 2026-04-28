@@ -25,11 +25,11 @@ class CopilotChat extends GroupChat
 	private const COUNTER_CHAT_CODE = 'copilot_chat_counter';
 	private const COPILOT_ROLE_UPDATED = 'COPILOT_ROLE_UPDATED';
 
-	public function __construct($source = null)
+	public function __construct($source = null, ?Context $context = null)
 	{
 		Loader::includeModule('imbot');
 
-		parent::__construct($source);
+		parent::__construct($source, $context);
 	}
 
 	protected function getDefaultType(): string
@@ -347,6 +347,11 @@ class CopilotChat extends GroupChat
 	public static function isAvailable(): bool
 	{
 		return (new Restriction())->isAvailable();
+	}
+
+	public static function isHistoryAvailable(): bool
+	{
+		return (new Restriction())->isHistoryAvailable();
 	}
 
 	public function deleteUser(int $userId, DeleteUserConfig $config = new DeleteUserConfig()): Result

@@ -23,15 +23,15 @@ class Entities
 	)
 	{}
 
-	public function getRestData(): array
+	public function getRestData(bool $withCounters = false): array
 	{
-		$this->loadRestData();
+		$this->loadRestData($withCounters);
 		$this->rest['dialogIds'] = $this->fillRestDialogData();
 
 		return $this->rest;
 	}
 
-	protected function loadRestData(): void
+	protected function loadRestData(bool $withCounters = false): void
 	{
 		$this->rest[Chats::getRestEntityName()] = $this->chats->toRestFormat();
 		$this->rest[Messages::getRestEntityName()] = $this->messages->toRestFormat();
@@ -39,7 +39,7 @@ class Entities
 
 		$messageCollection = $this->getMessageCollection();
 		$pinCollection = $this->pinMessages->getPinCollection();
-		$chatItems = $this->chats->getChatItems();
+		$chatItems = $this->chats->getChatItems($withCounters);
 
 		$restData = (new RestAdapter($messageCollection, $pinCollection, $chatItems))->toRestFormat($this->getOption());
 		$this->rest = array_merge($this->rest, $restData);

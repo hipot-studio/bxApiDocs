@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
@@ -80,6 +81,12 @@ final class ScopeMap
 		return $scopes;
 	}
 
+	public static function getRequiredParamList(): array
+	{
+		return [
+			Parameter::CurrentUser->code() => Loc::getMessage('BI_CONNECTOR_DASHBOARD_SCOPE_REQUIRED_PARAMETER_USER_ID_HINT'),
+		];
+	}
 
 	/**
 	 * @param Parameter $code

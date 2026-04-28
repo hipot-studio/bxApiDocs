@@ -18,7 +18,7 @@ use CAgent;
 
 final class CounterServiceAgent
 {
-	private const UNREAD_DELETE_ALL_LIMIT = 100000;
+	private const UNREAD_DELETE_ALL_LIMIT = 1000;
 	private const UNREAD_DELETE_ALL_INTERVAL = 10;
 	private const CLEANUP_GHOST_COUNTERS_LIMIT = 100;
 
@@ -106,7 +106,7 @@ final class CounterServiceAgent
 
 		$ids = [];
 
-		foreach ($r = $result->fetchAll() as $row)
+		while ($row = $result->fetch())
 		{
 			$ids[] = (int)$row['ID'];
 		}

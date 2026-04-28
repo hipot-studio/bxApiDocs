@@ -6,9 +6,9 @@ use Bitrix\Crm\Activity\TodoCreateNotification;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\Component\EntityList\Settings\PermissionItem;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\BaasManager;
 use Bitrix\Crm\Integration\AI\Config;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings;
-use Bitrix\Crm\Security\Role\Manage\RoleManagerSelectionFactory;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Main\ArgumentNullException;
@@ -197,7 +197,7 @@ JS;
 		{
 			if (
 				AIManager::isAiCallAutomaticProcessingAllowed()
-				&& AIManager::isBaasServiceAvailable()
+				&& BaasManager::isAvailable()
 			)
 			{
 				$settings = FillFieldsSettings::get($entityTypeId, $this->categoryId);

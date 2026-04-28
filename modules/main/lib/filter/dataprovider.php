@@ -63,7 +63,7 @@ abstract class DataProvider
 	 * @param array|null $params Field parameters (optional).
 	 * @return Field
 	 */
-	protected function createField($fieldID, array $params = null)
+	protected function createField($fieldID, ?array $params = null)
 	{
 		if(!is_array($params))
 		{

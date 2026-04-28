@@ -20,6 +20,7 @@ class DataType
 	public const TYPE_DATE = 'date';
 	public const TYPE_DATETIME = 'datetime';
 	public const TYPE_DATATYPE = 'datatype';
+	public const TYPE_ANY = 'any';
 	/**
 	 * @deprecated Deprecated since catalog 24.300.0 - a specific type for products only
 	 * @see \Bitrix\Catalog\RestView\EntityFieldType::PRODUCT_PROPERTY

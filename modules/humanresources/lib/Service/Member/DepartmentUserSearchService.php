@@ -6,6 +6,7 @@ use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\NodeMember;
+use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Contract;
 use Bitrix\HumanResources\Type\MemberEntityType;
@@ -208,14 +209,14 @@ class DepartmentUserSearchService
 	 *
 	 * Finds nearest user nodeMember from a specified list of userIds within the department branch of the user
 	 */
-	public function findNearestFromUserListByUserId(int $userId, array $searchedUserIds): ?Item\NodeMember
+	public function findNearestFromUserListByUserId(int $userId, array $searchedUserIds, ?int $structureId = null): ?Item\NodeMember
 	{
 		if (empty($searchedUserIds))
 		{
 			return null;
 		}
 
-		$nodeCollection = $this->nodeRepository->findAllByUserId($userId);
+		$nodeCollection = PublicContainer::getNodeService()->findAllByMemberEntityId($userId, structureId: $structureId);
 		if ($nodeCollection->empty())
 		{
 			return null;

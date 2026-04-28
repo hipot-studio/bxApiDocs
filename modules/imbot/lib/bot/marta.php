@@ -171,7 +171,11 @@ class Marta extends Base
 		$language = 'en';
 		if (Loader::includeModule('im'))
 		{
-			$language = BotData::getInstance(self::getBotId())->getBotData()['LANG'] ?? 'en';
+			$botLang = BotData::getInstance(self::getBotId())->getLang();
+			if (!empty($botLang))
+			{
+				$language = $botLang;
+			}
 		}
 
 		(new \CUser())->Update(self::getBotId(), ['PERSONAL_PHOTO' => self::uploadAvatar()]);
@@ -208,11 +212,11 @@ class Marta extends Base
 
 	public static function onChatStart($dialogId, $joinFields)
 	{
-		$botData = \Bitrix\Im\Bot::getCache(self::getBotId());
+		$botLang = BotData::getInstance(self::getBotId())->getLang();
 		$language = null;
-		if ($botData['LANG'])
+		if (!empty($botLang))
 		{
-			$language = $botData['LANG'];
+			$language = $botLang;
 			Loc::loadLanguageFile(__FILE__, $language);
 		}
 
@@ -260,7 +264,7 @@ class Marta extends Base
 		$dateNow = new \Bitrix\Main\Type\DateTime();
 		self::setBotOption($messageFields['FROM_USER_ID'], 'last_message', $dateNow->format('Ymd'));
 
-		$botData = \Bitrix\Im\Bot::getCache(self::getBotId());
+		$botLang = BotData::getInstance(self::getBotId())->getLang();
 
 		if ($messageFields['MESSAGE'] == '0' && $messageFields['CHAT_ENTITY_TYPE'] == 'LINES')
 		{
@@ -278,7 +282,7 @@ class Marta extends Base
 
 		self::sendMessage(Array(
 			'BOT_ID' => self::getBotId(),
-			'BOT_LANG' => $botData['LANG'],
+			'BOT_LANG' => $botLang,
 			'DIALOG_ID' => $messageFields['DIALOG_ID'],
 			'MESSAGE_ID' => $messageId,
 			'MESSAGE_TEXT' => $messageFields['MESSAGE'],
@@ -399,11 +403,11 @@ class Marta extends Base
 		$dateNow = new \Bitrix\Main\Type\DateTime();
 		self::setBotOption($messageFields['FROM_USER_ID'], 'last_message', $dateNow->format('Ymd'));
 
-		$botData = \Bitrix\Im\Bot::getCache(self::getBotId());
+		$botLang = BotData::getInstance(self::getBotId())->getLang();
 
 		self::sendCommand(Array(
 			'BOT_ID' => self::getBotId(),
-			'BOT_LANG' => $botData['LANG'],
+			'BOT_LANG' => $botLang,
 			'DIALOG_ID' => $messageFields['DIALOG_ID'],
 			'MESSAGE_ID' => $messageId,
 			'MESSAGE_TEXT' => $messageFields['MESSAGE'],
@@ -495,10 +499,10 @@ class Marta extends Base
 		return '';
 
 		$language = null;
-		$botData = \Bitrix\Im\Bot::getCache(self::getBotId());
-		if ($botData['LANG'])
+		$botLang = BotData::getInstance(self::getBotId())->getLang();
+		if (!empty($botLang))
 		{
-			$language = $botData['LANG'];
+			$language = $botLang;
 			Loc::loadLanguageFile(__FILE__, $language);
 		}
 
@@ -563,10 +567,10 @@ class Marta extends Base
 			return true;
 
 		$language = null;
-		$botData = \Bitrix\Im\Bot::getCache(self::getBotId());
-		if ($botData['LANG'])
+		$botLang = BotData::getInstance(self::getBotId())->getLang();
+		if (!empty($botLang))
 		{
-			$language = $botData['LANG'];
+			$language = $botLang;
 			Loc::loadLanguageFile(__FILE__, $language);
 		}
 
@@ -625,10 +629,10 @@ class Marta extends Base
 		));
 
 		$language = null;
-		$botData = \Bitrix\Im\Bot::getCache(self::getBotId());
-		if ($botData['LANG'])
+		$botLang = BotData::getInstance(self::getBotId())->getLang();
+		if (!empty($botLang))
 		{
-			$language = $botData['LANG'];
+			$language = $botLang;
 			Loc::loadLanguageFile(__FILE__, $language);
 		}
 
@@ -662,10 +666,10 @@ class Marta extends Base
 		}
 
 		$language = null;
-		$botData = \Bitrix\Im\Bot::getCache(self::getBotId());
-		if ($botData['LANG'])
+		$botLang = BotData::getInstance(self::getBotId())->getLang();
+		if (!empty($botLang))
 		{
-			$language = $botData['LANG'];
+			$language = $botLang;
 			Loc::loadLanguageFile(__FILE__, $language);
 		}
 
@@ -935,11 +939,11 @@ class Marta extends Base
 
 	public static function getLangMessage($messageCode = '')
 	{
-		$botData = \Bitrix\Im\Bot::getCache(self::getBotId());
+		$botLang = BotData::getInstance(self::getBotId())->getLang();
 		$language = null;
-		if ($botData['LANG'])
+		if (!empty($botLang))
 		{
-			$language = $botData['LANG'];
+			$language = $botLang;
 			Loc::loadLanguageFile(__FILE__, $language);
 		}
 		return Loc::getMessage($messageCode, null, $language);

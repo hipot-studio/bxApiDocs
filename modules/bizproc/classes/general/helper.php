@@ -1198,6 +1198,7 @@ class CBPHelper
 			'bool' => ['Name' => Loc::getMessage('BPCGHLP_PROP_BOOL'), 'BaseType' => 'bool'],
 			'date' => ['Name' => Loc::getMessage('BPCGHLP_PROP_DATA'), 'BaseType' => 'date'],
 			'datetime' => ['Name' => Loc::getMessage('BPCGHLP_PROP_DATETIME'), 'BaseType' => 'datetime'],
+			'time' => ['Name' => Bizproc\BaseType\Time::getName(), 'BaseType' => Bizproc\BaseType\Time::getType()],
 			'user' => ['Name' => Loc::getMessage('BPCGHLP_PROP_USER'), 'BaseType' => 'user'],
 			'file' => ['Name' => Loc::getMessage('BPCGHLP_PROP_FILE'), 'BaseType' => 'file'],
 //			'entityselector' => [

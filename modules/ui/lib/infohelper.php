@@ -120,6 +120,8 @@ class InfoHelper
 			}
 		}
 
+		$parameters['isNewHelpdesk'] = Option::get('intranet', 'isNewHelpdesk', 'N') === 'Y' ? 1 : 0;
+
 		return $parameters;
 	}
 

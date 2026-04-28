@@ -8,10 +8,12 @@ use Bitrix\Im\Promotion;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Message\CounterService;
+use Bitrix\Im\V2\Reading\Counter\UserCountersCollector;
 use Bitrix\Im\V2\Recent\RecentChannel;
 use Bitrix\Im\V2\Recent\RecentCollab;
 use Bitrix\Im\V2\TariffLimit\Limit;
 use Bitrix\ImMobile\NavigationTab\Tab\AvailableMethodList;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
@@ -186,7 +188,15 @@ abstract class Tab extends BaseController
 
 	protected function getImCounters(): array
 	{
-		return $this->convertKeysToCamelCase((new CounterService())->get());
+		$countersCollection = ServiceLocator::getInstance()
+			->get(UserCountersCollector::class)
+			->get((int)$this->getCurrentUser()?->getId())
+		;
+
+		return [
+			'messengerCounters' => $countersCollection->toRestFormat(),
+			'notifyCounters' => $countersCollection->getNotificationCounter(),
+		];
 	}
 
 	protected function getAnchors(): array
@@ -211,6 +221,8 @@ abstract class Tab extends BaseController
 				'JSON' => 'Y',
 				'SKIP_OPENLINES' => 'Y',
 				'GET_ORIGINAL_TEXT' => 'N',
+				'WITH_COUNTERS' => $this->options['withCounters'] ?? 'N',
+				'UNREAD_ONLY' => $this->options['unreadOnly'] === 'Y' ? 'Y' : 'N',
 				'OFFSET' => self::OFFSET,
 				'LIMIT' => self::LIMIT,
 			]
@@ -270,7 +282,13 @@ abstract class Tab extends BaseController
 			);
 		}
 
-		$recentList = \Bitrix\Im\V2\Recent\RecentExternalChat::getExternalChats('tasksTask', self::LIMIT);
+		$filter = [];
+		if (($this->options['unreadOnly'] ?? '') === 'Y')
+		{
+			$filter['unread'] = 'Y';
+		}
+
+		$recentList = \Bitrix\Im\V2\Recent\RecentExternalChat::getExternalChats('tasksTask', self::LIMIT, $filter);
 
 		return $this->toRestFormatWithPaginationData(
 			[$recentList],

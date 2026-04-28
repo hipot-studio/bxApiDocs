@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\DocumentType;
 
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Data\DataManager;
@@ -99,11 +100,18 @@ class DocumentTypeUserOptionTable extends DataManager
 
 		if (!$item)
 		{
-			$tableAddResult = self::add($data);
-			if (!$tableAddResult->isSuccess())
+			try
 			{
-				$addResult->addError(new Error('Adding to table failed.', self::ADDING_ERROR));
+				$tableAddResult = self::add($data);
+				if (!$tableAddResult->isSuccess())
+				{
+					$addResult->addError(new Error('Adding to table failed.', self::ADDING_ERROR));
 
+					return $addResult;
+				}
+			}
+			catch (DuplicateEntryException $exception)
+			{
 				return $addResult;
 			}
 

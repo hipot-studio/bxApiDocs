@@ -14,6 +14,7 @@ class DocumentProvider extends BaseProvider
 	protected const ENTITY_TYPE_DOCUMENT = 'document';
 	protected const CUSTOM_DATA_ID_TEMPLATE = 'idTemplate';
 	protected const CUSTOM_DATA_FIELD_INFO = 'field';
+	protected const CUSTOM_DATA_PROPERTY = 'property';
 
 	public function __construct(array $options = [])
 	{
@@ -72,6 +73,7 @@ class DocumentProvider extends BaseProvider
 						'options' => $field['Options'] ?? [],
 						...$documentItem->getCustomData()->get(self::CUSTOM_DATA_FIELD_INFO) ?? [],
 					],
+					self::CUSTOM_DATA_PROPERTY => $field,
 				],
 			]);
 			$documentItem->addChild($item);

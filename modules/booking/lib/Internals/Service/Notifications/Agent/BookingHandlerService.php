@@ -37,6 +37,7 @@ class BookingHandlerService
 		if (!$bookingCollection->isEmpty())
 		{
 			$bookingRepository->withSkus($bookingCollection);
+			$bookingRepository->withClientData($bookingCollection);
 		}
 
 		foreach ($bookingCollection as $booking)

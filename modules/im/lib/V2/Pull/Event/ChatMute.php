@@ -12,11 +12,13 @@ class ChatMute extends BaseChatEvent
 {
 	protected int $userId;
 	protected bool $isMuted;
+	protected int $counter;
 
-	public function __construct(Chat $chat, int $userId, bool $isMuted)
+	public function __construct(Chat $chat, int $userId, bool $isMuted, int $counter)
 	{
 		$this->userId = $userId;
 		$this->isMuted = $isMuted;
+		$this->counter = $counter;
 		parent::__construct($chat);
 	}
 
@@ -36,7 +38,7 @@ class ChatMute extends BaseChatEvent
 	{
 		return new Diff($userId, [
 			'dialogId' => $this->chat->getDialogId($userId),
-			'counter' => $this->chat->withContextUser($userId)->getUserCounter(),
+			'counter' => $this->counter,
 			'unread' => Recent::isUnread($userId, $this->chat->getType(), $this->chat->getDialogId($userId)),
 		]);
 	}

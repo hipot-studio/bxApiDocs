@@ -10,6 +10,14 @@ use Bitrix\Main\Web\Json;
 
 class SourceConnector extends Base
 {
+	/**
+	 * @return bool
+	 */
+	protected function isNeedApplyTimezoneOffset(): bool
+	{
+		return false;
+	}
+
 	public function query(
 		array $parameters,
 		int $limit,
@@ -65,4 +73,3 @@ class SourceConnector extends Base
 		return $result;
 	}
 }
-

@@ -8,6 +8,7 @@ use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Repository\TaskRepository\TaskRepository;
 use Bitrix\Bizproc\Public\Service\Task\ArchiveTaskService;
 use Bitrix\Main\Application;
+use Bitrix\Main\Type\DateTime;
 
 class ArchiveTaskCommandHandler
 {
@@ -20,16 +21,18 @@ class ArchiveTaskCommandHandler
 		$this->archiveService = Container::getArchiveTaskService();
 	}
 
-	public function __invoke(ArchiveTaskCommand $command): bool
+	public function __invoke(ArchiveTaskCommand $command): ArchiveTaskHandlerResult
 	{
-		$neededTasks = $this->taskRepository->getForArchive(
-			select: ['ID'],
-			limit: $command->limit
-		);
-		$neededTasksIds = $neededTasks->getEntityIds();
+		$afterDate = null;
+		if ($command->afterDate !== null)
+		{
+			$afterDate = DateTime::createFromTimestamp($command->afterDate);
+		}
+
+		$neededTasksIds = $this->taskRepository->getTaskIdsForArchive($command->limit, $command->candidateLimit, $afterDate);
 		if (empty($neededTasksIds))
 		{
-			return false;
+			return new ArchiveTaskHandlerResult();
 		}
 
 		$allTasks = $this->taskRepository->getTasksDataByIds(
@@ -45,7 +48,7 @@ class ArchiveTaskCommandHandler
 				'TASK_USERS.STATUS',
 				'TASK_USERS.DATE_UPDATE',
 			],
-			$neededTasksIds
+			$neededTasksIds,
 		);
 		$groupedTasks = $allTasks->groupByWorkflowId();
 
@@ -65,6 +68,11 @@ class ArchiveTaskCommandHandler
 			}
 		}
 
-		return $command->limit === $neededTasks->count();
+		$lastModified = $allTasks->getLastCollectionItem()?->getModified();
+
+		return new ArchiveTaskHandlerResult(
+			isReachedLimit: true,
+			lastModified: $lastModified,
+		);
 	}
 }

@@ -202,7 +202,7 @@ abstract class QueryEngine
 		return $isFiltered;
 	}
 
-	public function walk(array $filter = null, callable $callback = null, Node $node, $limit = 0, $direction = self::DIR_DOWN)
+	public function walk(?array $filter = null, ?callable $callback = null, Node $node, $limit = 0, $direction = self::DIR_DOWN)
 	{
 		if($limit > 0)
 		{
@@ -220,7 +220,7 @@ abstract class QueryEngine
 	}
 
 
-	protected function walkInternal(array $filter = null, callable $callback = null, Node $node)
+	protected function walkInternal(?array $filter = null, ?callable $callback = null, Node $node)
 	{
 		$resultList = array();
 		if($node->hasChildNodes())

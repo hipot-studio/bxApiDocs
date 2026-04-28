@@ -125,16 +125,18 @@ class OrderArchiveTable extends Main\Entity\DataManager
 
 			new Main\Entity\FloatField(
 				'PRICE',
-				array(
-					'default_value' => '0.0000'
-				)
+				[
+					'default_value' => '0.0',
+					'scale' => 8,
+				]
 			),
 
 			new Main\Entity\FloatField(
 				'SUM_PAID',
-				array(
-					'default_value' => '0.0000'
-				)
+				[
+					'default_value' => '0.0',
+					'scale' => 8,
+				]
 			),
 
 			new Main\Entity\StringField(

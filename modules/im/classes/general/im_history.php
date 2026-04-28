@@ -2,6 +2,7 @@
 IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Im as IM;
+use Bitrix\Im\V2\Reading\Counter\Infrastructure\CountersEventHandler;
 
 class CIMHistory
 {
@@ -464,9 +465,8 @@ class CIMHistory
 			$strSql = "UPDATE b_im_relation SET START_ID = ".intval($arRes['MAX_ID'])." WHERE ID = ".intval($arRes['R1_ID']);
 			$DB->Query($strSql);
 
-			$counterService = new IM\V2\Message\CounterService($this->user_id);
-
-			$counterService->deleteByChatId((int)$arRes['CHAT_ID']);
+			$cleaner = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(IM\V2\Reading\Cleaner::class);
+			$cleaner->onCleanHistory((int)$arRes['CHAT_ID'], $this->user_id);
 
 			if ($arRes['MAX_ID'] >= $arRes['R2_START_ID'] && $arRes['R2_START_ID'] > 0)
 			{
@@ -521,9 +521,8 @@ class CIMHistory
 			$strSql = "UPDATE b_im_relation SET START_ID = ".intval($arRes['MAX_ID'])." WHERE ID = ".intval($arRes['R1_ID']);
 			$dbRes = $DB->Query($strSql);
 
-			$counterService = new IM\V2\Message\CounterService($this->user_id);
-
-			$counterService->deleteByChatId((int)$arRes['CHAT_ID']);
+			$cleaner = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(IM\V2\Reading\Cleaner::class);
+			$cleaner->onCleanHistory((int)$chatId, $this->user_id);
 
 			$chatType = $ar ? $ar['MESSAGE_TYPE'] : IM_MESSAGE_CHAT;
 			$primaryKey = ['USER_ID' => $this->user_id, 'ITEM_TYPE' => $chatType, 'ITEM_ID' => $chatId];
@@ -1271,7 +1270,7 @@ class CIMHistory
 			WHERE
 				CHAT_ID = ".$chatId." 
 				and DATE_CREATE <= '".$dateCreate->format('Y-m-d H:i:s')."'
-			ORDER BY CHAT_ID, DATE_CREATE desc 
+			ORDER BY b_im_message.DATE_CREATE desc 
 			LIMIT ".$limit;
 
 		if (!$timezone)
@@ -1323,7 +1322,7 @@ class CIMHistory
 			WHERE
 				CHAT_ID = ".$chatId." 
 				and DATE_CREATE >= '".$dateCreate->format('Y-m-d H:i:s')."'
-			ORDER BY CHAT_ID, DATE_CREATE asc 
+			ORDER BY b_im_message.DATE_CREATE asc 
 			LIMIT ".$limit;
 
 		if (!$timezone)

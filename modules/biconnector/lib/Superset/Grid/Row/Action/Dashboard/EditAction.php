@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\LimitManager;
 use Bitrix\BIConnector\Services\ApacheSuperset;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
@@ -79,6 +80,13 @@ final class EditAction extends BaseAction
 			'appId' => $rawFields['APP_ID'],
 		]);
 		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.showLoginPopup({$params}, 'grid_menu')";
+
+		if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($rawFields['TYPE']))
+		{
+			$this->onclick = "BX.UI.InfoHelper.show(\"limit_benefit_market_active\")";
+
+			return parent::getControl($rawFields);
+		}
 
 		return parent::getControl($rawFields);
 	}

@@ -9,15 +9,14 @@ use Bitrix\Booking\Controller\V1\Response\MainPageGetCountersResponse;
 use Bitrix\Booking\Controller\V1\Response\MainPageGetResponse;
 use Bitrix\Booking\Entity\DatePeriod;
 use Bitrix\Booking\Entity\WaitListItem\WaitListItemCollection;
-use Bitrix\Booking\Interfaces\ProviderInterface;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuCreator;
-use Bitrix\Booking\Internals\Integration\Crm\WebForm;
+use Bitrix\Booking\Internals\Integration\Crm\WebForm\Provider as WebFormProvider;
 use Bitrix\Booking\Internals\Service\Integration\IntegrationManager;
-use Bitrix\Booking\Internals\Service\Notifications\MessageSenderPicker;
 use Bitrix\Booking\Internals\Repository\CounterRepositoryInterface;
+use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderPicker;
 use Bitrix\Booking\Internals\Service\Notifications\WhatsAppEmergencyService;
 use Bitrix\Booking\Internals\Service\Timezone;
 use Bitrix\Booking\Provider\BookingProvider;
@@ -45,11 +44,11 @@ class MainPage extends BaseController
 	private FavoritesProvider $favoritesProvider;
 	private ResourceTypeProvider $resourceTypeProvider;
 	private CounterRepositoryInterface $counterRepository;
-	private ProviderInterface|null $provider;
 	private MoneyStatisticsProvider $moneyStatisticsProvider;
 	private ClientStatisticsProvider $clientStatisticsProvider;
 	private WaitListItemProvider $waitListItemProvider;
 	private WhatsAppEmergencyService $whatsAppEmergencyService;
+	private MessageSenderPicker $messageSenderPicker;
 
 	public function __construct(Request $request = null)
 	{
@@ -59,11 +58,11 @@ class MainPage extends BaseController
 		$this->favoritesProvider = new FavoritesProvider();
 		$this->resourceTypeProvider = new ResourceTypeProvider();
 		$this->counterRepository = Container::getCounterRepository();
-		$this->provider = Container::getProviderManager()::getCurrentProvider();
 		$this->moneyStatisticsProvider = new MoneyStatisticsProvider();
 		$this->clientStatisticsProvider = new ClientStatisticsProvider();
 		$this->waitListItemProvider = new WaitListItemProvider();
 		$this->whatsAppEmergencyService = Container::getWhatsAppEmergencyService();
+		$this->messageSenderPicker = Container::getMessageSenderPicker();
 	}
 
 	public function getForBookingAction(
@@ -107,9 +106,13 @@ class MainPage extends BaseController
 				favorites: null,
 				bookingCollection: $bookings,
 				resourceTypeCollection: $resourceTypes,
-				providerModuleId: $this->provider?->getModuleId(),
+				providerModuleId: Loader::includeModule('crm') ? 'crm' : null,
 				clientsDataRecent: $this->getClientsDataRecent(),
-				isCurrentSenderAvailable: MessageSenderPicker::canUseCurrentSender(),
+				/**
+				 * @deprecated and should be removed on frontend: there is no such thing as "current sender" whatsoever
+				 * choice of a sender depends on specific resource and its settings and can not be inferred globally
+				 */
+				isCurrentSenderAvailable: $this->messageSenderPicker->canUseAnySender(),
 				waitListItemCollection: $waitListItemCollection,
 				isIntersectionForAll: true,
 				counters: $this->counterRepository->getList($userId),
@@ -148,9 +151,13 @@ class MainPage extends BaseController
 				favorites: $favorites,
 				bookingCollection: $bookings,
 				resourceTypeCollection: $resourceTypes,
-				providerModuleId: $this->provider?->getModuleId(),
+				providerModuleId: Loader::includeModule('crm') ? 'crm' : null,
 				clientsDataRecent: $this->getClientsDataRecent(),
-				isCurrentSenderAvailable: MessageSenderPicker::canUseCurrentSender(),
+				/**
+				 * @deprecated and should be removed on frontend: there is no such thing as "current sender" whatsoever
+				 * choice of a sender depends on specific resource and its settings and can not be inferred globally
+				 */
+				isCurrentSenderAvailable: $this->messageSenderPicker->canUseAnySender(),
 				waitListItemCollection: $waitListItems,
 				isIntersectionForAll: $this->isIntersectionForAll($userId),
 				counters: $this->counterRepository->getList($userId),
@@ -305,7 +312,7 @@ class MainPage extends BaseController
 
 	private function getClientsDataRecent(): array
 	{
-		return $this->provider?->getClientProvider()?->getClientDataRecent() ?? [];
+		return Container::getCrmClientDataRecentProvider()->getClientDataRecent();
 	}
 
 	private function getWaitListItems(int $userId): WaitListItemCollection
@@ -332,16 +339,16 @@ class MainPage extends BaseController
 
 	private function getFormsMenu(): array
 	{
-		if (!WebForm::isAvailable())
+		if (!WebFormProvider::isAvailable())
 		{
 			return [];
 		}
 
 		return [
-			'canEdit' => WebForm::canEdit(),
-			'presets' => WebForm::getPresets(),
-			'formsListLink' => WebForm::getFormsListLink(),
-			'formsCount' => WebForm::getFormsCount(),
+			'canEdit' => WebFormProvider::canEdit(),
+			'presets' => WebFormProvider::getPresets(),
+			'formsListLink' => WebFormProvider::getFormsListLink(),
+			'formsCount' => WebFormProvider::getFormsCount(),
 		];
 	}
 }

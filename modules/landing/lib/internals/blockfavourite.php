@@ -8,6 +8,19 @@ Loc::loadMessages(__FILE__);
 
 /**
  * Class BlockFavouriteTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_BlockFavourite_Query query()
+ * @method static EO_BlockFavourite_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_BlockFavourite_Result getById($id)
+ * @method static EO_BlockFavourite_Result getList(array $parameters = [])
+ * @method static EO_BlockFavourite_Entity getEntity()
+ * @method static \Bitrix\Landing\Internals\EO_BlockFavourite createObject($setDefaultValues = true)
+ * @method static \Bitrix\Landing\Internals\EO_BlockFavourite_Collection createCollection()
+ * @method static \Bitrix\Landing\Internals\EO_BlockFavourite wakeUpObject($row)
+ * @method static \Bitrix\Landing\Internals\EO_BlockFavourite_Collection wakeUpCollection($rows)
  */
 class BlockFavouriteTable extends Entity\DataManager
 {

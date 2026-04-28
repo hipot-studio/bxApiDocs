@@ -3,48 +3,70 @@
 namespace Bitrix\Bizproc\Internal\Integration\ImBot\Service;
 
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
 class MentionService
 {
-	public function replaceBbMentions(string $text): string
+	public function replaceBbMentions(string $text, int $salt = 0): ?string
 	{
 		return preg_replace_callback(
-			"/\[USER=([0-9]+)?](.*?)\[\/USER]/i",
-			function($matches)
-			{
+			'~\[USER=([0-9]+)?\](.*?)\[\\\\?\/USER\]~i',
+			function($matches) use ($salt) {
 				$userId = (int)$matches[1];
 
-				return $this->buildAIMention($userId);
+				return ServiceLocator::getInstance()
+					->get(UserPseudonymizer::class)
+					->getPseudonymizedUserMention($userId, $salt)
+				;
 			},
 			$text,
 		);
 	}
 
-	private function buildAiMention(int $userId): string
+	public function restoreMentions(string $text, int $salt = 0): ?string
 	{
-		$shortUserName = $this->buildShortUserName($userId);
+		return preg_replace_callback(
+			'~\[USER=([0-9]+)\](.*?)\[\\\\?\/USER\]~i',
+			function($matches) use ($salt) {
+				$shortId = $matches[1];
 
-		return "[USER={$userId}]{$shortUserName}[/USER]";
+				$userId = ServiceLocator::getInstance()
+					->get(UserPseudonymizer::class)
+					->extractUserId((string)$shortId, $salt)
+				;
+				if (!isset($userId))
+				{
+					return $matches[0];
+				}
+
+				return $this->buildBbMention($userId);
+			},
+			$text,
+		);
 	}
 
-	private function buildShortUserName(int $userId): string
+	private function buildBbMention(int $userId): string
 	{
-		$defaultUserName = 'User';
-		if (empty($userId) || !Loader::includeModule('im'))
+		if (!Loader::includeModule('im'))
 		{
-			return $defaultUserName;
+			return 'User';
 		}
 
-		$user = User::getInstance($userId);
-		$userName = trim($user->getFirstName() ?? '');
-		if (empty($userName))
+		$userName = $this->getUserName($userId);
+
+		return "[USER={$userId}]{$userName}[/USER]";
+	}
+
+	private function getUserName(int $userId): string
+	{
+		if (!isset($this->userName[$userId]))
 		{
-			return $defaultUserName;
+			$user = User::getInstance($userId);
+			$userName = $user->getName();
+			$this->userName[$userId] = trim($userName);
 		}
 
-		$userName = trim(preg_replace('#\s+#', '_', $userName));
-
-		return $userName ?: $defaultUserName;
+		return $this->userName[$userId];
 	}
 }

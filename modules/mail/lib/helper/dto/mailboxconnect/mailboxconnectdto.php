@@ -15,8 +15,9 @@ final class MailboxConnectDTO extends AbstractMailboxConnectDTO
 
 		if (is_null($email))
 		{
-			$email = $request->get('login') ?: $request->get('loginWithoutDomain');
-			$login = (string)$request->get('loginWithoutDomain');
+			$email = (string)($request->get('login') ?: $request->get('loginWithoutDomain'));
+			$loginWithoutDomain = (string)$request->get('loginWithoutDomain');
+			$login = $loginWithoutDomain !== '' ? $loginWithoutDomain : $email;
 		}
 		else
 		{
@@ -24,7 +25,7 @@ final class MailboxConnectDTO extends AbstractMailboxConnectDTO
 		}
 
 		$constructorData = [
-			'email' => (string)$email,
+			'email' => $email ?? '',
 			'login' => $login,
 			'password' => (string)$request->get('password'),
 			'serviceId' => (int)$request->get('serviceId'),

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Link\File;
 
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity;
 use Bitrix\Im\V2\Entity\File\FileError;
 use Bitrix\Im\V2\Entity\File\FilePopupItem;
@@ -51,7 +52,8 @@ class FileCollection extends BaseLinkCollection
 		}
 
 		$query = LinkFileTable::query();
-		static::addRightsCheckToQuery($query, $context->getUserId(), ['FILE.ID', 'FILE.CREATED_BY']);
+		static::processDiskFileFilters($query, $context);
+
 		$query
 			->setSelect(['ID', 'DISK_FILE_ID', 'SUBTYPE', 'AUTHOR_ID', 'MESSAGE_ID', 'CHAT_ID', 'DATE_CREATE'])
 			->setOrder($fileOrder)
@@ -170,22 +172,18 @@ class FileCollection extends BaseLinkCollection
 		}
 	}
 
-	protected static function addRightsCheckToQuery(Query $query, int $userId, array $specificColumns): Query
+	protected static function processDiskFileFilters(Query $query, Context $context): void
 	{
-		$securityContext = new \Bitrix\Disk\Security\DiskSecurityContext($userId);
+		$securityContext = new \Bitrix\Disk\Security\DiskSecurityContext($context->getUserId());
 		$parameters = [];
 		$parameters = \Bitrix\Disk\Driver::getInstance()
 			->getRightsManager()
-			->addRightsCheck($securityContext, $parameters, $specificColumns)
+			->addRightsCheck($securityContext, $parameters, ['FILE.ID'])
 		;
 
 		/** @var Fields\ExpressionField $field */
 		$field = $parameters['runtime'][0];
 		$field->configureValueType(Fields\IntegerField::class);
-		$query
-			->registerRuntimeField($field)
-			->where('RIGHTS_CHECK', 1);
-
-		return $query;
+		$query->registerRuntimeField($field);
 	}
 }

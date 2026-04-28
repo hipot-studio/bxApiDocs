@@ -14,29 +14,34 @@ class InvitationCounter extends Stepper
 	private int $limit = 100;
 	private ?int $totalWaitingInvitation = null;
 
-	public function getUserIds($offset = 0): array
+	private function getUserIds($lastId = 0): array
 	{
-		 return UserTable::query()
-			->setLimit($this->limit)
+		return UserTable::query()
 			->setSelect(['ID'])
-			->setOffset($offset)
+			->where('REAL_USER', 'expr', true)
+			->addFilter('>ID', $lastId)
+			->setLimit($this->limit)
+			->addOrder('ID')
 			->fetchCollection()
-			->getIdList();
+			->getIdList()
+		;
 	}
 
-	public function execute(array &$result): bool
+	public function execute(array &$option): bool
 	{
-		if (empty($result))
+		if (empty($option))
 		{
-			$result["steps"] = 0;
-			$result["count"] = ceil(UserTable::getCount() / $this->limit);
+			$option["steps"] = 0;
+			$option["count"] = 1;
+			$option['lastId'] = 0;
 		}
-		$userIds = $this->getUserIds($result["steps"] * $this->limit);
+		$userIds = $this->getUserIds($option['lastId']);
+
 		foreach ($userIds as $id)
 		{
 			$user = new User($id);
 			$invitationCounter = new Counter(
-				Invitation::getInvitedCounterId()
+				Invitation::getInvitedCounterId(),
 			);
 
 			$invitationCounterValue = $user->numberOfInvitationsSent();
@@ -47,7 +52,8 @@ class InvitationCounter extends Stepper
 				if (!$this->totalWaitingInvitation)
 				{
 					$this->totalWaitingInvitation = (int)\Bitrix\Intranet\UserTable::createInvitedQuery()
-						->where('ACTIVE', 'N')->queryCountTotal();
+						->where('ACTIVE', 'N')->queryCountTotal()
+					;
 				}
 				$waitingCounter = new Counter(Invitation::getWaitConfirmationCounterId());
 				$waitingCounter->setValue($user, $this->totalWaitingInvitation);
@@ -57,10 +63,10 @@ class InvitationCounter extends Stepper
 			$total = $waitingCounterValue + $invitationCounterValue;
 			$totalCounter = new Counter(Invitation::getTotalInvitationCounterId());
 			$totalCounter->setValue($user, $total);
+			$option['lastId'] = $id;
 		}
-		$result["steps"]++;
 
-		return ($result["steps"] <= $result["count"] ? self::CONTINUE_EXECUTION : self::FINISH_EXECUTION);
+		return count($userIds) < $this->limit ? self::FINISH_EXECUTION : self::CONTINUE_EXECUTION;
 	}
 
 }

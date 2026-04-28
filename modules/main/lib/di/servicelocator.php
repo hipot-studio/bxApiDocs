@@ -18,6 +18,8 @@ final class ServiceLocator implements ContainerInterface
 	/** @var string[][] */
 	private array $services = [];
 	private array $instantiated = [];
+	private array $nonSingletonServices = [];
+
 	private static ServiceLocator $instance;
 
 	private array $callStack = [];
@@ -72,6 +74,11 @@ final class ServiceLocator implements ContainerInterface
 		$furtherClassMetadata = $configuration['className'] ?? $configuration['constructor'];
 
 		$this->services[$id] = [$furtherClassMetadata, $configuration['constructorParams'] ?? []];
+
+		if (isset($configuration['singleton']) && $configuration['singleton'] === false)
+		{
+			$this->nonSingletonServices[$id] = true;
+		}
 	}
 
 	/**
@@ -155,7 +162,10 @@ final class ServiceLocator implements ContainerInterface
 			$object = $this->createItemByServiceName($id);
 		}
 
-		$this->instantiated[$id] = $object;
+		if (!isset($this->nonSingletonServices[$id]))
+		{
+			$this->instantiated[$id] = $object;
+		}
 
 		return $object;
 	}

@@ -5,10 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Calendar\Synchronization\Public\Command\Push\Google;
 
 use Bitrix\Calendar\Sync\Connection\Connection;
-use Bitrix\Calendar\Synchronization\Internal\Exception\ApiException;
-use Bitrix\Calendar\Synchronization\Internal\Exception\Exception;
-use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
-use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\PushException;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Command\AbstractCommand;
 use Bitrix\Main\ObjectException;
@@ -25,15 +22,11 @@ class SubscribeToPushCommand extends AbstractCommand
 
 	/**
 	 * @return Result
-	 *
-	 * @throws ApiException
 	 * @throws ArgumentException
-	 * @throws DtoValidationException
-	 * @throws Exception
-	 * @throws NotAuthorizedException
 	 * @throws ObjectException
 	 * @throws ObjectPropertyException
 	 * @throws PersistenceException
+	 * @throws PushException
 	 * @throws SystemException
 	 */
 	protected function execute(): Result

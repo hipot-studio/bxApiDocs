@@ -14,16 +14,16 @@ use Bitrix\Crm\RepeatSale\Segment\SegmentItem;
 use Bitrix\Crm\RepeatSale\Segment\SegmentManager;
 use Bitrix\Main\Localization\Loc;
 
-class RepeatSaleForceMode extends BaseFeature
+final class RepeatSaleForceMode extends BaseFeature
 {
 	public function getName(): string
 	{
 		return Loc::getMessage('CRM_FEATURE_REPEAT_SALE_FORCE_MODE_NAME');
 	}
 
-	public function getCategory(): BaseCategory
+	public function getCategory(): Category\RepeatSale
 	{
-		return Common::getInstance();
+		return Category\RepeatSale::getInstance();
 	}
 
 	protected function getOptionName(): string
@@ -34,6 +34,11 @@ class RepeatSaleForceMode extends BaseFeature
 	protected function getEnabledValue(): bool
 	{
 		return true;
+	}
+
+	public function getSort(): int
+	{
+		return 20;
 	}
 
 	public function enable(): void

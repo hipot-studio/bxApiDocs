@@ -242,7 +242,7 @@ class UserTable extends DataManager
 	 * @return int
 	 * @deprecated
 	 */
-	public static function getActiveUsersCount(Type\Date $lastLoginDate = null)
+	public static function getActiveUsersCount(?Type\Date $lastLoginDate = null)
 	{
 		return Application::getInstance()->getLicense()->getActiveUsersCount($lastLoginDate);
 	}
@@ -318,6 +318,7 @@ class UserTable extends DataManager
 			'call',
 			'document_editor',
 			'calendar_sharing',
+			'im_guest',
 		];
 
 		return $types;

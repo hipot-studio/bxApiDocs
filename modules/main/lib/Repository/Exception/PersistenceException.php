@@ -14,7 +14,7 @@ class PersistenceException extends SystemException
 	 * @param \Throwable|null $previous
 	 * @param Error[] $errors
 	 */
-	public function __construct(string $message = '', \Throwable $previous = null, private readonly array $errors = [])
+	public function __construct(string $message = '', ?\Throwable $previous = null, private readonly array $errors = [])
 	{
 		parent::__construct($message, previous: $previous);
 	}

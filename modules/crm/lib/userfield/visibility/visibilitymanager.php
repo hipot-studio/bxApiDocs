@@ -62,20 +62,32 @@ class VisibilityManager
 	 */
 	public static function getNotAccessibleFields(int $entityTypeId, ?array $userAccessCodes = null): array
 	{
-		if ($userAccessCodes === null)
-		{
-			$userAccessCodes = self::getUserAccessCodes();
-		}
-
-		if (self::isAdmin($userAccessCodes))
+		if (
+			$userAccessCodes !== null
+			&& self::isAdminByAccessCodes($userAccessCodes)
+		)
 		{
 			return [];
 		}
 
-		$accessCodes = static::getUserFieldsAccessCodes($entityTypeId);
+		if (
+			$userAccessCodes === null
+			&& Container::getInstance()->getUserPermissions()->isAdmin()
+		)
+		{
+			return [];
+		}
+
+		$userFieldAccessCodes = static::getUserFieldsAccessCodes($entityTypeId);
+		if (empty($userFieldAccessCodes))
+		{
+			return [];
+		}
+
+		$userAccessCodes = $userAccessCodes ?? static::getUserAccessCodes();
 
 		$excludedFields = [];
-		foreach ($accessCodes as $name => $item)
+		foreach ($userFieldAccessCodes as $name => $item)
 		{
 			if (isset($item['accessCodes']) && !empty($name))
 			{
@@ -301,7 +313,7 @@ class VisibilityManager
 		return $result;
 	}
 
-	private static function isAdmin(array $userAccessCodes): bool
+	private static function isAdminByAccessCodes(array $userAccessCodes): bool
 	{
 		$userId = 0;
 

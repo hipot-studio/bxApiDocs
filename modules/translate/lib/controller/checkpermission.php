@@ -6,6 +6,9 @@ use Bitrix\Main;
 use Bitrix\Main\Context;
 use Bitrix\Main\Localization\Loc;
 
+/**
+ * @internal
+ */
 
 class CheckPermission extends Main\Engine\ActionFilter\Base
 {

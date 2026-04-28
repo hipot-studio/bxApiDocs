@@ -3,6 +3,9 @@
 namespace Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings;
 
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\BaasManager;
+use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
+use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 
 final class ChatChannelSettings extends BaseChannelSettings
 {
@@ -27,7 +30,7 @@ final class ChatChannelSettings extends BaseChannelSettings
 		$checkAutomaticProcessingParams = $context['checkAutomaticProcessingParams'] ?? true;
 		if (
 			$checkAutomaticProcessingParams
-			&& !(AIManager::isAiCallAutomaticProcessingAllowed() && AIManager::isBaasServiceHasPackage())
+			&& !(AIManager::isAiCallAutomaticProcessingAllowed() && BaasManager::hasPackage())
 		)
 		{
 			return false;
@@ -70,6 +73,17 @@ final class ChatChannelSettings extends BaseChannelSettings
 
 	public static function getDefault(): self
 	{
+		if (self::isRuZone())
+		{
+			return new self(
+				[
+					SummarizeCallTranscription::TYPE_ID,
+					FillItemFieldsFromCallTranscription::TYPE_ID,
+				],
+				true
+			);
+		}
+
 		return new self(
 			[],
 			false

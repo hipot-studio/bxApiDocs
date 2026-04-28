@@ -22,6 +22,7 @@ use Bitrix\BIConnector\Superset\Dashboard\ScreenshotExporter;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Logger\Logger;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
@@ -358,6 +359,26 @@ class Dashboard extends Controller
 			return null;
 		}
 
+		if ($dashboard->isMarketDashboard())
+		{
+			$dashboardId = $dashboard->getId();
+			$relatedItemsResult = MarketDashboardManager::getInstance()->getMarketDashboardReusedEntities([$dashboardId]);
+			if (!$relatedItemsResult->isSuccess())
+			{
+				$this->addErrors($relatedItemsResult->getErrors());
+
+				return null;
+			}
+
+			$relatedItems = $relatedItemsResult->getData();
+			if (!empty($relatedItems[$dashboardId]))
+			{
+				$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_DELETE_ERROR_HAS_RELATED_ENTITIES')));
+
+				return null;
+			}
+		}
+
 		if (
 			$dashboard->isMarketDashboard()
 			|| (
@@ -380,7 +401,7 @@ class Dashboard extends Controller
 		if ($dashboard->isCustomDashboard())
 		{
 			$externalDashboardId = $dashboard->getExternalId();
-			$response = Integrator::getInstance()->deleteDashboard([$externalDashboardId]);
+			$response = Integrator::getInstance()->deleteDashboard([$externalDashboardId], $dashboard->isMarketDashboard());
 			if ($response->hasErrors())
 			{
 				if ($response->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
@@ -398,6 +419,31 @@ class Dashboard extends Controller
 		}
 
 		return true;
+	}
+
+	public function getMarketDashboardRelatedItemsAction(Model\Dashboard $dashboard): ?array
+	{
+		if (!$dashboard->isMarketDashboard())
+		{
+			return [];
+		}
+
+		$dashboardId = $dashboard->getId();
+		$relatedItemsResult = MarketDashboardManager::getInstance()->getMarketDashboardReusedEntities([$dashboardId]);
+		if (!$relatedItemsResult->isSuccess())
+		{
+			$this->addErrors($relatedItemsResult->getErrors());
+
+			return null;
+		}
+
+		$relatedItems = $relatedItemsResult->getData();
+		if (empty($relatedItems[$dashboardId]))
+		{
+			return [];
+		}
+
+		return $relatedItems[$dashboardId];
 	}
 
 	public function restartImportAction(Model\Dashboard $dashboard): ?array
@@ -486,6 +532,7 @@ class Dashboard extends Controller
 				'canEdit' => $canEdit,
 				'urlParams' => $urlParams,
 				'isUseExternalDatasets' => $dashboard->isUseExternalDatasets(),
+				'isAvailable' => MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType()),
 			],
 		];
 	}
@@ -651,6 +698,23 @@ class Dashboard extends Controller
 	 *
 	 * @return string|null
 	 */
+	public function getSupersetEntityLoginUrlAction(string $entityUrl): ?string
+	{
+		$loginUrl = (new SupersetController(Integrator::getInstance()))->getLoginUrl();
+
+		if ($loginUrl)
+		{
+			$url = new Uri($loginUrl);
+			$url->addParams([
+				'next' => $entityUrl,
+			]);
+
+			return $url->getLocator();
+		}
+
+		return $entityUrl;
+	}
+
 	public function getEditUrlAction(Model\Dashboard $dashboard, string $editUrl): ?string
 	{
 		$canEdit = AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $dashboard);

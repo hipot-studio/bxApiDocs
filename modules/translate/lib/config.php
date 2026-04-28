@@ -6,6 +6,10 @@ use Bitrix\Main;
 use Bitrix\Translate;
 use Bitrix\Main\Localization\Loc;
 
+/**
+ * @internal
+ */
+
 final class Config
 {
 	public const OPTION_INIT_FOLDERS = 'INIT_FOLDERS';

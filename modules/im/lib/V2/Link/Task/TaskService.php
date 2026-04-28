@@ -7,6 +7,7 @@ use Bitrix\Im\Model\LinkTaskTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\Im\V2\Link\File\TemporaryFileService;
 use Bitrix\Im\V2\Link\Push;
 use Bitrix\Im\V2\Message;
@@ -465,8 +466,9 @@ class TaskService
 	protected function getMessageByVoiceNoteAutoTask(TaskItem $task): ?string
 	{
 		return Loc::getMessage(
-			'IM_CHAT_TASK_REGISTER_FROM_VOICE_NOTE_MESSAGE_NOTIFICATION_MSGVER_1',
+			'IM_CHAT_TASK_REGISTER_FROM_VOICE_NOTE_MESSAGE_NOTIFICATION_MSGVER_2',
 			[
+				'#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName(),
 				'#LINK#' => $task->getEntity()->getUrl(),
 				'#MESSAGE_ID#' => $task->getMessageId(),
 				'#DIALOG_ID#' => Chat::getInstance($task->getChatId())->getDialogContextId(),
@@ -477,8 +479,9 @@ class TaskService
 	protected function getMessageByVideoNoteAutoTask(TaskItem $task): ?string
 	{
 		return Loc::getMessage(
-			'IM_CHAT_TASK_REGISTER_FROM_VIDEO_NOTE_MESSAGE_NOTIFICATION_MSGVER_1',
+			'IM_CHAT_TASK_REGISTER_FROM_VIDEO_NOTE_MESSAGE_NOTIFICATION_MSGVER_2',
 			[
+				'#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName(),
 				'#LINK#' => $task->getEntity()->getUrl(),
 				'#MESSAGE_ID#' => $task->getMessageId(),
 				'#DIALOG_ID#' => Chat::getInstance($task->getChatId())->getDialogContextId(),

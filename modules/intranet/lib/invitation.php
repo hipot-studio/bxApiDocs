@@ -768,8 +768,16 @@ class Invitation
 		}
 		else
 		{
-			$user = new User((int)$userId);
-			static::addResyncAllCountersTask($user);
+			$date = \ConvertTimeStamp(time()+\CTimeZone::GetOffset()+2, "FULL");
+			\CAgent::AddAgent(
+				$agentNameFrom,
+				"intranet",
+				"N",
+				1,
+				$date,
+				'Y',
+				$date,
+			);
 		}
 	}
 

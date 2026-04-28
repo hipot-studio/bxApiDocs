@@ -31,7 +31,10 @@ class Time implements \JsonSerializable
 			$this->timestamp = $dateTime->getTimestamp() - $offset;
 		}
 
-		$this->offset = $offset;
+		$this->offset = isset($userOffset) && $userOffset !== $offset
+			? $userOffset
+			: $offset
+		;
 	}
 
 	public function getTimestamp(): int

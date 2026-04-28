@@ -19,7 +19,7 @@ class HttpCookies extends \Bitrix\Main\Type\Dictionary
 	/**
 	 * @param string[] | Http\Cookie[] | null $values
 	 */
-	public function __construct(array $values = null)
+	public function __construct(?array $values = null)
 	{
 		if ($values !== null)
 		{

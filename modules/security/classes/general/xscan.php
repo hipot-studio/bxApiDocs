@@ -17,7 +17,8 @@ class CBitrixXscan
 	static $evals_reg = '(?:assert|call_user_func|call_user_func_array|create_function|eval|exec|ob_start|passthru|pcntl_exec|popen|proc_open|set_include_path|shell_exec|system)';
 	static $black_reg = '(https?://[0-9a-z\-]+\.pw/|password_verify|https?://(?:sw\.)?bitrix\.dev|wp-config|wp-admin|wp-login|deprecated-media-js|customize-menus-rtl|adminer_errors|/etc/passwd|/etc/hosts|mysql_pdo|__halt_compiler|/bin/sh|registerPHPFunctions)';
 	static $mehtods = [
-		'Bitrix\Im\Call\Auth::authorizeById',
+		'Bitrix\Im\Call\Auth::authorizeById',//todo: remove it in future
+		'Bitrix\Call\Rest\Auth::authorizeById',
 		'Bitrix\ImOpenLines\Controller\Widget\Filter\Authorization::authorizeById',
 		'Bitrix\Imopenlines\Widget\Auth::authorizeById',
 		'Bitrix\Sale\Delivery\Services\Automatic::createConfig',

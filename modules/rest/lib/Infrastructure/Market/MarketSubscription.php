@@ -4,8 +4,8 @@ namespace Bitrix\Rest\Infrastructure\Market;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\Type\Date;
+use Bitrix\Rest\Internal\Integration\Bitrix24\MarketUrlProvider;
 use Bitrix\Rest\Marketplace\Client;
-use Bitrix\Rest\Marketplace\Url;
 use Bitrix\Rest\Service\RestOption;
 use Bitrix\Rest\Service\ServiceContainer;
 
@@ -111,7 +111,7 @@ class MarketSubscription
 
 	public function getBuyUrl(): string
 	{
-		return Url::getSubscriptionBuyUrl();
+		return (new MarketUrlProvider)->getBuyUrl()->getUri();
 	}
 
 	public function getTransitionPeriodEndDate(): Date

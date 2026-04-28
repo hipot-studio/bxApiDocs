@@ -30,6 +30,10 @@ class Deal extends ProductsDataProvider implements Filterable
 				'TITLE' => GetMessage('CRM_DOCGEN_DATAPROVIDER_DEAL_STAGE_TITLE'),
 				'VALUE' => [$this, 'getStage'],
 			];
+			$this->fields['PREVIOUS_STAGE'] = [
+				'TITLE' => GetMessage('CRM_DOCGEN_DATAPROVIDER_DEAL_PREVIOUS_STAGE_TITLE'),
+				'VALUE' => [$this, 'getPreviousStage'],
+			];
 			$this->fields['CATEGORY'] = [
 				'TITLE' => GetMessage('CRM_DOCGEN_DATAPROVIDER_DEAL_CATEGORY_TITLE'),
 				'VALUE' => [$this, 'getCategory'],
@@ -162,6 +166,14 @@ class Deal extends ProductsDataProvider implements Filterable
 	{
 		$stage = Container::getInstance()->getFactory(\CCrmOwnerType::Deal)->getStage($this->getRawValue('STAGE_ID'));
 		return $stage ? $stage->getName() : null;
+	}
+
+	public function getPreviousStage()
+	{
+		return Container::getInstance()
+			->getFactory(\CCrmOwnerType::Deal)
+			->getStage($this->getRawValue('PREVIOUS_STAGE_ID'))?->getName()
+		;
 	}
 
 	protected function getTableClass()

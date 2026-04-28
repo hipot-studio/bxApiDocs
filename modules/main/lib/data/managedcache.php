@@ -4,26 +4,30 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Data;
 
-use Bitrix\Main;
+use Bitrix\Main\Application;
+use Bitrix\Main\Data\Cache\CacheEntry;
 
 class ManagedCache
 {
-	/** @var Cache[] */
+	protected const BASE_DIR = "managed_cache";
+	protected const FLAG_DIR = "_flags";
+	protected const FLAG_TTL = 30;
+
+	/** @var CacheEntry[] */
 	protected $cache = [];
-	protected $cacheInit = [];
-	protected $cachePath = [];
 	protected $vars = [];
-	protected $ttl = [];
 	protected $dbType;
+	protected $flagDir;
 
 	public function __construct()
 	{
-		$this->dbType = strtoupper(Main\Application::getInstance()->getConnection()->getType());
+		$this->dbType = strtoupper(Application::getInstance()->getConnection()->getType());
+		$this->flagDir = $this->dbType . '/' . static::FLAG_DIR;
 	}
 
 	// Tries to read cached variable value from the file
@@ -31,25 +35,27 @@ class ManagedCache
 	// otherwise returns false
 	public function read($ttl, $uniqueId, $tableId = false)
 	{
-		if (!isset($this->cacheInit[$uniqueId]))
+		if (!isset($this->cache[$uniqueId]))
 		{
-			$this->cache[$uniqueId] = Cache::createInstance();
-			$this->cachePath[$uniqueId] = $this->dbType . ($tableId === false ? "" : "/" . $tableId);
-			$this->ttl[$uniqueId] = $ttl;
-			$this->cacheInit[$uniqueId] = $this->cache[$uniqueId]->initCache($ttl, $uniqueId, $this->cachePath[$uniqueId], "managed_cache");
+			$this->cache[$uniqueId] = (new CacheEntry($ttl, $uniqueId, $this->getDir($tableId), static::BASE_DIR))
+				->initialize()
+			;
 		}
-		return $this->cacheInit[$uniqueId] || array_key_exists($uniqueId, $this->vars);
+
+		return $this->cache[$uniqueId]->isInitialized() || array_key_exists($uniqueId, $this->vars);
 	}
 
 	public function getImmediate($ttl, $uniqueId, $tableId = false)
 	{
-		$cache = Cache::createInstance();
-		$cachePath = $this->dbType . ($tableId === false ? "" : "/" . $tableId);
+		$cacheEntry = (new CacheEntry($ttl, $uniqueId, $this->getDir($tableId), static::BASE_DIR))
+			->initialize()
+		;
 
-		if ($cache->initCache($ttl, $uniqueId, $cachePath, "managed_cache"))
+		if ($cacheEntry->isInitialized())
 		{
-			return $cache->getVars();
+			return $cacheEntry->getVars();
 		}
+
 		return false;
 	}
 
@@ -66,14 +72,12 @@ class ManagedCache
 		{
 			return $this->vars[$uniqueId];
 		}
-		elseif (isset($this->cacheInit[$uniqueId]) && $this->cacheInit[$uniqueId])
+		elseif (isset($this->cache[$uniqueId]) && $this->cache[$uniqueId]->isInitialized())
 		{
 			return $this->cache[$uniqueId]->getVars();
 		}
-		else
-		{
-			return false;
-		}
+
+		return false;
 	}
 
 	// Sets new value to the variable
@@ -87,34 +91,76 @@ class ManagedCache
 
 	public function setImmediate($uniqueId, $val)
 	{
-		if (isset($this->cache[$uniqueId]))
+		if (!isset($this->cache[$uniqueId]))
 		{
-			$cache = Cache::createInstance();
-			$cache->noOutput();
-			$cache->startDataCache($this->ttl[$uniqueId], $uniqueId, $this->cachePath[$uniqueId], $val, "managed_cache");
-			$cache->endDataCache();
-
-			unset($this->cache[$uniqueId]);
-			unset($this->cacheInit[$uniqueId]);
-			unset($this->cachePath[$uniqueId]);
-			unset($this->vars[$uniqueId]);
+			return;
 		}
+
+		$initTime = $this->cache[$uniqueId]->getInitTime();
+		$write = true;
+
+		// real value changed - cache entry was deleted
+		if ($this->checkFlag('flag.' . $uniqueId, $initTime))
+		{
+			$write = false;
+		}
+		else
+		{
+			$cachePath = $this->cache[$uniqueId]->getCachePath();
+
+			// real value changed - cache directory was deleted
+			if ($this->checkFlag('dir.' . $cachePath, $initTime))
+			{
+				$write = false;
+			}
+		}
+
+		if ($write)
+		{
+			$this->cache[$uniqueId]->write($val);
+		}
+
+		unset($this->cache[$uniqueId]);
+		unset($this->vars[$uniqueId]);
+	}
+
+	protected function writeFlag(string $key): void
+	{
+		(new CacheEntry(static::FLAG_TTL, $key, $this->flagDir, static::BASE_DIR))
+			->write(hrtime(true))
+		;
+	}
+
+	protected function checkFlag(string $key, float $startTime): bool
+	{
+		$cacheEntry = (new CacheEntry(static::FLAG_TTL, $key, $this->flagDir, static::BASE_DIR))
+			->initialize()
+		;
+
+		if ($cacheEntry->isInitialized())
+		{
+			$cleanTime = $cacheEntry->getVars();
+
+			if ($startTime <= $cleanTime)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	// Marks cache entry as invalid
 	public function clean($uniqueId, $tableId = false)
 	{
-		$cache = Cache::createInstance();
-		$cache->clean(
-			$uniqueId,
-			$this->dbType . ($tableId === false ? "" : "/" . $tableId),
-			"managed_cache"
-		);
+		// Write a flag to indicate that the real value has changed. We'll check this flag on writing.
+		$this->writeFlag('flag.' . $uniqueId);
+
+		Cache::createInstance()->clean($uniqueId, $this->getDir($tableId), static::BASE_DIR);
+
 		if (isset($this->cache[$uniqueId]))
 		{
 			unset($this->cache[$uniqueId]);
-			unset($this->cacheInit[$uniqueId]);
-			unset($this->cachePath[$uniqueId]);
 			unset($this->vars[$uniqueId]);
 		}
 	}
@@ -122,46 +168,43 @@ class ManagedCache
 	// Marks cache entries associated with the table as invalid
 	public function cleanDir($tableId)
 	{
-		$strPath = $this->dbType . "/" . $tableId;
-		foreach ($this->cachePath as $uniqueId => $Path)
+		$dir = $this->getDir($tableId);
+
+		// Write a flag to indicate that the real value has changed. We'll check this flag on writing.
+		$this->writeFlag('dir.' . $dir);
+
+		Cache::createInstance()->cleanDir($dir, static::BASE_DIR);
+
+		foreach ($this->cache as $uniqueId => $cacheEntry)
 		{
-			if ($Path == $strPath)
+			if ($cacheEntry->getCachePath() == $dir)
 			{
 				unset($this->cache[$uniqueId]);
-				unset($this->cacheInit[$uniqueId]);
-				unset($this->cachePath[$uniqueId]);
 				unset($this->vars[$uniqueId]);
 			}
 		}
-		$cache = Cache::createInstance();
-		$cache->cleanDir($this->dbType . "/" . $tableId, "managed_cache");
 	}
 
 	// Clears all managed_cache
 	public function cleanAll()
 	{
-		$this->cache = [];
-		$this->cacheInit = [];
-		$this->cachePath = [];
-		$this->vars = [];
-		$this->ttl = [];
+		Cache::createInstance()->cleanDir(false, static::BASE_DIR);
 
-		$cache = Cache::createInstance();
-		$cache->cleanDir(false, "managed_cache");
+		$this->cache = [];
+		$this->vars = [];
 	}
 
 	// Use it to flush cache to the files.
 	// Causion: only at the end of all operations!
 	public static function finalize()
 	{
-		$cacheManager = Main\Application::getInstance()->getManagedCache();
-		$cache = Cache::createInstance();
-		foreach ($cacheManager->cache as $uniqueId => $val)
+		$cacheManager = Application::getInstance()->getManagedCache();
+
+		foreach ($cacheManager->cache as $uniqueId => $cacheEntry)
 		{
 			if (array_key_exists($uniqueId, $cacheManager->vars))
 			{
-				$cache->startDataCache($cacheManager->ttl[$uniqueId], $uniqueId, $cacheManager->cachePath[$uniqueId], $cacheManager->vars[$uniqueId], "managed_cache");
-				$cache->endDataCache();
+				$cacheManager->setImmediate($uniqueId, $cacheManager->vars[$uniqueId]);
 			}
 		}
 	}
@@ -181,6 +224,12 @@ class ManagedCache
 		}
 
 		$path = "/" . SITE_ID . $relativePath . $salt;
+
 		return $path;
+	}
+
+	protected function getDir($tableId): string
+	{
+		return $this->dbType . ($tableId === false ? "" : "/" . $tableId);
 	}
 }

@@ -6,9 +6,7 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroup;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Type\Collection;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
@@ -25,6 +23,7 @@ class SupersetGroupProvider extends BaseProvider
 		$this->options['onlySystemGroups'] = (bool)($options['onlySystemGroups'] ?? false);
 		$this->options['checkAccessRights'] = (bool)($options['checkAccessRights'] ?? true);
 		$this->options['checkAccessEditRights'] = (bool)($options['checkAccessEditRights'] ?? false);
+		$this->options['onlyEditGroupsSelectable'] = (bool)($options['onlyEditGroupsSelectable'] ?? false);
 	}
 
 	public function isAvailable(): bool
@@ -53,15 +52,28 @@ class SupersetGroupProvider extends BaseProvider
 			$filter['TYPE'] = SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM;
 		}
 
-		if ($this->options['checkAccessEditRights'])
+		$editableGroupIds = [];
+		if ($this->options['checkAccessEditRights'] || $this->options['onlyEditGroupsSelectable'])
 		{
 			$groupFilter = AccessController::getCurrent()->getEntityFilter(
 				ActionDictionary::ACTION_BIC_DASHBOARD_EDIT,
 				SupersetDashboardGroupTable::class,
 			);
+
 			if ($groupFilter)
 			{
-				$filter['ID'] = $groupFilter['=ID'];
+				if ($this->options['checkAccessEditRights'])
+				{
+					$filter['ID'] = $groupFilter['=ID'];
+				}
+
+				$editableGroupIds = $groupFilter['=ID'];
+			}
+			else
+			{
+				$editableGroupIds = AccessController::getCurrent()->getAllowedGroupValue(
+					ActionDictionary::ACTION_BIC_DASHBOARD_EDIT,
+				);
 			}
 		}
 		elseif ($this->options['checkAccessRights'])
@@ -85,13 +97,15 @@ class SupersetGroupProvider extends BaseProvider
 
 		foreach ($groups as $group)
 		{
-			$result[] = $this->makeItem($group);
+			$isEditable = !$this->options['onlyEditGroupsSelectable'] || in_array($group->getId(), $editableGroupIds);
+
+			$result[] = $this->makeItem($group, $isEditable);
 		}
 
 		return $result;
 	}
 
-	private function makeItem(SupersetDashboardGroup $group): Item
+	private function makeItem(SupersetDashboardGroup $group, bool $isEditable = true): Item
 	{
 		$itemParams = [
 			'id' => $group->getId(),
@@ -110,6 +124,12 @@ class SupersetGroupProvider extends BaseProvider
 				'groupScopes' => $group->getScope()->getScopeCodeList(),
 			],
 		];
+
+		if (!$isEditable)
+		{
+			$itemParams['deselectable'] = false;
+			$itemParams['hidden'] = true;
+		}
 
 		return new Item($itemParams);
 	}

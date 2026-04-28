@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Restriction;
 use Bitrix\Crm\Integration\Bitrix24Manager;
 use Bitrix\Crm\Order\Manager;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotSupportedException;
@@ -17,19 +18,19 @@ Loc::loadMessages(__FILE__);
 
 class Bitrix24SearchLimitRestriction extends Bitrix24QuantityRestriction
 {
-	public function __construct($name = '', $limit = 0)
+	public function __construct(string $name = '', int $limit = 0)
 	{
 		$htmlInfo = null;
-		$popupInfo = array(
+		$popupInfo = [
 			'ID' => 'crm_entity_search_limit',
 			'TITLE' => Loc::getMessage('CRM_B24_SEARCH_LIMIT_RESTRICTION_TITLE'),
-			'CONTENT' => Loc::getMessage('CRM_B24_SEARCH_LIMIT_RESTRICTION_LIMIT_CONTENT')
-		);
+			'CONTENT' => Loc::getMessage('CRM_B24_SEARCH_LIMIT_RESTRICTION_LIMIT_CONTENT'),
+		];
 
 		parent::__construct($name, $limit, $htmlInfo, $popupInfo);
 	}
 
-	public function isExceeded($entityTypeId): bool
+	public function isExceeded(int $entityTypeId): bool
 	{
 		$limit = $this->getQuantityLimit();
 		if ($limit <= 0)
@@ -42,7 +43,7 @@ class Bitrix24SearchLimitRestriction extends Bitrix24QuantityRestriction
 		return $count > $limit;
 	}
 
-	public function getCount($entityTypeId): int
+	public function getCount(int $entityTypeId): int
 	{
 		$cacheId = 'crm_search_restriction_count_' . $entityTypeId;
 
@@ -105,7 +106,7 @@ class Bitrix24SearchLimitRestriction extends Bitrix24QuantityRestriction
 		return $count;
 	}
 
-	public function prepareStubInfo(array $params = null)
+	public function prepareStubInfo(?array $params = null): ?array
 	{
 		if ($params === null)
 		{
@@ -163,25 +164,116 @@ class Bitrix24SearchLimitRestriction extends Bitrix24QuantityRestriction
 		return $this->restrictionInfo->prepareStubInfo($params);
 	}
 
-	public function notifyLimitWarning(int $entityTypeId, int $warningCount, int $userId = null): void
+	public function notifyIfLimitAlmostExceed(int $entityTypeId, ?int $userId = null): void
 	{
-		if ($userId === null)
+		if (is_null($userId))
 		{
-			$userId = Container::getInstance()->getContext()->getUserId();
+			$userId = (int)CurrentUser::get()->getId();
 		}
 
-		if (!$userId)
+		if ($userId <= 0)
 		{
 			return;
 		}
 
-		$this->setUserNotifiedCount($entityTypeId, $warningCount, $userId);
+		$limitWarningValue = $this->getLimitWarningValue($entityTypeId, $userId);
+		if ($limitWarningValue > 0)
+		{
+			$entityTypeId = $entityTypeId === CCrmOwnerType::SmartInvoice ? CCrmOwnerType::Invoice : $entityTypeId;
+			$entityTypeName = CCrmOwnerType::ResolveName($entityTypeId);
 
-		$entityTypeName = CCrmOwnerType::ResolveName($entityTypeId);
+			$this->showSearchLimitNotificationSlider($entityTypeName, $userId);
+			$this->notifyLimitWarning($entityTypeName, $limitWarningValue, $userId);
+
+			$this->setUserNotifiedCount($entityTypeId, $limitWarningValue, $userId);
+		}
+	}
+
+	protected function getLimitWarningValue(int $entityTypeId, int $userId): int
+	{
+		$limit = $this->getQuantityLimit();
+		if ($limit <= 0)
+		{
+			return 0;
+		}
+
+		if (Bitrix24Manager::hasPurchasedLicense())
+		{
+			return 0;
+		}
+
+		return $this->calculateLimitWarningValue(
+			$this->getUserNotifiedCount($entityTypeId, $userId),
+			$this->getCount($entityTypeId),
+			$limit,
+		);
+	}
+
+	protected function calculateLimitWarningValue(int $notifiedCount, int $count, int $limit): int
+	{
+		if ($count > $limit)
+		{
+			return 0;
+		}
+
+		// These thresholds must be placed in ascending order
+		$thresholds = [50, 100];
+		if ($notifiedCount < $count)
+		{
+			foreach ($thresholds as $threshold)
+			{
+				$notificationLimit = $limit - $threshold;
+				if ($notificationLimit <= 0)
+				{
+					continue;
+				}
+
+				if ($count > $notificationLimit && $notifiedCount < $notificationLimit)
+				{
+					return $notificationLimit;
+				}
+			}
+		}
+
+		return 0;
+	}
+
+	protected function showSearchLimitNotificationSlider(string $entityTypeName, int $userId): void
+	{
+		if ($entityTypeName === '')
+		{
+			return;
+		}
+
+		$entityTypeName = strtolower($entityTypeName);
+
+		$landingId = 'limit_v2_crm_entity_search_limit_' . $entityTypeName;
+
+		$notificationParams = [
+			'notificationId' => "crm_entity_search_limit_{$entityTypeName}_" . time(),
+			'landingId' => $landingId,
+		];
+
+		$showSliderCallback = function () use ($userId, $notificationParams) {
+			\Bitrix\Pull\Event::add(
+				$userId,
+				[
+					'module_id' => 'bitrix24',
+					'command' => 'onThresholdNotification',
+					'params' => $notificationParams,
+				],
+			);
+		};
+
+		\Bitrix\Main\Application::getInstance()->addBackgroundJob($showSliderCallback);
+	}
+
+	protected function notifyLimitWarning(string $entityTypeName, int $warningCount, int $userId): void
+	{
 		if (
-			Loader::includeModule('im')
+			$entityTypeName !== ''
 			&& Loader::includeModule('ui')
-			&& $entityTypeName !== ''
+			&& Loader::includeModule('im')
 		)
 		{
 			$helpdeskUrl = Util::getArticleUrlByCode('9745327');
@@ -250,80 +342,13 @@ class Bitrix24SearchLimitRestriction extends Bitrix24QuantityRestriction
 		}
 	}
 
-	public function notifyIfLimitAlmostExceed(int $entityTypeId, int $userId = null): void
-	{
-		$limitWarningValue = $this->getLimitWarningValue($entityTypeId, $userId);
-		if ($limitWarningValue > 0)
-		{
-			$this->notifyLimitWarning($entityTypeId, $limitWarningValue, $userId);
-		}
-	}
-
-	public function getLimitWarningValue(int $entityTypeId, int $userId = null): int
-	{
-		if ($userId === null)
-		{
-			$userId = Container::getInstance()->getContext()->getUserId();
-		}
-
-		if (!$userId)
-		{
-			return 0;
-		}
-
-		$limit = $this->getQuantityLimit();
-		if ($limit <= 0)
-		{
-			return 0;
-		}
-
-		if (Bitrix24Manager::hasPurchasedLicense())
-		{
-			return 0;
-		}
-
-		return $this->calculateLimitWarningValue(
-			$this->getUserNotifiedCount($entityTypeId, $userId),
-			$this->getCount($entityTypeId),
-			$limit
-		);
-	}
-
-	protected function calculateLimitWarningValue(int $notifiedCount, int $count, int $limit): int
-	{
-		if ($count > $limit)
-		{
-			return 0;
-		}
-
-		$thresholds = [50, 100];
-		if ($notifiedCount < $count)
-		{
-			foreach ($thresholds as $threshold)
-			{
-				$notificationLimit = $limit - $threshold;
-				if ($notificationLimit <= 0)
-				{
-					continue;
-				}
-
-				if ($count > $notificationLimit && $notifiedCount < $notificationLimit)
-				{
-					return $notificationLimit;
-				}
-			}
-		}
-
-		return 0;
-	}
-
 	protected function getUserNotifiedCount(int $entityTypeId, int $userId): int
 	{
 		return (int)CUserOptions::GetOption(
 			'crm',
 			'crm_entity_search_limit_notification_' . $entityTypeId,
 			0,
-			$userId
+			$userId,
 		);
 	}
 
@@ -334,7 +359,7 @@ class Bitrix24SearchLimitRestriction extends Bitrix24QuantityRestriction
 			'crm_entity_search_limit_notification_' . $entityTypeId,
 			$count,
 			false,
-			$userId
+			$userId,
 		);
 	}
 }

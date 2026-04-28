@@ -40,6 +40,11 @@ class HrUserService
 		return $userCollection->filter(fn (User $user) => $this->isEmployee($user));
 	}
 
+	public function filterEmployeesByUserIds(array $userIds): array
+	{
+		return $this->hrUserService->filterEmployees($userIds);
+	}
+
 	public function filterNotEmployees(UserCollection $userCollection): UserCollection
 	{
 		return $userCollection->filter(fn (User $user) => !$this->isEmployee($user));

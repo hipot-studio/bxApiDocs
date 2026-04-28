@@ -23,7 +23,7 @@ class Crm extends UserFieldBase
 
 		if (!$rendered)
 		{
-			\Bitrix\Main\UI\Extension::load('ui.fonts.opensans');
+			\Bitrix\Main\UI\Extension::load(['ui.fonts.opensans', 'intranet.old-interface.intranet-common']);
 			Asset::getInstance()->addCss('/bitrix/js/crm/css/crm.css');
 			$rendered = true;
 		}

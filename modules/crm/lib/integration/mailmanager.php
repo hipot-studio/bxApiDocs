@@ -336,8 +336,6 @@ final class MailManager implements ICanSendMessage
 			$activityFields['STORAGE_ELEMENT_IDS'] = $attachments;
 		}
 
-		\Bitrix\Crm\Activity\Provider\Email::compressActivity($activityFields);
-
 		$activityId = (int)\CCrmActivity::Add(
 			$activityFields,
 			false,

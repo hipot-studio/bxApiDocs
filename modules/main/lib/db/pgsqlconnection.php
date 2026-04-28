@@ -107,7 +107,7 @@ class PgsqlConnection extends Connection
 	/**
 	 * @inheritDoc
 	 */
-	protected function queryInternal($sql, array $binds = null, Diag\SqlTrackerQuery $trackerQuery = null)
+	protected function queryInternal($sql, ?array $binds = null, ?Diag\SqlTrackerQuery $trackerQuery = null)
 	{
 		$this->connectInternal();
 
@@ -137,7 +137,7 @@ class PgsqlConnection extends Connection
 	/**
 	 * @inheritDoc
 	 */
-	protected function createResult($result, Diag\SqlTrackerQuery $trackerQuery = null)
+	protected function createResult($result, ?Diag\SqlTrackerQuery $trackerQuery = null)
 	{
 		return new PgsqlResult($result, $this, $trackerQuery);
 	}

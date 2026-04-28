@@ -135,7 +135,7 @@ abstract class BaseSender
 
 			return $result;
 		}
-//array ('ID' => '12233', 'ENTITY_ID' => 'COMPANY', 'ELEMENT_ID' => '2082', 'TYPE_ID' => 'EMAIL', 'VALUE_TYPE' => 'WORK', 'COMPLEX_ID' => 'EMAIL_WORK', 'VALUE' => 'atoll-it@mail.ru',)
+
 		return $result->setData([
 			'ELEMENT_ID' => (int)$ownerData['ELEMENT_ID'],
 			'VALUE' => htmlspecialcharsbx($ownerData['VALUE']),

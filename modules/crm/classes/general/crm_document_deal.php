@@ -2,6 +2,9 @@
 
 use Bitrix\Crm;
 use Bitrix\Crm\Category\DealCategory;
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Main;
 
 if (!CModule::IncludeModule('bizproc'))
@@ -456,6 +459,7 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 			{
 				$DB->Rollback();
 			}
+
 			throw new Exception($CCrmEntity->LAST_ERROR);
 		}
 
@@ -464,36 +468,29 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 			Crm\Tracking\UI\Details::saveEntityData(\CCrmOwnerType::Deal, $id, $arFields);
 		}
 
-		if (COption::GetOptionString('crm', 'start_bp_within_bp', 'N') == 'Y')
+		$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Deal, (int)$id));
+		$result =
+			$starter
+				->setContextModuleId('bizproc')
+				->runOnInnerDocumentAdd(
+					new RunDataDto(
+						actualFields: $arFields
+					)
+				)
+		;
+
+		if ($useTransaction)
 		{
-			$CCrmBizProc = new CCrmBizProc('DEAL');
-			if (false === $CCrmBizProc->CheckFields(false, true))
+			if ($result->isSuccess())
 			{
-				if ($useTransaction)
-				{
-					$DB->Rollback();
-				}
-				throw new Exception($CCrmBizProc->LAST_ERROR);
+				$DB->Commit();
 			}
-
-			if ($id && $id > 0 && !$CCrmBizProc->StartWorkflow($id))
+			else
 			{
-				if ($useTransaction)
-				{
-					$DB->Rollback();
-				}
-				throw new Exception($CCrmBizProc->LAST_ERROR);
+				$DB->Rollback();
+
+				throw new Exception(CBPHelper::stringify($result->getErrorMessages()));
 			}
-		}
-
-		//region automation
-		$starter = new Crm\Automation\Starter(\CCrmOwnerType::Deal, $id);
-		$starter->setContextToBizproc()->runOnAdd();
-		//endregion
-
-		if ($id && $id > 0 && $useTransaction)
-		{
-			$DB->Commit();
 		}
 
 		return $id;
@@ -616,36 +613,30 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 			);
 		}
 
-		if (COption::GetOptionString('crm', 'start_bp_within_bp', 'N') == 'Y')
+		$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Deal, (int)$arDocumentID['ID']));
+		$result =
+			$starter
+				->setContextModuleId('bizproc')
+				->runOnInnerDocumentUpdate(
+					new RunDataDto(
+						actualFields: $arFields,
+						previousFields: $arPresentFields,
+					)
+				)
+		;
+
+		if ($useTransaction)
 		{
-			$CCrmBizProc = new CCrmBizProc('DEAL');
-			if (false === $CCrmBizProc->CheckFields($arDocumentID['ID'], true))
+			if ($result->isSuccess())
 			{
-				if ($useTransaction)
-				{
-					$DB->Rollback();
-				}
-				throw new Exception($CCrmBizProc->LAST_ERROR);
+				$DB->Commit();
 			}
-
-			if ($res && !$CCrmBizProc->StartWorkflow($arDocumentID['ID']))
+			else
 			{
-				if ($useTransaction)
-				{
-					$DB->Rollback();
-				}
-				throw new Exception($CCrmBizProc->LAST_ERROR);
+				$DB->Rollback();
+
+				throw new Exception(CBPHelper::stringify($result->getErrorMessages()));
 			}
-		}
-
-		//region automation
-		$starter = new Crm\Automation\Starter(\CCrmOwnerType::Deal, $arDocumentID['ID']);
-		$starter->setContextToBizproc()->runOnUpdate($arFields, $arPresentFields);
-		//endregion
-
-		if ($res && $useTransaction)
-		{
-			$DB->Commit();
 		}
 	}
 

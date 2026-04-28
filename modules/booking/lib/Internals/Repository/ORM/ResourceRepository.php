@@ -232,6 +232,7 @@ class ResourceRepository implements ResourceRepositoryInterface
 			->setTemplateTypeDelayed($resource->getTemplateTypeDelayed())
 			->setDelayedDelay($resource->getDelayedNotificationDelay())
 			->setDelayedCounterDelay($resource->getDelayedCounterDelay())
+			->setSenderCode($resource->getSenderCode())
 			->save()
 		;
 		if (!$notificationSettingsSaveResult->isSuccess())
@@ -283,6 +284,7 @@ class ResourceRepository implements ResourceRepositoryInterface
 			->setTemplateTypeDelayed($resource->getTemplateTypeDelayed())
 			->setDelayedDelay($resource->getDelayedNotificationDelay())
 			->setDelayedCounterDelay($resource->getDelayedCounterDelay())
+			->setSenderCode($resource->getSenderCode())
 			->save()
 		;
 		if (!$notificationSettingsSaveResult->isSuccess())

@@ -753,6 +753,40 @@ class Helper
 		}
 	}
 
+	protected static function getInactiveRecipientsFilter(
+		array $value,
+		array &$filter,
+		array $extraCallbackParams = [],
+	): void
+	{
+		$days = self::normalizeInactiveDays($value);
+		if ($days <= 0)
+		{
+			return;
+		}
+
+		$filter['INACTIVE_RECIPIENTS'] = $days;
+	}
+
+	protected static function normalizeInactiveDays(array $filterValue): int
+	{
+		$daysFrom = (int)($filterValue['CLIENT_INACTIVE_DAYS_from'] ?? 0);
+		$daysTo = (int)($filterValue['CLIENT_INACTIVE_DAYS_to'] ?? 0);
+		$days = $daysFrom > 0 ? $daysFrom : $daysTo;
+
+		if ($days < 1)
+		{
+			return 0;
+		}
+
+		if ($days > 730)
+		{
+			$days = 730;
+		}
+
+		return $days;
+	}
+
 	/**
 	 * Callback on draw of result view.
 	 *

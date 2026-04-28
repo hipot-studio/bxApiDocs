@@ -95,6 +95,12 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 		}
 		else
 		{
+			if ($this->isPortalEvent($localEvent))
+			{
+				$this->eventId = $localEvent['ID'];
+				return true;
+			}
+
 			$preparedEvent = $this->prepareToUpdateEvent($icalEvent, $localEvent);
 			if ($this->updateEvent($preparedEvent, $localEvent))
 			{
@@ -560,14 +566,7 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 			$event['VERSION'] = $icalEvent->getSequence()->getValue();
 		}
 
-		if ($icalEvent->getDescription() !== null)
-		{
-			$event['DESCRIPTION'] = $icalEvent->getDescription()->getValue();
-		}
-		else
-		{
-			$event['DESCRIPTION'] = null;
-		}
+		$event['DESCRIPTION'] = $icalEvent->getDescription()?->getValue();
 
 		if ($icalEvent->getRRule() !== null)
 		{

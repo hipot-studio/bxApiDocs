@@ -26,7 +26,7 @@ final class FactoryProvider
 	/**
 	 * @return Factory[]
 	 */
-	public static function getFactoriesMetaData(): array
+	public static function getFactoriesMetaData(array $categories = []): array
 	{
 		if (self::isExtranetUser())
 		{
@@ -42,7 +42,7 @@ final class FactoryProvider
 		foreach ($factories as $factory)
 		{
 			$entityTypeId = $factory->getEntityTypeId();
-			$categoryId = self::getCategoryIdForCheckPermission($factory);
+			$categoryId = self::getCategoryIdForCheckPermission($factory, $categories);
 
 			if (
 				(is_null($categoryId) && $userPermissions->entityType()->canReadItems($entityTypeId))
@@ -146,11 +146,18 @@ final class FactoryProvider
 		return $result;
 	}
 
-	private static function getCategoryIdForCheckPermission(Factory $factory): ?int
+	private static function getCategoryIdForCheckPermission(Factory $factory, array $categories = []): ?int
 	{
+		$entityTypeId = $factory->getEntityTypeId();
+		$categoryId = $categories[$entityTypeId] ?? null;
+		if ($categoryId !== null)
+		{
+			return (int)$categoryId;
+		}
+
 		return (
-			$factory->getEntityTypeId() === \CCrmOwnerType::Contact
-			|| $factory->getEntityTypeId() === \CCrmOwnerType::Company
+		$entityTypeId === \CCrmOwnerType::Contact
+			|| $entityTypeId === \CCrmOwnerType::Company
 				? $factory->getDefaultCategory()->getId()
 				: null
 		);

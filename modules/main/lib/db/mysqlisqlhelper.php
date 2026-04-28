@@ -414,7 +414,7 @@ class MysqliSqlHelper extends SqlHelper
 	/**
 	 * @inheritdoc
 	 */
-	public function getFieldByColumnType($name, $type, array $parameters = null)
+	public function getFieldByColumnType($name, $type, ?array $parameters = null)
 	{
 		switch($type)
 		{

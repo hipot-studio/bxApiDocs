@@ -6,6 +6,8 @@ use Bitrix\Translate;
 
 /**
  * Timer class.
+ *
+ * @internal
  */
 class Timer implements Translate\Controller\ITimeLimit
 {

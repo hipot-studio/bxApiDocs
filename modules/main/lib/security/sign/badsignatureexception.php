@@ -17,7 +17,7 @@ class BadSignatureException
 	 * @param string $message Message.
 	 * @param \Exception | null $previous Previous exception.
 	 */
-	public function __construct($message = "", \Throwable $previous = null)
+	public function __construct($message = "", ?\Throwable $previous = null)
 	{
 		parent::__construct($message, 140, '', 0, $previous);
 	}

@@ -71,9 +71,9 @@ class Chats implements Entity
 		return $this->messageIds;
 	}
 
-	public function getChatItems(): ChatsSync
+	public function getChatItems(bool $withCounters = false): ChatsSync
 	{
-		return new ChatsSync($this->getChats(), $this->getRecent());
+		return new ChatsSync($this->getChats(), $this->getRecent(), $withCounters);
 	}
 
 	private function getChats(): array

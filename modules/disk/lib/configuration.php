@@ -8,6 +8,7 @@ use Bitrix\Disk\Document\BitrixHandler;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Enum\CustomServerTypes;
 use Bitrix\Disk\Internal\Enum\ServersTypesEnum;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Type\DateTime;
@@ -22,6 +23,7 @@ final class Configuration
 	public const REVISION_API       = 8;
 	public const OPTION_ONLYOFFICE_SERVERS_TYPE = 'disk_onlyoffice_servers_type';
 	public const OPTION_ONLYOFFICE_SWITCH_SERVERS_TYPE_STATE = 'disk_onlyoffice_switch_servers_type_state';
+	public const OPTION_DEFAULT_VIEWER_CUSTOM_CONFIG_TYPE = 'default_viewer_service_custom_config_type';
 
 	public static function isEnabledDefaultEditInUf()
 	{
@@ -309,6 +311,38 @@ final class Configuration
 		Option::set(Driver::INTERNAL_MODULE_ID, 'default_viewer_service', $code);
 	}
 
+	public static function setDefaultViewerCustomConfigType(CustomServerTypes $type): void
+	{
+		Option::set(
+			moduleId: Driver::INTERNAL_MODULE_ID,
+			name: self::OPTION_DEFAULT_VIEWER_CUSTOM_CONFIG_TYPE,
+			value: $type->value,
+		);
+	}
+
+	public static function getDefaultViewerCustomConfigType(): ?CustomServerTypes
+	{
+		$defaultViewerCustomConfigType = Option::get(
+			moduleId: Driver::INTERNAL_MODULE_ID,
+			name: self::OPTION_DEFAULT_VIEWER_CUSTOM_CONFIG_TYPE,
+		);
+
+		if ($defaultViewerCustomConfigType === '')
+		{
+			return null;
+		}
+
+		return CustomServerTypes::tryFrom($defaultViewerCustomConfigType);
+	}
+
+	public static function removeDefaultViewerCustomConfigType(): void
+	{
+		Option::delete(
+			moduleId: Driver::INTERNAL_MODULE_ID,
+			filter: ['name' => self::OPTION_DEFAULT_VIEWER_CUSTOM_CONFIG_TYPE],
+		);
+	}
+
 	/**
 	 * @deprecated
 	 * @return bool
@@ -466,6 +500,26 @@ final class Configuration
 			moduleId: Driver::INTERNAL_MODULE_ID,
 			filter: ['name' => self::OPTION_ONLYOFFICE_SWITCH_SERVERS_TYPE_STATE],
 		);
+	}
+
+	public static function getCustomServers(): ?array
+	{
+		return Configuration::getFromSettings('customServers');
+	}
+
+	public static function getCustomServersRegions(): ?array
+	{
+		return Configuration::getFromSettings('customServersRegions');
+	}
+
+	public static function getVersionMatchers(): ?array
+	{
+		return Configuration::getFromSettings('versionMatchers');
+	}
+
+	protected static function getFromSettings(string $key): mixed
+	{
+		return \Bitrix\Main\Config\Configuration::getInstance('disk')->get($key);
 	}
 }
 

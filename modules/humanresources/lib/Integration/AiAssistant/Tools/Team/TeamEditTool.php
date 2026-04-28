@@ -13,7 +13,7 @@ class TeamEditTool extends NodeEditTool
 
 	public function getName(): string
 	{
-		return 'edit';
+		return 'team_edit';
 	}
 
 	public function getDescription(): string

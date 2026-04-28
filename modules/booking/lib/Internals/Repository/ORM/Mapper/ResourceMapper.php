@@ -85,6 +85,7 @@ class ResourceMapper
 				->setTemplateTypeDelayed($ormNotificationSettings->getTemplateTypeDelayed())
 				->setDelayedNotificationDelay($ormNotificationSettings->getDelayedDelay())
 				->setDelayedCounterDelay($ormNotificationSettings->getDelayedCounterDelay())
+				->setSenderCode($ormNotificationSettings->getSenderCode())
 			;
 		}
 

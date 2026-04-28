@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Im\Integration\UI\EntitySelector;
 
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\UserTable;
 use Bitrix\Socialnetwork\Integration\UI\EntitySelector\UserProvider;
@@ -130,7 +131,7 @@ class RecentChatProvider extends BaseProvider
 
 			if ($item['USER'] && $item['USER']['BOT'])
 			{
-				$customData['imBot'] = \Bitrix\Im\Bot::getCache($item['ID']) ?: [];
+				$customData['imBot'] = BotData::getInstance((int)$item['ID'])->toArray();
 			}
 		}
 

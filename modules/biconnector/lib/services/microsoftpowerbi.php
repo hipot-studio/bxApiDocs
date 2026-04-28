@@ -13,9 +13,9 @@ class MicrosoftPowerBI extends Service
 {
 	protected static $serviceId = 'pbi';
 	public static $dateFormats = [
-		'datetime_format' => '%Y-%m-%d %H:%i:%s',
+		'datetime_format' => 'YYYY-MM-DD HH:MI:SS',
 		'datetime_format_php' => 'Y-m-d H:i:s',
-		'date_format' => '%Y-%m-%d',
+		'date_format' => 'YYYY-MM-DD',
 		'date_format_php' => 'Y-m-d',
 	];
 

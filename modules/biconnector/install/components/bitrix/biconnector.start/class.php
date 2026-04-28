@@ -73,7 +73,7 @@ class BIConnectorStartComponent extends CBitrixComponent
 			}
 		}
 
-		$this->arResult['ACCESS_KEY'] = $accessKey ? $accessKey . LANGUAGE_ID : '';
+		$this->arResult['ACCESS_KEY'] = $accessKey ?: '';
 
 		if (\Bitrix\Main\Loader::includeModule('rest'))
 		{

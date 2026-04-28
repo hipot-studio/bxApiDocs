@@ -1,5 +1,6 @@
 <?php
 namespace Bitrix\Crm\Integrity;
+use Bitrix\Crm\EntityAdapter;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Main;
 use Bitrix\Crm\EntityRequisite;
@@ -7,7 +8,9 @@ use Bitrix\Crm\EntityPreset;
 //IncludeModuleLangFile(__FILE__);
 abstract class DuplicateChecker
 {
-	protected $entityTypeID = \CCrmOwnerType::Undefined;
+	protected int $entityTypeID = \CCrmOwnerType::Undefined;
+	protected bool $useStrictComparison = false;
+
 	protected function __construct($entityTypeID)
 	{
 		if(!is_int($entityTypeID))
@@ -21,12 +24,20 @@ abstract class DuplicateChecker
 		}
 		$this->entityTypeID = $entityTypeID;
 	}
+
 	public function getEntityID()
 	{
 		return $this->entityTypeID;
 	}
-	abstract public function findDuplicates(\Bitrix\Crm\EntityAdapter $adapter, DuplicateSearchParams $params);
-	public function findMultifieldDuplicates($type, \Bitrix\Crm\EntityAdapter $adapter, DuplicateSearchParams $params)
+
+	/**
+	 * @param EntityAdapter $adapter
+	 * @param DuplicateSearchParams $params
+	 * @return Duplicate[]
+	 */
+	abstract public function findDuplicates(EntityAdapter $adapter, DuplicateSearchParams $params);
+
+	public function findMultifieldDuplicates($type, EntityAdapter $adapter, DuplicateSearchParams $params)
 	{
 		if(!is_string($type))
 		{
@@ -83,7 +94,7 @@ abstract class DuplicateChecker
 		unset($multiField);
 		return $dups;
 	}
-	public function findRequisiteDuplicates(\Bitrix\Crm\EntityAdapter $adapter, DuplicateSearchParams $params)
+	public function findRequisiteDuplicates(EntityAdapter $adapter, DuplicateSearchParams $params)
 	{
 		$dups = array();
 
@@ -223,7 +234,7 @@ abstract class DuplicateChecker
 
 		return $dups;
 	}
-	public function findBankDetailDuplicates(\Bitrix\Crm\EntityAdapter $adapter, DuplicateSearchParams $params)
+	public function findBankDetailDuplicates(EntityAdapter $adapter, DuplicateSearchParams $params)
 	{
 		$dups = array();
 
@@ -374,5 +385,20 @@ abstract class DuplicateChecker
 		}
 
 		return $dups;
+	}
+
+	public function setStrictComparison($useStrictComparison)
+	{
+		if (!is_bool($useStrictComparison))
+		{
+			throw new Main\ArgumentTypeException('useStrictComparison', 'boolean');
+		}
+
+		$this->useStrictComparison = $useStrictComparison;
+	}
+
+	public function isStrictComparison()
+	{
+		return $this->useStrictComparison;
 	}
 }

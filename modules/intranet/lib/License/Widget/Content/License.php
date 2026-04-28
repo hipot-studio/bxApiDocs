@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\License\Widget\Content;
 
+use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\License\ExpirationNotifier;
 use Bitrix\Main\Application;
 use Bitrix\Main\Context;
@@ -14,12 +15,14 @@ class License extends BaseContent
 	private Main\License $license;
 	private ExpirationNotifier $expirationNotifier;
 	private bool $isCIS;
+	private bool $isCurrentUserAdmin;
 
 	public function __construct()
 	{
 		$this->license = Application::getInstance()->getLicense();
 		$this->isCIS = in_array($this->license->getRegion(), ['ru', 'by', 'kz']);
 		$this->expirationNotifier = new ExpirationNotifier();
+		$this->isCurrentUserAdmin = CurrentUser::get()->canDoOperation('bitrix24_config');
 	}
 
 	public function getName(): string
@@ -91,6 +94,7 @@ class License extends BaseContent
 			'link' => $this->isCIS
 				? SITE_DIR . 'bitrix/admin/buy_support.php'
 				: (new Main\License\UrlProvider())->getPurchaseHistoryUrl(),
+			'isAdminRestricted' => $this->isCIS && !$this->isCurrentUserAdmin,
 			'type' => $this->isCIS ? 'GET' : 'POST',
 			'hashKey' => $this->isCIS ? null : $this->license->getHashLicenseKey(),
 			'isAvailable' => $isAvailable,
@@ -177,6 +181,7 @@ class License extends BaseContent
 		return [
 			'text' => Loc::getMessage('INTRANET_LICENSE_WIDGET_CONTENT_LICENSE_MORE_INFORMATION'),
 			'link' => SITE_DIR . 'bitrix/admin/update_system.php',
+			'isAdminRestricted' => !$this->isCurrentUserAdmin,
 		];
 	}
 }

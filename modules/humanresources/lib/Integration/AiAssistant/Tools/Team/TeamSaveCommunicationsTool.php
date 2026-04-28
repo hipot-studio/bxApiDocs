@@ -13,7 +13,7 @@ class TeamSaveCommunicationsTool extends NodeSaveCommunicationsTool
 
 	public function getName(): string
 	{
-		return 'save_communications_list';
+		return 'team_save_communications_list';
 	}
 
 	public function getDescription(): string

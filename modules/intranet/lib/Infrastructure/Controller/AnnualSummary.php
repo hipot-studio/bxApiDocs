@@ -5,7 +5,6 @@ namespace Bitrix\Intranet\Infrastructure\Controller;
 use Bitrix\Intranet\ActionFilter\UserType;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Internal\Integration\Main\AnnualSummarySign;
-use Bitrix\Intranet\Internal\Provider\AnnualSummary\FeatureProvider;
 use Bitrix\Intranet\Internal\Service\AnnualSummary\Visibility;
 use Bitrix\Intranet\Public\Provider\Portal\DomainProvider;
 use Bitrix\Main\Engine\Controller;

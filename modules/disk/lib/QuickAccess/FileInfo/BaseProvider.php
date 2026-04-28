@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\QuickAccess\FileInfo;
 
+use Bitrix\Disk\Public\TypeFileMap;
 use Bitrix\Disk\QuickAccess\Storage\ScopeStorage;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Config\Option;
@@ -41,6 +42,8 @@ abstract class BaseProvider implements ProviderInterface
 			$filePath = $filenameEncoded;
 		}
 
+		$normalizedMimeType = TypeFile::normalizeMimeType($fileData['CONTENT_TYPE'], $filePath);
+		$fileExtension = TypeFile::getExtensionByMimeType($normalizedMimeType);
 		return new FileInfoDto(
 			id: (int)$fileData['ID'],
 			handlerId: (int)$fileData['HANDLER_ID'],
@@ -49,8 +52,9 @@ abstract class BaseProvider implements ProviderInterface
 			path: $filePath,
 			dir: $fileData['SUBDIR'],
 			filename: $fileData['FILE_NAME'],
-			contentType: TypeFile::normalizeMimeType($fileData['CONTENT_TYPE'], $filePath),
+			contentType: $normalizedMimeType,
 			expirationTime: time() + ScopeStorage::DEFAULT_FILE_METADATA_TTL,
+			typeFile: TypeFileMap::fromTypeFileConstant(TypeFile::getByExtension($fileExtension)),
 		);
 	}
 }

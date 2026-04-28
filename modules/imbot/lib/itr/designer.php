@@ -1,6 +1,8 @@
 <?php
 namespace Bitrix\ImBot\Itr;
 
+use Bitrix\Im\Bot;
+
 class Designer
 {
 	public $botId = 0;
@@ -84,7 +86,7 @@ class Designer
 		{
 			$messageText = str_replace('#USER_NAME#', $this->userData->getName(), $menuItemAction['TEXT']);
 
-			\Bitrix\Im\Bot::addMessage(Array('BOT_ID' => $this->botId), Array(
+			Bot::addMessage(Array('BOT_ID' => $this->botId), Array(
 				'DIALOG_ID' => $this->dialogId,
 				'MESSAGE' => $messageText
 			));
@@ -109,18 +111,10 @@ class Designer
 				'LEAVE' => $menuItemAction['LEAVE']? 'Y': 'N'
 			));
 		}
-		else if ($menuItemAction['TYPE'] == Item::TYPE_BOT)
+		else if ($menuItemAction['TYPE'] === Item::TYPE_BOT)
 		{
-			$botId = 0;
-			$bots = \Bitrix\Im\Bot::getListCache();
-			foreach ($bots as $botData)
-			{
-				if ($botData['CODE'] == $menuItemAction['BOT_CODE'] && $botData['OPENLINE'] == 'Y')
-				{
-					$botId = $botData['BOT_ID'];
-					break;
-				}
-			}
+			$botId = Bot::getOpenLineBotIdByCode((string)$menuItemAction['BOT_CODE']);
+
 			if ($botId)
 			{
 				$chat = new \CIMChat($this->botId);
@@ -130,7 +124,7 @@ class Designer
 			else if ($menuItemAction['ERROR_TEXT'])
 			{
 				$messageText = str_replace('#USER_NAME#', $this->userData->getName(), $menuItemAction['ERROR_TEXT']);
-				\Bitrix\Im\Bot::addMessage(Array('BOT_ID' => $this->botId), Array(
+				Bot::addMessage(Array('BOT_ID' => $this->botId), Array(
 					'DIALOG_ID' => $this->dialogId,
 					'MESSAGE' => $messageText
 				));
@@ -172,7 +166,7 @@ class Designer
 
 		$messageText = str_replace('#USER_NAME#', $this->userData->getName(), $messageText);
 
-		\Bitrix\Im\Bot::addMessage(Array('BOT_ID' => $this->botId), Array(
+		Bot::addMessage(Array('BOT_ID' => $this->botId), Array(
 			'DIALOG_ID' => $this->dialogId,
 			'MESSAGE' => $messageText
 		));
@@ -184,13 +178,13 @@ class Designer
 	{
 		if (self::$executed)
 			return false;
-		
+
 		list($itemId) = explode(" ", $text);
 
 		$this->execMenuItem($itemId);
 
 		$this->getMenuItems();
-		
+
 		self::$executed = true;
 
 		return true;

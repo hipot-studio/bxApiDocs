@@ -6,10 +6,8 @@ namespace Bitrix\Disk\QuickAccess;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
-use Bitrix\Disk\File;
 use Bitrix\Disk\QuickAccess\FileInfo\ProviderFactory;
 use Bitrix\Disk\QuickAccess\Storage\ScopeStorage;
-use Bitrix\Disk\TypeFile;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\HttpRequest;
@@ -19,7 +17,6 @@ use Bitrix\Main\Security\Sign\BadSignatureException;
 use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\Web\Cookie;
 use Bitrix\Main\Web\Json;
-use Bitrix\Main\Web\Uri;
 
 /**
  * Class ScopeTokenService
@@ -340,7 +337,11 @@ class ScopeTokenService
 		$cipher->setIvSalt(\CMain::GetServerUniqID());
 		$encryptedData = $cipher->encrypt($packedData, $this->signerKey);
 
-		return base64_encode($encryptedData);
+		return strtr(
+			string: base64_encode($encryptedData),
+			from: '+/',
+			to: '-_',
+		);
 	}
 
 	/**

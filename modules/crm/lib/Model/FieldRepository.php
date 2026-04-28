@@ -8,6 +8,7 @@ use Bitrix\Crm\Entity\CommentsHelper;
 use Bitrix\Crm\FieldMultiTable;
 use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
 use Bitrix\Crm\ProductRowTable;
 use Bitrix\Crm\RepeatSale\Log\Entity\RepeatSaleLogTable;
@@ -64,11 +65,15 @@ final class FieldRepository
 
 	public function getCreatedTime(
 		string $fieldName = Item::FIELD_NAME_CREATED_TIME,
-		bool $feminine = false
+		FieldCaptionGender $fieldCaptionGender = FieldCaptionGender::Masculine,
 	): ScalarField
 	{
-		$messageCode = 'CRM_TYPE_ITEM_FIELD_CREATED_TIME';
-		$this->prepareMessageCode($messageCode, $feminine);
+		/**
+		 * CRM_TYPE_ITEM_FIELD_CREATED_TIME
+		 * CRM_TYPE_ITEM_FIELD_CREATED_TIME_FEMININE
+		 * CRM_TYPE_ITEM_FIELD_CREATED_TIME_NEUTRAL
+		 */
+		$fieldCaption = $fieldCaptionGender->getMessage('CRM_TYPE_ITEM_FIELD_CREATED_TIME');
 
 		return
 			(new DatetimeField($fieldName))
@@ -76,17 +81,21 @@ final class FieldRepository
 				->configureDefaultValue(static function () {
 					return new DateTime();
 				})
-				->configureTitle(Loc::getMessage($messageCode))
+				->configureTitle($fieldCaption)
 		;
 	}
 
 	public function getUpdatedTime(
 		string $fieldName = Item::FIELD_NAME_UPDATED_TIME,
-		bool $feminine = false
+		FieldCaptionGender $fieldCaptionGender = FieldCaptionGender::Masculine,
 	): ScalarField
 	{
-		$messageCode = 'CRM_TYPE_ITEM_FIELD_UPDATED_TIME';
-		$this->prepareMessageCode($messageCode, $feminine);
+		/**
+		 * CRM_TYPE_ITEM_FIELD_UPDATED_TIME
+		 * CRM_TYPE_ITEM_FIELD_UPDATED_TIME_FEMININE
+		 * CRM_TYPE_ITEM_FIELD_UPDATED_TIME_NEUTRAL
+		 */
+		$fieldCaption = $fieldCaptionGender->getMessage('CRM_TYPE_ITEM_FIELD_UPDATED_TIME');
 
 		return
 			(new DatetimeField($fieldName))
@@ -94,17 +103,13 @@ final class FieldRepository
 				->configureDefaultValue(static function () {
 					return new DateTime();
 				})
-				->configureTitle(Loc::getMessage($messageCode))
+				->configureTitle($fieldCaption)
 		;
 	}
 
-	public function getMovedTime(
-		string $fieldName = Item::FIELD_NAME_MOVED_TIME,
-		bool $feminine = false
-	): ScalarField
+	public function getMovedTime(string $fieldName = Item::FIELD_NAME_MOVED_TIME): ScalarField
 	{
 		$messageCode = 'CRM_TYPE_ITEM_FIELD_MOVED_TIME_V2';
-		$this->prepareMessageCode($messageCode, $feminine);
 
 		return
 			(new DatetimeField($fieldName))
@@ -128,11 +133,15 @@ final class FieldRepository
 
 	public function getCreatedBy(
 		string $fieldName = Item::FIELD_NAME_CREATED_BY,
-		bool $feminine = false
+		FieldCaptionGender $fieldCaptionGender = FieldCaptionGender::Masculine,
 	): ScalarField
 	{
-		$messageCode = 'CRM_TYPE_ITEM_FIELD_CREATED_BY';
-		$this->prepareMessageCode($messageCode, $feminine);
+		/**
+		 * CRM_TYPE_ITEM_FIELD_CREATED_BY
+		 * CRM_TYPE_ITEM_FIELD_CREATED_BY_FEMININE
+		 * CRM_TYPE_ITEM_FIELD_CREATED_BY_NEUTRAL
+		 */
+		$fieldCaption = $fieldCaptionGender->getMessage('CRM_TYPE_ITEM_FIELD_CREATED_BY');
 
 		return
 			(new IntegerField($fieldName))
@@ -140,32 +149,32 @@ final class FieldRepository
 				->configureDefaultValue(static function () {
 					return Container::getInstance()->getContext()->getUserId();
 				})
-				->configureTitle(Loc::getMessage($messageCode))
+				->configureTitle($fieldCaption)
 		;
 	}
 
 	public function getUpdatedBy(
 		string $fieldName = Item::FIELD_NAME_UPDATED_BY,
-		bool $feminine = false
+		FieldCaptionGender $fieldCaptionGender = FieldCaptionGender::Masculine,
 	): ScalarField
 	{
-		$messageCode = 'CRM_TYPE_ITEM_FIELD_UPDATED_BY';
-		$this->prepareMessageCode($messageCode, $feminine);
+		/**
+		 * CRM_TYPE_ITEM_FIELD_UPDATED_BY
+		 * CRM_TYPE_ITEM_FIELD_UPDATED_BY_FEMININE
+		 * CRM_TYPE_ITEM_FIELD_UPDATED_BY_NEUTRAL
+		 */
+		$fieldCaption = $fieldCaptionGender->getMessage('CRM_TYPE_ITEM_FIELD_UPDATED_BY');
 
 		return
 			(new IntegerField($fieldName))
 				->configureRequired()
-				->configureTitle(Loc::getMessage($messageCode))
+				->configureTitle($fieldCaption)
 		;
 	}
 
-	public function getMovedBy(
-		string $fieldName = Item::FIELD_NAME_MOVED_BY,
-		bool $feminine = false
-	): ScalarField
+	public function getMovedBy(string $fieldName = Item::FIELD_NAME_MOVED_BY): ScalarField
 	{
 		$messageCode = 'CRM_TYPE_ITEM_FIELD_MOVED_BY_V2';
-		$this->prepareMessageCode($messageCode, $feminine);
 
 		return
 			(new IntegerField($fieldName))
@@ -174,14 +183,6 @@ final class FieldRepository
 				})
 				->configureTitle(Loc::getMessage($messageCode))
 		;
-	}
-
-	private function prepareMessageCode(string &$messageCode, bool $feminine = false): void
-	{
-		if ($feminine)
-		{
-			$messageCode .= '_FEMININE';
-		}
 	}
 
 	public function getLastActivityBy(string $fieldName = Item::FIELD_NAME_LAST_ACTIVITY_BY): ScalarField
@@ -786,6 +787,7 @@ final class FieldRepository
 			(new StringField($fieldName))
 				->configureNullable()
 				->configureSize(100)
+				->configureTitle(Loc::getMessage('CRM_TYPE_ITEM_FIELD_FULL_NAME'))
 		;
 	}
 
@@ -1034,5 +1036,22 @@ final class FieldRepository
 			Join::on('this.ID', 'ref.ENTITY_ID')
 				->where('ref.ENTITY_TYPE_ID', \CCrmOwnerType::Deal),
 		);
+	}
+
+	public function withNumberFormatFetchModifier(FloatField $field): FloatField
+	{
+		$field->addFetchDataModifier([self::class, 'getScaleFetchModifier']);
+
+		return $field;
+	}
+
+	public static function getScaleFetchModifier($value)
+	{
+		if (is_null($value) || $value === '')
+		{
+			return $value;
+		}
+
+		return number_format((float)$value, 2, '.', '');
 	}
 }

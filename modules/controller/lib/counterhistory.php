@@ -96,14 +96,12 @@ class CounterHistoryTable extends DataManager
 			new Fields\TextField(
 				'COMMAND_FROM',
 				[
-					'required' => true,
 					'title' => Loc::getMessage('COUNTER_HISTORY_ENTITY_COMMAND_FROM_FIELD'),
 				]
 			),
 			new Fields\TextField(
 				'COMMAND_TO',
 				[
-					'required' => true,
 					'title' => Loc::getMessage('COUNTER_HISTORY_ENTITY_COMMAND_TO_FIELD'),
 				]
 			),

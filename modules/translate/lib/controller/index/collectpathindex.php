@@ -8,6 +8,8 @@ use Bitrix\Translate\Index;
 
 /**
  * Harvester of the lang files disposition.
+ *
+ * @internal
  */
 class CollectPathIndex
 	extends Translate\Controller\Action

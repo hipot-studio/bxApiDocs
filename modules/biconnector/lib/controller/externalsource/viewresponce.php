@@ -8,7 +8,7 @@ use Bitrix\Main\Engine\Response;
 
 class ViewResponce extends Response\AjaxJson
 {
-	public function __construct($status = self::STATUS_SUCCESS, ErrorCollection $errorCollection = null)
+	public function __construct($status = self::STATUS_SUCCESS, ?ErrorCollection $errorCollection = null)
 	{
 		parent::__construct(status: $status, errorCollection: $errorCollection);
 

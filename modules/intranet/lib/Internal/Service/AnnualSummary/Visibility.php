@@ -16,7 +16,7 @@ class Visibility
 	{
 		return (int)Option::get('intranet', 'annual_summary_25_start_show', strtotime('2025-12-15')) <= time()
 			&& (int)Option::get('intranet', 'annual_summary_25_end_show', strtotime('2025-12-30')) > time()
-			&& (new AnnualSummaryRepository($this->userId))->has();
+			&& (new AnnualSummaryRepository())->has($this->userId);
 	}
 
 	public function canForceShow(): bool

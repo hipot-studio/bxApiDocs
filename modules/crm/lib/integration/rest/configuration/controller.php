@@ -4,8 +4,6 @@
 namespace Bitrix\Crm\Integration\Rest\Configuration;
 
 
-use Bitrix\Crm\Integration\Rest\Configuration\Entity;
-use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 use Exception;
@@ -61,7 +59,7 @@ class Controller
 			!is_string($manifestCode)
 			|| (
 				str_starts_with($manifestCode, 'automated_solution')
-				&& !RestrictionManager::getAutomatedSolutionExportImportRestriction()->hasPermission()
+				&& (new \Bitrix\Crm\Restriction\AutomatedSolutionImportedLimit())->isRestricted()
 			)
 		)
 		{

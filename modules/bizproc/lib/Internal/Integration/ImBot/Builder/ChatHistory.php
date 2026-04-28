@@ -16,19 +16,23 @@ class ChatHistory
 	private MessageCollection $messagePool;
 	private int $limit;
 	private int $botId;
+	private int $salt;
 	private readonly MentionService $mentionService;
+	private bool $usePseudonymizer = false;
 
 	public static function isSupported(): bool
 	{
 		return Loader::includeModule('im');
 	}
 
-	public function __construct(Message $targetMessage, int $limit, int $botId)
+	public function __construct(Message $targetMessage, int $limit, int $botId, int $salt = 0, bool $usePseudonymizer)
 	{
 		$this->messagePool = new MessageCollection();
 		$this->addTargetMessage($targetMessage);
 		$this->limit = $limit;
 		$this->botId = $botId;
+		$this->salt = $salt;
+		$this->usePseudonymizer = $usePseudonymizer;
 		$this->mentionService = ServiceLocator::getInstance()->get(MentionService::class);
 	}
 
@@ -158,7 +162,12 @@ class ChatHistory
 	{
 		$text =	$message->getMessage() . $this->getReplyMessageText($message);
 
-		return $this->mentionService->replaceBbMentions($text);
+		if (!$this->usePseudonymizer)
+		{
+			return $text;
+		}
+
+		return $this->mentionService->replaceBbMentions($text, $this->salt);
 	}
 
 	private function getReplyMessageText(Message $message): string

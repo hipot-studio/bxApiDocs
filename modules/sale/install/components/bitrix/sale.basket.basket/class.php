@@ -1496,13 +1496,13 @@ class CBitrixBasketComponent extends CBitrixComponent
 			$basketItem['WEIGHT'] = (float)$basketItem['WEIGHT'];
 			$basketItem['WEIGHT_FORMATED'] = roundEx($basketItem['WEIGHT'] / $this->weightKoef, SALE_WEIGHT_PRECISION).' '.$this->weightUnit;
 
-			$basketItem['PRICE'] = PriceMaths::roundPrecision((float)$basketItem['PRICE']);
+			$basketItem['PRICE'] = PriceMaths::roundByFormatCurrency((float)$basketItem['PRICE'], $basketItem['CURRENCY']);
 			$basketItem['PRICE_FORMATED'] = CCurrencyLang::CurrencyFormat($basketItem['PRICE'], $basketItem['CURRENCY'], true);
 
-			$basketItem['FULL_PRICE'] = PriceMaths::roundPrecision((float)$basketItem['BASE_PRICE']);
+			$basketItem['FULL_PRICE'] = PriceMaths::roundByFormatCurrency((float)$basketItem['BASE_PRICE'], $basketItem['CURRENCY']);
 			$basketItem['FULL_PRICE_FORMATED'] = CCurrencyLang::CurrencyFormat($basketItem['FULL_PRICE'], $basketItem['CURRENCY'], true);
 
-			$basketItem['DISCOUNT_PRICE'] = PriceMaths::roundPrecision((float)$basketItem['DISCOUNT_PRICE']);
+			$basketItem['DISCOUNT_PRICE'] = PriceMaths::roundByFormatCurrency((float)$basketItem['DISCOUNT_PRICE'], $basketItem['CURRENCY']);
 			$basketItem['DISCOUNT_PRICE_FORMATED'] = CCurrencyLang::CurrencyFormat($basketItem['DISCOUNT_PRICE'], $basketItem['CURRENCY'], true);
 
 			$basketItem['SUM_VALUE'] = $basketItem['PRICE'] * $basketItem['QUANTITY'];
@@ -1667,13 +1667,13 @@ class CBitrixBasketComponent extends CBitrixComponent
 		$basketItem['WEIGHT'] = (float)$basketItem['WEIGHT'];
 		$basketItem['WEIGHT_FORMATED'] = roundEx($basketItem['WEIGHT'] / $this->weightKoef, SALE_WEIGHT_PRECISION).' '.$this->weightUnit;
 
-		$basketItem['PRICE'] = PriceMaths::roundPrecision($basketItem['PRICE']);
+		$basketItem['PRICE'] = PriceMaths::roundByFormatCurrency($basketItem['PRICE'], $basketItem['CURRENCY']);
 		$basketItem['PRICE_FORMATED'] = CCurrencyLang::CurrencyFormat($basketItem['PRICE'], $basketItem['CURRENCY'], true);
 
-		$basketItem['FULL_PRICE'] = PriceMaths::roundPrecision($basketItem['BASE_PRICE']);
+		$basketItem['FULL_PRICE'] = PriceMaths::roundByFormatCurrency($basketItem['BASE_PRICE'], $basketItem['CURRENCY']);
 		$basketItem['FULL_PRICE_FORMATED'] = CCurrencyLang::CurrencyFormat($basketItem['FULL_PRICE'], $basketItem['CURRENCY'], true);
 
-		$basketItem['DISCOUNT_PRICE'] = PriceMaths::roundPrecision($basketItem['DISCOUNT_PRICE']);
+		$basketItem['DISCOUNT_PRICE'] = PriceMaths::roundByFormatCurrency($basketItem['DISCOUNT_PRICE'], $basketItem['CURRENCY']);
 		$basketItem['DISCOUNT_PRICE_FORMATED'] = CCurrencyLang::CurrencyFormat($basketItem['DISCOUNT_PRICE'], $basketItem['CURRENCY'], true);
 
 		$basketItem['SUM_VALUE'] = $basketItem['PRICE'] * $basketItem['QUANTITY'];
@@ -2654,19 +2654,19 @@ class CBitrixBasketComponent extends CBitrixComponent
 		$siteCurrency = Sale\Internals\SiteCurrencyTable::getSiteCurrency($this->getSiteId());
 		$result['CURRENCY'] = $siteCurrency;
 
-		$result['allSum'] = PriceMaths::roundPrecision($basketPrice);
+		$result['allSum'] = PriceMaths::roundByFormatCurrency($basketPrice, $siteCurrency);
 		$result['allSum_FORMATED'] = CCurrencyLang::CurrencyFormat($result['allSum'], $siteCurrency, true);
 
 		$result['allWeight'] = $basketWeight;
 		$result['allWeight_FORMATED'] = roundEx($basketWeight / $this->weightKoef, SALE_WEIGHT_PRECISION).' '.$this->weightUnit;
 
 		$result['PRICE_WITHOUT_DISCOUNT'] = CCurrencyLang::CurrencyFormat($basketBasePrice, $siteCurrency, true);
-		$result['DISCOUNT_PRICE_ALL'] = PriceMaths::roundPrecision($basketBasePrice - $basketPrice);
+		$result['DISCOUNT_PRICE_ALL'] = PriceMaths::roundByFormatCurrency($basketBasePrice - $basketPrice, $siteCurrency);
 		$result['DISCOUNT_PRICE_FORMATED'] = $result['DISCOUNT_PRICE_ALL_FORMATED'] = CCurrencyLang::CurrencyFormat($result['DISCOUNT_PRICE_ALL'], $siteCurrency, true);
 
 		if ($this->priceVatShowValue === 'Y')
 		{
-			$result['allVATSum'] = PriceMaths::roundPrecision($basketVatSum);
+			$result['allVATSum'] = PriceMaths::roundByFormatCurrency($basketVatSum, $siteCurrency);
 			$result['allVATSum_FORMATED'] = CCurrencyLang::CurrencyFormat($result['allVATSum'], $siteCurrency, true);
 			$result['allSum_wVAT_FORMATED'] = CCurrencyLang::CurrencyFormat($result['allSum'] - $result['allVATSum'], $siteCurrency, true);
 		}

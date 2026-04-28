@@ -270,12 +270,15 @@ final class QueueTable extends DataManager
 		return new Result();
 	}
 
-	public static function deleteByItem(ItemIdentifier $target): Result
+	public static function deleteByItem(
+		ItemIdentifier $target,
+		int $typeId = ScoreCall::TYPE_ID,
+	): Result
 	{
 		$jobIds = self::getJobIds([
 			'=ENTITY_TYPE_ID' => $target->getEntityTypeId(),
 			'=ENTITY_ID' => $target->getEntityId(),
-			'=TYPE_ID' => ScoreCall::TYPE_ID,
+			'=TYPE_ID' => $typeId,
 		]);
 
 		$sqlQuery = new SqlExpression(

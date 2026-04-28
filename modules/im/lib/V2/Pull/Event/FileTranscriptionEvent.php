@@ -43,4 +43,9 @@ class FileTranscriptionEvent extends BaseChatEvent
 
 		return $this->chat->getRelations()->filterActive()->getUserIds();
 	}
+
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
+	}
 }

@@ -6,6 +6,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Crm\Component\Base;
+use Bitrix\Crm\Feature;
+use Bitrix\Crm\Feature\RepeatSaleSandbox;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\RepeatSale\Job\Controller\RepeatSaleJobController;
@@ -671,33 +673,50 @@ HTML;
 		$showConfettiValue = $showConfetti ? 'true' : 'false';
 		$periodTypeId = $config['periodTypeId'] ?? PeriodType::Day30->value;
 
+		$widgetButton = new Button([
+			'text' => Loc::getMessage('CRM_REPEAT_SALE_SEGMENT_LIST_WIDGET_BUTTON'),
+			'color' => Color::LIGHT_BORDER,
+			'icon' => Icon::COPILOT,
+			'onclick' => new JsCode(
+				"BX.Crm.RepeatSale.Widget.execute(
+					'{$type}',
+					event.target,
+					{
+						showSettingsButton: false,
+						showConfetti: {$showConfettiValue},
+						periodTypeId: {$periodTypeId},
+						isRepeatSaleGrid: true,
+					},
+					event
+				)",
+			),
+			'dataset' => [
+				'id' => 'crm-repeat-sale-widget-button',
+				'subSection' => Dictionary::SUB_SECTION_DETAILS,
+			],
+		]);
+
+		if (Feature::enabled(RepeatSaleSandbox::class))
+		{
+			$sandboxButton = new Button([
+				'text' => Loc::getMessage('CRM_REPEAT_SALE_SEGMENT_LIST_SANDBOX_BUTTON'),
+				'color' => Color::LIGHT_BORDER,
+				'icon' => Icon::COPILOT,
+				'link' => '/crm/repeat-sale-sandbox/',
+			]);
+		}
+		else
+		{
+			$sandboxButton = null;
+		}
+
 		$parameters = [
 			'isWithFavoriteStar' => true,
 			'hideBorder' => true,
 			'buttons' => [
 				ButtonLocation::RIGHT => [
-					new Button([
-						'text' => Loc::getMessage('CRM_REPEAT_SALE_SEGMENT_LIST_WIDGET_BUTTON'),
-						'color' => Color::LIGHT_BORDER,
-						'icon' => Icon::COPILOT,
-						'onclick' => new JsCode(
-							"BX.Crm.RepeatSale.Widget.execute(
-								'{$type}',
-								event.target,
-								{
-									showSettingsButton: false,
-									showConfetti: {$showConfettiValue},
-									periodTypeId: {$periodTypeId},
-									isRepeatSaleGrid: true,
-								},
-								event
-							)",
-						),
-						'dataset' => [
-							'id' => 'crm-repeat-sale-widget-button',
-							'subSection' => Dictionary::SUB_SECTION_DETAILS,
-						],
-					]),
+					$widgetButton,
+					$sandboxButton,
 				],
 			],
 		];

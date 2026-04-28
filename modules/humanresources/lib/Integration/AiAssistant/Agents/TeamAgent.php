@@ -11,6 +11,7 @@ use Bitrix\HumanResources\Access\Permission\Mapper\TeamPermissionMapper;
 use Bitrix\HumanResources\Access\Permission\PermissionDictionary;
 use Bitrix\HumanResources\Access\Permission\PermissionHelper;
 use Bitrix\HumanResources\Access\Permission\PermissionVariablesDictionary;
+use Bitrix\HumanResources\Config\Storage;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamChangeParentTool;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamCreateTool;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamEditEmployeesTool;
@@ -55,6 +56,11 @@ class TeamAgent extends BaseAgent
 
 	public function canList(int $userId): bool
 	{
+		if (!Storage::instance()->isCompanyStructureConverted())
+		{
+			return false;
+		}
+
 		$user = UserModel::createFromId($userId);
 
 		if ($user->isAdmin())

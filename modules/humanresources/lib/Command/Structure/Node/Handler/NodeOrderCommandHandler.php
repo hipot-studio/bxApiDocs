@@ -44,7 +44,7 @@ class NodeOrderCommandHandler
 			return $result;
 		}
 
-		$siblings = $this->internalNodeRepository->getChildrenOfNode($parent);
+		$siblings = $this->internalNodeRepository->findChildrenByNodeIds([$parent->id]);
 
 		if ($siblings->empty())
 		{

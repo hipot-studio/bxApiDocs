@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Integration\BizProc\Starter;
 
-use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Dto\StarterConfigDto;
 use Bitrix\Bizproc\Starter\Dto\StarterDto;
 use Bitrix\Bizproc\Starter\Enum\Face;
@@ -18,15 +17,16 @@ use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Result;
 use CCrmBizProcHelper;
 
 final class CrmStarter
 {
 	public const AUTOMATION_SCOPE = 'automation';
 	public const REST_SCOPE = 'rest';
+	public const MOVE_TO_BACKGROUND_DELAY = 0;
 	private array $complexId;
 	private DocumentDto $document;
+	private string $contextModuleId = 'crm';
 
 	public function __construct(DocumentDto $document)
 	{
@@ -40,17 +40,37 @@ final class CrmStarter
 		$this->document = $document;
 	}
 
-	public function runOnDocumentAdd(RunDataDto $dto): void
+	public function setContextModuleId(string $moduleId): static
 	{
+		$this->contextModuleId = $moduleId;
+
+		return $this;
+	}
+
+	public function runOnDocumentAdd(RunDataDto $dto): Result
+	{
+		$result = new Result();
+
+		$freeScenarioResult = $this->runLeadFreeScenarioIfEnabled();
+		if ($freeScenarioResult)
+		{
+			return $result->setConversionResult($freeScenarioResult);
+		}
+
 		$starter = $this->getStarter(true, $dto);
 		if ($starter)
 		{
 			$starter->setValidateParameters(false);
-			$starter->start();
+			$result->addErrors($starter->start()->getErrors());
 		}
 		else
 		{
-			$this->runProcess($dto, \CCrmBizProcEventType::Create);
+			$processResult = $this->runProcess($dto, \CCrmBizProcEventType::Create);
+			$result->addErrors($processResult->getErrors());
+			if ($processResult->getConversionResult())
+			{
+				$result->setConversionResult($processResult->getConversionResult());
+			}
 
 			// region automation
 			foreach ($dto->events as $event)
@@ -58,29 +78,126 @@ final class CrmStarter
 				$this->executeTrigger($event);
 			}
 
-			$this->runAutomation($dto, \CCrmBizProcEventType::Create);
+			$automationResult = $this->runAutomation($dto, \CCrmBizProcEventType::Create);
+			$result->addErrors($automationResult->getErrors());
+			if ($automationResult->getConversionResult())
+			{
+				$result->setConversionResult($automationResult->getConversionResult());
+			}
 		}
+
+		return $this->addConversionResult($result);
 	}
 
-	public function runOnDocumentUpdate(RunDataDto $dto): void
+	public function runOnInnerDocumentAdd(RunDataDto $dto): Result
 	{
+		$result = new Result();
+
+		$freeScenarioResult = $this->runLeadFreeScenarioIfEnabled();
+		if ($freeScenarioResult)
+		{
+			return $result->setConversionResult($freeScenarioResult);
+		}
+
+		if (\Bitrix\Main\Config\Option::get('crm', 'start_bp_within_bp', 'N') === 'Y')
+		{
+			// both: process + automation
+			$starter = $this->getStarter(true, $dto);
+			if ($starter)
+			{
+				$starter->setValidateParameters(false);
+				$startResult = $starter->start();
+				$result->addErrors($startResult->getErrors());
+
+				return $this->addConversionResult($result);
+			}
+
+			$processResult = $this->runProcess($dto, \CCrmBizProcEventType::Create);
+			$result->addErrors($processResult->getErrors());
+			if ($processResult->getConversionResult())
+			{
+				$result->setConversionResult($processResult->getConversionResult());
+			}
+		}
+
+		$automationResult = $this->runAutomation($dto, \CCrmBizProcEventType::Create);
+		$result->addErrors($automationResult->getErrors());
+		if ($automationResult->getConversionResult())
+		{
+			$result->setConversionResult($automationResult->getConversionResult());
+		}
+
+		return $this->addConversionResult($result);
+	}
+
+	public function runOnInnerDocumentUpdate(RunDataDto $dto): Result
+	{
+		$result = new Result();
+
+		if (\Bitrix\Main\Config\Option::get('crm', 'start_bp_within_bp', 'N') === 'Y')
+		{
+			// both: process + automation
+			$starter = $this->getStarter(false, $dto);
+			if ($starter)
+			{
+				$starter->setValidateParameters(false);
+				$startResult = $starter->start();
+				$result->addErrors($startResult->getErrors());
+
+				return $this->addConversionResult($result);
+			}
+
+			$processResult = $this->runProcess($dto, \CCrmBizProcEventType::Edit);
+			$result->addErrors($processResult->getErrors());
+			if ($processResult->getConversionResult())
+			{
+				$result->setConversionResult($processResult->getConversionResult());
+			}
+		}
+
+		$automationResult = $this->runAutomation($dto, \CCrmBizProcEventType::Edit);
+		$result->addErrors($automationResult->getErrors());
+		if ($automationResult->getConversionResult())
+		{
+			$result->setConversionResult($automationResult->getConversionResult());
+		}
+
+		return $this->addConversionResult($result);
+	}
+
+	public function runOnDocumentUpdate(RunDataDto $dto): Result
+	{
+		$result = new Result();
+
 		$starter = $this->getStarter(false, $dto);
 		if ($starter)
 		{
 			$starter->setValidateParameters(false);
-			$starter->start();
+			$result->addErrors($starter->start()->getErrors());
 		}
 		else
 		{
-			$this->runProcess($dto, \CCrmBizProcEventType::Edit);
+			$processResult = $this->runProcess($dto, \CCrmBizProcEventType::Edit);
+			$result->addErrors($processResult->getErrors());
+			if ($processResult->getConversionResult())
+			{
+				$result->setConversionResult($processResult->getConversionResult());
+			}
 
 			foreach ($dto->events as $event)
 			{
 				$this->executeTrigger($event);
 			}
 
-			$this->runAutomation($dto, \CCrmBizProcEventType::Edit);
+			$automationResult = $this->runAutomation($dto, \CCrmBizProcEventType::Edit);
+			$result->addErrors($automationResult->getErrors());
+			if ($automationResult->getConversionResult())
+			{
+				$result->setConversionResult($automationResult->getConversionResult());
+			}
 		}
+
+		return $this->addConversionResult($result);
 	}
 
 	// todo: runOnEvents
@@ -107,8 +224,7 @@ final class CrmStarter
 				$this->fillStarterWithCommonTriggers($dto, $starter);
 			}
 
-			$startResult = $starter->start();
-			$result->addErrors($startResult->getErrors());
+			$result->addErrors($starter->start()->getErrors());
 		}
 		else
 		{
@@ -130,12 +246,21 @@ final class CrmStarter
 			}
 		}
 
-		return $result;
+		return $this->addConversionResult($result);
 	}
 
 	public function runAutomation(RunDataDto $dto, int $eventType): Result
 	{
 		$result = new Result();
+
+		if ($eventType === \CCrmBizProcEventType::Create)
+		{
+			$freeScenarioResult = $this->runLeadFreeScenarioIfEnabled();
+			if ($freeScenarioResult)
+			{
+				return $result->setConversionResult($freeScenarioResult);
+			}
+		}
 
 		if ($this->isStarterEnabled())
 		{
@@ -156,8 +281,7 @@ final class CrmStarter
 				$this->fillStarterWithCommonTriggers($dto, $starter);
 			}
 
-			$startResult = $starter->start();
-			$result->addErrors($startResult->getErrors());
+			$result->addErrors($starter->start()->getErrors());
 		}
 		elseif (Factory::isAutomationAvailable($this->document->entityTypeId))
 		{
@@ -166,6 +290,8 @@ final class CrmStarter
 			{
 				$starter->setUserId($dto->userId);
 			}
+
+			$starter->setContextModuleId($this->contextModuleId);
 
 			if ($dto->scope === self::AUTOMATION_SCOPE)
 			{
@@ -186,7 +312,35 @@ final class CrmStarter
 			}
 
 			$result->addErrors($runResult->getErrors());
-			$result->setData($runResult->getData());
+			if ($runResult->getConversionResult())
+			{
+				$result->setConversionResult($runResult->getConversionResult());
+			}
+		}
+
+		return $this->addConversionResult($result);
+	}
+
+	private function runLeadFreeScenarioIfEnabled(): ?\Bitrix\Crm\Automation\Converter\Result
+	{
+		if ($this->document->entityTypeId === \CCrmOwnerType::Lead && !\Bitrix\Crm\Settings\LeadSettings::isEnabled())
+		{
+			return
+				(new \Bitrix\Crm\Automation\Starter($this->document->entityTypeId, $this->document->entityId))
+					->runOnAdd()
+					->getConversionResult()
+			;
+		}
+
+		return null;
+	}
+
+	private function addConversionResult(Result $result): Result
+	{
+		$conversionResult = Factory::shiftConversionResult($this->document->entityTypeId, $this->document->entityId);
+		if ($conversionResult)
+		{
+			$result->setConversionResult($conversionResult);
 		}
 
 		return $result;
@@ -259,6 +413,17 @@ final class CrmStarter
 		if (in_array($responsibleKey, $changedFields, true))
 		{
 			$events[] = new EventDto(ResponsibleChangedTrigger::getCode(), [$this->document]);
+
+			$target = Factory::getTarget($this->document->entityTypeId, $this->document->entityId);
+			$events[] = new EventDto(
+				ResponsibleChangedTrigger::class,
+				[],
+				[
+					'TARGET' => $target,
+					'INPUT_DATA' => $changedFields,
+					'TRIGGER_CLASS' => ResponsibleChangedTrigger::class,
+				]
+			);
 		}
 
 		foreach ($events as $event)
@@ -284,7 +449,9 @@ final class CrmStarter
 					$dto->previousFields ?? []
 				)
 			))
-			->setContext(new ContextDto('crm', $face))
+			->setContext(
+				$this->createContextDto($face, $dto->isManual)
+			)
 			->setParameters($dto->parameters ?? [])
 			->setUser($dto->userId)
 		;
@@ -295,6 +462,38 @@ final class CrmStarter
 		}
 	}
 
+	private function createContextDto($face, $isManual)
+	{
+		$reflection = new \ReflectionClass(\Bitrix\Bizproc\Starter\Dto\ContextDto::class);
+		$constructor = $reflection->getConstructor();
+		$hasIsManual = false;
+
+		if ($constructor)
+		{
+			foreach ($constructor->getParameters() as $param)
+			{
+				if ($param->getName() === 'isManual')
+				{
+					$hasIsManual = true;
+					break;
+				}
+			}
+		}
+
+		if ($hasIsManual)
+		{
+			return new \Bitrix\Bizproc\Starter\Dto\ContextDto(
+				moduleId: $this->contextModuleId,
+				face: $face,
+				isManual: $isManual,
+			);
+		}
+
+		return new \Bitrix\Bizproc\Starter\Dto\ContextDto(
+			moduleId: $this->contextModuleId,
+			face: $face,
+		);
+	}
 	private function computeChangedFields(array $actualFields, array $previousFields): array
 	{
 		return (new DocumentFieldComparator(

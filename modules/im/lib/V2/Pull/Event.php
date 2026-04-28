@@ -25,4 +25,5 @@ interface Event
 	public function shouldSendToOnlySpecificRecipients(): bool;
 	public function shouldSendMobilePush(): bool;
 	public function shouldSendImmediately(): bool;
+	public function shouldSendSharedPull(): bool;
 }

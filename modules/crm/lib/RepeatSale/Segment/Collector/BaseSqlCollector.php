@@ -10,7 +10,7 @@ use Bitrix\Crm\Service\Communication\Utils\Common;
 
 abstract class BaseSqlCollector extends BaseCollector
 {
-	protected function createSegmentData(int $entityTypeId, array $filter): SegmentDataInterface
+	protected function createSegmentData(int $entityTypeId, array $filter, int $minimumDaysAfterLastClosedEntity): SegmentDataInterface
 	{
 		if (!Common::isClientEntityTypeId($entityTypeId))
 		{

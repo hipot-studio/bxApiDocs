@@ -9,12 +9,13 @@ namespace Bitrix\Crm;
 
 use Bitrix\Crm\History\Entity\DealStageHistoryTable;
 use Bitrix\Crm\History\Entity\DealStageHistoryWithSupposedTable;
+use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\DealSettings;
 use Bitrix\Main;
-use Bitrix\Main\Entity\IntegerField;
+use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\Entity\ReferenceField;
-use Bitrix\Main\Entity\StringField;
+use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
@@ -67,7 +68,7 @@ class DealTable extends Main\ORM\Data\DataManager
 
 			$fieldRepository->getId(),
 
-			$fieldRepository->getCreatedTime('DATE_CREATE', true),
+			$fieldRepository->getCreatedTime('DATE_CREATE', FieldCaptionGender::Feminine),
 
 			$fieldRepository->getShortDate(
 				'DATE_CREATE_SHORT',
@@ -76,7 +77,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_DATE_CREATE_SHORT_FIELD'))
 			,
 
-			$fieldRepository->getUpdatedTime('DATE_MODIFY', true),
+			$fieldRepository->getUpdatedTime('DATE_MODIFY', FieldCaptionGender::Feminine),
 
 			$fieldRepository->getShortDate(
 				'DATE_MODIFY_SHORT',
@@ -85,7 +86,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle('CRM_DEAL_ENTITY_DATE_MODIFY_SHORT_FIELD')
 			,
 
-			$fieldRepository->getCreatedBy('CREATED_BY_ID', true),
+			$fieldRepository->getCreatedBy('CREATED_BY_ID', FieldCaptionGender::Feminine),
 
 			(new ReferenceField(
 				'CREATED_BY',
@@ -95,7 +96,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_CREATED_BY_FIELD'))
 			,
 
-			$fieldRepository->getUpdatedBy('MODIFY_BY_ID', true),
+			$fieldRepository->getUpdatedBy('MODIFY_BY_ID', FieldCaptionGender::Feminine),
 
 			(new ReferenceField(
 				'MODIFY_BY',
@@ -199,6 +200,13 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_STAGE_BY_FIELD'))
 			,
 
+			// Phrases are loaded in the constructor of the Bitrix\Crm\Model\FieldRepository class
+			(new StringField(Item::FIELD_NAME_PREVIOUS_STAGE_ID))
+				->configureTitle(Loc::getMessage('CRM_TYPE_ITEM_FIELD_PREVIOUS_STAGE_ID'))
+				->configureSize(50)
+				->configureDefaultValue('')
+			,
+
 			$fieldRepository->getStageSemanticId(),
 
 			(new BooleanField('IS_NEW'))
@@ -249,17 +257,17 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_TYPE_BY_FIELD'))
 			,
 
-			$fieldRepository->getOpportunity(),
+			$fieldRepository->withNumberFormatFetchModifier($fieldRepository->getOpportunity()),
 
 			$fieldRepository->getIsManualOpportunity(),
 
-			$fieldRepository->getTaxValue(),
+			$fieldRepository->withNumberFormatFetchModifier($fieldRepository->getTaxValue()),
 
 			$fieldRepository->getCurrencyId(),
 
-			$fieldRepository->getOpportunityAccount(),
+			$fieldRepository->withNumberFormatFetchModifier($fieldRepository->getOpportunityAccount()),
 
-			$fieldRepository->getTaxValueAccount(),
+			$fieldRepository->withNumberFormatFetchModifier($fieldRepository->getTaxValueAccount()),
 
 			$fieldRepository->getAccountCurrencyId(),
 
@@ -329,7 +337,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_EVENT_DESCRIPTION_FIELD'))
 			,
 
-			$fieldRepository->getExchRate(),
+			$fieldRepository->withNumberFormatFetchModifier($fieldRepository->getExchRate()),
 
 			$fieldRepository->getLocationId(),
 
@@ -368,7 +376,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_ORDER_STAGE_FIELD'))
 			,
 
-			$fieldRepository->getMovedBy('MOVED_BY_ID', true),
+			$fieldRepository->getMovedBy('MOVED_BY_ID'),
 
 			$fieldRepository->getMovedTime(),
 

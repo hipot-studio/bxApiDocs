@@ -16,7 +16,7 @@ class RecoverableMessageException extends RuntimeException
 		string $message = '',
 		int $code = 0,
 		?\Throwable $previous = null,
-		private readonly ?int $retryDelay = null
+		private readonly ?int $retryDelay = null,
 	)
 	{
 		parent::__construct($message, $code, $previous);

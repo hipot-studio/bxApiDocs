@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Entity\File;
 
 use Bitrix\Im\Common;
+use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\File\Image;
@@ -44,7 +45,35 @@ class ChatAvatar
 		int|string $avatar,
 		bool $withMessage = true,
 		bool $skipRecent = false,
-		bool $withoutSaveInChat = false
+		bool $withoutSaveInChat = false,
+	): Result
+	{
+		if (!is_numeric($avatar))
+		{
+			$avatar = self::saveAvatarByString((string)$avatar) ?? 0;
+		}
+
+		$oldAvatarId = $this->chat->getAvatarId();
+		$result = $this->updateById(
+			avatarId: (int)$avatar,
+			withMessage: $withMessage,
+			skipRecent: $skipRecent,
+			withoutSaveInChat: $withoutSaveInChat,
+		);
+
+		if (isset($oldAvatarId) && $result->isSuccess())
+		{
+			$this->cleanupOldAvatarIfNeeded($oldAvatarId, $withoutSaveInChat);
+		}
+
+		return $result;
+	}
+
+	public function updateSystemAvatar(
+		int|string $avatar,
+		bool $withMessage = true,
+		bool $skipRecent = false,
+		bool $withoutSaveInChat = false,
 	): Result
 	{
 		if (!is_numeric($avatar))
@@ -53,10 +82,10 @@ class ChatAvatar
 		}
 
 		return $this->updateById(
-			(int)$avatar,
-			$withMessage,
-			$skipRecent,
-			$withoutSaveInChat
+			avatarId: (int)$avatar,
+			withMessage: $withMessage,
+			skipRecent: $skipRecent,
+			withoutSaveInChat: $withoutSaveInChat,
 		);
 	}
 
@@ -64,12 +93,11 @@ class ChatAvatar
 		int $avatarId,
 		bool $withMessage = true,
 		bool $skipRecent = false,
-		bool $withoutSaveInChat = false
+		bool $withoutSaveInChat = false,
 	): Result
 	{
 		$result = new Result();
 
-		$oldAvatarId = $this->chat->getAvatarId();
 		$this->chat->setAvatarId($avatarId);
 
 		if (!$withoutSaveInChat)
@@ -79,11 +107,6 @@ class ChatAvatar
 			{
 				return $result;
 			}
-		}
-
-		if (isset($oldAvatarId) && $oldAvatarId > 0)
-		{
-			CFile::Delete($oldAvatarId);
 		}
 
 		$avatar = $this->getResizeAvatar();
@@ -162,5 +185,40 @@ class ChatAvatar
 		$avatar = CFile::saveFile($avatar, 'im');
 
 		return is_numeric($avatar) && $avatar > 0 ? $avatar : null;
+	}
+
+	protected function isDuplicateAvatar(int $avatarId, ?int $excludedChatId = null): bool
+	{
+		$query = ChatTable::query()
+			->setSelect(['AVATAR'])
+			->where('AVATAR', $avatarId)
+			->setLimit(1)
+		;
+
+		if (isset($excludedChatId))
+		{
+			$query->whereNot('ID', $excludedChatId);
+		}
+
+		return $query->fetch() !== false;
+	}
+
+	protected function cleanupOldAvatarIfNeeded(int $avatarId, bool $withoutSaveInChat): void
+	{
+		if ($avatarId <= 0)
+		{
+			return;
+		}
+
+		$isAvatarDuplicate =
+			$withoutSaveInChat
+				? $this->isDuplicateAvatar($avatarId, $this->chat->getId())
+				: $this->isDuplicateAvatar($avatarId)
+		;
+
+		if (!$isAvatarDuplicate)
+		{
+			CFile::Delete($avatarId);
+		}
 	}
 }

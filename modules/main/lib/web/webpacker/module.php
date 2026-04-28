@@ -25,7 +25,7 @@ class Module
 	 * @param Resource\Package|null $package Resource package.
 	 * @param Resource\Profile|null $profile Profile.
 	 */
-	public function __construct($name, Resource\Package $package = null, Resource\Profile $profile = null)
+	public function __construct($name, ?Resource\Package $package = null, ?Resource\Profile $profile = null)
 	{
 		$this->name = $name;
 

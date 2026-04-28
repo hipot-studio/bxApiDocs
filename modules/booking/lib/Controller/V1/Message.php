@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Controller\V1;
 
-use Bitrix\Booking\Entity\Message\BookingMessage;
+use Bitrix\Booking\Internals\Service\Notifications\Entity\BookingMessage;
 use Bitrix\Booking\Internals\Container;
-use Bitrix\Booking\Internals\Service\Notifications\MessageSender;
+use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderPicker;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
@@ -18,14 +18,14 @@ use Bitrix\Main\Request;
 class Message extends BaseController
 {
 	private BookingRepositoryInterface $bookingRepository;
-	private MessageSender $messageSender;
+	private MessageSenderPicker $messageSenderPicker;
 
 	public function __construct(Request $request = null)
 	{
 		parent::__construct($request);
 
 		$this->bookingRepository = Container::getBookingRepository();
-		$this->messageSender = Container::getMessageSender();
+		$this->messageSenderPicker = Container::getMessageSenderPicker();
 	}
 
 	public function sendAction(int $bookingId, string $notificationType): BookingMessage|null
@@ -56,6 +56,7 @@ class Message extends BaseController
 		if (!$bookingCollection->isEmpty())
 		{
 			$this->bookingRepository->withSkus($bookingCollection);
+			$this->bookingRepository->withClientData($bookingCollection);
 		}
 
 		$booking = $bookingCollection->getFirstCollectionItem();
@@ -66,7 +67,15 @@ class Message extends BaseController
 			return null;
 		}
 
-		$sendResult = $this->messageSender->send($booking, $notificationType);
+		$messageSender = $this->messageSenderPicker->pickByBooking($booking);
+		if (!$messageSender)
+		{
+			$this->addError(new Error(Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_ERROR')));
+
+			return null;
+		}
+
+		$sendResult = $messageSender->send($booking, $notificationType);
 		if (!$sendResult->isSuccess())
 		{
 			$this->addError(new Error(Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_ERROR')));

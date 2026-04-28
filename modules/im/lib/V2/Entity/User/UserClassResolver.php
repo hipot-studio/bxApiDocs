@@ -15,6 +15,7 @@ final class UserClassResolver
 		{
 			$data['IS_BOT'] ?? false => UserBot::class,
 			CollaberService::getInstance()->isCollaber((int)$data['ID']) => UserCollaber::class,
+			$this->isGuest($data) => UserGuest::class,
 			$data['IS_EXTRANET'] ?? false => UserExtranet::class,
 			$this->isExternal($data) => UserExternal::class,
 			default => User::class,
@@ -26,5 +27,10 @@ final class UserClassResolver
 		$externalTypes = UserTable::filterExternalUserTypes(['bot']);
 
 		return in_array($params['EXTERNAL_AUTH_ID'], $externalTypes, true);
+	}
+
+	private function isGuest(array $params): bool
+	{
+		return ($params['EXTERNAL_AUTH_ID'] ?? '') === UserGuest::AUTH_ID;
 	}
 }

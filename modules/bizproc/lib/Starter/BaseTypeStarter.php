@@ -174,8 +174,9 @@ abstract class BaseTypeStarter
 	{
 		if (!$this->parameters)
 		{
-			// todo: default values or empty?
-			return [];
+			$parameters = Parameters::createFromTemplateParameters($templateId, $templateParameters);
+
+			return $parameters->getValues($templateId, $templateParameters);
 		}
 
 		if (!$this->config->validateParameters)

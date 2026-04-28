@@ -15,15 +15,17 @@ use Bitrix\Im\V2\Link\Url\UrlService;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Reading\Counter\CountersProvider;
+use Bitrix\Im\V2\Reading\Counter\Entity\UsersCounterMap;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Pull\Event;
-use ReflectionNamedType;
 
 class DeleteService
 {
@@ -41,7 +43,7 @@ class DeleteService
 	private Chat $chat;
 	private bool $isModeSpecified = false;
 	private bool $needUpdateRecent = false;
-	private array $counters;
+	private UsersCounterMap $counters;
 	private array $lastMessageViewers;
 	private bool $isPermissionFilled = false;
 	private \WeakMap $deletionTypeMap;
@@ -497,6 +499,7 @@ class DeleteService
 			'senderId' => $message->getAuthorId(),
 			'params' => ['IS_DELETED' => 'Y', 'URL_ID' => [], 'FILE_ID' => [], 'KEYBOARD' => 'N', 'ATTACH' => []],
 			'chatId' => $this->chat->getChatId(),
+			'parentChatId' => $this->chat->getParentChatId(),
 			'dialogId' => $this->chat->getDialogId(),
 		];
 		$isComplete = $this->isCompleteDelete((int)$message->getId());
@@ -515,6 +518,7 @@ class DeleteService
 		$params = [
 			'messages' => [],
 			'chatId' => $this->chat->getChatId(),
+			'parentChatId' => $this->chat->getParentChatId(),
 			'type' => $this->chat->getType() === Chat::IM_TYPE_PRIVATE ? 'private' : 'chat',
 			'unread' => false,
 			'muted' => false,
@@ -641,6 +645,18 @@ class DeleteService
 			{
 				ExecuteModuleEventEx($event, [$id, $messageForEvent, $deleteFlags]);
 			}
+
+			try
+			{
+				(new \Bitrix\Im\V2\EventLog\EventLogger())->logUserMessageEvent(
+					'ONIMV2MESSAGEDELETE',
+					fn() => (new \Bitrix\Im\V2\Event\EventPayload())->messageDelete($id, $messageForEvent),
+					$messageForEvent
+				);
+			}
+			catch (\Throwable)
+			{
+			}
 		}
 
 		return $result;
@@ -648,11 +664,10 @@ class DeleteService
 
 	private function getCounter(int $userId): int
 	{
-		$this->counters ??= (new Message\CounterService())
-			->getByChatForEachUsers($this->chat->getChatId(), $this->chat->getRelations()->getUserIds())
-		;
+		$provider = ServiceLocator::getInstance()->get(CountersProvider::class);
+		$this->counters ??= $provider->getForUsers($this->chat->getId(), $this->chat->getRelations()->getUserIds());
 
-		return $this->counters[$userId] ?? 0;
+		return $this->counters->getByUserId($userId);
 	}
 
 	private function formatNewLastMessage(Message $message): array

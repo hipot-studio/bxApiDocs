@@ -7,6 +7,7 @@
  */
 namespace Bitrix\Crm;
 
+use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\CompanySettings;
 use Bitrix\Main\DI\ServiceLocator;
@@ -73,11 +74,11 @@ class CompanyTable extends Entity\DataManager
 
 			$fieldRepository->getId(),
 
-			$fieldRepository->getCreatedTime('DATE_CREATE', true),
+			$fieldRepository->getCreatedTime('DATE_CREATE', FieldCaptionGender::Feminine),
 
-			$fieldRepository->getUpdatedTime('DATE_MODIFY', true),
+			$fieldRepository->getUpdatedTime('DATE_MODIFY', FieldCaptionGender::Feminine),
 
-			$fieldRepository->getCreatedBy('CREATED_BY_ID', true),
+			$fieldRepository->getCreatedBy('CREATED_BY_ID', FieldCaptionGender::Feminine),
 
 			(new Reference(
 				'CREATED_BY',
@@ -87,7 +88,7 @@ class CompanyTable extends Entity\DataManager
 				->configureTitle(Loc::getMessage('CRM_COMPANY_ENTITY_CREATED_BY_FIELD'))
 			,
 
-			$fieldRepository->getUpdatedBy('MODIFY_BY_ID', true),
+			$fieldRepository->getUpdatedBy('MODIFY_BY_ID', FieldCaptionGender::Feminine),
 
 			(new Reference(
 				'MODIFY_BY',
@@ -201,6 +202,7 @@ class CompanyTable extends Entity\DataManager
 				->configureRequired()
 				->configureStorageValues('N', 'Y')
 				->configureDefaultValue(false)
+				->configureTitle(Loc::getMessage('CRM_COMPANY_ENTITY_IS_MY_COMPANY_FIELD'))
 			,
 
 			$fieldRepository->getSearchContent(),

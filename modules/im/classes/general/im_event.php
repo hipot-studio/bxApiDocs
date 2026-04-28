@@ -27,10 +27,6 @@ class CIMEvent
 
 	public static function OnBeforeUserSendPassword($params)
 	{
-		$bots = IM\Bot::getListCache();
-		if (empty($bots))
-			return true;
-
 		if (isset($params['LOGIN']) && !empty($params['LOGIN']))
 		{
 			if (mb_substr($params['LOGIN'], 0, mb_strlen(IM\Bot::LOGIN_START)) == IM\Bot::LOGIN_START)

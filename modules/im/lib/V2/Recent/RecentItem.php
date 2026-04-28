@@ -14,7 +14,6 @@ class RecentItem implements RestConvertible
 	protected int $messageId;
 	protected int $id = 0;
 	protected RecentType $type = RecentType::Chat;
-	protected int $counter = 0;
 	protected int $lastReadMessageId = 0;
 	protected int $markedId = 0;
 	protected bool $pinned = false;
@@ -24,14 +23,13 @@ class RecentItem implements RestConvertible
 	protected array $options = [];
 	protected array $invited = [];
 
-	public static function initByEntity(EO_Recent $entity, int $counter): self
+	public static function initByEntity(EO_Recent $entity): self
 	{
 		$recentItem = new static();
 		$recentItem
 			->setMessageId($entity->getItemMid())
 			->setChatId($entity->getItemCid())
 			->setDialogId('chat' . $entity->getItemCid()) // TODO: replace
-			->setCounter($counter)
 			->setUnread($entity->getUnread())
 			->setPinned($entity->getPinned())
 			->setLastReadMessageId((int)$entity->getRelation()?->getLastId())
@@ -42,7 +40,7 @@ class RecentItem implements RestConvertible
 		return $recentItem;
 	}
 
-	public static function initByArray(array $entity, int $counter): self
+	public static function initByArray(array $entity): self
 	{
 		$recentItem = new static();
 
@@ -50,7 +48,6 @@ class RecentItem implements RestConvertible
 			->setMessageId($entity["ITEM_MID"] ?? 0)
 			->setChatId($entity["ITEM_CID"] ?? 0)
 			->setDialogId('chat' . $entity["ITEM_CID"]) // TODO: replace
-			->setCounter($counter)
 			->setUnread($entity["UNREAD"] === 'Y')
 			->setPinned($entity["PINNED"] === 'Y')
 			->setLastReadMessageId((int)$entity['RELATION.LAST_ID'])
@@ -160,17 +157,6 @@ class RecentItem implements RestConvertible
 		return $this;
 	}
 
-	public function getCounter(): int
-	{
-		return $this->counter;
-	}
-
-	public function setCounter(int $counter): RecentItem
-	{
-		$this->counter = $counter;
-		return $this;
-	}
-
 	public function getLastReadMessageId(): int
 	{
 		return $this->lastReadMessageId;
@@ -242,7 +228,6 @@ class RecentItem implements RestConvertible
 			'options' => $this->options,
 			'invited' => $this->invited,
 			'lastReadMessageId' => $this->lastReadMessageId,
-			'counter' => $this->counter,
 			'dateUpdate' => $this->dateUpdate,
 			'dateLastActivity' => $this->dateLastActivity,
 		];

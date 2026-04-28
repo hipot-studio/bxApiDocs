@@ -1,12 +1,14 @@
 <?php
 namespace Bitrix\Crm\Automation\Trigger;
 
+use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
 Use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Tasks;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 Loc::loadMessages(__FILE__);
 
@@ -131,5 +133,25 @@ class TaskStatusTrigger extends BaseTrigger
 	public static function getGroup(): array
 	{
 		return ['employeeControl', 'taskManagement'];
+	}
+
+	public static function getNodeName(): string
+	{
+		return Loc::getMessage('CRM_AUTOMATION_TRIGGER_TASK_STATUS_NODE_NAME') ?? '';
+	}
+
+	public static function getNodeDescription(): string
+	{
+		return Loc::getMessage('CRM_AUTOMATION_TRIGGER_TASK_STATUS_NODE_DESCRIPTION') ?? '';
+	}
+
+	public static function getNodeColor(): int
+	{
+		return ActivityColorIndex::BLUE->value;
+	}
+
+	public static function getNodeIcon(): string
+	{
+		return Outline::COMPLETE_TASK_LIST->name;
 	}
 }

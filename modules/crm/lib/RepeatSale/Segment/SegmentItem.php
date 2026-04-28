@@ -124,6 +124,11 @@ final class SegmentItem
 		return $this;
 	}
 
+	public function getSegmentCode(): ?SegmentCode
+	{
+		return SegmentCode::tryFrom($this->getCode());
+	}
+
 	public function getCode(): ?string
 	{
 		return $this->code;

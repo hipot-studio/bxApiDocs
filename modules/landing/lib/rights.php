@@ -868,7 +868,13 @@ class Rights
 			}
 
 			// set new rights in option
-			if (empty($right) && $code === self::ADDITIONAL_RIGHTS['group_menu24'])
+			$groupRights = [
+				self::ADDITIONAL_RIGHTS['group_create'],
+				self::ADDITIONAL_RIGHTS['group_admin'],
+				self::ADDITIONAL_RIGHTS['group_menu24'],
+				self::ADDITIONAL_RIGHTS['group_unexportable'],
+			];
+			if (empty($right) && in_array($code, $groupRights, true))
 			{
 				Option::delete('landing', ['name' => 'access_codes_' . $code]);
 			}
@@ -1054,7 +1060,7 @@ class Rights
 		{
 			$type = mb_strtolower($type);
 			//todo: need fix it: remove if() and add 'mainpage_admin', 'mainpage_menu24' in ADDITIONAL_RIGHTS and check preview.bitrix24.site
-			if ($type == mb_strtolower(Site\Type::SCOPE_CODE_MAINPAGE))
+			if ($type == mb_strtolower(Site\Type::SCOPE_CODE_VIBE))
 			{
 				return true;
 			}

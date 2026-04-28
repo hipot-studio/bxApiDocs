@@ -49,8 +49,8 @@ class BePaidEripHandler extends PaySystem\ServiceHandler
 		}
 
 		$this->setExtraParams([
-			'sum' => PriceMaths::roundPrecision($payment->getSum()),
-			'currency' => $payment->getField('CURRENCY'),
+			'sum' => PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency()),
+			'currency' => $payment->getCurrency(),
 			'instruction' => $invoiceData['transaction']['erip']['instruction'],
 			'qr_code' => $invoiceData['transaction']['erip']['qr_code'],
 			'account_number' =>  $invoiceData['transaction']['erip']['account_number'],
@@ -249,8 +249,8 @@ class BePaidEripHandler extends PaySystem\ServiceHandler
 		$params = [
 			'request' => [
 				'test' => $this->isTestMode($payment),
-				'amount' => (string)(PriceMaths::roundPrecision($payment->getSum()) * 100),
-				'currency' => $payment->getField('CURRENCY'),
+				'amount' => (string)(PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency()) * 100),
+				'currency' => $payment->getCurrency(),
 				'description' => $this->getInvoiceDescription($payment),
 				'tracking_id' => $payment->getId() . self::TRACKING_ID_DELIMITER . $this->service->getField('ID'),
 				'notification_url' => $this->getBusinessValue($payment, 'BEPAID_ERIP_NOTIFICATION_URL'),
@@ -522,15 +522,16 @@ class BePaidEripHandler extends PaySystem\ServiceHandler
 	 */
 	private function isSumCorrect(Payment $payment, $sum): bool
 	{
+		$currency = $payment->getField('CURRENCY');
 		PaySystem\Logger::addDebugInfo(
 			sprintf( '%s: bePaidSum=%s; paymentSum=%s',
 				__CLASS__,
-				PriceMaths::roundPrecision($sum),
-				PriceMaths::roundPrecision($payment->getSum())
+				PriceMaths::roundByFormatCurrency($sum, $currency),
+				PriceMaths::roundByFormatCurrency($payment->getSum(), $currency)
 			)
 		);
 
-		return PriceMaths::roundPrecision($sum) === PriceMaths::roundPrecision($payment->getSum());
+		return PriceMaths::roundByFormatCurrency($sum, $currency) === PriceMaths::roundByFormatCurrency($payment->getSum(), $currency);
 	}
 
 	/**

@@ -8,13 +8,23 @@ use Bitrix\Bizproc\Public\Command\Task\ArchiveTaskCommand\ArchiveTaskCommand;
 use Bitrix\Bizproc\Public\Command\Task\ArchiveTaskCommand\ArchiveTaskCommandResult;
 use Bitrix\Main\Config\Option;
 
-class ArchiveTaskAgent extends BaseAgent
+class ArchiveTaskAgent
 {
 	private const DEFAULT_OFFSET = 10;
 
-	public static function run(): string
+	private static function next(?int $lastModified = null): string
 	{
-		$command = new ArchiveTaskCommand();
+		if ($lastModified)
+		{
+			return self::class . "::run($lastModified);";
+		}
+
+		return self::class . '::run();';
+	}
+
+	public static function run(?int $lastModified = null): string
+	{
+		$command = new ArchiveTaskCommand($lastModified);
 		/** @var ArchiveTaskCommandResult $result */
 		$result = $command->run();
 
@@ -26,8 +36,10 @@ class ArchiveTaskAgent extends BaseAgent
 		else
 		{
 			$pPERIOD = strtotime('tomorrow 01:00') - time();
+
+			return self::next();
 		}
 
-		return self::next();
+		return self::next($result->lastModified);
 	}
 }

@@ -5,9 +5,11 @@ namespace Bitrix\BIConnector\DataSourceConnector\Connector;
 use Bitrix\BIConnector\DataSourceConnector\ConnectorDataResult;
 use Bitrix\BIConnector\DataSourceConnector\ConnectorDto;
 use Bitrix\BIConnector\DataSourceConnector\FieldCollection;
-use Bitrix\BIConnector\DataSourceConnector\QueryResult;
+use Bitrix\BIConnector\Manager;
 use Bitrix\Main\Analytics\AnalyticsEvent;
+use Bitrix\Main\Config\ConfigurationException;
 use Bitrix\Main\Error;
+use Bitrix\Main\DB;
 
 abstract class Base
 {
@@ -16,9 +18,20 @@ abstract class Base
 	public function __construct(
 		protected string $name,
 		protected FieldCollection $fields,
-		public readonly array $rawInfo
+		public readonly array $rawInfo,
 	)
 	{
+	}
+
+	/**
+	 * @return DB\Connection|null
+	 * @throws ConfigurationException
+	 */
+	protected function getConnection(): ?DB\Connection
+	{
+		$manager = Manager::getInstance();
+
+		return $manager->getDatabaseConnection();
 	}
 
 	/**
@@ -105,7 +118,12 @@ abstract class Base
 			$sqlWhere = $this->applyDimensionsFilters($sqlWhere, $canBeFiltered, $parameters['dimensionsFilters']);
 		}
 
-		$queryWhere = new \CBIConnectorSqlBuilder;
+		$queryWhere = new \CBIConnectorSqlBuilder();
+		if ($this->getConnection())
+		{
+			$queryWhere->setConnection($this->getConnection());
+		}
+
 		$queryWhere->SetFields($tableFields);
 		if (isset($tableInfo['FILTER_FIELDS']))
 		{
@@ -242,7 +260,7 @@ abstract class Base
 			$queryWhere,
 			$tableInfo,
 			($canBeFiltered && $sqlWhere) ? $sqlWhere : null,
-			$parameters
+			$parameters,
 		);
 
 		$dto = new ConnectorDto(
@@ -251,7 +269,7 @@ abstract class Base
 			$fetchCallbacks,
 			$sqlWhere,
 			($strQueryWhere && $canBeFiltered),
-			$shadowFields
+			$shadowFields,
 		);
 
 		$result->setConnectorData($dto);
@@ -270,7 +288,7 @@ abstract class Base
 		\CBIConnectorSqlBuilder $builder,
 		array $tableInfo,
 		?array $where = null,
-		?array $queryParameters = null
+		?array $queryParameters = null,
 	): string
 	{
 		return '';
@@ -288,7 +306,7 @@ abstract class Base
 	protected function applyDateFilter(
 		array $sqlWhere,
 		array $dateRange,
-		string $timeFilterColumn = ''
+		string $timeFilterColumn = '',
 	): array
 	{
 		$tableFields = $this->rawInfo['FIELDS'] ?? [];
@@ -315,6 +333,7 @@ abstract class Base
 				if (in_array($fieldInfo['FIELD_TYPE'], ['date', 'datetime'], true))
 				{
 					$filterColumnName = $fieldName;
+
 					break;
 				}
 			}
@@ -325,9 +344,15 @@ abstract class Base
 			return $sqlWhere;
 		}
 
+		$dataTimezone = \Bitrix\BIConnector\Configuration\DataTimezone::getTimezone();
+
 		if ($startDate)
 		{
-			$sqlWhere['>=' . $filterColumnName] = ConvertTimeStamp($startDate, 'SHORT');
+			if ($dataTimezone && $this->isNeedApplyTimezoneOffset())
+			{
+				$startDate -= \CTimeZone::getTimezoneOffset($dataTimezone);
+			}
+			$sqlWhere['>=' . $filterColumnName] = ConvertTimeStamp($startDate, 'FULL');
 		}
 
 		$endDate =
@@ -337,7 +362,19 @@ abstract class Base
 		;
 		if ($endDate)
 		{
-			$endDate += 23 * 3600 + 59 * 60 + 59;
+			if ($dateRange['endDate'] === '9999-12-31')
+			{
+				// Prevent date overflow while adding timezone offset
+				$endDate = MakeTimeStamp('9999-12-31 23:59:59', 'YYYY-MM-DD HH:MI:SS');
+			}
+			else
+			{
+				$endDate += 23 * 3600 + 59 * 60 + 59;
+				if ($dataTimezone && $this->isNeedApplyTimezoneOffset())
+				{
+					$endDate -= \CTimeZone::getTimezoneOffset($dataTimezone);
+				}
+			}
 			$sqlWhere['<=' . $filterColumnName] = ConvertTimeStamp($endDate, 'FULL');
 		}
 
@@ -402,31 +439,40 @@ abstract class Base
 						case 'EQUALS':
 						case 'IN_LIST':
 							$andFilter[] = [$negate . '=' . $subFilter['fieldName'] => $subFilter['values']];
+
 							break;
 						case 'CONTAINS':
 							$andFilter[] = [$negate . '%' . $subFilter['fieldName'] => $subFilter['values']];
+
 							break;
 						case 'REGEXP_PARTIAL_MATCH':
 						case 'REGEXP_EXACT_MATCH':
 							$canBeFiltered = false;
+
 							break;
 						case 'IS_NULL':
 							$andFilter[] = [$negate . '=' . $subFilter['fieldName'] => false];
+
 							break;
 						case 'BETWEEN':
 							$andFilter[] = [$negate . '><' . $subFilter['fieldName'] => $subFilter['values']];
+
 							break;
 						case 'NUMERIC_GREATER_THAN':
 							$andFilter[] = [$negate . '>' . $subFilter['fieldName'] => $subFilter['values']];
+
 							break;
 						case 'NUMERIC_GREATER_THAN_OR_EQUAL':
 							$andFilter[] = [$negate . '>=' . $subFilter['fieldName'] => $subFilter['values']];
+
 							break;
 						case 'NUMERIC_LESS_THAN':
 							$andFilter[] = [$negate . '<' . $subFilter['fieldName'] => $subFilter['values']];
+
 							break;
 						case 'NUMERIC_LESS_THAN_OR_EQUAL':
 							$andFilter[] = [$negate . '<=' . $subFilter['fieldName'] => $subFilter['values']];
+
 							break;
 						default:
 							$canBeFiltered = false;
@@ -452,7 +498,7 @@ abstract class Base
 	abstract public function query(
 		array $parameters,
 		int $limit,
-		array $dateFormats = []
+		array $dateFormats = [],
 	): \Generator;
 
 	/**
@@ -466,7 +512,14 @@ abstract class Base
 	}
 
 	/**
-	 *
+	 * @return bool
+	 */
+	protected function isNeedApplyTimezoneOffset(): bool
+	{
+		return true;
+	}
+
+	/**
 	 * @return void
 	 */
 	public function sendAnalytic(): void

@@ -4,7 +4,6 @@ namespace Bitrix\Sign\Helper\Field;
 
 use Bitrix\Main;
 use Bitrix\Sign\Type\BlockCode;
-use CCrmOwnerType;
 
 final class NameHelper
 {
@@ -55,5 +54,39 @@ final class NameHelper
 		}
 
 		return [$fieldEntityType, $fieldName];
+	}
+
+	public static function isValidParsedField(array $parsedArray): bool
+	{
+		if (
+			!isset(
+				$parsedArray['fieldCode'],
+				$parsedArray['fieldType'],
+				$parsedArray['blockCode'],
+				$parsedArray['party'],
+				$parsedArray['subfieldCode']
+			)
+		)
+		{
+			return false;
+		}
+
+		return is_string($parsedArray['fieldCode']) && !empty($parsedArray['fieldCode'])
+			&& is_string($parsedArray['fieldType']) && !empty($parsedArray['fieldType'])
+			&& is_string($parsedArray['blockCode']) && !empty($parsedArray['blockCode'])
+			&& is_int($parsedArray['party']) && $parsedArray['party'] >= 0
+			&& is_string($parsedArray['subfieldCode']);
+	}
+
+	public static function isValidFieldName(string $fieldName): bool
+	{
+		if (empty($fieldName))
+		{
+			return false;
+		}
+
+		$parsed = self::parse($fieldName);
+
+		return self::isValidParsedField($parsed);
 	}
 }

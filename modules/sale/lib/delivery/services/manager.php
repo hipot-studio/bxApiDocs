@@ -21,7 +21,7 @@ use Bitrix\Sale\Delivery\ExtraServices;
 use Bitrix\Sale\Internals\ShipmentTable;
 use Bitrix\Sale\Delivery\CalculationResult;
 use Bitrix\Sale\Internals\ServiceRestrictionTable;
-use Bitrix\Sale\Delivery\Services\Base;
+use Bitrix\Sale\Delivery\Rest\Internals\DeliveryRestHandlerTable;
 
 Loc::loadMessages(__FILE__);
 
@@ -653,8 +653,11 @@ class Manager
 		if (!$init)
 		{
 			$init = true;
-			$restHandlerList = \Bitrix\Sale\Delivery\Rest\Internals\DeliveryRestHandlerTable::getList([
+			$restHandlerList = DeliveryRestHandlerTable::getList([
 				'select' => ['ID', 'NAME', 'CODE', 'SORT', 'DESCRIPTION', 'SETTINGS', 'PROFILES'],
+				'cache' => [
+					'ttl' => 86400,
+				],
 			])->fetchAll();
 			foreach ($restHandlerList as $restHandler)
 			{

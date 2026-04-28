@@ -228,5 +228,17 @@ class UpdateService
 		}
 
 		Bot::onMessageUpdate($this->message->getId(), $messageFields);
+
+		try
+		{
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logUserMessageEvent(
+				'ONIMV2MESSAGEUPDATE',
+				fn() => (new \Bitrix\Im\V2\Event\EventPayload())->messageUpdate($this->message->getId(), $messageFields),
+				$messageFields
+			);
+		}
+		catch (\Throwable)
+		{
+		}
 	}
 }

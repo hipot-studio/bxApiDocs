@@ -13,11 +13,6 @@ class IntranetLicenseWidgetComponent extends \CBitrixComponent
 {
 	public function executeComponent(): void
 	{
-		if (!CurrentUser::get()->canDoOperation('bitrix24_config'))
-		{
-			return;
-		}
-
 		if (Loader::includeModule('extranet') && \CExtranet::IsExtranetSite())
 		{
 			return;

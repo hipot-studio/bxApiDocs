@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Security\Mfa;
 
 use Bitrix\Main\Type;
@@ -25,11 +26,16 @@ class OtpEvents
 		foreach($users as $user)
 		{
 			if ($user['SKIP_MANDATORY'] === 'Y' && !$user['SECRET'])
+			{
 				UserTable::update($user['USER_ID'], array('SKIP_MANDATORY' => 'N', 'DEACTIVATE_UNTIL' => null));
+			}
 			else
+			{
 				UserTable::update($user['USER_ID'], array('ACTIVE' => 'Y', 'SKIP_MANDATORY' => 'N', 'DEACTIVATE_UNTIL' => null));
+			}
+			Otp::cleanCache($user['USER_ID']);
 		}
 
-		return sprintf('%s();',  __METHOD__);
+		return __METHOD__ . '();';
 	}
 }

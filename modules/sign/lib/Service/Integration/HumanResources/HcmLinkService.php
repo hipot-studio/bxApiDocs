@@ -183,4 +183,14 @@ class HcmLinkService
 
 		return Container::getHcmLinkPersonRepository()->getById($personId);
 	}
+
+	public function getById(int $companyId): ?HumanResources\Item\HcmLink\Company
+	{
+		if (!$this->isAvailable())
+		{
+			return null;
+		}
+
+		return Container::getHcmLinkCompanyRepository()->getById($companyId);
+	}
 }

@@ -5,6 +5,9 @@ namespace Bitrix\Translate;
 use Bitrix\Main;
 use Bitrix\Translate;
 
+/**
+ * @internal
+ */
 
 class Permission
 {

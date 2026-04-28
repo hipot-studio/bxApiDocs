@@ -893,6 +893,14 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 	}
 
 	/**
+	 * @return string
+	 */
+	public function getCurrency(): string
+	{
+		return (string)$this->getField('CURRENCY');
+	}
+
+	/**
 	 * @return float
 	 */
 	public function getSumPaid()

@@ -27,6 +27,25 @@ final class TypeRepository
 		return (string)self::getType($typeId)?->getValueTypeCaption((string)$valueType);
 	}
 
+	public static function getValueTypeByValueTypeCaption(mixed $typeId, string $valueTypeCaption): ?string
+	{
+		$type = self::getType($typeId);
+		if ($type === null)
+		{
+			return null;
+		}
+
+		foreach ($type->getValueTypes() as $valueType)
+		{
+			if ($type->getValueTypeCaption($valueType) === $valueTypeCaption)
+			{
+				return $valueType;
+			}
+		}
+
+		return null;
+	}
+
 	public static function getType(mixed $typeId): ?Type
 	{
 		foreach (self::getAll() as $type)

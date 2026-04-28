@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\Service\Timeline\Item\Activity\Booking;
 
-use Bitrix\Booking\Internals\Integration\Crm\BookingActivity;
+use Bitrix\Crm\Integration\Booking\BookingActivity;
 use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Crm\Dto\Booking\Booking\BookingFields;
@@ -12,9 +12,7 @@ use Bitrix\Crm\Dto\Booking\Booking\BookingFieldsMapper;
 use Bitrix\Crm\Dto\Booking\Booking\BookingStatusEnum;
 use Bitrix\Crm\Dto\Booking\Message\Message;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
-use Bitrix\Crm\Service\Timeline\Item\Model;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Animation;
@@ -27,6 +25,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItem;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 
@@ -39,18 +38,7 @@ class Booking extends Activity
 	private const ACTIVITY_STATUS_LATE = 'late';
 	private const ACTIVITY_STATUS_OVERBOOKING = 'overbooking';
 
-	private bool $isBookingLoaded = false;
 	private BookingFields|null $bookingModel = null;
-
-	public function __construct(Context $context, Model $model)
-	{
-		if (Loader::includeModule('booking'))
-		{
-			$this->isBookingLoaded = true;
-		}
-
-		parent::__construct($context, $model);
-	}
 
 	protected function getActivityTypeId(): string
 	{
@@ -181,7 +169,7 @@ class Booking extends Activity
 	 */
 	public function getButtons(): array
 	{
-		if (!$this->isBookingLoaded)
+		if (!ModuleManager::isModuleInstalled('booking'))
 		{
 			return [];
 		}
@@ -210,7 +198,7 @@ class Booking extends Activity
 	 */
 	private function getBeforeStartButtons(): array
 	{
-		if (!$this->isBookingLoaded)
+		if (!ModuleManager::isModuleInstalled('booking'))
 		{
 			return [];
 		}
@@ -220,7 +208,7 @@ class Booking extends Activity
 		$bookingId = $this->getBookingId();
 		$messageMenuItems = $this->getMessageMenuItems(
 			$bookingId,
-			BookingActivity::getMessageMenuItems($bookingId)
+			(new BookingActivity())->getMessageMenuItems($bookingId)
 		);
 
 		if (!empty($messageMenuItems))
@@ -241,7 +229,7 @@ class Booking extends Activity
 			->setScopeWeb()
 			->setAction(
 				(new Layout\Action\RunAjaxJsonAction(
-					BookingActivity::getDeleteBookingEndpoint()
+					'booking.api_v1.Booking.delete'
 				))
 					->addActionParamInt('id', $bookingId)
 					->setAnimation(Layout\Action\Animation::showLoaderForBlock())
@@ -318,7 +306,7 @@ class Booking extends Activity
 				->addActionParamString('code', 'limit_automation_off');
 		}
 
-		$action = (new RunAjaxJsonAction(BookingActivity::getSendBookingMessageEndpoint()))
+		$action = (new RunAjaxJsonAction('booking.api_v1.Message.send'))
 			->addActionParamInt('bookingId', $bookingId)
 			->setAnimation(Animation::showLoaderForBlock())
 		;

@@ -8,6 +8,8 @@ use Bitrix\Translate;
 
 /**
  * Harvester of the lang folder disposition.
+ *
+ * @internal
  */
 class ImportCsv
 	extends Translate\Controller\Action

@@ -281,6 +281,9 @@ class MailboxDirectoryHelper
 		return $list;
 	}
 
+	/**
+	 * @throws \Exception
+	 */
 	public function buildDirectoryTreeForContextMenu(int $mailboxId, Mailbox $mailboxHelper)
 	{
 		$directoriesWithNumberOfUnreadMessages = $mailboxHelper->getDirsMd5WithCounter($mailboxId);
@@ -311,7 +314,7 @@ class MailboxDirectoryHelper
 		$flat = [];
 		$list = [];
 		$syncDirIds = [];
-		$dirs = $this->getSyncDirs();
+		$dirs = $this->getSyncDirsOrdered();
 		foreach ($dirs as $dir)
 		{
 			$syncDirIds[$dir->getId()] = true;
@@ -371,22 +374,14 @@ class MailboxDirectoryHelper
 			}
 		}
 
-		usort(
-			$list,
-			static function (array $a, array $b): int
-			{
-				$aSort = $a['order'];
-				$bSort = $b['order'];
-
-				return $aSort <=> $bSort;
-			},
-		);
-
 		$directoryTreeForContextMenu = $list;
 
 		return $list;
 	}
 
+	/**
+	 * @throws \Exception
+	 */
 	private function buildFolderData(
 		$dir,
 		array $systemDirMap,
@@ -397,7 +392,7 @@ class MailboxDirectoryHelper
 		$id = $dir->getId();
 		$path = $dir->getPath(true);
 		$isCounted = !(($dir->isTrash() || $dir->isSpam()));
-		$hasChild = (bool)preg_match('/(HasChildren)/ix', (string)$dir->getFlags());
+		$hasChild = self::hasChildren((string)$dir->getFlags());
 
 		return [
 			'id' => $id,

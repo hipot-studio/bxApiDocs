@@ -19,7 +19,7 @@ class TimeSigner
 	 *
 	 * @param SigningAlgorithm $algorithm Custom signing algorithm.
 	 */
-	public function __construct(SigningAlgorithm $algorithm = null)
+	public function __construct(?SigningAlgorithm $algorithm = null)
 	{
 		$this->signer = new Signer($algorithm);
 	}

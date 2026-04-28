@@ -85,8 +85,24 @@ class AccessInstaller
 							'value' => UserPermissions::PERMISSION_SELF,
 						],
 						[
+							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_ADD,
+							'value' => UserPermissions::PERMISSION_SELF,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_EDIT,
+							'value' => UserPermissions::PERMISSION_SELF,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_READ,
+							'value' => UserPermissions::PERMISSION_SELF,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_DELETE,
+							'value' => UserPermissions::PERMISSION_SELF,
+						],
+						[
 							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_REFUSED,
-							'value' => UserPermissions::PERMISSION_NONE,
+							'value' => 1,
 						],
 					],
 				],
@@ -143,8 +159,24 @@ class AccessInstaller
 							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
 						],
 						[
+							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_ADD,
+							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_EDIT,
+							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_READ,
+							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_DELETE,
+							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
+						],
+						[
 							'id' => SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_REFUSED,
-							'value' => UserPermissions::PERMISSION_NONE,
+							'value' => 1,
 						],
 					],
 				],

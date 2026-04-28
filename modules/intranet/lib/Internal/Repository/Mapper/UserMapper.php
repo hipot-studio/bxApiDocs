@@ -38,6 +38,7 @@ class UserMapper
 			lid: $userData['LID'] ?? null,
 			languageId: $userData['LANGUAGE_ID'] ?? null,
 			personalMobile: $userData['PERSONAL_MOBILE'] ?? null,
+			workPosition: $userData['WORK_POSITION'] ?? null,
 			password: $userData['PASSWORD'] ?? null,
 			ufCrmEntity: $userData['UF_USER_CRM_ENTITY'] ?? null,
 			lastLogin: $this->parseDateValue($userData['LAST_LOGIN'] ?? null),

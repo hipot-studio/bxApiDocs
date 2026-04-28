@@ -3,6 +3,7 @@
 namespace Bitrix\Sign\Operation\Document\Template;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sign\Config\Const\OnboardingTemplate;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Contract\Operation;
 use Bitrix\Sign\Item\Document;
@@ -168,7 +169,7 @@ class GetOrInstallOnboardingTemplate implements Operation
 				return $templateForOnboarding;
 			}
 
-			if ($this->storage->getOnboardingTemplateSha256() === hash('sha256', $file->content->data))
+			if (hash('sha256', $file->content->data) === OnboardingTemplate::SHA256)
 			{
 				$templateForOnboarding = $template;
 			}

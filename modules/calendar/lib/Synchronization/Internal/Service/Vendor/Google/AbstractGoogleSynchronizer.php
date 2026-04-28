@@ -8,6 +8,7 @@ use Bitrix\Calendar\Integration\Dav\ConnectionProvider;
 use Bitrix\Calendar\Integration\Socialservices\Auth\GoogleAuthHelper;
 use Bitrix\Calendar\Sync\Connection\Connection;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Repository\RepositoryReadException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AuthorizationException;
 use Bitrix\Calendar\Synchronization\Internal\Service\ConnectionManager;
 use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 
@@ -18,7 +19,7 @@ class AbstractGoogleSynchronizer
 	public function __construct(
 		private readonly ConnectionProvider $connectionProvider,
 		protected readonly ConnectionManager $connectionManager,
-		protected readonly RequestLogger $logger
+		protected readonly RequestLogger $logger,
 	)
 	{
 	}
@@ -29,7 +30,18 @@ class AbstractGoogleSynchronizer
 	protected function handleUnauthorizedException(Connection $connection): void
 	{
 		$userId = $connection->getOwner()->getId();
-		$authEntity = GoogleAuthHelper::getUserAuthEntity($userId);
+
+		try
+		{
+			$authEntity = GoogleAuthHelper::getUserAuthEntity($userId);
+		}
+		catch (AuthorizationException)
+		{
+			$this->deactivateConnection($connection);
+
+			return;
+		}
+
 		$userTokenInfo = GoogleAuthHelper::getStoredTokens($userId);
 		$refreshResult = false;
 

@@ -1655,6 +1655,16 @@ namespace Bitrix\Intranet\Internal\Model {
 	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary resetValue()
 	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary unsetValue()
 	 * @method null|\string fillValue()
+	 * @method \int getTotal()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary setTotal(\int|\Bitrix\Main\DB\SqlExpression $total)
+	 * @method bool hasTotal()
+	 * @method bool isTotalFilled()
+	 * @method bool isTotalChanged()
+	 * @method \int remindActualTotal()
+	 * @method \int requireTotal()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary resetTotal()
+	 * @method \Bitrix\Intranet\Internal\Model\EO_AnnualSummary unsetTotal()
+	 * @method \int fillTotal()
 	 *
 	 * Common methods:
 	 * ---------------

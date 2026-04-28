@@ -4,7 +4,7 @@ namespace Bitrix\Mobile\Controller;
 
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\JsonController;
-use Bitrix\AiAssistant\RemoteMcp\Grid;
+use Bitrix\AiAssistant\RemoteMcp\Enum\SharingOptionType;
 use Bitrix\Mobile\Provider\UserRepository;
 
 final class MCPSelector extends JsonController
@@ -52,6 +52,7 @@ final class MCPSelector extends JsonController
 		return [
 			'disabledByAdmin' => !$mcpFeature->isActive(),
 			'disabledByTariff' => !$mcpFeature->isAvailableByTariff(),
+			'disabledBySubscription' => !$mcpFeature->isAvailableBySubscription(),
 			'items' => $preparedServers,
 			'users' => $users,
 		];
@@ -68,6 +69,7 @@ final class MCPSelector extends JsonController
 
 		$pager = new \Bitrix\Main\UI\PageNavigation('nav-selector');
 		$filter = (new \Bitrix\AiAssistant\RemoteMcp\Grid\Provider\Params\McpServer\McpServerFilter());
+		$filter->setAgentMode(false);
 		$pager->setCurrentPage($page);
 
 		$params = new \Bitrix\AiAssistant\RemoteMcp\Grid\Provider\Params\McpServer\McpServerParams(

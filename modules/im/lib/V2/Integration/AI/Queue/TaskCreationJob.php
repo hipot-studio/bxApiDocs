@@ -37,6 +37,11 @@ class TaskCreationJob extends QueueJob
 		$transcriptText = $transcribeManager->getFileTranscription()?->getPlainText();
 		$data = $result->getJsonData() ?? [];
 
+		if (empty($transcriptText))
+		{
+			return;
+		}
+
 		(new TaskCreationManager($message, $transcriptText, $fileId, $diskFileId))->createTask($data);
 	}
 

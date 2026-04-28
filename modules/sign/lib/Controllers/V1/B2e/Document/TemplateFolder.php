@@ -5,6 +5,7 @@ namespace Bitrix\Sign\Controllers\V1\B2e\Document;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Access\ActionDictionary;
+use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
 use Bitrix\Sign\Attribute\ActionAccess;
 use Bitrix\Sign\Config\Feature;
 use Bitrix\Sign\Config\Storage;
@@ -214,7 +215,9 @@ class TemplateFolder extends Controller
 		$templateGridRepository = $container->getTemplateGridRepository();
 		$templateAccessService = $container->getTemplateAccessService();
 
-		$queryFilterByTemplatePermission = $templateAccessService->prepareQueryFilterByTemplatePermission();
+		$queryFilterByTemplatePermission = $templateAccessService->prepareQueryFilterByTemplatePermission(
+			permissionId: SignPermissionDictionary::SIGN_B2E_TEMPLATE_WRITE,
+		);
 		$firstLevelDeepFolders = $templateGridRepository->listByDepthAndEntityType(
 			$depthLevel,
 			EntityType::FOLDER,

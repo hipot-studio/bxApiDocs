@@ -23,6 +23,11 @@ class UpdateFeature extends BaseEvent
 		return [];
 	}
 
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
+	}
+
 	protected function getBasePullParamsInternal(): array
 	{
 		return [

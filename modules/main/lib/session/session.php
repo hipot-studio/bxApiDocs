@@ -22,7 +22,7 @@ class Session implements SessionInterface, \ArrayAccess
 	/**
 	 * Session constructor.
 	 */
-	public function __construct(\SessionHandlerInterface $sessionHandler = null)
+	public function __construct(?\SessionHandlerInterface $sessionHandler = null)
 	{
 		$this->sessionHandler = $sessionHandler;
 		$this->debugger = new Debugger();

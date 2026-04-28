@@ -307,6 +307,7 @@ final class Dynamic extends Base
 						continue;
 					}
 
+					$template = clone $template;
 					$template->setSourceType($provider);
 
 					$document = \Bitrix\DocumentGenerator\Document::createByTemplate($template, $itemId);

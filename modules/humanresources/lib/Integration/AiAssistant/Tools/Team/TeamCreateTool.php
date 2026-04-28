@@ -13,7 +13,7 @@ class TeamCreateTool extends NodeCreateTool
 
 	public function getName(): string
 	{
-		return 'create';
+		return 'team_create';
 	}
 
 	public function getDescription(): string

@@ -237,8 +237,9 @@ class YandexInvoiceHandler extends PaySystem\ServiceHandler
 			'shopArticleId' => $this->getBusinessValue($payment, 'YANDEX_INVOICE_SHOP_ARTICLE_ID'),
 		);
 
-		$paymentPrice = PriceMaths::roundPrecision($this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY'));
-		$yandexPrice = PriceMaths::roundPrecision($payload['order']['amount']);
+		$paymentCurrency = $this->getBusinessValue($payment, 'PAYMENT_CURRENCY');
+		$paymentPrice = PriceMaths::roundByFormatCurrency($this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY'), $paymentCurrency);
+		$yandexPrice = PriceMaths::roundByFormatCurrency($payload['order']['amount'], $paymentCurrency);
 		if ($yandexPrice === $paymentPrice)
 		{
 			$serviceResult->setOperationType($serviceResult::MONEY_COMING);

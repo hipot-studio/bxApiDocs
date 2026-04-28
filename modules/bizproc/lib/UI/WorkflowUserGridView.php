@@ -155,7 +155,7 @@ class WorkflowUserGridView extends WorkflowUserView
 				'id' => $taskId,
 				'name' => html_entity_decode($task['~NAME']),
 				'description' => $task['~DESCRIPTION'],
-				'isInline' => \CBPHelper::getBool($task['IS_INLINE']),
+				'isInline' => \CBPHelper::getBool($task['IS_INLINE'] ?? null),
 				'controls' => $isRunning ? $this->getTaskControls($task) : [],
 				'overdueDate' => $task['~OVERDUE_DATE'] ?? null,
 				'url' => $isRpa

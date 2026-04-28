@@ -841,8 +841,17 @@ class ResultEntity
 			)
 			{
 				$previousFields = $entityClassName::GetByID($id, false);
-				$starter = new Automation\Starter(\CCrmOwnerType::ResolveID($entityName), $id);
-				$starter->runOnUpdate($entityFields, $previousFields ?: []);
+				$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::ResolveID($entityName), (int)$id));
+				$starter
+					->runAutomation(
+						new RunDataDto(
+							actualFields: $entityFields,
+							previousFields: $previousFields ?: [],
+							delay: CrmStarter::MOVE_TO_BACKGROUND_DELAY,
+						),
+						\CCrmBizProcEventType::Edit
+					)
+				;
 			}
 		}
 
@@ -1899,13 +1908,16 @@ class ResultEntity
 			}
 			$starter?->runProcess(
 				new RunDataDto(
-					delay: 0, // move to background
+					delay: CrmStarter::MOVE_TO_BACKGROUND_DELAY,
 				),
 				$isEntityAdded ? \CCrmBizProcEventType::Create : \CCrmBizProcEventType::Edit,
 			);
 			if($isEntityAdded && empty($entity['IS_AUTOMATION_RUN']))
 			{
-				$starter?->runAutomation(new RunDataDto(delay: 0), \CCrmBizProcEventType::Create);
+				$starter?->runAutomation(
+					new RunDataDto(delay: CrmStarter::MOVE_TO_BACKGROUND_DELAY),
+					\CCrmBizProcEventType::Create,
+				);
 			}
 
 			$bindings[] = array(

@@ -16,7 +16,7 @@ class SystemException extends \Exception
 	 * @param int $line
 	 * @param \Throwable | null $previous
 	 */
-	public function __construct($message = "", $code = 0, $file = "", $line = 0, \Throwable $previous = null)
+	public function __construct($message = "", $code = 0, $file = "", $line = 0, ?\Throwable $previous = null)
 	{
 		parent::__construct($message, $code, $previous);
 

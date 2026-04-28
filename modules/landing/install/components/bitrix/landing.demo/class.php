@@ -70,7 +70,7 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 		'PAGE' => 'page',
 		'STORE' => 'shop',
 		'KNOWLEDGE' => 'knowledgeBase',
-		'MAINPAGE' => 'mainpage',
+		'VIBE' => 'mainpage',
 	];
 
 	protected const FILTER_ID = 'LANDING_FLT_DEMO';
@@ -1878,7 +1878,7 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 			$marketIdDelimiter = '/';
 			$typesUseMarket = [
 				'PAGE',
-				'MAINPAGE',
+				'VIBE',
 			];
 			$useMarket =
 				($this->arParams['SKIP_REMOTE'] ?? 'N') !== 'Y'
@@ -1989,7 +1989,10 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 						$itemData['type'] = $siteTypeDef;
 					}
 					$itemData['type'] = array_map('strtoupper', (array)$itemData['type']);
-					if (in_array($siteTypeCurr, $itemData['type']) && isset($itemData['name']))
+					if (
+						isset($itemData['name'])
+						&& in_array($siteTypeCurr, $itemData['type'], true)
+					)
 					{
 						if (!isset($itemData['fields']) || !is_array($itemData['fields']))
 						{

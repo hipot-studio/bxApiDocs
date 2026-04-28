@@ -70,7 +70,7 @@ class UserProfileHistoryTable extends Data\DataManager
 	 * @param array|null $after Fields after update.
 	 * @return Entity\AddResult
 	 */
-	public static function addHistory($userId, $type, array $before = null, array $after = null)
+	public static function addHistory($userId, $type, ?array $before = null, ?array $after = null)
 	{
 		global $USER;
 

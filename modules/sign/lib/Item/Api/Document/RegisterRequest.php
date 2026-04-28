@@ -11,6 +11,7 @@ class RegisterRequest implements Contract\Item
 		public string $lang,
 		public string $scenario,
 		public ?string $title = null,
-		public int $version = Version::CURRENT
+		public int $version = Version::CURRENT,
+		public bool $hasPlaceholders = false,
 	) {}
 }

@@ -30,7 +30,7 @@ class Profile
 	 * @param string $callMethod Call method.
 	 * @param null|array $callParameter Call parameter.
 	 */
-	public function __construct($callMethod = null, array $callParameter = null)
+	public function __construct($callMethod = null, ?array $callParameter = null)
 	{
 		if ($callMethod)
 		{

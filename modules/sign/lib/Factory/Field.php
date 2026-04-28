@@ -9,11 +9,13 @@ use Bitrix\Main;
 use Bitrix\Sign\Blanks\Block\Factory;
 use Bitrix\Sign\Connector\MemberConnectorFactory;
 use Bitrix\Sign\Helper\Field\NameHelper;
+use Bitrix\Sign\Helper\Field\UserFieldCodeHelper;
 use Bitrix\Sign\Integration\CRM;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Operation\GetRequiredFieldsWithCache;
 use Bitrix\Sign\Repository\BlockRepository;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\Document;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkFieldService;
 use Bitrix\Sign\Service\Providers\MemberDynamicFieldInfoProvider;
 use Bitrix\Sign\Service\Result\Sign\Block\B2eRequiredFieldsResult;
@@ -42,6 +44,11 @@ final class Field
 		FieldType::POSITION,
 	];
 
+	private const EMPLOYEE_INITIATED_UNSUPPORTED_USER_FIELD_TYPES = [
+		FieldType::ADDRESS,
+		FieldType::URL,
+	];
+
 	private const ADDRESS_SUBFIELD_CODES = [
 		'ADDRESS_1',
 		'ADDRESS_2',
@@ -64,11 +71,13 @@ final class Field
 	private readonly FieldValue $fieldValueFactory;
 	private readonly HcmLinkFieldService $hcmLinkFieldService;
 	private readonly \Bitrix\Sign\Blanks\Block\Factory $blockFactory;
+	private readonly Document\FieldService $fieldService;
 
 	public function __construct(
 		?BlockRepository $blockRepository = null,
 		?HcmLinkFieldService $hcmLinkFieldService = null,
 		?\Bitrix\Sign\Blanks\Block\Factory $blockFactory = null,
+		?Document\FieldService $fieldService = null,
 	)
 	{
 		$this->memberConnectorFactory = new MemberConnectorFactory();
@@ -76,6 +85,7 @@ final class Field
 		$this->fieldValueFactory = new FieldValue();
 		$this->hcmLinkFieldService = $hcmLinkFieldService ?? Container::instance()->getHcmLinkFieldService();
 		$this->blockFactory = $blockFactory ?? new \Bitrix\Sign\Blanks\Block\Factory();
+		$this->fieldService = $fieldService ?? Container::instance()->getDocumentFieldService();
 	}
 
 	/**
@@ -219,6 +229,7 @@ final class Field
 					$block,
 					$registeredFields,
 					$member,
+					$document,
 				),
 				BlockCode::REQUISITES, BlockCode::MY_REQUISITES => $this->createRequisiteFields(
 					$block,
@@ -299,6 +310,7 @@ final class Field
 		Item\Block $block,
 		Item\FieldCollection $registeredFields,
 		Item\Member $member,
+		?Item\Document $document = null,
 	): Item\FieldCollection
 	{
 		$fieldCode = $block->data['field'] ?? '';
@@ -314,7 +326,16 @@ final class Field
 			return new Item\FieldCollection();
 		}
 
-		$fieldType = match ($fieldDescription['TYPE'] ?? '')
+		$sourceFieldType = (string)($fieldDescription['TYPE'] ?? '');
+		if (
+			$document !== null
+			&& $this->shouldSkipUnsupportedEmployeeInitiatedFieldType($document, $member, $sourceFieldType)
+		)
+		{
+			return new Item\FieldCollection();
+		}
+
+		$fieldType = match ($sourceFieldType)
 		{
 			FieldType::DATE, FieldType::DATETIME => FieldType::DATE,
 			FieldType::LIST => FieldType::LIST,
@@ -501,10 +522,12 @@ final class Field
 			return new Item\FieldCollection();
 		}
 
+		$fieldCodeForCheck = UserFieldCodeHelper::removePrefix($fieldCode);
+
 		$profileProvider = Container::instance()->getServiceProfileProvider();
-		if (!$profileProvider->isProfileField($fieldCode))
+		if (!$profileProvider->isProfileField($fieldCodeForCheck))
 		{
-			return $this->createCrmReferenceFields($block, $registeredFields, $member);
+			return $this->createCrmReferenceFields($block, $registeredFields, $member, $document);
 		}
 
 		if ($block->role === Type\Member\Role::ASSIGNEE && $document->representativeId === null)
@@ -512,16 +535,23 @@ final class Field
 			return new Item\FieldCollection();
 		}
 
-		$fieldDescription = $profileProvider->getDescriptionByFieldName($fieldCode);
-		$fieldType = $this->convertUserFieldType($fieldDescription['type'] ?? '');
+		$fieldDescription = $profileProvider->getDescriptionByFieldName($fieldCodeForCheck);
+		$sourceFieldType = (string)($fieldDescription['type'] ?? '');
+		if ($this->shouldSkipUnsupportedEmployeeInitiatedFieldType($document, $member, $sourceFieldType))
+		{
+			return new Item\FieldCollection();
+		}
 
-		if ($fieldCode === self::SNILS_FIELD_CODE)
+		$fieldType = $this->fieldService->convertUserFieldType($sourceFieldType);
+
+		if ($fieldCodeForCheck === self::SNILS_FIELD_CODE)
 		{
 			$fieldType = FieldType::SNILS;
 		}
 
-		$fieldCode = self::USER_FIELD_CODE_PREFIX . $fieldCode;
-		$fieldName = NameHelper::create($block->code, $fieldType, $member->party, $fieldCode);
+		$fieldCodeWithPrefix = UserFieldCodeHelper::addPrefix($fieldCode);
+
+		$fieldName = NameHelper::create($block->code, $fieldType, $member->party, $fieldCodeWithPrefix);
 
 		return $this->makeFieldsByUserFieldDescription(
 			$fieldName,
@@ -700,7 +730,13 @@ final class Field
 			return new Item\FieldCollection();
 		}
 
-		$fieldType = $this->convertUserFieldType($fieldDescription['type'] ?? '');
+		$sourceFieldType = (string)($fieldDescription['type'] ?? '');
+		if ($this->shouldSkipUnsupportedEmployeeInitiatedFieldType($document, $member, $sourceFieldType))
+		{
+			return new Item\FieldCollection();
+		}
+
+		$fieldType = $this->fieldService->convertUserFieldType($sourceFieldType);
 		$fieldName = NameHelper::create($block->code, $fieldType, $member->party, $fieldCode);
 
 		return $this->makeFieldsByUserFieldDescription(
@@ -710,24 +746,6 @@ final class Field
 			$member->party,
 			$registeredFields,
 		);
-	}
-
-	private function convertUserFieldType(string $userFieldType): string
-	{
-		return match ($userFieldType)
-		{
-			FieldType::SNILS => FieldType::SNILS,
-			FieldType::FIRST_NAME => FieldType::FIRST_NAME,
-			FieldType::LAST_NAME => FieldType::LAST_NAME,
-			FieldType::PATRONYMIC => FieldType::PATRONYMIC,
-			FieldType::POSITION => FieldType::POSITION,
-			FieldType::DATE, FieldType::DATETIME => FieldType::DATE,
-			FieldType::LIST, FieldType::ENUMERATION => FieldType::LIST,
-			FieldType::DOUBLE => FieldType::DOUBLE,
-			FieldType::INTEGER => FieldType::INTEGER,
-			FieldType::ADDRESS => FieldType::ADDRESS,
-			default => FieldType::STRING
-		};
 	}
 
 	/**
@@ -740,7 +758,7 @@ final class Field
 		if (
 			empty($fieldDescription['items'])
 			|| !is_array($fieldDescription['items'])
-			&& FieldType::LIST !== $this->convertUserFieldType($fieldDescription['type'] ?? '')
+			&& FieldType::LIST !== $this->fieldService->convertUserFieldType($fieldDescription['type'] ?? '')
 		)
 		{
 			return null;
@@ -853,6 +871,20 @@ final class Field
 		return in_array($fieldType, self::NOT_REQUIRED_FIELD_TYPES, true) ? false : null;
 	}
 
+	private function shouldSkipUnsupportedEmployeeInitiatedFieldType(
+		Item\Document $document,
+		Item\Member $member,
+		string $sourceFieldType,
+	): bool
+	{
+		if ($member->role !== Type\Member\Role::SIGNER || !$document->isInitiatedByEmployee())
+		{
+			return false;
+		}
+
+		return in_array(strtolower($sourceFieldType), self::EMPLOYEE_INITIATED_UNSUPPORTED_USER_FIELD_TYPES, true);
+	}
+
 	private function createB2eRegionalFields(
 		Item\Block $block,
 		Item\Member $member,
@@ -865,7 +897,7 @@ final class Field
 			return new Item\FieldCollection();
 		}
 
-		$fieldType = self::getB2eRegionalFieldTypeByBlockCode($block->code);
+		$fieldType = $this->fieldService->getB2eRegionalFieldTypeByBlockCode($block->code);
 		$fieldName = NameHelper::create($block->code, $fieldType, $member->party);
 
 		$field = $registeredFields->getFirstFieldByName($fieldName);
@@ -884,14 +916,5 @@ final class Field
 		);
 
 		return new Item\FieldCollection($field);
-	}
-
-	private static function getB2eRegionalFieldTypeByBlockCode(string $code): string
-	{
-		return match ($code)
-		{
-			BlockCode::B2E_EXTERNAL_ID => FieldType::EXTERNAL_ID,
-			BlockCode::B2E_EXTERNAL_DATE_CREATE => FieldType::EXTERNAL_DATE,
-		};
 	}
 }

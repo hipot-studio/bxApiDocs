@@ -118,8 +118,9 @@ class AssistHandler extends PaySystem\ServiceHandler implements PaySystem\IRefun
 	{
 		$sum = $request->get('orderamount');
 		$paymentSum = $this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY');
+		$currency = $payment->getField('CURRENCY');
 
-		return PriceMaths::roundPrecision($paymentSum) === PriceMaths::roundPrecision($sum);
+		return PriceMaths::roundByFormatCurrency($paymentSum, $currency) === PriceMaths::roundByFormatCurrency($sum, $currency);
 	}
 
 	/**

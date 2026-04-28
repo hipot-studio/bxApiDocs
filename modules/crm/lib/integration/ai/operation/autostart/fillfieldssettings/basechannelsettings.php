@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings;
 
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Main\Application;
 
 abstract class BaseChannelSettings implements ChannelSettingsInterface
 {
@@ -31,5 +32,16 @@ abstract class BaseChannelSettings implements ChannelSettingsInterface
 			array_map('intval', $types),
 			static fn(int $type) => in_array($type, $validTypes, true)
 		);
+	}
+
+	final protected static function isRuZone(): bool
+	{
+		static $zone = null;
+		if ($zone === null)
+		{
+			$zone = Application::getInstance()->getLicense()->getRegion() ?? 'ru';
+		}
+
+		return $zone === 'ru';
 	}
 }

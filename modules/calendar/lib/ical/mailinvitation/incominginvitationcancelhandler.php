@@ -57,6 +57,11 @@ class IncomingInvitationCancelHandler extends IncomingInvitationHandler
 
 		if ($event)
 		{
+			if ($this->isPortalEvent($event))
+			{
+				return true;
+			}
+
 			if ($icalEvent->getRecurrenceId() !== null)
 			{
 				$date = $this->getExdateFromRecurrenceId($icalEvent->getRecurrenceId());

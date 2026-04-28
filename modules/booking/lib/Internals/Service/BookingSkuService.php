@@ -9,7 +9,7 @@ use Bitrix\Booking\Entity\Booking\BookingSku;
 use Bitrix\Booking\Entity\Booking\BookingSkuCollection;
 use Bitrix\Booking\Internals\Exception\InvalidSkuException;
 use Bitrix\Booking\Internals\Integration\Catalog\SkuDataLoader;
-use Bitrix\Booking\Internals\Integration\Crm\ProductRowDataLoader;
+use Bitrix\Booking\Internals\Integration\Crm\DataLoader\ProductRowDataLoader;
 use Bitrix\Booking\Internals\Repository\ORM\BookingSkuRepository;
 
 class BookingSkuService

@@ -18,6 +18,18 @@ use Bitrix\Main\Config\Option;
 
 class ArchiveTaskService
 {
+	public const TASK_ID = 0;
+	public const TASK_NAME = 1;
+	public const TASK_DESCRIPTION = 2;
+	public const TASK_STATUS = 3;
+	public const TASK_CREATED_DATE = 4;
+	public const TASK_MODIFIED = 5;
+	public const TASK_USERS = 6;
+
+	public const USER_ID = 0;
+	public const USER_STATUS = 1;
+	public const USER_DATE_UPDATE = 2;
+
 	private const DEFAULT_CHUNK_SIZE = 10000;
 	private TaskArchiveRepository $archiveRepository;
 	private TaskArchiveTasksRepository $archiveTasksRepository;
@@ -92,20 +104,20 @@ class ArchiveTaskService
 		{
 			$userId = $user->getUserId();
 			$users[$userId] = [
-				$userId, // USER_ID
-				$user->getStatus(), // STATUS
-				$user->getDateUpdate(), // DATE_UPDATE
+				self::USER_ID => $userId,
+				self::USER_STATUS => $user->getStatus(),
+				self::USER_DATE_UPDATE => $user->getDateUpdate(),
 			];
 		}
 
 		return [
-			$task->getId(), // ID
-			$task->getName(), // NAME
-			$task->getDescription(), // DESCRIPTION
-			$task->getStatus(), // STATUS
-			$task->getCreatedDate(), // CREATED_DATE
-			$task->getModified(), // MODIFIED
-			$users, // USERS
+			self::TASK_ID => $task->getId(),
+			self::TASK_NAME => $task->getName(),
+			self::TASK_DESCRIPTION => $task->getDescription(),
+			self::TASK_STATUS => $task->getStatus(),
+			self::TASK_CREATED_DATE => $task->getCreatedDate(),
+			self::TASK_MODIFIED => $task->getModified(),
+			self::TASK_USERS => $users,
 		];
 	}
 

@@ -166,6 +166,11 @@ class ChatService
 
 	public function getChatsAndChannelsByNode(Item\Node $node, ?int $userId = null): array
 	{
+		if ($node->id === null)
+		{
+			return [];
+		}
+
 		$chatCollection = $this->nodeRelationRepository->findRelationsByNodeIdAndRelationType(
 			nodeId: $node->id,
 			relationEntityType: RelationEntityType::CHAT,

@@ -18,7 +18,7 @@ class ValidationException extends SystemException
 	public function __construct(
 		private readonly array $validationErrors,
 		string $message = 'Data has validation errors',
-		Throwable $previous = null
+		?Throwable $previous = null
 	)
 	{
 		parent::__construct($message, previous: $previous);

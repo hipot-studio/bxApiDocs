@@ -491,8 +491,7 @@ class CMainInterfaceButtons
 
 			if (!$result && isset($item["ADDITIONAL_URL"]) && is_array($item["ADDITIONAL_URL"]))
 			{
-				$result = array_search($requestUri, $item["ADDITIONAL_URL"]);
-				$result = !is_null($result);
+				$result = (array_search($requestUri, $item["ADDITIONAL_URL"]) !== false);
 			}
 		}
 		else

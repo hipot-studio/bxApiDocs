@@ -1,6 +1,8 @@
 <?php
 namespace Bitrix\ImBot;
 
+use Bitrix\Im\V2\Entity\User\Data\BotData;
+
 /**
  * Bot event dispatcher.
  * @package \Bitrix\ImBot
@@ -16,15 +18,15 @@ class Event
 	 */
 	public static function onUserRead($params)
 	{
-		$botData = \Bitrix\Im\Bot::getCache($params['DIALOG_ID']);
-		if (!$botData)
-		{
-			return true;
-		}
+		$className = BotData::getInstance((int)$params['DIALOG_ID'])->getClass();
 		
-		if (class_exists($botData['CLASS']) && method_exists($botData['CLASS'], 'onUserRead'))
+		if (
+			!empty($className)
+			&& class_exists($className)
+			&& method_exists($className, 'onUserRead')
+		)
 		{
-			return call_user_func_array(array($botData['CLASS'], 'onUserRead'), Array($params));
+			return call_user_func_array(array($className, 'onUserRead'), [$params]);
 		}
 		
 		return true;
@@ -52,15 +54,15 @@ class Event
 		$result = true;
 		foreach ($botList as $botId)
 		{
-			$botData = \Bitrix\Im\Bot::getCache($botId);
-			if (!$botData)
-			{
-				continue;
-			}
+			$className = BotData::getInstance($botId)->getClass();
 
-			if (class_exists($botData['CLASS']) && method_exists($botData['CLASS'], 'onChatRead'))
+			if (
+				!empty($className)
+				&& class_exists($className)
+				&& method_exists($className, 'onChatRead')
+			)
 			{
-				$result = call_user_func_array([$botData['CLASS'], 'onChatRead'], [$params]);
+				$result = call_user_func_array([$className, 'onChatRead'], [$params]);
 			}
 		}
 
@@ -85,17 +87,17 @@ class Event
 			$botId = $params['MESSAGE']['AUTHOR_ID'];
 		}
 		
-		$botData = \Bitrix\Im\Bot::getCache($botId);
-		if (!$botData)
+		$className = BotData::getInstance((int)$botId)->getClass();
+		if (empty($className))
 		{
 			return true;
 		}
 		
 		Log::write($params, 'MESSAGE LIKE');
 		
-		if (class_exists($botData['CLASS']) && method_exists($botData['CLASS'], 'onMessageLike'))
+		if (class_exists($className) && method_exists($className, 'onMessageLike'))
 		{
-			return call_user_func_array(array($botData['CLASS'], 'onMessageLike'), Array($params));
+			return call_user_func_array(array($className, 'onMessageLike'), [$params]);
 		}
 		
 		return true;
@@ -129,22 +131,19 @@ class Event
 		$result = true;
 		foreach ($botList as $botId)
 		{
-			$botData = \Bitrix\Im\Bot::getCache($botId);
-			if (!$botData)
-			{
-				continue;
-			}
+			$className = BotData::getInstance($botId)->getClass();
 
 			if (
-				class_exists($botData['CLASS'], true)
-				&& method_exists($botData['CLASS'], 'onStartWriting')
+				!empty($className)
+				&& class_exists($className)
+				&& method_exists($className, 'onStartWriting')
 			)
 			{
 				$params['BOT_ID'] = $botId;
 
 				Log::write($params, 'START WRITING');
 
-				$result = call_user_func([$botData['CLASS'], 'onStartWriting'], $params);
+				$result = call_user_func([$className, 'onStartWriting'], $params);
 			}
 		}
 
@@ -180,22 +179,19 @@ class Event
 		$result = true;
 		foreach ($botList as $botId)
 		{
-			$botData = \Bitrix\Im\Bot::getCache($botId);
-			if (!$botData)
-			{
-				continue;
-			}
+			$className = BotData::getInstance($botId)->getClass();
 
 			if (
-				class_exists($botData['CLASS'])
-				&& method_exists($botData['CLASS'], 'onSessionVote')
+				!empty($className)
+				&& class_exists($className)
+				&& method_exists($className, 'onSessionVote')
 			)
 			{
 				$params['BOT_ID'] = $botId;
 
 				Log::write($params, 'SESSION VOTE');
 
-				$result = call_user_func([$botData['CLASS'], 'onSessionVote'], $params);
+				$result = call_user_func([$className, 'onSessionVote'], $params);
 			}
 		}
 

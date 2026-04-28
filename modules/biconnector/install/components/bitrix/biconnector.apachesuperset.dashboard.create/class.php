@@ -68,6 +68,7 @@ class ApacheSupersetDashboardCreateComponent
 				'title' => $this->getDefaultDashboardTitle(),
 			],
 			'paramList' => $this->getParamList(),
+			'requiredParamList' => $this->getRequiredParamList(),
 			'groupIds' => $this->getGroupIds(),
 			'activeUrlParamsSelector' => SupersetInitializer::isSupersetReady(),
 		];
@@ -96,6 +97,11 @@ class ApacheSupersetDashboardCreateComponent
 	private function getParamList(): array
 	{
 		return UrlParameter\ScopeMap::getParamList();
+	}
+
+	private function getRequiredParamList(): array
+	{
+		return UrlParameter\ScopeMap::getRequiredParamList();
 	}
 
 	private function getGroupIds(): array

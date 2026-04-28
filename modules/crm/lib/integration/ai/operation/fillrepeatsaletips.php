@@ -7,45 +7,38 @@ use Bitrix\AI\Payload\IPayload;
 use Bitrix\Crm\Activity\Analytics\Dictionary;
 use Bitrix\Crm\Activity\Provider\RepeatSale;
 use Bitrix\Crm\Badge;
-use Bitrix\Crm\Dto\Dto;
-use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Dto\RepeatSale\FillRepeatSaleTipsPayload;
 use Bitrix\Crm\Integration\AI\ErrorCode;
-use Bitrix\Crm\Integration\AI\EventHandler;
-use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Operation\Payload\PayloadFactory;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\Activity\EditActivityEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\FillRepeatSaleTipsEvent;
 use Bitrix\Crm\ItemIdentifier;
-use Bitrix\Crm\RepeatSale\DataCollector\CopilotMarkerLimitManager;
 use Bitrix\Crm\RepeatSale\Logger;
 use Bitrix\Crm\RepeatSale\Segment\SegmentItemChecker;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\AI\Controller;
 use Bitrix\Main;
-use Bitrix\Main\Web\Json;
 use CCrmActivity;
 use CCrmOwnerType;
 
-final class FillRepeatSaleTips extends AbstractOperation
+final class FillRepeatSaleTips extends AbstractFillRepeatSaleTips
 {
 	public const TYPE_ID = 6;
-	public const CONTEXT_ID = 'fill_repeat_sale_tips';
-
-	protected const PAYLOAD_CLASS = FillRepeatSaleTipsPayload::class;
-	protected const ENGINE_CODE = EventHandler::SETTINGS_REPEAT_SALE_ENGINE_CODE;
 
 	public static function isAccessGranted(int $userId, ItemIdentifier $target): bool
 	{
-		return parent::isAccessGranted($userId, $target)
-			&& CCrmActivity::CheckItemUpdatePermission(
-				['ID' => $target->getEntityId()],
-				Container::getInstance()->getUserPermissions($userId)->getCrmPermissions(),
-			)
-		;
+		if (!parent::isAccessGranted($userId, $target))
+		{
+			return false;
+		}
+
+		return CCrmActivity::CheckItemUpdatePermission(
+			['ID' => $target->getEntityId()],
+			Container::getInstance()->getUserPermissions($userId)->getCrmPermissions(),
+		);
 	}
 
 	public static function isSuitableTarget(ItemIdentifier $target): bool
@@ -93,42 +86,6 @@ final class FillRepeatSaleTips extends AbstractOperation
 		return $result;
 	}
 
-	private function isPayloadMarkersValid(array $markers): bool
-	{
-		if (empty($markers))
-		{
-			return false;
-		}
-
-		$crmData = Json::decode($markers['crm_data'] ?? '');
-		if (empty($crmData))
-		{
-			return false;
-		}
-
-		$dealList = $crmData['deals_list'] ?? [];
-		if (empty($dealList))
-		{
-			return false;
-		}
-
-		$limit = CopilotMarkerLimitManager::getInstance()->getDealFieldsMinLimit();
-		$filtered = array_filter(
-			$dealList,
-			static function (array $item) use ($limit): bool
-			{
-				$dealFields = $item['deal_fields'] ?? [];
-				$communicationData = $item['communication_data'] ?? [];
-
-				return
-					TextHelper::countCharactersInArrayFlexible($dealFields, true) > $limit
-					|| TextHelper::countCharactersInArrayFlexible($communicationData) > $limit;
-			},
-		);
-
-		return !empty($filtered);
-	}
-
 	protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void
 	{
 		// operation is not used in the timeline
@@ -164,20 +121,6 @@ final class FillRepeatSaleTips extends AbstractOperation
 	protected static function notifyAboutLimitExceededError(Result $result): void
 	{
 		// not implemented yet
-	}
-
-	protected static function extractPayloadFromAIResult(\Bitrix\AI\Result $result, EO_Queue $job): Dto
-	{
-		$json = self::extractPayloadPrettifiedData($result);
-		if (empty($json))
-		{
-			return new FillRepeatSaleTipsPayload([]);
-		}
-
-		return new FillRepeatSaleTipsPayload([
-			'customerInfo' => self::underscoreToCamelCase($json['customer_info'] ?? []),
-			'actionPlan' => self::underscoreToCamelCase($json['action_plan'] ?? []),
-		]);
 	}
 
 	protected static function onAfterSuccessfulJobFinish(Result $result, ?Context $context = null): void
@@ -268,16 +211,5 @@ final class FillRepeatSaleTips extends AbstractOperation
 	protected static function getJobFinishEventBuilder(): AIBaseEvent
 	{
 		return new FillRepeatSaleTipsEvent();
-	}
-
-	private static function underscoreToCamelCase(array $input): array
-	{
-		return array_combine(
-			array_map(
-				static fn(string $key) => lcfirst(str_replace('_', '', ucwords($key, '_'))),
-				array_keys($input)
-			),
-			array_values($input)
-		);
 	}
 }

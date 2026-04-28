@@ -11,4 +11,12 @@ enum SegmentCode: string
 	case DEAL_EVERY_MONTH = 'deal_every_month_year';
 	case AI_SCREENING = 'ai_screening';
 	case AI_APPROVE = 'ai_approve';
+
+	public static function isNeedAiModule(string $segmentCode): bool
+	{
+		return
+			$segmentCode === self::AI_SCREENING->value
+			|| $segmentCode === self::AI_APPROVE->value
+		;
+	}
 }

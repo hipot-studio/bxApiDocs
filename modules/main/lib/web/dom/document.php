@@ -37,7 +37,7 @@ class Document extends Node
 	 * @param null|Node $node
 	 * @return string
 	 */
-	public function saveHTML(Node $node = null)
+	public function saveHTML(?Node $node = null)
 	{
 		if($node === null)
 		{

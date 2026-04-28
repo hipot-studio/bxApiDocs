@@ -11,6 +11,7 @@ use Bitrix\AiAssistant\Definition\Dto\UsesToolsDto;
 use Bitrix\HumanResources\Access\Model\UserModel;
 use Bitrix\HumanResources\Access\Permission\PermissionDictionary;
 use Bitrix\HumanResources\Access\Permission\PermissionVariablesDictionary;
+use Bitrix\HumanResources\Config\Storage;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Department\DepartmentChangeParentTool;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Department\DepartmentCreateTool;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Department\DepartmentEditEmployeesTool;
@@ -55,6 +56,11 @@ class DepartmentAgent extends BaseAgent
 
 	public function canList(int $userId): bool
 	{
+		if (!Storage::instance()->isCompanyStructureConverted())
+		{
+			return false;
+		}
+
 		$user = UserModel::createFromId($userId);
 
 		if ($user->isAdmin())

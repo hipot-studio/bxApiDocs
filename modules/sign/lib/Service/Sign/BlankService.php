@@ -9,14 +9,12 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
-use Bitrix\Rpa\Command\Add;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Item\Blank;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Fs\File;
 use Bitrix\Sign\Item\Fs\FileCollection;
 use Bitrix\Sign\Item\Fs\FileContent;
-use Bitrix\Sign\Operation\SaveBlankPreviewPage;
 use Bitrix\Sign\Repository\Blank\ResourceRepository;
 use Bitrix\Sign\Repository\BlankRepository;
 use Bitrix\Sign\Repository\FileRepository;
@@ -51,7 +49,12 @@ class BlankService
 	 * @throws SystemException
 	 * @throws ArgumentException
 	 */
-	public function createFromFile(FileCollection $fileCollection, string $scenario = BlankScenario::B2B, bool $forTemplate = false): AddResult
+	public function createFromFile(
+		FileCollection $fileCollection,
+		string $scenario = BlankScenario::B2B,
+		bool $forTemplate = false,
+		bool $hasPlaceholders = false,
+	): AddResult
 	{
 		if (!in_array($scenario, BlankScenario::getAll(), true))
 		{
@@ -100,6 +103,7 @@ class BlankService
 				fileCollection: new FileCollection($firstFile),
 				scenario: $scenario,
 				forTemplate: $forTemplate,
+				hasPlaceholders: $hasPlaceholders,
 			),
 		);
 		$files = $fileCollection->toArray();
@@ -124,14 +128,21 @@ class BlankService
 	}
 
 	/**
-	 * @param array<string|int> $files
-	 *
-	 * @return \Bitrix\Main\Entity\AddResult
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @param array $files
+	 * @param string $scenario
+	 * @param bool $forTemplate
+	 * @param bool $hasPlaceholders
+	 * @return AddResult
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 */
-	public function createFromFileIds(array $files, string $scenario = BlankScenario::B2B, bool $forTemplate = false): AddResult
+	public function createFromFileIds(
+		array  $files,
+		string $scenario = BlankScenario::B2B,
+		bool   $forTemplate = false,
+		bool   $hasPlaceholders = false,
+	): AddResult
 	{
 		if (!in_array($scenario, BlankScenario::getAll(), true))
 		{
@@ -177,7 +188,7 @@ class BlankService
 			);
 		}
 
-		return $this->createFromFile($fileCollection, $scenario, $forTemplate);
+		return $this->createFromFile($fileCollection, $scenario, $forTemplate, $hasPlaceholders);
 	}
 
 	public function changeBlankTitleByDocument(Document $document, string $title): Result
@@ -243,5 +254,17 @@ class BlankService
 		}
 
 		return $this->blankRepository->getById($blankId);
+	}
+
+	/**
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 * @throws ArgumentException
+	 */
+	public function hasPlaceholders(int $blankId): bool
+	{
+		$blank = $this->blankRepository->getById($blankId);
+
+		return $blank?->hasPlaceholders ?? false;
 	}
 }

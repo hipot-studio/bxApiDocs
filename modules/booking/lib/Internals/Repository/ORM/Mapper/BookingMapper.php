@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Repository\ORM\Mapper;
 
 use Bitrix\Booking\Entity\Booking\Booking;
+use Bitrix\Booking\Entity\Booking\BookingPayment;
 use Bitrix\Booking\Entity\Booking\BookingSkuCollection;
 use Bitrix\Booking\Entity\Booking\BookingSource;
 use Bitrix\Booking\Entity\Booking\BookingVisitStatus;
@@ -88,6 +89,7 @@ class BookingMapper
 		$this->setExternalDataCollection($booking, $ormBooking);
 		$this->setNote($booking, $ormBooking);
 		$this->setClientNote($booking, $ormBooking);
+		$this->setPayment($booking, $ormBooking);
 
 		return $booking;
 	}
@@ -224,5 +226,21 @@ class BookingMapper
 		}
 
 		$booking->setExternalDataCollection(new ExternalDataCollection(...$externalDataItems));
+	}
+
+	private function setPayment(Booking $booking, EO_Booking $ormBooking): void
+	{
+		$ormPayment = $ormBooking->getPayment();
+		if ($ormPayment === null)
+		{
+			return;
+		}
+
+		$booking->setPayment(
+			(new BookingPayment())
+				->setId($ormPayment->getPaymentId())
+				->setIsPaid($ormPayment->getIsPaid())
+				->setIsPaidManually($ormPayment->getIsPaidManually())
+		);
 	}
 }

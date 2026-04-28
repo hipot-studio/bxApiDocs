@@ -5,7 +5,6 @@ namespace Bitrix\Sign\Blanks\Block;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Compatibility\Role;
 use Bitrix\Sign\Exception\SignException;
-use Bitrix\Sign\Factory\Field;
 use Bitrix\Sign\Helper\Field\NameHelper;
 use Bitrix\Sign\Repository\MemberRepository;
 use Bitrix\Sign\Service\Container;
@@ -21,6 +20,8 @@ class Factory
 	private Service\Sign\BlockService $blockService;
 	private readonly HcmLinkFieldService $hcmLinkFieldService;
 	private readonly LegalInfoProvider $legalInfoProvider;
+	/** @var array<string, Item\MemberCollection> */
+	private array $membersByDocumentParty = [];
 
 	public function __construct(
 		?MemberRepository $memberRepository = null,
@@ -99,7 +100,7 @@ class Factory
 			role: $role ?? Role::createForBlock($party, $document->parties),
 		);
 		// we need only first member, and other to check that count is more that 1
-		$membersByParty = $this->memberRepository->listByDocumentIdWithParty($document->id, $party, 2);
+		$membersByParty = $this->getMembersByDocumentParty($document, $party, 2);
 
 		$result = $this->blockService->loadData($item, $document, $membersByParty->getFirst(), $skipSecurity);
 		if (!$result->isSuccess())
@@ -125,6 +126,22 @@ class Factory
 		}
 
 		return $item;
+	}
+
+	private function getMembersByDocumentParty(Item\Document $document, int $party, int $limit): Item\MemberCollection
+	{
+		if ($document->id === null)
+		{
+			return $this->memberRepository->listByDocumentIdWithParty($document->id, $party, $limit);
+		}
+
+		$key = $document->id . ':' . $party;
+		if (!isset($this->membersByDocumentParty[$key]))
+		{
+			$this->membersByDocumentParty[$key] = $this->memberRepository->listByDocumentIdWithParty($document->id, $party, $limit);
+		}
+
+		return $this->membersByDocumentParty[$key];
 	}
 
 	public function getTypeByCode(string $code): string

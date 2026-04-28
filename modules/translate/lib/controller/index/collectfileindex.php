@@ -7,6 +7,8 @@ use Bitrix\Translate\Index;
 
 /**
  * The lang files index harvester.
+ *
+ * @internal
  */
 class CollectFileIndex
 	extends Translate\Controller\Action

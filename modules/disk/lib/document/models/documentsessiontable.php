@@ -2,11 +2,8 @@
 
 namespace Bitrix\Disk\Document\Models;
 
-use Bitrix\Disk\Document;
 use Bitrix\Disk\Document\OnlyOffice;
 use Bitrix\Disk\Internals\DataManager;
-use Bitrix\Disk\Internals\Entity\Model;
-use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity\BooleanField;
 use Bitrix\Main\ORM\Data\AddResult;
@@ -158,15 +155,11 @@ final class DocumentSessionTable extends DataManager
 		parent::deleteBatch($filter);
 	}
 
-	public static function clearOld(): void
+	public static function deleteByService(DocumentService $service): void
 	{
-
-	}
-
-	public static function clearTable(): void
-	{
-		$sql = "TRUNCATE TABLE " . self::getTableName();
-		Application::getConnection()->queryExecute($sql);
+		static::deleteBatch([
+			'SERVICE' => $service->value,
+		]);
 	}
 
 	public static function deactivateByHash(string $hash): void

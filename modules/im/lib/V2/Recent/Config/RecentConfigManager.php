@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Recent\Config;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
 use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Im\V2\Common\FormatConverter;
@@ -24,6 +25,11 @@ class RecentConfigManager
 	)
 	{
 		$this->converterToCamelCase = new Converter(Converter::TO_CAMEL | Converter::LC_FIRST);
+	}
+
+	public static function getInstance(): self
+	{
+		return ServiceLocator::getInstance()->get(RecentConfigManager::class);
 	}
 
 	public function getByExtendedType(string $type): RecentConfig
@@ -69,7 +75,7 @@ class RecentConfigManager
 	private function loadInternal(): void
 	{
 		$this->configByTypes[ExtendedType::Copilot->value] =
-			new RecentConfig(true, true, CounterType::Copilot);
+			new RecentConfig(CopilotChat::isHistoryAvailable(), CopilotChat::isActive(), CounterType::Copilot);
 		$this->configByTypes[ExtendedType::Collab->value] =
 			new RecentConfig(true, true, CounterType::Collab);
 		$this->configByTypes[ExtendedType::Lines->value] =
@@ -80,6 +86,9 @@ class RecentConfigManager
 			new RecentConfig(true, true);
 		$this->configByTypes[ExtendedType::GeneralChannel->value]
 			= (new RecentConfig(true, true))->setOwnSectionName('openChannel')
+		;
+		$this->configByTypes[ExtendedType::System->value] =
+			new RecentConfig(false, false)
 		;
 	}
 

@@ -40,7 +40,6 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$this->arResult = $this->prepareData();
 		$this->arResult['ACCESS_RIGHTS_ENABLED'] = LicenseManager::isAccessRightsEnabled();
 		$this->arResult['MAILBOX_MASS_CONNECT_ENABLED'] = LicenseManager::isMailboxesMassConnectEnabled();
-		$this->arResult['NEED_SHOW_MAILBOX_LIST_HINT'] = $this->needShowMailboxListHint();
 		$this->arResult['MAILBOX_LIST_HINT_NAME'] = Guide::getMailboxListHintOptionName();
 
 		$this->includeComponentTemplate();
@@ -105,10 +104,5 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$accessValues['HAS_ACCESS_TO_EDIT_PERMISSIONS'] = MailAccess::hasCurrentUserAccessToPermission();
 
 		return $accessValues;
-	}
-
-	private function needShowMailboxListHint(): bool
-	{
-		return !Guide::wasMailboxListShown();
 	}
 }

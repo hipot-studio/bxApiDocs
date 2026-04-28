@@ -97,7 +97,8 @@ class SectionDictionary
 
 		if (Config\Feature::instance()->isDepartmentBPSettingsAvailable()
 			|| Config\Feature::instance()->areDepartmentReportsSettingsAvailable()
-			|| Config\Feature::instance()->areMultipleUsersSettingsAvailable()
+			|| Config\Feature::instance()->areMultipleUsersBPSettingsAvailable()
+			|| Config\Feature::instance()->areMultipleUsersReportSettingsAvailable()
 		)
 		{
 			$companyStructure[] = PermissionDictionary::HUMAN_RESOURCES_DEPARTMENT_SETTINGS_EDIT;

@@ -141,10 +141,13 @@ class ToDo extends Base
 			];
 		}
 
+		$userSettings = \Bitrix\Calendar\UserSettings::get(Container::getInstance()->getContext()->getUserId());
+
 		return [
 			'sections' => $sections,
 			'trackingUsersList' => $trackingUsersList,
 			'readOnly' => $readOnly,
+			'userSettings' => $userSettings,
 		];
 	}
 

@@ -27,13 +27,13 @@ abstract class Base extends BIConnector\DataSource\BIBuilderDataset
 	public static function createDataset(
 		BIConnector\ExternalSource\Internal\ExternalDataset $dataset,
 		Main\DB\Connection $dataConnection,
-		string $languageId = null
+		?string $languageId = null,
 	): self
 	{
 		return (new static($dataConnection, $languageId))->setDataset($dataset);
 	}
 
-	private function setDataset(BIConnector\ExternalSource\Internal\ExternalDataset $dataset): self
+	protected function setDataset(BIConnector\ExternalSource\Internal\ExternalDataset $dataset): self
 	{
 		$this->dataset = $dataset;
 
@@ -73,7 +73,7 @@ abstract class Base extends BIConnector\DataSource\BIBuilderDataset
 		return $result;
 	}
 
-	private function getField(BIConnector\ExternalSource\Internal\ExternalDatasetField $datasetField): BIConnector\DataSource\DatasetField
+	protected function getField(BIConnector\ExternalSource\Internal\ExternalDatasetField $datasetField): BIConnector\DataSource\DatasetField
 	{
 		$type = $datasetField->getEnumType();
 		$name = $datasetField->getName();
@@ -119,26 +119,33 @@ abstract class Base extends BIConnector\DataSource\BIBuilderDataset
 		$externalDatasets = BIConnector\ExternalSource\DatasetManager::getList();
 		foreach ($externalDatasets as $externalDataset)
 		{
-			$dataset = Factory::getDataset($externalDataset, $connection, $languageId);
+			try
+			{
+				$dataset = Factory::getDataset($externalDataset, $connection, $languageId);
 
-			if (!empty($eventTableName) && $dataset->getResultTableName() !== $eventTableName)
+				if (!empty($eventTableName) && $dataset->getResultTableName() !== $eventTableName)
+				{
+					continue;
+				}
+
+				if (!$dataset->onBeforeEvent()->isSuccess())
+				{
+					continue;
+				}
+
+				$fields = new BIConnector\DataSourceConnector\FieldCollection();
+				foreach ($dataset->getDatasetFields() as $field)
+				{
+					$fields->add($dataset->prepareFieldDto($field));
+				}
+
+				$tableName = $dataset->getResultTableName();
+				$result[$tableName] = $dataset->getConnector($tableName, $fields, $dataset->getResult());
+			}
+			catch (\Exception $e)
 			{
 				continue;
 			}
-
-			if (!$dataset->onBeforeEvent()->isSuccess())
-			{
-				continue;
-			}
-
-			$fields = new BIConnector\DataSourceConnector\FieldCollection();
-			foreach ($dataset->getDatasetFields() as $field)
-			{
-				$fields->add($dataset->prepareFieldDto($field));
-			}
-
-			$tableName = $dataset->getResultTableName();
-			$result[$tableName] = $dataset->getConnector($tableName, $fields, $dataset->getResult());
 		}
 	}
 }

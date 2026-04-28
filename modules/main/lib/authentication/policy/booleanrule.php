@@ -21,7 +21,7 @@ class BooleanRule extends Rule
 	 * @param bool $value
 	 * @param array|null $options
 	 */
-	public function __construct($title, bool $value = false, array $options = null)
+	public function __construct($title, bool $value = false, ?array $options = null)
 	{
 		parent::__construct($title, $value, $options);
 	}

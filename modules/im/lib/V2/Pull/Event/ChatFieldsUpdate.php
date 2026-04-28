@@ -36,4 +36,14 @@ class ChatFieldsUpdate extends BaseChatEvent
 	{
 		return true;
 	}
+
+	protected function getRecipients(): array
+	{
+		return $this->chat->getRelations()->filterActive()->getUserIds();
+	}
+
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
+	}
 }

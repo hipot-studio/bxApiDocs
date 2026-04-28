@@ -5,7 +5,7 @@ use Bitrix\Landing\Landing as LandingCore;
 use Bitrix\Landing\Site\Type;
 use Bitrix\Landing\Manager;
 use Bitrix\Landing\Landing;
-use Bitrix\Landing\Mainpage;
+use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main\Localization\Loc;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -45,7 +45,7 @@ class LandingBlocksMainpageWidgetKb extends LandingBlocksMainpageWidgetBase
 	protected function getData(): void
 	{
 		$useDemoData = false;
-		if (Mainpage\Manager::isUseDemoData())
+		if (Vibe::isUseDemoData())
 		{
 			$data = $this->getDemoData();
 		}
@@ -213,7 +213,7 @@ class LandingBlocksMainpageWidgetKb extends LandingBlocksMainpageWidgetBase
 			$knowledgeBaseData['PUBLIC_URL'] = $item['PUBLIC_URL'];
 			$knowledgeBasesData[] = $knowledgeBaseData;
 		}
-		Type::setScope('MAINPAGE');
+		Type::setScope(Type::SCOPE_CODE_VIBE);
 
 		return $knowledgeBasesData;
 	}

@@ -28,9 +28,7 @@ class UserAbsence
 	 */
 	public static function getIblockId()
 	{
-		$iblockId = Option::get('intranet', 'iblock_absence', 0);
-
-		return intval($iblockId);
+		return (int)Option::get('intranet', 'iblock_absence', 0);
 	}
 
 	/**
@@ -70,6 +68,9 @@ class UserAbsence
 		return true;
 	}
 
+	/**
+	 * @deprecated use (new \Bitrix\Intranet\Public\Provider\User\AbsenceProvider())->getTypes() instead
+	 */
 	public static function getActiveVacationTypes()
 	{
 		if (is_array(self::$activeVacationTypes))
@@ -91,9 +92,7 @@ class UserAbsence
 	}
 
 	/**
-	 * @return array
-	 * @throws \Bitrix\Main\ArgumentNullException
-	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
+	 * @deprecated use (new AbsenceProvider())->getTypes() instead
 	 */
 	public static function getVacationTypes()
 	{

@@ -32,11 +32,6 @@ class KeyFieldAssembler extends FieldAssembler
 				$key = \CUtil::JSEscape($row['data']['ACCESS_KEY']);
 			}
 
-			if (defined('LANGUAGE_ID'))
-			{
-				$key .= LANGUAGE_ID;
-			}
-
 			$result = '
 				<a onclick="BX.BIConnector.KeysGrid.copyKey(this)" style="text-decoration: none" class="ui-btn ui-btn-xs ui-btn-light-border ui-btn-round">
 					' . $text . '

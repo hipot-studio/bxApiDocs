@@ -46,7 +46,7 @@ final class SignB2eSignersEdit extends SignBaseComponent
 	{
 		if (!\Bitrix\Sign\Config\Storage::instance()->isB2eAvailable())
 		{
-			showError((string)Loc::getMessage('SIGN_B2E_SIGNERS_LIST_B2E_NOT_ACTIVATED'));
+			$this->includeNotAvailableTemplate();
 
 			return;
 		}

@@ -10,6 +10,8 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\PushException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\ApiException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AuthorizationException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
 use Bitrix\Calendar\Synchronization\Internal\Repository\PushRepository;
 use Bitrix\Calendar\Synchronization\Internal\Repository\SectionConnectionRepository;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Office365GatewayProvider;
@@ -23,15 +25,16 @@ class PushManager extends AbstractPushManager
 	public function __construct(
 		PushRepository $pushRepository,
 		SectionConnectionRepository $sectionConnectionRepository,
-		protected readonly Office365GatewayProvider $gatewayProvider
+		protected readonly Office365GatewayProvider $gatewayProvider,
 	)
 	{
 		parent::__construct($pushRepository, $sectionConnectionRepository);
 	}
 
 	/**
-	 * @throws AuthorizationException
 	 * @throws PushException
+	 * @throws AuthorizationException
+	 * @throws NotAuthorizedException
 	 */
 	public function subscribeSection(SectionConnection $sectionConnection): void
 	{
@@ -40,15 +43,14 @@ class PushManager extends AbstractPushManager
 			return;
 		}
 
-		/** @noinspection PhpUnhandledExceptionInspection */
-		$push = $this->pushRepository->getBySectionConnectionId($sectionConnection->getId());
-
-		$userId = $sectionConnection->getSection()?->getOwner()?->getId();
+		$userId = $sectionConnection->getSection()->getOwner()?->getId();
 
 		if (!$userId)
 		{
 			return;
 		}
+
+		$push = $this->pushRepository->getBySectionConnectionId($sectionConnection->getId());
 
 		$gateway = $this->gatewayProvider->getPushGateway($userId);
 
@@ -61,6 +63,10 @@ class PushManager extends AbstractPushManager
 				$push->setExpireDate(new Date($response->getExpirationDateTime()));
 
 				$this->pushRepository->update($push);
+			}
+			catch (NotAuthorizedException $e)
+			{
+				throw $e;
 			}
 			catch (DtoValidationException|ApiException|ObjectException $e)
 			{
@@ -86,8 +92,19 @@ class PushManager extends AbstractPushManager
 		try
 		{
 			$response = $gateway->addSectionPush($sectionConnection);
-
-			$this->addSectionPush($response, $push, $sectionConnection);
+		}
+		catch (NotAuthorizedException $e)
+		{
+			throw $e;
+		}
+		catch (NotFoundException $e)
+		{
+			throw new PushException(
+				sprintf('Google API exception on subscribe to connection push: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+				isRecoverable: false,
+			);
 		}
 		catch (DtoValidationException|ApiException $e)
 		{
@@ -95,8 +112,12 @@ class PushManager extends AbstractPushManager
 				sprintf('Unable to subscribe to section push: "%s" (%s)', $e->getMessage(), $e->getCode()),
 				$e->getCode(),
 				$e,
-				isRecoverable: false,
 			);
+		}
+
+		try
+		{
+			$this->addSectionPush($response, $push, $sectionConnection);
 		}
 		catch (ArgumentException|ObjectException|PersistenceException $e)
 		{

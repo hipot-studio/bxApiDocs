@@ -13,7 +13,7 @@ class TeamEditEmployeesTool extends NodeEditEmployeesTool
 
 	public function getName(): string
 	{
-		return 'edit_employees';
+		return 'team_edit_employees';
 	}
 
 	public function getDescription(): string

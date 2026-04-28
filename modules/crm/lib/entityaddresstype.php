@@ -67,14 +67,19 @@ class EntityAddressType
 			return false;
 		}
 
+		$availableTypesByZone = self::getAvailableTypesByZone($zoneId);
+
+		return in_array($typeId, $availableTypesByZone, true);
+	}
+
+	public static function getAvailableTypesByZone(?string $zoneId = null): array
+	{
 		if ($zoneId === null)
 		{
 			$zoneId = EntityAddress::getZoneId();
 		}
 
-		$availableTypesByZone = self::getZoneMap()[$zoneId]['types'] ?? [];
-
-		return in_array($typeId, $availableTypesByZone, true);
+		return self::getZoneMap()[$zoneId]['types'] ?? [];
 	}
 
 	public static function getAllIDs()

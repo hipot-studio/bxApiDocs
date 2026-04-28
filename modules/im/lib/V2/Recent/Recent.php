@@ -76,7 +76,7 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 		return $this;
 	}
 
-	protected static function getOrder(int $userId): array
+	public static function getOrder(int $userId): array
 	{
 		$userSettings = (new UserConfiguration($userId))->getGeneralSettings();
 
@@ -105,6 +105,11 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 
 	public static function getRecentEntities(RecentParams $recentParams): array
 	{
+		if (isset($recentParams->filter) && !$recentParams->filter->isPossible())
+		{
+			return [];
+		}
+
 		$query = RecentTable::query();
 
 		$query->setSelect([
@@ -125,13 +130,10 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 	public static function initByArray(array $recentArray): static
 	{
 		$recent = new static();
-		$userId = $recent->getContext()->getUserId();
-		$chatIds = array_column($recentArray, 'ITEM_CID');
-		$counters = (new CounterService($userId))->getForEachChat($chatIds);
 
 		foreach ($recentArray as $entity)
 		{
-			$recent[] = RecentItem::initByArray($entity, $counters[$entity['ITEM_CID']] ?? 0);
+			$recent[] = RecentItem::initByArray($entity);
 		}
 
 		return $recent;

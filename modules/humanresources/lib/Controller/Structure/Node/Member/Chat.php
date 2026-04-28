@@ -160,6 +160,13 @@ class Chat extends Controller
 
 	public function getListAction(Item\Node $node): array
 	{
+		if ($node->id === null)
+		{
+			$this->addError(new Error('Node not found'));
+
+			return [];
+		}
+
 		$chatService = Container::getChatService();
 		if (!$chatService->isAvailable())
 		{

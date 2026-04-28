@@ -572,6 +572,37 @@ class CBPViewHelper
 		return \FormatDate("$df, $tf", $date->toUserTime());
 	}
 
+	public static function renderDelayLimitsInfo(): string
+	{
+		$delayMinLimit = CBPSchedulerService::getDelayMinLimit();
+		$delayMaxDays = CBPSchedulerService::getDelayMaxDays();
+
+		if (empty($delayMinLimit) && empty($delayMaxDays))
+		{
+			return '';
+		}
+		$message = '';
+		if ($delayMinLimit > 0)
+		{
+			$message .= Loc::getMessage("BIZPROC_VIEW_HELPER_DELAY_MIN_TEXT", ["#VALUE#" => CBPHelper::FormatTimePeriod($delayMinLimit)]);
+		}
+
+		if ($delayMaxDays > 0)
+		{
+			if (!empty($message))
+			{
+				$message .= "<br/>";
+			}
+			$message .= Loc::getMessage("BIZPROC_VIEW_HELPER_DELAY_MAX_TEXT", ["#VALUE#" => CBPHelper::FormatTimePeriod($delayMaxDays * 24 * 60 * 60)]);
+		}
+
+		return <<<HTML
+			<p class="ui-alert ui-alert-primary ui-alert-icon-info ui-alert-xs" style="box-sizing: border-box;">
+				<span class="ui-alert-message">{$message}</span>
+			</p>
+		HTML;
+	}
+
 	private static function getScopeTokenService(): ScopeTokenService
 	{
 		if (!isset(self::$scopeTokenService))

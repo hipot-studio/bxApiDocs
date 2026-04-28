@@ -5,6 +5,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sign\Service\Integration\Crm\AccessService;
 
 Loc::loadMessages(__FILE__);
 
@@ -12,6 +13,17 @@ Loc::loadMessages(__FILE__);
 
 class SignContactListComponent extends SignBaseComponent
 {
+	public function executeComponent(): void
+	{
+		if (!(new AccessService())->canReadSmartDocumentContacts())
+		{
+			$this->includeAccessDeniedTemplate();
+			return;
+		}
+
+		parent::executeComponent();
+	}
+
 	protected function exec(): void
 	{
 		$this->prepareResult();

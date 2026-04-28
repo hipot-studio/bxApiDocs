@@ -89,7 +89,8 @@ class ImConnectorConnectorSettings extends \CBitrixComponent
 			'select' => [
 				'ID',
 				'NAME' => 'LINE_NAME',
-				'IS_LINE_ACTIVE' => 'ACTIVE'
+				'IS_LINE_ACTIVE' => 'ACTIVE',
+				'MODIFY_USER_ID'
 			],
 			'filter' => ['=TEMPORARY' => 'N'],
 			'order' => ['LINE_NAME']
@@ -372,7 +373,8 @@ class ImConnectorConnectorSettings extends \CBitrixComponent
 							empty($this->arParams['connector']) ||
 							Config::canActivateLine()
 						)
-					   && $this->userPermissions->canPerform(Permissions::ENTITY_LINES, Permissions::ACTION_MODIFY))
+					   && $this->userPermissions->canPerform(Permissions::ENTITY_LINES, Permissions::ACTION_MODIFY)
+					   && $this->userPermissions->canPerform(Permissions::ENTITY_CONNECTORS, Permissions::ACTION_MODIFY))
 					{
 						$this->arResult['PATH_TO_ADD_LINE'] = Helper::getAddUrl();
 					}

@@ -88,7 +88,8 @@ class Restriction
 				'CNT'
 			],
 			'filter' => [
-				'>DATE_CREATE' => $date
+				'>DATE_CREATE' => $date,
+				'=TEMPLATE_ID' => null,
 			],
 			'runtime' => [
 				new \Bitrix\Main\Entity\ExpressionField(

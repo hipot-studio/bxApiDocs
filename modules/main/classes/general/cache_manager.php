@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2023 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 
@@ -82,14 +82,14 @@ class CCacheManager
 		\Bitrix\Main\Data\ManagedCache::finalize();
 	}
 
-	function GetCompCachePath($relativePath)
+	public function GetCompCachePath($relativePath)
 	{
 		return $this->managedCache->getCompCachePath($relativePath);
 	}
 
 	/*Components managed(tagged) cache*/
 
-	function StartTagCache($relativePath)
+	public function StartTagCache($relativePath)
 	{
 		if(defined("BX_COMP_MANAGED_CACHE"))
 		{
@@ -97,7 +97,7 @@ class CCacheManager
 		}
 	}
 
-	function EndTagCache()
+	public function EndTagCache()
 	{
 		if(defined("BX_COMP_MANAGED_CACHE"))
 		{
@@ -105,7 +105,7 @@ class CCacheManager
 		}
 	}
 
-	function AbortTagCache()
+	public function AbortTagCache()
 	{
 		if(defined("BX_COMP_MANAGED_CACHE"))
 		{
@@ -113,7 +113,7 @@ class CCacheManager
 		}
 	}
 
-	function RegisterTag($tag)
+	public function RegisterTag($tag)
 	{
 		if(defined("BX_COMP_MANAGED_CACHE"))
 		{
@@ -121,7 +121,7 @@ class CCacheManager
 		}
 	}
 
-	function ClearByTag($tag)
+	public function ClearByTag($tag)
 	{
 		if(defined("BX_COMP_MANAGED_CACHE"))
 		{

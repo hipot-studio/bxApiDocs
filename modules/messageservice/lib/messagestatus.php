@@ -5,6 +5,9 @@ use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * @internal
+ */
 class MessageStatus
 {
 	//local queue statuses

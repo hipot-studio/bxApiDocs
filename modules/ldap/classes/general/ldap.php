@@ -1,8 +1,17 @@
 <?php
 
+use Bitrix\Ldap\Cursor;
+use Bitrix\Ldap\DI\Container;
 use Bitrix\Ldap\EncryptionType;
+use Bitrix\Ldap\Internal\Entry;
 use Bitrix\Ldap\Internal\ImageType;
+use Bitrix\Ldap\Internal\LdapServersQueue;
+use Bitrix\Ldap\Internal\LoginPrefixResolver;
 use Bitrix\Ldap\Internal\Security\Password;
+use Bitrix\Ldap\Internal\User;
+use Bitrix\Ldap\Limit;
+use Bitrix\Ldap\QueryResult;
+use Bitrix\Ldap\Settings;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Authentication\ApplicationPasswordTable;
 
@@ -18,24 +27,13 @@ class CLDAP
 	var $arFields, $arGroupList = false;
 	var $conn;
 
+	/**
+	 * @deprecated
+	 */
 	protected static $PHOTO_ATTRIBS = array("thumbnailPhoto", "jpegPhoto");
+
 	protected $arGroupMaps;
 	protected $groupsLists = array();
-
-	/**
-	 * @deprecated use Bitrix\Ldap\EncryptionType instead
-	 */
-	const CONNECTION_TYPE_SIMPLE = 0;
-
-	/**
-	 * @deprecated use Bitrix\Ldap\EncryptionType instead
-	 */
-	const CONNECTION_TYPE_SSL = 1;
-
-	/**
-	 * @deprecated use Bitrix\Ldap\EncryptionType instead
-	 */
-	const CONNECTION_TYPE_TLS = 2;
 
 	protected $isTlsStarted = false;
 
@@ -139,6 +137,15 @@ class CLDAP
 	/**
 	 * @return string[]
 	 */
+	public function getNamingContexts(): array
+	{
+		return $this->RootDSE();
+	}
+
+	/**
+	 * @deprecated Use \CLDAP::getNamingContexts() instead.
+	 * @return string[]
+	 */
 	public function RootDSE(): array
 	{
 		$values = $this->_RootDSE('namingcontexts');
@@ -158,6 +165,7 @@ class CLDAP
 	}
 
 	/**
+	 * @deprecated
 	 * @param string $filtr
 	 * @return array|false
 	 */
@@ -179,6 +187,11 @@ class CLDAP
 		return $values;
 	}
 
+	/**
+	 * @deprecated
+	 * @param array $values
+	 * @return mixed
+	 */
 	public function WorkAttr($values)
 	{
 		if(is_array($values) && $values['count']==1)
@@ -191,6 +204,79 @@ class CLDAP
 		return $values;
 	}
 
+	/**
+	 * This method is recommended for large result sets over Query() and QueryArray().
+	 *
+	 * @param string $baseDn You must specify root context of your query
+	 * @param Cursor $cursor You must specify page to work with
+	 * @param string $filter LDAP filter string.
+	 * @param array $requiredAttributes
+	 * @return QueryResult
+	 */
+	public function QueryPaginated(
+		string $baseDn,
+		Cursor $cursor,
+		string $filter = '(ObjectClass=*)',
+		array $requiredAttributes = [],
+	): QueryResult
+	{
+		$pageSize = $cursor->pageSize ?? $this->getDefaultPageSize();
+		$cookie = $cursor->cookie;
+
+		$searchControls = [
+			['oid' => LDAP_CONTROL_PAGEDRESULTS, 'value' => ['size' => $pageSize, 'cookie' => $cookie]],
+		];
+
+		$searchResult = @ldap_search(
+			$this->conn,
+			$baseDn,
+			$filter,
+			$requiredAttributes,
+			0,
+			-1,
+			-1,
+			LDAP_DEREF_NEVER,
+			$searchControls
+		);
+
+		if ($searchResult)
+		{
+			ldap_parse_result(
+				$this->conn,
+				$searchResult,
+				$error_code,
+				$matched_dn,
+				$error_message,
+				$referrals,
+				$controls
+			);
+
+			$result = new QueryResult(
+				cookie: $controls[LDAP_CONTROL_PAGEDRESULTS]['value']['cookie'] ?? '',
+			);
+
+			$entries = ldap_get_entries($this->conn, $searchResult);
+
+			if ($entries && $entries['count'] > 0)
+			{
+				for ($k = 0; $k < $entries['count']; $k++)
+				{
+					$result->addEntry(new Entry($entries[$k]));
+				}
+			}
+
+			return $result;
+		}
+
+		return new QueryResult();
+	}
+
+	/**
+	 * @deprecated Use QueryPaginated() for better performance and memory management.
+	 * @param string $str
+	 * @param false $fields
+	 * @return array|false
+	 */
 	public function QueryArray($str = '(ObjectClass=*)', $fields = false)
 	{
 		global $APPLICATION;
@@ -215,13 +301,9 @@ class CLDAP
 			do
 			{
 				$searchAttributes = is_array($fields) ? $fields : [];
-				$searchControls = null;
-				if (CLdapUtil::isLdapPaginationAviable())
-				{
-					$searchControls = [
-						['oid' => LDAP_CONTROL_PAGEDRESULTS, 'value' => ['size' => $pageSize, 'cookie' => $cookie]],
-					];
-				}
+				$searchControls = [
+					['oid' => LDAP_CONTROL_PAGEDRESULTS, 'value' => ['size' => $pageSize, 'cookie' => $cookie]],
+				];
 
 				$sr = @ldap_search(
 					$this->conn,
@@ -237,19 +319,16 @@ class CLDAP
 
 				if ($sr)
 				{
-					if (CLdapUtil::isLdapPaginationAviable())
-					{
-						ldap_parse_result(
-							$this->conn,
-							$sr,
-							$error_code,
-							$matched_dn,
-							$error_message,
-							$referrals,
-							$controls
-						);
-						$cookie = $controls[LDAP_CONTROL_PAGEDRESULTS]['value']['cookie'] ?? '';
-					}
+					ldap_parse_result(
+						$this->conn,
+						$sr,
+						$error_code,
+						$matched_dn,
+						$error_message,
+						$referrals,
+						$controls
+					);
+					$cookie = $controls[LDAP_CONTROL_PAGEDRESULTS]['value']['cookie'] ?? '';
 
 					$entry = ldap_first_entry($this->conn, $sr);
 
@@ -296,6 +375,12 @@ class CLDAP
 		return $info;
 	}
 
+	/**
+	 * @deprecated This method loads all results into memory. Use CLDAP::QueryPaginated() for better performance and memory management.
+	 * @param string $str
+	 * @param false $fields
+	 * @return CDBResult
+	 */
 	public function Query($str = '(ObjectClass=*)', $fields = false)
 	{
 		$info = $this->QueryArray($str, $fields);
@@ -419,21 +504,19 @@ class CLDAP
 			return 0;
 		}
 
-		$filter = ["ACTIVE" => "Y"];
-		$prefix = mb_strpos($login, "\\");
+		[ $login, $prefix ] = LoginPrefixResolver::resolve($login);
 
-		if($prefix===false && COption::GetOptionString("ldap", "ntlm_auth_without_prefix", "Y") !== "Y")
+		$settings = Container::getInstance()->getSettings();
+
+		if ($prefix === '' && $settings->isLoginPrefixRequiredForNtlmAuth())
 		{
 			return 0;
 		}
 
-		if($prefix > 0)
-		{
-			$filter["CODE"] = mb_substr($login, 0, $prefix);
-			$login = mb_substr($login, $prefix + 1);
-		}
+		$serversQueue = new LdapServersQueue($login, $prefix);
 
-		$params = [
+		$filter = $serversQueue->filter;
+		$eventParams = [
 			"LOGIN" => &$login,
 			"PASSWORD" => &$password,
 			"LDAP_FILTER" => &$filter,
@@ -442,7 +525,7 @@ class CLDAP
 		$APPLICATION->ResetException();
 		foreach(GetModuleEvents("ldap", "OnBeforeUserLogin", true) as $arEvent)
 		{
-			if(ExecuteModuleEventEx($arEvent, [&$params]) === false)
+			if(ExecuteModuleEventEx($arEvent, [&$eventParams]) === false)
 			{
 				if($err = $APPLICATION->GetException())
 				{
@@ -457,6 +540,8 @@ class CLDAP
 				return 0;
 			}
 		}
+
+		$serversQueue->filter = $filter;
 
 		/**
 		 * variants:
@@ -473,9 +558,8 @@ class CLDAP
 		}
 
 		$userId = 0;
-		$dbRes = CLdapServer::GetList([], $filter);
 
-		while($xLDAP = $dbRes->GetNextServer())
+		while ($xLDAP = $serversQueue->getNextServer())
 		{
 			if($xLDAP->Connect())
 			{
@@ -496,7 +580,7 @@ class CLDAP
 				{
 					$userId = $xLDAP->SetUser(
 						$arLdapUser,
-						(COption::GetOptionString("ldap", "add_user_when_auth", "Y") === "Y")
+						$settings->shouldCreateUserAfterFirstSuccessfulLogin()
 					);
 
 					$xLDAP->Disconnect();
@@ -507,9 +591,9 @@ class CLDAP
 						break;
 					}
 
-					if(\Bitrix\Ldap\Limit::isUserLimitExceeded())
+					if(Limit::isUserLimitExceeded())
 					{
-						$arArgs['RESULT_MESSAGE'] = \Bitrix\Ldap\Limit::getUserLimitNotifyMessage();
+						$arArgs['RESULT_MESSAGE'] = Limit::getUserLimitNotifyMessage();
 						break;
 					}
 				}
@@ -551,6 +635,7 @@ class CLDAP
 
 		return false;
 	}
+
 	/**
 	 * Returns value of ldap user field mapped to bitrix field.
 	 * @param string $fieldName Name of user field in Bitrix system.
@@ -641,33 +726,27 @@ class CLDAP
 			return 0;
 		}
 
-		// Hit cache
 		static $result = [];
-
-		if(isset($result[$login]))
+		$cacheId = $login;
+		if (isset($result[$cacheId]))
 		{
-			return $result[$login];
+			return $result[$cacheId];
 		}
 
-		$filter = ["ACTIVE" => "Y"];
-		$prefix = mb_strpos($login, "\\");
+		[ $login, $prefix ] = LoginPrefixResolver::resolve($login);
 
-		if($prefix === false && COption::GetOptionString("ldap", "ntlm_auth_without_prefix", "Y") !== "Y")
+		$settings = Container::getInstance()->getSettings();
+
+		if ($prefix === '' && $settings->isLoginPrefixRequiredForNtlmAuth())
 		{
 			return 0;
 		}
 
-		if($prefix > 0)
-		{
-			$filter["CODE"] = mb_substr($login, 0, $prefix);
-			$login = mb_substr($login, $prefix + 1);
-		}
+		$serversQueue = new LdapServersQueue($login, $prefix);
 
 		$userId = 0;
 
-		$dbServ = CLdapServer::GetList([], $filter);
-
-		while($serv = $dbServ->GetNextServer())
+		while ($serv = $serversQueue->getNextServer())
 		{
 			if($serv->Connect())
 			{
@@ -675,7 +754,7 @@ class CLDAP
 				{
 					$userId = $serv->SetUser(
 						$arLdapUser,
-						(COption::GetOptionString("ldap", "add_user_when_auth", "Y") === "Y")
+						$settings->shouldCreateUserAfterFirstSuccessfulLogin()
 					);
 				}
 
@@ -688,7 +767,7 @@ class CLDAP
 			}
 		}
 
-		$result[$login] = $userId;
+		$result[$cacheId] = $userId;
 		return $userId;
 	}
 
@@ -986,40 +1065,62 @@ class CLDAP
 	}
 
 
-	// get user list (with attributes) from AD server
-	public function GetUserList($arFilter = Array())
+	/**
+	 * @deprecated Use \CLDAP::getUserListPaginated() instead.
+	 * Get user list (with attributes) from AD server
+	 */
+	public function GetUserList($arFilter = [])
 	{
-		$query = '';
-		foreach($arFilter as $key=>$value)
+		$filter = $this->prepareUserListFilter($arFilter);
+		return $this->Query($filter);
+	}
+
+	public function getUserListPaginated(string $baseDn, Cursor $cursor, array $filter = []): QueryResult
+	{
+		return $this->QueryPaginated(
+			$baseDn,
+			$cursor,
+			$this->prepareUserListFilter($filter),
+			[],
+		);
+	}
+
+	protected function prepareUserListFilter(array $filter = []): string
+	{
+		$customFilter = '';
+		foreach ($filter as $key => $value)
 		{
 			$key = mb_strtoupper($key);
-			switch($key)
+			switch ($key)
 			{
 				case 'GROUP_ID':
-					//"SELECT ".
-					//	"FROM "
-
 				case 'GROUP_DN':
 					$temp = '';
-					if(!is_array($value))
-						$value = array($value);
-					foreach($value as $group)
+					if (!is_array($value))
 					{
-						if($group == '')
-							continue;
-						$temp .= '('.$this->arFields['USER_GROUP_ATTR'].'='.$this->specialchars($group).')';
+						$value = [$value];
 					}
-					$query .= '(|'.$temp.')';
+
+					foreach ($value as $group)
+					{
+						if ($group === '')
+						{
+							continue;
+						}
+						$temp .= '(' . $this->arFields['USER_GROUP_ATTR'] . '=' . $this->specialchars($group) . ')';
+					}
+
+					$customFilter .= '(|' . $temp . ')';
 					break;
 			}
 		}
 
-		$user_filter = $this->arFields['USER_FILTER'];
-		if(trim($user_filter) <> '' && mb_substr(trim($user_filter), 0, 1) != '(')
-			$user_filter = '('.trim($user_filter).')';
-		$query = '(&'.$user_filter.$query.')';
-		$arResult = $this->Query($query);
-		return $arResult;
+		$baseFilter = $this->arFields['USER_FILTER'];
+		if (trim($baseFilter) <> '' && mb_substr(trim($baseFilter), 0, 1) != '(')
+		{
+			$baseFilter = '(' . trim($baseFilter) . ')';
+		}
+		return '(&' . $baseFilter . $customFilter.')';
 	}
 
 	public function GetUserArray($cn)
@@ -1035,6 +1136,11 @@ class CLDAP
 		return $this->QueryArray($query);
 	}
 
+	/**
+	 * @deprecated
+	 * @param string $str
+	 * @return string
+	 */
 	public function specialchars($str)
 	{
 		$from = Array("\\", ',', '+', '"', '<', '>', ';', "\n", "\r", '=', '*');
@@ -1065,6 +1171,8 @@ class CLDAP
 
 		if(!array_key_exists("AUTH_TYPE", $_SERVER) || ($_SERVER["AUTH_TYPE"] != "NTLM" && $_SERVER["AUTH_TYPE"] != "Negotiate"))
 			return;
+
+		$settings = Container::getInstance()->getSettings();
 
 		$ntlm_varname = trim(COption::GetOptionString('ldap', 'ntlm_varname', 'REMOTE_USER'));
 		$LOGIN = isset($_SERVER[$ntlm_varname]) ? (string)$_SERVER[$ntlm_varname] : '';
@@ -1108,7 +1216,10 @@ class CLDAP
 				{
 					if($arLdapUser = $xLDAP->FindUser($LOGIN))
 					{
-						$ID = $xLDAP->SetUser($arLdapUser, (COption::GetOptionString("ldap", "add_user_when_auth", "Y")=="Y"));
+						$ID = $xLDAP->SetUser(
+							$arLdapUser,
+							$settings->shouldCreateUserAfterFirstSuccessfulLogin()
+						);
 
 						if($ID > 0)
 						{
@@ -1171,14 +1282,19 @@ class CLDAP
 		return $this->arGroupMaps;
 	}
 
-	//Need this to delete old photo
+	/**
+	 * Need this to delete old photo
+	 * @deprecated
+	 * @param int $uid
+	 * @param array $arLdapUser
+	 * @return bool
+	 */
 	public static function PrepareUserPhoto($uid, &$arLdapUser)
 	{
 		if(!isset($arLdapUser["PERSONAL_PHOTO"]))
 			return false;
 
-		$dbRes = CUser::GetById($uid);
-		$arUser = $dbRes->Fetch();
+		$arUser = User\Cache::get((int)$uid, ['PERSONAL_PHOTO']) ?? User\Provider::getById((int)$uid);
 
 		if(!isset($arUser["PERSONAL_PHOTO"]))
 			return false;
@@ -1246,7 +1362,7 @@ class CLDAP
 
 			if($bitrixUserId <= 0 && $ldapUserID <= 0)
 			{
-				if($bAddNew && !\Bitrix\Ldap\Limit::isUserLimitExceeded())
+				if($bAddNew && !Limit::isUserLimitExceeded())
 				{
 					if($arLdapUser["EMAIL"] == '')
 					{
@@ -1335,7 +1451,7 @@ class CLDAP
 		return $ID;
 	}
 
-	protected function getLastErrorDescription()
+	protected function getLastErrorDescription(): string
 	{
 		$result = '';
 
@@ -1355,5 +1471,49 @@ class CLDAP
 		return array(
 			"LDAP_USER_LIMIT_EXCEEDED" => Loc::getMessage("LDAP_USER_LIMIT_EXCEEDED_EVENT_TYPE"),
 		);
+	}
+
+	/**
+	 * Returns page size for ldap queries based on server settings. Defaults to 1000 entries per page.
+	 * @return int
+	 */
+	public function getDefaultPageSize(): int
+	{
+		return isset($this->arFields['MAX_PAGE_SIZE']) && intval($this->arFields['MAX_PAGE_SIZE'] > 0)
+			? intval($this->arFields['MAX_PAGE_SIZE'])
+			: 1000;
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public function getBaseDnList(): array
+	{
+		$baseDnList = explode(';', $this->arFields['BASE_DN']);
+		$baseDnList = array_map('trim', $baseDnList);
+
+		return array_filter($baseDnList);
+	}
+
+	public function getLdapLoginAttr(): string
+	{
+		return (string)$this->arFields['~USER_ID_ATTR'];
+	}
+
+	public function getLdapUserWhenChangedAttr(): string
+	{
+		return (string)$this->arFields['SYNC_ATTR'];
+	}
+
+	public function isUserCreationAllowed(): bool
+	{
+		return ($this->arFields['SYNC_USER_ADD'] === 'Y');
+	}
+
+	public function getLastSyncTs(): int
+	{
+		return ($this->arFields['SYNC_LAST'] <> '')
+			? (int)MakeTimeStamp($this->arFields['SYNC_LAST'])
+			: 0;
 	}
 }

@@ -335,11 +335,16 @@ class Dialog implements \JsonSerializable
 	public function load(): void
 	{
 		$entities = [];
+		$entitiesToFill = [];
 		foreach ($this->getEntities() as $entity)
 		{
 			if ($entity->hasDynamicLoad())
 			{
 				$entities[] = $entity->getId();
+				if ($entity->shouldFillRecentItems())
+				{
+					$entitiesToFill[] = $entity->getId();
+				}
 			}
 		}
 
@@ -348,10 +353,10 @@ class Dialog implements \JsonSerializable
 			return;
 		}
 
-		$this->fillRecentItems($entities);
+		$this->fillRecentItems($entitiesToFill);
 		if ($this->getContext() !== null)
 		{
-			$this->fillGlobalRecentItems($entities);
+			$this->fillGlobalRecentItems($entitiesToFill);
 		}
 
 		foreach ($entities as $entityId)

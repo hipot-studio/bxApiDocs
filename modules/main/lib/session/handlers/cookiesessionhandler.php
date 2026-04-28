@@ -19,7 +19,7 @@ class CookieSessionHandler implements \SessionHandlerInterface
 	/** @var int */
 	private $lifetime;
 
-	public function __construct(int $lifetime, Request $request = null)
+	public function __construct(int $lifetime, ?Request $request = null)
 	{
 		$this->request = $request ?: Context::getCurrent()->getRequest();
 		$this->lifetime = $lifetime;

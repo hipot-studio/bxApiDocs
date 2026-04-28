@@ -200,6 +200,7 @@ class SendingConfig
 	private int $fakeRelation = 0;
 
 	private ?array $counterRecipients = null;
+	private ?array $pushRecipients = null;
 
 	public function __construct(?array $args = null)
 	{
@@ -254,6 +255,18 @@ class SendingConfig
 	public function setCounterRecipients(?array $counterRecipients): self
 	{
 		$this->counterRecipients = $counterRecipients !== null ? $this->prepareSet($counterRecipients) : null;
+
+		return $this;
+	}
+
+	public function getPushRecipients(): ?array
+	{
+		return $this->sendPush() ? $this->pushRecipients : [];
+	}
+
+	public function setPushRecipients(?array $pushRecipients): self
+	{
+		$this->pushRecipients = $pushRecipients !== null ? $this->prepareSet($pushRecipients) : null;
 
 		return $this;
 	}

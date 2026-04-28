@@ -14,9 +14,9 @@ namespace Bitrix\Translate;
  * @property string $path File stricture path.
  * @property int $tabId Storage Id.
  * @property bool $recursively Perform process recursively.
- *
+ * @internal
  */
-class Filter implements \Iterator, \Countable, \Serializable, \ArrayAccess
+class Filter implements \Iterator, \Countable, \ArrayAccess
 {
 	const STORAGE_NAME = 'TRANSLATE_FILTER';
 	const STORAGE_TAB_CNT = 'TRANSLATE_FILTER_TAB';
@@ -110,8 +110,7 @@ class Filter implements \Iterator, \Countable, \Serializable, \ArrayAccess
 	 *
 	 * @return string|null
 	 */
-	#[\ReturnTypeWillChange]
-	public function current()
+	public function current(): mixed
 	{
 		$code = $this->iterateCodes[$this->iteratePosition];
 
@@ -133,8 +132,7 @@ class Filter implements \Iterator, \Countable, \Serializable, \ArrayAccess
 	 *
 	 * @return int|null
 	 */
-	#[\ReturnTypeWillChange]
-	public function key()
+	public function key(): mixed
 	{
 		return $this->iterateCodes[$this->iteratePosition] ?: null;
 	}
@@ -165,28 +163,21 @@ class Filter implements \Iterator, \Countable, \Serializable, \ArrayAccess
 	// region Serializable
 
 	/**
-	 * String representation of object.
-	 * @return string
+	 * Serialize object data.
+	 * @return array
 	 */
-	public function serialize(): string
+	public function __serialize(): array
 	{
-		return \serialize($this->params);
+		return $this->params;
 	}
 
 	/**
-	 * Constructs the object from a string representation.
-	 * @param string $data Data to deserialize.
+	 * Restore object from serialized data.
+	 * @param array $data Serialized data.
 	 */
-	public function unserialize($data): void
+	public function __unserialize(array $data): void
 	{
-		if (!empty($data))
-		{
-			$deserialized = \unserialize($data, ['allowed_classes' => false]);
-			if (\is_array($deserialized))
-			{
-				$this->params = $deserialized;
-			}
-		}
+		$this->params = $data;
 	}
 
 	//endregion
@@ -230,7 +221,7 @@ class Filter implements \Iterator, \Countable, \Serializable, \ArrayAccess
 			$this->tabId = self::getTabId();
 		}
 
-		$_SESSION[self::STORAGE_NAME][$this->tabId] = $this->serialize();
+		$_SESSION[self::STORAGE_NAME][$this->tabId] = \serialize($this);
 	}
 
 	/**
@@ -241,7 +232,11 @@ class Filter implements \Iterator, \Countable, \Serializable, \ArrayAccess
 	{
 		if (isset($_SESSION[self::STORAGE_NAME], $_SESSION[self::STORAGE_NAME][$id]))
 		{
-			$this->unserialize($_SESSION[self::STORAGE_NAME][$id]);
+			$restored = \unserialize($_SESSION[self::STORAGE_NAME][$id], ['allowed_classes' => [self::class]]);
+			if ($restored instanceof self)
+			{
+				$this->params = $restored->params;
+			}
 		}
 		$this->tabId = $id;
 	}
@@ -269,8 +264,7 @@ class Filter implements \Iterator, \Countable, \Serializable, \ArrayAccess
 	 *
 	 * @return mixed|null
 	 */
-	#[\ReturnTypeWillChange]
-	public function offsetGet($code)
+	public function offsetGet($code): mixed
 	{
 		if (isset($this->params[$code]))
 		{

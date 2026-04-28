@@ -85,6 +85,9 @@ class Resource extends View
 			'DELAYED_COUNTER_DELAY' => [
 				'TYPE' => DataType::TYPE_INT,
 			],
+			'SENDER_CODE' => [
+				'TYPE' => DataType::TYPE_STRING,
+			],
 			'IS_MAIN' => [
 				'TYPE' => DataType::TYPE_BOOLEAN,
 			],

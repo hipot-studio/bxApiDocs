@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2023 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main;
@@ -22,6 +22,9 @@ use Bitrix\Main\Session\KernelSessionProxy;
 use Bitrix\Main\Session\SessionConfigurationResolver;
 use Bitrix\Main\Session\SessionInterface;
 use Bitrix\Main\Session\Handlers\CookieSessionHandler;
+use Bitrix\Main\Data\ManagedCache;
+use Bitrix\Main\Data\TaggedCache;
+use Bitrix\Main\Diag\ExceptionHandler;
 
 /**
  * Base class for any application.
@@ -54,12 +57,12 @@ abstract class Application
 	protected $connectionPool;
 	/**
 	 * Managed cache instance.
-	 * @var \Bitrix\Main\Data\ManagedCache
+	 * @var ManagedCache
 	 */
 	protected $managedCache;
 	/**
 	 * Tagged cache instance.
-	 * @var \Bitrix\Main\Data\TaggedCache
+	 * @var TaggedCache
 	 */
 	protected $taggedCache;
 	/** @var SessionInterface */
@@ -215,6 +218,8 @@ abstract class Application
 
 	protected function initializeRouter()
 	{
+		$documentRoot = Loader::getDocumentRoot();
+
 		$routes = new RoutingConfigurator();
 		$router = new Router();
 		$routes->setRouter($router);
@@ -226,13 +231,9 @@ abstract class Application
 
 		// user files
 		$routingConfig = Configuration::getInstance()->get('routing');
-		$documentRoot = $this->context->getServer()->getDocumentRoot();
-
 		if (!empty($routingConfig['config']))
 		{
-			$fileNames = $routingConfig['config'];
-
-			foreach ($fileNames as $fileName)
+			foreach ($routingConfig['config'] as $fileName)
 			{
 				foreach (['local', 'bitrix'] as $vendor)
 				{
@@ -240,16 +241,25 @@ abstract class Application
 
 					if (file_exists($filename))
 					{
-						$files[] = $filename;
+						$files[$filename] = $filename;
 					}
 				}
 			}
 		}
 
 		// system files
-		if (file_exists($documentRoot . '/bitrix/routes/web_bitrix.php'))
+		$routingConfig = Configuration::getInstanceByPath($documentRoot . '/bitrix/routes/.settings.php')->get('routing');
+		if (!empty($routingConfig['config']))
 		{
-			$files[] = $documentRoot . '/bitrix/routes/web_bitrix.php';
+			foreach ($routingConfig['config'] as $fileName)
+			{
+				$filename = $documentRoot . '/bitrix/routes/' . basename($fileName);
+
+				if (file_exists($filename))
+				{
+					$files[$filename] = $filename;
+				}
+			}
 		}
 
 		foreach ($files as $file)
@@ -299,7 +309,7 @@ abstract class Application
 	 *
 	 * @return void
 	 */
-	public function end($status = 0, Response $response = null)
+	public function end($status = 0, ?Response $response = null)
 	{
 		if ($response === null)
 		{
@@ -577,7 +587,7 @@ abstract class Application
 	}
 
 	/**
-	 * @return \Bitrix\Main\Diag\ExceptionHandler
+	 * @return ExceptionHandler
 	 */
 	public function getExceptionHandler()
 	{
@@ -800,7 +810,7 @@ abstract class Application
 	/**
 	 * Resets accelerator if any.
 	 */
-	public static function resetAccelerator(string $filename = null)
+	public static function resetAccelerator(?string $filename = null)
 	{
 		if (defined("BX_NO_ACCELERATOR_RESET"))
 		{

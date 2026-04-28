@@ -139,11 +139,16 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 		;
 
 		$datasetCollection = $datasetsQuery->exec()->fetchCollection();
+		if ($datasetCollection->isEmpty())
+		{
+			$this->grid->setRawRows($rowsData);
+
+			return;
+		}
 
 		foreach ($datasetCollection as $dataset)
 		{
 			$row = $dataset->toArray();
-			$row['IS_DELETED'] = false;
 
 			/** @var ExternalSourceCollection $sourceCollection */
 			$sourceCollection = $dataset->get('SOURCE');
@@ -158,25 +163,6 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 			}
 
 			$rowsData[] = $row;
-		}
-
-		if ($rowsData)
-		{
-			$additionalDataResult = (new SupersetIntegration())->loadDatasetList($datasetCollection);
-			if ($additionalDataResult->isSuccess())
-			{
-				$additionalData = $additionalDataResult->getData();
-				$externalIds = array_column($additionalData, 'id');
-
-				foreach ($rowsData as $index => $dataset)
-				{
-					if (!in_array((int)$dataset['EXTERNAL_ID'], $externalIds, true))
-					{
-						$dataset['IS_DELETED'] = true;
-						$rowsData[$index] = $dataset;
-					}
-				}
-			}
 		}
 
 		$this->grid->setRawRows($rowsData);
@@ -206,9 +192,6 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 
 	private function initCreateButton(): void
 	{
-		$errorCallback = 'BX.BIConnector.ExternalDatasetManager.Instance.showSupersetError()';
-		$isSupersetAvailable = !(SupersetInitializer::isSupersetLoading() || SupersetInitializer::isSupersetUnavailable());
-
 		if (SourceManager::isExternalConnectionsAvailable())
 		{
 			$button = new Buttons\Split\CreateButton([
@@ -217,25 +200,16 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 				],
 			]);
 
-			$button->getMainButton()->getAttributeCollection()['onclick'] = $isSupersetAvailable
-				? 'BX.BIConnector.DatasetImport.Slider.open("csv")'
-				: $errorCallback
-			;
+			$button->getMainButton()->getAttributeCollection()['onclick'] = 'BX.BIConnector.DatasetImport.Slider.open("csv")';
 
 			$menuItems = [
 				[
 					'text' => Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DATASET_GRID_MENU_ITEM_IMPORT_CSV_MSGVER_1'),
-					'onclick' => $isSupersetAvailable
-						? new Buttons\JsCode('this.close(); BX.BIConnector.DatasetImport.Slider.open("csv")')
-						: new Buttons\JsCode($errorCallback)
-					,
+					'onclick' => new Buttons\JsCode('this.close(); BX.BIConnector.DatasetImport.Slider.open("csv")'),
 				],
 				[
 					'text' => Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DATASET_GRID_MENU_ITEM_EXTERNAL_CONNECTION'),
-					'onclick' => $isSupersetAvailable
-						? new Buttons\JsCode('this.close(); BX.BIConnector.DatasetImport.Slider.open("1c")')
-						: new Buttons\JsCode($errorCallback)
-					,
+					'onclick' => new Buttons\JsCode('this.close(); BX.BIConnector.DatasetImport.Slider.open("1c")'),
 				],
 			];
 
@@ -260,10 +234,7 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 				],
 			]);
 
-			$button->getAttributeCollection()['onclick'] = $isSupersetAvailable
-				? 'BX.BIConnector.DatasetImport.Slider.open("csv")'
-				: $errorCallback
-			;
+			$button->getAttributeCollection()['onclick'] = 'BX.BIConnector.DatasetImport.Slider.open("csv")';
 		}
 
 		Toolbar::addButton($button, ButtonLocation::AFTER_TITLE);
@@ -277,8 +248,8 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 		}
 
 		$iconPath = $this->getPath() . '/images/not-found.svg';
-		$title = Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DATASET_GRID_STUB_TITLE') ?? '';
-		$description = Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DATASET_GRID_STUB_DESCRIPTION_MSGVER_1') ?? '';
+		$title = Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DATASET_GRID_STUB_TITLE_MSGVER_1') ?? '';
+		$description = Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DATASET_GRID_STUB_DESCRIPTION_MSGVER_2') ?? '';
 
 		return <<<HTML
 			<div class="biconnector-dataset-grid-stub-container">

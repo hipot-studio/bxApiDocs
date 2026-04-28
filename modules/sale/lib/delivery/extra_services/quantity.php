@@ -3,6 +3,7 @@
 namespace Bitrix\Sale\Delivery\ExtraServices;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sale\PriceMaths;
 
 Loc::loadMessages(__FILE__);
 
@@ -40,7 +41,7 @@ class Quantity extends Base
 	public static function getAdminParamsControl($name, array $params = array(), $currency = "")
 	{
 		if(!empty($params["PARAMS"]["PRICE"]))
-			$price = roundEx(floatval($params["PARAMS"]["PRICE"]), SALE_VALUE_PRECISION);
+			$price = PriceMaths::roundPrecision((float)$params["PARAMS"]["PRICE"]);
 		else
 			$price = 0;
 
@@ -55,7 +56,7 @@ class Quantity extends Base
 
 	protected function createJSOnchange($id, $price)
 	{
-		$price = roundEx(floatval($price), SALE_VALUE_PRECISION);
+		$price = PriceMaths::roundPrecision((float)$price);
 		return "BX.onCustomEvent('onDeliveryExtraServiceValueChange', [{'id' : '".$id."', 'value': this.value, 'price': this.value*parseFloat('".$price."')}]);";
 	}
 }

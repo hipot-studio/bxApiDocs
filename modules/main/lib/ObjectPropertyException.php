@@ -7,7 +7,7 @@ namespace Bitrix\Main;
  */
 class ObjectPropertyException extends ArgumentException
 {
-	public function __construct($parameter = "", \Throwable $previous = null)
+	public function __construct($parameter = "", ?\Throwable $previous = null)
 	{
 		parent::__construct("Object property \"{$parameter}\" not found.", $parameter, $previous);
 	}

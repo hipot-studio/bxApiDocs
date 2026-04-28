@@ -4,14 +4,36 @@ namespace Bitrix\BIConnector\DataSourceConnector\Connector;
 
 use Bitrix\Main\Config\ConfigurationException;
 use Bitrix\Main\Result;
-use Bitrix\BIConnector\Manager;
-use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\BIConnector\Aggregate;
+use Bitrix\Main\DB;
 
 class Sql extends Base
 {
 	protected const ANALYTIC_TAG_DATASET = 'system';
+
+	/**
+	 * @return DB\Result|bool
+	 * @throws ConfigurationException
+	 */
+	protected function biQuery(string $sql): DB\Result|bool
+	{
+		$connection = $this->getConnection();
+		if (!$connection)
+		{
+			return false;
+		}
+
+		return $connection->biQuery($sql);
+	}
+
+	/**
+	 * @throws ConfigurationException
+	 */
+	protected function getQueryErrorMessage(): string
+	{
+		return $this->getConnection()->getErrorMessage();
+	}
 
 	/**
 	 * @param array $parameters
@@ -25,18 +47,16 @@ class Sql extends Base
 	public function query(
 		array $parameters,
 		int $limit,
-		array $dateFormats = []
+		array $dateFormats = [],
 	): \Generator
 	{
 		$result = new Result();
-		$manager = Manager::getInstance();
 		$data = $this->getFormattedData($parameters, $dateFormats);
 
-		$connection = $manager->getDatabaseConnection();
-		$resultQuery = $connection->biQuery($data['sql']);
+		$resultQuery = $this->biQuery($data['sql']);
 		if (!$resultQuery)
 		{
-			$result->addError(new Error('SQL_ERROR', 0, ['description' => $connection->getErrorMessage()]));
+			$result->addError(new Error('SQL_ERROR', 0, ['description' => $this->getQueryErrorMessage()]));
 
 			return $result;
 		}
@@ -246,7 +266,7 @@ class Sql extends Base
 				if ($fieldInfo['IS_PRIMARY'] === 'Y')
 				{
 					$primaryKey = $fieldInfo['FIELD_NAME'];
-					$helper = Application::getConnection()->getSqlHelper();
+					$helper = $this->getConnection()->getSqlHelper();
 					$primaryKey = $helper->forSql($primaryKey);
 
 					break;

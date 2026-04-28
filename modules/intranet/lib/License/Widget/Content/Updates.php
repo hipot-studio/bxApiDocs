@@ -2,10 +2,18 @@
 
 namespace Bitrix\Intranet\License\Widget\Content;
 
+use Bitrix\Intranet\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 
 class Updates extends BaseContent
 {
+	private bool $isCurrentUserAdmin;
+
+	public function __construct()
+	{
+		$this->isCurrentUserAdmin = CurrentUser::get()->canDoOperation('bitrix24_config');
+	}
+
 	public function getName(): string
 	{
 		return 'updates';
@@ -16,6 +24,7 @@ class Updates extends BaseContent
 		return [
 			'link' => $this->getLink(),
 			'title' => $this->getTitle(),
+			'isAdminRestricted' => !$this->isCurrentUserAdmin,
 		];
 	}
 

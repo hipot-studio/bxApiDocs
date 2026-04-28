@@ -163,6 +163,10 @@ class ResourceType extends EntityFactory
 			$resourceType->setDelayedCounterDelay((int)$fields['DELAYED_COUNTER_DELAY']);
 		}
 
+		if (isset($fields['SENDER_CODE']))
+		{
+			$resourceType->setSenderCode((string)$fields['SENDER_CODE']);
+		}
 
 		return $resourceType;
 	}

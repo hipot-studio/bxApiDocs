@@ -7,6 +7,8 @@ use Bitrix\Translate;
 
 /**
  * Action purges the indexed data.
+ *
+ * @internal
  */
 class Purge extends Translate\Controller\Action
 {

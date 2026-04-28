@@ -5,6 +5,7 @@ declare(strict_types = 1);
 namespace Bitrix\Intranet\Internal\Integration\Security;
 
 use Bitrix\Intranet\Repository\UserRepository;
+use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Loader;
@@ -184,6 +185,9 @@ class OtpSettings
 			}
 
 			Otp::setMandatoryRights($otpRights);
+			$event = $isMandatory ? '2fa_on_portal' : '2fa_off_portal';
+			$analyticEvent = new AnalyticsEvent($event, 'user_settings', 'security');
+			$analyticEvent->send();
 		}
 		else
 		{

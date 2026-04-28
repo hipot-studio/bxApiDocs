@@ -6,6 +6,7 @@ namespace Bitrix\Im\V2\Application\Navigation;
 
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\Im\V2\Marketplace\Application;
 use Bitrix\Im\V2\Marketplace\Placement;
 use Bitrix\Im\V2\Permission;
@@ -79,7 +80,10 @@ class MenuItemProvider
 			),
 			new MenuItem(
 				id: 'copilot',
-				text: Loc::getMessage('IM_NAVIGATION_MENU_COPILOT'),
+				text: Loc::getMessage(
+					'IM_NAVIGATION_MENU_COPILOT_MSGVER_1',
+					['#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName()]
+				),
 				isVisible: $this->applicationFeatures->copilotAvailable,
 				sort: self::SORT_COPILOT,
 			),

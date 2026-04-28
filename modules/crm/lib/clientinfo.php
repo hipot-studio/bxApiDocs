@@ -22,6 +22,8 @@ class ClientInfo
 	public ?int $ownerTypeId = null;
 	public ?int $ownerId = null;
 
+	private static array $cache = [];
+
 	/**
 	 * @param int|null $companyId
 	 * @param array $contactIds
@@ -81,6 +83,12 @@ class ClientInfo
 	 */
 	public static function createFromOwner(int $ownerTypeId, int $ownerId): self
 	{
+		$instance = self::getFromCache($ownerTypeId, $ownerId);
+		if ($instance !== null)
+		{
+			return $instance;
+		}
+
 		$withOwner = false;
 
 		$companyId = null;
@@ -88,20 +96,36 @@ class ClientInfo
 
 		if ($ownerTypeId === CCrmOwnerType::Lead)
 		{
-			$lead = LeadTable::getById($ownerId)->fetch();
-			if ($lead)
+			$lead = Container::getInstance()
+				->getFactory(CCrmOwnerType::Lead)
+				?->getItem($ownerId, [
+					Item::FIELD_NAME_ID,
+					Item::FIELD_NAME_COMPANY_ID,
+					Item::FIELD_NAME_CONTACT_IDS,
+				])
+			;
+
+			if ($lead !== null)
 			{
-				$companyId = (int)$lead['COMPANY_ID'];
-				$contactIds = LeadContactTable::getLeadContactIDs($ownerId);
+				$companyId = $lead->getCompanyId();
+				$contactIds = $lead->getContactIds();
 			}
 		}
 		elseif ($ownerTypeId === CCrmOwnerType::Deal)
 		{
-			$deal = DealTable::getById($ownerId)->fetch();
-			if ($deal)
+			$deal = Container::getInstance()
+				->getFactory(CCrmOwnerType::Deal)
+				?->getItem($ownerId, [
+					Item::FIELD_NAME_ID,
+					Item::FIELD_NAME_COMPANY_ID,
+					Item::FIELD_NAME_CONTACT_IDS,
+				])
+			;
+
+			if ($deal !== null)
 			{
-				$contactIds = DealContactTable::getDealContactIDs($ownerId);
-				$companyId = (int)$deal['COMPANY_ID'];
+				$companyId = $deal->getCompanyId();
+				$contactIds = $deal->getContactIds();
 				$withOwner = true;
 			}
 		}
@@ -134,7 +158,23 @@ class ClientInfo
 		}
 		elseif ($ownerTypeId === CCrmOwnerType::Invoice)
 		{
-			$invoice = CCrmInvoice::GetByID($ownerId);
+			$invoiceList = CCrmInvoice::getList(
+				arFilter: [
+					'ID' => $ownerId,
+				],
+				arSelectFields: [
+					'ID',
+					'UF_COMPANY_ID',
+					'UF_CONTACT_ID',
+				],
+			);
+
+			$invoice = null;
+			if (is_object($invoiceList))
+			{
+				$invoice = $invoiceList->Fetch();
+			}
+
 			if ($invoice)
 			{
 				$companyID = $invoice['UF_COMPANY_ID'] ?? 0;
@@ -155,7 +195,12 @@ class ClientInfo
 			$factory = Container::getInstance()->getFactory($ownerTypeId);
 			if ($factory)
 			{
-				$item = $factory->getItem($ownerId);
+				$item = $factory->getItem($ownerId, [
+					Item::FIELD_NAME_ID,
+					Item::FIELD_NAME_COMPANY_ID,
+					Item::FIELD_NAME_CONTACT_ID,
+				]);
+
 				if ($item && $item->getCompanyId())
 				{
 					$companyId = (int)$item->getCompanyId();
@@ -173,12 +218,25 @@ class ClientInfo
 			$companyId,
 			$contactIds
 		);
+
 		if ($withOwner)
 		{
 			$self->ownerId = $ownerId;
 			$self->ownerTypeId = $ownerTypeId;
 		}
 
+		self::setToCache($ownerTypeId, $ownerId, $self);
+
 		return $self;
+	}
+
+	private static function getFromCache(int $ownerTypeId, int $ownerId): ?self
+	{
+		return self::$cache[$ownerTypeId][$ownerId] ?? null;
+	}
+
+	private static function setToCache(int $ownerTypeId, int $ownerId, self $instance): void
+	{
+		self::$cache[$ownerTypeId][$ownerId] = $instance;
 	}
 }

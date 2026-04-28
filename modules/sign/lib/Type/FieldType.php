@@ -18,6 +18,7 @@ final class FieldType
 	public const DATETIME = 'datetime';
 	public const EMAIL = 'email';
 	public const PHONE = 'phone';
+	public const URL = 'url';
 	public const NAME = 'name';
 	public const SIGNATURE = 'signature';
 	public const STAMP = 'stamp';

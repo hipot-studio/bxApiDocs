@@ -29,6 +29,11 @@ final class Source implements ExternalSource\Source
 		return $this->isConnected;
 	}
 
+	public function isAvailable(): bool
+	{
+		return true;
+	}
+
 	public function setConnected(bool $isConnected): void
 	{
 		$this->isConnected = $isConnected;

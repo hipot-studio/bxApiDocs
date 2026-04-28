@@ -1,7 +1,7 @@
 <?php
 
 use Bitrix\Intranet\UStat\UStat;
-use Bitrix\Landing\Mainpage;
+use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -61,7 +61,7 @@ class LandingBlocksMainpageWidgetActiveEmployees extends LandingBlocksMainpageWi
 	{
 		$this->arResult['SHOW_EMPTY_STATE'] = false;
 
-		if (Mainpage\Manager::isUseDemoData())
+		if (Vibe::isUseDemoData())
 		{
 			$demoData = $this->getDemoData();
 			$usersData = $demoData['USERS'];

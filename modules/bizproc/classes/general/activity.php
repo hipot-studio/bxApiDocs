@@ -1399,9 +1399,12 @@ abstract class CBPActivity
 		return false;
 	}
 
-	protected function trackError(string $errorMsg)
+	protected function trackError(?string $errorMsg)
 	{
-		$this->writeToTrackingService($errorMsg, 0, \CBPTrackingType::Error);
+		if ($errorMsg)
+		{
+			$this->writeToTrackingService($errorMsg, 0, \CBPTrackingType::Error);
+		}
 	}
 
 	protected function getDebugInfo(array $values = [], array $map = []): array

@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Message\Send;
 use Bitrix\Im\V2\Message\PushFormat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Reading\Counter\Entity\UsersCounterMap;
 
 abstract class PushService
 {
@@ -43,34 +44,12 @@ abstract class PushService
 
 	//region Push Private chat
 
-	abstract public function sendPush(array $counters = []): void;
+	abstract public function sendPush(UsersCounterMap $counters): void;
 
 	//endregion
 
 
 	//region Push in Group Chat
-
-	public static function getEventGroups(array $event, array $userIds, int $chatId): array
-	{
-		$counters = (new Message\CounterService())->getByChatForEachUsers($chatId, $userIds, 100);
-
-		return self::getEventGroupsByCounters($event, $counters);
-	}
-
-	public static function getEventGroupsByCounters(array $event, array $counters): array
-	{
-		$events = [];
-
-		foreach ($counters as $userId => $counter)
-		{
-			$eventForUser = $event;
-			$eventForUser['groupId'] = 'im_chat_' . $event['params']['chatId'] . $event['params']['message']['id'] . $counter;
-			$eventForUser['params']['counter'] = $counter;
-			$events[$userId] = $eventForUser;
-		}
-
-		return self::getEventByCounterGroup($events, 100);
-	}
 
 	/**
 	 * @param array $events

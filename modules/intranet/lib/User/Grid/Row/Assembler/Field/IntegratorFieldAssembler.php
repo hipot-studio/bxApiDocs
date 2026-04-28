@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\User\Grid\Row\Assembler\Field;
 
-use Bitrix\Intranet\Internal\Entity\User\PartnerInfoCollection;
-use Bitrix\Intranet\Internal\Repository\User\IntegratorInfoRepository;
+use Bitrix\Bitrix24\Internal\Entity\User\PartnerInfoCollection;
+use Bitrix\Intranet\Internal\Integration\Bitrix24\Integrator\PartnerInfo;
+use Bitrix\Main\Loader;
 
 class IntegratorFieldAssembler extends CustomUserFieldAssembler
 {
@@ -14,16 +15,22 @@ class IntegratorFieldAssembler extends CustomUserFieldAssembler
 	protected function prepareColumn($value): mixed
 	{
 		$userId = $value['ID'];
-		$value = $this->getIntegratorInfo()->findById((int)$userId)?->integratorName ?? '';
+		$integratorInfo = $this->getIntegratorInfo();
+		$value = $integratorInfo?->findById((int)$userId)?->integratorName ?? '';
 
 		return htmlspecialcharsbx($value);
 	}
 
-	private function getIntegratorInfo(): PartnerInfoCollection
+	private function getIntegratorInfo(): ?PartnerInfoCollection
 	{
 		if (!self::$integratorInfo)
 		{
-			self::$integratorInfo = (new IntegratorInfoRepository())->getList();
+			if (!Loader::includeModule('bitrix24'))
+			{
+				return null;
+			}
+
+			self::$integratorInfo = (new PartnerInfo())->getList();
 		}
 
 		return self::$integratorInfo;

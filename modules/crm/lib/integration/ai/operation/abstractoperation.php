@@ -35,6 +35,7 @@ use Bitrix\Main\ORM\Fields\FieldTypeMask;
 use Bitrix\Main\Web\Json;
 use Bitrix\Rest\Marketplace;
 use CCrmActivity;
+use CCrmActivityDirection;
 use CCrmOwnerType;
 
 /**
@@ -1135,11 +1136,13 @@ abstract class AbstractOperation
 			return;
 		}
 
+		$direction = (int)($activity['DIRECTION'] ?? 0);
+
 		$builder = (new CallParsingEvent())
 			->setIsManualLaunch($result->isManualLaunch())
 			->setActivityOwnerTypeId($owner->getEntityTypeId())
 			->setActivityId($activityId)
-			->setActivityDirection($activity['DIRECTION'])
+			->setActivityDirection($direction <= 0 ? CCrmActivityDirection::Incoming : $direction)
 			->setTotalScenarioDuration($totalScenarioDuration)
 			->setElement(Dictionary::ELEMENT_COPILOT_BUTTON)
 			->setStatus(CallParsingEvent::resolveStatusByJobResult($result))

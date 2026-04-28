@@ -31,7 +31,7 @@ class Sender extends MicroService\BaseSender
 	/**
 	 * @inheritDoc
 	 */
-	public function performRequest($action, array $parameters = [], Dto\User $user = null): Result
+	public function performRequest($action, array $parameters = [], ?Dto\User $user = null): Result
 	{
 		$url = $this->getServiceUrl() . $this->getProxyPath() . $action;
 
@@ -69,7 +69,7 @@ class Sender extends MicroService\BaseSender
 		return $this->buildResult($httpClient, $result);
 	}
 
-	public function performMultipartRequest($action, array $parameters = [], Dto\User $user = null): Result
+	public function performMultipartRequest($action, array $parameters = [], ?Dto\User $user = null): Result
 	{
 		$url = $this->getServiceUrl() . $this->getProxyPath() . $action;
 		$filePath = $parameters['filePath'] ?? '';
@@ -190,7 +190,7 @@ class Sender extends MicroService\BaseSender
 		return $result;
 	}
 
-	protected function getClientServerName(): string
+	public static function getCurrentPortalUrl(): string
 	{
 		if (defined('BX24_HOST_NAME'))
 		{
@@ -221,6 +221,11 @@ class Sender extends MicroService\BaseSender
 
 
 		return $scheme . $serverName;
+	}
+
+	protected function getClientServerName(): string
+	{
+		return self::getCurrentPortalUrl();
 	}
 
 	public function setSingleUseHttpClientParams(array $params): void

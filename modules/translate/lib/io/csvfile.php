@@ -316,7 +316,7 @@ class CsvFile
 						continue;
 					}
 
-					$result[] = $str;
+					$result[] = trim($str);
 
 					return $result;
 				}
@@ -341,7 +341,7 @@ class CsvFile
 			{
 				if (!$isInside)
 				{
-					$result[] = $str;
+					$result[] = trim($str);
 					$str = '';
 					$this->incrementCurrentPosition();
 					continue;
@@ -363,7 +363,7 @@ class CsvFile
 
 		if ($str !== '')
 		{
-			$result[] = $str;
+			$result[] = trim($str);
 		}
 
 		if ($result === [])

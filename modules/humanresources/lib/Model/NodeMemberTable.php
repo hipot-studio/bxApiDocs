@@ -96,12 +96,15 @@ class NodeMemberTable extends ORM\Data\DataManager
 		];
 	}
 
-	public static function onAfterDelete(Event $event): void
+	public static function onBeforeDelete(Event $event): void
 	{
 		$data = $event->getParameters();
 		$nodeMemberId = $data["primary"]["ID"];
 
 		InternalContainer::getUserSettingsService()
+			->deleteByNodeMemberId($nodeMemberId);
+
+		InternalContainer::getNodeSettingsService()
 			->deleteByNodeMemberId($nodeMemberId);
 	}
 

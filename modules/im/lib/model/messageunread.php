@@ -49,7 +49,9 @@ use Bitrix\Main\Type\DateTime;
 
 class MessageUnreadTable extends DataManager
 {
-	use DeleteByFilterTrait;
+	use DeleteByFilterTrait {
+		deleteByFilter as deleteByFilterBase;
+	}
 	use MergeTrait;
 	use InsertSelectTrait;
 	use MultiplyInsertTrait;
@@ -151,5 +153,16 @@ class MessageUnreadTable extends DataManager
 
 		$sql = 'UPDATE ' . $tableName . ' SET ' . $update[0] . ' WHERE ' . $where;
 		$connection->queryExecute($sql, $update[1]);
+	}
+
+	/**
+	 * @param array|\Bitrix\Main\ORM\Query\Filter\ConditionTree $filter
+	 * @return int Number of deleted rows
+	 */
+	public static function deleteByFilter(array|\Bitrix\Main\ORM\Query\Filter\ConditionTree $filter): int
+	{
+		static::deleteByFilterBase($filter);
+
+		return static::getEntity()->getConnection()->getAffectedRowsCount();
 	}
 }

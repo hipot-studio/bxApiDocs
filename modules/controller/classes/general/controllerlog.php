@@ -162,6 +162,7 @@ class CControllerLog
 			'TIMESTAMP_X' => [
 				'FIELD_NAME' => 'L.TIMESTAMP_X',
 				'FIELD_TYPE' => 'datetime',
+				'FORMAT' => 'FULL',
 			],
 			'CONTROLLER_MEMBER_ID' => [
 				'FIELD_NAME' => 'L.CONTROLLER_MEMBER_ID',

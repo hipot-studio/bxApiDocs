@@ -15,5 +15,5 @@ interface RuleInterface
 {
 	public function __construct(AccessibleController $controller);
 
-	public function execute(AccessibleItem $item = null, $params = null): bool;
+	public function execute(?AccessibleItem $item = null, $params = null): bool;
 }

@@ -10,7 +10,7 @@ class ExternalSourceRowAssembler extends RowAssembler
 {
 	private ?ExternalSourceSettings $settings;
 
-	public function __construct(array $visibleColumnIds, ExternalSourceSettings $settings = null)
+	public function __construct(array $visibleColumnIds, ?ExternalSourceSettings $settings = null)
 	{
 		$this->settings = $settings;
 

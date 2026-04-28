@@ -1,12 +1,16 @@
 <?php
 namespace Bitrix\Disk\Internals\Rights\Table;
 
-use Bitrix\Disk\Internals\Db\SqlHelper;
 use Bitrix\Disk\Internals\ObjectPathTable;
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\Connection;
+use Bitrix\Main\DB\SqlHelper as MainSqlHelper;
+use Bitrix\Main\Diag\Debug;
 
 final class TmpSimpleRight
 {
+	private const MAX_LENGTH_BATCH_QUERY = 65_535;
+
 	public static function getTableName()
 	{
 		return 'b_disk_tmp_simple_right';
@@ -22,13 +26,45 @@ final class TmpSimpleRight
 	 */
 	public static function insertBatchBySessionId(array $items, $sessionId)
 	{
-		foreach ($items as &$item)
+		if (empty($items))
 		{
-			$item['SESSION_ID'] = $sessionId;
+			return;
 		}
-		unset($item);
 
-		SqlHelper::insertBatch(self::getTableName(), $items);
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$sessionId = (int)$sessionId;
+
+		$query = '';
+		$columns = '';
+		foreach ($items as $item)
+		{
+			[$columns, $values] = $sqlHelper->prepareInsert(self::getTableName(), [
+				'OBJECT_ID' => (int)$item['OBJECT_ID'],
+				'ACCESS_CODE' => (string)$item['ACCESS_CODE'],
+				'SESSION_ID' => $sessionId,
+			]);
+
+			$query .= ($query ? ', ' : ' ') . '(' . $values . ')';
+			if (mb_strlen($query) >= self::MAX_LENGTH_BATCH_QUERY)
+			{
+				self::flushInsertIgnoreBatch($connection, $sqlHelper, $columns, $query);
+				$query = '';
+			}
+		}
+		unset($item, $values);
+
+		self::flushInsertIgnoreBatch($connection, $sqlHelper, $columns, $query);
+	}
+
+	private static function flushInsertIgnoreBatch(Connection $connection, MainSqlHelper $sqlHelper, string $columns, string $query): void
+	{
+		if ($query === '' || $columns === '')
+		{
+			return;
+		}
+
+		$connection->queryExecute($sqlHelper->getInsertIgnore(self::getTableName(), " ({$columns}) ", "VALUES {$query}"));
 	}
 
 	/**

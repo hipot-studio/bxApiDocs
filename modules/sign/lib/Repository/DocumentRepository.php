@@ -3,12 +3,12 @@
 namespace Bitrix\Sign\Repository;
 
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Entity\UpdateResult;
 use Bitrix\Main\Error;
 use Bitrix\Main;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Data\DeleteResult;
+use Bitrix\Main\ORM\Data\UpdateResult;
 use Bitrix\Main\ORM\Data\Result;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
@@ -721,15 +721,19 @@ class DocumentRepository
 		;
 	}
 
-	public function existAnyDocument(): bool
+	public function existAnyDocument(bool $withoutTemplates = true): bool
 	{
-		$document = Internal\DocumentTable::query()
+		$query = Internal\DocumentTable::query()
 			->setSelect(['ID'])
 			->setLimit(1)
-			->fetchObject()
 		;
 
-		return $document !== null;
+		if ($withoutTemplates)
+		{
+			$query->whereNull('TEMPLATE_ID');
+		}
+
+		return $query->fetchObject() !== null;
 	}
 
 	public function listByBlankId(int $id): Item\DocumentCollection
@@ -774,6 +778,7 @@ class DocumentRepository
 		return (int)Internal\DocumentTable::query()
 			->addSelect('ID')
 			->whereIn('SCENARIO', $scenarioIds)
+			->whereNull('TEMPLATE_ID')
 			->queryCountTotal()
 		;
 	}

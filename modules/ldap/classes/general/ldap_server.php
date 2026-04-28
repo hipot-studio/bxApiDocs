@@ -1,7 +1,12 @@
 <?php
 
 use Bitrix\Ldap\EncryptionType;
+use Bitrix\Ldap\Internal\Models\SyncSessionTable;
 use Bitrix\Ldap\Internal\Security\Encryption;
+use Bitrix\Ldap\Internal\User;
+use Bitrix\Ldap\Sync\Logger;
+use Bitrix\Ldap\Sync\SessionManager;
+use Bitrix\Ldap\Sync\Stepper;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -10,15 +15,16 @@ class CLdapServer
 	public $arFields = array();
 	public static $syncErrors = array();
 
+	// region CRUD
+
 	/**
-	 *
-	 * @param $arOrder
-	 * @param $arFilter
+	 * @param array $arOrder
+	 * @param array $arFilter
 	 * @return __CLDAPServerDBResult
 	 */
 	public static function GetList($arOrder=Array(), $arFilter=Array())
 	{
-		global $USER, $DB, $APPLICATION;
+		global $DB;
 		$strSql =
 				"SELECT ls.*, ".
 				"	".$DB->DateToCharFunction("ls.TIMESTAMP_X")."	as TIMESTAMP_X, ".
@@ -36,7 +42,7 @@ class CLdapServer
 		{
 			$val = $arFilter[$filter_keys[$i]];
 			$key=$filter_keys[$i];
-			$res = CLdapUtil::MkOperationFilter($key);
+			$res = self::MkOperationFilter((string)$key);
 			$key = mb_strtoupper($res["FIELD"]);
 			$cOperationType = $res["OPERATION"];
 			switch($key)
@@ -45,17 +51,17 @@ class CLdapServer
 				case "SYNC":
 				case "CONVERT_UTF8":
 				case "USER_GROUP_ACCESSORY":
-					$arSqlSearch[] = CLdapUtil::FilterCreate("ls.".$key, $val, "string_equal", $cOperationType);
+					$arSqlSearch[] = self::FilterCreate("ls.".$key, $val, "string_equal", $cOperationType);
 					break;
 				case "ID":
 				case "PORT":
 				case "MAX_PAX_SIZE":
 				case "CONNECTION_TYPE":
-					$arSqlSearch[] = CLdapUtil::FilterCreate("ls.".$key, $val, "number", $cOperationType);
+					$arSqlSearch[] = self::FilterCreate("ls.".$key, $val, "number", $cOperationType);
 					break;
 				case "SYNC_LAST":
 				case "TIMESTAMP_X":
-					$arSqlSearch[] = CLdapUtil::FilterCreate("ls.".$key, $val, "date", $cOperationType);
+					$arSqlSearch[] = self::FilterCreate("ls.".$key, $val, "date", $cOperationType);
 					break;
 				case "CODE":
 				case "NAME":
@@ -74,7 +80,7 @@ class CLdapServer
 				case "USER_LAST_NAME_ATTR":
 				case "USER_EMAIL_ATTR":
 				case "USER_GROUP_ATTR":
-					$arSqlSearch[] = CldapUtil::FilterCreate("ls.".$key, $val, "string", $cOperationType);
+					$arSqlSearch[] = self::FilterCreate("ls.".$key, $val, "string", $cOperationType);
 					break;
 			}
 		}
@@ -151,8 +157,7 @@ class CLdapServer
 	}
 
 	/**
-	 *
-	 * @param $ID
+	 * @param int $ID
 	 * @return __CLDAPServerDBResult
 	 */
 	public static function GetByID($ID)
@@ -160,61 +165,10 @@ class CLdapServer
 		return CLdapServer::GetList(Array(), $arFilter=Array("ID"=>intval($ID)));
 	}
 
-	public static function CheckFields($arFields, $ID=false)
-	{
-		global $DB, $APPLICATION;
-
-		$strErrors = "";
-		$arMsg = Array();
-
-		if(($ID===false || is_set($arFields, "NAME")) && mb_strlen($arFields["NAME"]) < 1)
-			$arMsg[] = array("id"=>"NAME", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_NAME"));
-			//$strErrors .= GetMessage("LDAP_ERR_NAME").", ";
-
-		if(($ID===false || is_set($arFields, "SERVER")) && mb_strlen($arFields["SERVER"]) < 1)
-			$arMsg[] = array("id"=>"SERVER", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_SERVER"));
-			//$strErrors .= GetMessage("LDAP_ERR_SERVER").", ";
-
-		if(($ID===false || is_set($arFields, "PORT")) && mb_strlen($arFields["PORT"]) < 1)
-			$arMsg[] = array("id"=>"PORT", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_PORT"));
-			//$strErrors .= GetMessage("LDAP_ERR_PORT").", ";
-
-		if(($ID===false || is_set($arFields, "BASE_DN")) && mb_strlen($arFields["BASE_DN"]) < 1)
-			//$strErrors .= GetMessage("LDAP_ERR_BASE_DN").", ";
-			$arMsg[] = array("id"=>"BASE_DN", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_BASE_DN"));
-
-		if(($ID===false || is_set($arFields, "GROUP_FILTER")) && mb_strlen($arFields["GROUP_FILTER"]) < 1)
-			//$strErrors .= GetMessage("LDAP_ERR_GROUP_FILT").", ";
-			$arMsg[] = array("id"=>"GROUP_FILTER", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_GROUP_FILT"));
-
-		if(($ID===false || is_set($arFields, "GROUP_ID_ATTR")) && mb_strlen($arFields["GROUP_ID_ATTR"]) < 1)
-			$arMsg[] = array("id"=>"GROUP_ID_ATTR", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_GROUP_ATTR"));
-			//$strErrors .= GetMessage("LDAP_ERR_GROUP_ATTR").", ";
-
-		if(($ID===false || is_set($arFields, "USER_FILTER")) && mb_strlen($arFields["USER_FILTER"]) < 1)
-			$arMsg[] = array("id"=>"USER_FILTER", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_USER_FILT"));
-			//$strErrors .= GetMessage("LDAP_ERR_USER_FILT").", ";
-
-		if(($ID===false || is_set($arFields, "USER_ID_ATTR")) && mb_strlen($arFields["USER_ID_ATTR"]) < 1)
-			$arMsg[] = array("id"=>"USER_ID_ATTR", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_USER_ATTR"));
-			//$strErrors .= GetMessage("LDAP_ERR_USER_ATTR").", ";
-
-		//if(strlen($strErrors)>0)
-		//{
-		//	$APPLICATION->throwException(GetMessage("LDAP_ERR_EMPTY").substr($strErrors, 0, -2));
-		//	return false;
-		//}
-
-		if(!empty($arMsg))
-		{
-			$e = new CAdminException($arMsg);
-			$GLOBALS["APPLICATION"]->ThrowException($e);
-			return false;
-		}
-
-		return true;
-	}
-
+	/**
+	 * @param array $arFields
+	 * @return int|false
+	 */
 	public static function Add($arFields)
 	{
 		global $DB, $APPLICATION;
@@ -236,7 +190,7 @@ class CLdapServer
 
 		$arFields['PORT'] = empty($arFields['PORT']) ? (string)$encryptionType->port() : $arFields['PORT'];
 
-		if(!CLdapServer::CheckFields($arFields))
+		if(!self::CheckFields($arFields))
 			return false;
 
 		if(is_set($arFields, "ADMIN_PASSWORD"))
@@ -262,24 +216,11 @@ class CLdapServer
 		return $ID;
 	}
 
-	public static function __UpdateAgentPeriod($server_id, $time)
-	{
-		$server_id = intval($server_id);
-		$time = intval($time);
-
-		CAgent::RemoveAgent("CLdapServer::SyncAgent(".$server_id.");", "ldap");
-		if($time>0)
-			CAgent::AddAgent("CLdapServer::SyncAgent(".$server_id.");", "ldap", "N", $time*60*60);
-	}
-
-	public static function SyncAgent($id)
-	{
-		CLdapServer::Sync($id);
-		return "CLdapServer::SyncAgent(".$id.");";
-	}
-
-	/*********************************************************************
-	*********************************************************************/
+	/**
+	 * @param int $ID
+	 * @param array $arFields
+	 * @return bool
+	 */
 	public static function Update($ID, $arFields)
 	{
 		global $DB, $APPLICATION;
@@ -317,7 +258,7 @@ class CLdapServer
 			$arFields['PORT'] = (string)$encryptionType->port();
 		}
 
-		if(!CLdapServer::CheckFields($arFields, $ID))
+		if(!self::CheckFields($arFields, $ID))
 			return false;
 
 		if(is_set($arFields, "ADMIN_PASSWORD"))
@@ -373,6 +314,10 @@ class CLdapServer
 		return true;
 	}
 
+	/**
+	 * @param int $ID
+	 * @return CDBResult|false
+	 */
 	public static function Delete($ID)
 	{
 		global $DB;
@@ -386,23 +331,246 @@ class CLdapServer
 		return $DB->Query($strSql, true);
 	}
 
+	/**
+	 * @deprecated Will be private soon.
+	 * @param array $arFields
+	 * @param int|bool $ID
+	 * @return bool
+	 */
+	public static function CheckFields($arFields, $ID=false)
+	{
+		$arMsg = Array();
+
+		if(($ID===false || is_set($arFields, "NAME")) && mb_strlen($arFields["NAME"]) < 1)
+			$arMsg[] = array("id"=>"NAME", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_NAME"));
+
+		if(($ID===false || is_set($arFields, "SERVER")) && mb_strlen($arFields["SERVER"]) < 1)
+			$arMsg[] = array("id"=>"SERVER", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_SERVER"));
+
+		if(($ID===false || is_set($arFields, "PORT")) && mb_strlen($arFields["PORT"]) < 1)
+			$arMsg[] = array("id"=>"PORT", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_PORT"));
+
+		if(($ID===false || is_set($arFields, "BASE_DN")) && mb_strlen($arFields["BASE_DN"]) < 1)
+			$arMsg[] = array("id"=>"BASE_DN", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_BASE_DN"));
+
+		if(($ID===false || is_set($arFields, "GROUP_FILTER")) && mb_strlen($arFields["GROUP_FILTER"]) < 1)
+			$arMsg[] = array("id"=>"GROUP_FILTER", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_GROUP_FILT"));
+
+		if(($ID===false || is_set($arFields, "GROUP_ID_ATTR")) && mb_strlen($arFields["GROUP_ID_ATTR"]) < 1)
+			$arMsg[] = array("id"=>"GROUP_ID_ATTR", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_GROUP_ATTR"));
+
+		if(($ID===false || is_set($arFields, "USER_FILTER")) && mb_strlen($arFields["USER_FILTER"]) < 1)
+			$arMsg[] = array("id"=>"USER_FILTER", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_USER_FILT"));
+
+		if(($ID===false || is_set($arFields, "USER_ID_ATTR")) && mb_strlen($arFields["USER_ID_ATTR"]) < 1)
+			$arMsg[] = array("id"=>"USER_ID_ATTR", "text"=> GetMessage("LDAP_ERR_EMPTY")." ".GetMessage("LDAP_ERR_USER_ATTR"));
+
+		if(!empty($arMsg))
+		{
+			$e = new CAdminException($arMsg);
+			$GLOBALS["APPLICATION"]->ThrowException($e);
+			return false;
+		}
+
+		return true;
+	}
+
+	private static function MkOperationFilter(string $key): array
+	{
+		if(mb_substr($key, 0, 1) == "!")
+		{
+			$key = mb_substr($key, 1);
+			$cOperationType = "N";
+		}
+		elseif(mb_substr($key, 0, 1) == "?")
+		{
+			$key = mb_substr($key, 1);
+			$cOperationType = "?";
+		}
+		elseif(mb_substr($key, 0, 2) == ">=")
+		{
+			$key = mb_substr($key, 2);
+			$cOperationType = "GE";
+		}
+		elseif(mb_substr($key, 0, 1) == ">")
+		{
+			$key = mb_substr($key, 1);
+			$cOperationType = "G";
+		}
+		elseif(mb_substr($key, 0, 2) == "<=")
+		{
+			$key = mb_substr($key, 2);
+			$cOperationType = "LE";
+		}
+		elseif(mb_substr($key, 0, 1) == "<")
+		{
+			$key = mb_substr($key, 1);
+			$cOperationType = "L";
+		}
+		else
+			$cOperationType = "E";
+
+		return Array("FIELD"=>$key, "OPERATION"=>$cOperationType);
+	}
+
+	private static function FilterCreate($fname, $vals, $type, $cOperationType=false, $bSkipEmpty = true)
+	{
+		return self::FilterCreateEx($fname, $vals, $type, $bFullJoin, $cOperationType, $bSkipEmpty);
+	}
+
+	private static function FilterCreateEx($fname, $vals, $type, &$bFullJoin, $cOperationType=false, $bSkipEmpty = true)
+	{
+		global $DB;
+		if(!is_array($vals))
+			$vals=Array($vals);
+
+		if(count($vals)<1)
+			return "";
+		if(is_bool($cOperationType))
+		{
+			if($cOperationType===true)
+				$cOperationType = "N";
+			else
+				$cOperationType = "E";
+		}
+
+		if($cOperationType=="G")
+			$strOperation = ">";
+		elseif($cOperationType=="GE")
+			$strOperation = ">=";
+		elseif($cOperationType=="LE")
+			$strOperation = "<=";
+		elseif($cOperationType=="L")
+			$strOperation = "<";
+		else
+			$strOperation = "=";
+
+		$bFullJoin = false;
+		$bWasLeftJoin = false;
+
+		$res = Array();
+		for($i=0, $c=count($vals); $i < $c; $i++)
+		{
+			$val = $vals[$i];
+			if(!$bSkipEmpty || $val <> '' || (is_bool($val) && $val===false))
+			{
+				switch ($type)
+				{
+					case "string_equal":
+						if($cOperationType=="?")
+						{
+							if($val <> '')
+								$res[] = GetFilterQuery($fname, $val, "N");
+						}
+						else
+						{
+							if($val == '')
+								$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL OR ".$DB->Length($fname)."<=0)";
+							else
+								$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".self::_Upper($fname).$strOperation.self::_Upper("'".$DB->ForSql($val)."'").")";
+						}
+						break;
+					case "string":
+						if($cOperationType=="?")
+						{
+							if($val <> '')
+							{
+								$sr = GetFilterQuery($fname, $val, "Y", array(), "N");
+								if($sr != "0")
+									$res[] = $sr;
+							}
+						}
+						else
+						{
+							if($val == '')
+								$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL OR ".$DB->Length($fname)."<=0)";
+							else
+								if($strOperation=="=")
+									$res[] = ($cOperationType == "N" ? " " . $fname . " IS NULL OR NOT " : "") . "(" . $fname . " LIKE '" . $DB->ForSqlLike($val) . "')";
+								else
+									$res[] = ($cOperationType == "N" ? " " . $fname . " IS NULL OR NOT " : "") . "(" . $fname . " " . $strOperation . " '" . $DB->ForSql($val) . "')";
+						}
+						break;
+					case "date":
+						if($val == '')
+							$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL)";
+						else
+							$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".$fname." ".$strOperation." ".$DB->CharToDateFunction($DB->ForSql($val), "FULL").")";
+						break;
+					case "number":
+						if($cOperationType=="?")
+						{
+							$sqlHelper = \Bitrix\Main\Application::getConnection()->getSqlHelper();
+
+							$res[] = "(" . $sqlHelper->castToChar($fname) . " LIKE '%" . $DB->ForSqlLike(trim($val)) . "%' AND " . $fname . " IS NOT NULL)";
+						}
+						else
+						{
+							if($val == '')
+								$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL)";
+							else
+								$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".$fname." ".$strOperation." '".DoubleVal($val)."')";
+						}
+						break;
+					case "number_above":
+						if($val == '')
+							$res[] = ($cOperationType=="N"?"NOT":"")."(".$fname." IS NULL)";
+						else
+							$res[] = ($cOperationType=="N"?" ".$fname." IS NULL OR NOT ":"")."(".$fname." ".$strOperation." '".$DB->ForSql($val)."')";
+						break;
+				}
+
+				// we need this conditions to do INNER JOIN
+				if($val <> '' && $cOperationType!="N")
+					$bFullJoin = true;
+				else
+					$bWasLeftJoin = true;
+			}
+		}
+
+		$strResult = "";
+		for($i=0, $c=count($res); $i < $c; $i++)
+		{
+			if($i>0)
+				$strResult .= ($cOperationType=="N"?" AND ":" OR ");
+			$strResult .= "(".$res[$i].")";
+		}
+		if($strResult!="")
+			$strResult = "(".$strResult.")";
+
+		if($bFullJoin && $bWasLeftJoin && $cOperationType!="N")
+			$bFullJoin = false;
+
+		return $strResult;
+	}
+
+	private static function _Upper($str)
+	{
+		global $DB;
+		return ($DB->type === 'PGSQL' ? 'UPPER(' . $str . ')' : $str);
+	}
+
+	// endregion
+
+	// region group management
+
 	public static function GetGroupMap($ID)
 	{
-		global $DB, $APPLICATION;
+		global $DB;
 		$ID = intval($ID);
 		return $DB->Query("SELECT GROUP_ID, LDAP_GROUP_ID FROM b_ldap_group WHERE LDAP_SERVER_ID=".$ID." AND NOT (GROUP_ID=-1)");
 	}
 
 	public static function GetGroupBan($ID)
 	{
-		global $DB, $APPLICATION;
+		global $DB;
 		$ID = intval($ID);
 		return $DB->Query("SELECT LDAP_GROUP_ID FROM b_ldap_group WHERE LDAP_SERVER_ID=".$ID." AND GROUP_ID=-1");
 	}
 
 	public static function SetGroupMap($ID, $arFields)
 	{
-		global $DB, $APPLICATION;
+		global $DB;
 		$ID = intval($ID);
 		$DB->Query("DELETE FROM b_ldap_group WHERE LDAP_SERVER_ID=".$ID);
 		foreach($arFields as $arGroup)
@@ -428,9 +596,50 @@ class CLdapServer
 		}
 	}
 
-	public static function Sync($ldap_server_id)
+	public static function isUserInBannedGroups($ldap_server_id, $arUserFields)
 	{
-		global $DB, $USER, $APPLICATION;
+		static $noImportGroups = null;
+
+		if($noImportGroups === null)
+		{
+			$noImportGroups = array();
+			$dbGroups = CLdapServer::GetGroupBan($ldap_server_id);
+
+			while($arGroup = $dbGroups->Fetch())
+				$noImportGroups[md5($arGroup['LDAP_GROUP_ID'])] = $arGroup['LDAP_GROUP_ID'];
+		}
+
+		if(empty($noImportGroups))
+			return false;
+
+		$allUserGroups = $arUserFields['LDAP_GROUPS'];
+		$result = false;
+
+		foreach($allUserGroups as $groupId)
+		{
+			$groupId = trim($groupId);
+
+			if(!empty($groupId) && array_key_exists(md5($groupId), $noImportGroups))
+			{
+				$result = true;
+				break;
+			}
+		}
+
+		return $result;
+	}
+
+	// endregion
+
+	// region synchronization logic
+
+	public static function Sync($ldap_server_id, bool $forceUpdate = false)
+	{
+		$logger = \Bitrix\Ldap\DI\Container::getInstance()->getSyncLogger();
+		$logger->start();
+		$logger->collectDebugInfo();
+
+		global $USER, $APPLICATION;
 		$bUSERGen = false;
 		self::$syncErrors = array();
 
@@ -469,6 +678,8 @@ class CLdapServer
 			}
 		}
 
+		$logger->log('OnLdapBeforeSync completed');
+
 		// select all users from LDAP
 		$arLdapUsers = array();
 		$ldapLoginAttr = mb_strtolower($oLdapServer->arFields["~USER_ID_ATTR"]);
@@ -482,17 +693,12 @@ class CLdapServer
 
 		unset($dbLdapUsers);
 
+		$logger->log(sprintf('%s users fetched from AD', count($arLdapUsers)));
+
 		// select all Bitrix CMS users for this LDAP
-		$arUsers = Array();
+		$arUsers = User\Provider::getByServerId((int)$ldap_server_id);
 
-		CTimeZone::Disable();
-		$dbUsers = CUser::GetList('', '', Array("EXTERNAL_AUTH_ID"=>"LDAP#".$ldap_server_id));
-		CTimeZone::Enable();
-
-		while($arUser = $dbUsers->Fetch())
-			$arUsers[mb_strtolower($arUser["LOGIN"])] = $arUser;
-			
-		unset($dbUsers);
+		$logger->log(sprintf('%s users fetched from portal database', count($arUsers)));
 
 		$arDelLdapUsers = array();
 
@@ -552,7 +758,7 @@ class CLdapServer
 					$userTime = MakeTimeStamp($arUsers[$userLogin]["TIMESTAMP_X"]);
 				}
 
-				if($syncTime < $ldapTime || $syncTime < $userTime)
+				if($syncTime < $ldapTime || $syncTime < $userTime || $forceUpdate)
 				{
 					$arUserFields = $oLdapServer->GetUserFields($arLdapUserFields, $departmentCache);
 
@@ -578,7 +784,14 @@ class CLdapServer
 				self::$syncErrors[] = $userLogin.': '.$USER->LAST_ERROR;
 				$USER->LAST_ERROR = '';
 			}
+
+			if ($cnt % 1000 === 0)
+			{
+				$logger->log($cnt . ' users processed');
+			}
 		}
+
+		$logger->log('All users processed');
 
 		foreach ($arDelLdapUsers as $userLogin)
 		{
@@ -590,47 +803,60 @@ class CLdapServer
 			}
 		}
 
+		$logger->log('Users deactivated');
+
 		$oLdapServer->Disconnect();
-		CLdapServer::Update($ldap_server_id, Array("~SYNC_LAST"=>$DB->CurrentTimeFunction()));
+		self::UpdateLastSyncTime((int)$ldap_server_id);
 
 		if($bUSERGen)
 			unset($USER);
 
+		$logger->stop();
+
 		return $cnt;
 	}
 
-	protected static function isUserInBannedGroups($ldap_server_id, $arUserFields)
+	public static function __UpdateAgentPeriod($server_id, $time)
 	{
-		static $noImportGroups = null;
+		$server_id = intval($server_id);
+		$time = intval($time);
 
-		if($noImportGroups === null)
-		{
-			$noImportGroups = array();
-			$dbGroups = CLdapServer::GetGroupBan($ldap_server_id);
-
-			while($arGroup = $dbGroups->Fetch())
-				$noImportGroups[md5($arGroup['LDAP_GROUP_ID'])] = $arGroup['LDAP_GROUP_ID'];
-		}
-
-		if(empty($noImportGroups))
-			return false;
-
-		$allUserGroups = $arUserFields['LDAP_GROUPS'];
-		$result = false;
-
-		foreach($allUserGroups as $groupId)
-		{
-			$groupId = trim($groupId);
-
-			if(!empty($groupId) && array_key_exists(md5($groupId), $noImportGroups))
-			{
-				$result = true;
-				break;
-			}
-		}
-
-		return $result;
+		CAgent::RemoveAgent("CLdapServer::SyncAgent(".$server_id.");", "ldap");
+		if($time>0)
+			CAgent::AddAgent("CLdapServer::SyncAgent(".$server_id.");", "ldap", "N", $time*60*60);
 	}
+
+	public static function SyncAgent($id)
+	{
+		$id = (int)$id;
+
+		$container = \Bitrix\Ldap\DI\Container::getInstance();
+		$settings = $container->getSettings();
+
+		if ($settings->isModernSyncEnabled())
+		{
+			$container->getSyncSessionManager()->tryStart($id);
+		}
+		else
+		{
+			CLdapServer::Sync($id);
+		}
+
+		return "CLdapServer::SyncAgent(".$id.");";
+	}
+
+	public static function UpdateLastSyncTime(int $serverId): void
+	{
+		global $DB;
+		$strUpdate = $DB->PrepareUpdate('b_ldap_server', [
+			'~SYNC_LAST' => $DB->CurrentTimeFunction(),
+		]);
+
+		$strSql = "UPDATE b_ldap_server SET " . $strUpdate . " WHERE ID=" . $serverId;
+		$DB->Query($strSql);
+	}
+
+	// endregion
 }
 
 class __CLDAPServerDBResult extends CDBResult
@@ -648,6 +874,9 @@ class __CLDAPServerDBResult extends CDBResult
 		return $res;
 	}
 
+	/**
+	 * @return CLDAP|false
+	 */
 	function GetNextServer()
 	{
 		if(!($r = $this->GetNext()))

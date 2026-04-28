@@ -61,7 +61,7 @@ class RepoWidget extends Repo
 		// Can set only available fields to manifest. Security!
 		$manifest = [];
 
-		$manifest['block']['type'] = mb_strtolower(Landing\Site\Type::SCOPE_CODE_MAINPAGE);
+		$manifest['block']['type'] = mb_strtolower(Landing\Site\Type::SCOPE_CODE_VIBE);
 		$manifest['block']['subtype'] = self::SUBTYPE_WIDGET;
 		$manifest['block']['subtype_params'] = [
 			'rootNode' => $fields['WIDGET_PARAMS']['rootNode'] ?? null,
@@ -71,7 +71,7 @@ class RepoWidget extends Repo
 			'lang' => $fields['WIDGET_PARAMS']['lang'] ?? null,
 		];
 
-		$manifest = Scope\Mainpage::prepareBlockManifest($manifest);
+		$manifest = Scope\Vibe::prepareBlockManifest($manifest);
 	}
 
 	/**
@@ -182,7 +182,7 @@ class RepoWidget extends Repo
 				$listAll = array_filter($listAll, function ($item) {
 					$isType = isset($item['MANIFEST']['block']['type'])
 						&& in_array(
-							mb_strtolower(Landing\Site\Type::SCOPE_CODE_MAINPAGE),
+							mb_strtolower(Landing\Site\Type::SCOPE_CODE_VIBE),
 							(array)$item['MANIFEST']['block']['type'],
 							true
 						)

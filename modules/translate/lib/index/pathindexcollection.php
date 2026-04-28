@@ -715,7 +715,7 @@ class PathIndexCollection
 	 *
 	 * @return self
 	 */
-	public function unvalidate(Translate\Filter $filter = null, bool $recursively = true): self
+	public function unvalidate(?Translate\Filter $filter = null, bool $recursively = true): self
 	{
 		if ($recursively)
 		{

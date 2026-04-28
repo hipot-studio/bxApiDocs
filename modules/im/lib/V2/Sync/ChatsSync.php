@@ -5,26 +5,29 @@ namespace Bitrix\Im\V2\Sync;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
 use Bitrix\Im\V2\Chat\MessagesAutoDelete\MessagesAutoDeleteConfigs;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
-use Bitrix\Im\V2\Integration\AI\RoleManager;
-use Bitrix\Im\V2\Message\ReadService;
+use Bitrix\Im\V2\Reading\Counter\UserCountersCollector;
 use Bitrix\Im\V2\Sync\Recent\RecentSync;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
+use Bitrix\Main\DI\ServiceLocator;
 
 class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 {
 	use ContextCustomer;
 
 	protected RecentSync $recent;
+	protected UserCountersCollector $countersCollector;
+	protected bool $withCounters = false;
 
-	public function __construct(array $chats, RecentSync $recent)
+	public function __construct(array $chats, RecentSync $recent, bool $withCounters = false)
 	{
 		$this->recent = $recent;
+		$this->countersCollector = ServiceLocator::getInstance()->get(UserCountersCollector::class);
+		$this->withCounters = $withCounters;
 
 		parent::__construct($chats);
 	}
@@ -53,8 +56,7 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 
 	protected function getSelfAdditionalParams(Chat $chat): array
 	{
-		return [
-			'counter' => $chat->getUserCounter(),
+		$data = [
 			'dateCreate' => $chat->getDateCreate()?->format('c'),
 			'lastMessageId' => $chat->getLastMessageId(),
 			'lastId' => $chat->getLastId(),
@@ -65,6 +67,14 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 			'unreadId' => $chat->getUnreadId(),
 			'userCounter' => $chat->getUserCount(),
 		];
+
+		if ($this->withCounters)
+		{
+			$userId = $this->getContext()->getUserId();
+			$data['counter'] = $this->countersCollector->get($userId)->getByChatId($chat->getId());
+		}
+
+		return $data;
 	}
 
 	protected function fillAllForRest(): void
@@ -72,13 +82,12 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 		$chatIds = $this->getChatIds();
 
 		$nonCachedData = $this->fillNonCachedData($chatIds);
-		$counters = $this->fillCounters($chatIds);
 		$markedIds = $this->fillMarkedIds($chatIds);
 
-		$this->fillData($nonCachedData, $counters, $markedIds);
+		$this->fillData($nonCachedData, $markedIds);
 	}
 
-	protected function fillData(array $nonCachedData, array $counters, array $markedIds): void
+	protected function fillData(array $nonCachedData, array $markedIds): void
 	{
 		foreach ($nonCachedData as $chatData)
 		{
@@ -94,7 +103,6 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 				->setUserCount((int)$chatData['USER_COUNT'])
 				->setLastMessageId((int)$chatData['LAST_MESSAGE_ID'])
 				->setMarkedId($markedIds[$chatId] ?? 0)
-				->setUserCounter($counters[$chatId] ?? 0)
 				->markFilledNonCachedData(true)
 			;
 		}
@@ -112,13 +120,6 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 			->whereIn('ID', $chatIds)
 			->fetchAll()
 		;
-	}
-
-	protected function fillCounters(array $chatIds): array
-	{
-		$readService = new ReadService();
-
-		return $readService->getCounterService()->getForEachChat($chatIds);
 	}
 
 	protected function fillMarkedIds(array $chatIds): array

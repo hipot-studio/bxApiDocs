@@ -2,9 +2,11 @@
 
 namespace Bitrix\Mobile\Helpers;
 
+use Bitrix\Intranet\Public\Service\OtpSettingsService;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Security\Mfa\Otp;
+use Bitrix\Security\Mfa\OtpType;
 use CBitrix24;
 use CHTTP;
 
@@ -111,6 +113,34 @@ class Auth
 				if ($otpParams = Otp::getDeferredParams())
 				{
 					$result["otpType"] = $otpParams['OTP_TYPE'];
+				}
+
+
+				/**
+				 * @var ?OtpSettingsService $otpService
+				 */
+				$otpService = null;
+				$serviceLocator = \Bitrix\Main\DI\ServiceLocator::getInstance();
+
+				if (
+					Loader::includeModule('intranet')
+					&& $serviceLocator->has('intranet.service.settings.otp')
+				)
+				{
+					$otpService = $serviceLocator->get('intranet.service.settings.otp');
+				}
+
+				if (
+					$otpService
+					&& ($otpParams['OTP_TYPE'] ?? null) === OtpType::Push->value
+				)
+				{
+					$userId = (int)($otpParams['USER_ID'] ?? 0);
+					if ($userId > 0)
+					{
+						$result['canLoginBySms'] = $otpService->canLoginBySms($userId);
+					}
+					$result['canUseRecoveryCodes'] = $otpService->isRecoveryCodesEnabled();
 				}
 			}
 		}

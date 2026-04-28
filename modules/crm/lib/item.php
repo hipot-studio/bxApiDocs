@@ -822,6 +822,10 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 			{
 				$this->setFromExternalValue($commonFieldName, $data[$entityFieldName]);
 			}
+			elseif (array_key_exists($commonFieldName, $data))
+			{
+				$this->setFromExternalValue($commonFieldName, $data[$commonFieldName]);
+			}
 			elseif ($this->isNew())
 			{
 				$defaultValue = $this->getDefaultValue($commonFieldName);

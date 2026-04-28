@@ -24,13 +24,14 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 	{
 		parent::exec();
 		$this->prepareResult();
+		$this->installDemoTemplateOnceIfNeeded();
 	}
 
 	public function executeComponent(): void
 	{
 		if (!Storage::instance()->isB2eAvailable())
 		{
-			showError('access denied');
+			$this->includeNotAvailableTemplate();
 
 			return;
 		}
@@ -45,11 +46,11 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 		}
 	}
 
-	private function addOnboardingClasses()
+	private function addOnboardingClasses(): void
 	{
 		foreach (Toolbar::getButtons() as $button)
 		{
-			if ($button instanceof Button && str_contains($button->getLink(), 'sign/b2e/doc/'))
+			if ($button instanceof Button && $this->isB2eDocumentCreateButton($button))
 			{
 				$button->addClass(self::SIGN_B2E_CLASS_FOR_ONBOARDING_CREATE);
 				break;
@@ -61,7 +62,7 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 	{
 		foreach (Toolbar::getButtons() as $button)
 		{
-			if ($button instanceof Button && str_contains($button->getLink(), 'sign/b2e/doc/'))
+			if ($button instanceof Button && $this->isB2eDocumentCreateButton($button))
 			{
 				$button
 					->setIcon(\Bitrix\UI\Buttons\Icon::LOCK)
@@ -72,6 +73,17 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 				break;
 			}
 		}
+	}
+
+	private function isB2eDocumentCreateButton(Button $button): bool
+	{
+		$link = $button->getLink();
+		if (!is_string($link) || $link === '')
+		{
+			return false;
+		}
+
+		return str_contains($link, 'sign/b2e/doc/');
 	}
 
 	private function prepareResult(): void
@@ -141,12 +153,42 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 	{
 		$onboardingService = Container::instance()->getOnboardingService();
 		$memberService = \Bitrix\Sign\Service\Container::instance()->getMemberService();
-		
+
 		$isUserMemberOrInitiatorWithDoneStatus = $memberService->isUserMemberOrInitiatorWithDoneStatus($userId);
 
-		$isUserMemberOrInitiatorWithDoneStatus 
+		$isUserMemberOrInitiatorWithDoneStatus
 			? $onboardingService->setBannerHidden($userId)
 			: $onboardingService->setBannerVisible($userId)
 		;
+	}
+
+	protected function installDemoTemplateOnceIfNeeded(): void
+	{
+		$currentUserId = (int)CurrentUser::get()->getId();
+		if($currentUserId < 1)
+		{
+			return;
+		}
+
+		if (Storage::instance()->isDemoTemplateInstalled())
+		{
+			return;
+		}
+
+		// it's OK if the flag is set by mistake: the template will still be installed when demo signing starts
+		Storage::instance()->setDemoTemplateInstalled(true);
+
+		\Bitrix\Main\Application::getInstance()->addBackgroundJob(
+			function () use ($currentUserId)
+			{
+				$result = (new \Bitrix\Sign\Operation\Document\Template\GetOrInstallOnboardingTemplate(currentUserId: $currentUserId))->launch();
+
+				if (!$result->isSuccess())
+				{
+					\Bitrix\Sign\Debug\Logger::getInstance()->error('onboarding template install errors: ' . implode('; ', $result->getErrorMessages()));
+					Storage::instance()->setDemoTemplateInstalled(false);
+				}
+			}
+		);
 	}
 }

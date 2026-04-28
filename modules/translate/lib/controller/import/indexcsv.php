@@ -9,6 +9,8 @@ use Bitrix\Translate\Index;
 
 /**
  * Index paths from csv file.
+ *
+ * @internal
  */
 class IndexCsv
 	extends Translate\Controller\Action

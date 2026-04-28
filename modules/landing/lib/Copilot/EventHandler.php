@@ -4,9 +4,6 @@ declare(strict_types=1);
 namespace Bitrix\Landing\Copilot;
 
 use Bitrix\AI;
-use Bitrix\AI\Tuning;
-use Bitrix\AI\Quality;
-use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\IEngine;
 use Bitrix\Landing\Copilot\Generation\Error;
 use Bitrix\Landing\Copilot\Generation\Request;
@@ -14,11 +11,8 @@ use Bitrix\Landing\Copilot\Generation\Type\Errors;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Event;
-use Bitrix\Main\Entity;
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main;
-use Exception;
 
 /**
  * Handle external events

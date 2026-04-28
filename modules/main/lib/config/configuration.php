@@ -16,7 +16,8 @@ final class Configuration implements \ArrayAccess, \Iterator, \Countable
 	 * @var Configuration[]
 	 */
 	private static array $instances = [];
-	private ?string $moduleId = null;
+	private ?string $moduleId;
+	private ?string $path;
 	private ?array $storedData = null;
 	private array $data = [];
 	private bool $isLoaded = false;
@@ -34,32 +35,48 @@ final class Configuration implements \ArrayAccess, \Iterator, \Countable
 		$configuration->saveConfiguration();
 	}
 
-	private function __construct($moduleId = null)
+	private function __construct(?string $moduleId = null, ?string $path = null)
 	{
 		if ($moduleId !== null)
 		{
-			$this->moduleId = preg_replace("/[^a-zA-Z0-9_.]+/i", "", trim($moduleId));
+			$moduleId = preg_replace("/[^a-zA-Z0-9_.]+/i", "", trim($moduleId));
 		}
+		$this->moduleId = $moduleId;
+		$this->path = $path;
 	}
 
-	public static function getInstance($moduleId = null): self
+	public static function getInstance(?string $moduleId = null): self
 	{
-		if (!isset(self::$instances[$moduleId]))
+		$index = $moduleId . '|';
+
+		if (!isset(self::$instances[$index]))
 		{
-			self::$instances[$moduleId] = new self($moduleId);
+			self::$instances[$index] = new self($moduleId);
 		}
 
-		return self::$instances[$moduleId];
+		return self::$instances[$index];
 	}
 
-	private static function getPathConfigForModule($moduleId): ?string
+	public static function getInstanceByPath(string $path): self
 	{
-		if (!$moduleId || !Main\ModuleManager::isModuleInstalled($moduleId))
+		$index = '|' . $path;
+
+		if (!isset(self::$instances[$index]))
+		{
+			self::$instances[$index] = new self(null, $path);
+		}
+
+		return self::$instances[$index];
+	}
+
+	private static function getPathConfigForModule(string $moduleId): ?string
+	{
+		if (!Main\ModuleManager::isModuleInstalled($moduleId))
 		{
 			return null;
 		}
 
-		$moduleConfigPath = Loader::getLocal("modules/{$moduleId}/.settings.php");
+		$moduleConfigPath = Loader::getLocal("modules/{$moduleId}/" . self::CONFIGURATION_FILE);
 		if ($moduleConfigPath === false)
 		{
 			return null;
@@ -70,11 +87,9 @@ final class Configuration implements \ArrayAccess, \Iterator, \Countable
 
 	private function loadConfiguration(): void
 	{
-		$this->isLoaded = false;
-
-		if ($this->moduleId)
+		if ($this->moduleId || $this->path)
 		{
-			$path = self::getPathConfigForModule($this->moduleId);
+			$path = $this->path ?? self::getPathConfigForModule($this->moduleId);
 			if ($path !== null && file_exists($path))
 			{
 				$dataTmp = include $path;
@@ -125,20 +140,25 @@ final class Configuration implements \ArrayAccess, \Iterator, \Countable
 		}
 		else
 		{
-			$path = Loader::getLocal(self::CONFIGURATION_FILE);
+			$path = $this->path ?? Loader::getLocal(self::CONFIGURATION_FILE);
 		}
 
 		$data = ($this->storedData !== null) ? $this->storedData : $this->data;
 		$data = var_export($data, true);
 
-		if (!is_writable($path))
+		$dir = dirname($path);
+		if (!is_dir($dir))
 		{
-			@chmod($path, 0644);
+			mkdir($dir, defined('BX_DIR_PERMISSIONS') ? BX_DIR_PERMISSIONS : 0755, true);
+		}
+		if (file_exists($path) && !is_writable($path))
+		{
+			@chmod($path, defined('BX_FILE_PERMISSIONS') ? BX_FILE_PERMISSIONS : 0644);
 		}
 		file_put_contents($path, "<" . "?php\nreturn " . $data . ";\n");
 	}
 
-	public function add($name, $value): void
+	public function add($name, $value): self
 	{
 		if (!$this->isLoaded)
 		{
@@ -153,6 +173,8 @@ final class Configuration implements \ArrayAccess, \Iterator, \Countable
 		{
 			$this->storedData[$name] = ["value" => $value, "readonly" => false];
 		}
+
+		return $this;
 	}
 
 	/**
@@ -161,9 +183,9 @@ final class Configuration implements \ArrayAccess, \Iterator, \Countable
 	 * You must use this method only if you know what you do!
 	 * @param string $name
 	 * @param array $value
-	 * @return void
+	 * @return Configuration
 	 */
-	public function addReadonly($name, $value): void
+	public function addReadonly($name, $value): self
 	{
 		if (!$this->isLoaded)
 		{
@@ -175,9 +197,11 @@ final class Configuration implements \ArrayAccess, \Iterator, \Countable
 		{
 			$this->storedData[$name] = ["value" => $value, "readonly" => true];
 		}
+
+		return $this;
 	}
 
-	public function delete($name): void
+	public function delete($name): self
 	{
 		if (!$this->isLoaded)
 		{
@@ -192,6 +216,8 @@ final class Configuration implements \ArrayAccess, \Iterator, \Countable
 		{
 			unset($this->storedData[$name]);
 		}
+
+		return $this;
 	}
 
 	public function get($name)

@@ -5,15 +5,12 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die;
 }
 
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Sign\Access\Model\UserModel;
 use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
 use Bitrix\Sign\Access\Service\RolePermissionService;
-
-Loc::loadMessages(__FILE__);
 
 CBitrixComponent::includeComponentClass('bitrix:sign.base');
 
@@ -35,7 +32,7 @@ final class SignB2eSignersSignerEdit extends SignBaseComponent
 	{
 		if (!\Bitrix\Sign\Config\Storage::instance()->isB2eAvailable())
 		{
-			showError((string)Loc::getMessage('SIGN_B2E_SIGNERS_LIST_B2E_NOT_ACTIVATED'));
+			$this->includeNotAvailableTemplate();
 
 			return;
 		}

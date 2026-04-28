@@ -15,8 +15,6 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\Main\Web\Uri;
-use Bitrix\UI\Buttons;
-use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\BIConnector;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -72,14 +70,6 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 		$this->arResult['FEATURE_AVAILABLE'] = true;
 		$this->arResult['HELPER_CODE'] = null;
 
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
-		{
-			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_PERMISSION_ERROR');
-			$this->includeComponentTemplate($template);
-
-			return;
-		}
-
 		if (
 			Loader::includeModule('intranet')
 			&& !ToolsManager::getInstance()->checkAvailabilityByToolId('crm_bi')
@@ -90,9 +80,25 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 			return;
 		}
 
+		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
+		{
+			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_CONTROLLER_PERMISSION_ERROR');
+			$this->includeComponentTemplate($template);
+
+			return;
+		}
+
 		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED)
 		{
 			$this->includeComponentTemplate('create_superset');
+
+			return;
+		}
+
+		if (!Superset\DomainLinkService::getInstance()->isLinked())
+		{
+			$this->arResult['IS_ADMIN'] = \Bitrix\BIConnector\Manager::isAdmin();
+			$this->includeComponentTemplate('link_superset');
 
 			return;
 		}

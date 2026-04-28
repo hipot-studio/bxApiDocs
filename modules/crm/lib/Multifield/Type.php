@@ -42,4 +42,6 @@ abstract class Type
 	{
 		return $value;
 	}
+
+	abstract public function getValueTypes(): array;
 }

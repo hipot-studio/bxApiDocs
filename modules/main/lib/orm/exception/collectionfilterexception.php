@@ -14,7 +14,7 @@ class CollectionFilterException extends SystemException
 		$code = 0,
 		$file = "",
 		$line = 0,
-		Throwable $previous = null
+		?Throwable $previous = null
 	)
 	{
 		parent::__construct($message, $code, $file, $line, $previous);

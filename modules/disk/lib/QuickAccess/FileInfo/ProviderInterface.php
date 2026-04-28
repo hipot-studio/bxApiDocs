@@ -7,7 +7,6 @@ namespace Bitrix\Disk\QuickAccess\FileInfo;
 interface ProviderInterface
 {
 	/**
-	 *
 	 * @param mixed $file - some type of file - AttachedObject, BaseObject, of id from b_file.
 	 * @return static|null
 	 */

@@ -20,6 +20,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\NoLogSynchronizerExceptio
 use Bitrix\Calendar\Synchronization\Internal\Exception\Repository\RepositoryReadException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\SynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AccessDeniedException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AuthorizationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\BadRequestException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\ConflictException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
@@ -769,6 +770,10 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 				isRecoverable: false,
 			);
 		}
+		catch (AuthorizationException)
+		{
+			$gateway = null;
+		}
 
 		if (!$gateway)
 		{
@@ -995,7 +1000,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 		{
 			throw new SynchronizerException(
 				sprintf('An import section events exception: "%s"', $e->getMessage()),
-				previous: $e
+				previous: $e,
 			);
 		}
 

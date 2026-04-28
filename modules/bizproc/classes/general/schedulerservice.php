@@ -1,7 +1,9 @@
 <?php
 
+use Bitrix\Bizproc\Activity\Enum\SchedulerTransport;
 use Bitrix\Bizproc\SchedulerEventTable;
 use Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Entity\WorkflowStartMessage;
+use Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Entity\WorkflowResumeMessage;
 use Bitrix\Main\Loader;
 
 class CBPSchedulerService extends CBPRuntimeService
@@ -61,22 +63,42 @@ class CBPSchedulerService extends CBPRuntimeService
 		\Bitrix\Main\Config\Option::set('bizproc', 'delay_min_limit', $limit);
 	}
 
+	public static function getDelayMaxDays(): int
+	{
+		return (int)\Bitrix\Main\Config\Option::get('bizproc', 'delay_max_days', 0);
+	}
+
+	public static function setDelayMaxDays(int $days): void
+	{
+		\Bitrix\Main\Config\Option::set('bizproc', 'delay_max_days', $days);
+	}
+
 	public function subscribeOnTime($workflowId, $eventName, $expiresAt, int $sort = self::DEFAULT_SORT)
 	{
 		$workflowId = preg_replace('#[^a-z0-9.]#i', '', $workflowId);
 		$eventName = preg_replace('#[^a-z0-9._-]#i', '', $eventName);
 
-		$minLimit = static::getDelayMinLimit(false);
-		if ($minLimit > 0)
-		{
-			$minExpiresAt = time() + $minLimit;
-			if ($minExpiresAt > $expiresAt)
-			{
-				$expiresAt = $minExpiresAt;
-			}
-		}
+		return self::addAgent($workflowId, $eventName, static::calculateExpirationTime($expiresAt), sort: $sort);
+	}
 
-		return self::addAgent($workflowId, $eventName, $expiresAt, sort: $sort);
+	public static function calculateExpirationTime(int $timestamp): int
+	{
+		$now = time();
+
+		['min' => $min, 'max' => $max] = static::getDelayBounds();
+
+		$minTimestamp = $min > 0 ? $now + $min : null;
+		$maxTimestamp = $max > 0 ? $now + $max : null;
+
+		return static::clamp($timestamp, $minTimestamp, $maxTimestamp);
+	}
+
+	public static function calculateDelay(int $delay): int
+	{
+		['min' => $min, 'max' => $max] = static::getDelayBounds();
+		$max = $max ?: null;
+
+		return static::clamp($delay, $min, $max);
 	}
 
 	private static function addAgent(
@@ -84,7 +106,7 @@ class CBPSchedulerService extends CBPRuntimeService
 		$eventName,
 		$expiresAt,
 		int $counter = 0,
-		int $sort = self::DEFAULT_SORT
+		int $sort = self::DEFAULT_SORT,
 	)
 	{
 		$params = "['SchedulerService' => 'OnAgent', 'Counter' => {$counter}, 'Sort' => {$sort}]";
@@ -132,7 +154,8 @@ class CBPSchedulerService extends CBPRuntimeService
 		$eventModule,
 		$eventName,
 		$entityId = null,
-		int $sort = self::DEFAULT_SORT
+		int $sort = self::DEFAULT_SORT,
+		?SchedulerTransport $schedulerTransport = null,
 	): ?int
 	{
 		$resultId = null;
@@ -154,14 +177,22 @@ class CBPSchedulerService extends CBPRuntimeService
 
 		if (!SchedulerEventTable::isSubscribed($workflowId, $eventHandlerName, $eventModule, $eventName, $entityId))
 		{
-			$result = SchedulerEventTable::add(array(
+			$result = SchedulerEventTable::add([
 				'WORKFLOW_ID' => (string)$workflowId,
 				'HANDLER' => (string)$eventHandlerName,
 				'EVENT_MODULE' => (string)$eventModule,
 				'EVENT_TYPE' => (string)$eventName,
 				'ENTITY_ID' => (string)$entityId,
-			));
+			]);
 			$resultId = (int)$result->getId();
+		}
+
+		$methodName = 'sendEvents';
+		$args = [$eventModule, $eventName, $entityKey];
+		if ($schedulerTransport !== null)
+		{
+			$methodName = 'sendEventsWithTransport';
+			$args[] = $schedulerTransport->value;
 		}
 
 		RegisterModuleDependences(
@@ -169,16 +200,23 @@ class CBPSchedulerService extends CBPRuntimeService
 			$eventName,
 			'bizproc',
 			'CBPSchedulerService',
-			'sendEvents',
+			$methodName,
 			$sort,
 			'',
-			array($eventModule, $eventName, $entityKey)
+			$args
 		);
 
 		return $resultId;
 	}
 
-	public function unSubscribeOnEvent($workflowId, $eventHandlerName, $eventModule, $eventName, $entityId = null)
+	public function unSubscribeOnEvent(
+		$workflowId,
+		$eventHandlerName,
+		$eventModule,
+		$eventName,
+		$entityId = null,
+		?SchedulerTransport $schedulerTransport = null,
+	)
 	{
 		// Clean old-style registry entry.
 		UnRegisterModuleDependences(
@@ -211,19 +249,27 @@ class CBPSchedulerService extends CBPRuntimeService
 
 		if (!SchedulerEventTable::hasSubscriptions($eventModule, $eventName))
 		{
+			$methodName = 'sendEvents';
+			$args = [$eventModule, $eventName, $entityKey];
+			if ($schedulerTransport !== null)
+			{
+				$methodName = 'sendEventsWithTransport';
+				$args[] = $schedulerTransport->value;
+			}
+
 			UnRegisterModuleDependences(
 				$eventModule,
 				$eventName,
 				'bizproc',
 				'CBPSchedulerService',
-				'sendEvents',
+				$methodName,
 				'',
-				array($eventModule, $eventName, $entityKey)
+				$args
 			);
 		}
 	}
 
-	public function unSubscribeByEventId(int $eventId, $entityKey = null)
+	public function unSubscribeByEventId(int $eventId, $entityKey = null, ?SchedulerTransport $schedulerTransport = null)
 	{
 		$event = SchedulerEventTable::getList([
 			'select' => ['WORKFLOW_ID', 'HANDLER','EVENT_MODULE', 'EVENT_TYPE', 'ENTITY_ID'],
@@ -237,7 +283,8 @@ class CBPSchedulerService extends CBPRuntimeService
 				$event['HANDLER'],
 				$event['EVENT_MODULE'],
 				$event['EVENT_TYPE'],
-				$entityKey ? [$entityKey => $event['ENTITY_ID']] : $event['ENTITY_ID']
+				$entityKey ? [$entityKey => $event['ENTITY_ID']] : $event['ENTITY_ID'],
+				schedulerTransport: $schedulerTransport,
 			);
 		}
 	}
@@ -327,42 +374,92 @@ class CBPSchedulerService extends CBPRuntimeService
 				'CBPSchedulerService',
 				'sendEvents',
 				'',
-				array($eventModule, $eventName, $entityKey)
+				[$eventModule, $eventName, $entityKey]
 			);
 
 			return false;
 		}
 
-		$eventParameters = array(
-			'SchedulerService' => 'OnEvent',  // compatibility
-			'eventModule' => $eventModule,
-			'eventName' => $eventName,
-		);
-
+		$args = [];
 		$num = func_num_args();
 		if ($num > 3)
 		{
-			for ($i = 3; $i < $num; $i++)
-				$eventParameters[] = func_get_arg($i);
+			$args = array_slice(func_get_args(), 3);
 		}
 
-		$filter = array(
+		self::sendEventsInternal($eventModule, $eventName, $entityKey, $args);
+	}
+
+	public static function sendEventsWithTransport(
+		string $eventModule,
+		string $eventName,
+		mixed $entityKey,
+		string $schedulerTransportType,
+	): void
+	{
+		try
+		{
+			$schedulerTransport = SchedulerTransport::from($schedulerTransportType);
+		}
+		catch (\Throwable $exception)
+		{
+			self::logUnknownException($exception);
+
+			return;
+		}
+
+		$args = [];
+		$num = func_num_args();
+		if ($num > 4)
+		{
+			$args = array_slice(func_get_args(), 4);
+		}
+
+		self::sendEventsInternal($eventModule, $eventName, $entityKey, $args, $schedulerTransport->value);
+	}
+
+	private static function sendEventsInternal(
+		string $eventModule,
+		string $eventName,
+		mixed $entityKey,
+		array $args,
+		?string $schedulerTransport = null,
+	): void
+	{
+		$eventParameters = [
+			'SchedulerService' => 'OnEvent',
+			'eventModule' => $eventModule,
+			'eventName' => $eventName,
+		];
+
+		if ($schedulerTransport !== null)
+		{
+			$eventParameters['schedulerTransport'] = $schedulerTransport;
+		}
+
+		$eventParameters += array_values($args);
+
+		$filter = [
 			'=EVENT_MODULE' => $eventModule,
 			'=EVENT_TYPE' => $eventName,
-		);
+		];
 
 		$entityId = null;
 		if ($entityKey === 0 && isset($eventParameters[0]))
+		{
 			$entityId = (string)$eventParameters[0];
+		}
 		elseif ($entityKey !== null && isset($eventParameters[0][$entityKey]))
+		{
 			$entityId = (string)$eventParameters[0][$entityKey];
+		}
 
 		if ($entityId !== null)
+		{
 			$filter['=ENTITY_ID'] = $entityId;
+		}
 
-		$iterator = SchedulerEventTable::getList(array(
-			'filter' => $filter,
-		));
+		$iterator = SchedulerEventTable::getList(['filter' => $filter]);
 
 		while ($event = $iterator->fetch())
 		{
@@ -393,7 +490,7 @@ class CBPSchedulerService extends CBPRuntimeService
 		$event = [
 			'WORKFLOW_ID' => $workflowId,
 			'HANDLER' => $handler,
-			'EVENT_PARAMETERS' => []
+			'EVENT_PARAMETERS' => [],
 		];
 		self::sendEventToWorkflow($event, $counter);
 	}
@@ -453,6 +550,15 @@ class CBPSchedulerService extends CBPRuntimeService
 				SchedulerEventTable::update($event['ID'], ['EVENT_PARAMETERS' => $filteredParameters]);
 			}
 
+			$schedulerTransport = $event['EVENT_PARAMETERS']['schedulerTransport'] ?? null;
+			if ($schedulerTransport === SchedulerTransport::Messenger->value)
+			{
+				$delay = $expiresAt - time();
+				self::enqueueResumeWorkflow($event['WORKFLOW_ID'], $event['HANDLER'], $delay);
+
+				return;
+			}
+
 			++$counter;
 			$eventId = $event['ID'];
 			$name = "CBPSchedulerService::repeatEvent({$eventId}, {$counter});";
@@ -490,5 +596,41 @@ class CBPSchedulerService extends CBPRuntimeService
 	private static function logUnknownException(Throwable $exception): void
 	{
 		\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+	}
+
+	public static function enqueueResumeWorkflow(string $workflowId, string $eventName, int $delay = 0): void
+	{
+		$message = new WorkflowResumeMessage($workflowId, $eventName);
+		$params = [];
+
+		$delay = self::calculateDelay($delay);
+		if ($delay > 0)
+		{
+			$params[] = new Bitrix\Main\Messenger\Entity\ProcessingParam\DelayParam($delay);
+		}
+
+		$message->send('resume_workflow_queue', $params);
+	}
+
+	public function sendResumeWorkflowMessage(string $workflowId, string $eventName, int $delay = 0)
+	{
+		self::enqueueResumeWorkflow($workflowId, $eventName, $delay);
+	}
+
+	private static function clamp(int $value, ?int $min = null, ?int $max = null): int
+	{
+		return min(
+			$max ?? $value,
+			max($value, $min ?? $value)
+		);
+	}
+
+
+	private static function getDelayBounds(): array
+	{
+		return [
+			'min' => static::getDelayMinLimit(false),
+			'max' => static::getDelayMaxDays() * 86400,
+		];
 	}
 }

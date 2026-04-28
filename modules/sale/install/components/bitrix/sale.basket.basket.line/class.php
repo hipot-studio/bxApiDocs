@@ -630,9 +630,9 @@ class SaleBasketLineComponent extends CBitrixComponent
 		$result['MEASURE_NAME'] = (string)$result['MEASURE_NAME'];
 		if ($result['MEASURE_NAME'] == '')
 			$result['MEASURE_NAME'] = GetMessage('TSB1_MEASURE_NAME');
-		$result['PRICE'] = Sale\PriceMaths::roundPrecision($result['PRICE']);
-		$result['BASE_PRICE'] = Sale\PriceMaths::roundPrecision($result['BASE_PRICE']);
-		$result['DISCOUNT_PRICE'] = Sale\PriceMaths::roundPrecision($result['DISCOUNT_PRICE']);
+		$result['PRICE'] = Sale\PriceMaths::roundByFormatCurrency($result['PRICE'], $result['CURRENCY']);
+		$result['BASE_PRICE'] = Sale\PriceMaths::roundByFormatCurrency($result['BASE_PRICE'], $result['CURRENCY']);
+		$result['DISCOUNT_PRICE'] = Sale\PriceMaths::roundByFormatCurrency($result['DISCOUNT_PRICE'], $result['CURRENCY']);
 		$result['SUM_VALUE'] = $result['PRICE'] * $result['QUANTITY'];
 
 		$result['SUM'] = \CCurrencyLang::CurrencyFormat($result['SUM_VALUE'], $result['CURRENCY'], true);

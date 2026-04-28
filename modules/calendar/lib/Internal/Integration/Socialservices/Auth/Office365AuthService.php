@@ -6,6 +6,7 @@ namespace Bitrix\Calendar\Internal\Integration\Socialservices\Auth;
 
 use Bitrix\Calendar\Sync\Office365\Helper;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Repository\RepositoryReadException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AuthorizationException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use COffice365OAuthInterface;
@@ -20,6 +21,7 @@ class Office365AuthService extends AbstractAuthService
 	 *
 	 * @throws LoaderException
 	 * @throws RepositoryReadException
+	 * @throws AuthorizationException
 	 */
 	public function prepareAuthEntity(int $userId): COffice365OAuthInterface
 	{
@@ -42,11 +44,19 @@ class Office365AuthService extends AbstractAuthService
 
 		if (!$authEntity->checkAccessToken())
 		{
-			$authEntity->getNewAccessToken(
+			$refreshed = $authEntity->getNewAccessToken(
 				$authEntity->getRefreshToken(),
 				$userId,
-				true
+				true,
 			);
+
+			if (!$refreshed)
+			{
+				throw new AuthorizationException(
+					sprintf('Unable to refresh Office365 OAuth token for user %d', $userId),
+					401,
+				);
+			}
 		}
 
 		return $authEntity;

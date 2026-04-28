@@ -48,10 +48,17 @@ class AttachJwtTokenToUrlCommand
 		return new AttachJwtTokenToUrlCommand($uri, $token, 'invite_token');
 	}
 
-	static function createInstanceWithUserLang(string $token, string $userLang = LANGUAGE_ID): self
+	static function createInstanceWithParams(string $token, array $params): self
 	{
 		$uri = self::getUri();
-		$uri->addParams(['user_lang' => $userLang]);
+
+		if (!empty($params))
+		{
+			foreach ($params as $key => $value)
+			{
+				$uri->addParams([$key => $value]);
+			}
+		}
 
 		return new AttachJwtTokenToUrlCommand($uri, $token, 'invite_token');
 	}

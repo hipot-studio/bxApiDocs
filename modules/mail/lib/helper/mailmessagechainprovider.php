@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mail\Helper;
 
+use Bitrix\MailMobile\Internal\Services\MessageLoader;
 use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Mail\MailMessageUidTable;
 use Bitrix\Main\ErrorCollection;
@@ -134,6 +135,31 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		return null;
 	}
 
+	protected function loadAttachments(MailMessage $mailMessage, int $mailboxId, int $attachmentsCount): void
+	{
+		if (empty($attachmentsCount))
+		{
+			return;
+		}
+
+		$mailMessage->attachments = $this->getMessageFilesLinkMessages($mailMessage->id);
+
+		if (empty($mailMessage->attachments))
+		{
+			$messageAttachments = new AttachmentHelper($mailboxId, $mailMessage->id);
+			$messageAttachments->update();
+			$mailMessage->attachments = $this->getMessageFilesLinkMessages($mailMessage->id);
+
+			$updatedBody = $messageAttachments->getBody();
+			if ($updatedBody !== null)
+			{
+				$mailMessage->body = $this->cleanCharset($updatedBody);
+			}
+		}
+
+		$mailMessage->body = $this->replaceAttachmentPlaceholders($mailMessage->body, $mailMessage->attachments);
+	}
+
 	protected function getMessageFilesLinkMessages(int $id, bool $forMobile = true): array
 	{
 		$attachments = Mail\Internals\MailMessageAttachmentTable::getList([
@@ -242,16 +268,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 				$message->withAttachments = (int)($messageData['OPTIONS']['attachments']);
 			}
 
-			$message->attachments = $this->getMessageFilesLinkMessages($id);
-
-			if (empty($message->attachments) && $message->withAttachments !== 0)
-			{
-				$messageAttachments = new AttachmentHelper((int)$messageData['MAILBOX_ID'], $messageId);
-				$messageAttachments->update();
-				$message->attachments = $this->getMessageFilesLinkMessages($id);
-			}
-
-			$message->body = $this->replaceAttachmentPlaceholders($message->body, $message->attachments);
+			$this->loadAttachments($message, (int)$messageData['MAILBOX_ID'], (int)($messageData['OPTIONS']['attachments'] ?? 0));
 		}
 
 		return $message;
@@ -425,8 +442,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 
 			if ($threadMessageRowId === (int)$row['ID'])
 			{
-				$mailMessage->attachments = $this->getMessageFilesLinkMessages($row['ID']);
-				$mailMessage->body = $this->replaceAttachmentPlaceholders($mailMessage->body, $mailMessage->attachments);
+				$this->loadAttachments($mailMessage, (int)$row['MAILBOX_ID'], (int)($row['OPTIONS']['attachments'] ?? 0));
 			}
 
 			$this->fillRecipients($mailMessage, $row);

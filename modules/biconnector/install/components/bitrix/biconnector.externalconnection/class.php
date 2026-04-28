@@ -104,6 +104,13 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 
 					$this->arResult['SOURCE_FIELDS']['isSupportMapping'] = $isSupportMapping;
 				}
+				elseif (
+					$this->arParams['CONNECTOR_TYPE'] === Type::Mysql->value
+					|| $this->arParams['CONNECTOR_TYPE'] === Type::Pgsql->value
+				)
+				{
+					$this->arResult['SOURCE_FIELDS']['code'] = $this->arParams['CONNECTOR_TYPE'];
+				}
 			}
 		}
 		$this->arResult['SIGNED_PARAMETERS'] = $this->getSignedParameters();

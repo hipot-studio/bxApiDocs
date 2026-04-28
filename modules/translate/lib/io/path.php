@@ -59,7 +59,7 @@ class Path extends Main\IO\Path
 				$arr = \explode(self::DIRECTORY_SEPARATOR, $path);
 				$langKey = \array_search('lang', $arr) + 1;
 
-				return \array_key_exists($langKey, $arr) && $arr[$langKey] <> '';
+				return \array_key_exists($langKey, $arr) && $arr[$langKey] != '';
 			}
 
 			return true;

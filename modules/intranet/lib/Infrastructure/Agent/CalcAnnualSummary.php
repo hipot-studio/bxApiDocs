@@ -2,21 +2,16 @@
 
 namespace Bitrix\Intranet\Infrastructure\Agent;
 
-use Bitrix\Intranet\Internal\Integration\Crm\AnnualSummary\DealProvider;
-use Bitrix\Intranet\Internal\Integration\Im\AnnualSummary\ChatProvider;
-use Bitrix\Intranet\Internal\Integration\Im\AnnualSummary\CopilotMessageProvider;
-use Bitrix\Intranet\Internal\Integration\Im\AnnualSummary\MessageProvider;
-use Bitrix\Intranet\Internal\Integration\Im\AnnualSummary\ReactionProvider;
-use Bitrix\Intranet\Internal\Integration\Landing\AnnualSummary\SiteProvider;
-use Bitrix\Intranet\Internal\Integration\Socialnetwork\AnnualSummary\WorkgroupProvider;
-use Bitrix\Intranet\Internal\Integration\Stafftrack\AnnualSummary\ShiftProvider;
-use Bitrix\Intranet\Internal\Integration\Tasks\AnnualSummary\TaskProvider;
-use Bitrix\Intranet\Internal\Integration\Workflow\AnnualSummary\WorkflowProvider;
-use Bitrix\Intranet\Internal\Service\AnnualSummary\AbstractFeatureProvider;
-use Bitrix\Intranet\Internal\Service\AnnualSummary\Calculator;
+use Bitrix\Intranet\Internal\Repository\AnnualSummaryRepository;
+use Bitrix\Intranet\Internal\Entity\AnnualSummary\SummaryInterface;
+use Bitrix\Intranet\Public\Event\OnInitSummaryProvidersEvent;
+use Bitrix\Intranet\Public\Provider\AnnualSummary\SummaryProviderInterface;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Entity\EntityCollection;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Update\Stepper;
 use Bitrix\Main\UserTable;
@@ -24,7 +19,20 @@ use Bitrix\Main\UserTable;
 class CalcAnnualSummary extends Stepper
 {
 	protected static $moduleId = "intranet";
-	private int $limit = 1;
+	private Date $from;
+	private Date $to;
+	private Date $closeDate;
+	private array $providers;
+	private AnnualSummaryRepository $annualSummaryRepository;
+
+	public function __construct()
+	{
+		$this->closeDate = new Date('31.12.2026', 'd.m.Y');
+		$this->from = new Date('01.01.2026', 'd.m.Y');
+		$this->to = new Date('01.12.2026', 'd.m.Y');
+		$this->providers = $this->getProviders();
+		$this->annualSummaryRepository = new AnnualSummaryRepository();
+	}
 
 	/**
 	 * @throws ArgumentException
@@ -33,7 +41,7 @@ class CalcAnnualSummary extends Stepper
 	 */
 	public function execute(array &$option): bool
 	{
-		if ((new DateTime()) >= new DateTime('31.12.2025', 'd.m.Y'))
+		if ((new Date()) >= $this->closeDate)
 		{
 			return self::FINISH_EXECUTION;
 		}
@@ -44,56 +52,29 @@ class CalcAnnualSummary extends Stepper
 			$option['lastId'] = 0;
 		}
 		$option['providerIndex'] ??= 0;
-		$option['partLastId'] ??= 0;
-		$option['partValue'] ??= 0;
 
-		$userIds = $this->getUserIds($option['lastId']);
-		$from = new DateTime('01.01.2025', 'd.m.Y');
-		$to = new DateTime('01.12.2025', 'd.m.Y');
-
-		foreach ($userIds as $userId)
+		if (empty($option['providerIdList']))
 		{
-			$calculator = new Calculator($userId);
-			while (true)
-			{
-				if (!($provider = $this->getProviderByIndex($option['providerIndex'])))
-				{
-					$option['providerIndex'] = 0;
-					break;
-				}
-				if (!$provider->isAvailable())
-				{
-					++$option['providerIndex'];
-					continue;
-				}
-				if (!$provider->needPartCalc())
-				{
-					$calculator->calcOne($provider, $from, $to);
-					++$option['providerIndex'];
+			$option['providerIdList'] = array_keys($this->providers);
+		}
+		$provider = $this->findProviderToOption($option);
+		if (!$provider)
+		{
+			return self::FINISH_EXECUTION;
+		}
+		$userIds = $this->getUserIds((int)$option['lastId'], $provider->getUserIdLimit());
 
-					continue;
-				}
-				[$partLastId, $partValue] = $calculator->calcPart($provider, $from, $to, $option['partLastId'] ?? 0);
-				if ($partLastId !== $option['partLastId'])
-				{
-					$option['partValue'] += $partValue;
-					$option['partLastId'] = $partLastId;
+		$collection = $provider->provide($userIds);
+		$this->annualSummaryRepository->saveCollection($collection);
 
-					return self::CONTINUE_EXECUTION;
-				}
-				else
-				{
-					$calculator->saveValue($provider, $option['partValue'] ?? 0);
-					$option['partValue'] = 0;
-					$option['partLastId'] = 0;
-					++$option['providerIndex'];
-				}
-			}
+		$option['lastId'] = $provider->getLastUserId();
 
-			$option['lastId'] = $userId;
+		if (count($userIds) < $provider->getUserIdLimit())
+		{
+			$option['providerIndex']++;
 		}
 
-		return count($userIds) < $this->limit ? self::FINISH_EXECUTION : self::CONTINUE_EXECUTION;
+		return self::CONTINUE_EXECUTION;
 	}
 
 	/**
@@ -101,7 +82,7 @@ class CalcAnnualSummary extends Stepper
 	 * @throws SystemException
 	 * @throws ArgumentException
 	 */
-	private function getUserIds($lastId = 0): array
+	private function getUserIds($lastId = 0, int $step = 5): array
 	{
 		return UserTable::query()
 			->setSelect(['ID'])
@@ -109,31 +90,48 @@ class CalcAnnualSummary extends Stepper
 			->addFilter('ACTIVE', 'Y')
 			->addFilter('>ID', $lastId)
 			->addFilter('<DATE_REGISTER', new DateTime('2025-10-01', 'Y-m-d'))
-			->setLimit($this->limit)
+			->setLimit($step)
 			->addOrder('ID')
 			->fetchCollection()
 			->getIdList()
 		;
 	}
 
+	/**
+	 * @return SummaryInterface[]
+	 */
 	private function getProviders(): array
 	{
-		return [
-			new ChatProvider(),
-			new MessageProvider(),
-			new ReactionProvider(),
-			new CopilotMessageProvider(),
-			new DealProvider(),
-			new SiteProvider(),
-			new ShiftProvider(),
-			new TaskProvider(),
-//			new WorkflowProvider(),
-			new WorkgroupProvider(),
-		];
+		/** @var SummaryProviderInterface[] $providers */
+		$providers = [];
+		$event = new OnInitSummaryProvidersEvent($this->from, $this->to);
+		$event->send();
+		
+		foreach ($event->getResults() as $result)
+		{
+			if ($result->getType() === EventResult::SUCCESS)
+			{
+				$provider = $result->getParameters()['provider'] ?? [];
+				if ($provider instanceof SummaryProviderInterface)
+				{
+					$providers[$provider->getId()] = $provider;
+				}
+			}
+		}
+
+		return $providers;
 	}
 
-	private function getProviderByIndex(int $index): ?AbstractFeatureProvider
+	private function getProviderById(string $id): ?SummaryProviderInterface
 	{
-		return $this->getProviders()[$index] ?? null;
+		return $this->providers[$id];
+	}
+
+	private function findProviderToOption(array $option): ?SummaryProviderInterface
+	{
+		$providerIndex = $option['providerIndex'];
+		$providerId = $option['providerIdList'][$providerIndex] ?? null;
+
+		return $providerId ? $this->getProviderById($providerId) : null;
 	}
 }

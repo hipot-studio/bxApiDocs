@@ -327,7 +327,7 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 		];
 
 		$gridOptions = new Bitrix\Main\Grid\Options($this->gridId);
-		$navParams = $gridOptions->getNavParams(['nPageSize' => 10]);
+		$navParams = $gridOptions->getNavParams();
 		$pageSize = (int)$navParams['nPageSize'];
 		$gridSort = $gridOptions->GetSorting(['sort' => $this->defaultGridSort]);
 

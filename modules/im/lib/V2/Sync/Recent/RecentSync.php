@@ -24,7 +24,7 @@ class RecentSync extends Recent
 		$filter = [];
 		$filter['userId'] = $userId;
 		$filter['chatIds'] = $chatIds;
-		$queryFilter = new RecentFilter($filter);
+		$queryFilter = RecentFilter::fromArray($filter);
 
 		$recentEntities = static::getSyncRecentEntities(filter: $queryFilter);
 		return static::initByArray($recentEntities);

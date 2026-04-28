@@ -3,6 +3,7 @@
 use Bitrix\Security\Mfa\Otp;
 use Bitrix\Security\Mfa\OtpType;
 use Bitrix\Security\Mfa\OtpException;
+use Bitrix\Security\Mfa\UserTable;
 
 /**
  * @deprecated use \Bitrix\Security\Mfa\Otp
@@ -11,7 +12,7 @@ class CSecurityUser
 {
 	const BX_SECURITY_SYNC_WINDOW = 15000;
 
-	/** @var \Bitrix\Security\Mfa\Otp[]*/
+	/** @var Otp[] */
 	protected static $cacheOtp = array();
 
 	/**
@@ -151,8 +152,17 @@ class CSecurityUser
 	 */
 	public static function onUserDelete($userId)
 	{
-		\Bitrix\Security\Mfa\UserTable::delete($userId);
-		return true;
+		UserTable::delete($userId);
+		Otp::cleanCache($userId);
+	}
+
+	public static function onAfterUserUpdate($fields)
+	{
+		if (isset($fields['ACTIVE']))
+		{
+			// see \Bitrix\Security\Mfa\Otp::getUserData()
+			Otp::cleanCache($fields['ID']);
+		}
 	}
 
 	/**

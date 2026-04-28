@@ -529,7 +529,7 @@ class CUserTypeManager
 		}
 	}
 
-	public function EditFormAddFields($entity_id, &$arFields, array $options = null)
+	public function EditFormAddFields($entity_id, &$arFields, ?array $options = null)
 	{
 		if (!is_array($options))
 		{
@@ -1645,7 +1645,7 @@ class CUserTypeManager
 	 * @param array|null $filteredFields Filtered fields.
 	 * @return bool
 	 */
-	public function CheckFields($entity_id, $ID, $arFields, $user_id = false, $checkRequired = true, array $requiredFields = null, array $filteredFields = null)
+	public function CheckFields($entity_id, $ID, $arFields, $user_id = false, $checkRequired = true, ?array $requiredFields = null, ?array $filteredFields = null)
 	{
 		global $APPLICATION;
 

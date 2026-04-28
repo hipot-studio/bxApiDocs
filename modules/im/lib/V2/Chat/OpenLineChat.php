@@ -6,6 +6,7 @@ use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
+use Bitrix\Im\V2\Message\Send\SendResult;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Relation\DeleteUserConfig;
@@ -64,50 +65,9 @@ class OpenLineChat extends EntityChat
 		return $this;
 	}
 
-	public function read(bool $onlyRecent = false, bool $byEvent = false, bool $forceRead = false): Result
+	public function isReadable(int $userId): bool
 	{
-		Recent::unread($this->getDialogId(), false, $this->getContext()->getUserId());
-
-		if ($onlyRecent)
-		{
-			$lastId = $this->getReadService()->getLastMessageIdInChat($this->chatId);
-
-			return (new Result())->setResult([
-				'CHAT_ID' => $this->chatId,
-				'LAST_ID' => $lastId,
-				'COUNTER' => $this->getReadService()->getCounterService()->getByChat($this->chatId),
-				'VIEWED_MESSAGES' => [],
-			]);
-		}
-
-		return $this->readAllMessages($byEvent, $forceRead);
-	}
-
-	public function readAllMessages(bool $byEvent = false, bool $forceRead = false): Result
-	{
-		$result = $this->readMessages(null, $byEvent, $forceRead);
-
-		$userId = $this->getContext()->getUserId();
-		Application::getInstance()->addBackgroundJob(function () use ($byEvent, $forceRead, $userId) {
-			$chat = $this->withContextUser($userId);
-
-			if ($chat->getSelfRelation() === null)
-			{
-				$chat->readMessages(null, $byEvent, $forceRead);
-			}
-		});
-
-		return $result;
-	}
-
-	public function readMessages(?MessageCollection $messages, bool $byEvent = false, bool $forceRead = false): Result
-	{
-		if (!$forceRead && $this->getAuthorId() === 0)
-		{
-			return new Result();
-		}
-
-		return parent::readMessages($messages, $byEvent);
+		return $this->getAuthorId() !== 0;
 	}
 
 	public function getRelations(): RelationCollection
@@ -386,7 +346,7 @@ class OpenLineChat extends EntityChat
 		return parent::updateRelationsAfterMessageSend($message);
 	}
 
-	protected function updateCountersAfterMessageSend(Message $message, SendingConfig $sendingConfig): Result
+	protected function updateCountersAfterMessageSend(Message $message, SendingConfig $sendingConfig): \Bitrix\Im\V2\Reading\Counter\Entity\UsersCounterMap
 	{
 		if ($this->hasFakeRelations())
 		{
@@ -402,7 +362,7 @@ class OpenLineChat extends EntityChat
 				$counters[$fakeRelation->getUserId()] = $counter;
 			}
 
-			return (new Result())->setResult(['COUNTERS' => $counters]);
+			return \Bitrix\Im\V2\Reading\Counter\Entity\UsersCounterMap::fromArray($counters);
 		}
 
 		return parent::updateCountersAfterMessageSend($message, $sendingConfig);

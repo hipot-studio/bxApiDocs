@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integration\AI\Operation\Autostart;
 
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\BaasManager;
 use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings\CallChannelSettings;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings\ChannelSettingsFactory;
@@ -44,7 +45,7 @@ final class FillFieldsSettings implements AutoStartInterface, JsonSerializable
 	{
 		if (
 			$checkAutomaticProcessingParams
-			&& !(AIManager::isAiCallAutomaticProcessingAllowed() && AIManager::isBaasServiceHasPackage())
+			&& !(AIManager::isAiCallAutomaticProcessingAllowed() && BaasManager::hasPackage())
 		)
 		{
 			return false;

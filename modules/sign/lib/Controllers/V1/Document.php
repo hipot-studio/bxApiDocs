@@ -16,6 +16,7 @@ use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
 use Bitrix\Sign\Item\Document\Template;
 use Bitrix\Sign\Operation;
 use Bitrix\Sign\Result\CreateDocumentResult;
+use Bitrix\Sign\Repository\BlankRepository;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Service\Sign\Document\Template\AccessService;
 use Bitrix\Sign\Service\Sign\Document\TemplateService;
@@ -30,6 +31,7 @@ class Document extends Controller
 	private Service\Sign\DocumentService $documentService;
 	private TemplateService $templateService;
 	private AccessService $templateAccessService;
+	private BlankRepository $blankRepository;
 
 	public function __construct(Request $request = null)
 	{
@@ -37,6 +39,7 @@ class Document extends Controller
 		$this->documentService = Service\Container::instance()->getDocumentService();
 		$this->templateService = Service\Container::instance()->getDocumentTemplateService();
 		$this->templateAccessService = Service\Container::instance()->getTemplateAccessService();
+		$this->blankRepository = Service\Container::instance()->getBlankRepository();
 	}
 
 	#[Attribute\Access\LogicOr(
@@ -83,10 +86,8 @@ class Document extends Controller
 		}
 
 		$createdById = (int)CurrentUser::get()->getId();
-		if($createdById < 1)
+		if (!$this->validateBlankAccess($blankId, $createdById))
 		{
-			$this->addError(new Error('User not found'));
-
 			return [];
 		}
 
@@ -200,6 +201,11 @@ class Document extends Controller
 	)]
 	public function changeBlankAction(string $uid, int $blankId, bool $copyBlocksFromPreviousBlank = false): array
 	{
+		if (!$this->validateBlankAccess($blankId, (int)CurrentUser::get()->getId()))
+		{
+			return [];
+		}
+
 		$result = $this->documentService->changeBlank($uid, $blankId, $copyBlocksFromPreviousBlank);
 		if (!$result->isSuccess())
 		{
@@ -719,6 +725,31 @@ class Document extends Controller
 		$this->addErrors($result->getErrors());
 
 		return [];
+	}
+
+	private function validateBlankAccess(int $blankId, int $userId): bool
+	{
+		if ($userId < 1)
+		{
+			$this->addError(new Error('User not found'));
+
+			return false;
+		}
+
+		$blank = $this->blankRepository->getById($blankId);
+		if ($blank !== null && $blank->createdById === $userId)
+		{
+			return true;
+		}
+
+		if ($this->blankRepository->getByIdAndValidatePermissions($blankId) !== null)
+		{
+			return true;
+		}
+
+		$this->addError(new Error('Access denied'));
+
+		return false;
 	}
 
 	public function isNotAcceptedAgreement(): bool

@@ -324,13 +324,10 @@ class BizprocDocumentLists extends \BizprocDocument
 			return sprintf('/services/lists/%u/element/0/%u/', $element['IBLOCK_ID'], $element['ID']);
 		}
 
-		return (
-			'/bitrix/admin/iblock_element_edit.php?view=Y&ID='
-			. $documentId
-			. '&IBLOCK_ID='
-			. $element['IBLOCK_ID']
-			. '&type='
-			. $element['IBLOCK_TYPE_ID']
-		);
+		$urlBuilder = new \Bitrix\Iblock\Url\AdminPage\IblockBuilder();
+		$urlBuilder->setIblockId((int)$element['IBLOCK_ID']);
+		$urlBuilder->setLanguageId('');
+
+		return $urlBuilder->getElementDetailUrl($documentId, ['view' => 'Y']);
 	}
 }

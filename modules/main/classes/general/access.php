@@ -215,7 +215,7 @@ class CAccess
 		unset(static::$userCodes[$userId]);
 	}
 
-	public static function RecalculateForUser($userId, $provider, DateTime $dateCheck = null)
+	public static function RecalculateForUser($userId, $provider, ?DateTime $dateCheck = null)
 	{
 		global $DB;
 

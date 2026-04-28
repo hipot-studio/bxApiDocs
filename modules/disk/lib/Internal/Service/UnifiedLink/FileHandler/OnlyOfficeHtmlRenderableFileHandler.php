@@ -18,7 +18,6 @@ use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\Command\Exception\CommandException;
 use Bitrix\Main\Command\Exception\CommandValidationException;
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Diag\ExceptionHandler;
 use Bitrix\Main\Engine\CurrentUser;
 
@@ -86,50 +85,33 @@ class OnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 					tool: 'docs',
 					category: 'docs',
 				))
-					->setElement($this->analytics['c_element'] ?? 'docs_attach')
 					->setSubSection($this->file->isNewByCreateTime() ? 'new_element' : 'old_element')
 					->setP4("fileId_{$this->file->getId()}")
 				;
 
-				$analyticsUserSessionStartEvent = (new AnalyticsEvent(
-					event: 'user_session_start',
-					tool: 'docs',
-					category: 'docs',
-				))
-					->setP2("sessionHash_{$documentSession->getExternalHash()}")
-					->setP4("fileId_{$this->file->getId()}")
-					->setP5("sessionId_{$documentSession->getId()}")
-				;
-
-				$domain = ServiceLocator::getInstance()->get('disk.onlyofficeConfiguration')->getDomain();
-
-				if (is_string($domain))
-				{
-					$analyticsUserSessionStartEvent->setSection($domain);
-				}
-
+				$element = $this->analytics['c_element'] ?? 'docs_attach';
 				$openType = OpenTypeEnum::getByDocumentSessionType($type);
 
 				if ($openType instanceof OpenTypeEnum)
 				{
 					$analyticsDocsOpenEvent->setType($openType->value);
-					$analyticsUserSessionStartEvent->setType($openType->value);
+
+					if ($openType === OpenTypeEnum::Edit && !$this->getCurrentUser()->getId())
+					{
+						$element = 'view_mode';
+					}
 				}
+
+				$analyticsDocsOpenEvent->setElement($element);
 
 				$analyticsDocType = DocumentTypeEnum::getByExtension($this->file->getExtension());
 
 				if ($analyticsDocType instanceof DocumentTypeEnum)
 				{
 					$analyticsDocsOpenEvent->setP3($analyticsDocType->value);
-					$analyticsUserSessionStartEvent->setP3($analyticsDocType->value);
 				}
 
 				$analyticsDocsOpenEvent->send();
-
-				if ($documentSession->isNew())
-				{
-					$analyticsUserSessionStartEvent->send();
-				}
 			});
 		}
 

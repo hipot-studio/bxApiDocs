@@ -23,7 +23,7 @@ class Signer
 	 *
 	 * @param SigningAlgorithm|null $algorithm Custom signing algorithm.
 	 */
-	public function __construct(SigningAlgorithm $algorithm = null)
+	public function __construct(?SigningAlgorithm $algorithm = null)
 	{
 		if ($algorithm !== null)
 		{

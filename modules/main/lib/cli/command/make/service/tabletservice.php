@@ -20,7 +20,7 @@ final class TabletService
 	private PathGenerator $PathGenerator;
 	private NamespaceGenerator $NamespaceGenerator;
 
-	public function __construct(string $defaultRootFolder = null)
+	public function __construct(?string $defaultRootFolder = null)
 	{
 		Loader::requireModule('perfmon');
 

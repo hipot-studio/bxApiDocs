@@ -59,8 +59,8 @@ class SkbHandler
 		$result->setPsData($createPaymentResult->getPsData());
 		$paymentData = $createPaymentResult->getData();
 
-		$params['CURRENCY'] = $payment->getField('CURRENCY');
-		$params['SUM'] = PriceMaths::roundPrecision($payment->getSum());
+		$params['CURRENCY'] = $payment->getCurrency();
+		$params['SUM'] = PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency());
 		$params['URL'] = $paymentData['payload'];
 		$params['QR_CODE_IMAGE'] = $paymentData['qrImage'];
 		$this->setExtraParams($params);
@@ -148,7 +148,7 @@ class SkbHandler
 			'agentId' => $this->getAgentId(),
 			'merchantId' => $this->getBusinessValue($payment, 'SKB_MERCHANT_ID'),
 			'paymentId' => (string)$payment->getId(),
-			'amount' => (string)($payment->getSum() * 100),
+			'amount' => (string)(PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getField('CURRENCY'), 2) * 100),
 			'currency' => $payment->getField('CURRENCY'),
 			'paymentPurpose' => $this->getAdditionalInfo($payment),
 			'templateVersion' => '01',
@@ -426,7 +426,7 @@ class SkbHandler
 		$params = [
 			'messageId' => self::getMessageId(),
 			'trxId' => $skbPayment['trxId'],
-			'amount' => (string)($refundableSum * 100),
+			'amount' => (string)(PriceMaths::roundByFormatCurrency($refundableSum, $payment->getCurrency(), 2) * 100),
 		];
 
 		$sendResult = $this->send($payment, 'checkRefundTransfer', $params);

@@ -18,6 +18,7 @@ final class Feature
 	public const BI_BUILDER_RIGHTS = 'bi_constructor_rights';
 	public const BI_EXTERNAL_ENTITIES = 'bi_constructor_external_entities';
 	public const BI_BUILDER_EXPORT = 'bi_constructor_export';
+	public const BI_BUILDER_EXTERNAL_SQL_DATASET = 'bi_constructor_external_sql_dataset';
 	public const CHECK_PERMISSION_BY_GROUP_OPTION = 'check_permissions_by_group';
 
 	public static function isBuilderEnabled(): bool
@@ -48,6 +49,14 @@ final class Feature
 		return
 			self::isBuilderEnabled()
 			&& self::isFeatureEnabled(self::BI_BUILDER_EXPORT)
+		;
+	}
+
+	public static function isExternalSqlDatasetEnabled(): bool
+	{
+		return
+			self::isBuilderEnabled()
+			&& !Loader::includeModule('bitrix24')
 		;
 	}
 

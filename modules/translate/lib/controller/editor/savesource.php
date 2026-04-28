@@ -7,6 +7,8 @@ use Bitrix\Main\Localization\Loc;
 
 /**
  * Update/create language file by php source.
+ *
+ * @internal
  */
 class SaveSource
 	extends Operation

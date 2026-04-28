@@ -5,13 +5,14 @@ namespace Bitrix\Bizproc\Internal\Integration\AI\Event;
 use Bitrix\Bizproc\Integration\ImBot\BizprocBot;
 use Bitrix\Bizproc\Internal\Integration\AI\DTO\MessageCollection;
 use Bitrix\Bizproc\Internal\Integration\ImBot\Builder\ChatHistory;
-use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Main\Event;
 
 class ChatHistoryAiEventHandler
 {
 	public const PARAM_MESSAGE_ID = 'messageId';
+	public const PARAM_SALT = 'salt';
+	public const PARAM_USE_PSEUDONYMIZER = 'usePseudonymizer';
 	public const PARAM_BOT_ID = 'botId';
 	public const PARAMETER_PARAMS = 'params';
 	private const CONTEXT_AMOUNT_DEFAULT = 25;
@@ -25,6 +26,9 @@ class ChatHistoryAiEventHandler
 	{
 		$messageId = (int)($event->getParameter(self::PARAMETER_PARAMS)[self::PARAM_MESSAGE_ID] ?? 0);
 		$botId = (int)($event->getParameter(self::PARAMETER_PARAMS)[self::PARAM_BOT_ID] ?? 0);
+		$salt = (int)($event->getParameter(self::PARAM_SALT) ?? 0);
+		$usePseudonymizer = (int)($event->getParameter(self::PARAM_USE_PSEUDONYMIZER) ?? false);
+
 		if (!$messageId || !$botId)
 		{
 			return self::makeEmptyResponse();
@@ -52,7 +56,7 @@ class ChatHistoryAiEventHandler
 			return self::makeEmptyResponse();
 		}
 
-		return (new ChatHistory($message, self::CONTEXT_AMOUNT_DEFAULT, $botId))
+		return (new ChatHistory($message, self::CONTEXT_AMOUNT_DEFAULT, $botId, $salt, $usePseudonymizer))
 			->build()
 		;
 	}

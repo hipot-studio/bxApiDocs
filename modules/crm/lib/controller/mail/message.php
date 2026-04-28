@@ -4,6 +4,9 @@ namespace Bitrix\Crm\Controller\Mail;
 
 use Bitrix\Crm\Activity\Mail\MailMessageChainProvider;
 use Bitrix\Crm\Activity\Mail\SanitizedDescriptionCache;
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Integration\Mail\Client;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
@@ -525,13 +528,15 @@ class Message extends Controller
 					if ($contactId > 0)
 					{
 						$commEntityType = \CCrmOwnerType::ContactName;
-						$commEntityID   = $contactId;
+						$commEntityID = $contactId;
 
-						$bizprocErrors = array();
-						\CCrmBizProcHelper::autostartWorkflows(
-							\CCrmOwnerType::Contact, $contactId,
-							\CCrmBizProcEventType::Create,
-							$bizprocErrors
+						$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Contact, (int)$contactId));
+						$starter->runProcess(
+							new RunDataDto(
+								actualFields: $contactFields,
+								userId: \Bitrix\Crm\Service\Container::getInstance()->getContext()->getUserId(),
+							),
+							\CCrmBizProcEventType::Create
 						);
 					}
 				}
@@ -571,17 +576,16 @@ class Message extends Controller
 					if ($leadId > 0)
 					{
 						$commEntityType = \CCrmOwnerType::LeadName;
-						$commEntityID   = $leadId;
+						$commEntityID = $leadId;
 
-						$bizprocErrors = [];
-						\CCrmBizProcHelper::autostartWorkflows(
-							\CCrmOwnerType::Lead, $leadId,
-							\CCrmBizProcEventType::Create,
-							$bizprocErrors
+						$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Lead, (int)$leadId));
+						$starter->runOnDocumentAdd(
+							new RunDataDto(
+								actualFields: $leadFields,
+								userId: \Bitrix\Crm\Service\Container::getInstance()->getContext()->getUserId(),
+								isManual: true,
+							)
 						);
-
-						$starter = new \Bitrix\Crm\Automation\Starter(\CCrmOwnerType::Lead, $leadId);
-						$starter->setUserIdFromCurrent()->runOnAdd();
 					}
 				}
 			}
@@ -1949,13 +1953,15 @@ class Message extends Controller
 				'DESCRIPTION',
 				'DESCRIPTION_TYPE',
 				'SETTINGS',
-			]
+				'PROVIDER_TYPE_ID',
+				'ASSOCIATED_ENTITY_ID',
+			],
 		);
 
 		if ($this->checkActivityPermission(self::PERMISSION_READ, $activities))
 		{
 			$activity = $activities[0] ?? [];
-			Email::uncompressActivity($activity);
+			Email::uncompressActivityDescription($activity);
 			return $activity;
 		}
 

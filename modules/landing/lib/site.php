@@ -294,7 +294,7 @@ class Site extends \Bitrix\Landing\Internals\BaseTable
 			'SMN' => Loc::getMessage('LANDING_TYPE_SMN'),
 			'KNOWLEDGE' => Loc::getMessage('LANDING_TYPE_KNOWLEDGE'),
 			'GROUP' => Loc::getMessage('LANDING_TYPE_GROUP'),
-			'MAINPAGE' => Loc::getMessage('LANDING_TYPE_MAINPAGE'),
+			'VIBE' => Loc::getMessage('LANDING_TYPE_MAINPAGE'),
 		];
 
 		return $types;

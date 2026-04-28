@@ -8,6 +8,7 @@ use Bitrix\Translate;
  * Stepper
  *
  * @implements Translate\Controller\ITimeLimit
+ * @internal
  */
 trait Stepper
 {

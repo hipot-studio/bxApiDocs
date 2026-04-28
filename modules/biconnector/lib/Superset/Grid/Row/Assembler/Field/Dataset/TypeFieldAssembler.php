@@ -11,7 +11,12 @@ class TypeFieldAssembler extends FieldAssembler
 	protected function prepareColumn($value): ?string
 	{
 		$type = $value['TYPE'];
-		$nameType = strtoupper($value['TYPE']);
+
+		$listSource = ExternalSourceRepository::getStaticSourceList();
+		$source = current(array_filter($listSource, static function($source) use ($value) {
+			return $source['CODE'] === $value['TYPE'];
+		}));
+		$nameType = $source['NAME'] ?? strtoupper($value['TYPE']);
 
 		if (Type::tryFrom($type) === Type::Rest)
 		{

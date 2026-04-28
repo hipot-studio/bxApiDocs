@@ -23,13 +23,46 @@ if (!Loader::includeModule('rest'))
 class Dataset extends Base
 {
 	public const SCOPE = 'biconnector';
+	private static bool $useOldBehavior = false;
 
 	public static function OnRestServiceBuildDescription()
 	{
 		return [
 			self::SCOPE => [
-				'biconnector.dataset.add' => [
+				'biconnector.table.add' => [
 					'callback' => [__CLASS__, 'add'],
+					'options' => [],
+				],
+				'biconnector.table.update' => [
+					'callback' => [__CLASS__, 'update'],
+					'options' => [],
+				],
+				'biconnector.table.delete' => [
+					'callback' => [__CLASS__, 'delete'],
+					'options' => [],
+				],
+				'biconnector.table.fields' => [
+					'callback' => [__CLASS__, 'fields'],
+					'options' => [],
+				],
+				'biconnector.table.get' => [
+					'callback' => [__CLASS__, 'get'],
+					'options' => [],
+				],
+				'biconnector.table.list' => [
+					'callback' => [__CLASS__, 'list'],
+					'options' => [],
+				],
+				'biconnector.table.fields.update' => [
+					'callback' => [__CLASS__, 'fieldsUpdate'],
+					'options' => [],
+				],
+				/*
+				 * TODO: remove in future releases
+				 * biconnector.dataset.* methods are deprecated and will be removed in future releases. Use biconnector.table.* methods instead.
+				 */
+				'biconnector.dataset.add' => [
+					'callback' => [__CLASS__, 'addOldBehavior'],
 					'options' => [],
 				],
 				'biconnector.dataset.update' => [
@@ -37,7 +70,7 @@ class Dataset extends Base
 					'options' => [],
 				],
 				'biconnector.dataset.delete' => [
-					'callback' => [__CLASS__, 'delete'],
+					'callback' => [__CLASS__, 'deleteOldBehavior'],
 					'options' => [],
 				],
 				'biconnector.dataset.fields' => [
@@ -211,6 +244,15 @@ class Dataset extends Base
 			return $result;
 		}
 
+		if (self::$useOldBehavior)
+		{
+			return RestDatasetManager::addWithDataset(
+				$dataset,
+				$datasetFields,
+				sourceId: $sourceId
+			);
+		}
+
 		return RestDatasetManager::add(
 			$dataset,
 			$datasetFields,
@@ -271,6 +313,11 @@ class Dataset extends Base
 			$result->addError(new Error('Dataset was not found.', 'DATASET_NOT_FOUND'));
 
 			return $result;
+		}
+
+		if (self::$useOldBehavior)
+		{
+			return RestDatasetManager::deleteWithDataset($id);
 		}
 
 		return RestDatasetManager::delete($id);
@@ -435,7 +482,7 @@ class Dataset extends Base
 		return $resultOrder;
 	}
 
-	private static function checkDatasetName(string $name = null): bool
+	private static function checkDatasetName(?string $name = null): bool
 	{
 		return preg_match('/^[a-z][a-z0-9_]*$/', $name);
 	}
@@ -568,5 +615,19 @@ class Dataset extends Base
 		]);
 
 		return $result;
+	}
+
+	public static function addOldBehavior(array $params, $n, \CRestServer $server): array|bool
+	{
+		self::$useOldBehavior = true;
+
+		return self::add($params, $n, $server);
+	}
+
+	public static function deleteOldBehavior(array $params, $n, \CRestServer $server): array|bool
+	{
+		self::$useOldBehavior = true;
+
+		return self::delete($params, $n, $server);
 	}
 }

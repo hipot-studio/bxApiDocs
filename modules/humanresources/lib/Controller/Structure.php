@@ -205,7 +205,9 @@ final class Structure extends Controller
 			'areTeamReportSettingsAvailable' => Feature::instance()->areTeamReportSettingsAvailable(),
 			'isDeputyGetReportsAvailable' => Feature::instance()->isDeputyGetReportsAvailable(),
 			'areDepartmentReportsSettingsAvailable' => Feature::instance()->areDepartmentReportsSettingsAvailable(),
-			'multipleUsersSettingsAvailable' => Feature::instance()->areMultipleUsersSettingsAvailable(),
+			'multipleUsersBPSettingsAvailable' => Feature::instance()->areMultipleUsersBPSettingsAvailable(),
+			'multipleUsersReportSettingsAvailable' => Feature::instance()->areMultipleUsersReportSettingsAvailable(),
+			'teamReportExceptionsAvailable' => Feature::instance()->areTeamReportExceptionsAvailable(),
 		];
 	}
 

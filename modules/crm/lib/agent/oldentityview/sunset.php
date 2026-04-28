@@ -2,7 +2,7 @@
 
 namespace Bitrix\Crm\Agent\OldEntityView;
 
-use Bitrix\Crm\Component\Utils\OldEntityViewDisableHelper;
+use Bitrix\Crm\Component\DisableHelpers\OldEntityViewDisableHelper;
 
 class Sunset
 {

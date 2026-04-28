@@ -6,6 +6,7 @@ use Bitrix\Main;
 use Bitrix\BIConnector;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 
 final class SupersetIntegration
 {
@@ -30,7 +31,7 @@ final class SupersetIntegration
 		if ($response->hasErrors())
 		{
 			$result->addError(new Main\Error(
-				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_CREATE_DATASET_ERROR'))
+				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_CREATE_DATASET_ERROR_MSGVER_1'))
 			);
 
 			return $result;
@@ -68,7 +69,7 @@ final class SupersetIntegration
 			if ($response->getStatus() === IntegratorResponse::STATUS_NO_ACCESS)
 			{
 				$result->addError(new Main\Error(
-						Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DELETE_DATASET_PERMISSION_ERROR'),
+						Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DELETE_DATASET_PERMISSION_ERROR_MSGVER_1'),
 						IntegratorResponse::STATUS_NO_ACCESS
 					),
 				);
@@ -76,7 +77,7 @@ final class SupersetIntegration
 			else
 			{
 				$result->addError(new Main\Error(
-						Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DELETE_DATASET_ERROR'),
+						Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DELETE_DATASET_ERROR_MSGVER_1'),
 						$response->getStatus()
 					)
 				);
@@ -99,7 +100,7 @@ final class SupersetIntegration
 		if (!$dataset->getExternalId())
 		{
 			$result->addError(new Main\Error(
-				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR')
+				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR_MSGVER_1')
 			));
 
 			return $result;
@@ -110,6 +111,33 @@ final class SupersetIntegration
 		{
 			$result->addError(new Main\Error(
 				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_GET_URL_ERROR'))
+			);
+
+			return $result;
+		}
+
+		$responseData = $response->getData();
+		$result->setData([
+			'url' => $responseData['url'],
+		]);
+
+		return $result;
+	}
+
+	/**
+	 * Gets dataset url for creating chart
+	 *
+	 * @param Internal\ExternalDataset $dataset
+	 * @return Main\Result
+	 */
+	public function getDatasetCreateUrl(Internal\ExternalDataset $dataset, bool $isVirtual = false): Main\Result
+	{
+		$result = new Main\Result();
+		$response = $this->integrator->getDatasetCreateUrl($dataset->getName(), $isVirtual);
+		if ($response->hasErrors())
+		{
+			$result->addError(
+				new Main\Error(Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_GET_URL_ERROR'))
 			);
 
 			return $result;
@@ -137,39 +165,13 @@ final class SupersetIntegration
 		if (!$id)
 		{
 			$result->addError(new Main\Error(
-				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR')
+				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR_MSGVER_1')
 			));
 
 			return $result;
 		}
 
 		$response = $this->integrator->getDatasetById($id);
-		if ($response->hasErrors())
-		{
-			$result->addErrors($response->getErrors());
-
-			return $result;
-		}
-
-		$result->setData($response->getData());
-
-		return $result;
-	}
-
-	/**
-	 * Gets datasets from superset
-	 *
-	 * @param Internal\ExternalDatasetCollection $datasetCollection
-	 * @return Main\Result
-	 */
-	public function loadDatasetList(Internal\ExternalDatasetCollection $datasetCollection): Main\Result
-	{
-		$result = new Main\Result();
-
-		$ids = $datasetCollection->getExternalIdList();
-		$ids = array_filter($ids, static fn ($id) => $id > 0);
-
-		$response = $this->integrator->getDatasetList($ids);
 		if ($response->hasErrors())
 		{
 			$result->addErrors($response->getErrors());
@@ -190,7 +192,7 @@ final class SupersetIntegration
 		if (!$id)
 		{
 			$result->addError(new Main\Error(
-				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR')
+				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR_MSGVER_1')
 			));
 
 			return $result;
@@ -222,6 +224,23 @@ final class SupersetIntegration
 		return $result;
 	}
 
+	public function loadSupersetDatasets(Internal\ExternalDataset $dataset): Main\Result
+	{
+		$result = new Main\Result();
+
+		$response = $this->integrator->getDatasetListByTableName($dataset->getName());
+		if (!$response->hasErrors())
+		{
+			$result->setData($response->getData());
+		}
+		else
+		{
+			$result->addErrors($response->getErrors());
+		}
+
+		return $result;
+	}
+
 	/**
 	 * @see DatasetManager::EVENT_ON_AFTER_ADD_DATASET
 	 *
@@ -230,6 +249,11 @@ final class SupersetIntegration
 	 */
 	public static function onAfterAddDataset(Main\Event $event): Main\EventResult
 	{
+		if (!SupersetInitializer::isSupersetExist())
+		{
+			return new Main\EventResult(Main\EventResult::SUCCESS);
+		}
+
 		/** @var Internal\ExternalDataset $dataset */
 		$dataset = $event->getParameter('dataset');
 
@@ -251,6 +275,11 @@ final class SupersetIntegration
 	 */
 	public static function onAfterUpdateDataset(Main\Event $event): Main\EventResult
 	{
+		if (!SupersetInitializer::isSupersetExist())
+		{
+			return new Main\EventResult(Main\EventResult::SUCCESS);
+		}
+
 		/** @var Internal\ExternalDataset $dataset */
 		$dataset = $event->getParameter('dataset');
 
@@ -265,13 +294,18 @@ final class SupersetIntegration
 	}
 
 	/**
-	 * @see DatasetManager::EVENT_ON_AFTER_DELETE_DATASET
+	 * @see DatasetManager::EVENT_ON_AFTER_DELETE_DATASET //but not used now
 	 *
 	 * @param Main\Event $event
 	 * @return Main\EventResult
 	 */
 	public static function onAfterDeleteDataset(Main\Event $event): Main\EventResult
 	{
+		if (!SupersetInitializer::isSupersetExist())
+		{
+			return new Main\EventResult(Main\EventResult::SUCCESS);
+		}
+
 		foreach ($event->getResults() as $result)
 		{
 			if ($result->getType() === Main\EventResult::ERROR)

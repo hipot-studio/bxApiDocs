@@ -254,13 +254,13 @@ class Command implements RestConvertible
 		$orm = \Bitrix\Im\Model\CommandLangTable::getList();
 		while ($commandLang = $orm->fetch())
 		{
-			if (!isset($result[$commandLang['ID']]))
+			if (!isset($result[$commandLang['COMMAND_ID']]))
 			{
 				continue;
 			}
 
-			$langSet[$commandLang['ID']][$commandLang['LANGUAGE_ID']]['TITLE'] = $commandLang['TITLE'];
-			$langSet[$commandLang['ID']][$commandLang['LANGUAGE_ID']]['PARAMS'] = $commandLang['PARAMS'];
+			$langSet[$commandLang['COMMAND_ID']][$commandLang['LANGUAGE_ID']]['TITLE'] = $commandLang['TITLE'];
+			$langSet[$commandLang['COMMAND_ID']][$commandLang['LANGUAGE_ID']]['PARAMS'] = $commandLang['PARAMS'];
 		}
 
 		$langAlter = \Bitrix\Im\Bot::getDefaultLanguage();

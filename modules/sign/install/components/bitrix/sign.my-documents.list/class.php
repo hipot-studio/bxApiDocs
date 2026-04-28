@@ -57,6 +57,12 @@ class SignMyDocumentsComponent extends SignBaseComponent
 
 	public function executeComponent(): void
 	{
+		if (!\Bitrix\Sign\Config\Storage::instance()->isB2eAvailable())
+		{
+			$this->includeNotAvailableTemplate();
+			return;
+		}
+
 		$userId = (int)CurrentUser::get()->getId();
 		if (!$userId || !User::instance()->canUserParticipateInSigning($userId))
 		{

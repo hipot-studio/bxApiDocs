@@ -1806,6 +1806,12 @@ class EntityAddress
 		$labels = self::getLabels($typeID);
 		return isset($labels[$fieldName]) ? $labels[$fieldName] : $fieldName;
 	}
+
+	public static function getShortLabel(string $fieldId, int $type = EntityAddressType::Primary): ?string
+	{
+		return self::getShortLabels($type)[$fieldId] ?? null;
+	}
+
 	public static function getShortLabels($typeID = 0)
 	{
 		if(!is_int($typeID))

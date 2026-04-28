@@ -18,7 +18,7 @@ class CommandValidationException extends ValidationException
 	public function __construct(
 		array $validationErrors,
 		string $message = 'Command has validation errors',
-		Throwable $previous = null
+		?Throwable $previous = null
 	)
 	{
 		parent::__construct($validationErrors, $message, $previous);

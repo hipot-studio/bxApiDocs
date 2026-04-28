@@ -164,34 +164,28 @@ class BookingFilter extends Filter
 			$result->where('TYPE.MODULE_ID', '=', $this->filter['MODULE_ID']);
 		}
 
-		$crmModuleId = 'crm';
-		$crmClientProvider = Container::getProviderManager()::getProviderByModuleId($crmModuleId)?->getClientProvider();
-		if ($crmClientProvider)
+		$knownCrmClientTypes = Container::getCrmClientTypeRepository()->getAll();
+		foreach ($knownCrmClientTypes as $crmClientType)
 		{
-			$crmClientTypes = $crmClientProvider->getClientTypeCollection();
-
-			foreach ($crmClientTypes as $crmClientType)
+			$entityId = $this->getEntityId('crm', $crmClientType);
+			if (!$entityId)
 			{
-				$entityId = $this->getEntityId($crmModuleId, $crmClientType->getCode());
-				if (!$entityId)
-				{
-					continue;
-				}
-
-				$result
-					->whereIn(
-						'CLIENTS.CLIENT_TYPE_ID',
-						new SqlExpression(
-							ClientTypeTable::query()
-								->setSelect(['ID'])
-								->where('MODULE_ID', '=', $crmModuleId)
-								->where('CODE', '=', $crmClientType->getCode())
-								->getQuery()
-						)
-					)
-					->whereIn('CLIENTS.CLIENT_ID', $entityId)
-				;
+				continue;
 			}
+
+			$result
+				->whereIn(
+					'CLIENTS.CLIENT_TYPE_ID',
+					new SqlExpression(
+						ClientTypeTable::query()
+							->setSelect(['ID'])
+							->where('MODULE_ID', '=', 'crm')
+							->where('CODE', '=', $crmClientType)
+							->getQuery()
+					)
+				)
+				->whereIn('CLIENTS.CLIENT_ID', $entityId)
+			;
 		}
 
 		if (isset($this->filter['CREATED_WITHIN']['FROM']))

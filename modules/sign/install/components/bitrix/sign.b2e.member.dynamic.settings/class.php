@@ -9,15 +9,19 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Access\AccessController;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Main\Grid\Cell;
+use Bitrix\Sign\Trait\Components\NotAvailableStubTrait;
 use Bitrix\Sign\Config\Feature;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Providers\MemberDynamicFieldInfoProvider;
 
 Loc::loadMessages(__FILE__);
+\Bitrix\Main\Loader::includeModule('sign');
 
 class SignB2eMemberDynamicSettingsComponent extends \CBitrixComponent
 {
+	use NotAvailableStubTrait;
+
 	private const GRID_ID = 'USER_FIELD_GRID_ID_MEMBER_DYNAMIC';
 	private const FIELD_ACTION_DELETE = 'delete';
 	private const ACTION_BUTTON_PREFIX = 'action_button_';
@@ -33,7 +37,14 @@ class SignB2eMemberDynamicSettingsComponent extends \CBitrixComponent
 			return;
 		}
 
-		if (!Storage::instance()->isB2eAvailable() || !Feature::instance()->isDocumentTemplatesAvailable())
+		if (!Storage::instance()->isB2eAvailable())
+		{
+			$this->renderNotAvailableStub();
+
+			return;
+		}
+
+		if (!Feature::instance()->isDocumentTemplatesAvailable())
 		{
 			showError('access denied');
 

@@ -10,11 +10,13 @@ use Bitrix\Im\V2\Message\Send\MentionService;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Message\Send\SendingService;
 use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Reading\Reader;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Message;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
@@ -254,7 +256,7 @@ class CommentChat extends GroupChat
 
 		if (!$subscribe)
 		{
-			$this->read();
+			ServiceLocator::getInstance()->get(Reader::class)->readAllInChat($this->getId(), $userId);
 		}
 
 		return $result;
@@ -469,7 +471,7 @@ class CommentChat extends GroupChat
 
 		$parentChat = $message->getChat();
 
-		$addResult = ChatFactory::getInstance()->addChat([
+		$addResult = ChatFactory::getInstance()->withContextUser(0)->addChat([
 			'TYPE' => self::IM_TYPE_COMMENT,
 			'PARENT_CHAT' => $parentChat,
 			'PARENT_MESSAGE' => $message,

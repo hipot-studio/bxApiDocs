@@ -390,6 +390,7 @@ class Factory
 
 		$values = UserBasedField::breakDepartmentsToUsers($values, $filter->getFields());
 		\Bitrix\Crm\Filter\FieldsTransform\UserBasedField::applyTransformWrapper($values);
+		\Bitrix\Crm\Filter\FieldsTransform\DateTimeField::applyTimezoneOffset($entityTypeId, $values);
 
 		if (\CCrmOwnerType::IsDefined($entityTypeId) && $filter->getEntityDataProvider() instanceof EntityDataProvider)
 		{

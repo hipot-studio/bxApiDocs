@@ -85,7 +85,7 @@ class Cache
 	 */
 	public function getCacheDirQueueOperatorData(): string
 	{
-		return '/imopenlines/queue/';
+		return '/imopenlines/queue/' . $this->userId . '/';
 	}
 
 	/**
@@ -109,7 +109,7 @@ class Cache
 	 */
 	public function getCacheDirCountLinesOperator(): string
 	{
-		return '/imopenlines/queue/count/';
+		return '/imopenlines/queue/count/' . $this->userId . '/';
 	}
 
 	/**
@@ -117,7 +117,7 @@ class Cache
 	 */
 	public function getCacheDirIsOperator(): string
 	{
-		return '/imopenlines/queue/operators/';
+		return '/imopenlines/queue/operators/' . $this->userId . '/';
 	}
 
 	/**

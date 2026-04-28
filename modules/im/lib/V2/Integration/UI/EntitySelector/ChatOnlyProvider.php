@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Integration\UI\EntitySelector;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Integration\UI\EntitySelector\SearchOptions\SearchingFlag;
 
 /**
  * Provider for chats in a broad sense - entities from ChatTable, like chats and channels
@@ -23,7 +24,7 @@ class ChatOnlyProvider extends RecentProvider
 
 	public function __construct(array $options = [])
 	{
-		$options[SearchOptions::INCLUDE_ONLY_OPTION] = [SearchOptions::FLAG_CHATS];
+		$options[SearchOptions::INCLUDE_ONLY_OPTION] = [SearchingFlag::Chats->value];
 		$options[SearchOptions::ONLY_WITH_MANAGE_USERS_ADD_RIGHT_OPTION] = true;
 		$options[SearchOptions::ONLY_WITH_NULL_ENTITY_TYPE_OPTION] = true;
 

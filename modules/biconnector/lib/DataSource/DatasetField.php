@@ -16,6 +16,7 @@ abstract class DatasetField
 	protected ?string $descriptionFull = null;
 	protected ?JoinSelection $join = null;
 	protected ?string $expression = null;
+	protected bool $isPreparedFieldName = true;
 
 	public function __construct(
 		protected readonly string $code,
@@ -75,13 +76,18 @@ abstract class DatasetField
 			return $this->expression;
 		}
 
-		$name =
-			!empty($this->name)
-				? $this->name
-				: $this->dataset?->getAliasFieldName($this->code) ?? $this->code
-		;
+		if (!empty($this->name))
+		{
+			return $this->dataset?->getSqlHelper()->quote($this->name) ?? $this->name;
+		}
 
-		return $this->dataset?->getSqlHelper()->quote($name) ?? $name;
+		$aliasCode = $this->dataset?->getAliasFieldName($this->code);
+		if (!empty($aliasCode))
+		{
+			return $aliasCode;
+		}
+
+		return $this->dataset?->getSqlHelper()->quote($this->code) ?? $this->code;
 	}
 
 	/**
@@ -124,11 +130,14 @@ abstract class DatasetField
 	 * Set raw expression for field selection.
 	 *
 	 * @param string $expression
+	 * @param bool $isPrepared
+	 * 
 	 * @return $this
 	 */
-	public function setExpression(string $expression): static
+	public function setExpression(string $expression, bool $isPrepared = true): static
 	{
 		$this->expression = $expression;
+		$this->isPreparedFieldName = $isPrepared;
 
 		return $this;
 	}
@@ -273,6 +282,7 @@ abstract class DatasetField
 			'FIELD_DESCRIPTION' => $this->getDescription(),
 			'FIELD_DESCRIPTION_FULL' => $this->getDescriptionFull(),
 			'IS_SYSTEM' => $this->isSystem ? 'Y' : 'N',
+			'IS_FIELD_NAME_PREPARED' => $this->isPreparedFieldName ? 'Y' : 'N',
 		];
 
 		if ($this->isPrimary)

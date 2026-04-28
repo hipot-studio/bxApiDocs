@@ -32,6 +32,13 @@ class Container
 		;
 	}
 
+	//region Node services
+
+	public static function getNodeService(): NodeService
+	{
+		return self::getService('humanresources.public.service.nodeService');
+	}
+
 	public static function getNodeMemberService(): NodeMemberService
 	{
 		return self::getService('humanresources.public.service.nodeMemberService');
@@ -52,13 +59,23 @@ class Container
 		return self::getService('humanresources.public.service.node.userService');
 	}
 
+	//endregion
+
+	//region Team services
+
 	public static function getUserTeamService(): TeamUserService
 	{
 		return self::getService('humanresources.service.public.team.userService');
 	}
 
+	//endregion
+
+	//region Department services
+
 	public static function getUserDepartmentService(): DepartmentUserService
 	{
 		return self::getService('humanresources.service.public.department.userService');
 	}
+
+	//endregion
 }

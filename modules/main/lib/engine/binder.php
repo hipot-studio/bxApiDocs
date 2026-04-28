@@ -105,7 +105,7 @@ class Binder
 		);
 	}
 
-	final public static function registerParameterDependsOnName($className, \Closure $constructObjectByClassAndId, \Closure $constructIdParameterName = null)
+	final public static function registerParameterDependsOnName($className, \Closure $constructObjectByClassAndId, ?\Closure $constructIdParameterName = null)
 	{
 		self::registerDefaultAutoWirings();
 

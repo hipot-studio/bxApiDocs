@@ -270,4 +270,37 @@ class Session extends BaseController
 
 		return null;
 	}
+
+	/**
+	 * @restMethod imopenlines.v2.Session.setSilentMode
+	 */
+	public function setSilentModeAction(\Bitrix\Im\V2\Chat $chat, string $silentMode = 'Y'): ?array
+	{
+		$currentUser = $this->getCurrentUser();
+		$operator = new \Bitrix\ImOpenLines\Operator($chat->getChatId(), (int)$currentUser?->getId());
+		$result = $operator->setSilentMode($this->convertCharToBool($silentMode));
+
+		if ($result)
+		{
+			return ['result' => true];
+		}
+
+		return null;
+	}
+
+	/**
+	 * @restMethod imopenlines.v2.Session.isSilentMode
+	 */
+	public function isSilentModeAction(\Bitrix\Im\V2\Chat $chat): ?array
+	{
+		$session = \Bitrix\ImOpenLines\V2\Session\Session::getInstanceByChatId($chat->getChatId());
+
+		if ($session)
+		{
+			$session->setChat($chat);
+			return ['result' => $session->getSilentMode()];
+		}
+
+		return null;
+	}
 }

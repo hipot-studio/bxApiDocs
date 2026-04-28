@@ -12,9 +12,11 @@ use Bitrix\Im\V2\Link\Calendar\CalendarService;
 use Bitrix\Im\V2\Link\Task\TaskCollection;
 use Bitrix\Im\V2\Link\Task\TaskService;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
+use Bitrix\Im\V2\Reading\Cleaner;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Sync\Event;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 
@@ -100,10 +102,7 @@ class CompleteDeletionStrategy extends DeletionStrategy
 		$connection = Application::getConnection();
 
 		(new \Bitrix\Im\V2\Link\Favorite\FavoriteService())->unmarkMessagesAsFavoriteForAll($this->messages);
-		(new \Bitrix\Im\V2\Message\ReadService())->deleteByMessages(
-			$this->messages,
-			$this->chat->getRelations()->getUserIds()
-		);
+		ServiceLocator::getInstance()->get(Cleaner::class)->onDeleteMessages($this->messages, $this->chat->getRelations()->getUserIds());
 
 		$this->messages->unpin(clearParams: false);
 

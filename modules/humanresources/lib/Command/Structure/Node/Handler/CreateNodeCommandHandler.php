@@ -62,8 +62,6 @@ class CreateNodeCommandHandler
 
 			$result = new CreateNodeCommandResult($node);
 
-			$this->nodeSettingsService->save($node->id, $command->settings);
-
 			$userIds = $command->userIds;
 
 			if (!empty($command->userIds))
@@ -95,6 +93,8 @@ class CreateNodeCommandHandler
 					}
 				}
 			}
+
+			$this->nodeSettingsService->save($node->id, $command->settings);
 
 			if ($command->createChat)
 			{

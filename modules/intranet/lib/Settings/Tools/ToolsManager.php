@@ -44,6 +44,7 @@ class ToolsManager
 			'menu_sign' => new Sign(),
 			'menu_crm_store' => new Inventory(),
 			'menu_bi_constructor' => new BIConstructor(),
+			'menu_note_base' => new NoteBase(),
 			'menu_company' => new Company(),
 			'menu_booking' => new Booking(),
 		];

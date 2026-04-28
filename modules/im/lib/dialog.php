@@ -3,7 +3,8 @@ namespace Bitrix\Im;
 
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\RelationTable;
-use Bitrix\Im\V2\Message\ReadService;
+use Bitrix\Im\V2\Reading\Reader;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
@@ -239,8 +240,7 @@ class Dialog
 			return false;
 		}
 
-		$readService = new ReadService($userId);
-		$readService->readAll();
+		ServiceLocator::getInstance()->get(Reader::class)->readAll($userId);
 
 		return true;
 	}

@@ -2,8 +2,8 @@
 
 namespace Bitrix\Booking\Component\Booking;
 
-use Bitrix\Booking\Internals\Container;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Filter\Theme;
 
@@ -37,8 +37,6 @@ class Filter
 
 	public function getFields(): array
 	{
-		$provider = Container::getProviderManager()::getCurrentProvider();
-
 		$fields = [
 			self::FIELD_CREATED_BY => $this->getCreatedByField(),
 			self::FIELD_CONTACT => $this->getContactField(),
@@ -48,7 +46,7 @@ class Filter
 			self::FIELD_REQUIRE_ATTENTION => $this->getRequireAttentionField(),
 		];
 
-		if ($provider?->getModuleId() !== 'crm')
+		if (!Loader::includeModule('crm'))
 		{
 			unset($fields[self::FIELD_CONTACT], $fields[self::FIELD_COMPANY]);
 		}

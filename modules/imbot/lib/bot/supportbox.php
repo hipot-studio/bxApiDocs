@@ -11,6 +11,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Im;
 use Bitrix\Im\Bot\Keyboard;
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\ImBot;
 use Bitrix\ImBot\Log;
 use Bitrix\ImBot\Bot\Mixin;
@@ -63,8 +64,6 @@ class SupportBox extends Network implements SupportBot, SupportQuestion
 			return self::getBotId();// do nothing
 		}
 
-		Im\Bot::clearCache();
-
 		$showActivateMessage = true;
 
 		$botParams = [
@@ -98,7 +97,7 @@ class SupportBox extends Network implements SupportBot, SupportQuestion
 		}
 		elseif ($botId)
 		{
-			$botCache = Im\Bot::getCache($botId);
+			$appId = BotData::getInstance($botId)->getAppId();
 
 			self::setBotId($botId);
 
@@ -112,10 +111,10 @@ class SupportBox extends Network implements SupportBot, SupportQuestion
 
 				self::setActive(true);
 
-				if ($botCache['APP_ID'] !== '' && $botCache['APP_ID'] !== self::getBotCode())
+				if ($appId !== '' && $appId !== self::getBotCode())
 				{
 					self::sendRequestFinalizeSession([
-						'BOT_CODE' => $botCache['APP_ID'],
+						'BOT_CODE' => $appId,
 						'MESSAGE' => Loc::getMessage('SUPPORT_BOX_CHANGE_LINE'),
 					]);
 				}
@@ -654,8 +653,8 @@ class SupportBox extends Network implements SupportBot, SupportQuestion
 			return false;
 		}
 
-		$bot = Im\Bot::getCache($messageFields['BOT_ID']);
-		if (mb_substr($bot['CODE'], 0, 7) != parent::BOT_CODE)
+		$botData = BotData::getInstance((int)$messageFields['BOT_ID']);
+		if (!$botData->exists() || mb_substr($botData->getCode(), 0, 7) !== parent::BOT_CODE)
 		{
 			return false;
 		}
@@ -1014,8 +1013,6 @@ class SupportBox extends Network implements SupportBot, SupportQuestion
 			return false;
 		}
 
-		Im\Bot::clearCache();
-
 		$botParams = [
 			'VERIFIED' => 'Y',
 			'CODE' => parent::BOT_CODE. '_'. $botCode,
@@ -1058,8 +1055,8 @@ class SupportBox extends Network implements SupportBot, SupportQuestion
 		$botId = (int)parent::getNetworkBotId(self::getPreviousBotCode(), true);
 		if ($botId > 0)
 		{
-			$botData = Im\Bot::getCache($botId);
-			if ($botData['CLASS'] != 'Bitrix\\ImBot\\Bot\\Support')
+			$botClass = BotData::getInstance($botId)->getClass();
+			if ($botClass !== 'Bitrix\\ImBot\\Bot\\Support')
 			{
 				$botId = -1;
 			}
@@ -1573,7 +1570,6 @@ class SupportBox extends Network implements SupportBot, SupportQuestion
 				$botParams['PROPERTIES']['PERSONAL_PHOTO'] = $userAvatar;
 			}
 
-			Im\Bot::clearCache();
 			Im\Bot::update(['BOT_ID' => $botId], $botParams);
 
 			self::registerCommands();

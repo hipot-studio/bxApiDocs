@@ -4,13 +4,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
-use Bitrix\Main\Error;
+use Bitrix\Intranet\Site\FirstPage\MainFirstPage;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\EventManager;
-use Bitrix\Main\Event;
-use Bitrix\Crm\UI\Webpack\CallTracker;
-use Bitrix\Crm\MessageSender\NotificationsPromoManager;
 use Bitrix\Landing\Hook;
 use Bitrix\Landing\Manager;
 use Bitrix\Landing\Landing;
@@ -18,7 +15,7 @@ use Bitrix\Landing\Domain;
 use Bitrix\Landing\Site;
 use Bitrix\Landing\Site\Type;
 use Bitrix\Landing\Syspage;
-use Bitrix\Landing\Mainpage;
+use Bitrix\Landing\Vibe;
 
 Loc::loadMessages(__FILE__);
 
@@ -61,6 +58,8 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 	 * @var array
 	 */
 	protected static ?array $landingMain = null;
+
+	private ?Vibe\Vibe $vibe = null;
 
 	/**
 	 * Gets main instance of current page.
@@ -112,8 +111,8 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 				$this->arParams['PATH'] = mb_substr($requestURL, mb_strlen($realFilePath));
 			}
 
-			$this->checkParam('LID', 0);
-			$this->checkParam('SITE_ID', 0);
+			$this->checkParam('MODULE_ID', '');
+			$this->checkParam('EMBED_ID', '');
 			$this->checkParam('CHECK_PERMISSIONS', 'N');
 			$this->checkParam('SHOW_EDIT_PANEL', 'N');
 			$this->checkParam('SKIP_404', 'N');
@@ -122,7 +121,7 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 			$this->checkParam('PAGE_URL_SITE_SHOW', '');
 			$this->checkParam('PAGE_URL_ROLES', '');
 
-			Type::setScope(Type::SCOPE_CODE_MAINPAGE);
+			Type::setScope(Type::SCOPE_CODE_VIBE);
 
 			// always draft
 			$this->isPreviewMode = true;
@@ -187,23 +186,16 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 					\Bitrix\Landing\Landing\View::inc($lid);
 				}
 			}
+			elseif (isset($this->vibe) && $this->vibe->isProcessing())
+			{
+				$this->template = 'processing';
+			}
 			else
 			{
-				/**
-				 * @var Mainpage\Manager $manager
-				 */
-				$manager = $this->arResult['MANAGER'];
-				if (isset($manager) && $manager->isProcessing())
-				{
-					$this->template = 'processing';
-				}
-				else
-				{
-					$this->addError(
-						'SITE_NOT_FOUND',
-						$this->getMessageType('LANDING_CMP_SITE_NOT_FOUND2')
-					);
-				}
+				$this->addError(
+					'SITE_NOT_FOUND',
+					$this->getMessageType('LANDING_CMP_SITE_NOT_FOUND2')
+				);
 			}
 		}
 
@@ -264,7 +256,7 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 				'filter' => [
 					'=DELETED' => 'N',
 					'CODE' => "/{$code}/",
-					'=TYPE' => Type::SCOPE_CODE_MAINPAGE,
+					'=TYPE' => Type::SCOPE_CODE_VIBE,
 				],
 				'limit' => 1,
 			]);
@@ -287,8 +279,25 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 		}
 		else
 		{
-			$this->arResult['MANAGER'] = new Mainpage\Manager();
-			$this->arResult['LANDING_ID'] = $this->arResult['MANAGER']->getConnectedPageId();
+			$vibe = new Vibe\Vibe(
+				$this->arParams['MODULE_ID'],
+				$this->arParams['EMBED_ID'],
+			);
+			$this->vibe = $vibe;
+			$this->arResult['LANDING_ID'] = $vibe->getLandingId();
+			$this->arResult['VIBE_TITLE'] = $vibe->getViewTitle();
+			$this->arResult['IS_VIBE_PUBLISHED'] = $vibe->isPublished();
+			$this->arResult['IS_VIBE_CREATED'] = $vibe->getLandingId();
+			$this->arResult['IS_VIBE_FEATURE_AVAILABLE'] = Vibe\Vibe::isFeatureEnable();
+			$this->arResult['IS_VIBE_IS_FREE_TARIFF_MODE'] = $vibe->isfreeTariffMode();
+			if (
+				!$this->arResult['IS_VIBE_PUBLISHED']
+				&& Manager::isAdmin()
+				&& Loader::includeModule('intranet')
+			)
+			{
+				$this->arResult['VIBE_SETTINGS_LINK'] = (new MainFirstPage())->getSettingsPath();
+			}
 		}
 
 		return (int)$this->arResult['LANDING_ID'] > 0;

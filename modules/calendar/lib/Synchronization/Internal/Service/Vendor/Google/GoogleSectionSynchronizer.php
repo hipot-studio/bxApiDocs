@@ -19,6 +19,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\PushException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Repository\RepositoryReadException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\SynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AccessDeniedException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\AuthorizationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\BadRequestException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitExceededException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
@@ -42,11 +43,9 @@ use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Processor\Sec
 use Bitrix\Calendar\Synchronization\Internal\Service\SectionSynchronizerInterface;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\SystemException;
-use Psr\Container\NotFoundExceptionInterface;
 
 class GoogleSectionSynchronizer extends AbstractGoogleSynchronizer implements SectionSynchronizerInterface
 {
@@ -328,8 +327,6 @@ class GoogleSectionSynchronizer extends AbstractGoogleSynchronizer implements Se
 	 * @throws PersistenceException
 	 * @throws RepositoryReadException
 	 * @throws SynchronizerException
-	 * @throws ObjectNotFoundException
-	 * @throws NotFoundExceptionInterface
 	 */
 	public function importSections(int $userId, ?string $token = null): array
 	{
@@ -362,7 +359,7 @@ class GoogleSectionSynchronizer extends AbstractGoogleSynchronizer implements Se
 			throw new SynchronizerException(
 				sprintf('Google rate limit exceeded: "%s"', $e->getMessage()),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 		catch (ApiException|DtoValidationException|ArgumentException|Exception $e)
@@ -370,7 +367,7 @@ class GoogleSectionSynchronizer extends AbstractGoogleSynchronizer implements Se
 			throw new SynchronizerException(
 				sprintf('Google API exception: "%s"', $e->getMessage()),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 
@@ -476,6 +473,10 @@ class GoogleSectionSynchronizer extends AbstractGoogleSynchronizer implements Se
 				isRecoverable: false,
 			);
 		}
+		catch (AuthorizationException)
+		{
+			$gateway = null;
+		}
 
 		if (!$gateway)
 		{
@@ -516,7 +517,7 @@ class GoogleSectionSynchronizer extends AbstractGoogleSynchronizer implements Se
 		{
 			throw new SynchronizerException(
 				'Unable to lock push for connection ' . $connectionId,
-				previous: $e
+				previous: $e,
 			);
 		}
 

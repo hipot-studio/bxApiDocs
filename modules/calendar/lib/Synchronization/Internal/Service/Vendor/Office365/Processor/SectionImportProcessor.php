@@ -10,6 +10,7 @@ use Bitrix\Calendar\Sync\Connection\Connection;
 use Bitrix\Calendar\Sync\Dictionary;
 use Bitrix\Calendar\Sync\Office365\Helper;
 use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
+use Bitrix\Calendar\Synchronization\Internal\Repository\EventConnectionRepository;
 use Bitrix\Calendar\Synchronization\Internal\Repository\SectionConnectionRepository;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Dto\CalendarListResponse;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Dto\CalendarResponse;
@@ -25,7 +26,8 @@ class SectionImportProcessor
 
 	public function __construct(
 		private readonly SectionConnectionRepository $sectionConnectionRepository,
-		private readonly \Bitrix\Calendar\Core\Mappers\Section $sectionMapper
+		private readonly EventConnectionRepository $eventConnectionRepository,
+		private readonly \Bitrix\Calendar\Core\Mappers\Section $sectionMapper,
 	)
 	{
 	}
@@ -152,9 +154,28 @@ class SectionImportProcessor
 
 	private function deleteSection(SectionConnection $sectionConnection): void
 	{
-		if ($sectionConnection->getSection() && !$sectionConnection->getSection()->isLocal())
+		$section = $sectionConnection->getSection();
+
+		// A local calendar couldn't be deleted by the vendor
+		if ($section && !$section->isLocal())
 		{
-			$this->sectionMapper->delete($sectionConnection->getSection(), ['softDelete' => false]);
+			$this->sectionMapper->delete($section, ['softDelete' => false]);
+		}
+
+		// If a local calendar was deleted on the vendor's side we should keep events on the portal's side
+		if ($section && $section->isLocal())
+		{
+			$this->eventConnectionRepository->deleteBySectionAndConnection(
+				$section->getId(),
+				$sectionConnection->getConnection()->getId(),
+			);
+
+			$sectionConnectionId = $sectionConnection->getId();
+
+			if ($sectionConnectionId !== null)
+			{
+				$this->sectionConnectionRepository->delete($sectionConnectionId);
+			}
 		}
 	}
 }

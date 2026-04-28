@@ -111,6 +111,11 @@ class HumanResourcesHcmLinkMappedUsersComponent extends \CBitrixComponent
 
 	private function getUsers(array $userIds): array
 	{
+		if (empty($userIds))
+		{
+			return [];
+		}
+
 		$result = [];
 		$users = \Bitrix\Main\UserTable::query()->whereIn('ID', $userIds)->fetchCollection()->getAll();
 		foreach ($users as $user)

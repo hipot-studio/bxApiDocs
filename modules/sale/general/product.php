@@ -506,7 +506,7 @@ class CALLSaleProduct
 				Catalog\Product\Price\Calculation::pushConfig();
 				Catalog\Product\Price\Calculation::setConfig(array(
 					'CURRENCY' => Sale\Internals\SiteCurrencyTable::getSiteCurrency($LID),
-					'PRECISION' => (int)Main\Config\Option::get('sale', 'value_precision'),
+					'PRECISION' => Sale\PriceMaths::getCurrentPrecision(),
 					'USE_DISCOUNTS' => true,
 					'RESULT_WITH_VAT' => true
 				));

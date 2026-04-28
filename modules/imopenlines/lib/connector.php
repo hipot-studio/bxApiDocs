@@ -18,6 +18,7 @@ use Bitrix\Im\Text;
 use Bitrix\Im\User;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\MessageTable;
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 
 Loc::loadMessages(__FILE__);
 
@@ -138,8 +139,8 @@ class Connector
 
 			$addMessage = [
 				"FROM_USER_ID" => $params['message']['user_id'],
-				"PARAMS" => $params['message']['params'] ?? []
-				//"SKIP_COMMAND" => "Y"
+				"PARAMS" => $params['message']['params'] ?? [],
+				"SKIP_USER_CHECK" => "Y",
 			];
 			//if (is_object($params['message']['date']))
 			//{
@@ -261,22 +262,6 @@ class Connector
 						)
 						{
 							$addMessage["TO_CHAT_ID"] = $session->getData('CHAT_ID');
-							if (!empty($params['message']['files']))
-							{
-								$params['message']['files'] = \CIMDisk::UploadFileFromMain(
-									$session->getData('CHAT_ID'),
-									$params['message']['files']
-								);
-
-								if ($params['message']['files'])
-								{
-									$addMessage["PARAMS"]['FILE_ID'] = $params['message']['files'];
-								}
-								else if ($addMessage["MESSAGE"] == '' && empty($addMessage["ATTACH"]))
-								{
-									$addMessage["MESSAGE"] = '[FILE]';
-								}
-							}
 						}
 
 						if ($resultLoadSession)
@@ -360,20 +345,20 @@ class Connector
 
 							if ($session->isNowCreated())
 							{
-								$allBots = \Bitrix\Im\Bot::getListCache();
 								$botsInLine = [];
 								if ($session->getConfig('QUEUE_TYPE') === Config::QUEUE_TYPE_ALL)
 								{
 									$messageId = 0;
 									foreach ($session->getJoinUserList() as $fakeRelation)
 									{
+										$isBot = BotData::getInstance((int)$fakeRelation)->exists();
 										$messageId = $session->joinUser(
-											!isset($allBots[$fakeRelation]),
+											!$isBot,
 											(int)$fakeRelation,
-											$messageId)
-										;
+											$messageId
+										);
 
-										if (isset($allBots[$fakeRelation]))
+										if ($isBot)
 										{
 											$botsInLine[] = (int)$fakeRelation;
 										}
@@ -382,9 +367,10 @@ class Connector
 								else
 								{
 									$firstOperatorId = (int)current($session->getJoinUserList());
-									$session->joinUser(!isset($allBots[$firstOperatorId]), $firstOperatorId);
+									$isBot = BotData::getInstance($firstOperatorId)->exists();
+									$session->joinUser(!$isBot, $firstOperatorId);
 
-									if (isset($allBots[$firstOperatorId]))
+									if ($isBot)
 									{
 										$botsInLine[] = $firstOperatorId;
 									}
@@ -533,6 +519,55 @@ class Connector
 							if (!empty($eventMessageFields['PARAMS']))
 							{
 								$addMessage['PARAMS'] = $eventMessageFields['PARAMS'];
+							}
+
+							if ($addMessage && !empty($params['message']['files']))
+							{
+								$chatId = (int)$session->getData('CHAT_ID');
+								$folderModel = \CIMDisk::GetFolderModel($chatId);
+								if ($folderModel)
+								{
+									$messageFileId = [];
+									foreach ($params['message']['files'] as $fileId)
+									{
+										$res = \CFile::GetByID($fileId);
+										$fileData = $res->Fetch();
+										if (!$fileData)
+										{
+											continue;
+										}
+
+										$fileName = empty($fileData['ORIGINAL_NAME'])
+											? $fileData['FILE_NAME']
+											: $fileData['ORIGINAL_NAME'];
+										$fileName = \Bitrix\Disk\Ui\Text::correctFilename($fileName);
+										$newFile = $folderModel->addFile([
+											'NAME' => $fileName,
+											'FILE_ID' => $fileId,
+											'SIZE' => $fileData['FILE_SIZE'],
+											'CREATED_BY' => \Bitrix\Disk\SystemUser::SYSTEM_USER_ID,
+										], [], true);
+										if ($newFile)
+										{
+											$newFile->increaseGlobalContentVersion();
+											$messageFileId[] = $newFile->getId();
+										}
+									}
+									$params['message']['files'] = !empty($messageFileId) ? $messageFileId : false;
+								}
+								else
+								{
+									$params['message']['files'] = false;
+								}
+
+								if ($params['message']['files'])
+								{
+									$addMessage["PARAMS"]['FILE_ID'] = $params['message']['files'];
+								}
+								else if ($addMessage["MESSAGE"] == '' && empty($addMessage["ATTACH"]))
+								{
+									$addMessage["MESSAGE"] = '[FILE]';
+								}
 							}
 
 							if ($addMessage)

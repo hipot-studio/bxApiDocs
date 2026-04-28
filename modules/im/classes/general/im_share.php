@@ -94,8 +94,6 @@ class CIMShare
 		$pinMessageId = $this->SendMessage('', $noticeMessage, $message);
 
 		\Bitrix\Im\Model\ChatTable::update($chatId, Array(
-			'PARENT_ID' => $parentChatId,
-			'PARENT_MID' => $parentMessageId,
 			'PIN_MESSAGE_ID' => $pinMessageId,
 		));
 

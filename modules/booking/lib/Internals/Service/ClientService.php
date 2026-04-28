@@ -8,15 +8,19 @@ use Bitrix\Booking\Entity\Client\ClientCollection;
 use Bitrix\Booking\Entity\EntityWithClientRelationInterface;
 use Bitrix\Booking\Entity\EntityInterface;
 use Bitrix\Booking\Entity\ExternalData\ExternalDataCollection;
-use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Integration\Crm\ClientAccessProvider;
+use Bitrix\Booking\Internals\Integration\Crm\DataLoader\ClientDataLoader;
+use Bitrix\Booking\Internals\Integration\Crm\DealClientSynchronizer;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
 use Bitrix\Booking\Internals\Repository\BookingClientRepositoryInterface;
 
 class ClientService
 {
 	public function __construct(
-		private readonly BookingClientRepositoryInterface $bookingClientRepository
+		private readonly BookingClientRepositoryInterface $bookingClientRepository,
+		private readonly DealClientSynchronizer $dealClientSynchronizer,
+		private readonly ClientDataLoader $crmClientDataLoader,
+		private readonly ClientAccessProvider $clientAccessProvider,
 	)
 	{
 	}
@@ -52,12 +56,7 @@ class ClientService
 	{
 		if ($newClients->isEmpty() && $existingClients->isEmpty())
 		{
-			Container::getProviderManager()::getCurrentProvider()
-				?->getDataProvider()
-				?->setClientsData(
-					$newClients,
-					$newExternalData
-				);
+			$this->dealClientSynchronizer->setClientsFromDeal($newClients, $newExternalData);
 		}
 
 		if ($newClients->isEqual($existingClients))
@@ -81,15 +80,12 @@ class ClientService
 
 	public function loadClientData(ClientCollection $clientCollection): void
 	{
-		Container::getProviderManager()::getCurrentProvider()
-			?->getClientProvider()
-			?->loadClientDataForCollection($clientCollection)
-		;
+		$this->crmClientDataLoader->loadDataForCollection($clientCollection);
 	}
 
 	public function applyClientPermissions(ClientCollection $clientCollection): void
 	{
-		$readAccessMap = (new ClientAccessProvider())->getReadAccessMap($clientCollection);
+		$readAccessMap = $this->clientAccessProvider->getReadAccessMap($clientCollection);
 
 		foreach ($clientCollection as $client)
 		{

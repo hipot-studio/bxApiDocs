@@ -45,7 +45,7 @@ final class Recommendations extends Page
 
 	public function getTitle(): string
 	{
-		return (string)Loc::getMessage('CRM_MESSAGESENDER_PAGE_RECOMMENDATIONS_TITLE');
+		return (string)Loc::getMessage('CRM_MESSAGESENDER_PAGE_RECOMMENDATIONS_TITLE_MSGVER_1');
 	}
 
 	/**

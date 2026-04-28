@@ -13,6 +13,7 @@ class ClientTypeMapper
 	{
 		return
 			(new ClientType())
+				->setId($ormClientType->getId())
 				->setCode($ormClientType->getCode())
 				->setModuleId($ormClientType->getModuleId())
 			;

@@ -20,7 +20,7 @@ abstract class AbstractPushReceiver extends AbstractReceiver
 
 	public function __construct(
 		private readonly ConnectionProvider $connectionProvider,
-		private readonly SectionConnectionRepository $sectionConnectionRepository
+		private readonly SectionConnectionRepository $sectionConnectionRepository,
 	)
 	{
 	}

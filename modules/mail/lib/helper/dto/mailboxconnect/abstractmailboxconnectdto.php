@@ -39,6 +39,11 @@ abstract class AbstractMailboxConnectDTO
 			'serviceType' => 'imap',
 			'name' => 'other',
 		],
+		public bool $uploadOutgoing = false,
+		public string $link = '',
+		/** @var string[] Access codes list (e.g., 'U1', 'DR5', 'D10') */
+		public array $shareAccess = [],
+		public ?bool $useSenderName = null
 	)
 	{
 	}

@@ -4,7 +4,6 @@ namespace Bitrix\HumanResources\Service;
 
 use Bitrix\HumanResources\Command\Structure\Node\NodeOrderCommand;
 use Bitrix\HumanResources\Contract;
-use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Exception\CreationFailedException;
@@ -12,6 +11,7 @@ use Bitrix\HumanResources\Exception\UpdateFailedException;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\Node;
+use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
@@ -31,9 +31,20 @@ class NodeService implements Contract\Service\NodeService
 		$this->nodeRepository = $nodeRepository ?? Container::getNodeRepository();
 		$this->structureWalkerService = $structureWalkerService ?? Container::getStructureWalkerService();
 	}
+
+	/**
+	 * Finds all departments for a given user.
+	 *
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllByNodeMemberId() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByMemberEntityId()
+	 */
 	public function getNodesByUserId(int $userId, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): NodeCollection
 	{
-		return $this->nodeRepository->findAllByUserId($userId, $activeFilter);
+		return PublicContainer::getNodeService()->findAllByMemberEntityId(
+			memberEntityId: $userId,
+			nodeActiveFilter: $activeFilter,
+		);
 	}
 
 	public function getNodesByUserIdAndUserRoleId(int $userId, int $roleId, NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE): NodeCollection
@@ -41,15 +52,19 @@ class NodeService implements Contract\Service\NodeService
 		return $this->nodeRepository->findAllByUserIdAndRoleId($userId, $roleId, $activeFilter);
 	}
 
+	/**
+	 * Deprecated service method for getting child nodeCollection for a given node (returns only departments).
+	 *
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllChildrenByNodeId() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findChildrenByNodeIds()
+	 */
 	public function getNodeChildNodes(int $nodeId): NodeCollection
 	{
-		$node = $this->nodeRepository->getById($nodeId);
-		if (!$node)
-		{
-			return new NodeCollection();
-		}
-
-		return $this->nodeRepository->getChildOf($node, DepthLevel::FULL);
+		return PublicContainer::getNodeService()->findChildrenByNodeIds(
+			nodeIds: [$nodeId],
+			nodeTypes: [NodeEntityType::DEPARTMENT],
+		);
 	}
 
 	public function getNodeChildNodesByAccessCode(string $accessCode): NodeCollection
@@ -63,9 +78,16 @@ class NodeService implements Contract\Service\NodeService
 		return $this->getNodeChildNodes($node->id);
 	}
 
+	/**
+	 * Internal service method for getting a Node by id. Use public node service instead.
+	 *
+	 *@deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::getById() instead.
+	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::getById()
+	 */
 	public function getNodeInformation(int $nodeId): ?Node
 	{
-		return $this->nodeRepository->getById($nodeId);
+		return PublicContainer::getNodeService()->getById($nodeId);
 	}
 
 	/**
@@ -119,7 +141,7 @@ class NodeService implements Contract\Service\NodeService
 
 		if ($targetNode)
 		{
-			$lastSibling = InternalContainer::getNodeRepository()->getChildrenOfNode($targetNode)->getLast();
+			$lastSibling = InternalContainer::getNodeRepository()->findChildrenByNodeIds([$targetNode->id])->getLast();
 		}
 
 		$lastSiblingSort = $lastSibling ? $lastSibling->sort : 0;

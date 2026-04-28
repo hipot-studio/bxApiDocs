@@ -103,11 +103,22 @@ abstract class EntityProvider extends BaseProvider
 	public function isAvailable(): bool
 	{
 		$restriction = RestrictionManager::getSearchLimitRestriction();
+		$entityTypeId = $this->getEntityTypeId();
+		if ($restriction->isExceeded($entityTypeId))
+		{
+			return false;
+		}
 
-		return
-			$this->userPermissions->entityType()->canReadItems($this->getEntityTypeId())
-			&& !$restriction->isExceeded($this->getEntityTypeId())
-		;
+		$categoryId = $this->getCategoryId();
+		if ($categoryId > 0)
+		{
+			return $this->userPermissions->entityType()->canReadItemsInCategory(
+				$entityTypeId,
+				$categoryId,
+			);
+		}
+
+		return $this->userPermissions->entityType()->canReadItems($entityTypeId);
 	}
 
 	public function getItems(array $ids): array

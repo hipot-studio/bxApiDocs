@@ -55,6 +55,7 @@ class PersonalMobilePush
 	public function setup(string $secret, string $totpCode, array $initParams = []): void
 	{
 		$this->personalOtp->setup($secret, $totpCode, OtpType::Push, $initParams);
+		(new DeviceReconnect())->clearLost($this->personalOtp->getOtpInfo()->userId);
 	}
 
 	public function getDeviceInfo(): array

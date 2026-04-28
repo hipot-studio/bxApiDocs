@@ -272,10 +272,10 @@ final class ActivityDescription implements \JsonSerializable
 	public function setComplexActivitySettings(?Complex\Settings $settings): self
 	{
 		$this->complexActivitySettings = $settings;
-		
+
 		return $this;
 	}
-	
+
 	public function getComplexActivitySettings(): ?Complex\Settings
 	{
 		return $this->complexActivitySettings;
@@ -347,6 +347,11 @@ final class ActivityDescription implements \JsonSerializable
 		if (!empty($preset['SORT']))
 		{
 			$data['SORT'] = $preset['SORT'];
+		}
+
+		if (!empty($preset['GROUPS']))
+		{
+			$data['GROUPS'] = $preset['GROUPS'];
 		}
 
 		return self::makeFromArray($data);

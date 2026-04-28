@@ -6,6 +6,9 @@ use Bitrix\Main\Localization;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Translate;
 
+/**
+ * @internal
+ */
 
 class Panel
 {

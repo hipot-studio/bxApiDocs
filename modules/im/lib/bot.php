@@ -2,11 +2,13 @@
 
 namespace Bitrix\Im;
 
+use Bitrix\Im\Model\BotTable;
 use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\Background\BackgroundId;
 use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Im\V2\Entity\User\UserBot;
+use Bitrix\Im\V2\Event\EventPayload;
 use Bitrix\Im\V2\Message;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
@@ -35,9 +37,13 @@ class Bot
 	const TYPE_SUPERVISOR = 'S';
 	const TYPE_NETWORK = 'N';
 	const TYPE_OPENLINE = 'O';
+	const TYPE_PERSONAL = 'P';
 
 	const CACHE_TTL = 31536000;
 	const CACHE_PATH = '/bx/im/bot/old_cache_v1/';
+
+	public const EVENT_MODE_WEBHOOK = 'WEBHOOK';
+	public const EVENT_MODE_FETCH = 'FETCH';
 
 	public const PLATFORM_CONTEXT_MOBILE = 'mobile';
 	public const PLATFORM_CONTEXT_WEB = 'web';
@@ -51,7 +57,7 @@ class Bot
 	public static function register(array $fields)
 	{
 		$code = isset($fields['CODE'])? $fields['CODE']: '';
-		$type = in_array($fields['TYPE'], [self::TYPE_BOT, self::TYPE_SUPERVISOR, self::TYPE_NETWORK, self::TYPE_OPENLINE])
+		$type = in_array($fields['TYPE'], [self::TYPE_BOT, self::TYPE_SUPERVISOR, self::TYPE_NETWORK, self::TYPE_OPENLINE, self::TYPE_PERSONAL])
 			? $fields['TYPE']
 			: self::TYPE_BOT;
 		$moduleId = $fields['MODULE_ID'];
@@ -75,7 +81,10 @@ class Bot
 		$openline = isset($fields['OPENLINE']) && $fields['OPENLINE'] == 'Y'? 'Y': 'N';
 		$isHidden = isset($fields['HIDDEN']) && $fields['HIDDEN'] === 'Y' ? 'Y' : 'N';
 		$reactionsEnabled = isset($fields['REACTIONS_ENABLED']) && $fields['REACTIONS_ENABLED'] === 'Y' ? 'Y' : 'N';
-		$backgroundId = Background::validateBackgroundId($fields['BACKGROUND_ID'] ?? null);
+		$backgroundId = Background::normalizeBackgroundId($fields['BACKGROUND_ID'] ?? null);
+		$eventMode = in_array($fields['EVENT_MODE'] ?? '', [self::EVENT_MODE_WEBHOOK, self::EVENT_MODE_FETCH], true)
+			? $fields['EVENT_MODE']
+			: self::EVENT_MODE_WEBHOOK;
 
 		/* rewrite vars for openline type */
 		if ($type == self::TYPE_OPENLINE)
@@ -107,15 +116,19 @@ class Bot
 			}
 		}
 
-		$bots = self::getListCache();
 		if ($moduleId && $code)
 		{
-			foreach ($bots as $bot)
+			$botQuery = Model\BotTable::getList([
+				'filter' => [
+					'=MODULE_ID' => $moduleId,
+					'=CODE' => $code,
+				],
+				'select' => ['BOT_ID'],
+				'limit' => 1,
+			]);
+			if ($bot = $botQuery->fetch())
 			{
-				if ($bot['MODULE_ID'] == $moduleId && $bot['CODE'] == $code)
-				{
-					return $bot['BOT_ID'];
-				}
+				return $bot['BOT_ID'];
 			}
 		}
 
@@ -183,7 +196,7 @@ class Bot
 			return false;
 		}
 
-		$result = \Bitrix\Im\Model\BotTable::add(Array(
+		$result = BotTable::add(Array(
 			'BOT_ID' => $botId,
 			'CODE' => $code? $code: $botId,
 			'MODULE_ID' => $moduleId,
@@ -205,6 +218,7 @@ class Bot
 			'HIDDEN' => $isHidden,
 			'REACTIONS_ENABLED' => $reactionsEnabled,
 			'BACKGROUND_ID' => $backgroundId,
+			'EVENT_MODE' => $eventMode,
 		));
 
 		$cache = \Bitrix\Main\Data\Cache::createInstance();
@@ -268,47 +282,84 @@ class Bot
 	 */
 	public static function unRegister(array $bot)
 	{
-		$botId = intval($bot['BOT_ID']);
-		$moduleId = isset($bot['MODULE_ID'])? $bot['MODULE_ID']: '';
-		$appId = isset($bot['APP_ID'])? $bot['APP_ID']: '';
+		$botId = (int)$bot['BOT_ID'];
+		$moduleId = $bot['MODULE_ID'] ?? '';
+		$appId = $bot['APP_ID'] ?? '';
 
-		if (intval($botId) <= 0)
+		if ($botId <= 0)
 		{
 			return false;
 		}
 
-		$bots = self::getListCache();
-		if (!isset($bots[$botId]))
+		$botData = BotData::getInstance($botId);
+		if (!$botData->exists())
 		{
 			return false;
 		}
 
-		if ($moduleId <> '' && $bots[$botId]['MODULE_ID'] != $moduleId)
+		if ($moduleId !== '' && $botData->getModuleId() !== $moduleId)
 		{
 			return false;
 		}
 
-		if ($appId <> '' && $bots[$botId]['APP_ID'] != $appId)
+		if ($appId != '' && $botData->getAppId() != $appId)
 		{
 			return false;
 		}
 
-		\Bitrix\Im\Model\BotTable::delete($botId);
+		$deletedBot = $botData->toArray();
+
+		// V2 payload must be built BEFORE deleting bot data,
+		// otherwise webhook handler URLs are gone and the event cannot be delivered.
+		$v2Payload = (new EventPayload())->botDelete($botId);
+
+		try
+		{
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logBotDelete($botId, 'ONIMBOTV2DELETE', $v2Payload);
+		}
+		catch (\Throwable)
+		{
+		}
+
+		self::fireRestEvents('onImBotDelete', 'onImBotV2Delete', [$deletedBot, $botId, $v2Payload]);
+
+		BotTable::delete($botId);
+		\Bitrix\Im\Model\EventLogTable::deleteBatch(['=USER_ID' => $botId]);
 
 		$cache = \Bitrix\Main\Data\Cache::createInstance();
 		$cache->cleanDir(self::CACHE_PATH);
 
+		if (!empty($deletedBot['APP_ID']))
+		{
+			$remainingBots = BotTable::getCount(['=APP_ID' => $deletedBot['APP_ID']]);
+			if (
+				$remainingBots === 0
+				&& \Bitrix\Main\Loader::includeModule('imbot')
+				&& \Bitrix\Main\Loader::includeModule('rest')
+			)
+			{
+				$appResult = \Bitrix\Rest\AppTable::getList([
+					'filter' => ['=CLIENT_ID' => $deletedBot['APP_ID']],
+					'select' => ['ID'],
+				]);
+				if ($app = $appResult->fetch())
+				{
+					\Bitrix\ImBot\V2\Controller\Bot::unbindV2RestEvents((int)$app['ID']);
+				}
+			}
+		}
+
 		$user = new \CUser;
 		$user->Delete($botId);
 
-		if (\Bitrix\Main\Loader::includeModule($bots[$botId]['MODULE_ID']) && $bots[$botId]["METHOD_BOT_DELETE"] && class_exists($bots[$botId]["CLASS"]) && method_exists($bots[$botId]["CLASS"], $bots[$botId]["METHOD_BOT_DELETE"]))
+		if (
+			\Bitrix\Main\Loader::includeModule($botData->getModuleId())
+			&& $botData->getMethodBotDelete()
+			&& class_exists($botData->getClass())
+			&& method_exists($botData->getClass(), $botData->getMethodBotDelete())
+		)
 		{
-			call_user_func_array(array($bots[$botId]["CLASS"], $bots[$botId]["METHOD_BOT_DELETE"]), Array($botId));
-		}
-
-		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImBotDelete") as $event)
-		{
-			\ExecuteModuleEventEx($event, Array($bots[$botId], $botId));
+			call_user_func_array(array($botData->getClass(), $botData->getMethodBotDelete()), [$botId]);
 		}
 
 		$orm = \Bitrix\Im\Model\CommandTable::getList(Array(
@@ -341,9 +392,9 @@ class Bot
 	 */
 	public static function update(array $bot, array $updateFields)
 	{
-		$botId = intval($bot['BOT_ID']);
-		$moduleId = isset($bot['MODULE_ID'])? $bot['MODULE_ID']: '';
-		$appId = isset($bot['APP_ID'])? $bot['APP_ID']: '';
+		$botId = (int)$bot['BOT_ID'];
+		$moduleId = $bot['MODULE_ID'] ?? '';
+		$appId = $bot['APP_ID'] ?? '';
 
 		if ($botId <= 0)
 		{
@@ -355,18 +406,18 @@ class Bot
 			return false;
 		}
 
-		$bots = self::getListCache();
-		if (!isset($bots[$botId]))
+		$botData = BotData::getInstance($botId);
+		if (!$botData->exists())
 		{
 			return false;
 		}
 
-		if ($moduleId <> '' && $bots[$botId]['MODULE_ID'] != $moduleId)
+		if ($moduleId !== '' && $botData->getModuleId() !== $moduleId)
 		{
 			return false;
 		}
 
-		if ($appId <> '' && $bots[$botId]['APP_ID'] != $appId)
+		if ($appId != '' && $botData->getAppId() != $appId)
 		{
 			return false;
 		}
@@ -427,7 +478,15 @@ class Bot
 			);
 
 			$user = new \CUser;
-			$user->Update($botId, $update);
+			try
+			{
+				$user->Update($botId, $update);
+			}
+			catch (\Throwable $e)
+			{
+				// Suppress errors from OnAfterUserUpdate handlers
+				// (counters, department, etc.) that are irrelevant for bot users.
+			}
 
 			if ($color && \Bitrix\Main\Loader::includeModule('pull'))
 			{
@@ -516,20 +575,43 @@ class Bot
 		{
 			$update['HIDDEN'] = $updateFields['HIDDEN'] === 'Y' ? 'Y' : 'N';
 		}
+		if (isset($updateFields['OPENLINE']))
+		{
+			$update['OPENLINE'] = $updateFields['OPENLINE'] === 'Y' ? 'Y' : 'N';
+		}
 		if (isset($updateFields['REACTIONS_ENABLED']))
 		{
 			$update['REACTIONS_ENABLED'] = $updateFields['REACTIONS_ENABLED'] === 'Y' ? 'Y' : 'N';
 		}
 		if (isset($updateFields['BACKGROUND_ID']))
 		{
-			$update['BACKGROUND_ID'] = Background::validateBackgroundId($updateFields['BACKGROUND_ID']);
+			$update['BACKGROUND_ID'] = Background::normalizeBackgroundId($updateFields['BACKGROUND_ID']);
+		}
+		$oldEventMode = null;
+		if (
+			isset($updateFields['EVENT_MODE'])
+			&& in_array($updateFields['EVENT_MODE'], [self::EVENT_MODE_WEBHOOK, self::EVENT_MODE_FETCH], true)
+		)
+		{
+			$botArray = $botData->toArray();
+			$oldEventMode = $botArray['EVENT_MODE'] ?? self::EVENT_MODE_WEBHOOK;
+			$update['EVENT_MODE'] = $updateFields['EVENT_MODE'];
 		}
 		if (!empty($update))
 		{
-			\Bitrix\Im\Model\BotTable::update($botId, $update);
+			BotTable::update($botId, $update);
 
 			$cache = \Bitrix\Main\Data\Cache::createInstance();
 			$cache->cleanDir(self::CACHE_PATH);
+		}
+
+		// Clean orphaned pending events when switching FETCH → WEBHOOK
+		if (
+			$oldEventMode === self::EVENT_MODE_FETCH
+			&& ($update['EVENT_MODE'] ?? null) === self::EVENT_MODE_WEBHOOK
+		)
+		{
+			\Bitrix\Im\Model\EventLogTable::deleteBatch(['=USER_ID' => $botId]);
 		}
 
 		self::sendPullNotify($botId, 'botUpdate');
@@ -552,8 +634,8 @@ class Bot
 			return false;
 		}
 
-		$botForJs = self::getListForJs();
-		if (!isset($botForJs[$botId]))
+		$botData = BotData::getInstance((int)$botId);
+		if (!$botData->exists())
 		{
 			return false;
 		}
@@ -573,7 +655,7 @@ class Bot
 				'module_id' => 'im',
 				'command' => $messageType,
 				'params' => [
-					'bot' => $botForJs[$botId],
+					'bot' => $botData->toRestFormat(),
 					'user' => $userData['users'][$botId],
 					'userInGroup' => $userData['userInGroup'],
 				],
@@ -614,8 +696,8 @@ class Bot
 			return false;
 		}
 
-		$botForJs = self::getListForJs();
-		if (!isset($botForJs[$botId]))
+		$botData = BotData::getInstance($botId);
+		if (!$botData->exists())
 		{
 			return false;
 		}
@@ -649,7 +731,7 @@ class Bot
 				continue;
 			}
 
-			$botData = $bot->getBotData()->getBotData();
+			$botData = $bot->getBotData()->toArray();
 			if (empty($botData))
 			{
 				continue;
@@ -722,7 +804,7 @@ class Bot
 
 			if ($params["METHOD_MESSAGE_ADD"] && class_exists($params["CLASS"]) && method_exists($params["CLASS"], $params["METHOD_MESSAGE_ADD"]))
 			{
-				\Bitrix\Im\Model\BotTable::update($params['BOT_ID'], array(
+				BotTable::update($params['BOT_ID'], array(
 					"COUNT_MESSAGE" => new \Bitrix\Main\DB\SqlExpression("?# + 1", "COUNT_MESSAGE")
 				));
 
@@ -734,11 +816,19 @@ class Bot
 			}
 		}
 
-		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImBotMessageAdd") as $event)
+		$v2Payload = (new EventPayload())->messageAdd($messageId, $messageFieldsForEvents);
+
+		try
 		{
-			$eventParams = [$botExecModule, $messageId, $messageFieldsForEvents];
-			\ExecuteModuleEventEx($event, $eventParams);
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logBotMessageEvent(
+				$botExecModule, 'ONIMBOTV2MESSAGEADD', $v2Payload
+			);
 		}
+		catch (\Throwable)
+		{
+		}
+
+		self::fireRestEventsPerItem('onImBotMessageAdd', 'onImBotV2MessageAdd', $botExecModule, [$messageId, $messageFieldsForEvents, $v2Payload]);
 
 		if (
 			$messageFields['CHAT_ENTITY_TYPE'] == 'LINES'
@@ -799,14 +889,22 @@ class Bot
 				call_user_func_array(array($params["CLASS"], "onMessageUpdate"), Array($messageId, $messageFields));
 			}
 		}
+
+		$v2Payload = (new EventPayload())->messageUpdate($messageId, $messageFieldsForEvents);
+
+		try
+		{
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logBotMessageEvent(
+				$botExecModule, 'ONIMBOTV2MESSAGEUPDATE', $v2Payload
+			);
+		}
+		catch (\Throwable)
+		{
+		}
+
 		unset($messageFields['BOT_ID']);
 
-		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImBotMessageUpdate") as $event)
-		{
-			$eventParams = [$botExecModule, $messageId, $messageFieldsForEvents];
-
-			\ExecuteModuleEventEx($event, $eventParams);
-		}
+		self::fireRestEventsPerItem('onImBotMessageUpdate', 'onImBotV2MessageUpdate', $botExecModule, [$messageId, $messageFieldsForEvents, $v2Payload]);
 
 		return true;
 	}
@@ -840,30 +938,37 @@ class Bot
 				call_user_func_array(array($params["CLASS"], "onMessageDelete"), Array($messageId, $messageFields));
 			}
 		}
+
+		$v2Payload = (new EventPayload())->messageDelete($messageId, $messageFields);
+
+		try
+		{
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logBotMessageEvent(
+				$botExecModule, 'ONIMBOTV2MESSAGEDELETE', $v2Payload
+			);
+		}
+		catch (\Throwable)
+		{
+		}
+
 		unset($messageFields['BOT_ID']);
 
-		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImBotMessageDelete") as $event)
-		{
-			\ExecuteModuleEventEx($event, Array($botExecModule, $messageId, $messageFields));
-		}
+		self::fireRestEventsPerItem('onImBotMessageDelete', 'onImBotV2MessageDelete', $botExecModule, [$messageId, $messageFields, $v2Payload]);
 
 		return true;
 	}
 
 	public static function onJoinChat($dialogId, $joinFields)
 	{
-		$bots = self::getListCache();
-		if (empty($bots))
-		{
-			return true;
-		}
-
-		if (!isset($joinFields['BOT_ID']) || !$bots[$joinFields['BOT_ID']])
+		if (!isset($joinFields['BOT_ID']))
 		{
 			return false;
 		}
-
-		$bot = $bots[$joinFields['BOT_ID']];
+		$bot = BotData::getInstance((int)$joinFields['BOT_ID'])->toArray();
+		if (!$bot)
+		{
+			return false;
+		}
 
 		if (!\Bitrix\Main\Loader::includeModule($bot['MODULE_ID']))
 		{
@@ -878,7 +983,7 @@ class Bot
 		{
 			$updateCounter = array("COUNT_CHAT" => new \Bitrix\Main\DB\SqlExpression("?# + 1", "COUNT_CHAT"));
 		}
-		\Bitrix\Im\Model\BotTable::update($joinFields['BOT_ID'], $updateCounter);
+		BotTable::update($joinFields['BOT_ID'], $updateCounter);
 
 		if ($bot["METHOD_WELCOME_MESSAGE"] && class_exists($bot["CLASS"]) && method_exists($bot["CLASS"], $bot["METHOD_WELCOME_MESSAGE"]))
 		{
@@ -918,28 +1023,32 @@ class Bot
 			));
 		}
 
-		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImBotJoinChat") as $event)
+		$v2Payload = (new EventPayload())->welcomeMessage($dialogId, $joinFields);
+
+		try
 		{
-			\ExecuteModuleEventEx($event, Array($bot, $dialogId, $joinFields));
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logJoinChat($bot, 'ONIMBOTV2JOINCHAT', $v2Payload);
 		}
+		catch (\Throwable)
+		{
+		}
+
+		self::fireRestEvents('onImBotJoinChat', 'onImBotV2JoinChat', [$bot, $dialogId, $joinFields, $v2Payload]);
 
 		return true;
 	}
 
 	public static function onLeaveChat($dialogId, $leaveFields)
 	{
-		$bots = self::getListCache();
-		if (empty($bots))
-		{
-			return true;
-		}
-
-		if (!isset($leaveFields['BOT_ID']) || !$bots[$leaveFields['BOT_ID']])
+		if (!isset($leaveFields['BOT_ID']))
 		{
 			return false;
 		}
-
-		$bot = $bots[$leaveFields['BOT_ID']];
+		$bot = BotData::getInstance((int)$leaveFields['BOT_ID'])->toArray();
+		if (!$bot)
+		{
+			return false;
+		}
 
 		if (!\Bitrix\Main\Loader::includeModule($bot['MODULE_ID']))
 		{
@@ -954,7 +1063,7 @@ class Bot
 		{
 			$updateCounter = array("COUNT_CHAT" => new \Bitrix\Main\DB\SqlExpression("?# - 1", "COUNT_CHAT"));
 		}
-		\Bitrix\Im\Model\BotTable::update($leaveFields['BOT_ID'], $updateCounter);
+		BotTable::update($leaveFields['BOT_ID'], $updateCounter);
 
 		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImBotLeaveChat") as $event)
 		{
@@ -977,7 +1086,7 @@ class Bot
 
 		foreach ($botList as $botId)
 		{
-			$botData = BotData::getInstance($botId)?->getBotData();
+			$botData = BotData::getInstance($botId)->toArray();
 			if (
 				empty($botData)
 				|| !\Bitrix\Main\Loader::includeModule($botData['MODULE_ID'])
@@ -998,15 +1107,24 @@ class Bot
 			}
 		}
 
+		$contextParams = $params;
+		$contextParams['CHAT_ID'] = $chat->getId();
+		$v2Payload = (new EventPayload())->contextGet($dialogId, $contextParams);
+
+		try
+		{
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logContextGet($botsForEvent, 'ONIMBOTV2CONTEXTGET', $v2Payload);
+		}
+		catch (\Throwable)
+		{
+		}
+
 		if (empty($botsForEvent))
 		{
 			return false;
 		}
 
-		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImBotContextGet") as $event)
-		{
-			\ExecuteModuleEventEx($event, [$botsForEvent, $dialogId, $params]);
-		}
+		self::fireRestEventsPerItem('onImBotContextGet', 'onImBotV2ContextGet', $botsForEvent, [$dialogId, $params, $v2Payload]);
 
 		return true;
 	}
@@ -1028,7 +1146,7 @@ class Bot
 
 		$params['DIALOG_ID'] = $dialogId;
 
-		$botData = BotData::getInstance($bot->getId())?->getBotData();
+		$botData = BotData::getInstance($bot->getId())->toArray();
 		if (
 			empty($botData)
 			|| !\Bitrix\Main\Loader::includeModule($botData['MODULE_ID'])
@@ -1050,12 +1168,82 @@ class Bot
 			call_user_func([$botData["CLASS"], "onReactionChange"], $message->getId(), $params);
 		}
 
-		foreach(\Bitrix\Main\EventManager::getInstance()->findEventHandlers("im", "onImBotReactionChange") as $event)
+		$v2Payload = (new EventPayload())->reactionChange($message->getId(), $params);
+
+		try
 		{
-			\ExecuteModuleEventEx($event, [$botData, $message->getId(), $params]);
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logReactionChange(
+				(int)$botData['BOT_ID'], 'ONIMBOTV2REACTIONCHANGE', $v2Payload
+			);
+		}
+		catch (\Throwable)
+		{
 		}
 
+		self::fireRestEvents('onImBotReactionChange', 'onImBotV2ReactionChange', [$botData, $message->getId(), $params, $v2Payload]);
+
 		return true;
+	}
+
+	/**
+	 * Fires paired V1 + V2 REST event handlers with the same parameters.
+	 */
+	public static function fireRestEvents(string $v1EventName, string $v2EventName, array $eventParams): void
+	{
+		$em = \Bitrix\Main\EventManager::getInstance();
+
+		foreach ($em->findEventHandlers('im', $v1EventName) as $event)
+		{
+			\ExecuteModuleEventEx($event, $eventParams);
+		}
+		foreach ($em->findEventHandlers('im', $v2EventName) as $event)
+		{
+			\ExecuteModuleEventEx($event, $eventParams);
+		}
+	}
+
+	/**
+	 * Fires V1 once (batch) and V2 once per item for single-object webhook format.
+	 *
+	 * Used for events where $arParams[0] contains a list of bots or commands.
+	 * V1 receives the full list (backward compatible).
+	 * V2 fires separately for each item so the webhook payload contains
+	 * a single `bot` object instead of an array.
+	 *
+	 * @param string $v1EventName V1 event name (batch dispatch)
+	 * @param string $v2EventName V2 event name (per-item dispatch)
+	 * @param array $items List of bots/commands — each item fires a separate V2 event
+	 * @param array $additionalParams Remaining event parameters after the item list
+	 */
+	public static function fireRestEventsPerItem(
+		string $v1EventName,
+		string $v2EventName,
+		array $items,
+		array $additionalParams
+	): void
+	{
+		$em = \Bitrix\Main\EventManager::getInstance();
+
+		// V1: all items in one event (backward compatible)
+		foreach ($em->findEventHandlers('im', $v1EventName) as $event)
+		{
+			\ExecuteModuleEventEx($event, array_merge([$items], $additionalParams));
+		}
+
+		// V2: one event per item → single-object bot format in webhook
+		$v2Handlers = $em->findEventHandlers('im', $v2EventName);
+		if (empty($v2Handlers))
+		{
+			return;
+		}
+
+		foreach ($items as $singleItem)
+		{
+			foreach ($v2Handlers as $event)
+			{
+				\ExecuteModuleEventEx($event, array_merge([[$singleItem]], $additionalParams));
+			}
+		}
 	}
 
 	protected static function addAdditionalParams(array $params): array
@@ -1091,8 +1279,8 @@ class Bot
 	)
 	{
 		$botId = $bot['BOT_ID'];
-		$moduleId = isset($bot['MODULE_ID'])? $bot['MODULE_ID']: '';
-		$appId = isset($bot['APP_ID'])? $bot['APP_ID']: '';
+		$moduleId = $bot['MODULE_ID'] ?? '';
+		$appId = $bot['APP_ID'] ?? '';
 
 		if (intval($botId) <= 0)
 		{
@@ -1104,18 +1292,18 @@ class Bot
 			return false;
 		}
 
-		$bots = self::getListCache();
-		if (!isset($bots[$botId]))
+		$botData = BotData::getInstance((int)$botId);
+		if (!$botData->exists())
 		{
 			return false;
 		}
 
-		if ($moduleId <> '' && $bots[$botId]['MODULE_ID'] != $moduleId)
+		if ($moduleId !== '' && $botData->getModuleId() !== $moduleId)
 		{
 			return false;
 		}
 
-		if ($appId <> '' && $bots[$botId]['APP_ID'] != $appId)
+		if ($appId != '' && $botData->getAppId() != $appId)
 		{
 			return false;
 		}
@@ -1188,8 +1376,8 @@ class Bot
 			return false;
 		}
 
-		$botData = BotData::getInstance($botId)?->getBotData();
-		if (!isset($botData))
+		$botData = BotData::getInstance($botId)->toArray();
+		if (empty($botData))
 		{
 			return false;
 		}
@@ -1230,10 +1418,10 @@ class Bot
 	public static function addMessage(array $bot, array $messageFields)
 	{
 		$botId = $bot['BOT_ID'];
-		$moduleId = isset($bot['MODULE_ID'])? $bot['MODULE_ID']: '';
-		$appId = isset($bot['APP_ID'])? $bot['APP_ID']: '';
+		$moduleId = $bot['MODULE_ID'] ?? '';
+		$appId = $bot['APP_ID'] ?? '';
 
-		if (intval($botId) <= 0)
+		if ((int)$botId <= 0)
 		{
 			return false;
 		}
@@ -1243,18 +1431,18 @@ class Bot
 			return false;
 		}
 
-		$bots = self::getListCache();
-		if (!isset($bots[$botId]))
+		$botData = BotData::getInstance((int)$botId);
+		if (!$botData->exists())
 		{
 			return false;
 		}
 
-		if ($moduleId <> '' && $bots[$botId]['MODULE_ID'] != $moduleId)
+		if ($moduleId !== '' && $botData->getModuleId() !== $moduleId)
 		{
 			return false;
 		}
 
-		if ($appId <> '' && $bots[$botId]['APP_ID'] != $appId)
+		if ($appId != '' && $botData->getAppId() != $appId)
 		{
 			return false;
 		}
@@ -1396,24 +1584,34 @@ class Bot
 	public static function updateMessage(array $bot, array $messageFields)
 	{
 		$botId = $bot['BOT_ID'];
-		$moduleId = isset($bot['MODULE_ID'])? $bot['MODULE_ID']: '';
-		$appId = isset($bot['APP_ID'])? $bot['APP_ID']: '';
+		$moduleId = $bot['MODULE_ID'] ?? '';
+		$appId = $bot['APP_ID'] ?? '';
 
-		if (intval($botId) <= 0)
+		if ((int)$botId <= 0)
+		{
 			return false;
+		}
 
 		if (!\Bitrix\Im\User::getInstance($botId)->isExists() || !\Bitrix\Im\User::getInstance($botId)->isBot())
+		{
 			return false;
+		}
 
-		$bots = self::getListCache();
-		if (!isset($bots[$botId]))
+		$botData = BotData::getInstance((int)$botId);
+		if (!$botData->exists())
+		{
 			return false;
+		}
 
-		if ($moduleId <> '' && $bots[$botId]['MODULE_ID'] != $moduleId)
+		if ($moduleId !== '' && $botData->getModuleId() !== $moduleId)
+		{
 			return false;
+		}
 
-		if ($appId <> '' && $bots[$botId]['APP_ID'] != $appId)
+		if ($appId != '' && $botData->getAppId() != $appId)
+		{
 			return false;
+		}
 
 		$messageId = intval($messageFields['MESSAGE_ID']);
 		if ($messageId <= 0)
@@ -1488,28 +1686,40 @@ class Bot
 	public static function deleteMessage(array $bot, $messageId)
 	{
 		$botId = $bot['BOT_ID'];
-		$moduleId = isset($bot['MODULE_ID'])? $bot['MODULE_ID']: '';
-		$appId = isset($bot['APP_ID'])? $bot['APP_ID']: '';
+		$moduleId = $bot['MODULE_ID'] ?? '';
+		$appId = $bot['APP_ID'] ?? '';
 
 		$messageId = intval($messageId);
 		if ($messageId <= 0)
+		{
 			return false;
+		}
 
-		if (intval($botId) <= 0)
+		if ((int)$botId <= 0)
+		{
 			return false;
+		}
 
 		if (!\Bitrix\Im\User::getInstance($botId)->isExists() || !\Bitrix\Im\User::getInstance($botId)->isBot())
+		{
 			return false;
+		}
 
-		$bots = self::getListCache();
-		if (!isset($bots[$botId]))
+		$botData = BotData::getInstance((int)$botId);
+		if (!$botData->exists())
+		{
 			return false;
+		}
 
-		if ($moduleId <> '' && $bots[$botId]['MODULE_ID'] != $moduleId)
+		if ($moduleId !== '' && $botData->getModuleId() !== $moduleId)
+		{
 			return false;
+		}
 
-		if ($appId <> '' && $bots[$botId]['APP_ID'] != $appId)
+		if ($appId != '' && $botData->getAppId() != $appId)
+		{
 			return false;
+		}
 
 		return \CIMMessenger::Delete($messageId, $botId);
 	}
@@ -1517,28 +1727,40 @@ class Bot
 	public static function likeMessage(array $bot, $messageId, $action = 'AUTO')
 	{
 		$botId = $bot['BOT_ID'];
-		$moduleId = isset($bot['MODULE_ID'])? $bot['MODULE_ID']: '';
-		$appId = isset($bot['APP_ID'])? $bot['APP_ID']: '';
+		$moduleId = $bot['MODULE_ID'] ?? '';
+		$appId = $bot['APP_ID'] ?? '';
 
 		$messageId = intval($messageId);
 		if ($messageId <= 0)
+		{
 			return false;
+		}
 
-		if (intval($botId) <= 0)
+		if ((int)$botId <= 0)
+		{
 			return false;
+		}
 
 		if (!\Bitrix\Im\User::getInstance($botId)->isExists() || !\Bitrix\Im\User::getInstance($botId)->isBot())
+		{
 			return false;
+		}
 
-		$bots = self::getListCache();
-		if (!isset($bots[$botId]))
+		$botData = BotData::getInstance((int)$botId);
+		if (!$botData->exists())
+		{
 			return false;
+		}
 
-		if ($moduleId <> '' && $bots[$botId]['MODULE_ID'] != $moduleId)
+		if ($moduleId !== '' && $botData->getModuleId() !== $moduleId)
+		{
 			return false;
+		}
 
-		if ($appId <> '' && $bots[$botId]['APP_ID'] != $appId)
+		if ($appId != '' && $botData->getAppId() != $appId)
+		{
 			return false;
+		}
 
 		return \CIMMessenger::Like($messageId, $action, $botId);
 	}
@@ -1569,8 +1791,8 @@ class Bot
 
 	public static function getCache($botId)
 	{
-		$botList = self::getListCache();
-		return isset($botList[$botId])? $botList[$botId]: false;
+		$botData = BotData::getInstance((int)$botId)->toArray();
+		return $botData ?: false;
 	}
 
 	public static function clearCache()
@@ -1581,6 +1803,9 @@ class Bot
 		return true;
 	}
 
+	/**
+	 * @deprecated Use {@see BotData::getInstance()} to retrieve single bot data.
+	 */
 	public static function getListCache($type = self::LIST_ALL)
 	{
 		$cache = \Bitrix\Main\Data\Cache::createInstance();
@@ -1591,7 +1816,7 @@ class Bot
 		else
 		{
 			$result = Array();
-			$orm = \Bitrix\Im\Model\BotTable::getList();
+			$orm = BotTable::getList();
 			while ($row = $orm->fetch())
 			{
 				$row['LANG'] = $row['LANG']? $row['LANG']: null;
@@ -1618,8 +1843,12 @@ class Bot
 
 	public static function getListForJs()
 	{
-		$result = Array();
-		$bots = self::getListCache();
+		$result = [];
+		$bots = BotTable::query()
+			->setSelect(['BOT_ID', 'CODE', 'TYPE', 'CLASS', 'OPENLINE', 'BACKGROUND_ID', 'REACTIONS_ENABLED'])
+			->setFilter(['=OPENLINE' => 'Y'])
+			->fetchAll()
+		;
 		foreach ($bots as $bot)
 		{
 			$type = 'bot';
@@ -1656,13 +1885,17 @@ class Bot
 			{
 				$type = 'supervisor';
 			}
+			else if ($bot['TYPE'] == self::TYPE_PERSONAL)
+			{
+				$type = 'personal';
+			}
 
 			$result[$bot['BOT_ID']] = Array(
 				'id' => $bot['BOT_ID'],
 				'code' => $code,
 				'type' => $type,
 				'openline' => $bot['OPENLINE'] == 'Y',
-				'backgroundId' => $bot['BACKGROUND_ID'] ?? null,
+				'backgroundId' => BackgroundId::normalize($bot['BACKGROUND_ID'] ?? null),
 				'reactionsEnabled' => $bot['REACTIONS_ENABLED'] ?? false,
 			);
 		}
@@ -1773,20 +2006,17 @@ class Bot
 	 */
 	private static function getBotsForMessage($messageFields): array
 	{
-		$bots = self::getListCache();
-		if (empty($bots))
-		{
-			return [];
-		}
-
-		if (isset($messageFields['FROM_USER_ID'], $bots[$messageFields['FROM_USER_ID']]))
+		if (
+			isset($messageFields['FROM_USER_ID'])
+			&& BotData::getInstance((int)$messageFields['FROM_USER_ID'])->exists()
+		)
 		{
 			return [];
 		}
 		if (
 			$messageFields['MESSAGE_TYPE'] === \IM_MESSAGE_CHAT
 			&& $messageFields['CHAT_ENTITY_TYPE'] === 'SUPPORT24_QUESTION' /** @see \Bitrix\ImBot\Bot\Support24::CHAT_ENTITY_TYPE */
-			&& isset($bots[$messageFields['AUTHOR_ID']])
+			&& BotData::getInstance((int)$messageFields['AUTHOR_ID'])->exists()
 		)
 		{
 			return [];
@@ -1795,9 +2025,10 @@ class Bot
 		$botExecModule = [];
 		if ($messageFields['MESSAGE_TYPE'] === \IM_MESSAGE_PRIVATE)
 		{
-			if (isset($bots[$messageFields['TO_USER_ID']]))
+			$botByToUserId = BotData::getInstance((int)$messageFields['TO_USER_ID'])->toArray();
+			if ($botByToUserId)
 			{
-				$botExecModule[$messageFields['TO_USER_ID']] = $bots[$messageFields['TO_USER_ID']];
+				$botExecModule[$messageFields['TO_USER_ID']] = $botByToUserId;
 			}
 		}
 		else
@@ -1816,7 +2047,8 @@ class Bot
 			{
 				foreach ($matches[1] as $userId)
 				{
-					if (isset($bots[$userId]) && isset($messageFields['BOT_IN_CHAT'][$userId]))
+					$botByUserIdExists = BotData::getInstance((int)$userId)->exists();
+					if ($botByUserIdExists && isset($messageFields['BOT_IN_CHAT'][$userId]))
 					{
 						$botFound[$userId] = $userId;
 					}
@@ -1825,7 +2057,8 @@ class Bot
 
 			foreach ($messageFields['BOT_IN_CHAT'] as $botId)
 			{
-				if (isset($bots[$botId]) && $bots[$botId]['TYPE'] == self::TYPE_SUPERVISOR)
+				$botByIdType = BotData::getInstance((int)$botId)->getType();
+				if ($botByIdType === self::TYPE_SUPERVISOR || $botByIdType === self::TYPE_PERSONAL)
 				{
 					$botFound[$botId] = $botId;
 				}
@@ -1835,15 +2068,16 @@ class Bot
 			{
 				foreach ($botFound as $botId)
 				{
-					if (!isset($bots[$botId]))
+					$botById = BotData::getInstance((int)$botId)->toArray();
+					if (!$botById)
 					{
 						continue;
 					}
-					if ($messageFields['CHAT_ENTITY_TYPE'] == 'LINES' && $bots[$botId]['OPENLINE'] == 'N')
+					if ($messageFields['CHAT_ENTITY_TYPE'] === 'LINES' && $botById['OPENLINE'] === 'N')
 					{
 						continue;
 					}
-					$botExecModule[$botId] = $bots[$botId];
+					$botExecModule[$botId] = $botById;
 				}
 			}
 		}
@@ -1876,5 +2110,109 @@ class Bot
 		self::$platformContext = self::resolvePlatformContext($context);
 
 		return self::$platformContext;
+	}
+
+	public static function getBotIdsByAppId(string $appId): array
+	{
+		if (empty($appId))
+		{
+			return [];
+		}
+
+		$botQuery = Model\BotTable::getList([
+			'filter' => [
+				'=APP_ID' => $appId,
+			],
+			'select' => ['BOT_ID'],
+		]);
+
+		return array_map('intval', array_column($botQuery->fetchAll() ?: [], 'BOT_ID'));
+	}
+
+	public static function getBotIdByAppId(string $appId): ?int
+	{
+		if (empty($appId))
+		{
+			return null;
+		}
+
+		$botQuery = Model\BotTable::getList([
+			'filter' => [
+				'=APP_ID' => $appId,
+			],
+			'select' => ['BOT_ID'],
+			'limit' => 1,
+		]);
+
+		if ($bot = $botQuery->fetch())
+		{
+			return (int)$bot['BOT_ID'];
+		}
+
+		return null;
+	}
+
+	public static function getNetworkBotIdByAppId(string $appId): ?int
+	{
+		if (empty($appId))
+		{
+			return null;
+		}
+
+		$botQuery = Model\BotTable::getList([
+			'filter' => [
+				'=APP_ID' => $appId,
+				'=TYPE' => self::TYPE_NETWORK
+			],
+			'select' => ['BOT_ID'],
+			'limit' => 1,
+		]);
+
+		if ($bot = $botQuery->fetch())
+		{
+			return (int)$bot['BOT_ID'];
+		}
+
+		return null;
+	}
+
+	public static function getOpenLineBotIdByCode(string $botCode): ?int
+	{
+		if (empty($botCode))
+		{
+			return null;
+		}
+
+		$botQuery = Model\BotTable::getList([
+			'filter' => [
+				'=CODE' => $botCode,
+				'=OPENLINE' => 'Y',
+			],
+			'select' => ['BOT_ID'],
+			'limit' => 1,
+		]);
+
+		if ($bot = $botQuery->fetch())
+		{
+			return (int)$bot['BOT_ID'];
+		}
+
+		return null;
+	}
+
+	/**
+	 * @return numeric-string[]
+	 */
+	public static function getAllOpenLineBotIds(): array
+	{
+		$botQuery = Model\BotTable::getList([
+			'filter' => [
+				'!=CODE' => 'marta',
+				'=OPENLINE' => 'Y',
+			],
+			'select' => ['BOT_ID'],
+		]);
+
+		return array_map('intval', array_column($botQuery->fetchAll() ?: [], 'BOT_ID'));
 	}
 }

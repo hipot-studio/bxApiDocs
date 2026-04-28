@@ -388,6 +388,7 @@ class LeadConverter extends EntityConverter
 						$mappedFields = $mapper->map($map, array('DISABLE_USER_FIELD_INIT' => true));
 						if(!empty($mappedFields))
 						{
+							$previousFields = $fields;
 							$merger = new CompanyMerger($this->getUserID(), true);
 							$merger->mergeFields(
 								$mappedFields,
@@ -398,15 +399,19 @@ class LeadConverter extends EntityConverter
 							$fields['LEAD_ID'] = $this->entityID;
 							if($entity->Update($entityID, $fields, true, true, $this->getUpdateOptions()))
 							{
-								//region BizProcess
-								$errors = [];
-								\CCrmBizProcHelper::AutoStartWorkflows(
-									\CCrmOwnerType::Company,
-									$entityID,
-									\CCrmBizProcEventType::Edit,
-									$errors
+								$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+									new Crm\Integration\BizProc\Starter\Dto\DocumentDto(
+										\CCrmOwnerType::Company, $entityID
+									)
 								);
-								//endregion
+								$starter->runProcess(
+									new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+										actualFields: $fields,
+										previousFields: $previousFields,
+										userId: $this->getUserID(),
+									),
+									\CCrmBizProcEventType::Edit
+								);
 							}
 						}
 					}
@@ -451,6 +456,7 @@ class LeadConverter extends EntityConverter
 						$mappedFields = $mapper->map($map, array('DISABLE_USER_FIELD_INIT' => true));
 						if(!empty($mappedFields))
 						{
+							$previousFields = $fields;
 							$merger = new ContactMerger($this->getUserID(), true);
 							$merger->mergeFields(
 								$mappedFields,
@@ -461,15 +467,19 @@ class LeadConverter extends EntityConverter
 							$fields['LEAD_ID'] = $this->entityID;
 							if($entity->Update($entityID, $fields, true, true, $this->getUpdateOptions()))
 							{
-								//region BizProcess
-								$errors = [];
-								\CCrmBizProcHelper::AutoStartWorkflows(
-									\CCrmOwnerType::Contact,
-									$entityID,
-									\CCrmBizProcEventType::Edit,
-									$errors
+								$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+									new Crm\Integration\BizProc\Starter\Dto\DocumentDto(
+										\CCrmOwnerType::Contact, $entityID
+									)
 								);
-								//endregion
+								$starter->runProcess(
+									new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+										actualFields: $fields,
+										previousFields: $previousFields,
+										userId: $this->getUserID(),
+									),
+									\CCrmBizProcEventType::Edit
+								);
 							}
 						}
 					}
@@ -608,15 +618,18 @@ class LeadConverter extends EntityConverter
 					);
 				}
 
-				//region BizProcess
-				$errors = [];
-				\CCrmBizProcHelper::AutoStartWorkflows(
-					\CCrmOwnerType::Company,
-					$entityID,
-					\CCrmBizProcEventType::Create,
-					$errors
+				$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+					new Crm\Integration\BizProc\Starter\Dto\DocumentDto(
+						\CCrmOwnerType::Company, $entityID
+					)
 				);
-				//endregion
+				$starter->runProcess(
+					new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+						actualFields: $fields,
+						userId: $this->getUserID(),
+					),
+					\CCrmBizProcEventType::Create
+				);
 
 				self::setDestinationEntityID(
 					\CCrmOwnerType::CompanyName,
@@ -657,15 +670,18 @@ class LeadConverter extends EntityConverter
 					);
 				}
 
-				//region BizProcess
-				$errors = [];
-				\CCrmBizProcHelper::AutoStartWorkflows(
-					\CCrmOwnerType::Contact,
-					$entityID,
-					\CCrmBizProcEventType::Create,
-					$errors
+				$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+					new Crm\Integration\BizProc\Starter\Dto\DocumentDto(
+						\CCrmOwnerType::Contact, $entityID
+					)
 				);
-				//endregion
+				$starter->runProcess(
+					new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+						actualFields: $fields,
+						userId: $this->getUserID(),
+					),
+					\CCrmBizProcEventType::Create
+				);
 
 				self::setDestinationEntityID(
 					\CCrmOwnerType::ContactName,
@@ -776,20 +792,17 @@ class LeadConverter extends EntityConverter
 				}
 				unset($requisiteIdLinked, $bankDetailIdLinked, $mcRequisiteIdLinked, $mcBankDetailIdLinked);
 
-				//region BizProcess
-				$errors = [];
-				\CCrmBizProcHelper::AutoStartWorkflows(
-					\CCrmOwnerType::Deal,
-					$entityID,
-					\CCrmBizProcEventType::Create,
-					$errors
+				$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+					new Crm\Integration\BizProc\Starter\Dto\DocumentDto(
+						\CCrmOwnerType::Deal, $entityID
+					)
 				);
-				//endregion
-
-				//Region automation
-				$starter = new Crm\Automation\Starter(\CCrmOwnerType::Deal, $entityID);
-				$starter->runOnAdd();
-				//end region
+				$starter->runOnDocumentAdd(
+					new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+						actualFields: $fields,
+						userId: $this->getUserID(),
+					),
+				);
 
 				self::setDestinationEntityID(
 					\CCrmOwnerType::DealName,
@@ -961,33 +974,34 @@ class LeadConverter extends EntityConverter
 						}
 						//endregion
 
+						// region bizproc
+						$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+							new Crm\Integration\BizProc\Starter\Dto\DocumentDto(
+								\CCrmOwnerType::Lead, (int)$this->entityID
+							)
+						);
+						$starterRunData = new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+							actualFields: $fields,
+							previousFields: $presentFields,
+							userId: $this->getUserID(),
+						);
+
 						if (!$this->shouldSkipBizProcAutoStart())
 						{
-							//region BizProcess
-							$errors = [];
-							\CCrmBizProcHelper::AutoStartWorkflows(
-								\CCrmOwnerType::Lead,
-								$this->entityID,
-								\CCrmBizProcEventType::Edit,
-								$errors
-							);
-							//endregion
-							if (!empty($errors))
+							$startBPResult = $starter->runProcess($starterRunData, \CCrmBizProcEventType::Edit);
+							if (!$startBPResult->isSuccess())
 							{
 								$this->log(
 									'AutoStartWorkflowsError',
 									[
-										'errors' => $errors
+										'errors' => array_map(static fn ($error) => $error->jsonSerialize(), $startBPResult->getErrors()),
 									],
 									\Psr\Log\LogLevel::ERROR
 								);
 							}
 						}
 
-						//region Automation
-						$starter = new Crm\Automation\Starter(\CCrmOwnerType::Lead, $this->entityID);
-						$starter->runOnUpdate($fields, $presentFields);
-						//end region
+						$starter->runAutomation($starterRunData, \CCrmBizProcEventType::Edit);
 					}
 					else
 					{

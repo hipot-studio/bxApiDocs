@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Controller\Autorun;
 use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\WhatsappMessageData;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\MessageSender\MassWhatsApp\SendItem;
 use Bitrix\Crm\MessageSender\MassWhatsApp\TemplateParams;
 use Bitrix\Crm\Service\Factory;
@@ -37,6 +38,11 @@ final class WhatsAppMessage extends Base
 		return WhatsappMessageData::class;
 	}
 
+	protected function getSelect(): array
+	{
+		return [Item::FIELD_NAME_ID];
+	}
+
 	/**
 	 * @param Factory $factory
 	 * @param Item $item
@@ -48,7 +54,7 @@ final class WhatsAppMessage extends Base
 		$sendItemService = SendItem::getInstance();
 
 		return $sendItemService->execute(
-			$item,
+			ItemIdentifier::createByItem($item),
 			new TemplateParams($data->messageBody, $data->messageTemplate, $data->fromPhone)
 		);
 	}

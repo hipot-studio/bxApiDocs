@@ -21,7 +21,7 @@ class HtmlContent extends AjaxJson
 	 * @param ErrorCollection|null $errorCollection
 	 * @param array $additionalResponseParams
 	 */
-	public function __construct(ContentAreaInterface $content, $status = self::STATUS_SUCCESS, ErrorCollection $errorCollection = null, array $additionalResponseParams = [])
+	public function __construct(ContentAreaInterface $content, $status = self::STATUS_SUCCESS, ?ErrorCollection $errorCollection = null, array $additionalResponseParams = [])
 	{
 		$html = $content->getHtml();
 

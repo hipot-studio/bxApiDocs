@@ -670,14 +670,7 @@ class CBPRestActivity extends CBPActivity implements
 					<option value="h"<?= ($currentValues["timeoutdurationtype"] === "h") ? " selected" : "" ?>><?= Loc::getMessage("BPRA_PD_TIME_H") ?></option>
 					<option value="d"<?= ($currentValues["timeoutdurationtype"] === "d") ? " selected" : "" ?>><?= Loc::getMessage("BPRA_PD_TIME_D") ?></option>
 				</select>
-				<?
-				$delayMinLimit = CBPSchedulerService::getDelayMinLimit();
-				if ($delayMinLimit):
-					?>
-					<p style="color: red;">* <?= Loc::getMessage("BPRA_PD_TIMEOUT_LIMIT") ?>: <?=CBPHelper::FormatTimePeriod($delayMinLimit)?></p>
-					<?
-				endif;
-				?>
+				<?= \CBPViewHelper::renderDelayLimitsInfo() ?>
 			</td>
 		</tr>
 		<?endif;

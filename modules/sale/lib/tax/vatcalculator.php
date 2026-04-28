@@ -5,6 +5,8 @@ namespace Bitrix\Sale\Tax;
 use Bitrix\Sale\PriceMaths;
 
 /**
+ * @deprecated Use service 'sale.vatCalculator' instead [ServiceLocator::getInstance()->get('sale.vatCalculator')].
+ *
  * Calculating vat value.
  *
  * Example:
@@ -27,6 +29,8 @@ class VatCalculator
 	}
 
 	/**
+	 * @deprecated
+	 *
 	 * Calculate vat value.
 	 *
 	 * @param float $price
@@ -53,6 +57,8 @@ class VatCalculator
 	}
 
 	/**
+	 * @deprecated
+	 *
 	 * Allocate price without vat from price with vat.
 	 *
 	 * @param float $price
@@ -75,6 +81,8 @@ class VatCalculator
 	}
 
 	/**
+	 * @deprecated
+	 *
 	 * Accrue vat value to price.
 	 *
 	 * @param float $price

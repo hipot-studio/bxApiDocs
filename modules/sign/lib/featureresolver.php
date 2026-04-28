@@ -12,6 +12,7 @@ final class FeatureResolver
 		'mobileMyDocumentsGrid',
 		'memberServiceCached',
 		'signUntilDate',
+		'repeatTestSigning',
 	];
 	private static self $instance;
 

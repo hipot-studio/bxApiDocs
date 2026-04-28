@@ -1,13 +1,21 @@
 <?php
+
 namespace Bitrix\Landing\Site;
 
+use Bitrix\Landing\Metrika;
 use Bitrix\Landing\Role;
 use Bitrix\Landing\Site;
+use Bitrix\Landing\Transfer\Requisite\FinishRedirectLinkDto;
 use Bitrix\Main\Event;
 use Bitrix\SignSafe\Processing\Preview;
 
 class Type
 {
+	/**
+	 * Default site type if not set another
+	 */
+	public const SCOPE_CODE_DEFAULT = 'PAGE';
+
 	/**
 	 * Scope group.
 	 */
@@ -19,9 +27,9 @@ class Type
 	public const SCOPE_CODE_KNOWLEDGE = 'KNOWLEDGE';
 
 	/**
-	 * Scope for mainpage (welcome)
+	 * Scope for vibe (welcome page)
 	 */
-	public const SCOPE_CODE_MAINPAGE = 'MAINPAGE';
+	public const SCOPE_CODE_VIBE = 'VIBE';
 
 	/**
 	 * Pseudo scope for crm forms.
@@ -31,7 +39,15 @@ class Type
 	protected const SCOPES_NOT_PUBLIC = [
 		self::SCOPE_CODE_GROUP,
 		self::SCOPE_CODE_KNOWLEDGE,
-		self::SCOPE_CODE_MAINPAGE,
+		self::SCOPE_CODE_VIBE,
+	];
+
+	/**
+	 * Support import old scopes.
+	 * Format 'old' => 'new'
+	 */
+	private const SCOPE_COMPATIBILITY = [
+		'MAINPAGE' => self::SCOPE_CODE_VIBE,
 	];
 
 	/**
@@ -51,16 +67,39 @@ class Type
 	 * @param string $scope Scope code.
 	 * @return string|null
 	 */
-	protected static function getScopeClass($scope): ?string
+	protected static function getScopeClass(string $scope): ?string
 	{
 		$scope = trim($scope);
-		$class = __NAMESPACE__ . '\\Scope\\' . $scope;
+		$class = self::getFullScopeClass($scope);
 		if (class_exists($class))
 		{
 			return $class;
 		}
 
-		return null;
+		$scopeAlias = self::getFullScopeClass(
+			self::getCompatibilityScopeClass($scope)
+		);
+
+		return class_exists($scopeAlias) ? $scopeAlias : null;
+	}
+
+	/**
+	 * @param class-string<Scope> $scope
+	 * @return string
+	 */
+	private static function getFullScopeClass(string $scope): string
+	{
+		return __NAMESPACE__ . '\\Scope\\' . $scope;
+	}
+
+	/**
+	 * Try to find compatibility class name
+	 * @param string $scope
+	 * @return string
+	 */
+	public static function getCompatibilityScopeClass(string $scope): string
+	{
+		return self::SCOPE_COMPATIBILITY[$scope] ?? $scope;
 	}
 
 	/**
@@ -142,7 +181,7 @@ class Type
 		// custom for Preview
 		$event = new Event('landing', 'onGetScopePublicationPath', [
 			'scope' => $scope,
-			'path' => $path
+			'path' => $path,
 		]);
 		$event->send();
 		foreach ($event->getResults() as $result)
@@ -248,8 +287,8 @@ class Type
 	/**
 	 * Scoped method for returning available operations of site.
 	 * @param int $siteId Site id.
-	 * @see \Bitrix\Landing\Rights::getOperationsForSite
 	 * @return array|null
+	 * @see \Bitrix\Landing\Rights::getOperationsForSite
 	 */
 	public static function getOperationsForSite(int $siteId): ?array
 	{
@@ -295,5 +334,45 @@ class Type
 		}
 
 		return true;
+	}
+
+	/**
+	 * To be compatible with previously exported archives, the transfer may use old scope codes
+	 * @return string
+	 */
+	public static function getScopeIdForTransfer(): string
+	{
+		if (self::$currentScopeClass !== null)
+		{
+			return self::$currentScopeClass::getScopeIdForTransfer();
+		}
+
+		return mb_strtolower(self::getCurrentScopeId() ?? self::SCOPE_CODE_DEFAULT);
+	}
+
+	/**
+	 * Scoped hook for transfer import finish URL.
+	 * @param int $siteId
+	 * @return FinishRedirectLinkDto|null
+	 */
+	public static function onTransferFinishRedirectUrlGet(int $siteId): ?FinishRedirectLinkDto
+	{
+		if (self::$currentScopeClass !== null)
+		{
+			return self::$currentScopeClass::onTransferFinishRedirectUrlGet($siteId);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Scoped hook for transfer finish analytics enrichment.
+	 */
+	public static function onTransferFinishAnalyticSend(int $siteId, Metrika\Metrika $metrika): void
+	{
+		if (self::$currentScopeClass !== null)
+		{
+			self::$currentScopeClass::onTransferFinishAnalyticSend($siteId, $metrika);
+		}
 	}
 }

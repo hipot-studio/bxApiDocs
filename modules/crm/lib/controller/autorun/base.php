@@ -18,7 +18,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Result;
 use Bitrix\Main\Text\StringHelper;
-use Bitrix\Main\Type\ArrayHelper;
+use Bitrix\Main\Type\Collection;
 
 abstract class Base extends \Bitrix\Crm\Controller\Base
 {
@@ -112,7 +112,7 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 		if (!empty($params['entityIds']) && is_array($params['entityIds']))
 		{
 			$entityIds = $params['entityIds'];
-			ArrayHelper::normalizeArrayValuesByInt($entityIds);
+			Collection::normalizeArrayValuesByInt($entityIds);
 
 			if (empty($entityIds))
 			{
@@ -324,7 +324,7 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 	private function getItemsToProcessViaOrm(Factory $factory, array $filter): array
 	{
 		return $factory->getItems([
-			'select' => ['*'],
+			'select' => $this->getSelect(),
 			'filter' => $filter,
 			'order' => [
 				'ID' => 'ASC',
@@ -357,7 +357,7 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 		}
 
 		return $factory->getItems([
-			'select' => ['*'],
+			'select' => $this->getSelect(),
 			'filter' => [
 				'@ID' => $ids,
 			],
@@ -365,6 +365,11 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 				'ID' => 'ASC',
 			],
 		]);
+	}
+
+	protected function getSelect(): array
+	{
+		return ['*'];
 	}
 
 	private function processItems(Factory $factory, array $itemsToProcess): void

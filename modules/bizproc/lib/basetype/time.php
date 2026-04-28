@@ -13,6 +13,11 @@ class Time extends Base
 		return FieldType::TIME;
 	}
 
+	public static function getName(): string
+	{
+		return Loc::getMessage('BIZPROC_BASE_TYPE_TIME_NAME') ?? '';
+	}
+
 	public static function internalizeValue(FieldType $fieldType, $context, $value)
 	{
 		if (\CBPActivity::isExpression($value))

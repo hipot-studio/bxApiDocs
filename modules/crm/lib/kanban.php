@@ -660,6 +660,11 @@ abstract class Kanban
 			'CONTACT_FULL_NAME',
 			'CONTACT_COMMENTS',
 		];
+		$filterExact = [
+			'STAGE_ID',
+			'PREVIOUS_STAGE_ID',
+			'SOURCE_ID',
+		];
 		$filterAddress = [
 			'ADDRESS', 'ADDRESS_2', 'ADDRESS_PROVINCE', 'ADDRESS_REGION', 'ADDRESS_CITY',
 			'ADDRESS_COUNTRY', 'ADDRESS_POSTAL_CODE'
@@ -806,6 +811,10 @@ abstract class Kanban
 					{
 						$filter['?' . $key] = $search[$key];
 					}
+					elseif(in_array($key, $filterExact, true))
+					{
+						$filter['=' . $key] = $search[$key];
+					}
 					elseif(in_array($key, $filterAddress, true))
 					{
 						$filter['=%' . $key] = $search[$key] . '%';
@@ -942,6 +951,7 @@ abstract class Kanban
 		$entity->prepareFilter($filter, $this->viewMode);
 		$entity->applySubQueryBasedFilters($filter, $this->viewMode);
 
+		\Bitrix\Crm\Filter\FieldsTransform\DateTimeField::applyTimezoneOffset($entity->getTypeId(), $filter);
 		$filter = Deal\OrderFilter::prepareFilter($filter);
 		$filter = \Bitrix\Crm\Automation\Debugger\DebuggerFilter::prepareFilter($filter, $entity->getTypeId());
 
@@ -1059,7 +1069,7 @@ abstract class Kanban
 	 */
 	protected function prepareAllowStages(array $filter): void
 	{
-		$this->allowStages = ($filter[$this->getStatusKey()] ?? $this->entity->getAllowStages($filter));
+		$this->allowStages = ($filter[$this->getStatusKey()] ?? $filter['=' . $this->getStatusKey()] ?? $this->entity->getAllowStages($filter));
 	}
 
 	protected function prepareAllowSemantics(): void

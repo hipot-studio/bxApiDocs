@@ -2,6 +2,7 @@
 namespace Bitrix\Sale\Exchange\OneC;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Sale\Exchange\ImportBase;
@@ -11,6 +12,7 @@ use Bitrix\Sale\Exchange\ISettingsExport;
 use Bitrix\Sale\Exchange\ISettingsImport;
 use Bitrix\Sale\Internals\StatusLangTable;
 use Bitrix\Sale;
+use Bitrix\Sale\Public\Dto\BasketItemCalculationInput;
 
 /**
  * Class ConverterDocumentOrder
@@ -500,7 +502,14 @@ class ConverterDocumentOrder extends Converter
 										$taxValue = DocumentBase::getLangByCodeField('VAT');
 										break;
 									case 'TAX_VALUE':
-										$taxValue = (($item["PRICE"] / ($item["VAT_RATE"]+1)) * $item["VAT_RATE"]);
+										$taxCalculator = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+										$taxInput = new BasketItemCalculationInput(
+											basePrice: (float)$item["PRICE"],
+											quantity: 1.0,
+											vatRate: (float)$item["VAT_RATE"] * 100,
+											vatIncluded: true,
+										);
+										$taxValue = $taxCalculator->calculate($taxInput)->vatAmount;
 										break;
 									case 'IN_PRICE':
 										$taxValue = 'Y';

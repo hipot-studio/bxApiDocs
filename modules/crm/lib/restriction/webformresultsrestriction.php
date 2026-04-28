@@ -147,6 +147,7 @@ class WebFormResultsRestriction extends Bitrix24AccessRestriction
 				Item::FIELD_NAME_TITLE,
 				Item::FIELD_NAME_ASSIGNED,
 				Item::FIELD_NAME_STAGE_ID,
+				Item::FIELD_NAME_PREVIOUS_STAGE_ID,
 				Item::FIELD_NAME_CATEGORY_ID,
 				Item::FIELD_NAME_WEBFORM_ID,
 				Item::FIELD_NAME_CREATED_BY,

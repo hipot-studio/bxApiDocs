@@ -113,6 +113,10 @@ final class ResourceNotificationSettingsTable extends DataManager
 
 			(new IntegerField('DELAYED_COUNTER_DELAY'))
 				->configureRequired(),
+
+			(new StringField('SENDER_CODE'))
+				->addValidator(new LengthValidator(1, 255))
+				->configureRequired(),
 		];
 	}
 }

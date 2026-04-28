@@ -20,4 +20,17 @@ final class Phone extends Type
 	{
 		return \Bitrix\Main\PhoneNumber\Parser::getInstance()->parse($value)->format();
 	}
+
+	public function getValueTypes(): array
+	{
+		return [
+			self::VALUE_TYPE_WORK,
+			self::VALUE_TYPE_MOBILE,
+			self::VALUE_TYPE_FAX,
+			self::VALUE_TYPE_HOME,
+			self::VALUE_TYPE_PAGER,
+			self::VALUE_TYPE_MAILING,
+			self::VALUE_TYPE_OTHER,
+		];
+	}
 }

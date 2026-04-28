@@ -867,4 +867,35 @@ class DateLib extends BaseLib
 
 		return strtr($formattedDate, $replacementRule);
 	}
+
+	public static function getMonthFullNames(): array
+	{
+		return [
+			1 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_JANUARY'),
+			2 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_FEBRUARY'),
+			3 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_MARCH'),
+			4 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_APRIL'),
+			5 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_MAY'),
+			6 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_JUNE'),
+			7 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_JULY'),
+			8 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_AUGUST'),
+			9 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_SEPTEMBER'),
+			10 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_OCTOBER'),
+			11 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_NOVEMBER'),
+			12 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_DECEMBER'),
+		];
+	}
+
+	public static function getWeekDayFullNames(): array
+	{
+		return [
+			1 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_MONDAY'),
+			2 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_TUESDAY'),
+			3 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_WEDNESDAY'),
+			4 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_THURSDAY'),
+			5 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_FRIDAY'),
+			6 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_SATURDAY'),
+			7 => Loc::getMessage('BIZPROC_CALC_FUNCTION_LOCDATE_SUNDAY'),
+		];
+	}
 }

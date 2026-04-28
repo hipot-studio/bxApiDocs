@@ -13,7 +13,7 @@ class TeamShowTool extends NodeShowTool
 
 	public function getName(): string
 	{
-		return 'show';
+		return 'team_show';
 	}
 
 	public function getDescription(): string

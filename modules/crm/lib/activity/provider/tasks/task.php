@@ -463,13 +463,19 @@ final class Task extends Base
 		$startDatePlan = is_null($task->getStartDatePlan()) ? '' : $task->getStartDatePlan()->toString();
 		if ($activity['START_TIME'] !== $startDatePlan)
 		{
-			$updateData['START_DATE_PLAN'] = $activity['START_TIME'];
+			$updateData['START_DATE_PLAN']
+				= CCrmDateTimeHelper::IsMaxDatabaseDate($activity['START_TIME'])
+					? null
+					: $activity['START_TIME'];
 		}
 
 		$endDatePlan = is_null($task->getEndDatePlan()) ? '' : $task->getEndDatePlan()->toString();
 		if ($activity['END_TIME'] !== $endDatePlan)
 		{
-			$updateData['END_DATE_PLAN'] = $activity['END_TIME'];
+			$updateData['END_DATE_PLAN']
+				= CCrmDateTimeHelper::IsMaxDatabaseDate($activity['END_TIME'])
+					? null
+					: $activity['END_TIME'];
 		}
 
 		if (!empty($updateData))

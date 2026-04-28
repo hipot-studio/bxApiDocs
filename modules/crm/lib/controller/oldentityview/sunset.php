@@ -4,7 +4,7 @@ namespace Bitrix\Crm\Controller\OldEntityView;
 
 use Bitrix\Crm\Controller\Base;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Component\Utils\OldEntityViewDisableHelper;
+use Bitrix\Crm\Component\DisableHelpers\OldEntityViewDisableHelper;
 use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Main\Error;
 

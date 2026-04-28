@@ -88,7 +88,7 @@ class UserAuthActionTable extends Data\DataManager
 	 * @param Type\DateTime|null $date
 	 * @return Data\AddResult
 	 */
-	public static function addUpdateAction($userId, Type\DateTime $date = null)
+	public static function addUpdateAction($userId, ?Type\DateTime $date = null)
 	{
 		if($date === null)
 		{

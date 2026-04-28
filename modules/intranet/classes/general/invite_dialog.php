@@ -1337,7 +1337,7 @@ class CIntranetInviteDialog
 		]);
 
 		$arMessage = $messageDb->fetch();
-		if (is_null($arMessage))
+		if ($arMessage === false)
 		{
 			return null;
 		}

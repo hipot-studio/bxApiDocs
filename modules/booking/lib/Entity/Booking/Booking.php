@@ -14,10 +14,9 @@ use Bitrix\Booking\Entity\EntityWithExternalDataRelationInterface;
 use Bitrix\Booking\Entity\EventInterface;
 use Bitrix\Booking\Entity\EventTrait;
 use Bitrix\Booking\Entity\ExternalData\ExternalDataCollection;
-use Bitrix\Booking\Entity\Message\BookingMessageCollection;
+use Bitrix\Booking\Internals\Service\Notifications\Entity\BookingMessageCollection;
 use Bitrix\Booking\Entity\Resource\Resource;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
-use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
 use Bitrix\Booking\Internals\Service\Rrule;
 use Bitrix\Booking\Internals\Service\Time;
@@ -61,6 +60,7 @@ class Booking implements
 	private int|null $updatedAt = null;
 	private string|null $note = null;
 	private string|null $clientNote = null;
+	private BookingPayment|null $payment = null;
 
 	public function __construct()
 	{
@@ -137,12 +137,7 @@ class Booking implements
 
 	public function getPrimaryClientUrl(): string
 	{
-		$url = Container::getProviderManager()::getProviderByBooking($this)
-			?->getClientProvider()
-			?->getClientUrl($this->getPrimaryClient())
-		;
-
-		return $url ?? '#';
+		return $this->getPrimaryClient()?->getUrl() ?? '';
 	}
 
 	public function setClientCollection(ClientCollection $clientCollection): self
@@ -272,11 +267,6 @@ class Booking implements
 		return $this;
 	}
 
-	public function getMessageCollection(): BookingMessageCollection
-	{
-		return $this->messageCollection;
-	}
-
 	public function setMessageCollection(BookingMessageCollection $messageCollection): self
 	{
 		$this->messageCollection = $messageCollection;
@@ -383,6 +373,18 @@ class Booking implements
 		return $this;
 	}
 
+	public function getPayment(): BookingPayment|null
+	{
+		return $this->payment;
+	}
+
+	public function setPayment(BookingPayment $payment): self
+	{
+		$this->payment = $payment;
+
+		return $this;
+	}
+
 	public function isDelayed(): bool
 	{
 		$now = time();
@@ -438,6 +440,7 @@ class Booking implements
 			'clientNote' => $this->clientNote,
 			'visitStatus' => $this->getVisitStatus()->value,
 			'source' => $this->getSource()->value,
+			'payment' => $this->payment?->toArray(),
 		];
 	}
 

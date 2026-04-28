@@ -4,28 +4,22 @@ namespace Bitrix\Intranet\Controller\User;
 
 use Bitrix\Intranet\ActionFilter\AdminUser;
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl;
-use Bitrix\Intranet\ActionFilter\InviteLimitControl;
 use Bitrix\Intranet\CurrentUser;
-use Bitrix\Intranet\Entity\Collection\InvitationCollection;
-use Bitrix\Intranet\Entity\Department;
+use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\InviteLimitControl;
+use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\PortalCreatorEmailConfirmationControl;
 use Bitrix\Intranet\Public\Type\EmailInvitation;
 use Bitrix\Intranet\Public\Type\PhoneInvitation;
 use Bitrix\Intranet\Exception\ErrorCollectionException;
 use Bitrix\Intranet\Public\Facade\Invitation\ReInvitationFacade;
 use Bitrix\Intranet\Invitation;
-use Bitrix\Intranet\Invitation\Register;
-use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\User;
-use Bitrix\Intranet\User\Access\Model\TargetUserModel;
 use Bitrix\Intranet\User\Access\UserAccessController;
 use Bitrix\Intranet\User\Access\UserActionDictionary;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\Response\AjaxJson;
 use Bitrix\Main\Error;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Response;
 
 class UserList extends Controller
@@ -46,6 +40,7 @@ class UserList extends Controller
 			'groupReInvite' => [
 				'+prefilters' => [
 					new InviteIntranetAccessControl(),
+					new PortalCreatorEmailConfirmationControl(),
 					new InviteLimitControl(),
 				],
 				'-prefilters' => [

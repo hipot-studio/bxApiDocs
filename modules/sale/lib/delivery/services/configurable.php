@@ -6,6 +6,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Delivery\CalculationResult;
+use Bitrix\Sale\PriceMaths;
 use Bitrix\Currency;
 
 Loc::loadMessages(__FILE__);
@@ -108,10 +109,7 @@ class Configurable extends Base
 		}
 
 		$result->setDeliveryPrice(
-			roundEx(
-				$price,
-				SALE_VALUE_PRECISION
-			)
+			PriceMaths::roundPrecision($price)
 		);
 
 		$result->setPeriodDescription($this->getPeriodText());

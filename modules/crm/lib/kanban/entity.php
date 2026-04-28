@@ -4,7 +4,6 @@ namespace Bitrix\Crm\Kanban;
 
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
-use Bitrix\Crm\Automation\Starter;
 use Bitrix\Crm\Component\EntityDetails\BaseComponent;
 use Bitrix\Crm\Component\EntityList\ClientDataProvider;
 use Bitrix\Crm\Component\EntityList\ClientDataProvider\KanbanDataProvider;
@@ -13,9 +12,12 @@ use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
 use Bitrix\Crm\Component\EntityList\GridId;
 use Bitrix\Crm\Counter\EntityCounter;
 use Bitrix\Crm\Entity\EntityEditorConfigScope;
-use Bitrix\Crm\Exclusion;
 use Bitrix\Crm\EO_Status;
+use Bitrix\Crm\Exclusion;
 use Bitrix\Crm\Filter;
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
 use Bitrix\Crm\Service;
@@ -42,6 +44,8 @@ use Bitrix\UI\Form\EntityEditorConfiguration;
 
 abstract class Entity
 {
+	private array $filterOptionsFields = [];
+
 	protected const OPTION_CATEGORY = 'crm';
 	protected const EDITOR_CONFIG_PREFIX = 'quick_editor_v6_';
 	protected const EDITOR_CONFIGURATION_CATEGORY = 'crm.entity.editor';
@@ -1645,16 +1649,23 @@ abstract class Entity
 
 	protected function runAutomationOnUpdate(int $id, array $fields): void
 	{
-		$errors = [];
-		\CCrmBizProcHelper::AutoStartWorkflows(
-			$this->getTypeId(),
-			$id, \CCrmBizProcEventType::Edit, $errors
+		try
+		{
+			$starter = new CrmStarter(new DocumentDto($this->getTypeId(), $id));
+		}
+		catch (ArgumentException $e)
+		{
+			return;
+		}
+
+		$starter->runOnDocumentUpdate(
+			new RunDataDto(
+				actualFields: $fields,
+				previousFields: [],
+				userId: \Bitrix\Crm\Service\Container::getInstance()->getContext()->getUserId(),
+				isManual: true,
+			)
 		);
-		$starter = new Starter(
-			$this->getTypeId(),
-			$id
-		);
-		$starter->setUserIdFromCurrent()->runOnUpdate($fields, []);
 	}
 
 	/**
@@ -1753,6 +1764,17 @@ abstract class Entity
 			'id' => CurrentUser::get()->getId(),
 			'name' => CurrentUser::get()->getFormattedName(),
 		];
+	}
+
+	public function getFilterOptionFields(Options $filterOptions, array $sourceFields): array
+	{
+		$key = $filterOptions->getId() . '-' . $filterOptions->getCurrentFilterPresetId();
+		if (empty($this->filterOptionsFields[$key]))
+		{
+			$this->filterOptionsFields[$key] = $filterOptions->getFilter($sourceFields);
+		}
+
+		return $this->filterOptionsFields[$key];
 	}
 
 	public function getFilterOptions(): Options

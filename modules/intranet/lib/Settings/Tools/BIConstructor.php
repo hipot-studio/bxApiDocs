@@ -49,7 +49,7 @@ class BIConstructor extends Tool
 		return 'menu_bi_constructor';
 	}
 
-	public function disable(): void
+	public function disable($notifySupersetInitializer = true): void
 	{
 		parent::disable();
 
@@ -58,7 +58,7 @@ class BIConstructor extends Tool
 			return;
 		}
 
-		if (SupersetInitializer::isSupersetExist())
+		if ($notifySupersetInitializer && SupersetInitializer::isSupersetExist())
 		{
 			SupersetInitializer::onDisableBiBuilderTool();
 		}

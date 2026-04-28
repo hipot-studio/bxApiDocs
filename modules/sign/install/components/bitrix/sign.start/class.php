@@ -29,6 +29,7 @@ use Bitrix\Sign\Service\Container as SignContainer;
 \CBitrixComponent::includeComponentClass('bitrix:sign.base');
 \Bitrix\Main\UI\Extension::load([
 	'sign.v2.grid.b2e.templates',
+	'sign.v2.grid.b2e.placeholders',
 	'crm_common',
 
 	// for sign.tour in menu items (see component_epilog.php)
@@ -786,7 +787,22 @@ class SignStartComponent extends SignBaseComponent
 			];
 		}
 
+		if ($this->isPlaceholderDocumentAvailable())
+		{
+			$items[] = [
+				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_PLACEHOLDERS_SETTINGS'),
+				'ON_CLICK' => 'new BX.Sign.V2.Grid.B2e.Placeholders().show();',
+			];
+		}
+
 		return $items;
+	}
+
+	private function isPlaceholderDocumentAvailable(): bool
+	{
+		return $this->accessController->check(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)
+			&& Feature::instance()->isPlaceholderDocumentEnabled()
+		;
 	}
 
 	private function removeButtons(): bool

@@ -24,6 +24,11 @@ abstract class BaseSharingLinkEvent extends BaseEvent
 		return $this->sharingLink->getRecipientsForPull($this->getType());
 	}
 
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
+	}
+
 	public function getTarget(): ?Chat
 	{
 		return null;

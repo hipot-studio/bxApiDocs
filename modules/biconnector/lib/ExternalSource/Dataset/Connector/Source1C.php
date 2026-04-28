@@ -277,6 +277,14 @@ final class Source1C extends Base
 	}
 
 	/**
+	 * @return bool
+	 */
+	protected function isNeedApplyTimezoneOffset(): bool
+	{
+		return false;
+	}
+
+	/**
 	 * @param int $datasetId
 	 *
 	 * @return array Map of codes: internal column name -> 1C column name

@@ -347,6 +347,11 @@ PHP;
 			return;
 		}
 
+		if (!\CBPWorkflowTemplateLoader::checkTemplateActivities($template['TEMPLATE']))
+		{
+			return; // template contains unknown activities, probably from newer modules
+		}
+
 		[$module, $entity, $docType] = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
 		$template['MODULE_ID'] = $module;
 		$template['ENTITY'] = $entity;

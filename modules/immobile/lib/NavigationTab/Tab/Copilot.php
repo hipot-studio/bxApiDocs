@@ -3,9 +3,8 @@
 namespace Bitrix\ImMobile\NavigationTab\Tab;
 
 use Bitrix\Im\V2\Chat\CopilotChat;
+use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\ImMobile\NavigationTab\MessengerComponentTitle;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Config\Option;
 
 class Copilot extends BaseRecent
 {
@@ -50,7 +49,7 @@ class Copilot extends BaseRecent
 
 	protected function getTabTitle(): ?string
 	{
-		return Loc::getMessage('IMMOBILE_NAVIGATION_TAB_COPILOT_TAB_TITLE');
+		return CopilotNameResolver::getInstance()->getName();
 	}
 
 	protected function getComponentName(): string

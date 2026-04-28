@@ -19,19 +19,22 @@ class DocumentType extends EntitySelector
 
 	protected static function getEntitySelectorConfig(FieldType $fieldType, mixed $value): array
 	{
+		$defaultEntity = [
+			'id' => 'bizproc-document-type',
+			'options' => $fieldType->getOptions(),
+			'dynamicLoad' => true,
+			'dynamicSearch' => false,
+		];
+		$entitySettings = $fieldType->getSettings()['entity'] ?? [];
+
 		$settings = [
-			'entity' => [
-				'id' => 'bizproc-document-type',
-				'options' => $fieldType->getOptions(),
-				'dynamicLoad' => true,
-				'dynamicSearch' => false,
-			],
+			'entity' => array_merge($defaultEntity, $entitySettings),
 		];
 
 		return
 			(new EntitySelectorConfigBuilder($fieldType, $value))
 				->setSettings($settings)
 				->build()
-			;
+		;
 	}
 }

@@ -9,6 +9,7 @@ use Bitrix\Crm\Component\Base;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\BaasManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Service\Container;
@@ -89,7 +90,7 @@ class CCrmCopilotCallAssessmentDetailsComponent extends Base
 		}
 
 		$this->arResult['copilotSettings'] = $this->getCopilotSettings();
-		$this->arResult['baasSettings'] = $this->getBaasSettings();
+		$this->arResult['baasSettings'] = BaasManager::getSettings();
 		$this->arResult['readOnly'] =
 			!Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canEdit()
 			|| !AIManager::isEnabledInGlobalSettings(GlobalSetting::CallAssessment)
@@ -123,15 +124,6 @@ class CCrmCopilotCallAssessmentDetailsComponent extends Base
 			'contextId' => 'crm_call_assessment_settings_prompt_' . CurrentUser::get()->getId(),
 			'category' => Bitrix\AI\SharePrompt\Enums\Category::CRM_COMMENT_FIELD->value,
 			'autoHide' => true,
-		];
-	}
-
-	private function getBaasSettings(): array
-	{
-		return [
-			'isAvailable' => AIManager::isBaasServiceAvailable(),
-			'hasPackage' => AIManager::isBaasServiceHasPackage(),
-			'aiPackagesEmptySliderCode' => AIManager::AI_PACKAGES_EMPTY_SLIDER_CODE,
 		];
 	}
 

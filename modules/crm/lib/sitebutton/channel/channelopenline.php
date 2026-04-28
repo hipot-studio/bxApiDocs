@@ -101,6 +101,12 @@ class ChannelOpenLine implements iProvider
 		])->fetchAll();
 
 		$result = [];
+
+		if (method_exists(\Bitrix\ImConnector\Status::class, 'getInstanceAllFull'))
+		{
+			ImConnector\Status::getInstanceAllFull();
+		}
+
 		foreach ($list as $line)
 		{
 			$connectors = self::getConnectors($line['ID']);
@@ -529,7 +535,7 @@ class ChannelOpenLine implements iProvider
 		}
 		else
 		{
-			$connectors = ImConnector\Connector::infoConnectorsLine($lineId);
+			$connectors = ImConnector\Connector::infoConnectorsLine($lineId, true);
 		}
 
 		if (count($connectors) == 0)

@@ -2,41 +2,37 @@
 
 namespace Bitrix\Sale;
 
-use Bitrix\Main;
+use Bitrix\Main\Config\Option;
 
 class PriceMaths
 {
-	private static ?int $valuePrecision = null;
+	private const DEFAULT_PRECISION = 8;
+
+	public static function getCurrentPrecision(): int
+	{
+		return max(0, (int)Option::get('sale', 'value_precision_v2', self::DEFAULT_PRECISION));
+	}
 
 	/**
 	 * @param $value
 	 *
 	 * @return float
 	 */
-	public static function roundPrecision($value)
+	public static function roundPrecision($value): float
 	{
-		if (!isset(self::$valuePrecision))
-		{
-			self::$valuePrecision = (int)Main\Config\Option::get('sale', 'value_precision');
-			if (self::$valuePrecision < 0)
-			{
-				self::$valuePrecision = 2;
-			}
-		}
-
-		return round((float)$value, self::$valuePrecision);
+		return round((float)$value, self::getCurrentPrecision());
 	}
 
 	/**
-	 * @deprecated Use \Bitrix\Sale\PriceMaths::roundPrecision instead it
-	 *
 	 * @param $price
 	 * @param $currency
 	 *
 	 * @return float
 	 */
-	public static function roundByFormatCurrency($price, $currency)
+	public static function roundByFormatCurrency($price, $currency, ?int $limitRounding = null): float
 	{
-		return (float)SaleFormatCurrency($price, $currency, false, true);
+		$formattedByCurrency = SaleFormatCurrency($price, $currency, false, true);
+
+		return $limitRounding === null || $limitRounding < 0 ? $formattedByCurrency : round($formattedByCurrency, $limitRounding);
 	}
 }

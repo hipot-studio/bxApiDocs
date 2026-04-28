@@ -2,6 +2,8 @@
 
 namespace Bitrix\Mobile\Controller;
 
+use Bitrix\Bitrix24\Feature;
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Intranet\ActionFilter\AdminUser;
 use Bitrix\Intranet\Service\MobileAppSettings;
@@ -72,6 +74,10 @@ final class Settings extends JsonController
 			'isHighPushOtpPromote' => $otpService->isPushOtpHighPromote(),
 			'takeScreenshotRights' => $this->getTakeScreenshotRights(),
 			'copyTextRights' => $this->getCopyTextRights($mobileAppSettings),
+			'isLoginHistoryAvailable' =>
+				ToolsManager::getInstance()->checkAvailabilityByToolId('login_history')
+				&& Feature::isFeatureEnabled('user_login_history')
+			,
 		]);
 	}
 

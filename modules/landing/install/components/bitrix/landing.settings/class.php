@@ -131,7 +131,7 @@ class LandingSettingsComponent extends LandingBaseComponent
 
 	protected function addPlacementsItems(): void
 	{
-		if ($this->arParams['TYPE'] === Landing\Site\Type::SCOPE_CODE_MAINPAGE)
+		if ($this->arParams['TYPE'] === Landing\Site\Type::SCOPE_CODE_VIBE)
 		{
 			return;
 		}

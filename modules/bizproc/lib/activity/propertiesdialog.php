@@ -263,7 +263,7 @@ class PropertiesDialog
 				if (isset($property['Type']) && $property['Type'] === FieldType::USER && !isset($property['Getter']))
 				{
 					$compatibleValues[$property['FieldName']] = \CBPHelper::usersArrayToString(
-						$compatibleValues[$property['FieldName']],
+						$compatibleValues[$property['FieldName']] ?? null,
 						$workflowTemplate,
 						$this->getDocumentType()
 					);

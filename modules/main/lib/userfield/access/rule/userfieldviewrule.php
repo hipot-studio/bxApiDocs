@@ -19,7 +19,7 @@ class UserFieldViewRule
 		$this->userFieldModel = UserFieldModel::createNew();
 	}
 
-	public function execute(AccessibleItem $userField = null, $params = null): bool
+	public function execute(?AccessibleItem $userField = null, $params = null): bool
 	{
 		return true;
 	}

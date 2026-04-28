@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Integration\BizProc\Document;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Crm;
 use Bitrix\Crm\Category\Entity\Category;
+use Bitrix\Crm\Integration\Intranet\CustomSectionProvider;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Operation;
 use Bitrix\Main\Application;
@@ -628,5 +629,39 @@ class Item extends \CCrmDocument implements \IBPWorkflowDocument
 		{
 			$entityFields[Crm\Item::FIELD_NAME_CATEGORY_ID]['Type'] = FieldType::SELECT;
 		}
+	}
+
+	public static function getSectionName(array $complexDocumentType): ?string
+	{
+		$normalized = \CBPHelper::normalizeComplexDocumentId($complexDocumentType);
+		if (!$normalized)
+		{
+			return null;
+		}
+
+		[,, $documentType] = $normalized;
+
+		$typeId = \CCrmOwnerType::ResolveID($documentType);
+		$factory = Container::getInstance()->getFactory($typeId);
+		if (!$factory)
+		{
+			return null;
+		}
+
+		if ($factory->isInCustomSection())
+		{
+			$manager = Container::getInstance()->getAutomatedSolutionManager();
+			$sectionIds = CustomSectionProvider::getAllCustomSectionIdsByEntityTypeId($factory->getEntityTypeId());
+			foreach ($sectionIds as $sectionId)
+			{
+				$solution = $manager->getAutomatedSolution((int)$sectionId);
+				if ($solution && isset($solution['TITLE']))
+				{
+					return (string)$solution['TITLE'];
+				}
+			}
+		}
+
+		return null;
 	}
 }

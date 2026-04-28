@@ -29,8 +29,8 @@ final class Executor
 {
 	use Singleton;
 
-	private const ENTITY_ITEMS_LIMIT = 300;
-	private const ENTITY_ITEMS_ONLY_CALC_LIMIT = 500;
+	private const ENTITY_ITEMS_LIMIT = 1000;
+	private const ENTITY_ITEMS_ONLY_CALC_LIMIT = 1000;
 	private const MAX_RETRY_COUNT = 3;
 	private ?RepeatSaleQueueController $controller = null;
 	private ?AvailabilityChecker $availabilityChecker = null;
@@ -114,7 +114,7 @@ final class Executor
 	{
 		$collection = $this->getController()->getList([
 			'select' => ['*', 'JOB.SEGMENT_ID', 'JOB.SEGMENT.ENTITY_CATEGORY_ID'],
-			'order' => ['CREATED_AT' => 'ASC'],
+			'order' => ['CREATED_AT' => 'ASC', 'ID' => 'ASC'],
 			'limit' => 1,
 		]);
 

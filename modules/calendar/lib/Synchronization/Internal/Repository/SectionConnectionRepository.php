@@ -17,11 +17,10 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\Repository\RepositoryInterface;
-use Bitrix\Main\Repository\SoftDeletableRepositoryInterface;
 use Bitrix\Main\SystemException;
 use Exception;
 
-class SectionConnectionRepository implements RepositoryInterface, SoftDeletableRepositoryInterface
+class SectionConnectionRepository implements RepositoryInterface
 {
 	public function __construct(private readonly SectionConnectionMapper $mapper)
 	{

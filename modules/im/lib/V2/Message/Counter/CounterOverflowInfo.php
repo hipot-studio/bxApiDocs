@@ -6,16 +6,23 @@ class CounterOverflowInfo
 {
 	protected array $usersWithOverflow;
 	protected array $usersWithoutOverflow;
+	protected int $chatId;
 
-	public function __construct(array $usersWithOverflow, array $usersWithoutOverflow)
+	public function __construct(array $usersWithOverflow, array $usersWithoutOverflow, int $chatId)
 	{
 		$this->usersWithOverflow = $usersWithOverflow;
 		$this->usersWithoutOverflow = $usersWithoutOverflow;
+		$this->chatId = $chatId;
 	}
 
 	public function getUsersWithoutOverflow(): array
 	{
 		return $this->usersWithoutOverflow;
+	}
+
+	public function getUsersWithOverflow(): array
+	{
+		return $this->usersWithOverflow;
 	}
 
 	public function hasOverflow(int $userId): bool
@@ -40,5 +47,10 @@ class CounterOverflowInfo
 			$this->usersWithoutOverflow[$userId] = $userId;
 			unset($this->usersWithOverflow[$userId]);
 		}
+	}
+
+	public function getChatId(): int
+	{
+		return $this->chatId;
 	}
 }

@@ -47,7 +47,7 @@ final class SignB2eSignersList extends SignBaseComponent
 	{
 		if (!Storage::instance()->isB2eAvailable())
 		{
-			showError((string)Loc::getMessage('SIGN_B2E_SIGNERS_LIST_B2E_NOT_ACTIVATED'));
+			$this->includeNotAvailableTemplate();
 
 			return;
 		}

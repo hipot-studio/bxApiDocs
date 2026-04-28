@@ -9,5 +9,6 @@ enum ActivityNodeType: string
 	case COMPLEX = 'complex';
 	case SIMPLE = 'simple';
 	case TRIGGER = 'trigger';
+	case FRAME = 'frame';
 	case TOOL = 'tool';
 }

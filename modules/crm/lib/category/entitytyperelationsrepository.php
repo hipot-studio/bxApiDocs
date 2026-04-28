@@ -2,7 +2,7 @@
 
 namespace Bitrix\Crm\Category;
 
-use Bitrix\Crm\Integration;
+use Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository;
 use Bitrix\Main\Loader;
 
 /**
@@ -64,14 +64,21 @@ final class EntityTypeRelationsRepository
 		//@TODO
 		if (
 			Loader::includeModule('catalog')
-			&& in_array($entityTypeId, [\CCrmOwnerType::Contact, \CCrmOwnerType::Company], true)
-			&& Integration\Catalog\Contractor\CategoryRepository::isContractorCategory($entityTypeId, $categoryId)
+			&& (
+				(
+					in_array($entityTypeId, [\CCrmOwnerType::Contact, \CCrmOwnerType::Company], true)
+					&& CategoryRepository::isContractorCategory($entityTypeId, $categoryId)
+				)
+				|| (
+					$entityTypeId === \CcrmOwnerType::StoreDocument
+				)
+			)
 		)
 		{
-			$contactCategoryId = Integration\Catalog\Contractor\CategoryRepository::getIdByEntityTypeId(
+			$contactCategoryId = CategoryRepository::getIdByEntityTypeId(
 				\CCrmOwnerType::Contact
 			);
-			$companyCategoryId = Integration\Catalog\Contractor\CategoryRepository::getIdByEntityTypeId(
+			$companyCategoryId = CategoryRepository::getIdByEntityTypeId(
 				\CCrmOwnerType::Company
 			);
 

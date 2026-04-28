@@ -2,8 +2,6 @@
 
 namespace Bitrix\Crm\Feature;
 
-use Bitrix\Crm\Feature\Category\BaseCategory;
-use Bitrix\Crm\Feature\Category\Common;
 use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
 use Bitrix\Crm\RepeatSale\Segment\SegmentCode;
 use Bitrix\Crm\StatusTable;
@@ -11,16 +9,16 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use CCrmStatus;
 
-class RepeatSale extends BaseFeature
+final class RepeatSale extends BaseFeature
 {
 	public function getName(): string
 	{
 		return Loc::getMessage('CRM_FEATURE_REPEAT_SALE_NAME');
 	}
 
-	public function getCategory(): BaseCategory
+	public function getCategory(): Category\RepeatSale
 	{
-		return Common::getInstance();
+		return Category\RepeatSale::getInstance();
 	}
 
 	protected function getOptionName(): string
@@ -31,6 +29,11 @@ class RepeatSale extends BaseFeature
 	protected function getEnabledValue(): bool
 	{
 		return true;
+	}
+
+	public function getSort(): int
+	{
+		return 1;
 	}
 
 	public function enable(): void

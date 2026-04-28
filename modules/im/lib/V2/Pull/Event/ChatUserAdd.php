@@ -41,4 +41,14 @@ class ChatUserAdd extends BaseChatEvent
 	{
 		return EventType::ChatUserAdd;
 	}
+
+	protected function getRecipients(): array
+	{
+		return $this->chat->getRelations()->filterActive()->getUserIds();
+	}
+
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
+	}
 }

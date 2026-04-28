@@ -7,6 +7,11 @@ namespace Bitrix\Calendar\Synchronization\Internal\Service\Push;
 use Bitrix\Calendar\Integration\Dav\ConnectionProvider;
 use Bitrix\Calendar\Synchronization\Internal\Entity\Push\EntityType;
 use Bitrix\Calendar\Synchronization\Internal\Entity\Push\Push;
+use Bitrix\Calendar\Synchronization\Internal\Exception\ApiException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\PushException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\SynchronizerException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
 use Bitrix\Calendar\Synchronization\Internal\Repository\SectionConnectionRepository;
 use Bitrix\Calendar\Synchronization\Internal\Service\ConnectionManager;
 use Bitrix\Calendar\Synchronization\Internal\Service\EventSynchronizerInterface;
@@ -31,6 +36,10 @@ abstract class AbstractPushProcessor implements PushProcessorInterface
 	{
 	}
 
+	/**
+	 * @throws PushException
+	 * @throws SynchronizerException
+	 */
 	public function processPush(Push $push): void
 	{
 		if (!$this->pushStorageManager->setBlockPush($push))
@@ -49,8 +58,13 @@ abstract class AbstractPushProcessor implements PushProcessorInterface
 				$this->processConnectionPush($push);
 			}
 		}
+		catch (SynchronizerException $e)
+		{
+			throw $e;
+		}
 		catch (\Throwable)
-		{}
+		{
+		}
 		finally
 		{
 			$this->pushStorageManager->setUnblockPush($push);
@@ -66,6 +80,7 @@ abstract class AbstractPushProcessor implements PushProcessorInterface
 	 * @throws ObjectException
 	 * @throws ObjectPropertyException
 	 * @throws PersistenceException
+	 * @throws PushException
 	 * @throws SystemException
 	 */
 	private function processSectionPush(Push $push): void
@@ -92,6 +107,27 @@ abstract class AbstractPushProcessor implements PushProcessorInterface
 
 			$this->pushStorageManager->markPushSuccess($push, true);
 		}
+		catch (NotFoundException)
+		{
+			// If section was deleted on vendor's side, you should remove push
+			$this->pushStorageManager->deletePush($push);
+		}
+		catch (ApiException|DtoValidationException $e)
+		{
+			$this->pushStorageManager->markPushSuccess($push, false);
+
+			throw new PushException(
+				sprintf('Vendor API exception: "%s"', $e->getMessage()),
+				$e->getCode(),
+				$e,
+			);
+		}
+		catch (SynchronizerException $e)
+		{
+			$this->pushStorageManager->markPushSuccess($push, false);
+
+			throw $e;
+		}
 		catch (Exception)
 		{
 			$this->pushStorageManager->markPushSuccess($push, false);
@@ -102,18 +138,16 @@ abstract class AbstractPushProcessor implements PushProcessorInterface
 		}
 	}
 
+	/**
+	 * @throws PersistenceException
+	 * @throws PushException
+	 * @throws SynchronizerException
+	 */
 	private function processConnectionPush(Push $push): void
 	{
-		try
-		{
-			$connection = $this->connectionProvider->getById($push->getEntityId());
+		$connection = $this->connectionProvider->getById($push->getEntityId());
 
-			if (!$connection || $connection->isDeleted())
-			{
-				return;
-			}
-		}
-		catch (ArgumentException)
+		if (!$connection || $connection->isDeleted())
 		{
 			return;
 		}
@@ -129,13 +163,19 @@ abstract class AbstractPushProcessor implements PushProcessorInterface
 
 			$this->connectionManager->updateConnection($connection);
 		}
-		catch(\Exception)
+		catch (SynchronizerException $e)
 		{
+			$this->pushStorageManager->markPushSuccess($push, false);
+
+			throw $e;
+		}
+		catch (Exception)
+		{
+			$this->pushStorageManager->markPushSuccess($push, false);
 		}
 		finally
 		{
 			$this->pushStorageManager->unLockConnection($connection);
 		}
-
 	}
 }

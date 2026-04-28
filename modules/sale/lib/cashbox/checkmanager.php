@@ -2,6 +2,7 @@
 
 namespace Bitrix\Sale\Cashbox;
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Sale\Cashbox\Internals\CashboxCheckCorrectionTable;
 use Bitrix\Sale\Cashbox\Internals\CashboxCheckTable;
@@ -1711,13 +1712,42 @@ final class CheckManager
 
 	/**
 	 * @param $uuid
+	 * @param array $select
 	 * @return array|false
-	 * @throws Main\ArgumentException
+	 * @throws ArgumentException
 	 */
-	public static function getCheckInfoByExternalUuid($uuid)
+	public static function getCheckInfoByExternalUuid($uuid, array $select = ['*']): array|false
 	{
-		$dbRes = self::getList(array('filter' => array('=EXTERNAL_UUID' => $uuid)));
+		$dbRes = self::getList([
+			'select' => $select,
+			'filter' => ['=EXTERNAL_UUID' => $uuid],
+		]);
+
 		return $dbRes->fetch();
+	}
+
+	public static function applyCheckResultFromCallback(array $data): void
+	{
+		if (empty($data['uuid']))
+		{
+			return;
+		}
+
+		$checkInfo = self::getCheckInfoByExternalUuid(
+			$data['uuid'],
+			['CASHBOX_HANDLER' => 'CASHBOX.HANDLER'],
+		);
+		if (!$checkInfo)
+		{
+			return;
+		}
+
+		/** @var Cashbox $cashboxHandler */
+		$cashboxHandler = $checkInfo['CASHBOX_HANDLER'];
+		if (is_a($cashboxHandler, Cashbox::class, true))
+		{
+			$cashboxHandler::applyCheckResult($data);
+		}
 	}
 
 	/**

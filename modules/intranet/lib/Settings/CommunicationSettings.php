@@ -2,9 +2,9 @@
 
 namespace Bitrix\Intranet\Settings;
 
-use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Public\Command\ChangeDefaultViewerServiceCommand;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Intranet\Service\ServiceContainer;
@@ -99,15 +99,6 @@ class CommunicationSettings extends AbstractSettings
 		else
 		{
 			\COption::SetOptionString("main", "url_preview_enable", "N");
-		}
-
-		if (isset($this->data["create_overdue_chats"]) && $this->data["create_overdue_chats"] <> 'N')
-		{
-			\COption::SetOptionString("tasks", "create_overdue_chats", "Y");
-		}
-		else
-		{
-			\COption::SetOptionString("tasks", "create_overdue_chats", "N");
 		}
 
 		if ($this->isDiskConverted)
@@ -245,7 +236,7 @@ class CommunicationSettings extends AbstractSettings
 			&& in_array($this->data["default_viewer_service"], $allowedCodes)
 		)
 		{
-			\COption::SetOptionString("disk", "default_viewer_service", $this->data["default_viewer_service"]);
+			(new ChangeDefaultViewerServiceCommand($this->data['default_viewer_service']))->run();
 		}
 
 		if (isset($this->data["unified_link_default_access_level"]))
@@ -535,20 +526,6 @@ class CommunicationSettings extends AbstractSettings
 			]
 		);
 
-		if (Loader::includeModule("tasks") && Loader::includeModule("im"))
-		{
-			$data['create_overdue_chats'] = new Switcher(
-				'settings-communication-field-create_overdue_chats',
-				'create_overdue_chats',
-				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_CREATE_OVERDUE_CHATS'),
-				Option::get('tasks', 'create_overdue_chats', 'N'),
-				[
-					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_OVERDUE_CHATS_ON_MSGVER_1')
-				],
-				helpDesk: 'redirect=detail&code=18213270'
-			);
-		}
-
 		if ($this->isDiskConverted)
 		{
 			$data['disk_allow_edit_object_in_uf'] = new Switcher(
@@ -663,7 +640,7 @@ class CommunicationSettings extends AbstractSettings
 
 			$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
 			$optionList = [];
-			$currentValue = Configuration::getDefaultViewerServiceCode();
+			$currentValue = $documentHandlersManager->getDefaultViewerServiceForView();
 			foreach ($documentHandlersManager->getHandlersForView() as $handler)
 			{
 				$optionList[] = [
@@ -784,7 +761,6 @@ class CommunicationSettings extends AbstractSettings
 			'allow_post_general_channel' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_POST_GEN_CHANNEL') ?? '',
 			'general_chat_message_leave' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_LEAVE_MESSAGE'),
 			'url_preview_enable' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_URL_PREVIEW'),
-			'create_overdue_chats' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_CREATE_OVERDUE_CHATS'),
 			'default_viewer_service' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SELECT_FILE_VIEWER'),
 			'disk_version_limit_per_file' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_MAX_FILE_LIMIT'),
 			'disk_allow_edit_object_in_uf' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_EDIT_DOC'),

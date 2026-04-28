@@ -101,7 +101,7 @@ class AdyenHandler
 			"PAYSYSTEM_ID" => $this->service->getField("ID"),
 			"MERCHANT_ID" => $this->getBusinessValue($payment, "APPLE_PAY_MERCHANT_ID"),
 			"ORDER_ID" => $payment->getOrder()->getId(),
-			"TOTAL_SUM" => PriceMaths::roundPrecision($payment->getSum()),
+			"TOTAL_SUM" => PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency()),
 			"CURRENCY" => $payment->getField("CURRENCY"),
 			"MAKE_PAYMENT_ACTION" => "makePaymentAction",
 		);
@@ -318,11 +318,12 @@ class AdyenHandler
 	 */
 	private function isSumCorrect(Payment $payment, $sum): bool
 	{
+		$currency = $payment->getField('CURRENCY');
 		PaySystem\Logger::addDebugInfo(
-			"Adyen: adyenSum=".PriceMaths::roundPrecision($sum)."; paymentSum=".PriceMaths::roundPrecision($payment->getSum())
+			"Adyen: adyenSum=" . PriceMaths::roundByFormatCurrency($sum, $currency) . "; paymentSum=".PriceMaths::roundByFormatCurrency($payment->getSum(), $currency)
 		);
 
-		return PriceMaths::roundPrecision($sum) === PriceMaths::roundPrecision($payment->getSum());
+		return PriceMaths::roundByFormatCurrency($sum, $currency) === PriceMaths::roundByFormatCurrency($payment->getSum(), $currency);
 	}
 
 	/**
@@ -633,7 +634,7 @@ class AdyenHandler
 		$requestParameters = [
 			"originalReference" => $payment->getField("PS_INVOICE_ID"),
 			"modificationAmount" => [
-				"value" => PriceMaths::roundPrecision($refundableSum * 100),
+				"value" => PriceMaths::roundByFormatCurrency($refundableSum, $payment->getCurrency()) * 100,
 				"currency" => $payment->getField("CURRENCY"),
 			],
 			"reference" => $payment->getId(),
@@ -834,7 +835,7 @@ class AdyenHandler
 	private function getAmount(Payment $payment): array
 	{
 		return [
-			"value" => PriceMaths::roundPrecision($payment->getSum() * 100),
+			"value" => PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency()) * 100,
 			"currency" => $payment->getField("CURRENCY"),
 		];
 	}

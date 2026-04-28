@@ -554,7 +554,7 @@ class OrderPayment
 												<td class="adm-detail-content-cell-l" width="40%">'.Loc::getMessage('SALE_ORDER_PAYMENT_PAYABLE_SUM').':</td>
 												<td class="adm-detail-content-cell-r tal">'
 												. \CCurrencyLang::getPriceControl(
-													'<input type="text" class="adm-bus-input-price" name="PAYMENT['.$index.'][SUM]" id="PAYMENT_SUM_'.$index.'" value="'.round($sum, 2).'" '.$disabled.'>',
+													'<input type="text" class="adm-bus-input-price" name="PAYMENT['.$index.'][SUM]" id="PAYMENT_SUM_'.$index.'" value="'.Sale\PriceMaths::roundByFormatCurrency($sum, $data['CURRENCY']).'" '.$disabled.'>',
 													$data['CURRENCY']
 												)
 												. '<br></td>
@@ -563,7 +563,7 @@ class OrderPayment
 												<td class="adm-detail-content-cell-l" width="40%">'.Loc::getMessage('SALE_ORDER_PAYMENT_PAYABLE_PRICE_COD').':</td>
 												<td class="adm-detail-content-cell-r tal">'
 												. \CCurrencyLang::getPriceControl(
-													'<input type="text" class="adm-bus-input-price" name="PAYMENT['.$index.'][PRICE_COD]" id="PAYMENT_PRICE_COD_'.$index.'" value="'.round($priceCod, 2).'" readonly>',
+													'<input type="text" class="adm-bus-input-price" name="PAYMENT['.$index.'][PRICE_COD]" id="PAYMENT_PRICE_COD_'.$index.'" value="'.Sale\PriceMaths::roundByFormatCurrency($priceCod, $data['CURRENCY']).'" readonly>',
 													$data['CURRENCY']
 												)
 												. '<br></td>

@@ -1143,15 +1143,7 @@ abstract class Factory
 	 */
 	public function getCategory(int $id): ?Category
 	{
-		foreach($this->getCategories() as $category)
-		{
-			if($category->getId() === $id)
-			{
-				return $category;
-			}
-		}
-
-		return null;
+		return $this->getCategoryByFilter(static fn (Category $category) => $category->getId() === $id);
 	}
 
 	/**
@@ -1169,9 +1161,18 @@ abstract class Factory
 			return null;
 		}
 
-		foreach($this->getCategories() as $category)
+		return $this->getCategoryByFilter(static fn (Category $category) => $category->getCode() === $code);
+	}
+
+	/**
+	 * @param callable(Category $category): bool $filter
+	 * @return Category|null
+	 */
+	public function getCategoryByFilter(callable $filter): ?Category
+	{
+		foreach ($this->getCategories() as $category)
 		{
-			if ($category->getCode() === $code)
+			if ($filter($category))
 			{
 				return $category;
 			}
@@ -1659,7 +1660,7 @@ abstract class Factory
 		return $this->getStageBroker()->getById($statusId);
 	}
 
-	public function getStageFromCategory(int $categoryId, string $statusId): ?EO_Status
+	public function getStageFromCategory(?int $categoryId, string $statusId): ?EO_Status
 	{
 		$stageCollection = $this->getStages($categoryId);
 		foreach ($stageCollection->getAll() as $stage)

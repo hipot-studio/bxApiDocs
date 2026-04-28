@@ -57,7 +57,7 @@ class AllowedAgentsTimeManager
 				return $portalDateTime;
 			}
 
-			return $portalDateTime->add('+1 day')->setTime($startHour, 0, 0);
+			return $portalDateTime->setTime($startHour, 0, 0);
 		}
 
 		if ($currentHour >= $startHour && $currentHour <= $endHour)

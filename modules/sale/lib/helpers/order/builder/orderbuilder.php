@@ -1535,18 +1535,22 @@ abstract class OrderBuilder
 		return $this;
 	}
 
-	protected function tradingPlatformExists($id)
+	protected function tradingPlatformExists(int $id): Result
 	{
-		$r = new Result();
+		$result = new Result();
 
-		$platformFields = TradingPlatformTable::getById($id)->fetchAll();
+		$tradingPlatform = TradingPlatformTable::getRow([
+			'select' => ['ID'],
+			'filter' => ['=ID' => $id],
+			'cache' => ['ttl' => 86400],
+		]);
 
-		if (!isset($platformFields[0]))
+		if (!$tradingPlatform)
 		{
-			$r->addError(new Error('tradingPlatform is not exists'));
+			$result->addError(new Error('tradingPlatform does not exist'));
 		}
 
-		return $r;
+		return $result;
 	}
 
 	protected function removeTradeBindings()

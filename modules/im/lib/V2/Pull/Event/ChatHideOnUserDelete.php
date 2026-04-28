@@ -24,6 +24,11 @@ class ChatHideOnUserDelete extends BaseEvent
 		return array_map('intval', Helper::getOnlineIntranetUsers());
 	}
 
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
+	}
+
 	protected function getBasePullParamsInternal(): array
 	{
 		return [

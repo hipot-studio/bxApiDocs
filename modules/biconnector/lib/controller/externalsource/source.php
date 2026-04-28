@@ -6,7 +6,6 @@ use Bitrix\BIConnector;
 use Bitrix\BIConnector\ExternalSource;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
 use Bitrix\BIConnector\ExternalSource\SourceManager;
-use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\ActionFilter;
 use Bitrix\Crm;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
@@ -14,7 +13,6 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\SystemException;
 use Bitrix\Main\Result;
 
 class Source extends Controller
@@ -233,12 +231,7 @@ class Source extends Controller
 			return null;
 		}
 
-		$supersetIsReady = !(SupersetInitializer::isSupersetLoading() || SupersetInitializer::isSupersetUnavailable());
-
-		return [
-			'connection' => $saveResult->getData()['connection'], // TODO add isSupportMapping parameter
-			'supersetIsReady' => $supersetIsReady,
-		];
+		return $saveResult->getData();
 	}
 
 	public function updateCommentAction(string $id, string $value): ?bool

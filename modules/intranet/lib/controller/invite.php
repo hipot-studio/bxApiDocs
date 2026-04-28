@@ -3,7 +3,8 @@ namespace Bitrix\Intranet\Controller;
 
 use Bitrix\Bitrix24\Integration\Network\RegisterSettingsSynchronizer;
 use Bitrix\Bitrix24\Portal\Settings\EmailConfirmationRequirements\Type;
-use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
+use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\InviteLimitControl;
+use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\PortalCreatorEmailConfirmationControl;
 use Bitrix\Intranet\Service\InviteLinkGenerator;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
@@ -132,17 +133,28 @@ class Invite extends Main\Engine\Controller
 			new ExactParameter(
 				Entity\Collection\DepartmentCollection::class,
 				'departmentCollection',
-				function($className, ?array $departmentIds = null): ?Entity\Collection\DepartmentCollection {
-					if (!$departmentIds)
+				function($className, ?array $departmentIds = null) {
+					if (!is_array($departmentIds))
 					{
-						$departmentCollection = new Entity\Collection\DepartmentCollection();
-						$departmentCollection->add((new Intranet\Integration\HumanResources\Department())->getRootDepartment());
+						return new Entity\Collection\DepartmentCollection();
+					}
+					$departmentRepository = Intranet\Service\ServiceContainer::getInstance()->hrDepartmentRepository();
+					$permission = Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser();
+					$departmentCollection = $departmentRepository->findAllByIds($departmentIds);
+					$departmentCollection = $departmentCollection->filter(function ($department) use($permission) {
+						return $permission->canInviteToDepartment($department);
+					});
 
-						return $departmentCollection;
+					if ($departmentCollection->empty())
+					{
+						if ($department = $permission->findFirstPossibleAvailableDepartment())
+						{
+							$departmentCollection->add($department);
+						}
 					}
 
-					return (new Intranet\Integration\HumanResources\Department())->getByIds($departmentIds);
-				}
+					return $departmentCollection;
+				},
 			),
 		];
 	}
@@ -162,13 +174,15 @@ class Invite extends Main\Engine\Controller
 			...parent::configureActions(),
 			'register' => [
 				'+prefilters' => [
-					new Intranet\ActionFilter\InviteLimitControl(),
+					new PortalCreatorEmailConfirmationControl(),
+					new InviteLimitControl(),
 				],
 			],
 			'inviteUsersToCollab' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\InviteToCollabAccessControl(),
-					new Intranet\ActionFilter\InviteLimitControl(),
+					new PortalCreatorEmailConfirmationControl(),
+					new InviteLimitControl(),
 				],
 				'-prefilters' => [
 					Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl::class,
@@ -177,7 +191,8 @@ class Invite extends Main\Engine\Controller
 			'getLinkByCollabId' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\InviteToCollabAccessControl(),
-					new Intranet\ActionFilter\InviteLimitControl(),
+					new PortalCreatorEmailConfirmationControl(),
+					new InviteLimitControl(),
 				],
 				'-prefilters' => [
 					Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl::class,
@@ -211,16 +226,20 @@ class Invite extends Main\Engine\Controller
 			],
 			'inviteUsersByEmail' => [
 				'+prefilters' => [
-					new Intranet\ActionFilter\InviteLimitControl(),
+					new InviteLimitControl(),
+					new PortalCreatorEmailConfirmationControl(),
 					new Intranet\Infrastructure\Controller\ActionFilter\ActiveUserInvitation(new Intranet\Repository\UserRepository()),
 					new Intranet\Infrastructure\Controller\ActionFilter\UserInvitedExtranet(new Intranet\Repository\UserRepository()),
+					Intranet\Infrastructure\Controller\ActionFilter\EmailDailyLimit::createByDefault(),
 				],
 			],
 			'inviteUsersByPhoneNumber' => [
 				'+prefilters' => [
-					new Intranet\ActionFilter\InviteLimitControl(),
+					new InviteLimitControl(),
+					new PortalCreatorEmailConfirmationControl(),
 					new Intranet\Infrastructure\Controller\ActionFilter\ActiveUserInvitation(new Intranet\Repository\UserRepository()),
 					new Intranet\Infrastructure\Controller\ActionFilter\UserInvitedExtranet(new Intranet\Repository\UserRepository()),
+					Intranet\Infrastructure\Controller\ActionFilter\EmailDailyLimit::createByDefault(),
 				],
 			],
 		];
@@ -240,7 +259,7 @@ class Invite extends Main\Engine\Controller
 
 	private function inviteUsers(
 		Intranet\Public\Type\Collection\InvitationCollection $emailInvitations,
-		?Entity\Collection\DepartmentCollection              $departmentCollection,
+		?Entity\Collection\DepartmentCollection $departmentCollection,
 	): ?array
 	{
 		try
@@ -278,7 +297,7 @@ class Invite extends Main\Engine\Controller
 	 */
 	public function inviteUsersByEmailAction(
 		Intranet\Public\Type\Collection\InvitationCollection $emailInvitations,
-		?Entity\Collection\DepartmentCollection              $departmentCollection,
+		?Entity\Collection\DepartmentCollection $departmentCollection,
 	): ?array
 	{
 		$invitedUsers = $this->inviteUsers($emailInvitations, $departmentCollection);
@@ -296,7 +315,7 @@ class Invite extends Main\Engine\Controller
 	 */
 	public function inviteUsersByPhoneNumberAction(
 		Intranet\Public\Type\Collection\InvitationCollection $phoneInvitations,
-		?Entity\Collection\DepartmentCollection              $departmentCollection,
+		?Entity\Collection\DepartmentCollection $departmentCollection,
 	): ?array
 	{
 		if (!Loader::includeModule('bitrix24'))
@@ -318,21 +337,22 @@ class Invite extends Main\Engine\Controller
 	 * @restMethod intranet.invite.getLinkByDepartments
 	 */
 	public function getLinkByDepartmentsAction(
-		?Entity\Collection\DepartmentCollection $departmentCollection
+		?Entity\Collection\DepartmentCollection $departmentCollection,
 	): ?string
 	{
 		if (!$departmentCollection)
 		{
 			$departmentCollection = new Entity\Collection\DepartmentCollection();
 		}
-		$departmentRepository = Intranet\Service\ServiceContainer::getInstance()->hrDepartmentRepository();
+
 		if ($departmentCollection->empty())
 		{
-			$departmentCollection->add($departmentRepository->getRootDepartment());
+			$permission = Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser();
+			$departmentCollection->add($permission->findFirstPossibleAvailableDepartment());
 		}
 
 		$linkGenerator = InviteLinkGenerator::createByDepartmentsIds(
-			$departmentCollection->map(fn(Entity\Department $department) => $department->getId())
+			$departmentCollection->map(fn(Entity\Department $department) => $department->getId()),
 		);
 
 		if (!$linkGenerator)

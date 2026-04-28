@@ -2,7 +2,8 @@
 
 namespace Bitrix\Im\V2\Recent;
 
-use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\ExtendedType;
+use Bitrix\Im\V2\Common\FormatConverter;
 use Bitrix\Im\V2\Recent\Query\RecentFilter;
 use Bitrix\Im\V2\Recent\Query\RecentParams;
 use Bitrix\Im\V2\Service\Locator;
@@ -13,10 +14,10 @@ class RecentCollab extends Recent
 	{
 		$userId = Locator::getContext()->getUserId();
 
-		$filter['itemType'] = Chat::IM_TYPE_COLLAB;
+		$filter['recentSection'] = FormatConverter::toCamelCase(ExtendedType::Collab->value);
 		$filter['userId'] = $userId;
 
-		$queryFilter = new RecentFilter($filter);
+		$queryFilter = RecentFilter::fromArray($filter);
 		$recentParams = new RecentParams(
 			filter: $queryFilter,
 			limit: $limit,

@@ -132,9 +132,10 @@ class DiskManager
 			}
 		}
 
+		$isSupportedFile = TypeFile::isImage($file) || TypeFile::isVideo($file);
 		if (
 			isset($viewUri)
-			&& TypeFile::isImage($file)
+			&& $isSupportedFile
 		)
 		{
 			$tokenService = new ScopeToken('owner_id_' . $ownerTypeID);

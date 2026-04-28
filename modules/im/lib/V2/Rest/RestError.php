@@ -8,6 +8,7 @@ use Bitrix\Main\Localization\Loc;
 class RestError extends Error
 {
 	public const ACCESS_ERROR = 'ACCESS_ERROR';
+	public const WRONG_DATETIME_FORMAT = 'WRONG_DATETIME_FORMAT';
 
 	protected function loadErrorMessage($code, $replacements): string
 	{

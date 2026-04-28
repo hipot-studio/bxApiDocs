@@ -71,19 +71,35 @@ class EventHandler
 		}
 
 		$dynamic = [];
+		$automatedSolution = [];
 		$crmDynamicTypesMap =
 			\Bitrix\Crm\Service\Container::getInstance()
 				->getDynamicTypesMap()
 				->load(['isLoadStages' => false, 'isLoadCategories' => false])
 		;
+
 		foreach ($crmDynamicTypesMap->getTypes() as $dynamicType)
 		{
-			$dynamic[] = CCrmBizProcHelper::resolveDocumentType($dynamicType->getEntityTypeId());
+			if ($dynamicType->getCustomSectionId() !== null)
+			{
+				$automatedSolution[] = CCrmBizProcHelper::resolveDocumentType($dynamicType->getEntityTypeId());
+			}
+			else
+			{
+				$dynamic[] = CCrmBizProcHelper::resolveDocumentType($dynamicType->getEntityTypeId());
+			}
 		}
 
 		if ($parameters->isOnlyDynamic())
 		{
 			$event->addResult(new EventResult(EventResult::SUCCESS, ['documentTypes' => $dynamic]));
+
+			return;
+		}
+
+		if ($parameters->isOnlyAutomatedSolution())
+		{
+			$event->addResult(new EventResult(EventResult::SUCCESS, ['documentTypes' => $automatedSolution]));
 
 			return;
 		}
@@ -100,11 +116,23 @@ class EventHandler
 				return isset($item[2]) && in_array($item[2], $certainEntities, true);
 			});
 
-			$event->addResult(new EventResult(EventResult::SUCCESS, ['documentTypes' => array_merge($basic, $dynamic)]));
+			$automatedSolution = array_filter($automatedSolution, static function($item) use ($certainEntities) {
+				return isset($item[2]) && in_array($item[2], $certainEntities, true);
+			});
+
+			$event->addResult(
+				new EventResult(
+					EventResult::SUCCESS, ['documentTypes' => array_merge($basic, $dynamic, $automatedSolution)]
+				)
+			);
 
 			return;
 		}
 
-		$event->addResult(new EventResult(EventResult::SUCCESS, ['documentTypes' => array_merge($basic, $dynamic)]));
+		$event->addResult(
+			new EventResult(
+				EventResult::SUCCESS, ['documentTypes' => array_merge($basic, $dynamic, $automatedSolution)]
+			)
+		);
 	}
 }

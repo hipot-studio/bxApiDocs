@@ -3,8 +3,8 @@
 namespace Bitrix\Dav;
 
 use Bitrix\Main\Authentication\ApplicationPasswordTable;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Main\UrlRewriter;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Context;
 
@@ -52,29 +52,34 @@ class Application extends \Bitrix\Main\Authentication\Application
 
 	/**
 	 * Application constructor.
+	 * Accepted url
+	 *
+	 * 'bitrix:socialnetwork_user',
+	 * 'bitrix:socialnetwork_group',
+	 * 'bitrix:disk.common',
+	 * 'bitrix:webdav',
 	 */
 	public function __construct()
 	{
-		$this->validUrls = array("/bitrix/groupdav.php", "/index.php", "/.well-known");
-
-		$site = \Bitrix\Main\Application::getInstance()->getContext()->getSite();
-		$acceptedUrl = [
-			'bitrix:socialnetwork_user',
-			'bitrix:socialnetwork_group',
-			'bitrix:disk.common',
-			'bitrix:webdav',
+		$this->validUrls = [
+			'/bitrix/groupdav.php',
+			'/index.php',
+			'/.well-known',
+			SITE_DIR . 'workgroups/index.php', //bitrix:socialnetwork_group
+			SITE_DIR . 'docs/sale/index.php', //bitrix:disk.common
+			SITE_DIR . 'docs/shared/index.php', //bitrix:disk.common
+			SITE_DIR . 'docs/manage/index.php', //bitrix:disk.common
+			SITE_DIR . 'docs/index.php', //bitrix:webdav
 		];
 
-		if (!empty($site))
+		$isExtranet = Loader::includeModule('extranet') && \CExtranet::isExtranetSite();
+		if ($isExtranet)
 		{
-			$urls = UrlRewriter::getList($site);
-			foreach ($urls as $url)
-			{
-				if (isset($url['ID']) && in_array($url['ID'], $acceptedUrl, true))
-				{
-					$this->validUrls[] = $url['PATH'];
-				}
-			}
+			$this->validUrls[] = SITE_DIR . 'contacts/index.php'; //bitrix:socialnetwork_user
+		}
+		else
+		{
+			$this->validUrls[] = SITE_DIR . 'company/personal.php'; //bitrix:socialnetwork_user
 		}
 	}
 
@@ -159,7 +164,6 @@ class Application extends \Bitrix\Main\Authentication\Application
 	 */
 	public static function generateAppPassword($userId, $appId)
 	{
-
 		$password = ApplicationPasswordTable::generatePassword();
 		$message = Loc::getMessage('DAV_APP_SYSCOMMENT');
 		if ($appId)
@@ -172,7 +176,6 @@ class Application extends \Bitrix\Main\Authentication\Application
 				));
 			}
 		}
-
 
 		$res = ApplicationPasswordTable::add(array(
 			'USER_ID' => $userId,

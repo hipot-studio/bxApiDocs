@@ -5,6 +5,7 @@ namespace Bitrix\Im\Configuration;
 use Bitrix\Im\Model\OptionStateTable;
 use Bitrix\Im\Model\OptionUserTable;
 use Bitrix\Im\V2\Application\Features;
+use Bitrix\Im\V2\Chat\Background\BackgroundId;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\ObjectPropertyException;
@@ -133,7 +134,7 @@ class General extends Base
 			'privacySearch' => Option::get("im", "privacy_search"),
 			'privacyProfile' => Option::get("im", "privacy_profile"),
 			'callAcceptIncomingVideo' => 'AllowAll',/** @see \Bitrix\Call\VideoStrategyType::ALLOW_ALL */
-			'backgroundImageId' => 1,
+			'backgroundImageId' => BackgroundId::Azure->value,
 			'chatAlignment' => 'left',
 			'next' => false,
 			'pinnedChatSort' => 'byCost',
@@ -436,6 +437,15 @@ class General extends Base
 	public static function prepareRawGroupSettings(array $settings): array
 	{
 		$settings = self::filterGroupSettingsByDefault($settings);
+
+		// Normalize backgroundImageId: legacy numeric values → text codes.
+		// Cache may store old integers (e.g. 5) that were never re-decoded.
+		if (isset($settings['backgroundImageId']))
+		{
+			$settings['backgroundImageId'] = BackgroundId::normalize((string)$settings['backgroundImageId'])
+				?? BackgroundId::Azure->value;
+		}
+
 		$redefinedSettings = self::getRedefinedSettings();
 
 		return array_replace($settings, $redefinedSettings);
@@ -591,7 +601,7 @@ class General extends Base
 
 			if ($decodedName === 'backgroundImageId')
 			{
-				$decodedSettings[$decodedName] = (int)$value;
+				$decodedSettings[$decodedName] = BackgroundId::normalize((string)$value) ?? BackgroundId::Azure->value;
 			}
 		}
 
@@ -752,7 +762,8 @@ class General extends Base
 					$verifiedSettings[$name] = !($value === 'N' || $value === false);
 					break;
 				case 'backgroundImageId':
-					$verifiedSettings[$name] = (int)$value > 0 ? (int)$value : 1;
+					$normalized = BackgroundId::normalize((string)$value);
+					$verifiedSettings[$name] = $normalized ?? BackgroundId::Azure->value;
 					break;
 				case 'chatAlignment':
 					$verifiedSettings[$name] =

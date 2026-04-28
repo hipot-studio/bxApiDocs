@@ -1653,4 +1653,24 @@ EOS;
 
 		return class_exists($entity) && isset(class_implements($entity)[IBPWorkflowDocument::class]);
 	}
+
+	public function getSectionName(array $complexDocumentType): ?string
+	{
+		$normalized = CBPHelper::normalizeComplexDocumentId($complexDocumentType);
+		if (!$normalized)
+		{
+			return null;
+		}
+
+		[$moduleId, $entity, $documentType] = $normalized;
+
+		if ($this->isCallable($moduleId, $entity, 'getSectionName'))
+		{
+			$name = $this->call($entity, 'getSectionName', $complexDocumentType);
+
+			return is_string($name) ? $name : null;
+		}
+
+		return null;
+	}
 }

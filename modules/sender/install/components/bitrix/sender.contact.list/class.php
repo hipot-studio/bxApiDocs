@@ -53,6 +53,13 @@ class SenderContactListComponent extends Bitrix\Sender\Internals\CommonSenderCom
 		switch ($action)
 		{
 			case 'delete':
+				if (!$this->getAccessController()->check(ActionDictionary::ACTION_SEGMENT_CLIENT_EDIT))
+				{
+					Security\AccessChecker::addError($this->errors);
+
+					break;
+				}
+
 				if (!is_array($ids))
 				{
 					$ids = array($ids);
@@ -62,6 +69,7 @@ class SenderContactListComponent extends Bitrix\Sender\Internals\CommonSenderCom
 				{
 					Entity\Contact::removeById($id);
 				}
+
 				break;
 		}
 	}

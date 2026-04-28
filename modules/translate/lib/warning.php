@@ -6,7 +6,10 @@ use Bitrix\Main;
 
 /**
  * Warning collection.
+ *
+ * @internal
  */
+
 trait Warning
 {
 	/** @var Main\ErrorCollection */

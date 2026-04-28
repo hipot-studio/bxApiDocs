@@ -200,6 +200,7 @@ class WorkTime
 			&& $this->sessionManager->isEnableSendSystemMessage()
 			&& $this->sessionManager->getAction() != Session::ACTION_CLOSED
 			&& !$this->isWorkTimeLine()
+			&& $this->session['STATUS'] < Session::STATUS_ANSWER
 		)
 		{
 			$result = Im::addMessage([

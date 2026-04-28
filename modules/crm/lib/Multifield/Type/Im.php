@@ -28,4 +28,23 @@ final class Im extends Type
 		self::VALUE_TYPE_JABBER,
 		self::VALUE_TYPE_SKYPE,
 	];
+
+	public function getValueTypes(): array
+	{
+		return [
+			self::VALUE_TYPE_FACEBOOK,
+			self::VALUE_TYPE_TELEGRAM,
+			self::VALUE_TYPE_VK,
+			self::VALUE_TYPE_SKYPE,
+			self::VALUE_TYPE_VIBER,
+			self::VALUE_TYPE_INSTAGRAM,
+			self::VALUE_TYPE_BITRIX24,
+			self::VALUE_TYPE_OPENLINE,
+			self::VALUE_TYPE_IMOL,
+			self::VALUE_TYPE_ICQ,
+			self::VALUE_TYPE_MSN,
+			self::VALUE_TYPE_JABBER,
+			self::VALUE_TYPE_OTHER,
+		];
+	}
 }

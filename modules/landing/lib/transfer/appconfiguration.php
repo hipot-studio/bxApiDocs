@@ -54,6 +54,7 @@ class AppConfiguration
 		'landing_page',
 		'landing_store',
 		'landing_knowledge',
+		// Do NOT remove landing_mainpage! It need to compatibility with old archives.
 		'landing_mainpage',
 	];
 
@@ -90,16 +91,19 @@ class AppConfiguration
 	{
 		$request = Application::getInstance()->getContext()->getRequest();
 		$additional = $request->get('additional');
+		// todo: 0 or null
 		$siteId = $additional['siteId'] ?? null;
 		$manifestList = [];
 
 		foreach (self::$accessManifest as $code)
 		{
-			if ($code == 'total')
+			if ($code === 'total')
 			{
 				continue;
 			}
 			$langCode = mb_strtoupper(mb_substr($code, mb_strlen(self::PREFIX_CODE)));
+			$langCode = Type::getCompatibilityScopeClass($langCode);
+
 			$manifestList[] = [
 				'CODE' => $code,
 				'VERSION' => 1,
@@ -151,7 +155,7 @@ class AppConfiguration
 		if ($manifest['CODE'] ?? null)
 		{
 			$siteType = substr($manifest['CODE'], strlen(AppConfiguration::PREFIX_CODE));
-			\Bitrix\Landing\Site\Type::setScope($siteType);
+			Type::setScope($siteType);
 		}
 
 		$siteId = $manifest['SITE_ID'] ?? 0;
@@ -185,13 +189,14 @@ class AppConfiguration
 
 		self::$processing = true;
 
-		if (in_array($code, static::$accessManifest))
+		if (in_array($code, static::$accessManifest, true))
 		{
-			if ($type == 'EXPORT')
+			if ($type === 'EXPORT')
 			{
 				return Export\Site::getInitManifest($event);
 			}
-			else if ($type == 'IMPORT')
+
+			if ($type === 'IMPORT')
 			{
 				return Import\Site::getInitManifest($event);
 			}

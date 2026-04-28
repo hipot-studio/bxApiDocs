@@ -12,7 +12,7 @@ use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\StructureRole;
 use Bitrix\HumanResources\Util\StructureHelper;
 use Bitrix\Landing\Connector\Crm;
-use Bitrix\Landing\Mainpage;
+use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
@@ -88,7 +88,7 @@ class LandingBlocksMainpageWidgetAbout extends LandingBlocksMainpageWidgetBase
 
 	protected function getData(): void
 	{
-		if (Mainpage\Manager::isUseDemoData())
+		if (Vibe::isUseDemoData())
 		{
 			$data = $this->getDemoData();
 			Extension::load(['ui.icon-set.main']);

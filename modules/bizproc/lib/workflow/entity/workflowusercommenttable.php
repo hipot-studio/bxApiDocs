@@ -6,6 +6,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\Type\DateTime;
@@ -57,6 +58,14 @@ class WorkflowUserCommentTable extends DataManager
 			(new DatetimeField('MODIFIED'))
 				->configureNullable(false)
 			,
+			new Reference(
+				'WORKFLOW_USER',
+				WorkflowUserTable::class,
+				[
+					'=this.WORKFLOW_ID' => 'ref.WORKFLOW_ID',
+					'=this.USER_ID' => 'ref.USER_ID',
+				],
+			),
 		];
 	}
 
@@ -138,29 +147,19 @@ class WorkflowUserCommentTable extends DataManager
 
 	public static function verifyUserUnread(int $userId): void
 	{
-		$rows = static::query()
-			->where('USER_ID', $userId)
+		$query = static::query()
 			->setSelect(['WORKFLOW_ID'])
-			->fetchAll()
+			->where('USER_ID', $userId)
+			->whereNull('WORKFLOW_USER.USER_ID')
 		;
-
-		$workflowIds = array_column($rows, 'WORKFLOW_ID');
+		$workflowIds =  array_column($query->fetchAll(), 'WORKFLOW_ID');
 
 		if (!$workflowIds)
 		{
 			return;
 		}
 
-		$workflowRows = WorkflowUserTable::query()
-			->whereIn('WORKFLOW_ID', $workflowIds)
-			->where('USER_ID', $userId)
-			->setSelect(['WORKFLOW_ID'])
-			->fetchAll();
-
-		$realIds = array_column($workflowRows, 'WORKFLOW_ID');
-		$oldIds = array_diff($workflowIds, $realIds);
-
-		foreach ($oldIds as $id)
+		foreach ($workflowIds as $id)
 		{
 			static::delete([
 				'USER_ID' => $userId,

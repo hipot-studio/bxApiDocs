@@ -1,8 +1,10 @@
 <?php
 namespace Bitrix\Crm\Automation\Trigger;
 
+use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
 use Bitrix\Main\Loader;
 Use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 Loc::loadMessages(__FILE__);
 
@@ -75,5 +77,20 @@ class FillTrackingNumberTrigger extends BaseTrigger
 	public static function getGroup(): array
 	{
 		return ['delivery'];
+	}
+
+	public static function getNodeDescription(): string
+	{
+		return Loc::getMessage('CRM_AUTOMATION_TRIGGER_FILL_TRACKNUM_NODE_DESCRIPTION') ?? '';
+	}
+
+	public static function getNodeColor(): int
+	{
+		return ActivityColorIndex::BLUE->value;
+	}
+
+	public static function getNodeIcon(): string
+	{
+		return Outline::DIGITS_123->name;
 	}
 }

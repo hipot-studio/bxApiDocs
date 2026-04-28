@@ -177,8 +177,9 @@ class WebMoneyHandler extends PaySystem\ServiceHandler
 	 */
 	protected function checkSum(Payment $payment, Request $request)
 	{
-		$paymentShouldPay = round($this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY'), 2);
-		$lmiPaymentAmount = round($request->get('LMI_PAYMENT_AMOUNT'), 2);
+		$currency = $payment->getField('CURRENCY');
+		$paymentShouldPay = PriceMaths::roundByFormatCurrency($this->getBusinessValue($payment, 'PAYMENT_SHOULD_PAY'), $currency, 2);
+		$lmiPaymentAmount = PriceMaths::roundByFormatCurrency($request->get('LMI_PAYMENT_AMOUNT'), $currency, 2);
 
 		return $paymentShouldPay == $lmiPaymentAmount;
 	}

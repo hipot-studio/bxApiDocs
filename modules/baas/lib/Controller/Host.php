@@ -42,7 +42,7 @@ class Host extends Main\Engine\Controller
 	public function refreshAction(): Main\Engine\Response\Json
 	{
 		return $this->fullFill(function() {
-			$result = $this->billingService->synchronizeWithBilling();
+			$result = Baas\Baas::getInstance()->sync(true);
 
 			if ($result->isSuccess())
 			{

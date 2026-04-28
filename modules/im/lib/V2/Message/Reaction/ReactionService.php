@@ -66,6 +66,7 @@ class ReactionService
 		(new PushService())->add($reactionItem);
 		(new MessageAnalytics($this->message))->addAddReaction($reaction, $reactionItem->getUserId());
 		(new ReactionEvent($this->message, $reactionItem, ReactionEvent::ADD_REACTION))->sendBotEvent();
+		$this->logUserReactionEvent($reactionItem);
 
 		$this->addAnchors($reaction);
 		return $result;
@@ -100,6 +101,7 @@ class ReactionService
 
 		(new PushService())->delete($reactionItem);
 		(new ReactionEvent($this->message, $reactionItem, ReactionEvent::DELETE_REACTION))->sendBotEvent();
+		$this->logUserReactionEvent($reactionItem);
 
 		$this->deleteAnchor();
 
@@ -208,5 +210,28 @@ class ReactionService
 			->setContext($this->getContext());
 
 		$anchorService->deleteReactionAnchors();
+	}
+
+	private function logUserReactionEvent(ReactionItem $reactionItem): void
+	{
+		try
+		{
+			$messageId = $this->message->getMessageId();
+			$chatId = $this->message->getChatId();
+			$reactionParams = [
+				'REACTION' => $reactionItem->getReaction(),
+				'USER_ID' => $reactionItem->getUserId(),
+				'CHAT_ID' => $chatId,
+			];
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logUserReactionEvent(
+				'ONIMV2REACTIONCHANGE',
+				fn() => (new \Bitrix\Im\V2\Event\EventPayload())->reactionChange($messageId, $reactionParams),
+				$chatId
+			);
+		}
+		catch (\Throwable)
+		{
+			// Event logging should not break reaction operations.
+		}
 	}
 }

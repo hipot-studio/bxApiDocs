@@ -1743,7 +1743,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 				$manifest['style']['block'] = ['type' => self::DEFAULT_WRAPPER_STYLE];
 				$manifest['block']['section'] = (array)$manifest['block']['section'];
 				if (
-					Site\Type::getCurrentScopeId() === 'MAINPAGE'
+					Site\Type::getCurrentScopeId() === Type::SCOPE_CODE_VIBE
 					&& !in_array('widgets_separators', $manifest['block']['section'], true)
 				)
 				{
@@ -5193,5 +5193,98 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		}
 
 		return false;
+	}
+
+	/**
+	 * Save new data to the block.
+	 * @param Block $blockInstance Block instance.
+	 * @param array $block Block data, format like used in export\import
+	 */
+	public static function saveDataToBlock(Block $blockInstance, array $block): void
+	{
+		// update cards
+		if (isset($block['cards']) && is_array($block['cards']))
+		{
+			$blockInstance->updateCards(
+				$block['cards']
+			);
+		}
+		// update style
+		if (isset($block['style']) && is_array($block['style']))
+		{
+			foreach ($block['style'] as $selector => $styleData)
+			{
+				if ($selector === '#wrapper')
+				{
+					$selector = '#' . $blockInstance->getAnchor($blockInstance->getId());
+				}
+				$styleToSet = [];
+				// compatibility for old style export
+				if (!isset($styleData['classList']) && !isset($styleData['style']))
+				{
+					foreach ((array)$styleData as $clPos => $clVal)
+					{
+						// todo: check compatibility
+						$selectorUpd = $selector . '@' . $clPos;
+						$styleToSet[$selectorUpd]['classList'] = (array)$clVal;
+					}
+				}
+
+				// new style export format (classList + style)
+				if (isset($styleData['classList']))
+				{
+					foreach ($styleData['classList'] as $clPos => $class)
+					{
+						if ($class)
+						{
+							$selectorUpd = $selector . '@' . $clPos;
+							$styleToSet[$selectorUpd]['classList'] = explode(' ', $class);
+						}
+					}
+				}
+				if (isset($styleData['style']))
+				{
+					foreach ($styleData['style'] as $stPos => $styles)
+					{
+						if (!empty($styles))
+						{
+							$selectorUpd = $selector . '@' . $stPos;
+							$styleToSet[$selectorUpd]['style'] = $styles;
+						}
+					}
+				}
+
+				if (!empty($styleToSet))
+				{
+					$blockInstance->setClasses($styleToSet);
+				}
+			}
+		}
+		// update nodes
+		if (isset($block['nodes']) && is_array($block['nodes']))
+		{
+			$blockInstance->updateNodes($block['nodes']);
+		}
+		// update menu
+		if (!empty($block['menu']))
+		{
+			$blockInstance->updateNodes($block['menu']);
+		}
+		// update attrs
+		if (!empty($block['attrs']))
+		{
+			if (isset($block['attrs']['#wrapper']))
+			{
+				$attrCode = '#' . $blockInstance->getAnchor($blockInstance->getId());
+				$block['attrs'][$attrCode] = $block['attrs']['#wrapper'];
+				unset($block['attrs']['#wrapper']);
+			}
+			$blockInstance->setAttributes($block['attrs']);
+		}
+		// update dynamic source
+		if (isset($block['dynamic']) && is_array($block['dynamic']))
+		{
+			$blockInstance->saveDynamicParams($block['dynamic']);
+		}
 	}
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Service;
 
 use Bitrix\Booking\Entity;
+use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\Booking\CreateBookingException;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
@@ -57,6 +58,7 @@ class BookingService
 
 		$bookingEntity->setSkuCollection($newBooking->getSkuCollection());
 		$this->skuService->handleSkuRelations($bookingEntity, new Entity\Booking\BookingSkuCollection());
+		$this->handlePayment($bookingEntity, $newBooking->getPayment());
 
 		try
 		{
@@ -202,5 +204,18 @@ class BookingService
 		{
 			throw new Exception('There is a deleted resource at the time of booking completed');
 		}
+	}
+
+	private function handlePayment(Entity\Booking\Booking $booking, Entity\Booking\BookingPayment|null $payment): void
+	{
+		return;
+
+		if (!$payment)
+		{
+			return;
+		}
+
+		Container::getBookingPaymentRepository()->link($booking->getId(), $payment->getId());
+		$booking->setPayment($payment);
 	}
 }

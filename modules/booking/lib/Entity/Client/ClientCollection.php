@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Entity\Client;
 
 use Bitrix\Booking\Entity\BaseEntityCollection;
-use Bitrix\Booking\Internals\Container;
 
 /**
  * @method \Bitrix\Booking\Entity\Client\Client|null getFirstCollectionItem()
@@ -23,19 +22,15 @@ class ClientCollection extends BaseEntityCollection
 
 	public function getPrimaryClient(): Client|null
 	{
-		$moduleId = $this->getFirstCollectionItem()?->getType()?->getModuleId();
-		if (!$moduleId)
+		foreach ($this->collectionItems as $client)
 		{
-			return null;
+			if ($client->getType()?->getCode() === ClientType::CODE_CONTACT)
+			{
+				return $client;
+			}
 		}
 
-		$clientProvider = Container::getProviderManager()::getProviderByModuleId($moduleId)?->getClientProvider();
-		if (!$clientProvider)
-		{
-			return null;
-		}
-
-		return $clientProvider->pickPrimaryClient($this);
+		return $this->getFirstCollectionItem();
 	}
 
 	public static function mapFromArray(array $props): self

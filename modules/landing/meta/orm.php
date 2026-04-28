@@ -622,6 +622,16 @@ namespace Bitrix\Landing\Copilot\Model {
 	 * @method bool isStepRefFilled()
 	 * @method bool isStepRefChanged()
 	 * @method \Bitrix\Landing\Copilot\Model\EO_RequestToStep fillStepRef()
+	 * @method \Bitrix\Landing\Copilot\Model\EO_Requests getRequestRef()
+	 * @method \Bitrix\Landing\Copilot\Model\EO_Requests remindActualRequestRef()
+	 * @method \Bitrix\Landing\Copilot\Model\EO_Requests requireRequestRef()
+	 * @method \Bitrix\Landing\Copilot\Model\EO_RequestToEntities setRequestRef(\Bitrix\Landing\Copilot\Model\EO_Requests $object)
+	 * @method \Bitrix\Landing\Copilot\Model\EO_RequestToEntities resetRequestRef()
+	 * @method \Bitrix\Landing\Copilot\Model\EO_RequestToEntities unsetRequestRef()
+	 * @method bool hasRequestRef()
+	 * @method bool isRequestRefFilled()
+	 * @method bool isRequestRefChanged()
+	 * @method \Bitrix\Landing\Copilot\Model\EO_Requests fillRequestRef()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -681,6 +691,9 @@ namespace Bitrix\Landing\Copilot\Model {
 	 * @method \Bitrix\Landing\Copilot\Model\EO_RequestToStep[] getStepRefList()
 	 * @method \Bitrix\Landing\Copilot\Model\EO_RequestToEntities_Collection getStepRefCollection()
 	 * @method \Bitrix\Landing\Copilot\Model\EO_RequestToStep_Collection fillStepRef()
+	 * @method \Bitrix\Landing\Copilot\Model\EO_Requests[] getRequestRefList()
+	 * @method \Bitrix\Landing\Copilot\Model\EO_RequestToEntities_Collection getRequestRefCollection()
+	 * @method \Bitrix\Landing\Copilot\Model\EO_Requests_Collection fillRequestRef()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -3221,6 +3234,157 @@ namespace Bitrix\Landing\Internals {
 	 * @method \Bitrix\Landing\Internals\EO_Role_Collection wakeUpCollection($rows)
 	 */
 	class EO_Role_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Landing\Internals\BlockFavouriteTable:landing/lib/internals/blockfavourite.php */
+namespace Bitrix\Landing\Internals {
+	/**
+	 * EO_BlockFavourite
+	 * @see \Bitrix\Landing\Internals\BlockFavouriteTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite resetUserId()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \string getCode()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite resetCode()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite unsetCode()
+	 * @method \string fillCode()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite resetDateCreate()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite set($fieldName, $value)
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite reset($fieldName)
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Landing\Internals\EO_BlockFavourite wakeUp($data)
+	 */
+	class EO_BlockFavourite {
+		/* @var \Bitrix\Landing\Internals\BlockFavouriteTable */
+		static public $dataClass = '\Bitrix\Landing\Internals\BlockFavouriteTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Landing\Internals {
+	/**
+	 * EO_BlockFavourite_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Landing\Internals\EO_BlockFavourite $object)
+	 * @method bool has(\Bitrix\Landing\Internals\EO_BlockFavourite $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite getByPrimary($primary)
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite[] getAll()
+	 * @method bool remove(\Bitrix\Landing\Internals\EO_BlockFavourite $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Landing\Internals\EO_BlockFavourite_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite_Collection merge(?\Bitrix\Landing\Internals\EO_BlockFavourite_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_BlockFavourite_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Landing\Internals\BlockFavouriteTable */
+		static public $dataClass = '\Bitrix\Landing\Internals\BlockFavouriteTable';
+	}
+}
+namespace Bitrix\Landing\Internals {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_BlockFavourite_Result exec()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite fetchObject()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite_Collection fetchCollection()
+	 */
+	class EO_BlockFavourite_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite fetchObject()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite_Collection fetchCollection()
+	 */
+	class EO_BlockFavourite_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite createObject($setDefaultValues = true)
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite_Collection createCollection()
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite wakeUpObject($row)
+	 * @method \Bitrix\Landing\Internals\EO_BlockFavourite_Collection wakeUpCollection($rows)
+	 */
+	class EO_BlockFavourite_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Landing\Internals\HookDataTable:landing/lib/internals/hookdata.php */
 namespace Bitrix\Landing\Internals {
@@ -8099,4 +8263,179 @@ namespace Bitrix\Landing\Internals {
 	 * @method \Bitrix\Landing\Internals\EO_UrlRewrite_Collection wakeUpCollection($rows)
 	 */
 	class EO_UrlRewrite_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Landing\Vibe\Model\VibeTable:landing/lib/Vibe/Model/VibeTable.php */
+namespace Bitrix\Landing\Vibe\Model {
+	/**
+	 * EO_Vibe
+	 * @see \Bitrix\Landing\Vibe\Model\VibeTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getModuleId()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
+	 * @method bool hasModuleId()
+	 * @method bool isModuleIdFilled()
+	 * @method bool isModuleIdChanged()
+	 * @method \string remindActualModuleId()
+	 * @method \string requireModuleId()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe resetModuleId()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe unsetModuleId()
+	 * @method \string fillModuleId()
+	 * @method \string getEmbedId()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe setEmbedId(\string|\Bitrix\Main\DB\SqlExpression $embedId)
+	 * @method bool hasEmbedId()
+	 * @method bool isEmbedIdFilled()
+	 * @method bool isEmbedIdChanged()
+	 * @method \string remindActualEmbedId()
+	 * @method \string requireEmbedId()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe resetEmbedId()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe unsetEmbedId()
+	 * @method \string fillEmbedId()
+	 * @method \int getSiteId()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe setSiteId(\int|\Bitrix\Main\DB\SqlExpression $siteId)
+	 * @method bool hasSiteId()
+	 * @method bool isSiteIdFilled()
+	 * @method bool isSiteIdChanged()
+	 * @method \int remindActualSiteId()
+	 * @method \int requireSiteId()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe resetSiteId()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe unsetSiteId()
+	 * @method \int fillSiteId()
+	 * @method \string getStatus()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \string remindActualStatus()
+	 * @method \string requireStatus()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe resetStatus()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe unsetStatus()
+	 * @method \string fillStatus()
+	 * @method \string getProviderClass()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe setProviderClass(\string|\Bitrix\Main\DB\SqlExpression $providerClass)
+	 * @method bool hasProviderClass()
+	 * @method bool isProviderClassFilled()
+	 * @method bool isProviderClassChanged()
+	 * @method \string remindActualProviderClass()
+	 * @method \string requireProviderClass()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe resetProviderClass()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe unsetProviderClass()
+	 * @method \string fillProviderClass()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe set($fieldName, $value)
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe reset($fieldName)
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Landing\Vibe\Model\EO_Vibe wakeUp($data)
+	 */
+	class EO_Vibe {
+		/* @var \Bitrix\Landing\Vibe\Model\VibeTable */
+		static public $dataClass = '\Bitrix\Landing\Vibe\Model\VibeTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Landing\Vibe\Model {
+	/**
+	 * EO_Vibe_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getModuleIdList()
+	 * @method \string[] fillModuleId()
+	 * @method \string[] getEmbedIdList()
+	 * @method \string[] fillEmbedId()
+	 * @method \int[] getSiteIdList()
+	 * @method \int[] fillSiteId()
+	 * @method \string[] getStatusList()
+	 * @method \string[] fillStatus()
+	 * @method \string[] getProviderClassList()
+	 * @method \string[] fillProviderClass()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Landing\Vibe\Model\EO_Vibe $object)
+	 * @method bool has(\Bitrix\Landing\Vibe\Model\EO_Vibe $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe getByPrimary($primary)
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe[] getAll()
+	 * @method bool remove(\Bitrix\Landing\Vibe\Model\EO_Vibe $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Landing\Vibe\Model\EO_Vibe_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe_Collection merge(?\Bitrix\Landing\Vibe\Model\EO_Vibe_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 */
+	class EO_Vibe_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Landing\Vibe\Model\VibeTable */
+		static public $dataClass = '\Bitrix\Landing\Vibe\Model\VibeTable';
+	}
+}
+namespace Bitrix\Landing\Vibe\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Vibe_Result exec()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe fetchObject()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe_Collection fetchCollection()
+	 */
+	class EO_Vibe_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe fetchObject()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe_Collection fetchCollection()
+	 */
+	class EO_Vibe_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe createObject($setDefaultValues = true)
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe_Collection createCollection()
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe wakeUpObject($row)
+	 * @method \Bitrix\Landing\Vibe\Model\EO_Vibe_Collection wakeUpCollection($rows)
+	 */
+	class EO_Vibe_Entity extends \Bitrix\Main\ORM\Entity {}
 }

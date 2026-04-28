@@ -5,8 +5,6 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
-use Bitrix\Im\V2\Message\ReadService;
-use Bitrix\Im\V2\Message\Send\SendingService;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -45,7 +43,7 @@ class ChannelChat extends GroupChat
 			return $parentResult;
 		}
 
-		$result = $commentChat->subscribeUsers(true, $mentionChange->addedUserIds);
+		$result = $commentChat->withContextUser(0)->subscribeUsers(true, $mentionChange->addedUserIds);
 
 		return Result::merge($parentResult, $result);
 	}
@@ -81,27 +79,6 @@ class ChannelChat extends GroupChat
 	public function getDefaultManageUI(): string
 	{
 		return self::MANAGE_RIGHTS_MANAGERS;
-	}
-
-	public function realAllComments(): void
-	{
-		$readComments = (new ReadService())->readChildren($this);
-
-		if (empty($readComments) || !Loader::includeModule('pull'))
-		{
-			return;
-		}
-
-		$pushMessage = [
-			'module_id' => 'im',
-			'command' => 'readAllChannelComments',
-			'params' => [
-				'chatId' => $this->getChatId(),
-			],
-			'extra' => \Bitrix\Im\Common::getPullExtra()
-		];
-
-		\Bitrix\Pull\Event::add($this->getContext()->getUserId(), $pushMessage);
 	}
 
 	protected function sendBanner(?int $authorId = null): void

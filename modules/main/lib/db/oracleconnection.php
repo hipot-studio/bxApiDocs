@@ -88,7 +88,7 @@ class OracleConnection extends Connection
 	/**
 	 * @inheritDoc
 	 */
-	protected function queryInternal($sql, array $binds = null, \Bitrix\Main\Diag\SqlTrackerQuery $trackerQuery = null)
+	protected function queryInternal($sql, ?array $binds = null, ?\Bitrix\Main\Diag\SqlTrackerQuery $trackerQuery = null)
 	{
 		$this->connectInternal();
 
@@ -162,7 +162,7 @@ class OracleConnection extends Connection
 	/**
 	 * @inheritDoc
 	 */
-	protected function createResult($result, \Bitrix\Main\Diag\SqlTrackerQuery $trackerQuery = null)
+	protected function createResult($result, ?\Bitrix\Main\Diag\SqlTrackerQuery $trackerQuery = null)
 	{
 		return new OracleResult($result, $this, $trackerQuery);
 	}

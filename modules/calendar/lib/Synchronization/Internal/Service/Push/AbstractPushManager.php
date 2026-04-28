@@ -9,6 +9,7 @@ use Bitrix\Calendar\Sync\Connection\Connection;
 use Bitrix\Calendar\Synchronization\Internal\Entity\Push\Push;
 use Bitrix\Calendar\Synchronization\Internal\Entity\Push\PushId;
 use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
+use Bitrix\Calendar\Synchronization\Internal\Exception\PushException;
 use Bitrix\Calendar\Synchronization\Internal\Repository\PushRepository;
 use Bitrix\Calendar\Synchronization\Internal\Repository\SectionConnectionRepository;
 use Bitrix\Calendar\Synchronization\Internal\Service\Push\Dto\AbstractPushResponse;
@@ -27,11 +28,6 @@ abstract class AbstractPushManager implements PushManagerInterface
 	{
 	}
 
-	/**
-	 * @param Connection $connection
-	 *
-	 * @return void
-	 */
 	public function subscribeConnection(Connection $connection): void
 	{
 	}
@@ -42,6 +38,8 @@ abstract class AbstractPushManager implements PushManagerInterface
 	 * @throws ArgumentException
 	 * @throws ObjectException
 	 * @throws ObjectPropertyException
+	 * @throws PersistenceException
+	 * @throws PushException
 	 * @throws SystemException
 	 */
 	public function resubscribeConnectionFully(Connection $connection): void
@@ -71,7 +69,7 @@ abstract class AbstractPushManager implements PushManagerInterface
 	protected function addSectionPush(
 		?AbstractPushResponse $response,
 		?Push $push,
-		SectionConnection $sectionConnection
+		SectionConnection $sectionConnection,
 	): void
 	{
 		if (!$response)

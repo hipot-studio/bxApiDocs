@@ -191,6 +191,11 @@ final class Starter
 			$contextDto->face,
 		);
 
+		if ($contextDto->isManual)
+		{
+			$context->setIsManual();
+		}
+
 		$this->processStarter?->setContext($context);
 		$this->automationStarter?->setContext($context);
 
@@ -284,20 +289,16 @@ final class Starter
 	{
 		if ($this->processStarter)
 		{
-			$searcher = new Searcher();
-			if ($searcher->isActivityExists($code))
+			$event = (new Event($code, $parameters));
+			if ($document)
 			{
-				$event = (new Event($code, $parameters));
-				if ($document)
-				{
-					$event->setDocument($document);
-				}
-
-				$event->setEventType($eventType);
-				$event->setUserId($userId);
-
-				$this->processStarter->addEvent($event);
+				$event->setDocument($document);
 			}
+
+			$event->setEventType($eventType);
+			$event->setUserId($userId);
+
+			$this->processStarter->addEvent($event);
 		}
 	}
 

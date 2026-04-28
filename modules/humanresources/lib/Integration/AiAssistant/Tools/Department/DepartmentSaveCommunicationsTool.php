@@ -15,7 +15,7 @@ class DepartmentSaveCommunicationsTool extends NodeSaveCommunicationsTool
 
 	public function getName(): string
 	{
-		return 'save_communications_list';
+		return 'department_save_communications_list';
 	}
 
 	public function getDescription(): string

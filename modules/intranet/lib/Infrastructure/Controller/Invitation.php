@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\Infrastructure\Controller;
 
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
 use Bitrix\Intranet\Exception\InvitationFailedException;
+use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\InviteLimitControl;
 use Bitrix\Intranet\Infrastructure\Controller\AutoWire\DepartmentParameterTrait;
 use Bitrix\Intranet\Public\Facade\Invitation\IntranetInvitationFacade;
 use Bitrix\Intranet\Public\Type\Collection\InvitationCollection;
@@ -32,7 +33,7 @@ class Invitation extends \Bitrix\Main\Engine\Controller
 			...parent::configureActions(),
 			'inviteUsers' => [
 				'+prefilters' => [
-					new \Bitrix\Intranet\ActionFilter\InviteLimitControl(),
+					new InviteLimitControl(),
 					new \Bitrix\Intranet\Infrastructure\Controller\ActionFilter\ActiveUserInvitation(new UserRepository()),
 					new \Bitrix\Intranet\Infrastructure\Controller\ActionFilter\UserInvitedExtranet(new UserRepository()),
 				],

@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Integration\AI\Operation\Autostart;
 use Bitrix\Crm\Activity\Provider\Call;
 use Bitrix\Crm\Activity\Provider\OpenLine;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\BaasManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\AutoLauncher\ChannelAutoStartStrategyFactory;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings\CallChannelSettings;
@@ -16,7 +17,7 @@ final class AutoLauncher
 	public static function isEnabled(): bool
 	{
 		return AIManager::isAiCallAutomaticProcessingAllowed()
-			&& AIManager::isBaasServiceHasPackage()
+			&& BaasManager::hasPackage()
 			&& (
 				AIManager::isEnabledInGlobalSettings()
 				|| AIManager::isEnabledInGlobalSettings(GlobalSetting::CallAssessment)

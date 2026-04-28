@@ -83,8 +83,8 @@ class SberbankOnlineHandler extends PaySystem\ServiceHandler implements PaySyste
 		parse_str($urlComponentList['query'], $formParams);
 		$params['FORM_PARAMS'] = $formParams;
 
-		$params['CURRENCY'] = $payment->getField('CURRENCY');
-		$params['SUM'] = PriceMaths::roundPrecision($payment->getSum());
+		$params['CURRENCY'] = $payment->getCurrency();
+		$params['SUM'] = PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency());
 		$this->setExtraParams($params);
 
 		$template = 'template_bank_card';
@@ -327,11 +327,12 @@ class SberbankOnlineHandler extends PaySystem\ServiceHandler implements PaySyste
 	private function isSumCorrect(Payment $payment, array $paymentData): bool
 	{
 		$sberbankAmount = $paymentData['amount'] / 100;
+		$currency = $payment->getCurrency();
 		PaySystem\Logger::addDebugInfo(
-			static::class.': requestSum='.PriceMaths::roundPrecision($sberbankAmount).'; paymentSum='.PriceMaths::roundPrecision($payment->getSum())
+			static::class . ': requestSum=' . PriceMaths::roundByFormatCurrency($sberbankAmount, $currency) . '; paymentSum=' . PriceMaths::roundByFormatCurrency($payment->getSum(), $currency),
 		);
 
-		return PriceMaths::roundPrecision($sberbankAmount) === PriceMaths::roundPrecision($payment->getSum());
+		return PriceMaths::roundByFormatCurrency($sberbankAmount, $currency) === PriceMaths::roundByFormatCurrency($payment->getSum(), $currency);
 	}
 
 	/**
@@ -444,7 +445,7 @@ class SberbankOnlineHandler extends PaySystem\ServiceHandler implements PaySyste
 		$url = $this->getUrl($payment, 'refund.do');
 		$params = $this->getMerchantParams($payment);
 		$params['orderId'] = $payment->getField('PS_INVOICE_ID');
-		$params['amount'] = $refundableSum * 100;
+		$params['amount'] = PriceMaths::roundByFormatCurrency($refundableSum, $payment->getCurrency()) * 100;
 
 		$sendResult = $this->send($url, $params);
 		if (!$sendResult->isSuccess())
@@ -582,19 +583,19 @@ class SberbankOnlineHandler extends PaySystem\ServiceHandler implements PaySyste
 	 */
 	protected function getRegisterOrderParams(Payment $payment, int $attempt): array
 	{
-		$jsonParams = [
-			// bx_paysystem_code for compatibility
-			'bx_paysystem_code' => $this->service->getField('ID'),
-			'bx_label' => $this->getLabelName(),
-		];
+	$jsonParams = [
+		// bx_paysystem_code for compatibility
+		'bx_paysystem_code' => $this->service->getField('ID'),
+		'bx_label' => $this->getLabelName(),
+	];
 
-		$params = [
-			'orderNumber' => $this->getOrderNumber($payment, $attempt),
-			'amount' => (int)PriceMaths::roundPrecision($payment->getSum() * 100),
-			'returnUrl' => $this->getSuccessUrl($payment),
-			'failUrl' => $this->getFailUrl($payment),
-			'jsonParams' => self::encode($jsonParams)
-		];
+	$params = [
+		'orderNumber' => $this->getOrderNumber($payment, $attempt),
+		'amount' => (int)(PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency()) * 100),
+		'returnUrl' => $this->getSuccessUrl($payment),
+		'failUrl' => $this->getFailUrl($payment),
+		'jsonParams' => self::encode($jsonParams)
+	];
 
 		$currency = Currency\CurrencyTable::getById($payment->getField('CURRENCY'))->fetch();
 		if (!empty($currency['NUMCODE']))

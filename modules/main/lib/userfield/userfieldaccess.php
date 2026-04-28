@@ -15,7 +15,7 @@ abstract class UserFieldAccess
 
 	protected $userId;
 
-	public function __construct(int $userId = null)
+	public function __construct(?int $userId = null)
 	{
 		if($userId === null)
 		{
@@ -25,7 +25,7 @@ abstract class UserFieldAccess
 		$this->userId = $userId;
 	}
 
-	public static function getInstance(string $moduleId, int $userId = null): UserFieldAccess
+	public static function getInstance(string $moduleId, ?int $userId = null): UserFieldAccess
 	{
 		$configuration = Configuration::getInstance($moduleId);
 

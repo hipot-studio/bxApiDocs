@@ -67,7 +67,7 @@ class CControllerTask
 				SELECT INIT_EXECUTE
 				FROM b_controller_task
 				WHERE CONTROLLER_MEMBER_ID='" . intval($arFields['CONTROLLER_MEMBER_ID']) . "'
-				AND TASK_ID='" . $DB->ForSQL($arFields['TASK_ID'], 255) . "'
+				AND TASK_ID='" . $DB->ForSql($arFields['TASK_ID'], 255) . "'
 				AND DATE_EXECUTE IS NULL
 			";
 			$dbr = $DB->Query($strSql);
@@ -117,7 +117,7 @@ class CControllerTask
 
 		if ($ID === false && !is_set($arFields, 'DATE_CREATE'))
 		{
-			$arFields['~DATE_CREATE'] = $DB->CurrentTimeFunction();
+			$arFields['~DATE_CREATE'] = CDatabase::CurrentTimeFunction();
 		}
 
 		if ($ID === false && !is_set($arFields, 'RETRY_COUNT'))
@@ -143,7 +143,7 @@ class CControllerTask
 		}
 
 		unset($arFields['TIMESTAMP_X']);
-		$arFields['~TIMESTAMP_X'] = $DB->CurrentTimeFunction();
+		$arFields['~TIMESTAMP_X'] = CDatabase::CurrentTimeFunction();
 
 		$ID = $DB->Add('b_controller_task', $arFields, ['INIT_EXECUTE', 'INIT_EXECUTE_PARAMS']);
 
@@ -160,20 +160,11 @@ class CControllerTask
 		}
 
 		unset($arFields['TIMESTAMP_X']);
-		$arFields['~TIMESTAMP_X'] = $DB->CurrentTimeFunction();
+		$arFields['~TIMESTAMP_X'] = CDatabase::CurrentTimeFunction();
 
-		$arUpdateBinds = [];
-		$strUpdate = $DB->PrepareUpdateBind('b_controller_task', $arFields, '', false, $arUpdateBinds);
+		$strUpdate = $DB->PrepareUpdate('b_controller_task', $arFields);
 
-		$strSql = 'UPDATE b_controller_task SET ' . $strUpdate . ' WHERE ID=' . intval($ID);
-
-		$arBinds = [];
-		foreach ($arUpdateBinds as $field_id)
-		{
-			$arBinds[$field_id] = $arFields[$field_id];
-		}
-
-		$DB->QueryBind($strSql, $arBinds);
+		$DB->Query('UPDATE b_controller_task SET ' . $strUpdate . ' WHERE ID=' . intval($ID));
 
 		return true;
 	}
@@ -558,6 +549,7 @@ class CControllerTask
 				break;
 			case 'REMOTE_COMMAND':
 				$arControllerLog['NAME'] = 'REMOTE_COMMAND';
+
 				if ($ar_task['INIT_EXECUTE_PARAMS'] <> '')
 				{
 					$ar_task['INIT_EXECUTE_PARAMS'] = unserialize($ar_task['INIT_EXECUTE_PARAMS'], ['allowed_classes' => false]);
@@ -584,10 +576,37 @@ class CControllerTask
 					}
 				}
 
+				if (
+					($ar_task['STATUS'] === 'P' || $ar_task['STATUS'] === 'R')
+					&& $ar_task['INIT_EXECUTE_PARAMS']
+				)
+				{
+					$ar_task['INIT_EXECUTE'] = '$params = ' . var_export($ar_task['INIT_EXECUTE_PARAMS'], true) . ';' . $ar_task['INIT_EXECUTE'];
+				}
+
 				$res = CControllerMember::RunCommand($ar_task['CONTROLLER_MEMBER_ID'], $ar_task['INIT_EXECUTE'], $ar_task['INIT_EXECUTE_PARAMS'], $ar_task['ID'], 'run_immediate');
 				if ($res !== false)
 				{
 					$RESULT = $res;
+
+					$lines = explode("\n", $res);
+					if (preg_match('/^({.+?})$/', end($lines)))
+					{
+						try
+						{
+							$next = Bitrix\Main\Web\Json::decode(end($lines));
+							if ($next && is_array($next) && isset($next['next']))
+							{
+								$STATUS = 'P';
+								$INIT_EXECUTE_PARAMS = serialize($next);
+								unset($lines[count($lines) - 1]);
+								$RESULT = implode("\n", $lines);
+							}
+						}
+						catch (\Exception $_)
+						{
+						}
+					}
 				}
 				else
 				{
@@ -618,40 +637,40 @@ class CControllerTask
 				'RESULT_EXECUTE' => $RESULT,
 				'INDEX_SALT' => rand(),
 			];
+
 			if (isset($INIT_EXECUTE_PARAMS))
 			{
 				$arUpdateFields['INIT_EXECUTE_PARAMS'] = $INIT_EXECUTE_PARAMS;
 			}
 
-			$arUpdateBinds = [];
-			$strUpdate = $DB->PrepareUpdateBind('b_controller_task', $arUpdateFields, '', false, $arUpdateBinds);
-
-			$strSql = 'UPDATE b_controller_task SET ' . $strUpdate . ' WHERE ID=' . $ID;
-
-			$arBinds = [];
-			foreach ($arUpdateBinds as $field_id)
+			if ( // If the task has failed and is going to retry
+				$STATUS === 'F'
+				&& $ar_task['RETRY_COUNT'] > 0
+			)
 			{
-				$arBinds[$field_id] = $arUpdateFields[$field_id];
+				// then decrease retries
+				$arUpdateFields['RETRY_COUNT'] = $ar_task['RETRY_COUNT'] - 1;
+				$arUpdateFields['STATUS'] = 'R';
+			}
+			elseif ( // If the task is going to continue after a fail
+				$STATUS === 'P'
+				&& $ar_task['STATUS'] === 'R'
+				&& $ar_task['RETRY_COUNT'] > 0
+			)
+			{
+				// then increase retries
+				$arUpdateFields['RETRY_COUNT'] = $ar_task['RETRY_COUNT'] + 1;
 			}
 
-			$DB->QueryBind($strSql, $arBinds);
+			$strUpdate = $DB->PrepareUpdate('b_controller_task', $arUpdateFields);
+
+			$DB->Query('UPDATE b_controller_task SET ' . $strUpdate . ' WHERE ID = ' . $ID);
 		}
 
 		// unlocking
 		$connection->unlock($lockId);
 
 		return $STATUS;
-	}
-
-	public static function PostponeTask($ID, $RETRY_COUNT)
-	{
-		global $DB;
-		$DB->Query('
-			UPDATE b_controller_task SET
-				RETRY_COUNT=' . intval($RETRY_COUNT) . '
-				' . ($RETRY_COUNT > 0 ? ",STATUS='R'" : '') . '
-			WHERE ID=' . intval($ID) . '
-		');
 	}
 
 	public static function ProcessAllTask($limit = 10000)
@@ -680,11 +699,6 @@ class CControllerTask
 					while ($new_status === 'P')
 					{
 						$new_status = CControllerTask::ProcessTask($arTask['ID']);
-					}
-
-					if ($new_status === 'F' && $arTask['RETRY_COUNT'] > 0)
-					{
-						CControllerTask::PostponeTask($arTask['ID'], $arTask['RETRY_COUNT'] - 1);
 					}
 
 					$limit--;

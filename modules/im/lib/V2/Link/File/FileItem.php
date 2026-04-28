@@ -2,13 +2,11 @@
 
 namespace Bitrix\Im\V2\Link\File;
 
-use Bitrix\Disk\TypeFile;
 use Bitrix\Im\Model\LinkFileTable;
 use Bitrix\Im\Model\EO_LinkFile;
 use Bitrix\Im\V2\Common\MigrationStatusCheckerTrait;
 use Bitrix\Im\V2\Entity;
 use Bitrix\Im\V2\Link\BaseLinkItem;
-use Bitrix\Im\V2\Entity\File\FileError;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\RestEntity;
 use Bitrix\Im\V2\Result;
@@ -228,7 +226,10 @@ class FileItem extends BaseLinkItem
 
 	public function needToAddLink(): bool
 	{
-		if ($this->getEntity()->isVideoNote())
+		if (
+			$this->getAuthorId() === Entity\User\User::SYSTEM_USER_ID
+			|| $this->getEntity()->isVideoNote()
+		)
 		{
 			return false;
 		}

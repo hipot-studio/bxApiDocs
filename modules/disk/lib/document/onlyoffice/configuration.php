@@ -2,6 +2,11 @@
 
 namespace Bitrix\Disk\Document\OnlyOffice;
 
+use Bitrix\Disk\Internal\Enum\CustomServerTypes;
+use Bitrix\Disk\Internal\Interface\CustomServerInterface;
+use Bitrix\Disk\Internal\Service\CustomServerConfigAdapter;
+use Bitrix\Disk\Public\Provider\CustomServerAvailabilityProvider;
+use Bitrix\Disk\Public\Provider\CustomServerProvider;
 use Bitrix\Main;
 use Bitrix\Disk\Driver;
 use Bitrix\Main\ArgumentException;
@@ -15,18 +20,28 @@ final class Configuration
 	public const MODE_CLOUD = 2;
 	public const MODE_LOCAL = 3;
 
-	/** @var string|null */
-	protected $server;
-	/** @var string|null */
-	protected $secretKey;
-	/** @var int|null */
-	protected $maxFileSize;
+	protected ?string $originalServer = null;
+	protected ?string $customServer = null;
+	protected ?string $originalSecretKey = null;
+	protected ?string $customSecretKey = null;
+	protected ?int $originalMaxFileSize = null;
+	protected ?int $customMaxFileSize = null;
 	/** @var array|null */
 	protected $localValues;
+	protected CustomServerAvailabilityProvider $customServerAvailabilityProvider;
+	protected CustomServerProvider $customServerProvider;
 
 	public function __construct()
 	{
 		$this->loadLocalValues();
+
+		$this->customServerAvailabilityProvider =
+			Main\DI\ServiceLocator
+				::getInstance()
+				->get(CustomServerAvailabilityProvider::class)
+		;
+
+		$this->customServerProvider = Main\DI\ServiceLocator::getInstance()->get(CustomServerProvider::class);
 	}
 
 	protected function loadLocalValues(): void
@@ -132,14 +147,34 @@ final class Configuration
 		return null;
 	}
 
-	public function getServer(): ?string
+	public function getServer(bool $original = false): ?string
 	{
-		if ($this->server === null)
+		if (!$original)
 		{
-			$this->server = $this->getValue('server', 'disk_onlyoffice_server');
+			if (!is_string($this->customServer))
+			{
+				$this->customServer = $this->getValue(
+					key: 'server',
+					optionName: 'disk_onlyoffice_server',
+				);
+			}
+
+			if (is_string($this->customServer))
+			{
+				return $this->customServer;
+			}
 		}
 
-		return $this->server;
+		if (!is_string($this->originalServer))
+		{
+			$this->originalServer = $this->getValue(
+				key: 'server',
+				optionName: 'disk_onlyoffice_server',
+				original: true,
+			);
+		}
+
+		return $this->originalServer;
 	}
 
 	public function getDomain(): ?string
@@ -156,44 +191,109 @@ final class Configuration
 		return rtrim($server, '/');
 	}
 
-	public function getSecretKey(): ?string
+	public function getSecretKey(bool $original = false): ?string
 	{
-		if ($this->secretKey === null)
+		if (!$original)
+		{
+			if (!is_string($this->customSecretKey))
+			{
+				$this->customSecretKey = $this->getValue(
+					key: 'secret_key',
+					optionName: 'disk_onlyoffice_secret_key',
+				);
+			}
+
+			if (is_string($this->customSecretKey))
+			{
+				return $this->customSecretKey;
+			}
+		}
+
+		if (!is_string($this->originalSecretKey))
 		{
 			$cloudData = $this->getCloudRegistrationData();
 			if (isset($cloudData['secretKey']) && $cloudData['secretKey'])
 			{
-				$this->secretKey = $cloudData['secretKey'];
+				$this->originalSecretKey = $cloudData['secretKey'];
 			}
 			else
 			{
-				$this->secretKey = $this->getValue('secret_key', 'disk_onlyoffice_secret_key');
+				$this->originalSecretKey = $this->getValue(
+					key: 'secret_key',
+					optionName: 'disk_onlyoffice_secret_key',
+					original: true,
+				);
 			}
 		}
 
-		return $this->secretKey;
+		return $this->originalSecretKey;
 	}
 
-	public function getMaxFileSize(): ?int
+	public function getMaxFileSize(bool $original = false): ?int
 	{
-		if ($this->maxFileSize === null)
+		if (!$original)
 		{
-			$value = $this->getValue('max_filesize', 'disk_onlyoffice_max_filesize');
-			$this->maxFileSize = ($value === null || $value === '') ? self::DEFAULT_MAX_FILESIZE : (int)$value;
+			if (!is_int($this->customMaxFileSize))
+			{
+				$this->customMaxFileSize = $this->getValue(
+					key: 'max_filesize',
+					optionName: 'disk_onlyoffice_max_filesize',
+				);
+			}
+
+			if (is_int($this->customMaxFileSize))
+			{
+				return $this->customMaxFileSize;
+			}
 		}
 
-		return $this->maxFileSize;
+		if (!is_int($this->originalMaxFileSize))
+		{
+			$value = $this->getValue(
+				key: 'max_filesize',
+				optionName: 'disk_onlyoffice_max_filesize',
+				original: true,
+			);
+
+			$this->originalMaxFileSize = ($value === null || $value === '') ? self::DEFAULT_MAX_FILESIZE : (int)$value;
+		}
+
+		return $this->originalMaxFileSize;
 	}
 
-	protected function getValue($key, string $optionName): ?string
+	protected function getValue($key, string $optionName, bool $original = false): mixed
 	{
-		$value = $this->getLocalValues($key);
-		if ($value === null)
+		if ($original)
 		{
-			return Option::get(Driver::INTERNAL_MODULE_ID, $optionName, null);
+			$value = $this->getLocalValues($key);
+			if ($value === null)
+			{
+				return Option::get(Driver::INTERNAL_MODULE_ID, $optionName, null);
+			}
+
+			return $value;
 		}
 
-		return $value;
+		$customConfigType = \Bitrix\Disk\Configuration::getDefaultViewerCustomConfigType();
+
+		if (!$customConfigType instanceof CustomServerTypes)
+		{
+			return null;
+		}
+
+		$customServer = $this->customServerProvider->getFirstByType($customConfigType);
+
+		if (!$customServer instanceof CustomServerInterface)
+		{
+			return null;
+		}
+
+		if (!$this->customServerAvailabilityProvider->isAvailableCustomServerForUse($customServer))
+		{
+			return null;
+		}
+
+		return CustomServerConfigAdapter::getValue($customServer, $optionName);
 	}
 
 	public function getLocalValues($key)

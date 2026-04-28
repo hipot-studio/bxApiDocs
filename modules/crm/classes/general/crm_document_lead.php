@@ -2,8 +2,10 @@
 
 use Bitrix\Crm;
 
-if (!CModule::IncludeModule('bizproc'))
+if (!\Bitrix\Main\Loader::includeModule('bizproc'))
+{
 	return;
+}
 
 IncludeModuleLangFile(__DIR__."/crm_document.php");
 
@@ -420,7 +422,7 @@ class CCrmDocumentLead extends CCrmDocument
 	{
 	}
 
-	static public function CreateDocument($parentDocumentId, $arFields)
+	public static function CreateDocument($parentDocumentId, $arFields)
 	{
 		if(!is_array($arFields))
 		{
@@ -430,7 +432,9 @@ class CCrmDocumentLead extends CCrmDocument
 		global $DB;
 		$arDocumentID = self::GetDocumentInfo($parentDocumentId);
 		if ($arDocumentID == false)
+		{
 			$arDocumentID['TYPE'] = $parentDocumentId;
+		}
 
 		$arDocumentFields = self::GetDocumentFields($arDocumentID['TYPE']);
 
@@ -527,41 +531,35 @@ class CCrmDocumentLead extends CCrmDocument
 			throw new Exception($CCrmEntity->LAST_ERROR);
 		}
 
-		if (COption::GetOptionString("crm", "start_bp_within_bp", "N") == "Y")
-		{
-			$CCrmBizProc = new CCrmBizProc('LEAD');
-			if (false === $CCrmBizProc->CheckFields(false, true))
-			{
-				if ($useTransaction)
-				{
-					$DB->Rollback();
-				}
-				throw new Exception($CCrmBizProc->LAST_ERROR);
-			}
-
-			if ($id && $id > 0 && !$CCrmBizProc->StartWorkflow($id))
-			{
-				if ($useTransaction)
-				{
-					$DB->Rollback();
-				}
-				throw new Exception($CCrmBizProc->LAST_ERROR);
-			}
-		}
-
 		if (isset($arFields['TRACKING_SOURCE_ID']))
 		{
 			Crm\Tracking\UI\Details::saveEntityData(\CCrmOwnerType::Lead, $id, $arFields);
 		}
 
-		//region automation
-		$starter = new Crm\Automation\Starter(\CCrmOwnerType::Lead, $id);
-		$starter->setContextToBizproc()->runOnAdd();
-		//endregion
+		$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+			new Crm\Integration\BizProc\Starter\Dto\DocumentDto(\CCrmOwnerType::Lead, (int)$id)
+		);
+		$result = $starter
+			->setContextModuleId('bizproc')
+			->runOnInnerDocumentAdd(
+				new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+					actualFields: $arFields,
+				)
+			)
+		;
 
-		if ($id && $id > 0 && $useTransaction)
+		if ($useTransaction)
 		{
-			$DB->Commit();
+			if ($result->isSuccess())
+			{
+				$DB->Commit();
+			}
+			else
+			{
+				$DB->Rollback();
+
+				throw new Exception(CBPHelper::stringify($result->getErrorMessages()));
+			}
 		}
 
 		return $id;
@@ -701,28 +699,6 @@ class CCrmDocumentLead extends CCrmDocument
 			throw new Exception($CCrmEntity->LAST_ERROR);
 		}
 
-		if (COption::GetOptionString("crm", "start_bp_within_bp", "N") == "Y")
-		{
-			$CCrmBizProc = new CCrmBizProc('LEAD');
-			if (false === $CCrmBizProc->CheckFields($arDocumentID['ID'], true))
-			{
-				if ($useTransaction)
-				{
-					$DB->Rollback();
-				}
-				throw new Exception($CCrmBizProc->LAST_ERROR);
-			}
-
-			if ($res && !$CCrmBizProc->StartWorkflow($arDocumentID['ID']))
-			{
-				if ($useTransaction)
-				{
-					$DB->Rollback();
-				}
-				throw new Exception($CCrmBizProc->LAST_ERROR);
-			}
-		}
-
 		if (isset($arFields['TRACKING_SOURCE_ID']))
 		{
 			Crm\Tracking\UI\Details::saveEntityData(
@@ -732,14 +708,31 @@ class CCrmDocumentLead extends CCrmDocument
 			);
 		}
 
-		//region automation
-		$starter = new Crm\Automation\Starter(\CCrmOwnerType::Lead, $arDocumentID['ID']);
-		$starter->setContextToBizproc()->runOnUpdate($updatedFields, $arPresentFields);
-		//endregion
+		$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+			new Crm\Integration\BizProc\Starter\Dto\DocumentDto(\CCrmOwnerType::Lead, (int)$arDocumentID['ID'])
+		);
+		$result = $starter
+			->setContextModuleId('bizproc')
+			->runOnInnerDocumentUpdate(
+				new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+					actualFields: $updatedFields,
+					previousFields: $arPresentFields,
+				)
+			)
+		;
 
-		if ($res && $useTransaction)
+		if ($useTransaction)
 		{
-			$DB->Commit();
+			if ($result->isSuccess())
+			{
+				$DB->Commit();
+			}
+			else
+			{
+				$DB->Rollback();
+
+				throw new Exception(CBPHelper::stringify($result->getErrorMessages()));
+			}
 		}
 	}
 

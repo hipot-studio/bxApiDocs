@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Pull;
 
@@ -34,4 +35,11 @@ enum EventType: string
 	case StickerRecentDeleteAll = 'stickerRecentDeleteAll';
 	case AutoTaskStatus = 'autoTaskStatus';
 	case ChatPin = 'chatPin';
+	case ReadMessages = 'readMessageChat';
+	case ReadMessagesForOpponent = 'readMessageChatOpponent';
+	case UnreadChat = 'chatUnread';
+	case ReadNotifications = 'notifyRead';
+	case ReadAllNotifications = 'notifyReadAll';
+	case UnreadNotifications = 'notifyUnread';
+	case ReadChildren = 'readChildren';
 }

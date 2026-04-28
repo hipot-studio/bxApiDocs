@@ -442,6 +442,11 @@ class CRestConfigurationImportComponent extends CBitrixComponent
 							$result['IMPORT_CONTEXT'] = $userContext;
 							$result['IMPORT_FOLDER_FILES'] = $structure->getFolder();
 						}
+
+						$setting->set(
+							Setting::SETTING_ACTION_ADDITIONAL_OPTION,
+							$this->arParams['ADDITIONAL'] ?? null,
+						);
 					}
 					catch (\Exception $e)
 					{

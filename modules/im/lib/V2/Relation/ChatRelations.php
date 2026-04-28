@@ -220,6 +220,11 @@ class ChatRelations
 		$this->relationByUserId = [];
 	}
 
+	public static function cleanAllCache(): void
+	{
+		self::$instances = [];
+	}
+
 	public function onAfterRelationAdd(array $usersToAdd): void
 	{
 		//TODO: change to update cache for optimization

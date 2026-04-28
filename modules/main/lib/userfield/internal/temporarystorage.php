@@ -23,7 +23,7 @@ class TemporaryStorage
 		return $primary;
 	}
 
-	public function saveData($primary, array $data = null)
+	public function saveData($primary, ?array $data = null)
 	{
 		$this->data[$this->getIdByPrimary($primary)] = $data;
 	}

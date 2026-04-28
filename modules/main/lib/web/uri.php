@@ -470,7 +470,7 @@ class Uri implements \JsonSerializable, UriInterface
 	 * @param string | null $host
 	 * @return $this
 	 */
-	public function toAbsolute(string $host = null): Uri
+	public function toAbsolute(?string $host = null): Uri
 	{
 		if ($this->host == '')
 		{

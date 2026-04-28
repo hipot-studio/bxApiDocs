@@ -6,12 +6,15 @@ namespace Bitrix\HumanResources\Builder\Structure\Filter;
 
 use Bitrix\HumanResources\Access\Permission\PermissionVariablesDictionary;
 use Bitrix\HumanResources\Builder\Structure\Filter\Column\IdFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\Node\NodeNameFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\Column\Node\NodeTypeFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\SelectionCondition\Node\NodeAccessFilter;
+use Bitrix\HumanResources\Enum\ConditionMode;
 use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Exception\NodeAccessFilterException;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Service\Access\Structure\StructureAccessService;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Util\StructureHelper;
@@ -30,7 +33,7 @@ final class NodeFilter extends BaseFilter
 		public null|int|DepthLevel $depthLevel = null,
 		public bool|NodeActiveFilter $active = true,
 		public ?NodeAccessFilter $accessFilter = null,
-		public ?string $name = null,
+		public string|NodeNameFilter|null $name = null,
 	)
 	{
 		$this->structureId ??= StructureHelper::getDefaultStructure()?->id;
@@ -58,11 +61,7 @@ final class NodeFilter extends BaseFilter
 		$conditionTree->where($this->getFieldByQueryContext('STRUCTURE_ID'), $this->structureId);
 		$this->addConditionsForIdsFilter($conditionTree);
 		$this->addActiveFilter($conditionTree);
-
-		if ($this->name !== null)
-		{
-			$conditionTree->whereLike($this->getFieldByQueryContext('NAME'), '%' . $this->name . '%');
-		}
+		$this->addConditionForNameFilter($conditionTree);
 
 		$additionalEntityTypeCondition = $this->applyNodeEntityTypeWithActionPermissionCheck();
 		if ($additionalEntityTypeCondition)
@@ -96,7 +95,7 @@ final class NodeFilter extends BaseFilter
 					return;
 				}
 
-				$rootNode = Container::getNodeRepository()->getRootNodeByStructureId($this->structureId);
+				$rootNode = InternalContainer::getNodeRepository()->getRootNodeByStructureId($this->structureId);
 				if ($rootNode?->id)
 				{
 					$this->idFilter = IdFilter::fromId($rootNode->id);
@@ -109,7 +108,11 @@ final class NodeFilter extends BaseFilter
 			return;
 		}
 
-		if ($this->depthLevel === null)
+		// If the mode is exclusion or the depth is not provided, there is no point in building a complex condition
+		if (
+			$this->idFilter->filterMode === ConditionMode::Exclusion
+			|| in_array($this->depthLevel, [null, 0, DepthLevel::NONE], true)
+		)
 		{
 			$idsFilter = $this->idFilter
 				->setCurrentAlias($this->currentAlias)
@@ -125,46 +128,87 @@ final class NodeFilter extends BaseFilter
 
 		$idField = $this->direction === Direction::ROOT
 			? 'PARENT_NODES.CHILD_ID'
-			: 'CHILD_NODES.PARENT_ID';
+			: 'CHILD_NODES.PARENT_ID'
+		;
 
-		$depthField = $this->direction === Direction::ROOT
-			? 'PARENT_NODES.DEPTH'
-			: 'CHILD_NODES.DEPTH';
+		$depthField = 'CHILD_NODES.DEPTH';
 
-		if ($this->idFilter->ids->count() > 0)
+		// If the depth is FULL, there is no point in building a complex condition.
+		if ($this->depthLevel === DepthLevel::FULL)
 		{
 			$conditionTree->whereIn(
 				$this->getFieldByQueryContext($idField),
 				$this->idFilter->ids->getItems(),
 			);
 
-			if ($this->depthLevel === DepthLevel::WITHOUT_PARENT)
-			{
-				$operator = $this->direction === Direction::ROOT ? '<' : '>' ;
-				$conditionTree->where(
-					$this->getFieldByQueryContext($depthField),
-					$operator,
-					0,
-				);
-			}
+			return;
 		}
 
+		// WITHOUT_PARENT returns only nodes with depth 1 relative to the specified parent.
 		if ($this->depthLevel === DepthLevel::FIRST)
 		{
-			$conditionTree->where(
-				$this->getFieldByQueryContext($depthField),
-				1,
-			);
+			$operator = '=';
+		}
+		elseif ($this->depthLevel === DepthLevel::WITHOUT_PARENT)
+		{
+			$operator = $this->direction === Direction::ROOT ? '<' : '>' ;
+		}
+		else
+		{
+			$operator = $this->direction === Direction::ROOT ? '>=' : '<=' ;
+		}
+
+
+		$conditionDepthLevel = 0;
+		if ($this->depthLevel === DepthLevel::FIRST)
+		{
+			$conditionDepthLevel = 1;
 		}
 		elseif (is_int($this->depthLevel))
 		{
-			$operator = $this->direction === Direction::ROOT ? '>=' : '<=' ;
-			$conditionTree->where(
+			$conditionDepthLevel = $this->depthLevel;
+		}
+
+		$subConditionTree = new ConditionTree();
+		if ($this->direction === Direction::ROOT)
+		{
+			// When searching for parents, the expected depth for each specified node must be calculated individually:
+			// expectedDepth = nodeDepth - expectedParentBranchLevel
+			$subConditionTree->logic(ConditionTree::LOGIC_OR);
+			foreach ($this->idFilter->ids->getItems() as $id)
+			{
+				$singleIdConditionTree = new ConditionTree();
+				$singleIdConditionTree->logic(ConditionTree::LOGIC_AND);
+				$singleIdConditionTree->where(
+					$this->getFieldByQueryContext($idField),
+					$id,
+				);
+
+				$node = InternalContainer::getNodeRepository()->getByIdWithDepth($id);
+				$calculatedParentDepthLevel = $node->depth - $conditionDepthLevel;
+				$singleIdConditionTree->where(
+					$this->getFieldByQueryContext($depthField),
+					$operator,
+					$calculatedParentDepthLevel,
+				);
+				$subConditionTree->addCondition($singleIdConditionTree);
+			}
+		}
+		else
+		{
+			$subConditionTree->logic(ConditionTree::LOGIC_AND);
+			$subConditionTree->whereIn(
+				$this->getFieldByQueryContext($idField),
+				$this->idFilter->ids->getItems(),
+			);
+			$subConditionTree->where(
 				$this->getFieldByQueryContext($depthField),
 				$operator,
-				$this->depthLevel,
+				$conditionDepthLevel,
 			);
 		}
+
+		$conditionTree->addCondition($subConditionTree);
 	}
 
 	private function addActiveFilter(ConditionTree $conditionTree): void
@@ -189,6 +233,36 @@ final class NodeFilter extends BaseFilter
 		}
 
 		$conditionTree->where($this->getFieldByQueryContext('ACTIVE'), true);
+	}
+
+	private function addConditionForNameFilter(ConditionTree $conditionTree): void
+	{
+		if (!$this->name)
+		{
+			return;
+		}
+
+		if (is_string($this->name))
+		{
+			$conditionTree->whereLike(
+				$this->getFieldByQueryContext('NAME'),
+				'%' . $this->name . '%',
+			);
+
+			return;
+		}
+
+		if (!($this->name instanceof NodeNameFilter))
+		{
+			return;
+		}
+
+		$nameFilter = $this->name
+			->setCurrentAlias($this->currentAlias)
+			->prepareFilter()
+		;
+
+		$conditionTree->addCondition($nameFilter);
 	}
 
 	/**

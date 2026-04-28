@@ -8,7 +8,9 @@ use Bitrix\Landing\Manager;
 use Bitrix\Landing\Restriction;
 use Bitrix\Landing\Rights;
 use Bitrix\Landing\Role;
+use Bitrix\Landing\Site as LandingSite;
 use Bitrix\Landing\Site\Scope;
+use Bitrix\Landing\Transfer\Requisite\FinishRedirectLinkDto;
 use Bitrix\Main\Loader;
 
 class Group extends Scope
@@ -169,5 +171,15 @@ class Group extends Scope
 		}
 
 		return $cache[$siteId];
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public static function onTransferFinishRedirectUrlGet(int $siteId): ?FinishRedirectLinkDto
+	{
+		return new FinishRedirectLinkDto(
+			href: LandingSite::getPublicUrl($siteId),
+		);
 	}
 }

@@ -79,7 +79,9 @@ class CrmKanbanFilterComponent extends \CBitrixComponent
 		$filterParams['GRID_ID'] = $entity->getGridId();
 		$filterParams['FILTER_ID'] = $entity->getGridId();
 		$filterParams['FILTER'] = $filter;
-		$filterParams['FILTER_FIELDS'] = $entity->getFilterOptions()->getFilter($filter);
+
+		$filterOptions = $entity->getFilterOptions();
+		$filterParams['FILTER_FIELDS'] = $entity->getFilterOptionFields($filterOptions, $filter);
 		$filterParams['FILTER_PRESETS'] = $entity->getFilterPresets();
 		$filterParams['ENABLE_LIVE_SEARCH'] = true;
 		$filterParams['COUNTER_PANEL'] = $this->arParams['COUNTER_PANEL'] ?: [];

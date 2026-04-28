@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Integration\Superset;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Superset\Config\ConfigContainer;
+use Bitrix\BIConnector\Superset\DomainLinkService;
 use Bitrix\BIConnector\Superset\Logger\SupersetInitializerLogger;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
@@ -33,6 +34,7 @@ final class Registrar
 	{
 		$this->setRegisterStage(0);
 		$this->config->clearConfig($reason);
+		DomainLinkService::getInstance()->clearUnlinkedStatus();
 	}
 
 	public function isComplete(): bool

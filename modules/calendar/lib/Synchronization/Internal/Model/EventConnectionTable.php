@@ -34,6 +34,8 @@ use Bitrix\Main\SystemException;
  */
 class EventConnectionTable extends DataManager
 {
+	use DeleteByFilterTrait;
+
 	public static function getTableName()
 	{
 		return 'b_calendar_event_connection';

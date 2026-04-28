@@ -1561,42 +1561,6 @@ class Form
 
 			if ($field['type'] === Booking::RESOURCE_FIELD_TYPE)
 			{
-				//@todo change format on frontend and remove this block
-				if (
-					is_array($field['values'][0])
-					&& !empty($field['values'][0])
-				)
-				{
-					$oldFieldValue = $field['values'][0];
-
-					$newFieldValue = [
-						'resources' => [],
-						'dateFromTs' => $oldFieldValue['dateFromTs'],
-						'dateToTs' => $oldFieldValue['dateToTs'],
-						'timezone' => $oldFieldValue['timezone'],
-					];
-
-					foreach ($oldFieldValue['resourcesIds'] as $i => $resourceId)
-					{
-						$skus = [];
-
-						// @todo example, remove later
-						/*$skus[] = [
-							'id' => 148,
-							'price' => 999.00,
-							'quantity' => 1,
-						];*/
-
-						$newFieldValue['resources'][] = [
-							'id' => $resourceId,
-							'skus' => $skus,
-						];
-					}
-
-					$field['values'][0] = $newFieldValue;
-					$resultFields[$fieldKey]['values'][0] = $newFieldValue;
-				}
-
 				$this->addBookingFieldProducts($field, $resultProducts);
 			}
 
@@ -1711,7 +1675,10 @@ class Form
 					);
 					$event->send();
 
-					if (empty($redirectUrl))
+					if (
+						empty($redirectUrl)
+						&& $this->params['FORM_SETTINGS']['REFILL']['ACTIVE'] !== 'Y'
+					)
 					{
 						$resultList = $event->getResults();
 						if (is_array($resultList))
@@ -2095,8 +2062,7 @@ class Form
 
 				$product = [
 					'ID' => $skuId,
-					'PRICE' => $sku['price'],
-					'QUANTITY' => $sku['quantity'],
+					'QUANTITY' => 1,
 				];
 
 				$this->enrichProductData($skuId, $product);
@@ -2138,6 +2104,11 @@ class Form
 			{
 				$product['VAT_RATE'] = (float)$vatData['RATE'] / 100;
 			}
+		}
+
+		if (!isset($product['PRICE']) && isset($productData['PRICE']))
+		{
+			$product['PRICE'] = (float)$productData['PRICE'];
 		}
 	}
 

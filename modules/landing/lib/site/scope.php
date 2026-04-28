@@ -1,6 +1,9 @@
 <?php
 namespace Bitrix\Landing\Site;
 
+use Bitrix\Landing\Metrika;
+use Bitrix\Landing\Transfer\Requisite\FinishRedirectLinkDto;
+
 abstract class Scope
 {
 	protected static $currentScopeId = null;
@@ -63,5 +66,34 @@ abstract class Scope
 	public static function isExtensionAllow(string $code): bool
 	{
 		return true;
+	}
+
+	/**
+	 * To be compatible with previously exported archives, the transfer may use old scope codes
+	 * @return string
+	 */
+	public static function getScopeIdForTransfer(): string
+	{
+		return mb_strtolower(self::$currentScopeId ?? '');
+	}
+
+	/**
+	 * Hook for transfer import finish URL resolution.
+	 * Scopes may override it when post-import navigation differs by site type.
+	 *
+	 * @param int $siteId
+	 * @return FinishRedirectLinkDto|null
+	 */
+	public static function onTransferFinishRedirectUrlGet(int $siteId): ?FinishRedirectLinkDto
+	{
+		return null;
+	}
+
+	/**
+	 * Hook for transfer finish analytics enrichment.
+	 * Scopes may append specific analytics params before send.
+	 */
+	public static function onTransferFinishAnalyticSend(int $siteId, Metrika\Metrika $metrika): void
+	{
 	}
 }

@@ -97,6 +97,17 @@ class Item
 	 */
 	public function canUpdateItemIdentifier(ItemIdentifier $itemIdentifier): bool
 	{
+
+		if ($this->isAutomatedSolutionEntityLocked($itemIdentifier->getEntityTypeId()))
+		{
+			return false;
+		}
+
+		if (!$this->canReadItemIdentifier($itemIdentifier))
+		{
+			return false;
+		}
+
 		if (CatalogEntityItem::isCatalogEntity($itemIdentifier->getEntityTypeId()))
 		{
 			return $this->catalogEntityItem->canUpdate($this, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
@@ -104,11 +115,6 @@ class Item
 		if (SaleEntityItem::isSaleEntity($itemIdentifier->getEntityTypeId()))
 		{
 			return $this->saleEntityItem->canUpdate($this, $this->entityType, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
-		}
-
-		if ($this->isAutomatedSolutionEntityLocked($itemIdentifier->getEntityTypeId()))
-		{
-			return false;
 		}
 
 		return $this->hasPermissions($itemIdentifier, UserPermissions::OPERATION_UPDATE);
@@ -121,6 +127,16 @@ class Item
 	 */
 	public function canDeleteItemIdentifier(ItemIdentifier $itemIdentifier): bool
 	{
+		if ($this->isAutomatedSolutionEntityLocked($itemIdentifier->getEntityTypeId()))
+		{
+			return false;
+		}
+
+		if (!$this->canReadItemIdentifier($itemIdentifier))
+		{
+			return false;
+		}
+
 		if (CatalogEntityItem::isCatalogEntity($itemIdentifier->getEntityTypeId()))
 		{
 			return $this->catalogEntityItem->canDelete($this, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
@@ -130,10 +146,6 @@ class Item
 			return $this->saleEntityItem->canDelete($this, $this->entityType, $itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
 		}
 
-		if ($this->isAutomatedSolutionEntityLocked($itemIdentifier->getEntityTypeId()))
-		{
-			return false;
-		}
 
 		return $this->hasPermissions($itemIdentifier, UserPermissions::OPERATION_DELETE);
 	}

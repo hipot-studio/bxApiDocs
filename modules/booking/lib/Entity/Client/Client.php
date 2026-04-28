@@ -61,6 +61,16 @@ class Client implements EntityInterface
 		return $this;
 	}
 
+	public function getName(): string
+	{
+		return $this->data['nameOnly'] ?? '';
+	}
+
+	public function getUrl(): string
+	{
+		return $this->data['url'] ?? '';
+	}
+
 	public function toArray(): array
 	{
 		return [

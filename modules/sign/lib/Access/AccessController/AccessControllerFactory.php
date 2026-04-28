@@ -2,7 +2,6 @@
 
 namespace Bitrix\Sign\Access\AccessController;
 
-use Bitrix\Main\Access\AccessibleController;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Sign\Access\AccessController;
 
@@ -17,5 +16,15 @@ class AccessControllerFactory
 		}
 
 		return new AlwaysAllowAccessController();
+	}
+
+	public function createByUserId(int $userId): ?AccessController
+	{
+		if ($userId < 1)
+		{
+			return null;
+		}
+
+		return new AccessController($userId);
 	}
 }

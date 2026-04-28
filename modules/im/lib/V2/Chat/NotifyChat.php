@@ -427,7 +427,7 @@ class NotifyChat extends Chat
 			return;
 		}
 
-		Message\MessageService::deleteByChatId($chatId, $this->getContext()->getUserId());
+		Message\MessageService::deleteNotificationsByChatId($chatId, $this->getContext()->getUserId());
 		$this->setMessageCount(0)->save();
 
 		$this->sendPushDropAll();

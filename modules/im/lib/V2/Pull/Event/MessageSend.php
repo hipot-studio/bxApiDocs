@@ -8,15 +8,16 @@ use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Pull\Dto\Diff;
 use Bitrix\Im\V2\Pull\EventType;
+use Bitrix\Im\V2\Reading\Counter\Entity\UsersCounterMap;
 
 class MessageSend extends BaseMessageEvent
 {
 	private const MAX_COUNTER = 100;
 
 	protected SendingConfig $sendingConfig;
-	protected array $counters;
+	protected UsersCounterMap $counters;
 
-	public function __construct(Message $message, SendingConfig $config, array $counters)
+	public function __construct(Message $message, SendingConfig $config, UsersCounterMap $counters)
 	{
 		$this->sendingConfig = $config;
 		$this->counters = $counters;
@@ -46,6 +47,11 @@ class MessageSend extends BaseMessageEvent
 	protected function getRecipients(): array
 	{
 		return $this->chat->getPullRecipients()->getUserIds();
+	}
+
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
 	}
 
 	protected function getDiffByUser(int $userId): Diff

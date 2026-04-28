@@ -2,6 +2,9 @@
 
 namespace Bitrix\Translate\Controller;
 
+/**
+ * @internal
+ */
 
 interface ITimeLimit
 {

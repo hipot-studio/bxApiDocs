@@ -138,6 +138,17 @@ class CCrmActivityDbResult extends CDBResult
 			{
 				$result['DESCRIPTION'] = \Bitrix\Main\Text\Emoji::decode($result['DESCRIPTION']);
 			}
+
+			foreach (CCrmActivity::getDateTimeFields() as $dateTimeField)
+			{
+				$rawDateTimeField = $dateTimeField . '_RAW';
+				if (isset($result[$rawDateTimeField]) && !empty([$rawDateTimeField]))
+				{
+					$result[$dateTimeField] =
+						(new \Bitrix\Main\Type\DateTime($result[$rawDateTimeField], 'Y-m-d H:i:s'))->toString(); // date become string in user timezone
+				}
+				unset($result[$rawDateTimeField]);
+			}
 		}
 		return $result;
 	}

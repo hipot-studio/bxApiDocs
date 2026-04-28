@@ -12,6 +12,7 @@ use Bitrix\Crm\Integration\AI\Operation\Payload\Stub\RepeatSalesPrompt;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Stub\RepeatSalesScreeningItem;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Stub\ScoringCriteriaExtraction;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Stub\SummarizeTranscript;
+use Bitrix\Crm\Integration\AI\Operation\Sandbox;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
 use Bitrix\Crm\Integration\AI\Operation\ScreeningRepeatSaleItem;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
@@ -33,7 +34,7 @@ final class StubFactory
 			FillItemFieldsFromCallTranscription::TYPE_ID => new ExtractFormFields($identifier),
 			ScoreCall::TYPE_ID => new CallScoring(),
 			ExtractScoringCriteria::TYPE_ID => new ScoringCriteriaExtraction(),
-			FillRepeatSaleTips::TYPE_ID => new RepeatSalesPrompt(),
+			FillRepeatSaleTips::TYPE_ID, Sandbox\FillRepeatSaleTips::TYPE_ID => new RepeatSalesPrompt(),
 			ScreeningRepeatSaleItem::TYPE_ID => new RepeatSalesScreeningItem(),
 			default => throw new ArgumentException('Unsupported operation code'),
 		};

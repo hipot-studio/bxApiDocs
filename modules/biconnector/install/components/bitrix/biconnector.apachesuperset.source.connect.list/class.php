@@ -50,7 +50,7 @@ class ApacheSupersetSourceConnectListComponent extends CBitrixComponent
 		}
 	}
 
-	protected function includeErrorComponent(string $errorMessage, string $description = null): void
+	protected function includeErrorComponent(string $errorMessage, ?string $description = null): void
 	{
 		global $APPLICATION;
 
@@ -75,8 +75,17 @@ class ApacheSupersetSourceConnectListComponent extends CBitrixComponent
 	private function getSourceList(): array
 	{
 		$sources = SourceRepository::getSources();
-		usort($sources, static fn(Source $source) => $source->isConnected());
 
-		return $sources;
+		$sourcesWithPriority = array_map(
+			static fn(Source $source) => [
+				'source' => $source,
+				'priority' => !$source->isAvailable() ? 2 : ($source->isConnected() ? 0 : 1),
+			],
+			$sources,
+		);
+
+		usort($sourcesWithPriority, static fn($a, $b) => $a['priority'] <=> $b['priority']);
+
+		return array_column($sourcesWithPriority, 'source');
 	}
 }

@@ -3940,37 +3940,32 @@ function SendError($error)
 
 function AddMessage2Log($text, $module = '', $traceDepth = 6, $showArgs = false)
 {
-	if (defined('LOG_FILENAME') && LOG_FILENAME <> '')
+	$logger = (new \Bitrix\Main\Diag\LoggerFactory(false))->createDefault($showArgs);
+	if (empty($logger))
 	{
-		$logger = Diag\Logger::create('main.Default', [LOG_FILENAME, $showArgs]);
-		if ($logger === null)
-		{
-			$logger = new Diag\FileLogger(LOG_FILENAME, 0);
-			$formatter = new Diag\LogFormatter($showArgs);
-			$logger->setFormatter($formatter);
-		}
-
-		$trace = '';
-		if ($traceDepth > 0)
-		{
-			$trace = Main\Diag\Helper::getBackTrace($traceDepth, ($showArgs ? null : DEBUG_BACKTRACE_IGNORE_ARGS));
-		}
-
-		$context = [
-			'module' => $module,
-			'message' => $text,
-			'trace' => $trace,
-		];
-
-		$message = "Host: {host}\n"
-			. "Date: {date}\n"
-			. ($module != '' ? "Module: {module}\n" : '')
-			. "{message}\n"
-			. "{trace}"
-			. "{delimiter}\n";
-
-		$logger->debug($message, $context);
+		return;
 	}
+
+	$trace = '';
+	if ($traceDepth > 0)
+	{
+		$trace = Main\Diag\Helper::getBackTrace($traceDepth, ($showArgs ? null : DEBUG_BACKTRACE_IGNORE_ARGS));
+	}
+
+	$context = [
+		'module' => $module,
+		'message' => $text,
+		'trace' => $trace,
+	];
+
+	$message = "Host: {host}\n"
+		. "Date: {date}\n"
+		. ($module != '' ? "Module: {module}\n" : '')
+		. "{message}\n"
+		. "{trace}"
+		. "{delimiter}\n";
+
+	$logger->debug($message, $context);
 }
 
 function AddEventToStatFile($module, $action, $tag, $label, $action_type = '', $user_id = null)
@@ -4996,7 +4991,7 @@ function NormalizePhone($number, $minLength = 10)
 	return $number;
 }
 
-function bxmail($to, $subject, $message, $additional_headers = "", $additional_parameters = "", Main\Mail\Context $context = null)
+function bxmail($to, $subject, $message, $additional_headers = "", $additional_parameters = "", ?Main\Mail\Context $context = null)
 {
 	if (empty($context))
 	{

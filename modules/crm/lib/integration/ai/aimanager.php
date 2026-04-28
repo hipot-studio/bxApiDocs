@@ -2,10 +2,10 @@
 
 namespace Bitrix\Crm\Integration\AI;
 
+use Bitrix\AI\Agreement;
 use Bitrix\AI\Context;
 use Bitrix\AI\Context\Language;
 use Bitrix\AI\Engine;
-use Bitrix\AI\Integration\Baas\BaasTokenService;
 use Bitrix\AI\Services\CopilotNameService;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Crm\Activity\Provider\OpenLine;
@@ -13,6 +13,7 @@ use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Operation\ExtractScoringCriteria;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
+use Bitrix\Crm\Integration\AI\Operation\Sandbox;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
 use Bitrix\Crm\Integration\AI\Operation\ScreeningRepeatSaleItem;
@@ -35,11 +36,8 @@ use Psr\Log\LoggerInterface;
 class AIManager
 {
 	public const AI_COPILOT_FEATURE_NAME = 'crm_copilot';
-
 	public const SUPPORTED_ENTITY_TYPE_IDS = FillItemFieldsFromCallTranscription::SUPPORTED_TARGET_ENTITY_TYPE_IDS;
 	public const AI_LICENCE_FEATURE_NAME = 'ai_available_by_version';
-	public const AI_PACKAGES_EMPTY_COMMON_SLIDER_CODE = 'limit_boost_copilot';
-	public const AI_PACKAGES_EMPTY_SLIDER_CODE = 'limit_boost_crm_automation';
 	public const AI_COPILOT_FEATURE_RESTRICTED_SLIDER_CODE = 'limit_v2_crm_copilot_call_assessment';
 
 	public const AI_LIMIT_CODE_DAILY = 'Daily';
@@ -47,21 +45,12 @@ class AIManager
 	public const AI_LIMIT_BAAS = 'BAAS';
 
 	private const AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME = 'AI_CALL_PROCESSING_ALLOWED_AUTO_V2';
-	private const AI_IGNORE_BAAS = 'AI_IGNORE_BAAS';
-	private const AI_LIMIT_SLIDERS_MAP = [
-		self::AI_LIMIT_CODE_DAILY => 'limit_copilot_max_number_daily_requests',
-		self::AI_LIMIT_CODE_MONTHLY => 'limit_copilot_requests',
-		self::AI_LIMIT_BAAS => self::AI_PACKAGES_EMPTY_COMMON_SLIDER_CODE,
-	];
-
 	private const AI_APP_COLLECTION_MARKET_MAP = [
 		'ru' => 19021440,
 		'by' => 19021806,
 		'kz' => 19021810,
 	];
 	private const AI_APP_COLLECTION_MARKET_DEFAULT = 19021800;
-
-	private static ?BaasTokenService $baasService = null;
 
 	public static function isAvailable(): bool
 	{
@@ -150,58 +139,8 @@ class AIManager
 	{
 		return
 			static::isAiCallProcessingEnabled()
-			&& Option::get(
-				'crm',
-				self::AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME,
-				static::isBaasServiceAvailable()
-			)
+			&& Option::get('crm', self::AI_CALL_PROCESSING_AUTOMATICALLY_OPTION_NAME, BaasManager::isAvailable())
 		;
-	}
-
-	public static function isBaasServiceIgnored(): bool
-	{
-		return (bool)Option::get('crm', self::AI_IGNORE_BAAS, false);
-	}
-
-	public static function setBaasServiceIgnored(bool $isAllowed): void
-	{
-		Option::set('crm', self::AI_IGNORE_BAAS, $isAllowed);
-	}
-
-	public static function isBaasServiceAvailable(): bool
-	{
-		if (
-			Loader::includeModule('ai')
-			&& Loader::includeModule('baas')
-		)
-		{
-			if (!self::$baasService)
-			{
-				self::$baasService = new BaasTokenService();
-			}
-
-			return self::$baasService->isAvailable();
-		}
-
-		return static::isBaasServiceIgnored();
-	}
-
-	public static function isBaasServiceHasPackage(): bool
-	{
-		if (
-			Loader::includeModule('ai')
-			&& Loader::includeModule('baas')
-		)
-		{
-			if (!self::$baasService)
-			{
-				self::$baasService = new BaasTokenService();
-			}
-
-			return self::$baasService->hasPackage() && self::$baasService->canConsume();
-		}
-
-		return static::isBaasServiceIgnored();
 	}
 
 	public static function isAILicenceAccepted(int $userId = null): bool
@@ -211,14 +150,14 @@ class AIManager
 			// check for box instances
 			if (\Bitrix\Crm\Settings\Crm::isBox())
 			{
-				if (!method_exists(\Bitrix\AI\Agreement::class, 'isAcceptedByUser'))
+				if (!method_exists(Agreement::class, 'isAcceptedByUser'))
 				{
 					return true;
 				}
 
 				$userId = $userId ?? Container::getInstance()->getContext()->getUserId();
 
-				return \Bitrix\AI\Agreement::get('AI_BOX_AGREEMENT')?->isAcceptedByUser($userId) ?? false;
+				return Agreement::get('AI_BOX_AGREEMENT')?->isAcceptedByUser($userId) ?? false;
 			}
 
 			// check for cloud instances
@@ -369,7 +308,7 @@ class AIManager
 
 	public static function launchFillRepeatSaleTips(int $activityId, ?int $userId = null, bool $isManualLaunch = false): Result
 	{
-		$result = new Result(FillRepeatSaleTips::TYPE_ID);
+		$result = new Result(Operation\AbstractFillRepeatSaleTips::TYPE_ID);
 
 		if (!static::isAvailable() || !static::isAiCallProcessingEnabled())
 		{
@@ -386,6 +325,29 @@ class AIManager
 			$userId,
 		))
 			->setIsManualLaunch($isManualLaunch)
+			->setScenario(Scenario::REPEAT_SALE_TIPS_SCENARIO)
+			->launch()
+		;
+	}
+
+	public static function launchSandboxFillRepeatSaleTips(
+		ItemIdentifier $itemIdentifier,
+		ItemIdentifier $clientIdentifier,
+		int $segmentId,
+		?int $userId = null,
+	): Result
+	{
+		$result = new Result(Operation\AbstractFillRepeatSaleTips::TYPE_ID);
+
+		if (!static::isAvailable() || !static::isAiCallProcessingEnabled())
+		{
+			return $result->addError(ErrorCode::getAINotAvailableError());
+		}
+
+		return (new Operation\Sandbox\FillRepeatSaleTips($itemIdentifier, $userId))
+			->setSegmentId($segmentId)
+			->setClientIdentifier($clientIdentifier)
+			->setIsManualLaunch(true)
 			->setScenario(Scenario::REPEAT_SALE_TIPS_SCENARIO)
 			->launch()
 		;
@@ -466,6 +428,7 @@ class AIManager
 			ExtractScoringCriteria::TYPE_ID,
 			FillRepeatSaleTips::TYPE_ID,
 			ScreeningRepeatSaleItem::TYPE_ID,
+			Sandbox\FillRepeatSaleTips::TYPE_ID,
 		];
 	}
 
@@ -510,17 +473,18 @@ class AIManager
 		return match ($errorCode)
 		{
 			'LIMIT_IS_EXCEEDED_BAAS' => ErrorCode::getAILimitOfRequestsExceededError([
-				'sliderCode' => self::AI_LIMIT_SLIDERS_MAP[self::AI_LIMIT_BAAS],
+				'sliderCode' => BaasManager::getEmptyPackagesSliderCode(),
 				'limitCode' => self::AI_LIMIT_BAAS,
 			]),
 			'LIMIT_IS_EXCEEDED_MONTHLY' => ErrorCode::getAILimitOfRequestsExceededError([
-				'sliderCode' => $sliderCode ?? self::AI_LIMIT_SLIDERS_MAP[self::AI_LIMIT_CODE_MONTHLY],
+				'sliderCode' => $sliderCode ?? BaasManager::SLIDER_CODE_LIMIT_MONTHLY,
 				'limitCode' => self::AI_LIMIT_CODE_MONTHLY,
 			]),
 			'LIMIT_IS_EXCEEDED_DAILY' => ErrorCode::getAILimitOfRequestsExceededError([
-				'sliderCode' => self::AI_LIMIT_SLIDERS_MAP[self::AI_LIMIT_CODE_DAILY],
+				'sliderCode' => BaasManager::SLIDER_CODE_LIMIT_DAILY,
 				'limitCode' => self::AI_LIMIT_CODE_DAILY,
 			]),
+			'LIMIT_IS_EXCEEDED_BAAS_RATE_LIMIT' => new Error($errorMessage, ErrorCode::AI_ENGINE_LIMIT_EXCEEDED),
 			default => ErrorCode::getAILimitOfRequestsExceededError(),
 		};
 	}

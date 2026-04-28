@@ -231,7 +231,7 @@ class SqlTracker implements \Iterator
 	 *
 	 * @return string
 	 */
-	protected function formatTrace(array $trace = null)
+	protected function formatTrace(?array $trace = null)
 	{
 		if ($trace)
 		{

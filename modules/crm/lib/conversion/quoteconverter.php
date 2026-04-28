@@ -413,18 +413,15 @@ class QuoteConverter extends EntityConverter
 				}
 				unset($requisiteIdLinked, $bankDetailIdLinked, $mcRequisiteIdLinked, $mcBankDetailIdLinked);
 
-				//region BizProcess
-				$arErrors = array();
-				\CCrmBizProcHelper::AutoStartWorkflows(
-					\CCrmOwnerType::Deal,
-					$entityID,
-					\CCrmBizProcEventType::Create,
-					$arErrors
+				$starter = new Crm\Integration\BizProc\Starter\CrmStarter(
+					new Crm\Integration\BizProc\Starter\Dto\DocumentDto(\CCrmOwnerType::Deal, (int)$entityID)
 				);
-
-				$starter = new Crm\Automation\Starter(\CCrmOwnerType::Deal, $entityID);
-				$starter->runOnAdd();
-				//endregion
+				$starter->runOnDocumentAdd(
+					new Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+						actualFields: $fields,
+						userId: \Bitrix\Crm\Service\Container::getInstance()->getContext()->getUserId(),
+					)
+				);
 
 				$this->resultData[\CCrmOwnerType::DealName] = $entityID;
 			}

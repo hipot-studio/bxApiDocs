@@ -20,7 +20,7 @@ class Mask implements \ArrayAccess
 	 * Mask constructor.
 	 * @param array|null $mask
 	 */
-	public function __construct(array $mask = null)
+	public function __construct(?array $mask = null)
 	{
 		if($mask !== null)
 		{

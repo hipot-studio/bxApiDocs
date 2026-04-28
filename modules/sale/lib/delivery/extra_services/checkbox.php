@@ -4,6 +4,7 @@ namespace Bitrix\Sale\Delivery\ExtraServices;
 
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sale\PriceMaths;
 
 Loc::loadMessages(__FILE__);
 
@@ -66,7 +67,7 @@ class Checkbox extends Base
 
 	protected function createJSOnchange($id, $price)
 	{
-		$price = roundEx(floatval($price), SALE_VALUE_PRECISION);
+		$price = PriceMaths::roundPrecision((float)$price);
 		return "BX.onCustomEvent('onDeliveryExtraServiceValueChange', [{'id' : '".$id."', 'value': this.checked, 'price': this.checked ? '".$price."' : '0'}]);";
 	}
 

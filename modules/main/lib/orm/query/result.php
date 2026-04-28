@@ -621,7 +621,7 @@ class Result extends BaseResult
 		return $this->result->fetchRaw();
 	}
 
-	public function fetch(\Bitrix\Main\Text\Converter $converter = null)
+	public function fetch(?\Bitrix\Main\Text\Converter $converter = null)
 	{
 		$row = $this->result->fetch($converter);
 
@@ -633,7 +633,7 @@ class Result extends BaseResult
 		return $row;
 	}
 
-	public function fetchAll(\Bitrix\Main\Text\Converter $converter = null)
+	public function fetchAll(?\Bitrix\Main\Text\Converter $converter = null)
 	{
 		if (empty($this->hiddenObjectFields))
 		{

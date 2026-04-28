@@ -13,6 +13,14 @@ use Bitrix\Main\Type\Date;
 
 class SourceExpensesConnector extends Base
 {
+	/**
+	 * @return bool
+	 */
+	protected function isNeedApplyTimezoneOffset(): bool
+	{
+		return false;
+	}
+
 	public function query(
 		array $parameters,
 		int $limit,
@@ -167,4 +175,3 @@ class SourceExpensesConnector extends Base
 		return $resultRows;
 	}
 }
-

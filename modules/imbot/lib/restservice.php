@@ -12,6 +12,11 @@ if(!Loader::includeModule('rest'))
 	return;
 }
 
+if(!Loader::includeModule('im'))
+{
+	return;
+}
+
 class RestService extends \IRestService
 {
 	/**
@@ -30,6 +35,17 @@ class RestService extends \IRestService
 				'imbot.network.question.add' => [__CLASS__, 'networkQuestionAdd'],
 				'imbot.network.question.list' => [__CLASS__, 'networkQuestionList'],
 				'imbot.network.question.search' => [__CLASS__, 'networkQuestionSearch'],
+
+				\CRestUtil::EVENTS => [
+					'OnImBotV2MessageAdd' => ['im', 'onImBotV2MessageAdd', [__CLASS__, 'onBotV2MessageAdd'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT, 'sendRefreshToken' => true]],
+					'OnImBotV2MessageUpdate' => ['im', 'onImBotV2MessageUpdate', [__CLASS__, 'onBotV2MessageUpdate'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT, 'sendRefreshToken' => true]],
+					'OnImBotV2MessageDelete' => ['im', 'onImBotV2MessageDelete', [__CLASS__, 'onBotV2MessageDelete'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT, 'sendRefreshToken' => true]],
+					'OnImBotV2JoinChat' => ['im', 'onImBotV2JoinChat', [__CLASS__, 'onBotV2JoinChat'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT]],
+					'OnImBotV2Delete' => ['im', 'onImBotV2Delete', [__CLASS__, 'onBotV2Delete'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT]],
+					'OnImBotV2ContextGet' => ['im', 'onImBotV2ContextGet', [__CLASS__, 'onBotV2ContextGet'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT, 'sendRefreshToken' => true]],
+					'OnImBotV2CommandAdd' => ['im', 'onImBotV2CommandAdd', [__CLASS__, 'onBotV2CommandAdd'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT, 'sendRefreshToken' => true]],
+					'OnImBotV2ReactionChange' => ['im', 'onImBotV2ReactionChange', [__CLASS__, 'onBotV2ReactionChange'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT, 'sendRefreshToken' => true]],
+				],
 			]
 		];
 	}
@@ -329,5 +345,45 @@ class RestService extends \IRestService
 			: \CRestServer::STATUS_WRONG_REQUEST;
 
 		throw new RestException($error->msg, $error->code, $status);
+	}
+
+	public static function onBotV2MessageAdd($arParams, $arHandler): array
+	{
+		return (new \Bitrix\Im\V2\Event\BotWebhookPayloadBuilder())->buildMessageAdd($arParams, $arHandler);
+	}
+
+	public static function onBotV2MessageUpdate($arParams, $arHandler): array
+	{
+		return (new \Bitrix\Im\V2\Event\BotWebhookPayloadBuilder())->buildMessageUpdate($arParams, $arHandler);
+	}
+
+	public static function onBotV2MessageDelete($arParams, $arHandler): array
+	{
+		return (new \Bitrix\Im\V2\Event\BotWebhookPayloadBuilder())->buildMessageDelete($arParams, $arHandler);
+	}
+
+	public static function onBotV2JoinChat($arParams, $arHandler): array
+	{
+		return (new \Bitrix\Im\V2\Event\BotWebhookPayloadBuilder())->buildJoinChat($arParams, $arHandler);
+	}
+
+	public static function onBotV2Delete($arParams, $arHandler): array
+	{
+		return (new \Bitrix\Im\V2\Event\BotWebhookPayloadBuilder())->buildDelete($arParams, $arHandler);
+	}
+
+	public static function onBotV2ContextGet($arParams, $arHandler): array
+	{
+		return (new \Bitrix\Im\V2\Event\BotWebhookPayloadBuilder())->buildContextGet($arParams, $arHandler);
+	}
+
+	public static function onBotV2CommandAdd($arParams, $arHandler): array
+	{
+		return (new \Bitrix\Im\V2\Event\BotWebhookPayloadBuilder())->buildCommandAdd($arParams, $arHandler);
+	}
+
+	public static function onBotV2ReactionChange($arParams, $arHandler): array
+	{
+		return (new \Bitrix\Im\V2\Event\BotWebhookPayloadBuilder())->buildReactionChange($arParams, $arHandler);
 	}
 }

@@ -26,36 +26,36 @@ class ExternalDataItem implements EntityInterface
 		return $this;
 	}
 
-	public function getModuleId(): ?string
+	public function getModuleId(): string|null
 	{
 		return $this->moduleId;
 	}
 
-	public function setModuleId(?string $moduleId): self
+	public function setModuleId(string|null $moduleId): self
 	{
 		$this->moduleId = $moduleId;
 
 		return $this;
 	}
 
-	public function getEntityTypeId(): ?string
+	public function getEntityTypeId(): string|null
 	{
 		return $this->entityTypeId;
 	}
 
-	public function setEntityTypeId(?string $entityTypeId): self
+	public function setEntityTypeId(string|null $entityTypeId): self
 	{
 		$this->entityTypeId = $entityTypeId;
 
 		return $this;
 	}
 
-	public function getValue(): ?string
+	public function getValue(): string|null
 	{
 		return $this->value;
 	}
 
-	public function setValue(?string $value): self
+	public function setValue(string|null $value): self
 	{
 		$this->value = $value;
 

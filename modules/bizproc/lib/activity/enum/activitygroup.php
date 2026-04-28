@@ -11,6 +11,7 @@ enum ActivityGroup: string
 {
 	case STARTER = 'starter';
 	case WORKFLOW = 'workflow';
+	case WORKFLOW_STATE = 'workflow_state';
 	case STORAGE = 'storage';
 	case AI = 'ai';
 	case MCP = 'mcp';
@@ -50,6 +51,7 @@ enum ActivityGroup: string
 		{
 			self::STARTER => Outline::ROCKET->name,
 			self::WORKFLOW => Outline::BUSINES_PROCESS_STAGES->name,
+			self::WORKFLOW_STATE => Outline::STAGES->name,
 			self::STORAGE => Outline::DATABASE->name,
 			self::AI => Outline::AI_STARS->name,
 			self::MARKETING => Outline::MARKETING->name,
@@ -93,6 +95,7 @@ enum ActivityGroup: string
 		{
 			self::STARTER => 'BIZPROCDESIGNER_ENUM_ACTIVITY_CATEGORY_STARTER',
 			self::WORKFLOW => 'BIZPROCDESIGNER_ENUM_ACTIVITY_CATEGORY_WORKFLOW',
+			self::WORKFLOW_STATE => 'BIZPROCDESIGNER_ENUM_ACTIVITY_CATEGORY_WORKFLOW_STATE',
 			self::STORAGE => 'BIZPROCDESIGNER_ENUM_ACTIVITY_CATEGORY_STORAGE',
 			self::AI => 'BIZPROCDESIGNER_ENUM_ACTIVITY_CATEGORY_AI',
 			self::MARKETING => 'BIZPROCDESIGNER_ENUM_ACTIVITY_CATEGORY_MARKETING',
@@ -127,7 +130,7 @@ enum ActivityGroup: string
 			self::OTHER_OPERATIONS => 'BIZPROCDESIGNER_ENUM_ACTIVITY_CATEGORY_OTHER_OPERATIONS',
 		};
 
-		return Loc::getMessage($messageId);
+		return Loc::getMessage($messageId) ?? '';
 	}
 
 	public static function toArray(): array

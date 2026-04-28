@@ -5,6 +5,8 @@ use Bitrix\Main;
 
 /**
  * Extending of the Main\Engine\Action class.
+ *
+ * @internal
  */
 abstract class Action
 	extends Main\Engine\Action

@@ -53,6 +53,7 @@ class ImportHelper
 	private $headerById;
 	private $rows;
 	private $rowNumber;
+	private array $rowIndexes = [];
 	private $entityKeyFields;
 	private $entityKeyValue;
 	private $searchNextEntityMode;
@@ -741,7 +742,13 @@ class ImportHelper
 		$demoRequisiteData = array($demoRequisiteData);
 
 		$requisite = EntityRequisite::getSingleInstance();
-		$demoRequisiteData = $requisite->entityListRequisiteExportDataFormatMultiline($demoRequisiteData, $exportHeaders);
+		$demoRequisiteData = $requisite->entityListRequisiteExportDataFormatMultiline(
+			$demoRequisiteData,
+			$exportHeaders,
+			[
+				'isIndexedKeys' => true,
+			],
+		);
 
 		if (is_array($demoRequisiteData[0]))
 			$result = $demoRequisiteData[0];
@@ -834,7 +841,7 @@ class ImportHelper
 
 		$this->rqFieldPrefix = 'RQ_';
 		$this->bdFieldPrefix = 'BD_';
-		
+
 		$this->rqListFieldMap = [];
 
 		$this->entityKeyValue = '';
@@ -859,6 +866,7 @@ class ImportHelper
 
 		$this->rows = array();
 		$this->rowNumber = 0;
+		$this->rowIndexes = [];
 
 		$this->requisiteList = array();
 
@@ -886,6 +894,11 @@ class ImportHelper
 		return $this->rows;
 	}
 
+	public function getRowIndexes(): array
+	{
+		return array_values($this->rowIndexes);
+	}
+
 	public function getFirstRow()
 	{
 		$row = array();
@@ -896,7 +909,12 @@ class ImportHelper
 		return $row;
 	}
 
-	public function parseRow($row)
+	public function getFirstRowIndex(): int
+	{
+		return $this->rowIndexes[0];
+	}
+
+	public function parseRow($row, ?int $rowIndex = null)
 	{
 		$result = new Main\Result();
 
@@ -914,6 +932,7 @@ class ImportHelper
 
 		$this->rows[] = $row;
 		$this->rowNumber++;
+		$this->rowIndexes[count($this->rows) - 1] = $rowIndex;
 
 		$entityKeyValue = $this->parseEntityKey($row);
 		if (!$this->searchNextEntityMode && $this->rowNumber === 1 && $entityKeyValue == '')
@@ -940,13 +959,19 @@ class ImportHelper
 
 			if ($this->searchNextEntityMode)
 			{
+				$this->rowIndexes = [
+					0 => $this->rowIndexes[count($this->rows) - 1],
+				];
 				$this->rows = array($this->rows[count($this->rows) - 1]);
+
 				$this->rowNumber = 1;
 				$this->searchNextEntityMode = false;
 			}
 			else if ($this->rowNumber > 1)
 			{
-				unset($this->rows[--$this->rowNumber]);
+				$this->rowNumber--;
+
+				unset($this->rows[$this->rowNumber], $this->rowIndexes[$this->rowNumber]);
 			}
 
 			return $result;
@@ -2193,12 +2218,12 @@ class ImportHelper
 
 		return $result;
 	}
-	
+
 	protected function updatePresetCacheById($presetId)
 	{
 		if ($presetId < 0)
 			$presetId = 0;
-		
+
 		if (!isset(self::$presetCacheById[$presetId]))
 		{
 			if ($presetId > 0)

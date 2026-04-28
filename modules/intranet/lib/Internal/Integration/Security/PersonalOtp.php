@@ -12,7 +12,7 @@ use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\TrustDeviceConfirmation;
-use Bitrix\Main\Application;
+use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Loader;
@@ -29,8 +29,6 @@ use Bitrix\Security\Mfa\OtpType;
 class PersonalOtp
 {
 	private Otp $securityOtp;
-	private const BASE_CACHE_DIR = '/otp/user_id/';
-	private const CACHE_ID_PREFIX = 'user_otp_v5_';
 	private UserOtp $otpInfo;
 
 	/**
@@ -70,6 +68,8 @@ class PersonalOtp
 			->syncParameters($totpCode)
 			->save()
 		;
+		$analyticEvent = new AnalyticsEvent('push_2fa_on_user', 'user_settings', 'security');
+		$analyticEvent->send();
 	}
 
 	/**
@@ -105,32 +105,30 @@ class PersonalOtp
 		return $this->otpInfo->type;
 	}
 
+	public function setType(OtpType $otpType): void
+	{
+		$this->getOtpByUser()->setType($otpType)->save();
+	}
+
 	public function isActivated(): bool
 	{
 		return $this->otpInfo->isActive;
 	}
 
+	/**
+	 * @throws ArgumentTypeException
+	 */
 	public function canSkipMandatory(): bool
 	{
-		// delete it after adding the cache to security
-		$result = $this->getOtpInfo()->isMandatorySkipped;
-
-		if (!$result)
-		{
-			$result = $this->canSkipMandatoryByRights();
-		}
-
-		return $result;
+		return (bool)$this->getOtpByUser()->canSkipMandatory();
 	}
 
+	/**
+	 * @throws ArgumentTypeException
+	 */
 	public function canSkipMandatoryByRights(): bool
 	{
-		// delete it after adding the cache to security
-		$targetRights = Otp::getMandatoryRights();
-		$userRights = \CAccess::getUserCodesArray($this->otpInfo->userId);
-		$existedRights = array_intersect($targetRights, $userRights);
-
-		return empty($existedRights);
+		return (bool)$this->getOtpByUser()->canSkipMandatoryByRights();
 	}
 
 	public function isPushType(): bool
@@ -213,6 +211,9 @@ class PersonalOtp
 		return $this->otpInfo->initialDate;
 	}
 
+	/**
+	 * @throws ArgumentTypeException
+	 */
 	public function isRequired(): bool
 	{
 		return !$this->canSkipMandatoryByRights();
@@ -221,12 +222,6 @@ class PersonalOtp
 	public function getOtpInfo(): UserOtp
 	{
 		return $this->otpInfo;
-	}
-
-	public static function clearCache(int $userId): void
-	{
-		$cacheDir = self::BASE_CACHE_DIR . substr(md5((string)$userId), -2) . '/' . $userId . '/';
-		Application::getInstance()->getCache()->cleanDir($cacheDir);
 	}
 
 	public function canSendRequestRecoverAccess(): bool
@@ -246,33 +241,16 @@ class PersonalOtp
 	 */
 	private function initOtpInfo(): void
 	{
-		$cacheId = self::CACHE_ID_PREFIX . $this->user->getId();
-		$cacheDir = self::BASE_CACHE_DIR . substr(md5((string)$this->user->getId()), -2) . '/' . $this->user->getId() . '/';
-		$cache = Application::getInstance()->getCache();
-
-		if ($cache->initCache(86400 * 7, $cacheId, $cacheDir))
-		{
-			$otpData = $cache->getVars();
-			$this->otpInfo = UserOtp::initByArray($otpData);
-		}
-		else
-		{
-			$this->otpInfo = new UserOtp(
-				userId: $this->user->getId(),
-				isActive: $this->getOtpByUser()->isActivated(),
-				dateDeactivate: $this->getOtpByUser()->getDeactivateUntil(),
-				isInitialized: $this->getOtpByUser()->isInitialized(),
-				initialDate: $this->getOtpByUser()->getInitialDate(),
-				type: $this->getOtpByUser()->getType(),
-				isMandatorySkipped: $this->getOtpByUser()->isMandatorySkipped(),
-				initParams: $this->getOtpByUser()->getInitParams(),
-			);
-
-			if ($cache->startDataCache())
-			{
-				$cache->endDataCache($this->otpInfo->toArray());
-			}
-		}
+		$this->otpInfo = new UserOtp(
+			userId: $this->user->getId(),
+			isActive: $this->getOtpByUser()->isActivated(),
+			dateDeactivate: $this->getOtpByUser()->getDeactivateUntil(),
+			isInitialized: $this->getOtpByUser()->isInitialized(),
+			initialDate: $this->getOtpByUser()->getInitialDate(),
+			type: $this->getOtpByUser()->getType(),
+			isMandatorySkipped: $this->getOtpByUser()->isMandatorySkipped(),
+			initParams: $this->getOtpByUser()->getInitParams(),
+		);
 	}
 
 	/**

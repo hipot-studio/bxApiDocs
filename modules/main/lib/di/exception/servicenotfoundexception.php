@@ -3,8 +3,8 @@
 namespace Bitrix\Main\DI\Exception;
 
 use Bitrix\Main\ObjectNotFoundException;
-use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\NotFoundExceptionInterface;
 
-class ServiceNotFoundException extends ObjectNotFoundException implements ContainerExceptionInterface
+class ServiceNotFoundException extends ObjectNotFoundException implements NotFoundExceptionInterface
 {
 }

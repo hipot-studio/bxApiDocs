@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\ExternalSource\Dataset\Connector;
 
+use Bitrix\BIConnector\Configuration\DataTimezone;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
 use Bitrix\BIConnector\DataSourceConnector\Connector\Base;
 use Bitrix\BIConnector\ExternalSource\Source;
@@ -43,6 +44,7 @@ final class Rest extends Base
 			'select' => array_column($data->getConnectorData()->schema, 'NAME'),
 			'filter' => $data->getConnectorData()->filter,
 			'limit' => $limit,
+			'timezone' => DataTimezone::getTimezone(),
 		];
 
 		try
@@ -65,5 +67,13 @@ final class Rest extends Base
 	public function isFulfilledOutput(): bool
 	{
 		return true;
+	}
+
+	/**
+	 * @return bool
+	 */
+	protected function isNeedApplyTimezoneOffset(): bool
+	{
+		return false;
 	}
 }

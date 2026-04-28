@@ -266,7 +266,7 @@ abstract class Connection extends Data\Connection
 	 * @return resource
 	 * @throws SqlQueryException | DuplicateEntryException
 	 */
-	abstract protected function queryInternal($sql, array $binds = null, Diag\SqlTrackerQuery $trackerQuery = null);
+	abstract protected function queryInternal($sql, ?array $binds = null, ?Diag\SqlTrackerQuery $trackerQuery = null);
 
 	/**
 	 * Returns database-depended result of the query.
@@ -276,7 +276,7 @@ abstract class Connection extends Data\Connection
 	 *
 	 * @return Result
 	 */
-	abstract protected function createResult($result, Diag\SqlTrackerQuery $trackerQuery = null);
+	abstract protected function createResult($result, ?Diag\SqlTrackerQuery $trackerQuery = null);
 
 	/**
 	 * Executes a query to the database.
@@ -347,7 +347,7 @@ abstract class Connection extends Data\Connection
 	 * @return string|null
 	 * @throws SqlQueryException
 	 */
-	public function queryScalar($sql, array $binds = null)
+	public function queryScalar($sql, ?array $binds = null)
 	{
 		$result = $this->query($sql, $binds, 0, 1);
 
@@ -368,7 +368,7 @@ abstract class Connection extends Data\Connection
 	 * @return void
 	 * @throws SqlQueryException
 	 */
-	public function queryExecute($sql, array $binds = null)
+	public function queryExecute($sql, ?array $binds = null)
 	{
 		$this->query($sql, $binds);
 	}
@@ -978,7 +978,7 @@ abstract class Connection extends Data\Connection
 	 *
 	 * @return void
 	 */
-	public function setTracker(Diag\SqlTracker $sqlTracker = null)
+	public function setTracker(?Diag\SqlTracker $sqlTracker = null)
 	{
 		$this->sqlTracker = $sqlTracker;
 	}

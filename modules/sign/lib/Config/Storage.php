@@ -14,8 +14,6 @@ use Bitrix\Sign\Service\Sign\UrlGeneratorService;
 class Storage
 {
 	private const INTRANET_TOOL_ID = 'sign';
-	private const ONBOARDING_TEMPLATE_SHA256 = '256233794c40f7d779430061011d35f499f3321781d1f67425235bff8829f40a';
-	private const ONBOARDING_TEMPLATE_NAME = 'onboarding_template.json';
 
 	private static ?self $instance = null;
 
@@ -398,14 +396,14 @@ class Storage
 	{
 		return (int)\Bitrix\Main\Config\Option::get('sign', '~sign_b2b_max_documents_without_restriction', 2);
 	}
-	
-	public function getOnboardingTemplateSha256(): string
+
+	public function isDemoTemplateInstalled(): ?bool
 	{
-		return Main\Config\Option::get('sign', 'sign_b2e_onboarding_template_sha256', self::ONBOARDING_TEMPLATE_SHA256);
+		return Main\Config\Option::get('sign', '~sign_b2e_onboarding_template_installed', 'N') === 'Y';
 	}
 
-	public function getOnboardingTemplateName(): string
+	public function setDemoTemplateInstalled(bool $value): void
 	{
-		return Main\Config\Option::get('sign', 'sign_b2e_onboarding_template_name', self::ONBOARDING_TEMPLATE_NAME);
+		Main\Config\Option::set('sign', '~sign_b2e_onboarding_template_installed', $value ? 'Y' : 'N');
 	}
 }

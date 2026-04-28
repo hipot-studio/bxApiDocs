@@ -37,6 +37,12 @@ class RecentCollection implements \IteratorAggregate, \JsonSerializable
 		return isset($this->itemsByEntity[$recentItem->getEntityId()][$recentItem->getId()]);
 	}
 
+	public function clear(): void
+	{
+		$this->items = [];
+		$this->itemsByEntity = [];
+	}
+
 	public function getByItem(Item $item): ?RecentItem
 	{
 		return $this->itemsByEntity[$item->getEntityId()][$item->getId()] ?? null;

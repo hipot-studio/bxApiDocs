@@ -85,6 +85,8 @@ class ServiceSkuCreator
 			return [];
 		}
 
+		\CCrmCatalog::EnsureDefaultExists();
+		
 		return [
 			'iblockId' => Catalog::getDefaultId(),
 			'basePriceId' => GroupTable::getBasePriceTypeId(),

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Forum\Comments;
 
+use Bitrix\Bizproc\Public\Provider\WorkflowUserProvider;
 use Bitrix\Main\Loader;
 
 final class WorkflowEntity extends Entity
@@ -92,7 +93,11 @@ final class WorkflowEntity extends Entity
 					if ($workflowId)
 					{
 						$currentUserId = (int) $USER->getId();
-						$participants = \CBPTaskService::getWorkflowParticipants($workflowId);
+						$participants =
+							class_exists(WorkflowUserProvider::class)
+								? (new WorkflowUserProvider())->getUserIdsByWorkflowId($workflowId)
+								: \CBPTaskService::getWorkflowParticipants($workflowId)
+						;
 						if (in_array($currentUserId, $participants))
 						{
 							$this->hasAccess = true;

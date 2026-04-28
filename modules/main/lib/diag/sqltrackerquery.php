@@ -44,7 +44,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	 *
 	 * @return void
 	 */
-	public function startQuery($sql, array $binds = null)
+	public function startQuery($sql, ?array $binds = null)
 	{
 		$this->sql = $sql;
 		$this->binds = $binds;
@@ -340,7 +340,7 @@ class SqlTrackerQuery implements \ArrayAccess
 	 *
 	 * @return SqlTrackerQuery
 	 */
-	public function setTrace(array $trace = null)
+	public function setTrace(?array $trace = null)
 	{
 		$this->trace = ($trace !== null ? $this->filterTrace($trace) : []);
 

@@ -43,7 +43,7 @@ class SetRightsHandler
 
 			if ($isCurrentUserFirstAdmin)
 			{
-				return (new TransferAdminRoleCommand($currentUserId, $command->userId))->run();
+				return (new TransferAdminRoleCommand($currentUserId, $command->userId, true))->run();
 			}
 
 			return (new RemoveRightsCommand($currentUserId, $currentUserId))->run();

@@ -21,7 +21,7 @@ class AjaxJson extends Json implements Errorable
 	 */
 	private $errorCollection;
 
-	public function __construct($data = null, $status = self::STATUS_SUCCESS, ErrorCollection $errorCollection = null)
+	public function __construct($data = null, $status = self::STATUS_SUCCESS, ?ErrorCollection $errorCollection = null)
 	{
 		$this->status = $status?: self::STATUS_SUCCESS;
 		$this->errorCollection = $errorCollection?: new ErrorCollection;
@@ -34,12 +34,12 @@ class AjaxJson extends Json implements Errorable
 		return new self($data, self::STATUS_SUCCESS, null);
 	}
 
-	final public static function createError(ErrorCollection $errorCollection = null, $data = null)
+	final public static function createError(?ErrorCollection $errorCollection = null, $data = null)
 	{
 		return new self($data, self::STATUS_ERROR, $errorCollection);
 	}
 
-	final public static function createDenied(ErrorCollection $errorCollection = null, $data = null)
+	final public static function createDenied(?ErrorCollection $errorCollection = null, $data = null)
 	{
 		return new self($data, self::STATUS_DENIED, $errorCollection);
 	}

@@ -10,11 +10,25 @@ class ApplicationPasswordService
 {
 	public function removeAllByUserId(int $userId): void
 	{
+		$this->deleteByFilter([
+			"=USER_ID" => $userId,
+			"=APPLICATION_ID" => ["desktop", "mobile"],
+		]);
+	}
+
+	public function removeAllByUserIdExceptDevice(int $userId, string $deviceCode): void
+	{
+		$this->deleteByFilter([
+			"=USER_ID" => $userId,
+			"=APPLICATION_ID" => ["desktop", "mobile"],
+			"!=CODE" => $deviceCode,
+		]);
+	}
+
+	private function deleteByFilter(array $filter): void
+	{
 		$passwordsList = ApplicationPasswordTable::getList([
-			"filter" => [
-				"=USER_ID" => $userId,
-				"=APPLICATION_ID" => ["desktop", "mobile"],
-			],
+			"filter" => $filter,
 		]);
 
 		while ($password = $passwordsList->fetchObject())

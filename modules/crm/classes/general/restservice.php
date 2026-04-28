@@ -9813,19 +9813,30 @@ class CCrmActivityRestProxy extends CCrmRestProxyBase
 	}
 	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
 	{
-		if(!is_array($order))
+		if (!is_array($order))
 		{
 			$order = array();
 		}
 
-		if(empty($order))
+		if (empty($order))
 		{
 			$order['START_TIME'] = 'ASC';
 		}
 
-		if(!is_array($select))
+		if (!is_array($select))
 		{
 			$select = array();
+		}
+
+		$selectHash = array_flip($select);
+		if (
+			isset($selectHash['DESCRIPTION'])
+			&& !isset($selectHash['*'])
+			&& !isset($selectHash['PROVIDER_ID'], $selectHash['PROVIDER_TYPE_ID'])
+		)
+		{
+			$select[] = 'PROVIDER_ID';
+			$select[] = 'PROVIDER_TYPE_ID';
 		}
 
 		//Proces storage aliases
@@ -10090,6 +10101,12 @@ class CCrmActivityRestProxy extends CCrmRestProxyBase
 			}
 			unset($fields['STORAGE_ELEMENT_IDS']);
 		}
+
+		if (isset($fields['DESCRIPTION']))
+		{
+			\Bitrix\Crm\Activity\Provider\Email::uncompressActivityDescription($fields);
+		}
+
 		parent::externalizeFields($fields, $fieldsInfo);
 	}
 	public function processMethodRequest($name, $nameDetails, $arParams, $nav, $server)

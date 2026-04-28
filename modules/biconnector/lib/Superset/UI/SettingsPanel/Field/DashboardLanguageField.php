@@ -3,8 +3,6 @@
 namespace Bitrix\BIConnector\Superset\UI\SettingsPanel\Field;
 
 use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
-use Bitrix\Intranet\Portal;
-use Bitrix\Main\Loader;
 
 final class DashboardLanguageField extends EntityEditorField
 {
@@ -15,7 +13,6 @@ final class DashboardLanguageField extends EntityEditorField
 	{
 		return [
 			'currentLanguage' => CultureFormatter::getLanguage(),
-			'settingsUrl' => $this->getSettingsUrl(),
 		];
 	}
 
@@ -32,18 +29,5 @@ final class DashboardLanguageField extends EntityEditorField
 	public function getType(): string
 	{
 		return self::FIELD_ENTITY_EDITOR_TYPE;
-	}
-
-	private function getSettingsUrl(): string
-	{
-		if (!Loader::includeModule('intranet'))
-		{
-			return '';
-		}
-
-		return
-			Portal::getInstance()->getSettings()->getSettingsUrl()
-			. '?page=configuration&option=settings-configuration-section-biconnector'
-		;
 	}
 }

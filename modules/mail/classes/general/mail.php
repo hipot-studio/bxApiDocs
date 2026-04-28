@@ -1709,6 +1709,7 @@ class CAllMailMessage
 		$arMessageParts = &$attachments;
 
 		$isStrippedTagsToBody = false;
+		// No visible text at save time. Does not guarantee the email is genuinely empty — download failure also results in true.
 		$isOriginalEmptyBody = empty(trim(strip_tags($message_body_html)));
 
 		if (self::isLongMessageBody($message_body))
@@ -1716,6 +1717,7 @@ class CAllMailMessage
 			[$message_body, $message_body_html] = self::prepareLongMessage($message_body, $message_body_html);
 		}
 
+		// HTML was downloaded (mb_strlen > 0) but has no text — cleared intentionally, resync won't help.
 		if (
 			(mb_strlen($message_body_html) > 0)
 			&& empty(trim(strip_tags($message_body_html)))

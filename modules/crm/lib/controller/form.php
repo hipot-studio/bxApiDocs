@@ -841,8 +841,9 @@ class Form extends Main\Engine\JsonController
 						? $settingsData['autoSelection']
 						: $settingsData['default']
 				;
+				$resources = isset($scenarioSettings['resources']) ? (array)$scenarioSettings['resources'] : [];
 				$resourceIds = isset($scenarioSettings['resourceIds']) ? (array)$scenarioSettings['resourceIds'] : [];
-				if (empty($resourceIds))
+				if (empty($resourceIds) && empty($resources))
 				{
 					$syncErrors[] = $resourceError;
 

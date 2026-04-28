@@ -43,7 +43,21 @@ class EmployeeType extends BaseType
 	 */
 	public static function prepareSettings(array $userField): array
 	{
-		return [];
+		$defaultValues = [];
+
+		$defaultValuesRaw = $userField['SETTINGS']['DEFAULT_VALUE'] ?? null;
+		$defaultValuesRaw = is_array($defaultValuesRaw) ? $defaultValuesRaw : [$defaultValuesRaw];
+		foreach ($defaultValuesRaw as $defaultValue)
+		{
+			if (is_numeric($defaultValue) && (int)$defaultValue > 0)
+			{
+				$defaultValues[] = (int)$defaultValue;
+			}
+		}
+
+		return [
+			'DEFAULT_VALUE' => $defaultValues,
+		];
 	}
 
 	/**
@@ -124,5 +138,18 @@ class EmployeeType extends BaseType
 	public static function onBeforeSave(array $userField, $value)
 	{
 		return $value;
+	}
+
+	public static function getDefaultValue(array $userField, array $additionalParameters = [])
+	{
+		$isMultiple = $userField['MULTIPLE'] === 'Y';
+
+		$defaultValues = ($userField['SETTINGS']['DEFAULT_VALUE'] ?? null);
+		if ($isMultiple)
+		{
+			return $defaultValues;
+		}
+
+		return $defaultValues[0] ?? '';
 	}
 }

@@ -20,6 +20,8 @@ final class EntityDataCollector extends BaseDataCollector
 
 	public function getMarkers(array $parameters = []): array
 	{
+		$emptyResult = [[], []];
+
 		$filter = $this->prepareCopilotMarkersFilter(
 			entityId: (int)($parameters['entityId'] ?? 0),
 			clientIdentifiers: $parameters['clientIdentifiers'] ?? [],
@@ -27,7 +29,7 @@ final class EntityDataCollector extends BaseDataCollector
 
 		if (empty($filter))
 		{
-			return [];
+			return $emptyResult;
 		}
 
 		$items = $this->getData([
@@ -41,9 +43,10 @@ final class EntityDataCollector extends BaseDataCollector
 			static fn (Item $item) => array_filter($item->getCompatibleData()),
 			$items,
 		);
+
 		if (empty($items))
 		{
-			return [];
+			return $emptyResult;
 		}
 
 		return [

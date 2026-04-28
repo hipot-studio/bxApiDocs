@@ -271,11 +271,11 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 				continue;
 			}
 
-			if ($query->getEntity()->getName() === 'Contact')
+			if ($query->getEntity()->getName() === $this->getContactEntityName())
 			{
 				$ref = array('=this.ID' => 'ref.CONTACT_ID');
 			}
-			elseif ($query->getEntity()->getName() === 'Company')
+			elseif ($query->getEntity()->getName() === $this->getCompanyEntityName())
 			{
 				$ref = array('=this.ID' => 'ref.COMPANY_ID');
 			}
@@ -354,6 +354,17 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 
 			$this->addNoPurchasesFilter($query, $noPurchasesFilter, $productSource);
 		}
+
+		if (array_key_exists('INACTIVE_RECIPIENTS', $filterFields))
+		{
+			$inactiveDays = $filterFields['INACTIVE_RECIPIENTS'];
+
+			unset($filterFields['INACTIVE_RECIPIENTS']);
+			$query->setFilter($filterFields);
+
+			$this->addInactiveRecipientsFilter($query, $inactiveDays);
+		}
+
 		if (array_key_exists('DEAL', $filterFields))
 		{
 			$query->where(\Bitrix\Main\Entity\Query::filter()
@@ -442,7 +453,7 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 			$orderQuery->setFilter($ordersFilter);
 		}
 
-		if ($query->getEntity()->getName() === 'Contact')
+		if ($query->getEntity()->getName() === $this->getContactEntityName())
 		{
 			$dealQuery->addSelect('CONTACT_ID', 'EID');
 			$dealQuery->whereNotNull('CONTACT_ID');
@@ -451,7 +462,7 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 				$orderQuery->where('ENTITY_TYPE_ID', \CCrmOwnerType::Contact);
 			}
 		}
-		elseif ($query->getEntity()->getName() === 'Company')
+		elseif ($query->getEntity()->getName() === $this->getCompanyEntityName())
 		{
 			$dealQuery->addSelect('COMPANY_ID', 'EID');
 			$dealQuery->whereNotNull('COMPANY_ID');
@@ -485,6 +496,81 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		}
 	}
 
+	/**
+	 * Add filter to include only contacts/companies who are active within the period.
+	 *
+	 * Business logic (active audience):
+	 * 1. CRM entity is not new: DATE_CREATE < DATE_LIMIT
+	 * 2. At least one read of a mailing created within the period
+	 *
+	 * @param Entity\Query $query Modifying query.
+	 * @param int $inactiveDays Period in days.
+	 * @return void
+	 */
+	protected function addInactiveRecipientsFilter(Entity\Query $query, int $inactiveDays): void
+	{
+		if ($inactiveDays <= 0)
+		{
+			// invalid period: return empty result set instead of removing filter
+			$query->where('ID', 0);
+
+			return;
+		}
+
+		$sqlHelper = Application::getConnection()->getSqlHelper();
+
+		$dateLimit = DateTime::createFromTimestamp(time() + \CTimeZone::GetOffset());
+		$dateLimit->add("-{$inactiveDays} days");
+		$dateLimitFormatted = $sqlHelper->convertToDbDateTime($dateLimit);
+
+		$entityName = $query->getEntity()->getName();
+
+		if (!$this->isEntityNameAllowed($entityName))
+		{
+			return;
+		}
+
+		$inactiveSubQuery = $this->buildInactiveRecipientsSubQuery(
+			$entityName,
+			$dateLimitFormatted,
+		);
+
+		$query->whereIn('ID', new SqlExpression($inactiveSubQuery));
+	}
+
+	/**
+	 * Build subquery to find active recipients within the period.
+	 *
+	 * Links CRM entities with sender contacts through email stored in b_crm_field_multi.
+	 *
+	 * @param string $entityName
+	 * @param string $dateLimitFormatted Formatted date limit.
+	 * @return string SQL subquery.
+	 */
+	protected function buildInactiveRecipientsSubQuery(string $entityName, string $dateLimitFormatted): string
+	{
+		$sendResultNone = \Bitrix\Sender\PostingRecipientTable::SEND_RESULT_NONE;
+		$emailTypeId = Type::EMAIL;
+		$fmTypeId = 'EMAIL';
+		$crmEntityCode = $entityName === $this->getContactEntityName() ? 'CONTACT' : 'COMPANY';
+
+		return "
+			SELECT fm.ELEMENT_ID
+			FROM b_crm_field_multi fm
+			INNER JOIN b_sender_contact sc ON sc.CODE = LOWER(TRIM(fm.VALUE)) AND sc.TYPE_ID = {$emailTypeId}
+			INNER JOIN b_sender_posting_recipient spr ON spr.CONTACT_ID = sc.ID
+			INNER JOIN b_sender_posting_read pr ON pr.RECIPIENT_ID = spr.ID
+			INNER JOIN b_sender_posting p ON p.ID = spr.POSTING_ID
+			WHERE fm.ENTITY_ID = '$crmEntityCode'
+				AND fm.TYPE_ID = '$fmTypeId'
+				AND sc.BLACKLISTED = 'N'
+				AND spr.STATUS != '$sendResultNone'
+				AND spr.DATE_SENT IS NOT NULL
+				AND p.DATE_CREATE >= {$dateLimitFormatted}
+				AND pr.DATE_INSERT >= {$dateLimitFormatted}
+			GROUP BY fm.ELEMENT_ID
+		";
+	}
 	protected function prepareQueryCollection(Entity\Query $query)
 	{
 		$result = [$query];
@@ -522,13 +608,13 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		$dealRef = [];
 
 		$entityName = $query->getEntity()->getName();
-		if ($entityName === 'Contact')
+		if ($entityName === $this->getContactEntityName())
 		{
 			$orderRef['ref.ENTITY_TYPE_ID'] = new SqlExpression('?i', \CCrmOwnerType::Contact);
 			$dealRef['=this.ID'] = 'ref.CONTACT_ID';
 			$extraQuery = $this->getContactQuery();
 		}
-		elseif ($entityName === 'Company')
+		elseif ($entityName === $this->getCompanyEntityName())
 		{
 			$orderRef['ref.ENTITY_TYPE_ID'] = new SqlExpression('?i', \CCrmOwnerType::Company);
 			$dealRef['=this.ID'] = 'ref.COMPANY_ID';
@@ -620,28 +706,28 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 		$dataTypeId = $this->getDataTypeId();
 		if ($dataTypeId == Type::CRM_ORDER_PRODUCT_CONTACT_ID && $ordersAreRequired)
 		{
-			if ($entityName === 'Contact')
+			if ($entityName === $this->getContactEntityName())
 			{
 				$result[] = $extraQuery;
 			}
 		}
 		elseif ($dataTypeId == Type::CRM_ORDER_PRODUCT_COMPANY_ID && $ordersAreRequired)
 		{
-			if ($entityName === 'Company')
+			if ($entityName === $this->getCompanyEntityName())
 			{
 				$result[] = $extraQuery;
 			}
 		}
 		elseif ($dataTypeId == Type::CRM_DEAL_PRODUCT_CONTACT_ID && $dealsAreRequired)
 		{
-			if ($entityName === 'Contact')
+			if ($entityName === $this->getContactEntityName())
 			{
 				$result[] = $query;
 			}
 		}
 		elseif ($dataTypeId == Type::CRM_DEAL_PRODUCT_COMPANY_ID && $dealsAreRequired)
 		{
-			if ($entityName === 'Company')
+			if ($entityName === $this->getCompanyEntityName())
 			{
 				$result[] = $query;
 			}
@@ -937,6 +1023,18 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 			],
 			'filter_callback' => ['\Bitrix\Sender\Integration\Crm\Connectors\Helper', 'getNoPurchasesFilter']
 		);
+
+		$list[] = [
+			"id" => "CLIENT_INACTIVE_DAYS",
+			"name" => Loc::getMessage('SENDER_INTEGRATION_CRM_CONNECTOR_CLIENT_FIELD_INACTIVE_DAYS'),
+			"type" => "number",
+			"exclude" => [
+				\Bitrix\Main\UI\Filter\NumberType::MORE,
+				\Bitrix\Main\UI\Filter\NumberType::RANGE,
+			],
+			"default" => false,
+			'filter_callback' => [Helper::class, 'getInactiveRecipientsFilter'],
+		];
 
 		if (Helper::isCrmSaleEnabled())
 		{
@@ -1363,5 +1461,51 @@ class Client extends Connector\BaseFilter implements Connector\IncrementallyConn
 	public function getStatFields()
 	{
 		return ['CLIENT_PRODUCT_ID', 'CLIENT_NO_PURCHASES_DATE'];
+	}
+
+	protected function getContactEntityName(): string
+	{
+		return $this->getEntityNameByClassName(CrmContactTable::class);
+	}
+
+	protected function getCompanyEntityName(): string
+	{
+		return $this->getEntityNameByClassName(CrmCompanyTable::class);
+	}
+
+	protected function getEntityNameByClassName(string $className): string
+	{
+		$classPath = explode('\\', ltrim($className, '\\'));
+
+		return substr(end($classPath), 0, -5);
+	}
+
+	private function isEntityNameAllowed(string $entityName): bool
+	{
+		$allowedEntityNames = $this->getAllowedEntityNames();
+		$normalisedEntityName = mb_strtoupper($entityName);
+
+		foreach ($allowedEntityNames as $allowedEntityName)
+		{
+			$normalisedAllowedEntityName = mb_strtoupper($allowedEntityName);
+
+			if ($normalisedEntityName === $normalisedAllowedEntityName)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private function getAllowedEntityNames(): array
+	{
+		return [
+			$this->getContactEntityName(),
+			$this->getCompanyEntityName(),
+		];
 	}
 }

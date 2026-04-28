@@ -19,10 +19,11 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\IO;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
 
-final class Integrator
+class Integrator
 {
 	private const PROXY_ACTION_REGISTER_PORTAL = '/portal/register';
 	private const PROXY_ACTION_VERIFY_PORTAL = '/portal/verify';
@@ -60,10 +61,15 @@ final class Integrator
 	private const PROXY_ACTION_UPDATE_DATASET = '/dataset/update';
 	private const PROXY_ACTION_DELETE_DATASET = '/dataset/delete';
 	private const PROXY_ACTION_GET_DATASET_URL = '/dataset/getUrl';
+	private const PROXY_ACTION_GET_DATASET_CREATE_URL = '/dataset/getCreateUrl';
 	private const PROXY_ACTION_GET_UNUSED_ELEMENTS = '/unusedElements/get';
 	private const PROXY_ACTION_DELETE_UNUSED_ELEMENTS = '/unusedElements/delete';
 	private const PROXY_ACTION_GET_DASHBOARD_DATASETS = '/dashboard/datasets';
+	private const PROXY_ACTION_LIST_DATASET_BY_TABLE_NAME = '/dataset/listByTableName';
 	private const PROXY_ACTION_DATASET_INIT_REQUIRED_DATASET = '/dataset/initRequiredDataset';
+	private const PROXY_ACTION_GET_DASHBOARD_REUSED_OBJECTS = '/dashboard/getReusedObjects';
+	private const PROXY_ACTION_SET_SUBSCRIPTION_EXPIRATION = '/subscription/expiration';
+	private const PROXY_ACTION_SET_SUBSCRIPTION_REQUIRE = '/subscription/require';
 
 	private const PROXY_EXTENDED_STREAM_TIMEOUT = 90;
 	static private self $instance;
@@ -86,14 +92,17 @@ final class Integrator
 		$statusContainer = new SupersetStatusOptionContainer();
 
 		$registrarMiddleware = new Middleware\Registrar(Registrar::getRegistrar(), $this->logger);
+		$domainLinkGateMiddleware = new Middleware\DomainLinkGate($this->logger);
 		$request = (new IntegratorRequest($this->sender))
 			->setAction($action)
 			->addBefore(new Middleware\TariffRestriction())
 			->addBefore($registrarMiddleware)
+			->addBefore($domainLinkGateMiddleware)
 			->addBefore(new Middleware\ReadyGate($statusContainer, $this->logger))
 			->addBefore(new Middleware\UserAccess())
 			->addBefore(new Middleware\RequiredDatasetSync())
 			->addAfter($registrarMiddleware)
+			->addAfter($domainLinkGateMiddleware)
 			->addAfter(new Middleware\Logger($this->logger))
 			->addAfter(new Middleware\StatusArbiter($this->logger))
 		;
@@ -134,9 +143,11 @@ final class Integrator
 		$response = $this
 			->createDefaultRequest(self::PROXY_ACTION_REGISTER_PORTAL)
 			->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+			->removeBefore(Middleware\DomainLinkGate::getMiddlewareId())
 			->removeBefore(Middleware\Registrar::getMiddlewareId())
 			->removeBefore(Middleware\UserAccess::getMiddlewareId())
 			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+			->removeAfter(Middleware\DomainLinkGate::getMiddlewareId())
 			->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
 			->perform()
 		;
@@ -166,9 +177,11 @@ final class Integrator
 		return $this
 			->createDefaultRequest(self::PROXY_ACTION_VERIFY_PORTAL)
 			->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+			->removeBefore(Middleware\DomainLinkGate::getMiddlewareId())
 			->removeBefore(Middleware\Registrar::getMiddlewareId())
 			->removeBefore(Middleware\UserAccess::getMiddlewareId())
 			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+			->removeAfter(Middleware\DomainLinkGate::getMiddlewareId())
 			->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
 			->perform()
 		;
@@ -528,13 +541,13 @@ final class Integrator
 	 * @param array $dashboardIds External ids of dashboards.
 	 * @return IntegratorResponse<int>
 	 */
-	public function deleteDashboard(array $dashboardIds): IntegratorResponse
+	public function deleteDashboard(array $dashboardIds, bool $deleteRelatedEntities = false): IntegratorResponse
 	{
 
 		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_DELETE_DASHBOARD)
-				->setParams(['ids' => $dashboardIds])
+				->setParams(['ids' => $dashboardIds, 'deleteRelatedEntities' => $deleteRelatedEntities])
 				->perform()
 		;
 	}
@@ -679,6 +692,8 @@ final class Integrator
 		return $this
 			->createDefaultRequest(self::PROXY_ACTION_REFRESH_DOMAIN_CONNECTION)
 			->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+			->removeBefore(Middleware\DomainLinkGate::getMiddlewareId())
+			->removeAfter(Middleware\DomainLinkGate::getMiddlewareId())
 			->perform()
 		;
 	}
@@ -730,6 +745,7 @@ final class Integrator
 	public function importDashboard(
 		string $filePath,
 		string $appCode,
+		string $type = ''
 	): IntegratorResponse
 	{
 
@@ -741,6 +757,7 @@ final class Integrator
 					'currency' => CultureFormatter::getPortalCurrencySymbol(),
 					'langCode' => CultureFormatter::getLanguageCode(),
 					'appCode' => $appCode,
+					'requiresSubscription' => $type === SupersetDashboardTable::DASHBOARD_TYPE_MARKET,
 				])
 				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
 				->setMultipart(true)
@@ -1133,6 +1150,28 @@ final class Integrator
 	}
 
 	/**
+	 * Gets dataset create url
+	 *
+	 * @param string $datasetName
+	 * @param bool $isVirtual
+	 * @return IntegratorResponse
+	 */
+	public function getDatasetCreateUrl(string $datasetName, bool $isVirtual = false): IntegratorResponse
+	{
+		$parameters = [
+			'datasetName' => $datasetName,
+			'isVirtual' => $isVirtual,
+		];
+
+		return
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_GET_DATASET_CREATE_URL)
+				->setParams($parameters)
+				->perform()
+			;
+	}
+
+	/**
 	 * Gets unused elements - dataset which are not used in charts and charts which are not used in dashboards.
 	 *
 	 * @param array $params ORM params - page, pageSize, filter, order.
@@ -1153,7 +1192,6 @@ final class Integrator
 		return
 			$this
 				->createDefaultRequest(self::PROXY_ACTION_GET_UNUSED_ELEMENTS)
-				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
 				->setParams($parameters)
 				->perform()
 		;
@@ -1200,6 +1238,60 @@ final class Integrator
 	}
 
 	/**
+	 * Returns response with list of dataset info by table names on successful request.
+	 * If response code is not OK - returns empty data.
+	 *
+	 * @param string $tableName
+	 * @return IntegratorResponse
+	 */
+	public function getDatasetListByTableName(string $tableName): IntegratorResponse
+	{
+		if (empty($tableName))
+		{
+			return new IntegratorResponse(
+				status: IntegratorResponse::STATUS_OK,
+				data: []
+			);
+		}
+
+		$requestParams = [
+			'tableName' => $tableName,
+		];
+
+		$response =
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_LIST_DATASET_BY_TABLE_NAME)
+				->setParams($requestParams)
+				->perform()
+		;
+
+		if ($response->hasErrors())
+		{
+			return $response;
+		}
+
+		$resultData = $response->getData();
+
+		return $response->setData($resultData['datasets'] ?? []);
+	}
+
+	/**
+	 * Gets list of charts and datasets used in dashboards, and shows which dashboards each entity is used in
+	 *
+	 * @param int[] $dashboardIds
+	 * @return IntegratorResponse
+	 */
+	public function getDashboardReusedObjects(array $dashboardIds): IntegratorResponse
+	{
+		return $this
+			->createDefaultRequest(self::PROXY_ACTION_GET_DASHBOARD_REUSED_OBJECTS)
+			->setParams(['dashboardIds' => $dashboardIds])
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->perform()
+		;
+	}
+
+	/**
 	 * Inits a server-side scenario to create or update required system datasets (e.g., for filters).
 	 *
 	 * @param array $tables
@@ -1218,6 +1310,38 @@ final class Integrator
 		;
 	}
 
+	public function setExpirationDate(?Date $date): IntegratorResponse
+	{
+		$parameters = [
+			'timestamp' => self::normalizeExpirationTimestamp($date),
+		];
+
+		return
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_SET_SUBSCRIPTION_EXPIRATION)
+				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
+				->setParams($parameters)
+				->perform()
+		;
+	}
+
+	public function syncMarketDashboards(array $marketDashboardsIdList): IntegratorResponse
+	{
+		$parameters = [
+			'dashboards' => $marketDashboardsIdList,
+		];
+
+		return
+			$this
+				->createDefaultRequest(self::PROXY_ACTION_SET_SUBSCRIPTION_REQUIRE)
+				->removeBefore(Middleware\ReadyGate::getMiddlewareId())
+				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
+				->setParams($parameters)
+				->perform()
+			;
+	}
+
 	// endregion
 
 	private function decode(string $data)
@@ -1230,5 +1354,10 @@ final class Integrator
 		{
 			return null;
 		}
+	}
+
+	private static function normalizeExpirationTimestamp(?Date $date): int
+	{
+		return $date?->getTimestamp() ?? 0;
 	}
 }

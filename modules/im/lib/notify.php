@@ -7,9 +7,13 @@ use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Notification\ChatProvider;
+use Bitrix\Im\V2\Reading\Counter\CountersProvider;
+use Bitrix\Im\V2\Reading\Counter\CountersUpdater;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Notification\Group\Condition\ConditionFactory;
 use Bitrix\Im\V2\Notification\Group\Condition\Conditions;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use CIMMessageParam;
@@ -88,6 +92,7 @@ class Notify
 		{
 			return null;
 		}
+		ServiceLocator::getInstance()->get(ChatProvider::class)->prime($userId, (int)$chatData['CHAT_ID']);
 
 		return $chatData;
 	}
@@ -217,14 +222,20 @@ class Notify
 			$result[$row['CHAT_ID']] = (int)$row['COUNTER'];
 		}*/
 
-		if ($isMulti)
+		$provider = ServiceLocator::getInstance()->get(\Bitrix\Im\V2\Reading\Counter\Notification\CountersProvider::class);
+		$notificationsProvider = ServiceLocator::getInstance()->get(ChatProvider::class);
+		$notificationsProvider->preloadByChatIds($chatList);
+		$userIds = [];
+		$result = [];
+		foreach ($chatList as $chat)
 		{
-			$result = (new CounterService(Common::getUserId()))->getForNotifyChats($chatList);
+			$userIds[] = $notificationsProvider->getUserId($chat);
 		}
-		else
+		$usersCounters = $provider->getForUsers($userIds);
+		foreach ($usersCounters as $userId => $counter)
 		{
-			$counter = (new CounterService(Common::getUserId()))->getByChat($chatList[0]);
-			$result[$chatList[0]] = $counter;
+			$chat = $notificationsProvider->getChatId($userId);
+			$result[$chat] = $counter;
 		}
 
 		return $result;
@@ -260,7 +271,9 @@ class Notify
 			]
 		)->fetch();*/
 
-		$unreadCount = (new CounterService(\Bitrix\Im\Common::getUserId()))->getByChat($this->chatId);
+		$provider = ServiceLocator::getInstance()->get(\Bitrix\Im\V2\Reading\Counter\Notification\CountersProvider::class);
+		$userId = \Bitrix\Im\Common::getUserId();
+		$unreadCount = $provider->getForUsers([$userId])->getByUserId($userId);
 
 		$result = [
 			'TOTAL_COUNT' => $this->totalCount,
@@ -506,7 +519,7 @@ class Notify
 			$batches[] = $batch;
 		}
 
-		$counterService = new CounterService();
+		$countersUpdater = ServiceLocator::getInstance()->get(CountersUpdater::class);
 		foreach ($batches as $batch)
 		{
 			$messageIds = $batch->getIds();
@@ -520,7 +533,7 @@ class Notify
 			\Bitrix\Im\Model\MessageParamTable::deleteBatch([
 				'=MESSAGE_ID' => $messageIds
 			]);
-			$counterService->deleteByMessagesForAll($batch);
+			$countersUpdater->delete()->byMessages($batch)->forAllUsers()->execute();
 		}
 
 		return __METHOD__. '();';
@@ -696,11 +709,12 @@ class Notify
 	{
 		$messageIds = array_keys($notifications);
 
-		$readStatuses = (new ReadService(\Bitrix\Im\Common::getUserId()))->getReadStatusesByMessageIds($messageIds);
+		$provider = ServiceLocator::getInstance()->get(CountersProvider::class);
+		$unreadStatuses = $provider->getUnreadStatuses($messageIds, \Bitrix\Im\Common::getUserId());
 
 		foreach ($notifications as $id => $notification)
 		{
-			$notifications[$id]['NOTIFY_READ'] = $readStatuses[$id] ? 'Y' : 'N';
+			$notifications[$id]['NOTIFY_READ'] = $unreadStatuses[$id] ? 'N' : 'Y';
 		}
 
 		return $notifications;
@@ -716,7 +730,7 @@ class Notify
 		return $this->groupConditions;
 	}
 
-	public static function deleteOldNotifyByTag(int $currentMessageId, array $arParams): Result
+	public static function deleteOldNotifyByTag(int $currentMessageId, array $arParams, int $toUserId): Result
 	{
 		$result = new Result();
 		$notifyTag = (string)$arParams['NOTIFY_TAG'];
@@ -781,7 +795,7 @@ class Notify
 		$newParams = array_diff($newParams, $params[$maxId] ?? []);
 
 		unset($messageIds[$maxId]);
-		$deleteParams = ['NOTIFY_TAG' => $notifyTag, 'SKIP_OVERFLOW_CLEANUP_CHAT' => $chatId];
+		$deleteParams = ['NOTIFY_TAG' => $notifyTag, 'SKIP_OVERFLOW_CLEANUP_USER' => $toUserId];
 		CIMNotify::deleteList($messageIds, $deleteParams);
 
 		if ($currentMessageId >= $maxId)

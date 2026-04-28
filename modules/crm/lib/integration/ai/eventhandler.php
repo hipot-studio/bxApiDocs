@@ -422,7 +422,7 @@ final class EventHandler
 			return; // AI is disabled in global settings
 		}
 
-		$isAutoStartPossible = AIManager::isBaasServiceHasPackage();
+		$isAutoStartPossible = BaasManager::hasPackage();
 		if (!$isAutoStartPossible)
 		{
 			return;
@@ -485,42 +485,18 @@ final class EventHandler
 
 	private static function getQueueJobExecuteResult(Event $event, EO_Queue $job): ?Result
 	{
-		if ((int)$job->requireTypeId() === TranscribeCallRecording::TYPE_ID)
+		return match ((int)$job->requireTypeId())
 		{
-			return TranscribeCallRecording::onQueueJobExecute($event, $job);
-		}
-
-		if ((int)$job->requireTypeId() === SummarizeCallTranscription::TYPE_ID)
-		{
-			return SummarizeCallTranscription::onQueueJobExecute($event, $job);
-		}
-
-		if ((int)$job->requireTypeId() === FillItemFieldsFromCallTranscription::TYPE_ID)
-		{
-			return FillItemFieldsFromCallTranscription::onQueueJobExecute($event, $job);
-		}
-
-		if ((int)$job->requireTypeId() === ScoreCall::TYPE_ID)
-		{
-			return ScoreCall::onQueueJobExecute($event, $job);
-		}
-
-		if ((int)$job->requireTypeId() === ExtractScoringCriteria::TYPE_ID)
-		{
-			return ExtractScoringCriteria::onQueueJobExecute($event, $job);
-		}
-
-		if ((int)$job->requireTypeId() === FillRepeatSaleTips::TYPE_ID)
-		{
-			return FillRepeatSaleTips::onQueueJobExecute($event, $job);
-		}
-
-		if ((int)$job->requireTypeId() === ScreeningRepeatSaleItem::TYPE_ID)
-		{
-			return ScreeningRepeatSaleItem::onQueueJobExecute($event, $job);
-		}
-
-		return null;
+			TranscribeCallRecording::TYPE_ID => TranscribeCallRecording::onQueueJobExecute($event, $job),
+			SummarizeCallTranscription::TYPE_ID => SummarizeCallTranscription::onQueueJobExecute($event, $job),
+			FillItemFieldsFromCallTranscription::TYPE_ID => FillItemFieldsFromCallTranscription::onQueueJobExecute($event, $job),
+			ScoreCall::TYPE_ID => ScoreCall::onQueueJobExecute($event, $job),
+			ExtractScoringCriteria::TYPE_ID => ExtractScoringCriteria::onQueueJobExecute($event, $job),
+			FillRepeatSaleTips::TYPE_ID => FillRepeatSaleTips::onQueueJobExecute($event, $job),
+			ScreeningRepeatSaleItem::TYPE_ID => ScreeningRepeatSaleItem::onQueueJobExecute($event, $job),
+			Operation\Sandbox\FillRepeatSaleTips::TYPE_ID => Operation\Sandbox\FillRepeatSaleTips::onQueueJobExecute($event, $job),
+			default => null,
+		};
 	}
 
 	private static function registerCallActivityWithAudioRecordingEvent(array $activityFields): void

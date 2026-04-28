@@ -8,6 +8,7 @@ const STATUS_PROGRESS = 'PROGRESS';
 
 /**
  * @const SETTING_ID
+ * @internal
  */
 abstract class Controller extends Main\Engine\Controller
 {

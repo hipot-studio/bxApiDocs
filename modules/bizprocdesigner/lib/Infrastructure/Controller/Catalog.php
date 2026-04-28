@@ -45,18 +45,26 @@ class Catalog extends JsonController
 		/** @var ActivityDescription $activityData */
 		foreach ($activities as $activityData)
 		{
-			$activityGroups = $activityData->getGroups();
-
-			foreach ($activityGroups as $activityGroup)
+			$baseGroups = $activityData->getGroups();
+			if ($activityData->getName() !== '' && $activityData->getPresets() === null)
 			{
-				if ($activityData->getName() !== '')
+				foreach ($baseGroups as $group)
 				{
-					$groups[$activityGroup]['items'][] = $activityData;
+					$groups[$group]['items'][] = $activityData;
 				}
 
-				foreach ($activityData->getPresets() ?? [] as $preset)
+				continue;
+			}
+
+			foreach ($activityData->getPresets() ?? [] as $preset)
+			{
+				$item = $activityData->applyPreset($preset);
+				$presetGroups = $item->getGroups();
+				$targetGroups = !empty($presetGroups) ? $presetGroups : $baseGroups;
+
+				foreach ($targetGroups as $group)
 				{
-					$groups[$activityGroup]['items'][] = $activityData->applyPreset($preset);
+					$groups[$group]['items'][] = $item;
 				}
 			}
 		}

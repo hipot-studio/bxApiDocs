@@ -2,9 +2,14 @@
 
 namespace Bitrix\Landing\Controller;
 
+use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\MainPage\Access;
+use Bitrix\Intranet\MainPage\Publisher;
 use Bitrix\Main\Engine;
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Main\Engine\Response\AjaxJson;
 use Bitrix\Main\Error;
+use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\HttpClient;
@@ -18,37 +23,12 @@ class Vibe extends Controller
 {
 	private const SUBTYPE_WIDGET = 'widgetvue';
 
-	public function getDefaultPreFilters(): array
-	{
-		return [
-			new Engine\ActionFilter\Authentication(),
-			new ActionFilter\Extranet(),
-		];
-	}
-
-	/**
-	 * Configures filter for ajax request.
-	 *
-	 * @return array
-	 */
-	public function configureActions(): array
-	{
-		return [
-			'getCoreConfig' => [
-				'prefilters' => [],
-			],
-			'getAssetsConfig' => [
-				'prefilters' => [],
-			],
-		];
-	}
-
 	/**
 	 * Get core extensions and styles configs, load relations, load lang phrases
 	 *
 	 * @return array - array of assets by type
 	 */
-	public static function getCoreConfigAction(): array
+	public function getCoreConfigAction(): array
 	{
 		$coreExts = [
 			'main.core',
@@ -74,7 +54,7 @@ class Vibe extends Controller
 	 * @param array $extCodes - array of extensions codes
 	 * @return array - array of assets by type
 	 */
-	public static function getAssetsConfigAction(array $extCodes): array
+	public function getAssetsConfigAction(array $extCodes): array
 	{
 		$assetsManager = (new Assets\Manager())
 			->enableSandbox()
@@ -203,5 +183,43 @@ class Vibe extends Controller
 		}
 
 		return $data;
+	}
+
+	public function publishAction(string $moduleId, string $embedId): AjaxJson
+	{
+		$errorCollection = new ErrorCollection();
+		$vibe = new Landing\Vibe\Vibe($moduleId, $embedId);
+
+		if ($vibe->canEdit())
+		{
+			$vibe->publish();
+
+			return AjaxJson::createSuccess();
+		}
+
+		$errorCollection->setError(new Error('Access denied'));
+
+		return AjaxJson::createError($errorCollection);
+	}
+
+	public function withdrawAction(string $moduleId, string $embedId): AjaxJson
+	{
+		$errorCollection = new ErrorCollection();
+		$vibe = new Landing\Vibe\Vibe($moduleId, $embedId);
+
+		if (
+			Loader::includeModule('intranet')
+			&& CurrentUser::get()->isAdmin()
+			&& $vibe->canView()
+		)
+		{
+			$vibe->withdraw();
+
+			return AjaxJson::createSuccess();
+		}
+
+		$errorCollection->setError(new Error('Access denied'));
+
+		return AjaxJson::createError($errorCollection);
 	}
 }

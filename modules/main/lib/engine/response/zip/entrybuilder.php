@@ -18,7 +18,7 @@ final class EntryBuilder
 		return DirectoryEntry::createEmptyDirectory($path);
 	}
 
-	public function createFromFileArray(array $fileArray, string $path = null): FileEntry
+	public function createFromFileArray(array $fileArray, ?string $path = null): FileEntry
 	{
 		$isFromCloud = $this->isFromCloud($fileArray);
 		$path = $this->getPath($fileArray, $path);
@@ -40,7 +40,7 @@ final class EntryBuilder
 		return new FileEntry($path, $serverRelativeUrl, $size);
 	}
 
-	public function createFromFileId($fileId, string $path = null): ?FileEntry
+	public function createFromFileId($fileId, ?string $path = null): ?FileEntry
 	{
 		$fileArray = \CFile::getFileArray($fileId);
 		if ($this->isValidFileArray($fileArray) === false)

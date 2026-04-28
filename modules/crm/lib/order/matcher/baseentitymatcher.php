@@ -402,13 +402,16 @@ abstract class BaseEntityMatcher
 		{
 			$this->matchRequisites($entityId);
 
-			$arErrors = [];
-
-			\CCrmBizProcHelper::AutoStartWorkflows(
-				$this->getEntityTypeId(),
-				$entityId,
-				\CCrmBizProcEventType::Create,
-				$arErrors
+			$starter = new \Bitrix\Crm\Integration\BizProc\Starter\CrmStarter(
+				new \Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto($this->getEntityTypeId(), (int)$entityId)
+			);
+			$starter->runProcess(
+				new \Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+					actualFields: $fields,
+					previousFields: [],
+					userId: (int)$this->assignedById,
+				),
+				\CCrmBizProcEventType::Create
 			);
 		}
 

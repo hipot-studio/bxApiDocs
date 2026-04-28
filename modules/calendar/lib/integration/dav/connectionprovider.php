@@ -155,12 +155,11 @@ class ConnectionProvider
 
 		try
 		{
-			$ormConnection =
-				DavConnectionTable::query()
-					->setSelect(self::SELECT_FIELDS)
-					->where('ID', $connectionId)
-					->exec()
-					->fetchObject()
+			$ormConnection = DavConnectionTable::query()
+				->setSelect(self::SELECT_FIELDS)
+				->where('ID', $connectionId)
+				->exec()
+				->fetchObject()
 			;
 		}
 		catch (SystemException)

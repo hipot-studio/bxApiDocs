@@ -118,10 +118,7 @@ class LandingRestPendingComponent extends \CBitrixComponent
 		if ($res->isSuccess())
 		{
 			$blockInstance = new Block($blockId);
-			Import\Landing::saveDataToBlock(
-				$blockInstance,
-				$data
-			);
+			Block::saveDataToBlock($blockInstance, $data);
 			// replace links
 			$replace = [];
 			foreach (['landing', 'block'] as $key)

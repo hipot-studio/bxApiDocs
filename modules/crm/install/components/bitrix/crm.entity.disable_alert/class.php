@@ -1,7 +1,8 @@
 <?php
 
-use Bitrix\Crm\Component\Utils\OldEntityViewDisableHelper;
-use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Component\DisableHelpers\BaseDisableHelper;
+use Bitrix\Crm\Component\DisableHelpers\OldEntityViewDisableHelper;
+use Bitrix\Crm\Component\DisableHelpers\OldInvoiceReadonlyHelper;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -10,6 +11,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 class CrmEntityDisableAlert extends CBitrixComponent
 {
+	private BaseDisableHelper $disableHelper;
+
 	public function executeComponent(): void
 	{
 		if (!$this->checkPermissions())
@@ -17,34 +20,10 @@ class CrmEntityDisableAlert extends CBitrixComponent
 			return;
 		}
 
+		$this->initDisableHelper();
 		$this->prepareParams();
+
 		$this->includeComponentTemplate();
-	}
-
-	private function getPreviewHref(): string
-	{
-		if (!isset($this->arParams['ENTITY_TYPE_ID'], $this->arParams['ENTITY_ID']))
-		{
-			return '';
-		}
-
-		$entityTypeId = (int)$this->arParams['ENTITY_TYPE_ID'];
-		$entityId = (int)$this->arParams['ENTITY_ID'];
-
-		if ($entityTypeId <= 0 || $entityId <= 0)
-		{
-			return '';
-		}
-
-		$urlString = Container::getInstance()->getRouter()->getItemDetailUrl($entityTypeId, $entityId);
-		$urlString->setPath(str_replace('/show/', '/details/', $urlString));
-
-		$params = [
-			'FORCE_READONLY' => 'Y',
-		];
-		$urlString->addParams($params);
-
-		return $urlString;
 	}
 
 	private function checkPermissions(): bool
@@ -56,14 +35,25 @@ class CrmEntityDisableAlert extends CBitrixComponent
 		;
 	}
 
+	private function initDisableHelper(): void
+	{
+		$disableHelperClass = $this->arParams['DISABLE_HELPER_CLASS'] ?? OldEntityViewDisableHelper::class;
+
+		$this->disableHelper = match ($disableHelperClass)
+		{
+			OldEntityViewDisableHelper::class => new OldEntityViewDisableHelper(),
+			OldInvoiceReadonlyHelper::class => new OldInvoiceReadonlyHelper(),
+			default => throw new \InvalidArgumentException('Unsupported DISABLE_HELPER_CLASS value'),
+		};
+	}
+
 	private function prepareParams(): void
 	{
-		$this->arResult['jsParams'] = [
-			'daysUntilDisable' => OldEntityViewDisableHelper::getDaysLeftUntilDisable(),
-			'isAdmin' => Container::getInstance()->getUserPermissions()->isCrmAdmin(),
-			'lastTimeShownField' => OldEntityViewDisableHelper::LAST_TIME_SHOWN_FIELD,
-			'lastTimeShownOptionName' => OldEntityViewDisableHelper::LAST_TIME_SHOWN_OPTION_NAME,
-			'previewHref' => $this->getPreviewHref(),
-		];
+		$this->arResult['jsParams'] = $this->disableHelper->getJsParams([
+			'ENTITY_TYPE_ID' => $this->arParams['ENTITY_TYPE_ID'],
+			'ENTITY_ID' => $this->arParams['ENTITY_ID'],
+		]);
+
+		$this->arResult['canShowAlert'] = $this->disableHelper->canShowAlert();
 	}
 }

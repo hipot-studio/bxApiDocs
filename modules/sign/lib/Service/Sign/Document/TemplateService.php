@@ -10,6 +10,7 @@ use Bitrix\Sign\Repository\Document\TemplateFolderRelationRepository;
 use Bitrix\Sign\Repository\Document\TemplateFolderRepository;
 use Bitrix\Sign\Repository\Document\TemplateRepository;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\Sign\Document\Template\AccessService;
 use Bitrix\Sign\Type\Document\InitiatedByType;
 use Bitrix\Sign\Type\Template\EntityType;
 use Bitrix\Sign\Type\Template\Status;
@@ -20,18 +21,20 @@ final class TemplateService
 	private readonly TemplateRepository $templateRepository;
 	private readonly TemplateFolderRepository $templateFolderRepository;
 	private readonly TemplateFolderRelationRepository $templateFolderRelationRepository;
+	private readonly AccessService $accessService;
 
 	public function __construct(
 		?TemplateRepository $templateRepository = null,
 		?TemplateFolderRepository $templateFolderRepository = null,
 		?TemplateFolderRelationRepository $templateFolderRelationRepository = null,
+		?AccessService $accessService = null,
 	)
 	{
 		$container = Container::instance();
-
 		$this->templateRepository = $templateRepository ?? $container->getDocumentTemplateRepository();
 		$this->templateFolderRepository = $templateFolderRepository ?? $container->getTemplateFolderRepository();
 		$this->templateFolderRelationRepository = $templateFolderRelationRepository ?? $container->getTemplateFolderRelationRepository();
+		$this->accessService = $accessService ?? $container->getTemplateAccessService();
 	}
 
 	/**
@@ -58,6 +61,17 @@ final class TemplateService
 
 		if ($folderId !== 0)
 		{
+			$targetFolder = $this->templateFolderRepository->getById($folderId);
+			if ($targetFolder === null)
+			{
+				return $result->addError(new Main\Error('Target folder not found'));
+			}
+
+			if (!$this->accessService->hasAccessToEdit($targetFolder))
+			{
+				return $result->addError(new Main\Error('No access rights to edit target folder'));
+			}
+
 			$changeFolderVisibilityOnTemplateAdditionalResult = $this->changeFolderVisibilityOnTemplateAddition($templateIds, $folderId);
 			if (!$changeFolderVisibilityOnTemplateAdditionalResult->isSuccess())
 			{
@@ -65,12 +79,26 @@ final class TemplateService
 			}
 		}
 
+		if (!$this->templateFolderRelationRepository->areAllEntitiesInSameParent($templateIds, EntityType::TEMPLATE))
+		{
+			return $result->addError(new Main\Error('All templates must be in the same folder'));
+		}
+
 		$parentIdForTemplateInFolderBeforeUpdate = $this->templateFolderRelationRepository->getByEntityIdAndType(
 			$templateIds[0],
-			EntityType::TEMPLATE
+			EntityType::TEMPLATE,
 		)
 			?->parentId
 		;
+
+		if ($parentIdForTemplateInFolderBeforeUpdate > 0)
+		{
+			$sourceFolder = $this->templateFolderRepository->getById($parentIdForTemplateInFolderBeforeUpdate);
+			if ($sourceFolder !== null && !$this->accessService->hasAccessToEdit($sourceFolder))
+			{
+				return $result->addError(new Main\Error('No access rights to edit source folder'));
+			}
+		}
 
 		$updateParentIdForTemplatesResult = $this->updateParentIdForTemplates(
 			$templateIds,

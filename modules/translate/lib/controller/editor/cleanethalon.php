@@ -8,6 +8,8 @@ use Bitrix\Main\Localization\Loc;
 
 /**
  * Remove phrases by the ethalon language file.
+ *
+ * @internal
  */
 class CleanEthalon
 	extends Translate\Controller\Editor\Operation

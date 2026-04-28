@@ -64,13 +64,13 @@ abstract class BaseAccessController
 		return $this->user;
 	}
 
-	public function checkByItemId(string $action, int $itemId = null, $params = null): bool
+	public function checkByItemId(string $action, ?int $itemId = null, $params = null): bool
 	{
 		$item = $this->loadItem($itemId);
 		return $this->check($action, $item, $params);
 	}
 
-	public function check(string $action, AccessibleItem $item = null, $params = null): bool
+	public function check(string $action, ?AccessibleItem $item = null, $params = null): bool
 	{
 		$rule = $this->ruleFactory->createFromAction($action, $this);
 		if (!$rule)
@@ -117,7 +117,7 @@ abstract class BaseAccessController
 		return $result;
 	}
 
-	abstract protected function loadItem(int $itemId = null): ?AccessibleItem;
+	abstract protected function loadItem(?int $itemId = null): ?AccessibleItem;
 
 	abstract protected function loadUser(int $userId): AccessibleUser;
 
@@ -143,7 +143,7 @@ abstract class BaseAccessController
 		return $namespace.'\\'.static::RULE_SUFFIX.'\\';
 	}
 
-	protected function sendEvent(string $eventName, string $action, AccessibleItem $item = null, $params = null, bool $isAccess = null)
+	protected function sendEvent(string $eventName, string $action, ?AccessibleItem $item = null, $params = null, ?bool $isAccess = null)
 	{
 		$event = new Event(
 			static::class,

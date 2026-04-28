@@ -8,6 +8,7 @@
 
 namespace Bitrix\Im;
 
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\ImBot\Bot\Giphy;
 use Bitrix\Main,
 	Bitrix\Main\Localization\Loc,
@@ -732,11 +733,11 @@ class App
 			else if ($isExtranet && $app['EXTRANET_SUPPORT'] != 'Y')
 				continue;
 
-			$botData = \Bitrix\Im\Bot::getCache($app['BOT_ID']);
+			$botCode = BotData::getInstance((int)$app['BOT_ID'])->getCode();
 			$result[] = Array(
 				'id' => $app['ID'],
 				'botId' => $app['BOT_ID'],
-				'botCode' => htmlspecialcharsbx($botData['CODE'] ?? ''),
+				'botCode' => htmlspecialcharsbx($botCode),
 				'domainHash' => self::getDomainHash($app['HASH']),
 				'userHash' => self::getUserHash($userId, $app['HASH']),
 				'code' => htmlspecialcharsbx($app['CODE']),

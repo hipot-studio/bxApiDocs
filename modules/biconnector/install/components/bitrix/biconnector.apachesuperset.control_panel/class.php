@@ -10,6 +10,7 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -180,10 +181,7 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 					JS,
 			];
 		}
-		else if (
-			AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG)
-			&& SupersetInitializer::isSupersetExist()
-		)
+		else if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG))
 		{
 			$menuItems[] = [
 				'ID' => 'BI_ANALYTICS',
@@ -317,6 +315,19 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 		foreach ($sortedDashboards as $dashboard)
 		{
 			$url = (new UrlParameter\Service($dashboard))->getEmbeddedUrl([], ['openFrom' => 'top_menu']);
+
+			if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType()))
+			{
+				$result[] = [
+					'ID' => "DASHBOARD_{$dashboard->getId()}",
+					'TEXT' => $dashboard->getTitle(),
+					'ON_CLICK' => "top.BX.UI.InfoHelper.show('limit_benefit_market_active');",
+					'IS_LOCKED' => true,
+				];
+
+				continue;
+			}
+
 			$result[] = [
 				'ID' => "DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),

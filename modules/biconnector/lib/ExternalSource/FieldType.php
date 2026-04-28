@@ -10,4 +10,5 @@ Enum FieldType: string
 	case Date = 'date';
 	case DateTime = 'datetime';
 	case Money = 'money';
+	case Timezone = 'timezone';
 }

@@ -21,6 +21,7 @@ class Blank implements Contract\Item, Contract\Item\ItemWithOwner, Contract\Item
 		public ?string $scenario = null,
 		public ?int $createdById = null,
 		public bool $forTemplate = false,
+		public bool $hasPlaceholders = false,
 	)
 	{
 		$this->initOriginal();
@@ -46,6 +47,7 @@ class Blank implements Contract\Item, Contract\Item\ItemWithOwner, Contract\Item
 			'scenario',
 			'createdById',
 			'forTemplate',
+			'hasPlaceholders',
 		];
 	}
 }

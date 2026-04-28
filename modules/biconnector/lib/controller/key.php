@@ -100,7 +100,7 @@ class Key extends Controller
 		array $select = [],
 		$offset = 0,
 		$limit = 50,
-		\CRestServer $server = null
+		?\CRestServer $server = null
 	)
 	{
 		$result = [];

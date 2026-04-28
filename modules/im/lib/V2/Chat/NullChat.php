@@ -61,6 +61,11 @@ class NullChat extends Chat
 		return $this;
 	}
 
+	public function readAllMessages(bool $byEvent = false): Result
+	{
+		return new Result();
+	}
+
 	public function readMessages(?MessageCollection $messages, bool $byEvent = false): Result
 	{
 		return new Result();

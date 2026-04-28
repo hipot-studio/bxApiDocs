@@ -1,69 +1,109 @@
 <?php
 
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable:bizproc/lib/DocumentType/DocumentTypeUserOptionTable.php */
-namespace Bitrix\Bizproc\DocumentType {
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\WorkflowStartMessageTable:bizproc/lib/Internal/Service/Scheduler/Messenger/Model/WorkflowStartMessageTable.php */
+namespace Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model {
 	/**
-	 * EO_DocumentTypeUserOption
-	 * @see \Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable
+	 * EO_WorkflowStartMessage
+	 * @see \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\WorkflowStartMessageTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \string getModuleId()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
-	 * @method bool hasModuleId()
-	 * @method bool isModuleIdFilled()
-	 * @method bool isModuleIdChanged()
-	 * @method \string remindActualModuleId()
-	 * @method \string requireModuleId()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption resetModuleId()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unsetModuleId()
-	 * @method \string fillModuleId()
-	 * @method \string getEntity()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
-	 * @method bool hasEntity()
-	 * @method bool isEntityFilled()
-	 * @method bool isEntityChanged()
-	 * @method \string remindActualEntity()
-	 * @method \string requireEntity()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption resetEntity()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unsetEntity()
-	 * @method \string fillEntity()
-	 * @method \string getDocumentType()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setDocumentType(\string|\Bitrix\Main\DB\SqlExpression $documentType)
-	 * @method bool hasDocumentType()
-	 * @method bool isDocumentTypeFilled()
-	 * @method bool isDocumentTypeChanged()
-	 * @method \string remindActualDocumentType()
-	 * @method \string requireDocumentType()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption resetDocumentType()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unsetDocumentType()
-	 * @method \string fillDocumentType()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \int remindActualUserId()
-	 * @method \int requireUserId()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption resetUserId()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unsetUserId()
-	 * @method \int fillUserId()
-	 * @method \int getOptionCode()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setOptionCode(\int|\Bitrix\Main\DB\SqlExpression $optionCode)
-	 * @method bool hasOptionCode()
-	 * @method bool isOptionCodeFilled()
-	 * @method bool isOptionCodeChanged()
-	 * @method \int remindActualOptionCode()
-	 * @method \int requireOptionCode()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption resetOptionCode()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unsetOptionCode()
-	 * @method \int fillOptionCode()
+	 * @method \string getQueueId()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage setQueueId(\string|\Bitrix\Main\DB\SqlExpression $queueId)
+	 * @method bool hasQueueId()
+	 * @method bool isQueueIdFilled()
+	 * @method bool isQueueIdChanged()
+	 * @method \string remindActualQueueId()
+	 * @method \string requireQueueId()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage resetQueueId()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage unsetQueueId()
+	 * @method \string fillQueueId()
+	 * @method null|\string getItemId()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage setItemId(null|\string|\Bitrix\Main\DB\SqlExpression $itemId)
+	 * @method bool hasItemId()
+	 * @method bool isItemIdFilled()
+	 * @method bool isItemIdChanged()
+	 * @method null|\string remindActualItemId()
+	 * @method null|\string requireItemId()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage resetItemId()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage unsetItemId()
+	 * @method null|\string fillItemId()
+	 * @method \string getClass()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage setClass(\string|\Bitrix\Main\DB\SqlExpression $class)
+	 * @method bool hasClass()
+	 * @method bool isClassFilled()
+	 * @method bool isClassChanged()
+	 * @method \string remindActualClass()
+	 * @method \string requireClass()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage resetClass()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage unsetClass()
+	 * @method \string fillClass()
+	 * @method \string getPayload()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage setPayload(\string|\Bitrix\Main\DB\SqlExpression $payload)
+	 * @method bool hasPayload()
+	 * @method bool isPayloadFilled()
+	 * @method bool isPayloadChanged()
+	 * @method \string remindActualPayload()
+	 * @method \string requirePayload()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage resetPayload()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage unsetPayload()
+	 * @method \string fillPayload()
+	 * @method \Bitrix\Main\Type\DateTime getCreatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage setCreatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdAt)
+	 * @method bool hasCreatedAt()
+	 * @method bool isCreatedAtFilled()
+	 * @method bool isCreatedAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime requireCreatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage resetCreatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage unsetCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime fillCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime getUpdatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage setUpdatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $updatedAt)
+	 * @method bool hasUpdatedAt()
+	 * @method bool isUpdatedAtFilled()
+	 * @method bool isUpdatedAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualUpdatedAt()
+	 * @method \Bitrix\Main\Type\DateTime requireUpdatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage resetUpdatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage unsetUpdatedAt()
+	 * @method \Bitrix\Main\Type\DateTime fillUpdatedAt()
+	 * @method \int getTtl()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage setTtl(\int|\Bitrix\Main\DB\SqlExpression $ttl)
+	 * @method bool hasTtl()
+	 * @method bool isTtlFilled()
+	 * @method bool isTtlChanged()
+	 * @method \int remindActualTtl()
+	 * @method \int requireTtl()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage resetTtl()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage unsetTtl()
+	 * @method \int fillTtl()
+	 * @method \Bitrix\Main\Type\DateTime getAvailableAt()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage setAvailableAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $availableAt)
+	 * @method bool hasAvailableAt()
+	 * @method bool isAvailableAtFilled()
+	 * @method bool isAvailableAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualAvailableAt()
+	 * @method \Bitrix\Main\Type\DateTime requireAvailableAt()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage resetAvailableAt()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage unsetAvailableAt()
+	 * @method \Bitrix\Main\Type\DateTime fillAvailableAt()
+	 * @method \string getStatus()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \string remindActualStatus()
+	 * @method \string requireStatus()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage resetStatus()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage unsetStatus()
+	 * @method \string fillStatus()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -79,9 +119,9 @@ namespace Bitrix\Bizproc\DocumentType {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption reset($fieldName)
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage reset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -89,258 +129,206 @@ namespace Bitrix\Bizproc\DocumentType {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage wakeUp($data)
 	 */
-	class EO_DocumentTypeUserOption {
-		/* @var \Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable */
-		static public $dataClass = '\Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable';
+	class EO_WorkflowStartMessage extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\WorkflowStartMessageTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\WorkflowStartMessageTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Bizproc\DocumentType {
+namespace Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model {
 	/**
-	 * EO_DocumentTypeUserOption_Collection
+	 * EO_WorkflowStartMessage_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int[] getIdList()
-	 * @method \string[] getModuleIdList()
-	 * @method \string[] fillModuleId()
-	 * @method \string[] getEntityList()
-	 * @method \string[] fillEntity()
-	 * @method \string[] getDocumentTypeList()
-	 * @method \string[] fillDocumentType()
-	 * @method \int[] getUserIdList()
-	 * @method \int[] fillUserId()
-	 * @method \int[] getOptionCodeList()
-	 * @method \int[] fillOptionCode()
+	 * @method \string[] getQueueIdList()
+	 * @method \string[] fillQueueId()
+	 * @method null|\string[] getItemIdList()
+	 * @method null|\string[] fillItemId()
+	 * @method \string[] getClassList()
+	 * @method \string[] fillClass()
+	 * @method \string[] getPayloadList()
+	 * @method \string[] fillPayload()
+	 * @method \Bitrix\Main\Type\DateTime[] getCreatedAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedAt()
+	 * @method \int[] getTtlList()
+	 * @method \int[] fillTtl()
+	 * @method \Bitrix\Main\Type\DateTime[] getAvailableAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillAvailableAt()
+	 * @method \string[] getStatusList()
+	 * @method \string[] fillStatus()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption $object)
-	 * @method bool has(\Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption $object)
+	 * @method void add(\Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage $object)
+	 * @method bool has(\Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption $object)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption current() Iterator
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection merge(?\Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection $collection)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage_Collection merge(?\Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection filter(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage_Collection filter(callable $callback)
 	 */
-	class EO_DocumentTypeUserOption_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable */
-		static public $dataClass = '\Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable';
+	class EO_WorkflowStartMessage_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\WorkflowStartMessageTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\WorkflowStartMessageTable';
 	}
 }
-namespace Bitrix\Bizproc\DocumentType {
+namespace Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_DocumentTypeUserOption_Result exec()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption fetchObject()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection fetchCollection()
+	 * @method EO_WorkflowStartMessage_Result exec()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage_Collection fetchCollection()
 	 */
-	class EO_DocumentTypeUserOption_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_WorkflowStartMessage_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption fetchObject()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection fetchCollection()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage_Collection fetchCollection()
 	 */
-	class EO_DocumentTypeUserOption_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_WorkflowStartMessage_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection createCollection()
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Internal\Service\Scheduler\Messenger\Model\EO_WorkflowStartMessage_Collection wakeUpCollection($rows)
 	 */
-	class EO_DocumentTypeUserOption_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_WorkflowStartMessage_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\RestActivityTable:bizproc/lib/restactivity.php */
-namespace Bitrix\Bizproc {
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\StorageFieldTable:bizproc/lib/Internal/Model/StorageFieldTable.php */
+namespace Bitrix\Bizproc\Internal\Model {
 	/**
-	 * EO_RestActivity
-	 * @see \Bitrix\Bizproc\RestActivityTable
+	 * EO_StorageField
+	 * @see \Bitrix\Bizproc\Internal\Model\StorageFieldTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \string getAppId()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setAppId(\string|\Bitrix\Main\DB\SqlExpression $appId)
-	 * @method bool hasAppId()
-	 * @method bool isAppIdFilled()
-	 * @method bool isAppIdChanged()
-	 * @method \string remindActualAppId()
-	 * @method \string requireAppId()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetAppId()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetAppId()
-	 * @method \string fillAppId()
-	 * @method \string getAppName()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setAppName(\string|\Bitrix\Main\DB\SqlExpression $appName)
-	 * @method bool hasAppName()
-	 * @method bool isAppNameFilled()
-	 * @method bool isAppNameChanged()
-	 * @method \string remindActualAppName()
-	 * @method \string requireAppName()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetAppName()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetAppName()
-	 * @method \string fillAppName()
+	 * @method \int getStorageId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setStorageId(\int|\Bitrix\Main\DB\SqlExpression $storageId)
+	 * @method bool hasStorageId()
+	 * @method bool isStorageIdFilled()
+	 * @method bool isStorageIdChanged()
+	 * @method \int remindActualStorageId()
+	 * @method \int requireStorageId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetStorageId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetStorageId()
+	 * @method \int fillStorageId()
 	 * @method \string getCode()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
 	 * @method bool hasCode()
 	 * @method bool isCodeFilled()
 	 * @method bool isCodeChanged()
 	 * @method \string remindActualCode()
 	 * @method \string requireCode()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetCode()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetCode()
 	 * @method \string fillCode()
-	 * @method \string getInternalCode()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setInternalCode(\string|\Bitrix\Main\DB\SqlExpression $internalCode)
-	 * @method bool hasInternalCode()
-	 * @method bool isInternalCodeFilled()
-	 * @method bool isInternalCodeChanged()
-	 * @method \string remindActualInternalCode()
-	 * @method \string requireInternalCode()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetInternalCode()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetInternalCode()
-	 * @method \string fillInternalCode()
-	 * @method \string getHandler()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setHandler(\string|\Bitrix\Main\DB\SqlExpression $handler)
-	 * @method bool hasHandler()
-	 * @method bool isHandlerFilled()
-	 * @method bool isHandlerChanged()
-	 * @method \string remindActualHandler()
-	 * @method \string requireHandler()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetHandler()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetHandler()
-	 * @method \string fillHandler()
-	 * @method \int getAuthUserId()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setAuthUserId(\int|\Bitrix\Main\DB\SqlExpression $authUserId)
-	 * @method bool hasAuthUserId()
-	 * @method bool isAuthUserIdFilled()
-	 * @method bool isAuthUserIdChanged()
-	 * @method \int remindActualAuthUserId()
-	 * @method \int requireAuthUserId()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetAuthUserId()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetAuthUserId()
-	 * @method \int fillAuthUserId()
-	 * @method \string getUseSubscription()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setUseSubscription(\string|\Bitrix\Main\DB\SqlExpression $useSubscription)
-	 * @method bool hasUseSubscription()
-	 * @method bool isUseSubscriptionFilled()
-	 * @method bool isUseSubscriptionChanged()
-	 * @method \string remindActualUseSubscription()
-	 * @method \string requireUseSubscription()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetUseSubscription()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetUseSubscription()
-	 * @method \string fillUseSubscription()
-	 * @method \boolean getUsePlacement()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setUsePlacement(\boolean|\Bitrix\Main\DB\SqlExpression $usePlacement)
-	 * @method bool hasUsePlacement()
-	 * @method bool isUsePlacementFilled()
-	 * @method bool isUsePlacementChanged()
-	 * @method \boolean remindActualUsePlacement()
-	 * @method \boolean requireUsePlacement()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetUsePlacement()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetUsePlacement()
-	 * @method \boolean fillUsePlacement()
+	 * @method \int getSort()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetSort()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetSort()
+	 * @method \int fillSort()
 	 * @method \string getName()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setName(\string|\Bitrix\Main\DB\SqlExpression $name)
 	 * @method bool hasName()
 	 * @method bool isNameFilled()
 	 * @method bool isNameChanged()
 	 * @method \string remindActualName()
 	 * @method \string requireName()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetName()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetName()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetName()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetName()
 	 * @method \string fillName()
 	 * @method \string getDescription()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
 	 * @method bool hasDescription()
 	 * @method bool isDescriptionFilled()
 	 * @method bool isDescriptionChanged()
 	 * @method \string remindActualDescription()
 	 * @method \string requireDescription()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetDescription()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetDescription()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetDescription()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetDescription()
 	 * @method \string fillDescription()
-	 * @method \string getProperties()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setProperties(\string|\Bitrix\Main\DB\SqlExpression $properties)
-	 * @method bool hasProperties()
-	 * @method bool isPropertiesFilled()
-	 * @method bool isPropertiesChanged()
-	 * @method \string remindActualProperties()
-	 * @method \string requireProperties()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetProperties()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetProperties()
-	 * @method \string fillProperties()
-	 * @method \string getReturnProperties()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setReturnProperties(\string|\Bitrix\Main\DB\SqlExpression $returnProperties)
-	 * @method bool hasReturnProperties()
-	 * @method bool isReturnPropertiesFilled()
-	 * @method bool isReturnPropertiesChanged()
-	 * @method \string remindActualReturnProperties()
-	 * @method \string requireReturnProperties()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetReturnProperties()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetReturnProperties()
-	 * @method \string fillReturnProperties()
-	 * @method \string getDocumentType()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setDocumentType(\string|\Bitrix\Main\DB\SqlExpression $documentType)
-	 * @method bool hasDocumentType()
-	 * @method bool isDocumentTypeFilled()
-	 * @method bool isDocumentTypeChanged()
-	 * @method \string remindActualDocumentType()
-	 * @method \string requireDocumentType()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetDocumentType()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetDocumentType()
-	 * @method \string fillDocumentType()
-	 * @method \string getFilter()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setFilter(\string|\Bitrix\Main\DB\SqlExpression $filter)
-	 * @method bool hasFilter()
-	 * @method bool isFilterFilled()
-	 * @method bool isFilterChanged()
-	 * @method \string remindActualFilter()
-	 * @method \string requireFilter()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetFilter()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetFilter()
-	 * @method \string fillFilter()
-	 * @method \boolean getIsRobot()
-	 * @method \Bitrix\Bizproc\EO_RestActivity setIsRobot(\boolean|\Bitrix\Main\DB\SqlExpression $isRobot)
-	 * @method bool hasIsRobot()
-	 * @method bool isIsRobotFilled()
-	 * @method bool isIsRobotChanged()
-	 * @method \boolean remindActualIsRobot()
-	 * @method \boolean requireIsRobot()
-	 * @method \Bitrix\Bizproc\EO_RestActivity resetIsRobot()
-	 * @method \Bitrix\Bizproc\EO_RestActivity unsetIsRobot()
-	 * @method \boolean fillIsRobot()
+	 * @method \string getType()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setType(\string|\Bitrix\Main\DB\SqlExpression $type)
+	 * @method bool hasType()
+	 * @method bool isTypeFilled()
+	 * @method bool isTypeChanged()
+	 * @method \string remindActualType()
+	 * @method \string requireType()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetType()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetType()
+	 * @method \string fillType()
+	 * @method \boolean getMultiple()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setMultiple(\boolean|\Bitrix\Main\DB\SqlExpression $multiple)
+	 * @method bool hasMultiple()
+	 * @method bool isMultipleFilled()
+	 * @method bool isMultipleChanged()
+	 * @method \boolean remindActualMultiple()
+	 * @method \boolean requireMultiple()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetMultiple()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetMultiple()
+	 * @method \boolean fillMultiple()
+	 * @method \boolean getMandatory()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setMandatory(\boolean|\Bitrix\Main\DB\SqlExpression $mandatory)
+	 * @method bool hasMandatory()
+	 * @method bool isMandatoryFilled()
+	 * @method bool isMandatoryChanged()
+	 * @method \boolean remindActualMandatory()
+	 * @method \boolean requireMandatory()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetMandatory()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetMandatory()
+	 * @method \boolean fillMandatory()
+	 * @method array getSettings()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setSettings(array|\Bitrix\Main\DB\SqlExpression $settings)
+	 * @method bool hasSettings()
+	 * @method bool isSettingsFilled()
+	 * @method bool isSettingsChanged()
+	 * @method array remindActualSettings()
+	 * @method array requireSettings()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetSettings()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetSettings()
+	 * @method array fillSettings()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -356,9 +344,9 @@ namespace Bitrix\Bizproc {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\EO_RestActivity set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\EO_RestActivity reset($fieldName)
-	 * @method \Bitrix\Bizproc\EO_RestActivity unset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField reset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -366,228 +354,196 @@ namespace Bitrix\Bizproc {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\EO_RestActivity wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageField wakeUp($data)
 	 */
-	class EO_RestActivity {
-		/* @var \Bitrix\Bizproc\RestActivityTable */
-		static public $dataClass = '\Bitrix\Bizproc\RestActivityTable';
+	class EO_StorageField extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Internal\Model\StorageFieldTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageFieldTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Bizproc {
+namespace Bitrix\Bizproc\Internal\Model {
 	/**
-	 * EO_RestActivity_Collection
+	 * EO_StorageField_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int[] getIdList()
-	 * @method \string[] getAppIdList()
-	 * @method \string[] fillAppId()
-	 * @method \string[] getAppNameList()
-	 * @method \string[] fillAppName()
+	 * @method \int[] getStorageIdList()
+	 * @method \int[] fillStorageId()
 	 * @method \string[] getCodeList()
 	 * @method \string[] fillCode()
-	 * @method \string[] getInternalCodeList()
-	 * @method \string[] fillInternalCode()
-	 * @method \string[] getHandlerList()
-	 * @method \string[] fillHandler()
-	 * @method \int[] getAuthUserIdList()
-	 * @method \int[] fillAuthUserId()
-	 * @method \string[] getUseSubscriptionList()
-	 * @method \string[] fillUseSubscription()
-	 * @method \boolean[] getUsePlacementList()
-	 * @method \boolean[] fillUsePlacement()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
 	 * @method \string[] getNameList()
 	 * @method \string[] fillName()
 	 * @method \string[] getDescriptionList()
 	 * @method \string[] fillDescription()
-	 * @method \string[] getPropertiesList()
-	 * @method \string[] fillProperties()
-	 * @method \string[] getReturnPropertiesList()
-	 * @method \string[] fillReturnProperties()
-	 * @method \string[] getDocumentTypeList()
-	 * @method \string[] fillDocumentType()
-	 * @method \string[] getFilterList()
-	 * @method \string[] fillFilter()
-	 * @method \boolean[] getIsRobotList()
-	 * @method \boolean[] fillIsRobot()
+	 * @method \string[] getTypeList()
+	 * @method \string[] fillType()
+	 * @method \boolean[] getMultipleList()
+	 * @method \boolean[] fillMultiple()
+	 * @method \boolean[] getMandatoryList()
+	 * @method \boolean[] fillMandatory()
+	 * @method array[] getSettingsList()
+	 * @method array[] fillSettings()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\EO_RestActivity $object)
-	 * @method bool has(\Bitrix\Bizproc\EO_RestActivity $object)
+	 * @method void add(\Bitrix\Bizproc\Internal\Model\EO_StorageField $object)
+	 * @method bool has(\Bitrix\Bizproc\Internal\Model\EO_StorageField $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\EO_RestActivity getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\EO_RestActivity[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\EO_RestActivity $object)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\EO_StorageField $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\EO_RestActivity_Collection wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\EO_RestActivity current() Iterator
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection merge(?\Bitrix\Bizproc\EO_RestActivity_Collection $collection)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection merge(?\Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\EO_RestActivity|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection filter(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection filter(callable $callback)
 	 */
-	class EO_RestActivity_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\RestActivityTable */
-		static public $dataClass = '\Bitrix\Bizproc\RestActivityTable';
+	class EO_StorageField_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Internal\Model\StorageFieldTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageFieldTable';
 	}
 }
-namespace Bitrix\Bizproc {
+namespace Bitrix\Bizproc\Internal\Model {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_RestActivity_Result exec()
-	 * @method \Bitrix\Bizproc\EO_RestActivity fetchObject()
-	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection fetchCollection()
+	 * @method EO_StorageField_Result exec()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection fetchCollection()
 	 */
-	class EO_RestActivity_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_StorageField_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Bizproc\EO_RestActivity fetchObject()
-	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection fetchCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection fetchCollection()
 	 */
-	class EO_RestActivity_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_StorageField_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Bizproc\EO_RestActivity createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection createCollection()
-	 * @method \Bitrix\Bizproc\EO_RestActivity wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection wakeUpCollection($rows)
 	 */
-	class EO_RestActivity_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_StorageField_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Service\Entity\TrackingTable:bizproc/lib/service/entity/trackingtable.php */
-namespace Bitrix\Bizproc\Service\Entity {
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\Trigger\TriggerScheduleTable:bizproc/lib/Internal/Model/Trigger/TriggerScheduleTable.php */
+namespace Bitrix\Bizproc\Internal\Model\Trigger {
 	/**
-	 * EO_Tracking
-	 * @see \Bitrix\Bizproc\Service\Entity\TrackingTable
+	 * EO_TriggerSchedule
+	 * @see \Bitrix\Bizproc\Internal\Model\Trigger\TriggerScheduleTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
-	 * @method bool hasWorkflowId()
-	 * @method bool isWorkflowIdFilled()
-	 * @method bool isWorkflowIdChanged()
-	 * @method \string remindActualWorkflowId()
-	 * @method \string requireWorkflowId()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetWorkflowId()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetWorkflowId()
-	 * @method \string fillWorkflowId()
-	 * @method \int getType()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setType(\int|\Bitrix\Main\DB\SqlExpression $type)
-	 * @method bool hasType()
-	 * @method bool isTypeFilled()
-	 * @method bool isTypeChanged()
-	 * @method \int remindActualType()
-	 * @method \int requireType()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetType()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetType()
-	 * @method \int fillType()
-	 * @method \Bitrix\Main\Type\DateTime getModified()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setModified(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modified)
-	 * @method bool hasModified()
-	 * @method bool isModifiedFilled()
-	 * @method bool isModifiedChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualModified()
-	 * @method \Bitrix\Main\Type\DateTime requireModified()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetModified()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetModified()
-	 * @method \Bitrix\Main\Type\DateTime fillModified()
-	 * @method \string getActionName()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setActionName(\string|\Bitrix\Main\DB\SqlExpression $actionName)
-	 * @method bool hasActionName()
-	 * @method bool isActionNameFilled()
-	 * @method bool isActionNameChanged()
-	 * @method \string remindActualActionName()
-	 * @method \string requireActionName()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetActionName()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetActionName()
-	 * @method \string fillActionName()
-	 * @method \string getActionTitle()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setActionTitle(\string|\Bitrix\Main\DB\SqlExpression $actionTitle)
-	 * @method bool hasActionTitle()
-	 * @method bool isActionTitleFilled()
-	 * @method bool isActionTitleChanged()
-	 * @method \string remindActualActionTitle()
-	 * @method \string requireActionTitle()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetActionTitle()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetActionTitle()
-	 * @method \string fillActionTitle()
-	 * @method \int getExecutionStatus()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setExecutionStatus(\int|\Bitrix\Main\DB\SqlExpression $executionStatus)
-	 * @method bool hasExecutionStatus()
-	 * @method bool isExecutionStatusFilled()
-	 * @method bool isExecutionStatusChanged()
-	 * @method \int remindActualExecutionStatus()
-	 * @method \int requireExecutionStatus()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetExecutionStatus()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetExecutionStatus()
-	 * @method \int fillExecutionStatus()
-	 * @method \int getExecutionResult()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setExecutionResult(\int|\Bitrix\Main\DB\SqlExpression $executionResult)
-	 * @method bool hasExecutionResult()
-	 * @method bool isExecutionResultFilled()
-	 * @method bool isExecutionResultChanged()
-	 * @method \int remindActualExecutionResult()
-	 * @method \int requireExecutionResult()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetExecutionResult()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetExecutionResult()
-	 * @method \int fillExecutionResult()
-	 * @method null|\string getActionNote()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setActionNote(null|\string|\Bitrix\Main\DB\SqlExpression $actionNote)
-	 * @method bool hasActionNote()
-	 * @method bool isActionNoteFilled()
-	 * @method bool isActionNoteChanged()
-	 * @method null|\string remindActualActionNote()
-	 * @method null|\string requireActionNote()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetActionNote()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetActionNote()
-	 * @method null|\string fillActionNote()
-	 * @method null|\int getModifiedBy()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setModifiedBy(null|\int|\Bitrix\Main\DB\SqlExpression $modifiedBy)
-	 * @method bool hasModifiedBy()
-	 * @method bool isModifiedByFilled()
-	 * @method bool isModifiedByChanged()
-	 * @method null|\int remindActualModifiedBy()
-	 * @method null|\int requireModifiedBy()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetModifiedBy()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetModifiedBy()
-	 * @method null|\int fillModifiedBy()
-	 * @method \string getCompleted()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setCompleted(\string|\Bitrix\Main\DB\SqlExpression $completed)
-	 * @method bool hasCompleted()
-	 * @method bool isCompletedFilled()
-	 * @method bool isCompletedChanged()
-	 * @method \string remindActualCompleted()
-	 * @method \string requireCompleted()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetCompleted()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetCompleted()
-	 * @method \string fillCompleted()
+	 * @method \int getTemplateId()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method bool hasTemplateId()
+	 * @method bool isTemplateIdFilled()
+	 * @method bool isTemplateIdChanged()
+	 * @method \int remindActualTemplateId()
+	 * @method \int requireTemplateId()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule resetTemplateId()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule unsetTemplateId()
+	 * @method \int fillTemplateId()
+	 * @method \string getTriggerName()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule setTriggerName(\string|\Bitrix\Main\DB\SqlExpression $triggerName)
+	 * @method bool hasTriggerName()
+	 * @method bool isTriggerNameFilled()
+	 * @method bool isTriggerNameChanged()
+	 * @method \string remindActualTriggerName()
+	 * @method \string requireTriggerName()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule resetTriggerName()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule unsetTriggerName()
+	 * @method \string fillTriggerName()
+	 * @method \string getScheduleType()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule setScheduleType(\string|\Bitrix\Main\DB\SqlExpression $scheduleType)
+	 * @method bool hasScheduleType()
+	 * @method bool isScheduleTypeFilled()
+	 * @method bool isScheduleTypeChanged()
+	 * @method \string remindActualScheduleType()
+	 * @method \string requireScheduleType()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule resetScheduleType()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule unsetScheduleType()
+	 * @method \string fillScheduleType()
+	 * @method array getScheduleData()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule setScheduleData(array|\Bitrix\Main\DB\SqlExpression $scheduleData)
+	 * @method bool hasScheduleData()
+	 * @method bool isScheduleDataFilled()
+	 * @method bool isScheduleDataChanged()
+	 * @method array remindActualScheduleData()
+	 * @method array requireScheduleData()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule resetScheduleData()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule unsetScheduleData()
+	 * @method array fillScheduleData()
+	 * @method null|\Bitrix\Main\Type\DateTime getNextRunAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule setNextRunAt(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $nextRunAt)
+	 * @method bool hasNextRunAt()
+	 * @method bool isNextRunAtFilled()
+	 * @method bool isNextRunAtChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualNextRunAt()
+	 * @method null|\Bitrix\Main\Type\DateTime requireNextRunAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule resetNextRunAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule unsetNextRunAt()
+	 * @method null|\Bitrix\Main\Type\DateTime fillNextRunAt()
+	 * @method null|\Bitrix\Main\Type\DateTime getLastRunAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule setLastRunAt(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $lastRunAt)
+	 * @method bool hasLastRunAt()
+	 * @method bool isLastRunAtFilled()
+	 * @method bool isLastRunAtChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualLastRunAt()
+	 * @method null|\Bitrix\Main\Type\DateTime requireLastRunAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule resetLastRunAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule unsetLastRunAt()
+	 * @method null|\Bitrix\Main\Type\DateTime fillLastRunAt()
+	 * @method \Bitrix\Main\Type\DateTime getCreatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule setCreatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdAt)
+	 * @method bool hasCreatedAt()
+	 * @method bool isCreatedAtFilled()
+	 * @method bool isCreatedAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime requireCreatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule resetCreatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule unsetCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime fillCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime getUpdatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule setUpdatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $updatedAt)
+	 * @method bool hasUpdatedAt()
+	 * @method bool isUpdatedAtFilled()
+	 * @method bool isUpdatedAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualUpdatedAt()
+	 * @method \Bitrix\Main\Type\DateTime requireUpdatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule resetUpdatedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule unsetUpdatedAt()
+	 * @method \Bitrix\Main\Type\DateTime fillUpdatedAt()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -603,9 +559,9 @@ namespace Bitrix\Bizproc\Service\Entity {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking reset($fieldName)
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule reset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -613,20 +569,349 @@ namespace Bitrix\Bizproc\Service\Entity {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Service\Entity\EO_Tracking wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule wakeUp($data)
 	 */
-	class EO_Tracking {
-		/* @var \Bitrix\Bizproc\Service\Entity\TrackingTable */
-		static public $dataClass = '\Bitrix\Bizproc\Service\Entity\TrackingTable';
+	class EO_TriggerSchedule extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Internal\Model\Trigger\TriggerScheduleTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\Trigger\TriggerScheduleTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Bizproc\Service\Entity {
+namespace Bitrix\Bizproc\Internal\Model\Trigger {
 	/**
-	 * EO_Tracking_Collection
+	 * EO_TriggerSchedule_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getTemplateIdList()
+	 * @method \int[] fillTemplateId()
+	 * @method \string[] getTriggerNameList()
+	 * @method \string[] fillTriggerName()
+	 * @method \string[] getScheduleTypeList()
+	 * @method \string[] fillScheduleType()
+	 * @method array[] getScheduleDataList()
+	 * @method array[] fillScheduleData()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getNextRunAtList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillNextRunAt()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getLastRunAtList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillLastRunAt()
+	 * @method \Bitrix\Main\Type\DateTime[] getCreatedAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedAt()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule $object)
+	 * @method bool has(\Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule_Collection merge(?\Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule_Collection filter(callable $callback)
+	 */
+	class EO_TriggerSchedule_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Internal\Model\Trigger\TriggerScheduleTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\Trigger\TriggerScheduleTable';
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model\Trigger {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_TriggerSchedule_Result exec()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule_Collection fetchCollection()
+	 */
+	class EO_TriggerSchedule_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule_Collection fetchCollection()
+	 */
+	class EO_TriggerSchedule_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Internal\Model\Trigger\EO_TriggerSchedule_Collection wakeUpCollection($rows)
+	 */
+	class EO_TriggerSchedule_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable:bizproc/lib/Internal/Model/TaskArchive/TaskArchiveTasksTable.php */
+namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
+	/**
+	 * EO_TaskArchiveTasks
+	 * @see \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getArchiveId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks setArchiveId(\int|\Bitrix\Main\DB\SqlExpression $archiveId)
+	 * @method bool hasArchiveId()
+	 * @method bool isArchiveIdFilled()
+	 * @method bool isArchiveIdChanged()
+	 * @method \int remindActualArchiveId()
+	 * @method \int requireArchiveId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks resetArchiveId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks unsetArchiveId()
+	 * @method \int fillArchiveId()
+	 * @method \int getTaskId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks setTaskId(\int|\Bitrix\Main\DB\SqlExpression $taskId)
+	 * @method bool hasTaskId()
+	 * @method bool isTaskIdFilled()
+	 * @method bool isTaskIdChanged()
+	 * @method \int remindActualTaskId()
+	 * @method \int requireTaskId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks resetTaskId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks unsetTaskId()
+	 * @method \int fillTaskId()
+	 * @method \Bitrix\Main\Type\DateTime getCompletedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks setCompletedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $completedAt)
+	 * @method bool hasCompletedAt()
+	 * @method bool isCompletedAtFilled()
+	 * @method bool isCompletedAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCompletedAt()
+	 * @method \Bitrix\Main\Type\DateTime requireCompletedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks resetCompletedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks unsetCompletedAt()
+	 * @method \Bitrix\Main\Type\DateTime fillCompletedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive getArchive()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive remindActualArchive()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive requireArchive()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks setArchive(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive $object)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks resetArchive()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks unsetArchive()
+	 * @method bool hasArchive()
+	 * @method bool isArchiveFilled()
+	 * @method bool isArchiveChanged()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive fillArchive()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks reset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks wakeUp($data)
+	 */
+	class EO_TaskArchiveTasks extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
+	/**
+	 * EO_TaskArchiveTasks_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getArchiveIdList()
+	 * @method \int[] fillArchiveId()
+	 * @method \int[] getTaskIdList()
+	 * @method \int[] fillTaskId()
+	 * @method \Bitrix\Main\Type\DateTime[] getCompletedAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCompletedAt()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive[] getArchiveList()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection getArchiveCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection fillArchive()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks $object)
+	 * @method bool has(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection merge(?\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection filter(callable $callback)
+	 */
+	class EO_TaskArchiveTasks_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable';
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_TaskArchiveTasks_Result exec()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection fetchCollection()
+	 */
+	class EO_TaskArchiveTasks_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection fetchCollection()
+	 */
+	class EO_TaskArchiveTasks_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection wakeUpCollection($rows)
+	 */
+	class EO_TaskArchiveTasks_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable:bizproc/lib/Internal/Model/TaskArchive/TaskArchiveTable.php */
+namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
+	/**
+	 * EO_TaskArchive
+	 * @see \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getWorkflowId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method bool hasWorkflowId()
+	 * @method bool isWorkflowIdFilled()
+	 * @method bool isWorkflowIdChanged()
+	 * @method \string remindActualWorkflowId()
+	 * @method \string requireWorkflowId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive resetWorkflowId()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive unsetWorkflowId()
+	 * @method \string fillWorkflowId()
+	 * @method \string getTasksData()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive setTasksData(\string|\Bitrix\Main\DB\SqlExpression $tasksData)
+	 * @method bool hasTasksData()
+	 * @method bool isTasksDataFilled()
+	 * @method bool isTasksDataChanged()
+	 * @method \string remindActualTasksData()
+	 * @method \string requireTasksData()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive resetTasksData()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive unsetTasksData()
+	 * @method \string fillTasksData()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks getTasks()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks remindActualTasks()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks requireTasks()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive setTasks(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks $object)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive resetTasks()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive unsetTasks()
+	 * @method bool hasTasks()
+	 * @method bool isTasksFilled()
+	 * @method bool isTasksChanged()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks fillTasks()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive reset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive wakeUp($data)
+	 */
+	class EO_TaskArchive extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
+	/**
+	 * EO_TaskArchive_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
@@ -634,82 +919,801 @@ namespace Bitrix\Bizproc\Service\Entity {
 	 * @method \int[] getIdList()
 	 * @method \string[] getWorkflowIdList()
 	 * @method \string[] fillWorkflowId()
-	 * @method \int[] getTypeList()
-	 * @method \int[] fillType()
-	 * @method \Bitrix\Main\Type\DateTime[] getModifiedList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillModified()
-	 * @method \string[] getActionNameList()
-	 * @method \string[] fillActionName()
-	 * @method \string[] getActionTitleList()
-	 * @method \string[] fillActionTitle()
-	 * @method \int[] getExecutionStatusList()
-	 * @method \int[] fillExecutionStatus()
-	 * @method \int[] getExecutionResultList()
-	 * @method \int[] fillExecutionResult()
-	 * @method null|\string[] getActionNoteList()
-	 * @method null|\string[] fillActionNote()
-	 * @method null|\int[] getModifiedByList()
-	 * @method null|\int[] fillModifiedBy()
-	 * @method \string[] getCompletedList()
-	 * @method \string[] fillCompleted()
+	 * @method \string[] getTasksDataList()
+	 * @method \string[] fillTasksData()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks[] getTasksList()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection getTasksCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection fillTasks()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Service\Entity\EO_Tracking $object)
-	 * @method bool has(\Bitrix\Bizproc\Service\Entity\EO_Tracking $object)
+	 * @method void add(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive $object)
+	 * @method bool has(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Service\Entity\EO_Tracking $object)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking current() Iterator
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection merge(?\Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection $collection)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection merge(?\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection filter(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection filter(callable $callback)
 	 */
-	class EO_Tracking_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Service\Entity\TrackingTable */
-		static public $dataClass = '\Bitrix\Bizproc\Service\Entity\TrackingTable';
+	class EO_TaskArchive_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable';
 	}
 }
-namespace Bitrix\Bizproc\Service\Entity {
+namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_Tracking_Result exec()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking fetchObject()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection fetchCollection()
+	 * @method EO_TaskArchive_Result exec()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection fetchCollection()
 	 */
-	class EO_Tracking_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_TaskArchive_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking fetchObject()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection fetchCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection fetchCollection()
 	 */
-	class EO_Tracking_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_TaskArchive_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection wakeUpCollection($rows)
 	 */
-	class EO_Tracking_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_TaskArchive_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable:bizproc/lib/Internal/Model/WorkflowTemplateFileTable.php */
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * EO_WorkflowTemplateFile
+	 * @see \Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getTemplateId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method bool hasTemplateId()
+	 * @method bool isTemplateIdFilled()
+	 * @method bool isTemplateIdChanged()
+	 * @method \int remindActualTemplateId()
+	 * @method \int requireTemplateId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile resetTemplateId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile unsetTemplateId()
+	 * @method \int fillTemplateId()
+	 * @method \int getFileId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile setFileId(\int|\Bitrix\Main\DB\SqlExpression $fileId)
+	 * @method bool hasFileId()
+	 * @method bool isFileIdFilled()
+	 * @method bool isFileIdChanged()
+	 * @method \int remindActualFileId()
+	 * @method \int requireFileId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile resetFileId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile unsetFileId()
+	 * @method \int fillFileId()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile reset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile wakeUp($data)
+	 */
+	class EO_WorkflowTemplateFile extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * EO_WorkflowTemplateFile_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getTemplateIdList()
+	 * @method \int[] fillTemplateId()
+	 * @method \int[] getFileIdList()
+	 * @method \int[] fillFileId()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile $object)
+	 * @method bool has(\Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection merge(?\Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection filter(callable $callback)
+	 */
+	class EO_WorkflowTemplateFile_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable';
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WorkflowTemplateFile_Result exec()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection fetchCollection()
+	 */
+	class EO_WorkflowTemplateFile_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection fetchCollection()
+	 */
+	class EO_WorkflowTemplateFile_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection wakeUpCollection($rows)
+	 */
+	class EO_WorkflowTemplateFile_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\StorageRecordTable:bizproc/lib/Internal/Model/StorageRecordTable.php */
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * EO_StorageRecord
+	 * @see \Bitrix\Bizproc\Internal\Model\StorageRecordTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getStorageId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setStorageId(\int|\Bitrix\Main\DB\SqlExpression $storageId)
+	 * @method bool hasStorageId()
+	 * @method bool isStorageIdFilled()
+	 * @method bool isStorageIdChanged()
+	 * @method \int remindActualStorageId()
+	 * @method \int requireStorageId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetStorageId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetStorageId()
+	 * @method \int fillStorageId()
+	 * @method \string getCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetCode()
+	 * @method \string fillCode()
+	 * @method \string getDocumentId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setDocumentId(\string|\Bitrix\Main\DB\SqlExpression $documentId)
+	 * @method bool hasDocumentId()
+	 * @method bool isDocumentIdFilled()
+	 * @method bool isDocumentIdChanged()
+	 * @method \string remindActualDocumentId()
+	 * @method \string requireDocumentId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetDocumentId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetDocumentId()
+	 * @method \string fillDocumentId()
+	 * @method \string getWorkflowId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method bool hasWorkflowId()
+	 * @method bool isWorkflowIdFilled()
+	 * @method bool isWorkflowIdChanged()
+	 * @method \string remindActualWorkflowId()
+	 * @method \string requireWorkflowId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetWorkflowId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetWorkflowId()
+	 * @method \string fillWorkflowId()
+	 * @method \int getTemplateId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method bool hasTemplateId()
+	 * @method bool isTemplateIdFilled()
+	 * @method bool isTemplateIdChanged()
+	 * @method \int remindActualTemplateId()
+	 * @method \int requireTemplateId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetTemplateId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetTemplateId()
+	 * @method \int fillTemplateId()
+	 * @method \int getCreatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setCreatedBy(\int|\Bitrix\Main\DB\SqlExpression $createdBy)
+	 * @method bool hasCreatedBy()
+	 * @method bool isCreatedByFilled()
+	 * @method bool isCreatedByChanged()
+	 * @method \int remindActualCreatedBy()
+	 * @method \int requireCreatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetCreatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetCreatedBy()
+	 * @method \int fillCreatedBy()
+	 * @method \int getUpdatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setUpdatedBy(\int|\Bitrix\Main\DB\SqlExpression $updatedBy)
+	 * @method bool hasUpdatedBy()
+	 * @method bool isUpdatedByFilled()
+	 * @method bool isUpdatedByChanged()
+	 * @method \int remindActualUpdatedBy()
+	 * @method \int requireUpdatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetUpdatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetUpdatedBy()
+	 * @method \int fillUpdatedBy()
+	 * @method \Bitrix\Main\Type\DateTime getCreatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setCreatedTime(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdTime)
+	 * @method bool hasCreatedTime()
+	 * @method bool isCreatedTimeFilled()
+	 * @method bool isCreatedTimeChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedTime()
+	 * @method \Bitrix\Main\Type\DateTime requireCreatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetCreatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetCreatedTime()
+	 * @method \Bitrix\Main\Type\DateTime fillCreatedTime()
+	 * @method \Bitrix\Main\Type\DateTime getUpdatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setUpdatedTime(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $updatedTime)
+	 * @method bool hasUpdatedTime()
+	 * @method bool isUpdatedTimeFilled()
+	 * @method bool isUpdatedTimeChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualUpdatedTime()
+	 * @method \Bitrix\Main\Type\DateTime requireUpdatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetUpdatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetUpdatedTime()
+	 * @method \Bitrix\Main\Type\DateTime fillUpdatedTime()
+	 * @method array getValue()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setValue(array|\Bitrix\Main\DB\SqlExpression $value)
+	 * @method bool hasValue()
+	 * @method bool isValueFilled()
+	 * @method bool isValueChanged()
+	 * @method array remindActualValue()
+	 * @method array requireValue()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetValue()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetValue()
+	 * @method array fillValue()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord reset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageRecord wakeUp($data)
+	 */
+	class EO_StorageRecord extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Internal\Model\StorageRecordTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageRecordTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * EO_StorageRecord_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getStorageIdList()
+	 * @method \int[] fillStorageId()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \string[] getDocumentIdList()
+	 * @method \string[] fillDocumentId()
+	 * @method \string[] getWorkflowIdList()
+	 * @method \string[] fillWorkflowId()
+	 * @method \int[] getTemplateIdList()
+	 * @method \int[] fillTemplateId()
+	 * @method \int[] getCreatedByList()
+	 * @method \int[] fillCreatedBy()
+	 * @method \int[] getUpdatedByList()
+	 * @method \int[] fillUpdatedBy()
+	 * @method \Bitrix\Main\Type\DateTime[] getCreatedTimeList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedTime()
+	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedTimeList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedTime()
+	 * @method array[] getValueList()
+	 * @method array[] fillValue()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Internal\Model\EO_StorageRecord $object)
+	 * @method bool has(\Bitrix\Bizproc\Internal\Model\EO_StorageRecord $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\EO_StorageRecord $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection merge(?\Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection filter(callable $callback)
+	 */
+	class EO_StorageRecord_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Internal\Model\StorageRecordTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageRecordTable';
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_StorageRecord_Result exec()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection fetchCollection()
+	 */
+	class EO_StorageRecord_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection fetchCollection()
+	 */
+	class EO_StorageRecord_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection wakeUpCollection($rows)
+	 */
+	class EO_StorageRecord_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\StorageTypeTable:bizproc/lib/Internal/Model/StorageTypeTable.php */
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * EO_StorageType
+	 * @see \Bitrix\Bizproc\Internal\Model\StorageTypeTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getTitle()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setTitle(\string|\Bitrix\Main\DB\SqlExpression $title)
+	 * @method bool hasTitle()
+	 * @method bool isTitleFilled()
+	 * @method bool isTitleChanged()
+	 * @method \string remindActualTitle()
+	 * @method \string requireTitle()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetTitle()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetTitle()
+	 * @method \string fillTitle()
+	 * @method \string getCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetCode()
+	 * @method \string fillCode()
+	 * @method \string getDescription()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
+	 * @method bool hasDescription()
+	 * @method bool isDescriptionFilled()
+	 * @method bool isDescriptionChanged()
+	 * @method \string remindActualDescription()
+	 * @method \string requireDescription()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetDescription()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetDescription()
+	 * @method \string fillDescription()
+	 * @method \int getCreatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setCreatedBy(\int|\Bitrix\Main\DB\SqlExpression $createdBy)
+	 * @method bool hasCreatedBy()
+	 * @method bool isCreatedByFilled()
+	 * @method bool isCreatedByChanged()
+	 * @method \int remindActualCreatedBy()
+	 * @method \int requireCreatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetCreatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetCreatedBy()
+	 * @method \int fillCreatedBy()
+	 * @method \int getUpdatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setUpdatedBy(\int|\Bitrix\Main\DB\SqlExpression $updatedBy)
+	 * @method bool hasUpdatedBy()
+	 * @method bool isUpdatedByFilled()
+	 * @method bool isUpdatedByChanged()
+	 * @method \int remindActualUpdatedBy()
+	 * @method \int requireUpdatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetUpdatedBy()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetUpdatedBy()
+	 * @method \int fillUpdatedBy()
+	 * @method \Bitrix\Main\Type\DateTime getCreatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setCreatedTime(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdTime)
+	 * @method bool hasCreatedTime()
+	 * @method bool isCreatedTimeFilled()
+	 * @method bool isCreatedTimeChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedTime()
+	 * @method \Bitrix\Main\Type\DateTime requireCreatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetCreatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetCreatedTime()
+	 * @method \Bitrix\Main\Type\DateTime fillCreatedTime()
+	 * @method \Bitrix\Main\Type\DateTime getUpdatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setUpdatedTime(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $updatedTime)
+	 * @method bool hasUpdatedTime()
+	 * @method bool isUpdatedTimeFilled()
+	 * @method bool isUpdatedTimeChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualUpdatedTime()
+	 * @method \Bitrix\Main\Type\DateTime requireUpdatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetUpdatedTime()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetUpdatedTime()
+	 * @method \Bitrix\Main\Type\DateTime fillUpdatedTime()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType reset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageType wakeUp($data)
+	 */
+	class EO_StorageType extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Internal\Model\StorageTypeTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageTypeTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * EO_StorageType_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getTitleList()
+	 * @method \string[] fillTitle()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \string[] getDescriptionList()
+	 * @method \string[] fillDescription()
+	 * @method \int[] getCreatedByList()
+	 * @method \int[] fillCreatedBy()
+	 * @method \int[] getUpdatedByList()
+	 * @method \int[] fillUpdatedBy()
+	 * @method \Bitrix\Main\Type\DateTime[] getCreatedTimeList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedTime()
+	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedTimeList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedTime()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Internal\Model\EO_StorageType $object)
+	 * @method bool has(\Bitrix\Bizproc\Internal\Model\EO_StorageType $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\EO_StorageType $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection merge(?\Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection filter(callable $callback)
+	 */
+	class EO_StorageType_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Internal\Model\StorageTypeTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageTypeTable';
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_StorageType_Result exec()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection fetchCollection()
+	 */
+	class EO_StorageType_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection fetchCollection()
+	 */
+	class EO_StorageType_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection wakeUpCollection($rows)
+	 */
+	class EO_StorageType_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable:bizproc/lib/Internal/Model/RobotVersionIndexTable.php */
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * EO_RobotVersionIndex
+	 * @see \Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getRobotCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex setRobotCode(\string|\Bitrix\Main\DB\SqlExpression $robotCode)
+	 * @method bool hasRobotCode()
+	 * @method bool isRobotCodeFilled()
+	 * @method bool isRobotCodeChanged()
+	 * @method \string remindActualRobotCode()
+	 * @method \string requireRobotCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex resetRobotCode()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex unsetRobotCode()
+	 * @method \string fillRobotCode()
+	 * @method \int getVersion()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex setVersion(\int|\Bitrix\Main\DB\SqlExpression $version)
+	 * @method bool hasVersion()
+	 * @method bool isVersionFilled()
+	 * @method bool isVersionChanged()
+	 * @method \int remindActualVersion()
+	 * @method \int requireVersion()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex resetVersion()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex unsetVersion()
+	 * @method \int fillVersion()
+	 * @method \Bitrix\Main\Type\Date getDateChanged()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex setDateChanged(\Bitrix\Main\Type\Date|\Bitrix\Main\DB\SqlExpression $dateChanged)
+	 * @method bool hasDateChanged()
+	 * @method bool isDateChangedFilled()
+	 * @method bool isDateChangedChanged()
+	 * @method \Bitrix\Main\Type\Date remindActualDateChanged()
+	 * @method \Bitrix\Main\Type\Date requireDateChanged()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex resetDateChanged()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex unsetDateChanged()
+	 * @method \Bitrix\Main\Type\Date fillDateChanged()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex reset($fieldName)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex wakeUp($data)
+	 */
+	class EO_RobotVersionIndex extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * EO_RobotVersionIndex_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getRobotCodeList()
+	 * @method \string[] fillRobotCode()
+	 * @method \int[] getVersionList()
+	 * @method \int[] fillVersion()
+	 * @method \Bitrix\Main\Type\Date[] getDateChangedList()
+	 * @method \Bitrix\Main\Type\Date[] fillDateChanged()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex $object)
+	 * @method bool has(\Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection merge(?\Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection filter(callable $callback)
+	 */
+	class EO_RobotVersionIndex_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable */
+		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable';
+	}
+}
+namespace Bitrix\Bizproc\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_RobotVersionIndex_Result exec()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection fetchCollection()
+	 */
+	class EO_RobotVersionIndex_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex fetchObject()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection fetchCollection()
+	 */
+	class EO_RobotVersionIndex_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection wakeUpCollection($rows)
+	 */
+	class EO_RobotVersionIndex_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Bizproc\Storage\Entity\ActivityStorageTable:bizproc/lib/Storage/Entity/ActivityStorageTable.php */
 namespace Bitrix\Bizproc\Storage\Entity {
@@ -792,7 +1796,7 @@ namespace Bitrix\Bizproc\Storage\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Storage\Entity\EO_ActivityStorage wakeUp($data)
 	 */
-	class EO_ActivityStorage {
+	class EO_ActivityStorage extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Storage\Entity\ActivityStorageTable */
 		static public $dataClass = '\Bitrix\Bizproc\Storage\Entity\ActivityStorageTable';
 		/**
@@ -848,7 +1852,7 @@ namespace Bitrix\Bizproc\Storage\Entity {
 	 * @method \Bitrix\Bizproc\Storage\Entity\EO_ActivityStorage|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Storage\Entity\EO_ActivityStorage_Collection filter(callable $callback)
 	 */
-	class EO_ActivityStorage_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ActivityStorage_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Storage\Entity\ActivityStorageTable */
 		static public $dataClass = '\Bitrix\Bizproc\Storage\Entity\ActivityStorageTable';
 	}
@@ -875,799 +1879,6 @@ namespace Bitrix\Bizproc\Storage\Entity {
 	 * @method \Bitrix\Bizproc\Storage\Entity\EO_ActivityStorage_Collection wakeUpCollection($rows)
 	 */
 	class EO_ActivityStorage_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Result\Entity\ResultTable:bizproc/lib/Result/Entity/ResultTable.php */
-namespace Bitrix\Bizproc\Result\Entity {
-	/**
-	 * EO_Result
-	 * @see \Bitrix\Bizproc\Result\Entity\ResultTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
-	 * @method bool hasWorkflowId()
-	 * @method bool isWorkflowIdFilled()
-	 * @method bool isWorkflowIdChanged()
-	 * @method \string remindActualWorkflowId()
-	 * @method \string requireWorkflowId()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result resetWorkflowId()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unsetWorkflowId()
-	 * @method \string fillWorkflowId()
-	 * @method \string getActivity()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setActivity(\string|\Bitrix\Main\DB\SqlExpression $activity)
-	 * @method bool hasActivity()
-	 * @method bool isActivityFilled()
-	 * @method bool isActivityChanged()
-	 * @method \string remindActualActivity()
-	 * @method \string requireActivity()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result resetActivity()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unsetActivity()
-	 * @method \string fillActivity()
-	 * @method array getResult()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setResult(array|\Bitrix\Main\DB\SqlExpression $result)
-	 * @method bool hasResult()
-	 * @method bool isResultFilled()
-	 * @method bool isResultChanged()
-	 * @method array remindActualResult()
-	 * @method array requireResult()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result resetResult()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unsetResult()
-	 * @method array fillResult()
-	 * @method \Bitrix\Main\Type\DateTime getCreatedDate()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setCreatedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdDate)
-	 * @method bool hasCreatedDate()
-	 * @method bool isCreatedDateFilled()
-	 * @method bool isCreatedDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedDate()
-	 * @method \Bitrix\Main\Type\DateTime requireCreatedDate()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result resetCreatedDate()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unsetCreatedDate()
-	 * @method \Bitrix\Main\Type\DateTime fillCreatedDate()
-	 * @method \int getPriority()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setPriority(\int|\Bitrix\Main\DB\SqlExpression $priority)
-	 * @method bool hasPriority()
-	 * @method bool isPriorityFilled()
-	 * @method bool isPriorityChanged()
-	 * @method \int remindActualPriority()
-	 * @method \int requirePriority()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result resetPriority()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unsetPriority()
-	 * @method \int fillPriority()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result reset($fieldName)
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Result\Entity\EO_Result wakeUp($data)
-	 */
-	class EO_Result {
-		/* @var \Bitrix\Bizproc\Result\Entity\ResultTable */
-		static public $dataClass = '\Bitrix\Bizproc\Result\Entity\ResultTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Result\Entity {
-	/**
-	 * EO_Result_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getWorkflowIdList()
-	 * @method \string[] fillWorkflowId()
-	 * @method \string[] getActivityList()
-	 * @method \string[] fillActivity()
-	 * @method array[] getResultList()
-	 * @method array[] fillResult()
-	 * @method \Bitrix\Main\Type\DateTime[] getCreatedDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedDate()
-	 * @method \int[] getPriorityList()
-	 * @method \int[] fillPriority()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Result\Entity\EO_Result $object)
-	 * @method bool has(\Bitrix\Bizproc\Result\Entity\EO_Result $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Result\Entity\EO_Result $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Result\Entity\EO_Result_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection merge(?\Bitrix\Bizproc\Result\Entity\EO_Result_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection filter(callable $callback)
-	 */
-	class EO_Result_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Result\Entity\ResultTable */
-		static public $dataClass = '\Bitrix\Bizproc\Result\Entity\ResultTable';
-	}
-}
-namespace Bitrix\Bizproc\Result\Entity {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Result_Result exec()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result fetchObject()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection fetchCollection()
-	 */
-	class EO_Result_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result fetchObject()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection fetchCollection()
-	 */
-	class EO_Result_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection wakeUpCollection($rows)
-	 */
-	class EO_Result_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\RestProviderTable:bizproc/lib/restprovider.php */
-namespace Bitrix\Bizproc {
-	/**
-	 * EO_RestProvider
-	 * @see \Bitrix\Bizproc\RestProviderTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\EO_RestProvider setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getAppId()
-	 * @method \Bitrix\Bizproc\EO_RestProvider setAppId(\string|\Bitrix\Main\DB\SqlExpression $appId)
-	 * @method bool hasAppId()
-	 * @method bool isAppIdFilled()
-	 * @method bool isAppIdChanged()
-	 * @method \string remindActualAppId()
-	 * @method \string requireAppId()
-	 * @method \Bitrix\Bizproc\EO_RestProvider resetAppId()
-	 * @method \Bitrix\Bizproc\EO_RestProvider unsetAppId()
-	 * @method \string fillAppId()
-	 * @method \string getAppName()
-	 * @method \Bitrix\Bizproc\EO_RestProvider setAppName(\string|\Bitrix\Main\DB\SqlExpression $appName)
-	 * @method bool hasAppName()
-	 * @method bool isAppNameFilled()
-	 * @method bool isAppNameChanged()
-	 * @method \string remindActualAppName()
-	 * @method \string requireAppName()
-	 * @method \Bitrix\Bizproc\EO_RestProvider resetAppName()
-	 * @method \Bitrix\Bizproc\EO_RestProvider unsetAppName()
-	 * @method \string fillAppName()
-	 * @method \string getCode()
-	 * @method \Bitrix\Bizproc\EO_RestProvider setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \string remindActualCode()
-	 * @method \string requireCode()
-	 * @method \Bitrix\Bizproc\EO_RestProvider resetCode()
-	 * @method \Bitrix\Bizproc\EO_RestProvider unsetCode()
-	 * @method \string fillCode()
-	 * @method \string getType()
-	 * @method \Bitrix\Bizproc\EO_RestProvider setType(\string|\Bitrix\Main\DB\SqlExpression $type)
-	 * @method bool hasType()
-	 * @method bool isTypeFilled()
-	 * @method bool isTypeChanged()
-	 * @method \string remindActualType()
-	 * @method \string requireType()
-	 * @method \Bitrix\Bizproc\EO_RestProvider resetType()
-	 * @method \Bitrix\Bizproc\EO_RestProvider unsetType()
-	 * @method \string fillType()
-	 * @method \string getHandler()
-	 * @method \Bitrix\Bizproc\EO_RestProvider setHandler(\string|\Bitrix\Main\DB\SqlExpression $handler)
-	 * @method bool hasHandler()
-	 * @method bool isHandlerFilled()
-	 * @method bool isHandlerChanged()
-	 * @method \string remindActualHandler()
-	 * @method \string requireHandler()
-	 * @method \Bitrix\Bizproc\EO_RestProvider resetHandler()
-	 * @method \Bitrix\Bizproc\EO_RestProvider unsetHandler()
-	 * @method \string fillHandler()
-	 * @method \string getName()
-	 * @method \Bitrix\Bizproc\EO_RestProvider setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Bizproc\EO_RestProvider resetName()
-	 * @method \Bitrix\Bizproc\EO_RestProvider unsetName()
-	 * @method \string fillName()
-	 * @method \string getDescription()
-	 * @method \Bitrix\Bizproc\EO_RestProvider setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
-	 * @method bool hasDescription()
-	 * @method bool isDescriptionFilled()
-	 * @method bool isDescriptionChanged()
-	 * @method \string remindActualDescription()
-	 * @method \string requireDescription()
-	 * @method \Bitrix\Bizproc\EO_RestProvider resetDescription()
-	 * @method \Bitrix\Bizproc\EO_RestProvider unsetDescription()
-	 * @method \string fillDescription()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\EO_RestProvider set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\EO_RestProvider reset($fieldName)
-	 * @method \Bitrix\Bizproc\EO_RestProvider unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\EO_RestProvider wakeUp($data)
-	 */
-	class EO_RestProvider {
-		/* @var \Bitrix\Bizproc\RestProviderTable */
-		static public $dataClass = '\Bitrix\Bizproc\RestProviderTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc {
-	/**
-	 * EO_RestProvider_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getAppIdList()
-	 * @method \string[] fillAppId()
-	 * @method \string[] getAppNameList()
-	 * @method \string[] fillAppName()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method \string[] getTypeList()
-	 * @method \string[] fillType()
-	 * @method \string[] getHandlerList()
-	 * @method \string[] fillHandler()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 * @method \string[] getDescriptionList()
-	 * @method \string[] fillDescription()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\EO_RestProvider $object)
-	 * @method bool has(\Bitrix\Bizproc\EO_RestProvider $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\EO_RestProvider getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\EO_RestProvider[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\EO_RestProvider $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\EO_RestProvider_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\EO_RestProvider current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection merge(?\Bitrix\Bizproc\EO_RestProvider_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\EO_RestProvider|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection filter(callable $callback)
-	 */
-	class EO_RestProvider_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\RestProviderTable */
-		static public $dataClass = '\Bitrix\Bizproc\RestProviderTable';
-	}
-}
-namespace Bitrix\Bizproc {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_RestProvider_Result exec()
-	 * @method \Bitrix\Bizproc\EO_RestProvider fetchObject()
-	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection fetchCollection()
-	 */
-	class EO_RestProvider_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\EO_RestProvider fetchObject()
-	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection fetchCollection()
-	 */
-	class EO_RestProvider_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\EO_RestProvider createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection createCollection()
-	 * @method \Bitrix\Bizproc\EO_RestProvider wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection wakeUpCollection($rows)
-	 */
-	class EO_RestProvider_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable:bizproc/lib/automation/trigger/entity/trigger.php */
-namespace Bitrix\Bizproc\Automation\Trigger\Entity {
-	/**
-	 * TriggerObject
-	 * @see \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getName()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetName()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetName()
-	 * @method \string fillName()
-	 * @method \string getCode()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \string remindActualCode()
-	 * @method \string requireCode()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetCode()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetCode()
-	 * @method \string fillCode()
-	 * @method \string getModuleId()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
-	 * @method bool hasModuleId()
-	 * @method bool isModuleIdFilled()
-	 * @method bool isModuleIdChanged()
-	 * @method \string remindActualModuleId()
-	 * @method \string requireModuleId()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetModuleId()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetModuleId()
-	 * @method \string fillModuleId()
-	 * @method \string getEntity()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
-	 * @method bool hasEntity()
-	 * @method bool isEntityFilled()
-	 * @method bool isEntityChanged()
-	 * @method \string remindActualEntity()
-	 * @method \string requireEntity()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetEntity()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetEntity()
-	 * @method \string fillEntity()
-	 * @method \string getDocumentType()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setDocumentType(\string|\Bitrix\Main\DB\SqlExpression $documentType)
-	 * @method bool hasDocumentType()
-	 * @method bool isDocumentTypeFilled()
-	 * @method bool isDocumentTypeChanged()
-	 * @method \string remindActualDocumentType()
-	 * @method \string requireDocumentType()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetDocumentType()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetDocumentType()
-	 * @method \string fillDocumentType()
-	 * @method \string getDocumentStatus()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setDocumentStatus(\string|\Bitrix\Main\DB\SqlExpression $documentStatus)
-	 * @method bool hasDocumentStatus()
-	 * @method bool isDocumentStatusFilled()
-	 * @method bool isDocumentStatusChanged()
-	 * @method \string remindActualDocumentStatus()
-	 * @method \string requireDocumentStatus()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetDocumentStatus()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetDocumentStatus()
-	 * @method \string fillDocumentStatus()
-	 * @method \string getApplyRules()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setApplyRules(\string|\Bitrix\Main\DB\SqlExpression $applyRules)
-	 * @method bool hasApplyRules()
-	 * @method bool isApplyRulesFilled()
-	 * @method bool isApplyRulesChanged()
-	 * @method \string remindActualApplyRules()
-	 * @method \string requireApplyRules()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetApplyRules()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetApplyRules()
-	 * @method \string fillApplyRules()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject reset($fieldName)
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject wakeUp($data)
-	 */
-	class EO_Trigger {
-		/* @var \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable */
-		static public $dataClass = '\Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Automation\Trigger\Entity {
-	/**
-	 * EO_Trigger_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method \string[] getModuleIdList()
-	 * @method \string[] fillModuleId()
-	 * @method \string[] getEntityList()
-	 * @method \string[] fillEntity()
-	 * @method \string[] getDocumentTypeList()
-	 * @method \string[] fillDocumentType()
-	 * @method \string[] getDocumentStatusList()
-	 * @method \string[] fillDocumentStatus()
-	 * @method \string[] getApplyRulesList()
-	 * @method \string[] fillApplyRules()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject $object)
-	 * @method bool has(\Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection merge(?\Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection filter(callable $callback)
-	 */
-	class EO_Trigger_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable */
-		static public $dataClass = '\Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable';
-	}
-}
-namespace Bitrix\Bizproc\Automation\Trigger\Entity {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Trigger_Result exec()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject fetchObject()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection fetchCollection()
-	 */
-	class EO_Trigger_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject fetchObject()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection fetchCollection()
-	 */
-	class EO_Trigger_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection wakeUpCollection($rows)
-	 */
-	class EO_Trigger_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Script\Entity\ScriptQueueTable:bizproc/lib/script/entity/scriptqueue.php */
-namespace Bitrix\Bizproc\Script\Entity {
-	/**
-	 * EO_ScriptQueue
-	 * @see \Bitrix\Bizproc\Script\Entity\ScriptQueueTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getScriptId()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setScriptId(\int|\Bitrix\Main\DB\SqlExpression $scriptId)
-	 * @method bool hasScriptId()
-	 * @method bool isScriptIdFilled()
-	 * @method bool isScriptIdChanged()
-	 * @method \int remindActualScriptId()
-	 * @method \int requireScriptId()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetScriptId()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetScriptId()
-	 * @method \int fillScriptId()
-	 * @method \Bitrix\Main\Type\DateTime getStartedDate()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setStartedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $startedDate)
-	 * @method bool hasStartedDate()
-	 * @method bool isStartedDateFilled()
-	 * @method bool isStartedDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualStartedDate()
-	 * @method \Bitrix\Main\Type\DateTime requireStartedDate()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetStartedDate()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetStartedDate()
-	 * @method \Bitrix\Main\Type\DateTime fillStartedDate()
-	 * @method \int getStartedBy()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setStartedBy(\int|\Bitrix\Main\DB\SqlExpression $startedBy)
-	 * @method bool hasStartedBy()
-	 * @method bool isStartedByFilled()
-	 * @method bool isStartedByChanged()
-	 * @method \int remindActualStartedBy()
-	 * @method \int requireStartedBy()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetStartedBy()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetStartedBy()
-	 * @method \int fillStartedBy()
-	 * @method \Bitrix\Main\EO_User getStartedUser()
-	 * @method \Bitrix\Main\EO_User remindActualStartedUser()
-	 * @method \Bitrix\Main\EO_User requireStartedUser()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setStartedUser(\Bitrix\Main\EO_User $object)
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetStartedUser()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetStartedUser()
-	 * @method bool hasStartedUser()
-	 * @method bool isStartedUserFilled()
-	 * @method bool isStartedUserChanged()
-	 * @method \Bitrix\Main\EO_User fillStartedUser()
-	 * @method \int getStatus()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setStatus(\int|\Bitrix\Main\DB\SqlExpression $status)
-	 * @method bool hasStatus()
-	 * @method bool isStatusFilled()
-	 * @method bool isStatusChanged()
-	 * @method \int remindActualStatus()
-	 * @method \int requireStatus()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetStatus()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetStatus()
-	 * @method \int fillStatus()
-	 * @method \Bitrix\Main\Type\DateTime getModifiedDate()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setModifiedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modifiedDate)
-	 * @method bool hasModifiedDate()
-	 * @method bool isModifiedDateFilled()
-	 * @method bool isModifiedDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualModifiedDate()
-	 * @method \Bitrix\Main\Type\DateTime requireModifiedDate()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetModifiedDate()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetModifiedDate()
-	 * @method \Bitrix\Main\Type\DateTime fillModifiedDate()
-	 * @method \int getModifiedBy()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setModifiedBy(\int|\Bitrix\Main\DB\SqlExpression $modifiedBy)
-	 * @method bool hasModifiedBy()
-	 * @method bool isModifiedByFilled()
-	 * @method bool isModifiedByChanged()
-	 * @method \int remindActualModifiedBy()
-	 * @method \int requireModifiedBy()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetModifiedBy()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetModifiedBy()
-	 * @method \int fillModifiedBy()
-	 * @method array getWorkflowParameters()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setWorkflowParameters(array|\Bitrix\Main\DB\SqlExpression $workflowParameters)
-	 * @method bool hasWorkflowParameters()
-	 * @method bool isWorkflowParametersFilled()
-	 * @method bool isWorkflowParametersChanged()
-	 * @method array remindActualWorkflowParameters()
-	 * @method array requireWorkflowParameters()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetWorkflowParameters()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetWorkflowParameters()
-	 * @method array fillWorkflowParameters()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue reset($fieldName)
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue wakeUp($data)
-	 */
-	class EO_ScriptQueue {
-		/* @var \Bitrix\Bizproc\Script\Entity\ScriptQueueTable */
-		static public $dataClass = '\Bitrix\Bizproc\Script\Entity\ScriptQueueTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Script\Entity {
-	/**
-	 * EO_ScriptQueue_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getScriptIdList()
-	 * @method \int[] fillScriptId()
-	 * @method \Bitrix\Main\Type\DateTime[] getStartedDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillStartedDate()
-	 * @method \int[] getStartedByList()
-	 * @method \int[] fillStartedBy()
-	 * @method \Bitrix\Main\EO_User[] getStartedUserList()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection getStartedUserCollection()
-	 * @method \Bitrix\Main\EO_User_Collection fillStartedUser()
-	 * @method \int[] getStatusList()
-	 * @method \int[] fillStatus()
-	 * @method \Bitrix\Main\Type\DateTime[] getModifiedDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillModifiedDate()
-	 * @method \int[] getModifiedByList()
-	 * @method \int[] fillModifiedBy()
-	 * @method array[] getWorkflowParametersList()
-	 * @method array[] fillWorkflowParameters()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Script\Entity\EO_ScriptQueue $object)
-	 * @method bool has(\Bitrix\Bizproc\Script\Entity\EO_ScriptQueue $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Script\Entity\EO_ScriptQueue $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection merge(?\Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection filter(callable $callback)
-	 */
-	class EO_ScriptQueue_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Script\Entity\ScriptQueueTable */
-		static public $dataClass = '\Bitrix\Bizproc\Script\Entity\ScriptQueueTable';
-	}
-}
-namespace Bitrix\Bizproc\Script\Entity {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_ScriptQueue_Result exec()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue fetchObject()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection fetchCollection()
-	 */
-	class EO_ScriptQueue_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue fetchObject()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection fetchCollection()
-	 */
-	class EO_ScriptQueue_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection wakeUpCollection($rows)
-	 */
-	class EO_ScriptQueue_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Bizproc\Script\Entity\ScriptTable:bizproc/lib/script/entity/script.php */
 namespace Bitrix\Bizproc\Script\Entity {
@@ -1860,7 +2071,7 @@ namespace Bitrix\Bizproc\Script\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Script\Entity\EO_Script wakeUp($data)
 	 */
-	class EO_Script {
+	class EO_Script extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Script\Entity\ScriptTable */
 		static public $dataClass = '\Bitrix\Bizproc\Script\Entity\ScriptTable';
 		/**
@@ -1939,7 +2150,7 @@ namespace Bitrix\Bizproc\Script\Entity {
 	 * @method \Bitrix\Bizproc\Script\Entity\EO_Script|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Script\Entity\EO_Script_Collection filter(callable $callback)
 	 */
-	class EO_Script_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Script_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Script\Entity\ScriptTable */
 		static public $dataClass = '\Bitrix\Bizproc\Script\Entity\ScriptTable';
 	}
@@ -2068,7 +2279,7 @@ namespace Bitrix\Bizproc\Script\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Script\Entity\EO_ScriptQueueDocument wakeUp($data)
 	 */
-	class EO_ScriptQueueDocument {
+	class EO_ScriptQueueDocument extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Script\Entity\ScriptQueueDocumentTable */
 		static public $dataClass = '\Bitrix\Bizproc\Script\Entity\ScriptQueueDocumentTable';
 		/**
@@ -2129,7 +2340,7 @@ namespace Bitrix\Bizproc\Script\Entity {
 	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueueDocument|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueueDocument_Collection filter(callable $callback)
 	 */
-	class EO_ScriptQueueDocument_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ScriptQueueDocument_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Script\Entity\ScriptQueueDocumentTable */
 		static public $dataClass = '\Bitrix\Bizproc\Script\Entity\ScriptQueueDocumentTable';
 	}
@@ -2156,6 +2367,1775 @@ namespace Bitrix\Bizproc\Script\Entity {
 	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueueDocument_Collection wakeUpCollection($rows)
 	 */
 	class EO_ScriptQueueDocument_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Script\Entity\ScriptQueueTable:bizproc/lib/script/entity/scriptqueue.php */
+namespace Bitrix\Bizproc\Script\Entity {
+	/**
+	 * EO_ScriptQueue
+	 * @see \Bitrix\Bizproc\Script\Entity\ScriptQueueTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getScriptId()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setScriptId(\int|\Bitrix\Main\DB\SqlExpression $scriptId)
+	 * @method bool hasScriptId()
+	 * @method bool isScriptIdFilled()
+	 * @method bool isScriptIdChanged()
+	 * @method \int remindActualScriptId()
+	 * @method \int requireScriptId()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetScriptId()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetScriptId()
+	 * @method \int fillScriptId()
+	 * @method \Bitrix\Main\Type\DateTime getStartedDate()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setStartedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $startedDate)
+	 * @method bool hasStartedDate()
+	 * @method bool isStartedDateFilled()
+	 * @method bool isStartedDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualStartedDate()
+	 * @method \Bitrix\Main\Type\DateTime requireStartedDate()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetStartedDate()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetStartedDate()
+	 * @method \Bitrix\Main\Type\DateTime fillStartedDate()
+	 * @method \int getStartedBy()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setStartedBy(\int|\Bitrix\Main\DB\SqlExpression $startedBy)
+	 * @method bool hasStartedBy()
+	 * @method bool isStartedByFilled()
+	 * @method bool isStartedByChanged()
+	 * @method \int remindActualStartedBy()
+	 * @method \int requireStartedBy()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetStartedBy()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetStartedBy()
+	 * @method \int fillStartedBy()
+	 * @method \Bitrix\Main\EO_User getStartedUser()
+	 * @method \Bitrix\Main\EO_User remindActualStartedUser()
+	 * @method \Bitrix\Main\EO_User requireStartedUser()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setStartedUser(\Bitrix\Main\EO_User $object)
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetStartedUser()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetStartedUser()
+	 * @method bool hasStartedUser()
+	 * @method bool isStartedUserFilled()
+	 * @method bool isStartedUserChanged()
+	 * @method \Bitrix\Main\EO_User fillStartedUser()
+	 * @method \int getStatus()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setStatus(\int|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \int remindActualStatus()
+	 * @method \int requireStatus()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetStatus()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetStatus()
+	 * @method \int fillStatus()
+	 * @method \Bitrix\Main\Type\DateTime getModifiedDate()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setModifiedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modifiedDate)
+	 * @method bool hasModifiedDate()
+	 * @method bool isModifiedDateFilled()
+	 * @method bool isModifiedDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualModifiedDate()
+	 * @method \Bitrix\Main\Type\DateTime requireModifiedDate()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetModifiedDate()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetModifiedDate()
+	 * @method \Bitrix\Main\Type\DateTime fillModifiedDate()
+	 * @method \int getModifiedBy()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setModifiedBy(\int|\Bitrix\Main\DB\SqlExpression $modifiedBy)
+	 * @method bool hasModifiedBy()
+	 * @method bool isModifiedByFilled()
+	 * @method bool isModifiedByChanged()
+	 * @method \int remindActualModifiedBy()
+	 * @method \int requireModifiedBy()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetModifiedBy()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetModifiedBy()
+	 * @method \int fillModifiedBy()
+	 * @method array getWorkflowParameters()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue setWorkflowParameters(array|\Bitrix\Main\DB\SqlExpression $workflowParameters)
+	 * @method bool hasWorkflowParameters()
+	 * @method bool isWorkflowParametersFilled()
+	 * @method bool isWorkflowParametersChanged()
+	 * @method array remindActualWorkflowParameters()
+	 * @method array requireWorkflowParameters()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue resetWorkflowParameters()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unsetWorkflowParameters()
+	 * @method array fillWorkflowParameters()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue reset($fieldName)
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue wakeUp($data)
+	 */
+	class EO_ScriptQueue extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Script\Entity\ScriptQueueTable */
+		static public $dataClass = '\Bitrix\Bizproc\Script\Entity\ScriptQueueTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Script\Entity {
+	/**
+	 * EO_ScriptQueue_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getScriptIdList()
+	 * @method \int[] fillScriptId()
+	 * @method \Bitrix\Main\Type\DateTime[] getStartedDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillStartedDate()
+	 * @method \int[] getStartedByList()
+	 * @method \int[] fillStartedBy()
+	 * @method \Bitrix\Main\EO_User[] getStartedUserList()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection getStartedUserCollection()
+	 * @method \Bitrix\Main\EO_User_Collection fillStartedUser()
+	 * @method \int[] getStatusList()
+	 * @method \int[] fillStatus()
+	 * @method \Bitrix\Main\Type\DateTime[] getModifiedDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillModifiedDate()
+	 * @method \int[] getModifiedByList()
+	 * @method \int[] fillModifiedBy()
+	 * @method array[] getWorkflowParametersList()
+	 * @method array[] fillWorkflowParameters()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Script\Entity\EO_ScriptQueue $object)
+	 * @method bool has(\Bitrix\Bizproc\Script\Entity\EO_ScriptQueue $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Script\Entity\EO_ScriptQueue $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection merge(?\Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection filter(callable $callback)
+	 */
+	class EO_ScriptQueue_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Script\Entity\ScriptQueueTable */
+		static public $dataClass = '\Bitrix\Bizproc\Script\Entity\ScriptQueueTable';
+	}
+}
+namespace Bitrix\Bizproc\Script\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_ScriptQueue_Result exec()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue fetchObject()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection fetchCollection()
+	 */
+	class EO_ScriptQueue_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue fetchObject()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection fetchCollection()
+	 */
+	class EO_ScriptQueue_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Script\Entity\EO_ScriptQueue_Collection wakeUpCollection($rows)
+	 */
+	class EO_ScriptQueue_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\SchedulerEventTable:bizproc/lib/schedulerevent.php */
+namespace Bitrix\Bizproc {
+	/**
+	 * EO_SchedulerEvent
+	 * @see \Bitrix\Bizproc\SchedulerEventTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getWorkflowId()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method bool hasWorkflowId()
+	 * @method bool isWorkflowIdFilled()
+	 * @method bool isWorkflowIdChanged()
+	 * @method \string remindActualWorkflowId()
+	 * @method \string requireWorkflowId()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetWorkflowId()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetWorkflowId()
+	 * @method \string fillWorkflowId()
+	 * @method \string getHandler()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setHandler(\string|\Bitrix\Main\DB\SqlExpression $handler)
+	 * @method bool hasHandler()
+	 * @method bool isHandlerFilled()
+	 * @method bool isHandlerChanged()
+	 * @method \string remindActualHandler()
+	 * @method \string requireHandler()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetHandler()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetHandler()
+	 * @method \string fillHandler()
+	 * @method \string getEventModule()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setEventModule(\string|\Bitrix\Main\DB\SqlExpression $eventModule)
+	 * @method bool hasEventModule()
+	 * @method bool isEventModuleFilled()
+	 * @method bool isEventModuleChanged()
+	 * @method \string remindActualEventModule()
+	 * @method \string requireEventModule()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetEventModule()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetEventModule()
+	 * @method \string fillEventModule()
+	 * @method \string getEventType()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setEventType(\string|\Bitrix\Main\DB\SqlExpression $eventType)
+	 * @method bool hasEventType()
+	 * @method bool isEventTypeFilled()
+	 * @method bool isEventTypeChanged()
+	 * @method \string remindActualEventType()
+	 * @method \string requireEventType()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetEventType()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetEventType()
+	 * @method \string fillEventType()
+	 * @method \string getEntityId()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setEntityId(\string|\Bitrix\Main\DB\SqlExpression $entityId)
+	 * @method bool hasEntityId()
+	 * @method bool isEntityIdFilled()
+	 * @method bool isEntityIdChanged()
+	 * @method \string remindActualEntityId()
+	 * @method \string requireEntityId()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetEntityId()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetEntityId()
+	 * @method \string fillEntityId()
+	 * @method \string getEventParameters()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setEventParameters(\string|\Bitrix\Main\DB\SqlExpression $eventParameters)
+	 * @method bool hasEventParameters()
+	 * @method bool isEventParametersFilled()
+	 * @method bool isEventParametersChanged()
+	 * @method \string remindActualEventParameters()
+	 * @method \string requireEventParameters()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetEventParameters()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetEventParameters()
+	 * @method \string fillEventParameters()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent reset($fieldName)
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\EO_SchedulerEvent wakeUp($data)
+	 */
+	class EO_SchedulerEvent extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\SchedulerEventTable */
+		static public $dataClass = '\Bitrix\Bizproc\SchedulerEventTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc {
+	/**
+	 * EO_SchedulerEvent_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getWorkflowIdList()
+	 * @method \string[] fillWorkflowId()
+	 * @method \string[] getHandlerList()
+	 * @method \string[] fillHandler()
+	 * @method \string[] getEventModuleList()
+	 * @method \string[] fillEventModule()
+	 * @method \string[] getEventTypeList()
+	 * @method \string[] fillEventType()
+	 * @method \string[] getEntityIdList()
+	 * @method \string[] fillEntityId()
+	 * @method \string[] getEventParametersList()
+	 * @method \string[] fillEventParameters()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\EO_SchedulerEvent $object)
+	 * @method bool has(\Bitrix\Bizproc\EO_SchedulerEvent $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\EO_SchedulerEvent $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\EO_SchedulerEvent_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection merge(?\Bitrix\Bizproc\EO_SchedulerEvent_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection filter(callable $callback)
+	 */
+	class EO_SchedulerEvent_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\SchedulerEventTable */
+		static public $dataClass = '\Bitrix\Bizproc\SchedulerEventTable';
+	}
+}
+namespace Bitrix\Bizproc {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_SchedulerEvent_Result exec()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent fetchObject()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection fetchCollection()
+	 */
+	class EO_SchedulerEvent_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent fetchObject()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection fetchCollection()
+	 */
+	class EO_SchedulerEvent_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection createCollection()
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection wakeUpCollection($rows)
+	 */
+	class EO_SchedulerEvent_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\RestProviderTable:bizproc/lib/restprovider.php */
+namespace Bitrix\Bizproc {
+	/**
+	 * EO_RestProvider
+	 * @see \Bitrix\Bizproc\RestProviderTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\EO_RestProvider setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getAppId()
+	 * @method \Bitrix\Bizproc\EO_RestProvider setAppId(\string|\Bitrix\Main\DB\SqlExpression $appId)
+	 * @method bool hasAppId()
+	 * @method bool isAppIdFilled()
+	 * @method bool isAppIdChanged()
+	 * @method \string remindActualAppId()
+	 * @method \string requireAppId()
+	 * @method \Bitrix\Bizproc\EO_RestProvider resetAppId()
+	 * @method \Bitrix\Bizproc\EO_RestProvider unsetAppId()
+	 * @method \string fillAppId()
+	 * @method \string getAppName()
+	 * @method \Bitrix\Bizproc\EO_RestProvider setAppName(\string|\Bitrix\Main\DB\SqlExpression $appName)
+	 * @method bool hasAppName()
+	 * @method bool isAppNameFilled()
+	 * @method bool isAppNameChanged()
+	 * @method \string remindActualAppName()
+	 * @method \string requireAppName()
+	 * @method \Bitrix\Bizproc\EO_RestProvider resetAppName()
+	 * @method \Bitrix\Bizproc\EO_RestProvider unsetAppName()
+	 * @method \string fillAppName()
+	 * @method \string getCode()
+	 * @method \Bitrix\Bizproc\EO_RestProvider setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\Bizproc\EO_RestProvider resetCode()
+	 * @method \Bitrix\Bizproc\EO_RestProvider unsetCode()
+	 * @method \string fillCode()
+	 * @method \string getType()
+	 * @method \Bitrix\Bizproc\EO_RestProvider setType(\string|\Bitrix\Main\DB\SqlExpression $type)
+	 * @method bool hasType()
+	 * @method bool isTypeFilled()
+	 * @method bool isTypeChanged()
+	 * @method \string remindActualType()
+	 * @method \string requireType()
+	 * @method \Bitrix\Bizproc\EO_RestProvider resetType()
+	 * @method \Bitrix\Bizproc\EO_RestProvider unsetType()
+	 * @method \string fillType()
+	 * @method \string getHandler()
+	 * @method \Bitrix\Bizproc\EO_RestProvider setHandler(\string|\Bitrix\Main\DB\SqlExpression $handler)
+	 * @method bool hasHandler()
+	 * @method bool isHandlerFilled()
+	 * @method bool isHandlerChanged()
+	 * @method \string remindActualHandler()
+	 * @method \string requireHandler()
+	 * @method \Bitrix\Bizproc\EO_RestProvider resetHandler()
+	 * @method \Bitrix\Bizproc\EO_RestProvider unsetHandler()
+	 * @method \string fillHandler()
+	 * @method \string getName()
+	 * @method \Bitrix\Bizproc\EO_RestProvider setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Bizproc\EO_RestProvider resetName()
+	 * @method \Bitrix\Bizproc\EO_RestProvider unsetName()
+	 * @method \string fillName()
+	 * @method \string getDescription()
+	 * @method \Bitrix\Bizproc\EO_RestProvider setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
+	 * @method bool hasDescription()
+	 * @method bool isDescriptionFilled()
+	 * @method bool isDescriptionChanged()
+	 * @method \string remindActualDescription()
+	 * @method \string requireDescription()
+	 * @method \Bitrix\Bizproc\EO_RestProvider resetDescription()
+	 * @method \Bitrix\Bizproc\EO_RestProvider unsetDescription()
+	 * @method \string fillDescription()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\EO_RestProvider set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\EO_RestProvider reset($fieldName)
+	 * @method \Bitrix\Bizproc\EO_RestProvider unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\EO_RestProvider wakeUp($data)
+	 */
+	class EO_RestProvider extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\RestProviderTable */
+		static public $dataClass = '\Bitrix\Bizproc\RestProviderTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc {
+	/**
+	 * EO_RestProvider_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getAppIdList()
+	 * @method \string[] fillAppId()
+	 * @method \string[] getAppNameList()
+	 * @method \string[] fillAppName()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \string[] getTypeList()
+	 * @method \string[] fillType()
+	 * @method \string[] getHandlerList()
+	 * @method \string[] fillHandler()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getDescriptionList()
+	 * @method \string[] fillDescription()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\EO_RestProvider $object)
+	 * @method bool has(\Bitrix\Bizproc\EO_RestProvider $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\EO_RestProvider getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\EO_RestProvider[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\EO_RestProvider $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\EO_RestProvider_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\EO_RestProvider current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection merge(?\Bitrix\Bizproc\EO_RestProvider_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\EO_RestProvider|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection filter(callable $callback)
+	 */
+	class EO_RestProvider_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\RestProviderTable */
+		static public $dataClass = '\Bitrix\Bizproc\RestProviderTable';
+	}
+}
+namespace Bitrix\Bizproc {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_RestProvider_Result exec()
+	 * @method \Bitrix\Bizproc\EO_RestProvider fetchObject()
+	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection fetchCollection()
+	 */
+	class EO_RestProvider_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\EO_RestProvider fetchObject()
+	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection fetchCollection()
+	 */
+	class EO_RestProvider_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\EO_RestProvider createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection createCollection()
+	 * @method \Bitrix\Bizproc\EO_RestProvider wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\EO_RestProvider_Collection wakeUpCollection($rows)
+	 */
+	class EO_RestProvider_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable:bizproc/lib/workflow/entity/workflowusertable.php */
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowUser
+	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \string getWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method bool hasWorkflowId()
+	 * @method bool isWorkflowIdFilled()
+	 * @method bool isWorkflowIdChanged()
+	 * @method \int getIsAuthor()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setIsAuthor(\int|\Bitrix\Main\DB\SqlExpression $isAuthor)
+	 * @method bool hasIsAuthor()
+	 * @method bool isIsAuthorFilled()
+	 * @method bool isIsAuthorChanged()
+	 * @method \int remindActualIsAuthor()
+	 * @method \int requireIsAuthor()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetIsAuthor()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetIsAuthor()
+	 * @method \int fillIsAuthor()
+	 * @method \int getWorkflowStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setWorkflowStatus(\int|\Bitrix\Main\DB\SqlExpression $workflowStatus)
+	 * @method bool hasWorkflowStatus()
+	 * @method bool isWorkflowStatusFilled()
+	 * @method bool isWorkflowStatusChanged()
+	 * @method \int remindActualWorkflowStatus()
+	 * @method \int requireWorkflowStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetWorkflowStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetWorkflowStatus()
+	 * @method \int fillWorkflowStatus()
+	 * @method \int getTaskStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setTaskStatus(\int|\Bitrix\Main\DB\SqlExpression $taskStatus)
+	 * @method bool hasTaskStatus()
+	 * @method bool isTaskStatusFilled()
+	 * @method bool isTaskStatusChanged()
+	 * @method \int remindActualTaskStatus()
+	 * @method \int requireTaskStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetTaskStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetTaskStatus()
+	 * @method \int fillTaskStatus()
+	 * @method \Bitrix\Main\Type\DateTime getModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setModified(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modified)
+	 * @method bool hasModified()
+	 * @method bool isModifiedFilled()
+	 * @method bool isModifiedChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualModified()
+	 * @method \Bitrix\Main\Type\DateTime requireModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetModified()
+	 * @method \Bitrix\Main\Type\DateTime fillModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter getFilter()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter remindActualFilter()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter requireFilter()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setFilter(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter $object)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetFilter()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetFilter()
+	 * @method bool hasFilter()
+	 * @method bool isFilterFilled()
+	 * @method bool isFilterChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter fillFilter()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment getComments()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment remindActualComments()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment requireComments()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setComments(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment $object)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetComments()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetComments()
+	 * @method bool hasComments()
+	 * @method bool isCommentsFilled()
+	 * @method bool isCommentsChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment fillComments()
+	 * @method \Bitrix\Bizproc\Workflow\WorkflowState getWorkflowState()
+	 * @method \Bitrix\Bizproc\Workflow\WorkflowState remindActualWorkflowState()
+	 * @method \Bitrix\Bizproc\Workflow\WorkflowState requireWorkflowState()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setWorkflowState(\Bitrix\Bizproc\Workflow\WorkflowState $object)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetWorkflowState()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetWorkflowState()
+	 * @method bool hasWorkflowState()
+	 * @method bool isWorkflowStateFilled()
+	 * @method bool isWorkflowStateChanged()
+	 * @method \Bitrix\Bizproc\Workflow\WorkflowState fillWorkflowState()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent getSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent remindActualSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent requireSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setSearchContent(\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent $object)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetSearchContent()
+	 * @method bool hasSearchContent()
+	 * @method bool isSearchContentFilled()
+	 * @method bool isSearchContentChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent fillSearchContent()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser wakeUp($data)
+	 */
+	class EO_WorkflowUser extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowUser_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getUserIdList()
+	 * @method \string[] getWorkflowIdList()
+	 * @method \int[] getIsAuthorList()
+	 * @method \int[] fillIsAuthor()
+	 * @method \int[] getWorkflowStatusList()
+	 * @method \int[] fillWorkflowStatus()
+	 * @method \int[] getTaskStatusList()
+	 * @method \int[] fillTaskStatus()
+	 * @method \Bitrix\Main\Type\DateTime[] getModifiedList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter[] getFilterList()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection getFilterCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection fillFilter()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment[] getCommentsList()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection getCommentsCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection fillComments()
+	 * @method \Bitrix\Bizproc\Workflow\WorkflowState[] getWorkflowStateList()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection getWorkflowStateCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowState_Collection fillWorkflowState()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent[] getSearchContentList()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection getSearchContentCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection fillSearchContent()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection filter(callable $callback)
+	 */
+	class EO_WorkflowUser_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable';
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WorkflowUser_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection fetchCollection()
+	 */
+	class EO_WorkflowUser_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection fetchCollection()
+	 */
+	class EO_WorkflowUser_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection wakeUpCollection($rows)
+	 */
+	class EO_WorkflowUser_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable:bizproc/lib/workflow/entity/workflowusercommenttable.php */
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowUserComment
+	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \string getWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method bool hasWorkflowId()
+	 * @method bool isWorkflowIdFilled()
+	 * @method bool isWorkflowIdChanged()
+	 * @method \int getUnreadCnt()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment setUnreadCnt(\int|\Bitrix\Main\DB\SqlExpression $unreadCnt)
+	 * @method bool hasUnreadCnt()
+	 * @method bool isUnreadCntFilled()
+	 * @method bool isUnreadCntChanged()
+	 * @method \int remindActualUnreadCnt()
+	 * @method \int requireUnreadCnt()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment resetUnreadCnt()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment unsetUnreadCnt()
+	 * @method \int fillUnreadCnt()
+	 * @method \int getLastType()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment setLastType(\int|\Bitrix\Main\DB\SqlExpression $lastType)
+	 * @method bool hasLastType()
+	 * @method bool isLastTypeFilled()
+	 * @method bool isLastTypeChanged()
+	 * @method \int remindActualLastType()
+	 * @method \int requireLastType()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment resetLastType()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment unsetLastType()
+	 * @method \int fillLastType()
+	 * @method \Bitrix\Main\Type\DateTime getModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment setModified(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modified)
+	 * @method bool hasModified()
+	 * @method bool isModifiedFilled()
+	 * @method bool isModifiedChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualModified()
+	 * @method \Bitrix\Main\Type\DateTime requireModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment resetModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment unsetModified()
+	 * @method \Bitrix\Main\Type\DateTime fillModified()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment wakeUp($data)
+	 */
+	class EO_WorkflowUserComment extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowUserComment_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getUserIdList()
+	 * @method \string[] getWorkflowIdList()
+	 * @method \int[] getUnreadCntList()
+	 * @method \int[] fillUnreadCnt()
+	 * @method \int[] getLastTypeList()
+	 * @method \int[] fillLastType()
+	 * @method \Bitrix\Main\Type\DateTime[] getModifiedList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillModified()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection filter(callable $callback)
+	 */
+	class EO_WorkflowUserComment_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable';
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WorkflowUserComment_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection fetchCollection()
+	 */
+	class EO_WorkflowUserComment_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection fetchCollection()
+	 */
+	class EO_WorkflowUserComment_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection wakeUpCollection($rows)
+	 */
+	class EO_WorkflowUserComment_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable:bizproc/lib/workflow/entity/workflowinstance.php */
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowInstance
+	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string getId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setId(\string|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getModuleId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
+	 * @method bool hasModuleId()
+	 * @method bool isModuleIdFilled()
+	 * @method bool isModuleIdChanged()
+	 * @method \string remindActualModuleId()
+	 * @method \string requireModuleId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetModuleId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetModuleId()
+	 * @method \string fillModuleId()
+	 * @method \string getEntity()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
+	 * @method bool hasEntity()
+	 * @method bool isEntityFilled()
+	 * @method bool isEntityChanged()
+	 * @method \string remindActualEntity()
+	 * @method \string requireEntity()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetEntity()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetEntity()
+	 * @method \string fillEntity()
+	 * @method \string getDocumentId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setDocumentId(\string|\Bitrix\Main\DB\SqlExpression $documentId)
+	 * @method bool hasDocumentId()
+	 * @method bool isDocumentIdFilled()
+	 * @method bool isDocumentIdChanged()
+	 * @method \string remindActualDocumentId()
+	 * @method \string requireDocumentId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetDocumentId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetDocumentId()
+	 * @method \string fillDocumentId()
+	 * @method \int getWorkflowTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setWorkflowTemplateId(\int|\Bitrix\Main\DB\SqlExpression $workflowTemplateId)
+	 * @method bool hasWorkflowTemplateId()
+	 * @method bool isWorkflowTemplateIdFilled()
+	 * @method bool isWorkflowTemplateIdChanged()
+	 * @method \int remindActualWorkflowTemplateId()
+	 * @method \int requireWorkflowTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetWorkflowTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetWorkflowTemplateId()
+	 * @method \int fillWorkflowTemplateId()
+	 * @method \string getWorkflow()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setWorkflow(\string|\Bitrix\Main\DB\SqlExpression $workflow)
+	 * @method bool hasWorkflow()
+	 * @method bool isWorkflowFilled()
+	 * @method bool isWorkflowChanged()
+	 * @method \string remindActualWorkflow()
+	 * @method \string requireWorkflow()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetWorkflow()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetWorkflow()
+	 * @method \string fillWorkflow()
+	 * @method \string getWorkflowRo()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setWorkflowRo(\string|\Bitrix\Main\DB\SqlExpression $workflowRo)
+	 * @method bool hasWorkflowRo()
+	 * @method bool isWorkflowRoFilled()
+	 * @method bool isWorkflowRoChanged()
+	 * @method \string remindActualWorkflowRo()
+	 * @method \string requireWorkflowRo()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetWorkflowRo()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetWorkflowRo()
+	 * @method \string fillWorkflowRo()
+	 * @method \Bitrix\Main\Type\DateTime getStarted()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setStarted(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $started)
+	 * @method bool hasStarted()
+	 * @method bool isStartedFilled()
+	 * @method bool isStartedChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualStarted()
+	 * @method \Bitrix\Main\Type\DateTime requireStarted()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetStarted()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetStarted()
+	 * @method \Bitrix\Main\Type\DateTime fillStarted()
+	 * @method \int getStartedBy()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setStartedBy(\int|\Bitrix\Main\DB\SqlExpression $startedBy)
+	 * @method bool hasStartedBy()
+	 * @method bool isStartedByFilled()
+	 * @method bool isStartedByChanged()
+	 * @method \int remindActualStartedBy()
+	 * @method \int requireStartedBy()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetStartedBy()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetStartedBy()
+	 * @method \int fillStartedBy()
+	 * @method \Bitrix\Main\EO_User getStartedUser()
+	 * @method \Bitrix\Main\EO_User remindActualStartedUser()
+	 * @method \Bitrix\Main\EO_User requireStartedUser()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setStartedUser(\Bitrix\Main\EO_User $object)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetStartedUser()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetStartedUser()
+	 * @method bool hasStartedUser()
+	 * @method bool isStartedUserFilled()
+	 * @method bool isStartedUserChanged()
+	 * @method \Bitrix\Main\EO_User fillStartedUser()
+	 * @method \int getStartedEventType()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setStartedEventType(\int|\Bitrix\Main\DB\SqlExpression $startedEventType)
+	 * @method bool hasStartedEventType()
+	 * @method bool isStartedEventTypeFilled()
+	 * @method bool isStartedEventTypeChanged()
+	 * @method \int remindActualStartedEventType()
+	 * @method \int requireStartedEventType()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetStartedEventType()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetStartedEventType()
+	 * @method \int fillStartedEventType()
+	 * @method \int getStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setStatus(\int|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \int remindActualStatus()
+	 * @method \int requireStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetStatus()
+	 * @method \int fillStatus()
+	 * @method \Bitrix\Main\Type\DateTime getModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setModified(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modified)
+	 * @method bool hasModified()
+	 * @method bool isModifiedFilled()
+	 * @method bool isModifiedChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualModified()
+	 * @method \Bitrix\Main\Type\DateTime requireModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetModified()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetModified()
+	 * @method \Bitrix\Main\Type\DateTime fillModified()
+	 * @method \string getOwnerId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setOwnerId(\string|\Bitrix\Main\DB\SqlExpression $ownerId)
+	 * @method bool hasOwnerId()
+	 * @method bool isOwnerIdFilled()
+	 * @method bool isOwnerIdChanged()
+	 * @method \string remindActualOwnerId()
+	 * @method \string requireOwnerId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetOwnerId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetOwnerId()
+	 * @method \string fillOwnerId()
+	 * @method \Bitrix\Main\Type\DateTime getOwnedUntil()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setOwnedUntil(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $ownedUntil)
+	 * @method bool hasOwnedUntil()
+	 * @method bool isOwnedUntilFilled()
+	 * @method bool isOwnedUntilChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualOwnedUntil()
+	 * @method \Bitrix\Main\Type\DateTime requireOwnedUntil()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetOwnedUntil()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetOwnedUntil()
+	 * @method \Bitrix\Main\Type\DateTime fillOwnedUntil()
+	 * @method \Bitrix\Bizproc\Workflow\WorkflowState getState()
+	 * @method \Bitrix\Bizproc\Workflow\WorkflowState remindActualState()
+	 * @method \Bitrix\Bizproc\Workflow\WorkflowState requireState()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setState(\Bitrix\Bizproc\Workflow\WorkflowState $object)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetState()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetState()
+	 * @method bool hasState()
+	 * @method bool isStateFilled()
+	 * @method bool isStateChanged()
+	 * @method \Bitrix\Bizproc\Workflow\WorkflowState fillState()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl getTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl remindActualTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl requireTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setTemplate(\Bitrix\Bizproc\Workflow\Template\Tpl $object)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetTemplate()
+	 * @method bool hasTemplate()
+	 * @method bool isTemplateFilled()
+	 * @method bool isTemplateChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl fillTemplate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance wakeUp($data)
+	 */
+	class EO_WorkflowInstance extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowInstance_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string[] getIdList()
+	 * @method \string[] getModuleIdList()
+	 * @method \string[] fillModuleId()
+	 * @method \string[] getEntityList()
+	 * @method \string[] fillEntity()
+	 * @method \string[] getDocumentIdList()
+	 * @method \string[] fillDocumentId()
+	 * @method \int[] getWorkflowTemplateIdList()
+	 * @method \int[] fillWorkflowTemplateId()
+	 * @method \string[] getWorkflowList()
+	 * @method \string[] fillWorkflow()
+	 * @method \string[] getWorkflowRoList()
+	 * @method \string[] fillWorkflowRo()
+	 * @method \Bitrix\Main\Type\DateTime[] getStartedList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillStarted()
+	 * @method \int[] getStartedByList()
+	 * @method \int[] fillStartedBy()
+	 * @method \Bitrix\Main\EO_User[] getStartedUserList()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection getStartedUserCollection()
+	 * @method \Bitrix\Main\EO_User_Collection fillStartedUser()
+	 * @method \int[] getStartedEventTypeList()
+	 * @method \int[] fillStartedEventType()
+	 * @method \int[] getStatusList()
+	 * @method \int[] fillStatus()
+	 * @method \Bitrix\Main\Type\DateTime[] getModifiedList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillModified()
+	 * @method \string[] getOwnerIdList()
+	 * @method \string[] fillOwnerId()
+	 * @method \Bitrix\Main\Type\DateTime[] getOwnedUntilList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillOwnedUntil()
+	 * @method \Bitrix\Bizproc\Workflow\WorkflowState[] getStateList()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection getStateCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowState_Collection fillState()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl[] getTemplateList()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection getTemplateCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection fillTemplate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection filter(callable $callback)
+	 */
+	class EO_WorkflowInstance_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable';
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WorkflowInstance_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection fetchCollection()
+	 */
+	class EO_WorkflowInstance_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection fetchCollection()
+	 */
+	class EO_WorkflowInstance_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection wakeUpCollection($rows)
+	 */
+	class EO_WorkflowInstance_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable:bizproc/lib/workflow/entity/workflowfiltertable.php */
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowFilter
+	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string getWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method bool hasWorkflowId()
+	 * @method bool isWorkflowIdFilled()
+	 * @method bool isWorkflowIdChanged()
+	 * @method \string getModuleId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
+	 * @method bool hasModuleId()
+	 * @method bool isModuleIdFilled()
+	 * @method bool isModuleIdChanged()
+	 * @method \string remindActualModuleId()
+	 * @method \string requireModuleId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter resetModuleId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unsetModuleId()
+	 * @method \string fillModuleId()
+	 * @method \string getEntity()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
+	 * @method bool hasEntity()
+	 * @method bool isEntityFilled()
+	 * @method bool isEntityChanged()
+	 * @method \string remindActualEntity()
+	 * @method \string requireEntity()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter resetEntity()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unsetEntity()
+	 * @method \string fillEntity()
+	 * @method \string getDocumentId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setDocumentId(\string|\Bitrix\Main\DB\SqlExpression $documentId)
+	 * @method bool hasDocumentId()
+	 * @method bool isDocumentIdFilled()
+	 * @method bool isDocumentIdChanged()
+	 * @method \string remindActualDocumentId()
+	 * @method \string requireDocumentId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter resetDocumentId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unsetDocumentId()
+	 * @method \string fillDocumentId()
+	 * @method \int getTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method bool hasTemplateId()
+	 * @method bool isTemplateIdFilled()
+	 * @method bool isTemplateIdChanged()
+	 * @method \int remindActualTemplateId()
+	 * @method \int requireTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter resetTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unsetTemplateId()
+	 * @method \int fillTemplateId()
+	 * @method \Bitrix\Main\Type\DateTime getStarted()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setStarted(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $started)
+	 * @method bool hasStarted()
+	 * @method bool isStartedFilled()
+	 * @method bool isStartedChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualStarted()
+	 * @method \Bitrix\Main\Type\DateTime requireStarted()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter resetStarted()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unsetStarted()
+	 * @method \Bitrix\Main\Type\DateTime fillStarted()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter wakeUp($data)
+	 */
+	class EO_WorkflowFilter extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowFilter_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string[] getWorkflowIdList()
+	 * @method \string[] getModuleIdList()
+	 * @method \string[] fillModuleId()
+	 * @method \string[] getEntityList()
+	 * @method \string[] fillEntity()
+	 * @method \string[] getDocumentIdList()
+	 * @method \string[] fillDocumentId()
+	 * @method \int[] getTemplateIdList()
+	 * @method \int[] fillTemplateId()
+	 * @method \Bitrix\Main\Type\DateTime[] getStartedList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillStarted()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection filter(callable $callback)
+	 */
+	class EO_WorkflowFilter_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable';
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WorkflowFilter_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection fetchCollection()
+	 */
+	class EO_WorkflowFilter_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection fetchCollection()
+	 */
+	class EO_WorkflowFilter_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection wakeUpCollection($rows)
+	 */
+	class EO_WorkflowFilter_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable:bizproc/lib/workflow/entity/workflowmetadatatable.php */
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowMetadata
+	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method bool hasWorkflowId()
+	 * @method bool isWorkflowIdFilled()
+	 * @method bool isWorkflowIdChanged()
+	 * @method \string remindActualWorkflowId()
+	 * @method \string requireWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata resetWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata unsetWorkflowId()
+	 * @method \string fillWorkflowId()
+	 * @method \int getStartDuration()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata setStartDuration(\int|\Bitrix\Main\DB\SqlExpression $startDuration)
+	 * @method bool hasStartDuration()
+	 * @method bool isStartDurationFilled()
+	 * @method bool isStartDurationChanged()
+	 * @method \int remindActualStartDuration()
+	 * @method \int requireStartDuration()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata resetStartDuration()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata unsetStartDuration()
+	 * @method \int fillStartDuration()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata wakeUp($data)
+	 */
+	class EO_WorkflowMetadata extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowMetadata_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getWorkflowIdList()
+	 * @method \string[] fillWorkflowId()
+	 * @method \int[] getStartDurationList()
+	 * @method \int[] fillStartDuration()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection filter(callable $callback)
+	 */
+	class EO_WorkflowMetadata_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable';
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WorkflowMetadata_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection fetchCollection()
+	 */
+	class EO_WorkflowMetadata_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection fetchCollection()
+	 */
+	class EO_WorkflowMetadata_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection wakeUpCollection($rows)
+	 */
+	class EO_WorkflowMetadata_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable:bizproc/lib/workflow/entity/workflowdurationstattable.php */
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowDurationStat
+	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method bool hasWorkflowId()
+	 * @method bool isWorkflowIdFilled()
+	 * @method bool isWorkflowIdChanged()
+	 * @method \string remindActualWorkflowId()
+	 * @method \string requireWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat resetWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat unsetWorkflowId()
+	 * @method \string fillWorkflowId()
+	 * @method \int getTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method bool hasTemplateId()
+	 * @method bool isTemplateIdFilled()
+	 * @method bool isTemplateIdChanged()
+	 * @method \int remindActualTemplateId()
+	 * @method \int requireTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat resetTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat unsetTemplateId()
+	 * @method \int fillTemplateId()
+	 * @method \int getDuration()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat setDuration(\int|\Bitrix\Main\DB\SqlExpression $duration)
+	 * @method bool hasDuration()
+	 * @method bool isDurationFilled()
+	 * @method bool isDurationChanged()
+	 * @method \int remindActualDuration()
+	 * @method \int requireDuration()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat resetDuration()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat unsetDuration()
+	 * @method \int fillDuration()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat wakeUp($data)
+	 */
+	class EO_WorkflowDurationStat extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * EO_WorkflowDurationStat_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getWorkflowIdList()
+	 * @method \string[] fillWorkflowId()
+	 * @method \int[] getTemplateIdList()
+	 * @method \int[] fillTemplateId()
+	 * @method \int[] getDurationList()
+	 * @method \int[] fillDuration()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection filter(callable $callback)
+	 */
+	class EO_WorkflowDurationStat_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable';
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WorkflowDurationStat_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection fetchCollection()
+	 */
+	class EO_WorkflowDurationStat_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection fetchCollection()
+	 */
+	class EO_WorkflowDurationStat_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection wakeUpCollection($rows)
+	 */
+	class EO_WorkflowDurationStat_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable:bizproc/lib/workflow/entity/workflowstate.php */
 namespace Bitrix\Bizproc\Workflow\Entity {
@@ -2369,7 +4349,7 @@ namespace Bitrix\Bizproc\Workflow\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Workflow\WorkflowState wakeUp($data)
 	 */
-	class EO_WorkflowState {
+	class EO_WorkflowState extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable';
 		/**
@@ -2457,7 +4437,7 @@ namespace Bitrix\Bizproc\Workflow\Entity {
 	 * @method \Bitrix\Bizproc\Workflow\WorkflowState|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowState_Collection filter(callable $callback)
 	 */
-	class EO_WorkflowState_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_WorkflowState_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable';
 	}
@@ -2566,7 +4546,7 @@ namespace Bitrix\Bizproc\Workflow\Template {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateSettings wakeUp($data)
 	 */
-	class EO_WorkflowTemplateSettings {
+	class EO_WorkflowTemplateSettings extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateSettingsTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateSettingsTable';
 		/**
@@ -2623,7 +4603,7 @@ namespace Bitrix\Bizproc\Workflow\Template {
 	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateSettings|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateSettings_Collection filter(callable $callback)
 	 */
-	class EO_WorkflowTemplateSettings_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_WorkflowTemplateSettings_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateSettingsTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateSettingsTable';
 	}
@@ -2650,576 +4630,6 @@ namespace Bitrix\Bizproc\Workflow\Template {
 	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateSettings_Collection wakeUpCollection($rows)
 	 */
 	class EO_WorkflowTemplateSettings_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable:bizproc/lib/workflow/template/workflowtemplatedrafttable.php */
-namespace Bitrix\Bizproc\Workflow\Template {
-	/**
-	 * EO_WorkflowTemplateDraft
-	 * @see \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getModuleId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
-	 * @method bool hasModuleId()
-	 * @method bool isModuleIdFilled()
-	 * @method bool isModuleIdChanged()
-	 * @method \string remindActualModuleId()
-	 * @method \string requireModuleId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetModuleId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetModuleId()
-	 * @method \string fillModuleId()
-	 * @method \string getEntity()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
-	 * @method bool hasEntity()
-	 * @method bool isEntityFilled()
-	 * @method bool isEntityChanged()
-	 * @method \string remindActualEntity()
-	 * @method \string requireEntity()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetEntity()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetEntity()
-	 * @method \string fillEntity()
-	 * @method \string getDocumentType()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setDocumentType(\string|\Bitrix\Main\DB\SqlExpression $documentType)
-	 * @method bool hasDocumentType()
-	 * @method bool isDocumentTypeFilled()
-	 * @method bool isDocumentTypeChanged()
-	 * @method \string remindActualDocumentType()
-	 * @method \string requireDocumentType()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetDocumentType()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetDocumentType()
-	 * @method \string fillDocumentType()
-	 * @method \int getTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
-	 * @method bool hasTemplateId()
-	 * @method bool isTemplateIdFilled()
-	 * @method bool isTemplateIdChanged()
-	 * @method \int remindActualTemplateId()
-	 * @method \int requireTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetTemplateId()
-	 * @method \int fillTemplateId()
-	 * @method array getTemplateData()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setTemplateData(array|\Bitrix\Main\DB\SqlExpression $templateData)
-	 * @method bool hasTemplateData()
-	 * @method bool isTemplateDataFilled()
-	 * @method bool isTemplateDataChanged()
-	 * @method array remindActualTemplateData()
-	 * @method array requireTemplateData()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetTemplateData()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetTemplateData()
-	 * @method array fillTemplateData()
-	 * @method \int getStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setStatus(\int|\Bitrix\Main\DB\SqlExpression $status)
-	 * @method bool hasStatus()
-	 * @method bool isStatusFilled()
-	 * @method bool isStatusChanged()
-	 * @method \int remindActualStatus()
-	 * @method \int requireStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetStatus()
-	 * @method \int fillStatus()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \int remindActualUserId()
-	 * @method \int requireUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetUserId()
-	 * @method \int fillUserId()
-	 * @method \Bitrix\Main\Type\DateTime getCreated()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setCreated(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $created)
-	 * @method bool hasCreated()
-	 * @method bool isCreatedFilled()
-	 * @method bool isCreatedChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCreated()
-	 * @method \Bitrix\Main\Type\DateTime requireCreated()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetCreated()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetCreated()
-	 * @method \Bitrix\Main\Type\DateTime fillCreated()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl getTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl remindActualTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl requireTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setTemplate(\Bitrix\Bizproc\Workflow\Template\Tpl $object)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetTemplate()
-	 * @method bool hasTemplate()
-	 * @method bool isTemplateFilled()
-	 * @method bool isTemplateChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl fillTemplate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft wakeUp($data)
-	 */
-	class EO_WorkflowTemplateDraft {
-		/* @var \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Template {
-	/**
-	 * EO_WorkflowTemplateDraft_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getModuleIdList()
-	 * @method \string[] fillModuleId()
-	 * @method \string[] getEntityList()
-	 * @method \string[] fillEntity()
-	 * @method \string[] getDocumentTypeList()
-	 * @method \string[] fillDocumentType()
-	 * @method \int[] getTemplateIdList()
-	 * @method \int[] fillTemplateId()
-	 * @method array[] getTemplateDataList()
-	 * @method array[] fillTemplateData()
-	 * @method \int[] getStatusList()
-	 * @method \int[] fillStatus()
-	 * @method \int[] getUserIdList()
-	 * @method \int[] fillUserId()
-	 * @method \Bitrix\Main\Type\DateTime[] getCreatedList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCreated()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl[] getTemplateList()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection getTemplateCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection fillTemplate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection merge(?\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection filter(callable $callback)
-	 */
-	class EO_WorkflowTemplateDraft_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable';
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Template {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_WorkflowTemplateDraft_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection fetchCollection()
-	 */
-	class EO_WorkflowTemplateDraft_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection fetchCollection()
-	 */
-	class EO_WorkflowTemplateDraft_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection wakeUpCollection($rows)
-	 */
-	class EO_WorkflowTemplateDraft_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable:bizproc/lib/workflow/template/workflowtemplateuseroptiontable.php */
-namespace Bitrix\Bizproc\Workflow\Template {
-	/**
-	 * EO_WorkflowTemplateUserOption
-	 * @see \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
-	 * @method bool hasTemplateId()
-	 * @method bool isTemplateIdFilled()
-	 * @method bool isTemplateIdChanged()
-	 * @method \int remindActualTemplateId()
-	 * @method \int requireTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption resetTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption unsetTemplateId()
-	 * @method \int fillTemplateId()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \int remindActualUserId()
-	 * @method \int requireUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption resetUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption unsetUserId()
-	 * @method \int fillUserId()
-	 * @method \int getOptionCode()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption setOptionCode(\int|\Bitrix\Main\DB\SqlExpression $optionCode)
-	 * @method bool hasOptionCode()
-	 * @method bool isOptionCodeFilled()
-	 * @method bool isOptionCodeChanged()
-	 * @method \int remindActualOptionCode()
-	 * @method \int requireOptionCode()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption resetOptionCode()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption unsetOptionCode()
-	 * @method \int fillOptionCode()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl getTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl remindActualTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl requireTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption setTemplate(\Bitrix\Bizproc\Workflow\Template\Tpl $object)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption resetTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption unsetTemplate()
-	 * @method bool hasTemplate()
-	 * @method bool isTemplateFilled()
-	 * @method bool isTemplateChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl fillTemplate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption wakeUp($data)
-	 */
-	class EO_WorkflowTemplateUserOption {
-		/* @var \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Template {
-	/**
-	 * EO_WorkflowTemplateUserOption_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getTemplateIdList()
-	 * @method \int[] fillTemplateId()
-	 * @method \int[] getUserIdList()
-	 * @method \int[] fillUserId()
-	 * @method \int[] getOptionCodeList()
-	 * @method \int[] fillOptionCode()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl[] getTemplateList()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection getTemplateCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection fillTemplate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection merge(?\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection filter(callable $callback)
-	 */
-	class EO_WorkflowTemplateUserOption_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable';
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Template {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_WorkflowTemplateUserOption_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection fetchCollection()
-	 */
-	class EO_WorkflowTemplateUserOption_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection fetchCollection()
-	 */
-	class EO_WorkflowTemplateUserOption_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection wakeUpCollection($rows)
-	 */
-	class EO_WorkflowTemplateUserOption_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable:bizproc/lib/workflow/template/entity/workflowtemplatesection.php */
-namespace Bitrix\Bizproc\Workflow\Template\Entity {
-	/**
-	 * TemplateSection
-	 * @see \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
-	 * @method bool hasTemplateId()
-	 * @method bool isTemplateIdFilled()
-	 * @method bool isTemplateIdChanged()
-	 * @method \int remindActualTemplateId()
-	 * @method \int requireTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection resetTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unsetTemplateId()
-	 * @method \int fillTemplateId()
-	 * @method \string getSectionId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setSectionId(\string|\Bitrix\Main\DB\SqlExpression $sectionId)
-	 * @method bool hasSectionId()
-	 * @method bool isSectionIdFilled()
-	 * @method bool isSectionIdChanged()
-	 * @method \string remindActualSectionId()
-	 * @method \string requireSectionId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection resetSectionId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unsetSectionId()
-	 * @method \string fillSectionId()
-	 * @method \string getPath()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setPath(\string|\Bitrix\Main\DB\SqlExpression $path)
-	 * @method bool hasPath()
-	 * @method bool isPathFilled()
-	 * @method bool isPathChanged()
-	 * @method \string remindActualPath()
-	 * @method \string requirePath()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection resetPath()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unsetPath()
-	 * @method \string fillPath()
-	 * @method \Bitrix\Main\Type\DateTime getDateModify()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
-	 * @method bool hasDateModify()
-	 * @method bool isDateModifyFilled()
-	 * @method bool isDateModifyChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateModify()
-	 * @method \Bitrix\Main\Type\DateTime requireDateModify()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection resetDateModify()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unsetDateModify()
-	 * @method \Bitrix\Main\Type\DateTime fillDateModify()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl getTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl remindActualTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl requireTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setTemplate(\Bitrix\Bizproc\Workflow\Template\Tpl $object)
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection resetTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unsetTemplate()
-	 * @method bool hasTemplate()
-	 * @method bool isTemplateFilled()
-	 * @method bool isTemplateChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl fillTemplate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection wakeUp($data)
-	 */
-	class EO_WorkflowTemplateSection {
-		/* @var \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Template\Entity {
-	/**
-	 * EO_WorkflowTemplateSection_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getTemplateIdList()
-	 * @method \int[] fillTemplateId()
-	 * @method \string[] getSectionIdList()
-	 * @method \string[] fillSectionId()
-	 * @method \string[] getPathList()
-	 * @method \string[] fillPath()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateModify()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl[] getTemplateList()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection getTemplateCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection fillTemplate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection merge(?\Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection filter(callable $callback)
-	 */
-	class EO_WorkflowTemplateSection_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable';
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Template\Entity {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_WorkflowTemplateSection_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection fetchCollection()
-	 */
-	class EO_WorkflowTemplateSection_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection fetchCollection()
-	 */
-	class EO_WorkflowTemplateSection_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection wakeUpCollection($rows)
-	 */
-	class EO_WorkflowTemplateSection_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable:bizproc/lib/workflow/template/entity/workflowtemplate.php */
 namespace Bitrix\Bizproc\Workflow\Template\Entity {
@@ -3564,7 +4974,7 @@ namespace Bitrix\Bizproc\Workflow\Template\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Workflow\Template\Tpl wakeUp($data)
 	 */
-	class EO_WorkflowTemplate {
+	class EO_WorkflowTemplate extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable';
 		/**
@@ -3677,7 +5087,7 @@ namespace Bitrix\Bizproc\Workflow\Template\Entity {
 	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection filter(callable $callback)
 	 */
-	class EO_WorkflowTemplate_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_WorkflowTemplate_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable';
 	}
@@ -3704,6 +5114,350 @@ namespace Bitrix\Bizproc\Workflow\Template\Entity {
 	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection wakeUpCollection($rows)
 	 */
 	class EO_WorkflowTemplate_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable:bizproc/lib/workflow/template/workflowtemplateuseroptiontable.php */
+namespace Bitrix\Bizproc\Workflow\Template {
+	/**
+	 * EO_WorkflowTemplateUserOption
+	 * @see \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method bool hasTemplateId()
+	 * @method bool isTemplateIdFilled()
+	 * @method bool isTemplateIdChanged()
+	 * @method \int remindActualTemplateId()
+	 * @method \int requireTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption resetTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption unsetTemplateId()
+	 * @method \int fillTemplateId()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption resetUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \int getOptionCode()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption setOptionCode(\int|\Bitrix\Main\DB\SqlExpression $optionCode)
+	 * @method bool hasOptionCode()
+	 * @method bool isOptionCodeFilled()
+	 * @method bool isOptionCodeChanged()
+	 * @method \int remindActualOptionCode()
+	 * @method \int requireOptionCode()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption resetOptionCode()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption unsetOptionCode()
+	 * @method \int fillOptionCode()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl getTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl remindActualTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl requireTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption setTemplate(\Bitrix\Bizproc\Workflow\Template\Tpl $object)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption resetTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption unsetTemplate()
+	 * @method bool hasTemplate()
+	 * @method bool isTemplateFilled()
+	 * @method bool isTemplateChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl fillTemplate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption wakeUp($data)
+	 */
+	class EO_WorkflowTemplateUserOption extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Template {
+	/**
+	 * EO_WorkflowTemplateUserOption_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getTemplateIdList()
+	 * @method \int[] fillTemplateId()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \int[] getOptionCodeList()
+	 * @method \int[] fillOptionCode()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl[] getTemplateList()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection getTemplateCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection fillTemplate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection merge(?\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection filter(callable $callback)
+	 */
+	class EO_WorkflowTemplateUserOption_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable';
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Template {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WorkflowTemplateUserOption_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection fetchCollection()
+	 */
+	class EO_WorkflowTemplateUserOption_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection fetchCollection()
+	 */
+	class EO_WorkflowTemplateUserOption_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateUserOption_Collection wakeUpCollection($rows)
+	 */
+	class EO_WorkflowTemplateUserOption_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable:bizproc/lib/workflow/template/entity/workflowtemplatesection.php */
+namespace Bitrix\Bizproc\Workflow\Template\Entity {
+	/**
+	 * TemplateSection
+	 * @see \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method bool hasTemplateId()
+	 * @method bool isTemplateIdFilled()
+	 * @method bool isTemplateIdChanged()
+	 * @method \int remindActualTemplateId()
+	 * @method \int requireTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection resetTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unsetTemplateId()
+	 * @method \int fillTemplateId()
+	 * @method \string getSectionId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setSectionId(\string|\Bitrix\Main\DB\SqlExpression $sectionId)
+	 * @method bool hasSectionId()
+	 * @method bool isSectionIdFilled()
+	 * @method bool isSectionIdChanged()
+	 * @method \string remindActualSectionId()
+	 * @method \string requireSectionId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection resetSectionId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unsetSectionId()
+	 * @method \string fillSectionId()
+	 * @method \string getPath()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setPath(\string|\Bitrix\Main\DB\SqlExpression $path)
+	 * @method bool hasPath()
+	 * @method bool isPathFilled()
+	 * @method bool isPathChanged()
+	 * @method \string remindActualPath()
+	 * @method \string requirePath()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection resetPath()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unsetPath()
+	 * @method \string fillPath()
+	 * @method \Bitrix\Main\Type\DateTime getDateModify()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
+	 * @method bool hasDateModify()
+	 * @method bool isDateModifyFilled()
+	 * @method bool isDateModifyChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateModify()
+	 * @method \Bitrix\Main\Type\DateTime requireDateModify()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection resetDateModify()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unsetDateModify()
+	 * @method \Bitrix\Main\Type\DateTime fillDateModify()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl getTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl remindActualTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl requireTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection setTemplate(\Bitrix\Bizproc\Workflow\Template\Tpl $object)
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection resetTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unsetTemplate()
+	 * @method bool hasTemplate()
+	 * @method bool isTemplateFilled()
+	 * @method bool isTemplateChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl fillTemplate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection wakeUp($data)
+	 */
+	class EO_WorkflowTemplateSection extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Template\Entity {
+	/**
+	 * EO_WorkflowTemplateSection_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getTemplateIdList()
+	 * @method \int[] fillTemplateId()
+	 * @method \string[] getSectionIdList()
+	 * @method \string[] fillSectionId()
+	 * @method \string[] getPathList()
+	 * @method \string[] fillPath()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateModify()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl[] getTemplateList()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection getTemplateCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection fillTemplate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection merge(?\Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection filter(callable $callback)
+	 */
+	class EO_WorkflowTemplateSection_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable';
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Template\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WorkflowTemplateSection_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection fetchCollection()
+	 */
+	class EO_WorkflowTemplateSection_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection fetchCollection()
+	 */
+	class EO_WorkflowTemplateSection_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\TemplateSection wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateSection_Collection wakeUpCollection($rows)
+	 */
+	class EO_WorkflowTemplateSection_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTriggerTable:bizproc/lib/workflow/template/entity/workflowtemplatetrigger.php */
 namespace Bitrix\Bizproc\Workflow\Template\Entity {
@@ -3811,7 +5565,7 @@ namespace Bitrix\Bizproc\Workflow\Template\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateTrigger wakeUp($data)
 	 */
-	class EO_WorkflowTemplateTrigger {
+	class EO_WorkflowTemplateTrigger extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTriggerTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTriggerTable';
 		/**
@@ -3873,7 +5627,7 @@ namespace Bitrix\Bizproc\Workflow\Template\Entity {
 	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateTrigger|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateTrigger_Collection filter(callable $callback)
 	 */
-	class EO_WorkflowTemplateTrigger_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_WorkflowTemplateTrigger_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTriggerTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTriggerTable';
 	}
@@ -3900,6 +5654,232 @@ namespace Bitrix\Bizproc\Workflow\Template\Entity {
 	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplateTrigger_Collection wakeUpCollection($rows)
 	 */
 	class EO_WorkflowTemplateTrigger_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable:bizproc/lib/workflow/template/workflowtemplatedrafttable.php */
+namespace Bitrix\Bizproc\Workflow\Template {
+	/**
+	 * EO_WorkflowTemplateDraft
+	 * @see \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getModuleId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
+	 * @method bool hasModuleId()
+	 * @method bool isModuleIdFilled()
+	 * @method bool isModuleIdChanged()
+	 * @method \string remindActualModuleId()
+	 * @method \string requireModuleId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetModuleId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetModuleId()
+	 * @method \string fillModuleId()
+	 * @method \string getEntity()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
+	 * @method bool hasEntity()
+	 * @method bool isEntityFilled()
+	 * @method bool isEntityChanged()
+	 * @method \string remindActualEntity()
+	 * @method \string requireEntity()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetEntity()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetEntity()
+	 * @method \string fillEntity()
+	 * @method \string getDocumentType()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setDocumentType(\string|\Bitrix\Main\DB\SqlExpression $documentType)
+	 * @method bool hasDocumentType()
+	 * @method bool isDocumentTypeFilled()
+	 * @method bool isDocumentTypeChanged()
+	 * @method \string remindActualDocumentType()
+	 * @method \string requireDocumentType()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetDocumentType()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetDocumentType()
+	 * @method \string fillDocumentType()
+	 * @method \int getTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method bool hasTemplateId()
+	 * @method bool isTemplateIdFilled()
+	 * @method bool isTemplateIdChanged()
+	 * @method \int remindActualTemplateId()
+	 * @method \int requireTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetTemplateId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetTemplateId()
+	 * @method \int fillTemplateId()
+	 * @method array getTemplateData()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setTemplateData(array|\Bitrix\Main\DB\SqlExpression $templateData)
+	 * @method bool hasTemplateData()
+	 * @method bool isTemplateDataFilled()
+	 * @method bool isTemplateDataChanged()
+	 * @method array remindActualTemplateData()
+	 * @method array requireTemplateData()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetTemplateData()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetTemplateData()
+	 * @method array fillTemplateData()
+	 * @method \int getStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setStatus(\int|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \int remindActualStatus()
+	 * @method \int requireStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetStatus()
+	 * @method \int fillStatus()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \Bitrix\Main\Type\DateTime getCreated()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setCreated(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $created)
+	 * @method bool hasCreated()
+	 * @method bool isCreatedFilled()
+	 * @method bool isCreatedChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCreated()
+	 * @method \Bitrix\Main\Type\DateTime requireCreated()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetCreated()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetCreated()
+	 * @method \Bitrix\Main\Type\DateTime fillCreated()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl getTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl remindActualTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl requireTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft setTemplate(\Bitrix\Bizproc\Workflow\Template\Tpl $object)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft resetTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unsetTemplate()
+	 * @method bool hasTemplate()
+	 * @method bool isTemplateFilled()
+	 * @method bool isTemplateChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl fillTemplate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft wakeUp($data)
+	 */
+	class EO_WorkflowTemplateDraft extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Template {
+	/**
+	 * EO_WorkflowTemplateDraft_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getModuleIdList()
+	 * @method \string[] fillModuleId()
+	 * @method \string[] getEntityList()
+	 * @method \string[] fillEntity()
+	 * @method \string[] getDocumentTypeList()
+	 * @method \string[] fillDocumentType()
+	 * @method \int[] getTemplateIdList()
+	 * @method \int[] fillTemplateId()
+	 * @method array[] getTemplateDataList()
+	 * @method array[] fillTemplateData()
+	 * @method \int[] getStatusList()
+	 * @method \int[] fillStatus()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \Bitrix\Main\Type\DateTime[] getCreatedList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCreated()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl[] getTemplateList()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection getTemplateCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection fillTemplate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection merge(?\Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection filter(callable $callback)
+	 */
+	class EO_WorkflowTemplateDraft_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable';
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Template {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_WorkflowTemplateDraft_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection fetchCollection()
+	 */
+	class EO_WorkflowTemplateDraft_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection fetchCollection()
+	 */
+	class EO_WorkflowTemplateDraft_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Template\EO_WorkflowTemplateDraft_Collection wakeUpCollection($rows)
+	 */
+	class EO_WorkflowTemplateDraft_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Task\TaskTable:bizproc/lib/workflow/task/tasktable.php */
 namespace Bitrix\Bizproc\Workflow\Task {
@@ -4076,6 +6056,16 @@ namespace Bitrix\Bizproc\Workflow\Task {
 	 * @method bool isWorkflowInstanceFilled()
 	 * @method bool isWorkflowInstanceChanged()
 	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance fillWorkflowInstance()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks getTaskArchive()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks remindActualTaskArchive()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks requireTaskArchive()
+	 * @method \Bitrix\Bizproc\Workflow\Task setTaskArchive(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks $object)
+	 * @method \Bitrix\Bizproc\Workflow\Task resetTaskArchive()
+	 * @method \Bitrix\Bizproc\Workflow\Task unsetTaskArchive()
+	 * @method bool hasTaskArchive()
+	 * @method bool isTaskArchiveFilled()
+	 * @method bool isTaskArchiveChanged()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks fillTaskArchive()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -4103,7 +6093,7 @@ namespace Bitrix\Bizproc\Workflow\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Workflow\Task wakeUp($data)
 	 */
-	class EO_Task {
+	class EO_Task extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Workflow\Task\TaskTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Task\TaskTable';
 		/**
@@ -4155,6 +6145,9 @@ namespace Bitrix\Bizproc\Workflow\Task {
 	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance[] getWorkflowInstanceList()
 	 * @method \Bitrix\Bizproc\Workflow\Task\EO_Task_Collection getWorkflowInstanceCollection()
 	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection fillWorkflowInstance()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks[] getTaskArchiveList()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_Task_Collection getTaskArchiveCollection()
+	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection fillTaskArchive()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -4186,7 +6179,7 @@ namespace Bitrix\Bizproc\Workflow\Task {
 	 * @method \Bitrix\Bizproc\Workflow\Task|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Workflow\Task\EO_Task_Collection filter(callable $callback)
 	 */
-	class EO_Task_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Task_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Workflow\Task\TaskTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Task\TaskTable';
 	}
@@ -4213,650 +6206,6 @@ namespace Bitrix\Bizproc\Workflow\Task {
 	 * @method \Bitrix\Bizproc\Workflow\Task\EO_Task_Collection wakeUpCollection($rows)
 	 */
 	class EO_Task_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable:bizproc/lib/workflow/task/tasksearchcontenttable.php */
-namespace Bitrix\Bizproc\Workflow\Task {
-	/**
-	 * EO_TaskSearchContent
-	 * @see \Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getTaskId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent setTaskId(\int|\Bitrix\Main\DB\SqlExpression $taskId)
-	 * @method bool hasTaskId()
-	 * @method bool isTaskIdFilled()
-	 * @method bool isTaskIdChanged()
-	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
-	 * @method bool hasWorkflowId()
-	 * @method bool isWorkflowIdFilled()
-	 * @method bool isWorkflowIdChanged()
-	 * @method \string remindActualWorkflowId()
-	 * @method \string requireWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent resetWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent unsetWorkflowId()
-	 * @method \string fillWorkflowId()
-	 * @method \string getSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent setSearchContent(\string|\Bitrix\Main\DB\SqlExpression $searchContent)
-	 * @method bool hasSearchContent()
-	 * @method bool isSearchContentFilled()
-	 * @method bool isSearchContentChanged()
-	 * @method \string remindActualSearchContent()
-	 * @method \string requireSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent resetSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent unsetSearchContent()
-	 * @method \string fillSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task getTask()
-	 * @method \Bitrix\Bizproc\Workflow\Task remindActualTask()
-	 * @method \Bitrix\Bizproc\Workflow\Task requireTask()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent setTask(\Bitrix\Bizproc\Workflow\Task $object)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent resetTask()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent unsetTask()
-	 * @method bool hasTask()
-	 * @method bool isTaskFilled()
-	 * @method bool isTaskChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Task fillTask()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection getUsers()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection requireUsers()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection fillUsers()
-	 * @method bool hasUsers()
-	 * @method bool isUsersFilled()
-	 * @method bool isUsersChanged()
-	 * @method void addToUsers(\Bitrix\Bizproc\Workflow\Task\EO_TaskUser $taskUser)
-	 * @method void removeFromUsers(\Bitrix\Bizproc\Workflow\Task\EO_TaskUser $taskUser)
-	 * @method void removeAllUsers()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent resetUsers()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent unsetUsers()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent wakeUp($data)
-	 */
-	class EO_TaskSearchContent {
-		/* @var \Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Task {
-	/**
-	 * EO_TaskSearchContent_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getTaskIdList()
-	 * @method \string[] getWorkflowIdList()
-	 * @method \string[] fillWorkflowId()
-	 * @method \string[] getSearchContentList()
-	 * @method \string[] fillSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task[] getTaskList()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection getTaskCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_Task_Collection fillTask()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection[] getUsersList()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection getUsersCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection fillUsers()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection merge(?\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection filter(callable $callback)
-	 */
-	class EO_TaskSearchContent_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable';
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Task {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_TaskSearchContent_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection fetchCollection()
-	 */
-	class EO_TaskSearchContent_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection fetchCollection()
-	 */
-	class EO_TaskSearchContent_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection wakeUpCollection($rows)
-	 */
-	class EO_TaskSearchContent_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Task\TaskUserTable:bizproc/lib/workflow/task/taskusertable.php */
-namespace Bitrix\Bizproc\Workflow\Task {
-	/**
-	 * EO_TaskUser
-	 * @see \Bitrix\Bizproc\Workflow\Task\TaskUserTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \int remindActualUserId()
-	 * @method \int requireUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetUserId()
-	 * @method \int fillUserId()
-	 * @method \int getTaskId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setTaskId(\int|\Bitrix\Main\DB\SqlExpression $taskId)
-	 * @method bool hasTaskId()
-	 * @method bool isTaskIdFilled()
-	 * @method bool isTaskIdChanged()
-	 * @method \int remindActualTaskId()
-	 * @method \int requireTaskId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetTaskId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetTaskId()
-	 * @method \int fillTaskId()
-	 * @method \int getStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setStatus(\int|\Bitrix\Main\DB\SqlExpression $status)
-	 * @method bool hasStatus()
-	 * @method bool isStatusFilled()
-	 * @method bool isStatusChanged()
-	 * @method \int remindActualStatus()
-	 * @method \int requireStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetStatus()
-	 * @method \int fillStatus()
-	 * @method null|\Bitrix\Main\Type\DateTime getDateUpdate()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setDateUpdate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateUpdate)
-	 * @method bool hasDateUpdate()
-	 * @method bool isDateUpdateFilled()
-	 * @method bool isDateUpdateChanged()
-	 * @method null|\Bitrix\Main\Type\DateTime remindActualDateUpdate()
-	 * @method null|\Bitrix\Main\Type\DateTime requireDateUpdate()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetDateUpdate()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetDateUpdate()
-	 * @method null|\Bitrix\Main\Type\DateTime fillDateUpdate()
-	 * @method \int getOriginalUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setOriginalUserId(\int|\Bitrix\Main\DB\SqlExpression $originalUserId)
-	 * @method bool hasOriginalUserId()
-	 * @method bool isOriginalUserIdFilled()
-	 * @method bool isOriginalUserIdChanged()
-	 * @method \int remindActualOriginalUserId()
-	 * @method \int requireOriginalUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetOriginalUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetOriginalUserId()
-	 * @method \int fillOriginalUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Task getUserTasks()
-	 * @method \Bitrix\Bizproc\Workflow\Task remindActualUserTasks()
-	 * @method \Bitrix\Bizproc\Workflow\Task requireUserTasks()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setUserTasks(\Bitrix\Bizproc\Workflow\Task $object)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetUserTasks()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetUserTasks()
-	 * @method bool hasUserTasks()
-	 * @method bool isUserTasksFilled()
-	 * @method bool isUserTasksChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Task fillUserTasks()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent getUserTasksSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent remindActualUserTasksSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent requireUserTasksSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setUserTasksSearchContent(\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent $object)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetUserTasksSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetUserTasksSearchContent()
-	 * @method bool hasUserTasksSearchContent()
-	 * @method bool isUserTasksSearchContentFilled()
-	 * @method bool isUserTasksSearchContentChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent fillUserTasksSearchContent()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Task\EO_TaskUser wakeUp($data)
-	 */
-	class EO_TaskUser {
-		/* @var \Bitrix\Bizproc\Workflow\Task\TaskUserTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Task\TaskUserTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Task {
-	/**
-	 * EO_TaskUser_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getUserIdList()
-	 * @method \int[] fillUserId()
-	 * @method \int[] getTaskIdList()
-	 * @method \int[] fillTaskId()
-	 * @method \int[] getStatusList()
-	 * @method \int[] fillStatus()
-	 * @method null|\Bitrix\Main\Type\DateTime[] getDateUpdateList()
-	 * @method null|\Bitrix\Main\Type\DateTime[] fillDateUpdate()
-	 * @method \int[] getOriginalUserIdList()
-	 * @method \int[] fillOriginalUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Task[] getUserTasksList()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection getUserTasksCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_Task_Collection fillUserTasks()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent[] getUserTasksSearchContentList()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection getUserTasksSearchContentCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection fillUserTasksSearchContent()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Task\EO_TaskUser $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Task\EO_TaskUser $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Task\EO_TaskUser $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection merge(?\Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection filter(callable $callback)
-	 */
-	class EO_TaskUser_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Task\TaskUserTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Task\TaskUserTable';
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Task {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_TaskUser_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection fetchCollection()
-	 */
-	class EO_TaskUser_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection fetchCollection()
-	 */
-	class EO_TaskUser_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection wakeUpCollection($rows)
-	 */
-	class EO_TaskUser_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable:bizproc/lib/workflow/type/entity/globalvartable.php */
-namespace Bitrix\Bizproc\Workflow\Type\Entity {
-	/**
-	 * EO_GlobalVar
-	 * @see \Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \string getId()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setId(\string|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getName()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetName()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetName()
-	 * @method \string fillName()
-	 * @method \string getDescription()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
-	 * @method bool hasDescription()
-	 * @method bool isDescriptionFilled()
-	 * @method bool isDescriptionChanged()
-	 * @method \string remindActualDescription()
-	 * @method \string requireDescription()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetDescription()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetDescription()
-	 * @method \string fillDescription()
-	 * @method \string getPropertyType()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setPropertyType(\string|\Bitrix\Main\DB\SqlExpression $propertyType)
-	 * @method bool hasPropertyType()
-	 * @method bool isPropertyTypeFilled()
-	 * @method bool isPropertyTypeChanged()
-	 * @method \string remindActualPropertyType()
-	 * @method \string requirePropertyType()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetPropertyType()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetPropertyType()
-	 * @method \string fillPropertyType()
-	 * @method \boolean getIsRequired()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setIsRequired(\boolean|\Bitrix\Main\DB\SqlExpression $isRequired)
-	 * @method bool hasIsRequired()
-	 * @method bool isIsRequiredFilled()
-	 * @method bool isIsRequiredChanged()
-	 * @method \boolean remindActualIsRequired()
-	 * @method \boolean requireIsRequired()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetIsRequired()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetIsRequired()
-	 * @method \boolean fillIsRequired()
-	 * @method \boolean getIsMultiple()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setIsMultiple(\boolean|\Bitrix\Main\DB\SqlExpression $isMultiple)
-	 * @method bool hasIsMultiple()
-	 * @method bool isIsMultipleFilled()
-	 * @method bool isIsMultipleChanged()
-	 * @method \boolean remindActualIsMultiple()
-	 * @method \boolean requireIsMultiple()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetIsMultiple()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetIsMultiple()
-	 * @method \boolean fillIsMultiple()
-	 * @method \string getPropertyOptions()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setPropertyOptions(\string|\Bitrix\Main\DB\SqlExpression $propertyOptions)
-	 * @method bool hasPropertyOptions()
-	 * @method bool isPropertyOptionsFilled()
-	 * @method bool isPropertyOptionsChanged()
-	 * @method \string remindActualPropertyOptions()
-	 * @method \string requirePropertyOptions()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetPropertyOptions()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetPropertyOptions()
-	 * @method \string fillPropertyOptions()
-	 * @method \string getPropertySettings()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setPropertySettings(\string|\Bitrix\Main\DB\SqlExpression $propertySettings)
-	 * @method bool hasPropertySettings()
-	 * @method bool isPropertySettingsFilled()
-	 * @method bool isPropertySettingsChanged()
-	 * @method \string remindActualPropertySettings()
-	 * @method \string requirePropertySettings()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetPropertySettings()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetPropertySettings()
-	 * @method \string fillPropertySettings()
-	 * @method \string getPropertyValue()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setPropertyValue(\string|\Bitrix\Main\DB\SqlExpression $propertyValue)
-	 * @method bool hasPropertyValue()
-	 * @method bool isPropertyValueFilled()
-	 * @method bool isPropertyValueChanged()
-	 * @method \string remindActualPropertyValue()
-	 * @method \string requirePropertyValue()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetPropertyValue()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetPropertyValue()
-	 * @method \string fillPropertyValue()
-	 * @method \Bitrix\Main\Type\DateTime getCreatedDate()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setCreatedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdDate)
-	 * @method bool hasCreatedDate()
-	 * @method bool isCreatedDateFilled()
-	 * @method bool isCreatedDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedDate()
-	 * @method \Bitrix\Main\Type\DateTime requireCreatedDate()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetCreatedDate()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetCreatedDate()
-	 * @method \Bitrix\Main\Type\DateTime fillCreatedDate()
-	 * @method \int getCreatedBy()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setCreatedBy(\int|\Bitrix\Main\DB\SqlExpression $createdBy)
-	 * @method bool hasCreatedBy()
-	 * @method bool isCreatedByFilled()
-	 * @method bool isCreatedByChanged()
-	 * @method \int remindActualCreatedBy()
-	 * @method \int requireCreatedBy()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetCreatedBy()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetCreatedBy()
-	 * @method \int fillCreatedBy()
-	 * @method \string getVisibility()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setVisibility(\string|\Bitrix\Main\DB\SqlExpression $visibility)
-	 * @method bool hasVisibility()
-	 * @method bool isVisibilityFilled()
-	 * @method bool isVisibilityChanged()
-	 * @method \string remindActualVisibility()
-	 * @method \string requireVisibility()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetVisibility()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetVisibility()
-	 * @method \string fillVisibility()
-	 * @method \Bitrix\Main\Type\DateTime getModifiedDate()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setModifiedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modifiedDate)
-	 * @method bool hasModifiedDate()
-	 * @method bool isModifiedDateFilled()
-	 * @method bool isModifiedDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualModifiedDate()
-	 * @method \Bitrix\Main\Type\DateTime requireModifiedDate()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetModifiedDate()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetModifiedDate()
-	 * @method \Bitrix\Main\Type\DateTime fillModifiedDate()
-	 * @method \int getModifiedBy()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setModifiedBy(\int|\Bitrix\Main\DB\SqlExpression $modifiedBy)
-	 * @method bool hasModifiedBy()
-	 * @method bool isModifiedByFilled()
-	 * @method bool isModifiedByChanged()
-	 * @method \int remindActualModifiedBy()
-	 * @method \int requireModifiedBy()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetModifiedBy()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetModifiedBy()
-	 * @method \int fillModifiedBy()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar wakeUp($data)
-	 */
-	class EO_GlobalVar {
-		/* @var \Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Type\Entity {
-	/**
-	 * EO_GlobalVar_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \string[] getIdList()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 * @method \string[] getDescriptionList()
-	 * @method \string[] fillDescription()
-	 * @method \string[] getPropertyTypeList()
-	 * @method \string[] fillPropertyType()
-	 * @method \boolean[] getIsRequiredList()
-	 * @method \boolean[] fillIsRequired()
-	 * @method \boolean[] getIsMultipleList()
-	 * @method \boolean[] fillIsMultiple()
-	 * @method \string[] getPropertyOptionsList()
-	 * @method \string[] fillPropertyOptions()
-	 * @method \string[] getPropertySettingsList()
-	 * @method \string[] fillPropertySettings()
-	 * @method \string[] getPropertyValueList()
-	 * @method \string[] fillPropertyValue()
-	 * @method \Bitrix\Main\Type\DateTime[] getCreatedDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedDate()
-	 * @method \int[] getCreatedByList()
-	 * @method \int[] fillCreatedBy()
-	 * @method \string[] getVisibilityList()
-	 * @method \string[] fillVisibility()
-	 * @method \Bitrix\Main\Type\DateTime[] getModifiedDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillModifiedDate()
-	 * @method \int[] getModifiedByList()
-	 * @method \int[] fillModifiedBy()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection merge(?\Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection filter(callable $callback)
-	 */
-	class EO_GlobalVar_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable';
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Type\Entity {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_GlobalVar_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection fetchCollection()
-	 */
-	class EO_GlobalVar_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection fetchCollection()
-	 */
-	class EO_GlobalVar_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection wakeUpCollection($rows)
-	 */
-	class EO_GlobalVar_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Type\Entity\GlobalConstTable:bizproc/lib/workflow/type/entity/globalconst.php */
 namespace Bitrix\Bizproc\Workflow\Type\Entity {
@@ -5029,7 +6378,7 @@ namespace Bitrix\Bizproc\Workflow\Type\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalConst wakeUp($data)
 	 */
-	class EO_GlobalConst {
+	class EO_GlobalConst extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Workflow\Type\Entity\GlobalConstTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Type\Entity\GlobalConstTable';
 		/**
@@ -5103,7 +6452,7 @@ namespace Bitrix\Bizproc\Workflow\Type\Entity {
 	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalConst|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalConst_Collection filter(callable $callback)
 	 */
-	class EO_GlobalConst_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_GlobalConst_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Workflow\Type\Entity\GlobalConstTable */
 		static public $dataClass = '\Bitrix\Bizproc\Workflow\Type\Entity\GlobalConstTable';
 	}
@@ -5131,669 +6480,150 @@ namespace Bitrix\Bizproc\Workflow\Type\Entity {
 	 */
 	class EO_GlobalConst_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable:bizproc/lib/workflow/entity/workflowfiltertable.php */
-namespace Bitrix\Bizproc\Workflow\Entity {
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable:bizproc/lib/workflow/type/entity/globalvartable.php */
+namespace Bitrix\Bizproc\Workflow\Type\Entity {
 	/**
-	 * EO_WorkflowFilter
-	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
-	 * @method bool hasWorkflowId()
-	 * @method bool isWorkflowIdFilled()
-	 * @method bool isWorkflowIdChanged()
-	 * @method \string getModuleId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
-	 * @method bool hasModuleId()
-	 * @method bool isModuleIdFilled()
-	 * @method bool isModuleIdChanged()
-	 * @method \string remindActualModuleId()
-	 * @method \string requireModuleId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter resetModuleId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unsetModuleId()
-	 * @method \string fillModuleId()
-	 * @method \string getEntity()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
-	 * @method bool hasEntity()
-	 * @method bool isEntityFilled()
-	 * @method bool isEntityChanged()
-	 * @method \string remindActualEntity()
-	 * @method \string requireEntity()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter resetEntity()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unsetEntity()
-	 * @method \string fillEntity()
-	 * @method \string getDocumentId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setDocumentId(\string|\Bitrix\Main\DB\SqlExpression $documentId)
-	 * @method bool hasDocumentId()
-	 * @method bool isDocumentIdFilled()
-	 * @method bool isDocumentIdChanged()
-	 * @method \string remindActualDocumentId()
-	 * @method \string requireDocumentId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter resetDocumentId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unsetDocumentId()
-	 * @method \string fillDocumentId()
-	 * @method \int getTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
-	 * @method bool hasTemplateId()
-	 * @method bool isTemplateIdFilled()
-	 * @method bool isTemplateIdChanged()
-	 * @method \int remindActualTemplateId()
-	 * @method \int requireTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter resetTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unsetTemplateId()
-	 * @method \int fillTemplateId()
-	 * @method \Bitrix\Main\Type\DateTime getStarted()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter setStarted(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $started)
-	 * @method bool hasStarted()
-	 * @method bool isStartedFilled()
-	 * @method bool isStartedChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualStarted()
-	 * @method \Bitrix\Main\Type\DateTime requireStarted()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter resetStarted()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unsetStarted()
-	 * @method \Bitrix\Main\Type\DateTime fillStarted()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter wakeUp($data)
-	 */
-	class EO_WorkflowFilter {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * EO_WorkflowFilter_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \string[] getWorkflowIdList()
-	 * @method \string[] getModuleIdList()
-	 * @method \string[] fillModuleId()
-	 * @method \string[] getEntityList()
-	 * @method \string[] fillEntity()
-	 * @method \string[] getDocumentIdList()
-	 * @method \string[] fillDocumentId()
-	 * @method \int[] getTemplateIdList()
-	 * @method \int[] fillTemplateId()
-	 * @method \Bitrix\Main\Type\DateTime[] getStartedList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillStarted()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection filter(callable $callback)
-	 */
-	class EO_WorkflowFilter_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable';
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_WorkflowFilter_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection fetchCollection()
-	 */
-	class EO_WorkflowFilter_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection fetchCollection()
-	 */
-	class EO_WorkflowFilter_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection wakeUpCollection($rows)
-	 */
-	class EO_WorkflowFilter_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable:bizproc/lib/workflow/entity/workflowusercommenttable.php */
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * EO_WorkflowUserComment
-	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
-	 * @method bool hasWorkflowId()
-	 * @method bool isWorkflowIdFilled()
-	 * @method bool isWorkflowIdChanged()
-	 * @method \int getUnreadCnt()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment setUnreadCnt(\int|\Bitrix\Main\DB\SqlExpression $unreadCnt)
-	 * @method bool hasUnreadCnt()
-	 * @method bool isUnreadCntFilled()
-	 * @method bool isUnreadCntChanged()
-	 * @method \int remindActualUnreadCnt()
-	 * @method \int requireUnreadCnt()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment resetUnreadCnt()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment unsetUnreadCnt()
-	 * @method \int fillUnreadCnt()
-	 * @method \int getLastType()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment setLastType(\int|\Bitrix\Main\DB\SqlExpression $lastType)
-	 * @method bool hasLastType()
-	 * @method bool isLastTypeFilled()
-	 * @method bool isLastTypeChanged()
-	 * @method \int remindActualLastType()
-	 * @method \int requireLastType()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment resetLastType()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment unsetLastType()
-	 * @method \int fillLastType()
-	 * @method \Bitrix\Main\Type\DateTime getModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment setModified(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modified)
-	 * @method bool hasModified()
-	 * @method bool isModifiedFilled()
-	 * @method bool isModifiedChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualModified()
-	 * @method \Bitrix\Main\Type\DateTime requireModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment resetModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment unsetModified()
-	 * @method \Bitrix\Main\Type\DateTime fillModified()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment wakeUp($data)
-	 */
-	class EO_WorkflowUserComment {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * EO_WorkflowUserComment_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getUserIdList()
-	 * @method \string[] getWorkflowIdList()
-	 * @method \int[] getUnreadCntList()
-	 * @method \int[] fillUnreadCnt()
-	 * @method \int[] getLastTypeList()
-	 * @method \int[] fillLastType()
-	 * @method \Bitrix\Main\Type\DateTime[] getModifiedList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillModified()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection filter(callable $callback)
-	 */
-	class EO_WorkflowUserComment_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable';
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_WorkflowUserComment_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection fetchCollection()
-	 */
-	class EO_WorkflowUserComment_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection fetchCollection()
-	 */
-	class EO_WorkflowUserComment_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection wakeUpCollection($rows)
-	 */
-	class EO_WorkflowUserComment_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable:bizproc/lib/workflow/entity/workflowdurationstattable.php */
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * EO_WorkflowDurationStat
-	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
-	 * @method bool hasWorkflowId()
-	 * @method bool isWorkflowIdFilled()
-	 * @method bool isWorkflowIdChanged()
-	 * @method \string remindActualWorkflowId()
-	 * @method \string requireWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat resetWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat unsetWorkflowId()
-	 * @method \string fillWorkflowId()
-	 * @method \int getTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
-	 * @method bool hasTemplateId()
-	 * @method bool isTemplateIdFilled()
-	 * @method bool isTemplateIdChanged()
-	 * @method \int remindActualTemplateId()
-	 * @method \int requireTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat resetTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat unsetTemplateId()
-	 * @method \int fillTemplateId()
-	 * @method \int getDuration()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat setDuration(\int|\Bitrix\Main\DB\SqlExpression $duration)
-	 * @method bool hasDuration()
-	 * @method bool isDurationFilled()
-	 * @method bool isDurationChanged()
-	 * @method \int remindActualDuration()
-	 * @method \int requireDuration()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat resetDuration()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat unsetDuration()
-	 * @method \int fillDuration()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat wakeUp($data)
-	 */
-	class EO_WorkflowDurationStat {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * EO_WorkflowDurationStat_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getWorkflowIdList()
-	 * @method \string[] fillWorkflowId()
-	 * @method \int[] getTemplateIdList()
-	 * @method \int[] fillTemplateId()
-	 * @method \int[] getDurationList()
-	 * @method \int[] fillDuration()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection filter(callable $callback)
-	 */
-	class EO_WorkflowDurationStat_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable';
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_WorkflowDurationStat_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection fetchCollection()
-	 */
-	class EO_WorkflowDurationStat_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection fetchCollection()
-	 */
-	class EO_WorkflowDurationStat_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowDurationStat_Collection wakeUpCollection($rows)
-	 */
-	class EO_WorkflowDurationStat_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable:bizproc/lib/workflow/entity/workflowinstance.php */
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * EO_WorkflowInstance
-	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable
+	 * EO_GlobalVar
+	 * @see \Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \string getId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setId(\string|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setId(\string|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \string getModuleId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
-	 * @method bool hasModuleId()
-	 * @method bool isModuleIdFilled()
-	 * @method bool isModuleIdChanged()
-	 * @method \string remindActualModuleId()
-	 * @method \string requireModuleId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetModuleId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetModuleId()
-	 * @method \string fillModuleId()
-	 * @method \string getEntity()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
-	 * @method bool hasEntity()
-	 * @method bool isEntityFilled()
-	 * @method bool isEntityChanged()
-	 * @method \string remindActualEntity()
-	 * @method \string requireEntity()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetEntity()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetEntity()
-	 * @method \string fillEntity()
-	 * @method \string getDocumentId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setDocumentId(\string|\Bitrix\Main\DB\SqlExpression $documentId)
-	 * @method bool hasDocumentId()
-	 * @method bool isDocumentIdFilled()
-	 * @method bool isDocumentIdChanged()
-	 * @method \string remindActualDocumentId()
-	 * @method \string requireDocumentId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetDocumentId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetDocumentId()
-	 * @method \string fillDocumentId()
-	 * @method \int getWorkflowTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setWorkflowTemplateId(\int|\Bitrix\Main\DB\SqlExpression $workflowTemplateId)
-	 * @method bool hasWorkflowTemplateId()
-	 * @method bool isWorkflowTemplateIdFilled()
-	 * @method bool isWorkflowTemplateIdChanged()
-	 * @method \int remindActualWorkflowTemplateId()
-	 * @method \int requireWorkflowTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetWorkflowTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetWorkflowTemplateId()
-	 * @method \int fillWorkflowTemplateId()
-	 * @method \string getWorkflow()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setWorkflow(\string|\Bitrix\Main\DB\SqlExpression $workflow)
-	 * @method bool hasWorkflow()
-	 * @method bool isWorkflowFilled()
-	 * @method bool isWorkflowChanged()
-	 * @method \string remindActualWorkflow()
-	 * @method \string requireWorkflow()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetWorkflow()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetWorkflow()
-	 * @method \string fillWorkflow()
-	 * @method \string getWorkflowRo()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setWorkflowRo(\string|\Bitrix\Main\DB\SqlExpression $workflowRo)
-	 * @method bool hasWorkflowRo()
-	 * @method bool isWorkflowRoFilled()
-	 * @method bool isWorkflowRoChanged()
-	 * @method \string remindActualWorkflowRo()
-	 * @method \string requireWorkflowRo()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetWorkflowRo()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetWorkflowRo()
-	 * @method \string fillWorkflowRo()
-	 * @method \Bitrix\Main\Type\DateTime getStarted()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setStarted(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $started)
-	 * @method bool hasStarted()
-	 * @method bool isStartedFilled()
-	 * @method bool isStartedChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualStarted()
-	 * @method \Bitrix\Main\Type\DateTime requireStarted()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetStarted()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetStarted()
-	 * @method \Bitrix\Main\Type\DateTime fillStarted()
-	 * @method \int getStartedBy()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setStartedBy(\int|\Bitrix\Main\DB\SqlExpression $startedBy)
-	 * @method bool hasStartedBy()
-	 * @method bool isStartedByFilled()
-	 * @method bool isStartedByChanged()
-	 * @method \int remindActualStartedBy()
-	 * @method \int requireStartedBy()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetStartedBy()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetStartedBy()
-	 * @method \int fillStartedBy()
-	 * @method \Bitrix\Main\EO_User getStartedUser()
-	 * @method \Bitrix\Main\EO_User remindActualStartedUser()
-	 * @method \Bitrix\Main\EO_User requireStartedUser()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setStartedUser(\Bitrix\Main\EO_User $object)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetStartedUser()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetStartedUser()
-	 * @method bool hasStartedUser()
-	 * @method bool isStartedUserFilled()
-	 * @method bool isStartedUserChanged()
-	 * @method \Bitrix\Main\EO_User fillStartedUser()
-	 * @method \int getStartedEventType()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setStartedEventType(\int|\Bitrix\Main\DB\SqlExpression $startedEventType)
-	 * @method bool hasStartedEventType()
-	 * @method bool isStartedEventTypeFilled()
-	 * @method bool isStartedEventTypeChanged()
-	 * @method \int remindActualStartedEventType()
-	 * @method \int requireStartedEventType()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetStartedEventType()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetStartedEventType()
-	 * @method \int fillStartedEventType()
-	 * @method \int getStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setStatus(\int|\Bitrix\Main\DB\SqlExpression $status)
-	 * @method bool hasStatus()
-	 * @method bool isStatusFilled()
-	 * @method bool isStatusChanged()
-	 * @method \int remindActualStatus()
-	 * @method \int requireStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetStatus()
-	 * @method \int fillStatus()
-	 * @method \Bitrix\Main\Type\DateTime getModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setModified(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modified)
-	 * @method bool hasModified()
-	 * @method bool isModifiedFilled()
-	 * @method bool isModifiedChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualModified()
-	 * @method \Bitrix\Main\Type\DateTime requireModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetModified()
-	 * @method \Bitrix\Main\Type\DateTime fillModified()
-	 * @method \string getOwnerId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setOwnerId(\string|\Bitrix\Main\DB\SqlExpression $ownerId)
-	 * @method bool hasOwnerId()
-	 * @method bool isOwnerIdFilled()
-	 * @method bool isOwnerIdChanged()
-	 * @method \string remindActualOwnerId()
-	 * @method \string requireOwnerId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetOwnerId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetOwnerId()
-	 * @method \string fillOwnerId()
-	 * @method \Bitrix\Main\Type\DateTime getOwnedUntil()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setOwnedUntil(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $ownedUntil)
-	 * @method bool hasOwnedUntil()
-	 * @method bool isOwnedUntilFilled()
-	 * @method bool isOwnedUntilChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualOwnedUntil()
-	 * @method \Bitrix\Main\Type\DateTime requireOwnedUntil()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetOwnedUntil()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetOwnedUntil()
-	 * @method \Bitrix\Main\Type\DateTime fillOwnedUntil()
-	 * @method \Bitrix\Bizproc\Workflow\WorkflowState getState()
-	 * @method \Bitrix\Bizproc\Workflow\WorkflowState remindActualState()
-	 * @method \Bitrix\Bizproc\Workflow\WorkflowState requireState()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setState(\Bitrix\Bizproc\Workflow\WorkflowState $object)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetState()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetState()
-	 * @method bool hasState()
-	 * @method bool isStateFilled()
-	 * @method bool isStateChanged()
-	 * @method \Bitrix\Bizproc\Workflow\WorkflowState fillState()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl getTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl remindActualTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl requireTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance setTemplate(\Bitrix\Bizproc\Workflow\Template\Tpl $object)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance resetTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unsetTemplate()
-	 * @method bool hasTemplate()
-	 * @method bool isTemplateFilled()
-	 * @method bool isTemplateChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl fillTemplate()
+	 * @method \string getName()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetName()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetName()
+	 * @method \string fillName()
+	 * @method \string getDescription()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
+	 * @method bool hasDescription()
+	 * @method bool isDescriptionFilled()
+	 * @method bool isDescriptionChanged()
+	 * @method \string remindActualDescription()
+	 * @method \string requireDescription()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetDescription()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetDescription()
+	 * @method \string fillDescription()
+	 * @method \string getPropertyType()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setPropertyType(\string|\Bitrix\Main\DB\SqlExpression $propertyType)
+	 * @method bool hasPropertyType()
+	 * @method bool isPropertyTypeFilled()
+	 * @method bool isPropertyTypeChanged()
+	 * @method \string remindActualPropertyType()
+	 * @method \string requirePropertyType()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetPropertyType()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetPropertyType()
+	 * @method \string fillPropertyType()
+	 * @method \boolean getIsRequired()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setIsRequired(\boolean|\Bitrix\Main\DB\SqlExpression $isRequired)
+	 * @method bool hasIsRequired()
+	 * @method bool isIsRequiredFilled()
+	 * @method bool isIsRequiredChanged()
+	 * @method \boolean remindActualIsRequired()
+	 * @method \boolean requireIsRequired()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetIsRequired()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetIsRequired()
+	 * @method \boolean fillIsRequired()
+	 * @method \boolean getIsMultiple()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setIsMultiple(\boolean|\Bitrix\Main\DB\SqlExpression $isMultiple)
+	 * @method bool hasIsMultiple()
+	 * @method bool isIsMultipleFilled()
+	 * @method bool isIsMultipleChanged()
+	 * @method \boolean remindActualIsMultiple()
+	 * @method \boolean requireIsMultiple()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetIsMultiple()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetIsMultiple()
+	 * @method \boolean fillIsMultiple()
+	 * @method \string getPropertyOptions()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setPropertyOptions(\string|\Bitrix\Main\DB\SqlExpression $propertyOptions)
+	 * @method bool hasPropertyOptions()
+	 * @method bool isPropertyOptionsFilled()
+	 * @method bool isPropertyOptionsChanged()
+	 * @method \string remindActualPropertyOptions()
+	 * @method \string requirePropertyOptions()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetPropertyOptions()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetPropertyOptions()
+	 * @method \string fillPropertyOptions()
+	 * @method \string getPropertySettings()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setPropertySettings(\string|\Bitrix\Main\DB\SqlExpression $propertySettings)
+	 * @method bool hasPropertySettings()
+	 * @method bool isPropertySettingsFilled()
+	 * @method bool isPropertySettingsChanged()
+	 * @method \string remindActualPropertySettings()
+	 * @method \string requirePropertySettings()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetPropertySettings()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetPropertySettings()
+	 * @method \string fillPropertySettings()
+	 * @method \string getPropertyValue()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setPropertyValue(\string|\Bitrix\Main\DB\SqlExpression $propertyValue)
+	 * @method bool hasPropertyValue()
+	 * @method bool isPropertyValueFilled()
+	 * @method bool isPropertyValueChanged()
+	 * @method \string remindActualPropertyValue()
+	 * @method \string requirePropertyValue()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetPropertyValue()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetPropertyValue()
+	 * @method \string fillPropertyValue()
+	 * @method \Bitrix\Main\Type\DateTime getCreatedDate()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setCreatedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdDate)
+	 * @method bool hasCreatedDate()
+	 * @method bool isCreatedDateFilled()
+	 * @method bool isCreatedDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedDate()
+	 * @method \Bitrix\Main\Type\DateTime requireCreatedDate()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetCreatedDate()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetCreatedDate()
+	 * @method \Bitrix\Main\Type\DateTime fillCreatedDate()
+	 * @method \int getCreatedBy()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setCreatedBy(\int|\Bitrix\Main\DB\SqlExpression $createdBy)
+	 * @method bool hasCreatedBy()
+	 * @method bool isCreatedByFilled()
+	 * @method bool isCreatedByChanged()
+	 * @method \int remindActualCreatedBy()
+	 * @method \int requireCreatedBy()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetCreatedBy()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetCreatedBy()
+	 * @method \int fillCreatedBy()
+	 * @method \string getVisibility()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setVisibility(\string|\Bitrix\Main\DB\SqlExpression $visibility)
+	 * @method bool hasVisibility()
+	 * @method bool isVisibilityFilled()
+	 * @method bool isVisibilityChanged()
+	 * @method \string remindActualVisibility()
+	 * @method \string requireVisibility()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetVisibility()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetVisibility()
+	 * @method \string fillVisibility()
+	 * @method \Bitrix\Main\Type\DateTime getModifiedDate()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setModifiedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modifiedDate)
+	 * @method bool hasModifiedDate()
+	 * @method bool isModifiedDateFilled()
+	 * @method bool isModifiedDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualModifiedDate()
+	 * @method \Bitrix\Main\Type\DateTime requireModifiedDate()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetModifiedDate()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetModifiedDate()
+	 * @method \Bitrix\Main\Type\DateTime fillModifiedDate()
+	 * @method \int getModifiedBy()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar setModifiedBy(\int|\Bitrix\Main\DB\SqlExpression $modifiedBy)
+	 * @method bool hasModifiedBy()
+	 * @method bool isModifiedByFilled()
+	 * @method bool isModifiedByChanged()
+	 * @method \int remindActualModifiedBy()
+	 * @method \int requireModifiedBy()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar resetModifiedBy()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unsetModifiedBy()
+	 * @method \int fillModifiedBy()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -5809,9 +6639,9 @@ namespace Bitrix\Bizproc\Workflow\Entity {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance unset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -5819,359 +6649,368 @@ namespace Bitrix\Bizproc\Workflow\Entity {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar wakeUp($data)
 	 */
-	class EO_WorkflowInstance {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable';
+	class EO_GlobalVar extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Bizproc\Workflow\Entity {
+namespace Bitrix\Bizproc\Workflow\Type\Entity {
 	/**
-	 * EO_WorkflowInstance_Collection
+	 * EO_GlobalVar_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \string[] getIdList()
-	 * @method \string[] getModuleIdList()
-	 * @method \string[] fillModuleId()
-	 * @method \string[] getEntityList()
-	 * @method \string[] fillEntity()
-	 * @method \string[] getDocumentIdList()
-	 * @method \string[] fillDocumentId()
-	 * @method \int[] getWorkflowTemplateIdList()
-	 * @method \int[] fillWorkflowTemplateId()
-	 * @method \string[] getWorkflowList()
-	 * @method \string[] fillWorkflow()
-	 * @method \string[] getWorkflowRoList()
-	 * @method \string[] fillWorkflowRo()
-	 * @method \Bitrix\Main\Type\DateTime[] getStartedList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillStarted()
-	 * @method \int[] getStartedByList()
-	 * @method \int[] fillStartedBy()
-	 * @method \Bitrix\Main\EO_User[] getStartedUserList()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection getStartedUserCollection()
-	 * @method \Bitrix\Main\EO_User_Collection fillStartedUser()
-	 * @method \int[] getStartedEventTypeList()
-	 * @method \int[] fillStartedEventType()
-	 * @method \int[] getStatusList()
-	 * @method \int[] fillStatus()
-	 * @method \Bitrix\Main\Type\DateTime[] getModifiedList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillModified()
-	 * @method \string[] getOwnerIdList()
-	 * @method \string[] fillOwnerId()
-	 * @method \Bitrix\Main\Type\DateTime[] getOwnedUntilList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillOwnedUntil()
-	 * @method \Bitrix\Bizproc\Workflow\WorkflowState[] getStateList()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection getStateCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowState_Collection fillState()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl[] getTemplateList()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection getTemplateCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection fillTemplate()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getDescriptionList()
+	 * @method \string[] fillDescription()
+	 * @method \string[] getPropertyTypeList()
+	 * @method \string[] fillPropertyType()
+	 * @method \boolean[] getIsRequiredList()
+	 * @method \boolean[] fillIsRequired()
+	 * @method \boolean[] getIsMultipleList()
+	 * @method \boolean[] fillIsMultiple()
+	 * @method \string[] getPropertyOptionsList()
+	 * @method \string[] fillPropertyOptions()
+	 * @method \string[] getPropertySettingsList()
+	 * @method \string[] fillPropertySettings()
+	 * @method \string[] getPropertyValueList()
+	 * @method \string[] fillPropertyValue()
+	 * @method \Bitrix\Main\Type\DateTime[] getCreatedDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedDate()
+	 * @method \int[] getCreatedByList()
+	 * @method \int[] fillCreatedBy()
+	 * @method \string[] getVisibilityList()
+	 * @method \string[] fillVisibility()
+	 * @method \Bitrix\Main\Type\DateTime[] getModifiedDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillModifiedDate()
+	 * @method \int[] getModifiedByList()
+	 * @method \int[] fillModifiedBy()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance $object)
+	 * @method void add(\Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance $object)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance current() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection $collection)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection merge(?\Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection filter(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection filter(callable $callback)
 	 */
-	class EO_WorkflowInstance_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable';
+	class EO_GlobalVar_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Type\Entity\GlobalVarTable';
 	}
 }
-namespace Bitrix\Bizproc\Workflow\Entity {
+namespace Bitrix\Bizproc\Workflow\Type\Entity {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_WorkflowInstance_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection fetchCollection()
+	 * @method EO_GlobalVar_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection fetchCollection()
 	 */
-	class EO_WorkflowInstance_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_GlobalVar_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection fetchCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection fetchCollection()
 	 */
-	class EO_WorkflowInstance_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_GlobalVar_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowInstance_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Type\Entity\EO_GlobalVar_Collection wakeUpCollection($rows)
 	 */
-	class EO_WorkflowInstance_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_GlobalVar_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable:bizproc/lib/workflow/entity/workflowmetadatatable.php */
-namespace Bitrix\Bizproc\Workflow\Entity {
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Task\TaskUserTable:bizproc/lib/workflow/task/taskusertable.php */
+namespace Bitrix\Bizproc\Workflow\Task {
 	/**
-	 * EO_WorkflowMetadata
-	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable
+	 * EO_TaskUser
+	 * @see \Bitrix\Bizproc\Workflow\Task\TaskUserTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \int getTaskId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setTaskId(\int|\Bitrix\Main\DB\SqlExpression $taskId)
+	 * @method bool hasTaskId()
+	 * @method bool isTaskIdFilled()
+	 * @method bool isTaskIdChanged()
+	 * @method \int remindActualTaskId()
+	 * @method \int requireTaskId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetTaskId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetTaskId()
+	 * @method \int fillTaskId()
+	 * @method \int getStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setStatus(\int|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \int remindActualStatus()
+	 * @method \int requireStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetStatus()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetStatus()
+	 * @method \int fillStatus()
+	 * @method null|\Bitrix\Main\Type\DateTime getDateUpdate()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setDateUpdate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateUpdate)
+	 * @method bool hasDateUpdate()
+	 * @method bool isDateUpdateFilled()
+	 * @method bool isDateUpdateChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualDateUpdate()
+	 * @method null|\Bitrix\Main\Type\DateTime requireDateUpdate()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetDateUpdate()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetDateUpdate()
+	 * @method null|\Bitrix\Main\Type\DateTime fillDateUpdate()
+	 * @method \int getOriginalUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setOriginalUserId(\int|\Bitrix\Main\DB\SqlExpression $originalUserId)
+	 * @method bool hasOriginalUserId()
+	 * @method bool isOriginalUserIdFilled()
+	 * @method bool isOriginalUserIdChanged()
+	 * @method \int remindActualOriginalUserId()
+	 * @method \int requireOriginalUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetOriginalUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetOriginalUserId()
+	 * @method \int fillOriginalUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Task getUserTasks()
+	 * @method \Bitrix\Bizproc\Workflow\Task remindActualUserTasks()
+	 * @method \Bitrix\Bizproc\Workflow\Task requireUserTasks()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setUserTasks(\Bitrix\Bizproc\Workflow\Task $object)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetUserTasks()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetUserTasks()
+	 * @method bool hasUserTasks()
+	 * @method bool isUserTasksFilled()
+	 * @method bool isUserTasksChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Task fillUserTasks()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent getUserTasksSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent remindActualUserTasksSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent requireUserTasksSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser setUserTasksSearchContent(\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent $object)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser resetUserTasksSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unsetUserTasksSearchContent()
+	 * @method bool hasUserTasksSearchContent()
+	 * @method bool isUserTasksSearchContentFilled()
+	 * @method bool isUserTasksSearchContentChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent fillUserTasksSearchContent()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Workflow\Task\EO_TaskUser wakeUp($data)
+	 */
+	class EO_TaskUser extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Task\TaskUserTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Task\TaskUserTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Task {
+	/**
+	 * EO_TaskUser_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \int[] getTaskIdList()
+	 * @method \int[] fillTaskId()
+	 * @method \int[] getStatusList()
+	 * @method \int[] fillStatus()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getDateUpdateList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillDateUpdate()
+	 * @method \int[] getOriginalUserIdList()
+	 * @method \int[] fillOriginalUserId()
+	 * @method \Bitrix\Bizproc\Workflow\Task[] getUserTasksList()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection getUserTasksCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_Task_Collection fillUserTasks()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent[] getUserTasksSearchContentList()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection getUserTasksSearchContentCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection fillUserTasksSearchContent()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Workflow\Task\EO_TaskUser $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Task\EO_TaskUser $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Task\EO_TaskUser $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection merge(?\Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection filter(callable $callback)
+	 */
+	class EO_TaskUser_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Task\TaskUserTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Task\TaskUserTable';
+	}
+}
+namespace Bitrix\Bizproc\Workflow\Task {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_TaskUser_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection fetchCollection()
+	 */
+	class EO_TaskUser_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection fetchCollection()
+	 */
+	class EO_TaskUser_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection wakeUpCollection($rows)
+	 */
+	class EO_TaskUser_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable:bizproc/lib/workflow/task/tasksearchcontenttable.php */
+namespace Bitrix\Bizproc\Workflow\Task {
+	/**
+	 * EO_TaskSearchContent
+	 * @see \Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getTaskId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent setTaskId(\int|\Bitrix\Main\DB\SqlExpression $taskId)
+	 * @method bool hasTaskId()
+	 * @method bool isTaskIdFilled()
+	 * @method bool isTaskIdChanged()
 	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
 	 * @method bool hasWorkflowId()
 	 * @method bool isWorkflowIdFilled()
 	 * @method bool isWorkflowIdChanged()
 	 * @method \string remindActualWorkflowId()
 	 * @method \string requireWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata resetWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata unsetWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent resetWorkflowId()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent unsetWorkflowId()
 	 * @method \string fillWorkflowId()
-	 * @method \int getStartDuration()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata setStartDuration(\int|\Bitrix\Main\DB\SqlExpression $startDuration)
-	 * @method bool hasStartDuration()
-	 * @method bool isStartDurationFilled()
-	 * @method bool isStartDurationChanged()
-	 * @method \int remindActualStartDuration()
-	 * @method \int requireStartDuration()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata resetStartDuration()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata unsetStartDuration()
-	 * @method \int fillStartDuration()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata wakeUp($data)
-	 */
-	class EO_WorkflowMetadata {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * EO_WorkflowMetadata_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getWorkflowIdList()
-	 * @method \string[] fillWorkflowId()
-	 * @method \int[] getStartDurationList()
-	 * @method \int[] fillStartDuration()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection filter(callable $callback)
-	 */
-	class EO_WorkflowMetadata_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable';
-	}
-}
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_WorkflowMetadata_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection fetchCollection()
-	 */
-	class EO_WorkflowMetadata_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection fetchCollection()
-	 */
-	class EO_WorkflowMetadata_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata_Collection wakeUpCollection($rows)
-	 */
-	class EO_WorkflowMetadata_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable:bizproc/lib/workflow/entity/workflowusertable.php */
-namespace Bitrix\Bizproc\Workflow\Entity {
-	/**
-	 * EO_WorkflowUser
-	 * @see \Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getUserId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
-	 * @method bool hasWorkflowId()
-	 * @method bool isWorkflowIdFilled()
-	 * @method bool isWorkflowIdChanged()
-	 * @method \int getIsAuthor()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setIsAuthor(\int|\Bitrix\Main\DB\SqlExpression $isAuthor)
-	 * @method bool hasIsAuthor()
-	 * @method bool isIsAuthorFilled()
-	 * @method bool isIsAuthorChanged()
-	 * @method \int remindActualIsAuthor()
-	 * @method \int requireIsAuthor()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetIsAuthor()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetIsAuthor()
-	 * @method \int fillIsAuthor()
-	 * @method \int getWorkflowStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setWorkflowStatus(\int|\Bitrix\Main\DB\SqlExpression $workflowStatus)
-	 * @method bool hasWorkflowStatus()
-	 * @method bool isWorkflowStatusFilled()
-	 * @method bool isWorkflowStatusChanged()
-	 * @method \int remindActualWorkflowStatus()
-	 * @method \int requireWorkflowStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetWorkflowStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetWorkflowStatus()
-	 * @method \int fillWorkflowStatus()
-	 * @method \int getTaskStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setTaskStatus(\int|\Bitrix\Main\DB\SqlExpression $taskStatus)
-	 * @method bool hasTaskStatus()
-	 * @method bool isTaskStatusFilled()
-	 * @method bool isTaskStatusChanged()
-	 * @method \int remindActualTaskStatus()
-	 * @method \int requireTaskStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetTaskStatus()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetTaskStatus()
-	 * @method \int fillTaskStatus()
-	 * @method \Bitrix\Main\Type\DateTime getModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setModified(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modified)
-	 * @method bool hasModified()
-	 * @method bool isModifiedFilled()
-	 * @method bool isModifiedChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualModified()
-	 * @method \Bitrix\Main\Type\DateTime requireModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetModified()
-	 * @method \Bitrix\Main\Type\DateTime fillModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter getFilter()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter remindActualFilter()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter requireFilter()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setFilter(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter $object)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetFilter()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetFilter()
-	 * @method bool hasFilter()
-	 * @method bool isFilterFilled()
-	 * @method bool isFilterChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter fillFilter()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment getComments()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment remindActualComments()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment requireComments()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setComments(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment $object)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetComments()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetComments()
-	 * @method bool hasComments()
-	 * @method bool isCommentsFilled()
-	 * @method bool isCommentsChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment fillComments()
-	 * @method \Bitrix\Bizproc\Workflow\WorkflowState getWorkflowState()
-	 * @method \Bitrix\Bizproc\Workflow\WorkflowState remindActualWorkflowState()
-	 * @method \Bitrix\Bizproc\Workflow\WorkflowState requireWorkflowState()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setWorkflowState(\Bitrix\Bizproc\Workflow\WorkflowState $object)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetWorkflowState()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetWorkflowState()
-	 * @method bool hasWorkflowState()
-	 * @method bool isWorkflowStateFilled()
-	 * @method bool isWorkflowStateChanged()
-	 * @method \Bitrix\Bizproc\Workflow\WorkflowState fillWorkflowState()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent getSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent remindActualSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent requireSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser setSearchContent(\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent $object)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser resetSearchContent()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unsetSearchContent()
+	 * @method \string getSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent setSearchContent(\string|\Bitrix\Main\DB\SqlExpression $searchContent)
 	 * @method bool hasSearchContent()
 	 * @method bool isSearchContentFilled()
 	 * @method bool isSearchContentChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent fillSearchContent()
+	 * @method \string remindActualSearchContent()
+	 * @method \string requireSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent resetSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent unsetSearchContent()
+	 * @method \string fillSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task getTask()
+	 * @method \Bitrix\Bizproc\Workflow\Task remindActualTask()
+	 * @method \Bitrix\Bizproc\Workflow\Task requireTask()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent setTask(\Bitrix\Bizproc\Workflow\Task $object)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent resetTask()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent unsetTask()
+	 * @method bool hasTask()
+	 * @method bool isTaskFilled()
+	 * @method bool isTaskChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Task fillTask()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection getUsers()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection requireUsers()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection fillUsers()
+	 * @method bool hasUsers()
+	 * @method bool isUsersFilled()
+	 * @method bool isUsersChanged()
+	 * @method void addToUsers(\Bitrix\Bizproc\Workflow\Task\EO_TaskUser $taskUser)
+	 * @method void removeFromUsers(\Bitrix\Bizproc\Workflow\Task\EO_TaskUser $taskUser)
+	 * @method void removeAllUsers()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent resetUsers()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent unsetUsers()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -6187,9 +7026,9 @@ namespace Bitrix\Bizproc\Workflow\Entity {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser reset($fieldName)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser unset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent reset($fieldName)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -6197,169 +7036,158 @@ namespace Bitrix\Bizproc\Workflow\Entity {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent wakeUp($data)
 	 */
-	class EO_WorkflowUser {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable';
+	class EO_TaskSearchContent extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Bizproc\Workflow\Entity {
+namespace Bitrix\Bizproc\Workflow\Task {
 	/**
-	 * EO_WorkflowUser_Collection
+	 * EO_TaskSearchContent_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
-	 * @method \int[] getUserIdList()
+	 * @method \int[] getTaskIdList()
 	 * @method \string[] getWorkflowIdList()
-	 * @method \int[] getIsAuthorList()
-	 * @method \int[] fillIsAuthor()
-	 * @method \int[] getWorkflowStatusList()
-	 * @method \int[] fillWorkflowStatus()
-	 * @method \int[] getTaskStatusList()
-	 * @method \int[] fillTaskStatus()
-	 * @method \Bitrix\Main\Type\DateTime[] getModifiedList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillModified()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter[] getFilterList()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection getFilterCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowFilter_Collection fillFilter()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment[] getCommentsList()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection getCommentsCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUserComment_Collection fillComments()
-	 * @method \Bitrix\Bizproc\Workflow\WorkflowState[] getWorkflowStateList()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection getWorkflowStateCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowState_Collection fillWorkflowState()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent[] getSearchContentList()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection getSearchContentCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection fillSearchContent()
+	 * @method \string[] fillWorkflowId()
+	 * @method \string[] getSearchContentList()
+	 * @method \string[] fillSearchContent()
+	 * @method \Bitrix\Bizproc\Workflow\Task[] getTaskList()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection getTaskCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_Task_Collection fillTask()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection[] getUsersList()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection getUsersCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskUser_Collection fillUsers()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser $object)
-	 * @method bool has(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser $object)
+	 * @method void add(\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent $object)
+	 * @method bool has(\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser $object)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser current() Iterator
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection merge(?\Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection $collection)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection merge(?\Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection filter(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection filter(callable $callback)
 	 */
-	class EO_WorkflowUser_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable */
-		static public $dataClass = '\Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable';
+	class EO_TaskSearchContent_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable */
+		static public $dataClass = '\Bitrix\Bizproc\Workflow\Task\TaskSearchContentTable';
 	}
 }
-namespace Bitrix\Bizproc\Workflow\Entity {
+namespace Bitrix\Bizproc\Workflow\Task {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_WorkflowUser_Result exec()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection fetchCollection()
+	 * @method EO_TaskSearchContent_Result exec()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection fetchCollection()
 	 */
-	class EO_WorkflowUser_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_TaskSearchContent_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser fetchObject()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection fetchCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent fetchObject()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection fetchCollection()
 	 */
-	class EO_WorkflowUser_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_TaskSearchContent_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Workflow\Entity\EO_WorkflowUser_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Workflow\Task\EO_TaskSearchContent_Collection wakeUpCollection($rows)
 	 */
-	class EO_WorkflowUser_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_TaskSearchContent_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable:bizproc/lib/Debugger/Session/Entity/DebuggerSessionTemplateShardsTable.php */
-namespace Bitrix\Bizproc\Debugger\Session\Entity {
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable:bizproc/lib/DocumentType/DocumentTypeUserOptionTable.php */
+namespace Bitrix\Bizproc\DocumentType {
 	/**
-	 * TemplateShards
-	 * @see \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable
+	 * EO_DocumentTypeUserOption
+	 * @see \Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \int getTemplateId()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
-	 * @method bool hasTemplateId()
-	 * @method bool isTemplateIdFilled()
-	 * @method bool isTemplateIdChanged()
-	 * @method \int remindActualTemplateId()
-	 * @method \int requireTemplateId()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards resetTemplateId()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unsetTemplateId()
-	 * @method \int fillTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl getTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl remindActualTemplate()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl requireTemplate()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setTemplate(\Bitrix\Bizproc\Workflow\Template\Tpl $object)
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards resetTemplate()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unsetTemplate()
-	 * @method bool hasTemplate()
-	 * @method bool isTemplateFilled()
-	 * @method bool isTemplateChanged()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl fillTemplate()
-	 * @method array getShards()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setShards(array|\Bitrix\Main\DB\SqlExpression $shards)
-	 * @method bool hasShards()
-	 * @method bool isShardsFilled()
-	 * @method bool isShardsChanged()
-	 * @method array remindActualShards()
-	 * @method array requireShards()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards resetShards()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unsetShards()
-	 * @method array fillShards()
-	 * @method \string getTemplateType()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setTemplateType(\string|\Bitrix\Main\DB\SqlExpression $templateType)
-	 * @method bool hasTemplateType()
-	 * @method bool isTemplateTypeFilled()
-	 * @method bool isTemplateTypeChanged()
-	 * @method \string remindActualTemplateType()
-	 * @method \string requireTemplateType()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards resetTemplateType()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unsetTemplateType()
-	 * @method \string fillTemplateType()
-	 * @method \Bitrix\Main\Type\DateTime getModified()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setModified(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modified)
-	 * @method bool hasModified()
-	 * @method bool isModifiedFilled()
-	 * @method bool isModifiedChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualModified()
-	 * @method \Bitrix\Main\Type\DateTime requireModified()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards resetModified()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unsetModified()
-	 * @method \Bitrix\Main\Type\DateTime fillModified()
+	 * @method \string getModuleId()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
+	 * @method bool hasModuleId()
+	 * @method bool isModuleIdFilled()
+	 * @method bool isModuleIdChanged()
+	 * @method \string remindActualModuleId()
+	 * @method \string requireModuleId()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption resetModuleId()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unsetModuleId()
+	 * @method \string fillModuleId()
+	 * @method \string getEntity()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
+	 * @method bool hasEntity()
+	 * @method bool isEntityFilled()
+	 * @method bool isEntityChanged()
+	 * @method \string remindActualEntity()
+	 * @method \string requireEntity()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption resetEntity()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unsetEntity()
+	 * @method \string fillEntity()
+	 * @method \string getDocumentType()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setDocumentType(\string|\Bitrix\Main\DB\SqlExpression $documentType)
+	 * @method bool hasDocumentType()
+	 * @method bool isDocumentTypeFilled()
+	 * @method bool isDocumentTypeChanged()
+	 * @method \string remindActualDocumentType()
+	 * @method \string requireDocumentType()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption resetDocumentType()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unsetDocumentType()
+	 * @method \string fillDocumentType()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption resetUserId()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \int getOptionCode()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption setOptionCode(\int|\Bitrix\Main\DB\SqlExpression $optionCode)
+	 * @method bool hasOptionCode()
+	 * @method bool isOptionCodeFilled()
+	 * @method bool isOptionCodeChanged()
+	 * @method \int remindActualOptionCode()
+	 * @method \int requireOptionCode()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption resetOptionCode()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unsetOptionCode()
+	 * @method \int fillOptionCode()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -6375,9 +7203,9 @@ namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards reset($fieldName)
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unset($fieldName)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption reset($fieldName)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -6385,94 +7213,294 @@ namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Debugger\Session\TemplateShards wakeUp($data)
+	 * @method static \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption wakeUp($data)
 	 */
-	class EO_DebuggerSessionTemplateShards {
-		/* @var \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable */
-		static public $dataClass = '\Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable';
+	class EO_DocumentTypeUserOption extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable */
+		static public $dataClass = '\Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Bizproc\Debugger\Session\Entity {
+namespace Bitrix\Bizproc\DocumentType {
 	/**
-	 * EO_DebuggerSessionTemplateShards_Collection
+	 * EO_DocumentTypeUserOption_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int[] getIdList()
-	 * @method \int[] getTemplateIdList()
-	 * @method \int[] fillTemplateId()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl[] getTemplateList()
-	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection getTemplateCollection()
-	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection fillTemplate()
-	 * @method array[] getShardsList()
-	 * @method array[] fillShards()
-	 * @method \string[] getTemplateTypeList()
-	 * @method \string[] fillTemplateType()
-	 * @method \Bitrix\Main\Type\DateTime[] getModifiedList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillModified()
+	 * @method \string[] getModuleIdList()
+	 * @method \string[] fillModuleId()
+	 * @method \string[] getEntityList()
+	 * @method \string[] fillEntity()
+	 * @method \string[] getDocumentTypeList()
+	 * @method \string[] fillDocumentType()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \int[] getOptionCodeList()
+	 * @method \int[] fillOptionCode()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Debugger\Session\TemplateShards $object)
-	 * @method bool has(\Bitrix\Bizproc\Debugger\Session\TemplateShards $object)
+	 * @method void add(\Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption $object)
+	 * @method bool has(\Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Debugger\Session\TemplateShards $object)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection wakeUp($data)
+	 * @method static \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards current() Iterator
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection merge(?\Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection $collection)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection merge(?\Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection filter(callable $callback)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection filter(callable $callback)
 	 */
-	class EO_DebuggerSessionTemplateShards_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable */
-		static public $dataClass = '\Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable';
+	class EO_DocumentTypeUserOption_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable */
+		static public $dataClass = '\Bitrix\Bizproc\DocumentType\DocumentTypeUserOptionTable';
 	}
 }
-namespace Bitrix\Bizproc\Debugger\Session\Entity {
+namespace Bitrix\Bizproc\DocumentType {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_DebuggerSessionTemplateShards_Result exec()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards fetchObject()
-	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection fetchCollection()
+	 * @method EO_DocumentTypeUserOption_Result exec()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption fetchObject()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection fetchCollection()
 	 */
-	class EO_DebuggerSessionTemplateShards_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_DocumentTypeUserOption_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards fetchObject()
-	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection fetchCollection()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption fetchObject()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection fetchCollection()
 	 */
-	class EO_DebuggerSessionTemplateShards_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_DocumentTypeUserOption_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection createCollection()
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\DocumentType\EO_DocumentTypeUserOption_Collection wakeUpCollection($rows)
 	 */
-	class EO_DebuggerSessionTemplateShards_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_DocumentTypeUserOption_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable:bizproc/lib/automation/trigger/entity/trigger.php */
+namespace Bitrix\Bizproc\Automation\Trigger\Entity {
+	/**
+	 * TriggerObject
+	 * @see \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getName()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetName()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetName()
+	 * @method \string fillName()
+	 * @method \string getCode()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetCode()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetCode()
+	 * @method \string fillCode()
+	 * @method \string getModuleId()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setModuleId(\string|\Bitrix\Main\DB\SqlExpression $moduleId)
+	 * @method bool hasModuleId()
+	 * @method bool isModuleIdFilled()
+	 * @method bool isModuleIdChanged()
+	 * @method \string remindActualModuleId()
+	 * @method \string requireModuleId()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetModuleId()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetModuleId()
+	 * @method \string fillModuleId()
+	 * @method \string getEntity()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
+	 * @method bool hasEntity()
+	 * @method bool isEntityFilled()
+	 * @method bool isEntityChanged()
+	 * @method \string remindActualEntity()
+	 * @method \string requireEntity()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetEntity()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetEntity()
+	 * @method \string fillEntity()
+	 * @method \string getDocumentType()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setDocumentType(\string|\Bitrix\Main\DB\SqlExpression $documentType)
+	 * @method bool hasDocumentType()
+	 * @method bool isDocumentTypeFilled()
+	 * @method bool isDocumentTypeChanged()
+	 * @method \string remindActualDocumentType()
+	 * @method \string requireDocumentType()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetDocumentType()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetDocumentType()
+	 * @method \string fillDocumentType()
+	 * @method \string getDocumentStatus()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setDocumentStatus(\string|\Bitrix\Main\DB\SqlExpression $documentStatus)
+	 * @method bool hasDocumentStatus()
+	 * @method bool isDocumentStatusFilled()
+	 * @method bool isDocumentStatusChanged()
+	 * @method \string remindActualDocumentStatus()
+	 * @method \string requireDocumentStatus()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetDocumentStatus()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetDocumentStatus()
+	 * @method \string fillDocumentStatus()
+	 * @method \string getApplyRules()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject setApplyRules(\string|\Bitrix\Main\DB\SqlExpression $applyRules)
+	 * @method bool hasApplyRules()
+	 * @method bool isApplyRulesFilled()
+	 * @method bool isApplyRulesChanged()
+	 * @method \string remindActualApplyRules()
+	 * @method \string requireApplyRules()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject resetApplyRules()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unsetApplyRules()
+	 * @method \string fillApplyRules()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject reset($fieldName)
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject wakeUp($data)
+	 */
+	class EO_Trigger extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable */
+		static public $dataClass = '\Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Automation\Trigger\Entity {
+	/**
+	 * EO_Trigger_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \string[] getModuleIdList()
+	 * @method \string[] fillModuleId()
+	 * @method \string[] getEntityList()
+	 * @method \string[] fillEntity()
+	 * @method \string[] getDocumentTypeList()
+	 * @method \string[] fillDocumentType()
+	 * @method \string[] getDocumentStatusList()
+	 * @method \string[] fillDocumentStatus()
+	 * @method \string[] getApplyRulesList()
+	 * @method \string[] fillApplyRules()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject $object)
+	 * @method bool has(\Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection merge(?\Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection filter(callable $callback)
+	 */
+	class EO_Trigger_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable */
+		static public $dataClass = '\Bitrix\Bizproc\Automation\Trigger\Entity\TriggerTable';
+	}
+}
+namespace Bitrix\Bizproc\Automation\Trigger\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Trigger_Result exec()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject fetchObject()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection fetchCollection()
+	 */
+	class EO_Trigger_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject fetchObject()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection fetchCollection()
+	 */
+	class EO_Trigger_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\TriggerObject wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Automation\Trigger\Entity\EO_Trigger_Collection wakeUpCollection($rows)
+	 */
+	class EO_Trigger_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionWorkflowContextTable:bizproc/lib/Debugger/Session/Entity/DebuggerSessionWorkflowContextTable.php */
 namespace Bitrix\Bizproc\Debugger\Session\Entity {
@@ -6565,7 +7593,7 @@ namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Debugger\Session\WorkflowContext wakeUp($data)
 	 */
-	class EO_DebuggerSessionWorkflowContext {
+	class EO_DebuggerSessionWorkflowContext extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionWorkflowContextTable */
 		static public $dataClass = '\Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionWorkflowContextTable';
 		/**
@@ -6625,7 +7653,7 @@ namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	 * @method \Bitrix\Bizproc\Debugger\Session\WorkflowContext|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionWorkflowContext_Collection filter(callable $callback)
 	 */
-	class EO_DebuggerSessionWorkflowContext_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DebuggerSessionWorkflowContext_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionWorkflowContextTable */
 		static public $dataClass = '\Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionWorkflowContextTable';
 	}
@@ -6734,7 +7762,7 @@ namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Debugger\Session\Document wakeUp($data)
 	 */
-	class EO_DebuggerSessionDocument {
+	class EO_DebuggerSessionDocument extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionDocumentTable */
 		static public $dataClass = '\Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionDocumentTable';
 		/**
@@ -6791,7 +7819,7 @@ namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	 * @method \Bitrix\Bizproc\Debugger\Session\Document|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionDocument_Collection filter(callable $callback)
 	 */
-	class EO_DebuggerSessionDocument_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DebuggerSessionDocument_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionDocumentTable */
 		static public $dataClass = '\Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionDocumentTable';
 	}
@@ -7002,7 +8030,7 @@ namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Bizproc\Debugger\Session\Session wakeUp($data)
 	 */
-	class EO_DebuggerSession {
+	class EO_DebuggerSession extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTable */
 		static public $dataClass = '\Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTable';
 		/**
@@ -7080,7 +8108,7 @@ namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	 * @method \Bitrix\Bizproc\Debugger\Session\Session|null find(callable $callback)
 	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSession_Collection filter(callable $callback)
 	 */
-	class EO_DebuggerSession_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DebuggerSession_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTable */
 		static public $dataClass = '\Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTable';
 	}
@@ -7108,561 +8136,70 @@ namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	 */
 	class EO_DebuggerSession_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\StorageTypeTable:bizproc/lib/Internal/Model/StorageTypeTable.php */
-namespace Bitrix\Bizproc\Internal\Model {
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable:bizproc/lib/Debugger/Session/Entity/DebuggerSessionTemplateShardsTable.php */
+namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	/**
-	 * EO_StorageType
-	 * @see \Bitrix\Bizproc\Internal\Model\StorageTypeTable
+	 * TemplateShards
+	 * @see \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getTitle()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setTitle(\string|\Bitrix\Main\DB\SqlExpression $title)
-	 * @method bool hasTitle()
-	 * @method bool isTitleFilled()
-	 * @method bool isTitleChanged()
-	 * @method \string remindActualTitle()
-	 * @method \string requireTitle()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetTitle()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetTitle()
-	 * @method \string fillTitle()
-	 * @method \string getCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \string remindActualCode()
-	 * @method \string requireCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetCode()
-	 * @method \string fillCode()
-	 * @method \string getDescription()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
-	 * @method bool hasDescription()
-	 * @method bool isDescriptionFilled()
-	 * @method bool isDescriptionChanged()
-	 * @method \string remindActualDescription()
-	 * @method \string requireDescription()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetDescription()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetDescription()
-	 * @method \string fillDescription()
-	 * @method \int getCreatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setCreatedBy(\int|\Bitrix\Main\DB\SqlExpression $createdBy)
-	 * @method bool hasCreatedBy()
-	 * @method bool isCreatedByFilled()
-	 * @method bool isCreatedByChanged()
-	 * @method \int remindActualCreatedBy()
-	 * @method \int requireCreatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetCreatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetCreatedBy()
-	 * @method \int fillCreatedBy()
-	 * @method \int getUpdatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setUpdatedBy(\int|\Bitrix\Main\DB\SqlExpression $updatedBy)
-	 * @method bool hasUpdatedBy()
-	 * @method bool isUpdatedByFilled()
-	 * @method bool isUpdatedByChanged()
-	 * @method \int remindActualUpdatedBy()
-	 * @method \int requireUpdatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetUpdatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetUpdatedBy()
-	 * @method \int fillUpdatedBy()
-	 * @method \Bitrix\Main\Type\DateTime getCreatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setCreatedTime(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdTime)
-	 * @method bool hasCreatedTime()
-	 * @method bool isCreatedTimeFilled()
-	 * @method bool isCreatedTimeChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedTime()
-	 * @method \Bitrix\Main\Type\DateTime requireCreatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetCreatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetCreatedTime()
-	 * @method \Bitrix\Main\Type\DateTime fillCreatedTime()
-	 * @method \Bitrix\Main\Type\DateTime getUpdatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType setUpdatedTime(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $updatedTime)
-	 * @method bool hasUpdatedTime()
-	 * @method bool isUpdatedTimeFilled()
-	 * @method bool isUpdatedTimeChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualUpdatedTime()
-	 * @method \Bitrix\Main\Type\DateTime requireUpdatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType resetUpdatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unsetUpdatedTime()
-	 * @method \Bitrix\Main\Type\DateTime fillUpdatedTime()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType reset($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageType wakeUp($data)
-	 */
-	class EO_StorageType {
-		/* @var \Bitrix\Bizproc\Internal\Model\StorageTypeTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageTypeTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Internal\Model {
-	/**
-	 * EO_StorageType_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getTitleList()
-	 * @method \string[] fillTitle()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method \string[] getDescriptionList()
-	 * @method \string[] fillDescription()
-	 * @method \int[] getCreatedByList()
-	 * @method \int[] fillCreatedBy()
-	 * @method \int[] getUpdatedByList()
-	 * @method \int[] fillUpdatedBy()
-	 * @method \Bitrix\Main\Type\DateTime[] getCreatedTimeList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedTime()
-	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedTimeList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedTime()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Internal\Model\EO_StorageType $object)
-	 * @method bool has(\Bitrix\Bizproc\Internal\Model\EO_StorageType $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\EO_StorageType $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection merge(?\Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection filter(callable $callback)
-	 */
-	class EO_StorageType_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Internal\Model\StorageTypeTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageTypeTable';
-	}
-}
-namespace Bitrix\Bizproc\Internal\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_StorageType_Result exec()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection fetchCollection()
-	 */
-	class EO_StorageType_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection fetchCollection()
-	 */
-	class EO_StorageType_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageType_Collection wakeUpCollection($rows)
-	 */
-	class EO_StorageType_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable:bizproc/lib/Internal/Model/TaskArchive/TaskArchiveTable.php */
-namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
-	/**
-	 * EO_TaskArchive
-	 * @see \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
-	 * @method bool hasWorkflowId()
-	 * @method bool isWorkflowIdFilled()
-	 * @method bool isWorkflowIdChanged()
-	 * @method \string remindActualWorkflowId()
-	 * @method \string requireWorkflowId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive resetWorkflowId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive unsetWorkflowId()
-	 * @method \string fillWorkflowId()
-	 * @method \string getTasksData()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive setTasksData(\string|\Bitrix\Main\DB\SqlExpression $tasksData)
-	 * @method bool hasTasksData()
-	 * @method bool isTasksDataFilled()
-	 * @method bool isTasksDataChanged()
-	 * @method \string remindActualTasksData()
-	 * @method \string requireTasksData()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive resetTasksData()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive unsetTasksData()
-	 * @method \string fillTasksData()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks getTasks()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks remindActualTasks()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks requireTasks()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive setTasks(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks $object)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive resetTasks()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive unsetTasks()
-	 * @method bool hasTasks()
-	 * @method bool isTasksFilled()
-	 * @method bool isTasksChanged()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks fillTasks()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive reset($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive wakeUp($data)
-	 */
-	class EO_TaskArchive {
-		/* @var \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
-	/**
-	 * EO_TaskArchive_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getWorkflowIdList()
-	 * @method \string[] fillWorkflowId()
-	 * @method \string[] getTasksDataList()
-	 * @method \string[] fillTasksData()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks[] getTasksList()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection getTasksCollection()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection fillTasks()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive $object)
-	 * @method bool has(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection merge(?\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection filter(callable $callback)
-	 */
-	class EO_TaskArchive_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable';
-	}
-}
-namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_TaskArchive_Result exec()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection fetchCollection()
-	 */
-	class EO_TaskArchive_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection fetchCollection()
-	 */
-	class EO_TaskArchive_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection wakeUpCollection($rows)
-	 */
-	class EO_TaskArchive_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable:bizproc/lib/Internal/Model/TaskArchive/TaskArchiveTasksTable.php */
-namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
-	/**
-	 * EO_TaskArchiveTasks
-	 * @see \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getArchiveId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks setArchiveId(\int|\Bitrix\Main\DB\SqlExpression $archiveId)
-	 * @method bool hasArchiveId()
-	 * @method bool isArchiveIdFilled()
-	 * @method bool isArchiveIdChanged()
-	 * @method \int remindActualArchiveId()
-	 * @method \int requireArchiveId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks resetArchiveId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks unsetArchiveId()
-	 * @method \int fillArchiveId()
-	 * @method \int getTaskId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks setTaskId(\int|\Bitrix\Main\DB\SqlExpression $taskId)
-	 * @method bool hasTaskId()
-	 * @method bool isTaskIdFilled()
-	 * @method bool isTaskIdChanged()
-	 * @method \int remindActualTaskId()
-	 * @method \int requireTaskId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks resetTaskId()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks unsetTaskId()
-	 * @method \int fillTaskId()
-	 * @method \Bitrix\Main\Type\DateTime getCompletedAt()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks setCompletedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $completedAt)
-	 * @method bool hasCompletedAt()
-	 * @method bool isCompletedAtFilled()
-	 * @method bool isCompletedAtChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCompletedAt()
-	 * @method \Bitrix\Main\Type\DateTime requireCompletedAt()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks resetCompletedAt()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks unsetCompletedAt()
-	 * @method \Bitrix\Main\Type\DateTime fillCompletedAt()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive getArchive()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive remindActualArchive()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive requireArchive()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks setArchive(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive $object)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks resetArchive()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks unsetArchive()
-	 * @method bool hasArchive()
-	 * @method bool isArchiveFilled()
-	 * @method bool isArchiveChanged()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive fillArchive()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks reset($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks wakeUp($data)
-	 */
-	class EO_TaskArchiveTasks {
-		/* @var \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
-	/**
-	 * EO_TaskArchiveTasks_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getArchiveIdList()
-	 * @method \int[] fillArchiveId()
-	 * @method \int[] getTaskIdList()
-	 * @method \int[] fillTaskId()
-	 * @method \Bitrix\Main\Type\DateTime[] getCompletedAtList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCompletedAt()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive[] getArchiveList()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection getArchiveCollection()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchive_Collection fillArchive()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks $object)
-	 * @method bool has(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection merge(?\Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection filter(callable $callback)
-	 */
-	class EO_TaskArchiveTasks_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTasksTable';
-	}
-}
-namespace Bitrix\Bizproc\Internal\Model\TaskArchive {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_TaskArchiveTasks_Result exec()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection fetchCollection()
-	 */
-	class EO_TaskArchiveTasks_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection fetchCollection()
-	 */
-	class EO_TaskArchiveTasks_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Internal\Model\TaskArchive\EO_TaskArchiveTasks_Collection wakeUpCollection($rows)
-	 */
-	class EO_TaskArchiveTasks_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable:bizproc/lib/Internal/Model/WorkflowTemplateFileTable.php */
-namespace Bitrix\Bizproc\Internal\Model {
-	/**
-	 * EO_WorkflowTemplateFile
-	 * @see \Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
 	 * @method \int getTemplateId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
 	 * @method bool hasTemplateId()
 	 * @method bool isTemplateIdFilled()
 	 * @method bool isTemplateIdChanged()
 	 * @method \int remindActualTemplateId()
 	 * @method \int requireTemplateId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile resetTemplateId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile unsetTemplateId()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards resetTemplateId()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unsetTemplateId()
 	 * @method \int fillTemplateId()
-	 * @method \int getFileId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile setFileId(\int|\Bitrix\Main\DB\SqlExpression $fileId)
-	 * @method bool hasFileId()
-	 * @method bool isFileIdFilled()
-	 * @method bool isFileIdChanged()
-	 * @method \int remindActualFileId()
-	 * @method \int requireFileId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile resetFileId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile unsetFileId()
-	 * @method \int fillFileId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl getTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl remindActualTemplate()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl requireTemplate()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setTemplate(\Bitrix\Bizproc\Workflow\Template\Tpl $object)
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards resetTemplate()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unsetTemplate()
+	 * @method bool hasTemplate()
+	 * @method bool isTemplateFilled()
+	 * @method bool isTemplateChanged()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl fillTemplate()
+	 * @method array getShards()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setShards(array|\Bitrix\Main\DB\SqlExpression $shards)
+	 * @method bool hasShards()
+	 * @method bool isShardsFilled()
+	 * @method bool isShardsChanged()
+	 * @method array remindActualShards()
+	 * @method array requireShards()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards resetShards()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unsetShards()
+	 * @method array fillShards()
+	 * @method \string getTemplateType()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setTemplateType(\string|\Bitrix\Main\DB\SqlExpression $templateType)
+	 * @method bool hasTemplateType()
+	 * @method bool isTemplateTypeFilled()
+	 * @method bool isTemplateTypeChanged()
+	 * @method \string remindActualTemplateType()
+	 * @method \string requireTemplateType()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards resetTemplateType()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unsetTemplateType()
+	 * @method \string fillTemplateType()
+	 * @method \Bitrix\Main\Type\DateTime getModified()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards setModified(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modified)
+	 * @method bool hasModified()
+	 * @method bool isModifiedFilled()
+	 * @method bool isModifiedChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualModified()
+	 * @method \Bitrix\Main\Type\DateTime requireModified()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards resetModified()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unsetModified()
+	 * @method \Bitrix\Main\Type\DateTime fillModified()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -7678,9 +8215,9 @@ namespace Bitrix\Bizproc\Internal\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile reset($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile unset($fieldName)
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards reset($fieldName)
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -7688,20 +8225,20 @@ namespace Bitrix\Bizproc\Internal\Model {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Debugger\Session\TemplateShards wakeUp($data)
 	 */
-	class EO_WorkflowTemplateFile {
-		/* @var \Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable';
+	class EO_DebuggerSessionTemplateShards extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable */
+		static public $dataClass = '\Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Bizproc\Internal\Model {
+namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	/**
-	 * EO_WorkflowTemplateFile_Collection
+	 * EO_DebuggerSessionTemplateShards_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
@@ -7709,171 +8246,365 @@ namespace Bitrix\Bizproc\Internal\Model {
 	 * @method \int[] getIdList()
 	 * @method \int[] getTemplateIdList()
 	 * @method \int[] fillTemplateId()
-	 * @method \int[] getFileIdList()
-	 * @method \int[] fillFileId()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Tpl[] getTemplateList()
+	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection getTemplateCollection()
+	 * @method \Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate_Collection fillTemplate()
+	 * @method array[] getShardsList()
+	 * @method array[] fillShards()
+	 * @method \string[] getTemplateTypeList()
+	 * @method \string[] fillTemplateType()
+	 * @method \Bitrix\Main\Type\DateTime[] getModifiedList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillModified()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile $object)
-	 * @method bool has(\Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile $object)
+	 * @method void add(\Bitrix\Bizproc\Debugger\Session\TemplateShards $object)
+	 * @method bool has(\Bitrix\Bizproc\Debugger\Session\TemplateShards $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile $object)
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Debugger\Session\TemplateShards $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile current() Iterator
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection merge(?\Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection $collection)
+	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection merge(?\Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection filter(callable $callback)
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection filter(callable $callback)
 	 */
-	class EO_WorkflowTemplateFile_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\WorkflowTemplateFileTable';
+	class EO_DebuggerSessionTemplateShards_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable */
+		static public $dataClass = '\Bitrix\Bizproc\Debugger\Session\Entity\DebuggerSessionTemplateShardsTable';
 	}
 }
-namespace Bitrix\Bizproc\Internal\Model {
+namespace Bitrix\Bizproc\Debugger\Session\Entity {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_WorkflowTemplateFile_Result exec()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection fetchCollection()
+	 * @method EO_DebuggerSessionTemplateShards_Result exec()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards fetchObject()
+	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection fetchCollection()
 	 */
-	class EO_WorkflowTemplateFile_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_DebuggerSessionTemplateShards_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection fetchCollection()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards fetchObject()
+	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection fetchCollection()
 	 */
-	class EO_WorkflowTemplateFile_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_DebuggerSessionTemplateShards_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_WorkflowTemplateFile_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Debugger\Session\TemplateShards wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Debugger\Session\Entity\EO_DebuggerSessionTemplateShards_Collection wakeUpCollection($rows)
 	 */
-	class EO_WorkflowTemplateFile_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_DebuggerSessionTemplateShards_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\StorageFieldTable:bizproc/lib/Internal/Model/StorageFieldTable.php */
-namespace Bitrix\Bizproc\Internal\Model {
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Result\Entity\ResultTable:bizproc/lib/Result/Entity/ResultTable.php */
+namespace Bitrix\Bizproc\Result\Entity {
 	/**
-	 * EO_StorageField
-	 * @see \Bitrix\Bizproc\Internal\Model\StorageFieldTable
+	 * EO_Result
+	 * @see \Bitrix\Bizproc\Result\Entity\ResultTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \int getStorageId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setStorageId(\int|\Bitrix\Main\DB\SqlExpression $storageId)
-	 * @method bool hasStorageId()
-	 * @method bool isStorageIdFilled()
-	 * @method bool isStorageIdChanged()
-	 * @method \int remindActualStorageId()
-	 * @method \int requireStorageId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetStorageId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetStorageId()
-	 * @method \int fillStorageId()
-	 * @method \string getCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \string remindActualCode()
-	 * @method \string requireCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetCode()
-	 * @method \string fillCode()
-	 * @method \int getSort()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
-	 * @method bool hasSort()
-	 * @method bool isSortFilled()
-	 * @method bool isSortChanged()
-	 * @method \int remindActualSort()
-	 * @method \int requireSort()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetSort()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetSort()
-	 * @method \int fillSort()
-	 * @method \string getName()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetName()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetName()
-	 * @method \string fillName()
-	 * @method \string getDescription()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
-	 * @method bool hasDescription()
-	 * @method bool isDescriptionFilled()
-	 * @method bool isDescriptionChanged()
-	 * @method \string remindActualDescription()
-	 * @method \string requireDescription()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetDescription()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetDescription()
-	 * @method \string fillDescription()
-	 * @method \string getType()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setType(\string|\Bitrix\Main\DB\SqlExpression $type)
+	 * @method \string getWorkflowId()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method bool hasWorkflowId()
+	 * @method bool isWorkflowIdFilled()
+	 * @method bool isWorkflowIdChanged()
+	 * @method \string remindActualWorkflowId()
+	 * @method \string requireWorkflowId()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result resetWorkflowId()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unsetWorkflowId()
+	 * @method \string fillWorkflowId()
+	 * @method \string getActivity()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setActivity(\string|\Bitrix\Main\DB\SqlExpression $activity)
+	 * @method bool hasActivity()
+	 * @method bool isActivityFilled()
+	 * @method bool isActivityChanged()
+	 * @method \string remindActualActivity()
+	 * @method \string requireActivity()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result resetActivity()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unsetActivity()
+	 * @method \string fillActivity()
+	 * @method array getResult()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setResult(array|\Bitrix\Main\DB\SqlExpression $result)
+	 * @method bool hasResult()
+	 * @method bool isResultFilled()
+	 * @method bool isResultChanged()
+	 * @method array remindActualResult()
+	 * @method array requireResult()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result resetResult()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unsetResult()
+	 * @method array fillResult()
+	 * @method \Bitrix\Main\Type\DateTime getCreatedDate()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setCreatedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdDate)
+	 * @method bool hasCreatedDate()
+	 * @method bool isCreatedDateFilled()
+	 * @method bool isCreatedDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedDate()
+	 * @method \Bitrix\Main\Type\DateTime requireCreatedDate()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result resetCreatedDate()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unsetCreatedDate()
+	 * @method \Bitrix\Main\Type\DateTime fillCreatedDate()
+	 * @method \int getPriority()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result setPriority(\int|\Bitrix\Main\DB\SqlExpression $priority)
+	 * @method bool hasPriority()
+	 * @method bool isPriorityFilled()
+	 * @method bool isPriorityChanged()
+	 * @method \int remindActualPriority()
+	 * @method \int requirePriority()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result resetPriority()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unsetPriority()
+	 * @method \int fillPriority()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result reset($fieldName)
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Bizproc\Result\Entity\EO_Result wakeUp($data)
+	 */
+	class EO_Result extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Result\Entity\ResultTable */
+		static public $dataClass = '\Bitrix\Bizproc\Result\Entity\ResultTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Bizproc\Result\Entity {
+	/**
+	 * EO_Result_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getWorkflowIdList()
+	 * @method \string[] fillWorkflowId()
+	 * @method \string[] getActivityList()
+	 * @method \string[] fillActivity()
+	 * @method array[] getResultList()
+	 * @method array[] fillResult()
+	 * @method \Bitrix\Main\Type\DateTime[] getCreatedDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedDate()
+	 * @method \int[] getPriorityList()
+	 * @method \int[] fillPriority()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Bizproc\Result\Entity\EO_Result $object)
+	 * @method bool has(\Bitrix\Bizproc\Result\Entity\EO_Result $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Result\Entity\EO_Result $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Bizproc\Result\Entity\EO_Result_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection merge(?\Bitrix\Bizproc\Result\Entity\EO_Result_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection filter(callable $callback)
+	 */
+	class EO_Result_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Result\Entity\ResultTable */
+		static public $dataClass = '\Bitrix\Bizproc\Result\Entity\ResultTable';
+	}
+}
+namespace Bitrix\Bizproc\Result\Entity {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Result_Result exec()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result fetchObject()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection fetchCollection()
+	 */
+	class EO_Result_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result fetchObject()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection fetchCollection()
+	 */
+	class EO_Result_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Result\Entity\EO_Result_Collection wakeUpCollection($rows)
+	 */
+	class EO_Result_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\Service\Entity\TrackingTable:bizproc/lib/service/entity/trackingtable.php */
+namespace Bitrix\Bizproc\Service\Entity {
+	/**
+	 * EO_Tracking
+	 * @see \Bitrix\Bizproc\Service\Entity\TrackingTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getWorkflowId()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
+	 * @method bool hasWorkflowId()
+	 * @method bool isWorkflowIdFilled()
+	 * @method bool isWorkflowIdChanged()
+	 * @method \string remindActualWorkflowId()
+	 * @method \string requireWorkflowId()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetWorkflowId()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetWorkflowId()
+	 * @method \string fillWorkflowId()
+	 * @method \int getType()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setType(\int|\Bitrix\Main\DB\SqlExpression $type)
 	 * @method bool hasType()
 	 * @method bool isTypeFilled()
 	 * @method bool isTypeChanged()
-	 * @method \string remindActualType()
-	 * @method \string requireType()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetType()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetType()
-	 * @method \string fillType()
-	 * @method \boolean getMultiple()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setMultiple(\boolean|\Bitrix\Main\DB\SqlExpression $multiple)
-	 * @method bool hasMultiple()
-	 * @method bool isMultipleFilled()
-	 * @method bool isMultipleChanged()
-	 * @method \boolean remindActualMultiple()
-	 * @method \boolean requireMultiple()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetMultiple()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetMultiple()
-	 * @method \boolean fillMultiple()
-	 * @method \boolean getMandatory()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setMandatory(\boolean|\Bitrix\Main\DB\SqlExpression $mandatory)
-	 * @method bool hasMandatory()
-	 * @method bool isMandatoryFilled()
-	 * @method bool isMandatoryChanged()
-	 * @method \boolean remindActualMandatory()
-	 * @method \boolean requireMandatory()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetMandatory()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetMandatory()
-	 * @method \boolean fillMandatory()
-	 * @method array getSettings()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField setSettings(array|\Bitrix\Main\DB\SqlExpression $settings)
-	 * @method bool hasSettings()
-	 * @method bool isSettingsFilled()
-	 * @method bool isSettingsChanged()
-	 * @method array remindActualSettings()
-	 * @method array requireSettings()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField resetSettings()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unsetSettings()
-	 * @method array fillSettings()
+	 * @method \int remindActualType()
+	 * @method \int requireType()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetType()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetType()
+	 * @method \int fillType()
+	 * @method \Bitrix\Main\Type\DateTime getModified()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setModified(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $modified)
+	 * @method bool hasModified()
+	 * @method bool isModifiedFilled()
+	 * @method bool isModifiedChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualModified()
+	 * @method \Bitrix\Main\Type\DateTime requireModified()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetModified()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetModified()
+	 * @method \Bitrix\Main\Type\DateTime fillModified()
+	 * @method \string getActionName()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setActionName(\string|\Bitrix\Main\DB\SqlExpression $actionName)
+	 * @method bool hasActionName()
+	 * @method bool isActionNameFilled()
+	 * @method bool isActionNameChanged()
+	 * @method \string remindActualActionName()
+	 * @method \string requireActionName()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetActionName()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetActionName()
+	 * @method \string fillActionName()
+	 * @method \string getActionTitle()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setActionTitle(\string|\Bitrix\Main\DB\SqlExpression $actionTitle)
+	 * @method bool hasActionTitle()
+	 * @method bool isActionTitleFilled()
+	 * @method bool isActionTitleChanged()
+	 * @method \string remindActualActionTitle()
+	 * @method \string requireActionTitle()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetActionTitle()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetActionTitle()
+	 * @method \string fillActionTitle()
+	 * @method \int getExecutionStatus()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setExecutionStatus(\int|\Bitrix\Main\DB\SqlExpression $executionStatus)
+	 * @method bool hasExecutionStatus()
+	 * @method bool isExecutionStatusFilled()
+	 * @method bool isExecutionStatusChanged()
+	 * @method \int remindActualExecutionStatus()
+	 * @method \int requireExecutionStatus()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetExecutionStatus()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetExecutionStatus()
+	 * @method \int fillExecutionStatus()
+	 * @method \int getExecutionResult()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setExecutionResult(\int|\Bitrix\Main\DB\SqlExpression $executionResult)
+	 * @method bool hasExecutionResult()
+	 * @method bool isExecutionResultFilled()
+	 * @method bool isExecutionResultChanged()
+	 * @method \int remindActualExecutionResult()
+	 * @method \int requireExecutionResult()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetExecutionResult()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetExecutionResult()
+	 * @method \int fillExecutionResult()
+	 * @method null|\string getActionNote()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setActionNote(null|\string|\Bitrix\Main\DB\SqlExpression $actionNote)
+	 * @method bool hasActionNote()
+	 * @method bool isActionNoteFilled()
+	 * @method bool isActionNoteChanged()
+	 * @method null|\string remindActualActionNote()
+	 * @method null|\string requireActionNote()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetActionNote()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetActionNote()
+	 * @method null|\string fillActionNote()
+	 * @method null|\int getModifiedBy()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setModifiedBy(null|\int|\Bitrix\Main\DB\SqlExpression $modifiedBy)
+	 * @method bool hasModifiedBy()
+	 * @method bool isModifiedByFilled()
+	 * @method bool isModifiedByChanged()
+	 * @method null|\int remindActualModifiedBy()
+	 * @method null|\int requireModifiedBy()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetModifiedBy()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetModifiedBy()
+	 * @method null|\int fillModifiedBy()
+	 * @method \string getCompleted()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking setCompleted(\string|\Bitrix\Main\DB\SqlExpression $completed)
+	 * @method bool hasCompleted()
+	 * @method bool isCompletedFilled()
+	 * @method bool isCompletedChanged()
+	 * @method \string remindActualCompleted()
+	 * @method \string requireCompleted()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking resetCompleted()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unsetCompleted()
+	 * @method \string fillCompleted()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -7889,9 +8620,9 @@ namespace Bitrix\Bizproc\Internal\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField reset($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField unset($fieldName)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking reset($fieldName)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -7899,566 +8630,268 @@ namespace Bitrix\Bizproc\Internal\Model {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageField wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Service\Entity\EO_Tracking wakeUp($data)
 	 */
-	class EO_StorageField {
-		/* @var \Bitrix\Bizproc\Internal\Model\StorageFieldTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageFieldTable';
+	class EO_Tracking extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\Service\Entity\TrackingTable */
+		static public $dataClass = '\Bitrix\Bizproc\Service\Entity\TrackingTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Bizproc\Internal\Model {
+namespace Bitrix\Bizproc\Service\Entity {
 	/**
-	 * EO_StorageField_Collection
+	 * EO_Tracking_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int[] getIdList()
-	 * @method \int[] getStorageIdList()
-	 * @method \int[] fillStorageId()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method \int[] getSortList()
-	 * @method \int[] fillSort()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 * @method \string[] getDescriptionList()
-	 * @method \string[] fillDescription()
-	 * @method \string[] getTypeList()
-	 * @method \string[] fillType()
-	 * @method \boolean[] getMultipleList()
-	 * @method \boolean[] fillMultiple()
-	 * @method \boolean[] getMandatoryList()
-	 * @method \boolean[] fillMandatory()
-	 * @method array[] getSettingsList()
-	 * @method array[] fillSettings()
+	 * @method \string[] getWorkflowIdList()
+	 * @method \string[] fillWorkflowId()
+	 * @method \int[] getTypeList()
+	 * @method \int[] fillType()
+	 * @method \Bitrix\Main\Type\DateTime[] getModifiedList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillModified()
+	 * @method \string[] getActionNameList()
+	 * @method \string[] fillActionName()
+	 * @method \string[] getActionTitleList()
+	 * @method \string[] fillActionTitle()
+	 * @method \int[] getExecutionStatusList()
+	 * @method \int[] fillExecutionStatus()
+	 * @method \int[] getExecutionResultList()
+	 * @method \int[] fillExecutionResult()
+	 * @method null|\string[] getActionNoteList()
+	 * @method null|\string[] fillActionNote()
+	 * @method null|\int[] getModifiedByList()
+	 * @method null|\int[] fillModifiedBy()
+	 * @method \string[] getCompletedList()
+	 * @method \string[] fillCompleted()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Internal\Model\EO_StorageField $object)
-	 * @method bool has(\Bitrix\Bizproc\Internal\Model\EO_StorageField $object)
+	 * @method void add(\Bitrix\Bizproc\Service\Entity\EO_Tracking $object)
+	 * @method bool has(\Bitrix\Bizproc\Service\Entity\EO_Tracking $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\EO_StorageField $object)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\Service\Entity\EO_Tracking $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection wakeUp($data)
+	 * @method static \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField current() Iterator
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection merge(?\Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection $collection)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection merge(?\Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection filter(callable $callback)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection filter(callable $callback)
 	 */
-	class EO_StorageField_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Internal\Model\StorageFieldTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageFieldTable';
+	class EO_Tracking_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\Service\Entity\TrackingTable */
+		static public $dataClass = '\Bitrix\Bizproc\Service\Entity\TrackingTable';
 	}
 }
-namespace Bitrix\Bizproc\Internal\Model {
+namespace Bitrix\Bizproc\Service\Entity {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_StorageField_Result exec()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection fetchCollection()
+	 * @method EO_Tracking_Result exec()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking fetchObject()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection fetchCollection()
 	 */
-	class EO_StorageField_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_Tracking_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection fetchCollection()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking fetchObject()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection fetchCollection()
 	 */
-	class EO_StorageField_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_Tracking_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageField_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection createCollection()
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\Service\Entity\EO_Tracking_Collection wakeUpCollection($rows)
 	 */
-	class EO_StorageField_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_Tracking_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\StorageRecordTable:bizproc/lib/Internal/Model/StorageRecordTable.php */
-namespace Bitrix\Bizproc\Internal\Model {
+/* ORMENTITYANNOTATION:Bitrix\Bizproc\RestActivityTable:bizproc/lib/restactivity.php */
+namespace Bitrix\Bizproc {
 	/**
-	 * EO_StorageRecord
-	 * @see \Bitrix\Bizproc\Internal\Model\StorageRecordTable
+	 * EO_RestActivity
+	 * @see \Bitrix\Bizproc\RestActivityTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Bizproc\EO_RestActivity setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \int getStorageId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setStorageId(\int|\Bitrix\Main\DB\SqlExpression $storageId)
-	 * @method bool hasStorageId()
-	 * @method bool isStorageIdFilled()
-	 * @method bool isStorageIdChanged()
-	 * @method \int remindActualStorageId()
-	 * @method \int requireStorageId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetStorageId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetStorageId()
-	 * @method \int fillStorageId()
+	 * @method \string getAppId()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setAppId(\string|\Bitrix\Main\DB\SqlExpression $appId)
+	 * @method bool hasAppId()
+	 * @method bool isAppIdFilled()
+	 * @method bool isAppIdChanged()
+	 * @method \string remindActualAppId()
+	 * @method \string requireAppId()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetAppId()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetAppId()
+	 * @method \string fillAppId()
+	 * @method \string getAppName()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setAppName(\string|\Bitrix\Main\DB\SqlExpression $appName)
+	 * @method bool hasAppName()
+	 * @method bool isAppNameFilled()
+	 * @method bool isAppNameChanged()
+	 * @method \string remindActualAppName()
+	 * @method \string requireAppName()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetAppName()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetAppName()
+	 * @method \string fillAppName()
 	 * @method \string getCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method \Bitrix\Bizproc\EO_RestActivity setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
 	 * @method bool hasCode()
 	 * @method bool isCodeFilled()
 	 * @method bool isCodeChanged()
 	 * @method \string remindActualCode()
 	 * @method \string requireCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetCode()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetCode()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetCode()
 	 * @method \string fillCode()
-	 * @method \string getDocumentId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setDocumentId(\string|\Bitrix\Main\DB\SqlExpression $documentId)
-	 * @method bool hasDocumentId()
-	 * @method bool isDocumentIdFilled()
-	 * @method bool isDocumentIdChanged()
-	 * @method \string remindActualDocumentId()
-	 * @method \string requireDocumentId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetDocumentId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetDocumentId()
-	 * @method \string fillDocumentId()
-	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
-	 * @method bool hasWorkflowId()
-	 * @method bool isWorkflowIdFilled()
-	 * @method bool isWorkflowIdChanged()
-	 * @method \string remindActualWorkflowId()
-	 * @method \string requireWorkflowId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetWorkflowId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetWorkflowId()
-	 * @method \string fillWorkflowId()
-	 * @method \int getTemplateId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
-	 * @method bool hasTemplateId()
-	 * @method bool isTemplateIdFilled()
-	 * @method bool isTemplateIdChanged()
-	 * @method \int remindActualTemplateId()
-	 * @method \int requireTemplateId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetTemplateId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetTemplateId()
-	 * @method \int fillTemplateId()
-	 * @method \int getCreatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setCreatedBy(\int|\Bitrix\Main\DB\SqlExpression $createdBy)
-	 * @method bool hasCreatedBy()
-	 * @method bool isCreatedByFilled()
-	 * @method bool isCreatedByChanged()
-	 * @method \int remindActualCreatedBy()
-	 * @method \int requireCreatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetCreatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetCreatedBy()
-	 * @method \int fillCreatedBy()
-	 * @method \int getUpdatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setUpdatedBy(\int|\Bitrix\Main\DB\SqlExpression $updatedBy)
-	 * @method bool hasUpdatedBy()
-	 * @method bool isUpdatedByFilled()
-	 * @method bool isUpdatedByChanged()
-	 * @method \int remindActualUpdatedBy()
-	 * @method \int requireUpdatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetUpdatedBy()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetUpdatedBy()
-	 * @method \int fillUpdatedBy()
-	 * @method \Bitrix\Main\Type\DateTime getCreatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setCreatedTime(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdTime)
-	 * @method bool hasCreatedTime()
-	 * @method bool isCreatedTimeFilled()
-	 * @method bool isCreatedTimeChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedTime()
-	 * @method \Bitrix\Main\Type\DateTime requireCreatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetCreatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetCreatedTime()
-	 * @method \Bitrix\Main\Type\DateTime fillCreatedTime()
-	 * @method \Bitrix\Main\Type\DateTime getUpdatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setUpdatedTime(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $updatedTime)
-	 * @method bool hasUpdatedTime()
-	 * @method bool isUpdatedTimeFilled()
-	 * @method bool isUpdatedTimeChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualUpdatedTime()
-	 * @method \Bitrix\Main\Type\DateTime requireUpdatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetUpdatedTime()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetUpdatedTime()
-	 * @method \Bitrix\Main\Type\DateTime fillUpdatedTime()
-	 * @method array getValue()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord setValue(array|\Bitrix\Main\DB\SqlExpression $value)
-	 * @method bool hasValue()
-	 * @method bool isValueFilled()
-	 * @method bool isValueChanged()
-	 * @method array remindActualValue()
-	 * @method array requireValue()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord resetValue()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unsetValue()
-	 * @method array fillValue()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord reset($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageRecord wakeUp($data)
-	 */
-	class EO_StorageRecord {
-		/* @var \Bitrix\Bizproc\Internal\Model\StorageRecordTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageRecordTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Internal\Model {
-	/**
-	 * EO_StorageRecord_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getStorageIdList()
-	 * @method \int[] fillStorageId()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method \string[] getDocumentIdList()
-	 * @method \string[] fillDocumentId()
-	 * @method \string[] getWorkflowIdList()
-	 * @method \string[] fillWorkflowId()
-	 * @method \int[] getTemplateIdList()
-	 * @method \int[] fillTemplateId()
-	 * @method \int[] getCreatedByList()
-	 * @method \int[] fillCreatedBy()
-	 * @method \int[] getUpdatedByList()
-	 * @method \int[] fillUpdatedBy()
-	 * @method \Bitrix\Main\Type\DateTime[] getCreatedTimeList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedTime()
-	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedTimeList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedTime()
-	 * @method array[] getValueList()
-	 * @method array[] fillValue()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Internal\Model\EO_StorageRecord $object)
-	 * @method bool has(\Bitrix\Bizproc\Internal\Model\EO_StorageRecord $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\EO_StorageRecord $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection merge(?\Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection filter(callable $callback)
-	 */
-	class EO_StorageRecord_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Internal\Model\StorageRecordTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\StorageRecordTable';
-	}
-}
-namespace Bitrix\Bizproc\Internal\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_StorageRecord_Result exec()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection fetchCollection()
-	 */
-	class EO_StorageRecord_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection fetchCollection()
-	 */
-	class EO_StorageRecord_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection wakeUpCollection($rows)
-	 */
-	class EO_StorageRecord_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable:bizproc/lib/Internal/Model/RobotVersionIndexTable.php */
-namespace Bitrix\Bizproc\Internal\Model {
-	/**
-	 * EO_RobotVersionIndex
-	 * @see \Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getRobotCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex setRobotCode(\string|\Bitrix\Main\DB\SqlExpression $robotCode)
-	 * @method bool hasRobotCode()
-	 * @method bool isRobotCodeFilled()
-	 * @method bool isRobotCodeChanged()
-	 * @method \string remindActualRobotCode()
-	 * @method \string requireRobotCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex resetRobotCode()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex unsetRobotCode()
-	 * @method \string fillRobotCode()
-	 * @method \int getVersion()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex setVersion(\int|\Bitrix\Main\DB\SqlExpression $version)
-	 * @method bool hasVersion()
-	 * @method bool isVersionFilled()
-	 * @method bool isVersionChanged()
-	 * @method \int remindActualVersion()
-	 * @method \int requireVersion()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex resetVersion()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex unsetVersion()
-	 * @method \int fillVersion()
-	 * @method \Bitrix\Main\Type\Date getDateChanged()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex setDateChanged(\Bitrix\Main\Type\Date|\Bitrix\Main\DB\SqlExpression $dateChanged)
-	 * @method bool hasDateChanged()
-	 * @method bool isDateChangedFilled()
-	 * @method bool isDateChangedChanged()
-	 * @method \Bitrix\Main\Type\Date remindActualDateChanged()
-	 * @method \Bitrix\Main\Type\Date requireDateChanged()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex resetDateChanged()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex unsetDateChanged()
-	 * @method \Bitrix\Main\Type\Date fillDateChanged()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex reset($fieldName)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex wakeUp($data)
-	 */
-	class EO_RobotVersionIndex {
-		/* @var \Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Bizproc\Internal\Model {
-	/**
-	 * EO_RobotVersionIndex_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getRobotCodeList()
-	 * @method \string[] fillRobotCode()
-	 * @method \int[] getVersionList()
-	 * @method \int[] fillVersion()
-	 * @method \Bitrix\Main\Type\Date[] getDateChangedList()
-	 * @method \Bitrix\Main\Type\Date[] fillDateChanged()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex $object)
-	 * @method bool has(\Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection merge(?\Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection filter(callable $callback)
-	 */
-	class EO_RobotVersionIndex_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable */
-		static public $dataClass = '\Bitrix\Bizproc\Internal\Model\RobotVersionIndexTable';
-	}
-}
-namespace Bitrix\Bizproc\Internal\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_RobotVersionIndex_Result exec()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection fetchCollection()
-	 */
-	class EO_RobotVersionIndex_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex fetchObject()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection fetchCollection()
-	 */
-	class EO_RobotVersionIndex_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection createCollection()
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\Internal\Model\EO_RobotVersionIndex_Collection wakeUpCollection($rows)
-	 */
-	class EO_RobotVersionIndex_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Bizproc\SchedulerEventTable:bizproc/lib/schedulerevent.php */
-namespace Bitrix\Bizproc {
-	/**
-	 * EO_SchedulerEvent
-	 * @see \Bitrix\Bizproc\SchedulerEventTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getWorkflowId()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setWorkflowId(\string|\Bitrix\Main\DB\SqlExpression $workflowId)
-	 * @method bool hasWorkflowId()
-	 * @method bool isWorkflowIdFilled()
-	 * @method bool isWorkflowIdChanged()
-	 * @method \string remindActualWorkflowId()
-	 * @method \string requireWorkflowId()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetWorkflowId()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetWorkflowId()
-	 * @method \string fillWorkflowId()
+	 * @method \string getInternalCode()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setInternalCode(\string|\Bitrix\Main\DB\SqlExpression $internalCode)
+	 * @method bool hasInternalCode()
+	 * @method bool isInternalCodeFilled()
+	 * @method bool isInternalCodeChanged()
+	 * @method \string remindActualInternalCode()
+	 * @method \string requireInternalCode()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetInternalCode()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetInternalCode()
+	 * @method \string fillInternalCode()
 	 * @method \string getHandler()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setHandler(\string|\Bitrix\Main\DB\SqlExpression $handler)
+	 * @method \Bitrix\Bizproc\EO_RestActivity setHandler(\string|\Bitrix\Main\DB\SqlExpression $handler)
 	 * @method bool hasHandler()
 	 * @method bool isHandlerFilled()
 	 * @method bool isHandlerChanged()
 	 * @method \string remindActualHandler()
 	 * @method \string requireHandler()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetHandler()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetHandler()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetHandler()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetHandler()
 	 * @method \string fillHandler()
-	 * @method \string getEventModule()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setEventModule(\string|\Bitrix\Main\DB\SqlExpression $eventModule)
-	 * @method bool hasEventModule()
-	 * @method bool isEventModuleFilled()
-	 * @method bool isEventModuleChanged()
-	 * @method \string remindActualEventModule()
-	 * @method \string requireEventModule()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetEventModule()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetEventModule()
-	 * @method \string fillEventModule()
-	 * @method \string getEventType()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setEventType(\string|\Bitrix\Main\DB\SqlExpression $eventType)
-	 * @method bool hasEventType()
-	 * @method bool isEventTypeFilled()
-	 * @method bool isEventTypeChanged()
-	 * @method \string remindActualEventType()
-	 * @method \string requireEventType()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetEventType()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetEventType()
-	 * @method \string fillEventType()
-	 * @method \string getEntityId()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setEntityId(\string|\Bitrix\Main\DB\SqlExpression $entityId)
-	 * @method bool hasEntityId()
-	 * @method bool isEntityIdFilled()
-	 * @method bool isEntityIdChanged()
-	 * @method \string remindActualEntityId()
-	 * @method \string requireEntityId()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetEntityId()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetEntityId()
-	 * @method \string fillEntityId()
-	 * @method \string getEventParameters()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent setEventParameters(\string|\Bitrix\Main\DB\SqlExpression $eventParameters)
-	 * @method bool hasEventParameters()
-	 * @method bool isEventParametersFilled()
-	 * @method bool isEventParametersChanged()
-	 * @method \string remindActualEventParameters()
-	 * @method \string requireEventParameters()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent resetEventParameters()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unsetEventParameters()
-	 * @method \string fillEventParameters()
+	 * @method \int getAuthUserId()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setAuthUserId(\int|\Bitrix\Main\DB\SqlExpression $authUserId)
+	 * @method bool hasAuthUserId()
+	 * @method bool isAuthUserIdFilled()
+	 * @method bool isAuthUserIdChanged()
+	 * @method \int remindActualAuthUserId()
+	 * @method \int requireAuthUserId()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetAuthUserId()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetAuthUserId()
+	 * @method \int fillAuthUserId()
+	 * @method \string getUseSubscription()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setUseSubscription(\string|\Bitrix\Main\DB\SqlExpression $useSubscription)
+	 * @method bool hasUseSubscription()
+	 * @method bool isUseSubscriptionFilled()
+	 * @method bool isUseSubscriptionChanged()
+	 * @method \string remindActualUseSubscription()
+	 * @method \string requireUseSubscription()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetUseSubscription()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetUseSubscription()
+	 * @method \string fillUseSubscription()
+	 * @method \boolean getUsePlacement()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setUsePlacement(\boolean|\Bitrix\Main\DB\SqlExpression $usePlacement)
+	 * @method bool hasUsePlacement()
+	 * @method bool isUsePlacementFilled()
+	 * @method bool isUsePlacementChanged()
+	 * @method \boolean remindActualUsePlacement()
+	 * @method \boolean requireUsePlacement()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetUsePlacement()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetUsePlacement()
+	 * @method \boolean fillUsePlacement()
+	 * @method \string getName()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetName()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetName()
+	 * @method \string fillName()
+	 * @method \string getDescription()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
+	 * @method bool hasDescription()
+	 * @method bool isDescriptionFilled()
+	 * @method bool isDescriptionChanged()
+	 * @method \string remindActualDescription()
+	 * @method \string requireDescription()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetDescription()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetDescription()
+	 * @method \string fillDescription()
+	 * @method \string getProperties()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setProperties(\string|\Bitrix\Main\DB\SqlExpression $properties)
+	 * @method bool hasProperties()
+	 * @method bool isPropertiesFilled()
+	 * @method bool isPropertiesChanged()
+	 * @method \string remindActualProperties()
+	 * @method \string requireProperties()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetProperties()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetProperties()
+	 * @method \string fillProperties()
+	 * @method \string getReturnProperties()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setReturnProperties(\string|\Bitrix\Main\DB\SqlExpression $returnProperties)
+	 * @method bool hasReturnProperties()
+	 * @method bool isReturnPropertiesFilled()
+	 * @method bool isReturnPropertiesChanged()
+	 * @method \string remindActualReturnProperties()
+	 * @method \string requireReturnProperties()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetReturnProperties()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetReturnProperties()
+	 * @method \string fillReturnProperties()
+	 * @method \string getDocumentType()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setDocumentType(\string|\Bitrix\Main\DB\SqlExpression $documentType)
+	 * @method bool hasDocumentType()
+	 * @method bool isDocumentTypeFilled()
+	 * @method bool isDocumentTypeChanged()
+	 * @method \string remindActualDocumentType()
+	 * @method \string requireDocumentType()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetDocumentType()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetDocumentType()
+	 * @method \string fillDocumentType()
+	 * @method \string getFilter()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setFilter(\string|\Bitrix\Main\DB\SqlExpression $filter)
+	 * @method bool hasFilter()
+	 * @method bool isFilterFilled()
+	 * @method bool isFilterChanged()
+	 * @method \string remindActualFilter()
+	 * @method \string requireFilter()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetFilter()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetFilter()
+	 * @method \string fillFilter()
+	 * @method \boolean getIsRobot()
+	 * @method \Bitrix\Bizproc\EO_RestActivity setIsRobot(\boolean|\Bitrix\Main\DB\SqlExpression $isRobot)
+	 * @method bool hasIsRobot()
+	 * @method bool isIsRobotFilled()
+	 * @method bool isIsRobotChanged()
+	 * @method \boolean remindActualIsRobot()
+	 * @method \boolean requireIsRobot()
+	 * @method \Bitrix\Bizproc\EO_RestActivity resetIsRobot()
+	 * @method \Bitrix\Bizproc\EO_RestActivity unsetIsRobot()
+	 * @method \boolean fillIsRobot()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -8474,9 +8907,9 @@ namespace Bitrix\Bizproc {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent set($fieldName, $value)
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent reset($fieldName)
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent unset($fieldName)
+	 * @method \Bitrix\Bizproc\EO_RestActivity set($fieldName, $value)
+	 * @method \Bitrix\Bizproc\EO_RestActivity reset($fieldName)
+	 * @method \Bitrix\Bizproc\EO_RestActivity unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -8484,11 +8917,11 @@ namespace Bitrix\Bizproc {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Bizproc\EO_SchedulerEvent wakeUp($data)
+	 * @method static \Bitrix\Bizproc\EO_RestActivity wakeUp($data)
 	 */
-	class EO_SchedulerEvent {
-		/* @var \Bitrix\Bizproc\SchedulerEventTable */
-		static public $dataClass = '\Bitrix\Bizproc\SchedulerEventTable';
+	class EO_RestActivity extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Bizproc\RestActivityTable */
+		static public $dataClass = '\Bitrix\Bizproc\RestActivityTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
@@ -8497,58 +8930,76 @@ namespace Bitrix\Bizproc {
 }
 namespace Bitrix\Bizproc {
 	/**
-	 * EO_SchedulerEvent_Collection
+	 * EO_RestActivity_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int[] getIdList()
-	 * @method \string[] getWorkflowIdList()
-	 * @method \string[] fillWorkflowId()
+	 * @method \string[] getAppIdList()
+	 * @method \string[] fillAppId()
+	 * @method \string[] getAppNameList()
+	 * @method \string[] fillAppName()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \string[] getInternalCodeList()
+	 * @method \string[] fillInternalCode()
 	 * @method \string[] getHandlerList()
 	 * @method \string[] fillHandler()
-	 * @method \string[] getEventModuleList()
-	 * @method \string[] fillEventModule()
-	 * @method \string[] getEventTypeList()
-	 * @method \string[] fillEventType()
-	 * @method \string[] getEntityIdList()
-	 * @method \string[] fillEntityId()
-	 * @method \string[] getEventParametersList()
-	 * @method \string[] fillEventParameters()
+	 * @method \int[] getAuthUserIdList()
+	 * @method \int[] fillAuthUserId()
+	 * @method \string[] getUseSubscriptionList()
+	 * @method \string[] fillUseSubscription()
+	 * @method \boolean[] getUsePlacementList()
+	 * @method \boolean[] fillUsePlacement()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getDescriptionList()
+	 * @method \string[] fillDescription()
+	 * @method \string[] getPropertiesList()
+	 * @method \string[] fillProperties()
+	 * @method \string[] getReturnPropertiesList()
+	 * @method \string[] fillReturnProperties()
+	 * @method \string[] getDocumentTypeList()
+	 * @method \string[] fillDocumentType()
+	 * @method \string[] getFilterList()
+	 * @method \string[] fillFilter()
+	 * @method \boolean[] getIsRobotList()
+	 * @method \boolean[] fillIsRobot()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Bizproc\EO_SchedulerEvent $object)
-	 * @method bool has(\Bitrix\Bizproc\EO_SchedulerEvent $object)
+	 * @method void add(\Bitrix\Bizproc\EO_RestActivity $object)
+	 * @method bool has(\Bitrix\Bizproc\EO_RestActivity $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent getByPrimary($primary)
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent[] getAll()
-	 * @method bool remove(\Bitrix\Bizproc\EO_SchedulerEvent $object)
+	 * @method \Bitrix\Bizproc\EO_RestActivity getByPrimary($primary)
+	 * @method \Bitrix\Bizproc\EO_RestActivity[] getAll()
+	 * @method bool remove(\Bitrix\Bizproc\EO_RestActivity $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Bizproc\EO_SchedulerEvent_Collection wakeUp($data)
+	 * @method static \Bitrix\Bizproc\EO_RestActivity_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent current() Iterator
+	 * @method \Bitrix\Bizproc\EO_RestActivity current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection merge(?\Bitrix\Bizproc\EO_SchedulerEvent_Collection $collection)
+	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection merge(?\Bitrix\Bizproc\EO_RestActivity_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent|null find(callable $callback)
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection filter(callable $callback)
+	 * @method \Bitrix\Bizproc\EO_RestActivity|null find(callable $callback)
+	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection filter(callable $callback)
 	 */
-	class EO_SchedulerEvent_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Bizproc\SchedulerEventTable */
-		static public $dataClass = '\Bitrix\Bizproc\SchedulerEventTable';
+	class EO_RestActivity_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Bizproc\RestActivityTable */
+		static public $dataClass = '\Bitrix\Bizproc\RestActivityTable';
 	}
 }
 namespace Bitrix\Bizproc {
@@ -8556,21 +9007,21 @@ namespace Bitrix\Bizproc {
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_SchedulerEvent_Result exec()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent fetchObject()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection fetchCollection()
+	 * @method EO_RestActivity_Result exec()
+	 * @method \Bitrix\Bizproc\EO_RestActivity fetchObject()
+	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection fetchCollection()
 	 */
-	class EO_SchedulerEvent_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_RestActivity_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent fetchObject()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection fetchCollection()
+	 * @method \Bitrix\Bizproc\EO_RestActivity fetchObject()
+	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection fetchCollection()
 	 */
-	class EO_SchedulerEvent_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_RestActivity_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent createObject($setDefaultValues = true)
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection createCollection()
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent wakeUpObject($row)
-	 * @method \Bitrix\Bizproc\EO_SchedulerEvent_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Bizproc\EO_RestActivity createObject($setDefaultValues = true)
+	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection createCollection()
+	 * @method \Bitrix\Bizproc\EO_RestActivity wakeUpObject($row)
+	 * @method \Bitrix\Bizproc\EO_RestActivity_Collection wakeUpCollection($rows)
 	 */
-	class EO_SchedulerEvent_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_RestActivity_Entity extends \Bitrix\Main\ORM\Entity {}
 }

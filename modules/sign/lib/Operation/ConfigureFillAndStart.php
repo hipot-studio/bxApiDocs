@@ -9,19 +9,24 @@ use Bitrix\Sign\Operation\Result\ConfigureResult;
 use Bitrix\Sign\Operation\Result\FillFieldsResult;
 use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\Sign\PlaceholderBlockService;
 use Bitrix\Sign\Type\DocumentStatus;
 
 class ConfigureFillAndStart implements Operation
 {
 	private readonly Document $document;
 	private readonly DocumentRepository $documentRepository;
+	private readonly PlaceholderBlockService $placeholderBlockService;
 
 	public function __construct(
 		private readonly string $uid,
 		?DocumentRepository $documentRepository = null,
+		?PlaceholderBlockService $placeholderBlockService = null,
 	)
 	{
-		$this->documentRepository = $documentRepository ?? Container::instance()->getDocumentRepository();
+		$container = Container::instance();
+		$this->documentRepository = $documentRepository ?? $container->getDocumentRepository();
+		$this->placeholderBlockService = $placeholderBlockService ?? $container->getPlaceholderBlockService();
 	}
 
 	public function launch(): Main\Result|ConfigureResult
@@ -42,6 +47,13 @@ class ConfigureFillAndStart implements Operation
 
 		if ($this->document->status !== DocumentStatus::READY)
 		{
+			$createBlocksResult = $this->placeholderBlockService->createBlocksForDocument($this->document);
+
+			if (!$createBlocksResult->isSuccess())
+			{
+				return $createBlocksResult;
+			}
+
 			return $this->configure();
 		}
 

@@ -113,7 +113,7 @@ EOD;
 	 * @param Resource\Profile $profile Profile.
 	 * @return string
 	 */
-	protected static function encodePackage(Resource\Package $package, Resource\Profile $profile = null)
+	protected static function encodePackage(Resource\Package $package, ?Resource\Profile $profile = null)
 	{
 		$content = '';
 		foreach ($package::getOrderedTypeList() as $type)

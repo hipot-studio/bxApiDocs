@@ -345,12 +345,11 @@ abstract class ItemList extends Base
 		if (
 			$customSectionId > 0
 			&& Container::getInstance()->getUserPermissions()->automatedSolution()->canEdit()
-			&& \Bitrix\Main\Loader::includeModule('rest')
+			&& Loader::includeModule('rest')
 			&& is_callable('\Bitrix\Rest\Marketplace\Url::getConfigurationPlacementUrl')
 			&& RestrictionManager::getAutomatedSolutionExportImportRestriction()->hasPermission()
 		)
 		{
-
 			$customSectionCode = $this->getCustomSectionCodeById($customSectionId) ?? '';
 			if ($customSectionCode !== '')
 			{
@@ -399,36 +398,6 @@ abstract class ItemList extends Base
 					'text' => $text,
 					'href' => $link,
 					'onclick' => new Buttons\JsHandler('BX.Crm.Page.openSlider("' . $link . '");'),
-				];
-			}
-		}
-
-		$type = Service\Container::getInstance()->getTypeByEntityTypeId($this->entityTypeId);
-		$customSectionId = $type ? $type->getCustomSectionId() : 0;
-		if (
-			$customSectionId > 0
-			&& Container::getInstance()->getUserPermissions()->automatedSolution()->canEdit()
-			&& Loader::includeModule('rest')
-			&& is_callable('\Bitrix\Rest\Marketplace\Url::getConfigurationPlacementUrl')
-		)
-		{
-
-			$customSectionCode = $this->getCustomSectionCodeById($customSectionId) ?? '';
-			if ($customSectionCode !== '')
-			{
-				$settingsItems[] = [
-					'text' => Loc::getMessage('CRM_COMPONENT_ITEM_LIST_AUTOMATED_SOLUTION_EXPORT_IMPORT_ITEM'),
-					'href' =>
-						(
-							new Uri(
-								\Bitrix\Rest\Marketplace\Url::getConfigurationPlacementUrl(
-									'automated_solution_one',
-									'dynamic_type_list'
-								)
-							)
-						)->addParams(['additional' => ['automatedSolutionCode' => $customSectionCode]])
-					,
-					'onclick' => new Buttons\JsHandler('BX.Crm.Router.Instance.closeSettingsMenu'),
 				];
 			}
 		}

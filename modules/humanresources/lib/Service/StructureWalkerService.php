@@ -205,7 +205,7 @@ class StructureWalkerService implements Contract\Service\StructureWalkerService
 	 */
 	private function moveChildNodes(Node $node): array
 	{
-		$children = InternalContainer::getNodeRepository()->getChildrenOfNode($node);
+		$children = InternalContainer::getNodeRepository()->findChildrenByNodeIds([$node->id]);
 		$childIds = [];
 		$parent = $this->nodeRepository->getById($node->parentId);
 
@@ -215,7 +215,7 @@ class StructureWalkerService implements Contract\Service\StructureWalkerService
 			$parent = $this->nodeRepository->getRootNodeByStructureId($node->structureId);
 		}
 
-		$lastSibling = InternalContainer::getNodeRepository()->getChildrenOfNode($parent)->getLast();
+		$lastSibling = InternalContainer::getNodeRepository()->findChildrenByNodeIds([$parent->id])->getLast();
 		$lastSiblingSort = $lastSibling ? $lastSibling->sort : 0;
 
 		foreach ($children as $child)

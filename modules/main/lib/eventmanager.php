@@ -330,7 +330,7 @@ class EventManager
 		$this->isHandlersLoaded = false;
 	}
 
-	public function findEventHandlers($eventModuleId, $eventType, array $filter = null)
+	public function findEventHandlers($eventModuleId, $eventType, ?array $filter = null)
 	{
 		if (!$this->isHandlersLoaded)
 		{

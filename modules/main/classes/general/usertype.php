@@ -236,7 +236,7 @@ class CAllUserTypeEntity extends CDBResult
 			}
 
 			/** @noinspection PhpUndefinedVariableInspection */
-			$CACHE_MANAGER->Set($cacheId, $arResult);
+			$CACHE_MANAGER->SetImmediate($cacheId, $arResult);
 
 			$res = new CDBResult;
 			$res->InitFromArray($arResult);

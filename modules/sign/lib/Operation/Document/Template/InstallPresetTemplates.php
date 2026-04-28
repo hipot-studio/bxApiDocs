@@ -3,6 +3,7 @@
 namespace Bitrix\Sign\Operation\Document\Template;
 
 use Bitrix\Main;
+use Bitrix\Sign\Config\Const\OnboardingTemplate;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Contract\Operation;
 use Bitrix\Sign\Operation\Document\UnserializePortableBlank;
@@ -67,7 +68,9 @@ class InstallPresetTemplates implements Operation
 		foreach ($this->presetTemplatesService->getSerializedTemplatesPathsToInstall() as $filesystemEntry)
 		{
 			$templateName = $filesystemEntry->getName();
-			if ($templateName === $this->storage->getOnboardingTemplateName())
+
+			// Skip onboarding template, it has separate installation process (must be hidden)
+			if ($templateName === OnboardingTemplate::FILE_NAME)
 			{
 				continue;
 			}

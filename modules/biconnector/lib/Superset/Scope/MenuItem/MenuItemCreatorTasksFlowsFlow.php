@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\BIConnector\Superset\Scope\MenuItem;
 
 use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 
 class MenuItemCreatorTasksFlowsFlow extends BaseMenuItemCreator
@@ -30,6 +31,7 @@ class MenuItemCreatorTasksFlowsFlow extends BaseMenuItemCreator
 						'openFrom' => $this->getOpenFrom(),
 					]
 				),
+				'IS_AVAILABLE_WITHOUT_MARKET_SUB' => MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType()),
 			];
 		}
 

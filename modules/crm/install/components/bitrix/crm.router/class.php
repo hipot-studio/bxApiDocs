@@ -42,7 +42,6 @@ class CrmRouterComponent extends Component\Base
 		}
 
 		$this->arResult['page'] = $this->router->matchPage($this->request);
-		$this->arResult['anchors'] = $this->router->getSidePanelAnchors();
 		$this->arResult['isIframe'] = $this->isIframe();
 
 		$this->includeComponentTemplate();

@@ -4,13 +4,17 @@ namespace Bitrix\Crm\Activity\Provider;
 
 use Bitrix\Crm;
 use Bitrix\Crm\Activity;
+use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\Activity\CommunicationStatistics;
 use Bitrix\Crm\Automation\Trigger\EmailSentTrigger;
 use Bitrix\Crm\Timeline\LogMessageType;
+use Bitrix\Crm\Update\Activity\CompressMailStepper;
+use Bitrix\Mail\Internals\MailEntityOptionsTable;
 use Bitrix\Mail\Message;
 use Bitrix\Main\Config;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 
 class Email extends Activity\Provider\Base
 {
@@ -24,6 +28,7 @@ class Email extends Activity\Provider\Base
 
 	protected const TYPE_EMAIL = 'EMAIL';
 	public const TYPE_EMAIL_COMPRESSED = 'EMAIL_COMPRESSED';
+	private const DESCRIPTION_PREVIEW_LIMIT = 200;
 
 	public static function getId()
 	{
@@ -80,7 +85,7 @@ class Email extends Activity\Provider\Base
 
 		if (!$uncompressed)
 		{
-			static::uncompressActivity($activityFields);
+			static::uncompressActivityDescription($activityFields);
 		}
 		$header = Activity\Mail\Message::getHeader([
 			'OWNER_TYPE_ID' => (int)$activityFields['OWNER_TYPE_ID'],
@@ -332,68 +337,400 @@ class Email extends Activity\Provider\Base
 		return false;
 	}
 
-	public static function compressActivity(array &$activity): void
+	public static function compressActivityDescription(array &$activity): void
 	{
-		$activity['PROVIDER_ID'] = Crm\Activity\Provider\Email::getId();
+		$activity['PROVIDER_ID'] = self::getId();
 		$activity['PROVIDER_TYPE_ID'] = self::TYPE_EMAIL_COMPRESSED;
+		$activity['DESCRIPTION'] = self::makeDescriptionPreview(
+			$activity['DESCRIPTION'] ?? '',
+			(int)($activity['DESCRIPTION_TYPE'] ?? \CCrmContentType::Html),
+		);
+	}
 
-		$bodyId = Crm\Activity\MailBodyTable::addByBody($activity['DESCRIPTION'] ?? '');
-
-		$description = [
-			'DESCRIPTION' => $activity['DESCRIPTION'],
-			'DESCRIPTION_TYPE' => $activity['DESCRIPTION_TYPE']
+	private static function makeDescriptionPreview(string $description, int $descriptionType): string
+	{
+		$fields = [
+			'DESCRIPTION' => $description,
+			'DESCRIPTION_TYPE' => $descriptionType,
 		];
 
 		\CCrmActivity::PrepareDescriptionFields(
-			$description,
+			$fields,
 			[
 				'ENABLE_HTML' => false,
 				'ENABLE_BBCODE' => false,
-				'LIMIT' => 200,
-			]
+				'LIMIT' => self::DESCRIPTION_PREVIEW_LIMIT,
+			],
 		);
 
-		$activity['DESCRIPTION'] = $description['DESCRIPTION_RAW'];
-		//$activity['DESCRIPTION_TYPE'] = \CCrmContentType::PlainText;
-		$activity['ASSOCIATED_ENTITY_ID'] = $bodyId;
+		return $fields['DESCRIPTION_RAW'] ?? '';
 	}
 
-	public static function uncompressActivity(array &$activity)
+	public static function addMailBodyBinding(int $activityId, int $ownerTypeId, string $description): void
+	{
+		$bodyId = Crm\Activity\MailBodyTable::addByBody($description);
+
+		Activity\Entity\ActMailBodyBindTable::add([
+			'BODY_ID' => (int)$bodyId,
+			'OWNER_TYPE_ID' => $ownerTypeId,
+			'OWNER_ID' => $activityId,
+		]);
+	}
+
+	public static function uncompressActivityDescription(array &$activity): void
 	{
 		if (
-			isset($activity['PROVIDER_TYPE_ID'])
-			&& $activity['PROVIDER_TYPE_ID'] === self::TYPE_EMAIL_COMPRESSED
+			!isset($activity['PROVIDER_TYPE_ID'])
+			|| $activity['PROVIDER_TYPE_ID'] !== self::TYPE_EMAIL_COMPRESSED
 		)
 		{
-			$body = Crm\Activity\MailBodyTable::getById($activity['ASSOCIATED_ENTITY_ID'])->fetch();
+			return;
+		}
+
+		// Handles case when stepper hasn't yet converted all mails to new compressed format
+		if (
+			isset($activity['ASSOCIATED_ENTITY_ID'])
+			&& (int)$activity['ASSOCIATED_ENTITY_ID'] > 0
+			&& Config\Option::get('crm', CompressMailStepper::COMPRESS_IN_PROGRESS_OPTION_NAME, 'N') === 'Y'
+		)
+		{
+			$bodyId = (int)$activity['ASSOCIATED_ENTITY_ID'];
+
+			$body = Crm\Activity\MailBodyTable::getById($bodyId)->fetch();
 			if ($body)
 			{
 				$activity['DESCRIPTION'] = $body['BODY'];
 			}
+
+			return;
 		}
-	}
 
-	public static function deleteAssociatedEntity($entityId, array $activity, array $options = [])
-	{
-		if ($activity['PROVIDER_TYPE_ID'] === self::TYPE_EMAIL_COMPRESSED)
+		$mailBodyBind = Activity\Entity\ActMailBodyBindTable::query()
+			->setSelect(['BODY_ID'])
+			->where('OWNER_TYPE_ID', \CCrmOwnerType::Activity)
+			->where('OWNER_ID', (int)$activity['ID'])
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		$bodyId = $mailBodyBind ? (int)($mailBodyBind->getBodyId()) : 0;
+
+		if ($bodyId > 0)
 		{
-			$row = Crm\ActivityTable::getList([
-				'select' => ['ID'],
-				'filter' => [
-					'=TYPE_ID' => \CCrmActivityType::Email,
-					'=ASSOCIATED_ENTITY_ID' => $entityId,
-					'!=ID' => $activity['ID'],
-				],
-				'limit' => 1,
-			])->fetch();
-
-			if (!$row)
+			$body = Crm\Activity\MailBodyTable::getById($bodyId)->fetch();
+			if ($body && $body['BODY'] !== '')
 			{
-				Activity\MailBodyTable::delete($entityId);
+				$activity['DESCRIPTION'] = $body['BODY'];
+
+				return;
 			}
 		}
 
-		return parent::deleteAssociatedEntity($entityId, $activity, $options);
+		self::restoreBodyFromMailMessage($activity, $bodyId);
+	}
+
+	protected static function restoreBodyFromMailMessage(array &$activity, int $bodyId): void
+	{
+		$activityId = (int)($activity['ID'] ?? 0);
+		$messageId = (int)($activity['UF_MAIL_MESSAGE'] ?? 0);
+		if ($activityId <= 0 || $messageId <= 0)
+		{
+			return;
+		}
+
+		$settings = $activity['SETTINGS'] ?? [];
+		if (!empty($settings[\CCrmEMail::ACTIVITY_SETTINGS_MAIL_BODY_RESTORE_CHECKED_FIELD]))
+		{
+			return;
+		}
+
+		if (!Loader::includeModule('mail'))
+		{
+			return;
+		}
+
+		$message = \CMailMessage::getById($messageId)->fetch();
+		if (empty($message))
+		{
+			self::markMailBodyRestoreChecked($activityId, $activity, $settings);
+
+			return;
+		}
+
+		if (empty($message['BODY']) && empty($message['BODY_HTML']))
+		{
+			$messageOptions = $message['OPTIONS'] ?? [];
+
+			// Body was intentionally cleared by mail module (visually empty HTML) —
+			// resync won't help, this is not a download error
+			if (!empty($messageOptions['isStrippedTags']))
+			{
+				self::markMailBodyRestoreChecked($activityId, $activity, $settings);
+
+				return;
+			}
+
+			$mailboxId = (int)($message['MAILBOX_ID'] ?? 0);
+			if ($mailboxId <= 0)
+			{
+				self::markMailBodyRestoreChecked($activityId, $activity, $settings);
+
+				return;
+			}
+
+			if (self::isMailMessageBodyAlreadySynced($mailboxId, $messageId))
+			{
+				self::markMailBodyRestoreChecked($activityId, $activity, $settings);
+
+				return;
+			}
+
+			\Bitrix\Mail\Helper\Message::reSyncBody($mailboxId, [$messageId]);
+			$message = \CMailMessage::getById($messageId)->fetch();
+		}
+
+		if (empty($message))
+		{
+			self::markMailBodyRestoreChecked($activityId, $activity, $settings);
+
+			return;
+		}
+
+		$description = (new Activity\Mail\Attachment\MailActivityDescriptionFactory())
+			->makeFromMessageFieldsArray($message)
+		;
+
+		if (empty($description->description))
+		{
+			self::markMailBodyRestoreChecked($activityId, $activity, $settings);
+
+			return;
+		}
+
+		if ($bodyId > 0)
+		{
+			self::updateMailBody($activityId, $bodyId, $description->description);
+		}
+		else
+		{
+			self::addMailBodyBinding($activityId, \CCrmOwnerType::Activity, $description->description);
+		}
+		$settings[\CCrmEMail::ACTIVITY_SETTINGS_MAIL_BODY_RESTORE_CHECKED_FIELD] = 1;
+		$settings['SANITIZE_ON_VIEW'] = (int)($message['SANITIZE_ON_VIEW'] ?? 0);
+
+		ActivityTable::update(
+			$activityId,
+			[
+				'SETTINGS' => $settings,
+				'DESCRIPTION' => self::makeDescriptionPreview($description->description, \CCrmContentType::Html),
+			],
+		);
+
+		$activity['DESCRIPTION'] = $description->description;
+		$activity['SETTINGS'] = $settings;
+	}
+
+	private static function markMailBodyRestoreChecked(int $activityId, array &$activity, array $settings): void
+	{
+		if ($activityId <= 0)
+		{
+			return;
+		}
+
+		$settings[\CCrmEMail::ACTIVITY_SETTINGS_MAIL_BODY_RESTORE_CHECKED_FIELD] = 1;
+
+		ActivityTable::update(
+			$activityId,
+			['SETTINGS' => $settings],
+		);
+
+		$activity['SETTINGS'] = $settings;
+	}
+
+	private static function updateMailBody(int $activityId, int $oldBodyId, string $description): void
+	{
+		$newBodyId = Crm\Activity\MailBodyTable::addByBody($description);
+
+		if ($newBodyId === $oldBodyId)
+		{
+			return;
+		}
+
+		$bind = Activity\Entity\ActMailBodyBindTable::query()
+			->setSelect(['ID'])
+			->where('OWNER_TYPE_ID', \CCrmOwnerType::Activity)
+			->where('OWNER_ID', $activityId)
+			->where('BODY_ID', $oldBodyId)
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		if ($bind)
+		{
+			Activity\Entity\ActMailBodyBindTable::update($bind->getId(), [
+				'BODY_ID' => $newBodyId,
+			]);
+		}
+	}
+
+	private static function isMailMessageBodyAlreadySynced(int $mailboxId, int $messageId): bool
+	{
+		$unSyncOption = MailEntityOptionsTable::getList([
+			'select' => ['VALUE'],
+			'filter' => [
+				'=MAILBOX_ID' => $mailboxId,
+				'=ENTITY_TYPE' => 'MESSAGE',
+				'=ENTITY_ID' => $messageId,
+				'=PROPERTY_NAME' => 'UNSYNC_BODY',
+			],
+			'limit' => 1,
+		])->fetch();
+
+		return !$unSyncOption || $unSyncOption['VALUE'] !== 'Y';
+	}
+
+	public static function getBodyByMailId(int $id): ?\Bitrix\Crm\Activity\EO_MailBody
+	{
+		$mailBodyBind = Activity\Entity\ActMailBodyBindTable::query()
+			->setSelect(['BODY_ID'])
+			->where('OWNER_ID', $id)
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		$bodyId = $mailBodyBind ? (int)$mailBodyBind->getBodyId() : 0;
+
+		$body = Crm\Activity\MailBodyTable::getById($bodyId)->fetchObject();
+
+		return $body === false ? null : $body;
+	}
+
+	public static function doesBodyHaveExactlyOneBinding(int $bodyId): bool
+	{
+		$bindings = Activity\Entity\ActMailBodyBindTable::query()
+			->setSelect(['ID'])
+			->where('BODY_ID', $bodyId)
+			->setLimit(2)
+			->fetchAll()
+		;
+
+		$count = count($bindings);
+
+		return $count === 1;
+	}
+
+	public static function deleteBindingByMailId(int $id, bool $withBody = false): void
+	{
+		$mailBodyBind = Activity\Entity\ActMailBodyBindTable::query()
+			->setSelect(['ID', 'BODY_ID'])
+			->where('OWNER_ID', $id)
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		if ($mailBodyBind)
+		{
+			$bindingId = (int)$mailBodyBind->getId();
+			$bodyId = (int)$mailBodyBind->getBodyId();
+
+			Activity\Entity\ActMailBodyBindTable::delete($bindingId);
+
+			if ($withBody)
+			{
+				Crm\Activity\MailBodyTable::delete($bodyId);
+			}
+		}
+	}
+
+	public static function onAfterDelete(
+		int $id,
+		array $activityFields,
+		?array $params = null,
+	): void
+	{
+		if (
+			\Bitrix\Crm\Recycling\ActivityController::isEnabled()
+			&& \Bitrix\Crm\Settings\ActivitySettings::getCurrent()->isRecycleBinEnabled()
+		)
+		{
+			self::suspendMailBodyBind($id);
+		}
+		else
+		{
+			self::deleteMailBodyBind($id);
+		}
+
+		parent::onAfterDelete($id, $activityFields, $params);
+	}
+
+	public static function processRestorationFromRecycleBin(array $activityFields, ?array $params = null): Result
+	{
+		$oldEntityID = (int)$activityFields['THREAD_ID'];
+		$newEntityID = \CCrmActivity::Add(
+			$activityFields,
+			false,
+			false,
+			[
+				'IS_RESTORATION' => true,
+				'MOVED_TO_BIN_DATETIME' => $params['DATETIME'] ?? null,
+				'DISABLE_USER_FIELD_CHECK' => true,
+			],
+		);
+
+		$bindingId = Activity\Entity\ActMailBodyBindTable::query()
+			->setSelect(['ID'])
+			->where('OWNER_TYPE_ID', \CCrmOwnerType::SuspendedActivity)
+			->where('OWNER_ID', $oldEntityID)
+			->setLimit(1)
+			->fetchObject()
+			?->getId() ?? 0
+		;
+
+		Activity\Entity\ActMailBodyBindTable::update(
+			$bindingId,
+			[
+				'OWNER_TYPE_ID' => \CCrmOwnerType::Activity,
+				'OWNER_ID' => $newEntityID,
+			],
+		);
+
+		return (new Result())
+			->setData(['entityId' => $newEntityID])
+		;
+	}
+
+	public static function onAfterRecycleBinErase(array $activityFields, ?array $params = null): void
+	{
+		$id = (int)$activityFields['ID'];
+		self::deleteMailBodyBind($id);
+	}
+
+	protected static function suspendMailBodyBind(int $mailId): void
+	{
+		$bindingId = Activity\Entity\ActMailBodyBindTable::query()
+			->setSelect(['ID'])
+			->where('OWNER_TYPE_ID', \CCrmOwnerType::Activity)
+			->where('OWNER_ID', $mailId)
+			->setLimit(1)
+			->fetchObject()
+			?->getId() ?? 0
+		;
+		Activity\Entity\ActMailBodyBindTable::update(
+			$bindingId,
+			[
+				'OWNER_TYPE_ID' => Crm\Recycling\ActivityController::getInstance()?->getSuspendedEntityTypeID()
+					?? \CCrmOwnerType::SuspendedActivity,
+			],
+		);
+	}
+
+	protected static function deleteMailBodyBind(int $mailId): void
+	{
+		$body = self::getBodyByMailId($mailId);
+		$bodyId = $body?->getId() ?? 0;
+		$withBody = self::doesBodyHaveExactlyOneBinding($bodyId);
+
+		self::deleteBindingByMailId($mailId, $withBody);
 	}
 
 	/**

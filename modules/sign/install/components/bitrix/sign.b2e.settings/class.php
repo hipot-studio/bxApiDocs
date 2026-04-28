@@ -9,12 +9,16 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Access\AccessController;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Main\Grid\Cell;
+use Bitrix\Sign\Trait\Components\NotAvailableStubTrait;
 use Bitrix\Sign\Service\Providers\LegalInfoProvider;
 
 Loc::loadMessages(__FILE__);
+\Bitrix\Main\Loader::includeModule('sign');
 
 class SignB2eSettingsComponent extends \CBitrixComponent
 {
+	use NotAvailableStubTrait;
+
 	private const GRID_ID = 'USER_FIELD_GRID_ID_LEGAL';
 	private const FIELD_ACTION_DELETE = 'delete';
 	private const ACTION_BUTTON_PREFIX = 'action_button_';
@@ -25,7 +29,7 @@ class SignB2eSettingsComponent extends \CBitrixComponent
 	{
 		if (!\Bitrix\Sign\Config\Storage::instance()->isB2eAvailable())
 		{
-			showError('access denied');
+			$this->renderNotAvailableStub();
 
 			return;
 		}

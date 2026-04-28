@@ -2,6 +2,7 @@
 namespace Bitrix\Bizproc\Internal\Model\TaskArchive;
 
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\DatetimeField;
@@ -33,6 +34,7 @@ use Bitrix\Main\ORM\Query\Join;
 
 class TaskArchiveTasksTable extends DataManager
 {
+	use DeleteByFilterTrait;
 	/**
 	 * Returns DB table name for entity.
 	 *

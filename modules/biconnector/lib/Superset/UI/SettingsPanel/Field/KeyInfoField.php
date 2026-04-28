@@ -2,7 +2,6 @@
 
 namespace Bitrix\BIConnector\Superset\UI\SettingsPanel\Field;
 
-use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Superset\KeyManager;
 
 class KeyInfoField extends EntityEditorField

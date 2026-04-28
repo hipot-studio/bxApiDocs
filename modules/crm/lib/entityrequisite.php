@@ -7835,7 +7835,8 @@ class EntityRequisite
 							}
 						}
 					}
-					$entityData[] = array_values($rowData);
+
+					$entityData[] = $options['isIndexedKeys'] ?? false ? $rowData : array_values($rowData);
 				}
 			}
 

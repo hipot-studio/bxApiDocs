@@ -61,4 +61,15 @@ class NodeMemberCollection extends BaseCollection
 			),
 		);
 	}
+
+	public function getUniqueEntityIds(): array
+	{
+		return array_values(
+			array_unique(
+				$this->map(
+					static fn(Item\NodeMember $member) => $member->entityId,
+				),
+			)
+		);
+	}
 }

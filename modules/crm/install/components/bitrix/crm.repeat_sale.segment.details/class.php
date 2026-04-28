@@ -10,6 +10,7 @@ use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\Component\Base;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\BaasManager;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
@@ -75,7 +76,7 @@ class CCrmRepeatSaleSegmentDetailsComponent extends Base
 			'segment' => $segmentItem,
 			'categories' => $this->getCategories(),
 			'aiSettings' => $this->getAiSettings(),
-			'baasSettings' => $this->getBaasSettings(),
+			'baasSettings' => BaasManager::getSettings(),
 			'isAiCallEnabled' => $isAiCallEnabled,
 			'callAssessments' => $isAiCallEnabled ? $this->getCallAssessments() : [],
 			'callAssessmentId' => 1, // @todo: not implemented yet
@@ -122,15 +123,6 @@ class CCrmRepeatSaleSegmentDetailsComponent extends Base
 		}
 
 		return $result;
-	}
-
-	private function getBaasSettings(): array
-	{
-		return [
-			'isAvailable' => AIManager::isBaasServiceAvailable(),
-			'hasPackage' => AIManager::isBaasServiceHasPackage(),
-			'aiPackagesEmptySliderCode' => AIManager::AI_PACKAGES_EMPTY_COMMON_SLIDER_CODE,
-		];
 	}
 
 	private function getAiSettings(): array

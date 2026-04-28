@@ -47,8 +47,8 @@ class UaPayHandler
 
 			$invoiceData = $invoiceResult->getData();
 			$params = [
-				"CURRENCY" => $payment->getField("CURRENCY"),
-				"SUM" => PriceMaths::roundPrecision($payment->getSum()),
+				"CURRENCY" => $payment->getCurrency(),
+				"SUM" => PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency()),
 				"URL" => $invoiceData["paymentPageUrl"],
 			];
 			$this->setExtraParams($params);
@@ -170,7 +170,7 @@ class UaPayHandler
 				"type" => "PAY",
 				"callbackUrl" => $this->getBusinessValue($payment, "UAPAY_CALLBACK_URL"),
 				"description" => $this->getPaymentDescription($payment),
-				"amount" => (int)PriceMaths::roundPrecision($payment->getSum() * 100),
+				"amount" => (int)(PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency(), 2) * 100),
 				"redirectUrl" => $this->getRedirectUrl($payment),
 				"extraInfo" => self::encode($extraInfo),
 			],
@@ -578,11 +578,12 @@ class UaPayHandler
 	 */
 	private function isSumCorrect(Payment $payment, $amount)
 	{
+		$currency = $payment->getCurrency();
 		PaySystem\Logger::addDebugInfo(
-			__CLASS__.": sum=".PriceMaths::roundPrecision($amount)."; paymentSum=".PriceMaths::roundPrecision($payment->getSum())
+			__CLASS__.": sum=" . PriceMaths::roundByFormatCurrency($amount, $currency)."; paymentSum=" . PriceMaths::roundByFormatCurrency($payment->getSum(), $currency)
 		);
 
-		return PriceMaths::roundPrecision($amount) === PriceMaths::roundPrecision($payment->getSum());
+		return PriceMaths::roundByFormatCurrency($amount, $currency) === PriceMaths::roundByFormatCurrency($payment->getSum(), $currency);
 	}
 
 	/**

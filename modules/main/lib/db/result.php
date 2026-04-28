@@ -42,7 +42,7 @@ abstract class Result implements \IteratorAggregate
 	 * @param Connection|null $dbConnection Connection object.
 	 * @param \Bitrix\Main\Diag\SqlTrackerQuery|null $trackerQuery Helps to collect debug information.
 	 */
-	public function __construct($result, Connection $dbConnection = null, \Bitrix\Main\Diag\SqlTrackerQuery $trackerQuery = null)
+	public function __construct($result, ?Connection $dbConnection = null, ?\Bitrix\Main\Diag\SqlTrackerQuery $trackerQuery = null)
 	{
 		$this->resource = $result;
 		$this->connection = $dbConnection;
@@ -176,7 +176,7 @@ abstract class Result implements \IteratorAggregate
 	 *
 	 * @return array|false
 	 */
-	public function fetch(\Bitrix\Main\Text\Converter $converter = null)
+	public function fetch(?\Bitrix\Main\Text\Converter $converter = null)
 	{
 		$data = $this->fetchRaw();
 
@@ -246,7 +246,7 @@ abstract class Result implements \IteratorAggregate
 	 *
 	 * @return array
 	 */
-	public function fetchAll(\Bitrix\Main\Text\Converter $converter = null)
+	public function fetchAll(?\Bitrix\Main\Text\Converter $converter = null)
 	{
 		$res = array();
 		while ($ar = $this->fetch($converter))

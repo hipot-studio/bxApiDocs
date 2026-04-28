@@ -944,6 +944,13 @@ class Attach extends BaseObject implements \ArrayAccess
 
 	public function recall(int $userId, string $actionUuid = ''): Result
 	{
+		if (!$this->canParticipate($userId))
+		{
+			return (new Result())
+				->addError(new Error('Access denied'))
+			;
+		}
+
 		$canRevoteResult = $this->canRevote($userId);
 		if (!$canRevoteResult->isSuccess())
 		{

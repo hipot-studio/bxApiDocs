@@ -15,7 +15,7 @@ class DepartmentEditTool extends NodeEditTool
 
 	public function getName(): string
 	{
-		return 'edit';
+		return 'department_edit';
 	}
 
 	public function getDescription(): string

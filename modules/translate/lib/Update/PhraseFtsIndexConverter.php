@@ -8,6 +8,9 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Localization\LanguageTable;
 use Bitrix\Translate\Index;
 
+/**
+ * @internal
+ */
 
 final class PhraseFtsIndexConverter extends \Bitrix\Main\Update\Stepper
 {

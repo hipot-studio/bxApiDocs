@@ -6,6 +6,7 @@ namespace Bitrix\Booking\Internals\Repository\ORM;
 
 use Bitrix\Booking\Entity\Booking\Booking;
 use Bitrix\Booking\Entity\Booking\BookingCollection;
+use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\Booking\CreateBookingException;
 use Bitrix\Booking\Internals\Exception\Booking\RemoveBookingException;
 use Bitrix\Booking\Internals\Model\BookingTable;
@@ -265,6 +266,18 @@ class BookingRepository implements BookingRepositoryInterface
 		);
 
 		$this->bookingSkuService->loadForCollection(...$skuCollections);
+
+		return $this;
+	}
+
+	public function withClientData(BookingCollection $collection): self
+	{
+		$clientCollections = array_map(
+			static fn(Booking $booking) => $booking->getClientCollection(),
+			$collection->getCollectionItems(),
+		);
+
+		Container::getCrmClientDataLoader()->loadDataForCollection(...$clientCollections);
 
 		return $this;
 	}

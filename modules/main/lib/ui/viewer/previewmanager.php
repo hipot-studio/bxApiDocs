@@ -38,7 +38,7 @@ final class PreviewManager
 	 */
 	private $httpRequest;
 
-	public function __construct(HttpRequest $httpRequest = null)
+	public function __construct(?HttpRequest $httpRequest = null)
 	{
 		$this->httpRequest = $httpRequest? : Context::getCurrent()->getRequest();
 		$this->transformer = $this->buildTransformer();

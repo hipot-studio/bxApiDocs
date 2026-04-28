@@ -6,7 +6,6 @@ use Bitrix\HumanResources\Exception\CreationFailedException;
 use Bitrix\HumanResources\Exception\DeleteFailedException;
 use Bitrix\HumanResources\Exception\UpdateFailedException;
 use Bitrix\HumanResources\Item;
-use Bitrix\HumanResources\Item\Role;
 use Bitrix\HumanResources\Model;
 use Bitrix\HumanResources\Type\RoleChildAffectionType;
 use Bitrix\HumanResources\Type\RoleEntityType;

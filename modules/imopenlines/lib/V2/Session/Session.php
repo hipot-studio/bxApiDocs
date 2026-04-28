@@ -81,6 +81,7 @@ class Session implements RegistryEntry, ActiveRecord, PopupDataItem, RestEntity,
 	protected bool $sendHistory = false;
 	protected bool $closed = false;
 	protected bool $pause = false;
+	protected bool $silentMode = false;
 	protected bool $spam = false;
 	protected bool $worktime = false;
 	protected ?string $queueHistory = null;
@@ -153,6 +154,27 @@ class Session implements RegistryEntry, ActiveRecord, PopupDataItem, RestEntity,
 	public function setPinMode(?bool $pinMode): self
 	{
 		$this->pause = $pinMode ?? false;
+
+		return $this;
+	}
+
+	public function getSilentMode(): bool
+	{
+		if ($this->chat instanceof \Bitrix\Im\V2\Chat)
+		{
+			$entityData3 = $this->chat->getEntityData3();
+			if ($entityData3 !== null && $entityData3 !== '')
+			{
+				return $entityData3 === 'Y';
+			}
+		}
+
+		return false;
+	}
+
+	public function setSilentMode(?bool $silentMode): self
+	{
+		$this->silentMode = $silentMode ?? false;
 
 		return $this;
 	}
@@ -907,6 +929,11 @@ class Session implements RegistryEntry, ActiveRecord, PopupDataItem, RestEntity,
 				'set' => 'setPinMode',
 				'get' => 'getPinMode',
 			],
+			'SILENT_MODE' => [
+				'field' => 'silentMode',
+				'set' => 'setSilentMode',
+				'get' => 'getSilentMode',
+			],
 			'SPAM' => [
 				'field' => 'spam',
 				'set' => 'setSpam',
@@ -948,6 +975,7 @@ class Session implements RegistryEntry, ActiveRecord, PopupDataItem, RestEntity,
 			'status' => $this->getStatusGroup(),
 			'queueId' => $this->getConfigId(),
 			'pinned' => $this->getPinMode(),
+			'silentMode' => $this->getSilentMode(),
 			'isClosed' => $this->isClosed(),
 		];
 

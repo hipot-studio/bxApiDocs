@@ -13,9 +13,9 @@ Loc::loadMessages(__FILE__);
 
 class B24button extends \Bitrix\Landing\Hook\Page
 {
-	protected const COLOR_TYPE_BUTTON = 'button';
-	protected const COLOR_TYPE_SITE = 'site';
-	protected const COLOR_TYPE_CUSTOM = 'custom';
+	public const COLOR_TYPE_BUTTON = 'button';
+	public const COLOR_TYPE_SITE = 'site';
+	public const COLOR_TYPE_CUSTOM = 'custom';
 	protected const COLOR_DEFAULT = '#03c1fe';
 
 	/**

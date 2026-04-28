@@ -1716,6 +1716,10 @@ class CIntranetUtils
 			array('ID', 'NAME', 'UF_HEAD'));
 	}
 
+	/**
+	 * @deprecated use (new \Bitrix\Intranet\Public\Provider\User\UserSubordinateProvider)->getSubordinates($userId) instead
+	 * @see \Bitrix\Intranet\Public\Provider\User\UserSubordinateProvider
+	 */
 	public static function getSubordinateEmployees($USER_ID = null, $bRecursive = false, $onlyActive = 'Y', $arSelect = null)
 	{
 		$arDepartments = CIntranetUtils::GetSubordinateDepartments($USER_ID, $bRecursive);

@@ -9,7 +9,7 @@ use Bitrix\Booking\Entity\EntityWithClientRelationInterface;
 use Bitrix\Booking\Entity\EntityInterface;
 use Bitrix\Booking\Entity\EntityWithExternalDataRelationInterface;
 use Bitrix\Booking\Entity\ExternalData\ExternalDataCollection;
-use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Integration\Crm\DealClientSynchronizer;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
 use Bitrix\Booking\Internals\Repository\BookingClientRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ORM\BookingExternalDataRepository;
@@ -21,6 +21,7 @@ class ExternalDataService
 		private readonly BookingClientRepositoryInterface $bookingClientRepository,
 		private readonly BookingExternalDataRepository $bookingExternalDataRepository,
 		private readonly ClientService $clientService,
+		private readonly DealClientSynchronizer $dealClientSynchronizer,
 		private ExternalDataLoader|null $externalDataLoader = null,
 	)
 	{
@@ -52,12 +53,7 @@ class ExternalDataService
 		// handle primary client
 		if ($clientCollection->isEmpty())
 		{
-			Container::getProviderManager()::getCurrentProvider()
-				?->getDataProvider()
-				?->setClientsData(
-					$clientCollection,
-					$externalDataCollection
-				);
+			$this->dealClientSynchronizer->setClientsFromDeal($clientCollection, $externalDataCollection);
 
 			$this->bookingClientRepository->link(
 				$entity->getId(),

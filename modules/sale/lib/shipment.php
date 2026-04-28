@@ -5,9 +5,8 @@ namespace Bitrix\Sale;
 use Bitrix\Catalog\VatTable;
 use Bitrix\Main;
 use Bitrix\Main\Entity;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Sale\Delivery;
-use Bitrix\Sale\Internals;
 use \Bitrix\Sale\Delivery\Requests;
 use Bitrix\Sale\Reservation\Configuration\ReserveCondition;
 
@@ -2754,9 +2753,17 @@ class Shipment extends Internals\CollectableEntity implements IBusinessValueProv
 	public function getVatSum()
 	{
 		$vatRate = $this->getVatRate();
-		$price = $this->getPrice() * $vatRate / (1 + $vatRate);
 
-		return PriceMaths::roundPrecision($price);
+		$calculator = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+		$input = new \Bitrix\Sale\Public\Dto\BasketItemCalculationInput(
+			basePrice: (float)$this->getPrice(),
+			quantity: 1.0,
+			vatRate: (float)$vatRate * 100,
+			vatIncluded: true,
+		);
+		$result = $calculator->calculate($input);
+
+		return PriceMaths::roundPrecision($result->vatAmount);
 	}
 
 	/**

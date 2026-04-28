@@ -23,6 +23,13 @@ class HcmLinkFieldService
 	private const NAME_SEPARATOR = '_';
 	public const FIELD_PREFIX = 'HCMFIELD';
 
+	/** @var array<int, Item\HcmLink\Field> */
+	private array $fieldCacheById = [];
+	/** @var array<string, ?Item\HcmLink\Field> */
+	private array $fieldCacheByCode = [];
+	/** @var array<int, true> */
+	private array $preloadedCompanyIds = [];
+
 	public function getFieldsForSelector(int $hcmLinkCompanyId, bool $withEmployee = true): array
 	{
 		if (!$this->isAvailable())
@@ -33,21 +40,19 @@ class HcmLinkFieldService
 		$employeeFieldCollection = HumanResources\Service\Container::getHcmLinkFieldRepository()
 			->getByCompanyIdAndEntityType(
 				$hcmLinkCompanyId,
-				HumanResources\Type\HcmLink\FieldEntityType::EMPLOYEE
+				HumanResources\Type\HcmLink\FieldEntityType::EMPLOYEE,
 			)
 		;
 
-		$response = [
-			self::CATEGORY_REPRESENTATIVE => [
-				'CAPTION' => '',
-				'FIELDS' => $this->mapFieldCollectionForSelector(
-					fieldCollection: $employeeFieldCollection,
-					entityName: self::CATEGORY_REPRESENTATIVE,
-					party: BlockParty::NOT_LAST_PARTY,
-				),
-			],
-		];
+		return $this->buildSelectorResponse($employeeFieldCollection, $withEmployee);
+	}
 
+	private function buildSelectorResponse(
+		Item\Collection\HcmLink\FieldCollection $employeeFieldCollection,
+		bool $withEmployee,
+	): array
+	{
+		$response = [];
 		if ($withEmployee)
 		{
 			$response[self::CATEGORY_EMPLOYEE] = [
@@ -59,6 +64,15 @@ class HcmLinkFieldService
 				),
 			];
 		}
+
+		$response[self::CATEGORY_REPRESENTATIVE] = [
+			'CAPTION' => '',
+			'FIELDS' => $this->mapFieldCollectionForSelector(
+				fieldCollection: $employeeFieldCollection,
+				entityName: self::CATEGORY_REPRESENTATIVE,
+				party: BlockParty::NOT_LAST_PARTY,
+			),
+		];
 
 		return $response;
 	}
@@ -95,6 +109,7 @@ class HcmLinkFieldService
 					'multiple' => false,
 					'required' => false,
 					'hidden' => false,
+					'companyId' => $field->companyId,
 				],
 			),
 		);
@@ -176,12 +191,67 @@ class HcmLinkFieldService
 
 	public function getFieldById(int $id): ?Item\HcmLink\Field
 	{
+		if (isset($this->fieldCacheById[$id]))
+		{
+			return $this->fieldCacheById[$id];
+		}
+
 		if (!$this->isAvailable())
 		{
 			return null;
 		}
 
-		return HumanResources\Service\Container::getHcmLinkFieldRepository()->getById($id);
+		$field = HumanResources\Service\Container::getHcmLinkFieldRepository()->getById($id);
+
+		if ($field !== null)
+		{
+			$this->cacheField($field);
+		}
+
+		return $field;
+	}
+
+	/**
+	 * @param int[] $ids
+	 * @return array<int, Item\HcmLink\Field>
+	 */
+	public function getFieldsByIds(array $ids): array
+	{
+		if (!$this->isAvailable())
+		{
+			return [];
+		}
+
+		$missingIds = [];
+		foreach ($ids as $id)
+		{
+			if (!isset($this->fieldCacheById[$id]))
+			{
+				$missingIds[] = $id;
+			}
+		}
+
+		if (!empty($missingIds))
+		{
+			$fields = HumanResources\Service\Container::getHcmLinkFieldRepository()
+				->getByIds(array_unique($missingIds))
+			;
+			foreach ($fields as $field)
+			{
+				$this->cacheField($field);
+			}
+		}
+
+		$result = [];
+		foreach ($ids as $id)
+		{
+			if (isset($this->fieldCacheById[$id]))
+			{
+				$result[$id] = $this->fieldCacheById[$id];
+			}
+		}
+
+		return $result;
 	}
 
 	public function getFieldValue(
@@ -214,7 +284,7 @@ class HcmLinkFieldService
 				$companyId,
 				$employeeIds,
 				$fieldIds,
-				$signerMemberIdByEmployeeIdMap
+				$signerMemberIdByEmployeeIdMap,
 			)
 		;
 
@@ -283,39 +353,77 @@ class HcmLinkFieldService
 		};
 	}
 
-	public function isDateSettingFieldById(int $id): bool
+	public function getFieldByCode(int $companyId, string $code): ?Item\HcmLink\Field
 	{
-		if (!$this->isAvailable())
+		$cacheKey = "{$companyId}:{$code}";
+		if (array_key_exists($cacheKey, $this->fieldCacheByCode))
 		{
-			return false;
+			return $this->fieldCacheByCode[$cacheKey];
 		}
 
-		$field = HumanResources\Service\Container::getHcmLinkFieldRepository()->getById($id);
+		if (!$this->isAvailable())
+		{
+			return null;
+		}
 
-		return $field?->type === HumanResources\Type\HcmLink\FieldType::DOCUMENT_DATE;
+		$field = HumanResources\Service\Container::getHcmLinkFieldRepository()->getByUnique($companyId, $code);
+		$this->fieldCacheByCode[$cacheKey] = $field;
+		if ($field !== null)
+		{
+			$this->cacheField($field);
+		}
+
+		return $field;
+	}
+
+	public function buildFieldSelectorName(Item\HcmLink\Field $field, int $party): string
+	{
+		return $this->mapFieldName($field, $party);
+	}
+
+	public function preloadByCompanyId(int $companyId): void
+	{
+		if (isset($this->preloadedCompanyIds[$companyId]))
+		{
+			return;
+		}
+
+		if (!$this->isAvailable())
+		{
+			return;
+		}
+
+		$fields = HumanResources\Service\Container::getHcmLinkFieldRepository()->getByCompany($companyId);
+
+		foreach ($fields as $field)
+		{
+			$this->cacheField($field);
+		}
+
+		$this->preloadedCompanyIds[$companyId] = true;
+	}
+
+	private function cacheField(Item\HcmLink\Field $field): void
+	{
+		if ($field->id !== null)
+		{
+			$this->fieldCacheById[$field->id] = $field;
+		}
+		$this->fieldCacheByCode["{$field->companyId}:{$field->field}"] = $field;
+	}
+
+	public function isDateSettingFieldById(int $id): bool
+	{
+		return $this->getFieldById($id)?->type === HumanResources\Type\HcmLink\FieldType::DOCUMENT_DATE;
 	}
 
 	public function isExternalIdSettingFieldById(int $id): bool
 	{
-		if (!$this->isAvailable())
-		{
-			return false;
-		}
-
-		$field = HumanResources\Service\Container::getHcmLinkFieldRepository()->getById($id);
-
-		return $field?->type === HumanResources\Type\HcmLink\FieldType::DOCUMENT_REGISTRATION_NUMBER;
+		return $this->getFieldById($id)?->type === HumanResources\Type\HcmLink\FieldType::DOCUMENT_REGISTRATION_NUMBER;
 	}
 
 	public function isDocumentTypeSettingFieldById(int $id): bool
 	{
-		if (!$this->isAvailable())
-		{
-			return false;
-		}
-
-		$field = HumanResources\Service\Container::getHcmLinkFieldRepository()->getById($id);
-
-		return $field?->type === HumanResources\Type\HcmLink\FieldType::DOCUMENT_UID;
+		return $this->getFieldById($id)?->type === HumanResources\Type\HcmLink\FieldType::DOCUMENT_UID;
 	}
 }

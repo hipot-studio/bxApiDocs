@@ -69,6 +69,12 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 			?? \CCrmDeal::GetFieldCaption($fieldID)
 		;
 
+		if (!(is_string($name) && $name !== ''))
+		{
+			Container::getInstance()->getLocalization()->loadMessages();
+			$name = Loc::getMessage("CRM_TYPE_ITEM_FIELD_$fieldID");
+		}
+
 		if (!$name && ParentFieldManager::isParentFieldName($fieldID))
 		{
 			$parentEntityTypeId = ParentFieldManager::getEntityTypeIdFromFieldName($fieldID);
@@ -274,6 +280,14 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				]
 			);
 		}
+
+		$result['PREVIOUS_STAGE_ID'] = $this->createField(
+			'PREVIOUS_STAGE_ID',
+			[
+				'type' => 'list',
+				'partial' => true
+			]
+		);
 
 		$result['DELIVERY_STAGE'] = $this->createField(
 			'DELIVERY_STAGE',
@@ -667,7 +681,12 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 			);
 		}
 
-		if ($fieldID === 'STAGE_ID' || $fieldID === 'STAGE_ID_FROM_HISTORY' || $fieldID === 'STAGE_ID_FROM_SUPPOSED_HISTORY')
+		if (
+			$fieldID === 'STAGE_ID'
+			|| $fieldID === 'PREVIOUS_STAGE_ID'
+			|| $fieldID === 'STAGE_ID_FROM_HISTORY'
+			|| $fieldID === 'STAGE_ID_FROM_SUPPOSED_HISTORY'
+		)
 		{
 			$categoryID = $this->getCategoryID();
 			return array(

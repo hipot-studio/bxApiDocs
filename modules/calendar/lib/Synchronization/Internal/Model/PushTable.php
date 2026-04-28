@@ -6,6 +6,7 @@ namespace Bitrix\Calendar\Synchronization\Internal\Model;
 
 use Bitrix\Main\Entity\DataManager;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddInsertIgnoreTrait;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -30,6 +31,8 @@ use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
  */
 class PushTable extends DataManager
 {
+	use AddInsertIgnoreTrait;
+
 	public static function getTableName(): string
 	{
 		return 'b_calendar_push';

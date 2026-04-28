@@ -1,9 +1,10 @@
 <?php
 namespace Bitrix\Intranet;
 
-use Bitrix\Mail\Helper\Message;
 use Bitrix\Main\Loader;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Mail\Integration\Im\Chat;
 
 // workaround for ControlButton translations
 Loc::loadMessages(__DIR__ . '/controlbutton.php');
@@ -18,7 +19,7 @@ class Secretary
 	{
 		if (!self::checkAccessForIm() || !self::checkAccessForCalendar())
 		{
-			throw new \Bitrix\Main\SystemException('create calendar chat: failed to load modules');
+			throw new SystemException('create calendar chat: failed to load modules');
 		}
 
 		$chat = new \CIMChat(0);
@@ -95,7 +96,7 @@ class Secretary
 	{
 		if (!self::checkAccessForIm() || !self::checkAccessForCalendar())
 		{
-			throw new \Bitrix\Main\SystemException('create task chat: failed to load modules');
+			throw new SystemException('create task chat: failed to load modules');
 		}
 
 		$chat = new \CIMChat(0);
@@ -137,80 +138,47 @@ class Secretary
 		return $chatId;
 	}
 
+	/**
+	 * @throws SystemException
+	 * @deprecated Use Bitrix\Mail\Integration\Im\Chat::createMailChat()
+	 * @see Chat::createMailChat()
+	 */
 	public static function createMailChat(array $messageData, int $userId): ?int
 	{
-		if (!self::checkAccessForIm() || !self::checkAccessForMail())
+		if (!self::checkAccessForMail())
 		{
-			throw new \Bitrix\Main\SystemException('create mail chat: failed to load modules');
+			throw new SystemException('create mail chat: failed to load modules');
 		}
 
-		if (empty($messageData['SUBJECT']))
+		$createMailChatResult = Chat::createMailChat($messageData, $userId);
+		if (!$createMailChatResult->isSuccess())
 		{
-			$messageData['SUBJECT'] = Loc::getMessage(
-				'INTRANET_CONTROL_BUTTON_MAIL_CHAT_EMPTY_SUBJECT',
-				['#MESSAGE_ID#' => $messageData['ID']]
-			);
+			return null;
 		}
 
-		$chat = new \CIMChat(0);
-		$chatFields = [
-			'TITLE' => $messageData['SUBJECT'],
-			'TYPE' => IM_MESSAGE_CHAT,
-			'ENTITY_TYPE' => 'MAIL',
-			'ENTITY_ID' => $messageData['ID'],
-			'SKIP_ADD_MESSAGE' => 'Y',
-			'AUTHOR_ID' => $userId,
-			'USERS' => $messageData['USER_IDS']
-		];
-
-		$chatId = $chat->add($chatFields);
-
-		if (
-			$chatId
-			&& \Bitrix\Mail\Integration\Intranet\Secretary::provideAccessToMessage(
-				$messageData['ID'],
-				Message::ENTITY_TYPE_IM_CHAT,
-				$chatId,
-				$userId
-			)
-		)
-		{
-			$message = \Bitrix\Mail\Item\Message::fromArray($messageData);
-			self::postMailChatWelcomeMessage($message, $chatId, $userId);
-			return $chatId;
-		}
-
-		return null;
+		return $createMailChatResult->getData()['chatId'];
 	}
 
-	public static function postMailChatWelcomeMessage(\Bitrix\Mail\Item\Message $message, int $chatId, int $userId)
+	/**
+	 * @throws SystemException
+	 * @deprecated Use Bitrix\Mail\Integration\Im\Chat::postMailChatWelcomeMessage()
+	 * @see Chat::postMailChatWelcomeMessage()
+	 */
+	public static function postMailChatWelcomeMessage(\Bitrix\Mail\Item\Message $message, int $chatId, int $userId): void
 	{
-		if (!self::checkAccessForIm() || !self::checkAccessForMail())
+		if (!self::checkAccessForMail())
 		{
-			throw new \Bitrix\Main\SystemException('post mail welcome message: failed to load modules');
+			throw new SystemException('post mail welcome message: failed to load modules');
 		}
 
-		// $pathToMessage = SITE_DIR . 'mail/message/' . $messageData['ID'];
-		$pathToMessage = \Bitrix\Mail\Integration\Intranet\Secretary::getMessageUrlForChat($message->getId(), $chatId);
-		$entryLinkTitle = '[url=' . $pathToMessage . ']' . $message->getSubject() . '[/url]';
-		$chatMessageFields = [
-			'USER_ID' => $userId,
-			'CHAT_ID' => $chatId,
-			'MESSAGE' => Loc::getMessage(
-				'INTRANET_CONTROL_BUTTON_MAIL_CHAT_FIRST_MESSAGE',
-				[
-					'#MAIL_TITLE#' => $entryLinkTitle,
-				]
-			),
-		];
-		\CIMChat::AddSystemMessage($chatMessageFields);
+		Chat::postMailChatWelcomeMessage($message, $chatId, $userId);
 	}
 
 	public static function updateChatUsers($chatId, $addedUsers, $deletedUsers, array $parameters = []): void
 	{
 		if (!self::checkAccessForIm())
 		{
-			throw new \Bitrix\Main\SystemException('update chat: failed to load modules');
+			throw new SystemException('update chat: failed to load modules');
 		}
 
 		$chat = new \CIMChat(0);
@@ -234,7 +202,7 @@ class Secretary
 	{
 		if (!self::checkAccessForIm())
 		{
-			throw new \Bitrix\Main\SystemException('update chat: failed to load modules');
+			throw new SystemException('update chat: failed to load modules');
 		}
 
 		$chat = new \CIMChat(0);
@@ -256,7 +224,7 @@ class Secretary
 	{
 		if (!self::checkAccessForIm())
 		{
-			throw new \Bitrix\Main\SystemException('update chat: failed to load modules');
+			throw new SystemException('update chat: failed to load modules');
 		}
 
 		$chat = new \CIMChat(0);

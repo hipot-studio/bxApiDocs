@@ -13,7 +13,7 @@ use Bitrix\Main\Result;
 class SetupTemplateService
 {
 	private ?ErrorCollection $errors = null;
-	private bool $validationEventReceived = false;
+	private bool $eventReceived = false;
 	private ?int $eventHandler = null;
 
 	/**
@@ -32,7 +32,7 @@ class SetupTemplateService
 	): Result
 	{
 		$this->listenForValidationEvent($userId, $templateId);
-		$this->sendEvent($templateId, $userId, $instanceId, $constantValues);
+		$this->sendUserInputEvent($templateId, $userId, $instanceId, $constantValues);
 		$this->stopListenValidationEvent();
 
 		$result = new Result();
@@ -40,7 +40,7 @@ class SetupTemplateService
 		{
 			$result->addErrors($this->errors->getValues());
 		}
-		if (!$this->validationEventReceived)
+		if (!$this->eventReceived)
 		{
 			$result->addError(ErrorMessage::BP_NOT_FOUND->getError());
 		}
@@ -50,8 +50,7 @@ class SetupTemplateService
 
 	private function listenForValidationEvent(int $userId, int $templateId): void
 	{
-		$this->errors = null;
-		$this->validationEventReceived = false;
+		$this->resetProperties();
 		$this->eventHandler = EventManager::getInstance()
 			->addEventHandler(
 				fromModuleId: SetupTemplateValidationEvent::MODULE_ID,
@@ -61,14 +60,14 @@ class SetupTemplateService
 					if ($event->getTemplateId() === $templateId && $event->getUserId() === $userId)
 					{
 						$this->errors = $event->getErrors();
-						$this->validationEventReceived = true;
+						$this->eventReceived = true;
 					}
 				}
 			)
 		;
 	}
 
-	private function sendEvent(
+	private function sendUserInputEvent(
 		int $templateId,
 		int $userId,
 		string $instanceId,
@@ -102,5 +101,11 @@ class SetupTemplateService
 				iEventHandlerKey: $this->eventHandler,
 			)
 		;
+	}
+
+	private function resetProperties(): void
+	{
+		$this->errors = null;
+		$this->eventReceived = false;
 	}
 }

@@ -1,12 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Workflow\Template\Entity;
 
+use Bitrix\Bizproc\Internal\Service\Trigger\Schedule\ScheduledTriggerSyncService;
 use Bitrix\Bizproc\Public\Activity\Configurator;
 use Bitrix\Bizproc\Public\Entity\Trigger\Section;
 use Bitrix\Bizproc\Workflow\Template\Converter\NodesToTemplate;
 use Bitrix\Bizproc\WorkflowTemplateTable;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
@@ -40,27 +44,21 @@ class WorkflowTemplateTriggerTable extends DataManager
 		return [
 			(new ORM\Fields\IntegerField('TEMPLATE_ID'))
 				->configurePrimary()
-				->configureRequired()
-			,
+				->configureRequired(),
 			(new ORM\Fields\StringField('TRIGGER_NAME'))
 				->configurePrimary()
 				->configureRequired()
-				->addValidator(new LengthValidator(1, 128))
-			,
+				->addValidator(new LengthValidator(1, 128)),
 			(new ORM\Fields\StringField('TRIGGER_TYPE'))
 				->configureRequired()
-				->addValidator(new LengthValidator(1, 128))
-			,
+				->addValidator(new LengthValidator(1, 128)),
 			(new ORM\Fields\ArrayField('APPLY_RULES')),
 			(new ORM\Fields\StringField('MODULE_ID'))
-				->addValidator(new LengthValidator(1, 32))
-			,
+				->addValidator(new LengthValidator(1, 32)),
 			(new ORM\Fields\StringField('ENTITY'))
-				->addValidator(new LengthValidator(1, 64))
-			,
+				->addValidator(new LengthValidator(1, 64)),
 			(new ORM\Fields\StringField('DOCUMENT_TYPE'))
-				->addValidator(new LengthValidator(1, 128))
-			,
+				->addValidator(new LengthValidator(1, 128)),
 			new ORM\Fields\Relations\Reference(
 				'TEMPLATE',
 				WorkflowTemplateTable::class,
@@ -90,9 +88,13 @@ class WorkflowTemplateTriggerTable extends DataManager
 
 	public static function onTemplateDelete(int $id): void
 	{
-		self::deleteUnused($id, []);
+		self::deleteUnused($id);
 
-		WorkflowTemplateSectionTable::deleteByTemplate($id, []);
+		WorkflowTemplateSectionTable::deleteByTemplate($id);
+
+		ServiceLocator::getInstance()->get(ScheduledTriggerSyncService::class)
+					  ->syncByTemplate($id)
+		;
 	}
 
 	private static function fillRowFromActivity(\CBPActivity|\IBPTriggerActivity $activity): array
@@ -105,7 +107,7 @@ class WorkflowTemplateTriggerTable extends DataManager
 		];
 	}
 
-	private static function syncByTemplate(int $templateId,	array $template, bool $active = true): void
+	private static function syncByTemplate(int $templateId, array $template, bool $active = true): void
 	{
 		if ($template[0]['Type'] !== NodesToTemplate::ROOT_NODE_TYPE)
 		{
@@ -123,6 +125,10 @@ class WorkflowTemplateTriggerTable extends DataManager
 			self::deleteUnused($templateId);
 		}
 		self::updateSectionsByTriggers($templateId, $triggers);
+
+		ServiceLocator::getInstance()->get(ScheduledTriggerSyncService::class)
+			->syncByTemplate($templateId, $triggers, $active)
+		;
 	}
 
 	/**

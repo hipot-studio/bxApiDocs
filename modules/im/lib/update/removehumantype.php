@@ -81,8 +81,6 @@ class RemoveHumanType extends Stepper
 
 		Option::delete(self::MODULE_ID, ["name" => self::OPTION_NAME]);
 
-		\Bitrix\Im\Bot::clearCache();
-
 		return false;
 	}
 }

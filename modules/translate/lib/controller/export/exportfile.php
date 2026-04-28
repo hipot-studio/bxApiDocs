@@ -7,6 +7,8 @@ use Bitrix\Main\Localization\Loc;
 
 /**
  * Harvester of phrases the single file.
+ *
+ * @internal
  */
 class ExportFile
 	extends ExportAction

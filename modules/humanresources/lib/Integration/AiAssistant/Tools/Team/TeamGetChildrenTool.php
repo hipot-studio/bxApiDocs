@@ -13,7 +13,7 @@ class TeamGetChildrenTool extends NodeGetChildrenTool
 
 	public function getName(): string
 	{
-		return 'get_children';
+		return 'team_get_children';
 	}
 
 	public function getDescription(): string

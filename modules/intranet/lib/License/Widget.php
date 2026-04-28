@@ -14,6 +14,7 @@ class Widget
 	 */
 	private const CONTENT_LIST = [
 		Content\License::class,
+		Content\Integrator::class,
 		Content\MainButton::class,
 		Content\Baas::class,
 		Content\Market::class,

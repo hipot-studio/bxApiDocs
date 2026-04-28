@@ -12,6 +12,7 @@ use Bitrix\Im\V2\Chat\FavoriteChat;
 use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\Department\Departments;
+use Bitrix\Im\V2\Entity\User\Field\NameResolver;
 use Bitrix\Im\V2\Rest\RestEntity;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Locator;
@@ -27,6 +28,8 @@ use Bitrix\Main\UserTable;
 class User implements RestEntity, CacheableEntity
 {
 	use ContextCustomer;
+
+	public const SYSTEM_USER_ID = 0;
 
 	public const PHONE_MOBILE = 'PERSONAL_MOBILE';
 	public const PHONE_WORK = 'WORK_PHONE';
@@ -424,12 +427,16 @@ class User implements RestEntity, CacheableEntity
 
 	public function getName(): ?string
 	{
-		return $this->userData['NAME'] ?? null;
+		$resolveName = (new NameResolver((int)$this->getId()))->getName();
+
+		return $resolveName ?? $this->userData['NAME'] ?? null;
 	}
 
 	public function getFirstName(): ?string
 	{
-		return $this->userData['FIRST_NAME'] ?? null;
+		$resolveName = (new NameResolver((int)$this->getId()))->getFirstName();
+
+		return $resolveName ?? $this->userData['FIRST_NAME'] ?? null;
 	}
 
 	public function getLastName(): ?string

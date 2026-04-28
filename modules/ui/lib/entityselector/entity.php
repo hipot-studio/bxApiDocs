@@ -9,6 +9,7 @@ class Entity implements \JsonSerializable
 	protected $searchable = true;
 	protected $dynamicLoad = false;
 	protected $dynamicSearch = false;
+	protected $fillRecentItems = true;
 	protected $provider;
 	protected $substituteEntityId;
 	protected $filters = [];
@@ -43,6 +44,11 @@ class Entity implements \JsonSerializable
 		if (isset($options['substituteEntityId']) && is_string($options['substituteEntityId']))
 		{
 			$this->substituteEntityId = $options['substituteEntityId'];
+		}
+
+		if (isset($options['fillRecentItems']) && is_bool($options['fillRecentItems']))
+		{
+			$this->fillRecentItems = $options['fillRecentItems'];
 		}
 	}
 
@@ -152,6 +158,11 @@ class Entity implements \JsonSerializable
 		$this->dynamicLoad = $flag;
 
 		return $this;
+	}
+
+	public function shouldFillRecentItems(): bool
+	{
+		return $this->fillRecentItems;
 	}
 
 	public function jsonSerialize(): array

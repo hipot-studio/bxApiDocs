@@ -7,6 +7,7 @@ use Bitrix\Translate;
 
 /**
  * @see \Bitrix\Main\Text
+ * @internal
  */
 
 class StringHelper

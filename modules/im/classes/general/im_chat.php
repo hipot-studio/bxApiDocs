@@ -138,8 +138,8 @@ class CIMChat
 			}
 		}
 
-		$readService = new IM\V2\Message\ReadService($fromUserId);
-		$lastMessageIdInChat = $readService->getLastMessageIdInChat($toChatId);
+		$chat = Chat::getInstance($toChatId);
+		$lastMessageIdInChat = $chat->getLastMessageId();
 		$limitById = '';
 		$limitFetchMessages = 30;
 		$relations = \CIMChat::GetRelationById($toChatId, false, $bTimeZone, false);
@@ -281,6 +281,8 @@ class CIMChat
 					ORDER BY M.DATE_CREATE DESC
 				";
 			}
+
+			\Bitrix\Im\Disk\NoRelationPermission::add($toChatId, $fromUserId);
 		}
 
 		if (!$bTimeZone)
@@ -313,10 +315,8 @@ class CIMChat
 				$dbRes = $DB->Query(str_replace("#LIMIT#", "", $strSql));
 			}
 
-			$lastReads = $readService
-				->getViewedService()
-				->getDateViewedByMessageIdForEachUser($lastMessageIdInChat, array_keys($relations))
-			;
+			$viewProvider = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(\Bitrix\Im\V2\Reading\View\ViewProvider::class);
+			$lastReads = $viewProvider->getDatesViewedByMessageIdsForUsers($lastMessageIdInChat, array_keys($relations));
 			while ($arRes = $dbRes->Fetch())
 			{
 				if ($arRes['CHAT_ENTITY_TYPE'] != 'LIVECHAT' && \Bitrix\Im\User::getInstance($fromUserId)->isConnector())
@@ -788,19 +788,21 @@ class CIMChat
 		// region New counter
 		if ($withCounter)
 		{
-			$readService = new IM\V2\Message\ReadService($userId);
+			$countersProvider = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(IM\V2\Reading\Counter\CountersProvider::class);
+			$viewProvider = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(IM\V2\Reading\View\ViewProvider::class);
+			$chat = Chat::getInstance($ID);
 			if ($userId > 0)
 			{
-				$arResult['COUNTER'] = $readService->getCounterService()->getByChatWithOverflow($ID);
-				$lastRead =  $readService->getViewedService()->getDateViewedByMessageId($arResult['LAST_ID']);
+				$arResult['COUNTER'] = $countersProvider->getForUser($ID, $userId);
+				$lastRead = $viewProvider->getDateViewedByMessageId($arResult['LAST_ID'], $userId);
 				$arResult['LAST_READ'] = isset($lastRead) ? $lastRead->format('Y-m-d H:i:s') : null;
 			}
 			else
 			{
 				$userIds = array_keys($arResult);
-				$counters = $readService->getCounterService()->getByChatForEachUsers($ID, $userIds);
-				$lastIdInChat = $readService->getLastMessageIdInChat($ID);
-				$lastReads = $readService->getViewedService()->getDateViewedByMessageIdForEachUser($lastIdInChat, $userIds);
+				$counters = $countersProvider->getForUsers($ID, $userIds);
+				$lastIdInChat = $chat->getLastMessageId();
+				$lastReads = $viewProvider->getDatesViewedByMessageIdsForUsers($lastIdInChat, $userIds);
 				foreach ($arResult as $id => $user)
 				{
 					$arResult[$id]['COUNTER'] = $counters[$id] ?? 0;
@@ -1532,6 +1534,11 @@ class CIMChat
 		if ($chatId <= 0)
 			return false;
 
+		if (is_int($lastId) && $lastId <= 0)
+		{
+			return false;
+		}
+
 		CIMMessenger::SpeedFileDelete($this->user_id, IM_SPEED_GROUP);
 
 		$chat = IM\V2\Chat::getInstance($chatId);
@@ -1549,22 +1556,27 @@ class CIMChat
 			return false;
 		}
 
-		$readService = new IM\V2\Message\ReadService($this->user_id);
-
-		$startId = $readService->getLastIdByChatId($chatId);
-		$viewedMessages = [];
+		$reader = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(IM\V2\Reading\Reader::class);
 
 		if (isset($lastId))
 		{
 			$message = new \Bitrix\Im\V2\Message();
 			$message->setMessageId((int)$lastId)->setChatId($chatId);
-			$readResult = $readService->readTo($message);
-			$counter = $readResult->getResult()['COUNTER'];
-			$viewedMessages = $readResult->getResult()['VIEWED_MESSAGES'];
+			$readResult = $reader->readTo($message, $this->user_id);
+			if (!$readResult->isSuccess())
+			{
+				return false;
+			}
+			$counter = $readResult->getCounter();
 		}
 		else
 		{
-			$counter = $readService->readAllInChat($chatId)->getResult()['COUNTER'];
+			$readResult = $reader->readAllInChat($chatId, $this->user_id);
+			if (!$readResult->isSuccess())
+			{
+				return false;
+			}
+			$counter = $readResult->getCounter();
 		}
 
 		$relation = $chat->getRelationByUserId($this->user_id);
@@ -1573,95 +1585,7 @@ class CIMChat
 			return false;
 		}
 
-		$endId = $readService->getLastIdByChatId($chatId);
-
-		/*\Bitrix\Main\Application::getConnection()->query(
-			"UPDATE b_im_recent SET DATE_UPDATE = NOW() WHERE USER_ID = ".$this->user_id." AND ITEM_CID = ".intval($chatId)
-		);*/
-
-		if (CModule::IncludeModule("pull"))
-		{
-			CIMNotify::DeleteBySubTag("IM_MESS_".$chatId.'_'.$this->user_id, false, false);
-			CPushManager::DeleteFromQueueBySubTag($this->user_id, 'IM_MESS');
-
-			if (
-				$chat->getEntityType() == 'LIVECHAT'
-				|| !\Bitrix\Im\User::getInstance($this->user_id)->isConnector()
-			)
-			{
-				\Bitrix\Pull\Event::add($this->user_id, Array(
-					'module_id' => 'im',
-					'command' => 'readMessageChat',
-					'params' => Array(
-						'dialogId' => 'chat'.$chatId,
-						'chatId' => (int)$chatId,
-						'parentChatId' => $chat->getParentChatId(),
-						'type' => $chat->getExtendedType(),
-						'lastId' => $endId,
-						'counter' => $counter,
-						'muted' => $relation->getNotifyBlock() ?? false,
-						'unread' => Im\Recent::isUnread($this->user_id, $relation->getMessageType(), 'chat'.$chatId),
-						'lines' => $relation->getMessageType() === IM_MESSAGE_OPEN_LINE,
-						'viewedMessages' => $viewedMessages,
-						'counterType' => $chat->getCounterType(),
-						'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
-					),
-					'extra' => \Bitrix\Im\Common::getPullExtra()
-				));
-			}
-
-			$arRelation = self::GetRelationById($chatId, false, true, false);
-			unset($arRelation[$this->user_id]);
-
-			$pushMessage = Array(
-				'module_id' => 'im',
-				'command' => 'readMessageChatOpponent',
-				'expiry' => 600,
-				'params' => Array(
-					'dialogId' => 'chat'.$chatId,
-					'chatId' => (int)$chatId,
-					'userId' => (int)$this->user_id,
-					'userName' => \Bitrix\Im\User::getInstance($this->user_id)->getFullName(false),
-					'lastId' => $endId,
-					'date' => date('c', time()),
-					'viewedMessages' => $viewedMessages,
-					'chatMessageStatus' => $readService->getChatMessageStatus($chatId),
-				),
-				'extra' => \Bitrix\Im\Common::getPullExtra()
-			);
-			if ($chat->getEntityType() == 'LINES')
-			{
-				foreach ($arRelation as $rel)
-				{
-					if ($rel["EXTERNAL_AUTH_ID"] == 'imconnector')
-					{
-						unset($arRelation[$rel["USER_ID"]]);
-					}
-				}
-			}
-			if (count($arRelation) < 200)
-			{
-				\Bitrix\Pull\Event::add(array_keys($arRelation), $pushMessage);
-				if ($chat->needToSendPublicPull())
-				{
-					CPullWatch::AddToStack('IM_PUBLIC_'.$chatId, $pushMessage);
-				}
-			}
-		}
-
-		foreach(GetModuleEvents("im", "OnAfterChatRead", true) as $arEvent)
-		{
-			ExecuteModuleEventEx($arEvent, array(Array(
-				'CHAT_ID' => $chat->getChatId(),
-				'CHAT_ENTITY_TYPE' => $chat->getEntityType(),
-				'CHAT_ENTITY_ID' => $chat->getEntityId(),
-				'START_ID' => $startId,
-				'END_ID' => $endId,
-				'COUNT' => ((int)$counter > 99) ? 100 : $counter,
-				'USER_ID' => $this->user_id,
-				'BY_EVENT' => $byEvent
-			)));
-		}
+		$endId = $chat->getLastId();
 
 		return Array(
 			'DIALOG_ID' => 'chat'.$chatId,
@@ -1684,12 +1608,11 @@ class CIMChat
 		/*$result = Bitrix\Im\V2\Chat::getInstance($chatId)->unreadToMessage(new IM\V2\Message($lastId));
 
 		return $result->isSuccess();*/
-		$readService = new IM\V2\Message\ReadService($this->user_id);
-		$endId = $readService->getLastMessageIdInChat($chatId);
+		$chat = Bitrix\Im\V2\Chat::getInstance($chatId);
+		$endId = $chat->getLastMessageId();
 		$relation = CIMMessage::SetLastIdForUnread($chatId, $this->user_id, $lastId);
 		if ($relation)
 		{
-			$chat = Bitrix\Im\V2\Chat::getInstance($chatId);
 			\Bitrix\Main\Application::getConnection()->query(
 				"UPDATE b_im_recent SET DATE_UPDATE = NOW() WHERE USER_ID = ".$this->user_id." AND ITEM_CID = ".intval($chatId)
 			);

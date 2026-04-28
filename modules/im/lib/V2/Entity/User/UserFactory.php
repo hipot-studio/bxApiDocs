@@ -2,10 +2,12 @@
 
 namespace Bitrix\Im\V2\Entity\User;
 
+use Bitrix\Im\Bot;
 use Bitrix\Im\Color;
 use Bitrix\Im\Model\StatusTable;
 use Bitrix\Im\Model\UserTable;
 use Bitrix\Im\V2\Entity\User\Cache\UserCacheRegistry;
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Im\V2\Integration\Extranet\CollaberService;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
@@ -185,19 +187,19 @@ class UserFactory
 
 	protected function isNetwork(array $params): bool
 	{
-		$bots = \Bitrix\Im\Bot::getListCache();
 		$isNetworkUser = $params['EXTERNAL_AUTH_ID'] === \CIMContactList::NETWORK_AUTH_ID;
-		$isNetworkBot = (
-			$this->isBot($params)
-			&& $bots[$params["ID"]]['TYPE'] === \Bitrix\Im\Bot::TYPE_NETWORK
-		);
+		$isNetworkBot = false;
+		if ($params['EXTERNAL_AUTH_ID'] === Bot::EXTERNAL_AUTH_ID)
+		{
+			$isNetworkBot = BotData::getInstance((int)$params['ID'])->isNetworkBot();
+		}
 
 		return $isNetworkUser || $isNetworkBot;
 	}
 
 	protected function isBot(array $params): bool
 	{
-		return $params['EXTERNAL_AUTH_ID'] === \Bitrix\Im\Bot::EXTERNAL_AUTH_ID;
+		return $params['EXTERNAL_AUTH_ID'] === Bot::EXTERNAL_AUTH_ID;
 	}
 
 	protected function isConnector(array $params): bool

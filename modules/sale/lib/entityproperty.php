@@ -254,7 +254,8 @@ abstract class EntityProperty
 		$dbRes = Internals\OrderPropsVariantTable::getList([
 			'select' => ['VALUE', 'NAME'],
 			'filter' => ['ORDER_PROPS_ID' => $this->getId()],
-			'order' => ['SORT' => 'ASC']
+			'order' => ['SORT' => 'ASC'],
+			'cache' => ['ttl' => 86400],
 		]);
 
 		while ($data = $dbRes->fetch())

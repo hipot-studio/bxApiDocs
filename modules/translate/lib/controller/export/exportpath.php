@@ -7,6 +7,8 @@ use Bitrix\Main\Localization\Loc;
 
 /**
  * Harvester of phrases the list of files and folders.
+ *
+ * @internal
  */
 class ExportPath
 	extends ExportAction

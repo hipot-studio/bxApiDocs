@@ -2,7 +2,6 @@
 
 namespace Bitrix\Im\V2\Sync;
 
-use Bitrix\Im\Model\EO_Log_Collection;
 use Bitrix\Main\Type\DateTime;
 
 class Event
@@ -62,22 +61,15 @@ class Event
 		return $this->dateDelete;
 	}
 
-	public static function initByArray(array $logEntities): array
+	public static function initByEntity(array $entity): self
 	{
-		$events = [];
-
-		foreach ($logEntities as $entity)
-		{
-			$events[] = new self(
-				$entity['EVENT'] ?? '',
-				$entity['ENTITY_TYPE'] ?? '',
-				$entity['ENTITY_ID'] ?? 0,
-				$entity['DATE_CREATE'] ?? null,
-				$entity['DATE_DELETE'] ?? null,
-				$entity['ID'] ?? null
-			);
-		}
-
-		return $events;
+		return new self(
+			$entity['EVENT'] ?? '',
+			$entity['ENTITY_TYPE'] ?? '',
+			$entity['ENTITY_ID'] ?? 0,
+			$entity['DATE_DELETE'] ?? null,
+			$entity['DATE_CREATE'] ?? null,
+			$entity['ID'] ?? null
+		);
 	}
 }

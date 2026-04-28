@@ -14,6 +14,7 @@ use Bitrix\Main\Result;
 class Copy extends Operation
 {
 	public const ERROR_CODE_ITEM_IS_NEW = 'CRM_ITEM_IS_NEW';
+	private array $copyAddActions = [];
 
 	/**
 	 * @return CopyResult
@@ -66,6 +67,13 @@ class Copy extends Operation
 		return false;
 	}
 
+	public function addCopyAddAction(string $actionPlacement, Operation\Action $action): self
+	{
+		$this->copyAddActions[$actionPlacement][] = $action;
+
+		return $this;
+	}
+
 	/**
 	 * @return CopyResult
 	 */
@@ -92,7 +100,16 @@ class Copy extends Operation
 
 		$this->copyData($this->item, $copy);
 
-		$copyAddResult = $this->getCopyAddOperation($factory, $copy)->launch();
+		$copyAddOperation = $this->getCopyAddOperation($factory, $copy);
+		foreach ($this->copyAddActions as $actionPlacement => $actions)
+		{
+			foreach ($actions as $action)
+			{
+				$copyAddOperation->addAction($actionPlacement, $action);
+			}
+		}
+		$copyAddResult = $copyAddOperation->launch();
+
 		if (!$copyAddResult->isSuccess())
 		{
 			$result->addErrors($copyAddResult->getErrors());

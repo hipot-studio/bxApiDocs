@@ -31,6 +31,11 @@ abstract class Base extends BaseReport
 	const GROUP_BY_CHANEL = 'CHANEL';
 
 	/**
+	 * @var array|null
+	 */
+	private $responsibleCache = null;
+
+	/**
 	 *  Collect form elements for specific widget configuration form
 	 *
 	 * @throws \Bitrix\Main\ArgumentException
@@ -139,17 +144,16 @@ abstract class Base extends BaseReport
 	 */
 	protected function getResponsible()
 	{
-		static $result = null;
-		if ($result !== null)
+		if ($this->responsibleCache !== null)
 		{
-			return $result;
+			return $this->responsibleCache;
 		}
 
 		$operatorIds = [];
 		$operatorsLines = [];
-		$result = [
+		$this->responsibleCache = [
 			'operatorsName' => [],
-			'operatorsLines' => []
+			'operatorsLines' => [],
 		];
 
 		$queueResults = QueueTable::getList([
@@ -171,7 +175,7 @@ abstract class Base extends BaseReport
 
 		if (!$operatorIds)
 		{
-			return $result;
+			return $this->responsibleCache;
 		}
 
 		$userQuery = new Query(UserTable::getEntity());
@@ -188,20 +192,20 @@ abstract class Base extends BaseReport
 				'LAST_NAME' => $user['LAST_NAME']
 			]);
 
-			$result['operatorsName'][$user['ID']] = $name;
+			$this->responsibleCache['operatorsName'][$user['ID']] = $name;
 		}
 		foreach ($operatorsLines as $idLines => $operators)
 		{
 			foreach ($operators as $id => $name)
 			{
-				if(isset($result['operatorsName'][$id]))
+				if (isset($this->responsibleCache['operatorsName'][$id]))
 				{
-					$result['operatorsLines'][$idLines][$id] = $result['operatorsName'][$id];
+					$this->responsibleCache['operatorsLines'][$idLines][$id] = $this->responsibleCache['operatorsName'][$id];
 				}
 			}
 		}
 
-		return $result;
+		return $this->responsibleCache;
 	}
 
 	/**

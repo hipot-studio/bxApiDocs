@@ -3,30 +3,16 @@
 
 namespace Bitrix\Calendar\ICal\Basic;
 
-
-use Bitrix\Calendar\Util;
-use Bitrix\Main\Loader;
-use Bitrix\Main\Type\Date;
-use Bitrix\Main\Type\DateTime;
+use Bitrix\Calendar\ICal\MailInvitation\Helper;
 use Bitrix\Main\UserTable;
 
 class ICalUtil
 {
 	public static function isMailUser($userId): bool
 	{
-		$parameters = [
-			'filter' => [
-				'ID' => $userId,
-			],
-			'select' => [
-				'ID', 'EXTERNAL_AUTH_ID',
-			],
-			'limit' => 1,
-		];
+		$user = \CCalendar::GetUser($userId);
 
-		$userDd = UserTable::getList($parameters);
-
-		if ($user = $userDd->fetch())
+		if (!empty($user))
 		{
 			return $user['EXTERNAL_AUTH_ID'] === 'email';
 		}
@@ -34,29 +20,20 @@ class ICalUtil
 		return false;
 	}
 
-	public static function processDestinationUserEmail($params, &$errorText)
-	{
-		$userId = static::getExternalUserByEmail($params, $errorText);
-		return $userId ? ['U'.$userId] : [];
-	}
-
 	public static function getUserIdByEmail(array $userInfo): ?string
 	{
-		$parameters = [
-			'filter' => [
-				'EMAIL' => $userInfo['EMAIL'],
-			],
-			'select' => ['ID',],
+		$user = UserTable::getList([
+			'filter' => ['EMAIL' => $userInfo['EMAIL']],
+			'select' => ['ID'],
 			'limit' => 1,
-		];
+		])->fetch();
 
-		$userDd = UserTable::getList($parameters);
-		if ($user = $userDd->fetch())
+		if (!empty($user))
 		{
 			return $user['ID'];
 		}
 
-		return self::getExternalUserByEmail($userInfo, $errorCollection);
+		return Helper::getExternalUserByEmail($userInfo, $errorCollection);
 	}
 
 	public static function prepareAttendeesToCancel($attendees)
@@ -70,28 +47,18 @@ class ICalUtil
 	}
 
 	/**
-	 * @param int[] $usersId
+	 * @param int[] $userIds
 	 * @return array
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public static function getIndexUsersById(array $usersId): array
+	public static function getIndexUsersById(array $userIds): array
 	{
 		$users = [];
-		$usersDd = UserTable::getList([
-			'filter' => [
-				'ID' => $usersId,
-			],
-			'select' => [
-				'ID',
-				'NAME',
-				'LAST_NAME',
-				'EMAIL',
-			],
-		]);
+		$usersDd = \CCalendar::GetUserList($userIds);
 
-		while ($user = $usersDd->fetch())
+		foreach ($usersDd as $user)
 		{
 			$users[$user['ID']] = $user;
 		}
@@ -108,7 +75,7 @@ class ICalUtil
 		$userIdsList = [];
 		foreach ($attendeesCodeList as $code)
 		{
-			if(mb_strpos($code, 'U') === 0)
+			if(str_starts_with($code, 'U'))
 			{
 				$userIdsList[] = (int)mb_substr($code, 1);
 			}

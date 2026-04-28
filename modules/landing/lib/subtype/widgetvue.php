@@ -5,11 +5,10 @@ namespace Bitrix\Landing\Subtype;
 use Bitrix\Landing\Assets\Manager;
 use Bitrix\Landing\Block;
 use Bitrix\Landing\Repo;
-use Bitrix\Landing\Mainpage;
 use Bitrix\Landing;
+use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\UI\Extension;
 use Bitrix\Main\Web\DOM;
 use Bitrix\Main\Web\Json;
 use Bitrix\Rest\UsageStatTable;
@@ -180,7 +179,7 @@ class WidgetVue
 			$vueParams['style'] = $params['style'];
 		}
 
-		$vueParams['useDemoData'] = Mainpage\Manager::isUseDemoData();
+		$vueParams['useDemoData'] = Vibe::isUseDemoData();
 		if (
 			is_array($params['demoData'])
 			&& !empty($params['demoData'])

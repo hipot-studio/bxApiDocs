@@ -8,6 +8,8 @@ use Bitrix\Main\Localization\Loc;
 
 /**
  * Common operation with language file.
+ *
+ * @internal
  */
 class Operation
 	extends Translate\Controller\Action

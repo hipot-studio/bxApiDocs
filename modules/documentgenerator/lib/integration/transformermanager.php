@@ -47,47 +47,48 @@ final class TransformerManager implements InterfaceCallback
 	 */
 	public static function call($status, $command, $params, $result = [])
 	{
-		if(!isset($params['documentId']) || empty($params['documentId']))
+		if (!isset($params['documentId']) || empty($params['documentId']))
 		{
 			return 'wrong parameters: no documentId';
 		}
 
-		if($status != Command::STATUS_UPLOAD && $status != Command::STATUS_ERROR)
+		if ($status != Command::STATUS_UPLOAD && $status != Command::STATUS_ERROR)
 		{
 			return 'wrong command status';
 		}
 
-		$document = Document::loadById($params['documentId']);
-		if(!$document)
-		{
-			static::fireEvent($params['documentId']);
-			return 'document '.$params['documentId'].' not found';
-		}
+		$documentId = (int)$params['documentId'];
+		$data = [];
 
 		try
 		{
+			$document = Document::loadById($documentId);
+			if (!$document)
+			{
+				return 'document ' . $documentId . ' not found';
+			}
+
 			$updatedData = self::updateDocument($document, $result);
+
+			$data = $document->getFile(false)->getData();
+
+			static::addToStack($data);
+
+			$pdfId = null;
+			if (isset($updatedData['PDF_ID']) && $updatedData['PDF_ID'] > 0)
+			{
+				$pdfId = $updatedData['PDF_ID'];
+			}
+			$data['pdfId'] = $pdfId;
 		}
 		catch (\Throwable $throwable)
 		{
-			// this exception should never happen normally, it's truly an unexpected error. but sometimes it happens.
-			// however, we still should correctly notify observers that the transformation has completed
-
 			Application::getInstance()->getExceptionHandler()->writeToLog($throwable);
-
-			$updatedData = [];
 		}
-
-		$data = $document->getFile(false)->getData();
-
-		static::addToStack($data);
-		$pdfId = null;
-		if(isset($updatedData['PDF_ID']) && $updatedData['PDF_ID'] > 0)
+		finally
 		{
-			$pdfId = $updatedData['PDF_ID'];
+			static::fireEvent($documentId, $data);
 		}
-		$data['pdfId'] = $pdfId;
-		static::fireEvent($params['documentId'], $data);
 
 		return true;
 	}

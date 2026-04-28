@@ -1,11 +1,13 @@
 <?php
 namespace Bitrix\Crm\Automation\Trigger\Sign;
 
+use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
 use Bitrix\Sign;
 use Bitrix\Crm;
 use Bitrix\Crm\Automation;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 Loc::loadMessages(__FILE__);
 
@@ -89,5 +91,20 @@ class InitiatorSignedTrigger extends Automation\Trigger\BaseTrigger
 		}
 
 		return $result;
+	}
+
+	public static function getNodeDescription(): string
+	{
+		return Loc::getMessage('CRM_AUTOMATION_TRIGGER_SIGN_INITIATOR_SIGNED_NODE_DESCRIPTION') ?? '';
+	}
+
+	public static function getNodeColor(): int
+	{
+		return ActivityColorIndex::ORANGE->value;
+	}
+
+	public static function getNodeIcon(): string
+	{
+		return Outline::SIGN->name;
 	}
 }

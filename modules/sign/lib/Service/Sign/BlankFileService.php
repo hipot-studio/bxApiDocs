@@ -3,14 +3,12 @@
 namespace Bitrix\Sign\Service\Sign;
 
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Item\Fs\File;
-use Bitrix\Sign\Item\Fs\FileCollection;
 use Bitrix\Sign\Repository\BlankRepository;
 use Bitrix\Sign\Service\Container;
 
@@ -47,12 +45,12 @@ class BlankFileService
 
 		if (!$blank)
 		{
-			return (new Result())->addError((new \Bitrix\Main\Error('Blank not exists')));
+			return (new Result())->addError(new \Bitrix\Main\Error('Blank not exists'));
 		}
 
 		if (!$blank->fileCollection->first() || !$blank->fileCollection->first()->isImage)
 		{
-			return (new Result())->addError((new \Bitrix\Main\Error('File not exists')));
+			return (new Result())->addError(new \Bitrix\Main\Error('File not exists'));
 		}
 
 		$maxTotalFilesSize = $this->getMaxTotalFilesSize();
@@ -66,11 +64,11 @@ class BlankFileService
 		if ($totalSize > $maxTotalFilesSize)
 		{
 			return (new Result())->addError(
-				(new \Bitrix\Main\Error(
+				new \Bitrix\Main\Error(
 					Loc::getMessage('SIGN_IMAGES_BLANK_ERROR_FILE_TOO_BIG', [
 						'#SIZE#' => floor($maxTotalFilesSize / 1024 / 1024),
-					]), 'FILE_TOO_BIG'
-				))
+					]), 'FILE_TOO_BIG',
+				),
 			);
 		}
 
@@ -80,11 +78,11 @@ class BlankFileService
 		if ($totalCount > $pagesLimit)
 		{
 			return (new Result())->addError(
-				(new \Bitrix\Main\Error(
+				new \Bitrix\Main\Error(
 					Loc::getMessage('SIGN_FILE_BLANK_ERROR_TOO_MANY_PAGES', [
 						'#COUNT#' => $pagesLimit,
-					]), 'FILE_TOO_MANY_PAGES'
-				))
+					]), 'FILE_TOO_MANY_PAGES',
+				),
 			);
 		}
 
@@ -103,7 +101,7 @@ class BlankFileService
 						$file->getPath(),
 						$file->getExtension(),
 						$file->getId(),
-					)
+					),
 				);
 			}
 		}
@@ -119,8 +117,8 @@ class BlankFileService
 		{
 			$result->addError(
 				new \Bitrix\Main\Error(
-					Loc::getMessage('SIGN_CORE_BLANK_ERROR_NOT_ALLOWED_EXTENSIONS'), 'NOT_ALLOWED_EXTENSIONS'
-				)
+					Loc::getMessage('SIGN_CORE_BLANK_ERROR_NOT_ALLOWED_EXTENSIONS'), 'NOT_ALLOWED_EXTENSIONS',
+				),
 			);
 
 			return $result;
@@ -133,8 +131,8 @@ class BlankFileService
 					Loc::getMessage('SIGN_SERVICE_SIGN_BLANKFILE_IMAGE_FILE_TOO_BIG', [
 						// size showed in MB
 						'#SIZE#' => floor($this->getMaxImageSize() / 1024 / 1024),
-					]), 'FILE_TOO_BIG'
-				)
+					]), 'FILE_TOO_BIG',
+				),
 			);
 
 			return $result;
@@ -146,8 +144,8 @@ class BlankFileService
 					Loc::getMessage('SIGN_SERVICE_SIGN_BLANKFILE_FILE_TOO_BIG', [
 						// size showed in MB
 						'#SIZE#' => floor($this->getMaxFileSize() / 1024 / 1024),
-					]), 'FILE_TOO_BIG'
-				)
+					]), 'FILE_TOO_BIG',
+				),
 			);
 
 			return $result;
@@ -160,7 +158,7 @@ class BlankFileService
 			$signFile->setId(null);
 		}
 		$signFile->save();
-		$result->setData(['file' => $signFile,]);
+		$result->setData(['file' => $signFile]);
 
 		return $result;
 	}

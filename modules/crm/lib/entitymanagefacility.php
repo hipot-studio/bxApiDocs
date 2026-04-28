@@ -2,15 +2,14 @@
 
 namespace Bitrix\Crm;
 
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Crm\Activity\BindingSelector;
 use Bitrix\Crm\Integrity\ActualEntitySelector;
-use Bitrix\Crm\Merger;
-use Bitrix\Crm\Automation;
-use Bitrix\Crm\Binding;
 use Bitrix\Crm\Settings\LeadSettings;
 use Bitrix\Crm\Entity\Identificator;
-use Bitrix\Crm\Tracking;
 
 /**
  * Class EntityManageFacility
@@ -396,6 +395,8 @@ class EntityManageFacility
 		$this->registeredTypeId = \CCrmOwnerType::Lead;
 		$this->isBpRun = false;
 
+		$updatedFields = null;
+		$previousFields = null;
 		if ($this->canAddLead())
 		{
 			$this->registeredId = $this->addLead($fields, $updateSearch, $options);
@@ -416,12 +417,14 @@ class EntityManageFacility
 		}
 		elseif ($this->canUpdate())
 		{
-			$this->updateClientFields($fields, true, $updateSearch, $options);
+			$leadId = $this->selector->getLeadId() ?: $this->selector->getReturnCustomerLeadId();
+			$previousFields = $this->getEntityFieldsDb(\CCrmOwnerType::Lead, (int)$leadId);
+			$updatedFields = $this->updateClientFields($fields, true, $updateSearch, $options);
 		}
 
 		if ($this->isAutomationRun)
 		{
-			$this->runAutomation();
+			$this->runAutomation($updatedFields ?? $fields, $previousFields);
 		}
 
 		return !empty($this->registeredId);
@@ -441,6 +444,8 @@ class EntityManageFacility
 		$this->registeredTypeId = \CCrmOwnerType::Company;
 		$this->isBpRun = false;
 
+		$updatedFields = null;
+		$previousFields = null;
 		if ($this->canAddCompany())
 		{
 			if (!isset($fields['TITLE']) || !$fields['TITLE'])
@@ -472,12 +477,14 @@ class EntityManageFacility
 		}
 		elseif ($this->canUpdate())
 		{
-			$this->updateClientFields($fields, true, $updateSearch, $options);
+			$companyId = $this->selector->getCompanyId();
+			$previousFields = $this->getEntityFieldsDb(\CCrmOwnerType::Company, (int)$companyId);
+			$updatedFields = $this->updateClientFields($fields, true, $updateSearch, $options);
 		}
 
 		if ($this->isAutomationRun)
 		{
-			$this->runAutomation();
+			$this->runAutomation($updatedFields ?? $fields, $previousFields);
 		}
 
 		return !empty($this->registeredId);
@@ -497,6 +504,8 @@ class EntityManageFacility
 		$this->registeredTypeId = \CCrmOwnerType::Contact;
 		$this->isBpRun = false;
 
+		$updatedFields = null;
+		$previousFields = null;
 		if ($this->canAddContact())
 		{
 			// use entity configuration setting when create
@@ -523,12 +532,14 @@ class EntityManageFacility
 		}
 		elseif ($this->canUpdate())
 		{
-			$this->updateClientFields($fields, true, $updateSearch, $options);
+			$contactId = $this->selector->getContactId();
+			$previousFields = $this->getEntityFieldsDb(\CCrmOwnerType::Contact, (int)$contactId);
+			$updatedFields = $this->updateClientFields($fields, true, $updateSearch, $options);
 		}
 
 		if ($this->isAutomationRun)
 		{
-			$this->runAutomation();
+			$this->runAutomation($updatedFields ?? $fields, $previousFields);
 		}
 
 		return !empty($this->registeredId);
@@ -560,7 +571,7 @@ class EntityManageFacility
 
 		if ($this->isAutomationRun)
 		{
-			$this->runAutomation();
+			$this->runAutomation($fields);
 		}
 
 		return $this->registeredId;
@@ -576,7 +587,7 @@ class EntityManageFacility
 		$allowModes = [
 			self::REGISTER_MODE_DEFAULT,
 			self::REGISTER_MODE_ONLY_ADD,
-			self::REGISTER_MODE_ALWAYS_ADD
+			self::REGISTER_MODE_ALWAYS_ADD,
 		];
 		if (!in_array($this->registerMode, $allowModes))
 		{
@@ -888,45 +899,48 @@ class EntityManageFacility
 	 *
 	 * @return $this
 	 */
-	public function runAutomation()
+	public function runAutomation(?array $fields = null, ?array $previousFields = null)
 	{
+		$userId = $this->getUserId($fields ?? []);
+
 		// run on add
 		if ($this->canAdd() && $this->registeredId && $this->registeredTypeId)
 		{
-			// run business process
+			$starter = (new CrmStarter(new DocumentDto($this->registeredTypeId, $this->registeredId)));
+			$dto = new RunDataDto(actualFields: $fields, userId: $userId);
+
 			if (!$this->isBpRun)
 			{
-				$bpErrors = array();
-				\CCrmBizProcHelper::AutoStartWorkflows(
-					$this->registeredTypeId,
-					$this->registeredId,
-					\CCrmBizProcEventType::Create,
-					$bpErrors
-				);
-
 				// mark as BP run
 				$this->isBpRun = true;
+
+				// process + automation
+				if (!$this->isEntityTypeConvertible($this->registeredTypeId))
+				{
+					$starter->runOnDocumentAdd($dto);
+
+					return $this;
+				}
+
+				$starter->runProcess($dto, \CCrmBizProcEventType::Create);
 			}
 
 			// run automation
 			if (!$this->isEntityTypeConvertible($this->registeredTypeId))
 			{
-				$starter = new Automation\Starter($this->registeredTypeId, $this->registeredId);
-				$starter->runOnAdd();
+				$starter->runAutomation($dto, \CCrmBizProcEventType::Create);
 			}
 		}
 		elseif ($this->canUpdate() && $this->getPrimaryId() && $this->getPrimaryTypeId())
 		{
-			// run business process
-			$bpErrors = array();
-			\CCrmBizProcHelper::AutoStartWorkflows(
-				$this->getPrimaryTypeId(),
-				$this->getPrimaryId(),
-				\CCrmBizProcEventType::Edit,
-				$bpErrors
+			$starter = (new CrmStarter(new DocumentDto($this->getPrimaryTypeId(), $this->getPrimaryId())));
+			$dto = new RunDataDto(
+				actualFields: $fields,
+				previousFields: $previousFields,
+				userId: $userId,
 			);
 
-			// TODO: call Automation\Starter::runOnUpdate on entity update.
+			$starter->runProcess($dto, \CCrmBizProcEventType::Edit);
 		}
 
 		return $this;
@@ -1057,7 +1071,7 @@ class EntityManageFacility
 	 * @param bool $compare
 	 * @param bool $updateSearch
 	 * @param array $options
-	 * @return void
+	 * @return array|null
 	 * @throws ArgumentException
 	 */
 	public function updateClientFields(array $fields, $compare = true, $updateSearch = true, array $options = [])
@@ -1179,6 +1193,8 @@ class EntityManageFacility
 					if (!empty($mergeFields))
 					{
 						$entityObject->update($entityId, $mergeFields);
+
+						return $mergeFields;
 					}
 				}
 
@@ -1231,17 +1247,7 @@ class EntityManageFacility
 						];
 					}
 
-					$entityFieldsDb = $entityObject->getListEx(
-						array(),
-						array(
-							'=ID' => $entityId,
-							'CHECK_PERMISSIONS' => 'N'
-						),
-						false,
-						false,
-						array('*', 'UF_*')
-					);
-					$entityFields = $entityFieldsDb->fetch();
+					$entityFields = $this->getEntityFieldsDb((int)$entityTypeId, (int)$entityId);
 					if ($entityFields)
 					{
 						foreach ($entityFields as $key => $value)
@@ -1257,12 +1263,15 @@ class EntityManageFacility
 						$this->uniqueMultiFields($entityFields['FM'], $entityMultiFields);
 
 						$entityObject->update($entityId, $entityFields, $compare, $updateSearch, $options);
+
+						return $entityFields;
 					}
 				}
 
 				break;
 		}
 
+		return null;
 	}
 
 
@@ -1344,8 +1353,13 @@ class EntityManageFacility
 			return null;
 		}
 
-		$starter = new Automation\Starter($entityTypeId, $leadId);
-		$result = $starter->runOnAdd()->getConversionResult();
+		$starter = new CrmStarter(new DocumentDto($entityTypeId, $leadId));
+		$result =
+			$starter
+				->runAutomation(new RunDataDto(userId: $this->getUserId()), \CCrmBizProcEventType::Create)
+				->getConversionResult()
+		;
+
 		if (!$result)
 		{
 			return null;
@@ -1383,5 +1397,41 @@ class EntityManageFacility
 			&&
 			$entityTypeId === \CCrmOwnerType::Lead
 		);
+	}
+
+	private function getEntityFieldsDb(int $entityTypeId, int $entityId): ?array
+	{
+		if ($entityId <= 0)
+		{
+			return null;
+		}
+
+		if ($entityTypeId === \CCrmOwnerType::Company)
+		{
+			$entityObject = new \CCrmCompany(false);
+		}
+		elseif ($entityTypeId === \CCrmOwnerType::Contact)
+		{
+			$entityObject = new \CCrmContact(false);
+		}
+		elseif ($entityTypeId === \CCrmOwnerType::Lead)
+		{
+			$entityObject = new \CCrmLead(false);
+		}
+		else
+		{
+			return null;
+		}
+
+		$entityFieldsDb = $entityObject->getListEx(
+			[],
+			['=ID' => $entityId, 'CHECK_PERMISSIONS' => 'N'],
+			false,
+			false,
+			['*', 'UF_*']
+		);
+		$entityFields = $entityFieldsDb->fetch();
+
+		return $entityFields ?: null;
 	}
 }

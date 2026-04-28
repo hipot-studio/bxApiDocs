@@ -9,7 +9,6 @@ use Bitrix\Booking\Entity\Booking\BookingCollection;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
-use Bitrix\Booking\Internals\Service\BookingSkuService;
 use Bitrix\Booking\Internals\Service\CounterDictionary;
 use Bitrix\Booking\Internals\Service\ExternalDataService;
 use Bitrix\Booking\Internals\Service\Feature\BookingConfirmLink;
@@ -24,13 +23,11 @@ class BookingProvider
 		private BookingRepositoryInterface|null $repository = null,
 		private BookingMessageRepositoryInterface|null $messageRepository = null,
 		private ExternalDataService|null $externalDataService = null,
-		private BookingSkuService|null $skuService = null,
 	)
 	{
 		$this->repository = $repository ?? Container::getBookingRepository();
 		$this->messageRepository = $messageRepository ?? Container::getBookingMessageRepository();
 		$this->externalDataService = $this->externalDataService ?? Container::getExternalDataService();
-		$this->skuService = Container::getBookingSkuService();
 	}
 
 	public function getList(GridParams $gridParams, int $userId): BookingCollection
@@ -96,9 +93,7 @@ class BookingProvider
 			$clientCollections[] = $booking->getClientCollection();
 		}
 
-		Container::getProviderManager()::getCurrentProvider()
-			?->getClientProvider()
-			?->loadClientDataForCollection(...$clientCollections);
+		Container::getCrmClientDataLoader()->loadDataForCollection(...$clientCollections);
 
 		return $this;
 	}

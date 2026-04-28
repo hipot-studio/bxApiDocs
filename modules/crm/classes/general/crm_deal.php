@@ -206,9 +206,15 @@ class CAllCrmDeal
 	public static function GetFieldCaption($fieldName)
 	{
 		$result = GetMessage("CRM_DEAL_FIELD_{$fieldName}");
+
 		if (!(is_string($result) && $result !== ''))
 		{
 			$result = GetMessage("CRM_DEAL_FIELD_{$fieldName}_MSGVER_1");
+		}
+
+		if (!(is_string($result) && $result !== ''))
+		{
+			$result = Loc::getMessage("CRM_TYPE_ITEM_FIELD_{$fieldName}");
 		}
 
 		if (!(is_string($result) && $result !== '')
@@ -258,6 +264,11 @@ class CAllCrmDeal
 				'CRM_STATUS_TYPE' => 'DEAL_STAGE',
 				'ATTRIBUTES' => array(CCrmFieldInfoAttr::Progress)
 			),
+			'PREVIOUS_STAGE_ID' => [
+				'TYPE' => 'crm_status',
+				'CRM_STATUS_TYPE' => 'DEAL_STAGE',
+				'ATTRIBUTES' => [CCrmFieldInfoAttr::Progress, CCrmFieldInfoAttr::ReadOnly]
+			],
 			'STAGE_SEMANTIC_ID' => array(
 				'TYPE' => 'string',
 				'ATTRIBUTES' => array(CCrmFieldInfoAttr::ReadOnly)
@@ -431,6 +442,7 @@ class CAllCrmDeal
 			'TITLE' => array('FIELD' => 'L.TITLE', 'TYPE' => 'string'),
 			'TYPE_ID' => array('FIELD' => 'L.TYPE_ID', 'TYPE' => 'string'),
 			'STAGE_ID' => array('FIELD' => 'L.STAGE_ID', 'TYPE' => 'string'),
+			'PREVIOUS_STAGE_ID' => array('FIELD' => 'L.PREVIOUS_STAGE_ID', 'TYPE' => 'string'),
 			'ORDER_STAGE' => array('FIELD' => 'L.ORDER_STAGE', 'TYPE' => 'string'),
 			'PROBABILITY' => array('FIELD' => 'L.PROBABILITY', 'TYPE' => 'int'),
 			'CURRENCY_ID' => array('FIELD' => 'L.CURRENCY_ID', 'TYPE' => 'string'),
@@ -1111,7 +1123,7 @@ class CAllCrmDeal
 			array('CCrmDeal', '__AfterPrepareSql')
 		);
 
-		return $lb->Prepare($arOrder, $arFilter, $arGroupBy, $arNavStartParams, $arSelectFields, $arOptions);
+		return self::applyQueryResultDecorator($lb->Prepare($arOrder, $arFilter, $arGroupBy, $arNavStartParams, $arSelectFields, $arOptions));
 	}
 
 	public static function CreateListBuilder(array $arFieldOptions = null)
@@ -1604,7 +1616,7 @@ class CAllCrmDeal
 
 		$obRes = $DB->Query($sSql);
 		$obRes->SetUserFields($USER_FIELD_MANAGER->GetUserFields(self::$sUFEntityID));
-		return $obRes;
+		return  self::applyQueryResultDecorator($obRes);
 	}
 
 	public static function GetByID($ID, $bCheckPerms = true)
@@ -5901,5 +5913,36 @@ class CAllCrmDeal
 			->whereIn('ID', $ids);
 
 		return array_column($query->fetchAll(), 'ID');
+	}
+
+	private static function applyQueryResultDecorator(mixed $result)
+	{
+		if (!$result instanceof \CDBResult)
+		{
+			return $result;
+		}
+
+		return new class($result) extends \CDBResult
+		{
+			protected function AfterFetch(&$res)
+			{
+				parent::AfterFetch($res);
+				$currencyFields = [
+					'OPPORTUNITY',
+					'TAX_VALUE',
+					'OPPORTUNITY_ACCOUNT',
+					'TAX_VALUE_ACCOUNT',
+					'EXCH_RATE',
+				];
+
+				foreach ($res as $fieldName => $value)
+				{
+					if (in_array($fieldName, $currencyFields, true) && $value !== null && $value !== '')
+					{
+						$res[$fieldName] = number_format((float)$value, 2, '.', '');
+					}
+				}
+			}
+		};
 	}
 }

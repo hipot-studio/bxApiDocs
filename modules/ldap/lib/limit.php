@@ -8,6 +8,9 @@ use Bitrix\Main\UserTable;
 
 Loc::loadMessages(__FILE__);
 
+/**
+ * @deprecated This class is internal and will be moved to another namespace.
+ */
 final class Limit
 {
 	private static $userLimit = 1000;

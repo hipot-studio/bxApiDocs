@@ -9,6 +9,7 @@ use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\Web\Json;
 
 final class DeleteAction extends BaseAction
 {
@@ -41,8 +42,8 @@ final class DeleteAction extends BaseAction
 		}
 
 		$dashboardId = (int)$rawFields['ID'];
-		$isCustom = $rawFields['TYPE'] === \Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM;
-		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.deleteDashboard({$dashboardId}, {$isCustom})";
+		$dashboardType = $rawFields['TYPE'];
+		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.deleteDashboard({$dashboardId}, '{$dashboardType}')";
 
 		return parent::getControl($rawFields);
 	}

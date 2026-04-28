@@ -17,4 +17,6 @@ interface ClientTypeRepositoryInterface
 	): Entity\Client\ClientTypeCollection;
 
 	public function getById(int $id, int $userId = 0): Entity\Client\ClientType|null;
+
+	public function get(string $code, string $moduleId): Entity\Client\ClientType|null;
 }

@@ -56,6 +56,11 @@ class PromotionUpdateEvent extends BaseEvent
 		return array_keys($this->sortedByUserData);
 	}
 
+	public function shouldSendToOnlySpecificRecipients(): bool
+	{
+		return false;
+	}
+
 	protected function getDiffByUser(int $userId): Diff
 	{
 		return new Diff($userId, $this->sortedByUserData[$userId]);

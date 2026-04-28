@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Controller\ExternalSource;
 
+use Bitrix\BIConnector\ExternalSource\SupersetIntegration;
 use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\ExternalSource\FieldType;
 use Bitrix\BIConnector\ExternalSource\Validation\ImportDataValidator;
@@ -20,6 +21,7 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\UI\FileUploader;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\UI\FileUploaderController\DatasetUploaderController;
 
@@ -55,7 +57,7 @@ class Dataset extends Controller
 	{
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG))
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_EXTERNAL_SOURCE_DATASET_ACCESS_ERROR')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_EXTERNAL_SOURCE_DATASET_ACCESS_ERROR_MSGVER_1')));
 
 			return false;
 		}
@@ -73,7 +75,7 @@ class Dataset extends Controller
 				$datasetId = (int)$id;
 				if ($datasetId <= 0)
 				{
-					$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR')));
+					$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR_MSGVER_1')));
 
 					return null;
 				}
@@ -81,7 +83,7 @@ class Dataset extends Controller
 				$dataset = ExternalSource\DatasetManager::getById($datasetId);
 				if (!$dataset)
 				{
-					$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR')));
+					$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR_MSGVER_1')));
 
 					return null;
 				}
@@ -234,7 +236,7 @@ class Dataset extends Controller
 		$addResult = ExternalSource\DatasetManager::add($dataset, $datasetFields, $datasetSettings, $sourceId);
 		if (!$addResult->isSuccess())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_ADD_ERROR'), 'ADD_ERROR'));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_ADD_ERROR_MSGVER_1'), 'ADD_ERROR'));
 
 			return null;
 		}
@@ -286,7 +288,7 @@ class Dataset extends Controller
 		$enumType = ExternalSource\Type::tryFrom($type);
 		if (!$enumType)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE'), 'UNKNOWN_TYPE'));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1'), 'UNKNOWN_TYPE'));
 
 			return $result;
 		}
@@ -326,7 +328,7 @@ class Dataset extends Controller
 		{
 			$result->addError(
 				new Error(
-					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_ALREADY_EXIST_ERROR')
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_ALREADY_EXIST_ERROR_MSGVER_1')
 				)
 			);
 		}
@@ -382,7 +384,7 @@ class Dataset extends Controller
 		$updateResult = ExternalSource\DatasetManager::update($id, $dataset, $datasetFields, $datasetSettings);
 		if (!$updateResult->isSuccess())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UPDATE_ERROR'), 'UPDATE_ERROR'));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UPDATE_ERROR_MSGVER_1'), 'UPDATE_ERROR'));
 
 			return null;
 		}
@@ -432,7 +434,7 @@ class Dataset extends Controller
 		$enumType = ExternalSource\Type::tryFrom($type);
 		if (!$enumType)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE'), 'UNKNOWN_TYPE'));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1'), 'UNKNOWN_TYPE'));
 
 			return $result;
 		}
@@ -577,7 +579,7 @@ class Dataset extends Controller
 		$enumType = ExternalSource\Type::tryFrom($type);
 		if (!$enumType)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE'), 'UNKNOWN_TYPE'));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1'), 'UNKNOWN_TYPE'));
 
 			return $result;
 		}
@@ -644,7 +646,7 @@ class Dataset extends Controller
 			{
 				$result->addError(
 					new Error(
-						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DIFFERENT_COUNT_FIELDS_ERROR'),
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DIFFERENT_COUNT_FIELDS_ERROR_MSGVER_1'),
 						'DIFFERENT_COUNT_FIELDS'
 					)
 				);
@@ -725,7 +727,7 @@ class Dataset extends Controller
 		$enumType = ExternalSource\Type::tryFrom($type);
 		if (!$enumType)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE'), 'UNKNOWN_TYPE'));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1'), 'UNKNOWN_TYPE'));
 
 			return $result;
 		}
@@ -775,12 +777,38 @@ class Dataset extends Controller
 		$deleteResult = ExternalSource\DatasetManager::delete($id);
 		if (!$deleteResult->isSuccess())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_DELETE_ERROR'), 'DELETE_ERROR'));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_DELETE_ERROR_MSGVER_1'), 'DELETE_ERROR'));
 
 			return null;
 		}
 
 		return true;
+	}
+
+	/**
+	 * Get for external datasets related superset datasets
+	 *
+	 * @param ExternalSource\Internal\ExternalDataset $dataset
+	 * @return array|null
+	 */
+	public function getRelatedSupersetDatasetsAction(ExternalSource\Internal\ExternalDataset $dataset): ?array
+	{
+		if (!SupersetInitializer::isSupersetReady())
+		{
+			return null;
+		}
+
+		$supersetIntegration = new SupersetIntegration();
+		$supersetDatasetsResult = $supersetIntegration->loadSupersetDatasets($dataset);
+
+		if (!$supersetDatasetsResult->isSuccess())
+		{
+			$this->addErrors($supersetDatasetsResult->getErrors());
+
+			return null;
+		}
+
+		return $supersetDatasetsResult->getData();
 	}
 
 	public function syncFieldAction(ExternalSource\Internal\ExternalDataset $dataset): ?ViewResponce
@@ -1009,6 +1037,12 @@ class Dataset extends Controller
 				$fieldType = FieldType::tryFrom($code);
 				if ($fieldType)
 				{
+					if ($fieldType === FieldType::Timezone && empty($value))
+					{
+						// Empty timezone means "local server time" and is stored implicitly.
+						continue;
+					}
+
 					if (empty($value))
 					{
 						$value = match ($fieldType) {
@@ -1044,18 +1078,23 @@ class Dataset extends Controller
 		return $result;
 	}
 
-	public function getEditUrlAction(int $id): ?string
+	public function getCreateUrlAction(int $id): ?string
 	{
+		if (!SupersetInitializer::isSupersetReady())
+		{
+			return null;
+		}
+
 		$dataset = ExternalSource\DatasetManager::getById($id);
 		if (!$dataset)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR'), 'EDIT_URL_ERROR'));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR_MSGVER_1'), 'EDIT_URL_ERROR'));
 
 			return null;
 		}
 
 		$supersetIntegration = new ExternalSource\SupersetIntegration();
-		$getDatasetUrlResult = $supersetIntegration->getDatasetUrl($dataset);
+		$getDatasetUrlResult = $supersetIntegration->getDatasetCreateUrl($dataset, false);
 		if (!$getDatasetUrlResult->isSuccess())
 		{
 			$this->addError(new Error($getDatasetUrlResult->getError(), 'EDIT_URL_ERROR'));
@@ -1083,11 +1122,11 @@ class Dataset extends Controller
 	{
 		if ($type === ExternalSource\Type::Csv)
 		{
-			$code = $type->value . '_dataset';
+			$code = $type->value . '_table';
 		}
 		else
 		{
-			$code = "external_{$type->value}_dataset";
+			$code = "external_{$type->value}_table";
 		}
 
 		$dataset = ExternalSource\Internal\ExternalDatasetTable::getRow([

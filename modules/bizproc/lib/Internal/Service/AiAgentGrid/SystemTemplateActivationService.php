@@ -2,7 +2,10 @@
 
 namespace Bitrix\Bizproc\Internal\Service\AiAgentGrid;
 
+use Bitrix\Bizproc\Internal\Event\SetupTemplateCurrentDataEvent;
+use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Result\AiAgentStartResult;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
@@ -79,7 +82,7 @@ class SystemTemplateActivationService
 		return $result;
 	}
 
-	public function startTemplate(int $templateId): Result
+	public function startTemplate(int $templateId): AiAgentStartResult
 	{
 		$includeResult = $this->includeModuleAi();
 
@@ -88,25 +91,54 @@ class SystemTemplateActivationService
 			|| !class_exists(AiListenerParameters::class)
 		)
 		{
-			return $includeResult;
+			return (new AiAgentStartResult())
+				->addErrors($includeResult->getErrors())
+			;
 		}
+
+		$userId = (int)CurrentUser::get()->getId();
+		$setupTemplateDataEvent = null;
+		$eventHandler = EventManager::getInstance()
+			->addEventHandler(
+			  fromModuleId: SetupTemplateCurrentDataEvent::MODULE_ID,
+			  eventType: SetupTemplateCurrentDataEvent::EVENT_NAME,
+			  callback: function(SetupTemplateCurrentDataEvent $event) use ($userId, $templateId, &$setupTemplateDataEvent)
+				{
+					if ($event->getTemplateId() === $templateId && $event->getUserId() === $userId && $event->getBlocks())
+					{
+					  $setupTemplateDataEvent = $event;
+					}
+				}
+			)
+		;
 
 		$startResult = $this->handleOnAiAgentStart(
 			new AiListenerParameters(
-				new \Bitrix\Bizproc\Starter\Event(
+				event: new \Bitrix\Bizproc\Starter\Event(
 					name: ProcessedEvent::OnAiAgentStart->name,
 				),
-				$templateId,
-				(int)CurrentUser::get()->getId(),
+				templateId: $templateId,
+				startedBy: $userId,
 			),
 		);
+
+		EventManager::getInstance()
+			->removeEventHandler(
+				fromModuleId: SetupTemplateCurrentDataEvent::MODULE_ID,
+				eventType: SetupTemplateCurrentDataEvent::EVENT_NAME,
+				iEventHandlerKey: $eventHandler,
+			)
+		;
 
 		if ($startResult->isSuccess())
 		{
 			$this->markAsActivatedNow($templateId);
 		}
 
-		return $startResult;
+		return (new AiAgentStartResult($setupTemplateDataEvent))
+			->setData($startResult->getData())
+			->addErrors($startResult->getErrors())
+		;
 	}
 
 	/***
@@ -121,7 +153,12 @@ class SystemTemplateActivationService
 		$documentDto = new DocumentDto($document, $documentType);
 
 		return Starter::getByScenario(Scenario::onEvent)
-			->addEvent(self::AI_AGENT_START_TRIGGER, [$documentDto], $parameters->toArray())
+			->addEvent(
+				code: self::AI_AGENT_START_TRIGGER,
+				documents: [$documentDto],
+				parameters: $parameters->toArray(),
+				userId: $parameters->startedBy,
+			)
 			->setTemplateIds([$parameters->templateId])
 			->start()
 		;

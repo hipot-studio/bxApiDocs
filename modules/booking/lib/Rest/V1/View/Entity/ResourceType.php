@@ -79,6 +79,9 @@ class ResourceType extends View
 			'DELAYED_COUNTER_DELAY' => [
 				'TYPE' => DataType::TYPE_INT,
 			],
+			'SENDER_CODE' => [
+				'TYPE' => DataType::TYPE_STRING,
+			],
 		];
 	}
 

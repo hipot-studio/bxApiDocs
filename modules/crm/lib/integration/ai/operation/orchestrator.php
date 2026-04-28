@@ -261,10 +261,7 @@ final class Orchestrator
 		}
 
 		$callAssessmentItem = ItemFactory::getByActivityId($activityId);
-		$checkerResult = CallAssessmentItemChecker::getInstance()
-			->setItem(ItemFactory::getByActivityId($activityId))
-			->run()
-		;
+		$checkerResult = CallAssessmentItemChecker::getInstance()->setItem($callAssessmentItem)->run();
 		if (!$checkerResult->isSuccess())
 		{
 			return null;

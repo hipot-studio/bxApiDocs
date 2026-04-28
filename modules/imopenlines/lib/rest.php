@@ -851,19 +851,9 @@ class Rest extends \IRestService
 			throw new RestException('Queue ID or User ID can\'t be empty', 'TRANSFER_ID_EMPTY', \CRestServer::STATUS_WRONG_REQUEST);
 		}
 
-		$bots = Im\Bot::getListCache();
-		$botFound = false;
-		$botId = 0;
-		foreach ($bots as $bot)
-		{
-			if ($bot['APP_ID'] == $server->getAppId())
-			{
-				$botFound = true;
-				$botId = $bot['BOT_ID'];
-				break;
-			}
-		}
-		if (!$botFound)
+		$clientId = self::resolveClientId($server, $arParams);
+		$botId = (int)Im\Bot::getBotIdByAppId($clientId);
+		if (!$botId)
 		{
 			throw new RestException('Bot not found', 'BOT_ID_ERROR', \CRestServer::STATUS_WRONG_REQUEST);
 		}
@@ -897,19 +887,9 @@ class Rest extends \IRestService
 			throw new RestException('Chat ID can\'t be empty', 'CHAT_ID_EMPTY', \CRestServer::STATUS_WRONG_REQUEST);
 		}
 
-		$bots = Im\Bot::getListCache();
-		$botFound = false;
-		$botId = 0;
-		foreach ($bots as $bot)
-		{
-			if ($bot['APP_ID'] == $server->getAppId())
-			{
-				$botFound = true;
-				$botId = $bot['BOT_ID'];
-				break;
-			}
-		}
-		if (!$botFound)
+		$clientId = self::resolveClientId($server, $arParams);
+		$botId = (int)Im\Bot::getBotIdByAppId($clientId);
+		if (!$botId)
 		{
 			throw new RestException('Bot not found', 'BOT_ID_ERROR', \CRestServer::STATUS_WRONG_REQUEST);
 		}
@@ -1007,16 +987,12 @@ class Rest extends \IRestService
 
 		$networkBot = null;
 
-		$bots = Im\Bot::getListCache();
-		foreach ($bots as $bot)
+		$botId = (int)Im\Bot::getBotIdByAppId((string)$arParams['CODE']);
+		if ($botId)
 		{
-			if ($bot['APP_ID'] == $arParams['CODE'])
-			{
-				$networkBot = $bot;
-				break;
-			}
+			$networkBot = Im\V2\Entity\User\Data\BotData::getInstance($botId);
 		}
-		if (!$networkBot)
+		if (empty($networkBot) || !$networkBot->exists())
 		{
 			throw new RestException('Line not found', 'NOT_FOUND', \CRestServer::STATUS_WRONG_REQUEST);
 		}
@@ -1042,7 +1018,7 @@ class Rest extends \IRestService
 
 			$check = Model\RestNetworkLimitTable::getList([
 				'filter' => [
-					'=BOT_ID' => $networkBot['BOT_ID'],
+					'=BOT_ID' => $networkBot->getId(),
 					'=USER_ID' => $arMessageFields['DIALOG_ID'],
 					'>DATE_CREATE' => $dateLimit
 				]
@@ -1109,13 +1085,16 @@ class Rest extends \IRestService
 		}
 		$arMessageFields['PARAMS']['IMOL_QUOTE_MSG'] = 'Y';
 
-		$id = Im\Bot::addMessage(array('BOT_ID' => $networkBot['BOT_ID']), $arMessageFields);
+		$id = Im\Bot::addMessage(['BOT_ID' => $networkBot->getId()], $arMessageFields);
 		if (!$id)
 		{
 			throw new RestException('Message isn\'t added', 'WRONG_REQUEST', \CRestServer::STATUS_WRONG_REQUEST);
 		}
 
-		Model\RestNetworkLimitTable::add(Array('BOT_ID' => $networkBot['BOT_ID'], 'USER_ID' => $arMessageFields['DIALOG_ID']));
+		Model\RestNetworkLimitTable::add([
+			'BOT_ID' => $networkBot->getId(),
+			'USER_ID' => $arMessageFields['DIALOG_ID'],
+		]);
 
 		return true;
 	}
@@ -2409,5 +2388,23 @@ class Rest extends \IRestService
 		}
 
 		return $data;
+	}
+
+	private static function resolveClientId(\CRestServer $server, array $params): string
+	{
+		$clientId = $server->getClientId();
+		if ($clientId !== null && $clientId !== '')
+		{
+			return $clientId;
+		}
+
+		$params = array_change_key_case($params, CASE_UPPER);
+		$requestClientId = $params['CLIENT_ID'] ?? '';
+		if ($requestClientId === '')
+		{
+			throw new AccessException('Client ID not specified.');
+		}
+
+		return 'custom' . $requestClientId;
 	}
 }

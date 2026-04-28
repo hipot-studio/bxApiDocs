@@ -6,7 +6,9 @@ namespace Bitrix\Im\V2\Controller\Chat;
 
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Controller\BaseController;
+use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Relation\Provider\RelationCursor;
+use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Main\Validation\Engine\AutoWire\ValidationParameter;
 
 class Member extends BaseController
@@ -36,5 +38,17 @@ class Member extends BaseController
 		$rest['nextCursor'] = $nextCursor?->toRestFormat();
 
 		return $rest;
+	}
+
+	/**
+	 * @restMethod im.v2.Chat.Member.filterUsersByParticipation
+	 */
+	public function filterUsersByParticipationAction(Chat $chat, array $userIds): ?array
+	{
+		$userIds = array_map('intval', $userIds);
+
+		$relations = $chat->getRelationsByUserIds($userIds)->filterActiveMembers();
+
+		return (new RestAdapter($relations))->toRestFormat(['POPUP_DATA_EXCLUDE' => [UserPopupItem::class]]);
 	}
 }

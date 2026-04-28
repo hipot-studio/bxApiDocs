@@ -4,7 +4,7 @@ namespace Bitrix\Main\Cli\Helper;
 
 final class NamespaceGenerator
 {
-	public function generateNamespaceForModule(string $moduleId, string $postfix = null): string
+	public function generateNamespaceForModule(string $moduleId, ?string $postfix = null): string
 	{
 		$partnerModuleSeparator = '.';
 		$parts = explode($partnerModuleSeparator, $moduleId);

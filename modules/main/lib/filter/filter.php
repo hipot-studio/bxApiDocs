@@ -32,7 +32,7 @@ class Filter
 		'FIND',
 	];
 
-	function __construct($ID, DataProvider $entityDataProvider, array $extraDataProviders = null, array $params = null)
+	function __construct($ID, DataProvider $entityDataProvider, ?array $extraDataProviders = null, ?array $params = null)
 	{
 		$this->ID = $ID;
 		$this->entityDataProvider = $entityDataProvider;

@@ -7,96 +7,114 @@ namespace Bitrix\Intranet\Internal\Repository;
 use Bitrix\Intranet\Internal\Entity\AnnualSummary;
 use Bitrix\Intranet\Internal\Model\AnnualSummaryTable;
 use Bitrix\Intranet\Internal\Model\EO_AnnualSummary;
+use Bitrix\Intranet\Internal\Entity\AnnualSummary\SummaryInterface;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Entity\EntityCollection;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\Web\Json;
 
 class AnnualSummaryRepository
 {
-	private static array $data = [];
-	
-	public function __construct(
-		private readonly int $userId,
-	) {
-	}
-
 	/**
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function store(AnnualSummary\Collection $collection): void
+	public function getByName(int $userId, string $name): SummaryInterface
 	{
-		$annualSummaryData = $this->getByName('annual_summary_25');
-		if ($annualSummaryData)
-		{
-			$annualSummaryData->setValue(Json::encode($collection->toArray()))->save();
-		}
-		else
-		{
-			AnnualSummaryTable::createObject()
-				->setUserId($this->userId)
-				->setName('annual_summary_25')
-				->setValue(Json::encode($collection->toArray()))
-				->save()
-			;
-		}
-
-		self::$data[$this->userId] = [];
-	}
-
-	/**
-	 * @throws ArgumentException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
-	public function getByName(string $name): ?EO_AnnualSummary
-	{
-		return AnnualSummaryTable::query()
-			->where('USER_ID', $this->userId)
+		$model = AnnualSummaryTable::query()
+			->where('USER_ID', $userId)
 			->where('NAME', $name)
 			->setCacheTtl(86400 * 30) // 30 days
 			->fetchObject()
 		;
+		
+		return $this->convertToEntity($model);
 	}
-	
-	private function fetch(): array
+
+	public function has(int $userId): bool
 	{
-		try
+		// TODO: add logic in the future
+		return false;
+	}
+
+	/**
+	 * @throws SystemException
+	 */
+	public function save(SummaryInterface $entity): void
+	{
+		$helper = Application::getConnection()->getSqlHelper();
+		
+		$sql = $helper->prepareMerge(
+			AnnualSummaryTable::getTableName(),
+			['USER_ID', 'NAME'],
+			[
+				'USER_ID' => $entity->getUserId(),
+				'NAME' => $entity->getId(),
+				'TOTAL' => $entity->getTotal(),
+			],
+			['TOTAL' => $entity->getTotal()],
+		);
+		Application::getConnection()->query($sql[0]);
+	}
+
+	public function saveCollection(EntityCollection $collection): void
+	{
+		$rows = [];
+		foreach ($collection->getIterator() as $entity)
 		{
-			if (empty(self::$data[$this->userId]))
-			{
-				self::$data[$this->userId] = Json::decode($this->getByName('annual_summary_25')?->getValue() ?? '');
-			}
-
-			return self::$data[$this->userId];
+			$rows[] = [
+				'USER_ID' => $entity->getUserId(),
+				'NAME' => $entity->getId(),
+				'TOTAL' => $entity->getTotal(),
+			];
 		}
-		catch (\Exception)
+		$helper = Application::getConnection()->getSqlHelper();
+		$sql = $helper->prepareMergeMultiple(
+			AnnualSummaryTable::getTableName(),
+			['USER_ID', 'NAME'],
+			$rows,
+		);
+		if (isset($sql[0]))
 		{
-			return [];
+			Application::getConnection()->query($sql[0]);
 		}
 	}
 
-	public function getOption(string $name, $default = null): mixed
+	/**
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function findByIdAndUserId(string $id, int $userId): ?SummaryInterface
 	{
-		return $this->getByName($name)?->getValue() ?? $default;
+		$model = AnnualSummaryTable::query()
+			->where('USER_ID', $userId)
+			->where('NAME', $id)
+			->setCacheTtl(86400 * 30) // 30 days
+			->fetchObject()
+		;
+
+		if (!$model)
+		{
+			return null;
+		}
+
+		return $this->convertToEntity($model);
 	}
 
-	public function getSerializedOption(string $name, $default = null): mixed
+	private function convertToOrm(SummaryInterface $entity): EO_AnnualSummary
 	{
-		$option = $this->getOption($name);
+		return AnnualSummaryTable::createObject()
+			->setUserId($entity->getUserId())
+			->setName($entity->getId())
+			->setTotal($entity->getTotal())
+		;
+	}
 
-		return $option ? unserialize($option, ['allowed_classes' => false]) : $default;
-	}
-	
-	public function load(): AnnualSummary\Collection
+	private function convertToEntity(EO_AnnualSummary $model): SummaryInterface
 	{
-		return AnnualSummary\Collection::createByArray($this->fetch());
-	}
-	
-	public function has(): bool
-	{
-		return !empty($this->fetch());
+		return new AnnualSummary\Summary($model->getUserId(), $model->getName(), $model->getTotal());
 	}
 }

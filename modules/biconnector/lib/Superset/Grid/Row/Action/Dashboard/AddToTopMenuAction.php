@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dashboard;
 
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
@@ -44,11 +45,23 @@ final class AddToTopMenuAction extends BaseAction
 			. 'openFrom=top_menu'
 		;
 
-		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.addToTopMenu({$dashboardId}, `{$url}`)";
+		$restrictionCode = \CUtil::JSEscape($this->getRestrictionCode($rawFields));
+
+		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.addToTopMenu({$dashboardId}, `{$url}`, `{$restrictionCode}`)";
 
 		$result = parent::getControl($rawFields);
 		$result['ACTION_ID'] = self::getId();
 
 		return $result;
+	}
+
+	private function getRestrictionCode(array $rawFields): ?string
+	{
+		if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($rawFields['TYPE'] ?? ''))
+		{
+			return 'limit_benefit_market_active';
+		}
+
+		return null;
 	}
 }

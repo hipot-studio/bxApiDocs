@@ -6,14 +6,27 @@ namespace Bitrix\Booking\Internals;
 
 use Bitrix\Booking\Internals\Integration\Catalog\SkuDataLoader;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
-use Bitrix\Booking\Internals\Integration\Crm\Contact\ContactService;
-use Bitrix\Booking\Internals\Integration\Crm\CrmDealDataLoader;
+use Bitrix\Booking\Internals\Integration\Crm\ContactSearcher\ContactSearcherService;
+use Bitrix\Booking\Internals\Integration\Crm\MyCompanyProvider;
+use Bitrix\Booking\Internals\Integration\Crm\WebForm\EventHandler as WebFormEventHandler;
+use Bitrix\Booking\Internals\Integration\Crm\WebForm\BookingBuilder;
+use Bitrix\Booking\Internals\Integration\Crm\DataLoader\DealDataLoader;
+use Bitrix\Booking\Internals\Integration\Crm\ClientAccessProvider;
+use Bitrix\Booking\Internals\Integration\Crm\ClientDataProvider;
+use Bitrix\Booking\Internals\Integration\Crm\ClientDataRecentProvider;
+use Bitrix\Booking\Internals\Integration\Crm\ClientTypeRepository as CrmClientTypeRepository;
+use Bitrix\Booking\Internals\Integration\Crm\DataLoader\ClientDataLoader;
+use Bitrix\Booking\Internals\Integration\Crm\DealDataProvider;
+use Bitrix\Booking\Internals\Integration\Crm\ExternalDataItemExtractor;
+use Bitrix\Booking\Internals\Integration\Crm\DealClientSynchronizer;
+use Bitrix\Booking\Internals\Integration\Crm\MessageSender;
 use Bitrix\Booking\Internals\Integration\Crm\DealService;
-use Bitrix\Booking\Internals\Integration\Crm\ProductRowDataLoader;
+use Bitrix\Booking\Internals\Integration\Crm\DataLoader\ProductRowDataLoader;
 use Bitrix\Booking\Internals\Integration\Intranet\BookingTool;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\BookingSkuRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ClientTypeRepositoryInterface;
+use Bitrix\Booking\Internals\Repository\ORM\BookingPaymentRepository;
 use Bitrix\Booking\Internals\Repository\ORM\DelayedTaskRepository;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\BookingSkuMapper;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\ClientTypeMapper;
@@ -25,11 +38,14 @@ use Bitrix\Booking\Internals\Repository\WaitListItemRepositoryInterface;
 use Bitrix\Booking\Internals\Service\BookingService;
 use Bitrix\Booking\Internals\Service\BookingSkuService;
 use Bitrix\Booking\Internals\Service\ClientService;
+use Bitrix\Booking\Internals\Service\CrmForm\CrmFormService;
+use Bitrix\Booking\Internals\Service\CrmForm\ResourceAutoSelectionService;
 use Bitrix\Booking\Internals\Service\DealForBookingService;
 use Bitrix\Booking\Internals\Service\DelayedTask\DelayedTaskService;
 use Bitrix\Booking\Internals\Service\EventForBookingService;
 use Bitrix\Booking\Internals\Service\ExternalDataService;
 use Bitrix\Booking\Internals\Service\Journal\JournalServiceInterface;
+use Bitrix\Booking\Internals\Service\LicenseChecker;
 use Bitrix\Booking\Internals\Repository\AdvertisingResourceTypeRepository;
 use Bitrix\Booking\Internals\Repository\BookingClientRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
@@ -49,11 +65,12 @@ use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ResourceSlotRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ResourceTypeRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\TransactionHandlerInterface;
-use Bitrix\Booking\Internals\Service\Notifications\MessageSender;
+use Bitrix\Booking\Internals\Service\Notifications\MessageSender\DummyBaseMessageSender;
+use Bitrix\Booking\Internals\Service\Notifications\MessageSender\BookingDataExtractor;
+use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderPicker;
 use Bitrix\Booking\Internals\Service\Notifications\WhatsAppEmergencyService;
 use Bitrix\Booking\Internals\Service\Overbooking\OverbookingService;
 use Bitrix\Booking\Internals\Service\Overbooking\OverlapPolicy;
-use Bitrix\Booking\Internals\Service\ProviderManager;
 use Bitrix\Booking\Internals\Service\ResourceService;
 use Bitrix\Booking\Internals\Service\ResourceAvatarService;
 use Bitrix\Booking\Internals\Service\ResourceSkuService;
@@ -211,19 +228,9 @@ class Container
 		return self::getService('booking.counter.repository');
 	}
 
-	public static function getProviderManager(): ProviderManager
-	{
-		return self::getService('booking.provider.manager');
-	}
-
 	public static function getOptionRepository(): OptionRepositoryInterface
 	{
 		return self::getService('booking.option.repository');
-	}
-
-	public static function getMessageSender(): MessageSender
-	{
-		return self::getService('booking.message.sender');
 	}
 
 	public static function getWaitListItemRepositoryMapper(): WaitListItemMapper
@@ -356,9 +363,9 @@ class Container
 		return self::getService('booking.internals.service.yandex.find.resource.service');
 	}
 
-	public static function getCrmContactService(): ContactService
+	public static function getCrmContactSearcherService(): ContactSearcherService
 	{
-		return self::getService('booking.internals.integration.crm.contact.service');
+		return self::getService(ContactSearcherService::class);
 	}
 
 	public static function getCrmDealService(): DealService
@@ -406,7 +413,52 @@ class Container
 		return self::getService('booking.internals.integration.catalog.sku.data.loader');
 	}
 
-	public static function getCrmDealDataLoader(): CrmDealDataLoader
+	public static function getDealDataProvider(): DealDataProvider
+	{
+		return self::getService(DealDataProvider::class);
+	}
+
+	public static function getCrmExternalDataItemExtractor(): ExternalDataItemExtractor
+	{
+		return self::getService(ExternalDataItemExtractor::class);
+	}
+
+	public static function getCrmMessageSender(): MessageSender
+	{
+		return self::getService(MessageSender::class);
+	}
+
+	public static function getCrmDealClientSynchronizer(): DealClientSynchronizer
+	{
+		return self::getService(DealClientSynchronizer::class);
+	}
+
+	public static function getCrmClientDataLoader(): ClientDataLoader
+	{
+		return self::getService(ClientDataLoader::class);
+	}
+
+	public static function getCrmClientAccessProvider(): ClientAccessProvider
+	{
+		return self::getService(ClientAccessProvider::class);
+	}
+
+	public static function getCrmClientDataRecentProvider(): ClientDataRecentProvider
+	{
+		return self::getService(ClientDataRecentProvider::class);
+	}
+
+	public static function getCrmClientTypeRepository(): CrmClientTypeRepository
+	{
+		return self::getService(CrmClientTypeRepository::class);
+	}
+
+	public static function getCrmClientDataProvider(): ClientDataProvider
+	{
+		return self::getService(ClientDataProvider::class);
+	}
+
+	public static function getCrmDealDataLoader(): DealDataLoader
 	{
 		return self::getService('booking.internals.integration.crm.deal.data.loader');
 	}
@@ -481,8 +533,58 @@ class Container
 		return self::getService(DealForBookingService::class);
 	}
 
+	public static function getBookingPaymentRepository(): BookingPaymentRepository
+	{
+		return self::getService(BookingPaymentRepository::class);
+	}
+
 	public static function getWhatsAppEmergencyService(): WhatsAppEmergencyService
 	{
 		return self::getService(WhatsAppEmergencyService::class);
+	}
+
+	public static function getCrmFormService(): CrmFormService
+	{
+		return self::getService(CrmFormService::class);
+	}
+
+	public static function getCrmFormResourceAutoSelectionService(): ResourceAutoSelectionService
+	{
+		return self::getService(ResourceAutoSelectionService::class);
+	}
+
+	public static function getWebFormBookingBuilder(): BookingBuilder
+	{
+		return self::getService(BookingBuilder::class);
+	}
+
+	public static function getWebFormEventHandler(): WebFormEventHandler
+	{
+		return self::getService(WebFormEventHandler::class);
+	}
+
+	public static function getBookingDataExtractor(): BookingDataExtractor
+	{
+		return self::getService(BookingDataExtractor::class);
+	}
+
+	public static function getMyCompanyProvider(): MyCompanyProvider
+	{
+		return self::getService(MyCompanyProvider::class);
+	}
+
+	public static function getMessageSenderPicker(): MessageSenderPicker
+	{
+		return self::getService(MessageSenderPicker::class);
+	}
+
+	public static function getDummyBaseMessageSender(): DummyBaseMessageSender
+	{
+		return self::getService(DummyBaseMessageSender::class);
+	}
+
+	public static function getLicenseChecker(): LicenseChecker
+	{
+		return self::getService(LicenseChecker::class);
 	}
 }

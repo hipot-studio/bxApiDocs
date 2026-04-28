@@ -7,6 +7,8 @@ use Bitrix\Main\Localization\Loc;
 
 /**
  * Update/create language file.
+ *
+ * @internal
  */
 class SaveFile
 	extends Operation

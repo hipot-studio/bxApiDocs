@@ -211,6 +211,7 @@ class DocumentService
 			scenario: $documentItem->scenario,
 			title: $documentItem->title,
 			version: $documentItem->version,
+			hasPlaceholders: $blank->hasPlaceholders,
 		);
 		$documentRegisterResponse = $apiDocument->register($documentRegisterRequest);
 

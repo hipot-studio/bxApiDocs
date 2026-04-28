@@ -6,6 +6,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security;
 use Bitrix\Rest\Public;
 use Bitrix\Rest;
+use Bitrix\Main;
 
 IncludeModuleLangFile(__FILE__);
 

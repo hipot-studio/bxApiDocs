@@ -214,7 +214,8 @@ class OrderTable extends Main\Entity\DataManager
 			new Main\Entity\StringField('REASON_MARKED'),
 
 			new Main\Entity\FloatField(
-				'PRICE_DELIVERY'
+				'PRICE_DELIVERY',
+				['scale' => 8],
 			),
 			new Main\Entity\BooleanField(
 				'ALLOW_DELIVERY',
@@ -237,9 +238,10 @@ class OrderTable extends Main\Entity\DataManager
 
 			new Main\Entity\FloatField(
 				'PRICE',
-				array(
-					'default_value' => '0.0000'
-				)
+				[
+					'default_value' => '0.0',
+					'scale' => 8,
+				]
 			),
 
 			new Main\Entity\StringField(
@@ -252,9 +254,10 @@ class OrderTable extends Main\Entity\DataManager
 
 			new Main\Entity\FloatField(
 				'DISCOUNT_VALUE',
-				array(
-					'default_value' => '0.0000'
-				)
+				[
+					'default_value' => '0.0',
+					'scale' => 8,
+				]
 			),
 
 			new Main\Entity\ExpressionField(
@@ -265,9 +268,15 @@ class OrderTable extends Main\Entity\DataManager
 				array('DISCOUNT_VALUE', 'ID')
 			),
 
-			new Main\Entity\FloatField('TAX_VALUE'),
+			new Main\Entity\FloatField(
+				'TAX_VALUE',
+				['scale' => 8],
+			),
 
-			new Main\Entity\FloatField('SUM_PAID'),
+			new Main\Entity\FloatField(
+				'SUM_PAID',
+				['scale' => 8],
+			),
 
 			new Main\Entity\ExpressionField(
 				'SUM_PAID_FORREP',

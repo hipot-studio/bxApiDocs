@@ -80,12 +80,25 @@ final class CultureFormatter
 		return 'en';
 	}
 
-	private static function getLanguageList(): array
+	public static function getLanguageList(): array
 	{
-		return
-			\Bitrix\Main\Loader::includeModule('intranet')
-				? \Bitrix\Intranet\Util::getTemplateLanguages()
-				: []
-		;
+		if (!Loader::includeModule('intranet'))
+		{
+			return [];
+		}
+
+		if (Loader::includeModule('bitrix24'))
+		{
+			return \Bitrix\Intranet\Util::getTemplateLanguages();
+		}
+
+		$result = [];
+		$repository = new \Bitrix\Intranet\Internal\Repository\LanguageRepository();
+		foreach ($repository->getPortalLanguages() as $language)
+		{
+			$result[$language['ID']] = ['NAME' => $language['NAME']];
+		}
+
+		return $result;
 	}
 }

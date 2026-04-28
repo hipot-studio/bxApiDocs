@@ -87,6 +87,19 @@ final class ViewerBuilder
 				->setSettings($settings)
 			;
 		}
+		if (
+			$this->type === BIConnector\ExternalSource\Type::Mysql
+			|| $this->type === BIConnector\ExternalSource\Type::Pgsql
+		)
+		{
+			$provider = new Provider\ExternalSql($this->type);
+			$settings = $this->settings;
+			$settings['dataset'] = $this->externalTableData;
+			$provider
+				->setSourceId($this->sourceId)
+				->setSettings($settings)
+			;
+		}
 
 		return $provider;
 	}

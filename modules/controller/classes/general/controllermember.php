@@ -111,7 +111,7 @@ class CControllerMember
 
 		if (empty($arVars))
 		{
-			if ($DB->GetErrorMessage() <> '')
+			if ($DB->GetErrorMessage())
 			{
 				$e = new CApplicationException(GetMessage('CTRLR_MEM_ERR3') . ' ' . $DB->GetErrorMessage());
 			}
@@ -260,10 +260,31 @@ class CControllerMember
 		$rsCounters = CControllerCounter::GetMemberCounters($member_id);
 		while ($arCounter = $rsCounters->Fetch())
 		{
-			$strCommand .= 'function counter_' . $arCounter['ID'] . "(\$APPLICATION, \$USER, \$DB) {\n";
-			$strCommand .= '  return eval("' . EscapePHPString($arCounter['COMMAND']) . "\");\n";
-			$strCommand .= "}\n";
-			$strCommand .= "echo '" . $arCounter['ID'] . "='.urlencode(counter_" . $arCounter['ID'] . "(\$APPLICATION, \$USER, \$DB)).'&';\n";
+			$command = $arCounter['COMMAND_SOURCE'] === 'file' ? file_get_contents($_SERVER['DOCUMENT_ROOT'] . $arCounter['COMMAND_FILE']) : $arCounter['COMMAND'];
+			if (str_starts_with($command, '<' . '?'))
+			{
+				$command = mb_substr($command, 2);
+				if (str_starts_with($command, 'php'))
+				{
+					$command = mb_substr($command, 3);
+				}
+			}
+
+			if ($command)
+			{
+				$strCommand .= 'function counter_' . $arCounter['ID'] . "(\$APPLICATION, \$USER, \$DB) {\n";
+				$strCommand .= '  return eval("' . EscapePHPString($command) . "\");\n";
+				$strCommand .= "}\n";
+				if (defined('BX_CONTROLLER_UPDATE_COUNTERS_TIME'))
+				{
+					$strCommand .= "\$stime = microtime(1);\n";
+				}
+				$strCommand .= "echo '" . $arCounter['ID'] . "='.urlencode(counter_" . $arCounter['ID'] . "(\$APPLICATION, \$USER, \$DB)).'&';\n";
+				if (defined('BX_CONTROLLER_UPDATE_COUNTERS_TIME'))
+				{
+					$strCommand .= "echo 't_" . $arCounter['ID'] . "='.urlencode(round(microtime(1) - \$stime, 4)).'&';\n";
+				}
+			}
 		}
 
 		foreach (GetModuleEvents('controller', 'OnBeforeUpdateCounters', true) as $arEvent)
@@ -288,6 +309,24 @@ class CControllerMember
 		$ar_command_result = [];
 		parse_str($command_result, $ar_command_result);
 
+		if (defined('BX_CONTROLLER_UPDATE_COUNTERS_TIME'))
+		{
+			$time = 0.0;
+			$stat = ['UpdateCounters' => $member_id];
+			foreach ($ar_command_result as $k => $v)
+			{
+				if (str_starts_with($k, 't_'))
+				{
+					$stat[$k] = $v;
+					$time += $v;
+					unset($ar_command_result[$k]);
+				}
+			}
+			if ($time > constant('BX_CONTROLLER_UPDATE_COUNTERS_TIME'))
+			{
+				AddMessage2Log($stat, 'controller', 0);
+			}
+		}
 		//Try to guess encoding and convert to controller site charset
 		foreach ($ar_command_result as $k => $v)
 		{
@@ -296,7 +335,7 @@ class CControllerMember
 
 		$arFields = [
 			'TIMESTAMP' => $arMember['TIMESTAMP_X'],
-			'~COUNTERS_UPDATED' => $DB->CurrentTimeFunction(),
+			'~COUNTERS_UPDATED' => CDatabase::CurrentTimeFunction(),
 		];
 		if (array_key_exists('COUNTER_FREE_SPACE', $ar_command_result))
 		{
@@ -415,7 +454,7 @@ class CControllerMember
 		$DB->Add('b_controller_member_log', [
 			'CONTROLLER_MEMBER_ID' => $CONTROLLER_MEMBER_ID,
 			'USER_ID' => $USER_ID,
-			'~CREATED_DATE' => $DB->CurrentTimeFunction(),
+			'~CREATED_DATE' => CDatabase::CurrentTimeFunction(),
 			'FIELD' => 'NOTE',
 			'NOTES' => $strNote,
 		], ['NOTES']);
@@ -446,7 +485,7 @@ class CControllerMember
 				$DB->Add('b_controller_member_log', [
 					'CONTROLLER_MEMBER_ID' => $CONTROLLER_MEMBER_ID,
 					'USER_ID' => $USER_ID,
-					'~CREATED_DATE' => $DB->CurrentTimeFunction(),
+					'~CREATED_DATE' => CDatabase::CurrentTimeFunction(),
 					'FIELD' => $FIELD,
 					'FROM_VALUE' => $arFieldsOld[$FIELD],
 					'TO_VALUE' => $arFieldsNew[$FIELD],
@@ -1653,7 +1692,7 @@ class CControllerMember
 				'COMMAND_ID' => $command_id,
 				'TASK_ID' => $task_id,
 				'COMMAND' => $command,
-				'~DATE_INSERT' => $DB->CurrentTimeFunction(),
+				'~DATE_INSERT' => CDatabase::CurrentTimeFunction(),
 				'ADD_PARAMS' => (count($arAddParams) > 0 ? serialize($arAddParams) : false)
 			],
 			['COMMAND', 'ADD_PARAMS'],
@@ -1791,6 +1830,7 @@ class CControllerMember
 					$handledMembers[$ar['ID']] = $ar['ID'];
 					CControllerTask::Add([
 						'TASK_ID' => 'CLOSE_MEMBER',
+						'STATUS' => 'L',
 						'CONTROLLER_MEMBER_ID' => $ar['ID'],
 						'INIT_EXECUTE_PARAMS' => true,
 					]);
@@ -1824,6 +1864,7 @@ class CControllerMember
 				$handledMembers[$ar['ID']] = $ar['ID'];
 				CControllerTask::Add([
 					'TASK_ID' => 'CLOSE_MEMBER',
+					'STATUS' => 'L',
 					'CONTROLLER_MEMBER_ID' => $ar['ID'],
 					'INIT_EXECUTE_PARAMS' => false,
 				]);
@@ -1858,6 +1899,7 @@ class CControllerMember
 				$handledMembers[$ar['ID']] = $ar['ID'];
 				CControllerTask::Add([
 					'TASK_ID' => 'CLOSE_MEMBER',
+					'STATUS' => 'L',
 					'CONTROLLER_MEMBER_ID' => $ar['ID'],
 					'INIT_EXECUTE_PARAMS' => true,
 				]);

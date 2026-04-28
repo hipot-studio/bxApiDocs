@@ -1,8 +1,10 @@
 <?php
 namespace Bitrix\Crm\Automation\Trigger;
 
+use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 Loc::loadMessages(__FILE__);
 
@@ -74,5 +76,20 @@ class CallTrigger extends BaseTrigger
 	public static function getDescription(): string
 	{
 		return Loc::getMessage('CRM_AUTOMATION_TRIGGER_CALL_DESCRIPTION') ?? '';
+	}
+
+	public static function getNodeDescription(): string
+	{
+		return Loc::getMessage('CRM_AUTOMATION_TRIGGER_CALL_NODE_DESCRIPTION') ?? '';
+	}
+
+	public static function getNodeColor(): int
+	{
+		return ActivityColorIndex::GREEN->value;
+	}
+
+	public static function getNodeIcon(): string
+	{
+		return Outline::PHONE_IN->name;
 	}
 }
