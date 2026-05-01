@@ -7,7 +7,6 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\UrlPreview\UrlPreview;
-use Bitrix\Tasks\Internals\Task\Result\ResultTable;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\HistoryLog;
 use Bitrix\Tasks\V2\Internal\Entity\Result;
@@ -26,12 +25,14 @@ use Bitrix\Tasks\V2\Internal\Service\AutomationService;
 use Bitrix\Tasks\V2\Internal\Service\PushService;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Trait\ParticipantTrait;
+use Bitrix\Tasks\V2\Internal\Service\Trait\UserFieldTrait;
 use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 use CUserTypeManager;
 use InvalidArgumentException;
 
 class ResultService
 {
+	use UserFieldTrait;
 	use ParticipantTrait;
 
 	public const COMMAND_CREATE = 'task_result_create';
@@ -52,6 +53,7 @@ class ResultService
 		private readonly TaskRepositoryInterface $taskRepository,
 		private readonly UserRepositoryInterface $userRepository,
 		private readonly ChatNotificationInterface $chatNotification,
+		private readonly MemberService $memberService,
 	)
 	{
 	}
@@ -95,7 +97,7 @@ class ResultService
 
 		$result = new Result(
 			taskId: $message->chat->entityId,
-			text: !empty($message->text) ? $message->text : Loc::getMessage('TASKS_RESULT_SERVICE_DEFAULT_TITLE_FROM_MESSAGE'),
+			text: mb_strlen($message->text) > 0 ? $message->text : Loc::getMessage('TASKS_RESULT_SERVICE_DEFAULT_TITLE_FROM_MESSAGE'),
 			fileIds: $fileIds,
 			previewId: $message->previewId,
 			messageId: $message->getId(),
@@ -113,6 +115,22 @@ class ResultService
 
 		// check if task exists
 		$this->getTask((int)$result->taskId);
+
+		$uf = [];
+		if (!empty($result->fileIds))
+		{
+			$uf[UserField::TASK_RESULT] = (array)$result->fileIds;
+		}
+
+		if ($result->previewId)
+		{
+			$uf[UserField::TASK_RESULT_PREVIEW] = (new Signer())->sign((string)$result->previewId, UrlPreview::SIGN_SALT);
+		}
+
+		if (!empty($uf) && !$this->checkFields(0, $uf, $userId, UserField::RESULT))
+		{
+			throw new InvalidArgumentException('Invalid file ids');
+		}
 
 		$author = $this->userRepository->getByIds([$userId])->findOneById($userId);
 
@@ -153,21 +171,12 @@ class ResultService
 			$this->notifyChat($result, $userId, $notifyType);
 		}
 
-		$uf = [];
-		if (!empty($result->fileIds))
-		{
-			$uf[UserField::TASK_RESULT] = (array)$result->fileIds;
-		}
-
-		if ($result->previewId)
-		{
-			$uf[UserField::TASK_RESULT_PREVIEW] = (new Signer())->sign((string)$result->previewId, UrlPreview::SIGN_SALT);
-		}
-
 		if (!empty($uf))
 		{
-			$this->getUfManager()->Update(ResultTable::getUfId(), $result->getId(), $uf);
+			$this->getUfManager()->Update(UserField::RESULT, $result->getId(), $uf);
 		}
+
+		$this->addAuthorToAuditors($result);
 
 		$this->sendPush(self::COMMAND_CREATE, $result);
 
@@ -185,6 +194,22 @@ class ResultService
 		if (!$resultInDb)
 		{
 			throw new ResultNotFoundException('Result not found');
+		}
+
+		$uf = [];
+		if ($result->fileIds !== null)
+		{
+			$uf[UserField::TASK_RESULT] = $result->fileIds;
+		}
+
+		if ($result->previewId)
+		{
+			$uf[UserField::TASK_RESULT_PREVIEW] = (new Signer())->sign((string)$result->previewId, UrlPreview::SIGN_SALT);
+		}
+
+		if (!empty($uf) && !$this->checkFields($result->getId(), $uf, $userId, UserField::RESULT))
+		{
+			throw new InvalidArgumentException('Invalid file ids');
 		}
 
 		$updatedResult = new Result(
@@ -216,20 +241,9 @@ class ResultService
 
 		$this->notifyChat($updatedResult, $userId, NotificationType::ResultModified);
 
-		$uf = [];
-		if ($result->fileIds !== null)
-		{
-			$uf[UserField::TASK_RESULT] = $result->fileIds;
-		}
-
-		if ($result->previewId)
-		{
-			$uf[UserField::TASK_RESULT_PREVIEW] = (new Signer())->sign((string)$result->previewId, UrlPreview::SIGN_SALT);
-		}
-
 		if (!empty($uf))
 		{
-			$this->getUfManager()->Update(ResultTable::getUfId(), $result->getId(), $uf);
+			$this->getUfManager()->Update(UserField::RESULT, $result->getId(), $uf);
 
 			$fileIds = $this->taskResultRepository->getAttachmentIdsByResult($result->getId());
 
@@ -383,5 +397,17 @@ class ResultService
 		}
 
 		return $task;
+	}
+
+	private function addAuthorToAuditors(Result $result): void
+	{
+		$task = $this->getTask((int)$result->taskId);
+		$existingTaskUserIds = array_flip($task->getMemberIds());
+		$authorId = $result->author?->id ?? 0;
+
+		if ($authorId > 0 && !isset($existingTaskUserIds[$authorId]))
+		{
+			$this->memberService->addAuditors($result->taskId, [$authorId], new UpdateConfig($authorId));
+		}
 	}
 }

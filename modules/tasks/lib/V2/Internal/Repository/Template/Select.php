@@ -17,6 +17,7 @@ class Select
 		public readonly bool $relatedTasks = false,
 		public readonly bool $permissions = false,
 		public readonly bool $parent = false,
+		public readonly bool $params = false,
 	)
 	{
 

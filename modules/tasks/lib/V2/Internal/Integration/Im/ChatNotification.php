@@ -79,12 +79,23 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				newAccomplices: $args['newAccomplices'] ?? null,
 				newAddMembers: $args['newAddMembers'] ?? null,
 			),
+			NotificationType::GroupAdded => new Action\NotifyGroupAdded(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				group: $args['group'] ?? null,
+			),
 			NotificationType::GroupChanged => new Action\NotifyGroupChanged(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				newGroup: $args['newGroup'] ?? null,
-				oldGroup: $args['oldGroup'] ?? null
+			),
+			NotificationType::GroupRemoved => new Action\NotifyGroupRemoved(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				group: $args['group'] ?? null,
 			),
 			NotificationType::TaskOverdue => new Action\NotifyTaskOverdue(
 				task: $task,
@@ -299,6 +310,13 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 			NotificationType::TaskDeleted => new Action\NotifyTaskDeleted(
 				task: $task,
 				triggeredBy: $args['triggeredBy'] ?? null,
+			),
+			NotificationType::TaskStageChanged => new Action\NotifyTaskStageChanged(
+				task: $task,
+				sender: $this,
+				triggeredBy: $args['triggeredBy'] ?? null,
+				newStage: $args['newStage'] ?? null,
+
 			),
 			NotificationType::OnboardingInvitedResponsibleAccept => new Action\OnboardingInvitedResponsibleAccept(
 				task: $task,

@@ -10,6 +10,7 @@ use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Duration;
 use Bitrix\Tasks\V2\Internal\Entity\Task\ElapsedTime;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Gantt\LinkType;
+use Bitrix\Tasks\V2\Internal\Entity\Task\GanttLinkCollection;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Mark;
 use Bitrix\Tasks\V2\Internal\Entity\Task\ReminderCollection;
 use Bitrix\Tasks\V2\Internal\Entity\Task\ScenarioCollection;
@@ -139,8 +140,25 @@ class Task extends AbstractEntity
 		public ?string $deadlineChangeReason = null,
 		public readonly ?UserCollection $multiResponsibles = null,
 		public ?ScenarioCollection $scenarios = null,
+		public ?int $sprintId = null,
+		public ?int $backlogId = null,
+		public ?int $stageId = null,
+		public ?int $forumId = null,
+		public ?int $deadlineOrigTs = null,
+		public ?int $viewedDateTs = null,
+		public ?int $stagesId = null,
+		public ?bool $notViewed = null,
+		public ?bool $isMuted = null,
+		public ?bool $isRegular = null,
+		public ?bool $isPinned = null,
+		public ?int $forkByTemplateId = null,
+		public ?int $commentsCount = null,
+		public ?int $serviceCommentsCount = null,
+		public ?int $durationPlanSeconds = null,
+		public ?string $durationTypeAll = null,
+		public ?bool $isPinnedInGroup = null,
+		public ?GanttLinkCollection $links = null,
 	) {
-
 	}
 
 	public function getId(): ?int

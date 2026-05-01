@@ -24,6 +24,7 @@ class StageRepository implements StageRepositoryInterface
 			'COLOR',
 			'SORT',
 			'SYSTEM_TYPE',
+			'ENTITY_ID',
 		];
 
 		$stage = StagesTable::getByPrimary($id, ['select' => $select])->fetch();

@@ -366,6 +366,7 @@ class UserRepository implements UserRepositoryContract
 			->where('UF_DEPARTMENT', '!=', false)
 			->setSelect($fields)
 			->setLimit($limitRows)
+			->setOrder(['LAST_ACTIVITY_DATE' => 'DESC'])
 			->fetchAll()
 		;
 

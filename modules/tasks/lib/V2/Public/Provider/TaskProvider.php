@@ -17,15 +17,21 @@ use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Group;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\FormV2Feature;
+use Bitrix\Tasks\V2\Internal\Entity\TaskCollection;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Access\Service\CrmAccessService;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Service\DiskArchiveLinkService;
 use Bitrix\Tasks\V2\Internal\Integration\Mail\Service\EmailAccessService;
 use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\Task\Filter;
+use Bitrix\Tasks\V2\Internal\Repository\Task\ListSelect;
+use Bitrix\Tasks\V2\Internal\Repository\Task\Order;
+use Bitrix\Tasks\V2\Internal\Repository\Pagination;
 use Bitrix\Tasks\V2\Internal\Repository\Task\Select;
 use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
 use Bitrix\Tasks\V2\Internal\Service\Link\LinkService;
 use Bitrix\Tasks\V2\Internal\Service\Task\ViewService;
+use Bitrix\Tasks\V2\Public\Provider\Params\TaskList\TaskListParams;
 use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
 
 class TaskProvider
@@ -42,7 +48,8 @@ class TaskProvider
 	protected readonly EmailAccessService $emailAccessService;
 	protected readonly Scrum\Service\TaskService $scrumTaskService;
 
-	public function __construct()
+	public function __construct(
+	)
 	{
 		$this->taskRepository = Container::getInstance()->get(TaskReadRepositoryInterface::class);
 		$this->chatRepository = Container::getInstance()->get(ChatRepositoryInterface::class);
@@ -55,6 +62,24 @@ class TaskProvider
 		$this->viewService = Container::getInstance()->get(ViewService::class);
 		$this->emailAccessService = Container::getInstance()->get(EmailAccessService::class);
 		$this->scrumTaskService = new Scrum\Service\TaskService(); //todo
+	}
+
+	public function getList(TaskListParams $taskListParams): TaskCollection
+	{
+		return $this->taskRepository->getList(
+			pagination: new Pagination($taskListParams->getLimit(), $taskListParams->getOffset()),
+			select: new ListSelect($taskListParams->getSelect() ?? []),
+			order: new Order($taskListParams->getSort() ?? []),
+			filter: new Filter($taskListParams->getFilter(), $taskListParams->userId, $taskListParams->skipAccessCheck),
+		);
+	}
+
+
+	public function getCount(TaskListParams $taskListParams): int
+	{
+		return $this->taskRepository->getCount(
+			filter: new Filter($taskListParams->getFilter(), $taskListParams->userId, $taskListParams->skipAccessCheck),
+		);
 	}
 
 	public function get(TaskParams $taskParams): ?Task
@@ -101,11 +126,11 @@ class TaskProvider
 			select: $select,
 		);
 
-		if ($task === null)
-		{
-			return null;
-		}
+		return $task === null ? null : $this->prepareTask($task, $taskParams);
+	}
 
+	protected function prepareTask(Task $task, TaskParams $taskParams): Task
+	{
 		$modifiers = [
 			fn (): array => $this->prepareDescription($task),
 			fn (): array => $this->prepareFlow($taskParams, $task),

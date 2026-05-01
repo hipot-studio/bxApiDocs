@@ -35,6 +35,7 @@ class TemplateModel
 
 	private $permissions;
 	private ?int $parentId = null;
+	private ?int $parentTaskId = null;
 
 	private ?array $template = null;
 
@@ -146,6 +147,11 @@ class TemplateModel
 		if (isset($fields['BASE_TEMPLATE_ID']))
 		{
 			$model->parentId = (int)$fields['BASE_TEMPLATE_ID'];
+		}
+
+		if (isset($fields['PARENT_ID']))
+		{
+			$model->parentTaskId = (int)$fields['PARENT_ID'];
 		}
 
 		return $model;
@@ -396,6 +402,13 @@ class TemplateModel
 		$this->parentId ??= TemplateRegistry::getInstance()->get($this->id)?->getParent()?->getParentTemplateId();
 
 		return $this->parentId;
+	}
+
+	public function getParentTaskId(): ?int
+	{
+		$this->parentTaskId ??= TemplateRegistry::getInstance()->get($this->id)?->getParentId();
+
+		return $this->parentTaskId;
 	}
 
 	/**

@@ -42,7 +42,7 @@ class SetLegacyOtpAllowedHandler
 
 		$personalSettings = (new OtpSettings())->getPersonalSettingsByUserId($command->user->getId());
 
-		if ($command->allowed && $personalSettings?->isPushType() && !$personalSettings?->isActivated())
+		if ($command->allowed && $personalSettings?->getOtpInfo()->type === OtpType::Push && !$personalSettings?->isActivated())
 		{
 			$personalSettings->setType(OtpType::Totp);
 

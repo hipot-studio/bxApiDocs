@@ -6,6 +6,7 @@ use Bitrix\Intranet\Entity\InvitationLink;
 use Bitrix\Intranet\Enum\LinkEntityType;
 use Bitrix\Intranet\Contract\Repository\InvitationLinkRepository as InvitationLinkRepositoryContract;
 use Bitrix\Intranet\Service\ServiceContainer;
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Type\DateTime;
 
@@ -42,22 +43,31 @@ class LinkCodeGenerator
 	{
 		$entity = $this->invitationLinkRepository->getByEntity(
 			$this->entityType,
-			$this->entityId
+			$this->entityId,
 		);
 
 		if ((int)$entity?->getId() > 0)
 		{
 			$this->invitationLinkRepository->delete($entity->getId());
 		}
+		try
+		{
+			$entity = new InvitationLink(
+				$this->entityId,
+				$this->entityType,
+				Random::getString(self::LENGTH_CODE),
+				expiredAt: $expiredDate,
+			);
 
-		$entity = new InvitationLink(
-			$this->entityId,
-			$this->entityType,
-			Random::getString(self::LENGTH_CODE),
-			expiredAt: $expiredDate
-		);
-
-		return $this->invitationLinkRepository->create($entity);
+			return $this->invitationLinkRepository->create($entity);
+		}
+		catch (DuplicateEntryException)
+		{
+			return $this->invitationLinkRepository->getByEntity(
+				$this->entityType,
+				$this->entityId,
+			);
+		}
 	}
 
 	/**
@@ -70,7 +80,7 @@ class LinkCodeGenerator
 	{
 		$entity = $this->invitationLinkRepository->getActualByEntity(
 			$this->entityType,
-			$this->entityId
+			$this->entityId,
 		);
 
 		if (!$entity)
@@ -85,7 +95,7 @@ class LinkCodeGenerator
 	{
 		$entity = $this->invitationLinkRepository->getActualByEntity(
 			$this->entityType,
-			$this->entityId
+			$this->entityId,
 		);
 		if ($entity)
 		{

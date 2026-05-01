@@ -57,58 +57,41 @@ class CRestUtil
 	public static function getRequestData()
 	{
 		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
-		$server = \Bitrix\Main\Context::getCurrent()->getServer();
 
-		$query = $request->toArray();
+		$query = $request->getValues();
 
-		if($request->isPost() && $request->getPostList()->isEmpty())
+		if ($request->isPost())
 		{
-			$rawPostData = trim($request->getInput());
-
-			if(isset($server['HTTP_CONTENT_TYPE']))
+			try
 			{
-				$requestContentType = $server['HTTP_CONTENT_TYPE'];
-			}
-			else
-			{
-				$requestContentType = $server['CONTENT_TYPE'];
-			}
-
-			$requestContentType = trim(preg_replace('/;.*$/', '', $requestContentType));
-
-			$postData = array();
-
-			switch($requestContentType)
-			{
-				case 'application/json':
-
-					try
-					{
-						$postData = \Bitrix\Main\Web\Json::decode($rawPostData);
-					}
-					catch(\Bitrix\Main\ArgumentException $e)
-					{
-						$postData = array();
-					}
-
-					break;
-
-				default:
-
-					if($rawPostData <> '')
+				if ($request->isJson())
+				{
+					$request->decodeJsonStrict();
+					$postData = $request->getJsonList()->getValues();
+				}
+				elseif (!$request->getPostList()->isEmpty())
+				{
+					$postData = $request->getPostList()->getValues();
+				}
+				else
+				{
+					$rawPostData = trim($request->getInput());
+					$postData = [];
+					if ($rawPostData !== '')
 					{
 						parse_str($rawPostData, $postData);
+						if (!is_array($postData))
+						{
+							$postData = [];
+						}
 					}
+				}
 
-					break;
+				$query = array_replace($query, $postData);
 			}
-
-			if (!is_array($postData))
+			catch (Main\SystemException)
 			{
-				$postData = [];
 			}
-
-			$query = array_replace($query, $postData);
 		}
 
 		return $query;
@@ -672,7 +655,7 @@ class CRestUtil
 	{
 		if(is_array($fileContent))
 		{
-			list($fileName, $fileContent) = array_values($fileContent);
+			[$fileName, $fileContent] = array_values($fileContent);
 		}
 
 		if($fileContent <> '' && $fileContent !== 'false') // let it be >0
@@ -787,9 +770,9 @@ class CRestUtil
 						'CLIENT_ID' => $installResult['result']['client_id'],
 						'CODE' => $appDetailInfo['CODE'],
 						'ACTIVE' => \Bitrix\Rest\AppTable::ACTIVE,
-						'INSTALLED' => !empty($appDetailInfo['INSTALL_URL'])
-							? \Bitrix\Rest\AppTable::NOT_INSTALLED
-							: \Bitrix\Rest\AppTable::INSTALLED,
+						'INSTALLED' => ($appDetailInfo['OPEN_API'] === 'Y' || empty($appDetailInfo['INSTALL_URL']))
+							? \Bitrix\Rest\AppTable::INSTALLED
+							: \Bitrix\Rest\AppTable::NOT_INSTALLED,
 						'URL' => $appDetailInfo['URL'],
 						'URL_DEMO' => $appDetailInfo['DEMO_URL'],
 						'URL_INSTALL' => $appDetailInfo['INSTALL_URL'],

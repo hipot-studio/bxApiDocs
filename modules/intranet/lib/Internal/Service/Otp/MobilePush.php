@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Internal\Service\Otp;
 
+use Bitrix\Bitrix24;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Main\ArgumentOutOfRangeException;
@@ -19,6 +20,8 @@ class MobilePush
 {
 	private bool $isAvailable;
 	private ?array $legacyOtpAllowedUserIds = null;
+	private ?array $legacyOtpAllowedUserIdsWithIntegrators = null;
+	private ?array $integratorUserIds = null;
 
 	/**
 	 * @throws LoaderException
@@ -64,11 +67,38 @@ class MobilePush
 
 	public function isLegacyOtpAllowedByUserId(int $userId): bool
 	{
-		return $this->isLegacyOtpAllowed()
-			&& in_array($userId, $this->getLegacyOtpAllowedUserIds(), true);
+		if (
+			Loader::includeModule('bitrix24')
+			&& \CBitrix24::isIntegrator($userId)
+		)
+		{
+			return true;
+		}
+
+		return $this->isLegacyOtpAllowed() && in_array($userId, $this->getStoredLegacyOtpAllowedUserIds(), true);
 	}
 
 	public function getLegacyOtpAllowedUserIds(): array
+	{
+		if ($this->legacyOtpAllowedUserIdsWithIntegrators !== null)
+		{
+			return $this->legacyOtpAllowedUserIdsWithIntegrators;
+		}
+
+		$userIds = $this->isLegacyOtpAllowed() ? $this->getStoredLegacyOtpAllowedUserIds() : [];
+		$integratorUserIds = $this->getIntegratorUserIds();
+
+		if (!empty($integratorUserIds))
+		{
+			$userIds = array_values(array_unique([...$userIds, ...$integratorUserIds]));
+		}
+
+		$this->legacyOtpAllowedUserIdsWithIntegrators = $userIds;
+
+		return $this->legacyOtpAllowedUserIdsWithIntegrators;
+	}
+
+	private function getStoredLegacyOtpAllowedUserIds(): array
 	{
 		if ($this->legacyOtpAllowedUserIds !== null)
 		{
@@ -95,18 +125,41 @@ class MobilePush
 		return $this->legacyOtpAllowedUserIds;
 	}
 
+	private function getIntegratorUserIds(): array
+	{
+		if ($this->integratorUserIds !== null)
+		{
+			return $this->integratorUserIds;
+		}
+
+		if (!Loader::includeModule('bitrix24'))
+		{
+			$this->integratorUserIds = [];
+
+			return $this->integratorUserIds;
+		}
+
+		$this->integratorUserIds = array_map(
+			static fn($userId) => (int)$userId,
+			Bitrix24\Integrator::getIntegratorsId(),
+		);
+
+		return $this->integratorUserIds;
+	}
+
 	/**
 	 * @throws ArgumentOutOfRangeException
 	 */
 	public function addLegacyOtpAllowedUserId(int $userId): void
 	{
-		$userIds = $this->getLegacyOtpAllowedUserIds();
+		$userIds = $this->getStoredLegacyOtpAllowedUserIds();
 
 		if (!in_array($userId, $userIds, true))
 		{
 			$userIds[] = $userId;
 			Option::set('intranet', 'legacy_otp_allowed_users', Json::encode($userIds));
 			$this->legacyOtpAllowedUserIds = $userIds;
+			$this->legacyOtpAllowedUserIdsWithIntegrators = null;
 		}
 	}
 
@@ -115,13 +168,14 @@ class MobilePush
 	 */
 	public function removeLegacyOtpAllowedUserId(int $userId): void
 	{
-		$userIds = $this->getLegacyOtpAllowedUserIds();
+		$userIds = $this->getStoredLegacyOtpAllowedUserIds();
 		$filtered = array_values(array_filter($userIds, static fn(int $id) => $id !== $userId));
 
 		if (count($filtered) !== count($userIds))
 		{
 			Option::set('intranet', 'legacy_otp_allowed_users', Json::encode($filtered));
 			$this->legacyOtpAllowedUserIds = $filtered;
+			$this->legacyOtpAllowedUserIdsWithIntegrators = null;
 		}
 	}
 

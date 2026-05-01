@@ -14,7 +14,7 @@ abstract class IdentifiableCollection extends BaseCollection
 		return array_keys($this->items);
 	}
 
-	public function intersect(IdentifiableCollection $other): static
+	public function intersect(self $other): static
 	{
 		if ($other::getItemClassName() !== static::getItemClassName())
 		{
@@ -46,9 +46,9 @@ abstract class IdentifiableCollection extends BaseCollection
 
 	public function add(mixed $item): void
 	{
-		if (!($item instanceof (EntityInterface::class)))
+		if (!$item instanceof (EntityInterface::class))
 		{
-			throw new ArgumentException("Item must be of type EntityInterface");
+			throw new ArgumentException('Item must be of type EntityInterface');
 		}
 
 		parent::add($item);

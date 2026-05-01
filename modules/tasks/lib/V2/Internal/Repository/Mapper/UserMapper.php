@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository\Mapper;
 
+use Bitrix\Main\EO_User;
 use Bitrix\Tasks\Integration\Extranet;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Service\NameService;
@@ -69,5 +70,21 @@ class UserMapper
 		}
 
 		return $isExtranet ? Entity\User\Type::Extranet : Entity\User\Type::Employee;
+	}
+
+	public function mapToEntity(?EO_User $userObject): ?Entity\User
+	{
+		if (null === $userObject)
+		{
+			return null;
+		}
+
+		return new Entity\User(
+			id: $userObject->getId(),
+			name: $userObject->getName(),
+			type: $this->getUserType($userObject->getId()),
+			gender: Entity\User\Gender::tryFrom($userObject->getPersonalGender()) ?? Entity\User\Gender::Male,
+			email: $userObject->getEmail(),
+		);
 	}
 }

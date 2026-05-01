@@ -58,7 +58,7 @@ class InviteLinkGenerator
 		return self::createByPayloadWithParams($payload, $params);
 	}
 
-	public static function createByDepartmentsIds(array $departmentsIds, array $params = []): ?self
+	public static function createByDepartmentsIds(array $departmentsIds, array $workgroupIds = [], array $params = []): ?self
 	{
 		if (empty($departmentsIds))
 		{
@@ -71,6 +71,7 @@ class InviteLinkGenerator
 			'departments_ids' => $departmentsIds,
 			'inviting_user_id' => CurrentUser::get()?->getId() ?? null,
 			'link_code' => $linkCodeGenerator->getOrGenerate()->getCode(),
+			'workgroup_ids' => $workgroupIds,
 		];
 
 		return self::createByPayloadWithParams($payload, $params);

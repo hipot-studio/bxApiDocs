@@ -35,6 +35,7 @@ class TemplateMapper
 		?Template\PermissionCollection $permissions = null,
 		?array $fileIds = null,
 		null|Task|Template $parent = null,
+		?array $params = null,
 	): Template
 	{
 		return new Template(
@@ -70,6 +71,7 @@ class TemplateMapper
 			containsRelatedTasks: $aggregates['containsRelatedTasks'] ?? null,
 			containsChecklist: $aggregates['containsCheckList'] ?? null,
 			containsSubTemplates: $aggregates['containsSubTemplates'] ?? null,
+			requireResult: $params['requireResult'] ?? null,
 		);
 	}
 }

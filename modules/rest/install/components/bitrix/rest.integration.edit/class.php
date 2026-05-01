@@ -101,8 +101,6 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Main\Engi
 		$params = $this->arParams;
 		$presetData = Element::get($params['ELEMENT_CODE']);
 
-		(new Internal\Access\Preset\PresetAccessChecker($userContext))->ensureCanUse($presetData);
-
 		if (!empty($params['ELEMENT_CODE']) && !empty($presetData))
 		{
 			$result['TITLE'] = $presetData['TITLE'];
@@ -131,6 +129,20 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Main\Engi
 
 		$result['ID'] = $params['ID'];
 		$result = $this->getSavedData($result);
+
+		$accessChecker = new Internal\Access\Preset\PresetAccessChecker($userContext);
+		if (empty($result['ID']))
+		{
+			$accessChecker->ensureCanCreateOwn($presetData);
+		}
+		else if ($userId === (int)$result['USER_ID'])
+		{
+			$accessChecker->ensureCanEditOwn($presetData);
+		}
+		else
+		{
+			$accessChecker->ensureCanEdit($presetData);
+		}
 
 		if (!$isAdmin && (int)$userId !== (int)$result['USER_ID'])
 		{

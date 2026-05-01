@@ -71,6 +71,13 @@ class DepartmentInvitationLinkFacade extends InvitationLinkFacade
 			->filter(fn($department) => $this->permission->canInviteToDepartment($department));
 	}
 
+	public function getGroupCodes(): array
+	{
+		$workgroupIds = is_array($this->payload->workgroup_ids) ? $this->payload->workgroup_ids : [];
+
+		return array_map(fn($code) => "SG{$code}", $workgroupIds);
+	}
+
 	/**
 	 * @throws AccessDeniedException
 	 */
@@ -111,6 +118,18 @@ class DepartmentInvitationLinkFacade extends InvitationLinkFacade
 		$user = User::initByArray($fields);
 		$departmentAssigner = new DepartmentAssigner($this->filteredByPermissionDepartmentCollection());
 		$departmentAssigner->assignUser($user);
+		$groupCodes = $this->getGroupCodes();
+
+		if (!empty($groupCodes))
+		{
+			\CIntranetInviteDialog::RequestToSonetGroups(
+				$user->getId(),
+				$groupCodes,
+				'',
+				false,
+				$this->getInvitingUserId()
+			);
+		}
 	}
 
 	public function onBeforeUserRegister(array &$data): void

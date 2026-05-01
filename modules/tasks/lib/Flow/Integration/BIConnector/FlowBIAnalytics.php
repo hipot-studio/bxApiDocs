@@ -60,6 +60,7 @@ final class FlowBIAnalytics
 				'title' => $dashboard['TEXT'],
 				'url' => $dashboard['URL'],
 				'isLocked' => $dashboard['IS_LOCKED'],
+				'isAvailableWithoutMarketSub' => $dashboard['IS_AVAILABLE_WITHOUT_MARKET_SUB'],
 			];
 		}
 

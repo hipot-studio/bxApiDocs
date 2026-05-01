@@ -10,7 +10,6 @@ use Bitrix\Main\Validation\ValidationResult;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
-use Bitrix\Tasks\V2\Internal\Error\ErrorCode;
 use Bitrix\Tasks\V2\Internal\Result\Result;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Bitrix\Tasks\V2\Internal\Entity;
@@ -23,6 +22,7 @@ class UpdateTaskCommand extends AbstractCommand
 		public readonly Entity\Task $task,
 		public readonly UpdateConfig $config,
 		public readonly null|Entity\Task $taskBeforeUpdate = null,
+		public readonly null|Entity\Task $taskChangesContext = null,
 	)
 	{
 

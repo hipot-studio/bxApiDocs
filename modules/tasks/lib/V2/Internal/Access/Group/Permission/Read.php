@@ -29,6 +29,12 @@ class Read implements AttributeAccessInterface
 			return false;
 		}
 
+		$entityId = (int)$entity->getId();
+		if ($entityId <= 0)
+		{
+			return false;
+		}
+
 		$type = Container::getInstance()->getGroupRepository()->getType($entity->getId()) === 'collab'
 			? Type::Collab
 			: Type::Group;

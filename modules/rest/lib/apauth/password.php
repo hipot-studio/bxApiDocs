@@ -8,6 +8,8 @@ use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\ORM;
+use Bitrix\Rest\Internal\Integration\Rest\EventHandlers\PasswordEventHandler;
+use Bitrix\Rest\Internal\Service\SystemUserService;
 use Bitrix\Rest\Preset\EventController;
 use Bitrix\Rest\Enum;
 use Bitrix\Rest\Service\ServiceContainer;
@@ -53,6 +55,8 @@ class PasswordTable extends ORM\Data\DataManager
 	const INACTIVE = 'N';
 
 	const DEFAULT_LENGTH = 16;
+
+	public static array $itemsToDelete = [];
 
 	/**
 	 * Returns DB table name for entity.
@@ -171,14 +175,42 @@ class PasswordTable extends ORM\Data\DataManager
 		EventController::onAfterAddAp($event);
 	}
 
+	public static function onBeforeDelete(ORM\Event $event)
+	{
+		if (!$event->getParameter('id'))
+		{
+			return;
+		}
+		$itemToDeleteId = (int)$event->getParameter('id')['ID'];
+		$dataToDelete = PasswordTable::getById($itemToDeleteId)->fetch();
+		if ($dataToDelete)
+		{
+			self::$itemsToDelete[$itemToDeleteId] = $dataToDelete;
+		}
+	}
+
 	public static function onAfterDelete(ORM\Event $event)
 	{
-		self::clearServiceCache((int)$event->getParameter('id'));
+		if (!$event->getParameter('id'))
+		{
+			return;
+		}
+		self::clearServiceCache((int)$event->getParameter('id')['ID']);
+		if (isset(self::$itemsToDelete[(int)$event->getParameter('id')['ID']]))
+		{
+			$deletedItem = self::$itemsToDelete[(int)$event->getParameter('id')['ID']];
+			PasswordEventHandler::onAfterDelete($deletedItem);
+			unset(self::$itemsToDelete[(int)$event->getParameter('id')['ID']]);
+		}
 	}
 
 	public static function onAfterUpdate(ORM\Event $event)
 	{
-		self::clearServiceCache((int)$event->getParameter('id'));
+		if (!$event->getParameter('id'))
+		{
+			return;
+		}
+		self::clearServiceCache((int)$event->getParameter('id')['ID']);
 	}
 
 	private static function clearServiceCache(int $id): void

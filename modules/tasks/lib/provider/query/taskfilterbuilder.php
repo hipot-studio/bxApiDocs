@@ -1261,7 +1261,7 @@ class TaskFilterBuilder
 
 					$subQuery = TaskQueryBuilder::createQuery(TaskQueryBuilder::ALIAS_TASK_OPTION, UserOptionTable::getEntity());
 					$subQuery->addSelect('TASK_ID');
-					$subQuery->where('OPTION_CODE', $optionMap[$key]);
+					$subQuery->where('OPTION_CODE', $optionMap[$field]);
 					$subQuery->where('TASK_ID', new SqlExpression('%1$s'));
 					$subQuery->where('USER_ID', $this->behalfUserId);
 

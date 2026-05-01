@@ -152,7 +152,7 @@ trait AssignTrait
 		return false;
 	}
 
-	private function isMemberOfUserGroups(int $userId, int $responsibleId, bool $includeInvited = false): bool
+	protected function isMemberOfUserGroups(int $userId, int $responsibleId, bool $includeInvited = false): bool
 	{
 		// todo: use \Bitrix\Socialnetwork\Helper\Workgroup::isUsersHaveCommonGroups
 		return Group::usersHasCommonGroup($userId, $responsibleId, $includeInvited);

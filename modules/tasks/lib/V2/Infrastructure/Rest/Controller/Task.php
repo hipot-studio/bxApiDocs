@@ -4,6 +4,7 @@ namespace Bitrix\Tasks\V2\Infrastructure\Rest\Controller;
 
 use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\SystemException;
 use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\Controller\ValidateDtoTrait;
@@ -15,12 +16,15 @@ use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
 use Bitrix\Rest\V3\Interaction\Request\AddRequest;
 use Bitrix\Rest\V3\Interaction\Request\DeleteRequest;
 use Bitrix\Rest\V3\Interaction\Request\GetRequest;
+use Bitrix\Rest\V3\Interaction\Request\ListRequest;
 use Bitrix\Rest\V3\Interaction\Request\UpdateRequest;
 use Bitrix\Rest\V3\Interaction\Response\DeleteResponse;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
+use Bitrix\Rest\V3\Interaction\Response\ListResponse;
 use Bitrix\Rest\V3\Interaction\Response\UpdateResponse;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Controller\ActionFilter\IsEnabledFilter;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\Mapping\TaskDtoMapper;
+use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\Mapping\TaskListRequestMapper;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\TaskDto;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Add;
@@ -184,6 +188,11 @@ class Task extends RestController
 		return new GetResponse($dto);
 	}
 
+	/**
+	 * @throws SystemException
+	 * @throws AccessDeniedException
+	 * @throws EntityNotFoundException
+	 */
 	public function getAction(GetRequest $request, TaskProvider $taskProvider): GetResponse
 	{
 		$accessProvider = new Read();
@@ -246,5 +255,23 @@ class Task extends RestController
 		$dto = $mapper->mapByTaskAndRequest($entity, $request);
 
 		return new GetResponse($dto);
+	}
+
+	/**
+	 * @throws SystemException
+	 */
+	public function listAction(
+		ListRequest $request,
+		TaskProvider $taskProvider,
+		TaskDtoMapper $mapper,
+	): ListResponse
+	{
+		$tasksCollection = $taskProvider->getList(
+			TaskListRequestMapper::mapToListParams($request, $this->userId, false),
+		);
+
+		return new ListResponse(
+			$mapper->mapTaskList($tasksCollection, $request)
+		);
 	}
 }

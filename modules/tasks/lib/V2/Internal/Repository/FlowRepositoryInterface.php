@@ -9,4 +9,5 @@ use Bitrix\Tasks\V2\Internal\Entity;
 interface FlowRepositoryInterface
 {
 	public function getById(int $id): ?Entity\Flow;
+	public function getByIds(array $ids): Entity\FlowCollection;
 }

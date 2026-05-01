@@ -19,6 +19,7 @@ class InMemoryTaskRepository implements TaskRepositoryInterface
 	private array $existenceCache = [];
 	/** @var array<int, int> The cache of creator IDs keyed by task IDs. */
 	private array $creatorIdsCache = [];
+	private array $accessInfoCache = [];
 
 	public function __construct(TaskRepository $taskRepository)
 	{
@@ -62,6 +63,8 @@ class InMemoryTaskRepository implements TaskRepositoryInterface
 
 		TaskRegistry::getInstance()->drop($taskId);
 
+		unset($this->accessInfoCache[$taskId]);
+
 		return $taskId;
 	}
 
@@ -79,6 +82,8 @@ class InMemoryTaskRepository implements TaskRepositoryInterface
 		$this->existenceCache[$id] = false;
 
 		TaskRegistry::getInstance()->drop($id);
+
+		unset($this->accessInfoCache[$id]);
 	}
 
 	public function isExists(int $id): bool
@@ -116,6 +121,7 @@ class InMemoryTaskRepository implements TaskRepositoryInterface
 	public function invalidate(int $taskId): void
 	{
 		unset($this->cache[$taskId]);
+		unset($this->accessInfoCache[$taskId]);
 	}
 
 	public function updateLastActivityDate(int $taskId, int $activityTs): void
@@ -152,5 +158,26 @@ class InMemoryTaskRepository implements TaskRepositoryInterface
 			$groupId,
 			$role,
 		);
+	}
+
+	public function getAccessInfoById(int $taskId): ?Entity\Task
+	{
+		if (array_key_exists($taskId, $this->accessInfoCache))
+		{
+			return $this->accessInfoCache[$taskId];
+		}
+
+		$task = $this->taskRepository->getAccessInfoById($taskId);
+
+		if ($task === null)
+		{
+			$this->existenceCache[$taskId] = false;
+		}
+		else
+		{
+			$this->accessInfoCache[$taskId] = $task;
+		}
+
+		return $task;
 	}
 }

@@ -42,7 +42,11 @@ class AddTaskService
 
 		(new AddUserFields($config))($fields);
 
+		$this->taskRepository->invalidate($task->id);
+
 		(new RunBizProc($config))($fields);
+
+		$this->taskRepository->invalidate($task->id);
 
 		(new RunCrm($config))($fields);
 

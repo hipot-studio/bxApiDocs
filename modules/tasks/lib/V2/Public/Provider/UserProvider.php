@@ -6,9 +6,11 @@ namespace Bitrix\Tasks\V2\Public\Provider;
 
 use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
+use Bitrix\Tasks\V2\Internal\Entity\Task\Timer;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\OperationAccessService;
+use Bitrix\Tasks\V2\Internal\Repository\TimerRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Public\Provider\Params\UserParams;
 

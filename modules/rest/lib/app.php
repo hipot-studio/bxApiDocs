@@ -537,7 +537,7 @@ class AppTable extends Main\Entity\DataManager
 
 			foreach(GetModuleEvents("rest", "OnRestAppInstall", true) as $eventHandler)
 			{
-				ExecuteModuleEventEx($eventHandler, array($eventFields));
+				ExecuteModuleEventEx($eventHandler, array(&$eventFields));
 			}
 		}
 	}

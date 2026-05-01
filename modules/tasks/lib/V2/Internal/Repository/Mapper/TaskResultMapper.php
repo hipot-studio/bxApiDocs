@@ -27,7 +27,7 @@ class TaskResultMapper
 			author: $author,
 			createdAtTs: $result->getCreatedAt() ? $result->getCreatedAt()->getTimestamp() : null,
 			updatedAtTs: $result->getUpdatedAt() ? $result->getUpdatedAt()->getTimestamp() : null,
-			status: Result\Status::fromRaw($result->getStatus()),
+			status: $result->getStatus() !== null ? Result\Status::fromRaw($result->getStatus()) : null,
 			fileIds: is_array($files) ? $files : null,
 			messageId: $result->getMessage()?->getMessageId(),
 		);
@@ -41,10 +41,9 @@ class TaskResultMapper
 		$entities = [];
 		foreach ($results as $result)
 		{
-
 			$entities[] = $this->mapToEntity(
 				$result,
-				$authors?->findOneById($result->getCreatedBy())
+				$result->getCreatedBy() ? $authors?->findOneById($result->getCreatedBy()) : null,
 			);
 		}
 

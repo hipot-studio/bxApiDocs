@@ -25,6 +25,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Result;
 use Bitrix\Security;
+use Bitrix\Intranet\Integration;
 
 class SecuritySettings extends AbstractSettings
 {
@@ -36,6 +37,7 @@ class SecuritySettings extends AbstractSettings
 	private OtpSettings $otpSettings;
 	private ?User $user;
 	private ?PersonalOtp $personalOtp;
+	private Integration\Rest\AccessPolicy $integrationAccessPolicy;
 
 	public function __construct(array $data = [])
 	{
@@ -59,6 +61,7 @@ class SecuritySettings extends AbstractSettings
 		$this->otpSettings = new OtpSettings();
 		$this->user = (new UserRepository())->getUserById((int)CurrentUser::get()->getId());
 		$this->personalOtp = ($this->user && $this->otpSettings->isAvailable()) ? new PersonalOtp($this->user) : null;
+		$this->integrationAccessPolicy = new Integration\Rest\AccessPolicy();
 	}
 
 	public function validate(): ErrorCollection
@@ -130,6 +133,7 @@ class SecuritySettings extends AbstractSettings
 		$this->saveIpAccessRights();
 		$this->saveDeviceHistorySettings();
 		$this->saveDataLeakProtectionSettings();
+		$this->saveRestIntegrationSettings();
 
 		return new Result();
 	}
@@ -328,6 +332,25 @@ class SecuritySettings extends AbstractSettings
 			}
 		}
 
+		if ($this->integrationAccessPolicy->isIncomingWebhookAccessPolicyEnabled())
+		{
+			$data['sectionRestIntegration'] = new Section(
+				'settings-security-section-rest-integration',
+				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_REST_INTEGRATION'),
+				'ui-icon-set --apps',
+				false,
+			);
+
+			$accessCodes = $this->integrationAccessPolicy->getIncomingWebhookCreatorGroupList();
+
+			$data['selectorIncomingWebhookCreateOwn'] = new Selector(
+				id: 'settings-security-field-incoming-webhook-create-own',
+				name: 'rest_incoming_webhook_create_own_rights[]',
+				label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_REST_CREATE_ACCESS_INHOOK'),
+				items: $accessCodes,
+			);
+		}
+
 		$data['isWaterMarksEnabled'] = new Switcher(
 			id: 'settings-communication-field-isWaterMarksEnabled',
 			name: 'isWaterMarksEnabled',
@@ -460,7 +483,11 @@ class SecuritySettings extends AbstractSettings
 		}
 
 		$isMandatory = isset($this->data['SECURITY_OTP']) && $this->data['SECURITY_OTP'] === 'Y';
-		$this->otpSettings->setMandatoryUsing($isMandatory);
+
+		if ($this->personalOtp->isActivated())
+		{
+			$this->otpSettings->setMandatoryUsing($isMandatory);
+		}
 
 		if ($isMandatory && !$this->otpSettings->isDefaultTypePush() && $this->personalOtp?->isPushType())
 		{
@@ -516,6 +543,16 @@ class SecuritySettings extends AbstractSettings
 		}
 
 		return $result;
+	}
+
+	private function saveRestIntegrationSettings(): void
+	{
+		if ($this->integrationAccessPolicy->isIncomingWebhookAccessPolicyEnabled())
+		{
+			$this->integrationAccessPolicy->setIncomingWebhookCreatorGroupList(
+				$this->data['rest_incoming_webhook_create_own_rights'] ?? []
+			);
+		}
 	}
 
 	private function saveIpAccessRights(): void
@@ -597,6 +634,12 @@ class SecuritySettings extends AbstractSettings
 		if (IsModuleInstalled('im') && Option::get('im', 'auto_delete_messages_activated', 'N') === 'Y')
 		{
 			$searchIndex['isAutoDeleteMessagesEnabled'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_AUTO_DELETE_TO_BE_ENABLED');
+		}
+
+		if ($this->integrationAccessPolicy->isIncomingWebhookAccessPolicyEnabled())
+		{
+			$searchIndex['settings-security-section-rest-integration'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_REST_INTEGRATION');
+			$searchIndex['rest_incoming_webhook_create_own_rights'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_REST_CREATE_ACCESS_INHOOK');
 		}
 
 		$searchEngine = SearchEngine::initWithDefaultFormatter($searchIndex);

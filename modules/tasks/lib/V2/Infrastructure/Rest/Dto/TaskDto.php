@@ -26,36 +26,43 @@ class TaskDto extends Dto
 
 	#[Editable]
 	#[Required(['add'])]
+	#[Sortable]
 	public ?string $title;
 
 	#[Editable]
 	public string $description;
 
 	#[Required(['add'])]
+	#[Sortable]
 	public int $creatorId;
 
 	#[RelationToOne('creatorId', 'id')]
 	public ?UserDto $creator;
 
+	#[Sortable]
 	public ?DateTime $created;
 
 	#[Editable]
 	#[Required(['add'])]
+	#[Sortable]
 	public int $responsibleId;
 
 	#[RelationToOne('responsibleId', 'id')]
 	public ?UserDto $responsible;
 
 	#[Editable]
+	#[Sortable]
 	public ?DateTime $deadline;
 
 	#[Editable]
 	public ?bool $needsControl;
 
 	#[Editable]
+	#[Sortable]
 	public ?DateTime $startPlan;
 
 	#[Editable]
+	#[Sortable]
 	public ?DateTime $endPlan;
 
 	#[Editable]
@@ -65,6 +72,7 @@ class TaskDto extends Dto
 	public ?array $checklist;
 
 	#[Editable]
+	#[Sortable]
 	public ?int $groupId;
 
 	#[RelationToOne('groupId', 'id')]
@@ -89,9 +97,11 @@ class TaskDto extends Dto
 	public ?FlowDto $flow;
 
 	#[Editable]
+	#[Sortable]
 	public ?string $priority;
 
 	#[Editable]
+	#[Sortable]
 	public ?string $status;
 
 	#[Editable]
@@ -148,15 +158,18 @@ class TaskDto extends Dto
 	public ?string $durationType;
 
 	#[Editable]
+	#[Sortable]
 	public ?DateTime $started;
 
 	#[Editable]
+	#[Sortable]
 	public ?int $estimatedTime;
 
 	#[Editable]
 	public ?bool $replicate;
 
 	#[Editable]
+	#[Sortable]
 	public ?DateTime $changed;
 
 	#[Editable]
@@ -178,9 +191,11 @@ class TaskDto extends Dto
 	public ?UserDto $closedBy;
 
 	#[Editable]
+	#[Sortable]
 	public ?DateTime $closed;
 
 	#[Editable]
+	#[Sortable]
 	public ?DateTime $activity;
 
 	#[Editable]
@@ -199,12 +214,15 @@ class TaskDto extends Dto
 	public ?int $outlookVersion;
 
 	#[Editable]
+	#[Sortable]
 	public ?string $mark;
 
 	#[Editable]
+	#[Sortable]
 	public ?bool $allowsChangeDeadline;
 
 	#[Editable]
+	#[Sortable]
 	public ?bool $allowsTimeTracking;
 
 	#[Editable]
@@ -253,6 +271,9 @@ class TaskDto extends Dto
 
 	#[Editable]
 	public ?array $crmItemIds;
+
+	#[ElementType(CrmItemDto::class)]
+	public ?DtoCollection $crmItems;
 
 	#[Editable]
 	public ?array $reminders;

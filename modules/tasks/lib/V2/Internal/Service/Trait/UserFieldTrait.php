@@ -15,9 +15,9 @@ trait UserFieldTrait
 {
 	use ApplicationErrorTrait;
 
-	private function checkFields(int $taskId, array $fields, int $userId, string $entityCode): bool
+	private function checkFields(int $entityId, array $fields, int $userId, string $entityCode): bool
 	{
-		return $this->getUfManager()->CheckFields($entityCode, $taskId, $fields, $userId);
+		return $this->getUfManager()->CheckFields($entityCode, $entityId, $fields, $userId);
 	}
 
 	private function checkContainsUfKeys(array $fields): bool

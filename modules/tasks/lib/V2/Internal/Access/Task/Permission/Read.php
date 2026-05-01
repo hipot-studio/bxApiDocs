@@ -20,18 +20,40 @@ class Read implements AttributeAccessInterface
 {
 	use AccessControllerTrait;
 
+	public function __construct(
+		private readonly bool $returnTrueIfNotExist = false,
+	)
+	{
+
+	}
+
 	public function check(EntityInterface|EntityCollectionInterface $entity, Context $context, array $parameters = []): bool
 	{
 		$accessController = $this->getAccessController(Type::Task, $context);
+
+		$preloader = Container::getInstance()->getTaskModelPreloader();
+
 		if ($entity instanceof EntityInterface)
 		{
+			$preloader->preload($context->getUserId(), [$entity->getId()]);
+
+			if ($this->returnTrueIfNotExist && !$preloader->isLoadedAndExists($entity->getId()))
+			{
+				return true;
+			}
+
 			return $this->checkEntity($entity, $accessController);
 		}
 
-		Container::getInstance()->getTaskModelPreloader()->preload($context->getUserId(), $entity->getIds());
+		$preloader->preload($context->getUserId(), $entity->getIds());
 
 		foreach ($entity as $item)
 		{
+			if ($this->returnTrueIfNotExist && !$preloader->isLoadedAndExists($item->getId()))
+			{
+				continue;
+			}
+
 			if (!$this->checkEntity($item, $accessController))
 			{
 				return false;

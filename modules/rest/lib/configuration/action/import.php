@@ -14,6 +14,8 @@ use Bitrix\Rest\Configuration\DataProvider;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\AppLogTable;
 use Bitrix\Main\IO\File;
+use Bitrix\Rest\Event\Sender;
+use Bitrix\Rest\EventTable;
 
 /**
  * Class Import
@@ -531,7 +533,7 @@ class Import extends Base
 		$app = $this->getSetting()->get(Setting::SETTING_APP_INFO);
 		if (!empty($app['ID']))
 		{
-			if ($app['INSTALLED'] == AppTable::NOT_INSTALLED)
+			if ($app['INSTALLED'] === AppTable::NOT_INSTALLED)
 			{
 				AppTable::setSkipRemoteUpdate(true);
 				$updateResult = AppTable::update(
@@ -541,6 +543,22 @@ class Import extends Base
 					]
 				);
 				AppTable::setSkipRemoteUpdate(false);
+
+				if (!empty($app['URL_INSTALL']))
+				{
+					$eventBindResult = EventTable::add(
+						[
+							'APP_ID' => $app['ID'],
+							'EVENT_NAME' => 'ONAPPINSTALL',
+							'EVENT_HANDLER' => $app['URL_INSTALL'],
+						]
+					);
+					if ($eventBindResult->isSuccess())
+					{
+						Sender::bind('rest', 'OnRestAppInstall');
+					}
+				}
+
 				AppTable::install($app['ID']);
 				AppLogTable::log($app['ID'], AppLogTable::ACTION_TYPE_INSTALL);
 				$result['result'] = $updateResult->isSuccess();

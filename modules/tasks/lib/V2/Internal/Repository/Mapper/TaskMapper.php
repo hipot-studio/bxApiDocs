@@ -6,21 +6,130 @@ namespace Bitrix\Tasks\V2\Internal\Repository\Mapper;
 
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Internals\UserOption\Option;
+use Bitrix\Tasks\MemberTable;
 use Bitrix\Tasks\V2\Internal\Entity;
-use Bitrix\Tasks\V2\Internal\Entity\Task\Scenario;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemCollection;
 use Bitrix\Tasks\V2\Internal\Integration\Im;
 use Bitrix\Tasks\V2\Internal\Integration\Mail\Entity\Email;
+use Bitrix\Tasks\V2\Internal\Service\Task\ChecksumService;
 
 class TaskMapper
 {
+	use Entity\Trait\MapTypeTrait;
+
 	public function __construct(
 		private readonly TaskStatusMapper $taskStatusMapper,
 		private readonly PriorityMapper $taskPriorityMapper,
 		private readonly TaskMarkMapper $taskMarkMapper,
 		private readonly UserFieldMapper $userFieldMapper,
+		private readonly ChecksumService $checksumService,
 	)
 	{
 
+	}
+
+	public function mapFromArray(
+		array $taskData,
+		?Entity\TaskMemberCollection $taskMembers = null,
+		?Entity\UserCollection $members = null,
+		?CrmItemCollection $crmItems = null,
+		?Entity\TagCollection $tags = null,
+		?Entity\GroupCollection $groups = null,
+		?Entity\FlowCollection $flows = null,
+		?Entity\Task\GanttLinkCollection $links = null,
+	): Entity\Task
+	{
+		$mapBool = static function (?string $string): ?bool {
+			return $string === null ? null : ($string === 'Y');
+		};
+
+		$mapUser = static function (?string $id) use ($members) : ?Entity\User {
+			return $id === null ? null : $members?->findOneById((int)$id);
+		};
+
+		$accomplicesIds = $taskMembers
+			->filter(fn (Entity\TaskMember $taskMember) => $taskMember->type === MemberTable::MEMBER_TYPE_ACCOMPLICE)
+			->map(fn (Entity\TaskMember $taskMember) => $taskMember->userId)
+		;
+
+		$auditorsIds = $taskMembers
+			->filter(fn (Entity\TaskMember $taskMember) => $taskMember->type === MemberTable::MEMBER_TYPE_AUDITOR)
+			->map(fn (Entity\TaskMember $taskMember) => $taskMember->userId)
+		;
+
+		return new Entity\Task(
+			id: static::mapInteger($taskData, 'ID'),
+			title: static::mapString($taskData, 'TITLE'),
+			description: static::mapString($taskData, 'DESCRIPTION'),
+			descriptionChecksum: isset($taskData['DESCRIPTION']) ? $this->checksumService->calculateChecksum($taskData['DESCRIPTION']) : null,
+			creator: $mapUser($taskData['CREATED_BY'] ?? null),
+			createdTs: static::mapDateTime($taskData, 'CREATED_DATE')?->getTimestamp(),
+			responsible: $mapUser($taskData['RESPONSIBLE_ID'] ?? null),
+			deadlineTs: static::mapDateTime($taskData, 'DEADLINE')?->getTimestamp(),
+			needsControl: $mapBool($taskData['TASK_CONTROL'] ?? null),
+			startPlanTs: static::mapDateTime($taskData, 'START_DATE_PLAN')?->getTimestamp(),
+			endPlanTs: static::mapDateTime($taskData, 'END_DATE_PLAN')?->getTimestamp(),
+			parentId: static::mapInteger($taskData, 'PARENT_ID'),
+			group: isset($taskData['COMPUTE_GROUP_ID']) ? $groups->findOneById((int)$taskData['COMPUTE_GROUP_ID']) : null,
+			flow: isset($taskData['FLOW_ID']) ? $flows->findOneById((int)$taskData['FLOW_ID']) : null,
+			priority: isset($taskData['PRIORITY']) ? $this->taskPriorityMapper->mapToEnum((int)$taskData['PRIORITY']) : null,
+			status: isset($taskData['REAL_STATUS']) ? $this->taskStatusMapper->mapToEnum((int)$taskData['REAL_STATUS']) : null,
+			statusChangedTs: static::mapDateTime($taskData, 'COMPUTE_STATUS_CHANGED_DATE')?->getTimestamp(),
+			accomplices: $members->findAllByIds($accomplicesIds),
+			auditors: $members->findAllByIds($auditorsIds),
+			containsGanttLinks: $links->count() > 0,
+			timeSpent: static::mapInteger($taskData, 'TIME_SPENT_IN_LOGS'),
+			chatId: static::mapInteger($taskData, 'CHAT_ID'),
+			plannedDuration: static::mapInteger($taskData, 'COMPUTE_DURATION_PLAN'),
+			actualDuration: static::mapInteger($taskData, 'DURATION_FACT'),
+			durationType: isset($taskData['COMPUTE_DURATION_TYPE']) ? Entity\Task\Duration::tryFrom($taskData['COMPUTE_DURATION_TYPE']) : null,
+			startedTs: static::mapDateTime($taskData, 'DATE_START')?->getTimestamp(),
+			estimatedTime: static::mapInteger($taskData, 'TIME_ESTIMATE'),
+			replicate: $mapBool($taskData['REPLICATE'] ?? null),
+			changedTs: static::mapDateTime($taskData, 'CHANGED_DATE')?->getTimestamp(),
+			changedBy: $mapUser($taskData['CHANGED_BY'] ?? null),
+			statusChangedBy: $mapUser($taskData['STATUS_CHANGED_BY'] ?? null),
+			closedBy: $mapUser($taskData['CLOSED_BY'] ?? null),
+			closedTs: static::mapDateTime($taskData, 'CLOSED_DATE')?->getTimestamp(),
+			activityTs: static::mapDateTime($taskData, 'ACTIVITY_DATE')?->getTimestamp(),
+			guid: static::mapString($taskData, 'GUID'),
+			xmlId: static::mapString($taskData, 'XML_ID'),
+			exchangeId: static::mapInteger($taskData, 'EXCHANGE_ID'),
+			exchangeModified: static::mapString($taskData, 'EXCHANGE_MODIFIED'),
+			outlookVersion: static::mapInteger($taskData, 'OUTLOOK_VERSION'),
+			mark: isset($taskData['MARK']) ? $this->taskMarkMapper->mapToEnum($taskData['MARK']) : null,
+			allowsChangeDeadline: $mapBool($taskData['ALLOW_CHANGE_DEADLINE'] ?? null),
+			allowsTimeTracking: $mapBool($taskData['ALLOW_TIME_TRACKING'] ?? null),
+			matchesWorkTime: $mapBool($taskData['MATCH_WORK_TIME'] ?? null),
+			addInReport: $mapBool($taskData['ADD_IN_REPORT'] ?? null),
+			isMultitask: $mapBool($taskData['MULTITASK'] ?? null),
+			siteId: static::mapString($taskData, 'SITE_ID'),
+			deadlineCount: static::mapInteger($taskData, 'DEADLINE_COUNT'),
+			isZombie: $mapBool($taskData['IS_ZOMBIE'] ?? null),
+			declineReason: static::mapString($taskData, 'DECLINE_REASON'),
+			forumTopicId: static::mapInteger($taskData, 'FORUM_TOPIC_ID'),
+			tags: $tags,
+			crmItemIds: $crmItems?->getIdList(),
+			crmItems: $crmItems,
+			sprintId: static::mapInteger($taskData, 'SPRINT_ID'),
+			backlogId: static::mapInteger($taskData, 'BACKLOG_ID'),
+			stageId: static::mapInteger($taskData, 'STAGE_ID'),
+			forumId: static::mapInteger($taskData, 'FORUM_ID'),
+			deadlineOrigTs: static::mapDateTime($taskData, 'DEADLINE_ORIG')?->getTimestamp(),
+			viewedDateTs: static::mapDateTime($taskData, 'VIEWED_DATE')?->getTimestamp(),
+			stagesId: static::mapInteger($taskData, 'STAGES_ID'),
+			notViewed: $mapBool($taskData['NOT_VIEWED'] ?? null),
+			isMuted: $mapBool($taskData['IS_MUTED'] ?? null),
+			isRegular: $mapBool($taskData['IS_REGULAR'] ?? null),
+			isPinned: $mapBool($taskData['IS_PINNED'] ?? null),
+			forkByTemplateId: static::mapInteger($taskData, 'FORK_BY_TEMPLATE_ID'),
+			commentsCount: static::mapInteger($taskData, 'COMMENTS_COUNT'),
+			serviceCommentsCount: static::mapInteger($taskData, 'SERVICE_COMMENTS_COUNT'),
+			durationPlanSeconds: static::mapInteger($taskData, 'DURATION_PLAN_SECONDS'),
+			durationTypeAll: static::mapString($taskData, 'DURATION_TYPE_ALL'),
+			isPinnedInGroup: static::mapBool($taskData, 'IS_PINNED_IN_GROUP'),
+			links: $links,
+		);
 	}
 
 	public function mapToEntity(

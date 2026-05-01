@@ -11,7 +11,10 @@ class InMemoryPlacementRepository implements PlacementRepositoryInterface
 {
 	private PlacementRepositoryInterface $placementRepository;
 
-	private array $cache = [];
+	/** @var PlacementCollection[] */
+	private array $placementCollectionCache = [];
+
+	private array $existenceCache = [];
 
 	public function __construct(PlacementRepository $placementRepository)
 	{
@@ -20,31 +23,46 @@ class InMemoryPlacementRepository implements PlacementRepositoryInterface
 
 	public function existsPlacementByTypes(PlacementType ...$types): bool
 	{
+		$existenceCacheKey = $this->getExistenceCacheKey(...$types);
+
+		if (isset($this->existenceCache[$existenceCacheKey]))
+		{
+			return $this->existenceCache[$existenceCacheKey];
+		}
+
 		foreach ($types as $type)
 		{
 			$cacheKey = $this->getCacheKey($type);
 
-			if (isset($this->cache[$cacheKey]))
+			if (isset($this->placementCollectionCache[$cacheKey]))
 			{
-				return true;
+				$actualExistence = !$this->placementCollectionCache[$cacheKey]->isEmpty();
+
+				$this->existenceCache[$existenceCacheKey] = $actualExistence;
+
+				return $actualExistence;
 			}
 		}
 
-		return $this->placementRepository->existsPlacementByTypes(...$types);
+		$existenceCheckResult = $this->placementRepository->existsPlacementByTypes(...$types);
+
+		$this->existenceCache[$existenceCacheKey] = $existenceCheckResult;
+
+		return $existenceCheckResult;
 	}
 
 	public function getPlacementsByType(PlacementType $type): PlacementCollection
 	{
 		$cacheKey = $this->getCacheKey($type);
 
-		if (isset($this->cache[$cacheKey]))
+		if (isset($this->placementCollectionCache[$cacheKey]))
 		{
-			return $this->cache[$cacheKey];
+			return $this->placementCollectionCache[$cacheKey];
 		}
 
 		$placements = $this->placementRepository->getPlacementsByType($type);
 
-		$this->cache[$cacheKey] = $placements;
+		$this->placementCollectionCache[$cacheKey] = $placements;
 
 		return $placements;
 	}
@@ -52,5 +70,13 @@ class InMemoryPlacementRepository implements PlacementRepositoryInterface
 	private function getCacheKey(PlacementType $type): string
 	{
 		return $type->value;
+	}
+
+	private function getExistenceCacheKey(PlacementType ...$types): string
+	{
+		$values = array_map(fn (PlacementType $type) => $type->value, $types);
+		sort($values);
+
+		return implode('_', $values);
 	}
 }

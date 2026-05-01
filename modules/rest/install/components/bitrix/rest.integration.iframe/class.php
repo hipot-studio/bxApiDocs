@@ -45,7 +45,7 @@ class RestIntegratorsIndexComponent extends CBitrixComponent
 
 	protected function getParseUrl($url)
 	{
-		$uri = new Uri(urldecode ($url));
+		$uri = new Uri($url);
 
 		return [
 			'QUERY' => $uri->getQuery(),

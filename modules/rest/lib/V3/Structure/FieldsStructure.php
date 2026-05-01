@@ -2,15 +2,17 @@
 
 namespace Bitrix\Rest\V3\Structure;
 
-use Bitrix\Rest\V3\Attribute\Editable;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Validation\Group\ValidationGroup;
+use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
+use Bitrix\Rest\V3\Dto\DtoValidatorHelper;
 use Bitrix\Rest\V3\Dto\PropertyHelper;
 use Bitrix\Rest\V3\Exception\UnknownDtoPropertyException;
-use Bitrix\Rest\V3\Exception\Validation\DtoFieldRequiredAttributeException;
+use Bitrix\Rest\V3\Exception\Validation\DtoValidationException;
 use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
 use Bitrix\Rest\V3\Interaction\Request\Request;
-use Bitrix\Rest\V3\Interaction\Request\UpdateRequest;
 
 final class FieldsStructure extends Structure
 {
@@ -49,11 +51,6 @@ final class FieldsStructure extends Structure
 					continue;
 				}
 
-				if ($request instanceof UpdateRequest && !$fields[$item]->isEditable())
-				{
-					throw new DtoFieldRequiredAttributeException($dto->getShortName(), $item, Editable::class);
-				}
-
 				$itemValue = FieldsConverter::convertValueByType($fields[$item]->getPropertyType(), $itemValue);
 
 				$structure->items[$item] = $itemValue;
@@ -68,6 +65,9 @@ final class FieldsStructure extends Structure
 		return $this->items;
 	}
 
+	/**
+	 * @deprecated Use convertToDto instead
+	 */
 	public function getAsDto(): Dto
 	{
 		/** @var Dto $dtoClass */
@@ -79,6 +79,28 @@ final class FieldsStructure extends Structure
 		foreach ($this->userFields as $propertyName => $value)
 		{
 			$dto->{$propertyName} = $value;
+		}
+
+		return $dto;
+	}
+
+	public function convertToDto(mixed $group = null): Dto
+	{
+		/** @var Dto $dtoClass */
+		$dtoClass = $this->dtoClass;
+		$dto = $dtoClass::create();
+		Structure::addDto($dto);
+		$this->fillDto($dto, $this->items);
+
+		foreach ($this->userFields as $propertyName => $value)
+		{
+			$dto->{$propertyName} = $value;
+		}
+
+		$validationResult = DtoValidatorHelper::validate($dto, ValidationGroup::create($group));
+		if (!$validationResult->isSuccess())
+		{
+			throw new DtoValidationException($validationResult->getErrors());
 		}
 
 		return $dto;

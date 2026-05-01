@@ -46,6 +46,16 @@ class AccessCacheLoader
 		$sonetRegistry->load($groupIds, 'tasks', 'view_all', $userId);
 	}
 
+	public function isLoaded(int $taskId): bool
+	{
+		return TaskRegistry::getInstance()->isLoaded($taskId);
+	}
+
+	public function isLoadedAndExists(int $taskId): bool
+	{
+		return TaskRegistry::getInstance()->isLoadedAndExists($taskId);
+	}
+
 	public function preloadTags(array $tagsIds): void
 	{
 		$registry = TagRegistry::getInstance();

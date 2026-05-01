@@ -22,6 +22,7 @@ use Bitrix\Security\Mfa\OtpType;
 use Bitrix\Pull;
 use Bitrix\Pull\Model\PushTable;
 use Bitrix\Main\PhoneNumber;
+use Bitrix\Intranet;
 
 class PushOtp extends Main\Engine\Controller
 {
@@ -212,6 +213,11 @@ class PushOtp extends Main\Engine\Controller
 					'timeLeft' => static::SMS_RESEND_INTERVAL - $timePassed,
 				];
 			}
+		}
+
+		if (Main\Loader::includeModule('intranet'))
+		{
+			(new Intranet\Public\Service\Otp\SmsSenderConfigurator())->useNetworkSenderIfCloud();
 		}
 
 		$sms = new Main\Sms\Event(

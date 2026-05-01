@@ -9,6 +9,7 @@ use Bitrix\Tasks\Replication\Template\Repetition\Conversion\Converters\Descripti
 use Bitrix\Tasks\Replication\Template\Repetition\Conversion\Converters\DescriptionConverter;
 use Bitrix\Tasks\Replication\Template\Repetition\Conversion\Converters\EndDatePlanConverter;
 use Bitrix\Tasks\Replication\Template\Repetition\Conversion\Converters\MemberConverter;
+use Bitrix\Tasks\Replication\Template\Repetition\Conversion\Converters\ParameterConverter;
 use Bitrix\Tasks\Replication\Template\Repetition\Conversion\Converters\StartDatePlanConverter;
 use Bitrix\Tasks\Replication\Template\Repetition\Conversion\Converters\TagConverter;
 
@@ -26,6 +27,7 @@ final class ConverterConfig
 			new EndDatePlanConverter(),
 			new DescriptionConverter(),
 			new DescriptionBBCodeConverter(),
+			new ParameterConverter(),
 		];
 	}
 }

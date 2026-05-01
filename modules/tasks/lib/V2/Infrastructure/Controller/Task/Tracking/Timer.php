@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Infrastructure\Controller\Task\Tracking;
 
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\V2\Internal\Access\Factory\AccessControllerTrait;
 use Bitrix\Tasks\V2\Internal\Access\Factory\Type;
+use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Public\Command\Task\Tracking\StartTimerCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Tracking\StopTimerCommand;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
@@ -15,6 +17,7 @@ use Bitrix\Tasks\V2\Internal\Access\Task\Permission;
 use Bitrix\Tasks\V2\Internal\Access\Task\Tracking;
 use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
 use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
+use Bitrix\Tasks\V2\Public\Provider\TimerProvider;
 
 class Timer extends BaseController
 {
@@ -84,5 +87,27 @@ class Timer extends BaseController
 		}
 
 		return $taskProvider->get(TaskParams::mapFromIds($task->getId(), $this->userId));
+	}
+
+	/**
+	 * @ajaxAction tasks.V2.Task.Tracking.Timer.getTaskWithActiveTimer
+	 */
+	public function getTaskWithActiveTimerAction(
+		TaskProvider $taskProvider,
+		TimerProvider $timerProvider,
+	): ?Task
+	{
+		$timer = $timerProvider->getActiveTimer($this->userId);
+		if (!$timer)
+		{
+			return null;
+		}
+
+		if (!TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_READ, $timer->taskId))
+		{
+			return null;
+		}
+
+		return $taskProvider->get(TaskParams::mapFromIds($timer->taskId, $this->userId));
 	}
 }

@@ -19,9 +19,11 @@ class CustomDto extends Dto
 
 	#[Filterable]
 	#[Required(['add'])]
+	#[Editable(['add'])]
 	public string $name;
 
 	#[Required(['add'])]
+	#[Editable(['add'])]
 	public string $userTypeId;
 
 	#[Editable]
@@ -65,7 +67,9 @@ class CustomDto extends Dto
 	#[Editable]
 	public null|array|string $listFilterLabel;
 
+	#[Editable]
 	public null|array|string $errorMessage;
 
+	#[Editable]
 	public null|array|string $helpMessage;
 }

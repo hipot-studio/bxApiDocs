@@ -11,6 +11,7 @@ use Bitrix\Tasks\Access\Model\UserModel;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\Access\Rule\Traits\AssignTrait;
 use Bitrix\Tasks\Access\Rule\Traits\GroupTrait;
+use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Access\TemplateAccessController;
 
 /**
@@ -53,6 +54,20 @@ class TemplateSaveRule extends AbstractRule
 		)
 		{
 			$this->controller->addError(static::class, 'Access to create or update template denied');
+
+			return false;
+		}
+
+		if (!$this->checkParentTemplate($oldTemplate, $newTemplate))
+		{
+			$this->controller->addError(static::class, 'Access to attach parent template denied');
+
+			return false;
+		}
+
+		if (!$this->checkParentTask($oldTemplate, $newTemplate))
+		{
+			$this->controller->addError(static::class, 'Access to attach parent task denied');
 
 			return false;
 		}
@@ -107,6 +122,49 @@ class TemplateSaveRule extends AbstractRule
 		}
 
 		return true;
+	}
+
+	protected function canReadParentTask(int $parentTaskId): bool
+	{
+		return TaskAccessController::can($this->user->getUserId(), ActionDictionary::ACTION_TASK_READ, $parentTaskId);
+	}
+
+	private function checkParentTemplate(TemplateModel $oldTemplate, TemplateModel $newTemplate): bool
+	{
+		$newParentId = (int)$newTemplate->getParentId();
+
+		if ($newParentId <= 0)
+		{
+			return true;
+		}
+
+		$oldParentId = (int)$oldTemplate->getParentId();
+
+		if ($newParentId === $oldParentId)
+		{
+			return true;
+		}
+
+		return $this->controller->checkByItemId(ActionDictionary::ACTION_TEMPLATE_READ, $newParentId);
+	}
+
+	private function checkParentTask(TemplateModel $oldTemplate, TemplateModel $newTemplate): bool
+	{
+		$newParentTaskId = (int)$newTemplate->getParentTaskId();
+
+		if ($newParentTaskId <= 0)
+		{
+			return true;
+		}
+
+		$oldParentTaskId = (int)$oldTemplate->getParentTaskId();
+
+		if ($newParentTaskId === $oldParentTaskId)
+		{
+			return true;
+		}
+
+		return $this->canReadParentTask($newParentTaskId);
 	}
 
 	private function canAssignMembersExtranet(TemplateModel $newTemplate, TemplateModel $oldTemplate): bool

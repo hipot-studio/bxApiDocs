@@ -3,6 +3,7 @@
 namespace Bitrix\Rest\V3\Dto\Validation;
 
 use Bitrix\Main\Localization\LocalizableMessage;
+use Bitrix\Main\Validation\Group\ValidationGroup;
 use Bitrix\Main\Validation\ValidationError;
 use Bitrix\Main\Validation\ValidationResult;
 use Bitrix\Rest\Exceptions\ArgumentTypeException;
@@ -10,9 +11,9 @@ use Bitrix\Rest\V3\Dto\DtoField;
 
 class FieldRequiredValidator extends DtoFieldValidator
 {
-	use GroupValidationTrait;
+	use RequiredGroupValidationTrait;
 
-	public function __construct(public readonly string $group)
+	public function __construct(public readonly ValidationGroup $group)
 	{
 	}
 
@@ -29,18 +30,25 @@ class FieldRequiredValidator extends DtoFieldValidator
 			throw new ArgumentTypeException('value', DtoField::class);
 		}
 
-		if ($this->isRequired($value, $this->group) && !$value->isInitialized())
+		if (!$this->isRequired($value, $this->group))
 		{
-			$result->addError(new ValidationError(
-				new LocalizableMessage(
-					code: 'REST_V3_DTO_VALIDATION_FIELD_REQUIRED_VALIDATOR_ERROR',
-					replace: [
-						'#FIELD#' => $value->getPropertyName(),
-					],
-				),
-				$value->getPropertyName(),
-			));
+			return $result;
 		}
+
+		if ($value->isInitialized())
+		{
+			return $result;
+		}
+
+		$result->addError(new ValidationError(
+			new LocalizableMessage(
+				code: 'REST_V3_DTO_VALIDATION_FIELD_REQUIRED_VALIDATOR_ERROR',
+				replace: [
+					'#FIELD#' => $value->getPropertyName(),
+				],
+			),
+			$value->getPropertyName(),
+		));
 
 		return $result;
 	}

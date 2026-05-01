@@ -61,6 +61,27 @@ class GanttLinkRepository implements GanttLinkRepositoryInterface
 		return $this->ganttLinkMapper->mapToCollection($rows);
 	}
 
+	public function getLinksByTaskIds(array $taskIds): GanttLinkCollection
+	{
+		if (empty($taskIds))
+		{
+			return new GanttLinkCollection();
+		}
+
+		$rows = ProjectDependenceTable::query()
+			->setSelect(['TASK_ID', 'DEPENDS_ON_ID', 'TYPE', 'CREATOR_ID'])
+			->whereIn('TASK_ID', $taskIds)
+			->exec()
+			->fetchAll();
+
+		if (empty($rows))
+		{
+			return new GanttLinkCollection();
+		}
+
+		return $this->ganttLinkMapper->mapToCollection($rows);
+	}
+
 	public function update(GanttLink $ganttLink): void
 	{
 		$primary = [

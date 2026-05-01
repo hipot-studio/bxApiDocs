@@ -11,6 +11,7 @@ use Bitrix\Tasks\Control\Exception\TaskStopDeleteException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Control\Exception\WrongTaskIdException;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskAccessService;
+use Bitrix\Tasks\V2\Internal\Entity\CheckList;
 use Bitrix\Tasks\V2\Internal\Entity\Group;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
@@ -18,6 +19,7 @@ use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\InvalidIdentifierException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\NotFoundException;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Provider\Mapper\TaskResponseMapper;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\CreateTaskDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\DeleteTaskDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\MakeTaskRecurringDto;
@@ -36,6 +38,7 @@ class TaskService
 		private readonly AddTaskService $addService,
 		private readonly UpdateTaskService $updateService,
 		private readonly DeleteTaskService $deleteService,
+		private readonly TaskResponseMapper $taskResponseMapper,
 	)
 	{
 	}
@@ -45,7 +48,7 @@ class TaskService
 	 * @throws TaskAddException
 	 * @throws TaskNotExistsException
 	 */
-	public function create(CreateTaskDto $dto, int $userId): Task
+	public function create(CreateTaskDto $dto, int $userId): array
 	{
 		$task = new Task(
 			title: $dto->title,
@@ -68,7 +71,9 @@ class TaskService
 
 		$config = new AddConfig($userId);
 
-		return $this->addService->add($task, $config);
+		$task = $this->addService->add($task, $config);
+
+		return $this->taskResponseMapper->mapFromEntity($task, new CheckList(), $userId);
 	}
 
 	/**

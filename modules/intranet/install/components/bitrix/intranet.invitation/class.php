@@ -338,8 +338,14 @@ class CIntranetInviteDialogComponent extends \CBitrixComponent
 		$departmentIds = \Bitrix\Main\Context::getCurrent()->getRequest()->get('departments');
 		$result = [];
 
-		$rootDepartment = Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser()
-			->findFirstPossibleAvailableDepartment();
+		try {
+			$rootDepartment = Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser()
+				->findFirstPossibleAvailableDepartment();
+		}
+		catch (Intranet\Internal\Exception\PortalSetupIncompleteException $e)
+		{
+			$rootDepartment = null;
+		}
 		$companyRootDepartment = $departmentRepository->getRootDepartment();
 
 		if (empty($departmentIds) || !is_array($departmentIds))

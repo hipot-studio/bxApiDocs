@@ -368,12 +368,23 @@ class Provider
 		$userContext = new Internal\Access\UserContext($userId);
 		$isAdmin = $userContext->isAdmin();
 		$presetData = Element::get($elementCode);
+		$integrationData = $id > 0 ? IntegrationTable::getById($id)->fetch() : null;
 
 		try
 		{
-			(new Internal\Access\Preset\PresetAccessChecker(
-				$userContext
-			))->ensureCanSave($presetData);
+			$accessChecker = new Internal\Access\Preset\PresetAccessChecker($userContext);
+			if (empty($integrationData))
+			{
+				$accessChecker->ensureCanCreateOwn($presetData);
+			}
+			else if ((int)$integrationData['USER_ID'] === (int)$userId)
+			{
+				$accessChecker->ensureCanEditOwn($presetData);
+			}
+			else
+			{
+				$accessChecker->ensureCanEdit($presetData);
+			}
 		}
 		catch (Main\SystemException $e)
 		{
@@ -465,14 +476,7 @@ class Provider
 
 			if (!$isAdd)
 			{
-				$resIntegration = IntegrationTable::getList(
-					[
-						'filter' => [
-							'ID' => $id
-						]
-					]
-				);
-				if ($integrationData = $resIntegration->fetch())
+				if (!empty($integrationData))
 				{
 					if (!$isAdmin && $integrationData['USER_ID'] != $userId)
 					{

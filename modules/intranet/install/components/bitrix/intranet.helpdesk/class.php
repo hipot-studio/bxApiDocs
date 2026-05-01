@@ -8,6 +8,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\UI\Util;
+use Bitrix\Intranet\Internal\Service\Notification\NewHelperNotificationService;
 
 class IntranetHelpdeskComponent extends CBitrixComponent
 {
@@ -20,6 +21,8 @@ class IntranetHelpdeskComponent extends CBitrixComponent
 		$this->arResult['CAN_HAVE_HELP_NOTIFICATIONS'] = 'N';
 		$this->arResult['CURRENT_HELP_NOTIFICATIONS'] = '';
 		$this->arResult['LAST_CHECK_NOTIFICATIONS_TIME'] = '';
+		$newHelperNotificationService = NewHelperNotificationService::createForCurrentUser();
+		$this->arResult['SHOULD_SHOW_NEW_HELPER_NOTIFICATION'] = $newHelperNotificationService->needToShow() ? 'Y' : 'N';
 		$this->arResult['IM_BAR_EXISTS'] = Loader::includeModule('im')
 			&& CBXFeatures::IsFeatureEnabled('WebMessenger')
 			&& !defined('BX_IM_FULLSCREEN');
@@ -78,6 +81,12 @@ class IntranetHelpdeskComponent extends CBitrixComponent
 		if (isset($helper) && $helper === 'Y')
 		{
 			$this->arResult['OPEN_HELPER_AFTER_PAGE_LOADING'] = true;
+
+			if ($this->arResult['SHOULD_SHOW_NEW_HELPER_NOTIFICATION'] === 'Y')
+			{
+				$newHelperNotificationService->setShownForUser();
+				$this->arResult['SHOULD_SHOW_NEW_HELPER_NOTIFICATION'] = 'N';
+			}
 		}
 
 		$this->includeComponentTemplate();

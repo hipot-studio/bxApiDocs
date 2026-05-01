@@ -28,6 +28,18 @@ class TaskObject extends EO_Task implements Arrayable
 	use MemberTrait;
 	use WakeUpTrait;
 
+	public function getFieldValueOrNull(string $fieldName): mixed
+	{
+		try
+		{
+			return $this->get($fieldName);
+		}
+		catch (ArgumentException)
+		{
+			return null;
+		}
+	}
+
 	public function getCrmFields(bool $force = false): array
 	{
 		if (!$this->isUtsDataFilled() || $this->isUtsDataChanged() || $force)

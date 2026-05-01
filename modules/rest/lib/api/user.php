@@ -2,6 +2,7 @@
 namespace Bitrix\Rest\Api;
 
 use Bitrix\Intranet\Invitation;
+use Bitrix\Main\Application;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
@@ -657,8 +658,6 @@ class User extends \IRestService
 			unset($filter['HAS_DEPARTAMENT']);
 		}
 
-		$filter['=IS_REAL_USER'] = 'Y';
-
 		$getListClassName = '\Bitrix\Main\UserTable';
 		if (Loader::includeModule('intranet'))
 		{
@@ -689,17 +688,17 @@ class User extends \IRestService
 			$allowedFields = array_merge(array_intersect($allowedFields, $select), $allowedAllUF ?? []);
 		}
 
-		$dbRes = $getListClassName::$getListMethodName(
-			[
-				'order' => $querySort,
-				'filter' => $filter,
-				'select' => $allowedFields,
-				'limit' => $navParams['limit'],
-				'offset' => $navParams['offset'],
-				'data_doubling' => false,
-				'count_total' => $nav !== -1,
-			],
-		);
+		$dbRes = $getListClassName::query()
+			->setSelect($allowedFields)
+			->setFilter($filter)
+			->where('REAL_USER', 'expr', true)
+			->setOrder($querySort)
+			->setLimit($navParams['limit'])
+			->setOffset($navParams['offset'])
+			->disableDataDoubling()
+			->countTotal($nav !== -1)
+			->exec()
+		;
 
 		$result = [];
 		$files = [];

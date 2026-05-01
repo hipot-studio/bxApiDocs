@@ -1400,12 +1400,13 @@ class CIntranetInviteDialog
 		return false;
 	}
 
-	public static function RequestToSonetGroups($arUserId, $arGroupCode, $arGroupName, $bExtranetUser = false)
+	public static function RequestToSonetGroups($arUserId, $arGroupCode, $arGroupName, $bExtranetUser = false, $invitingUserId = null)
 	{
 		global $APPLICATION, $USER;
 
 		$arGroupToAdd = array();
 		$strError = false;
+		$invitingUserId ??= $USER->GetID();
 
 		if (!is_array($arUserId))
 		{
@@ -1458,7 +1459,7 @@ class CIntranetInviteDialog
 						);
 
 						if ($group_id = CSocNetGroup::CreateGroup(
-							$USER->GetID(),
+							$invitingUserId,
 							$arSocNetGroupFields,
 							false
 						))
@@ -1476,7 +1477,7 @@ class CIntranetInviteDialog
 					$group_id = $match[1];
 					if (
 						($arGroup = CSocNetGroup::GetByID($group_id))
-						&& ($arCurrentUserPerms = CSocNetUserToGroup::InitUserPerms($USER->GetID(), $arGroup, CSocNetUser::IsCurrentUserModuleAdmin(SITE_ID, false)))
+						&& ($arCurrentUserPerms = CSocNetUserToGroup::InitUserPerms($invitingUserId, $arGroup, CSocNetUser::IsCurrentUserModuleAdmin(SITE_ID, false)))
 						&& $arCurrentUserPerms["UserCanInitiate"]
 						&& $arGroup["CLOSED"] !== "Y"
 					)
@@ -1493,7 +1494,7 @@ class CIntranetInviteDialog
 					foreach ($arUserId as $user_id)
 					{
 						if (
-							!CSocNetUserToGroup::SendRequestToJoinGroup($USER->GetID(), $user_id, $group_id, "", false)
+							!CSocNetUserToGroup::SendRequestToJoinGroup($invitingUserId, $user_id, $group_id, "", false)
 							&& $e = $APPLICATION->GetException()
 						)
 						{

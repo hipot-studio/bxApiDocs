@@ -2,10 +2,13 @@
 
 namespace Bitrix\Tasks\V2\Infrastructure\Rest\Dto\Mapping;
 
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest\V3\Dto\DtoCollection;
+use Bitrix\Rest\V3\Interaction\Request\ListRequest;
 use Bitrix\Rest\V3\Interaction\Request\Request;
+use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\CrmItemDto;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\ElapsedTimeDto;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\EmailDto;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\FlowDto;
@@ -20,9 +23,13 @@ use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\TemplateDto;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\UserDto;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\UserFieldDto;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Entity\TaskCollection;
 
 class TaskDtoMapper
 {
+	/**
+	 * @throws SystemException
+	 */
 	public function mapByTaskAndRequest(?Task $task, ?Request $request = null): ?TaskDto
 	{
 		if (!$task)
@@ -416,6 +423,9 @@ class TaskDtoMapper
 		return Task::mapFromArray($data);
 	}
 
+	/**
+	 * @throws SystemException
+	 */
 	private function fillCollection(string $dtoClass, \ArrayIterator|array|null $entities, ?Request $request): DtoCollection
 	{
 		$dtoCollection = new DtoCollection($dtoClass);
@@ -430,5 +440,352 @@ class TaskDtoMapper
 		}
 
 		return $dtoCollection;
+	}
+
+	/**
+	 * @throws SystemException
+	 */
+	public function mapTaskList(TaskCollection $taskList, ListRequest $request = null): DtoCollection
+	{
+		$result = new DtoCollection(TaskDto::class);
+
+		$requestedFields = array_flip(
+			array_merge($request?->select?->getList() ?? [], $request?->select?->getRelationFields() ?? [])
+		);
+
+		if (count($requestedFields) === 0)
+		{
+			$requestedFields = ['id' => true];
+		}
+
+		$isFieldRequested = static fn($fieldName) => isset($requestedFields[$fieldName]);
+
+		foreach ($taskList as $task)
+		{
+			$taskDto = new TaskDto();
+
+			if ($isFieldRequested('id'))
+			{
+				$taskDto->id = $task->id;
+			}
+
+			if ($isFieldRequested('title'))
+			{
+				$taskDto->title = $task->title;
+			}
+
+			if ($isFieldRequested('activity'))
+			{
+				$taskDto->activity = $this->mapDateTimeOrNull($task->activityTs);
+			}
+
+			if (isset($requestedFields['deadline']))
+			{
+				$taskDto->deadline = $this->mapDateTimeOrNull($task->deadlineTs);
+			}
+
+			if ($isFieldRequested('creator'))
+			{
+				$taskDto->creator = UserDto::fromEntity(
+					$task->creator,
+					$request?->getRelation('creator')?->getRequest()
+				);
+			}
+
+			if ($isFieldRequested('creatorId'))
+			{
+				$taskDto->creatorId = $task->creator?->id;
+			}
+
+			if ($isFieldRequested('responsible'))
+			{
+				$taskDto->responsible = UserDto::fromEntity(
+					$task->responsible,
+					$request?->getRelation('responsible')?->getRequest()
+				);
+			}
+
+			if ($isFieldRequested('responsibleId'))
+			{
+				$taskDto->responsibleId = $task->responsible?->id;
+			}
+
+			if ($isFieldRequested('groupId'))
+			{
+				$taskDto->groupId = $task->group?->id;
+			}
+
+			if ($isFieldRequested('group'))
+			{
+				$taskDto->group = GroupDto::fromEntity(
+					$task->group,
+					$request->getRelation('group')?->getRequest()
+				);
+			}
+
+			if ($isFieldRequested('flowId'))
+			{
+				$taskDto->flowId = $task->flow?->id;
+			}
+
+			if ($isFieldRequested('flow'))
+			{
+				$taskDto->flow = FlowDto::fromEntity(
+					$task->flow,
+					$request->getRelation('flow')?->getRequest()
+				);
+			}
+
+			if ($isFieldRequested('created'))
+			{
+				$taskDto->created = $this->mapDateTimeOrNull($task->createdTs);
+			}
+
+			if ($isFieldRequested('closed'))
+			{
+				$taskDto->closed = $this->mapDateTimeOrNull($task->closedTs);
+			}
+
+			if ($isFieldRequested('changed'))
+			{
+				$taskDto->changed = $this->mapDateTimeOrNull($task->changedTs);
+			}
+
+			if ($isFieldRequested('estimatedTime'))
+			{
+				$taskDto->estimatedTime = $task->estimatedTime;
+			}
+
+			if ($isFieldRequested('allowsTimeTracking'))
+			{
+				$taskDto->allowsTimeTracking = $task->allowsTimeTracking;
+			}
+
+			if ($isFieldRequested('allowsChangeDeadline'))
+			{
+				$taskDto->allowsChangeDeadline = $task->allowsChangeDeadline;
+			}
+
+			if ($isFieldRequested('mark'))
+			{
+				$taskDto->mark = $task->mark?->value;
+			}
+
+			if ($isFieldRequested('startPlan'))
+			{
+				$taskDto->startPlan = $this->mapDateTimeOrNull($task->startPlanTs);
+			}
+
+			if ($isFieldRequested('endPlan'))
+			{
+				$taskDto->endPlan = $this->mapDateTimeOrNull($task->endPlanTs);
+			}
+
+			if ($isFieldRequested('status'))
+			{
+				$taskDto->status = $task->status->value;
+			}
+
+			if ($isFieldRequested('tags'))
+			{
+				$taskDto->tags = $this->mapCollection(
+					$task->tags?->getEntities() ?? [],
+					TagDto::class,
+					$request->getRelation('tags')?->getRequest()
+				);
+			}
+
+			if ($isFieldRequested('crmItems'))
+			{
+				$taskDto->crmItems = $this->mapCollection(
+					$task->crmItems?->getEntities() ?? [],
+					CrmItemDto::class,
+					$request->getRelation('crmItems')?->getRequest(),
+				);
+			}
+
+			if ($isFieldRequested('crmItemIds'))
+			{
+				$taskDto->crmItemIds = $task->crmItems?->getIdList() ?? [];
+			}
+
+			if ($isFieldRequested('description'))
+			{
+				$taskDto->description = $task->description;
+			}
+
+			if ($isFieldRequested('parentId'))
+			{
+				$taskDto->parentId = $task->parentId;
+			}
+
+			if ($isFieldRequested('statusChanged'))
+			{
+				$taskDto->statusChanged = $this->mapDateTimeOrNull($task->statusChangedTs);
+			}
+
+			if ($isFieldRequested('needsControl'))
+			{
+				$taskDto->needsControl = $task->needsControl;
+			}
+
+			if ($isFieldRequested('guid'))
+			{
+				$taskDto->guid = $task->guid;
+			}
+
+			if ($isFieldRequested('xmlId'))
+			{
+				$taskDto->xmlId = $task->xmlId;
+			}
+
+			if ($isFieldRequested('siteId'))
+			{
+				$taskDto->siteId = $task->siteId;
+			}
+
+			if ($isFieldRequested('forumTopicId'))
+			{
+				$taskDto->forumTopicId = $task->forumTopicId;
+			}
+
+			if ($isFieldRequested('chatId'))
+			{
+				$taskDto->chatId = $task->chatId;
+			}
+
+			if ($isFieldRequested('priority'))
+			{
+				$taskDto->priority = $task->priority?->value;
+			}
+
+			if ($isFieldRequested('accomplices'))
+			{
+				$taskDto->accomplices = $this->mapCollection(
+					$task->accomplices?->getEntities() ?? [],
+					UserDto::class,
+					$request->getRelation('accomplices')?->getRequest()
+				);
+			}
+
+			if ($isFieldRequested('auditors'))
+			{
+				$taskDto->auditors = $this->mapCollection(
+					$task->auditors?->getEntities() ?? [],
+					UserDto::class,
+					$request->getRelation('auditors')?->getRequest()
+				);
+			}
+
+			if ($isFieldRequested('plannedDuration'))
+			{
+				$taskDto->plannedDuration = $task->plannedDuration;
+			}
+
+			if ($isFieldRequested('actualDuration'))
+			{
+				$taskDto->actualDuration = $task->actualDuration;
+			}
+
+			if ($isFieldRequested('durationType'))
+			{
+				$taskDto->durationType = $task->durationType?->value;
+			}
+
+			if ($isFieldRequested('started'))
+			{
+				$taskDto->started = $this->mapDateTimeOrNull($task->startedTs);
+			}
+
+			if ($isFieldRequested('closed'))
+			{
+				$taskDto->closed = $this->mapDateTimeOrNull($task->closedTs);
+			}
+
+			if ($isFieldRequested('changedBy'))
+			{
+				$taskDto->changedBy = UserDto::fromEntity(
+					$task->changedBy,
+					$request?->getRelation('changedBy')?->getRequest()
+				);
+			}
+
+			if ($isFieldRequested('changedById'))
+			{
+				$taskDto->changedById = $task->changedBy?->id;
+			}
+
+			if ($isFieldRequested('statusChangedBy'))
+			{
+				$taskDto->statusChangedBy = UserDto::fromEntity(
+					$task->statusChangedBy,
+					$request?->getRelation('statusChangedBy')?->getRequest()
+				);
+			}
+
+			if ($isFieldRequested('statusChangedById'))
+			{
+				$taskDto->statusChangedById = $task->statusChangedBy?->id;
+			}
+
+			if ($isFieldRequested('exchangeId'))
+			{
+				$taskDto->exchangeId = $task->exchangeId;
+			}
+
+			if ($isFieldRequested('outlookVersion'))
+			{
+				$taskDto->outlookVersion = $task->outlookVersion;
+			}
+
+			if ($isFieldRequested('deadlineCount'))
+			{
+				$taskDto->deadlineCount = $task->deadlineCount;
+			}
+
+			if ($isFieldRequested('exchangeModified'))
+			{
+				$taskDto->exchangeModified = $task->exchangeModified;
+			}
+
+			if ($isFieldRequested('matchesWorkTime'))
+			{
+				$taskDto->matchesWorkTime = $task->matchesWorkTime;
+			}
+
+			if ($isFieldRequested('addInReport'))
+			{
+				$taskDto->addInReport = $task->addInReport;
+			}
+
+			if ($isFieldRequested('isMultitask'))
+			{
+				$taskDto->isMultitask = $task->isMultitask;
+			}
+
+			$result->add($taskDto);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @throws SystemException
+	 */
+	private function mapCollection(array $items, string $dtoClass, ?Request $request): DtoCollection
+	{
+		$collection = new DtoCollection($dtoClass);
+		foreach ($items as $item)
+		{
+			$dto = call_user_func([$dtoClass, 'fromEntity'], $item, $request);
+			$collection->add($dto);
+		}
+
+		return $collection;
+	}
+
+	protected function mapDateTimeOrNull(?int $timestamp): ?DateTime
+	{
+		return $timestamp === null ? null : DateTime::createFromTimestamp($timestamp);
 	}
 }

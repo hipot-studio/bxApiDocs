@@ -8,6 +8,7 @@ use Bitrix\Main\Engine;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
+use Bitrix\Main\ModuleManager;
 
 class UserType extends Engine\ActionFilter\Base
 {
@@ -31,9 +32,12 @@ class UserType extends Engine\ActionFilter\Base
 	/** @var array */
 	private $allowedUserTypes;
 
-	public function __construct(array $allowedUserTypes)
+	private ?\CUser $user;
+
+	public function __construct(array $allowedUserTypes, ?\CUser $user = null)
 	{
 		$this->allowedUserTypes = $allowedUserTypes;
+		$this->user = $user ?? $this->getCurrentUser();
 		parent::__construct();
 	}
 
@@ -44,7 +48,7 @@ class UserType extends Engine\ActionFilter\Base
 			Context::getCurrent()->getResponse()->setStatus(403);
 			$this->addError(new Error(
 				'Access restricted by user type',
-				self::ERROR_RESTRICTED_BY_USER_TYPE
+				self::ERROR_RESTRICTED_BY_USER_TYPE,
 			));
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
@@ -53,31 +57,169 @@ class UserType extends Engine\ActionFilter\Base
 		return null;
 	}
 
-	protected function belongsCurrentUserToAllowedTypes(): bool
+	private function getCurrentUser(): ?\CUser
 	{
 		global $USER;
-		if (!($USER instanceof \CUser) || !$USER->getId())
+
+		return ($USER instanceof \CUser) ? $USER : null;
+	}
+
+	protected function belongsCurrentUserToAllowedTypes(): bool
+	{
+		if (!$this->hasAuthorizedCurrentUser())
 		{
 			return false;
 		}
 
-		if ($USER->IsAdmin())
+		if ($this->isAdminUser($this->user))
 		{
 			return true;
 		}
 
-		$userData = UserTable::getRow([
-			'filter' => [
-				'=ID' => $USER->getId()
-			],
-			'select' => ['ID', 'USER_TYPE']
-		]);
+		return $this->belongsUserToAllowedTypes($this->user);
+	}
 
-		if (empty($userData['USER_TYPE']))
+	protected function hasAuthorizedCurrentUser(): bool
+	{
+		return $this->user !== null && (int)$this->user->getId() > 0;
+	}
+
+	protected function isAdminUser(\CUser $user): bool
+	{
+		return $user->IsAdmin();
+	}
+
+	protected function belongsUserToAllowedTypes(\CUser $user): bool
+	{
+		$userType = $this->getExternalUserType($user);
+
+		if ($userType !== null)
+		{
+			return $this->isAllowedUserType($userType);
+		}
+
+		return $this->belongsInternalUserToAllowedTypes((int)$user->getId());
+	}
+
+	protected function getExternalUserType(\CUser $user): ?string
+	{
+		return $this->resolveUserTypeByExternalAuthId((string)$user->GetParam('EXTERNAL_AUTH_ID'));
+	}
+
+	protected function belongsInternalUserToAllowedTypes(int $userId): bool
+	{
+		$possibleInternalUserTypes = $this->getPossibleInternalUserTypes();
+		$allowedInternalUserTypes = $this->getAllowedInternalUserTypes($possibleInternalUserTypes);
+
+		if (empty($allowedInternalUserTypes))
 		{
 			return false;
 		}
 
-		return in_array($userData['USER_TYPE'], $this->allowedUserTypes, true);
+		// There is no need to check the real UserType if the required UserType is employee or extranet|shop
+		if ($this->allowsAllPossibleInternalUserTypes($possibleInternalUserTypes, $allowedInternalUserTypes))
+		{
+			return true;
+		}
+
+		$userType = $this->getUserTypeById($userId);
+
+		return $userType !== null && $this->isAllowedUserType($userType);
+	}
+
+	protected function getAllowedInternalUserTypes(array $possibleInternalUserTypes): array
+	{
+		return array_intersect($possibleInternalUserTypes, $this->allowedUserTypes);
+	}
+
+	protected function allowsAllPossibleInternalUserTypes(
+		array $possibleInternalUserTypes,
+		array $allowedInternalUserTypes,
+	): bool
+	{
+		return count($possibleInternalUserTypes) === count($allowedInternalUserTypes);
+	}
+
+	protected function isAllowedUserType(string $userType): bool
+	{
+		return in_array($userType, $this->allowedUserTypes, true);
+	}
+
+	protected function resolveUserTypeByExternalAuthId(string $externalAuthId): ?string
+	{
+		if ($externalAuthId === '')
+		{
+			return null;
+		}
+
+		$userTypeMap = $this->getExternalAuthIdToUserTypeMap();
+
+		return $userTypeMap[$externalAuthId] ?? null;
+	}
+
+	protected function getExternalAuthIdToUserTypeMap(): array
+	{
+		$userTypeMap = $this->getModuleAwareExternalAuthIdToUserTypeMap();
+
+		foreach (\Bitrix\Main\UserTable::getExternalUserTypes() as $externalAuthId)
+		{
+			if (!isset($userTypeMap[$externalAuthId]))
+			{
+				$userTypeMap[$externalAuthId] = $externalAuthId;
+			}
+		}
+
+		return $userTypeMap;
+	}
+
+	protected function getModuleAwareExternalAuthIdToUserTypeMap(): array
+	{
+		$userTypeMap = [];
+
+		if (ModuleManager::isModuleInstalled('sale'))
+		{
+			$userTypeMap[self::TYPE_SALE] = self::TYPE_SALE;
+			$userTypeMap[self::TYPE_SALE_ANONYMOUS] = self::TYPE_SALE;
+			$userTypeMap[self::TYPE_SHOP] = self::TYPE_SALE;
+		}
+
+		if (ModuleManager::isModuleInstalled('imconnector'))
+		{
+			$userTypeMap[self::TYPE_IMCONNECTOR] = self::TYPE_IMCONNECTOR;
+		}
+
+		if (ModuleManager::isModuleInstalled('im'))
+		{
+			$userTypeMap[self::TYPE_BOT] = self::TYPE_BOT;
+		}
+
+		if (ModuleManager::isModuleInstalled('mail'))
+		{
+			$userTypeMap[self::TYPE_EMAIL] = self::TYPE_EMAIL;
+		}
+
+		return $userTypeMap;
+	}
+
+	protected function getPossibleInternalUserTypes(): array
+	{
+		return [
+			self::TYPE_EMPLOYEE,
+			ModuleManager::isModuleInstalled('extranet')
+				? self::TYPE_EXTRANET
+				: self::TYPE_SHOP,
+		];
+	}
+
+	protected function getUserTypeById(int $userId): ?string
+	{
+		$userData = UserTable::getRow([
+			'filter' => [
+				'=ID' => $userId,
+			],
+			'select' => ['ID', 'USER_TYPE'],
+		]);
+
+		return !empty($userData['USER_TYPE']) ? $userData['USER_TYPE'] : null;
 	}
 }

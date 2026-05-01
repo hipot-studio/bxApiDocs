@@ -88,22 +88,24 @@ class Type extends \Bitrix\Tasks\Util\UserField\Type
 	private static function removeRawAttachments($message, $attachmentData)
 	{
 		return preg_replace_callback(
-			"/\[DISK FILE ID\s*=\s*([^\]]*)\]/isu",
-			function ($matches) use ($attachmentData)
+			"/\[DISK FILE ID\s*=\s*([^]\s]+)([^]]*)]/isu",
+			static function ($matches) use ($attachmentData)
 			{
-				if($matches[1])
+				$fileId = $matches[1] ?? null;
+
+				$additionalProperties = $matches[2] ?? '';
+
+				if (!$fileId)
 				{
-					if(array_key_exists($matches[1], $attachmentData))
-					{
-						return ''; // remove
-					}
-					else
-					{
-						return "[DISK FILE ID=".$matches[1]."]"; // attachment belongs to some other disk field
-					}
+					return ''; // no match?
 				}
 
-				return ''; // no match?
+				if (array_key_exists($fileId, $attachmentData))
+				{
+					return ''; // remove
+				}
+
+				return "[DISK FILE ID={$fileId}{$additionalProperties}]"; // attachment belongs to some other disk field
 			},
 			$message
 		);
@@ -124,28 +126,34 @@ class Type extends \Bitrix\Tasks\Util\UserField\Type
 		}
 
 		return preg_replace_callback(
-			"/\[DISK FILE ID\s*=\s*([^\]]*)\]/isu",
-			function ($matches) use ($map, $objMap)
+			"/\[DISK FILE ID\s*=\s*([^]\s]+)([^]]*)]/isu",
+			static function ($matches) use ($map, $objMap)
 			{
-				$from = $matches[1];
+				$from = $matches[1] ?? null;
 				$to = false;
 
-				if($from)
-				{
-					if(array_key_exists($from, $map)) // attachment id (number) => n+(object id)
-					{
-						$to = $map[$from];
-					}
-					elseif(array_key_exists($from, $objMap)) // n+(object id) => n+(object id)
-					{
-						$to = $objMap[$from];
-					}
+				$additionalProperties = $matches[2] ?? '';
 
-					if($to)
-					{
-						return "[DISK FILE ID=".$to."]";
-					}
+				if (!$from)
+				{
+					return ''; // no match?
 				}
+
+				if (array_key_exists($from, $map)) // attachment id (number) => n+(object id)
+				{
+					$to = $map[$from];
+				}
+				elseif (array_key_exists($from, $objMap)) // n+(object id) => n+(object id)
+				{
+					$to = $objMap[$from];
+				}
+
+				if (!$to)
+				{
+					return ''; // no match?
+				}
+
+				return "[DISK FILE ID={$to}{$additionalProperties}]";
 			},
 			$message
 		);

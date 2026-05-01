@@ -46,6 +46,22 @@ class PasswordRepository implements Contract\Repository\APAuth\PasswordRepositor
 		return $this->mapModelCollectionToEntityCollection($collection);
 	}
 
+	public function hasWebhooksByUserId(int $userId): bool
+	{
+		$password = PasswordTable::query()
+			->setSelect(['ID'])
+			->setFilter([
+				'=USER_ID' => $userId,
+				'=ACTIVE' => PasswordTable::ACTIVE,
+				'=TYPE' => Enum\APAuth\PasswordType::User->value,
+			])
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		return $password !== null;
+	}
+
 	public function getById(int $id): ?Entity\APAuth\Password
 	{
 		$model = PasswordTable::getById($id)->fetchObject();

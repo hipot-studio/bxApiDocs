@@ -262,7 +262,7 @@ class CIntranetUserProfileComponent extends UserProfile
 		$mobilePush = Service\Otp\MobilePush::createByDefault();
 
 		$this->arResult['OTP'] = [
-			'canEdit' => $otpPermission->canEdit(),
+			'canEdit' => $otpPermission->canCurrentUserEdit(),
 			'canDeactivate' => $otpPermission->canDeactivate(),
 			'isActive' => $otpUser->isActive ?? false,
 			'isMandatory' => $personalSettings->isRequired(),

@@ -62,6 +62,7 @@ class Integrator extends BaseContent
 			'partnerPhone' => $this->integratorInfo->phone ?? '',
 			'partnerCompany' => $this->integratorInfo->company ?? '',
 			'partnerEmail' => $this->integratorInfo->email ?? '',
+			'messages' => Loc::loadLanguageFile($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/intranet/install/templates/bitrix24/partner-connect-form.php'),
 		];
 	}
 

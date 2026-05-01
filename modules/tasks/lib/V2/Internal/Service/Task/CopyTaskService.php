@@ -123,7 +123,7 @@ class CopyTaskService
 					continue;
 				}
 
-				$copiedSubTask = $this->createTaskCopy($sourceSubTask, $config, $copiedTask->getId());
+				$copiedSubTask = $this->createTaskCopy($sourceSubTask, $config, $copiedTask->getId(), $copiedRootTask);
 				if (!$copiedSubTask)
 				{
 					continue;
@@ -140,12 +140,14 @@ class CopyTaskService
 		Entity\Task $originalTask,
 		CopyConfig $config,
 		?int $parentTaskId = null,
+		?Entity\Task $rootTask = null,
 	): ?Entity\Task
 	{
 		$preparedTask = $this->prepareTask(
 			sourceTask: $originalTask,
 			config: $config,
 			parentTaskId: $parentTaskId,
+			rootTask: $rootTask,
 		);
 
 		if (!$this->taskAccessService->canSave($config->userId, $preparedTask))
@@ -209,18 +211,43 @@ class CopyTaskService
 		Entity\Task $sourceTask,
 		CopyConfig $config,
 		?int $parentTaskId = null,
+		?Entity\Task $rootTask = null,
 	): Entity\Task
 	{
-		$task = new Entity\Task(
+		$fileIds = null;
+		$description = $sourceTask->description;
+		if ($config->withAttachments)
+		{
+			[$fileIds, $description] = $this->copyFileService->copyAttachments(
+				description: $sourceTask->description ?? '',
+				userId: $config->userId,
+				fileIds: $sourceTask->fileIds ?? [],
+			);
+		}
+
+		$dependsOn = null;
+		if ($config->withRelatedTasks)
+		{
+			$dependsOn =
+				$sourceTask->dependsOn
+				?? $this->relatedTaskRepository->getRelatedTaskIds((int)$sourceTask->getId())
+			;
+		}
+
+		$group = $rootTask !== null ? $rootTask->group : $sourceTask->group;
+
+		return new Entity\Task(
 			title: $sourceTask->title,
+			description: $description,
 			creator: $sourceTask->creator,
 			responsible: $sourceTask->responsible,
 			deadlineTs: $sourceTask->deadlineTs,
 			needsControl: $sourceTask->needsControl,
 			startPlanTs: $sourceTask->startPlanTs,
 			endPlanTs: $sourceTask->endPlanTs,
+			fileIds: $fileIds,
 			checklist: $sourceTask->checklist,
-			group: $sourceTask->group,
+			group: $group,
 			epicId: $sourceTask->epicId,
 			storyPoints: $sourceTask->storyPoints,
 			flow: $sourceTask->flow,
@@ -239,34 +266,7 @@ class CopyTaskService
 			userFields: $sourceTask->userFields,
 			crmItemIds: $sourceTask->crmItemIds,
 			requireResult: $sourceTask->requireResult,
+			dependsOn: $dependsOn,
 		);
-
-		if ($config->withAttachments)
-		{
-			[$fileIds, $description] = $this->copyFileService->copyAttachments(
-				description: $sourceTask->description ?? '',
-				userId: $config->userId,
-				fileIds: $sourceTask->fileIds ?? [],
-			);
-
-			$task = $task->cloneWith([
-				'fileIds' => $fileIds,
-				'description' => $description,
-			]);
-		}
-
-		if ($config->withRelatedTasks)
-		{
-			$relatedTaskIds =
-				$sourceTask->dependsOn
-				?? $this->relatedTaskRepository->getRelatedTaskIds((int)$sourceTask->getId())
-			;
-
-			$task = $task->cloneWith([
-				'dependsOn' => $relatedTaskIds,
-			]);
-		}
-
-		return $task;
 	}
 }

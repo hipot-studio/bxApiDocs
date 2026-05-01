@@ -2,10 +2,12 @@
 
 namespace Bitrix\Intranet\Integration\HumanResources;
 
+use Bitrix\HumanResources\Config\Storage;
 use Bitrix\HumanResources\Service\Access\Structure\StructureAccessService;
 use Bitrix\HumanResources\Type\StructureAction;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\Department;
+use Bitrix\Intranet\Internal\Exception\PortalSetupIncompleteException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\SystemException;
@@ -53,9 +55,13 @@ class PermissionInvitation
 		return $this->structureAccessService->canDoActionWithTheNode($department->getId());
 	}
 
+	/**
+	 * @throws PortalSetupIncompleteException
+	 */
 	public function findFirstPossibleAvailableDepartment(): ?Department
 	{
 		$node = $this->structureAccessService->findFirstPossibleAvailableNode();
+
 		if (!$node)
 		{
 			return null;

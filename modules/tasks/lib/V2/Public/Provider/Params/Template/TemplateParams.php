@@ -26,6 +26,7 @@ class TemplateParams
 		public readonly bool $checkTemplateAccess = true,
 		public readonly bool $checkGroupAccess = true,
 		public readonly bool $checkCrmAccess = true,
+		public readonly bool $params = true,
 	)
 	{
 
@@ -57,6 +58,7 @@ class TemplateParams
 			userFields:   static::mapBool($select, 'userFields', false),
 			relatedTasks: static::mapBool($select, 'relatedTasks', false),
 			permissions:  static::mapBool($select, 'permissions', false),
+			params:       static::mapBool($select, 'params', false),
 		);
 	}
 }

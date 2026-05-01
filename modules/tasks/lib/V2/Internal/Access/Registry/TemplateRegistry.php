@@ -44,6 +44,7 @@ final class TemplateRegistry
 			'ZOMBIE',
 			'GROUP_ID',
 			'REPLICATE',
+			'PARENT_ID',
 			'PARENT.PARENT_TEMPLATE_ID',
 		];
 

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
@@ -8,24 +9,31 @@
 
 namespace Bitrix\Tasks\Access\Rule;
 
-use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Main\Access\AccessibleItem;
+use Bitrix\Main\Access\Rule\AbstractRule;
+use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Model\TaskModel;
+use Bitrix\Tasks\Access\Model\UserModel;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
+use Bitrix\Tasks\Access\Rule\Traits\AssignTrait;
 
-class TaskChangeDirectorRule extends \Bitrix\Main\Access\Rule\AbstractRule
+class TaskChangeDirectorRule extends AbstractRule
 {
-	public function execute(AccessibleItem $task = null, $params = null): bool
+	use AssignTrait;
+
+	public function execute(?AccessibleItem $task = null, $params = null): bool
 	{
 		if (!$task)
 		{
 			$this->controller->addError(static::class, 'Incorrect task');
+
 			return false;
 		}
 
 		if (!$this->checkParams($params))
 		{
 			$this->controller->addError(static::class, 'Incorrect params');
+
 			return false;
 		}
 
@@ -40,6 +48,15 @@ class TaskChangeDirectorRule extends \Bitrix\Main\Access\Rule\AbstractRule
 		if (!in_array($this->user->getUserId(), $newTask->getMembers(RoleDictionary::ROLE_RESPONSIBLE), true))
 		{
 			$this->controller->addError(static::class, 'Access to change director denied');
+
+			return false;
+		}
+
+		$directorIds = $newTask->getMembers(RoleDictionary::ROLE_DIRECTOR);
+		$user = UserModel::createFromId($this->user->getUserId());
+
+		if (!$this->validateExtranetAccess($user, $directorIds))
+		{
 			return false;
 		}
 
@@ -50,11 +67,32 @@ class TaskChangeDirectorRule extends \Bitrix\Main\Access\Rule\AbstractRule
 		}
 
 		$this->controller->addError(static::class, 'Access to change director denied');
+
 		return false;
 	}
 
 	private function checkParams($params = null): bool
 	{
 		return is_object($params) && $params instanceof TaskModel;
+	}
+
+	private function validateExtranetAccess(UserModel $user, array $directorIds): bool
+	{
+		foreach ($directorIds as $directorId)
+		{
+			$director = UserModel::createFromId($directorId);
+
+			if (
+				($director->isExtranet() || $user->isExtranet())
+				&& !$this->isMemberOfUserGroups($user->getUserId(), $directorId)
+			)
+			{
+				$this->controller->addError(static::class, 'Access to change director denied');
+
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

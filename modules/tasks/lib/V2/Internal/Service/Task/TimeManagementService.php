@@ -87,10 +87,14 @@ class TimeManagementService
 		}
 
 		$timeSpent = $this->elapsedTimeRepository->getSum($taskId);
+		$timerStartedAtTs = (int)$timer->startedAtTs;
 
 		$parameters = [
 			'taskId' => $taskId,
-			'timeElapsed' => $timeSpent + (time() - (int)$timer->startedAtTs),
+			'timeElapsed' => $timeSpent + (time() - $timerStartedAtTs),
+			'timerStartedAtTs' => $timerStartedAtTs,
+			'timeSpentInLogs' => $timeSpent,
+			'timeEstimate' => $task->estimatedTime ?? 0,
 		];
 
 		$this->pushService->addEventByParameters(
@@ -218,13 +222,10 @@ class TimeManagementService
 
 		$activeTimers = $this->timerRepository->getRunningTimersByTaskId($taskId);
 
-		foreach ($userIds as $userId)
+		$timersForUsers = $this->timerRepository->getByUserIds($userIds, $taskId);
+		foreach ($timersForUsers as $timer)
 		{
-			$this->stopTimer(
-				userId: (int)$userId,
-				taskId: $taskId,
-				sendNotification : false,
-			);
+			$this->stopTimer($timer->userId, $timer->taskId, false);
 		}
 
 		if (!$sendNotification || $activeTimers->isEmpty())
@@ -233,12 +234,12 @@ class TimeManagementService
 		}
 
 		$task = $this->taskRepository->getById($taskId);
-		$triggeredBy = $this->userRepository->getByIds([$currentUserId])->findOneById($currentUserId);
-
 		if (!$task)
 		{
 			return;
 		}
+
+		$triggeredBy = $this->userRepository->getByIds([$currentUserId])->findOneById($currentUserId);
 
 		$this->chatNotification->notify(
 			type: NotificationType::TaskTimersStopped,

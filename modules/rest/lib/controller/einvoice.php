@@ -18,10 +18,19 @@ class EInvoice extends Controller
 {
 	public function saveAction(string $clientId, array $settings, string $handler): AjaxJson
 	{
+		$appData = AppTable::getByClientId($clientId);
+		if (!is_array($appData))
+		{
+			$this->errorCollection->setError(new Error( 'Invalid request'));
+
+			return AjaxJson::createError($this->errorCollection);
+		}
 		$formData = $settings;
 
 		$uri = new Uri($handler);
-		$httpClient = new HttpClient();
+		$httpClient = new HttpClient([
+			'privateIp' => false,
+		]);
 		$params = Sender::getDefaultEventParams();
 		$params['sendRefreshToken'] = true;
 		$event = [
@@ -30,8 +39,8 @@ class EInvoice extends Controller
 				$clientId,
 				CurrentUser::get()->getId() ?? 0,
 				[],
-				$params
-			)
+				$params,
+			),
 		];
 		$result = $httpClient->post($uri, $event);
 		try

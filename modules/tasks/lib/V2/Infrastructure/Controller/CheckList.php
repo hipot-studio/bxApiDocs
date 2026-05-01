@@ -48,6 +48,18 @@ class CheckList extends BaseController
 		bool $skipNotification = false,
 	): ?Arrayable
 	{
+		if (
+			empty($task->checklist)
+			&& !TaskAccessController::can(
+				userId: $this->userId,
+				action: ActionDictionary::ACTION_CHECKLIST_EDIT,
+				itemId: $task->getId(),
+			)
+		)
+		{
+			return null;
+		}
+
 		$result = (new SaveCheckListCommand(
 			task: $task,
 			updatedBy: $this->userId,

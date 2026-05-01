@@ -27,11 +27,11 @@ class CrmItemDto extends Dto
 		$dto = new self();
 		if (empty($select) || in_array('id', $select, true))
 		{
-			$dto->id = $crmItem->id;
+			$dto->id = $crmItem->entityId;
 		}
 		if (empty($select) || in_array('type', $select, true))
 		{
-			$dto->type = $crmItem->type;
+			$dto->type = $crmItem->type->value;
 		}
 		if (empty($select) || in_array('title', $select, true))
 		{

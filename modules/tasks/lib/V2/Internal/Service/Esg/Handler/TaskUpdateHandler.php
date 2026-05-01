@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Esg\Handler;
 
-use Bitrix\Tasks\V2\Internal\Entity\Stage;
+use Bitrix\Tasks\V2\Internal\Entity\Group;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Event\Task\OnCreatorUpdatedEvent;
@@ -78,14 +78,11 @@ class TaskUpdateHandler
 					taskBeforeUpdate: $taskBeforeUpdate,
 					key: 'accomplices',
 				),
-				'group' => $this->chatNotification->notify(
-					type: NotificationType::GroupChanged,
+				'group' => $this->handleGroupChanged(
 					task: $command->task,
-					args: [
-						'triggeredBy' => $triggeredBy,
-						'oldGroup' => $taskBeforeUpdate->group,
-						'newGroup' => $command->task->group
-					],
+					triggeredBy: $triggeredBy,
+					newGroup: $command->task->group,
+					oldGroup: $taskBeforeUpdate->group,
 				),
 				'status' => $this->chatNotification->notify(
 					type: NotificationType::TaskStatusChanged,
@@ -121,7 +118,7 @@ class TaskUpdateHandler
 					task: $command->task,
 					taskBeforeUpdate: $taskBeforeUpdate,
 					triggeredBy: $triggeredBy,
-					stage: $command->task->stage,
+					taskChangesContext: $command->taskChangesContext,
 				),
 				'mark' => $this->chatNotification->notify(
 					type: NotificationType::TaskMarkChanged,
@@ -198,26 +195,98 @@ class TaskUpdateHandler
 		Task $task,
 		Task $taskBeforeUpdate,
 		?User $triggeredBy,
-		?Stage $stage,
+		?Task $taskChangesContext,
 	): void
 	{
-		if ($stage === null && $task->group !== null && $task->status !== Task\Status::Completed)
+		if (!$task->group)
 		{
-			$this->chatNotification->notify(
-				type: NotificationType::TaskMovedToBacklog,
-				task: $task,
-				args: ['triggeredBy' => $triggeredBy],
-			);
+			return;
 		}
-		else
+
+		if ($task->stage === null)
+		{
+			if ($task->status !== Task\Status::Completed)
+			{
+				$this->chatNotification->notify(
+					type: NotificationType::TaskMovedToBacklog,
+					task: $task,
+					args: ['triggeredBy' => $triggeredBy],
+				);
+			}
+
+			return;
+		}
+
+		// insert another group or another sprint - ignore notify
+		if (
+			$task->group->id !== $taskBeforeUpdate->group?->id
+			|| ($taskBeforeUpdate->stage?->entityId && $task->stage->entityId !== $taskBeforeUpdate->stage->entityId)
+		)
+		{
+			return;
+		}
+
+		// Scrum stage can change by side effect in update-in-update call (1 -> null, null -> 2).
+		// If taskChangesContext has a stage, only notify when it matches the current stage;
+		// otherwise skip the check (backward compatibility).
+		$changedStageId = $taskChangesContext?->stage?->id;
+		$isCurrentContext = $changedStageId !== null && $task->stage->id === $changedStageId;
+		if (!$taskChangesContext || $isCurrentContext)
 		{
 			$this->chatNotification->notify(
 				type: NotificationType::TaskStageChanged,
 				task: $task,
 				args: [
 					'triggeredBy' => $triggeredBy,
-					'oldStage' => $taskBeforeUpdate->stage,
-					'newStage' => $stage,
+					'newStage' => $task->stage,
+				],
+			);
+		}
+	}
+
+	private function handleGroupChanged(
+		Task $task,
+		?User $triggeredBy = null,
+		?Group $newGroup = null,
+		?Group $oldGroup = null,
+	): void
+	{
+		if ($oldGroup !== null && $newGroup !== null)
+		{
+			$this->chatNotification->notify(
+				type: NotificationType::GroupChanged,
+				task: $task,
+				args: [
+					'triggeredBy' => $triggeredBy,
+					'newGroup' => $newGroup,
+				],
+			);
+
+			return;
+		}
+
+		if ($oldGroup !== null && $newGroup === null)
+		{
+			$this->chatNotification->notify(
+				type: NotificationType::GroupRemoved,
+				task: $task,
+				args: [
+					'triggeredBy' => $triggeredBy,
+					'group' => $oldGroup,
+				],
+			);
+
+			return;
+		}
+
+		if ($newGroup !== null)
+		{
+			$this->chatNotification->notify(
+				type: NotificationType::GroupAdded,
+				task: $task,
+				args: [
+					'triggeredBy' => $triggeredBy,
+					'group' => $newGroup,
 				],
 			);
 		}

@@ -187,7 +187,7 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		}
 
 		$this->tagsService = new TagService();
-		$this->timeService = new TimeService();
+		$this->timeService = new TimeService($this->userId);
 		$this->checkListService = new CheckListService();
 		$this->logsService = new LogService($this->userId);
 		$this->filesService = new FileService($this->previewSize);

@@ -39,7 +39,7 @@ abstract class AbstractCustom extends RestController
 			}
 		}
 
-		return $this->customFieldsByEntityIdUserIdLangFieldId[$entityId][$userId][$lang];
+		return $this->customFieldsByEntityIdUserIdLangFieldId[$entityId][$userId][$lang] ?? [];
 	}
 
 	protected function getCustomFieldsByFieldName(string $entityId, int $userId, ?string $lang): array

@@ -11,6 +11,7 @@ use Bitrix\Rest\Dto;
 interface PasswordService
 {
 	public function getSystemPasswordCollection(): PasswordCollection;
+	public function hasWebhooksByUserId(int $userId): bool;
 	public function isSystemPasswordById(int $id): bool;
 	public function deleteById(int $id): bool;
 	public function getPasswordById(int $id): ?Password;

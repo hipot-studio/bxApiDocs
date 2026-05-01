@@ -9,7 +9,6 @@ use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Error;
 use Bitrix\Rest\Configuration\Controller;
@@ -21,6 +20,7 @@ use Bitrix\Rest\Configuration\DataProvider;
 use Bitrix\Rest\Configuration\Action\Import;
 use Bitrix\Rest\Configuration\Notification;
 use Bitrix\Rest\Internal;
+use Bitrix\Rest\AppTable;
 
 Loc::loadMessages(__FILE__);
 
@@ -185,6 +185,13 @@ class CRestConfigurationInstallComponent extends CBitrixComponent implements Con
 			$result['NEED_START_BTN'] = true;
 			$result['NEED_CLEAR_FULL_CONFIRM'] = false;
 			$result['PRE_INSTALL_APP_MODE'] = true;
+		}
+
+		$appType = $this->arParams['APP']['TYPE'] ?? '';
+
+		if ($appType === AppTable::TYPE_BIC_DASHBOARD)
+		{
+			$result['NEED_CLEAR_FULL_CONFIRM'] = false;
 		}
 
 		$this->arResult = $result;

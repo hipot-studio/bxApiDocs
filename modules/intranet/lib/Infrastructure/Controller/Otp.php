@@ -14,7 +14,6 @@ use Bitrix\Intranet\Internal\Integration\Main\LogoutService;
 use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
-use Bitrix\Intranet\Internal\Integration\Messageservice\TwoFaNetworkSender;
 use Bitrix\Intranet\Internal\Integration\Security\RecoveryCodes;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
@@ -139,7 +138,9 @@ class Otp extends Controller
 
 		try
 		{
-			if (!(new UserPermission($user))->canEdit())
+			$permission = new UserPermission($user);
+
+			if (!$permission->canEdit())
 			{
 				$this->addError(new Error("No rights"));
 
@@ -170,7 +171,9 @@ class Otp extends Controller
 
 		try
 		{
-			if (!(new UserPermission($user))->canEdit())
+			$permission = new UserPermission($user);
+
+			if (!$permission->canActivate())
 			{
 				$this->addError(new Error("No rights"));
 
@@ -200,7 +203,9 @@ class Otp extends Controller
 
 		try
 		{
-			if (!(new UserPermission($user))->canEdit() || !(new UserPermission($user))->canDeactivate())
+			$permission = new UserPermission($user);
+
+			if (!$permission->canDeactivate())
 			{
 				$this->addError(new Error("No rights"));
 
@@ -232,6 +237,14 @@ class Otp extends Controller
 			return;
 		}
 
+		$currentUserId = (int)CurrentUser::get()->getId();
+		if ($currentUserId > 0 && !(new UserPermission($user))->canEdit())
+		{
+			$this->addError(new Error("No rights"));
+
+			return;
+		}
+
 		(new SendRequestRecoverAccessCommand($user))->run();
 	}
 
@@ -249,7 +262,9 @@ class Otp extends Controller
 
 		try
 		{
-			if (!(new UserPermission($user))->canEdit())
+			$permission = new UserPermission($user);
+
+			if (!$permission->canEdit())
 			{
 				$this->addError(new Error("No rights"));
 
@@ -283,6 +298,13 @@ class Otp extends Controller
 
 	public function sendConfirmationCodeAction(User $user, string $smsTemplate = 'SMS_USER_CONFIRM_NUMBER'): ?array
 	{
+		if (!(new UserPermission($user))->canEdit())
+		{
+			$this->addError(new Error("No rights"));
+
+			return [];
+		}
+
 		try
 		{
 			return VerifyPhoneService::createFor2Fa($user)->sendCodeByTemplate($smsTemplate);
@@ -311,6 +333,13 @@ class Otp extends Controller
 
 		try
 		{
+			if (!(new UserPermission($user))->canEdit())
+			{
+				$this->addError(new Error("No rights"));
+
+				return false;
+			}
+
 			$confirmed = (new VerifyPhoneService($user))->confirmPhoneNumber($code);
 
 			if ($confirmed)
@@ -343,8 +372,6 @@ class Otp extends Controller
 			return [];
 		}
 
-		TwoFaNetworkSender::useIfCloud();
-
 		return $this->forward(PushOtp::class, 'sendSms');
 	}
 
@@ -376,7 +403,9 @@ class Otp extends Controller
 			return false;
 		}
 
-		if (!(new UserPermission($user))->canEdit())
+		$permission = new UserPermission($user);
+
+		if (!$permission->canCurrentUserEdit())
 		{
 			$this->addError(new Error('No rights'));
 
@@ -408,7 +437,9 @@ class Otp extends Controller
 			return [];
 		}
 
-		if (!(new UserPermission($user))->canEdit())
+		$permission = new UserPermission($user);
+
+		if (!$permission->canEdit())
 		{
 			$this->addError(new Error("No rights"));
 

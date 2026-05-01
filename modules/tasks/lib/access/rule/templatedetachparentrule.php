@@ -19,7 +19,7 @@ class TemplateDetachParentRule extends AbstractRule
 	{
 		if (!$item instanceof TemplateModel)
 		{
-			$this->controller->addError(static::class, 'Incorrect task');
+			$this->controller->addError(static::class, 'Incorrect template');
 
 			return false;
 		}
@@ -32,14 +32,14 @@ class TemplateDetachParentRule extends AbstractRule
 		$parentId = $item->getParentId();
 		if ($parentId > 0 && !$this->controller->checkByItemId(ActionDictionary::ACTION_TEMPLATE_READ, $parentId))
 		{
-			$this->controller->addError(static::class, 'Access to parent task denied');
+			$this->controller->addError(static::class, 'Access to parent template denied');
 
 			return false;
 		}
 
 		if (!$this->controller->checkByItemId(ActionDictionary::ACTION_TEMPLATE_EDIT, $item->getId()))
 		{
-			$this->controller->addError(static::class, 'Access to detach parent task denied');
+			$this->controller->addError(static::class, 'Access to detach parent template denied');
 
 			return false;
 		}

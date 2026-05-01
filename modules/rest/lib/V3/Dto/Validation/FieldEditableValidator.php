@@ -1,0 +1,61 @@
+<?php
+
+namespace Bitrix\Rest\V3\Dto\Validation;
+
+use Bitrix\Main\Localization\LocalizableMessage;
+use Bitrix\Main\Validation\Group\ValidationGroup;
+use Bitrix\Main\Validation\ValidationError;
+use Bitrix\Main\Validation\ValidationResult;
+use Bitrix\Rest\Exceptions\ArgumentTypeException;
+use Bitrix\Rest\V3\Dto\DtoField;
+
+class FieldEditableValidator extends DtoFieldValidator
+{
+	use RequiredGroupValidationTrait;
+	use EditableGroupValidationTrait;
+
+	public function __construct(public readonly ValidationGroup $group)
+	{
+	}
+
+	/**
+	 * @param DtoField $value
+	 * @return ValidationResult
+	 */
+	public function validate(mixed $value): ValidationResult
+	{
+		$result = new ValidationResult();
+
+		if (!$value instanceof DtoField)
+		{
+			throw new ArgumentTypeException('value', DtoField::class);
+		}
+
+		if (!$value->isInitialized())
+		{
+			return $result;
+		}
+
+		if ($this->isRequired($value, $this->group))
+		{
+			return $result;
+		}
+
+		if ($this->isEditable($value, $this->group))
+		{
+			return $result;
+		}
+
+		$result->addError(new ValidationError(
+			new LocalizableMessage(
+				code: 'REST_V3_DTO_VALIDATION_FIELD_EDITABLE_VALIDATOR_ERROR',
+				replace: [
+					'#FIELD#' => $value->getPropertyName(),
+				],
+			),
+			$value->getPropertyName(),
+		));
+
+		return $result;
+	}
+}

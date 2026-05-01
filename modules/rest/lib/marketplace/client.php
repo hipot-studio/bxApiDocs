@@ -539,6 +539,7 @@ class Client
 	 */
 	public static function isSubscriptionAvailable()
 	{
+		\CModule::includeModule('rest');
 		if (ModuleManager::isModuleInstalled('bitrix24'))
 		{
 			$status = Option::get('bitrix24', '~mp24_paid', 'N');

@@ -101,7 +101,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_PlacementLang wakeUp($data)
 	 */
-	class EO_PlacementLang {
+	class EO_PlacementLang extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\PlacementLangTable */
 		static public $dataClass = '\Bitrix\Rest\PlacementLangTable';
 		/**
@@ -159,8 +159,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_PlacementLang_Collection merge(?\Bitrix\Rest\EO_PlacementLang_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_PlacementLang|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_PlacementLang_Collection filter(callable $callback)
 	 */
-	class EO_PlacementLang_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_PlacementLang_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\PlacementLangTable */
 		static public $dataClass = '\Bitrix\Rest\PlacementLangTable';
 	}
@@ -269,7 +271,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_AppLang wakeUp($data)
 	 */
-	class EO_AppLang {
+	class EO_AppLang extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\AppLangTable */
 		static public $dataClass = '\Bitrix\Rest\AppLangTable';
 		/**
@@ -323,8 +325,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_AppLang_Collection merge(?\Bitrix\Rest\EO_AppLang_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_AppLang|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_AppLang_Collection filter(callable $callback)
 	 */
-	class EO_AppLang_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_AppLang_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\AppLangTable */
 		static public $dataClass = '\Bitrix\Rest\AppLangTable';
 	}
@@ -651,7 +655,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_App wakeUp($data)
 	 */
-	class EO_App {
+	class EO_App extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\AppTable */
 		static public $dataClass = '\Bitrix\Rest\AppTable';
 		/**
@@ -753,8 +757,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_App_Collection merge(?\Bitrix\Rest\EO_App_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_App|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_App_Collection filter(callable $callback)
 	 */
-	class EO_App_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_App_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\AppTable */
 		static public $dataClass = '\Bitrix\Rest\AppTable';
 	}
@@ -1108,7 +1114,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_Stat wakeUp($data)
 	 */
-	class EO_Stat {
+	class EO_Stat extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\StatTable */
 		static public $dataClass = '\Bitrix\Rest\StatTable';
 		/**
@@ -1213,8 +1219,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_Stat_Collection merge(?\Bitrix\Rest\EO_Stat_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_Stat|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_Stat_Collection filter(callable $callback)
 	 */
-	class EO_Stat_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Stat_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\StatTable */
 		static public $dataClass = '\Bitrix\Rest\StatTable';
 	}
@@ -1548,7 +1556,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_UsageStat wakeUp($data)
 	 */
-	class EO_UsageStat {
+	class EO_UsageStat extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\UsageStatTable */
 		static public $dataClass = '\Bitrix\Rest\UsageStatTable';
 		/**
@@ -1647,8 +1655,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_UsageStat_Collection merge(?\Bitrix\Rest\EO_UsageStat_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_UsageStat|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_UsageStat_Collection filter(callable $callback)
 	 */
-	class EO_UsageStat_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UsageStat_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\UsageStatTable */
 		static public $dataClass = '\Bitrix\Rest\UsageStatTable';
 	}
@@ -1767,7 +1777,7 @@ namespace Bitrix\Rest\Configuration\Core {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\Configuration\Core\EO_OwnerEntity wakeUp($data)
 	 */
-	class EO_OwnerEntity {
+	class EO_OwnerEntity extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\Configuration\Core\OwnerEntityTable */
 		static public $dataClass = '\Bitrix\Rest\Configuration\Core\OwnerEntityTable';
 		/**
@@ -1823,8 +1833,10 @@ namespace Bitrix\Rest\Configuration\Core {
 	 * @method \Bitrix\Rest\Configuration\Core\EO_OwnerEntity_Collection merge(?\Bitrix\Rest\Configuration\Core\EO_OwnerEntity_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\Configuration\Core\EO_OwnerEntity|null find(callable $callback)
+	 * @method \Bitrix\Rest\Configuration\Core\EO_OwnerEntity_Collection filter(callable $callback)
 	 */
-	class EO_OwnerEntity_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_OwnerEntity_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\Configuration\Core\OwnerEntityTable */
 		static public $dataClass = '\Bitrix\Rest\Configuration\Core\OwnerEntityTable';
 	}
@@ -1933,7 +1945,7 @@ namespace Bitrix\Rest\Configuration\Core {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\Configuration\Core\EO_Storage wakeUp($data)
 	 */
-	class EO_Storage {
+	class EO_Storage extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\Configuration\Core\StorageTable */
 		static public $dataClass = '\Bitrix\Rest\Configuration\Core\StorageTable';
 		/**
@@ -1986,8 +1998,10 @@ namespace Bitrix\Rest\Configuration\Core {
 	 * @method \Bitrix\Rest\Configuration\Core\EO_Storage_Collection merge(?\Bitrix\Rest\Configuration\Core\EO_Storage_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\Configuration\Core\EO_Storage|null find(callable $callback)
+	 * @method \Bitrix\Rest\Configuration\Core\EO_Storage_Collection filter(callable $callback)
 	 */
-	class EO_Storage_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Storage_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\Configuration\Core\StorageTable */
 		static public $dataClass = '\Bitrix\Rest\Configuration\Core\StorageTable';
 	}
@@ -2186,7 +2200,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_Log wakeUp($data)
 	 */
-	class EO_Log {
+	class EO_Log extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\LogTable */
 		static public $dataClass = '\Bitrix\Rest\LogTable';
 		/**
@@ -2257,8 +2271,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_Log_Collection merge(?\Bitrix\Rest\EO_Log_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_Log|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_Log_Collection filter(callable $callback)
 	 */
-	class EO_Log_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Log_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\LogTable */
 		static public $dataClass = '\Bitrix\Rest\LogTable';
 	}
@@ -2417,7 +2433,7 @@ namespace Bitrix\Rest\APAuth {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\APAuth\EO_Password wakeUp($data)
 	 */
-	class EO_Password {
+	class EO_Password extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\APAuth\PasswordTable */
 		static public $dataClass = '\Bitrix\Rest\APAuth\PasswordTable';
 		/**
@@ -2480,8 +2496,10 @@ namespace Bitrix\Rest\APAuth {
 	 * @method \Bitrix\Rest\APAuth\EO_Password_Collection merge(?\Bitrix\Rest\APAuth\EO_Password_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\APAuth\EO_Password|null find(callable $callback)
+	 * @method \Bitrix\Rest\APAuth\EO_Password_Collection filter(callable $callback)
 	 */
-	class EO_Password_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Password_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\APAuth\PasswordTable */
 		static public $dataClass = '\Bitrix\Rest\APAuth\PasswordTable';
 	}
@@ -2570,7 +2588,7 @@ namespace Bitrix\Rest\APAuth {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\APAuth\EO_Permission wakeUp($data)
 	 */
-	class EO_Permission {
+	class EO_Permission extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\APAuth\PermissionTable */
 		static public $dataClass = '\Bitrix\Rest\APAuth\PermissionTable';
 		/**
@@ -2619,8 +2637,10 @@ namespace Bitrix\Rest\APAuth {
 	 * @method \Bitrix\Rest\APAuth\EO_Permission_Collection merge(?\Bitrix\Rest\APAuth\EO_Permission_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\APAuth\EO_Permission|null find(callable $callback)
+	 * @method \Bitrix\Rest\APAuth\EO_Permission_Collection filter(callable $callback)
 	 */
-	class EO_Permission_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Permission_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\APAuth\PermissionTable */
 		static public $dataClass = '\Bitrix\Rest\APAuth\PermissionTable';
 	}
@@ -2820,7 +2840,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_Placement wakeUp($data)
 	 */
-	class EO_Placement {
+	class EO_Placement extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\PlacementTable */
 		static public $dataClass = '\Bitrix\Rest\PlacementTable';
 		/**
@@ -2893,8 +2913,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_Placement_Collection merge(?\Bitrix\Rest\EO_Placement_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_Placement|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_Placement_Collection filter(callable $callback)
 	 */
-	class EO_Placement_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Placement_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\PlacementTable */
 		static public $dataClass = '\Bitrix\Rest\PlacementTable';
 	}
@@ -2983,7 +3005,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_StatMethod wakeUp($data)
 	 */
-	class EO_StatMethod {
+	class EO_StatMethod extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\StatMethodTable */
 		static public $dataClass = '\Bitrix\Rest\StatMethodTable';
 		/**
@@ -3032,8 +3054,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_StatMethod_Collection merge(?\Bitrix\Rest\EO_StatMethod_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_StatMethod|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_StatMethod_Collection filter(callable $callback)
 	 */
-	class EO_StatMethod_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_StatMethod_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\StatMethodTable */
 		static public $dataClass = '\Bitrix\Rest\StatMethodTable';
 	}
@@ -3192,7 +3216,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_EventOffline wakeUp($data)
 	 */
-	class EO_EventOffline {
+	class EO_EventOffline extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\EventOfflineTable */
 		static public $dataClass = '\Bitrix\Rest\EventOfflineTable';
 		/**
@@ -3255,8 +3279,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_EventOffline_Collection merge(?\Bitrix\Rest\EO_EventOffline_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_EventOffline|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_EventOffline_Collection filter(callable $callback)
 	 */
-	class EO_EventOffline_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_EventOffline_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\EventOfflineTable */
 		static public $dataClass = '\Bitrix\Rest\EventOfflineTable';
 	}
@@ -3375,7 +3401,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_AppLog wakeUp($data)
 	 */
-	class EO_AppLog {
+	class EO_AppLog extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\AppLogTable */
 		static public $dataClass = '\Bitrix\Rest\AppLogTable';
 		/**
@@ -3430,8 +3456,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_AppLog_Collection merge(?\Bitrix\Rest\EO_AppLog_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_AppLog|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_AppLog_Collection filter(callable $callback)
 	 */
-	class EO_AppLog_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_AppLog_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\AppLogTable */
 		static public $dataClass = '\Bitrix\Rest\AppLogTable';
 	}
@@ -3458,6 +3486,159 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_AppLog_Collection wakeUpCollection($rows)
 	 */
 	class EO_AppLog_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Rest\Internal\Model\AccessPermissionTable:rest/lib/Internal/Model/AccessPermissionTable.php */
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * EO_AccessPermission
+	 * @see \Bitrix\Rest\Internal\Model\AccessPermissionTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getEntityType()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission setEntityType(\string|\Bitrix\Main\DB\SqlExpression $entityType)
+	 * @method bool hasEntityType()
+	 * @method bool isEntityTypeFilled()
+	 * @method bool isEntityTypeChanged()
+	 * @method \string remindActualEntityType()
+	 * @method \string requireEntityType()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission resetEntityType()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission unsetEntityType()
+	 * @method \string fillEntityType()
+	 * @method \string getAccessCode()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission setAccessCode(\string|\Bitrix\Main\DB\SqlExpression $accessCode)
+	 * @method bool hasAccessCode()
+	 * @method bool isAccessCodeFilled()
+	 * @method bool isAccessCodeChanged()
+	 * @method \string remindActualAccessCode()
+	 * @method \string requireAccessCode()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission resetAccessCode()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission unsetAccessCode()
+	 * @method \string fillAccessCode()
+	 * @method \string getPermission()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission setPermission(\string|\Bitrix\Main\DB\SqlExpression $permission)
+	 * @method bool hasPermission()
+	 * @method bool isPermissionFilled()
+	 * @method bool isPermissionChanged()
+	 * @method \string remindActualPermission()
+	 * @method \string requirePermission()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission resetPermission()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission unsetPermission()
+	 * @method \string fillPermission()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission set($fieldName, $value)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission reset($fieldName)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Rest\Internal\Model\EO_AccessPermission wakeUp($data)
+	 */
+	class EO_AccessPermission extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Rest\Internal\Model\AccessPermissionTable */
+		static public $dataClass = '\Bitrix\Rest\Internal\Model\AccessPermissionTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * EO_AccessPermission_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getEntityTypeList()
+	 * @method \string[] fillEntityType()
+	 * @method \string[] getAccessCodeList()
+	 * @method \string[] fillAccessCode()
+	 * @method \string[] getPermissionList()
+	 * @method \string[] fillPermission()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Rest\Internal\Model\EO_AccessPermission $object)
+	 * @method bool has(\Bitrix\Rest\Internal\Model\EO_AccessPermission $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission getByPrimary($primary)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission[] getAll()
+	 * @method bool remove(\Bitrix\Rest\Internal\Model\EO_AccessPermission $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Rest\Internal\Model\EO_AccessPermission_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission_Collection merge(?\Bitrix\Rest\Internal\Model\EO_AccessPermission_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission|null find(callable $callback)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission_Collection filter(callable $callback)
+	 */
+	class EO_AccessPermission_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Rest\Internal\Model\AccessPermissionTable */
+		static public $dataClass = '\Bitrix\Rest\Internal\Model\AccessPermissionTable';
+	}
+}
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_AccessPermission_Result exec()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission fetchObject()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission_Collection fetchCollection()
+	 */
+	class EO_AccessPermission_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission fetchObject()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission_Collection fetchCollection()
+	 */
+	class EO_AccessPermission_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission createObject($setDefaultValues = true)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission_Collection createCollection()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission wakeUpObject($row)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AccessPermission_Collection wakeUpCollection($rows)
+	 */
+	class EO_AccessPermission_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Rest\Internals\FreeAppTable:rest/lib/Internals/FreeAppTable.php */
 namespace Bitrix\Rest\Internals {
@@ -3510,7 +3691,7 @@ namespace Bitrix\Rest\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\Internals\EO_FreeApp wakeUp($data)
 	 */
-	class EO_FreeApp {
+	class EO_FreeApp extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\Internals\FreeAppTable */
 		static public $dataClass = '\Bitrix\Rest\Internals\FreeAppTable';
 		/**
@@ -3558,8 +3739,10 @@ namespace Bitrix\Rest\Internals {
 	 * @method \Bitrix\Rest\Internals\EO_FreeApp_Collection merge(?\Bitrix\Rest\Internals\EO_FreeApp_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\Internals\EO_FreeApp|null find(callable $callback)
+	 * @method \Bitrix\Rest\Internals\EO_FreeApp_Collection filter(callable $callback)
 	 */
-	class EO_FreeApp_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_FreeApp_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\Internals\FreeAppTable */
 		static public $dataClass = '\Bitrix\Rest\Internals\FreeAppTable';
 	}
@@ -3758,7 +3941,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_Event wakeUp($data)
 	 */
-	class EO_Event {
+	class EO_Event extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\EventTable */
 		static public $dataClass = '\Bitrix\Rest\EventTable';
 		/**
@@ -3831,8 +4014,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_Event_Collection merge(?\Bitrix\Rest\EO_Event_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_Event|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_Event_Collection filter(callable $callback)
 	 */
-	class EO_Event_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Event_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\EventTable */
 		static public $dataClass = '\Bitrix\Rest\EventTable';
 	}
@@ -4101,7 +4286,7 @@ namespace Bitrix\Rest\Preset {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\Preset\EO_Integration wakeUp($data)
 	 */
-	class EO_Integration {
+	class EO_Integration extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\Preset\IntegrationTable */
 		static public $dataClass = '\Bitrix\Rest\Preset\IntegrationTable';
 		/**
@@ -4188,8 +4373,10 @@ namespace Bitrix\Rest\Preset {
 	 * @method \Bitrix\Rest\Preset\EO_Integration_Collection merge(?\Bitrix\Rest\Preset\EO_Integration_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\Preset\EO_Integration|null find(callable $callback)
+	 * @method \Bitrix\Rest\Preset\EO_Integration_Collection filter(callable $callback)
 	 */
-	class EO_Integration_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Integration_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\Preset\IntegrationTable */
 		static public $dataClass = '\Bitrix\Rest\Preset\IntegrationTable';
 	}
@@ -4308,7 +4495,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_UsageEntity wakeUp($data)
 	 */
-	class EO_UsageEntity {
+	class EO_UsageEntity extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\UsageEntityTable */
 		static public $dataClass = '\Bitrix\Rest\UsageEntityTable';
 		/**
@@ -4363,8 +4550,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_UsageEntity_Collection merge(?\Bitrix\Rest\EO_UsageEntity_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_UsageEntity|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_UsageEntity_Collection filter(callable $callback)
 	 */
-	class EO_UsageEntity_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UsageEntity_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\UsageEntityTable */
 		static public $dataClass = '\Bitrix\Rest\UsageEntityTable';
 	}
@@ -4453,7 +4642,7 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Rest\EO_StatApp wakeUp($data)
 	 */
-	class EO_StatApp {
+	class EO_StatApp extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Rest\StatAppTable */
 		static public $dataClass = '\Bitrix\Rest\StatAppTable';
 		/**
@@ -4503,8 +4692,10 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_StatApp_Collection merge(?\Bitrix\Rest\EO_StatApp_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\EO_StatApp|null find(callable $callback)
+	 * @method \Bitrix\Rest\EO_StatApp_Collection filter(callable $callback)
 	 */
-	class EO_StatApp_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_StatApp_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Rest\StatAppTable */
 		static public $dataClass = '\Bitrix\Rest\StatAppTable';
 	}

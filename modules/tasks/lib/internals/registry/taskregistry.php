@@ -22,6 +22,8 @@ class TaskRegistry
 	private static $instance;
 
 	private $storage = [];
+	/** @var array<int, array> */
+	private static array $userDepartmentsCache = [];
 
 	/**
 	 * @param int $userId
@@ -52,14 +54,35 @@ class TaskRegistry
 	{
 		if ($taskId)
 		{
+			$this->invalidateUserDepartmentsCache($taskId);
+
 			unset($this->storage[$taskId]);
 		}
 		else
 		{
+			$this->invalidateUserDepartmentsCache();
+
 			$this->storage = [];
 		}
 
 		return $this;
+	}
+
+	private function invalidateUserDepartmentsCache(?int $taskId = null): void
+	{
+		if ($taskId === null)
+		{
+			self::$userDepartmentsCache = [];
+
+			return;
+		}
+
+		$userIds = array_column($this->storage[$taskId]['MEMBER_LIST'] ?? [], 'USER_ID');
+
+		foreach ($userIds as $userId)
+		{
+			unset(self::$userDepartmentsCache[$userId]);
+		}
 	}
 
 	/**
@@ -226,6 +249,16 @@ class TaskRegistry
 	public function isLoaded(int $taskId): bool
 	{
 		return array_key_exists($taskId, $this->storage);
+	}
+
+	public function isLoadedAndExists(int $taskId): bool
+	{
+		if (isset($this->storage[$taskId]))
+		{
+			return ($this->storage[$taskId]['ZOMBIE'] ?? null) !== 'Y';
+		}
+
+		return false;
 	}
 
 	/**
@@ -437,24 +470,47 @@ class TaskRegistry
 			return;
 		}
 
-		$userIds = implode(',', $userIds);
-		$res = \Bitrix\Tasks\Util\User::getList(
-			[
-				'filter' => [
-					'@ID' => new SqlExpression($userIds),
-				],
-				'select' => ['ID', 'UF_DEPARTMENT'],
-			]
-		);
-
-		$deps = [];
-		foreach ($res as $row)
+		$uncachedUserIds = [];
+		foreach ($userIds as $userId)
 		{
-			if (!is_array($row['UF_DEPARTMENT']) || empty($row['UF_DEPARTMENT']))
+			if (!array_key_exists($userId, self::$userDepartmentsCache))
 			{
-				continue;
+				$uncachedUserIds[] = $userId;
 			}
-			$deps[$row['ID']] = $row['UF_DEPARTMENT'];
+		}
+
+		if (!empty($uncachedUserIds))
+		{
+			$userIds = implode(',', $uncachedUserIds);
+			$res = \Bitrix\Tasks\Util\User::getList(
+				[
+					'filter' => [
+						'@ID' => new SqlExpression($userIds),
+					],
+					'select' => ['ID', 'UF_DEPARTMENT'],
+				],
+			);
+
+			foreach ($res as $row)
+			{
+				$id = (int)$row['ID'];
+				$departments = [];
+
+				if (is_array($row['UF_DEPARTMENT']) && !empty($row['UF_DEPARTMENT']))
+				{
+					$departments = $row['UF_DEPARTMENT'];
+				}
+
+				self::$userDepartmentsCache[$id] = $departments;
+			}
+
+			foreach ($uncachedUserIds as $userId)
+			{
+				if (!array_key_exists($userId, self::$userDepartmentsCache))
+				{
+					self::$userDepartmentsCache[$userId] = [];
+				}
+			}
 		}
 
 		foreach ($taskIds as $taskId)
@@ -466,11 +522,18 @@ class TaskRegistry
 
 			foreach($this->storage[$taskId]['MEMBER_LIST'] as $row)
 			{
-				if (!isset($deps[$row['USER_ID']]))
+				$userId = (int)$row['USER_ID'];
+				$departments = self::$userDepartmentsCache[$userId] ?? [];
+
+				if (empty($departments))
 				{
 					continue;
 				}
-				$this->storage[$taskId]['DEPARTMENTS'][$row['TYPE']] = array_merge($this->storage[$taskId]['DEPARTMENTS'][$row['TYPE']], $deps[$row['USER_ID']]);
+
+				$this->storage[$taskId]['DEPARTMENTS'][$row['TYPE']] = array_merge(
+					$this->storage[$taskId]['DEPARTMENTS'][$row['TYPE']],
+					$departments,
+				);
 			}
 		}
 	}

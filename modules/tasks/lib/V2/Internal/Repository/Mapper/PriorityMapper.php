@@ -12,8 +12,7 @@ class PriorityMapper
 	public function mapToEnum(int $priority): ?Entity\Priority
 	{
 		return match ($priority) {
-			Internals\Task\Priority::LOW => Entity\Priority::Low,
-			Internals\Task\Priority::AVERAGE => Entity\Priority::Average,
+			Internals\Task\Priority::LOW, Internals\Task\Priority::AVERAGE => Entity\Priority::Average,
 			Internals\Task\Priority::HIGH => Entity\Priority::High,
 			default => null,
 		};

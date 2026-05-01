@@ -22,11 +22,14 @@ use Bitrix\Tasks\V2\Internal\Integration\Im\Chat;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\UserUrlService;
 use Bitrix\Tasks\V2\Internal\Repository\GroupRepository;
+use Bitrix\Tasks\V2\Internal\Repository\TaskAccessRequestRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserFieldSchemeRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\AnalyticsService;
 use Bitrix\Tasks\V2\Internal\Service\Link\LinkService;
 use Bitrix\Tasks\V2\Internal\Service\TariffService;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\OptionDictionary;
+use Bitrix\Tasks\V2\Internal\Service\State\StateFlagsService;
 use Bitrix\Tasks\V2\Internal\Service\Task\StateService;
 
 class ConfigService
@@ -40,11 +43,13 @@ class ConfigService
 		private readonly ToolService $toolService,
 		private readonly AnalyticsService $analyticsService,
 		private readonly StateService $stateService,
+		private readonly StateFlagsService $stateFlagsService,
 		private readonly UserRepositoryInterface $userRepository,
 		private readonly GroupRepository $groupRepository,
 		private readonly UserFieldSchemeRepositoryInterface $userFieldSchemeRepository,
 		private readonly UserUrlService $userUrlService,
 		private readonly StructureRepositoryInterface $structureRepository,
+		private readonly TaskAccessRequestRepositoryInterface $taskAccessRequestRepository,
 	)
 	{
 
@@ -55,6 +60,7 @@ class ConfigService
 		$isCollaber = User::isCollaber($userId);
 
 		$state = $this->stateService->get($userId);
+		$templateFlags = $this->stateFlagsService->get(OptionDictionary::StateFlagsTemplate, $userId);
 
 		$mainDepartmentAccessCode = $this->structureRepository->getMainDepartment()?->accessCode ?? '';
 		$mainDepartmentUfId = (new AccessCode($mainDepartmentAccessCode))->getEntityId();
@@ -77,6 +83,7 @@ class ConfigService
 			'defaultCollab' => $this->groupRepository->getDefaultCollab($userId),
 			'deadlineUserOption' => $state?->defaultDeadline?->toArray(),
 			'stateFlags' => $state?->getFlags(),
+			'templateStateFlags' => $templateFlags->toArray(),
 			'chatType' => Chat::ENTITY_TYPE,
 			'features' => [
 				'isV2Enabled' => FormV2Feature::isOn(),

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare;
 
+use Bitrix\Tasks\Internals\Task\ParameterTable;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Trait\ConfigTrait;
-use Bitrix\Tasks\Control\Handler\TaskFieldHandler;
 use Bitrix\Tasks\Processor\Task\Scheduler;
 
 class PrepareDatePlan implements PrepareFieldInterface
@@ -19,11 +19,9 @@ class PrepareDatePlan implements PrepareFieldInterface
 			return $fields;
 		}
 
-		$fieldHandler = new TaskFieldHandler($this->config->getUserId(), $fields, $fullTaskData);
-
-		$parentChanged = $fieldHandler->isParentChanged();
-		$datesChanged = $fieldHandler->isDatesChanged();
-		$followDatesChanged = $fieldHandler->isFollowDates();
+		$parentChanged = $this->isParentChanged($fields, $fullTaskData);
+		$datesChanged = $this->isDatesChanged($fields, $fullTaskData);
+		$followDatesChanged = $this->isFollowDates($fields);
 
 		$taskId = (int)$fullTaskData['ID'];
 
@@ -103,5 +101,61 @@ class PrepareDatePlan implements PrepareFieldInterface
 		]);
 
 		return $pipeline($fields, $fullTaskData);
+	}
+	
+	private function isParentChanged(array $fields, array $fullTaskData): bool
+	{
+		if (!isset($fields['PARENT_ID']))
+		{
+			return false;
+		}
+
+		$fields['PARENT_ID'] = (int)$fields['PARENT_ID'];
+		$fullTaskData['PARENT_ID'] = (int)($fullTaskData['PARENT_ID'] ?? 0);
+
+		return $fields['PARENT_ID'] !== $fullTaskData['PARENT_ID'];
+	}
+
+	private function isDatesChanged(array $fields, array $fullTaskData): bool
+	{
+		if (
+			isset($fields['START_DATE_PLAN'])
+			&& (string)$fullTaskData['START_DATE_PLAN'] !== (string)$fields['START_DATE_PLAN']
+		)
+		{
+			return true;
+		}
+
+		if (
+			isset($fields['END_DATE_PLAN'])
+			&& (string)$fullTaskData['END_DATE_PLAN'] !== (string)$fields['END_DATE_PLAN']
+		)
+		{
+			return true;
+		}
+		
+		return false;
+	}
+
+	private function isFollowDates(array $fields): bool
+	{
+		if (!is_array($fields['SE_PARAMETER'] ?? null))
+		{
+			return false;
+		}
+
+		foreach ($fields['SE_PARAMETER'] as $parameter)
+		{
+			if (
+				is_array($parameter)
+				&& (int)$parameter['CODE'] === ParameterTable::PARAM_SUBTASKS_TIME
+				&& $parameter['VALUE'] === 'Y'
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

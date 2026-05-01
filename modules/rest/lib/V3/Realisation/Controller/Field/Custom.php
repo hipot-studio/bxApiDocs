@@ -5,6 +5,7 @@ namespace Bitrix\Rest\V3\Realisation\Controller\Field;
 use Bitrix\Main\Request;
 use Bitrix\Main\SystemException;
 use Bitrix\Rest\V3\Attribute\RequiredGroup;
+use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Exception\EntityAlreadyExistsException;
 use Bitrix\Rest\V3\Exception\EntityNotFoundException;
 use Bitrix\Rest\V3\Exception\Internal\InternalException;
@@ -50,15 +51,10 @@ final class Custom extends AbstractCustom
 		return $this->getResponseWithOneField($entityId, $request->id, $selectedFields);
 	}
 
-	public function addAction(AddRequest $request, string $entityId): GetResponse
+	public function addAction(AddRequest $request): GetResponse
 	{
 		/** @var CustomDto $dto */
-		$dto = $request->fields->getAsDto();
-		$dto->entityId = $entityId;
-		if (!$this->validateDto($dto, (RequiredGroup::Add)->value))
-		{
-			throw new DtoValidationException($this->getErrors());
-		}
+		$dto = $request->fields->convertToDto((RequiredGroup::Add)->value);
 
 		$customFieldsByName = $this->getCustomFieldsByFieldName($dto->entityId, $this->getCurrentUser()->getId(), $this->getResponseLanguage());
 		if (isset($customFieldsByName[$dto->name]))
@@ -73,7 +69,7 @@ final class Custom extends AbstractCustom
 			global $APPLICATION;
 			throw new InternalException(new SystemException('Cannot add custom field: ' . $APPLICATION->GetException()));
 		}
-		$this->unsetFieldsByEntityId($entityId);
+		$this->unsetFieldsByEntityId($dto->entityId);
 
 		return $this->getResponseWithOneField($dto->entityId, $fieldId);
 	}
@@ -86,31 +82,25 @@ final class Custom extends AbstractCustom
 		return new BooleanResponse(true);
 	}
 
-	public function updateAction(UpdateRequest $request, string $entityId): GetResponse
+	public function updateAction(UpdateRequest $request): GetResponse
 	{
 		if ($request->id === null)
 		{
 			throw new RequiredFieldInRequestException('id');
 		}
 		/** @var CustomDto $dto */
-		$dto = $request->fields->getAsDto();
-		$dto->entityId = $entityId;
-
-		if (!$this->validateDto($dto, (RequiredGroup::Update)->value))
-		{
-			throw new DtoValidationException($this->getErrors());
-		}
+		$dto = $request->fields->convertToDto((RequiredGroup::Update)->value);
 
 		$valuesForUpdate = $this->mapper->getValuesForUpdate($dto);
 		if (empty($valuesForUpdate))
 		{
-			return $this->getResponseWithOneField($entityId, $request->id);
+			return $this->getResponseWithOneField($dto->entityId, $request->id);
 		}
-		$customField = $this->getCustomField($entityId, $request->id);
+		$customField = $this->getCustomField($dto->entityId, $request->id);
 		$this->userTypeEntity->Update($customField['ID'], $valuesForUpdate);
-		$this->unsetFieldsByEntityId($entityId);
+		$this->unsetFieldsByEntityId($dto->entityId);
 
-		return $this->getResponseWithOneField($entityId, $customField['ID']);
+		return $this->getResponseWithOneField($dto->entityId, $customField['ID']);
 	}
 
 	private function getResponseWithOneField(string $entityId, int $id, array $selectedFields = []): GetResponse

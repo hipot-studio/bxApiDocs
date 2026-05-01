@@ -7,10 +7,8 @@ use Bitrix\Tasks\Internals\TaskObject;
 
 class UserRepository implements UserRepositoryInterface
 {
-	/** @var User[]  */
-	private array $cache = [];
-	/** @var int[] */
-	private array $timeZoneCache = [];
+	/** @var User[] */
+	private static array $cache = [];
 
 	/**
 	 * @param TaskObject $task
@@ -91,9 +89,9 @@ class UserRepository implements UserRepositoryInterface
 			return null;
 		}
 
-		if (isset($this->cache[$userId]))
+		if (isset(static::$cache[$userId]))
 		{
-			return $this->cache[$userId];
+			return static::$cache[$userId];
 		}
 
 		$res = UserTable::query()
@@ -130,7 +128,7 @@ class UserRepository implements UserRepositoryInterface
 			]
 		);
 
-		$this->cache[$user->getId()] = $user;
+		static::$cache[$user->getId()] = $user;
 
 		return $user;
 	}
@@ -146,7 +144,8 @@ class UserRepository implements UserRepositoryInterface
 		if (empty($unCachedUserIds))
 		{
 			$cachedUserIds = $this->extractCachedUserIds($userIds);
-			return array_map(fn (int $userId): User => $this->cache[$userId], $cachedUserIds);
+
+			return array_map(fn (int $userId): User => static::$cache[$userId], $cachedUserIds);
 		}
 
 		$users = UserTable::query()
@@ -172,7 +171,7 @@ class UserRepository implements UserRepositoryInterface
 
 		foreach ($users as $user)
 		{
-			$this->cache[$user->getId()] = new User(
+			static::$cache[$user->getId()] = new User(
 				$user->getId(),
 				$user->getName(),
 				$user->getNotificationLanguageId(),
@@ -186,7 +185,7 @@ class UserRepository implements UserRepositoryInterface
 			);
 		}
 
-		return array_filter(array_map(fn (int $userId): ?User => $this->cache[$userId] ?? null, $userIds));
+		return array_filter(array_map(fn (int $userId): ?User => static::$cache[$userId] ?? null, $userIds));
 	}
 
 	public function getUserTimeZoneOffset(int $userId, bool $force = false): int
@@ -253,11 +252,11 @@ class UserRepository implements UserRepositoryInterface
 
 	private function extractCachedUserIds(array $userIds): array
 	{
-		return array_filter($userIds, fn (int $userId): bool => isset($this->cache[$userId]));
+		return array_filter($userIds, fn (int $userId): bool => isset(static::$cache[$userId]));
 	}
 
 	private function extractUnCachedUserIds(array $userIds): array
 	{
-		return array_filter($userIds, fn (int $userId): bool => !isset($this->cache[$userId]));
+		return array_filter($userIds, fn (int $userId): bool => !isset(static::$cache[$userId]));
 	}
 }

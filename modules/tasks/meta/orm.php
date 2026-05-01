@@ -91,7 +91,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\MemberObject wakeUp($data)
 	 */
-	class EO_Member {
+	class EO_Member extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\MemberTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\MemberTable';
 		/**
@@ -153,7 +153,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\MemberObject|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\MemberCollection filter(callable $callback)
 	 */
-	class EO_Member_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Member_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\MemberTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\MemberTable';
 	}
@@ -829,6 +829,16 @@ namespace Bitrix\Tasks\Integration\Report\Internals {
 	 * @method void removeAllTagList()
 	 * @method \Bitrix\Tasks\Internals\TaskObject resetTagList()
 	 * @method \Bitrix\Tasks\Internals\TaskObject unsetTagList()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter getCounters()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter remindActualCounters()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter requireCounters()
+	 * @method \Bitrix\Tasks\Internals\TaskObject setCounters(\Bitrix\Tasks\Internals\Counter\EO_Counter $object)
+	 * @method \Bitrix\Tasks\Internals\TaskObject resetCounters()
+	 * @method \Bitrix\Tasks\Internals\TaskObject unsetCounters()
+	 * @method bool hasCounters()
+	 * @method bool isCountersFilled()
+	 * @method bool isCountersChanged()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter fillCounters()
 	 * @method \string getDescriptionTr()
 	 * @method \string remindActualDescriptionTr()
 	 * @method \string requireDescriptionTr()
@@ -987,7 +997,7 @@ namespace Bitrix\Tasks\Integration\Report\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\TaskObject wakeUp($data)
 	 */
-	class EO_Task {
+	class EO_Task extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Integration\Report\Internals\TaskTable */
 		static public $dataClass = '\Bitrix\Tasks\Integration\Report\Internals\TaskTable';
 		/**
@@ -1147,6 +1157,9 @@ namespace Bitrix\Tasks\Integration\Report\Internals {
 	 * @method \Bitrix\Tasks\Internals\Task\TagCollection[] getTagListList()
 	 * @method \Bitrix\Tasks\Internals\Task\TagCollection getTagListCollection()
 	 * @method \Bitrix\Tasks\Internals\Task\TagCollection fillTagList()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter[] getCountersList()
+	 * @method \Bitrix\Tasks\Internals\TaskCollection getCountersCollection()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter_Collection fillCounters()
 	 * @method \string[] getDescriptionTrList()
 	 * @method \string[] fillDescriptionTr()
 	 * @method \string[] getStatusPseudoList()
@@ -1216,7 +1229,7 @@ namespace Bitrix\Tasks\Integration\Report\Internals {
 	 * @method \Bitrix\Tasks\Internals\TaskObject|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\TaskCollection filter(callable $callback)
 	 */
-	class EO_Task_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Task_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Integration\Report\Internals\TaskTable */
 		static public $dataClass = '\Bitrix\Tasks\Integration\Report\Internals\TaskTable';
 	}
@@ -1892,6 +1905,16 @@ namespace Bitrix\Tasks\Internals {
 	 * @method void removeAllTagList()
 	 * @method \Bitrix\Tasks\Internals\TaskObject resetTagList()
 	 * @method \Bitrix\Tasks\Internals\TaskObject unsetTagList()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter getCounters()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter remindActualCounters()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter requireCounters()
+	 * @method \Bitrix\Tasks\Internals\TaskObject setCounters(\Bitrix\Tasks\Internals\Counter\EO_Counter $object)
+	 * @method \Bitrix\Tasks\Internals\TaskObject resetCounters()
+	 * @method \Bitrix\Tasks\Internals\TaskObject unsetCounters()
+	 * @method bool hasCounters()
+	 * @method bool isCountersFilled()
+	 * @method bool isCountersChanged()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter fillCounters()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1919,7 +1942,7 @@ namespace Bitrix\Tasks\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\TaskObject wakeUp($data)
 	 */
-	class EO_Task {
+	class EO_Task extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\TaskTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\TaskTable';
 		/**
@@ -2079,6 +2102,9 @@ namespace Bitrix\Tasks\Internals {
 	 * @method \Bitrix\Tasks\Internals\Task\TagCollection[] getTagListList()
 	 * @method \Bitrix\Tasks\Internals\Task\TagCollection getTagListCollection()
 	 * @method \Bitrix\Tasks\Internals\Task\TagCollection fillTagList()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter[] getCountersList()
+	 * @method \Bitrix\Tasks\Internals\TaskCollection getCountersCollection()
+	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter_Collection fillCounters()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2110,7 +2136,7 @@ namespace Bitrix\Tasks\Internals {
 	 * @method \Bitrix\Tasks\Internals\TaskObject|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\TaskCollection filter(callable $callback)
 	 */
-	class EO_Task_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Task_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\TaskTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\TaskTable';
 	}
@@ -2212,6 +2238,16 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Item resetDescription()
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Item unsetDescription()
 	 * @method \string fillDescription()
+	 * @method \float getSortFloat()
+	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Item setSortFloat(\float|\Bitrix\Main\DB\SqlExpression $sortFloat)
+	 * @method bool hasSortFloat()
+	 * @method bool isSortFloatFilled()
+	 * @method bool isSortFloatChanged()
+	 * @method \float remindActualSortFloat()
+	 * @method \float requireSortFloat()
+	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Item resetSortFloat()
+	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Item unsetSortFloat()
+	 * @method \float fillSortFloat()
 	 * @method \int getSort()
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Item setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
 	 * @method bool hasSort()
@@ -2329,7 +2365,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Scrum\Internal\EO_Item wakeUp($data)
 	 */
-	class EO_Item {
+	class EO_Item extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Scrum\Internal\ItemTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\ItemTable';
 		/**
@@ -2358,6 +2394,8 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \string[] fillName()
 	 * @method \string[] getDescriptionList()
 	 * @method \string[] fillDescription()
+	 * @method \float[] getSortFloatList()
+	 * @method \float[] fillSortFloat()
 	 * @method \int[] getSortList()
 	 * @method \int[] fillSort()
 	 * @method \int[] getCreatedByList()
@@ -2410,7 +2448,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Item|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Item_Collection filter(callable $callback)
 	 */
-	class EO_Item_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Item_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Scrum\Internal\ItemTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\ItemTable';
 	}
@@ -2559,7 +2597,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Scrum\Internal\EO_TypeChecklist wakeUp($data)
 	 */
-	class EO_TypeChecklist {
+	class EO_TypeChecklist extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Scrum\Internal\TypeChecklistTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\TypeChecklistTable';
 		/**
@@ -2623,7 +2661,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_TypeChecklist|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_TypeChecklist_Collection filter(callable $callback)
 	 */
-	class EO_TypeChecklist_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TypeChecklist_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Scrum\Internal\TypeChecklistTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\TypeChecklistTable';
 	}
@@ -2752,7 +2790,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Scrum\Internal\EO_Epic wakeUp($data)
 	 */
-	class EO_Epic {
+	class EO_Epic extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Scrum\Internal\EpicTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\EpicTable';
 		/**
@@ -2812,7 +2850,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Epic|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Epic_Collection filter(callable $callback)
 	 */
-	class EO_Epic_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Epic_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Scrum\Internal\EpicTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\EpicTable';
 	}
@@ -2932,7 +2970,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Scrum\Internal\EO_Type wakeUp($data)
 	 */
-	class EO_Type {
+	class EO_Type extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Scrum\Internal\TypeTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\TypeTable';
 		/**
@@ -2991,7 +3029,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Type|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Type_Collection filter(callable $callback)
 	 */
-	class EO_Type_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Type_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Scrum\Internal\TypeTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\TypeTable';
 	}
@@ -3090,7 +3128,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Scrum\Internal\EO_TypeParticipants wakeUp($data)
 	 */
-	class EO_TypeParticipants {
+	class EO_TypeParticipants extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Scrum\Internal\TypeParticipantsTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\TypeParticipantsTable';
 		/**
@@ -3145,7 +3183,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_TypeParticipants|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_TypeParticipants_Collection filter(callable $callback)
 	 */
-	class EO_TypeParticipants_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TypeParticipants_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Scrum\Internal\TypeParticipantsTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\TypeParticipantsTable';
 	}
@@ -3229,7 +3267,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Scrum\Internal\EO_TypeChecklistTree wakeUp($data)
 	 */
-	class EO_TypeChecklistTree {
+	class EO_TypeChecklistTree extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Scrum\Internal\TypeChecklistTreeTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\TypeChecklistTreeTable';
 		/**
@@ -3280,7 +3318,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_TypeChecklistTree|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_TypeChecklistTree_Collection filter(callable $callback)
 	 */
-	class EO_TypeChecklistTree_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TypeChecklistTree_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Scrum\Internal\TypeChecklistTreeTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\TypeChecklistTreeTable';
 	}
@@ -3480,7 +3518,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Scrum\Internal\EO_Entity wakeUp($data)
 	 */
-	class EO_Entity {
+	class EO_Entity extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Scrum\Internal\EntityTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\EntityTable';
 		/**
@@ -3555,7 +3593,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Entity|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Entity_Collection filter(callable $callback)
 	 */
-	class EO_Entity_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Entity_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Scrum\Internal\EntityTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\EntityTable';
 	}
@@ -3704,7 +3742,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Scrum\Internal\EO_ItemChecklist wakeUp($data)
 	 */
-	class EO_ItemChecklist {
+	class EO_ItemChecklist extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Scrum\Internal\ItemChecklistTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\ItemChecklistTable';
 		/**
@@ -3768,7 +3806,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_ItemChecklist|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_ItemChecklist_Collection filter(callable $callback)
 	 */
-	class EO_ItemChecklist_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ItemChecklist_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Scrum\Internal\ItemChecklistTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\ItemChecklistTable';
 	}
@@ -3842,7 +3880,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Scrum\Internal\EO_Chat wakeUp($data)
 	 */
-	class EO_Chat {
+	class EO_Chat extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Scrum\Internal\ChatTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\ChatTable';
 		/**
@@ -3891,7 +3929,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Chat|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_Chat_Collection filter(callable $callback)
 	 */
-	class EO_Chat_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Chat_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Scrum\Internal\ChatTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\ChatTable';
 	}
@@ -3975,7 +4013,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Scrum\Internal\EO_ItemChecklistTree wakeUp($data)
 	 */
-	class EO_ItemChecklistTree {
+	class EO_ItemChecklistTree extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Scrum\Internal\ItemChecklistTreeTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\ItemChecklistTreeTable';
 		/**
@@ -4026,7 +4064,7 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_ItemChecklistTree|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_ItemChecklistTree_Collection filter(callable $callback)
 	 */
-	class EO_ItemChecklistTree_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ItemChecklistTree_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Scrum\Internal\ItemChecklistTreeTable */
 		static public $dataClass = '\Bitrix\Tasks\Scrum\Internal\ItemChecklistTreeTable';
 	}
@@ -4053,231 +4091,6 @@ namespace Bitrix\Tasks\Scrum\Internal {
 	 * @method \Bitrix\Tasks\Scrum\Internal\EO_ItemChecklistTree_Collection wakeUpCollection($rows)
 	 */
 	class EO_ItemChecklistTree_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable:tasks/lib/Deadline/Internals/Model/DeadlineUserOptionTable.php */
-namespace Bitrix\Tasks\Deadline\Internals\Model {
-	/**
-	 * EO_DeadlineUserOption
-	 * @see \Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \int remindActualUserId()
-	 * @method \int requireUserId()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetUserId()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetUserId()
-	 * @method \int fillUserId()
-	 * @method \int getDefaultDeadline()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setDefaultDeadline(\int|\Bitrix\Main\DB\SqlExpression $defaultDeadline)
-	 * @method bool hasDefaultDeadline()
-	 * @method bool isDefaultDeadlineFilled()
-	 * @method bool isDefaultDeadlineChanged()
-	 * @method \int remindActualDefaultDeadline()
-	 * @method \int requireDefaultDeadline()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetDefaultDeadline()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetDefaultDeadline()
-	 * @method \int fillDefaultDeadline()
-	 * @method \boolean getIsExactDeadlineTime()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setIsExactDeadlineTime(\boolean|\Bitrix\Main\DB\SqlExpression $isExactDeadlineTime)
-	 * @method bool hasIsExactDeadlineTime()
-	 * @method bool isIsExactDeadlineTimeFilled()
-	 * @method bool isIsExactDeadlineTimeChanged()
-	 * @method \boolean remindActualIsExactDeadlineTime()
-	 * @method \boolean requireIsExactDeadlineTime()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetIsExactDeadlineTime()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetIsExactDeadlineTime()
-	 * @method \boolean fillIsExactDeadlineTime()
-	 * @method \string getSkipNotificationPeriod()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setSkipNotificationPeriod(\string|\Bitrix\Main\DB\SqlExpression $skipNotificationPeriod)
-	 * @method bool hasSkipNotificationPeriod()
-	 * @method bool isSkipNotificationPeriodFilled()
-	 * @method bool isSkipNotificationPeriodChanged()
-	 * @method \string remindActualSkipNotificationPeriod()
-	 * @method \string requireSkipNotificationPeriod()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetSkipNotificationPeriod()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetSkipNotificationPeriod()
-	 * @method \string fillSkipNotificationPeriod()
-	 * @method null|\Bitrix\Main\Type\DateTime getSkipNotificationStartDate()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setSkipNotificationStartDate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $skipNotificationStartDate)
-	 * @method bool hasSkipNotificationStartDate()
-	 * @method bool isSkipNotificationStartDateFilled()
-	 * @method bool isSkipNotificationStartDateChanged()
-	 * @method null|\Bitrix\Main\Type\DateTime remindActualSkipNotificationStartDate()
-	 * @method null|\Bitrix\Main\Type\DateTime requireSkipNotificationStartDate()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetSkipNotificationStartDate()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetSkipNotificationStartDate()
-	 * @method null|\Bitrix\Main\Type\DateTime fillSkipNotificationStartDate()
-	 * @method \boolean getCanChangeDeadline()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setCanChangeDeadline(\boolean|\Bitrix\Main\DB\SqlExpression $canChangeDeadline)
-	 * @method bool hasCanChangeDeadline()
-	 * @method bool isCanChangeDeadlineFilled()
-	 * @method bool isCanChangeDeadlineChanged()
-	 * @method \boolean remindActualCanChangeDeadline()
-	 * @method \boolean requireCanChangeDeadline()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetCanChangeDeadline()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetCanChangeDeadline()
-	 * @method \boolean fillCanChangeDeadline()
-	 * @method null|\Bitrix\Main\Type\DateTime getMaxDeadlineChangeDate()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setMaxDeadlineChangeDate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $maxDeadlineChangeDate)
-	 * @method bool hasMaxDeadlineChangeDate()
-	 * @method bool isMaxDeadlineChangeDateFilled()
-	 * @method bool isMaxDeadlineChangeDateChanged()
-	 * @method null|\Bitrix\Main\Type\DateTime remindActualMaxDeadlineChangeDate()
-	 * @method null|\Bitrix\Main\Type\DateTime requireMaxDeadlineChangeDate()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetMaxDeadlineChangeDate()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetMaxDeadlineChangeDate()
-	 * @method null|\Bitrix\Main\Type\DateTime fillMaxDeadlineChangeDate()
-	 * @method null|\int getMaxDeadlineChanges()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setMaxDeadlineChanges(null|\int|\Bitrix\Main\DB\SqlExpression $maxDeadlineChanges)
-	 * @method bool hasMaxDeadlineChanges()
-	 * @method bool isMaxDeadlineChangesFilled()
-	 * @method bool isMaxDeadlineChangesChanged()
-	 * @method null|\int remindActualMaxDeadlineChanges()
-	 * @method null|\int requireMaxDeadlineChanges()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetMaxDeadlineChanges()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetMaxDeadlineChanges()
-	 * @method null|\int fillMaxDeadlineChanges()
-	 * @method \boolean getRequireDeadlineChangeReason()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setRequireDeadlineChangeReason(\boolean|\Bitrix\Main\DB\SqlExpression $requireDeadlineChangeReason)
-	 * @method bool hasRequireDeadlineChangeReason()
-	 * @method bool isRequireDeadlineChangeReasonFilled()
-	 * @method bool isRequireDeadlineChangeReasonChanged()
-	 * @method \boolean remindActualRequireDeadlineChangeReason()
-	 * @method \boolean requireRequireDeadlineChangeReason()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetRequireDeadlineChangeReason()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetRequireDeadlineChangeReason()
-	 * @method \boolean fillRequireDeadlineChangeReason()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption reset($fieldName)
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption wakeUp($data)
-	 */
-	class EO_DeadlineUserOption {
-		/* @var \Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable */
-		static public $dataClass = '\Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Tasks\Deadline\Internals\Model {
-	/**
-	 * EO_DeadlineUserOption_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getUserIdList()
-	 * @method \int[] fillUserId()
-	 * @method \int[] getDefaultDeadlineList()
-	 * @method \int[] fillDefaultDeadline()
-	 * @method \boolean[] getIsExactDeadlineTimeList()
-	 * @method \boolean[] fillIsExactDeadlineTime()
-	 * @method \string[] getSkipNotificationPeriodList()
-	 * @method \string[] fillSkipNotificationPeriod()
-	 * @method null|\Bitrix\Main\Type\DateTime[] getSkipNotificationStartDateList()
-	 * @method null|\Bitrix\Main\Type\DateTime[] fillSkipNotificationStartDate()
-	 * @method \boolean[] getCanChangeDeadlineList()
-	 * @method \boolean[] fillCanChangeDeadline()
-	 * @method null|\Bitrix\Main\Type\DateTime[] getMaxDeadlineChangeDateList()
-	 * @method null|\Bitrix\Main\Type\DateTime[] fillMaxDeadlineChangeDate()
-	 * @method null|\int[] getMaxDeadlineChangesList()
-	 * @method null|\int[] fillMaxDeadlineChanges()
-	 * @method \boolean[] getRequireDeadlineChangeReasonList()
-	 * @method \boolean[] fillRequireDeadlineChangeReason()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption $object)
-	 * @method bool has(\Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection merge(?\Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption|null find(callable $callback)
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection filter(callable $callback)
-	 */
-	class EO_DeadlineUserOption_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable */
-		static public $dataClass = '\Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable';
-	}
-}
-namespace Bitrix\Tasks\Deadline\Internals\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_DeadlineUserOption_Result exec()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption fetchObject()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection fetchCollection()
-	 */
-	class EO_DeadlineUserOption_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption fetchObject()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection fetchCollection()
-	 */
-	class EO_DeadlineUserOption_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection createCollection()
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection wakeUpCollection($rows)
-	 */
-	class EO_DeadlineUserOption_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Tasks\Access\Role\TasksRoleTable:tasks/lib/access/role/tasksroletable.php */
 namespace Bitrix\Tasks\Access\Role {
@@ -4330,7 +4143,7 @@ namespace Bitrix\Tasks\Access\Role {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Access\Role\TasksRole wakeUp($data)
 	 */
-	class EO_TasksRole {
+	class EO_TasksRole extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Access\Role\TasksRoleTable */
 		static public $dataClass = '\Bitrix\Tasks\Access\Role\TasksRoleTable';
 		/**
@@ -4380,7 +4193,7 @@ namespace Bitrix\Tasks\Access\Role {
 	 * @method \Bitrix\Tasks\Access\Role\TasksRole|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Access\Role\EO_TasksRole_Collection filter(callable $callback)
 	 */
-	class EO_TasksRole_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TasksRole_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Access\Role\TasksRoleTable */
 		static public $dataClass = '\Bitrix\Tasks\Access\Role\TasksRoleTable';
 	}
@@ -4469,7 +4282,7 @@ namespace Bitrix\Tasks\Access\Role {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Access\Role\TasksRoleRelation wakeUp($data)
 	 */
-	class EO_TasksRoleRelation {
+	class EO_TasksRoleRelation extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Access\Role\TasksRoleRelationTable */
 		static public $dataClass = '\Bitrix\Tasks\Access\Role\TasksRoleRelationTable';
 		/**
@@ -4521,7 +4334,7 @@ namespace Bitrix\Tasks\Access\Role {
 	 * @method \Bitrix\Tasks\Access\Role\TasksRoleRelation|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Access\Role\EO_TasksRoleRelation_Collection filter(callable $callback)
 	 */
-	class EO_TasksRoleRelation_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TasksRoleRelation_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Access\Role\TasksRoleRelationTable */
 		static public $dataClass = '\Bitrix\Tasks\Access\Role\TasksRoleRelationTable';
 	}
@@ -4630,7 +4443,7 @@ namespace Bitrix\Tasks\Access\Permission {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Access\Permission\TasksTemplatePermission wakeUp($data)
 	 */
-	class EO_TasksTemplatePermission {
+	class EO_TasksTemplatePermission extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable */
 		static public $dataClass = '\Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable';
 		/**
@@ -4686,7 +4499,7 @@ namespace Bitrix\Tasks\Access\Permission {
 	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermission|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionCollection filter(callable $callback)
 	 */
-	class EO_TasksTemplatePermission_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TasksTemplatePermission_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable */
 		static public $dataClass = '\Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable';
 	}
@@ -4785,7 +4598,7 @@ namespace Bitrix\Tasks\Access\Permission {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Access\Permission\TasksPermission wakeUp($data)
 	 */
-	class EO_TasksPermission {
+	class EO_TasksPermission extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Access\Permission\TasksPermissionTable */
 		static public $dataClass = '\Bitrix\Tasks\Access\Permission\TasksPermissionTable';
 		/**
@@ -4839,7 +4652,7 @@ namespace Bitrix\Tasks\Access\Permission {
 	 * @method \Bitrix\Tasks\Access\Permission\TasksPermission|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Access\Permission\EO_TasksPermission_Collection filter(callable $callback)
 	 */
-	class EO_TasksPermission_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TasksPermission_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Access\Permission\TasksPermissionTable */
 		static public $dataClass = '\Bitrix\Tasks\Access\Permission\TasksPermissionTable';
 	}
@@ -4938,7 +4751,7 @@ namespace Bitrix\Tasks\Integration\Intranet\Internals\Runtime {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Integration\Intranet\Internals\Runtime\EO_UtmUser wakeUp($data)
 	 */
-	class EO_UtmUser {
+	class EO_UtmUser extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Integration\Intranet\Internals\Runtime\UtmUserTable */
 		static public $dataClass = '\Bitrix\Tasks\Integration\Intranet\Internals\Runtime\UtmUserTable';
 		/**
@@ -4992,7 +4805,7 @@ namespace Bitrix\Tasks\Integration\Intranet\Internals\Runtime {
 	 * @method \Bitrix\Tasks\Integration\Intranet\Internals\Runtime\EO_UtmUser|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Integration\Intranet\Internals\Runtime\EO_UtmUser_Collection filter(callable $callback)
 	 */
-	class EO_UtmUser_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UtmUser_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Integration\Intranet\Internals\Runtime\UtmUserTable */
 		static public $dataClass = '\Bitrix\Tasks\Integration\Intranet\Internals\Runtime\UtmUserTable';
 	}
@@ -5071,7 +4884,7 @@ namespace Bitrix\Tasks\Integration\Intranet\Internals\Runtime {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Integration\Intranet\Internals\Runtime\EO_UtsIblockSection wakeUp($data)
 	 */
-	class EO_UtsIblockSection {
+	class EO_UtsIblockSection extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Integration\Intranet\Internals\Runtime\UtsIblockSectionTable */
 		static public $dataClass = '\Bitrix\Tasks\Integration\Intranet\Internals\Runtime\UtsIblockSectionTable';
 		/**
@@ -5121,7 +4934,7 @@ namespace Bitrix\Tasks\Integration\Intranet\Internals\Runtime {
 	 * @method \Bitrix\Tasks\Integration\Intranet\Internals\Runtime\EO_UtsIblockSection|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Integration\Intranet\Internals\Runtime\EO_UtsIblockSection_Collection filter(callable $callback)
 	 */
-	class EO_UtsIblockSection_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UtsIblockSection_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Integration\Intranet\Internals\Runtime\UtsIblockSectionTable */
 		static public $dataClass = '\Bitrix\Tasks\Integration\Intranet\Internals\Runtime\UtsIblockSectionTable';
 	}
@@ -5300,7 +5113,7 @@ namespace Bitrix\Tasks\Integration\Rest {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\ElapsedTimeObject wakeUp($data)
 	 */
-	class EO_ElapsedTime {
+	class EO_ElapsedTime extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Integration\Rest\ElapsedTimeTable */
 		static public $dataClass = '\Bitrix\Tasks\Integration\Rest\ElapsedTimeTable';
 		/**
@@ -5372,7 +5185,7 @@ namespace Bitrix\Tasks\Integration\Rest {
 	 * @method \Bitrix\Tasks\Internals\Task\ElapsedTimeObject|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Integration\Rest\EO_ElapsedTime_Collection filter(callable $callback)
 	 */
-	class EO_ElapsedTime_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ElapsedTime_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Integration\Rest\ElapsedTimeTable */
 		static public $dataClass = '\Bitrix\Tasks\Integration\Rest\ElapsedTimeTable';
 	}
@@ -5551,7 +5364,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\ElapsedTimeObject wakeUp($data)
 	 */
-	class EO_ElapsedTime {
+	class EO_ElapsedTime extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\ElapsedTimeTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ElapsedTimeTable';
 		/**
@@ -5623,7 +5436,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\ElapsedTimeObject|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_ElapsedTime_Collection filter(callable $callback)
 	 */
-	class EO_ElapsedTime_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ElapsedTime_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\ElapsedTimeTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ElapsedTimeTable';
 	}
@@ -5651,25 +5464,110 @@ namespace Bitrix\Tasks\Internals\Task {
 	 */
 	class EO_ElapsedTime_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable:tasks/lib/V2/Internal/Model/TaskResultMessageTable.php */
-namespace Bitrix\Tasks\V2\Internal\Model {
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable:tasks/lib/deadline/internals/model/deadlineuseroptiontable.php */
+namespace Bitrix\Tasks\Deadline\Internals\Model {
 	/**
-	 * EO_TaskResultMessage
-	 * @see \Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable
+	 * EO_DeadlineUserOption
+	 * @see \Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
-	 * @method \int getResultId()
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage setResultId(\int|\Bitrix\Main\DB\SqlExpression $resultId)
-	 * @method bool hasResultId()
-	 * @method bool isResultIdFilled()
-	 * @method bool isResultIdChanged()
-	 * @method \int getMessageId()
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage setMessageId(\int|\Bitrix\Main\DB\SqlExpression $messageId)
-	 * @method bool hasMessageId()
-	 * @method bool isMessageIdFilled()
-	 * @method bool isMessageIdChanged()
+	 * @method \int getId()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetUserId()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \int getDefaultDeadline()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setDefaultDeadline(\int|\Bitrix\Main\DB\SqlExpression $defaultDeadline)
+	 * @method bool hasDefaultDeadline()
+	 * @method bool isDefaultDeadlineFilled()
+	 * @method bool isDefaultDeadlineChanged()
+	 * @method \int remindActualDefaultDeadline()
+	 * @method \int requireDefaultDeadline()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetDefaultDeadline()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetDefaultDeadline()
+	 * @method \int fillDefaultDeadline()
+	 * @method \boolean getIsExactDeadlineTime()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setIsExactDeadlineTime(\boolean|\Bitrix\Main\DB\SqlExpression $isExactDeadlineTime)
+	 * @method bool hasIsExactDeadlineTime()
+	 * @method bool isIsExactDeadlineTimeFilled()
+	 * @method bool isIsExactDeadlineTimeChanged()
+	 * @method \boolean remindActualIsExactDeadlineTime()
+	 * @method \boolean requireIsExactDeadlineTime()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetIsExactDeadlineTime()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetIsExactDeadlineTime()
+	 * @method \boolean fillIsExactDeadlineTime()
+	 * @method \string getSkipNotificationPeriod()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setSkipNotificationPeriod(\string|\Bitrix\Main\DB\SqlExpression $skipNotificationPeriod)
+	 * @method bool hasSkipNotificationPeriod()
+	 * @method bool isSkipNotificationPeriodFilled()
+	 * @method bool isSkipNotificationPeriodChanged()
+	 * @method \string remindActualSkipNotificationPeriod()
+	 * @method \string requireSkipNotificationPeriod()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetSkipNotificationPeriod()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetSkipNotificationPeriod()
+	 * @method \string fillSkipNotificationPeriod()
+	 * @method null|\Bitrix\Main\Type\DateTime getSkipNotificationStartDate()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setSkipNotificationStartDate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $skipNotificationStartDate)
+	 * @method bool hasSkipNotificationStartDate()
+	 * @method bool isSkipNotificationStartDateFilled()
+	 * @method bool isSkipNotificationStartDateChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualSkipNotificationStartDate()
+	 * @method null|\Bitrix\Main\Type\DateTime requireSkipNotificationStartDate()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetSkipNotificationStartDate()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetSkipNotificationStartDate()
+	 * @method null|\Bitrix\Main\Type\DateTime fillSkipNotificationStartDate()
+	 * @method \boolean getCanChangeDeadline()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setCanChangeDeadline(\boolean|\Bitrix\Main\DB\SqlExpression $canChangeDeadline)
+	 * @method bool hasCanChangeDeadline()
+	 * @method bool isCanChangeDeadlineFilled()
+	 * @method bool isCanChangeDeadlineChanged()
+	 * @method \boolean remindActualCanChangeDeadline()
+	 * @method \boolean requireCanChangeDeadline()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetCanChangeDeadline()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetCanChangeDeadline()
+	 * @method \boolean fillCanChangeDeadline()
+	 * @method null|\Bitrix\Main\Type\DateTime getMaxDeadlineChangeDate()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setMaxDeadlineChangeDate(null|\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $maxDeadlineChangeDate)
+	 * @method bool hasMaxDeadlineChangeDate()
+	 * @method bool isMaxDeadlineChangeDateFilled()
+	 * @method bool isMaxDeadlineChangeDateChanged()
+	 * @method null|\Bitrix\Main\Type\DateTime remindActualMaxDeadlineChangeDate()
+	 * @method null|\Bitrix\Main\Type\DateTime requireMaxDeadlineChangeDate()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetMaxDeadlineChangeDate()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetMaxDeadlineChangeDate()
+	 * @method null|\Bitrix\Main\Type\DateTime fillMaxDeadlineChangeDate()
+	 * @method null|\int getMaxDeadlineChanges()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setMaxDeadlineChanges(null|\int|\Bitrix\Main\DB\SqlExpression $maxDeadlineChanges)
+	 * @method bool hasMaxDeadlineChanges()
+	 * @method bool isMaxDeadlineChangesFilled()
+	 * @method bool isMaxDeadlineChangesChanged()
+	 * @method null|\int remindActualMaxDeadlineChanges()
+	 * @method null|\int requireMaxDeadlineChanges()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetMaxDeadlineChanges()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetMaxDeadlineChanges()
+	 * @method null|\int fillMaxDeadlineChanges()
+	 * @method \boolean getRequireDeadlineChangeReason()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption setRequireDeadlineChangeReason(\boolean|\Bitrix\Main\DB\SqlExpression $requireDeadlineChangeReason)
+	 * @method bool hasRequireDeadlineChangeReason()
+	 * @method bool isRequireDeadlineChangeReasonFilled()
+	 * @method bool isRequireDeadlineChangeReasonChanged()
+	 * @method \boolean remindActualRequireDeadlineChangeReason()
+	 * @method \boolean requireRequireDeadlineChangeReason()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption resetRequireDeadlineChangeReason()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unsetRequireDeadlineChangeReason()
+	 * @method \boolean fillRequireDeadlineChangeReason()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -5685,9 +5583,9 @@ namespace Bitrix\Tasks\V2\Internal\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage set($fieldName, $value)
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage reset($fieldName)
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage unset($fieldName)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption reset($fieldName)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -5695,86 +5593,103 @@ namespace Bitrix\Tasks\V2\Internal\Model {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage wakeUp($data)
+	 * @method static \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption wakeUp($data)
 	 */
-	class EO_TaskResultMessage {
-		/* @var \Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable */
-		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable';
+	class EO_DeadlineUserOption extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable */
+		static public $dataClass = '\Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Tasks\V2\Internal\Model {
+namespace Bitrix\Tasks\Deadline\Internals\Model {
 	/**
-	 * EO_TaskResultMessage_Collection
+	 * EO_DeadlineUserOption_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
-	 * @method \int[] getResultIdList()
-	 * @method \int[] getMessageIdList()
+	 * @method \int[] getIdList()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \int[] getDefaultDeadlineList()
+	 * @method \int[] fillDefaultDeadline()
+	 * @method \boolean[] getIsExactDeadlineTimeList()
+	 * @method \boolean[] fillIsExactDeadlineTime()
+	 * @method \string[] getSkipNotificationPeriodList()
+	 * @method \string[] fillSkipNotificationPeriod()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getSkipNotificationStartDateList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillSkipNotificationStartDate()
+	 * @method \boolean[] getCanChangeDeadlineList()
+	 * @method \boolean[] fillCanChangeDeadline()
+	 * @method null|\Bitrix\Main\Type\DateTime[] getMaxDeadlineChangeDateList()
+	 * @method null|\Bitrix\Main\Type\DateTime[] fillMaxDeadlineChangeDate()
+	 * @method null|\int[] getMaxDeadlineChangesList()
+	 * @method null|\int[] fillMaxDeadlineChanges()
+	 * @method \boolean[] getRequireDeadlineChangeReasonList()
+	 * @method \boolean[] fillRequireDeadlineChangeReason()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage $object)
-	 * @method bool has(\Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage $object)
+	 * @method void add(\Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption $object)
+	 * @method bool has(\Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage getByPrimary($primary)
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage $object)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection wakeUp($data)
+	 * @method static \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage current() Iterator
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection merge(?\Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection $collection)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection merge(?\Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage|null find(callable $callback)
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection filter(callable $callback)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption|null find(callable $callback)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection filter(callable $callback)
 	 */
-	class EO_TaskResultMessage_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable */
-		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable';
+	class EO_DeadlineUserOption_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable */
+		static public $dataClass = '\Bitrix\Tasks\Deadline\Internals\Model\DeadlineUserOptionTable';
 	}
 }
-namespace Bitrix\Tasks\V2\Internal\Model {
+namespace Bitrix\Tasks\Deadline\Internals\Model {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_TaskResultMessage_Result exec()
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage fetchObject()
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection fetchCollection()
+	 * @method EO_DeadlineUserOption_Result exec()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption fetchObject()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection fetchCollection()
 	 */
-	class EO_TaskResultMessage_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_DeadlineUserOption_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage fetchObject()
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection fetchCollection()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption fetchObject()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection fetchCollection()
 	 */
-	class EO_TaskResultMessage_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_DeadlineUserOption_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection createCollection()
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage wakeUpObject($row)
-	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection createCollection()
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Deadline\Internals\Model\EO_DeadlineUserOption_Collection wakeUpCollection($rows)
 	 */
-	class EO_TaskResultMessage_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_DeadlineUserOption_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\V2\Internal\Model\CheckListUserOptionTable:tasks/lib/V2/Internal/Model/CheckListUserOptionTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\V2\Internal\Model\CheckListUserOptionTable:tasks/lib/v2/internal/model/checklistuseroptiontable.php */
 namespace Bitrix\Tasks\V2\Internal\Model {
 	/**
 	 * EO_CheckListUserOption
@@ -5845,7 +5760,7 @@ namespace Bitrix\Tasks\V2\Internal\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\V2\Internal\Model\EO_CheckListUserOption wakeUp($data)
 	 */
-	class EO_CheckListUserOption {
+	class EO_CheckListUserOption extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\V2\Internal\Model\CheckListUserOptionTable */
 		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\CheckListUserOptionTable';
 		/**
@@ -5899,7 +5814,7 @@ namespace Bitrix\Tasks\V2\Internal\Model {
 	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_CheckListUserOption|null find(callable $callback)
 	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_CheckListUserOption_Collection filter(callable $callback)
 	 */
-	class EO_CheckListUserOption_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_CheckListUserOption_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\V2\Internal\Model\CheckListUserOptionTable */
 		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\CheckListUserOptionTable';
 	}
@@ -5927,7 +5842,296 @@ namespace Bitrix\Tasks\V2\Internal\Model {
 	 */
 	class EO_CheckListUserOption_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\V2\Internal\Model\TaskChatTable:tasks/lib/V2/Internal/Model/TaskChatTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\V2\Internal\Model\TemplateParameterTable:tasks/lib/v2/internal/model/templateparametertable.php */
+namespace Bitrix\Tasks\V2\Internal\Model {
+	/**
+	 * EO_TemplateParameter
+	 * @see \Bitrix\Tasks\V2\Internal\Model\TemplateParameterTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getTemplateId()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter setTemplateId(\int|\Bitrix\Main\DB\SqlExpression $templateId)
+	 * @method bool hasTemplateId()
+	 * @method bool isTemplateIdFilled()
+	 * @method bool isTemplateIdChanged()
+	 * @method \int remindActualTemplateId()
+	 * @method \int requireTemplateId()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter resetTemplateId()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter unsetTemplateId()
+	 * @method \int fillTemplateId()
+	 * @method \int getCode()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter setCode(\int|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \int remindActualCode()
+	 * @method \int requireCode()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter resetCode()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter unsetCode()
+	 * @method \int fillCode()
+	 * @method null|\string getValue()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter setValue(null|\string|\Bitrix\Main\DB\SqlExpression $value)
+	 * @method bool hasValue()
+	 * @method bool isValueFilled()
+	 * @method bool isValueChanged()
+	 * @method null|\string remindActualValue()
+	 * @method null|\string requireValue()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter resetValue()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter unsetValue()
+	 * @method null|\string fillValue()
+	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateObject getTemplate()
+	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateObject remindActualTemplate()
+	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateObject requireTemplate()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter setTemplate(\Bitrix\Tasks\Internals\Task\Template\TemplateObject $object)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter resetTemplate()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter unsetTemplate()
+	 * @method bool hasTemplate()
+	 * @method bool isTemplateFilled()
+	 * @method bool isTemplateChanged()
+	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateObject fillTemplate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter set($fieldName, $value)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter reset($fieldName)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter wakeUp($data)
+	 */
+	class EO_TemplateParameter extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\V2\Internal\Model\TemplateParameterTable */
+		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\TemplateParameterTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Tasks\V2\Internal\Model {
+	/**
+	 * EO_TemplateParameter_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getTemplateIdList()
+	 * @method \int[] fillTemplateId()
+	 * @method \int[] getCodeList()
+	 * @method \int[] fillCode()
+	 * @method null|\string[] getValueList()
+	 * @method null|\string[] fillValue()
+	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateObject[] getTemplateList()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection getTemplateCollection()
+	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateCollection fillTemplate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter $object)
+	 * @method bool has(\Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter getByPrimary($primary)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection merge(?\Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter|null find(callable $callback)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection filter(callable $callback)
+	 */
+	class EO_TemplateParameter_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\V2\Internal\Model\TemplateParameterTable */
+		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\TemplateParameterTable';
+	}
+}
+namespace Bitrix\Tasks\V2\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_TemplateParameter_Result exec()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter fetchObject()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection fetchCollection()
+	 */
+	class EO_TemplateParameter_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter fetchObject()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection fetchCollection()
+	 */
+	class EO_TemplateParameter_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection createCollection()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter wakeUpObject($row)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection wakeUpCollection($rows)
+	 */
+	class EO_TemplateParameter_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable:tasks/lib/v2/internal/model/taskresultmessagetable.php */
+namespace Bitrix\Tasks\V2\Internal\Model {
+	/**
+	 * EO_TaskResultMessage
+	 * @see \Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getResultId()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage setResultId(\int|\Bitrix\Main\DB\SqlExpression $resultId)
+	 * @method bool hasResultId()
+	 * @method bool isResultIdFilled()
+	 * @method bool isResultIdChanged()
+	 * @method \int getMessageId()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage setMessageId(\int|\Bitrix\Main\DB\SqlExpression $messageId)
+	 * @method bool hasMessageId()
+	 * @method bool isMessageIdFilled()
+	 * @method bool isMessageIdChanged()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage set($fieldName, $value)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage reset($fieldName)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage wakeUp($data)
+	 */
+	class EO_TaskResultMessage extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable */
+		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Tasks\V2\Internal\Model {
+	/**
+	 * EO_TaskResultMessage_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getResultIdList()
+	 * @method \int[] getMessageIdList()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage $object)
+	 * @method bool has(\Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage getByPrimary($primary)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection merge(?\Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage|null find(callable $callback)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection filter(callable $callback)
+	 */
+	class EO_TaskResultMessage_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable */
+		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable';
+	}
+}
+namespace Bitrix\Tasks\V2\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_TaskResultMessage_Result exec()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage fetchObject()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection fetchCollection()
+	 */
+	class EO_TaskResultMessage_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage fetchObject()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection fetchCollection()
+	 */
+	class EO_TaskResultMessage_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection createCollection()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage wakeUpObject($row)
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskResultMessage_Collection wakeUpCollection($rows)
+	 */
+	class EO_TaskResultMessage_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Tasks\V2\Internal\Model\TaskChatTable:tasks/lib/v2/internal/model/taskchattable.php */
 namespace Bitrix\Tasks\V2\Internal\Model {
 	/**
 	 * EO_TaskChat
@@ -5978,7 +6182,7 @@ namespace Bitrix\Tasks\V2\Internal\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\V2\Internal\Model\EO_TaskChat wakeUp($data)
 	 */
-	class EO_TaskChat {
+	class EO_TaskChat extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\V2\Internal\Model\TaskChatTable */
 		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\TaskChatTable';
 		/**
@@ -6028,7 +6232,7 @@ namespace Bitrix\Tasks\V2\Internal\Model {
 	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskChat|null find(callable $callback)
 	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TaskChat_Collection filter(callable $callback)
 	 */
-	class EO_TaskChat_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TaskChat_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\V2\Internal\Model\TaskChatTable */
 		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\TaskChatTable';
 	}
@@ -6056,7 +6260,7 @@ namespace Bitrix\Tasks\V2\Internal\Model {
 	 */
 	class EO_TaskChat_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\V2\Internal\Model\DeadlineChangeLogTable:tasks/lib/V2/Internal/Model/DeadlineChangeLogTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\V2\Internal\Model\DeadlineChangeLogTable:tasks/lib/v2/internal/model/deadlinechangelogtable.php */
 namespace Bitrix\Tasks\V2\Internal\Model {
 	/**
 	 * EO_DeadlineChangeLog
@@ -6147,7 +6351,7 @@ namespace Bitrix\Tasks\V2\Internal\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\V2\Internal\Model\EO_DeadlineChangeLog wakeUp($data)
 	 */
-	class EO_DeadlineChangeLog {
+	class EO_DeadlineChangeLog extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\V2\Internal\Model\DeadlineChangeLogTable */
 		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\DeadlineChangeLogTable';
 		/**
@@ -6205,7 +6409,7 @@ namespace Bitrix\Tasks\V2\Internal\Model {
 	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_DeadlineChangeLog|null find(callable $callback)
 	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_DeadlineChangeLog_Collection filter(callable $callback)
 	 */
-	class EO_DeadlineChangeLog_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DeadlineChangeLog_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\V2\Internal\Model\DeadlineChangeLogTable */
 		static public $dataClass = '\Bitrix\Tasks\V2\Internal\Model\DeadlineChangeLogTable';
 	}
@@ -6324,7 +6528,7 @@ namespace Bitrix\Tasks\Internals\Notification\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Notification\Task\EO_Throttle wakeUp($data)
 	 */
-	class EO_Throttle {
+	class EO_Throttle extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Notification\Task\ThrottleTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Notification\Task\ThrottleTable';
 		/**
@@ -6382,7 +6586,7 @@ namespace Bitrix\Tasks\Internals\Notification\Task {
 	 * @method \Bitrix\Tasks\Internals\Notification\Task\EO_Throttle|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Notification\Task\EO_Throttle_Collection filter(callable $callback)
 	 */
-	class EO_Throttle_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Throttle_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Notification\Task\ThrottleTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Notification\Task\ThrottleTable';
 	}
@@ -6521,7 +6725,7 @@ namespace Bitrix\Tasks\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\SystemLogObject wakeUp($data)
 	 */
-	class EO_SystemLog {
+	class EO_SystemLog extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\SystemLogTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\SystemLogTable';
 		/**
@@ -6583,7 +6787,7 @@ namespace Bitrix\Tasks\Internals {
 	 * @method \Bitrix\Tasks\Internals\Task\SystemLogObject|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\EO_SystemLog_Collection filter(callable $callback)
 	 */
-	class EO_SystemLog_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_SystemLog_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\SystemLogTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\SystemLogTable';
 	}
@@ -6723,7 +6927,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\TagObject wakeUp($data)
 	 */
-	class EO_Label {
+	class EO_Label extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\LabelTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\LabelTable';
 		/**
@@ -6789,7 +6993,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\TagObject|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\TagCollection filter(callable $callback)
 	 */
-	class EO_Label_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Label_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\LabelTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\LabelTable';
 	}
@@ -6888,7 +7092,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_UserOption wakeUp($data)
 	 */
-	class EO_UserOption {
+	class EO_UserOption extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\UserOptionTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\UserOptionTable';
 		/**
@@ -6942,7 +7146,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_UserOption|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_UserOption_Collection filter(callable $callback)
 	 */
-	class EO_UserOption_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UserOption_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\UserOptionTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\UserOptionTable';
 	}
@@ -7111,7 +7315,7 @@ namespace Bitrix\Tasks\Internals\Task\Result {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Result\Result wakeUp($data)
 	 */
-	class EO_Result {
+	class EO_Result extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\Result\ResultTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Result\ResultTable';
 		/**
@@ -7182,7 +7386,7 @@ namespace Bitrix\Tasks\Internals\Task\Result {
 	 * @method \Bitrix\Tasks\Internals\Task\Result\Result|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Result\EO_Result_Collection filter(callable $callback)
 	 */
-	class EO_Result_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Result_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\Result\ResultTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Result\ResultTable';
 	}
@@ -7281,7 +7485,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_ProjectUserOption wakeUp($data)
 	 */
-	class EO_ProjectUserOption {
+	class EO_ProjectUserOption extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\ProjectUserOptionTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ProjectUserOptionTable';
 		/**
@@ -7335,7 +7539,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_ProjectUserOption|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_ProjectUserOption_Collection filter(callable $callback)
 	 */
-	class EO_ProjectUserOption_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ProjectUserOption_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\ProjectUserOptionTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ProjectUserOptionTable';
 	}
@@ -7504,7 +7708,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_Reminder wakeUp($data)
 	 */
-	class EO_Reminder {
+	class EO_Reminder extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\ReminderTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ReminderTable';
 		/**
@@ -7574,7 +7778,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Reminder|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Reminder_Collection filter(callable $callback)
 	 */
-	class EO_Reminder_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Reminder_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\ReminderTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ReminderTable';
 	}
@@ -7663,7 +7867,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_UtsTasksTask wakeUp($data)
 	 */
-	class EO_UtsTasksTask {
+	class EO_UtsTasksTask extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\UtsTasksTaskTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\UtsTasksTaskTable';
 		/**
@@ -7715,7 +7919,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_UtsTasksTask|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_UtsTasksTask_Collection filter(callable $callback)
 	 */
-	class EO_UtsTasksTask_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UtsTasksTask_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\UtsTasksTaskTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\UtsTasksTaskTable';
 	}
@@ -7814,7 +8018,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_SearchIndex wakeUp($data)
 	 */
-	class EO_SearchIndex {
+	class EO_SearchIndex extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\SearchIndexTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\SearchIndexTable';
 		/**
@@ -7868,7 +8072,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_SearchIndex|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_SearchIndex_Collection filter(callable $callback)
 	 */
-	class EO_SearchIndex_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_SearchIndex_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\SearchIndexTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\SearchIndexTable';
 	}
@@ -7952,7 +8156,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_CheckListTree wakeUp($data)
 	 */
-	class EO_CheckListTree {
+	class EO_CheckListTree extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\CheckListTreeTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\CheckListTreeTable';
 		/**
@@ -8003,7 +8207,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_CheckListTree|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_CheckListTree_Collection filter(callable $callback)
 	 */
-	class EO_CheckListTree_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_CheckListTree_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\CheckListTreeTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\CheckListTreeTable';
 	}
@@ -8132,7 +8336,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_Sorting wakeUp($data)
 	 */
-	class EO_Sorting {
+	class EO_Sorting extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\SortingTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\SortingTable';
 		/**
@@ -8192,7 +8396,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Sorting|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Sorting_Collection filter(callable $callback)
 	 */
-	class EO_Sorting_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Sorting_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\SortingTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\SortingTable';
 	}
@@ -8321,7 +8525,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\RegularParametersObject wakeUp($data)
 	 */
-	class EO_RegularParameters {
+	class EO_RegularParameters extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\RegularParametersTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\RegularParametersTable';
 		/**
@@ -8382,7 +8586,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\RegularParametersObject|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\RegularParametersCollection filter(callable $callback)
 	 */
-	class EO_RegularParameters_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_RegularParameters_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\RegularParametersTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\RegularParametersTable';
 	}
@@ -8491,7 +8695,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_Tag wakeUp($data)
 	 */
-	class EO_Tag {
+	class EO_Tag extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\TagTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\TagTable';
 		/**
@@ -8549,7 +8753,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Tag|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Tag_Collection filter(callable $callback)
 	 */
-	class EO_Tag_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Tag_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\TagTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\TagTable';
 	}
@@ -8628,7 +8832,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Scenario\Scenario wakeUp($data)
 	 */
-	class EO_Scenario {
+	class EO_Scenario extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\ScenarioTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ScenarioTable';
 		/**
@@ -8678,7 +8882,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\Scenario\Scenario|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Scenario_Collection filter(callable $callback)
 	 */
-	class EO_Scenario_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Scenario_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\ScenarioTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ScenarioTable';
 	}
@@ -8777,7 +8981,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Template\EO_Access wakeUp($data)
 	 */
-	class EO_Access {
+	class EO_Access extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\AccessTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\AccessTable';
 		/**
@@ -8831,7 +9035,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_Access|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_Access_Collection filter(callable $callback)
 	 */
-	class EO_Access_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Access_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\AccessTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\AccessTable';
 	}
@@ -8950,7 +9154,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Template\TemplateMemberObject wakeUp($data)
 	 */
-	class EO_TemplateMember {
+	class EO_TemplateMember extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable';
 		/**
@@ -9010,7 +9214,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateMemberObject|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateMemberCollection filter(callable $callback)
 	 */
-	class EO_TemplateMember_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TemplateMember_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable';
 	}
@@ -9136,7 +9340,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Template\EO_TemplateTag wakeUp($data)
 	 */
-	class EO_TemplateTag {
+	class EO_TemplateTag extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\TemplateTagTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\TemplateTagTable';
 		/**
@@ -9198,7 +9402,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_TemplateTag|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_TemplateTag_Collection filter(callable $callback)
 	 */
-	class EO_TemplateTag_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TemplateTag_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\TemplateTagTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\TemplateTagTable';
 	}
@@ -9307,7 +9511,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Template\EO_TemplateDependence wakeUp($data)
 	 */
-	class EO_TemplateDependence {
+	class EO_TemplateDependence extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\TemplateDependenceTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\TemplateDependenceTable';
 		/**
@@ -9365,7 +9569,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_TemplateDependence|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_TemplateDependence_Collection filter(callable $callback)
 	 */
-	class EO_TemplateDependence_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TemplateDependence_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\TemplateDependenceTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\TemplateDependenceTable';
 	}
@@ -9449,7 +9653,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Template\EO_CheckListTree wakeUp($data)
 	 */
-	class EO_CheckListTree {
+	class EO_CheckListTree extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\CheckListTreeTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\CheckListTreeTable';
 		/**
@@ -9500,7 +9704,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_CheckListTree|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_CheckListTree_Collection filter(callable $callback)
 	 */
-	class EO_CheckListTree_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_CheckListTree_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\CheckListTreeTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\CheckListTreeTable';
 	}
@@ -9579,7 +9783,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Template\EO_Scenario wakeUp($data)
 	 */
-	class EO_Scenario {
+	class EO_Scenario extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\ScenarioTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\ScenarioTable';
 		/**
@@ -9629,7 +9833,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_Scenario|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_Scenario_Collection filter(callable $callback)
 	 */
-	class EO_Scenario_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Scenario_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\ScenarioTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\ScenarioTable';
 	}
@@ -10074,6 +10278,17 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method bool isParentFilled()
 	 * @method bool isParentChanged()
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_Dependence fillParent()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection getParams()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection requireParams()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection fillParams()
+	 * @method bool hasParams()
+	 * @method bool isParamsFilled()
+	 * @method bool isParamsChanged()
+	 * @method void addToParams(\Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter $templateParameter)
+	 * @method void removeFromParams(\Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter $templateParameter)
+	 * @method void removeAllParams()
+	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateObject resetParams()
+	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateObject unsetParams()
 	 * @method \string getFiles()
 	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateObject setFiles(\string|\Bitrix\Main\DB\SqlExpression $files)
 	 * @method bool hasFiles()
@@ -10111,7 +10326,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Template\TemplateObject wakeUp($data)
 	 */
-	class EO_Template {
+	class EO_Template extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\TemplateTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\TemplateTable';
 		/**
@@ -10216,6 +10431,9 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_Dependence[] getParentList()
 	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateCollection getParentCollection()
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_Dependence_Collection fillParent()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection[] getParamsList()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection getParamsCollection()
+	 * @method \Bitrix\Tasks\V2\Internal\Model\EO_TemplateParameter_Collection fillParams()
 	 * @method \string[] getFilesList()
 	 * @method \string[] fillFiles()
 	 *
@@ -10249,7 +10467,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateObject|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Template\TemplateCollection filter(callable $callback)
 	 */
-	class EO_Template_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Template_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\TemplateTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\TemplateTable';
 	}
@@ -10393,7 +10611,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Template\EO_Dependence wakeUp($data)
 	 */
-	class EO_Dependence {
+	class EO_Dependence extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\DependenceTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\DependenceTable';
 		/**
@@ -10462,7 +10680,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_Dependence|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_Dependence_Collection filter(callable $callback)
 	 */
-	class EO_Dependence_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Dependence_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\DependenceTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\DependenceTable';
 	}
@@ -10595,7 +10813,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Template\EO_CheckList wakeUp($data)
 	 */
-	class EO_CheckList {
+	class EO_CheckList extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\CheckListTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\CheckListTable';
 		/**
@@ -10657,7 +10875,7 @@ namespace Bitrix\Tasks\Internals\Task\Template {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_CheckList|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Template\EO_CheckList_Collection filter(callable $callback)
 	 */
-	class EO_CheckList_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_CheckList_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\CheckListTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\CheckListTable';
 	}
@@ -10776,7 +10994,7 @@ namespace Bitrix\Tasks\Internals\Task\Template\CheckList {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\Template\CheckList\EO_Member wakeUp($data)
 	 */
-	class EO_Member {
+	class EO_Member extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\CheckList\MemberTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\CheckList\MemberTable';
 		/**
@@ -10836,7 +11054,7 @@ namespace Bitrix\Tasks\Internals\Task\Template\CheckList {
 	 * @method \Bitrix\Tasks\Internals\Task\Template\CheckList\EO_Member|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\Template\CheckList\EO_Member_Collection filter(callable $callback)
 	 */
-	class EO_Member_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Member_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\Template\CheckList\MemberTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\Template\CheckList\MemberTable';
 	}
@@ -10930,7 +11148,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_ViewedGroup wakeUp($data)
 	 */
-	class EO_ViewedGroup {
+	class EO_ViewedGroup extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\ViewedGroupTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ViewedGroupTable';
 		/**
@@ -10983,7 +11201,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_ViewedGroup|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_ViewedGroup_Collection filter(callable $callback)
 	 */
-	class EO_ViewedGroup_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ViewedGroup_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\ViewedGroupTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ViewedGroupTable';
 	}
@@ -11062,7 +11280,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_ProjectLastActivity wakeUp($data)
 	 */
-	class EO_ProjectLastActivity {
+	class EO_ProjectLastActivity extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\ProjectLastActivityTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ProjectLastActivityTable';
 		/**
@@ -11112,7 +11330,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_ProjectLastActivity|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_ProjectLastActivity_Collection filter(callable $callback)
 	 */
-	class EO_ProjectLastActivity_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ProjectLastActivity_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\ProjectLastActivityTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ProjectLastActivityTable';
 	}
@@ -11211,7 +11429,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_Timer wakeUp($data)
 	 */
-	class EO_Timer {
+	class EO_Timer extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\TimerTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\TimerTable';
 		/**
@@ -11265,7 +11483,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Timer|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Timer_Collection filter(callable $callback)
 	 */
-	class EO_Timer_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Timer_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\TimerTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\TimerTable';
 	}
@@ -11349,7 +11567,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_Dependence wakeUp($data)
 	 */
-	class EO_Dependence {
+	class EO_Dependence extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\DependenceTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\DependenceTable';
 		/**
@@ -11400,7 +11618,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Dependence|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Dependence_Collection filter(callable $callback)
 	 */
-	class EO_Dependence_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Dependence_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\DependenceTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\DependenceTable';
 	}
@@ -11574,7 +11792,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_ProjectDependence wakeUp($data)
 	 */
-	class EO_ProjectDependence {
+	class EO_ProjectDependence extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\ProjectDependenceTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ProjectDependenceTable';
 		/**
@@ -11649,7 +11867,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_ProjectDependence|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_ProjectDependence_Collection filter(callable $callback)
 	 */
-	class EO_ProjectDependence_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ProjectDependence_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\ProjectDependenceTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ProjectDependenceTable';
 	}
@@ -11773,7 +11991,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\View wakeUp($data)
 	 */
-	class EO_Viewed {
+	class EO_Viewed extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\ViewedTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ViewedTable';
 		/**
@@ -11835,7 +12053,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\View|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Viewed_Collection filter(callable $callback)
 	 */
-	class EO_Viewed_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Viewed_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\ViewedTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ViewedTable';
 	}
@@ -11909,7 +12127,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_Related wakeUp($data)
 	 */
-	class EO_Related {
+	class EO_Related extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\RelatedTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\RelatedTable';
 		/**
@@ -11958,7 +12176,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Related|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Related_Collection filter(callable $callback)
 	 */
-	class EO_Related_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Related_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\RelatedTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\RelatedTable';
 	}
@@ -12067,7 +12285,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_TaskTag wakeUp($data)
 	 */
-	class EO_TaskTag {
+	class EO_TaskTag extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\TaskTagTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\TaskTagTable';
 		/**
@@ -12125,7 +12343,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_TaskTag|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_TaskTag_Collection filter(callable $callback)
 	 */
-	class EO_TaskTag_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TaskTag_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\TaskTagTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\TaskTagTable';
 	}
@@ -12274,7 +12492,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_Log wakeUp($data)
 	 */
-	class EO_Log {
+	class EO_Log extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\LogTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\LogTable';
 		/**
@@ -12340,7 +12558,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Log|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Log_Collection filter(callable $callback)
 	 */
-	class EO_Log_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Log_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\LogTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\LogTable';
 	}
@@ -12499,7 +12717,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_CheckList wakeUp($data)
 	 */
-	class EO_CheckList {
+	class EO_CheckList extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\CheckListTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\CheckListTable';
 		/**
@@ -12566,7 +12784,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_CheckList|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_CheckList_Collection filter(callable $callback)
 	 */
-	class EO_CheckList_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_CheckList_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\CheckListTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\CheckListTable';
 	}
@@ -12665,7 +12883,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_Parameter wakeUp($data)
 	 */
-	class EO_Parameter {
+	class EO_Parameter extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\ParameterTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ParameterTable';
 		/**
@@ -12719,7 +12937,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Parameter|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Parameter_Collection filter(callable $callback)
 	 */
-	class EO_Parameter_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Parameter_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\ParameterTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\ParameterTable';
 	}
@@ -12813,7 +13031,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\EO_Favorite wakeUp($data)
 	 */
-	class EO_Favorite {
+	class EO_Favorite extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\FavoriteTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\FavoriteTable';
 		/**
@@ -12868,7 +13086,7 @@ namespace Bitrix\Tasks\Internals\Task {
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Favorite|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\EO_Favorite_Collection filter(callable $callback)
 	 */
-	class EO_Favorite_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Favorite_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\FavoriteTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\FavoriteTable';
 	}
@@ -12987,7 +13205,7 @@ namespace Bitrix\Tasks\Internals\Task\CheckList {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Task\CheckList\EO_Member wakeUp($data)
 	 */
-	class EO_Member {
+	class EO_Member extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Task\CheckList\MemberTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\CheckList\MemberTable';
 		/**
@@ -13047,7 +13265,7 @@ namespace Bitrix\Tasks\Internals\Task\CheckList {
 	 * @method \Bitrix\Tasks\Internals\Task\CheckList\EO_Member|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Task\CheckList\EO_Member_Collection filter(callable $callback)
 	 */
-	class EO_Member_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Member_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Task\CheckList\MemberTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Task\CheckList\MemberTable';
 	}
@@ -13186,7 +13404,7 @@ namespace Bitrix\Tasks\Internals\Marketing {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Marketing\EO_Marketing wakeUp($data)
 	 */
-	class EO_Marketing {
+	class EO_Marketing extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Marketing\MarketingTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Marketing\MarketingTable';
 		/**
@@ -13249,7 +13467,7 @@ namespace Bitrix\Tasks\Internals\Marketing {
 	 * @method \Bitrix\Tasks\Internals\Marketing\EO_Marketing|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Marketing\EO_Marketing_Collection filter(callable $callback)
 	 */
-	class EO_Marketing_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Marketing_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Marketing\MarketingTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Marketing\MarketingTable';
 	}
@@ -13458,7 +13676,7 @@ namespace Bitrix\Tasks\Internals\Counter {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Counter\EO_Effective wakeUp($data)
 	 */
-	class EO_Effective {
+	class EO_Effective extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Counter\EffectiveTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Counter\EffectiveTable';
 		/**
@@ -13538,7 +13756,7 @@ namespace Bitrix\Tasks\Internals\Counter {
 	 * @method \Bitrix\Tasks\Internals\Counter\EO_Effective|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Counter\EO_Effective_Collection filter(callable $callback)
 	 */
-	class EO_Effective_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Effective_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Counter\EffectiveTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Counter\EffectiveTable';
 	}
@@ -13687,7 +13905,7 @@ namespace Bitrix\Tasks\Internals\Counter {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Counter\EO_Counter wakeUp($data)
 	 */
-	class EO_Counter {
+	class EO_Counter extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Counter\CounterTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Counter\CounterTable';
 		/**
@@ -13754,7 +13972,7 @@ namespace Bitrix\Tasks\Internals\Counter {
 	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Counter\EO_Counter_Collection filter(callable $callback)
 	 */
-	class EO_Counter_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Counter_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Counter\CounterTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Counter\CounterTable';
 	}
@@ -13863,7 +14081,7 @@ namespace Bitrix\Tasks\Internals\Counter\Queue {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Counter\Queue\EO_Queue wakeUp($data)
 	 */
-	class EO_Queue {
+	class EO_Queue extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Counter\Queue\QueueTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Counter\Queue\QueueTable';
 		/**
@@ -13919,7 +14137,7 @@ namespace Bitrix\Tasks\Internals\Counter\Queue {
 	 * @method \Bitrix\Tasks\Internals\Counter\Queue\EO_Queue|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Counter\Queue\EO_Queue_Collection filter(callable $callback)
 	 */
-	class EO_Queue_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Queue_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Counter\Queue\QueueTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Counter\Queue\QueueTable';
 	}
@@ -14048,7 +14266,7 @@ namespace Bitrix\Tasks\Internals\Counter\Event {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Internals\Counter\Event\EO_Event wakeUp($data)
 	 */
-	class EO_Event {
+	class EO_Event extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Internals\Counter\Event\EventTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Counter\Event\EventTable';
 		/**
@@ -14108,7 +14326,7 @@ namespace Bitrix\Tasks\Internals\Counter\Event {
 	 * @method \Bitrix\Tasks\Internals\Counter\Event\EO_Event|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Internals\Counter\Event\EO_Event_Collection filter(callable $callback)
 	 */
-	class EO_Event_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Event_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Internals\Counter\Event\EventTable */
 		static public $dataClass = '\Bitrix\Tasks\Internals\Counter\Event\EventTable';
 	}
@@ -14187,7 +14405,7 @@ namespace Bitrix\Tasks\Kanban {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Kanban\EO_Projects wakeUp($data)
 	 */
-	class EO_Projects {
+	class EO_Projects extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Kanban\ProjectsTable */
 		static public $dataClass = '\Bitrix\Tasks\Kanban\ProjectsTable';
 		/**
@@ -14237,7 +14455,7 @@ namespace Bitrix\Tasks\Kanban {
 	 * @method \Bitrix\Tasks\Kanban\EO_Projects|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Kanban\EO_Projects_Collection filter(callable $callback)
 	 */
-	class EO_Projects_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Projects_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Kanban\ProjectsTable */
 		static public $dataClass = '\Bitrix\Tasks\Kanban\ProjectsTable';
 	}
@@ -14396,7 +14614,7 @@ namespace Bitrix\Tasks\Kanban {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Kanban\Stage wakeUp($data)
 	 */
-	class EO_Stages {
+	class EO_Stages extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Kanban\StagesTable */
 		static public $dataClass = '\Bitrix\Tasks\Kanban\StagesTable';
 		/**
@@ -14462,7 +14680,7 @@ namespace Bitrix\Tasks\Kanban {
 	 * @method \Bitrix\Tasks\Kanban\Stage|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Kanban\StagesCollection filter(callable $callback)
 	 */
-	class EO_Stages_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Stages_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Kanban\StagesTable */
 		static public $dataClass = '\Bitrix\Tasks\Kanban\StagesTable';
 	}
@@ -14561,7 +14779,7 @@ namespace Bitrix\Tasks\Kanban {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Kanban\EO_TaskStage wakeUp($data)
 	 */
-	class EO_TaskStage {
+	class EO_TaskStage extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Kanban\TaskStageTable */
 		static public $dataClass = '\Bitrix\Tasks\Kanban\TaskStageTable';
 		/**
@@ -14616,7 +14834,7 @@ namespace Bitrix\Tasks\Kanban {
 	 * @method \Bitrix\Tasks\Kanban\EO_TaskStage|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Kanban\EO_TaskStage_Collection filter(callable $callback)
 	 */
-	class EO_TaskStage_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TaskStage_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Kanban\TaskStageTable */
 		static public $dataClass = '\Bitrix\Tasks\Kanban\TaskStageTable';
 	}
@@ -14644,7 +14862,148 @@ namespace Bitrix\Tasks\Kanban {
 	 */
 	class EO_TaskStage_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Onboarding\Internal\Model\QueueTable:tasks/lib/Onboarding/Internal/Model/QueueTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable:tasks/lib/onboarding/internal/model/jobcounttable.php */
+namespace Bitrix\Tasks\Onboarding\Internal\Model {
+	/**
+	 * JobCountItem
+	 * @see \Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getCode()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem resetCode()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem unsetCode()
+	 * @method \string fillCode()
+	 * @method \int getJobCount()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem setJobCount(\int|\Bitrix\Main\DB\SqlExpression $jobCount)
+	 * @method bool hasJobCount()
+	 * @method bool isJobCountFilled()
+	 * @method bool isJobCountChanged()
+	 * @method \int remindActualJobCount()
+	 * @method \int requireJobCount()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem resetJobCount()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem unsetJobCount()
+	 * @method \int fillJobCount()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem reset($fieldName)
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem wakeUp($data)
+	 */
+	class EO_JobCount extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable */
+		static public $dataClass = '\Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Tasks\Onboarding\Internal\Model {
+	/**
+	 * JobCountItemCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \int[] getJobCountList()
+	 * @method \int[] fillJobCount()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem $object)
+	 * @method bool has(\Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection merge(?\Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem|null find(callable $callback)
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection filter(callable $callback)
+	 */
+	class EO_JobCount_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable */
+		static public $dataClass = '\Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable';
+	}
+}
+namespace Bitrix\Tasks\Onboarding\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_JobCount_Result exec()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem fetchObject()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection fetchCollection()
+	 */
+	class EO_JobCount_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem fetchObject()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection fetchCollection()
+	 */
+	class EO_JobCount_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection createCollection()
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection wakeUpCollection($rows)
+	 */
+	class EO_JobCount_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Onboarding\Internal\Model\QueueTable:tasks/lib/onboarding/internal/model/queuetable.php */
 namespace Bitrix\Tasks\Onboarding\Internal\Model {
 	/**
 	 * QueueItem
@@ -14775,7 +15134,7 @@ namespace Bitrix\Tasks\Onboarding\Internal\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Onboarding\Internal\Model\QueueItem wakeUp($data)
 	 */
-	class EO_Queue {
+	class EO_Queue extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Onboarding\Internal\Model\QueueTable */
 		static public $dataClass = '\Bitrix\Tasks\Onboarding\Internal\Model\QueueTable';
 		/**
@@ -14842,7 +15201,7 @@ namespace Bitrix\Tasks\Onboarding\Internal\Model {
 	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\QueueItem|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\QueueItemCollection filter(callable $callback)
 	 */
-	class EO_Queue_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Queue_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Onboarding\Internal\Model\QueueTable */
 		static public $dataClass = '\Bitrix\Tasks\Onboarding\Internal\Model\QueueTable';
 	}
@@ -14870,302 +15229,7 @@ namespace Bitrix\Tasks\Onboarding\Internal\Model {
 	 */
 	class EO_Queue_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable:tasks/lib/Onboarding/Internal/Model/JobCountTable.php */
-namespace Bitrix\Tasks\Onboarding\Internal\Model {
-	/**
-	 * JobCountItem
-	 * @see \Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getCode()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \string remindActualCode()
-	 * @method \string requireCode()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem resetCode()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem unsetCode()
-	 * @method \string fillCode()
-	 * @method \int getJobCount()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem setJobCount(\int|\Bitrix\Main\DB\SqlExpression $jobCount)
-	 * @method bool hasJobCount()
-	 * @method bool isJobCountFilled()
-	 * @method bool isJobCountChanged()
-	 * @method \int remindActualJobCount()
-	 * @method \int requireJobCount()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem resetJobCount()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem unsetJobCount()
-	 * @method \int fillJobCount()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem reset($fieldName)
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem wakeUp($data)
-	 */
-	class EO_JobCount {
-		/* @var \Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable */
-		static public $dataClass = '\Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Tasks\Onboarding\Internal\Model {
-	/**
-	 * JobCountItemCollection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method \int[] getJobCountList()
-	 * @method \int[] fillJobCount()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem $object)
-	 * @method bool has(\Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection merge(?\Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem|null find(callable $callback)
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection filter(callable $callback)
-	 */
-	class EO_JobCount_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable */
-		static public $dataClass = '\Bitrix\Tasks\Onboarding\Internal\Model\JobCountTable';
-	}
-}
-namespace Bitrix\Tasks\Onboarding\Internal\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_JobCount_Result exec()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem fetchObject()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection fetchCollection()
-	 */
-	class EO_JobCount_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem fetchObject()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection fetchCollection()
-	 */
-	class EO_JobCount_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection createCollection()
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItem wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Onboarding\Internal\Model\JobCountItemCollection wakeUpCollection($rows)
-	 */
-	class EO_JobCount_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable:tasks/lib/Flow/Internal/FlowCopilotAdviceTable.php */
-namespace Bitrix\Tasks\Flow\Internal {
-	/**
-	 * FlowCopilotAdvice
-	 * @see \Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
-	 * @method bool hasFlowId()
-	 * @method bool isFlowIdFilled()
-	 * @method bool isFlowIdChanged()
-	 * @method array getAdvice()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice setAdvice(array|\Bitrix\Main\DB\SqlExpression $advice)
-	 * @method bool hasAdvice()
-	 * @method bool isAdviceFilled()
-	 * @method bool isAdviceChanged()
-	 * @method array remindActualAdvice()
-	 * @method array requireAdvice()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice resetAdvice()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice unsetAdvice()
-	 * @method array fillAdvice()
-	 * @method \Bitrix\Main\Type\DateTime getUpdatedDate()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice setUpdatedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $updatedDate)
-	 * @method bool hasUpdatedDate()
-	 * @method bool isUpdatedDateFilled()
-	 * @method bool isUpdatedDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualUpdatedDate()
-	 * @method \Bitrix\Main\Type\DateTime requireUpdatedDate()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice resetUpdatedDate()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice unsetUpdatedDate()
-	 * @method \Bitrix\Main\Type\DateTime fillUpdatedDate()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity getFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity remindActualFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity requireFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice setFlow(\Bitrix\Tasks\Flow\Internal\Entity\FlowEntity $object)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice resetFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice unsetFlow()
-	 * @method bool hasFlow()
-	 * @method bool isFlowFilled()
-	 * @method bool isFlowChanged()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity fillFlow()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice reset($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice wakeUp($data)
-	 */
-	class EO_FlowCopilotAdvice {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Tasks\Flow\Internal {
-	/**
-	 * EO_FlowCopilotAdvice_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getFlowIdList()
-	 * @method array[] getAdviceList()
-	 * @method array[] fillAdvice()
-	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedDate()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity[] getFlowList()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection getFlowCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntityCollection fillFlow()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice $object)
-	 * @method bool has(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice|null find(callable $callback)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection filter(callable $callback)
-	 */
-	class EO_FlowCopilotAdvice_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable';
-	}
-}
-namespace Bitrix\Tasks\Flow\Internal {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_FlowCopilotAdvice_Result exec()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection fetchCollection()
-	 */
-	class EO_FlowCopilotAdvice_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection fetchCollection()
-	 */
-	class EO_FlowCopilotAdvice_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection createCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection wakeUpCollection($rows)
-	 */
-	class EO_FlowCopilotAdvice_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowTable:tasks/lib/Flow/Internal/FlowTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowTable:tasks/lib/flow/internal/flowtable.php */
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
 	 * FlowEntity
@@ -15370,7 +15434,7 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity wakeUp($data)
 	 */
-	class EO_Flow {
+	class EO_Flow extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Flow\Internal\FlowTable */
 		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowTable';
 		/**
@@ -15454,7 +15518,7 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntityCollection filter(callable $callback)
 	 */
-	class EO_Flow_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Flow_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Flow\Internal\FlowTable */
 		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowTable';
 	}
@@ -15482,70 +15546,40 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 */
 	class EO_Flow_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable:tasks/lib/Flow/Internal/FlowResponsibleQueueTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable:tasks/lib/flow/internal/flowsearchindextable.php */
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
-	 * EO_FlowResponsibleQueue
-	 * @see \Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable
+	 * EO_FlowSearchIndex
+	 * @see \Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
 	 * @method \int getFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
 	 * @method bool hasFlowId()
 	 * @method bool isFlowIdFilled()
 	 * @method bool isFlowIdChanged()
 	 * @method \int remindActualFlowId()
 	 * @method \int requireFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue resetFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unsetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex resetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex unsetFlowId()
 	 * @method \int fillFlowId()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \int remindActualUserId()
-	 * @method \int requireUserId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue resetUserId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unsetUserId()
-	 * @method \int fillUserId()
-	 * @method \int getNextUserId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setNextUserId(\int|\Bitrix\Main\DB\SqlExpression $nextUserId)
-	 * @method bool hasNextUserId()
-	 * @method bool isNextUserIdFilled()
-	 * @method bool isNextUserIdChanged()
-	 * @method \int remindActualNextUserId()
-	 * @method \int requireNextUserId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue resetNextUserId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unsetNextUserId()
-	 * @method \int fillNextUserId()
-	 * @method \int getSort()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
-	 * @method bool hasSort()
-	 * @method bool isSortFilled()
-	 * @method bool isSortChanged()
-	 * @method \int remindActualSort()
-	 * @method \int requireSort()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue resetSort()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unsetSort()
-	 * @method \int fillSort()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity getFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity remindActualFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity requireFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setFlow(\Bitrix\Tasks\Flow\Internal\Entity\FlowEntity $object)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue resetFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unsetFlow()
-	 * @method bool hasFlow()
-	 * @method bool isFlowFilled()
-	 * @method bool isFlowChanged()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity fillFlow()
+	 * @method \string getSearchIndex()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex setSearchIndex(\string|\Bitrix\Main\DB\SqlExpression $searchIndex)
+	 * @method bool hasSearchIndex()
+	 * @method bool isSearchIndexFilled()
+	 * @method bool isSearchIndexChanged()
+	 * @method \string remindActualSearchIndex()
+	 * @method \string requireSearchIndex()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex resetSearchIndex()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex unsetSearchIndex()
+	 * @method \string fillSearchIndex()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -15561,9 +15595,9 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue reset($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex reset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -15571,11 +15605,11 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue wakeUp($data)
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex wakeUp($data)
 	 */
-	class EO_FlowResponsibleQueue {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable';
+	class EO_FlowSearchIndex extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
@@ -15584,7 +15618,7 @@ namespace Bitrix\Tasks\Flow\Internal {
 }
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
-	 * EO_FlowResponsibleQueue_Collection
+	 * EO_FlowSearchIndex_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
@@ -15592,49 +15626,42 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method \int[] getIdList()
 	 * @method \int[] getFlowIdList()
 	 * @method \int[] fillFlowId()
-	 * @method \int[] getUserIdList()
-	 * @method \int[] fillUserId()
-	 * @method \int[] getNextUserIdList()
-	 * @method \int[] fillNextUserId()
-	 * @method \int[] getSortList()
-	 * @method \int[] fillSort()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity[] getFlowList()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection getFlowCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntityCollection fillFlow()
+	 * @method \string[] getSearchIndexList()
+	 * @method \string[] fillSearchIndex()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue $object)
-	 * @method bool has(\Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue $object)
+	 * @method void add(\Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex $object)
+	 * @method bool has(\Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection wakeUp($data)
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue current() Iterator
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection $collection)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue|null find(callable $callback)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection filter(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex|null find(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection filter(callable $callback)
 	 */
-	class EO_FlowResponsibleQueue_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable';
+	class EO_FlowSearchIndex_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable';
 	}
 }
 namespace Bitrix\Tasks\Flow\Internal {
@@ -15642,78 +15669,245 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_FlowResponsibleQueue_Result exec()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection fetchCollection()
+	 * @method EO_FlowSearchIndex_Result exec()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection fetchCollection()
 	 */
-	class EO_FlowResponsibleQueue_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_FlowSearchIndex_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection fetchCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection fetchCollection()
 	 */
-	class EO_FlowResponsibleQueue_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_FlowSearchIndex_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection createCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection createCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection wakeUpCollection($rows)
 	 */
-	class EO_FlowResponsibleQueue_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_FlowSearchIndex_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowNotificationTable:tasks/lib/Flow/Internal/FlowNotificationTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowRobotTable:tasks/lib/flow/internal/flowrobottable.php */
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
-	 * EO_FlowNotification
-	 * @see \Bitrix\Tasks\Flow\Internal\FlowNotificationTable
+	 * FlowRobot
+	 * @see \Bitrix\Tasks\Flow\Internal\FlowRobotTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
 	 * @method \int getFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
 	 * @method bool hasFlowId()
 	 * @method bool isFlowIdFilled()
 	 * @method bool isFlowIdChanged()
 	 * @method \int remindActualFlowId()
 	 * @method \int requireFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification resetFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification unsetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetFlowId()
 	 * @method \int fillFlowId()
-	 * @method \int getIntegrationId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification setIntegrationId(\int|\Bitrix\Main\DB\SqlExpression $integrationId)
-	 * @method bool hasIntegrationId()
-	 * @method bool isIntegrationIdFilled()
-	 * @method bool isIntegrationIdChanged()
-	 * @method \int remindActualIntegrationId()
-	 * @method \int requireIntegrationId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification resetIntegrationId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification unsetIntegrationId()
-	 * @method \int fillIntegrationId()
+	 * @method \int getStageId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setStageId(\int|\Bitrix\Main\DB\SqlExpression $stageId)
+	 * @method bool hasStageId()
+	 * @method bool isStageIdFilled()
+	 * @method bool isStageIdChanged()
+	 * @method \int remindActualStageId()
+	 * @method \int requireStageId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetStageId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetStageId()
+	 * @method \int fillStageId()
+	 * @method \int getBizProcTemplateId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setBizProcTemplateId(\int|\Bitrix\Main\DB\SqlExpression $bizProcTemplateId)
+	 * @method bool hasBizProcTemplateId()
+	 * @method bool isBizProcTemplateIdFilled()
+	 * @method bool isBizProcTemplateIdChanged()
+	 * @method \int remindActualBizProcTemplateId()
+	 * @method \int requireBizProcTemplateId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetBizProcTemplateId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetBizProcTemplateId()
+	 * @method \int fillBizProcTemplateId()
+	 * @method \string getStageType()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setStageType(\string|\Bitrix\Main\DB\SqlExpression $stageType)
+	 * @method bool hasStageType()
+	 * @method bool isStageTypeFilled()
+	 * @method bool isStageTypeChanged()
+	 * @method \string remindActualStageType()
+	 * @method \string requireStageType()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetStageType()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetStageType()
+	 * @method \string fillStageType()
+	 * @method \string getRobot()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setRobot(\string|\Bitrix\Main\DB\SqlExpression $robot)
+	 * @method bool hasRobot()
+	 * @method bool isRobotFilled()
+	 * @method bool isRobotChanged()
+	 * @method \string remindActualRobot()
+	 * @method \string requireRobot()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetRobot()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetRobot()
+	 * @method \string fillRobot()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot reset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot wakeUp($data)
+	 */
+	class EO_FlowRobot extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowRobotTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowRobotTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * FlowRobotCollection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getFlowIdList()
+	 * @method \int[] fillFlowId()
+	 * @method \int[] getStageIdList()
+	 * @method \int[] fillStageId()
+	 * @method \int[] getBizProcTemplateIdList()
+	 * @method \int[] fillBizProcTemplateId()
+	 * @method \string[] getStageTypeList()
+	 * @method \string[] fillStageType()
+	 * @method \string[] getRobotList()
+	 * @method \string[] fillRobot()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Tasks\Flow\Internal\Entity\FlowRobot $object)
+	 * @method bool has(\Bitrix\Tasks\Flow\Internal\Entity\FlowRobot $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\Entity\FlowRobot $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection merge(?\Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot|null find(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection filter(callable $callback)
+	 */
+	class EO_FlowRobot_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowRobotTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowRobotTable';
+	}
+}
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_FlowRobot_Result exec()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection fetchCollection()
+	 */
+	class EO_FlowRobot_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection fetchCollection()
+	 */
+	class EO_FlowRobot_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection createCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection wakeUpCollection($rows)
+	 */
+	class EO_FlowRobot_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable:tasks/lib/flow/internal/flowcopilotcollecteddatatable.php */
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * FlowCopilotCollectedData
+	 * @see \Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
+	 * @method bool hasFlowId()
+	 * @method bool isFlowIdFilled()
+	 * @method bool isFlowIdChanged()
+	 * @method array getData()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData setData(array|\Bitrix\Main\DB\SqlExpression $data)
+	 * @method bool hasData()
+	 * @method bool isDataFilled()
+	 * @method bool isDataChanged()
+	 * @method array remindActualData()
+	 * @method array requireData()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData resetData()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData unsetData()
+	 * @method array fillData()
 	 * @method \string getStatus()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
 	 * @method bool hasStatus()
 	 * @method bool isStatusFilled()
 	 * @method bool isStatusChanged()
 	 * @method \string remindActualStatus()
 	 * @method \string requireStatus()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification resetStatus()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification unsetStatus()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData resetStatus()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData unsetStatus()
 	 * @method \string fillStatus()
-	 * @method \string getData()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification setData(\string|\Bitrix\Main\DB\SqlExpression $data)
-	 * @method bool hasData()
-	 * @method bool isDataFilled()
-	 * @method bool isDataChanged()
-	 * @method \string remindActualData()
-	 * @method \string requireData()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification resetData()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification unsetData()
-	 * @method \string fillData()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity getFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity remindActualFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity requireFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData setFlow(\Bitrix\Tasks\Flow\Internal\Entity\FlowEntity $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData resetFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData unsetFlow()
+	 * @method bool hasFlow()
+	 * @method bool isFlowFilled()
+	 * @method bool isFlowChanged()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity fillFlow()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -15729,9 +15923,9 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification reset($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification unset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData reset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -15739,11 +15933,11 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowNotification wakeUp($data)
+	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData wakeUp($data)
 	 */
-	class EO_FlowNotification {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowNotificationTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowNotificationTable';
+	class EO_FlowCopilotCollectedData extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
@@ -15752,54 +15946,53 @@ namespace Bitrix\Tasks\Flow\Internal {
 }
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
-	 * EO_FlowNotification_Collection
+	 * EO_FlowCopilotCollectedData_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
-	 * @method \int[] getIdList()
 	 * @method \int[] getFlowIdList()
-	 * @method \int[] fillFlowId()
-	 * @method \int[] getIntegrationIdList()
-	 * @method \int[] fillIntegrationId()
+	 * @method array[] getDataList()
+	 * @method array[] fillData()
 	 * @method \string[] getStatusList()
 	 * @method \string[] fillStatus()
-	 * @method \string[] getDataList()
-	 * @method \string[] fillData()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity[] getFlowList()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection getFlowCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntityCollection fillFlow()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Flow\Internal\EO_FlowNotification $object)
-	 * @method bool has(\Bitrix\Tasks\Flow\Internal\EO_FlowNotification $object)
+	 * @method void add(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData $object)
+	 * @method bool has(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\EO_FlowNotification $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection wakeUp($data)
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification current() Iterator
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection $collection)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification|null find(callable $callback)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection filter(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData|null find(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection filter(callable $callback)
 	 */
-	class EO_FlowNotification_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowNotificationTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowNotificationTable';
+	class EO_FlowCopilotCollectedData_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable';
 	}
 }
 namespace Bitrix\Tasks\Flow\Internal {
@@ -15807,74 +16000,64 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_FlowNotification_Result exec()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection fetchCollection()
+	 * @method EO_FlowCopilotCollectedData_Result exec()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection fetchCollection()
 	 */
-	class EO_FlowNotification_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_FlowCopilotCollectedData_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection fetchCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection fetchCollection()
 	 */
-	class EO_FlowNotification_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_FlowCopilotCollectedData_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection createCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection createCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection wakeUpCollection($rows)
 	 */
-	class EO_FlowNotification_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_FlowCopilotCollectedData_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowOptionTable:tasks/lib/Flow/Internal/FlowOptionTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable:tasks/lib/flow/internal/flowcopilotadvicetable.php */
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
-	 * FlowOption
-	 * @see \Bitrix\Tasks\Flow\Internal\FlowOptionTable
+	 * FlowCopilotAdvice
+	 * @see \Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
 	 * @method \int getFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
 	 * @method bool hasFlowId()
 	 * @method bool isFlowIdFilled()
 	 * @method bool isFlowIdChanged()
-	 * @method \int remindActualFlowId()
-	 * @method \int requireFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption resetFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption unsetFlowId()
-	 * @method \int fillFlowId()
-	 * @method \string getName()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption resetName()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption unsetName()
-	 * @method \string fillName()
-	 * @method \string getValue()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption setValue(\string|\Bitrix\Main\DB\SqlExpression $value)
-	 * @method bool hasValue()
-	 * @method bool isValueFilled()
-	 * @method bool isValueChanged()
-	 * @method \string remindActualValue()
-	 * @method \string requireValue()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption resetValue()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption unsetValue()
-	 * @method \string fillValue()
+	 * @method array getAdvice()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice setAdvice(array|\Bitrix\Main\DB\SqlExpression $advice)
+	 * @method bool hasAdvice()
+	 * @method bool isAdviceFilled()
+	 * @method bool isAdviceChanged()
+	 * @method array remindActualAdvice()
+	 * @method array requireAdvice()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice resetAdvice()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice unsetAdvice()
+	 * @method array fillAdvice()
+	 * @method \Bitrix\Main\Type\DateTime getUpdatedDate()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice setUpdatedDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $updatedDate)
+	 * @method bool hasUpdatedDate()
+	 * @method bool isUpdatedDateFilled()
+	 * @method bool isUpdatedDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualUpdatedDate()
+	 * @method \Bitrix\Main\Type\DateTime requireUpdatedDate()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice resetUpdatedDate()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice unsetUpdatedDate()
+	 * @method \Bitrix\Main\Type\DateTime fillUpdatedDate()
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity getFlow()
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity remindActualFlow()
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity requireFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption setFlow(\Bitrix\Tasks\Flow\Internal\Entity\FlowEntity $object)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption resetFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption unsetFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice setFlow(\Bitrix\Tasks\Flow\Internal\Entity\FlowEntity $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice resetFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice unsetFlow()
 	 * @method bool hasFlow()
 	 * @method bool isFlowFilled()
 	 * @method bool isFlowChanged()
@@ -15894,9 +16077,9 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption reset($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption unset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice reset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -15904,11 +16087,11 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowOption wakeUp($data)
+	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice wakeUp($data)
 	 */
-	class EO_FlowOption {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowOptionTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowOptionTable';
+	class EO_FlowCopilotAdvice extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
@@ -15917,55 +16100,53 @@ namespace Bitrix\Tasks\Flow\Internal {
 }
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
-	 * EO_FlowOption_Collection
+	 * EO_FlowCopilotAdvice_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
-	 * @method \int[] getIdList()
 	 * @method \int[] getFlowIdList()
-	 * @method \int[] fillFlowId()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 * @method \string[] getValueList()
-	 * @method \string[] fillValue()
+	 * @method array[] getAdviceList()
+	 * @method array[] fillAdvice()
+	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedDate()
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity[] getFlowList()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection getFlowCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection getFlowCollection()
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntityCollection fillFlow()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Flow\Internal\Entity\FlowOption $object)
-	 * @method bool has(\Bitrix\Tasks\Flow\Internal\Entity\FlowOption $object)
+	 * @method void add(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice $object)
+	 * @method bool has(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\Entity\FlowOption $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection wakeUp($data)
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption current() Iterator
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection $collection)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption|null find(callable $callback)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection filter(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice|null find(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection filter(callable $callback)
 	 */
-	class EO_FlowOption_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowOptionTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowOptionTable';
+	class EO_FlowCopilotAdvice_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowCopilotAdviceTable';
 	}
 }
 namespace Bitrix\Tasks\Flow\Internal {
@@ -15973,216 +16154,25 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_FlowOption_Result exec()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection fetchCollection()
+	 * @method EO_FlowCopilotAdvice_Result exec()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection fetchCollection()
 	 */
-	class EO_FlowOption_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_FlowCopilotAdvice_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection fetchCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection fetchCollection()
 	 */
-	class EO_FlowOption_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_FlowCopilotAdvice_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection createCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection createCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotAdvice_Collection wakeUpCollection($rows)
 	 */
-	class EO_FlowOption_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_FlowCopilotAdvice_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowUserOptionTable:tasks/lib/Flow/Internal/FlowUserOptionTable.php */
-namespace Bitrix\Tasks\Flow\Internal {
-	/**
-	 * EO_FlowUserOption
-	 * @see \Bitrix\Tasks\Flow\Internal\FlowUserOptionTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
-	 * @method bool hasFlowId()
-	 * @method bool isFlowIdFilled()
-	 * @method bool isFlowIdChanged()
-	 * @method \int remindActualFlowId()
-	 * @method \int requireFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetFlowId()
-	 * @method \int fillFlowId()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \int remindActualUserId()
-	 * @method \int requireUserId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetUserId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetUserId()
-	 * @method \int fillUserId()
-	 * @method \string getName()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetName()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetName()
-	 * @method \string fillName()
-	 * @method \string getValue()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setValue(\string|\Bitrix\Main\DB\SqlExpression $value)
-	 * @method bool hasValue()
-	 * @method bool isValueFilled()
-	 * @method bool isValueChanged()
-	 * @method \string remindActualValue()
-	 * @method \string requireValue()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetValue()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetValue()
-	 * @method \string fillValue()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity getFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity remindActualFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity requireFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setFlow(\Bitrix\Tasks\Flow\Internal\Entity\FlowEntity $object)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetFlow()
-	 * @method bool hasFlow()
-	 * @method bool isFlowFilled()
-	 * @method bool isFlowChanged()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity fillFlow()
-	 * @method \Bitrix\Main\EO_User getUser()
-	 * @method \Bitrix\Main\EO_User remindActualUser()
-	 * @method \Bitrix\Main\EO_User requireUser()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setUser(\Bitrix\Main\EO_User $object)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetUser()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetUser()
-	 * @method bool hasUser()
-	 * @method bool isUserFilled()
-	 * @method bool isUserChanged()
-	 * @method \Bitrix\Main\EO_User fillUser()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption reset($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption wakeUp($data)
-	 */
-	class EO_FlowUserOption {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowUserOptionTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowUserOptionTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Tasks\Flow\Internal {
-	/**
-	 * EO_FlowUserOption_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getFlowIdList()
-	 * @method \int[] fillFlowId()
-	 * @method \int[] getUserIdList()
-	 * @method \int[] fillUserId()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 * @method \string[] getValueList()
-	 * @method \string[] fillValue()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity[] getFlowList()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection getFlowCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntityCollection fillFlow()
-	 * @method \Bitrix\Main\EO_User[] getUserList()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection getUserCollection()
-	 * @method \Bitrix\Main\EO_User_Collection fillUser()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Flow\Internal\EO_FlowUserOption $object)
-	 * @method bool has(\Bitrix\Tasks\Flow\Internal\EO_FlowUserOption $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\EO_FlowUserOption $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption|null find(callable $callback)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection filter(callable $callback)
-	 */
-	class EO_FlowUserOption_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowUserOptionTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowUserOptionTable';
-	}
-}
-namespace Bitrix\Tasks\Flow\Internal {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_FlowUserOption_Result exec()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection fetchCollection()
-	 */
-	class EO_FlowUserOption_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection fetchCollection()
-	 */
-	class EO_FlowUserOption_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection createCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection wakeUpCollection($rows)
-	 */
-	class EO_FlowUserOption_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowMemberTable:tasks/lib/Flow/Internal/FlowMemberTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowMemberTable:tasks/lib/flow/internal/flowmembertable.php */
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
 	 * FlowMember
@@ -16293,7 +16283,7 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowMember wakeUp($data)
 	 */
-	class EO_FlowMember {
+	class EO_FlowMember extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Flow\Internal\FlowMemberTable */
 		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowMemberTable';
 		/**
@@ -16357,7 +16347,7 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowMember|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowMemberCollection filter(callable $callback)
 	 */
-	class EO_FlowMember_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_FlowMember_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Flow\Internal\FlowMemberTable */
 		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowMemberTable';
 	}
@@ -16385,223 +16375,56 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 */
 	class EO_FlowMember_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowRobotTable:tasks/lib/Flow/Internal/FlowRobotTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowOptionTable:tasks/lib/flow/internal/flowoptiontable.php */
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
-	 * FlowRobot
-	 * @see \Bitrix\Tasks\Flow\Internal\FlowRobotTable
+	 * FlowOption
+	 * @see \Bitrix\Tasks\Flow\Internal\FlowOptionTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
 	 * @method \int getFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
 	 * @method bool hasFlowId()
 	 * @method bool isFlowIdFilled()
 	 * @method bool isFlowIdChanged()
 	 * @method \int remindActualFlowId()
 	 * @method \int requireFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption resetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption unsetFlowId()
 	 * @method \int fillFlowId()
-	 * @method \int getStageId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setStageId(\int|\Bitrix\Main\DB\SqlExpression $stageId)
-	 * @method bool hasStageId()
-	 * @method bool isStageIdFilled()
-	 * @method bool isStageIdChanged()
-	 * @method \int remindActualStageId()
-	 * @method \int requireStageId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetStageId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetStageId()
-	 * @method \int fillStageId()
-	 * @method \int getBizProcTemplateId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setBizProcTemplateId(\int|\Bitrix\Main\DB\SqlExpression $bizProcTemplateId)
-	 * @method bool hasBizProcTemplateId()
-	 * @method bool isBizProcTemplateIdFilled()
-	 * @method bool isBizProcTemplateIdChanged()
-	 * @method \int remindActualBizProcTemplateId()
-	 * @method \int requireBizProcTemplateId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetBizProcTemplateId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetBizProcTemplateId()
-	 * @method \int fillBizProcTemplateId()
-	 * @method \string getStageType()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setStageType(\string|\Bitrix\Main\DB\SqlExpression $stageType)
-	 * @method bool hasStageType()
-	 * @method bool isStageTypeFilled()
-	 * @method bool isStageTypeChanged()
-	 * @method \string remindActualStageType()
-	 * @method \string requireStageType()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetStageType()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetStageType()
-	 * @method \string fillStageType()
-	 * @method \string getRobot()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot setRobot(\string|\Bitrix\Main\DB\SqlExpression $robot)
-	 * @method bool hasRobot()
-	 * @method bool isRobotFilled()
-	 * @method bool isRobotChanged()
-	 * @method \string remindActualRobot()
-	 * @method \string requireRobot()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot resetRobot()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unsetRobot()
-	 * @method \string fillRobot()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot reset($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot wakeUp($data)
-	 */
-	class EO_FlowRobot {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowRobotTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowRobotTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Tasks\Flow\Internal {
-	/**
-	 * FlowRobotCollection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getFlowIdList()
-	 * @method \int[] fillFlowId()
-	 * @method \int[] getStageIdList()
-	 * @method \int[] fillStageId()
-	 * @method \int[] getBizProcTemplateIdList()
-	 * @method \int[] fillBizProcTemplateId()
-	 * @method \string[] getStageTypeList()
-	 * @method \string[] fillStageType()
-	 * @method \string[] getRobotList()
-	 * @method \string[] fillRobot()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Flow\Internal\Entity\FlowRobot $object)
-	 * @method bool has(\Bitrix\Tasks\Flow\Internal\Entity\FlowRobot $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\Entity\FlowRobot $object)
-	 * @method void removeByPrimary($primary)
-	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection merge(?\Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection $collection)
-	 * @method bool isEmpty()
-	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot|null find(callable $callback)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection filter(callable $callback)
-	 */
-	class EO_FlowRobot_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowRobotTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowRobotTable';
-	}
-}
-namespace Bitrix\Tasks\Flow\Internal {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_FlowRobot_Result exec()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection fetchCollection()
-	 */
-	class EO_FlowRobot_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection fetchCollection()
-	 */
-	class EO_FlowRobot_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection createCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobot wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowRobotCollection wakeUpCollection($rows)
-	 */
-	class EO_FlowRobot_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable:tasks/lib/Flow/Internal/FlowCopilotCollectedDataTable.php */
-namespace Bitrix\Tasks\Flow\Internal {
-	/**
-	 * FlowCopilotCollectedData
-	 * @see \Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
-	 * @method bool hasFlowId()
-	 * @method bool isFlowIdFilled()
-	 * @method bool isFlowIdChanged()
-	 * @method array getData()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData setData(array|\Bitrix\Main\DB\SqlExpression $data)
-	 * @method bool hasData()
-	 * @method bool isDataFilled()
-	 * @method bool isDataChanged()
-	 * @method array remindActualData()
-	 * @method array requireData()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData resetData()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData unsetData()
-	 * @method array fillData()
-	 * @method \string getStatus()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
-	 * @method bool hasStatus()
-	 * @method bool isStatusFilled()
-	 * @method bool isStatusChanged()
-	 * @method \string remindActualStatus()
-	 * @method \string requireStatus()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData resetStatus()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData unsetStatus()
-	 * @method \string fillStatus()
+	 * @method \string getName()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption resetName()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption unsetName()
+	 * @method \string fillName()
+	 * @method \string getValue()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption setValue(\string|\Bitrix\Main\DB\SqlExpression $value)
+	 * @method bool hasValue()
+	 * @method bool isValueFilled()
+	 * @method bool isValueChanged()
+	 * @method \string remindActualValue()
+	 * @method \string requireValue()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption resetValue()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption unsetValue()
+	 * @method \string fillValue()
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity getFlow()
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity remindActualFlow()
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity requireFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData setFlow(\Bitrix\Tasks\Flow\Internal\Entity\FlowEntity $object)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData resetFlow()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData unsetFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption setFlow(\Bitrix\Tasks\Flow\Internal\Entity\FlowEntity $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption resetFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption unsetFlow()
 	 * @method bool hasFlow()
 	 * @method bool isFlowFilled()
 	 * @method bool isFlowChanged()
@@ -16621,9 +16444,9 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData reset($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData unset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption reset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -16631,11 +16454,11 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData wakeUp($data)
+	 * @method static \Bitrix\Tasks\Flow\Internal\Entity\FlowOption wakeUp($data)
 	 */
-	class EO_FlowCopilotCollectedData {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable';
+	class EO_FlowOption extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowOptionTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowOptionTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
@@ -16644,53 +16467,55 @@ namespace Bitrix\Tasks\Flow\Internal {
 }
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
-	 * EO_FlowCopilotCollectedData_Collection
+	 * EO_FlowOption_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
+	 * @method \int[] getIdList()
 	 * @method \int[] getFlowIdList()
-	 * @method array[] getDataList()
-	 * @method array[] fillData()
-	 * @method \string[] getStatusList()
-	 * @method \string[] fillStatus()
+	 * @method \int[] fillFlowId()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getValueList()
+	 * @method \string[] fillValue()
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity[] getFlowList()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection getFlowCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection getFlowCollection()
 	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntityCollection fillFlow()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData $object)
-	 * @method bool has(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData $object)
+	 * @method void add(\Bitrix\Tasks\Flow\Internal\Entity\FlowOption $object)
+	 * @method bool has(\Bitrix\Tasks\Flow\Internal\Entity\FlowOption $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\Entity\FlowOption $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection wakeUp($data)
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData current() Iterator
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection $collection)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData|null find(callable $callback)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection filter(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption|null find(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection filter(callable $callback)
 	 */
-	class EO_FlowCopilotCollectedData_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowCopilotCollectedDataTable';
+	class EO_FlowOption_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowOptionTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowOptionTable';
 	}
 }
 namespace Bitrix\Tasks\Flow\Internal {
@@ -16698,58 +16523,98 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_FlowCopilotCollectedData_Result exec()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection fetchCollection()
+	 * @method EO_FlowOption_Result exec()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection fetchCollection()
 	 */
-	class EO_FlowCopilotCollectedData_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_FlowOption_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection fetchCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection fetchCollection()
 	 */
-	class EO_FlowCopilotCollectedData_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_FlowOption_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection createCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotCollectedData wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowCopilotCollectedData_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection createCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowOption wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowOption_Collection wakeUpCollection($rows)
 	 */
-	class EO_FlowCopilotCollectedData_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_FlowOption_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable:tasks/lib/Flow/Internal/FlowSearchIndexTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowUserOptionTable:tasks/lib/flow/internal/flowuseroptiontable.php */
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
-	 * EO_FlowSearchIndex
-	 * @see \Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable
+	 * EO_FlowUserOption
+	 * @see \Bitrix\Tasks\Flow\Internal\FlowUserOptionTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
 	 * @method \int getFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
 	 * @method bool hasFlowId()
 	 * @method bool isFlowIdFilled()
 	 * @method bool isFlowIdChanged()
 	 * @method \int remindActualFlowId()
 	 * @method \int requireFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex resetFlowId()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex unsetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetFlowId()
 	 * @method \int fillFlowId()
-	 * @method \string getSearchIndex()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex setSearchIndex(\string|\Bitrix\Main\DB\SqlExpression $searchIndex)
-	 * @method bool hasSearchIndex()
-	 * @method bool isSearchIndexFilled()
-	 * @method bool isSearchIndexChanged()
-	 * @method \string remindActualSearchIndex()
-	 * @method \string requireSearchIndex()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex resetSearchIndex()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex unsetSearchIndex()
-	 * @method \string fillSearchIndex()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetUserId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \string getName()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetName()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetName()
+	 * @method \string fillName()
+	 * @method \string getValue()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setValue(\string|\Bitrix\Main\DB\SqlExpression $value)
+	 * @method bool hasValue()
+	 * @method bool isValueFilled()
+	 * @method bool isValueChanged()
+	 * @method \string remindActualValue()
+	 * @method \string requireValue()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetValue()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetValue()
+	 * @method \string fillValue()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity getFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity remindActualFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity requireFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setFlow(\Bitrix\Tasks\Flow\Internal\Entity\FlowEntity $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetFlow()
+	 * @method bool hasFlow()
+	 * @method bool isFlowFilled()
+	 * @method bool isFlowChanged()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity fillFlow()
+	 * @method \Bitrix\Main\EO_User getUser()
+	 * @method \Bitrix\Main\EO_User remindActualUser()
+	 * @method \Bitrix\Main\EO_User requireUser()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption setUser(\Bitrix\Main\EO_User $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption resetUser()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unsetUser()
+	 * @method bool hasUser()
+	 * @method bool isUserFilled()
+	 * @method bool isUserChanged()
+	 * @method \Bitrix\Main\EO_User fillUser()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -16765,9 +16630,9 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex set($fieldName, $value)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex reset($fieldName)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex unset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption reset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -16775,11 +16640,11 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex wakeUp($data)
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption wakeUp($data)
 	 */
-	class EO_FlowSearchIndex {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable';
+	class EO_FlowUserOption extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowUserOptionTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowUserOptionTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
@@ -16788,7 +16653,7 @@ namespace Bitrix\Tasks\Flow\Internal {
 }
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
-	 * EO_FlowSearchIndex_Collection
+	 * EO_FlowUserOption_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
@@ -16796,42 +16661,52 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method \int[] getIdList()
 	 * @method \int[] getFlowIdList()
 	 * @method \int[] fillFlowId()
-	 * @method \string[] getSearchIndexList()
-	 * @method \string[] fillSearchIndex()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getValueList()
+	 * @method \string[] fillValue()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity[] getFlowList()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection getFlowCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntityCollection fillFlow()
+	 * @method \Bitrix\Main\EO_User[] getUserList()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection getUserCollection()
+	 * @method \Bitrix\Main\EO_User_Collection fillUser()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex $object)
-	 * @method bool has(\Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex $object)
+	 * @method void add(\Bitrix\Tasks\Flow\Internal\EO_FlowUserOption $object)
+	 * @method bool has(\Bitrix\Tasks\Flow\Internal\EO_FlowUserOption $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex getByPrimary($primary)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex[] getAll()
-	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\EO_FlowUserOption $object)
 	 * @method void removeByPrimary($primary)
 	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection wakeUp($data)
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex current() Iterator
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection $collection)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex|null find(callable $callback)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection filter(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption|null find(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection filter(callable $callback)
 	 */
-	class EO_FlowSearchIndex_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable */
-		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowSearchIndexTable';
+	class EO_FlowUserOption_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowUserOptionTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowUserOptionTable';
 	}
 }
 namespace Bitrix\Tasks\Flow\Internal {
@@ -16839,25 +16714,203 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_FlowSearchIndex_Result exec()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection fetchCollection()
+	 * @method EO_FlowUserOption_Result exec()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection fetchCollection()
 	 */
-	class EO_FlowSearchIndex_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_FlowUserOption_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex fetchObject()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection fetchCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection fetchCollection()
 	 */
-	class EO_FlowSearchIndex_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_FlowUserOption_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex createObject($setDefaultValues = true)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection createCollection()
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex wakeUpObject($row)
-	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowSearchIndex_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection createCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowUserOption_Collection wakeUpCollection($rows)
 	 */
-	class EO_FlowSearchIndex_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_FlowUserOption_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowTaskTable:tasks/lib/Flow/Internal/FlowTaskTable.php */
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable:tasks/lib/flow/internal/flowresponsiblequeuetable.php */
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * EO_FlowResponsibleQueue
+	 * @see \Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
+	 * @method bool hasFlowId()
+	 * @method bool isFlowIdFilled()
+	 * @method bool isFlowIdChanged()
+	 * @method \int remindActualFlowId()
+	 * @method \int requireFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue resetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unsetFlowId()
+	 * @method \int fillFlowId()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue resetUserId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \int getNextUserId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setNextUserId(\int|\Bitrix\Main\DB\SqlExpression $nextUserId)
+	 * @method bool hasNextUserId()
+	 * @method bool isNextUserIdFilled()
+	 * @method bool isNextUserIdChanged()
+	 * @method \int remindActualNextUserId()
+	 * @method \int requireNextUserId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue resetNextUserId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unsetNextUserId()
+	 * @method \int fillNextUserId()
+	 * @method \int getSort()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setSort(\int|\Bitrix\Main\DB\SqlExpression $sort)
+	 * @method bool hasSort()
+	 * @method bool isSortFilled()
+	 * @method bool isSortChanged()
+	 * @method \int remindActualSort()
+	 * @method \int requireSort()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue resetSort()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unsetSort()
+	 * @method \int fillSort()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity getFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity remindActualFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity requireFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue setFlow(\Bitrix\Tasks\Flow\Internal\Entity\FlowEntity $object)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue resetFlow()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unsetFlow()
+	 * @method bool hasFlow()
+	 * @method bool isFlowFilled()
+	 * @method bool isFlowChanged()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity fillFlow()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue reset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue wakeUp($data)
+	 */
+	class EO_FlowResponsibleQueue extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * EO_FlowResponsibleQueue_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getFlowIdList()
+	 * @method \int[] fillFlowId()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \int[] getNextUserIdList()
+	 * @method \int[] fillNextUserId()
+	 * @method \int[] getSortList()
+	 * @method \int[] fillSort()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntity[] getFlowList()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection getFlowCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\Entity\FlowEntityCollection fillFlow()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue $object)
+	 * @method bool has(\Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue|null find(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection filter(callable $callback)
+	 */
+	class EO_FlowResponsibleQueue_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowResponsibleQueueTable';
+	}
+}
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_FlowResponsibleQueue_Result exec()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection fetchCollection()
+	 */
+	class EO_FlowResponsibleQueue_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection fetchCollection()
+	 */
+	class EO_FlowResponsibleQueue_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection createCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowResponsibleQueue_Collection wakeUpCollection($rows)
+	 */
+	class EO_FlowResponsibleQueue_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowTaskTable:tasks/lib/flow/internal/flowtasktable.php */
 namespace Bitrix\Tasks\Flow\Internal {
 	/**
 	 * EO_FlowTask
@@ -16939,7 +16992,7 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowTask wakeUp($data)
 	 */
-	class EO_FlowTask {
+	class EO_FlowTask extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Tasks\Flow\Internal\FlowTaskTable */
 		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowTaskTable';
 		/**
@@ -16997,7 +17050,7 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowTask|null find(callable $callback)
 	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowTask_Collection filter(callable $callback)
 	 */
-	class EO_FlowTask_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_FlowTask_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Tasks\Flow\Internal\FlowTaskTable */
 		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowTaskTable';
 	}
@@ -17024,4 +17077,169 @@ namespace Bitrix\Tasks\Flow\Internal {
 	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowTask_Collection wakeUpCollection($rows)
 	 */
 	class EO_FlowTask_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Tasks\Flow\Internal\FlowNotificationTable:tasks/lib/flow/internal/flownotificationtable.php */
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * EO_FlowNotification
+	 * @see \Bitrix\Tasks\Flow\Internal\FlowNotificationTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification setFlowId(\int|\Bitrix\Main\DB\SqlExpression $flowId)
+	 * @method bool hasFlowId()
+	 * @method bool isFlowIdFilled()
+	 * @method bool isFlowIdChanged()
+	 * @method \int remindActualFlowId()
+	 * @method \int requireFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification resetFlowId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification unsetFlowId()
+	 * @method \int fillFlowId()
+	 * @method \int getIntegrationId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification setIntegrationId(\int|\Bitrix\Main\DB\SqlExpression $integrationId)
+	 * @method bool hasIntegrationId()
+	 * @method bool isIntegrationIdFilled()
+	 * @method bool isIntegrationIdChanged()
+	 * @method \int remindActualIntegrationId()
+	 * @method \int requireIntegrationId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification resetIntegrationId()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification unsetIntegrationId()
+	 * @method \int fillIntegrationId()
+	 * @method \string getStatus()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \string remindActualStatus()
+	 * @method \string requireStatus()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification resetStatus()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification unsetStatus()
+	 * @method \string fillStatus()
+	 * @method \string getData()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification setData(\string|\Bitrix\Main\DB\SqlExpression $data)
+	 * @method bool hasData()
+	 * @method bool isDataFilled()
+	 * @method bool isDataChanged()
+	 * @method \string remindActualData()
+	 * @method \string requireData()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification resetData()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification unsetData()
+	 * @method \string fillData()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification set($fieldName, $value)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification reset($fieldName)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowNotification wakeUp($data)
+	 */
+	class EO_FlowNotification extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowNotificationTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowNotificationTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * EO_FlowNotification_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getFlowIdList()
+	 * @method \int[] fillFlowId()
+	 * @method \int[] getIntegrationIdList()
+	 * @method \int[] fillIntegrationId()
+	 * @method \string[] getStatusList()
+	 * @method \string[] fillStatus()
+	 * @method \string[] getDataList()
+	 * @method \string[] fillData()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Tasks\Flow\Internal\EO_FlowNotification $object)
+	 * @method bool has(\Bitrix\Tasks\Flow\Internal\EO_FlowNotification $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification getByPrimary($primary)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification[] getAll()
+	 * @method bool remove(\Bitrix\Tasks\Flow\Internal\EO_FlowNotification $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection merge(?\Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification|null find(callable $callback)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection filter(callable $callback)
+	 */
+	class EO_FlowNotification_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Tasks\Flow\Internal\FlowNotificationTable */
+		static public $dataClass = '\Bitrix\Tasks\Flow\Internal\FlowNotificationTable';
+	}
+}
+namespace Bitrix\Tasks\Flow\Internal {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_FlowNotification_Result exec()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection fetchCollection()
+	 */
+	class EO_FlowNotification_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification fetchObject()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection fetchCollection()
+	 */
+	class EO_FlowNotification_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification createObject($setDefaultValues = true)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection createCollection()
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification wakeUpObject($row)
+	 * @method \Bitrix\Tasks\Flow\Internal\EO_FlowNotification_Collection wakeUpCollection($rows)
+	 */
+	class EO_FlowNotification_Entity extends \Bitrix\Main\ORM\Entity {}
 }

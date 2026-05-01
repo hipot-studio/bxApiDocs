@@ -22,6 +22,7 @@ use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Rest\Service\PlacementService;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\UserMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Trait\ApplicationErrorTrait;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Task\OrmTaskMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskMapper;
@@ -43,6 +44,7 @@ class TaskRepository implements TaskRepositoryInterface
 		private readonly TaskTagRepositoryInterface $taskTagRepository,
 		private readonly TaskMapper $taskMapper,
 		private readonly OrmTaskMapper $ormTaskMapper,
+		private readonly UserMapper $userMapper,
 		private readonly SubTaskRepositoryInterface $subTaskRepository,
 		private readonly RelatedTaskRepositoryInterface $relatedTaskRepository,
 		private readonly GanttLinkRepositoryInterface $ganttLinkRepository,
@@ -133,13 +135,13 @@ class TaskRepository implements TaskRepositoryInterface
 			'requireDeadlineChangeReason' => $this->taskParameterRepository->requireDeadlineChangeReason($id),
 		];
 
-		$crmItemIds = $task->get(Entity\UF\UserField::TASK_CRM);
+		$crmItemIds = $task->getFieldValueOrNull(Entity\UF\UserField::TASK_CRM);
 		if (empty($crmItemIds))
 		{
 			$crmItemIds = null;
 		}
 
-		$fileIds = $task->get(Entity\UF\UserField::TASK_ATTACHMENTS);
+		$fileIds = $task->getFieldValueOrNull(Entity\UF\UserField::TASK_ATTACHMENTS);
 		if (empty($fileIds))
 		{
 			$fileIds = null;
@@ -372,5 +374,51 @@ class TaskRepository implements TaskRepositoryInterface
 			->exec();
 
 		return $result->fetchAll();
+	}
+
+	public function getAccessInfoById(int $taskId): ?Entity\Task
+	{
+		$task = TaskTable::query()
+			->setSelect([
+				'DURATION_TYPE',
+				'GROUP_ID',
+				'MEMBER_LIST',
+				'CREATED_BY',
+				'RESPONSIBLE_ID',
+				'CLOSED_BY',
+				'STATUS_CHANGED_BY',
+				'CHANGED_BY',
+			])
+			->where('ID', $taskId)
+			->fetchObject()
+		;
+
+		if ($task === null)
+		{
+			return null;
+		}
+
+		$memberIds = array_merge(
+			(array)$task->getMemberList()?->getUserIdList(),
+			[
+				$task->getCreatedBy(),
+				$task->getResponsibleId(),
+				$task->getClosedBy(),
+				$task->getStatusChangedBy(),
+				$task->getChangedBy(),
+			],
+		);
+
+		Collection::normalizeArrayValuesByInt($memberIds, false);
+
+		$members = Entity\UserCollection::mapFromIds($memberIds);
+
+		$group = $task->getGroupId() > 0 ? new Entity\Group(id: $task->getGroupId()) : null;
+
+		return $this->taskMapper->mapToEntity(
+			taskObject: $task,
+			group: $group,
+			members: $members,
+		);
 	}
 }

@@ -34,6 +34,11 @@ class PasswordService implements Contract\Service\APAuth\PasswordService
 		return $this->passwordRepository->getByType(Enum\APAuth\PasswordType::System);
 	}
 
+	public function hasWebhooksByUserId(int $userId): bool
+	{
+		return $this->passwordRepository->hasWebhooksByUserId($userId);
+	}
+
 	public function isSystemPasswordById(int $id): bool
 	{
 		$cache = Application::getInstance()->getCache();

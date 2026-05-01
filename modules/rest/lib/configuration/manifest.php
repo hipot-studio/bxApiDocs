@@ -78,7 +78,8 @@ class Manifest
 				$result[] = [
 					'NEXT' => isset($parameters['NEXT']) ? $parameters['NEXT'] : false,
 					'ERROR_MESSAGES' => $parameters['ERROR_MESSAGES'] ?? null,
-					'ERROR_ACTION' => $parameters['ERROR_ACTION'] ?? null
+					'ERROR_ACTION' => $parameters['ERROR_ACTION'] ?? null,
+					'ERROR_EXCEPTION' => $parameters['ERROR_EXCEPTION'] ?? null,
 				];
 			}
 		}

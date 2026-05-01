@@ -84,9 +84,12 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 			$otpSettings = new OtpSettings();
 			$mobilePush = MobilePush::createByDefault();
 			$personalOtp = $this->arParams['PERSONAL_OTP'];
+			$otpPermission = new UserPermission($user);
 			$this->arResult["OTP"]["IS_ENABLED"] = $otpSettings->isEnabled() ? 'Y' : 'N';
 			$this->arResult["OTP"]["IS_ACTIVE"] = $personalOtp->isActivated() ? 'Y' : 'N';
-			$this->arResult["OTP"]["CAN_EDIT_OTP"] = (new UserPermission($user))->canEdit() ? 'Y' : 'N';
+			$this->arResult["OTP"]["CAN_VIEW_OTP"] = $otpPermission->canView() ? 'Y' : 'N';
+			$this->arResult["OTP"]["CAN_EDIT_OTP"] = $otpPermission->canEdit() ? 'Y' : 'N';
+			$this->arResult["OTP"]["CAN_DEACTIVATE_OTP"] = $otpPermission->canDeactivate() ? 'Y' : 'N';
 			$this->arResult["OTP"]["2FA_SECTION_SHOW"] = 'Y';
 			$this->arResult["OTP"]["IS_INITIALIZED"] = $personalOtp->isInitialized() ? 'Y' : 'N';
 
@@ -155,6 +158,8 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 	{
 		$verifyPhone = new VerifyPhoneService($this->arParams['USER']);
 		$pushOtpService = MobilePush::createByDefault();
+		$userId = (int)$this->arParams['USER']->getId();
+		$otpPermission = new UserPermission($this->arParams['USER']);
 		$canShowBannerPushOtp = $this->arParams["CAN_EDIT"] && $pushOtpService->getPromoteMode() !== PromoteMode::Disable;
 
 		if (
@@ -166,15 +171,28 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 			$canShowBannerPushOtp = $pushOtpService->canUsePersonalModeByUserId((int)$this->arParams['USER']->getId());
 		}
 
-		return [
-			...$this->arParams['PERSONAL_OTP']->getOtpConfig(),
+		$isPersonalPushType = $this->arParams['PERSONAL_OTP']->getType() === OtpType::Push;
+
+		$params = [
 			'provideSmsOtp' => $verifyPhone->canSendSms(),
 			'canShowBannerPushOtp' => $canShowBannerPushOtp,
 			'isOtpActive' => $this->arParams['PERSONAL_OTP']->isActivated(),
-			'canDeactivate' => (new UserPermission($this->arParams['USER']))->canDeactivate(),
-			'isNotPushOtp' => ($this->arParams['PERSONAL_OTP']->getType() !== OtpType::Push && $this->arParams['PERSONAL_OTP']->isInitialized()) || !MobilePush::createByDefault()->getPromoteMode()->isGreaterOrEqual(PromoteMode::Low),
+			'canDeactivate' => $otpPermission->canDeactivate(),
+			'isNotPushOtp' => (!$isPersonalPushType && $this->arParams['PERSONAL_OTP']->isInitialized())
+				|| (!$isPersonalPushType && !$pushOtpService->getPromoteMode()->isGreaterOrEqual(PromoteMode::Low))
+				|| ($pushOtpService->isLegacyOtpAllowedByUserId($userId) && !$isPersonalPushType),
 			'days' => $this->createDays(),
 		];
+
+		if ($otpPermission->canEdit())
+		{
+			$params = [
+				...$this->arParams['PERSONAL_OTP']->getOtpConfig(),
+				...$params,
+			];
+		}
+
+		return $params;
 	}
 
 	private function createDays(): array

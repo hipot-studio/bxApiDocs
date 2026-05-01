@@ -26,4 +26,9 @@ class InMemoryFlowRepository implements FlowRepositoryInterface
 
 		return $this->cache[$id];
 	}
+
+	public function getByIds(array $ids): Entity\FlowCollection
+	{
+		return $this->flowRepository->getByIds($ids);
+	}
 }

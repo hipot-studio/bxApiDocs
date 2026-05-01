@@ -497,7 +497,7 @@ class DocumentationManager
 		};
 	}
 
-	private function getExamplesByDtoClass(\ReflectionProperty $property, ?DtoExample $dtoExample, ReflectionMethod $method): array
+	private function getExamplesByDtoClass(\ReflectionProperty $property, ?DtoExample $dtoExample, MethodDescription $methodDescription): array
 	{
 		return match ($property->getName())
 		{
@@ -513,11 +513,11 @@ class DocumentationManager
 					'order' => 'ASC',
 				],
 			],
-			'filter' => call_user_func(function () use ($method) {
+			'filter' => call_user_func(function () use ($methodDescription) {
 				$result = [
 					'type' => 'array',
 				];
-				if ($method->getName() !== 'tailAction')
+				if ($methodDescription->method !== 'tail')
 				{
 					$result['example'] = [['id', '>=', 1], ['id', 1], ['id', 'in', [1, 2, 3]]];
 				}
@@ -531,25 +531,24 @@ class DocumentationManager
 						'type' => 'string',
 					],
 				];
-				if ($dtoExample !== null)
+				if ($dtoExample !== null && $dtoExample->selectable !== [])
 				{
-					$result['example'] = $dtoExample->select;
+					$result['example'] = $dtoExample->selectable;
 				}
 
 				return $result;
 			}),
-			'fields' => call_user_func(function () use ($method, $dtoExample) {
+			'fields' => call_user_func(function () use ($methodDescription, $dtoExample) {
 				$result = [
 					'type' => 'object',
 				];
 
-				if ($dtoExample !== null)
+				if ($dtoExample !== null && $dtoExample->editable !== [])
 				{
-					$methodName = str_replace('Action', '', $method->getName());
-					$result['properties'] = $method->getName() === 'updateAction' ? $dtoExample->editable : $dtoExample->addable;
-					if (!empty($dtoExample->fieldsRequiredByMethods[$methodName]) || isset($dtoExample->fieldsRequiredByMethods['*']))
+					$result['properties'] = $dtoExample->editable;
+					if ($dtoExample->required !== [])
 					{
-						$result['required'] = array_merge($dtoExample->fieldsRequiredByMethods[$methodName] ?? [], $dtoExample->allMethodsRequiredFields);
+						$result['required'] = $dtoExample->required;
 					}
 				}
 
@@ -559,7 +558,7 @@ class DocumentationManager
 				$result = [
 					'type' => 'object',
 				];
-				if ($dtoExample !== null)
+				if ($dtoExample !== null && $dtoExample->sortable !== [])
 				{
 					$result['properties'] = $dtoExample->sortable;
 				}
@@ -585,7 +584,7 @@ class DocumentationManager
 					'countDistinct' => ['type' => 'array', 'items' => ['type' => 'string'], 'example' => ['id']],
 				],
 			],
-			default => call_user_func(function () use ($method, $property) {
+			default => call_user_func(function () use ($methodDescription, $property) {
 				$propertyType = $this->getPropertyTypeProperties($property->getType()->getName());
 				if ($propertyType === null)
 				{
@@ -710,8 +709,8 @@ class DocumentationManager
 							{
 								continue;
 							}
-							$dtoExample = $this->getDtoExample($dto);
-							$properties[$property->getName()] = $this->getExamplesByDtoClass($property, $dtoExample, $method);
+							$dtoExample = $dto !== null ? $this->getDtoExample($dto, $methodDescription) : null;
+							$properties[$property->getName()] = $this->getExamplesByDtoClass($property, $dtoExample, $methodDescription);
 
 							if (!$property->getType()->allowsNull())
 							{
@@ -747,68 +746,53 @@ class DocumentationManager
 		return $baseRequestSchema($properties, $requestRequiredProperties);
 	}
 
-	private function getDtoExample(?Dto $dto = null): ?DtoExample
+	private function getDtoExample(Dto $dto, MethodDescription $methodDescription): ?DtoExample
 	{
-		if ($dto === null)
-		{
-			return null;
-		}
-		if (!isset(self::$dtoExamples[get_class($dto)]))
-		{
-			$select = $sortable = $addable = $editable = $methodRequiredFields = $allMethodsRequiredFields = [];
+		$selectable = $editable = $sortable = $required = [];
 
-			/** @var DtoField $dtoField */
-			foreach ($dto->getFields() as $dtoField)
+		/** @var DtoField $dtoField */
+		foreach ($dto->getFields() as $dtoField)
+		{
+			if ($dtoField->getRelation() !== null)
 			{
-				if ($dtoField->getRelation() !== null)
-				{
-					continue;
-				}
-				$select[] = $dtoField->getPropertyName();
+				continue;
+			}
+			$selectable[] = $dtoField->getPropertyName();
 
-				if ($dtoField->isSortable())
-				{
-					$sortable[$dtoField->getPropertyName()] = [
-						'type' => 'string',
-						'example' => 'ASC',
-					];
-				}
-
-				if ($dtoField->getRequiredGroups() !== null)
-				{
-					if ($dtoField->getRequiredGroups() === [])
-					{
-						$allMethodsRequiredFields[] = $dtoField->getPropertyName();
-					}
-					else
-					{
-						foreach ($dtoField->getRequiredGroups() as $methodName)
-						{
-							$methodRequiredFields[$methodName][] = $dtoField->getPropertyName();
-						}
-					}
-				}
-
-
-				$addable[$dtoField->getPropertyName()] = $this->getFormatByType($dtoField);
-				if ($dtoField->isEditable())
-				{
-					$editable[$dtoField->getPropertyName()] = $addable[$dtoField->getPropertyName()];
-				}
+			if ($dtoField->isSortable())
+			{
+				$sortable[$dtoField->getPropertyName()] = [
+					'type' => 'string',
+					'example' => 'ASC',
+				];
 			}
 
-			self::$dtoExamples[get_class($dto)] = new DtoExample(
-				get_class($dto),
-				$select,
-				$addable,
-				$editable,
-				$sortable,
-				$methodRequiredFields,
-				$allMethodsRequiredFields
-			);
+			if (
+				$dtoField->getRequiredGroups() !== null &&
+				(
+					$dtoField->getRequiredGroups() === [] ||
+					in_array($methodDescription->method, $dtoField->getRequiredGroups(), true)
+				)
+			)
+			{
+				$required[] = $dtoField->getPropertyName();
+				$editable[$dtoField->getPropertyName()] = $this->getFormatByType($dtoField);
+			}
+
+			if (
+				!isset($editable[$dtoField->getPropertyName()]) &&
+				$dtoField->getEditableGroups() !== null &&
+				(
+					$dtoField->getEditableGroups() === [] ||
+					in_array($methodDescription->method, $dtoField->getEditableGroups(), true)
+				)
+			)
+			{
+				$editable[$dtoField->getPropertyName()] = $this->getFormatByType($dtoField);
+			}
 		}
 
-		return self::$dtoExamples[get_class($dto)];
+		return new DtoExample(get_class($dto), $selectable, $editable, $sortable, $required);
 	}
 
 	private function getDtoByClass(?string $dtoFqcn): ?Dto

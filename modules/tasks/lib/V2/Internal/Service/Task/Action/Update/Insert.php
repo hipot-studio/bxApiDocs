@@ -5,10 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Update;
 
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\Control\Exception\TaskNotFoundException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Trait\ConfigTrait;
-use Bitrix\Tasks\Control\Handler\TaskFieldHandler;
 use Bitrix\Tasks\V2\Internal\Service\Task\Trait\TaskTrait;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Internals\TaskTable;

@@ -388,6 +388,8 @@ class CRestConfigurationImportComponent extends CBitrixComponent
 				{
 					$appInfo = $appInfo["ITEMS"];
 
+					$app['TYPE'] = $appInfo['TYPE'] ?? null;
+
 					if (
 						($appInfo['TYPE'] === AppTable::TYPE_CONFIGURATION || $appInfo['TYPE'] === AppTable::TYPE_BIC_DASHBOARD)
 						&& !empty($appInfo['CONFIG_URL'])

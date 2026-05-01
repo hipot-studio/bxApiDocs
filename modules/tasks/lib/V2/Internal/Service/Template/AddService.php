@@ -9,6 +9,7 @@ use Bitrix\Tasks\Control\Exception\TemplateAddException;
 use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\AddDependencies;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\AddMembers;
+use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\AddParams;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\AddParent;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\AddTags;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\AddRights;
@@ -50,6 +51,8 @@ class AddService
 		(new EnableReplication())($fields);
 
 		(new AddParent())($fields);
+
+		(new AddParams())($fields);
 
 		(new ResetCache())($fields);
 

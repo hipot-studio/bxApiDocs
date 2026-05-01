@@ -2,18 +2,21 @@
 
 namespace Bitrix\Rest\V3\Dto;
 
+use Bitrix\Main\Validation\Group\ValidationGroup;
 use Bitrix\Main\Validation\Rule\ClassValidationAttributeInterface;
 use Bitrix\Main\Validation\ValidationError;
 use Bitrix\Main\Validation\ValidationResult;
+use Bitrix\Rest\V3\Dto\Validation\FieldEditableValidator;
 use Bitrix\Rest\V3\Dto\Validation\FieldRequiredValidator;
 use Bitrix\Rest\V3\Dto\Validation\FieldTypeValidator;
 
 class DtoValidatorHelper
 {
-	public static function validate(Dto $dto, string $group = 'default'): ValidationResult
+	public static function validate(Dto $dto, ValidationGroup $group): ValidationResult
 	{
 		$result = new ValidationResult();
 		$validateRequired = new FieldRequiredValidator($group);
+		$validateEditable = new FieldEditableValidator($group);
 		$validateType = new FieldTypeValidator();
 		/** @var DtoField $field */
 		foreach ($dto->getFields() as $field)
@@ -27,17 +30,33 @@ class DtoValidatorHelper
 				}
 			}
 
-			$validateRequiredResult = $validateRequired->validate($field);
-			if (!$validateRequiredResult->isSuccess())
-			{
-				$result->addErrors($validateRequiredResult->getErrors());
+			$fieldRequired = self::isFieldRequired($field);
 
-				continue;
+			if ($fieldRequired)
+			{
+				$validateRequiredResult = $validateRequired->validate($field);
+				if (!$validateRequiredResult->isSuccess())
+				{
+					$result->addErrors($validateRequiredResult->getErrors());
+
+					continue;
+				}
 			}
 
 			if (!$field->isInitialized())
 			{
 				continue;
+			}
+
+			if (!$fieldRequired)
+			{
+				$validateEditableResult = $validateEditable->validate($field);
+				if (!$validateEditableResult->isSuccess())
+				{
+					$result->addErrors($validateEditableResult->getErrors());
+
+					continue;
+				}
 			}
 
 			$validateTypeResult = $validateType->validate($field);
@@ -110,5 +129,20 @@ class DtoValidatorHelper
 		}
 
 		return $result;
+	}
+
+	private static function isFieldRequired(DtoField $field): bool
+	{
+		if ($field->getRequiredGroups() === null)
+		{
+			return false;
+		}
+
+		if (empty($field->getRequiredGroups()) && $field->isInitialized())
+		{
+			return false;
+		}
+
+		return true;
 	}
 }

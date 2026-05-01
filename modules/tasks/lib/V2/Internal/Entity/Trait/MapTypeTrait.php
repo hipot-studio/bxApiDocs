@@ -260,4 +260,16 @@ trait MapTypeTrait
 
 		return $value instanceof DateTime ? $value : null;
 	}
+
+	public static function mapTimestamp(array $props, string $key, ?DateTime $default = null): ?DateTime
+	{
+		if (!isset($props[$key]))
+		{
+			return $default ?? null;
+		}
+
+		$value = $props[$key];
+
+		return is_integer($value) ? DateTime::createFromTimestamp($value) : null;
+	}
 }

@@ -77,7 +77,6 @@ class CounterService
 
 		(new Counter\Event\UserEventProcessor())->process();
 		(new Counter\Event\ProjectEventProcessor())->process();
-		Container::getInstance()->getMentionedCollector()->process();
 		Container::getInstance()->getCounterGarbageCollector()->process();
 
 		$service->done();

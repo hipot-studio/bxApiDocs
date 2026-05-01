@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\Site\Sections;
 
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Crm;
+use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Router;
 use Bitrix\Main\Config\Option;
@@ -215,22 +216,39 @@ class AutomationSection
 		}
 
 		$hasIsNewItem = !empty(
-			array_filter(
-				$menuSubItems,
-				static fn($item) => (($item['IS_NEW'] ?? null) === true),
-			)
+			array_filter($menuSubItems, static fn($item) => (($item['IS_NEW'] ?? null) === true))
 		);
+
+		$hasCheckRestrictionMethod = method_exists(
+			RestrictionManager::class,
+			'getAutomatedSolutionRestriction',
+		);
+
+		if (!$hasCheckRestrictionMethod || RestrictionManager::getAutomatedSolutionRestriction()->hasPermission())
+		{
+			$locked = false;
+			$onclick = '';
+		}
+		else
+		{
+			$onclick = "javascript:BX.UI.InfoHelper.show('limit_smart_process_automation');";
+			$locked = true;
+			$menuSubItems = [];
+		}
 
 		return [
 			'id' => 'crm-dynamic',
 			'title' => Loc::getMessage('AUTOMATION_SECTION_CRM_DYNAMIC_SUBTITLE_1'),
 			'available' => true,
 			'iconClass' => 'ui-icon intranet-automation-bp-icon',
+			'locked' => $locked,
 			'menuData' => [
 				'menu_item_id' => self::MENU_ITEMS_ID['smart_process'],
 				'top_menu_id' => 'top_menu_id_crm_dynamic',
 				'sub_menu' => $menuSubItems,
 				'is_new' => $hasIsNewItem,
+				'is_locked' => $locked,
+				'onclick' => $onclick,
 			],
 		];
 	}

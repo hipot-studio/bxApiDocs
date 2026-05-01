@@ -30,6 +30,22 @@ class TaskMemberRepository implements TaskMemberRepositoryInterface
 		return $this->memberMapper->mapToCollection($members);
 	}
 
+	public function getByTaskIds(array $taskIds): Entity\TaskMemberCollection
+	{
+		if (empty($taskIds))
+		{
+			return new Entity\TaskMemberCollection();
+		}
+
+		$members = MemberTable::query()
+			->setSelect(['USER_ID', 'TYPE', 'TASK_ID'])
+			->whereIn('TASK_ID', $taskIds)
+			->exec()
+			->fetchAll();
+
+		return $this->memberMapper->mapToTaskMemberCollection($members);
+	}
+
 	public function getCreator(int $taskId): ?Entity\User
 	{
 		return $this->getMemberByType($taskId, MemberTable::MEMBER_TYPE_ORIGINATOR);

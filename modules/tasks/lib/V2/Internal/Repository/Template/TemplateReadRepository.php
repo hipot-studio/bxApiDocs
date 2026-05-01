@@ -45,6 +45,11 @@ class TemplateReadRepository implements TemplateReadRepositoryInterface
 			$selectFields[] = 'MEMBERS';
 		}
 
+		if ($select->params)
+		{
+			$selectFields[] = 'PARAMS';
+		}
+
 		if ($select->userFields)
 		{
 			$selectFields[] = 'UF_*';
@@ -135,6 +140,20 @@ class TemplateReadRepository implements TemplateReadRepositoryInterface
 			$fileIds = null;
 		}
 
+		$params = [];
+		$templateParams = $template->getParams();
+		if ($templateParams && !$templateParams->isEmpty())
+		{
+			foreach ($templateParams as $param)
+			{
+				match ($param->getCode())
+				{
+					TemplateParameter::RequireResult->value => $params['requireResult'] = $param->getValue() === 'Y',
+					default => null,
+				};
+			}
+		}
+
 		return $this->mapper->mapFromTemplateObject(
 			templateObject: $template,
 			tags: $tags,
@@ -146,6 +165,7 @@ class TemplateReadRepository implements TemplateReadRepositoryInterface
 			permissions: $permissions,
 			fileIds: $fileIds,
 			parent: $parent,
+			params: $params,
 		);
 	}
 

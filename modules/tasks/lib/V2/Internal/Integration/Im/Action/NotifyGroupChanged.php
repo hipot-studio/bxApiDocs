@@ -4,53 +4,59 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Entity\Group;
+use Bitrix\Tasks\V2\Internal\Entity\GroupTypes;
+use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Entity\User\Gender;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
+use Bitrix\Tasks\V2\Internal\Util\MBString;
 
 #[Recipients(creator: false, responsible: true, accomplices: true, auditors: false)]
 class NotifyGroupChanged extends AbstractNotify
 {
+	private const MESSAGE_CODE_TEMPLATE = 'TASKS_IM_TASK_GROUP_ADDED_OR_CHANGED_%s_%s';
+
 	public function __construct(
-		private readonly Entity\Task $task,
+		private readonly Task $task,
 		MessageSenderInterface $sender,
-		protected readonly ?Entity\User $triggeredBy = null,
-		private readonly ?Entity\Group $newGroup = null,
-		private readonly ?Entity\Group $oldGroup = null,
+		protected readonly ?User $triggeredBy = null,
+		private readonly ?Group $newGroup,
 	)
 	{
-		if ($oldGroup !== null && $newGroup !== null)
-		{
-			$sender->sendMessage(task: $task, notification: $this);
-		}
-		elseif ($oldGroup !== null && $newGroup === null)
-		{
-			$notification = new NotifyGroupRemoved($this->triggeredBy, $this->oldGroup);
-			$sender->sendMessage(task: $task, notification: $notification);
-		}
-		elseif ($newGroup !== null)
-		{
-			$notification = new NotifyGroupAdded($this->triggeredBy, $this->newGroup);
-			$sender->sendMessage(task: $task, notification: $notification);
-		}
+		$sender->sendMessage(task: $task, notification: $this);
 	}
 
 	public function getMessageCode(): string
 	{
-		$secretCode = $this->oldGroup->isVisible && $this->newGroup->isVisible ? '' : 'SECRET_';
-
-		return match($this->triggeredBy?->getGender()) {
-			Entity\User\Gender::Male => "TASKS_IM_TASK_GROUP_CHANGED_{$secretCode}M",
-			Entity\User\Gender::Female => "TASKS_IM_TASK_GROUP_CHANGED_{$secretCode}F",
-			default => "TASKS_IM_TASK_GROUP_CHANGED_{$secretCode}M",
+		$genderCode = match ($this->triggeredBy?->getGender())
+		{
+			Gender::Male,
+			Gender::Female => $this->triggeredBy?->getGender()->value,
+			default => Gender::Male->value,
 		};
+
+		$groupTypeCode = match ($this->newGroup?->type)
+		{
+			GroupTypes::Group->value,
+			GroupTypes::Project->value,
+			GroupTypes::Collab->value => $this->newGroup?->type,
+			default => GroupTypes::Group->value,
+		};
+		$groupTypeCode = mb_strtoupper($groupTypeCode);
+
+		return sprintf(
+			static::MESSAGE_CODE_TEMPLATE,
+			$groupTypeCode,
+			$genderCode,
+		);
 	}
 
 	public function getMessageData(): array
 	{
 		return [
 			'#USER#' => $this->formatUser($this->triggeredBy),
-			'#OLD_GROUP#' => $this->oldGroup->name,
-			'#NEW_GROUP#' => $this->newGroup->name,
+			'#GROUP#' => MBString::ucfirst((string)$this->newGroup?->name),
 		];
 	}
 }

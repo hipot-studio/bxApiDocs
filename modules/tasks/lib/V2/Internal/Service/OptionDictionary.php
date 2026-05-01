@@ -15,4 +15,8 @@ enum OptionDictionary: string
 	case AhaRequiredResultResponsible = 'aha_required_result_responsible';
 	case AhaResultFromMessage = 'aha_result_from_message';
 	case AhaStartTimeTracking = 'aha_start_time_tracking';
+	case AhaTasksAiPromo = 'aha_tasks_ai_promo';
+
+	case StateFlags = 'state.flags';
+	case StateFlagsTemplate = 'state.flags.template';
 }

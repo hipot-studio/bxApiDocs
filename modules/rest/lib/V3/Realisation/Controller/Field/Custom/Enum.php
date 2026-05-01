@@ -8,10 +8,8 @@ use Bitrix\Rest\V3\Attribute\RequiredGroup;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Exception\EntityNotFoundException;
 use Bitrix\Rest\V3\Exception\Internal\InternalException;
-use Bitrix\Rest\V3\Exception\Validation\DtoValidationException;
 use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
 use Bitrix\Rest\V3\Interaction\Request\AddRequest;
-use Bitrix\Rest\V3\Interaction\Request\DeleteRequest;
 use Bitrix\Rest\V3\Interaction\Request\GetRequest;
 use Bitrix\Rest\V3\Interaction\Request\UpdateRequest;
 use Bitrix\Rest\V3\Interaction\Response\BooleanResponse;
@@ -21,8 +19,8 @@ use Bitrix\Rest\V3\Realisation\Controller\Field\AbstractCustom;
 use Bitrix\Rest\V3\Realisation\Dto\Field\Custom\EnumDto;
 use Bitrix\Rest\V3\Realisation\Dto\Mapping\EnumMapper;
 use Bitrix\Rest\V3\Realisation\Exception\FieldNotFoundException;
+use Bitrix\Rest\V3\Realisation\Request\Field\Custom\Enum\DeleteRequest;
 use Bitrix\Rest\V3\Realisation\Request\Field\Custom\Enum\ListRequest;
-use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
 use CUserFieldEnum;
 
 final class Enum extends AbstractCustom
@@ -40,7 +38,7 @@ final class Enum extends AbstractCustom
 		parent::__construct($request);
 	}
 
-	public function listAction(ListRequest $request, string $entityId): ListResponse
+	public function listAction(ListRequest $request): ListResponse
 	{
 		if (!$request->filter)
 		{
@@ -54,7 +52,7 @@ final class Enum extends AbstractCustom
 		}
 
 		$fieldId = $conditions['fieldId'];
-		$enumValues = $this->getEnumFields($entityId, $fieldId);
+		$enumValues = $this->getEnumFields($request->entityId, $fieldId);
 		if (empty($enumValues))
 		{
 			return new ListResponse(new DtoCollection(EnumDto::class));
@@ -81,16 +79,12 @@ final class Enum extends AbstractCustom
 		return new GetResponse($enumDto);
 	}
 
-	public function addAction(AddRequest $request, string $entityId): GetResponse
+	public function addAction(AddRequest $request): GetResponse
 	{
 		/** @var EnumDto $dto */
-		$dto = $request->fields->getAsDto();
-		if (!$this->validateDto($dto, (RequiredGroup::Add)->value))
-		{
-			throw new DtoValidationException($this->getErrors());
-		}
+		$dto = $request->fields->convertToDto((RequiredGroup::Add)->value);
 
-		$customFields = $this->getCustomFieldsByFieldId($entityId, $this->getCurrentUser()->getId(), $this->getResponseLanguage());
+		$customFields = $this->getCustomFieldsByFieldId($dto->entityId, $this->getCurrentUser()->getId(), $this->getResponseLanguage());
 		if (!isset($customFields[$dto->fieldId]))
 		{
 			throw new FieldNotFoundException($dto->fieldId);
@@ -108,7 +102,7 @@ final class Enum extends AbstractCustom
 		}
 
 		$lastAdded = [];
-		$enumList = $this->getEnumFields($entityId, $dto->fieldId);
+		$enumList = $this->getEnumFields($dto->entityId, $dto->fieldId);
 		foreach ($enumList as $enum)
 		{
 			if (empty($lastAdded))
@@ -125,32 +119,32 @@ final class Enum extends AbstractCustom
 		return new GetResponse($this->mapper->mapOne($lastAdded));
 	}
 
-	public function deleteAction(DeleteRequest $request, string $entityId): BooleanResponse
+	public function deleteAction(DeleteRequest $request): BooleanResponse
 	{
-		$ids = isset($request->ids) ? $request->ids : [$request->id];
-		foreach ($ids as $id)
+		if (!$request->id)
 		{
-			$enumData = $this->getEnumValuesByFilterData(['ID' => $id]);
-			if (empty($enumData))
-			{
-				throw new EntityNotFoundException($id);
-			}
-			$enumValue = $enumData[0];
+			throw new RequiredFieldInRequestException('id');
+		}
+		$enumData = $this->getEnumValuesByFilterData(['ID' => $request->id]);
+		if (empty($enumData))
+		{
+			throw new EntityNotFoundException($request->id);
+		}
+		$enumValue = $enumData[0];
 
-			$customFields = $this->getCustomFieldsByFieldId($entityId, $this->getCurrentUser()->getId(), $this->getResponseLanguage());
-			if (!isset($customFields[$enumValue['USER_FIELD_ID']]))
-			{
-				throw new FieldNotFoundException($enumValue['USER_FIELD_ID']);
-			}
-			$valuesForDelete = [
-				$id => ['DEL' => 'Y']
-			];
-			$result = $this->userFieldEnum->SetEnumValues($enumData['USER_FIELD_ID'], $valuesForDelete);
-			if (!$result)
-			{
-				global $APPLICATION;
-				throw new InternalException(new SystemException('Cannot delete enum value: ' . $APPLICATION->GetException()));
-			}
+		$customFields = $this->getCustomFieldsByFieldId($request->entityId, $this->getCurrentUser()->getId(), $this->getResponseLanguage());
+		if (!isset($customFields[$enumValue['USER_FIELD_ID']]))
+		{
+			throw new FieldNotFoundException($enumValue['USER_FIELD_ID']);
+		}
+		$valuesForDelete = [
+			$request->id => ['DEL' => 'Y']
+		];
+		$result = $this->userFieldEnum->SetEnumValues($enumValue['USER_FIELD_ID'], $valuesForDelete);
+		if (!$result)
+		{
+			global $APPLICATION;
+			throw new InternalException(new SystemException('Cannot delete enum value: ' . $APPLICATION->GetException()));
 		}
 
 		return new BooleanResponse(true);
@@ -160,12 +154,7 @@ final class Enum extends AbstractCustom
 	public function updateAction(UpdateRequest $request): GetResponse
 	{
 		/** @var EnumDto $dto */
-		$dto = $request->fields->getAsDto();
-		if (!$this->validateDto($dto, (RequiredGroup::Update)->value))
-		{
-			throw new DtoValidationException($this->getErrors());
-		}
-
+		$dto = $request->fields->convertToDto((RequiredGroup::Update)->value);
 		$updateData = $this->mapper->getValuesForAdd($dto);
 		$enumValues = $this->getEnumValuesByFilterData(['ID' => $request->id]);
 		if (empty($enumValues))

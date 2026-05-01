@@ -8,6 +8,7 @@ class UserField
 {
 	public const TASK = 'TASKS_TASK';
 	public const TEMPLATE = 'TASKS_TASK_TEMPLATE';
+	public const RESULT = 'TASKS_TASK_RESULT';
 
 	public const TASK_ATTACHMENTS = 'UF_TASK_WEBDAV_FILES';
 	public const CHECKLIST_ATTACHMENTS = 'UF_CHECKLIST_FILES';

@@ -16,6 +16,7 @@ interface PasswordRepository
 	 */
 	public function create(Entity\APAuth\Password $password): Entity\APAuth\Password;
 	public function getByType(Enum\APAuth\PasswordType $type): PasswordCollection;
+	public function hasWebhooksByUserId(int $userId): bool;
 	public function deleteById(int $id): bool;
 	public function getById(int $id): ?Entity\APAuth\Password;
 }

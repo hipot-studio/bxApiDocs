@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class AccessDeniedException extends RestException
+class AccessDeniedException extends RestException implements SkipWriteToLogException
 {
 	protected const STATUS = \CRestServer::STATUS_FORBIDDEN;
 

@@ -43,7 +43,7 @@ class TemplateRepository implements RepositoryInterface
 		{
 			$query = TemplateTable::query();
 			$query
-				->setSelect(['*', 'UF_*', 'MEMBERS', 'TAG_LIST', 'DEPENDENCIES', 'SCENARIO', 'CHECKLIST_DATA'])
+				->setSelect(['*', 'UF_*', 'MEMBERS', 'TAG_LIST', 'DEPENDENCIES', 'SCENARIO', 'CHECKLIST_DATA', 'PARAMS'])
 				->where('ID', $this->templateId);
 
 			$this->template = $query->exec()->fetchObject();

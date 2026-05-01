@@ -6,6 +6,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 use Bitrix\Intranet\Entity\Type\Phone;
 use Bitrix\Intranet\Internal\Access\Otp\UserPermission;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
+use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
@@ -59,7 +60,7 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 
 		$permission = new UserPermission($user);
 
-		if (!$permission->canEdit())
+		if (!$permission->canView())
 		{
 			return;
 		}
@@ -77,7 +78,14 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 
 		$this->arResult["OTP"]["IS_ENABLED"] = "Y";
 		$this->arResult["OTP"]["IS_MANDATORY"] = !$personalOtp->canSkipMandatory();
-		$this->arResult["OTP"]["USER_HAS_EDIT_RIGHTS"] = $USER->CanDoOperation('security_edit_user_otp');
+		$canEditOtp = $permission->canEdit();
+		$canActivateOtp = $permission->canActivate();
+		$canDeactivateOtp = $permission->canDeactivate();
+		$this->arResult["OTP"]["CAN_VIEW_OTP"] = 'Y';
+		$this->arResult["OTP"]["CAN_EDIT_OTP"] = $canEditOtp ? 'Y' : 'N';
+		$this->arResult["OTP"]["CAN_ACTIVATE_OTP"] = $canActivateOtp ? 'Y' : 'N';
+		$this->arResult["OTP"]["CAN_DEACTIVATE_OTP"] = $canDeactivateOtp ? 'Y' : 'N';
+		$this->arResult["OTP"]["USER_HAS_EDIT_RIGHTS"] = $canEditOtp;
 
 		if (
 			Loader::includeModule('bitrix24')
@@ -96,7 +104,20 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		$this->arResult["OTP"]["CAN_USE_RECOVERED_CODES"] = $personalOtp->isActivated()
 			&& $otpSettings->isRecoveredCodesEnabled()
 			&& $user->isCurrent();
-		$this->arResult['OTP']['PUSH_OTP_CONFIG'] = $personalOtp->getOtpConfig();
+		if ($canEditOtp)
+		{
+			$this->arResult['OTP']['PUSH_OTP_CONFIG'] = $personalOtp->getOtpConfig();
+		}
+		elseif ($canDeactivateOtp)
+		{
+			$this->arResult['OTP']['PUSH_OTP_CONFIG'] = [
+				'signedUserId' => (new OtpSigner())->signUserId($user->getId()),
+			];
+		}
+		else
+		{
+			$this->arResult['OTP']['PUSH_OTP_CONFIG'] = [];
+		}
 		$authPhone = new Phone($user->getAuthPhoneNumber() ?? '');
 		$this->arResult['OTP']['PHONE_NUMBER'] = $authPhone->format(Format::INTERNATIONAL);
 		$this->arResult['OTP']['PHONE_NUMBER_CONFIRMED'] = $verifyPhone->isConfirmed($authPhone);
@@ -114,6 +135,7 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		}
 		elseif (
 			!$personalOtp->isActivated()
+			&& !MobilePush::createByDefault()->isLegacyOtpAllowedByUserId((int)$user->getId())
 			&& (
 				$otpSettings->getDefaultType() === OtpType::Push
 				|| $personalOtp->isPushType()

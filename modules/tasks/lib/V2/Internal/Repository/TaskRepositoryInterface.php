@@ -55,4 +55,6 @@ interface TaskRepositoryInterface
 		?int $groupId = null,
 		?string $role = null
 	): array;
+
+	public function getAccessInfoById(int $taskId): ?Entity\Task;
 }

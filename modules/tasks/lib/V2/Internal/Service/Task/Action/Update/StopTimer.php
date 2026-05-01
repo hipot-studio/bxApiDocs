@@ -13,15 +13,29 @@ class StopTimer
 {
 	use ConfigTrait;
 
-	public function __invoke(array $fullTaskData): void
+	public function __invoke(array $fullTaskData, array $changes): void
 	{
-		if (
+		$statusChanged = isset($changes['STATUS']) && is_array($changes['STATUS']);
+		$timeTrackingChanged = isset($changes['ALLOW_TIME_TRACKING']) && is_array($changes['ALLOW_TIME_TRACKING']);
+		if (!$statusChanged && !$timeTrackingChanged)
+		{
+			return;
+		}
+
+		$taskNotCompleted = (
 			!in_array(
 				(int)$fullTaskData['STATUS'],
 				[Status::COMPLETED, Status::SUPPOSEDLY_COMPLETED],
 				true,
 			)
-		)
+		);
+
+		$timeTrackingNotDisabled = (
+			!array_key_exists('ALLOW_TIME_TRACKING', $fullTaskData)
+			|| $fullTaskData['ALLOW_TIME_TRACKING'] !== 'N'
+		);
+
+		if ($taskNotCompleted && $timeTrackingNotDisabled)
 		{
 			return;
 		}

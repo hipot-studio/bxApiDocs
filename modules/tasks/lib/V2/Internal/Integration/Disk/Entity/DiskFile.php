@@ -85,6 +85,7 @@ class DiskFile extends AbstractEntity
 			'serverPreviewWidth' => $this->serverPreviewWidth,
 			'serverPreviewHeight' => $this->serverPreviewHeight,
 			'customData' => $this->customData,
+			'objectId' => !empty($this->customData['objectId']) ? $this->customData['objectId'] : null,
 			'viewerAttrs' => $this->viewerAttrs,
 			'owner' => $this->owner?->toArray(),
 		];

@@ -136,7 +136,10 @@ class UserCollector
 		foreach ($rows as $row)
 		{
 			$type = $row['TYPE'];
-			if (!array_key_exists($type, CounterDictionary::MAP_EXPIRED))
+			if (
+				$type === MemberTable::MEMBER_TYPE_AUDITOR
+				|| !array_key_exists($type, CounterDictionary::MAP_EXPIRED)
+			)
 			{
 				continue;
 			}

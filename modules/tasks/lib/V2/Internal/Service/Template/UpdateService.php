@@ -9,8 +9,6 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TemplateAddException;
-use Bitrix\Tasks\Control\Exception\TemplateUpdateException;
-use Bitrix\Tasks\Control\Handler\Exception\TemplateFieldValidateException;
 use Bitrix\Tasks\Replication\Template\Option\Options;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
@@ -21,6 +19,7 @@ use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\ResetCache;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\SendPush;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\UpdateDependencies;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\UpdateMembers;
+use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\UpdateParams;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\UpdateParent;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\UpdateRights;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\UpdateTags;
@@ -80,6 +79,8 @@ class UpdateService
 			(new EnableReplication())($fields);
 			// $this->enableReplication($fields);
 		}
+
+		(new UpdateParams())($fields);
 
 		// $this->resetCache();
 		(new ResetCache())($fields);

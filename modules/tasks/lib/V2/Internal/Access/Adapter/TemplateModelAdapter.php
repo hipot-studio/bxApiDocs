@@ -58,6 +58,11 @@ class TemplateModelAdapter implements EntityModelAdapterInterface
 			$data['BASE_TEMPLATE_ID'] = (int)$this->entity->base->id;
 		}
 
+		if ($this->entity->parent?->getId() !== null)
+		{
+			$data['PARENT_ID'] = (int)$this->entity->parent->getId();
+		}
+
 		$model = Model\TemplateModel::createFromArray($data);
 
 		if (!$hasMembers)

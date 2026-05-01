@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlException;
+use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\SystemException;
+use Bitrix\Main\Type\Collection;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Internals\Task\Result\EO_Result_Collection;
+use Bitrix\Tasks\Internals\Task\Result\ResultTable;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Entity\Result;
 use Bitrix\Tasks\V2\Internal\Entity\ResultCollection;
-use Bitrix\Tasks\Internals\Task\Result\ResultTable;
-use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\V2\Internal\Model\TaskResultMessageTable;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskResultMapper;
 
@@ -120,6 +124,51 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 		);
 	}
 
+	/**
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function getByStatements(
+		?array $select = [],
+		?ConditionTree $filter = null,
+		?array $order = [],
+		?int $limit = null,
+		?int $offset = null,
+	): Entity\ResultCollection
+	{
+		$query = ResultTable::query();
+
+		if (!empty($select))
+		{
+			$query->setSelect($select);
+		}
+
+		if ($filter !== null)
+		{
+			$query->where($filter);
+		}
+
+		if (!empty($order))
+		{
+			$query->setOrder($order);
+		}
+
+		$query
+			->setLimit($limit)
+			->setOffset($offset)
+		;
+
+		$results = $query->exec()->fetchCollection();
+
+		$authorIds = $results->getCreatedByList();
+		Collection::normalizeArrayValuesByInt($authorIds, false);
+
+		$authors = $this->userRepository->getByIds($authorIds);
+
+		return $this->taskResultMapper->mapToCollection($results, $authors);
+	}
+
 	public function getAttachmentIdsByResult(int $resultId): ?array
 	{
 		return $this->getById($resultId)?->fileIds ?? [];
@@ -202,21 +251,21 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 	public function getByTaskId(int $taskId): EO_Result_Collection
 	{
 		return ResultTable::query()
-				->setSelect(['ID', 'TASK_ID', 'COMMENT_ID', 'CREATED_BY', 'CREATED_AT', 'UPDATED_AT', 'TEXT', 'STATUS', 'UF_*'])
-				->where('TASK_ID', $taskId)
-				->setOrder(['ID' => 'DESC'])
-				->exec()
-				->fetchCollection()
+			->setSelect(['ID', 'TASK_ID', 'COMMENT_ID', 'CREATED_BY', 'CREATED_AT', 'UPDATED_AT', 'TEXT', 'STATUS', 'UF_*'])
+			->where('TASK_ID', $taskId)
+			->setOrder(['ID' => 'DESC'])
+			->exec()
+			->fetchCollection()
 			;
 	}
 
 	public function getByCommentId(int $commentId): ?\Bitrix\Tasks\Internals\Task\Result\Result
 	{
 		return ResultTable::query()
-				->setSelect(['ID', 'TASK_ID', 'COMMENT_ID', 'CREATED_BY', 'CREATED_AT', 'UPDATED_AT', 'TEXT', 'STATUS'])
-				->where('COMMENT_ID', $commentId)
-				->exec()
-				->fetchObject()
+			->setSelect(['ID', 'TASK_ID', 'COMMENT_ID', 'CREATED_BY', 'CREATED_AT', 'UPDATED_AT', 'TEXT', 'STATUS'])
+			->where('COMMENT_ID', $commentId)
+			->exec()
+			->fetchObject()
 			;
 	}
 

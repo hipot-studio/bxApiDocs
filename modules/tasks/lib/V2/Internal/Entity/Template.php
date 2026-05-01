@@ -53,6 +53,7 @@ class Template extends AbstractEntity
 		public readonly ?string $archiveLink = null,
 		public readonly ?array $rights = null,
 		public readonly ?bool $multitask = null,
+		public readonly ?bool $requireResult = null,
 	)
 	{
 
@@ -104,6 +105,7 @@ class Template extends AbstractEntity
 			'archiveLink' => $this->archiveLink,
 			'rights' => $this->rights,
 			'multitask' => $this->multitask,
+			'requireResult' => $this->requireResult,
 		];
 	}
 
@@ -148,6 +150,7 @@ class Template extends AbstractEntity
 			archiveLink: static::mapString($props, 'archiveLink'),
 			rights: static::mapArray($props, 'rights'),
 			multitask: static::mapBool($props, 'multitask'),
+			requireResult: static::mapBool($props, 'requireResult'),
 		);
 	}
 }

@@ -4,34 +4,59 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Entity\Group;
+use Bitrix\Tasks\V2\Internal\Entity\GroupTypes;
+use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Entity\User\Gender;
+use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
+use Bitrix\Tasks\V2\Internal\Util\MBString;
 
 #[Recipients(creator: false, responsible: true, accomplices: true, auditors: false)]
 class NotifyGroupRemoved extends AbstractNotify
 {
+	private const MESSAGE_CODE_TEMPLATE = 'TASKS_IM_TASK_GROUP_REMOVED_%s_%s';
+
 	public function __construct(
-		protected readonly ?Entity\User $triggeredBy = null,
-		private readonly Entity\Group $group,
+		private readonly Task $task,
+		MessageSenderInterface $sender,
+		protected readonly ?User $triggeredBy = null,
+		private readonly ?Group $group,
 	)
 	{
+		$sender->sendMessage(task: $task, notification: $this);
 	}
 
 	public function getMessageCode(): string
 	{
-		$secretCode = $this->group->isVisible ? '' : 'SECRET_';
-
-		return match($this->triggeredBy?->getGender()) {
-			Entity\User\Gender::Male => "TASKS_IM_TASK_GROUP_REMOVED_{$secretCode}M",
-			Entity\User\Gender::Female => "TASKS_IM_TASK_GROUP_REMOVED_{$secretCode}F",
-			default => "TASKS_IM_TASK_GROUP_REMOVED_{$secretCode}M",
+		$genderCode = match ($this->triggeredBy?->getGender())
+		{
+			Gender::Male,
+			Gender::Female => $this->triggeredBy?->getGender()->value,
+			default => Gender::Male->value,
 		};
+
+		$groupTypeCode = match ($this->group?->type)
+		{
+			GroupTypes::Group->value,
+			GroupTypes::Project->value,
+			GroupTypes::Collab->value => $this->group?->type,
+			default => GroupTypes::Group->value,
+		};
+		$groupTypeCode = mb_strtoupper($groupTypeCode);
+
+		return sprintf(
+			static::MESSAGE_CODE_TEMPLATE,
+			$groupTypeCode,
+			$genderCode,
+		);
 	}
 
 	public function getMessageData(): array
 	{
 		return [
 			'#USER#' => $this->formatUser($this->triggeredBy),
-			'#GROUP#' => $this->group->name,
+			'#GROUP#' => MBString::ucfirst((string)$this->group?->name),
 		];
 	}
 }

@@ -982,7 +982,7 @@ class Task implements \IBPWorkflowDocument
 			/** @var \Bitrix\Tasks\Internals\Task\Result\Result $result */
 			foreach ($fields['COMMENT_RESULT'] as $result)
 			{
-				$results[] = htmlspecialcharsback($result->getText()); //$result->getFormattedText();
+				$results[] = self::prepareText($result->getText()); //$result->getFormattedText();
 			}
 
 			$fields['COMMENT_RESULT'] = array_reverse($results);
@@ -991,7 +991,7 @@ class Task implements \IBPWorkflowDocument
 
 		if (isset($fields['COMMENT_RESULT_LAST']) && (is_array($fields['COMMENT_RESULT_LAST'])))
 		{
-			$fields['COMMENT_RESULT_LAST'] = htmlspecialcharsback($fields['COMMENT_RESULT_LAST']['TEXT']);
+			$fields['COMMENT_RESULT_LAST'] = self::prepareText($fields['COMMENT_RESULT_LAST']['TEXT']);
 		}
 	}
 
@@ -1174,6 +1174,24 @@ class Task implements \IBPWorkflowDocument
 			? $res->getNotificationLanguageId()
 			: null
 			;
+	}
+
+	private static function prepareText($text): string
+	{
+		if (!is_string($text) || $text === '')
+		{
+			return '';
+		}
+
+		$text = htmlspecialchars_decode(htmlspecialcharsback($text), ENT_QUOTES);
+		$text = trim(\CTextParser::clearAllTags($text));
+		$text = str_replace(
+			["&#91;", "&#93;"],
+			["[", "]"],
+			$text,
+		);
+
+		return preg_replace('/\n{3,}/', "\n\n", $text);
 	}
 
 	public static function getTriggerByCode(string $code, array $complexDocumentType): ?string

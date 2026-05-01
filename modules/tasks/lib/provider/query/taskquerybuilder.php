@@ -280,6 +280,7 @@ class TaskQueryBuilder implements QueryBuilderInterface
 				Join::on('this.ID', 'ref.TASK_ID')
 			))->configureJoinType('inner')
 		);
+
 		$this->query->where($accessFilter);
 
 		return $this;

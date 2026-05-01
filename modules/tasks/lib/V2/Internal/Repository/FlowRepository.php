@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
 use Bitrix\Tasks\Flow\FlowRegistry;
+use Bitrix\Tasks\Flow\Internal\FlowTable;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\FlowMapper;
 
@@ -25,5 +26,26 @@ class FlowRepository implements FlowRepositoryInterface
 		}
 
 		return $this->flowMapper->mapToEntity($flow);
+	}
+
+	public function getByIds(array $ids): Entity\FlowCollection
+	{
+		$collection = new Entity\FlowCollection();
+		if (empty($ids))
+		{
+			return $collection;
+		}
+
+		$flows = FlowTable::query()
+			->setSelect(['ID', 'NAME'])
+			->whereIn('ID', $ids)
+			->fetchCollection();
+
+		foreach ($flows as $flow)
+		{
+			$collection->add($this->flowMapper->mapToEntity($flow));
+		}
+
+		return $collection;
 	}
 }

@@ -14,10 +14,12 @@ class EnumDto extends Dto
 	public int $id;
 
 	#[Filterable]
+	#[Required()]
 	public string $entityId;
 
 	#[Filterable]
 	#[Required(['add'])]
+	#[Editable(['add'])]
 	public int $fieldId;
 
 	#[Required(['add'])]

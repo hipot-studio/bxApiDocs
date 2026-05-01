@@ -20,6 +20,11 @@ class CheckUserFields
 	 */
 	public function __invoke(array $fields): void
 	{
+		if (!$this->config->getCheckUserFields())
+		{
+			return;
+		}
+
 		if (!$this->checkContainsUfKeys($fields))
 		{
 			return;

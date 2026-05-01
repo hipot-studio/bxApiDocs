@@ -219,6 +219,12 @@ class CTasks
 			}
 		}
 
+		$checkUserFields = (bool)($arParams['CHECK_USER_FIELDS'] ?? true);
+		if ($checkUserFields === false)
+		{
+			$handler->skipCheckUserFields();
+		}
+
 		try
 		{
 			$task = $handler->add($arFields);

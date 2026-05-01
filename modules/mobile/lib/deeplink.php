@@ -14,8 +14,9 @@ class Deeplink
 		$server = Context::getCurrent()->getServer();
 		$host = defined('BX24_HOST_NAME') ? BX24_HOST_NAME : $server->getHttpHost();
 		$host = ($request->isHttps() ? 'https' : 'http').'://'.preg_replace("/:(443|80)$/", "", $host);
-		$link = $host."/?intent=".urlencode("$intent;$hash");
+		$link = urlencode($host."/?intent=".urlencode("$intent;$hash"));
 		$data = self::getAppsData();
+
 
 		return self::getServiceUrl()."?".self::getLinkGETParamKey()."=${link}&apn=".$data['apn']."&isi=".$data['isi']. "&ibi=".$data['ibi'] ;
 	}

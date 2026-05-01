@@ -11,12 +11,14 @@ namespace Bitrix\Rest\APAuth;
 use Bitrix\Main\Authentication\ApplicationManager;
 use Bitrix\Main\Authentication\ApplicationPasswordTable;
 use Bitrix\Main\Context;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Engine\Access\HoldEntity;
-use Bitrix\Rest\Preset\IntegrationTable;
+use Bitrix\Rest\Internal\Entity\SystemUser\ResourceType;
+use Bitrix\Rest\Internal\Repository\SystemUser\SystemUserRepository;
 
 class Auth
 {
@@ -169,6 +171,18 @@ class Auth
 			if (!$passwordInfo)
 			{
 				$passwordInfo = static::checkOldPassword($userInfo['ID'], $auth[static::$authQueryParams['PASSWORD']]);
+			}
+
+			if (!$passwordInfo)
+			{
+				/** @var SystemUserRepository $systemUserRepository */
+				$systemUserRepository = ServiceLocator::getInstance()->get(SystemUserRepository::class);
+				$replaceUser = $systemUserRepository->getByResourceIdAndResourceType((int)$userInfo['ID'], ResourceType::WEBHOOK);
+				if ($replaceUser !== null)
+				{
+					$auth[static::$authQueryParams['UID']] = (string)$replaceUser->getUserId();
+					return self::check($auth, $scope);
+				}
 			}
 
 			if ($passwordInfo)

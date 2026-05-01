@@ -10,6 +10,7 @@ use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Trait\ConfigTrait;
 use Bitrix\Tasks\V2\Internal\Service\Trait\UserFieldTrait;
+use CBPHelper;
 
 class AddUserFields
 {
@@ -39,10 +40,14 @@ class AddUserFields
 				continue;
 			}
 
-			if (
-				$value === true
-				|| (is_string($value) && !in_array(mb_strtolower($value), ['0', 'n'], true))
-			)
+			if (is_bool($value))
+			{
+				$fields[$key] = $value;
+
+				continue;
+			}
+
+			if (is_string($value) && mb_strtolower($value) === 'y')
 			{
 				$value = true;
 			}
@@ -54,7 +59,8 @@ class AddUserFields
 			$fields[$key] = $value;
 		}
 
-		$result = $ufManager->Update(UserField::TASK, $taskId, $fields, $this->config->getUserId());
+		$userId = $this->config->getCheckUserFields() ? $this->config->getUserId() : 0;
+		$result = $ufManager->Update(UserField::TASK, $taskId, $fields, $userId);
 
 		Container::getInstance()->get(CrmItemRepositoryInterface::class)->invalidate($taskId);
 

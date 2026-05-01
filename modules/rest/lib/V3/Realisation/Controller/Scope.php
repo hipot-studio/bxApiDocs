@@ -65,7 +65,7 @@ final class Scope extends RestController
 					}
 				}
 
-				$scopeFields = $methodDescription->controllerFqcn ? $dtoFields[$methodDescription->controllerFqcn] : null;
+				$scopeFields = $methodDescription->controllerFqcn && isset($dtoFields[$methodDescription->controllerFqcn]) ? $dtoFields[$methodDescription->controllerFqcn] : null;
 
 				foreach ($methodDescription->scopes as $scope)
 				{

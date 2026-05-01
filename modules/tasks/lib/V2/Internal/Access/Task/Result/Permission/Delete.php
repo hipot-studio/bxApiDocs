@@ -24,9 +24,9 @@ class Delete implements AttributeAccessInterface
 			return false;
 		}
 
-		$entityId = $entity->getId();
+		$entityId = (int)$entity->getId();
 
-		if ($entityId === null || $entityId <= 0)
+		if ($entityId <= 0)
 		{
 			return false;
 		}

@@ -15,18 +15,15 @@ use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Counter;
-use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\AttachDependence;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\CorrectDatePlan;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunInternalEvent;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateReminders;
 use Bitrix\Tasks\V2\Public\Command\Task\UpdateTaskCommand;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\AutoClose;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\CleanCache;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\CloseResult;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Pin;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\PostComment;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunIntegration;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunUpdateEvent;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\SendNotification;
@@ -40,9 +37,7 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateParameters;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateSearchIndex;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateSync;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateTags;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateTopic;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateUserOptions;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateViews;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
 use Bitrix\Tasks\V2\Internal\Entity;
@@ -83,8 +78,9 @@ class UpdateService
 		// we do validation here, because we need merge states and get new entity to check
 		$this->validate($entityBefore, $task);
 
-		$compatibilityRepository = Container::getInstance()->getTaskCompatabilityRepository();
+		$taskChangesContext = clone $task;
 
+		$compatibilityRepository = Container::getInstance()->getTaskCompatabilityRepository();
 		$fullTaskData = $compatibilityRepository->getTaskData($task->getId());
 
 		/**
@@ -127,8 +123,6 @@ class UpdateService
 		 */
 		[$sourceTaskData, $fullTaskData, $taskObject, $fields] = $this->reload($fields, $fullTaskData);
 
-		(new UpdateReminders())($fullTaskData, $changes);
-
 		(new UpdateHistoryLog($config))($fullTaskData, $changes);
 
 		(new AutoClose($config))($fields, $fullTaskData);
@@ -147,8 +141,6 @@ class UpdateService
 
 		(new CleanCache($config))($fullTaskData);
 
-		(new UpdateViews())($fullTaskData, $sourceTaskData);
-
 		(new UpdateUserOptions())($fields, $sourceTaskData);
 
 		if (!$config->isSkipRecount())
@@ -164,18 +156,9 @@ class UpdateService
 
 		(new Pin())($fullTaskData, $sourceTaskData);
 
-		(new UpdateTopic())($fullTaskData, $sourceTaskData);
-
-		if (!FormV2Feature::isOn())
-		{
-			(new PostComment($config))($fields, $sourceTaskData, $changes);
-		}
-
 		(new SendPush($config))($fullTaskData, $sourceTaskData, $changes);
 
-		(new StopTimer($config))($fullTaskData);
-
-		(new RunIntegration($config))($fields, $taskObjectBeforeUpdate);
+		(new StopTimer($config))($fullTaskData, $changes);
 
 		// get task object with prepopulated data
 		$this->repository->invalidate($taskObject->getId());
@@ -190,6 +173,9 @@ class UpdateService
 		// todo Delete after the deadline changes from all places through the new api.
 		$deadlineChangeReason = ($fields['DEADLINE_CHANGE_REASON'] ?? null);
 		$taskAfterUpdate->deadlineChangeReason = $deadlineChangeReason;
+
+		(new RunIntegration())($taskAfterUpdate);
+
 		if (isset($fields['DEADLINE']))
 		{
 			$deadlineDateTime = $fields['DEADLINE'];
@@ -211,6 +197,7 @@ class UpdateService
 			task: $taskAfterUpdate,
 			config: $config,
 			taskBeforeUpdate: $entityBefore,
+			taskChangesContext: $taskChangesContext,
 		));
 
 		(new RunInternalEvent())($entityBefore, $taskAfterUpdate);

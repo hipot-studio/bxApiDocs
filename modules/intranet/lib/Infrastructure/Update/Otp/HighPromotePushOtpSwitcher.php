@@ -49,11 +49,7 @@ class HighPromotePushOtpSwitcher extends Stepper
 		$dbLastId = $dbUserIds[array_key_last($dbUserIds)];
 
 		$userIds = $this->filterIntranetUsers($dbUserIds);
-
-		if (MobilePush::createByDefault()->isLegacyOtpAllowed())
-		{
-			$userIds = $this->filterOutLegacyOtpUsers($userIds);
-		}
+		$userIds = $this->filterOutLegacyOtpUsers($userIds);
 
 		if (!empty($userIds))
 		{

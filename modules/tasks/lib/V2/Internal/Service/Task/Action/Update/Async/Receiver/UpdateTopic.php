@@ -11,6 +11,7 @@ use Bitrix\Tasks\Integration\Forum;
 
 class UpdateTopic extends AbstractReceiver
 {
+	// TODO: Remove when UpdateTopic queue is completely empty.
 	protected function process(MessageInterface $message): void
 	{
 		if (!$message instanceof Message\UpdateTopic)

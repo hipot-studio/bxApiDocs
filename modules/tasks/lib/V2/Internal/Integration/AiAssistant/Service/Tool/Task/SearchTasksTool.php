@@ -4,14 +4,13 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task;
 
+use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\AiAssistant\Facade\TracedLogger;
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Validation\ValidationService;
-use Bitrix\Main\Web\Json;
 use Bitrix\Tasks\Provider\Exception\TaskListException;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\DtoValidationException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Provider\TaskProvider;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\SearchTasksDto;
-use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\DtoValidationException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder\TaskSchemaBuilder;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\BaseTool;
 
@@ -39,10 +38,7 @@ class SearchTasksTool extends BaseTool
 		;
 	}
 
-	/**
-	 * @throws ArgumentException
-	 */
-	protected function execute(int $userId, ...$args): string
+	protected function executeStructured(int $userId, ...$args): array
 	{
 		$dto = SearchTasksDto::fromArray($args);
 
@@ -54,14 +50,11 @@ class SearchTasksTool extends BaseTool
 		}
 		catch (DtoValidationException|TaskListException $e)
 		{
-			return $this->createFailureResponse($e->getMessage());
+			throw new McpException($e->getMessage(), previous: $e);
 		}
 
-		if (empty($tasks))
-		{
-			return 'Tasks not found.';
-		}
-
-		return 'Tasks successfully found: ' . Json::encode($tasks) . '.';
+		return [
+			'tasks' => $tasks,
+		];
 	}
 }

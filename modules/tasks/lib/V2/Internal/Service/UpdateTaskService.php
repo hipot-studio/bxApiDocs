@@ -57,13 +57,19 @@ class UpdateTaskService
 
 		(new UpdateUserFields($config))($fields, $task->id);
 
+		$this->taskRepository->invalidate($task->id);
+
 		(new RunUpdateEvent($config))(
 			$fields,
 			$sourceTaskData,
 			static fn (mixed $event): bool => is_array($event) && ($event['TO_MODULE_ID'] ?? null) === 'crm',
 		);
 
+		$this->taskRepository->invalidate($task->id);
+
 		(new RunBizProc($config))($fields, $taskObjectBefore);
+
+		$this->taskRepository->invalidate($task->id);
 
 		(new RunCrm($config))($fields, $taskObjectBefore);
 

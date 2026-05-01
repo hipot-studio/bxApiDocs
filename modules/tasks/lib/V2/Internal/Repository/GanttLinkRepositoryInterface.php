@@ -11,6 +11,7 @@ interface GanttLinkRepositoryInterface
 {
 	public function getLinkTypes(int $taskId, array $dependentIds): array;
 	public function getTaskLinks(int $taskId): GanttLinkCollection;
+	public function getLinksByTaskIds(array $taskIds): GanttLinkCollection;
 
 	public function update(GanttLink $ganttLink): void;
 

@@ -18,6 +18,7 @@ class AddConfig
 	private array $skipTimeZoneFields;
 	private bool $needCorrectDatePlan;
 	private bool $useConsistency;
+	private bool $checkUserFields;
 	private ?string $eventGuid;
 	private RuntimeData $runtime;
 	private ?Processor\Task\Result $shiftResult = null;
@@ -33,6 +34,7 @@ class AddConfig
 		array $skipTimeZoneFields = [],
 		bool $needCorrectDatePlan = true,
 		bool $useConsistency = false,
+		bool $checkUserFields = true,
 		?string $eventGuid = null,
 		RuntimeData $runtime = new RuntimeData()
 	) {
@@ -46,6 +48,7 @@ class AddConfig
 		$this->skipTimeZoneFields = $skipTimeZoneFields;
 		$this->needCorrectDatePlan = $needCorrectDatePlan;
 		$this->useConsistency = $useConsistency;
+		$this->checkUserFields = $checkUserFields;
 		$this->eventGuid = $eventGuid;
 		$this->runtime = $runtime;
 	}
@@ -129,6 +132,11 @@ class AddConfig
 	public function getRuntime(): RuntimeData
 	{
 		return $this->runtime;
+	}
+
+	public function getCheckUserFields(): bool
+	{
+		return $this->checkUserFields;
 	}
 
 	// Fluent setters

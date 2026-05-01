@@ -260,7 +260,7 @@ abstract class Dto implements Arrayable
 					Description::class => $field->setDescription($attributeInstance->value),
 					Sortable::class => $field->setSortable(true),
 					Filterable::class => $field->setFilterable(true),
-					Editable::class => $field->setEditable(true),
+					Editable::class => $field->setEditableGroups($attributeInstance->groups),
 					ElementType::class => $field->setElementType($attributeInstance->type),
 					RelationToOne::class => call_user_func(function () use ($field, $attributeInstance, $property) {
 						$field->setRelation(new DtoFieldRelation(thisField: $attributeInstance->thisField, refField: $attributeInstance->refField));
@@ -318,6 +318,7 @@ abstract class Dto implements Arrayable
 				filterable: $ufField['IS_SEARCHABLE'] === 'Y',
 				sortable: $ufField['IS_SEARCHABLE'] === 'Y',
 				multiple: $ufField['MULTIPLE'] === 'Y',
+				editableGroups: [],
 			);
 		}
 

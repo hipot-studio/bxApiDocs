@@ -36,21 +36,23 @@ class AttachmentService
 		$currentAttachmentIds = $ufManager->GetUserFields(UserField::TASK, $taskId)[UserField::TASK_ATTACHMENTS]['VALUE'] ?? [];
 		$currentAttachmentIds = is_array($currentAttachmentIds) ? $currentAttachmentIds : [];
 
-		$currentAttachmentIdsMap = Container::getInstance()->getDiskFileRepository()->getObjectIdsByAttachmentIds($currentAttachmentIds);
+		$currentAttachmentIdsMap = array_flip(
+			Container::getInstance()->getDiskFileRepository()->getObjectIdsByAttachmentIds($currentAttachmentIds)
+		);
 
-		foreach ($currentAttachmentIds as $currentAttachmentId)
+		$currentAttachmentIds = array_flip($currentAttachmentIds);
+
+		foreach ($currentAttachmentIds as $key => $value)
 		{
-			if (!in_array($currentAttachmentId, $currentAttachmentIdsMap, true))
+			if (!isset($currentAttachmentIdsMap[$key]))
 			{
-				$currentAttachmentIds = array_filter(
-					$currentAttachmentIds,
-					static fn($fileId) => $fileId !== $currentAttachmentId
-				);
+				unset($currentAttachmentIds[$key]);
 			}
 		}
 
-		$new = array_unique(array_merge($currentAttachmentIds, $fileIds));
-		$new = array_values($new);
+		$currentAttachmentIds = array_flip($currentAttachmentIds);
+
+		$new = array_values(array_unique(array_merge($currentAttachmentIds, $fileIds)));
 
 		$changedBy = new User(id: $userId);
 

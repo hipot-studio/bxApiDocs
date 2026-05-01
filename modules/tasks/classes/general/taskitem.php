@@ -360,10 +360,13 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 			$arNewTaskData['CREATED_BY'] = $executiveUserId;
 		}
 
+		$checkAccess = (bool)($parameters['CHECK_ACCESS'] ?? true);
+
 		// todo: remove, this fact will checked in TaskSaveRule
 		// Check some conditions for non-admins
 		if (
-			isset($arNewTaskData['GROUP_ID'])
+			$checkAccess
+			&& isset($arNewTaskData['GROUP_ID'])
 			&& ($arNewTaskData['GROUP_ID'] > 0)
 			&& (!\Bitrix\Tasks\Util\User::isAdmin($executiveUserId))
 			&& (!\Bitrix\Tasks\Integration\Bitrix24\User::isAdmin($executiveUserId))
@@ -387,7 +390,10 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 
 		$model = \Bitrix\Tasks\Access\Model\TaskModel::createFromArray($arNewTaskData);
 
-		if (!TaskAccessController::can($executiveUserId, ActionDictionary::ACTION_TASK_SAVE, null, $model))
+		if (
+			$checkAccess
+			&& !TaskAccessController::can($executiveUserId, ActionDictionary::ACTION_TASK_SAVE, null, $model)
+		)
 		{
 			static::sendTaskCreateAnalytics($arNewTaskData, (int)$executiveUserId);
 
@@ -399,7 +405,8 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 
 		$parentId = (int)($arNewTaskData['PARENT_ID'] ?? null);
 		if (
-			$parentId > 0
+			$checkAccess
+			&& $parentId > 0
 			&& !TaskAccessController::can($executiveUserId, ActionDictionary::ACTION_TASK_READ, $parentId)
 		)
 		{
@@ -419,6 +426,7 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 		$arParams = array_merge($parameters, array(
 			'USER_ID'			   => $executiveUserId,
 			'CHECK_RIGHTS_ON_FILES' => true,
+			'CHECK_USER_FIELDS' => $checkAccess,
 		));
 
 		$o = new CTasks();

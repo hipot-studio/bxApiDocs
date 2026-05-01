@@ -41,7 +41,7 @@ class Chat
 					Action::LeaveOwner->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
 					Action::Kick->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
 					Action::ChangeManagers->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
-					Action::Mute->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
+					Action::Mute->value => \Bitrix\Im\V2\Chat::ROLE_MEMBER,
 			],
 				isAutoJoinEnabled: true),
 		];

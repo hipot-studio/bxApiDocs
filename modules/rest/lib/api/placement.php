@@ -626,6 +626,7 @@ class Placement extends \IRestService
 					}
 				}
 				$result[] = array(
+					'id' => $placement->getId(),
 					'placement' => $placement->getPlacement(),
 					'userId' => $placement->getUserId(),
 					'handler' => $placement->getPlacementHandler(),

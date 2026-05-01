@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task;
 
+use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\AiAssistant\Facade\TracedLogger;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\Control\Exception\TaskAddException;
@@ -34,7 +35,7 @@ class CreateTaskTool extends BaseTool
 		return 'Creates a new task with the provided title and other details.';
 	}
 
-	protected function execute(int $userId, ...$args): string
+	protected function executeStructured(int $userId, ...$args): array
 	{
 		$dto = CreateTaskDto::fromArray([...$args, 'userId' => $userId]);
 
@@ -46,17 +47,17 @@ class CreateTaskTool extends BaseTool
 		}
 		catch (DtoValidationException|TaskAddException $e)
 		{
-			return $this->createFailureResponse($e->getMessage());
+			throw new McpException(message: $e->getMessage(), previous: $e);
 		}
 		catch (AccessDeniedException)
 		{
-			return $this->createFailureResponse('Access denied.');
+			throw new McpException('Access denied.');
 		}
 		catch (TaskNotExistsException)
 		{
-			return $this->createFailureResponse('Task not found.');
+			throw new McpException('Task not found.');
 		}
 
-		return "Task '{$task->title}' with id '{$task->id}' successfully created.";
+		return $task;
 	}
 }

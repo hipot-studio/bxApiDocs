@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Infrastructure\Controller;
 
+use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\AutoWire\Parameter;
 use Bitrix\Main\Engine\Controller;
@@ -12,20 +13,23 @@ use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Provider\Params\SelectInterface;
+use Bitrix\Main\Validation\Engine\AutoWire\ValidationParameter;
 use Bitrix\Tasks\DI\Container;
+use Bitrix\Tasks\V2\Infrastructure\Controller\Request\TaskListRequest;
 use Bitrix\Tasks\V2\Internal\Access\AccessUserErrorInterface;
 use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
 use Bitrix\Tasks\V2\Infrastructure\Controller\ActionFilter\IsEnabledFilter;
 use Bitrix\Tasks\V2\Internal\Entity\EntityInterface;
 use Bitrix\Tasks\V2\Internal\Entity\EntityCollectionInterface;
+use Bitrix\Tasks\V2\Internal\Entity\ValueObjectInterface;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Entity\State\StateFlags;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Entity\Message;
 use Bitrix\Tasks\V2\Internal\Repository\TaskLogRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateRepositoryInterface;
-use Bitrix\Tasks\V2\Internal\Service\Task\Action\Copy\Config\CopyConfig;
 use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskSelect;
+use Bitrix\Tasks\V2\Public\Provider\Params\TaskList\TaskListFilter;
 use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
 use Bitrix\Tasks\V2\Public\Provider\Params\Template\Relation\RelationTemplateSelect;
 use Bitrix\Tasks\V2\Public\Provider\Params\Template\TemplateParams;
@@ -85,6 +89,9 @@ abstract class BaseController extends JsonController
 		);
 	}
 
+	/**
+	 * @throws BinderArgumentException
+	 */
 	protected function getExactParameters(): array
 	{
 		return [
@@ -245,16 +252,16 @@ abstract class BaseController extends JsonController
 				=> new RelationTemplateSelect($relationTemplateSelect),
 			),
 			new ExactParameter(
-				TaskParams::class,
-				'taskSelect',
-				fn (string $className, ?array $taskSelect = null): ?TaskParams
-				=> TaskParams::mapFromArray($taskSelect),
-			),
-			new ExactParameter(
 				TemplateParams::class,
 				'templateSelect',
 				fn (string $className, ?array $templateSelect = null): ?TemplateParams
 				=> TemplateParams::mapFromArray($templateSelect),
+			),
+			new ExactParameter(
+				TaskParams::class,
+				'taskSelect',
+				fn (string $className, ?array $taskSelect = null): ?TaskParams
+				=> TaskParams::mapFromArray($taskSelect),
 			),
 			new ExactParameter(
 				Entity\Task\GanttLink::class,
@@ -269,11 +276,21 @@ abstract class BaseController extends JsonController
 				=> Entity\Task\State::mapFromArray($state),
 			),
 			new ExactParameter(
+				StateFlags::class,
+				'flags',
+				fn (string $className, array $flags): ?ValueObjectInterface
+				=> StateFlags::mapFromArray($flags),
+			),
+			new ExactParameter(
 				Entity\UserFieldCollection::class,
 				'userFields',
 				fn (string $className, array $userFields): ?EntityCollectionInterface
 				=> $this->getWithAccess($this, 'userFields', Entity\UserFieldCollection::mapFromArray($userFields))
-			)
+			),
+			new ValidationParameter(
+				TaskListRequest::class,
+				fn() => TaskListRequest::createFromRequest($this->getRequest()),
+			),
 		];
 	}
 
@@ -350,9 +367,9 @@ abstract class BaseController extends JsonController
 		return null;
 	}
 
-	protected function buildForbiddenError($code = 'Access denied'): Error
+	protected function buildForbiddenError(string $code = 'access_denied'): Error
 	{
-		$message = Loc::getMessage('TASKS_ACCESS_ERROR_DEFAULT') ?? 'Access denied';
+		$message = Loc::getMessage('TASKS_ACCESS_ERROR_DEFAULT') ?? $code;
 
 		return new Error($message, $code);
 	}

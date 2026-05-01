@@ -35,6 +35,7 @@ use Bitrix\Tasks\V2\Internal\Repository\TaskParameterRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskTagRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskResultRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateParameterRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\AddTaskService;
 use Bitrix\Tasks\V2\Internal\Service\AddTemplateService;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
@@ -504,6 +505,11 @@ class Container extends AbstractContainer
 	public function getFeedbackService(): FeedbackService
 	{
 		return $this->get(FeedbackService::class);
+	}
+
+	public function getTemplateParameterRepository(): TemplateParameterRepositoryInterface
+	{
+		return $this->get(TemplateParameterRepositoryInterface::class);
 	}
 
 	public function getChatIntegration(): Chat

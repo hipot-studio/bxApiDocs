@@ -95,8 +95,7 @@ class CounterDictionary
 		MemberTable::MEMBER_TYPE_RESPONSIBLE 	=> self::COUNTER_MY_EXPIRED,
 		MemberTable::MEMBER_TYPE_ORIGINATOR 	=> self::COUNTER_ORIGINATOR_EXPIRED,
 		MemberTable::MEMBER_TYPE_ACCOMPLICE 	=> self::COUNTER_ACCOMPLICES_EXPIRED,
-		// MemberTable::MEMBER_TYPE_AUDITOR 		=> self::COUNTER_AUDITOR_EXPIRED
-		// According to the new role model, the auditor is removed from the deadline recipients
+		MemberTable::MEMBER_TYPE_AUDITOR 		=> self::COUNTER_AUDITOR_EXPIRED,
 	];
 
 	public const MAP_MUTED_EXPIRED = [

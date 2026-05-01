@@ -353,6 +353,7 @@ final class ControllerDataManager
 			$customMethods = ['list', 'get', 'delete', 'update', 'add'];
 			foreach ($customMethods as $customMethod)
 			{
+				$fieldsMethod = in_array($customMethod, ['add', 'update'], true);
 				$customMethodUri = $controllerData->getMethodUri('field.custom.' . $customMethod);
 				$customMethodDescription = new MethodDescription(
 					module: $controllerData->module,
@@ -363,7 +364,7 @@ final class ControllerDataManager
 					actionUri: $customMethodUri,
 					title: null,
 					description: null,
-					queryParams: ['entityId' => $entityId],
+					queryParams: $fieldsMethod ? ['fields' => ['entityId' => $entityId]] : ['entityId' => $entityId],
 				);
 				$this->systemControllersData[Custom::class]->addMethod($customMethodDescription);
 				$enumMethodUri = $controllerData->getMethodUri('field.custom.enum.' . $customMethod);
@@ -376,7 +377,7 @@ final class ControllerDataManager
 					actionUri: $enumMethodUri,
 					title: null,
 					description: null,
-					queryParams: ['entityId' => $entityId],
+					queryParams: $fieldsMethod ? ['fields' => ['entityId' => $entityId]] : ['entityId' => $entityId],
 				);
 				$this->systemControllersData[Custom\Enum::class]->addMethod($customEnumMethodDescription);
 			}

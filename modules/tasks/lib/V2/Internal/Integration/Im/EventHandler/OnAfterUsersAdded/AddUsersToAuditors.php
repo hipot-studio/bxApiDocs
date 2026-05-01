@@ -29,11 +29,12 @@ class AddUsersToAuditors
 		}
 
 		$newUserIds = [];
+		$existingUserIds = array_flip($task->getMemberIds());
 		foreach ($event->getChanges()->getNewMembers() as $userId)
 		{
-			if ($userId > 0 && !in_array($userId, $task->getMemberIds(), true))
+			if ($userId > 0 && !isset($existingUserIds[$userId]))
 			{
-				$newUserIds[] = $userId;
+				$newUserIds[$userId] = $userId;
 			}
 		}
 

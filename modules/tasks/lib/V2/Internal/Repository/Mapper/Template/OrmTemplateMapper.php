@@ -9,6 +9,7 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\PriorityMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Trait\CastTrait;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\UserFieldMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateParameter;
 use Bitrix\Tasks\Validation\Validator\SerializedValidator;
 
 class OrmTemplateMapper
@@ -209,6 +210,20 @@ class OrmTemplateMapper
 			$fields['MULTITASK'] = $template->multitask ? 'Y' : 'N';
 		}
 
+		$params = [];
+		if ($template->requireResult !== null)
+		{
+			$params[] = [
+				'TEMPLATE_ID' => $template->getId(),
+				'CODE' => TemplateParameter::RequireResult->value,
+				'VALUE' => $template->requireResult === true ? 'Y' : 'N',
+			];
+		}
+		if (!empty($params))
+		{
+			$fields['PARAMS'] = $params;
+		}
+
 		return $fields;
 	}
 
@@ -396,6 +411,18 @@ class OrmTemplateMapper
 		if (isset($fields[Entity\UF\UserField::TASK_CRM]))
 		{
 			$templateFields['crmItemIds'] = $fields[Entity\UF\UserField::TASK_CRM];
+		}
+
+		if (isset($fields['PARAMS']) && is_array($fields['PARAMS']))
+		{
+			foreach ($fields['PARAMS'] as $param)
+			{
+				match ($param['CODE'] ?? null)
+				{
+					TemplateParameter::RequireResult->value => $templateFields['requireResult'] = $param['VALUE'] === 'Y',
+					default => null,
+				};
+			}
 		}
 
 		return Entity\Template::mapFromArray($templateFields);

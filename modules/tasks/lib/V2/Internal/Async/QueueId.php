@@ -11,6 +11,7 @@ enum QueueId: string
 
 	case UpdateDavSync = 'update_task_dav_sync';
 	case UpdateSearchIndex = 'update_task_search_index';
+	// TODO: Remove when UpdateTopic queue is completely empty.
 	case UpdateTopic = 'update_task_topic';
 	case RecountSort = 'recount_task_sort';
 

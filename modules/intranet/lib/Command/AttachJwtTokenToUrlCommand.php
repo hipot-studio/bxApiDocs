@@ -3,16 +3,16 @@
 namespace Bitrix\Intranet\Command;
 
 use Bitrix\Main\Context;
-use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Config\Option;
 
 class AttachJwtTokenToUrlCommand
 {
 	public function __construct(
-		private Uri $uri,
-		private string $token,
-		private string $parametrName = 'invite_token'
+		private readonly Uri $uri,
+		private readonly string $token,
+		private readonly string $parametrName = 'invite_token',
 	)
 	{}
 
@@ -24,31 +24,32 @@ class AttachJwtTokenToUrlCommand
 		{
 			$serverName = BX24_HOST_NAME;
 		}
-		else if (defined('SITE_SERVER_NAME') && !empty(SITE_SERVER_NAME))
+		elseif (defined('SITE_SERVER_NAME') && !empty(SITE_SERVER_NAME))
 		{
 			$serverName = SITE_SERVER_NAME;
 		}
 
 		$baseUrl = (Context::getCurrent()->getRequest()->isHttps() ? 'https://' : 'http://') . $serverName;
 		$uri = new Uri($baseUrl);
-
-		if (!Loader::includeModule('bitrix24'))
+		$path = SITE_DIR;
+		if (!ModuleManager::isModuleInstalled('bitrix24'))
 		{
-			$uri->setPath('/auth/registration_link.php');
+			$path .= 'auth/registration_link.php';
 			$uri->addParams(['register' => 'yes']);
 		}
+		$uri->setPath($path);
 
 		return $uri;
 	}
 
-	static function createDefaultInstance(string $token): self
+	public static function createDefaultInstance(string $token): self
 	{
 		$uri = self::getUri();
 
-		return new AttachJwtTokenToUrlCommand($uri, $token, 'invite_token');
+		return new self($uri, $token, 'invite_token');
 	}
 
-	static function createInstanceWithParams(string $token, array $params): self
+	public static function createInstanceWithParams(string $token, array $params): self
 	{
 		$uri = self::getUri();
 
@@ -60,7 +61,7 @@ class AttachJwtTokenToUrlCommand
 			}
 		}
 
-		return new AttachJwtTokenToUrlCommand($uri, $token, 'invite_token');
+		return new self($uri, $token, 'invite_token');
 	}
 
 	public function attach(): Uri

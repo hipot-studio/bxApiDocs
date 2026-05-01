@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository\Mapper;
 
+use Bitrix\Socialnetwork\Internals\Group\GroupEntity;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Service\PhotoService;
@@ -41,6 +42,21 @@ class GroupMapper
 			image: $image,
 			type: $workgroup->getType()?->value,
 			isVisible: $workgroup->isVisible(),
+		);
+	}
+
+	public function mapToEntityFromGroupEntity(
+		?GroupEntity $group,
+	): ?Entity\Group
+	{
+		if ($group === null)
+		{
+			return null;
+		}
+
+		return new Entity\Group(
+			id: $group->getId(),
+			name: $group->getName(),
 		);
 	}
 }

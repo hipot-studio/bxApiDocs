@@ -11,6 +11,7 @@ use Bitrix\Tasks\V2\Internal\Entity\ResultCollection;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Entity\DiskFile;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Repository\DiskFileRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskResultRepositoryInterface;
+use Bitrix\Tasks\V2\Public\Provider\Params\Result\TaskResultParams;
 
 class TaskResultProvider
 {
@@ -44,6 +45,30 @@ class TaskResultProvider
 		$collection = $this->repository->getByIds($resultIds);
 
 		return $this->enrichResults($collection, $userId);
+	}
+
+	public function getList(TaskResultParams $params, int $userId): ResultCollection
+	{
+		$resultCollection = $this->repository->getByStatements(
+			$params->getSelect(),
+			$params->getFilter(),
+			$params->getSort(),
+			$params->getLimit(),
+			$params->getOffset(),
+		);
+
+		if ($resultCollection->isEmpty())
+		{
+			return $resultCollection;
+		}
+
+		$isNeedToRequestRights = $params->isInSelect('rights') ?? false;
+		if ($isNeedToRequestRights)
+		{
+			$resultCollection = $this->addRights($resultCollection, $userId);
+		}
+
+		return $resultCollection;
 	}
 
 	public function getTaskResults(int $taskId, int $userId, ?PagerInterface $pager = null): ResultCollection
@@ -99,6 +124,21 @@ class TaskResultProvider
 			$resultFiles = $files->filter(static fn (DiskFile $file): bool => in_array($file->id, (array)$item->fileIds, true));
 
 			$results->add($item->cloneWith(['rights' => $resultRights, 'files' => $resultFiles]));
+		}
+
+		return $results;
+	}
+
+	private function addRights(ResultCollection $collection, int $userId): ResultCollection
+	{
+		$rights = $this->getRights($collection->getIdList(), $userId);
+
+		$results = new ResultCollection();
+		foreach ($collection as $item)
+		{
+			$resultRights = $rights['rights'][$item->getId()] ?? null;
+
+			$results->add($item->cloneWith(['rights' => $resultRights]));
 		}
 
 		return $results;

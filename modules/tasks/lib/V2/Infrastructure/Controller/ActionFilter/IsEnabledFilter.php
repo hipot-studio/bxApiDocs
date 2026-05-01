@@ -10,18 +10,17 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
-use Bitrix\Tasks\V2\Infrastructure\Controller\CheckList;
-use Bitrix\Tasks\V2\Infrastructure\Controller\Group;
-use Bitrix\Tasks\V2\Infrastructure\Controller\Task;
+use Bitrix\Tasks\V2\Infrastructure;
 use Bitrix\Tasks\V2\FormV2Feature;
 
 class IsEnabledFilter extends Base
 {
 	protected const ENABLED_ACTIONS = [
-		Task::class => ['add'],
-		CheckList::class => ['save'],
-		Group::class => ['get'],
-		Group\Url::class => ['get'],
+		Infrastructure\Controller\Task::class => ['add', 'get', 'list'],
+		Infrastructure\Rest\Controller\Task::class => ['get', 'list'],
+		Infrastructure\Controller\CheckList::class => ['save'],
+		Infrastructure\Controller\Group::class => ['get'],
+		Infrastructure\Controller\Group\Url::class => ['get'],
 	];
 
 	public function onBeforeAction(Event $event): ?EventResult

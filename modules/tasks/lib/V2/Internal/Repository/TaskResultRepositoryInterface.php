@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Tasks\Internals\Task\Result\EO_Result_Collection;
 use Bitrix\Tasks\Internals\Task\Result\Result;
 use Bitrix\Tasks\V2\Internal\Entity;
@@ -17,6 +18,14 @@ interface TaskResultRepositoryInterface
 	public function getByIds(array $resultIds): Entity\ResultCollection;
 
 	public function getByTask(int $taskId, ?int $limit = null, ?int $offset = null): Entity\ResultCollection;
+
+	public function getByStatements(
+		?array $select = [],
+		?ConditionTree $filter = null,
+		?array $order = [],
+		?int $limit = null,
+		?int $offset = null,
+	): Entity\ResultCollection;
 
 	public function getAttachmentIdsByResult(int $resultId): ?array;
 

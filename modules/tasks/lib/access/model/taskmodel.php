@@ -383,6 +383,11 @@ class TaskModel implements AccessibleTask
 
 	public function getParentId(): ?int
 	{
+		if ($this->parentId !== null)
+		{
+			return $this->parentId;
+		}
+
 		$task = $this->getTask(true);
 		if (!$task)
 		{

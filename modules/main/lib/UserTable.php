@@ -319,6 +319,7 @@ class UserTable extends DataManager
 			'document_editor',
 			'calendar_sharing',
 			'im_guest',
+			'rest_system',
 		];
 
 		return $types;

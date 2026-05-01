@@ -43,6 +43,7 @@ class StageMapper
 			color: $color,
 			systemType: $stage['SYSTEM_TYPE'],
 			sort: (int)($stage['SORT'] ?? 0),
+			entityId: (int)($stage['ENTITY_ID'] ?? 0),
 		);
 	}
 }

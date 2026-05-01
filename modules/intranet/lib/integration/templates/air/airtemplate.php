@@ -158,6 +158,31 @@ final class AirTemplate
 		ThemePicker::getInstance()?->showBodyAssets();
 	}
 
+	public static function restoreRightPanelBodyState(): void
+	{
+		?>
+		<script data-skip-moving="true">
+		try {
+			const _ss = sessionStorage;
+			const _expanded = _ss.getItem('b24_right_panel_expanded');
+			if (_expanded === 'Y' && !BX.Dom.hasClass(document.body, '--right-panel-expanded'))
+			{
+				BX.Dom.addClass(document.body, ['--right-panel-expanded', '--right-panel-no-transition']);
+			}
+			if (_expanded === 'N' && document.body.classList.contains('--right-panel-expanded'))
+			{
+				BX.Dom.removeClass(document.body, ['--right-panel-expanded', '--right-panel-no-transition']);
+			}
+			const _width = _ss.getItem('b24_right_panel_width');
+			if (_width && parseInt(_width, 10) > 0)
+			{
+				BX.Dom.style(document.body, '--air-right-panel-width', `${_width}px`);
+			}
+		} catch(e) {}
+		</script>
+		<?php
+	}
+
 	public static function getJsTitle(): string
 	{
 		$title = $GLOBALS['APPLICATION']->getTitle('title', true);
@@ -191,7 +216,31 @@ final class AirTemplate
 			$bodyClasses .= ' im-bar-mode-off';
 		}
 
+		if (self::isRightPanelExpanded())
+		{
+			$bodyClasses .= ' --right-panel-expanded --right-panel-no-transition';
+		}
+
 		return $bodyClasses;
+	}
+
+	public static function getBodyAttributes(): string
+	{
+		$attributes = [];
+
+		$savedWidth = (int)\CUserOptions::GetOption('intranet', 'right_panel_width', '380');
+
+		$attributes[] = 'style="--air-right-panel-width: ' . $savedWidth . 'px"';
+
+		return implode(' ', $attributes);
+	}
+
+	public static function isRightPanelExpanded(): bool
+	{
+		return (
+			\CUserOptions::GetOption('aiassistant', 'marta_is_open', 'N') === 'Y'
+			&& \CUserOptions::GetOption('aiassistant', 'show_chat_in_right_panel', 'N') === 'Y'
+		);
 	}
 
 	public static function getCompositeBodyClasses(): string
@@ -225,4 +274,15 @@ final class AirTemplate
 		return $goTopButton;
 	}
 
+	public static function getLang(): string
+	{
+		$context = \Bitrix\Main\Context::getCurrent();
+		$locale = $context->getLanguageObject()?->getCode();
+		if (empty($locale))
+		{
+			$locale = defined('LANGUAGE_ID') ? LANGUAGE_ID : '';
+		}
+
+		return $locale;
+	}
 }

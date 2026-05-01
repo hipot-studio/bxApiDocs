@@ -73,6 +73,8 @@ class DiskFileRepository implements DiskFileRepositoryInterface
 
 		$currentAttachments = $this->getCurrentTaskAttachments($taskId);
 
+		$currentAttachmentIds = array_column($currentAttachments->toArray(), 'id', 'objectId');
+
 		$attachmentIds = [];
 
 		foreach ($fileIds as $fileId)
@@ -80,15 +82,12 @@ class DiskFileRepository implements DiskFileRepositoryInterface
 			[$type, $realValue] = FileUserType::detectType($fileId);
 			if ($type === FileUserType::TYPE_NEW_OBJECT)
 			{
-				/** @var DiskFile $attachment */
-				foreach ($currentAttachments as $attachment)
+				$realValue = (int)$realValue;
+				if (isset($currentAttachmentIds[$realValue]))
 				{
-					if ($attachment->customData['objectId'] === (int)$realValue)
-					{
-						$attachmentIds[$attachment->id] = $fileId;
+					$attachmentIds[$currentAttachmentIds[$realValue]] = $fileId;
 
-						break;
-					}
+					break;
 				}
 			}
 			else

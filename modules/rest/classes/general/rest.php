@@ -82,8 +82,9 @@ class CRestServer
 
 	public function __construct($params, $toLowerMethod = true)
 	{
-		$this->class = $params['CLASS'] ?: static::DEFAULT_REST_PROVIDER;
-		$this->method = $toLowerMethod ? mb_strtolower($params['METHOD']) : $params['METHOD'];
+		$this->class = $params['CLASS'] ?? static::DEFAULT_REST_PROVIDER;
+		$this->method = $params['METHOD'] ?? '';
+		$this->method = $toLowerMethod ? mb_strtolower($this->method) : $this->method;
 
 		$this->query = $params['QUERY'] ?? null;
 
@@ -522,7 +523,7 @@ class CRestServer
 			}
 		}
 
-		return $this->arServiceDesc[$this->scope][$this->method];
+		return $this->arServiceDesc[$this->scope][$this->method] ?? null;
 	}
 
 

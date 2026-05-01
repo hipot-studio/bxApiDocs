@@ -6,9 +6,6 @@ namespace Bitrix\Tasks\V2\Internal\Service\Counter\Collector;
 
 use Bitrix\Im\V2\Anchor\AnchorItem;
 use Bitrix\Tasks\Internals\Counter\CounterDictionary;
-use Bitrix\Tasks\Internals\Counter\Event\Event;
-use Bitrix\Tasks\Internals\Counter\Event\EventCollection;
-use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\V2\Internal\Entity\CounterCollection;
 use Bitrix\Tasks\V2\Internal\Entity\Counter;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Service\ImAnchorProviderDelegate;
@@ -29,36 +26,6 @@ class MentionedCollector
 		private readonly GroupRepositoryInterface $groupRepository,
 		private readonly Logger $logger,
 	) {
-	}
-
-	/**
-	 * Main process method for collecting mention counters.
-	 * Orchestrates the entire flow while delegating specific tasks to private methods.
-	 */
-	public function process(): void
-	{
-		$events = EventCollection::getInstance()->list();
-		$mentionEvents = $this->filterMentionEvents($events);
-
-		if (empty($mentionEvents))
-		{
-			return;
-		}
-
-		$mentionCounters = $this->calculateMentionCounters($mentionEvents);
-		$counterCollection = $this->createCounterCollection($mentionEvents, $mentionCounters);
-
-		if ($counterCollection->isEmpty())
-		{
-			return;
-		}
-
-		foreach ($counterCollection as $counter)
-		{
-			$this->repository->deleteByUserAndTaskAndType($counter->userId, $counter->taskId, $counter->type);
-		}
-
-		$this->repository->createFromCollection($counterCollection);
 	}
 
 	/**
@@ -99,65 +66,6 @@ class MentionedCollector
 		{
 			$this->repository->createFromCollection($counterCollection);
 		}
-	}
-
-	/**
-	 * Filters events to get only mention events.
-	 *
-	 * @param Event[] $events
-	 * @return Event[]
-	 */
-	private function filterMentionEvents(array $events): array
-	{
-		return array_filter(
-			$events,
-			fn (Event $event): bool => $event->getType() === EventDictionary::EVENT_AFTER_USER_MENTIONED,
-		);
-	}
-
-	/**
-	 * Calculates mention counters for the given events.
-	 *
-	 * @param Event[] $events
-	 * @return array<int, array<int, int>> Array mapping [userId => [chatId => count]]
-	 */
-	private function calculateMentionCounters(array $events): array
-	{
-		[$userIds, $taskIds] = $this->extractUniqueIds($events);
-		$anchorData = $this->fetchAnchorData($userIds);
-		$chatToTaskMapping = $this->getChatToTaskMapping($taskIds);
-
-		return $this->buildMentionCounters($anchorData, $chatToTaskMapping);
-	}
-
-	/**
-	 * Extracts unique user IDs and task IDs from events.
-	 *
-	 * @param Event[] $events
-	 * @return array{0: int[], 1: int[]} Tuple of unique user IDs and task IDs.
-	 */
-	private function extractUniqueIds(array $events): array
-	{
-		$userIds = [];
-		$taskIds = [];
-
-		foreach ($events as $event)
-		{
-			$userId = $event->getUserId();
-			$taskId = $event->getTaskId();
-
-			if ($userId > 0)
-			{
-				$userIds[$userId] = $userId;
-			}
-
-			if ($taskId > 0)
-			{
-				$taskIds[$taskId] = $taskId;
-			}
-		}
-
-		return [array_values($userIds), array_values($taskIds)];
 	}
 
 	/**
@@ -262,56 +170,8 @@ class MentionedCollector
 	{
 		return is_array($anchor)
 			&& isset($anchor['type'], $anchor['chatId'])
-			&& $anchor['type'] === AnchorItem::MENTION
+			&& strtolower($anchor['type']) === strtolower(AnchorItem::MENTION)
 			&& (int)$anchor['chatId'] > 0;
-	}
-
-	/**
-	 * Creates a counter's collection from events and mention counters.
-	 *
-	 * @param Event[] $events
-	 * @param array<int, array<int, int>> $mentionCounters
-	 */
-	private function createCounterCollection(array $events, array $mentionCounters): CounterCollection
-	{
-		$collection = new CounterCollection();
-
-		foreach ($events as $event)
-		{
-			$counterEntity = $this->createCounterEntity($event, $mentionCounters);
-			if ($counterEntity !== null)
-			{
-				$collection->add($counterEntity);
-			}
-		}
-
-		return $collection;
-	}
-
-	/**
-	 * Creates a single counter entity from event and mention counters.
-	 */
-	private function createCounterEntity(Event $event, array $mentionCounters): ?Counter
-	{
-		$userId = $event->getUserId();
-		$taskId = $event->getTaskId();
-
-		if ($userId <= 0 || $taskId <= 0)
-		{
-			return null; // Skip invalid events
-		}
-
-		// Note: There seems to be some confusion in original code between taskId and chatId
-		// Based on the original logic, using taskId as the key for mention counters
-		$counterValue = $mentionCounters[$userId][$taskId] ?? 0;
-
-		return new Counter(
-			taskId: $taskId,
-			groupId: $event->getGroupId(),
-			userId: $userId,
-			type: CounterDictionary::COUNTER_MENTIONED,
-			value: $counterValue,
-		);
 	}
 
 	/**

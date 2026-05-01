@@ -15,7 +15,10 @@ enum NotificationType: string
 	case DeadlineChanged = 'deadline_changed';
 	case AuditorsChanged = 'auditors_changed';
 	case AccomplicesChanged = 'accomplices_changed';
+	case GroupAdded = 'group_addeded';
 	case GroupChanged = 'group_changed';
+
+	case GroupRemoved = 'group_removed';
 	case TaskOverdue = 'task_overdue';
 	case TaskOverdueSoon = 'task_overdue_soon';
 	case TaskStatusChanged = 'task_status_changed';

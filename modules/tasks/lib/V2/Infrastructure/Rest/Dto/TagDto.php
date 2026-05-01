@@ -57,4 +57,9 @@ class TagDto extends Dto
 
 		return $dto;
 	}
+
+	public function getValue(): self
+	{
+		return $this;
+	}
 }

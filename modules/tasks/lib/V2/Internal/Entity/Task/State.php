@@ -6,6 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Entity\Task;
 
 use Bitrix\Tasks\Deadline\Entity\DeadlineUserOption;
 use Bitrix\Tasks\V2\Internal\Entity\AbstractEntity;
+use Bitrix\Tasks\V2\Internal\Entity\State\StateFlagKey;
 use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 
 class State extends AbstractEntity
@@ -35,10 +36,10 @@ class State extends AbstractEntity
 	public function getFlags(): array
 	{
 		return [
-			'needsControl' => $this->needsControl,
-			'matchesWorkTime' => $this->matchesWorkTime,
-			'defaultRequireResult' => $this->defaultRequireResult,
-			'allowsTimeTracking' => $this->allowsTimeTracking,
+			StateFlagKey::NeedsControl->value => $this->needsControl,
+			StateFlagKey::MatchesWorkTime->value => $this->matchesWorkTime,
+			StateFlagKey::DefaultRequireResult->value => $this->defaultRequireResult,
+			StateFlagKey::AllowsTimeTracking->value => $this->allowsTimeTracking,
 		];
 	}
 
@@ -58,7 +59,7 @@ class State extends AbstractEntity
 	{
 		return [
 			'userId' => $this->userId,
-			'deadlineUserOption' => $this->defaultDeadline?->toArray(),
+			'defaultDeadline' => $this->defaultDeadline?->toArray(),
 			'needsControl' => $this->needsControl,
 			'matchesWorkTime' => $this->matchesWorkTime,
 			'defaultRequireResult' => $this->defaultRequireResult,

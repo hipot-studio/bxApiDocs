@@ -14,6 +14,7 @@ use Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable;
 use Bitrix\Tasks\Internals\Task\Template\TemplateObject;
 use Bitrix\Tasks\Internals\Task\Template\TemplateTagTable;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
+use Bitrix\Tasks\V2\Internal\Model\TemplateParameterTable;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\TextField;
@@ -221,6 +222,12 @@ class TemplateTable extends DataManager
 				'PARENT',
 				\Bitrix\Tasks\Internals\Task\Template\DependenceTable::class,
 				Join::on('this.ID', 'ref.TEMPLATE_ID')
+			))->configureJoinType(Join::TYPE_LEFT),
+
+			(new OneToMany(
+				'PARAMS',
+				TemplateParameterTable::class,
+				'TEMPLATE'
 			))->configureJoinType(Join::TYPE_LEFT),
 
 			// deprecated

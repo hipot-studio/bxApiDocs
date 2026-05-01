@@ -9,6 +9,7 @@ use Bitrix\Tasks\V2\Internal\Async\QueueId;
 
 class UpdateTopic extends AbstractBaseMessage
 {
+	// TODO: Remove when UpdateTopic queue is completely empty.
 	public function __construct(
 		public readonly array $task
 	)

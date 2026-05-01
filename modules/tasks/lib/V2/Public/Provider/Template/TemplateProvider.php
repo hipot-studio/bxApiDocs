@@ -36,7 +36,7 @@ class TemplateProvider
 		$this->diskArchiveLinkService = ServiceLocator::getInstance()->get(DiskArchiveLinkService::class);
 		$this->templateReadRepository = ServiceLocator::getInstance()->get(TemplateReadRepositoryInterface::class);
 	}
-	
+
 	public function get(TemplateParams $templateParams): ?Template
 	{
 		if (
@@ -61,6 +61,7 @@ class TemplateProvider
 			relatedTasks: $templateParams->relatedTasks,
 			permissions: $templateParams->permissions,
 			parent: $templateParams->parent,
+			params: $templateParams->params,
 		);
 
 		$template = $this->templateReadRepository->getById(

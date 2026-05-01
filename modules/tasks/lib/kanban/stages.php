@@ -76,6 +76,8 @@ class StagesTable extends DataManager
 	 * Default colors.
 	 */
 	public const DEF_COLOR_STAGE = '47D1E2';
+	public const DEF_COLOR_STAGE_WORK_IN_PROGRESS = '9DCF00';
+	public const DEF_COLOR_STAGE_REVIEW = 'FFA801';
 
 	/**
 	 * Allowed work modes.
@@ -364,11 +366,25 @@ class StagesTable extends DataManager
 					'COLOR' => static::SYS_TYPE_NEW_COLOR,
 				]);
 				self::add([
-					'TITLE' => Loc::getMessage('TASKS_STAGE_MP_2'),
+					'TITLE' => Loc::getMessage('TASKS_STAGE_PERSONAL_WORK_IN_PROGRESS'),
 					'SORT' => 200,
 					'ENTITY_ID' => $entityId,
 					'ENTITY_TYPE' => $entityType,
+					'COLOR' => self::DEF_COLOR_STAGE_WORK_IN_PROGRESS,
+				]);
+				self::add([
+					'TITLE' => Loc::getMessage('TASKS_STAGE_MP_2'),
+					'SORT' => 300,
+					'ENTITY_ID' => $entityId,
+					'ENTITY_TYPE' => $entityType,
 					'COLOR' => static::DEF_COLOR_STAGE,
+				]);
+				self::add([
+					'TITLE' => Loc::getMessage('TASKS_STAGE_PERSONAL_REVIEW'),
+					'SORT' => 400,
+					'ENTITY_ID' => $entityId,
+					'ENTITY_TYPE' => $entityType,
+					'COLOR' => static::DEF_COLOR_STAGE_REVIEW,
 				]);
 			}
 			elseif ($entityType == self::WORK_MODE_GROUP)
