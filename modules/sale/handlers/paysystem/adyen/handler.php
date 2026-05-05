@@ -53,7 +53,7 @@ class AdyenHandler
 	 * @throws Main\ArgumentTypeException
 	 * @throws Main\ObjectException
 	 */
-	public function initiatePay(Payment $payment, Request $request = null): PaySystem\ServiceResult
+	public function initiatePay(Payment $payment, ?Request $request = null): PaySystem\ServiceResult
 	{
 		$result = new PaySystem\ServiceResult();
 
@@ -534,7 +534,7 @@ class AdyenHandler
 	 * @param string $action
 	 * @return mixed|string
 	 */
-	protected function getUrl(Payment $payment = null, $action)
+	protected function getUrl(?Payment $payment = null, $action)
 	{
 		$url = parent::getUrl($payment, $action);
 		if ($payment !== null && !$this->isTestMode($payment))
@@ -584,7 +584,7 @@ class AdyenHandler
 	 * @param Payment $payment
 	 * @return bool
 	 */
-	protected function isTestMode(Payment $payment = null): bool
+	protected function isTestMode(?Payment $payment = null): bool
 	{
 		return ($this->getBusinessValue($payment, "PS_IS_TEST") === "Y");
 	}

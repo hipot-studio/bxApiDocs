@@ -31,12 +31,14 @@ class CDiskFileUploadComponent extends DiskComponent
 	{
 		if($this->storage->isEnabledBizProc() && \Bitrix\Disk\Integration\BizProcManager::isAvailable())
 		{
-			$documentData = array(
-				'DISK' => \Bitrix\Disk\BizProcDocument::generateDocumentComplexType($this->storage->getId()),
-				'WEBDAV' => \Bitrix\Disk\BizProcDocumentCompatible::generateDocumentComplexType($this->storage->getId()),
-			);
+			$storageId = $this->storage->getId();
 
-			if(!empty($this->arParams['FILE_ID']))
+			$documentData = [
+				'DISK' => \Bitrix\Disk\BizProcDocument::generateDocumentComplexType($storageId),
+				'WEBDAV' => \Bitrix\Disk\BizProcDocumentCompatible::generateDocumentComplexType($storageId),
+			];
+
+			if (!empty($this->arParams['FILE_ID']))
 			{
 				$autoExecute = CBPDocumentEventType::Edit;
 			}
@@ -44,36 +46,77 @@ class CDiskFileUploadComponent extends DiskComponent
 			{
 				$autoExecute = CBPDocumentEventType::Create;
 			}
+
 			$this->arParams['BIZPROC_PARAMETERS'] = false;
-			$this->arParams['BIZPROC_PARAMETERS_REQUIRED'] = array();
+			$this->arParams['BIZPROC_PARAMETERS_REQUIRED'] = [];
+
 			$workflowTemplateId = '';
+			$hasWebDavTemplatesWithParams = false;
+			$hasDiskTemplatesWithParams = false;
+
 			foreach($documentData as $nameModule => $data)
 			{
 				$workflowTemplateObject = CBPWorkflowTemplateLoader::getList(
-					array(),
-					array("DOCUMENT_TYPE" => $data, "AUTO_EXECUTE" => $autoExecute, "ACTIVE" => "Y"),
+					[],
+					['DOCUMENT_TYPE' => $data, 'AUTO_EXECUTE' => $autoExecute, 'ACTIVE' => 'Y'],
 					false,
 					false,
-					array("ID", "PARAMETERS")
+					['ID', 'PARAMETERS']
 				);
 				while ($workflowTemplate = $workflowTemplateObject->getNext())
 				{
-					if(!empty($workflowTemplate['PARAMETERS']))
+					if (!empty($workflowTemplate['PARAMETERS']))
 					{
-						foreach($workflowTemplate['PARAMETERS'] as $parametersId => $parameters)
+						foreach ($workflowTemplate['PARAMETERS'] as $parametersId => $parameters)
 						{
-							if($parameters['Required'])
+							if ($parameters['Required'])
 							{
-								$this->arParams['BIZPROC_PARAMETERS_REQUIRED'][] = 'bizproc'.$workflowTemplate['ID'].'_'.$parametersId;
+								$this->arParams['BIZPROC_PARAMETERS_REQUIRED'][] =
+									'bizproc'
+									. $workflowTemplate['ID']
+									. '_'
+									. $parametersId
+								;
 							}
 						}
+
 						$this->arParams['BIZPROC_PARAMETERS'] = true;
+
+						if ($nameModule === 'DISK')
+						{
+							$hasDiskTemplatesWithParams = true;
+						}
+
+						if ($nameModule === 'WEBDAV')
+						{
+							$hasWebDavTemplatesWithParams = true;
+						}
 					}
+
 					$workflowTemplateId = $workflowTemplate['ID'];
 				}
 			}
 
 			$this->arParams['STATUS_START_BIZPROC'] = !empty($workflowTemplateId);
+
+			if (
+				defined('CBPRuntime::ACTIVITY_API_VERSION')
+				&& \CBPRuntime::ACTIVITY_API_VERSION >= 2
+				&& !$hasWebDavTemplatesWithParams
+				&& $hasDiskTemplatesWithParams
+			)
+			{
+				$this->arResult['SIGNED_DOCUMENT_TYPE'] = \CBPDocument::signDocumentType(
+					\Bitrix\Disk\BizProcDocument::generateDocumentComplexType($storageId)
+				);
+				$this->arResult['SIGNED_DOCUMENT_ID'] =
+					!empty($this->arParams['FILE_ID'])
+						? \CBPDocument::signDocumentType(
+							\Bitrix\Disk\BizProcDocument::getDocumentComplexId($this->arParams['FILE_ID'])
+					)
+						: ''
+				;
+			}
 		}
 
 		$this->arParams['STORAGE_ID'] = $this->storage->getId();

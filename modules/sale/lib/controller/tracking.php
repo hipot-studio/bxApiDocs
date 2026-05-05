@@ -16,7 +16,7 @@ class Tracking extends \Bitrix\Main\Engine\Controller
 	const PERMISSION_READ = 'D';
 	const PERMISSION_WRITE = 'W';
 
-	public function __construct(Request $request = null)
+	public function __construct(?Request $request = null)
 	{
 		$this->manager = Manager::getInstance();
 		parent::__construct($request);

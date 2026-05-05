@@ -17,14 +17,14 @@ interface IRecurring
 	 * @param Request|null $request
 	 * @return ServiceResult
 	 */
-	public function repeatRecurrent(Payment $payment, Request $request = null): ServiceResult;
+	public function repeatRecurrent(Payment $payment, ?Request $request = null): ServiceResult;
 
 	/**
 	 * @param Payment $payment
 	 * @param Request|null $request
 	 * @return ServiceResult
 	 */
-	public function cancelRecurrent(Payment $payment, Request $request = null): ServiceResult;
+	public function cancelRecurrent(Payment $payment, ?Request $request = null): ServiceResult;
 
 	/**
 	 * @param Payment $payment

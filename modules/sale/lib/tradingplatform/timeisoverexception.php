@@ -18,7 +18,7 @@ class TimeIsOverException extends SystemException
 	 * @param string  $endPosition Position from witch must be start ed next step.
 	 * @param \Exception $previous.
 	 */
-	public function __construct($message = "", $endPosition = "", \Exception $previous = null)
+	public function __construct($message = "", $endPosition = "", ?\Exception $previous = null)
 	{
 		parent::__construct($message, 0, '', 0, $previous);
 		$this->endPosition = $endPosition;

@@ -1511,23 +1511,6 @@ class CAllCatalog
 				}
 				unset($row);
 			}
-			if (self::isCrmCatalogBrandProperty($id))
-			{
-				$property = \CIBlockProperty::GetByID($id)->Fetch();
-
-				if (isset($fields['NAME']) && $fields['NAME'] !== $property['NAME'])
-				{
-					$messages[] = Loc::getMessage('BT_MOD_CATALOG_ERR_CANNOT_CHANGE_BRAND_PROPERTY_NAME');
-				}
-				elseif (isset($fields['CODE']) && $fields['CODE'] !== 'BRAND_FOR_FACEBOOK')
-				{
-					$messages[] = Loc::getMessage('BT_MOD_CATALOG_ERR_CANNOT_CHANGE_BRAND_PROPERTY_CODE');
-				}
-				elseif (isset($fields['MULTIPLE']) && $fields['MULTIPLE'] !== 'Y')
-				{
-					$messages[] = Loc::getMessage('BT_MOD_CATALOG_ERR_CANNOT_CHANGE_BRAND_PROPERTY_MULTIPLE');
-				}
-			}
 			unset($id);
 		}
 
@@ -1570,30 +1553,9 @@ class CAllCatalog
 			));
 			$result = false;
 		}
-		elseif (self::isCrmCatalogBrandProperty($intPropertyID))
-		{
-			$APPLICATION->throwException(GetMessage("BT_MOD_CATALOG_ERR_CANNOT_DELETE_BRAND_PROPERTY"));
-			$result = false;
-		}
 		unset($property);
 
 		return $result;
-	}
-
-	private static function isCrmCatalogBrandProperty($propertyId): bool
-	{
-		if (
-			!Loader::includeModule('crm')
-			|| !Loader::includeModule('bitrix24')
-		)
-		{
-			return false;
-		}
-
-		$crmCatalogId = \CCrmCatalog::GetDefaultID();
-		$property = \CIBlockProperty::GetByID($propertyId)->Fetch();
-
-		return $property['CODE'] === 'BRAND_FOR_FACEBOOK' && (int)$property['IBLOCK_ID'] === $crmCatalogId;
 	}
 
 	public static function OnIBlockModuleUnInstall(): bool

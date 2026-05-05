@@ -28,11 +28,13 @@ class CashboxBitrix extends Cashbox
 
 		$data = $check->getDataForCheck();
 
+		$currency = $data['currency'] ?? '';
+
 		foreach ($data['payments'] as $payment)
 		{
 			$result['payments'][] = array(
 				'type' => $this->getValueFromSettings('PAYMENT_TYPE', $payment['type']),
-				'value' => $payment['sum']
+				'value' => $this->roundMoney((float)$payment['sum'], $currency)
 			);
 		}
 
@@ -57,7 +59,7 @@ class CashboxBitrix extends Cashbox
 
 			$value = array(
 				'name' => $item['name'],
-				'price' => (float)$item['base_price'],
+				'price' => $this->roundMoney((float)$item['base_price'], $currency),
 				'quantity' => $item['quantity'],
 				'VAT' => (int)$vat
 			);

@@ -23,6 +23,7 @@ abstract class Base
 	const TYPE_DATE = 'date';
 	const TYPE_DATETIME = 'datetime';
 	const TYPE_DATATYPE = 'datatype';
+	const TYPE_ANY = 'any';
 
 	abstract public function getFields();
 
@@ -544,80 +545,86 @@ abstract class Base
 	// region externalize fields
 	public function externalizeFields($fields)
 	{
-        if (!is_array($fields))
-        {
-            return [];
-        }
+		if (!is_array($fields))
+		{
+			return [];
+		}
 
-        $result = [];
+		$result = [];
 
-        $fieldsInfo = $this->getListFieldInfo(
-            $this->getFields(),
-            [
-                'filter' => [
-                    'ignoredAttributes' => [
-                        Attributes::Hidden,
-                    ],
-                ],
-            ]
-        );
+		$fieldsInfo = $this->getListFieldInfo(
+			$this->getFields(),
+			[
+				'filter' => [
+					'ignoredAttributes' => [
+						Attributes::Hidden,
+					],
+				],
+			]
+		);
 
-        foreach ($fields as $name => $value)
-        {
-            $info = $fieldsInfo[$name] ?? null;
-            if (!$info)
-            {
-                continue;
-            }
+		foreach ($fields as $name => $value)
+		{
+			$info = $fieldsInfo[$name] ?? null;
+			if (!$info)
+			{
+				continue;
+			}
 
-            $type = $info['TYPE'] ?? '';
-            $hasValue = isset($value) && $value !== '';
+			$type = $info['TYPE'] ?? '';
+			$hasValue = isset($value) && $value !== '';
 
-            switch ($type)
-            {
-                case DataType::TYPE_STRING:
-                case DataType::TYPE_CHAR:
-                case DataType::TYPE_TEXT:
-                    $value = (string)$value;
-                    break;
-                case DataType::TYPE_FLOAT:
-                    $value = $hasValue ? (float)$value : null;
-                    break;
-                case DataType::TYPE_INT:
-                    $value = $hasValue ? (int)$value : null;
-                    break;
-                case DataType::TYPE_DATE:
-                    if ($hasValue)
-                    {
-                        $time = strtotime($value);
-                        $value = $time ? Date::createFromTimestamp($time) : null;
-                    }
-                    else
-                    {
-                        $value = null;
-                    }
-                    break;
-                case DataType::TYPE_DATETIME:
-                    if ($hasValue)
-                    {
-                        $time = strtotime($value);
-                        $value = $time ? DateTime::createFromTimestamp($time) : null;
-                    }
-                    else
-                    {
-                        $value = null;
-                    }
-                    break;
-                case DataType::TYPE_DATATYPE:
-                case DataType::TYPE_LIST:
-                    break;
-                default:
-                    $value = null;
-                    break;
-            }
+			switch ($type)
+			{
+				case DataType::TYPE_STRING:
+				case DataType::TYPE_CHAR:
+				case DataType::TYPE_TEXT:
+					$value = (string)$value;
+					break;
+				case DataType::TYPE_FLOAT:
+					$value = $hasValue ? (float)$value : null;
+					break;
+				case DataType::TYPE_INT:
+					$value = $hasValue ? (int)$value : null;
+					break;
+				case DataType::TYPE_DATE:
+					if ($hasValue)
+					{
+						$time = strtotime($value);
+						$value = $time ? Date::createFromTimestamp($time) : null;
+					}
+					else
+					{
+						$value = null;
+					}
+					break;
+				case DataType::TYPE_DATETIME:
+					if ($hasValue)
+					{
+						$time = strtotime($value);
+						$value = $time ? DateTime::createFromTimestamp($time) : null;
+					}
+					else
+					{
+						$value = null;
+					}
+					break;
+				case DataType::TYPE_DATATYPE:
+				case DataType::TYPE_LIST:
+					break;
+				case DataType::TYPE_ANY:
+					if ($fields['TYPE'] !== 'FILE')
+					{
+						$value = (string)$value;
+					}
+					break;
+				default:
+					$value = null;
+					break;
+			}
 
-            $result[$name] = $value;
-        }
+			$result[$name] = $value;
+		}
 
 		return $result;
 	}

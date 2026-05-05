@@ -1310,7 +1310,7 @@ class Order extends OrderBase implements \IShipmentOrder, \IPaymentOrder, IBusin
 	 * @throws Main\NotSupportedException
 	 * @throws Main\ObjectNotFoundException
 	 */
-	private function syncOrderAndPayments(Payment $payment = null)
+	private function syncOrderAndPayments(?Payment $payment = null)
 	{
 		$result = new Result();
 

@@ -1,7 +1,12 @@
 <?php
 
+use Bitrix\Bizproc\Public\Service\Workflow\StarterService;
+use Bitrix\Bizproc\Starter\Dto\ContextDto;
+use Bitrix\Bizproc\Starter\Dto\DocumentDto;
+use Bitrix\Bizproc\Starter\Enum\Face;
+use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Disk\Internals\Engine\Contract\SidePanelWrappable;
-use Bitrix\Main\Loader;
+use Bitrix\Disk\Driver;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Internals\Error\Error;
@@ -214,21 +219,54 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 
 			if ($canStartWorkflow)
 			{
-				$errorsTemporary = array();
+				$currentUserId = (int)$this->getUser()->getID();
 
-				$workflowId = CBPDocument::startWorkflow(
-					$this->arParams['TEMPLATE_ID'],
-					$documentParameters['DOCUMENT_ID'],
-					array_merge($arWorkflowParameters, array('TargetUser' => 'user_'.intval($this->getUser()->getID()))),
-					$errorsTemporary
-				);
+				if (class_exists(StarterService::class))
+				{
+					$starter = (new StarterService())->getStarterForManualDocumentScenario(
+						templateIds: [$this->arParams['TEMPLATE_ID']],
+						context: new ContextDto(Driver::INTERNAL_MODULE_ID, Face::WEB),
+						document: new DocumentDto(
+							complexDocumentId: $documentParameters['DOCUMENT_ID'],
+							complexDocumentType: $documentParameters['DOCUMENT_TYPE'],
+						),
+						userId: $currentUserId,
+						parameters: $arWorkflowParameters,
+					);
+					$starter->setValidateParameters(false);
+					$startResult = $starter->start();
+					$workflowIds = $startResult->getWorkflowIds();
+					$workflowId = $workflowIds[0] ?? null;
+					$startErrors = [];
 
-				if (count($errorsTemporary) > 0)
+					if (!$startResult->isSuccess())
+					{
+						foreach ($startResult->getErrors() as $error)
+						{
+							$startErrors[] = [
+								'code' => $error->getCode(),
+								'message' => $error->getMessage(),
+							];
+						}
+					}
+				}
+				else
+				{
+					$startErrors = [];
+					$workflowId = CBPDocument::startWorkflow(
+						$this->arParams['TEMPLATE_ID'],
+						$documentParameters['DOCUMENT_ID'],
+						array_merge($arWorkflowParameters, ['TargetUser' => 'user_' . $currentUserId]),
+						$startErrors
+					);
+				}
+
+				if (!empty($startErrors))
 				{
 					$this->arResult['SHOW_MODE'] = 'StartWorkflowError';
-					foreach ($errorsTemporary as $e)
+					foreach ($startErrors as $error)
 					{
-						$this->errorCollection->add(array(new Error('['.$e['code'].'] '.$e['message'])));
+						$this->errorCollection->add([new Error('[' . $error['code'] . '] ' . $error['message'])]);
 					}
 				}
 				else
@@ -240,6 +278,7 @@ class CDiskBizprocStartComponent extends BaseComponent implements SidePanelWrapp
 						$this->end(true);
 					}
 				}
+
 			}
 			else
 			{

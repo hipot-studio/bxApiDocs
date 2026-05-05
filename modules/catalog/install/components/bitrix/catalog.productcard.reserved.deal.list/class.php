@@ -65,6 +65,10 @@ class ReservedDealListComponent extends CBitrixComponent
 		$this->arResult['DEALS_FILTER'] = $dealsFilter;
 		$this->arResult['PRODUCT_NAME'] = $productFields['NAME'];
 
+		$this->arResult['ENTITY_CREATE_URLS'] = [
+			CCrmOwnerType::DealName => CCrmOwnerType::GetEntityEditPath(CCrmOwnerType::Deal, 0),
+		];
+
 		$this->includeComponentTemplate();
 	}
 }

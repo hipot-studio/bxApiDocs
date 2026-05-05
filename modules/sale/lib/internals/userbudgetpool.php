@@ -38,7 +38,7 @@ class UserBudgetPool
 	 * @param Sale\Order $order
 	 * @param Sale\Payment|null $payment
 	 */
-	public function add($sum, $budgetType, Sale\Order $order, Sale\Payment $payment = null)
+	public function add($sum, $budgetType, Sale\Order $order, ?Sale\Payment $payment = null)
 	{
 		if (!$this->isLocked())
 		{
@@ -173,7 +173,7 @@ class UserBudgetPool
 	 * @param Sale\Payment|null $payment
 	 * @throws Main\Db\SqlQueryException
 	 */
-	public static function addPoolItem(Sale\Order $order, $value, $type, Sale\Payment $payment = null)
+	public static function addPoolItem(Sale\Order $order, $value, $type, ?Sale\Payment $payment = null)
 	{
 		if (floatval($value) == 0)
 			return;

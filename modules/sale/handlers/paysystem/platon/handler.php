@@ -46,7 +46,7 @@ class PlatonHandler extends PaySystem\ServiceHandler implements PaySystem\IRefun
 	/**
 	 * @inheritDoc
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		$result = new PaySystem\ServiceResult();
 

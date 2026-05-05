@@ -43,7 +43,7 @@ class AlfaBankHandler extends SberbankOnlineHandler
 	 * @param string $action
 	 * @return string
 	 */
-	protected function getUrl(Payment $payment = null, $action): string
+	protected function getUrl(?Payment $payment = null, $action): string
 	{
 		$url = parent::getUrl($payment, $action);
 		if ($payment !== null && $action === 'formUrl')

@@ -165,7 +165,7 @@ class Manager
 	 * @param Shipment|null $shipment
 	 * @return float
 	 */
-	public function getTotalCostShipment(Shipment $shipment = null)
+	public function getTotalCostShipment(?Shipment $shipment = null)
 	{
 		$result = 0;
 

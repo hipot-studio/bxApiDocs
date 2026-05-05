@@ -642,12 +642,12 @@ class Price extends Entity
 
 	/**
 	 * Check price value.
-	 * @internal
-	 *
-	 * @param string|int|float|null $price      Price value.
+	 * @param float|int|string|null $price Price value.
 	 * @return float|int|null
+	 *@internal
+	 *
 	 */
-	private static function checkPriceValue($price)
+	private static function checkPriceValue(float|int|string|null $price): float|int|null
 	{
 		$result = null;
 
@@ -659,7 +659,9 @@ class Price extends Entity
 				{
 					$price = (float)$price;
 					if (is_finite($price))
+					{
 						$result = $price;
+					}
 				}
 			}
 			elseif (

@@ -48,7 +48,12 @@ class Service implements \JsonSerializable, Baas\Contract\Service
 	 */
 	public function canConsume(int $units = 1): bool
 	{
-		return ($this->data->getCurrentValue() - $units) >= $this->data->getMinimalValue();
+		if ($this->data?->getMinimalValue() === null)
+		{
+			return false;
+		}
+
+		return ($this->data?->getCurrentValue() - $units) >= $this->data?->getMinimalValue();
 	}
 
 	/**

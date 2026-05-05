@@ -67,7 +67,8 @@ abstract class CorrectionCheck extends AbstractCheck
 			'type' => static::getType(),
 			'unique_id' => $this->getField('ID'),
 			'date_create' => new Main\Type\DateTime(),
-			'calculated_sign' => static::getCalculatedSign()
+			'calculated_sign' => static::getCalculatedSign(),
+			'currency' => $this->getField('CURRENCY'),
 		];
 
 		$data = $this->extractData();

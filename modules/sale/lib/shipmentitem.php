@@ -49,7 +49,7 @@ class ShipmentItem
 	 * @param BasketItem $basketItem
 	 * @return ShipmentItem
 	 */
-	public static function create(ShipmentItemCollection $collection, BasketItem $basketItem = null)
+	public static function create(ShipmentItemCollection $collection, ?BasketItem $basketItem = null)
 	{
 		$fields = [
 			'XML_ID' => static::generateXmlId(),

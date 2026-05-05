@@ -1780,7 +1780,7 @@ class OrderEdit
 		return $discounts;
 	}
 
-	public static function getCouponList(Order $order = null, $needRecalculate = true)
+	public static function getCouponList(?Order $order = null, $needRecalculate = true)
 	{
 		$result = array();
 		$discounts = array();

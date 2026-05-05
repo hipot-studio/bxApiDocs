@@ -36,7 +36,7 @@ class Manager
 		return $this;
 	}
 
-	public function getValue(string $param, int $id = null)
+	public function getValue(string $param, ?int $id = null)
 	{
 		$chain = explode('.', $param);
 		if(count($chain) <= 1)

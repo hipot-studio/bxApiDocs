@@ -13,5 +13,5 @@ interface Buildable
 	 */
 	public function buildOrder();
 
-	public function setEntityFields($entityName, array $fields = null);
+	public function setEntityFields($entityName, ?array $fields = null);
 }

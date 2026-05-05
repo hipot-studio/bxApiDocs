@@ -98,7 +98,7 @@ class TradeBindingCollection extends Internals\EntityCollection
 	 * @param TradingPlatform\Platform|null $platform
 	 * @return mixed
 	 */
-	public function createItem(TradingPlatform\Platform $platform = null)
+	public function createItem(?TradingPlatform\Platform $platform = null)
 	{
 		$registry = Registry::getInstance(static::getRegistryType());
 
@@ -281,7 +281,7 @@ class TradeBindingCollection extends Internals\EntityCollection
 	 * @param string|null $type
 	 * @return bool
 	 */
-	public function hasTradingPlatform(string $platformCode, string $type = null): bool
+	public function hasTradingPlatform(string $platformCode, ?string $type = null): bool
 	{
 		return $this->getTradingPlatform($platformCode, $type) ? true : false;
 	}
@@ -293,7 +293,7 @@ class TradeBindingCollection extends Internals\EntityCollection
 	 * @param string|null $type
 	 * @return TradingPlatform\Platform|null
 	 */
-	public function getTradingPlatform(string $platformCode, string $type = null)
+	public function getTradingPlatform(string $platformCode, ?string $type = null)
 	{
 		foreach ($this->collection as $item)
 		{

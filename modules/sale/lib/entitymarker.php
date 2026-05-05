@@ -229,7 +229,7 @@ class EntityMarker
 	 *
 	 * @return array|null
 	 */
-	public static function getMarker($orderCode, Internals\Entity $entity = null)
+	public static function getMarker($orderCode, ?Internals\Entity $entity = null)
 	{
 		if (empty(static::$pool[$orderCode]))
 		{
@@ -293,7 +293,7 @@ class EntityMarker
 	 * @throws Main\ArgumentNullException
 	 * @throws \Exception
 	 */
-	public static function saveMarkers(Order $order = null)
+	public static function saveMarkers(?Order $order = null)
 	{
 		global $USER;
 		$result = new Result();

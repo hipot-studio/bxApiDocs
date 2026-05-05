@@ -78,7 +78,7 @@ class Album extends DataConverter
 	 * @param Vk\Logger|NULL $logger
 	 * @return string
 	 */
-	private function validateTitle($title, Vk\Logger $logger = NULL)
+	private function validateTitle($title, ?Vk\Logger $logger = NULL)
 	{
 		$newTitle = $title;
 

@@ -407,7 +407,7 @@ class BasketComponentHelper
 	 * @return Result
 	 * @throws Main\LoaderException
 	 */
-	public static function checkQuantityRatio(Basket $basket, BasketItem $item = null)
+	public static function checkQuantityRatio(Basket $basket, ?BasketItem $item = null)
 	{
 		$result = new Result();
 
@@ -466,7 +466,7 @@ class BasketComponentHelper
 	 * @throws Main\LoaderException
 	 * @throws \Exception
 	 */
-	public static function correctQuantityRatio(Basket $basket, BasketItem $item = null)
+	public static function correctQuantityRatio(Basket $basket, ?BasketItem $item = null)
 	{
 		$result = new Result();
 		$changedItems = array();
@@ -579,7 +579,7 @@ class BasketComponentHelper
 	 * @return Result
 	 * @throws Main\LoaderException
 	 */
-	public static function getRatio(Basket $basket, BasketItem $item = null)
+	public static function getRatio(Basket $basket, ?BasketItem $item = null)
 	{
 		$result = new Result();
 		$ratioList = array();

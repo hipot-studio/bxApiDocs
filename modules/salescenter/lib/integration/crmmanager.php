@@ -902,7 +902,7 @@ class CrmManager extends Base
 	public function sendPaymentBySms(
 		Order\Payment $payment,
 		array $sendingInfo,
-		Order\Shipment $shipment = null,
+		?Order\Shipment $shipment = null,
 		?array $messageData = null,
 	): bool
 	{

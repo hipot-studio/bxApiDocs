@@ -36,7 +36,7 @@ class PropertyValue extends Base
 				]
 			],
 			'VALUE'=>[
-				'TYPE'=>DataType::TYPE_STRING,
+				'TYPE'=>DataType::TYPE_ANY,
 				'ATTRIBUTES'=>[Attributes::REQUIRED]
 			],
 			'ORDER_PROPS_ID'=>[

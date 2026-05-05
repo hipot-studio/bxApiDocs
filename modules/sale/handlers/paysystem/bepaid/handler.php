@@ -50,7 +50,7 @@ class BePaidHandler extends PaySystem\ServiceHandler implements
 	 * @param Request|null $request
 	 * @return ServiceResult
 	 */
-	public function initiatePay(Payment $payment, Request $request = null): ServiceResult
+	public function initiatePay(Payment $payment, ?Request $request = null): ServiceResult
 	{
 		$result = new ServiceResult();
 
@@ -639,7 +639,7 @@ class BePaidHandler extends PaySystem\ServiceHandler implements
 	 * @param string $action
 	 * @return string
 	 */
-	protected function getUrl(Payment $payment = null, $action): string
+	protected function getUrl(?Payment $payment = null, $action): string
 	{
 		$url = parent::getUrl($payment, $action);
 		if ($payment !== null && $action === 'getPaymentStatus')
@@ -666,7 +666,7 @@ class BePaidHandler extends PaySystem\ServiceHandler implements
 	 * @param Payment $payment
 	 * @return bool
 	 */
-	protected function isTestMode(Payment $payment = null): bool
+	protected function isTestMode(?Payment $payment = null): bool
 	{
 		return ($this->getBusinessValue($payment, 'PS_IS_TEST') === 'Y');
 	}

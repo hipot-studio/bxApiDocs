@@ -687,7 +687,7 @@ final class SaveOrderAction extends Sale\Controller\Action\BaseAction
 		return $result;
 	}
 
-	private function setProfile(Sale\Order $order, array $profileFields = null): Sale\Result
+	private function setProfile(Sale\Order $order, ?array $profileFields = null): Sale\Result
 	{
 		$result = new Sale\Result();
 

@@ -164,7 +164,7 @@ class ShipmentImport extends EntityImport
      * @return Sale\Result
      * @throws Main\ObjectNotFoundException
      */
-    public function delete(array $params = null)
+    public function delete(?array $params = null)
     {
         /** @var Shipment $entity */
         $entity = $this->getEntity();

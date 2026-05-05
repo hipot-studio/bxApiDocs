@@ -69,57 +69,6 @@ class Compilation extends Base
 		return $deal->Add($dealFields, true, $options) ?: null;
 	}
 
-	public function sendFacebookModerationWaitingNotificationAction(array $options): void
-	{
-		if (
-			\Bitrix\Main\Loader::includeModule('imopenlines')
-			&& \Bitrix\Main\Loader::includeModule('im')
-		)
-		{
-			$dialogId = $options['dialogId'];
-			$chatId = \Bitrix\ImOpenLines\SalesCenter\Catalog::normalizeChatId($dialogId);
-
-			Im::addMessage([
-				'FROM_USER_ID' => 0,
-				'TO_CHAT_ID' => $chatId,
-				'MESSAGE' => Loc::getMessage('SALESCENTER_CONTROLLER_FACEBOOK_COMPILATION_MODERATION'),
-				'SYSTEM' => 'Y',
-				'PARAMS' => [
-					'CLASS' => 'bx-messenger-content-item-system'
-				],
-			]);
-		}
-	}
-
-	public function sendCompilationToFacebook(array $productIds, int $chatId, int $compilationId): void
-	{
-		if (
-			!\Bitrix\Main\Loader::includeModule('imopenlines')
-			|| !\Bitrix\Main\Loader::includeModule('im')
-		)
-		{
-			return;
-		}
-
-		$crmCatalogIblockId = \CCrmCatalog::EnsureDefaultExists() ?: 0;
-		$facebookFacade = ServiceContainer::get('integration.seo.facebook.facade', [
-			'iblockId' => $crmCatalogIblockId,
-		]);
-
-		$exportResult = $facebookFacade->exportProductsByIds($productIds);
-		$exportResultData = $exportResult->getData();
-		$errorProducts = $exportResultData['ERROR_PRODUCTS'];
-		$queueId = $exportResultData['QUEUE_ID'];
-		if (!empty($errorProducts))
-		{
-			$this->sendErrorFacebookCompilationMessage($compilationId, $chatId, count($errorProducts));
-		}
-		elseif ($queueId)
-		{
-			CatalogManager::getInstance()->setCompilationQueueId($compilationId, $queueId);
-		}
-	}
-
 	public function normalizeChatId($chatId): ?int
 	{
 		if (mb_strpos($chatId, 'chat') === 0)
@@ -128,132 +77,6 @@ class Compilation extends Base
 		}
 
 		return null;
-	}
-
-	private function sendErrorFacebookCompilationMessage($compilationId, $chatId, $errorProductCount): void
-	{
-		$keyboard = new \Bitrix\Im\Bot\Keyboard();
-		$keyboard->addButton([
-			'TEXT' => Loc::getMessage('SALESCENTER_CONTROLLER_FACEBOOK_COMPILATION_EDIT_LINK'),
-			'FUNCTION' => "BX.MessengerCommon.openStore({compilationId: {$compilationId}})",
-			'BG_COLOR' => '#727475',
-			'TEXT_COLOR' => '#fff',
-			'CONTEXT' => 'DESKTOP',
-		]);
-
-		$keyboard->addButton([
-			'TEXT' => Loc::getMessage('SALESCENTER_CONTROLLER_FACEBOOK_COMPILATION_SEND_B24'),
-			'FUNCTION' => "BX.MessengerCommon.sendCompilationByChat({$compilationId})",
-			'BG_COLOR' => '#727475',
-			'TEXT_COLOR' => '#fff',
-			'CONTEXT' => 'DESKTOP',
-		]);
-
-		Im::addMessage([
-			'FROM_USER_ID' => 0,
-			'TO_CHAT_ID' => $chatId,
-			'MESSAGE' => Loc::getMessage(
-				'SALESCENTER_CONTROLLER_FACEBOOK_COMPILATION_SENT_ERROR',
-				[
-					'#PRODUCT_COUNT#' => $errorProductCount
-				]
-			),
-			'SYSTEM' => 'Y',
-			'PARAMS' => [
-				'CLASS' => 'bx-messenger-content-item-system'
-			],
-			'KEYBOARD' => $keyboard,
-		]);
-	}
-
-	public function onFacebookCompilationExportFinishedHandler($event): void
-	{
-		if (
-			!\Bitrix\Main\Loader::includeModule('imopenlines')
-			|| !\Bitrix\Main\Loader::includeModule('im')
-		)
-		{
-			return;
-		}
-		/** @var \Bitrix\Main\Result $result */
-		$queueId = $event->getParameter('QUEUE_ID');
-		$errorProducts = $event->getParameter('ERROR_PRODUCTS');
-		$facebookProductIds = $event->getParameter('FACEBOOK_PRODUCT_IDS');
-		$compilation = CatalogManager::getInstance()->getCompilationByQueueId($queueId);
-		$compilationId = (int)$compilation['ID'];
-		$chatId = (int)$compilation['CHAT_ID'];
-
-		if (!empty($errorProducts))
-		{
-			self::sendErrorFacebookCompilationMessage($compilationId, $chatId, count($errorProducts));
-		}
-		else
-		{
-			self::sendSuccessCompilationMessage($compilationId, $chatId, $facebookProductIds);
-		}
-	}
-
-	private function sendSuccessCompilationMessage($compilationId, $chatId, $facebookProductIds): void
-	{
-		$keyboard = new \Bitrix\Im\Bot\Keyboard();
-		$keyboard->addButton(Array(
-			'TEXT' => Loc::getMessage('SALESCENTER_CONTROLLER_FACEBOOK_COMPILATION_OPEN_LINK'),
-			'FUNCTION' => 'BX.MessengerCommon.openStore({compilationId:' . $compilationId . '})',
-			'BG_COLOR' => '#727475',
-			'TEXT_COLOR' => '#fff',
-			'CONTEXT' => 'DESKTOP',
-		));
-
-		$fieldsMessage = [
-			'TO_CHAT_ID' => $chatId,
-			'FROM_USER_ID' => 0,
-			'SYSTEM' => 'Y',
-			'MESSAGE' => Loc::getMessage('SALESCENTER_CONTROLLER_FACEBOOK_COMPILATION_SENT_SUCCESS'),
-			'MESSAGE_TYPE' => IM_MESSAGE_CHAT,
-			'IMPORTANT_CONNECTOR' => 'Y',
-			'PARAMS' => [
-				'CLASS' => 'bx-messenger-content-item-system'
-			],
-			'KEYBOARD' => $keyboard,
-		];
-
-		$imOlMessage = new \Bitrix\ImOpenLines\SalesCenter\Catalog($chatId);
-		$imOlMessage->setProductIds($facebookProductIds);
-		$imOlMessage->setMessage($fieldsMessage);
-
-		$imOlMessage->send();
-
-		$compilation = CatalogManager::getInstance()->getCompilationById($compilationId);
-		self::onAfterCompilationSent(
-			$compilationId,
-			$compilation['PRODUCT_IDS'],
-			$compilation['DEAL_ID'],
-			'chat' . $chatId
-		);
-	}
-
-	public function sendCompilationByChatAction($compilationId): void
-	{
-		$productCompilation = CatalogManager::getInstance()->getCompilationById((int)$compilationId);
-		if (!$productCompilation)
-		{
-			return;
-		}
-
-		$productIds = $productCompilation['PRODUCT_IDS'];
-		$dealId = $productCompilation['DEAL_ID'];
-		$compilationLink = CatalogManager::getInstance()->getLinkToProductCompilation($compilationId, $productIds)->getData();
-		$dialogId = 'chat' . $productCompilation['CHAT_ID'];
-
-		$result = ImOpenLinesManager::getInstance()->sendCompilationMessage($compilationLink, $dialogId, $dealId);
-		if ($result->isSuccess())
-		{
-			$this->onAfterCompilationSent($compilationId, $productIds, $dealId, $dialogId);
-		}
-		else
-		{
-			$this->addErrors($result->getErrors());
-		}
 	}
 
 	public function createCompilationAction(array $productIds = [], array $options = []): array
@@ -389,14 +212,7 @@ class Compilation extends Base
 
 			if (!isset($options['skipPublicMessage']) || $options['skipPublicMessage'] === 'n')
 			{
-				if (
-					$options['connector'] === 'facebook'
-					&& $options['sendCompilationLinkToFacebook'] !== 'true'
-				)
-				{
-					$this->sendCompilationToFacebook($productIds, $chatId, $compilationId);
-				}
-				elseif ($compilationLink)
+				if ($compilationLink)
 				{
 					$result = ImOpenLinesManager::getInstance()->sendCompilationMessage($compilationLink, $options['dialogId'], $dealId);
 					if ($result->isSuccess())

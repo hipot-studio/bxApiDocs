@@ -105,7 +105,7 @@ final class Manager
 	 * @param array|null $appliedDiscounts List of all discounts for basket, which already applied to basket.
 	 * @return array
 	 */
-	public function getCollectionsByBasket(Basket $basket, array $discounts = null, array $appliedDiscounts = null)
+	public function getCollectionsByBasket(Basket $basket, ?array $discounts = null, ?array $appliedDiscounts = null)
 	{
 		$this->errorCollection->clear();
 

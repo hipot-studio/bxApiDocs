@@ -10,8 +10,6 @@ use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\v2\Integration\JS\ProductForm;
 use Bitrix\Catalog\v2\Integration\JS\ProductForm\BasketItem;
-use Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookFacade;
-use Bitrix\Catalog\v2\IoC\ServiceContainer;
 use Bitrix\Catalog\VatTable;
 use Bitrix\Crm;
 use Bitrix\Crm\Feature;
@@ -22,7 +20,6 @@ use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Rest;
 use Bitrix\Sale;
@@ -36,7 +33,6 @@ use Bitrix\SalesCenter\Component\PaymentSlip;
 use Bitrix\SalesCenter\Component\ReceivePaymentHelper;
 use Bitrix\SalesCenter\Driver;
 use Bitrix\SalesCenter\Integration\Bitrix24Manager;
-use Bitrix\SalesCenter\Integration\CatalogManager;
 use Bitrix\SalesCenter\Integration\CrmManager;
 use Bitrix\SalesCenter\Integration\ImOpenLinesManager;
 use Bitrix\SalesCenter\Integration\LandingManager;
@@ -194,8 +190,6 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			}
 			$arParams['ownerTypeId'] = CCrmOwnerType::Deal;
 		}
-
-		$arParams['compilationId'] ??= $this->request->get('compilationId');
 
 		$arParams['showModeList'] = (int)$arParams['ownerTypeId'] === CCrmOwnerType::Deal;
 
@@ -427,7 +421,6 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		$this->arResult['isFrame'] = Application::getInstance()->getContext()->getRequest()->get('IFRAME') === 'Y';
 		$this->arResult['isCatalogAvailable'] = (\Bitrix\Main\Config\Option::get('salescenter', 'is_catalog_enabled', 'N') === 'Y');
 		$this->arResult['dialogId'] = $this->arParams['dialogId'];
-		$this->arResult['compilation'] = $this->getCompilation();
 		$this->arResult['sessionId'] = $this->arParams['sessionId'];
 		$this->arResult['context'] = $this->getContextFromParams($this->arParams);
 		$this->arResult['orderAddPullTag'] = PullManager::getInstance()->subscribeOnOrderAdd();
@@ -610,7 +603,6 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 				!\CCrmSaleHelper::isWithOrdersMode()
 				|| $this->arParams['templateMode'] === self::TEMPLATE_VIEW_MODE
 				|| count($this->getOrderIdListByEntityId($ownerId, $ownerTypeId)) === 0
-				|| !empty($this->arResult['compilation'])
 			)
 			&&
 			!(
@@ -740,10 +732,6 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 
 		$this->arResult['documentSelector'] = $this->getDocumentSelectorParameters();
 
-		$this->arResult['isAllowedFacebookRegion'] = $this->isFacebookExportAvailable();
-
-		$this->arResult['facebookSettingsPath'] = $this->getFacebookSettingsPath();
-
 		$this->arResult['isTerminalAvailable'] = Crm\Terminal\AvailabilityManager::getInstance()->isAvailable();
 
 		$this->arResult['isSalescenterToolEnabled'] = ToolAvailabilityManager::getInstance()->checkSalescenterAvailability();
@@ -773,58 +761,11 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		$this->arResult['isPhoneConfirmed'] = LandingManager::getInstance()->isPhoneConfirmed();
 	}
 
-	private function getCompilation(): ?array
-	{
-		if ($this->arParams['compilationId'])
-		{
-			$compilation = CatalogManager::getInstance()->getCompilationById($this->arParams['compilationId']);
-			$exportedProducts = $this->getFacebookExportedProduct($compilation['PRODUCT_IDS']);
-			$failProducts = [];
-			foreach ($exportedProducts as $exportedProduct)
-			{
-				if (!empty($exportedProduct['ERROR']))
-				{
-					$failProducts[$exportedProduct['ID']] = $exportedProduct['ERROR'];
-				}
-			}
-			$compilation['FAIL_PRODUCTS'] = $failProducts;
-			$date = $compilation['CREATION_DATE'];
-			$culture = \Bitrix\Main\Context::getCurrent()->getCulture();
-			$shortDateFormat = $culture->getShortDateFormat();
-			$formattedDate = $date->format($shortDateFormat);
-			$compilation['TITLE'] = Loc::getMessage(
-				'SALESCENTER_APP_FACEBOOK_COMPILATION_TITLE',
-				[
-					'#COMPILAITON_DATE#' => $formattedDate,
-				]
-			);
-			$compilation['TITLE_TAB'] = Loc::getMessage(
-				'SALESCENTER_APP_FACEBOOK_COMPILATION_TITLE_TAB',
-				[
-					'#COMPILAITON_DATE#' => $formattedDate,
-				]
-			);
-			if (!$compilation['FAIL_PRODUCTS'])
-			{
-				$this->arResult['templateMode'] = 'view';
-			}
-
-			return $compilation;
-		}
-
-		return null;
-	}
-
 	/**
 	 * @return string
 	 */
 	private function makeTitle(): string
 	{
-		if (!empty($this->arResult['compilation']))
-		{
-			return $this->arResult['compilation']['TITLE'];
-		}
-
 		if (
 			$this->arParams['context'] === SalesCenter\Component\ContextDictionary::DEAL
 			|| $this->arParams['context'] === SalesCenter\Component\ContextDictionary::SMART_INVOICE
@@ -1033,11 +974,6 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	 */
 	private function getBasket(): array
 	{
-		if ($this->arParams['compilationId'])
-		{
-			return $this->getCompilationProducts();
-		}
-
 		if ($this->arParams['templateMode'] === self::TEMPLATE_VIEW_MODE)
 		{
 			return $this->getOrderProducts();
@@ -1049,27 +985,6 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		}
 
 		return [];
-	}
-
-	private function getCompilationProducts(): array
-	{
-		$productIds = $this->arResult['compilation']['PRODUCT_IDS'];
-		$formBuilder = new ProductForm\BasketBuilder();
-
-		foreach ($productIds as $productId)
-		{
-			$item = $formBuilder->loadItemBySkuId($productId);
-
-			if ($item === null)
-			{
-				$item = $formBuilder->createItem();
-			}
-
-			$formBuilder->setItem($item);
-			$item->setSort($formBuilder->count() * 100);
-		}
-
-		return $formBuilder->getFormattedItems();
 	}
 
 	private function getShipmentData(int $contactId, int $personTypeId)
@@ -2481,80 +2396,6 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		return $editor;
 	}
 
-	private function getFacebookSettingsPath(): ?string
-	{
-		if (!$this->arResult['isAllowedFacebookRegion'])
-		{
-			return null;
-		}
-
-		if ($this->arParams['dialogId'] && Main\Loader::includeModule('im'))
-		{
-			$chatId = \Bitrix\Im\Dialog::getChatId($this->arParams['dialogId']);
-			$chat = \Bitrix\Im\Chat::getById($chatId);
-			[$connector, $line] = explode('|', $chat['ENTITY_ID']);
-
-			if ($connector !== 'facebook' || $this->hasCatalogExportAuth())
-			{
-				return null;
-			}
-
-			return
-				Main\Loader::includeModule('bitrix24')
-					? '/contact_center/connector?ID=facebook&LINE=' . $line . '&action-line=create&MENU_TAB=catalog'
-					: '/services/contact_center/connector?ID=facebook&LINE=' . $line . '&action-line=create&MENU_TAB=catalog'
-			;
-		}
-
-		return null;
-	}
-
-	private function getFacebookFacade(): ?FacebookFacade
-	{
-		static $facade = null;
-
-		if ($facade === null)
-		{
-			if (Main\Loader::includeModule('catalog') && Main\Loader::includeModule('crm'))
-			{
-				try
-				{
-					$iblockId = CCrmCatalog::EnsureDefaultExists();
-					$facade = ServiceContainer::get('integration.seo.facebook.facade', compact('iblockId'));
-				}
-				catch (ObjectNotFoundException)
-				{
-				}
-			}
-		}
-
-		return $facade;
-	}
-
-	private function hasCatalogExportAuth(): bool
-	{
-		if ($facebookFacade = $this->getFacebookFacade())
-		{
-			return $facebookFacade->hasAuth();
-		}
-
-		return false;
-	}
-
-	private function isFacebookExportAvailable(): bool
-	{
-		$facebookFacade = $this->getFacebookFacade();
-
-		return $facebookFacade && $facebookFacade->isExportAvailable();
-	}
-
-	private function getFacebookExportedProduct(array $productIds): array
-	{
-		$facebookFacade = $this->getFacebookFacade();
-
-		return $facebookFacade ? $facebookFacade->getExportedProducts($productIds) : [];
-	}
-
 	// region Actions
 
 	/**
@@ -2735,13 +2576,5 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			$optionsName,
 			[]
 		);
-	}
-
-	public function getFacebookSettingsPathAction($dialogId): ?string
-	{
-		$this->arParams['dialogId'] = $dialogId;
-		$this->arResult['isAllowedFacebookRegion'] = $this->isFacebookExportAvailable();
-
-		return $this->getFacebookSettingsPath();
 	}
 }

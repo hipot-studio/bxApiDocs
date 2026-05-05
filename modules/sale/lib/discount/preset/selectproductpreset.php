@@ -151,7 +151,7 @@ abstract class SelectProductPreset extends BasePreset
 		return $htmlResult;
 	}
 
-	protected function getSectionsFromConditions(array $conditions = null)
+	protected function getSectionsFromConditions(?array $conditions = null)
 	{
 		if(!$conditions)
 		{
@@ -171,7 +171,7 @@ abstract class SelectProductPreset extends BasePreset
 		return array_unique($sectionIds);
 	}
 
-	protected function getProductsFromConditions(array $conditions = null)
+	protected function getProductsFromConditions(?array $conditions = null)
 	{
 		if(!$conditions)
 		{

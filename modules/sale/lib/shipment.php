@@ -187,7 +187,7 @@ class Shipment extends Internals\CollectableEntity implements IBusinessValueProv
 	 * @throws Main\ArgumentException
 	 * @throws Main\SystemException
 	 */
-	public static function create(ShipmentCollection $collection, Delivery\Services\Base $service = null)
+	public static function create(ShipmentCollection $collection, ?Delivery\Services\Base $service = null)
 	{
 		$emptyService = Delivery\Services\Manager::getById(Delivery\Services\EmptyDeliveryService::getEmptyDeliveryServiceId());
 		$fields = [
@@ -1261,7 +1261,7 @@ class Shipment extends Internals\CollectableEntity implements IBusinessValueProv
 	 * @throws Main\ArgumentOutOfRangeException
 	 * @throws Main\SystemException
 	 */
-	public static function createSystem(ShipmentCollection $collection, Delivery\Services\Base $deliveryService = null)
+	public static function createSystem(ShipmentCollection $collection, ?Delivery\Services\Base $deliveryService = null)
 	{
 		$shipment = static::create($collection, $deliveryService);
 		$shipment->markSystem();

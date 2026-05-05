@@ -22,7 +22,7 @@ class InnerHandler extends PaySystem\BaseServiceHandler implements PaySystem\IRe
 	 * @return PaySystem\ServiceResult
 	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		$result = new PaySystem\ServiceResult();
 

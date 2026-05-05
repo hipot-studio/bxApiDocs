@@ -8,6 +8,7 @@ use Bitrix\AI\Tuning;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
 
 class Settings
 {
@@ -54,7 +55,12 @@ class Settings
 		{
 			$items[self::TUNING_CODE_TEXT_PRODUCT_CARD] = [
 				'group' => Tuning\Defaults::GROUP_TEXT,
-				'header' => Loc::getMessage('CATALOG_AI_SETTINGS_ALLOW_TEXT_PROSUCT_CARD_COPILOT_DESC'),
+				'header' => Loc::getMessage(
+					'CATALOG_AI_SETTINGS_ALLOW_TEXT_PRODUCT_CARD_COPILOT_DESC',
+					[
+						'#COPILOT_NAME#' => self::getCopilotName(),
+					],
+				),
 				'title' => Loc::getMessage('CATALOG_AI_SETTINGS_COPILOT_PRODUCT_CARD_TITLE'),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
@@ -68,5 +74,10 @@ class Settings
 		]);
 
 		return $result;
+	}
+
+	private static function getCopilotName(): string
+	{
+		return Loader::includeModule('ui') ? (new CopilotNameService())->getCopilotName() : 'CoPilot';
 	}
 }

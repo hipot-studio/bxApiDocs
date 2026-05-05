@@ -78,7 +78,7 @@ class Discount extends DiscountBase
 	 * @param Shipment $shipment							Current shipment.
 	 * @return void
 	 */
-	public function setCalculateShipments(Shipment $shipment = null)
+	public function setCalculateShipments(?Shipment $shipment = null)
 	{
 		$this->shipment = $shipment;
 	}

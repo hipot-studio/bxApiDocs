@@ -438,7 +438,7 @@ abstract class ExportOneCPackage extends ExportOneCBase
 	 * @param OrderImport $orderImport
 	 * @throws ArgumentException
 	 */
-	protected function prepareEntityFieldsBusinessValue(ImportBase $item, OrderImport $orderImport=null)
+	protected function prepareEntityFieldsBusinessValue(ImportBase $item, ?OrderImport $orderImport = null)
 	{
 		if(!($item instanceof OrderImport || $item instanceof ShipmentImport || $item instanceof PaymentImport || $item instanceof UserImportBase))
 			throw new ArgumentException("Entity must be instanceof OrderImport or ShipmentImport or PaymentImport or ProfileImport");

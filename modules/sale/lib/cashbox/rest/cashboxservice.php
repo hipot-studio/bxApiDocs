@@ -517,7 +517,7 @@ class CashboxService extends RestService
 		}
 	}
 
-	private static function hasAccessToCashbox(Cashbox $cashbox, string $appId = null): bool
+	private static function hasAccessToCashbox(Cashbox $cashbox, ?string $appId = null): bool
 	{
 		$handler = $cashbox->getField('HANDLER');
 		if (self::isRestHandler($handler))

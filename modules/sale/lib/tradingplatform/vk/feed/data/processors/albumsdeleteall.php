@@ -19,7 +19,7 @@ class AlbumsDeleteAll extends DataProcessor
 	 *
 	 * @return bool - return true if OK or if errors it not critical. Expression if timer is over
 	 */
-	public function process($data = NULL, Timer $timer = NULL)
+	public function process($data = NULL, ?Timer $timer = NULL)
 	{
 		$apiHelper = new Vk\Api\ApiHelper($this->exportId);
 		$albumsFromVk = $apiHelper->getALbumsFromVk($this->vkGroupId, false);

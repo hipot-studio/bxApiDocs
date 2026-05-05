@@ -8,7 +8,7 @@ use Bitrix\Sale\Exchange\Integration\CRM\EntityType;
 
 class Factory
 {
-	static public function create($type, array $values = null)
+	static public function create($type, ?array $values = null)
 	{
 		if($type == EntityType::ACTIVITY)
 		{

@@ -15,6 +15,8 @@ class BillingSynchronizationService
 	private const LOCK_NAME = 'baas_sync_where_appropriate';
 	private const LOCK_LIMIT = 0;
 
+	private const SYNC_OFFSET_SEC = 3600;
+
 	private PurchaseService $purchaseService;
 
 	private static bool $synchronized = false;
@@ -100,7 +102,7 @@ class BillingSynchronizationService
 		}
 
 		$lastSyncDate = strtotime(date('Y-m-d', $lastTimeToSync));
-		$nowDate = strtotime(date('Y-m-d', $now - $this->configs->getSyncDelta()));
+		$nowDate = strtotime(date('Y-m-d', $now - self::SYNC_OFFSET_SEC - $this->configs->getSyncDelta()));
 
 		return $lastSyncDate < $nowDate;
 	}

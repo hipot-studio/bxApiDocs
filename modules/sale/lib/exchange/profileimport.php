@@ -232,7 +232,7 @@ class ProfileImport extends UserImportBase
      * @param array|null $params
      * @return Sale\Result
      */
-    public function delete(array $params = null)
+    public function delete(?array $params = null)
     {
         return new Sale\Result();
     }

@@ -14,7 +14,7 @@ if ($params["PAYED"] != "Y")
 		<tr>
 			<td align="center">
 				<?
-					$itemName = "Invoice ".$params["PAYMENT_ID"]." (".$params["PAYMENT_DATE_INSERT"].")";
+					$itemName = 'Invoice ' . $params['PAYMENT_ID'] . ' ' . $params['PAYMENT_DATE_INSERT'];
 				?>
 				<form action="<?=$params['URL']?>" method="post">
 					<input type="hidden" name="cmd" value="_xclick">

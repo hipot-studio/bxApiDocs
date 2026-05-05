@@ -23,8 +23,8 @@ class Vk extends Platform
 	private $api = array();
 	private $executer = array();
 
-	const OAUTH_URL = "https://oauth.vk.ru/authorize";
-	const TOKEN_URL = "https://oauth.vk.ru/access_token";
+	const OAUTH_URL = "https://id.vk.ru/authorize";
+	const TOKEN_URL = "https://id.vk.ru/oauth2/auth";
 	const VK_URL = 'https://vk.ru/';
 	const VK_URL__MARKET_PREFIX = 'market-';
 	const VK_URL__ALBUM_PREFIX = '?section=album_';
@@ -600,68 +600,88 @@ class Vk extends Platform
 			return false;
 	}
 
+	/*
+	 * @see https://id.vk.com/about/business/go/docs/ru/vkid/latest/vk-id/connection/api-description#Required-parameters-authorize
+	 */
+	public function generateState(): string
+	{
+		return bin2hex(random_bytes(16));
+	}
+
+	/*
+	 * @see https://datatracker.ietf.org/doc/html/rfc7636#section-4.1
+	 */
+	public function generateCodeVerifier(): string
+	{
+		return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+	}
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7636#section-4.2
+	 */
+	private function generateCodeChallenge(string $codeVerifier): string
+	{
+		return rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
+	}
 
 	/**
 	 * Create URL for link to authorize in VK Oauth server
 	 *
-	 * @param $exportId
 	 * @param $redirectUrl
+	 * @param $vkSettings
 	 * @return bool|string
 	 */
-	public function getAuthUrl($exportId, $redirectUrl)
+	public function getAuthUrl($redirectUrl, $vkSettings)
 	{
-		$settings = $this->getSettings();
-		$urlParams = array();
+		$urlParams = [];
 
-		if (isset($settings[$exportId]["VK_SETTINGS"]["APP_ID"]) && !empty($settings[$exportId]["VK_SETTINGS"]["APP_ID"]))
-			$urlParams['client_id'] = $settings[$exportId]["VK_SETTINGS"]["APP_ID"];
-		else return false;
+		if (
+			empty($redirectUrl)
+			|| empty($vkSettings['VK_SETTINGS']['APP_ID'])
+		)
+		{
+			return false;
+		}
 
-		if (!empty($redirectUrl))
-			$urlParams['redirect_uri'] = self::formatRedirectUrl($redirectUrl);
-		else return false;
+		$urlParams["response_type"] = 'code';
+		$urlParams['client_id'] = $vkSettings['VK_SETTINGS']['APP_ID'];
+		$urlParams['redirect_uri'] = self::formatRedirectUrl($redirectUrl);
+		$urlParams['state'] = $vkSettings['OAUTH']['STATE'];
+		$urlParams['scope'] = 'market photos groups';
+		$urlParams['code_challenge'] = $this->generateCodeChallenge($vkSettings['OAUTH']['CODE_VERIFIER']);
+		$urlParams['code_challenge_method'] = 'S256';
 
-		$urlParams["display"] = "page";
-		$urlParams["scope"] = self::getScope(array("market", "photos", "offline", "wall", "docs", "groups"));
-		$urlParams["response_type"] = "code";
-		$urlParams["v"] = Api::$apiVersion;
-
-		return self::OAUTH_URL . "?" . http_build_query($urlParams);
+		return self::OAUTH_URL . '?' . http_build_query($urlParams);
 	}
 
 
-	/**
-	 * Create link to getting access token
-	 *
-	 * @param $exportId
-	 * @param $redirectUrl
-	 * @param $code
-	 * @return bool|string
-	 */
-	public function getTokenUrl($exportId, $redirectUrl, $code)
+	public function getTokenUrl(): string
 	{
-		$settings = $this->getSettings($exportId);
-		$urlParams = array();
-
-		if (isset($settings["VK_SETTINGS"]["APP_ID"]) && !empty($settings["VK_SETTINGS"]["APP_ID"]))
-			$urlParams['client_id'] = $settings["VK_SETTINGS"]["APP_ID"];
-		else return false;
-
-		if (isset($settings["VK_SETTINGS"]["SECRET"]) && !empty($settings["VK_SETTINGS"]["SECRET"]))
-			$urlParams['client_secret'] = $settings["VK_SETTINGS"]["SECRET"];
-		else return false;
-
-		if (!empty($redirectUrl))
-			$urlParams['redirect_uri'] = self::formatRedirectUrl($redirectUrl);
-		else return false;
-
-		if (!empty($code))
-			$urlParams['code'] = $code;
-		else return false;
-
-		return self::TOKEN_URL . "?" . http_build_query($urlParams);
+		return self::TOKEN_URL;
 	}
 
+	public function getTokenParams($redirectUrl, $vkSettings): ?array
+	{
+		if (
+			empty($redirectUrl)
+			|| empty($vkSettings['VK_SETTINGS']['APP_ID'])
+			|| empty($vkSettings['VK_SETTINGS']['SECRET'])
+			|| empty($vkSettings['OAUTH']['CODE'])
+		)
+		{
+			return null;
+		}
+
+		return [
+			'grant_type' => 'authorization_code',
+			'code' => $vkSettings['OAUTH']['CODE'],
+			'client_id' => $vkSettings['VK_SETTINGS']['APP_ID'],
+			'client_secret' => $vkSettings['VK_SETTINGS']['SECRET'],
+			'redirect_uri' => self::formatRedirectUrl($redirectUrl),
+			'code_verifier' => $vkSettings['OAUTH']['CODE_VERIFIER'],
+			'device_id' => $vkSettings['OAUTH']['DEVICE_ID'],
+		];
+	}
 
 	/**
 	 * Decoding url and adding protocol

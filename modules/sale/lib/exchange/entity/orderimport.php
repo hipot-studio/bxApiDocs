@@ -237,7 +237,7 @@ class OrderImport extends EntityImport
      * @param array|null $params
      * @return Sale\Result
      */
-    public function delete(array $params = null)
+    public function delete(?array $params = null)
     {
         return new Sale\Result();
     }

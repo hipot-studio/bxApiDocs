@@ -2036,7 +2036,7 @@ class CSaleExport
 		return $ec_bufer;
 	}
 
-	public static function OutputXmlDocumentsByType($typeDocument, $xmlResult, $arOrder, $documents, \Bitrix\Sale\Order $order=null, $agentParams, $arProp, $locationStreetPropertyValue)
+	public static function OutputXmlDocumentsByType($typeDocument, $xmlResult, $arOrder, $documents, ?\Bitrix\Sale\Order $order=null, $agentParams, $arProp, $locationStreetPropertyValue)
 	{
 		if(is_array($documents) && count($documents)>0)
 		{
@@ -3264,7 +3264,7 @@ class CSaleExport
 	}
 
 	/** @deprecated */
-	private static function logError($itemId, $message, Bitrix\Main\Result $result = null)
+	private static function logError($itemId, $message, ?Bitrix\Main\Result $result = null)
 	{
 		if ($result)
 			$message .= "\n".implode("\n", $result->getErrorMessages());

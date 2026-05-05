@@ -13,7 +13,7 @@ class SberbankHandler extends PaySystem\BaseServiceHandler
 	 * @param Request|null $request
 	 * @return PaySystem\ServiceResult
 	 */
-	public function initiatePay(Sale\Payment $payment, Request $request = null)
+	public function initiatePay(Sale\Payment $payment, ?Request $request = null)
 	{
 		return $this->showTemplate($payment, "template");
 	}

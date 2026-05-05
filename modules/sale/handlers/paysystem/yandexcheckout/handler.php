@@ -108,7 +108,7 @@ class YandexCheckoutHandler
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		if ($request === null)
 		{
@@ -1334,7 +1334,7 @@ class YandexCheckoutHandler
 	 * @param string $action
 	 * @return string
 	 */
-	protected function getUrl(Payment $payment = null, $action)
+	protected function getUrl(?Payment $payment = null, $action)
 	{
 		$url = parent::getUrl($payment, $action);
 		if ($payment !== null &&
@@ -1456,7 +1456,7 @@ class YandexCheckoutHandler
 	 * @throws Main\ObjectException
 	 * @throws Main\SystemException
 	 */
-	public function repeatRecurrent(Payment $payment, Request $request = null): PaySystem\ServiceResult
+	public function repeatRecurrent(Payment $payment, ?Request $request = null): PaySystem\ServiceResult
 	{
 		if ($request === null)
 		{
@@ -1471,7 +1471,7 @@ class YandexCheckoutHandler
 	 * @param Request|null $request
 	 * @return PaySystem\ServiceResult
 	 */
-	public function cancelRecurrent(Payment $payment, Request $request = null): PaySystem\ServiceResult
+	public function cancelRecurrent(Payment $payment, ?Request $request = null): PaySystem\ServiceResult
 	{
 		return (new PaySystem\ServiceResult());
 	}

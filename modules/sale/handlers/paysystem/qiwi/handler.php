@@ -19,7 +19,7 @@ class QiwiHandler extends PaySystem\ServiceHandler implements PaySystem\ICheckab
 	 * @param Request|null $request
 	 * @return PaySystem\ServiceResult
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		if ($request === null)
 		{
@@ -208,7 +208,7 @@ class QiwiHandler extends PaySystem\ServiceHandler implements PaySystem\ICheckab
 	 * @param Payment $payment
 	 * @return bool
 	 */
-	protected function isTestMode(Payment $payment = null)
+	protected function isTestMode(?Payment $payment = null)
 	{
 		return false;
 	}

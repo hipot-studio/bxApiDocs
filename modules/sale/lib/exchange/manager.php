@@ -59,7 +59,7 @@ final class Manager
      * @throws ArgumentOutOfRangeException
 	 * @internal
      */
-	static public function registerInstance($typeId, ISettings $settings, ICollision $collision = null, ICriterion $criterion = null)
+	static public function registerInstance($typeId, ISettings $settings, ?ICollision $collision = null, ?ICriterion $criterion = null)
     {
         if(!is_int($typeId))
         {

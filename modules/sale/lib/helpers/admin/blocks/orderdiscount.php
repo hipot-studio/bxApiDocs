@@ -37,7 +37,7 @@ class OrderDiscount
 		return $list;
 	}
 
-	static public function getEditPageUrlParams(array $items = null)
+	static public function getEditPageUrlParams(?array $items = null)
 	{
 		return null;
 	}

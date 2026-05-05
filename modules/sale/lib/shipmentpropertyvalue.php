@@ -78,9 +78,9 @@ class ShipmentPropertyValue extends EntityPropertyValue
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
 	protected static function createPropertyValueObject(
-		array $property = null,
-		array $value = [], array
-		$relation = null
+		?array $property = null,
+		array $value = [],
+		?array $relation = null
 	): EntityPropertyValue
 	{
 		$registry = Registry::getInstance(static::getRegistryType());

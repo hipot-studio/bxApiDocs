@@ -141,7 +141,7 @@ class Controller extends Engine\Controller
 		}
 	}
 
-	public function getBuilder(SettingsContainer $settings=null)
+	public function getBuilder(?SettingsContainer $settings = null)
 	{
 		$settings = $settings === null? $this->getSettingsContainerDefault():$settings;
 

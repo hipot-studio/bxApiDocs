@@ -95,7 +95,7 @@ class Configurable extends Base
 		return $result;
 	}
 
-	protected function calculateConcrete(\Bitrix\Sale\Shipment $shipment = null)
+	protected function calculateConcrete(?\Bitrix\Sale\Shipment $shipment = null)
 	{
 		$result = new CalculationResult;
 		$price = $this->config["MAIN"]["PRICE"];

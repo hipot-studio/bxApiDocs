@@ -826,7 +826,7 @@ abstract class ProviderBase
 	 * @return array
 	 * @throws NotSupportedException
 	 */
-	public static function getProductAvailableQuantity(Basket $basketCollection, BasketItem $refreshItem = null)
+	public static function getProductAvailableQuantity(Basket $basketCollection, ?BasketItem $refreshItem = null)
 	{
 
 		static $proxyProductAvailableQuantity = array();
@@ -980,7 +980,7 @@ abstract class ProviderBase
 	 * @throws NotSupportedException
 	 * @throws ObjectNotFoundException
 	 */
-	public static function getProductData(BasketItemCollection $basketCollection, array $select = array(), BasketItem $refreshItem = null)
+	public static function getProductData(BasketItemCollection $basketCollection, array $select = array(), ?BasketItem $refreshItem = null)
 	{
 		$resultList = array();
 
@@ -2589,7 +2589,7 @@ abstract class ProviderBase
 	 *
 	 * @return array
 	 */
-	protected static function makeArrayFromBasketCollection(BasketItemCollection $basketCollection, BasketItem $refreshItem = null)
+	protected static function makeArrayFromBasketCollection(BasketItemCollection $basketCollection, ?BasketItem $refreshItem = null)
 	{
 		$basketList = array();
 		/** @var BasketItem $basketItem */

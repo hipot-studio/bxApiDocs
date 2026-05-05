@@ -1402,7 +1402,7 @@ class OrderCompatibility extends Internals\EntityCompatibility
 	 * @return Sale\Result
 	 * @throws Main\ObjectNotFoundException
 	 */
-	public static function fillShipmentItemCollectionFromRequest(Sale\ShipmentItemCollection $shipmentItemCollection, array $storeData, Sale\Basket $basket = null)
+	public static function fillShipmentItemCollectionFromRequest(Sale\ShipmentItemCollection $shipmentItemCollection, array $storeData, ?Sale\Basket $basket = null)
 	{
 		$result = new Sale\Result();
 

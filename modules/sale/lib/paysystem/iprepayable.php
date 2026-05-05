@@ -7,7 +7,7 @@ use Bitrix\Sale\Payment;
 
 interface IPrePayable
 {
-	public function initPrePayment(Payment $payment = null, Request $request);
+	public function initPrePayment(?Payment $payment = null, Request $request);
 
 	public function getProps();
 

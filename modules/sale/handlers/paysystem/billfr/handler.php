@@ -22,7 +22,7 @@ class BillFrHandler extends BillHandler
 	 * @param Request|null $request
 	 * @return array
 	 */
-	protected function getPreparedParams(Sale\Payment $payment, Request $request = null)
+	protected function getPreparedParams(Sale\Payment $payment, ?Request $request = null)
 	{
 		$params = parent::getPreparedParams($payment, $request);
 		$params['DATE_BILL'] = $payment->getField('DATE_BILL');

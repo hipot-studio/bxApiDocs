@@ -152,7 +152,7 @@ class BaseService extends \IRestService
 		return $data;
 	}
 
-	protected static function hasAccessToDelivery(array $deliveryData, string $appId = null): bool
+	protected static function hasAccessToDelivery(array $deliveryData, ?string $appId = null): bool
 	{
 		$className = $deliveryData['CLASS_NAME'];
 		if (self::isRestHandler($className))

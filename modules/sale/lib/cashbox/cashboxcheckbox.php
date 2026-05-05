@@ -85,8 +85,14 @@ class CashboxCheckbox extends Cashbox implements IPrintImmediately, ICheckable
 
 		$isReturn = self::isCheckReturn($check);
 
-		$goods = [];
+		$items = [];
 		foreach ($checkData['items'] as $item)
+		{
+			array_push($items, ...$this->splitItemForPriceQuantityApi($item));
+		}
+
+		$goods = [];
+		foreach ($items as $item)
 		{
 			$goodEntry = [];
 
@@ -102,10 +108,11 @@ class CashboxCheckbox extends Cashbox implements IPrintImmediately, ICheckable
 			}
 
 			$vat = $this->getValueFromSettings('VAT', $item['vat']);
+			$itemCurrency = $item['currency'] ?? '';
 			$goodEntry['good'] = [
 				'code' => mb_substr($code, 0, static::MAX_CODE_LENGTH),
 				'name' => mb_substr($item['name'], 0, static::MAX_NAME_LENGTH),
-				'price' => PriceMaths::roundPrecision($item['price'] * static::PRICE_MULTIPLIER),
+				'price' => round($this->roundMoney((float)$item['price'], $itemCurrency) * static::PRICE_MULTIPLIER),
 			];
 
 			if ($vat && $vat !== static::CODE_NO_VAT)
@@ -134,9 +141,10 @@ class CashboxCheckbox extends Cashbox implements IPrintImmediately, ICheckable
 		foreach ($checkData['payments'] as $payment)
 		{
 			$paymentType = $payment['type'] === Check::PAYMENT_TYPE_CASH ? 'CASH' : 'CARD';
+			$paymentCurrency = $payment['currency'] ?? '';
 			$paymentEntry = [
 				'type' => $paymentType,
-				'value' => PriceMaths::roundPrecision($payment['sum'] * static::PRICE_MULTIPLIER),
+				'value' => round($this->roundMoney((float)$payment['sum'], $paymentCurrency) * static::PRICE_MULTIPLIER),
 			];
 			$payments[] = $paymentEntry;
 		}

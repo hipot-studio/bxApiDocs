@@ -121,7 +121,7 @@ class PaymentImport extends EntityImport
      * @param array|null $params
      * @return Sale\Result
      */
-    public function delete(array $params = null)
+    public function delete(?array $params = null)
     {
         /** @var Payment $entity */
         $entity = $this->getEntity();

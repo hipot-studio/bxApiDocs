@@ -719,7 +719,7 @@ class OrderShipment
 		);
 	}
 
-	public static function getExtraServiceEditControl($extraService, $index, $view = false, Shipment $shipment = null)
+	public static function getExtraServiceEditControl($extraService, $index, $view = false, ?Shipment $shipment = null)
 	{
 		ob_start();
 		echo '<table border="0" cellspacing="0" cellpadding="0" width="100%" class="adm-detail-content-table edit-table" id="BLOCK_EXTRA_SERVICE_'.$index.'">';

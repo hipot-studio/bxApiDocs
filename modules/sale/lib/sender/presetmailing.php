@@ -8,7 +8,7 @@ Loc::loadMessages(__FILE__);
 
 class PresetMailing
 {
-	protected static function getMailTemplate(array $params = null)
+	protected static function getMailTemplate(?array $params = null)
 	{
 		if(!isset($params['TITLE']))
 		{

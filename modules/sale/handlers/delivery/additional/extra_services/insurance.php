@@ -22,7 +22,7 @@ class Insurance extends Base
 		return Loc::getMessage('SALE_DLVRS_ADD_ESI_TITLE');
 	}
 
-	public function getCostShipment(Shipment $shipment = null)
+	public function getCostShipment(?Shipment $shipment = null)
 	{
 		if($this->value != "Y")
 			return 0;
@@ -30,7 +30,7 @@ class Insurance extends Base
 		return $this->getPriceShipment($shipment);
 	}
 
-	protected function getShipmentProductsPrice(Shipment $shipment = null)
+	protected function getShipmentProductsPrice(?Shipment $shipment = null)
 	{
 		$result = 0;
 
@@ -70,7 +70,7 @@ class Insurance extends Base
 		return true;
 	}
 
-	public function getPriceShipment(Shipment $shipment = null)
+	public function getPriceShipment(?Shipment $shipment = null)
 	{
 		if(!isset($this->params["FEE"]))
 			return 0;

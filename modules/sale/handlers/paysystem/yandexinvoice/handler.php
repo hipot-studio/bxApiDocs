@@ -24,7 +24,7 @@ class YandexInvoiceHandler extends PaySystem\ServiceHandler
 	 * @param Request|null $request
 	 * @return PaySystem\ServiceResult
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		$errors = '';
 
@@ -461,7 +461,7 @@ class YandexInvoiceHandler extends PaySystem\ServiceHandler
 	 * @param Payment|null $payment
 	 * @return bool
 	 */
-	protected function isTestMode(Payment $payment = null)
+	protected function isTestMode(?Payment $payment = null)
 	{
 		return $this->getBusinessValue($payment, 'PS_IS_TEST') == 'Y';
 	}

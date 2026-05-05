@@ -742,7 +742,7 @@ abstract class BasketBase extends BasketItemCollection
 	 * @param RefreshStrategy|null $strategy
 	 * @return Result
 	 */
-	public function refresh(RefreshStrategy $strategy = null)
+	public function refresh(?RefreshStrategy $strategy = null)
 	{
 		$isStartField = $this->isStartField();
 
@@ -998,7 +998,7 @@ abstract class BasketBase extends BasketItemCollection
 	 *
 	 * @return BasketItemCollection
 	 */
-	public function createClone(\SplObjectStorage $cloneEntity = null)
+	public function createClone(?\SplObjectStorage $cloneEntity = null)
 	{
 		if ($cloneEntity === null)
 		{
@@ -1109,7 +1109,7 @@ abstract class BasketBase extends BasketItemCollection
 	 * @return Result
 	 * @throws Main\ArgumentNullException
 	 */
-	public function refreshData($select = array(), BasketItemBase $refreshItem = null)
+	public function refreshData($select = array(), ?BasketItemBase $refreshItem = null)
 	{
 		if ($refreshItem !== null)
 		{

@@ -14,7 +14,7 @@ abstract class DataProcessor
 	protected $vkGroupId;
 	protected $exportId;
 
-	abstract public function process($data, Timer $timer = NULL);
+	abstract public function process($data, ?Timer $timer = NULL);
 
 	/**
 	 * DataProcessor constructor.

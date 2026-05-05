@@ -21,7 +21,7 @@ class AuthorizeHandler extends PaySystem\BaseServiceHandler
 	 * @param Request|null $request
 	 * @return ServiceResult
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		if ($request === null)
 		{

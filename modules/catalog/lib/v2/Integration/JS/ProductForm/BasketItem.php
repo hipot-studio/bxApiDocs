@@ -23,7 +23,6 @@ class BasketItem
 {
 	private const DISCOUNT_TYPE_MONETARY = 1;
 	private const DISCOUNT_TYPE_PERCENTAGE = 2;
-	private const BRAND_PROPERTY_CODE = 'BRAND_FOR_FACEBOOK';
 
 	private $fields;
 	private $detailUrlType;
@@ -64,7 +63,6 @@ class BasketItem
 			'taxIncluded' => 'N',
 			'additionalFields' => [],
 			'properties' => [],
-			'brands' => '',
 			'weight' => 0,
 			'dimensions' => [],
 		];
@@ -204,7 +202,6 @@ class BasketItem
 		$this->setName($this->sku->getName());
 		$this->setType($this->sku->getType());
 		$this->fillProperties();
-		$this->fillBrands();
 		$this->fillMeasureFields();
 		$this->fillTaxFields();
 		$this->fillPriceFields();
@@ -225,41 +222,6 @@ class BasketItem
 		}
 
 		$this->fields['properties'] = $properties;
-	}
-
-	private function fillBrands(): void
-	{
-		/** @var BaseProduct $product */
-		$product = $this->sku->getParent();
-		if (!$product)
-		{
-			return;
-		}
-
-		$property = $product->getPropertyCollection()->findByCodeLazy(self::BRAND_PROPERTY_CODE);
-		if (!$property)
-		{
-			return;
-		}
-
-		$userType = \CIBlockProperty::GetUserType($property->getUserType());
-		$userTypeMethod = $userType['GetUIEntityEditorProperty'];
-		$propertySettings = $property->getSettings();
-		$propertyValues = $property->getPropertyValueCollection()->getValues();
-		$description = $userTypeMethod($propertySettings, $propertyValues);
-		$propertyBrandItems = $description['data']['items'];
-
-		$selectedBrandItems = [];
-
-		foreach ($propertyBrandItems as $propertyBrandItem)
-		{
-			if (in_array($propertyBrandItem['VALUE'], $propertyValues, true))
-			{
-				$selectedBrandItems[] = $propertyBrandItem;
-			}
-		}
-
-		$this->fields['brands'] = $selectedBrandItems;
 	}
 
 	private function getFormattedProperty(Property $property): ?array

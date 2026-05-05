@@ -1727,7 +1727,7 @@ class RestService extends \IRestService
 		return true;
 	}
 
-	private static function hasAccessToPaySystem(array $paySystemData, string $appId = null): bool
+	private static function hasAccessToPaySystem(array $paySystemData, ?string $appId = null): bool
 	{
 		$handlerCode = $paySystemData['ACTION_FILE'];
 		if (Manager::isRestHandler($handlerCode))

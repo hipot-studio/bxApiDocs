@@ -32,7 +32,7 @@ class PaymentCollection extends Internals\EntityCollection
 	 * @param Service|null $service
 	 * @return Payment
 	 */
-	public function createItem(Service $service = null)
+	public function createItem(?Service $service = null)
 	{
 		/** @var Payment $paymentClassName */
 		$paymentClassName = static::getItemCollectionClassName();

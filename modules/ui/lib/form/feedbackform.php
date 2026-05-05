@@ -53,11 +53,16 @@ class FeedbackForm
 		$presets['b24_plan'] = $this->isCloud
 			? \CBitrix24::getLicenseType()
 			: implode(', ', Application::getInstance()->getLicense()->getCodes());
-		$presets['b24_plan_date_to'] = (
-		$this->isCloud
-			? ConvertTimeStamp(Option::get('main', '~controller_group_till', time()))
-			: Application::getInstance()->getLicense()->getExpireDate()?->getTimestamp()
-		);
+
+		if ($this->isCloud)
+		{
+			$presets['b24_plan_date_to'] = ConvertTimeStamp(Option::get('main', '~controller_group_till', time()));
+		}
+		else
+		{
+			$date = Application::getInstance()->getLicense()->getExpireDate();
+			$presets['b24_plan_date_to'] = $date ? $date->toString() : '';
+		}
 
 		if (
 			!$this->isCloud

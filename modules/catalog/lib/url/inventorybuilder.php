@@ -42,6 +42,7 @@ class InventoryBuilder extends ShopBuilder
 			.'#ENTITY_ID#/'
 			.'?#BASE_PARAMS#'
 			.'&ID=#ENTITY_ID#'
+			.'&publicSidePanel=Y'
 			.'#ADDITIONAL_PARAMETERS#';
 		$this->urlTemplates[self::PAGE_SECTION_COPY] = $this->urlTemplates[self::PAGE_SECTION_DETAIL]
 			.$this->getCopyAction();

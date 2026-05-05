@@ -95,7 +95,7 @@ final class Manager
 	 */
 	private static function getOrderBuilder(
 		array $settings = [],
-		string $basketBuilderClass = null
+		?string $basketBuilderClass = null
 	): OrderBuilder
 	{
 		$builder = new OrderBuilder(new SettingsContainer($settings));

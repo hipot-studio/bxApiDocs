@@ -5287,7 +5287,7 @@ abstract class DiscountBase
 	 *
 	 * @return string
 	 */
-	protected static function getInstanceIndexByBasket(BasketBase $basket, Context\BaseContext $context = null)
+	protected static function getInstanceIndexByBasket(BasketBase $basket, ?Context\BaseContext $context = null)
 	{
 		if (!$context)
 			return '0|'.$basket->getFUserId(false).'|'.$basket->getSiteId();

@@ -433,7 +433,7 @@ class BasketCompatibility extends Internals\EntityCompatibility
 	 * @throws Main\ObjectException
 	 * @throws Main\ObjectNotFoundException
 	 */
-	private function setChildBundleCollection(Sale\Basket $basket, array $basketItemList, Sale\BasketItem $externalParentBasketItem = null)
+	private function setChildBundleCollection(Sale\Basket $basket, array $basketItemList, ?Sale\BasketItem $externalParentBasketItem = null)
 	{
 		$order = null;
 

@@ -78,14 +78,23 @@ class PropertyValue extends ControllerBase
 
 		$order = $builder->getOrder();
 
-		$r = $order->save();
-		if(!$r->isSuccess())
+		$verifyResult = $order->getPropertyCollection()->verify();
+		if (!$verifyResult->isSuccess())
 		{
-			$this->addErrors($r->getErrors());
+			$this->addErrors($verifyResult->getErrors());
+
 			return null;
 		}
 
-		return ['PROPERTY_VALUES'=>$this->toArray($order)['ORDER']['PROPERTY_VALUES']];
+		$saveResult = $order->save();
+		if(!$saveResult->isSuccess())
+		{
+			$this->addErrors($saveResult->getErrors());
+
+			return null;
+		}
+
+		return ['PROPERTY_VALUES' => $this->toArray($order)['ORDER']['PROPERTY_VALUES']];
 	}
 
 	public function deleteAction(Sale\PropertyValue $propertyValue)

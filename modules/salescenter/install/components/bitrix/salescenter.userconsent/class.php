@@ -2,6 +2,9 @@
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
+use Bitrix\Main\Errorable;
+use Bitrix\Main\ErrorableImplementation;
+use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
@@ -9,12 +12,16 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Crm\Integration\UserConsent;
 use Bitrix\Main\Web\Json;
+use Bitrix\SalesCenter\Integration\SaleManager;
+use Bitrix\Main\Error;
 
 /**
  * Class SalesCenterUserConsent
  */
-class SalesCenterUserConsent extends CBitrixComponent implements Controllerable
+class SalesCenterUserConsent extends CBitrixComponent implements Controllerable, Errorable
 {
+	use ErrorableImplementation;
+
 	/**
 	 * @deprecated
 	 * @see SALESCENTER_USER_CONSENTS
@@ -29,6 +36,12 @@ class SalesCenterUserConsent extends CBitrixComponent implements Controllerable
 	const SALESCENTER_USER_CONSENT_ACTIVE = "~SALESCENTER_USER_CONSENT_ACTIVE";
 	const SALESCENTER_USER_CONSENTS = '~SALESCENTER_USER_CONSENTS';
 
+	public function __construct($component = null)
+	{
+		parent::__construct($component);
+		$this->errorCollection = new ErrorCollection();
+	}
+
 	/**
 	 * @return mixed|void
 	 * @throws \Bitrix\Main\ArgumentNullException
@@ -37,14 +50,39 @@ class SalesCenterUserConsent extends CBitrixComponent implements Controllerable
 	 */
 	public function executeComponent()
 	{
-		if(!Loader::includeModule('salescenter'))
+		if (!$this->checkModules() || !$this->checkAccess())
 		{
-			$this->showError(Loc::getMessage('SALESCENTER_MODULE_ERROR'));
+			$this->showErrors();
+
 			return;
 		}
 
 		$this->prepareResult();
 		$this->includeComponentTemplate();
+	}
+
+	private function checkModules(): bool
+	{
+		if (!Loader::includeModule('salescenter'))
+		{
+			$this->errorCollection->setError(new Error(Loc::getMessage('SALESCENTER_MODULE_ERROR')));
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private function checkAccess(): bool
+	{
+		if (!SaleManager::getInstance()->isManagerAccess())
+		{
+			$this->errorCollection->setError(new Error(Loc::getMessage('SALESCENTER_USERCONSENT_ACCESS_DENIED')));
+
+			return false;
+		}
+
+		return true;
 	}
 
 	/**
@@ -215,6 +253,11 @@ class SalesCenterUserConsent extends CBitrixComponent implements Controllerable
 	 */
 	public function saveUserConsentAction($formData): void
 	{
+		if (!$this->checkModules() || !$this->checkAccess())
+		{
+			return;
+		}
+
 		if (isset($formData['USERCONSENT']['ACTIVE']) && $formData['USERCONSENT']['ACTIVE'] == 'Y')
 		{
 			Option::set('salescenter', self::SALESCENTER_USER_CONSENT_ACTIVE, 'Y');
@@ -230,7 +273,7 @@ class SalesCenterUserConsent extends CBitrixComponent implements Controllerable
 			}
 			else
 			{
-				Option::set('salescenter', self::SALESCENTER_USER_CONSENTS, []);
+				Option::set('salescenter', self::SALESCENTER_USER_CONSENTS, Json::encode([]));
 			}
 		}
 		else
@@ -268,12 +311,12 @@ class SalesCenterUserConsent extends CBitrixComponent implements Controllerable
 		return $parsedAgreements;
 	}
 
-	/**
-	 * @param $error
-	 */
-	protected function showError($error)
+	protected function showErrors(): void
 	{
-		ShowError($error);
+		foreach ($this->getErrors() as $error)
+		{
+			ShowError($error);
+		}
 	}
 
 	/**

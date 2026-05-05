@@ -134,9 +134,15 @@ class CashboxOrangeData
 			'meta' => self::PARTNER_CODE_BITRIX
 		];
 
+		$items = [];
+		foreach ($checkData['items'] as $item)
+		{
+			array_push($items, ...$this->splitItemForPriceQuantityApi($item));
+		}
+
 		$hasVat20 = false;
 		$hasVat22 = false;
-		foreach ($checkData['items'] as $item)
+		foreach ($items as $item)
 		{
 			$position = $this->buildPosition($checkData, $item, $isSellReturn);
 			if (
@@ -159,9 +165,10 @@ class CashboxOrangeData
 		$paymentTypeMap = $this->getPaymentTypeMap();
 		foreach ($checkData['payments'] as $payment)
 		{
+			$paymentCurrency = $payment['currency'] ?? '';
 			$result['content']['checkClose']['payments'][] = [
 				'type' => $paymentTypeMap[$payment['type']],
-				'amount' => $payment['sum'],
+				'amount' => $this->roundMoney((float)$payment['sum'], $paymentCurrency),
 			];
 		}
 
@@ -241,11 +248,13 @@ class CashboxOrangeData
 
 	/**
 	 * @param array $item
-	 * @return mixed
+	 * @return float
 	 */
 	protected function buildPositionPrice(array $item)
 	{
-		return $item['price'];
+		$currency = $item['currency'] ?? '';
+
+		return $this->roundMoney((float)$item['price'], $currency);
 	}
 
 	/**
@@ -1158,6 +1167,8 @@ class CashboxOrangeData
 
 		$calculatedSignMap = $this->getCalculatedSignMap();
 
+		$correctionCurrency = $data['currency'] ?? '';
+
 		$result = [
 			'id' => static::buildUuid(static::UUID_TYPE_CHECK, $data['unique_id']),
 			'inn' => $this->getValueFromSettings('SERVICE', 'INN'),
@@ -1168,21 +1179,15 @@ class CashboxOrangeData
 				'correctionType' => $this->getCorrectionTypeMap($data['correction_info']['type']),
 				'causeDocumentDate' => $this->getCorrectionCauseDocumentDate($data['correction_info']),
 				'causeDocumentNumber' => $this->getCorrectionCauseDocumentNumber($data['correction_info']),
-				'totalSum' => $this->getCorrectionTotalSum($data['correction_info']),
+				'totalSum' => $this->getCorrectionTotalSum($data['correction_info'], $correctionCurrency),
 				'taxationSystem' => $this->getValueFromSettings('TAX', 'SNO')
 			],
 		];
 
 		foreach ($data['payments'] as $payment)
 		{
-			if ($payment['type'] === Check::PAYMENT_TYPE_CASH)
-			{
-				$result['content']['cashSum'] = (float)$payment['sum'];
-			}
-			else
-			{
-				$result['content']['eCashSum'] = (float)$payment['sum'];
-			}
+			$cashKey = $payment['type'] === Check::PAYMENT_TYPE_CASH ? 'cashSum' : 'eCashSum';
+			$result['content'][$cashKey] = $this->roundMoney((float)$payment['sum'], $correctionCurrency);
 		}
 
 		if ($this->useTax20ForCorrection($data))
@@ -1242,12 +1247,14 @@ class CashboxOrangeData
 	}
 
 	/**
-	 * @param $correctionInfo
-	 * @return mixed
+	 * @param array $correctionInfo
+	 * @param string $currency
+	 * 
+	 * @return float
 	 */
-	protected function getCorrectionTotalSum($correctionInfo)
+	protected function getCorrectionTotalSum(array $correctionInfo, string $currency = ''): float
 	{
-		return $correctionInfo['total_sum'];
+		return $this->roundMoney($correctionInfo['total_sum'], $currency);
 	}
 
 	/**

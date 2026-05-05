@@ -30,7 +30,7 @@ class BillHandler
 	 * @throws \Bitrix\Main\LoaderException
 	 * @throws \Bitrix\Main\NotImplementedException
 	 */
-	public function initiatePay(Sale\Payment $payment, Request $request = null)
+	public function initiatePay(Sale\Payment $payment, ?Request $request = null)
 	{
 		$template = 'template';
 
@@ -49,7 +49,7 @@ class BillHandler
 	 * @param string $template
 	 * @return PaySystem\ServiceResult
 	 */
-	public function showTemplate(Sale\Payment $payment = null, $template = '')
+	public function showTemplate(?Sale\Payment $payment = null, $template = '')
 	{
 		\CCurrencyLang::disableUseHideZero();
 
@@ -65,7 +65,7 @@ class BillHandler
 	 * @throws \Bitrix\Main\LoaderException
 	 * @throws \Bitrix\Main\NotImplementedException
 	 */
-	protected function getPreparedParams(Sale\Payment $payment, Request $request = null)
+	protected function getPreparedParams(Sale\Payment $payment, ?Request $request = null)
 	{
 		/** @var \Bitrix\Sale\PaymentCollection $paymentCollection */
 		$paymentCollection = $payment->getCollection();

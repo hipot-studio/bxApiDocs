@@ -725,6 +725,12 @@ class Logger
 				"CODE" => "ERR_UPLOAD_BAD_IMAGE_SIZE_PRODUCT_PHOTOS",
 				"ITEMS_TYPE" => 'PHOTO',
 			],
+			'VK_INVALID_STATE' => [
+				'MESSAGE' => Loc::getMessage('SALE_VK_ERRORS__VK_INVALID_STATE'),
+				'CRITICAL' => true,
+				'CODE' => 'VK_INVALID_STATE',
+				'ITEMS_TYPE' => 'NONE',
+			],
 		);
 
 //		if set key - return one element, else return all array

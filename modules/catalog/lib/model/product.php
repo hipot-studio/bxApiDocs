@@ -4,7 +4,6 @@ namespace Bitrix\Catalog\Model;
 
 use Bitrix\Catalog;
 use Bitrix\Iblock;
-use Bitrix\Catalog\v2\Integration\Seo\Entity\ExportedProductTable;
 use Bitrix\Main;
 use Bitrix\Main\ORM;
 use Bitrix\Main\Loader;
@@ -787,7 +786,6 @@ class Product extends Entity
 		Catalog\ProductGroupAccessTable::deleteByProduct($id);
 		Catalog\StoreProductTable::deleteByProduct($id);
 		Catalog\SubscribeTable::onIblockElementDelete($id);
-		ExportedProductTable::deleteProduct($id);
 		//TODO: replace this code
 		$conn = Main\Application::getConnection();
 		$helper = $conn->getSqlHelper();

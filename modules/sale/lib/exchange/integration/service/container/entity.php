@@ -10,7 +10,7 @@ abstract class Entity
 {
 	protected $fields;
 
-	public function __construct(array $values = null)
+	public function __construct(?array $values = null)
 	{
 		$this->fields = new Fields($values);
 	}

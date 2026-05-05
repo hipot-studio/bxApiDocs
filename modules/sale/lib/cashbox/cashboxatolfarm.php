@@ -47,6 +47,8 @@ class CashboxAtolFarm extends Cashbox implements IPrintImmediately, ICheckable
 		/** @var Main\Type\DateTime $dateTime */
 		$dateTime = $data['date_create'];
 
+		$currency = $data['currency'] ?? '';
+
 		$result = array(
 			'timestamp' => $dateTime->format('d.m.Y H:i:s'),
 			'external_id' => static::buildUuid(static::UUID_TYPE_CHECK, $data['unique_id']),
@@ -61,7 +63,7 @@ class CashboxAtolFarm extends Cashbox implements IPrintImmediately, ICheckable
 				),
 				'payments' => array(),
 				'items' => array(),
-				'total' => (float)$data['total_sum']
+				'total' => $this->roundMoney((float)$data['total_sum'], $currency)
 			)
 		);
 
@@ -99,22 +101,46 @@ class CashboxAtolFarm extends Cashbox implements IPrintImmediately, ICheckable
 		{
 			$result['receipt']['payments'][] = array(
 				'type' => (int)$this->getValueFromSettings('PAYMENT_TYPE', $payment['type']),
-				'sum' => (float)$payment['sum']
+				'sum' => $this->roundMoney((float)$payment['sum'], $currency)
 			);
 		}
 
-		foreach ($data['items'] as $i => $item)
+		$items = [];
+		foreach ($data['items'] as $item)
+		{
+			array_push($items, ...$this->splitItemForPriceQuantityApi($item));
+		}
+
+		$receiptItems = [];
+		foreach ($items as $item)
 		{
 			$vat = $this->getValueFromSettings('VAT', $item['vat']);
 
-			$result['receipt']['items'][] = array(
+			$receiptItems[] = [
 				'name' => mb_substr($item['name'], 0, self::MAX_NAME_LENGTH),
-				'price' => (float)$item['price'],
-				'sum' => (float)$item['sum'],
+				'price' => $this->roundMoney((float)$item['price'], $currency),
+				'sum' => $this->roundMoney((float)$item['sum'], $currency),
 				'quantity' => $item['quantity'],
-				'tax' => ($vat !== null) ? $vat : $this->getValueFromSettings('VAT', 'NOT_VAT')
-			);
+				'tax' => ($vat !== null) ? $vat : $this->getValueFromSettings('VAT', 'NOT_VAT'),
+				'raw_sum' => (float)$item['price'] * (float)$item['quantity'],
+			];
 		}
+
+		$receiptItems = static::adjustItemsSumToTotal(
+			$receiptItems,
+			'sum',
+			$this->roundMoney((float)$data['total_sum'], $currency),
+			$currency,
+			'raw_sum'
+		);
+
+		foreach ($receiptItems as &$receiptItem)
+		{
+			unset($receiptItem['raw_sum']);
+		}
+		unset($receiptItem);
+
+		$result['receipt']['items'] = $receiptItems;
 
 		return $result;
 	}

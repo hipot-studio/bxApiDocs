@@ -4,19 +4,22 @@ namespace Bitrix\Disk\Document\OnlyOffice;
 
 use Bitrix\Disk\Document\Models\RestrictionLog;
 use Bitrix\Disk\Document\Models\RestrictionLogTable;
+use Bitrix\Disk\Document\OnlyOffice\Cloud\LimitInfo;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Service\Environment;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Error;
 use Bitrix\Main\Event;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
-use CBitrix24;
+use RuntimeException;
 
 final class RestrictionManager
 {
@@ -31,27 +34,34 @@ final class RestrictionManager
 	protected const LOCK_LIMIT = 15;
 
 	protected Config\Configuration $config;
+	protected Environment $environment;
 
 	public function __construct()
 	{
 		$this->config = Config\Configuration::getInstance('disk');
+		$this->environment = ServiceLocator::getInstance()->get(Environment::class);
 	}
 
 	public function shouldUseRestriction(): bool
 	{
-		if (!ModuleManager::isModuleInstalled('bitrix24'))
+		if ($this->environment->isCloudPortal())
 		{
-			return false;
+			return $this->shouldUseRestrictionForCloud();
 		}
 
-		return $this->getLimit() !== self::UNLIMITED_VALUE;
+		return $this->shouldUseRestrictionForBox();
 	}
 
 	public function getLimit(): int
 	{
-		$value = Bitrix24Manager::getFeatureVariable('disk_oo_edit_restriction');
+		$value =
+			$this->environment->isCloudPortal()
+				? $this->getBaseLimitForCloud()
+				: $this->getBaseLimitForBox()
+		;
 
 		$baasDocumentQuotaService = new BaasSessionBoostService();
+
 		if ($value && $baasDocumentQuotaService->isActual())
 		{
 			$value += $baasDocumentQuotaService->getQuota();
@@ -290,30 +300,6 @@ final class RestrictionManager
 		self::emitEvent(self::DELETE_SESSION_EVENT);
 	}
 
-	/**
-	 * Determinate is current portal tariff extendable (max number of sessions).
-	 *
-	 * @return bool
-	 */
-	public function isCurrentTariffExtendable(): bool
-	{
-		$licenseType = CBitrix24::getLicenseType();
-
-		if (!is_string($licenseType))
-		{
-			return true;
-		}
-
-		$extendableTariffs = $this->config->get('extendableTariffs');
-
-		if (!is_array($extendableTariffs))
-		{
-			return true;
-		}
-
-		return in_array($licenseType, $extendableTariffs, true);
-	}
-
 	public static function deleteOldOrPendingAgent(): string
 	{
 		self::deleteOldOrPending();
@@ -365,5 +351,60 @@ final class RestrictionManager
 		}
 
 		return $limit > $countSessions;
+	}
+
+	protected function shouldUseRestrictionForCloud(): bool
+	{
+		return $this->getLimit() !== self::UNLIMITED_VALUE;
+	}
+
+	protected function shouldUseRestrictionForBox(): bool
+	{
+		$cloudRegistrationData =
+			ServiceLocator::getInstance()
+				->get('disk.onlyofficeConfiguration')
+				->getCloudRegistrationData()
+		;
+
+		return is_array($cloudRegistrationData);
+	}
+
+	protected function getBaseLimitForCloud(): ?int
+	{
+		return Bitrix24Manager::getFeatureVariable('disk_oo_edit_restriction');
+	}
+
+	protected function getBaseLimitForBox(): ?int
+	{
+		$cloudRegistrationData =
+			ServiceLocator::getInstance()
+				->get('disk.onlyofficeConfiguration')
+				->getCloudRegistrationData()
+		;
+
+		if (!is_array($cloudRegistrationData))
+		{
+			return null;
+		}
+
+		$limitResult = (new LimitInfo($cloudRegistrationData['serverHost']))->getClientLimit();
+		$error = $limitResult->getError();
+
+		if (!$limitResult->isSuccess() && $error instanceof Error)
+		{
+			$code = $error->getCode();
+
+			if (!is_int($code))
+			{
+				$code = 0;
+			}
+
+			throw new RuntimeException(
+				message: $error->getMessage(),
+				code: $code,
+			);
+		}
+
+		return $limitResult->getData()['limit'] ?? null;
 	}
 }

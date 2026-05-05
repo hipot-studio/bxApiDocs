@@ -31,7 +31,7 @@ class RestHandler extends PaySystem\ServiceHandler
 	 * @return ServiceResult
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		if ($request === null)
 		{
@@ -933,7 +933,7 @@ class RestHandler extends PaySystem\ServiceHandler
 		return $template;
 	}
 
-	public function canCheckout(Payment $payment, Request $request = null): bool
+	public function canCheckout(Payment $payment, ?Request $request = null): bool
 	{
 		if ($request === null)
 		{

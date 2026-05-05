@@ -66,6 +66,9 @@ class CashboxRobokassa extends CashboxPaySystem
 		$request = Main\Application::getInstance()->getContext()->getRequest();
 		$protocol = $request->isHttps() ? 'https://' : 'http://';
 
+		$currency = $checkData['currency'] ?? '';
+		$roundedTotal = $this->roundMoney((float)$checkData['total_sum'], $currency);
+
 		$fields = [
 			'merchantId' => $this->getPaySystemSetting($payment, 'ROBOXCHANGE_SHOPLOGIN'),
 			'id' => $checkData['unique_id'],
@@ -73,7 +76,7 @@ class CashboxRobokassa extends CashboxPaySystem
 			'operation' => SellCheck::getType(),
 			'sno' => $this->getValueFromSettings('TAX', 'SNO'),
 			'url' => \urlencode($protocol . $request->getHttpHost()),
-			'total' => (string)Sale\PriceMaths::roundPrecision($checkData['total_sum']),
+			'total' => (string)$roundedTotal,
 			'client' => [
 				'email' => $checkData['client_email'],
 				'phone' => $checkData['client_phone'],
@@ -87,14 +90,23 @@ class CashboxRobokassa extends CashboxPaySystem
 		{
 			$fields['payments'][] = [
 				'type' => self::CHECK_PAYMENT_TYPE,
-				'sum' => (string)Sale\PriceMaths::roundPrecision($paymentItem['sum']),
+				'sum' => (string)$this->roundMoney((float)$paymentItem['sum'], $currency),
 			];
 		}
 
 		$checkTypeMap = $this->getCheckTypeMap();
 		$paymentMethod = $checkTypeMap[$check::getType()];
 		$paymentObjectMap = $this->getPaymentObjectMap();
+
+		$items = [];
 		foreach ($checkData['items'] as $item)
+		{
+			array_push($items, ...$this->splitItemForPriceQuantityApi($item));
+		}
+
+		$receiptItems = [];
+		$vatItems = [];
+		foreach ($items as $item)
 		{
 			$vat = $this->getValueFromSettings('VAT', $item['vat']);
 			$tax = $vat ?? $this->getValueFromSettings('VAT', 'NOT_VAT');
@@ -102,10 +114,11 @@ class CashboxRobokassa extends CashboxPaySystem
 			$receiptItem = [
 				'name' => mb_substr($item['name'], 0, self::MAX_NAME_LENGTH),
 				'quantity' => (string)$item['quantity'],
-				'sum' => (string)Sale\PriceMaths::roundPrecision($item['sum']),
+				'sum' => (string)$this->roundMoney((float)$item['sum'], $currency),
 				'tax' => $tax,
 				'payment_method' => $paymentMethod,
 				'payment_object' => $paymentObjectMap[$item['payment_object']],
+				'raw_sum' => (float)$item['price'] * (float)$item['quantity'],
 			];
 
 			if (!empty($item['marking_code']))
@@ -113,13 +126,38 @@ class CashboxRobokassa extends CashboxPaySystem
 				$receiptItem['nomenclature_code'] = $item['marking_code'];
 			}
 
-			$fields['items'][] = $receiptItem;
+			$receiptItems[] = $receiptItem;
 
-			$fields['vats'][] = [
+			$vatItems[] = [
 				'type' => $tax,
-				'sum' => (string)Sale\PriceMaths::roundPrecision($item['vat_sum']),
+				'sum' => (string)$this->roundMoney((float)$item['vat_sum'], $currency),
 			];
 		}
+
+		// Robokassa uses string sums — convert to float for adjustment, then back
+		foreach ($receiptItems as &$receiptItem)
+		{
+			$receiptItem['sum'] = (float)$receiptItem['sum'];
+		}
+		unset($receiptItem);
+
+		$receiptItems = static::adjustItemsSumToTotal(
+			$receiptItems,
+			'sum',
+			$roundedTotal,
+			$currency,
+			'raw_sum'
+		);
+
+		foreach ($receiptItems as &$receiptItem)
+		{
+			$receiptItem['sum'] = (string)$receiptItem['sum'];
+			unset($receiptItem['raw_sum']);
+		}
+		unset($receiptItem);
+
+		$fields['items'] = $receiptItems;
+		$fields['vats'] = $vatItems;
 
 		return $fields;
 	}

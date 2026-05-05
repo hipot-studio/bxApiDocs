@@ -130,7 +130,7 @@ class Product extends DataConverter
 	 * @param Vk\Logger|NULL $logger
 	 * @return string
 	 */
-	private function validateName($name, Vk\Logger $logger = NULL)
+	private function validateName($name, ?Vk\Logger $logger = NULL)
 	{
 		$newName = $name;
 
@@ -163,7 +163,7 @@ class Product extends DataConverter
 	 * @param Vk\Logger|NULL $logger
 	 * @return string
 	 */
-	private function validateDescription($desc, Vk\Logger $logger = NULL)
+	private function validateDescription($desc, ?Vk\Logger $logger = NULL)
 	{
 		$newDesc = $desc;
 

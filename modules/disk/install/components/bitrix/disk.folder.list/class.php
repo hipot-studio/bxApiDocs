@@ -1782,18 +1782,18 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		return $sharedObjectIds;
 	}
 
-	private function appendToResultAutoloadTemplateBizProc()
+	private function appendToResultAutoloadTemplateBizProc(): void
 	{
 		$this->arResult['WORKFLOW_TEMPLATES'] = [];
 		$this->arResult['BIZPROC_PARAMETERS'] = false;
 
+		$hasWebDavTemplatesWithParams = false;
+		$hasDiskTemplatesWithParams = false;
+
+		$storageId = $this->storage->getId();
 		$documentData = [
-			'DISK' => [
-				'DOCUMENT_TYPE' => \Bitrix\Disk\BizProcDocument::generateDocumentComplexType($this->storage->getId()),
-			],
-			'WEBDAV' => [
-				'DOCUMENT_TYPE' => \Bitrix\Disk\BizProcDocumentCompatible::generateDocumentComplexType($this->storage->getId()),
-			],
+			'DISK' => ['DOCUMENT_TYPE' => \Bitrix\Disk\BizProcDocument::generateDocumentComplexType($storageId)],
+			'WEBDAV' => ['DOCUMENT_TYPE' => \Bitrix\Disk\BizProcDocumentCompatible::generateDocumentComplexType($storageId)],
 		];
 
 		foreach ($documentData as $nameModule => $data)
@@ -1801,14 +1801,14 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			$workflowTemplateObject = CBPWorkflowTemplateLoader::getList(
 				[],
 				[
-					"DOCUMENT_TYPE" => $data["DOCUMENT_TYPE"],
-					"AUTO_EXECUTE" => CBPDocumentEventType::Create,
-					"ACTIVE" => "Y",
-					"!PARAMETERS" => null,
+					'DOCUMENT_TYPE' => $data['DOCUMENT_TYPE'],
+					'AUTO_EXECUTE' => CBPDocumentEventType::Create,
+					'ACTIVE' => "Y",
+					'!PARAMETERS' => null,
 				],
 				false,
 				false,
-				["ID", "NAME", "DESCRIPTION", "PARAMETERS"],
+				['ID', 'NAME', 'DESCRIPTION', 'PARAMETERS'],
 			);
 			while ($workflowTemplate = $workflowTemplateObject->getNext())
 			{
@@ -1816,10 +1816,32 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				{
 					$this->arResult['BIZPROC_PARAMETERS'] = true;
 					$this->arResult['WORKFLOW_TEMPLATES'][$workflowTemplate['ID']]['PARAMETERS'] = $workflowTemplate['PARAMETERS'];
+
+					if ($nameModule === 'DISK')
+					{
+						$hasDiskTemplatesWithParams = true;
+					}
+
+					if ($nameModule === 'WEBDAV')
+					{
+						$hasWebDavTemplatesWithParams = true;
+					}
 				}
 				$this->arResult['WORKFLOW_TEMPLATES'][$workflowTemplate['ID']]['ID'] = $workflowTemplate['ID'];
 				$this->arResult['WORKFLOW_TEMPLATES'][$workflowTemplate['ID']]['NAME'] = $workflowTemplate['NAME'];
 			}
+		}
+
+		// Cancel rendering of BP template parameters
+		if (
+			defined('CBPRuntime::ACTIVITY_API_VERSION')
+			&& \CBPRuntime::ACTIVITY_API_VERSION >= 2
+			&& !$hasWebDavTemplatesWithParams
+			&& $hasDiskTemplatesWithParams
+		)
+		{
+			$this->arResult['BIZPROC_PARAMETERS'] = false;
+			$this->arResult['WORKFLOW_TEMPLATES'] = [];
 		}
 	}
 

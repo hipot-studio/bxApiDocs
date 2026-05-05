@@ -47,6 +47,8 @@ class CashboxAtolFarmV4 extends CashboxAtolFarm implements ICorrection
 			$serviceEmail = static::getDefaultServiceEmail();
 		}
 
+		$currency = $data['currency'] ?? '';
+
 		$result = [
 			'timestamp' => $dateTime->format('d.m.Y H:i:s'),
 			'external_id' => static::buildUuid(static::UUID_TYPE_CHECK, $data['unique_id']),
@@ -64,7 +66,7 @@ class CashboxAtolFarmV4 extends CashboxAtolFarm implements ICorrection
 				'internet' => $this->getField('USE_OFFLINE') === 'N',
 				'payments' => [],
 				'items' => [],
-				'total' => (float)$data['total_sum']
+				'total' => $this->roundMoney((float)$data['total_sum'], $currency)
 			]
 		];
 
@@ -116,15 +118,40 @@ class CashboxAtolFarmV4 extends CashboxAtolFarm implements ICorrection
 			{
 				$result['receipt']['payments'][] = [
 					'type' => $paymentTypeMap[$payment['type']],
-					'sum' => (float)$payment['sum']
+					'sum' => $this->roundMoney((float)$payment['sum'], $currency)
 				];
 			}
 		}
 
+		$items = [];
 		foreach ($data['items'] as $item)
 		{
-			$result['receipt']['items'][] = $this->buildPosition($data, $item);
+			array_push($items, ...$this->splitItemForPriceQuantityApi($item));
 		}
+
+		$receiptItems = [];
+		foreach ($items as $item)
+		{
+			$position = $this->buildPosition($data, $item);
+			$position['raw_sum'] = (float)$item['price'] * (float)$item['quantity'];
+			$receiptItems[] = $position;
+		}
+
+		$receiptItems = static::adjustItemsSumToTotal(
+			$receiptItems,
+			'sum',
+			$this->roundMoney((float)$data['total_sum'], $currency),
+			$currency,
+			'raw_sum'
+		);
+
+		foreach ($receiptItems as &$receiptItem)
+		{
+			unset($receiptItem['raw_sum']);
+		}
+		unset($receiptItem);
+
+		$result['receipt']['items'] = $receiptItems;
 
 		return $result;
 	}
@@ -171,7 +198,9 @@ class CashboxAtolFarmV4 extends CashboxAtolFarm implements ICorrection
 	 */
 	protected function buildPositionPrice(array $item)
 	{
-		return (float)$item['price'];
+		$currency = $item['currency'] ?? '';
+
+		return $this->roundMoney((float)$item['price'], $currency);
 	}
 
 	/**
@@ -180,7 +209,9 @@ class CashboxAtolFarmV4 extends CashboxAtolFarm implements ICorrection
 	 */
 	protected function buildPositionSum(array $item)
 	{
-		return (float)$item['sum'];
+		$currency = $item['currency'] ?? '';
+
+		return $this->roundMoney((float)$item['sum'], $currency);
 	}
 
 	/**
@@ -305,6 +336,8 @@ class CashboxAtolFarmV4 extends CashboxAtolFarm implements ICorrection
 			]
 		];
 
+		$corrCurrency = $data['currency'] ?? '';
+
 		if (isset($data['payments']))
 		{
 			$paymentTypeMap = $this->getPaymentTypeMap();
@@ -312,7 +345,7 @@ class CashboxAtolFarmV4 extends CashboxAtolFarm implements ICorrection
 			{
 				$result['correction']['payments'][] = [
 					'type' => $paymentTypeMap[$payment['type']],
-					'sum' => (float)$payment['sum']
+					'sum' => $this->roundMoney((float)$payment['sum'], $corrCurrency)
 				];
 			}
 		}
@@ -329,7 +362,7 @@ class CashboxAtolFarmV4 extends CashboxAtolFarm implements ICorrection
 
 				$result['correction']['vats'][] = [
 					'type' => $vat,
-					'sum' => (float)$item['sum']
+					'sum' => $this->roundMoney((float)$item['sum'], $corrCurrency)
 				];
 			}
 		}

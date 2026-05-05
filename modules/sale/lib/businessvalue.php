@@ -23,7 +23,7 @@ final class BusinessValue
 	private static $consumerCodePersonMapping = array();
 
 	/** @deprecated */
-	public static function getValueFromProvider(IBusinessValueProvider $provider = null, $codeKey, $consumerKey)
+	public static function getValueFromProvider(?IBusinessValueProvider $provider = null, $codeKey, $consumerKey)
 	{
 		return self::get($codeKey, $consumerKey, $provider);
 	}
@@ -624,7 +624,7 @@ final class BusinessValue
 	}
 
 	/** @internal */
-	public static function getPersonTypes($all = false, array $resetAllPersonTypes = null)
+	public static function getPersonTypes($all = false, ?array $resetAllPersonTypes = null)
 	{
 		static $allPersonTypes = array(), $personTypes = array();
 

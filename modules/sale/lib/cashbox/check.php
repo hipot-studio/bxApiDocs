@@ -242,6 +242,7 @@ abstract class Check extends AbstractCheck
 			'type' => static::getType(),
 			'calculated_sign' => static::getCalculatedSign(),
 			'unique_id' => $this->getField('ID'),
+			'currency' => $this->getField('CURRENCY'),
 			'items' => [],
 			'date_create' => new Main\Type\DateTime()
 		];
@@ -382,6 +383,11 @@ abstract class Check extends AbstractCheck
 			}
 
 			$result['total_sum'] = $data['TOTAL_SUM'];
+
+			if (isset($data['CURRENCY']))
+			{
+				$result['currency'] = $data['CURRENCY'];
+			}
 		}
 
 		return $result;

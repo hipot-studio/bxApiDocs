@@ -843,34 +843,61 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		}
 	}
 
-	protected function getAutoloadTemplateBizProc($documentData)
+	protected function getAutoloadTemplateBizProc($documentData): void
 	{
-		$this->arResult['WORKFLOW_TEMPLATES'] = array();
-		$this->arResult['BIZPROC_PARAMETERS'] = false;
+		$this->arResult['WORKFLOW_TEMPLATES'] = [];
+
+		$hasWebDavTemplatesWithParams = false;
+		$hasDiskTemplatesWithParams = false;
+
 		foreach($documentData as $nameModule => $data)
 		{
 			$workflowTemplateObject = CBPWorkflowTemplateLoader::getList(
-				array(),
-				array(
-					"DOCUMENT_TYPE" => $data["DOCUMENT_TYPE"],
-					"AUTO_EXECUTE" => CBPDocumentEventType::Edit,
-					"ACTIVE" => "Y",
-					"!PARAMETERS" => null,
-				),
+				[],
+				[
+					'DOCUMENT_TYPE' => $data['DOCUMENT_TYPE'],
+					'AUTO_EXECUTE' => CBPDocumentEventType::Edit,
+					'ACTIVE' => 'Y',
+					'!PARAMETERS' => null,
+				],
 				false,
 				false,
-				array("ID", "NAME", "DESCRIPTION", "PARAMETERS")
+				['ID', 'NAME', 'DESCRIPTION', 'PARAMETERS']
 			);
+
 			while ($workflowTemplate = $workflowTemplateObject->getNext())
 			{
 				if(!empty($workflowTemplate['PARAMETERS']))
 				{
+					if ($nameModule === 'DISK')
+					{
+						$hasDiskTemplatesWithParams = true;
+					}
+
+					if ($nameModule === 'WEBDAV')
+					{
+						$hasWebDavTemplatesWithParams = true;
+					}
+
 					$this->arResult['BIZPROC_PARAMETERS'] = true;
 				}
+
 				$this->arResult['WORKFLOW_TEMPLATES'][$workflowTemplate['ID']]['ID'] = $workflowTemplate['ID'];
 				$this->arResult['WORKFLOW_TEMPLATES'][$workflowTemplate['ID']]['NAME'] = $workflowTemplate['NAME'];
 				$this->arResult['WORKFLOW_TEMPLATES'][$workflowTemplate['ID']]['PARAMETERS'] = $workflowTemplate['PARAMETERS'];
 			}
+		}
+
+		if (
+			defined('CBPRuntime::ACTIVITY_API_VERSION')
+			&& \CBPRuntime::ACTIVITY_API_VERSION >= 2
+			&& !$hasWebDavTemplatesWithParams
+			&& $hasDiskTemplatesWithParams
+		)
+		{
+			// Cancel rendering of BP template parameters
+			$this->arResult['BIZPROC_PARAMETERS'] = false;
+			$this->arResult['WORKFLOW_TEMPLATES'] = [];
 		}
 	}
 

@@ -2079,6 +2079,11 @@ class CCatalogDeductDocs extends CCatalogDocsTypes
 				}
 			}
 
+			if ($element['BARCODE_MULTI'] === 'N')
+			{
+				continue;
+			}
+
 			$barcodes = (array)($element['BARCODES'] ?? []);
 			foreach ($barcodes as $item)
 			{
@@ -2087,11 +2092,6 @@ class CCatalogDeductDocs extends CCatalogDocsTypes
 				{
 					$rowId = $item['DOCUMENT_ROW_ID'];
 					$storeId = $positions[$rowId]['STORE_TO'] ?? null;
-				}
-
-				if ($element['BARCODE_MULTI'] === 'N')
-				{
-					$storeId = 0;
 				}
 
 				if ($action === self::ACTION_CONDUCTION)

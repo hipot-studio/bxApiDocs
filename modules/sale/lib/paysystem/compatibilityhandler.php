@@ -31,7 +31,7 @@ class CompatibilityHandler extends ServiceHandler implements ICheckable
 	 * @param Payment $payment
 	 * @return mixed
 	 */
-	protected function isTestMode(Payment $payment = null)
+	protected function isTestMode(?Payment $payment = null)
 	{
 		return false;
 	}
@@ -49,7 +49,7 @@ class CompatibilityHandler extends ServiceHandler implements ICheckable
 	 * @param Request|null $request
 	 * @return ServiceResult
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		$result = new ServiceResult();
 
@@ -86,7 +86,7 @@ class CompatibilityHandler extends ServiceHandler implements ICheckable
 	 * @param string $template
 	 * @return ServiceResult
 	 */
-	public function showTemplate(Payment $payment = null, $template = '')
+	public function showTemplate(?Payment $payment = null, $template = '')
 	{
 		$result = new ServiceResult();
 
@@ -122,7 +122,7 @@ class CompatibilityHandler extends ServiceHandler implements ICheckable
 	 * @param Payment $payment
 	 * @return mixed
 	 */
-	public function getParamsBusValue(Payment $payment = null)
+	public function getParamsBusValue(?Payment $payment = null)
 	{
 		$orderId = 0;
 		$orderFields = array();

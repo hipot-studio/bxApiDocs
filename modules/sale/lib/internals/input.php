@@ -1342,6 +1342,9 @@ class File extends Base
 	 * @param array $files - $_FILES
 	 * @return array       - post + fixed files
 	 */
+
+	private static array $temporaryFiles = [];
+
 	static function getPostWithFiles(array $post, array $files)
 	{
 		foreach ($files as $key => $file)
@@ -1443,8 +1446,24 @@ class File extends Base
 			&& isset($value['error'])
 			&& $value['error'] == UPLOAD_ERR_OK
 			&& isset($value['tmp_name'])
-			&& is_uploaded_file($value['tmp_name'])
+			&& (
+				is_uploaded_file($value['tmp_name'])
+				|| self::isTemporaryFile($value['tmp_name'])
+			)
 		;
+	}
+
+	public static function isTemporaryFile(string $temporaryName): bool
+	{
+		return in_array($temporaryName, self::$temporaryFiles, true);
+	}
+
+	public static function setTemporaryFile(string $temporaryName): void
+	{
+		if (!in_array($temporaryName, self::$temporaryFiles, true))
+		{
+			self::$temporaryFiles[] = $temporaryName;
+		}
 	}
 
 	// input methods ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1587,7 +1606,13 @@ class File extends Base
 					]
 					: [];
 			}
-			elseif (isset($value['tmp_name'])  && is_uploaded_file($value['tmp_name']))
+			elseif (
+				isset($value['tmp_name'])
+				&& (
+					is_uploaded_file($value['tmp_name'])
+					|| self::isTemporaryFile($value['tmp_name'])
+				)
+			)
 			{
 				$errors = array();
 

@@ -38,7 +38,7 @@ abstract class BaseServiceHandler
 	 * @param Request|null $request
 	 * @return ServiceResult
 	 */
-	abstract public function initiatePay(Payment $payment, Request $request = null);
+	abstract public function initiatePay(Payment $payment, ?Request $request = null);
 
 	/**
 	 * BaseServiceHandler constructor.
@@ -56,7 +56,7 @@ abstract class BaseServiceHandler
 	 * @param string $template
 	 * @return ServiceResult
 	 */
-	public function showTemplate(Payment $payment = null, $template = '')
+	public function showTemplate(?Payment $payment = null, $template = '')
 	{
 		$result = new ServiceResult();
 
@@ -154,7 +154,7 @@ abstract class BaseServiceHandler
 	 * @param Payment $payment
 	 * @return array
 	 */
-	public function getParamsBusValue(Payment $payment = null)
+	public function getParamsBusValue(?Payment $payment = null)
 	{
 		$params = array();
 		$codes = $this->getBusinessCodes();
@@ -181,7 +181,7 @@ abstract class BaseServiceHandler
 	 * @param $code
 	 * @return mixed
 	 */
-	protected function getBusinessValue(Payment $payment = null, $code)
+	protected function getBusinessValue(?Payment $payment = null, $code)
 	{
 		$value = BusinessValue::get($code, $this->service->getConsumerName(), $payment);
 		if (is_string($value))
@@ -340,7 +340,7 @@ abstract class BaseServiceHandler
 	 * @param string $action
 	 * @return string
 	 */
-	protected function getUrl(Payment $payment = null, $action)
+	protected function getUrl(?Payment $payment = null, $action)
 	{
 		$urlList = $this->getUrlList();
 		if (isset($urlList[$action]))
@@ -367,7 +367,7 @@ abstract class BaseServiceHandler
 	 * @param Payment $payment
 	 * @return bool
 	 */
-	protected function isTestMode(Payment $payment = null)
+	protected function isTestMode(?Payment $payment = null)
 	{
 		return false;
 	}

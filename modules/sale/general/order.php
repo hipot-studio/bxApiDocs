@@ -295,8 +295,13 @@ class CAllSaleOrder
 						? \Bitrix\Sale\PriceMaths::roundPrecision($v / $arItem["QUANTITY"])
 						: 0.0;
 
-					$arResult["VAT_SUM"] += $v;
+					$currency = $arItem["CURRENCY"] ?? '';
+					if ($currency !== '')
+					{
+						$v = \Bitrix\Sale\PriceMaths::roundByFormatCurrency($v, $currency);
+					}
 
+					$arResult["VAT_SUM"] += $v;
 				}
 			}
 		}

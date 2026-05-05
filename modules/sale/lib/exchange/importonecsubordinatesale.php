@@ -467,7 +467,7 @@ final class ImportOneCSubordinateSale extends ImportOneCPackage
 	 * @param array|null $params
 	 * @return mixed|null
 	 */
-	protected function getItemByParam($key, array $items, array $params=null)
+	protected function getItemByParam($key, array $items, ?array $params = null)
 	{
 		foreach ($items as $item)
 		{

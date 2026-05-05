@@ -24,7 +24,7 @@ class PayMasterHandler extends WebMoneyHandler
 	 * @param Request|null $request
 	 * @return PaySystem\ServiceResult
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		$extraParams = array(
 			'PS_MODE' => $this->service->getField('PS_MODE'),

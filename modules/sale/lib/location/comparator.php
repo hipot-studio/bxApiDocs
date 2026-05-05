@@ -50,7 +50,7 @@ class Comparator
 		return self::$replacement;
 	}
 
-	public static function setReplacement(Replacement $replacement = null)
+	public static function setReplacement(?Replacement $replacement = null)
 	{
 		if($replacement === null)
 			self::$replacement = new Replacement;

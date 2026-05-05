@@ -59,6 +59,8 @@ class CashboxBitrixV2 extends CashboxBitrix
 			$client = $phone;
 		}
 
+		$currency = $data['currency'] ?? '';
+
 		$result = [
 			'type' => $check::getCalculatedSign() === Check::CALCULATED_SIGN_INCOME ? 'sell' : 'sellReturn',
 			'timestamp' => $dateTime->format('d.m.Y H:i:s'),
@@ -70,21 +72,46 @@ class CashboxBitrixV2 extends CashboxBitrix
 			],
 			'payments' => [],
 			'items' => [],
-			'total' => (float)$data['total_sum']
+			'total' => $this->roundMoney((float)$data['total_sum'], $currency)
 		];
 
 		foreach ($data['payments'] as $payment)
 		{
 			$result['payments'][] = [
 				'type' => $this->getValueFromSettings('PAYMENT_TYPE', $payment['type']),
-				'sum' => (float)$payment['sum']
+				'sum' => $this->roundMoney((float)$payment['sum'], $currency)
 			];
 		}
 
+		$items = [];
 		foreach ($data['items'] as $item)
 		{
-			$result['items'][] = $this->buildPosition($data, $item);
+			array_push($items, ...$this->splitItemForPriceQuantityApi($item));
 		}
+
+		$positionItems = [];
+		foreach ($items as $item)
+		{
+			$position = $this->buildPosition($data, $item);
+			$position['raw_amount'] = (float)$item['price'] * (float)$item['quantity'];
+			$positionItems[] = $position;
+		}
+
+		$positionItems = static::adjustItemsSumToTotal(
+			$positionItems,
+			'amount',
+			$this->roundMoney((float)$data['total_sum'], $currency),
+			$currency,
+			'raw_amount'
+		);
+
+		foreach ($positionItems as &$positionItem)
+		{
+			unset($positionItem['raw_amount']);
+		}
+		unset($positionItem);
+
+		$result['items'] = $positionItems;
 
 		return $result;
 	}
@@ -100,12 +127,14 @@ class CashboxBitrixV2 extends CashboxBitrix
 			$vat = $this->getValueFromSettings('VAT', 'NOT_VAT');
 		}
 
+		$currency = $item['currency'] ?? '';
+
 		$position = [
 			'type' => 'position',
 			'name' => $item['name'],
-			'price' => (float)$item['price'],
+			'price' => $this->roundMoney((float)$item['price'], $currency),
 			'quantity' => $item['quantity'],
-			'amount' => (float)$item['sum'],
+			'amount' => $this->roundMoney((float)$item['sum'], $currency),
 			'paymentMethod' => $checkTypeMap[$checkData['type']],
 			'paymentObject' => $paymentObjectMap[$item['payment_object']],
 			'tax' => [

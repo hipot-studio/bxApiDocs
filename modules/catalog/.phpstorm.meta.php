@@ -27,9 +27,6 @@ namespace PHPSTORM_META
 		\Bitrix\Catalog\v2\IoC\Dependency::MEASURE_RATIO_FACTORY,
 		\Bitrix\Catalog\v2\IoC\Dependency::MEASURE_RATIO_REPOSITORY,
 		'sku.tree',
-		'integration.seo.facebook.facade',
-		'integration.seo.facebook.product.processor',
-		'integration.seo.facebook.product.repository',
 	);
 	expectedArguments(
 		\Bitrix\Catalog\v2\IoC\ServiceContainer::get(),
@@ -106,9 +103,6 @@ namespace PHPSTORM_META
 		\Bitrix\Catalog\v2\MeasureRatio\MeasureRatioFactory::MEASURE_RATIO_COLLECTION => \Bitrix\Catalog\v2\MeasureRatio\MeasureRatioCollection::class,
 
 		'sku.tree' => \Bitrix\Catalog\Component\SkuTree::class,
-		'integration.seo.facebook.facade' => \Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookFacade::class,
-		'integration.seo.facebook.product.processor' => \Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookProductProcessor::class,
-		'integration.seo.facebook.product.repository' => \Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookProductRepository::class,
 	]));
 
 	override(\Bitrix\Catalog\v2\IoC\ServiceContainer::make(0), map([
@@ -175,8 +169,5 @@ namespace PHPSTORM_META
 		\Bitrix\Catalog\v2\MeasureRatio\MeasureRatioFactory::MEASURE_RATIO_COLLECTION => \Bitrix\Catalog\v2\MeasureRatio\MeasureRatioCollection::class,
 
 		'sku.tree' => \Bitrix\Catalog\Component\SkuTree::class,
-		'integration.seo.facebook.facade' => \Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookFacade::class,
-		'integration.seo.facebook.product.processor' => \Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookProductProcessor::class,
-		'integration.seo.facebook.product.repository' => \Bitrix\Catalog\v2\Integration\Seo\Facebook\FacebookProductRepository::class,
 	]));
 }

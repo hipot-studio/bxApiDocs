@@ -151,6 +151,13 @@ class CatalogProductGridComponent extends \CBitrixComponent
 			throw new SystemException('Parameter "URL_BUILDER" must implement ' . CatalogBuilder::class);
 		}
 
+		$createBtnItems = null;
+		if (isset($params['CREATE_BTN_ITEMS']) && is_array($params['CREATE_BTN_ITEMS']))
+		{
+			$createBtnItems = $params['CREATE_BTN_ITEMS'];
+		}
+		$params['CREATE_BTN_ITEMS'] = $createBtnItems;
+
 		return parent::onPrepareComponentParams($params);
 	}
 
@@ -1513,6 +1520,13 @@ class CatalogProductGridComponent extends \CBitrixComponent
 
 	private function initToolbarCreateButtons(): void
 	{
+		$btnItems = $this->arParams['CREATE_BTN_ITEMS'];
+		// if empty array passed to CREATE_BTN_ITEMS param, not show button at all
+		if (is_array($btnItems) && count($btnItems) === 0)
+		{
+			return;
+		}
+
 		$productLimits = null;
 		if ($this->hasIblock())
 		{
@@ -1524,9 +1538,7 @@ class CatalogProductGridComponent extends \CBitrixComponent
 
 		if (empty($productLimits))
 		{
-			$createBtnItems = $this->productGridCreateButton
-				->getButtonIds($this->arParams['CREATE_BTN_ITEMS'] ?? null)
-			;
+			$createBtnItems = $this->productGridCreateButton->getButtonIds($btnItems);
 			$isSingleCreateItem = count($createBtnItems) === 1;
 
 			$createButton = $isSingleCreateItem ? new UI\Buttons\CreateButton() : new CreateButton();

@@ -33,8 +33,8 @@ class PhotoUploader
 	const TYPE_PRODUCT_MAIN_PHOTO = 'PRODUCT_MAIN_PHOTO';
 	const TYPE_PRODUCT_PHOTOS = 'PRODUCT_PHOTOS';
 	const TYPE_ALBUM_PHOTO = 'ALBUM_PHOTO';
-	
-	public function __construct($exportId, $photoType, Timer $timer = null)
+
+	public function __construct($exportId, $photoType, ?Timer $timer = null)
 	{
 		if (empty($exportId))
 		{
@@ -69,8 +69,8 @@ class PhotoUploader
 		switch ($this->type)
 		{
 			case self::TYPE_PRODUCT_MAIN_PHOTO:
-				$this->params['uploadServerMethod']= 'photos.getMarketUploadServer';
-				$this->params['saveMethod'] = 'photos.saveMarketPhoto';
+				$this->params['uploadServerMethod']= 'market.getProductPhotoUploadServer';
+				$this->params['saveMethod'] = 'market.saveProductPhoto';
 				$this->params['keyReference'] = 'BX_ID';
 				$this->params['keyPhotoVk'] = 'PHOTO_MAIN_VK_ID';
 				$this->params['keyPhotoBx'] = 'PHOTO_MAIN_BX_ID';
@@ -78,8 +78,8 @@ class PhotoUploader
 				break;
 			
 			case self::TYPE_PRODUCT_PHOTOS:
-				$this->params['uploadServerMethod']= 'photos.getMarketUploadServer';
-				$this->params['saveMethod'] = 'photos.saveMarketPhoto';
+				$this->params['uploadServerMethod']= 'market.getProductPhotoUploadServer';
+				$this->params['saveMethod'] = 'market.saveProductPhoto';
 				$this->params['keyReference'] = 'PHOTO_BX_ID';
 				$this->params['keyPhotoVk'] = 'PHOTO_VK_ID';
 				$this->params['keyPhotoBx'] = 'PHOTO_BX_ID';
@@ -168,10 +168,10 @@ class PhotoUploader
 			
 			$savePhotoResult = $this->savePhoto($uploadHttpResult);
 //			RESULT
-			$photoSaveResults[$item[$this->params['keyReference']]] = array(
+			$photoSaveResults[$item[$this->params['keyReference']]] = [
 				$this->params['keyReference'] => $item[$this->params['keyReference']],
-				$this->params['keyPhotoVk'] => $savePhotoResult[0]["id"],
-			);
+				$this->params['keyPhotoVk'] => $savePhotoResult[0]['id'] ?? $savePhotoResult['photo_id'],
+			];
 //			todo: photo mapping. po odnomu, navernoe, ved timer
 		}
 		
@@ -246,8 +246,7 @@ class PhotoUploader
 
 		return $http->get($url);
 	}
-	
-	
+
 	/**
 	 * Save photo after http upload
 	 *
@@ -255,26 +254,24 @@ class PhotoUploader
 	 */
 	private function savePhoto($uploadResult)
 	{
-		$photoSaveParams = array(
-			"group_id" => str_replace('-', '', $this->vkGroupId),
-			"photo" => $uploadResult["photo"],
-			"server" => $uploadResult["server"],
-			"hash" => $uploadResult["hash"],
-		);
-		
 		// for product photo we need more params
-		if ($this->params['saveMethod'] == "photos.saveMarketPhoto")
+		if ($this->params['saveMethod'] === 'market.saveProductPhoto')
 		{
-			if (isset($uploadResult["crop_hash"]) && $uploadResult["crop_hash"])
-				$photoSaveParams["crop_hash"] = $uploadResult["crop_hash"];
-			if (isset($uploadResult["crop_data"]) && $uploadResult["crop_data"])
-				$photoSaveParams["crop_data"] = $uploadResult["crop_data"];
+			$photoSaveParams = ['upload_response' => Json::encode($uploadResult)];
 		}
-		
+		else
+		{
+			$photoSaveParams = [
+				'group_id' => str_replace('-', '', $this->vkGroupId),
+				'photo' => $uploadResult['photo'],
+				'server' => $uploadResult['server'],
+				'hash' => $uploadResult['hash'],
+			];
+		}
+
 		return $this->api->run($this->params['saveMethod'], $photoSaveParams);
 	}
-	
-	
+
 	/**
 	 * When loaded product main photo need additional params
 	 *

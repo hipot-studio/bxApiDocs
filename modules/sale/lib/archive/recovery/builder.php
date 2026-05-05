@@ -31,7 +31,7 @@ abstract class Builder implements Buildable, ArchivePackable
 		return new Result();
 	}
 
-	public function setEntityFields($name, array $value = null)
+	public function setEntityFields($name, ?array $value = null)
 	{
 		if (!is_array($this->entitiesFields[$name]))
 		{

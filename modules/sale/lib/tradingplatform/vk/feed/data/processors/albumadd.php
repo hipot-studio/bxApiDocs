@@ -28,7 +28,7 @@ class AlbumAdd extends DataProcessor
 	 * @throws TimeIsOverException
 	 * @throws Vk\ExecuteException
 	 */
-	public function process($data = null, Timer $timer = null)
+	public function process($data = null, ?Timer $timer = null)
 	{
 		$logger = new Vk\Logger($this->exportId);
 		

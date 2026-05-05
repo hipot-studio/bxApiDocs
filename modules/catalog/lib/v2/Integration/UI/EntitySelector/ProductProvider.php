@@ -46,6 +46,10 @@ class ProductProvider extends BaseProvider
 		;
 
 		$this->options['defaultItemAvatar'] = $options['defaultItemAvatar'] ?? '';
+		if (!is_string($this->options['defaultItemAvatar']))
+		{
+			$this->options['defaultItemAvatar'] = '';
+		}
 		$this->options['showPriceInCaption'] = (bool)($options['showPriceInCaption'] ?? true);
 		$this->options['linkType'] = isset($options['linkType']) ? (string)$options['linkType'] : '';
 	}
@@ -315,6 +319,7 @@ class ProductProvider extends BaseProvider
 			'filter' => ['=ID' => $productIds],
 			'offer_filter' => ['=ID' => $offerIds],
 			'sort' => [],
+			'limit' => 0,
 		]);
 
 		// sort $products by $productIds
@@ -444,6 +449,7 @@ class ProductProvider extends BaseProvider
 			return [];
 		}
 
+		$limit = isset($parameters['limit']) ? (int)$parameters['limit'] : null;
 		$productFilter = (array)($parameters['filter'] ?? []);
 		$offerFilter = (array)($parameters['offer_filter'] ?? []);
 		$shouldLoadOffers = (bool)($parameters['load_offers'] ?? true);
@@ -467,7 +473,7 @@ class ProductProvider extends BaseProvider
 
 		$products = $this->loadElements([
 			'filter' => array_merge($productFilter, $additionalProductFilter),
-			'limit' => self::PRODUCT_LIMIT,
+			'limit' => $limit ?? self::PRODUCT_LIMIT,
 		]);
 		if (empty($products))
 		{
@@ -657,10 +663,16 @@ class ProductProvider extends BaseProvider
 			$variationToProductMap[$element['ID']] = $id;
 		}
 
+		$resultCurrency = $this->getCurrency();
+
 		$priceTableResult = PriceTable::getList([
-			'select' => ['PRICE', 'CURRENCY', 'PRODUCT_ID'],
+			'select' => [
+				'PRICE',
+				'CURRENCY',
+				'PRODUCT_ID',
+			],
 			'filter' => [
-				'PRODUCT_ID' => array_keys($variationToProductMap),
+				'@PRODUCT_ID' => array_keys($variationToProductMap),
 				'=CATALOG_GROUP_ID' => $this->getBasePriceId(),
 				[
 					'LOGIC' => 'OR',
@@ -681,10 +693,10 @@ class ProductProvider extends BaseProvider
 
 			$priceValue = $price['PRICE'];
 			$currency = $price['CURRENCY'];
-			if (!empty($this->getCurrency()) && $this->getCurrency() !== $currency)
+			if (!empty($resultCurrency) && $resultCurrency !== $currency)
 			{
-				$priceValue = \CCurrencyRates::ConvertCurrency($priceValue, $currency, $this->getCurrency());
-				$currency = $this->getCurrency();
+				$priceValue = \CCurrencyRates::ConvertCurrency($priceValue, $currency, $resultCurrency);
+				$currency = $resultCurrency;
 			}
 
 			$formattedPrice = \CCurrencyLang::CurrencyFormat($priceValue, $currency, true);

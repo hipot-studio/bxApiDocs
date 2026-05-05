@@ -189,7 +189,7 @@ class Payment extends Internals\CollectableEntity implements IBusinessValueProvi
 	 * @throws Main\NotImplementedException
 	 * @throws Main\ObjectException
 	 */
-	public static function create(PaymentCollection $collection, Sale\PaySystem\Service $paySystem = null)
+	public static function create(PaymentCollection $collection, ?Sale\PaySystem\Service $paySystem = null)
 	{
 		$fields = [
 			'DATE_BILL' => new Main\Type\DateTime(),

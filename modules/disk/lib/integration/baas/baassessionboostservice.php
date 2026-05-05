@@ -6,7 +6,8 @@ namespace Bitrix\Disk\Integration\Baas;
 
 use Bitrix\Baas\Entity\Service;
 use Bitrix\Disk\Internal\Service\OnlyOffice\Promo\TariffGroup;
-use Bitrix\Disk\Internal\Service\OnlyOffice\Promo\TariffGroupResolver;
+use Bitrix\Disk\Internal\Service\OnlyOffice\Promo\TariffGroupResolverFactory;
+use Bitrix\Main\DI\ServiceLocator;
 
 class BaasSessionBoostService
 {
@@ -23,7 +24,12 @@ class BaasSessionBoostService
 			$this->service = $availableServices[self::SERVICE_CODE];
 		}
 
-		$this->tariffGroup = (new TariffGroupResolver())->resolve();
+		$this->tariffGroup =
+			ServiceLocator::getInstance()
+				->get(TariffGroupResolverFactory::class)
+				->make()
+				->resolve()
+		;
 	}
 
 	public function isActual(): bool

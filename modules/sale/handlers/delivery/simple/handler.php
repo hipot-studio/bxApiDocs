@@ -73,7 +73,7 @@ class SimpleHandler extends \Bitrix\Sale\Delivery\Services\Base
 	 * @return CalculationResult
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	protected function calculateConcrete(\Bitrix\Sale\Shipment $shipment = null)
+	protected function calculateConcrete(?\Bitrix\Sale\Shipment $shipment = null)
 	{
 		$result = new CalculationResult;
 		$result->setDeliveryPrice(

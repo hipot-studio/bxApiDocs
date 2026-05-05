@@ -169,12 +169,12 @@ class CatalogJSProductForm
 		}
 
 		if (
-			(int)$fields['discount'] === 0
+			empty($fields['discount'])
 			&& abs($priceExclusive - $basePrice) > 1e-10
 			&& (float)$basePrice > 0
 		)
 		{
-			$fields['discount'] = (int)(100 - ($priceExclusive / $basePrice) * 100);
+			$fields['discount'] = $basePrice - $priceExclusive;
 		}
 
 		if ($fields['discount'] > 0)

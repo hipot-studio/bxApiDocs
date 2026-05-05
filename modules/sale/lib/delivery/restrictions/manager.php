@@ -71,7 +71,7 @@ class Manager extends \Bitrix\Sale\Services\Base\RestrictionManager
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public static function getRestrictedIds(\Bitrix\Sale\Shipment $shipment = null, $restrictionMode)
+	public static function getRestrictedIds(?\Bitrix\Sale\Shipment $shipment = null, $restrictionMode)
 	{
 		$result = array();
 

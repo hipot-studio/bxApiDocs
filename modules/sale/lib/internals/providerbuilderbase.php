@@ -63,7 +63,7 @@ abstract class ProviderBuilderBase
 	 * @return Sale\Result
 	 * @throws Main\ArgumentOutOfRangeException
 	 */
-	protected function callTransferMethod($className, $methodName, Sale\Result $result = null)
+	protected function callTransferMethod($className, $methodName, ?Sale\Result $result = null)
 	{
 		if (!class_exists($className))
 		{

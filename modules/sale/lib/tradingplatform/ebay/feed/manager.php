@@ -9,7 +9,7 @@ use \Bitrix\Sale\TradingPlatform\Ebay\Ebay;
 
 class Manager
 {
-	public static function createSftpQueue($feedType, $siteId, Timer $timer = null)
+	public static function createSftpQueue($feedType, $siteId, ?Timer $timer = null)
 	{
 		$params = array(
 			"SITE_ID" => $siteId,

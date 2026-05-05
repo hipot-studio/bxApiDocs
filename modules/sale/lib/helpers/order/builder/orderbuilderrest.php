@@ -296,34 +296,107 @@ class OrderBuilderRest extends OrderBuilder
 
 	public function setProperties()
 	{
-		if(!isset($this->formData["PROPERTIES"]))
+		if(!isset($this->formData['PROPERTIES']))
 		{
 			return $this;
 		}
 
 		$r = $this->removePropertyValues();
-		if($r->isSuccess() == false)
+		if (!$r->isSuccess())
 		{
 			$this->getErrorsContainer()->addErrors($r->getErrors());
+
 			return $this;
 		}
 
-		$this->formData["PROPERTIES"] = File::getPostWithFiles(
-			$this->formData["PROPERTIES"],
+		$propCollection = $this->order->getPropertyCollection();
+
+		foreach ($this->formData['PROPERTIES'] as $id => $value)
+		{
+			$propertyValue = $propCollection->getItemByOrderPropertyId($id);
+			if (!$propertyValue || $propertyValue->getType() !== 'FILE')
+			{
+				continue;
+			}
+
+			$processedValue = $this->processFileValue($value);
+			if (!$processedValue)
+			{
+				$this->getErrorsContainer()->addError(
+					new Error('Wrong format of property value with id ' . $id),
+				);
+
+				return $this;
+			}
+
+			$this->formData['PROPERTIES'][$id] = $processedValue;
+		}
+
+		$this->formData['PROPERTIES'] = File::getPostWithFiles(
+			$this->formData['PROPERTIES'],
 			$this->settingsContainer->getItemValue('propsFiles')
 		);
 
-		$propCollection = $this->order->getPropertyCollection();
-
-		foreach ($this->formData["PROPERTIES"] as $id=>$value)
+		foreach ($this->formData['PROPERTIES'] as $id => $value)
 		{
-			if(($propertyValue = $propCollection->getItemByOrderPropertyId($id)))
-			{
-				$propertyValue->setValue($value);
-			}
+			$propCollection->getItemByOrderPropertyId($id)?->setValue($value);
 		}
 
 		return $this;
+	}
+
+	private function processFileValue(mixed $value): ?array
+	{
+		if (!is_array($value) || empty($value))
+		{
+			return null;
+		}
+
+		if (!array_is_list($value))
+		{
+			$value = [$value];
+		}
+
+		$processedFiles = [];
+		foreach ($value as $valueElement)
+		{
+			$processedFile = $this->processSingleFileValue($valueElement);
+			if (!$processedFile)
+			{
+				return null;
+			}
+
+			$processedFiles[] = $processedFile;
+		}
+
+		return $processedFiles;
+	}
+
+	private function processSingleFileValue(mixed $fileValue): ?array
+	{
+		if (isset($fileValue['REMOVE']) && $fileValue['REMOVE'] === 'Y')
+		{
+			return ['DELETE' => 'Y'];
+		}
+
+		if (
+			!isset($fileValue['FILE_DATA'][0], $fileValue['FILE_DATA'][1])
+			|| !is_string($fileValue['FILE_DATA'][0])
+			|| !is_string($fileValue['FILE_DATA'][1])
+		)
+		{
+			return null;
+		}
+
+		$fileArray = \CRestUtil::saveFile($fileValue['FILE_DATA']);
+		if (!$fileArray)
+		{
+			return null;
+		}
+		$fileArray['error'] = UPLOAD_ERR_OK;
+		File::setTemporaryFile($fileArray['tmp_name']);
+
+		return $fileArray;
 	}
 
 	public function setDiscounts()

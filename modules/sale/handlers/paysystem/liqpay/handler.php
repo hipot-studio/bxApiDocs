@@ -27,7 +27,7 @@ class LiqPayHandler extends PaySystem\ServiceHandler
 	 * @throws Main\ArgumentOutOfRangeException
 	 * @throws Main\NotImplementedException
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		$busValues = $this->getParamsBusValue($payment);
 		$busValues['LIQPAY_PATH_TO_RESULT_URL'] = $this->getPathResultUrl($payment);

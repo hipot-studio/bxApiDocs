@@ -19,7 +19,7 @@ class CashOnDeliveryHandler extends PaySystem\BaseServiceHandler
 	 * @param Request|null $request
 	 * @return PaySystem\ServiceResult
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		return new PaySystem\ServiceResult();
 	}

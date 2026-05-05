@@ -18,7 +18,7 @@ class DeliveryRequest extends \Bitrix\Main\Engine\Controller
 	 * @param int|null $deliveryId
 	 * @return Requests\Result[]|null
 	 */
-	public function createAction(array $shipmentIds, array $additional = [], int $deliveryId = null)
+	public function createAction(array $shipmentIds, array $additional = [], ?int $deliveryId = null)
 	{
 		if (!$this->checkPermission('U'))
 		{

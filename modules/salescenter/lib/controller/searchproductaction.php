@@ -19,7 +19,7 @@ class SearchProductAction extends Main\Search\SearchAction
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function provideData($searchQuery, array $options = null, Main\UI\PageNavigation $pageNavigation = null)
+	public function provideData($searchQuery, ?array $options = null, ?Main\UI\PageNavigation $pageNavigation = null)
 	{
 		$result = [];
 		Main\Loader::includeModule('iblock');

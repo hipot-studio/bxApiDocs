@@ -27,7 +27,7 @@ class Lift extends Base
 		$this->value = intval($value) >= 0 ? intval($value) : 0;
 	}
 
-	public function getCostShipment(Shipment $shipment = null)
+	public function getCostShipment(?Shipment $shipment = null)
 	{
 		if(!$shipment)
 			return 0;

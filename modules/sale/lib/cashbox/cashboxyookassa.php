@@ -89,7 +89,13 @@ class CashboxYooKassa extends CashboxPaySystem
 		$paymentMode = $paymentModeMap[$check::getType()];
 		$paymentObjectMap = $this->getPaymentObjectMap();
 
+		$items = [];
 		foreach ($checkData['items'] as $item)
+		{
+			array_push($items, ...$this->splitItemForPriceQuantityApi($item));
+		}
+
+		foreach ($items as $item)
 		{
 			$vat = $this->getValueFromSettings('VAT', $item['vat']);
 			$vat = $vat ?? $this->getValueFromSettings('VAT', 'NOT_VAT');
@@ -100,7 +106,7 @@ class CashboxYooKassa extends CashboxPaySystem
 			$receiptItem = [
 				'description' => mb_substr($item['name'], 0, self::MAX_NAME_LENGTH),
 				'amount' => [
-					'value' => (string)Sale\PriceMaths::roundPrecision($item['price']),
+					'value' => (string)$this->roundMoney((float)$item['price'], $item['currency']),
 					'currency' => (string)$item['currency'],
 				],
 				'vat_code' => (int)$vat,
@@ -141,7 +147,7 @@ class CashboxYooKassa extends CashboxPaySystem
 				$fields['settlements'][] = [
 					'type' => self::SETTLEMENT_TYPE_PREPAYMENT,
 					'amount' => [
-						'value' => (string)Sale\PriceMaths::roundPrecision($paymentItem['sum']),
+						'value' => (string)$this->roundMoney((float)$paymentItem['sum'], $paymentItem['currency']),
 						'currency' => (string)$paymentItem['currency'],
 					],
 				];

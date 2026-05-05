@@ -8,5 +8,7 @@ enum PromoType: string
 	case Slider = 'slider';
 	case SliderWithPopup = 'sliderWithPopup';
 	case Form = 'form';
+	case FormWithPopup = 'formWithPopup';
 	case Boost = 'boost';
+	case Link = 'link';
 }

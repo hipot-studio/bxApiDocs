@@ -39,7 +39,7 @@ class WebMoneyHandler extends PaySystem\ServiceHandler
 	 * @param Request|null $request
 	 * @return PaySystem\ServiceResult
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		$extraParams = array(
 			'URL' => $this->getUrl($payment, 'pay'),
@@ -153,7 +153,7 @@ class WebMoneyHandler extends PaySystem\ServiceHandler
 	 * @param Payment $payment
 	 * @return mixed
 	 */
-	protected function isTestMode(Payment $payment = null)
+	protected function isTestMode(?Payment $payment = null)
 	{
 		return $this->getBusinessValue($payment, 'PS_IS_TEST');
 	}

@@ -263,7 +263,6 @@ class ProductTable extends DataManager
 					],
 					'default_value' => self::STATUS_DEFAULT,
 					'fetch_data_modification' => [__CLASS__, 'modifyNegativeAmountTrace'],
-					'title' => Loc::getMessage('PRODUCT_ENTITY_NEGATIVE_AMOUNT_TRACE_FIELD'),
 				]
 			),
 			'NEGATIVE_AMOUNT_TRACE_ORIG' => new Main\Entity\ExpressionField(

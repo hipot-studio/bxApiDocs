@@ -20,7 +20,7 @@ abstract class SettingsBase
 	 * ImportSettings constructor.
 	 * @param array|null $settings
 	 */
-	protected function __construct(array $settings = null)
+	protected function __construct(?array $settings = null)
 	{
 		if($settings !== null)
 		{

@@ -96,7 +96,7 @@ class Property extends Base
 					'TYPE'=>self::TYPE_CHAR
 				],
 				'DEFAULT_VALUE'=>[
-					'TYPE'=>self::TYPE_STRING
+					'TYPE'=>self::TYPE_ANY
 				],
 				'SETTINGS'=>[
 					'TYPE'=>self::TYPE_DATATYPE,

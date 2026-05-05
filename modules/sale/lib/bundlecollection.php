@@ -147,7 +147,7 @@ class BundleCollection extends BasketItemCollection
 	 * @throws Main\ObjectNotFoundException
 	 * @throws \Exception
 	 */
-	public function createClone(\SplObjectStorage $cloneEntity = null)
+	public function createClone(?\SplObjectStorage $cloneEntity = null)
 	{
 		if ($cloneEntity === null)
 		{

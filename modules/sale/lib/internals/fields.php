@@ -20,7 +20,7 @@ class Fields
 	protected $isClone = false;
 
 
-	public function __construct(array $values = null)
+	public function __construct(?array $values = null)
 	{
 		if ($values !== null)
 			$this->values = $values;

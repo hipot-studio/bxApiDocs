@@ -29,7 +29,7 @@ class ProductAdd extends DataProcessor
 	 * @throws TimeIsOverException
 	 * @throws Vk\ExecuteException
 	 */
-	public function process($data, Timer $timer = null)
+	public function process($data, ?Timer $timer = null)
 	{
 //		logger use always, but rich log need only if set this option
 		$logger = new Vk\Logger($this->exportId);

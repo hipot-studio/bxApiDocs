@@ -23,9 +23,9 @@ class PayPalHandler
 	extends PaySystem\ServiceHandler
 	implements PaySystem\IPrePayable
 {
-	const DELIMITER_PAYMENT_ID = ':';
+	public const DELIMITER_PAYMENT_ID = '-';
 
-	private $prePaymentSetting = array();
+	private array $prePaymentSetting = [];
 
 	/**
 	 * @return array
@@ -352,7 +352,7 @@ class PayPalHandler
 	 * @param Request|null $request
 	 * @return PaySystem\ServiceResult
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		$this->setExtraParams([
 			'URL' => $this->getUrl($payment, 'pay'),
@@ -367,7 +367,7 @@ class PayPalHandler
 	 * @param Payment $payment
 	 * @return array
 	 */
-	public function getParamsBusValue(Payment $payment = null)
+	public function getParamsBusValue(?Payment $payment = null)
 	{
 		$params = parent::getParamsBusValue($payment);
 
@@ -419,7 +419,7 @@ class PayPalHandler
 	 * @param Payment $payment
 	 * @return bool
 	 */
-	protected function isTestMode(Payment $payment = null)
+	protected function isTestMode(?Payment $payment = null)
 	{
 		return $this->getBusinessValue($payment, 'PS_IS_TEST') == 'Y';
 	}
@@ -446,7 +446,7 @@ class PayPalHandler
 	 * @param Request $request
 	 * @return bool
 	 */
-	public function initPrePayment(Payment $payment = null, Request $request)
+	public function initPrePayment(?Payment $payment = null, Request $request)
 	{
 		$this->prePaymentSetting = array(
 			'USER' => $this->getBusinessValue($payment, 'PAYPAL_USER'),

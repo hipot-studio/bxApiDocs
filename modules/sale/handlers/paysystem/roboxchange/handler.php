@@ -38,7 +38,7 @@ class RoboxchangeHandler
 	 * @return PaySystem\ServiceResult
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		if ($request === null)
 		{
@@ -107,7 +107,7 @@ class RoboxchangeHandler
 	 * @param array $additionalUserFields
 	 * @return string
 	 */
-	private function getSignatureValue(Payment $payment, string $receipt = null, array $additionalUserFields = []): string
+	private function getSignatureValue(Payment $payment, ?string $receipt = null, array $additionalUserFields = []): string
 	{
 		$passwordCode = 'ROBOXCHANGE_SHOPPASSWORD';
 		if ($this->isTestMode($payment))
@@ -229,7 +229,7 @@ class RoboxchangeHandler
 		return $request->get('InvId');
 	}
 
-	protected function getUrl(Payment $payment = null, $action): string
+	protected function getUrl(?Payment $payment = null, $action): string
 	{
 		$url = parent::getUrl($payment, $action);
 
@@ -329,7 +329,7 @@ class RoboxchangeHandler
 	 * @param Payment|null $payment
 	 * @return bool
 	 */
-	protected function isTestMode(Payment $payment = null)
+	protected function isTestMode(?Payment $payment = null)
 	{
 		return $this->getBusinessValue($payment, 'PS_IS_TEST') === 'Y';
 	}

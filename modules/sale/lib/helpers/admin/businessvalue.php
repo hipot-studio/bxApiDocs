@@ -153,7 +153,7 @@ final class BusinessValueControl
 	}
 
 	/** @internal @deprecated */
-	public static function sanitizeMapping($personTypeId, array &$mapping, array $providerKeys = null)
+	public static function sanitizeMapping($personTypeId, array &$mapping, ?array $providerKeys = null)
 	{
 		$error = array();
 
@@ -661,7 +661,7 @@ final class BusinessValueControl
 	}
 
 	/** @internal */
-	public static function renderMapping(array $mappings, $inputNamePrefix, array $providerInput, array $providerValueInput, array $commonProviderInput = null, array $commonProviderValueInput = null)
+	public static function renderMapping(array $mappings, $inputNamePrefix, array $providerInput, array $providerValueInput, ?array $commonProviderInput = null, ?array $commonProviderValueInput = null)
 	{
 		foreach ($mappings as &$m)
 			$m = self::correctMapping($providerInput, $providerValueInput, $m);
@@ -1102,7 +1102,7 @@ final class BusinessValueControl
 	}
 
 	/** @internal */
-	public static function getProviderInput($personTypeId, array $providerKeys = null)
+	public static function getProviderInput($personTypeId, ?array $providerKeys = null)
 	{
 		$providerInput = self::$personProviderInput[$personTypeId];
 

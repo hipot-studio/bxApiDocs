@@ -31,7 +31,7 @@ class BePaidEripHandler extends PaySystem\ServiceHandler
 	/**
 	 * @inheritDoc
 	 */
-	public function initiatePay(Payment $payment, Request $request = null): ServiceResult
+	public function initiatePay(Payment $payment, ?Request $request = null): ServiceResult
 	{
 		$result = new ServiceResult();
 
@@ -210,7 +210,7 @@ class BePaidEripHandler extends PaySystem\ServiceHandler
 	/**
 	 * @inheritDoc
 	 */
-	protected function getUrl(Payment $payment = null, $action): string
+	protected function getUrl(?Payment $payment = null, $action): string
 	{
 		return str_replace(
 			'#invoice-id#',
@@ -233,7 +233,7 @@ class BePaidEripHandler extends PaySystem\ServiceHandler
 	/**
 	 * @inheritDoc
 	 */
-	protected function isTestMode(Payment $payment = null): bool
+	protected function isTestMode(?Payment $payment = null): bool
 	{
 		return ($this->getBusinessValue($payment, 'PS_IS_TEST') === 'Y');
 	}

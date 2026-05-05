@@ -83,13 +83,14 @@ class CashboxOrangeDataFfd12 extends CashboxOrangeData
 	{
 		$data = $this->getCheckData($check);
 		$correctionInfo = $data['correction_info'];
+		$correctionCurrency = $data['currency'] ?? '';
 
 		$result = $this->buildCheckQueryByCheckData($data, ($check->getType() === 'sellreturn'));
 		$result['content']['ffdVersion'] = self::FFD_12_VERSION;
 		$result['content']['correctionType'] = $this->getCorrectionTypeMap($correctionInfo['type']);
 		$result['content']['causeDocumentDate'] = $this->getCorrectionCauseDocumentDate($correctionInfo);
 		$result['content']['causeDocumentNumber'] = $this->getCorrectionCauseDocumentNumber($correctionInfo);
-		$result['content']['totalSum'] = $this->getCorrectionTotalSum($correctionInfo);
+		$result['content']['totalSum'] = $this->getCorrectionTotalSum($correctionInfo, $correctionCurrency);
 
 		if ($this->useTax20ForCorrection($data))
 		{

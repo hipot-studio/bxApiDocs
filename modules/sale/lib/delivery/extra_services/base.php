@@ -224,7 +224,7 @@ abstract class Base
 		return $this->id;
 	}
 
-	public function getCostShipment(Shipment $shipment = null)
+	public function getCostShipment(?Shipment $shipment = null)
 	{
 		return $this->getCost();
 	}
@@ -244,7 +244,7 @@ abstract class Base
 		return false;
 	}
 
-	public function getPriceShipment(Shipment $shipment = null)
+	public function getPriceShipment(?Shipment $shipment = null)
 	{
 		return $this->getPrice();
 	}

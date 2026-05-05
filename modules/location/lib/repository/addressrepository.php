@@ -21,6 +21,9 @@ class AddressRepository
 	/** @var Model\AddressLinkTable  */
 	protected $linkTableClass = Model\AddressLinkTable::class;
 
+	/** @var array<int, Entity\Address|null> */
+	protected static array $findByIdCache = [];
+
 	/**
 	 * @param int $id
 	 * @return Entity\Address|null
@@ -32,6 +35,11 @@ class AddressRepository
 	 */
 	public function findById(int $id)
 	{
+		if (array_key_exists($id, static::$findByIdCache))
+		{
+			return static::$findByIdCache[$id];
+		}
+
 		$res = $this->tableClass::getList([
 			'select' => ['*', 'FIELDS', 'LOCATION', 'LOCATION.NAME', 'LINKS'],
 			'filter' => ['=ID' => $id],
@@ -45,6 +53,8 @@ class AddressRepository
 		{
 			$result = Entity\Address\Converter\OrmConverter::convertFromOrm($res);
 		}
+
+		static::$findByIdCache[$id] = $result;
 
 		return $result;
 	}
@@ -112,6 +122,8 @@ class AddressRepository
 
 		$this->saveFieldCollection($address);
 		$this->saveLinkCollection($address);
+
+		unset(static::$findByIdCache[$address->getId()]);
 
 		return $result;
 	}
@@ -204,6 +216,9 @@ class AddressRepository
 		$result = $this->tableClass::delete($addressId);
 		$this->fieldTableClass::deleteByAddressId($addressId);
 		$this->linkTableClass::deleteByAddressId($addressId);
+
+		unset(static::$findByIdCache[$addressId]);
+
 		return $result;
 	}
 }

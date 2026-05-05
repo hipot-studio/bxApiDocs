@@ -34,10 +34,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 {
 	public const ERROR_CODE_EXCEEDED_LIMIT = 'exceeded_limit';
 	public const ERROR_CODE_COULD_NOT_LOCK = 'could_not_lock';
-	protected const SESSION_LIMIT_SLIDER_KEY = 'disk.limitSlider';
-	protected const LIMIT_SLIDER_TARIFF_CODE = 'limit_v2_disk_onlyoffice_edit';
-	protected const LIMIT_SLIDER_OWN_SERVER_BOX = 'limit_disk_onlyoffice_own_server_box';
-	protected const LIMIT_SLIDER_FEEDBACK_FORM = 'feedbackForm';
+	protected const SESSION_SHOW_IMMEDIATELY_KEY = 'disk.promoShowImmediately';
 	protected const AUTO_FORCE_RELOAD_AFTER = 300_000; // 5 minutes in ms
 
 	private const OPTION_CATEGORY_TO_CONTROL_BUTTON_WIDGET_DISPLAY = 'session-boost-in-editor';
@@ -130,7 +127,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		{
 			if (!$bitrix24Scenario->canUseEdit())
 			{
-				LocalRedirect($this->processExceededLimit($documentSession, true));
+				LocalRedirect($this->processExceededLimit($documentSession));
 			}
 		}
 
@@ -286,7 +283,6 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 				{
 					$this->errorCollection[] = new Disk\Internals\Error\Error('Exceeded limit.', self::ERROR_CODE_EXCEEDED_LIMIT, [
 						'limit' => $this->restrictionManager->getLimit(),
-						'isTariffExtendable' => $this->restrictionManager->isCurrentTariffExtendable(),
 					]);
 
 					AddEventToStatFile(
@@ -383,61 +379,13 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
  	/**
 	 * Fill necessary params for show selected slider.
 	 * @return void
-	 * @throws ArgumentException
 	 */
 	protected function processLimitSlider(): void
 	{
 		$session = $this->getSession();
-		/** @var string|null $limitSlider */
-		$limitSlider = $session->get(self::SESSION_LIMIT_SLIDER_KEY);
+		$this->arResult['PROMO_SHOW_IMMEDIATELY'] = (bool)$session->get(self::SESSION_SHOW_IMMEDIATELY_KEY);
 
-		$this->arResult['PROMO_SHOW_IMMEDIATELY'] = !is_null($limitSlider);
-
-		$session->remove(self::SESSION_LIMIT_SLIDER_KEY);
-
-		if (!IsModuleInstalled('bitrix24'))
-		{
-			switch ($limitSlider)
-			{
-				case self::LIMIT_SLIDER_FEEDBACK_FORM:
-					if (defined('BX24_HOST_NAME'))
-					{
-						$fromDomain = BX24_HOST_NAME;
-					}
-					else
-					{
-						$fromDomain = Application::getInstance()->getContext()->getRequest()->getHttpHost();
-					}
-
-					$this->arResult['LIMIT_SLIDER'] = $limitSlider;
-
-					$this->arResult['LIMIT_SLIDER_FEEDBACK_FORM_PARAMS'] = [
-						'forms' => Json::encode([
-							[
-								'zones' => ['ru', 'kz', 'by', 'uz'],
-								'id' => 2996,
-								'lang' => 'ru',
-								'sec' => '7plkx7',
-							],
-							[
-								'zones' => ['en'],
-								'id' => 850,
-								'lang' => 'en',
-								'sec' => 'c76ugx',
-							],
-						]),
-						'presets' => Json::encode([
-							'from_domain' => $fromDomain,
-						]),
-					];
-
-					break;
-				case self::LIMIT_SLIDER_TARIFF_CODE:
-				default:
-					$this->arResult['LIMIT_SLIDER'] = 'infoHelper';
-					$this->arResult['LIMIT_SLIDER_INFO_HELPER_CODE'] = $limitSlider;
-			}
-		}
+		$session->remove(self::SESSION_SHOW_IMMEDIATELY_KEY);
 	}
 
 	private function shouldUseRestriction(): bool
@@ -685,9 +633,9 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 				'LIMIT_VALUE' => $this->getErrorByCode(self::ERROR_CODE_EXCEEDED_LIMIT)->getCustomData()['limit'],
 			];
 
-			if (!Disk\Internal\Service\OnlyOffice\Promo\PromoResolver::shouldBlockPromoForUser())
+			if (!Disk\Internal\Service\OnlyOffice\Promo\PromoBlocker::shouldBlockPromoForUser())
 			{
-				LocalRedirect($this->processExceededLimitError($error, $documentSession));
+				LocalRedirect($this->processExceededLimit($documentSession));
 			}
 		}
 
@@ -698,60 +646,16 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 	}
 
 	/**
-	 * Process exceeded limit by error.
-	 *
-	 * @param \Bitrix\Main\Error $error
-	 * @param Disk\Document\Models\DocumentSession $documentSession
-	 * @return string url for redirection
-	 * @throws ArgumentException
-	 * @throws NotImplementedException
-	 */
-	protected function processExceededLimitError(
-		\Bitrix\Main\Error $error,
-		Disk\Document\Models\DocumentSession $documentSession,
-	): string
-	{
-		$isTariffExtendable = $error->getCustomData()['isTariffExtendable'] ?? true;
-
-		return $this->processExceededLimit($documentSession, $isTariffExtendable);
-	}
-
-	/**
 	 * Generate URL for redirection and setting slider type for show in UI.
 	 *
 	 * @param Disk\Document\Models\DocumentSession $documentSession
-	 * @param bool $isTariffExtendable
 	 * @return string url for redirection
 	 * @throws ArgumentException
 	 * @throws NotImplementedException
 	 */
-	protected function processExceededLimit(
-		Disk\Document\Models\DocumentSession $documentSession,
-		bool $isTariffExtendable,
-	): string
+	protected function processExceededLimit(Disk\Document\Models\DocumentSession $documentSession): string
 	{
-		if (!$this->sessionBoostService->isAvailable())
-		{
-			if ($isTariffExtendable)
-			{
-				$limitSlider = self::LIMIT_SLIDER_TARIFF_CODE;
-			}
-			elseif ($this->customServerAvailabilityProvider->isAvailableForBuy())
-			{
-				$limitSlider = self::LIMIT_SLIDER_OWN_SERVER_BOX;
-			}
-			else
-			{
-				$limitSlider = self::LIMIT_SLIDER_FEEDBACK_FORM;
-			}
-
-			$this->getSession()->set(self::SESSION_LIMIT_SLIDER_KEY, $limitSlider);
-		}
-		else
-		{
-			$this->getSession()->set(self::SESSION_LIMIT_SLIDER_KEY, self::LIMIT_SLIDER_TARIFF_CODE);
-		}
-
+		$this->getSession()->set(self::SESSION_SHOW_IMMEDIATELY_KEY, true);
 		$documentSession->transformToView();
 
 		Application::getInstance()->addBackgroundJob(function () use ($documentSession) {
@@ -792,9 +696,9 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 		$errorCollection = $result->getErrorCollection();
 		/** @see \Bitrix\DocumentProxy\Controller\SignDocumentConfiguration::ERROR_CODE_EXCEEDED_LIMIT */
-		if (($error = $errorCollection->getErrorByCode('exceeded_limit')) && !Disk\Internal\Service\OnlyOffice\Promo\PromoResolver::shouldBlockPromoForUser())
+		if ($errorCollection->getErrorByCode('exceeded_limit') && !Disk\Internal\Service\OnlyOffice\Promo\PromoBlocker::shouldBlockPromoForUser())
 		{
-			LocalRedirect($this->processExceededLimitError($error, $documentSession));
+			LocalRedirect($this->processExceededLimit($documentSession));
 		}
 		/** @see \Bitrix\DocumentProxy\Engine\Filter\DemoRestriction::ERROR_DEMO_RESTRICTION */
 		if ($errorCollection->getErrorByCode('demo_restriction'))

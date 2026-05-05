@@ -5,6 +5,7 @@ namespace Bitrix\Location\Infrastructure;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Event;
 use Bitrix\Main\Application;
+use Bitrix\Location\Repository\Format\DataCollection;
 
 /**
  * Class CurrentFormatCode
@@ -28,6 +29,12 @@ class FormatCode
 
 	public static function setCurrent(string $formatCode, string $siteId = ''): void
 	{
+		$validCodes = array_keys(DataCollection::getAll('en'));
+		if (!in_array($formatCode, $validCodes, true))
+		{
+			$formatCode = static::getDefault();
+		}
+
 		Option::set(
 			'location',
 			static::$optionName,

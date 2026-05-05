@@ -36,7 +36,7 @@ class UaPayHandler
 	 * @throws Main\NotImplementedException
 	 * @throws Main\ObjectException
 	 */
-	public function initiatePay(Payment $payment, Request $request = null)
+	public function initiatePay(Payment $payment, ?Request $request = null)
 	{
 		$result = new PaySystem\ServiceResult();
 
@@ -670,7 +670,7 @@ class UaPayHandler
 	 * @param Payment $payment
 	 * @return bool
 	 */
-	protected function isTestMode(Payment $payment = null)
+	protected function isTestMode(?Payment $payment = null)
 	{
 		return ($this->getBusinessValue($payment, "UAPAY_TEST_MODE") === "Y");
 	}

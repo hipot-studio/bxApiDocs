@@ -2,6 +2,12 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Bizproc\Starter\Dto\ContextDto;
+use Bitrix\Bizproc\Starter\Dto\DocumentDto;
+use Bitrix\Bizproc\Starter\Dto\StarterConfigDto;
+use Bitrix\Bizproc\Starter\Dto\StarterDto;
+use Bitrix\Bizproc\Starter\Enum\Scenario;
+use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Disk\Internals\FileHelper;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -2257,12 +2263,12 @@ class BizProcDocument implements \IBPWorkflowDocument
 
 	public static function runAfterEdit($storageId, $fileId)
 	{
-		static::startAutoBizProc($storageId, $fileId, \CBPDocumentEventType::Edit);
+		static::startAutoBizProc((int)$storageId, (int)$fileId, \CBPDocumentEventType::Edit);
 	}
 
 	public static function runAfterCreate($storageId, $fileId)
 	{
-		static::startAutoBizProc($storageId, $fileId, \CBPDocumentEventType::Create);
+		static::startAutoBizProc((int)$storageId, (int)$fileId, \CBPDocumentEventType::Create);
 	}
 
 	/**
@@ -2272,9 +2278,15 @@ class BizProcDocument implements \IBPWorkflowDocument
 	 * @deprecated
 	 * @internal
 	 */
-	public static function runAfterEditWithInputParameters($storageId, $fileId, $workflowParameters)
+	public static function runAfterEditWithInputParameters($storageId, $fileId, $workflowParameters, $parametersAreSigned = false)
 	{
-		static::startAutoBizProc($storageId, $fileId, \CBPDocumentEventType::Edit, $workflowParameters);
+		static::startAutoBizProc(
+			(int)$storageId,
+			(int)$fileId,
+			\CBPDocumentEventType::Edit,
+			(array)$workflowParameters,
+			(bool)$parametersAreSigned
+		);
 	}
 
 	/**
@@ -2284,9 +2296,15 @@ class BizProcDocument implements \IBPWorkflowDocument
 	 * @deprecated
 	 * @internal
 	 */
-	public static function runAfterCreateWithInputParameters($storageId, $fileId, $workflowParameters)
+	public static function runAfterCreateWithInputParameters($storageId, $fileId, $workflowParameters, bool $parametersAreSigned = false)
 	{
-		static::startAutoBizProc($storageId, $fileId, \CBPDocumentEventType::Create, $workflowParameters);
+		static::startAutoBizProc(
+			(int)$storageId,
+			(int)$fileId,
+			\CBPDocumentEventType::Create,
+			(array)$workflowParameters,
+			$parametersAreSigned
+		);
 	}
 
 	/**
@@ -2294,8 +2312,133 @@ class BizProcDocument implements \IBPWorkflowDocument
 	 * @param $fileId
 	 * @param $autoExecuteType
 	 * @param array $workflowParameters When we want to run bizproc without parameters use empty array.
+	 * @param bool $parametersAreSigned
 	 */
-	private static function startAutoBizProc($storageId, $fileId, $autoExecuteType, array $workflowParameters = array())
+	private static function startAutoBizProc(
+		int $storageId,
+		int $fileId,
+		int $autoExecuteType,
+		array $workflowParameters = [],
+		bool $parametersAreSigned = false
+	): void
+	{
+		if (
+			!class_exists(Starter::class)
+			|| ($autoExecuteType !== \CBPDocumentEventType::Create && $autoExecuteType !== \CBPDocumentEventType::Edit)
+		)
+		{
+			static::startAutoBizProcByLegacyApi(
+				$storageId,
+				$fileId,
+				$autoExecuteType,
+				$workflowParameters,
+				$parametersAreSigned
+			);
+
+			return;
+		}
+
+		$scenario =
+			$autoExecuteType === \CBPDocumentEventType::Create
+				? Scenario::onDocumentAdd
+				: Scenario::onDocumentUpdate
+		;
+
+		$documentData = [
+			'DISK' => [
+				'DOCUMENT_TYPE' => self::generateDocumentComplexType($storageId),
+				'DOCUMENT_ID' => self::getDocumentComplexId($fileId),
+			],
+			'WEBDAV' => [
+				'DOCUMENT_TYPE' => BizProcDocumentCompatible::generateDocumentComplexType($storageId),
+				'DOCUMENT_ID' => BizProcDocumentCompatible::getDocumentComplexId($fileId),
+			],
+		];
+
+		$userId = (int)\Bitrix\Main\Engine\CurrentUser::get()->getId();
+
+		foreach ($documentData as $data)
+		{
+			$templateIds = static::getAutoStartTemplateIds(
+				$data['DOCUMENT_TYPE'],
+				$autoExecuteType,
+				$workflowParameters
+			);
+
+			if (empty($templateIds))
+			{
+				continue;
+			}
+
+			$starter = (new Starter(new StarterDto(
+				process: new StarterConfigDto(
+					scenario: $scenario,
+					validateParameters: !$parametersAreSigned,
+				)
+			)))
+				->setDocument(new DocumentDto(
+					complexDocumentId: $data['DOCUMENT_ID'],
+					complexDocumentType: $data['DOCUMENT_TYPE'],
+				))
+				->setTemplateIds($templateIds)
+				->setContext(new ContextDto(Driver::INTERNAL_MODULE_ID))
+				->setUser($userId)
+			;
+
+			if ($workflowParameters)
+			{
+				$starter->setParameters($workflowParameters);
+			}
+
+			$starter->start();
+		}
+	}
+
+	private static function getAutoStartTemplateIds(
+		array $complexDocumentType,
+		int $autoExecuteType,
+		array $workflowParameters
+	): array
+	{
+		$filter = [
+			'DOCUMENT_TYPE' => $complexDocumentType,
+			'AUTO_EXECUTE' => $autoExecuteType,
+			'ACTIVE' => 'Y',
+		];
+
+		if ($workflowParameters)
+		{
+			$filter['!PARAMETERS'] = null;
+		}
+		else
+		{
+			$filter['PARAMETERS'] = null;
+		}
+
+		$templateIds = [];
+		$workflowTemplateObject = \CBPWorkflowTemplateLoader::getList(
+			[],
+			$filter,
+			false,
+			false,
+			['ID']
+		);
+
+		while ($workflowTemplate = $workflowTemplateObject->fetch())
+		{
+			$templateIds[] = (int)$workflowTemplate['ID'];
+		}
+
+		return $templateIds;
+	}
+
+	private static function startAutoBizProcByLegacyApi(
+		int $storageId,
+		int $fileId,
+		int $autoExecuteType,
+		array $workflowParameters = [],
+		bool $parametersAreSigned = false
+	): void
 	{
 		$documentData = array(
 			'DISK' => array(
@@ -2308,13 +2451,15 @@ class BizProcDocument implements \IBPWorkflowDocument
 			),
 		);
 
-		$error = array();
-		foreach($documentData as $nameModule => $data)
+		$workflowParameters = static::normalizeLegacyWorkflowParameters($workflowParameters, $parametersAreSigned);
+
+		$error = [];
+		foreach ($documentData as $data)
 		{
 			$filter = array(
-				"DOCUMENT_TYPE" => $data["DOCUMENT_TYPE"],
-				"AUTO_EXECUTE" => $autoExecuteType,
-				"ACTIVE" => "Y",
+				'DOCUMENT_TYPE' => $data['DOCUMENT_TYPE'],
+				'AUTO_EXECUTE' => $autoExecuteType,
+				'ACTIVE' => 'Y',
 			);
 
 			if ($workflowParameters)
@@ -2327,35 +2472,68 @@ class BizProcDocument implements \IBPWorkflowDocument
 			}
 
 			$workflowTemplateObject = \CBPWorkflowTemplateLoader::getList(
-				array(),
+				[],
 				$filter,
 				false,
 				false,
-				array("ID", "PARAMETERS")
+				['ID', 'PARAMETERS']
 			);
 			while ($workflowTemplate = $workflowTemplateObject->getNext())
 			{
-				$workflowParameter = array();
-				foreach($workflowParameters as $idParameter => $valueParameter)
+				$workflowParameter = [];
+				foreach ($workflowParameters as $idParameter => $valueParameter)
 				{
 					$search = $workflowTemplate['ID'];
 					$res = mb_strpos($idParameter, $search);
-					if($res === 7)
+					if ($res === 7)
 					{
-						$parameterKey = end(explode('_', $idParameter));
+						$parameterChunks = explode('_', $idParameter);
+						$parameterKey = end($parameterChunks);
 						$workflowParameter[$parameterKey] = $valueParameter;
 					}
 				}
 
-				$workflowParametersCheck = \CBPWorkflowTemplateLoader::checkWorkflowParameters(
-					$workflowTemplate["PARAMETERS"],
-					$workflowParameter,
-					$data["DOCUMENT_TYPE"],
-					$error
-				);
-				\CBPDocument::startWorkflow($workflowTemplate['ID'], $data["DOCUMENT_ID"], $workflowParametersCheck, $error);
+				if ($parametersAreSigned)
+				{
+					$workflowParametersCheck = $workflowParameter;
+				}
+				else
+				{
+					$workflowParametersCheck = \CBPWorkflowTemplateLoader::checkWorkflowParameters(
+						$workflowTemplate['PARAMETERS'],
+						$workflowParameter,
+						$data['DOCUMENT_TYPE'],
+						$error
+					);
+				}
+
+				\CBPDocument::startWorkflow($workflowTemplate['ID'], $data['DOCUMENT_ID'], $workflowParametersCheck, $error);
 			}
 		}
+	}
+
+	private static function normalizeLegacyWorkflowParameters(array $workflowParameters, bool $parametersAreSigned): array
+	{
+		if (!$parametersAreSigned)
+		{
+			return $workflowParameters;
+		}
+
+		$flattenedParameters = [];
+		foreach ($workflowParameters as $templateId => $params)
+		{
+			if (!is_array($params))
+			{
+				continue;
+			}
+
+			foreach ($params as $paramKey => $paramValue)
+			{
+				$flattenedParameters['bizproc' . $templateId . '_' . $paramKey] = $paramValue;
+			}
+		}
+
+		return $flattenedParameters;
 	}
 
 	public static function getAllowableOperations($documentType)

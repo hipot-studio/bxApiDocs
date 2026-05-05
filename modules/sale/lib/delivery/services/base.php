@@ -162,7 +162,7 @@ abstract class Base
 	 * @param array $extraServices .
 	 * @return \Bitrix\Sale\Delivery\CalculationResult
 	 */
-	public function calculate(\Bitrix\Sale\Shipment $shipment = null, $extraServices = array()) // null for compability with old configurable services api
+	public function calculate(?\Bitrix\Sale\Shipment $shipment = null, $extraServices = array()) // null for compability with old configurable services api
 	{
 		$result = new Delivery\CalculationResult();
 

@@ -37,7 +37,7 @@ class StatisticProvider extends Base
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function listAction($select = [], $filter = [], $order = [], PageNavigation $pageNavigation = null): Page
+	public function listAction($select = [], $filter = [], $order = [], ?PageNavigation $pageNavigation = null): Page
 	{
 		return new Page('STATISTIC_PROVIDERS',
 			$this->getList($select, $filter, $order, $pageNavigation),

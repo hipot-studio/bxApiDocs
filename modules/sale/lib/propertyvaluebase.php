@@ -54,9 +54,9 @@ class PropertyValueBase extends EntityPropertyValue
 	 * @return EntityPropertyValue
 	 */
 	protected static function createPropertyValueObject(
-		array $property = null,
+		?array $property = null,
 		array $value = [],
-		array $relation = null
+		?array $relation = null
 	): EntityPropertyValue
 	{
 		$registry = Registry::getInstance(static::getRegistryType());

@@ -72,7 +72,7 @@ class Service implements RestrictableService
 	 * @param int $mode
 	 * @return ServiceResult
 	 */
-	public function initiatePay(Payment $payment, Request $request = null, $mode = BaseServiceHandler::STREAM)
+	public function initiatePay(Payment $payment, ?Request $request = null, $mode = BaseServiceHandler::STREAM)
 	{
 		$onBeforeInitResult = $this->callEventOnBeforeInitiatePay($payment);
 		if (!$onBeforeInitResult->isSuccess())
@@ -717,7 +717,7 @@ class Service implements RestrictableService
 	 * @param $templateName
 	 * @return ServiceResult
 	 */
-	public function showTemplate(Payment $payment = null, $templateName)
+	public function showTemplate(?Payment $payment = null, $templateName)
 	{
 		return $this->handler->showTemplate($payment, $templateName);
 	}
@@ -735,7 +735,7 @@ class Service implements RestrictableService
 	 * @param Request $request
 	 * @throws NotSupportedException
 	 */
-	public function initPrePayment(Payment $payment = null, Request $request)
+	public function initPrePayment(?Payment $payment = null, Request $request)
 	{
 		if ($this->isPrePayable())
 			return $this->handler->initPrePayment($payment, $request);
@@ -987,7 +987,7 @@ class Service implements RestrictableService
 	 * @param Request|null $request
 	 * @return ServiceResult
 	 */
-	public function repeatRecurrent(Payment $payment, Request $request = null): ServiceResult
+	public function repeatRecurrent(Payment $payment, ?Request $request = null): ServiceResult
 	{
 		$result = new ServiceResult();
 
@@ -1004,7 +1004,7 @@ class Service implements RestrictableService
 	 * @param Request|null $request
 	 * @return ServiceResult
 	 */
-	public function cancelRecurrent(Payment $payment, Request $request = null): ServiceResult
+	public function cancelRecurrent(Payment $payment, ?Request $request = null): ServiceResult
 	{
 		$result = new ServiceResult();
 

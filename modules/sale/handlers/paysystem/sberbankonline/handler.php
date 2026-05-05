@@ -42,7 +42,7 @@ class SberbankOnlineHandler extends PaySystem\ServiceHandler implements PaySyste
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function initiatePay(Payment $payment, Request $request = null): PaySystem\ServiceResult
+	public function initiatePay(Payment $payment, ?Request $request = null): PaySystem\ServiceResult
 	{
 		$result = new PaySystem\ServiceResult();
 		$params = [];
@@ -525,7 +525,7 @@ class SberbankOnlineHandler extends PaySystem\ServiceHandler implements PaySyste
 	 * @param Payment|null $payment
 	 * @return bool
 	 */
-	protected function isTestMode(Payment $payment = null): bool
+	protected function isTestMode(?Payment $payment = null): bool
 	{
 		return $this->getBusinessValue($payment, static::getDescriptionCode('TEST_MODE')) === 'Y';
 	}

@@ -320,7 +320,7 @@ class Manager
 	 * @param array $skipChecks self::SKIP_CHILDREN_PARENT_CHECK || self::SKIP_PROFILE_PARENT_CHECK
 	 * @return array Array of active delivery services fields filtered by restrictions.
 	 */
-	public static function getRestrictedList(Shipment $shipment = null, $restrictionMode, array $skipChecks = array())
+	public static function getRestrictedList(?Shipment $shipment = null, $restrictionMode, array $skipChecks = array())
 	{
 		$result = array();
 
@@ -1367,7 +1367,7 @@ class Manager
 	/**
 	 * @deprecated use \Bitrix\Sale\Delivery\Services\Manager::getRestrictedList()
 	 */
-	public static function getServicesBriefsForShipment(Shipment $shipment = null, array $skipChecks = array(), $getAll = false)
+	public static function getServicesBriefsForShipment(?Shipment $shipment = null, array $skipChecks = array(), $getAll = false)
 	{
 		return self::getRestrictedList($shipment, Restrictions\Manager::MODE_CLIENT, $skipChecks);
 	}

@@ -38,9 +38,9 @@ abstract class EntityPropertyValue extends CollectableEntity
 	 * @throws Main\NotImplementedException
 	 */
 	abstract protected static function createPropertyValueObject(
-		array $property = null,
+		?array $property = null,
 		array $value = [],
-		array $relation = null
+		?array $relation = null
 	): EntityPropertyValue;
 
 	/**
@@ -447,7 +447,7 @@ abstract class EntityPropertyValue extends CollectableEntity
 	 * @param array|null $relation
 	 * @throws Main\SystemException|Main\LoaderException
 	 */
-	protected function __construct(array $property = null, array $value = [], array $relation = null)
+	protected function __construct(?array $property = null, array $value = [], ?array $relation = null)
 	{
 		if (!$property && !$value)
 		{

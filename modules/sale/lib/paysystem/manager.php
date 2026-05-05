@@ -332,7 +332,7 @@ final class Manager
 	 * @throws \Bitrix\Main\NotSupportedException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public static function getListWithRestrictionsByOrder(Order $order, float $sum = null, int $mode = Restrictions\Manager::MODE_CLIENT): array
+	public static function getListWithRestrictionsByOrder(Order $order, ?float $sum = null, int $mode = Restrictions\Manager::MODE_CLIENT): array
 	{
 		/** @var Order $orderClone */
 		$orderClone = $order->createClone();

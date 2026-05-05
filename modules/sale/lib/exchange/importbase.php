@@ -66,7 +66,7 @@ abstract class ImportBase
      * @param array|null $params
      * @return Sale\Result
      */
-    abstract public function delete(array $params = null);
+    abstract public function delete(?array $params = null);
 
     /**
      * @param array $fields

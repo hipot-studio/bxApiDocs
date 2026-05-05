@@ -36,7 +36,7 @@ class OrderDocumentHandler
 	 * @throws Main\ArgumentTypeException
 	 * @throws Main\LoaderException
 	 */
-	public function initiatePay(Sale\Payment $payment, Request $request = null)
+	public function initiatePay(Sale\Payment $payment, ?Request $request = null)
 	{
 		$result = new PaySystem\ServiceResult();
 		if (!Main\Loader::includeModule('documentgenerator')

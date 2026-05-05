@@ -111,7 +111,7 @@ class ShipmentCollection
 	 * @throws Main\ArgumentException
 	 * @throws Main\ObjectNotFoundException
 	 */
-	public function createItem(Delivery\Services\Base $delivery = null)
+	public function createItem(?Delivery\Services\Base $delivery = null)
 	{
 		/** @var Shipment $shipmentClassName */
 		$shipmentClassName = static::getItemCollectionClassName();

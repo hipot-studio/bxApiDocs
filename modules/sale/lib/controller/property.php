@@ -54,7 +54,7 @@ class Property extends Controller
 		}
 	}
 
-	public function updateAction($id, array $fields)
+	public function updateAction($id, array $fields): ?array
 	{
 		$r = $this->exists($id);
 		if($r->isSuccess())
@@ -71,7 +71,7 @@ class Property extends Controller
 				unset($fields['SETTINGS']);
 			}
 
-			$r = $this->checkFileds($fields);
+			$r = $this->checkFields($fields);
 
 			if($r->isSuccess())
 			{
@@ -192,7 +192,7 @@ class Property extends Controller
 		return Registry::ENTITY_ORDER;
 	}
 
-	public function addAction($fields)
+	public function addAction(array $fields): ?array
 	{
 		$fields = self::prepareFields($fields);
 		if (isset($fields['SETTINGS']) && is_array($fields['SETTINGS']))
@@ -201,10 +201,12 @@ class Property extends Controller
 			unset($fields['SETTINGS']);
 		}
 
-		$r = $this->checkFileds($fields);
+		$r = $this->checkFields($fields);
 
-		if(!isset($fields['PERSON_TYPE_ID']) || trim($fields['PERSON_TYPE_ID'])=='')
+		if (!isset($fields['PERSON_TYPE_ID']) || trim($fields['PERSON_TYPE_ID']) == '')
+		{
 			$r->addError(new Error('person type id is empty', 200850000005));
+		}
 
 		if($r->isSuccess())
 		{
@@ -226,6 +228,7 @@ class Property extends Controller
 		if(!$r->isSuccess())
 		{
 			$this->addErrors($r->getErrors());
+
 			return null;
 		}
 		else
@@ -235,17 +238,26 @@ class Property extends Controller
 	}
 	//endregion
 
-	protected function checkFileds($fields)
+	/**
+	 * @deprecated
+	 * @see \Bitrix\Sale\Controller\Property::checkFields
+	 */
+	protected function checkFileds(array $fields): Result
+	{
+		return $this->checkFields($fields);
+	}
+
+	protected function checkFields(array $fields): Result
 	{
 		$r = new Result();
 
-		if(isset($fields['MULTIPLE']) && $fields['MULTIPLE'] == 'Y')
+		if (isset($fields['MULTIPLE']) && $fields['MULTIPLE'] === 'Y')
 		{
-			if(isset($fields['IS_FILTERED']) == false)
+			if (!isset($fields['IS_FILTERED']))
 			{
 				$r->addError(new Error('Require fields: isFiltered.' , 200850000009));
 			}
-			elseif($fields['IS_FILTERED'] <> 'N')
+			elseif ($fields['IS_FILTERED'] !== 'N')
 			{
 				$r->addError(new Error('Allowed values: isFiltered - [N]', 200850000010));
 			}
@@ -253,25 +265,25 @@ class Property extends Controller
 
 		if ($fields['TYPE'] == \Bitrix\Sale\Rest\Entity\Property::PROPERTY_TYPE_LOCATION)
 		{
-			if(isset($fields['IS_LOCATION']) && $fields['IS_LOCATION'] == 'Y')
+			if (isset($fields['IS_LOCATION']) && $fields['IS_LOCATION'] === 'Y')
 			{
-				if(isset($fields['MULTIPLE']) == false)
+				if (!isset($fields['MULTIPLE']))
 				{
 					$r->addError(new Error('Require fields: multiple.', 200850000011));
 				}
-				elseif ($fields['MULTIPLE'] <> 'N')
+				elseif ($fields['MULTIPLE'] !== 'N')
 				{
 					$r->addError(new Error('Allowed values: multiple - [N]', 200850000012));
 				}
 			}
 
-			if(isset($fields['IS_LOCATION4TAX']) && $fields['IS_LOCATION4TAX'] == 'Y')
+			if (isset($fields['IS_LOCATION4TAX']) && $fields['IS_LOCATION4TAX'] === 'Y')
 			{
-				if(isset($fields['MULTIPLE']) == false)
+				if (!isset($fields['MULTIPLE']))
 				{
 					$r->addError(new Error('Require fields: multiple.', 200850000013));
 				}
-				elseif ($fields['MULTIPLE'] <> 'N')
+				elseif ($fields['MULTIPLE'] !== 'N')
 				{
 					$r->addError(new Error('Allowed values: multiple - [N]', 200850000014));
 				}
@@ -280,20 +292,68 @@ class Property extends Controller
 
 		if ($fields['TYPE'] == \Bitrix\Sale\Rest\Entity\Property::PROPERTY_TYPE_STRING)
 		{
-			if(isset($fields['IS_PROFILE_NAME']) && $fields['IS_PROFILE_NAME'] == 'Y')
+			if (isset($fields['IS_PROFILE_NAME']) && $fields['IS_PROFILE_NAME'] === 'Y')
 			{
-				if(isset($fields['REQUIRED']) == false)
+				if (!isset($fields['REQUIRED']))
 				{
 					$r->addError(new Error('Require fields: require.', 200850000015));
 				}
-				elseif ($fields['REQUIRED'] <> 'Y')
+				elseif ($fields['REQUIRED'] !== 'Y')
 				{
 					$r->addError(new Error('Allowed values: require - [Y]', 200850000016));
 				}
 			}
 		}
 
+		if (
+			$fields['TYPE'] == \Bitrix\Sale\Rest\Entity\Property::PROPERTY_TYPE_FILE
+			&& isset($fields['DEFAULT_VALUE'])
+		)
+		{
+			$defaultValue = $fields['DEFAULT_VALUE'];
+			if (is_array($defaultValue))
+			{
+				if (!array_is_list($defaultValue))
+				{
+					$defaultValue = [$defaultValue];
+				}
+				foreach ($defaultValue as $defaultValueElement)
+				{
+					if (!$this->checkFileFieldValue($defaultValueElement))
+					{
+						$r->addError($this->getWrongFormatOfFieldError());
+
+						break;
+					}
+				}
+			}
+			else
+			{
+				$r->addError($this->getWrongFormatOfFieldError());
+			}
+		}
+
 		return $r;
+	}
+
+	protected function getWrongFormatOfFieldError(): Error
+	{
+		return new Error('Wrong format of field `defaultValue`', 200850000017);
+	}
+
+	protected function checkFileFieldValue($fileFieldValue): bool
+	{
+		return
+			(
+				isset($fileFieldValue['FILE_DATA'][0], $fileFieldValue['FILE_DATA'][1])
+				&& is_string($fileFieldValue['FILE_DATA'][0])
+				&& is_string($fileFieldValue['FILE_DATA'][1])
+			)
+			|| (
+				isset($fileFieldValue['REMOVE'])
+				&& $fileFieldValue['REMOVE'] === 'Y'
+			)
+		;
 	}
 
 	public function getTypes()
@@ -902,7 +962,7 @@ class Property extends Controller
 	{
 		if ($this->property['TYPE'] === 'FILE')
 		{
-			$savedFiles = $this->saveFiles($this->property);
+			$savedFiles = $this->saveFiles();
 		}
 		else
 		{
@@ -948,34 +1008,49 @@ class Property extends Controller
 		}
 	}
 
-	protected function saveFiles(&$property)
+	protected function saveFiles(): array
 	{
-		$savedFiles = array();
-
-		$files = File::asMultiple($property['DEFAULT_VALUE']);
-		foreach ($files as $i => $file)
+		$savedFiles = [];
+		$defaultValue = $this->property['DEFAULT_VALUE'] ?? null;
+		if (!is_array($defaultValue))
 		{
-			if (File::isDeletedSingle($file))
-			{
-				unset($files[$i]);
-			}
-			else
-			{
-				if (
-					File::isUploadedSingle($file)
-					&& ($fileId = \CFile::SaveFile(array('MODULE_ID' => 'sale') + $file, 'sale/order/properties/default'))
-					&& is_numeric($fileId)
-				)
-				{
-					$file = $fileId;
-					$savedFiles[] = $fileId;
-				}
+			return $savedFiles;
+		}
 
-				$files[$i] = File::loadInfoSingle($file);
+		$multiple = ($this->property['MULTIPLE'] ?? null) === 'Y';
+
+		$defaultValue = array_is_list($defaultValue) ? $defaultValue : [$defaultValue];
+		foreach ($defaultValue as $defaultValueKey => $defaultValueElement)
+		{
+			if (
+				isset($defaultValueElement['REMOVE'])
+				&& $defaultValueElement['REMOVE'] === 'Y'
+			)
+			{
+				unset($defaultValue[$defaultValueKey]);
+
+				continue;
+			}
+
+			$fileData = $defaultValueElement['FILE_DATA'];
+			$fileArray = \CRestUtil::saveFile($fileData[1], $fileData[0]);
+			if (is_array($fileArray))
+			{
+				$fileArray['MODULE_ID'] = 'sale';
+				$fileId = \CFile::SaveFile($fileArray, 'sale/order/properties/default');
+				if ((int)$fileId > 0)
+				{
+					$defaultValue[$defaultValueKey] = File::loadInfoSingle($fileId);
+					$savedFiles[] = $fileId;
+					if ($multiple)
+					{
+						break;
+					}
+				}
 			}
 		}
 
-		$property['DEFAULT_VALUE'] = $files;
+		$this->property['DEFAULT_VALUE'] = $defaultValue;
 
 		return $savedFiles;
 	}
