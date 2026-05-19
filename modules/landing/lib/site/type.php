@@ -247,7 +247,7 @@ class Type
 		}
 
 		// compatibility, huh
-		return $strict ? null : ['PAGE', 'STORE', 'SMN'];
+		return $strict ? null : ['PAGE', 'STORE', 'SMN', 'VIBE'];
 	}
 
 	/**

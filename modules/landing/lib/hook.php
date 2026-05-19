@@ -884,12 +884,43 @@ class Hook
 			$editModeBack = self::$editMode;
 			self::$editMode = true;
 			self::saveData($id, self::ENTITY_TYPE_LANDING, $data);
+			if (array_key_exists('METAOG_IMAGE', $data))
+			{
+				self::deleteVibePreviewOptionsByLandingId($id);
+			}
 			self::indexContent($id, self::ENTITY_TYPE_LANDING);
 			if (Manager::getOption('public_hook_on_save') === 'Y')
 			{
 				self::publicationLandingWithSkipNeededPublication($id);
 			}
 			self::$editMode = $editModeBack;
+		}
+	}
+
+	private static function deleteVibePreviewOptionsByLandingId(int $landingId): void
+	{
+		$sites = Site::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=TYPE' => Site\Type::SCOPE_CODE_VIBE,
+				'=LANDING_ID_INDEX' => $landingId,
+				'CHECK_PERMISSIONS' => 'N',
+			],
+		]);
+		while ($site = $sites->fetch())
+		{
+			$vibes = \Bitrix\Landing\Vibe\Model\VibeTable::query()
+				->setSelect(['MODULE_ID', 'EMBED_ID'])
+				->where('SITE_ID', (int)$site['ID'])
+				->exec()
+			;
+			while ($vibe = $vibes->fetch())
+			{
+				$optionCode = 'vibe_preview_'
+					. md5((string)$vibe['MODULE_ID'] . '|' . (string)$vibe['EMBED_ID'])
+				;
+				\Bitrix\Main\Config\Option::delete('landing', ['name' => $optionCode]);
+			}
 		}
 	}
 

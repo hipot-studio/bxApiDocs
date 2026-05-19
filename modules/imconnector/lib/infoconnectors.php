@@ -8,6 +8,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\ORM;
 use Bitrix\Main\Event;
 use Bitrix\Main\Web\Json;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\ImConnector\Model\InfoConnectorsTable;
@@ -445,7 +446,7 @@ class InfoConnectors
 		{
 			$result->setResult($data);
 
-			$dataEncoded = Json::encode($data);
+			$dataEncoded = Emoji::encode(Json::encode($data));
 			$hashDataEncoded = md5($dataEncoded);
 			$timeExpires = DateTime::createFromTimestamp(time() + (int)Library::CACHE_TIME_INFO_CONNECTORS_LINE);
 

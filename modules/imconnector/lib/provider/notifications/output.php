@@ -101,9 +101,26 @@ class Output extends Base\Output
 				return $result->addError(new Error('LINE_ID should be positive integer'));
 			}
 
+			$disabledScenarios = [];
+			if (Settings::isAnyScenarioEnabled())
+			{
+				foreach (Settings::getScenarioList() as $scenarioCode)
+				{
+					if (Settings::isScenarioEnabled($scenarioCode))
+					{
+						Settings::setScenarioStatus($scenarioCode, false);
+						$disabledScenarios[] = $scenarioCode;
+					}
+				}
+			}
+
 			$resultDelete = ImConnector::unRegisterConnector($lineId);
 			if (!$resultDelete->isSuccess())
 			{
+				foreach ($disabledScenarios as $scenarioCode)
+				{
+					Settings::setScenarioStatus($scenarioCode, true);
+				}
 				$result->addErrors($resultDelete->getErrors());
 			}
 			else
@@ -196,6 +213,56 @@ class Output extends Base\Output
 		$result = clone $this->result;
 
 		return $result->addError(new Error('Message delete is not supported', 'NOT_SUPPORTED'));
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	protected function deleteLine($lineId): Result
+	{
+		$result = clone $this->result;
+
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		if (!Loader::includeModule('notifications'))
+		{
+			return $result;
+		}
+
+		$lineId = (int)$lineId;
+		$connectedLineId = ImConnector::getLineId();
+		if ($connectedLineId === null || $connectedLineId !== $lineId)
+		{
+			return $result;
+		}
+
+		$disabledScenarios = [];
+		if (Settings::isAnyScenarioEnabled())
+		{
+			foreach (Settings::getScenarioList() as $scenarioCode)
+			{
+				if (Settings::isScenarioEnabled($scenarioCode))
+				{
+					Settings::setScenarioStatus($scenarioCode, false);
+					$disabledScenarios[] = $scenarioCode;
+				}
+			}
+		}
+
+		$unregisterResult = ImConnector::unRegisterConnector($lineId);
+		if (!$unregisterResult->isSuccess())
+		{
+			foreach ($disabledScenarios as $scenarioCode)
+			{
+				Settings::setScenarioStatus($scenarioCode, true);
+			}
+			$result->addErrors($unregisterResult->getErrors());
+		}
+
+		return $result;
 	}
 
 	/**

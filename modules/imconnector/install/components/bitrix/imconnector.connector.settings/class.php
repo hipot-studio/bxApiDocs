@@ -128,7 +128,8 @@ class ImConnectorConnectorSettings extends \CBitrixComponent
 			try
 			{
 				if (
-					($channelData = JSON::decode($channelInfo['DATA']))
+					!empty($channelInfo['DATA'])
+					&& ($channelData = JSON::decode(\Bitrix\Main\Text\Emoji::decode($channelInfo['DATA'])))
 					&& !empty($channelData[$this->arResult['ID']]['name'])
 				)
 				{

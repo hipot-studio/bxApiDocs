@@ -1,4 +1,4 @@
-<?
+<?php
 
 namespace Bitrix\Seo\Retargeting\Services;
 
@@ -8,6 +8,7 @@ class RequestVkontakte extends ProxyRequest
 {
 	const TYPE_CODE = 'vkontakte';
 	const REST_METHOD_PREFIX = 'seo.client.ads.vkontakte';
+	private const VK_API_VERSION = '5.199';
 
 	protected function directQuery(array $params = array())
 	{
@@ -15,7 +16,7 @@ class RequestVkontakte extends ProxyRequest
 		$url .= $params['endpoint'];
 
 		$clientParameters = is_array($params['fields']) ? $params['fields'] : array();
-		$clientParameters = $clientParameters + ['v' => '5.107', 'access_token' => $this->adapter->getToken()];
+		$clientParameters = $clientParameters + ['v' => self::VK_API_VERSION, 'access_token' => $this->adapter->getToken()];
 
 
 		if (isset($params['method']) && $params['method'] == 'POST')

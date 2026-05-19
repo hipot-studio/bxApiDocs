@@ -35,6 +35,7 @@ class Openlines extends Controller
 			'urlPrefix' => 'https://t.me/'
 		],
 		Library::ID_NOTIFICATIONS_CONNECTOR => [],
+		Library::ID_MAX_CONNECTOR => [],
 	];
 
 	public const ERROR_ACCESS_DENIED = [

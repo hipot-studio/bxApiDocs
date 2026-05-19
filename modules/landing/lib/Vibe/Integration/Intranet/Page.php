@@ -50,16 +50,13 @@ class Page
 
 	public static function getSefTemplates(): array
 	{
-		try
+		$moduleId = null;
+		$embedId = null;
+		$parsed = self::parseParamsByRoute();
+		if ($parsed !== null)
 		{
-			$route = Application::getInstance()->getCurrentRoute();
-			$moduleId = $route?->getParameterValue('moduleId');
-			$embedId = $route?->getParameterValue('embedId');
+			[$moduleId, $embedId] = $parsed;
 		}
-		// todo: delete after fix getCurrentRoute return type
-		// todo: ORRRR migrate from new/index.php to not-index file
-		catch (\Throwable $e)
-		{}
 
 		$parametrizedPart = isset($moduleId, $embedId) ? '#vibe_module#/#vibe_embed#/' : '';
 
@@ -69,6 +66,20 @@ class Page
 			'vibe_settings' => "settings/$parametrizedPart",
 			'vibe_setting' => "settings/$parametrizedPart#setting_type#/",
 		];
+	}
+
+	public static function parseParamsByRoute(): ?array
+	{
+		if (Application::getInstance()->hasCurrentRoute())
+		{
+			$route = Application::getInstance()->getCurrentRoute();
+			$moduleId = $route->getParameterValue('moduleId');
+			$embedId = $route->getParameterValue('embedId');
+
+			return [$moduleId, $embedId];
+		}
+
+		return null;
 	}
 
 	public static function prepareEditComponentParams(array $params, Vibe $vibe): array

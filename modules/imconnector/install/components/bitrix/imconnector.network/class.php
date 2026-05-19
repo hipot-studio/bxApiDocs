@@ -155,12 +155,17 @@ class ImConnectorNetwork extends \CBitrixComponent
 							elseif (
 								!($imageCheck = (new \Bitrix\Main\File\Image($file['tmp_name']))->getInfo())
 								|| !$imageCheck->getWidth()
-								|| $imageCheck->getWidth() > 5000
 								|| !$imageCheck->getHeight()
-								|| $imageCheck->getHeight() > 5000
 							)
 							{
 								$this->error[] = Loc::getMessage("IMCONNECTOR_COMPONENT_NETWORK_FILE_IS_NOT_A_SUPPORTED_TYPE");
+							}
+							elseif (
+								$imageCheck->getWidth() > 5000
+								|| $imageCheck->getHeight() > 5000
+							)
+							{
+								$this->error[] = Loc::getMessage("IMCONNECTOR_COMPONENT_NETWORK_FILE_EXCEEDS_MAX_SIZE");
 							}
 							else
 							{

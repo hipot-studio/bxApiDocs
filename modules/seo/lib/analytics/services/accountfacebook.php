@@ -398,8 +398,8 @@ class AccountFacebook extends Account
 	{
 		$fields = [
 			'fields' => 'id,account_id,actor_id,adlabels,applink_treatment,asset_feed_spec,body,branded_content_sponsor_page_id,'.
-				'call_to_action_type,effective_instagram_story_id,effective_object_story_id,image_crops,image_hash,'.
-				'image_url,instagram_actor_id,instagram_permalink_url,instagram_story_id,link_og_id,link_url,'.
+				'call_to_action_type,effective_instagram_media_id,effective_object_story_id,image_crops,image_hash,'.
+				'image_url,instagram_user_id,instagram_permalink_url,source_instagram_media_id,link_og_id,link_url,'.
 				'messenger_sponsored_message,name,object_id,object_story_id,object_story_spec,object_type,object_url,'.
 				'platform_customizations,portrait_customizations,product_set_id,recommender_settings,status,template_url,'.
 				'template_url_spec,thumbnail_url,title,url_tags,use_page_actor_override,video_id',

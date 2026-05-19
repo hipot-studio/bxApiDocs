@@ -6,6 +6,7 @@ namespace Bitrix\Landing\Vibe\Integration\Intranet\Settings;
 use Bitrix\Intranet\Integration\Landing\Vibe\MainPage;
 use Bitrix\Landing\Vibe;
 use Bitrix\Landing\Vibe\Url;
+use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Loader;
 
 class Manager
@@ -17,10 +18,27 @@ class Manager
 
 	/**
 	 * Collect all available vibes and manage settings
+	 *
+	 * @param array<Vibe\Vibe>|null $vibes
+	 * @throws ArgumentTypeException
 	 */
-	public function __construct()
+	public function __construct(?array $vibes = null)
 	{
-		$this->vibes = Vibe\Vibe::getList();
+		if ($vibes !== null)
+		{
+			foreach ($vibes as $index => $item)
+			{
+				if (!$item instanceof Vibe\Vibe)
+				{
+					throw new ArgumentTypeException('vibes[' . $index . ']', Vibe\Vibe::class);
+				}
+			}
+			$this->vibes = $vibes;
+		}
+		else
+		{
+			$this->vibes = Vibe\Vibe::getList();
+		}
 		$this->checkDefaultProviderExists();
 	}
 

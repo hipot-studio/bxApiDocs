@@ -310,6 +310,52 @@ class Site extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
+	 * Update site.
+	 * @param int $id Site id.
+	 * @param array $fields Fields array.
+	 * @return \Bitrix\Main\Result
+	 */
+	public static function update($id, $fields = array())
+	{
+		$result = parent::update($id, $fields);
+		self::clearPing((int)$id);
+
+		if (
+			$result->isSuccess()
+			&& array_key_exists('LANDING_ID_INDEX', $fields)
+		)
+		{
+			$siteRow = self::getList([
+				'select' => ['TYPE'],
+				'filter' => [
+					'=ID' => (int)$id,
+					'CHECK_PERMISSIONS' => 'N',
+				],
+				'cache' => ['ttl' => 86400],
+			])->fetch();
+			if (($siteRow['TYPE'] ?? null) !== Site\Type::SCOPE_CODE_VIBE)
+			{
+				return $result;
+			}
+
+			$res = \Bitrix\Landing\Vibe\Model\VibeTable::query()
+				->setSelect(['MODULE_ID', 'EMBED_ID'])
+				->where('SITE_ID', (int)$id)
+				->exec()
+			;
+				while ($vibe = $res->fetch())
+				{
+					$optionCode = 'vibe_preview_'
+						. md5((string)$vibe['MODULE_ID'] . '|' . (string)$vibe['EMBED_ID'])
+					;
+					\Bitrix\Main\Config\Option::delete('landing', ['name' => $optionCode]);
+				}
+			}
+
+		return $result;
+	}
+
+	/**
 	 * Delete site by id.
 	 * @param int $id Site id.
 	 * @param bool $pagesDelete Delete all pages before.

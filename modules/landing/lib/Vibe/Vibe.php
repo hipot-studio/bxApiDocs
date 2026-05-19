@@ -11,7 +11,6 @@ use Bitrix\Landing\Vibe\Provider\AbstractVibeProvider;
 use Bitrix\Landing\Vibe\Provider\VibeContextDto;
 use Bitrix\Landing;
 use Bitrix\Landing\Site;
-use Bitrix\Landing\Scope\Guard;
 use Bitrix\Landing\Vibe\Facade\Portal;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Main\UI\Extension;
@@ -19,6 +18,8 @@ use Bitrix\Pull;
 
 class Vibe
 {
+	private static ?int $lastViewedId = null;
+
 	private string $moduleId;
 	private string $embedId;
 	private string $providerClass;
@@ -33,8 +34,10 @@ class Vibe
 	private ?string $previewImg = null;
 
 	private Portal $state;
+	private Renderer $renderer;
 
 	private const USE_DEMO_OPTION_CODE = 'use_demo_data_in_block_widgets';
+	private const PREVIEW_OPTION_CODE_PREFIX = 'vibe_preview_';
 
 	// region Common
 
@@ -54,6 +57,14 @@ class Vibe
 	}
 
 	/**
+	 * @return int|null
+	 */
+	public function getEntityId(): ?int
+	{
+		return $this->entityId;
+	}
+
+	/**
 	 * @return string
 	 */
 	public function getModuleId(): string
@@ -67,6 +78,27 @@ class Vibe
 	public function getEmbedId(): string
 	{
 		return $this->embedId;
+	}
+
+	/**
+	 * Try to create Vibe by saved ID
+	 * @param int $vibeId
+	 * @return Vibe|null
+	 */
+	public static function createById(int $vibeId): ?Vibe
+	{
+		$res = Model\VibeTable::query()
+			->setSelect(['ID', 'MODULE_ID', 'EMBED_ID'])
+			->where('ID', $vibeId)
+			->setCacheTtl(86400)
+			->exec()
+		;
+		if ($vibe = $res->fetch())
+		{
+			return new Vibe($vibe['MODULE_ID'], $vibe['EMBED_ID']);
+		}
+
+		return null;
 	}
 
 	/**
@@ -141,7 +173,7 @@ class Vibe
 	// region Detected
 	private function detect(): void
 	{
-		$guard = new Guard\Vibe();
+		$guard = new Site\ScopeGuard(Site\Type::SCOPE_CODE_VIBE);
 		$guard->start();
 
 		$vibe = (Model\VibeTable::query())
@@ -164,7 +196,22 @@ class Vibe
 			$this->providerClass = $vibe->getProviderClass();
 		}
 
-		$site = (Landing\Site::getList([
+		$cached = $this->getPreviewOptionData();
+		$cachedLandingId = (int)($cached['landingId'] ?? 0);
+		if (
+			$cached !== null
+			&& (int)($cached['siteId'] ?? 0) === (int)$this->siteId
+			&& $cachedLandingId > 0
+		)
+		{
+			$this->landingId = $cachedLandingId;
+			$this->previewImg = $this->getPreviewFromOption($this->landingId)
+				?? $this->buildPreviewAndSaveOption($this->landingId);
+
+			return;
+		}
+
+		$site = (Site::getList([
 			'select' => ['LANDING_ID_INDEX'],
 			'filter' => [
 				'=ID' => $this->siteId,
@@ -185,8 +232,96 @@ class Vibe
 		{
 			// todo: check exists page
 			$this->landingId = (int)$site['LANDING_ID_INDEX'];
-			$this->previewImg = Landing\Manager::getUrlFromFile(Site::getPreview($this->getSiteId(), true));
+			$this->previewImg = $this->getPreviewFromOption($this->landingId)
+				?? $this->buildPreviewAndSaveOption($this->landingId);
 		}
+	}
+
+	private function getPreviewFromOption(int $landingId): ?string
+	{
+		$cached = $this->getPreviewOptionData();
+		if (
+			$cached !== null
+			&& (int)($cached['siteId'] ?? 0) === (int)$this->siteId
+			&& (int)($cached['landingId'] ?? 0) === $landingId
+		)
+		{
+			$previewSource = trim((string)($cached['previewSource'] ?? ''));
+			if ($previewSource !== '')
+			{
+				return Landing\Manager::getUrlFromFile($previewSource);
+			}
+		}
+
+		return null;
+	}
+
+	private function buildPreviewAndSaveOption(int $landingId): string
+	{
+		$previewSource = '/bitrix/images/landing/nopreview.jpg';
+		$imageValue = Landing\Hook\Page\MetaOg::getImageByEntityId($landingId);
+		if ($imageValue !== null)
+		{
+			if ((int)$imageValue > 0)
+			{
+				$path = Landing\File::getFilePath((int)$imageValue);
+				if ($path)
+				{
+					$previewSource = $path;
+				}
+			}
+			else
+			{
+				$imageValue = trim($imageValue);
+				if ($imageValue !== '')
+				{
+					$previewSource = $imageValue;
+				}
+			}
+		}
+
+		$data = [
+			'siteId' => (int)$this->siteId,
+			'landingId' => $landingId,
+			'previewSource' => $previewSource,
+		];
+		$optionCode = $this->getPreviewOptionCode();
+		try
+		{
+			Option::set('landing', $optionCode, json_encode($data, JSON_THROW_ON_ERROR));
+		}
+		catch (\JsonException)
+		{
+		}
+
+		return Landing\Manager::getUrlFromFile($previewSource);
+	}
+
+	private function getPreviewOptionCode(): string
+	{
+		return self::PREVIEW_OPTION_CODE_PREFIX
+			. md5($this->moduleId . '|' . $this->embedId)
+		;
+	}
+
+	private function getPreviewOptionData(): ?array
+	{
+		$value = Option::get('landing', $this->getPreviewOptionCode());
+		if ($value === '')
+		{
+			return null;
+		}
+
+		try
+		{
+			$data = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+		}
+		catch (\JsonException)
+		{
+			return null;
+		}
+
+		return is_array($data) ? $data : null;
 	}
 
 	/**
@@ -219,7 +354,7 @@ class Vibe
 
 		if (!isset($this->landingInstance))
 		{
-			$guard = new Guard\Vibe();
+			$guard = new Site\ScopeGuard(Site\Type::SCOPE_CODE_VIBE);
 			$guard->start();
 
 			$landing = Landing\Landing::createInstance($lid);
@@ -261,6 +396,16 @@ class Vibe
 				'STATUS' => $status->value,
 			]
 		)->isSuccess();
+	}
+
+	public static function getLastViewed(): ?Vibe
+	{
+		if (isset(self::$lastViewedId))
+		{
+			return self::createById(self::$lastViewedId);
+		}
+
+		return null;
 	}
 	// endregion
 
@@ -347,10 +492,10 @@ class Vibe
 
 	private function createDefaultSite(): ?int
 	{
-		$guard = new Guard\Vibe();
+		$guard = new Site\ScopeGuard(Site\Type::SCOPE_CODE_VIBE);
 		$guard->start();
 
-		$resAdd = Landing\Site::add([
+		$resAdd = Site::add([
 			'TITLE' => Loc::getMessage('LANDING_VIBE_SITE_NAME'),
 			'CODE' => strtolower(Site\Type::SCOPE_CODE_VIBE),
 			'TYPE' => Site\Type::SCOPE_CODE_VIBE,
@@ -373,7 +518,8 @@ class Vibe
 			->where('MODULE_ID', '=', $this->moduleId)
 			->where('EMBED_ID', '=', $this->embedId)
 			->setSelect(['ID'])
-			->fetchObject()
+			->exec()
+			->fetch()
 		;
 		if (!$vibe)
 		{
@@ -381,14 +527,35 @@ class Vibe
 		}
 
 		$res = Model\VibeTable::update(
-			$vibe->getId(),
+			$vibe['ID'],
 			[
 				'STATUS' => Type\Status::Unregistered->value,
 			]
 		);
-		$this->status = Type\Status::Unregistered;
+		if ($res->isSuccess())
+		{
+			$this->status = Type\Status::Unregistered;
+			Option::delete('landing', ['name' => $this->getPreviewOptionCode()]);
+		}
 
 		return $res->isSuccess();
+	}
+
+	public function delete()
+	{
+		if (isset($this->siteId))
+		{
+			$guard = new Site\ScopeGuard(Site\Type::SCOPE_CODE_VIBE);
+			$guard->start();
+			Site::markDelete($this->siteId);
+		}
+
+		if (isset($this->entityId))
+		{
+			Model\VibeTable::delete($this->entityId);
+		}
+
+		Option::delete('landing', ['name' => $this->getPreviewOptionCode()]);
 	}
 
 	/**
@@ -628,7 +795,7 @@ class Vibe
 
 		$this->onStartPageCreation();
 
-		$guard = new Guard\Vibe();
+		$guard = new Site\ScopeGuard(Site\Type::SCOPE_CODE_VIBE);
 		$guard->start();
 		$installer = new Installer($this);
 
@@ -700,7 +867,7 @@ class Vibe
 		// todo: how for all?
 		// $this->createSonetGroupForPublicationOnce();
 
-		Landing\Site::update($siteId, [
+		Site::update($siteId, [
 			'LANDING_ID_INDEX' => $landingId,
 		]);
 
@@ -805,20 +972,23 @@ class Vibe
 
 	public function renderView(): void
 	{
-		if (!$this->canView())
+		self::$lastViewedId = $this->getEntityId();
+		$this->getRenderer()->renderView();
+	}
+
+	public function renderSettings(): void
+	{
+		$this->getRenderer()->renderSettings();
+	}
+
+	private function getRenderer(): Renderer
+	{
+		if (!isset($this->renderer))
 		{
-			return;
+			$this->renderer = new Renderer($this);
 		}
 
-		global $APPLICATION;
-		$APPLICATION->IncludeComponent(
-			'bitrix:landing.mainpage.pub',
-			'',
-			[
-				'MODULE_ID' => $this->moduleId,
-				'EMBED_ID' => $this->embedId,
-			],
-		);
+		return $this->renderer;
 	}
 
 	/**

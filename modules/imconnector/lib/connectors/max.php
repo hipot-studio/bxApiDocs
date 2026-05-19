@@ -5,13 +5,14 @@ namespace Bitrix\ImConnector\Connectors;
 use Bitrix\ImConnector\Connector;
 use Bitrix\ImConnector\Error;
 use Bitrix\ImConnector\Library;
+use Bitrix\ImConnector\Output;
 use Bitrix\ImConnector\Result;
 use Bitrix\ImConnector\Tools\Text;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\ImOpenLines;
 
-class Max extends Base
+class Max extends Base implements MessengerUrl
 {
 	private const MAX_BOT = 'max';
 
@@ -170,6 +171,54 @@ class Max extends Base
 			$message['user'] = $userId;
 
 			$result->setResult($message);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @see https://dev.max.ru/help (deep links section)
+	 *
+	 * @param int $lineId
+	 * @param array|string|null $additional
+	 * @return array{web: string, mob: string}
+	 */
+	public function getMessengerUrl(int $lineId, $additional = null): array
+	{
+		$result = [];
+		$url = null;
+		$connectorData = Connector::infoConnectorsLine($lineId);
+		if (isset($connectorData[self::MAX_BOT]))
+		{
+			$url = $connectorData[self::MAX_BOT]['url_im'] ?? $connectorData[self::MAX_BOT]['url'] ?? '';
+		}
+		else
+		{
+			$connectorOutput = new Output(self::MAX_BOT, $lineId);
+			$infoConnect = $connectorOutput->infoConnect();
+
+			if ($infoConnect->isSuccess())
+			{
+				$url = $infoConnect->getData()['url'];
+			}
+		}
+
+		if ($url)
+		{
+			$result = [
+				'web' => $url,
+				'mob' => $url,
+			];
+
+			if (!empty($additional))
+			{
+				if (is_array($additional))
+				{
+					$additional = base64_encode(http_build_query($additional));
+				}
+				$result['web'] .= '?start=' . $additional;
+				$result['mob'] .= '?start=' . $additional;
+			}
 		}
 
 		return $result;

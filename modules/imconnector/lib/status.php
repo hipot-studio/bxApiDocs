@@ -89,7 +89,10 @@ class Status implements \JsonSerializable
 				],
 				'order' => [
 					'ID' => 'ASC'
-				]
+				],
+				'cache' => [
+					'ttl' => Library::CACHE_TIME_STATUS,
+				],
 			]);
 			if ($row = $raw->fetch())
 			{

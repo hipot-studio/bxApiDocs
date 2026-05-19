@@ -46,6 +46,15 @@ Library::loadMessages();
  * @see \Bitrix\ImConnectorServer\Connector::saveDomainSite
  * @method static Result saveDomainSite(string $publicUrl)
  *
+ * @see \Bitrix\ImConnectorServer\Connectors\Wazzup::getOauthUrl
+ * @method Result getOauthUrl()
+ *
+ * @see \Bitrix\ImConnectorServer\Connectors\Wazzup::handleOauthCallback
+ * @method Result handleOauthCallback(string $code, ?string $state = null)
+ *
+ * @see \Bitrix\ImConnectorServer\Connectors\Wazzup::getChannelsList
+ * @method Result getChannelsList(?string $apiKey = null)
+ *
  * @package Bitrix\ImConnector
  * @final
  */

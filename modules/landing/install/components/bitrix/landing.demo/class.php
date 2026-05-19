@@ -1367,9 +1367,18 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 					{
 						if (isset($tplsXml[$layout['code']]))
 						{
-							Landing::update($landingId, [
+							$res = Landing::update($landingId, [
 								'TPL_ID' => $tplsXml[$layout['code']],
 							]);
+
+							if (!$res->isSuccess())
+							{
+								$this->setErrors($res->getErrors());
+								\Bitrix\Landing\Rights::setGlobalOn();
+
+								return false;
+							}
+
 							if (isset($layout['ref']))
 							{
 								$ref = [];
@@ -1434,9 +1443,18 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 						{
 							if (isset($landings[$pageCode]))
 							{
-								Landing::update($landings[$pageCode], array(
+								$res = Landing::update($landings[$pageCode], array(
 									'FOLDER_ID' => $folderId,
 								));
+
+								if (!$res->isSuccess())
+								{
+									$this->setErrors($res->getErrors());
+									\Bitrix\Landing\Rights::setGlobalOn();
+
+									return false;
+								}
+
 								if ($folderIndexId == $landings[$pageCode])
 								{
 									\Bitrix\Landing\Folder::update($folderId, [

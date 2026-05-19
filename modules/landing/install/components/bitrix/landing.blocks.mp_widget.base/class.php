@@ -1,8 +1,10 @@
 <?php
 
+use Bitrix\Landing\Vibe\Integration\Intranet\Page;
+use Bitrix\Landing\Vibe\Vibe;
+use Bitrix\Main\Application;
 use Bitrix\Main\Page\Asset;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\UI\Extension;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -27,8 +29,14 @@ class LandingBlocksMainpageWidgetBase extends CBitrixComponent
 	 */
 	public function executeComponent(): void
 	{
-		Asset::getInstance()->addJS('/bitrix/components/bitrix/landing.blocks.mp_widget.base/templates/.default/script.js');
-		Asset::getInstance()->addCSS('/bitrix/components/bitrix/landing.blocks.mp_widget.base/templates/.default/style.css');
+		Asset::getInstance()
+			->addJS('/bitrix/components/bitrix/landing.blocks.mp_widget.base/templates/.default/script.js')
+		;
+		Asset::getInstance()
+			->addCSS('/bitrix/components/bitrix/landing.blocks.mp_widget.base/templates/.default/style.css')
+		;
+
+		$this->detectVibe();
 
 		foreach (self::BASE_CSS_VAR_PROPERTIES as $property => $cssVar)
 		{
@@ -38,19 +46,40 @@ class LandingBlocksMainpageWidgetBase extends CBitrixComponent
 		$this->view();
 	}
 
-	protected function view(): void
+	protected function detectVibe(): void
 	{
-		ob_start();
-		$this->IncludeComponentTemplate();
-		$template = ob_get_clean();
+		$vibe = null;
 
-		echo
-			'<div class="landing-widget-wrapper" style="'
-				. $this->getCssVarPropertiesString()
-			. '">'
-				. $template
-			. '</div>'
-		;
+		if (Bitrix\Landing\Landing::getEditMode())
+		{
+			$params = Page::parseParamsByRoute();
+			if ($params !== null)
+			{
+				[$moduleId, $embedId] = $params;
+				$vibe = new Vibe($moduleId, $embedId);
+			}
+			else
+			{
+				$request = Application::getInstance()->getContext()->getRequest();
+				if ($request->isAjaxRequest())
+				{
+					$siteId = (int)$request->get('site_id');
+					if ($siteId > 0)
+					{
+						$vibe = Vibe::createBySiteId($siteId);
+					}
+				}
+			}
+		}
+		else
+		{
+			$vibe = Vibe::getLastViewed();
+		}
+
+		if ($vibe !== null && $vibe->isAvailable())
+		{
+			$this->arResult['VIBE'] = $vibe;
+		}
 	}
 
 	protected function addCssVarProperty(string $property, string $cssVar): void
@@ -85,7 +114,8 @@ class LandingBlocksMainpageWidgetBase extends CBitrixComponent
 	protected static function getUserData(array|int $userId, array $avatarSize = [100, 100]): array
 	{
 		$query = \CUser::getList(
-			'ID', 'ASC',
+			'ID',
+			'ASC',
 			[
 				'ACTIVE' => 'Y',
 				'ID' => implode('|', array_unique((array)$userId)),
@@ -151,7 +181,11 @@ class LandingBlocksMainpageWidgetBase extends CBitrixComponent
 	 *
 	 * @return string|null String with the converted date in the specified format or null on conversion error.
 	 */
-	protected function convertDateFormat(string $inputDate, $convertedType = 'hidmy', $inputDateType = 'd.m.Y H:i:s'): ?string
+	protected function convertDateFormat(
+		string $inputDate,
+		$convertedType = 'hidmy',
+		$inputDateType = 'd.m.Y H:i:s'
+	): ?string
 	{
 		$date = DateTime::createFromFormat($inputDateType, $inputDate);
 
@@ -164,7 +198,8 @@ class LandingBlocksMainpageWidgetBase extends CBitrixComponent
 		$convertedDate = null;
 		if ($convertedType === 'hidmy')
 		{
-			$convertedDate = $date->format('H:i') . ' ' . $date->format('d') . ' ' . $monthPhrase . ' ' . $date->format('Y');
+			$convertedDate =
+				$date->format('H:i') . ' ' . $date->format('d') . ' ' . $monthPhrase . ' ' . $date->format('Y');
 		}
 		if ($convertedType === 'dmy')
 		{
@@ -192,5 +227,20 @@ class LandingBlocksMainpageWidgetBase extends CBitrixComponent
 			'EXTEND' => Loc::getMessage('LANDING_WIDGET_BASE_CLASS_EXTEND_BUTTON_TEXT'),
 			'VIEW_ALL' => Loc::getMessage('LANDING_WIDGET_BASE_CLASS_VIEW_ALL_BUTTON_TEXT'),
 		];
+	}
+
+	protected function view(): void
+	{
+		ob_start();
+		$this->IncludeComponentTemplate();
+		$template = ob_get_clean();
+
+		echo
+			'<div class="landing-widget-wrapper" style="'
+			. $this->getCssVarPropertiesString()
+			. '">'
+			. $template
+			. '</div>'
+		;
 	}
 }

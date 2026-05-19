@@ -2,20 +2,19 @@
 namespace Bitrix\ImConnector;
 
 use Bitrix\ImConnector\Tools\Connectors\Messageservice;
-use Bitrix\Main;
-use Bitrix\Main\Loader;
-use Bitrix\Main\Web\Uri;
-use Bitrix\Main\Context;
-use Bitrix\Main\Web\Json;
-use Bitrix\Main\Page\Asset;
-use Bitrix\Main\Data\Cache;
-use Bitrix\Main\Type\DateTime;
-use Bitrix\Main\Config\Option;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\DI\ServiceLocator;
-
 use Bitrix\ImOpenLines\LiveChatManager;
-use Bitrix\ImConnector\Connectors;
+use Bitrix\Main;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Context;
+use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Page\Asset;
+use Bitrix\Main\Text\Emoji;
+use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Web\Json;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages(__FILE__);
 Library::loadMessages();
@@ -172,19 +171,7 @@ class Connector
 			$connectors[Library::ID_FB_COMMENTS_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_FACEBOOK_COMMENTS_PAGE' . self::META_RU_SUFFIX);
 			$connectors[Library::ID_FBINSTAGRAMDIRECT_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_FBINSTAGRAMDIRECT' . self::META_RU_SUFFIX);
 			$connectors[Library::ID_FBINSTAGRAM_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_FBINSTAGRAM' . self::META_RU_SUFFIX);
-
-			if (
-				\Bitrix\Main\Config\Option::get('imconnector', 'feature_wazzup', 'N') === 'Y'
-				||
-				(
-					\Bitrix\Main\Loader::includeModule('crm')
-					&& class_exists(\Bitrix\Crm\Feature\TelegramActivity::class)
-					&& \Bitrix\Crm\Feature::enabled(\Bitrix\Crm\Feature\TelegramActivity::class)
-				)
-			)
-			{
-				$connectors[Library::ID_WAZZUP_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_WAZZUP');
-			}
+			$connectors[Library::ID_WAZZUP_CONNECTOR] = Loc::getMessage('IMCONNECTOR_NAME_CONNECTOR_WAZZUP');
 		}
 		else
 		{
@@ -768,7 +755,7 @@ class Connector
 
 		if (!empty($info['DATA']))
 		{
-			$result = Json::decode($info['DATA']) ?? [];
+			$result = Json::decode(Emoji::decode($info['DATA'])) ?? [];
 
 			$expiresTime =  new DateTime($info['EXPIRES']);
 			if ($expiresTime->getTimestamp() < time())
@@ -1499,6 +1486,7 @@ class Connector
 						break;
 
 					case 'network':
+					case Library::ID_NOTIFICATIONS_CONNECTOR:
 						if (Loader::includeModule(Library::MODULE_ID_OPEN_LINES))
 						{
 							$output = new Output($connector, $line);

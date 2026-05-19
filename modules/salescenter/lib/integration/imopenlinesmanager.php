@@ -1330,6 +1330,7 @@ class ImOpenLinesManager extends Base
 	{
 		return array_merge($this->getCommonImParams($publicUrl), [
 			'richUrlPreview' => $this->getPaymentPreviewData($payment),
+			'isPaymentLink' => true,
 		]);
 	}
 

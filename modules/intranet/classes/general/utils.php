@@ -324,7 +324,7 @@ class CIntranetUtils
 						return true;
 					}
 
-					if ($ts_start === $ts_finish && !self::IsDateTime($ts_start))
+					if ($ts_start === $ts_finish && $ts_finish + 86400 > $ts)
 					{
 						return true;
 					}

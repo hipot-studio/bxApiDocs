@@ -18,6 +18,8 @@ class ImConnectorWazzup extends \CBitrixComponent
 	/* @TODO replace with real one */
 	public const HELPDESK_CODE = '26927854';
 
+	private ?string $callbackOrigin = null;
+
 	private $cacheId;
 	private $connector = 'wazzup';
 	private $error = [];
@@ -74,26 +76,21 @@ class ImConnectorWazzup extends \CBitrixComponent
 
 	public function saveForm()
 	{
-		//If been sent the current form
 		if ($this->request->isPost() && !empty($this->request[$this->connector. '_form']))
 		{
-			//If the session actual
 			if (check_bitrix_sessid())
 			{
-				//Activation bot
 				if ($this->request[$this->connector. '_active'] && empty($this->arResult["ACTIVE_STATUS"]))
 				{
 					$this->status->setActive(true);
 					$this->arResult["ACTIVE_STATUS"] = true;
 
-					//Reset cache
 					$this->cleanCache();
 				}
 
 				if (!empty($this->arResult["ACTIVE_STATUS"]))
 				{
-					//If saving
-					if ($this->request[$this->connector. '_save'])
+					if (isset($this->request[$this->connector. '_save']))
 					{
 						foreach ($this->listOptions as $value)
 						{
@@ -120,9 +117,11 @@ class ImConnectorWazzup extends \CBitrixComponent
 								}
 							}
 
-							$channelList = $this->connectorOutput->getChannelsList($this->arResult['FORM']['api_key']);
 							if (empty($this->arResult['FORM']['channel']))
 							{
+								$apiKeyParam = isset($this->arResult['FORM']['api_key']) ? $this->arResult['FORM']['api_key'] : null;
+								$channelList = $this->connectorOutput->getChannelsList($apiKeyParam);
+
 								if ($channelList->isSuccess())
 								{
 									$this->arResult['CHANNELS'] = $channelList->getResult();
@@ -150,40 +149,40 @@ class ImConnectorWazzup extends \CBitrixComponent
 								$saved = $this->connectorOutput->saveSettings($this->arResult['FORM']);
 								if ($saved->isSuccess())
 								{
-									if (isset($this->arResult['FORM']['channel']))
+									$this->messages[] = Loc::getMessage('IMCONNECTOR_COMPONENT_WAZZUP_OK_SAVE_MSGVER_1');
+									$this->arResult["SAVE_STATUS"] = true;
+									$this->status->setError(false);
+									$this->arResult["ERROR_STATUS"] = false;
+
+									$apiKeyParam = isset($this->arResult['FORM']['api_key']) ? $this->arResult['FORM']['api_key'] : null;
+									$channelList = $this->connectorOutput->getChannelsList($apiKeyParam);
+
+									if ($channelList->isSuccess())
 									{
-										$this->messages[] = Loc::getMessage('IMCONNECTOR_COMPONENT_WAZZUP_OK_SAVE_MSGVER_1');
-										$this->arResult["SAVE_STATUS"] = true;
-
-										$this->status->setError(false);
-										$this->arResult["ERROR_STATUS"] = false;
-
 										foreach ($channelList->getResult() as $channel)
 										{
 											if ($channel['channelId'] == $this->arResult['FORM']['channel'])
 											{
+												// Prepare data to save in status
 												$dataToSave = [
-													'apiKey' => Wazzup::hideApiKey($this->arResult['FORM']['api_key']),
 													'channelName' => $channel['plainId'],
 													'channelId' => $channel['channelId'],
 													'channelType' => $channel['transport'],
 												];
-												$this->status->setData($dataToSave);
 
+												if (!empty($this->arResult['FORM']['api_key']))
+												{
+													$dataToSave['apiKey'] = Wazzup::hideApiKey($this->arResult['FORM']['api_key']);
+													$this->arResult['placeholder']['api_key'] = Wazzup::hideApiKey($this->arResult['FORM']['api_key']);
+												}
+
+												$this->status->setData($dataToSave);
 												\Bitrix\ImConnector\InfoConnectors::refreshInfoConnectors((int)$this->arParams['LINE']);
 
 												$this->arResult['placeholder']['channel'] = $this->getChannelTypePhrase($dataToSave['channelType']) . ': ' . $channel['name'];
-												$this->arResult['placeholder']['api_key'] = Wazzup::hideApiKey($dataToSave['apiKey']);
+												break;
 											}
 										}
-									}
-									else
-									{
-										$this->messages[] = Loc::getMessage("IMCONNECTOR_COMPONENT_WAZZUP_SELECT_CHANNEL");
-										$this->arResult["SAVE_STATUS"] = true;
-
-										$this->status->setError(false);
-										$this->arResult["ERROR_STATUS"] = false;
 									}
 								}
 								else
@@ -205,17 +204,12 @@ class ImConnectorWazzup extends \CBitrixComponent
 							$this->error[] = Loc::getMessage("IMCONNECTOR_COMPONENT_WAZZUP_NO_DATA_SAVE");
 						}
 
-						//Reset cache
 						$this->cleanCache();
 					}
 
-					//If the test connection or save
 					if (($this->request[$this->connector. '_save'] && $this->arResult["SAVE_STATUS"]) || $this->request[$this->connector. '_tested'])
 					{
-
-						// @TODO replace with real one
-						$testConnect = new \Bitrix\Main\Result();
-						// $testConnect = $this->connectorOutput->testConnect();
+						$testConnect = $this->connectorOutput->testConnect();
 
 						if ($testConnect->isSuccess())
 						{
@@ -230,6 +224,8 @@ class ImConnectorWazzup extends \CBitrixComponent
 
 							$this->status->setError(false);
 							$this->arResult["ERROR_STATUS"] = false;
+
+							$this->arResult["PAGE"] = '';
 						}
 						else
 						{
@@ -298,6 +294,132 @@ class ImConnectorWazzup extends \CBitrixComponent
 	{
 		global $APPLICATION;
 
+		$authInfo = $this->connectorOutput->getAuthorizationInformation();
+		$hasApiKey = false;
+		$hasOAuthTokens = false;
+
+		if ($authInfo->isSuccess())
+		{
+			$authData = $authInfo->getResult();
+
+			if (!empty($authData['SETTINGS']['api_key']))
+			{
+				$hasApiKey = true;
+				$this->arResult['HAS_API_KEY'] = true;
+			}
+
+			if (!empty($authData['SETTINGS']['access_token']) || !empty($authData['SETTINGS']['refresh_token']))
+			{
+				$hasOAuthTokens = true;
+				$this->arResult['HAS_OAUTH_TOKENS'] = true;
+			}
+		}
+
+		if (!$hasOAuthTokens && !$hasApiKey)
+		{
+			$this->requestOauthUrl();
+		}
+
+		if ($hasOAuthTokens)
+		{
+			$channelsList = $this->connectorOutput->getChannelsList();
+			if ($channelsList->isSuccess())
+			{
+				$this->arResult['CHANNELS'] = $channelsList->getResult();
+				foreach ($this->arResult['CHANNELS'] as $channelKey => $channelValue)
+				{
+					$this->arResult['CHANNELS'][$channelKey]['title'] = $this->getChannelTypePhrase($channelValue['transport']);
+				}
+
+				if (empty($authData['SETTINGS']['channel']))
+				{
+					$activeChannels = array_filter($this->arResult['CHANNELS'], static function($channel) {
+						return $channel['state'] === 'active';
+					});
+
+					if (empty($activeChannels))
+					{
+						$this->arResult['NO_AVAILABLE_CHANNELS'] = true;
+					}
+					elseif (count($activeChannels) === 1)
+					{
+						$singleChannel = reset($activeChannels);
+
+						$this->arResult['FORM']['channel'] = $singleChannel['channelId'];
+
+						$saved = $this->connectorOutput->saveSettings($this->arResult['FORM']);
+						if (!$saved->isSuccess())
+						{
+							foreach ($saved->getErrors() as $error)
+							{
+								$this->error[] = $error->getMessage();
+							}
+							return;
+						}
+
+						$this->messages[] = Loc::getMessage('IMCONNECTOR_COMPONENT_WAZZUP_OK_SAVE_MSGVER_1');
+
+						$dataToSave = [
+							'channel' => $singleChannel['channelId'],
+							'channelName' => $singleChannel['plainId'],
+							'channelType' => $singleChannel['transport'],
+						];
+
+						$this->status->setData($dataToSave);
+						\Bitrix\ImConnector\InfoConnectors::refreshInfoConnectors((int)$this->arParams['LINE']);
+
+						$this->arResult['placeholder']['channel'] = $this->getChannelTypePhrase($singleChannel['transport']) . ': ' . $singleChannel['name'];
+
+						$testConnect = $this->connectorOutput->testConnect();
+						if ($testConnect->isSuccess())
+						{
+							$this->messages[] = Loc::getMessage("IMCONNECTOR_COMPONENT_WAZZUP_OK_CONNECT_MSGVER_1");
+
+							$this->status->setConnection(true);
+							$this->arResult["CONNECTION_STATUS"] = true;
+
+							$this->status->setRegister(true);
+							$this->arResult["REGISTER_STATUS"] = true;
+							$this->arResult["STATUS"] = true;
+
+							$this->status->setError(false);
+							$this->arResult["ERROR_STATUS"] = false;
+
+							$this->arResult["PAGE"] = '';
+						}
+						else
+						{
+							foreach ($testConnect->getErrors() as $error)
+							{
+								$this->error[] = $error->getMessage();
+							}
+						}
+
+						$this->cleanCache();
+					}
+					else
+					{
+						$this->messages[] = Loc::getMessage('IMCONNECTOR_COMPONENT_WAZZUP_SELECT_CHANNEL');
+					}
+				}
+			}
+			else
+			{
+				foreach ($channelsList->getErrors() as $error)
+				{
+					if ($error->getCode() === 'OAUTH_TOKEN_UNKNOWN_OR_REVOKED')
+					{
+						$this->error[] = Loc::getMessage('IMCONNECTOR_COMPONENT_WAZZUP_OAUTH_TOKEN_REVOKED');
+						$this->requestOauthUrl();
+					}
+					elseif (!empty($error->getMessage()))
+					{
+						$this->error[] = $error->getMessage();
+					}
+				}
+			}
+		}
+
 		$this->arResult["NAME"] = Connector::getNameConnectorReal($this->connector);
 
 		$this->arResult["URL"]["INDEX"] = $APPLICATION->GetCurPageParam($this->pageId . "=index", array($this->pageId, "open_block", "action"));
@@ -322,17 +444,17 @@ class ImConnectorWazzup extends \CBitrixComponent
 						if (!empty($result['SETTINGS'][$value]))
 						{
 							$this->arResult['SAVE_STATUS'] = true;
-							if ($result['SETTINGS'][$value] == '#HIDDEN#')
+							if ($result['SETTINGS'][$value] === '#HIDDEN#')
 							{
 								$statusData = $this->status->getData();
-								if ($value == 'channel')
+								if ($value === 'channel')
 								{
 									if (!empty($statusData['channelType']) && !empty($statusData['channelName']))
 									{
 										$this->arResult['placeholder'][$value] = $this->getChannelTypePhrase($statusData['channelType']) . ": " . $statusData['channelName'];
 									}
 								}
-								elseif ($value == 'api_key')
+								elseif ($value === 'api_key')
 								{
 									$this->arResult['placeholder'][$value] = Wazzup::hideApiKey($statusData['apiKey']);
 								}
@@ -437,6 +559,23 @@ class ImConnectorWazzup extends \CBitrixComponent
 				ShowError(Loc::getMessage("IMCONNECTOR_COMPONENT_WAZZUP_NO_ACTIVE_CONNECTOR_MSGVER_1"));
 			}
 		}
+	}
+
+	private function requestOauthUrl(): void
+	{
+		$settings = $this->connectorOutput->getOauthUrl();
+		if ($settings->isSuccess())
+		{
+			$oauthData = $settings->getResult();
+			$this->arResult['FORM']['authorization_url'] = $oauthData['authorization_url'] ?? '';
+			$this->callbackOrigin = $oauthData['callback_origin'] ?? null;
+		}
+		else
+		{
+			$this->arResult['FORM']['authorization_url'] = '';
+		}
+
+		$this->arResult['OAUTH_TRUSTED_ORIGINS'] = !empty($this->callbackOrigin) ? [$this->callbackOrigin] : [];
 	}
 
 	private function getChannelTypePhrase($channelType): string

@@ -4,12 +4,12 @@ declare(strict_types=1);
 namespace Bitrix\Landing\Vibe;
 
 use Bitrix\Main\Web\Uri;
+use Bitrix\Landing\Site\ScopeGuard;
 use Bitrix\Landing\Site\Type;
 use Bitrix\Landing\Transfer;
 use Bitrix\Landing\Metrika;
 use Bitrix\Landing\Vibe\Provider\AbstractVibeProvider;
 use Bitrix\Intranet\Binding\Marketplace;
-use Bitrix\Landing\Scope\Guard;
 
 class Url
 {
@@ -32,7 +32,7 @@ class Url
 
 	public function getImport(): string
 	{
-		$guard = new Guard\Vibe();
+		$guard = new ScopeGuard(Type::SCOPE_CODE_VIBE);
 		$guard->start();
 
 		$importType = Type::getScopeIdForTransfer();
@@ -48,7 +48,7 @@ class Url
 
 	public function getExport(): string
 	{
-		$guard = new Guard\Vibe();
+		$guard = new ScopeGuard(Type::SCOPE_CODE_VIBE);
 		$guard->start();
 
 		$siteId = $this->vibe->getSiteId();
