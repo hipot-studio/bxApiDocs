@@ -51,7 +51,7 @@ final class ContainerBuilder
 		return $configPaths;
 	}
 
-	private static function loadDependencies(string $customPath = null): array
+	private static function loadDependencies(?string $customPath = null): array
 	{
 		$dependencies = [];
 
@@ -97,7 +97,7 @@ final class ContainerBuilder
 		return new $containerClass();
 	}
 
-	public static function buildFromConfig(string $customPath = null): ContainerContract
+	public static function buildFromConfig(?string $customPath = null): ContainerContract
 	{
 		$dependencies = static::loadDependencies($customPath);
 		$container = static::buildContainer($dependencies);

@@ -9,7 +9,7 @@ use Bitrix\Main\ArgumentOutOfRangeException;
 /**
  * @template T of Dto
  */
-final class Result extends \Bitrix\Main\Result implements \JsonSerializable
+class Result extends \Bitrix\Main\Result implements \JsonSerializable
 {
 	public const OPERATION_STATUS_CONFLICT = 'CONFLICT';
 	public const OPERATION_STATUS_APPLIED = 'APPLIED';

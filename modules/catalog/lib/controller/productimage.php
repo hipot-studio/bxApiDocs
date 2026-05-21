@@ -40,7 +40,7 @@ final class ProductImage extends Controller
 	 *
 	 * @return Page|null
 	 */
-	public function listAction(int $productId, array $select = [], \CRestServer $restServer = null): ?Page
+	public function listAction(int $productId, array $select = [], ?\CRestServer $restServer = null): ?Page
 	{
 		if ($productId <= 0)
 		{
@@ -117,7 +117,7 @@ final class ProductImage extends Controller
 	 *
 	 * @return array[]|null
 	 */
-	public function getAction(int $id, int $productId, \CRestServer $restServer = null): ?array
+	public function getAction(int $id, int $productId, ?\CRestServer $restServer = null): ?array
 	{
 		$product = $this->getProduct($productId);
 		if (!$product)
@@ -155,7 +155,7 @@ final class ProductImage extends Controller
 	 *
 	 * @return void
 	 */
-	public function addAction(array $fields, array $fileContent, \CRestServer $restServer = null): ?array
+	public function addAction(array $fields, array $fileContent, ?\CRestServer $restServer = null): ?array
 	{
 		if (!Loader::includeModule('rest'))
 		{
@@ -352,8 +352,8 @@ final class ProductImage extends Controller
 
 	private function prepareFileStructure(
 		array $image,
-		\CRestServer $restServer = null,
-		array $selectedFields = null
+		?\CRestServer $restServer = null,
+		?array $selectedFields = null
 	): array
 	{
 		$result = [];

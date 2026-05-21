@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 Use Bitrix\Main\Localization\Loc;
 use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
@@ -47,5 +48,10 @@ class DeductedTrigger extends BaseTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::PRODUCTS_CUBE->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::DELIVERY->value];
 	}
 }

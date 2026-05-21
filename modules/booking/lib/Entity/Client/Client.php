@@ -81,6 +81,16 @@ class Client implements EntityInterface
 		];
 	}
 
+	public function isEqual(self $clientToCompare): bool
+	{
+		return (
+			$this->getType() !== null
+			&& $clientToCompare->getType() !== null
+			&& $this->getType()->isEqual($clientToCompare->getType())
+			&& $clientToCompare->getId() === $this->getId()
+		);
+	}
+
 	public static function mapFromArray(array $props): self
 	{
 		return (new self())

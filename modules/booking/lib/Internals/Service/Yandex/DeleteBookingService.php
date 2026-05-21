@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Service\Yandex;
 
 use Bitrix\Booking\Command\Booking\RemoveBookingCommand;
+use Bitrix\Booking\Entity\Booking\BookingDeletionScenario;
 use Bitrix\Booking\Entity\Booking\BookingSource;
 use Bitrix\Booking\Internals\Exception\Yandex\BookingCancelForbidden;
 use Bitrix\Booking\Internals\Exception\Yandex\BookingNotFoundException;
@@ -48,6 +49,7 @@ class DeleteBookingService
 		$command = new RemoveBookingCommand(
 			id: $id,
 			removedBy: (int)CurrentUser::get()->getId(),
+			scenario: BookingDeletionScenario::ClientYandex,
 		);
 
 		$result = $command->run();

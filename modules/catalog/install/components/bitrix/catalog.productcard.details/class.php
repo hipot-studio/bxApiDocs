@@ -86,7 +86,7 @@ class CatalogProductDetailsComponent
 		}
 	}
 
-	protected function includeErrorComponent(string $errorMessage, string $description = null): void
+	protected function includeErrorComponent(string $errorMessage, ?string $description = null): void
 	{
 		Toolbar::deleteFavoriteStar();
 
@@ -2201,7 +2201,7 @@ class CatalogProductDetailsComponent
 		}
 	}
 
-	private function createSkuItem(BaseProduct $product, int $copySkuId = null): BaseSku
+	private function createSkuItem(BaseProduct $product, ?int $copySkuId = null): BaseSku
 	{
 		/** @var BaseSku $sku */
 		$sku = $product->getSkuCollection()

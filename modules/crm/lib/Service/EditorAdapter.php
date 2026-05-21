@@ -2536,15 +2536,23 @@ class EditorAdapter
 		$myCompanyId = $item->getMycompanyId();
 		if ($myCompanyId > 0)
 		{
-			$this->entityData[static::FIELD_MY_COMPANY_DATA_INFO] = [
-				'COMPANY_DATA' => [
-					$this->prepareCrmEntityData(
-						$editorField,
-						$myCompanyId,
-						$this->getMyCompanyRequisitesEntityData()
-					),
-				],
-			];
+			$company = Container::getInstance()->getCompanyBroker()->getById($myCompanyId);
+			if ($company)
+			{
+				$this->entityData[static::FIELD_MY_COMPANY_DATA_INFO] = [
+					'COMPANY_DATA' => [
+						$this->prepareCrmEntityData(
+							$editorField,
+							$myCompanyId,
+							$this->getMyCompanyRequisitesEntityData()
+						),
+					],
+				];
+			}
+			else
+			{
+				$this->entityData[Item::FIELD_NAME_MYCOMPANY_ID] = 0;
+			}
 		}
 
 		$this->entityData[static::LAST_MYCOMPANY_INFOS] = $this->getLastMyCompanyInfos();

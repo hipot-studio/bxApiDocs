@@ -50,4 +50,25 @@ class ClientCollection extends BaseEntityCollection
 	{
 		return new ClientCollection(...$this->baseDiff($collectionToCompare));
 	}
+
+	protected function baseDiff(BaseEntityCollection $collectionToCompare): array
+	{
+		$result = [];
+
+		foreach ($this->collectionItems as $entity)
+		{
+			/** @var Client $candidate */
+			foreach ($collectionToCompare->collectionItems as $candidate)
+			{
+				if ($entity->isEqual($candidate))
+				{
+					continue 2;
+				}
+			}
+
+			$result[] = $entity;
+		}
+
+		return $result;
+	}
 }

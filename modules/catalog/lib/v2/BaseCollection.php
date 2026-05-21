@@ -168,7 +168,7 @@ abstract class BaseCollection implements \IteratorAggregate, \Countable
 		return null;
 	}
 
-	public function getFirst(callable $callback = null): ?BaseEntity
+	public function getFirst(?callable $callback = null): ?BaseEntity
 	{
 		if ((empty($this->items) || $callback) && !$this->isLoaded())
 		{

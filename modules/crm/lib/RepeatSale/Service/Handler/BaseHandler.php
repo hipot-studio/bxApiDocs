@@ -23,6 +23,7 @@ abstract class BaseHandler
 	protected bool $isOnlyCalc = false;
 	protected int $limit = 50;
 	protected int $offset = 0;
+	protected int $minimumDaysAfterLastClosedEntity = 0;
 
 	public function __construct(
 		protected readonly string $segmentCode,
@@ -62,7 +63,11 @@ abstract class BaseHandler
 			->getCollector($segmentCode)
 			?->setLimit($this->limit)
 			->setIsOnlyCalc($this->isOnlyCalc)
-			->getSegmentData($this->entityTypeId, $this->lastEntityId)
+			->getSegmentData(
+				$this->entityTypeId,
+				$this->lastEntityId,
+				$this->minimumDaysAfterLastClosedEntity,
+			)
 		;
 
 		if ($segmentData === null)
@@ -121,6 +126,13 @@ abstract class BaseHandler
 	public function setIsOnlyCalc(bool $value): self
 	{
 		$this->isOnlyCalc = $value;
+
+		return $this;
+	}
+
+	public function setMinimumDaysAfterLastClosedEntity(int $days): self
+	{
+		$this->minimumDaysAfterLastClosedEntity = $days;
 
 		return $this;
 	}

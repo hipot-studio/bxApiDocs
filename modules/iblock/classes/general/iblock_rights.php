@@ -2265,25 +2265,6 @@ class CIBlockRightsStorage
 
 class CIBlockElementRightsStorage extends CIBlockRightsStorage
 {
-	function AddSelfSet($RIGHT_ID, $bInherited = false): void
-	{
-		if ($this->SECTION_ID === 0)
-		{
-			$this->addSelfSetInRoot([
-				0 => [
-					[
-						'id' => $RIGHT_ID,
-						'isInherited' => $bInherited,
-					],
-				],
-			]);
-		}
-		else
-		{
-			parent::AddSelfSet($RIGHT_ID, $bInherited);
-		}
-	}
-
 	public function addSelfSetInRoot(array $rightList): void
 	{
 		if (empty($rightList))

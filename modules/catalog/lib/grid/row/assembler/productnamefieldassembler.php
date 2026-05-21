@@ -15,7 +15,7 @@ final class ProductNameFieldAssembler extends FieldAssembler
 {
 	private ?BaseBuilder $urlBuilder;
 
-	public function __construct(array $columnIds, BaseBuilder $urlBuilder = null)
+	public function __construct(array $columnIds, ?BaseBuilder $urlBuilder = null)
 	{
 		parent::__construct($columnIds);
 

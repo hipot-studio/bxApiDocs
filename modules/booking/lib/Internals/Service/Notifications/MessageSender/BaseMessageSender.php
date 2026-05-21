@@ -31,6 +31,13 @@ abstract class BaseMessageSender
 			);
 		}
 
+		if (!in_array($notificationType, $this->getSupportedNotificationTypes(), true))
+		{
+			return (new MessageSendResult())->addError(
+				ErrorBuilder::build('Notification type is not supported by the sender')
+			);
+		}
+
 		$result = $this->doSend($booking, $notificationType);
 		if (!$result->isSuccess())
 		{

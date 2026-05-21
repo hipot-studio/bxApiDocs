@@ -136,6 +136,16 @@ class Resource extends EntityFactory
 			$resource->setInfoNotificationDelay((int)$fields['INFO_NOTIFICATION_DELAY']);
 		}
 
+		if (isset($fields['IS_CANCELLATION_NOTIFICATION_ON']))
+		{
+			$resource->setIsCancellationNotificationOn((bool)$fields['IS_CANCELLATION_NOTIFICATION_ON']);
+		}
+
+		if (isset($fields['CANCELLATION_NOTIFICATION_DELAY']))
+		{
+			$resource->setCancellationNotificationDelay((int)$fields['CANCELLATION_NOTIFICATION_DELAY']);
+		}
+
 		if (isset($fields['IS_CONFIRMATION_NOTIFICATION_ON']))
 		{
 			$resource->setIsConfirmationNotificationOn((bool)$fields['IS_CONFIRMATION_NOTIFICATION_ON']);

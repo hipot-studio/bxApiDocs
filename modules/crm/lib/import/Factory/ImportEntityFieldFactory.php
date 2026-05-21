@@ -55,6 +55,7 @@ final class ImportEntityFieldFactory
 		$headers = [];
 		(new GridHeaders($userType))
 			->setForImport(true)
+			->setWithHtmlSpecialchars(false)
 			->setWithEnumFieldValues(true)
 			->append($headers)
 		;

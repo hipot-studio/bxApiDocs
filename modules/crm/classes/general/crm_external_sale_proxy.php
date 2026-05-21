@@ -104,6 +104,7 @@ class CCrmExternalSaleProxy
 		}
 
 		$this->client->setRedirect(false);
+		$this->client->setPrivateIp(false);
 
 		if($method === \Bitrix\Main\Web\HttpClient::HTTP_POST && is_array($postData))
 		{

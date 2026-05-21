@@ -3006,26 +3006,6 @@ class CAllCrmInvoice
 		$errMsg = [];
 		$bError = false;
 
-
-		$repeatSaleAiSegmentCalcAgent = '~CRM_REPEAT_SALE_AI_SEGMENT_CALC_AGENT';
-		if ((string)COption::GetOptionString('crm', $repeatSaleAiSegmentCalcAgent, 'N') === 'N')
-		{
-			COption::SetOptionString('crm', $repeatSaleAiSegmentCalcAgent, 'Y');
-
-			/**
-			 * @see Bitrix\Crm\Agent\RepeatSale\Hypothesis\AiSegmentAgent
-			 */
-			\CAgent::AddAgent(
-				'Bitrix\Crm\Agent\RepeatSale\Hypothesis\AiSegmentAgent::run();',
-				'crm',
-				'N',
-				60,
-				'',
-				'Y',
-				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
-			);
-		}
-
 		$repeatSaleTryHiddenEnabled = '~CRM_REPEAT_SALE_TRY_HIDDEN_ENABLED';
 		if ((string)COption::GetOptionString('crm', $repeatSaleTryHiddenEnabled, 'N') === 'N')
 		{
@@ -3082,22 +3062,6 @@ class CAllCrmInvoice
 				'',
 				'Y',
 				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
-			);
-		}
-
-		$recreateJobExecutorAgent = '~CRM_RECREATE_JOB_EXECUTOR_AGENT';
-		if ((string)COption::GetOptionString('crm', $recreateJobExecutorAgent, 'N') === 'N')
-		{
-			COption::SetOptionString('crm', $recreateJobExecutorAgent, 'Y');
-
-			\CAgent::AddAgent(
-				'Bitrix\Crm\Agent\RepeatSale\JobExecutorRecreatorAgent::run();',
-				'crm',
-				'N',
-				600,
-				'',
-				'Y',
-				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 1200, 'FULL'),
 			);
 		}
 

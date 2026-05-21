@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Document\Flipchart;
 
 use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\Document\Flipchart\Enum\BoardReadyStatus;
+use Bitrix\Disk\Document\Flipchart\Messenger\DownloadBoardMessage;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
@@ -67,7 +69,7 @@ class BoardService
 		return array_pop($documentId);
 	}
 
-	public function saveDocument($isNewBoard = false): Error|bool
+	public function saveDocument($isNewBoard = false, int $attempt = 0): Error|bool
 	{
 		if (!$this->session->getObject())
 		{
@@ -76,7 +78,19 @@ class BoardService
 
 		$boardId = $this->session->getObject()->getId();
 		$boardId = self::convertDocumentIdToExternal($boardId);
-		$downloadResult = (new BoardApiService())->downloadBoard("/api/v1/flip/{$boardId}/download", isNewBoard: $isNewBoard);
+		$boardApiService = new BoardApiService();
+		$boardStatus = $boardApiService->getBoardReadyStatus($boardId);
+		switch ($boardStatus) {
+			case BoardReadyStatus::ERROR:
+			case BoardReadyStatus::FAILED:
+				return new Error('Error preparing board to download');
+				break;
+			case BoardReadyStatus::IN_PROGRESS:
+				(new DownloadBoardMessage($boardId, $this->session->getUserId(), $isNewBoard, $attempt))->schedule();
+				return false;
+				break;
+		}
+		$downloadResult = $boardApiService->downloadBoard("/api/v1/flip/{$boardId}/download", isNewBoard: $isNewBoard);
 		if (!$downloadResult->isSuccess())
 		{
 			return new Error('Could not download the file.');

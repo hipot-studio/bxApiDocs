@@ -95,7 +95,7 @@ class DefaultElement extends Controller
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function listAction($iblock, $select = ['*'], $filter = [], $order = [], PageNavigation $pageNavigation = null)
+	public function listAction($iblock, $select = ['*'], $filter = [], $order = [], ?PageNavigation $pageNavigation = null)
 	{
 		$elementEntity = IblockTable::compileEntity($iblock);
 		if (!$elementEntity)

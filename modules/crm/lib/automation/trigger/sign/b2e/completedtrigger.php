@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Automation\Trigger\Sign\B2e;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
@@ -100,5 +101,10 @@ final class CompletedTrigger extends AbstractB2eDocumentTrigger
 		}
 
 		return parent::getNodeIcon();
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::SIGN->value];
 	}
 }

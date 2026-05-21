@@ -63,23 +63,7 @@ class CrmAutomationPubQrComponent extends \CBitrixComponent implements
 		}
 
 		$qrCode = $this->getQr($this->arParams['QR_ID']);
-		if (!$qrCode)
-		{
-			ShowError(Loc::getMessage('CRM_AUTOMATION_QR_NOT_FOUND'));
-			return;
-		}
-
-		$qrEntityId = $qrCode->getEntityId();
-		$qrEntityTypeId = $qrCode->getEntityTypeId();
-		if (!$qrEntityId || !$qrEntityTypeId)
-		{
-			ShowError(Loc::getMessage('CRM_AUTOMATION_QR_NOT_FOUND'));
-
-			return;
-		}
-
-		$item = Container::getInstance()->getFactory($qrEntityTypeId)?->getItem($qrEntityId);
-		if (!$item)
+		if (!$qrCode || !$this->isQrValid($qrCode))
 		{
 			ShowError(Loc::getMessage('CRM_AUTOMATION_QR_NOT_FOUND'));
 
@@ -89,12 +73,33 @@ class CrmAutomationPubQrComponent extends \CBitrixComponent implements
 		if ($this->arParams['VIEW'] === 'code')
 		{
 			$this->showCode($qrCode);
+
 			return;
 		}
 
 		$this->arResult['QR'] = $qrCode->collectValues();
 
 		$this->includeComponentTemplate();
+	}
+
+	protected function isQrValid(Main\ORM\Objectify\EntityObject $qrCode): bool
+	{
+		if ($qrCode->getId() === 'test')
+		{
+			return true;
+		}
+
+		if (!$qrCode->getEntityId() || !$qrCode->getEntityTypeId())
+		{
+			return false;
+		}
+
+		$item = Container::getInstance()
+			->getFactory($qrCode->getEntityTypeId())
+			?->getItem($qrCode->getEntityId())
+		;
+
+		return $item !== null;
 	}
 
 	public function completeAction()

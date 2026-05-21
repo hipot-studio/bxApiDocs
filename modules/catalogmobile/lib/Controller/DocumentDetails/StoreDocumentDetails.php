@@ -47,7 +47,7 @@ class StoreDocumentDetails extends BaseDocumentDetails
 	 * @param string|null $docType
 	 * @return array
 	 */
-	public function loadMainAction(int $entityId = null, string $docType = null): array
+	public function loadMainAction(?int $entityId = null, ?string $docType = null): array
 	{
 		if (!$this->checkDocumentReadRights($entityId, $docType))
 		{
@@ -80,7 +80,7 @@ class StoreDocumentDetails extends BaseDocumentDetails
 	 * @param string|null $docType
 	 * @return array
 	 */
-	public function loadProductsAction(int $entityId = null, string $docType = null): array
+	public function loadProductsAction(?int $entityId = null, ?string $docType = null): array
 	{
 		if (!$this->checkDocumentReadRights($entityId, $docType))
 		{

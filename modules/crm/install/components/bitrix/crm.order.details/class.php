@@ -698,7 +698,10 @@ class CCrmOrderDetailsComponent extends Crm\Component\EntityDetails\BaseComponen
 				)
 			);
 
-			$this->arResult['TABS'][] = $this->getEventTabParams();
+			if(\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 		}
 		else
 		{
@@ -735,7 +738,10 @@ class CCrmOrderDetailsComponent extends Crm\Component\EntityDetails\BaseComponen
 				'enabled' => false
 			);
 
-			$this->arResult['TABS'][] = $this->getEventTabParams();
+			if(\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 		}
 		//endregion
 

@@ -16,7 +16,9 @@ use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuCreator;
 use Bitrix\Booking\Internals\Integration\Crm\WebForm\Provider as WebFormProvider;
 use Bitrix\Booking\Internals\Service\Integration\IntegrationManager;
 use Bitrix\Booking\Internals\Repository\CounterRepositoryInterface;
+use Bitrix\Booking\Internals\Service\Notifications\MessageSender\BaseMessageSender;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderPicker;
+use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
 use Bitrix\Booking\Internals\Service\Notifications\WhatsAppEmergencyService;
 use Bitrix\Booking\Internals\Service\Timezone;
 use Bitrix\Booking\Provider\BookingProvider;
@@ -108,17 +110,20 @@ class MainPage extends BaseController
 				resourceTypeCollection: $resourceTypes,
 				providerModuleId: Loader::includeModule('crm') ? 'crm' : null,
 				clientsDataRecent: $this->getClientsDataRecent(),
-				/**
-				 * @deprecated and should be removed on frontend: there is no such thing as "current sender" whatsoever
-				 * choice of a sender depends on specific resource and its settings and can not be inferred globally
-				 */
-				isCurrentSenderAvailable: $this->messageSenderPicker->canUseAnySender(),
 				waitListItemCollection: $waitListItemCollection,
 				isIntersectionForAll: true,
 				counters: $this->counterRepository->getList($userId),
 				//@todo deprecated and should be removed
 				formsMenu: [],
 				catalogSkuEntityOptions: (new ServiceSkuCreator())->getEntitySelectorEntityOptions($userId),
+				senders: array_map(
+					static fn (BaseMessageSender $sender) => [
+						'code' => $sender->getCode(),
+						'canUse' => $sender->canUse(),
+						'notifications' => NotificationType::casesToArray($sender->getSupportedNotificationTypes()),
+					],
+					$this->messageSenderPicker->getSenders(),
+				),
 			);
 		}
 		catch (Exception $e)
@@ -153,17 +158,20 @@ class MainPage extends BaseController
 				resourceTypeCollection: $resourceTypes,
 				providerModuleId: Loader::includeModule('crm') ? 'crm' : null,
 				clientsDataRecent: $this->getClientsDataRecent(),
-				/**
-				 * @deprecated and should be removed on frontend: there is no such thing as "current sender" whatsoever
-				 * choice of a sender depends on specific resource and its settings and can not be inferred globally
-				 */
-				isCurrentSenderAvailable: $this->messageSenderPicker->canUseAnySender(),
 				waitListItemCollection: $waitListItems,
 				isIntersectionForAll: $this->isIntersectionForAll($userId),
 				counters: $this->counterRepository->getList($userId),
 				//@todo deprecated and should be removed
 				formsMenu: [],
 				catalogSkuEntityOptions: (new ServiceSkuCreator())->getEntitySelectorEntityOptions($userId),
+				senders: array_map(
+					static fn (BaseMessageSender $sender) => [
+						'code' => $sender->getCode(),
+						'canUse' => $sender->canUse(),
+						'notifications' => NotificationType::casesToArray($sender->getSupportedNotificationTypes()),
+					],
+					$this->messageSenderPicker->getSenders(),
+				),
 				shouldShowWhatsAppEmergency: $this->whatsAppEmergencyService->shouldNotify($userId),
 			);
 		}

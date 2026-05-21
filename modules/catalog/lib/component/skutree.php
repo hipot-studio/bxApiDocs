@@ -144,7 +144,7 @@ class SkuTree
 		return $result;
 	}
 
-	protected function editTemplateOfferProps(array &$product, array $skuPropList, int $selectedOfferId = null): void
+	protected function editTemplateOfferProps(array &$product, array $skuPropList, ?int $selectedOfferId = null): void
 	{
 		$matrix = [];
 		$newOffers = [];

@@ -94,6 +94,11 @@ abstract class Base
 
 	abstract public static function isAllowed(): bool;
 
+	protected static function isEditable(): bool
+	{
+		return true;
+	}
+
 	public static function getTitle(): string
 	{
 		$result = static::getTitleInternal();
@@ -235,7 +240,7 @@ abstract class Base
 
 	public static function getGridAction(ProductGroupAction $panel): ?array
 	{
-		if (!static::isAllowed())
+		if (!static::isAllowed() || !static::isEditable())
 		{
 			return null;
 		}

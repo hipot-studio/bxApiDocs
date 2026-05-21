@@ -1117,7 +1117,7 @@ class ProductSelector extends JsonController
 		return $imageField->getFormattedField();
 	}
 
-	public function getFileInputAction(int $iblockId, int $skuId = null): ?Response\Component
+	public function getFileInputAction(int $iblockId, ?int $skuId = null): ?Response\Component
 	{
 		$productFactory = ServiceContainer::getProductFactory($iblockId);
 		if (!$productFactory)

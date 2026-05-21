@@ -206,20 +206,26 @@ class Booking extends Activity
 		$result['openButton'] = $this->getOpenBookingButton();
 
 		$bookingId = $this->getBookingId();
-		$messageMenuItems = $this->getMessageMenuItems(
-			$bookingId,
-			(new BookingActivity())->getMessageMenuItems($bookingId)
-		);
+		$senderInfo = (new BookingActivity())->getMessageSenderInfo($bookingId);
 
-		if (!empty($messageMenuItems))
+		if ($senderInfo && !empty($senderInfo['notificationTypes']))
 		{
-			$result['messageButton'] = (new Button(
-				Loc::getMessage('CRM_TIMELINE_BOOKING_BTN_MESSAGE') ?? '',
-				Button::TYPE_SECONDARY
-			))
-				->setScopeWeb()
-				->setMenuItems($messageMenuItems)
-			;
+			$buttonTitle = Loc::getMessage(
+				'CRM_TIMELINE_BOOKING_BTN_MESSAGE_' . mb_strtoupper($senderInfo['senderCode'])
+			);
+
+			if ($buttonTitle)
+			{
+				$messageMenuItems = $this->buildMessageMenuItems($bookingId, $senderInfo['notificationTypes']);
+
+				if (!empty($messageMenuItems))
+				{
+					$result['messageButton'] = (new Button($buttonTitle, Button::TYPE_SECONDARY))
+						->setScopeWeb()
+						->setMenuItems($messageMenuItems)
+					;
+				}
+			}
 		}
 
 		$result['cancelButton'] = (new Button(
@@ -281,45 +287,35 @@ class Booking extends Activity
 		;
 	}
 
-	private function getMessageMenuItems(int $bookingId, array $messageMenuItems): array
+	private function buildMessageMenuItems(int $bookingId, array $notificationTypes): array
 	{
 		$result = [];
 
 		$isToolAvailable = $this->isToolAvailable();
 
-		foreach ($messageMenuItems as $messageMenuItem)
+		foreach ($notificationTypes as $notificationType)
 		{
-			$result[$messageMenuItem['code'] ?? ''] = (new MenuItem($messageMenuItem['name'] ?? ''))
-				->setAction(
-					$this->getMessageMenuItemAction($bookingId, $messageMenuItem, $isToolAvailable)
-				);
+			$code = $notificationType['code'] ?? '';
+			$name = $notificationType['name'] ?? '';
+
+			if (!$isToolAvailable)
+			{
+				$action = (new Action\JsEvent($this->getType() . ':ShowInfoHelper'))
+					->addActionParamString('code', 'limit_automation_off');
+			}
+			else
+			{
+				$action = (new RunAjaxJsonAction('booking.api_v1.Message.send'))
+					->addActionParamInt('bookingId', $bookingId)
+					->addActionParamString('notificationType', $code)
+					->setAnimation(Animation::showLoaderForBlock())
+				;
+			}
+
+			$result[$code] = (new MenuItem($name))->setAction($action);
 		}
 
 		return $result;
-	}
-
-	private function getMessageMenuItemAction(int $bookingId, array $messageMenuItem, bool $isToolAvailable): Action
-	{
-		if (!$isToolAvailable)
-		{
-			return (new Action\JsEvent($this->getType() . ':ShowInfoHelper'))
-				->addActionParamString('code', 'limit_automation_off');
-		}
-
-		$action = (new RunAjaxJsonAction('booking.api_v1.Message.send'))
-			->addActionParamInt('bookingId', $bookingId)
-			->setAnimation(Animation::showLoaderForBlock())
-		;
-		$params = (isset($messageMenuItem['params']) && is_array($messageMenuItem['params']))
-			? $messageMenuItem['params']
-			: []
-		;
-		foreach ($params as $paramName => $paramValue)
-		{
-			$action->addActionParamString($paramName, $paramValue);
-		}
-
-		return $action;
 	}
 
 	public function needShowNotes(): bool

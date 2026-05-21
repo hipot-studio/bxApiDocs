@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Security\Role\Manage;
 
 use Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository;
+use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionEvent;
 use Bitrix\Crm\Security\Role\Manage\Entity\ContractorConfig;
 use Bitrix\Crm\Security\Role\Manage\Entity\Contractor;
 use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionConfig;
@@ -16,6 +17,7 @@ use Bitrix\Crm\Security\Role\Manage\Entity\CrmConfig;
 use Bitrix\Crm\Security\Role\Manage\Entity\Deal;
 use Bitrix\Crm\Security\Role\Manage\Entity\DynamicItem;
 use Bitrix\Crm\Security\Role\Manage\Entity\Exclusion;
+use Bitrix\Crm\Security\Role\Manage\Entity\Event;
 use Bitrix\Crm\Security\Role\Manage\Entity\FilterableByAutomatedSolution;
 use Bitrix\Crm\Security\Role\Manage\Entity\FilterableByCategory;
 use Bitrix\Crm\Security\Role\Manage\Entity\FilterableByTypes;
@@ -96,7 +98,9 @@ final class PermissionEntityBuilder
 			Permission::RepeatSale => new RepeatSale(),
 			Permission::AutomatedSolutionConfig => new AutomatedSolutionConfig(),
 			Permission::AutomatedSolutionList => new AutomatedSolutionList(),
+			Permission::Event => new Event(),
 			Permission::CrmConfig => new CrmConfig(),
+			Permission::AutomatedSolutionEvent => new AutomatedSolutionEvent(),
 		};
 
 		if (!$this->isPermissionAvailable($permission))

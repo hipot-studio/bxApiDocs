@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Integration\AI\Operation;
 
+use Bitrix\AI\Context;
 use Bitrix\Crm\Badge;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Integration\AI\Config;
@@ -39,8 +40,8 @@ final class TranscribeCallRecording extends AbstractOperation
 
 	public function __construct(
 		ItemIdentifier $target,
-		private int $storageTypeId,
-		private int $storageElementId,
+		private readonly int $storageTypeId,
+		private readonly int $storageElementId,
 		?int $userId = null,
 		?int $parentJobId = null,
 	)
@@ -188,7 +189,7 @@ final class TranscribeCallRecording extends AbstractOperation
 		;
 	}
 
-	final protected function getContextLanguageId(): string
+	protected function getContextLanguageId(): string
 	{
 		$itemIdentifier = (new Orchestrator())->findPossibleFillFieldsTarget($this->target->getEntityId());
 		if ($itemIdentifier)
@@ -203,32 +204,9 @@ final class TranscribeCallRecording extends AbstractOperation
 		return parent::getContextLanguageId();
 	}
 
-	protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void
-	{
-		$nextTarget = (new Orchestrator())->findPossibleFillFieldsTarget($result->getTarget()?->getEntityId());
-		if ($nextTarget)
-		{
-			Controller::getInstance()->onStartRecordTranscript(
-				$nextTarget,
-				$result->getTarget()?->getEntityId(),
-				$result->getUserId(),
-			);
-		}
-	}
+	protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void {}
 
-	protected static function notifyTimelineAfterSuccessfulJobFinish(Result $result): void
-	{
-		$nextTarget = (new Orchestrator())->findPossibleFillFieldsTarget($result->getTarget()?->getEntityId());
-		if ($nextTarget)
-		{
-			Controller::getInstance()->onFinishRecordTranscript(
-				$nextTarget,
-				$result->getTarget()?->getEntityId(),
-				[],
-				$result->getUserId(),
-			);
-		}
-	}
+	protected static function notifyTimelineAfterSuccessfulJobFinish(Result $result): void {}
 
 	protected static function notifyAboutJobError(
 		Result $result,
@@ -265,6 +243,15 @@ final class TranscribeCallRecording extends AbstractOperation
 					$activityId
 				);
 			}
+		}
+	}
+
+	protected static function onAfterSuccessfulJobFinish(Result $result, ?Context $context = null): void
+	{
+		$activityId = $result->getTarget()?->getEntityId();
+		if ($activityId > 0)
+		{
+			self::notifyTimelinesAboutActivityUpdate($activityId);
 		}
 	}
 

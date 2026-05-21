@@ -87,7 +87,7 @@ class Helper
 	 *
 	 * @return array[string]string
 	 */
-	public static function convertModifiersToArray(array $template = null)
+	public static function convertModifiersToArray(?array $template = null)
 	{
 		if ($template === null)
 		{

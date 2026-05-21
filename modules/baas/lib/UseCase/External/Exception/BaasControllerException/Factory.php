@@ -61,6 +61,9 @@ class Factory
 					ClientLicenseIsNotFoundException::SYMBOLIC_CODE => ClientLicenseIsNotFoundException::class,
 					// 'NETWORK'
 					ClientNetworkException::SYMBOLIC_CODE => ClientNetworkException::class,
+					ClientNetworkEmptyResponseException::SYMBOLIC_CODE => ClientNetworkEmptyResponseException::class,
+					ClientNetworkBadResponseException::SYMBOLIC_CODE => ClientNetworkBadResponseException::class,
+
 					default => UnknownException::class,
 				};
 			}

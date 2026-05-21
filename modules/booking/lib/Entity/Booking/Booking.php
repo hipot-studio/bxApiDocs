@@ -54,10 +54,12 @@ class Booking implements
 
 	private BookingVisitStatus|null $visitStatus = null;
 	private BookingSource|null $source = null;
+	private BookingDeletionScenario|null $deletionScenario = null;
 
 	private int|null $createdBy = null;
 	private int|null $createdAt = null;
 	private int|null $updatedAt = null;
+	private int|null $deletedAt = null;
 	private string|null $note = null;
 	private string|null $clientNote = null;
 	private BookingPayment|null $payment = null;
@@ -320,6 +322,18 @@ class Booking implements
 		return $this;
 	}
 
+	public function getDeletedAt(): int|null
+	{
+		return $this->deletedAt;
+	}
+
+	public function setDeletedAt(int|null $deletedAt): self
+	{
+		$this->deletedAt = $deletedAt;
+
+		return $this;
+	}
+
 	public function getCounter(): int
 	{
 		return $this->counter;
@@ -369,6 +383,18 @@ class Booking implements
 	public function setSource(BookingSource $source): self
 	{
 		$this->source = $source;
+
+		return $this;
+	}
+
+	public function getDeletionScenario(): BookingDeletionScenario|null
+	{
+		return $this->deletionScenario;
+	}
+
+	public function setDeletionScenario(BookingDeletionScenario|null $deletionScenario): self
+	{
+		$this->deletionScenario = $deletionScenario;
 
 		return $this;
 	}
@@ -434,12 +460,14 @@ class Booking implements
 			'createdBy' => $this->createdBy,
 			'createdAt' => $this->createdAt,
 			'updatedAt' => $this->updatedAt,
+			'deletedAt' => $this->deletedAt,
 			'counter' => $this->counter,
 			'counters' => $this->counters,
 			'note' => $this->note,
 			'clientNote' => $this->clientNote,
 			'visitStatus' => $this->getVisitStatus()->value,
 			'source' => $this->getSource()->value,
+			'deletionScenario' => $this->getDeletionScenario()?->value,
 			'payment' => $this->payment?->toArray(),
 		];
 	}
@@ -543,6 +571,11 @@ class Booking implements
 			$result->setUpdatedAt($props['updatedAt']);
 		}
 
+		if (isset($props['deletedAt']))
+		{
+			$result->setDeletedAt($props['deletedAt']);
+		}
+
 		if (isset($props['note']))
 		{
 			$result->setNote((string)$props['note']);
@@ -567,6 +600,15 @@ class Booking implements
 			$result->setSource(
 				BookingSource::tryFrom(
 					(string)$props['source']
+				)
+			);
+		}
+
+		if (isset($props['deletionScenario']))
+		{
+			$result->setDeletionScenario(
+				BookingDeletionScenario::tryFrom(
+					(string)$props['deletionScenario']
 				)
 			);
 		}

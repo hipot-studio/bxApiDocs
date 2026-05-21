@@ -473,7 +473,9 @@ class AIManager
 		return match ($errorCode)
 		{
 			'LIMIT_IS_EXCEEDED_BAAS' => ErrorCode::getAILimitOfRequestsExceededError([
-				'sliderCode' => BaasManager::getEmptyPackagesSliderCode(),
+				'sliderCode' => BaasManager::isAvailable()
+					? BaasManager::SLIDER_CODE_EMPTY_MARKET_PACKAGES
+					: BaasManager::SLIDER_CODE_EMPTY_BAAS_PACKAGES,
 				'limitCode' => self::AI_LIMIT_BAAS,
 			]),
 			'LIMIT_IS_EXCEEDED_MONTHLY' => ErrorCode::getAILimitOfRequestsExceededError([

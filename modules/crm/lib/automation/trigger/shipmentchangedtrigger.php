@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Main\Loader;
 Use Bitrix\Main\Localization\Loc;
@@ -101,5 +102,10 @@ class ShipmentChangedTrigger extends BaseTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::PRODUCTS_CUBE->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::DELIVERY->value];
 	}
 }

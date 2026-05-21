@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
@@ -153,5 +154,10 @@ class TaskStatusTrigger extends BaseTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::COMPLETE_TASK_LIST->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::TASK_MANAGEMENT->value, ActivityGroup::TASK_DISTRIBUTION->value];
 	}
 }

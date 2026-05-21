@@ -323,6 +323,9 @@ class CAllCrmDeal
 					'parentEntityTypeId' => \CCrmOwnerType::Company,
 				],
 			),
+			'MYCOMPANY_ID' => array(
+				'TYPE' => 'crm_company'
+			),
 			'CONTACT_ID' => array(
 				'TYPE' => 'crm_contact',
 				'ATTRIBUTES' => array(CCrmFieldInfoAttr::Deprecated)
@@ -461,6 +464,8 @@ class CAllCrmDeal
 
 			'CONTACT_ID' => array('FIELD' => 'L.CONTACT_ID', 'TYPE' => 'int'),
 			'CONTACT_ADDRESS' => array('FIELD' => 'C.ADDRESS', 'TYPE' => 'string', 'FROM' => $contactJoin),
+
+			'MYCOMPANY_ID' => array('FIELD' => 'L.MYCOMPANY_ID', 'TYPE' => 'int'),
 
 			'QUOTE_ID' => array('FIELD' => 'L.QUOTE_ID', 'TYPE' => 'int'),
 			'QUOTE_TITLE' => array('FIELD' => 'Q.TITLE', 'TYPE' => 'string', 'FROM' => $quoteJoin),

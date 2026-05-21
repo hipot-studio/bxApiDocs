@@ -10,6 +10,14 @@ use Bitrix\Iblock;
 use Bitrix\Catalog;
 use Bitrix\Landing;
 use Bitrix\Crm;
+use Bitrix\Main\Application;
+use Bitrix\Main\ORM\Entity;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Iblock\ElementTable;
+use Bitrix\Iblock\SectionTable;
+use Bitrix\Iblock\SectionElementTable;
+
 
 /**
  * Class State
@@ -20,6 +28,10 @@ use Bitrix\Crm;
 final class State
 {
 	private const EXTERNAL_CATALOG_OPTION = 'is_external_catalog';
+
+	private const CACHE_TIME = 86400;
+	private const CACHE_DIR = 'catalog/landing_limited_products/';
+	private const CACHE_LIMIT_POSTFIX = '_limit';
 
 	/** @var array */
 	private static $landingSections;
@@ -107,7 +119,7 @@ final class State
 			return false;
 		}
 
-		return Catalog\GroupTable::getCount([], ['ttl' => 86400]) > 1;
+		return Catalog\GroupTable::getCount([], ['ttl' => self::CACHE_TIME]) > 1;
 	}
 
 	/**
@@ -122,7 +134,7 @@ final class State
 			return true;
 		}
 
-		return Catalog\GroupTable::getCount([], ['ttl' => 86400]) === 0;
+		return Catalog\GroupTable::getCount([], ['ttl' => self::CACHE_TIME]) === 0;
 	}
 
 	/**
@@ -137,7 +149,7 @@ final class State
 			return false;
 		}
 
-		return Catalog\StoreTable::getCount([], ['ttl' => 86400]) > 1;
+		return Catalog\StoreTable::getCount([], ['ttl' => self::CACHE_TIME]) > 1;
 	}
 
 	/**
@@ -152,17 +164,18 @@ final class State
 			return true;
 		}
 
-		return Catalog\StoreTable::getCount([], ['ttl' => 86400]) === 0;
+		return Catalog\StoreTable::getCount([], ['ttl' => self::CACHE_TIME]) === 0;
 	}
 
 	/**
 	 * Returns information about exceeding the number of goods in the landing for the information block.
 	 *
-	 * @param int $iblockId		Iblock Id.
+	 * @param int $iblockId Iblock Id.
 	 * @param int|null $sectionId Current section (can be absent).
+	 * @param bool $needRealCount Used to optimize COUNT execution. Set to false if COUNT is only required for limit validation.
 	 * @return array|null
 	 */
-	public static function getExceedingProductLimit(int $iblockId, ?int $sectionId = null): ?array
+	public static function getExceedingProductLimit(int $iblockId, ?int $sectionId = null, bool $needRealCount = true): ?array
 	{
 		if ($iblockId <= 0)
 		{
@@ -179,7 +192,7 @@ final class State
 			return null;
 		}
 
-		$result = self::checkIblockLimit($iblockId);
+		$result = self::checkIblockLimit($iblockId, $needRealCount);
 		if ($result !== null && $sectionId !== null)
 		{
 			self::loadIblockSections($iblockId);
@@ -206,44 +219,10 @@ final class State
 		$crmCatalogId = self::getCrmCatalogId();
 		if ($crmCatalogId > 0)
 		{
-			return self::getExceedingProductLimit($crmCatalogId);
+			return self::getExceedingProductLimit($crmCatalogId, needRealCount: false);
 		}
 
 		return null;
-	}
-
-	public static function getProductLimitState(int $iblockId): ?array
-	{
-		if ($iblockId <= 0)
-		{
-			return null;
-		}
-
-		if (!ModuleManager::isModuleInstalled('bitrix24'))
-		{
-			return null;
-		}
-
-		if ($iblockId !== self::getCrmCatalogId())
-		{
-			return null;
-		}
-
-		$result = [];
-		$variable = Feature::getLandingLimitVariable();
-		$result[$variable] = [
-			'LIMIT_NAME' => $variable,
-			'LIMIT_VALUE' => Feature::getLandingProductLimit(),
-			'CURRENT_VALUE' => self::getElementCount($iblockId),
-		];
-
-		$crmLimit = self::getCrmCatalogLimitState($iblockId);
-		if ($crmLimit !== null)
-		{
-			$result[$crmLimit['LIMIT_NAME']] = $crmLimit;
-		}
-
-		return $result;
 	}
 
 	/**
@@ -313,6 +292,7 @@ final class State
 			return;
 
 		self::$elementCount = null;
+		self::clearCache();
 	}
 
 	/**
@@ -403,6 +383,7 @@ final class State
 		}
 
 		self::$elementCount = null;
+		self::clearCache();
 	}
 
 	/**
@@ -417,6 +398,7 @@ final class State
 			return;
 
 		self::$elementCount = null;
+		self::clearCache();
 	}
 
 	/**
@@ -537,6 +519,7 @@ final class State
 		self::$iblockSections = null;
 		self::$fullIblockSections = null;
 		self::$elementCount = null;
+		self::clearCache();
 	}
 
 	/**
@@ -553,13 +536,39 @@ final class State
 		self::$iblockSections = null;
 		self::$fullIblockSections = null;
 		self::$elementCount = null;
+		self::clearCache();
+	}
+
+	private static function clearCache(): void
+	{
+		Application::getInstance()->getCache()->cleanDir(self::CACHE_DIR);
+	}
+
+	private static function getUtmProductTmpEntity(): Entity
+	{
+		static $entity = null;
+		if ($entity === null)
+		{
+			$entity = Entity::compileEntity(
+				'UtmProductTmp',
+				[
+					'VALUE_ID' => ['data_type' => 'integer'],
+					'FIELD_ID' => ['data_type' => 'integer'],
+					'VALUE_INT' => ['data_type' => 'integer'],
+				],
+				['table_name' => 'b_utm_product']
+			);
+		}
+
+		return $entity;
 	}
 
 	/**
 	 * @param int $iblockId
+	 * @param ?int $limit
 	 * @return int
 	 */
-	private static function getElementCount(int $iblockId): int
+	private static function getElementCount(int $iblockId, ?int $limit = null): int
 	{
 		if (self::$elementCount === null)
 		{
@@ -568,26 +577,76 @@ final class State
 			$iblockSectionIds = self::getIblockSections($iblockId);
 			if (!empty($iblockSectionIds))
 			{
-				$filter = [
-					'IBLOCK_ID' => $iblockId,
-					'SECTION_ID' => $iblockSectionIds,
-					'INCLUDE_SUBSECTIONS' => 'Y',
-					'CHECK_PERMISSIONS' => 'N',
-				];
-				$filter = Catalog\Product\SystemField\ProductMapping::getExtendedFilterByArea(
-					$filter,
-					Catalog\Product\SystemField\ProductMapping::MAP_LANDING
+				$areaData = Catalog\Product\SystemField\ProductMapping::getAreaData(
+					Catalog\Product\SystemField\ProductMapping::MAP_LANDING,
 				);
-				self::$elementCount = (int)\CIBlockElement::GetList(
-					[],
-					$filter,
-					[],
-					false,
-					['ID']
-				);
+				$uniqueId = md5(serialize([$iblockSectionIds, $areaData]));
+				if ($limit)
+				{
+					$uniqueId .= self::CACHE_LIMIT_POSTFIX;
+				}
+				$cache = Application::getInstance()->getCache();
+				if ($cache->initCache(self::CACHE_TIME, $uniqueId, self::CACHE_DIR))
+				{
+					self::$elementCount = (int)$cache->getVars();
+				}
+				else
+				{
+					$subQuery = ElementTable::query()
+						->setSelect(['ID'])
+						->registerRuntimeField(
+							(new Reference(
+								'BUF1',
+								self::getUtmProductTmpEntity()->getDataClass(),
+								Join::on('this.ID', 'ref.VALUE_ID')
+									->where('ref.FIELD_ID', $areaData['ID'])
+									->where('ref.VALUE_INT', $areaData['VALUE'])
+							))->configureJoinType(Join::TYPE_INNER)
+						)
+						->registerRuntimeField(
+							(new Reference(
+								'BSE',
+								SectionElementTable::class,
+								Join::on('this.ID', 'ref.IBLOCK_ELEMENT_ID')
+							))->configureJoinType(Join::TYPE_INNER)
+						)
+						->registerRuntimeField(
+							(new Reference(
+								'BSubS',
+								SectionTable::class,
+								Join::on('this.BSE.IBLOCK_SECTION_ID', 'ref.ID')
+							))->configureJoinType(Join::TYPE_INNER)
+						)
+						->registerRuntimeField(
+							(new Reference(
+								'BS',
+								SectionTable::class,
+								Join::on('this.BSubS.IBLOCK_ID', 'ref.IBLOCK_ID')
+									->whereIn('ref.ID', $iblockSectionIds)
+									->whereColumn('this.BSubS.LEFT_MARGIN', '>=', 'ref.LEFT_MARGIN')
+									->whereColumn('this.BSubS.RIGHT_MARGIN', '<=', 'ref.RIGHT_MARGIN')
+							))->configureJoinType(Join::TYPE_INNER)
+						)
+						->setFilter([
+							'=IBLOCK_ID' => $iblockId,
+							'=WF_STATUS_ID' => 1,
+							'==WF_PARENT_ELEMENT_ID' => null,
+						])
+						->setGroup(['ID'])
+					;
+					if ($limit)
+					{
+						$subQuery->setLimit($limit);
+					}
+
+					$sql = 'SELECT COUNT(*) AS CNT FROM (' . $subQuery->getQuery() . ') t';
+					self::$elementCount = (int)Application::getConnection()->queryScalar($sql);
+					$cache->startDataCache();
+					$cache->endDataCache(self::$elementCount);
+				}
 			}
-			unset($iblockSectionIds);
 		}
+
 		return self::$elementCount;
 	}
 
@@ -684,7 +743,7 @@ final class State
 					'=CODE' => 'SECTION_ID',
 					'=TMP_LANDING_SITE.DELETED' => 'N',
 				],
-				'cache' => ['ttl' => 86400],
+				'cache' => ['ttl' => self::CACHE_TIME],
 			]);
 			while ($row = $iterator->fetch())
 			{
@@ -734,21 +793,6 @@ final class State
 		}
 
 		return Crm\Config\State::getExceedingProductLimit($iblockId);
-	}
-
-	private static function getCrmCatalogLimitState(int $iblockId): ?array
-	{
-		if (!self::isCrmIncluded())
-		{
-			return null;
-		}
-
-		if (!method_exists('\Bitrix\Crm\Config\State', 'getProductLimitState'))
-		{
-			return null;
-		}
-
-		return Crm\Config\State::getProductLimitState($iblockId);
 	}
 
 	/**
@@ -804,6 +848,7 @@ final class State
 	 * Check products limit.
 	 *
 	 * @param int $iblockId
+	 * @param bool $needRealCount
 	 * @return array|null
 	 * 	keys are case sensitive:
 	 * 		<ul>
@@ -813,9 +858,9 @@ final class State
 	 * 		<li>string MESSAGE
 	 * 		</ul>
 	 */
-	private static function checkIblockLimit(int $iblockId): ?array
+	private static function checkIblockLimit(int $iblockId, bool $needRealCount = true): ?array
 	{
-		$result = self::getIblockLimit($iblockId);
+		$result = self::getIblockLimit($iblockId, $needRealCount);
 		if (
 			$result['LIMIT'] === 0
 			|| $result['COUNT'] < $result['LIMIT']
@@ -834,6 +879,7 @@ final class State
 	 * Returns products limit.
 	 *
 	 * @param int $iblockId
+	 * @param bool $needRealCount
 	 * @return array
 	 * 	keys are case sensitive:
 	 * 		<ul>
@@ -842,7 +888,7 @@ final class State
 	 * 		<li>string MESSAGE_ID
 	 * 		</ul>
 	 */
-	private static function getIblockLimit(int $iblockId): array
+	private static function getIblockLimit(int $iblockId, bool $needRealCount = true): array
 	{
 		$result = [
 			'COUNT' => 0,
@@ -853,7 +899,7 @@ final class State
 		{
 			return $result;
 		}
-		$result['COUNT'] = self::getElementCount($iblockId);
+		$result['COUNT'] = self::getElementCount($iblockId, $needRealCount ? null : $result['LIMIT']);
 
 		return $result;
 	}

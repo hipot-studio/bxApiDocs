@@ -8,7 +8,7 @@ use Bitrix\Main\Web\Uri;
 
 class ContentBlockFactory
 {
-	public static function createTextOrLink(string $text, ?Action $action): ContentBlock
+	public static function createTextOrLink(string $text, ?Action $action): Link|Text
 	{
 		return $action
 			? (new Link())

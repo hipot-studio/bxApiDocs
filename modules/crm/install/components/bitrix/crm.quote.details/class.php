@@ -605,6 +605,14 @@ class CrmQuoteDetailsComponent extends FactoryBased
 			return $tabInvoice;
 		}
 
+		if ($tabCode === static::TAB_NAME_EVENT)
+		{
+				if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+				{
+					return null;
+				}
+		}
+
 		return parent::getDefaultTabInfoByCode($tabCode);
 	}
 

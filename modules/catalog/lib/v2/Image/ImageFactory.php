@@ -35,7 +35,7 @@ class ImageFactory
 	 * @param string|null $type
 	 * @return \Bitrix\Catalog\v2\Image\BaseImage
 	 */
-	public function createEntity(string $type = null): BaseImage
+	public function createEntity(?string $type = null): BaseImage
 	{
 		switch ($type)
 		{

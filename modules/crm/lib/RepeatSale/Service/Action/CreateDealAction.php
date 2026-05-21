@@ -2,7 +2,9 @@
 
 namespace Bitrix\Crm\RepeatSale\Service\Action;
 
+use Bitrix\Crm\Format\PlaceholderFormatter;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\RepeatSale\Segment\SegmentCode;
 use Bitrix\Crm\RepeatSale\Segment\SegmentItem;
@@ -53,11 +55,20 @@ final class CreateDealAction implements ActionInterface
 			}
 		}
 
-		$result = $this->getFactory()->getAddOperation($deal)->disableAllChecks()->launch();
+		$addResult = $this->getFactory()->getAddOperation($deal)->disableAllChecks()->launch();
 
-		$this->sendAnalyticsEvent($segmentItem?->getCode(), $result->isSuccess());
+		if (!$addResult->isSuccess())
+		{
+			$this->sendAnalyticsEvent($segmentItem?->getCode(), false);
 
-		return $result->isSuccess() ? $result->setData(['item' => $deal]) : $result;
+			return $addResult;
+		}
+
+		$updateResult = $this->replaceDealTitlePlaceholders($deal);
+
+		$this->sendAnalyticsEvent($segmentItem?->getCode(), $updateResult->isSuccess());
+
+		return $updateResult->isSuccess() ? $updateResult->setData(['item' => $deal]) : $updateResult;
 	}
 
 	private function createDeal(int $assignmentUserId, ?SegmentItem $segmentItem): Item
@@ -77,6 +88,31 @@ final class CreateDealAction implements ActionInterface
 	private function getTitle(SegmentItem $segmentItem): ?string
 	{
 		return $segmentItem->getEntityTitlePattern();
+	}
+
+	private function replaceDealTitlePlaceholders(Item $deal): Result
+	{
+		$pattern = $deal->getTitle();
+
+		if ($pattern === null || !PlaceholderFormatter::hasPlaceholders($pattern))
+		{
+			return new Result();
+		}
+
+		$title = (new DocumentGeneratorManager())
+			->replacePlaceholdersInText(
+				\CCrmOwnerType::Deal,
+				$deal->getId(),
+				$pattern,
+			)
+		;
+
+		$title = trim($title);
+		$title = empty($title) ? $deal->getTitlePlaceholder() : $title;
+
+		$deal->setTitle($title);
+
+		return $this->getFactory()->getUpdateOperation($deal)->disableAllChecks()->launch();
 	}
 
 	private function getFactory(): Factory

@@ -29,7 +29,7 @@ abstract class BaseEntity
 	private $parentCollection;
 
 	// ToDo do we need $repository for every base entity?
-	public function __construct(RepositoryContract $repository = null)
+	public function __construct(?RepositoryContract $repository = null)
 	{
 		$this->entityRepository = $repository;
 	}

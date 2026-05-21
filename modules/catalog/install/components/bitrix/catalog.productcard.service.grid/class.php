@@ -229,7 +229,7 @@ class CatalogProductServiceGridComponent
 		return true;
 	}
 
-	public function isAjaxGridAction(Request $request = null): bool
+	public function isAjaxGridAction(?Request $request = null): bool
 	{
 		if ($request === null)
 		{

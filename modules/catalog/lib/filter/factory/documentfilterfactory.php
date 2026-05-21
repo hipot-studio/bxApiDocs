@@ -8,7 +8,7 @@ use Bitrix\Main\Filter\Settings;
 
 class DocumentFilterFactory
 {
-	public function createBySettings(string $mode, Settings $settings, array $extraDataProviders = null): Filter
+	public function createBySettings(string $mode, Settings $settings, ?array $extraDataProviders = null): Filter
 	{
 		return new Filter(
 			$settings->getID(),

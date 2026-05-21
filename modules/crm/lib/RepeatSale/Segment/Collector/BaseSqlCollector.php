@@ -7,6 +7,7 @@ use Bitrix\Crm\RepeatSale\Segment\Data\SegmentData;
 use Bitrix\Crm\RepeatSale\Segment\Data\SegmentDataInterface;
 use Bitrix\Crm\RepeatSale\Segment\Data\WrongSegmentData;
 use Bitrix\Crm\Service\Communication\Utils\Common;
+use CCrmOwnerType;
 
 abstract class BaseSqlCollector extends BaseCollector
 {
@@ -17,7 +18,7 @@ abstract class BaseSqlCollector extends BaseCollector
 			return new WrongSegmentData();
 		}
 
-		if ($entityTypeId === \CCrmOwnerType::Contact)
+		if ($entityTypeId === CCrmOwnerType::Contact)
 		{
 			$ids = $this->getContactIds($filter);
 		}
@@ -25,6 +26,12 @@ abstract class BaseSqlCollector extends BaseCollector
 		{
 			$ids = $this->getCompanyIds($filter);
 		}
+
+		$ids = $this->filterItemsWithRecentlyClosedEntities(
+			$ids,
+			$entityTypeId,
+			$minimumDaysAfterLastClosedEntity,
+		);
 
 		$items = $this->getItemsByIds($ids, $entityTypeId);
 		if (empty($items))

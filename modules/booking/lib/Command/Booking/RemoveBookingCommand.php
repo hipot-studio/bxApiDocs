@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Command\Booking;
 
 use Bitrix\Booking\Command\AbstractCommand;
+use Bitrix\Booking\Entity\Booking\BookingDeletionScenario;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Main\Result;
@@ -14,6 +15,7 @@ class RemoveBookingCommand extends AbstractCommand
 	public function __construct(
 		public readonly int $id,
 		public readonly int $removedBy,
+		public readonly BookingDeletionScenario|null $scenario = null,
 	)
 	{
 
@@ -24,6 +26,7 @@ class RemoveBookingCommand extends AbstractCommand
 		return [
 			'id' => $this->id,
 			'removedBy' => $this->removedBy,
+			'scenario' => $this->scenario?->value,
 		];
 	}
 

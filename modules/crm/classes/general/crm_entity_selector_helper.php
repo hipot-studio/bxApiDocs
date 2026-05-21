@@ -3,15 +3,16 @@
 use Bitrix\Crm\EntityPreset;
 use Bitrix\Crm\EntityRequisite;
 use Bitrix\Crm\Integration\OpenLineManager;
+use Bitrix\Crm\Item;
+use Bitrix\Crm\Item\Company;
 use Bitrix\Crm\Order\Order;
 use Bitrix\Crm\RequisiteAddress;
+use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Location\Entity\Address;
 use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Crm\Service;
-use Bitrix\Crm\Item\Company;
-use Bitrix\Crm\Item;
+use Bitrix\Main\PhoneNumber\Parser;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -277,7 +278,7 @@ class CCrmEntitySelectorHelper
 						)
 						{
 							$formattedValue = $arRes['TYPE_ID'] === 'PHONE'
-								? \Bitrix\Main\PhoneNumber\Parser::getInstance()->parse($arRes['VALUE'])->format()
+								? Parser::getInstance()->parse($arRes['VALUE'])->format()
 								: $arRes['VALUE'];
 
 							$multiFieldId = $normalizeMultifields ? $arRes['ID'] : $entityID;
@@ -444,12 +445,16 @@ class CCrmEntitySelectorHelper
 					$phoneCountryList = CCrmFieldMulti::GetPhoneCountryList(array_keys($multifields));
 					foreach ($multifields as $arRes)
 					{
-						if ($arRes['TYPE_ID'] === 'PHONE' || $arRes['TYPE_ID'] === 'EMAIL')
+						if (
+							$arRes['TYPE_ID'] === 'PHONE'
+							|| $arRes['TYPE_ID'] === 'EMAIL'
+							|| ($arRes['TYPE_ID'] === 'IM' && OpenLineManager::isImOpenLinesValue($arRes['VALUE']))
+						)
 						{
 							$formattedValue = $arRes['TYPE_ID'] === 'PHONE'
-								? \Bitrix\Main\PhoneNumber\Parser::getInstance()->parse($arRes['VALUE'])->format()
-								: $arRes['VALUE'];
-
+								? Parser::getInstance()->parse($arRes['VALUE'])->format()
+								: $arRes['VALUE']
+							;
 							$multiFieldId = $normalizeMultifields ? $arRes['ID'] : $entityID;
 
 							if (!isset($result[$advancedInfoKey]) || !is_array($result[$advancedInfoKey]))
@@ -477,7 +482,8 @@ class CCrmEntitySelectorHelper
 								],
 								'VALUE_FORMATTED' => $formattedValue,
 								'COMPLEX_ID' => $arRes['COMPLEX_ID'],
-								'COMPLEX_NAME' => \CCrmFieldMulti::GetEntityNameByComplex($arRes['COMPLEX_ID'], false)
+								'COMPLEX_NAME' => \CCrmFieldMulti::GetEntityNameByComplex($arRes['COMPLEX_ID'], false),
+								'TITLE' => OpenLineManager::isImOpenLinesValue($arRes['VALUE']) ? OpenLineManager::getOpenLineTitle($arRes['VALUE']) : '',
 							];
 						}
 					}
@@ -511,16 +517,16 @@ class CCrmEntitySelectorHelper
 		elseif($entityTypeName === 'LEAD')
 		{
 			$obRes = CCrmLead::GetListEx(
-				array(),
-				array('=ID'=> $entityID),
+				[],
+				['=ID'=> $entityID, 'CHECK_PERMISSIONS' => 'N'],
 				false,
 				false,
-				array('TITLE', 'HONORIFIC', 'NAME', 'SECOND_NAME', 'LAST_NAME')
+				['TITLE', 'HONORIFIC', 'NAME', 'SECOND_NAME', 'LAST_NAME']
 			);
-			if($arRes = $obRes->Fetch())
+			if ($arRes = $obRes->Fetch())
 			{
-				$result[$titleKey] = isset($arRes['TITLE']) ? $arRes['TITLE'] : '';
-				if($result[$titleKey] === '')
+				$result[$titleKey] = $arRes['TITLE'] ?? '';
+				if ($result[$titleKey] === '')
 				{
 					$result[$titleKey] = CCrmLead::PrepareFormattedName(
 						array(
@@ -542,10 +548,10 @@ class CCrmEntitySelectorHelper
 
 				$result[$descKey] = CCrmLead::PrepareFormattedName(
 					array(
-						'HONORIFIC' => isset($arRes['HONORIFIC']) ? $arRes['HONORIFIC'] : '',
-						'NAME' => isset($arRes['NAME']) ? $arRes['NAME'] : '',
-						'SECOND_NAME' => isset($arRes['SECOND_NAME']) ? $arRes['SECOND_NAME'] : '',
-						'LAST_NAME' => isset($arRes['LAST_NAME']) ? $arRes['LAST_NAME'] : ''
+						'HONORIFIC' => $arRes['HONORIFIC'] ?? '',
+						'NAME' => $arRes['NAME'] ?? '',
+						'SECOND_NAME' => $arRes['SECOND_NAME'] ?? '',
+						'LAST_NAME' => $arRes['LAST_NAME'] ?? ''
 					)
 				);
 
@@ -561,12 +567,16 @@ class CCrmEntitySelectorHelper
 					$phoneCountryList = CCrmFieldMulti::GetPhoneCountryList(array_keys($multifields));
 					foreach ($multifields as $arRes)
 					{
-						if ($arRes['TYPE_ID'] === 'PHONE' || $arRes['TYPE_ID'] === 'EMAIL')
+						if (
+							$arRes['TYPE_ID'] === 'PHONE'
+							|| $arRes['TYPE_ID'] === 'EMAIL'
+							|| ($arRes['TYPE_ID'] === 'IM' && OpenLineManager::isImOpenLinesValue($arRes['VALUE']))
+						)
 						{
 							$formattedValue = $arRes['TYPE_ID'] === 'PHONE'
-								? \Bitrix\Main\PhoneNumber\Parser::getInstance()->parse($arRes['VALUE'])->format()
-								: $arRes['VALUE'];
-
+								? Parser::getInstance()->parse($arRes['VALUE'])->format()
+								: $arRes['VALUE']
+							;
 							$multiFieldId = $normalizeMultifields ? $arRes['ID'] : $entityID;
 
 							if (!isset($result[$advancedInfoKey]) || !is_array($result[$advancedInfoKey]))
@@ -594,7 +604,8 @@ class CCrmEntitySelectorHelper
 								],
 								'VALUE_FORMATTED' => $formattedValue,
 								'COMPLEX_ID' => $arRes['COMPLEX_ID'],
-								'COMPLEX_NAME' => \CCrmFieldMulti::GetEntityNameByComplex($arRes['COMPLEX_ID'], false)
+								'COMPLEX_NAME' => \CCrmFieldMulti::GetEntityNameByComplex($arRes['COMPLEX_ID'], false),
+								'TITLE' => OpenLineManager::isImOpenLinesValue($arRes['VALUE']) ? OpenLineManager::getOpenLineTitle($arRes['VALUE']) : '',
 							];
 						}
 					}
@@ -608,16 +619,15 @@ class CCrmEntitySelectorHelper
 		elseif($entityTypeName === 'DEAL')
 		{
 			$obRes = CCrmDeal::GetListEx(
-				array(),
-				array('=ID'=> $entityID),
+				[],
+				['=ID'=> $entityID, 'CHECK_PERMISSIONS' => 'N'],
 				false,
 				false,
-				array('TITLE', 'COMPANY_TITLE', 'CONTACT_FULL_NAME')
+				['TITLE', 'COMPANY_TITLE', 'CONTACT_FULL_NAME']
 			);
-			if($arRes = $obRes->Fetch())
+			if ($arRes = $obRes->Fetch())
 			{
 				$result[$titleKey] = $arRes['TITLE'];
-
 				$result[$urlKey] = CComponentEngine::MakePathFromTemplate(
 					COption::GetOptionString('crm', $enableSlider ? 'path_to_deal_details' : 'path_to_deal_show'),
 					array(
@@ -1715,15 +1725,4 @@ class CCrmEntitySelectorHelper
 		return $result;
 	}
 
-	private static function getPhoneCountryList(string $entityId, int $elementId): array
-	{
-		$multiFieldIds = [];
-		$dbResultIds = CCrmFieldMulti::GetList(['ID' => 'asc'], ['ENTITY_ID' => $entityId, 'ELEMENT_ID' => $elementId]);
-		while ($row = $dbResultIds->fetch())
-		{
-			$multiFieldIds[] = (int)$row['ID'];
-		}
-
-		return CCrmFieldMulti::GetPhoneCountryList($multiFieldIds);
-	}
 }

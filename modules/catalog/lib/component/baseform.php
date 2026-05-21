@@ -363,7 +363,7 @@ abstract class BaseForm
 	 * @param array|null $descriptions Field descriptions.
 	 * @return array
 	 */
-	public function getValues(bool $allowDefaultValues = true, array $descriptions = null): array
+	public function getValues(bool $allowDefaultValues = true, ?array $descriptions = null): array
 	{
 		$values = [];
 		if ($descriptions === null)
@@ -2347,7 +2347,7 @@ abstract class BaseForm
 HTML;
 	}
 
-	protected function getFilePropertyViewHtml($description, $value, bool $multipleForList = null)
+	protected function getFilePropertyViewHtml($description, $value, ?bool $multipleForList = null)
 	{
 		if ($multipleForList === null)
 		{

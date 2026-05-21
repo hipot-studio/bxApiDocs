@@ -21,7 +21,7 @@ class FieldStorage implements \ArrayAccess, \Iterator, \Countable
 
 	private $typeCaster;
 
-	public function __construct(TypeCasterContract $typeCaster = null)
+	public function __construct(?TypeCasterContract $typeCaster = null)
 	{
 		$this->typeCaster = $typeCaster ?? new NullTypeCaster();
 	}

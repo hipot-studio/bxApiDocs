@@ -61,7 +61,7 @@ class IblockCatalogPermissionsSaver
 	/**
 	 * @param string|null $siteId
 	 */
-	public function __construct(string $siteId = null)
+	public function __construct(?string $siteId = null)
 	{
 		Loader::requireModule('iblock');
 

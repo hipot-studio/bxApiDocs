@@ -23,7 +23,7 @@ trait EnableFactory
 	 */
 	public function isFactoryEnabled(): bool
 	{
-		return $this->isFactoryEnabled->get();
+		return true;
 	}
 
 	/**
@@ -33,6 +33,5 @@ trait EnableFactory
 	 */
 	public function setFactoryEnabled(bool $isEnabled): void
 	{
-		$this->isFactoryEnabled->set($isEnabled);
 	}
 }

@@ -52,6 +52,8 @@ final class CustomSectionSelection implements SectionableRoleSelectionManager
 		return (new PermissionEntityBuilder())
 			->include(Permission::Dynamic)
 			->filterByEntityTypeIds(Permission::Dynamic, $entityTypes)
+			->include(Permission::AutomatedSolutionEvent)
+			->filterByAutomatedSolution(Permission::AutomatedSolutionEvent, $this->getAutomatedSolutionId())
 			->include(Permission::AutomatedSolutionConfig)
 			->filterByAutomatedSolution(Permission::AutomatedSolutionConfig, $this->getAutomatedSolutionId())
 			->buildOfMade()

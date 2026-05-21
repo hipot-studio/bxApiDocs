@@ -5,18 +5,16 @@ namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 use Bitrix\Crm\Activity\Provider\ProviderManager;
 use Bitrix\Crm\Badge\Model\BadgeTable;
 use Bitrix\Crm\Integration\AI\AIManager;
-use Bitrix\Crm\Integration\AI\Model\QueueTable;
+use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\OpenLineManager;
-use Bitrix\Crm\Service\Timeline\Item\Activity;
-use Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\BaseButton;
-use Bitrix\Crm\Service\Timeline\Item\Interfaces\HasCopilot;
-use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotHelper;
+use Bitrix\Crm\Service\Timeline\Item\AIActivity;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Animation;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ActionBar\ActionBarItem;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Client;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ClientMark;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockFactory;
@@ -28,15 +26,12 @@ use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Crm\Service\Timeline\Layout\Header\ChangeStreamButton;
 use Bitrix\Crm\Service\Timeline\Layout\Header\Tag;
+use Bitrix\Im\V2\Message;
 use Bitrix\Main\Localization\Loc;
 use CCrmActivity;
-use CCrmOwnerType;
 
-final class OpenLine extends Activity implements HasCopilot
+final class OpenLine extends AIActivity
 {
-	use CopilotHelper;
-
-	private const SUMMARIZE_TRANSCRIPTION_LIMIT = 10;
 	private const DEFAULT_ADDITIONAL_ICON_CODE = 'livechat';
 
 	protected function getActivityTypeId(): string
@@ -81,69 +76,72 @@ final class OpenLine extends Activity implements HasCopilot
 	public function getContentBlocks(): array
 	{
 		$result = [];
+
 		$userCode = $this->getOpenLineUserCode();
 		$lineName = OpenLineManager::getLineTitle($userCode);
-		if ($lineName)
-		{
-			$result['lineTitle'] = (new ContentBlockWithTitle())
+		$channelName = $this->getOpenLineChannelName($userCode);
+		$subject = (string)($this->getAssociatedEntityModel()?->get('SUBJECT') ?? '');
+
+		$clientBlock = $this->buildClientBlock(Client::BLOCK_WITH_COMMUNICATION_CONTROL);
+		$lineTitleBlock = $lineName
+			? (new ContentBlockWithTitle())
 				->setTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_NAME'))
 				->setContentBlock((new Link())->setValue($lineName)->setAction($this->getOpenChatAction()))
+				->setFixedWidth(false)
 				->setInline()
-			;
-		}
+			: null
+		;
+		$chatTitleBlock = $channelName
+			? (new ContentBlockWithTitle())
+				->setTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_CHANNEL'))
+				->setContentBlock(ContentBlockFactory::createTitle($channelName)->setColor(Text::COLOR_BASE_90))
+				->setFixedWidth(false)
+				->setInline()
+			: null
+		;
+		$subjectBlock = !isset($clientBlock, $lineTitleBlock, $chatTitleBlock) && !empty($subject)
+			? ContentBlockFactory::createTextOrLink($subject, $this->getOpenChatAction())
+			: null
+		;
+		$chatActivityBlock = $this->buildChatActivityBlock();
+		$clientMarkBlock = $this->buildClientMarkBlock();
 
-		$clientBlock = $this->buildClientBlock(Client::BLOCK_WITH_FIXED_TITLE);
-		if (isset($clientBlock))
+		if ($clientBlock)
 		{
 			$result['client'] = $clientBlock;
 		}
-
-		$sourceList = [];
-		$providerId = $this->getAssociatedEntityModel()?->get('PROVIDER_ID');
-		if ($providerId && $provider = CCrmActivity::GetProviderById($providerId))
+		if ($lineTitleBlock)
 		{
-			$sourceList = $provider::getResultSources();
+			$result['lineTitle'] = $lineTitleBlock->setScopeMobile();
 		}
-
-		if (!empty($sourceList))
+		if ($chatTitleBlock)
 		{
-			$connectorType = OpenLineManager::getLineConnectorType($userCode);
-			$channelName = $sourceList[$connectorType] ?? $sourceList['livechat'];
-			$result['chatTitle'] = (new ContentBlockWithTitle())
-				->setTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_CHANNEL'))
-				->setContentBlock(ContentBlockFactory::createTitle($channelName)->setColor(Text::COLOR_BASE_90))
-				->setInline()
-			;
+			$result['chatTitle'] = $chatTitleBlock->setScopeMobile();
 		}
-
-		if (empty($result))
+		if ($subjectBlock)
 		{
-			$subject = (string)($this->getAssociatedEntityModel()?->get('SUBJECT') ?? '');
-			if (!empty($subject))
-			{
-				$result['subject'] = ContentBlockFactory::createTextOrLink(
-					$subject,
-					$this->getOpenChatAction()
-				);
-			}
+			$result['subject'] = $subjectBlock;
 		}
-
-		$chatActivityBlock = $this->buildChatActivityBlock();
 		if (isset($chatActivityBlock))
 		{
-			$result['chatActivityBlock'] = $chatActivityBlock;
+			$result['chatActivityBlock'] = $chatActivityBlock->setScopeMobile();
 		}
-
-		$clientMarkBlock = $this->buildClientMarkBlock();
 		if (isset($clientMarkBlock))
 		{
-			$result['clientMark'] = $clientMarkBlock;
+			$result['clientMark'] = $clientMarkBlock->setScopeMobile();
 		}
 
-		$copilotSummaryBlock = $this->buildCopilotSummaryBlock();
-		if (isset($copilotSummaryBlock))
+		// group blocks for web
+		$groupBlock = $this->buildGroupBlocks($result);
+		if ($groupBlock->isFilled())
 		{
-			$result['copilotSummaryBlock'] = $copilotSummaryBlock->setScopeWeb();
+			$result['chatGroupOfBlocks'] = $groupBlock->setScopeWeb();
+
+		}
+		$actionBarBlock = $this->buildAiActionBar();
+		if ($actionBarBlock->isFilled())
+		{
+			$result['aiActionBar'] = $actionBarBlock->setScopeWeb();
 		}
 
 		return $result;
@@ -157,8 +155,9 @@ final class OpenLine extends Activity implements HasCopilot
 			return [];
 		}
 
-		return [
-			'openChat' => (
+		return array_merge(
+			[
+				'openChat' => (
 				new Button(
 					Loc::getMessage($this->isScheduled()
 						? 'CRM_TIMELINE_BUTTON_OPEN_CHAT_MSGVER_1'
@@ -166,9 +165,10 @@ final class OpenLine extends Activity implements HasCopilot
 					,
 					$this->isScheduled() ? Button::TYPE_PRIMARY : Button::TYPE_SECONDARY
 				)
-			)->setAction($openChatAction),
-			'aiButton' => $this->getCopilotButton(),
-		];
+				)->setAction($openChatAction),
+			],
+			$this->getAIButtons(),
+		);
 	}
 
 	public function getMenuItems(): array
@@ -176,7 +176,7 @@ final class OpenLine extends Activity implements HasCopilot
 		$items = parent::getMenuItems();
 		unset($items['view']);
 
-		return $items;
+		return array_merge($items, $this->getAIMenuItems());
 	}
 
 	public function getTags(): ?array
@@ -206,33 +206,56 @@ final class OpenLine extends Activity implements HasCopilot
 			}
 		}
 
-		$aiTags = $this->getAiTags(
-			$this->getContext()->getIdentifier()->getEntityTypeId(),
-			$this->getContext()->getIdentifier()->getEntityId(),
-			$this->getActivityId()
-		);
-
-		return array_merge($tags, $aiTags);
+		return array_merge($tags, $this->getAITags());
 	}
 
-	public function needShowNotes(): bool
+	protected function getScenarios(): array
 	{
-		return true;
-	}
-
-	public function getCopilotButton(): ?BaseButton
-	{
-		$isButtonVisible = $this->isCopilotScope()
-			&& $this->hasUpdatePermission()
-			&& $this->isItemHashValid($this->getActivityId(), $this->getContext())
-		;
-
-		if (!$isButtonVisible)
+		if ($this->isAIScope() && $this->getAIService()->isFieldsFillingWrong())
 		{
-			return null;
+			return [
+				Scenario::CONFIRM_FIELDS_SCENARIO,
+			];
 		}
 
-		return $this->createCopilotButton();
+		return [
+			Scenario::FILL_FIELDS_SCENARIO,
+		];
+	}
+
+	protected function canShowAIActions(): bool
+	{
+		return true; // show AI actions, but it disabled when no valid data in chat
+	}
+
+	protected function createViewCopilotSummaryItem(array $list): ?ActionBarItem
+	{
+		$activityId = $this->getActivityId();
+		$languageTitle = $this->getAIService()->getAILanguage(SummarizeCallTranscription::TYPE_ID);
+		$barItemAction = (new JsEvent('Openline:ShowCopilotSummary'))
+			->addActionParamInt('activityId', $activityId)
+			->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+			->addActionParamInt('ownerId', $this->getContext()->getEntityId())
+			->addActionParamString('languageTitle', $languageTitle)
+			->addActionParamArray('summarizeTranscriptionList', $list)
+		;
+		$barItem = (new ActionBarItem())
+			->setSize(ActionBarItem::SIZE_SM)
+			->setDesign(ActionBarItem::DESIGN_COPILOT)
+			->setAction($barItemAction)
+			->setText(
+				Loc::getMessage(
+					'CRM_TIMELINE_BLOCK_OPEN_LINE_ACTION_BAR_COPILOT_SUMMARY',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				)
+			)
+		;
+		if (count($list) > 1)
+		{
+			$barItem->setIsDropdown(true);
+		}
+
+		return $barItem;
 	}
 
 	protected function getOpenChatAction(): ?Action
@@ -276,10 +299,11 @@ final class OpenLine extends Activity implements HasCopilot
 		return $this->isScheduled();
 	}
 
+	// region Build content blocks
 	private function buildChatActivityBlock(): ?ContentBlock
 	{
 		$userCode = $this->getOpenLineUserCode();
-		/** @var \Bitrix\Im\V2\Message $message */
+		/** @var Message $message */
 		$message = OpenLineManager::getLastMessage($userCode);
 		if ($message === null)
 		{
@@ -297,6 +321,7 @@ final class OpenLine extends Activity implements HasCopilot
 		return (new ContentBlockWithTitle())
 			->setTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_CHAT_ACTIVITY'))
 			->setContentBlock(ContentBlockFactory::createTitle($text)->setColor(Text::COLOR_BASE_90))
+			->setFixedWidth(false)
 			->setInline()
 		;
 	}
@@ -309,13 +334,7 @@ final class OpenLine extends Activity implements HasCopilot
 			return null;
 		}
 
-		$vote = (int)$sessionData['VOTE'];
-		if ($vote <= 0)
-		{
-			return null;
-		}
-
-		$clientMark = $this->mapClientMark($vote);
+		$clientMark = ClientMark::getByChatVote((int)$sessionData['VOTE']);
 		if (!isset($clientMark))
 		{
 			return null;
@@ -327,54 +346,44 @@ final class OpenLine extends Activity implements HasCopilot
 		;
 	}
 
-	private function buildCopilotSummaryBlock(): ?ContentBlock
+	private function buildGroupBlocks(array $blocks): ContentBlock\GroupBlocks
 	{
-		if (!$this->isCopilotScope())
+		$groupedBlock = new ContentBlock\GroupBlocks();
+
+		if (isset($blocks['lineTitle'], $blocks['chatTitle']))
 		{
-			return null;
+			$chatTitleBlock = ContentBlockFactory::createTitle(
+				Loc::getMessage(
+					'CRM_TIMELINE_BLOCK_OPEN_LINE_CHAT_LINE_DELIMITER',
+					['#CHAT_TITLE#' => $blocks['chatTitle']->getContentBlock()->getValue() ?? '']
+				)
+			)->setColor(Text::COLOR_BASE_90);
+			$lineAndChatBlock = (new LineOfTextBlocks())
+				->addContentBlock('lineTitle', $blocks['lineTitle']->getContentBlock())
+				->addContentBlock('chatTitle',  $chatTitleBlock)
+			;
+			$groupedBlock->addBlock('lineAndChat', $lineAndChatBlock);
 		}
 
-		$activityId = $this->getActivityId();
-		$list = $this->getSummarizeTranscriptionList($activityId);
-		if (empty($list))
+		if (isset($blocks['chatActivityBlock']))
 		{
-			return null;
+			$groupedBlock->addBlock('chatActivityBlock', $blocks['chatActivityBlock']->getContentBlock());
 		}
 
-		$block = new LineOfTextBlocks();
-
-		$blockTitle = ContentBlockFactory::createTitle(
-			Loc::getMessage(
-				'CRM_TIMELINE_BLOCK_TITLE_VIEW_COPILOT_SUMMARY',
-				['#COPILOT_NAME#' => AIManager::getCopilotName()]
-			)
-		)->setColor(Text::COLOR_BASE_60);
-		$block->addContentBlock('copilotSummaryBlockTitle', $blockTitle);
-
-		$viewLink = (new Link())
-			->setValue(Loc::getMessage('CRM_TIMELINE_BUTTON_SEE_CHAT'))
-			->setAction((new JsEvent('Openline:ShowCopilotSummary'))
-				->addActionParamInt('activityId', $activityId)
-				->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
-				->addActionParamInt('ownerId', $this->getContext()->getEntityId())
-				->addActionParamArray('summarizeTranscriptionList', $list)
-			)
-			->setDecoration(Text::DECORATION_DASHED)
-		;
-		if (count($list) > 1)
+		if (isset($blocks['clientMark']))
 		{
-			$viewLink->setIcon('chevron');
+			$clientMarkBlock = (clone $blocks['clientMark'])->setScopeWeb();
+			$groupedBlock->addBlock('clientMark', $clientMarkBlock);
 		}
 
-		$itemId = $this->model->getId();
-		$block->addContentBlock("copilotSummaryBlockLink_$itemId", $viewLink);
-
-		return $block;
+		return $groupedBlock;
 	}
+	// endregion
 
+	// region Internal utils
 	private function getSessionData(): array
 	{
-		$sessionId = $this->getModel()->getAssociatedEntityModel()?->get('ASSOCIATED_ENTITY_ID') ?? 0;
+		$sessionId = (int)($this->getModel()->getAssociatedEntityModel()?->get('ASSOCIATED_ENTITY_ID') ?? 0);
 
 		return $sessionId > 0
 			? OpenLineManager::getSessionData($sessionId)
@@ -382,51 +391,33 @@ final class OpenLine extends Activity implements HasCopilot
 		;
 	}
 
-	private function mapClientMark(int $vote): ?string
-	{
-		if ($vote > 3)
-		{
-			return ClientMark::POSITIVE;
-		}
-
-		if ($vote === 3)
-		{
-			return ClientMark::NEUTRAL;
-		}
-
-		if ($vote > 0)
-		{
-			return ClientMark::NEGATIVE;
-		}
-
-		return null;
-	}
-
 	private function getOpenLineUserCode(): ?string
 	{
 		return $this->getAssociatedEntityModel()?->get('PROVIDER_PARAMS')['USER_CODE'];
 	}
 
-	private function getSummarizeTranscriptionList(int $activityId): array
+	private function getOpenLineChannelName(?string $userCode): ?string
 	{
-		$rawData = QueueTable::query()
-			->setSelect(['ID', 'FINISHED_TIME'])
-			->where('ENTITY_TYPE_ID', CCrmOwnerType::Activity)
-			->where('ENTITY_ID', $activityId)
-			->where('TYPE_ID', SummarizeCallTranscription::TYPE_ID)
-			->where('EXECUTION_STATUS', QueueTable::EXECUTION_STATUS_SUCCESS)
-			->setOrder(['FINISHED_TIME' => 'DESC'])
-			->setLimit(self::SUMMARIZE_TRANSCRIPTION_LIMIT)
-			->fetchCollection()
-			->getAll()
-		;
-
-		$result = [];
-		foreach ($rawData as $item)
+		$providerId = $this->getAssociatedEntityModel()?->get('PROVIDER_ID');
+		if (!$providerId)
 		{
-			$result[$item->getId()] = $item->getFinishedTime()?->getTimestamp();
+			return null;
 		}
 
-		return $result;
+		$connectorType = OpenLineManager::getLineConnectorType($userCode);
+		if (!$connectorType)
+		{
+			return null;
+		}
+
+		$provider = CCrmActivity::GetProviderById($providerId);
+		$sourceList = $provider ? $provider::getResultSources() : [];
+		if (empty($sourceList))
+		{
+			return null;
+		}
+
+		return $sourceList[$connectorType] ?? $sourceList[self::DEFAULT_ADDITIONAL_ICON_CODE];
 	}
+	// endregion
 }

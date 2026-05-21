@@ -4,6 +4,8 @@ IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Crm;
 use Bitrix\Crm\Security\EntityAuthorization;
+use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EventHistory;
 use Bitrix\Crm\Settings\HistorySettings;
 use Bitrix\Main\Entity\ReferenceField;
@@ -309,6 +311,35 @@ class CCrmEvent
 			{
 				$entitiesSql[CCrmOwnerType::CompanyName] = CCrmCompany::BuildPermSql('CER', $permType, $permOptions);
 			}
+		}
+
+		$userPermissions = Container::getInstance()->getUserPermissions();
+		$typesMap = Container::getInstance()->getTypesMap();
+
+		foreach ($typesMap->getFactories() as $factory)
+		{
+			if (array_key_exists((string)$factory->getEntityTypeId(), $entitiesSql))
+			{
+				continue;
+			}
+
+			if (!$userPermissions->entityType()->canReadItems($factory->getEntityTypeId()))
+			{
+				continue;
+			}
+
+			$builderOptions = OptionsBuilder::makeFromArray($permOptions)
+				->setOperations([$permType])
+				->setAliasPrefix($aliasPrefix)
+				->build()
+			;
+			$entityTypesHelper = new Crm\Category\PermissionEntityTypeHelper($factory->getEntityTypeId());
+			$queryBuilder = $userPermissions
+				->itemsList()
+				->createQueryBuilder($entityTypesHelper->getAllPermissionEntityTypesForEntity(), $builderOptions)
+			;
+
+			$entitiesSql[$factory->getEntityName()] = $queryBuilder->build()->getSql();
 		}
 
 		foreach($entitiesSql as $entityType => $entitySql)
@@ -642,7 +673,7 @@ class CCrmEvent
 				array(
 					'USER_ID' => $userID,
 					'ENTITY_ID' => 0,
-					'ENTITY_TYPE' => CCrmOwnerType::SystemName,
+					'ENTITY_TYPE' => CCrmOwnerType::ResolveName($entityTypeID),
 					'EVENT_TYPE' => CCrmEvent::TYPE_DELETE,
 					'EVENT_NAME' => CCrmEvent::GetEventTypeName(CCrmEvent::TYPE_DELETE),
 					'DATE_CREATE' => ConvertTimeStamp($timestamp, 'FULL', SITE_ID),

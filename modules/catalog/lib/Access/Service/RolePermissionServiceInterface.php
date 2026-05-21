@@ -14,7 +14,7 @@ interface RolePermissionServiceInterface
 	 *
 	 * @return int
 	 */
-	public function saveRole(String $name, int $roleId = null): int;
+	public function saveRole(String $name, ?int $roleId = null): int;
 
 	/**
 	 * @param int $roleId

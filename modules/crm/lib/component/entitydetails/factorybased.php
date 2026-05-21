@@ -9,12 +9,14 @@ use Bitrix\Crm\Component\ComponentError;
 use Bitrix\Crm\Component\EntityDetails;
 use Bitrix\Crm\Component\EntityDetails\Files\CopyFilesOnItemClone;
 use Bitrix\Crm\Controller\Entity;
+use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Entity\EntityEditorOptionBuilder;
 use Bitrix\Crm\EO_Status;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Format\Money;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
+use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig\DynamicDefaultEntityConfig;
 use Bitrix\Crm\Integration\UI\EntityEditor\SupportsEditorProvider;
 use Bitrix\Crm\Item;
@@ -22,6 +24,7 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\MessageSender\Channel\ChannelRepository;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Product\Url\ProductBuilder;
+use Bitrix\Crm\Recurring\Entity\Dynamic;
 use Bitrix\Crm\Recurring\RecurringFieldEditorAdapter;
 use Bitrix\Crm\Relation;
 use Bitrix\Crm\RelationIdentifier;
@@ -31,6 +34,7 @@ use Bitrix\Crm\Security\StagePermissions;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\UserPermissions\Event;
 use Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Main\Application;
@@ -38,20 +42,23 @@ use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\Response\Json;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
+use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\Request;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserField\Dispatcher;
-use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
 use Bitrix\Main\UserField\Types\DateTimeType;
 use Bitrix\Main\UserField\Types\DoubleType;
 use Bitrix\Main\Web\Uri;
 use Bitrix\UI\Buttons;
+use Bitrix\UI\Buttons\JsCode;
 use Bitrix\UI\Toolbar\ButtonLocation;
 use CCrmComponentHelper;
+use CCrmOwnerType;
 use CLists;
+use CUtil;
 
 abstract class FactoryBased extends BaseComponent implements Controllerable, SupportsEditorProvider
 {
@@ -92,7 +99,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 	//@codingStandardsIgnoreStart
 	public function onPrepareComponentParams($arParams): array
 	{
-		$arParams['ENTITY_TYPE_ID'] = (int)($arParams['ENTITY_TYPE_ID'] ?? \CCrmOwnerType::Undefined);
+		$arParams['ENTITY_TYPE_ID'] = (int)($arParams['ENTITY_TYPE_ID'] ?? CCrmOwnerType::Undefined);
 		$arParams['ENTITY_ID'] = (int)($arParams['ENTITY_ID'] ?? 0);
 
 		$this->fillParameterFromRequest('categoryId', $arParams);
@@ -125,7 +132,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 	public function getEntityTypeID(): int
 	{
-		return (int)($this->arParams['ENTITY_TYPE_ID'] ?? \CCrmOwnerType::Undefined);
+		return (int)($this->arParams['ENTITY_TYPE_ID'] ?? CCrmOwnerType::Undefined);
 	}
 
 	public function setEntityID($entityID): void
@@ -441,7 +448,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 	protected function getEntityName(): string
 	{
-		return \CCrmOwnerType::ResolveName($this->getEntityTypeID());
+		return CCrmOwnerType::ResolveName($this->getEntityTypeID());
 	}
 
 	protected function getGuid(): string
@@ -632,12 +639,37 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		return $this->isReadOnly;
 	}
 
+	public function isRecurringItem(): bool
+	{
+		return $this->factory->isRecurringEnabled() && $this->item->getIsRecurring();
+	}
+
 	protected function getDefaultTabInfoByCode(string $tabCode): ?array
 	{
 		$toolsManager = \Bitrix\Crm\Service\Container::getInstance()->getIntranetToolsManager();
 
 		if($tabCode === static::TAB_NAME_EVENT)
 		{
+			$entityTypeId = $this->factory->getEntityTypeId();
+			$userPermissions = Container::getInstance()->getUserPermissions();
+			$type = Container::getInstance()->getTypeByEntityTypeId($entityTypeId);
+
+			if ($type)
+			{
+				$customSectionId = $type->getCustomSectionId();
+				if ($customSectionId !== null && !$userPermissions->automatedSolutionEvent()->canRead($customSectionId))
+				{
+					return null;
+				}
+			}
+			elseif (Event::isEntityTypeWithEventPermission($entityTypeId))
+			{
+				if (!$userPermissions->event()->canRead())
+				{
+					return null;
+				}
+			}
+
 			$entityName = $this->factory->getEntityName();
 			$entityId = $this->item->getId();
 
@@ -769,7 +801,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		{
 			return [
 				'id' => static::TAB_NAME_ORDERS,
-				'name' => \CCrmOwnerType::GetCategoryCaption(\CCrmOwnerType::Order),
+				'name' => CCrmOwnerType::GetCategoryCaption(CCrmOwnerType::Order),
 				'loader' => [
 					'serviceUrl' => '/bitrix/components/bitrix/crm.order.list/lazyload.ajax.php?&site='.SITE_ID.'&'.bitrix_sessid_get(),
 					'componentData' => [
@@ -849,7 +881,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 		$relation = Container::getInstance()->getRelationManager()->getRelation(new RelationIdentifier(
 			$this->factory->getEntityTypeId(),
-			\CCrmOwnerType::Order
+			CCrmOwnerType::Order
 		));
 		if ($relation && $relation->isChildrenListEnabled())
 		{
@@ -999,6 +1031,11 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			{
 				$buttons[ButtonLocation::RIGHT][] = $this->getDocumentToolbarButton();
 			}
+
+			if ($this->factory->isRecurringEnabled() && $this->item->getIsRecurring())
+			{
+				$buttons[ButtonLocation::RIGHT][] = $this->getRecurringExposeToolbarButton();
+			}
 		}
 
 		$afterTitleHtml = null;
@@ -1052,6 +1089,47 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		return new Buttons\SettingsButton([
 			'menu' => [
 				'items' => $items,
+			],
+		]);
+	}
+
+	protected function getRecurringExposeToolbarButton(): ?Buttons\CreateButton
+	{
+		if (
+			$this->isEmbedded()
+			|| !Container::getInstance()->getUserPermissions()->entityType()->canAddItems($this->getEntityTypeID())
+		)
+		{
+			return null;
+		}
+
+		$recurringRestriction = RestrictionManager::getInvoiceRecurringRestriction();
+		if ($recurringRestriction?->hasPermission())
+		{
+			$eventName= 'BX.Crm.ItemDetailsComponent:onClickRecurringExpose';
+			$scriptRecurring = new Buttons\JsEvent($eventName);
+			$icon = 'btn-copy';
+		}
+		else
+		{
+			$scriptRecurring = new JsCode($recurringRestriction?->prepareInfoHelperScript() ?? '');
+			$icon = 'grid-lock';
+		}
+
+		$basePhrase = 'CRM_COMPONENT_FACTORYBASED_EXPOSE';
+		$entityTypeName = CCrmOwnerType::ResolveName($this->item->getEntityTypeId());
+		$text = Loc::getMessage($basePhrase . '_' . $entityTypeName)
+			?? Loc::getMessage($basePhrase)
+		;
+
+		$componentName = CUtil::JSEscape($this->getName());
+
+		return Buttons\CreateButton::create([
+			'text' => $text,
+			'onclick' => $scriptRecurring,
+			'icon' => $icon,
+			'dataset' => [
+				'component-name' => $componentName,
 			],
 		]);
 	}
@@ -1114,7 +1192,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 							{
 								$multifieldItem['OWNER'] = [
 									'ID' => $client['id'],
-									'TYPE_ID' => \CCrmOwnerType::ResolveID($client['typeName']),
+									'TYPE_ID' => CCrmOwnerType::ResolveID($client['typeName']),
 									'TITLE' => $client['title'],
 								];
 							}
@@ -1323,7 +1401,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 	protected function getUserFieldEntityId(): string
 	{
-		return \CCrmOwnerType::ResolveUserFieldEntityID($this->getEntityTypeID());
+		return CCrmOwnerType::ResolveUserFieldEntityID($this->getEntityTypeID());
 	}
 
 	protected function listKeysSignedParameters(): array
@@ -1348,7 +1426,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 		$sourceEntityTypeId = (int)($data['CONVERSION_SOURCE']['entityTypeId'] ?? 0);
 		$sourceEntityId = (int)($data['CONVERSION_SOURCE']['entityId'] ?? 0);
-		if (($sourceEntityId > 0) && \CCrmOwnerType::IsDefined($sourceEntityTypeId))
+		if (($sourceEntityId > 0) && CCrmOwnerType::IsDefined($sourceEntityTypeId))
 		{
 			$this->conversionSource = new ItemIdentifier($sourceEntityTypeId, $sourceEntityId);
 		}
@@ -1556,6 +1634,41 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		return $result;
 	}
 
+	public function exposeAction(int $entityId, int $entityTypeId): ?int
+	{
+		$this->errorCollection = new ErrorCollection();
+
+		$userPermissions = Container::getInstance()->getUserPermissions();
+
+		if (
+			!$userPermissions->item()->canRead($entityTypeId, $entityId)
+			|| !$userPermissions->entityType()->canAddItems($entityTypeId)
+		)
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
+
+			return null;
+		}
+
+		$factory = Container::getInstance()->getFactory($entityTypeId);
+		$item = $factory?->getItem($entityId);
+		if (!$factory?->isRecurringEnabled() || !$item?->getIsRecurring())
+		{
+			$this->addError(ErrorCode::getEntityTypeNotSupportedError($entityTypeId));
+
+			return null;
+		}
+
+		$filter = [
+			'=ENTITY_TYPE_ID' => $entityTypeId,
+			'=ITEM_ID' => $entityId,
+		];
+		$exposeSelectionLimit = 1;
+		$result = Dynamic::getInstance()->expose($filter, $exposeSelectionLimit, false);
+
+		return $result->getData()['ID'][0] ?? null;
+	}
+
 	public function loadAction(): ?array
 	{
 		$this->init();
@@ -1660,7 +1773,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 					 * this case is already handled there
 					 * @todo refactor and remove this crutch
 					 */
-					&& !\CCrmOwnerType::isUseDynamicTypeBasedApproach($this->item->getEntityTypeId())
+					&& !CCrmOwnerType::isUseDynamicTypeBasedApproach($this->item->getEntityTypeId())
 				)
 				{
 					$useTimezone = $field->getUserField()['SETTINGS']['USE_TIMEZONE'] ?? 'Y';
@@ -1764,7 +1877,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 		Entity::addLastRecentlyUsedItems(
 			$this->getComponentName(),
-			mb_strtolower(\CCrmOwnerType::ResolveName($entityTypeId)),
+			mb_strtolower(CCrmOwnerType::ResolveName($entityTypeId)),
 			[
 				[
 					'ENTITY_TYPE_ID' => $entityTypeId,
@@ -1921,7 +2034,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		)
 		{
 			$context[EditorAdapter::CONTEXT_PARENT_TYPE_ID] = (int)$this->arParams['parentTypeId'];
-			$context[EditorAdapter::CONTEXT_PARENT_TYPE_NAME] = \CCrmOwnerType::ResolveName($context['PARENT_TYPE_ID']);
+			$context[EditorAdapter::CONTEXT_PARENT_TYPE_NAME] = CCrmOwnerType::ResolveName($context['PARENT_TYPE_ID']);
 			$context[EditorAdapter::CONTEXT_PARENT_ID] = (int)$this->arParams['parentId'];
 		}
 		//@codingStandardsIgnoreEnd
@@ -1970,7 +2083,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		foreach ($parentRelations as $relation)
 		{
 			$parentEntityTypeId = $relation->getParentEntityTypeId();
-			$entityName = mb_strtolower(\CCrmOwnerType::ResolveName($parentEntityTypeId)) . '_id';
+			$entityName = mb_strtolower(CCrmOwnerType::ResolveName($parentEntityTypeId)) . '_id';
 			$entityId = (int)$request->get($entityName);
 			if ($entityId > 0 && $userPermissions->item()->canRead($parentEntityTypeId, $entityId))
 			{
@@ -1989,7 +2102,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 	{
 		if ($relation->isPredefined())
 		{
-			return \CCrmOwnerType::ResolveName($relation->getParentEntityTypeId()) . '_ID';
+			return CCrmOwnerType::ResolveName($relation->getParentEntityTypeId()) . '_ID';
 		}
 
 		return EditorAdapter::getParentFieldName($relation->getParentEntityTypeId());

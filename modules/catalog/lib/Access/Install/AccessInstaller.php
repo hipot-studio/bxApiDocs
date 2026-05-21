@@ -315,7 +315,7 @@ class AccessInstaller
 		Application::getConnection()->query($query);
 	}
 
-	private function fillDefaultSystemPermissions(array $roles = null): void
+	private function fillDefaultSystemPermissions(?array $roles = null): void
 	{
 		$map = RoleMap::getDefaultMap();
 

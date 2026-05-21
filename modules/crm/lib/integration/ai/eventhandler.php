@@ -256,6 +256,14 @@ final class EventHandler
 		$result = self::getQueueJobExecuteResult($event, $job);
 		if ($result)
 		{
+			if (
+				$result->getTypeId() === TranscribeCallRecording::TYPE_ID
+				&& $result->getNextTypeId() === 0
+			)
+			{
+				return;
+			}
+
 			$orchestrator = new Orchestrator();
 
 			if (

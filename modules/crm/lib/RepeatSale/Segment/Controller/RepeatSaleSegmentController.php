@@ -31,6 +31,8 @@ final class RepeatSaleSegmentController
 
 	public function add(SegmentItem $segmentItem): AddResult
 	{
+		$segmentItem->convertTitlePlaceholdersToExternalFormat();
+
 		$result = RepeatSaleSegmentTable::add($this->getFields($segmentItem));
 
 		if (!$result->isSuccess())
@@ -60,6 +62,8 @@ final class RepeatSaleSegmentController
 
 	public function update(int $id, SegmentItem $segmentItem, ?Context $context = null): UpdateResult
 	{
+		$segmentItem->convertTitlePlaceholdersToExternalFormat();
+
 		$result = RepeatSaleSegmentTable::update($id, $this->getFields($segmentItem));
 
 		if (!$result->isSuccess())
@@ -102,6 +106,7 @@ final class RepeatSaleSegmentController
 			'IS_AI_ENABLED' => $segmentItem->isAiEnabled(),
 			'UPDATED_AT' => new DateTime(),
 			'UPDATED_BY_ID' => Container::getInstance()->getContext()->getUserId(),
+			'MINIMUM_DAYS_AFTER_LAST_CLOSED_ENTITY' => $segmentItem->getMinimumDaysAfterLastClosedEntity(),
 		];
 	}
 

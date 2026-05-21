@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Main\Loader;
 Use Bitrix\Main\Localization\Loc;
 use Bitrix\Ui\Public\Enum\IconSet\Outline;
@@ -92,5 +93,10 @@ class FillTrackingNumberTrigger extends BaseTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::DIGITS_123->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::DELIVERY->value];
 	}
 }

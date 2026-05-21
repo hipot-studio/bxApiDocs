@@ -487,6 +487,26 @@ final class JobRepository
 		return $fillFieldsJob->requireFinishedTime()->getTimestamp() - $transcribeJob->requireCreatedTime()->getTimestamp();
 	}
 
+	public function getSummarizeTranscriptionData(int $activityId, array $fields = ['*'], int $limit = 10): array
+	{
+		if ($activityId <= 0)
+		{
+			return [];
+		}
+
+		return QueueTable::query()
+			->setSelect($fields)
+			->where('ENTITY_TYPE_ID', CCrmOwnerType::Activity)
+			->where('ENTITY_ID', $activityId)
+			->where('TYPE_ID', SummarizeCallTranscription::TYPE_ID)
+			->where('EXECUTION_STATUS', QueueTable::EXECUTION_STATUS_SUCCESS)
+			->setOrder(['FINISHED_TIME' => 'DESC'])
+			->setLimit($limit)
+			->fetchCollection()
+			->getAll()
+		;
+	}
+
 	public function isUserHasJobs(int $userId): bool
 	{
 		$useJob = QueueTable::query()

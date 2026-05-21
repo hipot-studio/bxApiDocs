@@ -4,6 +4,7 @@ namespace Bitrix\IntranetMobile\Controller;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\IntranetMobile\Dto\LoginDto;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
+use Bitrix\Main\Loader;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\Authentication\Internal\UserDeviceLoginTable;
 use Bitrix\Main\Authentication\Internal\UserDeviceTable;
@@ -61,10 +62,13 @@ class LoginHistory extends Base
 		?PageNavigation $nav = null,
 	): array
 	{
+		$isUserLoginHistoryFeatureEnabled =
+			!Loader::includeModule('bitrix24')
+			|| Feature::isFeatureEnabled('user_login_history');
+		$isLoginHistoryToolAvailable = ToolsManager::getInstance()->checkAvailabilityByToolId('login_history');
 
 		if (
-			!Feature::isFeatureEnabled('user_login_history')
-			|| !ToolsManager::getInstance()->checkAvailabilityByToolId('login_history')
+			!$isLoginHistoryToolAvailable || !$isUserLoginHistoryFeatureEnabled
 		)
 		{
 			return [];

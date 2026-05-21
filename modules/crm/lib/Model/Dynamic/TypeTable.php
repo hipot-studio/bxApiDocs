@@ -412,6 +412,10 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		$result = new ORM\EventResult();
 		$primary = $event->getParameter('primary');
 		$typeData = static::getTemporaryStorage()->getData($primary);
+		if ($typeData === null)
+		{
+			return $result;
+		}
 		static::getTemporaryStorage()->saveData($primary, $typeData);
 
 		static::deleteItemIndexTable($typeData);
@@ -630,6 +634,10 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			return new EventResult();
 		}
 		$result = parent::onBeforeUpdate($event);
+		if ($result->getErrors())
+		{
+			return $result;
+		}
 
 		$fields = $event->getParameter('fields');
 		if(isset($fields['NAME']) && !empty($fields['NAME']))
@@ -642,6 +650,12 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		}
 		$id = $event->getParameter('id');
 		$typeData = static::getTemporaryStorage()->getData($id);
+		if ($typeData === null)
+		{
+			$result->addError(new ORM\EntityError('Type was not found'));
+
+			return $result;
+		}
 		static::getTemporaryStorage()->saveData($id, $typeData);
 		$entityTypeId = (int)$typeData['ENTITY_TYPE_ID'];
 		if(isset($fields['ENTITY_TYPE_ID']))
@@ -941,7 +955,10 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		{
 			$oldData = static::getTemporaryStorage()->getData($id);
 			static::update($id, ['IS_INITIALIZED' => false]); // hide smart-process before delete to avoid race conditions in TypesCollectionCache
-			static::getTemporaryStorage()->saveData($id, $oldData);
+			if ($oldData !== null)
+			{
+				static::getTemporaryStorage()->saveData($id, $oldData);
+			}
 		}
 
 		return $result;

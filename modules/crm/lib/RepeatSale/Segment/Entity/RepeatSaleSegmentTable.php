@@ -118,6 +118,10 @@ class RepeatSaleSegmentTable extends DataManager
 				->configureNullable()
 				->addValidator(new RangeValidator(null, 100))
 			,
+			(new IntegerField('MINIMUM_DAYS_AFTER_LAST_CLOSED_ENTITY'))
+				->configureDefaultValue(0)
+				->addValidator(new RangeValidator(0))
+			,
 			$fieldRepository->getCreatedTime('CREATED_AT'),
 			$fieldRepository->getUpdatedTime('UPDATED_AT'),
 			$fieldRepository

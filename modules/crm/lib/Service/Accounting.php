@@ -455,15 +455,17 @@ class Accounting
 		$inclusivePrice = $fields['PRICE'];
 		$exclusivePrice = $fields['PRICE_EXCLUSIVE'];
 
-		$fields['TAX_RATE'] = 0.0;
-		if (isset($product['TAX_RATE']))
+		$taxRate = (float)($fields['TAX_RATE'] ?? 0);
+		if (array_key_exists('TAX_RATE', $product) && isset($product['TAX_RATE']))
 		{
-			$fields['TAX_RATE'] = static::round((float)$product['TAX_RATE'], $ratePrecision);
+			$taxRate = static::round((float)$product['TAX_RATE'], $ratePrecision);
+			$fields['TAX_RATE'] = $taxRate;
 		}
+
 		$fields['TAX_INCLUDED'] = ($product['TAX_INCLUDED'] ?? 'N') === 'Y' ? 'Y' : 'N';
 		if ($exclusivePrice === 0.0 && $inclusivePrice !== 0.0)
 		{
-			$exclusivePrice = static::calculatePriceExcludingTax($inclusivePrice, $fields['TAX_RATE']);
+			$exclusivePrice = static::calculatePriceExcludingTax($inclusivePrice, $taxRate);
 		}
 
 		$discountTypeId = $fields['DISCOUNT_TYPE_ID'];
@@ -536,7 +538,7 @@ class Accounting
 		$priceBrutto =
 			isset($product['PRICE_BRUTTO'])
 				? (float)$product['PRICE_BRUTTO']
-				: static::calculatePriceIncludingTax($priceNetto, $fields['TAX_RATE'])
+				: static::calculatePriceIncludingTax($priceNetto, $taxRate)
 		;
 
 		$fields['PRICE_BRUTTO'] = static::round($priceBrutto, $pricePrecision);

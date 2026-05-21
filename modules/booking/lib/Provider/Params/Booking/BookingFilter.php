@@ -10,9 +10,9 @@ use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Model\BookingClientTable;
 use Bitrix\Booking\Internals\Model\BookingResourceTable;
 use Bitrix\Booking\Internals\Model\BookingTable;
-use Bitrix\Booking\Internals\Model\ClientTypeTable;
 use Bitrix\Booking\Internals\Model\Enum\EntityType;
 use Bitrix\Booking\Internals\Model\ScorerTable;
+use Bitrix\Booking\Internals\Repository\ClientTypeRepositoryInterface;
 use Bitrix\Booking\Internals\Service\CounterDictionary;
 use Bitrix\Booking\Internals\Service\Time;
 use Bitrix\Booking\Provider\Params\Filter;
@@ -29,12 +29,14 @@ class BookingFilter extends Filter
 	private string $initAlias;
 	private int $currentTimestamp;
 	private Connection $connection;
+	private ClientTypeRepositoryInterface $clientTypeRepository;
 
 	public function __construct(array $filter = [])
 	{
 		$this->filter = $filter;
 		$this->currentTimestamp = time();
 		$this->connection = Application::getInstance()->getConnection();
+		$this->clientTypeRepository = Container::getClientTypeRepository();
 	}
 
 	public function prepareQuery(Query $query): void
@@ -164,25 +166,19 @@ class BookingFilter extends Filter
 			$result->where('TYPE.MODULE_ID', '=', $this->filter['MODULE_ID']);
 		}
 
-		$knownCrmClientTypes = Container::getCrmClientTypeRepository()->getAll();
-		foreach ($knownCrmClientTypes as $crmClientType)
+		$clientTypes = $this->clientTypeRepository->getList();
+		foreach ($clientTypes as $clientType)
 		{
-			$entityId = $this->getEntityId('crm', $crmClientType);
+			$entityId = $this->getEntityId($clientType->getModuleId(), $clientType->getCode());
 			if (!$entityId)
 			{
 				continue;
 			}
 
 			$result
-				->whereIn(
+				->where(
 					'CLIENTS.CLIENT_TYPE_ID',
-					new SqlExpression(
-						ClientTypeTable::query()
-							->setSelect(['ID'])
-							->where('MODULE_ID', '=', 'crm')
-							->where('CODE', '=', $crmClientType)
-							->getQuery()
-					)
+					$clientType->getId()
 				)
 				->whereIn('CLIENTS.CLIENT_ID', $entityId)
 			;

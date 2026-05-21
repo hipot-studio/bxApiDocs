@@ -49,6 +49,58 @@ class CCrmEntityPopupComponent extends CBitrixComponent
 		return $this->entityID;
 	}
 
+	public function filterTabsByRights(array $sourceTabs): array
+	{
+		$resultTabs = [];
+
+		foreach (array_keys($sourceTabs) as $index)
+		{
+			$tab = $sourceTabs[$index];
+			if (is_array($tab) && isset($tab['id']))
+			{
+				$itemId = $tab['id'];
+				if (is_string($itemId) && $itemId !== '')
+				{
+					if (str_starts_with($tab['id'], RelationManager::TAB_NAME_RELATION))
+					{
+						$entityTypeName = substr($tab['id'], 13);
+					}
+					elseif (str_starts_with($tab['id'], 'tab_'))
+					{
+						$entityTypeName = substr($tab['id'], 4);
+					}
+					else
+					{
+						$entityTypeName = '';
+					}
+					if ($entityTypeName !== '')
+					{
+						$entityTypeName = strtoupper($entityTypeName);
+						$entityTypeId = CCrmOwnerType::ResolveID($entityTypeName);
+						if ($entityTypeId <= 0 && strlen($entityTypeName) > 1 && str_ends_with($entityTypeName, 'S'))
+						{
+							$entityTypeId = CCrmOwnerType::ResolveID(substr($entityTypeName, 0, -1));
+						}
+						if (
+							$entityTypeId > 0
+							&& !Container::getInstance()
+								->getUserPermissions()
+								->entityType()
+								->canReadItems($entityTypeId)
+						)
+						{
+							continue;
+						}
+					}
+				}
+			}
+			$resultTabs[] = $tab;
+			unset($sourceTabs[$index]);
+		}
+
+		return $resultTabs;
+	}
+
 	public function executeComponent()
 	{
 		$this->entityTypeID = isset($this->arParams['~ENTITY_TYPE_ID'])
@@ -193,6 +245,8 @@ class CCrmEntityPopupComponent extends CBitrixComponent
 		$this->arResult['ENTITY_CATEGORIES_DATA'] = [];
 		$this->arResult['ENTITY_CATEGORIES_ENABLED'] = [];
 
+		$this->arResult['TABS'] = $this->filterTabsByRights($this->arResult['TABS']);
+
 		foreach ($this->arResult['TABS'] as &$tab)
 		{
 			if (is_array($tab) && isset($tab['id']) && is_string($tab['id']))
@@ -298,6 +352,13 @@ class CCrmEntityPopupComponent extends CBitrixComponent
 
 		$this->arResult['ANALYTIC_PARAMS'] = isset($this->arParams['~ANALYTIC_PARAMS']) && is_array($this->arParams['~ANALYTIC_PARAMS'])
 			? $this->arParams['~ANALYTIC_PARAMS'] : array();
+
+		$router = Container::getInstance()->getRouter();
+		$this->arResult['ROUTER']['URL_TEMPLATES'] = $router->getTemplatesForJsRouter();
+		if ((int)$this->entityTypeID > 0)
+		{
+			$this->arResult['ROUTER']['CURRENT_LIST_VIEW'] = $router->getCurrentListView((int)$this->entityTypeID);
+		}
 
 		$this->arResult['RESTRICTIONS_SCRIPT'] = $this->getRestrictionsScript();
 

@@ -913,7 +913,7 @@ class GridVariationForm extends VariationForm
 		return parent::getValues($allowDefaultValues, $filteredDescriptions);
 	}
 
-	public function getValues(bool $allowDefaultValues = true, array $descriptions = null): array
+	public function getValues(bool $allowDefaultValues = true, ?array $descriptions = null): array
 	{
 		$values = $this->getShowedValues($allowDefaultValues);
 
@@ -1052,7 +1052,7 @@ class GridVariationForm extends VariationForm
 		return $result;
 	}
 
-	protected function getAdditionalValues(array $values, array $descriptions = null): array
+	protected function getAdditionalValues(array $values, ?array $descriptions = null): array
 	{
 		$additionalValues = parent::getAdditionalValues($values, $descriptions);
 

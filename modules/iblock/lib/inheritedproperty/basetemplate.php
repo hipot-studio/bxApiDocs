@@ -94,7 +94,7 @@ class BaseTemplate
 	 * @return array
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	public function get(BaseValues $entity = null)
+	public function get(?BaseValues $entity = null)
 	{
 		static $cache = array();
 		if ($entity === null)

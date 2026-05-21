@@ -61,10 +61,7 @@ class BFile extends File
 			{
 				if(isset($options['fileName']))
 				{
-					$options['fileName'] = str_replace(' ', '_', Path::replaceInvalidFilename($options['fileName'], function()
-					{
-						return '_';
-					}));
+					$options['fileName'] = str_replace(' ', '_', Path::replaceInvalidFilename($options['fileName'], fn() => '_'));
 					$fileDescription['name'] = $fileDescription['fileName'] = $options['fileName'];
 				}
 				if(isset($options['MODULE_ID']))
@@ -146,6 +143,14 @@ class BFile extends File
 	public function upload(array $file)
 	{
 		$result = new AddResult();
+
+		$rawName = $file['fileName'] ?? $file['name'] ?? null;
+		if ($rawName !== null)
+		{
+			$sanitized = str_replace(' ', '_', Path::replaceInvalidFilename($rawName, fn() => '_'));
+			$file['name'] = $file['fileName'] = $sanitized;
+		}
+
 		$path = $this->getPath($file);
 		$fileId = \CFile::saveFile($file, $path, true, true);
 		if($fileId > 0)

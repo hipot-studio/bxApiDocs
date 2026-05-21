@@ -10,6 +10,7 @@ final class Dictionary
 {
 	public const TOOL_CRM = 'crm';
 	public const TOOL_AI = 'AI';
+	public const TOOL_TASKS = 'tasks';
 
 	public const CATEGORY_ENTITY_OPERATIONS = 'entity_operations';
 	public const CATEGORY_CRM_OPERATIONS = 'crm_operations';

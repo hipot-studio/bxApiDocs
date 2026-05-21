@@ -513,7 +513,10 @@ class CCrmLeadDetailsComponent
 					)
 				)
 			);
-			$this->arResult['TABS'][] = $this->getEventTabParams();
+			if($this->userPermissionsService->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 			if (CModule::IncludeModule('lists'))
 			{
 				$listIblock = CLists::getIblockAttachedCrm(CCrmOwnerType::LeadName);
@@ -561,7 +564,10 @@ class CCrmLeadDetailsComponent
 					'enabled' => false
 				);
 			}
-			$this->arResult['TABS'][] = $this->getEventTabParams();
+			if($this->userPermissionsService->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 			if (CModule::IncludeModule('lists'))
 			{
 				$listIblock = CLists::getIblockAttachedCrm(CCrmOwnerType::LeadName);
@@ -725,10 +731,7 @@ class CCrmLeadDetailsComponent
 		$this->guidPrefix = null;
 
 		$this->userFields = null;
-		$this->prepareEntityUserFields();
-
 		$this->userFieldInfos = null;
-		$this->prepareEntityUserFieldInfos();
 	}
 	public function prepareEntityDataScheme()
 	{
@@ -1163,7 +1166,7 @@ class CCrmLeadDetailsComponent
 
 		$this->entityFieldInfos = array_merge(
 			$this->entityFieldInfos,
-			array_values($this->userFieldInfos)
+			array_values($this->prepareEntityUserFieldInfos())
 		);
 		if ($this->editorAdapter)
 		{
@@ -2521,6 +2524,8 @@ class CCrmLeadDetailsComponent
 
 	public function initializeData()
 	{
+		$this->prepareEntityUserFields();
+		$this->prepareEntityUserFieldInfos();
 		$this->prepareFieldInfos();
 		$this->prepareEntityData();
 		$this->prepareEntityFieldAttributes();

@@ -3,18 +3,17 @@
 namespace Bitrix\Crm\Service\Timeline\Item\Activity\Tasks;
 
 use Bitrix\Crm\Activity\Provider\Tasks\TaskActivityStatus;
-use Bitrix\Crm\Integration\Tasks\TaskAccessController;
+use Bitrix\Crm\Integration\Analytics;
 use Bitrix\Crm\Integration\Tasks\TaskChecklist;
-use Bitrix\Crm\Integration\Tasks\TaskObject;
 use Bitrix\Crm\Integration\Tasks\TaskPathMaker;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
 use Bitrix\Crm\Service\Timeline\Item\AssociatedEntityModel;
-use Bitrix\Crm\Service\Timeline\Layout\Action\Analytics;
+use Bitrix\Crm\Service\Timeline\Layout\Action;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Redirect;
+use Bitrix\Crm\Service\Timeline\Layout\Action\RunAjaxAction;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockWithTitle;
-use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Date;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\EditableDate;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\FileList;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Link;
@@ -24,6 +23,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Common\Logo;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Crm\Service\Timeline\Layout\Header\Tag;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItem;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
@@ -254,6 +254,11 @@ class Task extends Activity
 		return $pingButtonObject;
 	}
 
+	protected function getCompleteAction(): RunAjaxAction
+	{
+		return parent::getCompleteAction()->setAnalytics($this->createCompleteAnalytics());
+	}
+
 	private function getUserName(?int $userId): string
 	{
 		if (is_null($userId))
@@ -318,5 +323,50 @@ class Task extends Activity
 		$item->setAction($event);
 
 		return $item;
+	}
+
+	private function createCompleteAnalytics(): ?Action\Analytics
+	{
+		$entityTypeId = $this->getContext()->getEntityTypeId();
+		$entityTypeName = Analytics\Dictionary::getAnalyticsEntityType($entityTypeId);
+
+		if ($entityTypeName === null)
+		{
+			return null;
+		}
+
+		if (!Loader::includeModule('tasks'))
+		{
+			return null;
+		}
+
+		$model = $this->getAssociatedEntityModel();
+		$task = $this->getTask($model);
+
+		if ($task === null)
+		{
+			return null;
+		}
+
+		$completedStatuses = [
+			TaskActivityStatus::TASKS_STATE_SUPPOSEDLY_COMPLETED,
+			TaskActivityStatus::TASKS_STATE_COMPLETED,
+		];
+
+		if (in_array($task->getRealStatus(), $completedStatuses, true))
+		{
+			return null;
+		}
+
+		return new Action\Analytics([
+			'event' => Analytics\Tasks\Event::TaskComplete->value,
+			'tool' => Analytics\Dictionary::TOOL_TASKS,
+			'category' => Analytics\Tasks\Category::TaskOperations->value,
+			'type' => Analytics\Tasks\Type::Task->value,
+			'c_section' => Analytics\Tasks\Section::Crm->value,
+			'c_sub_section' => $entityTypeName,
+			'c_element' => Analytics\Tasks\Element::CompleteButton->value,
+			'p1' => 'taskId_' . $task->getId(),
+		]);
 	}
 }

@@ -392,11 +392,17 @@ class CCrmOrderShipmentDetailsComponent extends Crm\Component\EntityDetails\Base
 					)
 				)
 			);
-			$this->arResult['TABS'][] = $this->getEventTabParams();
+			if(\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 		}
 		else
 		{
-			$this->arResult['TABS'][] = $this->getEventTabParams();
+			if(\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 		}
 		//endregion
 

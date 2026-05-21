@@ -107,6 +107,7 @@ final class AiQualityAssessmentController
 					['join_type' => 'LEFT'],
 				)
 			],
+			'order' => ['ID' => 'DESC'],
 			'limit' => 1,
 		])->fetch();
 

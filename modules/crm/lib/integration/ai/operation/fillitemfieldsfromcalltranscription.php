@@ -256,18 +256,7 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 		}
 	}
 
-	protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void
-	{
-		$activityId = self::getParentActivityId($result);
-		if ($activityId > 0)
-		{
-			Controller::getInstance()->onStartFillingEntityFields(
-				$result->getTarget(),
-				$activityId,
-				$result->getUserId(),
-			);
-		}
-	}
+	protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void {}
 
 	protected static function onAfterSuccessfulJobFinish(Result $result, ?\Bitrix\AI\Context $context = null): void
 	{
@@ -474,15 +463,6 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 		$activityId = self::getParentActivityId($result);
 		if ($activityId > 0)
 		{
-			Controller::getInstance()->onFinishFillingEntityFields(
-				$result->getTarget(),
-				$activityId,
-				[
-					'JOB_ID' => $result->getJobId(),
-				],
-				$result->getUserId(),
-			);
-
 			$badgeType = $result->getOperationStatus() === Result::OPERATION_STATUS_CONFLICT
 				? Badge\Type\AiCallFieldsFillingResult::CONFLICT_FIELDS_VALUE
 				: Badge\Type\AiCallFieldsFillingResult::SUCCESS_FIELDS_VALUE
@@ -576,6 +556,7 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 			throw new ArgumentException('Only results of type ' . static::TYPE_ID . ' are supported');
 		}
 
+		/** @var Result<FillItemFieldsFromCallTranscriptionPayload> $newResult */
 		$newResult = new Result(
 			$result->getTypeId(),
 			$result->getTarget(),
@@ -631,11 +612,6 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 		$activityId = self::getParentActivityId($result);
 		if ($activityId)
 		{
-			Controller::getInstance()->onFinishProcessingEntityFields(
-				$result->getTarget(),
-				$activityId,
-			);
-
 			self::syncBadges($activityId, Badge\Type\AiCallFieldsFillingResult::SUCCESS_FIELDS_VALUE);
 			self::notifyTimelinesAboutActivityUpdate($activityId, true);
 		}

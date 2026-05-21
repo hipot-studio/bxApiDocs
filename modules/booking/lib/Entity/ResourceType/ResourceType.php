@@ -26,6 +26,8 @@ class ResourceType implements EntityInterface
 	private bool $isInfoNotificationOn = true;
 	private string $templateTypeInfo;
 	private int $infoNotificationDelay = 0;
+	private bool $isCancellationNotificationOn = true;
+	private int $cancellationNotificationDelay = 600; // 10 minutes
 	private bool $isConfirmationNotificationOn = true;
 	private string $templateTypeConfirmation;
 	private int $confirmationNotificationDelay = 86400; // one day
@@ -107,9 +109,9 @@ class ResourceType implements EntityInterface
 		return $this->isInfoNotificationOn;
 	}
 
-	public function setIsInfoNotificationOn(bool $isInfoNotificationOn): self
+	public function setIsInfoNotificationOn(bool $isOn): self
 	{
-		$this->isInfoNotificationOn = $isInfoNotificationOn;
+		$this->isInfoNotificationOn = $isOn;
 
 		return $this;
 	}
@@ -119,9 +121,33 @@ class ResourceType implements EntityInterface
 		return $this->infoNotificationDelay;
 	}
 
-	public function setInfoNotificationDelay(int $infoNotificationDelay): self
+	public function setInfoNotificationDelay(int $delay): self
 	{
-		$this->infoNotificationDelay = $infoNotificationDelay;
+		$this->infoNotificationDelay = $delay;
+
+		return $this;
+	}
+
+	public function isCancellationNotificationOn(): bool
+	{
+		return $this->isCancellationNotificationOn;
+	}
+
+	public function setIsCancellationNotificationOn(bool $isOn): self
+	{
+		$this->isCancellationNotificationOn = $isOn;
+
+		return $this;
+	}
+
+	public function getCancellationNotificationDelay(): int
+	{
+		return $this->cancellationNotificationDelay;
+	}
+
+	public function setCancellationNotificationDelay(int $delay): self
+	{
+		$this->cancellationNotificationDelay = $delay;
 
 		return $this;
 	}
@@ -131,9 +157,9 @@ class ResourceType implements EntityInterface
 		return $this->isConfirmationNotificationOn;
 	}
 
-	public function setIsConfirmationNotificationOn(bool $isConfirmationNotificationOn): self
+	public function setIsConfirmationNotificationOn(bool $isOn): self
 	{
-		$this->isConfirmationNotificationOn = $isConfirmationNotificationOn;
+		$this->isConfirmationNotificationOn = $isOn;
 
 		return $this;
 	}
@@ -144,9 +170,9 @@ class ResourceType implements EntityInterface
 		return $this->confirmationNotificationDelay;
 	}
 
-	public function setConfirmationNotificationDelay(int $confirmationNotificationDelay): self
+	public function setConfirmationNotificationDelay(int $delay): self
 	{
-		$this->confirmationNotificationDelay = $confirmationNotificationDelay;
+		$this->confirmationNotificationDelay = $delay;
 
 		return $this;
 	}
@@ -156,9 +182,9 @@ class ResourceType implements EntityInterface
 		return $this->confirmationNotificationRepetitions;
 	}
 
-	public function setConfirmationNotificationRepetitions(int $confirmationNotificationRepetitions): self
+	public function setConfirmationNotificationRepetitions(int $repetitions): self
 	{
-		$this->confirmationNotificationRepetitions = $confirmationNotificationRepetitions;
+		$this->confirmationNotificationRepetitions = $repetitions;
 
 		return $this;
 	}
@@ -168,9 +194,9 @@ class ResourceType implements EntityInterface
 		return $this->confirmationNotificationRepetitionsInterval;
 	}
 
-	public function setConfirmationNotificationRepetitionsInterval(int $confirmationNotificationRepetitionsInterval): self
+	public function setConfirmationNotificationRepetitionsInterval(int $repetitionsInterval): self
 	{
-		$this->confirmationNotificationRepetitionsInterval = $confirmationNotificationRepetitionsInterval;
+		$this->confirmationNotificationRepetitionsInterval = $repetitionsInterval;
 
 		return $this;
 	}
@@ -180,9 +206,9 @@ class ResourceType implements EntityInterface
 		return $this->confirmationCounterDelay;
 	}
 
-	public function setConfirmationCounterDelay(int $confirmationCounterDelay): self
+	public function setConfirmationCounterDelay(int $delay): self
 	{
-		$this->confirmationCounterDelay = $confirmationCounterDelay;
+		$this->confirmationCounterDelay = $delay;
 
 		return $this;
 	}
@@ -192,9 +218,9 @@ class ResourceType implements EntityInterface
 		return $this->isReminderNotificationOn;
 	}
 
-	public function setIsReminderNotificationOn(bool $isReminderNotificationOn): self
+	public function setIsReminderNotificationOn(bool $isOn): self
 	{
-		$this->isReminderNotificationOn = $isReminderNotificationOn;
+		$this->isReminderNotificationOn = $isOn;
 
 		return $this;
 	}
@@ -204,9 +230,9 @@ class ResourceType implements EntityInterface
 		return $this->reminderNotificationDelay;
 	}
 
-	public function setReminderNotificationDelay(int $reminderNotificationDelay): self
+	public function setReminderNotificationDelay(int $delay): self
 	{
-		$this->reminderNotificationDelay = $reminderNotificationDelay;
+		$this->reminderNotificationDelay = $delay;
 
 		return $this;
 	}
@@ -216,9 +242,9 @@ class ResourceType implements EntityInterface
 		return $this->isFeedbackNotificationOn;
 	}
 
-	public function setIsFeedbackNotificationOn(bool $isFeedbackNotificationOn): self
+	public function setIsFeedbackNotificationOn(bool $isOn): self
 	{
-		$this->isFeedbackNotificationOn = $isFeedbackNotificationOn;
+		$this->isFeedbackNotificationOn = $isOn;
 
 		return $this;
 	}
@@ -228,14 +254,14 @@ class ResourceType implements EntityInterface
 		return $this->templateTypeInfo;
 	}
 
-	public function setTemplateTypeInfo(string $templateTypeInfo): self
+	public function setTemplateTypeInfo(string $templateType): self
 	{
-		if (!TemplateTypeInfo::isValid($templateTypeInfo))
+		if (!TemplateTypeInfo::isValid($templateType))
 		{
 			throw new InvalidArgumentException('Invalid value for templateTypeInfo');
 		}
 
-		$this->templateTypeInfo = $templateTypeInfo;
+		$this->templateTypeInfo = $templateType;
 
 		return $this;
 	}
@@ -245,14 +271,14 @@ class ResourceType implements EntityInterface
 		return $this->templateTypeConfirmation;
 	}
 
-	public function setTemplateTypeConfirmation(string $templateTypeConfirmation): self
+	public function setTemplateTypeConfirmation(string $templateType): self
 	{
-		if (!TemplateTypeConfirmation::isValid($templateTypeConfirmation))
+		if (!TemplateTypeConfirmation::isValid($templateType))
 		{
 			throw new InvalidArgumentException('Invalid value for templateTypeConfirmation');
 		}
 
-		$this->templateTypeConfirmation = $templateTypeConfirmation;
+		$this->templateTypeConfirmation = $templateType;
 
 		return $this;
 	}
@@ -262,14 +288,14 @@ class ResourceType implements EntityInterface
 		return $this->templateTypeReminder;
 	}
 
-	public function setTemplateTypeReminder(string $templateTypeReminder): self
+	public function setTemplateTypeReminder(string $templateType): self
 	{
-		if (!TemplateTypeReminder::isValid($templateTypeReminder))
+		if (!TemplateTypeReminder::isValid($templateType))
 		{
 			throw new InvalidArgumentException('Invalid value for templateTypeReminder');
 		}
 
-		$this->templateTypeReminder = $templateTypeReminder;
+		$this->templateTypeReminder = $templateType;
 
 		return $this;
 	}
@@ -279,14 +305,14 @@ class ResourceType implements EntityInterface
 		return $this->templateTypeFeedback;
 	}
 
-	public function setTemplateTypeFeedback(string $templateTypeFeedback): self
+	public function setTemplateTypeFeedback(string $templateType): self
 	{
-		if (!TemplateTypeFeedback::isValid($templateTypeFeedback))
+		if (!TemplateTypeFeedback::isValid($templateType))
 		{
 			throw new InvalidArgumentException('Invalid value for templateTypeFeedback');
 		}
 
-		$this->templateTypeFeedback = $templateTypeFeedback;
+		$this->templateTypeFeedback = $templateType;
 
 		return $this;
 	}
@@ -296,9 +322,9 @@ class ResourceType implements EntityInterface
 		return $this->isDelayedNotificationOn;
 	}
 
-	public function setIsDelayedNotificationOn(bool $isDelayedNotificationOn): self
+	public function setIsDelayedNotificationOn(bool $isOn): self
 	{
-		$this->isDelayedNotificationOn = $isDelayedNotificationOn;
+		$this->isDelayedNotificationOn = $isOn;
 
 		return $this;
 	}
@@ -308,14 +334,14 @@ class ResourceType implements EntityInterface
 		return $this->templateTypeDelayed;
 	}
 
-	public function setTemplateTypeDelayed(string $templateTypeDelayed): self
+	public function setTemplateTypeDelayed(string $templateType): self
 	{
-		if (!TemplateTypeDelayed::isValid($templateTypeDelayed))
+		if (!TemplateTypeDelayed::isValid($templateType))
 		{
 			throw new InvalidArgumentException('Invalid value for templateTypeDelayed');
 		}
 
-		$this->templateTypeDelayed = $templateTypeDelayed;
+		$this->templateTypeDelayed = $templateType;
 
 		return $this;
 	}
@@ -325,9 +351,9 @@ class ResourceType implements EntityInterface
 		return $this->delayedNotificationDelay;
 	}
 
-	public function setDelayedNotificationDelay(int $delayedNotificationDelay): self
+	public function setDelayedNotificationDelay(int $delay): self
 	{
-		$this->delayedNotificationDelay = $delayedNotificationDelay;
+		$this->delayedNotificationDelay = $delay;
 
 		return $this;
 	}
@@ -337,9 +363,9 @@ class ResourceType implements EntityInterface
 		return $this->delayedCounterDelay;
 	}
 
-	public function setDelayedCounterDelay(int $delayedCounterDelay): self
+	public function setDelayedCounterDelay(int $delay): self
 	{
-		$this->delayedCounterDelay = $delayedCounterDelay;
+		$this->delayedCounterDelay = $delay;
 
 		return $this;
 	}
@@ -367,6 +393,8 @@ class ResourceType implements EntityInterface
 			'isInfoNotificationOn' => $this->isInfoNotificationOn,
 			'templateTypeInfo' => $this->templateTypeInfo,
 			'infoNotificationDelay' => $this->infoNotificationDelay,
+			'isCancellationNotificationOn' => $this->isCancellationNotificationOn,
+			'cancellationNotificationDelay' => $this->cancellationNotificationDelay,
 			'isConfirmationNotificationOn' => $this->isConfirmationNotificationOn,
 			'templateTypeConfirmation' => $this->templateTypeConfirmation,
 			'confirmationNotificationDelay' => $this->confirmationNotificationDelay,
@@ -407,6 +435,15 @@ class ResourceType implements EntityInterface
 		if (isset($props['infoNotificationDelay']))
 		{
 			$resourceType->setInfoNotificationDelay((int)$props['infoNotificationDelay']);
+		}
+
+		if (isset($props['isCancellationNotificationOn']))
+		{
+			$resourceType->setIsCancellationNotificationOn((bool)$props['isCancellationNotificationOn']);
+		}
+		if (isset($props['cancellationNotificationDelay']))
+		{
+			$resourceType->setCancellationNotificationDelay((int)$props['cancellationNotificationDelay']);
 		}
 
 		if (isset($props['isConfirmationNotificationOn']))

@@ -338,6 +338,7 @@ class CIBlockSection extends CAllIBlockSection
 				case "created":
 					$arSqlOrder[$by] = " BS.DATE_CREATE ".$order." ";
 					$additionalSelect["DATE_CREATE"] = $arFields["DATE_CREATE"]." AS DATE_CREATE";
+					$additionalSelect["DATE_CREATE_SORT"] = "BS.DATE_CREATE AS DCT_TMP";
 					break;
 				case "created_by":
 					$arSqlOrder[$by] = " BS.CREATED_BY ".$order." ";

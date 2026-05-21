@@ -10,33 +10,36 @@ use Bitrix\Main\Loader;
 
 class BookingActivity
 {
-	public function getMessageMenuItems(int $bookingId): array
+	public function getMessageSenderInfo(int $bookingId): ?array
 	{
 		if (!Loader::includeModule('booking'))
 		{
-			return [];
+			return null;
 		}
 
 		$sender = Container::getMessageSenderPicker()->pickByBookingId($bookingId);
 		if (!$sender || !$sender->canUse())
 		{
-			return [];
+			return null;
 		}
 
-		$supportedNotificationTypes = $sender->getSupportedNotificationTypes();
-
-		$result = [];
-		foreach ($supportedNotificationTypes as $notificationType)
+		$notificationTypes = [];
+		foreach ($sender->getSupportedNotificationTypes() as $notificationType)
 		{
-			$result[] = [
+			if ($notificationType === NotificationType::Cancellation)
+			{
+				continue;
+			}
+
+			$notificationTypes[] = [
 				'code' => $notificationType->value,
 				'name' => NotificationType::getName($notificationType),
-				'params' => [
-					'notificationType' => $notificationType->value,
-				],
 			];
 		}
 
-		return $result;
+		return [
+			'senderCode' => $sender->getCode(),
+			'notificationTypes' => $notificationTypes,
+		];
 	}
 }

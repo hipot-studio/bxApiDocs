@@ -14,6 +14,8 @@ use Bitrix\UI\Buttons\SettingsButton;
 
 Loader::includeModule('crm');
 
+Loc::loadLanguageFile(__FILE__);
+
 class CrmItemDetailsComponent extends FactoryBased
 {
 	public function executeComponent()

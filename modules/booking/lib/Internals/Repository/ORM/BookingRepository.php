@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Repository\ORM;
 
 use Bitrix\Booking\Entity\Booking\Booking;
+use Bitrix\Booking\Entity\Booking\BookingDeletionScenario;
 use Bitrix\Booking\Entity\Booking\BookingCollection;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\Booking\CreateBookingException;
@@ -25,6 +26,7 @@ use Bitrix\Booking\Provider\Params\FilterInterface;
 use Bitrix\Booking\Provider\Params\GridParams;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\ORM\Query\QueryHelper;
+use Bitrix\Main\Type\DateTime;
 
 class BookingRepository implements BookingRepositoryInterface
 {
@@ -249,9 +251,21 @@ class BookingRepository implements BookingRepositoryInterface
 		return $result->getId();
 	}
 
-	public function remove(int $id): void
+	public function remove(
+		int $id,
+		BookingDeletionScenario|null $deletionScenario = null,
+	): void
 	{
-		$result = BookingTable::update($id, ['IS_DELETED' => 'Y']);
+		$fields = [
+			'IS_DELETED' => 'Y',
+			'DELETED_AT' => new DateTime(),
+		];
+		if ($deletionScenario !== null)
+		{
+			$fields['DELETION_SCENARIO'] = $deletionScenario->value;
+		}
+
+		$result = BookingTable::update($id, $fields);
 		if (!$result->isSuccess())
 		{
 			throw new RemoveBookingException($result->getErrors()[0]->getMessage());

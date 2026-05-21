@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Controller\V1;
 
+use Bitrix\Booking\Command\Booking\ConfirmBookingCommand;
 use Bitrix\Booking\Command\Booking\CreateBookingFromWaitListItemCommand;
 use Bitrix\Booking\Command\Booking\CreateDealForBookingCommand;
+use Bitrix\Booking\Command\Booking\UnconfirmBookingCommand;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Container;
@@ -263,6 +265,7 @@ class Booking extends BaseController
 		$command = new RemoveBookingCommand(
 			id: $id,
 			removedBy: (int)CurrentUser::get()->getId(),
+			scenario: Entity\Booking\BookingDeletionScenario::Manager,
 		);
 
 		$result = $command->run();
@@ -283,6 +286,7 @@ class Booking extends BaseController
 			$command = new RemoveBookingCommand(
 				id: $id,
 				removedBy: (int)CurrentUser::get()->getId(),
+				scenario: Entity\Booking\BookingDeletionScenario::Manager,
 			);
 
 			$command->run();
@@ -317,6 +321,24 @@ class Booking extends BaseController
 		);
 
 		$result = $createFromWaitListItemCommand->run();
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getBooking();
+	}
+
+	public function confirmAction(int $id, bool $isConfirmed): Entity\Booking\Booking|null
+	{
+		$command = $isConfirmed
+			? new ConfirmBookingCommand(id: $id, updatedBy: (int)CurrentUser::get()->getId())
+			: new UnconfirmBookingCommand(id: $id, updatedBy: (int)CurrentUser::get()->getId())
+		;
+
+		$result = $command->run();
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());

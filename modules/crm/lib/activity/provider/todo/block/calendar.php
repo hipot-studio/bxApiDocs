@@ -67,6 +67,7 @@ final class Calendar extends Base
 				'to' => $to * $milliseconds,
 				'duration' => $eventData['DT_LENGTH'] * $milliseconds,
 				'sectionId' => $this->activityData['settings']['CALENDAR_SECTION_ID'] ?? null,
+				'calendarEventId' => $calendarEventId,
 			];
 
 			if (

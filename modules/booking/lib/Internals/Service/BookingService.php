@@ -131,6 +131,13 @@ class BookingService
 	{
 		$this->ensureNewResourcesAreNotDeleted($bookingBefore, $bookingAfter);
 		$this->ensureDateChangeIsValidForDeletedResources($bookingBefore, $bookingAfter);
+
+		if ($this->bookingAutoConfirmService->shouldRecalculateOnUpdate($bookingBefore, $bookingAfter))
+		{
+			$bookingAfter->setConfirmed(
+				$this->bookingAutoConfirmService->shouldAutoConfirm($bookingAfter)
+			);
+		}
 	}
 
 	public function checkIntersection(Entity\Booking\Booking $booking, bool $allowOverbooking): IntersectionResult

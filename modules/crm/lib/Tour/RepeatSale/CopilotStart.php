@@ -10,7 +10,7 @@ use Bitrix\Crm\Integration\AI\Dto\RepeatSale\FillRepeatSaleTipsPayload;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\Type\CopilotButtonRepeatSale;
+use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\FillRepeatSaleTips;
 use Bitrix\Crm\Tour\Base;
 use Bitrix\Crm\Tour\Mixin\HasEntitySupport;
 use Bitrix\Main\Localization\Loc;
@@ -56,7 +56,7 @@ final class CopilotStart extends Base
 					['#COPILOT_NAME#' => AIManager::getCopilotName()]
 				),
 				'position' => 'top',
-				'target' => sprintf('#%s', CopilotButtonRepeatSale::BUTTON_TARGET_ID),
+				'target' => sprintf('#%s', FillRepeatSaleTips::BUTTON_TARGET_ID),
 				'article' => 25376986,
 			],
 		];

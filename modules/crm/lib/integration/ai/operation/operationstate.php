@@ -8,26 +8,22 @@ use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\ItemIdentifier;
 use CCrmActivity;
 
-final class OperationState
+/**
+ * @deprecated
+ */
+class OperationState
 {
-	private ?Result $transcriptionResult;
-	private ?Result $callScoringResult;
-	private ?Result $summarizeResult;
-	private ?Result $fillResult;
+	private ?Result $transcriptionResult = null;
+	private ?Result $callScoringResult = null;
+	private ?Result $summarizeResult = null;
+	private ?Result $fillResult = null;
 
-	public function __construct(
-		private readonly int $activityId,
-		private readonly int $entityTypeId,
-		private readonly int $entityId
-	)
-	{
-		$this->transcriptionResult = null;
-		$this->callScoringResult = null;
-		$this->summarizeResult = null;
-		$this->fillResult = null;
+	private bool $transcriptionResultLoaded = false;
+	private bool $callScoringResultLoaded = false;
+	private bool $summarizeResultLoaded = false;
+	private bool $fillResultLoaded = false;
 
-		$this->init();
-	}
+	public function __construct(private readonly int $activityId, private readonly ItemIdentifier $identifier) {}
 
 	// region FullScenario
 	public function isLaunchOperationsPending(): bool
@@ -37,10 +33,10 @@ final class OperationState
 			return false;
 		}
 
-		return $this->transcriptionResult?->isPending()
-			|| $this->summarizeResult?->isPending()
-			|| $this->fillResult?->isPending()
-			|| $this->callScoringResult?->isPending()
+		return $this->getTranscriptionResult()?->isPending()
+			|| $this->getSummarizeResult()?->isPending()
+			|| $this->getFillResult()?->isPending()
+			|| $this->getCallScoringResult()?->isPending()
 		;
 	}
 
@@ -56,9 +52,8 @@ final class OperationState
 			$bindings = $this->fetchEntityBindings();
 			foreach ($bindings as $binding)
 			{
-				if (
-					(new self($binding['OWNER_TYPE_ID'], $binding['OWNER_ID'], $this->activityId))
-						->isLaunchOperationsSuccess(false)
+				$bIdentifier = new ItemIdentifier($binding['OWNER_TYPE_ID'], $binding['OWNER_ID']);
+				if ((new self($this->activityId, $bIdentifier))->isLaunchOperationsSuccess(false)
 				)
 				{
 					return true;
@@ -66,10 +61,10 @@ final class OperationState
 			}
 		}
 
-		return $this->transcriptionResult?->isSuccess()
-			&& $this->summarizeResult?->isSuccess()
-			&& $this->fillResult?->isSuccess()
-			&& $this->callScoringResult?->isSuccess()
+		return $this->getTranscriptionResult()?->isSuccess()
+			&& $this->getSummarizeResult()?->isSuccess()
+			&& $this->getFillResult()?->isSuccess()
+			&& $this->getCallScoringResult()?->isSuccess()
 		;
 	}
 	// endregion
@@ -83,8 +78,8 @@ final class OperationState
 		}
 
 		if (
-			$this->summarizeResult?->isPending()
-			|| $this->fillResult?->isPending()
+			$this->getSummarizeResult()?->isPending()
+			|| $this->getFillResult()?->isPending()
 		)
 		{
 			return true;
@@ -92,9 +87,9 @@ final class OperationState
 
 		return $this->isFillFieldsScenario()
 			&& (
-				$this->transcriptionResult?->isPending()
-				|| $this->summarizeResult?->isPending()
-				|| $this->fillResult?->isPending()
+				$this->getTranscriptionResult()?->isPending()
+				|| $this->getSummarizeResult()?->isPending()
+				|| $this->getFillResult()?->isPending()
 			)
 		;
 	}
@@ -106,14 +101,19 @@ final class OperationState
 			return false;
 		}
 
-		if ($this->fillResult?->isSuccess())
+		if ($this->getFillResult()?->isPending())
+		{
+			return false;
+		}
+
+		if ($this->getFillResult()?->isSuccess())
 		{
 			return true;
 		}
 
 		return (
 			$this->isLaunchOperationsSuccess()
-			|| $this->fillResult?->isSuccess()
+			|| $this->getFillResult()?->isSuccess()
 		);
 	}
 
@@ -125,8 +125,8 @@ final class OperationState
 		}
 
 		if (
-			$this->summarizeResult?->isErrorsLimitExceeded()
-			|| $this->fillResult?->isErrorsLimitExceeded()
+			$this->getSummarizeResult()?->isErrorsLimitExceeded()
+			|| $this->getFillResult()?->isErrorsLimitExceeded()
 		)
 		{
 			return true;
@@ -135,9 +135,9 @@ final class OperationState
 		return (
 			$this->isFillFieldsScenario()
 			&& (
-				$this->transcriptionResult?->isErrorsLimitExceeded()
-				|| $this->summarizeResult?->isErrorsLimitExceeded()
-				|| $this->fillResult?->isErrorsLimitExceeded()
+				$this->getTranscriptionResult()?->isErrorsLimitExceeded()
+				|| $this->getSummarizeResult()?->isErrorsLimitExceeded()
+				|| $this->getFillResult()?->isErrorsLimitExceeded()
 			)
 		);
 	}
@@ -151,15 +151,15 @@ final class OperationState
 			return false;
 		}
 
-		if ($this->callScoringResult?->isPending())
+		if ($this->getCallScoringResult()?->isPending())
 		{
 			return true;
 		}
 
 		return $this->isCallScoringScenario()
 			&& (
-				$this->transcriptionResult?->isPending()
-				|| $this->callScoringResult?->isPending()
+				$this->getTranscriptionResult()?->isPending()
+				|| $this->getCallScoringResult()?->isPending()
 			)
 		;
 	}
@@ -171,14 +171,19 @@ final class OperationState
 			return false;
 		}
 
-		if ($this->callScoringResult?->isSuccess())
+		if ($this->getCallScoringResult()?->isPending())
+		{
+			return false;
+		}
+
+		if ($this->getCallScoringResult()?->isSuccess())
 		{
 			return true;
 		}
 
 		return (
 			$this->isLaunchOperationsSuccess()
-			|| $this->callScoringResult?->isSuccess()
+			|| $this->getCallScoringResult()?->isSuccess()
 		);
 	}
 
@@ -189,58 +194,93 @@ final class OperationState
 			return true;
 		}
 
-		if ($this->callScoringResult?->isErrorsLimitExceeded())
+		if ($this->getCallScoringResult()?->isErrorsLimitExceeded())
 		{
 			return true;
 		}
 
 		return $this->isCallScoringScenario()
 			&& (
-				$this->transcriptionResult?->isErrorsLimitExceeded()
-				|| $this->callScoringResult?->isErrorsLimitExceeded()
+				$this->getTranscriptionResult()?->isErrorsLimitExceeded()
+				|| $this->getCallScoringResult()?->isErrorsLimitExceeded()
 			)
 		;
 	}
 	// endregion
 
-	// region Utils
-	private function init(bool $isCacheReset = true): void
+	// region LazyLoadingGetters
+	private function getTranscriptionResult(): ?Result
 	{
-		$jobRepo = JobRepository::getInstance();
-		if ($isCacheReset)
+		if (!$this->transcriptionResultLoaded)
 		{
-			$jobRepo->cleanRuntimeCache();
+			$this->transcriptionResult = JobRepository::getInstance()
+				->getTranscribeCallRecordingResultByActivity($this->activityId);
+			$this->transcriptionResultLoaded = true;
 		}
 
-		$this->transcriptionResult = $jobRepo->getTranscribeCallRecordingResultByActivity($this->activityId);
-		$this->summarizeResult = $jobRepo->getSummarizeCallTranscriptionResultByActivity($this->activityId);
-		$this->callScoringResult = $jobRepo->getCallScoringResult($this->activityId);
-
-		if ($this->isValidParams())
-		{
-			$this->fillResult = $jobRepo->getFillItemFieldsFromCallTranscriptionResult(
-				new ItemIdentifier($this->entityTypeId, $this->entityId),
-				$this->activityId
-			);
-		}
+		return $this->transcriptionResult;
 	}
 
+	private function getSummarizeResult(): ?Result
+	{
+		if (!$this->summarizeResultLoaded)
+		{
+			$this->summarizeResult = JobRepository::getInstance()
+				->getSummarizeCallTranscriptionResultByActivity($this->activityId);
+			$this->summarizeResultLoaded = true;
+		}
+
+		return $this->summarizeResult;
+	}
+
+	private function getCallScoringResult(): ?Result
+	{
+		if (!$this->callScoringResultLoaded)
+		{
+			$this->callScoringResult = JobRepository::getInstance()
+				->getCallScoringResult($this->activityId);
+			$this->callScoringResultLoaded = true;
+		}
+
+		return $this->callScoringResult;
+	}
+
+	private function getFillResult(): ?Result
+	{
+		if (!$this->fillResultLoaded)
+		{
+			if ($this->isValidParams())
+			{
+				$this->fillResult = JobRepository::getInstance()->getFillItemFieldsFromCallTranscriptionResult($this->identifier, $this->activityId);
+			}
+			$this->fillResultLoaded = true;
+		}
+
+		return $this->fillResult;
+	}
+	// endregion
+
+	// region Utils
 	private function isFillFieldsScenario(): bool
 	{
-		return $this->transcriptionResult?->getNextTypeId() === null
-			|| $this->transcriptionResult?->getNextTypeId() === SummarizeCallTranscription::TYPE_ID
+		return $this->getTranscriptionResult()?->getNextTypeId() === null
+			|| $this->getTranscriptionResult()?->getNextTypeId() === SummarizeCallTranscription::TYPE_ID
 		;
 	}
 
 	private function isCallScoringScenario(): bool
 	{
-		return $this->transcriptionResult?->getNextTypeId() === ScoreCall::TYPE_ID;
+		return $this->getTranscriptionResult()?->getNextTypeId() === ScoreCall::TYPE_ID;
 	}
 
 	private function isValidParams(): bool
 	{
 		return $this->activityId >= 0
-			&& in_array($this->entityTypeId, AIManager::SUPPORTED_ENTITY_TYPE_IDS, true)
+			&& in_array(
+				$this->identifier->getEntityTypeId(),
+				AIManager::SUPPORTED_ENTITY_TYPE_IDS,
+				true
+			)
 		;
 	}
 
@@ -255,7 +295,7 @@ final class OperationState
 				(int)$row['OWNER_TYPE_ID'],
 				AIManager::SUPPORTED_ENTITY_TYPE_IDS,
 				true
-			) && $this->entityTypeId !== (int)$row['OWNER_TYPE_ID']
+			) && $this->identifier->getEntityTypeId() !== (int)$row['OWNER_TYPE_ID']
 		);
 	}
 	// endregion

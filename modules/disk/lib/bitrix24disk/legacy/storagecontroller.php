@@ -1160,21 +1160,35 @@ class StorageController extends Controller
 	/**
 	 * Return null, if not such range.
 	 * Return array($start, $end, $length)
-	 * @return array|null
+	 * @return array|null|false
 	 */
 	private function getContentRange()
 	{
 		$headers = $this->getAllHeaders();
-		if(!$headers || !isset($headers['Content-Range']))
+
+		$normalizedHeaders = [];
+		foreach ($headers as $name => $value) {
+			$normalizedHeaders[strtolower($name)] = $value;
+		}
+
+		$contentRange = $normalizedHeaders['content-range']
+			?? $_SERVER['HTTP_CONTENT_RANGE']
+			?? $_SERVER['CONTENT_RANGE']
+			?? $_SERVER['REDIRECT_HTTP_CONTENT_RANGE']
+			?? $_SERVER['REDIRECT_CONTENT_RANGE']
+			?? null;
+
+		if (!$contentRange)
 		{
 			return false;
 		}
-		$contentRange = $headers['Content-Range'];
-		if(!preg_match("/(\\d+)-(\\d+)\\/(\\d+)\$/", $contentRange, $match))
+
+		if (!preg_match('/(\d+)-(\d+)\/(\d+)$/', $contentRange, $match))
 		{
 			return null;
 		}
-		return array($match[1], $match[2], $match[3]);
+
+		return [$match[1], $match[2], $match[3]];
 	}
 
 	/**

@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Automation\Trigger;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
@@ -46,5 +47,10 @@ class CallBackTrigger extends WebFormTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::FEEDBACK_FORM->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::FEEDBACK->value];
 	}
 }

@@ -18,7 +18,7 @@ class ProductWizard extends Controller
 	/**
 	 * @inheritDoc
 	 */
-	public function __construct(\Bitrix\Main\Request $request = null)
+	public function __construct(?\Bitrix\Main\Request $request = null)
 	{
 		parent::__construct($request);
 
@@ -49,7 +49,7 @@ class ProductWizard extends Controller
 	 * @param int|null $id
 	 * @return array|null
 	 */
-	public function saveProductAction(array $fields, int $id = null): ?array
+	public function saveProductAction(array $fields, ?int $id = null): ?array
 	{
 		$result = (new SaveProductCommand($fields, $id))->execute();
 

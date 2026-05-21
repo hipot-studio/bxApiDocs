@@ -23,7 +23,7 @@ class ImageCollection extends BaseCollection
 		$this->factory = $factory;
 	}
 
-	public function create(string $type = null): BaseImage
+	public function create(?string $type = null): BaseImage
 	{
 		if ($type === ImageFactory::DETAIL_IMAGE || $type === ImageFactory::PREVIEW_IMAGE)
 		{

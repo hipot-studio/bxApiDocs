@@ -14,7 +14,7 @@ class CatalogRightsEditRule extends BaseRule
 	 *
 	 * @return bool
 	 */
-	public function execute(AccessibleItem $item = null, $params = null): bool
+	public function execute(?AccessibleItem $item = null, $params = null): bool
 	{
 		if (!Feature::isAccessControllerCheckingEnabled())
 		{

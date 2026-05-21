@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger\Sign;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
 use Bitrix\Sign;
@@ -106,5 +107,10 @@ class InitiatorSignedTrigger extends Automation\Trigger\BaseTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::SIGN->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::DOCUMENT_FLOW->value];
 	}
 }

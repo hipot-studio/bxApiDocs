@@ -170,12 +170,6 @@ final class ScoreCall extends AbstractOperation
 		if ($nextTarget)
 		{
 			self::notifyTimelinesAboutActivityUpdate($activityId, true);
-			
-			Controller::getInstance()->onStartCallScoring(
-				$nextTarget,
-				$result->getTarget()?->getEntityId(),
-				$result->getUserId(),
-			);
 		}
 	}
 
@@ -186,23 +180,11 @@ final class ScoreCall extends AbstractOperation
 			return;
 		}
 
-		$nextTarget = (new Orchestrator())->findPossibleFillFieldsTarget($result->getTarget()?->getEntityId());
+		$activityId = $result->getTarget()?->getEntityId();
+		$nextTarget = (new Orchestrator())->findPossibleFillFieldsTarget($activityId);
 		if ($nextTarget)
 		{
-			$activityId = $result->getTarget()?->getEntityId();
-			if ($activityId)
-			{
-				Controller::getInstance()->onFinishCallScoring(
-					$nextTarget,
-					$activityId,
-					[
-						'JOB_ID' => $result->getJobId(),
-					],
-					$result->getUserId(),
-				);
-
-				self::notifyTimelinesAboutActivityUpdate($activityId, true);
-			}
+			self::notifyTimelinesAboutActivityUpdate($activityId, true);
 		}
 	}
 
@@ -312,21 +294,13 @@ final class ScoreCall extends AbstractOperation
 			return;
 		}
 
-		/* @todo: add message via IM service & get RATED_USER_CHAT_ID | MANAGER_USER_CHAT_ID
-		$sender = \Bitrix\Crm\Service\Container::getInstance()->getImService();
-		$message = new Bitrix\Crm\Integration\Im\Message\Type\Assessment\ToEmployee(
-			fromUser: $userIdFrom,
-			toUser: $userIdTo,
-		);
-		$result = $sender->sendMessage($message);
-		*/
-
 		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
 		$userId = $activity['RESPONSIBLE_ID'] ?? $result->getUserId();
 
 		$assessmentSettingsId = isset($context)
 			? $context->getParameters()['additionalInfo']['assessment_settings_id'] ?? null
-			: null;
+			: null
+		;
 		$assessmentSettings = self::getAssessmentSettings($activityId, $assessmentSettingsId);
 		$assessment = self::getAssessmentsValue($payload);
 		$controller = AiQualityAssessmentController::getInstance();

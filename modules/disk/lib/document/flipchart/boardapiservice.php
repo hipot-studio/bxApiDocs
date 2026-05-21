@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Document\Flipchart;
 
 use Bitrix\Disk\Document\FileDownloader;
+use Bitrix\Disk\Document\Flipchart\Enum\BoardReadyStatus;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Http\Method;
 use Bitrix\Main\Web\HttpClient;
@@ -128,5 +129,45 @@ class BoardApiService
 		}
 
 		return (array) Json::decode($data);
+	}
+
+	public function getBoardReadyStatus(string $documentId): BoardReadyStatus
+	{
+		$url = $this->baseUrl . '/api/v1/file/status';
+		$token = (new JwtService())->generateToken(
+			false,
+			[
+				'document_id' => $documentId
+			]
+		);
+
+		$httpClient = new HttpClient();
+		$httpClient->disableSslVerification();
+		$httpClient->setHeader('Content-Type', 'application/json');
+		$httpClient->setHeader(
+			Configuration::getClientTokenHeaderLookup(),
+			$token,
+		);
+
+		$data = $httpClient->get($url);
+
+		if (!$data || !Json::validate($data))
+		{
+			return BoardReadyStatus::ERROR;
+		}
+
+		$data = (array)Json::decode($data);
+		if (!array_key_exists('status', $data))
+		{
+			return BoardReadyStatus::ERROR;
+		}
+
+		$status = BoardReadyStatus::tryFrom($data['status']);
+		if (!$status)
+		{
+			return BoardReadyStatus::ERROR;
+		}
+
+		return $status;
 	}
 }

@@ -307,7 +307,7 @@ class SkuRepository extends BaseIblockElementRepository implements SkuRepository
 		return $propertyElementMap;
 	}
 
-	protected function createEntity(array $fields = [], PropertyCollection $propertyCollection = null): BaseIblockElementEntity
+	protected function createEntity(array $fields = [], ?PropertyCollection $propertyCollection = null): BaseIblockElementEntity
 	{
 		$entity = parent::createEntity($fields);
 

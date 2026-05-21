@@ -161,6 +161,7 @@ class Resource extends BaseController
 			$removeBookingCommand = new RemoveBookingCommand(
 				id: $booking->getId(),
 				removedBy: $this->userId,
+				scenario: Entity\Booking\BookingDeletionScenario::Manager,
 			);
 
 			$removeBookingResult = $removeBookingCommand->run();

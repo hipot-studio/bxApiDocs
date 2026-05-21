@@ -159,6 +159,18 @@ class UpdateBookingCommandHandler
 						)
 					);
 				}
+				elseif ($currentBooking->isConfirmed() && !$booking->isConfirmed())
+				{
+					$this->journalService->append(
+						new JournalEvent(
+							entityId: $command->booking->getId(),
+							type: JournalType::BookingUnconfirmed,
+							data: [
+								'booking' => $booking->toArray(),
+							],
+						)
+					);
+				}
 
 				// TODO: if BookingRepository::getById refactored and stop return counters without condition
 				// refactor this, check usages for proper counters loading

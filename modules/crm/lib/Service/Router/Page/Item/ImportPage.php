@@ -102,9 +102,9 @@ final class ImportPage extends AbstractPage
 	{
 		$origin = $this->request->get('origin');
 
-		return (new ImportPageTitleBuilder($this->entityTypeId))
+		return htmlspecialcharsback((new ImportPageTitleBuilder($this->entityTypeId))
 			->setOrigin(Origin::tryFrom($origin) ?? Origin::Custom)
-			->getMessage()
+			->getMessage())
 		;
 	}
 

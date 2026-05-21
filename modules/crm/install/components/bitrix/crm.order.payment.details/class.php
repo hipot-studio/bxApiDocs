@@ -360,7 +360,10 @@ class CCrmOrderPaymentDetailsComponent extends Crm\Component\EntityDetails\BaseC
 				)
 			);
 
-			$this->arResult['TABS'][] = $this->getEventTabParams();
+			if(\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 		}
 		else
 		{
@@ -370,7 +373,10 @@ class CCrmOrderPaymentDetailsComponent extends Crm\Component\EntityDetails\BaseC
 				'enabled' => false
 			);
 
-			$this->arResult['TABS'][] = $this->getEventTabParams();
+			if(\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 		}
 		//endregion
 

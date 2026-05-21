@@ -159,7 +159,7 @@ class GridHeaders
 
 		return [
 			'id' => $fieldName,
-			'name' => htmlspecialcharsbx($fieldLabel),
+			'name' => $fieldLabel,
 			'sort' => $userField['MULTIPLE'] == 'N' ? $fieldName : false,
 			'default' => $userField['SHOW_IN_LIST'] == 'Y',
 			'editable' => $editable,

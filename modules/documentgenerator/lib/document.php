@@ -14,6 +14,7 @@ use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
+use Bitrix\Main\IO\Path;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Numerator\Numerator;
@@ -1691,7 +1692,10 @@ class Document
 		{
 			$extension = $this->body->getFileExtension();
 		}
-		return $this->getTitle().'.'.$extension;
+
+		$baseName = Path::replaceInvalidFilename($this->getTitle(), fn() => '_');
+
+		return $baseName.'.'.$extension;
 	}
 
 	/**

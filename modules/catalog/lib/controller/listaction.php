@@ -13,7 +13,7 @@ trait ListAction
 		array $select,
 		array $filter,
 		array $order,
-		PageNavigation $pageNavigation = null
+		?PageNavigation $pageNavigation = null
 	): array;
 
 	abstract protected function count($filter);

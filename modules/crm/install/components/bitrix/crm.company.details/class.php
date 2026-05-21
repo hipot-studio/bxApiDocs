@@ -554,7 +554,10 @@ class CCrmCompanyDetailsComponent
 						)
 					)
 				);
-				$this->arResult['TABS'][] = $this->getEventTabParams();
+				if($this->arResult['CATEGORY_ID'] || \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+				{
+					$this->arResult['TABS'][] = $this->getEventTabParams();
+				}
 
 				if (CModule::IncludeModule('lists') && !$this->arResult['CATEGORY_ID'])
 				{
@@ -598,7 +601,10 @@ class CCrmCompanyDetailsComponent
 			}
 			else
 			{
-				$this->arResult['TABS'][] = $this->getEventTabParams();
+				if($this->arResult['CATEGORY_ID'] || \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+				{
+					$this->arResult['TABS'][] = $this->getEventTabParams();
+				}
 			}
 		}
 		else
@@ -629,7 +635,10 @@ class CCrmCompanyDetailsComponent
 					'enabled' => false
 				);
 			}
-			$this->arResult['TABS'][] = $this->getEventTabParams();
+			if($this->arResult['CATEGORY_ID'] || \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 
 			if (CModule::IncludeModule('lists') && !$this->arResult['CATEGORY_ID'])
 			{
@@ -738,10 +747,7 @@ class CCrmCompanyDetailsComponent
 		$this->arResult['ENTITY_ID'] = $this->entityID;
 
 		$this->userFields = null;
-		$this->prepareEntityUserFields();
-
 		$this->userFieldInfos = null;
-		$this->prepareEntityUserFieldInfos();
 	}
 
 	public function setCategoryID(int $categoryID): void
@@ -2305,6 +2311,8 @@ class CCrmCompanyDetailsComponent
 
 	public function initializeData()
 	{
+		$this->prepareEntityUserFields();
+		$this->prepareEntityUserFieldInfos();
 		$this->loadConversionWizard();
 		$this->prepareFieldInfos();
 		$this->prepareEntityData();

@@ -61,7 +61,10 @@ class CCrmRepeatSaleSegmentDetailsComponent extends Base
 				return;
 			}
 
-			$segmentItem = SegmentItem::createFromEntity($segment)->toArray();
+			$segmentItem = SegmentItem::createFromEntity($segment);
+			$segmentItem->convertTitlePlaceholdersToDisplayFormat();
+
+			$segmentItem = $segmentItem->toArray();
 		}
 		else // @todo new segments cannot be created now
 		{

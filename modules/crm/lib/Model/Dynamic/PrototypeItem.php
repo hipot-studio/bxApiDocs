@@ -319,7 +319,7 @@ abstract class PrototypeItem extends Main\UserField\Internal\PrototypeItemDataMa
 			return $result;
 		}
 
-		/** @var Item|null $item */
+		/** @var ORM\Objectify\EntityObject|null $item */
 		$item = $event->getParameter('object');
 		if (!$item)
 		{
@@ -502,6 +502,13 @@ abstract class PrototypeItem extends Main\UserField\Internal\PrototypeItemDataMa
 		if($isUpdate)
 		{
 			$oldData = static::getByPrimary($id)->fetch();
+			if ($oldData === false)
+			{
+				$result->addError(new Main\ORM\EntityError('Item was not found'));
+				static::$isCheckUserFields = true;
+
+				return $result;
+			}
 			static::getTemporaryStorage()->saveData($id, $oldData);
 			if (
 				static::$isCheckUserFields

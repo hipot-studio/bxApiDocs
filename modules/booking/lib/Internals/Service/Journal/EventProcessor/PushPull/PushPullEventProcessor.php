@@ -34,7 +34,9 @@ class PushPullEventProcessor extends AbstractEventProcessor
 		return match ($type)
 		{
 			JournalType::BookingAdded => PushPullCommandType::BookingAdded,
-			JournalType::BookingUpdated, JournalType::BookingConfirmed => PushPullCommandType::BookingUpdated,
+			JournalType::BookingUpdated,
+			JournalType::BookingConfirmed,
+			JournalType::BookingUnconfirmed => PushPullCommandType::BookingUpdated,
 			JournalType::BookingClientsUpdated => PushPullCommandType::BookingClientUpdated,
 			JournalType::BookingDeleted, JournalType::BookingCanceled => PushPullCommandType::BookingDeleted,
 			JournalType::ResourceAdded => PushPullCommandType::ResourceAdded,

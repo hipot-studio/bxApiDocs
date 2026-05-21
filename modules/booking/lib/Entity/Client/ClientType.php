@@ -51,6 +51,19 @@ class ClientType implements EntityInterface
 		return $this;
 	}
 
+	public function isEqual(self $clientTypeToCompare): bool
+	{
+		$clientToCompareTypeModuleId = $clientTypeToCompare->getModuleId();
+		$clientToCompareTypeCode = $clientTypeToCompare->getCode();
+
+		return (
+			$clientToCompareTypeModuleId !== null
+			&& $clientToCompareTypeCode !== null
+			&& $clientToCompareTypeModuleId === $this->getModuleId()
+			&& $clientToCompareTypeCode === $this->getCode()
+		);
+	}
+
 	public function toArray(): array
 	{
 		return [

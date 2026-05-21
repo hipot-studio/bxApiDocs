@@ -546,7 +546,7 @@ final class StoreStockSale
 		return array_unique($combineColumnElements);
 	}
 
-	protected static function formField(array $storeReservedData, int $storeId = null): array
+	protected static function formField(array $storeReservedData, ?int $storeId = null): array
 	{
 		$storedSum = 0.0;
 		foreach ($storeReservedData as $storePosition)

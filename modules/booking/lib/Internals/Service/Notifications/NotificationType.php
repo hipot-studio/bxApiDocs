@@ -4,26 +4,29 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Service\Notifications;
 
-use Bitrix\Booking\Internals\Service\DictionaryTrait;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/booking/lib/Internals/NotificationType.php');
 
 enum NotificationType: string
 {
-	use DictionaryTrait;
-
 	case Info = 'info';
 	case Confirmation = 'confirmation';
 	case Reminder = 'reminder';
 	case Delayed = 'delayed';
+	case Cancellation = 'cancellation';
 	case Feedback = 'feedback';
 
 	public static function toArray(): array
 	{
+		return self::casesToArray(self::cases());
+	}
+
+	public static function casesToArray(array $notificationTypes): array
+	{
 		$result = [];
 
-		foreach (self::cases() as $case)
+		foreach ($notificationTypes as $case)
 		{
 			$result[$case->name] = [
 				'name' => self::getName($case),

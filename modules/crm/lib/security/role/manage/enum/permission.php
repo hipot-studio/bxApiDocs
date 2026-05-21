@@ -26,6 +26,8 @@ enum Permission: string
 	case ContractorCompany = 'contractorCompany';
 	case CopilotCallAssessment = 'copilotCallAssessment';
 	case RepeatSale = 'repeatSale';
+	case Event = 'event';
+	case AutomatedSolutionEvent = 'automatedSolutionEvent';
 	case AutomatedSolutionConfig = 'automatedSolutionConfig';
 	case AutomatedSolutionList = 'automatedSolutionList';
 	case CrmConfig = 'crmConfig';

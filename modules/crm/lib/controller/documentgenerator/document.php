@@ -22,6 +22,23 @@ use Bitrix\Main\UI\PageNavigation;
 
 class Document extends Base
 {
+	private const ALLOWED_LIST_FIELD = [
+		'id',
+		'title',
+		'number',
+		'templateId',
+		'provider',
+		'value',
+		'fileId',
+		'imageId',
+		'pdfId',
+		'createTime',
+		'updateTime',
+		'createdBy',
+		'updatedBy',
+		// 'values', // text field, dont allow filter and ordering, only select
+	];
+
 	/**
 	 * @return \Bitrix\DocumentGenerator\Controller\Base
 	 */
@@ -96,32 +113,50 @@ class Document extends Base
 
 	/**
 	 * @see \Bitrix\DocumentGenerator\Controller\Document::listAction()
-	 * @param array $select
-	 * @param array|null $order
-	 * @param array|null $filter
-	 * @param PageNavigation|null $pageNavigation
-	 * @return Page
 	 */
-	public function listAction(array $select = ['*'], array $order = null, array $filter = null, PageNavigation $pageNavigation = null)
+	public function listAction(array $select = ['*'], ?array $order = null, ?array $filter = null, PageNavigation $pageNavigation = null)
 	{
-		if(!is_array($filter))
+		$order ??= [];
+		$filter ??= [];
+
+		// backwards compatibility: ORM normalizes order values to upper case. Our validator is stricter.
+		/** @see \Bitrix\Main\ORM\Query\Query::addOrder */
+		$upperOrder = array_map(fn(mixed $value) => is_string($value) ? strtoupper($value) : $value, $order);
+		if (!$this->validateOrder($upperOrder, self::ALLOWED_LIST_FIELD))
 		{
-			$filter = [];
+			return null;
 		}
-		$filter['=template.moduleId'] = static::MODULE_ID;
+
+		if (!$this->validateFilter($filter, [...self::ALLOWED_LIST_FIELD, 'entityTypeId', 'entityId']))
+		{
+			return null;
+		}
+
+		$userPermissions = Container::getInstance()->getUserPermissions();
+
+		$entityTypeId = $filter['entityTypeId'] ?? $filter['=entityTypeId'] ?? null;
+		if ($entityTypeId !== null && !is_numeric($entityTypeId))
+		{
+			$this->addError(new Error("Invalid filter: field 'entityTypeId' should either be not set or have a numeric value", ErrorCode::INVALID_ARG_VALUE));
+
+			return null;
+		}
+
+		$entityTypeId = $entityTypeId === null ? null : (int)$entityTypeId;
 
 		if (
-			(!isset($filter['entityTypeId']) || !is_scalar($filter['entityTypeId']))
-			&& !\CCrmPerms::IsAccessEnabled()
+			$entityTypeId === null
+			&& !$userPermissions->entityType()->canReadSomeItemsInCrm()
 		)
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
 
 			return null;
 		}
+
 		if (
-			(isset($filter['entityTypeId']) && is_scalar($filter['entityTypeId']))
-			&& !Container::getInstance()->getUserPermissions()->entityType()->canReadItems($filter['entityTypeId'])
+			$entityTypeId !== null
+			&& !$userPermissions->entityType()->canReadItems($entityTypeId)
 		)
 		{
 			$this->addError(ErrorCode::getAccessDeniedError());
@@ -129,30 +164,12 @@ class Document extends Base
 			return null;
 		}
 
-		if(is_array($select) && in_array('entityId', $select))
+		$result = $this->proxyAction('listAction', [$this->prepareSelect($select), $order, $this->prepareFilter($filter, $entityTypeId), $pageNavigation]);
+		if (!$result instanceof Page)
 		{
-			$select[] = 'value';
-			unset($select[array_search('entityId', $select)]);
+			return null;
 		}
 
-		$providersMap = DocumentGeneratorManager::getInstance()->getCrmOwnerTypeProvidersMap();
-		if(is_array($filter))
-		{
-			if(isset($filter['entityTypeId']))
-			{
-				$provider = DocumentGeneratorManager::getInstance()->getCrmOwnerTypeProvider((int)$filter['entityTypeId']);
-				$filter['=provider'] = $provider ? mb_strtolower($provider) : $filter['entityTypeId'];
-
-				unset($filter['entityTypeId']);
-			}
-			if(isset($filter['entityId']))
-			{
-				$filter['=value'] = $filter['entityId'];
-				unset($filter['entityId']);
-			}
-		}
-		/** @var Page $result */
-		$result = $this->proxyAction('listAction', [$select, $order, $filter, $pageNavigation]);
 		$documents = $result->getItems();
 		foreach($documents as $key => &$document)
 		{
@@ -161,6 +178,52 @@ class Document extends Base
 		}
 
 		return $result;
+	}
+
+	private function prepareSelect(array $select): array
+	{
+		$select = array_intersect($select, [...self::ALLOWED_LIST_FIELD, '*', 'entityTypeId', 'entityId', 'values']);
+
+		if (in_array('entityTypeId', $select))
+		{
+			$select[] = 'provider';
+
+			$select = array_filter($select, fn($field) => $field !== 'entityTypeId');
+		}
+
+		if (in_array('entityId', $select))
+		{
+			$select[] = 'value';
+
+			$select = array_filter($select, fn($field) => $field !== 'entityId');
+		}
+
+		return $select;
+	}
+
+	private function prepareFilter(array $filter, ?int $entityTypeId): array
+	{
+		$filter['=template.moduleId'] = static::MODULE_ID;
+
+		if ($entityTypeId !== null)
+		{
+			$provider = DocumentGeneratorManager::getInstance()->getCrmOwnerTypeProvider($entityTypeId);
+			$filter['=provider'] = $provider ? mb_strtolower($provider) : $entityTypeId;
+		}
+
+		// filter out '=entityTypeId', '>entityTypeId', etc.
+		$filter = array_filter($filter, fn($key) => !str_ends_with((string)$key, 'entityTypeId'), ARRAY_FILTER_USE_KEY);
+
+		$entityId = $filter['entityId'] ?? $filter['=entityId'] ?? null;
+		if ($entityId !== null)
+		{
+			$filter['=value'] = $entityId;
+		}
+
+		// filter out '=entityId', '>entityId', etc.
+		$filter = array_filter($filter, fn($key) => !str_ends_with((string)$key, 'entityId'), ARRAY_FILTER_USE_KEY);
+
+		return $filter;
 	}
 
 	/**

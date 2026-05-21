@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 Use Bitrix\Main\Localization\Loc;
 use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
@@ -42,5 +43,10 @@ class EmailSentTrigger extends BaseTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::MAIL_SEND->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::CLIENT_COMMUNICATION->value];
 	}
 }

@@ -155,7 +155,7 @@ final class QueueTable extends DataManager
 			,
 			(new EnumField('NEXT_TYPE_ID'))
 				->configureNullable()
-				->configureValues(AIManager::getAllOperationTypes())
+				->configureValues([0, ...AIManager::getAllOperationTypes()])
 			,
 		];
 	}

@@ -250,6 +250,16 @@ class Deal extends ProductsDataProvider implements Filterable
 	}
 
 	/**
+	 * @param null $defaultMyCompanyId
+	 * @return array|int
+	 * @throws \Bitrix\Main\ArgumentException
+	 */
+	public function getMyCompanyId($defaultMyCompanyId = null)
+	{
+		return parent::getMyCompanyId($this->data['MYCOMPANY_ID'] ?? null);
+	}
+
+	/**
 	 * @return string
 	 */
 	protected function getUserFieldEntityID()

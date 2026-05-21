@@ -959,6 +959,11 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 				$this->visibleColumns = array_column($this->visibleColumns, 'id');
 			}
+			$activityBlockColumnIndex = array_search('ACTIVITY_BLOCK', $this->visibleColumns, true);
+			if ($this->isExportMode() && $activityBlockColumnIndex !== false)
+			{
+				unset($this->visibleColumns[$activityBlockColumnIndex]);
+			}
 		}
 
 		return $this->visibleColumns;
@@ -1095,7 +1100,10 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				$itemData = $itemsData[$itemId];
 				$itemColumn = $itemColumns[$itemId];
 
-				$this->appendNearestActivityBlockToItem($item, $itemData, $itemColumn);
+				if (!$this->isExportMode())
+				{
+					$this->appendNearestActivityBlockToItem($item, $itemData, $itemColumn);
+				}
 
 				if (isset($restrictedItemIds[$itemId]))
 				{

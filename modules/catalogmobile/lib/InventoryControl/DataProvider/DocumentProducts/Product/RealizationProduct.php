@@ -358,7 +358,7 @@ final class RealizationProduct extends BaseProduct
 		return $products;
 	}
 
-	private static function getEntityProductsBasketIdFilter(Payment $payment = null): array
+	private static function getEntityProductsBasketIdFilter(?Payment $payment = null): array
 	{
 		if (!$payment)
 		{

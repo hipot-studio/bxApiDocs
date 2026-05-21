@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger\Sign;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
@@ -42,5 +43,10 @@ class OtherMemberSignedTrigger extends InitiatorSignedTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::PERSON_CHECKS->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::DOCUMENT_FLOW->value];
 	}
 }

@@ -31,6 +31,7 @@ use Bitrix\Main\Result;
 final class AiQualityAssessmentTable extends DataManager
 {
 	public const ACTIVITY_TYPE_CALL = 1;
+	public const ACTIVITY_TYPE_CALL_SUSPENDED = 2;
 
 	public static function getTableName(): string
 	{
@@ -119,5 +120,37 @@ final class AiQualityAssessmentTable extends DataManager
 		}
 
 		return new Result();
+	}
+
+	public static function deleteByActivityId(int $activityType, int $activityId): void
+	{
+		$sqlQuery = new SqlExpression(
+			/** @lang text */
+			'DELETE FROM ?# WHERE ACTIVITY_TYPE=?i AND ACTIVITY_ID=?i',
+			self::getTableName(),
+			$activityType,
+			$activityId,
+		);
+
+		Application::getConnection()->query((string)$sqlQuery);
+
+		self::cleanCache();
+	}
+
+	public static function rebind(int $fromType, int $fromActivityId, int $toType, int $toActivityId)
+	{
+		$sqlQuery = new SqlExpression(
+			/** @lang text */
+			'UPDATE ?# SET ACTIVITY_TYPE=?i, ACTIVITY_ID=?i WHERE ACTIVITY_TYPE=?i AND ACTIVITY_ID=?i',
+			self::getTableName(),
+			$toType,
+			$toActivityId,
+			$fromType,
+			$fromActivityId,
+		);
+
+		Application::getConnection()->query((string)$sqlQuery);
+
+		self::cleanCache();
 	}
 }

@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
 use Bitrix\Ui\Public\Enum\IconSet\Outline;
@@ -91,5 +92,10 @@ class CallTrigger extends BaseTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::PHONE_IN->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::CLIENT_COMMUNICATION->value];
 	}
 }

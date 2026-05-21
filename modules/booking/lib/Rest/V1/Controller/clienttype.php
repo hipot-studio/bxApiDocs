@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Rest\V1\Controller;
 
 use Bitrix\Booking\Provider\ClientTypeProvider;
-use Bitrix\Booking\Provider\Params\GridParams;
 use Bitrix\Booking\Rest\V1\Controller;
 use Bitrix\Main\Engine\Response\DataType\Page;
 
@@ -29,7 +28,7 @@ class ClientType extends Controller
 		$clientTypeCollection =
 			$this
 				->clientTypeProvider
-				->getList(new GridParams())
+				->getList()
 		;
 
 		return new Page(

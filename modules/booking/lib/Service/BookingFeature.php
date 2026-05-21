@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Service;
 
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Config\Option;
 
@@ -103,6 +104,20 @@ final class BookingFeature
 		}
 
 		self::setTrialOption();
+		self::sendToolDemoActivatedAnalytics();
+	}
+
+	private static function sendToolDemoActivatedAnalytics(): void
+	{
+		(new AnalyticsEvent(
+			'tool_demo_activated',
+			'booking',
+			'demo',
+		))
+			->setSection('booking')
+			->setElement('auto')
+			->send()
+		;
 	}
 
 	private static function trialFeature(string $featureId): void

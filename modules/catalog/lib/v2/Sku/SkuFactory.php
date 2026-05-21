@@ -26,7 +26,7 @@ class SkuFactory extends BaseIblockElementFactory
 	 * @return \Bitrix\Catalog\v2\Sku\BaseSku
 	 * @throws \Bitrix\Main\NotSupportedException
 	 */
-	public function createEntity(string $entityClass = null): BaseIblockElementEntity
+	public function createEntity(?string $entityClass = null): BaseIblockElementEntity
 	{
 		if ($entityClass === null)
 		{

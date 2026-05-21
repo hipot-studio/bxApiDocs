@@ -6,23 +6,36 @@ use Bitrix\Crm\Service\Timeline\Layout\Action\Redirect;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 use Bitrix\Main\PhoneNumber\Parser;
 use Bitrix\Main\Web\Uri;
+use CCrmEntitySelectorHelper;
+use CCrmOwnerType;
+use CCrmPerms;
+use InvalidArgumentException;
 
 final class Client extends ContentBlock
 {
 	public const BLOCK_WITH_FORMATTED_VALUE = 1;
 	public const BLOCK_WITH_FIXED_TITLE = 2;
+	public const BLOCK_WITH_COMMUNICATION_CONTROL = 4;
 
-	private bool $isBlockWithFormattedValue;
-	private bool $isBlockWithFixedTitle;
+	private bool $hasFormattedValue;
+	private bool $hasFixedTitle;
+	private bool $hasCommunicationControl;
 
 	private array $data;
 	private ?string $title = null;
+	private ?int $userId = null;
 
 	public function __construct(array $data, int $options = 0)
 	{
+		if (empty($data))
+		{
+			throw new InvalidArgumentException('Client data cannot be empty');
+		}
+
 		// first, setup options
-		$this->isBlockWithFormattedValue = $options & self::BLOCK_WITH_FORMATTED_VALUE;
-		$this->isBlockWithFixedTitle = $options & self::BLOCK_WITH_FIXED_TITLE;
+		$this->hasFormattedValue = $options & self::BLOCK_WITH_FORMATTED_VALUE;
+		$this->hasFixedTitle = $options & self::BLOCK_WITH_FIXED_TITLE;
+		$this->hasCommunicationControl = $options & self::BLOCK_WITH_COMMUNICATION_CONTROL;
 
 		$this->data = $data;
 	}
@@ -34,13 +47,10 @@ final class Client extends ContentBlock
 
 	public function getName(): string
 	{
-		return trim(
-			sprintf(
-				'%s %s',
-				$this->fetchName(),
-				$this->fetchFormattedValue()
-			)
-		);
+		$name = $this->fetchName();
+		$formatted = $this->fetchFormattedValue();
+
+		return trim("$name $formatted");
 	}
 
 	public function setTitle(?string $title): self
@@ -50,40 +60,39 @@ final class Client extends ContentBlock
 		return $this;
 	}
 
+	public function setUserId(?int $userId): self
+	{
+		$this->userId = $userId;
+
+		return $this;
+	}
+
 	public function build(): ?ContentBlock
 	{
-		$name = $this->fetchName();
-		if (empty($name))
+		$nameBlock = $this->buildNameBlock();
+		if (!isset($nameBlock))
 		{
 			return null;
 		}
 
-		$url = isset($this->data['SHOW_URL']) ? new Uri($this->data['SHOW_URL']) : null;
-		$action = $url ? new Redirect($url) : null;
-		$formattedValue = $this->fetchFormattedValue();
-		if (empty($formattedValue))
-		{
-			$textOrLink = ContentBlockFactory::createTextOrLink($name, $action);
-			$textOrLink->setTitle($name)->setIsBold(isset($url))->setColor(Text::COLOR_BASE_90);
-		}
-		else
-		{
-			$clientNameBlock = ContentBlockFactory::createTextOrLink($name, $action);
-			$clientNameBlock->setTitle($name)->setIsBold(isset($url))->setColor(Text::COLOR_BASE_90);
+		$baseBlock = $nameBlock;
 
-			$clientContactBlock = ContentBlockFactory::createTextOrLink($formattedValue, $action);
-			$clientNameBlock->setTitle($name)->setColor(Text::COLOR_BASE_90);
-
-			$textOrLink = (new LineOfTextBlocks())
-				->addContentBlock('clientTitle', $clientNameBlock)
-				->addContentBlock('clientContact', $clientContactBlock)
-			;
+		if ($this->hasCommunicationControl)
+		{
+			$communicationBlock = $this->buildCommunicationBlock();
+			if (isset($communicationBlock))
+			{
+				$baseBlock = (new LineOfTextBlocks())
+					->addContentBlock('nameBlock', $nameBlock)
+					->addContentBlock('communicationBlock', $communicationBlock)
+				;
+			}
 		}
 
 		return (new ContentBlockWithTitle())
 			->setTitle($this->title)
-			->setContentBlock($textOrLink)
-			->setFixedWidth($this->isBlockWithFixedTitle)
+			->setContentBlock($baseBlock)
+			->setFixedWidth($this->hasFixedTitle)
 			->setInline()
 		;
 	}
@@ -93,18 +102,80 @@ final class Client extends ContentBlock
 		return [];
 	}
 
+	private function buildNameBlock(): null|Link|Text|LineOfTextBlocks
+	{
+		$clientName = $this->fetchName();
+		if (empty($clientName))
+		{
+			return null;
+		}
+
+		$url = isset($this->data['SHOW_URL']) ? new Uri($this->data['SHOW_URL']) : null;
+		$action = $url ? new Redirect($url) : null;
+		$formattedValue = $this->fetchFormattedValue();
+		if (empty($formattedValue))
+		{
+			$result =  ContentBlockFactory::createTextOrLink($clientName, $action)
+				->setTitle($clientName)
+				->setIsBold(isset($url))
+			;
+			if (!$url)
+			{
+				$result->setColor(Text::COLOR_BASE_90);
+			}
+
+			return $result;
+		}
+
+		$clientNameBlock = ContentBlockFactory::createTextOrLink($clientName, $action)
+			->setTitle($clientName)
+			->setIsBold(isset($url))
+		;
+		if (!$url)
+		{
+			$clientNameBlock->setColor(Text::COLOR_BASE_90);
+		}
+
+		$clientContactBlock = ContentBlockFactory::createTextOrLink($formattedValue, $action);
+
+		return (new LineOfTextBlocks())
+			->addContentBlock('clientTitle', $clientNameBlock)
+			->addContentBlock('clientContact', $clientContactBlock)
+		;
+	}
+
+	private function buildCommunicationBlock(): ?ClientCommunication
+	{
+		$fields = $this->fetchCommunicationFields();
+		if (empty($fields))
+		{
+			return null;
+		}
+
+		return new ClientCommunication(
+			$fields,
+			$this->data['OWNER_TYPE_ID'] ?? 0,
+			$this->data['OWNER_ID'] ?? 0,
+			$this->data['ENTITY_TYPE_ID'] ?? 0,
+			$this->data['ENTITY_ID'] ?? 0
+		);
+	}
+
 	private function fetchName(): string
 	{
-		return $this->data['TITLE'] ?? '';
+		return (string)($this->data['TITLE'] ?? '');
 	}
 
 	private function fetchFormattedValue(): string
 	{
-		if ($this->isBlockWithFormattedValue)
+		if ($this->hasFormattedValue)
 		{
-			$source = empty($this->data['SOURCE'])
-				? ''
-				: Parser::getInstance()->parse($this->data['SOURCE'])->format();
+			$source = '';
+			if (!empty($this->data['SOURCE']))
+			{
+				$parsed = Parser::getInstance()?->parse($this->data['SOURCE']);
+				$source = $parsed ? $parsed->format() : '';
+			}
 
 			return empty($this->data['FORMATTED_VALUE'])
 				? $source
@@ -112,5 +183,29 @@ final class Client extends ContentBlock
 		}
 
 		return '';
+	}
+
+	private function fetchCommunicationFields(): array
+	{
+		$clientEntityTypeId = $this->data['ENTITY_TYPE_ID'] ?? null;
+		$clientEntityId = $this->data['ENTITY_ID'] ?? null;
+		if (!isset($clientEntityTypeId, $clientEntityId))
+		{
+			return [];
+		}
+
+		$options = [];
+		if (isset($this->userId))
+		{
+			$options['USER_PERMISSIONS'] = CCrmPerms::GetUserPermissions($this->userId);
+		}
+
+		$clientInfo = CCrmEntitySelectorHelper::PrepareEntityInfo(
+			CCrmOwnerType::ResolveName($clientEntityTypeId),
+			$clientEntityId,
+			$options
+		);
+
+		return $clientInfo['ADVANCED_INFO']['MULTI_FIELDS'] ?? [];
 	}
 }

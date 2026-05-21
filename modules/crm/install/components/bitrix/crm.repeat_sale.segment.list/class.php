@@ -136,6 +136,7 @@ class CrmRepeatSaleSegmentListComponent extends Base
 			$rule['WIN_DEAL_COUNT'] = $this->getField('WIN_DEAL_COUNT', $segment, $fieldsData);
 			$rule['LOSE_DEAL_COUNT'] = $this->getField('LOSE_DEAL_COUNT', $segment, $fieldsData);
 			$rule['CONVERSION'] = $this->getField('CONVERSION', $segment, $fieldsData);
+			$rule['MINIMUM_DAYS_AFTER_LAST_CLOSED_ENTITY'] = $this->getField('MINIMUM_DAYS_AFTER_LAST_CLOSED_ENTITY', $segment);
 
 			$rows[] = [
 				'id' => $segment['ID'],
@@ -337,6 +338,7 @@ class CrmRepeatSaleSegmentListComponent extends Base
 			'LOSE_DEAL_COUNT' => $this->getLoseDealCountField($segment, $fieldsData),
 			'CONVERSION' => $this->getConversionField($segment, $fieldsData),
 			'MODIFIED' => $this->getModifiedField($segment, $fieldsData),
+			'MINIMUM_DAYS_AFTER_LAST_CLOSED_ENTITY' => $this->getMinimumDaysAfterLastClosedEntity($segment),
 			default => '',
 		};
 
@@ -536,6 +538,11 @@ HTML;
 		return '<div class="' . $classPrefix . '">' . $date . $user . '</div>';
 	}
 
+	private function getMinimumDaysAfterLastClosedEntity(RepeatSaleSegment $segment): int
+	{
+		return (int)$segment->getMinimumDaysAfterLastClosedEntity();
+	}
+
 	private function formatDateTime(DateTime $dateTime): string
 	{
 		$dateTime = $dateTime->toUserTime();
@@ -655,6 +662,12 @@ HTML;
 			'default' => true,
 			'name' => Loc::getMessage('CRM_REPEAT_SALE_SEGMENT_LIST_COLUMN_MODIFIED_BY'),
 			'sort' => 'UPDATED_AT',
+		];
+		$columns[] = [
+			'id' => 'MINIMUM_DAYS_AFTER_LAST_CLOSED_ENTITY',
+			'name' => Loc::getMessage('CRM_REPEAT_SALE_SEGMENT_LIST_COLUMN_MINIMUM_DAYS_AFTER_LAST_CLOSED_ENTITY'),
+			'hint' => Loc::getMessage('CRM_REPEAT_SALE_SEGMENT_LIST_COLUMN_MINIMUM_DAYS_AFTER_LAST_CLOSED_ENTITY_HINT'),
+			'sort' => 'MINIMUM_DAYS_AFTER_LAST_CLOSED_ENTITY',
 		];
 
 		return $columns;

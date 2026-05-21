@@ -60,7 +60,7 @@ abstract class AbstractOperation
 	public function __construct(
 		protected ItemIdentifier $target,
 		protected ?int $userId = null,
-		private ?int $parentJobId = null,
+		private readonly ?int $parentJobId = null,
 	)
 	{
 		$this->userId ??= Container::getInstance()->getContext()->getUserId();
@@ -550,8 +550,6 @@ abstract class AbstractOperation
 
 	abstract protected function getAIPayload(): \Bitrix\Main\Result;
 
-	abstract protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void;
-
 	protected function getJobUpdateFields(): array
 	{
 		return [
@@ -864,14 +862,6 @@ abstract class AbstractOperation
 	{
 	}
 
-	abstract protected static function notifyTimelineAfterSuccessfulJobFinish(Result $result): void;
-
-	abstract protected static function notifyAboutJobError(
-		Result $result,
-		bool $withSyncBadges = true,
-		bool $withSendAnalytics = true
-	): void;
-
 	protected static function notifyAboutLimitExceededError(Result $result): void
 	{
 		$activityId = $result->getTarget()?->getEntityId();
@@ -1073,8 +1063,6 @@ abstract class AbstractOperation
 		return $payload;
 	}
 
-	abstract protected static function extractPayloadFromAIResult(\Bitrix\AI\Result $result, EO_Queue $job): Dto;
-
 	protected static function logOperationProgress(string $operation, ItemIdentifier $target, string $hash, ?int $parentJobId): void
 	{
 		if (Loader::includeModule('bitrix24'))
@@ -1247,5 +1235,10 @@ abstract class AbstractOperation
 	{
 	}
 
+	// @todo: refactor
+	abstract protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void;
+	abstract protected static function notifyTimelineAfterSuccessfulJobFinish(Result $result): void;
+	abstract protected static function notifyAboutJobError(Result $result, bool $withSyncBadges = true, bool $withSendAnalytics = true): void;
+	abstract protected static function extractPayloadFromAIResult(\Bitrix\AI\Result $result, EO_Queue $job): Dto;
 	abstract protected static function getJobFinishEventBuilder(): AIBaseEvent;
 }

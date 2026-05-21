@@ -161,7 +161,7 @@ class PermissionDictionary extends Permission\PermissionDictionary
 		return static::VALUE_YES;
 	}
 
-	public static function getStoreDocumentPermissionRules(array $permissions, array $documents = null): array
+	public static function getStoreDocumentPermissionRules(array $permissions, ?array $documents = null): array
 	{
 		$result = [];
 

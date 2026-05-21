@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Ui\Public\Enum\IconSet\Outline;
@@ -41,5 +42,10 @@ class ResponsibleChangedTrigger extends BaseTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::PERSON->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::SALES_CRM->value];
 	}
 }

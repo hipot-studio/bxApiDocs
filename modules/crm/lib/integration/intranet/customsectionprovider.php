@@ -6,6 +6,7 @@ use Bitrix\Crm\Counter\EntityCounterFactory;
 use Bitrix\Crm\Integration\Analytics\Builder\Security\ViewEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\Intranet\SystemPageProvider\ActivityPage;
+use Bitrix\Crm\Integration\Intranet\SystemPageProvider\EventsPage;
 use Bitrix\Crm\Integration\Intranet\SystemPageProvider\PermissionsPage;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Service\Container;
@@ -37,6 +38,7 @@ class CustomSectionProvider extends Provider
 		return [
 			ActivityPage::CODE => ActivityPage::class,
 			PermissionsPage::CODE => PermissionsPage::class,
+			EventsPage::CODE => EventsPage::class,
 		];
 	}
 

@@ -15,6 +15,8 @@ final class Scenario
 	public const EXTRACT_SCORING_CRITERIA_SCENARIO = 'extract_scoring_criteria';
 	public const REPEAT_SALE_TIPS_SCENARIO = 'repeat_sale_tips';
 	public const REPEAT_SALE_SCREENING_SCENARIO = 'repeat_sale_screening';
+	public const CONFIRM_FIELDS_SCENARIO = 'confirm_fields';
+	public const TRANSCRIBE_RECORD_SCENARIO = 'transcribe_record';
 
 	public const FULL_OFF_SLIDER_CODE = 'limit_copilot_off';
 	public const FILL_FIELDS_SCENARIO_OFF_SLIDER_CODE = 'limit_v2_crm_copilot_fill_item_from_call_off';
@@ -37,6 +39,8 @@ final class Scenario
 			self::EXTRACT_SCORING_CRITERIA_SCENARIO,
 			self::REPEAT_SALE_TIPS_SCENARIO,
 			self::REPEAT_SALE_SCREENING_SCENARIO,
+			self::CONFIRM_FIELDS_SCENARIO,
+			self::TRANSCRIBE_RECORD_SCENARIO,
 		];
 
 		return in_array($scenario, $scenarioList, true);
@@ -64,6 +68,7 @@ final class Scenario
 			self::CALL_SCORING_SCENARIO, self::EXTRACT_SCORING_CRITERIA_SCENARIO => $isScoreCallEnabled,
 			self::FULL_SCENARIO => $isFillFieldsEnabled || $isScoreCallEnabled,
 			self::REPEAT_SALE_TIPS_SCENARIO, self::REPEAT_SALE_SCREENING_SCENARIO => $isRepeatSaleEnabled,
+			self::TRANSCRIBE_RECORD_SCENARIO, self::CONFIRM_FIELDS_SCENARIO => true, // transcription is always enabled if the scenario is supported, there is no separate global setting for it
 			default => false,
 		};
 	}
@@ -102,6 +107,11 @@ final class Scenario
 		if ($scenario === self::CALL_SCORING_SCENARIO)
 		{
 			return ScoreCall::TYPE_ID;
+		}
+
+		if ($scenario === self::TRANSCRIBE_RECORD_SCENARIO)
+		{
+			return 0; // there is no next operation, this scenario is only for transcription without further processing
 		}
 
 		return null; // FULL_SCENARIO

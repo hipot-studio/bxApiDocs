@@ -17,13 +17,13 @@ class MainPageGetResponse implements \JsonSerializable
 		public readonly ResourceTypeCollection $resourceTypeCollection,
 		public readonly string|null $providerModuleId,
 		public readonly array $clientsDataRecent,
-		public readonly bool $isCurrentSenderAvailable,
 		public readonly WaitListItemCollection $waitListItemCollection,
 		public readonly bool $isIntersectionForAll,
 		public readonly array $counters,
 		//@todo deprecated and should be removed
 		public readonly array $formsMenu,
 		public readonly array $catalogSkuEntityOptions,
+		public readonly array $senders,
 		public readonly bool $shouldShowWhatsAppEmergency = false,
 	)
 	{
@@ -42,10 +42,10 @@ class MainPageGetResponse implements \JsonSerializable
 			'counters' => $this->counters,
 			'waitListItems' => $this->waitListItemCollection->toArray(),
 			'isIntersectionForAll' => $this->isIntersectionForAll,
-			'isCurrentSenderAvailable' => $this->isCurrentSenderAvailable,
 			//@todo deprecated and should be removed
 			'formsMenu' => $this->formsMenu,
 			'catalogSkuEntityOptions' => $this->catalogSkuEntityOptions,
+			'senders' => $this->senders,
 			'shouldShowWhatsAppEmergency' => $this->shouldShowWhatsAppEmergency,
 		];
 	}

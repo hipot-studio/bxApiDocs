@@ -2,11 +2,12 @@
 
 namespace Bitrix\Crm\Controller\DocumentGenerator;
 
+use Bitrix\Crm\Controller\Validator;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\DocumentGenerator\Model\FileTable;
 use Bitrix\Main\Engine\Controller;
-use Bitrix\Main\EventResult;
 use Bitrix\Main\Error;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\Result;
 
 abstract class Base extends Controller
@@ -172,5 +173,27 @@ abstract class Base extends Controller
 			$this->errorCollection->add($saveResult->getErrors());
 			return false;
 		}
+	}
+
+	final protected function validateOrder(array $order, array $allowedFields): bool
+	{
+		$result = (new Validator\Order($allowedFields))->validate($order);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+		}
+
+		return $result->isSuccess();
+	}
+
+	final protected function validateFilter(array $filter, array $allowedFields): bool
+	{
+		$result = (new Validator\Filter($allowedFields))->validate($filter);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+		}
+
+		return $result->isSuccess();
 	}
 }

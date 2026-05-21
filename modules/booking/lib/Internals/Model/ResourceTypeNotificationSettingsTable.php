@@ -61,6 +61,13 @@ final class ResourceTypeNotificationSettingsTable extends DataManager
 			(new IntegerField('INFO_DELAY'))
 				->configureRequired(),
 
+			(new BooleanField('IS_CANCELLATION_ON'))
+				->configureValues('N', 'Y')
+				->configureRequired(),
+
+			(new IntegerField('CANCELLATION_DELAY'))
+				->configureRequired(),
+
 			(new BooleanField('IS_CONFIRMATION_ON'))
 				->configureValues('N', 'Y')
 				->configureRequired(),

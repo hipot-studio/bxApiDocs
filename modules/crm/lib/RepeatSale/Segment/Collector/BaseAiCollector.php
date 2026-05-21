@@ -26,7 +26,15 @@ abstract class BaseAiCollector extends BaseCollector
 		}
 
 		$filteredItemIds = $this->getFilteredItemIds($items, $filter);
-		$filteredItems = $this->getItemsByIds($filteredItemIds, $entityTypeId);
+
+//		// @todo need filter inside getFilteredItemIds for best performance
+		$ids = $this->filterItemsWithRecentlyClosedEntities(
+			$filteredItemIds,
+			$entityTypeId,
+			$minimumDaysAfterLastClosedEntity,
+		);
+
+		$filteredItems = $this->getItemsByIds($ids, $entityTypeId);
 
 		return new SegmentData(
 			$filteredItems,
@@ -35,6 +43,10 @@ abstract class BaseAiCollector extends BaseCollector
 		);
 	}
 
-	abstract protected function getItems(int $entityTypeId, array $filter): array;
+	abstract protected function getItems(
+		int $entityTypeId,
+		array $filter,
+	): array;
+
 	abstract protected function getFilteredItemIds(array $items, array $filter): array;
 }

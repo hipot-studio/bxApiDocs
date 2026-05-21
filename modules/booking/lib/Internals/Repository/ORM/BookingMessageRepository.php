@@ -9,10 +9,16 @@ use Bitrix\Booking\Internals\Service\Notifications\Entity\BookingMessage;
 use Bitrix\Booking\Internals\Service\Notifications\Entity\BookingMessageCollection;
 use Bitrix\Booking\Internals\Model\BookingMessageTable;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
-use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
+use Bitrix\Booking\Internals\Repository\ORM\Mapper\BookingMessageMapper;
 
 class BookingMessageRepository implements BookingMessageRepositoryInterface
 {
+	public function __construct(
+		private readonly BookingMessageMapper $mapper,
+	)
+	{
+	}
+
 	public function save(BookingMessage $bookingMessage): int
 	{
 		$result = BookingMessageTable::add([
@@ -32,104 +38,70 @@ class BookingMessageRepository implements BookingMessageRepositoryInterface
 		return $bookingMessage->getId();
 	}
 
-	public function getLastByBookingId(int $bookingId): BookingMessage|null
+	public function getById(int $id): BookingMessage|null
 	{
-		$row = BookingMessageTable::query()
-			->setSelect($this->getDefaultSelect())
-			->where('BOOKING_ID', '=', $bookingId)
-			->setOrder(['CREATED_AT' => 'DESC'])
-			->setLimit(1)
-			->exec()
-			->fetch()
-		;
-
-		if (!$row)
+		$ormBookingMessage = BookingMessageTable::getByPrimary($id)->fetchObject();
+		if (!$ormBookingMessage)
 		{
 			return null;
 		}
 
-		return $this->createEntityFromOrmRow($row);
+		return $this->mapper->convertFromOrm($ormBookingMessage);
+	}
+
+	public function getLastByBookingId(int $bookingId): BookingMessage|null
+	{
+		$ormBookingMessage = BookingMessageTable::query()
+			->setSelect(['*'])
+			->where('BOOKING_ID', '=', $bookingId)
+			->setOrder(['CREATED_AT' => 'DESC'])
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		if (!$ormBookingMessage)
+		{
+			return null;
+		}
+
+		return $this->mapper->convertFromOrm($ormBookingMessage);
 	}
 
 	public function getByExternalId(string $senderCode, string $externalId): BookingMessage|null
 	{
-		$bookingMessage = BookingMessageTable::query()
-			->setSelect($this->getDefaultSelect())
+		$ormBookingMessage = BookingMessageTable::query()
+			->setSelect(['*'])
 			->setLimit(1)
 			->where('SENDER_CODE', '=', $senderCode)
 			->where('EXTERNAL_MESSAGE_ID', '=', $externalId)
-			->exec()
-			->fetch();
+			->fetchObject()
 		;
-		if (!$bookingMessage)
+
+		if (!$ormBookingMessage)
 		{
 			return null;
 		}
 
-		return $this->createEntityFromOrmRow($bookingMessage);
+		return $this->mapper->convertFromOrm($ormBookingMessage);
 	}
 
 	public function getByBookingIds(array $bookingIds): BookingMessageCollection
 	{
 		$result = new BookingMessageCollection();
 
-		$bookingMessages = BookingMessageTable::query()
-			->setSelect($this->getDefaultSelect())
+		$ormBookingMessages = BookingMessageTable::query()
+			->setSelect(['*'])
 			->whereIn('BOOKING_ID', $bookingIds)
-			->exec()
-			->fetchAll();
+			->fetchCollection()
 		;
 
-		foreach ($bookingMessages as $bookingMessage)
+		foreach ($ormBookingMessages as $ormBookingMessage)
 		{
 			$result->add(
-				$this->createEntityFromOrmRow($bookingMessage)
+				$this->mapper->convertFromOrm($ormBookingMessage)
 			);
 		}
 
 		return $result;
-	}
-
-	private function createEntityFromOrmRow(array $row): BookingMessage
-	{
-		$entity = new BookingMessage();
-
-		if (isset($row['ID']))
-		{
-			$entity->setId((int)$row['ID']);
-		}
-
-		if (isset($row['BOOKING_ID']))
-		{
-			$entity->setBookingId((int)$row['BOOKING_ID']);
-		}
-
-		if (isset($row['NOTIFICATION_TYPE']))
-		{
-			$entity->setNotificationType(NotificationType::tryFrom($row['NOTIFICATION_TYPE']));
-		}
-
-		if (isset($row['SENDER_CODE']))
-		{
-			$entity->setSenderCode($row['SENDER_CODE']);
-		}
-
-		if (isset($row['EXTERNAL_MESSAGE_ID']))
-		{
-			$entity->setExternalMessageId((string)$row['EXTERNAL_MESSAGE_ID']);
-		}
-
-		return $entity;
-	}
-
-	private function getDefaultSelect(): array
-	{
-		return [
-			'ID',
-			'BOOKING_ID',
-			'NOTIFICATION_TYPE',
-			'SENDER_CODE',
-			'EXTERNAL_MESSAGE_ID',
-		];
 	}
 }

@@ -28,7 +28,7 @@ class MoveStoreBatchAction extends UpsertStoreBatchAction
 		int $storeToId,
 		int $productId,
 		float $amount,
-		int $documentElementId = null,
+		?int $documentElementId = null,
 	)
 	{
 		$this->storeFromId = $storeFromId;

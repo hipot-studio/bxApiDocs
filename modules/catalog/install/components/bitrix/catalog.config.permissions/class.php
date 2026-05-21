@@ -101,7 +101,7 @@ class CatalogConfigPermissionsComponent extends CBitrixComponent
 	 *
 	 * @return void
 	 */
-	protected function includeErrorComponent(string $errorMessage, string $description = null): void
+	protected function includeErrorComponent(string $errorMessage, ?string $description = null): void
 	{
 		global $APPLICATION;
 

@@ -196,13 +196,15 @@ final class ScreeningRepeatSaleItem extends AbstractOperation
 		$screeningItem->setCategory($payload->category);
 		$screeningItem->save();
 
-		$waitingItemsCount = RepeatSaleAiScreeningTable::query()
-			->where('DESIRED_CREATION_DATE', new Main\Type\Date())
+		$waitingItem = RepeatSaleAiScreeningTable::query()
+			->setSelect(['ID'])
+			->where('DESIRED_CREATION_DATE', new \Bitrix\Main\Type\Date())
 			->whereNull('AI_OPINION')
-			->queryCountTotal()
+			->setLimit(1)
+			->fetch()
 		;
 
-		if ((int)$waitingItemsCount === 0)
+		if (!is_array($waitingItem))
 		{
 			Scheduler::getInstance()->addChildrenJobsToQueueIfNotExists($segmentId);
 		}

@@ -16,6 +16,26 @@ use Bitrix\Main\Web\Uri;
 
 class Template extends Base
 {
+	private const ALLOWED_LIST_FIELD = [
+		'id',
+		'name',
+		'region',
+		'code',
+		'active',
+		'moduleId',
+		'numeratorId',
+		'withStamps',
+		'isDeleted',
+		'isDefault',
+		'sort',
+		'createdBy',
+		'updatedBy',
+		'createTime',
+		'updateTime',
+		'bodyType',
+		'productsTableVariant',
+	];
+
 	/**
 	 * @param int $templateId
 	 * @return Uri
@@ -86,62 +106,84 @@ class Template extends Base
 
 	/**
 	 * @see \Bitrix\DocumentGenerator\Controller\Template::listAction()
-	 * @param array $select
-	 * @param array|null $order
-	 * @param array|null $filter
-	 * @param PageNavigation|null $pageNavigation
-	 * @return Page
 	 */
-	public function listAction(array $select = ['*'], array $filter = null, array $order = null, PageNavigation $pageNavigation = null)
+	public function listAction(array $select = ['*'], ?array $filter = null, ?array $order = null, PageNavigation $pageNavigation = null)
 	{
-		if(!is_array($filter))
-		{
-			$filter = [];
-		}
-		$filter['=moduleId'] = static::MODULE_ID;
+		$filter ??= [];
+		$order ??= [];
 
-		if(in_array('entityTypeId', $select))
+		if (!$this->validateFilter($filter, [...self::ALLOWED_LIST_FIELD, 'entityTypeId']))
+		{
+			return null;
+		}
+
+		// backwards compatibility: ORM normalizes order values to upper case. Our validator is stricter.
+		/** @see \Bitrix\Main\ORM\Query\Query::addOrder */
+		$upperOrder = array_map(fn(mixed $value) => is_string($value) ? strtoupper($value) : $value, $order);
+		if (!$this->validateOrder($upperOrder, self::ALLOWED_LIST_FIELD))
+		{
+			return null;
+		}
+
+		$select = array_intersect($select, [...self::ALLOWED_LIST_FIELD, '*', 'entityTypeId', 'users', 'providers']);
+
+		if (in_array('entityTypeId', $select))
 		{
 			$select[] = 'providers';
-			unset($select[array_search('entityTypeId', $select)]);
+			$select = array_filter($select, fn($value) => $value !== 'entityTypeId');
 		}
 
-		$providersMap = DocumentGeneratorManager::getInstance()->getCrmOwnerTypeProvidersMap();
-		if(is_array($filter) && isset($filter['entityTypeId']))
+		$result = $this->proxyAction('listAction', [$select, $order, $this->prepareFilter($filter), $pageNavigation]);
+		if (!$result instanceof Page)
 		{
-			$filterMap = array_map(function($item)
-			{
-				return mb_strtolower($item);
-			}, $providersMap);
-			$typeIds = (array)$filter['entityTypeId'];
-			$providers = [];
-			foreach ($typeIds as $typeId)
-			{
-				if (is_numeric($typeId))
-				{
-					$providers[] = $filterMap[$typeId];
-				}
-				else
-				{
-					[$entityTypeId, ] = explode('_', (string)$typeId);
-					if ($entityTypeId > 0)
-					{
-						$providers[] = $filterMap[$entityTypeId]. mb_substr((string)$typeId, mb_strlen($entityTypeId));
-					}
-				}
-			}
-			$filter['=provider.provider'] = $providers;
-			unset($filter['entityTypeId']);
+			return null;
 		}
-		/** @var Page $result */
-		$result = $this->proxyAction('listAction', [$select, $order, $filter, $pageNavigation]);
+
 		$templates = $result->getItems();
 		foreach($templates as $key => &$template)
 		{
 			$template = $this->prepareTemplateData($template);
 			$result->offsetSet($key, $template);
 		}
+
 		return $result;
+	}
+
+	private function prepareFilter(array $filter): array
+	{
+		$filter['=moduleId'] = static::MODULE_ID;
+
+		$entityTypeId = $filter['entityTypeId'] ?? $filter['=entityTypeId'] ?? null;
+		if ($entityTypeId !== null)
+		{
+			$providersMap = DocumentGeneratorManager::getInstance()->getCrmOwnerTypeProvidersMap();
+			$filterMap = array_map(mb_strtolower(...), $providersMap);
+
+			$typeIds = (array)$entityTypeId;
+
+			$providers = [];
+			foreach ($typeIds as $typeId)
+			{
+				if (is_numeric($typeId) && isset($filterMap[$typeId]))
+				{
+					$providers[] = $filterMap[$typeId];
+				}
+				else
+				{
+					[$innerEntityTypeId, ] = explode('_', (string)$typeId);
+					if ($innerEntityTypeId > 0 && isset($filterMap[$innerEntityTypeId]))
+					{
+						$providers[] = $filterMap[$innerEntityTypeId]. mb_substr((string)$typeId, mb_strlen($innerEntityTypeId));
+					}
+				}
+			}
+
+			$filter['=provider.provider'] = $providers;
+		}
+
+		$filter = array_filter($filter, fn($key) => !str_ends_with((string)$key, 'entityTypeId'), ARRAY_FILTER_USE_KEY);
+
+		return $filter;
 	}
 
 	/**

@@ -69,6 +69,7 @@ class DealController extends BaseController
 			'ADDITIONAL_INFO',
 			'MOVED_BY_ID',
 			'MOVED_TIME',
+			'MYCOMPANY_ID',
 		];
 	}
 

@@ -113,6 +113,10 @@ final class BookingTable extends DataManager
 				->configureDefaultValue(BookingSource::Internal->value)
 				->addValidator(new LengthValidator(1, 20)),
 
+			(new StringField('DELETION_SCENARIO'))
+				->addValidator(new LengthValidator(1, 20))
+				->configureNullable(),
+
 			(new IntegerField('CREATED_BY'))
 				->configureRequired(),
 
@@ -121,6 +125,9 @@ final class BookingTable extends DataManager
 
 			(new DatetimeField('UPDATED_AT'))
 				->configureDefaultValue(new DateTime()),
+
+			(new DatetimeField('DELETED_AT'))
+				->configureDefaultValue(null),
 		];
 	}
 

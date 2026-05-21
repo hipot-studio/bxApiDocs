@@ -257,7 +257,7 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 		$result['CAN_CREATE_CONTACT'] = CCrmContact::CheckCreatePermission($userPermissions);
 		$result['CAN_CREATE_LEAD'] = CCrmLead::CheckCreatePermission($userPermissions);
 		$result['CAN_CREATE_DEAL'] = CCrmDeal::CheckCreatePermission($userPermissions);
-		$result['CAN_CREATE_INVOICE'] = CCrmInvoice::CheckCreatePermission($userPermissions);
+		$result['CAN_CREATE_INVOICE'] = CCrmInvoice::CheckCreatePermission($userPermissions) && Crm\Settings\InvoiceSettings::getCurrent()->isOldInvoicesEnabled();
 		$result['DEAL'] = '';
 		if(isset($this->arParams['ENTITY_TYPE']) && isset($this->arParams['ENTITY_ID']))
 		{

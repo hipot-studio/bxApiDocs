@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Repository\ORM\Mapper;
 
 use Bitrix\Booking\Entity\Booking\Booking;
+use Bitrix\Booking\Entity\Booking\BookingDeletionScenario;
 use Bitrix\Booking\Entity\Booking\BookingPayment;
 use Bitrix\Booking\Entity\Booking\BookingSkuCollection;
 use Bitrix\Booking\Entity\Booking\BookingSource;
@@ -69,6 +70,7 @@ class BookingMapper
 			)
 			->setVisitStatus(BookingVisitStatus::from($ormBooking->getVisitStatus()))
 			->setSource(BookingSource::from($ormBooking->getSource()))
+			->setDeletionScenario(BookingDeletionScenario::tryFrom((string)$ormBooking->getDeletionScenario()))
 			->setCreatedBy($ormBooking->getCreatedBy())
 			->setCreatedAt($ormBooking->getCreatedAt()->getTimestamp())
 			->setUpdatedAt($ormBooking->getUpdatedAt()->getTimestamp())
@@ -122,6 +124,11 @@ class BookingMapper
 			->setParentId($booking->getParent()?->getId())
 			->setUpdatedAt(new DateTime())
 		;
+
+		if ($booking->getDeletionScenario() !== null)
+		{
+			$result->setDeletionScenario($booking->getDeletionScenario()->value);
+		}
 
 		$rrule = $booking->getRrule();
 		$isRecurring = (bool)$rrule;

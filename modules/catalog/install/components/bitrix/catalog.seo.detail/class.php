@@ -437,7 +437,7 @@ class CatalogSeoDetail extends \CBitrixComponent implements Controllerable, Erro
 	 * @param string|null $description
 	 * @return void
 	 */
-	protected function includeErrorComponent(string $errorMessage, string $description = null): void
+	protected function includeErrorComponent(string $errorMessage, ?string $description = null): void
 	{
 		global $APPLICATION;
 		$APPLICATION->IncludeComponent(
@@ -473,7 +473,7 @@ class CatalogSeoDetail extends \CBitrixComponent implements Controllerable, Erro
 	 * @param array|null $externalTemplates
 	 * @return array
 	 */
-	protected function getValues(array $externalTemplates = null): array
+	protected function getValues(?array $externalTemplates = null): array
 	{
 		$iblockTemplates = $this->getIblockTemplates();
 		$values = $iblockTemplates->getValuesEntity();

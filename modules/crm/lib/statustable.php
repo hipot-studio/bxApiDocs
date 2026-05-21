@@ -11,7 +11,6 @@ use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Security\StagePermissions;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
-use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Event;
@@ -37,7 +36,7 @@ Loc::loadMessages(__FILE__);
  * @method static \Bitrix\Crm\EO_Status wakeUpObject($row)
  * @method static \Bitrix\Crm\EO_Status_Collection wakeUpCollection($rows)
  */
-class StatusTable extends Entity\DataManager
+class StatusTable extends ORM\Data\DataManager
 {
 	public const ENTITY_ID_SOURCE = 'SOURCE';
 	public const ENTITY_ID_HONORIFIC = 'HONORIFIC';
@@ -432,6 +431,10 @@ class StatusTable extends Entity\DataManager
 		$result = new EventResult();
 
 		$data = static::getTemporaryStorage()->getData($event->getParameter('id'));
+		if ($data === null)
+		{
+			return $result;
+		}
 
 		$entityId = $data['ENTITY_ID'];
 		$entity = \CCrmStatus::GetEntityTypes()[$entityId] ?? null;

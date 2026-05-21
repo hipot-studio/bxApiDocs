@@ -161,12 +161,20 @@ final class Executor
 		try
 		{
 			$limit = $this->getLimit($item->isOnlyCalc());
+			$minimumDaysAfterLastClosedEntity =
+				RepeatSaleSegmentController::getInstance()
+					->getById($segmentId)
+					?->getMinimumDaysAfterLastClosedEntity()
+					?? 0
+			;
+
 			$result = $handler
 				->setEntityTypeId($item->getLastEntityTypeId() ?? current($handler->getAvailableEntityTypeIds()))
 				->setLastEntityId($item->getLastItemId())
 				->setLastAssignmentId($item->getLastAssignmentId())
 				->setLimit($limit)
 				->setIsOnlyCalc($item->isOnlyCalc())
+				->setMinimumDaysAfterLastClosedEntity($minimumDaysAfterLastClosedEntity)
 				->execute()
 			;
 

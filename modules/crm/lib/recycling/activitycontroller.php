@@ -3,6 +3,7 @@ namespace Bitrix\Crm\Recycling;
 
 use Bitrix\Crm;
 use Bitrix\Crm\Badge\Badge;
+use Bitrix\Crm\Copilot\AiQualityAssessment\Entity\AiQualityAssessmentTable;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\Timeline\Entity\NoteTable;
@@ -248,6 +249,7 @@ class ActivityController extends BaseController
 			new Crm\ItemIdentifier($this->getEntityTypeID(), $entityID),
 			new Crm\ItemIdentifier($this->getSuspendedEntityTypeID(), $recyclingEntityID),
 		);
+		$this->suspendAiQualityAssessment((int)$entityID, (int)$recyclingEntityID);
 
 		\CCrmActivity::DoDeleteElementIDs($entityID);
 
@@ -469,6 +471,7 @@ class ActivityController extends BaseController
 			new Crm\ItemIdentifier($this->getEntityTypeID(), $newEntityID),
 			new Crm\ItemIdentifier($this->getSuspendedEntityTypeID(), $recyclingEntityID),
 		);
+		$this->recoverAiQualityAssessment($recyclingEntityID, $newEntityID);
 
 		//region Relations
 		Relation::unregisterRecycleBin($recyclingEntityID);
@@ -507,6 +510,7 @@ class ActivityController extends BaseController
 		\Bitrix\Crm\Integration\AI\EventHandler::onItemDelete(
 			new Crm\ItemIdentifier($this->getSuspendedEntityTypeID(), $recyclingEntityID),
 		);
+		$this->eraseSuspendedAiQualityAssessment($recyclingEntityID);
 
 		//region Files
 		$files = isset($params['FILES']) ? $params['FILES'] : null;
@@ -730,6 +734,31 @@ class ActivityController extends BaseController
 		(new RestAppLayoutBlocksRepository())
 			->deleteByItem($recyclingEntityId, RestAppLayoutBlocksTable::SUSPENDED_ACTIVITY_TYPE)
 		;
+	}
+
+	protected function suspendAiQualityAssessment(int $entityId, int $recyclingEntityId): void
+	{
+		AiQualityAssessmentTable::rebind(
+			AiQualityAssessmentTable::ACTIVITY_TYPE_CALL,
+			$entityId,
+			AiQualityAssessmentTable::ACTIVITY_TYPE_CALL_SUSPENDED,
+			$recyclingEntityId,
+		);
+	}
+
+	protected function recoverAiQualityAssessment(int $recyclingEntityId, int $newEntityId): void
+	{
+		AiQualityAssessmentTable::rebind(
+			AiQualityAssessmentTable::ACTIVITY_TYPE_CALL_SUSPENDED,
+			$recyclingEntityId,
+			AiQualityAssessmentTable::ACTIVITY_TYPE_CALL,
+			$newEntityId,
+		);
+	}
+
+	protected function eraseSuspendedAiQualityAssessment(int $recyclingEntityId): void
+	{
+		AiQualityAssessmentTable::deleteByActivityId(AiQualityAssessmentTable::ACTIVITY_TYPE_CALL_SUSPENDED, $recyclingEntityId);
 	}
 
 	protected function notifyTimelineMonitorAboutMoveToBin(array $bindings): void

@@ -85,9 +85,4 @@ class QuoteSettings
 	{
 		Container::getInstance()->getRouter()->setDefaultListView(\CCrmOwnerType::Quote, $viewID);
 	}
-
-	public function isFactoryEnabled(): bool
-	{
-		return true;
-	}
 }

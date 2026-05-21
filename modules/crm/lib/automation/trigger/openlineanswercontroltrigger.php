@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Crm\Integration;
@@ -164,5 +165,10 @@ class OpenLineAnswerControlTrigger extends OpenLineTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::CLOCK->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::CLIENT_COMMUNICATION->value, ActivityGroup::TEAM_MANAGEMENT->value];
 	}
 }

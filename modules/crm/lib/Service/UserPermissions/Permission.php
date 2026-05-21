@@ -4,10 +4,12 @@ namespace Bitrix\Crm\Service\UserPermissions;
 
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionConfig;
+use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionEvent;
 use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionList;
 use Bitrix\Crm\Security\Role\Manage\Entity\Button;
 use Bitrix\Crm\Security\Role\Manage\Entity\ButtonConfig;
 use Bitrix\Crm\Security\Role\Manage\Entity\ContractorConfig;
+use Bitrix\Crm\Security\Role\Manage\Entity\Event;
 use Bitrix\Crm\Security\Role\Manage\Entity\WebForm as WebFormEntity;
 use Bitrix\Crm\Security\Role\Manage\Entity\WebFormConfig;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\PermIdentifier;
@@ -43,6 +45,8 @@ final class Permission
 
 			ContractorConfig::CODE => $this->inventoryManagementContractor->canWriteConfig(),
 
+			Event::ENTITY_CODE => $this->admin->isCrmAdmin(),
+
 			default => null,
 		};
 
@@ -54,6 +58,17 @@ final class Permission
 		if (str_starts_with($permission->entityCode, AutomatedSolutionConfig::ENTITY_CODE_PREFIX))
 		{
 			$automatedSolutionId = AutomatedSolutionConfig::decodeAutomatedSolutionId($permission->entityCode);
+			if ($automatedSolutionId === null)
+			{
+				return false;
+			}
+
+			return $this->automatedSolution->isAutomatedSolutionAdmin($automatedSolutionId);
+		}
+
+		if (str_starts_with($permission->entityCode, AutomatedSolutionEvent::ENTITY_CODE_PREFIX))
+		{
+			$automatedSolutionId = AutomatedSolutionEvent::decodeAutomatedSolutionId($permission->entityCode);
 			if ($automatedSolutionId === null)
 			{
 				return false;

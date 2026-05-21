@@ -12,7 +12,8 @@ use Bitrix\Main\Result;
 class ConfirmBookingCommand extends AbstractCommand
 {
 	public function __construct(
-		public readonly string $hash,
+		public readonly int $id,
+		public readonly int $updatedBy,
 	)
 	{
 	}
@@ -20,14 +21,16 @@ class ConfirmBookingCommand extends AbstractCommand
 	public function toArray(): array
 	{
 		return [
-			'hash' => $this->hash,
+			'id' => $this->id,
+			'updatedBy' => $this->updatedBy,
 		];
 	}
 
 	public static function mapFromArray(array $props): self
 	{
 		return new self(
-			hash: $props['hash'],
+			id: $props['id'],
+			updatedBy: $props['updatedBy'],
 		);
 	}
 

@@ -615,11 +615,12 @@ class Message
 	}
 
 	/**
-	 * @param $recipients
-	 * These parameters must be passed to search and add related elements
-	 * in case processing the $recipients param will result in an empty collection:
-	 * @param string|null $ownerType
-	 * @param int|null $ownerId
+	 * @param array $recipients
+	 * @param string $ownerType
+	 * @param int $ownerId
+	 * @param bool $loadIfEmpty If the given recipients are no longer found in CRM (deleted, unlinked),
+	 * falls back to loading the first available recipient from the owner entity's relations:
+	 * bound contacts, contacts of the bound company, or the bound company itself as a recipient.
 	 * @return ItemCollection
 	 * @throws \Exception
 	 */

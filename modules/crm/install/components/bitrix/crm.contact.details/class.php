@@ -541,8 +541,10 @@ class CCrmContactDetailsComponent
 					)
 				)
 			);
-			$this->arResult['TABS'][] = $this->getEventTabParams();
-
+			if($this->arResult['CATEGORY_ID'] || \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 			if (CModule::IncludeModule('lists') && !$this->arResult['CATEGORY_ID'])
 			{
 				$listIblock = CLists::getIblockAttachedCrm(CCrmOwnerType::ContactName);
@@ -595,8 +597,10 @@ class CCrmContactDetailsComponent
 					'enabled' => false
 				);
 			}
-			$this->arResult['TABS'][] = $this->getEventTabParams();
-
+			if($this->arResult['CATEGORY_ID'] || \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->event()->canRead())
+			{
+				$this->arResult['TABS'][] = $this->getEventTabParams();
+			}
 			if (CModule::IncludeModule('lists') && !$this->arResult['CATEGORY_ID'])
 			{
 				$listIblock = CLists::getIblockAttachedCrm(CCrmOwnerType::ContactName);
@@ -719,10 +723,7 @@ class CCrmContactDetailsComponent
 		$this->arResult['ENTITY_ID'] = $this->entityID;
 
 		$this->userFields = null;
-		$this->prepareEntityUserFields();
-
 		$this->userFieldInfos = null;
-		$this->prepareEntityUserFieldInfos();
 
 		$this->entityData = null;
 	}
@@ -2233,6 +2234,8 @@ class CCrmContactDetailsComponent
 
 	public function initializeData()
 	{
+		$this->prepareEntityUserFields();
+		$this->prepareEntityUserFieldInfos();
 		$this->loadConversionWizard();
 		$this->prepareFieldInfos();
 		$this->prepareEntityData();

@@ -64,7 +64,7 @@ final class SegmentItemChecker
 			));
 		}
 
-		if ($this->isTitleEmpty() || $this->isPromptEmpty())
+		if ($this->isTitleEmpty() || $this->isPromptEmpty() || $this->isMinimumDaysAfterLastClosedEntityInvalid())
 		{
 			return $result->addError(new Error(
 				Loc::getMessage('CRM_SEGMENT_ITEM_INVALID'),
@@ -97,5 +97,10 @@ final class SegmentItemChecker
 	private function isPromptEmpty(): bool
 	{
 		return empty(trim($this->item->getPrompt()));
+	}
+
+	private function isMinimumDaysAfterLastClosedEntityInvalid(): bool
+	{
+		return $this->item->getMinimumDaysAfterLastClosedEntity() < 0;
 	}
 }

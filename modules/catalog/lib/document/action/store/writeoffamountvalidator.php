@@ -15,7 +15,7 @@ trait WriteOffAmountValidator
 {
 	use ProductAndStoreInfo;
 
-	protected function checkStoreAmount(EO_StoreDocumentElement $storeDocumentElement = null): Result
+	protected function checkStoreAmount(?EO_StoreDocumentElement $storeDocumentElement = null): Result
 	{
 		$result = new Result();
 

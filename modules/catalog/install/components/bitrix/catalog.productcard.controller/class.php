@@ -177,7 +177,7 @@ class CatalogProductControllerComponent extends CBitrixComponent
 	 * @param string|null $description
 	 * @return void
 	 */
-	protected function includeErrorComponent(string $errorMessage, string $description = null): void
+	protected function includeErrorComponent(string $errorMessage, ?string $description = null): void
 	{
 		Toolbar::deleteFavoriteStar();
 

@@ -1,33 +1,37 @@
 <?php
+
 namespace Bitrix\Crm\Restriction;
-use Bitrix\Main;
-use \Bitrix\Crm\Integration;
+
+use Bitrix\Main\Config\Option;
 
 abstract class Restriction
 {
 	/** @var string  */
 	protected $name = '';
+
 	/** @var bool  */
 	protected $isPersistent = false;
+
+	abstract public function externalize();
+	abstract public function internalize(array $params);
+	abstract public function preparePopupScript();
+	abstract public function getHtml();
+
 	public function __construct($name)
 	{
 		$this->setName($name);
 	}
-	/**
-	* @return string
-	*/
+
 	public function getName()
 	{
 		return $this->name;
 	}
-	/**
-	* @param string $name Name
-	* @return void
-	*/
+
 	public function setName($name)
 	{
 		$this->name = (string)$name;
 	}
+
 	/**
 	* @deprecated No longer used by internal code and not recommended. Please use isPersistent.
 	* @return bool
@@ -37,62 +41,56 @@ abstract class Restriction
 		return $this->isPersistent;
 	}
 
-	/**
-	 * @return bool
-	 */
 	public function isPersistent()
 	{
 		return $this->isPersistent;
 	}
-	/**
-	* @return array
-	*/
-	abstract public function externalize();
-	/**
-	* @param array $params Params
-	* @return void
-	*/
-	abstract public function internalize(array $params);
-	/**
-	* @return string
-	*/
-	abstract public function preparePopupScript();
-	/**
-	* @return string
-	*/
-	abstract public function getHtml();
 
 	public function save()
 	{
 		$this->isPersistent = false;
-		if($this->name !== '')
+
+		if ($this->name !== '')
 		{
-			Main\Config\Option::set('crm', $this->name, serialize($this->externalize()), '');
+			Option::set(
+				'crm',
+				$this->name,
+				serialize($this->externalize()),
+			);
+
 			$this->isPersistent = true;
 		}
+
 		return $this->isPersistent;
 	}
+
 	public function load()
 	{
 		$this->isPersistent = false;
-		if($this->name !== '')
+
+		if ($this->name !== '')
 		{
-			$s = Main\Config\Option::get('crm', $this->name, '', '');
-			$params = $s !== '' ? unserialize($s, ['allowed_classes' => false]) : null;
-			if(is_array($params) && !empty($params))
+			$saved = Option::get('crm', $this->name, '', '');
+			$params = str_starts_with($saved, 'a:')
+				? unserialize($saved, ['allowed_classes' => false])
+				: null
+			;
+			if (is_array($params) && !empty($params))
 			{
 				$this->internalize($params);
 				$this->isPersistent = true;
 			}
 		}
+
 		return $this->isPersistent;
 	}
+
 	public function reset()
 	{
 		$this->isPersistent = false;
-		if($this->name !== '')
+		if ($this->name !== '')
 		{
-			Main\Config\Option::delete('crm', array('name' => $this->name));
+			Option::delete('crm', ['name' => $this->name]);
 		}
 	}
 }

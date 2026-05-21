@@ -29,7 +29,9 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Tasks\Integration\CRM\Timeline\Bindings;
+use Bitrix\Crm\Integration\Analytics;
 use CCrmActivity;
+use CCrmActivityStatus;
 use CCrmDateTimeHelper;
 use CCrmOwnerType;
 use CCrmOwnerTypeAbbr;
@@ -486,18 +488,14 @@ final class Task extends Base
 			$handler = TaskHandler::getHandler($executorId)
 				->withAutoClose();
 
+			if (method_exists($handler, 'withAnalyticsEvent'))
+			{
+				$handler->withAnalyticsEvent(self::getAnalyticsEvent($updateData, $activity, $options));
+			}
+
 			try
 			{
-				$task = $handler->update($taskId, $updateData);
-
-				if (
-					$task !== false
-					&& $task->isCompleted()
-					&& ($updateData['STATUS'] ?? null) === TaskActivityStatus::TASKS_STATE_COMPLETED
-				)
-				{
-					self::onTaskComplete((int)($activity['OWNER_TYPE_ID'] ?? null));
-				}
+				$handler->update($taskId, $updateData);
 			}
 			catch (\Exception $exception)
 			{
@@ -508,23 +506,47 @@ final class Task extends Base
 		return $result;
 	}
 
-	private static function onTaskComplete(int $ownerTypeId): void
+	private static function getAnalyticsEvent(array $updateData, array $activity, array $options): ?AnalyticsEvent
 	{
-		$ownerName = strtolower(\CCrmOwnerType::ResolveName($ownerTypeId));
+		$event = $options['ANALYTICS_EVENT'] ?? null;
 
-		if (empty($ownerName))
+		if ($event instanceof AnalyticsEvent)
 		{
-			return;
+			return $event;
 		}
 
-		$analyticsEvent = new AnalyticsEvent('task_complete', 'tasks', 'task_operations');
-		$analyticsEvent
-			->setType('task')
-			->setElement('complete_button')
-			->setSection('crm')
-			->setSubSection($ownerName)
-			->send()
-		;
+		$taskStatus = (int)($updateData['STATUS'] ?? 0);
+		$activityStatus = (int)($activity['STATUS'] ?? 0);
+
+		if (self::isTaskCompletedByAutoCompletedActivity($taskStatus, $activityStatus))
+		{
+			$event = new AnalyticsEvent(
+				event: Analytics\Tasks\Event::TaskComplete->value,
+				tool: Analytics\Dictionary::TOOL_TASKS,
+				category: Analytics\Tasks\Category::TaskOperations->value,
+			);
+
+			return
+				$event
+					->setSection(Analytics\Tasks\Section::Crm->value)
+					->setSubSection(Analytics\Tasks\SubSection::Automation->value)
+					->setElement(Analytics\Tasks\Element::Auto->value)
+			;
+		}
+
+		return null;
+	}
+
+	private static function isTaskCompletedByAutoCompletedActivity(int $taskStatus, int $activityStatus): bool
+	{
+		$isTaskCompleted = (
+			$taskStatus === TaskActivityStatus::TASKS_STATE_SUPPOSEDLY_COMPLETED
+			|| $taskStatus === TaskActivityStatus::TASKS_STATE_COMPLETED
+		);
+
+		$isActivityAutoCompleted = $activityStatus === CCrmActivityStatus::AutoCompleted;
+
+		return $isTaskCompleted && $isActivityAutoCompleted;
 	}
 
 	// public function updateEndTime(array $timelineParams): void

@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\RepeatSale;
 
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Crm\Feature\RepeatSale;
 use Bitrix\Crm\Traits\Singleton;
 use Bitrix\Main\Event;
 
@@ -33,7 +34,14 @@ class AgentsManager
 		$agentsManager = new self();
 		if (Feature::isFeatureEnabledFor('crm_repeat_sale', $licenseType))
 		{
-			$agentsManager->enableAgents();
+			if (\Bitrix\Crm\Feature::enabled(RepeatSale::class))
+			{
+				$agentsManager->enableAgents();
+			}
+			else
+			{
+				\Bitrix\Crm\Feature::enable(RepeatSale::class);
+			}
 		}
 		else
 		{

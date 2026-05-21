@@ -2,6 +2,8 @@
 
 namespace Bitrix\Catalog\UserField;
 
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\Controller\Controller;
 use Bitrix\Catalog\Document\StoreDocumentTableManager;
 use Bitrix\Catalog\StoreTable;
@@ -12,13 +14,32 @@ class UserFieldAccess extends \Bitrix\Main\UserField\UserFieldAccess
 	protected function getAvailableEntityIds(): array
 	{
 		$iblockEntities = array_map(fn($item): string => 'IBLOCK_' . $item . '_SECTION', static::getIBlockList());
-		$storeDocsEntities = array_values(StoreDocumentTableManager::getUfEntityIds());
 
-		return [
+		$accessController = AccessController::getInstance($this->userId);
+
+		$storeDocsEntities = [];
+		if ($accessController->check(ActionDictionary::ACTION_INVENTORY_MANAGEMENT_ACCESS))
+		{
+			foreach (StoreDocumentTableManager::getUfEntityIds() as $type => $entityId)
+			{
+				if ($accessController->checkByValue(ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY, $type))
+				{
+					$storeDocsEntities[] = $entityId;
+				}
+			}
+		}
+
+		$result = [
 			...$iblockEntities,
 			...$storeDocsEntities,
-			StoreTable::getUfId(),
 		];
+
+		if ($accessController->check(ActionDictionary::ACTION_STORE_MODIFY))
+		{
+			$result[] = StoreTable::getUfId();
+		}
+
+		return $result;
 	}
 
 	protected static function getIBlockList(): array

@@ -8,14 +8,12 @@ use Bitrix\Crm\Item;
 use Bitrix\Crm\Order\BasketItem;
 use Bitrix\Crm\Service\Accounting;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
 
 class ProductRowChecker
 {
-	private const PRICE_ERROR = 'Insufficient permission to change product price';
-	private const DISCOUNT_ERROR = 'Insufficient permission to change product discount';
-
 	public function checkOrderCatalogRights(
 		\Bitrix\Crm\Order\Order $order
 	): Result
@@ -51,14 +49,14 @@ class ProductRowChecker
 				{
 					if ($basketItemFields->isChanged('DISCOUNT_PRICE'))
 					{
-						return $result->addError(new Error(self::DISCOUNT_ERROR));
+						return $result->addError($this->getDiscountError());
 					}
 				}
 				else
 				{
 					if ((float)$basketItemFields->get('DISCOUNT_PRICE') !== 0.0)
 					{
-						return $result->addError(new Error(self::DISCOUNT_ERROR));
+						return $result->addError($this->getDiscountError());
 					}
 				}
 			}
@@ -89,7 +87,7 @@ class ProductRowChecker
 					)
 				)
 				{
-					return $result->addError(new Error(self::PRICE_ERROR));
+					return $result->addError($this->getPriceError());
 				}
 			}
 			else
@@ -106,7 +104,7 @@ class ProductRowChecker
 					)
 				)
 				{
-					return $result->addError(new Error(self::PRICE_ERROR));
+					return $result->addError($this->getPriceError());
 				}
 			}
 		}
@@ -166,12 +164,12 @@ class ProductRowChecker
 				&& !$this->checkDiscount($productRow, $originalProductRow, $currencyId, $originalCurrencyId)
 			)
 			{
-				return $result->addError(new Error(self::DISCOUNT_ERROR));
+				return $result->addError($this->getDiscountError());
 			}
 
 			if (!$canEditPrice && !$this->checkPrice($productRow, $currencyId, $originalProductRow))
 			{
-				return $result->addError(new Error(self::PRICE_ERROR));
+				return $result->addError($this->getPriceError());
 			}
 		}
 
@@ -465,5 +463,15 @@ class ProductRowChecker
 		}
 
 		return true;
+	}
+
+	private function getPriceError(): Error
+	{
+		return new Error(Loc::getMessage('PRODUCT_ROW_CHECKER_PRICE_ERROR'));
+	}
+
+	private function getDiscountError(): Error
+	{
+		return new Error(Loc::getMessage('PRODUCT_ROW_CHECKER_DISCOUNT_ERROR'));
 	}
 }

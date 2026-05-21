@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Integration\AI;
 
+use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
@@ -58,7 +59,14 @@ final class CopilotLauncher
 			return $this->transcriptionResult;
 		}
 
-		if (!$this->transcriptionResult?->isSuccess())
+		if ($this->transcriptionResult?->isSuccess())
+		{
+			// for correct run after separate transcription scenario, when transcription already done, but fill fields not
+			QueueTable::update($this->transcriptionResult->getJobId(), [
+				'NEXT_TYPE_ID' => Scenario::getNextTypeIdByScenario($this->scenario),
+			]);
+		}
+		else
 		{
 			return AIManager::launchCallRecordingTranscription($this->activityId, $this->scenario);
 		}

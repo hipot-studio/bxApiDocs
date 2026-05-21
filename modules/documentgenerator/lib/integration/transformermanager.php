@@ -7,6 +7,8 @@ use Bitrix\DocumentGenerator\Driver;
 use Bitrix\DocumentGenerator\Model\DocumentTable;
 use Bitrix\DocumentGenerator\Model\FileTable;
 use Bitrix\Main\Application;
+use Bitrix\Main\Diag\Logger;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
@@ -110,6 +112,8 @@ final class TransformerManager implements InterfaceCallback
 
 	private static function updateDocument(Document $document, array $result): array
 	{
+		$logger = (new LoggerFactory())->createById('documentgenerator.Default', isCheckEnabledFromRegistry: false);
+
 		$updateData = [];
 		foreach (static::getFormats() as $extension => $format)
 		{
@@ -118,7 +122,12 @@ final class TransformerManager implements InterfaceCallback
 				$fileArray = \CFile::MakeFileArray($result['files'][$extension], $format['TYPE']);
 				if (empty($fileArray['tmp_name']))
 				{
-					throw new SystemException('Could not make file array for ' . $result['files'][$extension]);
+					$logger->critical('{date}: {method}: Could not make file array for {file}', [
+						'method' => __METHOD__,
+						'file' => $result['files'][$extension],
+					]);
+
+					continue;
 				}
 
 				$fileArray['MODULE_ID'] = Driver::MODULE_ID;
@@ -129,6 +138,16 @@ final class TransformerManager implements InterfaceCallback
 					$updateData[$format['KEY']] = $saveResult->getId();
 					$document->{$format['METHOD']}($saveResult->getId());
 				}
+				else
+				{
+					$logger->critical('{date}: {method}: Could not save file for document {documentId} with extension {extension} and name {name}. Errors: {errors}', [
+						'method' => __METHOD__,
+						'documentId' => $document->ID,
+						'extension' => $extension,
+						'name' => $fileArray['name'],
+						'errors' => implode('; ', $saveResult->getErrorMessages()),
+					]);
+				}
 			}
 		}
 
@@ -137,6 +156,13 @@ final class TransformerManager implements InterfaceCallback
 			$updateResult = DocumentTable::update($document->ID, $updateData);
 			if (!$updateResult->isSuccess())
 			{
+				$logger->critical('{date}: {method}: Could not update document {documentId} with data {data}. Errors: {errors}', [
+					'method' => __METHOD__,
+					'documentId' => $document->ID,
+					'data' => $updateData,
+					'errors' => implode('; ', $updateResult->getErrorMessages()),
+				]);
+
 				foreach($updateData as $fileId)
 				{
 					FileTable::delete($fileId);

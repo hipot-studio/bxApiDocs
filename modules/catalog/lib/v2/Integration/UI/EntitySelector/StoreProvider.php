@@ -44,7 +44,7 @@ class StoreProvider extends BaseProvider
 		parent::__construct();
 	}
 
-	private function getMeasureSymbol(int $measureId = null): string
+	private function getMeasureSymbol(?int $measureId = null): string
 	{
 		$measureResult = \CCatalogMeasure::getList(
 			array('CODE' => 'ASC'),

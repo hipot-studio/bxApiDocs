@@ -28,6 +28,8 @@ class ResourceTypeMapper
 				->setIsInfoNotificationOn($ormNotificationSettings->getIsInfoOn())
 				->setTemplateTypeInfo($ormNotificationSettings->getTemplateTypeInfo())
 				->setInfoNotificationDelay($ormNotificationSettings->getInfoDelay())
+				->setIsCancellationNotificationOn($ormNotificationSettings->getIsCancellationOn())
+				->setCancellationNotificationDelay($ormNotificationSettings->getCancellationDelay())
 				->setIsConfirmationNotificationOn($ormNotificationSettings->getIsConfirmationOn())
 				->setTemplateTypeConfirmation($ormNotificationSettings->getTemplateTypeConfirmation())
 				->setConfirmationNotificationDelay($ormNotificationSettings->getConfirmationDelay())

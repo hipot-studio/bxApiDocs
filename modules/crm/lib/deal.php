@@ -24,6 +24,7 @@ use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\CascadePolicy;
 use Bitrix\Main\ORM\Fields\Relations\OneToMany;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\TextField;
 use Bitrix\Main\ORM\Query\Join;
 
@@ -175,6 +176,10 @@ class DealTable extends Main\ORM\Data\DataManager
 			))
 				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW)
 			,
+
+			$fieldRepository->getMyCompanyId(),
+
+			(new Reference('MYCOMPANY', CompanyTable::class, Join::on('this.MYCOMPANY_ID', 'ref.ID'))),
 
 			(new IntegerField('QUOTE_ID'))
 				->configureNullable()

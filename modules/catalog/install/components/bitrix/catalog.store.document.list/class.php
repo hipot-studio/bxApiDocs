@@ -1162,15 +1162,19 @@ class CatalogStoreDocumentListComponent extends CBitrixComponent implements Cont
 			$this->arResult['ADD_DOCUMENT_BTN_ID'] = $addDocumentButton->getUniqId();
 		}
 
-		$settingsButtonSettings = [
-			'menu' => [
-				'id' => 'docFieldsSettingsMenu',
-				'items' => $this->getSettingsButtonMenuItems(),
-			],
-		];
+		$menuItems = $this->getSettingsButtonMenuItems();
+		if (!empty($menuItems))
+		{
+			$settingsButtonSettings = [
+				'menu' => [
+					'id' => 'docFieldsSettingsMenu',
+					'items' => $menuItems,
+				],
+			];
 
-		$menuButton = new SettingsButton($settingsButtonSettings);
-		Toolbar::addButton($menuButton);
+			$menuButton = new SettingsButton($settingsButtonSettings);
+			Toolbar::addButton($menuButton);
+		}
 	}
 
 	private function getAddDocumentButton(): ?\Bitrix\UI\Buttons\Button
@@ -1277,44 +1281,64 @@ class CatalogStoreDocumentListComponent extends CBitrixComponent implements Cont
 
 	private function getSettingsButtonMenuItems(): array
 	{
-		$fieldsSettingsItem = [
-			'text' => Loc::getMessage('DOCUMENT_LIST_FIELDS_SETTINGS'),
-		];
 		if ($this->mode === self::ARRIVAL_MODE)
 		{
-			$fieldsSettingsItem['items'] = [
-				[
+			$items = [];
+			if ($this->accessController->checkByValue(ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY, StoreDocumentTable::TYPE_ARRIVAL))
+			{
+				$items[] = [
 					'text' => Loc::getMessage('DOCUMENT_LIST_DOC_TYPE_A'),
 					'href' => $this->getUserFieldListConfigUrl(StoreDocumentArrivalTable::getUfId()),
 					'onclick' => new \Bitrix\UI\Buttons\JsHandler('BX.Catalog.DocumentGridManager.openUfSlider'),
-				],
-				[
+				];
+			}
+			if ($this->accessController->checkByValue(ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY, StoreDocumentTable::TYPE_STORE_ADJUSTMENT))
+			{
+				$items[] = [
 					'text' => Loc::getMessage('DOCUMENT_LIST_DOC_TYPE_S'),
 					'href' => $this->getUserFieldListConfigUrl(StoreDocumentStoreAdjustmentTable::getUfId()),
+					'onclick' => new \Bitrix\UI\Buttons\JsHandler('BX.Catalog.DocumentGridManager.openUfSlider'),
+				];
+			}
+
+			if (empty($items))
+			{
+				return [];
+			}
+
+			return [
+				[
+					'text' => Loc::getMessage('DOCUMENT_LIST_FIELDS_SETTINGS'),
+					'items' => $items,
+				],
+			];
+		}
+
+		$entityId = '';
+		$docType = '';
+		if ($this->mode === self::MOVING_MODE)
+		{
+			$entityId = StoreDocumentMovingTable::getUfId();
+			$docType = StoreDocumentTable::TYPE_MOVING;
+		}
+		elseif ($this->mode === self::DEDUCT_MODE)
+		{
+			$entityId = StoreDocumentDeductTable::getUfId();
+			$docType = StoreDocumentTable::TYPE_DEDUCT;
+		}
+
+		if ($entityId && $this->accessController->checkByValue(ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY, $docType))
+		{
+			return [
+				[
+					'text' => Loc::getMessage('DOCUMENT_LIST_FIELDS_SETTINGS'),
+					'href' => $this->getUserFieldListConfigUrl($entityId),
 					'onclick' => new \Bitrix\UI\Buttons\JsHandler('BX.Catalog.DocumentGridManager.openUfSlider'),
 				],
 			];
 		}
-		else
-		{
-			$entityId = '';
-			if ($this->mode === self::MOVING_MODE)
-			{
-				$entityId = StoreDocumentMovingTable::getUfId();
-			}
-			elseif ($this->mode === self::DEDUCT_MODE)
-			{
-				$entityId = StoreDocumentDeductTable::getUfId();
-			}
 
-			if ($entityId)
-			{
-				$fieldsSettingsItem['href'] = $this->getUserFieldListConfigUrl($entityId);
-				$fieldsSettingsItem['onclick'] = new \Bitrix\UI\Buttons\JsHandler('BX.Catalog.DocumentGridManager.openUfSlider');
-			}
-		}
-
-		return [$fieldsSettingsItem];
+		return [];
 	}
 
 	private function getUserFieldListConfigUrl(string $entityId): string

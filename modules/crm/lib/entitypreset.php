@@ -1135,17 +1135,23 @@ class EntityPreset
 	{
 		$result = new Main\Result();
 
+		if (!static::checkChangeCurrentCountryPermission())
+		{
+			$result->addError(new Main\Error('Access denied!'));
+
+			return $result;
+		}
+
+		return $this->changeCurrentCountryWithoutCheckingRights($countryId);
+	}
+
+	public function changeCurrentCountryWithoutCheckingRights(int $countryId): Main\Result
+	{
+		$result = new Main\Result();
+
 		if ($countryId <= 0 || !in_array($countryId, EntityRequisite::getAllowedRqFieldCountries(), true))
 		{
 			$result->addError(new Main\Error("Incorrect country for change (ID: $countryId)"));
-		}
-
-		if ($result->isSuccess())
-		{
-			if (!static::checkChangeCurrentCountryPermission())
-			{
-				$result->addError(new Main\Error('Access denied!'));
-			}
 		}
 
 		if ($result->isSuccess())
@@ -1329,6 +1335,8 @@ class EntityPreset
 
 				// Set new identifier of the current country.
 				Option::set('crm', 'crm_requisite_preset_country_id', $countryId);
+
+				$this->clearCache();
 
 				$entityTypeNames = ['COMPANY', 'CONTACT'];
 

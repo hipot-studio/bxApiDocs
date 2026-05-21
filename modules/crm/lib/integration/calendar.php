@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Integration;
 
 use Bitrix\Calendar\Core\Managers\Accessibility;
+use Bitrix\Calendar\Internals\EventTable;
 use Bitrix\Crm\Entity\EntityEditorConfigScope;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -487,26 +488,23 @@ class Calendar
 		return array_unique($accessibility->getBusyUsersIds($userIds, $fromTs, $toTs));
 	}
 
-	public static function getChildEvents(int $parentEventId, int $userId, array $selectFields = []): ?array
+	public static function getChildMeetingEvents(
+		int $parentEventId,
+		int $userId,
+		array $selectFields,
+		int $limit = 1,
+	): array
 	{
-		$params = [
-			'arFilter' => [
+		return EventTable::query()
+			->setSelect($selectFields)
+			->setFilter([
 				'PARENT_ID' => $parentEventId,
 				'CREATED_BY' => $userId,
 				'IS_MEETING' => 1,
 				'DELETED' => 'N',
-			],
-			'parseRecursion' => false,
-			'fetchAttendees' => true,
-			'checkPermissions' => false,
-			'setDefaultLimit' => false,
-		];
-
-		if (!empty($selectFields))
-		{
-			$params['arSelect'] = $selectFields;
-		}
-
-		return \CCalendarEvent::GetList($params);
+			])
+			->setLimit($limit)
+			->fetchAll()
+		;
 	}
 }

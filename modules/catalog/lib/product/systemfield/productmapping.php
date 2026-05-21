@@ -326,24 +326,37 @@ class ProductMapping extends Highloadblock
 
 	public static function getExtendedFilterByArea(array $filter, string $areaXmlId): array
 	{
-		if (!static::isAllowed())
+		$areaData = self::getAreaData($areaXmlId);
+		if (!$areaData)
 		{
 			return $filter;
 		}
+
+		$filter['=PRODUCT_'.static::getUserFieldName(static::getFieldId())] = $areaData['VALUE'];
+
+		return $filter;
+	}
+
+	public static function getAreaData(string $areaXmlId): ?array
+	{
+		if (!static::isAllowed())
+		{
+			return null;
+		}
 		if ($areaXmlId === '')
 		{
-			return $filter;
+			return null;
 		}
 
 		$userField = static::load();
 		if ($userField === null)
 		{
-			return $filter;
+			return null;
 		}
 
 		if (empty($userField['SETTINGS']) || !is_array($userField['SETTINGS']))
 		{
-			return $filter;
+			return null;
 		}
 
 		/** @var Catalog\Product\SystemField\Type\HighloadBlock $className */
@@ -352,12 +365,13 @@ class ProductMapping extends Highloadblock
 		$list = $className::getIdByXmlId((int)$userField['SETTINGS']['HLBLOCK_ID'], [$areaXmlId]);
 		if (!isset($list[$areaXmlId]))
 		{
-			return $filter;
+			return null;
 		}
 
-		$filter['=PRODUCT_'.static::getUserFieldName(static::getFieldId())] = $list[$areaXmlId];
-
-		return $filter;
+		return [
+			'ID' => (int)$userField['ID'],
+			'VALUE' => (int)$list[$areaXmlId],
+		];
 	}
 
 	protected static function afterLoadInternalModify(array $row): array
@@ -399,7 +413,7 @@ class ProductMapping extends Highloadblock
 
 	public static function renderAdminFormControl(array $field, array $product, array $config): ?string
 	{
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_PRODUCT_PUBLIC_VISIBILITY_SET))
+		if (!self::isEditable())
 		{
 			$field['EDIT_IN_LIST'] = 'N';
 		}
@@ -426,7 +440,7 @@ class ProductMapping extends Highloadblock
 		}
 		unset($items);
 
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_PRODUCT_PUBLIC_VISIBILITY_SET))
+		if (!self::isEditable())
 		{
 			$description['editable'] = false;
 			$description['defaultValue'] = [];
@@ -434,5 +448,10 @@ class ProductMapping extends Highloadblock
 		}
 
 		return $description;
+	}
+
+	protected static function isEditable(): bool
+	{
+		return AccessController::getCurrent()->check(ActionDictionary::ACTION_PRODUCT_PUBLIC_VISIBILITY_SET);
 	}
 }

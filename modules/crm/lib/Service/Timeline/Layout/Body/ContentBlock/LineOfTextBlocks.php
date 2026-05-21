@@ -46,8 +46,14 @@ class LineOfTextBlocks extends ContentBlock
 		if (!$this->isAvailableContentBlock($textContentBlock))
 		{
 			throw new ArgumentTypeException(
-				'textContentBlock',
-				Text::class . '|' . Link::class . '|' . Date::class . '|' . Money::class
+				'contentBlock',
+				Text::class
+				. '|' . Link::class
+				. '|' . Date::class
+				. '|' . Money::class
+				. '|' . ItemSelector::class
+				. '|' . ClientCommunication::class
+				. '|' . ClientMark::class
 			);
 		}
 
@@ -61,14 +67,17 @@ class LineOfTextBlocks extends ContentBlock
 		return $this;
 	}
 
-	private function isAvailableContentBlock(ContentBlock $textContentBlock): bool
+	private function isAvailableContentBlock(ContentBlock $contentBlock): bool
 	{
 		return
-			($textContentBlock instanceof Text)
-			|| ($textContentBlock instanceof Link)
-			|| ($textContentBlock instanceof Date)
-			|| ($textContentBlock instanceof Money)
-			|| ($textContentBlock instanceof ItemSelector)
+			$contentBlock instanceof self
+			|| ($contentBlock instanceof Text)
+			|| ($contentBlock instanceof Link)
+			|| ($contentBlock instanceof Date)
+			|| ($contentBlock instanceof Money)
+			|| ($contentBlock instanceof ItemSelector)
+			|| ($contentBlock instanceof ClientCommunication)
+			|| ($contentBlock instanceof ClientMark)
 		;
 	}
 

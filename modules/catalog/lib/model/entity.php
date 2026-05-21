@@ -109,7 +109,7 @@ abstract class Entity
 	 * @param Main\Text\Converter|null $converter
 	 * @return array|false
 	 */
-	public function fetch(Main\Text\Converter $converter = null)
+	public function fetch(?Main\Text\Converter $converter = null)
 	{
 		if ($this->result === null)
 			return false;

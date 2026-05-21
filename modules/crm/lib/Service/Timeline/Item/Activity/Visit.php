@@ -7,6 +7,7 @@ use Bitrix\Crm\Service\Timeline\Item\Mixin\FileListPreparer;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Body\CalendarLogo;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Audio;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\GroupBlocks;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Crm\Service\Timeline\Layout\Body\Logo;
 use Bitrix\Crm\Service\Timeline\Layout\Common;
@@ -31,6 +32,7 @@ final class Visit extends Activity
 	{
 		return Loc::getMessage('CRM_TIMELINE_ITEM_VISIT_TITLE');
 	}
+
 	public function getLogo(): ?Logo
 	{
 		$recordUrl = $this->getRecordUrl();
@@ -70,10 +72,19 @@ final class Visit extends Activity
 			];
 		}
 
+		$audio = (new Audio())
+			->setId($this->getAssociatedEntityModel()?->get('ID'))
+			->setSource($recordUrl)
+			->setScopeMobile()
+		;
+		$groupOfBlocks = (new GroupBlocks())
+			->addBlock('audio', (clone $audio)->setScopeWeb())
+			->setScopeWeb()
+		;
+
 		return [
-			'audio' => (new Audio())
-				->setId($this->getAssociatedEntityModel()?->get('ID'))
-				->setSource($recordUrl)
+			'visitGroupOfBlocks' => $groupOfBlocks,
+			'audio' => $audio,
 		];
 	}
 

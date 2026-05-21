@@ -38,7 +38,7 @@ abstract class BaseDocumentDetails extends Controller
 
 	use ReadsApplicationErrors;
 
-	public function __construct(Request $request = null)
+	public function __construct(?Request $request = null)
 	{
 		parent::__construct($request);
 
@@ -346,7 +346,7 @@ abstract class BaseDocumentDetails extends Controller
 		);
 	}
 
-	protected function checkDocumentReadRights(int $entityId = null, string $docType = null): bool
+	protected function checkDocumentReadRights(?int $entityId = null, ?string $docType = null): bool
 	{
 		return (
 			$this->checkDocumentBaseRights()
@@ -383,7 +383,7 @@ abstract class BaseDocumentDetails extends Controller
 		);
 	}
 
-	protected function checkDocumentModifyRights(int $entityId = null, string $docType = null): bool
+	protected function checkDocumentModifyRights(?int $entityId = null, ?string $docType = null): bool
 	{
 		return (
 			$this->checkDocumentBaseRights()

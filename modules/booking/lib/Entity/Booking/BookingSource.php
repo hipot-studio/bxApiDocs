@@ -14,4 +14,5 @@ enum BookingSource: string
 	case Yandex = 'yandex';
 	case CrmForm = 'crm_form';
 	case Rest = 'rest';
+	case McpTools = 'mcp_tools';
 }

@@ -63,9 +63,16 @@ class CreateWaitListItemFromBookingCommandHandler
 					),
 				);
 
-				$this->bookingRepository->remove($command->bookingId);
+				$this->bookingRepository->remove(
+					$command->bookingId,
+					Entity\Booking\BookingDeletionScenario::Manager,
+				);
 
-				$removeBookingCommand = new RemoveBookingCommand($command->bookingId, $command->createdBy);
+				$removeBookingCommand = new RemoveBookingCommand(
+					id: $command->bookingId,
+					removedBy: $command->createdBy,
+					scenario: Entity\Booking\BookingDeletionScenario::Manager,
+				);
 				$this->journalService->append(
 					new JournalEvent(
 						entityId: $command->bookingId,

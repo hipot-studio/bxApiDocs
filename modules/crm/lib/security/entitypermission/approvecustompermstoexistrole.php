@@ -61,6 +61,8 @@ final class ApproveCustomPermsToExistRole
 		}
 
 		$roleIds = [];
+		$automatedSolutionRoleIds = [];
+		$allRoleIds = [];
 
 		$permissionRoleGroups = $defaultPermission->getRoleGroups();
 
@@ -82,6 +84,11 @@ final class ApproveCustomPermsToExistRole
 			}
 			elseif(in_array($roleGroupCode, $permissionRoleGroups, true))
 			{
+				if (preg_match('/^AUTOMATED_SOLUTION_(\d+)$/', $roleGroupCode, $matches))
+				{
+					$automatedSolutionId = (int)$matches[1];
+				}
+
 				$roleId = $role['ID'];
 			}
 
@@ -92,13 +99,26 @@ final class ApproveCustomPermsToExistRole
 					continue;
 				}
 
-				$roleIds[] = $roleId;
+				if (isset($automatedSolutionId))
+				{
+					$automatedSolutionRoleIds[$automatedSolutionId][] = $roleId;
+
+					unset($automatedSolutionId);
+				}
+				else
+				{
+					$roleIds[] = $roleId;
+				}
+				$allRoleIds[] = $roleId;
 			}
 		}
 
-		$this->log('Affected roleIds', ['roleIds' => $roleIds]);
+		$this->log('Affected roleIds', [
+			'roleIds' => $roleIds,
+			'automatedSolutionRoleIds' => $automatedSolutionRoleIds,
+		]);
 
-		if (empty($roleIds))
+		if (empty($allRoleIds))
 		{
 			$this->removeDefaultPermissionFromOptions($defaultPermission);
 
@@ -125,7 +145,7 @@ final class ApproveCustomPermsToExistRole
 		}
 
 		$rolePermissions = RolePermissionTable::query()
-			->whereIn('ROLE_ID', $roleIds)
+			->whereIn('ROLE_ID', $allRoleIds)
 			->whereIn('ENTITY', $entities)
 			->where('PERM_TYPE', $defaultPermission->getPermissionType())
 			->fetchCollection()
@@ -140,7 +160,18 @@ final class ApproveCustomPermsToExistRole
 		$processedRolesCount = 0;
 		foreach ($entities as $entity)
 		{
-			foreach ($roleIds as $roleId)
+			$automatedSolutionEntityPattern = $defaultPermission->getAutomatedSolutionSettings()['entityCodePattern'];
+			if (is_string($automatedSolutionEntityPattern) && preg_match($automatedSolutionEntityPattern, $entity, $matches))
+			{
+				$automatedSolutionId = (int)$matches[1];
+				$entityRoleIds = $automatedSolutionRoleIds[$automatedSolutionId] ?? [];
+			}
+			else
+			{
+				$entityRoleIds = $roleIds;
+			}
+
+			foreach ($entityRoleIds as $roleId)
 			{
 				$rolePermission = (new EO_RolePermission())
 					->setRoleId($roleId)

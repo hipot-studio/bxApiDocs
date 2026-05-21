@@ -81,7 +81,33 @@ class EntityRequisite
 	private static $fixedPresetList = null;
 	private static $FIELD_INFOS = null;
 
-	private static $allowedRqFieldCountryIds = array(1, 4, 6, 14, 34, 46, 77, 110, 122, 132, 13);
+	private static $allowedRqFieldCountryIds = [
+		1,
+		4,
+		6,
+		13,
+		14,
+		34,
+		46,
+		77,
+		110,
+		122,
+		132,
+	];
+	private static $regionToAllowedCountryIdMap = [
+		'ru' => 1,
+		'by' => 4,
+		'kz' => 6,
+		'uz' => 13,
+		'ua' => 14,
+		'ur' => 14,
+		'br' => 34,
+		'de' => 46,
+		'co' => 77,
+		'pl' => 110,
+		'en' => 122,
+		'fr' => 132,
+	];
 	private static $rqFieldCountryMap = null;
 	private static $rqFieldTitleMap = null;
 	private static $userFieldTitles = null;
@@ -2122,6 +2148,11 @@ class EntityRequisite
 	public static function getAllowedRqFieldCountries()
 	{
 		return self::$allowedRqFieldCountryIds;
+	}
+
+	public static function getCountryIdByRegion(string $regionCode): int
+	{
+		return self::$regionToAllowedCountryIdMap[$regionCode] ?? 0;
 	}
 
 	public function getUserFieldsTitles()
@@ -6082,6 +6113,7 @@ class EntityRequisite
 		$bitrix24 = Main\IO\Directory::isDirectoryExists($bitrix24Path);
 		unset($bitrix24Path);
 		$languageId = '';
+
 		if ($bitrix24)
 		{
 			if (defined('B24_LANGUAGE_ID'))
@@ -6089,6 +6121,7 @@ class EntityRequisite
 			else
 				$languageId = mb_substr((string)Main\Config\Option::get('main', '~controller_group_name'), 0, 2);
 		}
+
 		if ($languageId == '')
 		{
 			/** @todo Use SiteTable::getDefaultLanguageId() */
@@ -6101,37 +6134,18 @@ class EntityRequisite
 				$languageId = (string)$site['LANGUAGE_ID'];
 			unset($site, $siteIterator);
 		}
+
 		if ($languageId == '')
-			$languageId = 'en';
-		switch ($languageId)
 		{
-			case 'de':
-				$countryCode = 'DE';
-				break;
-			case 'ru':
-				$countryCode = 'RU';
-				break;
-			case 'ua':
-			case 'ur':
-				$countryCode = 'UA';
-				break;
-			case 'kz':
-				$countryCode = 'KZ';
-				break;
-			case 'by':
-				$countryCode = 'BY';
-				break;
-			case 'pl':
-				$countryCode = 'PL';
-				break;
-			case 'co':
-				$countryCode = 'CO';
-				break;
-			default:
-				$countryCode = 'US';
-				break;
+			$languageId = 'en';
 		}
-		$countryId = (int)GetCountryIdByCode($countryCode);
+
+		$countryId = EntityRequisite::getCountryIdByRegion($languageId);
+		if ($countryId <= 0 )
+		{
+			$countryId = (int)GetCountryIdByCode('US');
+		}
+
 		Main\Config\Option::set('crm', 'crm_requisite_preset_country_id', $countryId);
 		unset($bitrix24);
 

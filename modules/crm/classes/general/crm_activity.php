@@ -7358,7 +7358,8 @@ class CAllCrmActivity
 		return true;
 	}
 
-	public static function NotifyMulti($userId, $schemeTypeID, $count, $tag = '')
+	/** @deprecated use \CAllCrmActivity::Notify */
+	public static function NotifyMulti($userId, $schemeTypeID, $count, $tag = ''): bool
 	{
 		if($userId <= 0)
 		{
@@ -9168,8 +9169,7 @@ class CCrmActivityEmailSender
 
 		$arUpdateFields = array(
 			'COMPLETED' => 'Y',
-			'ASSOCIATED_ENTITY_ID'=> $postingID,
-			'SETTINGS' => $settings
+			'SETTINGS' => $settings,
 		);
 
 		$arUpdateFields['SETTINGS']['MESSAGE_HEADERS'] = array('Message-Id' => $messageId);

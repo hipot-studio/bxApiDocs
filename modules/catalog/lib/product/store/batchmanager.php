@@ -41,7 +41,7 @@ class BatchManager
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function getStoreCollection(array $filter = null): EO_StoreBatch_Collection
+	public function getStoreCollection(?array $filter = null): EO_StoreBatch_Collection
 	{
 		$filter['=ELEMENT_ID'] = $this->getProductId();
 
@@ -79,7 +79,7 @@ class BatchManager
 	 * @return float
 	 * @throws \Bitrix\Main\LoaderException
 	 */
-	public function calculateCostPrice(float $quantity, int $storeId, string $currency = null): float
+	public function calculateCostPrice(float $quantity, int $storeId, ?string $currency = null): float
 	{
 		if (empty($currency) && Loader::includeModule('currency'))
 		{

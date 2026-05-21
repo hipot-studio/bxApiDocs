@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item;
 
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\Analytics\Builder\communication\WhatsAppPinUnpinEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\ContentBlockDto;
@@ -14,6 +15,7 @@ use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Analytics;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Redirect;
 use Bitrix\Crm\Service\Timeline\Layout\Action\RunAjaxAction;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Note;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Crm\Service\Timeline\Layout\Converter;
@@ -534,7 +536,7 @@ abstract class Configurable extends Item
 		return $userData ?? [];
 	}
 
-	protected function buildClientBlock(int $options = 0, string $blockTitle = null): ?Layout\Body\ContentBlock
+	protected function buildClientBlock(int $options = 0, string $blockTitle = null): ?ContentBlock
 	{
 		$communication = $this->getAssociatedEntityModel()?->get('COMMUNICATION') ?? [];
 		if (empty($communication))
@@ -542,8 +544,9 @@ abstract class Configurable extends Item
 			return null;
 		}
 
-		return (new Layout\Body\ContentBlock\Client($communication, $options))
+		return (new ContentBlock\Client($communication, $options))
 			->setTitle($blockTitle ?? Loc::getMessage("CRM_TIMELINE_CLIENT_TITLE"))
+			->setUserId($this->getAssociatedEntityModel()?->get('RESPONSIBLE_ID'))
 			->build()
 		;
 	}
@@ -702,6 +705,27 @@ abstract class Configurable extends Item
 	protected function canBeReloaded(): bool
 	{
 		return true;
+	}
+
+	protected function buildAiCreatedBlock(): ?ContentBlock
+	{
+		$copilotName = AIManager::getCopilotName();
+		if (empty($copilotName))
+		{
+			return null;
+		}
+
+		$blockValue = Loc::getMessage(
+			'CRM_TIMELINE_BLOCK_AI_CREATED',
+			[
+				'#COPILOT_NAME#' => $copilotName,
+			],
+		);
+
+		return (new ContentBlock\Text())
+			->setValue($blockValue)
+			->setColor(Text::COLOR_BASE_70)
+		;
 	}
 
 	final protected function getLinkOnHelp(string $code): ?string

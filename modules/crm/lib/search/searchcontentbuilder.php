@@ -305,7 +305,7 @@ abstract class SearchContentBuilder
 	protected function transferEntityFilterKeys(array $sourceKeys, array &$filter): void
 	{
 		$searchFieldName = $this->getSearchFieldName();
-		
+
 		foreach ($sourceKeys as $key)
 		{
 			if (!isset($filter[$key]))
@@ -331,6 +331,11 @@ abstract class SearchContentBuilder
 			}
 
 			unset($filter[$key]);
+		}
+
+		if (isset($filter[$searchFieldName]))
+		{
+			$filter['__ENABLE_SEARCH_CONTENT_PHONE_DETECTION'] = false;
 		}
 	}
 

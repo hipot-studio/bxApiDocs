@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\RepeatSale\Segment;
 
+use Bitrix\Crm\Format\PlaceholderFormatter;
 use Bitrix\Crm\RepeatSale\Segment\Entity\RepeatSaleSegment;
 use Bitrix\Main\Localization\Loc;
 use CCrmOwnerType;
@@ -25,6 +26,7 @@ final class SegmentItem
 	private ?int $clientFound = null;
 	private ?int $clientCoverage = null;
 	private array $assignmentUserIds = [];
+	private int $minimumDaysAfterLastClosedEntity = 0;
 
 	public static function createFromEntity(RepeatSaleSegment $segmentItem): self
 	{
@@ -46,8 +48,9 @@ final class SegmentItem
 		$instance->isAiEnabled = $segmentItem->getIsAiEnabled();
 		$instance->clientFound = $segmentItem->getClientFound();
 		$instance->clientCoverage = $segmentItem->getClientCoverage();
+		$instance->minimumDaysAfterLastClosedEntity = $segmentItem->getMinimumDaysAfterLastClosedEntity();
 
-		foreach ( $segmentItem->getAssignmentUsers() as $assignmentUser)
+		foreach ($segmentItem->getAssignmentUsers() as $assignmentUser)
 		{
 			$instance->assignmentUserIds[] = $assignmentUser->getUserId();
 		}
@@ -76,6 +79,7 @@ final class SegmentItem
 		$instance->clientFound = $data['clientFound'] ?? null;
 		$instance->clientCoverage = $data['clientCoverage'] ?? null;
 		$instance->assignmentUserIds = $data['assignmentUserIds'] ?? [];
+		$instance->minimumDaysAfterLastClosedEntity = $data['minimumDaysAfterLastClosedEntity'] ?? 0;
 
 		return $instance;
 	}
@@ -99,7 +103,34 @@ final class SegmentItem
 			'clientFound' => $this->clientFound,
 			'clientCoverage' => $this->clientCoverage,
 			'assignmentUserIds' => $this->assignmentUserIds,
+			'minimumDaysAfterLastClosedEntity' => $this->minimumDaysAfterLastClosedEntity,
 		];
+	}
+
+	public function convertTitlePlaceholdersToDisplayFormat()
+	{
+		if ($this->entityTitlePattern === null)
+		{
+			return;
+		}
+
+		$this->entityTitlePattern = PlaceholderFormatter::convertToDisplayFormat(
+			CCrmOwnerType::Deal,
+			$this->entityTitlePattern,
+		);
+	}
+
+	public function convertTitlePlaceholdersToExternalFormat()
+	{
+		if ($this->entityTitlePattern === null)
+		{
+			return;
+		}
+
+		$this->entityTitlePattern = PlaceholderFormatter::convertToExternalFormat(
+			CCrmOwnerType::Deal,
+			$this->entityTitlePattern,
+		);
 	}
 
 	public function getId(): ?int
@@ -268,5 +299,17 @@ final class SegmentItem
 			SegmentCode::AI_APPROVE->value => Loc::getMessage('CRM_SEGMENT_ITEM_AI_APPROVE'),
 			default => null,
 		};
+	}
+
+	public function getMinimumDaysAfterLastClosedEntity(): int
+	{
+		return $this->minimumDaysAfterLastClosedEntity;
+	}
+
+	public function setMinimumDaysAfterLastClosedEntity(int $days): self
+	{
+		$this->minimumDaysAfterLastClosedEntity = $days;
+
+		return $this;
 	}
 }

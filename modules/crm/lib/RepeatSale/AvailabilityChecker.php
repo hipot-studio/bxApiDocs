@@ -60,6 +60,11 @@ class AvailabilityChecker
 		return RestrictionManager::getRepeatSaleRestriction()->hasPermission();
 	}
 
+	public function isForceMode(): bool
+	{
+		return Feature::enabled(Feature\RepeatSaleForceMode::class);
+	}
+
 	public function isAiSegmentsAvailable(): bool
 	{
 		if (!$this->isEnabled())

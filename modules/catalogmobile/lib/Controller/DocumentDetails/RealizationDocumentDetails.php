@@ -43,7 +43,7 @@ class RealizationDocumentDetails extends BaseDocumentDetails
 	 * @param string|null $docType
 	 * @return array
 	 */
-	public function loadMainAction(int $entityId = null, string $docType = null, array $context = []): array
+	public function loadMainAction(?int $entityId = null, ?string $docType = null, array $context = []): array
 	{
 		if (!$this->checkDocumentReadRights($entityId, $docType))
 		{
@@ -64,7 +64,7 @@ class RealizationDocumentDetails extends BaseDocumentDetails
 	 * @param string|null $docType
 	 * @return array
 	 */
-	public function loadProductsAction(int $entityId = null, string $docType = null, array $context = []): array
+	public function loadProductsAction(?int $entityId = null, ?string $docType = null, array $context = []): array
 	{
 		if (!$this->checkDocumentReadRights($entityId, $docType))
 		{

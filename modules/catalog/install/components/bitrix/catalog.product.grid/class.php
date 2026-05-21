@@ -207,7 +207,7 @@ class CatalogProductGridComponent extends \CBitrixComponent
 		$this->includeComponentTemplate('stub');
 	}
 
-	protected function includeErrorComponent(string $errorMessage, string $description = null): void
+	protected function includeErrorComponent(string $errorMessage, ?string $description = null): void
 	{
 		UI\Toolbar\Facade\Toolbar::deleteFavoriteStar();
 

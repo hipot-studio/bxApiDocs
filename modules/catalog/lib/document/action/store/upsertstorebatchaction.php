@@ -31,9 +31,9 @@ class UpsertStoreBatchAction implements Action
 		int $storeId,
 		int $productId,
 		float $amount,
-		int $documentElementId = null,
-		float $purchasingPrice = null,
-		string $purchasingCurrency = null
+		?int $documentElementId = null,
+		?float $purchasingPrice = null,
+		?string $purchasingCurrency = null
 	)
 	{
 		$this->storeId = $storeId;
@@ -131,8 +131,8 @@ class UpsertStoreBatchAction implements Action
 	protected function createBatch(
 		int $storeId,
 		float $amount,
-		float $purchasingPrice = null,
-		string $purchasingCurrency = null,
+		?float $purchasingPrice = null,
+		?string $purchasingCurrency = null,
 	): ?EO_StoreBatch
 	{
 		$resultAdd = StoreBatchTable::add([
@@ -156,8 +156,8 @@ class UpsertStoreBatchAction implements Action
 	protected function addDocumentElementBatchBinding(
 		EO_StoreBatch $batch,
 		float $amount,
-		float $purchasingPrice = null,
-		string $purchasingCurrency = null,
+		?float $purchasingPrice = null,
+		?string $purchasingCurrency = null,
 	): void
 	{
 		StoreBatchDocumentElementTable::add([
@@ -173,7 +173,7 @@ class UpsertStoreBatchAction implements Action
 		EO_StoreBatch $batch,
 		float $amount,
 		float $purchasingPrice,
-		string $purchasingCurrency = null,
+		?string $purchasingCurrency = null,
 	): void
 	{
 		if ($purchasingCurrency && $purchasingCurrency !== $batch->getPurchasingCurrency())

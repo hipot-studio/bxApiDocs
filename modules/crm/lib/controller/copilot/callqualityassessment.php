@@ -81,12 +81,7 @@ final class CallQualityAssessment extends Base
 			return null;
 		}
 
-		$operationState = new OperationState(
-			$activityId,
-			$itemIdentifier->getEntityTypeId(),
-			$itemIdentifier->getEntityId()
-		);
-
+		$operationState = new OperationState($activityId, $itemIdentifier);
 		$prevAssessmentAvg = AiQualityAssessmentController::getInstance()->getPrevAvgAssessmentValue($activity['RESPONSIBLE_ID']);
 
 		return [

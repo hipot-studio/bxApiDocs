@@ -42,6 +42,7 @@ class ResourceTypeProvider
 	{
 		$resourceTypeCount = $this->resourceRepository->getResourceTypeCount($resourceTypeCollection->getEntityIds());
 
+		/** @var Entity\ResourceType\ResourceType $resourceType */
 		foreach ($resourceTypeCollection as $resourceType)
 		{
 			$resourceType->setResourcesCnt($resourceTypeCount[$resourceType->getId()] ?? null);

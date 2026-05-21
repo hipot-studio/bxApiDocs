@@ -12,6 +12,8 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Booking\Internals\Service\Feature\BookingConfirmContext;
 use Bitrix\Booking\Internals\Exception\Exception;
+use Bitrix\Booking\Entity\Booking\BookingDeletionScenario;
+use Bitrix\Booking\Command\Booking\RemoveBookingCommand;
 
 Loc::loadMessages(__FILE__);
 
@@ -69,7 +71,7 @@ class BookingPubConfirmComponent extends BookingBaseComponent implements \Bitrix
 				&& $context !== BookingConfirmContext::Info
 			)
 			{
-				$result = (new \Bitrix\Booking\Command\Booking\ConfirmBookingCommand($hash))->run();
+				$result = (new \Bitrix\Booking\Command\Booking\ConfirmBookingCommand(id: $booking->getId(), updatedBy: 0))->run();
 
 				// if booking already confirmed before component call, no need to pass error to response
 				// just silently return default component success response, as if confirmation succeed
@@ -113,7 +115,22 @@ class BookingPubConfirmComponent extends BookingBaseComponent implements \Bitrix
 			return;
 		}
 
-		$result = (new \Bitrix\Booking\Command\Booking\CancelBookingCommand($hash))->run();
+		try
+		{
+			$booking = (new BookingConfirmLink())->getBookingByHash($hash);
+		}
+		catch (InvalidArgumentException $e)
+		{
+			$this->addError($e->getCode(), 'Access denied');
+
+			return;
+		}
+
+		$result = (new RemoveBookingCommand(
+			id: $booking->getId(),
+			removedBy: 0,
+			scenario: BookingDeletionScenario::ClientWeb,
+		))->run();
 
 		if (!$result->isSuccess())
 		{
@@ -128,7 +145,18 @@ class BookingPubConfirmComponent extends BookingBaseComponent implements \Bitrix
 			return;
 		}
 
-		$result = (new \Bitrix\Booking\Command\Booking\ConfirmBookingCommand($hash))->run();
+		try
+		{
+			$booking = (new BookingConfirmLink())->getBookingByHash($hash);
+		}
+		catch (\InvalidArgumentException $e)
+		{
+			$this->addError($e->getCode(), 'Access denied');
+
+			return;
+		}
+
+		$result = (new \Bitrix\Booking\Command\Booking\ConfirmBookingCommand(id: $booking->getId(), updatedBy: 0))->run();
 
 		if (!$result->isSuccess())
 		{

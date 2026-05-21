@@ -14,11 +14,11 @@ final class BaasManager
 {
 	public const SLIDER_CODE_LIMIT_DAILY = 'limit_copilot_max_number_daily_requests';
 	public const SLIDER_CODE_LIMIT_MONTHLY = 'limit_copilot_requests';
+	public const SLIDER_CODE_BUY_MARKET = 'limit_subscription_market_access_buy_marketplus';
+	public const SLIDER_CODE_EMPTY_MARKET_PACKAGES = 'limit_subscription_market_ai_spent';
+	public const SLIDER_CODE_EMPTY_BAAS_PACKAGES = 'limit_boost_copilot'; // check slider code for call "limit_boost_crm_automation";
 
 	private const AI_IGNORE_BAAS = 'AI_IGNORE_BAAS';
-	private const SLIDER_CODE_BUY_MARKET = 'limit_subscription_market_access_buy_marketplus';
-	private const SLIDER_CODE_EMPTY_MARKET_PACKAGES = 'limit_subscription_market_ai_spent';
-	private const SLIDER_CODE_EMPTY_BAAS_PACKAGES = 'limit_boost_copilot'; // check slider code for call "limit_boost_crm_automation";
 
 	/**
 	 * Method checks if BAAS connection is available.
@@ -73,7 +73,7 @@ final class BaasManager
 			return self::isAvailable()
 				? self::SLIDER_CODE_EMPTY_MARKET_PACKAGES
 				: self::SLIDER_CODE_EMPTY_BAAS_PACKAGES
-				;
+			;
 		}
 
 		return self::SLIDER_CODE_BUY_MARKET;

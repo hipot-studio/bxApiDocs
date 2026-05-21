@@ -40,7 +40,7 @@ class MapTypeCaster implements TypeCasterContract
 
 	private $fieldMap = [];
 
-	public function __construct(array $fieldMap = null)
+	public function __construct(?array $fieldMap = null)
 	{
 		if (!empty($fieldMap))
 		{

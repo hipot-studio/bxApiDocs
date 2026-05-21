@@ -6,11 +6,17 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 
 class Audio extends ContentBlock
 {
+	public const TRANSCRIPTION_EMPTY = 'empty';
+	public const TRANSCRIPTION_PENDING = 'pending';
+	public const TRANSCRIPTION_SUCCESS = 'success';
+	public const TRANSCRIPTION_FAILED = 'failed';
+
 	protected int $id = 0;
 	protected string $source = '';
 	protected ?string $title = null;
 	protected ?string $imageUrl = null;
 	protected ?string $recordName = null;
+	protected ?string $transcriptionState = null;
 
 	public function getRendererName(): string
 	{
@@ -41,21 +47,14 @@ class Audio extends ContentBlock
 		return $this;
 	}
 
-	public function setTitle(?string $title): self
-	{
-		$this->title = $title;
-
-		return $this;
-	}
-
 	public function getTitle(): ?string
 	{
 		return $this->title;
 	}
 
-	public function setImageUrl(?string $imageUrl): self
+	public function setTitle(?string $title): self
 	{
-		$this->imageUrl = $imageUrl;
+		$this->title = $title;
 
 		return $this;
 	}
@@ -65,9 +64,9 @@ class Audio extends ContentBlock
 		return $this->imageUrl;
 	}
 
-	public function setRecordName(?string $recordName): self
+	public function setImageUrl(?string $imageUrl): self
 	{
-		$this->recordName = $recordName;
+		$this->imageUrl = $imageUrl;
 
 		return $this;
 	}
@@ -75,6 +74,25 @@ class Audio extends ContentBlock
 	public function getRecordName(): ?string
 	{
 		return $this->recordName;
+	}
+
+	public function setRecordName(?string $recordName): self
+	{
+		$this->recordName = $recordName;
+
+		return $this;
+	}
+
+	public function getTranscriptionState(): ?string
+	{
+		return $this->transcriptionState;
+	}
+
+	public function setTranscriptionState(?string $transcriptionState): self
+	{
+		$this->transcriptionState = $transcriptionState;
+
+		return $this;
 	}
 
 	protected function getProperties(): array
@@ -85,6 +103,7 @@ class Audio extends ContentBlock
 			'title' => $this->getTitle(),
 			'imageUrl' => $this->getImageUrl(),
 			'recordName' => $this->getRecordName(),
+			'transcriptionState' => $this->getTranscriptionState(),
 		];
 	}
 }

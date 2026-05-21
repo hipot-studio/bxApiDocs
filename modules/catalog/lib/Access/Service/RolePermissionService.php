@@ -145,7 +145,7 @@ class RolePermissionService implements RolePermissionServiceInterface
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function saveRole(string $name, int $roleId = null): int
+	public function saveRole(string $name, ?int $roleId = null): int
 	{
 		$nameField = [
 			"NAME" => Encoding::convertEncodingToCurrent($name),

@@ -63,7 +63,7 @@ class AccessController extends BaseAccessController
 	 * @return bool
 	 * @throws UnknownActionException
 	 */
-	public function check(string $action, AccessibleItem $item = null, $params = null): bool
+	public function check(string $action, ?AccessibleItem $item = null, $params = null): bool
 	{
 		if (!ModuleManager::isModuleInstalled('crm') || InstallStatus::inProgress())
 		{
@@ -156,7 +156,7 @@ class AccessController extends BaseAccessController
 		return $this->user->isAdmin() || (Loader::includeModule("bitrix24") && \CBitrix24::isPortalAdmin($this->user->getUserId()));
 	}
 
-	protected function loadItem(int $itemId = null): ?AccessibleItem
+	protected function loadItem(?int $itemId = null): ?AccessibleItem
 	{
 		return null;
 	}

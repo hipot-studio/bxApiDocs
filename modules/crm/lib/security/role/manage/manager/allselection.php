@@ -43,6 +43,7 @@ final class AllSelection implements SectionableRoleSelectionManager
 
 			->exclude(Permission::AutomatedSolutionList)
 			->exclude(Permission::AutomatedSolutionConfig)
+			->exclude(Permission::AutomatedSolutionEvent)
 
 			->buildOfMade()
 		;

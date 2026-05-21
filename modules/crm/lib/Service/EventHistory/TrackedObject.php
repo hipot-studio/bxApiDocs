@@ -171,7 +171,7 @@ abstract class TrackedObject
 		$title = $this->getEntityTitle();
 
 		return new EventHistoryData([
-			'ENTITY_TYPE' => \CCrmOwnerType::SystemName,
+			'ENTITY_TYPE' => $this->getEntityType(),
 			'ENTITY_ID' => 0,
 			'EVENT_TEXT_1' => "$this->entityDescription: [$entityId] $title",
 		]);

@@ -8,7 +8,6 @@ use Bitrix\Booking\Entity\Client\ClientType;
 use Bitrix\Booking\Entity\Client\ClientTypeCollection;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Repository\ClientTypeRepositoryInterface;
-use Bitrix\Booking\Provider\Params\GridParams;
 
 class ClientTypeProvider
 {
@@ -19,23 +18,13 @@ class ClientTypeProvider
 		$this->repository = Container::getClientTypeRepository();
 	}
 
-	public function get(string $code, string $moduleId): ?ClientType
+	public function get(string $code, string $moduleId): ClientType|null
 	{
-		return
-			$this
-				->repository
-				->get($code, $moduleId)
-			;
+		return $this->repository->get($code, $moduleId);
 	}
 
-	public function getList(GridParams $gridParams): ClientTypeCollection
+	public function getList(): ClientTypeCollection
 	{
-		return
-			$this
-				->repository
-				->getList(
-					filter: $gridParams->getFilter(),
-				)
-			;
+		return $this->repository->getList();
 	}
 }

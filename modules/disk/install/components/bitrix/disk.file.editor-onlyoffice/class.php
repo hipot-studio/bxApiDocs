@@ -99,6 +99,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		$this->arResult['UNIFIED_LINK_ACCESS_ONLY'] = $this->unifiedLinkAccessOnly;
 		$this->arResult['UNIFIED_LINK_MODE'] = $this->unifiedLinkMode;
 		$this->arResult['FILE_UNIQUE_CODE'] = $this->arParams['FILE_UNIQUE_CODE'] ?? '';
+		$this->arResult['SIGN_PLACEHOLDERS_ENABLED'] = $this->isSignPlaceholdersEnabled();
 
 		if (isset($this->arParams['TEMPLATE']) && $this->arParams['TEMPLATE'] === 'not-found')
 		{
@@ -765,6 +766,17 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 	protected function getSession(): SessionInterface
 	{
 		return Application::getInstance()->getSession();
+	}
+
+	private function isSignPlaceholdersEnabled(): bool
+	{
+		$request = Application::getInstance()->getContext()->getRequest();
+		if ($request->get('signPlaceholders') !== 'Y')
+		{
+			return false;
+		}
+
+		return Loader::includeModule('sign');
 	}
 
 	private function getSessionBoostOptions(Disk\Document\Models\DocumentSession $documentSession): ?array

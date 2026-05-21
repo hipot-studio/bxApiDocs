@@ -316,15 +316,7 @@ class EventForBookingService
 
 	private function isClientsChanged(Booking $prevBooking, Booking $currentBooking): bool
 	{
-		if ($prevBooking->getClientCollection()->count() !== $currentBooking->getClientCollection()->count())
-		{
-			return true;
-		}
-
-		return !$prevBooking->getClientCollection()
-			->diff($currentBooking->getClientCollection())
-			->isEmpty()
-		;
+		return !$prevBooking->getClientCollection()->isEqual($currentBooking->getClientCollection());
 	}
 
 	private function isLinkedUsersChanged(Booking $prevBooking, Booking $currentBooking): bool

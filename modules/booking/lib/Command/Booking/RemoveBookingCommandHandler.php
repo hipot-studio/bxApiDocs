@@ -6,6 +6,7 @@ namespace Bitrix\Booking\Command\Booking;
 
 use Bitrix\Booking\Command\Booking\Trait\BookingChangesTrait;
 use Bitrix\Booking\Entity\Booking\Booking;
+use Bitrix\Booking\Entity\Booking\BookingDeletionScenario;
 use Bitrix\Booking\Entity\Booking\BookingCollection;
 use Bitrix\Booking\Internals\Exception\Booking\RemoveBookingException;
 use Bitrix\Booking\Internals\Container;
@@ -47,7 +48,24 @@ class RemoveBookingCommandHandler
 
 		Container::getTransactionHandler()->handle(
 			fn: function () use ($command, $existBooking) {
-				$this->bookingRepository->remove($command->id);
+				$this->bookingRepository->remove($command->id, $command->scenario);
+
+				if (BookingDeletionScenario::isClientDeletion($command->scenario))
+				{
+					$this->journalService->append(
+						new JournalEvent(
+							entityId: $command->id,
+							type: JournalType::BookingCanceled,
+							data: array_merge(
+								$command->toArray(),
+								[
+									'id' => $command->id,
+									'booking' => $existBooking->toArray(),
+								],
+							),
+						),
+					);
+				}
 
 				$this->journalService->append(
 					new JournalEvent(

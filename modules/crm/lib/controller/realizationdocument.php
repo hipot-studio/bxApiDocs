@@ -50,6 +50,11 @@ class RealizationDocument extends Main\Engine\Controller
 			return false;
 		}
 
+		if (!$this->checkReadPermission())
+		{
+			return false;
+		}
+
 		$this->defaultStoreId = Catalog\StoreTable::getDefaultStoreId();
 
 		if (Sale\Configuration::isEnableAutomaticReservation())
@@ -102,47 +107,21 @@ class RealizationDocument extends Main\Engine\Controller
 		/** @var Crm\Order\Order $order */
 		$order = $shipmentData['order'];
 
-
-		if ($value === 'N')
+		if ($value === 'N' && !$this->checkReadAnyStorePermission($shipment))
 		{
-			$shipmentItemCollection = $shipment->getShipmentItemCollection();
+			$this->addError(
+				new Main\Error(
+					Main\Localization\Loc::getMessage(
+						'CRM_CONTROLLER_REALIZATION_DOCUMENT_DELETE_ERROR',
+						[
+							'#ID#' => htmlspecialcharsbx($shipment->getField('ACCOUNT_NUMBER')),
+						],
+					),
+					self::REALIZATION_CANNOT_DELETE_ERROR_CODE,
+				),
+			);
 
-			$storeIds = [];
-			foreach ($shipmentItemCollection as $shipmentItem)
-			{
-				$storeCollection = $shipmentItem->getShipmentItemStoreCollection();
-
-				if (!isset($storeCollection))
-				{
-					continue;
-				}
-
-				foreach ($storeCollection as $store)
-				{
-					$storeId = $store->getStoreId();
-					if ($storeId > 0 && !isset($storeIds[$storeId]))
-					{
-						if (!$this->accessController->checkByValue(ActionDictionary::ACTION_STORE_VIEW, $storeId))
-						{
-							$this->addError(
-								new Main\Error(
-									Main\Localization\Loc::getMessage(
-										'CRM_CONTROLLER_REALIZATION_DOCUMENT_DELETE_ERROR',
-										[
-											'#ID#' => htmlspecialcharsbx($shipment->getField('ACCOUNT_NUMBER')),
-										]
-									),
-									self::REALIZATION_CANNOT_DELETE_ERROR_CODE
-								)
-							);
-
-							return;
-						}
-
-						$storeIds[$storeId] = $storeId;
-					}
-				}
-			}
+			return;
 		}
 
 		$delivery = Sale\Delivery\Services\Manager::getById($shipment->getDeliveryId());
@@ -275,6 +254,7 @@ class RealizationDocument extends Main\Engine\Controller
 					self::REALIZATION_NOT_USED_INVENTORY_MANAGEMENT_ERROR_CODE
 				)
 			);
+
 			return;
 		}
 
@@ -292,6 +272,7 @@ class RealizationDocument extends Main\Engine\Controller
 		if (!$shipmentResult->isSuccess())
 		{
 			$this->addErrors($shipmentResult->getErrors());
+
 			return;
 		}
 
@@ -311,7 +292,7 @@ class RealizationDocument extends Main\Engine\Controller
 							'#ID#' => htmlspecialcharsbx($shipment->getField('ACCOUNT_NUMBER')),
 						]
 					),
-					self::REALIZATION_ALREADY_DEDUCTED_ERROR_CODE
+					self::REALIZATION_ALREADY_DEDUCTED_ERROR_CODE,
 				)
 			);
 		}
@@ -325,7 +306,7 @@ class RealizationDocument extends Main\Engine\Controller
 							'#ID#' => htmlspecialcharsbx($shipment->getField('ACCOUNT_NUMBER')),
 						]
 					),
-					self::REALIZATION_NOT_DEDUCTED_ERROR_CODE
+					self::REALIZATION_NOT_DEDUCTED_ERROR_CODE,
 				)
 			);
 		}
@@ -338,9 +319,10 @@ class RealizationDocument extends Main\Engine\Controller
 					$this->addError(
 						new Main\Error(
 							Main\Localization\Loc::getMessage('CRM_CONTROLLER_REALIZATION_DOCUMENT_PRODUCT_NOT_FOUND'),
-							self::REALIZATION_PRODUCT_NOT_FOUND_ERROR_CODE
+							self::REALIZATION_PRODUCT_NOT_FOUND_ERROR_CODE,
 						)
 					);
+
 					return;
 				}
 
@@ -381,6 +363,18 @@ class RealizationDocument extends Main\Engine\Controller
 						}
 					}
 				}
+			}
+
+			if (!$this->checkReadAnyStorePermission($shipment))
+			{
+				$this->addError(
+					new Main\Error(
+						Main\Localization\Loc::getMessage('CRM_CONTROLLER_REALIZATION_DOCUMENT_ACCESS_DENIED'),
+						self::REALIZATION_ACCESS_DENIED_ERROR_CODE,
+					),
+				);
+
+				return;
 			}
 
 			$setResult = $shipment->setField('DEDUCTED', $value);
@@ -471,6 +465,37 @@ class RealizationDocument extends Main\Engine\Controller
 		}
 	}
 
+	private function checkReadAnyStorePermission(Crm\Order\Shipment $shipment): bool
+	{
+		$shipmentItemCollection = $shipment->getShipmentItemCollection();
+		$hasAnyStore = false;
+
+		/** @var Crm\Order\ShipmentItem $shipmentItem */
+		foreach ($shipmentItemCollection as $shipmentItem)
+		{
+			$storeCollection = $shipmentItem->getShipmentItemStoreCollection();
+			if (!$storeCollection)
+			{
+				continue;
+			}
+
+			foreach ($storeCollection as $store)
+			{
+				$storeId = $store->getStoreId();
+				if ($storeId > 0)
+				{
+					if ($this->accessController->checkByValue(ActionDictionary::ACTION_STORE_VIEW, $storeId))
+					{
+						return true;
+					}
+					$hasAnyStore = true;
+				}
+			}
+		}
+
+		return !$hasAnyStore;
+	}
+
 	/**
 	 * Check permissions on create or update model.
 	 *
@@ -481,6 +506,15 @@ class RealizationDocument extends Main\Engine\Controller
 	private function checkModifyPermission(int $id = 0): bool
 	{
 		return $this->checkPermission(ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY, $id);
+	}
+
+	private function checkReadPermission(): bool
+	{
+		return
+			$this->checkPermission(ActionDictionary::ACTION_CATALOG_READ)
+			&& $this->checkPermission(ActionDictionary::ACTION_INVENTORY_MANAGEMENT_ACCESS)
+			&& $this->checkPermission(ActionDictionary::ACTION_STORE_DOCUMENT_VIEW)
+		;
 	}
 
 	/**

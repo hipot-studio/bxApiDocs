@@ -2,6 +2,7 @@
 namespace Bitrix\Crm\Automation\Trigger;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
+use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\PhaseSemantics;
@@ -130,5 +131,10 @@ class InvoiceTrigger extends BaseTrigger
 	public static function getNodeIcon(): string
 	{
 		return Outline::INVOICE->name;
+	}
+
+	public static function getNodeGroups(): array
+	{
+		return [ActivityGroup::PAYMENT->value];
 	}
 }

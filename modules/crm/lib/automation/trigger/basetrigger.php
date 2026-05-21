@@ -232,4 +232,9 @@ class BaseTrigger extends \Bitrix\Bizproc\Automation\Trigger\BaseTrigger
 	{
 		return Outline::ACTIVITY->name;
 	}
+
+	public static function getNodeGroups(): array
+	{
+		return [];
+	}
 }

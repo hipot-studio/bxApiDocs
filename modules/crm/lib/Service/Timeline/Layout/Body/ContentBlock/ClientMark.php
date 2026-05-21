@@ -2,16 +2,44 @@
 
 namespace Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 
+use Bitrix\Crm\Activity\StatisticsMark;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 
 class ClientMark extends ContentBlock
 {
-	public const POSITIVE = 'positive';
-	public const NEUTRAL = 'neutral';
-	public const NEGATIVE = 'negative';
-
 	protected ?string $mark = null;
 	protected ?string $text = null;
+
+	private const POSITIVE = 'positive';
+	private const NEUTRAL = 'neutral';
+	private const NEGATIVE = 'negative';
+
+	public static function getByCallVote(int $callVote): ?string
+	{
+		return match ($callVote)
+		{
+			StatisticsMark::Negative => self::NEGATIVE,
+			StatisticsMark::Neutral => self::NEUTRAL,
+			StatisticsMark::Positive => self::POSITIVE,
+			default => null,
+		};
+	}
+
+	public static function getByChatVote(int $chatVote): ?string
+	{
+		if ($chatVote <= 0)
+		{
+			return null;
+		}
+
+		return match (true)
+		{
+			$chatVote > 3 => self::POSITIVE,
+			$chatVote === 3 => self::NEUTRAL,
+			$chatVote > 0 => self::NEGATIVE,
+			default => null,
+		};
+	}
 
 	public function getRendererName(): string
 	{

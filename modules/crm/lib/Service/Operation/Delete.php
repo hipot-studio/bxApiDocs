@@ -37,12 +37,20 @@ class Delete extends Operation
 		if (!Container::getInstance()->getUserPermissions($userId)->item()->canDeleteItem($this->item))
 		{
 			$title =  $this->item->getHeading() ?? '';
-			$message = Loc::getMessage(
-				'CRM_TYPE_ITEM_PERMISSIONS_DELETE_DENIED_MSGVER_1',
-				[
-					'#ITEM_TITLE#' => TruncateText($title, 80),
-				]
-			);
+
+			if (Container::getInstance()->getUserPermissions($userId)->item()->canReadItem($this->item))
+			{
+				$message = Loc::getMessage(
+					'CRM_TYPE_ITEM_PERMISSIONS_DELETE_DENIED_MSGVER_1',
+					[
+						'#ITEM_TITLE#' => TruncateText($title, 80),
+					],
+				);
+			}
+			else
+			{
+				$message = Loc::getMessage('CRM_COMMON_ERROR_ACCESS_DENIED');
+			}
 			$result->addError(
 				new Error(
 					$message,

@@ -10,6 +10,7 @@ use Bitrix\Crm\Security\EntityPermission\MyCompany;
 use Bitrix\Crm\Security\Role\PermissionsManager;
 use Bitrix\Crm\Service\UserPermissions\Admin;
 use Bitrix\Crm\Service\UserPermissions\AutomatedSolution;
+use Bitrix\Crm\Service\UserPermissions\AutomatedSolutionEvent;
 use Bitrix\Crm\Service\UserPermissions\Automation;
 use Bitrix\Crm\Service\UserPermissions\CopilotCallAssessment;
 use Bitrix\Crm\Service\UserPermissions\DynamicType;
@@ -21,6 +22,7 @@ use Bitrix\Crm\Service\UserPermissions\EntityPermissions\ItemsList;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\SaleEntityItem;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Stage;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Type;
+use Bitrix\Crm\Service\UserPermissions\Event;
 use Bitrix\Crm\Service\UserPermissions\Exclusion;
 use Bitrix\Crm\Service\UserPermissions\InventoryManagementContractor;
 use Bitrix\Crm\Service\UserPermissions\Kanban;
@@ -69,6 +71,7 @@ class UserPermissions
 	protected ?SaleEntityItem $saleEntityItemPermissions = null;
 	protected ?Product $productItemPermissions = null;
 	protected ?AutomatedSolution $automatedSolutionPermissions = null;
+	protected ?AutomatedSolutionEvent $automatedSolutionEventPermissions = null;
 	protected ?Automation $automationPermissions = null;
 	protected ?DynamicType $dynamicTypePermissions = null;
 	protected ?EntityEditor $entityEditorPermissions = null;
@@ -83,6 +86,7 @@ class UserPermissions
 	protected ?RepeatSale $repeatSalePermissions = null;
 	protected ?InventoryManagementContractor $inventoryManagementContractorPermissions = null;
 	protected ?MessageSender $messageSender = null;
+	protected ?Event $eventPermissions = null;
 
 	/**
 	 * @deprecated
@@ -239,6 +243,40 @@ class UserPermissions
 		}
 
 		return $this->automatedSolutionPermissions;
+	}
+
+	/**
+	 * Manage permissions for an automated solution Event list
+	 * @return AutomatedSolutionEvent
+	 */
+	public function automatedSolutionEvent(): AutomatedSolutionEvent
+	{
+		if (!$this->automatedSolutionEventPermissions)
+		{
+			$this->automatedSolutionEventPermissions = new AutomatedSolutionEvent(
+				$this->automatedSolution(),
+				$this->getPermissionsManager(),
+			);
+		}
+
+		return $this->automatedSolutionEventPermissions;
+	}
+
+	/**
+	 * Manage permissions for Event list
+	 * @return Event
+	 */
+	public function event(): Event
+	{
+		if (!$this->eventPermissions)
+		{
+			$this->eventPermissions = new Event(
+				$this->getPermissionsManager(),
+				$this->admin(),
+			);
+		}
+
+		return $this->eventPermissions;
 	}
 
 	/**

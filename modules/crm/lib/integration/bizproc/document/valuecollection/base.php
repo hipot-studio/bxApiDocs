@@ -73,6 +73,11 @@ abstract class Base extends ValueCollection
 
 	public function offsetGet($offset): mixed
 	{
+		if ($offset === null)
+		{
+			return null;
+		}
+
 		if (!array_key_exists($offset, $this->document))
 		{
 			$this->loadCommonValue($offset);
@@ -83,6 +88,11 @@ abstract class Base extends ValueCollection
 
 	public function offsetExists($offset): bool
 	{
+		if ($offset === null)
+		{
+			return false;
+		}
+
 		if (!array_key_exists($offset, $this->document))
 		{
 			$this->loadCommonValue($offset);
@@ -928,8 +938,13 @@ abstract class Base extends ValueCollection
 
 	protected function filterCommonFields(): array
 	{
-		return array_filter($this->select, static function(string $field)
+		return array_filter($this->select, static function(mixed $field)
 		{
+			if (!is_string($field))
+			{
+				return false;
+			}
+
 			return str_starts_with($field, 'OBSERVER_IDS')
 				|| str_starts_with($field, 'CRM_ID')
 				|| str_starts_with($field, 'URL')

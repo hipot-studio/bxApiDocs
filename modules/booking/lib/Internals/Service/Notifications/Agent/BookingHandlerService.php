@@ -5,24 +5,29 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Service\Notifications\Agent;
 
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
 use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 use Bitrix\Booking\Provider\Params\Booking\BookingSort;
 
 class BookingHandlerService
 {
-	public function handleBookings(array $ids, callable $fn): void
+	private BookingRepositoryInterface $bookingRepository;
+
+	public function __construct()
+	{
+		$this->bookingRepository = Container::getBookingRepository();
+	}
+
+	public function handleBookings(array $ids, callable $fn, bool $includeDeleted = false): void
 	{
 		if (empty($ids))
 		{
 			return;
 		}
 
-		$bookingRepository = Container::getBookingRepository();
-		$bookingCollection = $bookingRepository->getList(
-			filter: new BookingFilter([
-				'ID' => $ids,
-			]),
+		$bookingCollection = $this->bookingRepository->getList(
+			filter: new BookingFilter($this->makeFilter($ids, $includeDeleted)),
 			sort: (new BookingSort([
 				'ID' => 'ASC',
 			]))->prepareSort(),
@@ -36,13 +41,26 @@ class BookingHandlerService
 
 		if (!$bookingCollection->isEmpty())
 		{
-			$bookingRepository->withSkus($bookingCollection);
-			$bookingRepository->withClientData($bookingCollection);
+			$this->bookingRepository->withSkus($bookingCollection);
+			$this->bookingRepository->withClientData($bookingCollection);
 		}
 
 		foreach ($bookingCollection as $booking)
 		{
 			$fn($booking);
 		}
+	}
+
+	private function makeFilter(array $ids, bool $includeDeleted = false): array
+	{
+		$filter = [
+			'ID' => $ids,
+		];
+		if ($includeDeleted)
+		{
+			$filter['INCLUDE_DELETED'] = true;
+		}
+
+		return $filter;
 	}
 }

@@ -25,6 +25,20 @@ class BookingAutoConfirmService
 		return (new \DateTimeImmutable())->getTimestamp() > $startFromWithConfirmedPeriod->getTimestamp();
 	}
 
+	public function shouldRecalculateOnUpdate(Booking $bookingBefore, Booking $bookingAfter): bool
+	{
+		$dateFromBefore = $bookingBefore->getDatePeriod()?->getDateFrom();
+		$dateFromAfter = $bookingAfter->getDatePeriod()?->getDateFrom();
+
+		$primaryBefore = $bookingBefore->getPrimaryResource();
+		$primaryAfter = $bookingAfter->getPrimaryResource();
+
+		return (
+			$dateFromBefore?->getTimestamp() !== $dateFromAfter?->getTimestamp()
+			|| $primaryBefore?->getId() !== $primaryAfter?->getId()
+		);
+	}
+
 	private function getAutoConfirmPeriod(Resource $resource): \DateInterval
 	{
 		if ($resource->isConfirmationNotificationOn())

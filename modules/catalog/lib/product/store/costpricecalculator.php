@@ -107,7 +107,7 @@ class CostPriceCalculator
 	 * @return float
 	 * @throws \Bitrix\Main\LoaderException
 	 */
-	public function calculate(float $quantity, int $storeId, string $currency = null): float
+	public function calculate(float $quantity, int $storeId, ?string $currency = null): float
 	{
 		if ($quantity <= 0 || !self::isUsedInventoryManagement())
 		{
@@ -133,7 +133,7 @@ class CostPriceCalculator
 		return $this->calculateAverage($storeId, $currency);
 	}
 
-	private function calculateFifo(float $quantity, int $storeId, string $currency = null): float
+	private function calculateFifo(float $quantity, int $storeId, ?string $currency = null): float
 	{
 		$commonAmount = 0;
 		$commonSum = 0;
@@ -171,7 +171,7 @@ class CostPriceCalculator
 		return $this->roundCalculation($commonSum / $commonAmount);
 	}
 
-	private function calculateAverage(int $storeId, string $currency = null): float
+	private function calculateAverage(int $storeId, ?string $currency = null): float
 	{
 		$batchCollection = $this->batchManager->getAvailableStoreCollection($storeId);
 		$batch = $batchCollection->current();

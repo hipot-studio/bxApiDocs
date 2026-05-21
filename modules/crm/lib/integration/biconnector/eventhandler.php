@@ -64,6 +64,7 @@ class EventHandler
 				'crm_ai_quality_assessment',
 				'crm_copilot_call_assessment',
 				'crm_entity_stage_history',
+				'crm_last_communication',
 			];
 
 			if (!in_array($eventTableName, $tableNames, true))
@@ -82,6 +83,7 @@ class EventHandler
 				'crm_ai_quality_assessment' => AiQualityAssessmentMapping::getMapping(),
 				'crm_copilot_call_assessment' => CopilotCallAssessmentMapping::getMapping(),
 				'crm_entity_stage_history' => EntityStageHistoryMapping::getMapping($helper),
+				'crm_last_communication' => LastCommunicationMapping::getMapping(),
 			};
 
 			self::addDescriptions([
@@ -100,6 +102,7 @@ class EventHandler
 		$result['crm_ai_quality_assessment'] = AiQualityAssessmentMapping::getMapping();
 		$result['crm_copilot_call_assessment'] = CopilotCallAssessmentMapping::getMapping();
 		$result['crm_entity_stage_history'] = EntityStageHistoryMapping::getMapping($helper);
+		$result['crm_last_communication'] = LastCommunicationMapping::getMapping();
 		$result = array_merge(
 			$result,
 			AutomatedSolutionMapping::getMapping($languageId),
@@ -121,6 +124,7 @@ class EventHandler
 			'crm_ai_quality_assessment',
 			'crm_copilot_call_assessment',
 			'crm_entity_stage_history',
+			'crm_last_communication',
 		], $result, $languageId);
 	}
 

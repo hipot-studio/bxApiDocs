@@ -1227,7 +1227,7 @@ class EntityLink
 			return $resultLink;
 		}
 
-		$skipSeller = ($entityTypeId === \CCrmOwnerType::Deal/* || $entityTypeId === \CCrmOwnerType::Order*/);
+		$skipSeller = false;
 
 		$entityId = (int)$entityId;
 
@@ -1674,6 +1674,7 @@ class EntityLink
 		{
 			switch ($entityTypeId)
 			{
+				case \CCrmOwnerType::Deal:
 				case \CCrmOwnerType::Quote:
 					$entityFields['MYCOMPANY_ID'] = $resultLink['SELLER_ENTITY_ID'];
 					break;

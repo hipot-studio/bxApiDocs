@@ -16,6 +16,7 @@ class BillingSynchronizationService
 	private const LOCK_LIMIT = 0;
 
 	private const SYNC_OFFSET_SEC = 3600;
+	private const MAX_SYNC_ATTEMPTS = 3;
 
 	private PurchaseService $purchaseService;
 
@@ -64,12 +65,13 @@ class BillingSynchronizationService
 		try
 		{
 			$syncResult = $this->billingService->synchronizeWithBilling();
+			$this->configs->resetFailedSyncAttempts();
 
 			PurchaseService::getInstance()->notifyAboutUnnotifiedPurchases();
 		}
 		catch (Baas\UseCase\BaasException $e)
 		{
-			$this->delaySyncForSec();
+			$this->handleSyncFailure();
 			$syncResult = new Main\Result();
 			$syncResult->addError(new Main\Error($e->getMessage()));
 		}
@@ -77,11 +79,35 @@ class BillingSynchronizationService
 		return $syncResult;
 	}
 
+	protected function handleSyncFailure(): void
+	{
+		$attempts = $this->configs->getFailedSyncAttempts() + 1;
+		if ($attempts >= self::MAX_SYNC_ATTEMPTS)
+		{
+			$this->delaySyncUntilTomorrow();
+
+			return;
+		}
+
+		$this->configs->setFailedSyncAttempts($attempts);
+		$this->delaySyncForSec(300 * (2 ** ($attempts - 1)));
+	}
+
 	protected function delaySyncForSec(int $sec = 300): void
 	{
 		$this->configs->setNextSyncTime(
 			time() + $sec,
 		);
+	}
+
+	protected function delaySyncUntilTomorrow(): void
+	{
+		$this->configs->setNextSyncTime(
+			strtotime('tomorrow')
+			+ self::SYNC_OFFSET_SEC
+			+ $this->configs->getSyncDelta()
+		);
+		$this->configs->resetFailedSyncAttempts();
 	}
 
 	protected function isTimeToSynchronize(?int $now = null): bool

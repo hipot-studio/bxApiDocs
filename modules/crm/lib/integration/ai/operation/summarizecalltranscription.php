@@ -24,7 +24,7 @@ use Bitrix\Main;
 use CCrmActivity;
 use CCrmOwnerType;
 
-class SummarizeCallTranscription extends AbstractOperation
+final class SummarizeCallTranscription extends AbstractOperation
 {
 	public const TYPE_ID = 2;
 	public const CONTEXT_ID = 'summarize_call_transcription';
@@ -41,7 +41,7 @@ class SummarizeCallTranscription extends AbstractOperation
 
 	public function __construct(
 		ItemIdentifier $target,
-		private string $transcription,
+		private readonly string $transcription,
 		?int $userId = null,
 		?int $parentJobId = null,
 	)
@@ -125,7 +125,7 @@ class SummarizeCallTranscription extends AbstractOperation
 		;
 	}
 
-	final protected function getContextLanguageId(): string
+	protected function getContextLanguageId(): string
 	{
 		$itemIdentifier = (new Orchestrator())->findPossibleFillFieldsTarget($this->target->getEntityId());
 		if ($itemIdentifier)
@@ -142,37 +142,16 @@ class SummarizeCallTranscription extends AbstractOperation
 
 	protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void
 	{
-		$nextTarget = (new Orchestrator())->findPossibleFillFieldsTarget($result->getTarget()?->getEntityId());
-
+		$activityId = $result->getTarget()?->getEntityId();
+		$nextTarget = (new Orchestrator())->findPossibleFillFieldsTarget($activityId);
 		if ($nextTarget)
 		{
-			$activityId = $result->getTarget()?->getEntityId();
-
-			Controller::getInstance()->onStartRecordTranscriptSummary(
-				$nextTarget,
-				$activityId,
-				$result->getUserId(),
-			);
-
 			self::saveActivitySettings($activityId);
+			self::notifyTimelinesAboutActivityUpdate($activityId, true);
 		}
 	}
 
-	protected static function notifyTimelineAfterSuccessfulJobFinish(Result $result): void
-	{
-		$nextTarget = (new Orchestrator())->findPossibleFillFieldsTarget($result->getTarget()?->getEntityId());
-		if ($nextTarget)
-		{
-			Controller::getInstance()->onFinishRecordTranscriptSummary(
-				$nextTarget,
-				$result->getTarget()?->getEntityId(),
-				[
-					'JOB_ID' => $result->getJobId(),
-				],
-				$result->getUserId(),
-			);
-		}
-	}
+	protected static function notifyTimelineAfterSuccessfulJobFinish(Result $result): void {}
 
 	protected static function notifyAboutJobError(
 		Result $result,

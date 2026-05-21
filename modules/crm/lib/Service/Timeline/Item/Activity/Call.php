@@ -2,29 +2,31 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 
-use Bitrix\Crm\Activity\StatisticsMark;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Controller\AiQualityAssessmentController;
-use Bitrix\Crm\Copilot\CallAssessment\ItemFactory;
 use Bitrix\Crm\Format\Duration;
-use Bitrix\Crm\Integration\AI\Operation\OperationState;
+use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\Dto\Scoring\ScoreCallPayload;
+use Bitrix\Crm\Integration\AI\Operation\Scenario;
+use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
+use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
+use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
+use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\Timeline\Item\Activity;
-use Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\BaseButton;
-use Bitrix\Crm\Service\Timeline\Item\Interfaces\HasCopilot;
-use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotHelper;
+use Bitrix\Crm\Service\Timeline\Item\AIActivity;
 use Bitrix\Crm\Service\Timeline\Item\Payload;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Redirect;
 use Bitrix\Crm\Service\Timeline\Layout\Action\ShowMenu;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ActionBar\ActionBarItem;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Audio;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Client;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ClientMark;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockFactory;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockWithTitle;
-use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Copilot\CallScoringPill;
+use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\EditableDescription;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\LineOfTextBlocks;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
@@ -36,6 +38,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemFactory;
 use Bitrix\Crm\Tour\CopilotInCall;
 use Bitrix\Crm\Tour\CopilotRunAutomatically;
 use Bitrix\Crm\Tour\CopilotRunManually;
+use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\PhoneNumber;
 use Bitrix\Main\Type\DateTime;
@@ -46,10 +49,8 @@ use CCrmFieldMulti;
 use CCrmOwnerType;
 use CFile;
 
-class Call extends Activity implements HasCopilot
+class Call extends AIActivity
 {
-	use CopilotHelper;
-
 	private const BLOCK_DELIMITER = '&bull;';
 
 	final protected function getActivityTypeId(): string
@@ -57,7 +58,7 @@ class Call extends Activity implements HasCopilot
 		return 'Call';
 	}
 
-	public function getIconCode(): ?string
+	final public function getIconCode(): ?string
 	{
 		switch ($this->fetchDirection())
 		{
@@ -75,7 +76,7 @@ class Call extends Activity implements HasCopilot
 		return Icon::CALL;
 	}
 
-	public function getTitle(): string
+	final public function getTitle(): string
 	{
 		switch ($this->fetchDirection())
 		{
@@ -115,126 +116,82 @@ class Call extends Activity implements HasCopilot
 		return Loc::getMessage('CRM_TIMELINE_CALL_TITLE_DEFAULT');
 	}
 
-	public function getLogo(): ?Layout\Body\Logo
+	final public function getLogo(): ?Layout\Body\Logo
 	{
 		$recordUrls = array_unique(array_column($this->fetchAudioRecordList(), 'VIEW_URL'));
-		$isAudioExist = !empty($recordUrls);
-
-		$changePlayerStateAction = (new JsEvent('Call:ChangePlayerState'))
-			->addActionParamInt('recordId', $this->getAssociatedEntityModel()?->get('ID'))
-			->addActionParamString('recordUri', $isAudioExist ? (string)$recordUrls[0] : null)
+		$hasAudio = !empty($recordUrls) && isset($recordUrls[0]);
+		$direction = $this->fetchDirection();
+		$logoType = $hasAudio
+			? Layout\Common\Logo::CALL_PLAY_RECORD
+			: $this->getLogoTypeByDirection($direction)
 		;
-
-		switch ($this->fetchDirection())
+		$logo = Layout\Common\Logo::getInstance($logoType)->createLogo();
+		if (!$logo)
 		{
-			case CCrmActivityDirection::Incoming:
-				if ($this->isMissedCall())
-				{
-					return $isAudioExist
-						? (Layout\Common\Logo::getInstance(Layout\Common\Logo::CALL_PLAY_RECORD))
-							->createLogo()
-							?->setAction($changePlayerStateAction)
-						: Layout\Common\Logo::getInstance(Layout\Common\Logo::CALL_DEFAULT)
-							->createLogo()
-							?->setIconType(Layout\Body\Logo::ICON_TYPE_FAILURE)
-							->setAdditionalIconType(Layout\Body\Logo::ICON_TYPE_FAILURE)
-							->setAdditionalIconCode('arrow')
-					;
-				}
-
-				return $isAudioExist
-					? Layout\Common\Logo::getInstance(Layout\Common\Logo::CALL_PLAY_RECORD)
-						->createLogo()
-						?->setAction($changePlayerStateAction)
-					: Layout\Common\Logo::getInstance(Layout\Common\Logo::CALL_INCOMING)
-						->createLogo()
-				;
-
-			case CCrmActivityDirection::Outgoing:
-				$logo = $isAudioExist
-					? Layout\Common\Logo::getInstance(Layout\Common\Logo::CALL_PLAY_RECORD)
-						->createLogo()?->setAction($changePlayerStateAction)
-					: Layout\Common\Logo::getInstance(Layout\Common\Logo::CALL_OUTGOING)
-						->createLogo()
-				;
-
-				if (!$this->isPlanned() && !$this->fetchInfo()['SUCCESSFUL'])
-				{
-					$logo
-						?->setAdditionalIconType(Layout\Body\Logo::ICON_TYPE_FAILURE)
-						?->setAdditionalIconCode('cross')
-					;
-				}
-
-				return $logo;
+			return null;
 		}
 
-		return  Layout\Common\Logo::getInstance(Layout\Common\Logo::CALL_DEFAULT)
-			->createLogo();
+		if ($hasAudio)
+		{
+			$logo->setAction((new JsEvent('Call:ChangePlayerState'))
+				->addActionParamInt('recordId', $this->getAssociatedEntityModel()?->get('ID'))
+				->addActionParamString('recordUri', $recordUrls[0])
+			);
+		}
+
+		return $this->applyLogoModifications($logo, $direction, $hasAudio);
 	}
 
-	public function getContentBlocks(): array
+	final public function getContentBlocks(): array
 	{
 		$result = [];
 
-		if ($this->isPlanned() && $this->getDeadline())
-		{
-			$deadline = $this->getDeadline();
-			$updateDeadlineAction = null;
-			if ($this->isScheduled())
-			{
-				$updateDeadlineAction = $this->getChangeDeadlineAction();
-			}
+		$recordUrls = array_unique(array_column($this->fetchAudioRecordList(), 'VIEW_URL'));
 
-			$result['deadline'] = (new ContentBlockWithTitle())
-				->setTitle(Loc::getMessage('CRM_TIMELINE_ITEM_CALL_COMPLETE_TO'))
-				->setInline()
-				->setContentBlock(
-					(new ContentBlock\EditableDate())
-						->setStyle(ContentBlock\EditableDate::STYLE_PILL)
-						->setDate($deadline)
-						->setAction($updateDeadlineAction)
-						->setBackgroundColor($this->isScheduled() ? ContentBlock\EditableDate::BACKGROUND_COLOR_WARNING : null)
-				)
-			;
-		}
-
-		$clientBlockOptions = Client::BLOCK_WITH_FORMATTED_VALUE | Client::BLOCK_WITH_FIXED_TITLE;
+		$clientBlockOptions = Client::BLOCK_WITH_FORMATTED_VALUE | Client::BLOCK_WITH_COMMUNICATION_CONTROL;
 		$clientBlock = $this->buildClientBlock($clientBlockOptions);
+		$responsibleUserBlock = $this->buildResponsibleUserBlock();
+		$deadlineBlock = $this->buildDeadlineBlock();
+		$callDateTimeBlock = $this->buildCallDateTimeBlock();
+		$subjectBlock = $this->buildSubjectBlock();
+		$additionalInfoBlock = $this->buildAdditionalInfoBlock();
+		$clientMarkBlock = $this->buildClientMarkBlock();
+		$descriptionBlock = $this->buildDescriptionBlock();
+		$commentBlock = $this->buildCommentBlock();
+
 		if (isset($clientBlock))
 		{
 			$result['client'] = $clientBlock;
 		}
-
-		$responsibleUserBlock = $this->buildResponsibleUserBlock();
 		if (isset($responsibleUserBlock))
 		{
-			$result['responsibleUser'] = $responsibleUserBlock;
+			$result['responsibleUser'] = $responsibleUserBlock->setScopeMobile();
 		}
-
-		$subjectBlock = $this->buildSubjectBlock();
-		if (isset($subjectBlock) && $this->isPlanned())
+		if (isset($deadlineBlock))
 		{
-			$result['subject'] = $subjectBlock;
+			$result['deadline'] = $deadlineBlock; // for planned calls (old activity)
 		}
-
-		$callQueueBlock = $this->buildCallQueueBlock();
-		if (isset($callQueueBlock) && $this->isMissedCall())
+		if (isset($subjectBlock))
 		{
-			$result['callQueue'] = $callQueueBlock;
+			$result['subject'] = $subjectBlock; // for planned calls (old activity)
 		}
 
-		$recordUrls = array_unique(array_column($this->fetchAudioRecordList(), 'VIEW_URL'));
 		if (!empty($recordUrls))
 		{
-			$callScoringPill = $this->buildCopilotCallScoringPill();
-			if (isset($callScoringPill))
+			if (isset($callDateTimeBlock))
 			{
-				$result['callScoringPill'] = $callScoringPill;
+				$result['callDateTime'] = $callDateTimeBlock->setScopeMobile();
+			}
+			if (isset($additionalInfoBlock))
+			{
+				$result['callInformation'] = $additionalInfoBlock->setScopeMobile();
 			}
 
-			// show first audio record
-			$audio = (new Audio())->setId($this->getAssociatedEntityModel()?->get('ID'))->setSource($recordUrls[0]);
+			$audio = (new Audio())
+				->setId($this->getAssociatedEntityModel()?->get('ID'))
+				->setSource($recordUrls[0]) // show first audio record
+				->setTranscriptionState($this->fetchTranscriptionState())
+			;
 			if (isset($clientBlock))
 			{
 				$communication = $this->getAssociatedEntityModel()?->get('COMMUNICATION') ?? [];
@@ -244,123 +201,95 @@ class Call extends Activity implements HasCopilot
 					$audio->setTitle($title);
 				}
 
-				if (isset($communication['ENTITY_TYPE_ID']) && $communication['ENTITY_TYPE_ID'] === CCrmOwnerType::Contact)
+				if (
+					isset($communication['ENTITY_TYPE_ID'])
+					&& $communication['ENTITY_TYPE_ID'] === CCrmOwnerType::Contact
+				)
 				{
-					$photo = Container::getInstance()->getContactBroker()->getById($communication['ENTITY_ID'])['PHOTO'] ?? '';
-					if ($photo)
+					$photo = (int)(Container::getInstance()
+						->getContactBroker()
+						->getById($communication['ENTITY_ID'])['PHOTO'] ?? 0)
+					;
+					if ($photo > 0)
 					{
-						$photoUrl = CFile::ResizeImageGet($photo, ["width" => 2000, "height" => 2000], BX_RESIZE_IMAGE_PROPORTIONAL,false, false, true);
+						$photoUrl = CFile::ResizeImageGet($photo, ["width" => 2000, "height" => 2000], BX_RESIZE_IMAGE_PROPORTIONAL, false, false, true);
 						$audio->setImageUrl($photoUrl['src']);
 					}
 				}
 			}
 
-			$result['audio'] = $audio;
+			$result['audio'] = $audio->setScopeMobile();
 		}
 
-		$additionalInfoBlock = $this->buildAdditionalInfoBlock();
-		if (isset($additionalInfoBlock))
+		if (isset($descriptionBlock))
 		{
-			$result['callInformation'] = $additionalInfoBlock;
+			$result['description'] = $descriptionBlock;
 		}
 
-		$clientMarkBlock = $this->buildClientMarkBlock();
+		if (isset($commentBlock))
+		{
+			$result['comment'] = $commentBlock;
+		}
+
 		if (isset($clientMarkBlock))
 		{
-			$result['clientMark'] = $clientMarkBlock;
+			$result['clientMark'] = $clientMarkBlock->setScopeMobile();
 		}
 
-		$description = $this->fetchDescription(
-			(string)$this->getAssociatedEntityModel()?->get($this->isScheduled() ? 'DESCRIPTION' : 'DESCRIPTION_RAW')
-		);
-
-		if (!empty($description))
+		// group blocks for web
+		$groupBlock = $this->buildGroupBlocks($result);
+		if ($groupBlock->isFilled())
 		{
-			$result['description'] = (new ContentBlock\EditableDescription())
-				->setText($description)
-				->setEditable(false)
-				->setHeight(ContentBlock\EditableDescription::HEIGHT_LONG)
-			;
+			$result['callGroupOfBlocks'] = $groupBlock->setScopeWeb();
 		}
-
-		$comment = (string) ($this->fetchInfo()['COMMENT'] ?? null);
-		if (!empty($comment))
+		$actionBarBlock = $this->buildAiActionBar();
+		if ($actionBarBlock->isFilled())
 		{
-			$result['comment'] = (new ContentBlock\EditableDescription())
-				->setText($comment)
-				->setEditable(false)
-				->setHeight(ContentBlock\EditableDescription::HEIGHT_LONG)
-			;
+			$result['aiActionBar'] = $actionBarBlock->setScopeWeb();
 		}
 
 		return $result;
 	}
 
-	public function getButtons(): array
+	final public function getButtons(): array
 	{
-		$doneButton = (new Button(Loc::getMessage('CRM_TIMELINE_BUTTON_CALL_COMPLETE'), Button::TYPE_PRIMARY))->setAction($this->getCompleteAction());
-		$scheduleButton = $this->getScheduleButton('Call:Schedule');
-		$aiButton = $this->getCopilotButton();
-		$communication = $this->getAssociatedEntityModel()?->get('COMMUNICATION') ?? [];
+		$callButton = $this->getCallButton();
+		$scheduleButton = $this->getScheduleButton('Call:Schedule', '', Button::TYPE_PRIMARY);
+		$copilotButtons = $this->getAIButtons();
 
+		$buttons = [];
 		switch ($this->fetchDirection())
 		{
 			case CCrmActivityDirection::Incoming:
 				if ($this->isMissedCall())
 				{
-					if (!empty($communication))
-					{
-						$buttons['callButton'] = $this->getCallButton(
-							$communication,
-							$this->isScheduled() ? Button::TYPE_PRIMARY : Button::TYPE_SECONDARY
-						);
-					}
-
+					$buttons['callButton'] = $callButton;
 					if ($this->isScheduled())
 					{
 						$buttons['scheduleButton'] = $scheduleButton;
 					}
 
-					return $buttons ?? [];
+					return $buttons;
 				}
 
 				if ($this->isScheduled())
 				{
 					return $this->isPlanned()
-						? ['doneButton' => $doneButton]
-						: [
-							'doneButton' => $doneButton,
-							'scheduleButton' => $scheduleButton,
-							'aiButton' => $this->getCopilotButton(),
-						];
+						? [
+							'callButton' => $callButton,
+						]
+						: array_merge(['scheduleButton' => $scheduleButton], $copilotButtons);
 				}
 
-				return empty($communication)
-					? [
-						'aiButton' => $aiButton,
-					]
-					: [
-						'callButton' => $this->getCallButton($communication, Button::TYPE_SECONDARY),
-						'aiButton' => $this->getCopilotButton(),
-					];
+				return array_merge(['callButton' => $callButton], $copilotButtons);
 			case CCrmActivityDirection::Outgoing:
-				return empty($communication)
-					? [
-						'aiButton' => $aiButton,
-					]
-					: [
-						'callButton' => $this->getCallButton(
-							$communication,
-							$this->isScheduled() ? Button::TYPE_PRIMARY : Button::TYPE_SECONDARY
-						),
-						'aiButton' => $aiButton,
-					];
+				return array_merge(['callButton' => $callButton], $copilotButtons);
 		}
 
 		return [];
 	}
 
-	public function getAdditionalIconButton(): ?IconButton
+	final public function getAdditionalIconButton(): ?IconButton
 	{
 		$callInfo = $this->fetchInfo();
 		if ($this->isTranscribed($callInfo))
@@ -375,7 +304,7 @@ class Call extends Activity implements HasCopilot
 		return null;
 	}
 
-	public function getMenuItems(): array
+	final public function getMenuItems(): array
 	{
 		$items = parent::getMenuItems();
 
@@ -403,6 +332,7 @@ class Call extends Activity implements HasCopilot
 			foreach ($records as $index => $record)
 			{
 				$menuItemName = $isSingleRecord ? null : $record['NAME'];
+
 				$items["downloadFile_$index"] = MenuItemFactory::createDownloadFileMenuItem($menuItemName)
 					->setAction(
 						(new JsEvent('Call:DownloadRecord'))
@@ -412,10 +342,15 @@ class Call extends Activity implements HasCopilot
 			}
 		}
 
-		return $items;
+		$aiMenuItems = (!$this->isAIScope() || $this->isMissedCall())
+			? []
+			: $this->getAIMenuItems()
+		;
+
+		return array_merge($items, $aiMenuItems);
 	}
 
-	public function getTags(): ?array
+	final public function getTags(): ?array
 	{
 		$tags = [];
 
@@ -436,29 +371,17 @@ class Call extends Activity implements HasCopilot
 			);
 		}
 
-		$aiTags = $this->getAiTags(
-			$this->getContext()->getIdentifier()->getEntityTypeId(),
-			$this->getContext()->getIdentifier()->getEntityId(),
-			$this->getActivityId()
-		);
-
-		return array_merge($tags, $aiTags);
+		return array_merge($tags, $this->getAITags());
 	}
 
-	public function needShowNotes(): bool
+	final public function getPayload(): ?Payload
 	{
-		return true;
-	}
-
-	public function getPayload(): ?Payload
-	{
-		$aiButton = $this->getCopilotButton();
-
-		if ($aiButton === null || $aiButton->getState() === Layout\Button::STATE_DISABLED)
+		if (!$this->isAIScope() || !$this->canShowAIActions())
 		{
 			return null;
 		}
 
+		$activityId = $this->getActivityId();
 		$isWelcomeTourEnabled = (CopilotInCall::getInstance())
 			->setEntityTypeId($this->getContext()->getIdentifier()->getEntityTypeId())
 			->isWelcomeTourEnabled()
@@ -473,45 +396,72 @@ class Call extends Activity implements HasCopilot
 		;
 
 		return (new Payload())
-			->addValueBoolean(
-				'isWelcomeTourEnabled',
-				$isWelcomeTourEnabled
-			)
-			->addValueBoolean(
-				'isWelcomeTourAutomaticallyEnabled',
-				$isWelcomeTourAutomaticallyEnabled
-			)
-			->addValueBoolean(
-				'isWelcomeTourManuallyEnabled',
-				$isWelcomeTourManuallyEnabled
-			)
+			->addValueInt('activityId', $activityId)
+			->addValueInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+			->addValueInt('ownerId', $this->getContext()->getEntityId())
+			->addValueString('languageTitle', $this->getAIService()->getAILanguage(TranscribeCallRecording::TYPE_ID))
+			->addValueBoolean('isWelcomeTourEnabled', $isWelcomeTourEnabled)
+			->addValueBoolean('isWelcomeTourAutomaticallyEnabled', $isWelcomeTourAutomaticallyEnabled)
+			->addValueBoolean('isWelcomeTourManuallyEnabled', $isWelcomeTourManuallyEnabled)
 		;
 	}
 
-	public function getCopilotButton(): ?BaseButton
+	final protected function getScenarios(): array
 	{
-		// don't show the button
-		//	- if call processing with AI not enabled
-		//	- OR if user has no update rights
-		//	- OR if the entity type is not supported
-		//	- OR if there are no audio recordings
-		//	- OR if the entity is closed
-		//	- OR if there is another entity that is selected as target for this call
-		$isButtonVisible = $this->isCopilotScope()
-			&& $this->hasUpdatePermission()
-			&& count($this->fetchAudioRecordList()) > 0
-			&& $this->isItemHashValid($this->getActivityId(), $this->getContext())
-		;
+		if ($this->isAIScope() && $this->getAIService()->isFieldsFillingWrong())
+		{
+			return [
+				Scenario::CONFIRM_FIELDS_SCENARIO,
+				Scenario::CALL_SCORING_SCENARIO,
+			];
+		}
 
-		return $isButtonVisible ? $this->createCopilotButton() : null;
+		return [
+			Scenario::FILL_FIELDS_SCENARIO,
+			Scenario::CALL_SCORING_SCENARIO,
+		];
 	}
 
-	protected function canMoveTo(): bool
+	final protected function canShowAIActions(): bool
+	{
+		return count($this->fetchAudioRecordList()) > 0;
+	}
+
+	final protected function createViewCopilotSummaryItem(array $list): ?ActionBarItem
+	{
+		if (!$this->canShowAIActions())
+		{
+			return null;
+		}
+
+		$activityId = $this->getActivityId();
+		$languageTitle = $this->getAIService()->getAILanguage(SummarizeCallTranscription::TYPE_ID);
+		$barItemAction = (new JsEvent('Call:ShowCopilotSummary'))
+			->addActionParamInt('activityId', $activityId)
+			->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+			->addActionParamInt('ownerId', $this->getContext()->getEntityId())
+			->addActionParamString('languageTitle', $languageTitle)
+		;
+
+		return (new ActionBarItem())
+			->setSize(ActionBarItem::SIZE_SM)
+			->setDesign(ActionBarItem::DESIGN_COPILOT)
+			->setAction($barItemAction)
+			->setText(
+				Loc::getMessage(
+					'CRM_TIMELINE_BLOCK_CALL_ACTION_BAR_COPILOT_SUMMARY',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()]
+				)
+			)
+		;
+	}
+
+	final protected function canMoveTo(): bool
 	{
 		return $this->isScheduled() && $this->isVoxImplant($this->fetchOriginId());
 	}
 
-	protected function getDeleteConfirmationText(): string
+	final protected function getDeleteConfirmationText(): string
 	{
 		$title = $this->getAssociatedEntityModel()?->get('SUBJECT') ?? '';
 
@@ -523,7 +473,7 @@ class Call extends Activity implements HasCopilot
 		};
 	}
 
-	protected function fetchAudioRecordList(): array
+	final protected function fetchAudioRecordList(): array
 	{
 		$originId = $this->fetchOriginId();
 		if (!$this->isVoxImplant($originId))
@@ -539,6 +489,82 @@ class Call extends Activity implements HasCopilot
 		}
 
 		return parent::fetchAudioRecordList();
+	}
+
+	// region Build content blocks
+	private function buildDeadlineBlock(): ?ContentBlockWithTitle
+	{
+		if (!$this->isPlanned())
+		{
+			return null;
+		}
+
+		$deadline = $this->getDeadline();
+		if (!$deadline)
+		{
+			return null;
+		}
+
+		$updateDeadlineAction = null;
+		if ($this->isScheduled())
+		{
+			$updateDeadlineAction = $this->getChangeDeadlineAction();
+		}
+
+		$editableDateBlock = (new ContentBlock\EditableDate())
+			->setStyle(ContentBlock\EditableDate::STYLE_PILL)
+			->setDate($deadline)
+			->setAction($updateDeadlineAction)
+			->setBackgroundColor(
+				$this->isScheduled()
+					? ContentBlock\EditableDate::BACKGROUND_COLOR_WARNING
+					: null
+			)
+		;
+		return (new ContentBlockWithTitle())
+			->setFixedWidth(false)
+			->setAlignItems('center')
+			->setTitle(Loc::getMessage('CRM_TIMELINE_ITEM_CALL_COMPLETE_TO'))
+			->setInline()
+			->setContentBlock($editableDateBlock)
+		;
+	}
+
+	private function buildCallDateTimeBlock(): ?ContentBlock
+	{
+		if ($this->isPlanned() || $this->fetchDirection() === CCrmActivityDirection::Outgoing)
+		{
+			return null;
+		}
+
+		$culture = Application::getInstance()->getContext()->getCulture();
+		$callInfo = $this->fetchInfo();
+		$startTime = $callInfo['CALL_START_DATE'] instanceof DateTime
+			? $callInfo['CALL_START_DATE']
+			: $this->getModel()->getDate()
+		;
+		$startTime = CCrmDateTimeHelper::getUserTime($startTime, $this->getContext()->getUserId())->getTimestamp();
+		$dateTimeValue = sprintf(
+			'%s %s',
+			FormatDate($culture?->getLongDateFormat(), $startTime),
+			FormatDate($culture?->getShortTimeFormat(), $startTime),
+		);
+
+		$block = new LineOfTextBlocks();
+		$blockTitle = ContentBlockFactory::createTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_CALL_DATE_TIME'))
+			->setColor(Text::COLOR_BASE_60)
+		;
+		$block->addContentBlock('callDateTimeBlockTitle', $blockTitle);
+
+		$valueBlock = (new Text())
+			->setValue($dateTimeValue)
+			->setColor(Text::COLOR_BASE_70)
+			->setFontWeight(Text::FONT_WEIGHT_MEDIUM)
+		;
+
+		$block->addContentBlock("callDateTimeBlock", $valueBlock);
+
+		return $block;
 	}
 
 	private function buildResponsibleUserBlock(): ?ContentBlock
@@ -561,6 +587,11 @@ class Call extends Activity implements HasCopilot
 
 	private function buildSubjectBlock(): ?ContentBlock
 	{
+		if (!$this->isPlanned())
+		{
+			return null;
+		}
+
 		$subject = $this->getAssociatedEntityModel()?->get('SUBJECT');
 		if (empty($subject))
 		{
@@ -568,21 +599,11 @@ class Call extends Activity implements HasCopilot
 		}
 
 		return (new ContentBlockWithTitle())
+			->setFixedWidth(false)
 			->setTitle(Loc::getMessage("CRM_TIMELINE_BLOCK_TITLE_THEME"))
 			->setContentBlock(ContentBlockFactory::createTitle((string)$subject))
 			->setInline()
 		;
-	}
-
-	private function buildCallQueueBlock(): ?ContentBlock
-	{
-		// TODO: call queue not implemented yet
-		/*return (new ContentBlockWithTitle())
-			->setTitle(ContentBlockFactory::createTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_QUEUE')))
-			->setContentBlock((new Text())->setValue('not implemented yet')) // TODO: fix after improving in voximplant module
-		;*/
-
-		return null;
 	}
 
 	private function buildAdditionalInfoBlock(): ?ContentBlock
@@ -659,7 +680,7 @@ class Call extends Activity implements HasCopilot
 
 	private function buildClientMarkBlock(): ?ContentBlock
 	{
-		$clientMark = $this->mapClientMark((int)$this->getAssociatedEntityModel()?->get('RESULT_MARK'));
+		$clientMark = ClientMark::getByCallVote((int)$this->getAssociatedEntityModel()?->get('RESULT_MARK'));
 		if (!isset($clientMark))
 		{
 			return null;
@@ -678,79 +699,128 @@ class Call extends Activity implements HasCopilot
 		;
 	}
 
-	private function buildCopilotCallScoringPill(): ?ContentBlock
+	private function buildDescriptionBlock(): ?EditableDescription
 	{
-		$isPillVisible = $this->isCopilotScope()
-			&& $this->hasUpdatePermission()
-			&& count($this->fetchAudioRecordList()) > 0
-		;
+		$input = (string)$this->getAssociatedEntityModel()?->get($this->isScheduled() ? 'DESCRIPTION' : 'DESCRIPTION_RAW');
+		$description = $this->fetchDescription($input);
+		if (empty($description))
+		{
+			return null;
+		}
 
-		if (!$isPillVisible)
+		return (new EditableDescription())
+			->setText($description)
+			->setEditable(false)
+			->setHeight(EditableDescription::HEIGHT_LONG)
+		;
+	}
+
+	private function buildCommentBlock(): ?EditableDescription
+	{
+		$comment = (string) ($this->fetchInfo()['COMMENT'] ?? null);
+		if (empty($comment))
+		{
+			return null;
+		}
+
+		return (new EditableDescription())
+			->setText($comment)
+			->setEditable(false)
+			->setHeight(EditableDescription::HEIGHT_LONG)
+		;
+	}
+
+	private function buildCallScoringBlock(): ?ContentBlock
+	{
+		if (!$this->isAIScope() || !$this->canShowAIActions())
 		{
 			return null;
 		}
 
 		$activityId = $this->getActivityId();
-		$ownerTypeId = $this->getContext()->getEntityTypeId();
-		$ownerId = $this->getContext()->getEntityId();
+		$scriptData = $this->fetchCallScoringScript($activityId);
+		if (empty($scriptData))
+		{
+			return null;
+		}
+
+		$jobId = $scriptData['JOB_ID'] ?? null;
+		$scoreDescription = $this->fetchScoringDescription($jobId);
+		if (empty($scoreDescription))
+		{
+			return null;
+		}
+
 		$communication = $this->getAssociatedEntityModel()?->get('COMMUNICATION') ?? [];
 		$userData = $this->getUserData($this->getAssociatedEntityModel()?->get('RESPONSIBLE_ID'));
-		$scoringResult = AiQualityAssessmentController::getInstance()->getByActivityIdAndJobId($this->getActivityId());
-		$jobId = $scoringResult['JOB_ID'] ?? null;
-		$createdTimestamp = (new DateTime($this->getAssociatedEntityModel()?->get('CREATED')))->getTimestamp();
+		$created = $this->getAssociatedEntityModel()?->get('CREATED');
+		$createdTimestamp = $created ? (new DateTime($created))->getTimestamp() : 0;
 
 		$action = (new JsEvent('Call:OpenCallScoringResult'))
 			->addActionParamInt('activityId', $activityId)
-			->addActionParamInt('ownerTypeId', $ownerTypeId)
-			->addActionParamInt('ownerId', $ownerId)
+			->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+			->addActionParamInt('ownerId', $this->getContext()->getEntityId())
 			->addActionParamInt('activityCreated', $createdTimestamp)
 			->addActionParamString('clientDetailUrl', isset($communication['SHOW_URL']) ? new Uri($communication['SHOW_URL']) : null)
 			->addActionParamString('clientFullName', $communication['TITLE'] ?? '')
 			->addActionParamString('userPhotoUrl', $userData['PHOTO_URL'] ?? '')
 			->addActionParamInt('jobId', $jobId)
+			->addActionParamInt('assessmentSettingsId', $scriptData['ASSESSMENT_SETTING_ID'] ?? null)
 		;
-		$pill = (new CallScoringPill())
+
+		return (new ContentBlock\Copilot\CallScoringV2())
+			->setTitle($scriptData['TITLE'] ?? '')
+			->setScore($scriptData['ASSESSMENT'] ?? 0)
+			->setScoreLowBorder($scriptData['LOW_BORDER'] ?? 0)
+			->setScoreHighBorder($scriptData['HIGH_BORDER'] ?? 0)
+			->setScoreDescription($scoreDescription)
 			->setAction($action)
-			->setScopeWeb()
-		;
-
-		if ($scoringResult)
-		{
-			$pill
-				->setTitle($scoringResult['TITLE'] ?? '')
-				->setValue(($scoringResult['ASSESSMENT'] ?? 0) . '%')
-				->setState(CallScoringPill::STATE_PROCESSED)
-			;
-		}
-		else
-		{
-			$callAssessmentItem = ItemFactory::getByActivityId($activityId);
-			$operationState = new OperationState($activityId, $ownerTypeId, $ownerId);
-			$pill
-				->setTitle($callAssessmentItem?->getTitle() ?? Loc::getMessage('CRM_TIMELINE_COPILOT_SCORING_PILL_DEFAULT_TITLE'))
-				->setState($operationState->isCallScoringScenarioPending()
-					? CallScoringPill::STATE_LOADING
-					: CallScoringPill::STATE_UNPROCESSED
-				)
-			;
-			$action->addActionParamInt('assessmentSettingsId', $callAssessmentItem?->getId());
-		}
-
-		return (new ContentBlockWithTitle())
-			->setTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_SCRIPT'))
-			->setContentBlock($pill)
-			->setInline()
-			->setScopeWeb()
 		;
 	}
 
-	private function getCallButton(array $communication, string $type): ?Button
+	private function buildGroupBlocks(array $blocks): ContentBlock\GroupBlocks
 	{
+		$groupedBlock = new ContentBlock\GroupBlocks();
+
+		if (isset($blocks['audio']))
+		{
+			$audioBlock = (clone $blocks['audio'])->setScopeWeb();
+			$groupedBlock->addBlock('audio', $audioBlock);
+
+			if (isset($blocks['callDateTime']))
+			{
+				$callDateTimeBlock = (clone $blocks['callDateTime'])->setScopeWeb();
+				$additionalInfoBlock = (new LineOfTextBlocks())->addContentBlock('callDateTime', $callDateTimeBlock);
+				if (isset($blocks['clientMark']))
+				{
+					$clientMarkBlock = (clone $blocks['clientMark'])->setScopeWeb();
+					$additionalInfoBlock->addContentBlock('clientMark', $clientMarkBlock);
+				}
+
+				$groupedBlock->addBlock('additionalInfo', $additionalInfoBlock);
+			}
+
+			$callScoringBlock = $this->buildCallScoringBlock();
+			if (isset($callScoringBlock))
+			{
+				$groupedBlock->addBlock('callScoring', $callScoringBlock->setScopeWeb());
+			}
+		}
+
+		return $groupedBlock;
+	}
+	// endregion
+
+	// region Internal utils
+	private function getCallButton(): ?Button
+	{
+		$communication = $this->getAssociatedEntityModel()?->get('COMMUNICATION') ?? [];
 		if (empty($communication))
 		{
 			return null;
 		}
 
+		$type = $this->isScheduled() ? Button::TYPE_PRIMARY : Button::TYPE_SECONDARY;
 		$button = new Button(Loc::getMessage('CRM_TIMELINE_BUTTON_CALL'), $type);
 		$makeCallAction = function (string $phone) use ($communication) {
 			return (new JsEvent('Call:MakeCall'))
@@ -790,15 +860,27 @@ class Call extends Activity implements HasCopilot
 		return $button;
 	}
 
-	private function mapClientMark(int $callVote): ?string
+	private function fetchScoringDescription(?int $jobId): ?string
 	{
-		return match ($callVote)
+		/** @var Result<ScoreCallPayload>|null $result */
+		$result = $this->getAIService()->getAIJobResult(ScoreCall::TYPE_ID, $jobId);
+		if ($result?->isSuccess())
 		{
-			StatisticsMark::Negative => ClientMark::NEGATIVE,
-			StatisticsMark::Neutral => ClientMark::NEUTRAL,
-			StatisticsMark::Positive => ClientMark::POSITIVE,
-			default => null,
-		};
+			$description = empty($result?->getPayload()?->overallSummary)
+				? $result?->getPayload()?->recommendations
+				: $result?->getPayload()?->overallSummary
+			;
+			if (empty($description))
+			{
+				return null;
+			}
+
+			$sentences = preg_split('/(?<=[.?!])\s+/u', $description, 3, PREG_SPLIT_NO_EMPTY) ?: [];
+
+			return implode(' ', array_slice($sentences, 0, 1));
+		}
+
+		return null;
 	}
 
 	private function fetchInfo(): array
@@ -883,6 +965,33 @@ class Call extends Activity implements HasCopilot
 		return (string)$this->getAssociatedEntityModel()?->get('ORIGIN_ID');
 	}
 
+	private function fetchCallScoringScript(int $activityId): ?array
+	{
+		return AiQualityAssessmentController::getInstance()->getByActivityIdAndJobId($activityId);
+	}
+
+	private function fetchTranscriptionState(): ?string
+	{
+		if (!$this->isAIScope() || $this->isMissedCall())
+		{
+			return null;
+		}
+
+		$jobResult = $this->getAIService()->getAIJobResult(TranscribeCallRecording::TYPE_ID);
+		if (isset($jobResult))
+		{
+			return match (true)
+			{
+				$jobResult->isPending() => Audio::TRANSCRIPTION_PENDING,
+				$jobResult->isSuccess() => Audio::TRANSCRIPTION_SUCCESS,
+				$jobResult->isErrorsLimitExceeded() => Audio::TRANSCRIPTION_FAILED,
+				default => Audio::TRANSCRIPTION_EMPTY,
+			};
+		}
+
+		return Audio::TRANSCRIPTION_EMPTY;
+	}
+
 	private function isMissedCall(): bool
 	{
 		$settings = $this->getAssociatedEntityModel()?->get('SETTINGS');
@@ -899,4 +1008,56 @@ class Call extends Activity implements HasCopilot
 	{
 		return isset($input['HAS_TRANSCRIPT']) && $input['HAS_TRANSCRIPT'];
 	}
+	// endregion
+
+	// region Logo utils
+	private function getLogoTypeByDirection(int $direction): string
+	{
+		return match ($direction)
+		{
+			CCrmActivityDirection::Incoming => $this->isMissedCall()
+				? Layout\Common\Logo::CALL_DEFAULT
+				: Layout\Common\Logo::CALL_INCOMING,
+			CCrmActivityDirection::Outgoing => Layout\Common\Logo::CALL_OUTGOING,
+			default => Layout\Common\Logo::CALL_DEFAULT,
+		};
+	}
+
+	private function applyLogoModifications(Layout\Body\Logo $logo, int $direction, bool $hasAudio): Layout\Body\Logo
+	{
+		if ($direction === CCrmActivityDirection::Incoming)
+		{
+			if ($this->isMissedCall())
+			{
+				return $logo
+					->setIconType(Layout\Body\Logo::ICON_TYPE_FAILURE)
+					->setAdditionalIconType(Layout\Body\Logo::ICON_TYPE_FAILURE)
+					->setAdditionalIconCode('arrow')
+				;
+			}
+
+			if ($hasAudio)
+			{
+				return $logo->setAdditionalIconCode('call-incoming');
+			}
+
+			return $logo;
+		}
+
+		// CCrmActivityDirection::Outgoing
+		if ($hasAudio)
+		{
+			return $logo->setAdditionalIconCode('call-outgoing');
+		}
+
+		if (!$this->isPlanned() && !($this->fetchInfo()['SUCCESSFUL'] ?? true))
+		{
+			return $logo
+				->setAdditionalIconType(Layout\Body\Logo::ICON_TYPE_FAILURE)
+				->setAdditionalIconCode('cross');
+		}
+
+		return $logo;
+	}
+	// endregion
 }

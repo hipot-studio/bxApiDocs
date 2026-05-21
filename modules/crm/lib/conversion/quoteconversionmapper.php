@@ -82,6 +82,7 @@ class QuoteConversionMapper extends EntityConversionMapper
 			$map->createItem('LEAD_ID');
 			$map->createItem('COMPANY_ID');
 			$map->createItem('CONTACT_BINDINGS');
+			$map->createItem('MYCOMPANY_ID');
 			$map->createItem('PRODUCT_ROWS');
 			//endregion
 

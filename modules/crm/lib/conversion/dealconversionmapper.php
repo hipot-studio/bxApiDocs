@@ -74,6 +74,7 @@ class DealConversionMapper extends EntityConversionMapper
 			$map->createItem('COMPANY_ID', 'UF_COMPANY_ID');
 			$map->createItem('LOCATION_ID', 'PR_LOCATION');
 			$map->createItem('CONTACT_PRIMARY_BINDING', 'UF_CONTACT_ID');
+			$map->createItem('MYCOMPANY_ID', 'UF_MYCOMPANY_ID');
 			$map->createItem('ASSIGNED_BY_ID', 'RESPONSIBLE_ID');
 			$map->createItem('COMMENTS');
 			$map->createItem('PRODUCT_ROWS');
@@ -101,6 +102,7 @@ class DealConversionMapper extends EntityConversionMapper
 			$map->createItem('LEAD_ID');
 			$map->createItem('COMPANY_ID');
 			$map->createItem('CONTACT_BINDINGS');
+			$map->createItem('MYCOMPANY_ID');
 			$map->createItem('PRODUCT_ROWS');
 			//endregion
 

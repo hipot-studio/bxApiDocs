@@ -401,7 +401,7 @@ class BasketItem
 		return $this;
 	}
 
-	public function setName(string $value = null): self
+	public function setName(?string $value = null): self
 	{
 		$this->fields['name'] = $value;
 
@@ -439,7 +439,7 @@ class BasketItem
 		return $this;
 	}
 
-	public function setCustomPriceType(string $value = null): self
+	public function setCustomPriceType(?string $value = null): self
 	{
 		$this->fields['isCustomPrice'] = ($value === 'N') ? 'N' : 'Y';
 
@@ -512,7 +512,7 @@ class BasketItem
 		return $this;
 	}
 
-	public function setTaxIncluded(string $value = null): self
+	public function setTaxIncluded(?string $value = null): self
 	{
 		$this->fields['taxIncluded'] = ($value === 'N') ? 'N' : 'Y';
 

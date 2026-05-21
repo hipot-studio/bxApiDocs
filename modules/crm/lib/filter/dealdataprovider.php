@@ -81,6 +81,14 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 			$name = \CCrmOwnerType::GetDescription($parentEntityTypeId);
 		}
 
+		if (!$name && $fieldID === 'MYCOMPANY_ID')
+		{
+			$name = Crm\Service\Container::getInstance()
+				->getFactory(\CCrmOwnerType::Deal)
+				->getFieldCaption(Crm\Item::FIELD_NAME_MYCOMPANY_ID)
+			;
+		}
+
 		return $name;
 	}
 
@@ -377,6 +385,13 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 			),
 			'COMPANY_ID' => $this->createField(
 				'COMPANY_ID',
+				[
+					'type' => 'dest_selector',
+					'partial' => true
+				]
+			),
+			'MYCOMPANY_ID' => $this->createField(
+				'MYCOMPANY_ID',
 				[
 					'type' => 'dest_selector',
 					'partial' => true
@@ -766,6 +781,28 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				'params' => array(
 					'apiVersion' => 3,
 					'context' => EntitySelector::CONTEXT,
+					'contextCode' => 'CRM',
+					'useClientDatabase' => 'N',
+					'enableAll' => 'N',
+					'enableDepartments' => 'N',
+					'enableUsers' => 'N',
+					'enableSonetgroups' => 'N',
+					'allowEmailInvitation' => 'N',
+					'allowSearchEmailUsers' => 'N',
+					'departmentSelectDisable' => 'Y',
+					'enableCrm' => 'Y',
+					'enableCrmCompanies' => 'Y',
+					'convertJson' => 'Y'
+				)
+			);
+		}
+
+		if ($fieldID === 'MYCOMPANY_ID')
+		{
+			return array(
+				'params' => array(
+					'apiVersion' => 3,
+					'context' => 'CRM_DEAL_FILTER_MYCOMPANY_ID',
 					'contextCode' => 'CRM',
 					'useClientDatabase' => 'N',
 					'enableAll' => 'N',

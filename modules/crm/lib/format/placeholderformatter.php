@@ -103,6 +103,34 @@ final class PlaceholderFormatter
 	}
 
 	/**
+	 * Checking for placeholders before calling getPlaceholders() avoids expensive memory operations when no placeholders are present.
+	 */
+	public static function hasPlaceholders(string $input): bool
+	{
+		if (trim($input) === '')
+		{
+			return false;
+		}
+
+		$opened = false;
+		$len = strlen($input);
+		for ($i = 0; $i < $len; $i++)
+		{
+			$ch = $input[$i];
+			if ($ch === '{')
+			{
+				$opened = true;
+			}
+			elseif ($ch === '}' && $opened)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * @param int $entityTypeId
 	 * @return array<string, string> [externalFormat => displayFormat]
 	 */
@@ -141,33 +169,5 @@ final class PlaceholderFormatter
 		}
 
 		return $result;
-	}
-
-	/**
-	 * Checking for placeholders before calling getPlaceholders() avoids expensive memory operations when no placeholders are present.
-	 */
-	private static function hasPlaceholders(string $input): bool
-	{
-		if (trim($input) === '')
-		{
-			return false;
-		}
-
-		$opened = false;
-		$len = strlen($input);
-		for ($i = 0; $i < $len; $i++)
-		{
-			$ch = $input[$i];
-			if ($ch === '{')
-			{
-				$opened = true;
-			}
-			elseif ($ch === '}' && $opened)
-			{
-				return true;
-			}
-		}
-
-		return false;
 	}
 }

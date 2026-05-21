@@ -2447,7 +2447,7 @@ final class CatalogStoreDocumentProductListComponent
 		return $this->arParams['PREFIX'] !== '' ? $this->arParams['PREFIX'] : $this->getDefaultPrefix();
 	}
 
-	protected function getRowIdPrefix(string $code = null): string
+	protected function getRowIdPrefix(?string $code = null): string
 	{
 		return $this->getPrefix() . '_product_row_' . $code;
 	}

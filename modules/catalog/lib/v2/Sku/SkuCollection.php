@@ -87,7 +87,7 @@ class SkuCollection extends BaseCollection
 	 * @param callable|null $callback
 	 * @return \Bitrix\Catalog\v2\BaseEntity|\Bitrix\Catalog\v2\Sku\BaseSku|null
 	 */
-	public function getFirst(callable $callback = null): ?BaseEntity
+	public function getFirst(?callable $callback = null): ?BaseEntity
 	{
 		return parent::getFirst($callback);
 	}

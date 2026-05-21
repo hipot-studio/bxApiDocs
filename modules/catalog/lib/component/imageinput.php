@@ -21,7 +21,7 @@ class ImageInput
 	private $inputId;
 	private $values;
 
-	public function __construct(BaseIblockElementEntity $entity = null)
+	public function __construct(?BaseIblockElementEntity $entity = null)
 	{
 		$this->entity = $entity;
 	}

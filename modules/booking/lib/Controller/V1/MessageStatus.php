@@ -7,6 +7,7 @@ namespace Bitrix\Booking\Controller\V1;
 use Bitrix\Booking\Controller\V1\Response\MessageStatusGetResponse;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
+use Bitrix\Booking\Internals\Service\Notifications\MessageSender\BaseMessageSender;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderPicker;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
 use Bitrix\Booking\Provider\BookingProvider;
@@ -42,7 +43,10 @@ class MessageStatus extends BaseController
 		$booking = $this->bookingProvider->getList(
 			gridParams: new GridParams(
 				filter: new BookingFilter(['ID' => $bookingId]),
-				select: new BookingSelect(['CLIENTS']),
+				select: new BookingSelect([
+					'RESOURCES',
+					'CLIENTS',
+				]),
 			),
 			userId: (int)CurrentUser::get()->getId(),
 		)->getFirstCollectionItem();
@@ -51,11 +55,13 @@ class MessageStatus extends BaseController
 		{
 			return null;
 		}
+		$messageSender = $this->messageSenderPicker->pickByBooking($booking);
+		[$defaultTitle, $defaultDescription] = $this->getDefaultTitleAndDescription($messageSender);
 
 		if ($booking->getClientCollection()->isEmpty())
 		{
 			return new MessageStatusGetResponse(
-				title: Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_STATUS_SMS_TO_CLIENT'),
+				title: $defaultTitle,
 				description: Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_STATUS_CLIENT_NOT_SPECIFIED'),
 				semantic: self::SEMANTIC_SECONDARY,
 				isDisabled: true,
@@ -63,21 +69,20 @@ class MessageStatus extends BaseController
 		}
 
 		$lastSentMessage = $this->bookingMessageRepository->getLastByBookingId($bookingId);
+		if (
+			!(
+				$lastSentMessage
+				&& $messageSender
+				&& $lastSentMessage->getSenderCode() === $messageSender->getCode()
+			)
 
-		$notSentResponse = new MessageStatusGetResponse(
-			title: Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_STATUS_SMS_TO_CLIENT'),
-			description: Loc::getMessage('BOOKING_CONTROLLER_MESSAGE_STATUS_NOT_SENT'),
-			semantic: self::SEMANTIC_SECONDARY,
-		);
-		if (!$lastSentMessage)
+		)
 		{
-			return $notSentResponse;
-		}
-
-		$messageSender = $this->messageSenderPicker->pickByBooking($booking);
-		if (!$messageSender)
-		{
-			return $notSentResponse;
+			return new MessageStatusGetResponse(
+				title: $defaultTitle,
+				description: $defaultDescription,
+				semantic: self::SEMANTIC_SECONDARY,
+			);
 		}
 
 		$messageStatus = $messageSender->getMessageStatus($lastSentMessage->getExternalMessageId());
@@ -109,5 +114,25 @@ class MessageStatus extends BaseController
 			description: $description,
 			semantic: $semanticsMap[$messageStatus->getSemantic()],
 		);
+	}
+
+	private function getDefaultTitleAndDescription(BaseMessageSender|null $messageSender): array
+	{
+		if (!$messageSender)
+		{
+			return ['', ''];
+		}
+
+		$langCode = mb_strtoupper($messageSender->getCode());
+
+		$defaultTitle = Loc::getMessage(
+			'BOOKING_CONTROLLER_MESSAGE_STATUS_DEFAULT_TITLE_' . $langCode
+		) ?? '';
+
+		$defaultDescription = Loc::getMessage(
+			'BOOKING_CONTROLLER_MESSAGE_STATUS_DEFAULT_DESCRIPTION_' . $langCode
+		) ?? '';
+
+		return [$defaultTitle, $defaultDescription];
 	}
 }

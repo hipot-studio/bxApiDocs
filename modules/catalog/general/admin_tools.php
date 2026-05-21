@@ -135,7 +135,7 @@ class CCatalogAdminTools extends CCatalogAdminToolsAll
 		$intIBlockID,
 		&$arCatalog,
 		$arParams,
-		BaseBuilder $urlBuilder = null,
+		?BaseBuilder $urlBuilder = null,
 		$gridId = ''
 	)
 	{
@@ -439,7 +439,7 @@ class CCatalogAdminTools extends CCatalogAdminToolsAll
 		$intID,
 		&$arCatalog,
 		$arParams,
-		BaseBuilder $urlBuilder = null
+		?BaseBuilder $urlBuilder = null
 	)
 	{
 		$arResult = false;

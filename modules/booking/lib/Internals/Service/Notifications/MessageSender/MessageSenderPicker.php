@@ -7,7 +7,7 @@ namespace Bitrix\Booking\Internals\Service\Notifications\MessageSender;
 use Bitrix\Booking\Entity\Booking\Booking;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
-use Bitrix\Main\Loader;
+use Bitrix\Main\Config\Option;
 
 class MessageSenderPicker
 {
@@ -17,29 +17,21 @@ class MessageSenderPicker
 	{
 	}
 
-	public function canUseAnySender(): bool
-	{
-		$senders = $this->getSenders();
-
-		foreach ($senders as $sender)
-		{
-			if ($sender->canUse())
-			{
-				return true;
-			}
-		}
-
-		return false;
-	}
-
 	/**
 	 * @return BaseMessageSender[]
 	 */
 	public function getSenders(): array
 	{
-		return [
+		$result = [
 			Container::getCrmMessageSender(),
 		];
+
+		if ((bool)Option::get('booking', 'ai_call_message_sender_enabled', false))
+		{
+			$result[] = Container::getAiCallMessageSender();
+		}
+
+		return $result;
 	}
 
 	public function pickByBookingId(int $id): BaseMessageSender|null
@@ -60,16 +52,20 @@ class MessageSenderPicker
 
 	public function pickByBooking(Booking $booking): BaseMessageSender|null
 	{
-		return $this->getDefaultProvider();
+		return $this->pickByCode($booking->getPrimaryResource()?->getSenderCode());
 	}
 
-	private function getDefaultProvider(): BaseMessageSender
+	private function pickByCode(string|null $code): BaseMessageSender|null
 	{
-		if (!Loader::includeModule('crm'))
+		$senders = $this->getSenders();
+		foreach ($senders as $sender)
 		{
-			return Container::getDummyBaseMessageSender();
+			if ($sender->getCode() === $code)
+			{
+				return $sender;
+			}
 		}
 
-		return Container::getCrmMessageSender();
+		return null;
 	}
 }

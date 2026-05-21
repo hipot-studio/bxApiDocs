@@ -102,10 +102,14 @@ class NavigationBar
 
 		$showConfetti = $config['showConfetti'] ?? false;
 		$periodTypeId = $config['periodTypeId'] ?? null;
+		$isGlowingSettingsButton = $config['isGlowingSettingsButton'] ?? false;
+		$showSettingsButton = $config['showSettingsButton'] ?? true;
 
 		$params = Json::encode([
 			'showConfetti' => $showConfetti,
 			'periodTypeId' => $periodTypeId,
+			'isGlowingSettingsButton' => $isGlowingSettingsButton,
+			'showSettingsButton' => $showSettingsButton,
 		]);
 
 		return new Button([

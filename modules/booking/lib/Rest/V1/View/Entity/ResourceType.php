@@ -31,7 +31,16 @@ class ResourceType extends View
 					Attributes::REQUIRED_ADD,
 				],
 			],
+			'IS_INFO_NOTIFICATION_ON' => [
+				'TYPE' => DataType::TYPE_BOOLEAN,
+			],
 			'INFO_NOTIFICATION_DELAY' => [
+				'TYPE' => DataType::TYPE_INT,
+			],
+			'IS_CANCELLATION_NOTIFICATION_ON' => [
+				'TYPE' => DataType::TYPE_BOOLEAN,
+			],
+			'CANCELLATION_NOTIFICATION_DELAY' => [
 				'TYPE' => DataType::TYPE_INT,
 			],
 			'IS_CONFIRMATION_NOTIFICATION_ON' => [

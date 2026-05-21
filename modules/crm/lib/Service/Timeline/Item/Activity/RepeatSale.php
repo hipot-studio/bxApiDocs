@@ -6,16 +6,14 @@ use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Dto\RepeatSale\FillRepeatSaleTipsPayload;
-use Bitrix\Crm\Integration\AI\JobRepository;
+use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
+use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
 use Bitrix\Crm\RepeatSale\Segment\Entity\RepeatSaleSegment;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
-use Bitrix\Crm\Service\Timeline\Item\Activity;
-use Bitrix\Crm\Service\Timeline\Item\AI\CopilotButton\BaseButton;
-use Bitrix\Crm\Service\Timeline\Item\Interfaces\HasCopilot;
-use Bitrix\Crm\Service\Timeline\Item\Mixin\CopilotHelper;
+use Bitrix\Crm\Service\Timeline\Item\AIActivity;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockFactory;
@@ -27,12 +25,13 @@ use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Main\Localization\Loc;
 use CCrmContentType;
 
-final class RepeatSale extends Activity implements HasCopilot
+final class RepeatSale extends AIActivity
 {
-	use CopilotHelper;
-
 	private const HELPDESK_CODE_COPILOT_WARNING = '20412666';
 	private const HELPDESK_CODE_REPEAT_SALE = '25376986';
+
+	private ?RepeatSaleSegment $segment = null;
+	private bool $segmentLoaded = false;
 
 	protected function getActivityTypeId(): string
 	{
@@ -83,16 +82,9 @@ final class RepeatSale extends Activity implements HasCopilot
 
 	public function getButtons(): array
 	{
-		$buttons = parent::getButtons() ?? [];
-
-		$scheduleButtonType = $this->isScheduled()
-			? Button::TYPE_PRIMARY
-			: Button::TYPE_SECONDARY
-		;
-
-		/** @var Result<FillRepeatSaleTipsPayload>|null $jobResult */
-		$payload = $this->getCoPilotJobResult()?->getPayload();
-		if ($payload)
+		$scheduleButtonType = $this->isScheduled() ? Button::TYPE_PRIMARY : Button::TYPE_SECONDARY;
+		$payload = $this->getJobResult()?->getPayload();
+		if ($payload instanceof FillRepeatSaleTipsPayload)
 		{
 			$description = Provider\RepeatSale::createDescriptionFromPayload($payload, true);
 		}
@@ -103,10 +95,7 @@ final class RepeatSale extends Activity implements HasCopilot
 			$scheduleButtonType
 		);
 
-		return array_merge($buttons, [
-			'scheduleButton' => $scheduleButton,
-			'aiButton' => $this->getCopilotButton(),
-		]);
+		return array_merge(['scheduleButton' => $scheduleButton], $this->getAIButtons());
 	}
 
 	public function getMenuItems(): array
@@ -122,27 +111,19 @@ final class RepeatSale extends Activity implements HasCopilot
 		return $menuItems;
 	}
 
-	public function needShowNotes(): bool
+	protected function getScenarios(): array
 	{
-		return true;
+		return [
+			Scenario::REPEAT_SALE_TIPS_SCENARIO,
+		];
 	}
 
-	public function getCopilotButton(): ?BaseButton
+	protected function canShowAIActions(): bool
 	{
-		$isButtonVisible = $this->isCopilotScope()
-			&& $this->hasUpdatePermission()
-			&& $this->isItemHashValid($this->getActivityId(), $this->getContext())
-			&& $this->getSegment() !== null
-		;
-
-		if (!$isButtonVisible)
-		{
-			return null;
-		}
-
-		return $this->createCopilotButton();
+		return $this->getSegment() !== null;
 	}
 
+	// region Build content blocks
 	private function buildDescriptionBlock(): ?ContentBlock
 	{
 		// base block
@@ -156,7 +137,7 @@ final class RepeatSale extends Activity implements HasCopilot
 			)
 		;
 
-		$jobResult = $this->getCoPilotJobResult();
+		$jobResult = $this->getJobResult();
 		if (
 			is_null($jobResult)
 			|| !$jobResult->isSuccess()
@@ -226,19 +207,13 @@ final class RepeatSale extends Activity implements HasCopilot
 			->addContentBlock('value', $textOrLink->setIsBold($segmentId > 0))
 		;
 	}
+
 	private function buildWarningBlock(): ?ContentBlock
 	{
-		$jobResult = $this->getCoPilotJobResult();
+		$jobResult = $this->getJobResult();
 		if ($jobResult?->isSuccess())
 		{
-			$message = Loc::getMessage(
-				'CRM_TIMELINE_ITEM_REPEAT_SALE_COPILOT_WARNING',
-				[
-					'[helpdesklink]' => '<a href="' . $this->getLinkOnHelp(self::HELPDESK_CODE_COPILOT_WARNING) . '" target="blank">',
-					'[/helpdesklink]' => '</a>',
-					'#COPILOT_NAME#' => AIManager::getCopilotName(),
-				],
-			);
+			$message = $this->getWarningText();
 
 			return ContentBlockFactory::createFromHtmlString(
 				$message,
@@ -263,7 +238,7 @@ final class RepeatSale extends Activity implements HasCopilot
 
 	private function buildErrorBlock(): ?ContentBlock
 	{
-		$jobResult = $this->getCoPilotJobResult();
+		$jobResult = $this->getJobResult();
 		if (isset($jobResult) && !$jobResult->isSuccess())
 		{
 			return (new ContentBlock\ErrorBlock())
@@ -276,18 +251,26 @@ final class RepeatSale extends Activity implements HasCopilot
 
 		return null;
 	}
+	// endregion
+
+	// region Internal utils
+	private function getJobResult(): ?Result
+	{
+		return $this->getAIService()->getAIJobResult(FillRepeatSaleTips::TYPE_ID);
+	}
 
 	private function getSegment(): ?RepeatSaleSegment
 	{
-		$params = $this->getAssociatedEntityModel()?->get('PROVIDER_PARAMS') ?? [];
-		$segmentId = (int)($params['SEGMENT_ID'] ?? 0);
+		if (!$this->segmentLoaded)
+		{
+			$params = $this->getAssociatedEntityModel()?->get('PROVIDER_PARAMS') ?? [];
+			$segmentId = (int)($params['SEGMENT_ID'] ?? 0);
 
-		return RepeatSaleSegmentController::getInstance()->getById($segmentId);
-	}
+			$this->segment = RepeatSaleSegmentController::getInstance()->getById($segmentId);
+			$this->segmentLoaded = true;
+		}
 
-	private function getCoPilotJobResult(): ?Result
-	{
-		return JobRepository::getInstance()->getFillRepeatSaleTipsByActivity($this->getActivityId());
+		return $this->segment;
 	}
 
 	private function getDescription(): string
@@ -318,4 +301,17 @@ final class RepeatSale extends Activity implements HasCopilot
 			],
 		);
 	}
+
+	private function getWarningText(): ?string
+	{
+		return Loc::getMessage(
+			'CRM_TIMELINE_ITEM_REPEAT_SALE_COPILOT_WARNING',
+			[
+				'[helpdesklink]' => '<a href="' . $this->getLinkOnHelp(self::HELPDESK_CODE_COPILOT_WARNING) . '" target="blank">',
+				'[/helpdesklink]' => '</a>',
+				'#COPILOT_NAME#' => AIManager::getCopilotName(),
+			],
+		);
+	}
+	// endregion
 }

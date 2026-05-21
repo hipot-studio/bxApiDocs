@@ -18,7 +18,9 @@ use Bitrix\Crm\Conversion\LeadConversionWizard;
 use Bitrix\Crm\Conversion\QuoteConversionWizard;
 use Bitrix\Crm\Integration\Catalog\WarehouseOnboarding;
 use Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig\DealDefaultEntityConfig;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\Recurring;
+use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
@@ -685,7 +687,7 @@ class CCrmDealDetailsComponent
 
 				if ($tabQuote)
 				{
-					$toolsManager = \Bitrix\Crm\Service\Container::getInstance()->getIntranetToolsManager();
+					$toolsManager = Container::getInstance()->getIntranetToolsManager();
 					if (!$toolsManager->checkEntityTypeAvailability(\CCrmOwnerType::Quote))
 					{
 						$availabilityLock = \Bitrix\Crm\Restriction\AvailabilityManager::getInstance()
@@ -735,7 +737,7 @@ class CCrmDealDetailsComponent
 						],
 					];
 
-					$toolsManager = \Bitrix\Crm\Service\Container::getInstance()->getIntranetToolsManager();
+					$toolsManager = Container::getInstance()->getIntranetToolsManager();
 					if (!$toolsManager->checkEntityTypeAvailability(\CCrmOwnerType::Invoice))
 					{
 						$availabilityLock = \Bitrix\Crm\Restriction\AvailabilityManager::getInstance()
@@ -794,7 +796,7 @@ class CCrmDealDetailsComponent
 							->addParams(['id' => $this->entityID]),
 					];
 
-					$toolsManager = \Bitrix\Crm\Service\Container::getInstance()->getIntranetToolsManager();
+					$toolsManager = Container::getInstance()->getIntranetToolsManager();
 					if (!$toolsManager->checkRobotsAvailability())
 					{
 						$robotsTab['availabilityLock'] = \Bitrix\Crm\Restriction\AvailabilityManager::getInstance()
@@ -820,7 +822,7 @@ class CCrmDealDetailsComponent
 				}
 				if (Main\Loader::IncludeModule('bizproc') && CBPRuntime::isFeatureEnabled())
 				{
-					$toolsManager = \Bitrix\Crm\Service\Container::getInstance()->getIntranetToolsManager();
+					$toolsManager = Container::getInstance()->getIntranetToolsManager();
 					$bizprocAvailabilityLock =
 						$toolsManager->checkBizprocAvailability()
 							? null
@@ -875,7 +877,7 @@ class CCrmDealDetailsComponent
 					}
 				}
 
-				$relationManager = Crm\Service\Container::getInstance()->getRelationManager();
+				$relationManager = Container::getInstance()->getRelationManager();
 				$this->arResult['TABS'] = array_merge(
 					$this->arResult['TABS'],
 					$relationManager->getRelationTabsForDynamicChildren(
@@ -899,7 +901,10 @@ class CCrmDealDetailsComponent
 						)
 					)
 				);
-				$this->arResult['TABS'][] = $this->getEventTabParams();
+				if($this->userPermissionsService->event()->canRead())
+				{
+					$this->arResult['TABS'][] = $this->getEventTabParams();
+				}
 				if (CModule::IncludeModule('lists'))
 				{
 					$listIblock = CLists::getIblockAttachedCrm(CCrmOwnerType::DealName);
@@ -952,7 +957,10 @@ class CCrmDealDetailsComponent
 						'enabled' => false
 					);
 				}
-				$this->arResult['TABS'][] = $this->getEventTabParams();
+				if($this->userPermissionsService->event()->canRead())
+				{
+					$this->arResult['TABS'][] = $this->getEventTabParams();
+				}
 				if (CModule::IncludeModule('lists'))
 				{
 					$listIblock = CLists::getIblockAttachedCrm(CCrmOwnerType::DealName);
@@ -1105,6 +1113,55 @@ class CCrmDealDetailsComponent
 	public function setCategoryID($categoryID)
 	{
 		$this->categoryID = $categoryID;
+	}
+
+	protected function getRequisiteLink(int $entityTypeId, int $entityId): array
+	{
+		$requisiteIndex = EditorAdapter::FIELD_MY_COMPANY_REQUISITE_ID;
+		$bankDetailIndex = EditorAdapter::FIELD_MY_COMPANY_BANK_DETAIL_ID;
+		$resuisiteLink = EntityLink::getByEntity($entityTypeId, $entityId);
+
+		return [
+			$requisiteIndex => (int)($resuisiteLink[$requisiteIndex] ?? null),
+			$bankDetailIndex => (int)($resuisiteLink[$bankDetailIndex] ?? null),
+		];
+	}
+
+	protected function fillMyCompanyDataForEmbeddedEditorField(): void
+	{
+		$editorField = EditorAdapter::getMyCompanyFieldWithEditor();
+		$factory = Container::getInstance()->getFactory(CCrmOwnerType::Deal);
+		$fieldsSettings = $factory->getFieldsInfo();
+		if (($fieldsSettings['MYCOMPANY_ID']['SETTINGS']['isEmbeddedEditorEnabled'] ?? false) === true)
+		{
+			$myCompanyId = (int)($this->entityData[Item::FIELD_NAME_MYCOMPANY_ID] ?? 0);
+			if ($myCompanyId > 0)
+			{
+				$company = Container::getInstance()->getCompanyBroker()->getById($myCompanyId);
+				if ($company)
+				{
+					$this->entityData[EditorAdapter::FIELD_MY_COMPANY_DATA_INFO] = [
+						'COMPANY_DATA' => [
+							$this->editorAdapter->prepareCrmEntityData(
+								$editorField,
+								$myCompanyId,
+								$this->getRequisiteLink(CCrmOwnerType::Deal, $this->getEntityID())
+							),
+						],
+					];
+				}
+				else
+				{
+					$this->entityData[Item::FIELD_NAME_MYCOMPANY_ID] = 0;
+				}
+			}
+
+			$this->entityData[EditorAdapter::LAST_MYCOMPANY_INFOS] = $this->editorAdapter->getLastMyCompanyInfos();
+
+			$this->arResult['ENTITY_DATA'] = $this->entityData;
+		}
+
+		$this->entityFieldInfos[] = $editorField;
 	}
 
 	public function prepareFieldInfos()
@@ -1587,6 +1644,8 @@ class CCrmDealDetailsComponent
 		);
 
 		(new Crm\Filter\Field\LastCommunicationField())->addLastCommunicationFieldInfo($this->entityFieldInfos);
+
+		$this->fillMyCompanyDataForEmbeddedEditorField();
 
 		$this->arResult['ENTITY_FIELDS'] = $this->entityFieldInfos;
 
@@ -2095,6 +2154,23 @@ class CCrmDealDetailsComponent
 		{
 			$this->entityData['CATEGORY_NAME'] = Bitrix\Crm\Category\DealCategory::getName($this->entityData['CATEGORY_ID']);
 		}
+
+		//region My Company
+		if (
+			$this->entityID <= 0
+			&& (
+				!isset($this->entityData[Item::FIELD_NAME_MYCOMPANY_ID])
+				|| $this->entityData[Item::FIELD_NAME_MYCOMPANY_ID] <= 0
+			)
+		)
+		{
+			$defaultMyCompanyId = EntityLink::getDefaultMyCompanyId();
+			if ($defaultMyCompanyId > 0)
+			{
+				$this->entityData[Item::FIELD_NAME_MYCOMPANY_ID] = (int)$defaultMyCompanyId;
+			}
+		}
+		//endregion
 
 		//region User Fields
 		foreach ($this->userFields as $fieldName => $userField)

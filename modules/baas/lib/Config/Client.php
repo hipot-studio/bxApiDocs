@@ -69,6 +69,25 @@ class Client extends Config
 		return (int)$this->get('synchronization:next_sync_time_because_of_error');
 	}
 
+	public function setFailedSyncAttempts(int $count): static
+	{
+		$this->set('synchronization:failed_attempts', (string)$count);
+
+		return $this;
+	}
+
+	public function getFailedSyncAttempts(): int
+	{
+		return (int)$this->get('synchronization:failed_attempts');
+	}
+
+	public function resetFailedSyncAttempts(): static
+	{
+		$this->delete('synchronization:failed_attempts');
+
+		return $this;
+	}
+
 	public function setLastSyncTime(int $timestamp): static
 	{
 		$this->set('synchronization:last_sync_time', (string)$timestamp);

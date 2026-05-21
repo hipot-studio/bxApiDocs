@@ -12,6 +12,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Routing\Router;
 use Bitrix\Main\Security\Sign\TimeSigner;
+use Bitrix\Main\Web\Uri;
 
 final class BalanceReport
 {
@@ -161,7 +162,7 @@ final class BalanceReport
 		$signedPurchasedPackageCode = $this->signer->sign($purchasedPackageCode, $signTime);
 		$signedServiceCode = $this->signer->sign($serviceCode, $signTime);
 
-		$route = $this->router->url(
+		$uri = $this->router->url(
 			'/bitrix/services/main/ajax.php',
 			[
 				'action' => 'baas.Host.getSignedPurchaseReport',
@@ -169,10 +170,11 @@ final class BalanceReport
 				'serviceCode' => $signedServiceCode,
 			],
 		);
+		$url = (new Uri($uri))->toAbsolute()->getLocator();
 
 		return sprintf(
 			'<a href="%s" target="_blank" >%s</a>',
-			$route,
+			$url,
 			Loc::getMessage('BAAS_PACKAGE_LOGS_ROW_DOWNLOAD') ?? 'Logs',
 		);
 	}

@@ -83,6 +83,7 @@ class ToDo extends Item
 			'contextId' => 'crm_timeline_todo_editor_add_item_' . CurrentUser::get()->getId(),
 			'category' => 'crm_activity',
 			'autoHide' => true,
+			'responseFormat' => 'html',
 		];
 	}
 

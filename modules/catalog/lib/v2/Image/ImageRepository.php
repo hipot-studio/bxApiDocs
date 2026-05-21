@@ -26,7 +26,7 @@ class ImageRepository implements ImageRepositoryContract
 		$this->factory = $factory;
 	}
 
-	public function getEntityById(int $id, string $type = null): ?BaseEntity
+	public function getEntityById(int $id, ?string $type = null): ?BaseEntity
 	{
 		if ($id <= 0)
 		{
@@ -43,7 +43,7 @@ class ImageRepository implements ImageRepositoryContract
 		return reset($entities) ?: null;
 	}
 
-	public function getEntitiesBy($params, string $type = null): array
+	public function getEntitiesBy($params, ?string $type = null): array
 	{
 		$entities = [];
 
@@ -197,7 +197,7 @@ class ImageRepository implements ImageRepositoryContract
 		return $files;
 	}
 
-	protected function createEntity(array $fields = [], string $type = null): BaseImage
+	protected function createEntity(array $fields = [], ?string $type = null): BaseImage
 	{
 		$entity = $this->factory->createEntity($type);
 
