@@ -350,7 +350,7 @@ class CAllPrice
 		$bGetID = ($bGetID == true);
 
 		$arFields = array();
-		$arFields["PRICE"] = (float)$Price;
+		$arFields['PRICE'] = (float)$Price;
 		$arFields["CURRENCY"] = $Currency;
 		$arFields["QUANTITY_FROM"] = ($quantityFrom == false ? false : (int)$quantityFrom);
 		$arFields["QUANTITY_TO"] = ($quantityTo == false ? false : (int)$quantityTo);
@@ -378,22 +378,26 @@ class CAllPrice
 	{
 		$ID = (int)$ID;
 		if ($ID <= 0)
+		{
 			return;
+		}
 
-		$iblockList = array();
+		$iblockList = [];
 
 		if ($TYPE == 'EXTRA')
 		{
 			$baseType = CCatalogGroup::GetBaseGroup();
 			if (empty($baseType))
+			{
 				return;
+			}
 
 			$db_res = CPrice::GetListEx(
-				array(),
-				array('EXTRA_ID' => $ID),
+				[],
+				['EXTRA_ID' => $ID],
 				false,
 				false,
-				array('ID', 'PRODUCT_ID', 'EXTRA_ID', 'QUANTITY_FROM', 'QUANTITY_TO')
+				['ID', 'PRODUCT_ID', 'EXTRA_ID', 'QUANTITY_FROM', 'QUANTITY_TO']
 			);
 			while ($res = $db_res->Fetch())
 			{
@@ -404,36 +408,34 @@ class CAllPrice
 					'QUANTITY_TO' => ($res['QUANTITY_TO'] === null ? false : $res['QUANTITY_TO'])
 				);
 				$parentIterator = CPrice::GetListEx(
-					array(),
+					[],
 					$parentFilter,
 					false,
 					false,
-					array('ID', 'PRODUCT_ID', 'PRICE', 'CURRENCY', 'ELEMENT_IBLOCK_ID')
+					['ID', 'PRODUCT_ID', 'PRICE', 'CURRENCY', 'ELEMENT_IBLOCK_ID']
 				);
 				$basePrice = $parentIterator->Fetch();
 				if (!empty($basePrice))
 				{
 					$basePrice['ELEMENT_IBLOCK_ID'] = (int)$basePrice['ELEMENT_IBLOCK_ID'];
-					$fields = array(
-						'PRICE' => roundex($basePrice['PRICE'] * (1 + 1 * $VAL / 100), 2),
+					$rawMarkupPrice = $basePrice['PRICE'] * (1 + $VAL / 100);
+					$fields = [
+						'PRICE' => Catalog\Product\Price\Calculation::roundPrecision($rawMarkupPrice),
 						'CURRENCY' => $basePrice['CURRENCY']
-					);
+					];
 					CPrice::Update($res['ID'], $fields);
-					unset($arFields);
 					$iblockList[$basePrice['ELEMENT_IBLOCK_ID']] = $basePrice['ELEMENT_IBLOCK_ID'];
 				}
-				unset($basePrice, $parentIterator);
 			}
-			unset($res, $db_res, $baseType);
 		}
 		else
 		{
 			$db_res = CPrice::GetListEx(
-				array(),
-				array("PRODUCT_ID" => $ID),
+				[],
+				["PRODUCT_ID" => $ID],
 				false,
 				false,
-				array('ID', 'PRODUCT_ID', 'EXTRA_ID', 'ELEMENT_IBLOCK_ID')
+				['ID', 'PRODUCT_ID', 'EXTRA_ID', 'ELEMENT_IBLOCK_ID'],
 			);
 			while ($res = $db_res->Fetch())
 			{
@@ -442,23 +444,22 @@ class CAllPrice
 				if ($res["EXTRA_ID"] > 0)
 				{
 					$res1 = CExtra::GetByID($res["EXTRA_ID"]);
-					$arFields = array(
-						"PRICE" => $VAL * (1 + 1 * $res1["PERCENTAGE"] / 100),
-					);
+					$arFields = [
+						'PRICE' => $VAL * (1 + 1 * $res1["PERCENTAGE"] / 100),
+					];
 					CPrice::Update($res["ID"], $arFields);
 					$iblockList[$res['ELEMENT_IBLOCK_ID']] = $res['ELEMENT_IBLOCK_ID'];
 				}
 			}
-			unset($res, $db_res);
 		}
 
 		if (!empty($iblockList) && Main\Loader::includeModule('iblock'))
 		{
 			foreach ($iblockList as &$iblock)
+			{
 				CIblock::clearIblockTagCache($iblock);
-			unset($iblock);
+			}
 		}
-		unset($iblockList);
 	}
 
 	public static function OnCurrencyDelete($Currency)
@@ -527,20 +528,29 @@ class CAllPrice
 	 */
 	public static function ReCountForBase(&$arFields)
 	{
-		static $arExtraList = array();
+		static $arExtraList = [];
 
-		$arFilter = array('PRODUCT_ID' => $arFields['PRODUCT_ID'],'!CATALOG_GROUP_ID' => $arFields['CATALOG_GROUP_ID']);
+		$arFilter = [
+			'PRODUCT_ID' => $arFields['PRODUCT_ID'],
+			'!CATALOG_GROUP_ID' => $arFields['CATALOG_GROUP_ID'],
+		];
+
 		if (isset($arFields['QUANTITY_FROM']))
+		{
 			$arFilter['QUANTITY_FROM'] = $arFields['QUANTITY_FROM'];
+		}
+
 		if (isset($arFields['QUANTITY_TO']))
+		{
 			$arFilter['QUANTITY_TO'] = $arFields['QUANTITY_TO'];
+		}
 
 		$rsPrices = CPrice::GetListEx(
-			array('CATALOG_GROUP_ID' => 'ASC',"QUANTITY_FROM" => "ASC", "QUANTITY_TO" => "ASC"),
+			['CATALOG_GROUP_ID' => 'ASC',"QUANTITY_FROM" => "ASC", "QUANTITY_TO" => "ASC"],
 			$arFilter,
 			false,
 			false,
-			array('ID','EXTRA_ID')
+			['ID','EXTRA_ID'],
 		);
 		while ($arPrice = $rsPrices->Fetch())
 		{
@@ -557,15 +567,16 @@ class CAllPrice
 						$arExtraList[$arExtra['ID']] = (float)$arExtra['PERCENTAGE'];
 					}
 				}
+
 				if ($boolSearch)
 				{
-					$arNewPrice = array(
+					$rawExtraPrice = $arFields['PRICE'] * (1 + $arExtraList[$arPrice['EXTRA_ID']] / 100);
+					$arNewPrice = [
 						'CURRENCY' => $arFields['CURRENCY'],
-						'PRICE' => roundEx($arFields["PRICE"] * (1 + $arExtraList[$arPrice['EXTRA_ID']]/100), CATALOG_VALUE_PRECISION),
-					);
+						'PRICE' => Catalog\Product\Price\Calculation::roundPrecision($rawExtraPrice),
+					];
 					CPrice::Update($arPrice['ID'],$arNewPrice,false);
 				}
-				unset($boolSearch);
 			}
 		}
 	}
@@ -610,7 +621,8 @@ class CAllPrice
 						if ($arBasePrice = $rsBasePrices->Fetch())
 						{
 							$arFields['CURRENCY'] = $arBasePrice['CURRENCY'];
-							$arFields['PRICE'] = roundEx($arBasePrice["PRICE"] * (1 + $arExtra["PERCENTAGE"]/100), CATALOG_VALUE_PRECISION);
+							$rawRecount = $arBasePrice['PRICE'] * (1 + $arExtra["PERCENTAGE"] / 100);
+							$arFields['PRICE'] = Catalog\Product\Price\Calculation::roundByFormatCurrency($rawRecount, $arBasePrice['CURRENCY']);
 							$currency = CCurrency::GetByID($arBasePrice['CURRENCY']);
 							if (!empty($currency))
 								$arFields['PRICE_SCALE'] = $arFields['PRICE']*$currency['CURRENT_BASE_RATE'];

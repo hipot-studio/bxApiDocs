@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\AI\Payload\Formatter;
 
-use Bitrix\Main\Loader;
 use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
 
 class CopilotName extends Formatter implements IFormatter
 {
 	private const MARKER = '{copilot_name}';
-	private const COPILOT_NAME_FALLBACK = 'CoPilot';
 
 	/**
 	 * @inheritDoc
@@ -27,12 +25,6 @@ class CopilotName extends Formatter implements IFormatter
 
 	protected function getCopilotName(): string
 	{
-		if (Loader::includeModule('ui'))
-		{
-			return (new CopilotNameService())->getCopilotName();
-		}
-
-		return self::COPILOT_NAME_FALLBACK;
+		return (new CopilotNameService())->getCopilotName();
 	}
 }
-

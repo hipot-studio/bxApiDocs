@@ -5,6 +5,7 @@ namespace Bitrix\Catalog\Integration\Report\Handler\StoreProfit;
 use Bitrix\Catalog\Integration\Report\Filter\StoreStockFilter;
 use Bitrix\Catalog\Integration\Report\Handler\BaseHandler;
 use Bitrix\Catalog\Integration\Report\StoreStock\StoreStockSale;
+use Bitrix\Catalog\Product\Price\Calculation;
 use Bitrix\Currency\CurrencyManager;
 use Bitrix\Main\Loader;
 
@@ -27,7 +28,10 @@ abstract class ProfitHandler extends BaseHandler
 
 		foreach ($fields as $key => $value)
 		{
-			$fields[$key] = \CCurrencyRates::convertCurrency($value, $currency, $reportCurrency);
+			$fields[$key] = Calculation::roundByFormatCurrency(
+				\CCurrencyRates::convertCurrency($value, $currency, $reportCurrency),
+				$reportCurrency
+			);
 		}
 
 		return $fields;
@@ -41,7 +45,10 @@ abstract class ProfitHandler extends BaseHandler
 			return $value;
 		}
 
-		return \CCurrencyRates::convertCurrency($value, $currency, $reportCurrency);
+		return Calculation::roundByFormatCurrency(
+			\CCurrencyRates::convertCurrency($value, $currency, $reportCurrency),
+			$reportCurrency
+		);
 	}
 
 	protected function getBaseCurrency(): ?string

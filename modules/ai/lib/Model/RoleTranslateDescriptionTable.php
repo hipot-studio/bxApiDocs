@@ -2,8 +2,10 @@
 
 namespace Bitrix\AI\Model;
 
-use Bitrix\AI\Model\RoleTable;
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Data\AddStrategy\Contract\AddStrategy;
+use Bitrix\Main\ORM\Data\AddStrategy\Merge;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddMergeTrait;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
@@ -27,6 +29,12 @@ use Bitrix\Main\ORM\Query\Join;
 class RoleTranslateDescriptionTable extends Entity\DataManager
 {
 	use DeleteByFilterTrait;
+	use AddMergeTrait;
+
+	protected static function getMergeStrategy(): AddStrategy
+	{
+		return new Merge(static::getEntity(), ['ROLE_ID', 'LANG']);
+	}
 
 	public const DEFAULT_LANG = 'en';
 

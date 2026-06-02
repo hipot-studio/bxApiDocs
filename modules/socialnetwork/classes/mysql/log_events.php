@@ -16,18 +16,22 @@ class CSocNetLogEvents extends CAllSocNetLogEvents
 		if (!CSocNetLogEvents::CheckFields("ADD", $arFields))
 			return false;
 
+		$connection = \Bitrix\Main\Application::getConnection();
+
 		$arInsert = $DB->PrepareInsert("b_sonet_log_events", $arFields);
 		\Bitrix\Socialnetwork\Util::processEqualityFieldsToInsert($arFields1, $arInsert);
 
 		$ID = false;
 		if ($arInsert[0] <> '')
 		{
-			$strSql =
-				"INSERT INTO b_sonet_log_events(".$arInsert[0].") ".
-				"VALUES(".$arInsert[1].")";
-			$DB->Query($strSql);
+			$strSql = $connection->getSqlHelper()->getInsertIgnore(
+				'b_sonet_log_events',
+				"(".$arInsert[0].")",
+				"VALUES(".$arInsert[1].")"
+			);
+			$connection->query($strSql);
 
-			$ID = intval($DB->LastID());
+			$ID = (int)$connection->getInsertedId();
 		}
 
 		return $ID;

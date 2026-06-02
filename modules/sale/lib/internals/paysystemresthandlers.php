@@ -1,6 +1,9 @@
 <?php
 namespace Bitrix\Sale\Internals;
 
+use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
+
 /**
  * Class PaySystemRestHandlersTable
  * @package Bitrix\Sale\Internals
@@ -39,12 +42,10 @@ class PaySystemRestHandlersTable extends \Bitrix\Main\Entity\DataManager
 				'primary' => true,
 				'autocomplete' => true,
 			),
-			'NAME' => array(
-				'data_type' => 'string'
-			),
-			'CODE' => array(
-				'data_type' => 'string'
-			),
+			'NAME' => (new StringField('NAME'))
+				->addValidator(new LengthValidator(1, 255)),
+			'CODE' => (new StringField('CODE'))
+				->addValidator(new LengthValidator(null, 50)),
 			'SORT' => array(
 				'data_type' => 'integer'
 			),
@@ -52,9 +53,8 @@ class PaySystemRestHandlersTable extends \Bitrix\Main\Entity\DataManager
 				'data_type' => 'string',
 				'serialized' => true
 			),
-			'APP_ID' => array(
-				'data_type' => 'string'
-			),
+			'APP_ID' => (new StringField('APP_ID'))
+				->addValidator(new LengthValidator(null, 128)),
 		);
 	}
 }

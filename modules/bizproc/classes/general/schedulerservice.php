@@ -625,12 +625,16 @@ class CBPSchedulerService extends CBPRuntimeService
 		);
 	}
 
-
 	private static function getDelayBounds(): array
 	{
 		return [
 			'min' => static::getDelayMinLimit(false),
 			'max' => static::getDelayMaxDays() * 86400,
 		];
+	}
+
+	public function useMessengerTransport(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('bizproc', 'scheduler_use_messenger_transport', 'N') === 'Y';
 	}
 }

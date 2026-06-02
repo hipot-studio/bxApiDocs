@@ -63,10 +63,15 @@ class Dynamic extends Item
 	public static function getDocumentCategoryId(string $documentId): ?int
 	{
 		$documentInfo = self::GetDocumentInfo($documentId);
+		if (!$documentInfo)
+		{
+			return null;
+		}
+
 		$entityTypeId = \CCrmOwnerType::ResolveID($documentInfo['TYPE']);
 		$factory = Crm\Service\Container::getInstance()->getFactory($entityTypeId);
 
-		if ($factory && $factory?->isCategoriesSupported() && $factory?->isCategoriesEnabled())
+		if ($factory && $factory->isCategoriesSupported() && $factory->isCategoriesEnabled())
 		{
 			$entity = $factory->getItem($documentInfo['ID'], ['CATEGORY_ID']);
 			if ($entity)

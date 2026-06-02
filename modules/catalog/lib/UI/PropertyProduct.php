@@ -12,7 +12,7 @@ use Bitrix\Iblock\PropertyTable;
 
 class PropertyProduct
 {
-	private const PRICE_PRECISION = 2;
+	private const PRICE_PRECISION = 8;
 
 	/**
 	 * Get readable properties of a product variation. Fields are not properties - but included here.

@@ -2647,6 +2647,23 @@ class CCrmDocument
 		return $documentId;
 	}
 
+	protected static function getEntityFieldCaption(int $entityTypeId, string $fieldName, ?string $fallback = null): string
+	{
+		$factory = Container::getInstance()->getFactory($entityTypeId);
+		if ($factory && $factory->isFieldExists($fieldName))
+		{
+			$caption = $factory->getFieldCaption($fieldName);
+			if ($caption === $fieldName && $fallback)
+			{
+				return $fallback;
+			}
+
+			return $caption;
+		}
+
+		return $fallback ?? $fieldName;
+	}
+
 	protected static function getVirtualFields(): array
 	{
 		$fields = [

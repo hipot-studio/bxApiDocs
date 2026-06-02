@@ -14,6 +14,7 @@ use Bitrix\DocumentGenerator\Value;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 use Bitrix\Main\Web\Uri;
 
 Container::getInstance()->getLocalization()->loadMessages();
@@ -208,7 +209,7 @@ final class Document extends Activity
 
 		$menuItems['print'] =
 			(new Layout\Menu\MenuItem(Loc::getMessage('CRM_COMMON_ACTION_PRINT')))
-				->setIcon('print')
+				->setIcon(Outline::PRINTER)
 				->setAction(
 					$this->getUrlAction('Document:Print', 'printUrl', $this->getPrintUrl()),
 				)
@@ -217,6 +218,7 @@ final class Document extends Activity
 
 		$menuItems['downloadPdf'] =
 			(new Layout\Menu\MenuItem(Loc::getMessage('CRM_TIMELINE_ACTIVITY_DOCUMENT_DOWNLOAD_PDF')))
+				->setIcon(Outline::DOWNLOAD)
 				->setAction(
 					$this->getUrlAction('Document:DownloadPdf', 'pdfUrl', $this->getPdfUrl()),
 				)
@@ -225,6 +227,7 @@ final class Document extends Activity
 
 		$menuItems['downloadDocx'] =
 			(new Layout\Menu\MenuItem(Loc::getMessage('CRM_TIMELINE_ACTIVITY_DOCUMENT_DOWNLOAD_DOCX')))
+				->setIcon(Outline::DOWNLOAD)
 				->setAction(
 					$this->getUrlAction('Document:DownloadDocx', 'docxUrl', $this->getDownloadUrl()),
 				)

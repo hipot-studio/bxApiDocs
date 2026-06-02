@@ -12,6 +12,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItem;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemFactory;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 Container::getInstance()->getLocalization()->loadMessages();
 
@@ -297,11 +298,13 @@ final class Document extends Configurable
 
 		$menuItems['downloadPdf'] =
 			(new MenuItem(Loc::getMessage('CRM_COMMON_ACTION_DOWNLOAD_FORMAT', ['#FORMAT#' => 'PDF'])))
+				->setIcon(Outline::DOWNLOAD)
 				->setAction($downloadPdfAction)
 		;
 
 		$menuItems['downloadDocx'] =
 			(new MenuItem(Loc::getMessage('CRM_COMMON_ACTION_DOWNLOAD_FORMAT', ['#FORMAT#' => 'DOCX'])))
+				->setIcon(Outline::DOWNLOAD)
 				->setAction(
 					(new Layout\Action\JsEvent('Document:DownloadDocx'))
 						->addActionParamString('docxUrl', (string)$this->getDownloadUrl())

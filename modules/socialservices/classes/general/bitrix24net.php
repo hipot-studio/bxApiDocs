@@ -356,8 +356,6 @@ class CSocServBitrix24Net extends CSocServAuth
 			$url = \CHTTP::URN2URI('/');
 		}
 
-		$url = CUtil::JSEscape($url);
-
 		if ($bSuccess)
 		{
 			unset($_SESSION['B24_NETWORK_REDIRECT_TRY']);
@@ -405,14 +403,7 @@ class CSocServBitrix24Net extends CSocServAuth
 			$url = "/";
 		}
 
-		$location = ($mode == "popup")
-			? 'if(window.opener) window.opener.location = \''.$url.'\'; window.close();'
-			: 'window.location = \''.$url.'\';';
-?>
-<script>
-<?=$location?>
-</script>
-<?
+		$this->onAfterWebAuth(true, ($mode == "popup") ? self::OPENER_MODE : $mode, $url);
 
 		CMain::FinalActions();
 	}

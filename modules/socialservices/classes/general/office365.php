@@ -320,8 +320,6 @@ class CSocServOffice365OAuth extends CSocServAuth
 			$url = (preg_match("/\?/", $url)) ? $url . "&current_fieldset=SOCSERV" : $url . "?current_fieldset=SOCSERV";
 		}
 
-		$url = CUtil::JSEscape($url);
-
 		if ($bSuccess && $mode === self::MOBILE_MODE)
 		{
 			$this->onAfterMobileAuth();

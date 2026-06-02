@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Config\Option;
@@ -42,45 +43,123 @@ class CAllCatalogDiscount
 
 	private static function calculatePriceByDiscount($basePrice, $currentPrice, $oneDiscount, &$needErase)
 	{
-		$calculatePrice = false;
+		$needErase = true;
 		switch ($oneDiscount['VALUE_TYPE'])
 		{
 			case self::TYPE_PERCENT:
-				$discountValue = Price\Calculation::roundPrecision(
-					-(self::$getPercentFromBasePrice ? $basePrice : $currentPrice) * $oneDiscount['VALUE'] / 100
-				);
-				if (isset($oneDiscount['DISCOUNT_CONVERT']) && $oneDiscount['DISCOUNT_CONVERT'] > 0)
-				{
-					if ($discountValue + $oneDiscount['DISCOUNT_CONVERT'] <= 0)
-						$discountValue = -$oneDiscount['DISCOUNT_CONVERT'];
-				}
-				$needErase = ($currentPrice + $discountValue < 0);
-				if (!$needErase)
-				{
-					$calculatePrice = $currentPrice + $discountValue;
-				}
-				unset($discountValue);
-				break;
+				return Loader::includeModule('sale')
+					? self::calculatePercentDiscount($basePrice, $currentPrice, $oneDiscount, $needErase)
+					: self::calculatePercentDiscountLegacy($basePrice, $currentPrice, $oneDiscount, $needErase);
+
 			case self::TYPE_FIX:
-				$needErase = ($oneDiscount['DISCOUNT_CONVERT'] > $currentPrice);
+				$needErase = $oneDiscount['DISCOUNT_CONVERT'] > $currentPrice;
 				if (!$needErase)
 				{
-					$calculatePrice = $currentPrice - $oneDiscount['DISCOUNT_CONVERT'];
+					return Price\Calculation::roundPrecision(
+						$currentPrice - (float)$oneDiscount['DISCOUNT_CONVERT']
+					);
 				}
+
 				break;
 			case self::TYPE_SALE:
-				$needErase = ($oneDiscount['DISCOUNT_CONVERT'] >= $currentPrice);
+				$needErase = $oneDiscount['DISCOUNT_CONVERT'] >= $currentPrice;
 				if (!$needErase)
 				{
-					$calculatePrice = $oneDiscount['DISCOUNT_CONVERT'];
+					return Price\Calculation::roundPrecision(
+						(float)$oneDiscount['DISCOUNT_CONVERT']
+					);
 				}
-				break;
-			default:
-				$needErase = true;
-				break;
 		}
 
-		return $calculatePrice;
+		// boolean value is returned for compatibility
+		return false;
+	}
+
+	private static function calculatePercentDiscount($basePrice, $currentPrice, $oneDiscount, &$needErase)
+	{
+		$effectiveBase = self::$getPercentFromBasePrice ? $basePrice : $currentPrice;
+		$discountCalculator = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+		$discountFactory = ServiceLocator::getInstance()->get('sale.basketItemInputFactory');
+		$result = $discountCalculator->calculate(
+			$discountFactory->createFromArray([
+				'basePrice' => $effectiveBase,
+				'discountRate' => (float)$oneDiscount['VALUE'],
+			])
+		);
+		$discountValue = $result->discountValue;
+
+		// cap discount by max allowed amount (DISCOUNT_CONVERT)
+		if (
+			isset($oneDiscount['DISCOUNT_CONVERT'])
+			&& $oneDiscount['DISCOUNT_CONVERT'] > 0
+			&& $discountValue > $oneDiscount['DISCOUNT_CONVERT']
+		)
+		{
+			$discountValue = $oneDiscount['DISCOUNT_CONVERT'];
+		}
+
+		$needErase = $currentPrice < $discountValue;
+
+		return $needErase ? false : $currentPrice - $discountValue;
+	}
+
+	private static function calculatePercentDiscountLegacy($basePrice, $currentPrice, $oneDiscount, &$needErase)
+	{
+		$effectiveBase = self::$getPercentFromBasePrice ? $basePrice : $currentPrice;
+		$discountValue = Price\Calculation::roundPrecision(
+			$effectiveBase * $oneDiscount['VALUE'] / 100
+		);
+
+		// cap discount by max allowed amount (DISCOUNT_CONVERT)
+		if (
+			isset($oneDiscount['DISCOUNT_CONVERT'])
+			&& $oneDiscount['DISCOUNT_CONVERT'] > 0
+			&& $discountValue > $oneDiscount['DISCOUNT_CONVERT']
+		)
+		{
+			$discountValue = $oneDiscount['DISCOUNT_CONVERT'];
+		}
+
+		$needErase = $currentPrice < $discountValue;
+
+		return $needErase ? false : $currentPrice - $discountValue;
+	}
+
+	private static function adjustVat(float $price, float $vatRatePercent, bool $accrue): float
+	{
+		$vatCalc = ServiceLocator::getInstance()->get('sale.vatCalculator');
+		$inputFactory = ServiceLocator::getInstance()->get('sale.basketItemInputFactory');
+
+		if ($accrue)
+		{
+			return $vatCalc->accrueVat(
+				$inputFactory->createFromArray([
+					'basePrice' => $price,
+					'vatRate' => $vatRatePercent,
+					'vatIncluded' => false,
+				])
+			);
+		}
+
+		return $vatCalc->allocateVat(
+			$inputFactory->createFromArray([
+				'basePrice' => $price,
+				'vatRate' => $vatRatePercent,
+				'vatIncluded' => true,
+			])
+		);
+	}
+
+	private static function convertCurrency(float $value, string $fromCurrency, string $toCurrency): float
+	{
+		if ($fromCurrency === $toCurrency)
+		{
+			return $value;
+		}
+
+		return Price\Calculation::roundPrecision(
+			CCurrencyRates::ConvertCurrency($value, $fromCurrency, $toCurrency)
+		);
 	}
 
 	/**
@@ -2207,9 +2286,6 @@ class CAllCatalogDiscount
 			if (self::$useSaleDiscount && Loader::includeModule('sale'))
 			{
 				Catalog\Product\Price\Calculation::pushConfig();
-				Catalog\Product\Price\Calculation::setConfig([
-					'PRECISION' => (int)Main\Config\Option::get('sale', 'value_precision')
-				]);
 				$applyDiscountList = array();
 				foreach ($productDiscountList as $priority => $discounts)
 				{
@@ -2271,6 +2347,7 @@ class CAllCatalogDiscount
 						$currentPrice = $accumulativePrice;
 						$applyDiscountList = $applyAccumulativeList;
 					}
+
 					break;
 				case CCatalogDiscountSave::APPLY_MODE_ADD:
 					$currentPrice = self::calculateDiscSave(
@@ -2282,6 +2359,7 @@ class CAllCatalogDiscount
 					);
 					if ($currentPrice === false)
 						return false;
+
 					break;
 				case CCatalogDiscountSave::APPLY_MODE_DISABLE:
 					if (empty($applyDiscountList))
@@ -2311,100 +2389,102 @@ class CAllCatalogDiscount
 	public static function calculateDiscountList($priceData, $currency, &$discountList, $getWithVat = true)
 	{
 		$getWithVat = ($getWithVat !== false);
-		$result = array();
+
 		if (empty($priceData) || !is_array($priceData))
-			return $result;
+		{
+			return [];
+		}
+
 		$priceData['PRICE'] = (float)$priceData['PRICE'];
 		$priceData['CURRENCY'] = CCurrency::checkCurrencyID($priceData['CURRENCY']);
 		$currency = CCurrency::checkCurrencyID($currency);
-		if ($priceData['CURRENCY'] === false || $currency === false || !is_array($discountList))
-			return $result;
 
-		//$discountVat = ((string)Option::get('catalog', 'discount_vat') != 'N');
-		$discountVat = true;
+		if (
+			$priceData['CURRENCY'] === false
+			|| $currency === false
+			|| !is_array($discountList)
+			|| !Loader::includeModule('sale')
+		)
+		{
+			return [];
+		}
 
-		$currentPrice = (
-			$priceData['CURRENCY'] == $currency
-			? $priceData['PRICE']
-			: CCurrencyRates::ConvertCurrency($priceData['PRICE'], $priceData['CURRENCY'], $currency)
-		);
+		$discountCalculator = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+		$inputFactory = ServiceLocator::getInstance()->get('sale.basketItemInputFactory');
+		$vatRatePercent = $priceData['VAT_RATE'] * 100;
+
+		// pre-discount VAT adjustment
+		$currentPrice = self::convertCurrency($priceData['PRICE'], $priceData['CURRENCY'], $currency);
 		$priceData['ORIG_VAT_INCLUDED'] = $priceData['VAT_INCLUDED'];
-		if ($discountVat)
+
+		if ($priceData['VAT_INCLUDED'] === 'N')
 		{
-			if ($priceData['VAT_INCLUDED'] == 'N')
-			{
-				$currentPrice *= (1 + $priceData['VAT_RATE']);
-				$priceData['VAT_INCLUDED'] = 'Y';
-			}
+			$currentPrice = self::adjustVat($currentPrice, $vatRatePercent, true);
+			$priceData['VAT_INCLUDED'] = 'Y';
 		}
-		else
-		{
-			if ($priceData['VAT_INCLUDED'] == 'Y')
-			{
-				$currentPrice /= (1 + $priceData['VAT_RATE']);
-				$priceData['VAT_INCLUDED'] = 'N';
-			}
-		}
+
 		$currentPrice = Price\Calculation::roundPrecision($currentPrice);
 		$calculatePrice = $currentPrice;
+
+		// iterative discount chain
 		foreach ($discountList as $discount)
 		{
 			switch ($discount['VALUE_TYPE'])
 			{
 				case self::TYPE_FIX:
-					if ($discount['CURRENCY'] == $currency)
-						$currentDiscount = $discount['VALUE'];
-					else
-						$currentDiscount = CCurrencyRates::ConvertCurrency($discount['VALUE'], $discount['CURRENCY'], $currency);
-					$currentDiscount = Price\Calculation::roundPrecision($currentDiscount);
-					$currentPrice = $currentPrice - $currentDiscount;
+					$fixDiscValue = self::convertCurrency((float)$discount['VALUE'], $discount['CURRENCY'], $currency);
+					$fixResult = $discountCalculator->calculate(
+						$inputFactory->createFromArray([
+							'basePrice' => $currentPrice,
+							'discountValue' => $fixDiscValue,
+						])
+					);
+					$currentPrice = $fixResult->price;
+
 					break;
 				case self::TYPE_PERCENT:
-					$currentDiscount = $currentPrice*$discount['VALUE']/100.0;
+					$percentResult = $discountCalculator->calculate(
+						$inputFactory->createFromArray([
+							'basePrice' => $currentPrice,
+							'discountRate' => (float)$discount['VALUE'],
+						])
+					);
+					// MAX_DISCOUNT clamping
 					if ($discount['MAX_DISCOUNT'] > 0)
 					{
-						if ($discount['CURRENCY'] == $currency)
-							$maxDiscount = $discount['MAX_DISCOUNT'];
-						else
-							$maxDiscount = CCurrencyRates::ConvertCurrency($discount['MAX_DISCOUNT'], $discount['CURRENCY'], $currency);
-						if ($currentDiscount > $maxDiscount)
-							$currentDiscount = $maxDiscount;
+						$maxDiscount = self::convertCurrency((float)$discount['MAX_DISCOUNT'], $discount['CURRENCY'], $currency);
+						if ($percentResult->discountValue > $maxDiscount)
+						{
+							$percentResult = $discountCalculator->calculate(
+								$inputFactory->createFromArray([
+									'basePrice' => $currentPrice,
+									'discountValue' => $maxDiscount,
+								])
+							);
+						}
 					}
-					$currentDiscount = Price\Calculation::roundPrecision($currentDiscount);
-					$currentPrice = $currentPrice - $currentDiscount;
+					$currentPrice = $percentResult->price;
+
 					break;
 				case self::TYPE_SALE:
-					if ($discount['CURRENCY'] == $currency)
-						$currentPrice = $discount['VALUE'];
-					else
-						$currentPrice = CCurrencyRates::ConvertCurrency($discount['VALUE'], $discount['CURRENCY'], $currency);
+					$currentPrice = self::convertCurrency((float)$discount['VALUE'], $discount['CURRENCY'], $currency);
 					$currentPrice = Price\Calculation::roundPrecision($currentPrice);
+
 					break;
 			}
 		}
-		unset($discount);
 
-		$vatRate = (1 + $priceData['VAT_RATE']);
-		if ($discountVat)
+		// post-discount VAT adjustment
+		if (!$getWithVat)
 		{
-			if (!$getWithVat)
-			{
-				$calculatePrice /= $vatRate;
-				$currentPrice /= $vatRate;
-			}
+			$calculatePrice = self::adjustVat($calculatePrice, $vatRatePercent, false);
+			$currentPrice = self::adjustVat($currentPrice, $vatRatePercent, false);
 		}
-		else
-		{
-			if ($getWithVat)
-			{
-				$calculatePrice *= $vatRate;
-				$currentPrice *= $vatRate;
-			}
-		}
-		unset($vatRate);
+
 		unset($priceData['ORIG_VAT_INCLUDED']);
 		$unroundBasePrice = $calculatePrice;
 		$unroundPrice = $currentPrice;
+
 		if (Catalog\Product\Price\Calculation::isComponentResultMode())
 		{
 			$calculatePrice = Catalog\Product\Price::roundPrice(
@@ -2412,22 +2492,17 @@ class CAllCatalogDiscount
 				$calculatePrice,
 				$currency
 			);
+
 			$currentPrice = Catalog\Product\Price::roundPrice(
 				$priceData['CATALOG_GROUP_ID'],
 				$currentPrice,
 				$currency
 			);
-			if (
-				empty($discountList)
-				|| Catalog\Product\Price\Calculation::compare($result['BASE_PRICE'], $result['PRICE'], '<=')
-			)
-			{
-				$result['BASE_PRICE'] = $result['PRICE'];
-			}
 		}
-		$currentDiscount = ($calculatePrice - $currentPrice);
 
-		$result = array(
+		$currentDiscount = $calculatePrice - $currentPrice;
+
+		return [
 			'PRICE_TYPE_ID' => $priceData['CATALOG_GROUP_ID'],
 			'BASE_PRICE' => $calculatePrice,
 			'DISCOUNT_PRICE' => $currentPrice,
@@ -2437,13 +2512,12 @@ class CAllCatalogDiscount
 			'DISCOUNT' => $currentDiscount,
 			'PERCENT' => (
 				$calculatePrice > 0 && $currentDiscount > 0
-				? round((100*$currentDiscount)/$calculatePrice, 0)
-				: 0
+					? round((100 * $currentDiscount) / $calculatePrice, 0)
+					: 0
 			),
 			'VAT_RATE' => $priceData['VAT_RATE'],
-			'VAT_INCLUDED' => ($getWithVat ? 'Y' : 'N')
-		);
-		return $result;
+			'VAT_INCLUDED' => $getWithVat ? 'Y' : 'N',
+		];
 	}
 
 	public static function getDiscountDescription(array $discount)
@@ -3235,9 +3309,11 @@ class CAllCatalogDiscount
 					case Iblock\PropertyTable::TYPE_ELEMENT:
 					case Iblock\PropertyTable::TYPE_SECTION:
 						$property['EMPTY_VALUE'] = array(-1);
+
 						break;
 					default:
 						$property['EMPTY_VALUE'] = array('');
+
 						break;
 				}
 				$iblockProperties[$arProduct['IBLOCK_ID']][$id] = $property;
@@ -3285,6 +3361,7 @@ class CAllCatalogDiscount
 							}
 							$arProduct['PROPERTY_'.$arOneProp['ID'].'_VALUE'] = $arOneProp['VALUE'];
 							$boolCheck = true;
+
 							break;
 					}
 				}
@@ -3352,6 +3429,7 @@ class CAllCatalogDiscount
 							}
 							$arProduct['PROPERTY_'.$arOneProp['ID'].'_VALUE'] = $arValues;
 							$boolCheck = true;
+
 							break;
 					}
 				}
@@ -4284,6 +4362,7 @@ class CAllCatalogDiscount
 						if ($changeData)
 							$oneDiscount['VALUE'] = $oneDiscount['DISCOUNT_CONVERT'];
 					}
+
 					break;
 				case self::TYPE_SALE:
 					$discountValue = (
@@ -4300,6 +4379,7 @@ class CAllCatalogDiscount
 						if ($changeData)
 							$oneDiscount['VALUE'] = $oneDiscount['DISCOUNT_CONVERT'];
 					}
+
 					break;
 				case self::TYPE_PERCENT:
 					$validDiscount = ($oneDiscount['VALUE'] <= 100);
@@ -4319,6 +4399,7 @@ class CAllCatalogDiscount
 								$oneDiscount['MAX_DISCOUNT'] = $oneDiscount['DISCOUNT_CONVERT'];
 						}
 					}
+
 					break;
 				default:
 					$validDiscount = false;
@@ -4405,8 +4486,19 @@ class CAllCatalogDiscount
 		$basePrice = (float)$basePrice;
 		$price = (float)$price;
 		$currency = CCurrency::checkCurrencyID($currency);
-		if ($basePrice <= 0 || $price <= 0 || $currency === false)
+		if (
+			$basePrice <= 0
+			|| $price <= 0
+			|| $currency === false
+			|| !Loader::includeModule('sale')
+		)
+		{
 			return false;
+		}
+
+		// Step 3: resolve DiscountCalculator for calculateDiscSave
+		$discSaveCalc = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+		$discSaveFactory = ServiceLocator::getInstance()->get('sale.basketItemInputFactory');
 
 		$currentPrice = $price;
 		$minPrice = false;
@@ -4417,25 +4509,32 @@ class CAllCatalogDiscount
 			switch($oneDiscount['VALUE_TYPE'])
 			{
 				case CCatalogDiscountSave::TYPE_PERCENT:
-					$discountValue = Price\Calculation::roundPrecision((
-						self::$getPercentFromBasePrice
-							? $basePrice
-							: $currentPrice
-						)*$oneDiscount['VALUE']/100
+					$effectiveBase = self::$getPercentFromBasePrice ? $basePrice : $currentPrice;
+					$discSaveResult = $discSaveCalc->calculate(
+						$discSaveFactory->createFromArray([
+							'basePrice' => $effectiveBase,
+							'discountRate' => (float)$oneDiscount['VALUE'],
+						])
 					);
-					$needErase = ($currentPrice < $discountValue);
+					$needErase = $currentPrice < $discSaveResult->discountValue;
 					if (!$needErase)
-						$calculatePrice = $currentPrice - $discountValue;
-					unset($discountValue);
+					{
+						$calculatePrice = $currentPrice - $discSaveResult->discountValue;
+					}
+
 					break;
 				case CCatalogDiscountSave::TYPE_FIX:
-					$needErase = ($oneDiscount['DISCOUNT_CONVERT'] > $currentPrice);
+					$needErase = $oneDiscount['DISCOUNT_CONVERT'] > $currentPrice;
 					if (!$needErase)
-						$calculatePrice = $currentPrice - $oneDiscount['DISCOUNT_CONVERT'];
+					{
+						$calculatePrice = Price\Calculation::roundPrecision(
+							$currentPrice - (float)$oneDiscount['DISCOUNT_CONVERT']
+						);
+					}
+
 					break;
 				default:
 					$needErase = true;
-					break;
 			}
 			if (!$needErase)
 			{
@@ -4445,7 +4544,6 @@ class CAllCatalogDiscount
 					$minPrice = $calculatePrice;
 					$minIndex = $discountIndex;
 				}
-				unset($apply);
 			}
 		}
 		if ($minPrice !== false && isset($discsaveList[$minIndex]))

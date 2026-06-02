@@ -54,14 +54,22 @@ class WorkgroupSubject
 		$addSubjectSiteList = array_diff($groupSiteIdList, $subjectSiteList);
 		$addSubjectSiteList = array_unique($addSubjectSiteList);
 
+		$connection = \Bitrix\Main\Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+
 		if (!empty($addSubjectSiteList))
 		{
 			foreach ($addSubjectSiteList as $siteId)
 			{
-				WorkgroupSubjectSiteTable::add(array(
-					'SUBJECT_ID' => $subjectId,
-					'SITE_ID' => $siteId
-				));
+				$sqlQuery = $connection->getSqlHelper()->getInsertIgnore(
+					WorkgroupSubjectSiteTable::getTableName(),
+					' (SUBJECT_ID, SITE_ID) ',
+					"VALUES("
+					. (int)$subjectId . ", '"
+					. $sqlHelper->forSql($siteId) . "')"
+				);
+
+				$connection->query($sqlQuery);
 			}
 		}
 

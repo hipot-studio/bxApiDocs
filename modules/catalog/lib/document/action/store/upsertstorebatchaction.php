@@ -5,10 +5,10 @@ namespace Bitrix\Catalog\Document\Action\Store;
 use Bitrix\Catalog\Document\Action;
 use Bitrix\Catalog\Document\Action\ProductAndStoreInfo;
 use Bitrix\Catalog\EO_StoreBatch;
+use Bitrix\Catalog\Product\Price\Calculation;
 use Bitrix\Catalog\Product\Store\CostPriceCalculator;
 use Bitrix\Catalog\StoreBatchDocumentElementTable;
 use Bitrix\Catalog\StoreBatchTable;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -181,10 +181,9 @@ class UpsertStoreBatchAction implements Action
 			$purchasingPrice = $this->convertPrice($purchasingPrice, $purchasingCurrency, $batch->getPurchasingCurrency());
 		}
 
-		$precision = (int)Option::get('sale', 'value_precision', 2);
 		$newAvailableAmount = $batch->getAvailableAmount() + $amount;
 		$newPurchasingPrice = ($batch->getPurchasingPrice() * $batch->getAvailableAmount() + $purchasingPrice * $amount) / $newAvailableAmount;
-		$newPurchasingPrice = round($newPurchasingPrice, $precision);
+		$newPurchasingPrice = Calculation::roundPrecision($newPurchasingPrice);
 
 		$batch->setAvailableAmount($newAvailableAmount);
 		$batch->setPurchasingPrice($newPurchasingPrice);
@@ -201,10 +200,12 @@ class UpsertStoreBatchAction implements Action
 			return $purchasingPrice;
 		}
 
-		return \CCurrencyRates::convertCurrency(
-			$purchasingPrice,
-			$purchasingCurrency,
-			$newCurrency
+		return Calculation::roundPrecision(
+			\CCurrencyRates::convertCurrency(
+				$purchasingPrice,
+				$purchasingCurrency,
+				$newCurrency
+			)
 		);
 	}
 }

@@ -95,6 +95,14 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 		;
 		$this->getApplication()->SetTitle($title);
 
+		if ($this->isExternalDynamicTypes && !RestrictionManager::getAutomatedSolutionRestriction()->hasPermission())
+		{
+			$componentPage = 'restrictions';
+			$this->includeComponentTemplate($componentPage);
+
+			return;
+		}
+
 		$this->arResult['isExternal'] = $this->isExternalDynamicTypes;
 		$this->arResult['grid'] = $this->prepareGrid();
 		$this->arResult['isEmptyList'] = !$this->isAtLeastOneDynamicTypeExists();

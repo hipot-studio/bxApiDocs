@@ -107,13 +107,13 @@ class StoreDocumentElementTable extends DataManager
 					'title' => Loc::getMessage('INVENTORY_DOCUMENT_ELEMENT_ENTITY_AMOUNT_FIELD'),
 				]
 			),
-			'PURCHASING_PRICE' => new IntegerField(
+			'PURCHASING_PRICE' => new FloatField(
 				'PURCHASING_PRICE',
 				[
 					'title' => Loc::getMessage('INVENTORY_DOCUMENT_ELEMENT_ENTITY_PURCHASING_PRICE_FIELD'),
 				]
 			),
-			'BASE_PRICE' => new IntegerField(
+			'BASE_PRICE' => new FloatField(
 				'BASE_PRICE',
 				[
 					'title' => Loc::getMessage('INVENTORY_DOCUMENT_ELEMENT_ENTITY_BASE_PRICE_FIELD'),

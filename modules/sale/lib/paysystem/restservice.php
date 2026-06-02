@@ -697,6 +697,11 @@ class RestService extends \IRestService
 			throw new RestException('Parameter CODE is not defined', self::ERROR_CHECK_FAILURE);
 		}
 
+		if (!Main\IO\Path::validateFilename($params['CODE']))
+		{
+			throw new RestException('Parameter CODE contains invalid characters', self::ERROR_CHECK_FAILURE);
+		}
+
 		if (!isset($params['SETTINGS']))
 		{
 			throw new RestException('Parameter SETTINGS is not defined', self::ERROR_CHECK_FAILURE);
@@ -824,6 +829,11 @@ class RestService extends \IRestService
 
 		if (isset($params['FIELDS']['CODE']))
 		{
+			if (!Main\IO\Path::validateFilename($params['FIELDS']['CODE']))
+			{
+				throw new RestException('Parameter CODE contains invalid characters', self::ERROR_CHECK_FAILURE);
+			}
+
 			$dbRes = Internals\PaySystemRestHandlersTable::getList([
 				'filter' => [
 					'!=ID' => $params['ID'],

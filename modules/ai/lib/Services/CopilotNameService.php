@@ -2,39 +2,18 @@
 
 namespace Bitrix\AI\Services;
 
-use Bitrix\AI\Enum\CopilotName;
-use Bitrix\AI\Facade\Bitrix24;
-use Bitrix\Main\Application;
+use Bitrix\Ui\Public\Services\Copilot;
 
 /**
  * @deprecated Use \Bitrix\Ui\Public\Services\Copilot\CopilotNameService instead
  */
 class CopilotNameService
 {
-	private static ?string $cachedZone = null;
-
 	/**
 	 * @deprecated Use \Bitrix\Ui\Public\Services\Copilot\CopilotNameService::getCopilotName() instead
 	 */
 	public function getCopilotName(): string
 	{
-		return $this->isWestZone() ? CopilotName::COPILOT->value : CopilotName::BITRIX_GPT->value;
-	}
-
-	private function isWestZone(): bool
-	{
-		$zone = $this->getPortalZone();
-
-		return !in_array($zone, Bitrix24::CIS_ZONES, true);
-	}
-
-	protected function getPortalZone(): string
-	{
-		if (self::$cachedZone === null)
-		{
-			self::$cachedZone = strtolower(Application::getInstance()->getLicense()->getRegion() ?? 'ru');
-		}
-
-		return self::$cachedZone;
+		return (new Copilot\CopilotNameService())->getCopilotName();
 	}
 }

@@ -298,7 +298,7 @@ class UserContentView
 		{
 			$result['items'] = $userList;
 		}
-		elseif ($pageNum <= ((count($userList) / $pageSize) + 1))
+		elseif ($pageNum < ((count($userList) / $pageSize) + 1))
 		{
 			$res = new \CDBResult();
 			$res->initFromArray($userList);

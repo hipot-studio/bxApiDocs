@@ -14,10 +14,24 @@ class CSalePaySystemsHelper
 		if(!isset($arClassNames[$actionFile]))
 		{
 			$PSTarifClassName = '';  //must be defined in file tarif.php and contain class
-			$tarifFileName = $_SERVER["DOCUMENT_ROOT"].$actionFile."/tarif.php";
 
-			if(file_exists($tarifFileName))
-				include_once($tarifFileName);
+			try
+			{
+				$handlerFolder = \Bitrix\Sale\PaySystem\Manager::getPathToHandlerFolder($actionFile);
+			}
+			catch (\Bitrix\Main\IO\InvalidPathException $e)
+			{
+				$handlerFolder = null;
+			}
+			if ($handlerFolder !== null)
+			{
+				$tarifFileName = $_SERVER["DOCUMENT_ROOT"] . $handlerFolder . "/tarif.php";
+
+				if (file_exists($tarifFileName))
+				{
+					include_once($tarifFileName);
+				}
+			}
 
 			$arClassNames[$actionFile] = $PSTarifClassName;  // todo: may be object/instance instead name ?
 		}
@@ -140,10 +154,23 @@ class CSalePaySystemsHelper
 	{
 		$isAffordPdf = false;
 
-		$descriptionFile = $_SERVER['DOCUMENT_ROOT'] . $actionFile . '/.description.php';
+		try
+		{
+			$handlerFolder = \Bitrix\Sale\PaySystem\Manager::getPathToHandlerFolder($actionFile);
+		}
+		catch (\Bitrix\Main\IO\InvalidPathException $e)
+		{
+			$handlerFolder = null;
+		}
+		if ($handlerFolder !== null)
+		{
+			$descriptionFile = $_SERVER['DOCUMENT_ROOT'] . $handlerFolder . '/.description.php';
 
-		if (is_file($descriptionFile))
-			include($descriptionFile);
+			if (is_file($descriptionFile))
+			{
+				include($descriptionFile);
+			}
+		}
 
 		return $isAffordPdf;
 	}
@@ -165,7 +192,20 @@ class CSalePaySystemsHelper
 
 		while($ps = $res->Fetch())
 		{
-			$descriptionFile = $_SERVER["DOCUMENT_ROOT"].$ps["ACTION_FILE"]."/.description.php";
+			try
+			{
+				$handlerFolder = \Bitrix\Sale\PaySystem\Manager::getPathToHandlerFolder($ps["ACTION_FILE"]);
+			}
+			catch (\Bitrix\Main\IO\InvalidPathException $e)
+			{
+				$handlerFolder = null;
+			}
+			if ($handlerFolder === null)
+			{
+				continue;
+			}
+
+			$descriptionFile = $_SERVER["DOCUMENT_ROOT"] . $handlerFolder . "/.description.php";
 
 			if(!file_exists($descriptionFile) || !is_file($descriptionFile))
 				continue;

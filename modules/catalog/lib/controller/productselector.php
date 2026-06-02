@@ -11,6 +11,7 @@ use Bitrix\Catalog\ProductTable;
 use Bitrix\Catalog\StoreBarcodeTable;
 use Bitrix\Catalog\UI\PropertyProduct;
 use Bitrix\Catalog\v2\Barcode\Barcode;
+use Bitrix\Catalog\Product\Price\Calculation;
 use Bitrix\Catalog\v2\BaseIblockElementEntity;
 use Bitrix\Catalog\v2\Image\DetailImage;
 use Bitrix\Catalog\v2\Image\MorePhotoImage;
@@ -288,10 +289,7 @@ class ProductSelector extends JsonController
 			if (!empty($options['currency']) && $options['currency'] !== $currency)
 			{
 				$basePrice = \CCurrencyRates::ConvertCurrency($price, $currency, $options['currency']);
-				$currencyFormat = \CCurrencyLang::GetCurrencyFormat($options['currency']);
-				$decimals = $currencyFormat['DECIMALS'] ?? 2;
-				$basePrice = round($basePrice, $decimals);
-				$price = \CCurrencyLang::CurrencyFormat($basePrice, $options['currency'], false);
+				$price = Calculation::roundByFormatCurrency($basePrice, $options['currency']);
 				$isCustomized = 'Y';
 				$currency = $options['currency'];
 			}

@@ -7,6 +7,7 @@ use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\Quality;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
 
 /**
  * Predefined data for settings
@@ -74,8 +75,12 @@ class Defaults
 		{
 			$langCode = 'AI_SETTINGS_DEFAULT_GROUP_' . mb_strtoupper($group);
 			$data[$group] = [
-				'title' => Loc::getMessage($langCode),
-				'description' => Loc::getMessage($langCode . '_DESCRIPTION') ?? null,
+				'title' => Loc::getMessage($langCode, [
+					'#COPILOT_NAME#' => self::getCopilotName(),
+				]),
+				'description' => Loc::getMessage($langCode . '_DESCRIPTION_MSGVER_1', [
+					'#COPILOT_NAME#' => self::getCopilotName(),
+				]) ?? null,
 				'icon' => $icons[$group] ?? null,
 				'sort' => $sort++,
 				'helpdesk' => self::getDefaultGroupsHelpdesk($group),
@@ -137,8 +142,12 @@ class Defaults
 			// todo: add helps
 			// todo: add  helps
 			$data[$group] = [
-				'title' => Loc::getMessage($langCode),
-				'description' => Loc::getMessage($langCode . '_DESCRIPTION'),
+				'title' => Loc::getMessage($langCode . '_MSGVER_1', [
+					'#COPILOT_NAME#' => self::getCopilotName(),
+				]),
+				'description' => Loc::getMessage($langCode . '_DESCRIPTION_MSGVER_1', [
+					'#COPILOT_NAME#' => self::getCopilotName(),
+				]),
 				'sort' => $sort++,
 				// 'helpdesk' => 123,
 			];
@@ -341,5 +350,10 @@ class Defaults
 		}
 
 		return in_array($item->getCode(), $internalCodes);
+	}
+
+	private static function getCopilotName(): string
+	{
+		return (new CopilotNameService())->getCopilotName();
 	}
 }

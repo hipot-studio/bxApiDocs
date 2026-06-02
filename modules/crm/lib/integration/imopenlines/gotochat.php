@@ -22,6 +22,7 @@ class GoToChat
 
 	private const TELEGRAM_BOT_CONNECTOR_ID = 'telegrambot';
 	private const WHATS_APP_CONNECTOR_ID = 'notifications';
+	private const MAX_CONNECTOR_ID = 'max';
 
 	private string $senderType;
 	private string $senderChannelId;
@@ -59,6 +60,7 @@ class GoToChat
 		$availableConnectors = [
 			self::TELEGRAM_BOT_CONNECTOR_ID,
 			self::WHATS_APP_CONNECTOR_ID,
+			self::MAX_CONNECTOR_ID,
 		];
 
 		if (!in_array($connectorId, $availableConnectors, true))

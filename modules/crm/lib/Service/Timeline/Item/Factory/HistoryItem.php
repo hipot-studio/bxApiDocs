@@ -209,6 +209,8 @@ class HistoryItem
 					return new Item\LogMessage\Booking\BookingStatusUpdate($context, $model);
 				case LogMessageType::REPEAT_SALE_CREATED:
 					return new Item\LogMessage\RepeatSaleCreated($context, $model);
+				case LogMessageType::COPIED:
+					return new Item\LogMessage\Copied($context, $model);
 			}
 		}
 

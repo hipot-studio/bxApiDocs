@@ -31,6 +31,6 @@ class TranslateDescriptionRepository extends BaseRepository
 			return;
 		}
 
-		RoleTranslateDescriptionTable::addMulti($data, true);
+		RoleTranslateDescriptionTable::addMergeMulti($data);
 	}
 }

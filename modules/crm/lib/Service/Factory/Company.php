@@ -22,7 +22,7 @@ use Bitrix\Main\IO\Path;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Objectify\EntityObject;
 
-final class Company extends Service\Factory
+class Company extends Service\Factory
 {
 	protected $itemClassName = Item\Company::class;
 

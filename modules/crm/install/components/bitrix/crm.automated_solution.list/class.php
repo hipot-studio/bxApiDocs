@@ -68,13 +68,22 @@ class CrmAutomatedSolutionListComponent extends Base
 	{
 		$this->init();
 
-		if($this->getErrors())
+		if ($this->getErrors())
 		{
 			$this->includeComponentTemplate();
+
 			return;
 		}
 
 		$this->getApplication()->SetTitle(Loc::getMessage('CRM_AUTOMATED_SOLUTION_LIST_TITLE'));
+
+		if (!RestrictionManager::getAutomatedSolutionRestriction()->hasPermission())
+		{
+			$componentPage = 'restrictions';
+			$this->includeComponentTemplate($componentPage);
+
+			return;
+		}
 
 		$this->arResult['grid'] = $this->prepareGridParams();
 
@@ -156,7 +165,6 @@ class CrmAutomatedSolutionListComponent extends Base
 	private function getSettingsItems(): array
 	{
 		$items = [];
-
 
 		if (
 			Container::getInstance()->getUserPermissions()->automatedSolution()->canEdit()

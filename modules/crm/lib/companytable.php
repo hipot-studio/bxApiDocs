@@ -11,9 +11,9 @@ use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\CompanySettings;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\Entity;
 use Bitrix\Main\IO\Path;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\EntityError;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\FloatField;
@@ -44,7 +44,7 @@ Loc::loadMessages(Path::combine(__DIR__, 'company.php'));
  * @method static \Bitrix\Crm\Company wakeUpObject($row)
  * @method static \Bitrix\Crm\EO_Company_Collection wakeUpCollection($rows)
  */
-class CompanyTable extends Entity\DataManager
+class CompanyTable extends DataManager
 {
 	protected static $isCheckUserFields = true;
 
@@ -216,6 +216,7 @@ class CompanyTable extends Entity\DataManager
 			$fieldRepository->getLastActivityTime(),
 
 			(new OneToMany('CONTACT_BINDINGS', Binding\ContactCompanyTable::class, 'COMPANY'))
+				->configureTitle(Loc::getMessage('CRM_COMMON_CONTACTS'))
 				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW)
 			,
 

@@ -14,6 +14,8 @@ class Menu extends Base
 	protected int $currentSort = 0;
 	protected const SORT_STEP = 100;
 
+	protected array $sections = [];
+
 	public function addItem(string $id, MenuItem $item): self
 	{
 		if ($item->getSort() === null)
@@ -59,10 +61,52 @@ class Menu extends Base
 		return ($this->menuItems[$id] ?? null);
 	}
 
+	/**
+	 * Adds a section definition in the output order expected by `ui.system.menu`.
+	 */
+	public function addSection(string $code, ?string $title = null, ?string $design = null): self
+	{
+		$section = ['code' => $code];
+		if ($title !== null)
+		{
+			$section['title'] = $title;
+		}
+		if ($design !== null)
+		{
+			$section['design'] = $design;
+		}
+		$this->sections[] = $section;
+
+		return $this;
+	}
+
+	/**
+	 * Replaces explicit section definitions for the current menu level.
+	 *
+	 * @param array<int, array{code: string, title?: string, design?: string}> $sections
+	 */
+	public function setSections(array $sections): self
+	{
+		$this->sections = $sections;
+
+		return $this;
+	}
+
+	/**
+	 * Returns explicit section definitions for the current menu level.
+	 *
+	 * @return array<int, array{code: string, title?: string, design?: string}>
+	 */
+	public function getSections(): array
+	{
+		return $this->sections;
+	}
+
 	public function toArray(): array
 	{
 		return [
 			'items' => $this->getItems(),
+			'sections' => empty($this->sections) ? null : $this->sections,
 		];
 	}
 }

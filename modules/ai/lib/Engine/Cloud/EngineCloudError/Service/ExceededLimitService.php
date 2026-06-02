@@ -9,6 +9,7 @@ use Bitrix\AI\Integration\Baas\BaasTokenService;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
 use Bitrix\UI\Util;
 
 class ExceededLimitService
@@ -49,8 +50,9 @@ class ExceededLimitService
 		if ($errorCode === static::ERROR_CODE_RATE_LIMIT)
 		{
 			return Loc::getMessage(
-				'AI_ENGINE_ERROR_RATE_LIMIT_IS_EXCEEDED',
+				'AI_ENGINE_ERROR_RATE_LIMIT_IS_EXCEEDED_MSGVER_1',
 				[
+					'#COPILOT_NAME#' => $this->getCopilotName(),
 					'[helpdesklink]' => '<a href="' . $this->getLinkOnHelp() . '" target="blank">',
 					'[/helpdesklink]' => '</a>',
 				]
@@ -70,6 +72,7 @@ class ExceededLimitService
 		$msgForIm = Loc::getMessage(
 			'AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED_WITH_MORE',
 			[
+				'#COPILOT_NAME#' => $this->getCopilotName(),
 				'#LINK#' => '/online/?FEATURE_PROMOTER=' . $sliderCode,
 			]
 		);
@@ -104,8 +107,9 @@ class ExceededLimitService
 		elseif ($errorCode === static::ERROR_CODE_RATE_LIMIT)
 		{
 			$msgForIm = Loc::getMessage(
-				'AI_ENGINE_ERROR_IM_RATE_LIMIT_IS_EXCEEDED',
+				'AI_ENGINE_ERROR_IM_RATE_LIMIT_IS_EXCEEDED_MSGVER_1',
 				[
+					'#COPILOT_NAME#' => $this->getCopilotName(),
 					'#LINK#' => $this->getLinkOnHelp(),
 				]
 			);
@@ -115,8 +119,9 @@ class ExceededLimitService
 		else
 		{
 			$msgForIm = Loc::getMessage(
-				'AI_ENGINE_ERROR_LIMIT_BAAS',
+				'AI_ENGINE_ERROR_LIMIT_BAAS_MSGVER_1',
 				[
+					'#COPILOT_NAME#' => $this->getCopilotName(),
 					'#LINK#' => '/online/?FEATURE_PROMOTER=' . $sliderCode,
 				]
 			);
@@ -169,5 +174,10 @@ class ExceededLimitService
 		return Loader::includeModule('ui')
 			? Util::getArticleUrlByCode(static::RATE_LIMIT_HELP_CODE)
 			: 'https://helpdesk.bitrix24.ru/open/' . static::RATE_LIMIT_HELP_CODE;
+	}
+
+	private function getCopilotName(): string
+	{
+		return (new CopilotNameService())->getCopilotName();
 	}
 }

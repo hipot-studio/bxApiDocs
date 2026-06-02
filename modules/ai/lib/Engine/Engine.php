@@ -16,6 +16,7 @@ use Bitrix\AI\Quality;
 use Bitrix\AI\QueueJob;
 use Bitrix\AI\Result;
 use Bitrix\AI\Role\RoleManager;
+use Bitrix\AI\Service\BasicAuthToken;
 use Bitrix\AI\Services\ImageService;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
@@ -649,6 +650,11 @@ abstract class Engine
 
 		$http = new HttpClient;
 		$http->setHeader('Content-Type', 'application/json');
+		$authHeader = BasicAuthToken::getAuthorizationHeader();
+		if ($authHeader !== null)
+		{
+			$http->setHeader('Authorization', $authHeader);
+		}
 
 		$http->post($url, json_encode([
 			'callbackUrl' => $this->queueJob->getCallbackUrl(),

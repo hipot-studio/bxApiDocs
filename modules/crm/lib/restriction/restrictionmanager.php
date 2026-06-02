@@ -94,6 +94,7 @@ class RestrictionManager
 	/** @var Bitrix24AccessRestriction */
 	private static $taskRestriction;
 	private static ?AccessRestriction $repeatSaleRestriction = null;
+	private static ?Bitrix24AccessRestriction $automatedSolutionRestriction = null;
 	private static ?Bitrix24AccessRestriction $automatedSolutionExportImportRestriction = null;
 
 	/**
@@ -1424,6 +1425,30 @@ class RestrictionManager
 		}
 
 		return static::$taskRestriction;
+	}
+
+	public static function getAutomatedSolutionRestriction(): Bitrix24AccessRestriction
+	{
+		if (is_null(static::$automatedSolutionRestriction))
+		{
+			static::$automatedSolutionRestriction = new Bitrix24AccessRestriction(
+				'crm_automated_solution',
+				false,
+				null,
+				[
+					'ID' => 'limit_smart_process_automation',
+				],
+			);
+
+			if (!static::$automatedSolutionRestriction->load())
+			{
+				static::$automatedSolutionRestriction->permit(
+					Bitrix24Manager::isFeatureEnabled('crm_smart_processes'),
+				);
+			}
+		}
+
+		return static::$automatedSolutionRestriction;
 	}
 
 	public static function getAutomatedSolutionExportImportRestriction(): Bitrix24AccessRestriction

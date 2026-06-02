@@ -168,21 +168,18 @@ class WorkgroupForm extends \CBitrixComponent
 			'groupId' => $groupId,
 		]);
 
+		if (!$groupFields)
+		{
+			$groupData['VISIBLE'] = 'Y';
+			$groupData['IS_EXTRANET_GROUP'] = 'N';
+
+			return;
+		}
+
 		if (
-			$groupFields
-			&& (
-				(
-					$tab === 'edit'
-					&& $canUpdate
-				)
-				|| (
-					$tab === 'invite'
-					&& (
-						$currentAdmin
-						|| $groupPerms['UserCanInitiate']
-						|| $groupPerms['UserCanModifyGroup']
-					)
-				)
+			($tab === 'edit' && $canUpdate)
+			|| ($tab === 'invite' &&
+				($currentAdmin || $groupPerms['UserCanInitiate'] || $groupPerms['UserCanModifyGroup'])
 			)
 		)
 		{
@@ -240,12 +237,6 @@ class WorkgroupForm extends \CBitrixComponent
 			{
 				$groupData['MODERATOR_IDS'][] = (int)$relation['USER_ID'];
 			}
-		}
-		else
-		{
-			$groupData['VISIBLE'] = 'Y';
-			$groupData['IS_EXTRANET_GROUP'] = 'N';
-			$groupId = 0;
 		}
 	}
 

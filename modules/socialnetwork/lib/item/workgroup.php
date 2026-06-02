@@ -253,6 +253,11 @@ class Workgroup implements Main\Type\Contract\Arrayable, Main\Type\Contract\Json
 
 	public function isProject(): bool
 	{
+		if ($this->getType() === Type::Project)
+		{
+			return true;
+		}
+
 		return (
 			isset($this->fields['PROJECT'])
 			&& $this->fields['PROJECT'] === 'Y'
@@ -261,6 +266,11 @@ class Workgroup implements Main\Type\Contract\Arrayable, Main\Type\Contract\Json
 
 	public function isScrumProject(): bool
 	{
+		if ($this->getType() === Type::Scrum)
+		{
+			return true;
+		}
+
 		return (!empty($this->fields['SCRUM_MASTER_ID']));
 	}
 

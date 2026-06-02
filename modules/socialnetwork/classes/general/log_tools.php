@@ -345,8 +345,8 @@ class CSocNetLogTools
 				"PATH_TO_SONET_MESSAGES_CHAT" => $arParams["~PATH_TO_MESSAGES_CHAT"],
 				"PATH_TO_SONET_USER_PROFILE" => $arParams["~PATH_TO_USER"],
 				"PATH_TO_VIDEO_CALL" => $arParams["~PATH_TO_VIDEO_CALL"],
-				"SHOW_FIELDS" => $arParams["SHOW_FIELDS_TOOLTIP"],
-				"USER_PROPERTY" => $arParams["USER_PROPERTY_TOOLTIP"],
+				"SHOW_FIELDS" => $arParams["SHOW_FIELDS_TOOLTIP"] ?? null,
+				"USER_PROPERTY" => $arParams["USER_PROPERTY_TOOLTIP"] ?? null,
 				"DATE_TIME_FORMAT" => $arParams["DATE_TIME_FORMAT"],
 				"SHOW_YEAR" => $arParams["SHOW_YEAR"],
 				"CACHE_TYPE" => $arParams["CACHE_TYPE"],
@@ -707,7 +707,12 @@ class CSocNetLogTools
 					{
 						$rsSites = CSite::GetByID($siteID);
 						$arSite = $rsSites->Fetch();
-						$server_name = ($arSite["SERVER_NAME"] <> '' ? $arSite["SERVER_NAME"] : COption::GetOptionString("main", "server_name", $GLOBALS["SERVER_NAME"]));
+						$defaultServerName = (
+							defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> ''
+								? SITE_SERVER_NAME
+								: ($_SERVER["SERVER_NAME"] ?? ($GLOBALS["SERVER_NAME"] ?? ''))
+						);
+						$server_name = ($arSite["SERVER_NAME"] <> '' ? $arSite["SERVER_NAME"] : COption::GetOptionString("main", "server_name", $defaultServerName));
 						$arSiteServerName[$siteID] = $server_name;
 					}
 				}

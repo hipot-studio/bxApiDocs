@@ -748,17 +748,19 @@ class CSocServAuth
 	 */
 	protected function onAfterWebAuth($addParams, $mode, $url)
 	{
+		$url = \CUtil::JSEscape($url);
+
 		if ($addParams)
 		{
 			$location = ($mode === self::OPENER_MODE)
-				? 'if(window.opener) window.opener.location = \''.$url.'\'; window.close();'
+				? 'if(window.opener){window.opener.location = \''.$url.'\'; window.close();}else{window.location = \''.$url.'\';}'
 				: ' window.location = \''.$url.'\';'
 			;
 		}
 		else
 		{
 			$location = ($mode === self::OPENER_MODE)
-				? 'if(window.opener) window.opener.location = window.opener.location.href + \''.$url.'\'; window.close();'
+				? 'if(window.opener){window.opener.location = window.opener.location.href + \''.$url.'\'; window.close();}else{window.location = window.location.href + \''.$url.'\';}'
 				: ' window.location = window.location.href + \''.$url.'\';'
 			;
 		}

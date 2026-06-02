@@ -7,7 +7,6 @@
  */
 namespace Bitrix\Socialnetwork\Item;
 
-use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\UserWelltoryTable;
 
 class UserWelltory
@@ -79,8 +78,6 @@ class UserWelltory
 				: 1
 		);
 
-		$intranetInstalled = Loader::includeModule('intranet');
-
 		$res = UserWelltoryTable::getList([
 			'filter' => [
 				'=USER_ID' => $userId
@@ -93,17 +90,15 @@ class UserWelltory
 		]);
 		while ($dataFields = $res->fetch())
 		{
-			$item = [
+			$result[] = [
 				'id' => $dataFields['ID'],
 				'date' => $dataFields['DATE_MEASURE'],
 				'value' => intval($dataFields['STRESS']),
 				'type' => ($dataFields['STRESS_TYPE'] <> '' ? $dataFields['STRESS_TYPE'] : ''),
-				'typeDescription' => ($intranetInstalled ?  : ''),
+				'typeDescription' => '',
 				'comment' => ($dataFields['STRESS_COMMENT'] <> '' ? $dataFields['STRESS_COMMENT'] : ''),
-				'hash' => ($dataFields['HASH'] <> '' ? $dataFields['HASH'] : '')
+				'hash' => ($dataFields['HASH'] <> '' ? $dataFields['HASH'] : ''),
 			];
-			$item['typeDescription'] = ($intranetInstalled ? \Bitrix\Intranet\Component\UserProfile\StressLevel::getTypeDescription($item['type'], $item['value']) : '');
-			$result[] = $item;
 		}
 
 		return $result;

@@ -17,6 +17,7 @@ use Bitrix\AI\Limiter\LimitControlService;
 use Bitrix\AI\Limiter\ReserveRequest;
 use Bitrix\AI\Limiter\Usage;
 use Bitrix\AI\Payload\IPayload;
+use Bitrix\AI\Services\BitrixGptAgreementService;
 use Bitrix\AI\Services\CopilotAccessCheckerService;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
@@ -25,6 +26,7 @@ use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
 
 Loc::loadMessages(__FILE__);
 
@@ -812,6 +814,13 @@ class Engine
 			return;
 		}
 
+		if (!(new BitrixGptAgreementService())->isAvailableForExternalRequest())
+		{
+			$this->throwError(self::ERRORS['MUST_AGREE_WITH_AGREEMENT']);
+
+			return;
+		}
+
 		if (!$this->isAvailableByTariff())
 		{
 			$this->throwError(self::ERRORS['SERVICE_IS_NOT_AVAILABLE_BY_TARIFF']);
@@ -961,15 +970,21 @@ class Engine
 		$rewriteErrorMessage = null;
 		if ($suffixErrorCode === '_BAAS_RATE_LIMIT' && Portal::isMarketAvailable())
 		{
-			$rewriteErrorMessage = $customData['msgForIm'] = Loc::getMessage('AI_ENGINE_ERROR_RATE_LIMIT_BAAS_MARKET');
+			$rewriteErrorMessage = $customData['msgForIm'] = Loc::getMessage(
+				'AI_ENGINE_ERROR_RATE_LIMIT_BAAS_MARKET_MSGVER_1',
+				['#COPILOT_NAME#' => $this->getCopilotName()]
+			);
 			$customData['showSliderWithMsg'] = false;
 		}
 
 		if ($suffixErrorCode === '_BAAS' && Portal::isMarketAvailable())
 		{
 			$customData['msgForIm'] = Loc::getMessage(
-				'AI_ENGINE_ERROR_LIMIT_BAAS_MARKET_MSGVER_1',
-				['#LINK#' => '/online/?FEATURE_PROMOTER=limit_subscription_market_access_buy_marketplus']
+				'AI_ENGINE_ERROR_LIMIT_BAAS_MARKET_MSGVER_2',
+				[
+					'#LINK#' => '/online/?FEATURE_PROMOTER=limit_subscription_market_access_buy_marketplus',
+					'#COPILOT_NAME#' => $this->getCopilotName(),
+				]
 			);
 			$customData['showSliderWithMsg'] = false;
 		}
@@ -977,11 +992,19 @@ class Engine
 		call_user_func(
 			[$this, 'internalErrorCallback'],
 			new Error(
-				$rewriteErrorMessage ?? Loc::getMessage("AI_ENGINE_ERROR_$errorCode"),
+				$rewriteErrorMessage ?? Loc::getMessage(
+					"AI_ENGINE_ERROR_$errorCode",
+					['#COPILOT_NAME#' => $this->getCopilotName()]
+				),
 				$errorCode . $suffixErrorCode,
 				$customData
 			),
 		);
+	}
+
+	private function getCopilotName(): string
+	{
+		return (new CopilotNameService())->getCopilotName();
 	}
 
 	private function getLimitControlService(): LimitControlService

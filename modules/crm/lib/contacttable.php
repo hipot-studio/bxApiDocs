@@ -209,6 +209,7 @@ class ContactTable extends ORM\Data\DataManager
 				Binding\ContactCompanyTable::class,
 				'CONTACT'
 			))
+				->configureTitle(Loc::getMessage('CRM_COMMON_COMPANIES'))
 				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW)
 			,
 

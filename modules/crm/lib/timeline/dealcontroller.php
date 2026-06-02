@@ -520,7 +520,11 @@ class DealController extends EntityController implements Interfaces\FinalSummary
 
 		if($typeID === TimelineType::CREATION)
 		{
-			$data['TITLE'] =  Loc::getMessage('CRM_DEAL_CREATION');
+			$data['TITLE'] =
+				$typeCategoryId === CreationEntry::CATEGORY_COPY
+					? Loc::getMessage('CRM_DEAL_CREATION_COPY')
+					: Loc::getMessage('CRM_DEAL_CREATION')
+			;
 
 			if($associatedEntityTypeID === \CCrmOwnerType::SuspendedDeal)
 			{

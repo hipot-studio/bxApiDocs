@@ -14,8 +14,10 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ActionBar\ActionBarItem
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Crm\Service\Timeline\Layout\Header\Tag;
 use Bitrix\Crm\Service\Timeline\Layout\Menu;
+use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemDesign;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemSubmenu;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 use CCrmOwnerType;
 
 abstract class AIActivity extends Activity
@@ -62,6 +64,9 @@ abstract class AIActivity extends Activity
 		return [
 			(new MenuItemSubmenu(AIManager::getCopilotName(), (new Menu())->setItems($items)))
 				->setSort(self::MENU_DEFAULT_SORT)
+				->setDesign(MenuItemDesign::COPILOT)
+				->setBadgeText(Menu\BadgeText::createNew())
+				->setIcon(Outline::COPILOT)
 				->setScopeWeb()
 		];
 	}

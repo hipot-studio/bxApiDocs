@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Permission\Rule;
 
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\Access\Rule\AbstractRule;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Socialnetwork\Permission\GroupAccessController;
 use Bitrix\Socialnetwork\Permission\Model\GroupModel;
 use Bitrix\Socialnetwork\Permission\Rule\Trait\AccessTrait;
@@ -33,12 +34,22 @@ class GroupUpdateRule extends AbstractRule
 			return false;
 		}
 
-		if (!$this->getAccessManager($item, $this->user->getUserId(), $this->user->getUserId())->canModify())
+		try
 		{
-			$this->controller->addError(static::class, 'Access denied by permissions');
+			if (!$this->getAccessManager($item, $this->user->getUserId(), $this->user->getUserId())->canModify())
+			{
+				$this->controller->addError(static::class, 'Access denied by permissions');
+
+				return false;
+			}
+		}
+		catch (ArgumentException $e)
+		{
+			$this->controller->addError(static::class, $e->getMessage());
 
 			return false;
 		}
+
 
 		return true;
 	}

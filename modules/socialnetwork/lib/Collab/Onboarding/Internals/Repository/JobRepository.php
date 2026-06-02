@@ -99,14 +99,41 @@ class JobRepository implements JobRepositoryInterface
 			return new JobCollection();
 		}
 
-		$filter = array_merge([
+		$ormFilter = [
 			'IS_PROCESSED' => false,
 			'<=NEXT_EXECUTION' => $from,
-		], $filter);
+		];
+
+		if (isset($filter['TYPE']))
+		{
+			if (is_array($filter['TYPE']))
+			{
+				$ormFilter['@TYPE'] = $filter['TYPE'];
+			}
+			else
+			{
+				$ormFilter['TYPE'] = $filter['TYPE'];
+			}
+		}
+
+		if (isset($filter['USER_ID']))
+		{
+			$ormFilter['USER_ID'] = $filter['USER_ID'];
+		}
+
+		if (isset($filter['COLLAB_ID']))
+		{
+			$ormFilter['COLLAB_ID'] = $filter['COLLAB_ID'];
+		}
+
+		if (isset($filter['ID']))
+		{
+			$ormFilter['ID'] = $filter['ID'];
+		}
 
 		$jobCollectionModel = QueueTable::query()
 			->setSelect(['ID', 'COLLAB_ID', 'USER_ID', 'TYPE', 'NEXT_EXECUTION', 'CREATED_DATE'])
-			->setFilter($filter)
+			->setFilter($ormFilter)
 			->exec()
 			->fetchCollection()
 		;

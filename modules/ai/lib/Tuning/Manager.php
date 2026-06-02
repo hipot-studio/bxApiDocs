@@ -5,6 +5,7 @@ namespace Bitrix\AI\Tuning;
 use Bitrix\AI\Config;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Facade\Bitrix24;
+use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Event;
 use Bitrix\Main\ORM;
 use Bitrix\Main\Web\Json;
@@ -285,8 +286,45 @@ class Manager
 
 		if (!$externalConfig->isEmpty())
 		{
-			Config::setOptionsValue(self::CONFIG_EXTERNAL_CODE, json_encode($externalConfig->toArray()));
+			$savedConfig = static::getTuningStorage();
+			$newConfig = $externalConfig->toArray();
+			Config::setOptionsValue(self::CONFIG_EXTERNAL_CODE, json_encode($newConfig));
+
+			try
+			{
+				foreach ($newConfig as $key => $value)
+				{
+					if (
+						!isset($savedConfig[$key])
+						|| $value !== $savedConfig[$key]
+					)
+					{
+						$analyticsEvent = new AnalyticsEvent('change', 'settings', 'ai');
+						$analyticsEvent
+							->setType($key)
+							->setP1('isAdmin_' . (\Bitrix\AI\Facade\User::isAdmin() ? 'Y' : 'N'))
+							->setP2(static::formatSettingValue($value))
+							->setP3(!isset($savedConfig[$key]) ? '' : static::formatSettingValue($savedConfig[$key]))
+							->send();
+					}
+				}
+			}
+			catch (\Throwable $e) {}
 		}
+	}
+
+	private static function formatSettingValue(mixed $value): string
+	{
+		if ($value === true)
+		{
+			return 'on';
+		}
+		if ($value === false)
+		{
+			return 'off';
+		}
+
+		return (string)$value;
 	}
 
 	public static function getTuningStorage(): array

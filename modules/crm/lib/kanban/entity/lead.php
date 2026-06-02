@@ -58,6 +58,7 @@ class Lead extends Entity
 				'defaultQuickFormFields' => [
 					'TITLE',
 					'CLIENT',
+					'OPPORTUNITY_WITH_CURRENCY',
 				],
 			]
 		);

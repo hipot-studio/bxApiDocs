@@ -38,29 +38,28 @@ class CCrmDocumentLead extends CCrmDocument
 
 	public static function getEntityFields($entityType)
 	{
-		\Bitrix\Main\Localization\Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/components/bitrix/crm.'.
-			mb_strtolower($entityType).'.edit/component.php');
-
+		$entityTypeId = \CCrmOwnerType::ResolveID($entityType);
 		$addressLabels = Crm\EntityAddress::getShortLabels();
+		$fullAddressLabel = Crm\EntityAddress::getFullAddressLabel();
 		$printableFieldNameSuffix = ' ('.GetMessage('CRM_FIELD_BP_TEXT').')';
 
 		$arResult = static::getVirtualFields() + [
 			'ID' => [
-				'Name' => GetMessage('CRM_FIELD_ID'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'ID'),
 				'Type' => 'int',
 				'Filterable' => true,
 				'Editable' => false,
 				'Required' => false,
 			],
 			'TITLE' => [
-				'Name' => GetMessage('CRM_FIELD_TITLE_LEAD'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'TITLE'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => true,
 			],
 			'STATUS_ID' => [
-				'Name' => CCrmLead::GetFieldCaption('STATUS_ID'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'STATUS_ID'),
 				'Type' => 'select',
 				'Options' => CCrmStatus::GetStatusListEx('STATUS'),
 				'Filterable' => true,
@@ -68,35 +67,35 @@ class CCrmDocumentLead extends CCrmDocument
 				'Required' => false,
 			],
 			'STATUS_ID_PRINTABLE' => [
-				'Name' => CCrmLead::GetFieldCaption('STATUS_ID') . $printableFieldNameSuffix,
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'STATUS_ID') . $printableFieldNameSuffix,
 				'Type' => 'string',
 				'Filterable' => false,
 				'Editable' => false,
 				'Required' => false,
 			],
 			'STATUS_DESCRIPTION' => [
-				'Name' => CCrmLead::GetFieldCaption('STATUS_DESCRIPTION'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'STATUS_DESCRIPTION'),
 				'Type' => 'text',
 				'Filterable' => false,
 				'Editable' => true,
 				'Required' => false,
 			],
 			"OPENED" => [
-				"Name" => GetMessage("CRM_FIELD_OPENED"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'OPENED'),
 				"Type" => "bool",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
 			],
 			'OPPORTUNITY' => [
-				'Name' => GetMessage('CRM_FIELD_OPPORTUNITY'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'OPPORTUNITY'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'CURRENCY_ID' => [
-				'Name' => GetMessage('CRM_FIELD_CURRENCY_ID'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'CURRENCY_ID'),
 				'Type' => 'select',
 				'Options' => CCrmCurrencyHelper::PrepareListItems(),
 				'Filterable' => true,
@@ -104,7 +103,7 @@ class CCrmDocumentLead extends CCrmDocument
 				'Required' => false,
 			],
 			'ASSIGNED_BY_ID' => [
-				'Name' => GetMessage('CRM_FIELD_ASSIGNED_BY_ID'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'ASSIGNED_BY_ID'),
 				'Type' => 'user',
 				'Filterable' => true,
 				'Editable' => true,
@@ -115,14 +114,14 @@ class CCrmDocumentLead extends CCrmDocument
 		$arResult += parent::getAssignedByFields();
 		$arResult += [
 			'CREATED_BY_ID' => [
-				'Name' => GetMessage('CRM_FIELD_CREATED_BY_ID'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'CREATED_BY_ID'),
 				'Type' => 'user',
 				'Filterable' => true,
 				'Editable' => false,
 				'Required' => false,
 			],
 			'CREATED_BY_PRINTABLE' => [
-				'Name' => GetMessage('CRM_FIELD_CREATED_BY_ID').$printableFieldNameSuffix,
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'CREATED_BY_ID').$printableFieldNameSuffix,
 				'Type' => 'string',
 				'Filterable' => false,
 				'Editable' => false,
@@ -133,7 +132,7 @@ class CCrmDocumentLead extends CCrmDocument
 				'Type' => 'user',
 			],
 			'COMMENTS' => [
-				'Name' => GetMessage('CRM_FIELD_COMMENTS'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'COMMENTS'),
 				'Type' => 'text',
 				'ValueContentType' => 'bb',
 				'Filterable' => false,
@@ -141,7 +140,7 @@ class CCrmDocumentLead extends CCrmDocument
 				'Required' => false,
 			],
 			"OBSERVER_IDS" => [
-				"Name" => GetMessage("CRM_FIELD_OBSERVER_IDS"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'OBSERVER_IDS', GetMessage('CRM_FIELD_OBSERVER_IDS')),
 				"Type" => "user",
 				"Filterable" => true,
 				"Editable" => false,
@@ -149,84 +148,84 @@ class CCrmDocumentLead extends CCrmDocument
 				"Multiple" => true,
 			],
 			'NAME' => [
-				'Name' => GetMessage('CRM_LEAD_FIELD_NAME'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'NAME'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'LAST_NAME' => [
-				'Name' => GetMessage('CRM_FIELD_LAST_NAME'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'LAST_NAME'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'SECOND_NAME' => [
-				'Name' => GetMessage('CRM_FIELD_SECOND_NAME'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'SECOND_NAME'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'HONORIFIC' => [
-				'Name' => GetMessage('CRM_FIELD_HONORIFIC'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'HONORIFIC'),
 				'Type' => 'select',
 				'Options' => CCrmStatus::GetStatusListEx('HONORIFIC'),
 				'Editable' => true,
 				'Required' => false,
 			],
 			'BIRTHDATE' => [
-				'Name' => GetMessage('CRM_LEAD_EDIT_FIELD_BIRTHDATE'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'BIRTHDATE'),
 				'Type' => 'datetime',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'EMAIL' => [
-				'Name' => GetMessage('CRM_FIELD_EMAIL'),
+				'Name' => \CCrmFieldMulti::GetEntityTypeCaption('EMAIL'),
 				'Type' => 'email',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'PHONE' => [
-				'Name' => GetMessage('CRM_FIELD_PHONE'),
+				'Name' => \CCrmFieldMulti::GetEntityTypeCaption('PHONE'),
 				'Type' => 'phone',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'WEB' => [
-				'Name' => GetMessage('CRM_FIELD_WEB'),
+				'Name' => \CCrmFieldMulti::GetEntityTypeCaption('WEB'),
 				'Type' => 'web',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'IM' => [
-				'Name' => GetMessage('CRM_FIELD_MESSENGER'),
+				'Name' => \CCrmFieldMulti::GetEntityTypeCaption('IM'),
 				'Type' => 'im',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'COMPANY_TITLE' => [
-				'Name' => GetMessage('CRM_FIELD_COMPANY_TITLE'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'COMPANY_TITLE'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'POST' => [
-				'Name' => GetMessage('CRM_FIELD_POST'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'POST'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			],
 			'FULL_ADDRESS' => [
-				'Name' => GetMessage('CRM_FIELD_ADDRESS'),
+				'Name' => $fullAddressLabel,
 				'Type' => 'text',
 				'Filterable' => false,
 				'Editable' => false,
@@ -282,7 +281,7 @@ class CCrmDocumentLead extends CCrmDocument
 				'Required' => false,
 			],
 			'SOURCE_ID' => [
-				'Name' => GetMessage('CRM_FIELD_SOURCE_ID'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'SOURCE_ID'),
 				'Type' => 'select',
 				'Options' => CCrmStatus::GetStatusListEx('SOURCE'),
 				'Filterable' => true,
@@ -290,21 +289,21 @@ class CCrmDocumentLead extends CCrmDocument
 				'Required' => false,
 			],
 			'SOURCE_DESCRIPTION' => [
-				'Name' => GetMessage('CRM_FIELD_SOURCE_DESCRIPTION'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'SOURCE_DESCRIPTION'),
 				'Type' => 'text',
 				'Filterable' => false,
 				'Editable' => true,
 				'Required' => false,
 			],
 			"DATE_CREATE" => [
-				"Name" => GetMessage("CRM_LEAD_EDIT_FIELD_DATE_CREATE"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'DATE_CREATE'),
 				"Type" => "datetime",
 				"Filterable" => true,
 				"Editable" => false,
 				"Required" => false,
 			],
 			"DATE_MODIFY" => [
-				"Name" => GetMessage("CRM_LEAD_EDIT_FIELD_DATE_MODIFY"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'DATE_MODIFY'),
 				"Type" => "datetime",
 				"Filterable" => true,
 				"Editable" => false,
@@ -321,7 +320,11 @@ class CCrmDocumentLead extends CCrmDocument
 				"Options" => ['CONTACT' => 'Y'],
 			],
 			"CONTACT_IDS" => [
-				"Name" => GetMessage("CRM_DOCUMENT_FIELD_CONTACT_IDS"),
+				"Name" => static::getEntityFieldCaption(
+					$entityTypeId,
+					'CONTACT_IDS',
+					GetMessage('CRM_DOCUMENT_FIELD_CONTACT_IDS')
+				),
 				"Type" => "UF:crm",
 				"Options" => ['CONTACT' => 'Y'],
 				"Multiple" => true,
@@ -332,7 +335,11 @@ class CCrmDocumentLead extends CCrmDocument
 				"Options" => ['COMPANY' => 'Y'],
 			],
 			'TRACKING_SOURCE_ID' => [
-				'Name' => GetMessage('CRM_DOCUMENT_FIELD_TRACKING_SOURCE_ID'),
+				'Name' => static::getEntityFieldCaption(
+					$entityTypeId,
+					'TRACKING_SOURCE_ID',
+					GetMessage('CRM_DOCUMENT_FIELD_TRACKING_SOURCE_ID')
+				),
 				'Type' => 'select',
 				'Options' => array_column(Crm\Tracking\Provider::getActualSources(), 'NAME','ID'),
 				'Filterable' => true,
@@ -376,7 +383,7 @@ class CCrmDocumentLead extends CCrmDocument
 		foreach ($ar as $typeId => $arFields)
 		{
 			$arResult[$typeId.'_PRINTABLE'] = array(
-				'Name' => GetMessage('CRM_FIELD_MULTI_'.$typeId).$printableFieldNameSuffix,
+				'Name' => \CCrmFieldMulti::GetEntityTypeCaption($typeId) . $printableFieldNameSuffix,
 				'Type' => 'string',
 				"Filterable" => true,
 				"Editable" => false,

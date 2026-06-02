@@ -133,15 +133,7 @@ class CSocServBitrixOAuth extends CSocServAuth
 		}
 		$url = \CHTTP::URN2URI(BX_ROOT);
 		$mode = 'opener';
-		$url = CUtil::JSEscape($url);
-		$location = ($mode == "opener") ? 'if(window.opener) window.opener.location = \''.$url.'\'; window.close();' : ' window.location = \''.$url.'\';';
-		$JSScript = '
-		<script>
-		'.$location.'
-		</script>
-		';
-
-		echo $JSScript;
+		$this->onAfterWebAuth(true, $mode, $url);
 
 		CMain::FinalActions();
 	}
@@ -159,7 +151,7 @@ class CSocServBitrixOAuth extends CSocServAuth
 		$url = \CHTTP::URN2URI(BX_ROOT);
 		$mode = 'opener';
 		$url = CUtil::JSEscape($url);
-		$location = ($mode == "opener") ? 'if(window.opener) window.opener.location = \''.$url.'\'; window.close();' : ' window.location = \''.$url.'\';';
+		$location = ($mode == "opener") ? 'if(window.opener){window.opener.location = \''.$url.'\'; window.close();}else{window.location = \''.$url.'\';}' : ' window.location = \''.$url.'\';';
 		$JSScript = '
 		<script>
 		'.$location.'

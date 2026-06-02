@@ -5188,7 +5188,7 @@ if (Main\Loader::includeModule('sale'))
 			Price\Calculation::pushConfig();
 			Price\Calculation::setConfig([
 				'CURRENCY' => $config['CURRENCY'],
-				'PRECISION' => (int)Main\Config\Option::get('sale', 'value_precision'),
+				'PRECISION' => Price\Calculation::getPrecision(),
 				'RESULT_WITH_VAT' => true,
 				'RESULT_MODE' => Catalog\Product\Price\Calculation::RESULT_MODE_RAW,
 			]);

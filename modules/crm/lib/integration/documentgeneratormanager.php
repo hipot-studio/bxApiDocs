@@ -1041,6 +1041,7 @@ class DocumentGeneratorManager
 
 			$result = $document
 				->setCheckFields($isCheckFields)
+				->setIsCheckAccess(true)
 				->getProcessedResult()
 			;
 			if ($result->isSuccess())

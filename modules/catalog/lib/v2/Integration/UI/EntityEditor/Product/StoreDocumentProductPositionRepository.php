@@ -8,7 +8,7 @@ use Bitrix\Catalog\v2\IoC\ServiceContainer;
 use Bitrix\Catalog\Config\State;
 use Bitrix\Iblock\Url\AdminPage\BuilderManager;
 use Bitrix\Main\Loader;
-use Bitrix\Sale\PriceMaths;
+use Bitrix\Catalog\Product\Price\Calculation;
 
 /**
  * Class StoreDocumentProductPositionRepository
@@ -117,7 +117,7 @@ final class StoreDocumentProductPositionRepository
 	{
 		$productPositionData = [
 			'PRODUCT_NAME' => $product['ELEMENT_NAME'],
-			'SUM' =>  PriceMaths::roundPrecision((float)$product[self::PRODUCT_PRICE_TYPE] * (float)$product['AMOUNT']),
+			'SUM' =>  Calculation::roundPrecision((float)$product[self::PRODUCT_PRICE_TYPE] * (float)$product['AMOUNT']),
 		];
 
 		$productId = $product['ELEMENT_ID'];

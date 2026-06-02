@@ -25,7 +25,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Objectify\EntityObject;
 use CCrmSaleHelper;
 
-final class Deal extends Factory
+class Deal extends Factory
 {
 	protected $itemClassName = Item\Deal::class;
 

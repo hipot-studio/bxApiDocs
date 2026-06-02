@@ -86,7 +86,7 @@ class SmsSender extends Bizproc\BaseType\Select
 					for="{$controlId}"
 					{$selectorAttributes}
 					data-role="inline-selector-target" 
-					class="{$className} bizproc-type-control-select-wide"
+					class="{$className} bizproc-type-control-select-wide --rounded"
 				>{$textChoose}</label>
 				<a
 					data-role="provider-manage-url"
@@ -293,7 +293,12 @@ HTML;
 						for (var i = 0; i < providers.length; ++i)
 						{
 							var proviver = providers[i];
-			
+
+							if (proviver['ID'] === '')
+							{
+								continue;
+							}
+
 							if (proviver['ID'] === 'rest')
 							{
 								proviver['FROM_LIST'].forEach(function(item)

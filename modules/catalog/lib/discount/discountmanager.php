@@ -1,13 +1,14 @@
 <?php
 namespace Bitrix\Catalog\Discount;
 
-use Bitrix\Main,
-	Bitrix\Main\Localization\Loc,
-	Bitrix\Main\Loader,
-	Bitrix\Main\Type\Collection,
-	Bitrix\Catalog,
-	Bitrix\Iblock,
-	Bitrix\Sale;
+use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Type\Collection;
+use Bitrix\Catalog;
+use Bitrix\Iblock;
+use Bitrix\Sale;
 
 Loc::loadMessages(__FILE__);
 
@@ -435,6 +436,16 @@ class DiscountManager
 	 */
 	public static function applyDiscount(&$product, $discount): void
 	{
+		if (self::$saleIncluded === null)
+		{
+			self::$saleIncluded = Loader::includeModule('sale');
+		}
+
+		if (!self::$saleIncluded)
+		{
+			return;
+		}
+
 		if (empty($product) || !is_array($product))
 			return;
 		if (empty($discount) || empty($discount['TYPE']))
@@ -450,18 +461,22 @@ class DiscountManager
 			: $product['PRICE'] + $product['DISCOUNT_PRICE']
 		);
 
+		// Step 2.2: resolve discount calculator service
+		$discountCalc = ServiceLocator::getInstance()->get('sale.basketItemCalculator');
+		$discountFactory = ServiceLocator::getInstance()->get('sale.basketItemInputFactory');
+
 		switch ($discount['TYPE'])
 		{
 			case Catalog\DiscountTable::VALUE_TYPE_PERCENT:
-				$discount['VALUE'] = -$discount['VALUE'];
-				$discountValue = self::roundValue(
-					((
-						$getPercentFromBasePrice
-							? $basePrice
-							: $product['PRICE']
-						)*$discount['VALUE'])/100,
-					$product['CURRENCY']
+				$effectiveBase = $getPercentFromBasePrice ? $basePrice : $product['PRICE'];
+				$result = $discountCalc->calculate(
+					$discountFactory->createFromArray([
+						'basePrice' => $effectiveBase,
+						'discountRate' => (float)$discount['VALUE'],
+					])
 				);
+				$discountValue = -self::roundValue($result->discountValue, $product['CURRENCY']);
+				// MAX_VALUE clamp adapter
 				if (isset($discount['MAX_VALUE']) && $discount['MAX_VALUE'] > 0)
 				{
 					if ($discountValue + $discount['MAX_VALUE'] <= 0)
@@ -474,17 +489,32 @@ class DiscountManager
 					$product['DISCOUNT_RESULT']['BASKET'][0]['RESULT_VALUE'] = (string)abs($discountValue);
 					$product['DISCOUNT_RESULT']['BASKET'][0]['RESULT_UNIT'] = $product['CURRENCY'];
 				}
-				unset($discountValue);
+
 				break;
 			case Catalog\DiscountTable::VALUE_TYPE_FIX:
-				$discount['VALUE'] = self::roundValue($discount['VALUE'], $product['CURRENCY']);
-				$product['PRICE'] -= $discount['VALUE'];
-				$product['DISCOUNT_PRICE'] += $discount['VALUE'];
+				$result = $discountCalc->calculate(
+					$discountFactory->createFromArray([
+						'basePrice' => $product['PRICE'],
+						'discountValue' => self::roundValue((float)$discount['VALUE'], $product['CURRENCY']),
+					])
+				);
+				$product['DISCOUNT_PRICE'] += $result->discountValue;
+				$product['PRICE'] = $result->price;
+
 				break;
 			case Catalog\DiscountTable::VALUE_TYPE_SALE:
-				$discount['VALUE'] = self::roundValue($discount['VALUE'], $product['CURRENCY']);
-				$product['DISCOUNT_PRICE'] += ($product['PRICE'] - $discount['VALUE']);
-				$product['PRICE'] = $discount['VALUE'];
+				// TYPE_SALE adapter: convert target sale price to discount value
+				$saleTargetPrice = self::roundValue((float)$discount['VALUE'], $product['CURRENCY']);
+				$saleDiscountValue = max(0.0, $product['PRICE'] - $saleTargetPrice);
+				$result = $discountCalc->calculate(
+					$discountFactory->createFromArray([
+						'basePrice' => $product['PRICE'],
+						'discountValue' => $saleDiscountValue,
+					])
+				);
+				$product['DISCOUNT_PRICE'] += $result->discountValue;
+				$product['PRICE'] = $result->price;
+
 				break;
 		}
 	}
@@ -626,24 +656,36 @@ class DiscountManager
 	public static function preloadProductDataToExtendOrder(array $productIds, array $userGroups)
 	{
 		if (empty($productIds) || empty($userGroups))
+		{
 			return;
-		Collection::normalizeArrayValuesByInt($productIds, true);
+		}
+
+		Collection::normalizeArrayValuesByInt($productIds);
 		if (empty($productIds))
+		{
 			return;
-		Collection::normalizeArrayValuesByInt($userGroups, true);
+		}
+
+		Collection::normalizeArrayValuesByInt($userGroups);
 		if (empty($userGroups))
+		{
 			return;
+		}
 
-		if(self::$saleIncluded === null)
+		if (self::$saleIncluded === null)
+		{
 			self::$saleIncluded = Loader::includeModule('sale');
+		}
 
-		if(!self::$saleIncluded)
+		if (!self::$saleIncluded)
+		{
 			return;
+		}
 
 		$discountCache = Sale\Discount\RuntimeCache\DiscountCache::getInstance();
 
 		$discountIds = $discountCache->getDiscountIds($userGroups);
-		if(!$discountIds)
+		if (!$discountIds)
 		{
 			return;
 		}
@@ -651,13 +693,13 @@ class DiscountManager
 		Collection::normalizeArrayValuesByInt($discountIds, true);
 
 		$entityList = $discountCache->getDiscountEntities($discountIds);
-		if(!$entityList || empty($entityList['catalog']))
+		if (!$entityList || empty($entityList['catalog']))
 		{
 			return;
 		}
 
 		$entityData = self::prepareEntity($entityList);
-		if(!$entityData)
+		if (!$entityData)
 		{
 			return;
 		}
@@ -668,7 +710,7 @@ class DiscountManager
 		self::fillProductPropertyList($entityData, $iblockData);
 
 		$productData = array_fill_keys($productIds, []);
-		if(empty($iblockData['iblockElement']))
+		if (empty($iblockData['iblockElement']))
 		{
 			return;
 		}
@@ -676,7 +718,7 @@ class DiscountManager
 		self::getProductData($productData, $entityData, $iblockData);
 
 		$cacheKeyForEntityList = self::getCacheKeyForEntityList($entityList);
-		if(!isset(self::$preloadedProductsData[$cacheKeyForEntityList]))
+		if (!isset(self::$preloadedProductsData[$cacheKeyForEntityList]))
 		{
 			self::$preloadedProductsData[$cacheKeyForEntityList] = [];
 		}
@@ -1748,9 +1790,14 @@ class DiscountManager
 		unset($action, $data);
 
 		if (self::$saleIncluded === null)
+		{
 			self::$saleIncluded = Loader::includeModule('sale');
+		}
+
 		if (!self::$saleIncluded)
+		{
 			return;
+		}
 
 		$type = '';
 		$descr = [
@@ -1833,20 +1880,15 @@ class DiscountManager
 	 */
 	protected static function roundValue($value, string $currency): float
 	{
-		if (self::$saleIncluded === null)
-			self::$saleIncluded = Loader::includeModule('sale');
-		if (self::$saleIncluded)
-			return Sale\Discount\Actions::roundValue($value, $currency);
-		else
-			return roundEx($value, CATALOG_VALUE_PRECISION);
+		return Catalog\Product\Price\Calculation::roundByFormatCurrency($value, $currency);
 	}
 
 	/**
 	 * Returns data after price rounding.
 	 * @internal
 	 *
-	 * @param array $basketItem     Basket row data.
-	 * @param array $roundData      Round rule.
+	 * @param array $basketItem Basket row data.
+	 * @param array $roundData Round rule.
 	 * @return array
 	 */
 	private static function getRoundResult(array $basketItem, array $roundData): array

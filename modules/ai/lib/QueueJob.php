@@ -428,7 +428,7 @@ final class QueueJob
 	 */
 	private function sendFrontendEvent(Result $result, string $eventName): void
 	{
-		if (Loader::includeModule('pull'))
+		if ($this->context->getUserId() && Loader::includeModule('pull'))
 		{
 			\Bitrix\Pull\Event::add($this->context->getUserId(), [
 				'module_id' => 'ai',

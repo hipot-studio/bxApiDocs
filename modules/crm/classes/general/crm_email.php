@@ -400,7 +400,7 @@ class CCrmEMail
 
 			$res = \CUser::getList(
 				'', '',
-				array('GROUPS_ID' => 1),
+				array('GROUPS_ID' => 1, '=ACTIVE' => 'Y'),
 				array('FIELDS' => array('ID', 'ACTIVE'))
 			);
 			while ($admin = $res->fetch())
@@ -408,10 +408,7 @@ class CCrmEMail
 
 			usort($adminList, function($a, $b)
 			{
-				if ($a['ACTIVE'] == 'Y' xor $b['ACTIVE'] == 'Y')
-					return $a['ACTIVE'] == 'Y' ? -1 : 1;
-
-				return $a['ID']-$b['ID'];
+				return $a['ID'] - $b['ID'];
 			});
 		}
 
@@ -1169,7 +1166,46 @@ class CCrmEMail
 
 		if (!empty($emailFacility->getBindings()))
 		{
-			$userId = $emailFacility->getOwnerResponsibleId();
+			/*
+				Without this, a Deal overrides the distribution queue: sortBindings() puts
+				Deals first, but they bypass rankingModifier and may have any ASSIGNED_BY_ID.
+				Pick the first binding whose responsible is in respQueue instead.
+			*/
+			$userId = null;
+			if (!$publicBindings && !empty($respQueue))
+			{
+				foreach ($emailFacility->getBindings() as $binding)
+				{
+					$respId = \CCrmOwnerType::GetResponsibleID(
+						$binding['OWNER_TYPE_ID'],
+						$binding['OWNER_ID'],
+						false
+					);
+					if ($respId > 0 && in_array($respId, $respQueue))
+					{
+						$userId = $respId;
+						break;
+					}
+				}
+			}
+
+			//Fallback: use owner's responsible if active, otherwise first queue member.
+			if (!$userId)
+			{
+				$fallbackId = $emailFacility->getOwnerResponsibleId();
+				$fallbackUser = \Bitrix\Main\UserTable::getRow([
+					'select' => ['ACTIVE'],
+					'filter' => ['=ID' => $fallbackId],
+				]);
+				if ($fallbackUser && $fallbackUser['ACTIVE'] === 'Y')
+				{
+					$userId = $fallbackId;
+				}
+				else
+				{
+					$userId = !empty($respQueue) ? $respQueue[0] : ($mailboxOwnerId ?: 1);
+				}
+			}
 		}
 		else if ($facility->canAddEntity($newEntityTypeId))
 		{

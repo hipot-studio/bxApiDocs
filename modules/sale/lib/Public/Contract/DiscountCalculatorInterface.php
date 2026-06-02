@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Sale\Public\Contract;
 
-use Bitrix\Sale\Public\Dto\BasketItemCalculationInput;
-use Bitrix\Sale\Public\Dto\BasketItemCalculationResult;
-
 /**
  * Contract for discount calculation operations.
  *

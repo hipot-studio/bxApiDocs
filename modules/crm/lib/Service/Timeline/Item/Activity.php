@@ -12,6 +12,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemFactory;
 use Bitrix\Crm\Settings\WorkTime;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 use Bitrix\Crm\Timeline\Entity\NoteTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
@@ -315,6 +316,7 @@ abstract class Activity extends Configurable implements Deadlinable
 			))
 				->setSort(9950)
 				->setHideIfReadonly()
+				->setIcon(Outline::CLOCK_BACK)
 		;
 	}
 

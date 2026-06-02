@@ -243,13 +243,8 @@ class CSocServFacebook extends CSocServAuth
 		{
 			$url .= ((mb_strpos($url, "?") === false) ? '?' : '&')."current_fieldset=SOCSERV";
 		}
-?>
-<script>
-if(window.opener)
-	window.opener.location = '<?=CUtil::JSEscape($url)?>';
-window.close();
-</script>
-<?
+
+		$this->onAfterWebAuth(true, self::OPENER_MODE, $url);
 		CMain::FinalActions();
 	}
 

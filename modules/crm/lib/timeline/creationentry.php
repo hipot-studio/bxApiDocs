@@ -8,6 +8,9 @@ use Bitrix\Crm\Timeline\Entity\TimelineTable;
 
 class CreationEntry extends TimelineEntry
 {
+	public const CATEGORY_DEFAULT = 0;
+	public const CATEGORY_COPY = 1;
+
 	public static function create(array $params)
 	{
 		[$authorId, $created, $settings, $bindings] = self::fetchParams($params);

@@ -5,26 +5,30 @@ namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\ActionDto;
 use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\ContentBlockDto;
 use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\FooterButtonDto;
+use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\FooterMenuDto;
 use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\LayoutDto;
 use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\MenuItemDto;
 use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\TagDto;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Service\Timeline\Item\Activity;
+use Bitrix\Crm\Service\Timeline\Item\Model;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Crm\Service\Timeline\Layout\Action;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
+use Bitrix\Crm\Service\Timeline\Layout\Factory\RestAppConfigurable\ActionFactory;
+use Bitrix\Crm\Service\Timeline\Layout\Factory\RestAppConfigurable\ContentBlockFactory;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Crm\Service\Timeline\Layout\Header\Tag;
 use Bitrix\Crm\Service\Timeline\Layout\Icon;
+use Bitrix\Crm\Service\Timeline\Layout\Menu\BadgeText;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItem;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemDelimiter;
-use Bitrix\Crm\Service\Timeline\Layout\Factory\RestAppConfigurable\ActionFactory;
-use Bitrix\Crm\Service\Timeline\Layout\Factory\RestAppConfigurable\ContentBlockFactory;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
 use Bitrix\Rest\AppTable;
-use Bitrix\Main\ArgumentException;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 class ConfigurableRestApp extends Activity
 {
@@ -58,7 +62,7 @@ class ConfigurableRestApp extends Activity
 		return false;
 	}
 
-	public static function isModelValid(\Bitrix\Crm\Service\Timeline\Item\Model $model): bool
+	public static function isModelValid(Model $model): bool
 	{
 		try
 		{
@@ -99,7 +103,8 @@ class ConfigurableRestApp extends Activity
 		{
 			return null;
 		}
-		$iconData = \Bitrix\Crm\Service\Timeline\Layout\Common\Icon::initFromCode($icon->getCode())->getData();
+
+		$iconData = Layout\Common\Icon::initFromCode($icon->getCode())->getData();
 		if (!$iconData) // wrong icon code was provided
 		{
 			return null;
@@ -149,9 +154,7 @@ class ConfigurableRestApp extends Activity
 			return null;
 		}
 
-		$logo = Layout\Common\Logo::getInstance($logoCode)
-			->createLogo()
-		;
+		$logo = Layout\Common\Logo::getInstance($logoCode)->createLogo();
 		if (!$logo)
 		{
 			return null;
@@ -216,13 +219,17 @@ class ConfigurableRestApp extends Activity
 		$needAddPostponeMenuItem = true;
 		$needAddDeleteMenuItem = true;
 		$extraMenuItems = [];
-		if ($this->getLayoutDto()->footer && $this->getLayoutDto()->footer->menu)
+		$footerMenu = $this->getFooterMenu();
+		$hasValidExplicitSections = $this->hasValidExplicitSections();
+		if ($footerMenu)
 		{
-			$menuDto = $this->getLayoutDto()->footer->menu;
-			$needAddPinMenuItem = $menuDto->showPinItem ?? true;
-			$needAddPostponeMenuItem = $menuDto->showPostponeItem ?? true;
-			$needAddDeleteMenuItem = $menuDto->showDeleteItem ?? true;
-			$extraMenuItems = $menuDto->items ?? [];
+			$needAddPinMenuItem = $footerMenu->showPinItem ?? true;
+			$needAddPostponeMenuItem = $footerMenu->showPostponeItem ?? true;
+			$needAddDeleteMenuItem = $footerMenu->showDeleteItem ?? true;
+			$extraMenuItems = $hasValidExplicitSections || (empty($footerMenu->sections) && !$this->hasInvalidExplicitSections())
+				? ($footerMenu->items ?? [])
+				: []
+			;
 		}
 		if (!$this->getDeadline() || !$this->isScheduled())
 		{
@@ -232,6 +239,8 @@ class ConfigurableRestApp extends Activity
 		{
 			$needAddPinMenuItem = false;
 		}
+
+		$hasSections = $hasValidExplicitSections;
 
 		$result = [];
 
@@ -245,14 +254,25 @@ class ConfigurableRestApp extends Activity
 				$extraMenuItemsAdded = true;
 			}
 		}
-		if ($extraMenuItemsAdded)
+		if ($extraMenuItemsAdded && !$hasSections)
 		{
 			$result['delim1'] = (new MenuItemDelimiter())->setSort(9000);
 		}
+
 		$stdMenuItemsAdded = false;
 		if ($needAddPinMenuItem)
 		{
 			$this->addPinMenuItems($result);
+			if ($hasSections)
+			{
+				foreach (['pin', 'unpin'] as $pinKey)
+				{
+					if (isset($result[$pinKey]))
+					{
+						$result[$pinKey]->setSectionCode('system');
+					}
+				}
+			}
 			$stdMenuItemsAdded = true;
 		}
 		if ($needAddPostponeMenuItem)
@@ -260,6 +280,10 @@ class ConfigurableRestApp extends Activity
 			$postponeMenuItem = $this->createPostponeMenuItem($this->getActivityId());
 			if ($postponeMenuItem)
 			{
+				if ($hasSections)
+				{
+					$postponeMenuItem->setSectionCode('system');
+				}
 				$result['postpone'] = $postponeMenuItem;
 				$stdMenuItemsAdded = true;
 			}
@@ -269,22 +293,33 @@ class ConfigurableRestApp extends Activity
 			$deleteMenuItem = $this->createDeleteMenuItem($this->getActivityId());
 			if ($deleteMenuItem)
 			{
+				if ($hasSections)
+				{
+					$deleteMenuItem->setSectionCode('system');
+				}
 				$result['delete'] = $deleteMenuItem;
 				$stdMenuItemsAdded = true;
 			}
 		}
-		if ($stdMenuItemsAdded)
+		if ($stdMenuItemsAdded && !$hasSections)
 		{
 			$result['delim2'] = (new MenuItemDelimiter())->setSort(10000);
 		}
+
 		$aboutAction = $this->createOpenAppAction();
 		$aboutAction->addActionParamString('context', 'aboutMenuItem');
 
-		$result['aboutApp'] = (new MenuItem(Loc::getMessage('CRM_TIMELINE_CONFIGURABLE_APP_MENU_ITEM_ABOUT')))
+		$aboutAppItem = (new MenuItem(Loc::getMessage('CRM_TIMELINE_CONFIGURABLE_APP_MENU_ITEM_ABOUT')))
 			->setAction($aboutAction)
 			->setSort(10001)
+			->setIcon(Outline::INFO_CIRCLE)
 			->setScopeWeb()
 		;
+		if ($hasSections)
+		{
+			$aboutAppItem->setSectionCode('about');
+		}
+		$result['aboutApp'] = $aboutAppItem;
 
 		return $result;
 	}
@@ -364,6 +399,179 @@ class ConfigurableRestApp extends Activity
 		;
 	}
 
+	private function mapDtoSections(): array
+	{
+		$footerMenu = $this->getFooterMenu();
+		if ($footerMenu === null || !$this->hasValidExplicitSections())
+		{
+			return [];
+		}
+
+		$sections = [];
+		foreach ($footerMenu->sections as $sectionDto)
+		{
+			$section = ['code' => $sectionDto->code];
+			if ($sectionDto->title !== null)
+			{
+				$section['title'] = (string)$sectionDto->title;
+			}
+			if ($sectionDto->design !== null)
+			{
+				$section['design'] = $sectionDto->design;
+			}
+			$sections[] = $section;
+		}
+
+		return $sections;
+	}
+
+	/**
+	 * Returns app-declared sections followed by synthetic sections for builder-owned items.
+	 *
+	 * @return array<int, array{code: string, title?: string, design?: string}>
+	 */
+	public function getMenuSections(): array
+	{
+		$appSections = $this->mapDtoSections();
+		if (empty($appSections))
+		{
+			return [];
+		}
+
+		// Append synthetic sections for system-injected items
+		if ($this->hasSystemMenuItems())
+		{
+			$appSections[] = [
+				'code' => 'system',
+			];
+		}
+		$appSections[] = [
+			'code' => 'about',
+		];
+
+		return $appSections;
+	}
+
+	private function hasSystemMenuItems(): bool
+	{
+		$needAddPinMenuItem = true;
+		$needAddPostponeMenuItem = true;
+		$needAddDeleteMenuItem = true;
+
+		$footerMenu = $this->getFooterMenu();
+		if ($footerMenu)
+		{
+			$needAddPinMenuItem = $footerMenu->showPinItem ?? true;
+			$needAddPostponeMenuItem = $footerMenu->showPostponeItem ?? true;
+			$needAddDeleteMenuItem = $footerMenu->showDeleteItem ?? true;
+		}
+		if (!$this->getDeadline() || !$this->isScheduled())
+		{
+			$needAddPostponeMenuItem = false;
+		}
+		if ($this->isScheduled())
+		{
+			$needAddPinMenuItem = false;
+		}
+
+		return $needAddPinMenuItem || $needAddPostponeMenuItem || $needAddDeleteMenuItem;
+	}
+
+	private function getFooterMenu(): ?FooterMenuDto
+	{
+		return $this->getLayoutDto()->footer?->menu;
+	}
+
+	private function hasValidExplicitSections(): bool
+	{
+		$footerMenu = $this->getFooterMenu();
+		$sections = $footerMenu?->sections;
+		if (!is_array($sections) || empty($sections))
+		{
+			return false;
+		}
+
+		foreach ($footerMenu->getValidationErrors() as $error)
+		{
+			if (in_array($error->getCode(), [
+				FooterMenuDto::ERROR_RESERVED_SECTION_CODE,
+				FooterMenuDto::ERROR_DUPLICATE_SECTION_CODE,
+				FooterMenuDto::ERROR_MISSING_SECTION_CODE,
+				FooterMenuDto::ERROR_UNKNOWN_SECTION_CODE,
+			], true))
+			{
+				return false;
+			}
+		}
+
+		$declaredCodes = [];
+		foreach ($sections as $sectionDto)
+		{
+			if ($sectionDto === null || $sectionDto->hasValidationErrors())
+			{
+				return false;
+			}
+
+			$code = (string)$sectionDto->code;
+			if ($code === '' || in_array($code, FooterMenuDto::RESERVED_SECTION_CODES, true))
+			{
+				return false;
+			}
+			if (in_array($code, $declaredCodes, true))
+			{
+				return false;
+			}
+
+			$declaredCodes[] = $code;
+		}
+
+		foreach (($footerMenu->items ?? []) as $menuItemDto)
+		{
+			if ($menuItemDto === null || $menuItemDto->hasValidationErrors())
+			{
+				continue;
+			}
+
+			$sectionCode = $menuItemDto->sectionCode;
+			if (!is_string($sectionCode) || $sectionCode === '' || !in_array($sectionCode, $declaredCodes, true))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private function hasInvalidExplicitSections(): bool
+	{
+		$footerMenu = $this->getFooterMenu();
+		if (!$footerMenu)
+		{
+			return false;
+		}
+
+		foreach ($footerMenu->getValidationErrors() as $error)
+		{
+			if (in_array($error->getCode(), [
+				FooterMenuDto::ERROR_RESERVED_SECTION_CODE,
+				FooterMenuDto::ERROR_DUPLICATE_SECTION_CODE,
+				FooterMenuDto::ERROR_MISSING_SECTION_CODE,
+				FooterMenuDto::ERROR_UNKNOWN_SECTION_CODE,
+			], true))
+			{
+				return true;
+			}
+
+			$field = $error->getCustomData()['FIELD'] ?? null;
+			if ($field === 'sections' || (is_string($field) && str_starts_with($field, 'sections[')))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	private function createMenuItem(?MenuItemDto $menuItemDto): ?MenuItem
 	{
 		if (!$this->isValidDto($menuItemDto))
@@ -371,11 +579,41 @@ class ConfigurableRestApp extends Activity
 			return null;
 		}
 
-		return (new MenuItem($menuItemDto->title))
+		$item = (new MenuItem((string)$menuItemDto->title))
 			->setScope($menuItemDto->scope)
 			->setHideIfReadonly($menuItemDto->hideIfReadonly)
 			->setAction($this->createAction($menuItemDto->action))
 		;
+
+		if ($menuItemDto->subtitle !== null)
+		{
+			$item->setSubtitle((string)$menuItemDto->subtitle);
+		}
+		if ($menuItemDto->design !== null)
+		{
+			$item->setDesign($menuItemDto->design);
+		}
+		if ($menuItemDto->isSelected !== null)
+		{
+			$item->setIsSelected($menuItemDto->isSelected);
+		}
+		if ($menuItemDto->isLocked !== null)
+		{
+			$item->setIsLocked($menuItemDto->isLocked);
+		}
+		if ($menuItemDto->badgeText !== null)
+		{
+			$item->setBadgeText(new BadgeText(
+				(string)$menuItemDto->badgeText->title,
+				$menuItemDto->badgeText->color,
+			));
+		}
+		if ($menuItemDto->sectionCode !== null)
+		{
+			$item->setSectionCode($menuItemDto->sectionCode);
+		}
+
+		return $item;
 	}
 
 	private function createAction(?ActionDto $actionDto): ?Action

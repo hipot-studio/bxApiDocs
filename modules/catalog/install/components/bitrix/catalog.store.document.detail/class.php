@@ -18,7 +18,7 @@ use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\Response\AjaxJson;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
-use Bitrix\Sale\PriceMaths;
+use Bitrix\Catalog\Product\Price\Calculation;
 use Bitrix\Main;
 use Bitrix\UI;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
@@ -1578,10 +1578,10 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		$priceType = 'PURCHASING_PRICE';
 		foreach ($element as $product)
 		{
-			$result += PriceMaths::roundPrecision((float)$product[$priceType] * (float)$product['AMOUNT']);
+			$result += Calculation::roundPrecision((float)$product[$priceType] * (float)$product['AMOUNT']);
 		}
 
-		return PriceMaths::roundPrecision($result);
+		return Calculation::roundPrecision($result);
 	}
 
 	private function getUrlToDocumentDetail($documentId, $addCloseOnSaveParam = false): string

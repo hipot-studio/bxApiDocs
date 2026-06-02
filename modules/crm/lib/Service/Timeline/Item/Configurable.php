@@ -2,12 +2,13 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item;
 
+use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\ContentBlockDto;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\Analytics\Builder\communication\WhatsAppPinUnpinEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
-use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\ContentBlockDto;
 use Bitrix\Crm\Integration\Intranet\BindingMenu\CodeBuilder;
 use Bitrix\Crm\Integration\Intranet\BindingMenu\SectionCode;
+use Bitrix\Crm\Integration\Market\Router;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item;
@@ -30,6 +31,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Rest\AppTable;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 use Bitrix\UI\Util;
 
 abstract class Configurable extends Item
@@ -437,6 +439,19 @@ abstract class Configurable extends Item
 		return $result;
 	}
 
+	/**
+	 * Declares explicit menu sections for timeline items rendered with `ui.system.menu`.
+	 *
+	 * Each section definition must contain a unique `code` key and may additionally provide
+	 * `title` and `design` keys.
+	 *
+	 * @return array<int, array{code: string, title?: string, design?: string}>
+	 */
+	public function getMenuSections(): array
+	{
+		return [];
+	}
+
 	protected function addPinMenuItems(array &$menuItems): void
 	{
 		$canBeFixed =
@@ -460,6 +475,7 @@ abstract class Configurable extends Item
 		{
 			$menuItems['pin'] = (new MenuItem(Loc::getMessage('CRM_TIMELINE_MENU_FASTEN')))
 				->setHideIfReadonly()
+				->setIcon(Outline::PIN)
 				->setSort(9900)
 				->setAction($this->getPinAction())
 			;
@@ -468,6 +484,7 @@ abstract class Configurable extends Item
 		{
 			$menuItems['unpin'] = (new MenuItem(Loc::getMessage('CRM_TIMELINE_MENU_UNFASTEN')))
 				->setHideIfReadonly()
+				->setIcon(Outline::UNPIN)
 				->setSort(9900)
 				->setAction($this->getUnpinAction())
 			;
@@ -505,7 +522,7 @@ abstract class Configurable extends Item
 				->setDetailsText(Loc::getMessage('CRM_TIMELINE_MARKET_PANEL_TEXT_DETAILS'))
 				->setDetailsTextAction(
 					$placementCode
-						? new Redirect(new Uri(\Bitrix\Crm\Integration\Market\Router::getBasePath() . '?placement=' . $placementCode))
+						? new Redirect(new Uri(Router::getBasePath() . '?placement=' . $placementCode))
 						: null
 				)
 			;
@@ -662,7 +679,7 @@ abstract class Configurable extends Item
 	{
 		if (Loader::includeModule('rest'))
 		{
-			return AppTable::getByClientId($clientId) ?? null;
+			return AppTable::getByClientId($clientId);
 		}
 
 		return null;
@@ -700,6 +717,7 @@ abstract class Configurable extends Item
 
 	/**
 	 * Returns true if item data allowed to be re-fetched (e.g. after push-message handling)
+	 *
 	 * @return bool
 	 */
 	protected function canBeReloaded(): bool
@@ -707,7 +725,7 @@ abstract class Configurable extends Item
 		return true;
 	}
 
-	protected function buildAiCreatedBlock(): ?ContentBlock
+	protected function buildAiCreatedBlock(): ?Text
 	{
 		$copilotName = AIManager::getCopilotName();
 		if (empty($copilotName))

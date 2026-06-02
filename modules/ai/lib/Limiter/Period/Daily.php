@@ -12,7 +12,7 @@ use Bitrix\Main\Type\DateTime;
 class Daily implements IPeriod
 {
 	private const MAX_IN_PERIOD = 5;
-	private const MAX_WITH_MARKET_IN_PERIOD = 10;
+	private const MAX_WITH_MARKET_IN_PERIOD = 11;
 
 	private const PERIOD_FORMAT = 'Y-m-d';
 

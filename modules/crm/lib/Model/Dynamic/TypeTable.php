@@ -32,8 +32,6 @@ use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\Entity\ReferenceField;
-use Bitrix\Main\Entity\Validator\RegExp;
 use Bitrix\Main\Error;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Loader;
@@ -43,7 +41,9 @@ use Bitrix\Main\ORM\Entity;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Fields\Validators\RegExpValidator;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Result as QueryResult;
 use Bitrix\Main\Result;
@@ -96,7 +96,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 				->configureUnique()
 				->configureSize(100)
 				->configureFormat('/^[A-Z][A-Za-z0-9]*$/')
-				->addValidator(new RegExp(
+				->addValidator(new RegExpValidator(
 					'/(?<!Table)$/i'
 				)),
 			(new StringField('TABLE_NAME'))
@@ -141,7 +141,7 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		$fieldsMap[] = (new ORM\Fields\IntegerField('CUSTOM_SECTION_ID'))
 			->configureNullable()
 			->configureTitle(Loc::getMessage('CRM_TYPE_CUSTOM_SECTION_ID_TITLE'));
-		$fieldsMap[] = new ReferenceField(
+		$fieldsMap[] = new Reference(
 			'AUTOMATED_SOLUTION',
 			AutomatedSolutionTable::class,
 			['=this.CUSTOM_SECTION_ID' => 'ref.ID']
@@ -1075,7 +1075,9 @@ class TypeTable extends UserField\Internal\TypeDataManager
 					->where('this.ENTITY_TYPE_ID', new SqlExpression('?i', $factory->getEntityTypeId()))
 			)));
 		}
+		Container::getInstance()->getLocalization()->loadMessages();
 		$oneToManyBindings = (new ORM\Fields\Relations\OneToMany('CONTACT_BINDINGS', EntityContactTable::class, $localFieldName))
+			->configureTitle(Loc::getMessage('CRM_COMMON_CONTACTS'))
 			->configureCascadeDeletePolicy(ORM\Fields\Relations\CascadePolicy::FOLLOW);
 		$localEntity->addField($oneToManyBindings);
 

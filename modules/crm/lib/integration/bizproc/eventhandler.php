@@ -2,7 +2,9 @@
 
 namespace Bitrix\Crm\Integration\BizProc;
 
+use Bitrix\Bizproc\Public\Event\Document\OnGetDocumentFieldTypesEvent\OnGetDocumentFieldTypesEvent;
 use Bitrix\Bizproc\Public\Event\Document\OnGetDocumentTypeEvent\OnGetDocumentTypeEvent;
+use Bitrix\Crm;
 use Bitrix\Crm\Integration\BizProc\Events\OnGetDocumentType\CrmDocumentTypeFilter;
 use Bitrix\Main\Event;
 use Bitrix\Crm\Activity\Provider\Bizproc;
@@ -37,6 +39,66 @@ class EventHandler
 		foreach ($activities as $activity)
 		{
 			\CCrmActivity::Delete($activity['ID']);
+		}
+	}
+
+	public static function onWorkflowCommentAdded(Event $event): void
+	{
+		static::handleCommentEvent($event, Crm\Timeline\Bizproc\Data\CommentStatus::Created);
+	}
+
+	public static function onWorkflowCommentDeleted(Event $event): void
+	{
+		static::handleCommentEvent($event, Crm\Timeline\Bizproc\Data\CommentStatus::Deleted);
+	}
+
+	public static function onWorkflowAllCommentViewed(Event $event): void
+	{
+		static::handleCommentEvent($event, Crm\Timeline\Bizproc\Data\CommentStatus::Viewed);
+	}
+
+	private static function handleCommentEvent(Event $event, Crm\Timeline\Bizproc\Data\CommentStatus $status): void
+	{
+		$workflowId = $event->getParameter('workflowId');
+		$userId = $event->getParameter('userId');
+
+		$documentId = \CBPStateService::getStateDocumentId($workflowId);
+		if (!$documentId)
+		{
+			return;
+		}
+
+		$documentId = \CBPHelper::parseDocumentId($documentId);
+
+		Crm\Timeline\Bizproc\Controller::getInstance()->onCommentStatusChange(
+			new Crm\Timeline\Bizproc\Dto\CommentStatusChangedDto(
+				$workflowId,
+				$documentId,
+				$userId,
+				$status,
+			)
+		);
+	}
+
+	/**
+	 * Event handler for onGetDocumentFieldTypes event.
+	 * Registers CRM-specific field types (sms_sender, mail_sender, deal_category, etc.)
+	 * so they are available in the node workflow designer.
+	 *
+	 * @param OnGetDocumentFieldTypesEvent $event
+	 *
+	 * @throws \CBPArgumentNullException
+	 */
+	public static function onGetDocumentFieldTypes(OnGetDocumentFieldTypesEvent $event): void
+	{
+		$types = \CCrmDocument::GetDocumentFieldTypes('CONTACT');
+
+		$baseTypes = \CBPHelper::GetDocumentFieldTypes();
+		$crmContactTypes = array_diff_key($types, $baseTypes);
+
+		if (!empty($crmContactTypes))
+		{
+			$event->addFieldTypes($crmContactTypes);
 		}
 	}
 

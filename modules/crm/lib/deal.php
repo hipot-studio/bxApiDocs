@@ -13,18 +13,17 @@ use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\DealSettings;
 use Bitrix\Main;
-use Bitrix\Main\ORM\Fields\IntegerField;
-use Bitrix\Main\Entity\ReferenceField;
-use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\CascadePolicy;
 use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\TextField;
 use Bitrix\Main\ORM\Query\Join;
 
@@ -62,6 +61,8 @@ class DealTable extends Main\ORM\Data\DataManager
 
 	public static function getMap()
 	{
+		Container::getInstance()->getLocalization()->loadMessages();
+
 		$fieldRepository = Main\DI\ServiceLocator::getInstance()->get('crm.model.fieldRepository');
 
 		$map = [
@@ -89,7 +90,7 @@ class DealTable extends Main\ORM\Data\DataManager
 
 			$fieldRepository->getCreatedBy('CREATED_BY_ID', FieldCaptionGender::Feminine),
 
-			(new ReferenceField(
+			(new Reference(
 				'CREATED_BY',
 				Main\UserTable::class,
 				Join::on('this.CREATED_BY_ID', 'ref.ID'),
@@ -99,7 +100,7 @@ class DealTable extends Main\ORM\Data\DataManager
 
 			$fieldRepository->getUpdatedBy('MODIFY_BY_ID', FieldCaptionGender::Feminine),
 
-			(new ReferenceField(
+			(new Reference(
 				'MODIFY_BY',
 				Main\UserTable::class,
 				Join::on('this.MODIFY_BY_ID', 'ref.ID'),
@@ -109,7 +110,7 @@ class DealTable extends Main\ORM\Data\DataManager
 
 			$fieldRepository->getAssigned(),
 
-			(new ReferenceField(
+			(new Reference(
 				'ASSIGNED_BY',
 				Main\UserTable::class,
 				Join::on('this.ASSIGNED_BY_ID', 'ref.ID'),
@@ -125,7 +126,7 @@ class DealTable extends Main\ORM\Data\DataManager
 
 			$fieldRepository->getLeadId(),
 
-			(new ReferenceField(
+			(new Reference(
 				'LEAD_BY',
 				LeadTable::class,
 				Join::on('this.LEAD_ID', 'ref.ID'),
@@ -135,7 +136,7 @@ class DealTable extends Main\ORM\Data\DataManager
 
 			$fieldRepository->getCompanyId(),
 
-			(new ReferenceField(
+			(new Reference(
 				'COMPANY_BY',
 				CompanyTable::class,
 				Join::on('this.COMPANY_ID', 'ref.ID'),
@@ -147,7 +148,7 @@ class DealTable extends Main\ORM\Data\DataManager
 
 			$fieldRepository->getContactId(),
 
-			(new ReferenceField(
+			(new Reference(
 				'CONTACT_BY',
 				ContactTable::class,
 				Join::on('this.CONTACT_ID', 'ref.ID'),
@@ -155,7 +156,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_CONTACT_BY_FIELD'))
 			,
 
-			(new ReferenceField(
+			(new Reference(
 				'CONTACT',
 				ContactTable::class,
 				Join::on('this.CONTACT_ID', 'ref.ID'),
@@ -163,7 +164,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(\CCrmOwnerType::GetDescription(\CCrmOwnerType::Contact))
 			,
 
-			(new ReferenceField(
+			(new Reference(
 				'BINDING_CONTACT',
 				Binding\DealContactTable::class,
 				Join::on('this.ID', 'ref.DEAL_ID'),
@@ -174,6 +175,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				Binding\DealContactTable::class,
 				'DEAL'
 			))
+				->configureTitle(Loc::getMessage('CRM_COMMON_CONTACTS'))
 				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW)
 			,
 
@@ -195,7 +197,7 @@ class DealTable extends Main\ORM\Data\DataManager
 
 			$fieldRepository->getStageId(Item::FIELD_NAME_STAGE_ID, \CCrmOwnerType::Deal),
 
-			(new ReferenceField(
+			(new Reference(
 				'STAGE_BY',
 				StatusTable::class,
 				Join::on('this.STAGE_ID', 'ref.STATUS_ID')
@@ -227,7 +229,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_IS_RECURRING_FIELD'))
 			,
 
-			(new ReferenceField(
+			(new Reference(
 				'CRM_DEAL_RECURRING',
 				DealRecurTable::class,
 				Join::on('this.ID', 'ref.DEAL_ID'),
@@ -252,7 +254,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_TYPE_ID_FIELD'))
 			,
 
-			(new ReferenceField(
+			(new Reference(
 				'TYPE_BY',
 				StatusTable::class,
 				Join::on('this.TYPE_ID', 'ref.STATUS_ID')
@@ -319,7 +321,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_EVENT_ID_FIELD'))
 			,
 
-			(new ReferenceField(
+			(new Reference(
 				'EVENT_BY',
 				StatusTable::class,
 				Join::on('this.EVENT_ID', 'ref.STATUS_ID')
@@ -329,7 +331,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_EVENT_BY_FIELD'))
 			,
 
-			(new ReferenceField(
+			(new Reference(
 				'EVENT_RELATION',
 				EventRelationsTable::class,
 				Join::on('this.ID', 'ref.ENTITY_ID'),
@@ -358,7 +360,7 @@ class DealTable extends Main\ORM\Data\DataManager
 
 			$fieldRepository->getOriginatorId(),
 
-			(new ReferenceField(
+			(new Reference(
 				'ORIGINATOR_BY',
 				ExternalSaleTable::class,
 				Join::on('this.ORIGINATOR_ID', 'ref.ID'),
@@ -441,7 +443,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_HAS_PRODUCTS_FIELD'))
 			,
 
-			(new ReferenceField(
+			(new Reference(
 				'PRODUCT_ROW',
 				ProductRowTable::class,
 				Join::on('this.ID', 'ref.OWNER_ID')
@@ -449,7 +451,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				,
 			)),
 
-			(new ReferenceField(
+			(new Reference(
 				'HISTORY',
 				DealStageHistoryTable::class,
 				Join::on('this.ID', 'ref.OWNER_ID'),
@@ -457,7 +459,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureJoinType(Join::TYPE_INNER)
 			,
 
-			(new ReferenceField(
+			(new Reference(
 				'FULL_HISTORY',
 				DealStageHistoryWithSupposedTable::class,
 				Join::on('this.ID', 'ref.OWNER_ID'),
@@ -465,7 +467,7 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureJoinType(Join::TYPE_INNER)
 			,
 
-			(new ReferenceField(
+			(new Reference(
 				'ORDER_BINDING',
 				Binding\OrderEntityTable::class,
 				Join::on('this.ID', 'ref.OWNER_ID')

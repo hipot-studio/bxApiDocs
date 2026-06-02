@@ -21,7 +21,7 @@ use Bitrix\Main\NotSupportedException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ORM\Objectify\EntityObject;
 
-final class Lead extends Service\Factory
+class Lead extends Service\Factory
 {
 	protected $itemClassName = Item\Lead::class;
 

@@ -22,7 +22,7 @@ class Manager
 	public static function getSenderInstance(CrmDealLink $crmDealLink): AbstractService
 	{
 		$entity = new ItemIdentifier(\CCrmOwnerType::Deal, $crmDealLink->getEntityId());
-		$repo = ChannelRepository::create($entity);
+		$repo = ChannelRepository::createWithPermissions($entity);
 
 		if ($repo->getById(MailManager::getSenderCode(), $crmDealLink->getChannelId()) !== null)
 		{
@@ -44,7 +44,7 @@ class Manager
 	public static function getCommunicationChannels(ItemIdentifier $entity): array
 	{
 		$result = [];
-		$repo = Channel\ChannelRepository::create($entity);
+		$repo = Channel\ChannelRepository::createWithPermissions($entity);
 
 		if (MailManager::canUse())
 		{
@@ -79,7 +79,7 @@ class Manager
 
 	public static function getContacts(ItemIdentifier $entity): array
 	{
-		return self::convertToListToArray(Channel\ChannelRepository::create($entity)->getToList());
+		return self::convertToListToArray(Channel\ChannelRepository::createWithPermissions($entity)->getToList());
 	}
 
 	protected static function getChannelArray(Channel $channel, string $typeId): array
@@ -138,7 +138,7 @@ class Manager
 	 */
 	public static function getOptimalChannelId(ItemIdentifier $entity, int $userId): ?string
 	{
-		$repo = Channel\ChannelRepository::create($entity);
+		$repo = Channel\ChannelRepository::createWithPermissions($entity);
 
 		$channel = $repo->getBestUsableBySender(SmsManager::getSenderCode());
 		if ($channel)

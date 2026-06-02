@@ -8,6 +8,7 @@ use Bitrix\Iblock;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM;
+use Bitrix\Sale;
 
 class Price extends Entity
 {
@@ -120,12 +121,13 @@ class Price extends Entity
 		]);
 		while ($row = $iterator->fetch())
 		{
+			$rawPrice = $price['PRICE'] * self::$extraList[$row['EXTRA_ID']];
 			$fields = [
-				'PRICE' => $price['PRICE']*self::$extraList[$row['EXTRA_ID']],
+				'PRICE' => Catalog\Product\Price\Calculation::roundPrecision($rawPrice),
 				'CURRENCY' => $price['CURRENCY'],
 				'TIMESTAMP_X' => $datetime
 			];
-			$fields['PRICE_SCALE'] = $fields['PRICE']*$currency['CURRENT_BASE_RATE'];
+			$fields['PRICE_SCALE'] = $fields['PRICE'] * $currency['CURRENT_BASE_RATE'];
 
 			$result = Catalog\PriceTable::update($row['ID'], $fields);
 			if ($result->isSuccess())
@@ -736,7 +738,11 @@ class Price extends Entity
 		if (!isset(self::$productPrices[$productId][$index]))
 			return;
 
-		$fields['PRICE'] = self::$productPrices[$productId][$index]['PRICE']*self::$extraList[$copyFields['EXTRA_ID']];
+		$rawPrice = self::$productPrices[$productId][$index]['PRICE'] * self::$extraList[$copyFields['EXTRA_ID']];
+		$fields['PRICE'] = Catalog\Product\Price\Calculation::roundByFormatCurrency(
+			$rawPrice,
+			self::$productPrices[$productId][$index]['CURRENCY']
+		);
 		$fields['CURRENCY'] = self::$productPrices[$productId][$index]['CURRENCY'];
 	}
 

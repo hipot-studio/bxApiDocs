@@ -397,8 +397,28 @@ class MarkdownToBBCodeTranslationService
 
 	private function sanitizeUrl(string $url): string
 	{
-		// Ensure this is a valid URL
+		$url = trim($url);
+
+		if ($url === '')
+		{
+			return '';
+		}
+
+		// Block dangerous schemes
+		$scheme = parse_url($url, PHP_URL_SCHEME);
+		if (is_string($scheme) && !in_array(strtolower($scheme), ['http', 'https', 'ftp', 'ftps'], true))
+		{
+			return '';
+		}
+
+		// Allow absolute URLs
 		if (filter_var($url, FILTER_VALIDATE_URL) !== false)
+		{
+			return $url;
+		}
+
+		// Allow relative URLs starting with / and absolute starting with // inheriting the scheme from the page
+		if (preg_match('#^/[^\s]*$#', $url))
 		{
 			return $url;
 		}

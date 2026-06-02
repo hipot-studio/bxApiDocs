@@ -192,16 +192,7 @@ class CSocServOdnoklassniki extends CSocServAuth
 		if(CModule::IncludeModule("socialnetwork") && mb_strpos($url, "current_fieldset=") === false)
 			$url = (preg_match("/\?/", $url)) ? $url."&current_fieldset=SOCSERV" : $url."?current_fieldset=SOCSERV";
 
-		$url = CUtil::JSEscape($url);
-		$location = ($mode == "opener") ? 'if(window.opener) window.opener.location = \''.$url.'\'; window.close();' : ' window.location = \''.$url.'\';';
-
-		$JSScript = '
-		<script>
-		'.$location.'
-		</script>
-		';
-
-		echo $JSScript;
+		$this->onAfterWebAuth(true, $mode, $url);
 
 		CMain::FinalActions();
 	}

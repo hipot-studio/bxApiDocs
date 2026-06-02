@@ -3136,6 +3136,15 @@ class CAllSocNetUserToGroup
 			{
 				$arReturn["UserCanInitiate"] = false;
 				$arReturn["UserCanViewGroup"] = ($groupVisible === "Y");
+				if (
+					$arReturn["UserCanViewGroup"]
+					&& Loader::includeModule('extranet')
+					&& !\CExtranet::isExtranetSocNetGroup($groupId)
+					&& !\CExtranet::isIntranetUser(SITE_ID, $userId)
+				)
+				{
+					$arReturn["UserCanViewGroup"] = false;
+				}
 				$arReturn["UserCanAutoJoinGroup"] = ($arReturn["UserCanViewGroup"] && ($groupOpened === "Y"));
 				$arReturn["UserCanModifyGroup"] = false;
 				$arReturn["UserCanModerateGroup"] = false;

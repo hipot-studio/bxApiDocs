@@ -36,99 +36,98 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 
 	public static function getEntityFields($entityType)
 	{
-		\Bitrix\Main\Localization\Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/components/bitrix/crm.'.
-			mb_strtolower($entityType).'.edit/component.php');
-
+		$entityTypeId = \CCrmOwnerType::ResolveID($entityType);
 		$addressLabels = Bitrix\Crm\EntityAddress::getShortLabels();
+		$fullAddressLabel = Bitrix\Crm\EntityAddress::getFullAddressLabel();
 		$printableFieldNameSuffix = ' ('.GetMessage('CRM_FIELD_BP_TEXT').')';
 
 		$arResult = static::getVirtualFields() + array(
 			'ID' => array(
-				'Name' => GetMessage('CRM_FIELD_ID'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'ID'),
 				'Type' => 'int',
 				'Filterable' => true,
 				'Editable' => false,
 				'Required' => false,
 			),
 			'NAME' => array(
-				'Name' => GetMessage('CRM_FIELD_FIRST_NAME'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'NAME'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => true,
 			),
 			'LAST_NAME' => array(
-				'Name' => GetMessage('CRM_FIELD_LAST_NAME'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'LAST_NAME'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => true,
 			),
 			'SECOND_NAME' => array(
-				'Name' => GetMessage('CRM_FIELD_SECOND_NAME'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'SECOND_NAME'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			),
 			'HONORIFIC' => array(
-				'Name' => GetMessage('CRM_FIELD_HONORIFIC'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'HONORIFIC'),
 				'Type' => 'select',
 				'Options' => CCrmStatus::GetStatusListEx('HONORIFIC'),
 				'Editable' => true,
 				'Required' => false,
 			),
 			'BIRTHDATE' => array(
-				'Name' => GetMessage('CRM_FIELD_BIRTHDATE'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'BIRTHDATE'),
 				'Type' => 'date',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			),
 			'PHOTO' => array(
-				'Name' => GetMessage('CRM_FIELD_PHOTO'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'PHOTO'),
 				'Type' => 'file',
 				'Filterable' => false,
 				'Editable' => true,
 				'Required' => false,
 			),
 			'EMAIL' => array(
-				'Name' => GetMessage('CRM_FIELD_EMAIL'),
+				'Name' => \CCrmFieldMulti::GetEntityTypeCaption('EMAIL'),
 				'Type' => 'email',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			),
 			'PHONE' => array(
-				'Name' => GetMessage('CRM_FIELD_PHONE'),
+				'Name' => \CCrmFieldMulti::GetEntityTypeCaption('PHONE'),
 				'Type' => 'phone',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			),
 			'WEB' => array(
-				'Name' => GetMessage('CRM_FIELD_WEB'),
+				'Name' => \CCrmFieldMulti::GetEntityTypeCaption('WEB'),
 				'Type' => 'web',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			),
 			'IM' => array(
-				'Name' => GetMessage('CRM_FIELD_MESSENGER'),
+				'Name' => \CCrmFieldMulti::GetEntityTypeCaption('IM'),
 				'Type' => 'im',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			),
 			'POST' => array(
-				'Name' => GetMessage('CRM_FIELD_POST'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'POST'),
 				'Type' => 'string',
 				'Filterable' => true,
 				'Editable' => true,
 				'Required' => false,
 			),
 			'FULL_ADDRESS' => array(
-				'Name' => GetMessage('CRM_FIELD_ADDRESS'),
+				'Name' => $fullAddressLabel,
 				'Type' => 'text',
 				'Filterable' => true,
 				'Editable' => true,
@@ -184,7 +183,7 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 				'Required' => false,
 			),
 			'COMMENTS' => array(
-				'Name' => GetMessage('CRM_FIELD_COMMENTS'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'COMMENTS'),
 				'Type' => 'text',
 				'ValueContentType' => 'bb',
 				'Filterable' => false,
@@ -192,7 +191,7 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 				'Required' => false,
 			),
 			'TYPE_ID' => array(
-				'Name' => GetMessage('CRM_FIELD_TYPE_ID'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'TYPE_ID'),
 				'Type' => 'select',
 				'Options' => CCrmStatus::GetStatusListEx('CONTACT_TYPE'),
 				'Filterable' => true,
@@ -200,7 +199,7 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 				'Required' => false,
 			),
 			'ASSIGNED_BY_ID' => array(
-				'Name' => GetMessage('CRM_FIELD_ASSIGNED_BY_ID'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'ASSIGNED_BY_ID'),
 				'Type' => 'user',
 				'Filterable' => true,
 				'Editable' => true,
@@ -219,7 +218,7 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 				'Type' => 'user',
 			],
 			'SOURCE_ID' => [
-				'Name' => GetMessage('CRM_FIELD_SOURCE_ID'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'SOURCE_ID'),
 				'Type' => 'select',
 				'Options' => CCrmStatus::GetStatusListEx('SOURCE'),
 				'Filterable' => true,
@@ -227,35 +226,43 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 				'Required' => false,
 			],
 			'SOURCE_DESCRIPTION' => [
-				'Name' => GetMessage('CRM_FIELD_SOURCE_DESCRIPTION'),
+				'Name' => static::getEntityFieldCaption($entityTypeId, 'SOURCE_DESCRIPTION'),
 				'Type' => 'text',
 				'Filterable' => false,
 				'Editable' => true,
 				'Required' => false,
 			],
 			"OPENED" => [
-				"Name" => GetMessage("CRM_FIELD_OPENED"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'OPENED'),
 				"Type" => "bool",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
 			],
 			"EXPORT" => [
-				"Name" => GetMessage("CRM_FIELD_EXPORT"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'EXPORT'),
 				"Type" => "bool",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
 			],
 			"COMPANY_ID" => [
-				"Name" => GetMessage("CRM_FIELD_COMPANY_ID"),
+				"Name" => static::getEntityFieldCaption(
+					$entityTypeId,
+					'COMPANY_ID',
+					GetMessage('CRM_DOCUMENT_CRM_ENTITY_TYPE_COMPANY')
+				),
 				"Type" => "string",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
 			],
 			"COMPANY_IDS" => [
-				"Name" => GetMessage("CRM_FIELD_COMPANY_IDS"),
+				"Name" => static::getEntityFieldCaption(
+					$entityTypeId,
+					'COMPANY_IDS',
+					\CCrmOwnerType::GetCategoryCaption(\CCrmOwnerType::Company),
+				),
 				"Type" => "string",
 				"Filterable" => true,
 				"Editable" => true,
@@ -263,42 +270,46 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 				"Multiple" => true
 			],
 			"LEAD_ID" => [
-				"Name" => GetMessage("CRM_FIELD_LEAD_ID"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'LEAD_ID'),
 				"Type" => "int",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
 			],
 			"ORIGINATOR_ID" => [
-				"Name" => GetMessage("CRM_FIELD_ORIGINATOR_ID"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'ORIGINATOR_ID'),
 				"Type" => "string",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
 			],
 			"ORIGIN_ID" => [
-				"Name" => GetMessage("CRM_FIELD_ORIGIN_ID"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'ORIGIN_ID'),
 				"Type" => "string",
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
 			],
 			"DATE_CREATE" => [
-				"Name" => GetMessage("CRM_CONTACT_EDIT_FIELD_DATE_CREATE"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'DATE_CREATE'),
 				"Type" => "datetime",
 				"Filterable" => true,
 				"Editable" => false,
 				"Required" => false,
 			],
 			"DATE_MODIFY" => [
-				"Name" => GetMessage("CRM_CONTACT_EDIT_FIELD_DATE_MODIFY"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'DATE_MODIFY'),
 				"Type" => "datetime",
 				"Filterable" => true,
 				"Editable" => false,
 				"Required" => false,
 			],
 			'TRACKING_SOURCE_ID' => [
-				'Name' => GetMessage('CRM_DOCUMENT_FIELD_TRACKING_SOURCE_ID'),
+				'Name' => static::getEntityFieldCaption(
+					$entityTypeId,
+					'TRACKING_SOURCE_ID',
+					GetMessage('CRM_DOCUMENT_FIELD_TRACKING_SOURCE_ID')
+				),
 				'Type' => 'select',
 				'Options' => array_column(Crm\Tracking\Provider::getActualSources(), 'NAME','ID'),
 				'Filterable' => true,
@@ -306,7 +317,7 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 				'Required' => false,
 			],
 			"OBSERVER_IDS" => [
-				"Name" => GetMessage("CRM_FIELD_OBSERVER_IDS"),
+				"Name" => static::getEntityFieldCaption($entityTypeId, 'OBSERVER_IDS', GetMessage('CRM_FIELD_OBSERVER_IDS')),
 				"Type" => "user",
 				"Editable" => !RestrictionManager::getObserversFieldRestriction(\CCrmOwnerType::Contact)->isExceeded(),
 				"Required" => false,
@@ -352,7 +363,7 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 		foreach ($ar as $typeId => $arFields)
 		{
 			$arResult[$typeId.'_PRINTABLE'] = array(
-				'Name' => GetMessage('CRM_FIELD_MULTI_'.$typeId).$printableFieldNameSuffix,
+				'Name' => \CCrmFieldMulti::GetEntityTypeCaption($typeId) . $printableFieldNameSuffix,
 				'Type' => 'string',
 				"Filterable" => true,
 				"Editable" => false,

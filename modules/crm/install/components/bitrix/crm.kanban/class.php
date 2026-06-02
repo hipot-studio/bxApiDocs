@@ -318,6 +318,7 @@ class CrmKanbanComponent extends CBitrixComponent
 		$this->arResult['USE_PUSH_CRM'] = ($this->arParams['USE_PUSH_CRM'] ?? 'Y') === 'Y';
 		$this->arResult['PERFORMANCE'] = $this->arParams['PERFORMANCE'] ?? [];
 		$this->arResult['STAGE_ANALYTICS'] = $this->getStageAnalyticsLabels();
+		$this->arResult['COPILOT_NAME'] = \Bitrix\Crm\Integration\AI\AIManager::getCopilotName();
 
 		$stub = $this->getStub();
 		if (!empty($stub))

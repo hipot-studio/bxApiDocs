@@ -6,6 +6,7 @@ use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Integration\Intranet\BindingMenu\CodeBuilder;
 use Bitrix\Crm\Integration\Intranet\BindingMenu\SectionCode;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\Configurable;
 use Bitrix\Crm\Service\Timeline\Layout;
 use Bitrix\Main\Localization\Loc;
@@ -143,6 +144,8 @@ class Builder
 		$menuItems = $this->item->getMenuItems();
 		if (!empty($menuItems))
 		{
+			$menuSections = $this->item->getMenuSections();
+
 			$extensionsMenu = $this->getExtensionsMenu();
 			if ($extensionsMenu && !$this->isRestContext())
 			{
@@ -152,16 +155,27 @@ class Builder
 				;
 
 				$menuItems[] = $extensionsMenu;
-				$menuItems[] = (new Menu\MenuItemDelimiter())
-					->setSort(8001)
-					->setScopeWeb()
-				;
+
+				if (!empty($menuSections))
+				{
+					$extensionsMenu->setSectionCode('extensions');
+					$menuSections[] = ['code' => 'extensions'];
+				}
+				else
+				{
+					$menuItems[] = (new Menu\MenuItemDelimiter())
+						->setSort(8001)
+						->setScopeWeb()
+					;
+				}
 			}
 
-			$footer->setMenu(
-				(new Layout\Menu())
-					->setItems($menuItems)
-			);
+			$menu = (new Layout\Menu())->setItems($menuItems);
+			if (!empty($menuSections))
+			{
+				$menu->setSections($menuSections);
+			}
+			$footer->setMenu($menu);
 		}
 
 		return $footer;
@@ -233,6 +247,6 @@ class Builder
 
 	private function isRestContext(): bool
 	{
-		return $this->item->getContext()->getType() === \Bitrix\Crm\Service\Timeline\Context::REST;
+		return $this->item->getContext()->getType() === Context::REST;
 	}
 }

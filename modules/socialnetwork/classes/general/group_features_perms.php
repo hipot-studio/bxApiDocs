@@ -426,6 +426,38 @@ class CAllSocNetFeaturesPerms
 
 	public static function CanPerformOperation($userID, $type, $id, $feature, $operation, $bCurrentUserIsAdmin = false)
 	{
+		static $cache = [];
+
+		$cacheKey = self::getCanPerformOperationCacheKey(
+			$userID,
+			$type,
+			$id,
+			$feature,
+			$operation,
+			$bCurrentUserIsAdmin,
+		);
+
+		if (array_key_exists($cacheKey, $cache))
+		{
+			return $cache[$cacheKey];
+		}
+
+		$result = self::canPerformOperationInternal(
+			$userID,
+			$type,
+			$id,
+			$feature,
+			$operation,
+			$bCurrentUserIsAdmin,
+		);
+
+		$cache[$cacheKey] = $result;
+
+		return $result;
+	}
+
+	private static function canPerformOperationInternal($userID, $type, $id, $feature, $operation, $bCurrentUserIsAdmin = false)
+	{
 		global $APPLICATION, $arSocNetAllowedEntityTypes;
 
 		$arSocNetFeaturesSettings = CSocNetAllowed::GetAllowedFeatures();
@@ -898,7 +930,7 @@ class CAllSocNetFeaturesPerms
 			return false;
 		}
 
-		$operation = mb_strtolower(Trim($operation));
+		$operation = mb_strtolower(Trim($operation ?? ''));
 		if (
 			!array_key_exists("operations", $arSocNetFeaturesSettings[$feature])
 			|| !array_key_exists($operation, $arSocNetFeaturesSettings[$feature]["operations"])
@@ -1226,7 +1258,7 @@ class CAllSocNetFeaturesPerms
 		{
 			if (!array_key_exists($feature, $arFeaturesPerms))
 			{
-				$featureOperationPerms = $arSocNetFeaturesSettings[$feature]["operations"][$operation][SONET_ENTITY_USER];
+				$featureOperationPerms = $arSocNetFeaturesSettings[$feature]["operations"][$operation][SONET_ENTITY_USER] ?? null;
 			}
 			elseif (!array_key_exists($operation, $arFeaturesPerms[$feature]))
 			{
@@ -1245,6 +1277,34 @@ class CAllSocNetFeaturesPerms
 
 		return $featureOperationPerms;
 
+	}
+
+	private static function getCanPerformOperationCacheKey(
+		$userID,
+		$type,
+		$id,
+		$feature,
+		$operation,
+		$bCurrentUserIsAdmin,
+	): string
+	{
+		if (is_array($id))
+		{
+			$normalizedId = array_values($id);
+		}
+		else
+		{
+			$normalizedId = (int)$id;
+		}
+
+		return md5(serialize([
+			(int)$userID,
+			(string)$type,
+			$normalizedId,
+			(string)$feature,
+			(string)$operation,
+			(bool)$bCurrentUserIsAdmin,
+		]));
 	}
 
 	private static function getCachePath($type, $id): string

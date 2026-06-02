@@ -114,6 +114,9 @@ class Task
 		]);
 	}
 
+	/**
+	 * @deprecated This method will be removed as there will no longer be task posts in the feed.
+	 */
 	public static function onTaskUserOptionChanged(Event $event): EventResult
 	{
 		$result = new EventResult(

@@ -290,7 +290,10 @@ class CSocServZoom extends CSocServAuth
 		<script>
 			if (window.opener)
 				window.opener.location.reload();
-			window.close();
+			else
+				window.location = '<?=CUtil::JSEscape($url)?>';
+			if (window.opener)
+				window.close();
 		</script>
 		<?php
 		CMain::FinalActions();

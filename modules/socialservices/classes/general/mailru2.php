@@ -305,13 +305,8 @@ class CSocServMailRu2 extends CSocServAuth
 		}
 
 		$url = $this->getAuthorizeRedirectUrl($authError);
-		?>
-		<script>
-			if (window.opener)
-				window.opener.location = '<?=CUtil::JSEscape($url)?>';
-			window.close();
-		</script>
-		<?
+
+		$this->onAfterWebAuth(true, self::OPENER_MODE, $url);
 		CMain::FinalActions();
 	}
 
@@ -361,9 +356,13 @@ class CMailRu2Interface extends CSocServOAuthTransport
 	}
 
 	/**
+	 * @param string $redirect_uri
+	 * @param string $state
+	 * @param bool $forceConsent If true, adds prompt=consent to always show the consent screen with scopes.
+	 * Required together with offline_access scope to obtain a refresh_token.
 	 * @return string
 	 */
-	public function GetAuthUrl($redirect_uri, $state = '')
+	public function GetAuthUrl(string $redirect_uri, string $state = '', bool $forceConsent = false): string
 	{
 		return self::AUTH_URL
 			."?client_id=".$this->appID
@@ -371,7 +370,8 @@ class CMailRu2Interface extends CSocServOAuthTransport
 			."&scope=".$this->getScopeEncode()
 			."&response_type="."code"
 			.($state <> '' ? '&state='.urlencode($state) : '')
-			.'&prompt_force=1';
+			.'&prompt_force=1'
+			.($forceConsent ? '&prompt=consent' : '');
 	}
 
 	/**

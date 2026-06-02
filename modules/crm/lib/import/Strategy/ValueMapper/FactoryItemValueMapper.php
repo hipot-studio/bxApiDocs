@@ -58,10 +58,10 @@ final class FactoryItemValueMapper
 			],
 			'filter' => match ($this->entityTypeId) {
 				CCrmOwnerType::Contact => [
-					Contact::FIELD_NAME_FULL_NAME => $itemName,
+					'=' . Contact::FIELD_NAME_FULL_NAME => $itemName,
 				],
 				default => [
-					Item::FIELD_NAME_TITLE => $itemName,
+					'=' . Item::FIELD_NAME_TITLE => $itemName,
 				],
 			},
 			'limit' => 1,

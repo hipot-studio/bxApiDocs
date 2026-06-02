@@ -31,8 +31,8 @@ use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\Web\Json;
 use Bitrix\Catalog\ProductTable;
 use Bitrix\Catalog\Store\EnableWizard;
-use Bitrix\Sale\PriceMaths;
-use Bitrix\Sale\Tax\VatCalculator;
+use Bitrix\Catalog\Product\Price\Calculation;
+use Bitrix\Main\DI\ServiceLocator;
 
 if (!Loader::includeModule('catalog'))
 {
@@ -420,9 +420,9 @@ final class CatalogStoreDocumentProductListComponent
 		$this->defaultSettings['TAB_ID'] = '';
 		$this->defaultSettings['AJAX_ID'] = '';
 		$this->defaultSettings['PAGE_SIZES'] = [5, 10, 20, 50, 100];
-		$this->defaultSettings['PRICE_PRECISION'] = 2;
+		$this->defaultSettings['PRICE_PRECISION'] = 8;
 		$this->defaultSettings['AMOUNT_PRECISION'] = 4;
-		$this->defaultSettings['COMMON_PRECISION'] = 2;
+		$this->defaultSettings['COMMON_PRECISION'] = 8;
 		$this->defaultSettings['CREATE_PRODUCT_PATH'] = $this->getElementDetailUrl($this->arParams['CATALOG_ID']);
 		$this->defaultSettings['NEW_ROW_POSITION'] = CUserOptions::GetOption(
 			'catalog.store.document.product.list',
@@ -782,14 +782,18 @@ final class CatalogStoreDocumentProductListComponent
 
 			if ($taxRate && $basePrice)
 			{
-				$calculator = new VatCalculator($taxRate / 100);
-				$tax = $calculator->calc(
-					$basePrice,
-					$taxIncluded === 'Y',
-					false
+				// Step 1.6: use sale vatCalculator service; $taxRate is already in percent (e.g. 20.0)
+				$storeVatCalc = ServiceLocator::getInstance()->get('sale.vatCalculator');
+				$storeInputFactory = ServiceLocator::getInstance()->get('sale.basketItemInputFactory');
+				$tax = $storeVatCalc->calculateVatAmount(
+					$storeInputFactory->createFromArray([
+						'basePrice' => $basePrice,
+						'vatRate' => $taxRate,
+						'vatIncluded' => ($taxIncluded === 'Y'),
+					])
 				);
 
-				$taxSum = PriceMaths::roundPrecision($tax * $amount);
+				$taxSum = Calculation::roundPrecision($tax * $amount);
 			}
 
 			$calculatedPrice = (float)($document[$this->getDefaultTotalCalculationField()] ?? 0.0);
@@ -2228,9 +2232,11 @@ final class CatalogStoreDocumentProductListComponent
 
 	private function formatPrices($price)
 	{
+		$pricePrecision = $this->currency['FORMAT']['DECIMALS'] ?? $this->getStorageItem('PRICE_PRECISION');
+
 		return number_format(
 			$price,
-			$this->getStorageItem('PRICE_PRECISION'),
+			(int)$pricePrecision,
 			'.',
 			''
 		);

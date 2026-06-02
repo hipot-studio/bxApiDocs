@@ -6,6 +6,7 @@ use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Currency;
+use Bitrix\Catalog\Product\Price\Calculation;
 
 /**
  * Class DiscountTable
@@ -349,6 +350,7 @@ class DiscountTable extends DataManager
 		{
 			return true;
 		}
+
 		return Loc::getMessage('DISCOUNT_ENTITY_VALIDATOR_TYPE');
 	}
 
@@ -364,6 +366,7 @@ class DiscountTable extends DataManager
 		$result->addError(new Main\Entity\EntityError(
 			Loc::getMessage('CATALOG_DISCOUNT_ENTITY_MESS_ADD_BLOCKED')
 		));
+
 		return $result;
 	}
 
@@ -380,6 +383,7 @@ class DiscountTable extends DataManager
 		$result->addError(new Main\Entity\EntityError(
 			Loc::getMessage('CATALOG_DISCOUNT_ENTITY_MESS_UPDATE_BLOCKED')
 		));
+
 		return $result;
 	}
 
@@ -395,6 +399,7 @@ class DiscountTable extends DataManager
 		$result->addError(new Main\Entity\EntityError(
 			Loc::getMessage('CATALOG_DISCOUNT_ENTITY_MESS_DELETE_BLOCKED')
 		));
+
 		return $result;
 	}
 
@@ -408,26 +413,37 @@ class DiscountTable extends DataManager
 	public static function convertCurrency(&$discount, $currency)
 	{
 		$currency = Currency\CurrencyManager::checkCurrencyID($currency);
-		if ($currency === false || empty($discount) || !is_array($discount))
+		if (
+			$currency === false
+			|| empty($discount)
+			|| !isset($discount['VALUE_TYPE'])
+			|| !isset($discount['CURRENCY'])
+			|| $discount['CURRENCY'] === $currency
+		)
+		{
 			return;
-		if (!isset($discount['VALUE_TYPE']) || !isset($discount['CURRENCY']) || $discount['CURRENCY'] == $currency)
-			return;
+		}
 
 		switch ($discount['VALUE_TYPE'])
 		{
 			case self::VALUE_TYPE_FIX:
 			case self::VALUE_TYPE_SALE:
-				$discount['VALUE'] = round(
-					\CCurrencyRates::convertCurrency($discount['VALUE'], $discount['CURRENCY'], $currency)
+				$discount['VALUE'] = Calculation::roundPrecision(
+					\CCurrencyRates::convertCurrency($discount['VALUE'], $discount['CURRENCY'], $currency),
 				);
 				$discount['CURRENCY'] = $currency;
+
 				break;
 			case self::VALUE_TYPE_PERCENT:
-				if ($discount['MAX_DISCOUNT'] > 0)
-					$discount['MAX_DISCOUNT'] = round(
-						\CCurrencyRates::convertCurrency($discount['MAX_DISCOUNT'], $discount['CURRENCY'], $currency)
+				$maxDiscount = $discount['MAX_DISCOUNT'] ?? 0;
+				if ($maxDiscount > 0)
+				{
+					$discount['MAX_DISCOUNT'] = Calculation::roundPrecision(
+						\CCurrencyRates::convertCurrency($maxDiscount, $discount['CURRENCY'], $currency),
 					);
+				}
 				$discount['CURRENCY'] = $currency;
+
 				break;
 		}
 	}
@@ -442,13 +458,22 @@ class DiscountTable extends DataManager
 	public static function setUseCoupons($discountList, $use)
 	{
 		if (!is_array($discountList))
+		{
 			$discountList = array($discountList);
+		}
+
 		$use = (string)$use;
 		if ($use !== 'Y' && $use !== 'N')
+		{
 			return;
+		}
+
 		Main\Type\Collection::normalizeArrayValuesByInt($discountList);
 		if (empty($discountList))
+		{
 			return;
+		}
+
 		$conn = Main\Application::getConnection();
 		$helper = $conn->getSqlHelper();
 		$conn->queryExecute(
@@ -456,6 +481,5 @@ class DiscountTable extends DataManager
 			' set '.$helper->quote('USE_COUPONS').' = \''.$use.'\' where '.
 			$helper->quote('ID').' in ('.implode(',', $discountList).')'
 		);
-		unset($helper, $conn);
 	}
 }

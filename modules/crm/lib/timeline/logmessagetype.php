@@ -41,4 +41,5 @@ final class LogMessageType
 	public const BOOKING_STATUS_UPDATE = 33;
 	public const REPEAT_SALE_CREATED = 34;
 	public const BOOKING_CREATION_ERROR = 35;
+	public const COPIED = 36;
 }

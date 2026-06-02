@@ -32,7 +32,7 @@ final class Updater
 
 	private const OPTION_JSON_DB_ETAG = 'option_json_db_etag';
 
-	private const CURRENT_JSON_FORMAT_VERSION = 2;
+	private const CURRENT_JSON_FORMAT_VERSION = 3;
 
 	private const CURRENT_JSON_FORMAT_SUBVERSION = 2;
 
@@ -146,11 +146,13 @@ final class Updater
 		}
 		catch (Exception)
 		{
+			self::makeExpired(self::TTL_HOURS);
 			return;
 		}
 
 		if ((int)$response['format_version'] !== self::CURRENT_JSON_FORMAT_VERSION)
 		{
+			self::makeExpired(self::TTL_HOURS);
 			return;
 		}
 

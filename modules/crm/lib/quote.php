@@ -10,12 +10,10 @@ namespace Bitrix\Crm;
 use Bitrix\Crm\Binding\QuoteContactTable;
 use Bitrix\Crm\Integration\StorageType;
 use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
-use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Settings\QuoteSettings;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Event;
@@ -155,6 +153,7 @@ class QuoteTable extends DataManager
 			(new Reference('CONTACT_BY', ContactTable::class, Join::on('this.CONTACT_ID', 'ref.ID'))),
 
 			(new OneToMany('CONTACT_BINDINGS', QuoteContactTable::class, 'QUOTE'))
+				->configureTitle(Loc::getMessage('CRM_COMMON_CONTACTS'))
 				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW),
 
 			(new EnumField('PERSON_TYPE_ID'))

@@ -113,6 +113,19 @@ class Contact extends Service\Factory
 		return parent::isFieldExists($commonFieldName);
 	}
 
+	public function getFieldCaption(string $commonFieldName): string
+	{
+		if (
+			$commonFieldName === Item\Contact::FIELD_NAME_COMPANIES
+			|| $commonFieldName === Item\Contact::FIELD_NAME_COMPANY_IDS
+		)
+		{
+			$commonFieldName = Item\Contact::FIELD_NAME_COMPANY_BINDINGS;
+		}
+
+		return parent::getFieldCaption($commonFieldName);
+	}
+
 	protected function prepareSelect(array $select): array
 	{
 		$select = parent::prepareSelect($select);

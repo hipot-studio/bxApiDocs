@@ -242,6 +242,9 @@ class ActivityTable extends Entity\DataManager
 			'DEADLINE' => array(
 				'data_type' => 'datetime'
 			),
+			'CALENDAR_EVENT_ID' => array(
+				'data_type' => 'integer'
+			),
 			'PARENT_ID' => array(
 				'data_type' => 'integer'
 			),

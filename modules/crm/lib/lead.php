@@ -9,10 +9,9 @@ namespace Bitrix\Crm;
 
 use Bitrix\Crm\History\Entity\LeadStatusHistoryTable;
 use Bitrix\Crm\History\Entity\LeadStatusHistoryWithSupposedTable;
-use Bitrix\Crm\Model\LastCommunicationTable;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\LeadSettings;
 use Bitrix\Main;
-use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
@@ -63,6 +62,8 @@ class LeadTable extends Main\ORM\Data\DataManager
 
 	public static function getMap()
 	{
+		Container::getInstance()->getLocalization()->loadMessages();
+
 		$fieldRepository = Main\DI\ServiceLocator::getInstance()->get('crm.model.fieldRepository');
 
 		$map = [
@@ -393,6 +394,7 @@ class LeadTable extends Main\ORM\Data\DataManager
 				Binding\LeadContactTable::class,
 				'LEAD',
 			))
+				->configureTitle(Loc::getMessage('CRM_COMMON_CONTACTS'))
 				->configureCascadeDeletePolicy(CascadePolicy::FOLLOW)
 			,
 

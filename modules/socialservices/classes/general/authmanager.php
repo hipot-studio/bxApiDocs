@@ -154,6 +154,9 @@ class CSocServAuthManager
 				if(is_callable(array($cl, "GetOnClickJs")))
 					$service["ONCLICK"] = call_user_func_array(array($cl, "GetOnClickJs"), array($arParams));
 
+				if(is_callable(array($cl, "getUrl")))
+					$service["AUTH_URL"] = call_user_func_array(array($cl, "getUrl"), array($arParams));
+
 				$aServ[$key] = $service;
 			}
 		}

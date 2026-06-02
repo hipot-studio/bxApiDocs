@@ -13,7 +13,7 @@ class AiUrlManager
 	protected const PROXY_HOST = 'https://ai-proxy.';
 	protected const STATIC_PROXY_HOST = 'https://static-ai-proxy.';
 	protected const SERVER_LIST_CONFIG_ENDPOINT = '/settings/config.json';
-	protected const PROMPT_BASE_ENDPOINT = '/v2/box.json';
+	protected const PROMPT_BASE_ENDPOINT = '/v3/box.json';
 	protected string $domain = '';
 
 	public function __construct(UrlProvider $urlProvider)

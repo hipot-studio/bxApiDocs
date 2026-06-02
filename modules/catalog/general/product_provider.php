@@ -383,7 +383,7 @@ class CCatalogProductProvider implements IBXSaleProductProvider
 			Price\Calculation::pushConfig();
 			Price\Calculation::setConfig(array(
 				'CURRENCY' => $arParams['CURRENCY'],
-				'PRECISION' => (int)Main\Config\Option::get('sale', 'value_precision'),
+				'PRECISION' => Price\Calculation::getPrecision(),
 				'USE_DISCOUNTS' => $arParams['CHECK_DISCOUNT'] == 'Y',
 				'RESULT_WITH_VAT' => true,
 				'RESULT_MODE' => Catalog\Product\Price\Calculation::RESULT_MODE_RAW
@@ -671,7 +671,7 @@ class CCatalogProductProvider implements IBXSaleProductProvider
 		Price\Calculation::pushConfig();
 		Price\Calculation::setConfig(array(
 			'CURRENCY' => $arParams['CURRENCY'],
-			'PRECISION' => (int)Main\Config\Option::get('sale', 'value_precision'),
+			'PRECISION' => Price\Calculation::getPrecision(),
 			'USE_DISCOUNTS' => $arParams['CHECK_DISCOUNT'] == 'Y',
 			'RESULT_WITH_VAT' => true,
 			'RESULT_MODE' => Catalog\Product\Price\Calculation::RESULT_MODE_RAW

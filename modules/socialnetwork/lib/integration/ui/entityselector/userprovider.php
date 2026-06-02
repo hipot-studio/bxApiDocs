@@ -5,14 +5,18 @@ namespace Bitrix\Socialnetwork\Integration\UI\EntitySelector;
 use Bitrix\Extranet\Enum\User\ExtranetRole;
 use Bitrix\Extranet\Model\ExtranetUserTable;
 use Bitrix\Extranet\Service\ServiceContainer;
-use Bitrix\HumanResources\Service\Container;
-use Bitrix\HumanResources\Util\StructureHelper;
+use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
+use Bitrix\HumanResources\Model\NodeMemberTable;
+use Bitrix\HumanResources\Model\NodeTable;
+use Bitrix\HumanResources\Type\MemberEntityType;
+use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Intranet\Integration\Mail\EmailUser;
 use Bitrix\Intranet\Internals\InvitationTable;
 use Bitrix\Intranet\Invitation;
 use Bitrix\Intranet\UserAbsence;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Engine\Router;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Entity\Query;
@@ -23,6 +27,7 @@ use Bitrix\Main\ModuleManager;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Filter;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Search\Content;
 use Bitrix\Main\UserTable;
@@ -225,6 +230,11 @@ class UserProvider extends BaseProvider
 		if (isset($options['searchLimit']) && is_int($options['searchLimit']))
 		{
 			$this->options['searchLimit'] = max(1, min($options['searchLimit'], static::SEARCH_LIMIT));
+		}
+
+		if (array_key_exists('activeUsers', $options))
+		{
+			$this->options['activeUsers'] = $options['activeUsers'];
 		}
 	}
 
@@ -746,12 +756,7 @@ class UserProvider extends BaseProvider
 
 		$query = UserTable::query();
 		$query->setSelect(array_unique($selectFields));
-
 		$intranetInstalled = ModuleManager::isModuleInstalled('intranet');
-		if ($intranetInstalled)
-		{
-			$query->addSelect('UF_DEPARTMENT');
-		}
 
 		$activeUsers = array_key_exists('activeUsers', $options) ? $options['activeUsers'] : true;
 		if (is_bool($activeUsers))
@@ -801,30 +806,10 @@ class UserProvider extends BaseProvider
 		$isIntranetUser = $intranetInstalled && self::isIntranetUser($currentUserId);
 		if ($intranetInstalled)
 		{
-			$emptyValue = serialize([]);
-			$emptyValue2 = serialize([0]);
-
-			$query->registerRuntimeField(new ExpressionField(
-				'IS_INTRANET_USER',
-				'CASE WHEN
-					(%s IS NOT NULL AND %s != \'' . $emptyValue . '\' AND %s != \'' . $emptyValue2 . '\') AND
-					(%s IS NULL OR %s NOT IN (\'' . implode('\', \'', UserTable::getExternalUserTypes()) . '\'))
-					THEN \'Y\'
-					ELSE \'N\'
-				END',
-				['UF_DEPARTMENT', 'UF_DEPARTMENT', 'UF_DEPARTMENT', 'EXTERNAL_AUTH_ID', 'EXTERNAL_AUTH_ID']),
-			);
-
-			$query->registerRuntimeField(new ExpressionField(
-				'IS_EXTRANET_USER',
-				'CASE WHEN
-					(%s IS NULL OR %s = \'' . $emptyValue . '\' OR %s = \'' . $emptyValue2 . '\') AND
-					(%s IS NULL OR %s NOT IN (\'' . implode('\', \'', UserTable::getExternalUserTypes()) . '\'))
-					 THEN \'Y\'
-					 ELSE \'N\'
-				END',
-				['UF_DEPARTMENT', 'UF_DEPARTMENT', 'UF_DEPARTMENT', 'EXTERNAL_AUTH_ID', 'EXTERNAL_AUTH_ID']),
-			);
+			$departmentId = (
+				isset($options['departmentId'])
+				&& is_int($options['departmentId'])
+			) ? $options['departmentId'] : null;
 
 			$query->registerRuntimeField(
 				new Reference(
@@ -856,9 +841,23 @@ class UserProvider extends BaseProvider
 
 			if ($isIntranetUser)
 			{
-				if (isset($options['departmentId']) && is_int($options['departmentId']))
+				if ($departmentId !== null)
 				{
-					$query->addFilter('UF_DEPARTMENT', $options['departmentId']);
+					if (
+						!static::registerHrEmployeeJoin(
+							$query,
+							'HR_DEPARTMENT_EMPLOYEE',
+							Join::TYPE_INNER,
+							$departmentId
+						)
+					)
+					{
+						$query->addFilter('UF_DEPARTMENT', $departmentId);
+					}
+					else
+					{
+						$query->whereNotNull('HR_DEPARTMENT_EMPLOYEE_NODE.ID');
+					}
 				}
 
 				if ($emailUsersOnly)
@@ -875,11 +874,15 @@ class UserProvider extends BaseProvider
 				}
 				else if ($intranetUsersOnly)
 				{
-					$query->where('IS_INTRANET_USER', 'Y');
+					if ($departmentId === null && $activeUsers !== false)
+					{
+						$whitelistIds = self::prepareUserIds($options['userId'] ?? []);
+						static::applyIntranetUsersFilter($query, $whitelistIds);
+					}
 				}
 				else if ($extranetUsersOnly)
 				{
-					$query->where('IS_EXTRANET_USER', 'Y');
+					static::applyExtranetUsersFilter($query);
 					if ($extranetUsersQuery)
 					{
 						$query->whereIn('ID', $extranetUsersQuery);
@@ -888,21 +891,22 @@ class UserProvider extends BaseProvider
 				else
 				{
 					$filter = Query::filter()->logic('or');
-
-					if (
+					if ($departmentId !== null)
+					{
+						$filter->whereNotNull('HR_DEPARTMENT_EMPLOYEE_NODE.ID');
+					}
+					else if (
 						empty($options['searchByEmail'])
 						&& !\CSocNetUser::isCurrentUserModuleAdmin()
+						&& $activeUsers !== false
 					)
 					{
-						$filter->where('IS_INTRANET_USER', 'Y');
+						$whitelistIds = self::prepareUserIds($options['userId'] ?? []);
+						static::applyIntranetUsersFilterToConditionTree($query, $filter, $whitelistIds);
 					}
 					else
 					{
-						$filter->addCondition(Query::filter()
-							->logic('or')
-							->whereNotIn('EXTERNAL_AUTH_ID', UserTable::getExternalUserTypes())
-							->whereNull('EXTERNAL_AUTH_ID'),
-						);
+						$filter->where('REAL_USER', 'expr', true);
 					}
 
 					if ($emailUsers === true)
@@ -928,14 +932,7 @@ class UserProvider extends BaseProvider
 					if ($extranetUsersQuery)
 					{
 						$filter->whereIn('ID', $extranetUsersQuery);
-						$filter->addCondition(Query::filter()
-							->where(Query::filter()
-								->logic('or')
-								->whereNull('EXTERNAL_AUTH_ID')
-								->whereNot('EXTERNAL_AUTH_ID', 'email'),
-							)
-							->whereNotNull('INVITATION.ID'),
-						);
+						$filter->addCondition(static::buildExtranetUsersFilterConditionForDialog());
 					}
 
 					$query->where($filter);
@@ -943,17 +940,18 @@ class UserProvider extends BaseProvider
 			}
 			else
 			{
-				if ($intranetUsersOnly)
+				if ($intranetUsersOnly && $activeUsers !== false)
 				{
-					$query->where('IS_INTRANET_USER', 'Y');
+					$whitelistIds = self::prepareUserIds($options['userId'] ?? []);
+					static::applyIntranetUsersFilter($query, $whitelistIds);
 				}
 				else if ($extranetUsersOnly)
 				{
-					$query->where('IS_EXTRANET_USER', 'Y');
+					static::applyExtranetUsersFilter($query);
 				}
 				else
 				{
-					$query->addFilter('!=EXTERNAL_AUTH_ID', UserTable::getExternalUserTypes());
+					$query->where('REAL_USER', 'expr', true);
 				}
 
 				if ($extranetUsersQuery)
@@ -968,7 +966,7 @@ class UserProvider extends BaseProvider
 		}
 		else
 		{
-			$query->addFilter('!=EXTERNAL_AUTH_ID', UserTable::getExternalUserTypes());
+			$query->where('REAL_USER', 'expr', true);
 		}
 
 		if (!($options['collabers'] ?? true) && Loader::includeModule('extranet'))
@@ -987,7 +985,6 @@ class UserProvider extends BaseProvider
 		$userIds = self::prepareUserIds($options['userId'] ?? []);
 		$notUserIds = self::prepareUserIds($options['!userId'] ?? []);
 
-		// User Whitelist
 		if (!empty($userIds))
 		{
 			$query->whereIn('ID', $userIds);
@@ -1035,6 +1032,200 @@ class UserProvider extends BaseProvider
 		}
 
 		return $query;
+	}
+
+	private static function applyIntranetUsersFilter(Query $query, array $whitelistUserIds = []): void
+	{
+		$existsExpr = static::buildHrDepartmentEmployeeExistsExpression();
+		if ($existsExpr !== null)
+		{
+			if (!empty($whitelistUserIds))
+			{
+				$legacyIntranet = static::buildIntranetUsersFilterCondition();
+
+				$query->where(
+					Query::filter()
+						->logic('or')
+						->whereExists($existsExpr)
+						->addCondition(
+							Query::filter()
+								->whereIn('ID', $whitelistUserIds)
+								->addCondition($legacyIntranet)
+						)
+				);
+			}
+			else
+			{
+				$query->whereExists($existsExpr);
+			}
+
+			return;
+		}
+
+		$query->where(static::buildIntranetUsersFilterCondition());
+	}
+
+	private static function applyIntranetUsersFilterToConditionTree(
+		Query $query,
+		ConditionTree $filter,
+		array $whitelistUserIds = [],
+	): void
+	{
+		$existsExpr = static::buildHrDepartmentEmployeeExistsExpression();
+		if ($existsExpr !== null)
+		{
+			if (!empty($whitelistUserIds))
+			{
+				$legacyIntranet = static::buildIntranetUsersFilterCondition();
+				$filter->addCondition(
+					Query::filter()
+						->logic('or')
+						->whereExists($existsExpr)
+						->addCondition(
+							Query::filter()
+								->whereIn('ID', $whitelistUserIds)
+								->addCondition($legacyIntranet)
+						)
+				);
+			}
+			else
+			{
+				$filter->whereExists($existsExpr);
+			}
+
+			return;
+		}
+
+		$filter->addCondition(static::buildIntranetUsersFilterCondition());
+	}
+
+	private static function buildHrDepartmentEmployeeExistsExpression(): ?SqlExpression
+	{
+		if (
+			!ModuleManager::isModuleInstalled('humanresources')
+			|| !Loader::includeModule('humanresources')
+		)
+		{
+			return null;
+		}
+
+		$memberTable = NodeMemberTable::getTableName();
+		$nodeTable = NodeTable::getTableName();
+		$userAlias = strtolower(UserTable::getEntity()->getCode());
+
+		return new SqlExpression(
+			"SELECT 1 FROM {$memberTable} m "
+			. "INNER JOIN {$nodeTable} n ON n.ID = m.NODE_ID AND n.TYPE = 'DEPARTMENT' "
+			. "WHERE m.ENTITY_ID = {$userAlias}.ID AND m.ENTITY_TYPE = 'USER' AND m.ACTIVE = 'Y'"
+		);
+	}
+
+	private static function buildIntranetUsersFilterCondition(): ConditionTree
+	{
+		return Query::filter()
+			->where('REAL_USER', 'expr', true)
+			->whereNotNull('UF_DEPARTMENT')
+			->whereNotIn('UF_DEPARTMENT', [serialize([]), serialize([0])])
+		;
+	}
+
+	private static function applyExtranetUsersFilter(Query $query): void
+	{
+		$query->where('REAL_USER', 'expr', true);
+		if (static::registerHrEmployeeJoin($query, 'HR_EXTRANET_EMPLOYEE', Join::TYPE_LEFT))
+		{
+			$query->whereNull('HR_EXTRANET_EMPLOYEE_NODE.ID');
+		}
+		else
+		{
+			$query->where(Query::filter()
+				->logic('or')
+				->whereNull('UF_DEPARTMENT')
+				->where('UF_DEPARTMENT', serialize([]))
+				->where('UF_DEPARTMENT', serialize([0]))
+			);
+		}
+	}
+
+	private static function buildExtranetUsersFilterConditionForDialog(): ConditionTree
+	{
+		return Query::filter()
+			->where(Query::filter()
+				->logic('or')
+				->whereNull('EXTERNAL_AUTH_ID')
+				->whereNot('EXTERNAL_AUTH_ID', 'email'),
+			)
+			->whereNotNull('INVITATION.ID')
+		;
+	}
+
+	private static function registerHrEmployeeJoin(
+		Query $query,
+		string $alias,
+		string $joinType = Join::TYPE_LEFT,
+		?int $departmentId = null,
+	): bool
+	{
+		if (
+			!ModuleManager::isModuleInstalled('humanresources')
+			|| !Loader::includeModule('humanresources')
+		)
+		{
+			return false;
+		}
+
+		$join = Join::on('this.ID', 'ref.ENTITY_ID')
+			->where('ref.ENTITY_TYPE', MemberEntityType::USER->value)
+			->where('ref.ACTIVE', 'Y')
+		;
+
+		$departmentNodeId = static::resolveHrDepartmentNodeId($departmentId);
+		if ($departmentNodeId !== null)
+		{
+			$join->where('ref.NODE_ID', $departmentNodeId);
+		}
+
+		$query->registerRuntimeField(
+			new Reference(
+				$alias,
+				NodeMemberTable::class,
+				$join,
+				['join_type' => $joinType],
+			),
+		);
+
+		$query->registerRuntimeField(
+			new Reference(
+				$alias . '_NODE',
+				NodeTable::class,
+				Join::on('this.' . $alias . '.NODE_ID', 'ref.ID')
+					->where('ref.TYPE', NodeEntityType::DEPARTMENT->value),
+				['join_type' => $joinType],
+			),
+		);
+
+		return true;
+	}
+
+	private static function resolveHrDepartmentNodeId(?int $departmentId): ?int
+	{
+		if ($departmentId === null)
+		{
+			return null;
+		}
+
+		try
+		{
+			$node = \Bitrix\HumanResources\Service\Container::getNodeRepository()->getByAccessCode(
+				DepartmentBackwardAccessCode::makeById($departmentId),
+			);
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+
+		return $node?->id;
 	}
 
 	private static function prepareUserIds($items): array
@@ -1145,7 +1336,7 @@ class UserProvider extends BaseProvider
 			$customData['position'] = $user->getWorkPosition();
 		}
 
-		$userType = self::getUserType($user);
+		$userType = self::getUserType($user, $options);
 
 		if ($user->getConfirmCode() && in_array($userType, ['employee', 'integrator']))
 		{
@@ -1219,7 +1410,7 @@ class UserProvider extends BaseProvider
 		return [static::ENTITY_ID];
 	}
 
-	public static function getUserType(EO_User $user): string
+	public static function getUserType(EO_User $user, array $options = []): string
 	{
 		$type = null;
 		if (!$user->getActive())
@@ -1251,18 +1442,13 @@ class UserProvider extends BaseProvider
 				}
 				else if (ModuleManager::isModuleInstalled('intranet'))
 				{
-					$ufDepartment = $user->getUfDepartment();
-					if (
-						empty($ufDepartment)
-						|| (is_array($ufDepartment) && count($ufDepartment) === 1 && (int)$ufDepartment[0] === 0)
-					)
-					{
-						$type = 'extranet';
-					}
-					else
-					{
-						$type = 'employee';
-					}
+					$isEmployeeByDepartmentMap = (
+						!empty($options['departmentMap'])
+						&& is_array($options['departmentMap'])
+						&& isset($options['departmentMap'][$user->getId()])
+					);
+
+					$type = $isEmployeeByDepartmentMap ? 'employee' : 'extranet';
 				}
 			}
 			else

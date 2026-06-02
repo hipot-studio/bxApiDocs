@@ -28,6 +28,8 @@ class Creation extends LogMessage
 		$title = null;
 
 		$assocEntityTypeId = $this->getModel()->getAssociatedEntityTypeId();
+		$typeCategoryId = $this->getModel()->getTypeCategoryId();
+
 		if ($assocEntityTypeId === \CCrmOwnerType::Activity)
 		{
 			$activityTypeId = (int)($this->getAssociatedEntityModel()->get('TYPE_ID') ?? 0);
@@ -40,6 +42,10 @@ class Creation extends LogMessage
 				]
 			);
 			$title = rtrim($title, ': ');
+		}
+		elseif ($typeCategoryId === \Bitrix\Crm\Timeline\CreationEntry::CATEGORY_COPY)
+		{
+			$title = Loc::getMessage('CRM_TIMELINE_DEAL_CREATION_COPY');
 		}
 		else
 		{

@@ -129,13 +129,7 @@ class CSocServMyMailRu extends CSocServAuth
 		if($bSuccess !== true)
 			$url = $GLOBALS['APPLICATION']->GetCurPageParam(('auth_service_id='.self::ID.'&auth_service_error='.$bSuccess), $aRemove);
 
-		echo '
-<script>
-if(window.opener)
-	window.opener.location = \''.CUtil::JSEscape($url).'\';
-window.close();
-</script>
-';
+		$this->onAfterWebAuth(true, self::OPENER_MODE, $url);
 		CMain::FinalActions();
 	}
 }

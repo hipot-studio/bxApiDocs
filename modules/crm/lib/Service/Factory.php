@@ -31,12 +31,12 @@ use Bitrix\Crm\UI\Filter\EntityHandler;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
 use Bitrix\Crm\UtmTable;
 use Bitrix\Main\Application;
-use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Entity;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Objectify\EntityObject;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\UserField;
@@ -247,7 +247,14 @@ abstract class Factory
 			return $commonFieldName;
 		}
 
-		$entityFieldName = $this->getEntityFieldNameByMap($commonFieldName);
+		if ($commonFieldName === Item::FIELD_NAME_CONTACTS || $commonFieldName === Item::FIELD_NAME_CONTACT_IDS)
+		{
+			$entityFieldName = Item::FIELD_NAME_CONTACT_BINDINGS;
+		}
+		else
+		{
+			$entityFieldName = $this->getEntityFieldNameByMap($commonFieldName);
+		}
 
 		if ($this->getDataClass()::getEntity()->hasField($entityFieldName))
 		{
@@ -279,7 +286,7 @@ abstract class Factory
 	{
 		if ($commonFieldName === Item::FIELD_NAME_CONTACTS || $commonFieldName === Item::FIELD_NAME_CONTACT_IDS)
 		{
-			$entityFieldName = 'CONTACT_BINDINGS';
+			$entityFieldName = Item::FIELD_NAME_CONTACT_BINDINGS;
 		}
 		else
 		{
@@ -681,6 +688,7 @@ abstract class Factory
 			$entityTypes,
 			$operation
 		);
+		$filter = $this->prepareFilter($filter);
 
 		return $this->getDataClass()::getCount($filter);
 	}

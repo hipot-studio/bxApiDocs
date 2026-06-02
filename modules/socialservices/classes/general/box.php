@@ -268,25 +268,7 @@ class CSocServBoxAuth extends CSocServAuth
 			$url = (preg_match("/\?/", $url)) ? $url."&current_fieldset=SOCSERV" : $url."?current_fieldset=SOCSERV";
 		}
 
-		$url = CUtil::JSEscape($url);
-
-		if($addParams)
-		{
-			$location = ($mode == "opener") ? 'if(window.opener) window.opener.location = \''.$url.'\'; window.close();' : ' window.location = \''.$url.'\';';
-		}
-		else
-		{
-			//fix for chrome
-			$location = ($mode == "opener") ? 'if(window.opener) window.opener.location = window.opener.location.href + \''.$url.'\'; window.close();' : ' window.location = window.location.href + \''.$url.'\';';
-		}
-
-		$JSScript = '
-		<script>
-		'.$location.'
-		</script>
-		';
-
-		echo $JSScript;
+		$this->onAfterWebAuth($addParams, $mode, $url);
 
 		CMain::FinalActions();
 	}

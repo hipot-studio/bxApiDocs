@@ -9,21 +9,28 @@ use Bitrix\AI\Tuning\Defaults;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Page\Asset;
 use Bitrix\Main\Request;
-use Bitrix\Main\UI\Extension;
 use Bitrix\Main\Web\Json;
 use CBitrix24;
 
 class BitrixGptAgreementService
 {
-	private const MODULE_ID = 'ai';
+	private const MODULE_AI_ID = 'ai';
+	private const MODULE_AIASSISTANT_ID = 'aiassistant';
 	private const OPTION_AGREEMENT_STATUS = 'bitrixgpt_agreement_status';
+	private const OPTION_AGREEMENT_ACCEPTED_USER_ID = 'bitrixgpt_agreement_accepted_user_id';
+	private const OPTION_AGREEMENT_ACCEPTED_AT = 'bitrixgpt_agreement_accepted_at';
 	private const OPTION_POPUP_SHOW_COUNT = 'bitrixgpt_agreement_popup_show_count';
 	private const OPTION_POPUP_SKIP_UNTIL = 'bitrixgpt_agreement_popup_skip_until';
 	private const OPTION_TUNING = 'tuning';
+	private const AIASSISTANT_SCENARIO_OPTIONS = [
+		'remote_mcp_server_active',
+		'remote_mcp_server_sharing_only',
+		'enable_bitrix_internal_mcp_server',
+	];
 	private const AGREEMENT_ACCEPTED = 'Y';
 	private const AGREEMENT_DECLINED = 'N';
 	private const SHOW_LIMIT = 2;
@@ -35,35 +42,15 @@ class BitrixGptAgreementService
 		'/bitrix/',
 	];
 
-	public function handler(bool $isAgreementPopupShown): bool
+	public function getPopupDataForAutoShow(): ?array
 	{
 		$request = Context::getCurrent()->getRequest();
-		if (!$this->checkRequest($isAgreementPopupShown, $request) || !$this->checkNeedToShowPopup())
+		if (!$this->checkRequest($request) || !$this->checkNeedToShowPopup() || !$this->hasEnabledScenario())
 		{
-			return false;
+			return null;
 		}
 
-		$popupData = $this->getPopupData();
-
-		$showLimit = $popupData['showLimit'];
-		$attempt = $popupData['attempt'];
-		$showSkip = $popupData['showSkip'] ? 'true' : 'false';
-
-		Extension::load(['ai.bitrixgpt-agreement-popup']);
-
-		Asset::getInstance()->addString(<<<JS
-			<script>
-				BX.ready(function () {
-					BX.AI.showBitrixGptAgreementPopup({
-						attempt: {$attempt},
-						showLimit: {$showLimit},
-						showSkip: {$showSkip},
-					});
-				});
-			</script>
-		JS);
-
-		return true;
+		return $this->getPopupData();
 	}
 
 	public function onSaveAISettings(): ?array
@@ -73,24 +60,44 @@ class BitrixGptAgreementService
 			return null;
 		}
 
-		$this->disableAllScenarios();
 		return $this->getPopupData();
 	}
 
 	public function getPopupAttemptForDisplay(): ?int
 	{
-		return (int)Option::get(self::MODULE_ID, self::OPTION_POPUP_SHOW_COUNT, 0);
+		return (int)Option::get(self::MODULE_AI_ID, self::OPTION_POPUP_SHOW_COUNT, 0);
 	}
 
 	public function acceptAgreement(): void
 	{
-		Option::set(self::MODULE_ID, self::OPTION_AGREEMENT_STATUS, self::AGREEMENT_ACCEPTED);
+		Option::set(self::MODULE_AI_ID, self::OPTION_AGREEMENT_STATUS, self::AGREEMENT_ACCEPTED);
+		Option::set(
+			self::MODULE_AI_ID,
+			self::OPTION_AGREEMENT_ACCEPTED_USER_ID,
+			(string)CurrentUser::get()->getId(),
+		);
+		$acceptedAt = time();
+		Option::set(self::MODULE_AI_ID, self::OPTION_AGREEMENT_ACCEPTED_AT, (string)$acceptedAt);
 	}
 
 	public function declineAgreement(): void
 	{
-		Option::set(self::MODULE_ID, self::OPTION_AGREEMENT_STATUS, self::AGREEMENT_DECLINED);
+		Option::set(self::MODULE_AI_ID, self::OPTION_AGREEMENT_STATUS, self::AGREEMENT_DECLINED);
 		$this->disableAllScenarios();
+	}
+
+	public function isAvailableForExternalRequest(): bool
+	{
+		if (
+			!$this->isBelarusPortal()
+			|| !Loader::includeModule('bitrix24')
+			|| ($this->getAgreementStatus() === self::AGREEMENT_ACCEPTED)
+		)
+		{
+			return true;
+		}
+
+		return false;
 	}
 
 	public function skipAgreementPopup(): void
@@ -103,15 +110,13 @@ class BitrixGptAgreementService
 
 		$this->incrementPopupAttemptForDisplay();
 		$skipUntil = time() + self::POPUP_SKIP_SECONDS;
-		Option::set(self::MODULE_ID, self::OPTION_POPUP_SKIP_UNTIL, (string)$skipUntil);
+		Option::set(self::MODULE_AI_ID, self::OPTION_POPUP_SKIP_UNTIL, (string)$skipUntil);
 	}
-	
-	private function checkRequest(bool $isAgreementPopupShown, Request | HttpRequest $request): bool
+
+	private function checkRequest(Request | HttpRequest $request): bool
 	{
 		if (
-			$isAgreementPopupShown
-			|| !$this->isBelarusPortal()
-			|| $request->isAjaxRequest()
+			!$this->isBelarusPortal()
 			|| $this->isIframeRequest($request)
 			|| !$this->isHtmlRequest($request)
 			|| $this->isDisallowedPage()
@@ -149,7 +154,6 @@ class BitrixGptAgreementService
 			|| !$isAdmin
 			|| ($this->getAgreementStatus() === self::AGREEMENT_ACCEPTED)
 			|| $this->isPopupSkipActive()
-			|| !$this->hasEnabledScenario()
 		)
 		{
 			return false;
@@ -169,7 +173,7 @@ class BitrixGptAgreementService
 		];
 	}
 
-	private function isOldPortal(): bool
+	public function isOldPortal(): bool
 	{
 		$portalCreateDate = Portal::getCreationDateTime();
 
@@ -193,47 +197,19 @@ class BitrixGptAgreementService
 		return ($accept !== null) && str_contains($accept, 'text/html');
 	}
 
-	private function canShowPopup(): bool
-	{
-		if (!$this->isBelarusPortal())
-		{
-			return false;
-		}
-
-		global $USER;
-		$isAdmin = Loader::includeModule('bitrix24') ? CBitrix24::IsPortalAdmin((int)$USER->GetID()) : $USER->isAdmin();
-
-		if (!$isAdmin)
-		{
-			return false;
-		}
-
-		if ($this->getAgreementStatus() === self::AGREEMENT_ACCEPTED)
-		{
-			return false;
-		}
-
-		if ($this->isPopupSkipActive() || !$this->hasEnabledScenario())
-		{
-			return false;
-		}
-
-		return true;
-	}
-
 	private function incrementPopupAttemptForDisplay(): int
 	{
 		$count = (int)$this->getPopupAttemptForDisplay();
 
 		$count++;
-		Option::set(self::MODULE_ID, self::OPTION_POPUP_SHOW_COUNT, (string)$count);
+		Option::set(self::MODULE_AI_ID, self::OPTION_POPUP_SHOW_COUNT, (string)$count);
 
 		return $count;
 	}
 
 	private function getAgreementStatus(): ?string
 	{
-		$value = Option::get(self::MODULE_ID, self::OPTION_AGREEMENT_STATUS);
+		$value = Option::get(self::MODULE_AI_ID, self::OPTION_AGREEMENT_STATUS);
 		$hasAgreementStatus = in_array(
 			$value,
 			[self::AGREEMENT_ACCEPTED, self::AGREEMENT_DECLINED],
@@ -245,7 +221,7 @@ class BitrixGptAgreementService
 
 	private function isPopupSkipActive(): bool
 	{
-		$skipUntil = (int)Option::get(self::MODULE_ID, self::OPTION_POPUP_SKIP_UNTIL, 0);
+		$skipUntil = (int)Option::get(self::MODULE_AI_ID, self::OPTION_POPUP_SKIP_UNTIL, 0);
 
 		return $skipUntil > time();
 	}
@@ -274,10 +250,21 @@ class BitrixGptAgreementService
 			}
 		}
 
+		if (Loader::includeModule(self::MODULE_AIASSISTANT_ID))
+		{
+			foreach (self::AIASSISTANT_SCENARIO_OPTIONS as $optionName)
+			{
+				if (Option::get(self::MODULE_AIASSISTANT_ID, $optionName, 'N') === 'Y')
+				{
+					return true;
+				}
+			}
+		}
+
 		return false;
 	}
 
-	private function disableAllScenarios(): void
+	public function disableAllScenarios(): void
 	{
 		$manager = new Manager();
 		$storage = Manager::getTuningStorage();
@@ -295,6 +282,14 @@ class BitrixGptAgreementService
 			}
 		}
 
-		Option::set(self::MODULE_ID, self::OPTION_TUNING, Json::encode($storage));
+		Option::set(self::MODULE_AI_ID, self::OPTION_TUNING, Json::encode($storage));
+
+		if (Loader::includeModule(self::MODULE_AIASSISTANT_ID))
+		{
+			foreach (self::AIASSISTANT_SCENARIO_OPTIONS as $optionName)
+			{
+				Option::set(self::MODULE_AIASSISTANT_ID, $optionName, 'N');
+			}
+		}
 	}
 }

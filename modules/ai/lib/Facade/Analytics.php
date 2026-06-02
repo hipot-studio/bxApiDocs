@@ -97,6 +97,7 @@ class Analytics
 			->setP2($providerPrefix . $engine->getName())
 			->setP3($p3)
 			->setP5($converter->process($engine->getContext()->getContextId()))
+			->setUserId($engine->getContext()->getUserId())
 			->send();
 	}
 

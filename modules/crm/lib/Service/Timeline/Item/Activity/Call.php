@@ -331,14 +331,19 @@ class Call extends AIActivity
 		{
 			foreach ($records as $index => $record)
 			{
-				$menuItemName = $isSingleRecord ? null : $record['NAME'];
-
-				$items["downloadFile_$index"] = MenuItemFactory::createDownloadFileMenuItem($menuItemName)
+				$downloadItem = MenuItemFactory::createDownloadFileMenuItem()
 					->setAction(
 						(new JsEvent('Call:DownloadRecord'))
 							->addActionParamString('url', $record['VIEW_URL'])
 					)
 				;
+
+				if (!$isSingleRecord)
+				{
+					$downloadItem->setSubtitle($record['NAME']);
+				}
+
+				$items["downloadFile_$index"] = $downloadItem;
 			}
 		}
 

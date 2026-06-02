@@ -116,13 +116,7 @@ class CSocServTwitter extends CSocServAuth
 
 			$url .= (preg_match("/\?/", $url) ? '&' : '?').CSocServUtil::getOAuthProxyString();
 
-			echo '
-<script>
-if(window.opener)
-	window.opener.location = \''.CUtil::JSEscape($url).'\';
-window.close();
-</script>
-';
+			$this->onAfterWebAuth(true, self::OPENER_MODE, $url);
 			CMain::FinalActions();
 		}
 		else

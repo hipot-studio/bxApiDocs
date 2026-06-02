@@ -126,16 +126,15 @@ class Order extends Base
 
 	protected function loadAdditionalValues(): void
 	{
-		$fields = [];
 		$userKeys = [
 			'USER_ID', 'EMP_PAYED_ID', 'EMP_DEDUCTED_ID', 'EMP_STATUS_ID', 'EMP_MARKED_ID',
-			'EMP_ALLOW_DELIVERY_ID', 'CREATED_BY', 'RESPONSIBLE_ID', 'EMP_CANCELED_ID',
+			'EMP_ALLOW_DELIVERY_ID', 'EMP_CANCELED_ID',
 		];
 		foreach ($userKeys as $userKey)
 		{
-			if (isset($fields[$userKey]))
+			if (isset($this->document[$userKey]))
 			{
-				$fields[$userKey] = 'user_' . $fields[$userKey];
+				$this->document[$userKey] = 'user_' . $this->document[$userKey];
 			}
 		}
 
@@ -152,30 +151,29 @@ class Order extends Base
 		{
 			if ((int)$row['ENTITY_TYPE_ID'] === \CCrmOwnerType::Contact)
 			{
-				$fields['CONTACT_ID'] = $row['ENTITY_ID'];
+				$this->document['CONTACT_ID'] = $row['ENTITY_ID'];
 			}
 			else
 			{
-				$fields['COMPANY_ID'] = $row['ENTITY_ID'];
+				$this->document['COMPANY_ID'] = $row['ENTITY_ID'];
 			}
 		}
 
-		$fields['LID_PRINTABLE'] = $fields['LID'];
-		if ($siteResult = \CSite::GetByID($fields['LID']))
+		$this->document['LID_PRINTABLE'] = $this->document['LID'];
+		if ($siteResult = \CSite::GetByID($this->document['LID']))
 		{
 			$site = $siteResult->fetch();
-			$fields['LID_PRINTABLE'] = $site['NAME'];
+			$this->document['LID_PRINTABLE'] = $site['NAME'];
 		}
 
-		$fields['PRICE_FORMATTED'] = html_entity_decode(
-			\CCrmCurrency::MoneyToString($fields['PRICE'], $fields['CURRENCY']),
+		$this->document['PRICE_FORMATTED'] = html_entity_decode(
+			\CCrmCurrency::MoneyToString($this->document['PRICE'], $this->document['CURRENCY']),
 			ENT_NOQUOTES,
 			LANG_CHARSET
 		);
 
-		self::convertDateFields($fields);
+		self::convertDateFields($this->document);
 
-		$this->document = array_merge($this->document, $fields ?: []);
 		$this->normalizeEntityBindings(['COMPANY_ID', 'CONTACT_ID']);
 
 		if (!empty($this->document['CONTACT_ID']))

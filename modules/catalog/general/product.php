@@ -2,6 +2,7 @@
 /** @global \CMain $APPLICATION */
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Currency;
 use Bitrix\Catalog;
 use	Bitrix\Sale;
@@ -1125,10 +1126,9 @@ class CAllCatalogProduct
 
 		$isNeedDiscounts = Catalog\Product\Price\Calculation::isAllowedUseDiscounts();
 		$resultWithVat = Catalog\Product\Price\Calculation::isIncludingVat();
-		if ($isNeedDiscounts)
+		if ($isNeedDiscounts && $arDiscountCoupons === false)
 		{
-			if ($arDiscountCoupons === false)
-				$arDiscountCoupons = CCatalogDiscountCoupon::GetCoupons();
+			$arDiscountCoupons = CCatalogDiscountCoupon::GetCoupons();
 		}
 
 		$minimalPrice = array();
@@ -1144,15 +1144,30 @@ class CAllCatalogProduct
 			$priceData['NO_VAT'] = $vat['EXCLUDE_VAT'];
 
 			$currentPrice = (float)$priceData['PRICE'];
-			if ($priceData['NO_VAT'] === 'N')
+			if ($priceData['NO_VAT'] === 'N' && $priceData['VAT_INCLUDED'] === 'N')
 			{
-				if ($priceData['VAT_INCLUDED'] === 'N')
+				if (self::$saleIncluded)
 				{
-					$currentPrice *= (1 + $priceData['VAT_RATE']);
+					$vatCalc = ServiceLocator::getInstance()->get('sale.vatCalculator');
+					$vatInputFactory = ServiceLocator::getInstance()->get('sale.basketItemInputFactory');
+					$currentPrice = $vatCalc->accrueVat(
+						$vatInputFactory->createFromArray([
+							'basePrice' => $currentPrice,
+							'vatRate' => $priceData['VAT_RATE'] * 100,
+							'vatIncluded' => false,
+						])
+					);
+				}
+				else
+				{
+					$currentPrice *= 1 + $priceData['VAT_RATE'];
 				}
 			}
+
 			if ($priceData['CURRENCY'] != $resultCurrency)
+			{
 				$currentPrice = CCurrencyRates::ConvertCurrency($currentPrice, $priceData['CURRENCY'], $resultCurrency);
+			}
 			$currentPrice = Catalog\Product\Price\Calculation::roundPrecision($currentPrice);
 
 			$result = array(
@@ -1204,13 +1219,28 @@ class CAllCatalogProduct
 				unset($possibleSalePrice);
 			}
 
-			if ($priceData['NO_VAT'] === 'N')
+			if ($priceData['NO_VAT'] === 'N' && !$resultWithVat)
 			{
-				if (!$resultWithVat)
+				if (self::$saleIncluded)
 				{
-					$result['PRICE'] /= (1 + $priceData['VAT_RATE']);
-					$result['COMPARE_PRICE'] /= (1 + $priceData['VAT_RATE']);
-					$result['BASE_PRICE'] /= (1 + $priceData['VAT_RATE']);
+					$vatCalc = ServiceLocator::getInstance()->get('sale.vatCalculator');
+					$vatInputFactory = ServiceLocator::getInstance()->get('sale.basketItemInputFactory');
+					foreach (['PRICE', 'COMPARE_PRICE', 'BASE_PRICE'] as $vatKey)
+					{
+						$result[$vatKey] = $vatCalc->allocateVat(
+							$vatInputFactory->createFromArray([
+								'basePrice' => $result[$vatKey],
+								'vatRate' => $priceData['VAT_RATE'] * 100,
+								'vatIncluded' => true,
+							])
+						);
+					}
+				}
+				else
+				{
+					$result['PRICE'] /= 1 + $priceData['VAT_RATE'];
+					$result['COMPARE_PRICE'] /= 1 + $priceData['VAT_RATE'];
+					$result['BASE_PRICE'] /= 1 + $priceData['VAT_RATE'];
 				}
 			}
 
@@ -1626,11 +1656,27 @@ class CAllCatalogProduct
 			$priceData['NO_VAT'] = $vat['EXCLUDE_VAT'];
 
 			$currentPrice = (float)$priceData['PRICE'];
-			if ($priceData['NO_VAT'] === 'N')
+			if (
+				$priceData['NO_VAT'] === 'N'
+				&& $priceData['VAT_INCLUDED'] === 'N'
+			)
 			{
-				if ($priceData['VAT_INCLUDED'] == 'N')
+				if (self::$saleIncluded)
 				{
-					$currentPrice *= (1 + $priceData['VAT_RATE']);
+					// Step 1.3 (batch accrue): accrue VAT via sale service (0.20 → 20.0)
+					$batchVatCalc = ServiceLocator::getInstance()->get('sale.vatCalculator');
+					$batchInputFactory = ServiceLocator::getInstance()->get('sale.basketItemInputFactory');
+					$currentPrice = $batchVatCalc->accrueVat(
+						$batchInputFactory->createFromArray([
+							'basePrice' => $currentPrice,
+							'vatRate' => $priceData['VAT_RATE'] * 100,
+							'vatIncluded' => false,
+						]),
+					);
+				}
+				else
+				{
+					$currentPrice *= 1 + $priceData['VAT_RATE'];
 				}
 			}
 
@@ -1695,13 +1741,29 @@ class CAllCatalogProduct
 				unset($possibleSalePrice);
 			}
 
-			if ($priceData['NO_VAT'] === 'N')
+			if ($priceData['NO_VAT'] === 'N' && !$resultWithVat)
 			{
-				if (!$resultWithVat)
+				if (self::$saleIncluded)
 				{
-					$result['PRICE'] /= (1 + $priceData['VAT_RATE']);
-					$result['COMPARE_PRICE'] /= (1 + $priceData['VAT_RATE']);
-					$result['BASE_PRICE'] /= (1 + $priceData['VAT_RATE']);
+					// Step 1.3 (batch exclude): exclude VAT via sale service (0.20 → 20.0)
+					$batchVatCalc = ServiceLocator::getInstance()->get('sale.vatCalculator');
+					$batchInputFactory = ServiceLocator::getInstance()->get('sale.basketItemInputFactory');
+					foreach (['PRICE', 'COMPARE_PRICE', 'BASE_PRICE'] as $vatKey)
+					{
+						$result[$vatKey] = $batchVatCalc->allocateVat(
+							$batchInputFactory->createFromArray([
+								'basePrice' => $result[$vatKey],
+								'vatRate' => $priceData['VAT_RATE'] * 100,
+								'vatIncluded' => true,
+							])
+						);
+					}
+				}
+				else
+				{
+					$result['PRICE'] /= 1 + $priceData['VAT_RATE'];
+					$result['COMPARE_PRICE'] /= 1 + $priceData['VAT_RATE'];
+					$result['BASE_PRICE'] /= 1 + $priceData['VAT_RATE'];
 				}
 			}
 
@@ -2369,174 +2431,6 @@ class CAllCatalogProduct
 					krsort($arPriceDiscount);
 			}
 		}
-	}
-
-	/**
-	* @deprecated deprecated since catalog 15.0.0
-	* @see CCatalogDiscount::applyDiscountList()
-	* @see CCatalogDiscount::calculatePriorityLevel()
-	 *
-	 * @param array &$arDiscounts
-	 * @param array &$arResultDiscount
-	 * @param array &$arParams
-	 *
-	 * @return bool
-	*/
-	protected static function __CalcOnePriority(&$arDiscounts, &$arResultDiscount, &$arParams)
-	{
-		$boolResult = false;
-		if (isset($arParams['PRICE']) && isset($arParams['CURRENCY']))
-		{
-			$arParams['PRICE'] = (float)$arParams['PRICE'];
-			$arParams['BASE_PRICE'] = (float)$arParams['BASE_PRICE'];
-			if ($arParams['PRICE'] > 0)
-			{
-				$dblCurrentPrice = $arParams['PRICE'];
-				do
-				{
-					$dblMinPrice = -1;
-					$strMinKey = -1;
-					$boolApply = false;
-					foreach ($arDiscounts as $strDiscountKey => $arOneDiscount)
-					{
-						$boolDelete = false;
-						$dblPriceTmp = -1;
-						switch($arOneDiscount['VALUE_TYPE'])
-						{
-						case CCatalogDiscount::TYPE_PERCENT:
-							$dblTempo = round((
-								CCatalogDiscount::getUseBasePrice()
-								? $arParams['BASE_PRICE']
-								: $dblCurrentPrice
-								)*$arOneDiscount['VALUE']/100,
-								CATALOG_VALUE_PRECISION
-							);
-							if (isset($arOneDiscount['DISCOUNT_CONVERT']))
-							{
-								if ($dblTempo > $arOneDiscount['DISCOUNT_CONVERT'])
-									$dblTempo = $arOneDiscount['DISCOUNT_CONVERT'];
-							}
-							$dblPriceTmp = $dblCurrentPrice - $dblTempo;
-							break;
-						case CCatalogDiscount::TYPE_FIX:
-							if ($arOneDiscount['DISCOUNT_CONVERT'] > $dblCurrentPrice)
-							{
-								$boolDelete = true;
-							}
-							else
-							{
-								$dblPriceTmp = $dblCurrentPrice - $arOneDiscount['DISCOUNT_CONVERT'];
-							}
-							break;
-						case CCatalogDiscount::TYPE_SALE:
-							if (!($arOneDiscount['DISCOUNT_CONVERT'] < $dblCurrentPrice))
-							{
-								$boolDelete = true;
-							}
-							else
-							{
-								$dblPriceTmp = $arOneDiscount['DISCOUNT_CONVERT'];
-							}
-							break;
-						}
-						if ($boolDelete)
-						{
-							unset($arDiscounts[$strDiscountKey]);
-						}
-						else
-						{
-							if (-1 == $dblMinPrice || $dblMinPrice > $dblPriceTmp)
-							{
-								$dblMinPrice = $dblPriceTmp;
-								$strMinKey = $strDiscountKey;
-								$boolApply = true;
-							}
-						}
-					}
-					if ($boolApply)
-					{
-						$dblCurrentPrice = $dblMinPrice;
-						$arResultDiscount[] = $arDiscounts[$strMinKey];
-						if ('Y' == $arDiscounts[$strMinKey]['LAST_DISCOUNT'])
-						{
-							$arDiscounts = array();
-							$arParams['LAST_DISCOUNT'] = 'Y';
-						}
-						unset($arDiscounts[$strMinKey]);
-					}
-				} while (!empty($arDiscounts));
-				if ($boolApply)
-				{
-					$arParams['PRICE'] = $dblCurrentPrice;
-				}
-				$boolResult = true;
-			}
-		}
-		return $boolResult;
-	}
-
-	/**
-	* @deprecated deprecated since catalog 15.0.0
-	* @see CCatalogDiscount::applyDiscountList()
-	* @see CCatalogDiscount::calculateDiscSave()
-	 *
-	 * @param array &$arDiscSave
-	 * @param array &$arResultDiscount
-	 * @param array &$arParams
-	 *
-	 * @return bool
-	*/
-	protected static function __CalcDiscSave(&$arDiscSave, &$arResultDiscount, &$arParams)
-	{
-		$boolResult = false;
-		if (isset($arParams['PRICE']) && isset($arParams['CURRENCY']))
-		{
-			$arParams['PRICE'] = (float)$arParams['PRICE'];
-			if (0 < $arParams['PRICE'])
-			{
-				$dblCurrentPrice = $arParams['PRICE'];
-				$dblMinPrice = -1;
-				$strMinKey = -1;
-				$boolApply = false;
-				foreach ($arDiscSave as $strDiscountKey => $arOneDiscount)
-				{
-					$dblPriceTmp = -1;
-					$boolDelete = false;
-					switch($arOneDiscount['VALUE_TYPE'])
-					{
-					case CCatalogDiscountSave::TYPE_PERCENT:
-						$dblPriceTmp = round($dblCurrentPrice*(1 - $arOneDiscount['VALUE']/100.0), CATALOG_VALUE_PRECISION);
-						break;
-					case CCatalogDiscountSave::TYPE_FIX:
-						if ($arOneDiscount['DISCOUNT_CONVERT'] > $dblCurrentPrice)
-						{
-							$boolDelete = true;
-						}
-						else
-						{
-							$dblPriceTmp = $dblCurrentPrice - $arOneDiscount['DISCOUNT_CONVERT'];
-						}
-						break;
-					}
-					if (!$boolDelete)
-					{
-						if (-1 == $dblMinPrice || $dblMinPrice > $dblPriceTmp)
-						{
-							$dblMinPrice = $dblPriceTmp;
-							$strMinKey = $strDiscountKey;
-							$boolApply = true;
-						}
-					}
-				}
-				if ($boolApply)
-				{
-					$arParams['PRICE'] = $dblMinPrice;
-					$arResultDiscount[] = $arDiscSave[$strMinKey];
-				}
-				$boolResult = true;
-			}
-		}
-		return $boolResult;
 	}
 
 	protected static function getQueryBuildCurrencyScale($filter, $priceTypeId)

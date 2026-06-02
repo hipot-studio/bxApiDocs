@@ -2,9 +2,11 @@
 namespace Bitrix\Catalog\Product\Price;
 
 use Bitrix\Main,
+	Bitrix\Main\DI\ServiceLocator,
 	Bitrix\Main\Localization\Loc,
 	Bitrix\Catalog,
-	Bitrix\Currency;
+	Bitrix\Currency,
+	Bitrix\Sale;
 
 Loc::loadMessages(__FILE__);
 
@@ -28,6 +30,8 @@ class Calculation
 	);
 
 	private static $stack = array();
+
+	private static ?bool $saleIncluded = null;
 
 	/**
 	 * Set calculation settings.
@@ -101,7 +105,17 @@ class Calculation
 	 */
 	public static function getPrecision()
 	{
-		return (self::$config['PRECISION'] !== null ? self::$config['PRECISION'] : CATALOG_VALUE_PRECISION);
+		if (self::$config['PRECISION'] !== null)
+		{
+			return self::$config['PRECISION'];
+		}
+
+		if (self::isSaleIncluded())
+		{
+			return ServiceLocator::getInstance()->get('sale.priceRounder')->getPrecision();
+		}
+
+		return CATALOG_VALUE_PRECISION;
 	}
 
 	/**
@@ -151,6 +165,24 @@ class Calculation
 	}
 
 	/**
+	 * Rounds price by currency display format (for public/output use).
+	 *
+	 * @param float|int $price		Price value.
+	 * @param string $currency		Currency code.
+	 * @param int|null $limitRounding	Optional limit for rounding.
+	 * @return float
+	 */
+	public static function roundByFormatCurrency($price, string $currency, ?int $limitRounding = null): float
+	{
+		if (self::isSaleIncluded())
+		{
+			return ServiceLocator::getInstance()->get('sale.priceRounder')->roundByFormatCurrency((float)$price, $currency, $limitRounding);
+		}
+
+		return round((float)$price, CATALOG_VALUE_PRECISION);
+	}
+
+	/**
 	 * Returns the result of comparing two values with the precision of rounding.
 	 *
 	 * @param float|int $firstValue         First value.
@@ -186,6 +218,16 @@ class Calculation
 				break;
 		}
 		return $result;
+	}
+
+	private static function isSaleIncluded(): bool
+	{
+		if (self::$saleIncluded === null)
+		{
+			self::$saleIncluded = Main\Loader::includeModule('sale');
+		}
+
+		return self::$saleIncluded;
 	}
 
 	/**

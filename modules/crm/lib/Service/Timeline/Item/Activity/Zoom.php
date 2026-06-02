@@ -19,6 +19,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 Container::getInstance()->getLocalization()->loadMessages();
 
@@ -121,6 +122,7 @@ final class Zoom extends Activity
 
 		$info = $this->fetchConferenceInfo();
 		$menuItems['copyInviteUrl'] = (new MenuItem(Loc::getMessage('CRM_COMMON_ACTION_COPY_LINK')))
+			->setIcon(Outline::COPY)
 			->setAction(
 				(new JsEvent('Activity:Zoom:CopyInviteUrl'))
 					->addActionParamString('url', (string)$info['CONF_URL'])

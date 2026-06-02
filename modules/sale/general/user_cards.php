@@ -337,6 +337,7 @@ class CAllSaleUserCards
 		if ($sum <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGUC_EMPTY_SUM"), "EMPTY_SUM");
+
 			return false;
 		}
 
@@ -344,12 +345,14 @@ class CAllSaleUserCards
 		if ($currency == '')
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGUC_EMPTY_CURRENCY"), "EMPTY_SUM_CURRENCY");
+
 			return false;
 		}
 
 		if (!is_array($arUserCard) || count($arUserCard) <= 0)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("SKGUC_NO_PARAMS"), "EMPTY_CARD_ARRAY");
+
 			return false;
 		}
 
@@ -361,6 +364,7 @@ class CAllSaleUserCards
 			if ($maxSum < $sum)
 			{
 				$GLOBALS["APPLICATION"]->ThrowException(str_replace("#SUM1#", SaleFormatCurrency($arUserCard["SUM_MAX"], $arUserCard["SUM_CURRENCY"]), str_replace("#SUM2#", SaleFormatCurrency($sum, $currency), GetMessage("SKGUC_CROSS_BOUND"))), "MAX_SUM_LIMIT");
+
 				return false;
 			}
 		}
@@ -369,13 +373,30 @@ class CAllSaleUserCards
 		if (!$arPSAction)
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(str_replace("#ID#", $arUserCard["PAY_SYSTEM_ACTION_ID"], GetMessage("SKGUC_NO_ACTION")), "NO_PAY_SYSTEM_ACTION");
+
 			return false;
 		}
 
-		$psActionPath = $_SERVER["DOCUMENT_ROOT"].$arPSAction["ACTION_FILE"];
+		try
+		{
+			$handlerFolder = \Bitrix\Sale\PaySystem\Manager::getPathToHandlerFolder($arPSAction["ACTION_FILE"]);
+		}
+		catch (\Bitrix\Main\IO\InvalidPathException $e)
+		{
+			$handlerFolder = null;
+		}
+		if ($handlerFolder === null)
+		{
+			$GLOBALS["APPLICATION"]->ThrowException(str_replace("#FILE#", $arPSAction["ACTION_FILE"], GetMessage("SKGUC_NO_PATH")), "NO_PS_PATH");
+
+			return false;
+		}
+
+		$psActionPath = $_SERVER["DOCUMENT_ROOT"] . $handlerFolder;
 		if (!file_exists($psActionPath))
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(str_replace("#FILE#", $arPSAction["ACTION_FILE"], GetMessage("SKGUC_NO_PATH")), "NO_PS_PATH");
+
 			return false;
 		}
 
@@ -385,6 +406,7 @@ class CAllSaleUserCards
 		if (!file_exists($psActionPath."/action.php"))
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(str_replace("#FILE#", $psActionPath."/action.php", GetMessage("SKGUC_NO_SCRIPT")), "NO_PS_SCRIPT");
+
 			return false;
 		}
 
