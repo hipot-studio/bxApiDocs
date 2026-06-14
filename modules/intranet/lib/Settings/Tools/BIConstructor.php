@@ -3,6 +3,8 @@
 namespace Bitrix\Intranet\Settings\Tools;
 
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Superset\Config\ConfigContainer;
+use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Localization\Loc;
@@ -83,11 +85,21 @@ class BIConstructor extends Tool
 			return false;
 		}
 
+		if (!ConfigContainer::getConfigContainer()->isPortalIdVerified() && !SupersetInitializer::isRebindRequired())
+		{
+			return false;
+		}
+
 		return SupersetInitializer::isSupersetExist();
 	}
 
 	public function getDisableConfirmationText(): ?string
 	{
+		if (Loader::includeModule('biconnector') && SupersetInitializer::isRebindRequired())
+		{
+			return Loc::getMessage('INTRANET_SETTINGS_TOOLS_BI_CONSTRUCTOR_DISABLE_CONFIRMATION_TEXT_REBIND');
+		}
+
 		return Loc::getMessage('INTRANET_SETTINGS_TOOLS_BI_CONSTRUCTOR_DISABLE_CONFIRMATION_TEXT');
 	}
 }

@@ -58,6 +58,10 @@ final class SupersetInitializer
 
 	private const REFRESH_DOMAIN_RETRY_OPTION = '~superset_refresh_domain_retry_scheduled';
 
+	private const SUPERSET_INSTANCE_SUSPENDED_OPTION = '~superset_instance_suspended';
+
+	private const SUPERSET_INSTANCE_EXISTS_OPTION = '~superset_instance_exists';
+
 	/**
 	 * Container for superset status. Used for tests mocking
 	 *
@@ -74,7 +78,7 @@ final class SupersetInitializer
 		SupersetInitializerLogger::logInfo('Portal make superset startup', ['current_status' => $status]);
 
 		$newStatus = self::startSupersetInitialize();
-		if ($status !== $newStatus)
+		if (self::getSupersetStatus() !== $newStatus)
 		{
 			self::setSupersetStatus($newStatus);
 		}
@@ -182,6 +186,23 @@ final class SupersetInitializer
 		$proxyIntegrator->unfreezeSuperset($params);
 	}
 
+	public static function markSupersetInstanceExists(bool $value): void
+	{
+		if ($value)
+		{
+			Option::set('biconnector', self::SUPERSET_INSTANCE_EXISTS_OPTION, 'Y');
+		}
+		else
+		{
+			Option::delete('biconnector', ['name' => self::SUPERSET_INSTANCE_EXISTS_OPTION]);
+		}
+	}
+
+	public static function isSupersetInstanceExists(): bool
+	{
+		return Option::get('biconnector', self::SUPERSET_INSTANCE_EXISTS_OPTION, 'N') === 'Y';
+	}
+
 	public static function setSupersetStatus(string $status): void
 	{
 		SupersetInitializerLogger::logInfo('Superset status changed to ' . $status);
@@ -276,6 +297,16 @@ final class SupersetInitializer
 	public static function isSupersetLoading(): bool
 	{
 		return self::getSupersetStatus() === self::SUPERSET_STATUS_LOAD;
+	}
+
+	public static function isRebindRequired(): bool
+	{
+		return Option::get('biconnector', '~superset_rebind_required', 'N') === 'Y';
+	}
+
+	public static function clearRebindRequired(): void
+	{
+		Option::delete('biconnector', ['name' => '~superset_rebind_required']);
 	}
 
 	public static function isSupersetUnavailable(): bool
@@ -563,6 +594,8 @@ final class SupersetInitializer
 		SupersetDashboardTagTable::deleteByFilter(['>ID' => 0]);
 
 		AccessInstaller::clearRelations();
+
+		self::clearRebindRequired();
 	}
 
 	/**
@@ -597,6 +630,42 @@ final class SupersetInitializer
 	 */
 	public static function onDisableBiBuilderTool(): void
 	{
+		if (self::isRebindRequired())
+		{
+			// Local portalId is detached in rebind state.
+			// Pull portalId back from proxy so the real DELETE can target it.
+			$response = Integrator::getInstance()->registerPortal();
+			$portalId = $response->getData()['portalId'] ?? null;
+			if (!empty($portalId))
+			{
+				$config = ConfigContainer::getConfigContainer();
+				$config->setPortalId($portalId);
+				$config->setPortalIdVerified(true);
+			}
+
+			self::deleteInstance();
+			self::clearSupersetData();
+			// Proxy releases the SupersetServer record only after Callback::deleteAction is called.
+			// Until then it keeps verified=Y, so a fast re-enable would loop on "Portal has already registered".
+			// DELETED activates the create_superset stub,
+			// which blocks the user from initiating any new proxy call. The callback flips DELETED->DOESNT_EXISTS
+			// and sends a PULL event so the page reloads into a clean state. The safety-net agent unblocks
+			// the user if the callback never arrives (see 0244532).
+			self::setSupersetStatus(self::SUPERSET_STATUS_DELETED);
+			\CAgent::AddAgent(
+				Agent::class . '::recoverDeletedAfterRebindTimeout();',
+				'biconnector',
+				'N',
+				0,
+				'',
+				'Y',
+				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
+			);
+			AccessInstaller::install();
+
+			return;
+		}
+
 		$deleteStartResult = self::deleteInstance();
 		if ($deleteStartResult->isSuccess())
 		{

@@ -53,7 +53,37 @@ final class Registrar
 			}
 		}
 
-		return (new Result());
+		return new Result();
+	}
+
+	public function rebind(): Result
+	{
+		$result = new Result();
+		$response = Integrator::getInstance()->registerPortal();
+
+		$responseData = $response->getData();
+
+		if (!empty($responseData['rebind']))
+		{
+			$portalId = $responseData['portalId'] ?? null;
+			if (!empty($portalId))
+			{
+				$this->config->setPortalId($portalId);
+				$this->config->setPortalIdVerified(true);
+				$this->setRegisterStage(2);
+			}
+
+			return $result;
+		}
+
+		SupersetInitializerLogger::logErrors(
+			[new Error('Rebind register request end with errors'), ...$response->getErrors()],
+			['STATUS_CODE' => $response->getStatus()]
+		);
+		$result->addErrors($response->getErrors());
+		$result->setData(['STATUS_CODE' => $response->getStatus()]);
+
+		return $result;
 	}
 
 	private function next(): Result
@@ -142,7 +172,8 @@ final class Registrar
 
 		if ($result->isSuccess() && $response->getStatus() === IntegratorResponse::STATUS_IN_PROGRESS)
 		{
-			ConfigContainer::getConfigContainer()->setPortalId($response->getData());
+			$responseData = $response->getData();
+			ConfigContainer::getConfigContainer()->setPortalId($responseData['portalId'] ?? '');
 		}
 		else
 		{

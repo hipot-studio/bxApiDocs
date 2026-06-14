@@ -182,7 +182,8 @@ class Sender extends MicroService\BaseSender
 				$result->addError(new Error($error["message"], $error["code"], $error["customData"] ?? null));
 			}
 		}
-		else if (is_array($parsedResponse["data"] ?? null))
+
+		if (is_array($parsedResponse["data"] ?? null))
 		{
 			$result->setData($parsedResponse["data"]);
 		}

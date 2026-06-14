@@ -2,7 +2,11 @@
 
 namespace Bitrix\BiConnector\Configuration;
 
-use \Bitrix\Main\Localization\Loc;
+use Bitrix\BIConnector\Access\AccessController;
+use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
@@ -115,8 +119,40 @@ class Manifest
 	 */
 	public static function onCheckAccessSuperset(string $type, array $manifest): array
 	{
-		return [
-			'result' => true,
+		$result = [
+			'result' => false,
+			'message' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_MANIFEST_SUPERSET_ACCESS_DENIED'),
 		];
+
+		if (!Feature::isBuilderEnabled())
+		{
+			$result['message'] = Loc::getMessage('BI_CONNECTOR_CONFIGURATION_MANIFEST_SUPERSET_TARIFF_ERROR');
+
+			return $result;
+		}
+
+		if (Loader::includeModule('intranet') && !ToolsManager::getInstance()->checkAvailabilityByToolId('crm_bi'))
+		{
+			$result['message'] = Loc::getMessage('BI_CONNECTOR_CONFIGURATION_MANIFEST_SUPERSET_TOOL_DISABLED');
+
+			return $result;
+		}
+
+		$accessController = AccessController::getCurrent();
+		if (!$accessController->check(ActionDictionary::ACTION_BIC_ACCESS))
+		{
+			return $result;
+		}
+
+		$result['result'] = match ($type)
+		{
+			\Bitrix\Rest\Configuration\Manifest::ACCESS_TYPE_IMPORT =>
+				$accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT),
+			\Bitrix\Rest\Configuration\Manifest::ACCESS_TYPE_EXPORT =>
+				$accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_EXPORT),
+			default => false,
+		};
+
+		return $result;
 	}
 }

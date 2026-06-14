@@ -47,6 +47,11 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 			LocalRedirect('/bi/dashboard');
 		}
 
+		if (SupersetInitializer::isRebindRequired())
+		{
+			LocalRedirect('/bi/dashboard');
+		}
+
 		if (Loader::includeModule('intranet') && !ToolsManager::getInstance()->checkAvailabilityByToolId('crm_bi'))
 		{
 			$this->arResult['TOOLS_AVAILABLE'] = false;

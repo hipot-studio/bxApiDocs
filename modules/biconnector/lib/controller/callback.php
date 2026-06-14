@@ -3,6 +3,8 @@
 namespace Bitrix\BIConnector\Controller;
 
 use Bitrix\BIConnector\Access\Install\AccessInstaller;
+use Bitrix\BIConnector\Integration\Superset\Agent;
+use Bitrix\BIConnector\Integration\Superset\Registrar;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\ActionFilter\ProxyAuth;
 use Bitrix\BIConnector\Superset\Logger\SupersetInitializerLogger;
@@ -74,6 +76,8 @@ class Callback extends Controller
 
 			return;
 		}
+
+		\CAgent::RemoveAgent(Agent::class . '::recoverDeletedAfterRebindTimeout();', 'biconnector');
 
 		// When deleting from proxy
 		if (SupersetInitializer::getSupersetStatus() !== SupersetInitializer::SUPERSET_STATUS_DELETED)

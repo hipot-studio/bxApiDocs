@@ -14,6 +14,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
+use Bitrix\BIConnector\Superset\UI\DashboardManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\LanguageTable;
@@ -164,5 +165,25 @@ class Agent
 		}
 
 		return __CLASS__ . '::' . __FUNCTION__ . '();';
+	}
+
+	/**
+	 * Safety net for the rebind disable flow.
+	 * @see SupersetInitializer::onDisableBiBuilderTool()
+	 *
+	 * @return string
+	 */
+	public static function recoverDeletedAfterRebindTimeout(): string
+	{
+		if (SupersetInitializer::getSupersetStatus() !== SupersetInitializer::SUPERSET_STATUS_DELETED)
+		{
+			return '';
+		}
+
+		SupersetInitializer::markSupersetInstanceExists(false);
+		SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
+		DashboardManager::notifySupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
+
+		return '';
 	}
 }

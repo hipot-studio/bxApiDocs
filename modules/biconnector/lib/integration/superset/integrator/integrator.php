@@ -152,14 +152,15 @@ class Integrator
 			->perform()
 		;
 
-		if ($response->hasErrors())
+		$clientId = $response->getData()['portalId'] ?? null;
+		$isRebind = (bool)($response->getData()['rebind'] ?? false);
+
+		if ($response->hasErrors() && $isRebind)
 		{
-			return $response;
+			\Bitrix\Main\Config\Option::set('biconnector', '~superset_rebind_required', 'Y');
 		}
 
-		$clientId = $response->getData()['portalId'] ?? null;
-
-		return $response->setData($clientId);
+		return $response->setData(['portalId' => $clientId, 'rebind' => $isRebind]);
 	}
 
 	/**
@@ -589,7 +590,8 @@ class Integrator
 
 		$responseData = [
 			'token' => $response->getData()['token'],
-			'superset_address' =>$response->getData()['superset_address'] ?? null,
+			'superset_address' => $response->getData()['superset_address'] ?? null,
+			'rebind' => (bool)($response->getData()['rebind'] ?? false),
 		];
 
 		return $response->setData($responseData);

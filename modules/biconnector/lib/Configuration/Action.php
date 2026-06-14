@@ -13,6 +13,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\IO\File;
+use Bitrix\Main\Security\Random;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Context;
@@ -34,6 +35,9 @@ class Action
 	public const ENTITY_TYPE_POWER_BI = 'POWER_BI';
 	public const ENTITY_TYPE_DATA_STUDIO = 'DATA_STUDIO';
 	public const ENTITY_TYPE_APACHE_SUPERSET = 'APACHE_SUPERSET';
+	private const SUPERSET_IMPORT_FILE_PREFIX = 'superset_dashboard_';
+	private const SUPERSET_IMPORT_FILE_EXTENSION = '.zip';
+
 	private static array $entityList = [
 		self::ENTITY_CODE => 1000,
 	];
@@ -146,7 +150,7 @@ class Action
 				];
 			}
 
-			$filePath = self::renameFile($fileInfo['NAME'], $fileInfo['PATH']);
+			$filePath = self::renameFile($fileInfo['PATH']);
 			$setting = new Setting($contextUser);
 			$setting->set(
 				Structure::CODE_CUSTOM_FILE . static::ENTITY_TYPE_APACHE_SUPERSET . time(),
@@ -471,10 +475,17 @@ class Action
 		return null;
 	}
 
-	private static function renameFile(string $newName, string $filePath): string
+	private static function renameFile(string $filePath): string
 	{
 		$file = new File($filePath);
 		$folder = $file->getDirectoryName();
+		$newName = self::SUPERSET_IMPORT_FILE_PREFIX
+			. Random::getStringByAlphabet(
+				32,
+				Random::ALPHABET_NUM | Random::ALPHABET_ALPHALOWER | Random::ALPHABET_ALPHAUPPER,
+			)
+			. self::SUPERSET_IMPORT_FILE_EXTENSION
+		;
 		$file->rename($folder . DIRECTORY_SEPARATOR . $newName);
 
 		return $file->getPath();

@@ -101,6 +101,11 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			return false;
 		}
 
+		if (SupersetInitializer::isRebindRequired())
+		{
+			return false;
+		}
+
 		return true;
 	}
 

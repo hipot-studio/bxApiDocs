@@ -667,11 +667,7 @@ class User extends \IRestService
 
 		$navParams = self::getNavData($nav, true);
 
-		$querySort = [];
-		if ($sort && $order)
-		{
-			$querySort[$sort] = $order;
-		}
+		$querySort = self::prepareUserGetOrder($sort, $order);
 
 		$allowedFields = static::getAllowedUserFields($server->getAuthScope());
 
@@ -1148,6 +1144,16 @@ class User extends \IRestService
 		endswitch;
 
 		return $value;
+	}
+
+	private static function prepareUserGetOrder($sort, $order): array
+	{
+		if ($sort && $order)
+		{
+			return [$sort => $order];
+		}
+
+		return ['ID' => 'ASC'];
 	}
 
 	private static function prepareUserFilter($query, $allowedUserFields = null, $clearFilterType = []): array

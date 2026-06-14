@@ -5,9 +5,13 @@ namespace Bitrix\BIConnector\Controller;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Install\AccessInstaller;
+use Bitrix\BIConnector\Access\Role\RoleTable;
+use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Integration\Superset\Registrar;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Cache\CacheManager;
 use Bitrix\BIConnector\Superset\DomainLinkService;
+use Bitrix\BIConnector\Superset\KeyManager;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -91,6 +95,46 @@ class Superset extends Controller
 		{
 			(new \Bitrix\Intranet\Settings\Tools\BIConstructor())->disable(false);
 		}
+	}
+
+	public function rebindSupersetAction(): void
+	{
+		if (!AccessController::getCurrent()->getUser()->isAdmin())
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_ERROR_RIGHTS')));
+
+			return;
+		}
+
+		if (!SupersetInitializer::isRebindRequired())
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_NOT_REQUIRED')));
+
+			return;
+		}
+
+		$rebindResult = Registrar::getRegistrar()->rebind();
+		if (!$rebindResult->isSuccess())
+		{
+			$this->addErrors($rebindResult->getErrors());
+
+			return;
+		}
+
+		SupersetInitializer::startupSuperset();
+
+		$accessKey = KeyManager::getAccessKey();
+		if ($accessKey !== null)
+		{
+			ProxyIntegrator::getInstance()->changeBiconnectorToken($accessKey);
+		}
+
+		if (RoleTable::getCount() === 0)
+		{
+			AccessInstaller::install();
+		}
+
+		SupersetInitializer::clearRebindRequired();
 	}
 
 	public function linkAddressAction(): void
