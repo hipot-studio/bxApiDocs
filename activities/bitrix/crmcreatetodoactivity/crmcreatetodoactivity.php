@@ -195,7 +195,6 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 		$this->Id = $todo->getId();
 		$this->notifyAboutResponsible($todo);
 
-		// Send Operations Analytics
 		\CCrmBizProcHelper::sendOperationsAnalytics(
 			Dictionary::EVENT_ENTITY_CREATE,
 			$this,

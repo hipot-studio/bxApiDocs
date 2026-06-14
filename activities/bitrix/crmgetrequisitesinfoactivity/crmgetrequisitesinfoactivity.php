@@ -85,12 +85,12 @@ class CBPCrmGetRequisitesInfoActivity extends CBPActivity
 
 	protected function defineCrmEntityWithRequisites(): array
 	{
-		[$entityType, $entityId] = mb_split('_(?=[^_]*$)', $this->GetDocumentId()[2]);
+		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($this->getDocumentId());
 
-		$entityTypeId = CCrmOwnerType::ResolveID($entityType);
-		$entityId = intval($entityId);
-
-		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory($entityTypeId);
+		if ($entityTypeId === CCrmOwnerType::Company || $entityTypeId === CCrmOwnerType::Contact)
+		{
+			return [$entityTypeId, $entityId];
+		}
 
 		if ($entityTypeId === CCrmOwnerType::Lead || $entityTypeId === CCrmOwnerType::Deal)
 		{
@@ -101,21 +101,23 @@ class CBPCrmGetRequisitesInfoActivity extends CBPActivity
 			;
 
 			$entityTypeId = (int)$this->CrmEntityType;
-			$entityId = (int)$entity[CCrmOwnerType::ResolveName($this->CrmEntityType) . '_ID'];
+			$entityId = (int)$entity[CCrmOwnerType::ResolveName($entityTypeId) . '_ID'];
+
+			return [$entityTypeId, $entityId];
 		}
-		elseif (isset($factory) && $factory->isAutomationEnabled())
+
+		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory($entityTypeId);
+		if (isset($factory))
 		{
 			$entity = $factory->getItem($entityId);
 
 			$entityTypeId = isset($entity) ? (int)$this->CrmEntityType : 0;
 			$entityId = isset($entity) ? $entity->get(CCrmOwnerType::ResolveName($entityTypeId) . '_ID') : 0;
-		}
-		elseif ($entityTypeId !== CCrmOwnerType::Company && $entityTypeId !== CCrmOwnerType::Contact)
-		{
-			$entityTypeId = $entityId = 0;
+
+			return [$entityTypeId, $entityId];
 		}
 
-		return [$entityTypeId, $entityId];
+		return [0, 0];
 	}
 
 	protected function logRequisiteProperties(): void

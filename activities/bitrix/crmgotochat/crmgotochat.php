@@ -66,7 +66,6 @@ class CBPCrmGoToChat extends CBPActivity
 			}
 		}
 
-		// Send Operations Analytics
 		$documentType = $this->getDocumentType();
 		\CCrmBizProcHelper::sendOperationsAnalytics(
 			Dictionary::EVENT_ENTITY_SOCIAL,

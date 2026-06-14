@@ -8,7 +8,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Bizproc\Result\ResultDto;
 use Bitrix\Main\Localization\Loc;
 
-/** @property-write string|null ErrorMessage */
+/**
+ * @property-write string|null ErrorMessage
+ * @property-write int|null ItemId
+ */
 class CBPCreateDocumentActivity extends CBPActivity
 {
 	const EXECUTION_MAX_DEPTH = 1;
@@ -47,10 +50,11 @@ class CBPCreateDocumentActivity extends CBPActivity
 
 		$executionKey = $this->getWorkflowTemplateId();
 
+		$createResult = null;
 		self::increaseExecutionDepth($executionKey);
 		try
 		{
-			$this->ItemId = $documentService->createDocument($documentId, $resultFields);
+			$createResult = $documentService->createDocument($documentId, $resultFields);
 		}
 		catch (Exception $e)
 		{
@@ -58,9 +62,14 @@ class CBPCreateDocumentActivity extends CBPActivity
 			$this->ErrorMessage = $e->getMessage();
 		}
 
-		if ($this->ItemId)
+		if ($createResult && is_numeric($createResult))
 		{
+			$this->ItemId = (int)$createResult;
 			$this->fixResult($this->makeResultFromId($this->ItemId));
+		}
+		elseif ($createResult && is_string($createResult))
+		{
+			$this->ErrorMessage = $createResult;
 		}
 
 		self::resetExecutionDepth($executionKey);

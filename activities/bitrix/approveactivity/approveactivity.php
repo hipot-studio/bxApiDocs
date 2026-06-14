@@ -195,31 +195,34 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 		$arParameters['DOCUMENT_URL'] = $documentService->getDocumentAdminPage($documentId);
 		$arParameters['TaskButton1Message'] =
 			$this->isPropertyExists('TaskButton1Message')
-				? $this->TaskButton1Message
+				? CBPHelper::stringify($this->TaskButton1Message)
 				: Loc::getMessage('BPAA_ACT_BUTTON1')
 		;
-		if ($arParameters['TaskButton1Message'] == '')
+		if (CBPHelper::isEmptyValue($arParameters['TaskButton1Message']))
 		{
 			$arParameters['TaskButton1Message'] = Loc::getMessage('BPAA_ACT_BUTTON1');
 		}
+
 		$arParameters['TaskButton2Message'] =
 			$this->isPropertyExists('TaskButton2Message')
-				? $this->TaskButton2Message
+				? CBPHelper::stringify($this->TaskButton2Message)
 				: Loc::getMessage('BPAA_ACT_BUTTON2_MSGVER_1')
 		;
-		if ($arParameters['TaskButton2Message'] == '')
+		if (CBPHelper::isEmptyValue($arParameters['TaskButton2Message']))
 		{
 			$arParameters['TaskButton2Message'] = Loc::getMessage('BPAA_ACT_BUTTON2_MSGVER_1');
 		}
+
 		$arParameters['CommentLabelMessage'] =
 			$this->isPropertyExists('CommentLabelMessage')
-				? $this->CommentLabelMessage
-				: Loc::getMessage('BPAA_ACT_COMMENT')
+				? CBPHelper::stringify($this->CommentLabelMessage)
+				: Loc::getMessage('BPAA_ACT_COMMENT_1')
 		;
-		if ($arParameters['CommentLabelMessage'] == '')
+		if (CBPHelper::isEmptyValue($arParameters['CommentLabelMessage']))
 		{
-			$arParameters['CommentLabelMessage'] = Loc::getMessage('BPAA_ACT_COMMENT');
+			$arParameters['CommentLabelMessage'] = Loc::getMessage('BPAA_ACT_COMMENT_1');
 		}
+
 		$arParameters['ShowComment'] = $this->isPropertyExists('ShowComment') ? $this->ShowComment : 'Y';
 		if ($arParameters['ShowComment'] != 'Y' && $arParameters['ShowComment'] != 'N')
 		{
@@ -243,7 +246,7 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 		if ($timeoutDuration > 0)
 		{
 			$overdueDate = DateTime::createFromTimestamp(
-				time() + max($timeoutDuration, CBPSchedulerService::getDelayMinLimit())
+				CBPSchedulerService::calculateExpirationTime(time() + $timeoutDuration)
 			);
 		}
 
@@ -368,14 +371,15 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 
 	protected function ExecuteOnApprove()
 	{
+		$this->outputPortId = 0;
+		$this->writeToTrackingService(Loc::getMessage('BPAA_ACT_APPROVE'));
+
 		if (count($this->arActivities) <= 0)
 		{
 			$this->workflow->closeActivity($this);
 
 			return;
 		}
-
-		$this->writeToTrackingService(Loc::getMessage('BPAA_ACT_APPROVE'));
 
 		$result = $this->getResult();
 		if ($result)
@@ -391,12 +395,15 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 	protected function getResult(): ?ResultDto
 	{
 		$usages = $this->collectPropertyUsages('Description');
+		$rootActivity = $this->GetRootActivity();
+		$usedDocumentFields = $rootActivity->{CBPDocument::PARAM_USED_DOCUMENT_FIELDS} ?? [];
 
 		if (!empty($usages))
 		{
 			$documentService = $this->workflow->getRuntime()->getDocumentService();
 			$type = $this->getDocumentType();
 			$id = $this->getDocumentId();
+			$document = $documentService->getDocument($id, $type, $usedDocumentFields);
 
 			$fileFields = array_filter(
 				$documentService->getDocumentFields($type),
@@ -412,7 +419,6 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 				{
 					if ($usage[0] === 'Document' && isset($fileFields[$usage[1]]))
 					{
-						$document = $documentService->getDocument($id, $type);
 						if (!empty($document[$usage[1]]))
 						{
 							$resultValue = [
@@ -460,13 +466,14 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 
 	protected function ExecuteOnNonApprove()
 	{
+		$this->outputPortId = 1;
+		$this->writeToTrackingService(Loc::getMessage('BPAA_ACT_NONAPPROVE'));
+
 		if (count($this->arActivities) <= 1)
 		{
 			$this->workflow->closeActivity($this);
 			return;
 		}
-
-		$this->writeToTrackingService(Loc::getMessage('BPAA_ACT_NONAPPROVE'));
 
 		$activity = $this->arActivities[1];
 		$activity->AddStatusChangeHandler(self::ClosedEvent, $this);
@@ -556,7 +563,7 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 				. "\n"
 				. (
 					$arEventParameters['COMMENT'] <> ''
-						? Loc::getMessage('BPAA_LOG_COMMENTS') . ': ' . $arEventParameters['COMMENT']
+						? Loc::getMessage('BPAA_LOG_COMMENTS_1') . ': ' . $arEventParameters['COMMENT']
 						: ''
 				)
 				. "\n"
@@ -852,7 +859,7 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 
 			$form .=
 				'<tr><td valign="top" width="40%" align="right" class="bizproc-field-name">'
-					.($arTask['PARAMETERS']['CommentLabelMessage'] <> '' ? $arTask['PARAMETERS']['CommentLabelMessage'] : Loc::getMessage('BPAA_ACT_COMMENT'))
+					.($arTask['PARAMETERS']['CommentLabelMessage'] <> '' ? $arTask['PARAMETERS']['CommentLabelMessage'] : Loc::getMessage('BPAA_ACT_COMMENT_1'))
 					.$required
 				.':</td>'.
 				'<td valign="top" width="60%" class="bizproc-field-value">'.
@@ -890,12 +897,20 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 
 		if (($task["PARAMETERS"]["ShowComment"] ?? 'N') !== "N")
 		{
+			$description = match ($task['PARAMETERS']['CommentRequired'] ?? '')
+			{
+				'YA' => Loc::getMessage('BPAA_ACT_COMMENT_REQUIRED_TO_APPROVE'),
+				'YR' => Loc::getMessage('BPAA_ACT_COMMENT_REQUIRED_TO_REJECT'),
+				default => '',
+			};
+
 			$controls['FIELDS'] = [
 				[
 					'Id' => 'task_comment',
 					'Type' => 'text',
-					'Name' => $task["PARAMETERS"]["CommentLabelMessage"] ?: GetMessage("BPAA_ACT_COMMENT"),
+					'Name' => $task['PARAMETERS']['CommentLabelMessage'] ?: Loc::getMessage('BPAA_ACT_COMMENT_1'),
 					'Required' => (($task['PARAMETERS']['CommentRequired'] ?? '') === 'Y'),
+					'Description' => $description,
 				],
 			];
 		}
@@ -957,7 +972,7 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 				$label =
 					$arTask['PARAMETERS']['CommentLabelMessage'] <> ''
 						? $arTask['PARAMETERS']['CommentLabelMessage']
-						: Loc::getMessage('BPAA_ACT_COMMENT'
+						: Loc::getMessage('BPAA_ACT_COMMENT_1'
 					)
 				;
 				self::$errors->setError(
@@ -1211,7 +1226,7 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 		}
 		if ($arCurrentValues['comment_label_message'] == '')
 		{
-			$arCurrentValues['comment_label_message'] = Loc::getMessage('BPAA_ACT_COMMENT');
+			$arCurrentValues['comment_label_message'] = Loc::getMessage('BPAA_ACT_COMMENT_1');
 		}
 		if ($arCurrentValues['timeout_duration_type'] == '')
 		{

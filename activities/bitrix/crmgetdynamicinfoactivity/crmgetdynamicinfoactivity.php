@@ -9,7 +9,6 @@ use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Crm;
-use Bitrix\Crm\Integration\BizProc\Document;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Error;
@@ -29,6 +28,8 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 	use \Bitrix\Bizproc\Activity\Mixins\EntityFilter;
 
 	protected static $requiredModules = ['crm'];
+
+	private const RETURN_PROPERTY_DOCUMENT = 'Document';
 
 	public function __construct($name)
 	{
@@ -125,6 +126,10 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 			$this->arProperties[$fieldId] = $document[$fieldId] ?? null;
 			$this->preparedProperties[$fieldId] = $document[$fieldId] ?? null;
 		}
+
+		$this->arProperties[self::RETURN_PROPERTY_DOCUMENT] = $complexDocumentId;
+		$this->preparedProperties[self::RETURN_PROPERTY_DOCUMENT] = $complexDocumentId;
+
 		$this->setPropertiesTypes($this->DynamicEntityFields);
 
 		return $errors;
@@ -169,6 +174,15 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 				{
 					$currentValues['DynamicEntityFields'][$fieldId] = $returnFieldsMap[$fieldId];
 				}
+			}
+
+			if (defined('\Bitrix\Bizproc\FieldType::DOCUMENT'))
+			{
+				$currentValues['DynamicEntityFields'][self::RETURN_PROPERTY_DOCUMENT] = [
+					'Type' => FieldType::DOCUMENT,
+					'Name' => \CCrmOwnerType::GetDescription($entityTypeId),
+					'Default' => \CCrmBizProcHelper::ResolveDocumentType($entityTypeId),
+				];
 			}
 
 			$result->setData($currentValues);
@@ -264,6 +278,7 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 				'Getter' => function($dialog, $property, $currentActivity, $compatible) {
 					return $currentActivity['Properties']['ReturnFields'];
 				},
+				'AllowSelection' => false,
 			],
 			'DynamicFilterFields' => [
 				'Name' => Loc::getMessage('CRM_GDIA_FILTERING_FIELDS_PROPERTY'),

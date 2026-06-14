@@ -119,7 +119,6 @@ class CBPCrmSendWhatsAppMessageActivity extends CBPActivity
 			return $this->closeWithError($result->getErrorMessages()[0] ?? '');
 		}
 
-		// Send Operations Analytics
 		$documentType = $this->getDocumentType();
 		\CCrmBizProcHelper::sendOperationsAnalytics(
 			Dictionary::EVENT_ENTITY_SOCIAL,

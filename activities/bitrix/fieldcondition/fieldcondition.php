@@ -28,9 +28,10 @@ class CBPFieldCondition extends CBPActivityCondition
 		$rootActivity = $ownerActivity->getRootActivity();
 		$documentId = $rootActivity->GetDocumentId();
 		$documentType = $rootActivity->getDocumentType();
+		$usedDocumentFields = $rootActivity->{CBPDocument::PARAM_USED_DOCUMENT_FIELDS} ?? [];
 
 		$documentService = $ownerActivity->workflow->getRuntime()->getDocumentService();
-		$document = $documentService->getDocument($documentId, $documentType);
+		$document = $documentService->getDocument($documentId, $documentType, $usedDocumentFields);
 		$documentFields = $documentService->getDocumentFields($documentType);
 		$documentFieldsAliasesMap = CBPDocument::getDocumentFieldsAliasesMap($documentFields);
 
@@ -94,14 +95,7 @@ class CBPFieldCondition extends CBPActivityCondition
 			$usages[] = [\Bitrix\Bizproc\Workflow\Template\SourceType::DocumentField, $cond[0]];
 			if (is_string($cond[2]))
 			{
-				$parsed = $ownerActivity::parseExpression($cond[2]);
-				if ($parsed)
-				{
-					$usages[] = \Bitrix\Bizproc\Workflow\Template\SourceType::getObjectSourceType(
-						$parsed['object'],
-						$parsed['field']
-					);
-				}
+				$this->collectExpressionUsages($usages, $ownerActivity, $cond[2]);
 			}
 		}
 
@@ -153,7 +147,7 @@ class CBPFieldCondition extends CBPActivityCondition
 					$arCurrentValues["field_condition_field_" . $i] = $value[0];
 					$arCurrentValues["field_condition_condition_" . $i] = $value[1];
 					$arCurrentValues["field_condition_value_" . $i] = $value[2];
-					$arCurrentValues["field_condition_joiner_" . $i] = $value[3];
+					$arCurrentValues["field_condition_joiner_" . $i] = $value[3] ?? null;
 
 					$i++;
 				}

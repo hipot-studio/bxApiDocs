@@ -13,6 +13,7 @@ class CBPDelayActivity extends CBPActivity implements
 	IBPActivityDebugEventListener,
 	IBPEventDrivenActivity
 {
+
 	private $subscriptionId = 0;
 	private $isInEventActivityMode = false;
 
@@ -31,7 +32,7 @@ class CBPDelayActivity extends CBPActivity implements
 
 	public function cancel()
 	{
-		if (!$this->isInEventActivityMode && $this->subscriptionId > 0)
+		if (!$this->isInEventActivityMode)
 		{
 			$this->Unsubscribe($this);
 		}
@@ -61,10 +62,10 @@ class CBPDelayActivity extends CBPActivity implements
 			'TimeoutDurationType' => $this->getRawProperty('TimeoutDurationType'),
 			'TimeoutTime' => $this->getRawProperty('TimeoutTime'),
 			'TimeoutTimeIsLocal' => $this->getRawProperty('TimeoutTimeIsLocal'),
+			'Sort' => $this->getRawProperty('Sort'),
 		];
 
 		$timeoutDuration = $this->parseValue($delayIntervalProperties['TimeoutDuration']);
-		$timeoutDurationValue = 0;
 		$timeoutTime = $this->parseValue($delayIntervalProperties['TimeoutTime']);
 
 		if (is_array($timeoutTime)) //if multiple value
@@ -73,6 +74,7 @@ class CBPDelayActivity extends CBPActivity implements
 		}
 
 		$nowTime = time();
+		$timeoutDurationValue = 0;
 		if ($timeoutDuration != null)
 		{
 			$timeoutDurationValue = $this->CalculateTimeoutDuration();
@@ -82,6 +84,7 @@ class CBPDelayActivity extends CBPActivity implements
 		{
 			$timeoutTime = $this->timeoutTimeToTimestamp($timeoutTime, $delayIntervalProperties);
 			$expiresAt = $timeoutTime;
+			$timeoutDurationValue = $timeoutTime - $nowTime;
 		}
 		else
 		{
@@ -107,55 +110,42 @@ class CBPDelayActivity extends CBPActivity implements
 			return false;
 		}
 
-		$schedulerService = $this->workflow->getService('SchedulerService');
-		$this->subscriptionId =
-			$schedulerService->subscribeOnTime($this->workflow->getInstanceId(), $this->name, $expiresAt)
-		;
-
-		if (!$this->subscriptionId)
+		$schedulerService = $this->workflow->getSchedulerService();
+		if ($schedulerService->useMessengerTransport())
 		{
-			throw new Exception(GetMessage('BPDA_SUBSCRIBE_ERROR_MSGVER_1'));
-		}
-
-		$this->workflow->addEventHandler($this->name, $eventHandler);
-
-		if ($timeoutDuration !== null)
-		{
-			$timeoutDurationValue = max($timeoutDurationValue, CBPSchedulerService::getDelayMinLimit());
-			$timestamp = $nowTime + $timeoutDurationValue;
-
-			$period1 = trim(CBPHelper::formatTimePeriod($timeoutDurationValue));
-			$period2 = $this->getConvertedForLogTimestamp($timestamp);
-			$message = Loc::getMessage(
-				'BPDA_TRACK4',
-				[
-					'#PERIOD1#' => $period1,
-					'#PERIOD2#' => $period2,
-				]
-			);
-			if (!empty($message))
-			{
-				$this->logMessage($message);
-			}
-		}
-		elseif ($timeoutTime != null)
-		{
-			$timestamp = max($timeoutTime, $nowTime + CBPSchedulerService::getDelayMinLimit());
-			$period = $this->getConvertedForLogTimestamp($timestamp);
-
-			$this->logMessage(
-				Loc::getMessage(
-					'BPDA_TRACK1',
-					[
-						'#PERIOD#' => $period
-					]
-				)
+			$schedulerService->sendResumeWorkflowMessage(
+				$this->workflow->getInstanceId(),
+				$this->name,
+				(int)$timeoutDurationValue
 			);
 		}
 		else
 		{
-			$this->logMessage(GetMessage('BPDA_TRACK2'));
+			$this->subscriptionId = $schedulerService->subscribeOnTime(
+				$this->workflow->getInstanceId(),
+				$this->name,
+				$expiresAt
+			);
+
+			if (!$this->subscriptionId)
+			{
+				throw new Exception(GetMessage('BPDA_SUBSCRIBE_ERROR_MSGVER_1'));
+			}
 		}
+
+		$this->workflow->addEventHandler($this->name, $eventHandler);
+
+		$timestamp = CBPSchedulerService::calculateExpirationTime($expiresAt);
+		$period = $this->getConvertedForLogTimestamp($timestamp);
+
+		$this->logMessage(
+			Loc::getMessage(
+				'BPDA_TRACK1',
+				[
+					'#PERIOD#' => $period
+				]
+			)
+		);
 
 		return true;
 	}
@@ -163,9 +153,13 @@ class CBPDelayActivity extends CBPActivity implements
 	public function Unsubscribe(IBPActivityExternalEventListener $eventHandler)
 	{
 		$schedulerService = $this->workflow->getService('SchedulerService');
-		$schedulerService->unSubscribeOnTime($this->subscriptionId);
+		if ($this->subscriptionId > 0)
+		{
+			$schedulerService->unSubscribeOnTime($this->subscriptionId);
+			$this->subscriptionId = 0;
+		}
+
 		$this->workflow->removeEventHandler($this->name, $eventHandler);
-		$this->subscriptionId = 0;
 	}
 
 	public function OnExternalEvent($arEventParameters = [])
@@ -275,7 +269,7 @@ class CBPDelayActivity extends CBPActivity implements
 			$this->needWriteToLog()
 				? sprintf('[timestamp=%u]%s[/timestamp]', $timestamp, $convertedFullTimestamp)
 				: sprintf('%s (%s)', $convertedFullTimestamp, date('P', $timestamp))
-		;
+			;
 	}
 
 	public static function GetPropertiesDialog(
@@ -412,7 +406,7 @@ class CBPDelayActivity extends CBPActivity implements
 			$properties['TimeoutDurationType'] = $arCurrentValues['delay_type'];
 		}
 
-		$properties['WriteToLog'] = CBPHelper::getBool($arCurrentValues['delay_write_to_log']) ? 'Y' : 'N';
+		$properties['WriteToLog'] = CBPHelper::getBool($arCurrentValues['delay_write_to_log'] ?? null) ? 'Y' : 'N';
 
 		$user = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
 		$errors = self::validateProperties($properties, $user);

@@ -45,7 +45,7 @@ class CBPCrmCreateLeadContactActivity
 			array('=ID' => $entityId, 'CHECK_PERMISSIONS' => 'N'),
 			false,
 			false,
-			array_merge($customerFields, ['ASSIGNED_BY_ID', 'CONTACT_ID', 'STATUS_ID'])
+			array_merge($customerFields, ['ASSIGNED_BY_ID', 'CONTACT_ID', 'STATUS_ID', 'SOURCE_ID'])
 		)->Fetch();
 
 		if(!$leadFields)

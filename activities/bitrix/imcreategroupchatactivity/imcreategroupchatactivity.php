@@ -6,12 +6,17 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Bizproc;
+
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 
 /**
  * @property $ChatName
  * @property $Members
  * @property $ChatId
+ * @property $OwnerId
  */
 class CBPImCreateGroupChatActivity extends CBPActivity
 {
@@ -22,6 +27,7 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 			'Title' => '',
 			'ChatName' => '',
 			'Members' => '',
+			'OwnerId' => '',
 
 			// return property
 			'ChatId' => null,
@@ -34,6 +40,9 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 			'Members' => [
 				'Type' => Bizproc\FieldType::USER,
 				'Multiple' => true,
+			],
+			'OwnerId' => [
+				'Type' => Bizproc\FieldType::USER,
 			],
 			'ChatId' => [
 				'Type' => Bizproc\FieldType::INT,
@@ -75,36 +84,46 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 
 		$moduleId = $this->getDocumentType()[0];
 
-		$chat = new CIMChat(0);
-		$chatId = $chat->Add([
-			'TITLE' => $chatName,
-			'USERS' => $members,
-			'MESSAGE' => Loc::getMessage('IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_WELCOME_MESSAGE'),
-			'ENTITY_TYPE' => 'BP_ACTIVITY_' . mb_strtoupper($moduleId),
-		]);
+		$result = Bitrix\Im\V2\Chat\ChatFactory::getInstance()->addChat([
+				'AUTHOR_ID' => $this->getAuthorId($members),
+				'TITLE' => $chatName,
+				'USERS' => $members,
+				'MESSAGE' => Loc::getMessage('IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_WELCOME_MESSAGE'),
+				'ENTITY_TYPE' => 'BP_ACTIVITY_' . mb_strtoupper($moduleId),
+			]
+		);
 
-		if ($chatId === false)
+		if (!$result->isSuccess())
 		{
-			global $APPLICATION;
-
-			$exception = $APPLICATION->GetException();
-			if ($exception)
-			{
-				$this->trackError($exception->GetString() ?? '');
-			}
+			$this->trackError(
+				implode('. ', $result->getErrorMessages())
+			);
 
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$this->ChatId = $chatId;
+		$this->ChatId = $result->getChatId();
 		$this->writeToTrackingService(
 			Loc::getMessage(
 				'IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_NEW_CHAT_CREATED',
-				['#CHAT_ID#' => $chatId]
+				['#CHAT_ID#' => $this->ChatId ]
 			),
 			0,
 			CBPTrackingType::AttachedEntity
 		);
+
+		if (
+			Loader::includeModule('crm')
+			&& method_exists(CCrmBizProcHelper::class, 'sendOperationsAnalytics')
+		)
+		{
+			$documentType = $this->getDocumentType();
+			\CCrmBizProcHelper::sendOperationsAnalytics(
+				Dictionary::EVENT_ENTITY_SOCIAL,
+				$this,
+				$documentType[2] ?? '',
+			);
+		}
 
 		return CBPActivityExecutionStatus::Closed;
 	}
@@ -123,6 +142,11 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 	private function getMembers()
 	{
 		return CBPHelper::extractUsers($this->Members, $this->getDocumentId());
+	}
+
+	private function getOwnerId(): int
+	{
+		return (int)CBPHelper::extractFirstUser($this->OwnerId, $this->getDocumentId());
 	}
 
 	protected function reInitialize()
@@ -182,6 +206,11 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 				'Type' => Bizproc\FieldType::USER,
 				'Multiple' => true,
 				'Required' => true,
+			],
+			'OwnerId' => [
+				'Name' => Loc::getMessage('IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_FIELD_OWNER_ID'),
+				'FieldName' => 'owner_id',
+				'Type' => Bizproc\FieldType::USER,
 			],
 		];
 	}
@@ -262,5 +291,23 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 		}
 
 		return array_merge($errors, parent::validateProperties($arTestProperties, $user));
+	}
+
+	private function getAuthorId(mixed $members): int
+	{
+		$ownerId = $this->getOwnerId();
+		$runBy = $this->getTemplateUserId();
+
+		if ($ownerId > 0)
+		{
+			return $ownerId;
+		}
+
+		if (is_numeric($members))
+		{
+			return (int)$members;
+		}
+
+		return (int)($members[0] ?? $runBy);
 	}
 }

@@ -81,9 +81,9 @@ class CBPCrmSendSmsActivity extends CBPActivity
 			$sendResult = $this->sendByProvider($providerId, $messageFrom, $phoneNumber, $messageText);
 		}
 
+		/** @var bool|int $sendResult */
 		if ($sendResult)
 		{
-			// Send Operations Analytics
 			$documentType = $this->getDocumentType();
 			\CCrmBizProcHelper::sendOperationsAnalytics(
 				Dictionary::EVENT_ENTITY_SOCIAL,
@@ -113,7 +113,7 @@ class CBPCrmSendSmsActivity extends CBPActivity
 				$bindings[] = ['OWNER_TYPE_ID' => $comEntityTypeId, 'OWNER_ID' => $comEntityId];
 			}
 
-			\Bitrix\Crm\Activity\Provider\Sms::addActivity([
+			$this->addActivity((string)$providerId, (string)$messageFrom, [
 				'AUTHOR_ID' => $responsibleId,
 				'DESCRIPTION' => $messageText,
 				'ASSOCIATED_ENTITY_ID' => $messageId,
@@ -131,7 +131,7 @@ class CBPCrmSendSmsActivity extends CBPActivity
 						'VALUE' => $phoneNumber,
 					],
 				],
-			], false);
+			]);
 		}
 
 		return CBPActivityExecutionStatus::Closed;
@@ -457,35 +457,111 @@ class CBPCrmSendSmsActivity extends CBPActivity
 
 	private function resolveDefaultProvider()
 	{
-		$providerId = $messageFrom = null;
-
-		if (SmsManager::canUse())
+		if (!SmsManager::canUse())
 		{
-			$defaults = SmsManager::getEditorCommon();
-			$providerId = $defaults['senderId'];
-			$messageFrom = $defaults['from'];
+			return ['', ''];
+		}
 
-			$firstSuitableProviderId = null;
-			$providers = SmsManager::getSenderSelectList();
-			foreach ($providers as $provider)
+		$defaults = SmsManager::getEditorCommon();
+		$providerId = (string)$defaults['senderId'];
+		$messageFrom = (string)$defaults['from'];
+		if ($this->isValidProviderId($providerId))
+		{
+			if (!$this->isValidFromId($providerId, $messageFrom))
 			{
-				if ($providerId === $provider['id'] && $provider['isTemplatesBased'])
-				{
-					$providerId = null; // can't use templates based provider
-				}
-				if (!$firstSuitableProviderId && !$provider['isTemplatesBased'] && $provider['canUse'])
-				{
-					$firstSuitableProviderId = $provider['id'];
-				}
+				return [$providerId, $this->getDefaultFromId($providerId)];
 			}
 
-			if (!$providerId)
+			return [$providerId, $messageFrom];
+		}
+
+		$defaultProviderId = $this->getDefaultProviderId();
+
+		return [$defaultProviderId, $this->getDefaultFromId($defaultProviderId)];
+	}
+
+	private function isValidProviderId(string $providerId): bool
+	{
+		$sender = SmsManager::getSenderById($providerId);
+		if (!$sender)
+		{
+			return false;
+		}
+
+		return $this->isValidProvider([
+			'isTemplatesBased' => $sender->isConfigurable() && $sender->isTemplatesBased(),
+			'canUse' => $sender->canUse(),
+		]);
+	}
+
+	private function isValidProvider(array $senderInfo): bool
+	{
+		return $senderInfo['canUse'] && !$senderInfo['isTemplatesBased'];
+	}
+
+	private function isValidFromId(string $providerId, string $fromId): bool
+	{
+		$fromList = SmsManager::getSenderFromList($providerId);
+
+		foreach ($fromList as $from)
+		{
+			if ((string)$from['id'] === $fromId)
 			{
-				$providerId = $firstSuitableProviderId;
+				return true;
 			}
 		}
 
-		return [$providerId, $messageFrom];
+		return false;
+	}
+
+	private function getDefaultProviderId(): string
+	{
+		$providers = SmsManager::getSenderInfoList();
+
+		$firstValid = null;
+		foreach ($providers as $senderInfo)
+		{
+			if (!$this->isValidProvider($senderInfo))
+			{
+				continue;
+			}
+
+			if ($senderInfo['isDefault'])
+			{
+				return $senderInfo['id'];
+			}
+
+			if ($firstValid === null)
+			{
+				$firstValid = $senderInfo;
+			}
+		}
+
+		if ($firstValid !== null)
+		{
+			return $firstValid['id'];
+		}
+
+		return '';
+	}
+
+	private function getDefaultFromId(string $providerId): string
+	{
+		$fromList = SmsManager::getSenderFromList($providerId);
+		foreach ($fromList as $from)
+		{
+			if ($from['isDefault'])
+			{
+				return (string)$from['id'];
+			}
+		}
+
+		if (!empty($fromList))
+		{
+			return (string)$fromList[0]['id'];
+		}
+
+		return '';
 	}
 
 	private function sendByRestOld($providerId, $phoneNumber, $messageText)
@@ -581,6 +657,24 @@ class CBPCrmSendSmsActivity extends CBPActivity
 		}
 
 		return true;
+	}
+
+	private function addActivity(string $providerId, string $fromId, array $activityFields): void
+	{
+		$activityProviderId = SmsManager::getActivityProviderId($providerId, SmsManager::getSenderFromType($providerId, $fromId));
+
+		if ($activityProviderId === \Bitrix\Crm\Activity\Provider\WhatsApp::getId())
+		{
+			\Bitrix\Crm\Activity\Provider\WhatsApp::addActivity($activityFields, false);
+		}
+		elseif ($activityProviderId === \Bitrix\Crm\Activity\Provider\Telegram::getId())
+		{
+			\Bitrix\Crm\Activity\Provider\Telegram::addActivity($activityFields, false);
+		}
+		else
+		{
+			\Bitrix\Crm\Activity\Provider\Sms::addActivity($activityFields, false);
+		}
 	}
 
 	private function writeError($errorText, $userId = 0)

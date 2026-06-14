@@ -5,8 +5,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
-$runtime = CBPRuntime::GetRuntime();
-$runtime->IncludeActivityFile('CreateDocumentActivity');
+if (!CBPRuntime::getRuntime()->includeActivityFile('CreateDocumentActivity'))
+{
+	return;
+}
 
 /** @property-write string|null ErrorMessage */
 class CBPCreateCrmContactDocumentActivity extends CBPCreateDocumentActivity
@@ -76,28 +78,28 @@ class CBPCreateCrmContactDocumentActivity extends CBPCreateDocumentActivity
 		$this->ErrorMessage = null;
 	}
 
-	public static function ValidateProperties($arTestProperties = array(), CBPWorkflowTemplateUser $user = null)
+	public static function ValidateProperties($arTestProperties = [], ?CBPWorkflowTemplateUser $user = null)
 	{
 		if (!CModule::IncludeModule('crm'))
 		{
-			return(array('code' => 'NotLoaded', 'module'=> 'crm', 'message'=> GetMessage('BPCDA_MODULE_NOT_LOADED')));
-		};
-
-		$arErrors = array();
-
-		$arDocumentFields = CCrmDocumentContact::GetDocumentFields('CONTACT');
-		$arTestFields = isset($arTestProperties['Fields']) && is_array($arTestProperties['Fields']) ? $arTestProperties['Fields'] : array();
-
-		$name = isset($arTestFields['NAME']) ? $arTestFields['NAME'] : '';
-		if($name === '')
-		{
-			$arErrors[] = array('code' => 'NotExist', 'parameter' => 'NAME', 'message' => GetMessage('BPCDA_FIELD_NOT_FOUND', array('#NAME#' => $arDocumentFields['NAME']['Name'])));
+			return ['code' => 'NotLoaded', 'module'=> 'crm', 'message'=> GetMessage('BPCDA_MODULE_NOT_LOADED')];
 		}
 
-		$lastName = isset($arTestFields['LAST_NAME']) ? $arTestFields['LAST_NAME'] : '';
-		if($lastName === '')
+		$arErrors = [];
+
+		$arDocumentFields = CCrmDocumentContact::GetDocumentFields('CONTACT');
+		$arTestFields = isset($arTestProperties['Fields']) && is_array($arTestProperties['Fields']) ? $arTestProperties['Fields'] : [];
+
+		$name = $arTestFields['NAME'] ?? '';
+		if ($name === '')
 		{
-			$arErrors[] = array('code' => 'NotExist', 'parameter' => 'LAST_NAME', 'message' => GetMessage('BPCDA_FIELD_NOT_FOUND', array('#NAME#' => $arDocumentFields['LAST_NAME']['Name'])));
+			$arErrors[] = ['code' => 'NotExist', 'parameter' => 'NAME', 'message' => GetMessage('BPCDA_FIELD_NOT_FOUND', ['#NAME#' => $arDocumentFields['NAME']['Name']])];
+		}
+
+		$lastName = $arTestFields['LAST_NAME'] ?? '';
+		if ($lastName === '')
+		{
+			$arErrors[] = ['code' => 'NotExist', 'parameter' => 'LAST_NAME', 'message' => GetMessage('BPCDA_FIELD_NOT_FOUND', ['#NAME#' => $arDocumentFields['LAST_NAME']['Name']])];
 		}
 
 		return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));
@@ -108,9 +110,10 @@ class CBPCreateCrmContactDocumentActivity extends CBPCreateDocumentActivity
 		if (!CModule::IncludeModule('crm'))
 		{
 			return '';
-		};
+		}
 
 		$documentType = \CCrmBizProcHelper::ResolveDocumentType(\CCrmOwnerType::Contact);
+
 		return parent::GetPropertiesDialog($documentType, $activityName, $arWorkflowTemplate, $arWorkflowParameters, $arWorkflowVariables, $arCurrentValues, $formName, $popupWindow);
 	}
 
@@ -119,9 +122,10 @@ class CBPCreateCrmContactDocumentActivity extends CBPCreateDocumentActivity
 		if (!CModule::IncludeModule('crm'))
 		{
 			return false;
-		};
+		}
 
 		$documentType = \CCrmBizProcHelper::ResolveDocumentType(\CCrmOwnerType::Contact);
+
 		return parent::GetPropertiesDialogValues($documentType, $activityName, $arWorkflowTemplate, $arWorkflowParameters, $arWorkflowVariables, $arCurrentValues, $arErrors);
 	}
 }

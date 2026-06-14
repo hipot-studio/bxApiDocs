@@ -35,6 +35,12 @@ class CBPCrmChangeDealCategoryActivity extends CBPActivity
 		$this->logDebug();
 
 		$documentId = $this->GetDocumentId();
+		//check deal only.
+		if (!CBPHelper::isEqualDocumentEntity($documentId, ['crm', 'CCrmDocumentDeal']))
+		{
+			return CBPActivityExecutionStatus::Closed;
+		}
+
 		$this->checkCycling($documentId);
 
 		$sourceDealId = explode('_', $documentId[2])[1];
@@ -54,7 +60,7 @@ class CBPCrmChangeDealCategoryActivity extends CBPActivity
 
 		if (!$sourceFields)
 		{
-			$this->WriteToTrackingService(Loc::getMessage('CRM_CDCA_NO_SOURCE_FIELDS'), 0, CBPTrackingType::Error);
+			$this->trackError(Loc::getMessage('CRM_CDCA_NO_SOURCE_FIELDS'));
 
 			return CBPActivityExecutionStatus::Closed;
 		}
@@ -71,29 +77,14 @@ class CBPCrmChangeDealCategoryActivity extends CBPActivity
 
 		if ($resultError === Crm\Category\DealCategoryChangeError::NONE)
 		{
-			// Send Operations Analytics
 			$documentType = $this->getDocumentType();
 			\CCrmBizProcHelper::sendOperationsAnalytics(
 				Dictionary::EVENT_ENTITY_EDIT,
 				$this,
 				$documentType[2] ?? '',
 			);
-			//stop all Workflows
-			$documentId = $this->GetDocumentId();
-			$instanceIds = WorkflowInstanceTable::getIdsByDocument($documentId);
-			$instanceIds[] = $this->GetWorkflowInstanceId();
-			$instanceIds = array_unique($instanceIds);
 
-			$errors = [];
-			foreach ($instanceIds as $instanceId)
-			{
-				\CBPDocument::TerminateWorkflow(
-					$instanceId,
-					$documentId,
-					$errors,
-					Loc::getMessage('CRM_CDCA_MOVE_TERMINATION_TITLE')
-				);
-			}
+			$this->terminateDocumentWorkflows($documentId);
 
 			//Fake document update for clearing document cache
 			/** @var CBPDocumentService $ds */
@@ -118,19 +109,28 @@ class CBPCrmChangeDealCategoryActivity extends CBPActivity
 				//End region
 			}
 
-			//Stop running queue
-			throw new Exception("TerminateWorkflow");
-		}
-		else
-		{
-			$this->WriteToTrackingService(
-				$this->resolveMoveCategoryErrorText($resultError),
-				0,
-				CBPTrackingType::Error
-			);
+			return CBPActivityExecutionStatus::Closed;
 		}
 
+		$this->trackError($this->resolveMoveCategoryErrorText($resultError));
+
 		return CBPActivityExecutionStatus::Closed;
+	}
+
+	private function terminateDocumentWorkflows(array $documentId): void
+	{
+		$instanceIds = \CCrmBizProcHelper::getDocumentNotNodesInstanceIds($documentId);
+
+		$errors = [];
+		foreach ($instanceIds as $instanceId)
+		{
+			\CBPDocument::TerminateWorkflow(
+				$instanceId,
+				$documentId,
+				$errors,
+				Loc::getMessage('CRM_CDCA_MOVE_TERMINATION_TITLE')
+			);
+		}
 	}
 
 	private function logDebug()
@@ -145,12 +145,6 @@ class CBPCrmChangeDealCategoryActivity extends CBPActivity
 
 	private function checkCycling(array $documentId)
 	{
-		//check deal only.
-		if (!($documentId[0] === 'crm' && $documentId[1] === 'CCrmDocumentDeal'))
-		{
-			return true;
-		}
-
 		$key = $this->GetName();
 		$documentIdKey = implode('@', $documentId);
 
@@ -248,11 +242,14 @@ class CBPCrmChangeDealCategoryActivity extends CBPActivity
 				'Name' => Loc::getMessage('CRM_CDCA_CATEGORY'),
 				'FieldName' => 'category_id',
 				'Type' => 'deal_category',
+				'Required' => true,
+				'AiDescription' => 'ID of the category to which the deal will be moved',
 			],
 			'StageId' => [
 				'Name' => Loc::getMessage('CRM_CDCA_STAGE'),
 				'FieldName' => 'stage_id',
 				'Type' => 'deal_stage',
+				'AiDescription' => 'The stage ID to which the deal will be moved, for a category other than the default category, the category name is included in the stage name',
 			],
 		];
 	}

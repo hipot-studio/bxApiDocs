@@ -1,8 +1,16 @@
-<?
-if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)die();
+<?php
+
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
+{
+	die();
+}
+
+use Bitrix\Main\Loader;
 
 use Bitrix\Tasks;
 use Bitrix\Tasks\Internals\Task\Status;
+
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 
 class CBPTasksChangeStatusActivity extends CBPActivity
 {
@@ -23,7 +31,8 @@ class CBPTasksChangeStatusActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentId = $this->GetDocumentId();
+		$documentId = $this->getDocumentId();
+		$documentType = $this->getDocumentType();
 		$targetStatus = (int) $this->TargetStatus;
 
 		/** @var CBPDocumentService $ds */
@@ -50,6 +59,18 @@ class CBPTasksChangeStatusActivity extends CBPActivity
 		}
 
 		$ds->UpdateDocument($documentId, ['STATUS' => $targetStatus], $this->ModifiedBy);
+
+		if (
+			Loader::includeModule('crm')
+			&& method_exists(CCrmBizProcHelper::class, 'sendOperationsAnalytics')
+		)
+		{
+			\CCrmBizProcHelper::sendOperationsAnalytics(
+				Dictionary::EVENT_ENTITY_EDIT,
+				$this,
+				$documentType[2] ?? '',
+			);
+		}
 
 		return CBPActivityExecutionStatus::Closed;
 	}
@@ -143,6 +164,7 @@ class CBPTasksChangeStatusActivity extends CBPActivity
 		if (
 			Tasks\Integration\Bizproc\Document\Task::isProjectTask($documentType)
 			|| Tasks\Integration\Bizproc\Document\Task::isScrumProjectTask($documentType)
+			|| Tasks\Integration\Bizproc\Document\Task::isBizprocTask($documentType)
 		)
 		{
 			$canChange = true;

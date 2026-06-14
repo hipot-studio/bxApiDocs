@@ -109,6 +109,10 @@ class CBPCrmSetObserverField extends CBPActivity
 		}
 
 		$item = $factory->getItem($entityId);
+		if (is_null($item))
+		{
+			return;
+		}
 		switch ($this->ActionOnObservers)
 		{
 			case self::ACTION_ADD_OBSERVERS:

@@ -5,6 +5,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Crm\Integration\Analytics\Dictionary;
+
 class CBPCrmControlNotifyActivity extends CBPActivity
 {
 	public function __construct($name)
@@ -42,6 +44,13 @@ class CBPCrmControlNotifyActivity extends CBPActivity
 		}
 
 		$this->sendImMessage($fromUserId, $toUserIds);
+
+		$documentType = $this->getDocumentType();
+		\CCrmBizProcHelper::sendOperationsAnalytics(
+			Dictionary::EVENT_ENTITY_SOCIAL,
+			$this,
+			$documentType[2] ?? '',
+		);
 
 		return CBPActivityExecutionStatus::Closed;
 	}
@@ -226,11 +235,19 @@ class CBPCrmControlNotifyActivity extends CBPActivity
 			"MessageText" => $arCurrentValues["message_text"],
 		];
 
-		$toUsers = CBPHelper::UsersStringToArray(
-			$arCurrentValues["to_users"],
-			$documentType,
-			$errors,
-		);
+		if ($arCurrentValues['to_users'] === 'responsible_head')
+		{
+			$toUsers = [$arCurrentValues['to_users']];
+		}
+		else
+		{
+			$toUsers = CBPHelper::UsersStringToArray(
+				$arCurrentValues["to_users"],
+				$documentType,
+				$errors,
+			);
+		}
+
 
 		if ($errors)
 		{

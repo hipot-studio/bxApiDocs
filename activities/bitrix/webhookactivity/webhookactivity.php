@@ -9,7 +9,7 @@ use Bitrix\Main\Loader;
 use \Bitrix\Rest\Sqs;
 use Bitrix\Rest;
 
-class CBPWebHookActivity extends CBPActivity
+class CBPWebHookActivity extends CBPActivity implements IBPConfigurableActivity
 {
 	public function __construct($name)
 	{
@@ -156,17 +156,22 @@ class CBPWebHookActivity extends CBPActivity
 			'siteId' => $siteId
 		));
 
-		$dialog->setMap(array(
-			'Handler' => array(
+		$dialog->setMap(static::getPropertiesMap($documentType));
+
+		return $dialog;
+	}
+
+	public static function getPropertiesMap(array $documentType, array $context = []): array
+	{
+		return [
+			'Handler' => [
 				'Name' => GetMessage('BPWHA_HANDLER_NAME'),
 				'Description' => GetMessage('BPWHA_HANDLER_NAME'),
 				'FieldName' => 'handler',
-				'Type' => 'text',
-				'Required' => true
-			)
-		));
-
-		return $dialog;
+				'Type' => \Bitrix\Bizproc\FieldType::TEXT,
+				'Required' => true,
+			]
+		];
 	}
 
 	public static function GetPropertiesDialogValues($documentType, $activityName, &$arWorkflowTemplate, &$arWorkflowParameters, &$arWorkflowVariables, $arCurrentValues, &$arErrors)

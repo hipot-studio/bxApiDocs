@@ -3,9 +3,12 @@
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\FieldType;
+
 use Bitrix\Crm;
 use Bitrix\Crm\Integration\BizProc\Document;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
+
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
@@ -112,8 +115,16 @@ class CBPCrmUpdateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 		$errors = parent::internalExecute();
 
 		$documentId = CCrmBizProcHelper::ResolveDocumentId($this->DynamicTypeId, $this->DynamicId);
+		$documentType = $this->getDocumentType();
 
 		$updateResult = static::getDocumentService()->updateDocument($documentId, $this->DynamicEntitiesFields);
+
+		\CCrmBizProcHelper::sendOperationsAnalytics(
+			Dictionary::EVENT_ENTITY_EDIT,
+			$this,
+			$documentType[2] ?? '',
+		);
+
 		if (is_string($updateResult))
 		{
 			$errors->setError(new Error($updateResult));
@@ -206,24 +217,37 @@ class CBPCrmUpdateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 				$currentValues['DynamicFilterFields'] = $extractingFilterResult->getData();
 			}
 
-			$extractingFieldsResult = parent::extractPropertiesValues(
-				$dialog,
-				array_intersect_ukey(
-					$fieldsMap['DynamicEntitiesFields']['Map'][$entityTypeId] ?? [],
-					$dialog->getCurrentValues(),
-					function ($lhsKey, $rhsKey) {
-						if (mb_substr($lhsKey, -mb_strlen('_text')) === '_text')
-						{
-							$lhsKey = mb_substr($lhsKey, 0, mb_strlen($lhsKey) - mb_strlen('_text'));
-						}
-						if (mb_substr($rhsKey, -mb_strlen('_text')) === '_text')
-						{
-							$rhsKey = mb_substr($rhsKey, 0, mb_strlen($rhsKey) - mb_strlen('_text'));
-						}
+			$dynamicFieldsMap = array_intersect_ukey(
+				$fieldsMap['DynamicEntitiesFields']['Map'][$entityTypeId] ?? [],
+				$dialog->getCurrentValues(),
+				function ($lhsKey, $rhsKey) {
+					if (mb_substr($lhsKey, -mb_strlen('_text')) === '_text')
+					{
+						$lhsKey = mb_substr($lhsKey, 0, mb_strlen($lhsKey) - mb_strlen('_text'));
+					}
+					if (mb_substr($rhsKey, -mb_strlen('_text')) === '_text')
+					{
+						$rhsKey = mb_substr($rhsKey, 0, mb_strlen($rhsKey) - mb_strlen('_text'));
+					}
 
-						return strcmp($lhsKey, $rhsKey);
-					},
-				)
+					return strcmp($lhsKey, $rhsKey);
+				},
+			);
+
+			$documentType = \CCrmBizProcHelper::ResolveDocumentType($entityTypeId);
+			if (is_null($documentType))
+			{
+				$result->addError(new Error(Loc::getMessage('CRM_UDA_ENTITY_TYPE_ERROR')));
+
+				return $result;
+			}
+
+			$dynamicFieldsDialog = clone $dialog;
+			$dynamicFieldsDialog->setDocumentType($documentType);
+
+			$extractingFieldsResult = parent::extractPropertiesValues(
+				$dynamicFieldsDialog,
+				$dynamicFieldsMap
 			);
 
 			if ($extractingFieldsResult->isSuccess())
@@ -330,7 +354,7 @@ class CBPCrmUpdateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 		$fieldsMap = [];
 		foreach (Document\Dynamic::getEntityFields($entityTypeId) as $fieldId => $field)
 		{
-			if ($field['Editable'] && !static::isInternalField($fieldId))
+			if (isset($field['Editable']) && $field['Editable'] && !static::isInternalField($fieldId))
 			{
 				$field['FieldName'] = $fieldId;
 				$fieldsMap[$fieldId] = $field;

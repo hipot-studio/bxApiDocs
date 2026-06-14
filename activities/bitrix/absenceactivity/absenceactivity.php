@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
 class CBPAbsenceActivity extends CBPActivity
@@ -28,7 +29,7 @@ class CBPAbsenceActivity extends CBPActivity
 
 	public function execute()
 	{
-		if (!CModule::IncludeModule('intranet'))
+		if (!CModule::IncludeModule('intranet') || !Loader::includeModule('iblock'))
 		{
 			return CBPActivityExecutionStatus::Closed;
 		}
@@ -147,9 +148,7 @@ class CBPAbsenceActivity extends CBPActivity
 
 		if (!$user || !$user->isAdmin())
 		{
-			$absenceIblockId = COption::GetOptionInt('intranet', 'iblock_absence', 0);
-			$iblockPerm = CIBlock::GetPermission($absenceIblockId);
-			if ($iblockPerm < 'W')
+			if (self::getAbsencePermission() < 'W')
 			{
 				$arErrors[] = ['code' => 'perm', 'message' => Loc::getMessage('BPAA2_NO_PERMS')];
 			}
@@ -229,24 +228,13 @@ class CBPAbsenceActivity extends CBPActivity
 			}
 		}
 
-		$absenceIblockId = COption::GetOptionInt('intranet', 'iblock_absence', 0, $siteId);
-		$arAbsenceTypes = [];
-		$dbTypeRes = CIBlockPropertyEnum::GetList(
-			['SORT' => 'ASC', 'VALUE' => 'ASC'],
-			['IBLOCK_ID' => $absenceIblockId, 'PROPERTY_ID' => 'ABSENCE_TYPE']
-		);
-		while ($arTypeValue = $dbTypeRes->GetNext())
-		{
-			$arAbsenceTypes[$arTypeValue['XML_ID']] = $arTypeValue['VALUE'];
-		}
-
 		return $runtime->ExecuteResourceFile(
 			__FILE__,
 			'properties_dialog.php',
 			[
 				'arCurrentValues' => $arCurrentValues,
 				'formName' => $formName,
-				'arAbsenceTypes' => $arAbsenceTypes,
+				'arAbsenceTypes' => self::getAbsenceTypes($siteId),
 				'absenceSiteId' => $siteId,
 			]
 		);
@@ -311,5 +299,38 @@ class CBPAbsenceActivity extends CBPActivity
 		$arCurrentActivity['Properties'] = $arProperties;
 
 		return true;
+	}
+
+	private static function getAbsenceTypes(mixed $siteId): array
+	{
+		if (!Loader::includeModule('iblock'))
+		{
+			return [];
+		}
+
+		$absenceIblockId = COption::GetOptionInt('intranet', 'iblock_absence', 0, $siteId);
+		$arAbsenceTypes = [];
+		$dbTypeRes = CIBlockPropertyEnum::GetList(
+			['SORT' => 'ASC', 'VALUE' => 'ASC'],
+			['IBLOCK_ID' => $absenceIblockId, 'PROPERTY_ID' => 'ABSENCE_TYPE']
+		);
+		while ($arTypeValue = $dbTypeRes->GetNext())
+		{
+			$arAbsenceTypes[$arTypeValue['XML_ID']] = $arTypeValue['VALUE'];
+		}
+
+		return $arAbsenceTypes;
+	}
+
+	private static function getAbsencePermission(): mixed
+	{
+		if (!Loader::includeModule('iblock'))
+		{
+			return null;
+		}
+
+		$absenceIblockId = COption::GetOptionInt('intranet', 'iblock_absence', 0);
+
+		return CIBlock::GetPermission($absenceIblockId);
 	}
 }

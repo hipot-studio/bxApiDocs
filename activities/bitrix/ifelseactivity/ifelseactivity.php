@@ -5,16 +5,26 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+/** @property-read ?array Conditions */
 class CBPIfElseActivity extends CBPCompositeActivity
 {
 	public function __construct($name)
 	{
 		parent::__construct($name);
-		$this->arProperties = ["Title" => ""];
+		$this->arProperties = [
+			'Title' => '',
+			'Conditions' => null,
+		];
 	}
 
-	public function Execute()
+	public function execute()
 	{
+		$nodeStatus = $this->executeLikeNode();
+		if ($nodeStatus)
+		{
+			return $nodeStatus;
+		}
+
 		$flag = true;
 		foreach ($this->arActivities as $activity)
 		{
@@ -35,6 +45,43 @@ class CBPIfElseActivity extends CBPCompositeActivity
 		}
 
 		return CBPActivityExecutionStatus::Closed;
+	}
+
+	private function executeLikeNode(): ?int
+	{
+		$conditions = $this->Conditions;
+		if (!is_array($conditions))
+		{
+			return null;
+		}
+
+		foreach ($conditions as $i => $condition)
+		{
+			if ($this->checkCondition($condition))
+			{
+				$this->outputPortId = $i;
+
+				return CBPActivityExecutionStatus::Closed;
+			}
+		}
+
+		return CBPActivityExecutionStatus::Closed;
+	}
+
+	private function checkCondition(array $conditionProps): bool
+	{
+		$runtime = $this->workflow->getRuntime();
+		foreach ($conditionProps as $key => $value)
+		{
+			if ($runtime->includeActivityFile($key))
+			{
+				$instance = CBPActivityCondition::createInstance($key, $value);
+
+				return (bool)$instance->evaluate($this);
+			}
+		}
+
+		return true;
 	}
 
 	public function Cancel()

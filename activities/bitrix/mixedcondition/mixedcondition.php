@@ -40,7 +40,7 @@ class CBPMixedCondition extends CBPActivityCondition
 				'operator' => $cond['operator'],
 				'valueToCheck' => $value,
 				'fieldType' => $fieldTypeObject,
-				'value' => $property ? $rootActivity->parseValue($conditionValue, $property['Type']) : null,
+				'value' => $cond['object'] ? $rootActivity->parseValue($conditionValue, $property['Type'] ?? 'string') : null,
 				'fieldName' => $property['Name'] ?? $cond['field'],
 			];
 		}
@@ -67,14 +67,7 @@ class CBPMixedCondition extends CBPActivityCondition
 			$usages[] = Bizproc\Workflow\Template\SourceType::getObjectSourceType($cond['object'], $cond['field']);
 			if (is_string($cond['value']))
 			{
-				$parsed = $ownerActivity::parseExpression($cond['value']);
-				if ($parsed)
-				{
-					$usages[] = \Bitrix\Bizproc\Workflow\Template\SourceType::getObjectSourceType(
-						$parsed['object'],
-						$parsed['field']
-					);
-				}
+				$this->collectExpressionUsages($usages, $ownerActivity, $cond['value']);
 			}
 		}
 
@@ -285,7 +278,49 @@ class CBPMixedCondition extends CBPActivityCondition
 
 		$props = \CBPRuntime::getRuntime()->getActivityReturnProperties($activity);
 
-		return $props[$field] ?? null;
+		return self::resolveActivityProperty($props, $field);
+	}
+
+	private static function resolveActivityProperty(array $props, string $field): ?array
+	{
+		if (isset($props[$field]))
+		{
+			return $props[$field];
+		}
+
+		if (!str_contains($field, '.'))
+		{
+			return null;
+		}
+
+		[$parentField, $fieldName] = explode('.', $field, 2);
+		if (!isset($props[$parentField]))
+		{
+			return null;
+		}
+
+		$property = $props[$parentField];
+
+		if (($property['Type'] ?? '') === Bizproc\FieldType::DOCUMENT && $fieldName)
+		{
+			$documentType = CBPHelper::normalizeComplexDocumentId($property['Default']);
+			if ($documentType)
+			{
+				$documentService = CBPRuntime::getRuntime()->getDocumentService();
+				$documentFields = $documentService->getDocumentFields($documentType);
+
+				return $documentFields[$fieldName] ?? null;
+			}
+		}
+
+		if (($property['Type'] ?? '') === Bizproc\FieldType::JSON && isset($property['BaseType']))
+		{
+			$property['Type'] = $property['BaseType'];
+
+			return $property;
+		}
+
+		return null;
 	}
 
 	private static function findTemplateActivity(array $template, $id)
@@ -296,7 +331,7 @@ class CBPMixedCondition extends CBPActivityCondition
 			{
 				return $activity;
 			}
-			if (is_array($activity['Children']))
+			if (is_array($activity['Children'] ?? null))
 			{
 				$found = self::findTemplateActivity($activity['Children'], $id);
 				if ($found)

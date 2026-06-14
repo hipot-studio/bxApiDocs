@@ -68,7 +68,7 @@ class CBPCrmGetPaymentUrlActivity extends CBPActivity
 		}
 
 		$this->logUrl();
-		// Send Operations Analytics
+
 		\CCrmBizProcHelper::sendOperationsAnalytics(
 			Dictionary::EVENT_ENTITY_CREATE,
 			$this,

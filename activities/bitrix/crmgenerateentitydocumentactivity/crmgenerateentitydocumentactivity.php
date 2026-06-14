@@ -123,7 +123,7 @@ class CBPCrmGenerateEntityDocumentActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 		$template->setSourceType($providerClassName);
-		$document = \Bitrix\DocumentGenerator\Document::createByTemplate($template, $entityId);
+		$document = DocumentGenerator\Document::createByTemplate($template, $entityId);
 		if (!$document)
 		{
 			$this->WriteToTrackingService('Could not create document', 0, CBPTrackingType::Error);
@@ -165,7 +165,8 @@ class CBPCrmGenerateEntityDocumentActivity
 			$values['MY_COMPANY.BANK_DETAIL'] = $myCompanyBankDetailId;
 		}
 
-		\Bitrix\DocumentGenerator\CreationMethod::markDocumentAsCreatedByAutomation($document);
+		DocumentGenerator\CreationMethod::markDocumentAsCreatedByAutomation($document);
+
 		$targetUserId = CBPHelper::ExtractUsers($this->GetRootActivity()->{CBPDocument::PARAM_TAGRET_USER}, $this->GetDocumentId(), true);
 		if (!$targetUserId)
 		{
@@ -186,7 +187,7 @@ class CBPCrmGenerateEntityDocumentActivity
 
 		$this->DocumentId = $documentData['id'];
 		$this->DocumentNumber = $documentData['number'];
-		$this->DocumentDocx = \Bitrix\DocumentGenerator\Model\FileTable::getBFileId($document->FILE_ID);
+		$this->DocumentDocx = DocumentGenerator\Model\FileTable::getBFileId($document->FILE_ID);
 		if($this->EnablePublicUrl === 'Y')
 		{
 			$result = $document->enablePublicUrl();
@@ -196,7 +197,6 @@ class CBPCrmGenerateEntityDocumentActivity
 			}
 		}
 
-		// Send Operations Analytics
 		\CCrmBizProcHelper::sendOperationsAnalytics(
 			Dictionary::EVENT_ENTITY_CREATE,
 			$this,

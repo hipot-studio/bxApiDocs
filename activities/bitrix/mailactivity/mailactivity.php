@@ -6,11 +6,15 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Disk;
+
 use Bitrix\Mail;
+
 use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text\Encoding;
+
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 
 class CBPMailActivity extends CBPActivity
 {
@@ -153,6 +157,19 @@ class CBPMailActivity extends CBPActivity
 			$event->Send($eventName, $siteId, $arFields, 'N', '', $files);
 		}
 
+		if (
+			Loader::includeModule('crm')
+			&& method_exists(CCrmBizProcHelper::class, 'sendOperationsAnalytics')
+		)
+		{
+			$documentType = $this->getDocumentType();
+			\CCrmBizProcHelper::sendOperationsAnalytics(
+				Dictionary::EVENT_ENTITY_SOCIAL,
+				$this,
+				$documentType[2] ?? '',
+			);
+		}
+
 		return CBPActivityExecutionStatus::Closed;
 	}
 
@@ -257,7 +274,7 @@ class CBPMailActivity extends CBPActivity
 		$arCurrentValues = null,
 		$formName = '',
 		$popupWindow = null,
-		$siteId = ''
+		$siteId = '',
 	)
 	{
 		$dialog = new \Bitrix\Bizproc\Activity\PropertiesDialog(
@@ -270,14 +287,14 @@ class CBPMailActivity extends CBPActivity
 				'workflowVariables' => $arWorkflowVariables,
 				'currentValues' => $arCurrentValues,
 				'formName' => $formName,
-				'siteId' => $siteId
+				'siteId' => $siteId,
 			]
 		);
 
 		$dialog->setMap(self::getPropertiesMap($documentType));
 
 		$dialog->setRuntimeData([
-			'mailboxes' => (array)Main\Mail\Sender::prepareUserMailboxes()
+			'mailboxes' => (array)Main\Mail\Sender::prepareUserMailboxes(),
 		]);
 
 		return $dialog;
@@ -377,7 +394,7 @@ class CBPMailActivity extends CBPActivity
 		&$arWorkflowParameters,
 		&$arWorkflowVariables,
 		$arCurrentValues,
-		&$arErrors
+		&$arErrors,
 	)
 	{
 		$arErrors = [];
@@ -481,18 +498,26 @@ class CBPMailActivity extends CBPActivity
 		$properties['MailMessageEncoded'] = 0;
 		if ($properties['MailMessageType'] === 'html')
 		{
+			$mailText = $properties['MailText'];
 			$request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
 			$rawData = $request->getPostList()->getRaw('mail_text');
 			if ($rawData === null)
 			{
 				$rawData = (array)$request->getPostList()->getRaw('form_data');
-				$rawData = $rawData['mail_text'];
+				$rawData = $rawData['mail_text'] ?? '';
 			}
-			//TODO: fix for WAF, needs refactoring.
-			$rawData = \Bitrix\Bizproc\Automation\Helper::unConvertExpressions($rawData, $documentType);
 
-			$properties['MailText'] = self::encodeMailText($rawData);
-			$properties['MailMessageEncoded'] = 1;
+			if ($rawData)
+			{
+				//TODO: fix for WAF, needs refactoring.
+				$mailText = \Bitrix\Bizproc\Automation\Helper::unConvertExpressions($rawData, $documentType);
+			}
+
+			if (!empty($mailText))
+			{
+				$properties['MailText'] = self::encodeMailText($mailText);
+				$properties['MailMessageEncoded'] = 1;
+			}
 		}
 
 		$arCurrentActivity = &CBPWorkflowTemplateLoader::FindActivityByName($arWorkflowTemplate, $activityName);
@@ -728,7 +753,7 @@ class CBPMailActivity extends CBPActivity
 			{
 				$fromList[] = [
 					'name' => $address->getName(),
-					'email' => $address->getEmail()
+					'email' => $address->getEmail(),
 				];
 			}
 		}
@@ -742,7 +767,7 @@ class CBPMailActivity extends CBPActivity
 				{
 					$fromList[] = [
 						'name' => $address->getName(),
-						'email' => $address->getEmail()
+						'email' => $address->getEmail(),
 					];
 				}
 			}
@@ -822,8 +847,8 @@ class CBPMailActivity extends CBPActivity
 		$res = Main\Mail\Internal\SenderTable::getList(array(
 			'filter' => array(
 				'IS_CONFIRMED' => true,
-				'@EMAIL' => $emailsToCheck
-			)
+				'@EMAIL' => $emailsToCheck,
+			),
 		));
 
 		while ($item = $res->fetch())
@@ -891,14 +916,14 @@ class CBPMailActivity extends CBPActivity
 			'text',
 			function($objectName, $fieldName, $property, $result) use ($mailMessageType)
 			{
-				if (is_array($result))
-				{
-					$result = implode(', ', CBPHelper::makeArrayFlat($result));
-				}
+				$result = CBPHelper::stringify($result);
 
-				if ($mailMessageType === 'html' && isset($property['ValueContentType']))
+				if ($mailMessageType === 'html')
 				{
-					if ($property['ValueContentType'] === 'bb')
+					$contentType =
+						$property['ValueContentType'] ?? (($property['Type'] ?? '') === 'S:HTML' ? 'html' : 'text')
+					;
+					if ($contentType === 'bb')
 					{
 						$sanitizer = new \CBXSanitizer();
 						$sanitizer->SetLevel(\CBXSanitizer::SECURE_LEVEL_LOW);
@@ -908,7 +933,7 @@ class CBPMailActivity extends CBPActivity
 							\CBPHelper::convertBBtoText($result)
 						);
 					}
-					elseif ($property['ValueContentType'] !== 'html' && isset($property['Type']) && $property['Type'] !== 'S:HTML')
+					elseif ($contentType !== 'html')
 					{
 						$result = htmlspecialcharsbx($result);
 					}
@@ -919,6 +944,22 @@ class CBPMailActivity extends CBPActivity
 		);
 
 		return $mailText;
+	}
+
+	public function collectUsages()
+	{
+		$properties = $this->arProperties;
+		$message = $this->getRawProperty('MailText');
+		if ($this->MailMessageEncoded)
+		{
+			$message = self::decodeMailText($message);
+			$properties['MailText'] = $message;
+		}
+
+		$usages = [];
+		$this->collectUsagesRecursive($properties, $usages);
+
+		return $usages;
 	}
 
 	private static function encodeMailText($text)

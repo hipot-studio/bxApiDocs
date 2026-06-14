@@ -66,6 +66,12 @@ class CBPCrmSetOrderCanceled
 			return CBPActivityExecutionStatus::Closed;
 		}
 
+		if ($this->getRootActivity() instanceof \CBPNodeWorkflowActivity)
+		{
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		$errors = [];
 		CBPDocument::TerminateWorkflow(
 			$this->GetWorkflowInstanceId(),
 			$this->GetDocumentId(),
@@ -73,8 +79,6 @@ class CBPCrmSetOrderCanceled
 			GetMessage('CRM_SOCCL_TERMINATE')
 		);
 
-		//Stop running queue
-		throw new Exception("TerminateWorkflow");
 		return CBPActivityExecutionStatus::Closed;
 	}
 

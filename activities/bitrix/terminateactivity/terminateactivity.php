@@ -5,7 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
-class CBPTerminateActivity extends CBPActivity
+class CBPTerminateActivity extends CBPActivity implements IBPConfigurableActivity
 {
 	private const TERMINATE_CURRENT = 'current';
 	private const TERMINATE_ALL_BY_DOC_AND_TMP = 'allByDocumentAndTemplate';
@@ -211,29 +211,34 @@ class CBPTerminateActivity extends CBPActivity
 			'siteId' => $siteId
 		]);
 
-		$dialog->setMap([
+		$dialog->setMap(static::getPropertiesMap($documentType));
+
+		return $dialog;
+	}
+
+	public static function getPropertiesMap(array $documentType, array $context = []): array
+	{
+		return [
 			'StateTitle' => [
 				'Name' => GetMessage('BPTA1_STATE_TITLE_NAME'),
 				'FieldName' => 'state_title',
-				'Type' => 'string',
+				'Type' => \Bitrix\Bizproc\FieldType::STRING,
 				'Default' => GetMessage('BPTA1_STATE_TITLE_MSGVER_1'),
 			],
 			'TerminateType' => [
 				'Name' => GetMessage('BPTA1_TERMINATE'),
 				'FieldName' => 'terminate_type',
-				'Type' => 'select',
+				'Type' => \Bitrix\Bizproc\FieldType::SELECT,
 				'Options' => self::getTerminateTypeOptions(),
 				'Default' => self::TERMINATE_CURRENT,
 			],
 			'KillWorkflow' => [
 				'Name' => GetMessage('BPTA1_KILL_WF_NAME'),
 				'FieldName' => 'kill_workflow',
-				'Type' => 'bool',
+				'Type' => \Bitrix\Bizproc\FieldType::BOOL,
 				'Default' => 'Y',
 			],
-		]);
-
-		return $dialog;
+		];
 	}
 
 	public static function GetPropertiesDialogValues(

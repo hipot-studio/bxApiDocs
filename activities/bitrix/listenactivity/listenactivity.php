@@ -38,11 +38,18 @@ class CBPListenActivity extends CBPCompositeActivity implements IBPActivityEvent
 
 	public function execute()
 	{
+		$nodeStatus = $this->executeLikeNode();
+		if ($nodeStatus)
+		{
+			return $nodeStatus;
+		}
+
 		for ($i = 0, $s = count($this->arActivities); $i < $s; $i++)
 		{
+			/** @var CBPEventDrivenActivity $eventDriven */
 			$eventDriven = $this->arActivities[$i];
 
-			$activity = $eventDriven->GetEventActivity();
+			$activity = $eventDriven->getEventActivity();
 			if ($activity === null)
 			{
 				continue;
@@ -57,10 +64,63 @@ class CBPListenActivity extends CBPCompositeActivity implements IBPActivityEvent
 		return CBPActivityExecutionStatus::Executing;
 	}
 
+	private function executeLikeNode(): ?int
+	{
+		$rootNode = $this->getRootActivity();
+		if (!($rootNode instanceof CBPNodeWorkflowActivity))
+		{
+			return null;
+		}
+
+		$names = $rootNode->getOutputNames($this->getName());
+
+		foreach ($names as $activityName)
+		{
+			$activity = $this->workflow->getActivityByName($activityName);
+			if ($activity instanceof IBPEventDrivenActivity)
+			{
+				$activity->addStatusChangeHandler(self::ClosedEvent, $this);
+			}
+		}
+
+		return CBPActivityExecutionStatus::Closed;
+	}
+
 	public function onEvent(CBPActivity $sender, $arEventParameters = [])
 	{
 		$sender->removeStatusChangeHandler(self::ClosedEvent, $this);
+		$this->onNodeEvent($sender);
 		$this->workflow->closeActivity($this);
+	}
+
+	protected function onNodeEvent(CBPActivity $sender): void
+	{
+		$rootNode = $this->getRootActivity();
+		if (!($rootNode instanceof CBPNodeWorkflowActivity))
+		{
+			return;
+		}
+
+		$senderName = $sender->getName();
+		$names = $rootNode->getOutputNames($this->getName());
+
+		foreach ($names as $activityName)
+		{
+			if ($activityName === $senderName)
+			{
+				continue;
+			}
+
+			$activity = $this->workflow->getActivityByName($activityName);
+			if (
+				$activity instanceof IBPEventDrivenActivity
+				&& $activity->executionStatus === CBPActivityExecutionStatus::Executing
+			)
+			{
+				$sender->removeStatusChangeHandler(self::ClosedEvent, $this);
+				$this->workflow->cancelActivity($activity);
+			}
+		}
 	}
 
 	public function cancel()

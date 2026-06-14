@@ -56,15 +56,15 @@ class CBPCrmChangeStatusActivity extends CBPActivity
 				CBPTrackingType::Error
 			);
 
+			$errors = [];
 			CBPDocument::TerminateWorkflow(
 				$this->GetWorkflowInstanceId(),
 				$documentId,
-				$arErrorsTmp,
+				$errors,
 				GetMessage('CRM_CHANGE_STATUS_RECURSION_MSGVER_1')
 			);
 
-			//Stop running queue
-			throw new Exception('TerminateWorkflow');
+			return CBPActivityExecutionStatus::Closed;
 		}
 		// end check recursion
 
@@ -129,7 +129,7 @@ class CBPCrmChangeStatusActivity extends CBPActivity
 				[$fieldKey => $targetStatus],
 				$this->ModifiedBy
 			);
-			// Send Operations Analytics
+
 			$documentType = $this->getDocumentType();
 			\CCrmBizProcHelper::sendOperationsAnalytics(
 				Dictionary::EVENT_ENTITY_EDIT,
@@ -138,15 +138,20 @@ class CBPCrmChangeStatusActivity extends CBPActivity
 			);
 		}
 
+		if ($this->getRootActivity() instanceof \CBPNodeWorkflowActivity)
+		{
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		$errors = [];
 		CBPDocument::TerminateWorkflow(
 			$this->GetWorkflowInstanceId(),
 			$documentId,
-			$arErrorsTmp,
+			$errors,
 			GetMessage('CRM_CHANGE_STATUS_TERMINATED_MSGVER_1')
 		);
 
-		//Stop running queue
-		throw new Exception('TerminateWorkflow');
+		return CBPActivityExecutionStatus::Closed;
 	}
 
 	public static function ValidateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null)

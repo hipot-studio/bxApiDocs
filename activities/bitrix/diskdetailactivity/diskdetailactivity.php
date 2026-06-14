@@ -1,17 +1,23 @@
-<?
+<?php
+
 use Bitrix\Disk\Driver;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 
-if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
+{
+	die();
+}
 
-class CBPDiskDetailActivity
-	extends CBPActivity
+class CBPDiskDetailActivity extends CBPActivity
 {
 	public function __construct($name)
 	{
 		parent::__construct($name);
-		$this->arProperties = array(
-			"Title" => "",
-			"SourceId" => "",
+
+		$this->arProperties = [
+			'Title' => '',
+			'SourceId' => '',
 
 			//return properties
 			'ObjectId' => '',
@@ -21,44 +27,45 @@ class CBPDiskDetailActivity
 			'SizeFormatted' => '',
 			'DetailUrl' => '',
 			'DownloadUrl' => '',
-		);
+		];
 
 		//return properties mapping
-		$this->SetPropertiesTypes(array(
-			'ObjectId' => array(
+		$this->setPropertiesTypes([
+			'ObjectId' => [
 				'Type' => 'int',
 				'Multiple' => true,
-			),
-			'Type' => array(
+			],
+			'Type' => [
 				'Type' => 'string',
 				'Multiple' => true,
-			),
-			'Name' => array(
+			],
+			'Name' => [
 				'Type' => 'string',
 				'Multiple' => true,
-			),
-			'SizeBytes' => array(
+			],
+			'SizeBytes' => [
 				'Type' => 'int',
 				'Multiple' => true,
-			),
-			'SizeFormatted' => array(
+			],
+			'SizeFormatted' => [
 				'Type' => 'string',
 				'Multiple' => true,
-			),
-			'DetailUrl' => array(
+			],
+			'DetailUrl' => [
 				'Type' => 'string',
 				'Multiple' => true,
-			),
-			'DownloadUrl' => array(
+			],
+			'DownloadUrl' => [
 				'Type' => 'string',
 				'Multiple' => true,
-			),
-		));
+			],
+		]);
 	}
 
-	protected function ReInitialize()
+	protected function reInitialize()
 	{
-		parent::ReInitialize();
+		parent::reInitialize();
+
 		$this->ObjectId = '';
 		$this->Type = '';
 		$this->Name = '';
@@ -68,14 +75,16 @@ class CBPDiskDetailActivity
 		$this->DownloadUrl = '';
 	}
 
-	public function Execute()
+	public function execute()
 	{
-		if (!CModule::IncludeModule("disk"))
+		if (!Loader::includeModule('disk'))
+		{
 			return CBPActivityExecutionStatus::Closed;
+		}
 
-		$ids = $types = $names = $sizes = $formattedSizes = $detailUrls = $downloadUrls = array();
+		$ids = $types = $names = $sizes = $formattedSizes = $detailUrls = $downloadUrls = [];
 		$urlManager = Driver::getInstance()->getUrlManager();
-		$sourceIds = (array) $this->SourceId;
+		$sourceIds = (array)$this->SourceId;
 
 		foreach ($sourceIds as $sourceId)
 		{
@@ -83,7 +92,8 @@ class CBPDiskDetailActivity
 
 			if (!$sourceObject)
 			{
-				$this->WriteToTrackingService(GetMessage('BPDD_SOURCE_ID_ERROR'));
+				$this->writeToTrackingService(Loc::getMessage('BPDD_SOURCE_ID_ERROR'));
+
 				continue;
 			}
 
@@ -114,82 +124,115 @@ class CBPDiskDetailActivity
 		return CBPActivityExecutionStatus::Closed;
 	}
 
-	public static function ValidateProperties($arTestProperties = array(), CBPWorkflowTemplateUser $user = null)
+	public static function validateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null)
 	{
-		$arErrors = array();
+		$arErrors = [];
 		if ($user && !$user->isAdmin())
 		{
-			$arErrors[] = array(
-				"code"      => "AccessDenied",
-				"parameter" => "Admin",
-				"message"   => GetMessage("BPDD_ACCESS_DENIED")
-			);
+			$arErrors[] = [
+				'code' => 'AccessDenied',
+				'parameter' => 'Admin',
+				'message' => Loc::getMessage('BPDD_ACCESS_DENIED'),
+			];
 		}
 
 		if (empty($arTestProperties['SourceId']))
-			$arErrors[] = array("code" => "NotExist", "parameter" => "SourceId", "message" => GetMessage("BPDD_EMPTY_SOURCE_ID"));
+		{
+			$arErrors[] = [
+				'code' => 'NotExist',
+				'parameter' => 'SourceId',
+				'message' => Loc::getMessage('BPDD_EMPTY_SOURCE_ID'),
+			];
+		}
 
-		return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));
+		return array_merge($arErrors, parent::validateProperties($arTestProperties, $user));
 	}
 
-	public static function GetPropertiesDialog($documentType, $activityName, $arWorkflowTemplate, $arWorkflowParameters, $arWorkflowVariables, $currentValues = null, $formName = "")
+	public static function getPropertiesDialog(
+		$documentType,
+		$activityName,
+		$arWorkflowTemplate,
+		$arWorkflowParameters,
+		$arWorkflowVariables,
+		$currentValues = null,
+		$formName = ''
+	)
 	{
-		if (!CModule::IncludeModule("disk"))
+		if (!Loader::includeModule('disk'))
+		{
 			return '';
+		}
 
-		$runtime = CBPRuntime::GetRuntime();
+		$runtime = CBPRuntime::getRuntime();
 
-		$arMap = array(
-			"SourceId" => 'source_id',
-		);
+		$arMap = [
+			'SourceId' => 'source_id',
+		];
 
 		if (!is_array($currentValues))
 		{
-			$arCurrentActivity = &CBPWorkflowTemplateLoader::FindActivityByName($arWorkflowTemplate, $activityName);
+			$arCurrentActivity = &CBPWorkflowTemplateLoader::findActivityByName($arWorkflowTemplate, $activityName);
 			foreach ($arMap as $k => $v)
 			{
-				$currentValues[$arMap[$k]] = isset($arCurrentActivity["Properties"][$k]) ? $arCurrentActivity["Properties"][$k] : '';
+				$currentValues[$arMap[$k]] = $arCurrentActivity['Properties'][$k] ?? '';
 			}
 		}
 
 		if (
 			empty($currentValues['source_id'])
 			&& isset($currentValues['source_id_x'])
-			&& CBPDocument::IsExpression($currentValues['source_id_x'])
+			&& CBPDocument::isExpression($currentValues['source_id_x'])
 		)
+		{
 			$currentValues['source_id'] = $currentValues['source_id_x'];
+		}
 
-		return $runtime->ExecuteResourceFile(
+		return $runtime->executeResourceFile(
 			__FILE__,
-			"properties_dialog.php",
-			array(
-				"arCurrentValues" => $currentValues,
-				"formName" => $formName,
-			)
+			'properties_dialog.php',
+			[
+				'arCurrentValues' => $currentValues,
+				'formName' => $formName,
+			]
 		);
 	}
 
-	public static function GetPropertiesDialogValues($documentType, $activityName, &$arWorkflowTemplate, &$arWorkflowParameters, &$arWorkflowVariables, $currentValues, &$arErrors)
+	public static function GetPropertiesDialogValues(
+		$documentType,
+		$activityName,
+		&$arWorkflowTemplate,
+		&$arWorkflowParameters,
+		&$arWorkflowVariables,
+		$currentValues,
+		&$arErrors
+	)
 	{
-		$arErrors = array();
+		$arErrors = [];
 
-		$properties = array('SourceId' => $currentValues['source_id']);
+		$properties = ['SourceId' => $currentValues['source_id']];
 
 		if (
 			empty($properties['SourceId'])
 			&& isset($currentValues['source_id_x'])
-			&& CBPDocument::IsExpression($currentValues['source_id_x'])
+			&& CBPDocument::isExpression($currentValues['source_id_x'])
 		)
+		{
 			$properties['SourceId'] = $currentValues['source_id_x'];
+		}
 
-		$arErrors = self::ValidateProperties($properties, new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser));
+		$arErrors = self::validateProperties(
+			$properties,
+			new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser)
+		);
+
 		if (count($arErrors) > 0)
+		{
 			return false;
+		}
 
-		$arCurrentActivity = &CBPWorkflowTemplateLoader::FindActivityByName($arWorkflowTemplate, $activityName);
-		$arCurrentActivity["Properties"] = $properties;
+		$arCurrentActivity = &CBPWorkflowTemplateLoader::findActivityByName($arWorkflowTemplate, $activityName);
+		$arCurrentActivity['Properties'] = $properties;
 
 		return true;
 	}
 }
-?>

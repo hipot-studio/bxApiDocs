@@ -1,15 +1,18 @@
 <?php
 
 use Bitrix\Tasks\Integration\Bizproc\Document\Task;
-use Bitrix\Tasks\Internals\Task\Result\ResultManager;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Integration\Bizproc\Service\ResultService;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
 }
 
+/** @property-read mixed Task */
 class CBPTasksGetDocumentActivity extends CBPActivity
 {
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -18,6 +21,7 @@ class CBPTasksGetDocumentActivity extends CBPActivity
 			'TaskId' => null,
 			'Fields' => null,
 			'FieldsMap' => null,
+			'Task' => null,
 		];
 	}
 
@@ -68,6 +72,7 @@ class CBPTasksGetDocumentActivity extends CBPActivity
 		$taskId = (int)$taskId;
 		$map = $this->FieldsMap;
 		$select = self::getSelectFieldsFromMap($map);
+		$select[] = 'RESPONSIBLE_ID';
 		$task = \CTasks::GetByID($taskId, false, ['select' => array_unique($select)]);
 		$fields = $task ? $task->fetch() : null;
 
@@ -84,24 +89,12 @@ class CBPTasksGetDocumentActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
+		$map['Task'] = ['Type' => 'document'];
 		$this->SetPropertiesTypes($map);
 
-		if (CModule::IncludeModule('forum'))
-		{
-			if (isset($map['COMMENT_RESULT']))
-			{
-				$fields['COMMENT_RESULT'] =
-					(new ResultManager(0))
-						->getTaskResults($taskId)
-				;
-			}
-			if (isset($map['COMMENT_RESULT_LAST']))
-			{
-				$fields['COMMENT_RESULT_LAST'] = ResultManager::getLastResult(
-					$taskId
-				);
-			}
-		}
+		$resultService = Container::getInstance()->get(ResultService::class);
+
+		$fields = $resultService->enrichFieldsWithResult($fields, $taskId, $map);
 
 		if (isset($map['HALF_TIME_BEFORE_EXPIRE_MESSAGE']) || isset($map['HIMSELF_ADMIN_TASK_NOT_TAKEN_MESSAGE']))
 		{
@@ -119,6 +112,8 @@ class CBPTasksGetDocumentActivity extends CBPActivity
 		{
 			$this->writeDebugInfo($this->getDebugInfo($fields, array_merge($logMap, $map)));
 		}
+
+		$this->Task = Task::resolveDocumentId($taskId);
 
 		return CBPActivityExecutionStatus::Closed;
 	}
@@ -295,7 +290,7 @@ class CBPTasksGetDocumentActivity extends CBPActivity
 		}
 		if (isset($map['IS_EXPIRED']))
 		{
-			$select += ['DEADLINE', 'REAL_STATUS', 'CLOSED_DATE'];
+			$select = array_merge($select, ['DEADLINE', 'REAL_STATUS', 'CLOSED_DATE']);
 		}
 
 		return $select;
@@ -310,6 +305,11 @@ class CBPTasksGetDocumentActivity extends CBPActivity
 
 	protected static function getPropertiesMap(array $documentType, array $context = []): array
 	{
+		if (!CModule::IncludeModule("tasks"))
+		{
+			return [];
+		}
+
 		return [
 			'TaskId' => [
 				'Name' => GetMessage('TASKS_GLDA_ELEMENT_ID'),

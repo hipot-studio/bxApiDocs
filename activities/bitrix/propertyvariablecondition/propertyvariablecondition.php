@@ -87,16 +87,9 @@ class CBPPropertyVariableCondition extends CBPActivityCondition
 				$usages[] = [\Bitrix\Bizproc\Workflow\Template\SourceType::Variable, $cond[0]];
 			}
 
-			if (is_string($cond[2]))
+			if (is_string($cond[2] ?? null))
 			{
-				$parsed = $ownerActivity::parseExpression($cond[2]);
-				if ($parsed)
-				{
-					$usages[] = \Bitrix\Bizproc\Workflow\Template\SourceType::getObjectSourceType(
-						$parsed['object'],
-						$parsed['field']
-					);
-				}
+				$this->collectExpressionUsages($usages, $ownerActivity, $cond[2]);
 			}
 		}
 

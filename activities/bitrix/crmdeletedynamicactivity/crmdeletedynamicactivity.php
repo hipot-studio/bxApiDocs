@@ -60,6 +60,7 @@ class CBPCrmDeleteDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 		$errorCollection = parent::internalExecute();
 
 		$documentId = CCrmBizProcHelper::ResolveDocumentId($this->EntityTypeId, $this->EntityId);
+		$documentType = $this->getDocumentType();
 
 		$deletionResult = static::getDocumentService()->DeleteDocument($documentId);
 		if (is_bool($deletionResult) && !$deletionResult)
@@ -71,11 +72,16 @@ class CBPCrmDeleteDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 			$errorCollection->add($deletionResult->getErrors());
 		}
 
-		[$currentEntityTypeId, $currentEntityId] = CCrmBizProcHelper::resolveEntityId($this->GetDocumentId());
-		if ($currentEntityTypeId === $this->EntityTypeId && $currentEntityId === $this->EntityId)
+		$isSuccess = (is_bool($deletionResult) && !$deletionResult)
+			|| ($deletionResult instanceof \Bitrix\Main\Result && $deletionResult->isSuccess());
+
+		if ($isSuccess)
 		{
-			$this->workflow->Terminate();
-			throw new Exception('TerminateActivity');
+			\CCrmBizProcHelper::sendOperationsAnalytics(
+				Crm\Integration\Analytics\Dictionary::EVENT_ENTITY_DELETE,
+				$this,
+				$documentType[2] ?? '',
+			);
 		}
 
 		return $errorCollection;

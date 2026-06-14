@@ -16,7 +16,7 @@ class CBPTasksUpdateTaskActivity extends CBPSetFieldActivity
 	{
 		if (!CModule::IncludeModule('tasks'))
 		{
-			CBPActivityExecutionStatus::Closed;
+			return CBPActivityExecutionStatus::Closed;
 		}
 
 		$fieldValue = $this->FieldValue;
@@ -35,6 +35,7 @@ class CBPTasksUpdateTaskActivity extends CBPSetFieldActivity
 		if (
 			Tasks\Integration\Bizproc\Document\Task::isProjectTask($documentType)
 			|| Tasks\Integration\Bizproc\Document\Task::isScrumProjectTask($documentType)
+			|| Tasks\Integration\Bizproc\Document\Task::isBizprocTask($documentType)
 		)
 		{
 			$canUpdate = true;

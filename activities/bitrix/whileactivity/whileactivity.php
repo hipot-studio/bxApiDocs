@@ -7,8 +7,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventListener
 {
-	const CYCLE_LIMIT = 1000;
-	private $cycleCounter = 0;
+	private const CYCLE_LIMIT = 1000;
+	private int $cycleCounter = 0;
+	private int $rootCycleCounter = 0;
 
 	public function __construct($name)
 	{
@@ -51,10 +52,7 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 				}
 			}
 
-			if ($this->arProperties['Condition'] == null)
-			{
-				throw new Exception(GetMessage("BPWA_NO_CONDITION"));
-			}
+			$this->arProperties['Title'] = $arParams['Title'] ?? '';
 		}
 	}
 
@@ -71,9 +69,17 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 		}
 	}
 
-	public function Execute()
+	public function execute()
 	{
-		if ($this->TryNextIteration())
+		if (!$this->hasIterations())
+		{
+			$this->outputPortId = 1;
+			$this->trackError(GetMessage('BPWA_ERROR_EMPTY_BODY'));
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		if ($this->tryNextIteration())
 		{
 			return CBPActivityExecutionStatus::Executing;
 		}
@@ -81,27 +87,24 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 		return CBPActivityExecutionStatus::Closed;
 	}
 
-	public function Cancel()
+	public function cancel()
 	{
-		if (count($this->arActivities) == 0)
+		$activity = $this->arActivities[0] ?? null;
+		if ($activity && $activity->executionStatus === CBPActivityExecutionStatus::Executing)
 		{
-			return CBPActivityExecutionStatus::Closed;
+			$this->workflow->cancelActivity($activity);
+
+			return CBPActivityExecutionStatus::Canceling;
 		}
 
-		$activity = $this->arActivities[0];
-		if ($activity->executionStatus == CBPActivityExecutionStatus::Executing)
-		{
-			$this->workflow->CancelActivity($activity);
-		}
-
-		return CBPActivityExecutionStatus::Canceling;
+		return CBPActivityExecutionStatus::Closed;
 	}
 
-	public function OnEvent(CBPActivity $sender, $arEventParameters = [])
+	public function onEvent(CBPActivity $sender, $arEventParameters = [])
 	{
 		$sender->RemoveStatusChangeHandler(self::ClosedEvent, $this);
 
-		if (!$this->TryNextIteration())
+		if (!$this->tryNextIteration())
 		{
 			$this->workflow->CloseActivity($this);
 		}
@@ -112,17 +115,24 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 		$this->cycleCounter = 0;
 	}
 
-	private function TryNextIteration()
+	private function tryNextIteration()
 	{
-		$this->cycleCounter++;
-		if ($this->cycleCounter > self::CYCLE_LIMIT)
-		{
-			throw new Exception(GetMessage("BPWA_CYCLE_LIMIT"));
-		}
+		$this->outputPortId = 1;
+
 		if (
-			$this->executionStatus == CBPActivityExecutionStatus::Canceling
-			|| $this->executionStatus == CBPActivityExecutionStatus::Faulting
+			$this->executionStatus === CBPActivityExecutionStatus::Canceling
+			|| $this->executionStatus === CBPActivityExecutionStatus::Faulting
 		)
+		{
+			return false;
+		}
+
+		if (!($this->Condition instanceof CBPActivityCondition))
+		{
+			return false;
+		}
+
+		if (!$this->checkIterationsLimit())
 		{
 			return false;
 		}
@@ -132,6 +142,8 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 			return false;
 		}
 
+		$this->incrementRootIterationsCounter();
+
 		if (count($this->arActivities) > 0)
 		{
 			/** @var CBPActivity $activity */
@@ -139,13 +151,27 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 			$activity->ReInitialize();
 			$activity->AddStatusChangeHandler(self::ClosedEvent, $this);
 			$this->workflow->ExecuteActivity($activity);
+
+			return true;
 		}
 
-		return true;
+		$this->outputPortId = 0;
+
+		return false;
 	}
 
-	public static function GetPropertiesDialog($documentType, $activityName, $arWorkflowTemplate, $arWorkflowParameters,
-		$arWorkflowVariables, $arCurrentValues = null, $formName = "")
+	public static function GetPropertiesDialog(
+		$documentType,
+		$activityName,
+		$arWorkflowTemplate,
+		$arWorkflowParameters,
+		$arWorkflowVariables,
+		$arCurrentValues = null,
+		$formName = "",
+		$popupWindow = null,
+		$currentSiteId = null,
+		$arWorkflowConstants = null,
+	)
 	{
 		if (!is_array($arWorkflowParameters))
 		{
@@ -199,6 +225,9 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 					(($defaultCondition == $activityKey) ? $defaultConditionValue : null),
 					$arCurrentValues,
 					$formName,
+					$popupWindow,
+					$currentSiteId,
+					$arWorkflowConstants,
 				]
 			);
 			if ($v == null)
@@ -267,8 +296,16 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 		return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));
 	}
 
-	public static function GetPropertiesDialogValues($documentType, $activityName, &$arWorkflowTemplate,
-		&$arWorkflowParameters, &$arWorkflowVariables, $arCurrentValues, &$arErrors)
+	public static function GetPropertiesDialogValues(
+		$documentType,
+		$activityName,
+		&$arWorkflowTemplate,
+		&$arWorkflowParameters,
+		&$arWorkflowVariables,
+		$arCurrentValues,
+		&$arErrors,
+		$arWorkflowConstants = null
+	)
 	{
 		$runtime = CBPRuntime::GetRuntime();
 		$arActivities = $runtime->SearchActivitiesByType("condition", $documentType);
@@ -292,6 +329,7 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 				$arWorkflowVariables,
 				$arCurrentValues,
 				&$arErrors,
+				$arWorkflowConstants,
 			]
 		);
 
@@ -316,5 +354,78 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 			$usages = array_merge($usages, $this->Condition->collectUsages($this));
 		}
 		return $usages;
+	}
+
+	/**
+	 * @return void
+	 * @throws Exception
+	 */
+	private function checkIterationsLimit(): bool
+	{
+		// local counter
+		$this->cycleCounter++;
+		if ($this->cycleCounter > self::CYCLE_LIMIT)
+		{
+			throw new \CBPInvalidOperationException(GetMessage("BPWA_CYCLE_LIMIT"));
+		}
+
+		// root counter
+		static $rootLimit;
+		$rootLimit ??= \Bitrix\Main\Config\Option::get('bizproc', 'limit_while_iterations', 1000);
+
+		if ($rootLimit > 0)
+		{
+			$rootWhile = $this->getRootWhileActivity();
+			if ($rootWhile->rootCycleCounter > $rootLimit)
+			{
+				$msgCode = ($rootWhile === $this) ? 'BPWA_ROOT_CYCLE_LIMIT' : 'BPWA_PARENT_ROOT_CYCLE_LIMIT';
+				$this->trackError(GetMessage($msgCode, ['#LIMIT#' => $rootLimit]));
+
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private function incrementRootIterationsCounter(): void
+	{
+		$rootWhile = $this->getRootWhileActivity();
+		$rootWhile->rootCycleCounter++;
+	}
+
+	private function getRootWhileActivity(): \CBPWhileActivity
+	{
+		$rootWhile = $this;
+		$parent = $this;
+
+		while ($parent->parent !== null)
+		{
+			$parent = $parent->parent;
+			if ($parent instanceof \CBPWhileActivity)
+			{
+				$rootWhile = $parent;
+			}
+		}
+
+		return $rootWhile;
+	}
+
+	private function hasIterations(): bool
+	{
+		if (!empty($this->arActivities))
+		{
+			return true;
+		}
+
+		$rootActivity = $this->getRootActivity();
+		if ($rootActivity instanceof CBPNodeWorkflowActivity)
+		{
+			$names = $rootActivity->getOutputNames($this->getName());
+
+			return !empty($names);
+		}
+
+		return false;
 	}
 }

@@ -1,8 +1,18 @@
-<?
+<?php
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)die();
 
 use Bitrix\Tasks;
 
+use Bitrix\Main\Loader;
+
+use Bitrix\Crm\Integration\Analytics\Dictionary;
+
+/**
+ * @property-read mixed Title
+ * @property-read mixed Responsible
+ * @property-read mixed ModifiedBy
+ */
 class CBPTasksChangeResponsibleActivity extends CBPActivity
 {
 	public function __construct($name)
@@ -22,13 +32,24 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		if (!$this->canChangeResponsible())
+		$documentId = $this->getDocumentId();
+
+		if ($documentId[0] !== 'tasks')
 		{
-			$this->WriteToTrackingService(GetMessage('TASKS_CHANGE_RESPONSIBLE_NO_PERMISSIONS_MSGVER_1'), 0, CBPTrackingType::Error);
+			$this->trackError(GetMessage('TASKS_CHANGE_RESPONSIBLE_ERROR_NO_TASK'));
+
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentId = $this->GetDocumentId();
+		if (!$this->canChangeResponsible($documentId))
+		{
+			$this->WriteToTrackingService(GetMessage('TASKS_CHANGE_RESPONSIBLE_NO_PERMISSIONS_MSGVER_1'), 0, CBPTrackingType::Error);
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		$documentType = $this->getDocumentType();
+
 		$runtime = CBPRuntime::GetRuntime();
 		/** @var CBPDocumentService $ds */
 		$ds = $runtime->GetService('DocumentService');
@@ -63,6 +84,18 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 					[$responsibleFieldName => $documentResponsible],
 					$this->ModifiedBy
 				);
+
+				if (
+					Loader::includeModule('crm')
+					&& method_exists(CCrmBizProcHelper::class, 'sendOperationsAnalytics')
+				)
+				{
+					\CCrmBizProcHelper::sendOperationsAnalytics(
+						Dictionary::EVENT_ENTITY_EDIT,
+						$this,
+						$documentType[2] ?? '',
+					);
+				}
 			}
 		}
 
@@ -123,7 +156,7 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 
 		$properties = array(
 			'Responsible' => CBPHelper::UsersStringToArray($arCurrentValues["responsible"], $documentType, $errors),
-			'ModifiedBy' => CBPHelper::UsersStringToArray($arCurrentValues["modified_by"], $documentType, $errors)
+			'ModifiedBy' => CBPHelper::UsersStringToArray($arCurrentValues["modified_by"], $documentType, $errors),
 		);
 
 		if (count($errors) > 0)
@@ -143,15 +176,15 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 		return true;
 	}
 
-	private function canChangeResponsible()
+	private function canChangeResponsible(array $documentId): bool
 	{
-		$documentType = $this->GetDocumentType()[2];
-		$taskId = $this->GetDocumentId()[2];
-
+		$taskId = $documentId[2];
+		$documentType = $this->getDocumentType()[2];
 		$canChange = false;
 
 		if (
-			Tasks\Integration\Bizproc\Document\Task::isProjectTask($documentType)
+			$documentType === Tasks\Integration\Bizproc\Document\Task::getDocumentType($taskId) // returned from CBPTasksGetDocumentActivity
+			|| Tasks\Integration\Bizproc\Document\Task::isProjectTask($documentType)
 			|| Tasks\Integration\Bizproc\Document\Task::isScrumProjectTask($documentType)
 		)
 		{

@@ -36,7 +36,10 @@ class CBPSetStateTitleActivity
 				$this->GetWorkflowInstanceId(),
 				$stateTitle
 			);
-			$rootActivity->SetCustomStatusMode();
+			if (is_callable([$rootActivity, 'setCustomStatusMode']))
+			{
+				$rootActivity->setCustomStatusMode();
+			}
 		}
 
 		return CBPActivityExecutionStatus::Closed;

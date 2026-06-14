@@ -272,8 +272,6 @@ class CBPCrmSendEmailActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		Crm\Activity\Provider\Email::compressActivity($activityFields);
-
 		$id = CCrmActivity::Add($activityFields, false, false, $addOptions);
 		if (!$id)
 		{
@@ -462,7 +460,6 @@ class CBPCrmSendEmailActivity extends CBPActivity
 			]
 		);
 
-		// Send Operations Analytics
 		$documentType = $this->getDocumentType();
 		\CCrmBizProcHelper::sendOperationsAnalytics(
 			Dictionary::EVENT_ENTITY_SOCIAL,
@@ -771,27 +768,38 @@ class CBPCrmSendEmailActivity extends CBPActivity
 
 		if ($properties['MessageTextType'] === self::TEXT_TYPE_HTML)
 		{
+			$messageText = $properties['MessageText'];
 			$request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
 			$rawData = $request->getPostList()->getRaw('message_text');
 			if ($rawData === null)
 			{
 				$rawData = (array)$request->getPostList()->getRaw('form_data');
-				$rawData = $rawData['message_text'];
+				$rawData = $rawData['message_text'] ?? null;
 			}
 
-			//TODO: fix for WAF, needs refactoring.
-			$rawData = \Bitrix\Crm\Automation\Helper::unConvertExpressions($rawData, $documentType);
+			if ($rawData)
+			{
+				//TODO: fix for WAF, needs refactoring.
+				$messageText = \Bitrix\Crm\Automation\Helper::unConvertExpressions($rawData, $documentType);
+			}
 
-			$properties['MessageText'] = self::encodeMessageText($rawData);
-			$properties['MessageTextEncoded'] = 1;
+			if (!empty($messageText))
+			{
+				$properties['MessageText'] = self::encodeMessageText($messageText);
+				$properties['MessageTextEncoded'] = 1;
+			}
 		}
 
-		if (count($errors) > 0)
+		if ($errors)
+		{
 			return false;
+		}
 
 		$errors = self::ValidateProperties($properties, new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser));
-		if (count($errors) > 0)
+		if ($errors)
+		{
 			return false;
+		}
 
 		$arCurrentActivity = &CBPWorkflowTemplateLoader::FindActivityByName($arWorkflowTemplate, $activityName);
 		$arCurrentActivity["Properties"] = $properties;
@@ -823,20 +831,20 @@ class CBPCrmSendEmailActivity extends CBPActivity
 			'text',
 			function($objectName, $fieldName, $property, $result) use ($messageType)
 			{
-				if (is_array($result))
-				{
-					$result = implode(', ', CBPHelper::makeArrayFlat($result));
-				}
+				$result = CBPHelper::stringify($result);
 
-				if ($messageType === 'html' && isset($property['ValueContentType']))
+				if ($messageType === 'html')
 				{
-					if ($property['ValueContentType'] === 'bb')
+					$contentType =
+						$property['ValueContentType'] ?? (($property['Type'] ?? '') === 'S:HTML' ? 'html' : 'text')
+					;
+					if ($contentType === 'bb')
 					{
 						$result = Crm\Format\TextHelper::sanitizeHtml(
 							Crm\Format\TextHelper::convertBbCodeToHtml($result)
 						);
 					}
-					elseif ($property['ValueContentType'] !== 'html' && isset($property['Type']) && $property['Type'] !== 'S:HTML')
+					elseif ($contentType !== 'html')
 					{
 						$result = htmlspecialcharsbx($result);
 					}
@@ -845,6 +853,22 @@ class CBPCrmSendEmailActivity extends CBPActivity
 				return $result;
 			}
 		);
+	}
+
+	public function collectUsages()
+	{
+		$properties = $this->arProperties;
+		$message = $this->getRawProperty('MessageText');
+		if ($this->MessageTextEncoded)
+		{
+			$message = self::decodeMessageText($message);
+			$properties['MessageText'] = $message;
+		}
+
+		$usages = [];
+		$this->collectUsagesRecursive($properties, $usages);
+
+		return $usages;
 	}
 
 	private static function encodeMessageText($text)

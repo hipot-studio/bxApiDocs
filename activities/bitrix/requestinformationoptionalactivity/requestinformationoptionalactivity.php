@@ -49,15 +49,16 @@ class CBPRequestInformationOptionalActivity extends CBPRequestInformationActivit
 
 		$taskParameters['TaskButtonCancelMessage'] =
 			$this->IsPropertyExists('TaskButtonCancelMessage')
-				? $this->TaskButtonCancelMessage
-				: GetMessage("BPRIOA_ACT_BUTTON2")
+				? CBPHelper::stringify($this->TaskButtonCancelMessage)
+				: Loc::getMessage('BPRIOA_ACT_BUTTON2')
 		;
 		$taskParameters['SaveVariables'] = CBPHelper::getBool($this->SaveVariables);
 
-		if ($taskParameters['TaskButtonCancelMessage'] == '')
+		if (CBPHelper::isEmptyValue($taskParameters['TaskButtonCancelMessage']))
 		{
-			$taskParameters['TaskButtonCancelMessage'] = GetMessage("BPRIOA_ACT_BUTTON2");
+			$taskParameters['TaskButtonCancelMessage'] = Loc::getMessage('BPRIOA_ACT_BUTTON2');
 		}
+
 		return $taskParameters;
 	}
 
@@ -86,6 +87,7 @@ class CBPRequestInformationOptionalActivity extends CBPRequestInformationActivit
 
 	protected function closeActivity()
 	{
+		$this->outputPortId = 1;
 		if (count($this->arActivities) <= 1)
 		{
 			$this->workflow->CloseActivity($this);
@@ -143,6 +145,7 @@ class CBPRequestInformationOptionalActivity extends CBPRequestInformationActivit
 
 	protected function executeOnOk()
 	{
+		$this->outputPortId = 0;
 		if (count($this->arActivities) <= 0)
 		{
 			$this->workflow->CloseActivity($this);
@@ -264,14 +267,14 @@ class CBPRequestInformationOptionalActivity extends CBPRequestInformationActivit
 				'Default' => 'N'
 			],
 			'CommentRequired' => [
-				'Name' => GetMessage('BPAR_COMMENT_REQUIRED'),
+				'Name' => Loc::getMessage('BPAR_COMMENT_REQUIRED_1'),
 				'FieldName' => 'comment_required',
 				'Type' => Bizproc\FieldType::SELECT,
 				'Options' => [
-					'N' => GetMessage('BPSFA_PD_NO'),
-					'Y' => GetMessage('BPSFA_YES'),
-					'YA' => GetMessage('BPSFA_COMMENT_REQUIRED_YA'),
-					'YR' => GetMessage("BPSFA_COMMENT_REQUIRED_YR"),
+					'N' => Loc::getMessage('BPSFA_PD_NO'),
+					'Y' => Loc::getMessage('BPSFA_YES'),
+					'YA' => Loc::getMessage('BPSFA_COMMENT_REQUIRED_YA_1'),
+					'YR' => Loc::getMessage('BPSFA_COMMENT_REQUIRED_YR_1'),
 				],
 				'Default' => 'N'
 			],
@@ -311,10 +314,11 @@ class CBPRequestInformationOptionalActivity extends CBPRequestInformationActivit
 		$commentRequiredValue = $arTask['PARAMETERS']['CommentRequired'] ?? '';
 
 		$commentRequired = false;
+		$cancel = $eventParameters['CANCEL'] ?? false;
 		if (
 			$commentRequiredValue === 'Y'
-			|| ($commentRequiredValue === 'YA' && !$eventParameters['CANCEL'])
-			|| ($commentRequiredValue === 'YR' && $eventParameters['CANCEL'])
+			|| ($commentRequiredValue === 'YA' && !$cancel)
+			|| ($commentRequiredValue === 'YR' && $cancel)
 		)
 		{
 			$commentRequired = true;

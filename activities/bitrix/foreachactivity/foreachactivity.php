@@ -20,12 +20,17 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 
 			//return
 			'Key' => null,
-			'Value' => null
+			'Value' => null,
 		];
 	}
 
-	public function Execute()
+	public function executeWithPayload(\Bitrix\Bizproc\Internal\Entity\Workflow\ExecutionPayload $payload)
 	{
+		if (($this->getRootActivity() instanceof CBPNodeWorkflowActivity) && $payload->getInputPort() === 0)
+		{
+			$this->clearResults();
+		}
+
 		if ($this->TryNextIteration())
 		{
 			return CBPActivityExecutionStatus::Executing;
@@ -34,23 +39,20 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 		return CBPActivityExecutionStatus::Closed;
 	}
 
-	public function Cancel()
+	public function cancel()
 	{
-		if (count($this->arActivities) == 0)
+		$activity = $this->arActivities[0] ?? null;
+		if ($activity && $activity->executionStatus === CBPActivityExecutionStatus::Executing)
 		{
-			return CBPActivityExecutionStatus::Closed;
+			$this->workflow->cancelActivity($activity);
+
+			return CBPActivityExecutionStatus::Canceling;
 		}
 
-		$activity = $this->arActivities[0];
-		if ($activity->executionStatus == CBPActivityExecutionStatus::Executing)
-		{
-			$this->workflow->CancelActivity($activity);
-		}
-
-		return CBPActivityExecutionStatus::Canceling;
+		return CBPActivityExecutionStatus::Closed;
 	}
 
-	public function OnEvent(CBPActivity $sender, $arEventParameters = array())
+	public function onEvent(CBPActivity $sender, $arEventParameters = [])
 	{
 		$sender->RemoveStatusChangeHandler(self::ClosedEvent, $this);
 
@@ -62,9 +64,11 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 
 	private function TryNextIteration()
 	{
+		$this->outputPortId = 1;
+
 		if (
-			($this->executionStatus == CBPActivityExecutionStatus::Canceling)
-			|| ($this->executionStatus == CBPActivityExecutionStatus::Faulting)
+			($this->executionStatus === CBPActivityExecutionStatus::Canceling)
+			|| ($this->executionStatus === CBPActivityExecutionStatus::Faulting)
 		)
 		{
 			return false;
@@ -103,7 +107,7 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 			return false;
 		}
 
-		$this->Key = array_shift($this->valuesKeys);;
+		$this->Key = array_shift($this->valuesKeys);
 		$this->Value = array_shift($this->values);
 
 		if (count($this->arActivities) > 0)
@@ -113,14 +117,27 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 			$activity->ReInitialize();
 			$activity->AddStatusChangeHandler(self::ClosedEvent, $this);
 			$this->workflow->ExecuteActivity($activity);
+
+			return true;
 		}
 
-		return true;
+		$this->outputPortId = 0;
+
+		return false;
 	}
 
-	protected function ReInitialize()
+	protected function reInitialize()
 	{
-		parent::ReInitialize();
+		parent::reInitialize();
+
+		if (!($this->getRootActivity() instanceof CBPNodeWorkflowActivity))
+		{
+			$this->clearResults();
+		}
+	}
+
+	protected function clearResults(): void
+	{
 		$this->values = null;
 		$this->Key = null;
 		$this->Value = null;
@@ -172,7 +189,7 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 
 		$dialog->setRuntimeData([
 			"arCurrentValues" => $arCurrentValues,
-			'workflowVariables' => $arWorkflowVariables
+			'workflowVariables' => $arWorkflowVariables,
 		]);
 
 		return $dialog;
@@ -242,30 +259,29 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 		{
 			return array_key_exists($field, $wfFields[$object]);
 		}
-		elseif ($object === \Bitrix\Bizproc\Workflow\Template\SourceType::GlobalVariable)
+
+		if ($object === \Bitrix\Bizproc\Workflow\Template\SourceType::GlobalVariable)
 		{
 			return (bool)\Bitrix\Bizproc\Workflow\Type\GlobalVar::getVisibleById($field, $documentType);
 		}
-		elseif ($object === \Bitrix\Bizproc\Workflow\Template\SourceType::GlobalConstant)
+		if ($object === \Bitrix\Bizproc\Workflow\Template\SourceType::GlobalConstant)
 		{
 			return (bool)\Bitrix\Bizproc\Workflow\Type\GlobalConst::getVisibleById($field, $documentType);
 		}
-		elseif ($object === \Bitrix\Bizproc\Workflow\Template\SourceType::DocumentField)
+		if ($object === \Bitrix\Bizproc\Workflow\Template\SourceType::DocumentField)
 		{
-			$documentService = CBPRuntime::GetRuntime(true)->getDocumentService();
+			$documentService = CBPRuntime::getRuntime()->getDocumentService();
 			$documentFields = $documentService->GetDocumentFields($documentType);
 
 			return array_key_exists($field, $documentFields);
 		}
-		else
+
+		if (CBPActivity::findActivityInTemplate(
+			$wfFields[\Bitrix\Bizproc\Workflow\Template\SourceType::Activity],
+			$object
+		))
 		{
-			if (CBPActivity::findActivityInTemplate(
-				$wfFields[\Bitrix\Bizproc\Workflow\Template\SourceType::Activity],
-				$object
-			))
-			{
- 				return true;
-			}
+			return true;
 		}
 
 		return false;
@@ -274,7 +290,7 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 	public static function validateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null)
 	{
 		$errors = [];
-		if ($arTestProperties['Variable'] === null)
+		if (empty($arTestProperties['Variable']))
 		{
 			$errors[] = [
 				'code' => 'emptyVariable',
@@ -291,7 +307,7 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 		if (!empty($this->arProperties['Variable']))
 		{
 			$field = $this->arProperties['Variable'];
-			$object = ($this->arProperties['Object'] !== null) ? $this->arProperties['Object'] : 'Variable';
+			$object = $this->arProperties['Object'] ?? 'Variable';
 
 			$usages[] = $this->getObjectSourceType($object, $field);
 		}

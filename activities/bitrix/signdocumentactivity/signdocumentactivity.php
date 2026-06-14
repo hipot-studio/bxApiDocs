@@ -8,11 +8,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign;
-use Bitrix\Crm;
 use Bitrix\BizProc;
 use Bitrix\Sign\Config\Storage;
-use Bitrix\Sign\Model\DocumentGeneratorBlankTemplate;
-use Bitrix\Sign\Model\SignDocumentGeneratorBlankTable;
 
 class CBPSignDocumentActivity extends CBPActivity
 {
@@ -20,6 +17,7 @@ class CBPSignDocumentActivity extends CBPActivity
 	{
 		parent::__construct($name);
 		$this->arProperties = [
+			"responsible" => null,
 			"initiatorName" => null,
 			"blankId" => null,
 		];
@@ -115,7 +113,7 @@ class CBPSignDocumentActivity extends CBPActivity
 
 			return;
 		}
-		$this->logDebug($this->initiatorName, $blank->getTitle());
+		$this->logDebug($this->initiatorName, $blank->getTitle(), $this->responsible);
 
 		$smartDocResult = Main\DI\ServiceLocator::getInstance()
 			->get('crm.integration.sign')
@@ -131,11 +129,30 @@ class CBPSignDocumentActivity extends CBPActivity
 			$this->addSigningErrorMessage($smartDocResult->getErrorMessages()[0]);
 			return;
 		}
+
+		$responsible = $this->responsible;
+		$createdDealId = \Bitrix\Crm\Service\Container::getInstance()
+			->getFactory(\CCrmOwnerType::Deal)
+			?->getItem($entityId)
+			?->getCreatedBy();
+
+		$responsibleUserId = CBPHelper::extractFirstUser($responsible, $smartDocId) ?? $createdDealId ?? 1;
+		$userForResponsible = Sign\Service\Container::instance()->getUserService()->getUserById($responsibleUserId);
+		if (!$userForResponsible)
+		{
+			$this->addSigningErrorMessage(Loc::getMessage('SIGN_DOCUMENT_ACTIVITY_ERROR_EMPTY_RESPONSIBLE'));
+
+			return;
+		}
+
+		$initiatorName = CBPHelper::stringify($this->initiatorName);
+
 		if (Storage::instance()->isNewSignEnabled())
 		{
 			$documentService = Sign\Service\Container::instance()->getDocumentService();
 			$createDocumentResult = $documentService->register(
 				blankId: $blank->getId(),
+				createdById: $responsibleUserId,
 				entityId: $smartDocId,
 				entityType: 'SMART',
 			);
@@ -147,13 +164,42 @@ class CBPSignDocumentActivity extends CBPActivity
 				return;
 			}
 
+			$documentEntityTypeId = (int)$document->entityTypeId;
+			if ($documentEntityTypeId === \CCrmOwnerType::Undefined)
+			{
+				$this->addSigningErrorMessage(Loc::getMessage('SIGN_DOCUMENT_ACTIVITY_ERROR_INVALID_SMART_DOCUMENT_ENTITY_TYPE'));
+
+				return;
+			}
+
+			$documentEntityId = (int)$document->entityId;
+			if ($documentEntityId < 1)
+			{
+				$this->addSigningErrorMessage(Loc::getMessage('SIGN_DOCUMENT_ACTIVITY_ERROR_INVALID_SMART_DOCUMENT_ENTITY_ID'));
+
+				return;
+			}
+
+			$result = Sign\Integration\CRM\Entity::updateEntityResponsible(
+				$documentEntityTypeId,
+				$documentEntityId,
+				$responsibleUserId,
+			);
+			if (!$result->isSuccess())
+			{
+				$this->addSigningErrorMessage(Loc::getMessage('SIGN_DOCUMENT_ACTIVITY_ERROR_RESPONSIBLE_FOR_SMART_DOCUMENT_NOT_SET'));
+
+				return;
+			}
+
 			$result = $documentService->upload($document->uid);
 			if (!$result->isSuccess())
 			{
 				$this->addSigningErrorMessage($result->getErrorMessages()[0]);
 				return;
 			}
-			$documentService->modifyInitiator($document->uid, $this->initiatorName);
+
+			$documentService->modifyInitiator($document->uid, $initiatorName);
 			Sign\Service\Container::instance()->getCrmSignDocumentService()->configureMembers($document);
 
 			$members = Sign\Service\Container::instance()->getMemberRepository()->listByDocumentId($document->id);
@@ -187,7 +233,7 @@ class CBPSignDocumentActivity extends CBPActivity
 			return;
 		}
 		$doc->setMeta([
-			'initiatorName' => $this->initiatorName,
+			'initiatorName' => $initiatorName,
 		]);
 		$doc->send();
 	}
@@ -207,6 +253,15 @@ class CBPSignDocumentActivity extends CBPActivity
 	)
 	{
 		$errors = [];
+		if (empty($properties["responsible"]))
+		{
+			$errors[] = [
+				"code" => "NotExist",
+				"parameter" => "responsible",
+				"message" => Loc::getMessage('SIGN_DOCUMENT_ACTIVITY_ERROR_EMPTY_RESPONSIBLE'),
+			];
+		}
+
 		if (empty($properties["initiatorName"]))
 		{
 			$errors[] = [
@@ -271,6 +326,12 @@ class CBPSignDocumentActivity extends CBPActivity
 	protected static function getPropertiesMap(array $documentType, array $context = []): array
 	{
 		return [
+			'responsible' => [
+				'Name' => GetMessage('SIGN_ACTIVITIES_SIGN_DOCUMENT_RESPONSIBLE_NAME'),
+				'FieldName' => 'responsible',
+				'Type' => 'user',
+				'Required' => true,
+			],
 			'initiatorName' => [
 				'Name' => GetMessage('SIGN_ACTIVITIES_SIGN_DOCUMENT_INITIATOR_NAME'),
 				'FieldName' => 'initiatorName',
@@ -305,6 +366,12 @@ class CBPSignDocumentActivity extends CBPActivity
 		$blankId = $arCurrentValues['blankId'];
 
 		$arProperties = [
+			'responsible' => self::getPropertyValue(
+				'responsible',
+				$arCurrentValues,
+				$documentType,
+				$arErrors,
+			),
 			'initiatorName' => $initiatorName,
 			'blankId' => $blankId,
 		];
@@ -325,7 +392,35 @@ class CBPSignDocumentActivity extends CBPActivity
 		return true;
 	}
 
-	private function logDebug($initiatorName, $blankId)
+	private static function getPropertyValue(
+		string $propertyName,
+		array $arCurrentValues,
+		array $documentType,
+		array &$arErrors
+	): array
+	{
+		$result = [];
+		$selectedValues = explode(',', $arCurrentValues[$propertyName] ?? '');
+		foreach ($selectedValues as $selectedValue)
+		{
+			$userArray = CBPHelper::usersStringToArray(
+				$selectedValue,
+				$documentType,
+				$arErrors,
+			);
+			$userValue = $userArray[0] ?? null;
+			if ($userValue === null)
+			{
+				continue;
+			}
+
+			$result[] = $userValue;
+		}
+
+		return $result;
+	}
+
+	private function logDebug($initiatorName, $blankId, $responsible)
 	{
 		if (!$this->workflow->isDebug())
 		{
@@ -333,11 +428,13 @@ class CBPSignDocumentActivity extends CBPActivity
 		}
 
 		$map = $this->getDebugInfo([
+			'responsible' => $responsible,
 			'initiatorName' => $initiatorName,
 			'blankId' => $blankId,
 		]);
 
 		$this->writeDebugInfo([
+			'responsible' => $map['responsible'],
 			'initiatorName' => $map['initiatorName'],
 			'accountId' => $map['blankId'],
 		]);

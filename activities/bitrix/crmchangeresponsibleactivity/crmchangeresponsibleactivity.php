@@ -15,7 +15,7 @@ use Bitrix\Main;
  * @property-read string SkipAbsent
  * @property-read string SkipTimeMan
  */
-class CBPCrmChangeResponsibleActivity extends CBPActivity
+class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigurableActivity
 {
 	private const GETTER_TYPE_RANDOM = 'r';
 	private const GETTER_TYPE_FIRST = 'f';
@@ -49,9 +49,24 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity
 
 		if ($this->workflow->isDebug())
 		{
-			$this->writeDebugInfo($this->getDebugInfo([
+			$propertiesMap = self::getPropertiesMap($this->getDocumentType());
+			unset($propertiesMap['ModifiedBy']);
+			$propertiesMap['NewResponsibleId'] = [
+				'Name' => Main\Localization\Loc::getMessage('CRM_CHANGE_NEW_RESPONSIBLE_ID'),
+				'FieldName' => 'new_responsible_id',
+				'Type' => \Bitrix\Bizproc\FieldType::USER,
+			];
+
+			$debugPropMapValues = [
 				'NewResponsibleId' => isset($newResponsibleId) ? "user_{$newResponsibleId}" : null,
-			]));
+			];
+
+			$propertiesMap = $this->getDebugInfo(
+				$debugPropMapValues,
+				$propertiesMap,
+			);
+
+			$this->writeDebugInfo($propertiesMap);
 		}
 
 		if ($newResponsibleId)
@@ -60,7 +75,7 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity
 			$ds->UpdateDocument(
 				$documentId,
 				[$responsibleFieldName => 'user_' . $newResponsibleId],
-				$this->ModifiedBy
+				$this->ModifiedBy,
 			);
 		}
 
@@ -186,7 +201,7 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity
 		return $nextUserId;
 	}
 
-	public static function ValidateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null)
+	public static function ValidateProperties($arTestProperties = [], ?CBPWorkflowTemplateUser $user = null)
 	{
 		$errors = [];
 		if (empty($arTestProperties["Responsible"]))
@@ -284,16 +299,7 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity
 
 	protected static function getPropertiesMap(array $documentType, array $context = []): array
 	{
-		$map = static::getPropertiesDialogMap($documentType);
-		unset($map['ModifiedBy']);
-
-		$map['NewResponsibleId'] = [
-			'Name' => Main\Localization\Loc::getMessage('CRM_CHANGE_NEW_RESPONSIBLE_ID'),
-			'FieldName' => 'new_responsible_id',
-			'Type' => \Bitrix\Bizproc\FieldType::USER,
-		];
-
-		return $map;
+		return static::getPropertiesDialogMap($documentType);
 	}
 
 	public static function GetPropertiesDialogValues($documentType, $activityName, &$arWorkflowTemplate, &$arWorkflowParameters, &$arWorkflowVariables, $arCurrentValues, &$errors)

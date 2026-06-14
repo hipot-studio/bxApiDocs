@@ -1,7 +1,12 @@
 <?php
 
 use Bitrix\Bizproc\FieldType;
+
+use Bitrix\Main\Loader;
+use Bitrix\Bizproc\Integration\AiAssistant\ActivityAiPropertyConverter;
 use Bitrix\Main\Localization\Loc;
+
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -60,6 +65,18 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 			}
 
 			$documentService->UpdateDocument($documentId, $resultFields, $this->ModifiedBy);
+
+			if (
+				Loader::includeModule('crm')
+				&& method_exists(CCrmBizProcHelper::class, 'sendOperationsAnalytics')
+			)
+			{
+				\CCrmBizProcHelper::sendOperationsAnalytics(
+					Dictionary::EVENT_ENTITY_EDIT,
+					$this,
+					$documentType[2] ?? '',
+				);
+			}
 		}
 		catch (Exception $e)
 		{
@@ -88,55 +105,12 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 			$mergeValues = ($this->MergeMultipleFields === 'Y');
 		}
 
-		$documentService = $this->workflow->GetService('DocumentService');
-		$document = $documentService->GetDocument($documentId, $documentType);
-
-		if (is_object($document) && method_exists($document, 'loadFieldValues'))
-		{
-			$multipleFields = $this->getMultipleFields($documentId, $documentType, $fields, $mergeValues);
-			$document->loadFieldValues($multipleFields);
-		}
-
-		return $this->buildResultFields($documentId, $documentType, $fields, $mergeValues);
-	}
-
-	protected function getMultipleFields(array $documentId, array $documentType, array $fields, bool $mergeValues): array
-	{
-		$multipleFields = [];
-
-		$documentService = $this->workflow->GetService('DocumentService');
-		$documentFields = $documentService->GetDocumentFields($documentType);
-		$documentFieldsAliasesMap = CBPDocument::getDocumentFieldsAliasesMap($documentFields);
-
-		foreach ($fields as $key => $value)
-		{
-			$key = $this->resolveFieldKey($key, $documentFields, $documentFieldsAliasesMap);
-
-			$property = $documentFields[$key] ?? null;
-			if ($property && ($value || $mergeValues))
-			{
-				$fieldTypeObject = $documentService->getFieldTypeObject($documentType, $property);
-				if ($fieldTypeObject && $fieldTypeObject->isMultiple() && $mergeValues)
-				{
-					$fieldTypeObject->setDocumentId($documentId);
-					$multipleFields[] = $key;
-				}
-			}
-		}
-
-		return $multipleFields;
-	}
-
-	protected function buildResultFields(array $documentId, array $documentType, array $fields, $mergeValues = null): array
-	{
 		$resultFields = [];
 
 		$documentService = $this->workflow->GetService('DocumentService');
 		$documentFields = $documentService->GetDocumentFields($documentType);
 		$documentFieldsAliasesMap = CBPDocument::getDocumentFieldsAliasesMap($documentFields);
-		$document = $documentService->GetDocument($documentId, $documentType);
-
-		$documentValues = $this->getDocumentValues($document);
+		$document = $documentService->getDocument($documentId, $documentType, array_keys($fields));
 
 		foreach ($fields as $key => $value)
 		{
@@ -152,7 +126,7 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 
 					if ($mergeValues && $fieldTypeObject->isMultiple())
 					{
-						$baseValue = $documentValues[$key] ?? [];
+						$baseValue = $document[$key] ?? [];
 						$value = $fieldTypeObject->mergeValue($baseValue, $value);
 					}
 
@@ -171,16 +145,6 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 		}
 
 		return $resultFields;
-	}
-
-	protected function getDocumentValues($document)
-	{
-		if (is_object($document) && method_exists($document, 'toArray'))
-		{
-			return $document->toArray();
-		}
-
-		return $document;
 	}
 
 	protected function resolveFieldKey(string $key, array $documentFields, array $documentFieldsAliasesMap): string
@@ -360,9 +324,15 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 				'workflowParameters' => $arWorkflowParameters,
 				'workflowVariables' => $arWorkflowVariables,
 				'currentValues' => $arCurrentValues,
-				'formName' => $formName
-			]
+				'formName' => $formName,
+			],
 		);
+
+		$isNodeWorkflow = ($arWorkflowTemplate[0]['Type'] ?? null) === 'NodeWorkflowActivity';
+		if ($isNodeWorkflow)
+		{
+			$dialog->setDialogFileName('node_properties_dialog.php');
+		}
 
 		$dialog->setMap(static::getPropertiesMap($documentType));
 
@@ -467,7 +437,7 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 				return false;
 			}
 
-			if (CBPHelper::getBool($property['Required']) && CBPHelper::isEmptyValue($r))
+			if (CBPHelper::getBool($property['Required'] ?? null) && CBPHelper::isEmptyValue($r))
 			{
 				$errors[] = [
 					'code' => 'NotExist',
@@ -536,6 +506,7 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 				'Name' => Loc::getMessage('BPSFA_MERGE_MULTIPLE'),
 				'FieldName' => 'merge_multiple_fields',
 				'Type' => 'bool',
+				ActivityAiPropertyConverter::PROPERTY_FIELD_AI_DESCRIPTION => 'Y/N is need merge multiple values in field instead of rewrite',
 			]
 		];
 	}

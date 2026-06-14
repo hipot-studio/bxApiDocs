@@ -6,6 +6,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Crm;
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Main\Localization\Loc;
 
 class CBPCrmCopyDealActivity extends CBPActivity
@@ -22,6 +25,7 @@ class CBPCrmCopyDealActivity extends CBPActivity
 			'CategoryId' => 0,
 			'StageId' => null,
 			'Responsible' => null,
+			'CopyTimeline' => 'N',
 
 			//return
 			'DealId' => 0,
@@ -153,6 +157,8 @@ class CBPCrmCopyDealActivity extends CBPActivity
 
 		$this->DealId = $newDealId;
 
+		$this->markCreationEntryAsClone((int)$newDealId, (int)$sourceDealId);
+
 		$parents = self::$cycleCounter[$documentId[2]];
 		$parents[$documentId[2]] = $this->getName();
 		self::$cycleCounter['DEAL_' . $newDealId] = $parents;
@@ -172,19 +178,21 @@ class CBPCrmCopyDealActivity extends CBPActivity
 			);
 		}
 
-		if (COption::GetOptionString('crm', 'start_bp_within_bp', 'N') == 'Y')
+		if ($this->CopyTimeline === 'Y')
 		{
-			$CCrmBizProc = new CCrmBizProc('DEAL');
-			if ($CCrmBizProc->CheckFields(false, true))
-			{
-				$CCrmBizProc->StartWorkflow($newDealId);
-			}
+			$this->attachTimeline((int)$sourceDealId, (int)$newDealId);
+			$this->addCopiedLogMessage((int)$sourceDealId, (int)$newDealId);
 		}
 
-		//Region automation
-		$starter = new \Bitrix\Crm\Automation\Starter(\CCrmOwnerType::Deal, $newDealId);
-		$starter->setContextToBizproc()->runOnAdd();
-		//End region
+		$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Deal, (int)$newDealId));
+		$starter
+			->setContextModuleId('bizproc')
+			->runOnInnerDocumentAdd(
+				new RunDataDto(
+					actualFields: $fields,
+				)
+			)
+		;
 
 		return CBPActivityExecutionStatus::Closed;
 	}
@@ -268,6 +276,11 @@ class CBPCrmCopyDealActivity extends CBPActivity
 				'FieldName' => 'responsible',
 				'Type' => 'user',
 			],
+			'CopyTimeline' => [
+				'Name' => Loc::getMessage('CRM_CDA_COPY_TIMELINE'),
+				'FieldName' => 'copy_timeline',
+				'Type' => 'bool',
+			],
 		];
 	}
 
@@ -292,6 +305,7 @@ class CBPCrmCopyDealActivity extends CBPActivity
 				$documentType,
 				$errors
 			),
+			'CopyTimeline' => $arCurrentValues['copy_timeline'] === 'Y' ? 'Y' : 'N',
 		];
 
 		if ($properties['CategoryId'] === '' && static::isExpression($arCurrentValues['category_id_text']))
@@ -387,6 +401,161 @@ class CBPCrmCopyDealActivity extends CBPActivity
 		}
 
 		return true;
+	}
+
+	private function markCreationEntryAsClone(int $newDealId, int $sourceDealId): void
+	{
+		$row = Crm\Timeline\Entity\TimelineTable::getList(
+			[
+				'select' => ['ID', 'SETTINGS'],
+				'filter' => [
+					'=ASSOCIATED_ENTITY_TYPE_ID' => \CCrmOwnerType::Deal,
+					'=ASSOCIATED_ENTITY_ID' => $newDealId,
+					'=TYPE_ID' => Crm\Timeline\TimelineType::CREATION,
+				],
+				'limit' => 1,
+			]
+		)->fetch();
+
+		if ($row)
+		{
+			$settings = is_array($row['SETTINGS']) ? $row['SETTINGS'] : [];
+			$settings['BASE'] = [
+				'ENTITY_TYPE_ID' => \CCrmOwnerType::Deal,
+				'ENTITY_ID' => $sourceDealId,
+			];
+			Crm\Timeline\Entity\TimelineTable::update(
+				$row['ID'], [
+					'TYPE_CATEGORY_ID' => Crm\Timeline\CreationEntry::CATEGORY_COPY,
+					'SETTINGS' => $settings,
+				]
+			);
+		}
+	}
+
+	private function getTimelineEntryTypesToAttach(): array
+	{
+		$exclude = [Crm\Timeline\TimelineType::UNDEFINED];
+		$reflection = new \ReflectionClass(Crm\Timeline\TimelineType::class);
+		$constants = $reflection->getConstants(\ReflectionClassConstant::IS_PUBLIC);
+		$constants = array_filter($constants, 'is_int');
+
+		return array_values(array_diff($constants, $exclude));
+	}
+
+	private function attachTimeline(int $sourceDealId, int $newDealId): void
+	{
+		$entityTypeId = \CCrmOwnerType::Deal;
+
+		Crm\Timeline\Entity\TimelineBindingTable::attach(
+			$entityTypeId,
+			$sourceDealId,
+			$entityTypeId,
+			$newDealId,
+			$this->getTimelineEntryTypesToAttach()
+		);
+
+		\CCrmActivity::AttachBinding($entityTypeId, $sourceDealId, $entityTypeId, $newDealId);
+
+		$this->attachTaskBindings($sourceDealId, $newDealId);
+		$this->attachCalendarBindings($sourceDealId, $newDealId);
+	}
+
+	private function attachTaskBindings(int $sourceDealId, int $newDealId): void
+	{
+		$rows = Crm\ActivityTable::query()
+			->addSelect('ASSOCIATED_ENTITY_ID')
+			->whereIn('PROVIDER_ID', [
+				Crm\Activity\Provider\Task::getId(),
+				Crm\Activity\Provider\Tasks\Task::getId(),
+			])
+			->where('BINDINGS.OWNER_TYPE_ID', \CCrmOwnerType::Deal)
+			->where('BINDINGS.OWNER_ID', $sourceDealId)
+			->where('ASSOCIATED_ENTITY_ID', '>', 0)
+			->exec();
+
+		$newBinding = [
+			['OWNER_TYPE_ID' => \CCrmOwnerType::Deal, 'OWNER_ID' => $newDealId],
+		];
+
+		while ($row = $rows->fetch())
+		{
+			$taskId = (int)$row['ASSOCIATED_ENTITY_ID'];
+			if ($taskId > 0)
+			{
+				Crm\Activity\Provider\Task::bindExternalEntity($taskId, $newBinding);
+			}
+		}
+	}
+
+	private function attachCalendarBindings(int $sourceDealId, int $newDealId): void
+	{
+		if (!\Bitrix\Main\Loader::includeModule('calendar'))
+		{
+			return;
+		}
+
+		$rows = Crm\ActivityTable::query()
+			->addSelect('CALENDAR_EVENT_ID')
+			->where('BINDINGS.OWNER_TYPE_ID', \CCrmOwnerType::Deal)
+			->where('BINDINGS.OWNER_ID', $sourceDealId)
+			->where('CALENDAR_EVENT_ID', '>', 0)
+			->exec();
+
+		$eventIds = [];
+		while ($row = $rows->fetch())
+		{
+			$eventId = (int)$row['CALENDAR_EVENT_ID'];
+			if ($eventId > 0)
+			{
+				$eventIds[] = $eventId;
+			}
+		}
+
+		if (empty($eventIds))
+		{
+			return;
+		}
+
+		$newSlug = \CCrmOwnerTypeAbbr::ResolveByTypeID(\CCrmOwnerType::Deal) . '_' . $newDealId;
+
+		foreach (array_chunk($eventIds, 50) as $chunk)
+		{
+			$events = \CCalendarEvent::GetList([
+				'arFilter' => ['ID' => $chunk, '=DELETED' => 'N'],
+				'arSelect' => ['ID'],
+				'getUserfields' => true,
+				'checkPermissions' => false,
+			]);
+
+			foreach ($events as $event)
+			{
+				$crmBindings = is_array($event['UF_CRM_CAL_EVENT']) ? $event['UF_CRM_CAL_EVENT'] : [];
+
+				if (!in_array($newSlug, $crmBindings, true))
+				{
+					$crmBindings[] = $newSlug;
+					\CCalendarEvent::UpdateUserFields((int)$event['ID'], ['UF_CRM_CAL_EVENT' => $crmBindings]);
+				}
+			}
+		}
+	}
+
+	private function addCopiedLogMessage(int $sourceDealId, int $newDealId): void
+	{
+		Crm\Timeline\LogMessageController::getInstance()->onCreate(
+			[
+				'ENTITY_TYPE_ID' => \CCrmOwnerType::Deal,
+				'ENTITY_ID' => $sourceDealId,
+				'SETTINGS' => [
+					'COPY_TARGET' => [
+						'ENTITY_TYPE_ID' => \CCrmOwnerType::Deal,
+						'ENTITY_ID' => $newDealId,
+					],
+				],
+			],
+			Crm\Timeline\LogMessageType::COPIED
+		);
 	}
 
 	private function prepareSourceFields(&$sourceFields)

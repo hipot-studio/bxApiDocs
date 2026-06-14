@@ -8,6 +8,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 $runtime = CBPRuntime::GetRuntime();
 $runtime->IncludeActivityFile('SequenceActivity');
 
+/** @property-read CBPActivityCondition Condition */
 class CBPIfElseBranchActivity extends CBPSequenceActivity
 {
 	public function __construct($name)
@@ -17,6 +18,22 @@ class CBPIfElseBranchActivity extends CBPSequenceActivity
 			"Title" => "",
 			"Condition" => null,
 		];
+	}
+
+	public function execute()
+	{
+		$rootNode = $this->getRootActivity();
+		if (!($rootNode instanceof CBPNodeWorkflowActivity))
+		{
+			return parent::execute();
+		}
+
+		$condition = $this->Condition;
+		$isTrue = $condition?->evaluate($this) ?? true;
+
+		$this->outputPortId = $isTrue ? 0 : 1;
+
+		return CBPActivityExecutionStatus::Closed;
 	}
 
 	public function pullProperties(): array

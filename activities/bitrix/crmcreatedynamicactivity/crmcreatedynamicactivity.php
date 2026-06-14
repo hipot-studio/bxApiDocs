@@ -131,7 +131,6 @@ class CBPCrmCreateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 
 		if ($this->ItemId)
 		{
-			// Send Operations Analytics
 			\CCrmBizProcHelper::sendOperationsAnalytics(
 				Dictionary::EVENT_ENTITY_CREATE,
 				$this,

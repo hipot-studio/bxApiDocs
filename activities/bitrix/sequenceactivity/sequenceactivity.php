@@ -11,7 +11,7 @@ class CBPSequenceActivity
 		$this->arProperties = array("Title" => "");
 	}
 
-	public function Execute()
+	public function execute()
 	{
 		if (count($this->arActivities) == 0)
 			return CBPActivityExecutionStatus::Closed;

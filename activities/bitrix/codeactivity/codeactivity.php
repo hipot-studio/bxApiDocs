@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Main\Localization\Loc;
 
 class CBPCodeActivity extends CBPActivity
@@ -20,9 +21,9 @@ class CBPCodeActivity extends CBPActivity
 
 	public function execute()
 	{
-		if ($this->ExecuteCode <> '')
+		if ($this->ExecuteCode !== '')
 		{
-			@eval($this->ExecuteCode);
+			Container::instance()->getEvalService()->evaluate($this->ExecuteCode, $this);
 		}
 
 		return CBPActivityExecutionStatus::Closed;

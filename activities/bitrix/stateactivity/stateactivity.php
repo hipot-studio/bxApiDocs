@@ -328,7 +328,7 @@ class CBPStateActivity extends CBPCompositeActivity implements IBPActivityEventL
 					);
 
 					$arCurrentValues["permission_" . $operationKey] = CBPHelper::UsersArrayToString(
-						$current[$operationKey],
+						$current[$operationKey] ?? null,
 						$arWorkflowTemplate,
 						$documentType
 					);

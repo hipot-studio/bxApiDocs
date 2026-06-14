@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Main\Localization\Loc;
 
 class CBPCodeCondition extends CBPActivityCondition
@@ -18,9 +19,11 @@ class CBPCodeCondition extends CBPActivityCondition
 
 	public function Evaluate(CBPActivity $ownerActivity)
 	{
-		@eval("\$result = ".$this->condition.";");
-
-		return $result;
+		return Container::instance()->getEvalService()->evaluateCondition(
+			$this->condition,
+			$this,
+			['ownerActivity' => $ownerActivity],
+		);
 	}
 
 	public static function validateProperties($value = null, CBPWorkflowTemplateUser $user = null)
