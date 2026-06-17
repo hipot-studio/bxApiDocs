@@ -2,15 +2,17 @@
 
 namespace Bitrix\HumanResources\Engine;
 
-use Bitrix\HumanResources\Internals\Attribute;
+use Bitrix\HumanResources\Access\StructureAccessController;
 use Bitrix\HumanResources\Config\Storage;
-use Bitrix\HumanResources\Exception\ElementNotFoundException;
+use Bitrix\HumanResources\Internals\Attribute;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\MemberEntityType;
-use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Intranet;
 use Bitrix\Main;
+use Bitrix\Main\Access\AccessibleController;
+use Bitrix\Main\Engine\Contract\AccessCheckControllerInterface;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -18,7 +20,22 @@ use ReflectionClass;
 use ReflectionMethod;
 
 abstract class Controller extends Main\Engine\Controller
+	implements AccessCheckControllerInterface
 {
+	private AccessibleController $accessController;
+
+	public function __construct(?Main\Request $request = null)
+	{
+		parent::__construct($request);
+		$userId = (int)CurrentUser::get()->getId();
+		$this->accessController = StructureAccessController::getInstance($userId);
+	}
+
+	public function getAccessController(): AccessibleController
+	{
+		return $this->accessController;
+	}
+
 	protected function getDefaultPreFilters()
 	{
 		return
@@ -29,7 +46,7 @@ abstract class Controller extends Main\Engine\Controller
 					[Main\Engine\ActionFilter\HttpMethod::METHOD_GET, Main\Engine\ActionFilter\HttpMethod::METHOD_POST]
 				),
 				new Intranet\ActionFilter\IntranetUser(),
-				new Main\Engine\ActionFilter\CloseSession()
+				new Main\Engine\ActionFilter\CloseSession(),
 			];
 	}
 

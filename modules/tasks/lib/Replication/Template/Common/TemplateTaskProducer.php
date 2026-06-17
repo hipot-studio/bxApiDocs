@@ -27,6 +27,7 @@ use Bitrix\Tasks\Replication\Template\Repetition\Time\Service\ExecutionService;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
 use CUserTypeManager;
 use Exception;
 
@@ -238,6 +239,11 @@ class TemplateTaskProducer implements ProducerInterface
 		return $this;
 	}
 
+	protected function getAnalyticsData(): ?AnalyticsData
+	{
+		return null;
+	}
+
 	protected function overrideActivityDate(): static
 	{
 		$this->fields['ACTIVITY_DATE'] = new DateTime();
@@ -291,15 +297,19 @@ class TemplateTaskProducer implements ProducerInterface
 			->overrideCreatedDate()
 			->overrideActivityDate()
 			->overrideChangedDate()
-			->filterFiles();
+			->filterFiles()
+		;
 
 		try
 		{
-			$this->task = (new Task($this->userId))
-				->withCloneAttachments()
-				->skipDeadlineTimeZone()
-				->fromAgent()
-				->add($this->fields);
+			$this->task =
+				(new Task($this->userId))
+					->withCloneAttachments()
+					->skipDeadlineTimeZone()
+					->fromAgent()
+					->withAnalyticsData($this->getAnalyticsData())
+					->add($this->fields)
+			;
 		}
 		catch (Exception $exception)
 		{

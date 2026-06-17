@@ -2,9 +2,10 @@
 
 use Bitrix\Bizproc;
 use Bitrix\Bizproc\Internal\Entity\Workflow\ExecutionPayload;
-use Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable;
+use Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable;
 use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
 
 /**
  * Workflow instance.
@@ -76,7 +77,7 @@ class CBPWorkflow
 	{
 		if (preg_match('|^get([a-z]+)service$|i', $name, $matches))
 		{
-			return $this->getService($matches[1]. 'Service');
+			return $this->getService($matches[1] . 'Service');
 		}
 
 		throw new Main\SystemException("Unknown method `{$name}`");
@@ -112,11 +113,11 @@ class CBPWorkflow
 	/************************  CONSTRUCTORS  ****************************************************/
 
 	/**
-	* Public constructor initializes a new workflow instance with the specified ID.
-	*
-	* @param mixed $instanceId - ID of the new workflow instance.
-	* @param mixed $runtime - Runtime object.
-	*/
+	 * Public constructor initializes a new workflow instance with the specified ID.
+	 *
+	 * @param mixed $instanceId - ID of the new workflow instance.
+	 * @param mixed $runtime - Runtime object.
+	 */
 	public function __construct($instanceId, CBPRuntime $runtime)
 	{
 		if (!$instanceId)
@@ -146,7 +147,7 @@ class CBPWorkflow
 		$workflowParameters = [],
 		$workflowVariablesTypes = [],
 		$workflowParametersTypes = [],
-		$workflowTemplateId = 0
+		$workflowTemplateId = 0,
 	)
 	{
 		$this->rootActivity = $rootActivity;
@@ -159,7 +160,7 @@ class CBPWorkflow
 		if (method_exists($rootActivity, 'setTemplateUserId'))
 		{
 			$rootActivity->setTemplateUserId(
-				CBPWorkflowTemplateLoader::getTemplateUserId($workflowTemplateId)
+				CBPWorkflowTemplateLoader::getTemplateUserId($workflowTemplateId),
 			);
 		}
 
@@ -169,8 +170,7 @@ class CBPWorkflow
 
 		$documentService = $this->getService("DocumentService");
 		$documentType = $workflowParameters[CBPDocument::PARAM_DOCUMENT_TYPE]
-			?? $documentService->getDocumentType($arDocumentId)
-		;
+			?? $documentService->getDocumentType($arDocumentId);
 
 		unset($workflowParameters[CBPDocument::PARAM_DOCUMENT_TYPE]);
 
@@ -232,9 +232,8 @@ class CBPWorkflow
 	}
 
 	/**
-	* Starts new workflow instance.
-	*
-	*/
+	 * Starts new workflow instance.
+	 */
 	public function start(): void
 	{
 		if ($this->getWorkflowStatus() !== CBPWorkflowStatus::Created)
@@ -256,9 +255,8 @@ class CBPWorkflow
 	}
 
 	/**
-	* Resume existing workflow.
-	*
-	*/
+	 * Resume existing workflow.
+	 */
 	public function resume(): void
 	{
 		if ($this->getWorkflowStatus() !== CBPWorkflowStatus::Suspended)
@@ -272,19 +270,73 @@ class CBPWorkflow
 	public function save()
 	{
 		$this->persister->saveWorkflow($this->rootActivity, true);
-		//fix workflow links
-		$this->rootActivity->setWorkflow($this);
 	}
 
+	/**
+	 * @throws Main\SystemException
+	 * @throws CBPInvalidOperationException
+	 * @throws Bizproc\Internal\Exceptions\Debugger\DebuggerException
+	 */
 	private function run(): void
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::run',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_RUN_PROCESS') ?? '',
+			[
+				'status' => CBPWorkflowStatus::out($this->getWorkflowStatus()),
+				'instance_id' => $this->getInstanceId(),
+				'template_id' => $this->getTemplateId(),
+				'document_id' => $this->getDocumentId(),
+				'document_type' => $this->getDocumentType(),
+			],
+		);
+
 		try
 		{
 			$this->setWorkflowStatus(CBPWorkflowStatus::Running);
+
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Log,
+				'CBPWorkflow::run',
+				Loc::getMessage('BPCGWF_DEBUG_TRACE_RUN_STATUS_SET') ?? '',
+				[
+					'status' => CBPWorkflowStatus::out($this->getWorkflowStatus()),
+					'is_new' => $this->isNew,
+				],
+			);
+
 			if ($this->rootActivity->executionStatus === CBPActivityExecutionStatus::Initialized)
 			{
+				$debugSessionService?->addTrace(
+					Bizproc\Internal\Entity\Debugger\TraceType::Condition,
+					'CBPWorkflow::run',
+					Loc::getMessage('BPCGWF_DEBUG_TRACE_RUN_NEW_INSTANCE') ?? '',
+					[
+						'instance_id' => $this->getInstanceId(),
+						'document_id' => $this->rootActivity->getDocumentId(),
+						'document_type' => $this->rootActivity->getDocumentType(),
+						'title' => $this->rootActivity->getTitle(),
+						'type' => $this->rootActivity->getType(),
+						'document_event_type' => $this->rootActivity->getDocumentEventType(),
+					]
+				);
+
 				$this->executeActivity($this->rootActivity);
+				$debugSessionService?->addTrace(
+					Bizproc\Internal\Entity\Debugger\TraceType::Condition,
+					'CBPWorkflow::run',
+					Loc::getMessage('BPCGWF_DEBUG_TRACE_RUN_ROOT_STARTING') ?? '',
+				);
 			}
+
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Log,
+				'CBPWorkflow::run',
+				Loc::getMessage('BPCGWF_DEBUG_TRACE_RUN_QUEUE_START') ?? '',
+			);
 
 			$this->runQueue();
 		}
@@ -292,8 +344,29 @@ class CBPWorkflow
 		{
 			$this->terminate($e);
 
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Error,
+				'CBPWorkflow::run::exception::' . $e::class,
+				$e->getMessage(),
+				[
+					'error_code' => $e->getCode(),
+					'error_file' => $e->getFile(),
+					'error_line' => $e->getLine(),
+					'error_trace' => $e->getTraceAsString(),
+				],
+			);
+
 			throw $e;
 		}
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::run',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_RUN_STATUS_CURRENT') ?? '',
+			[
+				'status' => CBPActivityExecutionStatus::out($this->rootActivity->executionStatus),
+			],
+		);
 
 		if ($this->rootActivity->executionStatus === CBPActivityExecutionStatus::Closed)
 		{
@@ -303,6 +376,15 @@ class CBPWorkflow
 		{
 			$this->setWorkflowStatus(CBPWorkflowStatus::Suspended);
 		}
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Condition,
+			'CBPWorkflow::run',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_RUN_STATUS_AFTER') ?? '',
+			[
+				'status' => CBPWorkflowStatus::out($this->getWorkflowStatus()),
+			],
+		);
 
 		$this->save();
 	}
@@ -335,17 +417,40 @@ class CBPWorkflow
 	/**********************  EXTERNAL EVENTS  **************************************************************/
 
 	/**
-	* Resume the workflow instance and transfer the specified event to it.
-	*
-	* @param string $eventName - Event name.
-	* @param array $eventParameters - Event parameters.
-	*/
+	 * Resume the workflow instance and transfer the specified event to it.
+	 *
+	 * @param string $eventName - Event name.
+	 * @param array $eventParameters - Event parameters.
+	 */
 	public function sendExternalEvent(string $eventName, array $eventParameters = []): void
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::sendExternalEvent',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_SEND_EVENT') ?? '',
+			[
+				'event_name' => $eventName,
+				'event_parameters' => $eventParameters,
+				'workflow_status' => CBPWorkflowStatus::out($this->getWorkflowStatus()),
+				'instance_id' => $this->getInstanceId(),
+			],
+		);
+
 		$this->addEventToQueue($eventName, $eventParameters);
 
 		if ($this->getWorkflowStatus() !== CBPWorkflowStatus::Running)
 		{
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Log,
+				'CBPWorkflow::sendExternalEvent',
+				Loc::getMessage('BPCGWF_DEBUG_TRACE_SEND_EVENT_RESUME') ?? '',
+				[
+					'event_name' => $eventName,
+				],
+			);
+
 			$this->resume();
 		}
 	}
@@ -411,18 +516,55 @@ class CBPWorkflow
 	/************************  ACTIVITY EXECUTION  *************************************************/
 
 	/**
-	* Initializes the specified activity by calling its method Initialize.
-	*
-	* @param CBPActivity $activity
-	*/
+	 * Initializes the specified activity by calling its method Initialize.
+	 *
+	 * @param CBPActivity $activity
+	 */
 	public function initializeActivity(CBPActivity $activity)
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::initializeActivity',
+			Loc::getMessage(
+				'BPCGWF_DEBUG_TRACE_INIT_ACTIVITY',
+				[
+					'#TITLE#' => $activity->getTitle(),
+				],
+			) ?? '',
+			[
+				'name' => $activity->getName(),
+				'type' => $activity->getType(),
+				'execution_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+			],
+		);
+
 		if ($activity->executionStatus !== CBPActivityExecutionStatus::Initialized)
 		{
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Error,
+				'CBPWorkflow::initializeActivity',
+				Loc::getMessage('BPCGWF_DEBUG_TRACE_INIT_WRONG_STATUS') ?? '',
+				[
+					'expected_status' => CBPActivityExecutionStatus::out(CBPActivityExecutionStatus::Initialized),
+					'actual_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+				],
+			);
+
 			throw new Exception("InvalidInitializingState");
 		}
 
 		$activity->initialize();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::initializeActivity',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_INIT_SUCCESS') ?? '',
+			[
+				'name' => $activity->getName(),
+			],
+		);
 	}
 
 	/**
@@ -435,8 +577,37 @@ class CBPWorkflow
 	 */
 	public function executeActivity(CBPActivity $activity, array $eventParameters = []): ExecutionPayload
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::executeActivity',
+			Loc::getMessage(
+				'BPCGWF_DEBUG_TRACE_EXEC_ACTIVITY',
+				[
+					'#TITLE#' => $activity->getTitle(),
+				],
+			) ?? '',
+			[
+				'name' => $activity->getName(),
+				'type' => $activity->getType(),
+				'execution_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+				'event_parameters' => $eventParameters,
+			],
+		);
+
 		if ($activity->executionStatus !== CBPActivityExecutionStatus::Initialized)
 		{
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Error,
+				'CBPWorkflow::executeActivity',
+				Loc::getMessage('BPCGWF_DEBUG_TRACE_EXEC_WRONG_STATUS') ?? '',
+				[
+					'expected_status' => CBPActivityExecutionStatus::out(CBPActivityExecutionStatus::Initialized),
+					'actual_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+				],
+			);
+
 			throw new CBPInvalidOperationException('InvalidExecutionState');
 		}
 
@@ -444,6 +615,16 @@ class CBPWorkflow
 
 		$activity->setStatus(CBPActivityExecutionStatus::Executing, $eventParameters);
 		$this->addItemToQueue([$activity, CBPActivityExecutorOperationType::Execute, $payload]);
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::executeActivity',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_EXEC_QUEUED') ?? '',
+			[
+				'name' => $activity->getName(),
+				'new_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+			],
+		);
 
 		return $payload;
 	}
@@ -458,48 +639,175 @@ class CBPWorkflow
 	 */
 	public function closeActivity(CBPActivity $activity, $arEventParameters = [])
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::closeActivity',
+			Loc::getMessage(
+				'BPCGWF_DEBUG_TRACE_CLOSE_ACTIVITY',
+				[
+					'#TITLE#' => $activity->getTitle(),
+				],
+			) ?? '',
+			[
+				'name' => $activity->getName(),
+				'type' => $activity->getType(),
+				'execution_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+				'event_parameters' => $arEventParameters,
+			],
+		);
+
 		switch ($activity->executionStatus)
 		{
 			case CBPActivityExecutionStatus::Executing:
 				$activity->markCompleted($arEventParameters);
+				$debugSessionService?->addTrace(
+					Bizproc\Internal\Entity\Debugger\TraceType::Log,
+					'CBPWorkflow::closeActivity',
+					Loc::getMessage('BPCGWF_DEBUG_TRACE_CLOSE_COMPLETED') ?? '',
+					['name' => $activity->getName()],
+				);
+
 				return;
 
 			case CBPActivityExecutionStatus::Canceling:
 				$activity->markCanceled($arEventParameters);
+				$debugSessionService?->addTrace(
+					Bizproc\Internal\Entity\Debugger\TraceType::Log,
+					'CBPWorkflow::closeActivity',
+					Loc::getMessage('BPCGWF_DEBUG_TRACE_CLOSE_CANCELED') ?? '',
+					['name' => $activity->getName()],
+				);
+
 				return;
 
 			case CBPActivityExecutionStatus::Closed:
+				$debugSessionService?->addTrace(
+					Bizproc\Internal\Entity\Debugger\TraceType::Log,
+					'CBPWorkflow::closeActivity',
+					Loc::getMessage('BPCGWF_DEBUG_TRACE_CLOSE_ALREADY') ?? '',
+					['name' => $activity->getName()],
+				);
+
 				return;
 
 			case CBPActivityExecutionStatus::Faulting:
 				$activity->markFaulted($arEventParameters);
+				$debugSessionService?->addTrace(
+					Bizproc\Internal\Entity\Debugger\TraceType::Error,
+					'CBPWorkflow::closeActivity',
+					Loc::getMessage('BPCGWF_DEBUG_TRACE_CLOSE_FAULTED') ?? '',
+					['name' => $activity->getName()],
+				);
+
 				return;
 		}
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Error,
+			'CBPWorkflow::closeActivity',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_CLOSE_WRONG_STATUS') ?? '',
+			[
+				'name' => $activity->getName(),
+				'actual_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+			],
+		);
 
 		throw new CBPInvalidOperationException('InvalidClosingState');
 	}
 
 	/**
-	* Cancel specified activity.
-	*
-	* @param CBPActivity $activity - Activity object.
-	* @param mixed $arEventParameters - Optional parameters.
-	*/
+	 * Cancel specified activity.
+	 *
+	 * @param CBPActivity $activity - Activity object.
+	 * @param mixed $arEventParameters - Optional parameters.
+	 */
 	public function cancelActivity(CBPActivity $activity, $arEventParameters = [])
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::cancelActivity',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_CANCEL_ACTIVITY', ['#TITLE#' => $activity->getTitle()]) ?? '',
+			[
+				'name' => $activity->getName(),
+				'type' => $activity->getType(),
+				'execution_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+				'event_parameters' => $arEventParameters,
+			],
+		);
+
 		if ($activity->executionStatus !== CBPActivityExecutionStatus::Executing)
 		{
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Error,
+				'CBPWorkflow::cancelActivity',
+				Loc::getMessage('BPCGWF_DEBUG_TRACE_CANCEL_WRONG_STATUS') ?? '',
+				[
+					'expected_status' => CBPActivityExecutionStatus::out(CBPActivityExecutionStatus::Executing),
+					'actual_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+				],
+			);
+
 			throw new Exception("InvalidCancelingState");
 		}
 
 		$activity->setStatus(CBPActivityExecutionStatus::Canceling, $arEventParameters);
-		$this->addItemToQueue(array($activity, CBPActivityExecutorOperationType::Cancel));
+		$this->addItemToQueue([$activity, CBPActivityExecutorOperationType::Cancel]);
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::cancelActivity',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_CANCEL_QUEUED') ?? '',
+			[
+				'name' => $activity->getName(),
+				'new_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+			],
+		);
 	}
 
 	public function faultActivity(CBPActivity $activity, Exception $e, $arEventParameters = [])
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Error,
+			'CBPWorkflow::faultActivity',
+			Loc::getMessage(
+				'BPCGWF_DEBUG_TRACE_FAULT_ACTIVITY',
+				[
+					'#TITLE#' => $activity->getTitle(),
+				],
+			) ?? '',
+			[
+				'name' => $activity->getName(),
+				'type' => $activity->getType(),
+				'execution_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+				'exception' => [
+					'class' => $e::class,
+					'message' => $e->getMessage(),
+					'code' => $e->getCode(),
+					'file' => $e->getFile(),
+					'line' => $e->getLine(),
+				],
+				'event_parameters' => $arEventParameters,
+			],
+		);
+
 		if ($activity->executionStatus === CBPActivityExecutionStatus::Closed)
 		{
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Log,
+				'CBPWorkflow::faultActivity',
+				Loc::getMessage('BPCGWF_DEBUG_TRACE_FAULT_CLOSED_PARENT') ?? '',
+				[
+					'name' => $activity->getName(),
+					'has_parent' => $activity->parent !== null,
+				],
+			);
+
 			if ($activity->parent === null)
 			{
 				$this->Terminate($e);
@@ -512,7 +820,17 @@ class CBPWorkflow
 		else
 		{
 			$activity->setStatus(CBPActivityExecutionStatus::Faulting);
-			$this->addItemToQueue(array($activity, CBPActivityExecutorOperationType::HandleFault, $e));
+			$this->addItemToQueue([$activity, CBPActivityExecutorOperationType::HandleFault, $e]);
+
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Log,
+				'CBPWorkflow::faultActivity',
+				Loc::getMessage('BPCGWF_DEBUG_TRACE_FAULT_QUEUED') ?? '',
+				[
+					'name' => $activity->getName(),
+					'new_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+				],
+			);
 		}
 	}
 
@@ -541,6 +859,7 @@ class CBPWorkflow
 		}
 
 		$item = array_shift($this->activitiesQueue);
+
 		if ($item === null)
 		{
 			return false;
@@ -552,6 +871,18 @@ class CBPWorkflow
 		}
 		catch (Exception $e)
 		{
+			$this->getRuntime()->getDebugSessionService()?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Error,
+				'CBPWorkflow::runStep::exception::' . $e::class,
+				$e->getMessage(),
+				[
+					'error_code' => $e->getCode(),
+					'error_file' => $e->getFile(),
+					'error_line' => $e->getLine(),
+					'error_trace' => $e->getTraceAsString(),
+				],
+			);
+
 			$this->faultActivity($item[0], $e);
 		}
 
@@ -561,7 +892,7 @@ class CBPWorkflow
 	/**
 	 * @throws Exception
 	 */
-	private function runQueuedItem(CBPActivity $activity, $activityOperation, Exception|ExecutionPayload $payload = null): void
+	private function runQueuedItem(CBPActivity $activity, $activityOperation, Exception|ExecutionPayload|null $payload = null): void
 	{
 		match ($activityOperation)
 		{
@@ -573,11 +904,50 @@ class CBPWorkflow
 
 	/**
 	 * @param CBPActivity $activity
+	 * @param ExecutionPayload|null $payload
 	 * @return void
-	 * @throws Exception
+	 * @throws CBPArgumentNullException
+	 * @throws CBPInvalidOperationException
+	 * @throws Main\SystemException
 	 */
-	private function runExecuteActivityOperation(CBPActivity $activity, ExecutionPayload $payload = null): void
+	private function runExecuteActivityOperation(CBPActivity $activity, ?ExecutionPayload $payload = null): void
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::runExecuteActivityOperation',
+			Loc::getMessage(
+				'BPCGWF_DEBUG_TRACE_RUN_EXEC_ACTIVITY',
+				[
+					'#TITLE#' => $activity->getTitle()
+				]
+			) ?? '',
+			[
+				'name' => $activity->getName(),
+				'type' => $activity->getType(),
+				'properties' => $activity->arProperties,
+				'property_types' => $activity->arPropertiesTypes,
+				'payload' => [
+					'input_port' => $payload?->getInputPort(),
+					'parent_name' => $payload?->getParentName(),
+					'parent_port' => $payload?->getParentPort(),
+				],
+				'instance_id' => $this->getInstanceId(),
+				'execution_status' => $activity->executionStatus,
+				'execution_result' => $activity->executionResult,
+			],
+		);
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Condition,
+			'CBPWorkflow::runExecuteActivityOperation',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_EXEC_OP_CURRENT_STATUS') ?? '',
+			[
+				'status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+			],
+		);
+
 		if ($activity->executionStatus !== CBPActivityExecutionStatus::Executing)
 		{
 			return;
@@ -595,10 +965,30 @@ class CBPWorkflow
 				$activity->executionStatus,
 				$activity->executionResult,
 				$activity->getTitle(),
-				''
+				'',
 			);
 			$newStatus = $activity->executeWithPayload($payload ?? new ExecutionPayload());
+
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Condition,
+				'CBPWorkflow::runExecuteActivityOperation',
+				Loc::getMessage('BPCGWF_DEBUG_TRACE_EXEC_OP_ACTIVATED') ?? '',
+				[
+					'input_port' => $payload?->getInputPort(),
+					'parent_name' => $payload?->getParentName(),
+					'parent_port' => $payload?->getParentPort(),
+				],
+			);
 		}
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::runExecuteActivityOperation',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_EXEC_OP_STATUS') ?? '',
+			[
+				'status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+			],
+		);
 
 		if ($newStatus === CBPActivityExecutionStatus::Closed)
 		{
@@ -628,6 +1018,31 @@ class CBPWorkflow
 	 */
 	private function runCancelActivityOperation(CBPActivity $activity): void
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::runCancelActivityOperation::' . $activity->getName(),
+			 $activity->getTitle(),
+			[
+				'type' => $activity->getType(),
+				'properties' => $activity->arProperties,
+				'property_types' => $activity->arPropertiesTypes,
+				'instance_id' => $this->getInstanceId(),
+				'execution_status' => $activity->executionStatus,
+				'execution_result' => $activity->executionResult,
+			],
+		);
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::runCancelActivityOperation',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_CANCEL_OP_STATUS') ?? '',
+			[
+				'status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+			],
+		);
+
 		if ($activity->executionStatus !== CBPActivityExecutionStatus::Canceling)
 		{
 			return;
@@ -641,10 +1056,19 @@ class CBPWorkflow
 			$activity->getName(),
 			$activity->executionStatus,
 			$activity->executionResult,
-			$activity->getTitle()
+			$activity->getTitle(),
 		);
 
 		$newStatus = $activity->cancel();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::runCancelActivityOperation',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_CANCEL_OP_NEW_STATUS') ?? '',
+			[
+				'status' => CBPActivityExecutionStatus::out($newStatus),
+			],
+		);
 
 		if ($newStatus === CBPActivityExecutionStatus::Closed)
 		{
@@ -664,6 +1088,36 @@ class CBPWorkflow
 	 */
 	private function runHandleFaultActivityOperation(CBPActivity $activity, ?Exception $exception): void
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::runHandleFaultActivityOperation::' . $activity->getName(),
+			$activity->getTitle(),
+			[
+				'type' => $activity->getType(),
+				'properties' => $activity->arProperties,
+				'property_types' => $activity->arPropertiesTypes,
+				'instance_id' => $this->getInstanceId(),
+				'execution_status' => $activity->executionStatus,
+				'execution_result' => $activity->executionResult,
+				'exception' => [
+					'class' => $exception::class,
+					'message' => $exception?->getMessage(),
+					'code' => $exception?->getCode(),
+				],
+			],
+		);
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::runHandleFaultActivityOperation',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_CANCEL_OP_STATUS') ?? '',
+			[
+				'status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+			],
+		);
+
 		if ($activity->executionStatus !== CBPActivityExecutionStatus::Faulting)
 		{
 			return;
@@ -678,10 +1132,20 @@ class CBPWorkflow
 			$activity->executionStatus,
 			$activity->executionResult,
 			$activity->getTitle(),
-			($exception ? ($exception->getCode() ? "[" . $exception->getCode() . "] " : '') . $exception->getMessage() : "")
+			($exception ? ($exception->getCode() ? "[" . $exception->getCode() . "] " : '') . $exception->getMessage() : ""),
 		);
 
 		$newStatus = $activity->handleFault($exception);
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::runHandleFaultActivityOperation',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_FAULT_OP_DONE') ?? '',
+			[
+				'status_label' => CBPActivityExecutionStatus::out($newStatus),
+				'status_value' => $newStatus,
+			],
+		);
 
 		if ($newStatus === CBPActivityExecutionStatus::Closed)
 		{
@@ -693,8 +1157,27 @@ class CBPWorkflow
 		}
 	}
 
-	public function terminate(Exception $e = null, $stateTitle = '')
+	public function terminate(?Exception $e = null, $stateTitle = '')
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Error,
+			'CBPWorkflow::terminate',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_TERMINATE') ?? '',
+			[
+				'instance_id' => $this->getInstanceId(),
+				'state_title' => $stateTitle ?: Loc::getMessage("BPCGWF_TERMINATED_MSGVER_1"),
+				'exception' => $e ? [
+					'class' => $e::class,
+					'message' => $e->getMessage(),
+					'code' => $e->getCode(),
+					'file' => $e->getFile(),
+					'line' => $e->getLine(),
+				] : null,
+			],
+		);
+
 		CBPTaskService::deleteByWorkflow($this->getInstanceId(), \CBPTaskStatus::Running);
 
 		$this->setWorkflowStatus(CBPWorkflowStatus::Terminated);
@@ -707,10 +1190,10 @@ class CBPWorkflow
 			$this->instanceId,
 			[
 				"STATE" => "Terminated",
-				"TITLE" => $stateTitle ?: GetMessage("BPCGWF_TERMINATED_MSGVER_1"),
+				"TITLE" => $stateTitle ?: Loc::getMessage("BPCGWF_TERMINATED_MSGVER_1"),
 				"PARAMETERS" => [],
 			],
-			false
+			false,
 		);
 
 		if ($e)
@@ -723,8 +1206,8 @@ class CBPWorkflow
 				"none",
 				CBPActivityExecutionStatus::Faulting,
 				CBPActivityExecutionResult::Faulted,
-				GetMessage('BPCGWF_EXCEPTION_TITLE'),
-				($e->getCode() ? "[" . $e->getCode() . "] " : '') . $e->getMessage()
+				Loc::getMessage('BPCGWF_EXCEPTION_TITLE'),
+				($e->getCode() ? "[" . $e->getCode() . "] " : '') . $e->getMessage(),
 			);
 		}
 	}
@@ -736,12 +1219,39 @@ class CBPWorkflow
 	 */
 	public function finalizeActivity(CBPActivity $activity)
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::finalizeActivity',
+			Loc::getMessage(
+				'BPCGWF_DEBUG_TRACE_FINALIZE_ACTIVITY',
+				[
+					'#TITLE#' => $activity->getTitle()
+				]
+			) ?? '',
+			[
+				'name' => $activity->getName(),
+				'type' => $activity->getType(),
+				'execution_status' => CBPActivityExecutionStatus::out($activity->executionStatus),
+			],
+		);
+
 		$activity->finalize();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::finalizeActivity',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_FINALIZE_SUCCESS') ?? '',
+			[
+				'name' => $activity->getName(),
+			],
+		);
 	}
 
 	/************************  EVENTS QUEUE  ********************************************************/
 
-	private function addEventToQueue($eventName, $arEventParameters = array())
+	private function addEventToQueue($eventName, $arEventParameters = [])
 	{
 		$this->eventsQueue[] = [$eventName, $arEventParameters];
 	}
@@ -764,15 +1274,63 @@ class CBPWorkflow
 
 	private function processQueuedEvent($eventName, $eventParameters = [])
 	{
+		$debugSessionService = $this->runtime->getDebugSessionService();
+
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::processQueuedEvent',
+			Loc::getMessage('BPCGWF_DEBUG_TRACE_EVENT_PROCESSING') ?? '',
+			[
+				'event_name' => $eventName,
+				'event_parameters' => $eventParameters,
+			],
+		);
+
 		if (!array_key_exists($eventName, $this->rootActivity->arEventsMap))
 		{
+			$debugSessionService?->addTrace(
+				Bizproc\Internal\Entity\Debugger\TraceType::Log,
+				'CBPWorkflow::processQueuedEvent',
+				Loc::getMessage('BPCGWF_DEBUG_TRACE_EVENT_NOT_FOUND') ?? '',
+				[
+					'event_name' => $eventName,
+					'available_events' => array_keys($this->rootActivity->arEventsMap ?? []),
+				],
+			);
+
 			return;
 		}
+
+		$handlersCount = count($this->rootActivity->arEventsMap[$eventName]);
+		$debugSessionService?->addTrace(
+			Bizproc\Internal\Entity\Debugger\TraceType::Log,
+			'CBPWorkflow::processQueuedEvent',
+			Loc::getMessage(
+				'BPCGWF_DEBUG_TRACE_EVENT_HANDLERS_COUNT',
+				[
+					'#COUNT#' => $handlersCount,
+				],
+			) ?? '',
+			[
+				'event_name' => $eventName,
+				'handlers_count' => $handlersCount,
+			],
+		);
 
 		foreach ($this->rootActivity->arEventsMap[$eventName] as $eventHandler)
 		{
 			if (!empty($eventParameters['DebugEvent']) && $eventHandler instanceof IBPActivityDebugEventListener)
 			{
+				$debugSessionService?->addTrace(
+					Bizproc\Internal\Entity\Debugger\TraceType::Log,
+					'CBPWorkflow::processQueuedEvent',
+					Loc::getMessage('BPCGWF_DEBUG_TRACE_EVENT_DEBUG_HANDLER') ?? '',
+					[
+						'event_name' => $eventName,
+						'handler_class' => get_class($eventHandler),
+					],
+				);
+
 				$eventHandler->onDebugEvent($eventParameters);
 
 				continue;
@@ -780,6 +1338,16 @@ class CBPWorkflow
 
 			if ($eventHandler instanceof IBPActivityExternalEventListener)
 			{
+				$debugSessionService?->addTrace(
+					Bizproc\Internal\Entity\Debugger\TraceType::Log,
+					'CBPWorkflow::processQueuedEvent',
+					Loc::getMessage('BPCGWF_DEBUG_TRACE_EVENT_EXTERNAL_HANDLER') ?? '',
+					[
+						'event_name' => $eventName,
+						'handler_class' => get_class($eventHandler),
+					],
+				);
+
 				$eventHandler->onExternalEvent($eventParameters);
 			}
 		}
@@ -800,11 +1368,11 @@ class CBPWorkflow
 	}
 
 	/**
-	* Add new event handler to the specified event.
-	*
-	* @param mixed $eventName - Event name.
-	* @param IBPActivityExternalEventListener $eventHandler - Event handler.
-	*/
+	 * Add new event handler to the specified event.
+	 *
+	 * @param mixed $eventName - Event name.
+	 * @param IBPActivityExternalEventListener $eventHandler - Event handler.
+	 */
 	public function addEventHandler($eventName, IBPActivityExternalEventListener $eventHandler)
 	{
 		if (!is_array($this->rootActivity->arEventsMap))
@@ -826,11 +1394,11 @@ class CBPWorkflow
 	}
 
 	/**
-	* Remove the event handler from the specified event.
-	*
-	* @param mixed $eventName - Event name.
-	* @param IBPActivityExternalEventListener $eventHandler - Event handler.
-	*/
+	 * Remove the event handler from the specified event.
+	 *
+	 * @param mixed $eventName - Event name.
+	 * @param IBPActivityExternalEventListener $eventHandler - Event handler.
+	 */
 	public function removeEventHandler($eventName, IBPActivityExternalEventListener $eventHandler)
 	{
 		if (!is_array($this->rootActivity->arEventsMap))

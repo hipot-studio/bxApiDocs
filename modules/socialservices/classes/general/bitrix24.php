@@ -1,5 +1,6 @@
 <?
 
+use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Socialservices\UserTable;
 
 IncludeModuleLangFile(__FILE__);
@@ -39,6 +40,8 @@ class CSocServBitrixOAuth extends CSocServAuth
 		{
 			$this->entityOAuth->setCode($code);
 		}
+
+		$this->entityOAuth->setLogger($this->logger);
 
 		return $this->entityOAuth;
 	}
@@ -113,7 +116,22 @@ class CSocServBitrixOAuth extends CSocServAuth
 	{
 		global $APPLICATION;
 		$APPLICATION->RestartBuffer();
-		if((isset($_REQUEST["code"]) && $_REQUEST["code"] <> '') && CSocServAuthManager::CheckUniqueKey())
+		$this->logger->info('oauth.auth.start');
+
+		$tokenOk = false;
+		if (empty($_REQUEST['code']))
+		{
+			$this->logger->error('oauth.request.invalid_code');
+			$this->sendOauthError(OAuthErrorCode::MissingCode);
+		}
+		elseif (!CSocServAuthManager::CheckUniqueKey())
+		{
+			$this->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'check_key_validation_failed',
+			]);
+			$this->sendOauthError(OAuthErrorCode::InvalidCheckKey);
+		}
+		else
 		{
 			$redirect_uri = \CHTTP::URN2URI('/bitrix/tools/oauth/bitrix24.php');
 			$userId = intval($_REQUEST['uid']);
@@ -123,15 +141,35 @@ class CSocServBitrixOAuth extends CSocServAuth
 			if(mb_strpos($portalURI, "http://") === false && mb_strpos($portalURI, "https://") === false)
 				$portalURI = "https://".$portalURI;
 			$gAuth = new CBitrixOAuthInterface($appID, $appSecret, $portalURI, $_REQUEST["code"]);
+			$gAuth->setLogger($this->logger);
 
 			$this->entityOAuth = $gAuth;
 			$gAuth->addScope(explode(',', $_REQUEST["scope"]));
 			if($gAuth->GetAccessToken($redirect_uri) !== false)
 			{
 				$gAuth->saveDataDB();
+				$tokenOk = true;
+			}
+			else
+			{
+				$this->logger->error('oauth.token.exchange_failed', [
+					'reason' => 'get_access_token_failed',
+				]);
 			}
 		}
+
+		$this->logger->info('oauth.auth.finish', [
+			'success' => $tokenOk,
+			'auth_result' => $tokenOk,
+		]);
+
 		$url = \CHTTP::URN2URI(BX_ROOT);
+		if (!$tokenOk)
+		{
+			$url .= (mb_strpos($url, '?') !== false ? '&' : '?')
+				. 'auth_service_id=' . static::ID . '&auth_service_error=' . SOCSERV_AUTHORISATION_ERROR;
+		}
+
 		$mode = 'opener';
 		$this->onAfterWebAuth(true, $mode, $url);
 
@@ -143,10 +181,32 @@ class CSocServBitrixOAuth extends CSocServAuth
 		global $APPLICATION;
 		$APPLICATION->RestartBuffer();
 
-		if((isset($_REQUEST["code"]) && $_REQUEST["code"] <> '') && CSocServAuthManager::CheckUniqueKey())
+		$auth = new CSocServBitrixOAuth('', '', '', '');
+		$auth->logger->info('oauth.auth.start');
+
+		$stored = false;
+		if (empty($_REQUEST['code']))
+		{
+			$auth->logger->error('oauth.request.invalid_code');
+			$auth->sendOauthError(OAuthErrorCode::MissingCode);
+		}
+		elseif (!CSocServAuthManager::CheckUniqueKey())
+		{
+			$auth->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'check_key_validation_failed',
+			]);
+			$auth->sendOauthError(OAuthErrorCode::InvalidCheckKey);
+		}
+		else
 		{
 			CUserOptions::SetOption('socialservices', 'bitrix24_task_planer_gadget_code', $_REQUEST["code"]);
+			$stored = true;
 		}
+
+		$auth->logger->info('oauth.auth.finish', [
+			'success' => $stored,
+			'auth_result' => $stored,
+		]);
 
 		$url = \CHTTP::URN2URI(BX_ROOT);
 		$mode = 'opener';
@@ -159,7 +219,7 @@ class CSocServBitrixOAuth extends CSocServAuth
 		';
 
 		echo $JSScript;
-		
+
 		die();
 	}
 }
@@ -207,6 +267,10 @@ class CBitrixOAuthInterface extends CSocServOAuthTransport
 	{
 		if($this->code === false)
 		{
+			$this->logger->error('oauth.token.exchange_failed', [
+				'reason' => 'empty_code',
+			]);
+
 			return false;
 		}
 
@@ -237,6 +301,11 @@ class CBitrixOAuthInterface extends CSocServOAuthTransport
 
 			return true;
 		}
+
+		$this->logger->error('oauth.token.exchange_failed', [
+			'reason' => 'token_not_found_in_response',
+		]);
+
 		return false;
 	}
 

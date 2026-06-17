@@ -5,6 +5,7 @@ namespace Bitrix\HumanResources\Service;
 use Bitrix\HumanResources\Contract;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\NodeMember;
+use Bitrix\HumanResources\Type\NodeMemberRole;
 use Bitrix\Main\Access\AccessCode;
 
 class RoleHelperService implements Contract\Service\RoleHelperService
@@ -113,6 +114,26 @@ class RoleHelperService implements Contract\Service\RoleHelperService
 			NodeMember::TEAM_ROLE_XML_ID['TEAM_EMPLOYEE'] => AccessCode::ACCESS_TEAM_EMPLOYEE,
 			default => null
 		};
+	}
+
+	public function getDepartmentRoleIdToMemberRoleMap(): array
+	{
+		$map = [];
+		$pairs = [
+			NodeMemberRole::Head->value => $this->getHeadRoleId(),
+			NodeMemberRole::DeputyHead->value => $this->getDeputyRoleId(),
+			NodeMemberRole::Employee->value => $this->getEmployeeRoleId(),
+		];
+
+		foreach ($pairs as $roleKey => $roleId)
+		{
+			if ($roleId !== null)
+			{
+				$map[$roleId] = $roleKey;
+			}
+		}
+
+		return $map;
 	}
 
 	private function getRoleByXmlIdWithCache(string $xmlIdKey): ?Item\Role

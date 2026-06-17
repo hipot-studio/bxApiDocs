@@ -4,7 +4,7 @@ namespace Bitrix\BIConnector\ExternalSource\Viewer\Provider;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\BIConnector\ExternalSource\Type;
-use Bitrix\Biconnector\ExternalSource\FieldType;
+use Bitrix\BIConnector\ExternalSource\FieldType;
 use Bitrix\BIConnector\ExternalSource\FileReader;
 
 final class Csv implements Provider

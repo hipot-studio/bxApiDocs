@@ -154,7 +154,7 @@ class Dynamic extends Service\Factory
 				'CLASS' => Field\Opened::class,
 			],
 			Item::FIELD_NAME_WEBFORM_ID => [
-				'TYPE' => Field::TYPE_INTEGER,
+				'TYPE' => Field::TYPE_CRM_WEBFORM,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
 			],
 			Item::FIELD_LAST_COMMUNICATION_TIME => [
@@ -302,6 +302,7 @@ class Dynamic extends Service\Factory
 				'TYPE' => Field::TYPE_DOUBLE,
 				'CLASS' => Field\Opportunity::class,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
 			];
 			$info[Item::FIELD_NAME_TAX_VALUE] = [
 				'TYPE' => Field::TYPE_DOUBLE,
@@ -425,6 +426,22 @@ class Dynamic extends Service\Factory
 	public function isClientEnabled(): bool
 	{
 		return $this->type->getIsClientEnabled();
+	}
+
+	public function isClientContactEnabled(): bool
+	{
+		return
+			$this->getEntityTypeId() === \CCrmOwnerType::SmartDocument
+			|| $this->isClientCompanyEnabled()
+		;
+	}
+
+	public function isClientCompanyEnabled(): bool
+	{
+		return
+			$this->getEntityTypeId() === \CCrmOwnerType::SmartInvoice
+			|| ($this->isClientEnabled() && \CCrmOwnerType::isPossibleDynamicTypeId($this->getEntityTypeId()))
+		;
 	}
 
 	public function isObserversEnabled(): bool

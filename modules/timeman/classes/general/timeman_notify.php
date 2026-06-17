@@ -177,7 +177,7 @@ class CTimeManNotify
 			default => "",
 		};
 
-		$arManagers = CTimeMan::GetUserManagers($arEntry["USER_ID"]);
+		$arManagers = array_slice(CTimeMan::getUserManagers($arEntry["USER_ID"]), 0, 1);
 		if (is_array($arManagers) && count($arManagers) > 0)
 		{
 			foreach($arManagers as $managerID)
@@ -367,7 +367,7 @@ class CTimeManNotify
 			)
 		);
 
-		$arManagers = CTimeMan::GetUserManagers($arFields["ENTITY_ID"]);
+		$arManagers = array_slice(CTimeMan::getUserManagers($arFields["ENTITY_ID"]), 0, 1);
 		$arManagers[] = $arFields["ENTITY_ID"];
 		$arManagers[] = $arFields["USER_ID"];
 		$arManagers = array_unique($arManagers);
@@ -972,7 +972,7 @@ class CTimeManNotify
 					};
 				}
 
-				$arManagers = CTimeMan::GetUserManagers($arEntry["USER_ID"]);
+				$arManagers = array_slice(CTimeMan::getUserManagers($arEntry["USER_ID"]), 0, 1);
 				if (is_array($arManagers))
 					$arUserIDToSend = array_merge($arUserIDToSend, $arManagers);
 

@@ -15,14 +15,13 @@ use Bitrix\HumanResources\Internals\Attribute\Access\LogicOr;
 use Bitrix\HumanResources\Internals\Attribute\StructureActionAccess;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item;
-use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
-use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Service\UserService;
 use Bitrix\HumanResources\Type\AccessibleItemType;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
+use Bitrix\HumanResources\Type\NodeMemberRole;
 use Bitrix\Main;
 use Bitrix\Main\Error;
 use Bitrix\Main\Request;
@@ -94,12 +93,9 @@ final class Member extends Controller
 		{
 			if (!$role)
 			{
-				$xmlId = $targetNode->type->isTeam()
-					? NodeMember::TEAM_ROLE_XML_ID['TEAM_EMPLOYEE']
-					: NodeMember::DEFAULT_ROLE_XML_ID['EMPLOYEE']
-				;
-
-				$role = $this->roleRepository->findByXmlId($xmlId);
+				$role = $this->roleRepository->findByXmlId(
+					NodeMemberRole::defaultForNodeType($targetNode->type)->value,
+				);
 			}
 
 			InternalContainer::getNodeMemberService()->moveMember($nodeUserMember, $targetNode, $role);
@@ -231,32 +227,12 @@ final class Member extends Controller
 		$result = [];
 		try
 		{
-			$userIds = PublicContainer::getUserDepartmentService()->filterEmployeeIds($userIds);
-			$membersToCreate = new Item\Collection\NodeMemberCollection();
-			foreach ($userIds as $userId)
-			{
-				$userId = (int)$userId;
-				if (!$userId)
-				{
-					continue;
-				}
-
-				$member = new NodeMember(
-					MemberEntityType::USER,
-					$userId,
-					$node->id,
-					true,
-					role: $role->id,
-				);
-
-				$membersToCreate->add($member);
-				$result['members'][] = $member;
-			}
-
-			if (!$membersToCreate->empty())
-			{
-				$this->nodeMemberRepository->createByCollection($membersToCreate);
-			}
+			$createdMembers = InternalContainer::getNodeMemberService()->addOrUpdateUsersInNode(
+				$node,
+				$userIds,
+				$role,
+			);
+			$result['members'] = $createdMembers->getValues();
 		}
 		catch (CreationFailedException $e)
 		{

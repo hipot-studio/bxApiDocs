@@ -4,12 +4,14 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Main;
 use Bitrix\Main\Data\ConnectionPool;
 use Bitrix\Main\Context;
+use Bitrix\Main\Diag\SqlTrackerQuery;
+use Bitrix\Main\Diag\SqlTracker;
 
 abstract class CAllDatabase
 {
@@ -49,12 +51,12 @@ abstract class CAllDatabase
 	 **/
 	var $timeQuery = 0.0;
 	/**
-	 * @var \Bitrix\Main\Diag\SqlTrackerQuery[]
+	 * @var SqlTrackerQuery[]
 	 * @deprecated Use \Bitrix\Main\Application::getConnection()->getTracker()->getQueries();
 	 **/
 	var $arQueryDebug = [];
 	/**
-	 * @var \Bitrix\Main\Diag\SqlTracker
+	 * @var SqlTracker
 	 */
 	public $sqlTracker = null;
 
@@ -541,6 +543,17 @@ abstract class CAllDatabase
 		return $this->connection->getInsertedId();
 	}
 
+	/**
+	 * @abstract
+	 * @param string $table
+	 * @param bool $useCache
+	 * @return array
+	 */
+	public function GetTableFields($table, bool $useCache = true)
+	{
+		return [];
+	}
+
 	public function GetTableFieldsList($table)
 	{
 		return array_keys($this->GetTableFields($table));
@@ -776,27 +789,30 @@ abstract class CAllDatabase
 		return $rows;
 	}
 
-	public function InitTableVarsForEdit($tablename, $strIdentFrom = "str_", $strIdentTo = "str_", $strSuffixFrom = "", $bAlways = false)
+	public function InitTableVarsForEdit($tablename, $strIdentFrom = "str_", $strIdentTo = "str_", $strSuffixFrom = "")
 	{
 		$fields = $this->GetTableFields($tablename);
+
 		foreach ($fields as $strColumnName => $field)
 		{
 			$varnameFrom = $strIdentFrom . $strColumnName . $strSuffixFrom;
 			$varnameTo = $strIdentTo . $strColumnName;
-			global ${$varnameFrom}, ${$varnameTo};
-			if ((isset(${$varnameFrom}) || $bAlways))
+
+			global ${$varnameTo};
+
+			if ((isset($_REQUEST[$varnameFrom])))
 			{
-				if (is_array(${$varnameFrom}))
+				if (is_array($_REQUEST[$varnameFrom]))
 				{
 					${$varnameTo} = [];
-					foreach (${$varnameFrom} as $k => $v)
+					foreach ($_REQUEST[$varnameFrom] as $k => $v)
 					{
 						${$varnameTo}[$k] = htmlspecialcharsbx($v);
 					}
 				}
 				else
 				{
-					${$varnameTo} = htmlspecialcharsbx(${$varnameFrom});
+					${$varnameTo} = htmlspecialcharsbx($_REQUEST[$varnameFrom]);
 				}
 			}
 		}

@@ -30,6 +30,12 @@ abstract class AbstractFillRepeatSaleTips extends AbstractOperation
 			return false;
 		}
 
+		$baseDeal = $crmData['base_deal'] ?? [];
+		if (!empty($baseDeal))
+		{
+			return true;
+		}
+
 		$dealList = $crmData['deals_list'] ?? [];
 		if (empty($dealList))
 		{

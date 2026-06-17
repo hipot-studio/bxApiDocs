@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Controller\Autorun;
 
+use Bitrix\Crm\Component\EntityList\ClientFieldHelper;
 use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\Progress;
 use Bitrix\Crm\Controller\ErrorCode;
@@ -79,7 +80,7 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 			return null;
 		}
 
-		$filter = $this->prepareFilter($factory->getEntityTypeId(), $gridId, $params);
+		$filter = $this->prepareFilter($factory, $gridId, $params);
 
 		$hash = $this->calculateHash($entityTypeId, $gridId, $filter);
 
@@ -107,8 +108,9 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 		return true;
 	}
 
-	private function prepareFilter(int $entityTypeId, string $gridId, array $params): ?array
+	private function prepareFilter(Factory $factory, string $gridId, array $params): ?array
 	{
+		$entityTypeId = $factory->getEntityTypeId();
 		if (!empty($params['entityIds']) && is_array($params['entityIds']))
 		{
 			$entityIds = $params['entityIds'];
@@ -128,12 +130,39 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 		$filter = $filterFactory->getFilter($filterFactory::getSettingsByGridId($entityTypeId, $gridId));
 
 		$rawUIFilter = (!empty($params['filter']) && is_array($params['filter'])) ? $params['filter'] : null;
-		if (is_array($rawUIFilter))
+		$filterValue =
+			is_array($rawUIFilter)
+				? $filter->getValue($rawUIFilter)
+				: $filterFactory->getFilterValue($entityTypeId, $filter)
+		;
+
+		if ($this->isUseOrmApproach($factory))
 		{
-			return $filter->getValue($rawUIFilter);
+			foreach ($this->getClientFieldHelpers($factory) as $clientFieldHelper)
+			{
+				$filterValue = $clientFieldHelper->normalizeFilter($filterValue);
+			}
 		}
 
-		return $filterFactory->getFilterValue($entityTypeId, $filter);
+		return $filterValue;
+	}
+
+	/**
+	 * @return ClientFieldHelper[]
+	 */
+	private function getClientFieldHelpers(Factory $factory): array
+	{
+		$clientFieldHelpers = [];
+		if ($factory->isClientContactEnabled())
+		{
+			$clientFieldHelpers[] = new ClientFieldHelper(\CCrmOwnerType::Contact);
+		}
+		if ($factory->isClientCompanyEnabled())
+		{
+			$clientFieldHelpers[] = new ClientFieldHelper(\CCrmOwnerType::Company);
+		}
+
+		return $clientFieldHelpers;
 	}
 
 	private function calculateHash(int $entityTypeId, string $gridId, array $filter): string

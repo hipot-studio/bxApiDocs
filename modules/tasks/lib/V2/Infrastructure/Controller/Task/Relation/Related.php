@@ -16,6 +16,7 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Public\Command\Task\Relation\AddRelatedTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Relation\DeleteRelatedTaskCommand;
 use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskParams;
+use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskByIdsParams;
 use Bitrix\Tasks\V2\Public\Provider\Relation\RelatedTaskProvider;
 use Bitrix\Tasks\Validation\Rule\Count;
 
@@ -31,6 +32,7 @@ class Related extends BaseController
 		RelatedTaskProvider $relatedTaskProvider,
 		?SelectInterface $relationTaskSelect = null,
 		bool $withIds = true,
+		bool $withCompleted = true,
 	): array
 	{
 		$params = new RelationTaskParams(
@@ -38,8 +40,10 @@ class Related extends BaseController
 			taskId: (int)$task->id,
 			templateId: 0,
 			pager: Pager::buildFromPageNavigation($pageNavigation),
-			checkRootAccess: false,
 			select: $relationTaskSelect,
+			checkRootAccess: false,
+			withCompleted: $withCompleted,
+			withSubTasks: false,
 		);
 
 		$response = [
@@ -48,7 +52,10 @@ class Related extends BaseController
 
 		if ($withIds)
 		{
-			$response['ids'] = $relatedTaskProvider->getTaskIds($params);
+			$idsData = $relatedTaskProvider->getTaskIdsWithStatuses($params);
+
+			$response['ids'] = $idsData['ids'];
+			$response['statuses'] = $idsData['statuses'];
 		}
 
 		return $response;
@@ -62,10 +69,18 @@ class Related extends BaseController
 		#[ElementsType(typeEnum: Type::Numeric)]
 		array $taskIds,
 		RelatedTaskProvider $relatedTaskProvider,
+		bool $withCompleted = false,
 	): array
 	{
+		$params = new RelationTaskByIdsParams(
+			taskIds: $taskIds,
+			userId: $this->userId,
+			withCompleted: $withCompleted,
+			withSubTasks: true,
+		);
+
 		return [
-			'tasks' => $relatedTaskProvider->getTasksByIds($taskIds, $this->userId),
+			'tasks' => $relatedTaskProvider->getTasksByIds($params),
 		];
 	}
 

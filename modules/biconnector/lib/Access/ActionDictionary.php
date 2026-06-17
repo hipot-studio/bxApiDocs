@@ -20,6 +20,7 @@ final class ActionDictionary
 	public const ACTION_BIC_DASHBOARD_COPY = 'bic_dashboard_copy';
 	public const ACTION_BIC_DASHBOARD_MODIFY_SETTINGS = 'bic_dashboard_modify_settings';
 	public const ACTION_BIC_DASHBOARD_TAG_MODIFY = 'bic_tag_modify';
+	public const ACTION_BIC_DASHBOARD_SHARE = 'bic_dashboard_share';
 
 	/** @var string @deprecated */
 	public const ACTION_BIC_GROUP_MODIFY = 'bic_group_modify';
@@ -41,6 +42,7 @@ final class ActionDictionary
 			self::ACTION_BIC_DASHBOARD_DELETE => PermissionDictionary::BIC_DASHBOARD,
 			self::ACTION_BIC_DASHBOARD_EXPORT => PermissionDictionary::BIC_DASHBOARD,
 			self::ACTION_BIC_DASHBOARD_COPY => PermissionDictionary::BIC_DASHBOARD,
+			self::ACTION_BIC_DASHBOARD_SHARE => PermissionDictionary::BIC_DASHBOARD_SHARE,
 		];
 	}
 

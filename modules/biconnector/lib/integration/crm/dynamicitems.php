@@ -367,6 +367,9 @@ class DynamicItems
 				$result[$datasetName]['TABLE_DESCRIPTION'] = $messages['CRM_DYNAMIC_ITEMS_TABLE_PREFIX'] . ' ' . $result[$datasetName]['TABLE_DESCRIPTION'];
 			}
 
+			$descriptionFull = $messages['CRM_DYNAMIC_ITEMS_TABLE_DESCRIPTION_FULL'] ?? '';
+			$result[$datasetName]['TABLE_DESCRIPTION_FULL'] = str_replace('#TITLE#', $type->getTitle(), $descriptionFull);
+
 			foreach ($result[$datasetName]['FIELDS'] as $fieldCode => &$fieldInfo)
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_DYNAMIC_ITEMS_FIELD_' . $fieldCode];

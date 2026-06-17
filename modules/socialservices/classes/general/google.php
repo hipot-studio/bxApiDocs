@@ -4,6 +4,8 @@ use \Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\JWK;
 use Bitrix\Main\Web\JWT;
+use Bitrix\Main\Web\Uri;
+use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -30,6 +32,8 @@ class CSocServGoogleOAuth extends CSocServAuth
 		{
 			$this->entityOAuth->setCode($code);
 		}
+
+		$this->entityOAuth->setLogger($this->logger);
 
 		return $this->entityOAuth;
 	}
@@ -94,35 +98,29 @@ class CSocServGoogleOAuth extends CSocServAuth
 			$this->entityOAuth->addScope($addScope);
 		}
 
-		$removeParams = [
-			'logout',
-			'auth_service_error',
-			'auth_service_id',
-			'backurl',
-			'serviceName',
-			'hitHash',
+		$stateFields = [
+			'provider' => static::ID,
+			'site_id' => SITE_ID,
+			'check_key' => \CSocServAuthManager::getUniqueKey(),
+			'redirect_url' => $this->getRedirectUrl($arParams, ['serviceName', 'hitHash']),
+			'mode' => $location,
 		];
+		$state = \Bitrix\Socialservices\OAuth\StateService::getInstance()->createState($stateFields);
 
-		if (IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
+		if ($this->isCloudPortal())
 		{
-			$redirect_uri = static::getControllerUrl()."/redirect.php";
-			$state = $this->getEntityOAuth()->getRedirectUri()."?check_key=".\CSocServAuthManager::getUniqueKey()."&state=";
-			$backurl = $GLOBALS["APPLICATION"]->GetCurPageParam('', $removeParams);
-			$state .= urlencode('provider='.static::ID.
-				"&state=".urlencode("backurl=".urlencode($backurl)
-					.'&mode='.$location.(isset($arParams['BACKURL'])
-						? '&redirect_url='.urlencode($arParams['BACKURL'])
-						: '')
-			));
+			$portalRedirectUri = new Uri(
+				$this->getEntityOAuth()->getRedirectUri()
+			);
+			$portalRedirectUri->addParams([
+				'state' => $state,
+			]);
+
+			$state = (string)$portalRedirectUri;
+			$redirect_uri = static::getControllerUrl() . '/redirect.php';
 		}
 		else
 		{
-			$state = 'provider='.static::ID.'&site_id='.SITE_ID
-				.'&backurl='.urlencode($GLOBALS["APPLICATION"]->GetCurPageParam('check_key='.\CSocServAuthManager::getUniqueKey(), $removeParams))
-				.'&mode='.$location.(isset($arParams['BACKURL'])
-					? '&redirect_url='.urlencode($arParams['BACKURL'])
-					: '')
-			;
 			$redirect_uri = $this->getEntityOAuth()->getRedirectUri();
 		}
 
@@ -276,8 +274,14 @@ class CSocServGoogleOAuth extends CSocServAuth
 		$bProcessState = false;
 
 		$authError = SOCSERV_AUTHORISATION_ERROR;
+		$this->logger->info('oauth.auth.start');
 
-		if(!empty($_REQUEST["code"]) && CSocServAuthManager::CheckUniqueKey())
+		if (empty($_REQUEST['code']))
+		{
+			$this->logger->error('oauth.request.invalid_code');
+			$this->sendOauthError(OAuthErrorCode::MissingCode);
+		}
+		elseif (CSocServAuthManager::CheckUniqueKey())
 		{
 			$this->getEntityOAuth()->setCode($_REQUEST["code"]);
 
@@ -291,26 +295,39 @@ class CSocServGoogleOAuth extends CSocServAuth
 				{
 					$arFields = $this->prepareUser($arGoogleUser);
 					$authError = $this->AuthorizeUser($arFields);
-
-					if ($authError !== true)
-					{
-						$this->log(static::ID, 'Authorize user error: ' . $authError);
-					}
 				}
 				elseif (isset($arGoogleUser["error"]))
 				{
-					$this->log(static::ID, 'Google error: ' . $arGoogleUser["error"]);
+					$this->logger->error('oauth.user.fetch_failed', [
+						'reason' => 'provider_error',
+					]);
 				}
 				else
 				{
-					$this->log(static::ID, 'Not found current user');
+					$this->logger->error('oauth.user.fetch_failed', [
+						'reason' => 'missing_user_id',
+					]);
 				}
 			}
 			else
 			{
-				$this->log(static::ID, 'Cannot load access token');
+				$this->logger->error('oauth.token.exchange_failed', [
+					'reason' => 'get_access_token_failed',
+				]);
 			}
 		}
+		else
+		{
+			$this->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'check_key_validation_failed',
+			]);
+			$this->sendOauthError(OAuthErrorCode::InvalidCheckKey);
+		}
+
+		$this->logger->info('oauth.auth.finish', [
+			'success' => ($authError === true),
+			'auth_result' => $authError,
+		]);
 
 		if(!$bProcessState)
 		{
@@ -318,72 +335,14 @@ class CSocServGoogleOAuth extends CSocServAuth
 		}
 
 		$bSuccess = $authError === true;
-
-		$aRemove = ["logout", "auth_service_error", "auth_service_id", "code", "error_reason", "error", "error_description", "check_key", "current_fieldset"];
-		$mode = null;
+		$arState = $this->getState();
+		$mode = $arState['mode'] ?? 'opener';
+		$url = $this->getRedirectUriAfterAuthorize($authError, static::ID);
+		$addParams = !str_starts_with($url, '#');
 
 		if($bSuccess)
 		{
 			CSocServUtil::checkOAuthProxyParams();
-
-			$url = ($APPLICATION->GetCurDir() === "/login/") ? "" : $APPLICATION->GetCurDir();
-			$mode = 'opener';
-			$addParams = true;
-			if(isset($_REQUEST["state"]))
-			{
-				$arState = array();
-				parse_str($_REQUEST["state"], $arState);
-
-				if(isset($arState['backurl']) || isset($arState['redirect_url']))
-				{
-					$url = !empty($arState['redirect_url']) ? $arState['redirect_url'] : $arState['backurl'];
-					if (!str_starts_with($url, "#"))
-					{
-						$parseUrl = parse_url($url);
-
-						$urlPath = $parseUrl["path"];
-						$arUrlQuery = explode('&', $parseUrl["query"]);
-
-						foreach($arUrlQuery as $key => $value)
-						{
-							foreach($aRemove as $param)
-							{
-								if (str_starts_with($value, $param . "="))
-								{
-									unset($arUrlQuery[$key]);
-									break;
-								}
-							}
-						}
-
-						$url = (!empty($arUrlQuery)) ? $urlPath . '?' . implode("&", $arUrlQuery) : $urlPath;
-					}
-					else
-					{
-						$addParams = false;
-					}
-				}
-
-				if(isset($arState['mode']))
-				{
-					$mode = $arState['mode'];
-				}
-			}
-		}
-
-		if ($authError === SOCSERV_REGISTRATION_DENY)
-		{
-			$url = (preg_match("/\?/", $url)) ? $url.'&' : $url.'?';
-			$url .= 'auth_service_id='.static::ID.'&auth_service_error='.SOCSERV_REGISTRATION_DENY;
-		}
-		elseif ($bSuccess !== true)
-		{
-			$url = (isset($urlPath)) ? $urlPath.'?auth_service_id='.static::ID.'&auth_service_error='.$authError : $APPLICATION->GetCurPageParam(('auth_service_id='.static::ID.'&auth_service_error='.$authError), $aRemove);
-		}
-
-		if($addParams && CModule::IncludeModule("socialnetwork") && mb_strpos($url, "current_fieldset=") === false)
-		{
-			$url = (preg_match("/\?/", $url)) ? $url."&current_fieldset=SOCSERV" : $url."?current_fieldset=SOCSERV";
 		}
 
 		if ($bSuccess && $mode === self::MOBILE_MODE)
@@ -634,6 +593,10 @@ class CGoogleOAuthInterface extends CSocServOAuthTransport
 
 		if($this->code === false)
 		{
+			$this->logger->error('oauth.token.exchange_failed', [
+				'reason' => 'empty_code',
+			]);
+
 			return false;
 		}
 
@@ -676,6 +639,11 @@ class CGoogleOAuthInterface extends CSocServOAuthTransport
 
 			return true;
 		}
+
+		$this->logger->error('oauth.token.exchange_failed', [
+			'reason' => 'token_not_found_in_response',
+		]);
+
 		return false;
 	}
 
@@ -685,11 +653,24 @@ class CGoogleOAuthInterface extends CSocServOAuthTransport
 		{
 			$identity = $this->decodeIdentityToken($this->idTokenAuth);
 
+			if (!$identity)
+			{
+				$this->logger->error('oauth.user.fetch_failed', [
+					'reason' => 'invalid_identity_token',
+				]);
+			}
+
 			return $identity ?: false;
 		}
 
 		if($this->access_token === false)
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'empty_access_token',
+			]);
+
 			return false;
+		}
 
 		$result = $this->getDecodedJson(static::CONTACTS_URL.'?access_token='.urlencode($this->access_token));
 
@@ -698,6 +679,12 @@ class CGoogleOAuthInterface extends CSocServOAuthTransport
 			$result["access_token"] = $this->access_token;
 			$result["refresh_token"] = $this->refresh_token;
 			$result["expires_in"] = $this->accessTokenExpires;
+		}
+		elseif ($result === [] || $result === null)
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'invalid_response',
+			]);
 		}
 
 		return $result;

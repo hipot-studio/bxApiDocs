@@ -13,6 +13,7 @@ final class AIItemsBuilder
 {
 	public const PRIMARY_BUTTON = 'aiPrimaryScenarioButton';
 	public const SECONDARY_BUTTON = 'aiSecondaryScenarioButton';
+	public const MAX_ACTION_PANEL_BUTTONS = 2;
 
 	private int $activityId;
 	private AssociatedEntityModel $model;
@@ -77,19 +78,22 @@ final class AIItemsBuilder
 
 		foreach ($this->actions as $action)
 		{
-			if ($action->isHidden() || $action->isMenuOnly())
+			if (
+				$action->getCurrentState() === \Bitrix\Crm\Service\Timeline\Layout\Button::STATE_HIDDEN
+				|| $action->isMenuOnly()
+			)
 			{
 				continue;
+			}
+
+			if ($index >= self::MAX_ACTION_PANEL_BUTTONS)
+			{
+				break;  // only two buttons are allowed, the other will be ignored
 			}
 
 			$key = $index === 0 ? self::PRIMARY_BUTTON : self::SECONDARY_BUTTON;
 			$buttons[$key] = $action->toButton();
 			$index++;
-
-			if ($index >= 2)
-			{
-				break; // only two buttons are allowed, the other will be ignored
-			}
 		}
 
 		return $buttons;

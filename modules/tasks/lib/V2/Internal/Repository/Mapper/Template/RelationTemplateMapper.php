@@ -21,6 +21,7 @@ class RelationTemplateMapper
 		array $template,
 		?UserCollection $responsibles = null,
 		?array $rights = null,
+		?array $subTemplateIds = null,
 	): Template
 	{
 		$fields = [
@@ -28,8 +29,10 @@ class RelationTemplateMapper
 			'title' => $template['TITLE'] ?? null,
 			'responsibleCollection' => $responsibles,
 			'deadlineAfter' => $template['DEADLINE_AFTER'] ?? null,
+			'matchesWorkTime' => ($template['MATCH_WORK_TIME'] ?? null) === 'Y',
 			'rights' => $rights,
 			'type' => $this->typeMapper->mapToEnum((int)$template['TPARAM_TYPE']),
+			'subTemplateIds' => $subTemplateIds,
 		];
 
 		return Template::mapFromArray($fields);
@@ -39,9 +42,11 @@ class RelationTemplateMapper
 		array $templates,
 		?UserCollection $users = null,
 		?array $rights = null,
+		?array $subTemplateIds = null,
 	): Template\TemplateCollection
 	{
 		$entities = [];
+
 		foreach ($templates as $template)
 		{
 			$templateId = (int)($template['ID'] ?? 0);
@@ -50,6 +55,25 @@ class RelationTemplateMapper
 				template: $template,
 				responsibles: $users?->filter(static fn (User $user) => in_array($user->getId(), $template['RESPONSIBLE_IDS'], true)),
 				rights: $rights[$templateId] ?? null,
+				subTemplateIds: $subTemplateIds[$templateId] ?? null,
+			);
+		}
+
+		return new Template\TemplateCollection(...$entities);
+	}
+
+	public function mapSubTemplateIdsCollection(
+		array $ids,
+		array $subTemplateIds,
+	): Template\TemplateCollection
+	{
+		$entities = [];
+
+		foreach ($ids as $id)
+		{
+			$entities[]= new Template(
+				id: $id,
+				subTemplateIds: $subTemplateIds[$id] ?? null,
 			);
 		}
 

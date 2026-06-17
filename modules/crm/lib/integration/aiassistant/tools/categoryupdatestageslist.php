@@ -13,7 +13,11 @@ class CategoryUpdateStagesList extends BaseCrmTool
 
 	public function getDescription(): string
 	{
-		return "Updates the 'In Progress' stages for the funnel identified by `categoryId`. The default stages remain unchanged. Use this function to modify the custom stages of an existing CRM funnel.";
+		return "Updates the 'In Progress' stages of an existing CRM funnel identified by `categoryId`."
+			. " Use this function to add, remove, rename, recolor, or reorder the custom (non-final) stages of a funnel — the order of items in `stages` defines the resulting order of In Progress stages."
+			. " This is a positional replace-all for the In Progress portion of the funnel, NOT a patch: existing In Progress stages are matched to incoming items strictly by position (1st existing ↔ 1st provided, 2nd ↔ 2nd, and so on)"
+			. " For a safe call you MUST pass the full current list of In Progress stages — omitting a stage will silently delete it, so partial / patch-style updates are not supported."
+			. " Final stages (e.g. 'Won' / 'Lost' and other system / non-process stages) are never modified by this tool: they cannot be renamed, recolored, reordered, added, or removed via this function. Recoloring or renaming final stages is NOT supported here.";
 	}
 
 	public function getInputSchema(): array

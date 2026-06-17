@@ -8,6 +8,8 @@ interface TaskParameterRepositoryInterface
 {
 	public function invalidate(int $taskId): void;
 
+	public function preload(array $taskIds): void;
+
 	public function matchesSubTasksTime(int $taskId): bool;
 
 	public function autocompleteSubTasks(int $taskId): bool;

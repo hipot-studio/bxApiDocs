@@ -3006,6 +3006,21 @@ class CAllCrmInvoice
 		$errMsg = [];
 		$bError = false;
 
+		$restAppConfigurationManifest = '~CRM_REST_APP_CONFIGURATION_MANIFEST';
+		if ((string)COption::GetOptionString('crm', $restAppConfigurationManifest, 'N') === 'N')
+		{
+			COption::SetOptionString('crm', $restAppConfigurationManifest, 'Y');
+
+			$eventManager = \Bitrix\Main\EventManager::getInstance();
+			$eventManager->registerEventHandler(
+				'rest',
+				'OnRestApplicationConfigurationGetManifestSetting',
+				'crm',
+				\Bitrix\Crm\Integration\Rest\Configuration\Controller::class,
+				'onManifestSetting'
+			);
+		}
+
 		$repeatSaleTryHiddenEnabled = '~CRM_REPEAT_SALE_TRY_HIDDEN_ENABLED';
 		if ((string)COption::GetOptionString('crm', $repeatSaleTryHiddenEnabled, 'N') === 'N')
 		{

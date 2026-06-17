@@ -7,6 +7,8 @@ use Bitrix\AI\Engine;
 use Bitrix\AI\Payload\IPayload;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Crm\Badge;
+use Bitrix\Crm\Copilot\Pipeline\StepContext;
+use Bitrix\Crm\Copilot\Pipeline\TargetResolver;
 use Bitrix\Crm\Copilot\Restriction\ExecutionDataManager;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Integration\AI\AIManager;
@@ -53,9 +55,14 @@ abstract class AbstractOperation
 	protected const ENGINE_CATEGORY = 'text';
 	protected const ENGINE_CODE = EventHandler::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_TEXT_CODE;
 
+	// @todo: inject via DI — currently each operation creates its own instance,
+	// and PipelineExecutor/StepFactory create additional ones. Consolidate after AutoLauncher migration.
+	protected TargetResolver $targetResolver;
+
 	private bool $isManualLaunch = true;
 	private ?string $scenario;
 	private ?string $contextLanguageId;
+	private ?int $nextTypeIdOverride = null;
 
 	public function __construct(
 		protected ItemIdentifier $target,
@@ -63,6 +70,8 @@ abstract class AbstractOperation
 		private readonly ?int $parentJobId = null,
 	)
 	{
+		$this->targetResolver = new TargetResolver();
+
 		$this->userId ??= Container::getInstance()->getContext()->getUserId();
 		$this->contextLanguageId = $this->getContextLanguageId();
 		$this->scenario = Scenario::FULL_SCENARIO;
@@ -152,6 +161,66 @@ abstract class AbstractOperation
 		return $this;
 	}
 
+	/**
+	 * Determines whether the pipeline should continue to the next step after this operation completes.
+	 * Override in subclasses for operation-specific logic (e.g., check autostart settings).
+	 */
+	public static function canProceedToNextStep(Result $result, StepContext $context): bool
+	{
+		return $result->isSuccess();
+	}
+
+	/**
+	 * Determines whether a successful existing result must be ignored and the step re-launched.
+	 * Default: no — an existing successful result shortcircuits the step.
+	 * Override in subclasses that support manual re-run with new parameters (e.g., ScoreCall
+	 * with a different assessmentSettingsId).
+	 */
+	public static function shouldRelaunch(Result $existingResult, StepContext $context): bool
+	{
+		return false;
+	}
+
+	protected static function checkPreviousJobsAllowingSuccessfulRelaunch(ItemIdentifier $target, int $parentId): \Bitrix\Main\Result
+	{
+		$result = new \Bitrix\Main\Result();
+
+		$previousJob = static::findDuplicateJob($target, $parentId);
+		if (!$previousJob)
+		{
+			return $result;
+		}
+
+		if ($previousJob->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_SUCCESS)
+		{
+			return $result;
+		}
+
+		if ($previousJob->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_PENDING)
+		{
+			return $result->addError(ErrorCode::getJobAlreadyExistsError());
+		}
+
+		if (
+			$previousJob->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_ERROR
+			&& $previousJob->requireRetryCount() >= Result::MAX_RETRY_COUNT
+		)
+		{
+			return $result->addError(ErrorCode::getJobMaxRetriesExceededError());
+		}
+
+		$result->setData(['previousJob' => $previousJob]);
+
+		return $result;
+	}
+
+	public function setNextTypeIdOverride(int $nextTypeId): self
+	{
+		$this->nextTypeIdOverride = $nextTypeId;
+
+		return $this;
+	}
+
 	public function launch(): Result
 	{
 		AIManager::logger()->debug(
@@ -214,7 +283,12 @@ abstract class AbstractOperation
 				],
 			);
 
-			$result->addError(ErrorCode::getAIDisabledError(['sliderCode' => Scenario::SLIDER_CODE_MAP[$this->scenario]]));
+			$sliderCode = Scenario::getDisabledSliderCode($this->scenario);
+			$result->addError(
+				$sliderCode !== null
+					? ErrorCode::getAIDisabledError(['sliderCode' => $sliderCode])
+					: ErrorCode::getAIScenarioError()
+			);
 
 			static::notifyAboutJobError($result, false);
 
@@ -561,7 +635,7 @@ abstract class AbstractOperation
 			'IS_MANUAL_LAUNCH' => $this->isManualLaunch,
 			'LANGUAGE_ID' => $this->contextLanguageId,
 			'ENGINE_ID' => self::$engineId,
-			'NEXT_TYPE_ID' => Scenario::getNextTypeIdByScenario($this->scenario),
+			'NEXT_TYPE_ID' => $this->nextTypeIdOverride ?? Scenario::getNextTypeIdByScenario($this->scenario),
 		];
 	}
 
@@ -576,7 +650,7 @@ abstract class AbstractOperation
 			'IS_MANUAL_LAUNCH' => $this->isManualLaunch,
 			'LANGUAGE_ID' => $this->contextLanguageId,
 			'ENGINE_ID' => self::$engineId,
-			'NEXT_TYPE_ID' => Scenario::getNextTypeIdByScenario($this->scenario),
+			'NEXT_TYPE_ID' => $this->nextTypeIdOverride ?? Scenario::getNextTypeIdByScenario($this->scenario),
 		];
 	}
 
@@ -584,6 +658,7 @@ abstract class AbstractOperation
 	{
 		return [
 			'myCompanyName' => Container::getInstance()->getCompanyBroker()->getTitle(EntityLink::getDefaultMyCompanyId()),
+			'scenario' => $this->scenario,
 		];
 	}
 
@@ -888,7 +963,7 @@ abstract class AbstractOperation
 	final protected static function notifyTimelinesAboutAutomationLaunchError(Result $result, int $activityId = null): void
 	{
 		$activityId = $activityId ?? $result->getTarget()?->getEntityId();
-		$target = (new Orchestrator())->findPossibleFillFieldsTarget($activityId);
+		$target = (new TargetResolver())->findTarget($activityId);
 		if ($target)
 		{
 			$errorCodes = array_map(static fn($error) => $error->getCode(), $result->getErrors());
@@ -903,7 +978,7 @@ abstract class AbstractOperation
 
 	final protected static function syncBadges(int $activityId, string $badgeValue = ''): void
 	{
-		$itemIdentifier = (new Orchestrator())->findPossibleFillFieldsTarget($activityId);
+		$itemIdentifier = (new TargetResolver())->findTarget($activityId);
 		if (!$itemIdentifier)
 		{
 			return;
@@ -925,7 +1000,7 @@ abstract class AbstractOperation
 
 	final protected static function cleanBadgeByType(int $activityId, string $badgeType): void
 	{
-		$itemIdentifier = (new Orchestrator())->findPossibleFillFieldsTarget($activityId);
+		$itemIdentifier = (new TargetResolver())->findTarget($activityId);
 		if (!$itemIdentifier)
 		{
 			return;

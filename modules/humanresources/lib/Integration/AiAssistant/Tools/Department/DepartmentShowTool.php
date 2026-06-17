@@ -18,6 +18,6 @@ class DepartmentShowTool extends NodeShowTool
 
 	public function getDescription(): string
 	{
-		return 'Get name, description and a list of employees for the node identified by `nodeId` when node is a department.';
+		return 'Get name, description, and member list (with roles) of the given department.';
 	}
 }

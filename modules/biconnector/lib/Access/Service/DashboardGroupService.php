@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\BIConnector\Internal\Integration\Im\DashboardDiscussionChatAccessSyncScheduler;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
@@ -105,6 +106,12 @@ class DashboardGroupService
 			$group->setDateModify(new DateTime());
 		}
 
+		$changedDashboardIds = $saveDashboardsBindingResult->getData()['changedDashboardIds'] ?? [];
+		if (!empty($changedDashboardIds))
+		{
+			self::scheduleDashboardDiscussionChatAccessSync($changedDashboardIds);
+		}
+
 		$saveScopeDashboardResult = self::saveDashboardScopeList($dashboards);
 		if (!$saveScopeDashboardResult->isSuccess())
 		{
@@ -124,7 +131,10 @@ class DashboardGroupService
 			}
 		}
 
-		$result->setData(['id' => $groupId]);
+		$result->setData([
+			'id' => $groupId,
+			'changedDashboardIds' => $changedDashboardIds,
+		]);
 
 		return $result;
 	}
@@ -254,7 +264,13 @@ class DashboardGroupService
 		}
 
 		$isDashboardBindChanged = !empty($addDashboardBinding) || !empty($deleteDashboardBinding);
-		$result->setData(['isDashboardBindChanged' => $isDashboardBindChanged]);
+		$result->setData([
+			'isDashboardBindChanged' => $isDashboardBindChanged,
+			'changedDashboardIds' => array_values(array_unique([
+				...$addDashboardBinding,
+				...$deleteDashboardBinding,
+			])),
+		]);
 
 		return $result;
 	}
@@ -374,6 +390,15 @@ class DashboardGroupService
 			return $result;
 		}
 
+		$changedDashboardIds = SupersetDashboardGroupBindingTable::getList([
+			'select' => ['DASHBOARD_ID'],
+			'filter' => ['@GROUP_ID' => $customDashboardIdList],
+		])
+			?->fetchCollection()
+			?->getDashboardIdList()
+		;
+		$changedDashboardIds = self::normalizeIds($changedDashboardIds ?? []);
+
 		SupersetDashboardGroupTable::deleteByFilter([
 			'@ID' => $customDashboardIdList,
 		]);
@@ -385,6 +410,11 @@ class DashboardGroupService
 		SupersetDashboardGroupScopeTable::deleteByFilter([
 			'@GROUP_ID' => $customDashboardIdList,
 		]);
+
+		if (!empty($changedDashboardIds))
+		{
+			self::scheduleDashboardDiscussionChatAccessSync($changedDashboardIds);
+		}
 
 		return $result;
 	}
@@ -423,6 +453,21 @@ class DashboardGroupService
 	public static function saveDashboardGroupBindings(int $dashboardId, array $groupIds): Result
 	{
 		$result = new Result();
+		$groupIds = self::normalizeIds($groupIds);
+		$currentGroupIds = SupersetDashboardGroupBindingTable::getList([
+			'select' => ['GROUP_ID'],
+			'filter' => ['=DASHBOARD_ID' => $dashboardId],
+		])
+			?->fetchCollection()
+			?->getGroupIdList()
+		;
+		$currentGroupIds = self::normalizeIds($currentGroupIds ?? []);
+
+		if ($currentGroupIds === $groupIds)
+		{
+			return $result;
+		}
+
 		$db = Application::getConnection();
 		try
 		{
@@ -445,7 +490,14 @@ class DashboardGroupService
 
 			if (!empty($bindings))
 			{
-				SupersetDashboardGroupBindingTable::addMulti(array_values($bindings));
+				$addResult = SupersetDashboardGroupBindingTable::addMulti(array_values($bindings));
+				if (!$addResult->isSuccess())
+				{
+					$result->addErrors($addResult->getErrors());
+					$db->rollbackTransaction();
+
+					return $result;
+				}
 			}
 
 			$db->commitTransaction();
@@ -456,6 +508,37 @@ class DashboardGroupService
 			$result->addError(new Error($e->getMessage()));
 		}
 
+		if ($result->isSuccess())
+		{
+			self::scheduleDashboardDiscussionChatAccessSync([$dashboardId]);
+		}
+
 		return $result;
+	}
+
+	private static function normalizeIds(array $ids): array
+	{
+		$normalizedIds = [];
+		foreach ($ids as $id)
+		{
+			$id = (int)$id;
+			if ($id > 0)
+			{
+				$normalizedIds[$id] = $id;
+			}
+		}
+
+		return array_values($normalizedIds);
+	}
+
+	private static function scheduleDashboardDiscussionChatAccessSync(array $dashboardIds): void
+	{
+		$dashboardIds = self::normalizeIds($dashboardIds);
+		if (empty($dashboardIds))
+		{
+			return;
+		}
+
+		(new DashboardDiscussionChatAccessSyncScheduler())->scheduleDashboardIds($dashboardIds);
 	}
 }

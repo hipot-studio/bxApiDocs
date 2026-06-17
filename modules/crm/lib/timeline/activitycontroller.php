@@ -405,6 +405,7 @@ class ActivityController extends EntityController
 						Activity\Provider\Bizproc\Comment::getId(),
 						Activity\Provider\Bizproc\Task::getId(),
 						Activity\Provider\RepeatSale::getId(),
+						Activity\Provider\EntityExclusion::getId(),
 					]
 				)
 			)
@@ -740,6 +741,7 @@ class ActivityController extends EntityController
 			Activity\Provider\Booking\Booking::getId(),
 			Activity\Provider\Booking\WaitListItem::getId(),
 			Activity\Provider\RepeatSale::getId(),
+			Activity\Provider\EntityExclusion::getId(),
 		];
 	}
 
@@ -771,6 +773,7 @@ class ActivityController extends EntityController
 				Activity\Provider\Bizproc\Comment::getId(),
 				Activity\Provider\Bizproc\Task::getId(),
 				Activity\Provider\RepeatSale::getId(),
+				Activity\Provider\EntityExclusion::getId(),
 			],
 			true
 		);
@@ -978,7 +981,14 @@ class ActivityController extends EntityController
 		{
 			$fields['PING_OFFSETS'] = Activity\Provider\ToDo\ToDo::getPingOffsets($ID);
 		}
-		elseif ($providerID !== Activity\Provider\RepeatSale::getId())
+		elseif (!in_array(
+			$providerID,
+			[
+				Activity\Provider\RepeatSale::getId(),
+				Activity\Provider\EntityExclusion::getId(),
+			],
+			true
+		))
 		{
 			$notLimitedDescriptionProviders = [
 				Activity\Provider\Call::getId(),

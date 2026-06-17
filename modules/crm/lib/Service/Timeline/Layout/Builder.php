@@ -93,8 +93,15 @@ class Builder
 			$this->item->getContentBlocks() ?? [],
 		);
 		$currentSort = 0;
-		foreach ($contentBlocks as $contentBlock)
+		foreach ($contentBlocks as $contentBlockName => $contentBlock)
 		{
+			if (is_null($contentBlock))
+			{
+				unset($contentBlocks[$contentBlockName]);
+
+				continue;
+			}
+
 			if (is_null($contentBlock->getSort()))
 			{
 				$contentBlock->setSort($currentSort++);

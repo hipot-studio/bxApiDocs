@@ -188,8 +188,13 @@ class WorktimeRecordReportComponent extends Timeman\Component\BaseComponent
 			->fetchObject();
 		$this->mainUser = $this->useEmployeesTimezone() ? $employee : $currentUser;
 		$this->oppositeUser = $this->useEmployeesTimezone() ? $currentUser : $employee;
-		$recordManager = DependencyManager::getInstance()->buildWorktimeRecordManager($record, $record->obtainSchedule(), $record->obtainShift());
-		$userManagers = $this->findUserManagers($userHelper->getManagerIds($employee->getId()) ?: [$employee->getId()]);
+		$recordManager = DependencyManager::getInstance()->buildWorktimeRecordManager(
+			$record,
+			$record->obtainSchedule(),
+			$record->obtainShift(),
+		);
+		$userManagerIds = $userHelper->getManagerIds($employee->getId()) ?: [$employee->getId()];
+		$userManagers = $this->findUserManagers([$userManagerIds[0]]);
 		$this->showingOffset = $this->mainUser->obtainUtcOffset();
 
 		$recordedStartDate = $this->timeHelper->createUserDateTimeFromFormat(

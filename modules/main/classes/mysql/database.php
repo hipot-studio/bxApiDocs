@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Main\DB\SqlExpression;
@@ -494,9 +494,9 @@ class CDatabaseMysql extends CAllDatabase
 		return mysqli_real_escape_string($this->db_Conn, str_replace("\\", "\\\\", $strValue ?? ''));
 	}
 
-	public function GetTableFields($table)
+	public function GetTableFields($table, bool $useCache = true)
 	{
-		if (!isset($this->column_cache[$table]))
+		if (!isset($this->column_cache[$table]) || !$useCache)
 		{
 			$this->column_cache[$table] = [];
 			$this->DoConnect();

@@ -14,11 +14,11 @@ use Bitrix\Booking\Internals\Integration\AiAssistant\Tool\CreateBookingByResourc
 use Bitrix\Booking\Internals\Integration\AiAssistant\Tool\CreateBookingByServicesTool;
 use Bitrix\Booking\Internals\Integration\AiAssistant\Tool\FindClientBookingsTool;
 use Bitrix\Booking\Internals\Integration\AiAssistant\Tool\RescheduleBookingTool;
+use Bitrix\Booking\Internals\Integration\AiAssistant\Tool\FindAllResourcesTool;
 use Bitrix\Booking\Internals\Integration\AiAssistant\Tool\FindAvailableDatesByResourceTool;
 use Bitrix\Booking\Internals\Integration\AiAssistant\Tool\FindAvailableDatesByServicesTool;
 use Bitrix\Booking\Internals\Integration\AiAssistant\Tool\FindAvailableSlotsByResourceTool;
 use Bitrix\Booking\Internals\Integration\AiAssistant\Tool\FindAvailableSlotsByServicesTool;
-use Bitrix\Booking\Internals\Integration\AiAssistant\Tool\SetCallStatusTool;
 
 class BookingToolSet extends BaseToolSet
 {
@@ -49,7 +49,7 @@ class BookingToolSet extends BaseToolSet
 			ConfirmBookingTool::class,
 			CancelBookingTool::class,
 			FindClientBookingsTool::class,
-			SetCallStatusTool::class,
+			FindAllResourcesTool::class,
 		]);
 	}
 }

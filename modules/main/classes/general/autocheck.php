@@ -356,8 +356,9 @@ class CAutoCheck
 
 						if (md5_file($file) !== $checksum)
 						{
-							$message .= str_replace(["//", "\\\\"], ["/", "\\"], $file) . "\n";
 							$modifiedFileCount++;
+							$message .= str_replace(["//", "\\\\"], ["/", "\\"], $file) . "\n";
+							unset($result[$relFile]);
 						}
 
 						foreach ($installFilesMapping as $key => $value)
@@ -369,6 +370,7 @@ class CAutoCheck
 								{
 									$modifiedFileCount++;
 									$message .= str_replace(["//", "\\\\"], ["/", "\\"], $filePath) . "\n";
+									unset($result[$relFile]);
 								}
 							}
 						}
@@ -377,6 +379,27 @@ class CAutoCheck
 					{
 						$unknownFileCount++;
 						$unknownMessage .= str_replace(["//", "\\\\"], ["/", "\\"], $file) . "\n";
+					}
+				}
+
+				foreach ($result as $relFile => $checksum)
+				{
+					if ($checksum == 'n/a')
+					{
+						continue;
+					}
+
+					foreach ($installFilesMapping as $key => $value)
+					{
+						if (str_starts_with($relFile, $key))
+						{
+							$filePath = str_replace($key, $docRoot . $value, $relFile);
+							if (file_exists($filePath) && md5_file($filePath) !== $checksum)
+							{
+								$modifiedFileCount++;
+								$message .= str_replace(["//", "\\\\"], ["/", "\\"], $filePath) . "\n";
+							}
+						}
 					}
 				}
 

@@ -33,6 +33,11 @@ class StructureRelation extends Dataset
 		return $this->getMessage('HR_BIC_STRUCTURE_RELATION_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('HR_BIC_STRUCTURE_RELATION_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	/**
 	 * @return Result
 	 */

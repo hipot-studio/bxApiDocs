@@ -48,6 +48,9 @@ final class RolePreset {
                     'EXCLUSION' => [
                         'READ' => ['-' => 'X'],
                     ],
+                    'EVENT' => [
+                        'READ' => ['-' => 'X'],
+                    ],
 
 					'CCA' => [
 						'READ' => ['-' => 'X'],
@@ -77,6 +80,9 @@ final class RolePreset {
                     'EXCLUSION' => [
                         'READ' => ['-' => 'X'],
                         'WRITE' => ['-' => 'X'],
+                    ],
+                    'EVENT' => [
+                        'READ' => ['-' => 'X'],
                     ],
 
 					'CCA' => [
@@ -108,6 +114,9 @@ final class RolePreset {
                         'READ' => ['-' => 'X'],
                         'WRITE' => ['-' => 'X'],
                     ],
+                    'EVENT' => [
+                        'READ' => ['-' => 'X'],
+                    ],
 
 					'CCA' => [
 						'READ' => ['-' => 'X'],
@@ -129,6 +138,10 @@ final class RolePreset {
 					'COMPANY' => self::getObserverPermissionSetForEntity(new CategoryIdentifier(CCrmOwnerType::Company)),
 					'QUOTE' => self::getObserverPermissionSetForEntity(new CategoryIdentifier(CCrmOwnerType::Quote)),
 					'INVOICE' => self::getObserverPermissionSetForEntity(new CategoryIdentifier(CCrmOwnerType::Invoice)),
+
+                    'EVENT' => [
+                        'READ' => ['-' => 'X'],
+                    ],
 				],
 			],
 			self::ADMIN => [
@@ -151,6 +164,9 @@ final class RolePreset {
                     'EXCLUSION' => [
                         'READ' => ['-' => 'X'],
                         'WRITE' => ['-' => 'X'],
+                    ],
+                    'EVENT' => [
+                        'READ' => ['-' => 'X'],
                     ],
 
 					'CCA' => [

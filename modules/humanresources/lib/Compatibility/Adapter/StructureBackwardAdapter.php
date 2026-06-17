@@ -3,6 +3,8 @@
 namespace Bitrix\HumanResources\Compatibility\Adapter;
 
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
+use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Item\Structure;
 use Bitrix\HumanResources\Item\Node;
@@ -111,6 +113,14 @@ class StructureBackwardAdapter
 	}
 
 	/**
+	 * Returns a tree structure compatible with the legacy iblock-based
+	 * `CIBlockSection::GetList(... 'DEPTH_LEVEL' ...)` shape.
+	 *
+	 * `DATA[<id>][DEPTH_LEVEL]` is the absolute depth (distance from the
+	 * structure root, 1-based), independent of `$fromIblockSectionId`. This
+	 * mirrors the semantics of `b_iblock_section.DEPTH_LEVEL` that the legacy
+	 * consumers rely on for cross-node comparisons.
+	 *
 	 * @param int|null $fromIblockSectionId
 	 * @param int|null $depth
 	 *
@@ -188,6 +198,8 @@ class StructureBackwardAdapter
 		{
 			$children = $nodeRepository->getChildOf($rootNode, $depth === null ? DepthLevel::FULL : ($depth - 1));
 		}
+
+		self::prefetchAbsoluteDepth($children);
 
 		$structureArray = [
 			'TREE' => [],
@@ -279,6 +291,30 @@ class StructureBackwardAdapter
 		}
 
 		return static::$nodeHeads[$node->id] ?? null;
+	}
+
+	/**
+	 * One batch SELECT to fill absolute depth (distance from the structure root)
+	 * on every child node, so the lazy Node::__get('depth') lookup does not fire
+	 * N times during tree traversal.
+	 */
+	private static function prefetchAbsoluteDepth(NodeCollection $children): void
+	{
+		$childIds = $children->getIds();
+		if (empty($childIds))
+		{
+			return;
+		}
+
+		$depthByChildId = InternalContainer::getNodePathRepository()->getAbsoluteDepthMap($childIds);
+
+		foreach ($children as $child)
+		{
+			if ($child->id !== null && isset($depthByChildId[$child->id]))
+			{
+				$child->depth = $depthByChildId[$child->id];
+			}
+		}
 	}
 
 	/**

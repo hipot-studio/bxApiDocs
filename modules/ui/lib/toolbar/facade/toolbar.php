@@ -107,6 +107,12 @@ use Bitrix\UI\Toolbar\Manager;
  * @see \Bitrix\UI\Toolbar\Toolbar::disableMultiLineTitle
  * @method static isMultiLineTitleEnabled();
  * @see \Bitrix\UI\Toolbar\Toolbar::isMultiLineTitleEnabled
+ * @method static void addFullscreenButton();
+ * @see \Bitrix\UI\Toolbar\Toolbar::addFullscreenButton
+ * @method static void removeFullscreenButton();
+ * @see \Bitrix\UI\Toolbar\Toolbar::removeFullscreenButton
+ * @method static bool hasFullscreenButton();
+ * @see \Bitrix\UI\Toolbar\Toolbar::hasFullscreenButton
  */
 final class Toolbar
 {

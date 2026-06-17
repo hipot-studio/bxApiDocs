@@ -189,4 +189,12 @@ class CounterDictionary
 
 		return false;
 	}
+
+	public static function getMapCommentsFilterCounterList(): array
+	{
+		return array_merge(
+			[self::COUNTER_MENTIONED],
+			array_values(self::MAP_COMMENTS),
+		);
+	}
 }

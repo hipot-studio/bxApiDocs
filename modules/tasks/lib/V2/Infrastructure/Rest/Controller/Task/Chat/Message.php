@@ -41,11 +41,7 @@ class Message extends RestController
 	public function sendAction(AddRequest $request): BooleanResponse
 	{
 		/** @var MessageDto $sendDto */
-		$sendDto = $request->fields->getAsDto();
-		if (!$this->validateDto($sendDto, 'send'))
-		{
-			throw new DtoValidationException($this->getErrors());
-		}
+		$sendDto = $request->fields->convertToDto('send');
 
 		$task = Entity\Task::mapFromId($sendDto->taskId);
 		$accessProvider = new Read();

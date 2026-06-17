@@ -1786,7 +1786,7 @@ class CMainUIGrid extends CBitrixComponent
 		$result = [
 			'id' => $column->getId(),
 			'type' => $column->getType(),
-			'name' => $column->getName(),
+			'name' => $column->getName() ?? $column->getId(),
 			'original_name' => $column->getName(),
 			'title' => $column->getTitle(),
 			'default' => $column->isDefault(),

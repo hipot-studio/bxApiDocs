@@ -27,6 +27,11 @@ class UIHelper
 			return false;
 		}
 
+		if (SupersetInitializer::isSupersetPendingDelete())
+		{
+			return false;
+		}
+
 		if (!Feature::isBuilderEnabled())
 		{
 			return true;

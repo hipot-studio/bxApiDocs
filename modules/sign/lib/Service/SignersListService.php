@@ -102,6 +102,13 @@ class SignersListService
 
 	public function renameList(int $listId, string $title, int $modifiedById): Result
 	{
+		if ($this->isRejectedList($listId))
+		{
+			return (new Result())->addError(
+				new \Bitrix\Main\Error('You cannot rename the rejected list')
+			);
+		}
+
 		$signersList = $this->signersListRepository->getById($listId);
 
 		if (!$signersList)
@@ -220,9 +227,14 @@ class SignersListService
 		return $result;
 	}
 
+	public function isRejectedList(int $listId): bool
+	{
+		return $listId === $this->config->getSignersListRejectedId();
+	}
+
 	public function deleteListById(int $listId): Result
 	{
-		if ($listId === $this->config->getSignersListRejectedId())
+		if ($this->isRejectedList($listId))
 		{
 			return (new Result())->addError(
 				new \Bitrix\Main\Error('You cannot delete the rejected list'),
@@ -244,7 +256,7 @@ class SignersListService
 
 		$filter = (new ConditionTree())->whereIn('ID', $ids);
 
-		return $this->listWithFilter($filter);
+		return $this->signersListRepository->list($filter);
 	}
 
 	public function search(string $query): \Bitrix\Sign\Item\SignersListCollection

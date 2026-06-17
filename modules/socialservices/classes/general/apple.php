@@ -5,7 +5,9 @@ use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\JWK;
 use Bitrix\Main\Web\JWT;
-
+use Bitrix\Main\Web\Uri;
+use Bitrix\Socialservices\OAuth\OAuthErrorCode;
+use Bitrix\Socialservices\OAuth\StateService;
 IncludeModuleLangFile(__FILE__);
 
 class CSocServApple extends CSocServAuth
@@ -45,6 +47,8 @@ class CSocServApple extends CSocServAuth
 			$this->entityOAuth->setCode($code);
 		}
 
+		$this->entityOAuth->setLogger($this->logger);
+
 		return $this->entityOAuth;
 	}
 
@@ -69,21 +73,27 @@ class CSocServApple extends CSocServAuth
 
 	public function getUrl($arParams): string
 	{
-		global $APPLICATION;
+		$stateFields = [
+			'site_id' => SITE_ID,
+			'check_key' => \CSocServAuthManager::getUniqueKey(),
+			'redirect_url' => $this->getRedirectUrl($arParams),
+		];
+		$state = StateService::getInstance()->createState($stateFields);
 
-		if (defined('BX24_HOST_NAME') && IsModuleInstalled('bitrix24'))
+		if ($this->isCloudPortal())
 		{
+			$portalRedirectUri = new Uri(
+				$this->getEntityOAuth()->GetRedirectURI()
+			);
+			$portalRedirectUri->addParams([
+				'state' => $state,
+			]);
+
+			$state = (string)$portalRedirectUri;
 			$redirect_uri = static::CONTROLLER_URL . '/redirect.php';
-			$state = $this->getEntityOAuth()->GetRedirectURI() . '?check_key=' . \CSocServAuthManager::getUniqueKey() . '&state=';
-			$backurl = $APPLICATION->GetCurPageParam('', ['logout', 'auth_service_error', 'auth_service_id', 'backurl']);
-			$state .= urlencode('state=' . urlencode('backurl=' . urlencode($backurl) . (isset($arParams['BACKURL']) ? '&redirect_url=' . urlencode($arParams['BACKURL']) : '')));
 		}
 		else
 		{
-			$state = 'site_id=' . SITE_ID . '&backurl=' .
-				urlencode($APPLICATION->GetCurPageParam('check_key=' . \CSocServAuthManager::getUniqueKey(), ['logout', 'auth_service_error', 'auth_service_id', 'backurl'])) .
-				(isset($arParams['BACKURL']) ? '&redirect_url=' . urlencode($arParams['BACKURL']) : '');
-
 			$redirect_uri = $this->getEntityOAuth()->GetRedirectURI();
 		}
 
@@ -127,15 +137,15 @@ class CSocServApple extends CSocServAuth
 
 	public static function CheckUniqueKey($bUnset = true): bool
 	{
-		$arState = array();
+		$arState = [];
 
 		if (isset($_REQUEST['state']))
 		{
-			parse_str(html_entity_decode($_REQUEST['state']), $arState);
+			$arState = StateService::getInstance()->getPayload((string)$_REQUEST['state']) ?? [];
 
-			if (isset($arState['backurl']))
+			if (isset($arState['redirect_url']))
 			{
-				InitURLParam($arState['backurl']);
+				InitURLParam($arState['redirect_url']);
 			}
 		}
 
@@ -172,13 +182,16 @@ class CSocServApple extends CSocServAuth
 		$APPLICATION->RestartBuffer();
 
 		$authError = SOCSERV_AUTHORISATION_ERROR;
+		$this->logger->info('oauth.auth.start');
 
-		if (
-			isset($_REQUEST['code']) && $_REQUEST['code'] <> ''
-			&& self::CheckUniqueKey()
-		)
+		if (empty($_REQUEST['code']))
 		{
-			if (defined('BX24_HOST_NAME') && IsModuleInstalled('bitrix24'))
+			$this->logger->error('oauth.request.invalid_code');
+			$this->sendOauthError(OAuthErrorCode::MissingCode);
+		}
+		elseif (self::CheckUniqueKey())
+		{
+			if ($this->isCloudPortal())
 			{
 				$redirect_uri = static::CONTROLLER_URL . '/redirect.php';
 			}
@@ -196,60 +209,34 @@ class CSocServApple extends CSocServAuth
 					$arFields = $this->prepareUser($arUser);
 					$authError = $this->AuthorizeUser($arFields);
 				}
-			}
-		}
-
-		$bSuccess = $authError === true;
-
-		$url = ($APPLICATION->GetCurDir() == "/login/") ? "" : $APPLICATION->GetCurDir();
-		$aRemove = array("logout", "auth_service_error", "auth_service_id", "code", "error_reason", "error", "error_description", "check_key", "current_fieldset");
-
-		if (isset($_REQUEST["state"]) && $bSuccess)
-		{
-			$arState = array();
-			parse_str(html_entity_decode($_REQUEST["state"]), $arState);
-
-			if (isset($arState['backurl']) || isset($arState['redirect_url']))
-			{
-				$url = !empty($arState['redirect_url']) ? $arState['redirect_url'] : $arState['backurl'];
-				if (substr($url, 0, 1) !== "#")
+				else
 				{
-					$parseUrl = parse_url($url);
-
-					$urlPath = $parseUrl["path"];
-					$arUrlQuery = explode('&', $parseUrl["query"]);
-
-					foreach ($arUrlQuery as $key => $value)
-					{
-						foreach ($aRemove as $param)
-						{
-							if (strpos($value, $param . "=") === 0)
-							{
-								unset($arUrlQuery[$key]);
-								break;
-							}
-						}
-					}
-
-					$url = (!empty($arUrlQuery)) ? $urlPath . '?' . implode("&", $arUrlQuery) : $urlPath;
+					$this->logger->error('oauth.user.fetch_failed', [
+						'reason' => 'missing_user_email',
+					]);
 				}
 			}
+			else
+			{
+				$this->logger->error('oauth.token.exchange_failed', [
+					'reason' => 'get_access_token_failed',
+				]);
+			}
+		}
+		else
+		{
+			$this->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'check_key_validation_failed',
+			]);
+			$this->sendOauthError(OAuthErrorCode::InvalidCheckKey);
 		}
 
-		if ($authError === SOCSERV_REGISTRATION_DENY)
-		{
-			$url = (preg_match("/\?/", $url)) ? $url . '&' : $url . '?';
-			$url .= 'auth_service_id=' . self::ID . '&auth_service_error=' . $authError;
-		}
-		elseif ($bSuccess !== true)
-		{
-			$url = (isset($urlPath)) ? $urlPath . '?auth_service_id=' . self::ID . '&auth_service_error=' . $authError : $GLOBALS['APPLICATION']->GetCurPageParam(('auth_service_id=' . self::ID . '&auth_service_error=' . $authError), $aRemove);
-		}
+		$this->logger->info('oauth.auth.finish', [
+			'success' => ($authError === true),
+			'auth_result' => $authError,
+		]);
 
-		if (CModule::IncludeModule("socialnetwork") && strpos($url, "current_fieldset=") === false)
-		{
-			$url .= ((strpos($url, "?") === false) ? '?' : '&') . "current_fieldset=SOCSERV";
-		}
+		$url = $this->getRedirectUriAfterAuthorize($authError, self::ID);
 		LocalRedirect($url);
 	}
 
@@ -344,6 +331,10 @@ class CAppleInterface extends CSocServOAuthTransport
 
 		if ($this->code === false)
 		{
+			$this->logger->error('oauth.token.exchange_failed', [
+				'reason' => 'empty_code',
+			]);
+
 			return false;
 		}
 
@@ -399,6 +390,10 @@ class CAppleInterface extends CSocServOAuthTransport
 			];
 			return true;
 		}
+
+		$this->logger->error('oauth.token.exchange_failed', [
+			'reason' => 'token_not_found_in_response',
+		]);
 
 		return false;
 	}
@@ -468,6 +463,10 @@ class CAppleInterface extends CSocServOAuthTransport
 	{
 		if ($this->access_token === false || $this->idToken === false)
 		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'empty_access_token',
+			]);
+
 			return false;
 		}
 
@@ -477,6 +476,10 @@ class CAppleInterface extends CSocServOAuthTransport
 		}
 		catch (Exception $exception)
 		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'invalid_identity_token',
+			]);
+
 			return false;
 		}
 
@@ -491,6 +494,13 @@ class CAppleInterface extends CSocServOAuthTransport
 				$user['first_name'] = $userData['name']['firstName'];
 				$user['last_name'] = $userData['name']['lastName'];
 			}
+		}
+
+		if (empty($user['sub']))
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'missing_user_id',
+			]);
 		}
 
 		return $user;

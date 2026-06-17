@@ -64,7 +64,14 @@ class CBPMixedCondition extends CBPActivityCondition
 		$usages = [];
 		foreach ($this->condition as $cond)
 		{
-			$usages[] = Bizproc\Workflow\Template\SourceType::getObjectSourceType($cond['object'], $cond['field']);
+			if (!empty($cond['object']) && !empty($cond['field']))
+			{
+				$usage = Bizproc\Workflow\Template\SourceType::getObjectSourceType($cond['object'], $cond['field']);
+				if ($usage !== null)
+				{
+					$usages[] = $usage;
+				}
+			}
 			if (is_string($cond['value']))
 			{
 				$this->collectExpressionUsages($usages, $ownerActivity, $cond['value']);

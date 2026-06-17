@@ -14,7 +14,7 @@ class UrlProvider
 
 	private function resolvePartnerDomain(): string
 	{
-		$region = Application::getInstance()->getLicense()->getRegion();
+		$region = Application::getInstance()->getLicense()->getRegion() ?? '';
 
 		if ($this->isCisRegion($region))
 		{

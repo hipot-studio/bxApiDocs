@@ -6,6 +6,8 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Access\Service\DashboardGroupService;
+use Bitrix\BIConnector\Public\Command\DashboardChat\DashboardDiscussionChatResult;
+use Bitrix\BIConnector\Public\Command\DashboardChat\GetOrCreateDashboardDiscussionChatCommand;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model;
@@ -17,6 +19,9 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetTagTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Superset\ActionFilter\BIConstructorAccess;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
+use Bitrix\BIConnector\Superset\Dashboard\ExternalFilter\RlsRuleBuilder;
+use Bitrix\BIConnector\Public\Command\Share\CreateShareCommand;
+use Bitrix\BIConnector\Public\Command\Share\DeactivateShareCommand;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Dashboard\ScreenshotExporter;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
@@ -29,6 +34,7 @@ use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\DashboardManager;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
@@ -37,6 +43,7 @@ use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 
 class Dashboard extends Controller
@@ -446,6 +453,65 @@ class Dashboard extends Controller
 		return $relatedItems[$dashboardId];
 	}
 
+	public function openDiscussionChatAction(Model\Dashboard $dashboard, CurrentUser $user): ?array
+	{
+		if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $dashboard))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_VIEW')));
+
+			return null;
+		}
+
+		$currentUserId = (int)$user->getId();
+		if ($currentUserId <= 0)
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_DISCUSSION_CHAT_OPEN_ERROR')));
+
+			return null;
+		}
+
+		$commandResult = (new GetOrCreateDashboardDiscussionChatCommand(
+			dashboardId: $dashboard->getId(),
+			dashboardTitle: $dashboard->getTitle(),
+			currentUserId: $currentUserId,
+			dashboardCreatedById: (int)($dashboard->getOrmObject()?->getCreatedById() ?? 0),
+		))->run();
+
+		if (!$commandResult->isSuccess())
+		{
+			$this->addErrors($commandResult->getErrors());
+
+			return null;
+		}
+
+		if (!$commandResult instanceof DashboardDiscussionChatResult)
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_DISCUSSION_CHAT_OPEN_ERROR')));
+
+			return null;
+		}
+
+		$chatId = (int)$commandResult->getChatId();
+		if ($chatId <= 0)
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_DISCUSSION_CHAT_OPEN_ERROR')));
+
+			return null;
+		}
+
+		$dialogId = trim($commandResult->getDialogId());
+		if ($dialogId === '')
+		{
+			$dialogId = "chat{$chatId}";
+		}
+
+		return [
+			'chatId' => $chatId,
+			'dialogId' => $dialogId,
+			'isCreated' => $commandResult->isCreated(),
+		];
+	}
+
 	public function restartImportAction(Model\Dashboard $dashboard): ?array
 	{
 		$availableDashboardStatusesToImport = [
@@ -494,6 +560,24 @@ class Dashboard extends Controller
 		{
 			$canEdit = $accessController->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $dashboard);
 		}
+		$canShare =
+			$accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_SHARE)
+			&& ($dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_DRAFT)
+		;
+
+		$shareData = null;
+		$shareProvider = ServiceLocator::getInstance()->get('biconnector.provider.share');
+		$currentUserId = (int)CurrentUser::get()->getId();
+		$share = $shareProvider->getByDashboardAndUser($dashboard->getId(), $currentUserId);
+		if ($share && $share->isActive())
+		{
+			$shareData = [
+				'isActive' => true,
+				'password' => $share->getPassword(),
+				'dateExpireTimestamp' => $share->getDateExpire()->getTimestamp(),
+			];
+		}
+
 		$dashboard->loadCredentials();
 		$dashboard->loadProxyData();
 
@@ -530,6 +614,8 @@ class Dashboard extends Controller
 				'nativeFilters' => $dashboard->getNativeFilter(),
 				'canExport' => $canExport,
 				'canEdit' => $canEdit,
+				'canShare' => $canShare,
+				'shareData' => $shareData,
 				'urlParams' => $urlParams,
 				'isUseExternalDatasets' => $dashboard->isUseExternalDatasets(),
 				'isAvailable' => MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType()),
@@ -878,8 +964,19 @@ class Dashboard extends Controller
 		}
 
 		$result = $dashboard->toggleDraft($publish);
+		if (!$result->isSuccess())
+		{
+			return null;
+		}
 
-		return $result->isSuccess() ? true : null;
+		if (!$publish)
+		{
+			(new \Bitrix\BIConnector\Public\Command\Share\DeleteSharesCommand(
+				dashboardId: $dashboard->getId(),
+			))->run();
+		}
+
+		return true;
 	}
 
 	public function deleteFromTopMenuAction(int $dashboardId, CurrentUser $user): ?bool
@@ -1017,6 +1114,188 @@ class Dashboard extends Controller
 			'group' => $currentGroup ?? null,
 			'issetScopeNotToExport' => $issetScopeNotToExport,
 		];
+	}
+
+	/**
+	 * Creates a share link for the dashboard.
+	 *
+	 * @param Model\Dashboard $dashboard
+	 * @param string $password
+	 * @param string|null $dateEnd
+	 * @param array|null $externalFilterValues Locked external filter values.
+	 *        Format: {filterId: {value: [...], label: '...'}, ...}
+	 * @return array|null
+	 */
+	public function createShareAction(
+		Model\Dashboard $dashboard,
+		string $password,
+		string $dateEnd,
+		?string $externalFilterValuesJson = null,
+		?array $urlParameterValues = null,
+	): ?array
+	{
+		$externalFilterValues = null;
+		if ($externalFilterValuesJson !== null && $externalFilterValuesJson !== '')
+		{
+			$externalFilterValues = \Bitrix\Main\Web\Json::decode($externalFilterValuesJson);
+		}
+
+		$accessController = AccessController::getCurrent();
+		if (!$accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_SHARE))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_SHARE')));
+
+			return null;
+		}
+
+		if (!$accessController->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $dashboard))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_VIEW')));
+
+			return null;
+		}
+
+		if (mb_strlen($password) < 8 || mb_strlen($password) > 32)
+		{
+			$this->addError(new Error('Password must be 8-32 characters.'));
+
+			return null;
+		}
+
+		$dateExpire = new DateTime($dateEnd, 'Y-m-d H:i:s');
+		if (\CTimeZone::Enabled())
+		{
+			$diff = \CTimeZone::GetOffset(null, false, $dateExpire);
+			if ($diff != 0)
+			{
+				$dateExpire->add(($diff > 0 ? '-' : '') . 'PT' . abs($diff) . 'S');
+			}
+		}
+
+		$currentUserId = (int)CurrentUser::get()->getId();
+
+		// No external filter values from frontend (e.g. sharing from grid without iframe).
+		// Extract defaults from dashboard's native filter config in Superset.
+		if ($externalFilterValues === null)
+		{
+			$superset = new SupersetController(Integrator::getInstance());
+			$proxyDashboard = $superset->getDashboardRepository()->getById($dashboard->getId(), true);
+			if ($proxyDashboard)
+			{
+				$externalFilterValues = RlsRuleBuilder::extractDefaultsFromConfig(
+					$proxyDashboard->getNativeFiltersConfig(),
+					$currentUserId,
+				);
+			}
+		}
+		$shareProvider = ServiceLocator::getInstance()->get('biconnector.provider.share');
+		$existingShare = $shareProvider->getByDashboardAndUser($dashboard->getId(), $currentUserId);
+
+		$command = new CreateShareCommand(
+			dashboardId: $dashboard->getId(),
+			createdById: $currentUserId,
+			password: $password,
+			dateExpire: $dateExpire,
+			externalFilterValues: $externalFilterValues,
+			urlParameterValues: $urlParameterValues,
+		);
+
+		$result = $command->run();
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		$share = $result->getShare();
+
+		$request = Application::getInstance()->getContext()->getRequest();
+		$scheme = $request->isHttps() ? 'https' : 'http';
+		$host = $request->getHttpHost();
+		$shareUrl = $scheme . '://' . $host . '/pub/bi/dashboard/' . $share->getToken() . '/';
+
+		return [
+			'id' => $share->getId(),
+			'token' => $share->getToken(),
+			'url' => $shareUrl,
+		];
+	}
+
+	public function deactivateShareAction(Model\Dashboard $dashboard): ?bool
+	{
+		$accessController = AccessController::getCurrent();
+		if (!$accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_SHARE))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_SHARE')));
+
+			return null;
+		}
+
+		if (!$accessController->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $dashboard))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_VIEW')));
+
+			return null;
+		}
+
+		$currentUserId = (int)CurrentUser::get()->getId();
+		$command = new DeactivateShareCommand(
+			dashboardId: $dashboard->getId(),
+			userId: $currentUserId,
+		);
+
+		$result = $command->run();
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return true;
+	}
+
+	public function deleteOwnShareAction(Model\Dashboard $dashboard): ?bool
+	{
+		$accessController = AccessController::getCurrent();
+		if (!$accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_SHARE))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_SHARE')));
+
+			return null;
+		}
+
+		if (!$accessController->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW, $dashboard))
+		{
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_ACCESS_ERROR_VIEW')));
+
+			return null;
+		}
+
+		$currentUserId = (int)CurrentUser::get()->getId();
+		$shareProvider = ServiceLocator::getInstance()->get('biconnector.provider.share');
+		$share = $shareProvider->getByDashboardAndUser($dashboard->getId(), $currentUserId);
+		if (!$share)
+		{
+			return true;
+		}
+
+		try
+		{
+			\Bitrix\BIConnector\Superset\Dashboard\SharePullService::sendRevokeEvent($share->getToken());
+			\Bitrix\BIConnector\Superset\Dashboard\ShareExpireAgent::remove($share->getId());
+			$shareRepository = ServiceLocator::getInstance()->get('biconnector.repository.share');
+			$shareRepository->delete($share->getId());
+		}
+		catch (\Exception $e)
+		{
+			$this->addError(new Error($e->getMessage(), $e->getCode()));
+
+			return null;
+		}
+
+		return true;
 	}
 
 	public function saveScreenshotAction(Model\Dashboard $dashboard, string $content, string $fileType): ?array

@@ -48,10 +48,13 @@ class CMailClientHomeComponent extends CBitrixComponent
 			);
 		}
 
+		$lastViewState = \CUserOptions::getOption('mail', 'last_view_state', \Bitrix\Mail\Helper\MessageFolder::VIEW_STATE_MAILBOX);
+
 		localRedirect(
 			\CHTTP::urlAddParams(
 				$redirect,
 				array_filter(array(
+					'virtual' => ($lastViewState === \Bitrix\Mail\Helper\MessageFolder::VIRTUAL_ALL_MESSAGES && !empty($mailbox)) ? $lastViewState : null,
 					'IFRAME' => isset($_REQUEST['IFRAME']) ? $_REQUEST['IFRAME'] : null,
 					'IFRAME_TYPE' => isset($_REQUEST['IFRAME_TYPE']) ? $_REQUEST['IFRAME_TYPE'] : null,
 				))

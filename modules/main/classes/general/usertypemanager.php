@@ -524,7 +524,7 @@ class CUserTypeManager
 			foreach ($arUserFields as $FIELD_NAME => $arUserField)
 			{
 				$arUserField["VALUE_ID"] = intval($ID);
-				echo $this->GetEditFormHTML($bVarsFromForm, $GLOBALS[$FIELD_NAME], $arUserField);
+				echo $this->GetEditFormHTML($bVarsFromForm, $_POST[$FIELD_NAME] ?? null, $arUserField);
 			}
 		}
 	}
@@ -542,7 +542,7 @@ class CUserTypeManager
 		}
 
 		$files = $options['FILES'] ?? $_FILES;
-		$form = isset($options['FORM']) && is_array($options['FORM']) ? $options['FORM'] : $GLOBALS;
+		$form = isset($options['FORM']) && is_array($options['FORM']) ? $options['FORM'] : $_POST;
 
 		$arUserFields = $this->GetUserFields($entity_id);
 		foreach ($arUserFields as $arUserField)
@@ -550,6 +550,10 @@ class CUserTypeManager
 			$fieldName = $arUserField['FIELD_NAME'];
 			if ($arUserField["EDIT_IN_LIST"] == "Y")
 			{
+				if (!isset($form[$fieldName]))
+				{
+					$form[$fieldName] = $GLOBALS[$fieldName] ?? null;
+				}
 				if ($arUserField["USER_TYPE"]["BASE_TYPE"] == "file")
 				{
 					if (isset($files[$fieldName]))
@@ -559,21 +563,18 @@ class CUserTypeManager
 							$arFields[$fieldName] = [];
 							foreach ($files[$fieldName]["name"] as $key => $value)
 							{
-								$old_id = $form[$fieldName . "_old_id"][$key] ?? null;
+								$old_id = $form[$fieldName . "_old_id"][$key] ?? $GLOBALS[$fieldName . "_old_id"][$key] ?? null;
+								$del = $form[$fieldName . "_del"] ?? $GLOBALS[$fieldName . "_del"] ?? null;
 								$arFields[$fieldName][$key] = [
 									"name" => $files[$fieldName]["name"][$key],
 									"type" => $files[$fieldName]["type"][$key],
 									"tmp_name" => $files[$fieldName]["tmp_name"][$key],
 									"error" => $files[$fieldName]["error"][$key],
 									"size" => $files[$fieldName]["size"][$key],
-									"del" =>
-										isset($form[$fieldName . "_del"])
-										&& is_array($form[$fieldName . "_del"]) &&
-										(in_array($old_id, $form[$fieldName . "_del"]) ||
-											(
-												array_key_exists($key, $form[$fieldName . "_del"]) &&
-												$form[$fieldName . "_del"][$key] == "Y"
-											)
+									"del" => is_array($del)
+										&& (
+											in_array($old_id, $del)
+											|| (isset($del[$key]) && $del[$key] == "Y")
 										),
 									"old_id" => $old_id,
 								];
@@ -582,8 +583,8 @@ class CUserTypeManager
 						else
 						{
 							$arFields[$fieldName] = $files[$fieldName];
-							$arFields[$fieldName]["del"] = $form[$fieldName . "_del"] ?? '';
-							$arFields[$fieldName]["old_id"] = $form[$fieldName . "_old_id"] ?? '';
+							$arFields[$fieldName]["del"] = $form[$fieldName . "_del"] ?? $GLOBALS[$fieldName . "_del"] ?? '';
+							$arFields[$fieldName]["old_id"] = $form[$fieldName . "_old_id"] ?? $GLOBALS[$fieldName . "_old_id"] ?? '';
 						}
 					}
 					else
@@ -674,7 +675,7 @@ class CUserTypeManager
 
 	public function AdminListAddFilterFieldsV2($entityId, &$arFilterFields)
 	{
-		$arUserFields = $this->GetUserFields($entityId, 0, $GLOBALS["lang"]);
+		$arUserFields = $this->GetUserFields($entityId, 0, LANGUAGE_ID);
 		foreach ($arUserFields as $fieldName => $arUserField)
 		{
 			if ($arUserField['SHOW_FILTER'] != 'N' && $arUserField['USER_TYPE']['BASE_TYPE'] != 'file')
@@ -867,7 +868,7 @@ class CUserTypeManager
 
 	public function AdminListAddHeaders($entity_id, &$arHeaders)
 	{
-		$arUserFields = $this->GetUserFields($entity_id, 0, $GLOBALS["lang"]);
+		$arUserFields = $this->GetUserFields($entity_id, 0, LANGUAGE_ID);
 		foreach ($arUserFields as $FIELD_NAME => $arUserField)
 		{
 			if ($arUserField["SHOW_IN_LIST"] == "Y")
@@ -895,7 +896,7 @@ class CUserTypeManager
 
 	public function AddFindFields($entity_id, &$arFindFields)
 	{
-		$arUserFields = $this->GetUserFields($entity_id, 0, $GLOBALS["lang"]);
+		$arUserFields = $this->GetUserFields($entity_id, 0, LANGUAGE_ID);
 		foreach ($arUserFields as $FIELD_NAME => $arUserField)
 		{
 			if ($arUserField["SHOW_FILTER"] != "N" && $arUserField["USER_TYPE"]["BASE_TYPE"] != "file")
@@ -910,7 +911,7 @@ class CUserTypeManager
 
 	public function AdminListShowFilter($entity_id)
 	{
-		$arUserFields = $this->GetUserFields($entity_id, 0, $GLOBALS["lang"]);
+		$arUserFields = $this->GetUserFields($entity_id, 0, LANGUAGE_ID);
 		foreach ($arUserFields as $FIELD_NAME => $arUserField)
 		{
 			if ($arUserField["SHOW_FILTER"] != "N" && $arUserField["USER_TYPE"]["BASE_TYPE"] != "file")
@@ -969,7 +970,7 @@ class CUserTypeManager
 				}
 				elseif ($arUserField["USER_TYPE"]["BASE_TYPE"] == "file")
 				{
-					$form_value = $GLOBALS[$arUserField["FIELD_NAME"] . "_old_id"];
+					$form_value = $_POST[$arUserField["FIELD_NAME"] . "_old_id"] ?? $GLOBALS[$arUserField["FIELD_NAME"] . "_old_id"] ?? '';
 				}
 				elseif ($arUserField["EDIT_IN_LIST"] == "N")
 				{

@@ -8,6 +8,8 @@ use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TemplateAccessController;
 use Bitrix\Tasks\Slider\Path\PathMaker;
 use Bitrix\Tasks\Slider\Path\TemplatePathMaker;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Public\Provider\Template\TemplateRecentProvider;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
@@ -20,10 +22,12 @@ class TaskTemplateProvider extends BaseProvider
 {
 	protected const ENTITY_ID = 'task-template';
 	protected const LIMIT = 30;
+	private const MOBILE_CONTEXT = 'mobile-task';
 
 	protected int $templateId;
 	protected bool $withFooter = true;
 	protected bool $withTab = false;
+	protected TemplateRecentProvider $templateRecentProvider;
 
 	public function __construct(array $options = [])
 	{
@@ -32,6 +36,7 @@ class TaskTemplateProvider extends BaseProvider
 		$this->templateId = $options['templateId'] ?? 0;
 		$this->withFooter = $options['withFooter'] ?? true;
 		$this->withTab = $options['withTab'] ?? false;
+		$this->templateRecentProvider = Container::getInstance()->get(TemplateRecentProvider::class);
 	}
 
 	public function isAvailable(): bool
@@ -41,7 +46,7 @@ class TaskTemplateProvider extends BaseProvider
 
 	public function getItems(array $ids): array
 	{
-		return [];
+		return $this->getTemplateItems(['ids' => $ids]);
 	}
 
 	public function getSelectedItems(array $ids): array
@@ -58,13 +63,13 @@ class TaskTemplateProvider extends BaseProvider
 
 	public function fillDialog(Dialog $dialog): void
 	{
-		$this->fillWithRecentItems($dialog);
-
-		if ($dialog->getItemCollection()->count() < static::LIMIT)
+		if ($this->isMobileContext($dialog))
 		{
-			$templateItems = $this->getTemplateItems(['excludeIds' => $this->getRecentItemsIds($dialog)]);
-
-			$dialog->addItems($templateItems);
+			$this->fillMobileDialog($dialog);
+		}
+		else
+		{
+			$this->fillWebDialog($dialog);
 		}
 
 		if ($this->withFooter)
@@ -94,6 +99,37 @@ class TaskTemplateProvider extends BaseProvider
 		$dialog->addTab($tab);
 	}
 
+	private function fillMobileDialog(Dialog $dialog): void
+	{
+		$recentItemIds = $this->getRecentItemsIds($dialog);
+		$remainingSlots = static::LIMIT - count($recentItemIds);
+		if ($remainingSlots > 0)
+		{
+			$templateItems = $this->getTemplateItems([
+				'excludeIds' => $recentItemIds,
+				'limit' => $remainingSlots,
+			]);
+
+			$dialog->addRecentItems($templateItems);
+		}
+	}
+
+	private function fillWebDialog(Dialog $dialog): void
+	{
+		$this->fillWithBusinessRecentItems($dialog);
+
+		$remainingSlots = static::LIMIT - $dialog->getItemCollection()->count();
+		if ($remainingSlots > 0)
+		{
+			$templateItems = $this->getTemplateItems([
+				'excludeIds' => $this->getRecentItemsIds($dialog),
+				'limit' => $remainingSlots,
+			]);
+
+			$dialog->addItems($templateItems);
+		}
+	}
+
 	private function getFooterOptions(string $context): array
 	{
 		$userId = (int)CurrentUser::get()->getId();
@@ -108,34 +144,30 @@ class TaskTemplateProvider extends BaseProvider
 		];
 	}
 
-	private function fillWithRecentItems(Dialog $dialog): void
+	private function fillWithBusinessRecentItems(Dialog $dialog): void
 	{
-		if ($dialog->getRecentItems()->count() <= 0)
+		$dialog->cleanRecentItems();
+
+		$templateIds = $this->templateRecentProvider->getRecentIds($GLOBALS['USER']->getId());
+		$templates = $this->getTemplates(['ids' => $templateIds]);
+
+		$templateIds = array_fill_keys($templateIds, null);
+		$templates = array_replace($templateIds, $templates);
+
+		foreach ($templates as $id => $title)
 		{
-			return;
-		}
-
-		$templates = $this->getTemplates(['ids' => $this->getRecentItemsIds($dialog)]);
-		foreach ($dialog->getRecentItems()->getAll() as $item)
-		{
-			/** @var RecentItem $item */
-			$itemId = $item->getId();
-
-			if (
-				!array_key_exists($itemId, $templates)
-				|| $dialog->getItemCollection()->get(static::ENTITY_ID, $itemId)
-			)
-			{
-				continue;
-			}
-
-			$dialog->addItem(static::makeItem($itemId, $templates[$itemId]));
-
-			if ($dialog->getItemCollection()->count() >= static::ENTITY_ID)
+			if ($dialog->getItemCollection()->count() >= static::LIMIT)
 			{
 				break;
 			}
+
+			$dialog->addRecentItem(static::makeItem($id, $title));
 		}
+	}
+
+	private function isMobileContext(Dialog $dialog): bool
+	{
+		return $dialog->getContext() === self::MOBILE_CONTEXT;
 	}
 
 	private function getRecentItemsIds(Dialog $dialog): array
@@ -168,7 +200,7 @@ class TaskTemplateProvider extends BaseProvider
 
 		$navigation = [
 			'NAV_PARAMS' => [
-				'nTopCount' => static::LIMIT,
+				'nTopCount' => $options['limit'] ?? static::LIMIT,
 			],
 		];
 		$select = ['ID', 'TITLE'];

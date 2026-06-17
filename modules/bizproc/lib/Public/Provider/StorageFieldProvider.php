@@ -32,6 +32,14 @@ class StorageFieldProvider
 		return $this->repository->getByStorageId($id, $select);
 	}
 
+	/**
+	 * @param array $ids
+	 */
+	public function getByStorageIds(array $ids, array $select = []): StorageFieldCollection
+	{
+		return $this->repository->getByStorageIds($ids, $select);
+	}
+
 	public function getList(GridParams $gridParams): StorageFieldCollection
 	{
 		return $this->repository->getList(

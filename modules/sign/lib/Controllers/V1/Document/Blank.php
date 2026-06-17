@@ -2,6 +2,7 @@
 
 namespace Bitrix\Sign\Controllers\V1\Document;
 
+use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
@@ -10,19 +11,35 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Request;
 use Bitrix\Main\SystemException;
 use Bitrix\Sign\Access\ActionDictionary;
+use Bitrix\Sign\Attribute;
 use Bitrix\Sign\Access\Service\BlankAccessService;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Result\Service\Sign\CreateBlankArchiveResult;
 use Bitrix\Sign\Upload\BlankUploadController;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Item;
+use Bitrix\Sign\Type\Access\AccessibleItemType;
+use Bitrix\Sign\Util\Filename;
 use Bitrix\Sign\Util\Query\Db\Paginator;
 
 class Blank extends \Bitrix\Sign\Engine\Controller
 {
+
 	public function __construct(Request $request = null)
 	{
 		parent::__construct($request);
 		Loader::includeModule('ui');
+	}
+
+	public function configureActions(): array
+	{
+		$actionsConfiguration = parent::configureActions();
+		$actionsConfiguration['downloadByDocument']['-prefilters'] = [
+			Main\Engine\ActionFilter\ContentType::class,
+			Main\Engine\ActionFilter\Csrf::class,
+		];
+
+		return $actionsConfiguration;
 	}
 
 	/**
@@ -242,4 +259,83 @@ class Blank extends \Bitrix\Sign\Engine\Controller
 		return $result;
 	}
 
+	#[Attribute\Access\LogicOr(
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_DOCUMENT_READ,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'documentId',
+		),
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_B2E_DOCUMENT_READ,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'documentId',
+		),
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_B2E_TEMPLATE_READ,
+		),
+	)]
+	public function downloadByDocumentAction(int $documentId): Main\Engine\Response\BFile|Main\Engine\Response\File|array
+	{
+		$document = $this->container->getDocumentRepository()->getById($documentId);
+		if ($document === null)
+		{
+			$this->addError(new Error('Document not found', 'DOCUMENT_NOT_FOUND'));
+
+			return [];
+		}
+
+		$accessController = $this->getAccessController();
+		$readPermission = Type\DocumentScenario::isB2eScenarioByDocument($document)
+			? ActionDictionary::ACTION_B2E_DOCUMENT_READ
+			: ActionDictionary::ACTION_DOCUMENT_READ
+		;
+		if (!$accessController->checkByItem($readPermission, $document))
+		{
+			$this->addError(new Error('Access denied', 'ACCESS_DENIED'));
+
+			return [];
+		}
+
+		$blank = $this->container->getBlankRepository()->getById($document->blankId);
+		if ($blank === null)
+		{
+			$this->addError(new Error('Blank not found', 'BLANK_NOT_FOUND'));
+
+			return [];
+		}
+
+		if (!$this->container->getSignBlankService()->hasDownloadableFile($blank))
+		{
+			$this->addError(new Error('Blank has no files', 'BLANK_NO_FILES'));
+
+			return [];
+		}
+
+		if ($blank->fileCollection->count() === 1)
+		{
+			$file = $blank->fileCollection->first();
+			$fileArray = \CFile::GetFileArray($file->id);
+			$originalName = (string)($fileArray['ORIGINAL_NAME'] ?? '');
+			$downloadName = $originalName !== ''
+				? Filename::compose($originalName, $document->title)
+				: null
+			;
+
+			return Main\Engine\Response\BFile::createByFileData($fileArray, $downloadName)
+				->showInline(false)
+			;
+		}
+
+		$result = $this->container->getSignBlankArchiveService()->createFromBlank($blank);
+		if (!$result instanceof CreateBlankArchiveResult)
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return (new Main\Engine\Response\File($result->filePath, $result->fileName, 'application/zip'))
+			->showInline(false)
+		;
+	}
 }

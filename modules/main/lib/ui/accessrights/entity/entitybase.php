@@ -42,4 +42,9 @@ abstract class EntityBase
 	}
 
 	abstract protected function loadModel();
+
+	public function exists(): bool
+	{
+		return (bool)$this->model;
+	}
 }

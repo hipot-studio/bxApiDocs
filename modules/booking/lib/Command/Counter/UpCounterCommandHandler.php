@@ -33,11 +33,7 @@ class UpCounterCommandHandler
 
 	private function handle(UpCounterCommand $command): void
 	{
-		$userId = $command->userId;
-		if (!$userId)
-		{
-			return;
-		}
+		$userId = $command->userId ?? 0;
 
 		$this->counterRepository->up(
 			entityId: $command->entityId,
@@ -45,12 +41,15 @@ class UpCounterCommandHandler
 			userId: $userId,
 		);
 
-		\CUserCounter::Set(
-			$userId,
-			CounterDictionary::LeftMenu->value,
-			$this->counterRepository->get($userId, CounterDictionary::Total),
-			'**',
-		);
+		if ($userId > 0)
+		{
+			\CUserCounter::Set(
+				$userId,
+				CounterDictionary::LeftMenu->value,
+				$this->counterRepository->get($userId, CounterDictionary::Total),
+				'**',
+			);
+		}
 
 		(new PushService())->sendEvent(
 			new PushEvent(

@@ -11,6 +11,8 @@ use Bitrix\Main\Localization\Loc;
 
 final class RepeatSale implements PermissionEntity
 {
+	public const ENTITY_CODE = 'RS';
+
 	private function permissions(): array
 	{
 		return [
@@ -30,7 +32,7 @@ final class RepeatSale implements PermissionEntity
 		$name = (string)Loc::getMessage('CRM_SECURITY_ROLE_ENTITY_TYPE_CRM_REPEAT_SALE');
 
 		return [
-			new EntityDTO('RS', $name, [], $this->permissions()),
+			new EntityDTO(self::ENTITY_CODE, $name, [], $this->permissions()),
 		];
 	}
 }

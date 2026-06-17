@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use Bitrix\Bizproc\Internal\Exception\ErrorBuilder;
 use Bitrix\Bizproc\Internal\Exception\Exception;
-use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\Activity\BaseActivity;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
@@ -16,7 +15,7 @@ use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Result;
-use Bitrix\Bizproc\Internal\Service\StorageField\FieldService;
+use Bitrix\Bizproc\Internal\Service\StorageActivity\StorageActivityService;
 use Bitrix\Bizproc\Internal\Repository\Mapper\StorageItemMapper;
 use Bitrix\Bizproc\Public\Provider\StorageFieldProvider;
 
@@ -163,10 +162,7 @@ class CBPCreateStorageNode extends BaseActivity implements IBPConfigurableActivi
 		$rawStorageCode = $this->StorageCode;
 		$storageCode = CBPHelper::hasStringRepresentation($rawStorageCode) ? (string)$rawStorageCode : '';
 
-		$provider = new StorageTypeProvider();
-		$type = $provider->getType(['CODE' => $storageCode], ['ID']);
-
-		return (int)$type?->getId();
+		return StorageActivityService::resolveStorageId(null, $storageCode);
 	}
 
 	private function createStorageFields(int $storageId, array $fieldCodes, \Bitrix\Main\ErrorCollection $errors): void
@@ -233,7 +229,7 @@ class CBPCreateStorageNode extends BaseActivity implements IBPConfigurableActivi
 				'Name' => Loc::getMessage('BPCSN_DESCRIPTION_CODE_FIELD_NAME'),
 				'FieldName' => 'StorageCode',
 				'Type' => \Bitrix\Bizproc\FieldType::STRING,
-				'Required' => false,
+				'Required' => true,
 				'AllowSelection' => true
 			],
 			'Mode' => [
@@ -250,7 +246,7 @@ class CBPCreateStorageNode extends BaseActivity implements IBPConfigurableActivi
 				'Type' => \Bitrix\Bizproc\FieldType::CUSTOM,
 				'Required' => false,
 				'AllowSelection' => true,
-				'CustomType' => 'storage-fields',
+				'CustomType' => 'storageFieldSelector',
 				'Options' => [
 					'codeCaption' => Loc::getMessage('BPCSN_DESCRIPTION_FIELD_CODE_CAPTION') ?? '',
 					'copyNotification' => Loc::getMessage('BPCSN_DESCRIPTION_FIELD_COPY_NOTIFICATION') ?? '',
@@ -285,36 +281,42 @@ class CBPCreateStorageNode extends BaseActivity implements IBPConfigurableActivi
 			];
 		}
 		$data['StorageFields'] = $storageFields;
-		if (!empty($currentValues['SelectedFields']))
+		if (empty($currentValues['SelectedFields']))
 		{
-			$selectedFields = [];
-			foreach ($currentValues['SelectedFields'] as $field)
+			$result->addError(
+				new \Bitrix\Main\Error(Loc::getMessage('BPCSN_DESCRIPTION_EMPTY_FIELDS_ERROR') ?? '')
+			);
+
+			return $result;
+		}
+
+		$selectedFields = [];
+		foreach ($currentValues['SelectedFields'] as $field)
+		{
+			$jsonField = \CBPHelper::stringify($field);
+			if (empty($jsonField) || !Json::validate($jsonField))
 			{
-				$jsonField = \CBPHelper::stringify($field);
-				if (empty($jsonField) || !Json::validate($jsonField))
-				{
-					$result->addError(ErrorMessage::GET_DATA_ERROR->getError());
+				$result->addError(ErrorMessage::GET_DATA_ERROR->getError());
 
-					return $result;
-				}
-
-				$storageField = Json::decode($jsonField);
-				if (!static::validateStorageField($storageField))
-				{
-					$result->addError(ErrorMessage::GET_DATA_ERROR->getError());
-
-					return $result;
-				}
-
-				$selectedFields[] = $storageField;
-				$data['StorageFields'][$storageField['code']] = [
-					'Name' => $storageField['name'],
-					'Type' => $storageField['type']
-				];
+				return $result;
 			}
 
-			$data['SelectedFields'] = $selectedFields;
+			$storageField = Json::decode($jsonField);
+			if (!static::validateStorageField($storageField))
+			{
+				$result->addError(ErrorMessage::GET_DATA_ERROR->getError());
+
+				return $result;
+			}
+
+			$selectedFields[] = $storageField;
+			$data['StorageFields'][$storageField['code']] = [
+				'Name' => $storageField['name'],
+				'Type' => $storageField['type']
+			];
 		}
+
+		$data['SelectedFields'] = $selectedFields;
 
 		$result->setData($data);
 
@@ -343,29 +345,14 @@ class CBPCreateStorageNode extends BaseActivity implements IBPConfigurableActivi
 
 	private static function getSystemFields(): array
 	{
-		$fieldService = new FieldService();
-		$fields = $fieldService->getEntityFields();
-
-		$supportedFields = [
+		return StorageActivityService::getSystemFields([
 			'ID',
-			'CODE',
 			'WORKFLOW_ID',
 			'DOCUMENT_ID',
 			'TEMPLATE_ID',
 			'CREATED_BY',
 			'CREATED_TIME',
-		];
-
-		$result = [];
-		foreach ($fields as $field)
-		{
-			if (in_array($field['ID'], $supportedFields, true))
-			{
-				$result[$field['ID']] = $field;
-			}
-		}
-
-		return $result;
+		]);
 	}
 
 	private function composeCreateErrorText(\Bitrix\Main\ErrorCollection $errors): string

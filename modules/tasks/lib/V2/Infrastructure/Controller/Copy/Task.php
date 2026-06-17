@@ -28,6 +28,7 @@ class Task extends BaseController
 		bool $withCheckLists = true,
 		bool $withAttachments = true,
 		bool $withRelatedTasks = true,
+		bool $view = false,
 	): ?Entity\EntityInterface
 	{
 		$copyConfig = new CopyConfig(
@@ -52,6 +53,12 @@ class Task extends BaseController
 			return null;
 		}
 
-		return $taskProvider->get(new TaskParams(taskId: $result->getId(), userId: $this->userId));
+		return $taskProvider->get(
+			new TaskParams(
+				taskId: $result->getId(),
+				userId: $this->userId,
+				view: $view,
+			)
+		);
 	}
 }

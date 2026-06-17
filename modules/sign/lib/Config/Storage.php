@@ -27,13 +27,44 @@ class Storage
 		return self::$instance;
 	}
 
-	public function isAvailable(?string $region = null): bool
+	public function canBeEnabled(?string $region = null): bool
 	{
 		if (!Loader::includeModule('crm'))
 		{
 			return false;
 		}
 
+		static $canBeEnabled = [];
+
+		$region = $region ?: Main\Application::getInstance()->getLicense()->getRegion();
+
+		if (isset($canBeEnabled[$region]))
+		{
+			return $canBeEnabled[$region];
+		}
+
+		if (empty($this->getServiceAddress($region)))
+		{
+			$canBeEnabled[$region] = false;
+
+			return false;
+		}
+
+		$isPublic = ($this->read('service.publicity')[$region] ?? false) === true;
+		if (!$isPublic && Main\Config\Option::get('sign', '~available', 'N') !== 'Y')
+		{
+			$canBeEnabled[$region] = false;
+
+			return false;
+		}
+
+		$canBeEnabled[$region] = true;
+
+		return true;
+	}
+
+	public function isAvailable(?string $region = null): bool
+	{
 		static $isAvailable = [];
 
 		$region = $region ?: Main\Application::getInstance()->getLicense()->getRegion();
@@ -43,15 +74,7 @@ class Storage
 			return $isAvailable[$region];
 		}
 
-		if (empty($this->getServiceAddress($region)))
-		{
-			$isAvailable[$region] = false;
-
-			return false;
-		}
-
-		$isPublic = ($this->read('service.publicity')[$region] ?? false) === true;
-		if (!$isPublic && Main\Config\Option::get('sign', '~available', 'N') !== 'Y')
+		if (!$this->canBeEnabled($region))
 		{
 			$isAvailable[$region] = false;
 

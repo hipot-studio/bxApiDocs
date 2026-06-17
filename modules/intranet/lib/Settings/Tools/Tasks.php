@@ -3,6 +3,7 @@
 namespace Bitrix\Intranet\Settings\Tools;
 
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -62,6 +63,12 @@ class Tasks extends Tool
 
 	public function getName(): string
 	{
+		$isNewProjectsOn = (Option::get('socialnetwork', 'new_projects', 'N') === 'Y');
+		if ($isNewProjectsOn)
+		{
+			return Loc::getMessage('INTRANET_SETTINGS_TOOLS_TASKS_MAIN_NEW') ?? '';
+		}
+
 		return Loc::getMessage('INTRANET_SETTINGS_TOOLS_TASKS_MAIN') ?? '';
 	}
 

@@ -354,7 +354,7 @@ class CAllUserTypeEntity extends CDBResult
 	 * <li>SORT - sort order (default 100)
 	 * <li>MULTIPLE - multiplicity flag Y/N (default N)
 	 * <li>MANDATORY - mandatory value input flag Y/N (default N)
-	 * <li>SHOW_FILTER - whether to show in the admin list filter and what type to use. see below.
+	 * <li>SHOW_FILTER - whether to show in the admin list filter and what type to use. See below.
 	 * <li>SHOW_IN_LIST - whether to show in the admin list (default Y)
 	 * <li>EDIT_IN_LIST - allow editing in forms, but not in API! (default Y)
 	 * <li>IS_SEARCHABLE - field participates in search (default N)
@@ -515,7 +515,7 @@ class CAllUserTypeEntity extends CDBResult
 			$this->CreatePropertyTables($arFields["ENTITY_ID"]);
 
 			$tableName = 'b_uts_' . $entityId;
-			$tableFields = $DB->GetTableFields($tableName);
+			$tableFields = $DB->GetTableFields($tableName, false);
 
 			if (isset($tableFields[$arFields['FIELD_NAME']]))
 			{
@@ -551,7 +551,7 @@ class CAllUserTypeEntity extends CDBResult
 					{
 						foreach ($arFields[$label] as $lang => $value)
 						{
-							$arLangs[$lang][$label] = $value;
+							$arLangs[mb_strtolower($lang)][$label] = $value;
 						}
 					}
 				}
@@ -705,7 +705,7 @@ class CAllUserTypeEntity extends CDBResult
 			{
 				foreach ($arFields[$label] as $lang => $value)
 				{
-					$arLangs[$lang][$label] = $value;
+					$arLangs[mb_strtolower($lang)][$label] = $value;
 				}
 			}
 		}
@@ -983,7 +983,7 @@ class CAllUserTypeEntity extends CDBResult
 			$fields[$field["FIELD_NAME"]] = 1;
 		}
 
-		$columns = $DB->GetTableFieldsList($table);
+		$columns = array_keys($DB->GetTableFields($table, false));
 
 		$drops = [];
 		foreach ($columns as $column)

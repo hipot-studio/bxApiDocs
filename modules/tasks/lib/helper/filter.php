@@ -1236,7 +1236,6 @@ class Filter extends Common
 							$filter['MEMBER'] = $this->getUserId();
 						}
 						$filter['WITH_NEW_COMMENTS'] = 'Y';
-						$filter['IS_MUTED'] = 'N';
 						break;
 
 					case Type::TYPE_PROJECT_EXPIRED:

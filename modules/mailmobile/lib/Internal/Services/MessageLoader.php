@@ -2,10 +2,12 @@
 
 namespace Bitrix\MailMobile\Internal\Services;
 
+use Bitrix\Mail\Helper\Message;
 use Bitrix\Mail\Helper\Dto\MailMessage;
 use Bitrix\Mail\Helper\MailMessageChainProvider;
 use Bitrix\Mail\Helper\Message\Loader\MessageFilter;
 use Bitrix\Mail\Helper\Message\Loader\QueryBuilder;
+use Bitrix\Mail\Internals\MailboxDirectoryTable;
 use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\LoaderException;
@@ -41,10 +43,47 @@ class MessageLoader
 			$filter->getArray(),
 		);
 
-		return self::aggregateMessages($query->fetchAll(), $hideReadStatuses);
+		$rows = $query->fetchAll();
+		$folderIds = self::buildFolderIdMap($rows);
+
+		return self::aggregateMessages($rows, $folderIds, $hideReadStatuses);
 	}
 
-	private static function aggregateMessages(array $rows, bool $hideReadStatuses = false): array
+	/**
+	 * @param array $rows
+	 * @return array<int, array<string, int>> Nested map: [mailboxId][dirMd5] => folderId
+	 */
+	private static function buildFolderIdMap(array $rows): array
+	{
+		if (empty($rows))
+		{
+			return [];
+		}
+
+		$result = MailboxDirectoryTable::getList([
+			'select' => ['ID', 'MAILBOX_ID', 'DIR_MD5'],
+			'filter' => [
+				'@MAILBOX_ID' => array_unique(array_map('intval', array_column($rows, 'MAILBOX_ID'))),
+				'@DIR_MD5' => array_unique(array_column($rows, 'DIR_MD5')),
+			],
+		]);
+
+		$map = [];
+		while ($dir = $result->fetch())
+		{
+			$map[(int)$dir['MAILBOX_ID']][$dir['DIR_MD5']] = (int)$dir['ID'];
+		}
+
+		return $map;
+	}
+
+	/**
+	 * @param array $rows
+	 * @param array<int, array<string, int>> $folderIds Nested map: [mailboxId][dirMd5] => folderId
+	 * @param bool $hideReadStatuses
+	 * @return array
+	 */
+	private static function aggregateMessages(array $rows, array $folderIds, bool $hideReadStatuses = false): array
 	{
 		$messageList = [];
 
@@ -53,12 +92,16 @@ class MessageLoader
 			if (!array_key_exists($row['MESSAGE_ID'], $messageList))
 			{
 				$message = new MailMessage();
-				$message->abbreviatedText = self::abbreviateText($row['BODY']);
 				$message->id = (int)$row['MESSAGE_ID'];
 				$message->uidId = $row['UID_ID'].'-'.$row['MAILBOX_ID'];
-				$message->subject = self::abbreviateText($row['SUBJECT']);
+				$message->mailboxId = (int)$row['MAILBOX_ID'];
+				$message->folderId = $folderIds[$message->mailboxId][$row['DIR_MD5'] ?? ''] ?? null;
+				$message->subject = (string)$row['SUBJECT'];
+				$message->abbreviatedText = self::abbreviateText(
+					Message::getDisplaySnippet((string)$row['BODY'], $message->subject),
+				);
 				MailMessageChainProvider::fillRecipients($message, $row);
-				$message->date = (int)($row['FIELD_DATE']->getTimestamp());
+				$message->date = (int)(($row['INTERNALDATE'] ?? $row['FIELD_DATE'])->getTimestamp());
 				$messageList[$row['MESSAGE_ID']] = $message;
 
 				if (isset($row['OPTIONS']['attachments']) &&  isset($row['OPTIONS']['attachments']) > 0)
@@ -93,7 +136,14 @@ class MessageLoader
 
 	private static function abbreviateText(string $text): string
 	{
-		return trim(preg_replace('/\s+/', ' ', mb_substr($text, 0, 50)));
+		$text = str_replace(["\r\n", "\n", "\r", "\t"], ' ', mb_substr($text, 0, 50));
+
+		while (str_contains($text, '  '))
+		{
+			$text = str_replace('  ', ' ', $text);
+		}
+
+		return trim($text);
 	}
 
 	/**

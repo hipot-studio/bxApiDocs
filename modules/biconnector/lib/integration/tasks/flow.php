@@ -34,6 +34,11 @@ class Flow extends Dataset
 		return $this->getMessage('FLOW_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('FLOW_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	/**
 	 * @return Result
 	 */

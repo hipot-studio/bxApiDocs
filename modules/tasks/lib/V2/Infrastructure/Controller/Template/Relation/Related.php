@@ -14,6 +14,7 @@ use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Read;
 use Bitrix\Tasks\V2\Public\Command\Template\Relation\AddRelatedTaskTemplateCommand;
 use Bitrix\Tasks\V2\Public\Command\Template\Relation\DeleteRelatedTaskTemplateCommand;
+use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskByIdsParams;
 use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskParams;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Access\Template\Permission;
@@ -32,6 +33,7 @@ class Related extends BaseController
 		RelatedTaskTemplateProvider $relatedTaskTemplateProvider,
 		SelectInterface|null $relationTaskSelect = null,
 		bool $withIds = true,
+		bool $withCompleted = true,
 	): array
 	{
 		$params = new RelationTaskParams(
@@ -39,8 +41,10 @@ class Related extends BaseController
 			taskId: 0,
 			templateId: (int)$template->id,
 			pager: Pager::buildFromPageNavigation($pageNavigation),
-			checkRootAccess: false,
 			select: $relationTaskSelect,
+			checkRootAccess: false,
+			withCompleted: $withCompleted,
+			withSubTasks: false,
 		);
 
 		$response = [
@@ -49,7 +53,10 @@ class Related extends BaseController
 
 		if ($withIds)
 		{
-			$response['ids'] = $relatedTaskTemplateProvider->getTaskIds($params);
+			$idsData = $relatedTaskTemplateProvider->getTaskIdsWithStatuses($params);
+
+			$response['ids'] = $idsData['ids'];
+			$response['statuses'] = $idsData['statuses'];
 		}
 
 		return $response;
@@ -63,10 +70,18 @@ class Related extends BaseController
 		#[ElementsType(typeEnum: Type::Numeric)]
 		array $taskIds,
 		RelatedTaskTemplateProvider $relatedTaskTemplateProvider,
+		bool $withCompleted = true,
 	): array
 	{
+		$params = new RelationTaskByIdsParams(
+			taskIds: $taskIds,
+			userId: $this->userId,
+			withCompleted: $withCompleted,
+			withSubTasks: false,
+		);
+
 		return [
-			'tasks' => $relatedTaskTemplateProvider->getTasksByIds($taskIds, $this->userId),
+			'tasks' => $relatedTaskTemplateProvider->getTasksByIds($params),
 		];
 	}
 

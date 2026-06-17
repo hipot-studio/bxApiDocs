@@ -349,6 +349,23 @@ class SecuritySettings extends AbstractSettings
 				label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_REST_CREATE_ACCESS_INHOOK'),
 				items: $accessCodes,
 			);
+
+			if ($this->integrationAccessPolicy->isLocalAppAccessPolicyEnabled())
+			{
+				$data['selectorLocalAppCreate'] = new Selector(
+					id: 'settings-security-field-local-app-create',
+					name: 'rest_local_app_create_rights[]',
+					label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_REST_LOCAL_APP_CREATE'),
+					items: $this->integrationAccessPolicy->getLocalAppCreatorGroupList(),
+				);
+
+				$data['selectorPersonalAppCreate'] = new Selector(
+					id: 'settings-security-field-personal-app-create',
+					name: 'rest_personal_app_create_rights[]',
+					label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_REST_PERSONAL_APP_CREATE'),
+					items: $this->integrationAccessPolicy->getPersonalAppCreatorGroupList(),
+				);
+			}
 		}
 
 		$data['isWaterMarksEnabled'] = new Switcher(
@@ -526,8 +543,18 @@ class SecuritySettings extends AbstractSettings
 
 			foreach ($ipRights as $userId => $ipList)
 			{
+				if (!is_string($userId) || empty($userId))
+				{
+					continue;
+				}
+
+				$userId = $this->normalizeIpAccessRight($userId);
 				$ipString = implode(', ', $ipList);
-				$ipUsersList[$ipString][] = $userId;
+
+				if (!in_array($userId, $ipUsersList[$ipString] ?? [], true))
+				{
+					$ipUsersList[$ipString][] = $userId;
+				}
 			}
 
 			$fieldNumber = 0;
@@ -552,6 +579,16 @@ class SecuritySettings extends AbstractSettings
 			$this->integrationAccessPolicy->setIncomingWebhookCreatorGroupList(
 				$this->data['rest_incoming_webhook_create_own_rights'] ?? []
 			);
+
+			if ($this->integrationAccessPolicy->isLocalAppAccessPolicyEnabled())
+			{
+				$this->integrationAccessPolicy->setLocalAppCreatorGroupList(
+					$this->data['rest_local_app_create_rights'] ?? []
+				);
+				$this->integrationAccessPolicy->setPersonalAppCreatorGroupList(
+					$this->data['rest_personal_app_create_rights'] ?? []
+				);
+			}
 		}
 	}
 
@@ -591,6 +628,13 @@ class SecuritySettings extends AbstractSettings
 
 					foreach ($userRightList[$right] as $user)
 					{
+						if (!is_string($user) || empty($user))
+						{
+							continue;
+						}
+
+						$user = $this->normalizeIpAccessRight($user);
+
 						if (empty($ipSettings[$user]))
 						{
 							$ipSettings[$user] = $ipList;
@@ -605,6 +649,11 @@ class SecuritySettings extends AbstractSettings
 
 			Rights::getInstance()->saveIpAccessRights($ipSettings);
 		}
+	}
+
+	private function normalizeIpAccessRight(string $accessCode): string
+	{
+		return $accessCode === 'UA' ? 'AU' : $accessCode;
 	}
 
 	public function find(string $query): array
@@ -640,6 +689,11 @@ class SecuritySettings extends AbstractSettings
 		{
 			$searchIndex['settings-security-section-rest-integration'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_REST_INTEGRATION');
 			$searchIndex['rest_incoming_webhook_create_own_rights'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_REST_CREATE_ACCESS_INHOOK');
+			if ($this->integrationAccessPolicy->isLocalAppAccessPolicyEnabled())
+			{
+				$searchIndex['rest_local_app_create_rights'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_REST_LOCAL_APP_CREATE');
+				$searchIndex['rest_personal_app_create_rights'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_REST_PERSONAL_APP_CREATE');
+			}
 		}
 
 		$searchEngine = SearchEngine::initWithDefaultFormatter($searchIndex);

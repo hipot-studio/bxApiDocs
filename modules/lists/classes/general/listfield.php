@@ -138,12 +138,19 @@ abstract class CListField
 	public function GetSettings()
 	{
 		$arField = $this->_read_from_cache($this->_field_id);
-		if($arField)
+		if ($arField)
 		{
-			$res = unserialize($arField["SETTINGS"], ['allowed_classes' => false]);
-			if(is_array($res))
-				return $res;
+			$settings = $arField['SETTINGS'] ?? null;
+			if (is_string($settings) && $settings !== '')
+			{
+				$res = unserialize($settings, ['allowed_classes' => false]);
+				if (is_array($res))
+				{
+					return $res;
+				}
+			}
 		}
+
 		return $this->GetSettingsDefaults();
 	}
 

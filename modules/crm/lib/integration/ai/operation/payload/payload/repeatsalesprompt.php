@@ -2,9 +2,9 @@
 
 namespace Bitrix\Crm\Integration\AI\Operation\Payload\Payload;
 
+use Bitrix\Crm\Copilot\Pipeline\TargetResolver;
 use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\AI\AIManager;
-use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 use Bitrix\Crm\Integration\AI\Operation\Payload\CalcMarkersInterface;
 use Bitrix\Crm\Integration\AI\Operation\Payload\PayloadInterface;
 use Bitrix\Crm\Integration\AI\Operation\Payload\SandboxInterface;
@@ -22,7 +22,12 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 
 	public function getPayloadCode(): string
 	{
-		return 'repeat_sales_prompt';
+		if ($this->getBaseDealId() === null)
+		{
+			return 'repeat_sales_prompt';
+		}
+
+		return 'repeat_sales_with_base_deal_prompt';
 	}
 
 	public function setMarkers(array $markers): PayloadInterface
@@ -40,6 +45,7 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 			$clientEntityTypeId = (int)($this->dataForCalcMarkers['clientEntityTypeId'] ?? 0);
 			$clientEntityId = (int)($this->dataForCalcMarkers['clientEntityId'] ?? 0);
 			$entityIdentifier = $this->identifier;
+			$baseDealId = $this->getBaseDealId();
 		}
 		else
 		{
@@ -51,13 +57,14 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 
 			$providerParams = $activity['PROVIDER_PARAMS'] ?? [];
 			$segmentId = (int)($activity['PROVIDER_PARAMS']['SEGMENT_ID'] ?? 0);
-			$clientEntityTypeId = (int)($providerParams['BASE_ENTITY_TYPE_ID'] ?? $providerParams['CLIENT_ENTITY_TYPE_ID'] ?? 0);
-			$clientEntityId = (int)($providerParams['BASE_ENTITY_ID'] ?? $providerParams['CLIENT_ENTITY_ID'] ?? 0);
-			$entityIdentifier = (new Orchestrator())->findPossibleFillFieldsTarget($this->identifier->getEntityId());
+			$clientEntityTypeId = (int)($providerParams['CLIENT_ENTITY_TYPE_ID'] ?? $providerParams['BASE_ENTITY_TYPE_ID'] ?? 0);
+			$clientEntityId = (int)($providerParams['CLIENT_ENTITY_ID'] ?? $providerParams['BASE_ENTITY_ID'] ?? 0);
+			$entityIdentifier = (new TargetResolver())->findTarget($this->identifier->getEntityId());
+			$baseDealId = $this->getBaseDealId();
 		}
 
 		$segmentData = $this->getSegmentData($segmentId);
-		$crmData = $this->getCrmData($clientEntityTypeId, $clientEntityId, $entityIdentifier);
+		$crmData = $this->getCrmData($clientEntityTypeId, $clientEntityId, $entityIdentifier, $baseDealId);
 		if (empty($segmentData) || empty($crmData))
 		{
 			return []; // no data
@@ -83,6 +90,26 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 		return !empty($this->dataForCalcMarkers) && SandboxManager::getInstance()->isAvailableSandboxMode();
 	}
 
+	private function getBaseDealId(): ?int
+	{
+		if ($this->isUseDataFromSandbox())
+		{
+			$baseDealId = (int)($this->dataForCalcMarkers['baseDealId'] ?? 0);
+
+			return $baseDealId > 0 ? $baseDealId : null;
+		}
+
+		$activity = $this->getActivity();
+		$providerParams = $activity['PROVIDER_PARAMS'] ?? [];
+		$baseEntityTypeId = (int)($providerParams['BASE_ENTITY_TYPE_ID'] ?? 0);
+		$baseEntityId = (int)($providerParams['BASE_ENTITY_ID'] ?? 0);
+
+		return $baseEntityTypeId === CCrmOwnerType::Deal && $baseEntityId > 0
+			? $baseEntityId
+			: null
+		;
+	}
+
 	private function getSegmentData(int $segmentId): array
 	{
 		if ($segmentId <= 0)
@@ -93,7 +120,12 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 		return RepeatSaleSegmentController::getInstance()->collectCopilotData($segmentId);
 	}
 
-	private function getCrmData(int $clientEntityTypeId, int $clientEntityId, ?ItemIdentifier $entityIdentifier): array
+	private function getCrmData(
+		int $clientEntityTypeId,
+		int $clientEntityId,
+		?ItemIdentifier $entityIdentifier,
+		?int $baseDealId = null,
+	): array
 	{
 		if ($clientEntityTypeId <= 0 || $clientEntityId <= 0)
 		{
@@ -105,12 +137,19 @@ final class RepeatSalesPrompt extends AbstractPayload implements CalcMarkersInte
 			return []; // currently only deal supported
 		}
 
-		return (new DataCollectorManager(
+		$manager = new DataCollectorManager(
 			$entityIdentifier,
 			new ItemIdentifier($clientEntityTypeId, $clientEntityId),
 			AIManager::logger(),
 			$this->userId,
-		))->collectCopilotData();
+		);
+
+		if ($baseDealId !== null)
+		{
+			$manager->setBaseDealIdentifier(new ItemIdentifier(CCrmOwnerType::Deal, $baseDealId));
+		}
+
+		return $manager->collectCopilotData();
 	}
 
 	private function isCrmDataSufficient(array $data): bool

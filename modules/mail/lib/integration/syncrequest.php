@@ -71,9 +71,8 @@ class SyncRequest
 						}
 					}
 				}
-				$unseen = max(Helper\Message::getCountersForUserMailboxes($userId, true), 0);
-				$result['unseen'] = $unseen;
-				\CUserCounter::set($userId, 'mail_unseen', $unseen, SITE_ID);
+				Helper\Message::setUserUnseenCounter($userId, SITE_ID);
+				$result['unseen'] = max(Helper\Message::getCountersForUserMailboxes($userId, true), 0);
 			}
 		}
 		return $result;

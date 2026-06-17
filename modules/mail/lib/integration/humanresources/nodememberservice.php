@@ -65,6 +65,33 @@ class NodeMemberService
 		return $employeeUsers;
 	}
 
+	/**
+	 * @param int[] $departmentIds
+	 * @return int[]
+	 */
+	public static function getMembersWithSubDepartments(array $departmentIds): array
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return [];
+		}
+
+		$members = (new NodeMemberDataBuilder())
+			->addFilter(
+				new NodeMemberFilter(
+					nodeFilter: new NodeFilter(
+						idFilter: IdFilter::fromIds(array_map('intval', $departmentIds)),
+						entityTypeFilter: NodeTypeFilter::fromNodeType(NodeEntityType::DEPARTMENT),
+						depthLevel: DepthLevel::FULL,
+					),
+				),
+			)
+			->getAll()
+		;
+
+		return array_values(array_unique($members->getEntityIds()));
+	}
+
 	public static function filterUsersByDepartmentIds(
 		array $userIds,
 		array $departmentIds,

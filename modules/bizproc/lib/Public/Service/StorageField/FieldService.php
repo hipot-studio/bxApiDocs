@@ -6,16 +6,21 @@ namespace Bitrix\Bizproc\Public\Service\StorageField;
 
 use Bitrix\Bizproc\Internal\Entity\StorageField\StorageField;
 use Bitrix\Bizproc\Internal\Model\StorageFieldTable;
+use Bitrix\Bizproc\Internal\Repository\Mapper\StorageFieldMapper;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Internal\Exception\Exception;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\Public\Command\StorageField\StorageFieldDto;
+use Bitrix\Bizproc\FieldType;
 
 class FieldService
 {
+	private const CODE_PATTERN = '/^[A-Za-z_][A-Za-z0-9_]*$/';
+
 	public function prepare(StorageFieldDto $storageFieldDto): ?StorageField
 	{
 		$storageFieldEntity = StorageField::mapFromArray($storageFieldDto->toArray());
-		$mapper = new \Bitrix\Bizproc\Internal\Repository\Mapper\StorageFieldMapper();
+		$mapper = new StorageFieldMapper();
 		$storageFieldOrm = $mapper->convertToOrm($storageFieldEntity);
 		$storageFieldEntity->setCode($storageFieldOrm->getCode());
 		$attributes = StorageFieldTable::getMap();
@@ -41,6 +46,32 @@ class FieldService
 			}
 		}
 
+		$this->validateFieldConstraints($storageFieldEntity);
+
 		return $storageFieldEntity;
+	}
+
+	private function validateFieldConstraints(StorageField $entity): void
+	{
+		$code = trim($entity->getCode());
+		if ($code !== '' && !preg_match(self::CODE_PATTERN, $code))
+		{
+			throw new Exception(
+				Loc::getMessage('BIZPROC_FIELD_SERVICE_WRONG_CODE') ?? ''
+			);
+		}
+
+		$reservedFields = StorageFieldMapper::getFieldsMap();
+		if (array_key_exists(mb_strtoupper($code), $reservedFields) && $reservedFields[mb_strtoupper($code)] !== null)
+		{
+			throw new Exception(
+				Loc::getMessage('BIZPROC_FIELD_SERVICE_CODE_EXIST') ?? ''
+			);
+		}
+	}
+
+	public static function isNumericFieldType(string $type): bool
+	{
+		return in_array($type, [FieldType::INT, FieldType::DOUBLE, FieldType::USER, FieldType::FILE], true);
 	}
 }

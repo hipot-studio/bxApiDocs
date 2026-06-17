@@ -13,6 +13,7 @@ use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\AIOperationStateChecker;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\StateChecker\ScenarioStateChecker;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 final class ScoreCall extends AIAction
 {
@@ -89,5 +90,10 @@ final class ScoreCall extends AIAction
 	protected function addCustomParams(JsEvent $jsEvent): JsEvent
 	{
 		return $jsEvent->addActionParamString('scenario', Scenario::CALL_SCORING_SCENARIO);
+	}
+
+	protected function getMenuIcon(): Outline
+	{
+		return Outline::LIST_AI;
 	}
 }

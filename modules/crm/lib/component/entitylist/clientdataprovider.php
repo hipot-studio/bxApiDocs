@@ -199,12 +199,12 @@ abstract class ClientDataProvider
 			$result[$fieldId] = Field::createFromUserField($fieldId, $userFieldInfo);
 		}
 
-		$entityName = \CCrmOwnerType::ResolveName($this->clientEntityTypeId);
-		$iconUrl = '/bitrix/images/crm/grid_icons/' . strtolower($entityName) . '.svg';
-		$iconTitle = $this->fieldHelper->getEntityTitle();
+		$defaultDisplayParams = $this->getDefaultDisplayParams();
 
 		foreach ($result as $field)
 		{
+			$field->addDisplayParams($defaultDisplayParams);
+
 			if ($this->isExportMode)
 			{
 				switch ($field->getType()) // force absolute date/time format for export
@@ -221,17 +221,23 @@ abstract class ClientDataProvider
 						break;
 				}
 			}
-
-			$field->addDisplayParam(
-				'icon',
-				[
-					'url' => $iconUrl,
-					'title' => $iconTitle,
-				]
-			);
 		}
 
 		return $result;
+	}
+
+	protected function getDefaultDisplayParams(): array
+	{
+		$entityName = \CCrmOwnerType::ResolveName($this->clientEntityTypeId);
+		$iconUrl = '/bitrix/images/crm/grid_icons/' . strtolower($entityName) . '.svg';
+		$iconTitle = $this->fieldHelper->getEntityTitle();
+
+		return [
+			'icon' => [
+				'url' => $iconUrl,
+				'title' => $iconTitle,
+			],
+		];
 	}
 
 	public function setExportMode(bool $isExportMode): self

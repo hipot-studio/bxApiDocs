@@ -25,6 +25,28 @@ class StartResult extends Result
 		return $this;
 	}
 
+	public function getTemplateWorkflowIds(): array
+	{
+		return $this->data['templateWorkflowIds'] ?? [];
+	}
+
+	public function addTemplateWorkflowIds(array $templateWorkflowIds): static
+	{
+		$this->data['templateWorkflowIds'] = array_replace(
+			$this->data['templateWorkflowIds'] ?? [],
+			$templateWorkflowIds
+		);
+
+		return $this;
+	}
+
+	public function setTemplateWorkflowIds(array $templateWorkflowIds): static
+	{
+		$this->data['templateWorkflowIds'] = $templateWorkflowIds;
+
+		return $this;
+	}
+
 	public function isAutomationTriggerApplied(): bool
 	{
 		return $this->data['automationTriggerApplied'] ?? false;

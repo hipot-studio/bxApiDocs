@@ -35,6 +35,13 @@ class Superset extends Controller
 		\Bitrix\Main\Config\Option::set('biconnector', 'superset_startup_metric_send', true);
 	}
 
+	public function isEnableConfirmationNeededAction(): array
+	{
+		return [
+			'isNeeded' => SupersetInitializer::isSupersetPendingDelete() && SupersetInitializer::isSupersetInstanceExists(),
+		];
+	}
+
 	public function clearCacheAction(): ?array
 	{
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_ACCESS))

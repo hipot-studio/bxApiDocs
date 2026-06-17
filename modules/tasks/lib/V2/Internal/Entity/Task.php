@@ -66,6 +66,7 @@ class Task extends AbstractEntity
 		#[Validatable]
 		public readonly ?UserCollection $auditors = null,
 		public readonly ?self $parent = null,
+		public readonly ?array $subTaskIds = null,
 		public readonly ?bool $containsChecklist = null,
 		public readonly ?bool $containsSubTasks = null,
 		public readonly ?bool $containsRelatedTasks = null,
@@ -138,6 +139,7 @@ class Task extends AbstractEntity
 		public readonly ?int $maxDeadlineChanges = null,
 		public readonly ?bool $requireDeadlineChangeReason = null,
 		public ?string $deadlineChangeReason = null,
+		public readonly ?int $deadlineChangeCount = null,
 		public readonly ?UserCollection $multiResponsibles = null,
 		public ?ScenarioCollection $scenarios = null,
 		public ?int $sprintId = null,
@@ -233,6 +235,7 @@ class Task extends AbstractEntity
 			accomplices: static::mapEntityCollection($props, 'accomplices', UserCollection::class),
 			auditors: static::mapEntityCollection($props, 'auditors', UserCollection::class),
 			parent: static::mapEntity($props, 'parent', self::class),
+			subTaskIds: static::mapArray($props, 'subTaskIds'),
 			containsChecklist: static::mapBool($props, 'containsChecklist'),
 			containsSubTasks: static::mapBool($props, 'containsSubTasks'),
 			containsRelatedTasks: static::mapBool($props, 'containsRelatedTasks'),
@@ -301,6 +304,7 @@ class Task extends AbstractEntity
 			maxDeadlineChanges: static::mapInteger($props, 'maxDeadlineChanges'),
 			requireDeadlineChangeReason: static::mapBool($props, 'requireDeadlineChangeReason'),
 			deadlineChangeReason: static::mapString($props, 'deadlineChangeReason'),
+			deadlineChangeCount: static::mapInteger($props, 'deadlineChangeCount'),
 			multiResponsibles: static::mapEntityCollection($props, 'multiResponsibles', UserCollection::class),
 			scenarios: static::mapBackedEnumCollection($props, 'scenarios', ScenarioCollection::class),
 		);
@@ -334,6 +338,7 @@ class Task extends AbstractEntity
 			'accomplices' => $this->accomplices?->toArray(),
 			'auditors' => $this->auditors?->toArray(),
 			'parent' => $this->parent?->toArray(),
+			'subTaskIds' => $this->subTaskIds,
 			'containsChecklist' => $this->containsChecklist,
 			'containsSubTasks' => $this->containsSubTasks,
 			'containsRelatedTasks' => $this->containsRelatedTasks,
@@ -402,6 +407,7 @@ class Task extends AbstractEntity
 			'maxDeadlineChanges' => $this->maxDeadlineChanges,
 			'requireDeadlineChangeReason' => $this->requireDeadlineChangeReason,
 			'deadlineChangeReason' => $this->deadlineChangeReason,
+			'deadlineChangeCount' => $this->deadlineChangeCount,
 			'multiResponsibles' => $this->multiResponsibles?->toArray(),
 			'scenarios' => $this->scenarios?->toArray(),
 		];

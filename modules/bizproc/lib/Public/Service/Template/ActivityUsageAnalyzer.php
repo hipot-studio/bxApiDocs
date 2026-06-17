@@ -163,6 +163,7 @@ class ActivityUsageAnalyzer
 			SourceType::Parameter => $this->parameters,
 		];
 		$checkMap[SourceType::Parameter]['TargetUser'] = [];
+		$checkMap[SourceType::Parameter]['TemplateActivatedBy'] = [];
 
 		return $checkMap;
 	}

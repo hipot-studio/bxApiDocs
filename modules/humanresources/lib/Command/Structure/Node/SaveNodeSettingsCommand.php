@@ -29,6 +29,11 @@ class SaveNodeSettingsCommand extends AbstractCommand
 				return false;
 			}
 
+			if ($nodeSettingType->isPublicApiOnly())
+			{
+				return false;
+			}
+
 			if ($this->checkIfAuthorityTypeInvalid($nodeSettingType, $setting, $unavailableBpTypes, $unavailableReportsTypes)
 				|| ($this->checkIfUserIdsTypeInvalid($nodeSettingType, $setting))
 				|| ($this->checkIfBooleanTypeInvalid($nodeSettingType, $setting))
@@ -107,9 +112,7 @@ class SaveNodeSettingsCommand extends AbstractCommand
 	private function checkIfBooleanTypeInvalid(NodeSettingsType $nodeSettingType, array $setting): bool
 	{
 		return $nodeSettingType->isBooleanType()
-			&& (!isset($setting['value'])
-				|| !in_array($setting['value'], ['Y', 'N'])
-			)
+			&& NodeSettingsType::booleanFromString($setting['value'] ?? null) === null
 		;
 	}
 

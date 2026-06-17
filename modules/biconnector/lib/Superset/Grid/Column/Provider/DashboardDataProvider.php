@@ -2,6 +2,8 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Column\Provider;
 
+use Bitrix\BIConnector\Access\AccessController;
+use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\Main\Grid\Column\DataProvider;
 use Bitrix\Main\Grid\Column\Type;
 use Bitrix\Main\Localization\Loc;
@@ -30,6 +32,17 @@ class DashboardDataProvider extends DataProvider
 				->setDefault(true)
 				->setWidth(150)
 		;
+
+		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_SHARE))
+		{
+			$result[] =
+				$this->createColumn('SHARE_LINK')
+					->setType(Type::TEXT)
+					->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_SHARE_LINK'))
+					->setAlign('left')
+					->setDefault(true)
+			;
+		}
 
 		$result[] =
 			$this->createColumn('CREATED_BY_ID')

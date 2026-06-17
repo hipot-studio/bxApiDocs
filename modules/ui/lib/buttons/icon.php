@@ -83,4 +83,10 @@ abstract class Icon
 	public const WORKFLOW_STOP = 'ui-btn-icon-workflow-stop';
 	public const MARKET = 'ui-btn-icon-market';
 	public const KEY = 'ui-btn-icon-key';
+	public const MAIL_PLUS = 'ui-btn-icon-mail-plus';
+	public const FUNNEL_FILTER = 'ui-btn-icon-funnel-filter';
+	public const CALENDAR_WITH_SLOTS = 'ui-btn-icon-calendar-with-slots';
+	public const CHATS = 'ui-btn-icon-chats';
+	public const CALENDAR_WITH_CHECKS = 'ui-btn-icon-calendar-with-checks';
+	public const EXCLAMATION = 'ui-btn-icon-exclamation';
 }

@@ -111,6 +111,13 @@ abstract class PrototypeItemDataManager extends ORM\Data\DataManager
 		if($isUpdate)
 		{
 			$oldData = static::getByPrimary($id)->fetch();
+			if ($oldData === false)
+			{
+				$result->addError(new Main\ORM\EntityError('Item was not found'));
+				static::$isCheckUserFields = true;
+
+				return $result;
+			}
 			static::getTemporaryStorage()->saveData($id, $oldData);
 			if (
 				static::$isCheckUserFields
@@ -185,6 +192,7 @@ abstract class PrototypeItemDataManager extends ORM\Data\DataManager
 
 		$fields = $userFieldManager->getUserFields(static::getItemUserFieldEntityId());
 		$oldData = static::getTemporaryStorage()->getData($id);
+		$oldDataExists = ($oldData !== null);
 
 		$multiValues = [];
 		foreach ($fields as $fieldName => $field)
@@ -198,10 +206,11 @@ abstract class PrototypeItemDataManager extends ORM\Data\DataManager
 				$multiValues[$fieldName] = array_filter($data[$fieldName], ['static', 'isNotNull']);
 				$multiValues[$fieldName] = array_filter($multiValues[$fieldName], static fn($item) => !is_array($item));
 			}
-			elseif ($field['USER_TYPE']['BASE_TYPE'] === 'file')
+			elseif ($oldDataExists && $field['USER_TYPE']['BASE_TYPE'] === 'file')
 			{
 				if (
-					is_numeric($oldData[$fieldName])
+					isset($oldData[$fieldName])
+					&& is_numeric($oldData[$fieldName])
 					&& array_key_exists($fieldName, $data)
 					&& (int)$oldData[$fieldName] !== (int)$data[$fieldName])
 				{
@@ -218,7 +227,7 @@ abstract class PrototypeItemDataManager extends ORM\Data\DataManager
 			if($isUpdate)
 			{
 				// another clutch to delete files if they had not been deleted before
-				if($fields[$fieldName]['USER_TYPE']['BASE_TYPE'] === 'file')
+				if($oldDataExists && isset($oldData[$fieldName]) && is_array($oldData[$fieldName]) && $fields[$fieldName]['USER_TYPE']['BASE_TYPE'] === 'file')
 				{
 					foreach($oldData[$fieldName] as $fileId)
 					{
@@ -284,6 +293,11 @@ abstract class PrototypeItemDataManager extends ORM\Data\DataManager
 	{
 		$result = new Main\ORM\EventResult();
 		$oldData = static::getTemporaryStorage()->getData($event->getParameter('id'));
+		if ($oldData === null)
+		{
+			return $result;
+		}
+
 		$id = static::getTemporaryStorage()->getIdByPrimary($event->getParameter('id'));
 		$userFieldManager = UserFieldHelper::getInstance()->getManager();
 		$type = static::getType();

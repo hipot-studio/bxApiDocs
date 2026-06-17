@@ -39,6 +39,7 @@ class BizprocController extends EntityController
 					'WORKFLOW_ID' => $fields['ID'],
 					'WORKFLOW_TEMPLATE_ID' => $fields['WORKFLOW_TEMPLATE_ID'],
 					'WORKFLOW_TEMPLATE_NAME' => $fields['WORKFLOW_TEMPLATE_NAME'],
+					'WORKFLOW_START_DURATION' => (new Bizproc\Data\Workflow($fields['ID']))->getStartDuration(),
 					'WORKFLOW_STATUS' => $status,
 					'WORKFLOW_STATUS_NAME' => \CBPWorkflowStatus::Out($status),
 				],

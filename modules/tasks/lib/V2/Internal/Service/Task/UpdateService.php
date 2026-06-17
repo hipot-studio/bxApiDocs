@@ -18,6 +18,8 @@ use Bitrix\Tasks\V2\Internal\Service\Counter;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\AttachDependence;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\CorrectDatePlan;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunInternalEvent;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\SendAnalytics;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateChatAvatar;
 use Bitrix\Tasks\V2\Public\Command\Task\UpdateTaskCommand;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\AutoClose;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\CleanCache;
@@ -97,11 +99,16 @@ class UpdateService
 		$id = $this->repository->save($task);
 
 		$fields['ID'] = $id;
+		$commandTask = Entity\Task::mapFromArray([
+			'id' => $task->id,
+			'creatorId' => $fullTaskData['CREATED_BY'] ?? null,
+			'responsibleId' => $fullTaskData['RESPONSIBLE_ID'] ?? null,
+		]);
 
 		$changes = $this->getChanges($fields, $fullTaskData);
 
 		$updateMemberService = new UpdateMembers($config);
-		$updateMemberInfo = $updateMemberService($fields, $fullTaskData, $changes);
+		$updateMemberInfo = $updateMemberService($fields, $commandTask, $changes);
 
 		(new UpdateParameters($config))($fields, $fullTaskData);
 
@@ -127,7 +134,7 @@ class UpdateService
 
 		(new AutoClose($config))($fields, $fullTaskData);
 
-		(new SendNotification($config))($fields, $fullTaskData, $sourceTaskData, $taskObject);
+		(new SendNotification($config))($fields, $sourceTaskData, $taskObject);
 
 		(new UpdateSearchIndex())($fullTaskData, $fields);
 
@@ -192,6 +199,8 @@ class UpdateService
 			);
 		}
 
+		(new UpdateChatAvatar())($entityBefore, $taskAfterUpdate);
+
 		// notify external services about updated task
 		$this->egressController->process(new UpdateTaskCommand(
 			task: $taskAfterUpdate,
@@ -221,6 +230,8 @@ class UpdateService
 					'TASKS_UPDATE_RESPONSIBLE_DEBUG'
 				);
 		}
+
+		(new SendAnalytics($config))($entityBefore, $taskAfterUpdate);
 
 		return [$taskAfterUpdate, $fields, $entityBefore, $taskObjectBeforeUpdate, $sourceTaskData];
 	}

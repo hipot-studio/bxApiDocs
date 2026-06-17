@@ -101,6 +101,10 @@ final class AccessRightsBuilder
 
 					continue;
 				}
+				if (method_exists($accessRightEntity, 'exists') && !$accessRightEntity->exists())
+				{
+					continue;
+				}
 
 				$optionUserGroup->addMember($accessCode, Member::fromAccessRightEntity($accessRightEntity));
 			}

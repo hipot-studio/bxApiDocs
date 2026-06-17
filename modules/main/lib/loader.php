@@ -4,6 +4,7 @@ namespace Bitrix\Main;
 
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\DI\ServiceLocator;
+use Dev\Main\Migrator\ModuleUpdater;
 
 /**
  * Class Loader loads required files, classes and modules. It is the only class which is included directly.
@@ -53,6 +54,7 @@ class Loader
 	protected static $autoLoadClasses = [];
 	protected static $aliases = [];
 	protected static $classAliases = [];
+	protected static $includedFiles = [];
 	/**
 	 * @var bool Controls throwing exception by requireModule method
 	 */
@@ -135,7 +137,7 @@ class Loader
 
 		if (class_exists('\Dev\Main\Migrator\ModuleUpdater'))
 		{
-			\Dev\Main\Migrator\ModuleUpdater::checkUpdates($moduleName, $pathToInclude);
+			ModuleUpdater::checkUpdates($moduleName, $pathToInclude);
 		}
 
 		$res = true;
@@ -303,8 +305,8 @@ class Loader
 	{
 		foreach ($aliases as $alias => $class)
 		{
-			$alias = strtolower(ltrim($alias, "\\"));
-			$class = strtolower(ltrim($class, "\\"));
+			$alias = ltrim($alias, "\\");
+			$class = ltrim($class, "\\");
 
 			// one class for an alias
 			self::$aliases[$alias] = $class;
@@ -370,9 +372,9 @@ class Loader
 		$classLower = strtolower($className);
 
 		// dynamically define the alias for a class
-		if (isset(self::$aliases[$classLower]))
+		if (isset(self::$aliases[$className]))
 		{
-			class_alias(self::$aliases[$classLower], $classLower);
+			class_alias(self::$aliases[$className], $className);
 
 			return;
 		}
@@ -394,13 +396,15 @@ class Loader
 					: "{$documentRoot}/{$holder}/modules";
 
 				$filePath .= '/' . $module . "/" . $pathInfo["file"];
-
-				require_once($filePath);
 			}
 			else
 			{
-				require_once($documentRoot . $pathInfo["file"]);
+				$filePath = $documentRoot . $pathInfo["file"];
 			}
+
+			require_once $filePath;
+
+			self::$includedFiles[$filePath] = 1;
 		}
 		else
 		{
@@ -456,21 +460,20 @@ class Loader
 
 							$classPathLower = strtolower($classPath);
 
-							// final path lower case
-							$filePath = $path . '/' . $classPathLower . ".php";
+							$filePath = $path . '/' . $classPath . ".php";
+							$filePathLower = $path . '/' . $classPathLower . ".php";
 
-							if (file_exists($filePath))
+							// final path original case
+							if (!isset(self::$includedFiles[$filePathLower]) && file_exists($filePath))
 							{
 								require_once($filePath);
 								break 3;
 							}
 
-							// final path original case
-							$filePath = $path . '/' . $classPath . ".php";
-
-							if (file_exists($filePath))
+							// final path lower case
+							if (file_exists($filePathLower))
 							{
-								require_once($filePath);
+								require_once($filePathLower);
 								break 3;
 							}
 						}
@@ -483,9 +486,9 @@ class Loader
 		}
 
 		// dynamically define the class aliases
-		if (isset(self::$classAliases[$classLower]))
+		if (isset(self::$classAliases[$className]))
 		{
-			foreach (self::$classAliases[$classLower] as $alias)
+			foreach (self::$classAliases[$className] as $alias)
 			{
 				class_exists($alias);
 			}

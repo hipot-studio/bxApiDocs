@@ -366,4 +366,28 @@ class ConfigTable extends Data\DataManager
 			)
 		));
 	}
+
+	public static function onAfterUpdate(Entity\Event $event)
+	{
+		$fields = $event->getParameter('fields') ?? [];
+		if (!array_intersect(array_keys($fields), ['PHONE_NAME', 'SEARCH_ID']))
+		{
+			return new Entity\EventResult();
+		}
+
+		$primary = $event->getParameter('id');
+		$id = is_array($primary) ? (int)($primary['ID'] ?? 0) : (int)$primary;
+		if ($id <= 0)
+		{
+			return new Entity\EventResult();
+		}
+
+		$row = static::getByPrimary($id)->fetch();
+		if (!empty($row['SEARCH_ID']))
+		{
+			Agent\StatisticReindexer::scheduleForConfig((string)$row['SEARCH_ID']);
+		}
+
+		return new Entity\EventResult();
+	}
 }

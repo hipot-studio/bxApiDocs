@@ -22,7 +22,12 @@ use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
+use Bitrix\BIConnector\Public\Provider\DashboardDetailInfoProvider;
+use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightOptions;
+use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightResolver;
+use Bitrix\BIConnector\Public\Command\DashboardView;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -68,6 +73,13 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			'ERROR_MESSAGES' => [],
 			'NATIVE_FILTERS' => '',
 			'FILTERS' => [],
+			'INFO_AHA_MOMENT' => [
+				'canShow' => false,
+				'id' => null,
+				'showDelaySeconds' => 0,
+				'title' => Loc::getMessage('SUPERSET_DASHBOARD_DETAIL_INFO_AHA_MOMENT_TITLE'),
+				'description' => Loc::getMessage('SUPERSET_DASHBOARD_DETAIL_INFO_AHA_MOMENT_DESCRIPTION'),
+			],
 			'MARKET_COLLECTION_URL' => MarketDashboardManager::getMarketCollectionUrl(),
 			'SUPERSET_SERVICE_LOCATION' => ServiceLocation::getCurrentDatacenterLocationRegion(),
 		];
@@ -78,7 +90,11 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 	private function isComponentAvailable(): bool
 	{
-		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED)
+		if (in_array(SupersetInitializer::getSupersetStatus(), [
+			SupersetInitializer::SUPERSET_STATUS_DELETED,
+			SupersetInitializer::SUPERSET_STATUS_PENDING_DELETE,
+			SupersetInitializer::SUPERSET_STATUS_PENDING_DELETE_SUSPENDED,
+		], true))
 		{
 			return false;
 		}
@@ -239,6 +255,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->prepareNativeFilters();
 
 		$this->prepareUrlParams();
+		$this->prepareInfoAhaMoment();
 
 		$this->arResult['IS_USE_EXTERNAL_DATASETS'] = $this->dashboard->isUseExternalDatasets();
 		$this->arResult['CAN_SEND_STARTUP_METRIC'] = self::canSendStartupSupersetMetric();
@@ -251,6 +268,11 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		}
 
 		(new BIConnector\Access\Superset\Synchronizer(CurrentUser::get()->getId()))->sync();
+
+		(new DashboardView\AddSupersetDashboardViewCommand(
+			$this->dashboardId,
+			CurrentUser::get()->getId()
+		))->run();
 
 		$this->includeComponentTemplate();
 
@@ -336,6 +358,33 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		}
 	}
 
+	private function prepareInfoAhaMoment(): void
+	{
+		$dashboardInfo = $this->getDashboardDetailInfoProvider()->getByDashboard($this->dashboard);
+		if (
+			$dashboardInfo === null
+			|| (
+				trim((string)$dashboardInfo->getDescription()) === ''
+				&& empty($dashboardInfo->getImages())
+			)
+		)
+		{
+			return;
+		}
+
+		$spotlightConfig = $this->getAhaMomentSpotlightResolver()->resolve(
+			new AhaMomentSpotlightOptions(
+				baseId: 'biconnector-apachesuperset-dashboard-detail-info',
+				maxShows: 2,
+				showDelaySeconds: 10,
+			),
+		);
+
+		$this->arResult['INFO_AHA_MOMENT']['canShow'] = $spotlightConfig->canShow();
+		$this->arResult['INFO_AHA_MOMENT']['id'] = $spotlightConfig->getSpotlightId();
+		$this->arResult['INFO_AHA_MOMENT']['showDelaySeconds'] = $spotlightConfig->getShowDelaySeconds();
+	}
+
 	private function prepareAccessParams(): void
 	{
 		$accessItem = DashboardAccessItem::createFromEntity($this->dashboard);
@@ -357,6 +406,28 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			$canEdit = $accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem);
 		}
 		$this->arResult['CAN_EDIT'] = $canEdit ? 'Y' : 'N';
+
+		$canShare =
+			$accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_SHARE)
+			&& ($this->dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_DRAFT)
+		;
+		$this->arResult['CAN_SHARE'] = $canShare ? 'Y' : 'N';
+
+		$shareProvider = \Bitrix\Main\DI\ServiceLocator::getInstance()->get('biconnector.provider.share');
+		$currentUserId = (int)CurrentUser::get()->getId();
+		$share = $shareProvider->getByDashboardAndUser($this->dashboard->getId(), $currentUserId);
+		if ($share && $share->isActive())
+		{
+			$this->arResult['SHARE_DATA'] = [
+				'isActive' => true,
+				'password' => $share->getPassword(),
+				'dateExpireTimestamp' => $share->getDateExpire()->getTimestamp(),
+			];
+		}
+		else
+		{
+			$this->arResult['SHARE_DATA'] = null;
+		}
 	}
 
 	private function getUrlParams(): ?array
@@ -376,5 +447,15 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			$supersetStatus === SupersetInitializer::SUPERSET_STATUS_READY
 			&& !$metricAlreadySend
 		);
+	}
+
+	private function getDashboardDetailInfoProvider(): DashboardDetailInfoProvider
+	{
+		return ServiceLocator::getInstance()->get('biconnector.provider.dashboardDetailInfo');
+	}
+
+	private function getAhaMomentSpotlightResolver(): AhaMomentSpotlightResolver
+	{
+		return ServiceLocator::getInstance()->get('biconnector.service.ahaMomentSpotlightResolver');
 	}
 }

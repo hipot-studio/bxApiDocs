@@ -5,9 +5,16 @@ namespace Bitrix\HumanResources\Integration\AiAssistant\Tools\Node;
 use Bitrix\HumanResources\Access\Model\NodeModel;
 use Bitrix\HumanResources\Access\StructureActionDictionary;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\NodeBaseTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Schema\InputProperty;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\NodeEntityType;
 
+/**
+ * Get chats, channels and collabs linked to a node.
+ *
+ * @see \Bitrix\HumanResources\Rest\Controller\Node\Communication::listAction — REST analog
+ * @see \Bitrix\HumanResources\Controller\Structure\Node\Member\Chat::getListAction — ajax controller
+ */
 abstract class NodeGetCommunicationsTool extends NodeBaseTool
 {
 	public function getInputSchema(): array
@@ -15,10 +22,7 @@ abstract class NodeGetCommunicationsTool extends NodeBaseTool
 		return [
 			'type' => 'object',
 			'properties' => [
-				'nodeId' => [
-					'description' => 'Identifier of the node to get list of communications for',
-					'type' => 'number',
-				],
+				'nodeId' => InputProperty::nodeId('Identifier of the node to get list of communications for'),
 			],
 			'additionalProperties' => false,
 			'required' => ['nodeId'],

@@ -43,7 +43,7 @@ trait DalleCommonTrait
 		return [
 			'model' => $this->getModel(),
 			'n' => self::IMAGES_NUM,
-			'quality' => 'standard',// can be "standard" or "hd"
+			'quality' => 'medium',// can be "low" or "medium" or "high"
 			'size' => self::WIDTH . 'x' . self::HEIGHT,
 		];
 	}
@@ -69,18 +69,25 @@ trait DalleCommonTrait
 	public function getResultFromRaw(mixed $rawResult, bool $cached = false): Result
 	{
 		$image = null;
+		$imageBase64 = $rawResult['data'][0]['b64_json'] ?? null;
 		$imageUri = $rawResult['data'][0]['url'] ?? null;
 
-		if ($imageUri !== null)
+		$fileId = null;
+		if ($imageBase64 !== null)
+		{
+			$fileId = File::saveImageByBase64Content($imageBase64, 'ai');
+		}
+		elseif ($imageUri !== null)
 		{
 			$fileId = File::saveImageByURL($imageUri, 'ai');
-			if ($fileId && ($fileArray = \CFile::GetFileArray($fileId)) && !empty($fileArray['EXTERNAL_ID']))
-			{
-				$image = [
-					ServiceLocator::getInstance()->get(ImageService::class)
-						->getUrlOnImgFile($fileId, $fileArray['EXTERNAL_ID'])
-				];
-			}
+		}
+
+		if ($fileId && ($fileArray = \CFile::GetFileArray($fileId)) && !empty($fileArray['EXTERNAL_ID']))
+		{
+			$image = [
+				ServiceLocator::getInstance()->get(ImageService::class)
+					->getUrlOnImgFile($fileId, $fileArray['EXTERNAL_ID'])
+			];
 		}
 
 		return new Result(

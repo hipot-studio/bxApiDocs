@@ -481,6 +481,16 @@ final class RecurringFieldEditorAdapter
 				return $result->addError(new Error(Loc::getMessage($code)));
 			}
 		}
+		if (
+			isset($recurringFields['CATEGORY_ID'])
+			&& !Container::getInstance()->getUserPermissions()->entityType()->canAddItemsInCategory(
+				$item->getEntityTypeId(),
+				$recurringFields['CATEGORY_ID'],
+			)
+		)
+		{
+			return $result->addError(new Error(Loc::getMessage('CRM_TYPE_RECURRING_FIELD_RESTRICTED')));
+		}
 
 		$recurringFields['IS_SEND_EMAIL'] = ($recurringData['IS_SEND_EMAIL'] ?? 'N') === 'Y';
 		$recurringFields['EMAIL_IDS'] = $recurringData['EMAIL_IDS'] ?? [];

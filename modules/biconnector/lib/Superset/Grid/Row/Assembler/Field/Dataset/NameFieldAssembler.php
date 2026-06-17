@@ -8,14 +8,29 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 {
 	protected function prepareColumn($value): string
 	{
-		$id = (int)$value['ID'];
 		$title = htmlspecialcharsbx($value['NAME']);
+
+		if (!empty($value['IS_SYSTEM']))
+		{
+			$jsName = htmlspecialcharsbx(\CUtil::JSEscape($value['NAME']));
+
+			return <<<HTML
+				<div class="dataset-title-wrapper">
+					<a
+						style="cursor: pointer"
+						onclick="BX.BIConnector.DatasetImport.Slider.open('system', 0, {}, {}, {tableName: '{$jsName}'})"
+					>{$title}</a>
+				</div>
+			HTML;
+		}
+
+		$id = (int)$value['ID'];
 		$type = $value['TYPE'];
 
 		$link = "
-				<a 
-					style='cursor: pointer' 
-					onclick='BX.BIConnector.DatasetImport.Slider.open(\"$type\", $id)' 
+				<a
+					style='cursor: pointer'
+					onclick='BX.BIConnector.DatasetImport.Slider.open(\"$type\", $id)'
 				>{$title}</a>
 			";
 

@@ -6,6 +6,19 @@ use Bitrix\Tasks\Access\Role\RoleDictionary;
 
 class TemplateMemberCollection extends EO_TemplateMember_Collection
 {
+	public function getOriginatorId(): ?int
+	{
+		foreach ($this as $member)
+		{
+			if ($member->getType() === RoleDictionary::ROLE_DIRECTOR)
+			{
+				return $member->getUserId();
+			}
+		}
+
+		return null;
+	}
+
 	public function getAuditorIds(): array
 	{
 		$auditors = [];

@@ -8,7 +8,6 @@ use Bitrix\Crm\Import\Result\FieldProcessResult;
 use Bitrix\Crm\Item\Contact;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\VCard\VCardLine;
-use Bitrix\Main\Type\DateTime;
 use CCrmOwnerType;
 
 final class Birthday extends AbstractVCardField
@@ -48,18 +47,12 @@ final class Birthday extends AbstractVCardField
 		}
 
 		$value = $vcardLine->getValue();
-		if (empty($value))
+		if (empty($value) || !is_string($value))
 		{
 			return FieldProcessResult::skip();
 		}
 
-		$time = strtotime($value);
-		if ($time === false)
-		{
-			return FieldProcessResult::skip();
-		}
-
-		$importItemFields[Contact::FIELD_NAME_BIRTHDATE] = DateTime::createFromTimestamp($time)->toString();
+		$importItemFields[Contact::FIELD_NAME_BIRTHDATE] = $value;
 
 		return FieldProcessResult::success();
 	}

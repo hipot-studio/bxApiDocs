@@ -95,7 +95,7 @@ class CBPCrmCopyDealActivity extends CBPActivity
 			$responsibles[] = $sourceFields['ASSIGNED_BY_ID'];
 		}
 
-		$dealTitle = $this->DealTitle;
+		$dealTitle = CBPHelper::stringify($this->DealTitle);
 		if (empty($dealTitle))
 		{
 			$dealTitle = Loc::getMessage('CRM_CDA_NEW_DEAL_TITLE', ['#SOURCE_TITLE#' => $sourceFields['TITLE']]);

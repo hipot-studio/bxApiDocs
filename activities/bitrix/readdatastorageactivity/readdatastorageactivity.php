@@ -17,9 +17,9 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Bizproc\Activity\BaseActivity;
-use Bitrix\Bizproc\Internal\Service\StorageField\FieldService;
 use Bitrix\Main\Web\Json;
 use Bitrix\Bizproc\Internal\Repository\Mapper\StorageItemMapper;
+use Bitrix\Bizproc\Internal\Service\StorageActivity\StorageActivityService;
 use Bitrix\Bizproc\BaseType\Value\DateTime;
 
 /**
@@ -102,8 +102,13 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 		$provider = new StorageItemProvider($storageId);
 
 		$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
-		$fieldsMap = static::getFilteringFieldsMap($storageId);
+		$fieldsMap = StorageActivityService::getFilteringFieldsMap($storageId);
 		$filter = $this->getOrmFilter($conditionGroup, $documentType, $fieldsMap);
+		if (!$this->isOrmFilterValid() || StorageActivityService::isOrmFilterEmpty($filter))
+		{
+			return 0;
+		}
+
 		$item = $provider->getItems([
 			'filter' => $filter,
 			'select' => ['ID'],
@@ -116,21 +121,11 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 
 	private function findStorageId(): int
 	{
-		$storageId = (int)$this->StorageId;
-		if ($storageId <= 0)
-		{
-			$rawStorageCode = $this->StorageCode;
-			$storageCode = CBPHelper::hasStringRepresentation($rawStorageCode) ? (string)$rawStorageCode : '';
+		$storageId = $this->StorageId;
+		$rawStorageCode = $this->StorageCode;
+		$storageCode = CBPHelper::hasStringRepresentation($rawStorageCode) ? (string)$rawStorageCode : '';
 
-			$provider = new StorageTypeProvider();
-			$type = $provider->getType(['CODE' => $storageCode], ['ID']);
-			if ($type)
-			{
-				$storageId = (int)$type->getId();
-			}
-		}
-
-		return $storageId;
+		return StorageActivityService::resolveStorageId($storageId, $storageCode);
 	}
 
 	protected function checkProperties(): \Bitrix\Main\ErrorCollection
@@ -200,11 +195,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 		$offset = \CTimeZone::GetOffset();
 		foreach ($this->computeReturnFields() as $key => $fieldId)
 		{
-			$value = $item[$fieldId] ?? null;
-			if ($fieldId === 'createdAt')
-			{
-				$value = $value ? new DateTime($value, $offset) : null;
-			}
+			$value = $this->normalizeReturnedValue($fieldId, $item[$fieldId] ?? null, $offset);
 			$this->arProperties[$key] = $value;
 			$this->preparedProperties[$key] = $value;
 		}
@@ -212,14 +203,29 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 
 	private function getSelectFields(): array
 	{
-		$select = ['VALUE'];
+		$select = [];
 		$fieldsMap = array_flip(StorageItemMapper::getFieldsMap());
+
+		$storageId = $this->findStorageId();
+		$dynamicCodes = [];
+		if ($storageId > 0)
+		{
+			$dynamicFields = (new StorageFieldProvider())->getByStorageId($storageId);
+			foreach ($dynamicFields as $dynamicField)
+			{
+				$dynamicCodes[$dynamicField->getCode()] = true;
+			}
+		}
 
 		foreach ($this->computeReturnFields() as $field)
 		{
 			if (isset($fieldsMap[$field]))
 			{
 				$select[] = $fieldsMap[$field];
+			}
+			elseif (isset($dynamicCodes[$field]))
+			{
+				$select[] = $field;
 			}
 		}
 
@@ -257,8 +263,18 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 		$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
 
 		$storageId = $this->findStorageId();
-		$fieldsMap = static::getFilteringFieldsMap($storageId);
+		$fieldsMap = StorageActivityService::getFilteringFieldsMap($storageId);
 		$filter = $this->getOrmFilter($conditionGroup, $documentType, $fieldsMap);
+		$items = [];
+		if (!$this->isOrmFilterValid() || StorageActivityService::isOrmFilterEmpty($filter))
+		{
+			$json = $this->encodeCollectionResult($items, $storageId);
+			$this->arProperties['CollectionJson'] = $json;
+			$this->preparedProperties['CollectionJson'] = $json;
+			$this->clearReturnFields();
+
+			return;
+		}
 
 		$params = [
 			'filter' => $filter,
@@ -267,8 +283,6 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 		];
 
 		$collection = $provider->getItems($params);
-
-		$items = [];
 
 		if ($collection)
 		{
@@ -286,6 +300,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 		$fields = static::getReturnFieldsMap($this->findStorageId());
 		$documentService = CBPRuntime::GetRuntime(true)->getDocumentService();
 		$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
+		$offset = \CTimeZone::GetOffset();
 		$items = [];
 
 		foreach ($collection as $item)
@@ -306,7 +321,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 				}
 
 				$code = $fieldProperties['FieldName'];
-				$value = $item->toArray()[$fieldId] ?? null;
+				$value = $this->normalizeReturnedValue($fieldId, $item->toArray()[$fieldId] ?? null, $offset);
 				$filteredItem[$code] = $fieldType->formatValue($value);
 			}
 
@@ -314,6 +329,16 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 		}
 
 		return $items;
+	}
+
+	private function normalizeReturnedValue(string $fieldId, mixed $value, int $offset): mixed
+	{
+		if ($fieldId === 'createdAt')
+		{
+			return $value ? new DateTime($value, $offset) : null;
+		}
+
+		return $value;
 	}
 
 	private function encodeCollectionResult(array $items, int $storageId): string
@@ -373,27 +398,6 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 		return __FILE__;
 	}
 
-	public static function GetPropertiesDialog(
-		$documentType,
-		$activityName,
-		$workflowTemplate,
-		$workflowParameters,
-		$workflowVariables,
-		$currentValues = null,
-		$formName = '',
-		$popupWindow = null,
-		$siteId = ''
-	)
-	{
-		$dialog = parent::GetPropertiesDialog(...func_get_args());
-		$dialog->setRuntimeData([
-			'DocumentName' => static::getDocumentService()->getEntityName($documentType[0], $documentType[1]),
-			'DocumentFields' => array_values(\Bitrix\Bizproc\Automation\Helper::getDocumentFields($documentType)),
-		]);
-
-		return $dialog;
-	}
-
 	protected static function extractPropertiesValues(PropertiesDialog $dialog, array $fieldsMap): Result
 	{
 		$simpleMap = $fieldsMap;
@@ -412,36 +416,43 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 			if ($storageId > 0)
 			{
 				$currentValues['StorageCode'] = '';
-				$currentValues['ReturnFieldsByStorageCode'] = [];
 			}
 
 			if (!CBPHelper::isEmptyValue($currentValues['StorageCode']))
 			{
 				$currentValues['StorageId'] = null;
-				$currentValues['ReturnFields'] = [];
+			}
+
+			$currentValues['ReturnFieldsByStorageCode'] = [];
+
+			$resolvedStorageId = $storageId;
+			if ($resolvedStorageId <= 0 && !CBPHelper::isEmptyValue($currentValues['StorageCode']))
+			{
+				$resolvedStorageId = StorageActivityService::resolveStorageId(
+					null,
+					(string)$currentValues['StorageCode'],
+				);
 			}
 
 			$outputFields = [];
 			if ($currentValues['ReturnMode'] === self::RETURN_MODE_SINGLE)
 			{
-				$returnFieldsMap = static::getReturnFieldsMap($storageId);
+				$returnFieldsMap = static::getReturnFieldsMap($resolvedStorageId);
 				foreach ($currentValues['ReturnFields'] as $fieldId)
 				{
 					if (isset($returnFieldsMap[$fieldId]))
 					{
 						$outputFields[$fieldId] = $returnFieldsMap[$fieldId];
 					}
-				}
-
-				$returnFieldsByStorageCode = CBPHelper::flatten($currentValues['ReturnFieldsByStorageCode']);
-				foreach ($returnFieldsByStorageCode as $fieldId)
-				{
-					$fieldIdClean = static::sanitizeFieldId($fieldId);
-					$outputFields[$fieldIdClean] = [
-						'Name' => $fieldId,
-						'FieldName' => $fieldIdClean,
-						'Type' => FieldType::STRING,
-					];
+					else
+					{
+						$fieldIdClean = static::sanitizeFieldId($fieldId);
+						$outputFields[$fieldIdClean] = [
+							'Name' => $fieldId,
+							'FieldName' => $fieldIdClean,
+							'Type' => FieldType::STRING,
+						];
+					}
 				}
 			}
 
@@ -480,16 +491,14 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 			];
 		}
 
-		if (
-			(
-				!CBPHelper::isEmptyValue($testProperties['StorageId'] ?? null)
-				&& CBPHelper::isEmptyValue($testProperties['ReturnFields'] ?? null)
-			)
-			|| (
-				!CBPHelper::isEmptyValue($testProperties['StorageCode'] ?? null)
-				&& CBPHelper::isEmptyValue($testProperties['ReturnFieldsByStorageCode'] ?? null)
-			)
-		)
+		$hasStorage = !CBPHelper::isEmptyValue($testProperties['StorageId'] ?? null)
+			|| !CBPHelper::isEmptyValue($testProperties['StorageCode'] ?? null)
+		;
+		$hasReturnFields = !CBPHelper::isEmptyValue($testProperties['ReturnFields'] ?? null)
+			|| !CBPHelper::isEmptyValue($testProperties['ReturnFieldsByStorageCode'] ?? null)
+		;
+
+		if ($hasStorage && !$hasReturnFields)
 		{
 			$errors[] = [
 				'code' => 'EmptyField',
@@ -498,7 +507,35 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 			];
 		}
 
+		if ($hasStorage && static::isDynamicFilterFieldsEmpty($testProperties['DynamicFilterFields'] ?? null))
+		{
+			$errors[] = [
+				'code' => 'EmptyField',
+				'parameter' => 'DynamicFilterFields',
+				'message' => Loc::getMessage('BIZPROC_SRA_EMPTY_FILTER_FIELDS'),
+			];
+		}
+
 		return array_merge($errors, parent::validateProperties($testProperties, $user));
+	}
+
+	private static function isDynamicFilterFieldsEmpty(mixed $filterFields): bool
+	{
+		if (!is_array($filterFields) || !is_array($filterFields['items'] ?? null))
+		{
+			return true;
+		}
+
+		foreach ($filterFields['items'] as $filterItem)
+		{
+			$condition = $filterItem[0] ?? null;
+			if (is_array($condition) && !CBPHelper::isEmptyValue($condition['field'] ?? null))
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	protected static function getReturnFieldsMap(int $storageId): array
@@ -523,36 +560,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 
 	private static function getSystemFields(): array
 	{
-		$fieldService = new FieldService();
-		$fields = $fieldService->getEntityFields();
-
-		$supportedFields = [
-			'ID',
-			'CODE',
-			'WORKFLOW_ID',
-			'DOCUMENT_ID',
-			'TEMPLATE_ID',
-			'CREATED_BY',
-			'CREATED_TIME',
-		];
-
-		$systemFields = [];
-		$fieldsMap = StorageItemMapper::getFieldsMap();
-		foreach ($fields as $field)
-		{
-			if (in_array($field['ID'], $supportedFields, true))
-			{
-				$systemFields[$fieldsMap[$field['ID']]] = [
-					'Name' => $field['NAME'],
-					'FieldName' => $fieldsMap[$field['ID']],
-					'Type' => $field['TYPE'],
-					'Required' => false,
-					'AllowSelection' => true,
-				];
-			}
-		}
-
-		return $systemFields;
+		return StorageActivityService::getReturnableSystemFields();
 	}
 
 	public static function getPropertiesDialogMap(?PropertiesDialog $dialog = null): array
@@ -564,18 +572,20 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 	{
 		$dynamicFilterFields = $context['Properties']['DynamicFilterFields'] ?? null;
 		$returnFields = $context['Properties']['ReturnFields'] ?? null;
-		$returnFieldsByStorageCode = $context['Properties']['return_fields_by_storage_code'] ?? null;
 
+		$storages = StorageActivityService::getStorageTypes();
+		$storageIds = array_map('intval', array_keys($storages));
+
+		$filteringFields = StorageActivityService::getFilteringFieldsMapByStorageIds($storageIds);
 		$filteringFieldsMap = [
-			0 => array_values(static::getFilteringFieldsMap(0))
+			0 => array_values(StorageActivityService::getFilteringFieldsMap(0)),
 		];
 		$returnFieldsMap = [];
-		$storages = static::getStorageTypes();
 
 		foreach ($storages as $id => $title)
 		{
 			$returnFieldsMap[$id] = static::getReturnFieldsMap($id);
-			$filteringFieldsMap[$id] = array_values(static::getFilteringFieldsMap($id));
+			$filteringFieldsMap[$id] = array_values($filteringFields[$id] ?? []);
 		}
 
 		return [
@@ -599,7 +609,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 				'Description' => Loc::getMessage('BIZPROC_SRA_FIELD_RECORD_CODE_DESCRIPTION'),
 				'Type' => FieldType::STRING,
 				'Required' => false,
-				'AllowSelection' => true,
+				'Hidden' => true,
 			],
 			'ReturnMode' => [
 				'Name' => Loc::getMessage('BIZPROC_SRA_RETURN_MODE_PROPERTY'),
@@ -628,6 +638,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 					'collapsedCaption' => Loc::getMessage('BIZPROC_SRA_FILTER_FIELDS_COLLAPSED_TEXT'),
 					'returnFieldsIds' => $returnFields,
 					'returnFieldsMap' => $returnFieldsMap,
+					'systemReturnFields' => static::getSystemFields(),
 				]
 			],
 			'IsExpanded' => [
@@ -656,65 +667,9 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 				'Multiple' => true,
 				'Required' => false,
 				'AllowSelection' => true,
+				'Hidden' => true,
 			],
 		];
-	}
-
-	protected static function getFilteringFieldsMap($storageId): array
-	{
-		$supportedFields = [
-			'ID',
-			'CODE',
-			'WORKFLOW_ID',
-			'DOCUMENT_ID',
-			'TEMPLATE_ID',
-			'CREATED_BY',
-			'CREATED_TIME',
-		];
-
-		$map = [];
-		$fieldService = new FieldService($storageId);
-		$fields = $fieldService->getEntityFields();
-
-		foreach ($fields as $key => $field)
-		{
-			if (in_array($field['ID'], $supportedFields, true))
-			{
-				$type = $field['TYPE'];
-				if ($type === 'integer')
-				{
-					$type = FieldType::INT;
-				}
-
-				$map[$field['ID']] = [
-					'Id' => $field['ID'],
-					'Name' => $field['NAME'],
-					'Type' => $type,
-					'Expression' => "{{{$field['NAME']}}}",
-					'SystemExpression' => "{=Storage:{$field['ID']}}",
-					'Options' => null,
-					'Settings' => null,
-					'Multiple' => false,
-				];
-			}
-		}
-
-		return $map;
-	}
-
-	private static function getStorageTypes(): array
-	{
-		$options = [];
-
-		$provider = new StorageTypeProvider();
-		$storages = $provider->getAllForActivity();
-
-		foreach ($storages as $storage)
-		{
-			$options[$storage->getId()] = $storage->getTitle();
-		}
-
-		return $options;
 	}
 
 	private function clearReturnFields(): void

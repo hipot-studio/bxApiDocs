@@ -65,6 +65,11 @@ class ClearOldCountersAgent
 
 		foreach ($affectedUserIds as $userId)
 		{
+			if ($userId <= 0)
+			{
+				continue;
+			}
+
 			\CUserCounter::Set(
 				$userId,
 				CounterDictionary::LeftMenu->value,

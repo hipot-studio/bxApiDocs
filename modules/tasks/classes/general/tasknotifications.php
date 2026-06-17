@@ -99,22 +99,6 @@ class CTaskNotifications
 
 	/**
 	 * @deprecated
-	 * @use \Bitrix\Tasks\Internals\Notification\Controller::onTaskStatusChanged
-	 */
-	public static function SendStatusMessage($arTask, $status, $arFields = array())
-	{
-		$task = \Bitrix\Tasks\Internals\Registry\TaskRegistry::getInstance()->getObject($arTask['ID'], true);
-		if (!$task)
-		{
-			return;
-		}
-		$controller = new \Bitrix\Tasks\Internals\Notification\Controller();
-		$controller->onTaskStatusChanged($task, (int)$status, $arFields);
-		$controller->push();
-	}
-
-	/**
-	 * @deprecated
 	 * @use \Bitrix\Tasks\Internals\Notification\Controller::onTaskExpiresSoon
 	 */
 	public static function sendExpiredSoonMessage(array $taskData): void

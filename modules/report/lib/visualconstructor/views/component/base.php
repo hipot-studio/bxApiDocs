@@ -114,18 +114,20 @@ abstract class Base extends View
 			$error = $exception->getMessage();
 		}
 
-		if (!empty($result['data']) && static::MAX_RENDER_REPORT_COUNT > 1)
+		if (!empty($result['data']) && !isset($result['data']['errors']) && static::MAX_RENDER_REPORT_COUNT > 1)
 		{
+			$reportHandlers = $widget->getWidgetHandler()->getReportHandlers();
 			foreach ($result['data'] as $num => &$reportResult)
 			{
+				$handler = $reportHandlers[$num] ?? null;
 				if (!isset($reportResult['config']['color']))
 				{
-					$reportResult['config']['color'] = $widget->getWidgetHandler()->getReportHandlers()[$num]->getFormElement('color')->getValue();
+					$reportResult['config']['color'] = $handler?->getFormElement('color')?->getValue();
 				}
 
 				if (!isset($reportResult['config']['title']))
 				{
-					$reportResult['title'] = $widget->getWidgetHandler()->getReportHandlers()[$num]->getFormElement('label')->getValue();
+					$reportResult['title'] = $handler?->getFormElement('label')?->getValue();
 				}
 				else
 				{
@@ -133,10 +135,16 @@ abstract class Base extends View
 				}
 			}
 		}
-		elseif (!empty($result['data']))
+		elseif (!empty($result['data']) && !isset($result['data']['errors']))
 		{
-			$reportResult['config']['color'] = $widget->getWidgetHandler()->getReportHandlers()[0]->getFormElement('color')->getValue();
-			$reportResult['title'] = $widget->getWidgetHandler()->getReportHandlers()[0]->getFormElement('label')->getValue();
+			$reportHandlers = $widget->getWidgetHandler()->getReportHandlers();
+			$firstHandler = $reportHandlers[0] ?? null;
+			$reportResult['config']['color'] =
+				$firstHandler?->getFormElement('color')?->getValue() ?? $reportResult['config']['color'] ?? null
+			;
+			$reportResult['title'] =
+				$firstHandler?->getFormElement('label')?->getValue() ?? $reportResult['title'] ?? null
+			;
 		}
 
 		$this->addComponentParameters('WIDGET', $widget);
@@ -191,12 +199,9 @@ abstract class Base extends View
 	 */
 	protected function getCalculatedPerformedData(Widget $widget, $withCalculatedData)
 	{
-		static $data;
-		if (!$data)
-		{
-			$data = $withCalculatedData ? WidgetHelper::getCalculatedPerformedData($this, $widget) : array();
-			$data = $this->handlerFinallyBeforePassToView($data);
-		}
+		$data = $withCalculatedData ? WidgetHelper::getCalculatedPerformedData($this, $widget) : array();
+		$data = $this->handlerFinallyBeforePassToView($data);
+
 		return $data;
 	}
 

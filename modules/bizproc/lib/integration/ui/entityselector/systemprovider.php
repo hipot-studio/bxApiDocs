@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Integration\UI\EntitySelector;
 
+use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
+
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
@@ -84,7 +89,7 @@ class SystemProvider extends BaseProvider
 
 	private function getSystemFields(): array
 	{
-		return [
+		$systemFields = [
 			[
 				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_WORKFLOW_ID'),
 				static::ENTITY_TYPE_WORKFLOW,
@@ -131,6 +136,21 @@ class SystemProvider extends BaseProvider
 				'HostUrl',
 			],
 		];
+
+		if(
+			Loader::includeModule('bizproc')
+			&& class_exists(AiAgentsFeature::class)
+			&& ServiceLocator::getInstance()->get(AiAgentsFeature::class)?->isAvailable()
+		)
+		{
+			$systemFields[] = [
+				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_TEMPLATE_ACTIVATED_BY'),
+				static::ENTITY_TYPE_WORKFLOW,
+				'TemplateActivatedBy',
+			];
+		}
+
+		return $systemFields;
 	}
 
 	protected function getFunctionItems(): array

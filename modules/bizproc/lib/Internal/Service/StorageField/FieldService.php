@@ -7,7 +7,6 @@ namespace Bitrix\Bizproc\Internal\Service\StorageField;
 use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Repository\StorageFieldRepository\StorageFieldRepositoryInterface;
 use Bitrix\Bizproc\Public\Provider\Params\StorageField\StorageFieldFilter;
-use Bitrix\Bizproc\Internal\Model\StorageRecordTable;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Main\ORM\Fields\Field;
 
@@ -26,7 +25,8 @@ class FieldService
 	public function getEntityFields(): array
 	{
 		$fields = [];
-		foreach (StorageRecordTable::getEntity()->getFields() as $field)
+		$dataManager = Container::getStorageRecordDataManager();
+		foreach ($dataManager::getEntity()->getFields() as $field)
 		{
 			$fields[] = [
 				'ID' => $field->getName(),

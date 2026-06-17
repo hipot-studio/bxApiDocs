@@ -29,6 +29,11 @@ final class Loc
 	 */
 	public static function getMessage($code, $replace = null, $language = null)
 	{
+		if (defined("BX_MESS_CODE"))
+		{
+			return $code;
+		}
+
 		if ($language === null)
 		{
 			//function call optimization

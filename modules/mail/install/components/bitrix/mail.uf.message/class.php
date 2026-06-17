@@ -21,11 +21,25 @@ class CMailUfMessageComponent extends CBitrixComponent
 		global $USER;
 
 		$message = Mail\MailMessageTable::getList(array(
+			'runtime' => array(
+				new Main\Entity\ReferenceField(
+					'MESSAGE_UID',
+					'Bitrix\Mail\MailMessageUidTable',
+					array(
+						'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+						'=this.ID' => 'ref.MESSAGE_ID',
+					),
+					array(
+						'join_type' => 'INNER',
+					)
+				),
+			),
 			'select' => array(
 				'*',
 				'MAILBOX_EMAIL' => 'MAILBOX.EMAIL',
 				'MAILBOX_NAME' => 'MAILBOX.NAME',
 				'MAILBOX_LOGIN' => 'MAILBOX.LOGIN',
+				'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE',
 			),
 			'filter' => array(
 				'=ID' => (int) $this->arParams['MESSAGE_ID'],

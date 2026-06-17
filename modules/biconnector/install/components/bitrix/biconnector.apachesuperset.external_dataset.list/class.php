@@ -1,17 +1,10 @@
 <?php
 
-use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
-use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceCollection;
-use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceDatasetRelationTable;
-use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\BIConnector\ExternalSource\SourceManager;
-use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Superset\Grid\DatasetRepository;
 use Bitrix\BIConnector\Superset\Grid\ExternalDatasetGrid;
 use Bitrix\BIConnector\Superset\Grid\Settings\ExternalDatasetSettings;
-use Bitrix\BIConnector\ExternalSource\SupersetIntegration;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ORM\Fields\Relations;
-use Bitrix\Main\ORM\Query\Join;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\ButtonLocation;
@@ -26,6 +19,7 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 	private const GRID_ID = 'biconnector_superset_external_dataset_grid';
 
 	private ExternalDatasetGrid $grid;
+	private DatasetRepository $repository;
 
 	public function onPrepareComponentParams($arParams)
 	{
@@ -71,8 +65,8 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 			'EDITABLE' => false,
 		]);
 
-		$grid = new ExternalDatasetGrid($settings);
-		$this->grid = $grid;
+		$this->grid = new ExternalDatasetGrid($settings);
+		$this->repository = new DatasetRepository();
 
 		if (empty($this->grid->getOptions()->getSorting()['sort']))
 		{
@@ -80,29 +74,7 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 		}
 
 		$ormParams = $this->grid->getOrmParams();
-
-		$query = ExternalDatasetTable::query()
-			->setSelect(['ID'])
-			->setCacheTtl(3600)
-			->setFilter($ormParams['filter'])
-			->registerRuntimeField(
-				(new Relations\Reference(
-					'SOURCE_RELATION',
-					ExternalSourceDatasetRelationTable::class,
-					Join::on('this.ID', 'ref.DATASET_ID')
-				))
-			)
-			->registerRuntimeField(
-				(new Relations\Reference(
-					'SOURCE',
-					ExternalSourceTable::class,
-					Join::on('this.SOURCE_RELATION.SOURCE_ID', 'ref.ID')
-				))
-			)
-		;
-
-
-		$totalCount = $query->queryCountTotal();
+		$totalCount = $this->repository->getTotalCount($ormParams['filter'] ?? []);
 		$this->grid->initPagination($totalCount);
 
 		if (!$totalCount)
@@ -113,57 +85,12 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 
 	private function loadRows(): void
 	{
-		$rowsData = [];
-
 		$ormParams = $this->grid->getOrmParams();
-		if (!in_array('EXTERNAL_ID', $ormParams['select'], true))
-		{
-			$ormParams['select'][] = 'EXTERNAL_ID';
-		}
-		$ormParams['select'][] = 'SOURCE';
-
-		$datasetsQuery = ExternalDatasetTable::query()
-			->setSelect($ormParams['select'])
-			->setFilter($ormParams['filter'])
-			->registerRuntimeField(
-				(new Relations\ManyToMany(
-					'SOURCE', ExternalSourceTable::class
-				))
-					->configureMediatorTableName(ExternalSourceDatasetRelationTable::getTableName())
-					->configureLocalPrimary('ID', 'DATASET_ID')
-					->configureRemotePrimary('ID', 'SOURCE_ID')
-			)
-			->setLimit($ormParams['limit'])
-			->setOffset($ormParams['offset'])
-			->setOrder($ormParams['order'])
-		;
-
-		$datasetCollection = $datasetsQuery->exec()->fetchCollection();
-		if ($datasetCollection->isEmpty())
-		{
-			$this->grid->setRawRows($rowsData);
-
-			return;
-		}
-
-		foreach ($datasetCollection as $dataset)
-		{
-			$row = $dataset->toArray();
-
-			/** @var ExternalSourceCollection $sourceCollection */
-			$sourceCollection = $dataset->get('SOURCE');
-			$source = current($sourceCollection->getAll());
-			if ($source)
-			{
-				$row['SOURCE'] = [
-					'ID' => $source->getId(),
-					'TYPE' => $source->getType(),
-					'TITLE' => $source->getTitle(),
-				];
-			}
-
-			$rowsData[] = $row;
-		}
+		$rowsData = $this->repository->getPageRows(
+			$ormParams,
+			$ormParams['offset'] ?? 0,
+			$ormParams['limit'] ?? 20,
+		);
 
 		$this->grid->setRawRows($rowsData);
 	}

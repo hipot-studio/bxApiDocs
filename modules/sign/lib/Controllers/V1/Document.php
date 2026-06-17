@@ -131,17 +131,10 @@ class Document extends Controller
 		];
 	}
 
-	#[Attribute\Access\LogicOr(
-		new Attribute\ActionAccess(
-			permission: ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
-			itemType: AccessibleItemType::DOCUMENT,
-			itemIdOrUidRequestKey: 'uid',
-		),
-		new Attribute\ActionAccess(
-			permission: ActionDictionary::ACTION_B2E_TEMPLATE_EDIT,
-			itemType: AccessibleItemType::DOCUMENT,
-			itemIdOrUidRequestKey: 'uid',
-		),
+	#[Attribute\ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+		itemType: AccessibleItemType::DOCUMENT,
+		itemIdOrUidRequestKey: 'uid',
 	)]
 	public function modifyInitiatedByTypeAction(
 		string $uid,
@@ -199,14 +192,22 @@ class Document extends Controller
 			itemIdOrUidRequestKey: 'uid',
 		)
 	)]
-	public function changeBlankAction(string $uid, int $blankId, bool $copyBlocksFromPreviousBlank = false): array
+	public function changeBlankAction(
+		string $uid,
+		int $blankId,
+		bool $copyBlocksFromPreviousBlank = false,
+	): array
 	{
 		if (!$this->validateBlankAccess($blankId, (int)CurrentUser::get()->getId()))
 		{
 			return [];
 		}
 
-		$result = $this->documentService->changeBlank($uid, $blankId, $copyBlocksFromPreviousBlank);
+		$result = $this->documentService->changeBlankAndUpload(
+			$uid,
+			$blankId,
+			$copyBlocksFromPreviousBlank,
+		);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -413,6 +414,87 @@ class Document extends Controller
 		}
 
 		return ['url' => $container->getSignBlankService()->getPreviewUrl($blankId)];
+	}
+
+	#[Attribute\ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+		itemType: AccessibleItemType::DOCUMENT,
+		itemIdOrUidRequestKey: 'uid',
+	)]
+	public function getEditUrlAction(string $uid): array
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		if ($userId < 1)
+		{
+			$this->addError(new Error('User not found'));
+
+			return [];
+		}
+
+		$result = $this->documentService->getEditUrl($uid, $userId);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return [
+			'editUrl' => $result->getData()['editUrl'],
+			'diskFileId' => $result->getData()['diskFileId'],
+		];
+	}
+
+	#[Attribute\ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+		itemType: AccessibleItemType::DOCUMENT,
+		itemIdOrUidRequestKey: 'uid',
+	)]
+	public function applyEditedFileAction(string $uid, int $diskFileId): array
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		if ($userId < 1)
+		{
+			$this->addError(new Error('User not found'));
+
+			return [];
+		}
+
+		$result = $this->documentService->applyEditedFile($uid, $diskFileId, $userId);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return ['blankId' => $result->getData()['blankId']];
+	}
+
+	#[Attribute\ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+		itemType: AccessibleItemType::DOCUMENT,
+		itemIdOrUidRequestKey: 'uid',
+	)]
+	public function discardEditedFileAction(string $uid, int $diskFileId): array
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		if ($userId < 1)
+		{
+			$this->addError(new Error('User not found'));
+
+			return [];
+		}
+
+		$result = $this->documentService->discardEditedFile($diskFileId, $userId);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return [];
 	}
 
 	#[Attribute\Access\LogicOr(
@@ -965,4 +1047,5 @@ class Document extends Controller
 			'progress' => $progress,
 		];
 	}
+
 }

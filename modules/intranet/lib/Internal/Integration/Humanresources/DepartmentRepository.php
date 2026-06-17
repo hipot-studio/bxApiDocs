@@ -13,23 +13,28 @@ use Bitrix\Intranet\Dto\EntitySelector\EntitySelectorCodeDto;
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
 use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Entity\Department;
-use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
 use Bitrix\HumanResources\Item\Node;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\Node\NodeTypeFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\SelectionCondition\Node\NodeAccessFilter;
+use Bitrix\HumanResources\Builder\Structure\Sort\NodeSort;
+use Bitrix\HumanResources\Builder\Structure\NodeDataBuilder;
+use Bitrix\HumanResources\Type\NodeEntityType;
+use Bitrix\HumanResources\Type\StructureAction;
+use Bitrix\HumanResources\Enum\SortDirection;
 
 class DepartmentRepository
 {
 	private bool $isAvailable;
 	private DepartmentMapper $departmentMapper;
-	private UserRepository $userRepository;
 
 	public function __construct()
 	{
 		$this->isAvailable = Loader::includeModule('humanresources');
 		$this->departmentMapper = new DepartmentMapper();
-		$this->userRepository = new UserRepository();
 	}
 
 	public function getDepartmentHeadsByDepartmentCollection(DepartmentCollection $departmentCollection): UserCollection
@@ -117,6 +122,69 @@ class DepartmentRepository
 	public function createDepartmentFromNode(Node $node): Department
 	{
 		return $this->departmentMapper->createDepartmentFromNode($node);
+	}
+
+	public function searchAvailableDepartmentsByName(
+		int $userId,
+		?string $name = null,
+		int $limit = 100,
+		int $offset = 0,
+	): DepartmentCollection
+	{
+		if (!$this->isAvailable || $userId <= 0 || $limit < 1 || $offset < 0)
+		{
+			return new DepartmentCollection();
+		}
+
+		$nodeCollection = $this->buildAvailableDepartmentsByNameBuilder($userId, $name)
+			->setLimit($limit)
+			->setOffset($offset)
+			->getAll()
+		;
+
+		return $this->createDepartmentCollectionFromNodeCollection($nodeCollection);
+	}
+
+	public function countAvailableDepartmentsByName(
+		int $userId,
+		?string $name = null,
+	): int
+	{
+		if (!$this->isAvailable || $userId <= 0)
+		{
+			return 0;
+		}
+
+		try
+		{
+			return (int)$this->buildAvailableDepartmentsByNameBuilder($userId, $name)
+				->prepareQuery()
+				->queryCountTotal()
+				;
+		}
+		catch (\Throwable)
+		{
+			return 0;
+		}
+	}
+
+	private function buildAvailableDepartmentsByNameBuilder(
+		int $userId,
+		?string $name = null,
+	): NodeDataBuilder
+	{
+		$name = trim((string)$name);
+		$name = $name === '' ? null : $name;
+
+		return NodeDataBuilder::createWithFilter(
+			new NodeFilter(
+				entityTypeFilter: NodeTypeFilter::fromNodeType(NodeEntityType::DEPARTMENT),
+				accessFilter: new NodeAccessFilter(StructureAction::InviteUserAction, $userId),
+				name: $name,
+			),
+		)
+			->setSort(new NodeSort(depth: SortDirection::Asc, sort: SortDirection::Asc))
+			;
 	}
 
 	private function createNodeCollectionFromDepartmentCollection(DepartmentCollection $departmentCollection): NodeCollection

@@ -12,7 +12,7 @@ trait GroupTrait
 	 * @return bool
 	 * @throws \Bitrix\Main\LoaderException
 	 */
-	private function canSetGroup(int $userId, int $groupId): bool
+	protected function canSetGroup(int $userId, int $groupId): bool
 	{
 		if (!Loader::includeModule('socialnetwork'))
 		{

@@ -101,6 +101,10 @@ class CMail
 			$selectResult = CMailbox::getList(array(), array('USER_ID' => intval($arFields['ID']), 'ACTIVE' => 'Y'));
 			while ($mailbox = $selectResult->fetch())
 				CMailbox::update($mailbox['ID'], array('ACTIVE' => 'N'));
+
+			\Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService::resetResponsibleAdminIfNeeded(
+				(int)$arFields['ID'],
+			);
 		}
 	}
 
@@ -109,6 +113,10 @@ class CMail
 		$selectResult = CMailbox::getList(array(), array('USER_ID' => intval($id)));
 		while ($mailbox = $selectResult->fetch())
 			CMailbox::delete($mailbox['ID']);
+
+		\Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService::resetResponsibleAdminIfNeeded(
+			(int)$id,
+		);
 	}
 
 	public static function option($name, $value = null)
@@ -743,6 +751,7 @@ class CAllMailBox
 			return false;
 
 		\Bitrix\Mail\Internals\MailboxAccessTable::deleteByFilter(['=MAILBOX_ID' => $ID,]);
+		\Bitrix\Mail\Internals\MailEntityDataTable::deleteList(['=MAILBOX_ID' => $ID]);
 		$DB->query(sprintf('DELETE FROM b_mail_mailbox_dir WHERE MAILBOX_ID = %u', $ID));
 		$DB->query(sprintf('DELETE FROM b_mail_counter WHERE MAILBOX_ID = %u', $ID));
 		$DB->query(sprintf('DELETE FROM b_mail_entity_options WHERE MAILBOX_ID = %u', $ID));

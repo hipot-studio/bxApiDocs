@@ -154,7 +154,12 @@ class BlankTable extends Entity\DataManager
 			{
 				foreach ((array)$row['FILE_ID'] as $fId)
 				{
-					\Bitrix\Sign\File::delete($fId);
+					$fileId = (int)$fId;
+					if ($fileId <= 0 || self::isFileSharedWithOtherBlanks($fileId, (int)$primary['ID']))
+					{
+						continue;
+					}
+					\Bitrix\Sign\File::delete($fileId);
 				}
 			}
 
@@ -193,5 +198,31 @@ class BlankTable extends Entity\DataManager
 		}
 
 		return $result;
+	}
+
+	private static function isFileSharedWithOtherBlanks(int $fileId, int $deletingBlankId): bool
+	{
+		$single = '[' . $fileId . ']';
+		$first  = '[' . $fileId . ',%';
+		$middle = '%,' . $fileId . ',%';
+		$last   = '%,' . $fileId . ']';
+
+		$fileFilter = (new \Bitrix\Main\ORM\Query\Filter\ConditionTree())
+			->logic(\Bitrix\Main\ORM\Query\Filter\ConditionTree::LOGIC_OR)
+			->whereLike('FILE_ID', $single)
+			->whereLike('FILE_ID', $first)
+			->whereLike('FILE_ID', $middle)
+			->whereLike('FILE_ID', $last)
+		;
+
+		$row = self::query()
+			->setSelect(['ID'])
+			->where('ID', '!=', $deletingBlankId)
+			->where($fileFilter)
+			->setLimit(1)
+			->fetch()
+		;
+
+		return $row !== false && $row !== null;
 	}
 }

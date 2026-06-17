@@ -319,7 +319,7 @@ class Task extends Base
 		$scrumItem->setEntityId($entityId);
 		$scrumItem->setSourceId((int) $task['ID']);
 
-		$sort = $this->getItemService()->getFirstItemSort() / 2;
+		$sort = $this->getItemService()->getFirstItemSort($entityId) / 2;
 		if (array_key_exists('sortFloat', $fields) && is_numeric($fields['sortFloat']))
 		{
 			$sort = (float)$fields['sortFloat'];

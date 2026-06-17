@@ -929,7 +929,7 @@ class CVoxImplantMain
 			static::CALL_INCOMING,
 			static::CALL_INCOMING_REDIRECT,
 			static::CALL_CALLBACK,
-			static::CALL_INFO
+			static::CALL_INFO,
 		);
 	}
 

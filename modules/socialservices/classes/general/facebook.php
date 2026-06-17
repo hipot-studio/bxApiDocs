@@ -3,8 +3,10 @@
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Web\HttpClient;
+use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Localization\Loc;
-
+use Bitrix\Socialservices\OAuth\OAuthErrorCode;
+use Bitrix\Socialservices\OAuth\StateService;
 IncludeModuleLangFile(__FILE__);
 
 class CSocServFacebook extends CSocServAuth
@@ -30,6 +32,8 @@ class CSocServFacebook extends CSocServAuth
 		{
 			$this->entityOAuth->setCode($code);
 		}
+
+		$this->entityOAuth->setLogger($this->logger);
 
 		return $this->entityOAuth;
 	}
@@ -76,18 +80,27 @@ class CSocServFacebook extends CSocServAuth
 
 	public function getUrl($arParams)
 	{
-		global $APPLICATION;
+		$stateFields = [
+			'site_id' => SITE_ID,
+			'check_key' => \CSocServAuthManager::getUniqueKey(),
+			'redirect_url' => $this->getRedirectUrl($arParams),
+		];
+		$state = StateService::getInstance()->createState($stateFields);
 
-		if(IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
+		if ($this->isCloudPortal())
 		{
-			$redirect_uri = static::CONTROLLER_URL."/redirect.php";
-			$state = $this->getEntityOAuth()->GetRedirectURI()."?check_key=".\CSocServAuthManager::getUniqueKey()."&state=";
-			$backurl = $APPLICATION->GetCurPageParam('', array("logout", "auth_service_error", "auth_service_id", "backurl"));
-			$state .= urlencode("state=".urlencode("backurl=".urlencode($backurl).(isset($arParams['BACKURL']) ? '&redirect_url='.urlencode($arParams['BACKURL']) : '')));
+			$portalRedirectUri = new Uri(
+				$this->getEntityOAuth()->GetRedirectURI()
+			);
+			$portalRedirectUri->addParams([
+				'state' => $state,
+			]);
+
+			$state = (string)$portalRedirectUri;
+			$redirect_uri = static::CONTROLLER_URL . '/redirect.php';
 		}
 		else
 		{
-			$state = 'site_id='.SITE_ID.'&backurl='.urlencode($APPLICATION->GetCurPageParam('check_key='.\CSocServAuthManager::getUniqueKey(), array("logout", "auth_service_error", "auth_service_id", "backurl"))).(isset($arParams['BACKURL']) ? '&redirect_url='.urlencode($arParams['BACKURL']) : '');
 			$redirect_uri = $this->getEntityOAuth()->GetRedirectURI();
 		}
 
@@ -165,13 +178,16 @@ class CSocServFacebook extends CSocServAuth
 		$APPLICATION->RestartBuffer();
 
 		$authError = SOCSERV_AUTHORISATION_ERROR;
+		$this->logger->info('oauth.auth.start');
 
-		if(
-			isset($_REQUEST["code"]) && $_REQUEST["code"] <> ''
-			&& CSocServAuthManager::CheckUniqueKey()
-		)
+		if (empty($_REQUEST['code']))
 		{
-			if(IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
+			$this->logger->error('oauth.request.invalid_code');
+			$this->sendOauthError(OAuthErrorCode::MissingCode);
+		}
+		elseif (CSocServAuthManager::CheckUniqueKey())
+		{
+			if ($this->isCloudPortal())
 			{
 				$redirect_uri = static::CONTROLLER_URL."/redirect.php";
 			}
@@ -189,60 +205,34 @@ class CSocServFacebook extends CSocServAuth
 					$arFields = self::prepareUser($arFBUser);
 					$authError = $this->AuthorizeUser($arFields);
 				}
-			}
-		}
-
-		$bSuccess = $authError === true;
-
-		$url = ($APPLICATION->GetCurDir() == "/login/") ? "" : $APPLICATION->GetCurDir();
-		$aRemove = array("logout", "auth_service_error", "auth_service_id", "code", "error_reason", "error", "error_description", "check_key", "current_fieldset");
-
-		if(isset($_REQUEST["state"]) && $bSuccess)
-		{
-			$arState = array();
-			parse_str($_REQUEST["state"], $arState);
-
-			if(isset($arState['backurl']) || isset($arState['redirect_url']))
-			{
-				$url = !empty($arState['redirect_url']) ? $arState['redirect_url'] : $arState['backurl'];
-				if(mb_substr($url, 0, 1) !== "#")
+				else
 				{
-					$parseUrl = parse_url($url);
-
-					$urlPath = $parseUrl["path"];
-					$arUrlQuery = explode('&', $parseUrl["query"]);
-
-					foreach($arUrlQuery as $key => $value)
-					{
-						foreach($aRemove as $param)
-						{
-							if(mb_strpos($value, $param."=") === 0)
-							{
-								unset($arUrlQuery[$key]);
-								break;
-							}
-						}
-					}
-
-					$url = (!empty($arUrlQuery)) ? $urlPath.'?'.implode("&", $arUrlQuery) : $urlPath;
+					$this->logger->error('oauth.user.fetch_failed', [
+						'reason' => 'missing_user_id',
+					]);
 				}
 			}
+			else
+			{
+				$this->logger->error('oauth.token.exchange_failed', [
+					'reason' => 'get_access_token_failed',
+				]);
+			}
+		}
+		else
+		{
+			$this->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'check_key_validation_failed',
+			]);
+			$this->sendOauthError(OAuthErrorCode::InvalidCheckKey);
 		}
 
-		if($authError === SOCSERV_REGISTRATION_DENY)
-		{
-			$url = (preg_match("/\?/", $url)) ? $url.'&' : $url.'?';
-			$url .= 'auth_service_id='.self::ID.'&auth_service_error='.$authError;
-		}
-		elseif($bSuccess !== true)
-		{
-			$url = (isset($urlPath)) ? $urlPath.'?auth_service_id='.self::ID.'&auth_service_error='.$authError : $GLOBALS['APPLICATION']->GetCurPageParam(('auth_service_id='.self::ID.'&auth_service_error='.$authError), $aRemove);
-		}
+		$this->logger->info('oauth.auth.finish', [
+			'success' => ($authError === true),
+			'auth_result' => $authError,
+		]);
 
-		if(CModule::IncludeModule("socialnetwork") && mb_strpos($url, "current_fieldset=") === false)
-		{
-			$url .= ((mb_strpos($url, "?") === false) ? '?' : '&')."current_fieldset=SOCSERV";
-		}
+		$url = $this->getRedirectUriAfterAuthorize($authError, self::ID);
 
 		$this->onAfterWebAuth(true, self::OPENER_MODE, $url);
 		CMain::FinalActions();
@@ -255,7 +245,7 @@ class CSocServFacebook extends CSocServAuth
 
 	public function getFriendsList($limit, &$next)
 	{
-		if(IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
+		if ($this->isCloudPortal())
 		{
 			$redirect_uri = self::CONTROLLER_URL."/redirect.php?redirect_to=".urlencode(CSocServUtil::GetCurUrl('auth_service_id='.self::ID, array("code")));
 		}
@@ -300,7 +290,7 @@ class CSocServFacebook extends CSocServAuth
 	{
 		$fb = new CFacebookInterface();
 
-		if(IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
+		if ($this->isCloudPortal())
 		{
 			$redirect_uri = self::CONTROLLER_URL."/redirect.php?redirect_to=".urlencode(CSocServUtil::GetCurUrl('auth_service_id='.self::ID, array("code")));
 		}
@@ -322,7 +312,7 @@ class CSocServFacebook extends CSocServAuth
 	{
 		$fb = new CFacebookInterface();
 
-		if(IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
+		if ($this->isCloudPortal())
 		{
 			$redirect_uri = self::CONTROLLER_URL."/redirect.php?redirect_to=".urlencode(CSocServUtil::GetCurUrl('auth_service_id='.self::ID, array("code")));
 		}
@@ -420,6 +410,10 @@ class CFacebookInterface extends CSocServOAuthTransport
 
 		if($this->code === false)
 		{
+			$this->logger->error('oauth.token.exchange_failed', [
+				'reason' => 'empty_code',
+			]);
+
 			return false;
 		}
 
@@ -458,20 +452,50 @@ class CFacebookInterface extends CSocServOAuthTransport
 			);
 		}
 
+		$this->logger->error('oauth.token.exchange_failed', [
+			'reason' => 'token_not_found_in_response',
+		]);
+
 		return false;
 	}
 
 	public function GetCurrentUser()
 	{
 		if($this->access_token === false)
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'empty_access_token',
+			]);
+
 			return false;
+		}
 
 		$http = new HttpClient();
 		$http->setTimeout($this->httpTimeout);
 
 		$result = $http->get(self::GRAPH_URL.'/me?access_token='.$this->access_token."&fields=picture,id,name,first_name,last_name,gender,email");
 
-		return Json::decode($result);
+		try
+		{
+			$decoded = Json::decode($result);
+		}
+		catch (\Bitrix\Main\ArgumentException $e)
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'invalid_response',
+			]);
+
+			return [];
+		}
+
+		if (!is_array($decoded))
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'invalid_response_payload',
+			]);
+		}
+
+		return $decoded;
 	}
 
 	public function GetAppInfo()

@@ -18,7 +18,9 @@ class TeamEditEmployeesTool extends NodeEditEmployeesTool
 
 	public function getDescription(): string
 	{
-		return 'Edit employee list for the node identified by `nodeId` when node is a team. 
-Use this function to update node members. Accepts a list of user IDs grouped by roles.';
+		return 'DESTRUCTIVE REPLACE. Replaces the full member list of the team. '
+			. 'Members absent from the input will be removed. '
+			. 'Use only when the user explicitly wants to rewrite the full composition. '
+			. 'For adding or re-roling individual members use `team_add_members`.';
 	}
 }

@@ -14,6 +14,7 @@ class MailboxFilterSettings extends Settings
 	public const CRM_QUEUE_FIELD = 'CRM_QUEUE';
 	public const DISK_SIZE_FIELD = 'DISK_SIZE';
 	public const SENDER_NAME_FIELD = 'SENDER_NAME';
+	public const CONNECTION_REQUESTS_FIELD = 'CONNECTION_REQUESTS';
 
 	protected array $filterAvailability = [];
 	protected array $whiteList = [];
@@ -55,6 +56,7 @@ class MailboxFilterSettings extends Settings
 			self::CRM_QUEUE_FIELD => true,
 			self::DISK_SIZE_FIELD => true,
 			self::SENDER_NAME_FIELD => true,
+			self::CONNECTION_REQUESTS_FIELD => true,
 		];
 	}
 }

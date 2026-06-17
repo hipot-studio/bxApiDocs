@@ -1,7 +1,14 @@
 <?php
+
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+
 class CSocServOAuthTransport
 {
 	const SERVICE_ID = "generic";
+
+	/** @var LoggerInterface|null Injected by provider (e.g. constructor or setLogger). */
+	protected LoggerInterface $logger;
 
 	protected $appID;
 	protected $appSecret;
@@ -27,6 +34,13 @@ class CSocServOAuthTransport
 		{
 			$this->userId = $USER->GetID();
 		}
+
+		$this->logger ??= new NullLogger();
+	}
+
+	public function setLogger(LoggerInterface $logger): void
+	{
+		$this->logger = $logger;
 	}
 
 	public function getAppID()

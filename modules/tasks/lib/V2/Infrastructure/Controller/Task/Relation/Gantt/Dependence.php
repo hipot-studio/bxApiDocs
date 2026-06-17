@@ -20,6 +20,7 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Gantt\GanttDependenceService;
 use Bitrix\Tasks\V2\Public\Command\Gantt\AddDependenceCommand;
 use Bitrix\Tasks\V2\Public\Command\Gantt\DeleteDependenceCommand;
 use Bitrix\Tasks\V2\Public\Command\Gantt\UpdateDependenceCommand;
+use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskByIdsParams;
 use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskParams;
 use Bitrix\Tasks\V2\Public\Provider\Relation\GanttDependenceProvider;
 
@@ -36,6 +37,7 @@ class Dependence extends BaseController
 		GanttDependenceProvider $ganttDependenceProvider,
 		?SelectInterface $relationTaskSelect = null,
 		bool $withIds = true,
+		bool $withCompleted = true,
 	): array
 	{
 		$params = new RelationTaskParams(
@@ -44,6 +46,8 @@ class Dependence extends BaseController
 			templateId: 0,
 			pager: Pager::buildFromPageNavigation($pageNavigation),
 			select: $relationTaskSelect,
+			withCompleted: $withCompleted,
+			withSubTasks: false,
 		);
 
 		$response = [
@@ -52,7 +56,10 @@ class Dependence extends BaseController
 
 		if ($withIds)
 		{
-			$response['ids'] = $ganttDependenceProvider->getTaskIds($params);
+			$idsData = $ganttDependenceProvider->getTaskIdsWithStatuses($params);
+
+			$response['ids'] = $idsData['ids'];
+			$response['statuses'] = $idsData['statuses'];
 		}
 
 		return $response;
@@ -66,10 +73,18 @@ class Dependence extends BaseController
 		#[ElementsType(typeEnum: Type::Numeric)]
 		array $taskIds,
 		GanttDependenceProvider $ganttDependenceProvider,
+		bool $withCompleted = true,
 	): array
 	{
+		$params = new RelationTaskByIdsParams(
+			taskIds: $taskIds,
+			userId: $this->userId,
+			withCompleted: $withCompleted,
+			withSubTasks: false,
+		);
+
 		return [
-			'tasks' => $ganttDependenceProvider->getTasksByIds($taskIds, $this->userId),
+			'tasks' => $ganttDependenceProvider->getTasksByIds($params),
 		];
 	}
 

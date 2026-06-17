@@ -7,6 +7,7 @@ use Bitrix\Crm\RepeatSale\Service\Action\CreateActivityAction;
 use Bitrix\Crm\RepeatSale\Service\Action\CreateDealAction;
 use Bitrix\Crm\RepeatSale\Service\Action\LogAction;
 use Bitrix\Crm\RepeatSale\Service\Operation;
+use CCrmOwnerType;
 
 final class SystemHandler extends BaseHandler
 {
@@ -28,8 +29,8 @@ final class SystemHandler extends BaseHandler
 	public function getAvailableEntityTypeIds(): array
 	{
 		return [
-			\CCrmOwnerType::Contact,
-			\CCrmOwnerType::Company,
+			CCrmOwnerType::Contact,
+			CCrmOwnerType::Company,
 		];
 	}
 }

@@ -29,7 +29,7 @@ class IntranetBindingMenu extends Button
 	protected function init(array $params = [])
 	{
 		$this->componentParameters = $params['componentParameters'] ?? [];
-
+		$this->componentParameters['UNIQUE_BUTTON_ID'] = $this->getUniqId();
 		$this->content = $this->preRender();
 	}
 

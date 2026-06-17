@@ -6,6 +6,7 @@ use Bitrix\Main;
 use Bitrix\Mail;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Mail\Helper\OAuth\UserData;
+use Bitrix\Socialservices\OAuth\StateService;
 
 
 abstract class OAuth
@@ -297,29 +298,24 @@ abstract class OAuth
 	 */
 	public function getUrl(): string
 	{
-		global $APPLICATION;
+		$stateFields = [
+			'check_key' => \CSocServAuthManager::getUniqueKey(),
+			'service' => $this->service,
+			'uid' => $this->storedUid,
+		];
+		$stateToken = StateService::getInstance()->createState($stateFields);
 
 		if (isModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
 		{
-			$state = sprintf(
-				'%s?%s',
-				$this->getRedirect(),
-				http_build_query(array(
-					'check_key' => \CSocServAuthManager::getUniqueKey(),
-					'state' => rawurlencode(http_build_query(array(
-						'service' => $this->service,
-						'uid' => $this->storedUid,
-					))),
-				))
-			);
+			$portalRedirectUri = new Uri($this->getRedirect());
+			$portalRedirectUri->addParams([
+				'state' => $stateToken,
+			]);
+			$state = (string)$portalRedirectUri;
 		}
 		else
 		{
-			$state = http_build_query(array(
-				'check_key' => \CSocServAuthManager::getUniqueKey(),
-				'service' => $this->service,
-				'uid' => $this->storedUid,
-			));
+			$state = $stateToken;
 		}
 
 		$redirect = $this->getRedirect(false);

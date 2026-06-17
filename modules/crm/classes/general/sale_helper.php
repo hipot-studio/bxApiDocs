@@ -3,7 +3,7 @@
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\GroupTable;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -1318,26 +1318,37 @@ class CCrmSaleHelper
 
 	public static function isRealizationCreationAvailable(): bool
 	{
-		return (
+		return
 			self::isProcessInventoryManagement()
 			&& AccessController::getCurrent()->checkByValue(
 				ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY,
 				StoreDocumentTable::TYPE_SALES_ORDERS
 			)
-		);
+		;
+	}
+
+	public static function isReserveMode(int $entityTypeId): bool
+	{
+		return
+			$entityTypeId === CCrmOwnerType::Deal
+			&& Loader::includeModule('catalog')
+			&& State::isUsedInventoryManagement()
+			&& !\CCrmSaleHelper::isWithOrdersMode()
+		;
+	}
+
+	public static function hasReserveAccess(int $categoryId): bool
+	{
+		return
+			\CCrmSaleHelper::isShopAccess()
+			&& AccessController::getCurrent()->checkByValue(
+				ActionDictionary::ACTION_DEAL_PRODUCT_RESERVE,
+				(string)$categoryId,
+			);
 	}
 
 	public static function isAllowedReservation(int $entityTypeId, int $categoryId): bool
 	{
-		return (
-			$entityTypeId === CCrmOwnerType::Deal
-			&& State::isUsedInventoryManagement()
-			&& !\CCrmSaleHelper::isWithOrdersMode()
-			&& \CCrmSaleHelper::isShopAccess()
-			&& AccessController::getCurrent()->checkByValue(
-				ActionDictionary::ACTION_DEAL_PRODUCT_RESERVE,
-				(string)$categoryId
-			)
-		);
+		return self::isReserveMode($entityTypeId) && self::hasReserveAccess($categoryId);
 	}
 }

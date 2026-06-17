@@ -12,17 +12,20 @@ use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\SelectionCondition\Node\NodeAccessFilter;
 use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
 use Bitrix\HumanResources\Builder\Structure\Sort\NodeMemberSort;
+use Bitrix\HumanResources\Enum\EventName;
 use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Enum\SortDirection;
 use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Item\Role;
+use Bitrix\HumanResources\Model\NodeMember as NodeMemberModel;
 use Bitrix\HumanResources\Model\NodeMemberTable;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Type\StructureAction;
 use Bitrix\HumanResources\Type\StructureRole;
+use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
@@ -45,6 +48,7 @@ final class NodeMemberRepository
 		?int $structureId = null,
 		?StructureAction $structureAction = null,
 		NodeActiveFilter $nodeActiveFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
+		?int $userId = null,
 
 	): NodeMemberCollection
 	{
@@ -54,7 +58,7 @@ final class NodeMemberRepository
 			return new NodeMemberCollection();
 		}
 
-		$accessFilter = $structureAction ? new NodeAccessFilter($structureAction) : null;
+		$accessFilter = $structureAction ? new NodeAccessFilter($structureAction, $userId) : null;
 
 		$nodeFilter = new NodeFilter(
 			idFilter: $nodeIds ? idFilter::fromIds($nodeIds) : null,
@@ -379,6 +383,193 @@ WHERE b_hr_structure_node_member.ENTITY_TYPE = 'USER' AND b_hr_structure_node_me
 SQL;
 
 		return $connection->query($sql)->fetchAll();
+	}
+
+	/**
+	 * Inject sort fields for UserTable query to prioritize users from the same departments
+	 * as $userId, with heads appearing first.
+	 *
+	 * Requires injectUserNodeSubquery() to be called first (registers USER_NODE_MEMBER reference).
+	 *
+	 * Sort order:
+	 * 1. Users from the same department(s) as $userId come first
+	 * 2. Heads (MEMBER_HEAD role) come before other employees
+	 *
+	 * May produce duplicate rows if a user has multiple roles — caller should handle with GROUP BY / DISTINCT.
+	 *
+	 * @param Query $query
+	 * @param int $userId User ID whose departments should be prioritized
+	 * @return Query
+	 */
+	public function injectUserNodeSort(
+		Query $query,
+		int $userId,
+	): Query
+	{
+		$userNodeIds = NodeMemberTable::query()
+			->setSelect(['NODE_ID'])
+			->where('ENTITY_TYPE', MemberEntityType::USER->value)
+			->where('ENTITY_ID', $userId)
+			->where('ACTIVE', 'Y')
+			->where('NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+			->fetchAll()
+		;
+
+		$nodeIds = array_map(
+			static fn(array $row) => (int)$row['NODE_ID'],
+			$userNodeIds,
+		);
+
+		if (!empty($nodeIds))
+		{
+			$nodeIdsList = implode(',', $nodeIds);
+			$query->registerRuntimeField(
+				new ExpressionField(
+					'USER_NODE_DEPT_PRIORITY',
+					"CASE WHEN %s IN ({$nodeIdsList}) THEN 0 ELSE 1 END",
+					['USER_NODE_MEMBER.NODE_ID'],
+				),
+			);
+			$query->addOrder('USER_NODE_DEPT_PRIORITY', 'ASC');
+		}
+
+		$query->registerRuntimeField(
+			new Reference(
+				'USER_NODE_MEMBER_ROLE_REF',
+				\Bitrix\HumanResources\Model\NodeMemberRoleTable::class,
+				Join::on('this.USER_NODE_MEMBER.ID', 'ref.MEMBER_ID'),
+				['join_type' => 'LEFT'],
+			),
+		);
+
+		$query->registerRuntimeField(
+			new Reference(
+				'USER_NODE_ROLE_REF',
+				\Bitrix\HumanResources\Model\RoleTable::class,
+				Join::on('this.USER_NODE_MEMBER_ROLE_REF.ROLE_ID', 'ref.ID'),
+				['join_type' => 'LEFT'],
+			),
+		);
+
+		$query->addOrder('USER_NODE_ROLE_REF.PRIORITY', 'DESC');
+
+		return $query;
+	}
+
+	/**
+	 * Returns (ENTITY_ID, ROLE_ID) pairs for all USER members of the given nodes.
+	 * A user appears once per role per node. Caller is responsible for deduplication.
+	 *
+	 * @param int[] $nodeIds
+	 * @param bool|null $active true — only active memberships (default), false — only inactive,
+	 *                          null — no ACTIVE filter (both active and dismissed)
+	 * @return array<array{ENTITY_ID: int, ROLE_ID: int}>
+	 */
+	public function getEntityIdsWithRoleIdsByNodeIds(array $nodeIds, ?bool $active = true): array
+	{
+		if (empty($nodeIds))
+		{
+			return [];
+		}
+
+		$query = NodeMemberTable::query()
+			->setSelect(['ENTITY_ID', 'MEMBER_ROLE_REF.ROLE_ID'])
+			->whereIn('NODE_ID', $nodeIds)
+			->where('ENTITY_TYPE', MemberEntityType::USER->value)
+			->registerRuntimeField(
+				new Reference(
+					'MEMBER_ROLE_REF',
+					\Bitrix\HumanResources\Model\NodeMemberRoleTable::class,
+					Join::on('this.ID', 'ref.MEMBER_ID'),
+					['join_type' => 'INNER'],
+				),
+			)
+		;
+
+		if ($active !== null)
+		{
+			$query->where('ACTIVE', $active ? 'Y' : 'N');
+		}
+
+		$rows = $query->fetchAll();
+
+		return array_map(
+			static fn(array $row) => [
+				'ENTITY_ID' => (int)$row['ENTITY_ID'],
+				'ROLE_ID'   => (int)$row['HUMANRESOURCES_MODEL_NODE_MEMBER_MEMBER_ROLE_REF_ROLE_ID'],
+			],
+			$rows,
+		);
+	}
+
+	/**
+	 * Sets ACTIVE flag for a single node_member row by its ID and emits OnMemberUpdated
+	 * with fields=['active'] — callers rely on the event to trigger UF_DEPARTMENT resync
+	 * via {@see \Bitrix\HumanResources\Compatibility\Event\NewToOldEventHandler::onMemberUpdated}
+	 * (which chains to onMemberAdded and the UF_DEPARTMENT background job).
+	 *
+	 * The event is fired regardless of whether ACTIVE actually changed — UF_DEPARTMENT
+	 * may have drifted away from node_member state and needs forcing.
+	 */
+	public function setActiveById(int $memberId, bool $active): Main\Result
+	{
+		$result = new Main\Result();
+
+		$model = NodeMemberTable::query()
+			->setSelect(['ID', 'ACTIVE', 'ENTITY_TYPE', 'ENTITY_ID', 'NODE_ID', 'ROLE', 'ADDED_BY', 'CREATED_AT', 'UPDATED_AT'])
+			->where('ID', $memberId)
+			->fetchObject()
+		;
+
+		if ($model === null)
+		{
+			return $result->addError(new Main\Error('NodeMember not found'));
+		}
+
+		$previousMember = $this->convertModelToItem($model);
+
+		if ($model->getActive() !== $active)
+		{
+			$model->setActive($active);
+			$saveResult = $model->save();
+			if (!$saveResult->isSuccess())
+			{
+				return $saveResult;
+			}
+		}
+
+		Container::getEventSenderService()->send(
+			EventName::OnMemberUpdated,
+			[
+				'member' => $this->convertModelToItem($model),
+				'fields' => ['active'],
+				'previousMember' => $previousMember,
+			],
+		);
+
+		return $result;
+	}
+
+	/**
+	 * Converts ORM model to Item. Mirrors the private converter in
+	 * {@see \Bitrix\HumanResources\Repository\NodeMemberRepository::convertModelToItem}.
+	 *
+	 * Public so internal services can hydrate Items from already-fetched models without
+	 * paying for a second SELECT through findById.
+	 */
+	public function convertModelToItem(NodeMemberModel $model): NodeMember
+	{
+		return new NodeMember(
+			entityType: MemberEntityType::tryFrom($model->getEntityType()),
+			entityId: $model->getEntityId(),
+			nodeId: $model->getNodeId(),
+			active: $model->getActive(),
+			roles: $model->getRole()?->getIdList(),
+			id: $model->getId(),
+			addedBy: $model->getAddedBy(),
+			createdAt: $model->getCreatedAt(),
+			updatedAt: $model->getUpdatedAt(),
+		);
 	}
 
 	public function injectUserNodeSubquery(

@@ -24,4 +24,9 @@ interface DeadlineChangeLogRepositoryInterface
 	 * Returns total number of rows by userId and taskId.
 	 */
 	public function countUserChanges(int $userId, int $taskId): int;
+
+	/**
+	 * Returns [taskId => count] for given userId and taskIds in a single query.
+	 */
+	public function countUserChangesBatch(int $userId, array $taskIds): array;
 }

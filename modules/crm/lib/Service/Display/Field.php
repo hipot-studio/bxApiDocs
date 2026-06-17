@@ -11,6 +11,7 @@ use Bitrix\Crm\Service\Display\Field\CrmCurrencyField;
 use Bitrix\Crm\Service\Display\Field\CrmField;
 use Bitrix\Crm\Service\Display\Field\CrmRepeatSaleSegmentTitleField;
 use Bitrix\Crm\Service\Display\Field\CrmStatusField;
+use Bitrix\Crm\Service\Display\Field\CrmWebFormField;
 use Bitrix\Crm\Service\Display\Field\DateField;
 use Bitrix\Crm\Service\Display\Field\DateTimeField;
 use Bitrix\Crm\Service\Display\Field\DeliveryStatusField;
@@ -310,6 +311,11 @@ abstract class Field
 		if ($type === CrmRepeatSaleSegmentTitleField::TYPE)
 		{
 			return new CrmRepeatSaleSegmentTitleField($id);
+		}
+
+		if ($type === CrmWebFormField::TYPE)
+		{
+			return new CrmWebFormField($id);
 		}
 
 		$crmField = static::resolveCrmField($type, $id);

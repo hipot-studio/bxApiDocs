@@ -9,6 +9,7 @@ final class ErrorCode
 {
 	public const AI_NOT_AVAILABLE = 'AI_NOT_AVAILABLE';
 	public const AI_DISABLED = 'AI_IS_DISABLED';
+	public const AI_SCENARIO_DISABLED = 'AI_SCENARIO_DISABLED';
 	public const LICENSE_NOT_ACCEPTED = 'LICENSE_NOT_ACCEPTED';
 	public const NOT_FOUND = \Bitrix\Crm\Controller\ErrorCode::NOT_FOUND;
 	public const FILE_NOT_FOUND = \Bitrix\Crm\Controller\ErrorCode::FILE_NOT_FOUND;
@@ -43,6 +44,14 @@ final class ErrorCode
 			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_DISABLED'),
 			self::AI_DISABLED,
 			$customData
+		);
+	}
+
+	public static function getAIScenarioError(): Error
+	{
+		return new Error(
+			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_SCENARIO_DISABLED'),
+			self::AI_SCENARIO_DISABLED
 		);
 	}
 

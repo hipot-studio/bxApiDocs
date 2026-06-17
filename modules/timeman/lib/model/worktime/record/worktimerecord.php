@@ -85,8 +85,11 @@ class WorktimeRecord extends EO_WorktimeRecord
 		$this->setLatClose($workRecordForm->latitudeClose);
 		$this->setLonClose($workRecordForm->longitudeClose);
 		$this->setIpClose($workRecordForm->ipClose);
-		$recordStopUtcTimestamp = $recordStopUtcTimestamp ?: $this->getTimeHelper()->getUtcNowTimestamp();
+		$actualNowTimestamp = $this->getTimeHelper()->getUtcNowTimestamp();
+		$recordStopUtcTimestamp = $recordStopUtcTimestamp ?: $actualNowTimestamp;
 		$this->setRecordedStopTimestamp($recordStopUtcTimestamp);
+		$this->normalizeBreakLengthForBackdatedStop($recordStopUtcTimestamp);
+		$hasFutureStopWhilePaused = $this->hasFutureStopWhilePaused($recordStopUtcTimestamp, $actualNowTimestamp);
 
 		if ($this->isOpened() || $this->isClosed())
 		{
@@ -94,7 +97,8 @@ class WorktimeRecord extends EO_WorktimeRecord
 		}
 		elseif ($this->isPaused())
 		{
-			$newBreak = $this->calculateDurationSince($this->getRecordedStopTimestamp()) - $this->getRecordedDuration();
+			$breakStopTimestamp = $hasFutureStopWhilePaused ? $actualNowTimestamp : $this->getRecordedStopTimestamp();
+			$newBreak = $this->calculateDurationSince($breakStopTimestamp) - $this->getRecordedDuration();
 			$this->increaseBreaks($this->clampNonNegative($newBreak));
 		}
 
@@ -106,14 +110,23 @@ class WorktimeRecord extends EO_WorktimeRecord
 		{
 			$this->setStopOffset($workRecordForm->stopOffset);
 		}
-		if ((int)$this->getActualStopTimestamp() === 0 || $this->getActualStopTimestamp() === null)
+		if (
+			$hasFutureStopWhilePaused
+			|| (int)$this->getActualStopTimestamp() === 0
+			|| $this->getActualStopTimestamp() === null
+		)
 		{
-			$this->setActualStopTimestamp($this->getTimeHelper()->getUtcNowTimestamp());
+			$this->setActualStopTimestamp($actualNowTimestamp);
 		}
 		$this->setCurrentStatus(WorktimeRecordTable::STATUS_CLOSED);
 		$this->setPaused(false);
-		$this->setDateFinish(DateTime::createFromTimestamp($this->getRecordedStopTimestamp()));
-		$this->setTimeFinish(TimeHelper::getInstance()->getSecondsFromDateTime($this->buildRecordedStopDateTime()));
+		$displayedStopTimestamp = $hasFutureStopWhilePaused ? $actualNowTimestamp : $this->getRecordedStopTimestamp();
+		$this->setDateFinish(DateTime::createFromTimestamp($displayedStopTimestamp));
+		$this->setTimeFinish(
+			TimeHelper::getInstance()->getSecondsFromDateTime(
+				$this->getTimeHelper()->createDateTimeFromFormat('U', $displayedStopTimestamp, $this->getStopOffset())
+			)
+		);
 
 		$this->setDuration(
 			$this->correctDuration(
@@ -160,7 +173,20 @@ class WorktimeRecord extends EO_WorktimeRecord
 
 		if ($continueUtcTimestamp < $this->getRecordedStopTimestamp())
 		{
-			$this->setRecordedDuration($this->calculateDurationSince($continueUtcTimestamp));
+			if ($this->shouldReduceBreaksOnContinue($continueUtcTimestamp))
+			{
+				$futureBreak = $this->getRecordedStopTimestamp() - $continueUtcTimestamp;
+				$this->setRecordedBreakLength(
+					$this->clampNonNegative($this->getRecordedBreakLength() - $futureBreak)
+				);
+				$this->setActualBreakLength(
+					$this->clampNonNegative($this->getActualBreakLength() - $futureBreak)
+				);
+			}
+			else
+			{
+				$this->setRecordedDuration($this->calculateDurationSince($continueUtcTimestamp));
+			}
 		}
 
 		$newBreak = $continueUtcTimestamp - $this->getRecordedStartTimestamp() - $this->getRecordedDuration() - $this->getRecordedBreakLength();
@@ -288,6 +314,14 @@ class WorktimeRecord extends EO_WorktimeRecord
 		if ($endTimestamp > 0)
 		{
 			$this->setRecordedDuration($this->calculateDurationSince($endTimestamp));
+		}
+		elseif ($this->isPaused())
+		{
+			$pauseTimestamp = $this->resolvePausedTimestamp();
+			if ($pauseTimestamp !== null)
+			{
+				$this->setRecordedDuration($this->calculateDurationSince($pauseTimestamp));
+			}
 		}
 
 		$this->setDuration(
@@ -447,7 +481,13 @@ class WorktimeRecord extends EO_WorktimeRecord
 		}
 		try
 		{
-			return $this->get('WORKTIME_EVENTS');
+			$worktimeEvents = $this->get('WORKTIME_EVENTS');
+
+			return (
+				($worktimeEvents instanceof WorktimeEventCollection)
+					? $worktimeEvents
+					: new WorktimeEventCollection()
+			);
 		}
 		catch (\Exception $exc)
 		{
@@ -643,6 +683,172 @@ class WorktimeRecord extends EO_WorktimeRecord
 		$newBreak = $this->clampNonNegative((int)$newBreak);
 		$this->setRecordedBreakLength($this->getRecordedBreakLength() + $newBreak);
 		$this->setActualBreakLength($this->clampDaySeconds((int)($this->getActualBreakLength() + $newBreak)));
+	}
+
+	private function normalizeBreakLengthForBackdatedStop(int $recordStopUtcTimestamp): void
+	{
+		$breakDurationAfterBackdatedStop = 0;
+		$openBreakStartTimestamp = null;
+
+		foreach ($this->getWorktimeEventsOrderedByActualTimestamp() as $worktimeEvent)
+		{
+			$eventType = $worktimeEvent->getEventType();
+			if ($this->isBreakStartingEventType($eventType))
+			{
+				$openBreakStartTimestamp = $this->resolveBreakStartTimestamp($worktimeEvent);
+
+				continue;
+			}
+
+			if ($eventType !== WorktimeEventTable::EVENT_TYPE_CONTINUE || $openBreakStartTimestamp === null)
+			{
+				continue;
+			}
+
+			$continueTimestamp = $worktimeEvent->getActualTimestamp();
+			$isBackdatedStopBeforeContinue = $continueTimestamp > 0 && $recordStopUtcTimestamp < $continueTimestamp;
+			if ($isBackdatedStopBeforeContinue)
+			{
+				$breakDurationAfterBackdatedStop += max($continueTimestamp - $openBreakStartTimestamp, 0);
+			}
+
+			$openBreakStartTimestamp = null;
+		}
+
+		if ($breakDurationAfterBackdatedStop <= 0)
+		{
+			return;
+		}
+
+		$this->setRecordedBreakLength(
+			$this->clampNonNegative($this->getRecordedBreakLength() - $breakDurationAfterBackdatedStop)
+		);
+
+		$this->setActualBreakLength(
+			$this->clampNonNegative($this->getActualBreakLength() - $breakDurationAfterBackdatedStop)
+		);
+	}
+
+	private function getWorktimeEventsOrderedByActualTimestamp(): array
+	{
+		$worktimeEvents = iterator_to_array($this->obtainWorktimeEvents());
+		usort($worktimeEvents, static function ($left, $right) {
+			$timestampCompare = $left->getActualTimestamp() <=> $right->getActualTimestamp();
+			if ($timestampCompare !== 0)
+			{
+				return $timestampCompare;
+			}
+
+			return $left->getId() <=> $right->getId();
+		});
+
+		return $worktimeEvents;
+	}
+
+	private function isBreakStartingEventType(string $eventType): bool
+	{
+		return in_array($eventType, [
+			WorktimeEventTable::EVENT_TYPE_PAUSE,
+			WorktimeEventTable::EVENT_TYPE_STOP,
+			WorktimeEventTable::EVENT_TYPE_EDIT_STOP,
+			WorktimeEventTable::EVENT_TYPE_STOP_WITH_ANOTHER_TIME,
+		], true);
+	}
+
+	private function resolveBreakStartTimestamp(WorktimeEvent $worktimeEvent): ?int
+	{
+		$recordedTimestamp = $worktimeEvent->getRecordedValue();
+		$actualTimestamp = $worktimeEvent->getActualTimestamp();
+
+		$breakStartTimestamp = $recordedTimestamp > 0 ? $recordedTimestamp : $actualTimestamp;
+
+		return $breakStartTimestamp > 0 ? $breakStartTimestamp : null;
+	}
+
+	private function resolvePausedTimestamp(): ?int
+	{
+		$dateFinish = $this->getDateFinish();
+		if ($dateFinish instanceof DateTime)
+		{
+			return $dateFinish->getTimestamp();
+		}
+
+		$actualStopTimestamp = (int)$this->getActualStopTimestamp();
+
+		return $actualStopTimestamp > 0 ? $actualStopTimestamp : null;
+	}
+
+	private function hasFutureStopWhilePaused(int $recordStopUtcTimestamp, int $actualNowTimestamp): bool
+	{
+		return $this->isPaused() && $recordStopUtcTimestamp > $actualNowTimestamp;
+	}
+
+	private function shouldReduceBreaksOnContinue(int $continueUtcTimestamp): bool
+	{
+		if (!$this->wasPausedOnFutureStop($continueUtcTimestamp))
+		{
+			return false;
+		}
+
+		return $this->getRecordedBreakLength() >= $this->getActualBreakLength();
+	}
+
+	private function wasPausedOnFutureStop(int $continueUtcTimestamp): bool
+	{
+		$recordedStopTimestamp = (int)$this->getRecordedStopTimestamp();
+		$actualStopTimestamp = (int)$this->getActualStopTimestamp();
+		if (
+			$recordedStopTimestamp <= 0
+			|| $continueUtcTimestamp >= $recordedStopTimestamp
+			|| $actualStopTimestamp <= 0
+			|| $actualStopTimestamp >= $recordedStopTimestamp
+		)
+		{
+			return false;
+		}
+
+		$wasPaused = false;
+		$wasPausedOnStop = false;
+		$stopFound = false;
+		foreach ($this->getWorktimeEventsOrderedByActualTimestamp() as $worktimeEvent)
+		{
+			$eventActualTimestamp = (int)$worktimeEvent->getActualTimestamp();
+			if ($eventActualTimestamp <= 0 || $eventActualTimestamp > $actualStopTimestamp)
+			{
+				continue;
+			}
+
+			$eventType = $worktimeEvent->getEventType();
+			if ($eventType === WorktimeEventTable::EVENT_TYPE_PAUSE)
+			{
+				$wasPaused = true;
+
+				continue;
+			}
+
+			if (
+				$eventType === WorktimeEventTable::EVENT_TYPE_CONTINUE
+				|| $eventType === WorktimeEventTable::EVENT_TYPE_START
+				|| $eventType === WorktimeEventTable::EVENT_TYPE_START_WITH_ANOTHER_TIME
+			)
+			{
+				$wasPaused = false;
+
+				continue;
+			}
+
+			if (in_array($eventType, [
+				WorktimeEventTable::EVENT_TYPE_STOP,
+				WorktimeEventTable::EVENT_TYPE_EDIT_STOP,
+				WorktimeEventTable::EVENT_TYPE_STOP_WITH_ANOTHER_TIME,
+			], true))
+			{
+				$wasPausedOnStop = $wasPaused;
+				$stopFound = true;
+			}
+		}
+
+		return $stopFound && $wasPausedOnStop;
 	}
 
 	private function correctDuration(int $duration): int

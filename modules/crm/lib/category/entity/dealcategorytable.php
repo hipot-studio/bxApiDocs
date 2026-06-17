@@ -73,7 +73,7 @@ class DealCategoryTable extends Entity\DataManager
 		if (\Bitrix\Crm\Restriction\RestrictionManager::getDealCategoryLimitRestriction()->isExceeded())
 		{
 			Container::getInstance()->getLocalization()->loadMessages();
-			$result = new Main\Orm\EventResult(Main\EventResult::ERROR);
+			$result = new Main\ORM\EventResult(Main\EventResult::ERROR);
 			$result->addError(new Main\ORM\EntityError(Main\Localization\Loc::getMessage('CRM_FEATURE_RESTRICTION_ERROR')));
 			$event->addResult($result);
 		}

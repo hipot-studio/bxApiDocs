@@ -58,12 +58,23 @@ interface StorageFieldRepositoryInterface
 	/**
 	 * @param int $storageId
 	 * @param array $select
+	 * @param bool $useCache
 	 * @return Entity\StorageField\StorageFieldCollection
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
- */
-	public function getByStorageId(int $storageId, array $select): Entity\StorageField\StorageFieldCollection;
+	 */
+	public function getByStorageId(int $storageId, array $select, bool $useCache = false): Entity\StorageField\StorageFieldCollection;
+
+	/**
+	 * @param int[] $storageIds
+	 * @param array $select
+	 * @return Entity\StorageField\StorageFieldCollection
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function getByStorageIds(array $storageIds, array $select = []): Entity\StorageField\StorageFieldCollection;
 
 	/**
 	 * @param Entity\StorageField\StorageField $storageField

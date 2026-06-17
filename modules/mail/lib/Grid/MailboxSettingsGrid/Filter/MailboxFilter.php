@@ -22,6 +22,7 @@ class MailboxFilter extends Filter
 		'CRM_QUEUE',
 		'DISK_SIZE',
 		'SENDER_NAME',
+		'CONNECTION_REQUESTS',
 	];
 
 	public function __construct(

@@ -8,6 +8,7 @@ use Bitrix\HumanResources\Internals\Repository\Structure\NodeRepository;
 use Bitrix\HumanResources\Internals\Service\Structure\AccessService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeAccessCodeService;
 use Bitrix\HumanResources\Internals\Repository\Structure\NodeAccessCodeRepository;
+use Bitrix\HumanResources\Internals\Repository\Structure\NodePathRepository;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeChatService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeCollabService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeMemberService;
@@ -81,6 +82,11 @@ class Container
 		return self::getService('humanresources.internal.repository.structure.nodeAccessCode');
 	}
 
+	public static function getNodePathRepository(): NodePathRepository
+	{
+		return self::getService('humanresources.internal.repository.structure.nodePath');
+	}
+
 	public static function getAccessService(): AccessService
 	{
 		return self::getService('humanresources.service.internal.accessService');
@@ -99,5 +105,15 @@ class Container
 	public static function getRoleService(): RoleService
 	{
 		return self::getService('humanresources.private.internal.service.structure.roleService');
+	}
+
+	public static function getUserRepository(): \Bitrix\HumanResources\Internals\Repository\Structure\UserRepository
+	{
+		return self::getService('humanresources.repository.internal.userRepository');
+	}
+
+	public static function getUserService(): Structure\UserService
+	{
+		return self::getService('humanresources.internal.service.structure.userService');
 	}
 }

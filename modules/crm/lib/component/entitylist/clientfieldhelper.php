@@ -8,7 +8,8 @@ use Bitrix\Main\Localization\Loc;
 
 class ClientFieldHelper
 {
-	protected $entityTypeId;
+	protected int $entityTypeId;
+	protected ?string $fieldPrefix = null;
 	protected $fieldsWithoutPrefix = [
 		\CCrmOwnerType::Company => [
 			'COMPANY_TYPE'
@@ -26,6 +27,23 @@ class ClientFieldHelper
 		}
 	}
 
+	public function isClientFilterFieldId(string $fieldIdWithOperation): bool
+	{
+		if (!str_contains($fieldIdWithOperation, $this->getFieldPrefix())) // micro optimization
+		{
+			return false;
+		}
+
+		$fieldId = \CSqlUtil::GetFilterOperation($fieldIdWithOperation)['FIELD'] ?? '';
+
+		return $this->isClientFieldId($fieldId);
+	}
+
+	public function isClientFieldId(string $fieldId): bool
+	{
+		return str_starts_with($fieldId, $this->getFieldPrefix());
+	}
+
 	/**
 	 * Will return "CONTACT_" or "COMPANY_"
 	 *
@@ -33,7 +51,12 @@ class ClientFieldHelper
 	 */
 	public function getFieldPrefix(): string
 	{
-		return \CCrmOwnerType::ResolveName($this->entityTypeId) . '_';
+		if ($this->fieldPrefix === null)
+		{
+			$this->fieldPrefix = \CCrmOwnerType::ResolveName($this->entityTypeId) . '_';
+		}
+
+		return $this->fieldPrefix;
 	}
 
 	/**
@@ -70,6 +93,15 @@ class ClientFieldHelper
 		}
 
 		return $this->getFieldPrefix() . $fieldId;
+	}
+
+	public function addRelationToFieldId(string $fieldId): string
+	{
+		return sprintf(
+			'%s.%s',
+			\CCrmOwnerType::ResolveName($this->entityTypeId),
+			$fieldId,
+		);
 	}
 
 	/**
@@ -144,5 +176,62 @@ class ClientFieldHelper
 				return \CCrmCompany::class;
 		}
 	}
-}
 
+	public function normalizeFilter(array $filter): array
+	{
+		foreach ($filter as $fieldIdWithOperation => $fieldValue)
+		{
+			if (is_int($fieldIdWithOperation) && is_array($fieldValue))
+			{
+				$filter[$fieldIdWithOperation] = $this->normalizeFilter($fieldValue);
+			}
+			elseif ($this->isClientFilterFieldId($fieldIdWithOperation))
+			{
+				$normalizedFieldId = $this->normalizeFilterFieldId($fieldIdWithOperation);
+				if ($normalizedFieldId !== null)
+				{
+					$filter[$normalizedFieldId] = $fieldValue;
+					unset($filter[$fieldIdWithOperation]);
+				}
+			}
+		}
+
+		return $filter;
+	}
+
+	public function normalizeFilterFieldId(string $fieldIdWithOperation): ?string
+	{
+		$fieldId = \CSqlUtil::GetFilterOperation($fieldIdWithOperation)['FIELD'] ?? null;
+		if ($fieldId === null)
+		{
+			return null;
+		}
+
+		$fieldIdStart = mb_strpos($fieldIdWithOperation, $fieldId);
+		if ($fieldIdStart === false)
+		{
+			return null;
+		}
+
+		$operation = mb_substr($fieldIdWithOperation, 0, $fieldIdStart);
+		$normalizedFieldId = $this->normalizeFieldId($fieldId);
+
+		return
+			$normalizedFieldId !== null
+				? $operation . $normalizedFieldId
+				: null
+			;
+	}
+
+	public function normalizeFieldId(string $fieldId): ?string
+	{
+		if (!$this->isClientFieldId($fieldId))
+		{
+			return null;
+		}
+
+		return $this->addRelationToFieldId(
+			$this->getFieldIdWithoutPrefix($fieldId),
+		);
+	}
+}

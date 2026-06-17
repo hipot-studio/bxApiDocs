@@ -255,6 +255,7 @@ class ProductPropertyValue
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_product_property_value']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_PRODUCT_PROPERTY_VALUE_TABLE'] ?? 'crm_product_property_value';
+		$result['crm_product_property_value']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_PRODUCT_PROPERTY_VALUE_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_product_property_value']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_PRODUCT_PROPERTY_VALUE_FIELD_' . $fieldCode] ?? null;

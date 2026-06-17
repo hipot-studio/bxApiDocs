@@ -65,10 +65,6 @@ class AccessInstaller
 							'value' => UserPermissions::PERMISSION_NONE,
 						],
 						[
-							'id' => SignPermissionDictionary::SIGN_B2E_TEMPLATES,
-							'value' => UserPermissions::PERMISSION_SELF,
-						],
-						[
 							'id' => SignPermissionDictionary::SIGN_B2E_TEMPLATE_WRITE,
 							'value' => UserPermissions::PERMISSION_SELF,
 						],
@@ -137,10 +133,6 @@ class AccessInstaller
 						[
 							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FIRED,
 							'value' => UserPermissions::PERMISSION_NONE,
-						],
-						[
-							'id' => SignPermissionDictionary::SIGN_B2E_TEMPLATES,
-							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
 						],
 						[
 							'id' => SignPermissionDictionary::SIGN_B2E_TEMPLATE_WRITE,

@@ -63,11 +63,11 @@ final class ExternalSql extends Base
 		$externalCode = $datasetField->getExternalCode();
 
 		$field = match ($type) {
-			Biconnector\ExternalSource\FieldType::Int => new BIConnector\DataSource\Field\IntegerField($name),
-			Biconnector\ExternalSource\FieldType::String => new BIConnector\DataSource\Field\StringField($name),
-			Biconnector\ExternalSource\FieldType::Double, Biconnector\ExternalSource\FieldType::Money => new BIConnector\DataSource\Field\DoubleField($name),
-			Biconnector\ExternalSource\FieldType::Date => new BIConnector\DataSource\Field\DateField($name),
-			Biconnector\ExternalSource\FieldType::DateTime => new BIConnector\DataSource\Field\DateTimeField($name),
+			BIConnector\ExternalSource\FieldType::Int => new BIConnector\DataSource\Field\IntegerField($name),
+			BIConnector\ExternalSource\FieldType::String => new BIConnector\DataSource\Field\StringField($name),
+			BIConnector\ExternalSource\FieldType::Double, BIConnector\ExternalSource\FieldType::Money => new BIConnector\DataSource\Field\DoubleField($name),
+			BIConnector\ExternalSource\FieldType::Date => new BIConnector\DataSource\Field\DateField($name),
+			BIConnector\ExternalSource\FieldType::DateTime => new BIConnector\DataSource\Field\DateTimeField($name),
 		};
 
 		$field->setExpression($externalCode, isPrepared: false);

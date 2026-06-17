@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Tasks\Rest\Controllers;
 
 use Bitrix\Crm\Integration\UI\EntitySelector\DynamicMultipleProvider;
@@ -22,9 +23,8 @@ use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\CheckList\Internals\CheckList;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
-use Bitrix\Tasks\Comments\Task\CommentPoster;
 use Bitrix\Tasks\FileUploader\TaskController;
-use Bitrix\Tasks\Helper\Filter;
+use Bitrix\Tasks\Helper;
 use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\CRM;
 use Bitrix\Tasks\Integration\Disk;
@@ -34,7 +34,6 @@ use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Internals\Counter\Template\TaskCounter;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\SearchIndex;
-use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Internals\Task\ParameterTable;
 use Bitrix\Tasks\Internals\Task\Result\ResultManager;
 use Bitrix\Tasks\Internals\Task\Result\ResultTable;
@@ -46,6 +45,8 @@ use Bitrix\Tasks\Manager;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 use Bitrix\Tasks\Util\Type\DateTime;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Scenario;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Ping\PingActionInterface;
@@ -285,12 +286,14 @@ final class Task extends Base
 		$fields = $this->processCrmElements($fields);
 		$fields = $this->processScenario($fields, $params);
 
+		$params = $this->addAnalyticsDataToParams($params, Analytics\Event::TaskCreate);
+
 		try
 		{
 			$task = CTaskItem::add($fields, $this->getCurrentUser()->getId(), $params);
 			if (isset($params['PLATFORM']) && $params['PLATFORM'] === 'mobile')
 			{
-				Analytics::getInstance()->logToFile('addTask');
+				Helper\Analytics::getInstance()->logToFile('addTask');
 			}
 
 			return $this->getAction($task);
@@ -327,6 +330,12 @@ final class Task extends Base
 		$fields = $this->processFiles($task->getId(), $fields);
 		$fields = $this->processCrmElements($fields);
 
+		$status = (int)($fields['STATUS'] ?? 0);
+		if (in_array($status, [Status::COMPLETED, Status::SUPPOSEDLY_COMPLETED], true))
+		{
+			$params = $this->addAnalyticsDataToParams($params, Analytics\Event::TaskComplete);
+		}
+
 		try
 		{
 			$fields = $this->removeReferences($fields);
@@ -341,9 +350,9 @@ final class Task extends Base
 				// "FLOW_ID" analytics label
 				$isDemo = (Loader::includeModule('bitrix24') && \CBitrix24::IsDemoLicense()) ? 'Y' : 'N';
 
-				Analytics::getInstance($this->getUserId())->onTaskUpdate(
-					event: Analytics::EVENT['task_update'],
-					subSection: Analytics::SUB_SECTION['task_card'],
+				Helper\Analytics::getInstance($this->getUserId())->onTaskUpdate(
+					event: Analytics\Event::TaskUpdate->value,
+					subSection: Analytics\SubSection::TaskCard->value,
 					params: [
 						'p1' => 'isDemo_' . $isDemo,
 					],
@@ -381,6 +390,8 @@ final class Task extends Base
 	{
 		try
 		{
+			$params = $this->addAnalyticsDataToParams($params, Analytics\Event::TaskDelete);
+
 			$task->delete($params);
 		}
 		catch (Exception $exception)
@@ -602,7 +613,7 @@ final class Task extends Base
 			$task->delegate((int)$userId, $params);
 			if ($params['PLATFORM'] === 'mobile')
 			{
-				Analytics::getInstance()->logToFile('delegateTask');
+				Helper\Analytics::getInstance()->logToFile('delegateTask');
 			}
 
 			return $this->getAction($task);
@@ -673,6 +684,17 @@ final class Task extends Base
 			{
 				return null;
 			}
+
+			Helper\Analytics::getInstance($this->getCurrentUser()->getId())->onTimeTrackingAdd(
+				event: Analytics\Event::TimeTracking->value,
+				section: Analytics\Section::Tasks->value,
+				element: Analytics\Element::Auto->value,
+				subSection: Analytics\SubSection::Rest->value,
+				type: Analytics\Type::AutoTimeTracking->value,
+				params: [
+					'p1' => 'taskId_' . $task->getId(),
+				],
+			);
 
 			return $this->getAction($task, [], ['WITH_TIMER_INFO' => 'Y']);
 		}
@@ -754,6 +776,8 @@ final class Task extends Base
 				$this->errorCollection->add([new Error(GetMessage('TASKS_FAILED_RESULT_REQUIRED'))]);
 				return null;
 			}
+
+			$params = $this->addAnalyticsDataToParams($params, Analytics\Event::TaskComplete);
 
 			$task->complete($params);
 
@@ -1094,6 +1118,19 @@ final class Task extends Base
 		}
 
 		return $fields;
+	}
+
+	private function addAnalyticsDataToParams(array $params, Analytics\Event $event): array
+	{
+		$params['ANALYTICS_DATA'] = new AnalyticsData(
+			event: $event,
+			category: Analytics\Category::TaskOperations,
+			section: Analytics\Section::Tasks,
+			subSection: Analytics\SubSection::Rest,
+			element: Analytics\Element::Auto,
+		);
+
+		return $params;
 	}
 
 	private function processFilterRoleId(array $filter, int $userId, string $roleId): array
@@ -1943,7 +1980,7 @@ final class Task extends Base
 
 		if (isset($params['SIFT_THROUGH_FILTER']))
 		{
-			/** @var Filter $filterInstance */
+			/** @var Helper\Filter $filterInstance */
 			$isSprintKanban = (($params['SIFT_THROUGH_FILTER']['sprintKanban'] ?? null) === 'Y');
 			if ($isSprintKanban)
 			{
@@ -1955,7 +1992,7 @@ final class Task extends Base
 			}
 			else
 			{
-				$filterInstance = Filter::getInstance(
+				$filterInstance = Helper\Filter::getInstance(
 					$params['SIFT_THROUGH_FILTER']['userId'],
 					$params['SIFT_THROUGH_FILTER']['groupId']
 				);

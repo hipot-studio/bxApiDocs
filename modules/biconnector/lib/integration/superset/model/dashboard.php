@@ -8,6 +8,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
+use Bitrix\BIConnector\Public\Command\Share\DeleteSharesCommand;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
@@ -193,6 +194,11 @@ final class Dashboard
 		return $this->dashboardData !== null;
 	}
 
+	public function isSupersetDashboardCredentialsLoad(): bool
+	{
+		return $this->embeddedCredentials !== null;
+	}
+
 	public function getNativeFilterFields(): array
 	{
 		$dateFilter = new EmbeddedFilter\DateTime($this);
@@ -291,13 +297,37 @@ final class Dashboard
 		$this->ormObject->setStatus($status);
 		$this->ormObject->save();
 
+		// Delete all shares when dashboard becomes draft
+		if (!$published)
+		{
+			$deleteResult = (new DeleteSharesCommand(dashboardId: $this->ormObject->getId()))->run();
+			if (!$deleteResult->isSuccess())
+			{
+				foreach ($deleteResult->getErrors() as $error)
+				{
+					$result->addWarning($error);
+				}
+			}
+		}
+
 		return $result;
 	}
 
-	public function loadCredentials(): self
+	/**
+	 * Loads embedded credentials for this dashboard.
+	 *
+	 * @param array $rlsRules Optional RLS rules for guest token
+	 *        Format: [['dataset' => datasetId, 'clause' => 'SQL WHERE clause'], ...]
+	 * @return $this
+	 */
+	public function loadCredentials(array $rlsRules = [], int $expSeconds = 0): self
 	{
 		$integrator = Integrator::getInstance();
-		$credentialsResponse = $integrator->getDashboardEmbeddedCredentials($this->getExternalId());
+		$credentialsResponse = $integrator->getDashboardEmbeddedCredentials(
+			$this->getExternalId(),
+			$rlsRules,
+			$expSeconds,
+		);
 
 		$credentials = $credentialsResponse->getData();
 		if (!empty($credentials))

@@ -11,6 +11,7 @@ use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Type\NodeSettingsType;
+use Bitrix\Main\Application;
 use Bitrix\Main\Result;
 
 class NodeSettingsService
@@ -90,6 +91,64 @@ class NodeSettingsService
 		$this->nodeSettingsRepository->createByCollection($settingsCollection);
 
 		return new Result();
+	}
+
+	/**
+	 * Upsert a single boolean setting for the given node, bypassing SaveNodeSettingsCommand.
+	 * Intended for types marked as public-API-only ({@see NodeSettingsType::isPublicApiOnly()}).
+	 * Caller is responsible for passing a boolean setting type.
+	 */
+	public function setBooleanSetting(int $nodeId, NodeSettingsType $type, bool $value): void
+	{
+		$this->nodeSettingsRepository->removeByTypeAndNodeId($nodeId, $type);
+		$this->nodeSettingsRepository->create(
+			new NodeSettings(
+				nodeId: $nodeId,
+				settingsType: $type,
+				settingsValue: NodeSettingsType::booleanToString($value),
+			),
+		);
+	}
+
+	/**
+	 * Upsert a boolean setting for multiple nodes in two SQL statements (one DELETE + one bulk INSERT)
+	 * wrapped in a single transaction. Caller is responsible for passing a boolean setting type.
+	 *
+	 * @param int[] $nodeIds
+	 * @param NodeSettingsType $type
+	 * @param bool $value
+	 */
+	public function setBooleanSettingForNodes(array $nodeIds, NodeSettingsType $type, bool $value): void
+	{
+		if (empty($nodeIds))
+		{
+			return;
+		}
+
+		$stringValue = NodeSettingsType::booleanToString($value);
+		$collection = new NodeSettingsCollection();
+		foreach (array_unique($nodeIds) as $nodeId)
+		{
+			$collection->add(new NodeSettings(
+				nodeId: $nodeId,
+				settingsType: $type,
+				settingsValue: $stringValue,
+			));
+		}
+
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+		try
+		{
+			$this->nodeSettingsRepository->removeByTypeAndNodeIds($nodeIds, $type);
+			$this->nodeSettingsRepository->createBatch($collection);
+			$connection->commitTransaction();
+		}
+		catch (\Exception $exception)
+		{
+			$connection->rollbackTransaction();
+			throw $exception;
+		}
 	}
 
 	public function deleteByNodeMemberId(int $nodeMemberId): void

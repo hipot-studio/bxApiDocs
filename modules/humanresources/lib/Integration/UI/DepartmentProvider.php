@@ -5,6 +5,7 @@ namespace Bitrix\HumanResources\Integration\UI;
 use Bitrix\HumanResources\Builder\Structure\Filter\Column\EntityIdFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\Column\IdFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\Column\Node\NodeTypeFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\RoleFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\SelectionCondition\Node\NodeAccessFilter;
 use Bitrix\HumanResources\Builder\Structure\NodeDataBuilder;
@@ -15,12 +16,14 @@ use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Enum\SortDirection;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
+use Bitrix\HumanResources\Integration\UI\Filter\ManagedHierarchyUserFilter;
 use Bitrix\HumanResources\Internals\Entity\Provider\UI\DepartmentProviderOptions;
 use Bitrix\HumanResources\Internals\Entity\Provider\UI\DepartmentProviderTabs;
 use Bitrix\HumanResources\Internals\Enum\Provider\UI\DepartmentProviderAvatarMode;
 use Bitrix\HumanResources\Internals\Enum\Provider\UI\DepartmentProviderTagStyleMode;
 use Bitrix\HumanResources\Type\AccessCodeType;
 use Bitrix\HumanResources\Type\IntegerCollection;
+use Bitrix\HumanResources\Service\Access\Structure\StructureAccessService;
 use Bitrix\HumanResources\Type\StructureAction;
 use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
@@ -55,7 +58,9 @@ class DepartmentProvider extends BaseStructureProvider
 	public const MODE_USERS_ONLY = 'usersOnly';
 	private const IMAGE_DEPARTMENT_OPTION = '/bitrix/js/humanresources/entity-selector/src/images/department-option.svg';
 	private const IMAGE_TEAM_OPTION = '/bitrix/js/humanresources/entity-selector/src/images/team-option.svg';
+	private const MANAGED_HIERARCHY_RECENT_USERS_LIMIT = 50;
 	private DepartmentProviderTabs $providerTabs;
+	private ?NodeCollection $managedHierarchyCache = null;
 
 	/**
 	 * @throws SystemException
@@ -73,6 +78,7 @@ class DepartmentProvider extends BaseStructureProvider
 
 	/**
 	 * @throws LoaderException
+	 * @throws ArgumentException
 	 */
 	protected function initProviderOptions(array $options = []): DepartmentProviderOptions
 	{
@@ -140,12 +146,31 @@ class DepartmentProvider extends BaseStructureProvider
 			return;
 		}
 
-		$nodes = $this->getStructure(
-			[
-				'searchQuery' => $searchQuery->getQuery(),
-				'nodeTypes' => $this->providerOptions->includedNodeEntityTypes,
-			],
-		);
+		if ($this->providerOptions->onlyManagedHierarchy)
+		{
+			$userEntity = $dialog->getEntity('user');
+			if ($userEntity)
+			{
+				$userEntity->addFilter(new ManagedHierarchyUserFilter([
+					'userIds' => $this->getManagedUserIds($this->getManagedHierarchyNodes()),
+				]));
+			}
+
+			$nodes = $this->getManagedHierarchyNodes($searchQuery->getQuery());
+			if ($nodes->empty())
+			{
+				return;
+			}
+		}
+		else
+		{
+			$nodes = $this->getStructure(
+				[
+					'searchQuery' => $searchQuery->getQuery(),
+					'nodeTypes' => $this->providerOptions->includedNodeEntityTypes,
+				],
+			);
+		}
 
 		$limitExceeded = $this->getLimit() <= $nodes->count();
 		if ($limitExceeded)
@@ -204,13 +229,17 @@ class DepartmentProvider extends BaseStructureProvider
 	public function fillDialog(Dialog $dialog): void
 	{
 		$this->providerTabs->addTabsIntoDialog($dialog);
+		$this->setDepartmentFooterIfNeeded($dialog);
 
 		if (!$this->providerOptions->fillDepartmentsTab && !$this->providerOptions->fillRecentTab)
 		{
 			return;
 		}
 
-		$nodes = $this->fetchNodes($this->providerOptions->includedNodeEntityTypes);
+		$nodes = $this->providerOptions->onlyManagedHierarchy
+			? $this->getManagedHierarchyNodes()
+			: $this->fetchNodes($this->providerOptions->includedNodeEntityTypes)
+		;
 
 		$hasMoreNodes = $this->areOtherNodesExists($nodes);
 		if ($this->providerOptions->selectMode === DepartmentProviderSelectMode::UsersOnly || !$hasMoreNodes)
@@ -230,6 +259,48 @@ class DepartmentProvider extends BaseStructureProvider
 		{
 			$this->fillNodes($dialog, $nodes, $forceDynamic);
 		}
+
+		if (
+			$this->providerOptions->onlyManagedHierarchy
+			&& $this->providerOptions->selectMode !== DepartmentProviderSelectMode::DepartmentsOnly
+		)
+		{
+			$this->fillSubordinateUsers($dialog, $nodes);
+		}
+	}
+
+	private function setDepartmentFooterIfNeeded(Dialog $dialog): void
+	{
+		if (
+			!$this->providerOptions->showDepartmentCreationFooter
+			|| !$this->canCurrentUserCreateDepartment()
+		)
+		{
+			return;
+		}
+
+		$departmentTab = $dialog->getTab(DepartmentProviderTabId::Departments->value);
+
+		if ($departmentTab === null)
+		{
+			return;
+		}
+
+		$departmentTab->setFooter('BX.HumanResources.EntitySelector.DepartmentCreationFooter');
+
+		if ($this->providerOptions->showDepartmentCreationFooterInRecentTab)
+		{
+			$recentTab = $dialog->getTab(DepartmentProviderTabId::Recent->value);
+			$recentTab?->setFooter('BX.HumanResources.EntitySelector.DepartmentCreationFooter');
+		}
+	}
+
+	private function canCurrentUserCreateDepartment(): bool
+	{
+		return (new StructureAccessService())
+			->setAction(StructureAction::CreateAction)
+			->canDoActionWithAnyNode()
+		;
 	}
 
 	private function getUserOptions(Dialog $dialog): array
@@ -263,6 +334,157 @@ class DepartmentProvider extends BaseStructureProvider
 		)
 			->getAll()
 		;
+	}
+
+	/**
+	 * Returns nodes where the current user is a manager or deputy
+	 * (see {@see DepartmentProviderOptions::$managedHierarchyRoles}) and all their
+	 * descendants. Optionally narrowed by name.
+	 *
+	 * With $searchQuery the NAME LIKE goes into the same SQL — earlier post-filter
+	 * pattern (top 100 by name → intersect) silently dropped managed matches past
+	 * the source limit.
+	 *
+	 * Full-tree result is memoized in {@see $managedHierarchyCache}; search-narrowed
+	 * calls are not cached.
+	 */
+	private function getManagedHierarchyNodes(?string $searchQuery = null): NodeCollection
+	{
+		if ($searchQuery === null && $this->managedHierarchyCache !== null)
+		{
+			return $this->managedHierarchyCache;
+		}
+
+		$currentUserId = CurrentUser::get()->getId();
+		if (!$currentUserId)
+		{
+			$empty = new NodeCollection();
+			if ($searchQuery === null)
+			{
+				$this->managedHierarchyCache = $empty;
+			}
+
+			return $empty;
+		}
+
+		$managedMembers = NodeMemberDataBuilder::createWithFilter(
+			new NodeMemberFilter(
+				entityIdFilter: EntityIdFilter::fromEntityId($currentUserId),
+				entityType: MemberEntityType::USER,
+				roleFilter: RoleFilter::fromRoles(...$this->providerOptions->managedHierarchyRoles),
+			),
+		)
+			->getAll()
+		;
+
+		$rootIds = array_map(
+			static fn($member): int => (int)$member->nodeId,
+			$managedMembers->getItemMap(),
+		);
+
+		if (empty($rootIds))
+		{
+			$empty = new NodeCollection();
+			if ($searchQuery === null)
+			{
+				$this->managedHierarchyCache = $empty;
+			}
+
+			return $empty;
+		}
+
+		$nodes = NodeDataBuilder::createWithFilter(
+			new NodeFilter(
+				idFilter: new IdFilter(new IntegerCollection(...$rootIds)),
+				entityTypeFilter: NodeTypeFilter::fromNodeTypes($this->providerOptions->includedNodeEntityTypes),
+				direction: Direction::CHILD,
+				depthLevel: DepthLevel::FULL,
+				accessFilter: $this->providerOptions->accessFilter,
+				name: $searchQuery,
+			),
+		)
+			->getAll()
+			->orderMapByInclude()
+		;
+
+		if ($searchQuery === null)
+		{
+			$this->managedHierarchyCache = $nodes;
+		}
+
+		return $nodes;
+	}
+
+	/**
+	 * Returns unique user IDs that sit inside the managed-hierarchy subtree.
+	 *
+	 * Extracted so that both the "recent users" filler and the user-entity hide filter
+	 * (applied after UserProvider::doSearch) share the same whitelist definition.
+	 */
+	private function getManagedUserIds(NodeCollection $managedNodes): array
+	{
+		$allNodeIds = array_map(
+			'intval',
+			array_column($managedNodes->getItemMap(), 'id'),
+		);
+		if (empty($allNodeIds))
+		{
+			return [];
+		}
+
+		$userIds = NodeMemberDataBuilder::createWithFilter(
+			new NodeMemberFilter(
+				entityType: MemberEntityType::USER,
+				nodeFilter: new NodeFilter(
+					idFilter: new IdFilter(new IntegerCollection(...$allNodeIds)),
+				),
+			),
+		)
+			->getAll()
+			->getEntityIds()
+		;
+
+		return array_values(array_unique(array_map('intval', $userIds)));
+	}
+
+	/**
+	 * Adds users from the managed-hierarchy subtree to the dialog as recent items.
+	 *
+	 * In the onlyManagedHierarchy mode the provider restricts the visible structure, so
+	 * consumers lose the default "all company users" population. To keep the selector
+	 * usable without extra round-trips, we pre-populate recent items with employees from
+	 * the same subtrees the user manages.
+	 *
+	 * The size of the recent tab is capped — for a top-level manager the managed subtree
+	 * can cover the entire company, and recent is not meant to hold thousands of users.
+	 * Consumer may override the cap via userOptions.maxUsersInRecentTab (already
+	 * normalized by UserProvider::prepareOptions).
+	 */
+	private function fillSubordinateUsers(Dialog $dialog, NodeCollection $managedNodes): void
+	{
+		$userIds = $this->getManagedUserIds($managedNodes);
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		$userOptions = $this->getUserOptions($dialog);
+		$limit = is_int($userOptions['maxUsersInRecentTab'] ?? null)
+			? $userOptions['maxUsersInRecentTab']
+			: self::MANAGED_HIERARCHY_RECENT_USERS_LIMIT
+		;
+
+		$userIds = array_slice($userIds, 0, $limit);
+
+		$userItems = UserProvider::makeItems(
+			UserProvider::getUsers(['userId' => $userIds] + $userOptions),
+			$userOptions,
+		);
+
+		foreach ($userItems as $userItem)
+		{
+			$dialog->addRecentItem($userItem);
+		}
 	}
 
 	private function fillRecentDepartments(Dialog $dialog, NodeCollection $nodes): void

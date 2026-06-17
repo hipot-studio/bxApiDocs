@@ -18,6 +18,7 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Service\Task\ParentService;
 use Bitrix\Tasks\V2\Public\Command\Task\Relation\DeleteParentRelationCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Relation\SetParentRelationCommand;
+use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskByIdsParams;
 use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskParams;
 use Bitrix\Tasks\V2\Public\Provider\Relation\SubTaskProvider;
 use Bitrix\Tasks\Validation\Rule\Count;
@@ -35,6 +36,8 @@ class Child extends BaseController
 		SubTaskProvider $subTaskProvider,
 		?SelectInterface $relationTaskSelect = null,
 		bool $withIds = true,
+		bool $withCompleted = true,
+		bool $withSubTasks = true,
 	): array
 	{
 		$params = new RelationTaskParams(
@@ -43,6 +46,8 @@ class Child extends BaseController
 			templateId: 0,
 			pager: Pager::buildFromPageNavigation($pageNavigation),
 			select: $relationTaskSelect,
+			withCompleted: $withCompleted,
+			withSubTasks: $withSubTasks,
 		);
 
 		$response = [
@@ -51,7 +56,10 @@ class Child extends BaseController
 
 		if ($withIds)
 		{
-			$response['ids'] = $subTaskProvider->getTaskIds($params);
+			$idsData = $subTaskProvider->getTaskIdsWithStatuses($params);
+
+			$response['ids'] = $idsData['ids'];
+			$response['statuses'] = $idsData['statuses'];
 		}
 
 		return $response;
@@ -65,10 +73,34 @@ class Child extends BaseController
 		#[ElementsType(typeEnum: Type::Numeric)]
 		array $taskIds,
 		SubTaskProvider $subTaskProvider,
+		bool $withCompleted = true,
+		bool $withSubTasks = true,
+	): array
+	{
+		$params = new RelationTaskByIdsParams(
+			taskIds: $taskIds,
+			userId: $this->userId,
+			withCompleted: $withCompleted,
+			withSubTasks: $withSubTasks,
+		);
+
+		return [
+			'tasks' => $subTaskProvider->getTasksByIds($params),
+		];
+	}
+
+	/**
+	 * @ajaxAction tasks.V2.Task.Relation.Child.getSubTaskIds
+	 */
+	#[CloseSession]
+	public function getSubTaskIdsAction(
+		#[ElementsType(typeEnum: Type::Numeric)]
+		array $taskIds,
+		SubTaskProvider $subTaskProvider,
 	): array
 	{
 		return [
-			'tasks' => $subTaskProvider->getTasksByIds($taskIds, $this->userId),
+			'tasks' => $subTaskProvider->getTasksWithSubTaskIds($taskIds),
 		];
 	}
 

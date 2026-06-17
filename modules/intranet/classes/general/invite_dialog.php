@@ -9,6 +9,8 @@
 
 use Bitrix\Intranet\Internal\Factory\Message\CollabInvitationMessageFactory;
 use Bitrix\Intranet\Internal\Factory\Message\ExtranetInvitationMessageFactory;
+use Bitrix\Intranet\Public\Service\Invitation\InviteContext;
+use Bitrix\Intranet\Public\Service\Invitation\InviteContextManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
@@ -24,6 +26,7 @@ use Bitrix\Main\Engine\Router;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Bitrix24\Integration;
+use Bitrix\Bitrix24\Public\Command\Network\SendNetworkException;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
@@ -288,7 +291,20 @@ class CIntranetInviteDialog
 			}
 
 			$obUser = new CUser;
-			$ID_ADDED = $obUser->Add($arUser);
+			InviteContextManager::set(InviteContext::InviteDialog);
+			try
+			{
+				$ID_ADDED = $obUser->Add($arUser);
+			}
+			catch (SendNetworkException $e)
+			{
+				$ID_ADDED = false;
+				$strError = $e->getMessage();
+			}
+			finally
+			{
+				InviteContextManager::clear();
+			}
 
 			if (!$ID_ADDED)
 			{
@@ -349,51 +365,7 @@ class CIntranetInviteDialog
 
 				$messageText = self::getInviteMessageText();
 
-				if (self::getSendPassword())
-				{
-					$serverName = (
-						(string)$site["SERVER_NAME"] !== ''
-							? $site["SERVER_NAME"]
-							: (
-								defined("SITE_SERVER_NAME") && SITE_SERVER_NAME !== ''
-									? SITE_SERVER_NAME
-									: Option::get('main', 'server_name')
-							)
-					);
-
-					if ($bitrix24Installed && Loader::includeModule('socialservices'))
-					{
-						$uri = new Uri(
-							(new CBitrix24NetOAuthInterface)->getInviteUrl(
-								$ID_ADDED,
-								$arUser["B24NETWORK_CHECKWORD"],
-							)
-						);
-						$uri->addParams([
-							'accepted' => 'yes'
-						]);
-						$url = $uri->getLocator();
-					}
-					else
-					{
-						$url = (CMain::IsHTTPS() ? "https" : "http") . "://" . $serverName . $site["DIR"];
-					}
-					$messageId = self::getMessageId($bitrix24Installed ? "BITRIX24_USER_ADD" : "INTRANET_USER_ADD", $siteIdByDepartmentId, LANGUAGE_ID);
-					CEvent::SendImmediate(
-						$bitrix24Installed ? "BITRIX24_USER_ADD" : "INTRANET_USER_ADD",
-						$siteIdByDepartmentId,
-						array(
-							"EMAIL_TO" => $arUser["EMAIL"],
-							"LINK" => $url,
-							"USER_ID_FROM" => $USER->GetID(),
-							"PASSWORD" => $strPassword,
-							"USER_TEXT" => $messageText
-						),
-						null,
-						$messageId
-					);
-				}
-				else
+				if (!self::getSendPassword())
 				{
 					$dbUser = CUser::GetByID($ID_ADDED);
 					$arUser = $dbUser->Fetch();
@@ -1175,7 +1147,15 @@ class CIntranetInviteDialog
 		}
 
 		$obUser = new CUser;
-		$res = $obUser->Add($arUser);
+		InviteContextManager::set(InviteContext::InviteDialog);
+		try
+		{
+			$res = $obUser->Add($arUser);
+		}
+		finally
+		{
+			InviteContextManager::clear();
+		}
 
 		if ($res)
 		{

@@ -2,9 +2,11 @@
 namespace Bitrix\Crm\Service;
 
 use Bitrix\Crm\Decorator\JsonSerializable\ClearNullValues;
+use Bitrix\Crm\Integration\Im\Chat;
 use Bitrix\Crm\Integration\Intranet\SystemPageProvider\ActivityPage;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Security\PermissionToken;
 use Bitrix\Crm\Security\Role\Manage\Manager\AllSelection;
 use Bitrix\Crm\Security\Role\Manage\RoleManagerSelectionFactory;
 use Bitrix\Crm\Service\Router\Component\Component;
@@ -19,6 +21,7 @@ use Bitrix\Intranet\Util;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\DataType\ContentUri;
 use Bitrix\Main\Event;
 use Bitrix\Main\HttpRequest;
@@ -798,6 +801,36 @@ class Router
 		}
 
 		return $this->getKanbanActivityUrlWithOldRouting($entityTypeId, $categoryId);
+	}
+
+	public function getActivityDetailsShareableUrl(int $activityId, int $chatId): ?Uri
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		if ($userId <= 0)
+		{
+			return null;
+		}
+
+		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
+		if (!$activity)
+		{
+			return null;
+		}
+
+		$provider = \CCrmActivity::GetActivityProvider($activity);
+		if (!$provider || !$provider::checkReadPermission($activity, $userId))
+		{
+			return null;
+		}
+
+		if (!Loader::includeModule('im') || Chat::getUserRelationToChat($chatId, $userId) === null)
+		{
+			return null;
+		}
+
+		$token = PermissionToken::createViewActivityToken($activityId, $chatId);
+
+		return new Uri('/crm/activity/details/' . $activityId . '/?act=' . urlencode($token));
 	}
 
 	public function getDeadlinesUrl(int $entityTypeId, int $categoryId = null): ?Uri

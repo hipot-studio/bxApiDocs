@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2023 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Web\Http;
@@ -27,9 +27,16 @@ class Request extends Message implements RequestInterface
 		$this->uri = $uri;
 
 		// PSR-7: During construction, implementations MUST attempt to set the Host header from a provided URI if no Host header is provided.
-		if ($uri->getHost() != '' && !$this->hasHeader('Host'))
+		$host = $uri->getHost();
+		if ($host != '' && !$this->hasHeader('Host'))
 		{
-			$this->headers->set('Host', $uri->getHost());
+			$scheme = $uri->getScheme();
+			$port = $uri->getPort();
+			if (($scheme == 'http' && $port != 80) || ($scheme == 'https' && $port != 443))
+			{
+				$host .= ':' . $port;
+			}
+			$this->headers->set('Host', $host);
 		}
 	}
 

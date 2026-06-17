@@ -71,6 +71,7 @@ class Task extends BaseController
 		#[Permission\Add]
 		Entity\Task $task,
 		TaskProvider $taskProvider,
+		bool $view = false,
 	): ?Arrayable
 	{
 		$config = new AddConfig(
@@ -90,7 +91,13 @@ class Task extends BaseController
 			return null;
 		}
 
-		return $taskProvider->get(new TaskParams(taskId: $result->getId(), userId: $this->userId));
+		return $taskProvider->get(
+			new TaskParams(
+				taskId: $result->getId(),
+				userId: $this->userId,
+				view: $view,
+			)
+		);
 	}
 
 	/**

@@ -11,7 +11,7 @@ use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 
 class CancelBookingTool extends BaseBookingTool
 {
-	protected function execute(int $userId, ...$args): string
+	protected function doExecuteStructured(int $userId, ...$args): array
 	{
 		$bookingId = (int)($args['bookingId'] ?? 0);
 		if (!$bookingId)
@@ -23,7 +23,7 @@ class CancelBookingTool extends BaseBookingTool
 			filter: new BookingFilter([
 				'ID' => $bookingId,
 			]),
-			select: (new BookingSelect(['CLIENTS']))->prepareSelect(),
+			select: (new BookingSelect(['CLIENTS', 'EXTERNAL_DATA']))->prepareSelect(),
 		)->getFirstCollectionItem();
 		if (!$booking)
 		{
@@ -34,6 +34,8 @@ class CancelBookingTool extends BaseBookingTool
 		{
 			return $this->createFailureResponse('Access denied');
 		}
+
+		$crmBindings = $this->crmBindingsBuilder->getExternalDataBindingsFromBooking($booking);
 
 		$command = new RemoveBookingCommand(
 			id: $booking->getId(),
@@ -46,7 +48,10 @@ class CancelBookingTool extends BaseBookingTool
 			return $this->createFailureResponse(implode(', ', $result->getErrorMessages()));
 		}
 
-		return "Booking with identifier '{$booking->getId()}' has been successfully cancelled";
+		return $this->createSuccessResponse(
+			message: "Booking with identifier '{$booking->getId()}' has been successfully cancelled",
+			crmBindings: $crmBindings,
+		);
 	}
 
 	public function getName(): string
@@ -56,7 +61,7 @@ class CancelBookingTool extends BaseBookingTool
 
 	public function getDescription(): string
 	{
-		return 'Cancels a specified booking. This action is irreversible.';
+		return 'Call this tool as soon as the client expresses intent to cancel the booking — both explicit ("cancel it", "I won\'t come, cancel") and implicit refusals to attend ("I\'m not coming anymore", "I no longer need it"). Treat any clear refusal-to-attend as a cancellation request, regardless of phrasing or language.';
 	}
 
 	public function getInputSchema(): array

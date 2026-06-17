@@ -633,8 +633,7 @@ class SignDocument extends Configurable
 			->setTitle(Loc::getMessage('CRM_SERVICE_TIMELINE_LAYOUT_SIGNDOCUMENT_BLOCK_DATE'))
 			->setContentBlock((new Layout\Body\ContentBlock\Date())
 				->setDate($this->getSignDocument()
-					->getDateCreate()
-					->toUserTime())
+					->getDateCreate())
 			)
 		;
 	}

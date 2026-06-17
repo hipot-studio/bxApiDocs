@@ -18,6 +18,9 @@ class MessageFolder
 	const OUTCOME = 'outcome';
 	const DRAFTS = 'drafts';
 
+	const VIRTUAL_ALL_MESSAGES = 'all_messages';
+	const VIEW_STATE_MAILBOX = 'mailbox';
+
 
 	public static function increaseDirCounter($mailboxId, ?MailboxDirectory $dirForMoveMessages, $dirForMoveMessagesId, $idsUnseenCount): void
 	{
@@ -205,4 +208,31 @@ class MessageFolder
 		return $full ? join(' / ', $path) : end($path);
 	}
 
+	public static function resolveFolderPath(string $folder, int $mailboxId): ?string
+	{
+		$normalizedInput = mb_strtolower($folder);
+
+		$directories = \Bitrix\Mail\MailboxDirectory::fetchAll($mailboxId);
+		if ($directories === null)
+		{
+			return null;
+		}
+
+		foreach ($directories as $directory)
+		{
+			$path = $directory->getPath();
+
+			if (mb_strtolower($path) === $normalizedInput)
+			{
+				return $path;
+			}
+
+			if (mb_strtolower($directory->getName()) === $normalizedInput)
+			{
+				return $path;
+			}
+		}
+
+		return null;
+	}
 }

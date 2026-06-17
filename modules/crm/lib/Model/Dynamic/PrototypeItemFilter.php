@@ -13,7 +13,11 @@ class PrototypeItemFilter
 	{
 		foreach ($filter as $index => $value)
 		{
-			if (mb_strpos($index, Item::FIELD_NAME_ASSIGNED) !== false)
+			$isOwnFieldNameAssigned =
+				str_contains($index, Item::FIELD_NAME_ASSIGNED)
+				&& !str_contains($index, '.' . Item::FIELD_NAME_ASSIGNED)
+			;
+			if ($isOwnFieldNameAssigned)
 			{
 				$assignedSqlExpression = static::getAssignedSqlExpression($index, $entityTypeId, $value);
 

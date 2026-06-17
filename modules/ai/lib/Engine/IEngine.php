@@ -301,4 +301,7 @@ interface IEngine
 	 */
 	public function setResponseJsonMode(bool $enable): void;
 
+	public function setResponseFormat(ResponseFormat $mode): void;
+
+	public function getResponseFormat(): ?ResponseFormat;
 }

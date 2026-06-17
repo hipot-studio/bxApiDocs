@@ -8,7 +8,6 @@ use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Main\UI\Filter\Options;
 
 class MessageFilter
 {
@@ -53,7 +52,11 @@ class MessageFilter
 			$this->addIsSeen($filterData['IS_SEEN'] === 'Y');
 		}
 
-		if (!empty($filterData['DIR']) && is_scalar($filterData['DIR']))
+		if (isset($filterData['MD5_DIRS']) && is_array($filterData['MD5_DIRS']))
+		{
+			$this->filter['@MESSAGE_UID.DIR_MD5'] = $filterData['MD5_DIRS'];
+		}
+		elseif (isset($filterData['DIR']) && is_scalar($filterData['DIR']))
 		{
 			$this->addDir($filterData['DIR']);
 		}
@@ -206,14 +209,14 @@ class MessageFilter
 
 	public function addDateFrom(DateTime $date): self
 	{
-		$this->filter['>=FIELD_DATE'] = $date;
+		$this->filter['>=MESSAGE_UID.INTERNALDATE'] = $date;
 
 		return $this;
 	}
 
 	public function addDateTo(DateTime $date): self
 	{
-		$this->filter['<=FIELD_DATE'] = $date;
+		$this->filter['<=MESSAGE_UID.INTERNALDATE'] = $date;
 
 		return $this;
 	}

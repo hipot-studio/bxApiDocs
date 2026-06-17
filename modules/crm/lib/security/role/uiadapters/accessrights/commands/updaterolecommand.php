@@ -92,7 +92,7 @@ class UpdateRoleCommand
 	 */
 	private function saveRoleNameAndCode(UserGroupsData $userGroup): int
 	{
-		return $this->permissionRepository->updateOrCreateRole($userGroup->id, $userGroup->title, $userGroup->groupCode);
+		return $this->permissionRepository->updateOrCreateRole((int)$userGroup->id, $userGroup->title, $userGroup->groupCode);
 	}
 
 	/**

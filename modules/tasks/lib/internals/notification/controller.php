@@ -11,7 +11,6 @@ use Bitrix\Tasks\Integration\SocialNetwork;
 use Bitrix\Tasks\Integration\Forum;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Internals\Notification;
-use Bitrix\Tasks\V2\FormV2Feature;
 
 class Controller
 {
@@ -47,16 +46,8 @@ class Controller
 	{
 		$providers = new ProviderCollection(...$this->getDefaultNotificationProviders([
 			new Mail\ExternalUserProvider(),
+			new Im\Notification\ProviderV2(),
 		]));
-
-		if (FormV2Feature::isOn('', (int)$task->getGroupId()))
-		{
-			$providers->add(new Im\Notification\ProviderV2());
-		}
-		else
-		{
-			$providers->add(new SocialNetwork\NotificationProvider());
-		}
 
 		(new Notification\UseCase\TaskCreated(
 			$task,
@@ -70,12 +61,9 @@ class Controller
 
 	public function onTaskAddedToFlowWithManualDistribution(TaskObject $task, FlowEntity $flow): self
 	{
-		$providers = new ProviderCollection(...$this->getDefaultNotificationProviders());
-
-		if (FormV2Feature::isOn('', (int)$task->getGroupId()))
-		{
-			$providers->add(new Im\Notification\ProviderV2());
-		}
+		$providers = new ProviderCollection(...$this->getDefaultNotificationProviders([
+			new Im\Notification\ProviderV2(),
+		]));
 
 		(new Notification\UseCase\Flow\TaskAddedToFlowWithManualDistribution(
 			$task,
@@ -89,12 +77,9 @@ class Controller
 
 	public function onTaskAddedToFlowWithHimselfDistribution(TaskObject $task, FlowEntity $flow): self
 	{
-		$providers = new ProviderCollection(...$this->getDefaultNotificationProviders());
-
-		if (FormV2Feature::isOn('', (int)$task->getGroupId()))
-		{
-			$providers->add(new Im\Notification\ProviderV2());
-		}
+		$providers = new ProviderCollection(...$this->getDefaultNotificationProviders([
+			new Im\Notification\ProviderV2(),
+		]));
 
 		(new Notification\UseCase\Flow\TaskAddedToFlowWithHimselfDistribution(
 			$task,
@@ -112,27 +97,20 @@ class Controller
 			new Mail\ExternalUserProvider(),
 		]));
 
-		if (FormV2Feature::isOn('', (int)$task->getGroupId()))
-		{
-			// another behavior for taskV2
-			$v2Providers = $this->getDefaultNotificationProviders(
-				[
-					new Im\Notification\ProviderV2()
-				],
-				false
-			);
-			$useCaseV2 = new Notification\UseCase\TaskUpdatedV2(
-				$task,
-				$this->buffer,
-				$this->userRepository,
-				new ProviderCollection(...$v2Providers),
-			);
-			$useCaseV2->execute($newFields, $previousFields, $params);
-		}
-		else
-		{
-			$providers->add(new SocialNetwork\NotificationProvider());
-		}
+		// another behavior for taskV2
+		$v2Providers = $this->getDefaultNotificationProviders(
+			[
+				new Im\Notification\ProviderV2()
+			],
+			false
+		);
+		$useCaseV2 = new Notification\UseCase\TaskUpdatedV2(
+			$task,
+			$this->buffer,
+			$this->userRepository,
+			new ProviderCollection(...$v2Providers),
+		);
+		$useCaseV2->execute($newFields, $previousFields, $params);
 
 		(new Notification\UseCase\TaskUpdated(
 			$task,
@@ -148,12 +126,9 @@ class Controller
 	{
 		$providerCollection = new ProviderCollection(...$this->getDefaultNotificationProviders([
 			new SocialNetwork\NotificationProvider(),
+			new Im\Notification\ProviderV2(),
 		]));
 
-		if (FormV2Feature::isOn('', (int)$task->getGroupId()))
-		{
-			$providerCollection->add(new Im\Notification\ProviderV2());
-		}
 		(new Notification\UseCase\TaskDeleted(
 			$task,
 			$this->buffer,
@@ -184,25 +159,6 @@ class Controller
 			$this->userRepository,
 			new ProviderCollection(...$this->getDefaultNotificationProviders()),
 		))->execute();
-
-		return $this;
-	}
-
-	public function onTaskStatusChanged(TaskObject $task, int $taskCurrentStatus, array $params = []): self
-	{
-		$providers = new ProviderCollection(...$this->getDefaultNotificationProviders());
-
-		if (!FormV2Feature::isOn('', (int)$task->getGroupId()))
-		{
-			$providers->add(new SocialNetwork\NotificationProvider());
-		}
-
-		(new Notification\UseCase\TaskStatusChanged(
-			$task,
-			$this->buffer,
-			$this->userRepository,
-			$providers,
-		))->execute($taskCurrentStatus, $params);
 
 		return $this;
 	}

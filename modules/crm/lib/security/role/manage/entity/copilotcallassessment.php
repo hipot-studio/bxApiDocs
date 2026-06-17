@@ -11,6 +11,8 @@ use Bitrix\Main\Localization\Loc;
 
 class CopilotCallAssessment implements PermissionEntity
 {
+	public const ENTITY_CODE = 'CCA';
+
 	private function permissions(): array
 	{
 		return [
@@ -29,7 +31,7 @@ class CopilotCallAssessment implements PermissionEntity
 		$name = Loc::getMessage('CRM_SECURITY_ROLE_ENTITY_TYPE_CRM_COPILOT_CALL_ASSESSMENT');
 
 		return [
-			new EntityDTO('CCA', $name, [], $this->permissions())
+			new EntityDTO(self::ENTITY_CODE, $name, [], $this->permissions())
 		];
 	}
 }

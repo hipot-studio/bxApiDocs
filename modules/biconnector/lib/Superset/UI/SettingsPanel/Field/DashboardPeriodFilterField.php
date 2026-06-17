@@ -4,8 +4,7 @@ namespace Bitrix\BIConnector\Superset\UI\SettingsPanel\Field;
 
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Type\Date;
+use Bitrix\BIConnector\Superset\UI\Period\DefaultPeriodLabelBuilder;
 
 final class DashboardPeriodFilterField extends PeriodFilterField
 {
@@ -45,29 +44,16 @@ final class DashboardPeriodFilterField extends PeriodFilterField
 			'VALUE' => EmbeddedFilter\DateTime::PERIOD_NONE,
 		];
 
-		$defaultFilterData = self::getDefaultFilterData();
-		$defaultFilterName = EmbeddedFilter\DateTime::getPeriodName($defaultFilterData['FILTER_PERIOD']);
-		if ($defaultFilterData['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_RANGE)
-		{
-			$startDate = new Date($defaultFilterData['DATE_FILTER_START']);
-			$endDate = new Date($defaultFilterData['DATE_FILTER_END']);
-
-			$defaultFilterName = Loc::getMessage(
-				'DASHBOARD_PERIOD_FILTER_FIELD_DEFAULT_PERIOD_RANGE_INCLUDE_LAST_FILTER_DATE',
-				[
-					'#DATE_FROM#' => $startDate->toString(),
-					'#DATE_TO#' => $endDate->toString(),
-				]
-			);
-		}
-
-		$defaultFilterName = "<span class='ui-color-light biconnector-default-filter-prefix'>{$defaultFilterName}</span>";
+		$defaultPeriodLabel = (new DefaultPeriodLabelBuilder())->build();
+		$defaultFilterName = htmlspecialcharsbx($defaultPeriodLabel['prefixText'])
+			. "<span class='ui-color-light biconnector-default-filter-prefix'>"
+			. htmlspecialcharsbx($defaultPeriodLabel['valueText'])
+			. '</span>'
+			. htmlspecialcharsbx($defaultPeriodLabel['suffixText'])
+		;
 
 		$defaultFilter = [
-			'NAME' => Loc::getMessage('DASHBOARD_PERIOD_FILTER_FIELD_DEFAULT_PERIOD', [
-				'#PERIOD_NAME#' => $defaultFilterName,
-				'#DEFAULT_PREFIX#' => Loc::getMessage('DASHBOARD_PERIOD_FILTER_FIELD_DEFAULT_PREFIX'),
-			]),
+			'NAME' => $defaultFilterName,
 			'VALUE' => EmbeddedFilter\DateTime::PERIOD_DEFAULT,
 		];
 

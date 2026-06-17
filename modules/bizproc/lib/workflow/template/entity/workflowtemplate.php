@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Workflow\Template\Entity;
 
+use Bitrix\Bizproc\Internal\Service\DayPlanBot\DayPlanBotSyncService;
 use Bitrix\Bizproc\Internal\Service\WorkflowTemplate\ConstantsFileService;
 use Bitrix\Bizproc\Workflow\Template\Tpl;
 use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable;
@@ -285,8 +286,9 @@ class WorkflowTemplateTable extends Main\ORM\Data\DataManager
 
 	public static function onAfterUpdate(Event $event): void
 	{
-		$template = $event->getParameter('fields')['TEMPLATE'] ?? null;
-		$active = $event->getParameter('fields')['ACTIVE'] ?? null;
+		$fields = $event->getParameter('fields');
+		$template = $fields['TEMPLATE'] ?? null;
+		$active = $fields['ACTIVE'] ?? null;
 		$id = $event->getParameter('primary')['ID'];
 
 		if (is_array($template))
@@ -299,18 +301,22 @@ class WorkflowTemplateTable extends Main\ORM\Data\DataManager
 			WorkflowTemplateTriggerTable::onTemplateUpdate($id);
 		}
 
-		$constants = $event->getParameter('fields')['CONSTANTS'] ?? null;
+		$constants = $fields['CONSTANTS'] ?? null;
 		if (is_array($constants))
 		{
 			self::getConstantsFileService()->update($id, $constants);
 		}
+
+		DayPlanBotSyncService::onTemplateUpdate($id, $fields ?? []);
 	}
 
 	public static function onAfterDelete(Event $event): void
 	{
 		$id = $event->getParameter('primary')['ID'];
-		WorkflowTemplateTriggerTable::onTemplateDelete($id);
 
+		WorkflowTemplateUserDataTable::deleteByFilter(['=TEMPLATE_ID' => $id]);
+
+		WorkflowTemplateTriggerTable::onTemplateDelete($id);
 		self::getConstantsFileService()->delete($id);
 	}
 

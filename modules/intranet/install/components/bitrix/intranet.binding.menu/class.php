@@ -100,6 +100,7 @@ class IntranetBindingMenuComponent extends \CBitrixComponent
 
 		$this->arParams['SECTION_CODE'] = mb_strtolower($this->arParams['SECTION_CODE']);
 		$this->arParams['MENU_CODE'] = mb_strtolower($this->arParams['MENU_CODE']);
+		$this->arResult['UNIQUE_BUTTON_ID'] = $this->arParams['UNIQUE_BUTTON_ID'] ?? null;
 
 		$this->arResult['BINDING_ID'] = $this->arParams['SECTION_CODE'] . ':' . $this->arParams['MENU_CODE'];
 		$this->arResult['SECTIONS'] = Binding\Menu::SECTIONS;

@@ -492,7 +492,8 @@ class CAllCrmActivity
 			return false; // is not exists
 		}
 
-		$currentUserId = (int)($params['CURRENT_USER'] ?? CCrmPerms::GetCurrentUserID());
+		$options['~CURRENT_USER'] = (int)($options['CURRENT_USER'] ?? 0);
+		$currentUserId = (int)($options['CURRENT_USER'] ?? CCrmPerms::GetCurrentUserID());
 		$options['CURRENT_USER'] = $currentUserId;
 
 		$checkFieldParams = ['PREVIOUS_FIELDS' => $arPrevEntity];

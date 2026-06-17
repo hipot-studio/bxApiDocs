@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Integration\AI;
 
+use Bitrix\Crm\Integration\AI\Dto\AnalyzeCommunicationPayload;
 use Bitrix\Crm\Integration\AI\Dto\FillItemFieldsFromCallTranscriptionPayload;
 use Bitrix\Crm\Integration\AI\Dto\RepeatSale\FillRepeatSaleTipsPayload;
 use Bitrix\Crm\Integration\AI\Dto\Scoring\ExtractScoringCriteriaPayload;
@@ -10,6 +11,7 @@ use Bitrix\Crm\Integration\AI\Dto\SummarizeCallTranscriptionPayload;
 use Bitrix\Crm\Integration\AI\Dto\TranscribeCallRecordingPayload;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
+use Bitrix\Crm\Integration\AI\Operation\AnalyzeCommunication;
 use Bitrix\Crm\Integration\AI\Operation\ExtractScoringCriteria;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
@@ -20,16 +22,17 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Traits\Singleton;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\EventManager;
 use Bitrix\Main\Web\Json;
 use CCrmOwnerType;
 
-final class JobRepository
+class JobRepository
 {
 	use Singleton;
 
 	/** @var Array<int, Result|null> */
 	private array $transcribeCache = [];
-	/** @var Array<int, Result|null> */
+	/** @var Array<string, Result|null> */
 	private array $summarizeCache = [];
 	/** @var Array<string, Result|null> */
 	private array $fillCache = [];
@@ -41,8 +44,10 @@ final class JobRepository
 	private array $extractScoringCriteriaCache = [];
 	/** @var Array<int, Result|null> */
 	private array $fillRepeatSaleTips = [];
+	/** @var Array<int, Result|null> */
+	private array $analyzeCommunicationCache = [];
 
-	private \Bitrix\Main\ORM\EventManager $ormEventManager;
+	private EventManager $ormEventManager;
 	private array $eventKeys = [
 		DataManager::EVENT_ON_AFTER_ADD => true,
 		DataManager::EVENT_ON_AFTER_UPDATE => true,
@@ -51,7 +56,7 @@ final class JobRepository
 
 	private function __construct()
 	{
-		$this->ormEventManager = \Bitrix\Main\ORM\EventManager::getInstance();
+		$this->ormEventManager = EventManager::getInstance();
 
 		foreach ($this->eventKeys as $eventName => $doesntMatter)
 		{
@@ -159,7 +164,7 @@ final class JobRepository
 
 		$result = $job ? SummarizeCallTranscription::constructResult($job) : null;
 
-		$this->summarizeCache[$activityId] = is_object($result) ? clone $result : null;
+		$this->summarizeCache[$cacheKey] = is_object($result) ? clone $result : null;
 
 		return $result;
 	}
@@ -172,10 +177,11 @@ final class JobRepository
 	 */
 	public function getFillItemFieldsFromCallTranscriptionResult(
 		ItemIdentifier $targetItem,
-		?int $activityId = null
+		?int $activityId = null,
+		?int $parentJobId = null,
 	): ?Result
 	{
-		$cacheKey = $targetItem->getHash() . $activityId;
+		$cacheKey = $targetItem->getHash() . $activityId . ':' . ($parentJobId ?? 0);
 
 		if (array_key_exists($cacheKey, $this->fillCache))
 		{
@@ -192,7 +198,11 @@ final class JobRepository
 			->setLimit(1)
 		;
 
-		if ($activityId > 0)
+		if ($parentJobId > 0)
+		{
+			$query->where('PARENT_ID', $parentJobId);
+		}
+		elseif ($activityId > 0)
 		{
 			$parentSubQuery = QueueTable::query()
 				->setSelect(['ID'])
@@ -297,6 +307,43 @@ final class JobRepository
 		$result = $job ? ScoreCall::constructResult($job) : null;
 
 		$this->callScoringCache[$cacheKey] = is_object($result) ? clone $result : null;
+
+		return $result;
+	}
+
+	/**
+	 * @return Result<AnalyzeCommunicationPayload>|null
+	 */
+	public function getAnalyzeCommunicationResult(int $activityId): ?Result
+	{
+		if (array_key_exists($activityId, $this->analyzeCommunicationCache))
+		{
+			return is_object($this->analyzeCommunicationCache[$activityId])
+				? clone $this->analyzeCommunicationCache[$activityId]
+				: null
+			;
+		}
+
+		if ($activityId > 0)
+		{
+			$job = QueueTable::query()
+				->setSelect(['*'])
+				->where('ENTITY_TYPE_ID', CCrmOwnerType::Activity)
+				->where('ENTITY_ID', $activityId)
+				->where('TYPE_ID', AnalyzeCommunication::TYPE_ID)
+				->addOrder('ID', 'DESC')
+				->setLimit(1)
+				->fetchObject()
+			;
+		}
+		else
+		{
+			$job = null;
+		}
+
+		$result = $job ? AnalyzeCommunication::constructResult($job) : null;
+
+		$this->analyzeCommunicationCache[$activityId] = is_object($result) ? clone $result : null;
 
 		return $result;
 	}
@@ -520,6 +567,89 @@ final class JobRepository
 	}
 
 	/**
+	 * Preloads all activity-targeted jobs for the given activityId in a single query,
+	 * populating per-type caches so that subsequent resolve() calls hit warm caches.
+	 *
+	 * Only warms caches for operation types that use Activity as the target entity
+	 * (Transcribe, Summarize, ScoreCall, AnalyzeCommunication, FillRepeatSaleTips).
+	 * FillItemFields (targets Deal/Lead) and ExtractScoringCriteria are not covered.
+	 */
+	public function warmCacheForActivity(int $activityId): void
+	{
+		if ($activityId <= 0)
+		{
+			return;
+		}
+
+		$jobs = QueueTable::query()
+			->setSelect(['*'])
+			->where('ENTITY_TYPE_ID', CCrmOwnerType::Activity)
+			->where('ENTITY_ID', $activityId)
+			->addOrder('ID', 'DESC')
+			->fetchCollection()
+		;
+
+		// Group by TYPE_ID, keep only the latest (first due to DESC order)
+		$latestByType = [];
+		foreach ($jobs as $job)
+		{
+			$typeId = (int)$job->requireTypeId();
+			if (!isset($latestByType[$typeId]))
+			{
+				$latestByType[$typeId] = $job;
+			}
+		}
+
+		// Populate per-type caches (only if not already cached)
+		if (
+			isset($latestByType[TranscribeCallRecording::TYPE_ID])
+			&& !array_key_exists($activityId, $this->transcribeCache)
+		)
+		{
+			$result = TranscribeCallRecording::constructResult($latestByType[TranscribeCallRecording::TYPE_ID]);
+			$this->transcribeCache[$activityId] = is_object($result) ? clone $result : null;
+		}
+
+		$summarizeKey = sprintf('%d-0', $activityId);
+		if (
+			isset($latestByType[SummarizeCallTranscription::TYPE_ID])
+			&& !array_key_exists($summarizeKey, $this->summarizeCache)
+		)
+		{
+			$result = SummarizeCallTranscription::constructResult($latestByType[SummarizeCallTranscription::TYPE_ID]);
+			$this->summarizeCache[$summarizeKey] = is_object($result) ? clone $result : null;
+		}
+
+		$scoringKey = sprintf('%d-0', $activityId);
+		if (
+			isset($latestByType[ScoreCall::TYPE_ID])
+			&& !array_key_exists($scoringKey, $this->callScoringCache)
+		)
+		{
+			$result = ScoreCall::constructResult($latestByType[ScoreCall::TYPE_ID]);
+			$this->callScoringCache[$scoringKey] = is_object($result) ? clone $result : null;
+		}
+
+		if (
+			isset($latestByType[AnalyzeCommunication::TYPE_ID])
+			&& !array_key_exists($activityId, $this->analyzeCommunicationCache)
+		)
+		{
+			$result = AnalyzeCommunication::constructResult($latestByType[AnalyzeCommunication::TYPE_ID]);
+			$this->analyzeCommunicationCache[$activityId] = is_object($result) ? clone $result : null;
+		}
+
+		if (
+			isset($latestByType[FillRepeatSaleTips::TYPE_ID])
+			&& !array_key_exists($activityId, $this->fillRepeatSaleTips)
+		)
+		{
+			$result = FillRepeatSaleTips::constructResult($latestByType[FillRepeatSaleTips::TYPE_ID]);
+			$this->fillRepeatSaleTips[$activityId] = is_object($result) ? clone $result : null;
+		}
+	}
+
+	/**
 	 * @internal
 	 */
 	public function cleanRuntimeCache(): void
@@ -529,6 +659,8 @@ final class JobRepository
 		$this->fillCache = [];
 		$this->fillByIdCache = [];
 		$this->callScoringCache = [];
+		$this->extractScoringCriteriaCache = [];
 		$this->fillRepeatSaleTips = [];
+		$this->analyzeCommunicationCache = [];
 	}
 }

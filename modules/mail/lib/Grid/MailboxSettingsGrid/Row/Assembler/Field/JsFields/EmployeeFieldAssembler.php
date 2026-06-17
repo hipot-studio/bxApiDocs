@@ -45,6 +45,17 @@ class EmployeeFieldAssembler extends JsExtensionFieldAssembler
 		];
 	}
 
+	/**
+	 * @param array $rawValue Raw row data with OWNER_DATA for the requester.
+	 * @return string HTML rendered via parent JS extension (shows requester as employee).
+	 */
+	protected function prepareConnectionRequestPlaceholder(array $rawValue): string
+	{
+		return parent::prepareColumn(array_merge($rawValue, [
+			'RENDER_AS_JS' => true,
+		]));
+	}
+
 	protected function getExtensionClassName(): string
 	{
 		return self::EXTENSION_CLASS_NAME;

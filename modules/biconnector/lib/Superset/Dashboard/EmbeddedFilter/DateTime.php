@@ -229,7 +229,7 @@ class DateTime extends UrlFilter
 
 	public static function getDefaultPeriod(): string
 	{
-		$defaultValue = self::PERIOD_LAST_365;
+		$defaultValue = self::PERIOD_LAST_30;
 		$value = Option::get('biconnector', self::CONFIG_PERIOD_OPTION_NAME, $defaultValue);
 		if (self::isAvailablePeriod($value))
 		{

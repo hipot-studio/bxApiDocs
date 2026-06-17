@@ -230,7 +230,7 @@ class ShiftsManager
 	 * @return ShiftWithDate[]
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	public function buildShiftWithDates(\DateTime $from, \DateTime $to)
+	public function buildShiftWithDates(\DateTime $from, \DateTime $to, bool $checkShiftPlan = true)
 	{
 		$workingShifts = [];
 		$periodIterator = TimeHelper::getInstance()->buildDatesIterator($from, $to);
@@ -242,7 +242,11 @@ class ShiftsManager
 				{
 					$shiftWithDate = new ShiftWithDate($shift, $schedule, $date);
 
-					if ($schedule->isShifted() && !$this->hasShiftPlan($shiftWithDate))
+					if (
+						$checkShiftPlan
+						&& $schedule->isShifted()
+						&& !$this->hasShiftPlan($shiftWithDate)
+					)
 					{
 						continue;
 					}

@@ -183,26 +183,21 @@ class CForumRestService extends IRestService
 		global $USER;
 		static $obCache = null;
 
-		$messageId = intval($arFields['MESSAGE_ID']);
+		$messageId = intval($arFields['MESSAGE_ID'] ?? 0);
 
-		if($messageId <= 0)
+		if ($messageId <= 0)
 		{
 			throw new Exception('Wrong message ID');
 		}
 
-		$currentUserId = (
-			isset($arFields["USER_ID"])
-			&& intval($arFields["USER_ID"]) > 0
-			&& self::isAdmin()
-				? $arFields["USER_ID"]
-				: $USER->getId()
-		);
-
 		$arMessage = self::getForumMessageFields($messageId);
 		if (empty($arMessage))
 		{
-			throw new Exception('No message found');
+			return true;
 		}
+
+		$userId = (int)($arFields['USER_ID'] ?? 0);
+		$currentUserId = $userId > 0 && self::isAdmin() ? $userId : $USER->getId();
 
 		$currentUserPerm = self::getForumMessagePerm(array(
 			'USER_ID' => $currentUserId,

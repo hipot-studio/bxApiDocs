@@ -20,6 +20,8 @@ use Bitrix\Main\Text\Emoji;
 use Bitrix\Tasks;
 use Bitrix\Tasks\Flow\Provider\FlowProvider;
 use Bitrix\Tasks\Flow\Provider\Query\ExpandedFlowQuery;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
 
 class CBPTask2Activity extends CBPActivity implements
 	IBPEventActivity,
@@ -154,6 +156,7 @@ class CBPTask2Activity extends CBPActivity implements
 		}
 
 		$documentId = $this->GetDocumentId();
+		$documentType = $this->GetDocumentType();
 
 		$logMap = static::getPropertiesMap($this->getDocumentType());
 
@@ -177,9 +180,6 @@ class CBPTask2Activity extends CBPActivity implements
 		}
 		if ($this->AUTO_LINK_TO_CRM_ENTITY && $documentId[0] === 'crm' && CModule::IncludeModule('crm'))
 		{
-			$documentId = $this->GetDocumentId();
-			$documentType = $this->GetDocumentType();
-
 			$letter = CCrmOwnerTypeAbbr::ResolveByTypeID(CCrmOwnerType::ResolveID($documentType[2]));
 
 			$fields['UF_CRM_TASK'][] = str_replace($documentType[2], $letter, $documentId[2]);
@@ -426,6 +426,7 @@ class CBPTask2Activity extends CBPActivity implements
 						'DEADLINE',
 					],
 					'CHECK_ACCESS' => false,
+					'ANALYTICS_DATA' => $this->getAnalyticsData($documentType),
 				],
 			);
 			$result = $task->getId();
@@ -650,6 +651,25 @@ class CBPTask2Activity extends CBPActivity implements
 		{
 			$fields['SE_PARAMETER'] = $parameters;
 		}
+	}
+
+	private function getAnalyticsData(?array $documentType): AnalyticsData
+	{
+		$moduleId = $documentType[0] ?? null;
+
+		$section = match ($moduleId)
+		{
+			'tasks' => Analytics\Section::Tasks,
+			'crm' => Analytics\Section::Crm,
+			default => Analytics\Section::BizProc,
+		};
+
+		return new AnalyticsData(
+			category: Analytics\Category::TaskOperations,
+			section: $section,
+			subSection: Analytics\SubSection::Automation,
+			element: Analytics\Element::Auto,
+		);
 	}
 
 	protected function markAsBPTask(int $taskId): void

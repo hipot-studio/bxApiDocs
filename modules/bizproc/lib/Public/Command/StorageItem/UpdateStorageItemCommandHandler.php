@@ -23,8 +23,8 @@ class UpdateStorageItemCommandHandler
 
 		$storageItem
 			->setId($command->storageItem->getId())
+			->setStorageId($command->storageItem->getStorageId())
 			->setUpdatedBy($command->updatedBy)
-			->setCode($command->storageItem->getCode())
 			->setDocumentId($command->storageItem->getDocumentId())
 			->setWorkflowId($command->storageItem->getWorkflowId())
 			->setTemplateId($command->storageItem->getTemplateId())

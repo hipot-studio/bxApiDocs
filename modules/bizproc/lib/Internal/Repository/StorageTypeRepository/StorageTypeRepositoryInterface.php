@@ -18,6 +18,14 @@ interface StorageTypeRepositoryInterface
 	public function exists(int $id): bool;
 
 	/**
+	 * @param FilterInterface|null $filter
+	 * @return int
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function getCount(?FilterInterface $filter = null): int;
+
+	/**
 	 * @param int|null $limit
 	 * @param int|null $offset
 	 * @param FilterInterface|null $filter

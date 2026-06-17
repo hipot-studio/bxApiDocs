@@ -351,63 +351,35 @@ class CSocServAuthManager
 
 	public static function CheckUniqueKey($bUnset = true)
 	{
-		$arState = array();
-
-		if(isset($_REQUEST["state"]))
+		if (empty($_SESSION['UNIQUE_KEY']))
 		{
-			$arState = StateService::getInstance()->getPayload((string)$_REQUEST['state']);
-			if (is_array($arState))
+			return false;
+		}
+
+		$checkKey = null;
+		if (isset($_REQUEST['check_key']))
+		{
+			$checkKey = (string)$_REQUEST['check_key'];
+		}
+		elseif (isset($_REQUEST['state']))
+		{
+			$payload = StateService::getInstance()->getPayload((string)$_REQUEST['state']);
+			if (is_array($payload))
 			{
-				if (!isset($_REQUEST['check_key']) && isset($arState['check_key']))
-				{
-					$_REQUEST['check_key'] = $arState['check_key'];
-				}
-
-				if (isset($arState['backurl']))
-				{
-					InitURLParam($arState['backurl']);
-				}
-
-				if (isset($arState['redirect_url']))
-				{
-					InitURLParam($arState['redirect_url']);
-				}
-			}
-			else
-			{
-				parse_str($_REQUEST["state"], $arState);
-
-				if (isset($arState['backurl']))
-				{
-					InitURLParam($arState['backurl']);
-				}
+				$checkKey = (string)($payload['check_key'] ?? '');
 			}
 		}
 
-		if(!isset($_REQUEST['check_key']) && isset($_REQUEST['backurl']))
+		if ($checkKey === (string)$_SESSION['UNIQUE_KEY'])
 		{
-			InitURLParam($_REQUEST['backurl']);
-		}
-
-		$checkKey = '';
-		if(isset($_REQUEST['check_key']))
-		{
-			$checkKey = $_REQUEST['check_key'];
-		}
-		elseif(isset($arState['check_key']))
-		{
-			$checkKey = $arState['check_key'];
-		}
-
-		if(!empty($_SESSION["UNIQUE_KEY"]) && $checkKey && ($checkKey === $_SESSION["UNIQUE_KEY"]))
-		{
-			if($bUnset)
+			if ($bUnset)
 			{
-				unset($_SESSION["UNIQUE_KEY"]);
+				unset($_SESSION['UNIQUE_KEY']);
 			}
 
 			return true;
 		}
+
 		return false;
 	}
 

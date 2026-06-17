@@ -34,6 +34,11 @@ class Store extends Dataset
 		return $this->getMessage('CATALOG_STORE_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('CATALOG_STORE_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	/**
 	 * @return Result
 	 */

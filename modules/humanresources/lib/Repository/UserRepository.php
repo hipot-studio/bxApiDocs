@@ -19,6 +19,8 @@ use Bitrix\HumanreSources\Item;
 final class UserRepository
 {
 	/**
+	 * @deprecated use Internals\Repository\Structure\UserRepository::getById() instead
+	 *
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
@@ -115,6 +117,9 @@ final class UserRepository
 		);
 	}
 
+	/**
+	 * @deprecated use Internals\Repository\Structure\UserRepository::getByIds() instead
+	 */
 	public function getByIds(array $userIds): UserCollection
 	{
 		$usersCollection = new Item\Collection\UserCollection();

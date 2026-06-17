@@ -18,36 +18,34 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 	protected $entityIdWithPrefix;
 	protected $gridAction;
 
-	protected $listPropertyIdWithoutPrefix = array();
-	protected $listElementData = array();
-	protected $listElementEditPermission = array();
+	protected $listPropertyIdWithoutPrefix = [];
+	protected $listElementData = [];
+	protected $listElementEditPermission = [];
 
 	protected $iblockId = 0;
-	protected $listIblockId = array();
-	protected $listIblockName = array();
+	protected $listIblockId = [];
+	protected $listIblockName = [];
 	protected $listIblockType = [];
-	protected $listIblockElementId = array();
-	protected $listIblockElementTemplateUrl = array();
-	protected $listIblockSocnetGroupId = array();
-	protected $listFields = array();
-	protected $listFieldsValue = array();
-	protected $listObject = array();
-	protected $listIblockPermission = array();
-	protected $listIblockBpTemplates = [];
-
-	protected $properties = array();
-	protected $selectedFields = array();
+	protected $listIblockElementId = [];
+	protected $listIblockElementTemplateUrl = [];
+	protected $listIblockSocnetGroupId = [];
+	protected $listFields = [];
+	protected $listFieldsValue = [];
+	protected $listObject = [];
+	protected $listIblockPermission = [];
+	protected $properties = [];
+	protected $selectedFields = [];
 
 	protected $prefixGridId = 'lists_attached_crm_';
-	protected $listGridId = array();
-	protected $listGridOptions = array();
-	protected $navigationGrid = array();
-	protected $headerGrids = array();
+	protected $listGridId = [];
+	protected $listGridOptions = [];
+	protected $navigationGrid = [];
+	protected $headerGrids = [];
 
-	protected $rowGrids = array();
-	protected $groupActionsGrids = array();
+	protected $rowGrids = [];
+	protected $groupActionsGrids = [];
 
-	protected $entityData = array();
+	protected $entityData = [];
 
 	public function onIncludeComponentLang()
 	{
@@ -57,13 +55,14 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 	protected function checkModules()
 	{
-		if(!Loader::includeModule('lists'))
+		if (!Loader::includeModule('lists'))
 		{
-			throw new SystemException(Loc::getMessage('LEAC_MODULE_NOT_INSTALLED', array('MODULE_ID' => 'lists')));
+			throw new SystemException(Loc::getMessage('LEAC_MODULE_NOT_INSTALLED', ['MODULE_ID' => 'lists']));
 		}
-		if(!Loader::includeModule('crm'))
+
+		if (!Loader::includeModule('crm'))
 		{
-			throw new SystemException(Loc::getMessage('LEAC_MODULE_NOT_INSTALLED', array('MODULE_ID' => 'crm')));
+			throw new SystemException(Loc::getMessage('LEAC_MODULE_NOT_INSTALLED', ['MODULE_ID' => 'crm']));
 		}
 	}
 
@@ -73,14 +72,22 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 		{
 			$params['GRID_ID'] = $_REQUEST['gridId'];
 			if(!empty($_REQUEST['action_button_'.$_REQUEST['gridId']]))
-				$params['ACTION'] = $_REQUEST['action_button_'.$_REQUEST['gridId']];
+			{
+				$params['ACTION'] = $_REQUEST['action_button_' . $_REQUEST['gridId']];
+			}
 			if(!empty($_REQUEST['ID']))
-				$params['ID_FOR_DELETE'] = (is_array($_REQUEST['ID'])) ? $_REQUEST['ID'] : array($_REQUEST['ID']);
+			{
+				$params['ID_FOR_DELETE'] = (is_array($_REQUEST['ID'])) ? $_REQUEST['ID'] : [$_REQUEST['ID']];
+			}
 		}
 		if(!empty($_REQUEST['entityId']))
+		{
 			$params['ENTITY_ID'] = $_REQUEST['entityId'];
+		}
 		if(!empty($_REQUEST['entityType']))
+		{
 			$params['ENTITY_TYPE'] = $_REQUEST['entityType'];
+		}
 
 		return $params;
 	}
@@ -123,24 +130,31 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 		{
 			throw new SystemException(Loc::getMessage('LEAC_ERROR_REQUIRED_PARAMETER'));
 		}
-		$this->entityIdWithPrefix = \CCrmOwnerTypeAbbr::resolveByTypeID(
-				$this->arParams['ENTITY_TYPE']).'_'.$this->arParams['ENTITY_ID'];
 
-		$this->arParams['ENTITY_TYPE_NAME'] = \CCrmOwnerTypeAbbr::resolveName(\CCrmOwnerTypeAbbr::resolveByTypeID(
-			$this->arParams['ENTITY_TYPE']));
+		$this->entityIdWithPrefix =
+			\CCrmOwnerTypeAbbr::resolveByTypeID($this->arParams['ENTITY_TYPE'])
+			. '_'
+			. $this->arParams['ENTITY_ID']
+		;
+
+		$this->arParams['ENTITY_TYPE_NAME'] = \CCrmOwnerTypeAbbr::resolveName(
+			\CCrmOwnerTypeAbbr::resolveByTypeID($this->arParams['ENTITY_TYPE'])
+		);
 
 		if(!empty($this->arParams['IBLOCK_ID']))
 		{
-			$this->iblockId = intval($this->arParams['IBLOCK_ID']);
+			$this->iblockId = (int)($this->arParams['IBLOCK_ID']);
 			$this->singleMode = true;
 		}
 
 		if(!empty($this->arParams['GRID_ID']))
 		{
-			$this->iblockId = intval(str_replace($this->prefixGridId, '', $this->arParams['GRID_ID']));
+			$this->iblockId = (int)str_replace($this->prefixGridId, '', $this->arParams['GRID_ID']);
 
 			if(!empty($this->arParams['ACTION']))
+			{
 				$this->gridAction = $this->arParams['ACTION'];
+			}
 		}
 
 		$this->arParams['RAND_STRING'] = $this->randString();
@@ -151,12 +165,14 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 		);
 
 		if(!empty($this->arParams['LIST_ELEMENT_DATA']))
+		{
 			$this->listElementData = $this->arParams['LIST_ELEMENT_DATA'];
+		}
 	}
 
 	protected function checkGridAction()
 	{
-		if(!empty($this->gridAction) && method_exists($this, 'performGridAction'.$this->gridAction))
+		if(!empty($this->gridAction) && method_exists($this, 'performGridAction' . $this->gridAction))
 		{
 			$actionMethod = 'performGridAction'.$this->gridAction;
 			$this->$actionMethod();
@@ -165,32 +181,43 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 	protected function performGridActionDelete()
 	{
-		if(empty($this->arParams['ID_FOR_DELETE'])
-			|| !$this->checkDeletePermission($this->iblockId,$this->arParams['ID_FOR_DELETE']))
+		if(
+			empty($this->arParams['ID_FOR_DELETE'])
+			|| !$this->checkDeletePermission($this->iblockId,$this->arParams['ID_FOR_DELETE'])
+		)
+		{
 			return;
+		}
 
-		$newPropertyValues = array();
+		$newPropertyValues = [];
 		$propertyValues = $this->getPropertyValues(
-			$this->iblockId, array('ID' => $this->arParams['ID_FOR_DELETE'], 'SHOW_NEW' => 'Y'), array());
+			$this->iblockId,
+			['ID' => $this->arParams['ID_FOR_DELETE'], 'SHOW_NEW' => 'Y']
+		);
+
 		foreach($propertyValues as $propertyData)
 		{
 			if(!isset($propertyData['IBLOCK_ELEMENT_ID']))
+			{
 				continue;
+			}
 
 			$elementId = $propertyData['IBLOCK_ELEMENT_ID'];
 			foreach($propertyData as $propertyId => $propertyValue)
 			{
-				if($propertyId == 'IBLOCK_ELEMENT_ID')
+				if($propertyId === 'IBLOCK_ELEMENT_ID')
+				{
 					continue;
+				}
 				if(is_array($propertyValue))
 				{
-					$keyForDelete = array_search($this->entityIdWithPrefix, $propertyValue);
+					$keyForDelete = array_search($this->entityIdWithPrefix, $propertyValue, true);
 					if($keyForDelete !== false)
 					{
 						unset($propertyValue[$keyForDelete]);
 						$newPropertyValues[$elementId][$propertyId] = $propertyValue;
 					}
-					$keyForDelete = array_search($this->arParams['ENTITY_ID'], $propertyValue);
+					$keyForDelete = array_search($this->arParams['ENTITY_ID'], $propertyValue, false);
 					if($keyForDelete !== false)
 					{
 						unset($propertyValue[$keyForDelete]);
@@ -215,14 +242,19 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 		{
 			foreach($listPropertyData as $propertyId => $propertyValues)
 			{
-				$propertyObject = Bitrix\Iblock\PropertyTable::getList(array(
-					'select' => array('USER_TYPE'),
-					'filter' => array('IBLOCK_ID'=> $this->iblockId, 'ID' => $propertyId)
-				));
+				$propertyObject = Bitrix\Iblock\PropertyTable::getList([
+					'select' => ['USER_TYPE'],
+					'filter' => [
+						'IBLOCK_ID' => $this->iblockId,
+						'ID' => $propertyId,
+					],
+				]);
 				if($property = $propertyObject->fetch())
 				{
-					if($property['USER_TYPE'] == Bitrix\Crm\Integration\IBlockElementProperty::USER_TYPE)
+					if($property['USER_TYPE'] === Bitrix\Crm\Integration\IBlockElementProperty::USER_TYPE)
+					{
 						CIBlockElement::setPropertyValues($elementId, $this->iblockId, $propertyValues, $propertyId);
+					}
 				}
 			}
 		}
@@ -230,12 +262,14 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 	protected function checkDeletePermission($iblockId, array $listElementId)
 	{
-		$iblockObject = Bitrix\Iblock\IblockTable::getList(array(
-			'select' => array('IBLOCK_TYPE_ID', 'SOCNET_GROUP_ID'),
-			'filter' => array('=ACTIVE' => 'Y', '=ID' => $iblockId)
-		));
-		if(!$iblock = $iblockObject->fetch())
+		$iblockObject = Bitrix\Iblock\IblockTable::getList([
+			'select' => ['IBLOCK_TYPE_ID', 'SOCNET_GROUP_ID'],
+			'filter' => ['=ACTIVE' => 'Y', '=ID' => $iblockId],
+		]);
+		if (!$iblock = $iblockObject->fetch())
+		{
 			return false;
+		}
 
 		global $USER;
 		foreach($listElementId as $elementId)
@@ -247,26 +281,37 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 				$iblock['SOCNET_GROUP_ID']
 			);
 			if($listsPerm < 0)
+			{
 				return false;
+			}
 
 			$isSocnetGroupClosed = false;
-			if(intval($iblock['SOCNET_GROUP_ID']) > 0 && Loader::includeModule('socialnetwork'))
+			if ((int)($iblock['SOCNET_GROUP_ID']) > 0 && Loader::includeModule('socialnetwork'))
 			{
 				$sonetGroup = CSocNetGroup::getByID($iblock['SOCNET_GROUP_ID']);
-				if (is_array($sonetGroup) && $sonetGroup['CLOSED'] == 'Y'
+				if (
+					is_array($sonetGroup)
+					&& $sonetGroup['CLOSED'] === 'Y'
 					&& !CSocNetUser::isCurrentUserModuleAdmin()
-					&& ($sonetGroup['OWNER_ID'] != $USER->getID()
-						|| COption::getOptionString('socialnetwork', 'work_with_closed_groups', 'N') != 'Y'))
+					&& (
+						$sonetGroup['OWNER_ID'] != $USER->getID()
+						|| Main\Config\Option::get('socialnetwork', 'work_with_closed_groups', 'N') !== 'Y')
+					)
 				{
 					$isSocnetGroupClosed = true;
 				}
 			}
-			if(!$isSocnetGroupClosed && ($listsPerm >= CListPermissions::CAN_WRITE ||
-				CIBlockElementRights::userHasRightTo($iblockId, $elementId, 'element_delete')))
+
+			if ($isSocnetGroupClosed)
 			{
-				return true;
+				return false;
 			}
-			else
+			if (
+				!(
+					$listsPerm >= CListPermissions::CAN_WRITE
+					|| CIBlockElementRights::userHasRightTo($iblockId, $elementId, 'element_delete')
+				)
+			)
 			{
 				return false;
 			}
@@ -277,31 +322,41 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 	protected function getElementIdByEntityId()
 	{
-		$filter = array(
+		$filter = [
 			'=ACTIVE' => 'Y',
 			'=USER_TYPE' => Bitrix\Crm\Integration\IBlockElementProperty::USER_TYPE,
-		);
+		];
 		if($this->iblockId)
+		{
 			$filter['=IBLOCK_ID'] = $this->iblockId;
+		}
 
-		$listProperty = array();
-		$propertyObject = Bitrix\Iblock\PropertyTable::getList(array(
-			'select' => array('ID', 'IBLOCK_ID', 'USER_TYPE_SETTINGS'),
-			'filter' => $filter
-		));
-		while($property = $propertyObject->fetch())
+		$listProperty = [];
+		$propertyObject = Bitrix\Iblock\PropertyTable::getList([
+			'select' => [
+				'ID',
+				'IBLOCK_ID',
+				'USER_TYPE_SETTINGS',
+			],
+			'filter' => $filter,
+		]);
+		while ($property = $propertyObject->fetch())
 		{
 			$property['USER_TYPE_SETTINGS'] = unserialize($property['USER_TYPE_SETTINGS'], ['allowed_classes' => false]);
 			if(is_array($property['USER_TYPE_SETTINGS']))
 			{
 				if(array_key_exists('VISIBLE', $property['USER_TYPE_SETTINGS']))
+				{
 					unset($property['USER_TYPE_SETTINGS']['VISIBLE']);
-				$tmpArray = array_filter($property['USER_TYPE_SETTINGS'], function($mark){
-					return $mark == "Y";
+				}
+				$tmpArray = array_filter($property['USER_TYPE_SETTINGS'], static function($mark) {
+					return $mark === 'Y';
 				});
-				if(count($tmpArray) == 1)
+				if(count($tmpArray) === 1)
+				{
 					$this->listPropertyIdWithoutPrefix[] = $property['ID'];
-				if ($property['USER_TYPE_SETTINGS'][$this->arParams['ENTITY_TYPE_NAME']] == 'Y')
+				}
+				if ($property['USER_TYPE_SETTINGS'][$this->arParams['ENTITY_TYPE_NAME']] === 'Y')
 				{
 					if (!isset($listProperty[$property['IBLOCK_ID']]) || !is_array($listProperty[$property['IBLOCK_ID']]))
 					{
@@ -314,18 +369,24 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 		foreach($listProperty as $iblockId => $listPropertyId)
 		{
-			$iblockObject = Bitrix\Iblock\IblockTable::getList(array(
-				'select' => array('NAME', 'IBLOCK_TYPE_ID', 'SOCNET_GROUP_ID'),
-				'filter' => array('=ACTIVE' => 'Y', '=ID' => $iblockId)
-			));
-			if(!$iblock = $iblockObject->fetch())
+			$iblockObject = Bitrix\Iblock\IblockTable::getList([
+				'select' => [
+					'NAME',
+					'IBLOCK_TYPE_ID',
+					'SOCNET_GROUP_ID',
+				],
+				'filter' => ['=ACTIVE' => 'Y', '=ID' => $iblockId],
+			]);
+			if (!$iblock = $iblockObject->fetch())
+			{
 				continue;
+			}
 
 			$this->listIblockId[] = $iblockId;
 			$this->listIblockSocnetGroupId[$iblockId] = $iblock['SOCNET_GROUP_ID'];
 			$this->listIblockName[$iblockId] = $iblock['NAME'];
 			$this->listIblockType[$iblockId] = $iblock['IBLOCK_TYPE_ID'];
-			$this->listElementData[$iblock['IBLOCK_TYPE_ID']][$iblockId] = array();
+			$this->listElementData[$iblock['IBLOCK_TYPE_ID']][$iblockId] = [];
 
 			$elementFilter = [
 				'IBLOCK_ID' => $iblockId,
@@ -339,7 +400,7 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 					in_array($item, $this->listPropertyIdWithoutPrefix)
 						? $this->arParams['ENTITY_ID']
 						: $this->entityIdWithPrefix
-					);
+				);
 			}
 
 			if (count($propertyFilter) > 1)
@@ -370,7 +431,9 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 	protected function createListElementIdByPermission()
 	{
 		if(empty($this->listElementData))
+		{
 			return;
+		}
 
 		global $USER;
 
@@ -384,17 +447,23 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 					$iblockId,
 					$this->listIblockSocnetGroupId[$iblockId]
 				);
-				if($listsPerm < 0)
+				if ($listsPerm < 0)
+				{
 					continue;
+				}
 
 				$isSocnetGroupClosed = false;
-				if(intval($this->listIblockSocnetGroupId[$iblockId]) > 0 && Loader::includeModule('socialnetwork'))
+				if((int)($this->listIblockSocnetGroupId[$iblockId]) > 0 && Loader::includeModule('socialnetwork'))
 				{
 					$sonetGroup = CSocNetGroup::getByID($this->listIblockSocnetGroupId[$iblockId]);
-					if (is_array($sonetGroup) && $sonetGroup['CLOSED'] == 'Y'
+					if (
+						is_array($sonetGroup)
+						&& $sonetGroup['CLOSED'] === 'Y'
 						&& !CSocNetUser::isCurrentUserModuleAdmin()
-						&& ($sonetGroup['OWNER_ID'] != $USER->getID()
-							|| COption::getOptionString('socialnetwork', 'work_with_closed_groups', 'N') != 'Y'))
+						&& (
+							$sonetGroup['OWNER_ID'] != $USER->getID()
+							|| Main\Config\Option::get('socialnetwork', 'work_with_closed_groups', 'N') !== 'Y')
+					)
 					{
 						$isSocnetGroupClosed = true;
 					}
@@ -414,9 +483,13 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 				foreach($listElementId as $elementKey => $elementId)
 				{
-					if($listsPerm < CListPermissions::CAN_READ
-						&& !CIBlockElementRights::userHasRightTo($iblockId, $elementId, 'element_read'))
+					if (
+						$listsPerm < CListPermissions::CAN_READ
+						&& !CIBlockElementRights::userHasRightTo($iblockId, $elementId, 'element_read')
+					)
+					{
 						continue;
+					}
 
 					$this->listIblockElementId[$iblockId][] = $elementId;
 
@@ -433,24 +506,29 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 	protected function setGridId()
 	{
 		if(empty($this->listIblockId))
+		{
 			return;
+		}
 
 		foreach($this->listIblockId as $iblockId)
-			$this->listGridId[$iblockId] = $this->prefixGridId.$iblockId;
+		{
+			$this->listGridId[$iblockId] = $this->prefixGridId . $iblockId;
+		}
 	}
 
 	protected function getGridOptions()
 	{
 		if(empty($this->listGridId))
+		{
 			return;
+		}
 
 		foreach($this->listGridId as $iblockId => $gridId)
 		{
 			$gridOptions = new Bitrix\Main\Grid\Options($gridId);
 			$this->listGridOptions[$iblockId]['gridOptionsObject'] = $gridOptions;
 			$this->listGridOptions[$iblockId]['visibleColumns'] = $gridOptions->getVisibleColumns();
-			$this->listGridOptions[$iblockId]['sorting'] = $gridOptions->getSorting(array(
-				'sort' => array('NAME' => 'ASC')));
+			$this->listGridOptions[$iblockId]['sorting'] = $gridOptions->getSorting(['sort' => ['NAME' => 'ASC']]);
 			$this->listGridOptions[$iblockId]['navParams'] = $gridOptions->getNavParams();
 		}
 	}
@@ -458,7 +536,9 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 	protected function setSelectedFields()
 	{
 		if(empty($this->listIblockId))
+		{
 			return;
+		}
 
 		foreach($this->listIblockId as $iblockId)
 		{
@@ -467,12 +547,12 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 			$this->listIblockElementTemplateUrl[$iblockId] = $this->listObject[$iblockId]->getUrlByIblockId($iblockId);
 
-			$this->headerGrids[$iblockId][] = array(
+			$this->headerGrids[$iblockId][] = [
 				'id' => 'ID',
 				'name' => 'ID',
 				'default' => false,
-				'sort' => 'ID'
-			);
+				'sort' => 'ID',
+			];
 
 			$visibleColumns = $this->listGridOptions[$iblockId]['visibleColumns'];
 			$this->selectedFields[$iblockId] = array('ID', 'IBLOCK_ID');
@@ -481,15 +561,23 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 				if(empty($visibleColumns) || in_array($fieldId, $visibleColumns))
 				{
 					if(mb_substr($fieldId, 0, 9) == 'PROPERTY_')
+					{
 						$this->properties[$iblockId][] = $fieldId;
+					}
 					else
+					{
 						$this->selectedFields[$iblockId][] = $fieldId;
+					}
 
-					if($fieldId == 'CREATED_BY')
+					if($fieldId === 'CREATED_BY')
+					{
 						$this->selectedFields[$iblockId][] = 'CREATED_USER_NAME';
+					}
 
 					if($fieldId == 'MODIFIED_BY')
+					{
 						$this->selectedFields[$iblockId][] = 'USER_NAME';
+					}
 				}
 
 				$this->setHeaderGrid($iblockId, $fieldId, $field);
@@ -500,13 +588,15 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 	protected function getListElement()
 	{
 		if(empty($this->listIblockElementId))
+		{
 			return;
+		}
 
 		foreach($this->listIblockElementId as $iblockId => $listElementId)
 		{
 			$queryObject = CIBlockElement::getList(
 				$this->listGridOptions[$iblockId]['sorting']['sort'],
-				array('=ACTIVE' => 'Y', '=ID' => $listElementId),
+				['=ACTIVE' => 'Y', '=ID' => $listElementId],
 				false,
 				$this->listGridOptions[$iblockId]['navParams'],
 				$this->selectedFields[$iblockId]
@@ -515,7 +605,9 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 			{
 				$element = $elementObject->getFields();
 				if(!is_array($element))
+				{
 					continue;
+				}
 
 				if (!isset($this->listFieldsValue[$element['ID']]) || !is_array($this->listFieldsValue[$element['ID']]))
 				{
@@ -529,12 +621,16 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 				if(!empty($this->properties[$iblockId]))
 				{
-					$propertyValues = $this->getPropertyValues($iblockId,
-						array('ID' => $element['ID'], 'SHOW_NEW' => 'Y'));
+					$propertyValues = $this->getPropertyValues(
+						$iblockId,
+						['ID' => $element['ID'], 'SHOW_NEW' => 'Y']
+					);
 					foreach(current($propertyValues) as $propertyId => $propertyValue)
 					{
 						if($propertyId == 'IBLOCK_ELEMENT_ID')
+						{
 							continue;
+						}
 						$this->listFieldsValue[$element['ID']]['PROPERTY_'.$propertyId] = $propertyValue;
 					}
 				}
@@ -548,30 +644,35 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 	protected function setRowGrid($iblockId, $elementId)
 	{
 		if(empty($this->listFields))
+		{
 			return;
+		}
 
-		$columns = array(
-			'ID' => intval($elementId)
-		);
+		$columns = ['ID' => (int)($elementId)];
 
-		$downloadFileUrl = '/bitrix/components/bitrix/lists.element.attached.crm/lazyload.ajax.php?&site='.SITE_ID.'&'.
-			bitrix_sessid_get().'&list_id=#list_id#&element_id=#element_id#&field_id=#field_id#&file_id=#file_id#';
+		$downloadFileUrl =
+			'/bitrix/components/bitrix/lists.element.attached.crm/lazyload.ajax.php?&site='
+			. SITE_ID
+			. '&'
+			. bitrix_sessid_get()
+			. '&list_id=#list_id#&element_id=#element_id#&field_id=#field_id#&file_id=#file_id#'
+		;
 
 		foreach($this->listFields[$iblockId] as $fieldId => $field)
 		{
-			$valueKey = (mb_substr($fieldId, 0, 9) == "PROPERTY_") ? $fieldId : "~".$fieldId;
-			$field["ELEMENT_ID"] = $elementId;
-			$field["FIELD_ID"] = $fieldId;
+			$valueKey = (str_starts_with($fieldId, 'PROPERTY_')) ? $fieldId : '~' . $fieldId;
+			$field['ELEMENT_ID'] = $elementId;
+			$field['FIELD_ID'] = $fieldId;
 			$field['VALUE'] = $this->listFieldsValue[$elementId][$valueKey];
-			$field["DOWNLOAD_FILE_URL"] = $downloadFileUrl;
+			$field['DOWNLOAD_FILE_URL'] = $downloadFileUrl;
 			$columns[$fieldId] = Field::renderField($field);
 		}
 
-		$this->rowGrids[$iblockId][] = array(
+		$this->rowGrids[$iblockId][] = [
 			'id' => $elementId,
 			'columns' => $columns,
 			'actions' => $this->createRowActions($iblockId, $elementId),
-		);
+		];
 	}
 
 	protected function setGridGroupActions()
@@ -580,29 +681,35 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 		foreach($this->listIblockId as $iblockId)
 		{
 			if(!$this->listIblockPermission[$iblockId]['EDIT'])
+			{
 				continue;
+			}
 
-			$this->groupActionsGrids[$iblockId] = array(
-				'GROUPS' => array(
-					array(
-						'ITEMS' => array(
+			$this->groupActionsGrids[$iblockId] = [
+				'GROUPS' => [
+					[
+						'ITEMS' => [
 							$snippet->getRemoveButton(),
-						)
-					)
-				)
-			);
+						],
+					],
+				],
+			];
 		}
 	}
 
 	protected function getEntityData()
 	{
 		$entityId = $this->arParams['ENTITY_ID'];
-		$this->entityData = \CCrmEntitySelectorHelper::prepareEntityInfo($this->arParams['ENTITY_TYPE_NAME'], $entityId, array(
-			'ENTITY_EDITOR_FORMAT' => true,
-			'REQUIRE_REQUISITE_DATA' => false,
-			'REQUIRE_MULTIFIELDS' => false,
-			'NAME_TEMPLATE' => \Bitrix\Crm\Format\PersonNameFormatter::getFormat()
-		));
+		$this->entityData = \CCrmEntitySelectorHelper::prepareEntityInfo(
+			$this->arParams['ENTITY_TYPE_NAME'],
+			$entityId,
+			[
+				'ENTITY_EDITOR_FORMAT' => true,
+				'REQUIRE_REQUISITE_DATA' => false,
+				'REQUIRE_MULTIFIELDS' => false,
+				'NAME_TEMPLATE' => \Bitrix\Crm\Format\PersonNameFormatter::getFormat(),
+			]
+		);
 		$this->entityData['defaultValue'] = $this->entityIdWithPrefix;
 	}
 
@@ -632,11 +739,13 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 		if(!empty($this->listFields[$this->iblockId]))
 		{
-			$this->arResult['FIELDS_FOR_SET_VALUE'] = array();
+			$this->arResult['FIELDS_FOR_SET_VALUE'] = [];
 			foreach($this->listFields[$this->iblockId] as $fieldId => $fieldData)
 			{
-				if($fieldData['TYPE'] == 'S:ECrm' &&
-					$fieldData['USER_TYPE_SETTINGS'][$this->arParams['ENTITY_TYPE_NAME']] == "Y")
+				if(
+					$fieldData['TYPE'] === 'S:ECrm'
+					&& $fieldData['USER_TYPE_SETTINGS'][$this->arParams['ENTITY_TYPE_NAME']] === 'Y'
+				)
 				{
 					$this->arResult['FIELDS_FOR_SET_VALUE'][$fieldId] = $this->entityData;
 				}
@@ -646,27 +755,27 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 	protected function setHeaderGrid($iblockId, $fieldId, $field)
 	{
-		$this->headerGrids[$iblockId][] = array(
+		$this->headerGrids[$iblockId][] = [
 			'id' => $fieldId,
 			'name' => $field['NAME'],
 			'default' => true,
 			'sort' => ($field['MULTIPLE'] == 'Y') ? '' : $fieldId,
-		);
+		];
 	}
 
 	protected function setNavigationGrid($iblockId, CIBlockResult $navObject)
 	{
 		$this->navigationGrid[$iblockId]['TOTAL_ROWS_COUNT'] = $navObject->NavRecordCount;
 		$this->navigationGrid[$iblockId]['ENABLE_NEXT_PAGE'] = ($navObject->PAGEN < $navObject->NavPageCount);
-		$this->navigationGrid[$iblockId]['PAGE_SIZES'] = array(
-			array('NAME' => '5', 'VALUE' => '5'),
-			array('NAME' => '10', 'VALUE' => '10'),
-			array('NAME' => '20', 'VALUE' => '20'),
-			array('NAME' => '50', 'VALUE' => '50'),
-			array('NAME' => '100', 'VALUE' => '100'),
-			array('NAME' => '200', 'VALUE' => '200'),
-			array('NAME' => '500', 'VALUE' => '500')
-		);
+		$this->navigationGrid[$iblockId]['PAGE_SIZES'] = [
+			['NAME' => '5', 'VALUE' => '5'],
+			['NAME' => '10', 'VALUE' => '10'],
+			['NAME' => '20', 'VALUE' => '20'],
+			['NAME' => '50', 'VALUE' => '50'],
+			['NAME' => '100', 'VALUE' => '100'],
+			['NAME' => '200', 'VALUE' => '200'],
+			['NAME' => '500', 'VALUE' => '500'],
+		];
 		$dummy = null;
 		$this->navigationGrid[$iblockId]['NAV_STRING'] = $navObject->getPageNavStringEx(
 			$dummy, '', 'grid', true, null, $this->listGridOptions[$iblockId]['navParams']);
@@ -676,49 +785,45 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 	{
 		$actions = [];
 
-		$canEdit = (array_key_exists($elementId, $this->listElementEditPermission)
-			&& $this->listElementEditPermission[$elementId] == CListPermissions::CAN_WRITE);
+		$canEdit =
+			(array_key_exists($elementId, $this->listElementEditPermission)
+			&& $this->listElementEditPermission[$elementId] === CListPermissions::CAN_WRITE)
+		;
 
 		$actions[] = [
-			'text' => $canEdit ? Loc::getMessage('LEAC_GRID_ACTION_ELEMENT_EDIT') :
-				Loc::getMessage('LEAC_GRID_ACTION_ELEMENT_SHOW'),
+			'text' =>
+				$canEdit
+					? Loc::getMessage('LEAC_GRID_ACTION_ELEMENT_EDIT')
+					: Loc::getMessage('LEAC_GRID_ACTION_ELEMENT_SHOW')
+			,
 			'title' => Loc::getMessage('LEAC_GRID_ACTION_ELEMENT_SHOW_TITLE'),
-			'onclick' => 'BX.Lists["'.$this->arParams['JS_OBJECT'].'"].editElement("'.$elementId.'");'
+			'onclick' => 'BX.Lists["' . $this->arParams['JS_OBJECT'] . '"].editElement("' . $elementId . '");'
 		];
+
 		if ($canEdit)
 		{
-			$bpTemplates = $this->getIblockBpTemplates($iblockId);
-			if ($bpTemplates)
-			{
-				$documentType = BizProcDocument::generateDocumentComplexType($this->listIblockType[$iblockId], $iblockId);
-				$bpActions = [];
+			$documentType = BizprocDocument::generateDocumentComplexType($this->listIblockType[$iblockId], $iblockId);
+			$documentId = BizprocDocument::getDocumentComplexId($this->listIblockType[$iblockId], $elementId);
 
-				foreach ($bpTemplates as $template)
-				{
-					$params = \Bitrix\Main\Web\Json::encode(array(
-						'moduleId' => $documentType[0],
-						'entity' => $documentType[1],
-						'documentType' => $documentType[2],
-						'documentId' => $elementId,
-						'templateId' => $template['id'],
-						'templateName' => $template['name'],
-						'hasParameters' => $template['hasParameters']
-					));
-					$bpActions[] = [
-						'TEXT' => $template['name'],
-						'ONCLICK' => 'BX.Bizproc.Starter.singleStart('
-							. $params
-							. ', function(){BX.Main.gridManager.reload(\''
-							. CUtil::JSEscape($this->listGridId[$iblockId])
-							. '\');});',
-					];
-				}
+			$callback =
+				'() => { BX.Main.gridManager.reload(\''
+				. CUtil::JSEscape($this->listGridId[$iblockId])
+				. '\');}'
+			;
 
-				$actions[] = array(
-					"TEXT" => Loc::getMessage("LEAC_GRID_ACTION_ELEMENT_START_BP"),
-					"MENU" => $bpActions,
-				);
-			}
+			$startParams = \Bitrix\Main\Web\Json::encode([
+				'signedDocumentType' => CBPDocument::signDocumentType($documentType),
+				'signedDocumentId' => CBPDocument::signDocumentType($documentId),
+			]);
+
+			$actions[] = [
+				'TEXT' => Loc::getMessage('LEAC_GRID_ACTION_ELEMENT_START_BP'),
+				'ONCLICK' =>
+					"BX.Bizproc.Workflow.Starter.showTemplates("
+					. "$startParams,"
+					. " {callback: $callback})"
+				,
+			];
 
 
 			$actions[] = [
@@ -734,34 +839,15 @@ class ListsElementAttachedCrmComponent extends CBitrixComponent
 
 	protected function getPropertyValues($iblockId, $elementFilter = array(), $propertyFilter = array())
 	{
-		$values = array();
+		$values = [];
 
 		$propertyValuesObject = \CIblockElement::getPropertyValues($iblockId, $elementFilter, false, $propertyFilter);
 		while($propertyValues = $propertyValuesObject->fetch())
+		{
 			$values[] = $propertyValues;
+		}
 
 		return $values;
 	}
 
-	protected function getIblockBpTemplates($iblockId): array
-	{
-		if (!isset($this->listIblockBpTemplates[$iblockId]))
-		{
-			$this->listIblockBpTemplates[$iblockId] = [];
-
-			if (
-				CLists::isBpFeatureEnabled($this->listIblockType[$iblockId])
-				&& CModule::IncludeModule('bizproc')
-			)
-			{
-				$user = Main\Engine\CurrentUser::get();
-				$this->listIblockBpTemplates[$iblockId] = CBPDocument::getTemplatesForStart(
-					$user->getId(),
-					BizProcDocument::generateDocumentComplexType($this->listIblockType[$iblockId], $iblockId),
-				);
-			}
-		}
-
-		return $this->listIblockBpTemplates[$iblockId];
-	}
 }

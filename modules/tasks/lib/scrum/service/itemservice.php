@@ -484,7 +484,7 @@ class ItemService implements Errorable
 
 		try
 		{
-			$firstSortValue = $this->getFirstItemSort();
+			$firstSortValue = $this->getFirstItemSort($entityId);
 
 			$updatedItems = [];
 			$sortWhens = [];
@@ -1040,10 +1040,13 @@ class ItemService implements Errorable
 		return $this->errorCollection->getErrorByCode($code);
 	}
 
-	public function getFirstItemSort(): float
+	public function getFirstItemSort(int $entityId): float
 	{
 		$queryObject = ItemTable::getList([
 			'select' => ['SORT_FLOAT'],
+			'filter' => [
+				'ENTITY_ID' => $entityId,
+			],
 			'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
 			'limit' => 1,
 		]);

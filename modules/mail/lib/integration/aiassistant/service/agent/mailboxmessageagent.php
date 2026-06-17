@@ -9,7 +9,7 @@ use Bitrix\AiAssistant\Definition\Dto\DefinitionMetadataDto;
 use Bitrix\AiAssistant\Definition\Dto\SystemPromptDto;
 use Bitrix\AiAssistant\Definition\Dto\UsesToolsDto;
 use Bitrix\Main\Loader;
-use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\SearchMessagesTool;
+use Bitrix\Mail\Integration\AiAssistant\Service\ToolSet\MailboxToolSet;
 
 class MailboxMessageAgent extends BaseAgent
 {
@@ -31,11 +31,7 @@ class MailboxMessageAgent extends BaseAgent
 
 	public function getUsesTools(): UsesToolsDto
 	{
-		$tools = [
-			SearchMessagesTool::class,
-		];
-
-		return new UsesToolsDto($tools);
+		return new UsesToolsDto(MailboxToolSet::TOOLS);
 	}
 
 	public function canList(int $userId): bool
@@ -45,7 +41,12 @@ class MailboxMessageAgent extends BaseAgent
 
 	public function canRun(int $userId): bool
 	{
-		return true;
+		if (Loader::includeModule('humanresources'))
+		{
+			return \Bitrix\HumanResources\Service\Container::getUserService()->isEmployee($userId);
+		}
+
+		return false;
 	}
 
 	public function getMetadata(): DefinitionMetadataDto

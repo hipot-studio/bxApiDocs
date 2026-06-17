@@ -17,6 +17,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
+use CCrmOwnerType;
 
 final class CreateActivityAction implements ActionInterface
 {
@@ -86,6 +87,22 @@ final class CreateActivityAction implements ActionInterface
 
 		$deadline = (new DateTime())->add('+15 day');
 		$isAiAutoStartEnabled = $this->isAutomaticProcessingAllowed() && $segmentItem?->isAiEnabled();
+
+		$providerParams = [
+			'JOB_ID' => $context?->getJobId(),
+			'SEGMENT_ID' => $segmentId,
+			'BASE_ENTITY_TYPE_ID' => $clientItem->getEntityTypeId(),
+			'BASE_ENTITY_ID' => $clientItem->getId(),
+			'IS_AI_AUTO_START_ENABLED' => $isAiAutoStartEnabled,
+		];
+
+		[$clientEntityTypeId, $clientEntityId] = $this->resolveClientFromItem($clientItem);
+		if ($clientEntityTypeId > 0 && $clientEntityId > 0)
+		{
+			$providerParams['CLIENT_ENTITY_TYPE_ID'] = $clientEntityTypeId;
+			$providerParams['CLIENT_ENTITY_ID'] = $clientEntityId;
+		}
+
 		$activity = new Entity\RepeatSale($identifier, new RepeatSale());
 		$activity
 			->setSubject(Loc::getMessage('CRM_REPEAT_SALE_ACTION_CREATE_ACTIVITY_TITLE', ['#ENTITY_ID#' => $item->getId()]))
@@ -93,18 +110,10 @@ final class CreateActivityAction implements ActionInterface
 			->setResponsibleId($item->getAssignedById())
 			->setDeadline($deadline)
 			->setAuthorId($assignmentUserId)
-			->setAdditionalFields(
-				[
-					'PROVIDER_PARAMS' => [
-						'JOB_ID' => $context?->getJobId(),
-						'SEGMENT_ID' => $segmentId,
-						'BASE_ENTITY_TYPE_ID' => $clientItem->getEntityTypeId(),
-						'BASE_ENTITY_ID' => $clientItem->getId(),
-						'IS_AI_AUTO_START_ENABLED' => $isAiAutoStartEnabled,
-					],
-					'IS_INCOMING_CHANNEL' => 'Y',
-				]
-			)
+			->setAdditionalFields([
+				'PROVIDER_PARAMS' => $providerParams,
+				'IS_INCOMING_CHANNEL' => 'Y',
+			])
 			->setCheckPermissions(false)
 		;
 
@@ -128,6 +137,41 @@ final class CreateActivityAction implements ActionInterface
 		;
 
 		return $activityId;
+	}
+
+	private function resolveClientFromItem(Item $clientItem): array
+	{
+		$entityTypeId = $clientItem->getEntityTypeId();
+
+		if ($entityTypeId === CCrmOwnerType::Contact || $entityTypeId === CCrmOwnerType::Company)
+		{
+			return [$entityTypeId, $clientItem->getId()];
+		}
+
+		if ($entityTypeId === CCrmOwnerType::Deal)
+		{
+			$companyId = (int)$clientItem->getCompanyId();
+			if ($companyId > 0)
+			{
+				return [CCrmOwnerType::Company, $companyId];
+			}
+
+			$contactId = $clientItem->getContactId();
+			if ($contactId > 0)
+			{
+				return [CCrmOwnerType::Contact, $contactId];
+			}
+		}
+
+		AIManager::logger()->warning(
+			'{date}: Failed to resolve client for repeat sale activity from item {entityType}#{entityId}' . PHP_EOL,
+			[
+				'entityType' => CCrmOwnerType::ResolveName($entityTypeId),
+				'entityId' => $clientItem->getId(),
+			],
+		);
+
+		return [0, 0];
 	}
 
 	private function isAutomaticProcessingAllowed(): bool

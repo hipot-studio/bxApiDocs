@@ -21,14 +21,19 @@ class Time implements \JsonSerializable
 			$timeFormatted = $matches[1];
 			$userOffset = (int)$matches[2];
 			$dateTime = new \Bitrix\Main\Type\DateTime($timeFormatted, static::getRenderFormat());
+			$today = new \Bitrix\Main\Type\DateTime();
+			$today->setTime((int)$dateTime->format('H'), (int)$dateTime->format('i'));
 
-			$this->timestamp = $dateTime->getTimestamp() - $userOffset;
+			$this->timestamp = $today->getTimestamp() - $userOffset;
 		}
 		else
 		{
 			$format = static::isRenderFormat($timeFormatted) ? static::getRenderFormat() : static::getFormat();
 			$dateTime = new \Bitrix\Main\Type\DateTime($timeFormatted, $format);
-			$this->timestamp = $dateTime->getTimestamp() - $offset;
+			$today = new \Bitrix\Main\Type\DateTime();
+			$today->setTime((int)$dateTime->format('H'), (int)$dateTime->format('i'));
+
+			$this->timestamp = $today->getTimestamp() - $offset;
 		}
 
 		$this->offset = isset($userOffset) && $userOffset !== $offset

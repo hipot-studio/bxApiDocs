@@ -6,6 +6,7 @@ use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\SystemException;
 use Bitrix\Rest\V3\Attribute\DtoType;
+use Bitrix\Rest\V3\Attribute\RequiredGroup;
 use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\Controller\ValidateDtoTrait;
 use Bitrix\Rest\V3\Exception\AccessDeniedException;
@@ -31,7 +32,10 @@ use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Add;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Delete;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Read;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Update;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
 use Bitrix\Tasks\V2\Internal\Entity\Task as TaskEntity;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\Config\DeleteConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
@@ -73,11 +77,7 @@ class Task extends RestController
 			throw new RequiredFieldInRequestException('id');
 		}
 		/** @var TaskDto $taskDto */
-		$taskDto = $request->fields->getAsDto();
-		if (!$this->validateDto($taskDto, 'update'))
-		{
-			throw new DtoValidationException($this->getErrors());
-		}
+		$taskDto = $request->fields->convertToDto((RequiredGroup::Update)->value);
 
 		$taskDto->id = $request->id;
 		$taskDtoMapper = new TaskDtoMapper();
@@ -92,7 +92,10 @@ class Task extends RestController
 		{
 			$result = (new UpdateTaskCommand(
 				task: $task,
-				config: new UpdateConfig($this->userId))
+				config: new UpdateConfig(
+					userId: $this->userId,
+					analyticsData: $this->getUpdateAnalyticsData($taskDto),
+				))
 			)->run();
 		}
 		catch (CommandValidationException $exception)
@@ -125,8 +128,16 @@ class Task extends RestController
 		{
 			$result = (new DeleteTaskCommand(
 				taskId: $task->getId(),
-				config: new DeleteConfig($this->userId))
-			)->run();
+				config: new DeleteConfig(
+					$this->userId,
+					analyticsData: new AnalyticsData(
+						category: Analytics\Category::TaskOperations,
+						section: Analytics\Section::Tasks,
+						subSection: Analytics\SubSection::Rest,
+						element: Analytics\Element::Auto,
+					),
+				),
+			))->run();
 		}
 		catch (CommandValidationException $exception)
 		{
@@ -144,11 +155,7 @@ class Task extends RestController
 	public function addAction(AddRequest $request, TaskProvider $taskProvider): GetResponse
 	{
 		/** @var TaskDto $addDto */
-		$addDto = $request->fields->getAsDto();
-		if (!$this->validateDto($addDto, 'add'))
-		{
-			throw new DtoValidationException($this->getErrors());
-		}
+		$addDto = $request->fields->convertToDto((RequiredGroup::Add)->value);
 
 		$mapper = new TaskDtoMapper();
 		$task = $mapper->getTaskByDto($addDto);
@@ -163,7 +170,15 @@ class Task extends RestController
 		{
 			$result = (new AddTaskCommand(
 				task: $task,
-				config: new AddConfig($this->userId))
+				config: new AddConfig(
+					userId: $this->userId,
+					analyticsData: new AnalyticsData(
+						category: Analytics\Category::TaskOperations,
+						section: Analytics\Section::Tasks,
+						subSection: Analytics\SubSection::Rest,
+						element: Analytics\Element::Auto,
+					),
+				))
 			)->run();
 		}
 		catch (CommandValidationException $exception)
@@ -273,5 +288,27 @@ class Task extends RestController
 		return new ListResponse(
 			$mapper->mapTaskList($tasksCollection, $request)
 		);
+	}
+
+	private function getUpdateAnalyticsData(TaskDto $taskDto): ?AnalyticsData
+	{
+		$status = $taskDto->status ?? null;
+
+		if (in_array(
+			$status,
+			[TaskEntity\Status::Completed->value, TaskEntity\Status::SupposedlyCompleted->value],
+			true,
+		))
+		{
+			return new AnalyticsData(
+				event: Analytics\Event::TaskComplete,
+				category: Analytics\Category::TaskOperations,
+				section: Analytics\Section::Tasks,
+				subSection: Analytics\SubSection::Rest,
+				element: Analytics\Element::Auto,
+			);
+		}
+
+		return null;
 	}
 }

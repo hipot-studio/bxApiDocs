@@ -14,6 +14,7 @@ final class DataCollectorManager
 	private UserPermissions $userPermissions;
 	private ?ClientDataCollector $clientCollector = null;
 	private ?EntityDataCollector $dealCollector = null;
+	private ?ItemIdentifier $baseDealIdentifier = null;
 
 	public function __construct(
 		private readonly ItemIdentifier $entityIdentifier,
@@ -23,6 +24,13 @@ final class DataCollectorManager
 	)
 	{
 		$this->userPermissions = Container::getInstance()->getUserPermissions($this->userId);
+	}
+
+	public function setBaseDealIdentifier(?ItemIdentifier $baseDealIdentifier): self
+	{
+		$this->baseDealIdentifier = $baseDealIdentifier;
+
+		return $this;
 	}
 
 	public function collectCopilotData(): array
@@ -72,19 +80,40 @@ final class DataCollectorManager
 				return [];
 			}
 
-			[$dealsList, $ordersSummary] = $this->getDealCollector()->getMarkers([
+			$dealCollectorParams = [
 				'entityId' => $this->entityIdentifier->getEntityId(),
 				'clientIdentifiers' => [
 					$this->clientIdentifier->jsonSerialize(),
 				],
-			]);
-
-			return [
-				'client_info' => $clientInfo,
-				'deals_list' => $dealsList ?? [],
-				'orders_summary' => $ordersSummary ?? [],
-				'preferred_communication_channel' => $this->getPreferredCommunicationChannel($dealsList),
 			];
+			if ($this->baseDealIdentifier !== null)
+			{
+				$dealCollectorParams['excludeId'] = $this->baseDealIdentifier->getEntityId();
+			}
+
+			[$dealsList, $ordersSummary] = $this->getDealCollector()->getMarkers($dealCollectorParams);
+			$dealsList ??= [];
+
+			$baseDeal = $this->baseDealIdentifier !== null
+				? $this->fetchBaseDeal($this->baseDealIdentifier)
+				: []
+			;
+
+			$dealsListForChannel = empty($baseDeal) ? $dealsList : [...$dealsList, $baseDeal];
+
+			$result = [
+				'client_info' => $clientInfo,
+				'deals_list' => $dealsList,
+				'orders_summary' => $ordersSummary ?? [],
+				'preferred_communication_channel' => $this->getPreferredCommunicationChannel($dealsListForChannel),
+			];
+
+			if (!empty($baseDeal))
+			{
+				$result['base_deal'] = $baseDeal;
+			}
+
+			return $result;
 		}
 		catch (Throwable $exception)
 		{
@@ -118,6 +147,28 @@ final class DataCollectorManager
 		}
 
 		return $this->dealCollector;
+	}
+
+	private function fetchBaseDeal(ItemIdentifier $baseDealIdentifier): array
+	{
+		$isPermitted = $this->userPermissions->item()->canRead(
+			$baseDealIdentifier->getEntityTypeId(),
+			$baseDealIdentifier->getEntityId(),
+		);
+		if (!$isPermitted)
+		{
+			$this->logger->error(
+				'{date}: Failed to collect copilot data for client {target}: access denied to base deal {baseDeal}' . PHP_EOL,
+				[
+					'target' => $this->clientIdentifier,
+					'baseDeal' => $baseDealIdentifier,
+				],
+			);
+
+			return [];
+		}
+
+		return $this->getDealCollector()->getMarkersForEntity($baseDealIdentifier->getEntityId());
 	}
 
 	private function getPreferredCommunicationChannel(array $dealsList): string

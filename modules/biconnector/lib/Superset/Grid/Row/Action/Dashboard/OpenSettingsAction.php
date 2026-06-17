@@ -5,7 +5,6 @@ namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dashboard;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Grid\Row\Action\BaseAction;
@@ -42,7 +41,16 @@ final class OpenSettingsAction extends BaseAction
 		}
 
 		$dashboardId = (int)$rawFields['ID'];
-		$this->onclick = "BX.BIConnector.DashboardManager.openSettingsSlider({$dashboardId})";
+		$dashboardType = (string)($rawFields['TYPE']);
+		$type = mb_strtolower($dashboardType);
+		$this->onclick = "
+			BX.BIConnector.ApacheSupersetAnalytics.sendAnalytics(
+				'edit',
+				'editing_card_report',
+				{type: '{$type}', c_element: 'context_menu', status: 'success'}
+			);
+			BX.BIConnector.DashboardManager.openSettingsSlider({$dashboardId}, '{$dashboardType}')
+		";
 
 		return parent::getControl($rawFields);
 	}

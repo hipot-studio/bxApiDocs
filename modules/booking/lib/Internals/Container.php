@@ -16,12 +16,15 @@ use Bitrix\Booking\Internals\Integration\Crm\ClientDataProvider;
 use Bitrix\Booking\Internals\Integration\Crm\ClientDataRecentProvider;
 use Bitrix\Booking\Internals\Integration\Crm\DataLoader\ClientDataLoader;
 use Bitrix\Booking\Internals\Integration\Crm\DealDataProvider;
+use Bitrix\Booking\Internals\Integration\Crm\CrmBindingsBuilder;
 use Bitrix\Booking\Internals\Integration\Crm\ExternalDataItemExtractor;
+use Bitrix\Booking\Internals\Integration\Crm\ClientExtractor;
 use Bitrix\Booking\Internals\Integration\Crm\DealClientSynchronizer;
 use Bitrix\Booking\Internals\Integration\Crm\CrmMessageSender;
 use Bitrix\Booking\Internals\Integration\Crm\DealService;
 use Bitrix\Booking\Internals\Integration\Crm\DataLoader\ProductRowDataLoader;
 use Bitrix\Booking\Internals\Integration\Intranet\BookingTool;
+use Bitrix\Booking\Internals\Integration\Pull\PushService;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\BookingSkuRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ClientTypeRepositoryInterface;
@@ -69,6 +72,7 @@ use Bitrix\Booking\Internals\Service\Notifications\MessageSender\BookingDataExtr
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderNotification;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderPicker;
 use Bitrix\Booking\Internals\Service\Notifications\WhatsAppEmergencyService;
+use Bitrix\Booking\Internals\Service\Overbooking\DateChangeAvailabilityService;
 use Bitrix\Booking\Internals\Service\Overbooking\OverbookingService;
 use Bitrix\Booking\Internals\Service\Overbooking\OverlapPolicy;
 use Bitrix\Booking\Internals\Service\ResourceService;
@@ -303,6 +307,11 @@ class Container
 		return self::getService('booking.internals.overbooking.service');
 	}
 
+	public static function getDateChangeAvailabilityService(): DateChangeAvailabilityService
+	{
+		return self::getService('booking.internals.overbooking.date.change.availability.service');
+	}
+
 	public static function getEventForBookingService(): EventForBookingService
 	{
 		return self::getService('booking.internals.event_for_booking.service');
@@ -421,6 +430,16 @@ class Container
 	public static function getCrmExternalDataItemExtractor(): ExternalDataItemExtractor
 	{
 		return self::getService(ExternalDataItemExtractor::class);
+	}
+
+	public static function getCrmClientExtractor(): ClientExtractor
+	{
+		return self::getService(ClientExtractor::class);
+	}
+
+	public static function getCrmBindingsBuilder(): CrmBindingsBuilder
+	{
+		return self::getService(CrmBindingsBuilder::class);
 	}
 
 	public static function getCrmMessageSender(): CrmMessageSender
@@ -563,6 +582,11 @@ class Container
 		return self::getService(BookingDataExtractor::class);
 	}
 
+	public static function getPushService(): PushService
+	{
+		return self::getService(PushService::class);
+	}
+
 	public static function getMyCompanyProvider(): MyCompanyProvider
 	{
 		return self::getService(MyCompanyProvider::class);
@@ -583,6 +607,16 @@ class Container
 		return self::getService(DummyMessageSender::class);
 	}
 
+	public static function getAiAgentTemplateQuery(): \Bitrix\Booking\Internals\Integration\Bizproc\AiAgentTemplateQuery
+	{
+		return self::getService(\Bitrix\Booking\Internals\Integration\Bizproc\AiAgentTemplateQuery::class);
+	}
+
+	public static function getAiAgentProvider(): \Bitrix\Booking\Internals\Integration\Bizproc\AiAgentProvider
+	{
+		return self::getService(\Bitrix\Booking\Internals\Integration\Bizproc\AiAgentProvider::class);
+	}
+
 	public static function getAiCallMessageSender(): \Bitrix\Booking\Internals\Integration\Bizproc\AiCallMessageSender
 	{
 		return self::getService(\Bitrix\Booking\Internals\Integration\Bizproc\AiCallMessageSender::class);
@@ -591,6 +625,11 @@ class Container
 	public static function getLicenseChecker(): LicenseChecker
 	{
 		return self::getService(LicenseChecker::class);
+	}
+
+	public static function getWorkingTimeService(): Service\WorkingTimeService
+	{
+		return self::getService(Service\WorkingTimeService::class);
 	}
 
 	public static function getAiAssistantContextProvider(): \Bitrix\Booking\Internals\Service\AiAssistant\ContextProvider
@@ -611,5 +650,20 @@ class Container
 	public static function getAiAssistantResourceSkuService(): \Bitrix\Booking\Internals\Service\AiAssistant\ResourceSkuService
 	{
 		return self::getService(\Bitrix\Booking\Internals\Service\AiAssistant\ResourceSkuService::class);
+	}
+
+	public static function getAiAssistantSkuMapper(): \Bitrix\Booking\Internals\Service\AiAssistant\Mapper\SkuMapper
+	{
+		return self::getService(\Bitrix\Booking\Internals\Service\AiAssistant\Mapper\SkuMapper::class);
+	}
+
+	public static function getAiAssistantResourceMapper(): \Bitrix\Booking\Internals\Service\AiAssistant\Mapper\ResourceMapper
+	{
+		return self::getService(\Bitrix\Booking\Internals\Service\AiAssistant\Mapper\ResourceMapper::class);
+	}
+
+	public static function getAiAssistantBookingMapper(): \Bitrix\Booking\Internals\Service\AiAssistant\Mapper\BookingMapper
+	{
+		return self::getService(\Bitrix\Booking\Internals\Service\AiAssistant\Mapper\BookingMapper::class);
 	}
 }

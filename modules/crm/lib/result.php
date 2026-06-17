@@ -14,6 +14,11 @@ class Result extends \Bitrix\Main\Result
 		return (new static())->setData($data);
 	}
 
+	public function get(string $key): mixed
+	{
+		return $this->getData()[$key] ?? null;
+	}
+
 	/**
 	 * @param Error|ErrorCollection|string|null $error
 	 * @param string|int $code
@@ -44,6 +49,11 @@ class Result extends \Bitrix\Main\Result
 	public static function failModuleNotInstalled(string $moduleName): static
 	{
 		return static::fail(ErrorCode::getModuleNotInstalledError($moduleName));
+	}
+
+	public static function failNotFound(): static
+	{
+		return static::fail(ErrorCode::getNotFoundError());
 	}
 
 	public static function failFromApplication(): static

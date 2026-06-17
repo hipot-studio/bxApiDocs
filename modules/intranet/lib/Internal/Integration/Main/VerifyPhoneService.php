@@ -8,7 +8,6 @@ use Bitrix\Intranet\Entity\Type\Phone;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Exception\UpdateFailedException;
 use Bitrix\Intranet\Internal\Exception\SendException;
-use Bitrix\Intranet\Internal\Integration\Messageservice\TwoFaNetworkSender;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
@@ -29,11 +28,6 @@ class VerifyPhoneService
 
 	public static function createFor2Fa(User $user): self
 	{
-		if (Loader::includeModule('messageservice'))
-		{
-			TwoFaNetworkSender::useIfCloud();
-		}
-
 		return new self($user);
 	}
 

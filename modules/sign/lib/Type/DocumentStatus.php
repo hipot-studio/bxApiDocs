@@ -55,4 +55,9 @@ final class DocumentStatus
 	{
 		return in_array($document->status, self::getFinalStatuses(), true);
 	}
+
+	public static function isEditableByDocument(Document $document): bool
+	{
+		return in_array($document->status, [self::NEW, self::UPLOADED], true);
+	}
 }

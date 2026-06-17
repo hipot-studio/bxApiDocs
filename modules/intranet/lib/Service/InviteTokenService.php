@@ -70,7 +70,7 @@ final class InviteTokenService
 		return $secret;
 	}
 
-	private function reCreateSecret(): string
+	public function reCreateSecret(): string
 	{
 		$secret = Random::getString(12);
 		if (Loader::includeModule('bitrix24'))

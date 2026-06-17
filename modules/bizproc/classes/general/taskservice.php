@@ -395,6 +395,8 @@ class CBPTaskService extends CBPRuntimeService
 			"WHERE WORKFLOW_ID = '".$DB->ForSql($workflowId)."' "
 			.($taskStatus !== null? 'AND STATUS = '.(int)$taskStatus : '')
 		);
+
+		Bizproc\Workflow\Entity\WorkflowUserTable::syncOnTaskUpdated($workflowId);
 	}
 
 	public static function getCounters($userId)

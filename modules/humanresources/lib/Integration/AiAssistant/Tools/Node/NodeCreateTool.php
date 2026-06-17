@@ -12,103 +12,90 @@ use Bitrix\HumanResources\Config\Feature;
 use Bitrix\HumanResources\Exception\CommandException;
 use Bitrix\HumanResources\Exception\CommandValidateException;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\NodeBaseTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Schema\InputProperty;
 use Bitrix\HumanResources\Type\NodeEntityType;
+use Bitrix\HumanResources\Util\StructureHelper;
 use Bitrix\Main\DI\ServiceLocator;
 
+/**
+ * Create a new node (department or team).
+ *
+ * @see \Bitrix\HumanResources\Rest\Controller\Node::addAction — REST analog
+ * @see \Bitrix\HumanResources\Controller\Structure\Node::addAction — ajax controller
+ * @see \Bitrix\HumanResources\Controller\Structure\Department::createAction
+ * @see \Bitrix\HumanResources\Controller\Structure\Team::createAction
+ */
 abstract class NodeCreateTool extends NodeBaseTool
 {
 	public function getInputSchema(): array
 	{
+		$properties = [
+			'name' => [
+				'description' => 'Node name',
+				'type' => 'string',
+				'minLength' => 1,
+			],
+			'parentId' => [
+				'description' => 'Identifier of the parent node',
+				'type' => 'integer',
+				'minimum' => 1,
+			],
+			'description' => [
+				'description' => 'Node description',
+				'type' => 'string',
+			],
+		];
+
+		if ($this->type === NodeEntityType::TEAM)
+		{
+			$properties['colorName'] = InputProperty::colorName();
+		}
+
+		$properties['userIds'] = InputProperty::userIdsByRole($this->type) + ['default' => []];
+
+		if ($this->type === NodeEntityType::DEPARTMENT)
+		{
+			$properties['moveUsersToNode'] = [
+				'description' => 'If true, users in `userIds` are moved from their current departments to this one. '
+					. 'If false, they are added without removing the previous membership.',
+				'type' => 'boolean',
+				'default' => false,
+			];
+		}
+
+		$properties['createChat'] = [
+			'description' => 'Whether to create a default chat for the node',
+			'type' => 'boolean',
+			'default' => false,
+		];
+		$properties['bindingChatIds'] = InputProperty::idList('Array of existing chat IDs to associate with the node');
+		$properties['createChannel'] = [
+			'description' => 'Whether to create a default channel for the node',
+			'type' => 'boolean',
+			'default' => false,
+		];
+		$properties['bindingChannelIds'] = InputProperty::idList('Array of existing channel IDs to associate with the node');
+		$properties['createCollab'] = [
+			'description' => 'Whether to create a default collab for the node',
+			'type' => 'boolean',
+			'default' => false,
+		];
+		$properties['bindingCollabIds'] = InputProperty::idList('Array of existing collab IDs to associate with the node');
+		$properties['settings'] = InputProperty::nodeSettings();
+
 		return [
 			'type' => 'object',
-			'properties' => [
-				'structureId' => [
-					'description' => 'Identifier of the structure',
-					'type' => 'number',
-				],
-				'name' => [
-					'description' => 'Node name',
-					'type' => 'string',
-				],
-				'parentId' => [
-					'description' => 'Identifier of the parent node',
-					'type' => 'number',
-				],
-				'description' => [
-					'description' => 'Node description',
-					'type' => 'string',
-				],
-				'colorName' => [
-					'description' => 'Color name for the node. Use only if creating a team',
-					'type' => 'string',
-				],
-				'userIds' => [
-					'description' => 'Array of user IDs to add to the node',
-					'type' => 'array',
-					'items' => [
-						'type' => 'number',
-					],
-					'default' => [],
-				],
-				'moveUsersToNode' => [
-					'description' => 'Whether to move users to the node or just save them',
-					'type' => 'boolean',
-					'default' => false,
-				],
-				'createChat' => [
-					'description' => 'Whether to create a default chat for the node',
-					'type' => 'boolean',
-					'default' => false,
-				],
-				'bindingChatIds' => [
-					'description' => 'Array of chat IDs to associate with the node',
-					'type' => 'array',
-					'items' => [
-						'type' => 'number',
-					],
-					'default' => [],
-				],
-				'createChannel' => [
-					'description' => 'Whether to create a default channel for the node',
-					'type' => 'boolean',
-					'default' => false,
-				],
-				'bindingChannelIds' => [
-					'description' => 'Array of channel IDs to associate with the node',
-					'type' => 'array',
-					'items' => [
-						'type' => 'number',
-					],
-					'default' => [],
-				],
-				'createCollab' => [
-					'description' => 'Whether to create a default collab for the node',
-					'type' => 'boolean',
-					'default' => false,
-				],
-				'bindingCollabIds' => [
-					'description' => 'Array of collab IDs to associate with the node',
-					'type' => 'array',
-					'items' => [
-						'type' => 'number',
-					],
-					'default' => [],
-				],
-				'settings' => [
-					'description' => 'Associative array with NodeSettingsType as keys (e.g., "BUSINESS_PROC_AUTHORITY", "REPORTS_AUTHORITY") and arrays of NodeSettingsAuthorityType as values (e.g., ["HEAD", "DEPUTY_HEAD"])',
-					'type' => 'object',
-					'additionalProperties' => true,
-					'default' => [],
-				],
-			],
+			'properties' => $properties,
 			'additionalProperties' => false,
-			'required' => ['structureId', 'name', 'parentId'],
+			'required' => ['name', 'parentId'],
 		];
 	}
 
 	public function execute(int $userId, ...$args): string
 	{
-		$parentItem = NodeModel::createFromId((int)$args['parentId']);
+		$parentId = (int)$args['parentId'];
+		$parentItem = NodeModel::createFromId($parentId);
+		$parentItem->setTargetNodeId($parentId);
 
 		$actionId = $this->type === NodeEntityType::DEPARTMENT
 			? StructureActionDictionary::ACTION_DEPARTMENT_CREATE
@@ -119,7 +106,13 @@ abstract class NodeCreateTool extends NodeBaseTool
 			return 'Access denied';
 		}
 
-		$structureId = (int)$args['structureId'];
+		$structure = StructureHelper::getDefaultStructure();
+		if ($structure === null)
+		{
+			return 'Default structure not found.';
+		}
+
+		$structureId = $structure->id;
 		$name = $args['name'];
 		$parentId = (int)$args['parentId'];
 		$description = $args['description'] ?? null;

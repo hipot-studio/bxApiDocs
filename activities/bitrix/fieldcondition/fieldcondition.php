@@ -38,6 +38,11 @@ class CBPFieldCondition extends CBPActivityCondition
 		$items = [];
 		foreach ($this->condition as $cond)
 		{
+			if (empty($cond[0]))
+			{
+				continue;
+			}
+
 			if (!isset($document[$cond[0]]) && mb_substr($cond[0], -mb_strlen('_PRINTABLE')) === '_PRINTABLE')
 			{
 				$cond[0] = mb_substr($cond[0], 0, mb_strlen($cond[0]) - mb_strlen('_PRINTABLE'));
@@ -92,7 +97,10 @@ class CBPFieldCondition extends CBPActivityCondition
 		$usages = [];
 		foreach ($this->condition as $cond)
 		{
-			$usages[] = [\Bitrix\Bizproc\Workflow\Template\SourceType::DocumentField, $cond[0]];
+			if (!empty($cond[0]))
+			{
+				$usages[] = [\Bitrix\Bizproc\Workflow\Template\SourceType::DocumentField, $cond[0]];
+			}
 			if (is_string($cond[2]))
 			{
 				$this->collectExpressionUsages($usages, $ownerActivity, $cond[2]);

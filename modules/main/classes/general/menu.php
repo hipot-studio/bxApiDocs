@@ -431,7 +431,7 @@ class CMenu
 						$varvalue = urldecode(mb_substr($param, $eqpos + 1));
 					}
 
-					$globvarvalue = ($GLOBALS[$varname] ?? "");
+					$globvarvalue = ($_GET[$varname] ?? "");
 					if($globvarvalue != $varvalue)
 					{
 						$bOK = false;

@@ -14,6 +14,9 @@ class RelationTaskSelect implements SelectInterface
 		'responsible',
 		'deadline',
 		'status',
+		'group',
+		'activityDate',
+		'changedDate',
 	];
 
 	public function __construct(

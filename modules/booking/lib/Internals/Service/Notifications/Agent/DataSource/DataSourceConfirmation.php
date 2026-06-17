@@ -14,11 +14,17 @@ class DataSourceConfirmation extends BaseDataSource
 		return NotificationType::Confirmation;
 	}
 
-	protected function doGetBookingIds(): array
+	protected function doGetBookingIdsForSend(): array
 	{
-		$currentTimestamp = time();
-		$twoWeeksAheadTimestamp = $currentTimestamp + Time::SECONDS_IN_DAY * 7 * 2;
+		$businessRulesSql = $this->getBusinessRulesSql();
+		$confirmationType = $this->sqlHelper->forSql(NotificationType::Confirmation->value);
 		$startSendTimestamp = "b.DATE_FROM - rns.CONFIRMATION_DELAY";
+		$currentDateTime = $this->convertTimestampToDbExpr($this->currentTimestamp);
+		$startSendDateTime = $this->convertTimestampToDbExpr($startSendTimestamp);
+		$repetitionsInterval = $this->sqlHelper->addSecondsToDateTime(
+			'rns.CONFIRMATION_REPETITIONS_INTERVAL',
+			'SENT_AT',
+		);
 
 		$sql = "
 			SELECT
@@ -28,43 +34,108 @@ class DataSourceConfirmation extends BaseDataSource
 			FROM b_booking_booking b
 			JOIN b_booking_booking_resource bbr ON bbr.BOOKING_ID = b.ID AND bbr.IS_PRIMARY = 'Y'
 			JOIN b_booking_resource_notification_settings rns ON rns.RESOURCE_ID = bbr.RESOURCE_ID
-			WHERE
-				b.IS_DELETED = 'N'
-				AND rns.IS_CONFIRMATION_ON = 'Y'
-			  	AND b.DATE_FROM > $currentTimestamp
-			  	AND b.DATE_FROM < $twoWeeksAheadTimestamp
-				AND b.IS_CONFIRMED = 'N'
-				AND $startSendTimestamp <= $currentTimestamp
-				AND " . $this->getVisitStatusUnknownSql() . "
+			WHERE 1 = 1
+				AND {$businessRulesSql}
+				AND {$startSendTimestamp} <= {$this->currentTimestamp}
 				AND NOT EXISTS (
 					SELECT 1
 					FROM b_booking_booking_message
 					WHERE
 						BOOKING_ID = b.ID
-						AND NOTIFICATION_TYPE = '" . $this->connection->getSqlHelper()->forSql(NotificationType::Confirmation->value) . "'
-						AND
-							" . $this->connection->getSqlHelper()->addSecondsToDateTime('rns.CONFIRMATION_REPETITIONS_INTERVAL', 'CREATED_AT') . "
-							>= " . $this->makeDateTimeFromTimestamp($currentTimestamp) . "
+						AND NOTIFICATION_TYPE = '{$confirmationType}'
+						AND {$repetitionsInterval} >= {$currentDateTime}
 				)
 				AND NOT EXISTS (
 					SELECT 1
 					FROM b_booking_booking_message
 					WHERE
 						BOOKING_ID = b.ID
-						AND NOTIFICATION_TYPE = '" . $this->connection->getSqlHelper()->forSql(NotificationType::Confirmation->value) . "'
-						AND CREATED_AT > " . $this->makeDateTimeFromTimestamp($startSendTimestamp) . "
+						AND NOTIFICATION_TYPE = '{$confirmationType}'
+						AND SENT_AT > {$startSendDateTime}
 					GROUP BY BOOKING_ID, NOTIFICATION_TYPE
 					HAVING COUNT(1) >= 1 + rns.CONFIRMATION_REPETITIONS
 				)
-				" . $this->getWhereSql() . "
 		";
 
+		return $this->filterBySendTimeRules(
+			$this->connection->query($sql)->fetchAll(),
+		);
+	}
+
+	protected function doFilterEligibleForRetry(array $bookingIds): array
+	{
+		$bookingIdFilterSql = $this->getBookingIdFilterSql($bookingIds);
+		$businessRulesSql = $this->getBusinessRulesSql();
+
+		$sql = "
+			SELECT b.ID
+			FROM b_booking_booking b
+			JOIN b_booking_booking_resource bbr ON bbr.BOOKING_ID = b.ID AND bbr.IS_PRIMARY = 'Y'
+			JOIN b_booking_resource_notification_settings rns ON rns.RESOURCE_ID = bbr.RESOURCE_ID
+			WHERE 1 = 1
+				AND {$bookingIdFilterSql}
+				AND {$businessRulesSql}
+		";
+
+		return array_map(
+			static fn(array $row) => (int)$row['ID'],
+			$this->connection->query($sql)->fetchAll(),
+		);
+	}
+
+	protected function doFilterReadyToSendNow(array $bookingIds): array
+	{
+		$bookingIdFilterSql = $this->getBookingIdFilterSql($bookingIds);
+
+		$sql = "
+			SELECT
+				b.ID,
+				b.TIMEZONE_FROM,
+				rns.CONFIRMATION_DELAY
+			FROM b_booking_booking b
+			JOIN b_booking_booking_resource bbr ON bbr.BOOKING_ID = b.ID AND bbr.IS_PRIMARY = 'Y'
+			JOIN b_booking_resource_notification_settings rns ON rns.RESOURCE_ID = bbr.RESOURCE_ID
+			WHERE 1 = 1
+				AND {$bookingIdFilterSql}
+		";
+
+		return $this->filterBySendTimeRules(
+			$this->connection->query($sql)->fetchAll(),
+		);
+	}
+
+	private function getBusinessRulesSql(): string
+	{
+		$twoWeeksAheadTimestamp = $this->currentTimestamp + Time::SECONDS_IN_DAY * 7 * 2;
+		$visitStatusSql = $this->getVisitStatusUnknownSql();
+		$clientAndSenderSql = $this->getClientAndSenderConditionsSql();
+
+		return "
+			b.IS_DELETED = 'N'
+			AND rns.IS_CONFIRMATION_ON = 'Y'
+			AND b.DATE_FROM > {$this->currentTimestamp}
+			AND b.DATE_FROM < {$twoWeeksAheadTimestamp}
+			AND b.IS_CONFIRMED = 'N'
+			AND {$visitStatusSql}
+			{$clientAndSenderSql}
+		";
+	}
+
+	/**
+	 * Filters bookings by send time rules.
+	 * Allows sending if it's currently working hours in the booking's timezone
+	 * or if the confirmation delay is precise (less than 1 day).
+	 */
+	private function filterBySendTimeRules(array $rows): array
+	{
 		$bookingIds = [];
-		$list = $this->connection->query($sql)->fetchAll();
-		foreach ($list as $item)
+		foreach ($rows as $item)
 		{
-			$isNowWorkingHours = $this->isWorkingHours($currentTimestamp, $item['TIMEZONE_FROM']);
-			$isPreciseDelay = (int)$item['CONFIRMATION_DELAY'] < $this->getPreciseDelay();
+			$isNowWorkingHours = $this->workingTimeService->isWithinWorkingHoursAt(
+				$this->currentTimestamp,
+				$item['TIMEZONE_FROM'],
+			);
+			$isPreciseDelay = (int)$item['CONFIRMATION_DELAY'] < $this->getPreciseDelayThreshold();
 			if (!$isNowWorkingHours && !$isPreciseDelay)
 			{
 				continue;
@@ -77,12 +148,11 @@ class DataSourceConfirmation extends BaseDataSource
 	}
 
 	/**
-	 * If the delay is less than returned we consider it to be precise
-	 * and therefore can send notification at any time (not only in working time)
-	 *
-	 * @return int
+	 * Returns the threshold in seconds below which a delay
+	 * is considered precise enough to send at any time,
+	 * ignoring working hours restrictions.
 	 */
-	private function getPreciseDelay(): int
+	private function getPreciseDelayThreshold(): int
 	{
 		return Time::SECONDS_IN_DAY;
 	}

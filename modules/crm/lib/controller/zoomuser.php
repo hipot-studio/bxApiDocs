@@ -10,6 +10,7 @@ use Bitrix\Main\Engine\Response;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Crm\Integration\Zoom\Activity;
+use Bitrix\Crm\Service\Container;
 
 class ZoomUser extends Controller
 {
@@ -56,6 +57,12 @@ class ZoomUser extends Controller
 
 	public function createConferenceAction($conferenceParams, $entityId, $entityType)
 	{
+		if (!Container::getInstance()->getUserPermissions()->item()->canUpdate(\CCrmOwnerType::ResolveID((string)$entityType), (int)$entityId))
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
+
+			return null;
+		}
 		$createResult = Conference::createZoom(\CCrmSecurityHelper::GetCurrentUserID(), $conferenceParams);
 		if (!$createResult->isSuccess())
 		{

@@ -10,6 +10,7 @@ use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Mail\Access\Permission\PermissionDictionary;
 use Bitrix\Mail\Access\MailboxAccessController;
 use Bitrix\Mail\Access\Permission\PermissionVariablesDictionary;
+use Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService;
 use Bitrix\Mail\Helper\Entity\Department\DepartmentProvider;
 use Bitrix\Mail\Helper\Entity\User\User;
 use Bitrix\Mail\Helper\Mailbox\MailboxSyncManager;
@@ -47,6 +48,7 @@ class MailboxSettingsGridHelper
 	private DepartmentProvider $departmentProvider;
 	private int $currentUserId;
 	private MailboxAccessController $accessController;
+	private MailboxConnectionRequestService $connectionRequestService;
 
 	public function __construct()
 	{
@@ -54,6 +56,7 @@ class MailboxSettingsGridHelper
 		$this->departmentProvider = new DepartmentProvider();
 		$this->currentUserId = (int)CurrentUser::get()->getId();
 		$this->accessController = MailboxAccessController::getInstance($this->currentUserId);
+		$this->connectionRequestService = new MailboxConnectionRequestService();
 	}
 
 	/**
@@ -110,12 +113,32 @@ class MailboxSettingsGridHelper
 			return [];
 		}
 
-		$mailboxes = $this->getMailboxesWithOwners($limit, $offset, $filterData);
+		$rows = [];
+		$showConnectionRequests = ($filterData['CONNECTION_REQUESTS'] ?? '') !== 'N';
+		$totalRequestCount = $showConnectionRequests
+			? $this->getMailboxConnectionRequestsTotalCount()
+			: 0;
+
+		if ($totalRequestCount > 0 && $offset < $totalRequestCount)
+		{
+			$connectionRequestRows = $this->getMailboxConnectionRequests($limit, $offset);
+			$rows = array_merge($rows, $connectionRequestRows);
+		}
+
+		$mailboxLimit = $limit - count($rows);
+		if ($mailboxLimit <= 0)
+		{
+			return $rows;
+		}
+
+		$mailboxOffset = max(0, $offset - $totalRequestCount);
+
+		$mailboxes = $this->getMailboxesWithOwners($mailboxLimit, $mailboxOffset, $filterData);
 		$this->setCanEditFlag($mailboxes);
 
 		if (empty($mailboxes))
 		{
-			return [];
+			return $rows;
 		}
 
 		$mailboxIds = array_column($mailboxes, 'ID');
@@ -172,7 +195,6 @@ class MailboxSettingsGridHelper
 			}
 		}
 
-		$rows = [];
 		foreach ($mailboxes as $mailbox)
 		{
 			$entitiesInfo = $allEntitiesInfo[$mailbox['ID']] ?? [];
@@ -262,8 +284,14 @@ class MailboxSettingsGridHelper
 		$query->setSelect([new ExpressionField('CNT', 'COUNT(DISTINCT %s)', 'ID')]);
 
 		$result = $query->exec()->fetch();
+		$mailboxCount = (int)($result['CNT'] ?? 0);
 
-		return (int)($result['CNT'] ?? 0);
+		$showConnectionRequests = ($filterData['CONNECTION_REQUESTS'] ?? '') !== 'N';
+		$requestCount = $showConnectionRequests
+			? $this->getMailboxConnectionRequestsTotalCount()
+			: 0;
+
+		return $mailboxCount + $requestCount;
 	}
 
 	/**
@@ -1281,5 +1309,72 @@ class MailboxSettingsGridHelper
 
 			$mailbox['CAN_EDIT'] = true;
 		}
+	}
+
+	/**
+	 * @return array<array{
+	 *     ID: string,
+	 *     REQUEST_ID: int,
+	 *     IS_CONNECTION_REQUEST: true,
+	 *     OWNER_DATA: ?array{
+	 *         id: int,
+	 *         name: string,
+	 *         avatar: array{src: string, width: int, height: int, size: int},
+	 *         pathToProfile: string,
+	 *     },
+	 *     REQUESTER_ID: int,
+	 *     COMMENT: ?string,
+	 *     CREATED_AT: \Bitrix\Main\Type\DateTime,
+	 * }>
+	 */
+	private function getMailboxConnectionRequests(int $limit, int $offset): array
+	{
+		if (!$this->isResponsibleAdmin())
+		{
+			return [];
+		}
+
+		$requests = $this->connectionRequestService->getPendingRequestsPaginated($limit, $offset);
+
+		if (empty($requests))
+		{
+			return [];
+		}
+
+		$requesterIds = array_unique(array_column($requests, 'REQUESTER_ID'));
+		$users = $this->userProvider->getEntitiesInfo($requesterIds);
+
+		$rows = [];
+		foreach ($requests as $request)
+		{
+			$requesterData = $users[(string)$request['REQUESTER_ID']] ?? null;
+
+			$rows[] = [
+				'ID' => sprintf('request_%u', $request['ID']),
+				'REQUEST_ID' => (int)$request['ID'],
+				'IS_CONNECTION_REQUEST' => true,
+				'OWNER_DATA' => $requesterData?->toArray(),
+				'REQUESTER_ID' => (int)$request['REQUESTER_ID'],
+				'COMMENT' => $request['COMMENT'],
+				'CREATED_AT' => $request['CREATED_AT'],
+			];
+		}
+
+		return $rows;
+	}
+
+	private function getMailboxConnectionRequestsTotalCount(): int
+	{
+		if (!$this->isResponsibleAdmin())
+		{
+			return 0;
+		}
+
+		return $this->connectionRequestService->getPendingCount();
+	}
+
+	private function isResponsibleAdmin(): bool
+	{
+		return $this->connectionRequestService->isResponsibleAdmin();
 	}
 }

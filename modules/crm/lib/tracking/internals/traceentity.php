@@ -83,7 +83,7 @@ class TraceEntityTable extends DataManager
 			return false;
 		}
 
-		/** @var Main\Orm\Data\DataManager $entityClass */
+		/** @var Main\ORM\Data\DataManager $entityClass */
 		$entityClass = null;
 		switch ($entityTypeId)
 		{

@@ -22,7 +22,6 @@ use Bitrix\Main\Grid\Panel\Snippet;
 use Bitrix\Main\Grid\Panel\Types;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Search\Content;
 use Bitrix\Main\UI\Filter;
 use Bitrix\Main\UI\Filter\Theme;
 use Bitrix\Main\UI\PageNavigation;
@@ -420,7 +419,6 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 		;
 		$this->setFiltersToRequest($workflowsRequest);
 		$this->setSortingToRequest($workflowsRequest);
-		$workflowsRequest->setFilterUserId($this->getCurrentUserId());
 
 		return $workflowStateService->getList($workflowsRequest);
 	}
@@ -433,14 +431,14 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 
 		if (!empty($currentFilters['NAME']))
 		{
-			$filter['%NAME'] = Content::prepareStringToken(htmlspecialcharsbx($currentFilters['NAME']));
+			$filter['%NAME'] = $currentFilters['NAME'];
 		}
 
-		$findValue = $currentFilters['FIND'] ?? null;
+		$findValue = trim($currentFilters['FIND'] ?? '');
 
-		if (!empty($findValue) && Content::canUseFulltextSearch($findValue = trim($findValue)))
+		if ($findValue !== '')
 		{
-			$templateToGet->setFilterSearchQuery(Content::prepareStringToken(htmlspecialcharsbx($findValue)));
+			$templateToGet->setFilterSearchQuery($findValue);
 		}
 
 		$templateToGet->setFilter($filter);

@@ -21,6 +21,7 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 
 	public const BIC_EXTERNAL_DASHBOARD_CONFIG = 7;
 	public const BIC_DELETE_ALL_UNUSED_ELEMENTS = 8;
+	public const BIC_DASHBOARD_SHARE = 9;
 
 	public const BIC_DASHBOARD = 100;
 	public const BIC_DASHBOARD_VIEW = 101;

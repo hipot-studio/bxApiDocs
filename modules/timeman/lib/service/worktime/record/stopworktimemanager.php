@@ -83,6 +83,11 @@ class StopWorktimeManager extends WorktimeManager
 		]);
 	}
 
+	protected function needsWorktimeEventLoading(): bool
+	{
+		return true;
+	}
+
 	protected function getRecordedStopTimestamp($record)
 	{
 		return $this->worktimeRecordForm->recordedStopTimestamp;

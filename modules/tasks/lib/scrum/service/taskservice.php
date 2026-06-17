@@ -1724,7 +1724,7 @@ class TaskService implements Errorable
 		array $fields,
 		array $previousFields = [],
 		int $epicId = 0,
-		int $sort = 1
+		?int $sort = null
 	): void
 	{
 		$itemService = new ItemService();
@@ -1740,7 +1740,7 @@ class TaskService implements Errorable
 			$scrumItem->setCreatedBy($createdBy);
 			$scrumItem->setEntityId($entity->getId());
 			$scrumItem->setSourceId($taskId);
-			$scrumItem->setSortFloat($sort);
+			$scrumItem->setSortFloat($sort ?? $itemService->getFirstItemSort($entity->getId()) / 2);
 
 			$epicId = (is_numeric($fields['EPIC'] ?? null) ? (int) $fields['EPIC'] : $epicId);
 
@@ -1805,7 +1805,7 @@ class TaskService implements Errorable
 			$pushService = (Loader::includeModule('pull') ? new PushService() : null);
 
 			$scrumItem->setEntityId($entity->getId());
-			$scrumItem->setSortFloat($itemService->getFirstItemSort() / 2);
+			$scrumItem->setSortFloat($itemService->getFirstItemSort($entity->getId()) / 2);
 			$scrumItem->setEpicId(0);
 			$scrumItem->setModifiedBy($fields['CHANGED_BY']);
 			$itemService->changeItem($scrumItem, $pushService);
@@ -1898,7 +1898,7 @@ class TaskService implements Errorable
 					if ($sprint->isCompletedSprint())
 					{
 						$scrumItem->setEntityId($backlog->getId());
-						$scrumItem->setSortFloat($itemService->getFirstItemSort() / 2);
+						$scrumItem->setSortFloat($itemService->getFirstItemSort($backlog->getId()) / 2);
 
 						$pushService = (Loader::includeModule('pull') ? new PushService() : null);
 						$itemService->changeItem($scrumItem, $pushService);

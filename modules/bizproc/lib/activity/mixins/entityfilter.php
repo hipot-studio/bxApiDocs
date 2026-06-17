@@ -11,6 +11,8 @@ use Bitrix\Bizproc\Result;
 
 trait EntityFilter
 {
+	private ?bool $ormFilterValid = null;
+
 	abstract public function getDocumentType();
 
 	public function getOrmFilter(
@@ -19,6 +21,7 @@ trait EntityFilter
 		?array $fieldsMap = null
 	): array
 	{
+		$this->ormFilterValid = true;
 		$filter = ['LOGIC' => 'OR'];
 
 		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
@@ -41,6 +44,7 @@ trait EntityFilter
 			$fieldId = $condition->getField();
 			if (!isset($fieldsMap[$fieldId]))
 			{
+				$this->ormFilterValid = false;
 				continue;
 			}
 
@@ -142,6 +146,11 @@ trait EntityFilter
 		}
 
 		return $filter;
+	}
+
+	protected function isOrmFilterValid(): bool
+	{
+		return $this->ormFilterValid ?? false;
 	}
 
 	private function getBetweenFilter(array $property, Condition $condition): Result

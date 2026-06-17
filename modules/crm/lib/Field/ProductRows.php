@@ -27,6 +27,16 @@ final class ProductRows extends Field
 			return new Result();
 		}
 
+		$productRowChecker = Container::getInstance()->getProductRowChecker();
+		if ($entityTypeId === CCrmOwnerType::Deal)
+		{
+			$checkReservationRightsResult = $productRowChecker->checkReservationRights($item);
+			if (!$checkReservationRightsResult->isSuccess())
+			{
+				return $checkReservationRightsResult;
+			}
+		}
+
 		$productRowsCollection = $item->getProductRows();
 		if (!$productRowsCollection)
 		{
@@ -39,7 +49,7 @@ final class ProductRows extends Field
 			static fn($originalProductRow) => isset($originalProductRow['ID']),
 		);
 
-		return Container::getInstance()->getProductRowChecker()->checkCatalogRights(
+		return $productRowChecker->checkCatalogRights(
 			$entityTypeId,
 			$productRows,
 			$item->getCurrencyId(),

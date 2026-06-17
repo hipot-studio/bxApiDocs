@@ -926,7 +926,7 @@ class ContactCenter
 				{
 					try
 					{
-						$channelData = JSON::decode($infoConnectors[$configItem["ID"]]['DATA']);
+						$channelData = JSON::decode(\Bitrix\Main\Text\Emoji::decode($infoConnectors[$configItem["ID"]]['DATA']));
 						if (
 							isset($channelData[$connectorCode]['name'])
 							&& is_string($channelData[$connectorCode]['name'])

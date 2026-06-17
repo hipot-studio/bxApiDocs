@@ -39,7 +39,7 @@ class Secretary
 
 	public static function getMessageUrlForUserMessage(int $messageId, int $userId): ?string
 	{
-		return self::getMessageUrl($messageId, Message::ENTITY_TYPE_USER_MESSAGE, $userId);
+		return self::getMessageUrl($messageId, Message::ENTITY_TYPE_USER_MESSAGE, $userId, $userId);
 	}
 
 	public static function getMailboxIdForMessage(int $messageId)

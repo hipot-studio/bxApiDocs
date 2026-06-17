@@ -8,6 +8,7 @@ use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Integration\Mail\Client;
+use Bitrix\Crm\Integration\Mail\MessageSender;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Disk\File;
@@ -341,12 +342,11 @@ class Message extends Controller
 
 		$now = convertTimeStamp(time() + \CTimeZone::getOffset(), 'FULL', SITE_ID);
 
-		$subject = isset($data['subject']) ? strval($data['subject']) : '';
-
-		if ($subject == '')
-		{
-			$subject = Loc::getMessage('CRM_MAIL_CONTROLLER_MESSAGE_DEFAULT_SUBJECT', ['#DATE#'=> $now]);
-		}
+		$subject = Helper\Message::getOutgoingSubject(
+			isset($data['subject']) ? strval($data['subject']) : '',
+			(string)($data['message'] ?? ''),
+			(string)Loc::getMessage('CRM_MAIL_CONTROLLER_MESSAGE_DEFAULT_SUBJECT', ['#DATE#'=> $now]),
+		);
 
 		$arErrors = [];
 
@@ -1155,100 +1155,26 @@ class Message extends Controller
 			return false;
 		}
 
-		// sending email
-		$rcpt    = array();
-		$rcptCc  = array();
-		$rcptBcc = array();
-		foreach ($to as $item)
-			$rcpt[] = Mail\Mail::encodeHeaderFrom($item, SITE_CHARSET);
-		foreach ($cc as $item)
-			$rcptCc[] = Mail\Mail::encodeHeaderFrom($item, SITE_CHARSET);
-		foreach ($bcc as $item)
-			$rcptBcc[] = Mail\Mail::encodeHeaderFrom($item, SITE_CHARSET);
-
-		$outgoingSubject = $subject;
-		$outgoingBody = $messageHtml ?: '';
-
-		if (!empty($injectUrn))
-		{
-			switch (\CCrmEMailCodeAllocation::getCurrent())
-			{
-				case \CCrmEMailCodeAllocation::Subject:
-					$outgoingSubject = \CCrmActivity::injectUrnInSubject($urn, $outgoingSubject);
-					break;
-				case \CCrmEMailCodeAllocation::Body:
-					$outgoingBody = \CCrmActivity::injectUrnInBody($urn, $outgoingBody, 'html');
-					break;
-			}
-		}
-
-		$attachments = array();
-		foreach ($arRawFiles as $key => $item)
-		{
-			$contentId = sprintf(
-				'bxacid.%s@%s.crm',
-				hash('crc32b', $item['external_id'].$item['size'].$item['name']),
-				hash('crc32b', $hostname)
-			);
-
-			$attachments[] = array(
-				'ID'           => $contentId,
-				'NAME'         => $item['ORIGINAL_NAME'] ?: $item['name'],
-				'PATH'         => $item['tmp_name'],
-				'CONTENT_TYPE' => $item['type'],
-			);
-
-			$outgoingBody = preg_replace(
-				sprintf('/(https?:\/\/)?bxacid:n?%u/i', $key),
-				sprintf('cid:%s', $contentId),
-				$outgoingBody
-			);
-		}
-
-		$outgoingParams = array(
-			'CHARSET'      => 'UTF-8',
-			'CONTENT_TYPE' => 'html',
-			'ATTACHMENT'   => $attachments,
-			'TO'           => join(', ', $rcpt),
-			'SUBJECT'      => $outgoingSubject,
-			'BODY'         => $outgoingBody,
-			'HEADER'       => array(
-				'From'       => $fromEncoded ?: $fromEmail,
-				'Reply-To'   => $reply ?: $fromEmail,
-				//'To'         => join(', ', $rcpt),
-				'Cc'         => join(', ', $rcptCc),
-				'Bcc'        => join(', ', $rcptBcc),
-				//'Subject'    => $outgoingSubject,
-				'Message-Id' => $messageId,
-			),
+		$sendResult = MessageSender::send(
+			[
+				'subject'       => $subject,
+				'body'          => $messageHtml ?: '',
+				'to'            => $to,
+				'cc'            => $cc,
+				'bcc'           => $bcc,
+				'fromEmail'     => $fromEmail,
+				'fromEncoded'   => $fromEncoded,
+				'reply'         => $reply,
+				'rawFiles'      => $arRawFiles,
+				'urn'           => $urn,
+				'injectUrn'     => !empty($injectUrn),
+				'hostname'      => $hostname,
+				'messageId'     => $messageId,
+				'priorityCount' => count($commData),
+			],
+			(string)Loc::getMessage('CRM_MAIL_CONTROLLER_MESSAGE_DEFAULT_SUBJECT', ['#DATE#'=> $now]),
+			$mailboxHelper,
 		);
-
-		$context = new Mail\Context();
-		$context->setCategory(Mail\Context::CAT_EXTERNAL);
-		$context->setPriority(count($commData) > 2 ? Mail\Context::PRIORITY_LOW : Mail\Context::PRIORITY_NORMAL);
-		$context->setCallback(
-			(new Mail\Callback\Config())
-				->setModuleId('crm')
-				->setEntityType('act')
-				->setEntityId($urn)
-		);
-
-		$sendResult = Mail\Mail::send(array_merge(
-			$outgoingParams,
-			array(
-				'TRACK_READ' => array(
-					'MODULE_ID' => 'crm',
-					'FIELDS'    => array('urn' => $urn),
-					'URL_PAGE' => '/pub/mail/read.php',
-				),
-				'TRACK_CLICK' => array(
-					'MODULE_ID' => 'crm',
-					'FIELDS'    => array('urn' => $urn),
-					'URL_PAGE' => '/pub/mail/click.php',
-				),
-				'CONTEXT' => $context,
-			)
-		));
 
 		if (!$sendResult)
 		{
@@ -1284,33 +1210,6 @@ class Message extends Controller
 		}
 
 		addEventToStatFile('crm', 'send_email_message', $_REQUEST['context'], trim(trim($messageId), '<>'));
-
-		$needUpload = !empty($mailboxHelper);
-
-		if ($context->getSmtp() && in_array(mb_strtolower($context->getSmtp()->getHost()), array('smtp.gmail.com', 'smtp.office365.com')))
-		{
-			$needUpload = false;
-		}
-
-		if ($needUpload)
-		{
-			class_exists('Bitrix\Mail\Helper');
-
-			$outgoing = new \Bitrix\Mail\DummyMail(array_merge(
-				$outgoingParams,
-				array(
-					'HEADER' => array_merge(
-						$outgoingParams['HEADER'],
-						array(
-							'To'      => $outgoingParams['TO'],
-							'Subject' => $outgoingParams['SUBJECT'],
-						)
-					),
-				)
-			));
-
-			$mailboxHelper->uploadMessage($outgoing);
-		}
 
 		// Try to add event to entity
 		$CCrmEvent = new \CCrmEvent();

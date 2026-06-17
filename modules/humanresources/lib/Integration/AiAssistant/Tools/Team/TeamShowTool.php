@@ -18,6 +18,6 @@ class TeamShowTool extends NodeShowTool
 
 	public function getDescription(): string
 	{
-		return 'Get name, description and a list of employees for the node identified by `nodeId` when node is a team.';
+		return 'Get name, description, and member list (with roles) of the given team.';
 	}
 }

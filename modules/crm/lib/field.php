@@ -48,12 +48,14 @@ class Field
 	public const TYPE_CRM_ACTIVITY_PROVIDER_TYPE = 'crm_activity_provider_type';
 	public const TYPE_CRM_DYNAMIC_TYPE = 'crm_dynamic_type';
 	public const TYPE_CRM_REPEAT_SALE_SEGMENT_TITLE = 'crm_repeat_sale_segment_title';
+	public const TYPE_CRM_WEBFORM = 'crm_webform';
 	public const TYPE_RECURRING = 'recurring';
 
 	public const VALUE_TYPE_PLAIN_TEXT = 'text';
 	public const VALUE_TYPE_BB = 'bb';
 	public const VALUE_TYPE_HTML = 'html';
 	public const VALUE_TYPE_IMAGE = 'image';
+	public const VALUE_TYPE_MONEY = 'money';
 
 	/** @var string */
 	protected $name;

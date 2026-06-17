@@ -1,7 +1,9 @@
 <?php
 
+use Bitrix\Tasks\Integration\SocialNetwork\GroupProvider;
 use Bitrix\Tasks\Internals\Task\MetaStatus;
 use Bitrix\Tasks\Internals\Task\Status;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -147,10 +149,19 @@ function tasksGetItemMenu($task, $arPaths, $site_id = SITE_ID, $bGantt = false, 
 		$task['META:ALLOWED_ACTIONS'] = $arAllowedTaskActions;
 	}
 
-	$analyticsSectionCode = $task['GROUP_ID']
-		? \Bitrix\Tasks\Helper\Analytics::SECTION['project']
-		: \Bitrix\Tasks\Helper\Analytics::SECTION['tasks']
-	;
+	$analyticsSectionCode = Analytics\Section::Tasks->value;
+
+	$groupId = (int)($task['GROUP_ID'] ?? 0);
+	if ($groupId)
+	{
+		$isCollab = GroupProvider::isCollab($groupId);
+
+		$analyticsSectionCode =
+			$isCollab
+				? Analytics\Section::Collab->value
+				: Analytics\Section::Project->value
+		;
+	}
 
 	$editUrl = \Bitrix\Tasks\Slider\Path\TaskPathMaker::getPath([
 		"task_id" => $task["ID"],
@@ -177,24 +188,24 @@ function tasksGetItemMenu($task, $arPaths, $site_id = SITE_ID, $bGantt = false, 
 
 	$viewUrl->addParams([
 		'ta_sec' => $analyticsSectionCode,
-		'ta_sub' => \Bitrix\Tasks\Helper\Analytics::SUB_SECTION['gantt'],
-		'ta_el' => \Bitrix\Tasks\Helper\Analytics::ELEMENT['context_menu'],
+		'ta_sub' => Analytics\SubSection::Gantt->value,
+		'ta_el' => Analytics\Element::ContextMenu->value,
 	]);
 
 	$subtaskUrl = new \Bitrix\Main\Web\Uri($addPath);
 	$subtaskUrl->addParams([
 		'PARENT_ID' => $task['ID'],
 		'ta_sec' => $analyticsSectionCode,
-		'ta_sub' => \Bitrix\Tasks\Helper\Analytics::SUB_SECTION['gantt'],
-		'ta_el' => \Bitrix\Tasks\Helper\Analytics::ELEMENT['context_menu'],
+		'ta_sub' => Analytics\SubSection::Gantt->value,
+		'ta_el' => Analytics\Element::ContextMenu->value,
 	]);
 
 	$copyUrl = new \Bitrix\Main\Web\Uri($addPath);
 	$copyUrl->addParams([
 		'COPY' => $task['ID'],
 		'ta_sec' => $analyticsSectionCode,
-		'ta_sub' => \Bitrix\Tasks\Helper\Analytics::SUB_SECTION['gantt'],
-		'ta_el' => \Bitrix\Tasks\Helper\Analytics::ELEMENT['context_menu'],
+		'ta_sub' => Analytics\SubSection::Gantt->value,
+		'ta_el' => Analytics\Element::ContextMenu->value,
 	]);
 
 	$inFavorite = false;
@@ -485,7 +496,7 @@ function tasksGetItemMenu($task, $arPaths, $site_id = SITE_ID, $bGantt = false, 
 					var fn = (window && window.DeleteTask) || (top && top.DeleteTask) || BX.DoNothing;
 					this.menuItems = [];
 					this.bindElement.onclick = function() { return (false); };
-					fn(<?= (int)$task["ID"] ?>);
+					fn(<?= (int)$task["ID"] ?>, '<?= $analyticsSectionCode ?>');
 					this.popupWindow.close();
 				})
 			},<?

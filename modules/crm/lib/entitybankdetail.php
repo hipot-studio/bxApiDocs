@@ -32,7 +32,7 @@ class EntityBankDetail
 
 	private static $FIELD_INFOS = null;
 
-	private static $rqFields = array(
+	private static $rqFields = [
 		'RQ_BANK_NAME',
 		'RQ_BANK_ADDR',
 		'RQ_BANK_CODE',
@@ -52,7 +52,7 @@ class EntityBankDetail
 		'RQ_CODEB',
 		'RQ_CODEG',
 		'RQ_RIB',
-	);
+	];
 	private static $rqFiltrableFields = null;
 	private static $rqFieldMapByCountry = [
 		// RU
@@ -131,6 +131,12 @@ class EntityBankDetail
 			'RQ_SWIFT',
 			'RQ_BIC',
 		],
+		// MX
+		93 => [
+			'RQ_BANK_NAME',
+			'RQ_ACC_NAME',
+			'RQ_ACC_NUM',
+		],
 		// PL
 		110 => [
 			'RQ_BANK_NAME',
@@ -167,6 +173,7 @@ class EntityBankDetail
 			'RQ_SWIFT',
 			'RQ_BIC',
 		],
+		// UZ
 		13 => [
 			'RQ_BANK_NAME',
 			'RQ_ACC_NUM',
@@ -1866,6 +1873,9 @@ class EntityBankDetail
 				77 => array(      // co
 					'RQ_ACC_NUM',
 					'RQ_IBAN',
+				),
+				93 => array(      // mx
+					'RQ_ACC_NUM',
 				),
 				110 => array(      // pl
 					'RQ_ACC_NUM',

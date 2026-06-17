@@ -33,6 +33,7 @@ class SaveNodeChatsCommandHandler
 	public function __invoke(SaveNodeChatsCommand $command): SaveNodeChatsResult
 	{
 		$result = new SaveNodeChatsResult();
+		$userId = $command->userId ?? CurrentUser::get()->getId();
 
 		$relationType = $this->getRelationEntityTypeByChatType($command->chatType);
 		if (!empty($command->removeIds))
@@ -55,7 +56,7 @@ class SaveNodeChatsCommandHandler
 		{
 			$filteredChatIds = $this->collabService->filterByPermissions(
 				$command->ids,
-				CurrentUser::get()->getId(),
+				$userId,
 			);
 		}
 		else
@@ -63,7 +64,7 @@ class SaveNodeChatsCommandHandler
 			$filteredChatIds = $this->chatService
 				->filterByPermissionsAndType(
 					$command->ids,
-					CurrentUser::get()->getId(),
+					$userId,
 					$relationSubtype,
 				)
 				->getChatIds()
@@ -79,7 +80,7 @@ class SaveNodeChatsCommandHandler
 			{
 				if ($relationType === RelationEntityType::COLLAB)
 				{
-					$addResult = $this->collabService->create($command->node, $headIds, CurrentUser::get()->getId());
+					$addResult = $this->collabService->create($command->node, $headIds, $userId);
 
 					if ($addResult->isSuccess())
 					{

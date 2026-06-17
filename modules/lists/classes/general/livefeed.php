@@ -448,7 +448,7 @@ class CListsLiveFeed
 					{
 						if (array_key_exists('UF_SONET_COM_DOC', $tmp))
 						{
-							$GLOBALS['UF_FORUM_MESSAGE_DOC'] = $tmp['UF_SONET_COM_DOC'];
+							$fieldsMessage['UF_FORUM_MESSAGE_DOC'] = $tmp['UF_SONET_COM_DOC'];
 						}
 						elseif (array_key_exists('UF_SONET_COM_FILE', $tmp))
 						{
@@ -461,7 +461,7 @@ class CListsLiveFeed
 
 						if (array_key_exists("UF_SONET_COM_URL_PRV", $tmp))
 						{
-							$GLOBALS["UF_FORUM_MES_URL_PRV"] = $tmp["UF_SONET_COM_URL_PRV"];
+							$fieldsMessage['UF_FORUM_MES_URL_PRV'] = $tmp['UF_SONET_COM_URL_PRV'];
 						}
 					}
 

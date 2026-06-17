@@ -21,6 +21,9 @@ use \CUserTypeSQL;
 use Bitrix\Tasks\Internals\Task\Template\DependenceTable;
 use \CTasks;
 
+/**
+ * @deprecated @use Bitrix\Tasks\V2\Public\Provider\Template\TemplateProvider;
+ */
 class TemplateProvider
 {
 	use UserProviderTrait;
@@ -52,6 +55,9 @@ class TemplateProvider
 		$this->userFieldManager = $userFieldManager ?? $USER_FIELD_MANAGER;
 	}
 
+	/**
+	 * @deprecated @use Bitrix\Tasks\V2\Public\Provider\Template\TemplateProvider->getList()
+	 */
 	public function getList($arOrder = [], $arFilter = [], $arSelect = [], $arParams = [], $arNavParams = []): CDBResult
 	{
 		$this->configure($arOrder, $arFilter, $arSelect, $arParams, $arNavParams);
@@ -106,6 +112,9 @@ class TemplateProvider
 		return $cdbResult;
 	}
 
+	/**
+	 * @deprecated @use Bitrix\Tasks\V2\Public\Provider\Template\TemplateProvider->getCount()
+	 */
 	public function getCount($includeSubTemplates = false, array $arParams = []): int
 	{
 		$this->configure([], [], [], $arParams, []);
@@ -143,6 +152,9 @@ class TemplateProvider
 		return 0;
 	}
 
+	/**
+	 * @deprecated @use Bitrix\Tasks\V2\Public\Provider\Template\TemplateProvider->getById()
+	 */
 	public static function getById(int $id, array $select = ['*']): ?array
 	{
 		if ($id <= 0 || [] === $select)
@@ -585,6 +597,7 @@ class TemplateProvider
 			'XML_ID' 					=> ['FIELD' => 'TT.XML_ID', 'DEFAULT' => true],
 			'ALLOW_CHANGE_DEADLINE' 	=> ['FIELD' => 'TT.ALLOW_CHANGE_DEADLINE', 'DEFAULT' => true],
 			'ALLOW_TIME_TRACKING' 		=> ['FIELD' => 'TT.ALLOW_TIME_TRACKING', 'DEFAULT' => true],
+			'TIME_ESTIMATE' 			=> ['FIELD' => 'TT.TIME_ESTIMATE', 'DEFAULT' => true],
 			'TASK_CONTROL' 				=> ['FIELD' => 'TT.TASK_CONTROL', 'DEFAULT' => true],
 			'ADD_IN_REPORT' 			=> ['FIELD' => 'TT.ADD_IN_REPORT', 'DEFAULT' => true],
 			'GROUP_ID' 					=> ['FIELD' => 'TT.GROUP_ID', 'DEFAULT' => true],

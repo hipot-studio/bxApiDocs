@@ -529,11 +529,11 @@ class BaseButton implements Contract\Renderable
 	 * @param bool $flag
 	 * @return void
 	 */
-	public function setAirDesign(bool $flag = true): void
+	public function setAirDesign(bool $flag = true): self
 	{
 		if (defined('AIR_SITE_TEMPLATE') === false)
 		{
-			return;
+			return $this;
 		}
 
 		$this->useAirDesign = $flag;
@@ -546,6 +546,8 @@ class BaseButton implements Contract\Renderable
 		{
 			$this->removeClass('--air');
 		}
+
+		return $this;
 	}
 
 	/**

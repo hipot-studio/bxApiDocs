@@ -6,6 +6,7 @@ namespace Bitrix\Tasks\V2\Internal\Entity;
 
 use Bitrix\Tasks\V2\Internal\Entity\Template\PermissionCollection;
 use Bitrix\Tasks\V2\Internal\Entity\Template\ReplicateParams;
+use Bitrix\Tasks\V2\Internal\Entity\Template\SubTemplateCollection;
 use Bitrix\Tasks\V2\Internal\Entity\Template\Type;
 use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
 use Bitrix\Tasks\V2\Internal\Entity\Template\TagCollection;
@@ -30,11 +31,13 @@ class Template extends AbstractEntity
 		public readonly ?bool $needsControl = null,
 		public readonly ?bool $replicate = null,
 		public readonly ?ReplicateParams $replicateParams = null,
+		public readonly ?int $replicateCount = null,
 		public readonly ?Group $group = null,
 		public readonly ?int $estimatedTime = null,
 		public readonly ?array $dependsOn = null,
 		public readonly ?TagCollection $tags = null,
 		public readonly ?Task $parent = null,
+		public readonly ?array $subTemplateIds = null,
 		public readonly ?self $base = null,
 		public readonly ?Type $type = null,
 		public readonly ?array $fileIds = null,
@@ -54,6 +57,19 @@ class Template extends AbstractEntity
 		public readonly ?array $rights = null,
 		public readonly ?bool $multitask = null,
 		public readonly ?bool $requireResult = null,
+		public readonly ?int $baseTemplateId = null,
+		public readonly ?int $groupId = null,
+		public readonly ?SubTemplateCollection $subTemplates = null,
+		public readonly ?string $status = null,
+		public readonly ?string $xmlId = null,
+		public readonly ?bool $addInReport = null,
+		public readonly ?int $replicationCount = null,
+		public readonly ?int $templateChildrenCount = null,
+		public readonly ?string $scenario = null,
+		public readonly ?int $taskId = null,
+		public readonly ?int $parentId = null,
+		public readonly ?bool $descriptionInBbcode = null,
+		public readonly ?int $stageId = null,
 	)
 	{
 
@@ -82,11 +98,13 @@ class Template extends AbstractEntity
 			'needsControl' => $this->needsControl,
 			'replicate' => $this->replicate,
 			'replicateParams' => $this->replicateParams?->toArray(),
+			'replicateCount' => $this->replicateCount,
 			'group' => $this->group?->toArray(),
 			'estimatedTime' => $this->estimatedTime,
 			'dependsOn' => $this->dependsOn,
 			'tags' => $this->tags?->toArray(),
 			'parent' => $this->parent?->toArray(),
+			'subTemplateIds' => $this->subTemplateIds,
 			'base' => $this->base?->toArray(),
 			'type' => $this->type?->value,
 			'fileIds' => $this->fileIds,
@@ -106,6 +124,19 @@ class Template extends AbstractEntity
 			'rights' => $this->rights,
 			'multitask' => $this->multitask,
 			'requireResult' => $this->requireResult,
+			'groupId' => $this->groupId,
+			'baseTemplateId' => $this->baseTemplateId,
+			'subTemplates' => $this->subTemplates?->toArray(),
+			'status' => $this->status,
+			'xmlId' => $this->xmlId,
+			'addInReport' => $this->addInReport,
+			'replicationCount' => $this->replicationCount,
+			'templateChildrenCount' => $this->templateChildrenCount,
+			'scenario' => $this->scenario,
+			'taskId' => $this->taskId,
+			'parentId' => $this->parentId,
+			'descriptionInBbcode' => $this->descriptionInBbcode,
+			'stageId' => $this->stageId,
 		];
 	}
 
@@ -127,11 +158,13 @@ class Template extends AbstractEntity
 			needsControl: static::mapBool($props, 'needsControl'),
 			replicate: static::mapBool($props, 'replicate'),
 			replicateParams: static::mapValueObject($props, 'replicateParams', ReplicateParams::class),
+			replicateCount: static::mapInteger($props, 'replicateCount'),
 			group: static::mapEntity($props, 'group', Group::class),
 			estimatedTime: static::mapInteger($props, 'estimatedTime'),
 			dependsOn: static::mapArray($props, 'dependsOn'),
 			tags: static::mapEntityCollection($props, 'tags', TagCollection::class),
 			parent: static::mapEntity($props, 'parent', Task::class),
+			subTemplateIds: static::mapArray($props, 'subTemplateIds'),
 			base: static::mapEntity($props, 'base', self::class),
 			type: static::mapBackedEnum($props, 'type', Type::class),
 			fileIds: static::mapArray($props, 'fileIds'),
@@ -151,6 +184,19 @@ class Template extends AbstractEntity
 			rights: static::mapArray($props, 'rights'),
 			multitask: static::mapBool($props, 'multitask'),
 			requireResult: static::mapBool($props, 'requireResult'),
+			baseTemplateId: static::mapInteger($props, 'baseTemplateId'),
+			groupId: static::mapInteger($props, 'groupId'),
+			subTemplates: static::mapEntityCollection($props, 'subTemplates', SubTemplateCollection::class),
+			status: static::mapString($props, 'status'),
+			xmlId: static::mapString($props, 'xmlId'),
+			addInReport: static::mapBool($props, 'addInReport'),
+			replicationCount: static::mapInteger($props, 'replicationCount'),
+			templateChildrenCount: static::mapInteger($props, 'templateChildrenCount'),
+			scenario: static::mapString($props, 'scenario'),
+			taskId: static::mapInteger($props, 'taskId'),
+			parentId: static::mapInteger($props, 'parentId'),
+			descriptionInBbcode: static::mapBool($props, 'descriptionInBbcode'),
+			stageId: static::mapInteger($props, 'stageId'),
 		);
 	}
 }

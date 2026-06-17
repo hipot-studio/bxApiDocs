@@ -5,6 +5,7 @@ namespace Bitrix\Bizproc\Workflow\Entity;
 use Bitrix\Main\Application;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
@@ -29,6 +30,7 @@ use Bitrix\Main\Type\DateTime;
  */
 class WorkflowUserCommentTable extends DataManager
 {
+	use DeleteByFilterTrait;
 	public const COMMENT_TYPE_DEFAULT = 0;
 
 	public const COMMENT_TYPE_SYSTEM = 1;
@@ -152,20 +154,17 @@ class WorkflowUserCommentTable extends DataManager
 			->where('USER_ID', $userId)
 			->whereNull('WORKFLOW_USER.USER_ID')
 		;
-		$workflowIds =  array_column($query->fetchAll(), 'WORKFLOW_ID');
+		$workflowIds = array_column($query->fetchAll(), 'WORKFLOW_ID');
 
 		if (!$workflowIds)
 		{
 			return;
 		}
 
-		foreach ($workflowIds as $id)
-		{
-			static::delete([
-				'USER_ID' => $userId,
-				'WORKFLOW_ID' => $id,
-			]);
-		}
+		static::deleteByFilter([
+			'=USER_ID' => $userId,
+			'@WORKFLOW_ID' => $workflowIds,
+		]);
 	}
 
 	public static function getCountUserUnread(int $userId): int
@@ -181,26 +180,19 @@ class WorkflowUserCommentTable extends DataManager
 
 	public static function deleteByWorkflow(string $workflowId): void
 	{
-		$iterator = static::query()
-			->setSelect(['USER_ID', 'WORKFLOW_ID'])
-			->setFilter(['=WORKFLOW_ID' => $workflowId])
-			->exec()
-		;
-
-		while ($row = $iterator->fetch())
-		{
-			static::delete($row);
-		}
+		static::deleteByFilter(['=WORKFLOW_ID' => $workflowId]);
 	}
 
 	public static function deleteUsersByWorkflow(array $userIds, string $workflowId): void
 	{
-		foreach ($userIds as $userId)
+		if (empty($userIds))
 		{
-			static::delete([
-				'USER_ID' => $userId,
-				'WORKFLOW_ID' => $workflowId,
-			]);
+			return;
 		}
+
+		static::deleteByFilter([
+			'@USER_ID' => $userIds,
+			'=WORKFLOW_ID' => $workflowId,
+		]);
 	}
 }

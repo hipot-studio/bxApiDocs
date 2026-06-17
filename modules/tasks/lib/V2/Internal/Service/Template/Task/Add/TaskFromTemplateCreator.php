@@ -12,6 +12,7 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Service\Task\CopyFileService;
 use Bitrix\Tasks\V2\Internal\Service\AddTaskService;
 use Bitrix\Tasks\V2\Internal\Service\Task;
+use Bitrix\Tasks\V2\Internal\Service\Template\Recent\UpdateTemplateRecentMessage;
 use Bitrix\Tasks\V2\Internal\Service\Template\Task\Add\Config\AddTaskConfig;
 use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
 use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
@@ -32,7 +33,11 @@ class TaskFromTemplateCreator
 	 * @throws TaskNotExistsException
 	 * @throws TaskAddException
 	 */
-	public function add(Entity\Task $taskData, Entity\Template $template, AddTaskConfig $config): Entity\Task
+	public function add(
+		Entity\Task $taskData,
+		Entity\Template $template,
+		AddTaskConfig $config,
+	): Entity\Task
 	{
 		if (!$this->taskAccessService->canSave($config->userId, $taskData))
 		{
@@ -57,7 +62,11 @@ class TaskFromTemplateCreator
 		}
 
 		$task = $this->taskProvider->get(
-			new TaskParams(taskId: $task->id, userId: $config->userId),
+			new TaskParams(
+				taskId: $task->id,
+				userId: $config->userId,
+				view: $config->view,
+			),
 		);
 
 		if ($task === null)
@@ -65,6 +74,15 @@ class TaskFromTemplateCreator
 			throw new TaskNotExistsException(
 				Loc::getMessage('TASKS_CREATE_TASK_FROM_TEMPLATE_TASK_NOT_FOUND')
 			);
+		}
+
+		if ($task->flow === null)
+		{
+			(new UpdateTemplateRecentMessage(
+				userId: $config->userId,
+				templateId: $template->id,
+				action: UpdateTemplateRecentMessage::ACTION_ADD,
+			))->sendByInternalQueueId();
 		}
 
 		return $task;

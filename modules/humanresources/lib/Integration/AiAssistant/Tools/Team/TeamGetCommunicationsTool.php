@@ -18,6 +18,6 @@ class TeamGetCommunicationsTool extends NodeGetCommunicationsTool
 
 	public function getDescription(): string
 	{
-		return 'Get a list of chats, channels and collabs where the node identified by `nodeId` is added when node is a team.';
+		return 'Get chats, channels, and collabs linked to the given team.';
 	}
 }

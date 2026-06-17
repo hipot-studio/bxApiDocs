@@ -122,6 +122,12 @@ class ConvertRuleCommand extends AbstractCommand
 				if ($expression instanceof ActionExpressionDto)
 				{
 					$currentActivity = ActivityData::createFromArray($expression->activityData);
+					if (!empty($expression->auxPortId))
+					{
+						$activityArray = $currentActivity->toArray();
+						$activityArray['Properties']['auxPort'] = $expression->auxPortId;
+						$currentActivity = ActivityData::createFromArray($activityArray);
+					}
 				}
 
 				if (

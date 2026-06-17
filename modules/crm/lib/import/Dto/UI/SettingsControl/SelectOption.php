@@ -74,7 +74,7 @@ final class SelectOption
 		$selectOptions = [];
 		foreach ($statusList as $id => $title)
 		{
-			$selectOptions[] = new SelectOption($id, $title);
+			$selectOptions[] = new SelectOption((string)$id, $title);
 		}
 
 		return $selectOptions;

@@ -23,8 +23,22 @@ abstract class JsExtensionFieldAssembler extends CustomMailboxFieldAssembler
 	abstract protected function getExtensionClassName(): string;
 	abstract protected function getRenderParams(array $rawValue): array;
 
+	/**
+	 * @param array $rawValue Raw row data with IS_CONNECTION_REQUEST flag.
+	 * @return string HTML placeholder for connection request rows.
+	 */
+	protected function prepareConnectionRequestPlaceholder(array $rawValue): string
+	{
+		return '<div class="mail__mailbox-list_mailbox-connection-request_placeholder"><i class="ui-icon-set --o-hourglass lalala"></i></div>';
+	}
+
 	protected function prepareColumn(mixed $value): mixed
 	{
+		if (!empty($value['IS_CONNECTION_REQUEST']) && empty($value['RENDER_AS_JS']))
+		{
+			return $this->prepareConnectionRequestPlaceholder($value);
+		}
+
 		if (!$this->extensionName)
 		{
 			return $value;

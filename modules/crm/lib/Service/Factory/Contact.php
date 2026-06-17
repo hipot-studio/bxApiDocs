@@ -370,6 +370,13 @@ class Contact extends Service\Factory
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Multiple],
 				'CLASS' => Field\Observers::class,
 			],
+			Item::FIELD_NAME_WEBFORM_ID => [
+				'TYPE' => Field::TYPE_CRM_WEBFORM,
+				'ATTRIBUTES' => [
+					\CCrmFieldInfoAttr::NotDisplayed,
+					\CCrmFieldInfoAttr::Immutable,
+				],
+			],
 			Item::FIELD_LAST_COMMUNICATION_TIME => [
 				'TYPE' => Field::TYPE_STRING,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::ReadOnly],

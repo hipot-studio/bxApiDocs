@@ -10,8 +10,7 @@ use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
 
 class ClearZombieInstanceAgent extends BaseAgent
 {
-	private const CLEAR_LOG_SELECT_LIMIT = 50000;
-	private const CLEAR_LOG_DELETE_LIMIT = 1000;
+	private const CLEAR_LOG_SELECT_LIMIT = 50;
 	private const MAX_DAYS_APPEND = 7;
 	private const AGENT_MIN_INTERVAL = 60;
 	private const AGENT_INTERVAL = 15 * self::AGENT_MIN_INTERVAL;
@@ -40,9 +39,14 @@ class ClearZombieInstanceAgent extends BaseAgent
 		$ids = $query->exec()->fetchAll();
 		$idsCount = count($ids);
 
-		while ($partIds = array_splice($ids, 0, static::CLEAR_LOG_DELETE_LIMIT))
+		if ($idsCount > 0)
 		{
-			WorkflowInstanceTable::deleteByFilter(['@ID' => array_column($partIds, 'ID')]);
+			WorkflowInstanceTable::deleteByFilter(['@ID' => array_column($ids, 'ID')]);
+
+			foreach ($ids as $id)
+			{
+				\CBPTaskService::deleteByWorkflow($id['ID'], \CBPTaskStatus::Running);
+			}
 		}
 
 		return $idsCount;

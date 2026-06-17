@@ -12,13 +12,14 @@ use Bitrix\Bizproc\Public\Command\StorageItem\AddStorageItemCommand;
 use Bitrix\Bizproc\Public\Command\StorageItem\UpdateStorageItemCommand;
 use Bitrix\Bizproc\Public\Provider\StorageFieldProvider;
 use Bitrix\Bizproc\Public\Provider\StorageItemProvider;
-use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
+use Bitrix\Bizproc\Activity\BaseActivity;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Internal\Service\StorageField\FieldService;
+use Bitrix\Bizproc\Internal\Service\StorageActivity\StorageActivityService;
 
 /**
  * @property-write ?int StorageId
@@ -30,7 +31,7 @@ use Bitrix\Bizproc\Internal\Service\StorageField\FieldService;
  * @property-write ?string RewriteMode
  * @property-write string IsExpanded
  */
-class CBPWriteDataStorageActivity extends CBPActivity
+class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurableActivity
 {
 	use \Bitrix\Bizproc\Activity\Mixins\EntityFilter;
 
@@ -38,6 +39,8 @@ class CBPWriteDataStorageActivity extends CBPActivity
 	private const MODE_NEW_ITEM = 'newItem';
 	private const MODE_MERGE_FIELDS = 'mergeFields';
 	private const MODE_REWRITE_FIELDS = 'rewriteFields';
+	private const FIELD_CONTROL_PREFIX = 'field_values_';
+	private const FIELD_CONTROL_SUFFIX = '__bpctl';
 
 	public function __construct($name)
 	{
@@ -52,6 +55,11 @@ class CBPWriteDataStorageActivity extends CBPActivity
 			'RewriteMode' => null,
 			'IsExpanded' => 'Y',
 		];
+	}
+
+	protected static function getFileName(): string
+	{
+		return __FILE__;
 	}
 
 	public function execute()
@@ -86,7 +94,7 @@ class CBPWriteDataStorageActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$storageFields = self::getSystemFields() + self::getStorageFields((int)$this->StorageId);
+		$storageFields = self::getStorageFields((int)$this->StorageId);
 		$storageFieldMap = array_column($storageFields, null, 'FieldName');
 		$fieldsData = $this->filterStorageFields($storageFieldMap, $fieldValue);
 
@@ -119,11 +127,13 @@ class CBPWriteDataStorageActivity extends CBPActivity
 		$storageId = (int)$this->StorageId;
 		if ($storageId <= 0)
 		{
-			$provider = new StorageTypeProvider();
-			$type = $provider->getType(['CODE' => $this->StorageCode], ['ID']);
-			if ($type)
+			$rawStorageCode = $this->StorageCode;
+			$storageCode = CBPHelper::hasStringRepresentation($rawStorageCode) ? (string)$rawStorageCode : '';
+
+			$resolved = StorageActivityService::resolveStorageId(null, $storageCode);
+			if ($resolved > 0)
 			{
-				$this->StorageId = $type->getId();
+				$this->StorageId = $resolved;
 			}
 			else
 			{
@@ -134,7 +144,7 @@ class CBPWriteDataStorageActivity extends CBPActivity
 
 	private function createNewStorageItem(array $fieldsData, int $author): Result
 	{
-		[$moduleId, $entity, $documentId] = $this->getComplexDocumentId();
+		[, , $documentId] = $this->getComplexDocumentId();
 		$templateId = $this->getWorkflowTemplateId();
 		$workflowId = $this->getWorkflowInstanceId();
 
@@ -142,7 +152,6 @@ class CBPWriteDataStorageActivity extends CBPActivity
 			->setDocumentId($documentId)
 			->setWorkflowId($workflowId)
 			->setTemplateId($templateId)
-			->setCode(CBPHelper::stringify($fieldsData['code'] ?? ''))
 			->setValueFields($fieldsData);
 
 		$addItemCommand = new AddStorageItemCommand(
@@ -161,7 +170,7 @@ class CBPWriteDataStorageActivity extends CBPActivity
 		bool $mergeMode = true
 	): Result
 	{
-		[$moduleId, $entity, $documentId] = $this->getComplexDocumentId();
+		[, , $documentId] = $this->getComplexDocumentId();
 		$templateId = $this->getWorkflowTemplateId();
 		$workflowId = $this->getWorkflowInstanceId();
 		$storageId = (int)$this->StorageId;
@@ -188,11 +197,6 @@ class CBPWriteDataStorageActivity extends CBPActivity
 
 		if ($mergeMode)
 		{
-			if (!empty(CBPHelper::stringify($fieldsData['code'] ?? '')) && !$existingItem->getCode())
-			{
-				$existingItem->setCode(CBPHelper::stringify($fieldsData['code']));
-			}
-
 			$currentData = $existingItem->getValueFields();
 			$result = $currentData;
 			foreach ($currentData as $key => $value)
@@ -213,7 +217,7 @@ class CBPWriteDataStorageActivity extends CBPActivity
 				{
 					// Append new elements to the array
 					$value = is_array($value) ? $value : [$value];
-					$newValue= is_array($newValue) ? $newValue : [$newValue];
+					$newValue = is_array($newValue) ? $newValue : [$newValue];
 					$merged = array_merge($value, $newValue);
 					$result[$key] = array_values(array_filter($merged, static fn($v) => $v !== null && $v !== ''));
 				}
@@ -224,11 +228,6 @@ class CBPWriteDataStorageActivity extends CBPActivity
 		}
 		else
 		{
-			if (!empty(CBPHelper::stringify($fieldsData['code'] ?? '')))
-			{
-				$existingItem->setCode(CBPHelper::stringify($fieldsData['code']));
-			}
-
 			$existingItem->setValueFields($fieldsData);
 		}
 
@@ -307,50 +306,15 @@ class CBPWriteDataStorageActivity extends CBPActivity
 		return $value;
 	}
 
-	public static function getPropertiesDialog(
-		$documentType,
-		$activityName,
-		$arWorkflowTemplate,
-		$arWorkflowParameters,
-		$arWorkflowVariables,
-		$arCurrentValues = null,
-		$formName = '',
-		$popupWindow = null,
-		$siteId = ''
-	)
+	public static function getPropertiesDialogMap(?PropertiesDialog $dialog = null): array
 	{
-		$dialog = new PropertiesDialog(__FILE__, [
-			'documentType' => $documentType,
-			'activityName' => $activityName,
-			'workflowTemplate' => $arWorkflowTemplate,
-			'workflowParameters' => $arWorkflowParameters,
-			'workflowVariables' => $arWorkflowVariables,
-			'currentValues' => $arCurrentValues,
-			'formName' => $formName,
-			'siteId' => $siteId,
-		]);
-
-		$dialog->setMap(static::getPropertiesMap($documentType));
-		$storageId = $dialog->getCurrentValue('StorageId');
-		if ($storageId)
+		$context = [];
+		if ($dialog !== null)
 		{
-			$dynamicFields = self::getStorageFields((int)$storageId);
-			$systemFields = array_values(self::getSystemFields());
-			$runtimeData = [
-				'fields' => $dynamicFields,
-				'systemFields' => $systemFields,
-			];
-
-			$dialog->setRuntimeData(array_merge($dialog->getRuntimeData(), $runtimeData));
-		}
-		else
-		{
-			$dialog->setRuntimeData(array_merge($dialog->getRuntimeData(), [
-				'systemFields' => array_values(self::getSystemFields())
-			]));
+			$context = ['Properties' => $dialog->getCurrentValues()];
 		}
 
-		return $dialog;
+		return static::getPropertiesMap([], $context);
 	}
 
 	protected static function getFilteringFieldsMap($storageId): array
@@ -395,20 +359,6 @@ class CBPWriteDataStorageActivity extends CBPActivity
 		return $map;
 	}
 
-	private static function getStorageTypes(): array
-	{
-		$options = [];
-
-		$provider = new StorageTypeProvider();
-		$storages = $provider->getAllForActivity();
-
-		foreach ($storages as $storage)
-		{
-			$options[$storage->getId()] = $storage->getTitle();
-		}
-
-		return $options;
-	}
 
 	protected function findStorageItemId(): int
 	{
@@ -421,8 +371,13 @@ class CBPWriteDataStorageActivity extends CBPActivity
 		$provider = new StorageItemProvider((int)$this->StorageId);
 
 		$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
-		$fieldsMap = static::getFilteringFieldsMap($this->StorageId);
+		$fieldsMap = StorageActivityService::getFilteringFieldsMap((int)$this->StorageId);
 		$filter = $this->getOrmFilter($conditionGroup, $documentType, $fieldsMap);
+		if (!$this->isOrmFilterValid() || StorageActivityService::isOrmFilterEmpty($filter))
+		{
+			return 0;
+		}
+
 		$item = $provider->getItems([
 			'filter' => $filter,
 			'select' => ['ID'],
@@ -435,57 +390,66 @@ class CBPWriteDataStorageActivity extends CBPActivity
 
 	protected static function getPropertiesMap(array $documentType, array $context = []): array
 	{
-		$provider = new StorageTypeProvider();
-		$storages = $provider->getAllForActivity();
+		$dynamicFilterFields = $context['Properties']['DynamicFilterFields'] ?? null;
+		$properties = $context['Properties'] ?? [];
+		$storageId = (int)($properties['StorageId'] ?? 0);
+		$storages = StorageActivityService::getStorageTypes();
+		$storageIds = array_map('intval', array_keys($storages));
 
-		$options = [];
-
-		foreach ($storages as $storage)
-		{
-			$options[] = [
-				'id' => (int)$storage->getId(),
-				'title' => $storage->getTitle(),
-			];
-		}
-
+		$filteringFields = StorageActivityService::getFilteringFieldsMapByStorageIds($storageIds);
 		$filteringFieldsMap = [
-			0 => array_values(static::getFilteringFieldsMap(0))
+			0 => array_values(StorageActivityService::getFilteringFieldsMap(0)),
 		];
-		$storages = static::getStorageTypes();
 
 		foreach ($storages as $id => $title)
 		{
-			$filteringFieldsMap[$id] = array_values(static::getFilteringFieldsMap($id));
+			$filteringFieldsMap[$id] = array_values($filteringFields[$id] ?? []);
+		}
+		$writeFieldsMap = [];
+		if ($storageId > 0)
+		{
+			$writeFieldsMap[$storageId] = self::getStorageFields($storageId);
+		}
+		$currentFieldValues = [];
+		if (isset($properties['Fields']) && is_array($properties['Fields']))
+		{
+			$currentFieldValues = array_column($properties['Fields'], 'Value', 'FieldName');
 		}
 
 		return [
 			'Author' => [
 				'Name' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_RECORD_AUTHOR'),
 				'FieldName' => 'Author',
-				'Type' => 'user',
+				'Type' => FieldType::USER,
 				'Required' => true,
 				'AllowSelection' => true,
 			],
 			'StorageId' => [
 				'Name' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_SELECT_STORAGE'),
-				'FieldName' => 'StorageId',
-				'Type' => 'select',
+				'FieldName' => 'storage_id',
+				'Type' => FieldType::ENTITYSELECTOR,
+				'Settings' => [
+					'entity' => ['id' => 'bizproc-storage'],
+					'dialogOptions' => [
+						'width' => 445,
+						'height' => 300,
+					],
+				],
 				'Required' => false,
-				'Options' => $options,
 				'AllowSelection' => false,
 			],
 			'StorageCode' => [
 				'Name' => '',
 				'Description' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_STORAGE_CODE'),
 				'FieldName' => 'StorageCode',
-				'Type' => 'string',
+				'Type' => FieldType::STRING,
 				'Required' => false,
-				'AllowSelection' => true,
+				'Hidden' => true,
 			],
 			'RewriteMode' => [
 				'Name' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_RECORD_MODE'),
 				'FieldName' => 'RewriteMode',
-				'Type' => 'select',
+				'Type' => FieldType::SELECT,
 				'Required' => true,
 				'AllowSelection' => false,
 				'Options' => [
@@ -496,21 +460,48 @@ class CBPWriteDataStorageActivity extends CBPActivity
 				'Default' => self::MODE_NEW_ITEM,
 			],
 			'DynamicFilterFields' => [
-				'Name' => 'ID',
-				'FieldName' => 'DynamicFilterFields',
-				'Map' => $filteringFieldsMap,
+				'Name' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_FILTER_FIELDS_PROPERTY'),
+				'FieldName' => 'filter_fields',
+				'Type' => FieldType::CUSTOM,
+				'Required' => false,
+				'AllowSelection' => true,
+				'CustomType' => 'filterFields',
+				'Options' => [
+					'documentType' => \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType(),
+					'filteringFieldsPrefix' => 'filter_fields_',
+					'filterFieldsMap' => $filteringFieldsMap,
+					'conditions' => $dynamicFilterFields,
+					'headCaption' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_FILTER_FIELDS_PROPERTY'),
+					'collapsedCaption' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_FILTER_FIELDS_COLLAPSED_TEXT'),
+				],
+			],
+			'WriteFields' => [
+				'Name' => '',
+				'FieldName' => 'write_fields',
+				'Type' => FieldType::CUSTOM,
+				'Required' => false,
+				'AllowSelection' => true,
+				'CustomType' => 'writeFields',
+				'Options' => [
+					'documentType' => \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType(),
+					'writeFieldsMap' => $writeFieldsMap,
+					'currentFieldValues' => $currentFieldValues,
+					'addFieldCaption' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_FIELDS_ADD_FIELD'),
+					'newFieldCaption' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_CREATE_NEW_FIELD'),
+					'newStorageCaption' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_CREATE_NEW_STORAGE'),
+				],
 			],
 			'Fields' => [
 				'Name' => 'Fields',
 				'FieldName' => 'Fields',
-				'Type' => 'select',
+				'Type' => FieldType::SELECT,
 				'Required' => false,
 				'AllowSelection' => false,
 				'Hidden' => true,
 			],
 			'IsExpanded' => [
 				'Name' => '',
-				'FieldName' => 'IsExpanded',
+				'FieldName' => 'is_expanded',
 				'Type' => FieldType::STRING,
 				'Required' => false,
 				'AllowSelection' => false,
@@ -520,90 +511,139 @@ class CBPWriteDataStorageActivity extends CBPActivity
 		];
 	}
 
-	public static function getPropertiesDialogValues(
-		$documentType,
-		$activityName,
-		&$workflowTemplate,
-		&$workflowParameters,
-		&$workflowVariables,
-		$currentValues,
-		&$errors
-	)
+	protected static function extractPropertiesValues(PropertiesDialog $dialog, array $fieldsMap): Result
 	{
-		$errors = [];
-		$properties = ['FieldValue' => []];
+		$simpleMap = $fieldsMap;
+		unset($simpleMap['DynamicFilterFields'], $simpleMap['WriteFields'], $simpleMap['Fields']);
+		$result = parent::extractPropertiesValues($dialog, $simpleMap);
 
-		$runtime = CBPRuntime::GetRuntime();
-		$runtime->StartRuntime();
-		/** @var CBPDocumentService $documentService */
-		$documentService = $runtime->getService('DocumentService');
-
-		$fieldsMap = static::getPropertiesMap($documentType);
-		foreach ($fieldsMap as $propertyKey => $fieldProperties)
+		if (!$result->isSuccess())
 		{
-			$field = $documentService->getFieldTypeObject($documentType, $fieldProperties);
-			if (!$field || $propertyKey === 'Fields')
-			{
-				continue;
-			}
-
-			$properties[$fieldProperties['FieldName']] = $field->extractValue(
-				['Field' => $fieldProperties['FieldName']],
-				$currentValues,
-				$errors,
-			);
+			return $result;
 		}
 
-		$fields = [];
-		$fieldKeys = $currentValues['field_keys'] ?? [];
-		$fieldValues = $currentValues['field_values'] ?? [];
-		foreach ($fieldKeys as $index => $key)
-		{
-			$fields[$key] = [
-				'Value' => $fieldValues[$index] ?? null,
-				'FieldName' => $key,
-			];
-		}
+		$currentValues = $result->getData();
+		$formValues = $dialog->getCurrentValues();
 
-		if (!empty($fields))
+		$currentValues['DynamicFilterFields'] = static::extractFilterFromProperties($dialog, $fieldsMap)->getData();
+
+		$fieldKeys = static::normalizeFieldKeys($formValues['field_keys'] ?? null);
+
+		if (!empty($fieldKeys))
 		{
-			$properties['Fields'] = $fields;
+			$currentValues['Fields'] = self::extractFlatFieldValues($fieldKeys, $dialog, $currentValues);
 		}
 		else
 		{
-			$properties['Fields'] = self::getStorageFieldValues(
-				$documentType,
-				$currentValues,
+			$errors = [];
+			$fallbackValues = $formValues;
+			$fallbackValues['StorageId'] = StorageActivityService::resolveStorageId(
+				isset($currentValues['StorageId']) ? (int)$currentValues['StorageId'] : null,
+				(string)($currentValues['StorageCode'] ?? ''),
+			);
+			$currentValues['Fields'] = self::getStorageFieldValues(
+				$dialog->getDocumentType(),
+				$fallbackValues,
 				$errors,
-				$documentService,
+				static::getDocumentService(),
 			);
 		}
 
-		$errors = self::validateProperties(
-			$properties,
-			new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser),
-		);
+		$currentValues['FieldValue'] = array_column($currentValues['Fields'], 'Value', 'FieldName');
 
-		if ($errors)
+		$result->setData($currentValues);
+
+		return $result;
+	}
+
+	private static function normalizeFieldKeys(mixed $fieldKeys): array
+	{
+		if (!is_array($fieldKeys))
 		{
-			return false;
+			return [];
 		}
 
-		$dialog = new PropertiesDialog(__FILE__, [
-			'documentType' => $documentType,
-			'activityName' => $activityName,
-			'workflowTemplate' => $workflowTemplate,
-			'workflowParameters' => $workflowParameters,
-			'workflowVariables' => $workflowVariables,
-			'currentValues' => $currentValues,
-		]);
+		$result = [];
+		foreach ($fieldKeys as $key)
+		{
+			if (is_string($key) && $key !== '' && !isset($result[$key]))
+			{
+				$result[$key] = $key;
+			}
+		}
 
-		$properties['FieldValue'] = array_column($properties['Fields'], 'Value', 'FieldName');
-		$currentActivity = &CBPWorkflowTemplateLoader::FindActivityByName($workflowTemplate, $activityName);
-		$properties['DynamicFilterFields'] = static::extractFilterFromProperties($dialog, $fieldsMap)->getData();
-		$currentActivity['Properties'] = $properties;
+		return array_values($result);
+	}
 
-		return true;
+	private static function extractFlatFieldValues(
+		array $fieldKeys,
+		PropertiesDialog $dialog,
+		array $currentValues,
+	): array
+	{
+		$resolvedStorageId = StorageActivityService::resolveStorageId(
+			isset($currentValues['StorageId']) ? (int)$currentValues['StorageId'] : null,
+			(string)($currentValues['StorageCode'] ?? ''),
+		);
+
+		$storageFieldMap = $resolvedStorageId > 0
+			? array_column(self::getStorageFields($resolvedStorageId), null, 'FieldName')
+			: []
+		;
+
+		$documentType = $dialog->getDocumentType();
+		$formValues = $dialog->getCurrentValues();
+		$documentService = static::getDocumentService();
+		$fields = [];
+
+		foreach ($fieldKeys as $fieldName)
+		{
+			$controlName = self::FIELD_CONTROL_PREFIX . $fieldName . self::FIELD_CONTROL_SUFFIX;
+
+			if (isset($storageFieldMap[$fieldName]))
+			{
+				$fieldProperties = $storageFieldMap[$fieldName];
+				$typeObject = $documentService->getFieldTypeObject($documentType, $fieldProperties);
+
+				if ($typeObject)
+				{
+					$value = $typeObject->extractValue(
+						['Field' => $controlName],
+						$formValues,
+					);
+
+					$prop = $typeObject->getProperty();
+					$prop['FieldName'] = $fieldName;
+					$prop['Value'] = $value;
+					$fields[$fieldName] = $prop;
+
+					continue;
+				}
+			}
+
+			$fields[$fieldName] = [
+				'FieldName' => $fieldName,
+				'Value' => self::readRawFieldValue($controlName, $formValues),
+			];
+		}
+
+		return $fields;
+	}
+
+	private static function readRawFieldValue(string $controlName, array $formValues): mixed
+	{
+		$value = $formValues[$controlName] ?? null;
+
+		if (CBPHelper::isEmptyValue($value))
+		{
+			$text = $formValues[$controlName . '_text'] ?? null;
+			if (is_string($text) && \CBPActivity::isExpression($text))
+			{
+				return $text;
+			}
+		}
+
+		return $value;
 	}
 
 	public static function validateProperties(
@@ -613,7 +653,7 @@ class CBPWriteDataStorageActivity extends CBPActivity
 	{
 		$errors = [];
 
-		$fieldsMap = static::getPropertiesMap($arTestProperties, ['RewriteMode' => $arTestProperties['RewriteMode'] ?? '']);
+		$fieldsMap = static::getPropertiesMap([], ['Properties' => $arTestProperties]);
 		foreach ($fieldsMap as $propertyKey => $fieldProperties)
 		{
 			if (
@@ -682,7 +722,7 @@ class CBPWriteDataStorageActivity extends CBPActivity
 		}
 
 		$fields = [];
-		$fieldMap = self::getSystemFields() + self::getStorageFields((int)$storageId);
+		$fieldMap = self::getStorageFields((int)$storageId);
 		foreach ($fieldMap as $fieldProperties)
 		{
 			$field = $documentService->getFieldTypeObject($documentType, $fieldProperties);
@@ -717,20 +757,6 @@ class CBPWriteDataStorageActivity extends CBPActivity
 		}
 
 		return $result;
-	}
-
-	private static function getSystemFields(): array
-	{
-		return [
-			'ItemCode' => [
-				'Id' => 'code',
-				'Name' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_RECORD_CODE'),
-				'FieldName' => 'code',
-				'Type' => 'string',
-				'Required' => false,
-				'AllowSelection' => true,
-			],
-		];
 	}
 
 	private function getComplexDocumentId(): array

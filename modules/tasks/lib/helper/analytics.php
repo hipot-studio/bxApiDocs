@@ -24,12 +24,15 @@ class Analytics extends Common
 	public const TASK_TYPE = 'task';
 	public const COMMENT_TYPE = 'comment';
 	public const NOTIFICATION_TYPE = 'notification';
+	public const AUTO_TIME_TRACKING_TYPE = 'auto';
+	public const MANUAL_TIME_TRACKING_TYPE = 'manual';
 
 	public const STATUS_SUCCESS = 'success';
 	public const STATUS_ERROR = 'error';
 
 	public const EVENT = [
 		'task_create' => 'task_create',
+		'task_delete' => 'task_delete',
 		'task_view' => 'task_view',
 		'task_complete' => 'task_complete',
 		'comment_add' => 'comment_add',
@@ -55,6 +58,8 @@ class Analytics extends Common
 		'click_task_link' => 'click_task_link',
 		'task_delegation' => 'task_delegation',
 		'notification_sent' => 'notification_sent',
+		'pattern_task_create' => 'pattern_task_create',
+		'time_tracking' => 'time_tracking',
 	];
 
 	public const SECTION = [
@@ -73,6 +78,7 @@ class Analytics extends Common
 		'collab' => 'collab',
 		'onboarding_notification' => 'onboarding_notification',
 		'templates' => 'templates',
+		'bizproc' => 'bizproc',
 	];
 
 	public const SUB_SECTION = [
@@ -96,6 +102,9 @@ class Analytics extends Common
 		'copilot_advice' => 'copilot_advice',
 		'existing' => 'existing',
 		'ai' => 'ai',
+		'rest' => 'rest',
+		'automation' => 'automation',
+		'replication' => 'replication',
 	];
 
 	public const ELEMENT = [
@@ -129,6 +138,8 @@ class Analytics extends Common
 		'delegation_button' => 'delegation_button',
 		'context_menu_subtask' => 'context_menu_subtask',
 		'context_menu_templatetask' => 'context_menu_templatetask',
+		'auto' => 'auto',
+		'multi_action' => 'multi_action',
 	];
 
 	/**
@@ -193,6 +204,34 @@ class Analytics extends Common
 			$event,
 			self::TOOL,
 			$category,
+		);
+
+		$this->sendAnalytics(
+			$analyticsEvent,
+			$section,
+			$element,
+			$subSection,
+			$status,
+			self::TASK_TYPE,
+			$params,
+		);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 */
+	public function onTaskDelete(
+		?string $section,
+		?string $element,
+		?string $subSection,
+		bool $status,
+		array $params = [],
+	): void
+	{
+		$analyticsEvent = new AnalyticsEvent(
+			self::EVENT['task_delete'],
+			self::TOOL,
+			self::TASK_CATEGORY,
 		);
 
 		$this->sendAnalytics(
@@ -285,6 +324,32 @@ class Analytics extends Common
 			$subSection,
 			true,
 			self::TASK_TYPE,
+			$params,
+		);
+	}
+
+	public function onTimeTrackingAdd(
+		string $event,
+		?string $section = null,
+		?string $element = null,
+		?string $subSection = null,
+		?string $type = null,
+		array $params = [],
+	): void
+	{
+		$analyticsEvent = new AnalyticsEvent(
+			$event,
+			self::TOOL,
+			self::TASK_CATEGORY,
+		);
+
+		$this->sendAnalytics(
+			$analyticsEvent,
+			$section,
+			$element,
+			$subSection,
+			true,
+			$type,
 			$params,
 		);
 	}

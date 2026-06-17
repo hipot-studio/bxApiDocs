@@ -60,16 +60,40 @@ class ActionDictionary
 		'deadline' => Access\ActionDictionary::ACTION_TASK_DEADLINE,
 		'detachParent' => Access\ActionDictionary::ACTION_TASK_DETACH_PARENT,
 		'delegate' => Access\ActionDictionary::ACTION_TASK_DELEGATE,
+		'changeResponsible' => Access\ActionDictionary::ACTION_TASK_CHANGE_RESPONSIBLE,
+		'start' => Access\ActionDictionary::ACTION_TASK_START,
+		'complete' => Access\ActionDictionary::ACTION_TASK_COMPLETE,
+		'defer' => Access\ActionDictionary::ACTION_TASK_DEFER,
+		'pause' => Access\ActionDictionary::ACTION_TASK_PAUSE,
+		'renew' => Access\ActionDictionary::ACTION_TASK_RENEW,
+		'createSubtask' => Access\ActionDictionary::ACTION_TASK_CREATE_SUB_TASK,
+		'remove' => Access\ActionDictionary::ACTION_TASK_REMOVE,
 	];
 
 	public const RELATED_TASK_ACTIONS = [
 		'deadline' => Access\ActionDictionary::ACTION_TASK_DEADLINE,
 		'detachRelated' => Access\ActionDictionary::ACTION_TASK_DETACH_RELATED,
+		'detachParent' => Access\ActionDictionary::ACTION_TASK_DETACH_PARENT,
 		'delegate' => Access\ActionDictionary::ACTION_TASK_DELEGATE,
+		'changeResponsible' => Access\ActionDictionary::ACTION_TASK_CHANGE_RESPONSIBLE,
+		'start' => Access\ActionDictionary::ACTION_TASK_START,
+		'complete' => Access\ActionDictionary::ACTION_TASK_COMPLETE,
+		'defer' => Access\ActionDictionary::ACTION_TASK_DEFER,
+		'pause' => Access\ActionDictionary::ACTION_TASK_PAUSE,
+		'renew' => Access\ActionDictionary::ACTION_TASK_RENEW,
+		'createSubtask' => Access\ActionDictionary::ACTION_TASK_CREATE_SUB_TASK,
+		'remove' => Access\ActionDictionary::ACTION_TASK_REMOVE,
 	];
 
 	public const GANTT_TASK_ACTIONS = [
 		'changeDependence' => Access\ActionDictionary::ACTION_TASK_CHANGE_GANTT_DEPENDENCE,
+		'start' => Access\ActionDictionary::ACTION_TASK_START,
+		'complete' => Access\ActionDictionary::ACTION_TASK_COMPLETE,
+		'defer' => Access\ActionDictionary::ACTION_TASK_DEFER,
+		'pause' => Access\ActionDictionary::ACTION_TASK_PAUSE,
+		'renew' => Access\ActionDictionary::ACTION_TASK_RENEW,
+		'createSubtask' => Access\ActionDictionary::ACTION_TASK_CREATE_SUB_TASK,
+		'remove' => Access\ActionDictionary::ACTION_TASK_REMOVE,
 	];
 
 	public const RESULT_ACTIONS = [
@@ -110,10 +134,24 @@ class ActionDictionary
 	];
 
 	public const SUBTEMPLATE_ACTIONS = [
+		'edit' => Access\ActionDictionary::ACTION_TEMPLATE_EDIT,
 		'detachParent' => Access\ActionDictionary::ACTION_TEMPLATE_DETACH_PARENT,
+		'remove' => Access\ActionDictionary::ACTION_TEMPLATE_REMOVE,
 	];
 
 	public const RELATED_TASK_TEMPLATE_ACTIONS = [
+		'edit' => Access\ActionDictionary::ACTION_TEMPLATE_EDIT,
 		'detachRelated' => Access\ActionDictionary::ACTION_TEMPLATE_DETACH_RELATED_TASK,
+		'deadline' => Access\ActionDictionary::ACTION_TASK_DEADLINE,
+		'detachParent' => Access\ActionDictionary::ACTION_TASK_DETACH_PARENT,
+		'delegate' => Access\ActionDictionary::ACTION_TASK_DELEGATE,
+		'changeResponsible' => Access\ActionDictionary::ACTION_TASK_CHANGE_RESPONSIBLE,
+		'start' => Access\ActionDictionary::ACTION_TASK_START,
+		'complete' => Access\ActionDictionary::ACTION_TASK_COMPLETE,
+		'defer' => Access\ActionDictionary::ACTION_TASK_DEFER,
+		'pause' => Access\ActionDictionary::ACTION_TASK_PAUSE,
+		'renew' => Access\ActionDictionary::ACTION_TASK_RENEW,
+		'createSubtask' => Access\ActionDictionary::ACTION_TASK_CREATE_SUB_TASK,
+		'remove' => Access\ActionDictionary::ACTION_TASK_REMOVE,
 	];
 }

@@ -17,6 +17,8 @@ interface UserRepository
 
 	public function findUsersByIds(array $ids): UserCollection;
 
+	public function findUsersByFilter(array $filter): UserCollection;
+
 	public function findUsersByEmails(array $emails): UserCollection;
 
 	public function findUsersByLoginsAndEmails(array $emails): UserCollection;

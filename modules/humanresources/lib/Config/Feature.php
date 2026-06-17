@@ -3,6 +3,7 @@
 namespace Bitrix\HumanResources\Config;
 
 use Bitrix\HumanResources\Internals\Trait\SingletonTrait;
+use Bitrix\HumanResources\Service\Container;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 
@@ -39,6 +40,13 @@ class Feature
 	public function isCollabsAvailable(): bool
 	{
 		return true; // enabled in 25.1000.0
+	}
+
+	public function isProjectsAvailable(): bool
+	{
+		$collabService = Container::getCollabService();
+
+		return $collabService->isProjectsAvailable();
 	}
 
 	public function isDeputyApprovesBPAvailable(): bool

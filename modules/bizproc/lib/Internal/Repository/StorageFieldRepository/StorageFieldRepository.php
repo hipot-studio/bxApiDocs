@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Internal\Repository\StorageFieldRepository;
 
 use Bitrix\Bizproc\Internal\Entity;
@@ -16,6 +18,8 @@ use Bitrix\Main\Provider\Params\FilterInterface;
 
 class StorageFieldRepository implements StorageFieldRepositoryInterface
 {
+	private const CACHE_TTL = 86400;
+
 	public function __construct(private readonly StorageFieldMapper $mapper)
 	{
 	}
@@ -89,12 +93,36 @@ class StorageFieldRepository implements StorageFieldRepositoryInterface
 		)->getFirstCollectionItem();
 	}
 
-	public function getByStorageId(int $storageId, array $select = []): Entity\StorageField\StorageFieldCollection
+	public function getByStorageId(int $storageId, array $select = [], bool $useCache = false): Entity\StorageField\StorageFieldCollection
 	{
 		$query =
 			StorageFieldTable::query()
 				->setSelect($select ?: ['*'])
 				->where('STORAGE_ID', $storageId)
+		;
+
+		if ($useCache)
+		{
+			$query->setCacheTtl(self::CACHE_TTL);
+		}
+
+		$ormStorageFields = QueryHelper::decompose($query);
+
+		/** @var EO_StorageField_Collection $ormStorageFields */
+		return $this->convertStorageFieldsFromOrm($ormStorageFields);
+	}
+
+	public function getByStorageIds(array $storageIds, array $select = []): Entity\StorageField\StorageFieldCollection
+	{
+		if (empty($storageIds))
+		{
+			return new Entity\StorageField\StorageFieldCollection();
+		}
+
+		$query =
+			StorageFieldTable::query()
+				->setSelect($select ?: ['*'])
+				->whereIn('STORAGE_ID', $storageIds)
 		;
 
 		$ormStorageFields = QueryHelper::decompose($query);

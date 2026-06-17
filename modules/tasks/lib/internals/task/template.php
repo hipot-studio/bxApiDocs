@@ -166,6 +166,8 @@ class TemplateTable extends DataManager
 
 			(new IntegerField('TASK_ID')),
 
+			(new IntegerField('STAGE_ID')),
+
 			(new IntegerField('TPARAM_TYPE')),
 
 			(new IntegerField('TPARAM_REPLICATION_COUNT'))
@@ -228,6 +230,18 @@ class TemplateTable extends DataManager
 				'PARAMS',
 				TemplateParameterTable::class,
 				'TEMPLATE'
+			))->configureJoinType(Join::TYPE_LEFT),
+
+			(new Reference(
+				'DIRECT_PARENT',
+				\Bitrix\Tasks\Internals\Task\Template\DependenceTable::class,
+				Join::on('this.ID', 'ref.TEMPLATE_ID')->where('ref.DIRECT', 1)
+			))->configureJoinType(Join::TYPE_LEFT),
+
+			(new OneToMany(
+				'SUB_TEMPLATES',
+				\Bitrix\Tasks\Internals\Task\Template\DependenceTable::class,
+				'PARENT_TEMPLATE'
 			))->configureJoinType(Join::TYPE_LEFT),
 
 			// deprecated

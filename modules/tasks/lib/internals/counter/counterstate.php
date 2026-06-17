@@ -8,6 +8,7 @@
 
 namespace Bitrix\Tasks\Internals\Counter;
 
+use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\UserService;
 
@@ -17,6 +18,7 @@ abstract class CounterState implements \Iterator
 
 	protected int $userId;
 	protected array $counters = [];
+	protected array $mentions = [];
 
 	/**
 	 * CounterState constructor.
@@ -118,9 +120,10 @@ abstract class CounterState implements \Iterator
 	 */
 	protected function updateRawCounters(): void
 	{
+		$this->mentions = [];
 		$this->counters = $this->getCountersEmptyState();
 
-		$userService = new UserService();
+		$userService = Container::getInstance()->get(UserService::class);
 		$groups = $userService->getGroups($this->userId);
 		$projects = $userService->getProjects($this->userId);
 		$scrum = $userService->getScrum($this->userId);
@@ -143,34 +146,18 @@ abstract class CounterState implements \Iterator
 			$meta = $this->getMetaProp($item, $groups, $projects, $scrum, $collabs);
 			$subType = $this->getItemSubType($type);
 
-			if (!isset($this->counters[$meta][$type][$groupId]))
-			{
-				$this->counters[$meta][$type][$groupId] = 0;
-			}
-			if (!isset($this->counters[$meta][$subType][$groupId]))
-			{
-				$this->counters[$meta][$subType][$groupId] = 0;
-			}
+			$this->counterInitIfNotExist($meta, $type, $groupId);
+			$this->counterInitIfNotExist($meta, $subType, $groupId);
+
 			if (!isset($tmpHeap[$meta][$subType][$groupId]))
 			{
 				$tmpHeap[$meta][$subType][$groupId] = [];
 			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_SONET][$type][$groupId]))
-			{
-				$this->counters[CounterDictionary::META_PROP_SONET][$type][$groupId] = 0;
-			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_SONET][$subType][$groupId]))
-			{
-				$this->counters[CounterDictionary::META_PROP_SONET][$subType][$groupId] = 0;
-			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_ALL][$type][$groupId]))
-			{
-				$this->counters[CounterDictionary::META_PROP_ALL][$type][$groupId] = 0;
-			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_ALL][$subType][$groupId]))
-			{
-				$this->counters[CounterDictionary::META_PROP_ALL][$subType][$groupId] = 0;
-			}
+
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_SONET, $type, $groupId);
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_SONET, $subType, $groupId);
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_ALL, $type, $groupId);
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_ALL, $subType, $groupId);
 
 			// flow
 			if (
@@ -179,11 +166,8 @@ abstract class CounterState implements \Iterator
 				&& !isset($tmpHeap[CounterDictionary::META_PROP_FLOW][$type][$flowId][$taskId]))
 			{
 				$tmpHeap[CounterDictionary::META_PROP_FLOW][$type][$flowId][$taskId] = $value;
-				$currentTypeValue = $this->counters[CounterDictionary::META_PROP_FLOW][$type][$flowId] ?? 0;
-				$this->counters[CounterDictionary::META_PROP_FLOW][$type][$flowId] = $currentTypeValue + $value;
-				// common flow
-				$commonFlowValue = $this->counters[CounterDictionary::META_PROP_FLOW][$type][0] ?? 0;
-				$this->counters[CounterDictionary::META_PROP_FLOW][$type][0] = $commonFlowValue + $value;
+				$this->counterAddValue($value, CounterDictionary::META_PROP_FLOW, $type, $flowId);
+				$this->counterAddValue($value, CounterDictionary::META_PROP_FLOW, $type, 0);
 			}
 
 			if (!isset($tmpHeap[$meta][$type][$groupId][$taskId]))
@@ -194,6 +178,11 @@ abstract class CounterState implements \Iterator
 				if (in_array($meta, [CounterDictionary::META_PROP_GROUP, CounterDictionary::META_PROP_PROJECT]))
 				{
 					$this->counters[CounterDictionary::META_PROP_SONET][$type][$groupId] += $value;
+				}
+
+				if ($type === CounterDictionary::COUNTER_MENTIONED)
+				{
+					$this->addMention($meta, $groupId, $taskId, $flowId, $value);
 				}
 			}
 
@@ -232,50 +221,19 @@ abstract class CounterState implements \Iterator
 			}
 
 			// Total sum for the all groups/projects
-			if (!isset($this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0]))
-			{
-				$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0] = 0;
-			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0]))
-			{
-				$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0] = 0;
-			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0]))
-			{
-				$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] = 0;
-			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0]))
-			{
-				$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] = 0;
-			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0]))
-			{
-				$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] = 0;
-			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0]))
-			{
-				$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] = 0;
-			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0]))
-			{
-				$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] = 0;
-			}
-			if (!isset($this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0]))
-			{
-				$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] = 0;
-			}
-			if (!isset($this->counters[$meta][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0]))
-			{
-				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] = 0;
-			}
-			if (!isset($this->counters[$meta][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0]))
-			{
-				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] = 0;
-			}
-			if (!isset($this->counters[$meta][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0]))
-			{
-				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0] = 0;
-			}
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED, 0);
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS, 0);
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED, 0);
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS, 0);
+
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_SONET, CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED, 0);
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_SONET, CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS, 0);
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_SONET, CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED, 0);
+			$this->counterInitIfNotExist(CounterDictionary::META_PROP_SONET, CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS, 0);
+
+			$this->counterInitIfNotExist($meta, CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED, 0);
+			$this->counterInitIfNotExist($meta, CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS, 0);
+			$this->counterInitIfNotExist($meta, CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED, 0);
 
 			if (
 				$subType === CounterDictionary::COUNTER_EXPIRED
@@ -283,16 +241,12 @@ abstract class CounterState implements \Iterator
 			)
 			{
 				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0] += $value;
-				if (in_array($meta, [CounterDictionary::META_PROP_PROJECT, CounterDictionary::META_PROP_GROUP]))
-				{
-					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0] += $value;
-					$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0] += $value;
-				}
-
 				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] -= $value;
 				if (in_array($meta, [CounterDictionary::META_PROP_PROJECT, CounterDictionary::META_PROP_GROUP]))
 				{
+					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0] += $value;
 					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] -= $value;
+					$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0] += $value;
 					$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] -= $value;
 				}
 
@@ -304,21 +258,15 @@ abstract class CounterState implements \Iterator
 				&& !isset($tmpHeap[$meta][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0][$taskId])
 			)
 			{
-				if (!isset($this->counters[$meta][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0]))
-				{
-					$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] = 0;
-				}
-				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] += $value;
-				if (in_array($meta, [CounterDictionary::META_PROP_PROJECT, CounterDictionary::META_PROP_GROUP]))
-				{
-					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] += $value;
-					$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] += $value;
-				}
+				$this->counterInitIfNotExist($meta, CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS, 0);
 
+				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] += $value;
 				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] -= $value;
 				if (in_array($meta, [CounterDictionary::META_PROP_PROJECT, CounterDictionary::META_PROP_GROUP]))
 				{
+					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] += $value;
 					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] -= $value;
+					$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] += $value;
 					$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] -= $value;
 				}
 
@@ -356,6 +304,11 @@ abstract class CounterState implements \Iterator
 			}
 		}
 
+		$this->applyMentions($tmpHeap);
+
+		// clear extra cache
+
+		$this->mentions = [];
 		unset($tmpHeap);
 	}
 
@@ -432,5 +385,91 @@ abstract class CounterState implements \Iterator
 		}
 
 		return CounterDictionary::META_PROP_NONE;
+	}
+
+	private function counterInitIfNotExist(string $meta, string $counter, int $groupId): void
+	{
+		if (!isset($this->counters[$meta][$counter][$groupId]))
+		{
+			$this->counters[$meta][$counter][$groupId] = 0;
+		}
+	}
+
+	private function addMention(string $meta, int $groupId, int $taskId, int $flowId, int $value): void
+	{
+		$key = sprintf('%s|%s|%s|%s', $meta, $groupId, $taskId, $flowId);
+		$this->mentions[$key] = [
+			'meta' => $meta,
+			'groupId' => $groupId,
+			'flowId' => $flowId,
+			'value' => $value,
+			'taskId' => $taskId,
+		];
+	}
+
+	/**
+	 * convert muted message counter into the new message counter for tasks that contains mention and muted messages
+	 */
+	private function applyMentions(array $tmpHeap): void
+	{
+		foreach ($this->mentions as $mentionInfo)
+		{
+			$meta = $mentionInfo['meta'];
+			$groupId = $mentionInfo['groupId'];
+			$value = $mentionInfo['value'];
+			$taskId = $mentionInfo['taskId'];
+			$flowId = $mentionInfo['flowId'];
+
+			if (!isset($tmpHeap[$meta][CounterDictionary::COUNTER_MUTED_NEW_COMMENTS][$groupId][$taskId]))
+			{
+				continue;
+			}
+
+			$this->counterAddValue(-$value, $meta, CounterDictionary::COUNTER_MUTED_NEW_COMMENTS, $groupId);
+
+			if ($meta === CounterDictionary::META_PROP_SCRUM)
+			{
+				// scrum total use scrum-meta
+				$this->counterAddValue($value, $meta, CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS, $groupId);
+			}
+			else
+			{
+				$this->counterAddValue($value, $meta, CounterDictionary::COUNTER_NEW_COMMENTS, $groupId);
+			}
+
+			if ($flowId > 0)
+			{
+				// flow total use flow-meta
+				$this->counterAddValue($value, CounterDictionary::META_PROP_FLOW, CounterDictionary::COUNTER_ORIGINATOR_NEW_COMMENTS, $flowId);
+				$this->counterAddValue($value, CounterDictionary::META_PROP_FLOW, CounterDictionary::COUNTER_ORIGINATOR_NEW_COMMENTS, 0);
+			}
+
+			if ($groupId > 0)
+			{
+				$this->counterAddValue($value, $meta, CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS, 0);
+			}
+
+			if (
+				$meta !== CounterDictionary::META_PROP_ALL
+				&& isset($tmpHeap[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_MUTED_NEW_COMMENTS][$groupId][$taskId])
+			)
+			{
+				// add no-all-meta counters to all total
+				$this->counterAddValue(-$value, CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_MUTED_NEW_COMMENTS, $groupId);
+				$this->counterAddValue($value, CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_NEW_COMMENTS, $groupId);
+
+				if ($groupId > 0 && ($meta === CounterDictionary::META_PROP_GROUP || $meta === CounterDictionary::META_PROP_PROJECT))
+				{
+					// groups and projects use group total from meta-all
+					$this->counterAddValue($value, CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS, 0);
+				}
+			}
+		}
+	}
+
+	private function counterAddValue(int $value, string $meta, string $counter, int $groupId): void
+	{
+		$this->counterInitIfNotExist($meta, $counter, $groupId);
+		$this->counters[$meta][$counter][$groupId] += $value;
 	}
 }

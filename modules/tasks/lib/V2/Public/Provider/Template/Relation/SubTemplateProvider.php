@@ -10,11 +10,12 @@ use Bitrix\Tasks\Provider\TemplateProvider;
 use Bitrix\Tasks\V2\Internal\Access\Service\TemplateRightService;
 use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
 use Bitrix\Tasks\V2\Internal\DI\Container;
-use Bitrix\Tasks\V2\Internal\Entity\TaskCollection;
 use Bitrix\Tasks\V2\Internal\Entity\Template\TemplateCollection;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Template\RelationTemplateMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Template\SubTemplateRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
+use Bitrix\Tasks\V2\Public\Provider\Params\Template\Relation\RelationTemplateByIdsParams;
 use Bitrix\Tasks\V2\Public\Provider\Params\Template\Relation\RelationTemplateParams;
 use Bitrix\Tasks\Validation\Validator\SerializedValidator;
 
@@ -23,12 +24,14 @@ class SubTemplateProvider
 	private readonly UserRepositoryInterface $userRepository;
 	private readonly TemplateRightService $templateRightService;
 	private readonly RelationTemplateMapper $relationTemplateMapper;
+	private readonly SubTemplateRepositoryInterface $subTemplateRepository;
 
 	public function __construct()
 	{
 		$this->userRepository = Container::getInstance()->get(UserRepositoryInterface::class);
 		$this->templateRightService = Container::getInstance()->get(TemplateRightService::class);
 		$this->relationTemplateMapper = Container::getInstance()->get(RelationTemplateMapper::class);
+		$this->subTemplateRepository = Container::getInstance()->get(SubTemplateRepositoryInterface::class);
 	}
 
 	public function getTemplates(RelationTemplateParams $relationTemplateParams): TemplateCollection
@@ -66,6 +69,11 @@ class SubTemplateProvider
 			navigation: $navigation,
 		);
 
+		if (empty($templates))
+		{
+			return new TemplateCollection();
+		}
+
 		$users = $this->getUsers($templates);
 
 		$templateIds = array_column($templates, 'ID');
@@ -77,15 +85,24 @@ class SubTemplateProvider
 			userId: $relationTemplateParams->userId,
 		);
 
+		$subTemplateIds = [];
+		if ($relationTemplateParams->withSubTemplates)
+		{
+			$subTemplateIds = $this->subTemplateRepository->getSubTemplateIdsByParentIds($templateIds);
+		}
+
 		return $this->relationTemplateMapper->mapToCollection(
 			templates: $templates,
 			users: $users,
-			rights: $rights
+			rights: $rights,
+			subTemplateIds: $subTemplateIds,
 		);
 	}
 
-	public function getTemplatesByIds(array $ids, int $userId): TemplateCollection
+	public function getTemplatesByIds(RelationTemplateByIdsParams $params): TemplateCollection
 	{
+		$ids = $params->templateIds;
+
 		Collection::normalizeArrayValuesByInt($ids, false);
 
 		if (empty($ids))
@@ -101,7 +118,7 @@ class SubTemplateProvider
 
 		$templates = $this->fetchTemplates(
 			select: $this->getDefaultSelect(),
-			userId: $userId,
+			userId: $params->userId,
 			filter: ['ID' => $ids],
 			navigation: $navigation,
 		);
@@ -119,13 +136,20 @@ class SubTemplateProvider
 		$rights = $this->getRelationRights(
 			templateIds: $templateIds,
 			templateId: 0,
-			userId: $userId,
+			userId: $params->userId,
 		);
+
+		$subTemplateIds = [];
+		if ($params->withSubTemplates)
+		{
+			$subTemplateIds = $this->subTemplateRepository->getSubTemplateIdsByParentIds($templateIds);
+		}
 
 		return $this->relationTemplateMapper->mapToCollection(
 			templates: $templates,
 			users: $users,
 			rights: $rights,
+			subTemplateIds: $subTemplateIds,
 		);
 	}
 
@@ -147,6 +171,23 @@ class SubTemplateProvider
 		return $this->fetchTemplateIds(
 			userId: $relationTemplateParams->userId,
 			baseTemplateId: $relationTemplateParams->templateId,
+		);
+	}
+
+	public function getTemplatesWithSubTemplateIds(array $ids): TemplateCollection
+	{
+		Collection::normalizeArrayValuesByInt($ids, false);
+
+		if (empty($ids))
+		{
+			return new TemplateCollection();
+		}
+
+		$subTemplateIds = $this->subTemplateRepository->getSubTemplateIdsByParentIds($ids);
+
+		return $this->relationTemplateMapper->mapSubTemplateIdsCollection(
+			ids: $ids,
+			subTemplateIds: $subTemplateIds,
 		);
 	}
 
@@ -237,6 +278,7 @@ class SubTemplateProvider
 			'title',
 			'responsible',
 			'deadline',
+			'matchesWorkTime',
 			'type',
 		];
 	}
@@ -248,6 +290,7 @@ class SubTemplateProvider
 			'title' => 'TITLE',
 			'responsible' => 'RESPONSIBLE_ID',
 			'deadline' => 'DEADLINE_AFTER',
+			'matchesWorkTime' => 'MATCH_WORK_TIME',
 			'type' => 'TPARAM_TYPE',
 		];
 

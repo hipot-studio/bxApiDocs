@@ -7,7 +7,7 @@ use Bitrix\Mail\Access\Repository\RoleRepository;
 use Bitrix\Mail\Access\Role\RoleUtil;
 use Bitrix\Main\Access\Exception\RoleNotFoundException;
 use Bitrix\Main\Access\Exception\RoleSaveException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 
 class MailboxCrmIntegrationPermissionInstaller extends AbstractInstaller
 {

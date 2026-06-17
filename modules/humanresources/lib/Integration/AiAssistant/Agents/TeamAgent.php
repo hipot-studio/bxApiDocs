@@ -12,6 +12,7 @@ use Bitrix\HumanResources\Access\Permission\PermissionDictionary;
 use Bitrix\HumanResources\Access\Permission\PermissionHelper;
 use Bitrix\HumanResources\Access\Permission\PermissionVariablesDictionary;
 use Bitrix\HumanResources\Config\Storage;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamAddMembersTool;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamChangeParentTool;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamCreateTool;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamEditEmployeesTool;
@@ -20,6 +21,9 @@ use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamGetCommunicatio
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamMoveEmployeesTool;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamSaveCommunicationsTool;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamGetChildrenTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamListTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamRemoveEmployeeTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamSearchTool;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\Team\TeamShowTool;
 
 class TeamAgent extends BaseAgent
@@ -44,13 +48,17 @@ class TeamAgent extends BaseAgent
 		return new UsesToolsDto([
 			TeamCreateTool::class,
 			TeamChangeParentTool::class,
+			TeamAddMembersTool::class,
 			TeamEditEmployeesTool::class,
 			TeamEditTool::class,
 			TeamMoveEmployeesTool::class,
 			TeamSaveCommunicationsTool::class,
 			TeamShowTool::class,
+			TeamListTool::class,
 			TeamGetChildrenTool::class,
 			TeamGetCommunicationsTool::class,
+			TeamSearchTool::class,
+			TeamRemoveEmployeeTool::class,
 		]);
 	}
 

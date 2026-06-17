@@ -136,7 +136,7 @@ class CBPWorkflowPersister
 					throw new Exception(GetMessage('BPCGWP_WF_LOCKED'), \CBPRuntime::EXCEPTION_CODE_INSTANCE_LOCKED);
 				}
 			}
-			else
+			elseif ($creationData)
 			{
 				$status = (int) $status;
 				$ownerId = ($bUnlocked ? false : $this->serviceInstanceId);

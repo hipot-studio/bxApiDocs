@@ -164,11 +164,40 @@ class Widget extends \Bitrix\Report\VisualConstructor\Controller\Base
 			if (!empty($widgetReports[$deletedReportId]))
 			{
 				$widgetReports[$deletedReportId]->delete();
+				unset($widgetReports[$deletedReportId]);
 			}
 			unset($reportsConfigurationsFromForm[$deletedReportId]);
 		}
 
+		//delete reports not present in form (cleanup orphans from race conditions)
+		foreach ($widgetReports as $reportGid => $report)
+		{
+			if (!isset($reportsConfigurationsFromForm[$reportGid]))
+			{
+				$report->delete();
+				unset($widgetReports[$reportGid]);
+			}
+		}
+
 		//save report configurations
+		$viewKey = $widget->getViewKey();
+		$view = ViewProvider::getViewByViewKey($viewKey);
+		$maxReportCount = $view ? $view::MAX_RENDER_REPORT_COUNT : 0;
+
+		//trim form reports to MAX_RENDER_REPORT_COUNT
+		if ($maxReportCount > 0 && count($reportsConfigurationsFromForm) > $maxReportCount)
+		{
+			$excessReports = array_slice($reportsConfigurationsFromForm, $maxReportCount, null, true);
+			$reportsConfigurationsFromForm = array_slice($reportsConfigurationsFromForm, 0, $maxReportCount, true);
+			foreach ($excessReports as $excessReportId => $unused)
+			{
+				if (!$this->isReportPseudo($excessReportId) && !empty($widgetReports[$excessReportId]))
+				{
+					$widgetReports[$excessReportId]->delete();
+				}
+			}
+		}
+
 		foreach ($reportsConfigurationsFromForm as $reportId => $configurationFromForm)
 		{
 			$configuration = $configurationFromForm['configurations'];
@@ -179,9 +208,12 @@ class Widget extends \Bitrix\Report\VisualConstructor\Controller\Base
 			}
 			else
 			{
-				$report = $widgetReports[$reportId];
-				$reportHandler = $report->getReportHandler();
-				$this->setConfigurableEntityConfiguration($report, $reportHandler, $configuration);
+				if (!empty($widgetReports[$reportId]))
+				{
+					$report = $widgetReports[$reportId];
+					$reportHandler = $report->getReportHandler();
+					$this->setConfigurableEntityConfiguration($report, $reportHandler, $configuration);
+				}
 			}
 		}
 
@@ -284,6 +316,16 @@ class Widget extends \Bitrix\Report\VisualConstructor\Controller\Base
 
 		$widgetHandler = $widget->getWidgetHandler();
 		$this->setConfigurableEntityConfiguration($widget, $widgetHandler, $widgetConfigurations);
+
+		//trim form reports to MAX_RENDER_REPORT_COUNT
+		$viewKey = $widget->getViewKey();
+		$view = ViewProvider::getViewByViewKey($viewKey);
+		$maxReportCount = $view ? $view::MAX_RENDER_REPORT_COUNT : 0;
+		if ($maxReportCount > 0 && count($reportsConfigurationsFromForm) > $maxReportCount)
+		{
+			$reportsConfigurationsFromForm = array_slice($reportsConfigurationsFromForm, 0, $maxReportCount, true);
+		}
+
 		//save report configurations
 		foreach ($reportsConfigurationsFromForm as $reportId => $configurationFromForm)
 		{

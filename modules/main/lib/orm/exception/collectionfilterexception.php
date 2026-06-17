@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Bitrix\Main\ORM\exception;
+namespace Bitrix\Main\ORM\Exception;
 
 use Bitrix\Main\SystemException;
 use Throwable;

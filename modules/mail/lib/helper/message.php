@@ -14,7 +14,9 @@ use Bitrix\Mail\Internals;
 use Bitrix\Mail\Helper\MessageAccess as AccessHelper;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Config\Ini;
+use Bitrix\Main\Mail\Converter;
 use Bitrix\Mail\Helper\Message\Parsers;
+use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Web\Uri;
 
 class Message
@@ -25,6 +27,9 @@ class Message
 	public const ENTITY_TYPE_IM_CHAT = MessageAccessTable::ENTITY_TYPE_IM_CHAT;
 	public const ENTITY_TYPE_CALENDAR_EVENT = MessageAccessTable::ENTITY_TYPE_CALENDAR_EVENT;
 	private const MAX_FILE_SIZE_MAIL_ATTACHMENT = 20000000;
+	private const DISPLAY_SUBJECT_MAX_LENGTH = 60;
+
+	private static array $countersForUsersCache = [];
 
 	public static function getMaxAttachedFilesSize()
 	{
@@ -442,14 +447,7 @@ class Message
 	 */
 	public static function getCountersForUserMailboxes($userId, $onlyGeneralCounter = false)
 	{
-		static $countersForUsers;
-
-		if (empty($countersForUsers))
-		{
-			$countersForUsers = [];
-		}
-
-		if (!isset($countersForUsers[$userId]))
+		if (!isset(self::$countersForUsersCache[$userId]))
 		{
 			$mailboxes = MailboxTable::getUserMailboxes($userId, true);
 
@@ -488,7 +486,7 @@ class Message
 				];
 			}
 
-			$countersForUsers[$userId] = [
+			self::$countersForUsersCache[$userId] = [
 				'mailboxesWithCounters' => $counters,
 				'totalCounter' => $totalCounter,
 			];
@@ -496,12 +494,28 @@ class Message
 
 		if($onlyGeneralCounter)
 		{
-			return $countersForUsers[$userId]['totalCounter'];
+			return self::$countersForUsersCache[$userId]['totalCounter'];
 		}
 		else
 		{
-			return $countersForUsers[$userId]['mailboxesWithCounters'];
+			return self::$countersForUsersCache[$userId]['mailboxesWithCounters'];
 		}
+	}
+
+	public static function resetCountersCache(int $userId): void
+	{
+		unset(self::$countersForUsersCache[$userId]);
+	}
+
+	public static function setUserUnseenCounter(int $userId, string $siteId): int
+	{
+		$unseen = max((int)static::getCountersForUserMailboxes($userId, true), 0);
+		$unseen += (new Mailbox\MailboxConnectionRequestService($userId))->getPendingCount();
+		$unseen += Mailbox\PasswordlessConnectHelper::getUserPendingCount($userId, $siteId);
+
+		\CUserCounter::set($userId, 'mail_unseen', $unseen, $siteId);
+
+		return $unseen;
 	}
 
 	public static function ensureAttachments(&$message)
@@ -808,7 +822,7 @@ class Message
 			case Message::ENTITY_TYPE_CALENDAR_EVENT:
 				return sprintf('event'.'%u', $entityId);
 			default:
-				// per-user tokens for entity types like TASKS_TASK, CRM_ACTIVITY, ...
+				// per-user tokens for USER_MESSAGE, TASKS_TASK, CRM_ACTIVITY, ...
 				return sprintf('user'.'%u', $userId);
 		}
 	}
@@ -840,7 +854,7 @@ class Message
 			case Message::ENTITY_TYPE_CALENDAR_EVENT:
 				return AccessHelper::checkAccessForCalendarEvent($entityId, $userId);
 			default:
-				return true; // tasks, crm creates per-user tokens
+				return true; // tasks, crm, user messages create per-user tokens
 		}
 	}
 
@@ -921,5 +935,140 @@ class Message
 		])->fetchAll();
 
 		return ICalMailManager::hasICalAttachments($attachments);
+	}
+
+	/**
+	 * @param string $subject Original compose subject.
+	 * @param string $body Compose body (HTML or plain text).
+	 * @param string $emptySubjectPlaceholder Placeholder for empty subjects.
+	 * @return string
+	 */
+	public static function getOutgoingSubject(
+		string $subject,
+		string $body,
+		string $emptySubjectPlaceholder,
+	): string
+	{
+		if (trim($subject) !== '')
+		{
+			return $subject;
+		}
+
+		$generated = static::extractSubjectFromBody($body);
+
+		return $generated !== '' ? $generated : $emptySubjectPlaceholder;
+	}
+
+	public static function getWithAccessCheck(int $messageId, ?int $userId): ?array
+	{
+		$message = \Bitrix\Mail\MailMessageTable::getRow([
+			'runtime' => [
+				new \Bitrix\Main\Entity\ReferenceField(
+					'MESSAGE_UID',
+					\Bitrix\Mail\MailMessageUidTable::class,
+					[
+						'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+						'=this.ID' => 'ref.MESSAGE_ID',
+					],
+					['join_type' => 'INNER'],
+				),
+			],
+			'select' => [
+				'*',
+				'MAILBOX_EMAIL' => 'MAILBOX.EMAIL',
+				'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE',
+			],
+			'filter' => ['=ID' => $messageId],
+		]);
+
+		if ($message === null || !self::hasAccess($message, $userId))
+		{
+			return null;
+		}
+
+		return $message;
+	}
+
+	public static function getMessageUrl(int $messageId): string
+	{
+		$uri = new Uri(
+			UrlManager::getInstance()->getHostUrl()
+			. \Bitrix\Mail\Integration\Intranet\Secretary::getDirectMessageUrl($messageId)
+		);
+
+		return $uri->getLocator();
+	}
+
+	/**
+	 * @param string $body Message body (plain text or HTML).
+	 * @return string Generated subject or empty string.
+	 */
+	public static function extractSubjectFromBody(string $body): string
+	{
+		$text = static::normalizeBodyText($body);
+		$maxLength = self::DISPLAY_SUBJECT_MAX_LENGTH;
+
+		if ($text === '' || mb_strlen($text, 'UTF-8') <= $maxLength)
+		{
+			return $text;
+		}
+
+		$trimmed = mb_substr($text, 0, $maxLength, 'UTF-8');
+		$lastSpace = mb_strrpos($trimmed, ' ', 0, 'UTF-8');
+		if ($lastSpace !== false && $lastSpace > 0)
+		{
+			$trimmed = mb_substr($trimmed, 0, $lastSpace, 'UTF-8');
+		}
+
+		return $trimmed . '...';
+	}
+
+	public static function getDisplaySnippet(string $body, string $subject): string
+	{
+		if (trim($subject) === '')
+		{
+			return $body;
+		}
+
+		$subjectForMatch = str_ends_with($subject, '...')
+			? trim(mb_substr($subject, 0, -3, 'UTF-8'))
+			: trim($subject)
+		;
+
+		if ($subjectForMatch === '')
+		{
+			return $body;
+		}
+
+		$normalizedBody = static::normalizeBodyText($body);
+		if (!str_starts_with($normalizedBody, $subjectForMatch))
+		{
+			return $body;
+		}
+
+		return trim(mb_substr(
+			$normalizedBody,
+			mb_strlen($subjectForMatch, 'UTF-8'),
+			null,
+			'UTF-8',
+		));
+	}
+
+	private static function normalizeBodyText(string $body): string
+	{
+		$text = $body;
+		if (str_contains($text, '<') && str_contains($text, '>'))
+		{
+			$text = preg_replace(
+				'#</?(?:br|div|p|li|tr|td|th|h[1-6]|blockquote|hr|ol|ul|pre|section|article|header|footer)\b[^>]*>#i',
+				' ',
+				$text,
+			) ?? $text;
+			$text = Converter::htmlToText($text);
+		}
+		$text = html_entity_decode($text, ENT_QUOTES | ENT_HTML401, SITE_CHARSET);
+		$text = trim(preg_replace('/\s+/u', ' ', $text));
+
+		return trim(preg_replace('/^[\p{P}\p{S}\p{Z}\p{C}]+/u', '', $text));
 	}
 }

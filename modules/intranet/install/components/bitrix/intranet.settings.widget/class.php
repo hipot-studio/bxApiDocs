@@ -193,7 +193,10 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 		$result['HOLDING'] = null;
 		$result['MAIN_PAGE'] = [
 			'isAvailable' => self::$cachedResult['IS_WIDGET_MENU_ITEM_SHOW'],
-			'settingsPath' => (new Intranet\Site\FirstPage\MainFirstPage())->getSettingsPath() . '&analyticContext=widget_settings_settings',
+			'settingsPath' =>
+				(new Intranet\Site\FirstPage\MainFirstPage())->getSettingsPath()
+				. '&analyticContext=widget_settings_settings_mainpage'
+			,
 		];
 
 		if ($this->isRequisiteAvailable)

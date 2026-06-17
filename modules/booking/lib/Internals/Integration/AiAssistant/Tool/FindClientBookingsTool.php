@@ -7,28 +7,30 @@ namespace Bitrix\Booking\Internals\Integration\AiAssistant\Tool;
 use Bitrix\AiAssistant\Facade\TracedLogger;
 use Bitrix\Booking\Entity\Booking\BookingCollection;
 use Bitrix\Booking\Internals\Container;
-use Bitrix\Booking\Internals\Service\AiAssistant\DateTimeService;
+use Bitrix\Booking\Internals\Service\AiAssistant\Mapper\BookingMapper;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
 use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 use Bitrix\Booking\Provider\Params\Booking\BookingSort;
-use Bitrix\Main\Web\Json;
 
 class FindClientBookingsTool extends BaseBookingTool
 {
-	private DateTimeService $dateTimeService;
+	private BookingMapper $bookingMapper;
 
 	public function __construct(TracedLogger $tracedLogger)
 	{
 		parent::__construct($tracedLogger);
 
-		$this->dateTimeService = Container::getAiAssistantDateTimeService();
+		$this->bookingMapper = Container::getAiAssistantBookingMapper();
 	}
 
-	protected function execute(int $userId, ...$args): string
+	protected function doExecuteStructured(int $userId, ...$args): array
 	{
-		return Json::encode($this->formatBookingCollection(
-			$this->getClientBookingCollection()
-		));
+		$bookings = $this->formatBookingCollection($this->getClientBookingCollection());
+
+		return $this->createSuccessResponse(
+			message: 'Client bookings retrieved',
+			data: ['bookings' => $bookings],
+		);
 	}
 
 	public function getName(): string
@@ -38,7 +40,7 @@ class FindClientBookingsTool extends BaseBookingTool
 
 	public function getDescription(): string
 	{
-		return 'Returns up to 10 upcoming (future) bookings for the current client, sorted by date ascending. Each booking includes: id, resourceId, serviceIds, and dateTime. Use this to look up booking IDs needed for reschedule, or cancel operations.';
+		return 'Returns up to 10 upcoming (future) bookings for the current client, sorted by date ascending. Each booking includes: id, clientName, dateTime, resource (id, name, typeName), and services (each with id, name, price, currencyId). Use this to look up booking IDs needed for reschedule, or cancel operations.';
 	}
 
 	public function getInputSchema(): array
@@ -92,6 +94,9 @@ class FindClientBookingsTool extends BaseBookingTool
 			$result->add($booking);
 		}
 
+		$this->bookingRepository->withClientData($result);
+		$this->bookingRepository->withSkus($result);
+
 		return $result;
 	}
 
@@ -101,14 +106,7 @@ class FindClientBookingsTool extends BaseBookingTool
 
 		foreach ($bookingCollection as $booking)
 		{
-			$result[] = [
-				'id' => $booking->getId(),
-				'resourceId' => $booking->getResourceCollection()->getPrimary()->getId(),
-				'serviceIds' => $booking->getSkuCollection()->getEntityIds(),
-				'dateTime' => $this->dateTimeService->formatDateTime(
-					$booking->getDatePeriod()->getDateFrom(),
-				),
-			];
+			$result[] = $this->bookingMapper->mapFromEntity($booking);
 		}
 
 		return $result;

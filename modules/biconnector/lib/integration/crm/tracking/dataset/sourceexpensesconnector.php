@@ -62,7 +62,7 @@ class SourceExpensesConnector extends Base
 		}
 
 		$startDate = clone($endDate);
-		$startDate->add('-1 year');
+		$startDate->add('-30 days');
 		if ($startDateTimestamp)
 		{
 			$startDate = Date::createFromTimestamp($startDateTimestamp);
@@ -78,21 +78,21 @@ class SourceExpensesConnector extends Base
 			return $result->addErrors($dailyExpensesResult->getErrors());
 		}
 
-		$expenses = $dailyExpensesResult->getData();
-
-		$summaryExpenses = [];
-		foreach ($expenses as $expense)
+		$summaryExpenses = $dailyExpensesResult->getData();
+		foreach ($summaryExpenses as &$expense)
 		{
 			$expense['TIMESTAMP'] = 0;
 			if ($expense['DATE'])
 			{
 				$expense['TIMESTAMP'] = (new Date($expense['DATE'], 'Y-m-d H:i:s'))->getTimestamp();
 			}
+		}
+		unset($expense);
 
+		foreach ($this->getCustomUserExpenses($startDate, $endDate) as $expense)
+		{
 			$summaryExpenses[] = $expense;
 		}
-
-		$summaryExpenses = array_merge($summaryExpenses, [...$this->getCustomUserExpenses($startDate, $endDate)]);
 
 		usort($summaryExpenses, static fn($a, $b) => $a['TIMESTAMP'] >= $b['TIMESTAMP']);
 
@@ -126,12 +126,10 @@ class SourceExpensesConnector extends Base
 	 * @param Date $startDate
 	 * @param Date $endDate
 	 *
-	 * @return array
+	 * @return \Generator
 	 */
-	private function getCustomUserExpenses(Date $startDate, Date $endDate): array
+	private function getCustomUserExpenses(Date $startDate, Date $endDate): \Generator
 	{
-		$resultRows = [];
-
 		$sources = Tracking\Provider::getActualSources();
 		$sourceIds = array_column($sources, 'ID');
 		$rows = SourceExpensesTable::getList([
@@ -169,9 +167,7 @@ class SourceExpensesConnector extends Base
 					: 0
 			;
 
-			$resultRows[] = $row;
+			yield $row;
 		}
-
-		return $resultRows;
 	}
 }

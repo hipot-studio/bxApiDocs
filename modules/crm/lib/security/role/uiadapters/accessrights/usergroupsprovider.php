@@ -13,6 +13,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Type\Collection;
 use Bitrix\UI\AccessRights\V2\Contract;
 use Bitrix\UI\AccessRights\V2\Options\RightSection;
+use Bitrix\UI\AccessRights\V2\Options\UserGroup;
 
 Loader::requireModule('ui');
 
@@ -68,7 +69,7 @@ final class UserGroupsProvider
 	}
 
 	/**
-	 * @inheritDoc
+	 * @return UserGroup[]
 	 */
 	public function loadAll(): array
 	{
@@ -78,22 +79,49 @@ final class UserGroupsProvider
 			return [];
 		}
 
-		$perms = $this->fetchPerms($roles);
+		$roleIds = $this->makeRoleIds($roles);
 
-		$perms = $this->doFilterByAccessRightsCodes($perms);
+		$perms = $this->filterPermissionsByAccessRightsCodes($this->fetchPerms($roleIds));
 
 		if ($this->excludeRolesWithoutRights)
 		{
-			$roles = $this->doExcludeRolesWithoutRights($roles, $perms);
+			$roleIdsToInclude = $this->getIdsOfRolesWithRights($perms);
+			$roleIdsToIncludeInverted = array_flip($roleIdsToInclude);
+			$roles = array_filter($roles, static fn (array $role): bool => isset($roleIdsToIncludeInverted[(int)$role['ID']]));
+
 			if (empty($roles))
 			{
 				return [];
 			}
+
+			$roleIds = $this->makeRoleIds($roles);
 		}
 
-		$relations = $this->fetchRelations($roles);
+		$relations = $this->fetchRelations($roleIds);
 
 		return $this->serialize($roles, $perms, $relations);
+	}
+
+	/**
+	 * @return int[]
+	 */
+	public function loadAllIds(): array
+	{
+		$roleIds = $this->prepareQuery()->fetchAllIds();
+		if (empty($roleIds))
+		{
+			return [];
+		}
+
+		if (!$this->excludeRolesWithoutRights)
+		{
+			return $roleIds;
+		}
+
+		$perms = $this->filterPermissionsByAccessRightsCodes($this->fetchPerms($roleIds));
+		$roleIdsToInclude = $this->getIdsOfRolesWithRights($perms);
+
+		return array_intersect($roleIds, $roleIdsToInclude);
 	}
 
 	private function prepareQuery(): QueryRoles
@@ -129,31 +157,25 @@ final class UserGroupsProvider
 		);
 	}
 
-	private function fetchPerms(array $roles): array
+	private function makeRoleIds(array $roles): array
 	{
 		$roleIds = array_column($roles, 'ID');
 		Collection::normalizeArrayValuesByInt($roleIds);
-		if (empty($roleIds))
-		{
-			return [];
-		}
 
+		return $roleIds;
+	}
+
+	private function fetchPerms(array $roleIds): array
+	{
 		return $this->permissionRepository->queryActualPermsByRoleIds($roleIds);
 	}
 
-	private function fetchRelations(array $roles): array
+	private function fetchRelations(array $roleIds): array
 	{
-		$roleIds = array_column($roles, 'ID');
-		Collection::normalizeArrayValuesByInt($roleIds);
-		if (empty($roleIds))
-		{
-			return [];
-		}
-
 		return $this->permissionRepository->queryRolesRelations($roleIds);
 	}
 
-	protected function doFilterByAccessRightsCodes(array $permissions): array
+	protected function filterPermissionsByAccessRightsCodes(array $permissions): array
 	{
 		$result = [];
 
@@ -171,14 +193,14 @@ final class UserGroupsProvider
 		return $result;
 	}
 
-	private function doExcludeRolesWithoutRights(array $roles, array $permissions): array
+	private function getIdsOfRolesWithRights(array $permissions): array
 	{
 		$roleIds = [];
 
 		foreach ($permissions as $permission)
 		{
 			$roleId = (int)$permission['ROLE_ID'];
-			if (in_array($roleId, $roleIds, true))
+			if (isset($roleIds[$roleId]))
 			{
 				continue;
 			}
@@ -198,17 +220,13 @@ final class UserGroupsProvider
 				\Bitrix\Crm\Security\Role\Manage\DTO\PermissionModel::createFromDbArray($permission)
 			);
 
-			if (!$isAllows)
+			if ($isAllows)
 			{
-				continue;
+				$roleIds[$roleId] = $roleId;
 			}
-
-			$roleIds[] = $roleId;
 		}
 
-		$isRoleInRoleIds = static fn (array $role): bool => in_array((int)$role['ID'], $roleIds, true);
-
-		return array_filter($roles, $isRoleInRoleIds);
+		return array_values($roleIds);
 	}
 
 	private function serialize(array $roles, array $perms, array $relations): array

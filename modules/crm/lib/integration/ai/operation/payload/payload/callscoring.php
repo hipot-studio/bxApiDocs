@@ -6,12 +6,12 @@ use Bitrix\Crm\Activity\Provider\Call;
 use Bitrix\Crm\ActivityBindingTable;
 use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\Copilot\CallAssessment\AssessmentClientTypeResolver;
+use Bitrix\Crm\Copilot\Pipeline\TargetResolver;
 use Bitrix\Crm\EO_Activity;
 use Bitrix\Crm\EO_Company;
 use Bitrix\Crm\EO_Contact;
 use Bitrix\Crm\EO_Deal;
 use Bitrix\Crm\EO_Lead;
-use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 use Bitrix\Crm\Integration\AI\Operation\Payload\CalcMarkersInterface;
 use Bitrix\Crm\Integration\AI\Operation\Payload\PayloadInterface;
 use Bitrix\Crm\Item;
@@ -64,7 +64,7 @@ final class CallScoring extends AbstractPayload implements CalcMarkersInterface
 	
 	private function initOwnerData(): void
 	{
-		$ownerIdentifier = (new Orchestrator())->findPossibleFillFieldsTarget($this->identifier->getEntityId());
+		$ownerIdentifier = (new TargetResolver())->findTarget($this->identifier->getEntityId());
 		if (!$ownerIdentifier)
 		{
 			return;

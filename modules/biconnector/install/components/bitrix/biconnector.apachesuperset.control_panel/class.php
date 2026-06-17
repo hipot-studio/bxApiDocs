@@ -157,7 +157,7 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 			$menuItems[] = [
 				'ID' => 'ORDER_DASHBOARD',
 				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_ORDER'),
-				'ON_CLICK' => 'BX.Biconnector.ApacheSupersetFeedbackForm.requestIntegrationFormOpen()',
+				'ON_CLICK' => 'BX.BIConnector.ApacheSupersetFeedbackForm.requestIntegrationFormOpen()',
 			];
 		}
 
@@ -196,7 +196,7 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 			$menuItems[] = [
 				'ID' => 'FEEDBACK',
 				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_FEEDBACK'),
-				'ON_CLICK' => 'BX.Biconnector.ApacheSupersetFeedbackForm.feedbackFormOpen()',
+				'ON_CLICK' => 'BX.BIConnector.ApacheSupersetFeedbackForm.feedbackFormOpen()',
 			];
 		}
 
@@ -266,17 +266,23 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 
 	private function canRenderMenuItems(): bool
 	{
-		$status = \Bitrix\BIConnector\Integration\Superset\SupersetInitializer::getSupersetStatus();
+		$status = SupersetInitializer::getSupersetStatus();
 
 		if ($this->isMenuMode)
 		{
 			return !in_array($status, [
-				\Bitrix\BIConnector\Integration\Superset\SupersetInitializer::SUPERSET_STATUS_DELETED,
-				\Bitrix\BIConnector\Integration\Superset\SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS,
-			]);
+				SupersetInitializer::SUPERSET_STATUS_DELETED,
+				SupersetInitializer::SUPERSET_STATUS_PENDING_DELETE,
+				SupersetInitializer::SUPERSET_STATUS_PENDING_DELETE_SUSPENDED,
+				SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS,
+			], true);
 		}
 
-		return $status !== \Bitrix\BIConnector\Integration\Superset\SupersetInitializer::SUPERSET_STATUS_DELETED;
+		return !in_array($status, [
+			SupersetInitializer::SUPERSET_STATUS_DELETED,
+			SupersetInitializer::SUPERSET_STATUS_PENDING_DELETE,
+			SupersetInitializer::SUPERSET_STATUS_PENDING_DELETE_SUSPENDED,
+		], true);
 	}
 
 	private function getDashboardsForTopMenu(): array

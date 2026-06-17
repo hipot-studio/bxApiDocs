@@ -95,6 +95,7 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 					'MAILBOX_LOGIN' => 'MAILBOX.LOGIN',
 					'DIR_MD5' => 'MESSAGE_UID.DIR_MD5',
 					'MSG_UID' => 'MESSAGE_UID.MSG_UID',
+					'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE',
 				),
 				'filter' => array(
 					'=ID' => $messageId,

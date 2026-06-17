@@ -28,6 +28,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		'ID',
 		'MAILBOX_ID',
 		'FIELD_DATE',
+		'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE',
 		'SUBJECT',
 		'BODY_HTML',
 		'HEADER',
@@ -253,9 +254,9 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 			$message->body = $this->cleanCharset($messageData['BODY_HTML']);
 			$message->id = $messageData['ID'];
 			$message->subject = $messageData['SUBJECT'];
-			$message->date = $messageData['FIELD_DATE']->getTimestamp();
+			$message->date = ($messageData['INTERNALDATE'] ?? $messageData['FIELD_DATE'])->getTimestamp();
 			$message->replyFromEmail = $messageData['MAILBOX_EMAIL'];
-			$message->mailboxId = $messageData['MAILBOX_ID'];
+			$message->mailboxId = (int)$messageData['MAILBOX_ID'];
 		}
 
 		if ($takeFiles)
@@ -281,11 +282,13 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		if ($takeParentMessages)
 		{
 			$order = [
-				'FIELD_DATE' => 'DESC'
+				'MESSAGE_UID.INTERNALDATE' => 'DESC'
 			];
 
 			$filter = [
 				'=CLOSURE.MESSAGE_ID' => $threadId,
+				'==MESSAGE_UID.DELETE_TIME' => 0,
+				'!@MESSAGE_UID.IS_OLD' => MailMessageUidTable::HIDDEN_STATUSES,
 			];
 
 			$mergeFilter = [
@@ -295,11 +298,13 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		else
 		{
 			$order = [
-				'FIELD_DATE' => 'ASC'
+				'MESSAGE_UID.INTERNALDATE' => 'ASC'
 			];
 
 			$filter = [
 				'=CLOSURE.PARENT_ID' => $threadId,
+				'==MESSAGE_UID.DELETE_TIME' => 0,
+				'!@MESSAGE_UID.IS_OLD' => MailMessageUidTable::HIDDEN_STATUSES,
 			];
 
 			$mergeFilter = [
@@ -430,9 +435,9 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 				$mailMessage->subject = $row['SUBJECT'];
 			}
 
-			$mailMessage->date = $row['FIELD_DATE']->getTimestamp();
+			$mailMessage->date = ($row['INTERNALDATE'] ?? $row['FIELD_DATE'])->getTimestamp();
 			$mailMessage->replyFromEmail = $row['MAILBOX_EMAIL'];
-			$mailMessage->mailboxId = $row['MAILBOX_ID'];
+			$mailMessage->mailboxId = (int)$row['MAILBOX_ID'];
 			MessageLoader::addBinding($mailMessage, $row);
 
 			if (isset($row['BODY_HTML']))

@@ -3,6 +3,7 @@
 namespace Bitrix\Main\UI\Filter;
 
 use Bitrix\Main\Type as MainType;
+use CTimeZone;
 
 class DateTime
 {
@@ -14,7 +15,6 @@ class DateTime
 
 	/** @var ?number */
 	protected $timestamp;
-
 
 	/**
 	 * DateTime constructor.
@@ -34,29 +34,50 @@ class DateTime
 		static::adjustTime($this->dateTime);
 	}
 
-
 	/**
 	 * Adjusts time relative current timezone offset
 	 * @param MainType\DateTime $dateTime
-	 * @return int timestamp
 	 */
 	public static function adjustTime(MainType\DateTime $dateTime)
 	{
-		if(\CTimeZone::Enabled())
+		if (CTimeZone::Enabled())
 		{
-			static $diff = null;
-			if($diff === null)
+			/**
+			 * Due to potential transitions to and from daylight saving time,
+			 * we cannot cache the offset once and for all.
+			 * Therefore, we cache only the user's time zone,
+			 * calculating the offset upon each access.
+			 */
+			static $userTimeZone = false;
+			if ($userTimeZone === false)
 			{
-				$diff = \CTimeZone::GetOffset();
+				$userTimeZone = self::resolveUserTimeZone();
 			}
-			if($diff <> 0)
+
+			$diff = CTimeZone::getTimezoneOffset($userTimeZone, $dateTime);
+			if ($diff !== 0)
 			{
-				$dateTime->add(($diff > 0? "-":"")."PT".abs($diff)."S");
+				$dateTime->add(($diff > 0 ? '-' : '') . 'PT' . abs($diff) . 'S');
 			}
 		}
 	}
 
+	private static function resolveUserTimeZone(): string
+	{
+		global $USER;
+		if (is_object($USER))
+		{
+			$timeZone = (string)$USER->GetParam('TIME_ZONE');
+			if (empty($timeZone) && CTimeZone::IsAutoTimeZone($USER->GetParam('AUTO_TIME_ZONE')))
+			{
+				$timeZone = CTimeZone::getTzCookie() ?? '';
+			}
 
+			return $timeZone;
+		}
+
+		return '';
+	}
 
 	/**
 	 * Gets month from date
@@ -65,9 +86,9 @@ class DateTime
 	public function month()
 	{
 		$date = new MainType\Date($this->toString());
+
 		return $date->format("n");
 	}
-
 
 	/**
 	 * Gets year
@@ -76,9 +97,9 @@ class DateTime
 	public function year()
 	{
 		$date = new MainType\Date($this->toString());
+
 		return $date->format("Y");
 	}
-
 
 	/**
 	 * Gets quarter number
@@ -87,9 +108,9 @@ class DateTime
 	public function quarter()
 	{
 		$date = new MainType\Date($this->toString());
+
 		return Quarter::get($date);
 	}
-
 
 	/**
 	 * Gets quarter start datetime
@@ -100,9 +121,9 @@ class DateTime
 		$startDate = Quarter::getStartDate($this->quarter(), $this->year());
 		$dateTime = MainType\DateTime::createFromTimestamp(MakeTimeStamp($startDate));
 		static::adjustTime($dateTime);
+
 		return $dateTime->toString();
 	}
-
 
 	/**
 	 * Gets quarter end dateTime
@@ -113,9 +134,9 @@ class DateTime
 		$endDate = Quarter::getEndDate($this->quarter(), $this->year());
 		$dateTime = MainType\DateTime::createFromUserTime($endDate);
 		$dateTime->add("- 1 second");
+
 		return $dateTime->toString();
 	}
-
 
 	/**
 	 * Gets datetime string with offset.
@@ -127,9 +148,9 @@ class DateTime
 		$date = MainType\DateTime::createFromTimestamp($this->getTimestamp());
 		$date->add($offset);
 		static::adjustTime($date);
+
 		return $date->toString();
 	}
-
 
 	/**
 	 * Gets datetime string
@@ -139,7 +160,6 @@ class DateTime
 	{
 		return $this->dateTime->toString();
 	}
-
 
 	/**
 	 * Gets timestamp

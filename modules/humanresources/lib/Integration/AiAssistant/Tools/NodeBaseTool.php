@@ -14,7 +14,6 @@ use Bitrix\HumanResources\Access\Permission\PermissionVariablesDictionary;
 use Bitrix\HumanResources\Access\StructureAccessController;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\NodeEntityType;
-use Bitrix\HumanResources\Config\Storage;
 
 abstract class NodeBaseTool extends ToolContract
 {
@@ -65,6 +64,7 @@ abstract class NodeBaseTool extends ToolContract
 			if (
 				$permissionValue !== PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS
 				&& $permissionValue !== PermissionVariablesDictionary::VARIABLE_SELF_DEPARTMENTS_SUB_DEPARTMENTS
+				&& $permissionValue !== PermissionVariablesDictionary::VARIABLE_ALL
 			)
 			{
 				return false;

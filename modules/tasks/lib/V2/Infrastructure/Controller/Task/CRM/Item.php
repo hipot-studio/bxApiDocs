@@ -98,7 +98,7 @@ class Item extends BaseController
 		$result = (new AddItemsCommand(
 			taskId: $task->id,
 			userId: $this->userId,
-			crmItemIds: $task->crmItemIds,
+			crmItemIds: (array)$task->crmItemIds,
 			useConsistency: true,
 		))->run();
 

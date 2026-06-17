@@ -8,6 +8,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TaskStopDeleteException;
 use Bitrix\Tasks\Control\Exception\WrongTaskIdException;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\SendAnalytics;
 use Bitrix\Tasks\V2\Public\Command\Task\DeleteTaskCommand;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Event\Task\OnTaskDeletedEvent;
@@ -157,6 +158,8 @@ class DeleteService
 		$this->counterService->send(new Counter\Command\AfterTaskDelete(data: $fullTaskData));
 
 		(new RunIntegration($config))($fullTaskData);
+
+		(new SendAnalytics($config))($fullTaskData);
 
 		$this->eventDispatcher->dispatch(
 			new OnTaskDeletedEvent(

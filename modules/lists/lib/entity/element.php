@@ -2,11 +2,18 @@
 
 namespace Bitrix\Lists\Entity;
 
-use Bitrix\Iblock\Public\Service\RestValidator as IblockRestValidator;
+use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\PrepareParametersRequest;
+use Bitrix\Bizproc\Api\Service\WorkflowTemplateService;
+use Bitrix\Iblock\Public\Service\RestValidator;
+use Bitrix\Lists\Api\Request\WorkflowService\StartWorkflowsRequest;
+use Bitrix\Lists\Api\Service\WorkflowService;
+use Bitrix\Lists\Internal\Integration\Crm\Validator\CrmPropertyValidator;
 use Bitrix\Lists\Service\Param;
+use Bitrix\Main\Context;
 use Bitrix\Main\Error;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorCollection;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ErrorableImplementation;
 use Bitrix\Rest\RestException;
@@ -31,6 +38,7 @@ class Element implements Controllable, Errorable
 	private array $elementFields = [];
 	private array $elementProperty = [];
 	private $listObject;
+	private ?WorkflowService $workflowService = null;
 
 	public $resultSanitizeFilter = [];
 
@@ -197,6 +205,10 @@ class Element implements Controllable, Errorable
 		}
 
 		$this->validateParams();
+		[$elementSelect, $elementFields, $elementProperty] = $this->getElementData();
+		$this->elementFields = $elementFields;
+		$this->elementProperty = $elementProperty;
+
 		$this->validateFields();
 
 		$isEnabledBp = $this->isEnabledBizproc($this->params["IBLOCK_TYPE_ID"]);
@@ -210,10 +222,6 @@ class Element implements Controllable, Errorable
 		{
 			return false;
 		}
-
-		[$elementSelect, $elementFields, $elementProperty] = $this->getElementData();
-		$this->elementFields = $elementFields;
-		$this->elementProperty = $elementProperty;
 
 		$fields = $this->getElementFields($this->elementId, $this->params["FIELDS"]);
 
@@ -446,9 +454,9 @@ class Element implements Controllable, Errorable
 					$fieldValue = [$fieldValue];
 				}
 
-				switch ($fieldData["TYPE"])
-				{
-					case "N":
+					switch ($fieldData["TYPE"])
+					{
+						case "N":
 						foreach($fieldValue as $key => $value)
 						{
 							$value = str_replace(" ", "", str_replace(",", ".", $value));
@@ -459,15 +467,31 @@ class Element implements Controllable, Errorable
 									self::ERROR_ELEMENT_FIELD_VALUE)
 								);
 							}
-						}
-						break;
+							}
+							break;
+						case 'S:ECrm':
+							$crmPropertyValidator = new CrmPropertyValidator(
+								$fieldData,
+								$this->getCurrentUserId(),
+								$this->elementProperty[$fieldData['ID']]['FULL_VALUES'] ?? null
+							);
+							$isValidCrmProperty = $crmPropertyValidator->validate($fieldValue);
+							$this->params['FIELDS'][$fieldId] = $crmPropertyValidator->getFilteredValue();
+							if (!$isValidCrmProperty)
+							{
+								$this->errorCollection->setError(new Error(
+									"Value of the \"".$fieldData["NAME"]."\" field is not correct",
+									self::ERROR_ELEMENT_FIELD_VALUE)
+								);
+							}
+							break;
+					}
 				}
 			}
-		}
 
 		if (!empty($this->params['FIELDS']) && is_array($this->params['FIELDS']))
 		{
-			$validator = IblockRestValidator\Format\SimpleNoFilePropertyValueValidator::getInstance();
+			$validator = RestValidator\Format\SimpleNoFilePropertyValueValidator::getInstance();
 			$validator->setIblockId($this->iblockId);
 			$internalResult = $validator->run($this->params['FIELDS']);
 			if (!$internalResult->isSuccess())
@@ -557,11 +581,13 @@ class Element implements Controllable, Errorable
 			}
 		}
 
-		global $USER;
-		if (empty($values["MODIFIED_BY"]) && isset($USER) && is_object($USER))
+		if (empty($values['MODIFIED_BY']))
 		{
-			$userId = $USER->getID();
-			$elementFields["MODIFIED_BY"] = $userId;
+			$userId = $this->getCurrentUserId();
+			if ($userId)
+			{
+				$elementFields['MODIFIED_BY'] = $userId;
+			}
 		}
 		unset($elementFields["TIMESTAMP_X"]);
 
@@ -791,19 +817,19 @@ class Element implements Controllable, Errorable
 
 	private function hasBpTemplatesWithAutoStart(int $execType): bool
 	{
-		$documentType = \BizProcDocument::generateDocumentComplexType(
-			$this->params["IBLOCK_TYPE_ID"],
-			$this->iblockId
-		);
+		$workflowService = $this->getWorkflowService();
+		$documentType = $workflowService->getComplexDocumentType();
+		if (!$documentType)
+		{
+			return false;
+		}
 
-		$bpTemplatesWithAutoStart = \CBPWorkflowTemplateLoader::searchTemplatesByDocumentType(
-			$documentType,
-			$execType
-		);
+		$bpTemplatesWithAutoStart = \CBPWorkflowTemplateLoader::getDocumentTypeStates($documentType, $execType);
 
 		foreach ($bpTemplatesWithAutoStart as $template)
 		{
-			if (!\CBPWorkflowTemplateLoader::isConstantsTuned($template["ID"]))
+			$templateId = (int)($template['TEMPLATE_ID'] ?? 0);
+			if ($templateId > 0 && !\CBPWorkflowTemplateLoader::isConstantsTuned($templateId))
 			{
 				$this->errorCollection->setError(
 					new Error("Workflow constants need to be configured", self::ERROR_ADD_ELEMENT)
@@ -814,97 +840,132 @@ class Element implements Controllable, Errorable
 		return !empty($bpTemplatesWithAutoStart);
 	}
 
-	private function startBp(int $elementId, int $execType, $changedElementFields = []): void
+	private function getWorkflowService(): WorkflowService
 	{
-		$documentType = \BizprocDocument::generateDocumentComplexType(
-			$this->params["IBLOCK_TYPE_ID"],
-			$this->iblockId
-		);
-		$documentId = \BizProcDocument::getDocumentComplexId(
-			$this->params["IBLOCK_TYPE_ID"],
-			$elementId
-		);
-		$documentStates = \CBPWorkflowTemplateLoader::getDocumentTypeStates(
-			$documentType,
-			$execType
-		);
-
-		if (is_array($documentStates) && !empty($documentStates))
+		if (!$this->workflowService)
 		{
-			global $USER;
+			$iBlockInfo = \CIBlock::GetArrayByID($this->iblockId) ?: [];
+			$iBlockInfo['ID'] = (int)($iBlockInfo['ID'] ?? $this->iblockId);
+			$iBlockInfo['IBLOCK_TYPE_ID'] = (string)($iBlockInfo['IBLOCK_TYPE_ID'] ?? ($this->params['IBLOCK_TYPE_ID'] ?? ''));
+			$iBlockInfo['BIZPROC'] = (string)($iBlockInfo['BIZPROC'] ?? 'Y');
 
-			$userId = $USER->getID();
-
-			$currentUserGroups = $USER->getUserGroupArray();
-			if ($this->params["CREATED_BY"] == $userId)
-			{
-				$currentUserGroups[] = "author";
-			}
-
-			if ($execType === \CBPDocumentEventType::Create)
-			{
-				$canWrite = \CBPDocument::canUserOperateDocumentType(
-					\CBPCanUserOperateOperation::WriteDocument,
-					$userId,
-					$documentType,
-					[
-						"AllUserGroups" => $currentUserGroups,
-						"DocumentStates" => $documentStates,
-					]
-				);
-			}
-			else
-			{
-				$canWrite = \CBPDocument::canUserOperateDocument(
-					\CBPCanUserOperateOperation::WriteDocument,
-					$userId,
-					$documentId,
-					[
-						"AllUserGroups" => $currentUserGroups,
-						"DocumentStates" => $documentStates,
-					]
-				);
-			}
-
-			if (!$canWrite)
-			{
-				$this->errorCollection->setError(
-					new Error("You do not have enough permissions to edit this record in its current bizproc state")
-				);
-
-				return;
-			}
-
-			$errors = [];
-
-			foreach ($documentStates as $documentState)
-			{
-				$parameters = \CBPDocument::startWorkflowParametersValidate(
-					$documentState["TEMPLATE_ID"],
-					$documentState["TEMPLATE_PARAMETERS"],
-					$documentType,
-					$errors
-				);
-
-				\CBPDocument::startWorkflow(
-					$documentState["TEMPLATE_ID"],
-					\BizProcDocument::getDocumentComplexId($this->params["IBLOCK_TYPE_ID"], $elementId),
-					array_merge(
-						$parameters,
-						[
-							\CBPDocument::PARAM_TAGRET_USER => "user_" . intval($userId),
-							\CBPDocument::PARAM_MODIFIED_DOCUMENT_FIELDS => $changedElementFields,
-						]
-					),
-					$errors
-				);
-			}
-
-			foreach($errors as $message)
-			{
-				$this->errorCollection->setError(new Error($message));
-			}
+			$this->workflowService = new WorkflowService($iBlockInfo);
 		}
+
+		return $this->workflowService;
+	}
+
+	private function getWorkflowParameterValues(WorkflowService $workflowService, array $documentStates): array
+	{
+		$complexDocumentType = $workflowService->getComplexDocumentType();
+		if (!$complexDocumentType)
+		{
+			return [];
+		}
+
+		$allRequestParameters = $this->getWorkflowRequestParameters();
+
+		$workflowTemplateService = new WorkflowTemplateService();
+		$parameters = [];
+
+		foreach ($documentStates as $documentState)
+		{
+			$templateId = (int)($documentState['TEMPLATE_ID'] ?? 0);
+			if ($templateId <= 0)
+			{
+				continue;
+			}
+
+			$templateParameters = $documentState['TEMPLATE_PARAMETERS'] ?? [];
+			if (!is_array($templateParameters))
+			{
+				continue;
+			}
+
+			$requestParameters = [];
+			foreach (array_keys($templateParameters) as $parameterKey)
+			{
+				$requestKey = 'bizproc' . $templateId . '_' . $parameterKey;
+				$paramKey = strtoupper($requestKey);
+
+				if (array_key_exists($requestKey, $allRequestParameters))
+				{
+					$requestParameters[$parameterKey] = $allRequestParameters[$requestKey];
+				}
+				elseif (array_key_exists($paramKey, $this->params))
+				{
+					$requestParameters[$parameterKey] = $this->params[$paramKey];
+				}
+			}
+
+			$response = $workflowTemplateService->prepareParameters(
+				new PrepareParametersRequest(
+					templateParameters: $templateParameters,
+					requestParameters: $requestParameters,
+					complexDocumentType: $complexDocumentType,
+				)
+			);
+			$this->errorCollection->add($response->getErrors());
+			$parameters[$templateId] = $response->getParameters();
+		}
+
+		return $parameters;
+	}
+
+	protected function getWorkflowRequestParameters(): array
+	{
+		$request = Context::getCurrent()?->getRequest();
+		if ($request === null)
+		{
+			return [];
+		}
+
+		return array_merge($request->toArray(), $request->getFileList()->toArray());
+	}
+
+	private function startBp(int $elementId, int $execType, array $changedElementFields = []): void
+	{
+		$workflowService = $this->getWorkflowService();
+		$documentType = $workflowService->getComplexDocumentType();
+		if (!$documentType)
+		{
+			return;
+		}
+
+		$userId = $this->getCurrentUserId();
+		$currentUserGroups = $this->getCurrentUserGroups();
+		if ($this->params['CREATED_BY'] == $userId)
+		{
+			$currentUserGroups[] = 'author';
+		}
+
+		$workflowElementId = ($execType === \CBPDocumentEventType::Create ? 0 : $elementId);
+		if (!$workflowService->canUserWriteDocument($workflowElementId, $userId, $currentUserGroups))
+		{
+			$this->errorCollection->setError(
+				new Error('You do not have enough permissions to edit this record in its current bizproc state')
+			);
+
+			return;
+		}
+
+		$documentStates = $workflowService->getNotRunningDocumentStates($workflowElementId);
+		if (!is_array($documentStates) || empty($documentStates))
+		{
+			return;
+		}
+
+		$parameters = $this->getWorkflowParameterValues($workflowService, $documentStates);
+		$response = $workflowService->startWorkflows(
+			new StartWorkflowsRequest(
+				$elementId,
+				$userId,
+				$parameters,
+				($execType === \CBPDocumentEventType::Edit ? $changedElementFields : []),
+				$execType === \CBPDocumentEventType::Create,
+			)
+		);
+		$this->errorCollection->add($response->getErrors());
 	}
 
 	private function getElementData()
@@ -1024,7 +1085,7 @@ class Element implements Controllable, Errorable
 		];
 		$filter = $this->getInputFilter($filter);
 
-		$validator = IblockRestValidator\Format\ElementFilterFieldValidator::getInstance();
+		$validator = RestValidator\Format\ElementFilterFieldValidator::getInstance();
 		$internalResult = $validator->run($filter);
 		if (!$internalResult->isSuccess())
 		{
@@ -1034,8 +1095,8 @@ class Element implements Controllable, Errorable
 		}
 		if ($this->iblockId)
 		{
-			/** @var IblockRestValidator\Format\PropertyValueFilterValidator $validator */
-			$validator = IblockRestValidator\Format\PropertyValueFilterValidator::getInstance();
+			/** @var RestValidator\Format\PropertyValueFilterValidator $validator */
+			$validator = RestValidator\Format\PropertyValueFilterValidator::getInstance();
 			$validator->setIblockId($this->iblockId);
 			$internalResult = $validator->run($filter);
 			if (!$internalResult->isSuccess())
@@ -1142,5 +1203,15 @@ class Element implements Controllable, Errorable
 		}
 
 		return $sefFolder;
+	}
+
+	protected function getCurrentUserId(): int
+	{
+		return (int)CurrentUser::get()->getId();
+	}
+
+	protected function getCurrentUserGroups(): array
+	{
+		return CurrentUser::get()->getUserGroups();
 	}
 }

@@ -37,6 +37,11 @@ class Structure extends Dataset
 		return $this->getMessage('HR_BIC_STRUCTURE_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('HR_BIC_STRUCTURE_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	/**
 	 * @return Result
 	 */

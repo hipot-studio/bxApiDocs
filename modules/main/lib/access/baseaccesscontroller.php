@@ -67,6 +67,7 @@ abstract class BaseAccessController
 	public function checkByItemId(string $action, ?int $itemId = null, $params = null): bool
 	{
 		$item = $this->loadItem($itemId);
+
 		return $this->check($action, $item, $params);
 	}
 

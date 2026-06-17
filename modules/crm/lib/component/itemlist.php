@@ -9,6 +9,7 @@ use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Component\EntityList\Settings\PermissionItem;
 use Bitrix\Crm\Counter\EntityCounterFactory;
 use Bitrix\Crm\Counter\EntityCounterType;
+use Bitrix\Crm\Filter\EntityDataProvider;
 use Bitrix\Crm\Filter\Filter;
 use Bitrix\Crm\Filter\HeaderSections;
 use Bitrix\Crm\Filter\ItemDataProvider;
@@ -44,6 +45,8 @@ abstract class ItemList extends Base
 	protected $provider;
 	/** @var ItemUfDataProvider */
 	protected $ufProvider;
+	/** @var EntityDataProvider[] */
+	protected array $additionalProviders = [];
 	/** @var Filter */
 	protected $filter;
 	protected $users;
@@ -156,14 +159,15 @@ abstract class ItemList extends Base
 			[
 				'categoryId' => $this->getCategoryId(),
 				'type' => $type,
+				'isRecurring' => $this->isRecurring(),
 			],
 		);
 		$this->provider = $filterFactory->getDataProvider($settings);
 
 		$this->ufProvider = $filterFactory->getUserFieldDataProvider($settings);
-		$additionalProviders = HeaderSections::getInstance()->additionalProviders($settings, $filterFactory);
+		$this->additionalProviders = HeaderSections::getInstance()->additionalProviders($settings, $filterFactory);
 
-		$this->filter = $filterFactory->createFilter($settings->getID(), $this->provider, $additionalProviders);
+		$this->filter = $filterFactory->createFilter($settings->getID(), $this->provider, $this->additionalProviders);
 
 		EntityRelationTable::initiateClearingDuplicateSourceElementsWithInterval($this->factory->getEntityTypeId());
 	}

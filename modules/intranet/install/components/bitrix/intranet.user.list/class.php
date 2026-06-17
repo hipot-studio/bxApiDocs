@@ -2,7 +2,6 @@
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)die();
 
-use Bitrix\Intranet\UserTable;
 use Bitrix\Intranet\User\Grid\Settings\UserSettings;
 use Bitrix\Intranet\User\Grid\UserGrid;
 
@@ -129,10 +128,13 @@ class CIntranetUserListComponent extends UserList
 
 			$this->grid->setTotalCountCalculator(function() {
 				$params = $this->grid->getOrmParams();
-				unset($params['limit'], $params['offset']);
-				$params['count_total'] = true;
 
-				return UserTable::getList($params)->getCount();
+				return $this->grid
+					->getQuery($params)
+					->countTotal(true)
+					->exec()
+					->getCount()
+				;
 			});
 		}
 

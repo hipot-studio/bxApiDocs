@@ -11,6 +11,7 @@ enum OptionDictionary: string
 	case BookingEnabled = 'booking_enabled';
 	case IntersectionForAll = 'IntersectionForAll';
 	case WaitListExpanded = 'wait_list_expanded';
+	case GridMode = 'grid_mode';
 	case CalendarExpanded = 'calendar_expanded';
 	case NotificationsExpanded = 'notificationsExpanded';
 	case WhatsAppEmergencyNotified = 'whatsapp_emergency_notified';

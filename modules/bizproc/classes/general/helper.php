@@ -1201,13 +1201,18 @@ class CBPHelper
 			'time' => ['Name' => Bizproc\BaseType\Time::getName(), 'BaseType' => Bizproc\BaseType\Time::getType()],
 			'user' => ['Name' => Loc::getMessage('BPCGHLP_PROP_USER'), 'BaseType' => 'user'],
 			'file' => ['Name' => Loc::getMessage('BPCGHLP_PROP_FILE'), 'BaseType' => 'file'],
-//			'entityselector' => [
-//				'Name' => Loc::getMessage('BPCGHLP_PROP_ENTITYSELECTOR'),
-//				'BaseType' => 'entityselector'
-//			],
+//			'entityselector' => self::getEntitySelectorTypeInfo(),
 		];
 
 		return $result;
+	}
+
+	public static function getEntitySelectorTypeInfo(): array
+	{
+		return [
+			'Name' => Loc::getMessage('BPCGHLP_PROP_ENTITYSELECTOR'),
+			'BaseType' => 'entityselector',
+		];
 	}
 
 	/**

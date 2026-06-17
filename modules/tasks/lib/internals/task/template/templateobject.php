@@ -85,8 +85,43 @@ class TemplateObject extends EO_Template implements Arrayable
 		return $this->getMembersIdsByRole(RoleDictionary::ROLE_RESPONSIBLE);
 	}
 
+	public function getSubTemplatesArray(): array
+	{
+		return array_map(
+			fn($item) => [
+				'TEMPLATE_ID' => $item->getTemplateId(),
+				'PARENT_TEMPLATE_ID' => $item->getParentTemplateId(),
+				'DIRECT' => $item->getDirect(),
+			],
+			$this->getSubTemplates()?->getAll() ?? [],
+		);
+	}
+
 	protected function getMemberService(): AbstractMemberService
 	{
 		return new TemplateMemberService($this->getId());
+	}
+
+	public function getTags(): array
+	{
+		return $this->getTagList()?->map(
+			fn ($tag) => ['ID' => $tag->getId(), 'NAME' => $tag->getName()]
+		) ?? [];
+	}
+
+	public function getBaseTemplateId(): ?int
+	{
+		$baseTemplate = $this->get('DIRECT_PARENT');
+		return $baseTemplate ? $baseTemplate->getParentTemplateId() : null;
+	}
+
+	public function getDirectChildrenCount(): int
+	{
+		return count(
+			array_filter(
+				$this->getSubTemplatesArray(),
+				fn($data) => $data['DIRECT'] ?? false,
+			)
+		);
 	}
 }

@@ -280,6 +280,7 @@ class User
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['user']['TABLE_DESCRIPTION'] = $messages['MAIN_BIC_USER_TABLE'] ?: 'user';
+		$result['user']['TABLE_DESCRIPTION_FULL'] = $messages['MAIN_BIC_USER_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['user']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = $messages['MAIN_BIC_USER_FIELD_' . $fieldCode];

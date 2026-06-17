@@ -73,7 +73,10 @@ class ModulesCommand extends UpdateCommand
 		{
 			if (empty($selectedModules) || in_array($moduleId, $selectedModules))
 			{
-				$modules[$moduleId] = array_key_last($module['VERSION']);
+				if (isset($module['VERSION']))
+				{
+					$modules[$moduleId] = array_key_last($module['VERSION']);
+				}
 			}
 		}
 
@@ -122,7 +125,10 @@ class ModulesCommand extends UpdateCommand
 		$updates = [];
 		foreach ($updateList as $moduleId => $module)
 		{
-			$updates[] = $moduleId . ' (' . array_key_last($module['VERSION']) . ')';
+			if (isset($module['VERSION']))
+			{
+				$updates[] = $moduleId . ' (' . array_key_last($module['VERSION']) . ')';
+			}
 		}
 		sort($updates);
 

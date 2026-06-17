@@ -94,7 +94,7 @@ class CUserTypeIBlockSection extends CUserTypeEnum
 			<tr>
 				<td>' . Loc::getMessage('USER_TYPE_IBSEC_DISPLAY') . ':</td>
 				<td>
-					<input type="text" size="6" name="' . $additionalParameters['NAME'] . '[IBLOCK_ID]" value="' . htmlspecialcharsbx($value) . '">
+					<input type="text" size="6" name="' . $additionalParameters['NAME'] . '[IBLOCK_ID]" value="' . htmlspecialcharsbx($iblock_id) . '">
 				</td>
 			</tr>
 			';

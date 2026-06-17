@@ -88,9 +88,16 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 			return;
 		}
 
-		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED)
+		if (SupersetInitializer::isSupersetDeleted())
 		{
 			$this->includeComponentTemplate('create_superset');
+
+			return;
+		}
+
+		if (SupersetInitializer::isSupersetPendingDelete())
+		{
+			$this->includeComponentTemplate('tool_disabled');
 
 			return;
 		}

@@ -147,6 +147,7 @@ class DealUserField
 
 		$messages = \Bitrix\Main\Localization\Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_deal_uf']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_DEAL_UF_TABLE'] ?: 'crm_deal_uf';
+		$result['crm_deal_uf']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_DEAL_UF_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_deal_uf']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			if (isset($messages['CRM_BIC_DEAL_UF_FIELD_' . $fieldCode]))

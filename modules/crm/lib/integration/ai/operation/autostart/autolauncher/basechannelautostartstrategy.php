@@ -2,9 +2,10 @@
 
 namespace Bitrix\Crm\Integration\AI\Operation\Autostart\AutoLauncher;
 
+use Bitrix\Crm\Copilot\Pipeline\TargetResolver;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings;
-use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
@@ -17,11 +18,19 @@ abstract class BaseChannelAutoStartStrategy
 	public const OPERATION_UPDATE = 2;
 	public const OPERATION_COMPLETE = 3;
 
-	protected LoggerInterface $logger;
-	protected Orchestrator $orchestrator;
-	protected ?ItemIdentifier $nextTarget;
 	protected ?int $userId;
+	protected LoggerInterface $logger;
+	protected TargetResolver $targetResolver;
+	protected ?ItemIdentifier $nextTarget;
 
+	/**
+	 * Method for running the strategy.
+	 * Should contain the logic of checking the conditions for autostart and starting the operation if conditions are met.
+	 *
+	 * @param array $changedFields
+	 *
+	 * @return void
+	 */
 	abstract public function run(array $changedFields = []): void;
 
 	public function __construct(readonly int $activityOperation, readonly array $activityFields) {}
@@ -33,13 +42,10 @@ abstract class BaseChannelAutoStartStrategy
 		return $this;
 	}
 
-	final public function setOrchestrator(Orchestrator $orchestrator): self
+	final public function setTargetResolver(TargetResolver $targetResolver): self
 	{
-		$this->orchestrator = $orchestrator;
-
-		$this->nextTarget = $this->orchestrator
-			->findPossibleTargetByBindings($this->activityFields['BINDINGS'] ?? [])
-		;
+		$this->targetResolver = $targetResolver;
+		$this->nextTarget = $this->targetResolver->findTargetByBindings($this->activityFields['BINDINGS'] ?? []);
 		$this->userId = $this->nextTarget
 			? $this->findAssigned($this->nextTarget)
 			: null
@@ -50,8 +56,12 @@ abstract class BaseChannelAutoStartStrategy
 
 	final protected function getFillFieldsSettings(): ?FillFieldsSettings
 	{
-		return AIManager::isEnabledInGlobalSettings()
-			? $this->orchestrator->getFillFieldsSettingsByActivity($this->activityFields)
+		return (
+			AIManager::isEnabledInGlobalSettings()
+			|| AIManager::isEnabledInGlobalSettings(GlobalSetting::AnalyzeCommunication)
+			|| AIManager::isEnabledInGlobalSettings(GlobalSetting::Summarize)
+		)
+			? $this->getFillFieldsSettingsByActivity()
 			: null
 		;
 	}
@@ -66,5 +76,15 @@ abstract class BaseChannelAutoStartStrategy
 		$factory = Container::getInstance()->getFactory($target->getEntityTypeId());
 
 		return $factory?->getItem($target->getEntityId(), [Item::FIELD_NAME_ASSIGNED])?->getAssignedById();
+	}
+
+	private function getFillFieldsSettingsByActivity(): ?FillFieldsSettings
+	{
+		if (!$this->nextTarget)
+		{
+			return null;
+		}
+
+		return FillFieldsSettings::get($this->nextTarget->getEntityTypeId(), $this->nextTarget->getCategoryId());
 	}
 }

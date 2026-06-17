@@ -18,7 +18,8 @@ class TeamEditTool extends NodeEditTool
 
 	public function getDescription(): string
 	{
-		return 'Rename name to `name` and description to `description` for the node identified by `nodeId` when node is a team. 
-Use this function to update node information';
+		return 'Update the name, description, and/or color of an existing team. '
+			. 'Does not move the node, change members, or alter communications. '
+			. 'Use `team_change_parent` to reparent and `team_edit_employees` to replace the member list.';
 	}
 }

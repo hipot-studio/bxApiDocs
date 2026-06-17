@@ -58,8 +58,12 @@ class DependenceTable extends Tree
 			(new Reference('TEMPLATE', TemplateTable::getEntity(), Join::on('this.TEMPLATE_ID', 'ref.ID')))
 				->configureJoinType(Join::TYPE_INNER),
 
-			(new Reference('PARENT_TEMPLATE', TemplateTable::getEntity(), Join::on('this.PARENT_TEMPLATE_ID', 'ref.ID')))
-				->configureJoinType(Join::TYPE_INNER),
+			(new Reference(
+				'PARENT_TEMPLATE',
+				TemplateTable::getEntity(),
+				Join::on('this.PARENT_TEMPLATE_ID', 'ref.ID')
+					->whereColumn('this.TEMPLATE_ID', '!=', 'this.PARENT_TEMPLATE_ID')
+			))->configureJoinType(Join::TYPE_INNER),
 		];
 
 		$parentMap = parent::getMap(self::class);

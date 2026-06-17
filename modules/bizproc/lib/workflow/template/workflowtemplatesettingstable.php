@@ -4,7 +4,6 @@ namespace Bitrix\Bizproc\Workflow\Template;
 
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Data\DataManager;
-use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 
 /**
@@ -26,6 +25,7 @@ use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 class WorkflowTemplateSettingsTable extends DataManager
 {
 	const SHOW_CATEGORY_PREFIX = 'SHOW_CATEGORY_ID_';
+	const ORIGIN_SYSTEM_CODE = 'ORIGIN_SYSTEM_CODE';
 
 	public static function getTableName(): string
 	{

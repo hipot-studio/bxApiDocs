@@ -40,7 +40,8 @@ class Integrator extends BaseContent
 			'title' => $this->getTitle(),
 			'description' => $this->getDescription(),
 			'integratorName' => $this->integratorInfo->name ?? '',
-			'integratorUrl' => $this->integratorInfo->id ? (new UrlProvider())->getPublicDomain()->setPath('/partners/partner/' . $this->integratorInfo->id) : '',
+			'integratorUrl' => $this->integratorInfo->url ?? '',
+			'integratorCardUrl' => $this->integratorInfo->id ? $this->getUrl($this->integratorInfo->id) : '',
 			'integratorLogo' => $this->integratorInfo->logo ?? '',
 			'isCurrentUserAdmin' => CurrentUser::get()->canDoOperation('bitrix24_config'),
 			'isCurrentUserIntegrator' => false,
@@ -48,6 +49,17 @@ class Integrator extends BaseContent
 			'feedbackFormPresets' => $this->getFeedbackFormPresets(),
 			'connectPartnerFormParams' => $this->getConnectPartnerFormParams(),
 		];
+	}
+
+	private function getUrl(int $id): string
+	{
+		$publicDomain = (new UrlProvider())->getPublicDomain();
+
+		return $publicDomain->setPath(
+			Application::getInstance()->getLicense()->isCis()
+			? "partners/partner/{$id}/"
+			: "partners/?ID={$id}"
+		)->getUri();
 	}
 
 	private function getFeedbackFormPresets(): array
@@ -66,7 +78,8 @@ class Integrator extends BaseContent
 		return [
 			'partnerId' => $this->integratorInfo->id ?? '',
 			'partnerName' => $this->integratorInfo->name ?? '',
-			'partnerUrl' => $this->integratorInfo->url ?? '#',
+			'partnerUrl' => $this->integratorInfo->url ?? '',
+			'partnerCardUrl' => $this->integratorInfo->id ? $this->getUrl($this->integratorInfo->id) : '',
 			'partnerLogo' => $this->integratorInfo->logo ?? '',
 			'publicDomain' => (new UrlProvider())->getPublicDomain(),
 			'partnerPhone' => $this->integratorInfo->phone ?? '',

@@ -2,21 +2,23 @@
 
 use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxConnectDTO;
+use Bitrix\Mail\Helper\Enum\MailboxStatus;
+use Bitrix\Mail\Helper\Enum\MailboxConnectionRequestStatus;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\Mailbox\MailboxConnector;
-use Bitrix\Mail\Helper\MailboxSearchIndexHelper;
+use Bitrix\Mail\Helper\Mailbox\MailboxSettingsConfig;
+use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Main;
-use Bitrix\Main\Mail\Address;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Mail\Sender;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Main\Config\Configuration;
-use Bitrix\Main\Mail\Internal\SenderTable;
 use Bitrix\Main\Mail\Sender\UserSenderDataProvider;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Web\Json;
+use Bitrix\UI\Buttons\Button;
 use Bitrix\UI\Buttons\Color;
 use Bitrix\UI\Buttons\Icon;
 use Bitrix\UI\Buttons\JsCode;
@@ -36,11 +38,13 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 	private const DEFAULT_SEND_LIMIT = 250;
 	private const ACCESS_CODE_USER_PREFIX = 'U';
 
+	private Main\ErrorCollection $errorCollection;
+
 	public function configureActions()
 	{
 		$this->errorCollection = new Main\ErrorCollection();
 
-		return array();
+		return [];
 	}
 
 	public function executeComponent()
@@ -50,6 +54,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		if (!is_object($USER) || !$USER->isAuthorized())
 		{
 			$APPLICATION->authForm('');
+
 			return;
 		}
 
@@ -63,9 +68,11 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		{
 			case 'new':
 				$this->editAction(true);
+
 				break;
 			case 'edit':
 				$this->editAction(false);
+
 				break;
 			default:
 				$this->defaultAction();
@@ -79,13 +86,11 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		$APPLICATION->setTitle(Loc::getMessage('MAIL_CLIENT_CONFIG_TITLE'));
 
 		$this->arResult['MAX_ALLOWED_CONNECTED_MAILBOXES'] = LicenseManager::getUserMailboxesLimit();
-		$this->arResult['CAN_CONNECT_NEW_MAILBOX'] = MailboxConnector::canConnectNewMailbox($USER->getId());
+		$this->arResult['CAN_CONNECT_NEW_MAILBOX'] = MailboxConnector::checkConnectionLimits((int)$USER->getId());
 		$this->arParams['DEFAULT_SEND_LIMIT'] = self::DEFAULT_SEND_LIMIT;
 
-		if (Feature::isMailboxGridAvailable())
-		{
-			$this->prepareToolbarButton();
-		}
+		$isMainMailPage = $this->arParams['VARIABLES']['IS_MAIN_MAIL_PAGE'] ?? false;
+		$this->prepareToolbarButton($isMainMailPage);
 
 		$this->includeComponentTemplate();
 	}
@@ -109,28 +114,33 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		{
 			$userIdToCheck = $USER->getId();
 
-			if (!MailboxConnector::canConnectNewMailbox($userIdToCheck))
+			if (!MailboxConnector::checkConnectionLimits((int)$userIdToCheck))
 			{
 				showError(Loc::getMessage('MAIL_CLIENT_DENIED'));
 
 				return;
 			}
 
-			$serviceId = $_REQUEST['id'];
+			$serviceId = (int)$_REQUEST['id'];
 		}
 		else
 		{
-			$mailbox = Mail\MailboxTable::getList(array(
-				'filter' => array(
-					'=ID' => $_REQUEST['id'],
-					'=ACTIVE' => 'Y',
-					'=SERVER_TYPE' => 'imap',
-				),
-			))->fetch();
+			$mailbox = Mail\MailboxTable::query()
+				->setSelect(['*'])
+				->where('ID', (int)$_REQUEST['id'])
+				->whereIn('ACTIVE', [
+					MailboxStatus::Active->value,
+					MailboxStatus::Pending->value,
+					MailboxStatus::Canceled->value,
+				])
+				->where('SERVER_TYPE', 'imap')
+				->fetch()
+			;
 
 			if (empty($mailbox))
 			{
 				showError(Loc::getMessage('MAIL_CLIENT_ELEMENT_NOT_FOUND'));
+
 				return;
 			}
 
@@ -142,7 +152,18 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				return;
 			}
 
-			foreach (array($mailbox['EMAIL'], $mailbox['NAME'], $mailbox['LOGIN']) as $item)
+			$isPasswordlessMailbox = in_array($mailbox['ACTIVE'], [
+				MailboxStatus::Pending->value,
+				MailboxStatus::Canceled->value,
+			], true);
+			if ($isPasswordlessMailbox && !MailAccess::hasCurrentUserAccessToMassConnect())
+			{
+				showError(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
+				return;
+			}
+
+			foreach ([$mailbox['EMAIL'], $mailbox['NAME'], $mailbox['LOGIN']] as $item)
 			{
 				$address = new \Bitrix\Main\Mail\Address($item);
 				if ($address->validate())
@@ -157,13 +178,26 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			{
 				if ($this->arParams['IS_SMTP_AVAILABLE'])
 				{
-					$sender = self::getMailboxSender((int)$mailbox['ID'], $mailbox['EMAIL'], (int)$mailbox['USER_ID']);
+					$sender = $this->getMailboxSender((int)$mailbox['ID'], $mailbox['EMAIL'], (int)$mailbox['USER_ID']);
 
 					if ($sender)
 					{
 						$mailbox['__smtp'] = $sender['OPTIONS']['smtp'];
 						$mailbox['USERNAME'] = $sender['NAME'];
 						$mailbox['USE_SENDER_NAME'] = UserSenderDataProvider::shouldUseCustomSenderName($sender) ? 'Y' : 'N';
+					}
+					elseif (!empty($mailbox['OPTIONS']['passwordless_smtp']))
+					{
+						$passwordlessSmtp = $mailbox['OPTIONS']['passwordless_smtp'];
+						$mailbox['__smtp'] = $passwordlessSmtp;
+						if (!empty($passwordlessSmtp['senderName']))
+						{
+							$mailbox['USERNAME'] = $passwordlessSmtp['senderName'];
+						}
+						if (isset($passwordlessSmtp['useSenderName']))
+						{
+							$mailbox['USE_SENDER_NAME'] = $passwordlessSmtp['useSenderName'] ? 'Y' : 'N';
+						}
 					}
 				}
 				else
@@ -172,7 +206,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				}
 			}
 
-			if (in_array('crm_connect', (array) $mailbox['OPTIONS']['flags']))
+			if (in_array('crm_connect', (array)$mailbox['OPTIONS']['flags']))
 			{
 				$mailbox['__crm'] = true;
 			}
@@ -186,7 +220,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		$this->arParams['HAS_NO_ACCESS_TO_SHARE_MAILBOX'] = !$new
 			&& !MailboxAccess::hasCurrentUserAccessToEditMailboxAccess(
-				mailboxData: $mailbox
+				$mailbox['ID'] ?? 0,
+				$mailbox['USER_ID'] ?? 0,
 			)
 		;
 
@@ -194,14 +229,14 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		$this->arParams['IS_ICAL_CHECK'] = $mailbox['OPTIONS']['ical_access'] === self::POSITIVE_ANSWER;
 
 
-		$res = Mail\MailServicesTable::getList(array(
-			'filter' => array(
+		$res = Mail\MailServicesTable::getList([
+			'filter' => [
 				'=ID' => $serviceId,
 				'=SITE_ID' => SITE_ID,
-			),
-		));
+			],
+		]);
 
-		$this->arParams['SERVICE'] = array();
+		$this->arParams['SERVICE'] = [];
 		if ($service = $res->fetch())
 		{
 			$this->arParams['SERVICE'] = [
@@ -232,9 +267,10 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			$this->arParams['SERVICE']['smtp'] = $serviceSmtp;
 
 		}
-		else if ($new)
+		elseif ($new)
 		{
 			showError(Loc::getMessage('MAIL_CLIENT_ELEMENT_NOT_FOUND'));
+
 			return;
 		}
 
@@ -270,22 +306,22 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		if (!$new)
 		{
-			$res = Mail\Internals\MailboxAccessTable::getList(array(
-				'filter' => array(
+			$res = Mail\Internals\MailboxAccessTable::getList([
+				'filter' => [
 					'=MAILBOX_ID' => $mailbox['ID'],
 					'TASK_ID' => 0,
-				),
-			));
+				],
+			]);
 
 			while ($item = $res->fetch())
 			{
 				if (preg_match('/^(U|DR|D)(\d+)$/', $item['ACCESS_CODE'], $matches))
 				{
-					if ('U' == $matches[1])
+					if ($matches[1] == 'U')
 					{
 						$access['user'][$item['ACCESS_CODE']] = $matches[2];
 					}
-					else if ('DR' == $matches[1])
+					elseif ($matches[1] == 'DR')
 					{
 						$access['department'][$item['ACCESS_CODE']] = [
 							'id' => $item['ACCESS_CODE'],
@@ -312,13 +348,13 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		while ($item = $res->fetch())
 		{
 			$id = sprintf('U%u', $item['ID']);
-			$access['user'][$id] = array(
+			$access['user'][$id] = [
 				'id'       => $id,
 				'entityId' => $item['ID'],
 				'name'     => \CUser::formatName(\CSite::getNameFormat(), $item, true),
 				'avatar'   => '',
 				'desc'     => $item['WORK_POSITION'] ?: $item['PERSONAL_PROFESSION'] ?: '&nbsp;',
-			);
+			];
 		}
 
 		$this->arParams['ACCESS_LIST'] = array_map(
@@ -326,7 +362,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			{
 				return array_filter($list, 'is_array');
 			},
-			$access
+			$access,
 		);
 
 		if (\Bitrix\Main\Loader::includeModule('socialnetwork'))
@@ -344,24 +380,14 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 			if ($this->arParams['CRM_AVAILABLE'])
 			{
-				$this->arParams['NEW_ENTITY_LIST'] = array(
-					\CCrmOwnerType::LeadName    => \CCrmOwnerType::getDescription(\CCrmOwnerType::Lead),
-					\CCrmOwnerType::ContactName => \CCrmOwnerType::getDescription(\CCrmOwnerType::Contact),
+				$this->arParams['LEAD_SOURCE_LIST'] = MailboxSettingsConfig::getCrmSourcesMap();
+				$defaultSettings = MailboxSettingsConfig::getDefaultSettings(
+					$this->arParams['LEAD_SOURCE_LIST'],
 				);
-				$this->arParams['DEFAULT_NEW_ENTITY_IN']  = \CCrmOwnerType::LeadName;
-				$this->arParams['DEFAULT_NEW_ENTITY_OUT'] = \CCrmOwnerType::ContactName;
-
-				$this->arParams['LEAD_SOURCE_LIST'] = \CCrmStatus::getStatusList('SOURCE');
-				reset($this->arParams['LEAD_SOURCE_LIST']);
-				$this->arParams['DEFAULT_LEAD_SOURCE'] = key($this->arParams['LEAD_SOURCE_LIST']);
-				if (is_set($this->arParams['LEAD_SOURCE_LIST'], 'EMAIL'))
-				{
-					$this->arParams['DEFAULT_LEAD_SOURCE'] = 'EMAIL';
-				}
-				else if (is_set($this->arParams['LEAD_SOURCE_LIST'], 'OTHER'))
-				{
-					$this->arParams['DEFAULT_LEAD_SOURCE'] = 'OTHER';
-				}
+				$this->arParams['NEW_ENTITY_LIST'] = MailboxSettingsConfig::getCrmEntitiesMap();
+				$this->arParams['DEFAULT_NEW_ENTITY_IN'] = $defaultSettings['crmIncomingEntity'];
+				$this->arParams['DEFAULT_NEW_ENTITY_OUT'] = $defaultSettings['crmOutgoingEntity'];
+				$this->arParams['DEFAULT_LEAD_SOURCE'] = $defaultSettings['crmSource'];
 
 				if (!$new)
 				{
@@ -369,13 +395,13 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 					if (!array_key_exists('flags', $options) || !is_array($options['flags']))
 					{
-						$options['flags'] = array();
+						$options['flags'] = [];
 					}
 
 					if ($mailbox['__crm'])
 					{
 						// backward compatibility
-						if (!array_intersect(array('crm_deny_new_lead', 'crm_deny_entity_in', 'crm_deny_entity_out'), $options['flags']))
+						if (!array_intersect(['crm_deny_new_lead', 'crm_deny_entity_in', 'crm_deny_entity_out'], $options['flags']))
 						{
 							$this->arParams['DEFAULT_NEW_ENTITY_IN'] = \CCrmOwnerType::LeadName;
 							$this->arParams['DEFAULT_NEW_ENTITY_OUT'] = \CCrmOwnerType::LeadName;
@@ -398,11 +424,11 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 					if (!empty($options['crm_lead_resp']))
 					{
-						$this->arParams['CRM_QUEUE'] = \Bitrix\Main\UserTable::getList(array(
-							'filter' => array(
+						$this->arParams['CRM_QUEUE'] = \Bitrix\Main\UserTable::getList([
+							'filter' => [
 								'ID' => $options['crm_lead_resp'],
-							),
-						))->fetchAll();
+							],
+						])->fetchAll();
 
 						$order = array_flip(array_values(array_unique($options['crm_lead_resp'])));
 						usort($this->arParams['CRM_QUEUE'], function ($a, $b) use (&$order)
@@ -411,16 +437,16 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 						});
 					}
 
-					$this->arParams['NEW_LEAD_FOR'] = is_array($options['crm_new_lead_for']) ? $options['crm_new_lead_for'] : array();
+					$this->arParams['NEW_LEAD_FOR'] = is_array($options['crm_new_lead_for']) ? $options['crm_new_lead_for'] : [];
 				}
 
 				if (empty($this->arParams['CRM_QUEUE']))
 				{
-					$this->arParams['CRM_QUEUE'] = \Bitrix\Main\UserTable::getList(array(
-						'filter' => array(
+					$this->arParams['CRM_QUEUE'] = \Bitrix\Main\UserTable::getList([
+						'filter' => [
 							'ID' => $new ? $USER->getId() : $mailbox['USER_ID'],
-						),
-					))->fetchAll();
+						],
+					])->fetchAll();
 				}
 			}
 		}
@@ -453,8 +479,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		$this->arParams['SENDER_NAME'] = $this->getSenderName($mailbox['USERNAME'] ?? '', $mailbox['USER_ID'] ?? null);
 		$this->arParams['USE_SENDER_NAME'] = $mailbox['USE_SENDER_NAME'] === 'Y';
 
-		$this->arParams['OWNER_ACCESS_CODE'] =
-			!empty($mailbox['USER_ID'])
+		$this->arParams['OWNER_ACCESS_CODE']
+			= !empty($mailbox['USER_ID'])
 				? self::ACCESS_CODE_USER_PREFIX . (int)$mailbox['USER_ID']
 				: ''
 		;
@@ -464,13 +490,13 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 	public function checkAvailabilityEMailAction($serviceId,$email,$oauthUid)
 	{
-		$service = Mail\MailServicesTable::getList(array(
-			'filter' => array(
+		$service = Mail\MailServicesTable::getList([
+			'filter' => [
 				'=ID'          => $serviceId,
 				'=ACTIVE'       => 'Y',
 				'=SERVICE_TYPE' => 'imap',
-			),
-		))->fetch();
+			],
+		])->fetch();
 
 		if (!empty($service))
 		{
@@ -498,8 +524,6 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 	public function saveAction($fields)
 	{
-		global $USER;
-
 		if (!empty($fields['site_id']))
 		{
 			$currentSite = \CSite::getById($fields['site_id'])->fetch();
@@ -516,20 +540,60 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 		if (!$mailboxId)
 		{
-			if (!Mail\Helper\MailboxAccess::hasCurrentUserAccessToAddMailbox())
-			{
-				$this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
-
-				return;
-			}
-
-			$mailboxConnectDTO = $this->prepareMailboxConnectDTO($fields, $currentSite, $USER->getId());
-			if ($mailboxConnectDTO === null)
-			{
-				return;
-			}
+			$connectionRequestId = (int)($fields['mailbox_connection_request_id'] ?? 0);
 
 			$mailboxConnector = new MailboxConnector();
+			if ($connectionRequestId > 0)
+			{
+				$connectionRequestService = new Mail\Helper\Mailbox\MailboxConnectionRequestService();
+
+				if (!$connectionRequestService->isResponsibleAdmin())
+				{
+					$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
+					return;
+				}
+
+				$request = $connectionRequestService->getRequestById($connectionRequestId);
+				if ($request === null)
+				{
+					$this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+
+					return;
+				}
+
+				if ($request['STATUS'] !== MailboxConnectionRequestStatus::Pending->value)
+				{
+					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_CONNECTION_REQUEST_NOT_PENDING'));
+
+					return;
+				}
+
+				$userIdToConnectNewMailbox = (int)$request['REQUESTER_ID'];
+
+				if (!MailAccess::hasCurrentUserAccessToConnectMailboxToUser($userIdToConnectNewMailbox))
+				{
+					$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
+					return;
+				}
+			}
+			else
+			{
+				$currentUserId = (int)CurrentUser::get()->getId();
+
+				if (!$mailboxConnector->checkConnectMailbox())
+				{
+					$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
+					return;
+				}
+
+				$userIdToConnectNewMailbox = $currentUserId;
+			}
+
+			$mailboxConnectDTO = MailboxConnectDTO::createFromFormFieldsForConnect($fields, $currentSite, $userIdToConnectNewMailbox);
+
 			$result = $mailboxConnector->connectMailboxWithCustomCrm($mailboxConnectDTO);
 			if (!$mailboxConnector->getSuccess())
 			{
@@ -538,611 +602,66 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				return;
 			}
 
-			return [
-				'id' => $result['id'] ?? 0,
-				'senderName' => $senderName ?? null,
-			];
-		}
+			$createdMailboxId = (int)($result['id'] ?? 0);
+			$connectionRequestCompleted = false;
 
-		$newOwnerId = 0;
-		if (MailboxAccess::hasCurrentUserAccessToChangeMailboxOwner())
-		{
-			$newOwnerId = $this->parseUserCode($fields['owner_id'] ?? 0);
-
-			if ($newOwnerId > 0)
+			if ($createdMailboxId > 0 && $connectionRequestId > 0)
 			{
-				if (!MailboxConnector::canConnectNewMailbox($newOwnerId))
-				{
-					$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
-
-					return;
-				}
-			}
-		}
-
-		$this->setIsSmtpAvailable();
-
-		if (!empty($fields['service_id']))
-		{
-			$service = Mail\MailServicesTable::getList(array(
-				'filter' => array(
-					'=ID'          => $fields['service_id'],
-					'=SERVICE_TYPE' => 'imap',
-				),
-			))->fetch();
-		}
-
-		if (empty($service) || $service['SITE_ID'] != $currentSite['LID'])
-		{
-			$this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
-			return;
-		}
-
-		$mailbox = Mail\MailboxTable::getList(array(
-			'filter' => array(
-				'=ID' => $mailboxId,
-				'=ACTIVE' => 'Y',
-				'=SERVER_TYPE' => 'imap',
-			),
-		))->fetch();
-
-		if (empty($mailbox))
-		{
-			$this->error(Loc::getMessage('MAIL_CLIENT_ELEMENT_NOT_FOUND'));
-
-			return;
-		}
-
-		$originalOwnerId = (int)$mailbox['USER_ID'];
-		if ($newOwnerId > 0 && $originalOwnerId !== $newOwnerId)
-		{
-			$existingMailbox = Mailbox::findActiveMailbox($newOwnerId, $mailbox['EMAIL'], $currentSite['LID']);
-			if (!empty($existingMailbox))
-			{
-				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_EMAIL_EXISTS_NEW_OWNER'));
-
-				return;
-			}
-		}
-
-		$canManage = Mail\Helper\MailboxAccess::hasCurrentUserAccessToEditMailbox($mailbox['ID']);
-		if (!$canManage)
-		{
-			$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
-
-			return;
-		}
-
-		if (!empty($mailbox))
-		{
-			if ($mailbox['SERVICE_ID'] != $service['ID'])
-			{
-				$this->error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
-				return;
-			}
-
-			foreach (array($mailbox['EMAIL'], $mailbox['NAME'], $mailbox['LOGIN']) as $item)
-			{
-				$address = new \Bitrix\Main\Mail\Address($item);
-				if ($address->validate())
-				{
-					$mailbox['EMAIL'] = $address->getEmail();
-
-					break;
-				}
-			}
-		}
-
-		$mailboxData = array(
-			'SERVER'   => $service['SERVER'] ? $mailbox['SERVER'] : trim($fields['server_imap']),
-			'PORT'     => $service['PORT'] ? $mailbox['PORT'] : (int) $fields['port_imap'],
-			'USE_TLS'  => $service['ENCRYPTION'] ? $mailbox['USE_TLS'] : $fields['ssl_imap'],
-			'LINK'     => $service['LINK'] ? $mailbox['LINK'] : trim($fields['link']),
-			'EMAIL'    => $mailbox['EMAIL'] ?: trim($fields['email']),
-			'NAME'     => trim($fields['name']),
-			'USERNAME' => trim($fields['sender']),
-			'LOGIN'    => $mailbox['LOGIN'],
-			'PASSWORD' => $mailbox['PASSWORD'],
-			'USER_ID' => $newOwnerId ?: $mailbox['USER_ID'],
-			'PERIOD_CHECK' => 60 * 24,
-			'OPTIONS'  => (array) $mailbox['OPTIONS'],
-		);
-
-		if ($fields['pass_imap'] <> '' && $fields['pass_imap'] != $fields['pass_placeholder'])
-		{
-			$mailboxData['PASSWORD'] = $fields['pass_imap'];
-		}
-
-		$mailboxData['OPTIONS']['flags'] = array_diff(
-			(array) $mailboxData['OPTIONS']['flags'],
-			array(
-				'crm_preconnect', 'crm_connect', 'crm_public_bind',
-				'crm_deny_new_lead', 'crm_deny_entity_in', 'crm_deny_entity_out', 'crm_deny_new_contact',
-			)
-		);
-
-		if (empty($service['UPLOAD_OUTGOING']))
-		{
-			if (!empty($fields['upload_outgoing']))
-			{
-				$mailboxData['OPTIONS']['flags'] = array_diff($mailboxData['OPTIONS']['flags'], ['deny_upload']);
-			}
-			else if (!in_array('deny_upload', $mailboxData['OPTIONS']['flags']))
-			{
-				$mailboxData['OPTIONS']['flags'][] = 'deny_upload';
-			}
-		}
-
-		$mailboxData['OPTIONS']['name'] = $mailboxData['USERNAME'];
-
-		$mailboxData['USE_SENDER_NAME'] = ($fields['use_sender_name'] ?? 'N') === 'Y';
-		$mailboxData['OPTIONS']['useSenderName'] = $mailboxData['USE_SENDER_NAME'];
-
-		$isOAuth = false;
-		if ($fields['oauth_uid'])
-		{
-			if (!empty($mailbox) && 'S' == $fields['oauth_mode'])
-			{
-				$mailboxData['EMAIL'] = mb_strtolower(trim($mailbox['EMAIL']));
-				$mailboxData['LOGIN'] = $mailboxData['EMAIL'];
-			}
-			else
-			{
-				if ($oauthHelper = Mail\MailServicesTable::getOAuthHelper($service))
-				{
-					$oauthHelper->getStoredToken($fields['oauth_uid']);
-
-					$mailboxData['LOGIN'] = $mailboxData['EMAIL'];
-					$mailboxData['PASSWORD'] = $oauthHelper->buildMeta();
-					$isOAuth = true;
-				}
-			}
-		}
-
-		if (empty($mailbox['EMAIL']))
-		{
-			$address = new Main\Mail\Address($mailboxData['EMAIL']);
-			if (!$address->validate())
-			{
-				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_EMAIL_BAD'));
-				return;
-			}
-
-			$mailboxData['EMAIL'] = $address->getEmail();
-		}
-
-		if (empty($mailboxData['NAME']))
-		{
-			$mailboxData['NAME'] = $mailboxData['EMAIL'];
-		}
-
-		if (!$service['SERVER'])
-		{
-			$regex = '/^(?:(?:http|https|ssl|tls|imap):\/\/)?((?:[a-z0-9](?:-*[a-z0-9])*\.?)+)$/i';
-			if (!preg_match($regex, $mailboxData['SERVER'], $matches) && $matches[1] <> '')
-			{
-				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_SERVER_BAD'));
-				return;
-			}
-
-			$mailboxData['SERVER'] = $matches[1];
-
-			if (!MailboxConnector::isValidMailHost($mailboxData['SERVER']))
-			{
-				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_SERVER_BAD'));
-				return;
-			}
-		}
-
-		if (!$service['PORT'])
-		{
-			if ($mailboxData['PORT'] <= 0 || $mailboxData['PORT'] > 65535)
-			{
-				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_PORT_BAD'));
-				return;
-			}
-		}
-
-		if (!in_array($mailboxData['USE_TLS'], array('Y', 'S')))
-		{
-			$mailboxData['USE_TLS'] = 'N';
-		}
-
-		if (!$service['LINK'] && $mailboxData['LINK'])
-		{
-			$regex = '/^(https?:\/\/)?((?:[a-z0-9](?:-*[a-z0-9])*\.?)+)(:[0-9]+)?\/?(.*)/i';
-			if (!(preg_match($regex, $mailboxData['LINK'], $matches) && $matches[2] <> ''))
-			{
-				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_LINK_BAD'));
-				return;
-			}
-
-			$mailboxData['LINK'] = $matches[0];
-			if ($matches[1] == '')
-			{
-				$mailboxData['LINK'] = 'http://' . $mailboxData['LINK'];
-			}
-		}
-
-		$unseen = Mail\Helper::getImapUnseen($mailboxData, 'inbox', $error, $errors);
-		if ($unseen === false)
-		{
-			$this->error($errors instanceof Main\ErrorCollection ? $errors : $error, $isOAuth);
-			return;
-		}
-
-		$isSmtpOauthEnabled = MailboxConnector::isOauthSmtpEnabled($service['NAME'] ?? '');
-		$useSmtp = !empty($fields['use_smtp']) || ($isSmtpOauthEnabled && $this->isNotMicrosoftService($service));
-
-		if ($this->arParams['IS_SMTP_AVAILABLE'] && !$useSmtp && !empty($mailbox))
-		{
-			self::deleteMailboxSender((int)$fields['mailbox_id'], $mailboxData['EMAIL']);
-		}
-
-		$senderFields = [];
-		if ($this->arParams['IS_SMTP_AVAILABLE'] && $useSmtp)
-		{
-			$senderFields =[
-				'NAME' => $mailboxData['USERNAME'],
-				'EMAIL' => $mailboxData['EMAIL'],
-				'USER_ID' => $mailboxData['USER_ID'] ?? CurrentUser::get()->getId(),
-				'IS_CONFIRMED' => false,
-				'IS_PUBLIC' => false,
-				'OPTIONS' => [
-					'useSenderName' => $mailboxData['USE_SENDER_NAME'],
-				],
-			];
-
-			$sender = self::getMailboxSender($fields['mailbox_id']);
-			if($sender)
-			{
-				$senderFields['ID'] = $sender['ID'];
-				$smtpConfirmed = $sender['OPTIONS']['smtp'];
-			}
-		}
-
-		if (!empty($senderFields))
-		{
-			// don't check the sender name if it has not changed or is equal to the username
-			if (
-				!empty($senderFields['NAME'])
-				&& $senderFields['NAME'] !== $this->getSenderName($mailbox['USERNAME'] ?? '', $mailbox['USER_ID'] ?? null)
-			)
-			{
-				$checkResult = Main\Mail\Sender::checkSenderNameCharacters((string)$senderFields['NAME']);
-				if (!$checkResult->isSuccess())
-				{
-					$this->error($checkResult->getErrorMessages()[0]);
-
-					return null;
-				}
-			}
-
-			$smtpConfig = array(
-				'server'   => $service['SMTP_SERVER'] ?: trim($fields['server_smtp']),
-				'port'     => $service['SMTP_PORT'] ?: (int) $fields['port_smtp'],
-				'protocol' => ('Y' == ($service['SMTP_ENCRYPTION'] ?: $fields['ssl_smtp']) ? 'smtps' : 'smtp'),
-				'login'    => $service['SMTP_LOGIN_AS_IMAP'] == 'Y' ? $mailboxData['LOGIN'] : $fields['login_smtp'],
-				'password' => '',
-				'limit' => $fields['use_limit_smtp'] === 'Y' ? max((int)($fields['limit_smtp'] ?? 0), 0) : null,
-			);
-
-			if (!empty($smtpConfirmed) && is_array($smtpConfirmed))
-			{
-				// server, port, protocol, login, password
-				$smtpConfig = array_filter($smtpConfig) + $smtpConfirmed;
-			}
-
-			if ($service['SMTP_PASSWORD_AS_IMAP'] === 'Y' && (!$fields['oauth_uid'] || $isSmtpOauthEnabled))
-			{
-				$smtpConfig['password'] = $mailboxData['PASSWORD'];
-				$smtpConfig['isOauth'] = !empty($fields['oauth_uid']) && $isSmtpOauthEnabled;
-			}
-			else if ($fields['pass_smtp'] <> '' && $fields['pass_smtp'] != $fields['pass_placeholder'])
-			{
-				if (preg_match('/^\^/', $fields['pass_smtp']))
-				{
-					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_PASS_BAD_CARET'));
-					return;
-				}
-				else if (preg_match('/\x00/', $fields['pass_smtp']))
-				{
-					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_PASS_BAD_NULL'));
-					return;
-				}
-
-				$smtpConfig['password'] = $fields['pass_smtp'];
-				$smtpConfig['isOauth'] = !empty($fields['oauth_uid']) && $isSmtpOauthEnabled;
-			}
-
-			if (!$service['SMTP_SERVER'])
-			{
-				$regex = '/^(?:(?:http|https|ssl|tls|smtp):\/\/)?((?:[a-z0-9](?:-*[a-z0-9])*\.?)+)$/i';
-				if (!preg_match($regex, $smtpConfig['server'], $matches) && $matches[1] <> '')
-				{
-					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_SERVER_BAD'));
-					return;
-				}
-
-				$smtpConfig['server'] = $matches[1];
-
-				if (!MailboxConnector::isValidMailHost($smtpConfig['server']))
-				{
-					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_SERVER_BAD'));
-					return;
-				}
-			}
-
-			if (!$service['SMTP_PORT'])
-			{
-				if ($smtpConfig['port'] <= 0 || $smtpConfig['port'] > 65535)
-				{
-					$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_SMTP_PORT_BAD'));
-					return;
-				}
-			}
-
-			$senderFields['OPTIONS']['smtp'] = $smtpConfig;
-
-			if (!empty($smtpConfirmed))
-			{
-				$senderFields['IS_CONFIRMED'] = !array_diff(
-					array('server', 'port', 'protocol', 'login', 'password', 'isOauth'),
-					array_keys(array_intersect_assoc($smtpConfig, $smtpConfirmed))
+				$connectionRequestService ??= new Mail\Helper\Mailbox\MailboxConnectionRequestService();
+				$completeResult = $connectionRequestService->completeRequest(
+					$connectionRequestId,
+					$createdMailboxId,
 				);
-			}
-		}
 
-		$userPrincipalName = (string)($fields['user_principal_name'] ?? '');
-
-		// we should check if smtp credentials is correct
-		if (
-			$this->arParams['IS_SMTP_AVAILABLE'] && $useSmtp
-			&& $this->isSmtpInvalid($senderFields ?? [], $userPrincipalName, $isSmtpOauthEnabled)
-		)
-		{
-			return false; // errors set in check method
-		}
-
-		if ($fields['use_crm'] == 'Y' && Main\Loader::includeModule('crm'))
-		{
-			$crmAvailable = false;
-			if (MailboxAccess::hasCurrentUserAccessToEditMailboxIntegrationCrm())
-			{
-				$crmAvailable = Feature::isCrmAvailable();
-
-				if ($crmAvailable)
+				if ($completeResult->isSuccess())
 				{
-					$mailboxData['OPTIONS']['flags'][] = 'crm_connect';
-
-					if ($fields['crm_sync_old'] == 'Y')
-					{
-						$maxAge = (int) $fields['crm_max_age'];
-						if ($maxAge < 0)
-						{
-							unset($mailboxData['OPTIONS']['crm_sync_from']);
-						}
-						else
-						{
-							$mailboxData['OPTIONS']['crm_sync_from'] = strtotime(sprintf('-%u days', $maxAge));
-						}
-					}
-
-					if ($fields['crm_public'] == 'Y')
-					{
-						$interval = (int) Main\Config\Option::get('mail', 'public_mailbox_sync_interval', 0);
-						$mailboxData['PERIOD_CHECK'] = $interval > 0 ? $interval : 10;
-						$mailboxData['OPTIONS']['flags'][] = 'crm_public_bind';
-					}
-
-					if ($fields['crm_allow_entity_in'] != 'Y')
-					{
-						$mailboxData['OPTIONS']['flags'][] = 'crm_deny_entity_in';
-					}
-					if ($fields['crm_allow_entity_out'] != 'Y')
-					{
-						$mailboxData['OPTIONS']['flags'][] = 'crm_deny_entity_out';
-					}
-
-					$newEntityList = array(\CCrmOwnerType::LeadName, \CCrmOwnerType::ContactName);
-					if (!empty($fields['crm_entity_in']) && in_array($fields['crm_entity_in'], $newEntityList))
-					{
-						$mailboxData['OPTIONS']['crm_new_entity_in'] = $fields['crm_entity_in'];
-					}
-					if (!empty($fields['crm_entity_out']) && in_array($fields['crm_entity_out'], $newEntityList))
-					{
-						$mailboxData['OPTIONS']['crm_new_entity_out'] = $fields['crm_entity_out'];
-					}
-
-					if ($fields['crm_vcf'] != 'Y')
-					{
-						$mailboxData['OPTIONS']['flags'][] = 'crm_deny_new_contact';
-					}
-
-					$leadSourceList = \CCrmStatus::getStatusList('SOURCE');
-					if (is_set($leadSourceList, $fields['crm_lead_source']))
-					{
-						$mailboxData['OPTIONS']['crm_lead_source'] = $fields['crm_lead_source'];
-					}
-
-					$mailboxData['OPTIONS']['crm_new_lead_for'] = array();
-					if (!empty($fields['crm_new_lead_for']))
-					{
-						$newLeadFor = preg_split('/[\r\n,;]+/', $fields['crm_new_lead_for']);
-						foreach ($newLeadFor as $i => $item)
-						{
-							$address = new Main\Mail\Address($item, ['checkingPunycode' => true]);
-
-							$newLeadFor[$i] = $address->validate() ? $address->getEmail() : null;
-						}
-
-						$mailboxData['OPTIONS']['crm_new_lead_for'] = array_values(array_unique(array_filter($newLeadFor)));
-					}
-
-					$queueUsers = $this->prepareQueueUsersForLeadResp($fields);
-					$mailboxData['OPTIONS']['crm_lead_resp'] = $queueUsers;
-
-					if (empty($mailboxData['OPTIONS']['crm_lead_resp']))
-					{
-						$newCrmLeadResp = [empty($mailbox) ? $USER->getId() : $mailbox['USER_ID']];
-						$mailboxData['OPTIONS']['crm_lead_resp'] = $newCrmLeadResp;
-					}
+					$pendingCount = $completeResult->getData()['pendingCount'] ?? null;
+					$connectionRequestCompleted = true;
 				}
 			}
-			elseif (!empty($mailbox))
-			{
-				$this->preserveMailboxCrmSettings($mailboxData, $mailbox);
-			}
+
+			return [
+				'id' => $createdMailboxId,
+				'senderName' => $result['senderName'] ?? null,
+				'connectionRequestCompleted' => $connectionRequestCompleted,
+				'pendingCount' => $pendingCount ?? null,
+			];
 		}
 
-		if (Main\Loader::includeModule('calendar'))
+		$dto = MailboxConnectDTO::createFromFormFields($fields);
+
+		$existingMailbox = Mail\MailboxTable::getById($mailboxId)->fetch();
+		if (
+			$existingMailbox
+			&& in_array($existingMailbox['ACTIVE'], [
+				MailboxStatus::Pending->value,
+				MailboxStatus::Canceled->value,
+			], true)
+		)
 		{
-			if (!isset($fields['ical_access']))
+			if (!MailAccess::hasCurrentUserAccessToMassConnect())
 			{
-				$mailboxData['OPTIONS']['ical_access'] = self::NEGATIVE_ANSWER;
+				$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
+
+				return;
 			}
-			else if (($fields['ical_access'] === self::POSITIVE_ANSWER))
-			{
-				$mailboxData['OPTIONS']['ical_access'] = self::POSITIVE_ANSWER;
-			}
+
+			$dto->skipConnectionValidation = true;
 		}
 
-		$mailboxData['OPTIONS']['version'] = 6;
+		$mailboxConnector = new MailboxConnector();
+		$result = $mailboxConnector->updateMailbox($mailboxId, $dto);
 
-		$result = \CMailbox::update($mailboxId = $mailbox['ID'], $mailboxData);
-
-		if ($result > 0 && $newOwnerId > 0 && $newOwnerId !== $originalOwnerId)
+		if (!$mailboxConnector->getSuccess())
 		{
-			Mail\MailboxTable::cleanOwnerCacheByUserId($originalOwnerId);
-			Mail\MailboxTable::cleanOwnerCacheByUserId($newOwnerId);
-			Mail\MailboxTable::cleanAllSharedCache();
+			$this->error($mailboxConnector->getErrors()[0]);
 
-			Mail\Helper\MailboxSettingsGridHelper::rebindSenders($mailboxId, $newOwnerId);
-		}
-
-		if (!($result > 0))
-		{
-			$this->error(Loc::getMessage('MAIL_CLIENT_SAVE_ERROR'));
 			return;
 		}
-
-		if (!empty($senderFields))
-		{
-			$result = [];
-			if (!empty($senderFields['ID']))
-			{
-				$updateResult = Main\Mail\Sender::updateSender($senderFields['ID'], $senderFields, checkSenderAccess: false);
-				if ($updateResult->isSuccess())
-				{
-					$result['confirmed'] = true;
-				}
-				else
-				{
-					$result['errors'] = $updateResult->getErrorCollection();
-				}
-			}
-			else
-			{
-				$result = MailboxConnector::appendSender($senderFields, (string)($fields['user_principal_name'] ?? ''), (int)$mailboxId);
-			}
-
-			if (!empty($result['errors']) && $result['errors'] instanceof Main\ErrorCollection)
-			{
-				$this->error($result['errors'], $isSmtpOauthEnabled, true);
-				return;
-			}
-			else if (!empty($result['error']))
-			{
-				$this->error($result['error'], $isSmtpOauthEnabled, true);
-				return;
-			}
-			else if (empty($result['confirmed']))
-			{
-				$this->error('MAIL_CLIENT_CONFIG_SMTP_CONFIRM', $isSmtpOauthEnabled, true);
-				return;
-			}
-		}
-
-		$finalOwnerId = $mailboxData['USER_ID'];
-		if (MailboxAccess::hasCurrentUserAccessToEditMailboxAccess(mailboxData: ['ID' => $mailboxId, ...$mailboxData]))
-		{
-			Mail\Internals\MailboxAccessTable::deleteByFilter(['=MAILBOX_ID' => $mailboxId]);
-			$access = $this->prepareShareAccess($fields, (int)$finalOwnerId);
-
-			$sharedMailboxesLimit = LicenseManager::getSharedMailboxesLimit();
-			if (count(array_unique($access)) > 1 && $sharedMailboxesLimit >= 0)
-			{
-				$alreadySharedMailboxesIds = Mail\Helper\Mailbox\SharedMailboxesManager::getSharedMailboxesIds();
-				if (count($alreadySharedMailboxesIds) >= $sharedMailboxesLimit && !in_array($mailboxId, $alreadySharedMailboxesIds))
-				{
-					$ownerAccessCode = 'U' . $finalOwnerId;
-					$access = [$ownerAccessCode];
-				}
-			}
-
-			foreach ($access as $item)
-			{
-				Mail\Internals\MailboxAccessTable::add([
-					'MAILBOX_ID' => $mailboxId,
-					'TASK_ID' => 0,
-					'ACCESS_CODE' => $item,
-				]);
-			}
-		}
-
-		$mailboxHelper = Mailbox::createInstance($mailboxId);
-		$mailboxHelper->cacheDirs();
-
-		$res = Mail\MailFilterTable::getList(array(
-			'select' => array(
-				'ID',
-			),
-			'filter' => array(
-				'=MAILBOX_ID'  => $mailboxId,
-				'=ACTION_TYPE' => 'crm_imap',
-			),
-		));
-		while ($filter = $res->fetch())
-		{
-			\CMailFilter::delete($filter['ID']);
-		}
-
-		if ($fields['use_crm'] == 'Y' && $crmAvailable)
-		{
-			$filterFields = array(
-				'MAILBOX_ID'         => $mailboxId,
-				'NAME'               => sprintf('CRM IMAP %u', $mailboxId),
-				'ACTION_TYPE'        => 'crm_imap',
-				'WHEN_MAIL_RECEIVED' => 'Y',
-				'WHEN_MANUALLY_RUN'  => 'Y',
-			);
-
-			\CMailFilter::add($filterFields);
-
-			// @TODO: process old messages
-		}
-
-		if (
-			!empty($senderFields)
-			&& strlen($senderFields['EMAIL'] ?? '') > 0
-		)
-		{
-			$senderName = UserSenderDataProvider::getAddressInEmailAngleFormat(
-				email:$senderFields['EMAIL'],
-				senderName: $senderFields['NAME'],
-			);
-		}
-
-		if (!empty($mailbox) && Feature::isMailboxGridAvailable())
-		{
-			Mail\Integration\Im\Notification::sendEditMailboxNotifications($mailbox, $originalOwnerId, $finalOwnerId);
-		}
-
-		MailboxSearchIndexHelper::saveSearchIndexForMailbox($mailboxId);
 
 		return [
-			'id' => $mailboxId,
-			'senderName' => $senderName ?? null,
+			'id' => $result['id'] ?? 0,
+			'senderName' => $result['senderName'] ?? null,
 		];
 	}
 
@@ -1153,17 +672,18 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 	{
 		global $USER;
 
-		$mailbox = Mail\MailboxTable::getList(array(
-			'filter' => array(
+		$mailbox = Mail\MailboxTable::getList([
+			'filter' => [
 				'=ID' => $id,
 				'=ACTIVE' => 'Y',
 				'=SERVER_TYPE' => 'imap',
-			),
-		))->fetch();
+			],
+		])->fetch();
 
 		if (empty($mailbox))
 		{
 			$this->error(Loc::getMessage('MAIL_CLIENT_ELEMENT_NOT_FOUND'));
+
 			return;
 		}
 
@@ -1175,7 +695,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			return;
 		}
 
-		\CMailbox::update($mailbox['ID'], array('ACTIVE' => 'N'));
+		\CMailbox::update($mailbox['ID'], ['ACTIVE' => 'N']);
 		self::deleteMailboxSender((int)$mailbox['ID'], $mailbox['EMAIL']);
 
 		\CUserCounter::clear($USER->getId(), 'mail_unseen', $mailbox['LID']);
@@ -1189,8 +709,8 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 	{
 		if ($error instanceof Main\ErrorCollection)
 		{
-			$messages = array();
-			$details  = array();
+			$messages = [];
+			$details  = [];
 
 			foreach ($error as $item)
 			{
@@ -1209,9 +729,9 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 					$authError = Loc::getMessage('MAIL_CLIENT_CONFIG_IMAP_AUTH_ERR_OAUTH_SMTP');
 				}
 
-				$messages = array(
+				$messages = [
 					new Main\Error($authError, Mail\Imap::ERR_AUTH),
-				);
+				];
 
 				$moreDetailsSection = false;
 			}
@@ -1228,15 +748,15 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			if($moreDetailsSection)
 			{
 				$this->errorCollection[] = new Main\Error(
-					join(': ', array_map($reduce, $messages)),
+					implode(': ', array_map($reduce, $messages)),
 					0,
-					join(': ', array_map($reduce, $details))
+					implode(': ', array_map($reduce, $details)),
 				);
 			}
 			else
 			{
 				$this->errorCollection[] = new Main\Error(
-					join(': ', array_map($reduce, $messages)),
+					implode(': ', array_map($reduce, $messages)),
 					0,
 				);
 			}
@@ -1268,7 +788,6 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		return $this->errorCollection->getErrorByCode($code);
 	}
 
-
 	private function setIsSmtpAvailable()
 	{
 		$defaultMailConfiguration = Configuration::getValue("smtp");
@@ -1284,7 +803,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 	 */
 	private static function prepareMailServices(?array $mailboxes = null): array
 	{
-		$mailboxes = $mailboxes ?? Mailbox::getServices();
+		$mailboxes ??= Mailbox::getServices();
 
 		foreach ($mailboxes as &$mailbox)
 		{
@@ -1418,7 +937,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 					[
 						'PARENT_MODULE_ID' => 'mail',
 						'PARENT_ID' => $mailboxId,
-					]
+					],
 				);
 
 				$sender['PARENT_MODULE_ID'] = 'mail';
@@ -1468,162 +987,152 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		}
 	}
 
-	private function preserveMailboxCrmSettings(array &$mailboxData, array $mailbox): void
+	private function prepareToolbarButton(bool $isMainMailPage = true): void
 	{
-		$mailboxOptions = $mailbox['OPTIONS'] ?? [];
+		$button = $this->createMailboxGridButton()
+			?? $this->createMassConnectButton()
+			?? $this->createConnectionRequestButton()
+		;
 
-		$crmFlags = [
-			'crm_preconnect',
-			'crm_connect',
-			'crm_public_bind',
-			'crm_deny_new_lead',
-			'crm_deny_entity_in',
-			'crm_deny_entity_out',
-			'crm_deny_new_contact',
-		];
+		$isConnectionRequest = $this->arParams['IS_CONNECTION_REQUEST_BUTTON'] ?? false;
 
-		$existingFlags = (array)($mailboxOptions['flags'] ?? []);
-		foreach ($crmFlags as $flag)
+		if (!$isConnectionRequest && !$isMainMailPage)
 		{
-			if (in_array($flag, $existingFlags, true))
-			{
-				$mailboxData['OPTIONS']['flags'][] = $flag;
-			}
+			$button = $this->createConnectionRequestButton();
 		}
 
-		$crmOptionsKeys = [
-			'crm_sync_from',
-			'crm_new_entity_in',
-			'crm_new_entity_out',
-			'crm_lead_source',
-			'crm_new_lead_for',
-			'crm_lead_resp',
-		];
-
-		foreach ($crmOptionsKeys as $key)
+		if ($isConnectionRequest)
 		{
-			if (array_key_exists($key, $mailboxOptions))
-			{
-				$mailboxData['OPTIONS'][$key] = $mailboxOptions[$key];
-			}
-		}
-
-		if (isset($mailbox['PERIOD_CHECK']) && in_array('crm_public_bind', $existingFlags, true))
-		{
-			$mailboxData['PERIOD_CHECK'] = $mailbox['PERIOD_CHECK'];
-		}
-	}
-
-	private function isSmtpInvalid(array $fields, string $principalName, bool $isOAuth): bool
-	{
-		if (empty($fields))
-		{
-			return false; // if we don't connect sender it's OK
-		}
-
-		if (empty($fields['OPTIONS']) || !is_array($fields['OPTIONS']))
-		{
-			$fields['OPTIONS'] = [];
-		}
-
-		Sender::checkEmail($fields, $error, $errors);
-
-		if ($principalName)
-		{
-			$address = new Address($principalName);
-			$currentSmtpLogin = $fields['OPTIONS']['smtp']['login'] ?? '';
-			if ($currentSmtpLogin && $currentSmtpLogin !== $principalName && $address->validate())
-			{
-				// outlook workaround, sometimes SMTP auth only works with userPrincipalName
-				$fields['OPTIONS']['smtp']['login'] = $principalName;
-				// clean errors
-				$error = null;
-				$errors = null;
-				Sender::checkEmail($fields, $error, $errors);
-			}
-		}
-
-		if (!empty($errors) && $errors instanceof Main\ErrorCollection)
-		{
-			$this->error($errors, $isOAuth, true);
-
-			return true;
-		}
-		else if (!empty($error))
-		{
-			$this->error($error, $isOAuth, true);
-
-			return true;
-		}
-
-		return false;
-	}
-
-	private function prepareToolbarButton(): void
-	{
-		$id = 'mail-provider-showcase-mailbox-grid-button';
-		$sliderData = ['data' => ['source' => 'connect_page']];
-
-		if ($this->isAnyMailboxConnected())
-		{
-			$link = '/mail/mailbox-list';
-			$text = Loc::getMessage('MAIL_CLIENT_CONFIG_TOOLBAR_MAILBOXES_LIST');
-			$icon = Icon::LIST;
-			$testId = 'mailbox-grid-button';
-			$canSee = Mail\Helper\MailAccess::hasCurrentUserAccessToMailboxGrid();
-			$tariffRestricted = !LicenseManager::isMailboxManagementEnabled();
-			$featureTariffCode = "limit_v2_mail_mailboxes_management_grid";
+			$this->arParams['NEED_SHOW_TOOLBAR_GUIDE'] = !Mail\Helper\Config\Guide::wasConnectionRequestGuideShown();
+			$this->arParams['TOOLBAR_GUIDE_OPTION_NAME'] = Mail\Helper\Config\Guide::getConnectionRequestGuideOptionName();
+			$this->arParams['TOOLBAR_GUIDE_TITLE'] = Loc::getMessage('MAIL_CLIENT_CONFIG_CONNECTION_REQUEST_GUIDE_TITLE');
+			$this->arParams['TOOLBAR_GUIDE_TEXT'] = Loc::getMessage('MAIL_CLIENT_CONFIG_CONNECTION_REQUEST_GUIDE_TEXT');
+			$this->arParams['TOOLBAR_GUIDE_WIDTH'] = 430;
 		}
 		else
 		{
-			$link = '/mail/massconnect';
-			$text = Loc::getMessage('MAIL_CLIENT_CONFIG_TOOLBAR_MAILBOXES_MASS_CONNECT');
-			$icon = Icon::ADD;
-			$testId = 'mailbox-massconnect-button';
-			$canSee = Mail\Helper\MailAccess::hasCurrentUserAccessToMassConnect();
-			$sliderData['width'] = 950;
-			$tariffRestricted = !LicenseManager::isMailboxesMassConnectEnabled();
-			$featureTariffCode = "limit_v2_mail_mailbox_massconnect";
+			$this->arParams['NEED_SHOW_TOOLBAR_GUIDE'] = !Mail\Helper\Config\Guide::wasMailboxGridGuideShown();
+			$this->arParams['TOOLBAR_GUIDE_OPTION_NAME'] = Mail\Helper\Config\Guide::getMailboxGridGuideOptionName();
+			$this->arParams['TOOLBAR_GUIDE_TITLE'] = null;
+			$this->arParams['TOOLBAR_GUIDE_TEXT'] = Loc::getMessage("MAIL_CLIENT_CONFIG_MAILBOX_GRID_GUIDE_TEXT");
 		}
 
-		$this->arParams['IS_SEEN_MAILBOX_GRID_BUTTON'] = true;
-		$this->arParams['NEED_SHOW_MAILBOX_GRID_GUIDE'] = !Mail\Helper\Config\Guide::wasMailboxGridGuideShown();
-		$this->arParams['MAILBOX_GRID_GUIDE_NAME'] = Mail\Helper\Config\Guide::getMailboxGridGuideOptionName();
-
-		if ($canSee)
+		if ($button !== null)
 		{
-			$sliderData = Json::encode($sliderData);
-
-			$buttonParams = [
-				"color" => Color::LIGHT_BORDER,
-				"tag" => Tag::BUTTON,
-				"text" => $text,
-				"dataset" => [
-					'toolbar-collapsed-icon' => $icon,
-					'id' => $id,
-					'test-id' => $testId,
-				],
-			];
-
-			if ($tariffRestricted)
-			{
-				$buttonParams['icon'] = Icon::LOCK;
-				$onclickCode = "top.BX.UI.FeaturePromotersRegistry.getPromoter({code: '$featureTariffCode'}).show();";
-			}
-			else
-			{
-				$onclickCode = sprintf("BX.SidePanel.Instance.open('%s', %s)",
-					$link,
-					$sliderData,
-				);
-			}
-
-			$buttonParams['onclick'] = new JsCode($onclickCode);
-
-			$button = new \Bitrix\UI\Buttons\Button($buttonParams);
-
 			Toolbar::addButton($button);
 		}
+	}
+
+	private function createMailboxGridButton(): ?Button
+	{
+		if (
+			!$this->isAnyMailboxConnected()
+			|| !Mail\Helper\MailAccess::hasCurrentUserAccessToMailboxGrid()
+		)
+		{
+			return null;
+		}
+
+		$button = $this->createSliderButton(
+			'/mail/mailbox-list',
+			Loc::getMessage('MAIL_CLIENT_CONFIG_TOOLBAR_MAILBOXES_LIST'),
+			Icon::LIST,
+			'mailbox-grid-button',
+			!LicenseManager::isMailboxManagementEnabled(),
+			'limit_v2_mail_mailboxes_management_grid',
+		);
+
+		$pendingCount = (new Mail\Helper\Mailbox\MailboxConnectionRequestService())->getPendingCount();
+		if ($pendingCount > 0)
+		{
+			$button->setCounter($pendingCount);
+		}
+
+		return $button;
+	}
+
+	private function createMassConnectButton(): ?Button
+	{
+		if (!Mail\Helper\MailAccess::hasCurrentUserAccessToMassConnect())
+		{
+			return null;
+		}
+
+		return $this->createSliderButton(
+			'/mail/massconnect',
+			Loc::getMessage('MAIL_CLIENT_CONFIG_TOOLBAR_MAILBOXES_MASS_CONNECT'),
+			Icon::ADD,
+			'mailbox-massconnect-button',
+			!LicenseManager::isMailboxesMassConnectEnabled(),
+			'limit_v2_mail_mailbox_massconnect',
+			950,
+		);
+	}
+
+	private function createConnectionRequestButton(): ?Button
+	{
+		if (!Mail\Helper\Config\Feature::isMailboxConnectionRequestAvailable())
+		{
+			return null;
+		}
+
+		$this->arParams['IS_CONNECTION_REQUEST_BUTTON'] = true;
+
+		return new Button([
+			'color' => Color::LIGHT_BORDER,
+			'tag' => Tag::LINK,
+			'text' => Loc::getMessage('MAIL_CLIENT_CONFIG_TOOLBAR_CONNECTION_REQUEST'),
+			'onclick' => new JsCode('new BX.Mail.Client.Dialog.MailboxConnectionRequest().show();'),
+			'icon' => Icon::MAIL_PLUS,
+			'dataset' => [
+				'toolbar-collapsed-icon' => Icon::MAIL_PLUS,
+				'id' => 'mail-provider-showcase-mailbox-grid-button',
+				'test-id' => 'mailbox-connection-request-button',
+			],
+		]);
+	}
+
+	private function createSliderButton(
+		string $link,
+		string $text,
+		string $icon,
+		string $testId,
+		bool $tariffRestricted,
+		string $featureTariffCode,
+		?int $sliderWidth = null,
+	): Button
+	{
+		$buttonParams = [
+			'color' => Color::LIGHT_BORDER,
+			'tag' => Tag::BUTTON,
+			'text' => $text,
+			'dataset' => [
+				'toolbar-collapsed-icon' => $icon,
+				'id' => 'mail-provider-showcase-mailbox-grid-button',
+				'test-id' => $testId,
+			],
+		];
+
+		if ($tariffRestricted)
+		{
+			$buttonParams['icon'] = Icon::LOCK;
+			$buttonParams['onclick'] = new JsCode(
+				"top.BX.UI.FeaturePromotersRegistry.getPromoter({code: '$featureTariffCode'}).show();",
+			);
+		}
+		else
+		{
+			$sliderData = ['data' => ['source' => 'connect_page']];
+			if ($sliderWidth !== null)
+			{
+				$sliderData['width'] = $sliderWidth;
+			}
+			$buttonParams['onclick'] = new JsCode(
+				sprintf("BX.SidePanel.Instance.open('%s', %s)", $link, Json::encode($sliderData)),
+			);
+		}
+
+		return new Button($buttonParams);
 	}
 
 	private function isAnyMailboxConnected(): bool
@@ -1638,207 +1147,6 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		])->fetch();
 
 		return $row !== false;
-	}
-
-	private function parseUserCode(?string $code): ?int
-	{
-		$code = trim((string)$code);
-
-		if (preg_match('/^U(\d+)$/i', $code, $matches))
-		{
-			return (int)$matches[1];
-		}
-
-		return null;
-	}
-
-	private function prepareMailboxConnectDTO(array $fields, array $currentSite, int $userId): ?MailboxConnectDTO
-	{
-		$useSmtp = (int)($fields['use_smtp'] ?? 0) === 1 ? 'Y' : 'N';
-		$crmOptions = $this->prepareCrmOptions($fields);
-		$shareAccess = $this->prepareShareAccess($fields, $userId);
-
-		$email = (string)($fields['email'] ?? '');
-		$isOAuth = !empty($fields['oauth_uid']);
-		$login = $isOAuth ? $email : (string)($fields['login_imap'] ?? '');
-
-		$messageMaxAge = null;
-		if (
-			($fields['mail_connect_import_messages'] ?? '') === 'Y'
-			&& array_key_exists('msg_max_age', $fields)
-		)
-		{
-			$messageMaxAge = (int)$fields['msg_max_age'];
-
-			$maxAgeLimit = LicenseManager::getSyncOldLimit();
-			if ($maxAgeLimit > 0 && $messageMaxAge > $maxAgeLimit)
-			{
-				$this->error(Loc::getMessage('MAIL_CLIENT_CONFIG_MAX_AGE_ERROR'));
-
-				return null;
-			}
-		}
-
-		return new MailboxConnectDTO(
-			email: $email,
-			login: $login,
-			password: (string)($fields['pass_imap'] ?? ''),
-			serviceId: (int)($fields['service_id'] ?? 0),
-			server: (string)($fields['server_imap'] ?? ''),
-			port: (string)($fields['port_imap'] ?? '993'),
-			ssl: (string)($fields['ssl_imap'] ?? 'Y'),
-			storageOauthUid: (string)($fields['oauth_uid'] ?? ''),
-			syncAfterConnection: (string)($fields['sync_after_connection'] ?? 'N'),
-			useSmtp: $useSmtp,
-			serverSmtp: (string)($fields['server_smtp'] ?? ''),
-			portSmtp: (string)($fields['port_smtp'] ?? '587'),
-			sslSmtp: (string)$fields['ssl_smtp'],
-			loginSmtp: (string)($fields['login_smtp'] ?? ''),
-			passwordSMTP: (string)($fields['pass_smtp'] ?? ''),
-			useLimitSmtp: ($fields['use_limit_smtp'] ?? 'N') === 'Y',
-			limitSmtp: (int)($fields['limit_smtp'] ?? 0),
-			mailboxName: (string)($fields['name'] ?? ''),
-			senderName: (string)($fields['sender'] ?? ''),
-			iCalAccess: (string)($fields['ical_access'] ?? 'N'),
-			crmOptions: $crmOptions,
-			site: $currentSite,
-			messageMaxAge: $messageMaxAge,
-			uploadOutgoing: (int)($fields['upload_outgoing'] ?? 0) === 1,
-			link: (string)($fields['link'] ?? ''),
-			shareAccess: $shareAccess,
-			useSenderName: ($fields['use_sender_name'] ?? 'N') === 'Y'
-		);
-	}
-
-	private function prepareCrmOptions(array $fields): array
-	{
-		if (empty($fields['use_crm']) || $fields['use_crm'] !== 'Y')
-		{
-			return [
-				'enabled' => 'N',
-			];
-		}
-
-		$config = [];
-		if ($fields['crm_sync_old'] == 'Y' && isset($fields['crm_max_age']))
-		{
-			$maxAge = (int) $fields['crm_max_age'];
-			if ($maxAge >= 0)
-			{
-				$config['crm_sync_days'] = $maxAge;
-			}
-		}
-
-		if ($fields['crm_public'] == 'Y')
-		{
-			$config['crm_public'] = 'Y';
-		}
-
-		if ($fields['crm_allow_entity_in'] === 'Y')
-		{
-			$config['crm_new_entity_in'] = (string)($fields['crm_entity_in'] ?? '');
-		}
-
-		if ($fields['crm_allow_entity_out'] === 'Y')
-		{
-			$config['crm_new_entity_out'] = (string)($fields['crm_entity_out'] ?? '');
-		}
-
-		$config['crm_vcf'] = (string)($fields['crm_vcf'] ?? 'N');
-
-		if (isset($fields['crm_lead_source']))
-		{
-			$config['crm_lead_source'] = (string)$fields['crm_lead_source'];
-		}
-
-		if (!empty($fields['crm_new_lead_for']))
-		{
-			$newLeadFor = preg_split('/[\r\n,;]+/', $fields['crm_new_lead_for']);
-			$validEmails = [];
-			foreach ($newLeadFor as $item)
-			{
-				$address = new Main\Mail\Address($item, ['checkingPunycode' => true]);
-				if ($address->validate())
-				{
-					$validEmails[] = $address->getEmail();
-				}
-			}
-
-			if (!empty($validEmails))
-			{
-				$config['crm_new_lead_for'] = array_values(array_unique($validEmails));
-			}
-		}
-
-		$config['crm_lead_resp'] = $this->prepareQueueUsersForLeadResp($fields);
-
-		return [
-			'enabled' => 'Y',
-			'config' => $config,
-		];
-	}
-
-	private function prepareQueueUsersForLeadResp(array $fields): array
-	{
-		if (empty($fields['crm_queue']))
-		{
-			return [];
-		}
-
-		$queueUsers = Json::decode($fields['crm_queue']);
-		if (empty($queueUsers))
-		{
-			return [];
-		}
-
-		$userIds = [];
-		foreach ($queueUsers as $item)
-		{
-			$userId = (int)$this->parseUserCode($item);
-			if ($userId > 0)
-			{
-				$userIds[] = $userId;
-			}
-		}
-
-		return $userIds;
-	}
-
-	private function prepareShareAccess(array $fields, int $userId): array
-	{
-		$ownerAccessCode = 'U' . $userId;
-		$access = [$ownerAccessCode];
-
-		$emptyJsonValue = \Bitrix\Main\Web\Json::encode([]);
-		$shareAccess = (array)\Bitrix\Main\Web\Json::decode((string)$fields['share_access'] ?? $emptyJsonValue);
-		if (!empty($shareAccess))
-		{
-			$access = array_merge(
-				$access,
-				$shareAccess,
-			);
-		}
-		elseif (!empty($fields['access']) && is_array($fields['access'])) // old
-		{
-			foreach ($fields['access'] as $code => $list)
-			{
-				if (in_array($code, ['U', 'DR', 'D']) && is_array($list))
-				{
-					$access = array_merge(
-						$access,
-						array_filter(
-							$list,
-							function ($item) use (&$code)
-							{
-								return preg_match(sprintf('/^%s\d+$/i', preg_quote($code, '/')), trim($item));
-							}
-						)
-					);
-				}
-			}
-		}
-
-		return array_unique($access);
 	}
 
 	private function shouldUseCustomSenderName(array $mailbox): bool

@@ -171,7 +171,7 @@ class Group extends Controller
 			return null;
 		}
 
-		$result = $group->delete();
+		$result = DashboardGroupService::deleteGroupList([$group->getId()]);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());

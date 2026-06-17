@@ -22,7 +22,10 @@ final class Version7 extends BaseVersion
 		$result = new Result();
 		$supersetStatus = SupersetInitializer::getSupersetStatus();
 
-		if ($supersetStatus === SupersetInitializer::SUPERSET_STATUS_DELETED)
+		if (
+			$supersetStatus === SupersetInitializer::SUPERSET_STATUS_DELETED
+			|| SupersetInitializer::isSupersetPendingDelete()
+		)
 		{
 			return $result;
 		}

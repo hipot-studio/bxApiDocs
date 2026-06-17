@@ -3,6 +3,7 @@
 namespace Bitrix\Mail\Helper;
 
 use Bitrix\Mail;
+use Bitrix\Mail\Helper\Enum\MailboxStatus;
 use Bitrix\Mail\Helper\Mailbox\MailboxSyncManager;
 use Bitrix\Mail\Internals\MessageUploadQueueTable;
 use Bitrix\Mail\MailboxTable;
@@ -483,12 +484,8 @@ abstract class Mailbox
 
 	public function updateGlobalCounter($userId)
 	{
-		\CUserCounter::set(
-			$userId,
-			'mail_unseen',
-			Message::getCountersForUserMailboxes($userId, true),
-			$this->mailbox['LID']
-		);
+		Message::resetCountersCache((int)$userId);
+		Message::setUserUnseenCounter((int)$userId, $this->mailbox['LID']);
 	}
 
 	public function updateGlobalCounterForCurrentUser()
@@ -607,7 +604,7 @@ abstract class Mailbox
 
 	public function syncCounters(): void
 	{
-		Helper::setMailboxUnseenCounter($this->mailbox['ID'],Helper::updateMailCounters($this->mailbox));
+		Helper::setMailboxUnseenCounter($this->mailbox['ID'], Helper::updateMailCounters($this->mailbox));
 
 		$usersWithAccessToMailbox = Mailbox\SharedMailboxesManager::getUserIdsWithAccessToMailbox($this->mailbox['ID']);
 
@@ -2374,13 +2371,13 @@ abstract class Mailbox
 		return null;
 	}
 
-	final public static function findBy($id, ?string $email = null): ?Mailbox
+	final public static function findBy($id, ?string $email = null, ?int $userId = null): ?Mailbox
 	{
 		$instance = null;
 
 		if ($id > 0)
 		{
-			if ($mailbox = Mail\MailboxTable::getUserMailbox($id))
+			if ($mailbox = Mail\MailboxTable::getUserMailbox($id, $userId))
 			{
 				$instance = static::createInstance($mailbox['ID'], false);
 			}
@@ -2422,14 +2419,17 @@ abstract class Mailbox
 
 	public static function findActiveMailbox($userId, $email, $lid)
 	{
-		return Mail\MailboxTable::getList([
-			'filter' => [
-				'=EMAIL' => $email,
-				'=USER_ID' => $userId,
-				'=ACTIVE' => 'Y',
-				'=LID' => $lid,
-			],
-			'limit' => 1,
-		])->fetch();
+		return Mail\MailboxTable::query()
+			->setSelect(['*'])
+			->where('EMAIL', $email)
+			->where('USER_ID', $userId)
+			->whereIn('ACTIVE', [
+				MailboxStatus::Active->value,
+				MailboxStatus::Pending->value,
+			])
+			->where('LID', $lid)
+			->setLimit(1)
+			->fetch()
+		;
 	}
 }

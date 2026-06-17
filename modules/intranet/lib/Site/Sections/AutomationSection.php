@@ -231,7 +231,7 @@ class AutomationSection
 		}
 		else
 		{
-			$onclick = "javascript:BX.UI.InfoHelper.show('limit_smart_process_automation');";
+			$onclick = "javascript:BX.UI.InfoHelper.show('limit_automated_solution');";
 			$locked = true;
 			$menuSubItems = [];
 		}

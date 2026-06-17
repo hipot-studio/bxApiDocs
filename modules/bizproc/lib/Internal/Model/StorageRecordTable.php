@@ -19,7 +19,6 @@ use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
  * <ul>
  * <li> ID int mandatory
  * <li> STORAGE_ID int mandatory
- * <li> CODE string mandatory
  * <li> DOCUMENT_ID string(128) mandatory
  * <li> WORKFLOW_ID string(32) mandatory
  * <li> TEMPLATE_ID int mandatory
@@ -27,23 +26,9 @@ use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
  * <li> UPDATED_BY int mandatory
  * <li> CREATED_TIME datetime optional default current datetime
  * <li> UPDATED_TIME datetime optional default current datetime
- * <li> VALUE array optional
  * </ul>
  *
  * @package Bitrix\Bizproc\Internal\Model
- *
- * DO NOT WRITE ANYTHING BELOW THIS
- *
- * <<< ORMENTITYANNOTATION
- * @method static EO_StorageRecord_Query query()
- * @method static EO_StorageRecord_Result getByPrimary($primary, array $parameters = [])
- * @method static EO_StorageRecord_Result getById($id)
- * @method static EO_StorageRecord_Result getList(array $parameters = [])
- * @method static EO_StorageRecord_Entity getEntity()
- * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageRecord createObject($setDefaultValues = true)
- * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection createCollection()
- * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageRecord wakeUpObject($row)
- * @method static \Bitrix\Bizproc\Internal\Model\EO_StorageRecord_Collection wakeUpCollection($rows)
  */
 class StorageRecordTable extends DataManager
 {
@@ -65,10 +50,6 @@ class StorageRecordTable extends DataManager
 			(new IntegerField('STORAGE_ID'))
 				->configureRequired()
 				->configureTitle(Loc::getMessage('BIZPROC_STORAGE_FIELD_MODEL_FIELD_STORAGE_ID'))
-			,
-			(new ORM\Fields\StringField('CODE'))
-				->configureDefaultValue('')
-				->configureTitle(Loc::getMessage('BIZPROC_STORAGE_ITEM_MODEL_FIELD_CODE'))
 			,
 			(new ORM\Fields\StringField('DOCUMENT_ID'))
 				->configureRequired()
@@ -105,10 +86,6 @@ class StorageRecordTable extends DataManager
 				->configureDefaultValue(new DateTime())
 				->configureTitle(Loc::getMessage('BIZPROC_STORAGE_ITEM_MODEL_FIELD_UPDATED_TIME'))
 			,
-			(new ORM\Fields\ArrayField('VALUE'))
-				->configureTitle(Loc::getMessage('BIZPROC_STORAGE_ITEM_MODEL_FIELD_DATA'))
-				->addValidator(static::validateSizeDataField(...))
-			,
 		];
 	}
 
@@ -122,14 +99,5 @@ class StorageRecordTable extends DataManager
 		}
 
 		return 0;
-	}
-
-	private static function validateSizeDataField($value, $primary, array $row, ORM\Fields\Field $field): string|bool
-	{
-		$limitInMb = \Bitrix\Main\Config\Option::get('bizproc', 'storage_item_data_limit', '1') ?? '1';
-		$limitInBytes = (int)$limitInMb * 1024 * 1024;
-		$errorMsg = Loc::getMessage('BIZPROC_STORAGE_ITEM_MODEL_FIELD_DATA_ERROR_MSG');
-
-		return strlen(serialize($value)) < $limitInBytes ? true : $errorMsg;
 	}
 }

@@ -3,6 +3,7 @@
 namespace Bitrix\AI;
 
 use Bitrix\AI\Context\Language;
+use Bitrix\AI\Engine\ResponseFormat;
 use Bitrix\AI\Facade\User;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
@@ -20,7 +21,10 @@ class Context
 		private string $moduleId,
 		private string $contextId,
 		private ?int $userId = null,
-	) {}
+		private ResponseFormat $responseFormat = ResponseFormat::DEFAULT,
+	)
+	{
+	}
 
 	public static function getFake(): self
 	{
@@ -56,6 +60,11 @@ class Context
 	public function getParameters(): mixed
 	{
 		return $this->contextParams;
+	}
+
+	public function getResponseFormat(): ResponseFormat
+	{
+		return $this->responseFormat;
 	}
 
 	/**
@@ -143,7 +152,8 @@ class Context
 			'contextId' => $this->getContextId(),
 			'userId' => $this->getUserId(),
 			'parameters' => $this->getParameters(),
-			'languageCode'=> $this->getLanguage()?->getCode()
+			'responseFormat' => $this->getResponseFormat(),
+			'languageCode' => $this->getLanguage()?->getCode(),
 		]);
 	}
 
@@ -160,6 +170,7 @@ class Context
 			'contextId' => $contextId,
 			'userId' => $userId,
 			'parameters' => $parameters,
+			'responseFormat' => $responseFormat,
 			'languageCode' => $languageCode,
 		] = json_decode($packedData, true);
 
@@ -167,6 +178,7 @@ class Context
 			$moduleId,
 			$contextId,
 			$userId,
+			ResponseFormat::fromString($responseFormat),
 		);
 		$context->setParameters($parameters);
 		if ($languageCode !== null)

@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Timeline\Bizproc\Data;
 use Bitrix\Bizproc\Api\Request\WorkflowFacesService\GetDataRequest;
 use Bitrix\Bizproc\Api\Service\WorkflowAccessService;
 use Bitrix\Bizproc\Api\Service\WorkflowFacesService;
+use Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
 use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
 use Bitrix\Main\Loader;
@@ -15,6 +16,7 @@ final class Workflow
 	private array $state;
 
 	private static $cache = [];
+	private static array $startDurationCache = [];
 
 	public function __construct(string $workflowId)
 	{
@@ -26,6 +28,29 @@ final class Workflow
 		$this->loadWorkflowState();
 
 		return $this->state['WORKFLOW_TEMPLATE_NAME'] ?? null;
+	}
+
+	public function getStartDuration(): ?int
+	{
+		if (array_key_exists($this->id, self::$startDurationCache))
+		{
+			return self::$startDurationCache[$this->id];
+		}
+
+		$workflowMeta = WorkflowMetadataTable::query()
+			->setSelect(['START_DURATION'])
+			->setFilter(['=WORKFLOW_ID' => $this->id])
+			->setLimit(1)
+			->exec()
+			->fetch()
+		;
+
+		self::$startDurationCache[$this->id] = is_numeric($workflowMeta['START_DURATION'] ?? null)
+			? max((int)$workflowMeta['START_DURATION'], 0)
+			: null
+		;
+
+		return self::$startDurationCache[$this->id];
 	}
 
 	private function loadWorkflowState(): void

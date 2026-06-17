@@ -395,7 +395,7 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 			$epicId = (is_numeric($post['epicId']) ? (int) $post['epicId'] : 0);
 			$parentTaskId = (is_numeric($post['parentTaskId'] ?? null) ? (int) $post['parentTaskId'] : 0);
 			$storyPoints = (is_string($post['storyPoints'] ?? null) ? $post['storyPoints'] : '');
-			$sort = (is_numeric($post['sort']) ? (int) $post['sort'] : 0);
+			$sort = (is_numeric($post['sort']) ? (float) $post['sort'] : 0);
 			$responsible = (is_array($post['responsible'] ?? null) ? $post['responsible'] : []);
 			$info = (is_array($post['info'] ?? null) ? $post['info'] : []);
 

@@ -26,6 +26,7 @@ class CommunicationSettings extends AbstractSettings
 	private bool $isBitrix24;
 	private bool $isDiskConverted;
 	private array $diskLimitPerFile;
+	private bool $isNewProjectsOn;
 
 	public function __construct(array $data = [])
 	{
@@ -42,6 +43,8 @@ class CommunicationSettings extends AbstractSettings
 			500 => 500
 		];
 		Loader::includeModule('im');
+
+		$this->isNewProjectsOn = (Option::get('socialnetwork', 'new_projects', 'N') === 'Y');
 	}
 
 	public function save(): Result
@@ -538,13 +541,24 @@ class CommunicationSettings extends AbstractSettings
 				]
 			);
 
+			$labelMessageKey = (
+				$this->isNewProjectsOn
+					? 'INTRANET_SETTINGS_FIELD_LABEL_ALLOW_AUTO_CONNECT_DISK_V2'
+					: 'INTRANET_SETTINGS_FIELD_LABEL_ALLOW_AUTO_CONNECT_DISK'
+			);
+			$hintMessageKey = (
+				$this->isNewProjectsOn
+					? 'INTRANET_SETTINGS_FIELD_HINT_ALLOW_AUTO_CONNECT_DISK_ON_V2'
+					: 'INTRANET_SETTINGS_FIELD_HINT_ALLOW_AUTO_CONNECT_DISK_ON_MSGVER_1'
+			);
+
 			$data['disk_allow_autoconnect_shared_objects'] = new Switcher(
 				'settings-communication-field-disk_allow_autoconnect_shared_objects',
 				'disk_allow_autoconnect_shared_objects',
-				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_AUTO_CONNECT_DISK'),
+				Loc::getMessage($labelMessageKey),
 				Option::get('disk', 'disk_allow_autoconnect_shared_objects', 'N'),
 				[
-					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALLOW_AUTO_CONNECT_DISK_ON_MSGVER_1')
+					'on' => Loc::getMessage($hintMessageKey)
 				],
 				helpDesk: 'redirect=detail&code=18213280'
 			);
@@ -764,6 +778,7 @@ class CommunicationSettings extends AbstractSettings
 			'default_viewer_service' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SELECT_FILE_VIEWER'),
 			'disk_version_limit_per_file' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_MAX_FILE_LIMIT'),
 			'disk_allow_edit_object_in_uf' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_EDIT_DOC'),
+
 			'disk_allow_autoconnect_shared_objects' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_AUTO_CONNECT_DISK'),
 			'disk_allow_use_external_link' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_PUBLIC_LINK'),
 			'disk_object_lock_enabled' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_BLOCK_DOC'),

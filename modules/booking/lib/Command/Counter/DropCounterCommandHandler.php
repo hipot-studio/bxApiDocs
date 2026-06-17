@@ -47,6 +47,11 @@ class DropCounterCommandHandler
 
 		foreach ($affectedUserIds as $userId)
 		{
+			if ($userId <= 0)
+			{
+				continue;
+			}
+
 			$total = $this->counterRepository->get($userId, CounterDictionary::Total);
 			\CUserCounter::Set(
 				$userId,

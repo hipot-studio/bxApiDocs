@@ -132,6 +132,14 @@ class ToolsSettings extends AbstractSettings
 					'text' => $tool->getDisableConfirmationText(),
 					'confirmCaption' => $tool->getDisableConfirmCaption(),
 				],
+				'enableConfirmation' => [
+					'isNeeded' => $tool->isNeedEnableConfirmation(),
+					'title' => $tool->getEnableConfirmationTitle(),
+					'text' => $tool->getEnableConfirmationText(),
+					'confirmCaption' => $tool->getEnableConfirmCaption(),
+					'jsExtension' => $tool->getEnableConfirmationJsExtension(),
+					'jsExportName' => $tool->getEnableConfirmationJsExportName(),
+				],
 			];
 		}
 

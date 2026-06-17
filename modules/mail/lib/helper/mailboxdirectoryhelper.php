@@ -16,6 +16,7 @@ class MailboxDirectoryHelper
 	/** @var  ErrorCollection */
 	private $errors = [];
 	private ?DirSortingHelper $sortingHelper = null;
+	private ?array $treeDirsCache = null;
 
 	public function __construct($mailboxId)
 	{
@@ -32,11 +33,13 @@ class MailboxDirectoryHelper
 	public function setDirs(array $dirs)
 	{
 		$this->storage->set($dirs);
+		$this->treeDirsCache = null;
 	}
 
 	public function reloadDirs()
 	{
 		$this->storage->init();
+		$this->treeDirsCache = null;
 	}
 
 	public function getErrors()
@@ -225,6 +228,64 @@ class MailboxDirectoryHelper
 	public function getSyncDirs(): array
 	{
 		return array_filter($this->getDirs(), static fn ($item) => $item->isSync());
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public function getSyncDirsMd5(): array
+	{
+		$syncDirs = $this->getSyncDirs();
+		$filteredDirs = array_filter($syncDirs, static fn ($dir) => !$dir->isInvisibleToCounters());
+		return array_values(array_map(static fn ($dir) => $dir->getDirMd5(), $filteredDirs));
+	}
+
+	/**
+	 * Aggregates counter-visible sync dirs MD5 across the given mailboxes.
+	 *
+	 * @param int[] $mailboxIds
+	 * @return string[]
+	 */
+	public static function getSyncDirsMd5ForMailboxes(array $mailboxIds): array
+	{
+		$result = [];
+		foreach ($mailboxIds as $mailboxId)
+		{
+			$helper = Mailbox::createInstance((int)$mailboxId, false);
+			if ($helper instanceof Mailbox)
+			{
+				$result = array_merge($result, $helper->getDirsHelper()->getSyncDirsMd5());
+			}
+		}
+
+		return array_values(array_unique($result));
+	}
+
+	/**
+	 * Aggregates Outcome (Sent) dirs MD5 across the given mailboxes.
+	 *
+	 * @param int[] $mailboxIds
+	 * @return string[]
+	 */
+	public static function getOutcomeDirsMd5ForMailboxes(array $mailboxIds): array
+	{
+		$result = [];
+		foreach ($mailboxIds as $mailboxId)
+		{
+			$helper = Mailbox::createInstance($mailboxId, false);
+			if (!($helper instanceof Mailbox))
+			{
+				continue;
+			}
+
+			$outcome = $helper->getDirsHelper()->getOutcome();
+			if ($outcome !== null)
+			{
+				$result[] = $outcome->getDirMd5();
+			}
+		}
+
+		return array_values(array_unique($result));
 	}
 
 	/**
@@ -639,6 +700,11 @@ class MailboxDirectoryHelper
 	 */
 	public function buildTreeDirs(): array
 	{
+		if ($this->treeDirsCache !== null)
+		{
+			return $this->treeDirsCache;
+		}
+
 		$list = [];
 		$result = [];
 		$dirs = $this->getDirs();
@@ -660,7 +726,9 @@ class MailboxDirectoryHelper
 			}
 		}
 
-		return $this->order($result);
+		$this->treeDirsCache = $this->order($result);
+
+		return $this->treeDirsCache;
 	}
 
 	public function syncChildren($parent)
@@ -682,8 +750,12 @@ class MailboxDirectoryHelper
 			'level'     => $parent->getLevel() + 1,
 			'parent_id' => $parent->getId(),
 			'root_id'   => $parent->getRootId() ?: $parent->getId(),
-			'is_sync'   => MailboxDirectoryTable::INACTIVE,
 		];
+
+		if (!$parent->isVirtualFolder())
+		{
+			$params['is_sync'] = MailboxDirectoryTable::INACTIVE;
+		}
 
 		$dirs = array_map(function ($item) use ($params)
 		{

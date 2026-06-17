@@ -2,6 +2,8 @@
 
 namespace Bitrix\AI\Payload\Formatter;
 
+use Bitrix\AI\Engine\ResponseFormat;
+
 class Setters extends Formatter implements IFormatter
 {
 	private const MARKER = '@set';
@@ -37,7 +39,10 @@ class Setters extends Formatter implements IFormatter
 			{
 				if ($paramKey === 'response_json')
 				{
-					$this->engine->setResponseJsonMode((bool)$paramValue);
+					if ($paramValue)
+					{
+						$this->engine->setResponseFormat(ResponseFormat::JSON);
+					}
 				}
 				elseif ($paramKey === 'reasoning_effort')
 				{

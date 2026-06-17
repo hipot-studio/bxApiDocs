@@ -8,7 +8,7 @@
 namespace Bitrix\Crm\Tracking\Analytics\Provider;
 
 use Bitrix\Main\Type\Date;
-use Bitrix\Main\Orm;
+use Bitrix\Main\ORM;
 use Bitrix\Crm\Tracking;
 use Bitrix\Crm\Integration;
 
@@ -136,8 +136,8 @@ class Action extends Base
 				'=TYPE_ID' => Tracking\Internals\SourceExpensesTable::TYPE_MANUAL,
 			],
 			'runtime' => [
-				new Orm\Fields\ExpressionField('SUM', 'SUM(%s)', ['EXPENSES']),
-				new Orm\Fields\ExpressionField('CNT', 'SUM(%s)', ['ACTIONS'])
+				new ORM\Fields\ExpressionField('SUM', 'SUM(%s)', ['EXPENSES']),
+				new ORM\Fields\ExpressionField('CNT', 'SUM(%s)', ['ACTIONS'])
 			],
 			'group' => ['CURRENCY_ID', 'SOURCE_ID']
 		]);
@@ -178,7 +178,7 @@ class Action extends Base
 				'=SOURCE_ID' => $sourcesWithMoney,
 			],
 			'runtime' => [
-				new Orm\Fields\ExpressionField('TRACE_CNT', 'COUNT(%s)', ['ID'])
+				new ORM\Fields\ExpressionField('TRACE_CNT', 'COUNT(%s)', ['ID'])
 			],
 			'group' => ['SOURCE_ID']
 		])->fetchAll();

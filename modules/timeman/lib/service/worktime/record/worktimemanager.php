@@ -25,6 +25,8 @@ Loc::loadMessages(__FILE__);
 
 abstract class WorktimeManager
 {
+	private const MAX_SHIFT_DURATION = 86400;
+
 	/** @var WorktimeRecordForm */
 	protected $worktimeRecordForm;
 	/** @var Schedule */
@@ -33,6 +35,8 @@ abstract class WorktimeManager
 	private $record;
 	/** @var Shift */
 	private $shift;
+	/** @var WorktimeAction|null */
+	private $action;
 	private $recordManager;
 
 	private $violationManager;
@@ -114,6 +118,11 @@ abstract class WorktimeManager
 	public function validateBeforeProcess()
 	{
 		return new WorktimeServiceResult();
+	}
+
+	protected function needsWorktimeEventLoading(): bool
+	{
+		return false;
 	}
 
 	/**
@@ -208,7 +217,59 @@ abstract class WorktimeManager
 					}
 				}
 			}
+
+			$stopValidationResult = $this->verifyStopTimestampConstraints($record);
+			if (!$stopValidationResult->isSuccess())
+			{
+				return $stopValidationResult;
+			}
 		}
+		return $result;
+	}
+
+	private function verifyStopTimestampConstraints(WorktimeRecord $record): WorktimeServiceResult
+	{
+		$result = new WorktimeServiceResult();
+		if ($this->worktimeRecordForm->isSystem === true)
+		{
+			return $result;
+		}
+
+		if (
+			!$record->isRecordedStartTimestampChanged()
+			&& !$record->isRecordedStopTimestampChanged()
+		)
+		{
+			return $result;
+		}
+
+		$startTimestamp = (int)$record->getRecordedStartTimestamp();
+		$stopTimestamp = (int)$record->getRecordedStopTimestamp();
+		if ($startTimestamp <= 0 || $stopTimestamp <= 0)
+		{
+			return $result;
+		}
+
+		if ($stopTimestamp < $startTimestamp)
+		{
+			return $result->addError(
+				new Error(
+					Loc::getMessage('TM_BASE_SERVICE_RESULT_ERROR_STOP_LESS_THAN_START'),
+					WorktimeServiceResult::ERROR_FOR_USER
+				)
+			);
+		}
+
+		if (($stopTimestamp - $startTimestamp) > self::MAX_SHIFT_DURATION)
+		{
+			return $result->addError(
+				new Error(
+					Loc::getMessage('TM_BASE_SERVICE_RESULT_ERROR_SHIFT_DURATION_EXCEEDS_DAY'),
+					WorktimeServiceResult::ERROR_FOR_USER
+				)
+			);
+		}
+
 		return $result;
 	}
 
@@ -218,10 +279,17 @@ abstract class WorktimeManager
 	 */
 	public function buildActualRecord($action, WorktimeRepository $worktimeRepository)
 	{
+		$this->action = $action;
 		$this->schedule = $action->getSchedule();
 		$this->shift = $action->getShift();
 		$this->record = $action->getRecord();
 		$this->recordManager = $action->getRecordManager();
+
+		if ($this->needsWorktimeEventLoading())
+		{
+			$this->loadWorktimeEventsIntoRecord($worktimeRepository);
+		}
+
 		$verifyResult = $this->verifyBeforeProcessUpdatingRecord();
 		if (!$verifyResult->isSuccess())
 		{
@@ -286,6 +354,22 @@ abstract class WorktimeManager
 				break;
 		}
 		return $record;
+	}
+
+	private function loadWorktimeEventsIntoRecord(WorktimeRepository $worktimeRepository): void
+	{
+		if (!$this->record || !$this->record->getId())
+		{
+			return;
+		}
+
+		$events = $worktimeRepository->findAllWorktimeEventsByRecordId($this->record->getId());
+		if ($events->count() === 0)
+		{
+			return;
+		}
+
+		$this->record->defineWorktimeEvents($events);
 	}
 
 	protected function processBuildingActualRecord()
@@ -380,6 +464,11 @@ abstract class WorktimeManager
 	protected function getShift()
 	{
 		return $this->shift;
+	}
+
+	protected function isEditAction(): bool
+	{
+		return $this->action !== null && $this->action->isEdit();
 	}
 
 	protected function needToSaveCompatibleReports()

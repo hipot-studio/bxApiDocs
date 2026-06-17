@@ -441,7 +441,7 @@ class CBPCrmCreateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 
 	protected static function isRequiredFieldId(string $fieldId): bool
 	{
-		return $fieldId === Crm\Item::FIELD_NAME_CREATED_BY;
+		return $fieldId === Crm\Item::FIELD_NAME_CREATED_BY || $fieldId === 'CREATED_BY_ID';
 	}
 
 	private static function showOnlyDynamicEntities(?PropertiesDialog $dialog = null): bool

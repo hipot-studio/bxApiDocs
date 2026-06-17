@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\Settings;
 
 use Bitrix\Bitrix24\Integration\Network\RegisterSettingsSynchronizer;
 use Bitrix\Extranet;
+use Bitrix\Intranet\Internal\Integration\Socialnetwork\FeatureProvider;
 use Bitrix\Intranet\Settings\Controls\Section;
 use Bitrix\Intranet\Settings\Controls\Selector;
 use Bitrix\Intranet\Settings\Controls\Switcher;
@@ -31,12 +32,15 @@ class EmployeeSettings extends AbstractSettings
 
 	private bool $isBitrix24;
 	private bool $isExtranetInstalled;
+	private bool $isNewProjectsAvailable;
 
 	public function __construct(array $data = [])
 	{
 		parent::__construct($data);
 		$this->isBitrix24 = Loader::includeModule('bitrix24');
 		$this->isExtranetInstalled = Loader::includeModule('extranet');
+
+		$this->isNewProjectsAvailable = (new FeatureProvider())->isNewProjectsAvailable();
 	}
 
 	public function validate(): ErrorCollection
@@ -246,13 +250,15 @@ class EmployeeSettings extends AbstractSettings
 
 		if ($this->isExtranetInstalled && ToolsManager::getInstance()->checkAvailabilityByToolId('collab'))
 		{
+			$collabMessageKeySuffix = ($this->isNewProjectsAvailable ? '_V2' : '');
+
 			$data['allow_invite_collabers'] = new Switcher(
 				'settings-employee-field-allow_invite_collabers',
 				'allow_invite_collabers',
-				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLABERS_INVITE'),
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLABERS_INVITE' . $collabMessageKeySuffix),
 				(new Extranet\Settings\CollaberInvitation())->isEnabled() ? 'Y' : 'N',
 				[
-					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_COLLABERS_INVITE_ON'),
+					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_COLLABERS_INVITE_ON' . $collabMessageKeySuffix),
 				],
 				helpDesk: 'redirect=detail&code=22706836',
 			);
@@ -436,8 +442,10 @@ class EmployeeSettings extends AbstractSettings
 			$index['address_format_code'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ADDRESS_FORMAT');
 		}
 
+		$collabMessageKeySuffix = ($this->isNewProjectsAvailable ? '_V2' : '');
+
 		$searchEngine = SearchEngine::initWithDefaultFormatter($index + [
-			'allow_invite_collabers' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLABERS_INVITE'),
+			'allow_invite_collabers' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLABERS_INVITE' . $collabMessageKeySuffix),
 			'phone_number_default_country' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COUNTRY_PHONE_NUMBER'),
 			'FORMAT_NAME_selector' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_NAME_FORMAT'),
 			'show_fired_employees' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SHOW_QUIT_EMPLOYEE'),

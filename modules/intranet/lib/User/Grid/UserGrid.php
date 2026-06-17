@@ -19,6 +19,7 @@ use Bitrix\Main\Grid\Pagination\PaginationFactory;
 use Bitrix\Main\Grid\Pagination\LazyLoadTotalCount;
 use Bitrix\Main\Grid\Row\Rows;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\UI\PageNavigation;
 
 /**
@@ -181,7 +182,7 @@ final class UserGrid extends Grid
 		);
 	}
 
-	public function getList(array $params = []): array
+	public function getQuery(array $params = []): Query
 	{
 		$query = UserTable::query();
 		$query->setSelect($params['select'])
@@ -213,7 +214,12 @@ final class UserGrid extends Grid
 			$query->setGroup($params['group']);
 		}
 
-		return $query->fetchAll();
+		return $query;
+	}
+
+	public function getList(array $params = []): array
+	{
+		return $this->getQuery($params)->fetchAll();
 	}
 
 	public function setRawRows(iterable $rawValue): void

@@ -64,6 +64,16 @@ abstract class Dataset
 	}
 
 	/**
+	 * Returns extended table description for display in table detail view.
+	 *
+	 * @return string
+	 */
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('TABLE_DESCRIPTION_FULL', '');
+	}
+
+	/**
 	 * @return DatasetFilter|null
 	 */
 	protected function getFilter(): ?DatasetFilter
@@ -127,6 +137,7 @@ abstract class Dataset
 			'TABLE_NAME' => $this->getConnectionTableName(),
 			'TABLE_ALIAS' => $this->getSqlTableAlias(),
 			'TABLE_DESCRIPTION' => $this->getTableDescription(),
+			'TABLE_DESCRIPTION_FULL' => $this->getTableDescriptionFull(),
 			'FIELDS' => $this->getResultFields(),
 		];
 

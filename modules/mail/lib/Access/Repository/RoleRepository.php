@@ -9,7 +9,7 @@ use Bitrix\Mail\Access\Role\RoleUtil;
 use Bitrix\Mail\Internals\Access\AccessRoleTable;
 use Bitrix\Main\Access\Exception\RoleNotFoundException;
 use Bitrix\Main\Access\Exception\RoleSaveException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 
 class RoleRepository
 {

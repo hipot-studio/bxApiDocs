@@ -2,6 +2,7 @@
 namespace Bitrix\Bizproc\Automation\Engine;
 
 use Bitrix\Bizproc;
+use Bitrix\Bizproc\Activity\Enum\Operator;
 use Bitrix\Bizproc\Automation\Target\BaseTarget;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\Automation\Helper;
@@ -537,7 +538,15 @@ class ConditionGroup
 		$currentValues = ['field' => $conditionValue];
 		$errors = [];
 
-		$isBetweenOperator = $condition->getOperator() === Bizproc\Activity\Operator\BetweenOperator::getCode();
+		$conditionOperator = $condition->getOperator();
+		$isBetweenOperator = $conditionOperator === Operator::Between->value;
+		$isInOperator = ($conditionOperator === Operator::In->value || $conditionOperator === Operator::NotIn->value);
+
+		if ($isInOperator)
+		{
+			$property['Multiple'] = true;
+		}
+
 		$valueInternal =
 			$isBetweenOperator
 				? []

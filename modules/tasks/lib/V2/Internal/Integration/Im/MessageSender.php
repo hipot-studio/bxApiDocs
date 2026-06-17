@@ -10,7 +10,6 @@ use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\SupersetProxy\HttpStatus;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Event\Chat\OnAfterSendMessageEvent;
 use Bitrix\Tasks\V2\Internal\EventDispatcher\EventDispatcher;
@@ -25,7 +24,6 @@ class MessageSender implements MessageSenderInterface
 	public function __construct(
 		private readonly Action\CounterRecipientsResolver $counterRecipientsResolver,
 		private readonly Action\NotificationRecipientsResolver $notificationRecipientsResolver,
-		private readonly Action\ImportanceRecipientsResolver $importanceRecipientsResolver,
 		private readonly ChatRepositoryInterface $chatRepository,
 		private readonly SendResultAdapter $sendResultAdapter,
 		private readonly EventDispatcher $eventDispatcher,
@@ -39,7 +37,7 @@ class MessageSender implements MessageSenderInterface
 		if (!Loader::includeModule('im'))
 		{
 			return $this->makeFailureResult(
-				new Error('Module IM is required', HttpStatus::BAD_REQUEST)
+				new Error('Module IM is required', 400)
 			);
 		}
 
@@ -59,10 +57,11 @@ class MessageSender implements MessageSenderInterface
 
 		$chat = Chat::getInstance($task->chatId);
 
+		$notificationRecipients = $this->notificationRecipientsResolver->resolve($notification, $task)->getIds();
 		$config = (new SendingConfig())
 			->enableSkipUrlIndex()
 			->setCounterRecipients($this->counterRecipientsResolver->resolve($notification, $task)->getIds())
-			->setNotificationRecipients($this->notificationRecipientsResolver->resolve($notification, $task)->getIds())
+			->setPushRecipients($notificationRecipients)
 		;
 
 		if ($notification->shouldDisableGenerateUrlPreview())
@@ -80,7 +79,7 @@ class MessageSender implements MessageSenderInterface
 			->setAuthorId($this->getAuthorId($notification))
 			->setContextUser($contextUserId)
 			->disableNotify()
-			->setImportantFor($this->importanceRecipientsResolver->resolve($notification, $task)->getIds())
+			->setImportantFor($notificationRecipients)
 		;
 
 		$keyboard = $notification->getKeyboard();

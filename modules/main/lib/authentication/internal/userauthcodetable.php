@@ -1,9 +1,10 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2020 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Authentication\Internal;
@@ -42,8 +43,8 @@ class UserAuthCodeTable extends Data\DataManager
 
 	public static function getMap()
 	{
-		return array(
-			new Fields\IntegerField("USER_ID", array(
+		return [
+			new Fields\IntegerField('USER_ID', [
 				'primary' => true,
 				'validation' => function()
 				{
@@ -51,30 +52,36 @@ class UserAuthCodeTable extends Data\DataManager
 						new Fields\Validators\ForeignValidator(Main\UserTable::getEntity()->getField('ID')),
 					];
 				}
-			)),
+			]),
 
-			new Fields\StringField("CODE_TYPE", array(
+			new Fields\StringField('CODE_TYPE', [
 				'default_value' => self::TYPE_EMAIL,
 				'primary' => true,
-			)),
+			]),
 
-			new Fields\SecretField("OTP_SECRET", array(
-				'crypto_enabled' => static::cryptoEnabled("OTP_SECRET"),
-			)),
+			new Fields\SecretField('OTP_SECRET', [
+				'crypto_enabled' => static::cryptoEnabled('OTP_SECRET'),
+				'nullable' => true,
+			]),
 
-			new Fields\IntegerField("ATTEMPTS", array(
-				"default_value" => 0,
-			)),
+			new Fields\IntegerField('ATTEMPTS', [
+				'default_value' => 0,
+				'nullable' => true,
+			]),
 
-			new Fields\DatetimeField("DATE_SENT"),
+			new Fields\DatetimeField('DATE_SENT', [
+				'nullable' => true,
+			]),
 
-			new Fields\DatetimeField("DATE_RESENT"),
+			new Fields\DatetimeField('DATE_RESENT', [
+				'nullable' => true,
+			]),
 
 			(new Fields\Relations\Reference(
 				'USER',
 				Main\UserTable::class,
 				Join::on('this.USER_ID', 'ref.ID')
 			))->configureJoinType('inner'),
-		);
+		];
 	}
 }

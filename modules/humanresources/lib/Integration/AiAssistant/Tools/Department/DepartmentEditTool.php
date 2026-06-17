@@ -20,7 +20,8 @@ class DepartmentEditTool extends NodeEditTool
 
 	public function getDescription(): string
 	{
-		return 'Rename name to `name` and description to `description` for the node identified by `nodeId` when node is a department. 
-Use this function to update node information';
+		return 'Update the name and/or description of an existing department. '
+			. 'Does not move the node, change members, or alter communications. '
+			. 'Use `department_change_parent` to reparent and `department_edit_employees` to replace the member list.';
 	}
 }

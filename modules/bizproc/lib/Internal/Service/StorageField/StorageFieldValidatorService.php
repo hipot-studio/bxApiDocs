@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Internal\Service\StorageField;
 
 use Bitrix\Bizproc\FieldType;
@@ -25,7 +27,7 @@ class StorageFieldValidatorService
 		$id = $item->getId() ?? false;
 		$fields = $item->toArray();
 		$documentService = \CBPRuntime::GetRuntime(true)->getDocumentService();
-		$documentType = ['bizproc', 'CBPVirtualDocument', 'type_0'];
+		$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
 		foreach ($fieldCollection as $field)
 		{
 			$code = $field->getCode();
@@ -37,7 +39,7 @@ class StorageFieldValidatorService
 				continue;
 			}
 
-			if ($field->getType() === 'user')
+			if ($field->getType() === FieldType::USER)
 			{
 				$fields[$code] = \CBPHelper::extractUsers($fields[$code], $documentType);
 			}

@@ -949,6 +949,11 @@ class Chat
 		return $entityData;
 	}
 
+	public static function getUserRelationToChat(int $chatId, int $userId): ?Im\V2\Relation
+	{
+		return Im\V2\Chat::getInstance($chatId)->getRelationByUserId($userId);
+	}
+
 	private static function getOpenLineLastActivity(string $code): array
 	{
 		$session = new Session();

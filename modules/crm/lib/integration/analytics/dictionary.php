@@ -53,6 +53,7 @@ final class Dictionary
 	public const EVENT_EXTRACT_SCORING_CRITERIA = 'extract_scoring_criteria';
 	public const EVENT_FILL_REPEAT_SALE_TIPS = 'fill_repeat_sale_tips';
 	public const EVENT_SCREENING_REPEAT_SALE_ITEM = 'screening_repeat_sale_item';
+	public const EVENT_ANALYZE_COMMUNICATION = 'analyze_communication';
 
 	public const EVENT_AUTOMATION_CREATE = 'automation_create';
 	public const EVENT_AUTOMATION_EDIT = 'automation_edit';

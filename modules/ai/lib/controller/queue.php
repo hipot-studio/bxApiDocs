@@ -55,15 +55,15 @@ class Queue extends Controller
 	public function callbackBodyAction(string $hash, JsonPayload $result): bool
 	{
 		$queueJob = QueueJob::createFromHash($hash);
-		if ($queueJob)
+		if (!$queueJob)
 		{
-			$resultData = $result->getDataList();
-			$queueJob->execute($resultData->toArrayRaw() ?? $resultData->toArray());
-
-			return true;
+			return false;
 		}
 
-		return false;
+		$resultData = $result->getDataList();
+		$queueJob->execute($resultData->toArrayRaw() ?? $resultData->toArray());
+
+		return true;
 	}
 
 	/**
@@ -76,13 +76,23 @@ class Queue extends Controller
 	public function callbackErrorAction(string $hash, JsonPayload $result): bool
 	{
 		$queueJob = QueueJob::createFromHash($hash);
-		if ($queueJob)
+		if (!$queueJob)
 		{
-			$queueJob->fail($result->getData());
-
-			return true;
+			return false;
 		}
 
-		return false;
+		try
+		{
+			$queueJob->fail($result->getData());
+		}
+		catch (\Throwable $e)
+		{
+			$queueJob->handleError(
+				'Error processing failure callback: ' . $e->getMessage(),
+				QueueJob::ERROR_FAIL_PROCESSING
+			);
+		}
+
+		return true;
 	}
 }

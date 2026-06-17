@@ -9,6 +9,7 @@ use Bitrix\Crm\Badge\Type\BookingStatus;
 use Bitrix\Crm\Badge\Type\CalendarSharingStatus;
 use Bitrix\Crm\Badge\Type\CallStatus;
 use Bitrix\Crm\Badge\Type\CopilotCallAssessmentStatus;
+use Bitrix\Crm\Badge\Type\EntityExclusionStatus;
 use Bitrix\Crm\Badge\Type\MailMessageDeliveryStatus;
 use Bitrix\Crm\Badge\Type\OpenLineStatus;
 use Bitrix\Crm\Badge\Type\PaymentStatus;
@@ -23,7 +24,8 @@ final class Factory
 {
 	public static function getBadgeInstance(string $type, string $value): Badge
 	{
-		$className = match ($type) {
+		$className = match ($type)
+		{
 			Badge::CALL_STATUS_TYPE => CallStatus::class,
 			Badge::PAYMENT_STATUS_TYPE => PaymentStatus::class,
 			Badge::OPENLINE_STATUS_TYPE => OpenLineStatus::class,
@@ -39,6 +41,7 @@ final class Factory
 			Badge::COPILOT_CALL_ASSESSMENT_STATUS_TYPE => CopilotCallAssessmentStatus::class,
 			Badge::AI_CALL_SCORING_STATUS => AiCallScoringStatus::class,
 			Badge::BOOKING_STATUS_TYPE => BookingStatus::class,
+			Badge::ENTITY_EXCLUSION_STATUS => EntityExclusionStatus::class,
 			default => throw new ArgumentException('Unknown badge type: ' . $type),
 		};
 

@@ -2,10 +2,12 @@
 
 namespace Bitrix\Crm\Integration\AI\Operation\Payload;
 
+use Bitrix\Crm\Integration\AI\Operation\AnalyzeCommunication;
 use Bitrix\Crm\Integration\AI\Operation\ExtractScoringCriteria;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\CallScoring;
+use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\ClientDialogueActionExtraction;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\ExtractFormFields;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\RepeatSalesPrompt;
 use Bitrix\Crm\Integration\AI\Operation\Payload\Payload\RepeatSalesScreeningItem;
@@ -33,6 +35,7 @@ final class PayloadFactory
 			ExtractScoringCriteria::TYPE_ID => new ScoringCriteriaExtraction($userId, $identifier),
 			FillRepeatSaleTips::TYPE_ID, Sandbox\FillRepeatSaleTips::TYPE_ID => new RepeatSalesPrompt($userId, $identifier),
 			ScreeningRepeatSaleItem::TYPE_ID => new RepeatSalesScreeningItem($userId, $identifier),
+			AnalyzeCommunication::TYPE_ID => new ClientDialogueActionExtraction($userId, $identifier),
 			default => throw new ArgumentException('Unsupported operation code'),
 		};
 	}

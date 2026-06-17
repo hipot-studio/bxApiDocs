@@ -78,6 +78,36 @@ abstract class Tool
 		return false;
 	}
 
+	public function isNeedEnableConfirmation(): bool
+	{
+		return false;
+	}
+
+	public function getEnableConfirmationTitle(): ?string
+	{
+		return null;
+	}
+
+	public function getEnableConfirmationText(): ?string
+	{
+		return null;
+	}
+
+	public function getEnableConfirmCaption(): string
+	{
+		return Loc::getMessage('INTRANET_SETTINGS_ENABLE_CONFIRMATION_BUTTON') ?? Loc::getMessage('INTRANET_SETTINGS_DISABLE_CONFIRMATION_BUTTON');
+	}
+
+	public function getEnableConfirmationJsExtension(): ?string
+	{
+		return null;
+	}
+
+	public function getEnableConfirmationJsExportName(): ?string
+	{
+		return null;
+	}
+
 	public function isNeedDisableConfirmation(): bool
 	{
 		return false;

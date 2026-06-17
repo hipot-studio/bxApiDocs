@@ -5,6 +5,10 @@ namespace Bitrix\HumanResources\Type;
 use Bitrix\HumanResources\Internals\Trait\ValuesTrait;
 use Bitrix\HumanResources\Item\NodeMember;
 
+/**
+ * @deprecated Use role XML IDs (NodeMember::DEFAULT_ROLE_XML_ID, NodeMember::TEAM_ROLE_XML_ID) and RoleFilter instead
+ * @see \Bitrix\HumanResources\Builder\Structure\Filter\Column\RoleFilter
+ */
 enum StructureRole: int
 {
 	// Department roles

@@ -10,6 +10,10 @@ class ListExportExcelComponent extends CBitrixComponent
 {
 	protected $listsPerm;
 	protected $arIBlock = array();
+	protected bool $isStepExport = false;
+	protected int $pageNum = 1;
+	protected int $pageSize = 100;
+	protected int $lastExportedId = 0;
 
 	public function onIncludeComponentLang()
 	{
@@ -38,7 +42,9 @@ class ListExportExcelComponent extends CBitrixComponent
 		$this->arResult["IBLOCK_ID"] = $this->arIBlock["ID"];
 		$this->arResult["GRID_ID"] = "lists_list_elements_".$this->arResult["IBLOCK_ID"];
 		$this->arResult["FILTER_ID"] = "lists_list_elements_".$this->arResult["IBLOCK_ID"];
-		$this->arResult["ANY_SECTION"] = isset($_GET["list_section_id"]) && $_GET["list_section_id"] == '';
+		$this->arResult["ANY_SECTION"] =
+			$params['ANY_SECTION'] ?? (isset($_GET["list_section_id"]) && $_GET["list_section_id"] == '')
+		;
 		$sectionUpperUrl = CHTTP::urlAddParams(str_replace(array("#list_id#", "#section_id#", "#group_id#"),
 			array($this->arResult["IBLOCK_ID"], 0, $params["SOCNET_GROUP_ID"] ?? 0),
 			$params['LIST_URL']), array('list_section_id' => ""));
@@ -138,15 +144,23 @@ class ListExportExcelComponent extends CBitrixComponent
 		{
 			$this->checkModules();
 			$this->checkPermissions();
+			$this->initExportSettings();
 
 			$this->setFrameMode(false);
 			global $APPLICATION;
 
-			$this->createDataExcel();
+			$exportResult = $this->createDataExcel();
+
+			if ($this->isStepExport)
+			{
+				$this->IncludeComponentTemplate();
+
+				return $exportResult;
+			}
 
 			$APPLICATION->RestartBuffer();
 			header("Content-Type: application/vnd.ms-excel");
-			header("Content-Disposition: filename=list_".$this->arIBlock["ID"].".xls");
+			header("Content-Disposition: attachment; filename=list_".$this->arIBlock["ID"].".xls");
 			$this->IncludeComponentTemplate();
 			$r = $APPLICATION->EndBufferContentMan();
 			echo $r;
@@ -157,6 +171,19 @@ class ListExportExcelComponent extends CBitrixComponent
 		{
 			ShowError($exception->getMessage());
 		}
+	}
+
+	protected function initExportSettings(): void
+	{
+		$this->isStepExport = (($this->arParams['STEXPORT_MODE'] ?? 'N') === 'Y');
+		$this->pageNum = max(1, (int)($this->arParams['PAGE_NUMBER'] ?? 1));
+		$this->pageSize = max(1, (int)($this->arParams['STEXPORT_PAGE_SIZE'] ?? 100));
+		$this->lastExportedId = max(0, (int)($this->arParams['STEXPORT_LAST_EXPORTED_ID'] ?? 0));
+
+		$this->arResult['STEXPORT_MODE'] = $this->isStepExport ? 'Y' : 'N';
+		$this->arResult['STEXPORT_IS_FIRST_PAGE'] = $this->pageNum === 1 ? 'Y' : 'N';
+		$this->arResult['STEXPORT_IS_LAST_PAGE'] = 'N';
+		$this->arResult['STEXPORT_TOTAL_ITEMS'] = (int)($this->arParams['STEXPORT_TOTAL_ITEMS'] ?? 0);
 	}
 
 	protected function checkPermissions()
@@ -208,7 +235,7 @@ class ListExportExcelComponent extends CBitrixComponent
 		}
 	}
 
-	protected function createDataExcel()
+	protected function createDataExcel(): array
 	{
 		$iblockId = $this->arIBlock["ID"];
 		$obList = new CList($iblockId);
@@ -216,7 +243,9 @@ class ListExportExcelComponent extends CBitrixComponent
 		$gridColumns = $gridOptions->GetVisibleColumns();
 		$gridSort = $gridOptions->GetSorting(array("sort" => array("name" => "asc")));
 
-		$this->arResult["ELEMENTS_HEADERS"] = array();
+		$this->arResult['ELEMENTS_HEADERS'] = [
+			'ID' => 'ID',
+		];
 		$arSelect = array("ID", "IBLOCK_ID");
 		$arProperties = array();
 
@@ -370,15 +399,52 @@ class ListExportExcelComponent extends CBitrixComponent
 		$count = 0;
 		$comments = in_array("COMMENTS", $gridColumns) && CModule::includeModule("forum");
 		$listValues = array();
+		$totalItems = (int)CIBlockElement::GetList([], $arFilter, [], false, ['ID']);
 
-		$rsElements = CIBlockElement::GetList(
-			$gridSort["sort"], $arFilter, false, false, $arSelect);
+		if (empty($gridColumns))
+		{
+			$gridColumns = array_keys($arListFields);
+		}
+		if (in_array("IBLOCK_SECTION_ID", $arSelect) && !in_array("IBLOCK_SECTION_ID", $gridColumns))
+		{
+			$gridColumns[] = "IBLOCK_SECTION_ID";
+		}
+
+		if ($this->isStepExport)
+		{
+			$this->arResult['STEXPORT_TOTAL_ITEMS'] = $totalItems;
+			if ($this->lastExportedId > 0)
+			{
+				$arFilter['>ID'] = $this->lastExportedId;
+			}
+
+			$rsElements = CIBlockElement::GetList(
+				["ID" => "ASC"],
+				$arFilter,
+				false,
+				['nTopCount' => $this->pageSize],
+				$arSelect
+			);
+		}
+		else
+		{
+			$rsElements = CIBlockElement::GetList(
+				$gridSort['sort'],
+				$arFilter,
+				false,
+				false,
+				$arSelect
+			);
+		}
+
 		$regexp = '/<a.*?href="(.*?)".*?>(.*?)<\/a>/';
+		$lastExportedId = 0;
 		while($obElement = $rsElements->GetNextElement())
 		{
 			$data = $obElement->GetFields();
 			if(!is_array($data))
 				continue;
+			$lastExportedId = (int)$data["ID"];
 
 			if (!isset($listValues[$data["ID"]]) || !is_array($listValues[$data["ID"]]))
 			{
@@ -466,14 +532,6 @@ class ListExportExcelComponent extends CBitrixComponent
 			if($comments)
 				$countComments = $this->getCommentsProcess($data["ID"]);
 
-			if (empty($gridColumns))
-			{
-				$gridColumns = array_keys($arListFields);
-			}
-			if (in_array("IBLOCK_SECTION_ID", $arSelect) && !in_array("IBLOCK_SECTION_ID", $gridColumns))
-			{
-				$gridColumns[] = "IBLOCK_SECTION_ID";
-			}
 			foreach ($gridColumns as $position => $id)
 			{
 				if($id == "COMMENTS")
@@ -499,6 +557,23 @@ class ListExportExcelComponent extends CBitrixComponent
 			}
 			$count++;
 		}
+
+		$this->arResult['STEXPORT_IS_LAST_PAGE'] =
+			(!$this->isStepExport
+				|| $count < $this->pageSize
+				|| $count === 0
+				|| $count >= $totalItems
+				|| (($this->pageNum - 1) * $this->pageSize + $count) >= $totalItems
+			)
+			? 'Y'
+			: 'N'
+		;
+
+		return [
+			'PROCESSED_ITEMS' => $count,
+			'TOTAL_ITEMS' => $totalItems,
+			'LAST_EXPORTED_ID' => $lastExportedId,
+		];
 	}
 
 	protected function getArrayBizproc($data = array())
@@ -519,7 +594,8 @@ class ListExportExcelComponent extends CBitrixComponent
 			);
 
 			$userGroups = $GLOBALS["USER"]->GetUserGroupArray();
-			if ($data["~CREATED_BY"] == $currentUserId)
+			$createdBy = (int)($data["~CREATED_BY"] ?? $data["CREATED_BY"] ?? 0);
+			if ($createdBy === $currentUserId)
 				$userGroups[] = "Author";
 
 			$arUserGroupsForBP = CUser::GetUserGroup($currentUserId);

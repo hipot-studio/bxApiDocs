@@ -744,14 +744,9 @@ abstract class CAllDBResult
 		$nPageSize = intval($nPageSize);
 		$NavNum = intval($NavNum);
 
-		$PAGEN_NAME = "PAGEN_" . ($NavNum + 1);
-		$SHOWALL_NAME = "SHOWALL_" . ($NavNum + 1);
-
-		global ${$PAGEN_NAME}, ${$SHOWALL_NAME};
-
 		if ($iNumPage === false)
 		{
-			$PAGEN = ${$PAGEN_NAME} ?? 0;
+			$PAGEN = $_REQUEST["PAGEN_" . ($NavNum + 1)] ?? 0;
 		}
 		else
 		{
@@ -759,7 +754,7 @@ abstract class CAllDBResult
 		}
 
 		$PAGEN = (int)$PAGEN;
-		$SHOWALL = ${$SHOWALL_NAME};
+		$SHOWALL = $_REQUEST["SHOWALL_" . ($NavNum + 1)] ?? null;
 
 		$application = Main\Application::getInstance();
 

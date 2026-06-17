@@ -5,6 +5,7 @@ namespace Bitrix\Lists\Api\Data\IBlockService;
 use Bitrix\Lists\Api\Data\Data;
 use Bitrix\Lists\Api\Request\IBlockService\UpdateIBlockElementRequest;
 use Bitrix\Lists\Api\Response\IBlockService\IBlockElementToUpdateValues;
+use Bitrix\Lists\Internal\Integration\Crm\Validator\CrmPropertyValidator;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Error;
 use Bitrix\Main\IO\Path;
@@ -256,11 +257,34 @@ class IBlockElementToUpdate extends Data
 		return $prepared;
 	}
 
-	protected function preparePropValue(array $requestValues, array $property, Result $result)
+	protected function preparePropValue(array &$requestValues, array $property, Result $result)
 	{
 		$baseType = $property['TYPE'];
 		$type = $property['PROPERTY_TYPE'];
 		$isMultiple = $property['MULTIPLE'] === 'Y';
+
+		if ($baseType === 'S:ECrm')
+		{
+			$crmPropertyValidator = new CrmPropertyValidator(
+				$property,
+				$this->getModifiedBy(),
+				$this->elementOldProps['PROPERTY_' . $property['ID']] ?? null
+			);
+			$isValidCrmProperty = $crmPropertyValidator->validate($requestValues);
+			$requestValues = $crmPropertyValidator->getFilteredValue();
+			if (!$isValidCrmProperty)
+			{
+				$this->loadLocalization();
+				$result->addError(
+					new Error(
+						Loc::getMessage(
+							'LISTS_LIB_API_DATA_IBLOCK_SERVICE_VALIDATE_FIELD_ERROR',
+							['#FIELD_NAME#' => $property['NAME']]
+						),
+					)
+				);
+			}
+		}
 
 		$values = [];
 		foreach ($requestValues as $key => $value)

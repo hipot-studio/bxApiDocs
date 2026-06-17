@@ -5,29 +5,26 @@ namespace Bitrix\Sign\Controllers\V1\B2e;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Sign\Access\ActionDictionary;
-use Bitrix\Sign\Attribute\Access\LogicAnd;
 use Bitrix\Sign\Attribute\ActionAccess;
 use Bitrix\Sign\Engine\Controller;
 use Bitrix\Sign\Operation;
 use Bitrix\Sign\Result\Operation\Member\ValidateEntitySelectorMembersResult;
-use Bitrix\Sign\Service\Container;
-use Bitrix\Sign\Type\Access\AccessibleItemType;
-use Bitrix\Sign\Type\Hr\EntitySelector\EntityType as HrEntityType;
+use Bitrix\Sign\Service\Sign\SignersList\AccessService;
+use Bitrix\Sign\Service\SignersListService;
+use Bitrix\Sign\Type\Hr\EntitySelector;
 use Bitrix\Sign\Type\Member\EntityType;
 
 class Signers extends Controller
 {
-	#[ActionAccess(
-		permission: ActionDictionary::ACTION_B2E_SIGNERS_LIST_DELETE,
-		itemType: AccessibleItemType::SIGNERS_LIST,
-		itemIdOrUidRequestKey: 'listId',
-	)]
-	public function deleteListAction(int $listId): array
+	public function deleteListAction(
+		int $listId,
+		AccessService $accessService,
+	): array
 	{
-		$list = Container::instance()->getSignersListService()->getById($listId);
+		$list = $accessService->getAccessibleList($listId, ActionDictionary::ACTION_B2E_SIGNERS_LIST_DELETE);
 		if ($list === null)
 		{
-			$this->addErrorByMessage('List not found');
+			$this->addAccessDeniedError();
 
 			return [];
 		}
@@ -38,17 +35,17 @@ class Signers extends Controller
 		return [];
 	}
 
-	#[ActionAccess(
-		permission: ActionDictionary::ACTION_B2E_SIGNERS_LIST_EDIT,
-		itemType: AccessibleItemType::SIGNERS_LIST,
-		itemIdOrUidRequestKey: 'listId',
-	)]
-	public function deleteSignersFromListAction(int $listId, array $userIds): array
+	public function deleteSignersFromListAction(
+		int $listId,
+		array $userIds,
+		AccessService $accessService,
+		SignersListService $signersListService,
+	): array
 	{
-		$list = Container::instance()->getSignersListService()->getById($listId);
+		$list = $accessService->getAccessibleList($listId, ActionDictionary::ACTION_B2E_SIGNERS_LIST_EDIT);
 		if ($list === null)
 		{
-			$this->addErrorByMessage('List not found');
+			$this->addAccessDeniedError();
 
 			return [];
 		}
@@ -61,7 +58,7 @@ class Signers extends Controller
 			return [];
 		}
 
-		$result = Container::instance()->getSignersListService()->deleteUsersFromList(
+		$result = $signersListService->deleteUsersFromList(
 			$listId,
 			$userIds,
 			$currentUserId,
@@ -71,17 +68,18 @@ class Signers extends Controller
 		return [];
 	}
 
-	#[ActionAccess(
-		permission: ActionDictionary::ACTION_B2E_SIGNERS_LIST_EDIT,
-		itemType: AccessibleItemType::SIGNERS_LIST,
-		itemIdOrUidRequestKey: 'listId',
-	)]
-	public function addSignersToListAction(int $listId, array $members, bool $excludeRejected = true): array
+	public function addSignersToListAction(
+		int $listId,
+		array $members,
+		AccessService $accessService,
+		SignersListService $signersListService,
+		bool $excludeRejected = true,
+	): array
 	{
-		$list = Container::instance()->getSignersListService()->getById($listId);
+		$list = $accessService->getAccessibleList($listId, ActionDictionary::ACTION_B2E_SIGNERS_LIST_EDIT);
 		if ($list === null)
 		{
-			$this->addErrorByMessage('List not found');
+			$this->addAccessDeniedError();
 
 			return [];
 		}
@@ -118,7 +116,7 @@ class Signers extends Controller
 			{
 				$employees = $nodeMemberService->getAllEmployees(
 					nodeId: $department->entityId,
-					withAllChildNodes: $department->entityType !== HrEntityType::FlatDepartment,
+					withAllChildNodes: $department->entityType !== EntitySelector\EntityType::FlatDepartment,
 				);
 
 				foreach ($employees->getIterator() as $employee)
@@ -139,7 +137,7 @@ class Signers extends Controller
 			return [];
 		}
 
-		$result = Container::instance()->getSignersListService()->addUsersToList(
+		$result = $signersListService->addUsersToList(
 			$listId,
 			$userIds,
 			$currentUserId,
@@ -149,27 +147,22 @@ class Signers extends Controller
 		return [];
 	}
 
-	#[LogicAnd(
-		new ActionAccess(
-			permission: ActionDictionary::ACTION_B2E_SIGNERS_LIST_READ,
-			itemType: AccessibleItemType::SIGNERS_LIST,
-			itemIdOrUidRequestKey: 'listId',
-		),
-		new ActionAccess(ActionDictionary::ACTION_B2E_SIGNERS_LIST_ADD),
-	)]
-	public function copyListAction(int $listId): array
+	public function copyListAction(
+		int $listId,
+		AccessService $accessService,
+	): array
 	{
-		if ($listId < 1)
+		$list = $accessService->getAccessibleList($listId, ActionDictionary::ACTION_B2E_SIGNERS_LIST_READ);
+		if ($list === null)
 		{
-			$this->addErrorByMessage('Incorrect list id');
+			$this->addAccessDeniedError();
 
 			return [];
 		}
 
-		$list = Container::instance()->getSignersListService()->getById($listId);
-		if ($list === null)
+		if (!$this->getAccessController()->check(ActionDictionary::ACTION_B2E_SIGNERS_LIST_ADD))
 		{
-			$this->addErrorByMessage('List not found');
+			$this->addAccessDeniedError();
 
 			return [];
 		}
@@ -192,7 +185,7 @@ class Signers extends Controller
 	#[ActionAccess(
 		permission: ActionDictionary::ACTION_B2E_SIGNERS_LIST_ADD,
 	)]
-	public function createListAction(string $title): array
+	public function createListAction(string $title, SignersListService $signersListService): array
 	{
 		$currentUserId = (int)CurrentUser::get()->getId();
 		if ($currentUserId < 1)
@@ -202,7 +195,7 @@ class Signers extends Controller
 			return [];
 		}
 
-		$result = Container::instance()->getSignersListService()->createList(
+		$result = $signersListService->createList(
 			$title,
 			$currentUserId,
 		);
@@ -211,24 +204,17 @@ class Signers extends Controller
 		return [];
 	}
 
-	#[ActionAccess(
-		permission: ActionDictionary::ACTION_B2E_SIGNERS_LIST_EDIT,
-		itemType: AccessibleItemType::SIGNERS_LIST,
-		itemIdOrUidRequestKey: 'listId',
-	)]
-	public function renameListAction(int $listId, string $title): array
+	public function renameListAction(
+		int $listId,
+		string $title,
+		AccessService $accessService,
+		SignersListService $signersListService,
+	): array
 	{
-		if ($listId < 1)
-		{
-			$this->addErrorByMessage('Incorrect list id');
-
-			return [];
-		}
-
-		$list = Container::instance()->getSignersListService()->getById($listId);
+		$list = $accessService->getAccessibleList($listId, ActionDictionary::ACTION_B2E_SIGNERS_LIST_EDIT);
 		if ($list === null)
 		{
-			$this->addErrorByMessage('List not found');
+			$this->addAccessDeniedError();
 
 			return [];
 		}
@@ -241,7 +227,7 @@ class Signers extends Controller
 			return [];
 		}
 
-		$result = Container::instance()->getSignersListService()->renameList(
+		$result = $signersListService->renameList(
 			$listId,
 			$title,
 			$currentUserId,
@@ -250,4 +236,14 @@ class Signers extends Controller
 
 		return [];
 	}
+
+	private function addAccessDeniedError(): void
+	{
+		\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus(401);
+		$this->addError(new \Bitrix\Main\Error(
+			\Bitrix\Main\Localization\Loc::getMessage('MAIN_ENGINE_FILTER_AUTHENTICATION_ERROR'),
+			'invalid_authentication',
+		));
+	}
+
 }

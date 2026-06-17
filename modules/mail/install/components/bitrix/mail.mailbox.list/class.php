@@ -7,9 +7,11 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Mail\Grid\MailboxSettingsGrid\MailboxGrid;
 use Bitrix\Mail\Grid\MailboxSettingsGrid\Settings\MailboxSettings;
+use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\Config\Guide;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Mail\Helper\MailAccess;
+use Bitrix\Mail\Helper\Mailbox\PasswordlessConnectHelper;
 use Bitrix\Mail\Helper\MailboxSettingsGridHelper;
 use Bitrix\Main\Localization\Loc;
 
@@ -40,7 +42,12 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$this->arResult = $this->prepareData();
 		$this->arResult['ACCESS_RIGHTS_ENABLED'] = LicenseManager::isAccessRightsEnabled();
 		$this->arResult['MAILBOX_MASS_CONNECT_ENABLED'] = LicenseManager::isMailboxesMassConnectEnabled();
+		$this->arResult['IS_PASSWORDLESS_CONNECT_AVAILABLE'] = Feature::isPasswordlessConnectAvailable();
 		$this->arResult['MAILBOX_LIST_HINT_NAME'] = Guide::getMailboxListHintOptionName();
+		$this->arResult['PASSWORDLESS_SENT_TOTAL_COUNT'] = $this->getPasswordlessSentTotalCount();
+		$this->arResult['NEED_HIGHLIGHT_GEAR_BUTTON'] = Feature::isPasswordlessConnectAvailable()
+			&& !Guide::wasMailboxListGearHighlightShown();
+		$this->arResult['HIGHLIGHT_GEAR_BUTTON_OPTION_NAME'] = Guide::getMailboxListGearHighlightOptionName();
 
 		$this->includeComponentTemplate();
 	}
@@ -104,5 +111,18 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$accessValues['HAS_ACCESS_TO_EDIT_PERMISSIONS'] = MailAccess::hasCurrentUserAccessToPermission();
 
 		return $accessValues;
+	}
+
+	private function getPasswordlessSentTotalCount(): int
+	{
+		if (
+			!Feature::isPasswordlessConnectAvailable()
+			|| !MailAccess::hasCurrentUserAccessToMassConnect()
+		)
+		{
+			return 0;
+		}
+
+		return PasswordlessConnectHelper::getSentTotalCount();
 	}
 }

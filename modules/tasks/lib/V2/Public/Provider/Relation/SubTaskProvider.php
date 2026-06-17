@@ -11,6 +11,19 @@ class SubTaskProvider extends AbstractRelationTaskProvider
 {
 	protected function getFilter(RelationTaskParams $relationTaskParams): array
 	{
+		if ($relationTaskParams->withCompleted)
+		{
+			return ['=PARENT_ID' => $relationTaskParams->taskId];
+		}
+
+		return [
+			...$this->getActiveTasksFilter(),
+			'=PARENT_ID' => $relationTaskParams->taskId,
+		];
+	}
+
+	protected function getFilterForIds(RelationTaskParams $relationTaskParams): array
+	{
 		return ['=PARENT_ID' => $relationTaskParams->taskId];
 	}
 

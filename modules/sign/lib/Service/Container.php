@@ -40,12 +40,6 @@ class Container
 
 	private static function getService(string $name): mixed
 	{
-		$prefix = 'sign.';
-		if (mb_strpos($name, $prefix) !== 0)
-		{
-			$name = $prefix . $name;
-		}
-
 		$locator = self::getServiceLocator();
 
 		return $locator->has($name)
@@ -149,6 +143,11 @@ class Container
 		return self::getService('sign.service.api.external-sign-provider');
 	}
 
+	public function getSignBlankArchiveService(): Service\Sign\BlankArchiveService
+	{
+		return self::getService('sign.service.sign.blank.archive');
+	}
+
 	public function getSignBlankFileService(): Service\Sign\BlankFileService
 	{
 		return self::getService('sign.service.sign.blank.file');
@@ -192,6 +191,11 @@ class Container
 	public function getImService(): Service\Integration\Im\ImService
 	{
 		return self::getService('sign.service.integration.im');
+	}
+
+	public function getDiskService(): Service\Integration\Disk\DiskService
+	{
+		return self::getService('sign.service.integration.disk');
 	}
 
 	public function getHrBotMessageService(): Service\HrBotMessageService
@@ -579,7 +583,12 @@ class Container
 
 	public function getSignersListService(): SignersListService
 	{
-		return static::getService('sign.service.signerslist');
+		return static::getService(SignersListService::class);
+	}
+
+	public function getSignersListAccessService(): Service\Sign\SignersList\AccessService
+	{
+		return static::getService(Service\Sign\SignersList\AccessService::class);
 	}
 
 	public function getOnboardingService(): OnboardingService

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\Config;
 
+use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
+
 class DeleteConfig
 {
 	private int $userId;
@@ -13,6 +15,7 @@ class DeleteConfig
 	private bool $skipBP;
 	private bool $useConsistency;
 	private RuntimeData $runtime;
+	private ?AnalyticsData $analyticsData;
 
 	public function __construct(
 		int $userId,
@@ -21,7 +24,8 @@ class DeleteConfig
 		?string $eventGuid = null,
 		bool $skipBP = false,
 		bool $useConsistency = false,
-		RuntimeData $runtime = new RuntimeData()
+		RuntimeData $runtime = new RuntimeData(),
+		?AnalyticsData $analyticsData = null,
 	)
 	{
 		$this->userId = $userId;
@@ -31,6 +35,7 @@ class DeleteConfig
 		$this->skipBP = $skipBP;
 		$this->useConsistency = $useConsistency;
 		$this->runtime = $runtime;
+		$this->analyticsData = $analyticsData;
 	}
 
 	public function getRuntime(): RuntimeData
@@ -66,5 +71,10 @@ class DeleteConfig
 	public function isUseConsistency(): bool
 	{
 		return $this->useConsistency;
+	}
+
+	public function getAnalyticsData(): ?AnalyticsData
+	{
+		return $this->analyticsData;
 	}
 }

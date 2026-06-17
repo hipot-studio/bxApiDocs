@@ -267,4 +267,22 @@ class BlankService
 
 		return $blank?->hasPlaceholders ?? false;
 	}
+
+	public function hasDownloadableFile(?Blank $blank): bool
+	{
+		if ($blank?->fileCollection === null || $blank->fileCollection->count() === 0)
+		{
+			return false;
+		}
+
+		foreach ($blank->fileCollection as $file)
+		{
+			if (!\CFile::GetFileArray($file->id))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
 }

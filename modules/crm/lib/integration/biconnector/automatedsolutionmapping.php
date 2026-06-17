@@ -18,9 +18,12 @@ class AutomatedSolutionMapping
 				continue;
 			}
 
+			$titleReplace = ['#TITLE#' => $solution->getTitle()];
+
 			$result['crm_automated_solution_' . $solution->getId()] = [
 				'TABLE_NAME' => 'b_crm_dynamic_type',
-				'TABLE_DESCRIPTION' => Localization::getMessage('CRM_AUTOMATED_SOLUTION_TABLE', $languageId, ['#TITLE#' => $solution->getTitle()]) ?? $solution->getTitle(),
+				'TABLE_DESCRIPTION' => Localization::getMessage('CRM_AUTOMATED_SOLUTION_TABLE', $languageId, $titleReplace) ?? $solution->getTitle(),
+				'TABLE_DESCRIPTION_FULL' => Localization::getMessage('CRM_AUTOMATED_SOLUTION_TABLE_DESCRIPTION_FULL', $languageId, $titleReplace) ?? '',
 				'TABLE_ALIAS' => 'DT',
 				'FILTER' => [
 					'=CUSTOM_SECTION_ID' => $solution->getId(),

@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Controller\Copilot;
 
 use Bitrix\Crm\Controller\Base;
 use Bitrix\Crm\Controller\ErrorCode;
+use Bitrix\Crm\Controller\Timeline\AI;
 use Bitrix\Crm\Controller\Timeline\trait\ActivityLoader;
 use Bitrix\Crm\Controller\Timeline\trait\ActivityPermissionsChecker;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Controller\AiQualityAssessmentController;
@@ -12,8 +13,9 @@ use Bitrix\Crm\Copilot\AiQualityAssessment\ViewModeEnum;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItemChecker;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
+use Bitrix\Crm\Copilot\Pipeline\PipelineExecutor;
+use Bitrix\Crm\Copilot\Pipeline\StepContext;
 use Bitrix\Crm\Integration\AI\AIManager;
-use Bitrix\Crm\Integration\AI\CopilotLauncher;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\ErrorCode as AIErrorCode;
 use Bitrix\Crm\Integration\AI\Operation\OperationState;
@@ -21,8 +23,12 @@ use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main\DI\Exception\CircularDependencyException;
+use Bitrix\Main\DI\Exception\ServiceNotFoundException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
+use Bitrix\Main\ObjectNotFoundException;
 
 final class CallQualityAssessment extends Base
 {
@@ -37,7 +43,30 @@ final class CallQualityAssessment extends Base
 		return $filters;
 	}
 
-	// region actions
+	public function getAutoWiredParameters(): array
+	{
+		return [
+			new ExactParameter(
+				ItemIdentifier::class,
+				'itemIdentifier',
+				static function($className, $ownerTypeId, $ownerId) {
+					return new ItemIdentifier($ownerTypeId, $ownerId);
+				}
+			),
+		];
+	}
+
+	// region Actions
+
+	/**
+	 * 'crm.copilot.callqualityassessment.get' method handler.
+	 *
+	 * @param int $activityId
+	 * @param int $assessmentSettingsId
+	 * @param ItemIdentifier $itemIdentifier
+	 *
+	 * @return array|null
+	 */
 	public function getAction(
 		int $activityId,
 		int $assessmentSettingsId,
@@ -65,7 +94,7 @@ final class CallQualityAssessment extends Base
 
 		if ($quality)
 		{
-			return (new \Bitrix\Crm\Controller\Timeline\AI())->getCopilotCallQualityAction(
+			return (new AI())->getCopilotCallQualityAction(
 				$activityId,
 				$itemIdentifier->getEntityTypeId(),
 				$itemIdentifier->getEntityId(),
@@ -110,6 +139,19 @@ final class CallQualityAssessment extends Base
 		];
 	}
 
+	/**
+	 * 'crm.copilot.callqualityassessment.doAssessment' method handler.
+	 *
+	 * @param int $activityId
+	 * @param int $assessmentSettingsId
+	 * @param ItemIdentifier $itemIdentifier
+	 *
+	 * @return Result|null
+	 *
+	 * @throws CircularDependencyException
+	 * @throws ServiceNotFoundException
+	 * @throws ObjectNotFoundException
+	 */
 	public function doAssessmentAction(
 		int $activityId,
 		int $assessmentSettingsId,
@@ -164,14 +206,14 @@ final class CallQualityAssessment extends Base
 				return null;
 			}
 
-			$scenario = Scenario::CALL_SCORING_SCENARIO;
-
-			$result = (new CopilotLauncher(
-				$activityId,
-				$this->getCurrentUserId(),
-				$scenario,
-			))->runCallScoringScenario($assessmentSettingsId);
-
+			$executor = ServiceLocator::getInstance()->get(PipelineExecutor::class);
+			$context = new StepContext(
+				activityId: $activityId,
+				userId: $this->getCurrentUserId(),
+				scenarioName: Scenario::CALL_SCORING_SCENARIO,
+				isManualLaunch: true,
+			);
+			$result = $executor->startOrResume($context->withExtra('assessmentSettingsId', $assessmentSettingsId));
 			if ($result?->isSuccess() === false)
 			{
 				$this->addErrors($result?->getErrors());
@@ -189,18 +231,5 @@ final class CallQualityAssessment extends Base
 	private function getCurrentUserId(): int
 	{
 		return $this->getCurrentUser()?->getId() ?? Container::getInstance()->getContext()->getUserId();
-	}
-
-	public function getAutoWiredParameters(): array
-	{
-		return [
-			new ExactParameter(
-				ItemIdentifier::class,
-				'itemIdentifier',
-				static function($className, $ownerTypeId, $ownerId) {
-					return new ItemIdentifier($ownerTypeId, $ownerId);
-				}
-			),
-		];
 	}
 }

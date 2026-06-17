@@ -3,7 +3,6 @@
 namespace Bitrix\Tasks\Integration\Bizproc\Document;
 
 use Bitrix\Main;
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\UserTable;
@@ -22,6 +21,8 @@ use Bitrix\Socialnetwork;
 use Bitrix\Tasks\Util\UserField;
 use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
 use Bitrix\Tasks\V2\Internal\Integration\Bizproc\Service\ResultService;
 
 if (!Main\Loader::includeModule('bizproc'))
@@ -690,6 +691,7 @@ class Task implements \IBPWorkflowDocument
 			'CHECK_RIGHTS_ON_FILES' => 'N',
 			'AUTHOR_ID' => $modifiedById ?: 1,
 			'USER_ID' => $modifiedById ?: 1,
+			'ANALYTICS_DATA' => self::getAnalyticsDataForUpdate($fields),
 		]);
 
 		\Bitrix\Tasks\Util\User::setOccurAsId($prevOccurAsUserId);
@@ -706,7 +708,15 @@ class Task implements \IBPWorkflowDocument
 			\Bitrix\Tasks\Util\User::setOccurAsId($task['CREATED_BY']);
 
 			$task = new \CTasks();
-			$task->delete($documentId);
+			$task->delete($documentId, [
+				'ANALYTICS_DATA' => new AnalyticsData(
+					event: Analytics\Event::TaskDelete,
+					category: Analytics\Category::TaskOperations,
+					section: Analytics\Section::Tasks,
+					subSection: Analytics\SubSection::Automation,
+					element: Analytics\Element::Auto,
+				),
+			]);
 
 			\Bitrix\Tasks\Util\User::setOccurAsId($prevOccurAsUserId);
 		}
@@ -1210,5 +1220,23 @@ class Task implements \IBPWorkflowDocument
 	public static function getStarterModuleSettings(array $complexDocumentType): TasksModuleSettings
 	{
 		return new \Bitrix\Tasks\Integration\Bizproc\Starter\TasksModuleSettings($complexDocumentType);
+	}
+
+	private static function getAnalyticsDataForUpdate(array $fields): ?AnalyticsData
+	{
+		$status = (int)($fields['STATUS'] ?? 0);
+
+		if (in_array($status, [Status::COMPLETED, Status::SUPPOSEDLY_COMPLETED], true))
+		{
+			return new AnalyticsData(
+				event: Analytics\Event::TaskComplete,
+				category: Analytics\Category::TaskOperations,
+				section: Analytics\Section::Tasks,
+				subSection: Analytics\SubSection::Automation,
+				element: Analytics\Element::Auto,
+			);
+		}
+
+		return null;
 	}
 }

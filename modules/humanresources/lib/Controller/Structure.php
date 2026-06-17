@@ -17,11 +17,11 @@ use Bitrix\HumanResources\Enum\SortDirection;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Util\StructureHelper;
 use Bitrix\HumanResources\Engine\Controller;
-use Bitrix\HumanResources\Internals\Attribute;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
+use Bitrix\Main\Engine\ActionFilter\Attribute\Access\ActionAccess;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Request;
 use Bitrix\HumanResources\Enum\DepthLevel;
@@ -38,7 +38,7 @@ final class Structure extends Controller
 		$this->nodeRepository = Container::getNodeRepository(true);
 	}
 
-	#[Attribute\StructureActionAccess(permission: StructureActionDictionary::ACTION_STRUCTURE_VIEW_ACCESS)]
+	#[ActionAccess(StructureActionDictionary::ACTION_STRUCTURE_VIEW_ACCESS)]
 	public function getAction(Item\Structure $structure): ?array
 	{
 		$result = [];
@@ -88,7 +88,7 @@ final class Structure extends Controller
 		];
 	}
 
-	#[Attribute\StructureActionAccess(permission: StructureActionDictionary::ACTION_STRUCTURE_VIEW_ACCESS)]
+	#[ActionAccess(StructureActionDictionary::ACTION_STRUCTURE_VIEW_ACCESS)]
 	public function dictionaryAction(): array
 	{
 		$userId = (int)CurrentUser::get()->getId();
@@ -200,6 +200,7 @@ final class Structure extends Controller
 			'firstTimeOpened' => \CUserOptions::GetOption("humanresources", 'first_time_opened', 'N'),
 			'teamsAvailable' => Feature::instance()->isCrossFunctionalTeamsAvailable(),
 			'collabsAvailable' => Feature::instance()->isCollabsAvailable(),
+			'projectsAvailable' => Feature::instance()->isProjectsAvailable(),
 			'deputyApprovesBP' => Feature::instance()->isDeputyApprovesBPAvailable(),
 			'departmentBPSettingsAvailable' => Feature::instance()->isDepartmentBPSettingsAvailable(),
 			'areTeamReportSettingsAvailable' => Feature::instance()->areTeamReportSettingsAvailable(),

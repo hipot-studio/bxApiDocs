@@ -3,13 +3,20 @@
 namespace Bitrix\BIConnector\Integration\Superset\Model;
 
 use Bitrix\BIConnector\Access\Service\RolePermissionService;
+use Bitrix\BIConnector\Internal\Model\SupersetDashboardShareTable;
 use Bitrix\BIConnector\Superset\Logger\Logger;
+use Bitrix\BIConnector\Internal\Model\SupersetDashboardChatTable;
+use Bitrix\BIConnector\Internal\Model\SupersetDashboardViewTable;
+use Bitrix\BIConnector\Internal\Model\SupersetDashboardInfoTable;
+use Bitrix\BIConnector\Internal\Integration\Im\DashboardDiscussionChatAccessSyncScheduler;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\Fields;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Rest\AppTable;
 
 /**
@@ -198,12 +205,23 @@ final class SupersetDashboardTable extends DataManager
 				->configureLocalPrimary('ID', 'DASHBOARD_ID')
 				->configureRemotePrimary('ID', 'GROUP_ID')
 			,
+
+			(new Fields\Relations\OneToMany(
+				'SHARES',
+				SupersetDashboardShareTable::class,
+				'DASHBOARD',
+			))
+				->configureJoinType(Join::TYPE_LEFT)
+				->configureCascadeDeletePolicy(Fields\Relations\CascadePolicy::FOLLOW)
+			,
 		];
 	}
 
 	public static function onAfterDelete(Event $event): void
 	{
 		$dashboardId = (int)$event->getParameters()['primary']['ID'];
+		$fileCleanupService = ServiceLocator::getInstance()->get('biconnector.service.dashboardInfo.fileCleanup');
+		$imageIdsToDelete = $fileCleanupService->collectImageIdsByDashboardId($dashboardId);
 		$service = new RolePermissionService();
 		$service->deletePermissionsByDashboard($dashboardId);
 
@@ -300,5 +318,111 @@ final class SupersetDashboardTable extends DataManager
 		}
 
 		SupersetDashboardGroupBindingTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
+
+		SupersetDashboardShareTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
+		SupersetDashboardViewTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
+		SupersetDashboardInfoTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
+		SupersetDashboardChatTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
+		$fileCleanupService->deleteFiles($imageIdsToDelete);
+	}
+
+	public static function onAfterAdd(Event $event)
+	{
+		parent::onAfterAdd($event);
+
+		$dashboardId = (int)($event->getParameter('id') ?? 0);
+		$fields = $event->getParameters()['fields'] ?? [];
+		$fields = is_array($fields) ? $fields : [];
+
+		$dashboardType = $fields['TYPE'] ?? self::DASHBOARD_TYPE_CUSTOM;
+		if ($dashboardId > 0 && $dashboardType === self::DASHBOARD_TYPE_CUSTOM)
+		{
+			$dashboardInfoFields = [
+				'DASHBOARD_ID' => $dashboardId,
+			];
+
+			$dashboardStatus = $fields['STATUS'] ?? self::DASHBOARD_STATUS_READY;
+			if ($dashboardStatus === self::DASHBOARD_STATUS_READY)
+			{
+				$publishedById = (int)($fields['CREATED_BY_ID'] ?? CurrentUser::get()->getId());
+				$dashboardInfoFields['PUBLISHED_BY_ID'] = $publishedById > 0 ? $publishedById : null;
+				$dashboardInfoFields['PUBLISHED_DATE'] = $fields['DATE_CREATE'] ?? new DateTime();
+			}
+
+			SupersetDashboardInfoTable::add($dashboardInfoFields);
+		}
+	}
+
+	public static function onAfterUpdate(Event $event)
+	{
+		parent::onAfterUpdate($event);
+
+		$id = (int)($event->getParameter('primary')['ID'] ?? 0);
+		$fields = $event->getParameters()['fields'] ?? [];
+
+		if ($id <= 0)
+		{
+			return;
+		}
+
+		$dashboard = static::getRow([
+			'select' => ['TYPE'],
+			'filter' => ['=ID' => $id],
+		]);
+		$dashboardType = $dashboard['TYPE'] ?? null;
+		if ($dashboardType !== self::DASHBOARD_TYPE_CUSTOM)
+		{
+			return;
+		}
+
+		$dashboardInfo = SupersetDashboardInfoTable::getRow([
+			'select' => ['ID'],
+			'filter' => ['=DASHBOARD_ID' => $id],
+		]);
+
+		$dashboardInfoId = (int)($dashboardInfo['ID'] ?? 0);
+		if ($dashboardInfoId <= 0)
+		{
+			$addResult = SupersetDashboardInfoTable::add([
+				'DASHBOARD_ID' => $id,
+			]);
+			if (!$addResult->isSuccess())
+			{
+				return;
+			}
+
+			$dashboardInfoId = (int)$addResult->getId();
+		}
+
+		$currentUserId = (int)($fields['MODIFIED_BY_ID'] ?? CurrentUser::get()->getId());
+		if ($currentUserId <= 0)
+		{
+			$currentUserId = null;
+		}
+
+		$updateFields = [
+			'UPDATED_BY_ID' => $currentUserId,
+			'UPDATED_DATE' => $fields['DATE_MODIFY'] ?? new DateTime(),
+		];
+
+		$isStatusChangedToReady = isset($fields['STATUS']) && $fields['STATUS'] === self::DASHBOARD_STATUS_READY;
+		$isStatusChangedToDraft = isset($fields['STATUS']) && $fields['STATUS'] === self::DASHBOARD_STATUS_DRAFT;
+		if ($isStatusChangedToReady)
+		{
+			$updateFields['PUBLISHED_BY_ID'] = $currentUserId;
+			$updateFields['PUBLISHED_DATE'] = $fields['DATE_MODIFY'] ?? new DateTime();
+		}
+		elseif ($isStatusChangedToDraft)
+		{
+			$updateFields['PUBLISHED_BY_ID'] = null;
+			$updateFields['PUBLISHED_DATE'] = null;
+		}
+
+		SupersetDashboardInfoTable::update($dashboardInfoId, $updateFields);
+
+		if (array_key_exists('STATUS', $fields))
+		{
+			(new DashboardDiscussionChatAccessSyncScheduler())->scheduleDashboardIds([$id]);
+		}
 	}
 }

@@ -33,4 +33,14 @@ abstract class EntitySettings extends \Bitrix\Main\Filter\EntitySettings
 	{
 		return $this->disableDepartmentSelector;
 	}
+
+	public function isClientFilterSupported(): bool
+	{
+		return false;
+	}
+
+	public function isClientCompanyFilterSupported(): bool
+	{
+		return false;
+	}
 }

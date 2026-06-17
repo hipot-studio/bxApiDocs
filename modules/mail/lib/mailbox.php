@@ -2,11 +2,13 @@
 
 namespace Bitrix\Mail;
 
+use Bitrix\Mail\Helper\Enum\MailboxStatus;
 use Bitrix\Mail\Internals\MailboxAccessTable;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\DB\ArrayResult;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 
 Localization\Loc::loadMessages(__FILE__);
 
@@ -28,6 +30,7 @@ Localization\Loc::loadMessages(__FILE__);
  */
 class MailboxTable extends Entity\DataManager
 {
+	use DeleteByFilterTrait;
 
 	private const CACHE_TTL = 86400;
 	public const SHARED_MAILBOX_KEY = 'mailbox_shared_mailboxes';
@@ -410,8 +413,8 @@ class MailboxTable extends Entity\DataManager
 				'required'  => true,
 			),
 			'ACTIVE' => array(
-				'data_type' => 'boolean',
-				'values'    => array('N', 'Y'),
+				'data_type' => 'enum',
+				'values'    => array_column(MailboxStatus::cases(), 'value'),
 			),
 			'SERVICE_ID' => array(
 				'data_type' => 'integer',

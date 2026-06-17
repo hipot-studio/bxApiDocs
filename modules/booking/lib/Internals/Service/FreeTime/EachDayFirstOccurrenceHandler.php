@@ -65,6 +65,29 @@ class EachDayFirstOccurrenceHandler
 					)
 				);
 
+				$rangeDurationMinutes = $slotRangeDatePeriod->diffMinutes();
+
+				if ($periodSize > $rangeDurationMinutes)
+				{
+					if (
+						$request->ignorePastTime
+						&& $slotRangeDatePeriod->getDateTo()->getTimestamp() <= time()
+					)
+					{
+						continue;
+					}
+
+					if (!$this->hasEventIntersection($slotRangeEvents, $slotRangeDatePeriod))
+					{
+						$response->foundDates->add($searchDate);
+						$response->foundPeriods->add($slotRangeDatePeriod);
+
+						break;
+					}
+
+					continue;
+				}
+
 				while ($slotRangeDatePeriod->contains($currentDatePeriod))
 				{
 					if (
@@ -77,27 +100,7 @@ class EachDayFirstOccurrenceHandler
 						continue;
 					}
 
-					if ($slotRangeEvents->isEmpty())
-					{
-						$response->foundDates->add($searchDate);
-						$response->foundPeriods->add($currentDatePeriod);
-
-						break 2;
-					}
-
-					$intersects = false;
-					/** @var EventInterface $slotRangeEvent */
-					foreach ($slotRangeEvents as $slotRangeEvent)
-					{
-						if ($slotRangeEvent->doEventsIntersect($currentDatePeriod))
-						{
-							$intersects = true;
-
-							break;
-						}
-					}
-
-					if (!$intersects)
+					if (!$this->hasEventIntersection($slotRangeEvents, $currentDatePeriod))
 					{
 						$response->foundDates->add($searchDate);
 						$response->foundPeriods->add($currentDatePeriod);
@@ -111,6 +114,19 @@ class EachDayFirstOccurrenceHandler
 		}
 
 		return $response;
+	}
+
+	private function hasEventIntersection(BookingCollection $events, DatePeriod $period): bool
+	{
+		foreach ($events as $event)
+		{
+			if ($event->doEventsIntersect($period))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function sortEventCollection(BookingCollection $eventCollection): BookingCollection

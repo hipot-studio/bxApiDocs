@@ -15,6 +15,8 @@ class MailboxDataProvider extends DataProvider
 		return [
 			new OpenSettingsAction($this->getSettings()),
 			new SyncMailboxAction($this->getSettings()),
+			new ConnectMailboxConnectionRequestAction($this->getSettings()),
+			new RejectMailboxConnectionRequestAction($this->getSettings()),
 		];
 	}
 }

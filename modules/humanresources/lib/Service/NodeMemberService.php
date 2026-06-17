@@ -3,6 +3,7 @@
 namespace Bitrix\HumanResources\Service;
 
 use Bitrix\HumanResources\Builder\Structure\Filter\Column\EntityIdFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\IdFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\Column\Node\NodeTypeFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
@@ -345,16 +346,57 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 	}
 
 	/**
-	 * @param NodeMember $nodeMember
+	 * Remove multiple users from a node by user IDs. Returns structured result with removed and failed arrays.
 	 *
-	 * @return NodeMember|null
-	 * @throws ArgumentException
-	 * @throws DeleteFailedException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 * @throws UpdateFailedException
-	 * @throws WrongStructureItemException
+	 * @param int $nodeId
+	 * @param int[] $userIds
+	 *
+	 * @return array{removed: int[], failed: array<array{userId: int, reason: string}>}
 	 */
+	public function removeFromNodeByUserIds(int $nodeId, array $userIds): array
+	{
+		$userIds = array_map('intval', $userIds);
+
+		$collectionToRemove = NodeMemberDataBuilder::createWithFilter(
+				new NodeMemberFilter(
+					entityIdFilter: EntityIdFilter::fromEntityIds($userIds),
+					nodeFilter: new NodeFilter(idFilter: IdFilter::fromId($nodeId)),
+				),
+			)->setCacheTtl(0)
+			->getAll()
+		;
+
+		$foundUserIds = array_flip($collectionToRemove->getEntityIds());
+		$failed = [];
+
+		foreach ($userIds as $uid)
+		{
+			if (!isset($foundUserIds[$uid]))
+			{
+				$failed[] = ['userId' => $uid, 'reason' => 'Not found in this node'];
+			}
+		}
+
+		$removed = [];
+		if (!$collectionToRemove->empty())
+		{
+			try
+			{
+				$this->removeUserMembersFromDepartmentByCollection($collectionToRemove);
+				$removed = $collectionToRemove->getEntityIds();
+			}
+			catch (DeleteFailedException $e)
+			{
+				foreach ($collectionToRemove as $member)
+				{
+					$failed[] = ['userId' => $member->entityId, 'reason' => $e->getMessage()];
+				}
+			}
+		}
+
+		return ['removed' => $removed, 'failed' => $failed];
+	}
+
 	public function removeUserMemberFromDepartment(Item\NodeMember $nodeMember): ?Item\NodeMember
 	{
 		$result = $this->removeUserWithEventQueue($nodeMember);
@@ -458,11 +500,13 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		$nodeMemberCollectionToUpdate = new Item\Collection\NodeMemberCollection();
 		foreach ($departmentUserIds as $roleXmlId => $userIds)
 		{
-			if ($node->type === NodeEntityType::DEPARTMENT && !in_array($roleXmlId, array_values(Item\NodeMember::DEFAULT_ROLE_XML_ID)))
-			{
-				continue;
-			}
-			elseif ($node->type === NodeEntityType::TEAM && !in_array($roleXmlId, array_values(Item\NodeMember::TEAM_ROLE_XML_ID)))
+			$isRoleAllowedForNodeType = in_array(
+				$roleXmlId,
+				Type\NodeMemberRole::allowedValuesForNodeType($node->type),
+				true,
+			);
+
+			if (!$isRoleAllowedForNodeType)
 			{
 				continue;
 			}
@@ -577,13 +621,19 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 
 	/**
 	 * @param Item\Node $node
+	/**
+	 * Batch move users to a node by role XML IDs. Silently skips invalid roles
+	 * (findByXmlId returns null → continue). Callers should validate roles beforehand
+	 * if an error response is needed.
+	 *
+	 * For moving a single member with strict validation (throws on invalid role/node type),
+	 * use {@see \Bitrix\HumanResources\Internals\Service\Structure\NodeMemberService::moveMember()} instead.
+	 *
 	 * @param array{
 	 *      MEMBER_HEAD?: list<int>,
 	 *      MEMBER_EMPLOYEE?: list<int>,
 	 *      MEMBER_DEPUTY_HEAD?: list<int>
 	 * } $departmentUserIds
-	 *
-	 * @return bool
 	 *
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\DB\DuplicateEntryException

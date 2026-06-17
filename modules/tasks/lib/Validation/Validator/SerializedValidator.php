@@ -22,11 +22,24 @@ class SerializedValidator implements ValidatorInterface
 			));
 		}
 
+		if ($value === 'b:0;')
+		{
+			return $result;
+		}
+
 		try
 		{
-			unserialize($value, ['allowed_classes' => false]);
+			$unserialized = unserialize($value, ['allowed_classes' => false]);
 		}
 		catch (Throwable)
+		{
+			return $result->addError(new ValidationError(
+				message: 'Not a serialized string',
+				failedValidator: $this
+			));
+		}
+
+		if ($unserialized === false)
 		{
 			return $result->addError(new ValidationError(
 				message: 'Not a serialized string',

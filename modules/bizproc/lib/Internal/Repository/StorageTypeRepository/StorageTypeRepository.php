@@ -41,6 +41,18 @@ class StorageTypeRepository implements StorageTypeRepositoryInterface
 		)->getFirstCollectionItem();
 	}
 
+	public function getCount(?FilterInterface $filter = null): int
+	{
+		$query = StorageTypeTable::query();
+
+		if ($filter !== null)
+		{
+			$query->where($filter->prepareFilter());
+		}
+
+		return $query->queryCountTotal();
+	}
+
 	public function getList(
 		?int $limit = null,
 		?int $offset = null,

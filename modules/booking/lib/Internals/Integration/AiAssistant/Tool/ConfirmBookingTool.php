@@ -10,7 +10,7 @@ use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 
 class ConfirmBookingTool extends BaseBookingTool
 {
-	protected function execute(int $userId, ...$args): string
+	protected function doExecuteStructured(int $userId, ...$args): array
 	{
 		$bookingId = (int)($args['bookingId'] ?? 0);
 		if (!$bookingId)
@@ -40,14 +40,16 @@ class ConfirmBookingTool extends BaseBookingTool
 
 		if (!$booking->isConfirmed())
 		{
-			$result = (new ConfirmBookingCommand(id: $booking->getId(), updatedBy: $userId))->run();
+			$result = (new ConfirmBookingCommand(id: $booking->getId(), updatedBy: 0))->run();
 			if (!$result->isSuccess())
 			{
 				return $this->createFailureResponse(implode(', ', $result->getErrorMessages()));
 			}
 		}
 
-		return "Booking with identifier '{$booking->getId()}' has been successfully confirmed";
+		return $this->createSuccessResponse(
+			message: "Booking with identifier '{$booking->getId()}' has been successfully confirmed",
+		);
 	}
 
 	public function getName(): string

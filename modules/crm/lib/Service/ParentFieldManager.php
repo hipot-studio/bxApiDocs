@@ -6,6 +6,7 @@ use Bitrix\Crm\Field;
 use Bitrix\Crm\Integration\Main\UISelector;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\ItemMiniCard\Builder\MiniCardHtmlBuilder;
 use Bitrix\Crm\Kanban\Entity;
 use Bitrix\Crm\Relation\EntityRelationTable;
 use Bitrix\Crm\RelationIdentifier;
@@ -206,6 +207,11 @@ class ParentFieldManager
 							$parent->getCategoryId()
 						);
 						$title = HtmlFilter::encode($parent->getHeading());
+						$miniCard = (new MiniCardHtmlBuilder($parent->getEntityTypeId(), $parent->getId()))
+							->setTitle($parent->getHeading())
+							->build()
+						;
+
 						$items[$parentId] = [
 							'id' => $parentId,
 							'code' => self::FIELD_PARENT_PREFIX . '_' . $parent->getEntityTypeId(),
@@ -213,6 +219,7 @@ class ParentFieldManager
 							'title' => $title,
 							'url' => $url,
 							'value' => '<a href="' . $url . '">' . $title . '</a>',
+							'miniCard' => $miniCard,
 						];
 					}
 					$this->parents[$parentElementTypeId] = $items;
@@ -252,6 +259,11 @@ class ParentFieldManager
 						$url = $this->getUrl($parentId, \CCrmOwnerType::ResolveName($parentElementTypeId));
 						$title = HtmlFilter::encode($parent['TITLE']);
 						$entityDescription = HtmlFilter::encode(\CCrmOwnerType::GetDescription($parentElementTypeId));
+						$miniCard = (new MiniCardHtmlBuilder((int)$parentElementTypeId, (int)$parentId))
+							->setTitle($parent['TITLE'] ?? '')
+							->build()
+						;
+
 						$items[$parentId] = [
 							'id' => $parentId,
 							'code' => self::FIELD_PARENT_PREFIX . '_' . $parentElementTypeId,
@@ -259,6 +271,7 @@ class ParentFieldManager
 							'title' => $title,
 							'url' => $url,
 							'value' => '<a href="' . $url . '">' . $title . '</a>',
+							'miniCard' => $miniCard,
 						];
 					}
 					$this->parents[$parentElementTypeId] = $items;

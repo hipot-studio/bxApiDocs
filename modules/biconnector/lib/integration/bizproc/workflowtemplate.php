@@ -35,6 +35,11 @@ class WorkflowTemplate extends Dataset
 		return $this->getMessage('WORKFLOW_TEMPLATE_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('WORKFLOW_TEMPLATE_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	protected function onBeforeEvent(): Result
 	{
 		$result = parent::onBeforeEvent();

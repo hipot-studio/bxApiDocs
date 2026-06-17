@@ -26,6 +26,14 @@ final class CreateExternalDatasetAction extends BaseAction
 
 	public function getControl(array $rawFields): ?array
 	{
+		if (!empty($rawFields['IS_SYSTEM']))
+		{
+			$name = \CUtil::JSEscape($rawFields['NAME']);
+			$this->onclick = "BX.BIConnector.ExternalDatasetManager.Instance.createExternalDatasetByName('{$name}')";
+
+			return parent::getControl($rawFields);
+		}
+
 		$datasetId = (int)$rawFields['ID'];
 		if (!$datasetId)
 		{

@@ -11,7 +11,25 @@ use Bitrix\Tasks\Integration\Pull\PushService;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Internals\TaskTable;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\AddMembers;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateMembers;
+use Bitrix\Tasks\V2\Public\Command\Task\Stakeholder;
 
+/**
+ * @deprecated
+ *
+ * Public API:
+ * @use Stakeholder\UpdateCreatorCommand
+ * @use Stakeholder\DelegateCommand
+ * @use Stakeholder\SetAccomplicesCommand
+ * @use Stakeholder\AddAuditorsCommand
+ * @use Stakeholder\SetAuditorsCommand
+ * @use Stakeholder\DeleteAuditorsCommand
+ *
+ * Internal API:
+ * @use AddMembers
+ * @use UpdateMembers
+ */
 class Member
 {
 	private int $userId;

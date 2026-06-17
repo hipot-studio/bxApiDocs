@@ -7,7 +7,6 @@ use Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController;
 use Bitrix\Crm\RepeatSale\Segment\SegmentItem;
 use Bitrix\Crm\RepeatSale\Service\Context;
 use Bitrix\Crm\RepeatSale\Service\Entity\RepeatSaleAiScreeningTable;
-use Bitrix\Crm\RepeatSale\Service\Handler\AiScreeningOpinion;
 use Bitrix\Main\Result;
 
 final class SaveCreatedItemToAiScreeningTableAction implements ActionInterface
@@ -29,8 +28,6 @@ final class SaveCreatedItemToAiScreeningTableAction implements ActionInterface
 			'filter' => [
 				'=OWNER_ID' => $clientItem->getId(),
 				'=OWNER_TYPE_ID' => $clientItem->getEntityTypeId(),
-				'=SEGMENT_ID' => $this->getSegmentId($segmentItem),
-				'=AI_OPINION' => AiScreeningOpinion::isRepeatSalePossible->value,
 			],
 			'limit' => 1,
 		])->fetchObject();
@@ -39,8 +36,8 @@ final class SaveCreatedItemToAiScreeningTableAction implements ActionInterface
 		{
 			$createdItem = $prevActionResult->getData()['item'];
 
-			$aiScreeningItem->setResultEntityTypeId($createdItem->getEntityTypeId());
-			$aiScreeningItem->setResultEntityId($createdItem->getId());
+			$aiScreeningItem->setResultEntityTypeId($createdItem->getEntityTypeId() ?? 0);
+			$aiScreeningItem->setResultEntityId($createdItem->getId() ?? 0);
 			$aiScreeningItem->save();
 		}
 

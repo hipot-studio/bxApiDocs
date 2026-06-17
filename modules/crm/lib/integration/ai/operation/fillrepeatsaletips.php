@@ -7,6 +7,7 @@ use Bitrix\AI\Payload\IPayload;
 use Bitrix\Crm\Activity\Analytics\Dictionary;
 use Bitrix\Crm\Activity\Provider\RepeatSale;
 use Bitrix\Crm\Badge;
+use Bitrix\Crm\Copilot\Pipeline\TargetResolver;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Dto\RepeatSale\FillRepeatSaleTipsPayload;
 use Bitrix\Crm\Integration\AI\ErrorCode;
@@ -185,7 +186,7 @@ final class FillRepeatSaleTips extends AbstractFillRepeatSaleTips
 	): void
 	{
 		$activityId = $result->getTarget()?->getEntityId();
-		$nextTarget = (new Orchestrator())->findPossibleFillFieldsTarget($activityId);
+		$nextTarget = (new TargetResolver())->findTarget($activityId);
 		if ($nextTarget)
 		{
 			if ($withSyncBadges)

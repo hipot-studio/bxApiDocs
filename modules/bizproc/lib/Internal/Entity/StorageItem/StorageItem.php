@@ -14,7 +14,6 @@ class StorageItem implements EntityInterface
 	private ?int $updatedBy = null;
 	private ?int $createdAt = null;
 	private ?int $updatedAt = null;
-	private ?string $code = null;
 	private ?string $documentId = null;
 	private ?string $workflowId = null;
 	private ?int $templateId = null;
@@ -82,18 +81,6 @@ class StorageItem implements EntityInterface
 	public function setUpdatedAt(?int $updatedAt): self
 	{
 		$this->updatedAt = $updatedAt;
-
-		return $this;
-	}
-
-	public function getCode(): ?string
-	{
-		return $this->code;
-	}
-
-	public function setCode(?string $code): self
-	{
-		$this->code = $code;
 
 		return $this;
 	}
@@ -199,11 +186,6 @@ class StorageItem implements EntityInterface
 			$result->setUpdatedAt((int)$props['updatedAt']);
 		}
 
-		if (isset($props['code']))
-		{
-			$result->setCode((string)$props['code']);
-		}
-
 		if (isset($props['documentId']))
 		{
 			$result->setDocumentId((string)$props['documentId']);
@@ -256,7 +238,6 @@ class StorageItem implements EntityInterface
 			'updatedBy' => $this->updatedBy,
 			'createdAt' => $this->createdAt,
 			'updatedAt' => $this->updatedAt,
-			'code' => $this->code,
 			'documentId' => $this->documentId,
 			'workflowId' => $this->workflowId,
 			'templateId' => $this->templateId,

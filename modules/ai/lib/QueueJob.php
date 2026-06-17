@@ -6,6 +6,7 @@ use Bitrix\AI\Cache\EngineResultCache;
 use Bitrix\AI\Engine\IEngine;
 use Bitrix\AI\Engine\IQueue;
 use Bitrix\AI\Engine\ThirdParty;
+use Bitrix\AI\Engine\ResponseFormat;
 use Bitrix\AI\Facade\Analytics;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\History\Manager;
@@ -21,12 +22,15 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
-use ReflectionClass;
 
 final class QueueJob
 {
 	private const EVENT_SUCCESS = 'onQueueJobExecute';
 	private const EVENT_FAIL = 'onQueueJobFail';
+
+	public const ERROR_EXECUTE = 'EXECUTE_ERROR';
+	public const ERROR_INVALID_JSON = 'INVALID_JSON';
+	public const ERROR_FAIL_PROCESSING = 'FAIL_PROCESSING_ERROR';
 
 	private const TTL_SECONDS = 14400;
 	private const CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.api.queue.callbackBody&hash={hash}';
@@ -134,6 +138,17 @@ final class QueueJob
 			$engine = Engine::getByCode($row['ENGINE_CODE'], $context);
 			if ($engine === null || $payload === null)
 			{
+				Manager::writeDiagnosticHistory([
+					'RESULT_TEXT' => '[QUEUE_JOB_LOAD_FAILED] hash=' . $hash
+						. ', engineNull=' . ($engine === null ? 'yes' : 'no')
+						. ', payloadNull=' . ($payload === null ? 'yes' : 'no'),
+					'CONTEXT_MODULE' => $context?->getModuleId() ?: 'ai',
+					'CONTEXT_ID' => $context?->getContextId() ?: '-',
+					'ENGINE_CODE' => $row['ENGINE_CODE'] ?? '',
+					'PAYLOAD_CLASS' => $row['PAYLOAD_CLASS'] ?: '-',
+					'CREATED_BY_ID' => $context?->getUserId() ?? 0,
+				]);
+
 				return null;
 			}
 
@@ -171,6 +186,10 @@ final class QueueJob
 			return $queueJob;
 		}
 
+		Manager::writeDiagnosticHistory([
+			'RESULT_TEXT' => '[QUEUE_JOB_NOT_FOUND] No queue record found for hash=' . $hash,
+		]);
+
 		return null;
 	}
 
@@ -188,9 +207,9 @@ final class QueueJob
 
 		$hash = QueueTable::generateHash();
 		$data = [
-			'ENGINE_CLASS' => (new ReflectionClass($this->engine))->getName(),
+			'ENGINE_CLASS' => $this->engine::class,
 			'ENGINE_CODE' => $this->engine->getCode(),
-			'PAYLOAD_CLASS' => (new ReflectionClass($this->engine->getPayload()))->getName(),
+			'PAYLOAD_CLASS' => $this->engine->getPayload()::class,
 			'PAYLOAD' => $this->engine->getPayload()->pack(),
 			'CONTEXT' => $this->engine->getContext()->pack(),
 			'PARAMETERS' => $this->engine->getParameters(),
@@ -330,19 +349,72 @@ final class QueueJob
 			$this->engine->getAnalyticData()
 		);
 
-		$result = $this->engine->getResultFromRaw($rawResult);
-
-		$this->engine->writeHistory($result);
-
-		if ($this->engine->getPayload()->getRole() !== null)
+		try
 		{
-			$langCode = $this->context->getLanguage()?->getCode() ?? User::getUserLanguage();
-			$roleManager = new RoleManager($this->context->getUserId(), $langCode);
-			$roleManager->addRecentRole($this->engine->getPayload()->getRole());
+			$result = $this->engine->getResultFromRaw($rawResult);
+
+			// Soft error — writeHistory failure should not prevent success events
+			try
+			{
+				$this->engine->writeHistory($result);
+			}
+			catch (\Throwable)
+			{
+				// Manager already attempted diagnostic write to b_ai_history
+			}
+
+			if ($this->engine->getPayload()->getRole() !== null)
+			{
+				$langCode = $this->context->getLanguage()?->getCode() ?? User::getUserLanguage();
+				$roleManager = new RoleManager($this->context->getUserId(), $langCode);
+				$roleManager->addRecentRole($this->engine->getPayload()->getRole());
+			}
+
+			$this->sendBackendEvent($result, self::EVENT_SUCCESS);
+			$this->sendFrontendEvent($result, self::EVENT_SUCCESS);
+			$this->delete();
+		}
+		catch (\Throwable $e)
+		{
+			$this->handleError($e->getMessage(), self::ERROR_EXECUTE);
+		}
+	}
+
+	public function handleError(string $message, string $code = 'PROCESSING_ERROR'): void
+	{
+		$this->error = new Error($message, $code);
+
+		$data = [
+			'RESULT_TEXT' => '[ERROR] ' . $code . ' ' . $message,
+		];
+		try
+		{
+			$context = $this->engine->getContext();
+			$data += [
+				'CONTEXT_MODULE' => $context->getModuleId(),
+				'CONTEXT_ID' => $context->getContextId(),
+				'ENGINE_CLASS' => $this->engine::class,
+				'ENGINE_CODE' => $this->engine->getCode(),
+				'PAYLOAD_CLASS' => $this->engine->getPayload()::class,
+				'CREATED_BY_ID' => $context->getUserId(),
+			];
+		}
+		catch (\Throwable)
+		{
 		}
 
-		$this->sendBackendEvent($result, self::EVENT_SUCCESS);
-		$this->sendFrontendEvent($result, self::EVENT_SUCCESS);
+		Manager::writeDiagnosticHistory($data);
+
+		try
+		{
+			$this->sendBackendEvent(new Result(null, null), self::EVENT_FAIL);
+			$this->sendFrontendEvent(new Result(null, null), self::EVENT_FAIL);
+		}
+		catch (\Throwable)
+		{
+			// Best effort
+		}
+
 		$this->delete();
 	}
 
@@ -440,7 +512,7 @@ final class QueueJob
 						'message' => $this->error->getMessage(),
 					] : null,
 					'data' => [
-						'result' => $this->engine->getResponseJsonMode() ? $result->getJsonData() : $result->getPrettifiedData(),
+						'result' => $result->getData($this->engine->getResponseFormat()),
 						'last' => $this->engine->shouldWriteHistory()
 							? Manager::getLastItem($this->context)
 							: Manager::getFakeItem($result->getPrettifiedData(), $this->engine)
@@ -484,4 +556,5 @@ final class QueueJob
 
 		return $this->limitControlService;
 	}
+
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config;
 
+use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
+
 class UpdateConfig
 {
 	private int $userId;
@@ -21,23 +23,25 @@ class UpdateConfig
 	private bool $useConsistency;
 	private ?string $eventGuid;
 	private RuntimeData $runtime;
+	private ?AnalyticsData $analyticsData;
 
 	public function __construct(
-		int         $userId,
-		bool        $needCorrectDatePlan = true,
-		bool        $checkFileRights = false,
-		bool        $correctDatePlanDependent = true,
-		array		$skipTimeZoneFields = [],
-		bool        $needAutoclose = true,
-		bool        $skipNotifications = false,
-		bool        $skipRecount = false,
-		array       $byPassParameters = [],
-		bool        $skipComments = false,
-		bool        $skipPush = false,
-		bool        $skipBP = false,
-		bool        $useConsistency = false,
-		?string     $eventGuid = null,
-		RuntimeData $runtime = new RuntimeData()
+		int $userId,
+		bool $needCorrectDatePlan = true,
+		bool $checkFileRights = false,
+		bool $correctDatePlanDependent = true,
+		array $skipTimeZoneFields = [],
+		bool $needAutoclose = true,
+		bool $skipNotifications = false,
+		bool $skipRecount = false,
+		array $byPassParameters = [],
+		bool $skipComments = false,
+		bool $skipPush = false,
+		bool $skipBP = false,
+		bool $useConsistency = false,
+		?string $eventGuid = null,
+		RuntimeData $runtime = new RuntimeData(),
+		?AnalyticsData $analyticsData = null,
 	)
 	{
 		$this->userId = $userId;
@@ -55,6 +59,7 @@ class UpdateConfig
 		$this->useConsistency = $useConsistency;
 		$this->eventGuid = $eventGuid;
 		$this->runtime = $runtime;
+		$this->analyticsData = $analyticsData;
 	}
 
 	public static function createFromArray(
@@ -129,6 +134,14 @@ class UpdateConfig
 		)
 		{
 			$config->setSkipPush(true);
+		}
+
+		if (
+			isset($parameters['ANALYTICS_DATA'])
+			&& $parameters['ANALYTICS_DATA'] instanceof AnalyticsData
+		)
+		{
+			$config->setAnalyticsData($parameters['ANALYTICS_DATA']);
 		}
 
 		return $config;
@@ -207,6 +220,11 @@ class UpdateConfig
 	public function getRuntime(): RuntimeData
 	{
 		return $this->runtime;
+	}
+
+	public function getAnalyticsData(): ?AnalyticsData
+	{
+		return $this->analyticsData;
 	}
 
 	public function setNeedCorrectDatePlan(bool $needCorrectDatePlan): static
@@ -289,6 +307,13 @@ class UpdateConfig
 	public function setUserId(int $userId): static
 	{
 		$this->userId = $userId;
+
+		return $this;
+	}
+
+	public function setAnalyticsData(AnalyticsData $analyticsData): static
+	{
+		$this->analyticsData = $analyticsData;
 
 		return $this;
 	}

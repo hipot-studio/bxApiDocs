@@ -9,7 +9,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
-class CrmFeaturesList extends CBitrixComponent implements \Bitrix\Main\Engine\Contract\Controllerable
+class CrmFeaturesList extends CBitrixComponent implements \Bitrix\Main\Engine\Contract\Controllerable, \Bitrix\Main\Errorable
 {
 	protected ?\Bitrix\Main\ErrorCollection $errors;
 	private FeatureRepository $featureRepository;
@@ -69,7 +69,7 @@ class CrmFeaturesList extends CBitrixComponent implements \Bitrix\Main\Engine\Co
 		$this->includeComponentTemplate($this->arResult['mode']);
 	}
 
-	public function enableFeatureAction(string $featureId)
+	public function enableFeatureAction(string $featureId): ?bool
 	{
 		if (!$this->checkAccess())
 		{
@@ -77,22 +77,29 @@ class CrmFeaturesList extends CBitrixComponent implements \Bitrix\Main\Engine\Co
 
 			return null;
 		}
+
 		$feature = $this->featureRepository->getById($featureId);
-		if ($feature)
+		if ($feature !== null)
 		{
-			$feature->enable();
+			try {
+				$feature->enable();
+			}
+			catch (\Throwable $exception)
+			{
+				$this->errors->setError(new \Bitrix\Main\Error($exception->getMessage(), $exception->getCode()));
+
+				return null;
+			}
 
 			return true;
 		}
-		else
-		{
-			$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getNotFoundError());
 
-			return null;
-		}
+		$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getNotFoundError());
+
+		return null;
 	}
 
-	public function disableFeatureAction(string $featureId)
+	public function disableFeatureAction(string $featureId): ?bool
 	{
 		if (!$this->checkAccess())
 		{
@@ -100,19 +107,26 @@ class CrmFeaturesList extends CBitrixComponent implements \Bitrix\Main\Engine\Co
 
 			return null;
 		}
+
 		$feature = $this->featureRepository->getById($featureId);
-		if ($feature)
+		if ($feature !== null)
 		{
-			$feature->disable();
+			try {
+				$feature->disable();
+			}
+			catch (\Throwable $exception)
+			{
+				$this->errors->setError(new \Bitrix\Main\Error($exception->getMessage(), $exception->getCode()));
+
+				return null;
+			}
 
 			return true;
 		}
-		else
-		{
-			$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getNotFoundError());
 
-			return null;
-		}
+		$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getNotFoundError());
+
+		return null;
 	}
 
 	public function enableToursAction()
@@ -246,5 +260,15 @@ class CrmFeaturesList extends CBitrixComponent implements \Bitrix\Main\Engine\Co
 		}
 
 		return \Bitrix\Main\Config\Option::get('crm', 'expertMode', 'features');
+	}
+
+	public function getErrors(): array
+	{
+		return $this->errors->toArray();
+	}
+
+	public function getErrorByCode($code): ?\Bitrix\Main\Error
+	{
+		return $this->errors->getErrorByCode($code);
 	}
 }

@@ -15,7 +15,7 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 	use Engine\Trait\BitrixGPTCommonTrait;
 
 	protected const CATEGORY_CODE = Engine::CATEGORIES['text'];
-	protected const ENGINE_NAME = 'BitrixGPT 5';
+	protected const ENGINE_NAME = 'BitrixGPT 5.5';
 
 	public const ENGINE_CODE = 'b24ai';
 

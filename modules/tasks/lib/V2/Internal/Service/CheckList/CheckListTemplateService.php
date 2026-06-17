@@ -60,7 +60,7 @@ class CheckListTemplateService extends BaseCheckListService
 			throw new TemplateNotFoundException();
 		}
 
-		$checkLists = $this->checkListEntityFieldService->prepare($checkLists);
+		$checkLists = $this->checkListEntityFieldService->prepare($checkLists, $templateId, Entity\CheckList\Type::Template);
 
 		$checkListsToUpdate = $this->checkListMapper->mapToNodes($checkLists)->toArray();
 

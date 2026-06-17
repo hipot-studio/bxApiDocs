@@ -13,6 +13,10 @@ class TaskParameterRepository implements TaskParameterRepositoryInterface
 	{
 	}
 
+	public function preload(array $taskIds): void
+	{
+	}
+
 	public function matchesSubTasksTime(int $taskId): bool
 	{
 		return $this->getParameter($taskId, ParameterTable::PARAM_SUBTASKS_TIME);

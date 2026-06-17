@@ -25,6 +25,11 @@ class PrepareReplication implements PrepareFieldInterface
 			$fields['TPARAM_REPLICATION_COUNT'] = (int)$fields['TPARAM_REPLICATION_COUNT'];
 		}
 
+		if (!array_key_exists('REPLICATE_PARAMS', $fields))
+		{
+			return $fields;
+		}
+
 		if (empty($fields['REPLICATE_PARAMS']))
 		{
 			$fields['REPLICATE_PARAMS'] = [];

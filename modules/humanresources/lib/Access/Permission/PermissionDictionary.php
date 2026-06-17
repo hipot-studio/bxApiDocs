@@ -2,6 +2,7 @@
 
 namespace Bitrix\HumanResources\Access\Permission;
 
+use Bitrix\HumanResources\Config\Feature;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
@@ -85,6 +86,20 @@ class PermissionDictionary extends Main\Access\Permission\PermissionDictionary
 	}
 
 	private static function getRephrasedPermissionCode(string $permissionId): ?string
+	{
+		if (Feature::instance()->isProjectsAvailable())
+		{
+			return match ($permissionId) {
+				self::HUMAN_RESOURCES_DEPARTMENT_COLLAB_EDIT => 'HUMAN_RESOURCES_DEPARTMENT_PROJECT_EDIT',
+				self::HUMAN_RESOURCES_TEAM_COLLAB_EDIT => 'HUMAN_RESOURCES_TEAM_PROJECT_EDIT',
+				default => self::getDefaultRephrasedPermissionCode($permissionId),
+			};
+		}
+
+		return self::getDefaultRephrasedPermissionCode($permissionId);
+	}
+
+	private static function getDefaultRephrasedPermissionCode(string $permissionId): ?string
 	{
 		return match ($permissionId) {
 			self::HUMAN_RESOURCES_STRUCTURE_VIEW => 'HUMAN_RESOURCES_STRUCTURE_VIEW_MSGVER_2',
@@ -217,5 +232,49 @@ class PermissionDictionary extends Main\Access\Permission\PermissionDictionary
 			],
 			true,
 		);
+	}
+
+	/**
+	 * All permission IDs that belong to the Department role category.
+	 * @return list<string>
+	 */
+	public static function getDepartmentCategoryPermissionIds(): array
+	{
+		return [
+			self::HUMAN_RESOURCES_USERS_ACCESS_EDIT,
+			self::HUMAN_RESOURCES_USER_INVITE,
+			self::HUMAN_RESOURCES_STRUCTURE_VIEW,
+			self::HUMAN_RESOURCES_DEPARTMENT_CREATE,
+			self::HUMAN_RESOURCES_DEPARTMENT_DELETE,
+			self::HUMAN_RESOURCES_DEPARTMENT_EDIT,
+			self::HUMAN_RESOURCES_EMPLOYEE_ADD_TO_DEPARTMENT,
+			self::HUMAN_RESOURCES_EMPLOYEE_REMOVE_FROM_DEPARTMENT,
+			self::HUMAN_RESOURCES_FIRE_EMPLOYEE,
+			self::HUMAN_RESOURCES_DEPARTMENT_SETTINGS_EDIT,
+			self::HUMAN_RESOURCES_DEPARTMENT_CHAT_EDIT,
+			self::HUMAN_RESOURCES_DEPARTMENT_CHANNEL_EDIT,
+			self::HUMAN_RESOURCES_DEPARTMENT_COLLAB_EDIT,
+		];
+	}
+
+	/**
+	 * All permission IDs that belong to the Team role category.
+	 * @return list<string>
+	 */
+	public static function getTeamCategoryPermissionIds(): array
+	{
+		return [
+			self::HUMAN_RESOURCES_TEAM_VIEW,
+			self::HUMAN_RESOURCES_TEAM_CREATE,
+			self::HUMAN_RESOURCES_TEAM_DELETE,
+			self::HUMAN_RESOURCES_TEAM_EDIT,
+			self::HUMAN_RESOURCES_TEAM_MEMBER_ADD,
+			self::HUMAN_RESOURCES_TEAM_MEMBER_REMOVE,
+			self::HUMAN_RESOURCES_TEAM_SETTINGS_EDIT,
+			self::HUMAN_RESOURCES_TEAM_ACCESS_EDIT,
+			self::HUMAN_RESOURCES_TEAM_CHAT_EDIT,
+			self::HUMAN_RESOURCES_TEAM_CHANNEL_EDIT,
+			self::HUMAN_RESOURCES_TEAM_COLLAB_EDIT,
+		];
 	}
 }

@@ -8,8 +8,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Integration\Catalog\CatalogSettingsProvider;
 use Bitrix\Booking\Internals\Service\Enum\AhaMoment;
+use Bitrix\Booking\Internals\Service\Enum\GridMode;
 use Bitrix\Booking\Provider\OptionProvider;
 use Bitrix\Booking\Service\BookingFeature;
+use Bitrix\Booking\Service\MultidayBookingFeature;
 use Bitrix\Booking\Component;
 use Bitrix\Booking\Internals\Integration\Pull\PushService;
 use Bitrix\Booking\Internals\Service\Journal\EventProcessor\PushPull\PushPullCommandType;
@@ -49,14 +51,18 @@ class BookingComponent extends CBitrixComponent
 
 		$this->arResult['currentUserId'] = $userId;
 
+		$isMultidayFeatureAvailable = MultidayBookingFeature::isOn();
+
 		$this->arResult['isFeatureEnabled'] = BookingFeature::isFeatureEnabled(
-			BookingFeature::FEATURE_ID_BOOKING
+			BookingFeature::FEATURE_ID_BOOKING,
 		);
+		$this->arResult['isMultidayFeatureAvailable'] = $isMultidayFeatureAvailable;
 		$this->arResult['features'] = BookingFeature::getFeatures();
 		$this->arResult['canTurnOnTrial'] = BookingFeature::canTurnOnTrial();
 		$this->arResult['canTurnOnDemo'] = BookingFeature::canTurnOnDemo();
 
 		$this->arResult['timezone'] = $this->getTimezone();
+		$this->arResult['firstWeekDay'] = Context::getCurrent()->getCulture()->getWeekStart();
 		$this->arResult['IS_SLIDER'] = $this->request->get('IFRAME') === 'Y';
 		$this->arResult['FILTER_ID'] = Component\Booking\Filter::getId();
 		$this->arResult['editingBookingId'] = $this->getEditingBookingId();
@@ -68,6 +74,9 @@ class BookingComponent extends CBitrixComponent
 		$this->arResult['isCalendarExpanded'] = $optionProvider->isCalendarExpanded($userId);
 		// if wait list item being edited, wait list should be expanded regardless option value
 		$this->arResult['isWaitListExpanded'] = $editingWaitListItemId || $optionProvider->isWaitListExpanded($userId);
+		$this->arResult['gridMode'] = $isMultidayFeatureAvailable
+			? $optionProvider->getGridMode($userId)
+			: GridMode::Day->value;
 
 		$clientStatisticsProvider = new ClientStatisticsProvider();
 		$this->arResult['TOTAL_CLIENTS'] = $clientStatisticsProvider->getTotalClients();
@@ -143,7 +152,7 @@ class BookingComponent extends CBitrixComponent
 		{
 			$pushService->subscribeByTag(
 				tag: $tag,
-				userId: $userId
+				userId: $userId,
 			);
 		}
 	}

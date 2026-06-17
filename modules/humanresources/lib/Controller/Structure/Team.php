@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\HumanResources\Controller\Structure;
 
+use Bitrix\HumanResources\Access\Strategy\NodeAccessCheckStrategy;
 use Bitrix\HumanResources\Command\Structure\Node\Enum\UserAddStrategy;
 use Bitrix\HumanResources\Access\StructureActionDictionary;
 use Bitrix\HumanResources\Command\Structure\Node\CreateNodeCommand;
@@ -12,11 +13,10 @@ use Bitrix\HumanResources\Engine\Controller;
 use Bitrix\HumanResources\Exception\CommandException;
 use Bitrix\HumanResources\Exception\CommandValidateException;
 use Bitrix\HumanResources\Item\Structure;
-use Bitrix\HumanResources\Type\AccessibleItemType;
-use Bitrix\HumanResources\Internals\Attribute;
 use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\ActionFilter\Attribute\Access\ActionAccess;
 use Bitrix\Main\Validation\ValidationService;
 
 class Team extends Controller
@@ -41,6 +41,8 @@ class Team extends Controller
 	 * @param array $bindingChatIds
 	 * @param bool $createChannel
 	 * @param array $bindingChannelIds
+	 * @param bool $createCollab
+	 * @param array $bindingCollabIds
 	 * @param array $settings
 	 *
 	 * @return array
@@ -48,10 +50,10 @@ class Team extends Controller
 	 * @throws CommandException
 	 * @throws CommandValidateException
 	 */
-	#[Attribute\StructureActionAccess(
-		permission: StructureActionDictionary::ACTION_TEAM_CREATE,
-		itemType: AccessibleItemType::NODE,
-		itemParentIdRequestKey: 'parentId',
+	#[ActionAccess(
+		action: StructureActionDictionary::ACTION_TEAM_CREATE,
+		strategy: NodeAccessCheckStrategy::class,
+		strategyArgs: ['requestKeys' => ['parentId']],
 	)]
 	public function createAction(
 		string $name,

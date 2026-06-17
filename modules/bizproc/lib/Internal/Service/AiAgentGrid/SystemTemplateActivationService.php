@@ -56,6 +56,8 @@ class SystemTemplateActivationService
 
 		$fields = $copier->prepareFieldsToCopy($fields);
 
+		$originSystemCode = $fields['SYSTEM_CODE'] ?? null;
+
 		$fields['USER_ID'] = $userId;
 		$fields['IS_SYSTEM'] = 'N';
 		$fields['ACTIVE'] = 'Y';
@@ -67,6 +69,11 @@ class SystemTemplateActivationService
 		if ($newTemplateId <= 0)
 		{
 			return (new Result())->addError(ErrorMessage::CREATE_WORKFLOW->getError());
+		}
+
+		if ($originSystemCode !== null)
+		{
+			$this->aiAgentRepository->saveOriginSystemCode($newTemplateId, $originSystemCode);
 		}
 
 		$result = new TemplateCreatedResult($newTemplateId);

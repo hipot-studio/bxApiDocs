@@ -19,7 +19,11 @@ class MobileMenuManager extends BaseMobileMenuManager
 			return $menu;
 		}
 
-		if (!$context->isCollaber && ToolsManager::getInstance()->checkAvailabilityByToolId('workgroups'))
+		if (
+			!$context->isCollaber
+			&& \Bitrix\Main\Config\Option::get('socialnetwork', 'new_projects', 'N') !== 'Y'
+			&& ToolsManager::getInstance()->checkAvailabilityByToolId('workgroups')
+		)
 		{
 			$groupsItem = self::prepareGroupsMenu($context);
 			$menu = self::addMenuItems($menu, MenuList::SECTION_TEAMWORK, $groupsItem);

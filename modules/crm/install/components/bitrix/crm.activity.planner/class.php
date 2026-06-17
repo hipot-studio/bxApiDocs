@@ -469,10 +469,21 @@ class CrmActivityPlannerComponent extends \Bitrix\Crm\Component\Base
 
 		$activity = $error = null;
 
+		$checkPermissions = ($this->arParams['CHECK_PERMISSIONS'] ?? 'Y') === 'Y';
+
 		if ($activityId > 0)
-			$activity = CCrmActivity::getList(array(), array('ID' => $activityId), false, false, array('*', 'UF_*'))->fetch();
+		{
+			$filter = [
+				'ID' => $activityId,
+				'CHECK_PERMISSIONS' => $checkPermissions ? 'Y' : 'N',
+			];
+
+			$activity =  CCrmActivity::getList([], $filter, false, false, ['*', 'UF_*'])->fetch();
+		}
 		elseif ($calendarEventId > 0)
+		{
 			$activity = CCrmActivity::GetByCalendarEventId($calendarEventId, false);
+		}
 
 		if (empty($activity))
 			$error = Loc::getMessage('CRM_ACTIVITY_PLANNER_NO_ACTIVITY');
@@ -493,7 +504,7 @@ class CrmActivityPlannerComponent extends \Bitrix\Crm\Component\Base
 			$activity['PROVIDER_TYPE_ID'] = $provider::getTypeId($activity);
 		}
 
-		if (!$error && !$provider::checkReadPermission($activity, \CCrmSecurityHelper::getCurrentUserId()))
+		if (!$error && $checkPermissions && !$provider::checkReadPermission($activity, \CCrmSecurityHelper::getCurrentUserId()))
 		{
 			$error = Loc::getMessage('CRM_ACTIVITY_PLANNER_NO_READ_PERMISSION');
 		}
@@ -535,6 +546,10 @@ class CrmActivityPlannerComponent extends \Bitrix\Crm\Component\Base
 		}
 
 		$activity['COMMUNICATIONS'] = $this->prepareCommunicationsForView($activity['COMMUNICATIONS']);
+
+		$isReadOnly = ($this->arParams['READ_ONLY'] ?? 'N') === 'Y';
+		$this->arResult['IS_READ_ONLY'] = $isReadOnly;
+		$activity['IS_READ_ONLY'] = $isReadOnly;
 
 		$this->arResult['COMMUNICATIONS'] = $activity['COMMUNICATIONS'];
 		$this->arResult['PROVIDER'] = $provider;

@@ -14,6 +14,8 @@ final class ServiceLocation
 	public const DATACENTER_LOCATION_REGION_RU = 'ru';
 	public const DATACENTER_LOCATION_REGION_EN = 'en';
 
+	private const RU_REGIONS = ['ru', 'by', 'kz', 'uz', 'kg', 'am', 'az', 'ge'];
+
 	public static function getCurrentServiceUrl(): string
 	{
 		$supersetProxyOption = Option::get('biconnector', 'superset_proxy_url');
@@ -40,12 +42,17 @@ final class ServiceLocation
 			return self::DATACENTER_LOCATION_REGION_RU;
 		}
 
-		if (in_array($region, ['ru', 'by', 'kz', 'uz', 'kg', 'am', 'az', 'ge'], true))
+		if (in_array($region, self::RU_REGIONS, true))
 		{
 			return self::DATACENTER_LOCATION_REGION_RU;
 		}
 
 		return self::DATACENTER_LOCATION_REGION_EN;
+	}
+
+	public static function isRuRegion(string $region): bool
+	{
+		return in_array($region, self::RU_REGIONS, true);
 	}
 
 	private static function getServiceUrlByRegion(string $region): string

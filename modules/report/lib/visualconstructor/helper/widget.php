@@ -45,11 +45,10 @@ class Widget
 		$widget->loadAttribute('reports');
 
 		$reports = $widget->getReports();
-		$reportsCount = count($widget->getReports());
+		$reportsCount = count($reports);
 		if ($reportsCount > $view::MAX_RENDER_REPORT_COUNT)
 		{
-			$result['errors'][] = 'View with key:' . $view->getKey() . 'can\'t render this count(' . $reportsCount . ') of reports';
-			return $result;
+			$reports = array_slice($reports, 0, $view::MAX_RENDER_REPORT_COUNT, true);
 		}
 
 		$handledReportData = array();

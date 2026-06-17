@@ -19,15 +19,23 @@ final class CollabProviderData
 		if (Loader::includeModule('socialnetwork'))
 		{
 			$this->isEnabled = true;
-			$this->available = CollabFeature::isOn()
+			$this->available = (
+				CollabFeature::isOn()
 				&& CollabFeature::isFeatureEnabled()
-				&& Requirement::check()->isSuccess();
+				&& Requirement::check()->isSuccess()
+			);
 		}
 	}
 
 	public function isAvailable(): bool
 	{
-		return $this->available;
+		return (
+			$this->available
+			&& (
+				!class_exists(\Bitrix\Socialnetwork\V2\Feature::class)
+				|| !\Bitrix\Socialnetwork\V2\Feature::isNewProjectsOn()
+			)
+		);
 	}
 
 	public function getUserCollabCollection($user): CollabCollection

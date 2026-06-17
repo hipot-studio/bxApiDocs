@@ -18,6 +18,7 @@ use Bitrix\Booking\Entity\Client\ClientCollection;
 use Bitrix\Booking\Entity\Client\ClientType;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
 use Bitrix\Booking\Internals\Exception\Yandex\BookingCreateForbiddenException;
+use Bitrix\Booking\Internals\Exception\Yandex\InternalErrorException;
 use Bitrix\Booking\Internals\Exception\Yandex\ResourceNotFoundException;
 use Bitrix\Booking\Internals\Exception\Yandex\ServiceNotFoundException;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
@@ -34,6 +35,7 @@ use Bitrix\Booking\Internals\Service\Yandex;
 class CreateBookingService
 {
 	public function __construct(
+		private readonly CompanyRepository $companyRepository,
 		private readonly ResourceRepositoryInterface $resourceRepository,
 		private readonly ServiceSkuProvider $serviceSkuProvider,
 		private readonly ContactSearcherService $contactSearcherService,
@@ -44,12 +46,19 @@ class CreateBookingService
 
 	public function create(CreateBookingRequest $createBookingRequest): Yandex\Dto\Api\Item\Booking
 	{
+		$company = $this->companyRepository->getById($createBookingRequest->getCompanyId());
+		if (!$company)
+		{
+			throw new InternalErrorException('Company not found');
+		}
+
 		$appointment = $createBookingRequest->getAppointment();
 
 		$dateFrom = DateTimeImmutable::createFromFormat(
 			DateTimeInterface::ATOM,
 			$appointment->getDatetime(),
-		);
+		)->setTimezone(new \DateTimeZone($company->getTimezone()));
+
 		if ($dateFrom->getTimestamp() < time())
 		{
 			throw new BookingCreateForbiddenException();

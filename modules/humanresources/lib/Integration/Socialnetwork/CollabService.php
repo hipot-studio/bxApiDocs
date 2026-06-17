@@ -7,8 +7,9 @@ use Bitrix\HumanResources\Repository\NodeRelationRepository;
 use Bitrix\HumanResources\Result\Integration\Socialnetwork\CreateCollabResult;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\RelationEntityType;
+use Bitrix\Main\Command\Exception\CommandException;
+use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -21,6 +22,10 @@ use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
 use Bitrix\Socialnetwork\Collab\Provider\CollabQuery;
 use Bitrix\Socialnetwork\Control\Decorator\AccessDecorator;
 use Bitrix\Socialnetwork\Integration\Im\Chat\Workgroup;
+use Bitrix\Socialnetwork\V2\Feature;
+use Bitrix\Socialnetwork\V2\Public\Command\Project\AddProjectCommand;
+use Bitrix\Socialnetwork\V2\Public\Dto\Project\Project;
+use Bitrix\Socialnetwork\V2\Public\Service;
 
 class CollabService
 {
@@ -36,6 +41,15 @@ class CollabService
 		return Loader::includeModule('socialnetwork');
 	}
 
+	public function isProjectsAvailable(): bool
+	{
+		return (
+			Loader::includeModule('socialnetwork')
+			&& class_exists(Feature::class)
+			&& Feature::isNewProjectsOn()
+		);
+	}
+
 	public function create(Item\Node $node, array $headIds, int $userId): CreateCollabResult
 	{
 		$result = new CreateCollabResult();
@@ -45,11 +59,21 @@ class CollabService
 			return $result->addError(new Error(Loc::getMessage('HUMANRESOURCES_COLLAB_SERVICE_NOT_AVAILABLE_MSGVER_1')));
 		}
 
-		$collabName = $this->getCollabName($node, $userId);
+		if ($this->isProjectsAvailable())
+		{
+			return $this->createProject($node, $headIds, $userId);
+		}
+
+		return $this->createCollab($node, $headIds, $userId);
+	}
+
+	private function createCollab(Item\Node $node, array $headIds, int $userId): CreateCollabResult
+	{
+		$result = new CreateCollabResult();
 
 		$collabData = [
-			'ownerId' => $headIds[array_rand($headIds)],
-			'name' => $collabName,
+			'ownerId' => $this->pickOwnerId($headIds),
+			'name' => $this->getAvailableName($node, $userId),
 			'initiatorId' => $userId,
 		];
 		$command = CollabAddCommand::createFromArray($collabData);
@@ -70,6 +94,11 @@ class CollabService
 		if (!$this->isAvailable())
 		{
 			return [];
+		}
+
+		if ($this->isProjectsAvailable())
+		{
+			return (new Service\Project\Access())->filterInvitable($userId, $ids);
 		}
 
 		// ToDo: improve performance
@@ -141,11 +170,11 @@ class CollabService
 		}
 
 		$collabsResult = array_map(
-			static fn(array $item): array => [
+			fn(array $item): array => [
 				'id' => (int)$item['ID'],
 				'title' => $item['NAME'],
 				'type' => RelationEntityType::COLLAB,
-				'subtitle' => Loc::getMessage('HUMANRESOURCES_COLLAB_SERVICE_COLLAB_SUBTITLE'),
+				'subtitle' => $this->getCollabSubtitle(),
 				'avatar' => $avatarsArray[$item['IMAGE_ID']] ?? null,
 				'originalNodeId' => $indirectCollabs[$item['ID']] ?? null,
 				'dialogId' => 'chat' . ($collabsChatData[$item['ID']] ?? null),
@@ -161,22 +190,80 @@ class CollabService
 	}
 
 	/**
-	 * Collabs with the same name can't be created (socialnetwork restriction), so we need to ensure that the name is unique.
-	 * To do that we check existing collabs with the same name and append a number to the name if needed.
+	 * @param int[] $headIds non-empty list of head user IDs
+	 */
+	private function pickOwnerId(array $headIds): int
+	{
+		return $headIds[array_rand($headIds)];
+	}
+
+	private function createProject(Item\Node $node, array $headIds, int $userId): CreateCollabResult
+	{
+		$result = new CreateCollabResult();
+
+		if (!(new Service\Project\Access())->canCreate($userId))
+		{
+			return $result->addError(new Error(
+				Loc::getMessage('HUMANRESOURCES_COLLAB_SERVICE_PROJECT_CREATE_ACCESS_DENIED'),
+				'ACCESS_DENIED',
+			));
+		}
+
+		$project = Project::mapFromArray([
+			'name' => $this->getAvailableName($node, $userId),
+			'ownerId' => $this->pickOwnerId($headIds),
+			'privacyType' => 'closed',
+		]);
+
+		try
+		{
+			$addResult = (new AddProjectCommand(
+				input: $project,
+				userId: $userId,
+				enforceInitiatorMembership: false,
+			))->run();
+		}
+		catch (CommandValidationException $e)
+		{
+			return $result->addErrors($e->getValidationErrors());
+		}
+		catch (CommandException $e)
+		{
+			return $result->addError(new Error($e->getMessage()));
+		}
+
+		if (!$addResult->isSuccess())
+		{
+			return $result->addErrors($addResult->getErrors());
+		}
+
+		$projectId = (int)($addResult->getData()['projectId'] ?? 0);
+		if ($projectId === 0)
+		{
+			return $result->addError(new Error(Loc::getMessage('HUMANRESOURCES_COLLAB_SERVICE_PROJECT_CREATE_FAILED')));
+		}
+
+		return $result->setCollabId($projectId);
+	}
+
+	/**
+	 * Resolves a unique name for a new socialnetwork group created from a node — applies both to
+	 * legacy collabs and V2 projects (they share b_sonet_group with TYPE='collab' and uniqueness
+	 * is enforced on NAME). Returns the node name as is if free, otherwise "<name> №N" with the
+	 * smallest free N.
 	 *
 	 * @param Item\Node $node
 	 * @param int $userId
 	 * @return string
 	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	private function getCollabName(Item\Node $node, int $userId): string
+	private function getAvailableName(Item\Node $node, int $userId): string
 	{
 		$duplicateTitleStart = Loc::getMessage('HUMANRESOURCES_COLLAB_SERVICE_NAME_SEPARATOR', [
 			'#COLLAB_NAME#' => $node->name,
 		]);
 		$suffixPosition = (string)(mb_strlen($duplicateTitleStart) + 1);
 
-		// check collab with same name
 		$collabProvider = new CollabProvider();
 		$allCollabQuery = (new CollabQuery($userId))
 			->setSelect([
@@ -206,5 +293,15 @@ class CollabService
 		$maxNumSuffix = array_reduce($collabs, fn(int $max, array $item) => max($max, (int)$item['NUM_SUFFIX']), 0);
 
 		return $duplicateTitleStart . ($maxNumSuffix + 1);
+	}
+
+	private function getCollabSubtitle(): string
+	{
+		if ($this->isProjectsAvailable())
+		{
+			return Loc::getMessage('HUMANRESOURCES_COLLAB_SERVICE_PROJECT_SUBTITLE');
+		}
+
+		return Loc::getMessage('HUMANRESOURCES_COLLAB_SERVICE_COLLAB_SUBTITLE');
 	}
 }

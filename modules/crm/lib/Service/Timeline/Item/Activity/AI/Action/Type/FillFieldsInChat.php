@@ -9,8 +9,11 @@ use Bitrix\Crm\Integration\AI\Operation\OperationState;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\AIAction;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\AIOperationStateChecker;
+use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\OpenLineScenarioAvailability;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\StateChecker\ScenarioStateChecker;
+use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 final class FillFieldsInChat extends AIAction
 {
@@ -48,23 +51,43 @@ final class FillFieldsInChat extends AIAction
 		);
 	}
 
-	protected function isDisabled(): bool
-	{
-		if ($this->getStateChecker()?->isErrorsLimitExceeded())
-		{
-			return true;
-		}
-
-		return !OpenLine::isCopilotProcessingAvailable($this->activityId);
-	}
-
 	protected function getHint(): ?string
 	{
-		if (!OpenLine::isCopilotProcessingAvailable($this->activityId))
+		if (!$this->isDisabledState())
 		{
-			return Loc::getMessage('CRM_TIMELINE_AI_CHAT_FILL_FIELDS_HINT');
+			return null;
 		}
 
-		return null;
+		$stateChecker = $this->getStateChecker();
+		if ($stateChecker?->isPending() || $stateChecker?->isErrorsLimitExceeded())
+		{
+			return null;
+		}
+
+		return Loc::getMessage('CRM_TIMELINE_AI_CHAT_FILL_FIELDS_HINT');
+	}
+
+	protected function isDisabled(): bool
+	{
+		$stateChecker = $this->getStateChecker();
+		$messages = OpenLine::getMessagesForCopilot($this->activityId);
+
+		return OpenLineScenarioAvailability::isDisabled(
+			OpenLine::isCopilotProcessingAvailable($this->activityId, $messages, false),
+			OpenLine::isCopilotProcessingAvailable($this->activityId, $messages),
+			$stateChecker?->isSuccess() ?? false,
+			$stateChecker?->isPending() ?? false,
+			$stateChecker?->isErrorsLimitExceeded() ?? false,
+		);
+	}
+
+	protected function addCustomParams(JsEvent $jsEvent): JsEvent
+	{
+		return $jsEvent->addActionParamString('scenario', Scenario::FILL_FIELDS_SCENARIO);
+	}
+
+	protected function getMenuIcon(): Outline
+	{
+		return Outline::CRM_FIELD_SIMPLE;
 	}
 }

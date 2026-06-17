@@ -828,4 +828,5 @@ class Email extends Activity\Provider\Base
 	{
 		return LogMessageType::EMAIL_INCOMING_MOVED;
 	}
+
 }

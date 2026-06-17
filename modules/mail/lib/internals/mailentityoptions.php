@@ -27,6 +27,7 @@ class MailEntityOptionsTable extends Entity\DataManager
 	const DIR_TYPE_NAME = 'DIR';
 	const MAILBOX_TYPE_NAME = 'MAILBOX';
 	const MESSAGE_TYPE_NAME = 'MESSAGE';
+	const USER_TYPE_NAME = 'USER';
 
 	const CONNECT_ERROR_ATTEMPT_COUNT_PROPERTY_NAME = 'CONNECT_ERROR_ATTEMPT_COUNT';
 	const SYNC_STATUS_PROPERTY_NAME = 'SYNC_STATUS';
@@ -105,7 +106,7 @@ class MailEntityOptionsTable extends Entity\DataManager
 			),
 			'ENTITY_TYPE' => array(
 				'data_type' => 'enum',
-				'values' => array(self::DIR_TYPE_NAME, self::MAILBOX_TYPE_NAME, self::MESSAGE_TYPE_NAME),
+				'values' => array(self::DIR_TYPE_NAME, self::MAILBOX_TYPE_NAME, self::MESSAGE_TYPE_NAME, self::USER_TYPE_NAME),
 				'required'  => true,
 				'primary' => true,
 			),

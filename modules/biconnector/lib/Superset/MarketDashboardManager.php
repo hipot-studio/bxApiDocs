@@ -98,6 +98,13 @@ final class MarketDashboardManager
 
 		if (SupersetInitializer::isSupersetExist())
 		{
+			if (SupersetInitializer::isSupersetPendingDelete())
+			{
+				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_INSTALL_PROXY')));
+
+				return $result;
+			}
+
 			$response = $this->integrator->importDashboard($filePath, $appCode, $type);
 			if ($response->hasErrors())
 			{

@@ -94,7 +94,7 @@ class ViolationRules extends EO_ViolationRules
 				array_unique(
 					array_merge(
 						$userIds,
-						array_map('intval', \CTimeMan::getUserManagers($fromUserId, false))
+						array_map('intval', array_slice(\CTimeMan::getUserManagers($fromUserId, false), 0, 1))
 					)
 				),
 				function ($value) use ($fromUserId) {

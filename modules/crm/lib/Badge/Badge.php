@@ -28,6 +28,7 @@ abstract class Badge
 	public const COPILOT_CALL_ASSESSMENT_STATUS_TYPE = 'copilot_call_assessment_status';
 	public const AI_CALL_SCORING_STATUS = 'ai_call_scoring_status';
 	public const BOOKING_STATUS_TYPE = 'booking_status';
+	public const ENTITY_EXCLUSION_STATUS = 'entity_exclusion_status';
 
 	public static function createByType(string $type, string $value): Badge
 	{
@@ -123,6 +124,7 @@ abstract class Badge
 		;
 
 		$data = $this->prepareBadgeTableData($itemIdentifier,$sourceItemIdentifier);
+		unset($data['SETTINGS']);
 		foreach ($data as $column => $value)
 		{
 			$query->where($column, $value);

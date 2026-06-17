@@ -1,39 +1,42 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Internal\Repository\Mapper;
 
 use Bitrix\Bizproc\Internal\Entity\StorageItem\StorageItem;
-use Bitrix\Bizproc\Internal\Model\StorageRecordTable;
-use Bitrix\Bizproc\Internal\Model\EO_StorageRecord;
+use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Bizproc\Internal\Model\EO_StorageRecordData;
 
 class StorageItemMapper
 {
-	public function convertFromOrm(EO_StorageRecord $ormModel): StorageItem
+	public function convertFromOrm(EO_StorageRecordData $ormModel): StorageItem
 	{
-		$storageType = new StorageItem();
+		$storageItem = new StorageItem();
 
-		$storageType
+		$storageItem
 			->setId($ormModel->getId())
 			->setStorageId($ormModel->getStorageId())
 			->setCreatedBy($ormModel->getCreatedBy())
 			->setUpdatedBy($ormModel->getUpdatedBy())
 			->setCreatedAt($ormModel->getCreatedTime()?->getTimestamp())
 			->setUpdatedAt($ormModel->getUpdatedTime()?->getTimestamp())
-			->setCode($ormModel->getCode())
 			->setDocumentId($ormModel->getDocumentId())
 			->setWorkflowId($ormModel->getWorkflowId())
 			->setTemplateId($ormModel->getTemplateId())
 		;
 
-		return $storageType;
+		return $storageItem;
 	}
 
-	public function convertToOrm(int $storageTypeId, StorageItem $entity): ?EO_StorageRecord
+	public function convertToOrm(int $storageTypeId, StorageItem $entity): ?EO_StorageRecordData
 	{
+		$dataManager = Container::getStorageRecordDataManager();
+
 		$ormModel = !$entity->isNew()
-			? EO_StorageRecord::wakeUp($entity->getId())
-			: StorageRecordTable::createObject();
+			? $dataManager::getEntity()->wakeUpObject($entity->getId())
+			: $dataManager::createObject();
 
 		if ($entity->isNew())
 		{
@@ -47,11 +50,9 @@ class StorageItemMapper
 		$ormModel
 			->setUpdatedBy($entity->getUpdatedBy())
 			->setUpdatedTime(new DateTime())
-			->setCode($entity->getCode())
 			->setDocumentId($entity->getDocumentId())
 			->setWorkflowId($entity->getWorkflowId())
 			->setTemplateId($entity->getTemplateId())
-			->setValue($entity->getValueFields())
 		;
 
 		return $ormModel;

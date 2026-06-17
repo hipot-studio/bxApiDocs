@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Bitrix\Ai\Services;
+namespace Bitrix\AI\Services;
 
 class MarkdownToBBCodeTranslationService
 {
@@ -61,12 +61,14 @@ class MarkdownToBBCodeTranslationService
 		$this->extractCodeBlocks();
 		$this->processUnicodeEscapes();
 		$this->normalizeWhitespace();
+		$this->processAutoLinks();
 		$this->extractHtmlTags();
 		$this->extractAndProcessImages();
 		$this->processHeadings();
 		$this->processHorizontalRule();
 		$this->processLinks();
 		$this->processMarkdownEmphasis();
+		$this->processBareUrls();
 		$this->processStrikethrough();
 		$this->processLists();
 		$this->processBlockQuotes();
@@ -285,43 +287,47 @@ class MarkdownToBBCodeTranslationService
 
 	private function processMarkdownEmphasis(): void
 	{
-		// Step 1: Handle italic with bold inside (\*italic \*\*bold\*\*\*)
-		$this->text = preg_replace_callback('/(^|[\s.,;:!?\-()\[\]])\*([^*]*)\*\*([^*]*?)\*\*\*/um', function ($matches) {
+		$b = '\\s.,;:!?\\-()\\[\\]';
+		$before = '(^|[' . $b . '])';
+		$after = '(?=$|[' . $b . '])';
+
+		// Step 1: Handle italic with bold inside (*italic **bold***)
+		$this->text = preg_replace_callback('/' . $before . '\\*(?!\\s)([^*]*)\\*\\*([^*]*?)(?<!\\s)\\*\\*\\*' . $after . '/um', function ($matches) {
 			return $matches[1] . '[i]' . $matches[2] . '[b]' . $matches[3] . '[/b][/i]';
 		}, $this->text);
 
-		// Step 2: Handle bold with italic inside (\*\*bold \*italic\*\*\*)
-		$this->text = preg_replace_callback('/(^|[\s.,;:!?\-()\[\]])\*\*([^*]*)\*([^*]*?)\*\*\*/um', function ($matches) {
+		// Step 2: Handle bold with italic inside (**bold *italic***)
+		$this->text = preg_replace_callback('/' . $before . '\\*\\*(?!\\s)([^*]*)\\*([^*]*?)(?<!\\s)\\*\\*\\*' . $after . '/um', function ($matches) {
 			return $matches[1] . '[b]' . $matches[2] . '[i]' . $matches[3] . '[/i][/b]';
 		}, $this->text);
 
-		// Step 3: Handle bold+italic (\*\*\*text\*\*\*)
-		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])\*\*\*([^*]+?)\*\*\*/um', '$1[b][i]$2[/i][/b]', $this->text);
+		// Step 3: Handle bold+italic (***text***)
+		$this->text = preg_replace('/' . $before . '\\*\\*\\*(?!\\s)([^*]+?)(?<!\\s)\\*\\*\\*' . $after . '/um', '$1[b][i]$2[/i][/b]', $this->text);
 
-		// Step 4: Handle remaining bold (\*\*text\*\*)
-		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])\*\*([^*]+?)\*\*/um', '$1[b]$2[/b]', $this->text);
+		// Step 4: Handle remaining bold (**text**)
+		$this->text = preg_replace('/' . $before . '\\*\\*(?!\\s)([^*]+?)(?<!\\s)\\*\\*' . $after . '/um', '$1[b]$2[/b]', $this->text);
 
-		// Step 5: Handle remaining italic (\*text\*)
-		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])\*([^*]+?)\*/um', '$1[i]$2[/i]', $this->text);
+		// Step 5: Handle remaining italic (*text*)
+		$this->text = preg_replace('/' . $before . '\\*(?!\\s)([^*]+?)(?<!\\s)\\*' . $after . '/um', '$1[i]$2[/i]', $this->text);
 
 		// Step 6: Handle underlined italic with bold inside (_italic __bold___)
-		$this->text = preg_replace_callback('/(^|[\s.,;:!?\-()\[\]])_([^_]*)__([^_]*?)___/um', function ($matches) {
+		$this->text = preg_replace_callback('/' . $before . '_(?!\\s)([^_]*)__([^_]*?)(?<!\\s)___' . $after . '/um', function ($matches) {
 			return $matches[1] . '[i]' . $matches[2] . '[b]' . $matches[3] . '[/b][/i]';
 		}, $this->text);
 
 		// Step 7: Handle underlined bold with italic inside (__bold _italic___)
-		$this->text = preg_replace_callback('/(^|[\s.,;:!?\-()\[\]])__([^_]*)_([^_]*?)___/um', function ($matches) {
+		$this->text = preg_replace_callback('/' . $before . '__(?!\\s)([^_]*)_([^_]*?)(?<!\\s)___' . $after . '/um', function ($matches) {
 			return $matches[1] . '[b]' . $matches[2] . '[i]' . $matches[3] . '[/i][/b]';
 		}, $this->text);
 
 		// Step 8: Handle underlined bold+italic (___text___)
-		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])___([^_]+?)___/um', '$1[b][i]$2[/i][/b]', $this->text);
+		$this->text = preg_replace('/' . $before . '___(?!\\s)([^_]+?)(?<!\\s)___' . $after . '/um', '$1[b][i]$2[/i][/b]', $this->text);
 
 		// Step 9: Handle underlined remaining bold (__text__)
-		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])__([^_]+?)__/um', '$1[b]$2[/b]', $this->text);
+		$this->text = preg_replace('/' . $before . '__(?!\\s)([^_]+?)(?<!\\s)__' . $after . '/um', '$1[b]$2[/b]', $this->text);
 
 		// Step 10: Handle underlined remaining italic (_text_)
-		$this->text = preg_replace('/(^|[\s.,;:!?\-()\[\]])_([^_]+?)_/um', '$1[i]$2[/i]', $this->text);
+		$this->text = preg_replace('/' . $before . '_(?!\\s)([^_]+?)(?<!\\s)_' . $after . '/um', '$1[i]$2[/i]', $this->text);
 	}
 
 	protected function processStrikethrough(): void
@@ -347,6 +353,77 @@ class MarkdownToBBCodeTranslationService
 			},
 			$this->text,
 		);
+	}
+
+	/**
+	 * Converts markdown angle-bracket autolinks: <https://...> → [url=...]...[/url]
+	 * Must run before extractHtmlTags() to prevent <url> being captured as HTML tag.
+	 */
+	private function processAutoLinks(): void
+	{
+		$this->text = preg_replace_callback(
+			'/<((?:https?|ftp|ftps):\/\/[^>]+)>/',
+			function (array $m): string {
+				$url = $this->sanitizeUrl($m[1]);
+
+				if ($url === '')
+				{
+					return $m[0];
+				}
+
+				return "[url={$url}]{$url}[/url]";
+			},
+			$this->text,
+		);
+	}
+
+	/**
+	 * Converts bare URLs (not inside [url] tags) into BBCode links.
+	 * Runs after processMarkdownEmphasis() so that [b]/[i] tags are already placed,
+	 * and the URL regex naturally stops at '[' boundaries.
+	 * This prevents CTextParser TEXT_ANCHOR from capturing BBCode tags as part of URLs.
+	 */
+	private function processBareUrls(): void
+	{
+		// Protect existing [url] and [URL] blocks from bare URL conversion
+		$urlBlocks = [];
+		$this->text = preg_replace_callback(
+			'/\[url=[^\]]*\].*?\[\/url\]/isu',
+			static function (array $m) use (&$urlBlocks): string {
+				$hash = md5($m[0] . count($urlBlocks));
+				$urlBlocks[$hash] = $m[0];
+
+				return "@@URLBLOCK{$hash}@@";
+			},
+			$this->text,
+		);
+
+		// Step 3: Convert remaining bare URLs to [url] BBCode
+		$this->text = preg_replace_callback(
+			'#\bhttps?://[^\s\[\]<>\"]+#iu',
+			function (array $m): string {
+				$url = $m[0];
+
+				// Remove trailing punctuation that is unlikely part of the URL
+				$url = rtrim($url, '.,;:!?)\'');
+
+				$url = $this->sanitizeUrl($url);
+
+				if ($url === '')
+				{
+					return $m[0];
+				}
+
+				return "[url={$url}]{$url}[/url]";
+			},
+			$this->text,
+		);
+
+		// Step 4: Restore protected [url] blocks
+		foreach ($urlBlocks as $hash => $original)
+		{
+			$this->text = str_replace("@@URLBLOCK{$hash}@@", $original, $this->text);
+		}
 	}
 
 	private function processHorizontalRule(): void
@@ -411,18 +488,37 @@ class MarkdownToBBCodeTranslationService
 			return '';
 		}
 
+		// FILTER_VALIDATE_URL rejects raw non-ASCII bytes (e.g. Cyrillic path
+		// segments like /язык.jpg), so percent-encode unsafe bytes before validation.
+		$encoded = $this->percentEncodeUnsafeBytes($url);
+
 		// Allow absolute URLs
-		if (filter_var($url, FILTER_VALIDATE_URL) !== false)
+		if (filter_var($encoded, FILTER_VALIDATE_URL) !== false)
 		{
-			return $url;
+			return $encoded;
 		}
 
 		// Allow relative URLs starting with / and absolute starting with // inheriting the scheme from the page
-		if (preg_match('#^/[^\s]*$#', $url))
+		if (preg_match('#^/[^\s]*$#', $encoded))
 		{
-			return $url;
+			return $encoded;
 		}
 
 		return '';
+	}
+
+	/**
+	 * Percent-encode every byte that is not in the RFC 3986 reserved/unreserved
+	 * set. UTF-8 multibyte sequences are encoded byte-by-byte (e.g. `я` → `%D1%8F`),
+	 * while already percent-encoded sequences pass through unchanged because `%`
+	 * and hex digits are part of the safe set.
+	 */
+	private function percentEncodeUnsafeBytes(string $url): string
+	{
+		return preg_replace_callback(
+			'/[^A-Za-z0-9\-._~:\/?#\[\]@!$&\'()*+,;=%]/',
+			static fn(array $m): string => rawurlencode($m[0]),
+			$url,
+		);
 	}
 }

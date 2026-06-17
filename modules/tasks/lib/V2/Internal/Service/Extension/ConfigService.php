@@ -101,6 +101,8 @@ class ConfigService
 				'editPath' => $this->linkService->getCreateTask($userId),
 				'userTaskPathTemplate' => RouteDictionary::PATH_TO_USER_TASK,
 				'groupTaskPathTemplate' => RouteDictionary::PATH_TO_GROUP_TASK,
+				'userListTaskPathTemplate' => RouteDictionary::PATH_TO_USER_TASKS_LIST,
+				'userTemplateListPathTemplate' => RouteDictionary::PATH_TO_USER_TEMPLATES_LIST,
 			],
 			'ahaMoments' => Container::getInstance()->getAhaMomentProvider()->get($userId),
 			'restrictions' => Container::getInstance()->getTariffProvider()->getRestrictions(),

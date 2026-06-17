@@ -36,6 +36,11 @@ class DocumentSaleOrder extends Dataset
 		return $this->getMessage('SALE_DOCUMENT_SALEORDER_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('SALE_DOCUMENT_SALEORDER_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	/**
 	 * @return Result
 	 */

@@ -62,10 +62,19 @@ final class BookingMessageTable extends DataManager
 				->configureRequired(),
 
 			(new StringField('EXTERNAL_MESSAGE_ID'))
-				->addValidator(new LengthValidator(1, 255))
-				->configureRequired(),
+				->addValidator(new LengthValidator(null, 255)),
 
-			(new DatetimeField('CREATED_AT')),
+			(new StringField('STATUS'))
+				->addValidator(new LengthValidator(1, 20))
+				->configureDefaultValue('success'),
+
+			(new IntegerField('RETRY_COUNT'))
+				->configureDefaultValue(0),
+
+			(new DatetimeField('NEXT_RETRY_AT')),
+
+			(new DatetimeField('SENT_AT'))
+				->configureRequired(),
 		];
 	}
 

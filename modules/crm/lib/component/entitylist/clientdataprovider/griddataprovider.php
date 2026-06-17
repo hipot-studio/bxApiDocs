@@ -2,8 +2,27 @@
 
 namespace Bitrix\Crm\Component\EntityList\ClientDataProvider;
 
+use Bitrix\Crm\Service\Container;
+
 class GridDataProvider extends \Bitrix\Crm\Component\EntityList\ClientDataProvider
 {
+	public function isFieldExists(string $fieldId): bool
+	{
+		if (!str_starts_with($fieldId, $this->fieldHelper->getFieldPrefix()))
+		{
+			return false;
+		}
+
+		$fieldIdWithoutPrefix = $this->fieldHelper->getFieldIdWithoutPrefix($fieldId);
+
+		return Container::getInstance()->getFactory($this->clientEntityTypeId)->isFieldExists($fieldIdWithoutPrefix);
+	}
+
+	public function normalizeField(string $fieldId): ?string
+	{
+		return $this->fieldHelper->normalizeFieldId($fieldId);
+	}
+
 	/**
 	 * Get extra grid headers for client fields
 	 *
@@ -86,6 +105,12 @@ class GridDataProvider extends \Bitrix\Crm\Component\EntityList\ClientDataProvid
 				}
 			}
 		}
+	}
+
+	public function prepareFieldValue(string $fieldId, string $value): string
+	{
+		// all fields values will be prepared in external Display service
+		return $value;
 	}
 
 	protected function getBaseFields(): array

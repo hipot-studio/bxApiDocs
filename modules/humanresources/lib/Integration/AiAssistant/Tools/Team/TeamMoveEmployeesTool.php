@@ -18,7 +18,7 @@ class TeamMoveEmployeesTool extends NodeMoveEmployeesTool
 
 	public function getDescription(): string
 	{
-		return 'Move employees to another node identified by `nodeId` when node is a team. 
-Use this function to move node members. Accepts a list of user IDs grouped by roles.';
+		return 'Move users to the target team. '
+			. 'For department membership use `department_move_employees`.';
 	}
 }

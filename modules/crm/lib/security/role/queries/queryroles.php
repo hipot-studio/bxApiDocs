@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Security\Role\Queries;
 
 use Bitrix\Crm\Security\Role\Model\RoleTable;
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\Type\Collection;
 use Bitrix\Main\Web\Json;
 
 class QueryRoles
@@ -35,16 +36,30 @@ class QueryRoles
 
 		$query->setDistinct();
 
-		$this->buildSelect($query);
+		$query->setSelect(['ID', 'NAME', 'IS_SYSTEM', 'CODE', 'GROUP_CODE']);
 
 		$this->buildFilter($query);
 
 		return $query->fetchAll();
 	}
 
-	private function buildSelect(Query $query): void
+	/**
+	 * @return int[]
+	 */
+	public function fetchAllIds(): array
 	{
-		$query->setSelect(['ID', 'NAME', 'IS_SYSTEM', 'CODE', 'GROUP_CODE']);
+		$query = RoleTable::query();
+
+		$query->setDistinct();
+
+		$query->setSelect(['ID']);
+
+		$this->buildFilter($query);
+
+		$ids = array_column($query->fetchAll(), 'ID');
+		Collection::normalizeArrayValuesByInt($ids);
+
+		return $ids;
 	}
 
 	private function buildFilter(Query $query): void

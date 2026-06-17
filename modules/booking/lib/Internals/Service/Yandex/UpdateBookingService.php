@@ -10,6 +10,7 @@ use Bitrix\Booking\Entity\Booking\BookingSource;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
 use Bitrix\Booking\Internals\Exception\Yandex\BookingNotFoundException;
 use Bitrix\Booking\Internals\Exception\Yandex\BookingUpdateForbiddenException;
+use Bitrix\Booking\Internals\Exception\Yandex\InternalErrorException;
 use Bitrix\Booking\Internals\Exception\Yandex\ResourceNotFoundException;
 use Bitrix\Booking\Internals\Exception\Yandex\ServiceNotFoundException;
 use Bitrix\Booking\Internals\Exception\Yandex\SlotUnavailableException;
@@ -23,6 +24,7 @@ use Bitrix\Booking\Internals\Service\Yandex;
 class UpdateBookingService
 {
 	public function __construct(
+		private readonly CompanyRepository $companyRepository,
 		private readonly BookingRepositoryInterface $bookingRepository,
 		private readonly FindResourceService $findResourceService,
 	)
@@ -35,10 +37,20 @@ class UpdateBookingService
 		string|null $comment = null,
 	): Yandex\Dto\Api\Item\Booking
 	{
+		/**
+		 * Company identifier is not available here so to workaround this issue we use default company
+		 * When we support multi-branches this method should receive company identifier and use it
+		 */
+		$company = $this->companyRepository->getDefaultCompany();
+		if (!$company)
+		{
+			throw new InternalErrorException('Company not found');
+		}
+
 		$dateFrom = DateTimeImmutable::createFromFormat(
 			DateTimeInterface::ATOM,
 			$datetime,
-		);
+		)->setTimezone(new \DateTimeZone($company->getTimezone()));
 		if ($dateFrom->getTimestamp() < time())
 		{
 			throw new BookingUpdateForbiddenException();

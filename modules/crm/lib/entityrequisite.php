@@ -90,6 +90,7 @@ class EntityRequisite
 		34,
 		46,
 		77,
+		93,
 		110,
 		122,
 		132,
@@ -104,6 +105,7 @@ class EntityRequisite
 		'br' => 34,
 		'de' => 46,
 		'co' => 77,
+		'mx' => 93,
 		'pl' => 110,
 		'en' => 122,
 		'fr' => 132,
@@ -1848,6 +1850,10 @@ class EntityRequisite
 				'RQ_STATE_REG' => ['TYPE' => 'string'],
 				'RQ_MNPL_REG' => ['TYPE' => 'string'],
 				'RQ_CPF' => ['TYPE' => 'string'],
+				'RQ_TAX_REGIME' => [
+					'TYPE' => 'crm_status',
+					'CRM_STATUS_TYPE' => $requisite->getAllowedRqListFieldsStatusEntitities('RQ_TAX_REGIME')
+				],
 				'RQ_SIGNATURE' => [
 					'TYPE' => 'file',
 					'VALUE_TYPE' => 'image',
@@ -1989,12 +1995,14 @@ class EntityRequisite
 		'RQ_STATE_REG',
 		'RQ_MNPL_REG',
 		'RQ_CPF',
+		'RQ_TAX_REGIME',
 		'RQ_SIGNATURE',
 		'RQ_STAMP',
 	];
 
 	private static $rqlistFields = [
 		'RQ_IDENT_TYPE',
+		'RQ_TAX_REGIME',
 	];
 
 	private static $rqFiltrableFields = null;
@@ -2080,6 +2088,7 @@ class EntityRequisite
 				'RQ_STATE_REG',
 				'RQ_MNPL_REG',
 				'RQ_CPF',
+				'RQ_TAX_REGIME',
 			];
 		}
 
@@ -2308,21 +2317,22 @@ class EntityRequisite
 	{
 		if (self::$rqFieldCountryMap === null)
 		{
-			// ru - 1, by - 4, kz - 6, ua - 14, br - 34, de - 46, 77 - co, pl - 110, fr - 132, us - 122
+			// ru - 1, by - 4, kz - 6, uz - 13, ua - 14, br - 34, de - 46,
+			// co - 77, mx - 93, pl - 110, fr - 132, us - 122
 			self::$rqFieldCountryMap = [
 				'RQ_NAME' => [1, 4, 6, 14, 46, 122],
-				'RQ_FIRST_NAME' => [1, 34, 46, 77, 110, 122, 132],
-				'RQ_LAST_NAME' => [1, 34, 46, 77, 110, 122, 132],
+				'RQ_FIRST_NAME' => [1, 34, 46, 77, 93, 110, 122, 132],
+				'RQ_LAST_NAME' => [1, 34, 46, 77, 93, 110, 122, 132],
 				'RQ_SECOND_NAME' => [1],
 				'RQ_COMPANY_ID' => [110],
-				'RQ_COMPANY_NAME' => [1, 4, 6, 14, 34, 46, 77, 110, 122, 132, 13],
+				'RQ_COMPANY_NAME' => [1, 4, 6, 14, 34, 46, 77, 93, 110, 122, 132, 13],
 				'RQ_COMPANY_FULL_NAME' => [1, 4, 6, 77, 110, 13],
 				'RQ_COMPANY_REG_DATE' => [1, 4],
 				'RQ_DIRECTOR' => [1, 4, 14, 13],
 				'RQ_ACCOUNTANT' => [1, 4, 14, 13],
 				'RQ_CEO_NAME' => [6],
 				'RQ_CEO_WORK_POS' => [6],
-				'RQ_ADDR' => [1, 4, 6, 14, 34, 46, 77, 110, 122, 132, 13],
+				'RQ_ADDR' => [1, 4, 6, 14, 34, 46, 77, 93, 110, 122, 132, 13],
 				'RQ_CONTACT' => [1, 4, 6, 14, 46, 122],
 				'RQ_EMAIL' => [1, 4, 6, 14, 46, 122],
 				'RQ_PHONE' => [1, 4, 6, 14, 46, 122],
@@ -2335,7 +2345,7 @@ class EntityRequisite
 				'RQ_IDENT_DOC_DATE' => [1, 4],
 				'RQ_IDENT_DOC_ISSUED_BY' => [1, 4],
 				'RQ_IDENT_DOC_DEP_CODE' => [1],
-				'RQ_INN' => [1, 4, 6, 14, 46, 77, 110, 13],
+				'RQ_INN' => [1, 4, 6, 14, 46, 77, 93, 110, 13],
 				'RQ_KPP' => [1],
 				'RQ_USRLE' => [46],
 				'RQ_IFNS' => [1],
@@ -2371,6 +2381,7 @@ class EntityRequisite
 				'RQ_STATE_REG' => [Country::ID_BRAZIL],
 				'RQ_MNPL_REG' => [Country::ID_BRAZIL],
 				'RQ_CPF' => [Country::ID_BRAZIL],
+				'RQ_TAX_REGIME' => [Country::ID_MEXICO],
 				'RQ_SIGNATURE' => [
 					Country::ID_RUSSIA,
 					Country::ID_BELARUS,
@@ -2378,6 +2389,7 @@ class EntityRequisite
 					Country::ID_GERMANY,
 					Country::ID_USA,
 					Country::ID_COLOMBIA,
+					Country::ID_MEXICO,
 					Country::ID_KAZAKHSTAN,
 					Country::ID_POLAND,
 					Country::ID_FRANCE,
@@ -2391,6 +2403,7 @@ class EntityRequisite
 					Country::ID_GERMANY,
 					Country::ID_USA,
 					Country::ID_COLOMBIA,
+					Country::ID_MEXICO,
 					Country::ID_KAZAKHSTAN,
 					Country::ID_POLAND,
 					Country::ID_FRANCE,
@@ -2514,6 +2527,30 @@ class EntityRequisite
 									'FOREIGNIDDOC',
 									'EXTNIT',
 									'NUIP',
+								];
+							}
+							elseif ($fieldName === 'RQ_TAX_REGIME')
+							{
+								$statusIds = [
+									'601',
+									'603',
+									'605',
+									'606',
+									'607',
+									'608',
+									'610',
+									'611',
+									'612',
+									'614',
+									'615',
+									'616',
+									'620',
+									'621',
+									'622',
+									'623',
+									'624',
+									'625',
+									'626',
 								];
 							}
 							else
@@ -2663,6 +2700,7 @@ class EntityRequisite
 		return [
 			'RQ_VAT_PAYER' => 'checkbox',
 			'RQ_IDENT_TYPE' => 'crm_status',
+			'RQ_TAX_REGIME' => 'crm_status',
 			'RQ_STAMP' => 'image',
 			'RQ_SIGNATURE' => 'image',
 		];
@@ -6023,6 +6061,126 @@ class EntityRequisite
 						'LAST_FIELD_ID' => 9,
 					],
 				],
+				// mx
+				25 => [
+					'ID' => 26,
+					'ENTITY_TYPE_ID' => '8',
+					'COUNTRY_ID' => '93',
+					'NAME' => $requisite->getPhrase('CRM_REQUISITE_FIXED_PRESET_LEGALENTITY_MX_TITLE', 93),
+					'ACTIVE' => 'Y',
+					'XML_ID' => '#CRM_REQUISITE_PRESET_DEF_MX_LEGALENTITY#',
+					'SORT' => 500,
+					'SETTINGS' => [
+						'FIELDS' => [
+							0 => [
+								'ID' => 1,
+								'FIELD_NAME' => 'RQ_COMPANY_NAME',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 510,
+							],
+							1 => [
+								'ID' => 2,
+								'FIELD_NAME' => 'RQ_INN',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 520
+							],
+							2 => [
+								'ID' => 3,
+								'FIELD_NAME' => 'RQ_TAX_REGIME',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 530
+							],
+							3 => [
+								'ID' => 4,
+								'FIELD_NAME' => 'RQ_ADDR',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 540,
+							],
+							4 => [
+								'ID' => 5,
+								'FIELD_NAME' => 'RQ_SIGNATURE',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 550,
+							],
+							5 => [
+								'ID' => 6,
+								'FIELD_NAME' => 'RQ_STAMP',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 560,
+							],
+						],
+						'LAST_FIELD_ID' => 6,
+					],
+				],
+				26 => [
+					'ID' => 27,
+					'ENTITY_TYPE_ID' => '8',
+					'COUNTRY_ID' => '93',
+					'NAME' => $requisite->getPhrase('CRM_REQUISITE_FIXED_PRESET_PERSON_MX_TITLE', 93),
+					'ACTIVE' => 'Y',
+					'XML_ID' => '#CRM_REQUISITE_PRESET_DEF_MX_PERSON#',
+					'SORT' => 500,
+					'SETTINGS' => [
+						'FIELDS' => [
+							0 => [
+								'ID' => 1,
+								'FIELD_NAME' => 'RQ_FIRST_NAME',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 510
+							],
+							1 => [
+								'ID' => 2,
+								'FIELD_NAME' => 'RQ_LAST_NAME',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 520
+							],
+							2 => [
+								'ID' => 3,
+								'FIELD_NAME' => 'RQ_INN',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 530
+							],
+							3 => [
+								'ID' => 4,
+								'FIELD_NAME' => 'RQ_TAX_REGIME',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 540
+							],
+							4 => [
+								'ID' => 5,
+								'FIELD_NAME' => 'RQ_ADDR',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 550
+							],
+							5 => [
+								'ID' => 6,
+								'FIELD_NAME' => 'RQ_SIGNATURE',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 560
+							],
+							6 => [
+								'ID' => 7,
+								'FIELD_NAME' => 'RQ_STAMP',
+								'FIELD_TITLE' => '',
+								'IN_SHORT_LIST' => 'N',
+								'SORT' => 570
+							],
+						],
+						'LAST_FIELD_ID' => 7,
+					],
+				],
 			];
 		}
 
@@ -8355,6 +8513,9 @@ class EntityRequisite
 				77 => [     // co
 					'RQ_INN',
 				],
+				93 => [     // mx
+					'RQ_INN',
+				],
 				110 => [    // pl
 					'RQ_INN',
 					'RQ_VAT_ID',
@@ -8773,6 +8934,7 @@ class EntityRequisite
 				34 => 'br',
 				46 => 'de',
 				77 => 'co',
+				93 => 'mx',
 				110 => 'pl',
 				132 => 'fr',
 				122 => 'en',

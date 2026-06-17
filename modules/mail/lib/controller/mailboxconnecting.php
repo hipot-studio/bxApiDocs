@@ -2,12 +2,18 @@
 
 namespace Bitrix\Mail\Controller;
 
+use Bitrix\Mail\Controller\ActionFilter\ConnectionRequestResponsibleAdminAccess;
+use Bitrix\Mail\Controller\ActionFilter\MassConnectAccess;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxConnectDTO;
-use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxMassconnectDTO;
 use Bitrix\Mail\Helper\Mailbox\MailMassConnect;
+use Bitrix\Mail\Helper\Enum\MailboxStatus;
+use Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService;
 use Bitrix\Mail\Helper\Mailbox\MailboxConnector;
+use Bitrix\Mail\Helper\Mailbox\MailboxSettingsConfig;
+use Bitrix\Mail\Helper\Mailbox\PasswordlessConnectHelper;
+use Bitrix\Mail\Internals\MailboxConnectionRequestTable;
 use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Helper\OAuth;
@@ -20,6 +26,8 @@ use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Validation\Engine\AutoWire\ValidationParameter;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Mail\MailMessageUidTable;
@@ -49,13 +57,23 @@ class MailboxConnecting extends Controller
 			];
 	}
 
+	public function configureActions(): array
+	{
+		$massConnectFilter = ['+prefilters' => [new MassConnectAccess()]];
+
+		return [
+			'createPasswordlessRequest' => $massConnectFilter,
+			'validateConnectionSettings' => $massConnectFilter,
+			'resendPasswordlessRequest' => $massConnectFilter,
+			'deletePasswordlessRequest' => $massConnectFilter,
+			'getPasswordlessRequestsCount' => $massConnectFilter,
+			'connectMailboxByConnectionRequest' => ['+prefilters' => [new ConnectionRequestResponsibleAdminAccess()]],
+		];
+	}
+
 	public function getAutoWiredParameters(): array
 	{
 		return [
-			new ValidationParameter(
-				MailboxMassconnectDTO::class,
-				fn() => MailboxMassconnectDTO::createFromRequest($this->getRequest()),
-			),
 			new ValidationParameter(
 				MailboxConnectDTO::class,
 				fn() => MailboxConnectDTO::createFromRequest($this->getRequest()),
@@ -126,7 +144,10 @@ class MailboxConnecting extends Controller
 		}
 
 		$mailboxConnector = new MailboxConnector();
-		$result = $mailboxConnector->connectMailboxWithDefaultCrm($mailboxConnectDTO);
+		$result = $mailboxConnectDTO->crmOptions !== null
+			? $mailboxConnector->connectMailboxWithCustomCrm($mailboxConnectDTO)
+			: $mailboxConnector->connectMailboxWithDefaultCrm($mailboxConnectDTO)
+		;
 		$this->addErrors($mailboxConnector->getErrors());
 
 		$mailboxId = (int)($result['id'] ?? 0);
@@ -138,6 +159,100 @@ class MailboxConnecting extends Controller
 				\CUserOptions::SetOption('mail', 'previous_seen_mailbox_id', $mailboxId);
 			}
 		}
+
+		return $result;
+	}
+
+	public function connectMailboxByConnectionRequestAction(
+		int $connectionRequestId,
+		MailboxConnectDTO $mailboxConnectDTO,
+	): array
+	{
+		$requestService = new MailboxConnectionRequestService();
+		$request = $requestService->getRequestById($connectionRequestId);
+
+		if ($request === null)
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_CONNECTION_REQUEST_NOT_FOUND')));
+
+			return [];
+		}
+
+		if ($request['STATUS'] !== MailboxConnectionRequestTable::STATUS_PENDING)
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_CONNECTION_REQUEST_NOT_PENDING')));
+
+			return [];
+		}
+
+		$mailboxConnectDTO->userIdToConnect = (int)$request['REQUESTER_ID'];
+
+		$mailboxConnector = new MailboxConnector();
+		$result = $mailboxConnector->connectMailboxWithCustomCrm($mailboxConnectDTO);
+		$this->addErrors($mailboxConnector->getErrors());
+
+		$mailboxId = (int)($result['id'] ?? 0);
+
+		if ($mailboxId <= 0 || !empty($this->getErrors()))
+		{
+			return $result;
+		}
+
+		$completeResult = $requestService->completeRequest($connectionRequestId, $mailboxId);
+		if (!$completeResult->isSuccess())
+		{
+			$this->addErrors($completeResult->getErrors());
+
+			return $result;
+		}
+
+		return [
+			'id' => $mailboxId,
+			'senderName' => $result['senderName'] ?? null,
+			'connectionRequestCompleted' => true,
+			'pendingCount' => $completeResult->getData()['pendingCount'] ?? null,
+		];
+	}
+
+	public function getMailboxAction(int $mailboxId): array
+	{
+		if (!MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_HAS_NOT_PERMISSION')));
+
+			return [];
+		}
+
+		$mailboxConnector = new MailboxConnector();
+		$data = $mailboxConnector->getMailboxDataSafe($mailboxId);
+
+		if (empty($data))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_MAILBOX_NOT_FOUND')));
+
+			return [];
+		}
+
+		return $data;
+	}
+
+	public function getSettingsConfigAction(): array
+	{
+		return MailboxSettingsConfig::getClientConfig();
+	}
+
+	public function updateMailboxAction(int $mailboxId, MailboxConnectDTO $dto): array
+	{
+		if (!MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_HAS_NOT_PERMISSION')));
+
+			return [];
+		}
+
+		$mailboxConnector = new MailboxConnector();
+		$result = $mailboxConnector->updateMailbox($mailboxId, $dto);
+		$this->addErrors($mailboxConnector->getErrors());
 
 		return $result;
 	}
@@ -164,7 +279,7 @@ class MailboxConnecting extends Controller
 	}
 
 	/**
-	 * @param MailboxMassconnectDTO $mailboxConnectDTO - mailbox connection data
+	 * @param MailboxConnectDTO $mailboxConnectDTO - mailbox connection data
 	 * @param int $massConnectId - id of MailMassConnectTable entity
 	 * @return array
 	 *
@@ -172,7 +287,7 @@ class MailboxConnecting extends Controller
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function connectMailboxFromMassconnectAction(MailboxMassconnectDTO $mailboxConnectDTO, int $massConnectId): array
+	public function connectMailboxFromMassconnectAction(MailboxConnectDTO $mailboxConnectDTO, int $massConnectId): array
 	{
 		if (!LicenseManager::isMailboxesMassConnectEnabled())
 		{
@@ -198,6 +313,36 @@ class MailboxConnecting extends Controller
 		$this->addErrors($mailboxConnector->getErrors());
 
 		return $result;
+	}
+
+	/**
+	 * @param int[] $userIds
+	 * @return array{items: array<int, array{userId: int, canConnectNew: bool}>, processedCount: int}
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function checkMailboxLimitsAction(array $userIds): array
+	{
+		if (!LicenseManager::isMailboxesMassConnectEnabled())
+		{
+			$this->addError(new Error('Mass mailbox connection is not allowed'));
+
+			return [
+				'items' => [],
+				'processedCount' => 0,
+			];
+		}
+
+		$maxUsersPerRequest = 500;
+		if (count($userIds) > $maxUsersPerRequest)
+		{
+			$userIds = array_slice($userIds, 0, $maxUsersPerRequest);
+		}
+
+		return [
+			'items' => MailboxConnector::getUsersCanConnectNewMailbox($userIds),
+			'processedCount' => count($userIds),
+		];
 	}
 
 	public function getDepartmentUsersAction(array $departmentIds): array
@@ -228,13 +373,14 @@ class MailboxConnecting extends Controller
 
 			$mailboxId = (int)$mailbox['ID'];
 
-			$mailboxesProtectedData[] = [
-				'USERNAME' => $replaceWithTheCurrentUserName && $user ? Container::getUserService()->getUserName($user) : $mailbox['USERNAME'],
-				'EMAIL' => $mailbox['EMAIL'],
-				'NAME' => $mailbox['NAME'],
-				'ID' => $mailboxId,
-				'COUNTER' => $mailboxesCounters[$mailboxId]['UNSEEN']
-			];
+				$mailboxesProtectedData[] = [
+					'USERNAME' => $replaceWithTheCurrentUserName && $user ? Container::getUserService()->getUserName($user) : $mailbox['USERNAME'],
+					'EMAIL' => $mailbox['EMAIL'],
+					'NAME' => $mailbox['NAME'],
+					'ID' => $mailboxId,
+					'COUNTER' => $mailboxesCounters[$mailboxId]['UNSEEN'],
+					'CAN_EDIT_SETTINGS' => MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId),
+				];
 
 			if ($previousSeenMailboxId === 0)
 			{
@@ -243,6 +389,156 @@ class MailboxConnecting extends Controller
 		}
 
 		return $mailboxesProtectedData;
+	}
+
+	/**
+	 * @return array{mailboxId: int, email: string}
+	 */
+	public function createPasswordlessRequestAction(MailboxConnectDTO $mailboxConnectDTO): array
+	{
+		if (!MailAccess::hasCurrentUserAccessToConnectMailboxToUser($mailboxConnectDTO->userIdToConnect))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_HAS_NOT_PERMISSION_TO_CONNECT_TO_USER')));
+
+			return [];
+		}
+
+		$adminId = (int)CurrentUser::get()->getId();
+		$passwordlessConnectHelper = new PasswordlessConnectHelper();
+		$result = $passwordlessConnectHelper->createRequest($adminId, $mailboxConnectDTO->userIdToConnect, $mailboxConnectDTO);
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return $result->getData();
+	}
+
+	/**
+	 * @return array{mailboxId: int, email: string}
+	 */
+	public function completePasswordlessRequestAction(int $mailboxId, string $password): array
+	{
+		$passwordlessConnectHelper = new PasswordlessConnectHelper();
+		$result = $passwordlessConnectHelper->completeRequest($mailboxId, $password);
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return $result->getData();
+	}
+
+	public function cancelPasswordlessRequestAction(int $mailboxId): array
+	{
+		$currentUserId = (int)CurrentUser::get()->getId();
+
+		$mailbox = MailboxTable::query()
+			->setSelect(['USER_ID'])
+			->where('ID', $mailboxId)
+			->where('ACTIVE', MailboxStatus::Pending->value)
+			->setLimit(1)
+			->fetch()
+		;
+
+		if (!$mailbox)
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_MAILBOX_NOT_FOUND')));
+
+			return [];
+		}
+
+		$isOwner = $currentUserId === (int)$mailbox['USER_ID'];
+		if (!$isOwner && !MailAccess::hasCurrentUserAccessToMassConnect())
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_HAS_NOT_PERMISSION')));
+
+			return [];
+		}
+
+		$passwordlessConnectHelper = new PasswordlessConnectHelper();
+		$result = $passwordlessConnectHelper->cancelRequest($mailboxId);
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return [];
+	}
+
+	/**
+	 * Validates IMAP/SMTP server availability without authentication (pre-send check for passwordless flow).
+	 */
+	public function validateConnectionSettingsAction(MailboxConnectDTO $dto): array
+	{
+		$helper = new PasswordlessConnectHelper();
+		$result = $helper->validateConnectionSettings($dto);
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return ['valid' => true];
+	}
+
+	/**
+	 * @return array{mailboxId: int, email: string}|null
+	 */
+	public function getPendingPasswordlessRequestAction(): ?array
+	{
+		$currentUserId = (int)CurrentUser::get()->getId();
+		return (new PasswordlessConnectHelper())->getPendingRequestForUser($currentUserId);
+	}
+
+	public function resendPasswordlessRequestAction(int $mailboxId): array
+	{
+		$adminId = (int)CurrentUser::get()->getId();
+		$helper = new PasswordlessConnectHelper();
+		$result = $helper->resendRequest($mailboxId, $adminId);
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return $result->getData();
+	}
+
+	public function deletePasswordlessRequestAction(int $mailboxId): array
+	{
+		$helper = new PasswordlessConnectHelper();
+		$result = $helper->deleteRecord($mailboxId);
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return [];
+	}
+
+	public function getPasswordlessRequestsCountAction(): array
+	{
+		$helper = new PasswordlessConnectHelper();
+		$count = $helper->getSentRequestsTotalCount(['ACTIVE' => MailboxStatus::Pending->value]);
+
+		return ['count' => $count];
 	}
 
 	private function getIds($ids, $ignoreOld = false): Main\Result
@@ -314,6 +610,56 @@ class MailboxConnecting extends Controller
 		return $result->getData();
 	}
 
+	/**
+	 * @return array[]
+	 * @throws Main\LoaderException
+	 */
+	public function syncAllUserMailboxesAction(): array
+	{
+		$userId = (int)Main\Engine\CurrentUser::get()->getId();
+		if ($userId <= 0)
+		{
+			return ['mailboxes' => []];
+		}
+
+		$results = [];
+		foreach (\Bitrix\Mail\MailboxTable::getUserMailboxes($userId) as $mailbox)
+		{
+			$id = (int)$mailbox['ID'];
+			$result = \Bitrix\Mail\Helper\Mailbox::quickSync($id);
+			$results[$id] = $result->getData();
+
+			if (!$result->isSuccess())
+			{
+				$this->errorCollection->add($result->getErrors());
+			}
+		}
+
+		return ['mailboxes' => $results];
+	}
+
+	public function getDefaultSettingsAction(): array
+	{
+		$mailboxConnector = new MailboxConnector();
+
+		return [
+			'defaultSenderName' => $mailboxConnector->getDefaultSenderName(),
+			'currentUser' => $mailboxConnector->getCurrentUserData(),
+		];
+	}
+
+	public function checkConnectMailboxAction(): array
+	{
+		$mailboxConnector = new MailboxConnector();
+		$canConnect = $mailboxConnector->checkConnectMailbox();
+		$this->addErrors($mailboxConnector->getErrors());
+
+		return ['canConnect' => $canConnect];
+	}
+
+	/**
+	 * @deprecated Use \Bitrix\Mail\Controller\MailboxConnecting::checkConnectMailboxAction
+	 */
 	public function isMailboxConnectingAvailableAction(): bool
 	{
 		return \Bitrix\Mail\Helper\MailboxAccess::hasCurrentUserAccessToAddMailbox();
@@ -321,7 +667,7 @@ class MailboxConnecting extends Controller
 
 	public function deleteMailboxAction(int $mailboxId): array
 	{
-		$result = \Bitrix\Mail\Helper\Mailbox\MailboxConnector::deleteMailbox($mailboxId);
+		$result = MailboxConnector::deleteMailbox($mailboxId);
 		$this->errorCollection = $result->getErrorCollection();
 
 		return $result->getData();

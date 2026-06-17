@@ -79,13 +79,35 @@ class CBPWorkflowTemplateLoader
 		return true;
 	}
 
-	public function validateTemplate($arActivity, $user)
+	public function validateTemplate($arActivity, $user, &$activityNames = null, $isBranchActive = true)
 	{
-		$errors = CBPActivity::callStaticMethod(
-			$arActivity['Type'],
-			'ValidateProperties',
-			[$arActivity['Properties'], $user]
-		);
+		if ($activityNames === null)
+		{
+			$activityNames = [];
+		}
+
+		$errors = [];
+		if (isset($activityNames[$arActivity['Name']]))
+		{
+			$errors[] = [
+				'code' => 'DuplicateActivityName',
+				'message' => Loc::getMessage('BPCGWTL_DUPLICATE_ACTIVITY_NAME', ['#NAME#' => $arActivity['Name']]),
+				'activityName' => $arActivity['Name'],
+			];
+		}
+		else
+		{
+			$activityNames[$arActivity['Name']] = true;
+		}
+
+		if ($isBranchActive)
+		{
+			$errors = array_merge($errors, CBPActivity::callStaticMethod(
+				$arActivity['Type'],
+				'ValidateProperties',
+				[$arActivity['Properties'], $user]
+			));
+		}
 
 		$pref = '';
 		if (isset($arActivity['Properties']['Title']))
@@ -129,11 +151,17 @@ class CBPWorkflowTemplateLoader
 					}
 
 					$bFirst = false;
-					$validateErrors = $this->validateTemplate($arChildActivity, $user);
-					if ($validateErrors)
-					{
-						$childrenErrors[] = $validateErrors;
-					}
+				}
+
+				$validateErrors = $this->validateTemplate(
+					$arChildActivity,
+					$user,
+					$activityNames,
+					($isBranchActive && (!isset($arChildActivity['Activated']) || $arChildActivity['Activated'] !== 'N'))
+				);
+				if ($validateErrors)
+				{
+					$childrenErrors[] = $validateErrors;
 				}
 			}
 
@@ -206,9 +234,10 @@ class CBPWorkflowTemplateLoader
 					$errors = array();
 					if ($validationRequired)
 					{
+						$activityNames = [];
 						foreach ($arFields['TEMPLATE'] as $rawTemplate)
 						{
-							array_push($errors, ...$this->ValidateTemplate($rawTemplate, $userTmp));
+							array_push($errors, ...$this->ValidateTemplate($rawTemplate, $userTmp, $activityNames));
 						}
 					}
 
@@ -1334,7 +1363,7 @@ class CBPWorkflowTemplateLoader
 			$select = [
 				'ID', 'MODULE_ID', 'ENTITY', 'DOCUMENT_TYPE', 'DOCUMENT_STATUS', 'AUTO_EXECUTE',
 				'NAME', 'DESCRIPTION', 'TEMPLATE', 'PARAMETERS', 'VARIABLES', 'CONSTANTS',
-				'MODIFIED', 'USER_ID', 'ACTIVE', 'IS_MODIFIED', 'IS_SYSTEM', 'SORT', 'TYPE'
+				'MODIFIED', 'USER_ID', 'ACTIVE', 'IS_MODIFIED', 'IS_SYSTEM', 'SORT', 'TYPE', 'SYSTEM_CODE',
 			];
 		}
 

@@ -245,7 +245,7 @@ abstract class FlowDirectedActivity extends \CBPCompositeActivity implements \IB
 	public function getAuxNames(string $sourceActivityName): array
 	{
 		$names = [];
-		$sourceLink = static::composeLink($sourceActivityName, PortType::Aux);
+		$auxPrefix = $sourceActivityName . self::LINK_DELIMITER . PortType::Aux->value;
 		$links = $this->getRawProperty(self::PARAM_LINKS);
 		foreach ($links as $link)
 		{
@@ -256,12 +256,12 @@ abstract class FlowDirectedActivity extends \CBPCompositeActivity implements \IB
 
 			$anotherActivityPort = null;
 			[$sourceNodeLink, $targetNodeLink] = $link;
-			if ($targetNodeLink === $sourceLink)
+			if (str_starts_with($targetNodeLink, $auxPrefix))
 			{
 				$anotherActivityPort = $sourceNodeLink;
 			}
 
-			if ($sourceNodeLink === $sourceLink)
+			if (str_starts_with($sourceNodeLink, $auxPrefix))
 			{
 				$anotherActivityPort = $targetNodeLink;
 			}

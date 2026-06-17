@@ -761,6 +761,11 @@ class RestService extends \IRestService
 			throw new RestException('Empty workflow instance ID', self::ERROR_WRONG_WORKFLOW_ID);
 		}
 
+		if (!is_string($params['ID']))
+		{
+			throw new RestException('Invalid workflow instance ID (string expected)', self::ERROR_WRONG_WORKFLOW_ID);
+		}
+
 		$id = $params['ID'];
 		$errors = \CBPDocument::killWorkflow($id);
 
@@ -1176,7 +1181,7 @@ class RestService extends \IRestService
 				$row['MODULE_ID'], $row['ENTITY'], $row['DOCUMENT_ID']
 			));
 
-			if (isset($row['PARAMETERS']))
+			if (isset($row['PARAMETERS']) && is_array($row['PARAMETERS']))
 			{
 				$row['PARAMETERS'] = static::prepareTaskParameters($row['PARAMETERS'], $row);
 			}

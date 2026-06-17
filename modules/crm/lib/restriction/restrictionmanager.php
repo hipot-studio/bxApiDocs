@@ -65,8 +65,8 @@ class RestrictionManager
 	private static $quotesRestriction;
 	/** @var OrderRestriction|null  */
 	private static $orderRestriction;
-	/** @var ClientFieldsRestriction  */
-	private static $clientFieldsRestriction;
+	/** @var ClientFieldsRestriction[]  */
+	private static array $clientFieldsRestrictionList = [];
 	/** @var ObserversFieldRestriction[]  */
 	private static $observersFieldRestrictionList;
 	/** @var ActivityFieldRestriction  */
@@ -905,14 +905,23 @@ class RestrictionManager
 		return self::$inventoryControl1cRestriction;
 	}
 
+	/**
+	 * @deprecated
+	 * @see static::getClientFieldsRestriction()
+	 */
 	public static function getDealClientFieldsRestriction(): ClientFieldsRestriction
 	{
-		if (!static::$clientFieldsRestriction)
+		return static::getClientFieldsRestriction(\CCrmOwnerType::Deal);
+	}
+
+	public static function getClientFieldsRestriction(int $entityTypeId): ClientFieldsRestriction
+	{
+		if (!isset(static::$clientFieldsRestrictionList[$entityTypeId]))
 		{
-			static::$clientFieldsRestriction = new ClientFieldsRestriction(\CCrmOwnerType::Deal);
+			static::$clientFieldsRestrictionList[$entityTypeId] = new ClientFieldsRestriction($entityTypeId);
 		}
 
-		return static::$clientFieldsRestriction;
+		return static::$clientFieldsRestrictionList[$entityTypeId];
 	}
 
 	public static function getObserversFieldRestriction(int $entityTypeId): ObserversFieldRestriction
@@ -1436,7 +1445,7 @@ class RestrictionManager
 				false,
 				null,
 				[
-					'ID' => 'limit_smart_process_automation',
+					'ID' => 'limit_automated_solution',
 				],
 			);
 

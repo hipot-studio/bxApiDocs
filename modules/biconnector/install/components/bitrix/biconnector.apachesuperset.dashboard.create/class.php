@@ -88,7 +88,7 @@ class ApacheSupersetDashboardCreateComponent
 			$currentTitle = $dashboard['TITLE'];
 			preg_match_all('/\d+/', $currentTitle, $matches);
 			$number = (int)($matches[0][0] ?? 0) + 1;
-			$name .= " ($number)";
+			$name = Loc::getMessage('DASHBOARD_CREATE_FORM_DEFAULT_TITLE_NUMBER', ['#NUMBER#' => $number]);
 		}
 
 		return $name;

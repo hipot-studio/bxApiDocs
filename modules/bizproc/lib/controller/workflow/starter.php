@@ -8,7 +8,10 @@ use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\PrepareStartParametersReq
 use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\SetConstantsRequest;
 use Bitrix\Bizproc\Api\Service\WorkflowAccessService;
 use Bitrix\Bizproc\Api\Service\WorkflowTemplateService;
+use Bitrix\Bizproc\Controller\Base;
 use Bitrix\Bizproc\Error;
+use Bitrix\Bizproc\Internal\Service\Document\DocumentsResolver;
+use Bitrix\Bizproc\Internal\Service\Document\Dto\ResolvedDocumentDto;
 use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Public\Service\Workflow\StarterService;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
@@ -19,8 +22,13 @@ use Bitrix\Bizproc\Starter\Enum\Face;
 use Bitrix\Main\Localization\Loc;
 use CBPDocumentEventType;
 
-class Starter extends \Bitrix\Bizproc\Controller\Base
+class Starter extends Base
 {
+	private ?DocumentsResolver $documentResolver = null;
+
+	/**
+	 * @deprecated Use the `bizproc.workflow.start.list` component instead.
+	 */
 	public function getTemplatesAction(): ?array
 	{
 		if (!$this->checkBizprocFeature())
@@ -35,7 +43,7 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 		}
 
 		$complexDocumentId = null;
-		if ($this->getRequest()->get('signedDocumentId'))
+		if ($this->hasDocumentIdInRequest())
 		{
 			$complexDocumentId = $this->getComplexDocumentId();
 			if (!$complexDocumentId)
@@ -201,29 +209,24 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 			return null;
 		}
 
-		$parametersDocumentType = $this->getComplexDocumentType();
-		if (!$parametersDocumentType)
+		$documents = $this->getDocumentsForCheckParameters();
+		if (empty($documents))
 		{
 			return null;
 		}
 
-		$canStart = false;
-		if ($this->getRequest()->get('signedDocumentId'))
+		$accessibleDocuments = [];
+		foreach ($documents as $document)
 		{
-			$canStart = \CBPDocument::canUserOperateDocument(
-				\CBPCanUserOperateOperation::StartWorkflow,
-				$this->getCurrentUserId(),
-				$this->getComplexDocumentId(),
-			);
+			if (!$this->canUserStartWorkflowForResolvedDocument($document))
+			{
+				continue;
+			}
+
+			$accessibleDocuments[] = $document;
 		}
 
-		if (!$canStart
-			&& !\CBPDocument::canUserOperateDocumentType(
-				\CBPCanUserOperateOperation::StartWorkflow,
-				$this->getCurrentUserId(),
-				$parametersDocumentType,
-			)
-		)
+		if (empty($accessibleDocuments))
 		{
 			$this->addError(new Error(
 				Loc::getMessage('BIZPROC_LIB_API_CONTROLLER_WORKFLOW_STARTER_ERROR_ACCESS_DENIED') ?? ''
@@ -234,19 +237,33 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 
 		$parameters = [];
 		$hasErrors = false;
-		foreach (\CBPWorkflowTemplateLoader::getDocumentTypeStates($parametersDocumentType, $autoExecuteType) as $template)
+		$processedTemplateIds = [];
+		foreach ($accessibleDocuments as $document)
 		{
-			if (is_array($template['TEMPLATE_PARAMETERS']) && $template['TEMPLATE_PARAMETERS'])
+			$parametersDocumentType = $document->complexDocumentType->toArray();
+			foreach (\CBPWorkflowTemplateLoader::getDocumentTypeStates($parametersDocumentType, $autoExecuteType) as $template)
 			{
-				$parameters[$template['TEMPLATE_ID']] =
+				$templateId = (int)($template['TEMPLATE_ID'] ?? 0);
+				if (
+					$templateId <= 0
+					|| isset($processedTemplateIds[$templateId])
+					|| !is_array($template['TEMPLATE_PARAMETERS'])
+					|| !$template['TEMPLATE_PARAMETERS']
+				)
+				{
+					continue;
+				}
+
+				$processedTemplateIds[$templateId] = true;
+				$parameters[$templateId] =
 					$this->prepareWorkflowParameters(
 						$template['TEMPLATE_PARAMETERS'],
 						$parametersDocumentType,
-						"bizproc{$template['TEMPLATE_ID']}_",
+						"bizproc{$templateId}_",
 					)
 				;
 
-				if ($parameters[$template['TEMPLATE_ID']] === null)
+				if ($parameters[$templateId] === null)
 				{
 					$hasErrors = true;
 				}
@@ -259,6 +276,56 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 		}
 
 		return ['parameters' => \CBPDocument::signParameters($parameters)];
+	}
+
+	private function getDocumentsForCheckParameters(): array
+	{
+		$hasDocumentIdInRequest = $this->hasDocumentIdInRequest();
+		$payload = $this->buildRequestDocumentsPayload($hasDocumentIdInRequest);
+		$documents = $this->resolveDocumentsFromPayload($payload);
+		if (empty($documents))
+		{
+			return [];
+		}
+
+		foreach ($documents as $resolvedDocument)
+		{
+			if ($hasDocumentIdInRequest && $resolvedDocument->complexDocumentId === null)
+			{
+				$this->addError(new Error(
+					Loc::getMessage('BIZPROC_LIB_API_CONTROLLER_WORKFLOW_STARTER_ERROR_INCORRECT_DOCUMENT_ID') ?? ''
+				));
+
+				return [];
+			}
+		}
+
+		return $documents;
+	}
+
+	private function canUserStartWorkflowForResolvedDocument(ResolvedDocumentDto $document): bool
+	{
+		$parametersDocumentType = $document->complexDocumentType->toArray();
+		$complexDocumentId = $document->complexDocumentId?->toArray();
+		$currentUserId = $this->getCurrentUserId();
+
+		if (
+			$complexDocumentId !== null
+			&& \CBPDocument::canUserOperateDocument(
+				\CBPCanUserOperateOperation::StartWorkflow,
+				$currentUserId,
+				$complexDocumentId,
+			)
+		)
+		{
+			return true;
+		}
+
+		return \CBPDocument::canUserOperateDocumentType(
+			\CBPCanUserOperateOperation::StartWorkflow,
+			$currentUserId,
+			$parametersDocumentType,
+		);
 	}
 
 	public function setConstantsAction(int $templateId): ?array
@@ -300,40 +367,21 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 
 	private function getComplexDocumentType(): ?array
 	{
-		$request = $this->getRequest();
+		$resolvedDocument = $this->resolveSingleDocumentFromPayload($this->buildRequestDocumentPayload());
 
-		$signedDocumentType = $request->get('signedDocumentType');
-		if (!is_string($signedDocumentType))
-		{
-			$this->addError(new Error(
-				Loc::getMessage('BIZPROC_LIB_API_CONTROLLER_WORKFLOW_STARTER_ERROR_INCORRECT_DOCUMENT_TYPE') ?? ''
-			));
-
-			return null;
-		}
-
-		$parametersDocumentType = \CBPDocument::unSignDocumentType($signedDocumentType);
-
-		try
-		{
-			\CBPHelper::parseDocumentId($parametersDocumentType);
-		}
-		catch (\CBPArgumentNullException $e)
-		{
-			$this->addError(Error::createFromThrowable($e));
-
-			return null;
-		}
-
-		return $parametersDocumentType;
+		return $resolvedDocument?->complexDocumentType->toArray();
 	}
 
 	private function getComplexDocumentId(): ?array
 	{
-		$request = $this->getRequest();
+		$resolvedDocument = $this->resolveSingleDocumentFromPayload($this->buildRequestDocumentPayload(true));
 
-		$signedDocumentId = $request->get('signedDocumentId');
-		if (!is_string($signedDocumentId))
+		if (!$resolvedDocument)
+		{
+			return null;
+		}
+
+		if ($resolvedDocument->complexDocumentId === null)
 		{
 			$this->addError(new Error(
 				Loc::getMessage('BIZPROC_LIB_API_CONTROLLER_WORKFLOW_STARTER_ERROR_INCORRECT_DOCUMENT_ID') ?? ''
@@ -342,37 +390,122 @@ class Starter extends \Bitrix\Bizproc\Controller\Base
 			return null;
 		}
 
-		$parametersDocumentId = \CBPDocument::unSignDocumentType($signedDocumentId);
-
-		try
-		{
-			\CBPHelper::parseDocumentId($parametersDocumentId);
-		}
-		catch (\CBPArgumentNullException $e)
-		{
-			$this->addError(Error::createFromThrowable($e));
-
-			return null;
-		}
-
-		return $parametersDocumentId;
+		return $resolvedDocument->complexDocumentId->toArray();
 	}
 
-	private function checkDocumentTypeMatchDocumentId(array $parametersDocumentType, array $parametersDocumentId): bool
+	private function buildRequestDocumentPayload(bool $withDocumentId = false): array
 	{
-		if (
-			$parametersDocumentType[0] === $parametersDocumentId[0]
-			&& $parametersDocumentType[1] === $parametersDocumentId[1]
-		)
+		$request = $this->getRequest();
+		$documentType = $request->get('documentType');
+		$documentId = $request->get('documentId');
+
+		if ($documentType !== null || $documentId !== null)
+		{
+			$payload = ['documentType' => $documentType];
+			if ($withDocumentId || $documentId !== null)
+			{
+				$payload['documentId'] = $documentId;
+			}
+
+			return $payload;
+		}
+
+		$payload = ['signedDocumentType' => $request->get('signedDocumentType')];
+		if ($withDocumentId || $request->get('signedDocumentId') !== null)
+		{
+			$payload['signedDocumentId'] = $request->get('signedDocumentId');
+		}
+
+		return $payload;
+	}
+
+	private function buildRequestDocumentsPayload(bool $withDocumentId = false): array
+	{
+		$request = $this->getRequest();
+
+		if (is_array($request->get('documents')))
+		{
+			return ['documents' => $request->get('documents')];
+		}
+
+		if (is_array($request->get('signedDocuments')))
+		{
+			return ['signedDocuments' => $request->get('signedDocuments')];
+		}
+
+		return $this->buildRequestDocumentPayload($withDocumentId);
+	}
+
+	private function hasDocumentIdInRequest(): bool
+	{
+		$request = $this->getRequest();
+
+		if ($request->get('documentId') !== null || $request->get('signedDocumentId') !== null)
 		{
 			return true;
 		}
 
-		$this->addError(new Error(
-			Loc::getMessage('BIZPROC_LIB_API_CONTROLLER_WORKFLOW_STARTER_ERROR_DOC_TYPE_DONT_MATCH_DOC_ID') ?? ''
-		));
+		foreach (['documents', 'signedDocuments'] as $requestKey)
+		{
+			$documents = $request->get($requestKey);
+			if (!is_array($documents))
+			{
+				continue;
+			}
+
+			foreach ($documents as $document)
+			{
+				if (
+					is_array($document)
+					&& (
+						array_key_exists('documentId', $document)
+						|| array_key_exists('signedDocumentId', $document)
+					)
+				)
+				{
+					return true;
+				}
+			}
+		}
 
 		return false;
+	}
+
+	private function checkDocumentTypeMatchDocumentId(array $parametersDocumentType, array $parametersDocumentId): bool
+	{
+		return $this->resolveSingleDocumentFromPayload([
+			'documentType' => $parametersDocumentType,
+			'documentId' => $parametersDocumentId,
+		]) !== null;
+	}
+
+	private function getDocumentResolver(): DocumentsResolver
+	{
+		return $this->documentResolver ??= new DocumentsResolver();
+	}
+
+	private function resolveSingleDocumentFromPayload(array $payload): ?ResolvedDocumentDto
+	{
+		$documents = $this->resolveDocumentsFromPayload($payload);
+		if (empty($documents))
+		{
+			return null;
+		}
+
+		return $documents[0] ?? null;
+	}
+
+	private function resolveDocumentsFromPayload(array $payload): array
+	{
+		$result = $this->getDocumentResolver()->resolveFromPayload($payload);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return $result->getDocuments()?->documents ?? [];
 	}
 
 	private function checkBizprocFeature(): bool

@@ -4,6 +4,7 @@ namespace Bitrix\Mail\Helper\Entity\Department;
 
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Mail\Helper\Entity\BaseProvider;
+use Bitrix\Mail\Integration\HumanResources\NodeAccessCodeResolver;
 use Bitrix\Mail\Integration\HumanResources\StructureNode;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
@@ -30,7 +31,7 @@ final class DepartmentProvider extends BaseProvider
 	 */
 	protected function getEntities(array $entityIds): array
 	{
-		$nodeCollection = Container::getNodeRepository()->findAllByAccessCodes($entityIds);
+		$nodeCollection = NodeAccessCodeResolver::resolveNodeCollection($entityIds);
 
 		$result = [];
 		foreach ($nodeCollection as $node)

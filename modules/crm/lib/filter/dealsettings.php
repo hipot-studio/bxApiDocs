@@ -57,4 +57,17 @@ class DealSettings extends EntitySettings implements ISettingsSupportsCategory
 	{
 		return $this->categoryAccess;
 	}
+
+	public function isClientFilterSupported(): bool
+	{
+		return
+			!$this->checkFlag(DealSettings::FLAG_RECURRING)
+			&& $this->checkFlag(DealSettings::FLAG_ENABLE_CLIENT_FIELDS)
+		;
+	}
+
+	public function isClientCompanyFilterSupported(): bool
+	{
+		return $this->isClientFilterSupported();
+	}
 }

@@ -220,7 +220,10 @@ class CSiteTemplate
 			self::SaveDescription($arFields, $_SERVER["DOCUMENT_ROOT"].$path."/description.php");
 		}
 
-		self::SaveStyleDescription($arFields["STYLES_DESCRIPTION"], $_SERVER["DOCUMENT_ROOT"].$path."/.styles.php");
+		if (isset($arFields["STYLES_DESCRIPTION"]))
+		{
+			self::SaveStyleDescription($arFields["STYLES_DESCRIPTION"], $_SERVER["DOCUMENT_ROOT"].$path."/.styles.php");
+		}
 
 		return $arFields["ID"];
 	}
@@ -273,12 +276,15 @@ class CSiteTemplate
 			if(!isset($arFields["TYPE"]))
 				$arFields["TYPE"] = $ar_t["TYPE"];
 			if(!isset($arFields["EDITOR_STYLES"]))
-				$arFields["EDITOR_STYLES"] = $ar_t["EDITOR_STYLES"];
+				$arFields["EDITOR_STYLES"] = $ar_t["EDITOR_STYLES"] ?? '';
 
 			self::SaveDescription($arFields, $_SERVER["DOCUMENT_ROOT"].$path."/description.php");
 		}
 
-		self::SaveStyleDescription($arFields["STYLES_DESCRIPTION"], $_SERVER["DOCUMENT_ROOT"].$path."/.styles.php");
+		if (isset($arFields["STYLES_DESCRIPTION"]))
+		{
+			self::SaveStyleDescription($arFields["STYLES_DESCRIPTION"], $_SERVER["DOCUMENT_ROOT"].$path."/.styles.php");
+		}
 
 		return true;
 	}
@@ -357,7 +363,7 @@ class CSiteTemplate
 		return $arRes;
 	}
 
-	public static function SaveStyleDescription($stylesDesc = array(), $stylesPath)
+	public static function SaveStyleDescription($stylesDesc, $stylesPath)
 	{
 		/** @global CMain $APPLICATION */
 		global $APPLICATION;
@@ -384,7 +390,7 @@ class CSiteTemplate
 		}
 	}
 
-	public static function SaveDescription($arFields = array(), $descPath)
+	public static function SaveDescription($arFields, $descPath)
 	{
 		/** @global CMain $APPLICATION */
 		global $APPLICATION;

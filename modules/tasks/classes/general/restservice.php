@@ -226,16 +226,28 @@ final class CTaskRestService extends IRestService
 			$errCode = $e->getCode();
 			$errMsg  = $e->getMessage();
 
-			if ($e->GetCode() & TasksException::TE_FLAG_SERIALIZED_ERRORS_IN_MESSAGE)
+			if (
+				$e->GetCode() & TasksException::TE_FLAG_SERIALIZED_ERRORS_IN_MESSAGE
+				&& (new \Bitrix\Tasks\Validation\Validator\SerializedValidator())->validate($errMsg)->isSuccess()
+			)
+			{
 				$arMessages = unserialize($errMsg, ['allowed_classes' => false]);
+				if (!is_array($arMessages))
+				{
+					$arMessages = [['text' => 'Unexpected error format', 'id' => 'TASKS_ERROR']];
+				}
+			}
 			else
 			{
-				$arMessages[] = array(
-					'id'   => 'TASKS_ERROR_EXCEPTION_#' . $errCode,
-					'text' => 'TASKS_ERROR_EXCEPTION_#' . $errCode
-						. '; ' . $errMsg
-						. '; ' . TasksException::renderErrorCode($e)
-				);
+				$arMessages[] = [
+					'id' => 'TASKS_ERROR_EXCEPTION_#' . $errCode,
+					'text' => 'TASKS_ERROR_EXCEPTION_#'
+						. $errCode
+						. '; '
+						. $errMsg
+						. '; '
+						. TasksException::renderErrorCode($e),
+				];
 			}
 		}
 		catch (Exception $e)

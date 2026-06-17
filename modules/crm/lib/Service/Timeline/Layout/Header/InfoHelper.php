@@ -4,10 +4,13 @@ namespace Bitrix\Crm\Service\Timeline\Layout\Header;
 
 use Bitrix\Crm\Service\Timeline\Layout\Action;
 use Bitrix\Crm\Service\Timeline\Layout\Base;
+use Bitrix\Ui\Public\Enum\IconSet\Main as MainIcon;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 class InfoHelper extends Base
 {
-	public const ICON_AUTO_SUM = 'auto-sum';
+	public const ICON_AUTO_SUM = Outline::SIGMA_SUMM;
+	public const ICON_INFO = Outline::INFO_CIRCLE;
 
 	protected ?string $iconCode = null;
 
@@ -23,9 +26,9 @@ class InfoHelper extends Base
 		return $this->iconCode;
 	}
 
-	public function setIconCode(?string $iconCode): self
+	public function setIconCode(string|Outline|MainIcon $iconCode): self
 	{
-		$this->iconCode = $iconCode;
+		$this->iconCode = is_string($iconCode) ? $iconCode : $iconCode->value;
 
 		return $this;
 	}

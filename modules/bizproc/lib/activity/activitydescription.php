@@ -36,6 +36,7 @@ final class ActivityDescription implements \JsonSerializable
 	private ?array $presets = null;
 	private ?string $presetId = null;
 	private bool $excluded = false;
+	private bool $deprecated = false;
 	private array $rawData = [];
 
 	public function __construct(
@@ -369,6 +370,18 @@ final class ActivityDescription implements \JsonSerializable
 		return $this->excluded;
 	}
 
+	public function setDeprecated(bool $deprecated): self
+	{
+		$this->deprecated = $deprecated;
+
+		return $this;
+	}
+
+	public function getDeprecated(): bool
+	{
+		return $this->deprecated;
+	}
+
 	public function set(string $key, mixed $value): self
 	{
 		// forbidden to change
@@ -421,6 +434,9 @@ final class ActivityDescription implements \JsonSerializable
 			case 'EXCLUDED':
 				$this->setExcluded($value);
 				break;
+			case 'DEPRECATED':
+				$this->setDeprecated($value);
+				break;
 			case 'FILTER':
 				$this->setFilter($value);
 				break;
@@ -468,6 +484,7 @@ final class ActivityDescription implements \JsonSerializable
 			'PATH_TO_ACTIVITY' => $this->getPathToActivity(),
 			'ROBOT_SETTINGS' => $this->getRobotSettings(),
 			'EXCLUDED' => $this->getExcluded(),
+			'DEPRECATED' => $this->getDeprecated(),
 			'FILTER' => $this->getFilter(),
 			'NODE_ACTION_SETTINGS' => $this->getNodeActionSettings(),
 			'COMPLEX_ACTIVITY_SETTINGS' => $this->getComplexActivitySettings(),
@@ -593,6 +610,11 @@ final class ActivityDescription implements \JsonSerializable
 		if ($this->getExcluded() === true)
 		{
 			$description['EXCLUDED'] = $this->getExcluded();
+		}
+
+		if ($this->getDeprecated() === true)
+		{
+			$description['DEPRECATED'] = $this->getDeprecated();
 		}
 
 		if ($this->getPresets())

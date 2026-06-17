@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Internals\Service;
 
+use Bitrix\Booking\Internals\Service\Notifications\NotificationAgentManager;
 use Bitrix\Main\Config\Option;
 
 class ModuleOptions
@@ -21,6 +22,7 @@ class ModuleOptions
 		}
 
 		self::setFirstResourceAdded();
+		NotificationAgentManager::registerAll();
 	}
 
 	public static function getDefaultAutoConfirmPeriodMinutes(): int

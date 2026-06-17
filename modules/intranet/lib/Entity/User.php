@@ -113,11 +113,11 @@ class User
 		{
 			return InvitationStatus::ACTIVE;
 		}
-		elseif (!empty($this->confirmCode) && $this->active)
+		if (!empty($this->confirmCode) && $this->active)
 		{
 			return InvitationStatus::INVITED;
 		}
-		elseif (ModuleManager::isModuleInstalled('bitrix24') && !empty($this->confirmCode) && !$this->active)
+		if (ModuleManager::isModuleInstalled('bitrix24') && !empty($this->confirmCode) && !$this->active)
 		{
 			return InvitationStatus::INVITE_AWAITING_APPROVE;
 		}
@@ -133,19 +133,23 @@ class User
 		{
 			return UserRole::INTEGRATOR;
 		}
-		elseif ($this->isAdmin())
+
+		if ($this->isAdmin())
 		{
 			return UserRole::ADMIN;
 		}
-		elseif ($this->isIntranet())
+
+		if ($this->isIntranet())
 		{
 			return UserRole::INTRANET;
 		}
-		elseif ($this->isCollaber())
+
+		if ($this->isCollaber())
 		{
 			return UserRole::COLLABER;
 		}
-		elseif (
+
+		if (
 			$this->isExtranet()
 			&& (in_array(\CExtranet::getExtranetUserGroupId(), \CUser::GetUserGroup($this->getId())))
 			&& \Bitrix\Extranet\PortalSettings::getInstance()->isExtranetUsersAvailable()
@@ -153,22 +157,28 @@ class User
 		{
 			return UserRole::EXTRANET;
 		}
-		elseif ($this->isEmail())
+
+		if ($this->isImGuest())
+		{
+			return UserRole::IM_GUEST;
+		}
+
+		if ($this->isEmail())
 		{
 			return UserRole::EMAIL;
 		}
-		elseif ($this->isShop())
+
+		if ($this->isShop())
 		{
 			return UserRole::SHOP;
 		}
-		elseif ($this->isExternal())
+
+		if ($this->isExternal())
 		{
 			return UserRole::EXTERNAL;
 		}
-		else
-		{
-			return UserRole::VISITOR;
-		}
+
+		return UserRole::VISITOR;
 	}
 
 	public function isIntegrator(): bool
@@ -206,6 +216,12 @@ class User
 	public function isEmail(): bool
 	{
 		return $this->externalAuthId === 'email';
+	}
+
+	public function isImGuest(): bool
+	{
+		return ModuleManager::isModuleInstalled('im')
+			&& $this->externalAuthId === 'im_guest';
 	}
 
 	public function isShop(): bool
@@ -335,10 +351,9 @@ class User
 
 	public function isExtranet(): bool
 	{
-		return (
+		return
 			ModuleManager::isModuleInstalled('extranet')
-			&& !(new HrUserService())->isEmployee($this)
-		);
+			&& !(new HrUserService())->isEmployee($this);
 	}
 
 	/**
@@ -402,7 +417,7 @@ class User
 	{
 		$this->workPosition = $workPosition;
 	}
-		
+
 	/**
 	 * @return InvitationType|null
 	 */

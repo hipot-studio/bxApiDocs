@@ -40,6 +40,7 @@ class Task extends BaseController
 		Entity\Template $template,
 		Entity\Task $task,
 		bool $withSubTasks = false,
+		bool $view = false,
 	): ?Arrayable
 	{
 		$userId = $this->userId;
@@ -51,7 +52,8 @@ class Task extends BaseController
 			config: new AddTaskConfig(
 				userId: $userId,
 				withSubTasks: $withSubTasks,
-			)
+				view: $view,
+			),
 		))->run();
 
 		if (!$result->isSuccess())

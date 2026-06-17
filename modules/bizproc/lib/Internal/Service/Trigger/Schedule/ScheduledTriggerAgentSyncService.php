@@ -38,10 +38,15 @@ class ScheduledTriggerAgentSyncService
 		$nextRunAt = $this->service->getNextAgentRunAt();
 		$agent = ScheduledTriggerAgent::getCurrentAgent();
 
-		if ($nextRunAt === null)
+		if ($nextRunAt === null && (int)($agent['ID'] ?? 0) > 0)
 		{
 			\CAgent::Delete((int)$agent['ID']);
 
+			return null;
+		}
+
+		if ($nextRunAt === null)
+		{
 			return null;
 		}
 

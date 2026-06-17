@@ -174,7 +174,6 @@ class SignMasterComponent extends SignBaseComponent
 		$isSesComAgreementAccepted = $this->isSesComAgreementAccepted();
 		$this->setResult('IS_SES_COM_AGREEMENT_ACCEPTED', $isSesComAgreementAccepted);
 		$this->setResult('ANALYTIC_CONTEXT', $this->getAnalyticContext());
-		$this->setResult('IS_PLACEHOLDER_DOCUMENT_ENABLED', Feature::instance()->isPlaceholderDocumentEnabled());
 
 		if (!$isSesComAgreementAccepted)
 		{

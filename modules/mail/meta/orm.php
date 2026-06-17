@@ -91,7 +91,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\Entity\BlacklistEmail wakeUp($data)
 	 */
-	class EO_Blacklist {
+	class EO_Blacklist extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\BlacklistTable */
 		static public $dataClass = '\Bitrix\Mail\BlacklistTable';
 		/**
@@ -149,7 +149,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Mail\Internals\Entity\BlacklistEmail|null find(callable $callback)
 	 * @method \Bitrix\Mail\EO_Blacklist_Collection filter(callable $callback)
 	 */
-	class EO_Blacklist_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Blacklist_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\BlacklistTable */
 		static public $dataClass = '\Bitrix\Mail\BlacklistTable';
 	}
@@ -318,7 +318,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\EO_MailLog wakeUp($data)
 	 */
-	class EO_MailLog {
+	class EO_MailLog extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\MailLogTable */
 		static public $dataClass = '\Bitrix\Mail\MailLogTable';
 		/**
@@ -389,7 +389,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Mail\EO_MailLog|null find(callable $callback)
 	 * @method \Bitrix\Mail\EO_MailLog_Collection filter(callable $callback)
 	 */
-	class EO_MailLog_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailLog_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\MailLogTable */
 		static public $dataClass = '\Bitrix\Mail\MailLogTable';
 	}
@@ -648,7 +648,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\EO_MailServices wakeUp($data)
 	 */
-	class EO_MailServices {
+	class EO_MailServices extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\MailServicesTable */
 		static public $dataClass = '\Bitrix\Mail\MailServicesTable';
 		/**
@@ -735,7 +735,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Mail\EO_MailServices|null find(callable $callback)
 	 * @method \Bitrix\Mail\EO_MailServices_Collection filter(callable $callback)
 	 */
-	class EO_MailServices_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailServices_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\MailServicesTable */
 		static public $dataClass = '\Bitrix\Mail\MailServicesTable';
 	}
@@ -824,7 +824,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_MessageDeleteQueue wakeUp($data)
 	 */
-	class EO_MessageDeleteQueue {
+	class EO_MessageDeleteQueue extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MessageDeleteQueueTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MessageDeleteQueueTable';
 		/**
@@ -876,7 +876,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MessageDeleteQueue|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MessageDeleteQueue_Collection filter(callable $callback)
 	 */
-	class EO_MessageDeleteQueue_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MessageDeleteQueue_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MessageDeleteQueueTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MessageDeleteQueueTable';
 	}
@@ -990,7 +990,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_MessageUploadQueue wakeUp($data)
 	 */
-	class EO_MessageUploadQueue {
+	class EO_MessageUploadQueue extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MessageUploadQueueTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MessageUploadQueueTable';
 		/**
@@ -1048,7 +1048,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MessageUploadQueue|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MessageUploadQueue_Collection filter(callable $callback)
 	 */
-	class EO_MessageUploadQueue_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MessageUploadQueue_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MessageUploadQueueTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MessageUploadQueueTable';
 	}
@@ -1197,7 +1197,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_MailMessageAttachment wakeUp($data)
 	 */
-	class EO_MailMessageAttachment {
+	class EO_MailMessageAttachment extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MailMessageAttachmentTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailMessageAttachmentTable';
 		/**
@@ -1261,7 +1261,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MailMessageAttachment|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MailMessageAttachment_Collection filter(callable $callback)
 	 */
-	class EO_MailMessageAttachment_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailMessageAttachment_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MailMessageAttachmentTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailMessageAttachmentTable';
 	}
@@ -1380,7 +1380,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_OAuth wakeUp($data)
 	 */
-	class EO_OAuth {
+	class EO_OAuth extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\OAuthTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\OAuthTable';
 		/**
@@ -1438,7 +1438,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_OAuth|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_OAuth_Collection filter(callable $callback)
 	 */
-	class EO_OAuth_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_OAuth_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\OAuthTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\OAuthTable';
 	}
@@ -1717,7 +1717,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\Entity\MailboxDirectory wakeUp($data)
 	 */
-	class EO_MailboxDirectory {
+	class EO_MailboxDirectory extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MailboxDirectoryTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailboxDirectoryTable';
 		/**
@@ -1807,7 +1807,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\Entity\MailboxDirectory|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MailboxDirectory_Collection filter(callable $callback)
 	 */
-	class EO_MailboxDirectory_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailboxDirectory_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MailboxDirectoryTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailboxDirectoryTable';
 	}
@@ -1906,7 +1906,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\Entity\UserSignature wakeUp($data)
 	 */
-	class EO_UserSignature {
+	class EO_UserSignature extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\UserSignatureTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\UserSignatureTable';
 		/**
@@ -1960,7 +1960,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\Entity\UserSignature|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_UserSignature_Collection filter(callable $callback)
 	 */
-	class EO_UserSignature_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UserSignature_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\UserSignatureTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\UserSignatureTable';
 	}
@@ -2049,7 +2049,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_MailCounter wakeUp($data)
 	 */
-	class EO_MailCounter {
+	class EO_MailCounter extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MailCounterTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailCounterTable';
 		/**
@@ -2101,7 +2101,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MailCounter|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MailCounter_Collection filter(callable $callback)
 	 */
-	class EO_MailCounter_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailCounter_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MailCounterTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailCounterTable';
 	}
@@ -2250,7 +2250,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_MessageAccess wakeUp($data)
 	 */
-	class EO_MessageAccess {
+	class EO_MessageAccess extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MessageAccessTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MessageAccessTable';
 		/**
@@ -2315,7 +2315,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MessageAccess|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MessageAccess_Collection filter(callable $callback)
 	 */
-	class EO_MessageAccess_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MessageAccess_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MessageAccessTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MessageAccessTable';
 	}
@@ -2389,7 +2389,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_DomainEmail wakeUp($data)
 	 */
-	class EO_DomainEmail {
+	class EO_DomainEmail extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\DomainEmailTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\DomainEmailTable';
 		/**
@@ -2438,7 +2438,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_DomainEmail|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_DomainEmail_Collection filter(callable $callback)
 	 */
-	class EO_DomainEmail_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DomainEmail_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\DomainEmailTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\DomainEmailTable';
 	}
@@ -2527,7 +2527,7 @@ namespace Bitrix\Mail\Internals\Search {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\Search\EO_MailboxListSearchIndex wakeUp($data)
 	 */
-	class EO_MailboxListSearchIndex {
+	class EO_MailboxListSearchIndex extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\Search\MailboxListSearchIndexTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\Search\MailboxListSearchIndexTable';
 		/**
@@ -2579,7 +2579,7 @@ namespace Bitrix\Mail\Internals\Search {
 	 * @method \Bitrix\Mail\Internals\Search\EO_MailboxListSearchIndex|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\Search\EO_MailboxListSearchIndex_Collection filter(callable $callback)
 	 */
-	class EO_MailboxListSearchIndex_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailboxListSearchIndex_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\Search\MailboxListSearchIndexTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\Search\MailboxListSearchIndexTable';
 	}
@@ -2658,7 +2658,7 @@ namespace Bitrix\Mail\Internals\Access {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\Access\EO_AccessRole wakeUp($data)
 	 */
-	class EO_AccessRole {
+	class EO_AccessRole extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\Access\AccessRoleTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\Access\AccessRoleTable';
 		/**
@@ -2708,7 +2708,7 @@ namespace Bitrix\Mail\Internals\Access {
 	 * @method \Bitrix\Mail\Internals\Access\EO_AccessRole|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\Access\EO_AccessRole_Collection filter(callable $callback)
 	 */
-	class EO_AccessRole_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_AccessRole_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\Access\AccessRoleTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\Access\AccessRoleTable';
 	}
@@ -2797,7 +2797,7 @@ namespace Bitrix\Mail\Internals\Access {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\Access\EO_AccessRoleRelation wakeUp($data)
 	 */
-	class EO_AccessRoleRelation {
+	class EO_AccessRoleRelation extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\Access\AccessRoleRelationTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\Access\AccessRoleRelationTable';
 		/**
@@ -2849,7 +2849,7 @@ namespace Bitrix\Mail\Internals\Access {
 	 * @method \Bitrix\Mail\Internals\Access\EO_AccessRoleRelation|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\Access\EO_AccessRoleRelation_Collection filter(callable $callback)
 	 */
-	class EO_AccessRoleRelation_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_AccessRoleRelation_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\Access\AccessRoleRelationTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\Access\AccessRoleRelationTable';
 	}
@@ -2948,7 +2948,7 @@ namespace Bitrix\Mail\Internals\Access {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\Access\EO_AccessPermission wakeUp($data)
 	 */
-	class EO_AccessPermission {
+	class EO_AccessPermission extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\Access\AccessPermissionTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\Access\AccessPermissionTable';
 		/**
@@ -3002,7 +3002,7 @@ namespace Bitrix\Mail\Internals\Access {
 	 * @method \Bitrix\Mail\Internals\Access\EO_AccessPermission|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\Access\EO_AccessPermission_Collection filter(callable $callback)
 	 */
-	class EO_AccessPermission_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_AccessPermission_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\Access\AccessPermissionTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\Access\AccessPermissionTable';
 	}
@@ -3106,7 +3106,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_MailEntityOptions wakeUp($data)
 	 */
-	class EO_MailEntityOptions {
+	class EO_MailEntityOptions extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MailEntityOptionsTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailEntityOptionsTable';
 		/**
@@ -3161,7 +3161,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MailEntityOptions|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MailEntityOptions_Collection filter(callable $callback)
 	 */
-	class EO_MailEntityOptions_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailEntityOptions_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MailEntityOptionsTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailEntityOptionsTable';
 	}
@@ -3260,7 +3260,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_MailboxAccess wakeUp($data)
 	 */
-	class EO_MailboxAccess {
+	class EO_MailboxAccess extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MailboxAccessTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailboxAccessTable';
 		/**
@@ -3314,7 +3314,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MailboxAccess|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MailboxAccess_Collection filter(callable $callback)
 	 */
-	class EO_MailboxAccess_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailboxAccess_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MailboxAccessTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailboxAccessTable';
 	}
@@ -3341,6 +3341,207 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MailboxAccess_Collection wakeUpCollection($rows)
 	 */
 	class EO_MailboxAccess_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Mail\Internals\MailboxConnectionRequestTable:mail/lib/internals/mailboxconnectionrequest.php */
+namespace Bitrix\Mail\Internals {
+	/**
+	 * EO_MailboxConnectionRequest
+	 * @see \Bitrix\Mail\Internals\MailboxConnectionRequestTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getRequesterId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setRequesterId(\int|\Bitrix\Main\DB\SqlExpression $requesterId)
+	 * @method bool hasRequesterId()
+	 * @method bool isRequesterIdFilled()
+	 * @method bool isRequesterIdChanged()
+	 * @method \int remindActualRequesterId()
+	 * @method \int requireRequesterId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetRequesterId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetRequesterId()
+	 * @method \int fillRequesterId()
+	 * @method null|\string getComment()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setComment(null|\string|\Bitrix\Main\DB\SqlExpression $comment)
+	 * @method bool hasComment()
+	 * @method bool isCommentFilled()
+	 * @method bool isCommentChanged()
+	 * @method null|\string remindActualComment()
+	 * @method null|\string requireComment()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetComment()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetComment()
+	 * @method null|\string fillComment()
+	 * @method \string getStatus()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \string remindActualStatus()
+	 * @method \string requireStatus()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetStatus()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetStatus()
+	 * @method \string fillStatus()
+	 * @method null|\int getAdminId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setAdminId(null|\int|\Bitrix\Main\DB\SqlExpression $adminId)
+	 * @method bool hasAdminId()
+	 * @method bool isAdminIdFilled()
+	 * @method bool isAdminIdChanged()
+	 * @method null|\int remindActualAdminId()
+	 * @method null|\int requireAdminId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetAdminId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetAdminId()
+	 * @method null|\int fillAdminId()
+	 * @method null|\int getMailboxId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setMailboxId(null|\int|\Bitrix\Main\DB\SqlExpression $mailboxId)
+	 * @method bool hasMailboxId()
+	 * @method bool isMailboxIdFilled()
+	 * @method bool isMailboxIdChanged()
+	 * @method null|\int remindActualMailboxId()
+	 * @method null|\int requireMailboxId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetMailboxId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetMailboxId()
+	 * @method null|\int fillMailboxId()
+	 * @method \Bitrix\Main\Type\DateTime getCreatedAt()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setCreatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdAt)
+	 * @method bool hasCreatedAt()
+	 * @method bool isCreatedAtFilled()
+	 * @method bool isCreatedAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime requireCreatedAt()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetCreatedAt()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime fillCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime getUpdatedAt()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setUpdatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $updatedAt)
+	 * @method bool hasUpdatedAt()
+	 * @method bool isUpdatedAtFilled()
+	 * @method bool isUpdatedAtChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualUpdatedAt()
+	 * @method \Bitrix\Main\Type\DateTime requireUpdatedAt()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetUpdatedAt()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetUpdatedAt()
+	 * @method \Bitrix\Main\Type\DateTime fillUpdatedAt()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest set($fieldName, $value)
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest reset($fieldName)
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Mail\Internals\EO_MailboxConnectionRequest wakeUp($data)
+	 */
+	class EO_MailboxConnectionRequest extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Mail\Internals\MailboxConnectionRequestTable */
+		static public $dataClass = '\Bitrix\Mail\Internals\MailboxConnectionRequestTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Mail\Internals {
+	/**
+	 * EO_MailboxConnectionRequest_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getRequesterIdList()
+	 * @method \int[] fillRequesterId()
+	 * @method null|\string[] getCommentList()
+	 * @method null|\string[] fillComment()
+	 * @method \string[] getStatusList()
+	 * @method \string[] fillStatus()
+	 * @method null|\int[] getAdminIdList()
+	 * @method null|\int[] fillAdminId()
+	 * @method null|\int[] getMailboxIdList()
+	 * @method null|\int[] fillMailboxId()
+	 * @method \Bitrix\Main\Type\DateTime[] getCreatedAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedAt()
+	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedAtList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillUpdatedAt()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Mail\Internals\EO_MailboxConnectionRequest $object)
+	 * @method bool has(\Bitrix\Mail\Internals\EO_MailboxConnectionRequest $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest getByPrimary($primary)
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest[] getAll()
+	 * @method bool remove(\Bitrix\Mail\Internals\EO_MailboxConnectionRequest $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Mail\Internals\EO_MailboxConnectionRequest_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest_Collection merge(?\Bitrix\Mail\Internals\EO_MailboxConnectionRequest_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest|null find(callable $callback)
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest_Collection filter(callable $callback)
+	 */
+	class EO_MailboxConnectionRequest_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Mail\Internals\MailboxConnectionRequestTable */
+		static public $dataClass = '\Bitrix\Mail\Internals\MailboxConnectionRequestTable';
+	}
+}
+namespace Bitrix\Mail\Internals {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_MailboxConnectionRequest_Result exec()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest fetchObject()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest_Collection fetchCollection()
+	 */
+	class EO_MailboxConnectionRequest_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest fetchObject()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest_Collection fetchCollection()
+	 */
+	class EO_MailboxConnectionRequest_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest createObject($setDefaultValues = true)
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest_Collection createCollection()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest wakeUpObject($row)
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest_Collection wakeUpCollection($rows)
+	 */
+	class EO_MailboxConnectionRequest_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Mail\Internals\MessageClosureTable:mail/lib/internals/messageclosure.php */
 namespace Bitrix\Mail\Internals {
@@ -3388,7 +3589,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_MessageClosure wakeUp($data)
 	 */
-	class EO_MessageClosure {
+	class EO_MessageClosure extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MessageClosureTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MessageClosureTable';
 		/**
@@ -3437,7 +3638,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MessageClosure|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MessageClosure_Collection filter(callable $callback)
 	 */
-	class EO_MessageClosure_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MessageClosure_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MessageClosureTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MessageClosureTable';
 	}
@@ -3566,7 +3767,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_MailContact wakeUp($data)
 	 */
-	class EO_MailContact {
+	class EO_MailContact extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MailContactTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailContactTable';
 		/**
@@ -3626,7 +3827,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MailContact|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MailContact_Collection filter(callable $callback)
 	 */
-	class EO_MailContact_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailContact_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MailContactTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailContactTable';
 	}
@@ -3735,7 +3936,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\Internals\EO_MailMassConnect wakeUp($data)
 	 */
-	class EO_MailMassConnect {
+	class EO_MailMassConnect extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\Internals\MailMassConnectTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailMassConnectTable';
 		/**
@@ -3791,7 +3992,7 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MailMassConnect|null find(callable $callback)
 	 * @method \Bitrix\Mail\Internals\EO_MailMassConnect_Collection filter(callable $callback)
 	 */
-	class EO_MailMassConnect_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailMassConnect_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\Internals\MailMassConnectTable */
 		static public $dataClass = '\Bitrix\Mail\Internals\MailMassConnectTable';
 	}
@@ -3950,7 +4151,7 @@ namespace Bitrix\Mail\User {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\User\EO_Message wakeUp($data)
 	 */
-	class EO_Message {
+	class EO_Message extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\User\MessageTable */
 		static public $dataClass = '\Bitrix\Mail\User\MessageTable';
 		/**
@@ -4016,7 +4217,7 @@ namespace Bitrix\Mail\User {
 	 * @method \Bitrix\Mail\User\EO_Message|null find(callable $callback)
 	 * @method \Bitrix\Mail\User\EO_Message_Collection filter(callable $callback)
 	 */
-	class EO_Message_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Message_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\User\MessageTable */
 		static public $dataClass = '\Bitrix\Mail\User\MessageTable';
 	}
@@ -4375,7 +4576,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\EO_Mailbox wakeUp($data)
 	 */
-	class EO_Mailbox {
+	class EO_Mailbox extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\MailboxTable */
 		static public $dataClass = '\Bitrix\Mail\MailboxTable';
 		/**
@@ -4482,7 +4683,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Mail\EO_Mailbox|null find(callable $callback)
 	 * @method \Bitrix\Mail\EO_Mailbox_Collection filter(callable $callback)
 	 */
-	class EO_Mailbox_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Mailbox_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\MailboxTable */
 		static public $dataClass = '\Bitrix\Mail\MailboxTable';
 	}
@@ -4871,7 +5072,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\EO_MailMessage wakeUp($data)
 	 */
-	class EO_MailMessage {
+	class EO_MailMessage extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\MailMessageTable */
 		static public $dataClass = '\Bitrix\Mail\MailMessageTable';
 		/**
@@ -4984,7 +5185,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Mail\EO_MailMessage|null find(callable $callback)
 	 * @method \Bitrix\Mail\EO_MailMessage_Collection filter(callable $callback)
 	 */
-	class EO_MailMessage_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailMessage_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\MailMessageTable */
 		static public $dataClass = '\Bitrix\Mail\MailMessageTable';
 	}
@@ -5208,7 +5409,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\EO_MailMessageUid wakeUp($data)
 	 */
-	class EO_MailMessageUid {
+	class EO_MailMessageUid extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\MailMessageUidTable */
 		static public $dataClass = '\Bitrix\Mail\MailMessageUidTable';
 		/**
@@ -5290,7 +5491,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Mail\EO_MailMessageUid|null find(callable $callback)
 	 * @method \Bitrix\Mail\EO_MailMessageUid_Collection filter(callable $callback)
 	 */
-	class EO_MailMessageUid_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailMessageUid_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\MailMessageUidTable */
 		static public $dataClass = '\Bitrix\Mail\MailMessageUidTable';
 	}
@@ -5429,7 +5630,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\EO_UserRelations wakeUp($data)
 	 */
-	class EO_UserRelations {
+	class EO_UserRelations extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\UserRelationsTable */
 		static public $dataClass = '\Bitrix\Mail\UserRelationsTable';
 		/**
@@ -5492,7 +5693,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Mail\EO_UserRelations|null find(callable $callback)
 	 * @method \Bitrix\Mail\EO_UserRelations_Collection filter(callable $callback)
 	 */
-	class EO_UserRelations_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UserRelations_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\UserRelationsTable */
 		static public $dataClass = '\Bitrix\Mail\UserRelationsTable';
 	}
@@ -5781,7 +5982,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Mail\EO_MailFilter wakeUp($data)
 	 */
-	class EO_MailFilter {
+	class EO_MailFilter extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Mail\MailFilterTable */
 		static public $dataClass = '\Bitrix\Mail\MailFilterTable';
 		/**
@@ -5873,7 +6074,7 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Mail\EO_MailFilter|null find(callable $callback)
 	 * @method \Bitrix\Mail\EO_MailFilter_Collection filter(callable $callback)
 	 */
-	class EO_MailFilter_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_MailFilter_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Mail\MailFilterTable */
 		static public $dataClass = '\Bitrix\Mail\MailFilterTable';
 	}

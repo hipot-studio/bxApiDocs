@@ -8,6 +8,7 @@ use Bitrix\Intranet\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Integration\Bitrix24\Portal;
+use Bitrix\Tasks\Promotion\TasksAi;
 use Bitrix\Tasks\V2\Internal\Repository\UserOptionRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\OptionDictionary;
 
@@ -31,6 +32,7 @@ class AhaMomentProvider
 		$ahaRequiredResultResponsibleShow = !$this->isShown($userId, OptionDictionary::AhaRequiredResultResponsible);
 		$ahaStartTimeTrackingShow = !$this->isShown($userId, OptionDictionary::AhaStartTimeTracking);
 		$ahaTaskChatShow = $isOldPortalUser && !$this->isShown($userId, OptionDictionary::AhaTaskChat);
+		$ahaTasksAiPromoShow = (new TasksAi())->shouldShow($userId);
 
 		return [
 			OptionDictionary::AhaResponsibleMany->value => $ahaResponsibleMany,
@@ -42,6 +44,7 @@ class AhaMomentProvider
 			OptionDictionary::AhaStartTimeTracking->value => $ahaStartTimeTrackingShow,
 			OptionDictionary::AhaTaskChat->value => $ahaTaskChatShow,
 			OptionDictionary::AhaTaskImportantMessages->value => false,
+			OptionDictionary::AhaTasksAiPromo->value => $ahaTasksAiPromoShow,
 		];
 	}
 

@@ -18,6 +18,6 @@ class DepartmentGetChildrenTool extends NodeGetChildrenTool
 
 	public function getDescription(): string
 	{
-		return 'Get a list of child nodes of the node identified by `nodeId` when node is a department.';
+		return 'Get direct children (departments and teams) of the given department.';
 	}
 }

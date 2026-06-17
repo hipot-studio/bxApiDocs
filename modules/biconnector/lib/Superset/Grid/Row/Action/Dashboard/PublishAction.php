@@ -57,11 +57,13 @@ final class PublishAction extends BaseAction
 		}
 
 		$dashboardId = (int)$rawFields['ID'];
+		$dashboardType = (string)$rawFields['TYPE'];
 		$onClickHandler = <<<JS
 			BX.BIConnector.SupersetDashboardGridManager.Instance.publish({$dashboardId}, {
 				id: {$dashboardId},
 				publish: true,
 				from: 'grid_menu',
+				type: '{$dashboardType}',
 			})
 		JS;
 

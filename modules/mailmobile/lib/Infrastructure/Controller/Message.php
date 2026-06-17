@@ -6,11 +6,14 @@ use Bitrix\Mail\Helper;
 use Bitrix\Bitrix24\MailCounter;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\MailboxAccess;
+use Bitrix\Mail\Helper\MailboxDirectoryHelper;
+use Bitrix\Mail\Helper\MessageFolder;
 use Bitrix\Mail\Helper\MailContact;
 use Bitrix\Mail\Helper\Dto\MailMessageChain;
 use Bitrix\Mail\Helper\Message\Loader\FilterPreset;
 use Bitrix\Mail\Helper\Message\Loader\MessageFilter;
 use Bitrix\Mail\Internals\MailMessageAttachmentTable;
+use Bitrix\Mail\MailboxTable;
 use Bitrix\Mail\MailMessageTable;
 use Bitrix\MailMobile\FileUploader\MailUploaderController;
 use Bitrix\MailMobile\Internal\Services\MessageLoader;
@@ -18,13 +21,14 @@ use Bitrix\MailMobile\Public\Service\MailSenderService;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Engine\Controller;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Mail\Internals\MailContactTable;
 use Bitrix\Main;
 use Bitrix\Main\Error;
 use Bitrix\Main\FinderDestTable;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Mail\Address;
 use Bitrix\Main\Mail\Sender;
 use Bitrix\Main\Mail\SenderSendCounter;
@@ -33,7 +37,6 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\Web\Json;
 use Bitrix\UI\FileUploader\Uploader;
-use CBXSanitizer;
 use CFile;
 use COption;
 use Exception;
@@ -43,6 +46,14 @@ use Bitrix\Intranet;
 class Message extends Controller
 {
 	public const CRM_MESSAGE_TYPE = 1;
+
+	private const TAB_UNREAD = 'unread';
+	private const TAB_SENT = 'sent';
+
+	private static function getEmptySubjectPlaceholder(): string
+	{
+		return (string)(Loc::getMessage('MAILMOBILE_MESSAGE_EMPTY_SUBJECT_PLACEHOLDER'));
+	}
 
 	protected function getDefaultPreFilters(): array
 	{
@@ -85,7 +96,7 @@ class Message extends Controller
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function getMessageListAction(PageNavigation $navigation, ?string $tabId = null, ?int $mailboxId = null, ?string $presetId = null, array $filterParams = []): array
+	public function getMessageListAction(PageNavigation $navigation, ?string $tabId = null, ?int $mailboxId = null, ?string $presetId = null, array $filterParams = [], ?string $virtualFolderKey = null): array
 	{
 		if (!$this->includeRequiredModules())
 		{
@@ -105,6 +116,7 @@ class Message extends Controller
 			? $previousSeenMailboxId
 			: $mailboxId
 		;
+		$mailboxIdsForFilter = [$mailboxId];
 
 		$mailboxHelper = Mailbox::findBy($mailboxId);
 		if (($mailboxHelper !== null) && $previousSeenMailboxId !== $mailboxId)
@@ -125,32 +137,22 @@ class Message extends Controller
 		$defaultDirPath = $mailboxDirsHelper->getDefaultDirPath(true);
 		$defaultDir = $mailboxDirsHelper->getDirByPath($defaultDirPath);
 		$selectedDir = $mailboxDirsHelper->getDirByPath($selectedDirPath);
+
 		if (empty($defaultDir) || !$defaultDir->isSync())
 		{
 			return ['mailboxIsNotAvailable' => true];
 		}
 
-		if ($tabId)
-		{
-			$currentDir = $selectedDir ?? $defaultDir;
-			$isOutcomeDir = $currentDir->isOutcome() ?? false;
-			$targetPath = match ($tabId)
-			{
-				'unread' => $isOutcomeDir ? $mailboxDirsHelper->getIncomePath(true) : null,
-				'sent' => $mailboxDirsHelper->getOutcomePath(true),
-				default => null,
-			};
-
-			$targetDir = $mailboxDirsHelper->getDirByPath($targetPath);
-			$currentDir = $targetDir?->isSync()
-				? $targetDir
-				: $currentDir
-			;
-		}
-
+		$mailboxIdsForFilter = $this->applyVirtualFolderFilter($virtualFolderKey, $tabId, $mailboxIdsForFilter, $filterParams);
+		$currentDir = $this->applyTabFilter($tabId, $selectedDir ?? $defaultDir, $mailboxDirsHelper, $filterParams);
 		$currentDir = $currentDir ?? $defaultDir;
 		$currentDirPath = $currentDir->getPath(true);
-		$filter = (new MessageFilter([$mailboxId], $filterParams))->addPreset($presetId, $mailboxId);
+
+		// In all_messages mode MessageFilter picks MD5_DIRS over DIR and ignores this line.
+		$filterParams['DIR'] = $currentDirPath;
+		$filter = (new MessageFilter($mailboxIdsForFilter, $filterParams))->addPreset($presetId, $mailboxId);
+
+		global $USER;
 
 		return [
 			'items' => MessageLoader::getMessageList(
@@ -160,9 +162,10 @@ class Message extends Controller
 			),
 			'dirs' => $mailboxDirsHelper->buildDirectoryTreeForContextMenu($mailboxId, $mailboxHelper),
 			'currentMailboxId' => $mailboxId,
-			'currentFolderPath' => $currentDirPath,
+			'currentFolderPath' => $virtualFolderKey === MessageFolder::VIRTUAL_ALL_MESSAGES ? '' : $currentDirPath,
 			'startEmailSender' => $mailboxHelper->getMailbox()['EMAIL'],
 			'mailboxIsNotAvailable' => false,
+			'messageCounterInAllMailboxes' => \CUserCounter::GetValue($USER->GetID(), 'mail_unseen'),
 		];
 	}
 
@@ -341,30 +344,25 @@ class Message extends Controller
 		}
 
 		$messageBody = (string)$data['message'];
+		$messageBodyHtml = '';
 		if (!empty($messageBody))
 		{
-			$messageBody = preg_replace('/<!--.*?-->/s', '', $messageBody);
-			$messageBody = preg_replace('/<script[^>]*>.*?<\/script>/is', '', $messageBody);
-			$messageBody = preg_replace('/<title[^>]*>.*?<\/title>/is', '', $messageBody);
-
-			$sanitizer = new CBXSanitizer();
-			$sanitizer->setLevel(CBXSanitizer::SECURE_LEVEL_LOW);
-			$sanitizer->applyDoubleEncode(false);
-			$sanitizer->addTags(Helper\Message::getWhitelistTagAttributes());
-
-			$messageBody = $sanitizer->sanitizeHtml($messageBody);
+			$messageBodyHtml = Helper\Message::sanitizeHtml($messageBody);
 
 			$messageBody = sprintf(
 				'<html><body>%s</body></html>',
-				preg_replace('/[\r\n]+/u', '<br>', htmlspecialcharsbx($messageBody))
+				preg_replace('/[\r\n]+/', '<br>', htmlspecialcharsbx($messageBodyHtml))
 			);
 
-			$messageBody = nl2br($messageBody);
-
-			$messageBody = preg_replace('/https?:\/\/bxacid:(n?\d+)/i', 'bxacid:\1', $messageBody);
+			$messageBody = str_replace(['http://bxacid:', 'https://bxacid:'], 'bxacid:', $messageBody);
 		}
 
 		$outgoingBody = $messageBody;
+		$outgoingSubject = Helper\Message::getOutgoingSubject(
+			(string)($data['subject'] ?? ''),
+			$messageBodyHtml,
+			self::getEmptySubjectPlaceholder(),
+		);
 
 		$attachments = [];
 		$fileTokens = isset($data['fileTokens']) && is_array($data['fileTokens']) ? $data['fileTokens'] : [];
@@ -555,6 +553,17 @@ class Message extends Controller
 		if ($repliedId > 0)
 		{
 			$repliedMessage = MailMessageTable::getRow([
+				'runtime' => [
+					new \Bitrix\Main\Entity\ReferenceField(
+						'MESSAGE_UID',
+						\Bitrix\Mail\MailMessageUidTable::class,
+						[
+							'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+							'=this.ID' => 'ref.MESSAGE_ID',
+						],
+						['join_type' => 'INNER'],
+					),
+				],
 				'select' => [
 					'FIELD_FROM',
 					'FIELD_REPLY_TO',
@@ -566,7 +575,8 @@ class Message extends Controller
 					'BODY',
 					'BODY_HTML',
 					'SUBJECT',
-					'FIELD_DATE'
+					'FIELD_DATE',
+					'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE',
 				],
 				'filter' => [
 					'ID' => $data['REPLIED_ID'],
@@ -598,7 +608,7 @@ class Message extends Controller
 				$repliedMessageQuote = \Bitrix\Mail\Message::wrapTheMessageWithAQuote(
 					$messageHtml,
 					$repliedMessage['SUBJECT'] ?? '',
-					$repliedMessage['FIELD_DATE'] ?? null,
+					$repliedMessage['INTERNALDATE'] ?? $repliedMessage['FIELD_DATE'] ?? null,
 					$repliedMessage['__from'],
 					$repliedMessage['__to'],
 					$repliedMessage['__cc'],
@@ -618,7 +628,7 @@ class Message extends Controller
 			'CONTENT_TYPE' => 'html',
 			'ATTACHMENT' => $attachments,
 			'TO' => implode(', ', $toEncoded),
-			'SUBJECT' => $data['subject'],
+			'SUBJECT' => $outgoingSubject,
 			'BODY' => $outgoingBody,
 			'HEADER' => [
 				'From' => $fromEncoded ?: $fromEmail,
@@ -897,5 +907,42 @@ class Message extends Controller
 		}
 
 		return MailboxAccess::hasCurrentUserAccessToMailbox($mailboxId, true);
+	}
+
+	private function applyVirtualFolderFilter(?string $virtualFolderKey, ?string $tabId, array $mailboxIdsForFilter, array &$filterParams): array
+	{
+		switch ($virtualFolderKey)
+		{
+			case MessageFolder::VIRTUAL_ALL_MESSAGES:
+				$mailboxIdsForFilter = array_map('intval', array_keys(MailboxTable::getUserMailboxes()));
+				$filterParams['MD5_DIRS'] = $tabId === self::TAB_SENT
+					? MailboxDirectoryHelper::getOutcomeDirsMd5ForMailboxes($mailboxIdsForFilter)
+					: MailboxDirectoryHelper::getSyncDirsMd5ForMailboxes($mailboxIdsForFilter);
+				break;
+			default:
+				break;
+		}
+
+		return $mailboxIdsForFilter;
+	}
+
+	private function applyTabFilter(?string $tabId, $currentDir, $mailboxDirsHelper, array &$filterParams)
+	{
+		if ($tabId !== self::TAB_SENT)
+		{
+			return $currentDir;
+		}
+
+		$targetPath = $mailboxDirsHelper->getOutcomePath(true);
+		$targetDir = $mailboxDirsHelper->getDirByPath($targetPath);
+
+		if ($targetDir?->isSync())
+		{
+			$filterParams['DIR'] = $targetPath;
+
+			return $targetDir;
+		}
+
+		return $currentDir;
 	}
 }

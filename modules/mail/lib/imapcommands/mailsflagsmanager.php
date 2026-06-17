@@ -74,11 +74,13 @@ class MailsFlagsManager extends SyncInternalManager
 
 	private function updateLeftMenuCounter()
 	{
-		CUserCounter::set(
-			Main\Engine\CurrentUser::get()->getId(),
-			'mail_unseen',
-			Mail\Helper\Message::getCountersForUserMailboxes(Main\Engine\CurrentUser::get()->getId(), true),
-			$this->mailbox['LID']
+		$userId = (int)Main\Engine\CurrentUser::get()->getId();
+
+		Mail\Helper\Message::resetCountersCache($userId);
+
+		Mail\Helper\Message::setUserUnseenCounter(
+			$userId,
+			$this->mailbox['LID'],
 		);
 	}
 

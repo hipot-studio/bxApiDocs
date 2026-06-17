@@ -1081,23 +1081,14 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 		$deadline = new Bitrix\Tasks\Grid\Task\Row\Content\Date\Deadline($taskData);
 
 		$rawValue = $deadline->formatDate($taskData['DEADLINE']);
-		$value = $rawValue;
-		$color = '';
-		$fill = false;
 
 		$state = $deadline->getDeadlineStateData();
-		if ($state['state'])
-		{
-			$value = $state['state'];
-			$color = "ui-label-{$state['color']}";
-			$fill = ($state['fill'] ? true : false);
-		}
 
 		return [
 			'rawValue' => $rawValue,
-			'value' => $value,
-			'color' => $color,
-			'fill' => $fill,
+			'value' => $state['text'] ?? $rawValue,
+			'design' => $state['design'] ?? 'outline',
+			'clickable' => $state['clickable'] ?? true,
 		];
 	}
 

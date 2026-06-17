@@ -24,7 +24,7 @@ use Bitrix\UI\Buttons\Color;
 use Bitrix\UI\Buttons\Icon;
 use Bitrix\UI\Toolbar\ButtonLocation;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
-use Bitrix\Sign\Service\Container as SignContainer;
+use Bitrix\Sign\Service;
 
 \CBitrixComponent::includeComponentClass('bitrix:sign.base');
 \Bitrix\Main\UI\Extension::load([
@@ -443,7 +443,7 @@ class SignStartComponent extends SignBaseComponent
 
 	private function getB2eUrl(string $path, int $categoryId): string
 	{
-		$urlGeneratorService = SignContainer::instance()->getUrlGeneratorService();
+		$urlGeneratorService = Service\Container::instance()->getUrlGeneratorService();
 
 		return match ($path)
 		{
@@ -615,7 +615,7 @@ class SignStartComponent extends SignBaseComponent
 		}
 
 		$userId = (int)CurrentUser::get()->getId();
-		$counter = SignContainer::instance()
+		$counter = Service\Container::instance()
 			->getCounterService()
 			->get(CounterType::SIGN_B2E_MY_DOCUMENTS, $userId)
 		;
@@ -640,7 +640,7 @@ class SignStartComponent extends SignBaseComponent
 		}
 
 		if (
-			SignContainer::instance()->getHcmLinkService()->isAvailable()
+			Service\Container::instance()->getHcmLinkService()->isAvailable()
 			&& $this->accessController->check(ActionDictionary::ACTION_B2E_DOCUMENT_ADD)
 		)
 		{
@@ -684,27 +684,29 @@ class SignStartComponent extends SignBaseComponent
 		}
 
 
+		$urlGeneratorService = Service\Container::instance()->getUrlGeneratorService();
+		$signersInnerItems = [];
+
 		if ($this->accessController->check(ActionDictionary::ACTION_B2E_SIGNERS_LIST_READ))
 		{
-			$urlGeneratorService = SignContainer::instance()->getUrlGeneratorService();
-
-			$signersInnerItems = [
-				[
-					'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_SIGNERS_LISTS'),
-					'ID' => 'sign_b2e_signers_lists',
-					'URL' => $urlGeneratorService->makeSignersListsUrl(),
-				],
+			$signersInnerItems[] = [
+				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_SIGNERS_LISTS'),
+				'ID' => 'sign_b2e_signers_lists',
+				'URL' => $urlGeneratorService->makeSignersListsUrl(),
 			];
+		}
 
-			if ($this->isRejectedListMenuAvailable())
-			{
-				$signersInnerItems[] = [
-					'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_SIGNERS_REJECTED'),
-					'ID' => 'sign_b2e_signers_edit_rejected',
-					'URL' => $urlGeneratorService->makeSignersListRejectedUrl(),
-				];
-			}
+		if ($this->isRejectedListMenuAvailable())
+		{
+			$signersInnerItems[] = [
+				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_SIGNERS_REJECTED'),
+				'ID' => 'sign_b2e_signers_edit_rejected',
+				'URL' => $urlGeneratorService->makeSignersListRejectedUrl(),
+			];
+		}
 
+		if (!empty($signersInnerItems))
+		{
 			$items[] = [
 				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_SIGNERS'),
 				'ID' => 'sign_b2e_signers',
@@ -735,24 +737,7 @@ class SignStartComponent extends SignBaseComponent
 			return false;
 		}
 
-		$rejectedList = SignContainer::instance()->getSignersListService()->getById($rejectedListId);
-
-		if (!$rejectedList)
-		{
-			return false;
-		}
-
-		if ($this->accessController->checkAll([
-			ActionDictionary::ACTION_B2E_SIGNERS_LIST_REFUSED_EDIT,
-			ActionDictionary::ACTION_B2E_SIGNERS_LIST_READ,
-		]))
-		{
-			return true;
-		}
-
-		$item = SignContainer::instance()->getAccessibleItemFactory()->createFromItem($rejectedList);
-
-		return $this->accessController->check(ActionDictionary::ACTION_B2E_SIGNERS_LIST_READ, $item);
+		return $this->accessController->check(ActionDictionary::ACTION_B2E_SIGNERS_LIST_REFUSED_EDIT);
 	}
 
 	private function hasB2eKanbanMenuItem(array $items): bool
@@ -787,7 +772,7 @@ class SignStartComponent extends SignBaseComponent
 			];
 		}
 
-		if ($this->isPlaceholderDocumentAvailable())
+		if ($this->canEditB2eDocument())
 		{
 			$items[] = [
 				'TEXT' => Loc::getMessage('SIGN_CMP_START_TPL_MENU_B2E_PLACEHOLDERS_SETTINGS'),
@@ -798,11 +783,10 @@ class SignStartComponent extends SignBaseComponent
 		return $items;
 	}
 
-	private function isPlaceholderDocumentAvailable(): bool
+	private function canEditB2eDocument(): bool
 	{
 		return $this->accessController->check(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)
-			&& Feature::instance()->isPlaceholderDocumentEnabled()
-		;
+			|| $this->accessController->check(ActionDictionary::ACTION_B2E_TEMPLATE_EDIT);
 	}
 
 	private function removeButtons(): bool
@@ -915,7 +899,7 @@ class SignStartComponent extends SignBaseComponent
 	{
 		$categories = $this->getKanbanCategoryCollection();
 		$items = [];
-		$categoryCodesForMenu = SignContainer::instance()
+		$categoryCodesForMenu = Service\Container::instance()
 			->getB2eKanbanCategoryService()
 			->getSmartB2eDocumentCategoryCodesForMenu()
 		;
@@ -989,7 +973,7 @@ class SignStartComponent extends SignBaseComponent
 
 	private function getKanbanCategoryCollection(): KanbanCategoryCollection
 	{
-		return SignContainer::instance()
+		return Service\Container::instance()
 			->getB2eKanbanCategoryService()
 			->getSmartB2eDocumentCategories()
 		;

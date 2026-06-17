@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Mail\Helper\Mailbox\MailboxSettingsConfig;
+use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Configuration;
@@ -25,6 +27,8 @@ class CMailClientMassconnectComponent extends CBitrixComponent
 
 		$this->arResult['TITLE'] = Loc::getMessage('MAIL_CLIENT_MASSCONNECT_TITLE_MSGVER_1');
 		$this->arResult['IS_SMTP_AVAILABLE'] = $this->isSmtpAvailable();
+		$this->arResult['IS_PASSWORDLESS_CONNECT_AVAILABLE'] = Feature::isPasswordlessConnectAvailable();
+		$this->arResult['SETTINGS_CONFIG'] = MailboxSettingsConfig::getConfig();
 		$this->includeComponentTemplate();
 	}
 

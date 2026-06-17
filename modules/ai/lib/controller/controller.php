@@ -4,6 +4,7 @@ namespace Bitrix\AI\Controller;
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
 use Bitrix\AI\Facade\User;
+use Bitrix\AI\Engine\ResponseFormat;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Error;
 
@@ -177,6 +178,7 @@ abstract class Controller extends \Bitrix\Main\Engine\Controller
 				$parameters['bx_module'],
 				$parameters['bx_context'],
 				User::getCurrentUserId(),
+				ResponseFormat::fromString($parameters['response_format']),
 			);
 			$this->context->setParameters($parameters['bx_context_parameters'] ?? null);
 		}

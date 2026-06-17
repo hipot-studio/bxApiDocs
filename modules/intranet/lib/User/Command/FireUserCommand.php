@@ -66,7 +66,7 @@ class FireUserCommand extends AbstractCommand
 				);
 			}
 
-			return $result->addErrors($exception->getErrors());
+			return $result->addErrors($exception->getErrors()->toArray());
 		}
 	}
 

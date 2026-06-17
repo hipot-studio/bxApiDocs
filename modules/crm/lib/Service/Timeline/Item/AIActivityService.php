@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\Service\Timeline\Item;
 
+use Bitrix\Crm\Copilot\Pipeline\TargetResolver;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
-use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Exception;
 use InvalidArgumentException;
 
@@ -120,7 +121,7 @@ final class AIActivityService
 	{
 		if ($this->isItemHashValid === null)
 		{
-			$possibleHash = (new Orchestrator())->findPossibleFillFieldsTarget($this->activityId)?->getHash();
+			$possibleHash = ServiceLocator::getInstance()->get(TargetResolver::class)->findTarget($this->activityId)?->getHash();
 			$currentHash = $this->context->getIdentifier()->getHash();
 
 			$this->isItemHashValid = $possibleHash === $currentHash;

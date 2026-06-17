@@ -37,6 +37,11 @@ class Source extends BIBuilderDataset
 		return $this->getMessage('TRACKING_SOURCE_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('TRACKING_SOURCE_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	/**
 	 * @return Result
 	 */

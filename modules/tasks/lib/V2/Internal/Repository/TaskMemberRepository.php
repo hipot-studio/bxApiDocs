@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskMemberMapper;
 
 class TaskMemberRepository implements TaskMemberRepositoryInterface
 {
-	private array $membershipCache = [];
+	protected array $membershipCache = [];
 
 	public function __construct(
 		private readonly TaskMemberMapper $memberMapper,
@@ -122,5 +124,71 @@ class TaskMemberRepository implements TaskMemberRepositoryInterface
 		}
 
 		return $this->membershipCache[$userId];
+	}
+
+	public function saveMulti(int $taskId, UserCollection $userCollection): void
+	{
+		if ($taskId < 1)
+		{
+			return;
+		}
+
+		$insertRows = [];
+		$invalidateCacheUsers = [];
+
+		foreach ($userCollection as $user)
+		{
+			$userId = (int)$user->id;
+			$invalidateCacheUsers[] = $userId;
+			$insertRows[] = [
+				'TASK_ID' => $taskId,
+				'USER_ID' => $userId,
+				'TYPE' => (string)$user->role,
+			];
+		}
+
+		if (empty($insertRows))
+		{
+			return;
+		}
+
+		$result = MemberTable::addInsertIgnoreMulti($insertRows);
+		if (!$result->isSuccess())
+		{
+			throw new SqlQueryException($result->getError()?->getMessage() ?? 'Failed to save task members');
+		}
+
+		$this->invalidateCache($taskId, $invalidateCacheUsers);
+	}
+
+	public function deleteAllInTask(int $taskId): void
+	{
+		if ($taskId < 1)
+		{
+			return;
+		}
+
+		MemberTable::deleteList(
+			[
+				'=TASK_ID' => $taskId,
+			]
+		);
+
+		$this->invalidateCache($taskId);
+	}
+
+	protected function invalidateCache(int $taskId, ?array $userIds = null): void
+	{
+		$userIds = $userIds ?? array_keys($this->membershipCache);
+
+		foreach ($userIds as $userId)
+		{
+			unset($this->membershipCache[$userId][$taskId]);
+
+			if (empty($this->membershipCache[$userId]))
+			{
+				unset($this->membershipCache[$userId]);
+			}
+		}
 	}
 }

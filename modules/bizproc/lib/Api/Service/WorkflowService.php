@@ -12,6 +12,7 @@ use Bitrix\Bizproc\Api\Response\Error;
 use Bitrix\Bizproc\Api\Response\WorkflowService\StartWorkflowResponse;
 use Bitrix\Bizproc\Api\Response\WorkflowService\TerminateWorkflowResponse;
 use Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata;
+use Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Localization\Loc;
@@ -58,14 +59,39 @@ class WorkflowService
 			throw new ArgumentException('Start duration must be non negative');
 		}
 
+		$parameters = $request->parameters;
+		$createdMetadataId = null;
+		if (isset($request->startDuration))
+		{
+			$metadataWorkflowId =
+				$parameters[\CBPDocument::PARAM_PRE_GENERATED_WORKFLOW_ID]
+				?? \CBPRuntime::generateWorkflowId()
+			;
+			$parameters[\CBPDocument::PARAM_PRE_GENERATED_WORKFLOW_ID] = $metadataWorkflowId;
+
+			$metadata = new EO_WorkflowMetadata();
+			$metadata->setWorkflowId($metadataWorkflowId);
+			$metadata->setStartDuration($request->startDuration);
+			$saveResult = $metadata->save();
+			if ($saveResult->isSuccess())
+			{
+				$createdMetadataId = $metadata->getId();
+			}
+		}
+
 		$startWorkflowErrors = [];
 		$instanceId = \CBPDocument::startWorkflow(
 			$request->templateId,
 			$request->complexDocumentId,
-			$request->parameters,
+			$parameters,
 			$startWorkflowErrors,
 			$request->parentWorkflow,
 		);
+
+		if (($startWorkflowErrors || is_null($instanceId)) && $createdMetadataId !== null)
+		{
+			WorkflowMetadataTable::delete($createdMetadataId);
+		}
 
 		if ($startWorkflowErrors)
 		{
@@ -89,15 +115,6 @@ class WorkflowService
 		}
 		else
 		{
-			if (isset($request->startDuration))
-			{
-				$metadata = new EO_WorkflowMetadata();
-
-				$metadata->setWorkflowId($instanceId);
-				$metadata->setStartDuration($request->startDuration);
-				$metadata->save();
-			}
-
 			$response->setWorkflowId($instanceId);
 		}
 

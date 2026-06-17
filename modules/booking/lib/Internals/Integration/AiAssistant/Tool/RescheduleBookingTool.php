@@ -10,8 +10,6 @@ use Bitrix\Booking\Entity\DatePeriod;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\AiAssistant\DateTimeService;
 use Bitrix\Booking\Internals\Service\ResourceAvailabilityService;
-use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
-use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 use DateInterval;
 
 class RescheduleBookingTool extends BaseBookingTool
@@ -27,7 +25,7 @@ class RescheduleBookingTool extends BaseBookingTool
 		$this->resourceAvailabilityService = Container::getAiAssistantResourceAvailabilityService();
 	}
 
-	protected function execute(int $userId, ...$args): string
+	protected function doExecuteStructured(int $userId, ...$args): array
 	{
 		$bookingId = (int)($args['bookingId'] ?? 0);
 		if (!$bookingId)
@@ -35,16 +33,13 @@ class RescheduleBookingTool extends BaseBookingTool
 			return $this->createFailureResponse('Booking has not been found');
 		}
 
-		$booking = $this->bookingRepository->getList(
-			filter: new BookingFilter([
-				'ID' => $bookingId,
-			]),
-			select: (new BookingSelect([
-				'CLIENTS',
-				'RESOURCES',
-			]))->prepareSelect(),
-		)->getFirstCollectionItem();
-
+		$booking = $this->bookingRepository->getById(
+			id: $bookingId,
+			withCounters: false,
+			withClientsData: false,
+			withExternalData: false,
+			withSkus: false,
+		);
 		if (!$booking)
 		{
 			return $this->createFailureResponse('Booking has not been found');
@@ -94,7 +89,10 @@ class RescheduleBookingTool extends BaseBookingTool
 			return $this->createFailureResponse(implode(', ', $result->getErrorMessages()));
 		}
 
-		return "Booking with identifier '{$booking->getId()}' has been successfully rescheduled";
+		return $this->createSuccessResponse(
+			message: "Booking with identifier '{$booking->getId()}' has been successfully rescheduled",
+			crmBindings: $this->crmBindingsBuilder->getExternalDataBindingsFromBooking($booking),
+		);
 	}
 
 	public function getName(): string
@@ -104,7 +102,7 @@ class RescheduleBookingTool extends BaseBookingTool
 
 	public function getDescription(): string
 	{
-		return 'Reschedules an existing booking to a new date and time. The booking duration and assigned resource remain unchanged. The new time must be in the future and the resource must be available at that time. Use find_available_slots_* with rescheduleBookingId to check availability before calling this tool.';
+		return 'Reschedules an existing booking to a new date and time. The booking\'s resource and services are not modifiable by this tool — they remain exactly as they were. To change the resource or services, the booking must be cancelled (cancel_booking_tool) and a new one created (create_booking_*). The new time must be in the future and the original resource must be available at that time. Use find_available_slots_* with rescheduleBookingId to check availability before calling this tool.';
 	}
 
 	public function getInputSchema(): array

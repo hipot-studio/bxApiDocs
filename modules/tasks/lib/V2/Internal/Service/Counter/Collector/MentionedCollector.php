@@ -31,7 +31,7 @@ class MentionedCollector
 	/**
 	 * Recounts mention counters for specific user and tasks.
 	 * This method is useful when you need to update counters for specific user-task combinations.
-	 * 
+	 *
 	 * @param int $userId User ID to recount mentions for
 	 * @param array $taskIds Array of task IDs to recount mentions for
 	 */
@@ -53,7 +53,7 @@ class MentionedCollector
 
 		// Calculate new mention counters
 		$mentionCounters = $this->calculateMentionCountersForUser($userId, $validTaskIds);
-		
+
 		if (empty($mentionCounters))
 		{
 			return;
@@ -61,7 +61,7 @@ class MentionedCollector
 
 		// Create counter collection
 		$counterCollection = $this->createCounterCollectionForUser($userId, $validTaskIds, $mentionCounters);
-		
+
 		if (!$counterCollection->isEmpty())
 		{
 			$this->repository->createFromCollection($counterCollection);
@@ -212,7 +212,7 @@ class MentionedCollector
 		foreach ($taskIds as $taskId)
 		{
 			$counterValue = $mentionCounters[$userId][$taskId] ?? 0;
-			
+
 			if ($counterValue > 0)
 			{
 				$counter = new Counter(
@@ -222,7 +222,7 @@ class MentionedCollector
 					type: CounterDictionary::COUNTER_MENTIONED,
 					value: $counterValue,
 				);
-				
+
 				$collection->add($counter);
 			}
 		}

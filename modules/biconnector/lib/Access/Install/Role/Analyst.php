@@ -18,6 +18,7 @@ class Analyst extends Base
 			PermissionDictionary::BIC_SETTINGS_ACCESS,
 			PermissionDictionary::BIC_DASHBOARD_TAG_MODIFY,
 			PermissionDictionary::BIC_EXTERNAL_DASHBOARD_CONFIG,
+			PermissionDictionary::BIC_DASHBOARD_SHARE,
 		];
 	}
 

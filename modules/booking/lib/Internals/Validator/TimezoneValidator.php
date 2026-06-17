@@ -15,11 +15,7 @@ class TimezoneValidator implements ValidatorInterface
 	{
 		$result = new ValidationResult();
 
-		$timezones = Container::getTimezoneService()->getTimezoneList();
-
-		$timezoneIds = array_column($timezones, 'timezoneId');
-
-		if (!in_array($value, $timezoneIds, true))
+		if (!Container::getTimezoneService()->isValid($value))
 		{
 			$result->addError(new ValidationError(
 				'Timezone invalid',

@@ -10,15 +10,12 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\Public\Provider\StorageItemProvider;
-use Bitrix\Bizproc\Public\Command\StorageItem\DeleteStorageItemCommand;
-use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
-use Bitrix\Main\ErrorCollection;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Bizproc\Activity\BaseActivity;
-use Bitrix\Bizproc\Internal\Service\StorageField\FieldService;
+use Bitrix\Bizproc\Internal\Service\StorageActivity\StorageActivityService;
 
 /**
  * @property-write int StorageId
@@ -83,6 +80,11 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 
 		$provider = new StorageItemProvider($storageId);
 		$filter = $this->getPreparedFilter($storageId);
+		if (!$this->isOrmFilterValid() || StorageActivityService::isOrmFilterEmpty($filter))
+		{
+			return 0;
+		}
+
 		$item = $provider->getItems([
 			'filter' => $filter,
 			'select' => ['ID'],
@@ -116,23 +118,11 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 
 	private function findStorageId(): int
 	{
-		$storageId = (int)$this->StorageId;
-		if ($storageId > 0)
-		{
-			return $storageId;
-		}
-
+		$storageId = $this->StorageId;
 		$rawStorageCode = $this->StorageCode;
 		$storageCode = CBPHelper::hasStringRepresentation($rawStorageCode) ? (string)$rawStorageCode : '';
-		if (!$storageCode)
-		{
-			return 0;
-		}
 
-		$provider = new StorageTypeProvider();
-		$type = $provider->getType(['CODE' => $storageCode], ['ID']);
-
-		return (int)$type?->getId();
+		return StorageActivityService::resolveStorageId($storageId, $storageCode);
 	}
 
 	protected function checkProperties(): \Bitrix\Main\ErrorCollection
@@ -234,27 +224,6 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 		return __FILE__;
 	}
 
-	public static function GetPropertiesDialog(
-		$documentType,
-		$activityName,
-		$workflowTemplate,
-		$workflowParameters,
-		$workflowVariables,
-		$currentValues = null,
-		$formName = '',
-		$popupWindow = null,
-		$siteId = ''
-	)
-	{
-		$dialog = parent::GetPropertiesDialog(...func_get_args());
-		$dialog->setRuntimeData([
-			'DocumentName' => static::getDocumentService()->getEntityName($documentType[0], $documentType[1]),
-			'DocumentFields' => array_values(\Bitrix\Bizproc\Automation\Helper::getDocumentFields($documentType)),
-		]);
-
-		return $dialog;
-	}
-
 	protected static function extractPropertiesValues(PropertiesDialog $dialog, array $fieldsMap): Result
 	{
 		$simpleMap = $fieldsMap;
@@ -278,14 +247,17 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 	{
 		$dynamicFilterFields = $context['Properties']['DynamicFilterFields'] ?? null;
 
+		$storages = StorageActivityService::getStorageTypes();
+		$storageIds = array_map('intval', array_keys($storages));
+
+		$filteringFields = StorageActivityService::getFilteringFieldsMapByStorageIds($storageIds);
 		$filteringFieldsMap = [
-			0 => array_values(static::getFilteringFieldsMap(0))
+			0 => array_values(StorageActivityService::getFilteringFieldsMap(0)),
 		];
-		$storages = static::getStorageTypes();
 
 		foreach ($storages as $id => $title)
 		{
-			$filteringFieldsMap[$id] = array_values(static::getFilteringFieldsMap((int)$id));
+			$filteringFieldsMap[$id] = array_values($filteringFields[$id] ?? []);
 		}
 
 		return [
@@ -309,7 +281,7 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 				'Description' => Loc::getMessage('BIZPROC_SDA_STORAGE_CODE_DESCRIPTION'),
 				'Type' => FieldType::STRING,
 				'Required' => false,
-				'AllowSelection' => true,
+				'Hidden' => true,
 			],
 			'DeleteMode' => [
 				'Name' => Loc::getMessage('BIZPROC_SDA_DELETE_MODE'),
@@ -349,62 +321,11 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 		];
 	}
 
-	protected static function getFilteringFieldsMap(int $storageId): array
-	{
-		$supportedFields = [
-			'ID',
-			'CODE',
-			'WORKFLOW_ID',
-			'DOCUMENT_ID',
-			'TEMPLATE_ID',
-			'CREATED_BY',
-			'CREATED_TIME'
-		];
-
-		$map = [];
-		$fieldService = new FieldService($storageId);
-		$fields = $fieldService->getEntityFields();
-
-		foreach ($fields as $key => $field)
-		{
-			if (in_array($field['ID'], $supportedFields, true))
-			{
-				$map[$field['ID']] = [
-					'Id' => $field['ID'],
-					'Name' => $field['NAME'],
-					'Type' => $field['TYPE'],
-					'Expression' => "{{{$field['NAME']}}}",
-					'SystemExpression' => "{=Storage:{$field['ID']}}",
-					'Options' => null,
-					'Settings' => null,
-					'Multiple' => false,
-				];
-			}
-		}
-
-		return $map;
-	}
-
-	private static function getStorageTypes(): array
-	{
-		$options = [];
-
-		$provider = new \Bitrix\Bizproc\Public\Provider\StorageTypeProvider();
-		$storages = $provider->getAllForActivity();
-
-		foreach ($storages as $storage)
-		{
-			$options[$storage->getId()] = $storage->getTitle();
-		}
-
-		return $options;
-	}
-
 	private function prepareFilterContext(int $storageId): array
 	{
 		$conditionGroup = new ConditionGroup($this->DynamicFilterFields);
 		$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
-		$fieldsMap = static::getFilteringFieldsMap($storageId);
+		$fieldsMap = StorageActivityService::getFilteringFieldsMap($storageId);
 
 		return $this->getOrmFilter($conditionGroup, $documentType, $fieldsMap);
 	}

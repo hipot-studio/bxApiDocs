@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Internal\Integration\Bitrix24\License;
 
 use Bitrix\Bitrix24\License;
-use Bitrix\Intranet\Internals\InvitationTable;
+use Bitrix\Bitrix24\LicenseScanner\Manager;
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\Date;
 
@@ -25,10 +26,37 @@ class InvitationLimiter
 			return false;
 		}
 
-		return
-			in_array(License::getCurrent()->getLicensePrefix(), ['cn', 'en', 'vn', 'jp'], true)
-			&& in_array(License::getCurrent()->getCode(), \CBitrix24::BASE_EDITIONS, true)
-			&& InvitationTable::getCount(['>=DATE_CREATE' => new Date]) >= 10
-		;
+		$managedCache = Application::getInstance()->getManagedCache();
+		$cacheKey = self::getCacheKey();
+
+		if ($managedCache->read(86400, $cacheKey, 'intranet_invitation_limiter'))
+		{
+			$isExceeded = (bool)$managedCache->get($cacheKey);
+		}
+		else
+		{
+			$isExceeded =
+				Manager::getInstance()
+				->getInvitationDailyLimiter()
+				->isLimitReached(License::getCurrent()->getCode())
+			;
+
+			$managedCache->set($cacheKey, $isExceeded);
+		}
+
+		return $isExceeded;
+	}
+
+	public static function clearCache(): void
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			Application::getInstance()->getManagedCache()->clean(self::getCacheKey(), 'intranet_invitation_limiter');
+		}
+	}
+
+	private static function getCacheKey(): string
+	{
+		return 'invited_users_on_portal_' . License::getCurrent()->getCode() . '_' . (new Date())->format('Y-m-d');
 	}
 }

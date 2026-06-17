@@ -33,4 +33,9 @@ class AccessDirector extends EntityBase
 	{
 		return null;
 	}
+
+	public function exists(): bool
+	{
+		return true;
+	}
 }

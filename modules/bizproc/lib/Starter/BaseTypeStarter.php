@@ -7,6 +7,7 @@ use Bitrix\Bizproc\Error;
 use Bitrix\Bizproc\Starter\Dto\StarterConfigDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Result\StartResult;
+use Bitrix\Bizproc\Workflow\Entity\WorkflowMetadataTable;
 use Bitrix\Main\ErrorableImplementation;
 use Bitrix\Main\ErrorCollection;
 
@@ -29,6 +30,7 @@ abstract class BaseTypeStarter
 	protected bool $isTriggerApplied = false;
 
 	protected array $startedWorkflows = [];
+	protected array $startedTemplateWorkflows = [];
 
 	public function __construct(StarterConfigDto $dto)
 	{
@@ -241,18 +243,24 @@ abstract class BaseTypeStarter
 
 		$parameters = array_merge($parameters, $startParameters);
 
-		$workflowId = $this->startWorkflow($templateId, $this->document->complexId, $parameters);
-		if ($workflowId)
-		{
-			$this->sendMetaData($workflowId); // only for processes? or automation too
-		}
-
-		return $workflowId;
+		return $this->startWorkflow($templateId, $this->document->complexId, $parameters);
 	}
 
 	protected function startWorkflow(int $templateId, array $complexDocumentId, array $parameters): ?string
 	{
 		$errors = [];
+		$createdMetadataId = null;
+
+		if ($this->metaData)
+		{
+			$metadataWorkflowId =
+				$parameters[\CBPDocument::PARAM_PRE_GENERATED_WORKFLOW_ID]
+				?? \CBPRuntime::generateWorkflowId()
+			;
+			$parameters[\CBPDocument::PARAM_PRE_GENERATED_WORKFLOW_ID] = $metadataWorkflowId;
+			$createdMetadataId = $this->sendMetaData($metadataWorkflowId);
+		}
+
 		$parameters[\CBPDocument::PARAM_START_WORKFLOW_DELAY] = $this->delay;
 		$workflowId = \CBPDocument::startWorkflow($templateId, $complexDocumentId, $parameters, $errors);
 		if ($errors)
@@ -262,22 +270,31 @@ abstract class BaseTypeStarter
 			);
 		}
 
+		if (($errors || !$workflowId) && $createdMetadataId !== null)
+		{
+			WorkflowMetadataTable::delete($createdMetadataId);
+		}
+
 		if ($workflowId)
 		{
-			$this->addWorkflowIdToCache($workflowId);
+			$this->addWorkflowIdToCache($workflowId, $templateId);
 		}
 
 		return $workflowId;
 	}
 
-	protected function addWorkflowIdToCache(string $workflowId): void
+	protected function addWorkflowIdToCache(string $workflowId, ?int $templateId = null): void
 	{
 		$this->startedWorkflows[$workflowId] = true;
+		if ($templateId > 0)
+		{
+			$this->startedTemplateWorkflows[$templateId] = $workflowId;
+		}
 	}
 
-	protected function sendMetaData(string $workflowId): void
+	protected function sendMetaData(string $workflowId): ?int
 	{
-		$this->metaData?->saveToWorkflowId($workflowId);
+		return $this->metaData?->saveToWorkflowId($workflowId);
 	}
 
 	protected function getTargetUserForStartParameters(): ?string
@@ -296,6 +313,7 @@ abstract class BaseTypeStarter
 			(new StartResult())
 				->addErrors($this->getErrors())
 				->setWorkflowIds(array_keys($this->unsetWorkflowIds()))
+				->setTemplateWorkflowIds($this->unsetTemplateWorkflowIds())
 				->setTriggerApplied($this->isTriggerApplied)
 		;
 	}
@@ -305,6 +323,7 @@ abstract class BaseTypeStarter
 		return
 			StartResult::createOk()
 				->setWorkflowIds(array_keys($this->unsetWorkflowIds()))
+				->setTemplateWorkflowIds($this->unsetTemplateWorkflowIds())
 				->setTriggerApplied($this->isTriggerApplied)
 		;
 	}
@@ -315,5 +334,13 @@ abstract class BaseTypeStarter
 		$this->startedWorkflows = [];
 
 		return $workflowIds;
+	}
+
+	protected function unsetTemplateWorkflowIds(): array
+	{
+		$templateWorkflowIds = $this->startedTemplateWorkflows;
+		$this->startedTemplateWorkflows = [];
+
+		return $templateWorkflowIds;
 	}
 }

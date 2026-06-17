@@ -8,7 +8,7 @@ use Bitrix\Main\Grid\Column\Columns;
 use Bitrix\Main\Grid\Grid;
 use Bitrix\Main\Grid\Pagination\LazyLoadTotalCount;
 use Bitrix\Main\Grid\Pagination\PaginationFactory;
-use Bitrix\Main\Grid\Row\Rows;
+use Bitrix\Mail\Grid\MailboxSettingsGrid\Row\MailboxRows;
 use Bitrix\Main\UI\PageNavigation;
 
 final class MailboxGrid extends Grid
@@ -27,12 +27,12 @@ final class MailboxGrid extends Grid
 		);
 	}
 
-	protected function createRows(): Rows
+	protected function createRows(): MailboxRows
 	{
 		$rowAssembler = new MailboxRowAssembler($this->getVisibleColumnsIds(), $this->getSettings());
 		$actionsProvider = new Row\Action\MailboxDataProvider($this->getSettings());
 
-		return new Rows($rowAssembler, $actionsProvider);
+		return new MailboxRows($rowAssembler, $actionsProvider);
 	}
 
 	protected function createFilter(): ?\Bitrix\Main\Filter\Filter

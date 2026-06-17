@@ -19,7 +19,7 @@ class Responder
 	 */
 	public static function respond()
 	{
-		require_once(__DIR__."/helper.php");
+		require_once(__DIR__."/Helper.php");
 
 		self::setErrorHandler(); //avoid possible PHP warnings or notices
 		self::registerAutoloader();
@@ -424,7 +424,7 @@ class Responder
 		$className = ltrim($className, "\\"); // fix web env
 		if ($className === "Bitrix\\Main\\Composite\\Debug\\Logger")
 		{
-			require_once(__DIR__."/debug/logger.php");
+			require_once(__DIR__."/Debug/Logger.php");
 		}
 	}
 

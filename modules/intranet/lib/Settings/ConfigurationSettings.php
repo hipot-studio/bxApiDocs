@@ -8,6 +8,9 @@ use Bitrix\Bitrix24\Portal\Remove\Verification\VerificationFactory;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Integration\Market\Label;
 use Bitrix\Intranet\Internal\Integration\BIConnector\BIConnectorSettingsService;
+use Bitrix\Intranet\Internal\Integration\Mail;
+use Bitrix\Intranet\Internal\Integration\Mail\MailConnectionRequestService;
+use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\Settings\Controls\Section;
 use Bitrix\Intranet\Settings\Controls\Selector;
 use Bitrix\Intranet\Settings\Controls\Switcher;
@@ -82,6 +85,7 @@ class ConfigurationSettings extends AbstractSettings
 
 		//mails section
 		$this->setTrackOutMails();
+		$this->setMailConnectionResponsibleAdmin();
 
 		//CRM map section
 		$this->setCardsProviderCRM();
@@ -374,6 +378,13 @@ class ConfigurationSettings extends AbstractSettings
 				Loc::getMessage('INTRANET_SETTINGS_FIELD_PLACEHOLDER_NOTIFICATION_EMAIL')
 			);
 		}
+
+		if (Mail\ConfigFeature::isMailboxConnectionRequestAvailable())
+		{
+			$data['selectorMailConnectionResponsibleAdmin'] = $this->getMailConnectionResponsibleAdminSelector();
+			$data['mailConnectionAdminIds'] = $this->getPortalAdminIds();
+		}
+
 		//endregion
 		//region CRM map section
 		$data["yandexApiUrl"] = static::YANDEX_API_URL;
@@ -493,7 +504,7 @@ class ConfigurationSettings extends AbstractSettings
 			);
 
 			$isEmployeesLeft = \Bitrix\Bitrix24\License\UserActive::getInstance()->getCount() > 1;
-			$isFreeLicense = \CBitrix24::isLicenseNeverPayed();
+			$isFreeLicense = \CBitrix24::isFreeLicense();
 			$verificationOptions = null;
 			$isBound = \Bitrix\Bitrix24\Holding\CurrentPortal::getInstance()->isBound();
 
@@ -534,6 +545,52 @@ class ConfigurationSettings extends AbstractSettings
 		{
 			return null;
 		}
+	}
+
+	private function setMailConnectionResponsibleAdmin(): void
+	{
+		if (!isset($this->data['mailConnectionResponsibleAdmin']))
+		{
+			return;
+		}
+
+		$adminId = 0;
+		$value = $this->data['mailConnectionResponsibleAdmin'];
+		if (is_string($value) && preg_match('/^U(\d+)$/', $value, $matches))
+		{
+			$adminId = (int)$matches[1];
+		}
+
+		MailConnectionRequestService::setResponsibleAdminId($adminId);
+	}
+
+	private function getMailConnectionResponsibleAdmin(): string
+	{
+		$adminId = MailConnectionRequestService::getResponsibleAdminId();
+		if ($adminId <= 0)
+		{
+			return '';
+		}
+
+		return 'U' . $adminId;
+	}
+
+	private function getMailConnectionResponsibleAdminSelector(): Selector
+	{
+		$value = $this->getMailConnectionResponsibleAdmin();
+
+		return new Selector(
+			id: 'settings-configuration-field-mail-connection-responsible-admin',
+			name: 'mailConnectionResponsibleAdmin',
+			label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_MAIL_CONNECTION_RESPONSIBLE_ADMIN'),
+			items: $value !== '' ? [$value] : [],
+			helpDesk: 'redirect=detail&code=28229838',
+		);
+	}
+
+	private function getPortalAdminIds(): array
+	{
+		return ServiceContainer::getInstance()->getUserService()->getAdminUserIds();
 	}
 
 	private function getGoogleKeyProductProperties(): string
@@ -885,6 +942,7 @@ class ConfigurationSettings extends AbstractSettings
 				'trackOutMailsRead' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_TRACK_OUT_MAILS'),
 				'trackOutMailsClick' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_TRACK_OUT_MAILS_CLICKS'),
 				'defaultEmailFrom' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_DEFAULT_EMAIL'),
+				'mailConnectionResponsibleAdmin' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_MAIL_CONNECTION_RESPONSIBLE_ADMIN'),
 				'cardsProviderCRM' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_CHOOSE_REGION_CRM_MAPS'),
 				'cardsProviderProductProperties' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_CHOOSE_REGION_CRM_MAPS'),
 				'allowUserInstallApplication' => Label::isRenamedMarket()

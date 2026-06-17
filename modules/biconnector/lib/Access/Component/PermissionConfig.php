@@ -92,6 +92,7 @@ final class PermissionConfig
 		$mainRights = [
 			PermissionDictionary::BIC_ACCESS,
 			PermissionDictionary::BIC_DASHBOARD_TAG_MODIFY,
+			PermissionDictionary::BIC_DASHBOARD_SHARE,
 			PermissionDictionary::BIC_SETTINGS_ACCESS,
 			PermissionDictionary::BIC_SETTINGS_EDIT_RIGHTS,
 		];

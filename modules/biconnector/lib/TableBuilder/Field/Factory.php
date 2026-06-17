@@ -3,7 +3,7 @@
 namespace Bitrix\BIConnector\TableBuilder\Field;
 
 use Bitrix\Main\SystemException;
-use Bitrix\Biconnector\ExternalSource\FieldType;
+use Bitrix\BIConnector\ExternalSource\FieldType;
 
 class Factory
 {

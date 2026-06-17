@@ -290,7 +290,10 @@ class CBPCrmAutomationTrigger extends Bitrix\Bizproc\Activity\BaseTrigger
 		$activityPropertiesMap = [];
 		foreach ($properties as $property)
 		{
-			if (array_key_exists($property['Type'], FieldType::getBaseTypesMap()))
+			if (
+				array_key_exists($property['Type'], FieldType::getBaseTypesMap())
+				|| $property['Type'] === FieldType::DOCUMENT
+			)
 			{
 				$activityProperty = $property;
 			}

@@ -8,16 +8,14 @@ use Bitrix\BIConnector\Access\Service\SystemGroupLocalizationService;
 use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
-use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\DashboardManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\LanguageTable;
+use Bitrix\Main\Localization\Loc;
 
 class Agent
 {
@@ -55,6 +53,109 @@ class Agent
 		Superset\SupersetInitializer::deleteInstance();
 
 		return '';
+	}
+
+	/**
+	 * Notify admins that BI Constructor will be deleted soon.
+	 * Scheduled by pendingDeleteInstance(), fires 1 day before actual deletion.
+	 *
+	 * @return string Empty string to remove agent from schedule.
+	 */
+	public static function pendingDeleteNotify(): string
+	{
+		if (!Superset\SupersetInitializer::isSupersetPendingDelete())
+		{
+			return '';
+		}
+
+		$titleCallback = static fn(?string $languageId = null) => Loc::getMessage(
+			'BI_SUPERSET_PENDING_DELETE_NOTIFY_TITLE',
+			language: $languageId,
+		);
+		$notificationCallback = static fn(?string $languageId = null) => Loc::getMessage(
+			'BI_SUPERSET_PENDING_DELETE_NOTIFY_TEXT',
+			language: $languageId,
+		);
+
+		self::notifyAllAdmins($titleCallback, $notificationCallback);
+
+		return '';
+	}
+
+	public static function notifyPendingDeleteCompleted(): void
+	{
+		$titleCallback = static fn(?string $languageId = null) => Loc::getMessage(
+			'BI_SUPERSET_PENDING_DELETE_COMPLETED_TITLE',
+			language: $languageId,
+		);
+		$notificationCallback = static fn(?string $languageId = null) => Loc::getMessage(
+			'BI_SUPERSET_PENDING_DELETE_COMPLETED_TEXT',
+			language: $languageId,
+		);
+
+		self::notifyAllAdmins($titleCallback, $notificationCallback);
+	}
+
+	private static function notifyAllAdmins(callable $titleCallback, callable $messageCallback): void
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		$adminIds = self::getPortalAdminIds();
+
+		foreach ($adminIds as $adminId)
+		{
+			\CIMNotify::Add([
+				'TO_USER_ID' => $adminId,
+				'FROM_USER_ID' => 0,
+				'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
+				'NOTIFY_MODULE' => 'biconnector',
+				'NOTIFY_TITLE' => $titleCallback,
+				'NOTIFY_MESSAGE' => $messageCallback,
+			]);
+		}
+	}
+
+	private static function getPortalAdminIds(): array
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			return \CBitrix24::getAllAdminId();
+		}
+
+		$adminIds = [];
+		$res = \CGroup::GetGroupUserEx(1);
+		while ($admin = $res->fetch())
+		{
+			$adminIds[] = (int)$admin['USER_ID'];
+		}
+
+		return $adminIds;
+	}
+
+	/**
+	 * Deferred deletion: check if still PENDING_DELETE and perform actual deletion.
+	 * Scheduled by pendingDeleteInstance(), fires after N days.
+	 *
+	 * @return string Empty string to remove agent from schedule.
+	 */
+	public static function pendingDeleteCheck(): string
+	{
+		if (!Superset\SupersetInitializer::isSupersetPendingDelete())
+		{
+			return '';
+		}
+
+		$deleteResult = Superset\SupersetInitializer::deleteInstance();
+		if ($deleteResult->isSuccess())
+		{
+			return '';
+		}
+
+		// Retry on next cron tick until deletion succeeds or status changes
+		return '\\' . __CLASS__ . '::' . __FUNCTION__ . '();';
 	}
 
 	/**
@@ -159,12 +260,43 @@ class Agent
 
 	public static function actualizeSystemDashboards(): string
 	{
-		if (SupersetInitializer::getSupersetStatus() !== SupersetInitializer::SUPERSET_STATUS_DELETED)
+		if (!SupersetInitializer::isSupersetDeleted() && !SupersetInitializer::isSupersetPendingDelete())
 		{
 			SystemDashboardManager::actualizeSystemDashboards();
 		}
 
 		return __CLASS__ . '::' . __FUNCTION__ . '();';
+	}
+
+	/**
+	 * One-shot recovery for clients stuck in DELETED status due to race between
+	 * onDisableBiBuilderTool() and the portal delete callback (task 0244532).
+	 *
+	 * @return string
+	 */
+	public static function recoverStuckDeletedStatus(): string
+	{
+		if (Option::get('biconnector', 'stuck_deleted_status_recovered', 'N') === 'Y')
+		{
+			return '';
+		}
+
+		if (SupersetInitializer::getSupersetStatus() !== SupersetInitializer::SUPERSET_STATUS_DELETED)
+		{
+			Option::set('biconnector', 'stuck_deleted_status_recovered', 'Y');
+
+			return '';
+		}
+
+		SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
+		AccessInstaller::install();
+		Option::set('biconnector', Feature::CHECK_PERMISSION_BY_GROUP_OPTION, 'Y');
+		SystemDashboardManager::actualizeSystemDashboards();
+		DashboardManager::notifySupersetStatus(SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS);
+
+		Option::set('biconnector', 'stuck_deleted_status_recovered', 'Y');
+
+		return '';
 	}
 
 	/**

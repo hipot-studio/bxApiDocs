@@ -49,11 +49,18 @@ class TaskCounter
 			return $res;
 		}
 
-		if (isset($counters[CounterDictionary::COUNTER_MY_NEW_COMMENTS]) && $counters[CounterDictionary::COUNTER_MY_NEW_COMMENTS])
+		$mentions = $counters[CounterDictionary::COUNTER_MENTIONED] ?? 0;
+		$myNewComments = $counters[CounterDictionary::COUNTER_MY_NEW_COMMENTS] ?? 0;
+		$needReadComments = $myNewComments ?: $mentions;
+
+		// show mentions as unread messages only for muted tasks (my_new_comments = 0)
+
+		if ($needReadComments)
 		{
 			$res['COLOR'] = CounterStyle::STYLE_GREEN;
-			$res['VALUE'] = $counters[CounterDictionary::COUNTER_MY_NEW_COMMENTS];
+			$res['VALUE'] = $needReadComments;
 		}
+
 		if (isset($counters[CounterDictionary::COUNTER_MY_EXPIRED]) && $counters[CounterDictionary::COUNTER_MY_EXPIRED])
 		{
 			$res['COLOR'] = CounterStyle::STYLE_RED;

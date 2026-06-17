@@ -12,6 +12,7 @@ use CCrmOwnerType;
 
 final class FillPreliminarySegments
 {
+	private bool $isAdminAsAssignmentUser = false;
 	private Logger $logger;
 
 	public function __construct()
@@ -70,6 +71,8 @@ final class FillPreliminarySegments
 		$fieldRepository = ServiceLocator::getInstance()->get('crm.model.fieldRepository');
 		$resolver = $fieldRepository->getDefaultStageIdResolver($entityTypeId);
 
+		$assignmentUserIds = $this->isAdminAsAssignmentUser ? [1] : [];
+
 		$params = [
 			'isEnabled' => Feature::enabled(Feature\RepeatSaleForceMode::class),
 			'entityTypeId' => $entityTypeId,
@@ -77,7 +80,7 @@ final class FillPreliminarySegments
 			'entityStageId' => $resolver(),
 			'callAssessmentId' => null,
 			'isAiEnabled' => true,
-			'assignmentUserIds' => [],
+			'assignmentUserIds' => $assignmentUserIds,
 			'isSystem' => false,
 		];
 
@@ -93,6 +96,11 @@ final class FillPreliminarySegments
 		{
 			$segments[] = $this->getAiScreeningDeals($params);
 			$segments[] = $this->getAiApproveDeals($params);
+		}
+
+		if (Feature::enabled(Feature\RepeatSaleRemainingSegment::class))
+		{
+			$segments[] = $this->getRemainingDeals($params);
 		}
 
 		return $segments;
@@ -188,8 +196,28 @@ final class FillPreliminarySegments
 		return array_merge($params, $data);
 	}
 
+	private function getRemainingDeals(array $params): array
+	{
+		$data = [
+			'isEnabled' => Feature::enabled(Feature\RepeatSaleRemainingSegment::class),
+			'code' => SegmentCode::REMAINING->value,
+			'title' => Loc::getMessage('CRM_FPS_REMAINING_TITLE'),
+			'prompt' => Loc::getMessage('CRM_FPS_REMAINING_PROMPT'),
+			'entityTitlePattern' => Loc::getMessage('CRM_FPS_REMAINING_ENTITY_TITLE_PATTERN'),
+		];
+
+		return array_merge($params, $data);
+	}
+
 	private function isAiSegmentsAvailable(): bool
 	{
 		return Container::getInstance()->getRepeatSaleAvailabilityChecker()->isAiSegmentsAvailable();
+	}
+
+	public function setAdminAsAssignmentUser(bool $value = true): self
+	{
+		$this->isAdminAsAssignmentUser = $value;
+
+		return $this;
 	}
 }

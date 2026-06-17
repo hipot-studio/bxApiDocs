@@ -1,7 +1,7 @@
 <?
 namespace Bitrix\Crm\Tracking\Internals;
 
-use Bitrix\Main\Orm;
+use Bitrix\Main\ORM;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\DB;
 
@@ -23,7 +23,7 @@ use Bitrix\Crm\Communication;
  * @method static \Bitrix\Crm\Tracking\Internals\EO_PhoneNumber wakeUpObject($row)
  * @method static \Bitrix\Crm\Tracking\Internals\EO_PhoneNumber_Collection wakeUpCollection($rows)
  */
-class PhoneNumberTable extends Orm\Data\DataManager
+class PhoneNumberTable extends ORM\Data\DataManager
 {
 	/**
 	 * Returns DB table name for entity.
@@ -81,8 +81,8 @@ class PhoneNumberTable extends Orm\Data\DataManager
 			$rows = static::getList([
 				'select' => ['VALUE', 'SUM_USE_CNT' ,'MAX_DATE_USE'],
 				'runtime' => [
-					new Orm\Fields\ExpressionField('SUM_USE_CNT', 'SUM(%s)', ['USE_CNT']),
-					new Orm\Fields\ExpressionField('MAX_DATE_USE', 'MAX(%s)', ['DATE_USE']),
+					new ORM\Fields\ExpressionField('SUM_USE_CNT', 'SUM(%s)', ['USE_CNT']),
+					new ORM\Fields\ExpressionField('MAX_DATE_USE', 'MAX(%s)', ['DATE_USE']),
 				],
 				'group' => ['VALUE'],
 				'cache' => ['ttl' => 1]

@@ -3488,4 +3488,33 @@ class BizprocDocument extends CIBlockDocument
 
 		return null;
 	}
+
+	public static function getSectionName(array $complexDocumentType): ?string
+	{
+		$normalized = \CBPHelper::normalizeComplexDocumentId($complexDocumentType);
+		if (!$normalized)
+		{
+			return null;
+		}
+
+		$iBlockId = (int)mb_substr($normalized[2], mb_strlen(self::DOCUMENT_TYPE_PREFIX));
+
+		if ($iBlockId > 0)
+		{
+			$iblock = CIBlock::GetArrayByID($iBlockId);
+			if (is_array($iblock) && isset($iblock['IBLOCK_TYPE_ID']))
+			{
+				$iBlockTypeId = $iblock['IBLOCK_TYPE_ID'];
+				$typeInfo = \CIBlockType::GetByIDLang($iBlockTypeId, LANGUAGE_ID);
+				if ($typeInfo && isset($typeInfo['NAME']) && $typeInfo['NAME'] !== '')
+				{
+					return $typeInfo['NAME'];
+				}
+
+				return null;
+			}
+		}
+
+		return null;
+	}
 }

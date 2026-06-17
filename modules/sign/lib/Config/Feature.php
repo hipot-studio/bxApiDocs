@@ -108,11 +108,6 @@ final class Feature
 		return Option::get('sign', 'TEMPLATE_FOLDER_GROUPING_ALLOWED', 'Y') === 'Y';
 	}
 
-	public function isPlaceholderDocumentEnabled(): bool
-	{
-		return Option::get("sign", "is_placeholder_document_enabled", 'Y') === 'Y';
-	}
-
 	private function read(string $name): mixed
 	{
 		$value = Main\Config\Configuration::getValue('sign')[$name] ?? null;

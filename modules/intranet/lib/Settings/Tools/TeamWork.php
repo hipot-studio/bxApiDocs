@@ -3,7 +3,9 @@
 namespace Bitrix\Intranet\Settings\Tools;
 
 use Bitrix\Intranet\Integration\Socialnetwork\Collab\CollabProviderData;
+use Bitrix\Intranet\Internal\Integration\Ui\CopilotService;
 use Bitrix\Intranet\UI\LeftMenu\Preset;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
@@ -17,10 +19,11 @@ class TeamWork extends Tool
 		return match ($subgroupId)
 		{
 			'instant_messenger' => ModuleManager::isModuleInstalled('im'),
+			'copilot' => CopilotService::shouldShowInLeftMenu(),
 			'collab' => (new CollabProviderData())->isAvailable(),
 			'calendar' => ModuleManager::isModuleInstalled('calendar'),
-			'docs' => \Bitrix\Main\Config\Option::get('disk', 'documents_enabled', 'N') === 'Y',
-			'boards' => \Bitrix\Main\Config\Option::get('disk', 'boards_enabled', 'N') === 'Y',
+			'docs' => Option::get('disk', 'documents_enabled', 'N') === 'Y',
+			'boards' => Option::get('disk', 'boards_enabled', 'N') === 'Y',
 			'mail' => ModuleManager::isModuleInstalled('mail'),
 			default => true,
 		};
@@ -29,6 +32,7 @@ class TeamWork extends Tool
 	protected const TEAMWORK_SUBGROUP_ID = [
 		'news' => 'menu_live_feed',
 		'instant_messenger' => 'menu_im_messenger',
+		'copilot' => 'menu_im_copilot',
 		'collab' => 'menu_im_collab',
 		'workgroups' => 'menu_all_groups',
 		'calendar' => 'menu_calendar',
@@ -44,6 +48,7 @@ class TeamWork extends Tool
 			'news' => '/stream/',
 			'instant_messenger' => '/online/',
 			'collab' => '/online/?IM_COLLAB',
+			'copilot' => '/online/?IM_COPILOT',
 			'workgroups' => '/workgroups/',
 			'calendar' => '/company/personal/user/#USER_ID#/calendar/',
 			'docs' => '/company/personal/user/#USER_ID#/disk/documents/',
@@ -55,9 +60,26 @@ class TeamWork extends Tool
 
 	public function getSubgroupNameById(string $id): string
 	{
+		$isNewProjectsOn = (Option::get('socialnetwork', 'new_projects', 'N') === 'Y');
+		if ($isNewProjectsOn)
+		{
+			$name = match ($id)
+			{
+				'tasks' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_TASKS_NEW'),
+				'workgroups' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_PROJECTS'),
+				default => null,
+			};
+
+			if ($name)
+			{
+				return $name;
+			}
+		}
+
 		return match ($id)
 		{
 			'instant_messenger' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_MESSENGER'),
+			'copilot' => (new CopilotService())->getName(),
 			'news' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_NEWS_FEED'),
 			'disk' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_DISK_MSGVER_1'),
 			'docs' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_DOCS_MSGVER_1'),

@@ -52,6 +52,19 @@ class InMemoryTaskUserOptionRepository implements TaskUserOptionRepositoryInterf
 		}
 	}
 
+	public function addBatch(Entity\Task\UserOptionCollection $userOptions): void
+	{
+		$this->userOptionRepository->addBatch($userOptions);
+
+		foreach ($userOptions as $userOption)
+		{
+			if (isset($this->cache[$userOption->userId][$userOption->taskId]))
+			{
+				unset($this->cache[$userOption->userId][$userOption->taskId]);
+			}
+		}
+	}
+
 	public function delete(array $codes = [], int $taskId = 0, int $userId = 0): void
 	{
 		$this->userOptionRepository->delete($codes, $taskId, $userId);
@@ -63,6 +76,19 @@ class InMemoryTaskUserOptionRepository implements TaskUserOptionRepositoryInterf
 		elseif ($userId > 0)
 		{
 			unset($this->cache[$userId]);
+		}
+	}
+
+	public function deleteBatch(int $taskId, array $userIds, array $codes = []): void
+	{
+		$this->userOptionRepository->deleteBatch($taskId, $userIds, $codes);
+
+		foreach ($userIds as $userId)
+		{
+			if (isset($this->cache[$userId][$taskId]))
+			{
+				unset($this->cache[$userId][$taskId]);
+			}
 		}
 	}
 

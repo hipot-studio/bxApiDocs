@@ -270,10 +270,9 @@ class OpenLine extends Base implements EventRegistrarInterface
 	 */
 	public static function syncBadges(int $activityId, array $activityFields, array $bindings): void
 	{
-		$badge = Container::getInstance()->getBadge(
-			Badge\Type\OpenLineStatus::OPENLINE_STATUS_TYPE,
-			Badge\Type\OpenLineStatus::CHAT_NOT_READ_VALUE,
-		);
+		$sessionId = is_numeric($activityFields['ASSOCIATED_ENTITY_ID'] ?? null) ? (int)$activityFields['ASSOCIATED_ENTITY_ID'] : null;
+		$userCode = $activityFields['PROVIDER_PARAMS']['USER_CODE'] ?? null;
+		$responsibleId = $activityFields['RESPONSIBLE_ID'] ?? null;
 
 		$sourceIdentifier = new Badge\SourceIdentifier(
 			Badge\SourceIdentifier::CRM_OWNER_TYPE_PROVIDER,
@@ -281,23 +280,44 @@ class OpenLine extends Base implements EventRegistrarInterface
 			$activityId,
 		);
 
-		$userCode = $activityFields['PROVIDER_PARAMS']['USER_CODE'] ?? null;
-		$responsibleId = $activityFields['RESPONSIBLE_ID'] ?? null;
-		$isNotReadChat = OpenLineManager::getChatUnReadMessagesCount($userCode, $responsibleId) > 0;
-		if ($isNotReadChat)
+		$processedByAiAgentBadge = Container::getInstance()->getBadge(
+			type: Badge\Type\OpenLineStatus::OPENLINE_STATUS_TYPE,
+			value: Badge\Type\OpenLineStatus::PROCESSED_BY_AI_AGENT,
+		);
+
+		$notReadBadge = Container::getInstance()->getBadge(
+			Badge\Type\OpenLineStatus::OPENLINE_STATUS_TYPE,
+			Badge\Type\OpenLineStatus::CHAT_NOT_READ_VALUE,
+		);
+
+		if (OpenLineManager::isProcessedByAiAgent($sessionId))
 		{
-			foreach ($bindings as $singleBinding)
+			foreach ($bindings as $binding)
 			{
-				$itemIdentifier = new ItemIdentifier((int)$singleBinding['OWNER_TYPE_ID'], (int)$singleBinding['OWNER_ID']);
-				$badge->bind($itemIdentifier, $sourceIdentifier);
+				$itemIdentifier = new ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']);
+
+				$notReadBadge->unbind($itemIdentifier, $sourceIdentifier);
+				$processedByAiAgentBadge->bind($itemIdentifier, $sourceIdentifier);
+			}
+		}
+		elseif (OpenLineManager::getChatUnReadMessagesCount($userCode, $responsibleId) > 0)
+		{
+			foreach ($bindings as $binding)
+			{
+				$itemIdentifier = new ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']);
+
+				$processedByAiAgentBadge->unbind($itemIdentifier, $sourceIdentifier);
+				$notReadBadge->bind($itemIdentifier, $sourceIdentifier);
 			}
 		}
 		else
 		{
-			foreach ($bindings as $singleBinding)
+			foreach ($bindings as $binding)
 			{
-				$itemIdentifier = new ItemIdentifier((int)$singleBinding['OWNER_TYPE_ID'], (int)$singleBinding['OWNER_ID']);
-				$badge->unbind($itemIdentifier, $sourceIdentifier);
+				$itemIdentifier = new ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']);
+
+				$processedByAiAgentBadge->unbind($itemIdentifier, $sourceIdentifier);
+				$notReadBadge->unbind($itemIdentifier, $sourceIdentifier);
 			}
 		}
 	}
@@ -315,73 +335,95 @@ class OpenLine extends Base implements EventRegistrarInterface
 	public static function getMessagesForCopilot(int $activityId, int $limit = 100): string
 	{
 		static $messagesForCopilot = [];
+		$cacheKey = static::class . ':' . $activityId;
 
-		if (isset($messagesForCopilot[$activityId]))
+		if (isset($messagesForCopilot[$cacheKey]))
 		{
-			return $messagesForCopilot[$activityId];
+			return $messagesForCopilot[$cacheKey];
 		}
 
-		$messagesForCopilot[$activityId] = '';
+		$messagesForCopilot[$cacheKey] = '';
 
 		if ($activityId <= 0)
 		{
-			return $messagesForCopilot[$activityId];
+			return $messagesForCopilot[$cacheKey];
 		}
 
 		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
 		if (!is_array($activity))
 		{
-			return $messagesForCopilot[$activityId];
+			return $messagesForCopilot[$cacheKey];
 		}
 
 		$userCode = (string)($activity['PROVIDER_PARAMS']['USER_CODE'] ?? '');
 		if ($userCode === '')
 		{
-			return $messagesForCopilot[$activityId];
+			return $messagesForCopilot[$cacheKey];
 		}
 
-		$data = OpenLineManager::getMessageData($userCode, $limit);
+		$data = static::getMessageDataForCopilot($userCode, $limit);
 		if (
-			empty($data)
-			|| empty($data['messages'])
-			|| !is_array($data['messages'])
+			!empty($data)
+			&& !empty($data['messages'])
+			&& is_array($data['messages'])
 		)
 		{
-			return $messagesForCopilot[$activityId];
+			$messages = array_filter(
+				$data['messages'],
+				static fn($item) => is_array($item) && (int)($item['author_id'] ?? 0) > 0
+			);
+			if (!empty($messages))
+			{
+				$userMap = array_column($data['users'] ?? [], 'name', 'id');
+
+				$result = [];
+				foreach ($messages as $message)
+				{
+					$author = $userMap[$message['author_id']] ?? '';
+					$datePart = isset($message['date']) ? ' [' . $message['date'] . ']:' : '';
+					$textPart = isset($message['text']) ? trim($message['text']) : '';
+					$result[] = sprintf("%s%s\n%s", $author, $datePart, $textPart);
+				}
+
+				$result = array_reverse($result);
+
+				$messagesForCopilot[$cacheKey] = static::normalizeMessagesForCopilot(
+					implode(' ', $result),
+				);
+
+				return $messagesForCopilot[$cacheKey];
+			}
 		}
 
-		$messages = array_filter(
-			$data['messages'],
-			static fn($item) => is_array($item) && (int)($item['author_id'] ?? 0) > 0
-		);
-		if (empty($messages))
+		$sessionMessages = static::getSessionMessagesForCopilot($activity, $limit);
+		if (!empty($sessionMessages))
 		{
-			return $messagesForCopilot[$activityId];
+			$result = [];
+			foreach ($sessionMessages as $message)
+			{
+				if (!is_array($message))
+				{
+					continue;
+				}
+
+				$textPart = trim((string)($message['MESSAGE'] ?? ''));
+				if ($textPart === '')
+				{
+					continue;
+				}
+
+				$result[] = $textPart;
+			}
+
+			$messagesForCopilot[$cacheKey] = static::normalizeMessagesForCopilot(
+				implode(' ', $result),
+			);
 		}
 
-		$userMap = array_column($data['users'] ?? [], 'name', 'id');
-
-		$result = [];
-		foreach ($messages as $message)
-		{
-			$author = $userMap[$message['author_id']] ?? '';
-			$datePart = isset($message['date']) ? ' [' . $message['date'] . ']:' : '';
-			$textPart = isset($message['text']) ? trim($message['text']) : '';
-			$result[] = sprintf("%s%s\n%s", $author, $datePart, $textPart);
-		}
-
-		$result = array_reverse($result);
-
-		$text = trim(implode(' ', $result));
-		$text = TextHelper::cleanTextByType($text, CCrmContentType::BBCode);
-		$text = preg_replace('/\s+/', ' ', $text);
-
-		$messagesForCopilot[$activityId] = CTextParser::cleanTag(trim($text));
-
-		return $messagesForCopilot[$activityId];
+		return $messagesForCopilot[$cacheKey];
 	}
 
-	public static function isCopilotProcessingAvailable(int $activityId, string $messages = ''): bool
+	public static function isCopilotProcessingAvailable(int $activityId, string $messages = '', bool $checkLastVolume = true): bool
 	{
 		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
 		if (!is_array($activity))
@@ -391,13 +433,41 @@ class OpenLine extends Base implements EventRegistrarInterface
 
 		if (empty($messages))
 		{
-			$messages = self::getMessagesForCopilot($activityId);
+			$messages = static::getMessagesForCopilot($activityId);
 		}
 
 		$currentVolume = mb_strlen($messages, 'UTF-8');
-		$lastVolume = $activity['SETTINGS']['LAST_MESSAGES_VOLUME'] ?? 0;
 
-		return $currentVolume >= $lastVolume + self::CHAT_MESSAGE_COPILOT_PROCESSING_LIMIT;
+		if ($checkLastVolume)
+		{
+			$lastVolume = $activity['SETTINGS']['LAST_MESSAGES_VOLUME'] ?? 0;
+
+			return $currentVolume >= $lastVolume + static::CHAT_MESSAGE_COPILOT_PROCESSING_LIMIT;
+		}
+
+		return $currentVolume >= static::CHAT_MESSAGE_COPILOT_PROCESSING_LIMIT;
+	}
+
+	public static function saveLastMessagesVolumeForCopilot(int $activityId): void
+	{
+		if ($activityId <= 0)
+		{
+			return;
+		}
+
+		$activity = Container::getInstance()->getActivityBroker()->getById($activityId);
+		if (($activity['PROVIDER_ID'] ?? null) !== static::getId())
+		{
+			return;
+		}
+
+		$messages = static::getMessagesForCopilot($activityId);
+		$settings = is_array($activity['SETTINGS'] ?? null) ? $activity['SETTINGS'] : [];
+
+		CCrmActivity::Update($activityId, ['SETTINGS' => [
+			...$settings,
+			'LAST_MESSAGES_VOLUME' => (int)(mb_strlen($messages, 'UTF-8')),
+		]]);
 	}
 
 	public static function getChatName(string $userCode): string
@@ -484,5 +554,29 @@ class OpenLine extends Base implements EventRegistrarInterface
 		$lineId = $fields['LINE_ID'] ?? null;
 
 		return $this->createActivity($lineId, $fields, $options);
+	}
+
+	protected static function getMessageDataForCopilot(string $userCode, int $limit): array
+	{
+		return OpenLineManager::getMessageData($userCode, $limit);
+	}
+
+	protected static function getSessionMessagesForCopilot(array $activity, int $limit): array
+	{
+		$sessionId = (int)($activity['ASSOCIATED_ENTITY_ID'] ?? 0);
+		if ($sessionId <= 0)
+		{
+			return [];
+		}
+
+		return OpenLineManager::getSessionMessages($sessionId, $limit);
+	}
+
+	protected static function normalizeMessagesForCopilot(string $text): string
+	{
+		$text = TextHelper::cleanTextByType($text, CCrmContentType::BBCode);
+		$text = preg_replace('/\s+/', ' ', $text);
+
+		return CTextParser::cleanTag(trim((string)$text));
 	}
 }

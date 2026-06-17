@@ -215,11 +215,34 @@ class StatisticTable extends Base
 		return new Entity\EventResult();
 	}
 
+	private const INDEXED_FIELDS = [
+		'PORTAL_NUMBER',
+		'PHONE_NUMBER',
+		'CALL_FAILED_CODE',
+		'INCOMING',
+		'PORTAL_USER_ID',
+		'CRM_ENTITY_TYPE',
+		'CRM_ENTITY_ID',
+		'TRANSCRIPT_ID',
+		'COMMENT',
+	];
+
+	private static function hasIndexedFields(?array $fields): bool
+	{
+		return !empty($fields)
+			&& !empty(array_intersect(array_keys($fields), static::INDEXED_FIELDS));
+	}
+
 	public static function onAfterUpdate(Entity\Event $event)
 	{
 		$primary = $event->getParameter("id");
 		$id = $primary["ID"];
-		static::indexRecord($id);
+
+		if (static::hasIndexedFields($event->getParameter("fields")))
+		{
+			static::indexRecord($id);
+		}
+
 		return new Entity\EventResult();
 	}
 

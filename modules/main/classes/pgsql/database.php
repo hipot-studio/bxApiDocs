@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Main\DB\SqlExpression;
@@ -102,11 +102,11 @@ class CDatabasePgSql extends CAllDatabase
 		return '';
 	}
 
-	public function GetTableFields($table)
+	public function GetTableFields($table, bool $useCache = true)
 	{
-		if (!isset($this->column_cache[$table]))
+		if (!isset($this->column_cache[$table]) || !$useCache)
 		{
-			$this->column_cache[$table] = array();
+			$this->column_cache[$table] = [];
 			$this->DoConnect();
 
 			$sqlHelper = $this->connection->getSqlHelper();

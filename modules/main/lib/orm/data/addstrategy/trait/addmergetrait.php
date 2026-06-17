@@ -38,11 +38,12 @@ trait AddMergeTrait
 	 * DUPLICATE KEY UPDATE' SQL statement.
 	 * Events are not supported and are never fired.
 	 */
-	final public static function addMergeMulti(array $rows): AddResult
+	final public static function addMergeMulti(array $rows, $ignoreEvents = false): AddResult
 	{
 		return self::sysAddMultiInternal(
 			self::getCachedMergeStrategy(),
 			$rows,
+			$ignoreEvents,
 		);
 	}
 }

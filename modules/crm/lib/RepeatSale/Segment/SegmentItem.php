@@ -297,6 +297,7 @@ final class SegmentItem
 			SegmentCode::SLEEPING_CLIENT->value => Loc::getMessage('CRM_SEGMENT_ITEM_SYSTEM_LAST_ACTIVITY_LESS_12_MONTH'),
 			SegmentCode::AI_SCREENING->value => Loc::getMessage('CRM_SEGMENT_ITEM_AI_SCREENING'),
 			SegmentCode::AI_APPROVE->value => Loc::getMessage('CRM_SEGMENT_ITEM_AI_APPROVE'),
+			SegmentCode::REMAINING->value => Loc::getMessage('CRM_SEGMENT_ITEM_REMAINING'),
 			default => null,
 		};
 	}

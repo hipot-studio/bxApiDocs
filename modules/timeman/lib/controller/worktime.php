@@ -161,6 +161,10 @@ class Worktime extends Controller
 
 			if ($record)
 			{
+				$record->defineWorktimeEvents(
+					$workTimeRepository->findAllWorktimeEventsByRecordId($record->getId())
+				);
+
 				$worktimeForm->editedBy = $this->getCurrentUser()->getId();
 
 				$record->updateByForm($worktimeForm);

@@ -275,6 +275,8 @@ class CollaborationSection
 	{
 		$tasks = new Tasks();
 
+
+
 		return [
 			'id' => $tasks->getId(),
 			'title' => $tasks->getName(),
@@ -503,9 +505,11 @@ class CollaborationSection
 			&& \CBXFeatures::IsFeatureEnabled('Workgroups')
 		);
 
+		$isNewProjectsOn = (Option::get('socialnetwork', 'new_projects', 'N') === 'Y');
+
 		return [
 			'id' => 'workgroups',
-			'title' => static::getTitle('workgroups'),
+			'title' => static::getTitle($isNewProjectsOn ? 'projects' : 'workgroups'),
 			'available' => $available,
 			'url' => SITE_DIR . 'workgroups/',
 			'menuData' => [

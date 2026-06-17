@@ -16,7 +16,10 @@ use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Item\Collection\RoleCollection;
 use Bitrix\HumanResources\Model\NodeMemberTable;
 use Bitrix\HumanResources\Contract\Repository\RoleRepository;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\RoleFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Type\NodeMemberRole;
 use Bitrix\HumanResources\Type\StructureRole;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
@@ -68,6 +71,10 @@ final class NodeMemberDataBuilder extends BaseDataBuilder
 		return (new self())->addFilter($filter);
 	}
 
+	/**
+	 * @deprecated Use RoleFilter in NodeMemberFilter instead
+	 * @see \Bitrix\HumanResources\Builder\Structure\Filter\Column\RoleFilter
+	 */
 	public function addStructureRole(StructureRole $role): self
 	{
 		$this->structureRoleList[] = $role;
@@ -75,6 +82,10 @@ final class NodeMemberDataBuilder extends BaseDataBuilder
 		return $this;
 	}
 
+	/**
+	 * @deprecated Use RoleFilter in NodeMemberFilter instead
+	 * @see \Bitrix\HumanResources\Builder\Structure\Filter\Column\RoleFilter
+	 */
 	public function setStructureRoles(array $roles): self
 	{
 		$this->structureRoleList = $roles;
@@ -122,30 +133,46 @@ final class NodeMemberDataBuilder extends BaseDataBuilder
 	}
 
 	/**
-	 * @return int[]
+	 * Converts deprecated structureRoleList into a RoleFilter and injects it into existing NodeMemberFilter.
+	 * Throws if a NodeMemberFilter already has a roleFilter set (conflicting role sources).
+	 * If no NodeMemberFilter exists, adds a new one.
 	 */
-	private function getStructureRoleIdList(): array
+	private function applyStructureRoleListToFilters(): void
 	{
-		$result = [];
-		/** @var StructureRole $structureRole */
-		foreach ($this->structureRoleList as $structureRole)
+		$xmlIds = array_filter(
+			array_map(
+				static fn(StructureRole $role): string => $role->getXmlId(),
+				$this->structureRoleList,
+			),
+		);
+
+		if (empty($xmlIds))
 		{
-			$xmlId = $structureRole->getXmlId();
-			$roleItem = $this->roleCollection->getItemByXmlId($xmlId);
-			if ($roleItem === null)
-			{
-				continue;
-			}
-
-			if ($roleItem->id === null)
-			{
-				continue;
-			}
-
-			$result[] = $roleItem->id;
+			return;
 		}
 
-		return $result;
+		$roleFilter = RoleFilter::fromRoles(
+			...NodeMemberRole::fromXmlIds($xmlIds),
+		);
+
+		foreach ($this->filters as $filter)
+		{
+			if ($filter instanceof NodeMemberFilter)
+			{
+				if ($filter->roleFilter !== null)
+				{
+					throw new InvalidArgumentException(
+						'Cannot use addStructureRole/setStructureRoles together with roleFilter in NodeMemberFilter',
+					);
+				}
+
+				$filter->roleFilter = $roleFilter;
+
+				return;
+			}
+		}
+
+		$this->addFilter(new NodeMemberFilter(roleFilter: $roleFilter));
 	}
 
 	/**
@@ -192,6 +219,11 @@ final class NodeMemberDataBuilder extends BaseDataBuilder
 		$conditionTree = new ConditionTree();
 		$conditionTree->logic($this->logic);
 
+		if (!empty($this->structureRoleList))
+		{
+			$this->applyStructureRoleListToFilters();
+		}
+
 		if (!empty($this->filters))
 		{
 			foreach ($this->filters as $filter)
@@ -203,13 +235,6 @@ final class NodeMemberDataBuilder extends BaseDataBuilder
 
 				$conditionTree->addCondition($filter->prepareFilter());
 			}
-		}
-
-		$roleList = $this->getStructureRoleIdList();
-
-		if (!empty($roleList))
-		{
-			$query->whereIn('ROLE.ID', $roleList);
 		}
 
 		$query->where($conditionTree);

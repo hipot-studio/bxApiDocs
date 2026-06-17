@@ -39,7 +39,11 @@ class TextField extends BaseLinkedEntitiesField
 		$wasRenderedAsHtml = true;
 
 		$contentTypeId = $this->getContentTypeId($itemId);
-		if ($contentTypeId === \CCrmContentType::BBCode)
+		if ($this->isExportContext())
+		{
+			$value = $this->sanitizeString($value);
+		}
+		elseif ($contentTypeId === \CCrmContentType::BBCode)
 		{
 			$wasRenderedAsHtml = false;
 
@@ -57,7 +61,7 @@ class TextField extends BaseLinkedEntitiesField
 				$wasRenderedAsHtml = true;
 			}
 		}
-		elseif (str_ends_with($this->getId(), '_COMMENTS'))
+		elseif ($this->isFieldRelationComments())
 		{
 			$hasParagraph = preg_match('/\[p]/i', $value) === 1;
 			$useTypography = $hasParagraph;
@@ -70,12 +74,32 @@ class TextField extends BaseLinkedEntitiesField
 		}
 		else
 		{
-			$value = TextHelper::sanitizeHtml($value);
+			$valueType = $this->getDisplayParam(
+				'VALUE_TYPE',
+				\Bitrix\Crm\Field::VALUE_TYPE_PLAIN_TEXT,
+			);
+			if ($valueType === \Bitrix\Crm\Field::VALUE_TYPE_PLAIN_TEXT)
+			{
+				$value = $this->sanitizeString($value);
+				if ($this->isKanbanContext() || $this->isGridContext())
+				{
+					$value = nl2br($value);
+				}
+			}
+			else
+			{
+				$value = TextHelper::sanitizeHtml($value);
+			}
 		}
 
 		$this->setWasRenderedAsHtml($wasRenderedAsHtml);
 
 		return $value;
+	}
+
+	protected function isFieldRelationComments(): bool
+	{
+		return str_ends_with($this->getId(), '_COMMENTS');
 	}
 
 	protected function getFormattedValueForMobile($fieldValue, int $itemId, Options $displayOptions): array
@@ -84,21 +108,30 @@ class TextField extends BaseLinkedEntitiesField
 
 		$contentTypeId = $this->getContentTypeId($itemId);
 		$result['config']['contentTypeId'] = $contentTypeId;
+		$isContentTypeHtml = $contentTypeId === \CCrmContentType::Html;
 
-		if ($this->getId() === 'COMMENTS' && $contentTypeId === \CCrmContentType::Html)
+		$isFieldRelationComments = $this->isFieldRelationComments();
+		if (($this->getId() === 'COMMENTS' || $isFieldRelationComments) && $isContentTypeHtml)
 		{
 			$contentTypeId = \CCrmContentType::BBCode;
 			if (is_array($result['value']))
 			{
 				foreach ($result['value'] as &$item)
 				{
-					$item = $this->convertHtmlToBbCode($item);
+					$item =
+						$isFieldRelationComments
+							? $this->convertDoubleEncodedHtmlToBbCode($item)
+							: $this->convertHtmlToBbCode($item)
+						;
 				}
 				unset($item);
 			}
 			else
 			{
-				$result['value'] = $this->convertHtmlToBbCode($result['value']);
+				$result['value'] = $isFieldRelationComments
+					? $this->convertDoubleEncodedHtmlToBbCode($result['value'])
+					: $this->convertHtmlToBbCode($result['value'])
+				;
 			}
 		}
 		// Temporarily removes [p] for mobile compatibility
@@ -132,6 +165,14 @@ class TextField extends BaseLinkedEntitiesField
 		$contentTypeId = $this->getLinkedEntitiesValues()[$itemId][$this->getId()] ?? \CCrmContentType::Undefined;
 
 		return (\CCrmContentType::IsDefined($contentTypeId) ? $contentTypeId : \CCrmContentType::Html);
+	}
+
+	protected function convertDoubleEncodedHtmlToBbCode($string): string
+	{
+		$string = str_replace('&#039;', '&#39;', $string);
+		$comment = $this->convertHtmlToBbCode($string);
+
+		return str_replace('&quot;', '"', $comment);
 	}
 
 	protected function convertHtmlToBbCode(string $string): string

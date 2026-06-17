@@ -1,11 +1,11 @@
 <?php
 namespace Bitrix\Timeman\Provider\Schedule;
 
-use Bitrix\Main\EO_User_Collection;
 use Bitrix\Timeman\Helper\EntityCodesHelper;
 use Bitrix\Timeman\Model\Schedule\Assignment\Department\ScheduleDepartment;
 use Bitrix\Timeman\Model\Schedule\Assignment\User\ScheduleUser;
 use Bitrix\Timeman\Model\Schedule\Schedule;
+use Bitrix\Timeman\Model\Schedule\ScheduleCollection;
 use Bitrix\Timeman\Model\User\UserCollection;
 use Bitrix\Timeman\Repository\Schedule\ScheduleRepository;
 
@@ -13,6 +13,7 @@ class ScheduleProvider extends ScheduleRepository
 {
 	private $schedulesByUserIds = [];
 	private $schedulesWithShifts = [];
+	private $schedulesCollectionsWithShifts = [];
 
 	/**
 	 * @param $userId
@@ -94,6 +95,31 @@ class ScheduleProvider extends ScheduleRepository
 			}
 		}
 		return $this->schedulesWithShifts[$scheduleId] === false ? null : $this->schedulesWithShifts[$scheduleId];
+	}
+
+	public function findSchedulesCollectionByIdsWithShifts(array $scheduleIds): ScheduleCollection
+	{
+		$scheduleIds = array_values(
+			array_unique(
+				array_filter(
+					array_map('intval', $scheduleIds), static fn(int $id): bool => $id > 0
+				)
+			)
+		);
+
+		if (empty($scheduleIds))
+		{
+			return new ScheduleCollection();
+		}
+
+		sort($scheduleIds);
+		$cacheKey = implode(':', $scheduleIds);
+		if (!isset($this->schedulesCollectionsWithShifts[$cacheKey]))
+		{
+			$this->schedulesCollectionsWithShifts[$cacheKey] = $this->findSchedulesByIdsForEntity($scheduleIds);
+		}
+
+		return $this->schedulesCollectionsWithShifts[$cacheKey];
 	}
 
 	/**

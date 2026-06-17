@@ -25,6 +25,7 @@ final class EntityDataCollector extends BaseDataCollector
 		$filter = $this->prepareCopilotMarkersFilter(
 			entityId: (int)($parameters['entityId'] ?? 0),
 			clientIdentifiers: $parameters['clientIdentifiers'] ?? [],
+			excludeId: (int)($parameters['excludeId'] ?? 0),
 		);
 
 		if (empty($filter))
@@ -53,6 +54,33 @@ final class EntityDataCollector extends BaseDataCollector
 			$this->getEntityList($items),
 			$this->getOrdersSummary($items),
 		];
+	}
+
+	public function getMarkersForEntity(int $entityId): array
+	{
+		if ($entityId <= 0)
+		{
+			return [];
+		}
+
+		$items = $this->getData([
+			'filter' => [
+				Item::FIELD_NAME_ID => $entityId,
+				'=' . Item::FIELD_NAME_IS_RECURRING => 'N',
+			],
+			'limit' => 1,
+		]);
+		if (empty($items))
+		{
+			return [];
+		}
+
+		$items = array_map(
+			static fn (Item $item) => array_filter($item->getCompatibleData()),
+			$items,
+		);
+
+		return $this->getEntityList($items)[$entityId] ?? [];
 	}
 
 	private function getEntityList(array $items): array
@@ -132,7 +160,11 @@ final class EntityDataCollector extends BaseDataCollector
 		];
 	}
 
-	private function prepareCopilotMarkersFilter(int $entityId, array $clientIdentifiers): array
+	private function prepareCopilotMarkersFilter(
+		int $entityId,
+		array $clientIdentifiers,
+		?int $excludeId = null,
+	): array
 	{
 		$filter = [];
 
@@ -165,9 +197,17 @@ final class EntityDataCollector extends BaseDataCollector
 			'=' . Item::FIELD_NAME_IS_RECURRING => 'N',
 		];
 
-		if ($entityId > 0)
+		if ($entityId > 0 && $excludeId > 0)
+		{
+			$entityFilter['!@' . Item::FIELD_NAME_ID] = [$entityId, $excludeId];
+		}
+		elseif ($entityId > 0)
 		{
 			$entityFilter['!=' . Item::FIELD_NAME_ID] = $entityId;
+		}
+		elseif ($excludeId > 0)
+		{
+			$entityFilter['!=' . Item::FIELD_NAME_ID] = $excludeId;
 		}
 
 		return array_merge($filter, $entityFilter);

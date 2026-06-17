@@ -13,6 +13,7 @@ use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\AIOperationStateChecker;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\StateChecker\ScenarioStateChecker;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 final class FillFieldsInCall extends AIAction
 {
@@ -89,5 +90,10 @@ final class FillFieldsInCall extends AIAction
 	protected function addCustomParams(JsEvent $jsEvent): JsEvent
 	{
 		return $jsEvent->addActionParamString('scenario', Scenario::FILL_FIELDS_SCENARIO);
+	}
+
+	protected function getMenuIcon(): Outline
+	{
+		return Outline::CRM_FIELD_SIMPLE;
 	}
 }

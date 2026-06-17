@@ -3,8 +3,8 @@
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Socialservices\OAuth\StateService;
-
 IncludeModuleLangFile(__FILE__);
 
 class CSocServMailRu2 extends CSocServAuth
@@ -12,7 +12,6 @@ class CSocServMailRu2 extends CSocServAuth
 	const ID = "MailRu2";
 	const CONTROLLER_URL = "https://www.bitrix24.ru/controller";
 
-	private static bool $isCloudPortal;
 	protected $entityOAuth;
 
 	public function GetSettings()
@@ -47,6 +46,8 @@ class CSocServMailRu2 extends CSocServAuth
 		{
 			$this->entityOAuth->setCode($code);
 		}
+
+		$this->entityOAuth->setLogger($this->logger);
 
 		return $this->entityOAuth;
 	}
@@ -176,111 +177,20 @@ class CSocServMailRu2 extends CSocServAuth
 		return $arFields;
 	}
 
-	private function isCloudPortal(): bool
-	{
-		self::$isCloudPortal ??= IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME');
-
-		return self::$isCloudPortal;
-	}
-
-	private function getRequestState(string $state = null): ?array
-	{
-		if (empty($state))
-		{
-			if (isset($_REQUEST['state']))
-			{
-				$state = $_REQUEST['state'];
-			}
-			else
-			{
-				return null;
-			}
-		}
-
-		return StateService::getInstance()->getPayload($state);
-	}
-
-	private function getAuthorizeRedirectUrl($authError): string
-	{
-		global $APPLICATION;
-
-		/**
-		 * @var \CMain $APPLICATION
-		 */
-
-		$bSuccess = $authError === true;
-
-		$url = $APPLICATION->GetCurDir();
-		if ($url === '/login/')
-		{
-			$url = '';
-		}
-
-		$aRemove = array("logout", "auth_service_error", "auth_service_id", "code", "error_reason", "error", "error_description", "check_key", "current_fieldset");
-		$arState = $this->getRequestState();
-
-		if (
-			$bSuccess
-			&& (
-				isset($arState['backurl'])
-				|| isset($arState['redirect_url'])
-			)
-		)
-		{
-			$url = !empty($arState['redirect_url']) ? $arState['redirect_url'] : $arState['backurl'];
-			if (mb_substr($url, 0, 1) !== "#")
-			{
-				$parseUrl = parse_url($url);
-
-				$urlPath = $parseUrl["path"];
-				$arUrlQuery = explode('&', $parseUrl["query"]);
-
-				foreach ($arUrlQuery as $key => $value)
-				{
-					foreach ($aRemove as $param)
-					{
-						if (mb_strpos($value, $param."=") === 0)
-						{
-							unset($arUrlQuery[$key]);
-							break;
-						}
-					}
-				}
-
-				$url = (!empty($arUrlQuery)) ? $urlPath . '?' . implode("&", $arUrlQuery) : $urlPath;
-			}
-		}
-
-		if ($authError === SOCSERV_REGISTRATION_DENY)
-		{
-			$url = (preg_match("/\?/", $url)) ? $url . '&' : $url . '?';
-			$url .= 'auth_service_id=' . self::ID . '&auth_service_error=' . $authError;
-		}
-		elseif ($bSuccess !== true)
-		{
-			$url = (isset($urlPath)) ? $urlPath . '?auth_service_id=' . self::ID . '&auth_service_error=' . $authError : $GLOBALS['APPLICATION']->GetCurPageParam(('auth_service_id=' . self::ID . '&auth_service_error=' . $authError), $aRemove);
-		}
-
-		if (CModule::IncludeModule("socialnetwork") && mb_strpos($url, "current_fieldset=") === false)
-		{
-			$url .= ((mb_strpos($url, "?") === false) ? '?' : '&') . "current_fieldset=SOCSERV";
-		}
-
-		return $url;
-	}
-
 	public function Authorize()
 	{
 		global $APPLICATION;
 
 		$APPLICATION->RestartBuffer();
 		$authError = SOCSERV_AUTHORISATION_ERROR;
+		$this->logger->info('oauth.auth.start');
 
-		if (
-			isset($_REQUEST["code"])
-			&& $_REQUEST["code"] <> ''
-			&& CSocServAuthManager::CheckUniqueKey()
-		)
+		if (empty($_REQUEST['code']))
+		{
+			$this->logger->error('oauth.request.invalid_code');
+			$this->sendOauthError(OAuthErrorCode::MissingCode);
+		}
+		elseif (CSocServAuthManager::CheckUniqueKey())
 		{
 			if ($this->isCloudPortal())
 			{
@@ -301,10 +211,34 @@ class CSocServMailRu2 extends CSocServAuth
 						$this->prepareUser($arUser)
 					);
 				}
+				else
+				{
+					$this->logger->error('oauth.user.fetch_failed', [
+						'reason' => 'missing_user_email',
+					]);
+				}
+			}
+			else
+			{
+				$this->logger->error('oauth.token.exchange_failed', [
+					'reason' => 'get_access_token_failed',
+				]);
 			}
 		}
+		else
+		{
+			$this->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'check_key_validation_failed',
+			]);
+			$this->sendOauthError(OAuthErrorCode::InvalidCheckKey);
+		}
 
-		$url = $this->getAuthorizeRedirectUrl($authError);
+		$this->logger->info('oauth.auth.finish', [
+			'success' => ($authError === true),
+			'auth_result' => $authError,
+		]);
+
+		$url = $this->getRedirectUriAfterAuthorize($authError, self::ID);
 
 		$this->onAfterWebAuth(true, self::OPENER_MODE, $url);
 		CMain::FinalActions();
@@ -415,6 +349,10 @@ class CMailRu2Interface extends CSocServOAuthTransport
 
 		if ($this->code === false)
 		{
+			$this->logger->error('oauth.token.exchange_failed', [
+				'reason' => 'empty_code',
+			]);
+
 			return false;
 		}
 
@@ -455,6 +393,10 @@ class CMailRu2Interface extends CSocServOAuthTransport
 			);
 			return true;
 		}
+
+		$this->logger->error('oauth.token.exchange_failed', [
+			'reason' => 'token_not_found_in_response',
+		]);
 
 		return false;
 	}
@@ -535,6 +477,10 @@ class CMailRu2Interface extends CSocServOAuthTransport
 	{
 		if ($this->access_token === false)
 		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'empty_access_token',
+			]);
+
 			return false;
 		}
 
@@ -545,12 +491,25 @@ class CMailRu2Interface extends CSocServOAuthTransport
 
 		try
 		{
-			return Json::decode($result);
+			$decoded = Json::decode($result);
 		}
 		catch (\Bitrix\Main\ArgumentException $e)
 		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'invalid_response',
+			]);
+
 			return false;
 		}
+
+		if (!is_array($decoded))
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'invalid_response_payload',
+			]);
+		}
+
+		return $decoded;
 	}
 
 	/**

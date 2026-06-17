@@ -43,18 +43,18 @@ class MailboxAccess extends MailAccess
 
 	public static function hasUserAccessToMailbox(int $mailboxId, int $userId, bool $withSharedMailboxes = false): bool
 	{
-		if (!$withSharedMailboxes)
+		if ($withSharedMailboxes && self::isMailboxSharedWithUser($mailboxId, $userId))
 		{
-			$mailbox = MailboxTable::getById($mailboxId)->fetch();
-			if (!$mailbox)
-			{
-				return false;
-			}
-
-			return (int)$mailbox['USER_ID'] === $userId;
+			return true;
 		}
 
-		return self::isMailboxSharedWithUser($mailboxId, $userId);
+		$mailbox = MailboxTable::getById($mailboxId)->fetch();
+		if (!$mailbox)
+		{
+			return false;
+		}
+
+		return (int)$mailbox['USER_ID'] === $userId;
 	}
 
 	public static function hasCurrentUserAccessToMailbox(int $mailboxId, bool $withSharedMailboxes = false): bool
@@ -91,11 +91,9 @@ class MailboxAccess extends MailAccess
 		return $controllerClass::can($userId, MailActionDictionary::ACTION_MAILBOX_LIST_ITEM_EDIT, $mailboxId);
 	}
 
-	public static function hasCurrentUserAccessToEditMailboxAccess(int $mailboxId = 0, array $mailboxData = []): bool
+	public static function hasCurrentUserAccessToEditMailboxAccess(int $mailboxId, int $ownerId): bool
 	{
 		$userId = self::getCurrentUserId();
-		$mailboxId = $mailboxId ?: (int)($mailboxData['ID'] ?? 0);
-		$ownerId = (int)($mailboxData['USER_ID'] ?? 0);
 
 		if (!$userId || !$mailboxId || !$ownerId)
 		{

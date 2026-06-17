@@ -559,7 +559,15 @@ class BaseActivity implements OptionallyConfigurable
 			{
 				$this->id = (int)$result->getData()['id'];
 
-				if ($this->getParentActivityId())
+				$allowComplete = true;
+				if (
+					isset($options['DISABLE_COMPLETE_PARENT_ACTIVITY'])
+					&& $options['DISABLE_COMPLETE_PARENT_ACTIVITY'] === true
+				)
+				{
+					$allowComplete = false;
+				}
+				if ($allowComplete && $this->getParentActivityId())
 				{
 					// close parent activity
 					if (!CCrmActivity::Complete($this->getParentActivityId(), true, ['REGISTER_SONET_EVENT' => true]))

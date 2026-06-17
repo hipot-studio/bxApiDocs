@@ -18,7 +18,8 @@ class TeamCreateTool extends NodeCreateTool
 
 	public function getDescription(): string
 	{
-		return 'Create a new node with the specified parameters when node is a team. 
-This tool provides functionality to set up node with employees and communication tools.';
+		return 'Create a new team under `parentId`. '
+			. 'Can optionally seed the team with members grouped by role and link or create chats/channels/collabs in one call. '
+			. 'Use when the user wants to add a new team to the org structure.';
 	}
 }

@@ -2,6 +2,7 @@
 namespace Bitrix\Timeman\Service\Worktime;
 
 use Bitrix\Bizproc\Public\Activity\Trigger\ContextFields\TimemanStartWorktimeTrigger;
+use Bitrix\Bizproc\Public\Activity\Trigger\ContextFields\TimemanStopWorktimeTrigger;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Result\StartResult;
@@ -252,6 +253,10 @@ class WorktimeService extends BaseService
 				$this->addStartWorkTimeTrigger($actualRecord->getUserId());
 			}
 
+			if ($actionListResult->getWorktimeAction()->isStop()) {
+				$this->addStopWorkTimeTrigger($actualRecord->getUserId(), $actualRecord->getId());
+			}
+
 			if ($actionListResult->getSchedule())
 			{
 				$this->sendNotifications($actualRecord, $actionListResult->getSchedule());
@@ -490,6 +495,28 @@ class WorktimeService extends BaseService
 		return Starter::getByScenario(Scenario::onEvent)
 			->setContext(new ContextDto('timeman'))
 			->addEvent('StartWorkTimeTrigger', [], $fields)
+			->start()
+		;
+	}
+
+	private function addStopWorkTimeTrigger(int $userId, int $recordId): ?StartResult
+	{
+		if (
+			!Loader::includeModule('bizproc')
+			|| !class_exists(TimemanStopWorktimeTrigger::class)
+		)
+		{
+			return null;
+		}
+
+		$fields = [
+			TimemanStopWorktimeTrigger::FIELD_USER_ID => $userId,
+			TimemanStopWorktimeTrigger::FIELD_RECORD_ID => $recordId,
+		];
+
+		return Starter::getByScenario(Scenario::onEvent)
+			->setContext(new ContextDto('timeman'))
+			->addEvent('StopWorkTimeTrigger', [], $fields)
 			->start()
 		;
 	}

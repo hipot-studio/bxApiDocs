@@ -6,8 +6,13 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 
 class GroupBlocks extends ContentBlock
 {
+	public const BORDER_TYPE_BASE = 'base';
+	public const BORDER_TYPE_WARNING = 'warning';
+
 	/** @var ContentBlock[] */
 	protected array $items = [];
+
+	protected string $borderType = self::BORDER_TYPE_BASE;
 
 	public function getRendererName(): string
 	{
@@ -26,6 +31,18 @@ class GroupBlocks extends ContentBlock
 		return $this;
 	}
 
+	public function setBorderType(string $borderType): self
+	{
+		$this->borderType = $borderType;
+
+		return $this;
+	}
+
+	public function getBorderType(): string
+	{
+		return $this->borderType;
+	}
+
 	public function setBlocks(array $items): self
 	{
 		$this->items = $items;
@@ -41,6 +58,7 @@ class GroupBlocks extends ContentBlock
 	protected function getProperties(): array
 	{
 		return [
+			'borderType' => $this->getBorderType(),
 			'blocks' => $this->getBlocks(),
 		];
 	}

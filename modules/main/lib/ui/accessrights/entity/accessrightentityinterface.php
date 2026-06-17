@@ -72,4 +72,6 @@ interface AccessRightEntityInterface
 	 * @return string|null
 	 */
 	public function getAvatar(int $width, int $height): ?string;
+
+	public function exists(): bool;
 }

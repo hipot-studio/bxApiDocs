@@ -24,10 +24,33 @@ class EntitySelector extends Base
 		return FieldType::ENTITYSELECTOR;
 	}
 
-	public static function extractValueMultiple(FieldType $fieldType, array $field, array $request)
+	public static function extractValueMultiple(FieldType $fieldType, array $field, array $request): array
 	{
 		$name = $field['Field'];
 		$value = $request[$name] ?? [];
+
+		if (is_array($value))
+		{
+			$resultItems = [];
+			foreach ($value as $valueItem)
+			{
+				if (
+					!empty($valueItem['id'])
+					&& !empty($valueItem['entityId'])
+				)
+				{
+					$resultItems[] = [
+						'id' => $valueItem['id'],
+						'entityId' => $valueItem['entityId'],
+					];
+				}
+			}
+
+			if (!empty($resultItems))
+			{
+				return $resultItems;
+			}
+		}
 
 		if (!is_array($value))
 		{
@@ -38,6 +61,25 @@ class EntitySelector extends Base
 		$request[$name] = $value;
 
 		return parent::extractValueMultiple($fieldType, $field, $request);
+	}
+
+	public static function extractValueSingle(FieldType $fieldType, array $field, array $request)
+	{
+		$name = $field['Field'];
+		$value = $request[$name] ?? [];
+
+		if (
+			!empty($value['id'])
+			&& !empty($value['entityId'])
+		)
+		{
+			return [
+				'id' => $value['id'],
+				'entityId' => $value['entityId'],
+			];
+		}
+
+		return parent::extractValueSingle($fieldType, $field, $request);
 	}
 
 	/**
@@ -89,7 +131,24 @@ HTML;
 
 	public static function renderControlMultiple(FieldType $fieldType, array $field, $value, $allowSelection, $renderMode)
 	{
-		return static::renderControl($fieldType, $field, $value, $allowSelection, $renderMode);
+		$renderResult = static::renderControl($fieldType, $field, $value, $allowSelection, $renderMode);
+		if ($allowSelection)
+		{
+			if (is_array($value))
+			{
+				$value = current($value);
+			}
+
+			$selectorValue = null;
+			if (\CBPActivity::isExpression($value))
+			{
+				$selectorValue = $value;
+			}
+
+			$renderResult .= static::renderControlSelector($field, $selectorValue, true, '', $fieldType);
+		}
+
+		return $renderResult;
 	}
 
 	public static function renderControlSingle(FieldType $fieldType, array $field, $value, $allowSelection, $renderMode)

@@ -22,61 +22,31 @@ class FlowSaveRule extends AbstractRule
 
 	public function execute(AccessibleItem $item = null, $params = null): bool
 	{
+		if ($item !== null && !$this->checkModel($item))
+		{
+			return false;
+		}
+
 		if (!$this->checkModel($params))
 		{
 			return false;
 		}
 
-		/** @var FlowModel $params */
-		if ($params->isNew() && !$this->controller->check(FlowAction::CREATE, $params))
+		if (!$this->checkFlowPermission($item, $params))
 		{
 			return false;
 		}
 
-		if ($params->getProjectId() > 0)
+		/** @var ?FlowModel $item */
+		$oldGroupId = (int)$item?->getProjectId();
+
+		$newGroupId = $params->getProjectId();
+
+		$isGroupChanged = $oldGroupId !== $newGroupId;
+
+		if ($isGroupChanged && !$this->checkGroupAvailability($newGroupId))
 		{
-			$group = GroupRegistry::getInstance()->get($params->getProjectId());
-			if (null === $group)
-			{
-				$this->controller->addError(static::class, 'Unable to load group info');
-				return false;
-			}
-
-			// tasks disabled for group
-			// the group is archived
-			if (
-				!$group['TASKS_ENABLED']
-				|| $group['CLOSED'] === 'Y'
-			)
-			{
-				$this->controller->addError(static::class, 'Unable to create flow bc group is closed or tasks disabled');
-				return false;
-			}
-
-			if ($this->user->isAdmin())
-			{
-				return true;
-			}
-
-			/** @var FlowModel $item */
-			if ((int)$item?->getProjectId() === $params->getProjectId())
-			{
-				if ((int)$item?->getOwnerId() === $this->user->getUserId())
-				{
-					return true;
-				}
-
-				if ((int)$item?->getCreatorId() === $this->user->getUserId())
-				{
-					return true;
-				}
-			}
-
-			if (!Group::isUserMember($group['ID'], $this->user->getUserId()))
-			{
-				$this->controller->addError(static::class, 'Unable by group permissions');
-				return false;
-			}
+			return false;
 		}
 
 		if ($this->user->isAdmin())
@@ -84,19 +54,104 @@ class FlowSaveRule extends AbstractRule
 			return true;
 		}
 
-		if (
-			$params->getTemplateId() > 0
-			&& !TemplateAccessController::can(
-				$this->user->getUserId(),
-				ActionDictionary::ACTION_TEMPLATE_READ,
-				$params->getTemplateId()
-			)
-		)
+		if ($isGroupChanged && !$this->checkGroupPermission($newGroupId))
 		{
-			$this->controller->addError(static::class, 'Unable to create flow by template permissions');
+			return false;
+		}
+
+		if (!$this->checkTemplatePermission($params->getTemplateId()))
+		{
 			return false;
 		}
 
 		return true;
+	}
+
+	private function checkFlowPermission(?FlowModel $item, FlowModel $params): bool
+	{
+		if ($params->isNew())
+		{
+			return $this->controller->check(FlowAction::CREATE, $params);
+		}
+
+		return $this->controller->check(FlowAction::UPDATE, $item, $params);
+	}
+
+	private function checkGroupAvailability(int $groupId): bool
+	{
+		if ($groupId <= 0)
+		{
+			$this->controller->addError(FlowSaveRule::class, 'Unable by invalid group id');
+
+			return false;
+		}
+
+		$group = $this->getGroupRegistry()->get($groupId);
+		if ($group === null)
+		{
+			$this->controller->addError(FlowSaveRule::class, 'Unable to load group info');
+
+			return false;
+		}
+
+		$isTasksEnabled = $group['TASKS_ENABLED'] ?? null;
+		$isClosed = ($group['CLOSED'] ?? null) === 'Y';
+
+		if (!$isTasksEnabled || $isClosed)
+		{
+			$this->controller->addError(FlowSaveRule::class, 'Unable to create flow bc group is closed or tasks disabled');
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private function checkGroupPermission(int $groupId): bool
+	{
+		if (!$this->isUserGroupMember($groupId))
+		{
+			$this->controller->addError(FlowSaveRule::class, 'Unable by target group permissions');
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private function checkTemplatePermission(int $templateId): bool
+	{
+		if ($templateId <= 0)
+		{
+			return true;
+		}
+
+		if (!$this->canReadTemplate($templateId))
+		{
+			$this->controller->addError(FlowSaveRule::class, 'Unable to create flow by template permissions');
+
+			return false;
+		}
+
+		return true;
+	}
+
+	protected function getGroupRegistry(): GroupRegistry
+	{
+		return GroupRegistry::getInstance();
+	}
+
+	protected function isUserGroupMember(int $groupId): bool
+	{
+		return Group::isUserMember($groupId, $this->user->getUserId());
+	}
+
+	protected function canReadTemplate(int $templateId): bool
+	{
+		return TemplateAccessController::can(
+			userId: $this->user->getUserId(),
+			action: ActionDictionary::ACTION_TEMPLATE_READ,
+			itemId: $templateId,
+		);
 	}
 }

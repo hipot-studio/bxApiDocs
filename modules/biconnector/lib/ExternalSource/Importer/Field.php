@@ -9,7 +9,7 @@ class Field
 	public function __construct(
 		readonly string $externalCode,
 		readonly string $name,
-		readonly Biconnector\ExternalSource\FieldType $type,
+		readonly BIConnector\ExternalSource\FieldType $type,
 		readonly ?string $format = null,
 	)
 	{

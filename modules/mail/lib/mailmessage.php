@@ -43,6 +43,27 @@ class MailMessageTable extends Entity\DataManager
 		return 'b_mail_message';
 	}
 
+	public static function getConsistentById(int $id, ?array $select = null): ?array
+	{
+		$row = self::getList([
+			'runtime' => [
+				new \Bitrix\Main\Entity\ReferenceField(
+					'MESSAGE_UID',
+					MailMessageUidTable::class,
+					[
+						'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+						'=this.ID' => 'ref.MESSAGE_ID',
+					],
+					['join_type' => 'INNER'],
+				),
+			],
+			'select' => $select ?? ['*', 'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE'],
+			'filter' => ['=ID' => $id],
+		])->fetch();
+
+		return is_array($row) ? $row : null;
+	}
+
 	public static function getMap()
 	{
 		return array(

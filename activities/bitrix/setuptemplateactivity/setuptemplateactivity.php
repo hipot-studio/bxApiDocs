@@ -12,9 +12,11 @@ use Bitrix\Bizproc\Integration\Push\PushWorker;
 use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\Block;
 use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\BlockCollection;
 use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\Constant;
+use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\ConstantConfiguration;
 use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\Delimiter;
 use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\DelimiterType;
 use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\Description;
+use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\EntitySelector\SelectorProvider;
 use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\Item;
 use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\ItemCollection;
 use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\ItemType;
@@ -23,12 +25,14 @@ use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\TitleWithIcon;
 use Bitrix\Bizproc\Internal\Event\SetupTemplateCurrentDataEvent;
 use Bitrix\Bizproc\Internal\Event\SetupTemplateUserInputEvent;
 use Bitrix\Bizproc\Internal\Event\SetupTemplateValidationEvent;
+use Bitrix\Bizproc\Internal\Integration\BI\Dashboard\DocumentFieldTypes\BIDashboardType;
 use Bitrix\Bizproc\Internal\Integration\Rag\DocumentFieldTypes\RagKnowledgeBaseType;
 use Bitrix\Bizproc\Internal\Integration\Tasks\DocumentFieldTypes\ProjectType;
 use Bitrix\Bizproc\Internal\Integration\UI\UploaderHelper;
 use Bitrix\Bizproc\Internal\Service\DocumentField\AccessValidationService;
 use Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate;
 use Bitrix\Bizproc\WorkflowTemplateTable;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
@@ -55,6 +59,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 	private const ERROR_CODE_UNKNOWN_ITEM_TYPE = 'UnknownItemType';
 	private const ERROR_CODE_UNKNOWN_FIELD_TYPE = 'UnknownFieldType';
 	private const EXPIRES_IN = 24 * 60 * 60;
+	private const CONSTANT_SETTINGS_ENTITYSELECTOR_SELECTOR_ID = 'selectorId';
+	private const CONSTANT_SETTINGS_ENTITYSELECTOR_SELECTOR = 'selector';
 	private int $subscriptionId = 0;
 
 	public function __construct($name)
@@ -108,7 +114,7 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 
 		$dialog->setMap(static::getPropertiesMap($documentType));
 		$dialog->setRuntimeData([
-			'typeNames' => self::getAllowedConstantTypes($documentType),
+			'constantConfigurationList' => self::getConstantConfigurationList($documentType),
 		]);
 
 		return $dialog;
@@ -268,7 +274,7 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 	): void
 	{
 		$model = $this->getTemplateNameAndDescriptionModel();
-		$blocksWithValues = $this->appendConstantValuesToBlocks($blocks);
+		$blocksWithValues = $this->appendConstantInfoToBlocks($blocks);
 
 		$this->sendCurrentDataEvent(
 			blocks: $blocksWithValues,
@@ -686,6 +692,47 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			);
 		}
 
+		if (
+			array_key_exists('settings', $arrayItem)
+			&& !is_null($arrayItem['settings'])
+			&& !is_array($arrayItem['settings'])
+		)
+		{
+			$errors[] = self::makeValidationError(
+				Loc::getMessage(
+					'BIZPROC_SETUP_TEMPLATE_ACTIVITY_VALIDATOR_IS_ARRAY',
+					[
+						'#name#' => Loc::getMessage('BIZPROC_SETUP_TEMPLATE_ACTIVITY_LABEL_CONSTANT_EDIT_SETTINGS'),
+						'#itemPosition#' => $itemPosition,
+						'#blockPosition#' => $blockPosition,
+					]
+				),
+			);
+		}
+
+		$constantType = $arrayItem['constantType'] ?? null;
+		if ($constantType === FieldType::ENTITYSELECTOR)
+		{
+			$settings = $arrayItem['settings'] ?? [];
+			$settings = is_array($settings) ? $settings : [];
+
+			$selectorProvider = ServiceLocator::getInstance()->get(SelectorProvider::class);
+			$selectorId = $settings[self::CONSTANT_SETTINGS_ENTITYSELECTOR_SELECTOR_ID] ?? null;
+			if (!$selectorProvider->isExists($selectorId))
+			{
+				$errors[] = self::makeValidationError(
+					Loc::getMessage(
+						'BIZPROC_SETUP_TEMPLATE_ACTIVITY_VALIDATOR_ENUM',
+						[
+							'#name#' => Loc::getMessage('BIZPROC_SETUP_TEMPLATE_ACTIVITY_LABEL_CONSTANT_EDIT_ENTITY_SELECTOR_SELECTOR_ID'),
+							'#itemPosition#' => $itemPosition,
+							'#blockPosition#' => $blockPosition,
+						]
+					),
+				);
+			}
+		}
+
 		if (!empty($errors))
 		{
 			return null;
@@ -699,6 +746,7 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			$arrayItem['multiple'] ?? false,
 			$arrayItem['required'] ?? false,
 			$arrayItem['options'] ?? [],
+			$arrayItem['settings'] ?? [],
 			(string)($arrayItem['default'] ?? ''),
 		);
 	}
@@ -934,16 +982,14 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 	}
 
 	/**
-	 * @return array<string, string> [type => name,...]
+	 * @param array|null $documentType
+	 * @return array<ConstantConfiguration>
 	 */
-	private static function getAllowedConstantTypes(?array $documentType): array
+	private static function getConstantConfigurationList(?array $documentType): array
 	{
 		$documentService = CBPRuntime::getRuntime()->getDocumentService();
 		$types = $documentService->GetDocumentFieldTypes($documentType);
-		$typeNames = array_map(
-			static fn(array $field): string => $field['Name'] ?? '',
-			$types,
-		);
+
 		$allowedTypes = [
 			FieldType::INT,
 			FieldType::STRING,
@@ -954,53 +1000,98 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			ProjectType::getType(),
 			FieldType::FILE,
 			FieldType::TIME,
+			BIDashboardType::getType(),
 		];
 
-		return array_filter(
-			$typeNames,
-			static fn(?string $v, string $k): bool => !empty($v) && in_array($k, $allowedTypes, true),
-			ARRAY_FILTER_USE_BOTH,
-		);
+		$constantConfigurationList = [];
+		foreach ($types as $type => $options)
+		{
+			if (empty($options['Name'] ?? null) || !in_array($type, $allowedTypes, true))
+			{
+				continue;
+			}
+
+			$constantConfigurationList[] = new ConstantConfiguration(
+				title: $options['Name'],
+				type: $type,
+				options: [],
+			);
+		}
+
+		$entitySelectorType = CBPHelper::getEntitySelectorTypeInfo();
+		if (!empty($entitySelectorType['Name']))
+		{
+			$selectorProvider = ServiceLocator::getInstance()->get(SelectorProvider::class);
+
+			$selectors = $selectorProvider->getAll();
+			if (!empty($selectors))
+			{
+				$constantConfigurationList[] = new ConstantConfiguration(
+					title: $entitySelectorType['Name'],
+					type: FieldType::ENTITYSELECTOR,
+					options: [
+						'selectors' => $selectors,
+					],
+				);
+			}
+		}
+
+		return $constantConfigurationList;
 	}
 
-	private function appendConstantValuesToBlocks(BlockCollection $blocks): BlockCollection
+	private function appendConstantInfoToBlocks(BlockCollection $blocks): BlockCollection
 	{
 		$patchedCollection = new BlockCollection();
 		foreach ($blocks as $block)
 		{
-			$patchedCollection->add(new Block($this->appendConstantValuesToItems($block->items)));
+			$patchedCollection->add(new Block($this->appendConstantInfoToItemCollection($block->items)));
 		}
 
 		return $patchedCollection;
 	}
 
-	private function appendConstantValuesToItems(ItemCollection $items): ItemCollection
+	private function appendConstantInfoToItemCollection(ItemCollection $items): ItemCollection
 	{
 		$patchedItems = new ItemCollection();
 		foreach ($items as $item)
 		{
-			$patchedItems->add($this->appendConstantValuesToItem($item));
+			$patchedItems->add($this->appendConstantInfoToItem($item));
 		}
 
 		return $patchedItems;
 	}
 
-	private function appendConstantValuesToItem(Item $item): Item
+	private function appendConstantInfoToItem(Item $item): Item
 	{
 		if (!$item instanceof Constant)
 		{
 			return $item;
 		}
 
-		$value = $this->getConstant($item->id);
-		if (is_scalar($value))
+		$defaultValue = $this->getConstant($item->id);
+		if (is_scalar($defaultValue))
 		{
-			$value = (string)$value;
+			$defaultValue = (string)$defaultValue;
 		}
 
-		if (empty($value) || (!is_string($value) && !is_array($value)))
+		if (empty($defaultValue) || (!is_string($defaultValue) && !is_array($defaultValue)))
 		{
-			return $item;
+			$defaultValue = $item->default;
+		}
+
+		$settings = $item->settings;
+		if (!is_array($settings))
+		{
+			$settings = [];
+		}
+
+		if ($item->constantType === FieldType::ENTITYSELECTOR)
+		{
+			$selectorProvider = ServiceLocator::getInstance()->get(SelectorProvider::class);
+			$selectorId = $item->settings[self::CONSTANT_SETTINGS_ENTITYSELECTOR_SELECTOR_ID] ?? null;
+			$selectorConfiguration = $selectorProvider->getById($selectorId);
+
+			$settings[self::CONSTANT_SETTINGS_ENTITYSELECTOR_SELECTOR] = $selectorConfiguration?->toArray() ?? [];
 		}
 
 		return new Constant(
@@ -1011,7 +1102,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			multiple: $item->multiple,
 			required: $item->required,
 			options: $item->options,
-			default: $value,
+			settings: $settings,
+			default: $defaultValue,
 		);
 	}
 

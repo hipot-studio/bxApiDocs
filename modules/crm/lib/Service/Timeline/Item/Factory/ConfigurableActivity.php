@@ -9,6 +9,7 @@ use Bitrix\Crm\Activity\Provider\CalendarSharing;
 use Bitrix\Crm\Activity\Provider\ConfigurableRestApp;
 use Bitrix\Crm\Activity\Provider\Delivery;
 use Bitrix\Crm\Activity\Provider\Document;
+use Bitrix\Crm\Activity\Provider\EntityExclusion;
 use Bitrix\Crm\Activity\Provider\Notification;
 use Bitrix\Crm\Activity\Provider\Payment;
 use Bitrix\Crm\Activity\Provider\RepeatSale;
@@ -17,11 +18,11 @@ use Bitrix\Crm\Activity\Provider\SignDocument;
 use Bitrix\Crm\Activity\Provider\Sms;
 use Bitrix\Crm\Activity\Provider\StoreDocument;
 use Bitrix\Crm\Activity\Provider\Tasks;
+use Bitrix\Crm\Activity\Provider\Telegram;
 use Bitrix\Crm\Activity\Provider\ToDo\ToDo;
 use Bitrix\Crm\Activity\Provider\Visit;
 use Bitrix\Crm\Activity\Provider\WhatsApp;
 use Bitrix\Crm\Activity\Provider\Zoom;
-use Bitrix\Crm\Activity\Provider\Telegram;
 use Bitrix\Crm\Activity\ProviderId;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item;
@@ -210,6 +211,11 @@ class ConfigurableActivity
 			if ($providerId === RepeatSale::getId())
 			{
 				return new Item\Activity\RepeatSale($context, $model);
+			}
+
+			if ($providerId === EntityExclusion::getId())
+			{
+				return new Item\Activity\EntityExclusion($context, $model);
 			}
 		}
 

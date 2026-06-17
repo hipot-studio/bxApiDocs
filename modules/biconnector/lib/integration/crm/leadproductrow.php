@@ -203,6 +203,7 @@ class LeadProductRow
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_lead_product_row']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_LEAD_PRODUCT_ROW_TABLE'] ?: 'crm_lead_product_row';
+		$result['crm_lead_product_row']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_LEAD_PRODUCT_ROW_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_lead_product_row']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_LEAD_PRODUCT_ROW_FIELD_' . $fieldCode];

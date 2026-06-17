@@ -10,7 +10,6 @@ use Bitrix\Main\Data\Internal\CacheCleanPathTable;
 class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 {
 	protected const LOCK_FILE = '/bitrix/cache/cacheCleanJob_lock.php';
-
 	protected int $written = 0;
 	protected int $read = 0;
 	protected string $path = '';
@@ -259,7 +258,6 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 		$ser_content = '';
 		$dateexpire = 0;
 		$datecreate = 0;
-		$zeroDanger = false;
 
 		$handle = null;
 		if (is_array($vars))
@@ -352,8 +350,8 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 		{
 			if (is_array($vars))
 			{
-				$contents = "<?";
-				$contents .= "\nif(\$INCLUDE_FROM_CACHE!='Y')return false;";
+				$contents = "<?php";
+				$contents .= "\nif(\$INCLUDE_FROM_CACHE!='Y') return false;";
 				$contents .= "\n\$datecreate = '" . str_pad(time(), 12, "0", STR_PAD_LEFT) . "';";
 				$contents .= "\n\$dateexpire = '" . str_pad(time() + intval($ttl), 12, "0", STR_PAD_LEFT) . "';";
 				$contents .= "\n\$ser_content = '" . str_replace($search, $replace, serialize($vars)) . "';";
@@ -491,9 +489,10 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 		$delta = 10;
 		$deleted = 0;
 		$etime = time() + 5;
+		$interrupted = false;
 
 		$managedCache = Application::getInstance()->getManagedCache();
-		$needClean = $managedCache->read(3600, 'needClean');
+		$needClean = $managedCache->getImmediate(3600, 'needClean');
 
 		if ($needClean != 'Y')
 		{
@@ -501,7 +500,7 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 			return;
 		}
 
-		$count = (int)$managedCache->getImmediate(604800, 'delCount');
+		$count = (int) $managedCache->getImmediate(604800, 'delCount');
 		if ($count < 1)
 		{
 			$count = 1;
@@ -521,17 +520,9 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 
 			if (time() > $etime)
 			{
+				$interrupted = true;
 				break;
 			}
-		}
-
-		if ($deleted > $count)
-		{
-			$count = $deleted;
-		}
-		elseif ($deleted < $count && $count > 1)
-		{
-			$count--;
 		}
 
 		$managedCache->read(604800, 'delCount');
@@ -539,7 +530,7 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 		{
 			$managedCache->setImmediate('delCount', $deleted);
 		}
-		elseif ($deleted < $count && $count > 1)
+		elseif ($interrupted && $deleted < $count && $count > 1)
 		{
 			$managedCache->setImmediate('delCount', $deleted);
 		}
@@ -547,7 +538,7 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 		if ($deleted == 0)
 		{
 			$managedCache->read(3600, 'needClean');
-			$managedCache->setImmediate('needClean', $deleted);
+			$managedCache->setImmediate('needClean', 'N');
 		}
 
 		$this->unlock($this->rootDirectory . self::LOCK_FILE);

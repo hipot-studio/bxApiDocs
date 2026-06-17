@@ -33,20 +33,11 @@ final class ExpensesAggregator
 	{
 		$result = new Main\Result();
 
-		$cacheDir = '/biconnector/integration/crm/dailyexpenses/';
-		$cacheName = $this->getRequestName($dateFrom, $dateTo);
-		$cacheTtl = (int)(Main\Config\Option::get('biconnector', 'crm_daily_expenses_report_cache_ttl', null) ?? self::CACHE_TTL);
-		$cache = Main\Data\Cache::createInstance();
-		if ($cache->initCache($cacheTtl, $cacheName, $cacheDir))
-		{
-			return $result->setData($cache->getVars());
-		}
-
 		$expenses = [];
 		/** @var Provider $provider */
 		foreach ($this->providers as $provider)
 		{
-			$providerExpensesResult = $provider->getDailyExpenses($dateFrom, $dateTo);
+			$providerExpensesResult = $this->buildProviderDailyExpensesReport($provider, $dateFrom, $dateTo);
 			if (!$providerExpensesResult->isSuccess())
 			{
 				$result->addErrors($providerExpensesResult->getErrors());
@@ -54,7 +45,38 @@ final class ExpensesAggregator
 				return $result;
 			}
 
-			$expenses = [...$expenses, ...$providerExpensesResult->getData()];
+			foreach ($providerExpensesResult->getData() as $expense)
+			{
+				$expenses[] = $expense;
+			}
+		}
+
+		return $result->setData($expenses);
+	}
+
+	private function buildProviderDailyExpensesReport(Provider $provider, ?Date $dateFrom, ?Date $dateTo): Main\Result
+	{
+		$result = new Main\Result();
+
+		$cacheDir = '/biconnector/integration/crm/dailyexpenses/';
+		$cacheName = $this->getProviderRequestName($provider, $dateFrom, $dateTo);
+		$cacheTtl = (int)(Main\Config\Option::get('biconnector', 'crm_daily_expenses_report_cache_ttl', null) ?? self::CACHE_TTL);
+		$cache = Main\Data\Cache::createInstance();
+		if ($cache->initCache($cacheTtl, $cacheName, $cacheDir))
+		{
+			return $result->setData($cache->getVars());
+		}
+
+		$providerExpensesResult = $provider->getDailyExpensesRows($dateFrom, $dateTo);
+		if (!$providerExpensesResult->isSuccess())
+		{
+			return $result->addErrors($providerExpensesResult->getErrors());
+		}
+
+		$expenses = [];
+		foreach (($providerExpensesResult->getData()['expenses'] ?? []) as $expense)
+		{
+			$expenses[] = $expense;
 		}
 
 		$cache->startDataCache();
@@ -63,7 +85,7 @@ final class ExpensesAggregator
 		return $result->setData($expenses);
 	}
 
-	private function getRequestName(?Date $dateFrom, ?Date $dateTo): string
+	private function getProviderRequestName(Provider $provider, ?Date $dateFrom, ?Date $dateTo): string
 	{
 		$name = '';
 		if ($dateFrom)
@@ -76,15 +98,7 @@ final class ExpensesAggregator
 			$name .= 't:' . $dateTo->getTimestamp() . '|';
 		}
 
-		$providerIds = [];
-		foreach ($this->providers as $provider)
-		{
-			$providerIds[] = $provider->getId();
-		}
-
-		sort($providerIds);
-
-		$name .= 'p:' . implode(',', $providerIds);
+		$name .= 'p:' . $provider->getCacheKey();
 
 		return $name;
 	}

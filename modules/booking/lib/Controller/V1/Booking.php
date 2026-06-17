@@ -260,6 +260,24 @@ class Booking extends BaseController
 		return $result->getBooking();
 	}
 
+	public function canChangeDateAction(int $bookingId, int $dateFromTs, int $dateToTs): bool|null
+	{
+		try
+		{
+			return Container::getDateChangeAvailabilityService()->canChangeDate(
+				bookingId: $bookingId,
+				dateFromTs: $dateFromTs,
+				dateToTs: $dateToTs,
+			);
+		}
+		catch (Exception $e)
+		{
+			$this->addError(ErrorBuilder::buildFromException($e));
+
+			return null;
+		}
+	}
+
 	public function deleteAction(int $id): array|null
 	{
 		$command = new RemoveBookingCommand(

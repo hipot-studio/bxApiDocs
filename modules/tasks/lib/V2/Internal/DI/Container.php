@@ -9,6 +9,7 @@ use Bitrix\Tasks\Deadline\Internals\Repository\Cache\Managed\CacheDeadlineUserOp
 use Bitrix\Tasks\Deadline\Internals\Repository\DeadlineUserOptionRepositoryInterface;
 use Bitrix\Tasks\DI\AbstractContainer;
 use Bitrix\Tasks\Internals\Counter;
+use Bitrix\Tasks\Internals\Notification;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Provider\Log\TaskLogProvider;
 use Bitrix\Tasks\V2\FormV2Feature;
@@ -515,5 +516,10 @@ class Container extends AbstractContainer
 	public function getChatIntegration(): Chat
 	{
 		return $this->get(Chat::class);
+	}
+
+	public function getNotificationController(): Notification\Controller
+	{
+		return $this->get(Notification\Controller::class);
 	}
 }

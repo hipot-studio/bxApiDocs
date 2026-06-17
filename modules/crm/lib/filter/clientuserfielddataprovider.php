@@ -36,6 +36,21 @@ class ClientUserFieldDataProvider extends UserFieldDataProvider
 		return $result;
 	}
 
+	public function prepareListFilter(array &$filter, array $filterFields, array $requestFilter)
+	{
+		$clientFilter = [];
+		parent::prepareListFilter($clientFilter, $filterFields, $requestFilter);
+
+		foreach ($clientFilter as $fieldIdWithOperation => $fieldValue)
+		{
+			$normalizedFieldId = $this->clientFieldHelper->normalizeFilterFieldId($fieldIdWithOperation);
+			if ($normalizedFieldId !== null)
+			{
+				$filter[$normalizedFieldId] = $fieldValue;
+			}
+		}
+	}
+
 	/**
 	 * Get user fields from contact or company for entity
 	 * @return array

@@ -1,1 +1,356 @@
-<? namespace Bitrix\Main;$GLOBALS['____1208237551']= array(base64_decode('Z'.'mls'.'Z'.'V9leGlz'.'dHM'.'='),base64_decode('c3RydG91c'.'HB'.'lc'.'g='.'='),base64_decode('bW'.'Q'.'1'),base64_decode('bWQ1'),base64_decode(''.'aW'.'5f'.'Y'.'XJy'.'YXk='),base64_decode('aW5fYXJy'.'YXk='),base64_decode(''.'ZGVmaW'.'5lZA=='),base64_decode('ZGVmaW5lZ'.'A=='),base64_decode('Z'.'GV'.'ma'.'W5lZA=='),base64_decode('ZmlsZ'.'V9leGlzdHM'.'='),base64_decode('Zml'.'sZV'.'9leGlzdHM'.'='),base64_decode(''.'ZmlsZ'.'V9leGlzdH'.'M='),base64_decode('Zm'.'lsZV9l'.'eG'.'lz'.'dHM='),base64_decode('Z'.'XhwbG9k'.'ZQ='.'='));if(!function_exists(__NAMESPACE__.'\\___541349859')){function ___541349859($_1770518544){static $_1511989773= false; if($_1511989773 == false) $_1511989773=array(''.'L2JpdHJpeC9sa'.'WNlbnNlX2tleS5wa'.'HA=','','','R'.'EVNTw'.'==','REVNTw'.'==',''.'Q'.'klUUkl'.'Y','TElDRU5D'.'RQ==','RE'.'VNTw'.'==','L2tleV'.'91cG'.'R'.'hdG'.'Uu'.'c'.'G'.'hwP2xpY2Vuc2Vfa2V5PQ'.'='.'=',''.'JnRv'.'YmF'.'za2V'.'0PXkmb'.'G'.'F'.'u'.'Zz0'.'=','aH'.'R'.'0cHM6Ly'.'9kZXYuMWMtYml0cml4LnJ1L2'.'xlYXJuaW5nL2'.'NvdXJ'.'zZS9'.'p'.'bmRleC5waHA'.'/Q09V'.'UlNFX0lEPTEz'.'NSZMRV'.'NTT05fSUQ9'.'MjU3'.'MjA=','aHR0'.'cHM6Ly'.'90cmF'.'pbmluZy5iaXRya'.'XgyNC5jb2'.'0'.'vc3VwcG9ydC90'.'cm'.'F'.'pb'.'ml'.'uZy9'.'jb3Vyc2UvaW'.'5kZXg'.'ucGhw'.'P0NPVVJTRV9J'.'RD'.'0'.'xNz'.'g'.'mTEVTU09OX'.'0lEPTI1OTMyJ'.'kxFU1'.'NPT'.'l'.'9QQV'.'RIP'.'T'.'E3N'.'TIwLjE3NTYyL'.'jI1OTMwLj'.'I1'.'OTMy',''.'cn'.'U=','Ynk=','a'.'3o=',''.'Z'.'GU=','ZXU=','ZnI=','cGw=',''.'a'.'XQ=','dWs'.'=','ZX'.'U'.'=','Y'.'29'.'t','cnU=','ZW4'.'=',''.'R'.'E'.'VNTw==','W'.'Q='.'=','VElNR'.'UxJTUlU'.'X0VESV'.'RJT04=','WQ==',''.'RU5D'.'T0'.'RF','W'.'Q'.'==','U'.'2'.'l0ZUV'.'4'.'c'.'Gl'.'yZUR'.'hdGU'.'=','bW'.'F'.'pbg'.'='.'=',''.'f'.'nN1cHBvc'.'nRfZml'.'uaXN'.'oX2RhdGU'.'=','WS1tLWQ=','WS1tLWQ=','Y'.'ml0cml4Mj'.'Q=','bW'.'F'.'pb'.'g='.'=','f'.'lBBUkF'.'NX0N'.'MS'.'U'.'VO'.'VF9'.'MQU5H','','aW5'.'0cmFuZXQ=','ZW4=','c'.'nU=',''.'bWFpbg='.'=','dmVuZ'.'G9y','Y'.'ml0c'.'m'.'l4X'.'3Bvc'.'nRhbA='.'=','Y'.'m'.'l0cml4','ZW4=','MW'.'NfYml0'.'cml4X3Bv'.'cn'.'Rh'.'b'.'A='.'=',''.'MWNfYml0c'.'m'.'l'.'4','cnU=','L2Jp'.'dHJpeC'.'9tb2R1'.'bGVzL21'.'h'.'aW4v'.'bGFuZy91Y'.'Q==',''.'dWE=','L2JpdH'.'J'.'peC9tb2R1bGV'.'zL21h'.'aW4vbGFuZy9ieQ==',''.'Ynk=','L2J'.'pd'.'H'.'Jpe'.'C9tb2R1'.'bG'.'VzL2'.'1haW4vb'.'GFu'.'Zy9'.'reg==','a'.'3'.'o=','L2Jp'.'dH'.'JpeC9t'.'b2R1bGVz'.'L'.'21'.'haW'.'4vbGFuZy9'.'ydQ==','c'.'n'.'U=','b'.'WFpbg==','flBB'.'U'.'k'.'FNX'.'1BBUl'.'RO'.'RVJf'.'SUQ'.'=',''.'bWFpbg==','UEF'.'SQU'.'1f'.'TUFYX1V'.'T'.'RVJT','b'.'WF'.'pbg==',''.'fkN'.'PV'.'U5'.'UX0'.'VY'.'VFJB','Tg==','WQ==','ZXh0'.'cmFuZ'.'X'.'Q'.'=',''.'QU5EI'.'FUuTEFTV'.'F9MT0'.'dJTiA+IA==','Q'.'U5EIFUuT'.'EF'.'TVF9MT0dJTiBJUyB'.'OT'.'1Qg'.'TlVM'.'T'.'A==','aW50cmFuZXQ=','CgkJCQl'.'TRUxFQ'.'1QgQ'.'09VTl'.'QoRElTVEl'.'OQ1Qg'.'VS5'.'JRCkKCQkJ'.'CUZST0'.'0KCQkJCQliX3V'.'zZXIgVQoJC'.'QkJCU'.'lOTkVSI'.'E'.'pP'.'SU4gYl'.'91c2'.'V'.'yX2ZpZ'.'WxkIE'.'Y'.'gT04gRi5'.'FTl'.'RJ'.'VFlfSUQgP'.'S'.'AnVVNFUicgQU5'.'EIEYuRklFTE'.'RfTk'.'FNRS'.'A9I'.'CdVRl'.'9E'.'RVB'.'BUlR'.'NRU5'.'UJwoJC'.'Qk'.'JC'.'U'.'lO'.'TkVSI'.'EpPS'.'U4'.'g'.'Yl91dG1f'.'d'.'XNlciBVRiBPTgoJCQkJCQl'.'V'.'Ri5GSUVMRF9JRCA9'.'IEYuSUQKCQk'.'JCQkJQ'.'U5'.'EIFVGLlZBTFVFX0lEID0'.'gVS5J'.'RAoJC'.'QkJCQlB'.'TkQgVUYu'.'VkFMV'.'UV'.'fS'.'U5'.'UID4gMA'.'oJC'.'QkJV0'.'h'.'FUkUgVS5BQ1RJVkU'.'gPSA'.'nWScKCQkJC'.'Q'.'k=','CgkJCQ==','ZX'.'h'.'0cmFuZXQ=','ZXh0cm'.'Fu'.'ZXR'.'fZ'.'3JvdX'.'A'.'=','C'.'gkJCQkJC'.'VNFTEVDVCBDT1VOVCgxKQoJC'.'Q'.'kJC'.'Ql'.'G'.'Uk9'.'NCgkJ'.'CQkJC'.'Ql'.'iX3VzZXIgVQoJ'.'CQkJCQ'.'k'.'J'.'SU5'.'ORVI'.'gSk9JTiBiX2V4'.'dHJhbmV0X3V'.'zZXIgRVU'.'gT04gRVUuV'.'VNFUl9JRC'.'A9IFUuSUQgQU5EIEVVLkN'.'IQVJHRUFCTEU'.'gPSAnWScKC'.'QkJC'.'QkJCUlOT'.'kVSIEpPSU4gYl91c2V'.'yX'.'2d'.'yb3V'.'wIFV'.'H'.'IE9'.'OIFV'.'HLlVTRVJfSUQ'.'gPS'.'BV'.'LklEIEFORC'.'BVRy5H'.'Uk'.'9V'.'UF9'.'JR'.'CA'.'9'.'IA==',''.'CgkJ'.'C'.'Qk'.'J'.'CQlMRU'.'ZUIEpPSU4gKA'.'o'.'JCQkJC'.'QkJCVNFTEVDVC'.'BVRi5WQUx'.'VRV9JRCAKCQ'.'kJCQkJC'.'Ql'.'GUk'.'9NIAoJCQkJ'.'CQk'.'JC'.'Qli'.'X'.'3V'.'zZXJfZm'.'llb'.'GQ'.'gRg'.'o'.'JCQkJCQkJCQ'.'lJTk5F'.'UiB'.'KT0lOI'.'GJfdX'.'RtX'.'3'.'VzZXIgVUYgT04'.'g'.'VUY'.'uRklFTERf'.'SU'.'QgPSBGLklEIE'.'FOR'.'C'.'BVRi5'.'WQUx'.'VRV9JTlQgPiAwCgkJ'.'CQkJCQkJV0hFUkU'.'gRi5FTlR'.'J'.'VF'.'lfSUQ'.'g'.'P'.'SAnVVNFUi'.'cgQU5'.'E'.'IEY'.'uRklF'.'T'.'E'.'R'.'f'.'TkF'.'NRSA9IC'.'d'.'V'.'Rl9ERVBBUlRNRU'.'5UJwoJCQkJCQkJKS'.'BE'.'IE9OIEQ'.'u'.'Vk'.'FMV'.'UVfSU'.'Qg'.'PSB'.'VLkl'.'E'.'Cgk'.'JC'.'QkJCVdI'.'RVJFIFUuQ'.'UNU'.'SVZF'.'ID0gJ1kn'.'C'.'gkJC'.'QkJCQk=','C'.'gkJCQ'.'kJ'.'C'.'Q'.'lBTk'.'Q'.'g'.'RC5'.'WQU'.'x'.'VRV9'.'JRCB'.'JUyBO'.'V'.'UxM'.'CgkJCQkJ','bWF'.'pbg==','f'.'mx'.'pY2Vuc2VfbmFtZQ='.'=','bW'.'Fpb'.'g='.'=','f'.'mx'.'pY'.'2Vuc2Vf'.'Y29'.'kZXM'.'=','',''.'LA==');return base64_decode($_1511989773[$_1770518544]);}}; use Bitrix\Main\Config\Option; use Bitrix\Main\Type\Date; final class License{ private?string $_1050497139= null; private?string $_1725971122= null; private const DOMAINS_STORE_LICENSE=[ 'ru' => 'https://util.1c-bitrix.ru', 'en' => 'https://util.bitrixsoft.com', 'kz' => 'https://util.1c-bitrix.kz', 'by' => 'https://util.1c-bitrix.by', 'uz' => 'https://util.1c-bitrix.uz',]; public const URL_BUS_EULA=[ 'ru' => 'https://www.1c-bitrix.ru/download/law/eula_bus.pdf', 'by' => 'https://www.1c-bitrix.by/download/law/eula_bus.pdf', 'kz' => 'https://www.1c-bitrix.kz/download/law/eula_bus.pdf',]; public const URL_CP_EULA=[ 'ru' => 'https://www.1c-bitrix.ru/download/law/eula_cp.pdf', 'by' => 'https://www.1c-bitrix.by/download/law/eula_cp.pdf', 'kz' => 'https://www.1c-bitrix.kz/download/law/eula_cp.pdf', 'en' => 'https://www.bitrix24.com/eula/', 'br' => 'https://www.bitrix24.com.br/eula/', 'fr' => 'https://www.bitrix24.fr/eula/', 'pl' => 'https://www.bitrix24.pl/eula/', 'it' => 'https://www.bitrix24.it/eula/', 'la' => 'https://www.bitrix24.es/eula/',]; public const URL_RENEWAL_LICENSE=[ 'com' => 'https://store.bitrix24.com/profile/license-keys.php', 'eu' => 'https://store.bitrix24.eu/profile/license-keys.php', 'de' => 'https://store.bitrix24.de/profile/license-keys.php', 'ru' => 'https://www.1c-bitrix.ru/buy/products/b24.php#tab-section-2', 'by' => 'https://www.1c-bitrix.by/buy/products/b24.php#tab-section-2', 'kz' => 'https://www.1c-bitrix.kz/buy/products/b24.php#tab-section-2',]; private const CIS=['ru' => 1, 'by' => 1, 'kz' => 1, 'uz' => 1, 'kg' => 1, 'am' => 1, 'az' => 1, 'ge' => 1]; public function getKey(): string{ if($this->_1050497139 === null){ $_2049344782= Loader::getDocumentRoot(). ___541349859(0); $LICENSE_KEY= ___541349859(1); if($GLOBALS['____1208237551'][0]($_2049344782)){ include($_2049344782);} $this->_1050497139=($LICENSE_KEY == ___541349859(2) || $GLOBALS['____1208237551'][1]($LICENSE_KEY) == ___541349859(3)? ___541349859(4): $LICENSE_KEY);} return $this->_1050497139;} public function getHashLicenseKey(): string{ return $GLOBALS['____1208237551'][2]($this->getKey());} public function getPublicHashKey(): string{ return $GLOBALS['____1208237551'][3](___541349859(5). $this->getKey(). ___541349859(6));} public function isDemoKey(): bool{ return $this->getKey() == ___541349859(7);} public function getBuyLink(): string{ return $this->getDomainStoreLicense(). ___541349859(8). $this->getHashLicenseKey(). ___541349859(9). LANGUAGE_ID;} public function getDocumentationLink(): string{ if($this->isCis()){ return ___541349859(10);} return ___541349859(11);} public function getRenewalLink(): string{ $_1725971122= $this->getRegion(); if($GLOBALS['____1208237551'][4]($_1725971122,[___541349859(12), ___541349859(13), ___541349859(14), ___541349859(15)])){ return self::URL_RENEWAL_LICENSE[$_1725971122];} if($GLOBALS['____1208237551'][5]($_1725971122,[___541349859(16), ___541349859(17), ___541349859(18), ___541349859(19), ___541349859(20)])){ return self::URL_RENEWAL_LICENSE[___541349859(21)];} return self::URL_RENEWAL_LICENSE[___541349859(22)];} public function getDomainStoreLicense(): string{ $_1725971122= $this->getRegion(); if(isset(self::DOMAINS_STORE_LICENSE[$_1725971122])){ return self::DOMAINS_STORE_LICENSE[$_1725971122];} $_1375352698= $this->isCis()? ___541349859(23): ___541349859(24); return self::DOMAINS_STORE_LICENSE[$_1375352698];} public function isDemo(): bool{ return $GLOBALS['____1208237551'][6](___541349859(25)) && DEMO === ___541349859(26);} public function isTimeBound(): bool{ return $GLOBALS['____1208237551'][7](___541349859(27)) && TIMELIMIT_EDITION === ___541349859(28);} public function isEncoded(): bool{ return $GLOBALS['____1208237551'][8](___541349859(29)) && ENCODE === ___541349859(30);} public function getExpireDate():?Date{ $_1313576242= (int)($GLOBALS[___541349859(31)] ??(864-2*432)); if($_1313576242> min(220,0,73.333333333333)){ return Date::createFromTimestamp($_1313576242);} return null;} public function getSupportExpireDate():?Date{ $_1313576242= Option::get(___541349859(32), ___541349859(33)); if(Date::isCorrect($_1313576242, ___541349859(34))){ return new Date($_1313576242, ___541349859(35));} return null;} public function isCis(): bool{ return isset(self::CIS[$this->getRegion()]);} public function getRegion():?string{ if($this->_1725971122 === null){ if(Loader::includeModule(___541349859(36))){ $this->_1725971122= \CBitrix24::getPortalZone();} else{ $_1725971122= Option::get(___541349859(37), ___541349859(38)); if(empty($_1725971122)){ $_1725971122= $this->__962910567(); if(empty($_1725971122)){ $_1725971122= $this->__242037611();}} $this->_1725971122= $_1725971122 ?? ___541349859(39);}} return $this->_1725971122?: null;} public function getEulaLink(): string{ if(ModuleManager::isModuleInstalled(___541349859(40))){ return self::URL_CP_EULA[$this->getRegion()] ?? self::URL_CP_EULA[___541349859(41)];} return self::URL_BUS_EULA[$this->getRegion()] ?? self::URL_BUS_EULA[___541349859(42)];} private function __962910567():?string{ $_333933824= Option::get(___541349859(43), ___541349859(44)); if($_333933824 === ___541349859(45) || $_333933824 === ___541349859(46)){ return ___541349859(47);} if($_333933824 === ___541349859(48) || $_333933824 === ___541349859(49)){ return ___541349859(50);} return null;} private function __242037611():?string{ $_1205037081= Application::getDocumentRoot(); if($GLOBALS['____1208237551'][9]($_1205037081. ___541349859(51))){ return ___541349859(52);} if($GLOBALS['____1208237551'][10]($_1205037081. ___541349859(53))){ return ___541349859(54);} if($GLOBALS['____1208237551'][11]($_1205037081. ___541349859(55))){ return ___541349859(56);} if($GLOBALS['____1208237551'][12]($_1205037081. ___541349859(57))){ return ___541349859(58);} return null;} public function getPartnerId(): int{ return (int)Option::get(___541349859(59), ___541349859(60),(962-2*481));} public function getMaxUsers(): int{ return (int)Option::get(___541349859(61), ___541349859(62), min(48,0,16));} public function isExtraCountable(): bool{ return Option::get(___541349859(63), ___541349859(64), ___541349859(65)) === ___541349859(66) && ModuleManager::isModuleInstalled(___541349859(67));} public function getActiveUsersCount(Date $_145949560= null): int{ $_2093412607= Application::getConnection(); $_1007450654=(908-2*454); if($_145949560 !== null){  $_1955509681= ___541349859(68). $_2093412607->getSqlHelper()->convertToDbDate($_145949560);} else{  $_1955509681= ___541349859(69);} if(ModuleManager::isModuleInstalled(___541349859(70))){ $_508676915= ___541349859(71). $_1955509681. ___541349859(72); $_1007450654= (int)$_2093412607->queryScalar($_508676915); $_908862427= (int)Option::get(___541349859(73), ___541349859(74)); if($_908862427>(184*2-368) && $this->isExtraCountable()){ $_508676915= ___541349859(75). $_908862427. ___541349859(76). $_1955509681. ___541349859(77); $_1007450654 += (int)$_2093412607->queryScalar($_508676915);}} return $_1007450654;}  public function getName(): string{ return Option::get(___541349859(78), ___541349859(79));}  public function getCodes(): array{ $_108463970= Option::get(___541349859(80), ___541349859(81)); if($_108463970 != ___541349859(82)){ return $GLOBALS['____1208237551'][13](___541349859(83), $_108463970);} return[];}}?>
+<?php
+
+namespace Bitrix\Main;
+
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Type\Date;
+
+final class License
+{
+	private ?string $key = null;
+	private ?string $region = null;
+
+	private const DOMAINS_STORE_LICENSE = [
+		'ru' => 'https://util.1c-bitrix.ru',
+		'en' => 'https://util.bitrixsoft.com',
+		'kz' => 'https://util.1c-bitrix.kz',
+		'by' => 'https://util.1c-bitrix.by',
+		'uz' => 'https://util.1c-bitrix.uz',
+	];
+	public const URL_BUS_EULA = [
+		'ru' => 'https://www.1c-bitrix.ru/download/law/eula_bus.pdf',
+		'by' => 'https://www.1c-bitrix.by/download/law/eula_bus.pdf',
+		'kz' => 'https://www.1c-bitrix.kz/download/law/eula_bus.pdf',
+	];
+	public const URL_CP_EULA = [
+		'ru' => 'https://www.1c-bitrix.ru/download/law/eula_cp.pdf',
+		'by' => 'https://www.1c-bitrix.by/download/law/eula_cp.pdf',
+		'kz' => 'https://www.1c-bitrix.kz/download/law/eula_cp.pdf',
+		'en' => 'https://www.bitrix24.com/eula/',
+		'br' => 'https://www.bitrix24.com.br/eula/',
+		'fr' => 'https://www.bitrix24.fr/eula/',
+		'pl' => 'https://www.bitrix24.pl/eula/',
+		'it' => 'https://www.bitrix24.it/eula/',
+		'la' => 'https://www.bitrix24.es/eula/',
+	];
+	public const URL_RENEWAL_LICENSE = [
+		'com' => 'https://store.bitrix24.com/profile/license-keys.php',
+		'eu' => 'https://store.bitrix24.eu/profile/license-keys.php',
+		'de' => 'https://store.bitrix24.de/profile/license-keys.php',
+		'ru' => 'https://www.1c-bitrix.ru/buy/products/b24.php#tab-section-2',
+		'by' => 'https://www.1c-bitrix.by/buy/products/b24.php#tab-section-2',
+		'kz' => 'https://www.1c-bitrix.kz/buy/products/b24.php#tab-section-2',
+	];
+
+	private const CIS = ['ru' => 1, 'by' => 1, 'kz' => 1, 'uz' => 1, 'kg' => 1, 'am' => 1, 'az' => 1, 'ge' => 1];
+
+	public function getKey(): string
+	{
+		if ($this->key === null)
+		{
+			$licenseFile = Loader::getDocumentRoot() . '/bitrix/license_key.php';
+
+			$LICENSE_KEY = '';
+			if (file_exists($licenseFile))
+			{
+				include($licenseFile);
+			}
+			$this->key = ($LICENSE_KEY == '' || strtoupper($LICENSE_KEY) == 'DEMO' ? 'DEMO' : $LICENSE_KEY);
+		}
+		return $this->key;
+	}
+
+	public function getHashLicenseKey(): string
+	{
+		return md5($this->getKey());
+	}
+
+	public function getPublicHashKey(): string
+	{
+		return md5('BITRIX' . $this->getKey() . 'LICENCE');
+	}
+
+	public function isDemoKey(): bool
+	{
+		return $this->getKey() == 'DEMO';
+	}
+
+	public function getBuyLink(): string
+	{
+		return $this->getDomainStoreLicense()
+			. '/key_update.php?license_key='
+			. $this->getHashLicenseKey()
+			. '&tobasket=y&lang='
+			. LANGUAGE_ID;
+	}
+
+	public function getDocumentationLink(): string
+	{
+		if ($this->isCis())
+		{
+			return 'https://dev.1c-bitrix.ru/learning/course/index.php?COURSE_ID=135&LESSON_ID=25720';
+		}
+
+		return 'https://training.bitrix24.com/support/training/course/index.php?COURSE_ID=178&LESSON_ID=25932&LESSON_PATH=17520.17562.25930.25932';
+	}
+
+	public function getRenewalLink(): string
+	{
+		$region = $this->getRegion();
+
+		if (in_array($region, ['ru', 'by', 'kz', 'de']))
+		{
+			return self::URL_RENEWAL_LICENSE[$region];
+		}
+
+		if (in_array($region, ['eu', 'fr', 'pl', 'it', 'uk']))
+		{
+			return self::URL_RENEWAL_LICENSE['eu'];
+		}
+
+		return self::URL_RENEWAL_LICENSE['com'];
+	}
+
+	public function getDomainStoreLicense(): string
+	{
+		$region = $this->getRegion();
+
+		if (isset(self::DOMAINS_STORE_LICENSE[$region]))
+		{
+			return self::DOMAINS_STORE_LICENSE[$region];
+		}
+
+		$fallback = $this->isCis() ? 'ru' : 'en';
+
+		return self::DOMAINS_STORE_LICENSE[$fallback];
+	}
+
+	public function isDemo(): bool
+	{
+		return defined('DEMO') && DEMO === 'Y';
+	}
+
+	public function isTimeBound(): bool
+	{
+		return defined('TIMELIMIT_EDITION') && TIMELIMIT_EDITION === 'Y';
+	}
+
+	public function isEncoded(): bool
+	{
+		return defined('ENCODE') && ENCODE === 'Y';
+	}
+
+	public function getExpireDate(): ?Date
+	{
+		$date = (int)($GLOBALS['SiteExpireDate'] ?? 0);
+		if ($date > 0)
+		{
+			return Date::createFromTimestamp($date);
+		}
+
+		return null;
+	}
+
+	public function getSupportExpireDate(): ?Date
+	{
+		$date = Option::get('main', '~support_finish_date');
+		if (Date::isCorrect($date, 'Y-m-d'))
+		{
+			return new Date($date, 'Y-m-d');
+		}
+
+		return null;
+	}
+
+	public function isCis(): bool
+	{
+		return isset(self::CIS[$this->getRegion()]);
+	}
+
+	public function getRegion(): ?string
+	{
+		if ($this->region === null)
+		{
+			if (Loader::includeModule('bitrix24'))
+			{
+				$this->region = \CBitrix24::getPortalZone();
+			}
+			else
+			{
+				$region = Option::get('main', '~PARAM_CLIENT_LANG');
+				if (empty($region))
+				{
+					$region = $this->getRegionByVendor();
+					if (empty($region))
+					{
+						$region = $this->getRegionByLanguage();
+					}
+				}
+
+				$this->region = $region ?? '';
+			}
+		}
+
+		return $this->region ?: null;
+	}
+
+	public function getEulaLink(): string
+	{
+		if (ModuleManager::isModuleInstalled('intranet'))
+		{
+			return self::URL_CP_EULA[$this->getRegion()] ?? self::URL_CP_EULA['en'];
+		}
+
+		return self::URL_BUS_EULA[$this->getRegion()] ?? self::URL_BUS_EULA['ru'];
+	}
+
+	private function getRegionByVendor(): ?string
+	{
+		$vendor = Option::get('main', 'vendor');
+		if ($vendor === 'bitrix_portal' || $vendor === 'bitrix')
+		{
+			return 'en';
+		}
+		if ($vendor === '1c_bitrix_portal' || $vendor === '1c_bitrix')
+		{
+			return 'ru';
+		}
+
+		return null;
+	}
+
+	private function getRegionByLanguage(): ?string
+	{
+		$documentRoot = Application::getDocumentRoot();
+
+		if (file_exists($documentRoot . '/bitrix/modules/main/lang/ua'))
+		{
+			return 'ua';
+		}
+		if (file_exists($documentRoot . '/bitrix/modules/main/lang/by'))
+		{
+			return 'by';
+		}
+		if (file_exists($documentRoot . '/bitrix/modules/main/lang/kz'))
+		{
+			return 'kz';
+		}
+		if (file_exists($documentRoot . '/bitrix/modules/main/lang/ru'))
+		{
+			return 'ru';
+		}
+
+		return null;
+	}
+
+	public function getPartnerId(): int
+	{
+		return (int)Option::get('main', '~PARAM_PARTNER_ID', 0);
+	}
+
+	public function getMaxUsers(): int
+	{
+		return (int)Option::get('main', 'PARAM_MAX_USERS', 0);
+	}
+
+	public function isExtraCountable(): bool
+	{
+		return Option::get('main', '~COUNT_EXTRA', 'N') === 'Y' && ModuleManager::isModuleInstalled('extranet');
+	}
+
+	public function getActiveUsersCount(?Date $lastLoginDate = null): int
+	{
+		static $cacheCount = null;
+
+		if ($cacheCount !== null && $lastLoginDate === null)
+		{
+			return $cacheCount;
+		}
+
+		$connection = Application::getConnection();
+		$count = 0;
+
+		if ($lastLoginDate !== null)
+		{
+			// logged in today
+			$filter = "AND U.LAST_LOGIN > " . $connection->getSqlHelper()->convertToDbDate($lastLoginDate);
+		}
+		else
+		{
+			// logged in total
+			$filter = "AND U.LAST_LOGIN IS NOT NULL";
+		}
+
+		if (ModuleManager::isModuleInstalled("intranet"))
+		{
+			$sql = "
+				SELECT COUNT(DISTINCT U.ID)
+				FROM
+					b_user U
+					INNER JOIN b_user_field F ON F.ENTITY_ID = 'USER' AND F.FIELD_NAME = 'UF_DEPARTMENT'
+					INNER JOIN b_utm_user UF ON
+						UF.FIELD_ID = F.ID
+						AND UF.VALUE_ID = U.ID
+						AND UF.VALUE_INT > 0
+				WHERE U.ACTIVE = 'Y'
+					" . $filter . "
+			";
+			$count = (int)$connection->queryScalar($sql);
+			$extranetGroupId = (int)Option::get('extranet', 'extranet_group');
+
+			if ($extranetGroupId > 0 && $this->isExtraCountable())
+			{
+				$sql = "
+						SELECT COUNT(1)
+						FROM
+							b_user U
+							INNER JOIN b_extranet_user EU ON EU.USER_ID = U.ID AND EU.CHARGEABLE = 'Y'
+							INNER JOIN b_user_group UG ON UG.USER_ID = U.ID AND UG.GROUP_ID = " . $extranetGroupId . "
+							LEFT JOIN (
+								SELECT UF.VALUE_ID 
+								FROM 
+									b_user_field F
+									INNER JOIN b_utm_user UF ON UF.FIELD_ID = F.ID AND UF.VALUE_INT > 0
+								WHERE F.ENTITY_ID = 'USER' AND F.FIELD_NAME = 'UF_DEPARTMENT'
+							) D ON D.VALUE_ID = U.ID
+						WHERE U.ACTIVE = 'Y'
+							" . $filter . "
+							AND D.VALUE_ID IS NULL
+					";
+				$count += (int)$connection->queryScalar($sql);
+			}
+		}
+
+		if ($lastLoginDate === null)
+		{
+			$cacheCount = $count;
+		}
+
+		return $count;
+	}
+
+	/**
+	 * Returns the license (edition) name, set by Update System.
+	 * @return string
+	 */
+	public function getName(): string
+	{
+		return Option::get('main', '~license_name');
+	}
+
+	/**
+	 * Returns the array of license (edition) codes, set by Update System.
+	 * @return string[]
+	 */
+	public function getCodes(): array
+	{
+		$codes = Option::get('main', '~license_codes');
+
+		if ($codes != '')
+		{
+			return explode(',', $codes);
+		}
+
+		return [];
+	}
+}

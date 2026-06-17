@@ -27,18 +27,12 @@ class CMailMessageActionsComponent extends CBitrixComponent
 		}
 		else if (!empty($this->arParams['MESSAGE_ID']))
 		{
-			$message = Mail\MailMessageTable::getList(array(
-				'select' => array(
-					'ID',
-					'MAILBOX_ID',
-					'SUBJECT',
-				),
-				'filter' => array(
-					'=ID' => (int) $this->arParams['MESSAGE_ID'],
-				),
-			))->fetch();
+			$message = Mail\MailMessageTable::getConsistentById(
+				(int) $this->arParams['MESSAGE_ID'],
+				['ID', 'MAILBOX_ID', 'SUBJECT'],
+			);
 
-			if (!empty($message))
+			if ($message !== null)
 			{
 				$message['BIND'] = MessageAccessTable::getBinds($message['MAILBOX_ID'], $message['ID']);
 			}

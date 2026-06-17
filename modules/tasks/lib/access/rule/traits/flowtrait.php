@@ -9,15 +9,16 @@ use Bitrix\Main\Loader;
 
 trait FlowTrait
 {
-	private function checkFlowPermissions(int $flowId): bool
+	private static array $flowModelCache = [];
+
+	protected function checkFlowPermissions(int $flowId): bool
 	{
-		$flow = FlowRegistry::getInstance()->get($flowId, ['*', 'MEMBERS']);
-		if (null === $flow)
+		$flowModel = $this->getFlowModel($flowId);
+
+		if ($flowModel === null)
 		{
 			return false;
 		}
-
-		$flowModel = FlowModel::createFromArray($flow->toArray());
 
 		if ($flowModel->isForAll())
 		{
@@ -57,5 +58,34 @@ trait FlowTrait
 		}
 
 		return false;
+	}
+
+	protected function doesGroupBelongToFlow(int $flowId, int $groupId): bool
+	{
+		if ($flowId <= 0 || $groupId <= 0)
+		{
+			return false;
+		}
+
+		$flowModel = $this->getFlowModel($flowId);
+
+		if ($flowModel === null)
+		{
+			return false;
+		}
+
+		return $flowModel->getProjectId() === $groupId;
+	}
+
+	protected function getFlowModel(int $flowId): ?FlowModel
+	{
+		if (!isset(self::$flowModelCache[$flowId]))
+		{
+			$flow = FlowRegistry::getInstance()->get($flowId, ['*', 'MEMBERS']);
+
+			self::$flowModelCache[$flowId] = $flow ? FlowModel::createFromArray($flow->toArray()) : null;
+		}
+
+		return self::$flowModelCache[$flowId];
 	}
 }

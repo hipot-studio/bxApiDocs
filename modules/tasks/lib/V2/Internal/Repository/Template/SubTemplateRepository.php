@@ -14,10 +14,33 @@ class SubTemplateRepository implements SubTemplateRepositoryInterface
 		$result = DependenceTable::query()
 			->setSelect([new ExpressionField('EXISTS', 1)])
 			->where('PARENT_TEMPLATE_ID', $parentId)
+			->where('DIRECT', 1)
 			->setLimit(1)
 			->fetch()
 		;
 
 		return $result !== false;
+	}
+
+	public function getSubTemplateIdsByParentIds(array $parentIds): array
+	{
+		$result = [];
+
+		$dependencies = DependenceTable::query()
+			->setSelect(['TEMPLATE_ID', 'PARENT_TEMPLATE_ID'])
+			->whereIn('PARENT_TEMPLATE_ID', $parentIds)
+			->where('DIRECT', 1)
+			->fetchAll()
+		;
+
+		foreach ($dependencies as $dependence)
+		{
+			$parentId = (int)$dependence['PARENT_TEMPLATE_ID'];
+
+			$result[$parentId] ??= [];
+			$result[$parentId][] = (int)$dependence['TEMPLATE_ID'];
+		}
+
+		return $result;
 	}
 }

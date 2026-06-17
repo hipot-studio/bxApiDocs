@@ -8,13 +8,8 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Main\UI\PageNavigation;
-use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
-use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Sign\Access\Model\UserModel;
-use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
-use Bitrix\Sign\Access\Service\RolePermissionService;
 use Bitrix\Sign\Item\UserCollection;
 
 Loc::loadMessages(__FILE__);
@@ -29,10 +24,11 @@ final class SignB2eSignersEdit extends SignBaseComponent
 	private const DEFAULT_NAVIGATION_KEY = 'sign-b2e-signers-edit';
 
 	private ?\Bitrix\Sign\Item\SignersList $list = null;
-	
+
 	private \Bitrix\Sign\Service\SignersListService $signersListService;
 	private \Bitrix\Sign\Repository\UserRepository $userRepository;
 	private \Bitrix\Sign\Service\Sign\UrlGeneratorService $urlGenerator;
+	private \Bitrix\Sign\Service\Sign\SignersList\AccessService $accessService;
 
 	public function __construct($component = null)
 	{
@@ -40,6 +36,7 @@ final class SignB2eSignersEdit extends SignBaseComponent
 		$this->signersListService = Container::instance()->getSignersListService();
 		$this->userRepository = Container::instance()->getUserRepository();
 		$this->urlGenerator = Container::instance()->getUrlGeneratorService();
+		$this->accessService = Container::instance()->getSignersListAccessService();
 	}
 
 	public function executeComponent(): void
@@ -59,14 +56,14 @@ final class SignB2eSignersEdit extends SignBaseComponent
 
 		if ($this->list === null)
 		{
-			showError('Access denied or list not found');
+			showError(Loc::getMessage('SIGN_B2E_SIGNERS_EDIT_ACCESS_DENIED'));
 
 			return;
 		}
 
 		if (!$this->hasCurrentUserAccessToListForRead($this->list->id))
 		{
-			showError('Access denied or list not found');
+			showError(Loc::getMessage('SIGN_B2E_SIGNERS_EDIT_ACCESS_DENIED'));
 
 			return;
 		}
@@ -74,23 +71,9 @@ final class SignB2eSignersEdit extends SignBaseComponent
 		parent::executeComponent();
 	}
 
-	private function hasCurrentUserAccessToListForRead(int $listId)
+	private function hasCurrentUserAccessToListForRead(int $listId): bool
 	{
-		if (
-			$this->isListForRefusedSigners($listId)
-			&& $this->getAccessController()->checkAll([
-				ActionDictionary::ACTION_B2E_SIGNERS_LIST_REFUSED_EDIT,
-				ActionDictionary::ACTION_B2E_SIGNERS_LIST_READ,
-			])
-		)
-		{
-			return true;
-		}
-
-		return $this->hasCurrentUserAccessToPermissionByItemWithOwnerId(
-			$this->list->getOwnerId(),
-			SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_READ,
-		);
+		return $this->accessService->hasAccessToRead($listId);
 	}
 
 	public function exec(): void
@@ -294,77 +277,9 @@ final class SignB2eSignersEdit extends SignBaseComponent
 		return is_array($value) ? $value : [$value];
 	}
 
-	private function getCurrentUserAccessModel(): UserModel
-	{
-		$currentUserId = CurrentUser::get()->getId();
-
-		if ($currentUserId < 1)
-		{
-			throw new \Bitrix\Main\SystemException('Current user is not authorized');
-		}
-
-		$this->currentUserAccessModel ??= UserModel::createFromId($currentUserId);
-
-		return $this->currentUserAccessModel;
-	}
-
 	private function canCurrentUserEditList(\Bitrix\Sign\Item\SignersList $list): bool
 	{
-		if (
-			$this->isListForRefusedSigners($list->id)
-			&& $this->getAccessController()->check(ActionDictionary::ACTION_B2E_SIGNERS_LIST_REFUSED_EDIT)
-			&& $this->getAccessController()->check(ActionDictionary::ACTION_B2E_SIGNERS_LIST_EDIT)
-		)
-		{
-			return true;
-		}
-
-		return $this->hasCurrentUserAccessToPermissionByItemWithOwnerId(
-			$list->getOwnerId(),
-			SignPermissionDictionary::SIGN_B2E_SIGNERS_LIST_EDIT,
-		);
-	}
-
-	private function isListForRefusedSigners(?int $listId): bool
-	{
-		return $listId === \Bitrix\Sign\Config\Storage::instance()->getSignersListRejectedId();
-	}
-
-	private function hasCurrentUserAccessToPermissionByItemWithOwnerId(int $itemOwnerId, int|string $permissionId): bool
-	{
-		$userAccessModel = $this->getCurrentUserAccessModel();
-		if ($userAccessModel->isAdmin())
-		{
-			return true;
-		}
-
-		if (!\Bitrix\Main\Loader::includeModule('crm'))
-		{
-			return false;
-		}
-
-		$permission = $this->getValueForPermissionFromCurrentUser($permissionId);
-
-		return match ($permission)
-		{
-			CCrmPerms::PERM_ALL => true,
-			CCrmPerms::PERM_SELF => $itemOwnerId === $userAccessModel->getUserId(),
-			CCrmPerms::PERM_DEPARTMENT => in_array($itemOwnerId, $userAccessModel->getUserDepartmentMembers(), true),
-			CCrmPerms::PERM_SUBDEPARTMENT => in_array($itemOwnerId, $userAccessModel->getUserDepartmentMembers(true), true),
-			default => false,
-		};
-	}
-
-	private function getValueForPermissionFromCurrentUser(string|int $permissionId): ?string
-	{
-		$permissionService = new RolePermissionService();
-
-		$this->currentUserPermissionValuesCache[$permissionId] ??= $permissionService->getValueForPermission(
-			$this->getCurrentUserAccessModel()->getRoles(),
-			$permissionId,
-		);
-
-		return $this->currentUserPermissionValuesCache[$permissionId];
+		return $this->accessService->hasAccessToEdit($list->id);
 	}
 
 	private function getNavigation(): PageNavigation

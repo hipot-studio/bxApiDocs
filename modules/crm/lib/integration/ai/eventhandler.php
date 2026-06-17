@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\AI;
 
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
+use Bitrix\AI\Engine\IEngine;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning;
 use Bitrix\Crm\Activity\Provider\Call;
@@ -11,25 +12,21 @@ use Bitrix\Crm\Activity\Provider\RepeatSale;
 use Bitrix\Crm\Copilot\AiQueueBuffer\Controller\AiQueueBufferController;
 use Bitrix\Crm\Copilot\AiQueueBuffer\Entity\AiQueueBufferItem;
 use Bitrix\Crm\Copilot\AiQueueBuffer\Provider\FillRepeatSaleTipsProvider;
+use Bitrix\Crm\Copilot\Pipeline\OperationRegistry;
+use Bitrix\Crm\Copilot\Pipeline\PipelineExecutor;
+use Bitrix\Crm\Copilot\Pipeline\ScenarioResolver;
 use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\AutoLauncher;
-use Bitrix\Crm\Integration\AI\Operation\ExtractScoringCriteria;
-use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
-use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
-use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
-use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
-use Bitrix\Crm\Integration\AI\Operation\ScreeningRepeatSaleItem;
-use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
-use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\CallActivityWithAudioRecordingEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\VoxImplant;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\EventResult;
@@ -49,6 +46,10 @@ final class EventHandler
 	public const SETTINGS_REPEAT_SALE_ENGINE_CODE = 'crm_copilot_repeat_sale_engine_code';
 	public const SETTINGS_REPEAT_SALE_SCREENING_ITEM_ENABLED_CODE = 'crm_copilot_repeat_sale_screening_item_enabled';
 	public const SETTINGS_REPEAT_SALE_SCREENING_ITEM_ENGINE_CODE = 'crm_copilot_repeat_sale_screening_item_code';
+	public const SETTINGS_ANALYZE_COMMUNICATION_ENABLED_CODE = 'crm_copilot_analyze_communication_enabled';
+	public const SETTINGS_ANALYZE_COMMUNICATION_ENGINE_CODE = 'crm_copilot_analyze_communication_engine_code';
+	public const SETTINGS_SUMMARIZE_ENABLED_CODE = 'crm_copilot_summarize_enabled';
+	public const SETTINGS_SUMMARIZE_ENGINE_CODE = 'crm_copilot_summarize_engine_code';
 
 	public const ENGINE_CATEGORY = 'text';
 
@@ -104,6 +105,21 @@ final class EventHandler
 					['#COPILOT_NAME#' => AIManager::getCopilotName()],
 				),
 				'helpdesk' => 18799442,
+			];
+
+			$items[self::SETTINGS_SUMMARIZE_ENABLED_CODE] = [
+				'group' => self::SETTINGS_GROUP_CODE,
+				'title' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTING_SUMMARIZE_TITLE',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
+				'header' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_SUMMARIZE_HEADER',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
+				'type' => Tuning\Type::BOOLEAN,
+				'default' => true,
+				'sort' => 9,
 			];
 
 			$items[self::SETTINGS_FILL_ITEM_FROM_CALL_ENABLED_CODE] = [
@@ -169,7 +185,7 @@ final class EventHandler
 				...Tuning\Defaults::getProviderSelectFieldParams(Engine::CATEGORIES['text'], $quality),
 				'group' => self::SETTINGS_GROUP_CODE,
 				'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_CALL_ASSESSMENT_ENGINE_TITLE'),
-				'sort' => 20,
+				'sort' => 31,
 			];
 
 			$availabilityChecker = Container::getInstance()->getRepeatSaleAvailabilityChecker();
@@ -198,9 +214,35 @@ final class EventHandler
 					...Tuning\Defaults::getProviderSelectFieldParams(Engine::CATEGORIES['text'], $quality),
 					'group' => self::SETTINGS_GROUP_CODE,
 					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_REPEAT_SALE_ENGINE_TITLE'),
-					'sort' => 31,
+					'sort' => 33,
 				];
 			}
+
+			$items[self::SETTINGS_ANALYZE_COMMUNICATION_ENABLED_CODE] = [
+				'group' => self::SETTINGS_GROUP_CODE,
+				'title' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTING_ANALYZE_COMMUNICATION_TITLE',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
+				'header' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_ANALYZE_COMMUNICATION_HEADER',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
+				'type' => Tuning\Type::BOOLEAN,
+				'default' => true,
+				'sort' => 17,
+			];
+
+			$quality = new Quality([
+				Quality::QUALITIES['scoring'] ?? Quality::QUALITIES['translate'],
+			]);
+
+			$items[self::SETTINGS_ANALYZE_COMMUNICATION_ENGINE_CODE] = [
+				...Tuning\Defaults::getProviderSelectFieldParams(Engine::CATEGORIES['text'], $quality),
+				'group' => self::SETTINGS_GROUP_CODE,
+				'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_ANALYZE_COMMUNICATION_ENGINE_TITLE'),
+				'sort' => 32,
+			];
 		}
 
 		$result->modifyFields([
@@ -235,64 +277,32 @@ final class EventHandler
 		}
 
 		$job = QueueTable::query()->setSelect(['*'])->where('HASH', $hash)->fetchObject();
-		if (
-			!$job
-			|| $job->requireExecutionStatus() !== QueueTable::EXECUTION_STATUS_PENDING
-			|| in_array($job->requireEntityTypeId(), CCrmOwnerType::getAllSuspended(), true)
-		)
+		if (!self::isJobProcessable($job))
 		{
-			AIManager::logger()->debug(
-				'{date}: Dont process event {eventName} because job dont exists or invalid: {job}' . PHP_EOL,
-				[
-					'eventName' => __FUNCTION__,
-					'job' => $job?->collectValues(fieldsMask: FieldTypeMask::FLAT),
-				],
-			);
-
 			return;
 		}
 
-		// ------------------------------ @todo: refactor block ------------------------------
+		// Pipeline continuation: determine scenario and launch next step
+		// @todo: duplicate callback protection — if the AI queue delivers the same hash twice,
+		// continueAfterCompletion may attempt to launch the next step twice.
+		// AbstractOperation::checkPreviousJobs provides partial deduplication, but there is a
+		// TOCTOU window between read and continueAfterCompletion. For AnalyzeCommunication this
+		// can produce duplicate ToDo / EntityExclusion activities. Plan: add an atomic CONTINUED
+		// flag on the job row (UPDATE ... WHERE id=? AND continued=0) and bail when affected_rows=0.
 		$result = self::getQueueJobExecuteResult($event, $job);
 		if ($result)
 		{
-			if (
-				$result->getTypeId() === TranscribeCallRecording::TYPE_ID
-				&& $result->getNextTypeId() === 0
-			)
+			$nextTypeId = $job->requireNextTypeId();
+			$scenarioName = ScenarioResolver::resolve(
+				(int)$job->requireTypeId(),
+				$nextTypeId !== null ? (int)$nextTypeId : null,
+				self::extractScenarioNameFromEngineContext($event),
+			);
+			if ($scenarioName !== null)
 			{
-				return;
-			}
-
-			$orchestrator = new Orchestrator();
-
-			if (
-				$result->getTypeId() === TranscribeCallRecording::TYPE_ID
-				&& $result->getNextTypeId() === ScoreCall::TYPE_ID
-			)
-			{
-				$orchestrator->launchScoreCallOperationIfNeeded($result);
-			}
-			elseif (AIManager::isEnabledInGlobalSettings())
-			{
-				$settings = $orchestrator->getFillFieldsSettingsByPreviousJobResult($result);
-				if ($settings)
-				{
-					$orchestrator->launchNextOperationIfNeeded(
-						$result,
-						$settings,
-					);
-				}
-				elseif (
-					$result->getTypeId() === FillItemFieldsFromCallTranscription::TYPE_ID
-					&& $result->isSuccess()
-				)
-				{
-					$orchestrator->launchScoreCallOperationIfNeeded($result, true);
-				}
+				ServiceLocator::getInstance()->get(PipelineExecutor::class)->continueAfterCompletion($result, $scenarioName);
 			}
 		}
-		// ------------------------------------------------------------------------------------
 
 		AIManager::logger()->debug(
 			'{date}: Event {eventName} was processed with result {result}' . PHP_EOL,
@@ -325,50 +335,15 @@ final class EventHandler
 		}
 
 		$job = QueueTable::query()->setSelect(['*'])->where('HASH', $hash)->fetchObject();
-		if (
-			!$job
-			|| $job->requireExecutionStatus() !== QueueTable::EXECUTION_STATUS_PENDING
-			|| in_array($job->requireEntityTypeId(), CCrmOwnerType::getAllSuspended(), true)
-		)
+		if (!self::isJobProcessable($job))
 		{
-			AIManager::logger()->debug(
-				'{date}: Dont process event {eventName} because job dont exists or invalid: {job}' . PHP_EOL,
-				[
-					'eventName' => __FUNCTION__,
-					'job' => $job?->collectValues(fieldsMask: FieldTypeMask::FLAT),
-				],
-			);
-
 			return;
 		}
 
-		if ((int)$job->requireTypeId() === TranscribeCallRecording::TYPE_ID)
+		$operationClass = ServiceLocator::getInstance()->get(OperationRegistry::class)->getByTypeId((int)$job->requireTypeId());
+		if ($operationClass !== null)
 		{
-			TranscribeCallRecording::onQueueJobFail($event, $job);
-		}
-		elseif ((int)$job->requireTypeId() === SummarizeCallTranscription::TYPE_ID)
-		{
-			SummarizeCallTranscription::onQueueJobFail($event, $job);
-		}
-		elseif ((int)$job->requireTypeId() === FillItemFieldsFromCallTranscription::TYPE_ID)
-		{
-			FillItemFieldsFromCallTranscription::onQueueJobFail($event, $job);
-		}
-		elseif ((int)$job->requireTypeId() === ScoreCall::TYPE_ID)
-		{
-			ScoreCall::onQueueJobFail($event, $job);
-		}
-		elseif ((int)$job->requireTypeId() === ExtractScoringCriteria::TYPE_ID)
-		{
-			ExtractScoringCriteria::onQueueJobFail($event, $job);
-		}
-		elseif ((int)$job->requireTypeId() === FillRepeatSaleTips::TYPE_ID)
-		{
-			FillRepeatSaleTips::onQueueJobFail($event, $job);
-		}
-		elseif ((int)$job->requireTypeId() === ScreeningRepeatSaleItem::TYPE_ID)
-		{
-			ScreeningRepeatSaleItem::onQueueJobFail($event, $job);
+			$operationClass::onQueueJobFail($event, $job);
 		}
 	}
 	//endregion
@@ -484,6 +459,38 @@ final class EventHandler
 	}
 	// endregion
 
+	private static function isJobProcessable(?EO_Queue $job): bool
+	{
+		if (!$job)
+		{
+			return false;
+		}
+
+		if ($job->requireExecutionStatus() !== QueueTable::EXECUTION_STATUS_PENDING)
+		{
+			AIManager::logger()->debug(
+				'{date}: Job is not in PENDING status: {job}' . PHP_EOL,
+				[
+					'job' => $job->collectValues(fieldsMask: FieldTypeMask::FLAT),
+				],
+			);
+
+			return false;
+		}
+
+		if (in_array($job->requireEntityTypeId(), CCrmOwnerType::getAllSuspended(), true))
+		{
+			AIManager::logger()->debug(
+				'{date}: Job entity is suspended: {job}' . PHP_EOL,
+				['job' => $job->collectValues(fieldsMask: FieldTypeMask::FLAT)],
+			);
+
+			return false;
+		}
+
+		return true;
+	}
+
 	private static function getValidJobHash(Event $event): ?string
 	{
 		$hash = $event->getParameter('queue');
@@ -493,18 +500,28 @@ final class EventHandler
 
 	private static function getQueueJobExecuteResult(Event $event, EO_Queue $job): ?Result
 	{
-		return match ((int)$job->requireTypeId())
+		$operationClass = ServiceLocator::getInstance()->get(OperationRegistry::class)->getByTypeId((int)$job->requireTypeId());
+		if ($operationClass === null)
 		{
-			TranscribeCallRecording::TYPE_ID => TranscribeCallRecording::onQueueJobExecute($event, $job),
-			SummarizeCallTranscription::TYPE_ID => SummarizeCallTranscription::onQueueJobExecute($event, $job),
-			FillItemFieldsFromCallTranscription::TYPE_ID => FillItemFieldsFromCallTranscription::onQueueJobExecute($event, $job),
-			ScoreCall::TYPE_ID => ScoreCall::onQueueJobExecute($event, $job),
-			ExtractScoringCriteria::TYPE_ID => ExtractScoringCriteria::onQueueJobExecute($event, $job),
-			FillRepeatSaleTips::TYPE_ID => FillRepeatSaleTips::onQueueJobExecute($event, $job),
-			ScreeningRepeatSaleItem::TYPE_ID => ScreeningRepeatSaleItem::onQueueJobExecute($event, $job),
-			Operation\Sandbox\FillRepeatSaleTips::TYPE_ID => Operation\Sandbox\FillRepeatSaleTips::onQueueJobExecute($event, $job),
-			default => null,
-		};
+			return null;
+		}
+
+		return $operationClass::onQueueJobExecute($event, $job);
+	}
+
+	private static function extractScenarioNameFromEngineContext(Event $event): ?string
+	{
+		$engine = $event->getParameter('engine');
+		if (!($engine instanceof IEngine))
+		{
+			return null;
+
+		}
+
+		$context = $engine->getContext();
+		$scenario = $context->getParameters()['additionalInfo']['scenario'] ?? null;
+
+		return is_string($scenario) && $scenario !== '' ? $scenario : null;
 	}
 
 	private static function registerCallActivityWithAudioRecordingEvent(array $activityFields): void

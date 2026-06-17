@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Service;
 
 use DateTimeImmutable;
+use DateTimeInterface;
+use DateTimeZone;
 
-//@todo find a better place for this class
+/**
+ * Helper class for time-related constants and utilities.
+ */
 class Time
 {
 	public const HOURS_IN_DAY = 24;
@@ -15,34 +19,27 @@ class Time
 	public const SECONDS_IN_HOUR = 3600;
 	public const SECONDS_IN_DAY = 86400;
 	public const MINUTES_IN_DAY = 1440;
-	public const DAYS_IN_YEAR = 365;
-	public const DAYTIME_START_HOUR = 8;
-	public const DAYTIME_END_HOUR = 21;
+
+	//@todo move to a more appropriate place, does not belong to this class
 	public const CONSIDER_BOOKING__DELAYED_AFTER_SECONDS = 300;
 
-	public static function getSecondsFromMidnight(DateTimeImmutable $dateTime): int
+	/**
+	 * Checks if two timestamps fall on the same calendar day
+	 * in the specified timezone.
+	 */
+	public static function isSameDay(int $timestamp1, int $timestamp2, string $timezone): bool
 	{
-		return (
-			(int)$dateTime->format('H') * self::SECONDS_IN_HOUR
-			+ (int)$dateTime->format('i') * self::SECONDS_IN_MINUTE
-			+ (int)$dateTime->format('s')
-		);
+		$dateTime1 = (new DateTimeImmutable("@{$timestamp1}"))
+			->setTimezone(new DateTimeZone($timezone))
+		;
+		$dateTime2 = (new DateTimeImmutable("@{$timestamp2}"))
+			->setTimezone(new DateTimeZone($timezone))
+		;
+
+		return $dateTime1->format('Ymd') === $dateTime2->format('Ymd');
 	}
 
-	public static function isWorkingTime(DateTimeImmutable $dateTime): bool
-	{
-		return (
-			Time::DAYTIME_START_HOUR <= (int)$dateTime->format('H')
-			&& (int)$dateTime->format('H') < Time::DAYTIME_END_HOUR
-		);
-	}
-
-	public static function getMinutesFromMidnight(DateTimeImmutable $dateTime): int
-	{
-		return self::getSecondsFromMidnight($dateTime) / self::MINUTES_IN_HOUR;
-	}
-
-	public static function getDayCode(\DateTimeInterface $dateTime): string
+	public static function getDayCode(DateTimeInterface $dateTime): string
 	{
 		$map = [
 			'SU',

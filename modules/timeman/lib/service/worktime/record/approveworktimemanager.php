@@ -35,6 +35,11 @@ class ApproveWorktimeManager extends WorktimeManager
 		return $record;
 	}
 
+	protected function needsWorktimeEventLoading(): bool
+	{
+		return true;
+	}
+
 	public function onBeforeRecordSave(WorktimeRecord $record, WorktimeLiveFeedManager $liveFeedManager)
 	{
 		if (!$this->wasAlreadyApproved && $record->isApproved())

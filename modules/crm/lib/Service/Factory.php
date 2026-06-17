@@ -1746,6 +1746,31 @@ abstract class Factory
 		return false;
 	}
 
+	public function isClientFieldsEnabled(): bool
+	{
+		return $this->isClientContactEnabled() || $this->isClientCompanyEnabled();
+	}
+
+	/**
+	 * Returns true if this entity supports related 'Contact' fields for its elements
+	 *
+	 * @return bool
+	 */
+	public function isClientContactEnabled(): bool
+	{
+		return false;
+	}
+
+	/**
+	 * Returns true if this entity supports related 'Company' fields for its elements
+	 *
+	 * @return bool
+	 */
+	public function isClientCompanyEnabled(): bool
+	{
+		return false;
+	}
+
 	/**
 	 * Returns true if this entity supports Crm Tracking
 	 *

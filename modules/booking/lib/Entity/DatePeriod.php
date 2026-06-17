@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Entity;
 
+use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\InvalidArgumentException;
 use Bitrix\Booking\Internals\Service\Rrule;
 use Bitrix\Booking\Internals\Service\Time;
@@ -30,6 +31,16 @@ class DatePeriod implements EventInterface
 			throw new InvalidArgumentException('DateTo must be greater than DateFrom');
 		}
 
+		if (!Container::getTimezoneService()->isValid($dateFrom->getTimezone()->getName()))
+		{
+			$dateFrom = $dateFrom->setTimezone(new DateTimeZone('UTC'));
+		}
+
+		if (!Container::getTimezoneService()->isValid($dateTo->getTimezone()->getName()))
+		{
+			$dateTo = $dateTo->setTimezone(new DateTimeZone('UTC'));
+		}
+
 		$this->dateFrom = $dateFrom;
 		$this->dateTo = $dateTo;
 	}
@@ -38,23 +49,22 @@ class DatePeriod implements EventInterface
 	{
 		return new self(
 			$this->dateFrom->setTimezone(new DateTimeZone($timezone)),
-			$this->dateTo->setTimezone(new DateTimeZone($timezone))
+			$this->dateTo->setTimezone(new DateTimeZone($timezone)),
 		);
 	}
 
-	public function contains(DatePeriod $datePeriod): bool
+	public function contains(self $datePeriod): bool
 	{
-		return (
+		return
 			$datePeriod->getDateFrom()->getTimestamp() >= $this->getDateFrom()->getTimestamp()
 			&& $datePeriod->getDateFrom()->getTimestamp() < $this->getDateTo()->getTimestamp()
 			&& $datePeriod->getDateTo()->getTimestamp() > $this->getDateFrom()->getTimestamp()
-			&& $datePeriod->getDateTo()->getTimestamp() <= $this->getDateTo()->getTimestamp()
-		);
+			&& $datePeriod->getDateTo()->getTimestamp() <= $this->getDateTo()->getTimestamp();
 	}
 
-	public function intersects(DatePeriod $datePeriod): bool
+	public function intersects(self $datePeriod): bool
 	{
-		return (
+		return
 			(
 				$this->getDateFrom()->getTimestamp() >= $datePeriod->getDateFrom()->getTimestamp()
 				&& $this->getDateFrom()->getTimestamp() < $datePeriod->getDateTo()->getTimestamp()
@@ -62,15 +72,41 @@ class DatePeriod implements EventInterface
 			|| (
 				$datePeriod->getDateFrom()->getTimestamp() >= $this->getDateFrom()->getTimestamp()
 				&& $datePeriod->getDateFrom()->getTimestamp() < $this->getDateTo()->getTimestamp()
-			)
-		);
+			);
+	}
+
+	public function exclude(self $datePeriod): DatePeriodCollection
+	{
+		$datePeriodFromTs = $this->getDateFrom()->getTimestamp();
+		$datePeriodToTs = $this->getDateTo()->getTimestamp();
+		$excludedDatePeriodFromTs = $datePeriod->getDateFrom()->getTimestamp();
+		$excludedDatePeriodToTs = $datePeriod->getDateTo()->getTimestamp();
+
+		if ($datePeriodToTs <= $excludedDatePeriodFromTs || $datePeriodFromTs >= $excludedDatePeriodToTs)
+		{
+			return new DatePeriodCollection($this);
+		}
+
+		$result = new DatePeriodCollection();
+
+		if ($datePeriodFromTs < $excludedDatePeriodFromTs)
+		{
+			$result->add(self::createDatePeriodFromTimestamps($datePeriodFromTs, $excludedDatePeriodFromTs));
+		}
+
+		if ($datePeriodToTs > $excludedDatePeriodToTs)
+		{
+			$result->add(self::createDatePeriodFromTimestamps($excludedDatePeriodToTs, $datePeriodToTs));
+		}
+
+		return $result;
 	}
 
 	public function addMinutes(int $minutes): self
 	{
 		return new self(
 			$this->getDateFrom()->add(new DateInterval('PT' . $minutes . 'M')),
-			$this->getDateTo()->add(new DateInterval('PT' . $minutes . 'M'))
+			$this->getDateTo()->add(new DateInterval('PT' . $minutes . 'M')),
 		);
 	}
 
@@ -97,8 +133,8 @@ class DatePeriod implements EventInterface
 			new \DatePeriod(
 				$this->getDateFrom(),
 				new DateInterval('P1D'),
-				$this->getDateTo()
-			)
+				$this->getDateTo(),
+			),
 		);
 		foreach ($dates as $date)
 		{
@@ -106,13 +142,6 @@ class DatePeriod implements EventInterface
 		}
 
 		return $result;
-	}
-
-	public function isMultipleOf(int $minutes): bool
-	{
-		$diffInSeconds = $this->dateTo->getTimestamp() - $this->dateFrom->getTimestamp();
-
-		return $diffInSeconds % ($minutes * Time::SECONDS_IN_MINUTE) === 0;
 	}
 
 	public function isGreaterThanDay(): bool
@@ -145,7 +174,7 @@ class DatePeriod implements EventInterface
 		return false;
 	}
 
-	public function getEventDatePeriod(): DatePeriod
+	public function getEventDatePeriod(): self
 	{
 		return $this;
 	}
@@ -153,5 +182,13 @@ class DatePeriod implements EventInterface
 	public function getEventRrule(): ?Rrule
 	{
 		return null;
+	}
+
+	private static function createDatePeriodFromTimestamps(int $dateFromTs, int $dateToTs): self
+	{
+		return new self(
+			new DateTimeImmutable('@' . $dateFromTs),
+			new DateTimeImmutable('@' . $dateToTs),
+		);
 	}
 }

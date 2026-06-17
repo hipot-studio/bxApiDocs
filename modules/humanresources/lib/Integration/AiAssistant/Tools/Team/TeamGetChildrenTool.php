@@ -18,6 +18,6 @@ class TeamGetChildrenTool extends NodeGetChildrenTool
 
 	public function getDescription(): string
 	{
-		return 'Get a list of child nodes of the node identified by `nodeId` when node is a team.';
+		return 'Get direct child teams of the given team.';
 	}
 }

@@ -1,7 +1,7 @@
 <?
 namespace Bitrix\Crm\Tracking\Internals;
 
-use Bitrix\Main\Orm;
+use Bitrix\Main\ORM;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
 
@@ -25,7 +25,7 @@ Loc::loadMessages(__FILE__);
  * @method static \Bitrix\Crm\Tracking\Internals\EO_TraceTree wakeUpObject($row)
  * @method static \Bitrix\Crm\Tracking\Internals\EO_TraceTree_Collection wakeUpCollection($rows)
  */
-class TraceTreeTable extends Orm\Data\DataManager
+class TraceTreeTable extends ORM\Data\DataManager
 {
 	/**
 	 * Returns DB table name for entity.
@@ -45,14 +45,14 @@ class TraceTreeTable extends Orm\Data\DataManager
 	public static function getMap()
 	{
 		return [
-			(new Orm\Fields\IntegerField('ID'))
+			(new ORM\Fields\IntegerField('ID'))
 				->configureAutocomplete()
 				->configurePrimary()
 			,
-			(new Orm\Fields\IntegerField('CHILD_ID'))
+			(new ORM\Fields\IntegerField('CHILD_ID'))
 				->configureRequired()
 			,
-			(new Orm\Fields\IntegerField('PARENT_ID'))
+			(new ORM\Fields\IntegerField('PARENT_ID'))
 				->configureRequired()
 			,
 		];

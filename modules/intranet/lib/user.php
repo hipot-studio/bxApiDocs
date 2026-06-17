@@ -16,6 +16,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\UI\EntitySelector\EntityUsageTable;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
@@ -397,6 +398,11 @@ class User
 			return UserRole::EXTRANET;
 		}
 
+		if ($this->isImGuest())
+		{
+			return UserRole::IM_GUEST;
+		}
+
 		if ($this->isEmail())
 		{
 			return UserRole::EMAIL;
@@ -413,6 +419,19 @@ class User
 		}
 
 		return UserRole::VISITOR;
+	}
+
+	public function isImGuest(): bool
+	{
+		if (!ModuleManager::isModuleInstalled('im'))
+		{
+			return false;
+		}
+
+		$fields = $this->getFields();
+
+		return array_key_exists('EXTERNAL_AUTH_ID', $fields)
+			&& $fields['EXTERNAL_AUTH_ID'] === 'im_guest';
 	}
 
 	public function isIntegrator(): bool

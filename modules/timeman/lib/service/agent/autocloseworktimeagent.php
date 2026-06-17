@@ -48,6 +48,12 @@ class AutoCloseWorktimeAgent
 		{
 			return '';
 		}
+
+		if ($recordStopUtcTimestamp <= $record->getActualStartTimestamp())
+		{
+			return '';
+		}
+
 		$recordStop = TimeHelper::getInstance()->createUserDateTimeFromFormat('U', $recordStopUtcTimestamp, $record->getUserId());
 		if (!$recordStop)
 		{

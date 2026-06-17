@@ -2,9 +2,11 @@
 
 namespace Bitrix\Crm\Kanban\Entity;
 
+use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Kanban\Entity\Dto\Sign\B2e\UserListDto;
+use Bitrix\Crm\Kanban\Helper\ClientFieldsPreparer;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Display\Field\Sign\B2e\ResultStatusField;
@@ -536,6 +538,23 @@ final class SmartB2eDocument extends Dynamic
 		}
 
 		return $result;
+	}
+
+	protected function getFieldsRestrictionsTypes(): array
+	{
+		return [
+			FieldRestrictionManagerTypes::OBSERVERS,
+		];
+	}
+
+	protected function getClientFieldsPreparer(): ClientFieldsPreparer
+	{
+		if (!$this->clientFieldsPreparer)
+		{
+			$this->clientFieldsPreparer = new ClientFieldsPreparer();
+		}
+
+		return $this->clientFieldsPreparer;
 	}
 
 	public function appendAdditionalData(array &$rows): void

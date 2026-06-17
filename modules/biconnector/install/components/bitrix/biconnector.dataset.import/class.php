@@ -9,27 +9,27 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\ExternalSource;
+use Bitrix\BIConnector\ExternalSource\Const;
+use Bitrix\BIConnector\ExternalSource\DatasetManager;
+use Bitrix\BIConnector\ExternalSource\FieldType;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
-use Bitrix\BIConnector\ExternalSource\SupersetIntegration;
+use Bitrix\BIConnector\ExternalSource\Source;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Configuration\DataTimezone;
+use Bitrix\BIConnector\DataSource\SystemDatasetProvider;
 use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\BiConnector\Settings;
-use Bitrix\BIConnector\ExternalSource;
-use Bitrix\BIConnector\ExternalSource\Const;
-use Bitrix\BIConnector\ExternalSource\FieldType;
-use Bitrix\BIConnector\ExternalSource\DatasetManager;
-use Bitrix\BIConnector\ExternalSource\Source;
-use Bitrix\BIConnector\Configuration\DataTimezone;
 use Bitrix\Main\Type;
 use Bitrix\Main\Web\Uri;
 
 class DatasetImportComponent extends CBitrixComponent
 {
 	private const FIRST_N_ROW = 20;
+	private const SYSTEM_PREVIEW_DAYS_WINDOW = 30;
 
 	public function onPrepareComponentParams($arParams)
 	{
@@ -42,6 +42,7 @@ class DatasetImportComponent extends CBitrixComponent
 
 		$arParams['datasetId'] = (int)($arParams['datasetId'] ?? 0);
 		$arParams['sourceId'] = (string)($arParams['sourceId'] ?? '');
+		$arParams['tableName'] = (string)($arParams['tableName'] ?? '');
 		if (!is_array($arParams['connection'] ?? null))
 		{
 			$arParams['connection'] = [];
@@ -86,7 +87,12 @@ class DatasetImportComponent extends CBitrixComponent
 	{
 		$this->fillInitialData();
 		$this->fillHelpdeskCode();
-		if ($this->arParams['datasetId'] > 0)
+
+		if ($this->arParams['sourceId'] === ExternalSource\Type::System->value)
+		{
+			$this->fillSystemDataset();
+		}
+		elseif ($this->arParams['datasetId'] > 0)
 		{
 			$this->loadDataset();
 		}
@@ -135,73 +141,141 @@ class DatasetImportComponent extends CBitrixComponent
 		}
 	}
 
-	private function loadSupersetDatasets(ExternalSource\Internal\ExternalDataset $dataset): array
+	private function fillSystemDataset(): void
+	{
+		$tableName = $this->arParams['tableName'];
+		$provider = new SystemDatasetProvider();
+		$tableData = $tableName !== '' ? $provider->getByName($tableName) : null;
+
+		if ($tableData === null)
+		{
+			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_DATASET_NOT_FOUND_MSGVER_1');
+			$this->includeComponentTemplate();
+			Application::getInstance()->terminate();
+		}
+
+		$externalDatasets = $this->loadSupersetDatasetsByName($tableName);
+
+		$description = $tableData['TABLE_DESCRIPTION_FULL'] !== ''
+			? $tableData['TABLE_DESCRIPTION_FULL']
+			: $tableData['TABLE_DESCRIPTION']
+		;
+
+		$datasetProperties = [
+			'id' => 0,
+			'name' => $tableData['NAME'],
+			'description' => $description,
+			'isSystem' => true,
+			'externalDatasets' => $externalDatasets,
+		];
+
+		$createPhysicalUrl = $this->getDatasetCreateUrl($tableName, $externalDatasets, false);
+		if ($createPhysicalUrl !== null)
+		{
+			$datasetProperties['createPhysicalDatasetUrl'] = $createPhysicalUrl;
+		}
+
+		$createVirtualUrl = $this->getDatasetCreateUrl($tableName, $externalDatasets, true);
+		if ($createVirtualUrl !== null)
+		{
+			$datasetProperties['createVirtualDatasetUrl'] = $createVirtualUrl;
+		}
+
+		$this->arResult['initialData']['config'] = [
+			...$this->arResult['initialData']['config'],
+			'datasetProperties' => $datasetProperties,
+			'fieldsSettings' => $this->mapSystemFields($tableData['FIELDS']),
+		];
+
+		$this->arResult['initialData']['previewData']['rows'] = $provider->getPreviewData(
+			$tableName,
+			self::FIRST_N_ROW,
+			$this->getSystemPreviewParameters(),
+		);
+	}
+
+	private function getSystemPreviewParameters(): array
+	{
+		return [
+			'dateRange' => [
+				'startDate' => date('Y-m-d', strtotime('-' . self::SYSTEM_PREVIEW_DAYS_WINDOW . ' days')),
+				'endDate' => date('Y-m-d'),
+			],
+		];
+	}
+
+	private function mapSystemFields(array $fields): array
+	{
+		$typeMap = [
+			'STRING' => FieldType::String->value,
+			'ARRAY_STRING' => FieldType::String->value,
+			'INT' => FieldType::Int->value,
+			'NUMBER' => FieldType::Int->value,
+			'DOUBLE' => FieldType::Double->value,
+			'DATE' => FieldType::Date->value,
+			'YEAR_MONTH_DAY' => FieldType::Date->value,
+			'DATETIME' => FieldType::DateTime->value,
+			'YEAR_MONTH_DAY_SECOND' => FieldType::DateTime->value,
+			'BOOLEAN' => FieldType::Int->value,
+		];
+
+		$result = [];
+		foreach ($fields as $fieldData)
+		{
+			$result[] = [
+				'name' => $fieldData['ID'] ?? '',
+				'type' => $typeMap[$fieldData['TYPE'] ?? ''] ?? FieldType::String->value,
+				'visible' => true,
+				'originalName' => $fieldData['NAME'] ?? '',
+				'externalCode' => $fieldData['NAME'] ?? '',
+			];
+		}
+
+		return $result;
+	}
+
+	private function loadSupersetDatasetsByName(string $tableName): array
 	{
 		if (!SupersetInitializer::isSupersetReady())
 		{
 			return [];
 		}
 
-		$supersetIntegration = new SupersetIntegration();
-		$datasetsResult = $supersetIntegration->loadSupersetDatasets($dataset);
-
-		if ($datasetsResult->isSuccess())
+		$integrator = Integrator::getInstance();
+		$response = $integrator->getDatasetListByTableName($tableName);
+		if ($response->hasErrors())
 		{
-			return $datasetsResult->getData();
+			return [];
 		}
 
-		return [];
+		return $response->getData();
 	}
 
-	private function getPhysicalDatasetCreateUrl(ExternalSource\Internal\ExternalDataset $dataset, array $externalDatasets): ?string
+	private function getDatasetCreateUrl(string $tableName, array $externalDatasets, bool $isVirtual): ?string
 	{
-		if(empty($dataset->getName()) || !SupersetInitializer::isSupersetReady())
+		if (!SupersetInitializer::isSupersetReady())
 		{
 			return null;
 		}
 
-		$hasPhysicalDataset = false;
-		if (!empty($externalDatasets))
+		if (!$isVirtual)
 		{
 			foreach ($externalDatasets as $externalDataset)
 			{
 				if (isset($externalDataset['is_virtual']) && $externalDataset['is_virtual'] === false)
 				{
-					$hasPhysicalDataset = true;
-					break;
+					return null;
 				}
 			}
 		}
 
-		if ($hasPhysicalDataset)
-		{
-			return null;
-		}
-
 		$integrator = Integrator::getInstance();
-		$response = $integrator->getDatasetCreateUrl($dataset->getName());
+		$response = $integrator->getDatasetCreateUrl($tableName, $isVirtual);
 		if ($response->hasErrors())
 		{
 			return null;
 		}
-		$responseData = $response->getData();
 
-		return $responseData['url'] ? $this->getSupersetLoginUrl($responseData['url']) : null;
-	}
-
-	private function getVirtualDatasetCreateUrl(ExternalSource\Internal\ExternalDataset $dataset): ?string
-	{
-		if (empty($dataset->getName()) || !SupersetInitializer::isSupersetReady())
-		{
-			return null;
-		}
-
-		$integrator = Integrator::getInstance();
-		$response = $integrator->getDatasetCreateUrl($dataset->getName(), true);
-		if ($response->hasErrors())
-		{
-			return null;
-		}
 		$responseData = $response->getData();
 
 		return $responseData['url'] ? $this->getSupersetLoginUrl($responseData['url']) : null;
@@ -259,7 +333,7 @@ class DatasetImportComponent extends CBitrixComponent
 				if ($source->getType() === \Bitrix\BIConnector\ExternalSource\Type::Rest->value)
 				{
 					$isSupportMapping = ExternalSourceRestTable::getList([
-						'select' => [ 'CONNECTOR.SUPPORT_MAPPING'],
+						'select' => ['CONNECTOR.SUPPORT_MAPPING'],
 						'filter' => ['SOURCE_ID' => $source->getId()],
 						'limit' => 1,
 					])
@@ -278,13 +352,13 @@ class DatasetImportComponent extends CBitrixComponent
 				];
 
 				$externalDatasets = $result['datasetProperties']['externalDatasets'] ?? [];
-				$createPhysicalUrl = $this->getPhysicalDatasetCreateUrl($dataset, $externalDatasets);
+				$createPhysicalUrl = $this->getDatasetCreateUrl($dataset->getName(), $externalDatasets, false);
 				if ($createPhysicalUrl !== null)
 				{
 					$connectionProperties['createPhysicalDatasetUrl'] = $createPhysicalUrl;
 				}
 
-				$createVirtualUrl = $this->getVirtualDatasetCreateUrl($dataset);
+				$createVirtualUrl = $this->getDatasetCreateUrl($dataset->getName(), $externalDatasets, true);
 				if ($createVirtualUrl !== null)
 				{
 					$connectionProperties['createVirtualDatasetUrl'] = $createVirtualUrl;
@@ -297,13 +371,13 @@ class DatasetImportComponent extends CBitrixComponent
 		if ($dataset->getEnumType() === ExternalSource\Type::Csv)
 		{
 			$externalDatasets = $result['datasetProperties']['externalDatasets'] ?? [];
-			$createPhysicalUrl = $this->getPhysicalDatasetCreateUrl($dataset, $externalDatasets);
+			$createPhysicalUrl = $this->getDatasetCreateUrl($dataset->getName(), $externalDatasets, false);
 			if ($createPhysicalUrl !== null)
 			{
 				$result['datasetProperties']['createPhysicalDatasetUrl'] = $createPhysicalUrl;
 			}
 
-			$createVirtualUrl = $this->getVirtualDatasetCreateUrl($dataset);
+			$createVirtualUrl = $this->getDatasetCreateUrl($dataset->getName(), $externalDatasets, true);
 			if ($createVirtualUrl !== null)
 			{
 				$result['datasetProperties']['createVirtualDatasetUrl'] = $createVirtualUrl;
@@ -329,7 +403,7 @@ class DatasetImportComponent extends CBitrixComponent
 			'description' => $dataset->getDescription() ?? '',
 			'externalCode' => $dataset->getExternalCode() ?? '',
 			'externalName' => $dataset->getExternalName() ?? '',
-			'externalDatasets' => $this->loadSupersetDatasets($dataset),
+			'externalDatasets' => $this->loadSupersetDatasetsByName($dataset->getName() ?? ''),
 		];
 	}
 
@@ -601,7 +675,7 @@ class DatasetImportComponent extends CBitrixComponent
 		$sources = ExternalSourceRestTable::getList([
 			'select' => [
 				'SOURCE_ID',
-				'AVATAR' => 'CONNECTOR.LOGO'
+				'AVATAR' => 'CONNECTOR.LOGO',
 			],
 		]);
 

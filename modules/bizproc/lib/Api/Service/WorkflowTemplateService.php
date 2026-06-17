@@ -519,7 +519,7 @@ class WorkflowTemplateService
 				return $response;
 			}
 
-			if ($this->accessService->canCreateWorkflow($documentType, $request->user->getId()))
+			if (!$this->accessService->canCreateWorkflow($documentType, $request->user->getId()))
 			{
 				$response->addError(
 					ErrorMessage::ACCESS_DENIED->getError(),

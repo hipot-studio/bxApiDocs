@@ -2,8 +2,8 @@
 
 use Bitrix\Bizproc;
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Internal\Service\Document\DocumentEntityChecker;
 use Bitrix\Bizproc\Public\Entity\Document\DocumentComplexId;
-use Bitrix\Main\Loader;
 use Bitrix\Bizproc\Public\Entity\Document\DocumentService\DocumentNameAndUrlDto;
 
 class CBPDocumentService extends CBPRuntimeService
@@ -1646,12 +1646,7 @@ EOS;
 
 	private function isEntityClass(string $moduleId, string $entity): bool
 	{
-		if ($moduleId)
-		{
-			Loader::includeModule($moduleId);
-		}
-
-		return class_exists($entity) && isset(class_implements($entity)[IBPWorkflowDocument::class]);
+		return DocumentEntityChecker::isValid($moduleId, $entity);
 	}
 
 	public function getSectionName(array $complexDocumentType): ?string

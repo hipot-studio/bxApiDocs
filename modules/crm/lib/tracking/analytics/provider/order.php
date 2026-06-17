@@ -9,7 +9,7 @@ namespace Bitrix\Crm\Tracking\Analytics\Provider;
 
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Orm;
+use Bitrix\Main\ORM;
 use Bitrix\Sale;
 use Bitrix\Crm;
 
@@ -104,19 +104,19 @@ class Order extends Base
 	protected function getOrderQuery()
 	{
 		$query = Sale\OrderTable::query();
-		$query->registerRuntimeField(new Orm\Fields\Relations\Reference(
+		$query->registerRuntimeField(new ORM\Fields\Relations\Reference(
 			'CRM_ORDER',
 			Crm\Binding\OrderContactCompanyTable::class,
 			['=this.ID' => 'ref.ORDER_ID'],
 			[
-				//'join_type' => Orm\Query\Join::TYPE_INNER
+				//'join_type' => ORM\Query\Join::TYPE_INNER
 			]
 		));
 
-		$query->registerRuntimeField(new Orm\Fields\ExpressionField(
+		$query->registerRuntimeField(new ORM\Fields\ExpressionField(
 			'ACCOUNT_CURRENCY_ID', '%s', ['CURRENCY']
 		));
-		$query->registerRuntimeField(new Orm\Fields\ExpressionField(
+		$query->registerRuntimeField(new ORM\Fields\ExpressionField(
 			'OPPORTUNITY_ACCOUNT', '%s', ['PRICE']
 		));
 

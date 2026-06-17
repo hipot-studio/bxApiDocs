@@ -32,7 +32,7 @@ final class ScheduledTriggerSyncService
 			return;
 		}
 
-		$active = $active ?? $this->workflowTemplateRepository->isTemplateActive($templateId);
+		$active = (bool)($active ?? $this->workflowTemplateRepository->isTemplateActive($templateId));
 		$triggers = $triggers ?? $this->getTemplateTriggers($templateId);
 
 		$this->scheduleSyncService->syncByTemplate($templateId, $triggers, $active);

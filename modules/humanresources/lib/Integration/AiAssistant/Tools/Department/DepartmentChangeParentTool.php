@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\HumanResources\Integration\AiAssistant\Tools\Department;
 
 use Bitrix\HumanResources\Access\Permission\PermissionDictionary;
-use \Bitrix\HumanResources\Integration\AiAssistant\Tools\Node\NodeChangeParentTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Node\NodeChangeParentTool;
 use Bitrix\HumanResources\Type\NodeEntityType;
 
 class DepartmentChangeParentTool extends NodeChangeParentTool
@@ -20,6 +20,8 @@ class DepartmentChangeParentTool extends NodeChangeParentTool
 
 	public function getDescription(): string
 	{
-		return 'Change node parent to `parentId` for the node identified by `nodeId` when node is a department. Use this function to change level of subordination';
+		return 'Reparent a department under a new `parentId`. '
+			. 'Side effects: changes the reporting chain, business-process approval scope, and access scope for the department and its entire subtree. '
+			. 'Always confirm with the user before calling.';
 	}
 }

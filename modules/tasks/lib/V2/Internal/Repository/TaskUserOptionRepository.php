@@ -80,6 +80,34 @@ class TaskUserOptionRepository implements TaskUserOptionRepositoryInterface
 		}
 	}
 
+	public function addBatch(Entity\Task\UserOptionCollection $userOptions): void
+	{
+		$data = [];
+		foreach ($userOptions as $userOption)
+		{
+			$data[] = $this->userOptionMapper->mapFromEntity($userOption);
+		}
+
+		if (empty($data))
+		{
+			return;
+		}
+
+		try
+		{
+			$result = UserOptionTable::addMulti($data, true);
+		}
+		catch (DuplicateEntryException $e)
+		{
+			throw new UserOptionException($e->getMessage());
+		}
+
+		if (!$result->isSuccess())
+		{
+			throw new UserOptionException($result->getError()?->getMessage());
+		}
+	}
+
 	public function delete(array $codes = [], int $taskId = 0, int $userId = 0): void
 	{
 		$filter = [];
@@ -103,6 +131,40 @@ class TaskUserOptionRepository implements TaskUserOptionRepositoryInterface
 		if (empty($filter))
 		{
 			return;
+		}
+
+		try
+		{
+			UserOptionTable::deleteByFilter($filter);
+		}
+		catch (SqlQueryException $e)
+		{
+			throw new UserOptionException($e->getMessage());
+		}
+	}
+
+	public function deleteBatch(int $taskId, array $userIds, array $codes = []): void
+	{
+		if ($taskId <= 0)
+		{
+			return;
+		}
+
+		Collection::normalizeArrayValuesByInt($userIds, false);
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		$filter = [
+			'=TASK_ID' => $taskId,
+			'@USER_ID' => $userIds,
+		];
+
+		Collection::normalizeArrayValuesByInt($codes, false);
+		if (!empty($codes))
+		{
+			$filter['@OPTION_CODE'] = $codes;
 		}
 
 		try

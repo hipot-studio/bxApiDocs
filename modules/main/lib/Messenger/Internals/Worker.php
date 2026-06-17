@@ -6,12 +6,9 @@ namespace Bitrix\Main\Messenger\Internals;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Configuration;
-use Bitrix\Main\Config\ConfigurationException;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\LoaderException;
 use Bitrix\Main\Messenger\Internals\Config\QueueConfigRegistry;
-use Bitrix\Main\Messenger\Internals\Exception\ReceiverException;
-use Bitrix\Main\SystemException;
+use Throwable;
 
 final class Worker
 {
@@ -31,11 +28,6 @@ final class Worker
 		}
 	}
 
-	/**
-	 * @throws LoaderException
-	 * @throws ConfigurationException
-	 * @throws SystemException
-	 */
 	public function process(array $options = []): void
 	{
 		$registry = ServiceLocator::getInstance()->get(QueueConfigRegistry::class);
@@ -58,7 +50,7 @@ final class Worker
 			{
 				$queueConfig->createReceiver()->run();
 			}
-			catch (ReceiverException $e)
+			catch (Throwable $e)
 			{
 				Application::getInstance()->getExceptionHandler()->writeToLog($e);
 			}

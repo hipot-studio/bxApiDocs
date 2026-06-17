@@ -188,6 +188,11 @@ class EditWorktimeManager extends WorktimeManager
 		return $events;
 	}
 
+	protected function needsWorktimeEventLoading(): bool
+	{
+		return true;
+	}
+
 	protected function checkStartGreaterThanNow()
 	{
 		return true;
@@ -195,6 +200,6 @@ class EditWorktimeManager extends WorktimeManager
 
 	protected function checkOverlappingRecords()
 	{
-		return false;
+		return true;
 	}
 }

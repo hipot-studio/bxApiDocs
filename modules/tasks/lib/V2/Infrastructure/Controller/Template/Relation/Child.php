@@ -18,6 +18,7 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Service\Template\TemplateParentService;
 use Bitrix\Tasks\V2\Public\Command\Template\Relation\DeleteBaseRelationCommand;
 use Bitrix\Tasks\V2\Public\Command\Template\Relation\SetBaseRelationCommand;
+use Bitrix\Tasks\V2\Public\Provider\Params\Template\Relation\RelationTemplateByIdsParams;
 use Bitrix\Tasks\V2\Public\Provider\Params\Template\Relation\RelationTemplateParams;
 use Bitrix\Tasks\V2\Public\Provider\Template\Relation\SubTemplateProvider;
 use Bitrix\Tasks\Validation\Rule\Count;
@@ -35,6 +36,7 @@ class Child extends BaseController
 		SubTemplateProvider $subTemplateProvider,
 		SelectInterface|null $relationTemplateSelect = null,
 		bool $withIds = true,
+		bool $withSubTemplates = true,
 	): array
 	{
 		$params = new RelationTemplateParams(
@@ -42,6 +44,7 @@ class Child extends BaseController
 			templateId: (int)$template->id,
 			pager: Pager::buildFromPageNavigation($pageNavigation),
 			select: $relationTemplateSelect,
+			withSubTemplates: $withSubTemplates,
 		);
 
 		$response = [
@@ -64,10 +67,32 @@ class Child extends BaseController
 		#[ElementsType(typeEnum: Type::Numeric)]
 		array $templateIds,
 		SubTemplateProvider $subTemplateProvider,
+		bool $withSubTemplates = true,
+	): array
+	{
+		$params = new RelationTemplateByIdsParams(
+			templateIds: $templateIds,
+			userId: $this->userId,
+			withSubTemplates: $withSubTemplates,
+		);
+
+		return [
+			'templates' => $subTemplateProvider->getTemplatesByIds($params),
+		];
+	}
+
+	/**
+	 * @ajaxAction tasks.V2.Template.Relation.Child.getSubTemplateIds
+	 */
+	#[CloseSession]
+	public function getSubTemplateIdsAction(
+		#[ElementsType(typeEnum: Type::Numeric)]
+		array $templateIds,
+		SubTemplateProvider $subTemplateProvider,
 	): array
 	{
 		return [
-			'templates' => $subTemplateProvider->getTemplatesByIds($templateIds, $this->userId),
+			'templates' => $subTemplateProvider->getTemplatesWithSubTemplateIds($templateIds),
 		];
 	}
 

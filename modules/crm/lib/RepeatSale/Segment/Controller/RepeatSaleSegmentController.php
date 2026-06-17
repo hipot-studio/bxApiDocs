@@ -159,6 +159,16 @@ final class RepeatSaleSegmentController
 
 	public function getById(int $id, bool $loadAssignmentUsers = false): ?RepeatSaleSegment
 	{
+		return $this->getItem('ID', $id, $loadAssignmentUsers);
+	}
+
+	public function getByCode(string $code, bool $loadAssignmentUsers = false): ?RepeatSaleSegment
+	{
+		return $this->getItem('CODE', $code, $loadAssignmentUsers);
+	}
+
+	private function getItem(string $fieldName, int|string $value, bool $loadAssignmentUsers = false): ?RepeatSaleSegment
+	{
 		$select = ['*'];
 		if ($loadAssignmentUsers)
 		{
@@ -167,10 +177,11 @@ final class RepeatSaleSegmentController
 
 		return RepeatSaleSegmentTable::query()
 			->setSelect($select)
-			->setFilter(['=ID' => $id])
+			->setFilter(['=' . $fieldName => $value])
 			->fetchObject()
 		;
 	}
+
 
 	public function getTotalCount(array $filter = []): int
 	{

@@ -47,5 +47,6 @@ class MailMessage
 	public array $attachments = [];
 	public string $abbreviatedText;
 	public string $replyFromEmail = '';
-	public ?string $mailboxId = null;
+	public ?int $mailboxId = null;
+	public ?int $folderId = null;
 }

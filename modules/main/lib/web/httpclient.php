@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Web;
@@ -12,6 +12,7 @@ namespace Bitrix\Main\Web;
 use Bitrix\Main\IO;
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Error;
 use Psr\Log;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -828,7 +829,15 @@ class HttpClient implements Log\LoggerAwareInterface, ClientInterface, Http\Debu
 
 		if (!$request->hasHeader('Host'))
 		{
-			$request = $request->withHeader('Host', $uri->getHost());
+			$host = $uri->getHost();
+			$scheme = $uri->getScheme();
+			$port = $uri->getPort();
+			if (($scheme == 'http' && $port != 80) || ($scheme == 'https' && $port != 443))
+			{
+				$host .= ':' . $port;
+			}
+
+			$request = $request->withHeader('Host', $host);
 		}
 		if (!$request->hasHeader('Connection'))
 		{
@@ -926,7 +935,7 @@ class HttpClient implements Log\LoggerAwareInterface, ClientInterface, Http\Debu
 
 		$punyUri = new Uri((string)$uri);
 		$error = $punyUri->convertToPunycode();
-		if ($error instanceof \Bitrix\Main\Error)
+		if ($error instanceof Error)
 		{
 			$this->addError('URI_PUNICODE', "Error converting hostname to punycode: {$error->getMessage()}");
 			return false;

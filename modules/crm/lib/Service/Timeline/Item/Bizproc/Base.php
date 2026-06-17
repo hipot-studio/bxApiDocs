@@ -8,6 +8,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockFactory;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\ContentBlockWithTitle;
 use Bitrix\Crm\Service\Timeline\Layout\Common;
+use Bitrix\Bizproc\UI\Helpers\DurationFormatter;
 use Bitrix\Main\Localization\Loc;
 
 abstract class Base extends Configurable
@@ -78,16 +79,51 @@ abstract class Base extends Configurable
 
 	private function buildCreatedTimeBlock(): ?ContentBlock
 	{
-		$textOrLink = ContentBlockFactory::createTextOrLink(
-			Loc::getMessage('CRM_TIMELINE_BIZPROC_EXEC_TIME') ?? '',
-			null
-		);
+		$textOrLink = ContentBlockFactory::createTextOrLink($this->getWorkflowStartDurationText(), null);
 
 		return (new ContentBlockWithTitle())
 			->setTitle(Loc::getMessage('CRM_TIMELINE_BIZPROC_EXEC_TITLE') ?? '')
-			->setContentBlock($textOrLink) //TODO when it will be done in another task
+			->setContentBlock($textOrLink)
 			->setInline()
 		;
+	}
+
+	private function getWorkflowStartDurationText(): string
+	{
+		$fallbackText = Loc::getMessage('CRM_TIMELINE_BIZPROC_EXEC_TIME') ?? '';
+
+		if (!$this->isBizprocEnabled())
+		{
+			return $fallbackText;
+		}
+
+		$duration = $this->resolveWorkflowStartDurationFromSettings();
+		if ($duration === null)
+		{
+			return $fallbackText;
+		}
+
+		if ($duration === 0)
+		{
+			return DurationFormatter::format($duration) ?? $fallbackText;
+		}
+
+		$roundedDuration = DurationFormatter::roundTimeInSeconds($duration, 2);
+
+		return DurationFormatter::format($roundedDuration) ?? $fallbackText;
+	}
+
+	private function resolveWorkflowStartDurationFromSettings(): ?int
+	{
+		$settings = $this->getModel()->getSettings();
+		$duration = $settings['WORKFLOW_START_DURATION'] ?? null;
+
+		if (is_numeric($duration))
+		{
+			return max((int)$duration, 0);
+		}
+
+		return null;
 	}
 
 	public function getMenuItems(): array

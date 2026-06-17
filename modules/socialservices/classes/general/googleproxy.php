@@ -5,6 +5,7 @@ use Bitrix\Main\Security\Cipher;
 use Bitrix\Main\Service\MicroService\Client;
 use Bitrix\Main\SystemException;
 use Bitrix\SocialServices\UserTable;
+use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Main\Web\HttpClient;
 
 
@@ -35,10 +36,23 @@ class CSocServGoogleProxyOAuth extends CSocServGoogleOAuth
 		$addParams = false;
 
 		$authError = SOCSERV_AUTHORISATION_ERROR;
+		$this->logger->info('oauth.auth.start');
 
-		$state = $this->parseState($_REQUEST['state']);
+		$state = $this->parseState($_REQUEST['state'] ?? '') ?? [];
 
-		if(!empty($_REQUEST["code"]) && $this->checkUserToken($state['user_token']))
+		if (empty($_REQUEST['code']))
+		{
+			$this->logger->error('oauth.request.invalid_code');
+			$this->sendOauthError(OAuthErrorCode::MissingCode);
+		}
+		elseif (!$this->checkUserToken($state['user_token'] ?? null))
+		{
+			$this->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'user_token_validation_failed',
+			]);
+			$this->sendOauthError(OAuthErrorCode::InvalidCheckKey);
+		}
+		else
 		{
 			$this->getEntityOAuth()->setCode($_REQUEST["code"]);
 
@@ -53,91 +67,42 @@ class CSocServGoogleProxyOAuth extends CSocServGoogleOAuth
 					$arFields = $this->prepareUser($arGoogleUser);
 					$arFields['USER_ID'] = $this->user->getId();
 					$authError = $this->AuthorizeUser($arFields);
-
-					if ($authError !== true)
-					{
-						$this->log(static::ID, 'Authorize user error: ' . $authError);
-					}
 				}
 				elseif (isset($arGoogleUser["error"]))
 				{
-					$this->log(static::ID, 'Google error: ' . $arGoogleUser["error"]);
+					$this->logger->error('oauth.user.fetch_failed', [
+						'reason' => 'provider_error',
+					]);
 				}
 				else
 				{
-					$this->log(static::ID, 'Not found current user');
+					$this->logger->error('oauth.user.fetch_failed', [
+						'reason' => 'missing_user_id',
+					]);
 				}
 			}
 			else
 			{
-				$this->log(static::ID, 'Cannot load access token');
+				$this->logger->error('oauth.token.exchange_failed', [
+					'reason' => 'get_access_token_failed',
+				]);
 			}
 		}
 
-		$aRemove = ["logout", "auth_service_error", "auth_service_id", "code", "error_reason", "error", "error_description", "check_key", "current_fieldset"];
-		$mode = null;
+		$this->logger->info('oauth.auth.finish', [
+			'success' => ($authError === true),
+			'auth_result' => $authError,
+		]);
+
+		$mode = $state['mode'] ?? 'opener';
 
 		if($this->user && ($authError === true))
 		{
 			$bSuccess = true;
 			CSocServUtil::checkOAuthProxyParams();
-
-			$url = ($APPLICATION->GetCurDir() === "/login/") ? "" : $APPLICATION->GetCurDir();
-			$mode = 'opener';
-			$addParams = true;
-			if(isset($state) && is_array($state))
-			{
-				if(isset($state['backurl']) || isset($state['redirect_url']))
-				{
-					$url = !empty($state['redirect_url']) ? $state['redirect_url'] : $state['backurl'];
-					if(!str_starts_with($url, "#"))
-					{
-						$parseUrl = parse_url($url);
-
-						$urlPath = $parseUrl["path"];
-						$arUrlQuery = explode('&', $parseUrl["query"]);
-
-						foreach($arUrlQuery as $key => $value)
-						{
-							foreach($aRemove as $param)
-							{
-								if(str_starts_with($value, $param . "="))
-								{
-									unset($arUrlQuery[$key]);
-									break;
-								}
-							}
-						}
-
-						$url = (!empty($arUrlQuery)) ? $urlPath . '?' . implode("&", $arUrlQuery) : $urlPath;
-					}
-					else
-					{
-						$addParams = false;
-					}
-				}
-
-				if(isset($state['mode']))
-				{
-					$mode = $state['mode'];
-				}
-			}
 		}
-
-		if($authError === SOCSERV_REGISTRATION_DENY)
-		{
-			$url = (preg_match("/\?/", $url)) ? $url.'&' : $url.'?';
-			$url .= 'auth_service_id='.static::ID.'&auth_service_error='.SOCSERV_REGISTRATION_DENY;
-		}
-		elseif($bSuccess !== true)
-		{
-			$url = (isset($urlPath)) ? $urlPath.'?auth_service_id='.static::ID.'&auth_service_error='.$authError : $APPLICATION->GetCurPageParam(('auth_service_id='.static::ID.'&auth_service_error='.$authError), $aRemove);
-		}
-
-		if($addParams && CModule::IncludeModule("socialnetwork") && !str_contains($url, "current_fieldset="))
-		{
-			$url = (preg_match("/\?/", $url)) ? $url."&current_fieldset=SOCSERV" : $url."?current_fieldset=SOCSERV";
-		}
+		$url = $this->getRedirectUriAfterAuthorize($authError, static::ID);
+		$addParams = !str_starts_with($url, '#');
 
 		if ($bSuccess && $mode === self::MOBILE_MODE)
 		{
@@ -170,22 +135,24 @@ class CSocServGoogleProxyOAuth extends CSocServGoogleOAuth
 			$this->entityOAuth->addScope($addScope);
 		}
 
-		$state = 'provider='.static::ID
-			. '&site_id=' . SITE_ID
-			. '&backurl=' . urlencode(
-				$GLOBALS["APPLICATION"]
-					->GetCurPageParam(
-						'check_key=' . \CSocServAuthManager::getUniqueKey(),
-						["logout", "auth_service_error", "auth_service_id", "backurl", 'serviceName', 'hitHash']
-					)
-			)
-			. '&mode=' . $location
-				. (isset($arParams['BACKURL'])
-					? '&redirect_url=' . urlencode($arParams['BACKURL'])
-					: '')
-			. '&user_token=' . urlencode($this->generateUserToken())
-			. '&hostUrl=' . urlencode(\Bitrix\Main\Engine\UrlManager::getInstance()->getHostUrl())
-		;
+		$defaultReturnUrl = $GLOBALS["APPLICATION"]->GetCurPageParam(
+			'',
+			["logout", "auth_service_error", "auth_service_id", "backurl", 'serviceName', 'hitHash']
+		);
+		$state = \Bitrix\Socialservices\OAuth\StateService::getInstance()->createState(
+			payload: [
+				'provider' => static::ID,
+				'site_id' => SITE_ID,
+				'check_key' => \CSocServAuthManager::getUniqueKey(),
+				'redirect_url' => isset($arParams['BACKURL']) ? $arParams['BACKURL'] : $defaultReturnUrl,
+				'mode' => $location,
+				'user_token' => $this->generateUserToken(),
+			],
+			additionalInfo: [
+				'hostUrl' => \Bitrix\Main\Engine\UrlManager::getInstance()->getHostUrl(),
+				'mode' => $location,
+			],
+		);
 
 		$redirect_uri = $this->getEntityOAuth()->getRedirectUri();
 
@@ -207,6 +174,8 @@ class CSocServGoogleProxyOAuth extends CSocServGoogleOAuth
 		{
 			$this->entityOAuth->setCode($code);
 		}
+
+		$this->entityOAuth->setLogger($this->logger);
 
 		return $this->entityOAuth;
 	}
@@ -281,20 +250,7 @@ class CSocServGoogleProxyOAuth extends CSocServGoogleOAuth
 
 	private function parseState(string $requestState = null): ?array
 	{
-		if (!$requestState)
-		{
-			return null;
-		}
-
-		$state = [];
-		parse_str($requestState, $state);
-
-		if (!$state)
-		{
-			return null;
-		}
-
-		return $state;
+		return $this->getState($requestState);
 	}
 
 	public function AuthorizeUser($socservUserFields, $bSave = false)

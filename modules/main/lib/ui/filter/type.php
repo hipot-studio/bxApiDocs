@@ -29,37 +29,26 @@ class Type
 
 	public function __construct()
 	{
+		$list = [
+			self::DATE => '\Bitrix\Main\UI\Filter\DateType',
+			self::NUMBER => '\Bitrix\Main\UI\Filter\NumberType',
+		];
+
 		$constants = (new \ReflectionClass(__CLASS__))->getConstants();
-		foreach ($constants as $key)
-		{
-			$list[$key] = null;
-			$filename = str_replace("_", "", mb_strtolower($key))."type.php";
-			if (file_exists(__DIR__."/".$filename))
-			{
-				$className = str_replace('_', ' ', mb_strtolower($key));
-				$className = str_replace(' ', '', ucwords($className));
-				$list[$key] = __NAMESPACE__."\\".$className."Type";
-			}
-		}
 		$event = new Event(self::class, 'onGetList', $constants);
 		$event->send();
-		if($event->getResults())
+		foreach ($event->getResults() as $evenResult)
 		{
-			foreach($event->getResults() as $evenResult)
+			if ($evenResult->getType() == EventResult::SUCCESS)
 			{
-				if($evenResult->getType() == EventResult::SUCCESS)
+				$result = $evenResult->getParameters();
+				if (is_array($result) && !empty($result["CODE_NAME"]) && !empty($result["CLASS"]))
 				{
-					$result = $evenResult->getParameters();
-					if (is_array($result) &&
-						array_key_exists("CODE_NAME", $result) && !empty($result["CODE_NAME"]) &&
-						array_key_exists("CLASS", $result) && !empty($result["CLASS"])
-					)
-					{
-						$list[$result["CODE_NAME"]] = $result["CLASS"];
-					}
+					$list[$result["CODE_NAME"]] = $result["CLASS"];
 				}
 			}
 		}
+
 		$this->list = $list;
 	}
 
@@ -103,7 +92,7 @@ class Type
 		$types = self::getInstance()->getTypesList();
 		$result = [];
 
-		foreach ($sourceFields as $sourceFieldKey => $sourceField)
+		foreach ($sourceFields as $sourceField)
 		{
 			$filter = array_merge(
 				FieldAdapter::adapt($sourceField),
@@ -114,15 +103,17 @@ class Type
 			/*
 			 * @todo Make a default type and use it. Not this condition.
 			 */
-			if (array_key_exists($filter["TYPE"], $types) &&
+			if (isset($types[$filter["TYPE"]]) &&
 				class_exists($types[$filter["TYPE"]]) &&
 				is_callable(array($types[$filter["TYPE"]], "getLogicFilter")))
 			{
 				$res = call_user_func_array(array($types[$filter["TYPE"]], "getLogicFilter"), array($data, $filter));
 				if (!empty($res))
-					$result += $res ;
+				{
+					$result += $res;
+				}
 			}
-			else if (array_key_exists($filter["NAME"], $data) && $data[$filter["NAME"]] <> '')
+			elseif (!empty($data[$filter["NAME"]]))
 			{
 				$result[$filter["NAME"]] = $data[$filter["NAME"]];
 			}

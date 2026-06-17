@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Internals\Service\Notifications\Entity;
 
 use Bitrix\Booking\Entity\EntityInterface;
+use Bitrix\Booking\Internals\Service\Notifications\BookingMessageStatus;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
 
 class BookingMessage implements EntityInterface
@@ -14,6 +15,10 @@ class BookingMessage implements EntityInterface
 	private NotificationType|null $notificationType = null;
 	private string|null $senderCode = null;
 	private string|null $externalMessageId = null;
+	private BookingMessageStatus|null $status = null;
+	private int $retryCount = 0;
+	private int|null $nextRetryAt = null;
+	private int|null $sentAt = null;
 
 	public function getId(): int|null
 	{
@@ -76,14 +81,65 @@ class BookingMessage implements EntityInterface
 		return $this;
 	}
 
+	public function getStatus(): BookingMessageStatus|null
+	{
+		return $this->status;
+	}
+
+	public function setStatus(BookingMessageStatus|null $status): self
+	{
+		$this->status = $status;
+
+		return $this;
+	}
+
+	public function getRetryCount(): int
+	{
+		return $this->retryCount;
+	}
+
+	public function setRetryCount(int $retryCount): self
+	{
+		$this->retryCount = $retryCount;
+
+		return $this;
+	}
+
+	public function getNextRetryAt(): int|null
+	{
+		return $this->nextRetryAt;
+	}
+
+	public function setNextRetryAt(int|null $nextRetryAt): self
+	{
+		$this->nextRetryAt = $nextRetryAt;
+
+		return $this;
+	}
+
+	public function getSentAt(): int|null
+	{
+		return $this->sentAt;
+	}
+
+	public function setSentAt(int|null $sentAt): self
+	{
+		$this->sentAt = $sentAt;
+
+		return $this;
+	}
+
 	public function toArray()
 	{
 		return [
 			'id' => $this->id,
 			'bookingId' => $this->bookingId,
-			'notificationType' => $this->notificationType->value,
+			'notificationType' => $this->notificationType?->value,
 			'senderCode' => $this->senderCode,
 			'externalMessageId' => $this->externalMessageId,
+			'status' => $this->status?->value,
+			'retryCount' => $this->retryCount,
+			'sentAt' => $this->sentAt,
 		];
 	}
 
@@ -99,6 +155,13 @@ class BookingMessage implements EntityInterface
 			)
 			->setSenderCode($props['sender_code'] ?? null)
 			->setExternalMessageId(isset($props['external_message_id']) ? (string)$props['external_message_id'] : null)
+			->setStatus(
+				isset($props['status'])
+					? BookingMessageStatus::tryFrom((string)$props['status'])
+					: null
+			)
+			->setRetryCount(isset($props['retry_count']) ? (int)$props['retry_count'] : 0)
+			->setSentAt(isset($props['sent_at']) ? (int)$props['sent_at'] : null)
 		;
 	}
 }

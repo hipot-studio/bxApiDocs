@@ -25,7 +25,10 @@ class Delete implements Operation
 	private readonly FileRepository $fileRepository;
 	private readonly ResourceRepository $blankResourceRepository;
 
-	public function __construct(private readonly Blank $blank)
+	public function __construct(
+		private readonly Blank $blank,
+		private readonly bool $skipForTemplateCheck = false,
+	)
 	{
 		$container = Container::instance();
 
@@ -43,7 +46,7 @@ class Delete implements Operation
 			return Result::createByErrorData(message: 'Blank not found');
 		}
 
-		if (!$this->blank->forTemplate)
+		if (!$this->skipForTemplateCheck && !$this->blank->forTemplate)
 		{
 			return Result::createByErrorData(
 				"Blank used for resent documents",

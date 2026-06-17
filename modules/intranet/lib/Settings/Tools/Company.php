@@ -89,6 +89,7 @@ class Company extends Tool
 		if ($this->getSubgroupCode('worktime') === $code)
 		{
 			(new Module\Installer('timeman'))->install();
+			(new Module\Installer('timemanmobile'))->install();
 		}
 
 		if ($this->getSubgroupCode('meetings') === $code)
@@ -104,6 +105,7 @@ class Company extends Tool
 		if ($this->getSubgroupCode('worktime') === $code)
 		{
 			(new Module\Deleter('timeman'))->delete();
+			(new Module\Deleter('timemanmobile'))->delete();
 		}
 
 		if ($this->getSubgroupCode('meetings') === $code)

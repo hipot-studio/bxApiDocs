@@ -41,7 +41,15 @@ class NodeCollabService
 
 				if ($newCollabId > 0)
 				{
-					$this->bind($node, [$newCollabId]);
+					// The project was just created on purpose for this node, so we must not
+					// re-check permissions: the creator is intentionally neither the owner
+					// (a department head is) nor a member, which would make filterByPermissions
+					// drop the freshly created project and leave the node without it.
+					$this->bind(
+						node: $node,
+						ids: [$newCollabId],
+						checkPermissions: false,
+					);
 				}
 
 				return $newCollabId;

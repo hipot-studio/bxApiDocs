@@ -4,10 +4,11 @@ namespace Bitrix\Crm\Activity\ToDo\ColorSettings;
 
 final class ColorSettingsProvider
 {
+	public const COPILOT_COLOR_ID = '5';
+
 	private const DEFAULT_COLOR_ID = 'default';
 
 	private bool $readOnlyMode = false;
-
 
 	public function __construct(private readonly ?string $colorId = null)
 	{
@@ -100,7 +101,7 @@ final class ColorSettingsProvider
 				'logoBackground' => '#F1FBD0',
 			],
 			[
-				'id' => '5',
+				'id' => self::COPILOT_COLOR_ID,
 				'color' => '#B37DC4',
 				'iconBackground' => '#B37DC4',
 				'itemBackground' => '#FCFAFF',

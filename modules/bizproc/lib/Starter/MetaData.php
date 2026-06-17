@@ -13,7 +13,7 @@ final class MetaData
 		$this->timeToStart = $timeToStart;
 	}
 
-	public function saveToWorkflowId(string $workflowId): void
+	public function saveToWorkflowId(string $workflowId): ?int
 	{
 		$hasDataToSave = false;
 
@@ -25,9 +25,13 @@ final class MetaData
 			$metadata->setStartDuration($this->timeToStart);
 		}
 
-		if ($hasDataToSave)
+		if (!$hasDataToSave)
 		{
-			$metadata->save();
+			return null;
 		}
+
+		$saveResult = $metadata->save();
+
+		return $saveResult->isSuccess() ? $metadata->getId() : null;
 	}
 }

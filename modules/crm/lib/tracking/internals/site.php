@@ -1,7 +1,7 @@
 <?
 namespace Bitrix\Crm\Tracking\Internals;
 
-use Bitrix\Main\Orm;
+use Bitrix\Main\ORM;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
 
@@ -25,7 +25,7 @@ Loc::loadMessages(__FILE__);
  * @method static \Bitrix\Crm\Tracking\Internals\EO_Site wakeUpObject($row)
  * @method static \Bitrix\Crm\Tracking\Internals\EO_Site_Collection wakeUpCollection($rows)
  */
-class SiteTable extends Orm\Data\DataManager
+class SiteTable extends ORM\Data\DataManager
 {
 	/**
 	 * Returns DB table name for entity.
@@ -61,7 +61,7 @@ class SiteTable extends Orm\Data\DataManager
 				'validation' => function ()
 				{
 					return [
-						new Orm\Fields\Validators\UniqueValidator(
+						new ORM\Fields\Validators\UniqueValidator(
 							Loc::getMessage('CRM_TRACKING_INTERNALS_SITE_ERROR_UNIQUE_HOST')
 						)
 					];

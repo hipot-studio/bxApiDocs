@@ -96,7 +96,7 @@ class Filter
 
 	private function prepareDateValue(mixed $value): ?DateTime
 	{
-		if (!ctype_digit($value))
+		if (preg_match('/^\d+$/', (string)$value) !== 1)
 		{
 			return null;
 		}

@@ -81,7 +81,7 @@ class CAutoSave
 					DISABLE_STANDARD_NOTIFY: <?=$DISABLE_STANDARD_NOTIFY?>
 				});
 			</script>
-			<?
+			<?php
 			$this->checkRestore();
 
 			$this->bInited = true;
@@ -157,7 +157,7 @@ class CAutoSave
 		window.autosave_<?=$this->GetID();?>.Restore(<?= Json::encode($arFields); ?>);
 	}
 });</script>
-<?
+<?php
 		}
 	}
 

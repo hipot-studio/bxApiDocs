@@ -80,4 +80,11 @@ class FormProvider
 			['zones' => ['ru'], 'id' => 3613, 'lang' => 'ru', 'sec' => 'shrvf7'],
 		];
 	}
+
+	public function getPartnerRefusalCheckoutNonAdminFormList(): array
+	{
+		return [
+			['zones' => ['ru'], 'id' => 3694, 'lang' => 'ru', 'sec' => 'ge9v9b'],
+		];
+	}
 }

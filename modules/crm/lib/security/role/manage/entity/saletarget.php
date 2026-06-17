@@ -13,6 +13,8 @@ use Bitrix\Main\Localization\Loc;
 
 class SaleTarget implements PermissionEntity
 {
+	public const ENTITY_CODE = 'SALETARGET';
+
 	private function permissions(): array
 	{
 		$hierarchy = (new UserDepartmentAndOpened())
@@ -45,6 +47,6 @@ class SaleTarget implements PermissionEntity
 	{
 		$name = GetMessage('CRM_SECURITY_ROLE_ENTITY_TYPE_SALETARGET');
 
-		return [new EntityDTO('SALETARGET', $name, [], $this->permissions())];
+		return [new EntityDTO(self::ENTITY_CODE, $name, [], $this->permissions())];
 	}
 }

@@ -381,11 +381,7 @@ class Deal extends Entity
 		$fields = parent::getPopupFields($viewType);
 		foreach ($fields as $i => $field)
 		{
-			if (
-				mb_strpos($field['NAME'], 'CONTACT_') === 0
-				|| mb_strpos($field['NAME'], 'COMPANY_') === 0
-				|| mb_strpos($field['NAME'], 'ACTIVITY_FASTSEARCH_') === 0
-			)
+			if (str_starts_with($field['NAME'], 'ACTIVITY_FASTSEARCH_'))
 			{
 				unset($fields[$i]);
 			}
@@ -411,23 +407,11 @@ class Deal extends Entity
 			}
 		}
 
+		$this->getClientFieldsPreparer()->prepareFields($fields);
 		if ($viewType !== static::VIEW_TYPE_EDIT)
 		{
-			if (ClientDataProvider::getPriorityEntityTypeId() === \CCrmOwnerType::Contact)
-			{
-				$firstProvider = $this->getContactDataProvider();
-				$secondProvider = $this->getCompanyDataProvider();
-			}
-			else
-			{
-				$firstProvider = $this->getCompanyDataProvider();
-				$secondProvider = $this->getContactDataProvider();
-			}
-			$fields = array_merge(
-				$fields,
-				$firstProvider->getPopupFields(),
-				$secondProvider->getPopupFields(),
-			);
+			$clientFields = $this->getClientFieldsPreparer()->getClientFields();
+			$fields = array_merge($fields, $clientFields);
 		}
 
 		return $fields;
@@ -439,33 +423,9 @@ class Deal extends Entity
 	public function prepareFieldsSections(array $configuration): array
 	{
 		$sections = parent::prepareFieldsSections($configuration);
+		$clientSections = $this->getClientFieldsPreparer()->getClientFieldsSections();
 
-		$contactSection = [
-			'name' => 'contact_fields',
-			'title' => Loc::getMessage('CRM_KANBAN_FIELD_SECTION_CONTACTS'),
-			'type' => 'section',
-			'elementsRule' => '/^CONTACT\_/',
-			'viewTypes' => ['view'],
-		];
-		$companySection = [
-			'name' => 'company_fields',
-			'title' => Loc::getMessage('CRM_KANBAN_FIELD_SECTION_COMPANIES'),
-			'type' => 'section',
-			'elementsRule' => '/^COMPANY\_/',
-			'viewTypes' => ['view'],
-		];
-		if (ClientDataProvider::getPriorityEntityTypeId() === \CCrmOwnerType::Contact)
-		{
-			$sections[] = $contactSection;
-			$sections[] = $companySection;
-		}
-		else
-		{
-			$sections[] = $companySection;
-			$sections[] = $contactSection;
-		}
-
-		return $sections;
+		return array_merge($sections, $clientSections);
 	}
 
 	/**

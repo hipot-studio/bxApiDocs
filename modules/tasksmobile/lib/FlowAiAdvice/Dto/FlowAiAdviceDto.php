@@ -9,4 +9,6 @@ class FlowAiAdviceDto extends Dto
 	public int $minTasksCountForAdvice;
 	public int $efficiencyThreshold;
 	public array $advices;
+	public bool $limitExceeded;
+	public bool $rateLimitExceeded;
 }

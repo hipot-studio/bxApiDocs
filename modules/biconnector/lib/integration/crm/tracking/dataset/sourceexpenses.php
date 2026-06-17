@@ -38,6 +38,11 @@ class SourceExpenses extends BIBuilderDataset
 		return $this->getMessage('TRACKING_SOURCE_EXPENSES_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('TRACKING_SOURCE_EXPENSES_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	/**
 	 * @return Result
 	 */

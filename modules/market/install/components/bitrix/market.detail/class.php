@@ -329,13 +329,6 @@ class RestMarketDetail extends CBitrixComponent
 	private function shouldStartInstall(): bool
 	{
 		$isAppInstalled = $this->isAppInstalled();
-		$importAppTypes = [AppTable::TYPE_CONFIGURATION, AppTable::TYPE_BIC_DASHBOARD];
-		$appType = $this->arResult['APP']['TYPE'] ?? '';
-
-		if ($isAppInstalled && in_array($appType, $importAppTypes))
-		{
-			return false;
-		}
 
 		$shouldStartInstall =
 			($this->arResult['CHECK_HASH'] || !$isAppInstalled)

@@ -2581,9 +2581,9 @@ class CBitrixXscan
 			'/bitrix/modules/main/lib/engine/response/redirect.php',
 			'/bitrix/modules/main/lib/config/option.php',
 			'/bitrix/modules/main/classes/general/main.php',
-			'/bitrix/modules/main/lib/UpdateSystem/PortalInfo.php',
-			'/bitrix/modules/main/lib/UpdateSystem/HashCodeParser.php',
-			'/bitrix/modules/main/lib/UpdateSystem/ActivationSystem.php',
+			'/bitrix/modules/main/lib/updatesystem/portalinfo.php',
+			'/bitrix/modules/main/lib/updatesystem/hashcodeparser.php',
+			'/bitrix/modules/main/lib/updatesystem/activationsystem.php',
 			'/bitrix/modules/main/lib/license.php',
             '/bitrix/modules/crm/classes/general/sql_helper.php',
 			'/bitrix/modules/main/lib/security/w/wwall.php',
@@ -2594,7 +2594,7 @@ class CBitrixXscan
 		];
 		foreach ($system as $path)
 		{
-			if (preg_match('#' . $path . '$#', $f))
+			if (preg_match('#' . $path . '$#i', $f))
 			{
 				return true;
 			}

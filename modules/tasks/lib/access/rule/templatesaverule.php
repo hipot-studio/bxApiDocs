@@ -4,7 +4,11 @@ namespace Bitrix\Tasks\Access\Rule;
 
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\Access\Rule\AbstractRule;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
+use Bitrix\Main\LoaderException;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Model\TemplateModel;
 use Bitrix\Tasks\Access\Model\UserModel;
@@ -24,8 +28,12 @@ class TemplateSaveRule extends AbstractRule
 
 	/**
 	 * @property TemplateAccessController $controller
+	 * @throws ArgumentException
+	 * @throws LoaderException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
 	 */
-	public function execute(AccessibleItem $item = null, $params = null): bool
+	public function execute(?AccessibleItem $item = null, $params = null): bool
 	{
 		if (
 			!$item instanceof TemplateModel
@@ -33,6 +41,7 @@ class TemplateSaveRule extends AbstractRule
 		)
 		{
 			$this->controller->addError(static::class, 'Incorrect template');
+
 			return false;
 		}
 
@@ -72,9 +81,9 @@ class TemplateSaveRule extends AbstractRule
 			return false;
 		}
 
-		if (!$this->canAssignMembersExtranet($newTemplate, $oldTemplate))
+		if (!$this->canAssignMembersByExtranetPolicy($oldTemplate, $newTemplate))
 		{
-			$this->controller->addError(static::class, 'Access to assign extranet members denied');
+			$this->controller->addError(static::class, 'Access to assign members denied by extranet policy');
 
 			return false;
 		}
@@ -85,13 +94,21 @@ class TemplateSaveRule extends AbstractRule
 		}
 
 		$members = $newTemplate->getMembers();
+		$directorId = (int)($members[RoleDictionary::ROLE_DIRECTOR][0] ?? 0);
 
-		$user = UserModel::createFromId($members[RoleDictionary::ROLE_DIRECTOR][0]);
+		if ($directorId <= 0)
+		{
+			$this->controller->addError(static::class, 'Incorrect director id');
+
+			return false;
+		}
+
+		$director = $this->createUserModel($directorId);
 
 		if (
 			$newTemplate->getGroupId()
 			&& $oldTemplate->getGroupId() !== $newTemplate->getGroupId()
-			&& !$this->canSetGroup($user->getUserId(), $newTemplate->getGroupId())
+			&& !$this->canSetGroup($directorId, $newTemplate->getGroupId())
 		)
 		{
 			$this->controller->addError(static::class, 'Access to set group denied');
@@ -102,7 +119,7 @@ class TemplateSaveRule extends AbstractRule
 		$responsibleList = $members[RoleDictionary::ROLE_RESPONSIBLE] ?? [];
 		foreach ($responsibleList as $responsibleId)
 		{
-			if (!$this->canAssign($user, $responsibleId, [], $item->getGroupId()))
+			if (!$this->canAssign($director, $responsibleId, [], $item->getGroupId()))
 			{
 				$this->controller->addError(static::class, 'Access to assign responsible denied');
 
@@ -113,7 +130,7 @@ class TemplateSaveRule extends AbstractRule
 		$accompliceList = $members[RoleDictionary::ROLE_ACCOMPLICE] ?? [];
 		foreach ($accompliceList as $accompliceId)
 		{
-			if (!$this->canAssign($user, $accompliceId, [], $item->getGroupId()))
+			if (!$this->canAssign($director, $accompliceId, [], $item->getGroupId()))
 			{
 				$this->controller->addError(static::class, 'Access to assign accomplice denied');
 
@@ -167,50 +184,117 @@ class TemplateSaveRule extends AbstractRule
 		return $this->canReadParentTask($newParentTaskId);
 	}
 
-	private function canAssignMembersExtranet(TemplateModel $newTemplate, TemplateModel $oldTemplate): bool
+	/**
+	 * @throws ArgumentException
+	 * @throws LoaderException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	private function canAssignMembersByExtranetPolicy(TemplateModel $oldTemplate, TemplateModel $newTemplate): bool
 	{
 		if (!Loader::includeModule('socialnetwork'))
 		{
 			$this->controller->addError(static::class, 'Unable to load sonet');
+
 			return false;
 		}
 
 		if (!Loader::includeModule('extranet'))
 		{
 			$this->controller->addError(static::class, 'Unable to load extranet');
+
+			return false;
 		}
 
-		$currentUser = UserModel::createFromId($this->user->getUserId());
+		$currentUser = $this->createUserModel($this->user->getUserId());
 
-		if (!$currentUser->isExtranet())
+		$addedMemberIds = $this->getAddedMemberIds($oldTemplate, $newTemplate);
+
+		if ($currentUser->isExtranet())
 		{
-			return true;
+			return $this->canExtranetUserAssignMembers($currentUser->getUserId(), $addedMemberIds);
 		}
 
-		$memberIds = array_unique(
-			array_merge(
-				$this->getNewMembers(RoleDictionary::ROLE_ACCOMPLICE, $newTemplate, $oldTemplate),
-				$this->getNewMembers(RoleDictionary::ROLE_RESPONSIBLE, $newTemplate, $oldTemplate),
-				$this->getNewMembers(RoleDictionary::ROLE_AUDITOR, $newTemplate, $oldTemplate)
-			)
-		);
+		return $this->canIntranetUserAssignMembers($currentUser->getUserId(), $addedMemberIds);
+	}
 
-		foreach ($memberIds as $id)
+	protected function createUserModel(int $userId): UserModel
+	{
+		return UserModel::createFromId($userId);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	protected function getAddedMemberIds(TemplateModel $oldTemplate, TemplateModel $newTemplate): array
+	{
+		$oldMembers = $oldTemplate->getMembers();
+		$newMembers = $newTemplate->getMembers();
+
+		$roles = RoleDictionary::getAvailableRoles();
+		$result = [];
+
+		foreach ($roles as $role)
 		{
-			if ($currentUser->getUserId() === $id)
+			$addedIds = array_diff(
+				$newMembers[$role] ?? [],
+				$oldMembers[$role] ?? [],
+			);
+
+			foreach ($addedIds as $id)
+			{
+				$id = (int)$id;
+
+				if ($id > 0)
+				{
+					$result[$id] = true;
+				}
+			}
+		}
+
+		return array_keys($result);
+	}
+
+	private function canExtranetUserAssignMembers(int $userId, array $memberIds): bool
+	{
+		foreach ($memberIds as $memberId)
+		{
+			if ($userId === $memberId)
 			{
 				continue;
 			}
-			if (!$this->isMemberOfUserGroups($currentUser->getUserId(), $id))
+
+			if (!$this->isMemberOfUserGroups($userId, $memberId))
 			{
 				return false;
 			}
 		}
+
 		return true;
 	}
 
-	private function getNewMembers(string $key, TemplateModel $newTemplate, TemplateModel $oldTemplate): array
+	private function canIntranetUserAssignMembers(int $userId, array $memberIds): bool
 	{
-		return array_diff($newTemplate->getMembers($key), $oldTemplate->getMembers($key));
+		foreach ($memberIds as $memberId)
+		{
+			if ($userId === $memberId)
+			{
+				continue;
+			}
+
+			$member = $this->createUserModel($memberId);
+
+			if (
+				$member->isExtranet()
+				&& !$this->isMemberOfUserGroups($userId, $memberId)
+			)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

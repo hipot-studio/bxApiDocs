@@ -387,6 +387,7 @@ class Contact
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_contact']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_CONTACT_TABLE'] ?: 'crm_contact';
+		$result['crm_contact']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_CONTACT_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_contact']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode];

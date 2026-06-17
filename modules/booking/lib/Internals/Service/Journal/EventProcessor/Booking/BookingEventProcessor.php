@@ -108,13 +108,26 @@ class BookingEventProcessor extends AbstractEventProcessor
 			]),
 			select: (new BookingSelect([
 				'EXTERNAL_DATA',
+				'RESOURCES',
 			]))->prepareSelect(),
 		);
 
-		if ($booking = $bookingCollection->getFirstCollectionItem())
+		$booking = $bookingCollection->getFirstCollectionItem();
+		if (!$booking)
 		{
-			(new ComingSoonBookingAgentManager())->unSchedule($booking);
-			Container::getEventForBookingService()->onBookingDeleted($booking);
+			return;
+		}
+
+		(new ComingSoonBookingAgentManager())->unSchedule($booking);
+		Container::getEventForBookingService()->onBookingDeleted($booking);
+
+		$hitsAt = [];
+		$this->addCancellationHitsAt($booking, $hitsAt);
+		if (!empty($hitsAt))
+		{
+			$this->sendBitrixEvent(type: 'onHitsNeeded', parameters: [
+				'hitsAt' => $hitsAt,
+			]);
 		}
 	}
 
@@ -137,9 +150,10 @@ class BookingEventProcessor extends AbstractEventProcessor
 
 	private function processBookingConfirmedEvent(JournalEvent $journalEvent): void
 	{
-		//TODO: review indirect detection of confirm by user
-		$hash = $journalEvent->data['hash'] ?? null;
-		$status = $hash ? BookingStatusEnum::ConfirmedByClient : BookingStatusEnum::ConfirmedByManager;
+		$status = (int)($journalEvent->data['currentUserId'] ?? 0)
+			? BookingStatusEnum::ConfirmedByManager
+			: BookingStatusEnum::ConfirmedByClient
+		;
 
 		$booking = Entity\Booking\Booking::mapFromArray($journalEvent->data['booking']);
 
@@ -228,11 +242,9 @@ class BookingEventProcessor extends AbstractEventProcessor
 	private function addConfirmationHitsAt(
 		DateTimeImmutable $dateFrom,
 		Entity\Resource\Resource $primaryResource,
-		array &$result
+		array &$result,
 	): void
 	{
-		$result = [];
-
 		$delay = $primaryResource->getConfirmationNotificationDelay();
 		$confirmAt = $dateFrom->sub(new DateInterval('PT' . $delay . 'S'));
 		$actualConfirmAt = $this->getActualHitDateConsideringDelay($confirmAt, $delay);
@@ -262,12 +274,14 @@ class BookingEventProcessor extends AbstractEventProcessor
 		$reminderNotificationDelay = $primaryResource->getReminderNotificationDelay();
 		if ($reminderNotificationDelay === Entity\Enum\Notification\ReminderNotificationDelay::Morning->value)
 		{
+			$workingTimeService = Container::getWorkingTimeService();
+
 			// at start hour on booking date
-			$result[] = $dateFrom->setTime(Time::DAYTIME_START_HOUR, 0)->getTimestamp();
+			$result[] = $dateFrom->setTime($workingTimeService->getStartHour(), 0)->getTimestamp();
 
 			// at the end of the day before booking
 			$result[] = $dateFrom->modify('-1 day')
-				->setTime(Time::DAYTIME_END_HOUR - 1, 0)
+				->setTime($workingTimeService->getEndHour() - 1, 0)
 				->getTimestamp()
 			;
 		}
@@ -295,26 +309,36 @@ class BookingEventProcessor extends AbstractEventProcessor
 		$result[] = $dateFrom->getTimestamp() + $primaryResource->getDelayedCounterDelay();
 	}
 
+	private function addCancellationHitsAt(Entity\Booking\Booking $booking, array &$result): void
+	{
+		$deletedAt = $booking->getDeletedAt();
+		$primaryResource = $booking->getPrimaryResource();
+
+		if ($deletedAt === null || !$primaryResource)
+		{
+			return;
+		}
+
+		$cancellationDelay = $primaryResource->getCancellationNotificationDelay();
+		$hitDateTime = (new DateTimeImmutable("@{$deletedAt}"))
+			->modify("+{$cancellationDelay} seconds")
+		;
+
+		$result[] = Container::getWorkingTimeService()
+			->adjustToWorkingHours($hitDateTime)
+			->getTimestamp()
+		;
+	}
+
 	private function getActualHitDateConsideringDelay(DateTimeImmutable $date, int $delay): DateTimeImmutable
 	{
 		$needPrecise = $delay < Time::SECONDS_IN_DAY;
-
-		if ($needPrecise || Time::isWorkingTime($date))
+		if ($needPrecise)
 		{
 			return $date;
 		}
 
-		if ((int)$date->format('H') < Time::DAYTIME_START_HOUR)
-		{
-			return $date
-				->setTime(Time::DAYTIME_START_HOUR, 0);
-		}
-		else
-		{
-			return $date
-				->modify('+1 day')
-				->setTime(Time::DAYTIME_START_HOUR, 0);
-		}
+		return Container::getWorkingTimeService()->adjustToWorkingHours($date);
 	}
 
 	private function sendBitrixEvent(string $type, array $parameters): void

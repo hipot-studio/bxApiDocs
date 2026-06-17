@@ -20,6 +20,8 @@ class DepartmentSaveCommunicationsTool extends NodeSaveCommunicationsTool
 
 	public function getDescription(): string
 	{
-		return 'Add node to chats, channels, or collabs, create default communications, or remove node from communications when node is a department.';
+		return 'Manage chat/channel/collab bindings of a department in one call: '
+			. 'create a default one, attach existing, or detach. The three modes can be combined. '
+			. 'At least one of `createDefault`, `ids`, or `removeIds` must be provided.';
 	}
 }

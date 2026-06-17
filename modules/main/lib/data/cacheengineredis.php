@@ -156,6 +156,7 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 		$delta = 10;
 		$deleted = 0;
 		$etime = time() + 5;
+		$interrupted = false;
 		$needClean = self::$engine->get($this->sid . '|needClean');
 
 		if ($needClean !== 'Y')
@@ -183,6 +184,7 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 				{
 					if (time() > $etime)
 					{
+						$interrupted = true;
 						$finished = false;
 						break;
 					}
@@ -196,6 +198,7 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 				}
 				elseif (time() > $etime)
 				{
+					$interrupted = true;
 					self::$engine->lPush($this->sid . '/cacheCleanPath', $paths);
 					break;
 				}
@@ -210,7 +213,7 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 		{
 			self::$engine->setex($this->sid . '|delCount', 604800, $deleted);
 		}
-		elseif ($deleted < $count && $count > 1)
+		elseif ($interrupted && $deleted < $count && $count > 1)
 		{
 			self::$engine->setex($this->sid . '|delCount', 604800, --$count);
 		}

@@ -21,6 +21,7 @@ class SearchMessagesDto
 		public readonly ?bool $hasAttachments = null,
 		public readonly ?string $folder = null,
 		public readonly int $limit = self::DEFAULT_LIMIT,
+		public readonly int $offset = 0,
 	)
 	{
 	}
@@ -36,6 +37,7 @@ class SearchMessagesDto
 			hasAttachments: self::getBool($props, 'hasAttachments'),
 			folder: self::getString($props, 'folder'),
 			limit: self::getInt($props, 'limit') ?? self::DEFAULT_LIMIT,
+			offset: max(0, self::getInt($props, 'offset') ?? 0),
 		);
 	}
 

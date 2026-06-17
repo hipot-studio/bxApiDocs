@@ -14,6 +14,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Button as LayoutButton;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button as FooterButton;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItem;
 use Bitrix\Crm\Settings\Crm;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 use CCrmActivityDirection;
 
 abstract class AIAction
@@ -22,6 +23,12 @@ abstract class AIAction
 	private bool $isStateCheckerInit = false;
 	private ?JsEvent $jsEvent = null;
 	private ?AIActivityService $aiService = null;
+	private ?string $currentState = null;
+	private bool $isCurrentStateInit = false;
+	private ?bool $isHiddenState = null;
+	private bool $isHiddenStateInit = false;
+	private ?bool $isDisabledState = null;
+	private bool $isDisabledStateInit = false;
 
 	abstract protected function getName(): string;
 	abstract protected function getEventName(): string;
@@ -45,22 +52,39 @@ abstract class AIAction
 
 	final public function getCurrentState(): string
 	{
-		if ($this->isHidden())
+		if ($this->isCurrentStateInit)
 		{
-			return LayoutButton::STATE_HIDDEN;
+			return $this->currentState;
+		}
+
+		if ($this->isHiddenState())
+		{
+			$this->currentState = LayoutButton::STATE_HIDDEN;
+			$this->isCurrentStateInit = true;
+
+			return $this->currentState;
 		}
 
 		if ($this->getStateChecker()?->isPending())
 		{
-			return LayoutButton::STATE_AI_LOADING;
+			$this->currentState = LayoutButton::STATE_AI_LOADING;
+			$this->isCurrentStateInit = true;
+
+			return $this->currentState;
 		}
 
-		if ($this->isDisabled())
+		if ($this->isDisabledState())
 		{
-			return LayoutButton::STATE_DISABLED;
+			$this->currentState = LayoutButton::STATE_DISABLED;
+			$this->isCurrentStateInit = true;
+
+			return $this->currentState;
 		}
 
-		return LayoutButton::STATE_DEFAULT;
+		$this->currentState = LayoutButton::STATE_DEFAULT;
+		$this->isCurrentStateInit = true;
+
+		return $this->currentState;
 	}
 
 	final public function toButton(): FooterButton
@@ -92,13 +116,14 @@ abstract class AIAction
 	{
 		$state = $this->getCurrentState();
 
-		if ($state === LayoutButton::STATE_HIDDEN || $this->isDisabled())
+		if ($state === LayoutButton::STATE_HIDDEN || $this->isDisabledState())
 		{
 			return null;
 		}
 
 		return (new MenuItem($this->getName()))
 			->setAction($state === LayoutButton::STATE_DEFAULT ? $this->getJsEvent() : null)
+			->setIcon($this->getMenuIcon())
 			->setScopeWeb()
 		;
 	}
@@ -111,6 +136,28 @@ abstract class AIAction
 	public function isHidden(): bool
 	{
 		return false;
+	}
+
+	final protected function isHiddenState(): bool
+	{
+		if (!$this->isHiddenStateInit)
+		{
+			$this->isHiddenState = $this->isHidden();
+			$this->isHiddenStateInit = true;
+		}
+
+		return $this->isHiddenState;
+	}
+
+	final protected function isDisabledState(): bool
+	{
+		if (!$this->isDisabledStateInit)
+		{
+			$this->isDisabledState = $this->isDisabled();
+			$this->isDisabledStateInit = true;
+		}
+
+		return $this->isDisabledState;
 	}
 
 	final protected function getStateChecker(): ?AIOperationStateChecker
@@ -172,6 +219,11 @@ abstract class AIAction
 	protected function getProps(): array
 	{
 		return [];
+	}
+
+	protected function getMenuIcon(): Outline
+	{
+		return Outline::COPILOT;
 	}
 
 	private function getJsEvent(): JsEvent

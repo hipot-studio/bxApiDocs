@@ -119,6 +119,11 @@ class NodeService implements Contract\Service\NodeService
 		if (!$node->id)
 		{
 			$this->nodeRepository->create($node);
+
+			if ($node->type === NodeEntityType::DEPARTMENT && $node->parentId)
+			{
+				Container::getNodeSettingsRepository()->inheritFromParent($node->id, $node->parentId);
+			}
 		}
 
 		return $node;

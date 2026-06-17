@@ -4,24 +4,35 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Internal;
 
-use Bitrix\Bizproc\Internal\Repository\StorageTypeRepository\StorageTypeRepositoryInterface;
-use Bitrix\Bizproc\Internal\Repository\StorageItemRepository\StorageItemRepositoryInterface;
-use Bitrix\Bizproc\Internal\Repository\StorageFieldRepository\StorageFieldRepositoryInterface;
+use Bitrix\Bizproc\Internal\Repository\Debugger\DebugRepository;
+use Bitrix\Bizproc\Internal\Repository\Debugger\DebugSessionRepository;
+use Bitrix\Bizproc\Internal\Repository\Debugger\DebugTraceRepository;
+use Bitrix\Bizproc\Internal\Repository\Mapper\DebugOrmMapper;
+use Bitrix\Bizproc\Internal\Repository\Mapper\DebugSessionOrmMapper;
+use Bitrix\Bizproc\Internal\Repository\Mapper\DebugTraceOrmMapper;
+use Bitrix\Bizproc\Internal\Repository\Mapper\StorageFieldMapper;
 use Bitrix\Bizproc\Internal\Repository\Mapper\StorageItemMapper;
 use Bitrix\Bizproc\Internal\Repository\Mapper\StorageTypeMapper;
-use Bitrix\Bizproc\Internal\Repository\Mapper\StorageFieldMapper;
-use Bitrix\Bizproc\Internal\Repository\Mapper\WorkflowStateMapper;
 use Bitrix\Bizproc\Internal\Repository\Mapper\TaskArchiveMapper;
 use Bitrix\Bizproc\Internal\Repository\Mapper\TaskArchiveTasksMapper;
 use Bitrix\Bizproc\Internal\Repository\Mapper\TaskMapper;
 use Bitrix\Bizproc\Internal\Repository\Mapper\TaskUserMapper;
+use Bitrix\Bizproc\Internal\Repository\Mapper\WorkflowStateMapper;
+use Bitrix\Bizproc\Internal\Repository\StorageFieldRepository\StorageFieldRepositoryInterface;
+use Bitrix\Bizproc\Internal\Repository\StorageItemRepository\StorageItemRepositoryInterface;
+use Bitrix\Bizproc\Internal\Repository\StorageTypeRepository\StorageTypeRepositoryInterface;
 use Bitrix\Bizproc\Internal\Repository\TaskArchiveRepository\TaskArchiveRepository;
 use Bitrix\Bizproc\Internal\Repository\TaskArchiveRepository\TaskArchiveTasksRepository;
 use Bitrix\Bizproc\Internal\Repository\TaskRepository\TaskRepository;
 use Bitrix\Bizproc\Internal\Repository\WorkflowStateRepository\WorkflowStateRepository;
 use Bitrix\Bizproc\Internal\Repository\WorkflowTemplate\WorkflowTemplateRepository;
-use Bitrix\Bizproc\Public\Service\Task\ArchiveTaskService;
+use Bitrix\Bizproc\Internal\Service\Debugger\DebugServiceInterface;
+use Bitrix\Bizproc\Internal\Service\Debugger\DebugSessionService;
 use Bitrix\Bizproc\Public\Command\WorkflowState\ClearStuckWorkflowCommand\ClearStuckWorkflowCommandHandler;
+use Bitrix\Bizproc\Internal\Service\StorageField\StorageFieldValidatorService;
+use Bitrix\Bizproc\Public\Service\Task\ArchiveTaskService;
+use Bitrix\Bizproc\Internal\Repository\StorageItemRepository\StorageFieldValueRepository;
+use Bitrix\Bizproc\Internal\Model\StorageRecordDataTable;
 use Bitrix\Main\DI\ServiceLocator;
 
 class Container
@@ -136,5 +147,60 @@ class Container
 	public static function getClearStuckWorkflowCommandHandler(): ClearStuckWorkflowCommandHandler
 	{
 		return self::getService('bizproc.clear.stuck.workflow.command.handler');
+	}
+
+	public static function getDebugRepositoryMapper(): ?DebugOrmMapper
+	{
+		return self::getService('bizproc.debugger.debug.repository.mapper');
+	}
+
+	public static function getDebugRepository(): ?DebugRepository
+	{
+		return self::getService('bizproc.debugger.debug.repository');
+	}
+
+	public static function getDebugSessionRepositoryMapper(): ?DebugSessionOrmMapper
+	{
+		return self::getService('bizproc.debugger.debug_session.repository.mapper');
+	}
+
+	public static function getDebugSessionRepository(): ?DebugSessionRepository
+	{
+		return self::getService('bizproc.debugger.debug_session.repository');
+	}
+
+	public static function getDebugTraceRepositoryMapper(): ?DebugTraceOrmMapper
+	{
+		return self::getService('bizproc.debugger.debug_trace.repository.mapper');
+	}
+
+	public static function getDebugTraceRepository(): ?DebugTraceRepository
+	{
+		return self::getService('bizproc.debugger.debug_trace.repository');
+	}
+
+	public static function getDebugSessionService(): ?DebugSessionService
+	{
+		return self::getService('bizproc.debugger.debug_session.service');
+	}
+
+	public static function getDebugService(): ?DebugServiceInterface
+	{
+		return self::getService('bizproc.debugger.debug.service');
+	}
+
+	public static function getStorageFieldValueRepository(): ?StorageFieldValueRepository
+	{
+		return self::getService('bizproc.storage.field.value.repository');
+	}
+
+	public static function getStorageFieldValidatorService(): ?StorageFieldValidatorService
+	{
+		return self::getService('bizproc.storage.field.validator');
+	}
+
+	public static function getStorageRecordDataManager(): ?StorageRecordDataTable
+	{
+		return self::getService('bizproc.storage.item.model');
 	}
 }

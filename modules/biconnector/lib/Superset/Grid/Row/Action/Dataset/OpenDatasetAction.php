@@ -28,6 +28,15 @@ final class OpenDatasetAction extends BaseAction
 	{
 		$datasetId = $rawFields['ID'];
 		$datasetType = $rawFields['TYPE'];
+
+		if (!empty($rawFields['IS_SYSTEM']))
+		{
+			$name = \CUtil::JSEscape($rawFields['NAME']);
+			$this->onclick = "BX.BIConnector.DatasetImport.Slider.open('system', 0, {}, {}, {tableName: '{$name}'})";
+
+			return parent::getControl($rawFields);
+		}
+
 		if (!$datasetId && !$datasetType)
 		{
 			return null;

@@ -19,6 +19,7 @@ use Bitrix\Main\Type\DateTime;
 class DbStorage implements StorageInterface
 {
 	private const LOCK_KEY = 'queueLock';
+	private const REQUEUE_LOCK_PREFIX = 'main_messenger_requeue_';
 
 	private const REQUEUE_CACHE_TTL = 600;
 	private const REQUEUE_THRESHOLD_SECONDS = 172800; // 2 days
@@ -58,9 +59,28 @@ class DbStorage implements StorageInterface
 			}
 		}
 
-		$this->processRequeue();
+		// Save the cache BEFORE starting the job so that parallel processes skip the attempt
+		// and don't try to execute the same UPDATE at the same time (thundering herd)
+		$cache->setImmediate($key, time() + self::REQUEUE_CACHE_TTL);
 
-		$cache->set($key, time() + self::REQUEUE_CACHE_TTL);
+		// In case of distributed environment or cache invalidation we need the lock
+		$connection = Application::getConnection();
+
+		$lockName = self::REQUEUE_LOCK_PREFIX . $tableEntity->getDBTableName();
+
+		if (!$connection->lock($lockName, 0))
+		{
+			return;
+		}
+
+		try
+		{
+			$this->processRequeue();
+		}
+		finally
+		{
+			$connection->unlock($lockName);
+		}
 	}
 
 	private function processRequeue(): void

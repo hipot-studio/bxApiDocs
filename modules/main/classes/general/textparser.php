@@ -1275,7 +1275,7 @@ class CTextParser
 		{
 			$pathEncoded = htmlspecialcharsbx($arParams['PATH']);
 
-			?><a href="<?=$pathEncoded?>"><?=$pathEncoded?></a><?
+			?><a href="<?=$pathEncoded?>"><?=$pathEncoded?></a><?php
 		}
 		elseif (in_array($arParams['TYPE'], $trustedProviders))
 		{
@@ -1294,11 +1294,11 @@ class CTextParser
 
 				if ($this->bMobile)
 				{
-					?><iframe class="bx-mobile-video-frame" src="<?=$pathEncoded?>" allowfullscreen="" frameborder="0" height="100%" width="100%" style="max-width: 600px; min-height: 300px;"></iframe><?
+					?><iframe class="bx-mobile-video-frame" src="<?=$pathEncoded?>" allowfullscreen="" frameborder="0" height="100%" width="100%" style="max-width: 600px; min-height: 300px;"></iframe><?php
 				}
 				else
 				{
-					?><iframe src="<?=$pathEncoded?>" allowfullscreen="" frameborder="0" height="<?=intval($arParams["HEIGHT"])?>" width="<?=intval($arParams["WIDTH"])?>" style="max-width: 100%;"></iframe><?
+					?><iframe src="<?=$pathEncoded?>" allowfullscreen="" frameborder="0" height="<?=intval($arParams["HEIGHT"])?>" width="<?=intval($arParams["WIDTH"])?>" style="max-width: 100%;"></iframe><?php
 				}
 			}
 		}
@@ -1480,20 +1480,20 @@ class CTextParser
 
 		ob_start();
 
-		?><table class="forum-spoiler"><?
-			?><thead onclick="if (this.nextSibling.style.display=='none') { this.nextSibling.style.display=''; BX.addClass(this, 'forum-spoiler-head-open'); } else { this.nextSibling.style.display='none'; BX.removeClass(this, 'forum-spoiler-head-open'); } BX.onCustomEvent('BX.Forum.Spoiler:toggle', [{node: this}]); event.stopPropagation();"><?
-				?><tr><?
-					?><th><?
-						?><div><?=htmlspecialcharsbx($title)?></div><?
-					?></th><?
-				?></tr><?
-			?></thead><?
-			?><tbody class="forum-spoiler" style="display:none;"><?
-				?><tr><?
-					?><td><?=self::trimLineBreaks($text)?></td><?
-				?></tr><?
-			?></tbody><?
-		?></table><?
+		?><table class="forum-spoiler"><?php
+			?><thead onclick="if (this.nextSibling.style.display=='none') { this.nextSibling.style.display=''; BX.addClass(this, 'forum-spoiler-head-open'); } else { this.nextSibling.style.display='none'; BX.removeClass(this, 'forum-spoiler-head-open'); } BX.onCustomEvent('BX.Forum.Spoiler:toggle', [{node: this}]); event.stopPropagation();"><?php
+				?><tr><?php
+					?><th><?php
+						?><div><?=htmlspecialcharsbx($title)?></div><?php
+					?></th><?php
+				?></tr><?php
+			?></thead><?php
+			?><tbody class="forum-spoiler" style="display:none;"><?php
+				?><tr><?php
+					?><td><?=self::trimLineBreaks($text)?></td><?php
+				?></tr><?php
+			?></tbody><?php
+		?></table><?php
 
 		return ob_get_clean();
 	}

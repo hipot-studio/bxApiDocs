@@ -464,6 +464,7 @@ class CVoxImplantCrmHelper
 			$direction = CCrmActivityDirection::Outgoing;
 		}
 
+		$isAiCall = ($additionalParams['IS_AI_CALL'] ?? 'N') === 'Y';
 		$activityFields = array(
 			'TYPE_ID' =>  CCrmActivityType::Call,
 			'PROVIDER_ID' => Provider\Call::ACTIVITY_PROVIDER_ID,
@@ -479,7 +480,7 @@ class CVoxImplantCrmHelper
 			'RESPONSIBLE_ID' => $callFields['PORTAL_USER_ID'],
 			'ORIGIN_ID' => 'VI_'.$callFields['CALL_ID'],
 			'BINDINGS' => $bindings,
-			'SETTINGS' => array(),
+			'SETTINGS' => $isAiCall ? ['IS_AI_CALL' => true] : array(),
 			'AUTHOR_ID' => $callFields['PORTAL_USER_ID'],
 		);
 		if (static::isNewCallScenarioEnabled())
@@ -1864,15 +1865,7 @@ class CVoxImplantCrmHelper
 	 */
 	public static function isNewCallScenarioEnabled(): bool
 	{
-		if(
-			\Bitrix\Main\Loader::includeModule('crm')
-			&& method_exists('\Bitrix\Crm\Settings\Crm', 'isUniversalActivityScenarioEnabled')
-		)
-		{
-			return \Bitrix\Crm\Settings\Crm::isUniversalActivityScenarioEnabled();
-		}
-
-		return false;
+		return true;
 	}
 
 	private static function sendCallRegisteredInCrmEvent(VI\Call $call): void

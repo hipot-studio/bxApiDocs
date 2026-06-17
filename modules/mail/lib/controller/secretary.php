@@ -2,9 +2,11 @@
 
 namespace Bitrix\Mail\Controller;
 
+use Bitrix\Crm\Activity\Provider\Email;
 use Bitrix\Forum\ForumTable;
 use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Mail\Helper\Message;
+use Bitrix\Mail\Integration\Crm\Activity;
 use Bitrix\Mail\Integration\Im\Chat;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
@@ -164,7 +166,12 @@ class Secretary extends Controller
 	 * @throws LoaderException
 	 * @throws SystemException
 	 */
-	public function discussMessageInChatAction(int $messageId, string $dialogId, CurrentUser $user): void
+	public function discussMessageInChatAction(
+		string $dialogId,
+		CurrentUser $user,
+		int $messageId = 0,
+		int $activityId = 0,
+	): void
 	{
 		if (!Loader::includeModule('im'))
 		{
@@ -174,6 +181,20 @@ class Secretary extends Controller
 		}
 
 		$userId = (int)$user->getId();
+
+		if ($activityId > 0)
+		{
+			$this->discussCrmActivityInChat($activityId, $dialogId, $userId);
+
+			return;
+		}
+
+		if ($messageId <= 0)
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_ACCESS_DENIED')));
+
+			return;
+		}
 
 		if (!$this->canBindEntities($messageId, $userId))
 		{
@@ -187,6 +208,92 @@ class Secretary extends Controller
 		$messageData['USER_IDS'] = [$userId];
 
 		$result = Chat::addMailInChat($messageData, $userId, $dialogId);
+
+		if (!$result->isSuccess())
+		{
+			$this->addError($result->getError());
+		}
+	}
+
+	private function discussCrmActivityInChat(int $activityId, string $dialogId, int $userId): void
+	{
+		if (!Loader::includeModule('crm'))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_MODULE_NOT_INSTALLED')));
+
+			return;
+		}
+
+		$activity = \Bitrix\Crm\Service\Container::getInstance()->getActivityBroker()->getById($activityId);
+		if (!$activity)
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_ACCESS_DENIED')));
+
+			return;
+		}
+
+		$provider = \CCrmActivity::GetActivityProvider($activity);
+		if (!$provider || !$provider::checkReadPermission($activity, $userId))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_ACCESS_DENIED')));
+
+			return;
+		}
+
+		Email::uncompressActivityDescription($activity);
+
+		$settings = is_string($activity['SETTINGS'] ?? null)
+			? unserialize($activity['SETTINGS'], ['allowed_classes' => false])
+			: ($activity['SETTINGS'] ?? []);
+		$emailMeta = $settings['EMAIL_META'] ?? [];
+
+		$from = $emailMeta['from'] ?? $emailMeta['__email'] ?? '';
+		if (is_array($from))
+		{
+			$from = implode(', ', $from);
+		}
+
+		$to = $emailMeta['to'] ?? '';
+		if (is_array($to))
+		{
+			$to = implode(', ', $to);
+		}
+
+		$bodyHtml = Email::getDescriptionHtmlByActivityFields($activity);
+		$bodyForText = preg_replace('#<(style|script)[^>]*>.*?</\\1>#si', '', $bodyHtml);
+		$bodyForText = str_replace(['<br>', '<br/>', '<br />', '</p>', '</div>'], "\n", $bodyForText);
+		$body = html_entity_decode(strip_tags($bodyForText), ENT_QUOTES, 'UTF-8');
+
+		$messageData = [
+			'ID' => $activityId,
+			'MAILBOX_ID' => 0,
+			'SUBJECT' => $activity['SUBJECT'] ?? '',
+			'BODY' => $body,
+			'BODY_HTML' => $bodyHtml,
+			'FIELD_FROM' => $from,
+			'FIELD_TO' => $to,
+			'FIELD_DATE' => $activity['START_TIME'] ?? '',
+		];
+
+		$message = \Bitrix\Mail\Item\Message::fromArray($messageData);
+
+		$chatId = Chat::resolveDialogChatId($dialogId, $userId);
+		if ($chatId === null)
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_ACCESS_DENIED')));
+
+			return;
+		}
+
+		$activityUrl = Activity::getShareableActivityUrl($activityId, $chatId);
+		if ($activityUrl === null)
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_ACCESS_DENIED')));
+
+			return;
+		}
+
+		$result = Chat::postMailChatDiscussMessage($message, $dialogId, $userId, $activityUrl);
 
 		if (!$result->isSuccess())
 		{

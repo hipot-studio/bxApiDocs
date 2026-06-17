@@ -70,14 +70,14 @@ class Thirdparty extends Controller
 	public function callbackSuccessAction(string $hash, JsonPayload $result): bool
 	{
 		$queueJob = QueueJob::createFromHash($hash);
-		if ($queueJob)
+		if (!$queueJob)
 		{
-			$queueJob->execute($result->getData());
-
-			return true;
+			return false;
 		}
 
-		return false;
+		$queueJob->execute($result->getData());
+
+		return true;
 	}
 
 	/**
@@ -90,13 +90,23 @@ class Thirdparty extends Controller
 	public function callbackErrorAction(string $hash, JsonPayload $result): bool
 	{
 		$queueJob = QueueJob::createFromHash($hash);
-		if ($queueJob)
+		if (!$queueJob)
 		{
-			$queueJob->fail($result->getData());
-
-			return true;
+			return false;
 		}
 
-		return false;
+		try
+		{
+			$queueJob->fail($result->getData());
+		}
+		catch (\Throwable $e)
+		{
+			$queueJob->handleError(
+				'Error processing failure callback: ' . $e->getMessage(),
+				QueueJob::ERROR_FAIL_PROCESSING
+			);
+		}
+
+		return true;
 	}
 }

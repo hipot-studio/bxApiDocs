@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage\AI;
 
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\Operation\AnalyzeCommunication;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
@@ -42,6 +43,7 @@ final class LaunchError extends Base
 			FillItemFieldsFromCallTranscription::TYPE_ID => Loc::getMessage('CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE_FILL_FIELDS'),
 			ScoreCall::TYPE_ID => Loc::getMessage('CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE_SCORE_CALl'),
 			FillRepeatSaleTips::TYPE_ID => Loc::getMessage('CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE_REPEAT_SALE'),
+			AnalyzeCommunication::TYPE_ID => Loc::getMessage('CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE_ANALYZE_COMMUNICATION'),
 			default => Loc::getMessage(
 				'CRM_TIMELINE_LOG_LAUNCH_ERROR_TITLE',
 				['#COPILOT_NAME#' => AIManager::getCopilotName()]

@@ -77,8 +77,17 @@ class Number extends Base
 
 		if ($withCalculatedData)
 		{
-			$resultWidget['config']['color'] = $widget->getWidgetHandler()->getReportHandlers()[0]->getFormElement('color')->getValue();
-			$resultWidget['config']['title'] = $widget->getWidgetHandler()->getReportHandlers()[0]->getFormElement('label')->getValue();
+			$reportHandlers = $widget->getWidgetHandler()->getReportHandlers();
+			$firstHandler = $reportHandlers[0] ?? null;
+			if ($firstHandler)
+			{
+				$resultWidget['config']['color'] =
+					$firstHandler->getFormElement('color')?->getValue() ?? $resultWidget['config']['color']
+				;
+				$resultWidget['config']['title'] =
+					$firstHandler->getFormElement('label')?->getValue() ?? $resultWidget['config']['title']
+				;
+			}
 		}
 
 		return $resultWidget;

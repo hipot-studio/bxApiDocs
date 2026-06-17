@@ -32,6 +32,11 @@ class StorageTypeProvider
 		return $this->repository->getType($filter, $select);
 	}
 
+	public function getCount(): int
+	{
+		return $this->repository->getCount();
+	}
+
 	public function getList(GridParams $gridParams): StorageTypeCollection
 	{
 		return $this->repository->getList(

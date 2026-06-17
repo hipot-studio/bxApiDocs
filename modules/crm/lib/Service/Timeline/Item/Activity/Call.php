@@ -152,9 +152,8 @@ class Call extends AIActivity
 		$clientBlock = $this->buildClientBlock($clientBlockOptions);
 		$responsibleUserBlock = $this->buildResponsibleUserBlock();
 		$deadlineBlock = $this->buildDeadlineBlock();
-		$callDateTimeBlock = $this->buildCallDateTimeBlock();
+		$callInfoBlock = $this->buildCallInfoBlock();
 		$subjectBlock = $this->buildSubjectBlock();
-		$additionalInfoBlock = $this->buildAdditionalInfoBlock();
 		$clientMarkBlock = $this->buildClientMarkBlock();
 		$descriptionBlock = $this->buildDescriptionBlock();
 		$commentBlock = $this->buildCommentBlock();
@@ -176,17 +175,13 @@ class Call extends AIActivity
 			$result['subject'] = $subjectBlock; // for planned calls (old activity)
 		}
 
+		if (isset($callInfoBlock))
+		{
+			$result['callInfo'] = $callInfoBlock->setScopeMobile();
+		}
+
 		if (!empty($recordUrls))
 		{
-			if (isset($callDateTimeBlock))
-			{
-				$result['callDateTime'] = $callDateTimeBlock->setScopeMobile();
-			}
-			if (isset($additionalInfoBlock))
-			{
-				$result['callInformation'] = $additionalInfoBlock->setScopeMobile();
-			}
-
 			$audio = (new Audio())
 				->setId($this->getAssociatedEntityModel()?->get('ID'))
 				->setSource($recordUrls[0]) // show first audio record
@@ -417,13 +412,21 @@ class Call extends AIActivity
 		{
 			return [
 				Scenario::CONFIRM_FIELDS_SCENARIO,
+				Scenario::TRANSCRIBE_RECORD_SCENARIO, // in menu only
+				Scenario::SUMMARIZE_SCENARIO, // in menu only
 				Scenario::CALL_SCORING_SCENARIO,
+				Scenario::ANALYZE_COMMUNICATION_SCENARIO, // in menu only
+				Scenario::FULL_SCENARIO, // in menu only
 			];
 		}
 
 		return [
+			Scenario::TRANSCRIBE_RECORD_SCENARIO, // in menu only
+			Scenario::SUMMARIZE_SCENARIO, // in menu only
 			Scenario::FILL_FIELDS_SCENARIO,
 			Scenario::CALL_SCORING_SCENARIO,
+			Scenario::ANALYZE_COMMUNICATION_SCENARIO, // in menu only
+			Scenario::FULL_SCENARIO, // in menu only
 		];
 	}
 
@@ -535,39 +538,101 @@ class Call extends AIActivity
 		;
 	}
 
-	private function buildCallDateTimeBlock(): ?ContentBlock
+	private function buildCallInfoBlock(): ?ContentBlock
 	{
-		if ($this->isPlanned() || $this->fetchDirection() === CCrmActivityDirection::Outgoing)
+		$callInfo = $this->fetchInfo();
+		if (empty($callInfo))
 		{
 			return null;
 		}
 
-		$culture = Application::getInstance()->getContext()->getCulture();
-		$callInfo = $this->fetchInfo();
-		$startTime = $callInfo['CALL_START_DATE'] instanceof DateTime
-			? $callInfo['CALL_START_DATE']
-			: $this->getModel()->getDate()
+		$isIncoming = $this->fetchDirection() === CCrmActivityDirection::Incoming;
+		$hasDateTime = $isIncoming && !$this->isPlanned();
+		$portalNumber = (string)($callInfo['PORTAL_LINE']['FULL_NAME'] ?? $callInfo['PORTAL_NUMBER'] ?? '');
+		$formattedPhone = $portalNumber !== ''
+			? PhoneNumber\Parser::getInstance()?->parse($portalNumber)->format()
+			: null
 		;
-		$startTime = CCrmDateTimeHelper::getUserTime($startTime, $this->getContext()->getUserId())->getTimestamp();
-		$dateTimeValue = sprintf(
-			'%s %s',
-			FormatDate($culture?->getLongDateFormat(), $startTime),
-			FormatDate($culture?->getShortTimeFormat(), $startTime),
-		);
+
+		if (empty($formattedPhone) && !$hasDateTime)
+		{
+			return null;
+		}
 
 		$block = new LineOfTextBlocks();
-		$blockTitle = ContentBlockFactory::createTitle(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_CALL_DATE_TIME'))
-			->setColor(Text::COLOR_BASE_60)
-		;
-		$block->addContentBlock('callDateTimeBlockTitle', $blockTitle);
+		$textBlockFn = static function (string $value): Text
+		{
+			return (new Text())
+				->setValue($value)
+				->setColor(Text::COLOR_BASE_50)
+				->setFontSize(Text::FONT_SIZE_SM)
+			;
+		};
 
-		$valueBlock = (new Text())
-			->setValue($dateTimeValue)
-			->setColor(Text::COLOR_BASE_70)
-			->setFontWeight(Text::FONT_WEIGHT_MEDIUM)
-		;
+		if ($hasDateTime)
+		{
+			$culture = Application::getInstance()->getContext()->getCulture();
+			$startTime = $callInfo['CALL_START_DATE'] instanceof DateTime
+				? $callInfo['CALL_START_DATE']
+				: $this->getModel()->getDate()
+			;
 
-		$block->addContentBlock("callDateTimeBlock", $valueBlock);
+			// In pull-worker context global $USER is empty, so DateTime::toUserTime()
+			// silently returns a zero offset. Resolve against the timeline context
+			// user (the activity's RESPONSIBLE_ID) explicitly.
+			$startTime = CCrmDateTimeHelper::getUserTime($startTime, $this->getContext()->getUserId())->getTimestamp();
+			$dateTimeValue = sprintf(
+				'%s %s',
+				FormatDate($culture?->getLongDateFormat(), $startTime),
+				FormatDate($culture?->getShortTimeFormat(), $startTime),
+			);
+
+			$block
+				->addContentBlock(
+					'callDateTimeTitle',
+					$textBlockFn(Loc::getMessage('CRM_TIMELINE_BLOCK_TITLE_CALL_DATE_TIME'))
+				)
+				->addContentBlock(
+					'callDateTime',
+					$textBlockFn($dateTimeValue)
+				)
+			;
+		}
+
+		if (!empty($formattedPhone))
+		{
+			$phoneLabelKey = $isIncoming ? 'CRM_TIMELINE_BLOCK_CALL_ADDITIONAL_INFO_1' : 'CRM_TIMELINE_BLOCK_CALL_ADDITIONAL_INFO_1_OUT';
+			$block
+				->addContentBlock(
+					'phoneNumberTitle',
+					$textBlockFn(Loc::getMessage($phoneLabelKey))
+				)
+				->addContentBlock(
+					'phoneNumber',
+					$textBlockFn($formattedPhone)
+				)
+			;
+		}
+
+		// длительность видна только в мобильном клиенте
+		$duration = (int)($callInfo['DURATION'] ?? 0);
+		if ($duration > 0)
+		{
+			$block
+				->addContentBlock(
+					'durationDelimiter',
+					$textBlockFn(html_entity_decode(self::BLOCK_DELIMITER))->setScopeMobile()
+				)
+				->addContentBlock(
+					'durationTitle',
+					$textBlockFn(Loc::getMessage('CRM_TIMELINE_BLOCK_CALL_ADDITIONAL_INFO_2'))->setScopeMobile()
+				)
+				->addContentBlock(
+					'duration',
+					$textBlockFn(Duration::format($duration))->setScopeMobile()
+				)
+			;
+		}
 
 		return $block;
 	}
@@ -609,78 +674,6 @@ class Call extends AIActivity
 			->setContentBlock(ContentBlockFactory::createTitle((string)$subject))
 			->setInline()
 		;
-	}
-
-	private function buildAdditionalInfoBlock(): ?ContentBlock
-	{
-		$callInfo = $this->fetchInfo();
-		if (empty($callInfo))
-		{
-			return null;
-		}
-
-		$callInfoBlockIsEmpty = true;
-		$block = new LineOfTextBlocks();
-
-		// 1st element - phone number
-		$portalNumber = $callInfo['PORTAL_LINE']['FULL_NAME'] ?? $callInfo['PORTAL_NUMBER'];
-		$formattedValue = PhoneNumber\Parser::getInstance()?->parse($portalNumber)->format();
-		if (!empty($formattedValue))
-		{
-			$block
-				->addContentBlock(
-					'info1',
-					ContentBlockFactory::createTitle(
-						Loc::getMessage(
-							$this->fetchDirection() === CCrmActivityDirection::Incoming
-								? 'CRM_TIMELINE_BLOCK_CALL_ADDITIONAL_INFO_1'
-								: 'CRM_TIMELINE_BLOCK_CALL_ADDITIONAL_INFO_1_OUT'
-						)
-					)->setColor(Text::COLOR_BASE_50)
-
-				)
-				->addContentBlock('phoneNumber', ContentBlockFactory::createTitle($formattedValue))
-			;
-
-			$callInfoBlockIsEmpty = false;
-		}
-
-		// 2nd element - call duration
-		$duration = (int)$callInfo['DURATION'];
-		if ($duration > 0)
-		{
-			if (!$callInfoBlockIsEmpty)
-			{
-				// add delimiter before first block
-				$block
-					->addContentBlock(
-						'delimiter',
-						ContentBlockFactory::createTitle(
-							html_entity_decode(self::BLOCK_DELIMITER)
-						)->setColor(Text::COLOR_BASE_50)
-					)
-				;
-			}
-
-			$block
-				->addContentBlock(
-					'info2',
-					ContentBlockFactory::createTitle(
-						Loc::getMessage('CRM_TIMELINE_BLOCK_CALL_ADDITIONAL_INFO_2')
-					)->setColor(Text::COLOR_BASE_50)
-				)
-				->addContentBlock(
-					'duration',
-					ContentBlockFactory::createTitle(
-						Duration::format($duration)
-					)->setColor(Text::COLOR_BASE_50)
-				)
-			;
-
-			$callInfoBlockIsEmpty = false;
-		}
-
-		return $callInfoBlockIsEmpty ? null : $block;
 	}
 
 	private function buildClientMarkBlock(): ?ContentBlock
@@ -792,17 +785,15 @@ class Call extends AIActivity
 			$audioBlock = (clone $blocks['audio'])->setScopeWeb();
 			$groupedBlock->addBlock('audio', $audioBlock);
 
-			if (isset($blocks['callDateTime']))
+			if (isset($blocks['callInfo']))
 			{
-				$callDateTimeBlock = (clone $blocks['callDateTime'])->setScopeWeb();
-				$additionalInfoBlock = (new LineOfTextBlocks())->addContentBlock('callDateTime', $callDateTimeBlock);
-				if (isset($blocks['clientMark']))
-				{
-					$clientMarkBlock = (clone $blocks['clientMark'])->setScopeWeb();
-					$additionalInfoBlock->addContentBlock('clientMark', $clientMarkBlock);
-				}
+				$groupedBlock->addBlock('callInfo', (clone $blocks['callInfo'])->setScopeWeb());
+			}
 
-				$groupedBlock->addBlock('additionalInfo', $additionalInfoBlock);
+			if (isset($blocks['clientMark']))
+			{
+				$clientMarkBlock = (clone $blocks['clientMark'])->setScopeWeb();
+				$groupedBlock->addBlock('clientMark', $clientMarkBlock);
 			}
 
 			$callScoringBlock = $this->buildCallScoringBlock();
@@ -810,6 +801,10 @@ class Call extends AIActivity
 			{
 				$groupedBlock->addBlock('callScoring', $callScoringBlock->setScopeWeb());
 			}
+		}
+		elseif (isset($blocks['callInfo']))
+		{
+			$groupedBlock->addBlock('callInfo', (clone $blocks['callInfo'])->setScopeWeb());
 		}
 
 		return $groupedBlock;

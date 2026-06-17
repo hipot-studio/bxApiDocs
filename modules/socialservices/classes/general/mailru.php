@@ -1,4 +1,8 @@
 <?
+use Bitrix\Socialservices\OAuth\OAuthErrorCode;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServMyMailRu extends CSocServAuth
@@ -37,7 +41,11 @@ class CSocServMyMailRu extends CSocServAuth
 		$gAuth = new CMailRuOAuthInterface($appID, $appSecret);
 
 		$redirect_uri = CSocServUtil::GetCurUrl('auth_service_id='.self::ID);
-		$state = 'site_id='.SITE_ID.'&backurl='.($GLOBALS["APPLICATION"]->GetCurPageParam('check_key='.\CSocServAuthManager::getUniqueKey(), array("logout", "auth_service_error", "auth_service_id", "backurl")));
+		$state = \Bitrix\Socialservices\OAuth\StateService::getInstance()->createState([
+			'site_id' => SITE_ID,
+			'check_key' => \CSocServAuthManager::getUniqueKey(),
+			'redirect_url' => $GLOBALS["APPLICATION"]->GetCurPageParam('', ["logout", "auth_service_error", "auth_service_id", "backurl"]),
+		]);
 
 		return $gAuth->GetAuthUrl($redirect_uri, $state);
 	}
@@ -48,8 +56,14 @@ class CSocServMyMailRu extends CSocServAuth
 
 		$bSuccess = 1;
 		$bProcessState = false;
+		$this->logger->info('oauth.auth.start');
 
-		if((isset($_REQUEST["code"]) && $_REQUEST["code"] <> '') && CSocServAuthManager::CheckUniqueKey())
+		if (empty($_REQUEST['code']))
+		{
+			$this->logger->error('oauth.request.invalid_code');
+			$this->sendOauthError(OAuthErrorCode::MissingCode);
+		}
+		elseif (CSocServAuthManager::CheckUniqueKey())
 		{
 			$bProcessState = true;
 
@@ -58,6 +72,7 @@ class CSocServMyMailRu extends CSocServAuth
 			$appSecret = trim(self::GetOption("mailru_secret_key"));
 
 			$gAuth = new CMailRuOAuthInterface($appID, $appSecret, $_REQUEST["code"]);
+			$gAuth->setLogger($this->logger);
 
 			if($gAuth->GetAccessToken($redirect_uri) !== false)
 			{
@@ -107,27 +122,39 @@ class CSocServMyMailRu extends CSocServAuth
 						$arFields["SITE_ID"] = SITE_ID;
 					$bSuccess = $this->AuthorizeUser($arFields);
 				}
+				else
+				{
+					$this->logger->error('oauth.user.fetch_failed', [
+						'reason' => 'missing_user_id',
+					]);
+				}
+			}
+			else
+			{
+				$this->logger->error('oauth.token.exchange_failed', [
+					'reason' => 'get_access_token_failed',
+				]);
 			}
 		}
+		else
+		{
+			$this->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'check_key_validation_failed',
+			]);
+			$this->sendOauthError(OAuthErrorCode::InvalidCheckKey);
+		}
+
+		$this->logger->info('oauth.auth.finish', [
+			'success' => ($bSuccess === true),
+			'auth_result' => $bSuccess,
+		]);
 
 		if(!$bProcessState)
 		{
 			unset($_REQUEST["state"]);
 		}
 
-		$url = ($GLOBALS["APPLICATION"]->GetCurDir() == "/login/") ? "" : $GLOBALS["APPLICATION"]->GetCurDir();
-		if(isset($_REQUEST["state"]))
-		{
-			$arState = array();
-			parse_str($_REQUEST["state"], $arState);
-
-			if(isset($arState['backurl']))
-				$url = parse_url($arState['backurl'], PHP_URL_PATH);
-		}
-
-		$aRemove = array("logout", "auth_service_error", "auth_service_id", "code", "error_reason", "error", "error_description", "check_key");
-		if($bSuccess !== true)
-			$url = $GLOBALS['APPLICATION']->GetCurPageParam(('auth_service_id='.self::ID.'&auth_service_error='.$bSuccess), $aRemove);
+		$url = $this->getRedirectUriAfterAuthorize($bSuccess, self::ID);
 
 		$this->onAfterWebAuth(true, self::OPENER_MODE, $url);
 		CMain::FinalActions();
@@ -136,6 +163,8 @@ class CSocServMyMailRu extends CSocServAuth
 
 class CMailRuOAuthInterface
 {
+	const SERVICE_ID = 'MyMailRu';
+
 	const AUTH_URL = "https://connect.mail.ru/oauth/authorize";
 	const TOKEN_URL = "https://connect.mail.ru/oauth/token";
 	const CONTACTS_URL = "http://www.appsmail.ru/platform/api";
@@ -146,12 +175,20 @@ class CMailRuOAuthInterface
 	protected $access_token = false;
 	protected $userID = false;
 
+	protected LoggerInterface $logger;
+
 	public function __construct($appID, $appSecret, $code=false)
 	{
 		$this->httpTimeout = SOCSERV_DEFAULT_HTTP_TIMEOUT;
 		$this->appID = $appID;
 		$this->appSecret = $appSecret;
 		$this->code = $code;
+		$this->logger = new NullLogger();
+	}
+
+	public function setLogger(LoggerInterface $logger): void
+	{
+		$this->logger = $logger;
 	}
 
 	public function GetAuthUrl($redirect_uri, $state='')
@@ -166,7 +203,13 @@ class CMailRuOAuthInterface
 	public function GetAccessToken($redirect_uri)
 	{
 		if($this->code === false)
+		{
+			$this->logger->error('oauth.token.exchange_failed', [
+				'reason' => 'empty_code',
+			]);
+
 			return false;
+		}
 
 		$result = CHTTP::sPostHeader(self::TOKEN_URL, array(
 			"client_id"=>$this->appID,
@@ -186,17 +229,36 @@ class CMailRuOAuthInterface
 
 			return true;
 		}
+
+		$this->logger->error('oauth.token.exchange_failed', [
+			'reason' => 'token_not_found_in_response',
+		]);
+
 		return false;
 	}
 
 	public function GetCurrentUser()
 	{
 		if($this->access_token === false)
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'empty_access_token',
+			]);
+
 			return false;
+		}
 		$sign=md5("app_id=".$this->appID."method=users.getInfosecure=1session_key=".$this->access_token.$this->appSecret);
 		$result = CHTTP::sGetHeader(self::CONTACTS_URL.'?method=users.getInfo&secure=1&app_id='.$this->appID.'&session_key='.urlencode($this->access_token).'&sig='.$sign, array(), $this->httpTimeout);
 
-		return CUtil::JsObjectToPhp($result);
+		$parsed = CUtil::JsObjectToPhp($result);
+		if (!is_array($parsed) || !isset($parsed[0]['uid']) || $parsed[0]['uid'] === '')
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'missing_user_id',
+			]);
+		}
+
+		return $parsed;
 	}
 }
 ?>

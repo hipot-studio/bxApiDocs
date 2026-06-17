@@ -23,4 +23,8 @@ interface TaskMemberRepositoryInterface
 	 * @return array<int, string[]>
 	 */
 	public function getMembershipForUserIdAndTaskIds(int $userId, array $taskIds): array;
+
+	public function deleteAllInTask(int $taskId): void;
+
+	public function saveMulti(int $taskId, Entity\UserCollection $userCollection): void;
 }

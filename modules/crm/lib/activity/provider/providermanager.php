@@ -76,6 +76,7 @@ class ProviderManager
 			Bizproc\Workflow::getId() => Bizproc\Workflow::class,
 			Bizproc\Comment::getId() => Bizproc\Comment::class,
 			Bizproc\Task::getId() => Bizproc\Task::class,
+			EntityExclusion::getId() => EntityExclusion::class,
 		];
 
 		if (Settings\Crm::isWhatsAppScenarioEnabled())

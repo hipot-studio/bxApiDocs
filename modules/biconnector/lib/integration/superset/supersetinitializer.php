@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Integration\Superset;
 
 use Bitrix\BIConnector\Access\Install\AccessInstaller;
 use Bitrix\BIConnector\Configuration\DataTimezone;
+use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
 use Bitrix\BIConnector\Superset\Config\ConfigContainer;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
@@ -45,13 +46,23 @@ final class SupersetInitializer
 	public const SUPERSET_STATUS_ERROR = 'ERROR';
 	public const SUPERSET_STATUS_LIMIT_EXCEEDED = 'LIMIT_EXCEEDED';
 	public const SUPERSET_STATUS_DELETED = 'DELETED';
+	public const SUPERSET_STATUS_PENDING_DELETE = 'PENDING_DELETE';
+	public const SUPERSET_STATUS_PENDING_DELETE_SUSPENDED = 'PENDING_DELETE_SUSPENDED';
 
 	public const FREEZE_REASON_TARIFF = 'TARIFF';
+	public const FREEZE_REASON_PENDING_DELETE = 'PENDING_DELETE';
+
+	public const ENABLE_MODE_RESTORE = 'restore';
+	public const ENABLE_MODE_RESET = 'reset';
 
 	public const ERROR_DELETE_INSTANCE_OPTION = 'error_superset_delete_instance';
 
 	private const SUPERSET_CLEAN_TIMESTAMP_OPTION = 'superset_clean_timestamp';
 	private const SUPERSET_CLEAN_TIMEOUT_OPTION = 'superset_clean_timeout';
+	private const SUPERSET_PENDING_DELETE_TIMEOUT_OPTION = 'superset_pending_delete_timeout';
+	private const SUPERSET_PENDING_DELETE_DAYS = 30;
+	private const SUPERSET_PENDING_DELETE_NOTIFY_OPTION = 'superset_pending_delete_notify_timeout';
+	private const SUPERSET_PENDING_DELETE_NOTIFY_DAYS = 1;
 
 	private const SUPERSET_CREATED_BY_OPTION = 'superset_created_by_user';
 	private const SUPERSET_INITIAL_DASHBOARD_OPTION = 'superset_initial_dashboard';
@@ -76,6 +87,16 @@ final class SupersetInitializer
 	{
 		$status = self::getSupersetStatus();
 		SupersetInitializerLogger::logInfo('Portal make superset startup', ['current_status' => $status]);
+
+		if (
+			Loader::includeModule('bitrix24')
+			&& !Feature::isFeatureEnabledFor('bi_constructor', \CBitrix24::getLicenseType())
+		)
+		{
+			SupersetInitializerLogger::logInfo('Skip superset startup: bi_constructor feature is disabled by current tariff');
+
+			return $status;
+		}
 
 		$newStatus = self::startSupersetInitialize();
 		if (self::getSupersetStatus() !== $newStatus)
@@ -157,6 +178,8 @@ final class SupersetInitializer
 		}
 
 		self::setSupersetStatus(self::SUPERSET_STATUS_READY);
+		self::markSupersetInstanceExists(true);
+		self::markSupersetInstanceSuspended(false);
 		DashboardManager::notifySupersetStatus(self::SUPERSET_STATUS_READY);
 
 		DashboardManager::notifySupersetCreated(
@@ -180,10 +203,41 @@ final class SupersetInitializer
 		$proxyIntegrator->freezeSuperset($params);
 	}
 
-	public static function unfreezeSuperset(array $params = []): void
+	public static function unfreezeSuperset(array $params = []): IntegratorResponse
 	{
 		$proxyIntegrator = Integrator::getInstance();
-		$proxyIntegrator->unfreezeSuperset($params);
+
+		return $proxyIntegrator->unfreezeSuperset($params);
+	}
+
+	public static function suspendSuperset(array $params = []): void
+	{
+		$proxyIntegrator = Integrator::getInstance();
+		$proxyIntegrator->suspendSuperset($params);
+	}
+
+	public static function resumeSuperset(array $params = []): IntegratorResponse
+	{
+		$proxyIntegrator = Integrator::getInstance();
+
+		return $proxyIntegrator->resumeSuperset($params);
+	}
+
+	public static function markSupersetInstanceSuspended(bool $value): void
+	{
+		if ($value)
+		{
+			Option::set('biconnector', self::SUPERSET_INSTANCE_SUSPENDED_OPTION, 'Y');
+		}
+		else
+		{
+			Option::delete('biconnector', ['name' => self::SUPERSET_INSTANCE_SUSPENDED_OPTION]);
+		}
+	}
+
+	public static function isSupersetInstanceSuspended(): bool
+	{
+		return Option::get('biconnector', self::SUPERSET_INSTANCE_SUSPENDED_OPTION, 'N') === 'Y';
 	}
 
 	public static function markSupersetInstanceExists(bool $value): void
@@ -294,6 +348,14 @@ final class SupersetInitializer
 		return self::getSupersetStatus() === self::SUPERSET_STATUS_DELETED;
 	}
 
+	public static function isSupersetPendingDelete(): bool
+	{
+		$status = self::getSupersetStatus();
+
+		return $status === self::SUPERSET_STATUS_PENDING_DELETE
+			|| $status === self::SUPERSET_STATUS_PENDING_DELETE_SUSPENDED;
+	}
+
 	public static function isSupersetLoading(): bool
 	{
 		return self::getSupersetStatus() === self::SUPERSET_STATUS_LOAD;
@@ -359,7 +421,14 @@ final class SupersetInitializer
 
 			if (Feature::isFeatureEnabledFor('bi_constructor', \CBitrix24::getLicenseType()))
 			{
-				self::unfreezeSuperset($params);
+				if (self::isSupersetInstanceSuspended())
+				{
+					self::resumeSuperset($params);
+				}
+				else
+				{
+					self::unfreezeSuperset($params);
+				}
 			}
 			else
 			{
@@ -463,18 +532,14 @@ final class SupersetInitializer
 		{
 			self::fixDeleteTimestamp();
 			self::clearSupersetData();
-			self::setSupersetStatus(self::SUPERSET_STATUS_DELETED);
+			self::setSupersetStatus(self::SUPERSET_STATUS_DOESNT_EXISTS);
+			DashboardManager::notifySupersetStatus(self::SUPERSET_STATUS_DOESNT_EXISTS);
 
 			return $result;
 		}
 
 		$response = Integrator::getInstance()->deleteSuperset();
-		if (!$response->hasErrors())
-		{
-			Registrar::getRegistrar()->clear(__CLASS__ . '::' . __FUNCTION__);
-			self::fixDeleteTimestamp();
-		}
-		else
+		if ($response->hasErrors())
 		{
 			$result->addErrors($response->getErrors());
 		}
@@ -482,7 +547,97 @@ final class SupersetInitializer
 		return $result;
 	}
 
-	private static function fixDeleteTimestamp(): void
+	private static function pendingDeleteInstance(): Result
+	{
+		$result = new Result();
+
+		if (self::isSupersetPendingDelete())
+		{
+			return $result;
+		}
+
+		$allowedStatuses = [
+			self::SUPERSET_STATUS_READY,
+			self::SUPERSET_STATUS_LOAD,
+			self::SUPERSET_STATUS_ERROR,
+			self::SUPERSET_STATUS_LIMIT_EXCEEDED,
+		];
+		if (!in_array(self::getSupersetStatus(), $allowedStatuses, true))
+		{
+			return $result;
+		}
+
+		self::setSupersetStatus(self::SUPERSET_STATUS_PENDING_DELETE);
+		self::suspendSuperset(['reason' => self::FREEZE_REASON_PENDING_DELETE]);
+
+		$timeout = (int)Option::get(
+			'biconnector',
+			self::SUPERSET_PENDING_DELETE_TIMEOUT_OPTION,
+			self::SUPERSET_PENDING_DELETE_DAYS * 24 * 60 * 60
+		);
+
+		$deleteAgentName = Agent::class . '::pendingDeleteCheck();';
+		\CAgent::AddAgent(
+			$deleteAgentName,
+			'biconnector',
+			'N',
+			600,
+			'',
+			'Y',
+			\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + $timeout, 'FULL')
+		);
+
+		$notifyBeforeTimeout = (int)Option::get(
+			'biconnector',
+			self::SUPERSET_PENDING_DELETE_NOTIFY_OPTION,
+			self::SUPERSET_PENDING_DELETE_NOTIFY_DAYS * 24 * 60 * 60
+		);
+		$notifyDelay = $timeout - $notifyBeforeTimeout;
+		if ($notifyDelay > 0)
+		{
+			$notifyAgentName = Agent::class . '::pendingDeleteNotify();';
+			\CAgent::AddAgent(
+				$notifyAgentName,
+				'biconnector',
+				'N',
+				0,
+				'',
+				'Y',
+				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + $notifyDelay, 'FULL')
+			);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Cancels a previously scheduled deferred deletion.
+	 * Removes agents, restores status to LOAD, resumes instance if helm uninstall is done.
+	 */
+	public static function cancelPendingDelete(): void
+	{
+		if (!self::isSupersetPendingDelete())
+		{
+			return;
+		}
+
+		\CAgent::RemoveAgent(Agent::class . '::pendingDeleteCheck();', 'biconnector');
+		\CAgent::RemoveAgent(Agent::class . '::pendingDeleteNotify();', 'biconnector');
+
+		$statusBeforeLoad = self::getSupersetStatus();
+		self::setSupersetStatus(self::SUPERSET_STATUS_LOAD);
+
+		// PENDING_DELETE means suspend is still running. Defer to suspendAction callback, which will
+		// see status=LOAD and trigger resume itself. See \Bitrix\BIConnector\Controller\Callback::suspendAction.
+		if ($statusBeforeLoad === self::SUPERSET_STATUS_PENDING_DELETE)
+		{
+			return;
+		}
+
+		self::resumeSuperset(['reason' => self::FREEZE_REASON_PENDING_DELETE]);
+	}
+
+	public static function fixDeleteTimestamp(): void
 	{
 		Option::set('biconnector', self::SUPERSET_CLEAN_TIMESTAMP_OPTION, time());
 	}
@@ -549,14 +704,17 @@ final class SupersetInitializer
 			$datasetDeleteResult = ExternalDatasetTable::delete($dataset->getId());
 			if ($datasetDeleteResult->isSuccess())
 			{
-				$tableName = Csv::TABLE_NAME_PREFIX . $dataset->getName();
-				try
+				if ($dataset->getEnumType() === Type::Csv)
 				{
-					$connection->query(sprintf('DROP TABLE IF EXISTS `%s`;', $tableName));
-				}
-				catch (SqlQueryException $exception)
-				{
-					Logger::logErrors([new Error($exception->getMessage())], ['clearSupersetData, deleting dataset ' . $dataset->getId()]);
+					$tableName = Csv::TABLE_NAME_PREFIX . $dataset->getName();
+					try
+					{
+						$connection->query(sprintf('DROP TABLE IF EXISTS `%s`;', $tableName));
+					}
+					catch (SqlQueryException $exception)
+					{
+						Logger::logErrors([new Error($exception->getMessage())], ['clearSupersetData, deleting dataset ' . $dataset->getId()]);
+					}
 				}
 			}
 			else
@@ -595,6 +753,8 @@ final class SupersetInitializer
 
 		AccessInstaller::clearRelations();
 
+		self::markSupersetInstanceExists(false);
+		self::markSupersetInstanceSuspended(false);
 		self::clearRebindRequired();
 	}
 
@@ -621,7 +781,55 @@ final class SupersetInitializer
 	 * @return void
 	 */
 	public static function onEnableBiBuilderTool(): void
-	{}
+	{
+		if (self::isSupersetPendingDelete())
+		{
+			self::cancelPendingDelete();
+		}
+
+		$retryAgentName = Agent::class . '::deleteInstance();';
+		\CAgent::RemoveAgent($retryAgentName, 'biconnector');
+		Option::delete('biconnector', ['name' => self::ERROR_DELETE_INSTANCE_OPTION]);
+	}
+
+	/**
+	 * Cancel pending deletion and immediately delete all data, starting fresh.
+	 *
+	 * @return void
+	 */
+	public static function resetSuperset(): void
+	{
+		$deleteAgentName = Agent::class . '::pendingDeleteCheck();';
+		\CAgent::RemoveAgent($deleteAgentName, 'biconnector');
+
+		$notifyAgentName = Agent::class . '::pendingDeleteNotify();';
+		\CAgent::RemoveAgent($notifyAgentName, 'biconnector');
+
+		$retryAgentName = Agent::class . '::deleteInstance();';
+		\CAgent::RemoveAgent($retryAgentName, 'biconnector');
+		Option::delete('biconnector', ['name' => self::ERROR_DELETE_INSTANCE_OPTION]);
+
+		$deleteResult = self::deleteInstance();
+		if (!$deleteResult->isSuccess())
+		{
+			\CAgent::AddAgent(
+				$retryAgentName,
+				'biconnector',
+				'N',
+				0,
+				'',
+				'Y',
+				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 86400, 'FULL'),
+			);
+			Option::set('biconnector', self::ERROR_DELETE_INSTANCE_OPTION, 'Y');
+		}
+
+		if (self::getSupersetStatus() !== self::SUPERSET_STATUS_DOESNT_EXISTS)
+		{
+			self::clearSupersetData();
+			self::setSupersetStatus(self::SUPERSET_STATUS_DELETED);
+		}
+	}
 
 	/**
 	 * Handle disable BI Builder tool in general portal settings.
@@ -630,6 +838,11 @@ final class SupersetInitializer
 	 */
 	public static function onDisableBiBuilderTool(): void
 	{
+		if (self::isSupersetPendingDelete())
+		{
+			return;
+		}
+
 		if (self::isRebindRequired())
 		{
 			// Local portalId is detached in rebind state.
@@ -666,31 +879,15 @@ final class SupersetInitializer
 			return;
 		}
 
-		$deleteStartResult = self::deleteInstance();
-		if ($deleteStartResult->isSuccess())
+		if (!self::isSupersetInstanceExists() && !self::isSupersetLoading())
 		{
-			// In case of 0238163 - callback returns instantly and here we already have DOESNT_EXISTS status
-			if (self::getSupersetStatus() !== self::SUPERSET_STATUS_DOESNT_EXISTS)
-			{
-				self::clearSupersetData();
-				self::setSupersetStatus(self::SUPERSET_STATUS_DELETED);
-			}
+			self::setSupersetStatus(self::SUPERSET_STATUS_DOESNT_EXISTS);
+			self::deleteInstance();
+			Registrar::getRegistrar()->clear(__CLASS__ . '::' . __FUNCTION__);
+
+			return;
 		}
-		else
-		{
-			$notificationCallback = static fn(?string $languageId = null) => Loc::getMessage(
-				code: 'BI_SUPERSET_DISABLING_TOOL_ERROR_TEXT',
-				language: $languageId,
-			);
-			\CIMNotify::Add([
-				'TO_USER_ID' => CurrentUser::get()->getId(),
-				'FROM_USER_ID' => 0,
-				'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
-				'NOTIFY_MODULE' => 'biconnector',
-				'NOTIFY_TITLE' => Loc::getMessage('BI_SUPERSET_DISABLING_TOOL_ERROR_TITLE'),
-				'NOTIFY_MESSAGE' => $notificationCallback,
-			]);
-			(new Tools\BIConstructor())->enable();
-		}
+
+		self::pendingDeleteInstance();
 	}
 }

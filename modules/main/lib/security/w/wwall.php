@@ -1,1 +1,516 @@
-<? namespace Bitrix\Main\Security\W;$GLOBALS['____1032654828']= array(base64_decode('d'.'G'.'ltZQ='.'='),base64_decode(''.'dGltZQ=='),base64_decode('anNvbl9kZWNvZGU='),base64_decode('Y'.'XJyYXlf'.'bWV'.'yZ2U='),base64_decode('am'.'9'.'pbg='.'='),base64_decode('am9'.'pb'.'g'.'='.'='),base64_decode('a'.'m9pbg=='),base64_decode('YX'.'JyYXl'.'fcG9w'),base64_decode('YXJyYXlfc2hpZ'.'n'.'Q='),base64_decode('YXJ'.'yYXlf'.'c2hpZn'.'Q='),base64_decode('YXJyYXl'.'f'.'c2hp'.'ZnQ='),base64_decode(''.'Y'.'XJyYXlfc2hp'.'ZnQ='),base64_decode('YX'.'J'.'yYXlfbW'.'V'.'yZ2U'.'='),base64_decode('a'.'X'.'NfY'.'XJy'.'YX'.'k='),base64_decode('YXJyYXlfb'.'WVy'.'Z2U='),base64_decode('aW5fY'.'X'.'Jy'.'YX'.'k='),base64_decode('aW5fYXJy'.'YX'.'k='),base64_decode('a'.'W'.'5fYXJ'.'yYXk='),base64_decode('aW5'.'fYXJ'.'y'.'YXk='),base64_decode('aW5'.'fYXJyY'.'Xk='),base64_decode('dGltZQ='.'='),base64_decode('dGl'.'tZQ='.'='),base64_decode(''.'YXJyYXlf'.'bW'.'F'.'w'),base64_decode(''.'Z'.'2V0X2x'.'v'.'YWRlZF9'.'le'.'HR'.'lbnN'.'p'.'b25z'),base64_decode('anNv'.'bl9lb'.'mNvZG'.'U='),base64_decode(''.'an'.'Nvb'.'l9lbmNvZGU='),base64_decode('cG'.'hw'.'dmVyc2'.'lvb'.'g=='),base64_decode(''.'an'.'Nvbl9lbmNvZGU='),base64_decode('am9p'.'bg=='));if(!function_exists(__NAMESPACE__.'\\___978196117')){function ___978196117($_1101357052){static $_275670910= false; if($_275670910 == false) $_275670910=array('V'.'1'.'dBTE'.'x'.'fTE9DS'.'w==','c2V'.'jd'.'XJpd'.'H'.'k=',''.'REFUQ'.'Q==','e'.'y'.'I=','V1'.'dBTExfTE9'.'DSw='.'=','c2'.'VjdX'.'Jpd'.'Hk'.'=','U0VDVV'.'JJVF'.'lf'.'V'.'1d'.'BTExfRVhDRVB'.'USU9O','RkFJTF9'.'D'.'S'.'EVDS0lORw='.'=','Q2'.'FuIG5vdC'.'BleGV'.'jdX'.'RlIHd3YWxsIHJ1b'.'GV'.'zO'.'iA=',''.'I'.'F'.'Ry'.'YWNlOiA=','Uk'.'VRV'.'UVTVF9VUkk'.'=','a'.'2V5cw'.'==','d'.'mF'.'sdWVz','U0VDV'.'VJJV'.'FlfV1dBTEx'.'fT'.'U9ESUZZ','L'.'g==','U'.'0VDVVJJVF'.'lf'.'V1dB'.'TExfV'.'U5TRVQ=','Lg==','U0VDVVJJVFlfV'.'1'.'dBTExfRVhJVA==','Lg==','Z2xv'.'Y'.'mF'.'s','a2V5cw==','dmFs'.'dWV'.'z','Z'.'2V'.'0','Z2'.'V0','cG'.'9zd'.'A'.'==',''.'cG9zdA='.'=','Y'.'29va2ll',''.'Y'.'2'.'9'.'va2l'.'l','c'.'mVxdW'.'VzdA==','cm'.'V'.'xdWVzd'.'A==','Z2xvYm'.'F'.'s',''.'Z'.'2xvYmFs',''.'b'.'WFpb'.'l9zZWM=','V1dBTExf'.'QUN'.'UV'.'UFMSV'.'pFX'.'1JV'.'T'.'EVT','dg='.'=','dmVyc'.'2'.'l'.'vbg'.'==','aQ==','aXNJbnN0YWxsZW'.'Q=','dg==',''.'aW5p','bW9k'.'d'.'Wxlcw'.'==',''.'b'.'GljZ'.'W'.'5zZQ'.'==','cGhw','dg==','Z'.'X'.'h0','c2Vj'.'dXJpdHk=','ZGI=','dHlwZQ==','ZGI=','d'.'mVyc'.'2lvbg==','ZGI=','dH'.'lwZQ==','ZGI'.'=',''.'dH'.'lw'.'ZQ='.'=',''.'dmVy'.'c2l'.'vbg='.'=','ZGI'.'=','dmV'.'yc2l'.'vb'.'g==','Z'.'W52aX'.'J'.'v'.'b'.'m'.'1lbnQ=','dm1fdmVy'.'c'.'2lvbg'.'==','dm0=','dg==','ZW'.'52'.'aXJvb'.'m1lbnQ=',''.'dm1fd'.'mVyc2lvbg==','c29ja2V0VGlt'.'ZW91dA'.'==','c3RyZWFtVGltZW'.'91d'.'A==','KCc=','ZGF0YQ'.'==','Jywg'.'Jw='.'=','b'.'W9k'.'dWxl','J'.'ywgJw==',''.'bW9kdWxlX'.'3ZlcnN'.'pb24=','Jyk'.'=','LCA=','U0V'.'DVVJJVFlfV'.'1dBTEx'.'fRVhDRV'.'BUSU9O','bWFpbg==','RkF'.'JTF9SRU'.'ZS'.'RVNI'.'SU5H','Q2Fu'.'IG5vdCByZWZy'.'ZXNoI'.'Hd3YWx'.'sIHJ1bGVzOiA=','IFRyYWNlO'.'iA'.'=','ZGF0YQ='.'=','e'.'yI=','LS0tLS1CRU'.'dJTi'.'BQVUJ'.'MSUMgS0VZ'.'L'.'S'.'0'.'tLS0=','Ck1JS'.'U'.'JJ'.'akFOQ'.'mdrcW'.'h'.'r'.'a'.'Uc5dzB'.'CQVFFRk'.'FBT0NB'.'UThBTUlJQkNn'.'S0'.'NBUUVBcTh'.'RRT'.'BIam1'.'I'.'Sl'.'VTdFdWNm4'.'wemE'.'KUlZ'.'vTH'.'gw'.'Mk'.'t6YmZyY'.'lMvUDZ'.'zV2F4VHp3O'.'FNlR1'.'R0Yl'.'RDT'.'3J'.'wSGk1UUY2'.'T1'.'J5alovWH'.'h6L'.'0tM'.'V'.'TFHYm'.'9mOUNaMw'.'o'.'0e'.'jdTa3FVdDY2a'.'WJYdk9GQn'.'g'.'0'.'Zncv'.'QVB'.'QUkdEcXRtMG'.'5E'.'M2ZnR3'.'N1M1JlUGd3Mjl'.'pOCt2bTdtdEJLSlV'.'ZbDRyCl'.'Z'.'wY'.'jZzZlpFVDlLRWI2'.'VDFIRFltRX'.'ZjMWhxL2lpdX'.'l4T'.'H'.'Ja'.'Wmk1UTZVZmY'.'0'.'VUV2'.'VEk'.'rNjh'.'zc'.'0ZS'.'a1Erb'.'3dUUnkK'.'ZU9JTW'.'JGa'.'E0'.'vVVR'.'tZlZ'.'ZYl'.'R'.'S'.'R'.'nk'.'y'.'b1VROFdNemEybk'.'o1U2'.'Foemk'.'xVU'.'tPMWp'.'BalhUUFJye'.'mM3Q'.'Wp1Nj'.'M5aj'.'FPMA'.'pwcHFmbT'.'V4'.'Z1dsRkFK'.'a'.'0hRV'.'GdiZG'.'Q1QVdxREZRa3Q5SEtrWStUbm'.'ZCTEdWTX'.'ZWeVB3V'.'EhOV1'.'FZQXc0'.'e'.'HBnL3dB'.'Cl'.'p3SURBUUFCC'.'i'.'0tL'.'S0'.'tRU5EIFBVQk'.'xJQ'.'y'.'BL'.'RVktLS0t'.'LQ==');return base64_decode($_275670910[$_1101357052]);}}; use Bitrix\Main\Application; use Bitrix\Main\Config\Option; use Bitrix\Main\Data\Cache; use Bitrix\Main\Loader; use Bitrix\Main\ModuleManager; use Bitrix\Main\Security\PublicKeyCipher; use Bitrix\Main\SystemException; use Bitrix\Main\Web\HttpClient; use Bitrix\Main\Web\Json; use Bitrix\Main\Security\W\Rules\Rule; use Bitrix\Main\Security\W\Rules\Results\RuleAction; use Bitrix\Main\Security\W\Rules\Results\RuleResult; use Bitrix\Main\Security\W\Rules\Results\CheckResult; use Bitrix\Main\Security\W\Rules\Results\ModifyResult; use Bitrix\Main\Type\ArrayHelper; use Bitrix\Main\Security\W\Rules\RuleRecordTable; use Bitrix\Main\License\UrlProvider; use CSecuritySystemInformation; use ReflectionExtension; class WWall{ const CACHE_RULES_TTL= 10800; protected $_2009304175= true; public function handle(){ try{  $_2138221505= RuleRecordTable::getList([ 'cache' =>['ttl' => 3600* 24* 7]])->fetchAll(); if(empty($_2138221505)){ return;}  $_6839252= Cache::createInstance(); $_286795286= false; if($_6839252->initCache(static::CACHE_RULES_TTL, 'WWALL_LOCK', 'security')){ $_1209568345= $_6839252->getVars(); if($GLOBALS['____1032654828'][0]()- $_1209568345> round(0+6.6666666666667+6.6666666666667+6.6666666666667)){  $_209210360= Application::getConnection(); $_450006762= RuleRecordTable::getTableName(); $_209210360->truncateTable($_450006762); RuleRecordTable::cleanCache(); $_6839252->clean(___978196117(0), ___978196117(1));}} elseif($_6839252->startDataCache()){  $_6839252->endDataCache($GLOBALS['____1032654828'][1]()); $_286795286= true;} foreach($_2138221505 as $_542813195){ $_932828008= new PublicKeyCipher; $_1442043953= $_932828008->decrypt($_542813195[___978196117(2)], static::__1475628579()); if(!str_starts_with($_1442043953, ___978196117(3))){ continue;} $_1802950596= $GLOBALS['____1032654828'][2]($_1442043953, true); if(!empty($_1802950596)){ $_759569544= Rule::make($_1802950596); $_1257624384= $this->handleRule($_759569544); $this->applyHandlingResults($_1257624384);}}  if($_286795286){ $_6839252->clean(___978196117(4), ___978196117(5));}} catch(\Throwable $_806131484){ $this->logEvent( ___978196117(6), ___978196117(7), ___978196117(8). $_806131484->getMessage(). ___978196117(9). $_806131484->getTraceAsString());}}  public function handleRule(Rule $_759569544): array{ $_1257624384=[]; if($_759569544->matchPath($_SERVER[___978196117(10)])){  $_1422443538= $this->getContextElements($_759569544->getContext()); foreach($_1422443538 as $_949661243 => &$_721094231){ $_1257624384= $GLOBALS['____1032654828'][3]($_1257624384, $this->recursiveContextKeyHandle($_949661243, $_721094231,[], $_759569544));}} return $_1257624384;}  public function applyHandlingResults(array $_1257624384){ $_1422443538= $this->getContextElements([ 'get', 'post', 'cookie', 'request', 'global']); foreach($_1257624384 as $_2080167881){ $_721094231=& $_1422443538[$_2080167881->getContextName()]; $_1604176933= $_2080167881->getRuleResult(); $_759569544= $_2080167881->getRule(); if($_1604176933 instanceof ModifyResult){ if($_759569544->getProcess() === ___978196117(11)){  static::rewriteContextKey( $_2080167881->getContextName(), $_721094231, $_2080167881->getContextKey(), $_1604176933->getCleanValue());} elseif($_759569544->getProcess() === ___978196117(12)){ static::rewriteContextValue( $_2080167881->getContextName(), $_721094231, $_2080167881->getContextKey(), $_1604176933->getCleanValue());} $this->logEvent( ___978196117(13), $_2080167881->getContextName(), $GLOBALS['____1032654828'][4](___978196117(14), $_2080167881->getContextKey()));} elseif($_1604176933 instanceof CheckResult &&!$_1604176933->isSuccess()){ if($_1604176933->getAction() === RuleAction::UNSET){ static::unsetContextValue( $_2080167881->getContextName(), $_721094231, $_2080167881->getContextKey(),); $this->logEvent( ___978196117(15), $_2080167881->getContextName(), $GLOBALS['____1032654828'][5](___978196117(16), $_2080167881->getContextKey()));} elseif($_1604176933->getAction() === RuleAction::EXIT){ $this->logEvent( ___978196117(17), $_2080167881->getContextName(), $GLOBALS['____1032654828'][6](___978196117(18), $_2080167881->getContextKey())); exit;}}}} public function disableEventLogging(){ $this->_2009304175= false;} protected function rewriteContextKey($_949661243, &$_721094231, $_1993593647, $_1747301119){ $_1672302455= $_1993593647;  $GLOBALS['____1032654828'][7]($_1672302455); $_1672302455[]= $_1747301119; if($_949661243 === ___978196117(19)){ $_1107290408= $GLOBALS['____1032654828'][8]($_1993593647); $GLOBALS['____1032654828'][9]($_1672302455); if(empty($_1993593647)){ $GLOBALS[$_1747301119]= $GLOBALS[$_1107290408]; unset($GLOBALS[$_1107290408]);} else{ $_721094231=& $GLOBALS[$_1107290408]; $_1566074588= ArrayHelper::getByNestedKey($_721094231, $_1993593647);  ArrayHelper::setByNestedKey($_721094231, $_1672302455, $_1566074588);  ArrayHelper::unsetByNestedKey($_721094231, $_1993593647);}} else{ $_1566074588= ArrayHelper::getByNestedKey($_721094231, $_1993593647);  ArrayHelper::setByNestedKey($_721094231, $_1672302455, $_1566074588);  ArrayHelper::unsetByNestedKey($_721094231, $_1993593647);}} protected function rewriteContextValue($_949661243, &$_721094231, $_734169546, $_1566074588){ if($_949661243 === 'global'){ $_1107290408= $GLOBALS['____1032654828'][10]($_734169546); if(empty($_734169546)){ $GLOBALS[$_1107290408]= $_1566074588;} else{ $_721094231=& $GLOBALS[$_1107290408]; ArrayHelper::setByNestedKey($_721094231, $_734169546, $_1566074588);}} else{  ArrayHelper::setByNestedKey($_721094231, $_734169546, $_1566074588);}} protected function unsetContextValue($_949661243, &$_721094231, $_734169546){ if($_949661243 === 'global'){ $_1107290408= $GLOBALS['____1032654828'][11]($_734169546); if(empty($_734169546)){ unset($GLOBALS[$_1107290408]);} else{ $_721094231=& $GLOBALS[$_1107290408]; ArrayHelper::unsetByNestedKey($_721094231, $_734169546);}} else{ ArrayHelper::unsetByNestedKey($_721094231, $_734169546);}}  protected function recursiveContextKeyHandle(string $_949661243, array &$_721094231, array $_1689259463, Rule $_759569544): array{  $_1257624384=[]; foreach($_721094231 as $_1225649997 => $_1566074588){ $_734169546= $GLOBALS['____1032654828'][12]($_1689259463,[$_1225649997]); if($_759569544->matchKey($_734169546)){  if($_759569544->getProcess() === ___978196117(20)){ $_1604176933= $_759569544->evaluate($_1225649997);} elseif($_759569544->getProcess() === ___978196117(21)){ $_1604176933= $_759569544->evaluateValue($_1566074588);}  if(!empty($_1604176933) && $_1604176933 instanceof RuleResult){ $_1257624384[]= new HandlingResult($_949661243, $_734169546, $_1604176933, $_759569544);}}  if($GLOBALS['____1032654828'][13]($_1566074588)){ $_1257624384= $GLOBALS['____1032654828'][14]($_1257624384, $this->recursiveContextKeyHandle( $_949661243, $_721094231[$_1225649997], $_734169546, $_759569544));}} return $_1257624384;} protected function getContextElements(array $_1048197245){ $_2107571506=[]; if($GLOBALS['____1032654828'][15](___978196117(22), $_1048197245, true)){ $_2107571506[___978196117(23)]= &$_GET;} if($GLOBALS['____1032654828'][16](___978196117(24), $_1048197245, true)){ $_2107571506[___978196117(25)]= &$_POST;} if($GLOBALS['____1032654828'][17](___978196117(26), $_1048197245, true)){ $_2107571506[___978196117(27)]= &$_COOKIE;} if($GLOBALS['____1032654828'][18](___978196117(28), $_1048197245, true)){ $_2107571506[___978196117(29)]= &$_REQUEST;} if($GLOBALS['____1032654828'][19](___978196117(30), $_1048197245, true)){ $_2107571506[___978196117(31)]= $GLOBALS;} return $_2107571506;} public static function refreshRules(){ try{ $_329813938= Option::get('main_sec', 'WWALL_ACTUALIZE_RULES', 0); if(($GLOBALS['____1032654828'][20]()- $_329813938)< static::CACHE_RULES_TTL){ return;} Option::set(___978196117(32), ___978196117(33), $GLOBALS['____1032654828'][21]()); $_1976462748= null;  $_903180606= $GLOBALS['____1032654828'][22](function($_324793934){ return[___978196117(34) => $_324793934[___978196117(35)], ___978196117(36) => (int) $_324793934[___978196117(37)]];}, ModuleManager::getModulesFromDisk());  $_1279035589=[]; foreach($GLOBALS['____1032654828'][23]() as $_1958948911){ $_1924772480= new ReflectionExtension($_1958948911); $_1279035589[$_1958948911]=[ ___978196117(38) => $_1924772480->getVersion(), ___978196117(39) => $_1924772480->getINIEntries()];} $_298601519=[ ___978196117(40) => $GLOBALS['____1032654828'][24]($_903180606), ___978196117(41) => Application::getInstance()->getLicense()->getHashLicenseKey(), ___978196117(42) => $GLOBALS['____1032654828'][25]([ ___978196117(43) => $GLOBALS['____1032654828'][26](), ___978196117(44) => $_1279035589])]; if(Loader::includeModule(___978196117(45))){ $_1545007831= CSecuritySystemInformation::getSystemInformation(); if(isset($_1545007831[___978196117(46)][___978196117(47)]) && isset($_1545007831[___978196117(48)][___978196117(49)])){ $_298601519[___978196117(50)]=[ ___978196117(51) => $_1545007831[___978196117(52)][___978196117(53)], ___978196117(54) => $_1545007831[___978196117(55)][___978196117(56)]];} if(isset($_1545007831[___978196117(57)][___978196117(58)])){ $_298601519[___978196117(59)]=[___978196117(60) => $_1545007831[___978196117(61)][___978196117(62)]];}}  $_353872005= new HttpClient([ ___978196117(63) => round(0+1+1+1+1+1), ___978196117(64) => round(0+2.5+2.5)]); $_1128657474=(new UrlProvider())->getTechDomain(); $_2118165906="https://wwall.{$_1128657474}/rules.php"; $_803760270= $_353872005->post($_2118165906, $_298601519); if($_353872005->getStatus() == round(0+40+40+40+40+40) &&!empty($_803760270)){ $_1976462748= Json::decode($_803760270);}  if($_1976462748 !== null){ $_209210360= Application::getConnection(); $_450006762= RuleRecordTable::getTableName(); if(!empty($_1976462748)){ foreach($_1976462748 as $_1231051450){ if(!static::checkRuleSign($_1231051450)){ throw new SystemException('Invalid sign for rule '.$GLOBALS['____1032654828'][27]($_1231051450));}}}  $_209210360->truncateTable($_450006762);  if(!empty($_1976462748)){ $_132920339=[]; foreach($_1976462748 as $_1231051450){ $_132920339[]= ___978196117(65). $_209210360->getSqlHelper()->forSql($_1231051450[___978196117(66)]). ___978196117(67). $_209210360->getSqlHelper()->forSql($_1231051450[___978196117(68)]). ___978196117(69). $_209210360->getSqlHelper()->forSql($_1231051450[___978196117(70)]). ___978196117(71);} $_1641969670= $GLOBALS['____1032654828'][28](___978196117(72), $_132920339);  $_209210360->query("INSERT INTO {$_450006762} (DATA, MODULE, MODULE_VERSION) VALUES {$_1641969670}");  RuleRecordTable::cleanCache();}}} catch(\Throwable $_806131484){ \CEventLog::log( \CEventLog::SEVERITY_SECURITY, ___978196117(73), ___978196117(74), ___978196117(75), ___978196117(76). $_806131484->getMessage(). ___978196117(77). $_806131484->getTraceAsString());}} protected static function checkRuleSign($_759569544){ $_932828008= new PublicKeyCipher; $_1802950596= $_932828008->decrypt($_759569544[___978196117(78)], static::__1475628579()); return str_starts_with($_1802950596, ___978196117(79));} private static function __1475628579(){ $_1827740636= ''; $_1827740636 .= ___978196117(80); $_1827740636 .= ___978196117(81); return $_1827740636;} protected function logEvent($_1339698492, $_1983945388, $_1156779655){ if($this->_2009304175){ \CEventLog::log( \CEventLog::SEVERITY_SECURITY, $_1339698492, 'main', $_1983945388, $_1156779655);}}}?>
+<?php
+
+namespace Bitrix\Main\Security\W;
+
+use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Data\Cache;
+use Bitrix\Main\Security\PublicKeyCipher;
+use Bitrix\Main\SystemException;
+use Bitrix\Main\Web\HttpClient;
+use Bitrix\Main\Web\Json;
+use Bitrix\Main\Security\W\Rules\Rule;
+use Bitrix\Main\Security\W\Rules\Results\RuleAction;
+use Bitrix\Main\Security\W\Rules\Results\RuleResult;
+use Bitrix\Main\Security\W\Rules\Results\CheckResult;
+use Bitrix\Main\Security\W\Rules\Results\ModifyResult;
+use Bitrix\Main\Type\Collection;
+use Bitrix\Main\Security\W\Rules\RuleRecordTable;
+use Bitrix\Main\License\UrlProvider;
+use Bitrix\Main\UpdateSystem\PortalInfo;
+
+class WWall
+{
+	const CACHE_RULES_TTL = 10800;
+
+	protected $logEvents = true;
+
+	public function handle()
+	{
+		try
+		{
+			// apply rules
+			$ruleRecords = RuleRecordTable::getList([
+				'cache' => ['ttl' => 3600 * 24 * 7]
+			])->fetchAll();
+
+			if (empty($ruleRecords))
+			{
+				return;
+			}
+
+			// check for lock
+			$cache = Cache::createInstance();
+			$cacheStarted = false;
+
+			if ($cache->initCache(static::CACHE_RULES_TTL, 'WWALL_LOCK', 'security'))
+			{
+				$time = $cache->getVars();
+
+				if (time() - $time > 20)
+				{
+					// emergency reset
+					$connection = Application::getConnection();
+					$tableName = RuleRecordTable::getTableName();
+
+					$connection->truncateTable($tableName);
+					RuleRecordTable::cleanCache();
+
+					$cache->clean('WWALL_LOCK', 'security');
+				}
+			}
+			elseif ($cache->startDataCache())
+			{
+				// set lock
+				$cache->endDataCache(time());
+				$cacheStarted = true;
+			}
+
+			foreach ($ruleRecords as $ruleRecord)
+			{
+				$cipher = new PublicKeyCipher;
+				$cleanData = $cipher->decrypt($ruleRecord['DATA'], static::getPublicKey());
+
+				if (!str_starts_with($cleanData, '{"'))
+				{
+					continue;
+				}
+
+				$data = json_decode($cleanData, true);
+
+				if (!empty($data))
+				{
+					$rule = Rule::make($data);
+
+					$results = $this->handleRule($rule);
+					$this->applyHandlingResults($results);
+				}
+			}
+
+			// release lock
+			if ($cacheStarted)
+			{
+				$cache->clean('WWALL_LOCK', 'security');
+			}
+		}
+		catch (\Throwable $e)
+		{
+			$this->logEvent(
+				'SECURITY_WWALL_EXCEPTION',
+				'FAIL_CHECKING',
+				'Can not execute wwall rules: ' . $e->getMessage() . ' Trace: ' . $e->getTraceAsString()
+			);
+		}
+	}
+
+	/**
+	 * @param Rule $rule
+	 * @return HandlingResult[]
+	 */
+	public function handleRule(Rule $rule): array
+	{
+		$results = [];
+
+		if ($rule->matchPath($_SERVER['REQUEST_URI']))
+		{
+			// get context arrays
+			$contextElements = $this->getContextElements($rule->getContext());
+
+			foreach ($contextElements as $contextName => &$contextElement)
+			{
+				$results = array_merge($results,
+					$this->recursiveContextKeyHandle($contextName, $contextElement, [], $rule)
+				);
+			}
+		}
+
+		return $results;
+	}
+
+	/**
+	 * @param HandlingResult[] $results
+	 * @return void
+	 */
+	public function applyHandlingResults(array $results)
+	{
+		$contextElements = $this->getContextElements([
+			'get', 'post', 'cookie', 'request', 'global'
+		]);
+
+		foreach ($results as $result)
+		{
+			$contextElement =& $contextElements[$result->getContextName()];
+			$ruleResult = $result->getRuleResult();
+			$rule = $result->getRule();
+
+			if ($ruleResult instanceof ModifyResult)
+			{
+				if ($rule->getProcess() === 'keys')
+				{
+					// rewrite key
+					static::rewriteContextKey(
+						$result->getContextName(),
+						$contextElement,
+						$result->getContextKey(),
+						$ruleResult->getCleanValue()
+					);
+				}
+				elseif ($rule->getProcess() === 'values')
+				{
+					static::rewriteContextValue(
+						$result->getContextName(),
+						$contextElement,
+						$result->getContextKey(),
+						$ruleResult->getCleanValue()
+					);
+				}
+
+				$this->logEvent(
+					'SECURITY_WWALL_MODIFY',
+					$result->getContextName(),
+					join('.', $result->getContextKey())
+				);
+			}
+			elseif ($ruleResult instanceof CheckResult && !$ruleResult->isSuccess())
+			{
+				if ($ruleResult->getAction() === RuleAction::UNSET)
+				{
+					static::unsetContextValue(
+						$result->getContextName(),
+						$contextElement,
+						$result->getContextKey(),
+					);
+
+					$this->logEvent(
+						'SECURITY_WWALL_UNSET',
+						$result->getContextName(),
+						join('.', $result->getContextKey())
+					);
+				}
+				elseif ($ruleResult->getAction() === RuleAction::EXIT)
+				{
+					$this->logEvent(
+						'SECURITY_WWALL_EXIT',
+						$result->getContextName(),
+						join('.', $result->getContextKey())
+					);
+
+					exit;
+				}
+			}
+		}
+	}
+
+	public function disableEventLogging()
+	{
+		$this->logEvents = false;
+	}
+
+	protected function rewriteContextKey($contextName, &$contextElement, $oldFullKey, $newKey)
+	{
+		$newFullKey = $oldFullKey;
+
+		// replace last element
+		array_pop($newFullKey);
+		$newFullKey[] = $newKey;
+
+
+		if ($contextName === 'global')
+		{
+			$globalName = array_shift($oldFullKey);
+			array_shift($newFullKey);
+
+			if (empty($oldFullKey))
+			{
+				$GLOBALS[$newKey] = $GLOBALS[$globalName];
+				unset($GLOBALS[$globalName]);
+			}
+			else
+			{
+				$contextElement =& $GLOBALS[$globalName];
+
+				$value = Collection::getByNestedKey($contextElement, $oldFullKey);
+
+				// set value with new key
+				Collection::setByNestedKey($contextElement, $newFullKey, $value);
+
+				// unset old key
+				Collection::unsetByNestedKey($contextElement, $oldFullKey);
+			}
+		}
+		else
+		{
+			$value = Collection::getByNestedKey($contextElement, $oldFullKey);
+
+			// set value with new key
+			Collection::setByNestedKey($contextElement, $newFullKey, $value);
+
+			// unset old key
+			Collection::unsetByNestedKey($contextElement, $oldFullKey);
+		}
+	}
+
+	protected function rewriteContextValue($contextName, &$contextElement, $fullKey, $value)
+	{
+		if ($contextName === 'global')
+		{
+			$globalName = array_shift($fullKey);
+
+			if (empty($fullKey))
+			{
+				$GLOBALS[$globalName] = $value;
+			}
+			else
+			{
+				$contextElement =& $GLOBALS[$globalName];
+				Collection::setByNestedKey($contextElement, $fullKey, $value);
+			}
+		}
+		else
+		{
+			// set new value with new key
+			Collection::setByNestedKey($contextElement, $fullKey, $value);
+		}
+	}
+
+	protected function unsetContextValue($contextName, &$contextElement, $fullKey)
+	{
+		if ($contextName === 'global')
+		{
+			$globalName = array_shift($fullKey);
+
+			if (empty($fullKey))
+			{
+				unset($GLOBALS[$globalName]);
+			}
+			else
+			{
+				$contextElement =& $GLOBALS[$globalName];
+				Collection::unsetByNestedKey($contextElement, $fullKey);
+			}
+		}
+		else
+		{
+			Collection::unsetByNestedKey($contextElement, $fullKey);
+		}
+	}
+
+	/**
+	 * @param string $contextName
+	 * @param array $contextElement
+	 * @param array $baseKey
+	 * @param Rule $rule
+	 * @return HandlingResult[]
+	 */
+	protected function recursiveContextKeyHandle(string $contextName, array &$contextElement, array $baseKey, Rule $rule): array
+	{
+		/** @var HandlingResult[] $results */
+		$results = [];
+
+		foreach ($contextElement as $key => $value)
+		{
+			$fullKey = array_merge($baseKey, [$key]);
+
+			if ($rule->matchKey($fullKey))
+			{
+				// evaluation
+				if ($rule->getProcess() === 'keys')
+				{
+					$ruleResult = $rule->evaluate($key);
+				}
+				elseif ($rule->getProcess() === 'values')
+				{
+					$ruleResult = $rule->evaluateValue($value);
+				}
+
+				// collect results
+				if (!empty($ruleResult) && $ruleResult instanceof RuleResult)
+				{
+					$results[] = new HandlingResult($contextName, $fullKey, $ruleResult, $rule);
+				}
+			}
+
+			// recursive call for sub arrays
+			if (is_array($value))
+			{
+				$results = array_merge($results, $this->recursiveContextKeyHandle(
+					$contextName,
+					$contextElement[$key],
+					$fullKey,
+					$rule
+				));
+			}
+		}
+
+		return $results;
+	}
+
+	protected function getContextElements(array $contextNames)
+	{
+		$elements = [];
+
+		if (in_array('get', $contextNames, true))
+		{
+			$elements['get'] = &$_GET;
+		}
+
+		if (in_array('post', $contextNames, true))
+		{
+			$elements['post'] = &$_POST;
+		}
+
+		if (in_array('cookie', $contextNames, true))
+		{
+			$elements['cookie'] = &$_COOKIE;
+		}
+
+		if (in_array('request', $contextNames, true))
+		{
+			$elements['request'] = &$_REQUEST;
+		}
+
+		if (in_array('global', $contextNames, true))
+		{
+			$elements['global'] = $GLOBALS;
+		}
+
+		return $elements;
+	}
+
+	public static function refreshRules()
+	{
+		try
+		{
+			$lastTime = Option::get('main_sec', 'WWALL_ACTUALIZE_RULES', 0);
+
+			if ((time() - $lastTime) < static::CACHE_RULES_TTL)
+			{
+				return;
+			}
+
+			$connection = Application::getConnection();
+
+			// we don't want to do the same job twice
+			if (!$connection->lock('WWALL_ACTUALIZE_RULES'))
+			{
+				return;
+			}
+
+			Option::set('main_sec', 'WWALL_ACTUALIZE_RULES', time());
+
+			$newRules = null;
+
+			$dataToSend = (new PortalInfo())->getSystemInfo();
+
+			// get actual rules
+			$http = new HttpClient([
+				'socketTimeout' => 5,
+				'streamTimeout' => 5
+			]);
+
+			$domain = (new UrlProvider())->getTechDomain();
+			$uri = "https://wwall.{$domain}/rules.php";
+
+			$response = $http->post($uri, $dataToSend);
+
+			if ($http->getStatus() == 200 && !empty($response))
+			{
+				$newRules = Json::decode($response);
+			}
+
+			//update db
+			if ($newRules !== null)
+			{
+				$tableName = RuleRecordTable::getTableName();
+
+				if (!empty($newRules))
+				{
+					foreach ($newRules as $newRule)
+					{
+						if (!static::checkRuleSign($newRule))
+						{
+							throw new SystemException('Invalid sign for rule '.json_encode($newRule));
+						}
+					}
+				}
+
+				// remove current data
+				$connection->truncateTable($tableName);
+
+				// prepare new data
+				if (!empty($newRules))
+				{
+					$records = [];
+					foreach ($newRules as $newRule)
+					{
+						$records[] = "('" .
+							$connection->getSqlHelper()->forSql($newRule['data'])
+							. "', '" . $connection->getSqlHelper()->forSql($newRule['module'])
+							. "', '" . $connection->getSqlHelper()->forSql($newRule['module_version'])
+							. "')";
+					}
+
+					$recordsSql = join(", ", $records);
+
+					// save new data
+					$connection->query("INSERT INTO {$tableName} (DATA, MODULE, MODULE_VERSION) VALUES {$recordsSql}");
+
+					// clean entity cache
+					RuleRecordTable::cleanCache();
+				}
+			}
+
+			$connection->unlock('WWALL_ACTUALIZE_RULES');
+		}
+		catch (\Throwable $e)
+		{
+			\CEventLog::log(
+				\CEventLog::SEVERITY_SECURITY,
+				'SECURITY_WWALL_EXCEPTION',
+				'main',
+				'FAIL_REFRESHING',
+				'Can not refresh wwall rules: ' . $e->getMessage() . ' Trace: ' . $e->getTraceAsString()
+			);
+		}
+	}
+
+	protected static function checkRuleSign($rule)
+	{
+		$cipher = new PublicKeyCipher;
+		$data = $cipher->decrypt($rule['data'], static::getPublicKey());
+
+		return str_starts_with($data, '{"');
+	}
+
+	private static function getPublicKey()
+	{
+		$s = '';
+		$s .= '-----BEGIN PUBLIC KEY-----';
+
+		$s .= '
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq8QE0HjmHJUStWV6n0za
+RVoLx02KzbfrbS/P6sWaxTzw8SeGTtbTCOrpHi5QF6ORyjZ/Xxz/KLU1Gbof9CZ3
+4z7SkqUt66ibXvOFBx4fw/APPRGDqtm0nD3fgGsu3RePgw29i8+vm7mtBKJUYl4r
+Vpb6sfZET9KEb6T1HDYmEvc1hq/iiuyxLrZZi5Q6Uff4UEvTI+68ssFRkQ+owTRy
+eOIMbFhM/UTmfVYbTRFy2oUQ8WMza2nJ5Sahzi1UKO1jAjXTPRrzc7Aju639j1O0
+ppqfm5xgWlFAJkHQTgbdd5AWqDFQkt9HKkY+TnfBLGVMvVyPwTHNWQYAw4xpg/wA
+ZwIDAQAB
+-----END PUBLIC KEY-----';
+
+		return $s;
+	}
+
+	protected function logEvent($auditTypeId, $itemId, $description)
+	{
+		if ($this->logEvents)
+		{
+			\CEventLog::log(
+				\CEventLog::SEVERITY_SECURITY,
+				$auditTypeId,
+				'main',
+				$itemId,
+				$description
+			);
+		}
+	}
+}

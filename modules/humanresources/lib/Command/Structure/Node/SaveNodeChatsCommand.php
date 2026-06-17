@@ -35,6 +35,7 @@ class SaveNodeChatsCommand extends AbstractCommand
 		public readonly array $ids = [],
 		public readonly array $removeIds = [],
 		public readonly bool $withChildren = false,
+		public readonly ?int $userId = null,
 	)
 	{}
 

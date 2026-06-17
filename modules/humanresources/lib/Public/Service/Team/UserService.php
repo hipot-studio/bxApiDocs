@@ -20,7 +20,7 @@ use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
-use Bitrix\HumanResources\Type\StructureRole;
+use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\Main\DB\SqlQueryException;
 
 class UserService
@@ -106,9 +106,9 @@ class UserService
 	 */
 	public function isHeadOfTeam(int $userId): bool
 	{
-		$headMember = PublicContainer::getUserService()->findByUserIdAndStructureRoles(
+		$headMember = PublicContainer::getUserService()->findByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::TEAM_HEAD],
+			[NodeMember::TEAM_ROLE_XML_ID['TEAM_HEAD']],
 		);
 
 		return $headMember !== null;
@@ -123,9 +123,9 @@ class UserService
 	 */
 	public function isDeputyOfTeam(int $userId): bool
 	{
-		$headMember = PublicContainer::getUserService()->findByUserIdAndStructureRoles(
+		$headMember = PublicContainer::getUserService()->findByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::TEAM_DEPUTY_HEAD],
+			[NodeMember::TEAM_ROLE_XML_ID['TEAM_DEPUTY_HEAD']],
 		);
 
 		return $headMember !== null;
@@ -140,9 +140,9 @@ class UserService
 	 */
 	public function isHeadOrDeputyOfTeam(int $userId): bool
 	{
-		$headMember = PublicContainer::getUserService()->findByUserIdAndStructureRoles(
+		$headMember = PublicContainer::getUserService()->findByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::TEAM_HEAD, StructureRole::TEAM_DEPUTY_HEAD],
+			[NodeMember::TEAM_ROLE_XML_ID['TEAM_HEAD'], NodeMember::TEAM_ROLE_XML_ID['TEAM_DEPUTY_HEAD']],
 		);
 
 		return $headMember !== null;
@@ -173,9 +173,9 @@ class UserService
 	 */
 	public function getTeamIdsWhereUserIsHead(int $userId): array
 	{
-		$nodeMembers = PublicContainer::getUserService()->findAllByUserIdAndStructureRoles(
+		$nodeMembers = PublicContainer::getUserService()->findAllByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::TEAM_HEAD],
+			[NodeMember::TEAM_ROLE_XML_ID['TEAM_HEAD']],
 		);
 
 		return $nodeMembers->getNodeIds();
@@ -189,9 +189,9 @@ class UserService
 	 */
 	public function getTeamIdsWhereUserIsDeputy(int $userId): array
 	{
-		$nodeMembers = PublicContainer::getUserService()->findAllByUserIdAndStructureRoles(
+		$nodeMembers = PublicContainer::getUserService()->findAllByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::TEAM_DEPUTY_HEAD],
+			[NodeMember::TEAM_ROLE_XML_ID['TEAM_DEPUTY_HEAD']],
 		);
 
 		return $nodeMembers->getNodeIds();
@@ -205,9 +205,9 @@ class UserService
 	 */
 	public function getNodeMembersWhereUserIsHeadOrDeputy(int $userId): NodeMemberCollection
 	{
-		return PublicContainer::getUserService()->findAllByUserIdAndStructureRoles(
+		return PublicContainer::getUserService()->findAllByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::TEAM_HEAD, StructureRole::TEAM_DEPUTY_HEAD],
+			[NodeMember::TEAM_ROLE_XML_ID['TEAM_HEAD'], NodeMember::TEAM_ROLE_XML_ID['TEAM_DEPUTY_HEAD']],
 		);
 	}
 	//endregion

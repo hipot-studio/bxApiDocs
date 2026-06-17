@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\Repository;
 
 use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Entity\User;
+use Bitrix\Intranet\Enum\InvitationStatus;
 use Bitrix\Intranet\Exception\CreationFailedException;
 use Bitrix\Intranet\Exception\DeleteFailedException;
 use Bitrix\Intranet\Exception\UpdateFailedException;
@@ -19,6 +20,7 @@ use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
@@ -233,27 +235,43 @@ class UserRepository implements UserRepositoryContract
 		return $this->makeUserCollectionFromModelArray($userList);
 	}
 
+	public function findUsersByFilter(array $filter): UserCollection
+	{
+		if (empty($filter))
+		{
+			return new UserCollection();
+		}
+
+		$query = UserTable::query()->setFilter($filter);
+		$userList = $this->injectDefaultSelect($query)->fetchAll();
+
+		return $this->makeUserCollectionFromModelArray($userList);
+	}
+
+	private function injectDefaultSelect(Query $query): Query
+	{
+		return $query->setSelect([
+			'ID',
+			'NAME',
+			'LAST_NAME',
+			'SECOND_NAME',
+			'ACTIVE',
+			'CONFIRM_CODE',
+			'LOGIN',
+			'EMAIL',
+			'PERSONAL_PHOTO',
+			'EXTERNAL_AUTH_ID',
+			'XML_ID',
+			'AUTH_PHONE_NUMBER' => 'PHONE_AUTH.PHONE_NUMBER',
+			'UF_DEPARTMENT',
+			'PERSONAL_MOBILE',
+		]);
+	}
+
 	public function getUserById(int $id): ?User
 	{
-		$user = UserTable::query()
-			->where('ID', $id)
-			->setSelect([
-				'ID',
-				'NAME',
-				'LAST_NAME',
-				'ACTIVE',
-				'CONFIRM_CODE',
-				'LOGIN',
-				'EMAIL',
-				'PERSONAL_PHOTO',
-				'EXTERNAL_AUTH_ID',
-				'XML_ID',
-				'AUTH_PHONE_NUMBER' => 'PHONE_AUTH.PHONE_NUMBER',
-				'UF_DEPARTMENT',
-				'PERSONAL_MOBILE',
-			])
-			->fetch()
-		;
+		$query = UserTable::query()->where('ID', $id);
+		$user = $this->injectDefaultSelect($query)->fetch();
 
 		if (!$user)
 		{
@@ -537,5 +555,155 @@ class UserRepository implements UserRepositoryContract
 		;
 
 		return $user && $user['ACTIVE'] === 'Y';
+	}
+
+	public function findUsersByInvitationStatusFilter(
+		?array $invitationStatuses,
+		?string $userEmail,
+		?int $filterUserId,
+		?int $departmentId,
+		int $limit,
+		int $offset,
+	): UserCollection
+	{
+		$query = $this->buildInvitationStatusQuery(
+			$invitationStatuses,
+			$userEmail,
+			$filterUserId,
+			$departmentId,
+		);
+
+		$query
+			->setLimit($limit)
+			->setOffset($offset)
+		;
+
+		return $this->makeUserCollectionFromModelArray($query->fetchAll());
+	}
+
+
+	public function countUsersByInvitationStatusFilter(
+		?array $invitationStatuses,
+		?string $userEmail,
+		?int $filterUserId,
+		?int $departmentId,
+	): int
+	{
+		$query = $this->buildInvitationStatusQuery(
+			$invitationStatuses,
+			$userEmail,
+			$filterUserId,
+			$departmentId,
+		);
+
+		return (int)$query->queryCountTotal();
+	}
+
+	/**
+	 * @param InvitationStatus[] $invitationStatuses
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 */
+	private function buildInvitationStatusQuery(
+		?array $invitationStatuses,
+		?string $userEmail,
+		?int $filterUserId,
+		?int $departmentId,
+	): Query
+	{
+		$query = UserTable::query()
+			->setSelect([
+				'ID',
+				'NAME',
+				'LAST_NAME',
+				'LOGIN',
+				'EMAIL',
+				'ACTIVE',
+				'CONFIRM_CODE',
+				'UF_DEPARTMENT',
+				'PERSONAL_MOBILE',
+			])
+			->where('REAL_USER', 'expr', true)
+			->setOrder(['ID' => 'DESC']);
+
+		if ($filterUserId !== null)
+		{
+			$query->where('ID', $filterUserId);
+		}
+		elseif ($userEmail !== null)
+		{
+			$query->where('EMAIL', $userEmail);
+		}
+
+		if ($departmentId !== null)
+		{
+			$query->where('UF_DEPARTMENT', $departmentId);
+		}
+
+		if (!empty($invitationStatuses) && !in_array(null, $invitationStatuses, true))
+		{
+			$statusFilters = [];
+
+			foreach ($invitationStatuses as $status)
+			{
+				if (!$status instanceof InvitationStatus)
+				{
+					continue;
+				}
+
+				if (($filter = $this->buildInvitationStatusCondition($status)) !== null)
+				{
+					$statusFilters[] = $filter;
+				}
+			}
+
+			if ($statusFilters === [])
+			{
+				throw new ArgumentException('No valid invitation status provided');
+			}
+
+			$orFilter = Query::filter()->logic('or');
+			foreach ($statusFilters as $filter)
+			{
+				$orFilter->where($filter);
+			}
+
+			$query->where($orFilter);
+		}
+
+		return $query;
+	}
+
+	private function buildInvitationStatusCondition(InvitationStatus $status): ?ConditionTree
+	{
+		return match ($status) {
+			InvitationStatus::ACTIVE => Query::filter()
+				->where('ACTIVE', true)
+				->where(
+					Query::filter()
+						->logic('or')
+						->where('CONFIRM_CODE', '')
+						->whereNull('CONFIRM_CODE')
+				),
+
+			InvitationStatus::INVITED => Query::filter()
+				->where('ACTIVE', true)
+				->whereNot('CONFIRM_CODE', ''),
+
+			InvitationStatus::INVITE_AWAITING_APPROVE => Query::filter()
+				->where('ACTIVE', false)
+				->whereNot('CONFIRM_CODE', ''),
+
+			InvitationStatus::FIRED => Query::filter()
+				->where('ACTIVE', false)
+				->where(
+					Query::filter()
+						->logic('or')
+						->where('CONFIRM_CODE', '')
+						->whereNull('CONFIRM_CODE')
+				),
+
+			InvitationStatus::NOT_REGISTERED => null,
+		};
 	}
 }

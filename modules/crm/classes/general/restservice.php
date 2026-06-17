@@ -16559,6 +16559,14 @@ class CCrmEntityEditorRestProxy implements ICrmRestProxy
 				\CCrmRestHelper::renameParam($extras, ['lead', 'customer', 'type'], 'LEAD_CUSTOMER_TYPE');
 			}
 		}
+		if (isset($extras['CATEGORY_ID']))
+		{
+			$extras['CATEGORY_ID'] = (int)$extras['CATEGORY_ID'];
+		}
+		if (isset($extras['DEAL_CATEGORY_ID']))
+		{
+			$extras['DEAL_CATEGORY_ID'] = (int)$extras['DEAL_CATEGORY_ID'];
+		}
 
 		$config = new \Bitrix\Crm\Entity\EntityEditorConfig($this->entityTypeID, $userID, $scope, $extras);
 

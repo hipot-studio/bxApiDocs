@@ -76,14 +76,16 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 
 	protected static function checkPreviousJobs(ItemIdentifier $target, int $parentId): Main\Result
 	{
-		$activity = Container::getInstance()->getActivityBroker()->getById($target->getEntityId());
-		if (!Scenario::isScenarioWithSkipTranscription($activity['PROVIDER_ID']))
+		$sourceProviderId = self::resolveSourceActivityProviderId($parentId);
+		if (
+			$sourceProviderId === null
+			|| Scenario::isScenarioRequiresTranscription($sourceProviderId)
+		)
 		{
 			return parent::checkPreviousJobs($target, $parentId);
 		}
 
 		$result = new Main\Result();
-
 		$previousJob = self::findDuplicateJob($target, $parentId);
 		if (!$previousJob)
 		{
@@ -111,6 +113,29 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 		$result->setData(['previousJob' => $previousJob]); // update only error jobs
 
 		return $result;
+	}
+
+	private static function resolveSourceActivityProviderId(int $parentId): ?string
+	{
+		if ($parentId <= 0)
+		{
+			return null;
+		}
+
+		$parentJob = QueueTable::query()
+			->setSelect(['ENTITY_TYPE_ID', 'ENTITY_ID'])
+			->where('ID', $parentId)
+			->setLimit(1)
+			->fetch()
+		;
+		if (!is_array($parentJob) || (int)($parentJob['ENTITY_TYPE_ID'] ?? 0) !== CCrmOwnerType::Activity)
+		{
+			return null;
+		}
+
+		$activity = Container::getInstance()->getActivityBroker()->getById((int)$parentJob['ENTITY_ID']);
+
+		return is_array($activity) ? ($activity['PROVIDER_ID'] ?? null) : null;
 	}
 
 	protected static function findDuplicateJob(ItemIdentifier $target, int $parentId): ?EO_Queue
@@ -404,11 +429,12 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 		}
 	}
 
+	// todo: refactor duplicate code \Bitrix\Crm\Integration\AiAssistant\Helper\UserFieldHelper::appendValueToComment
 	private static function appendComment(string $oldComment, string $unallocatedData): string
 	{
 		Container::getInstance()->getLocalization()->loadMessages();
 
-		$copilotSuffix = AIManager::getCopilotName() . PHP_EOL . $unallocatedData;
+		$copilotSuffix = '[p]' . AIManager::getCopilotName() . PHP_EOL . $unallocatedData . '[/p]';
 
 		if (empty($oldComment))
 		{

@@ -131,22 +131,48 @@ class Factory
 		return new RequisiteDataProvider($settings);
 	}
 
-	public function getClientDataProviders(EntitySettings $settings): array
+	public function getSupportedClientDataProviders(EntitySettings $settings): array
+	{
+		if (!$settings->isClientFilterSupported())
+		{
+			return [];
+		}
+
+		return $this->getClientDataProviders($settings, $settings->isClientCompanyFilterSupported());
+	}
+
+	public function getClientDataProviders(EntitySettings $settings, bool $withCompany = true): array
 	{
 		$dataProviders = [];
-		$firstClientEntityId = \Bitrix\Crm\Component\EntityList\ClientDataProvider::getPriorityEntityTypeId();
-		$secondClientEntityId =
-			($firstClientEntityId === \CCrmOwnerType::Contact)
-				? \CCrmOwnerType::Company
+		foreach ($this->getClientEntityTypeIds($withCompany) as $clientEntityTypeId)
+		{
+			$dataProviders[] = new ClientDataProvider($clientEntityTypeId, $settings);
+			$dataProviders[] = new ClientUserFieldDataProvider($clientEntityTypeId, $settings);
+		}
+
+		return $dataProviders;
+	}
+
+	private function getClientEntityTypeIds(bool $withCompany): array
+	{
+		$clientEntityTypeIds = [];
+		$clientEntityTypeIds[] =
+			$withCompany
+				? \Bitrix\Crm\Component\EntityList\ClientDataProvider::getPriorityEntityTypeId()
 				: \CCrmOwnerType::Contact
 		;
 
-		$dataProviders[] = new ClientDataProvider($firstClientEntityId, $settings);
-		$dataProviders[] = new ClientUserFieldDataProvider($firstClientEntityId, $settings);
-		$dataProviders[] = new ClientDataProvider($secondClientEntityId, $settings);
-		$dataProviders[] = new ClientUserFieldDataProvider($secondClientEntityId, $settings);
+		if ($withCompany)
+		{
+			$firstClientEntityId = reset($clientEntityTypeIds);
+			$clientEntityTypeIds[] =
+				($firstClientEntityId === \CCrmOwnerType::Contact)
+					? \CCrmOwnerType::Company
+					: \CCrmOwnerType::Contact
+			;
+		}
 
-		return $dataProviders;
+		return $clientEntityTypeIds;
 	}
 
 	public function getFilter(EntitySettings $settings, ?array $parameters = []): ?Filter

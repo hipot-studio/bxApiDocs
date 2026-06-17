@@ -13,10 +13,11 @@ use Bitrix\Crm\Copilot\AiQualityAssessment\ViewModeEnum;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItemChecker;
 use Bitrix\Crm\Copilot\CallAssessment\ItemFactory;
 use Bitrix\Crm\Copilot\CallAssessment\PromptsChecker;
+use Bitrix\Crm\Copilot\Pipeline\PipelineExecutor;
+use Bitrix\Crm\Copilot\Pipeline\StepContext;
 use Bitrix\Crm\Copilot\PullManager;
 use Bitrix\Crm\Entity\FieldDataProvider;
 use Bitrix\Crm\Integration\AI\AIManager;
-use Bitrix\Crm\Integration\AI\CopilotLauncher;
 use Bitrix\Crm\Integration\AI\Dto\FillItemFieldsFromCallTranscriptionPayload;
 use Bitrix\Crm\Integration\AI\Dto\MultipleFieldFillPayload;
 use Bitrix\Crm\Integration\AI\Dto\Scoring\ScoreCallPayload;
@@ -35,6 +36,8 @@ use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Timeline\Config;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ArgumentOutOfRangeException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
@@ -109,7 +112,19 @@ class AI extends Activity
 	}
 
 	// region AI and related sliders scenarios
-	/** @noinspection PhpUnused */
+
+	/**
+	 * 'crm.timeline.ai.launchCopilot' method handler.
+	 *
+	 * @param int $activityId
+	 * @param int $ownerTypeId
+	 * @param int $ownerId
+	 * @param string|null $scenario
+	 *
+	 * @return int[]|null
+	 *
+	 * @noinspection PhpUnused
+	 */
 	public function launchCopilotAction(int $activityId, int $ownerTypeId, int $ownerId, ?string $scenario = null): ?array
 	{
 		if (empty($scenario))
@@ -138,10 +153,34 @@ class AI extends Activity
 			&& in_array($ownerTypeId, AIManager::SUPPORTED_ENTITY_TYPE_IDS, true)
 		)
 		{
+			$activityProvider = $activity['PROVIDER_ID'] ?? null;
+
+			if (
+				$scenario === Scenario::FULL_SCENARIO
+				&& !Scenario::isManualFullScenarioAvailable($activityProvider)
+			)
+			{
+				$this->addError(
+					AIErrorCode::getAIDisabledError(['sliderCode' => Scenario::FULL_OFF_SLIDER_CODE])
+				);
+
+				return null;
+			}
+
 			$scenario = Scenario::filterFullScenarioByGlobalSettings($scenario);
 			if (!Scenario::isEnabledScenario($scenario))
 			{
-				$this->addError(AIErrorCode::getAIDisabledError(['sliderCode' => Scenario::SLIDER_CODE_MAP[$scenario]]));
+				$sliderCode = Scenario::getDisabledSliderCode($scenario);
+				if ($sliderCode !== null)
+				{
+					$this->addError(
+						AIErrorCode::getAIDisabledError(['sliderCode' => $sliderCode])
+					);
+				}
+				else
+				{
+					$this->addError(AIErrorCode::getAIScenarioError());
+				}
 
 				return null;
 			}
@@ -160,16 +199,14 @@ class AI extends Activity
 				}
 			}
 
-			$launcher = new CopilotLauncher(
-				$activityId,
-				Container::getInstance()->getContext()->getUserId(),
-				$scenario,
+			$executor = ServiceLocator::getInstance()->get(PipelineExecutor::class);
+			$context = new StepContext(
+				activityId: $activityId,
+				userId: Container::getInstance()->getContext()->getUserId(),
+				scenarioName: $scenario,
+				isManualLaunch: true,
 			);
-
-			$result = Scenario::isScenarioWithSkipTranscription($activity['PROVIDER_ID'])
-				? $launcher->runFillFieldsScenarioWithSkipTranscription()
-				: $launcher->run()
-			;
+			$result = $executor->startOrResume($context->withActivityProvider($activityProvider));
 			if (!$result?->isSuccess())
 			{
 				$errors = $result?->getErrors();
@@ -195,6 +232,15 @@ class AI extends Activity
 		return null;
 	}
 
+	/**
+	 * 'crm.timeline.ai.getCopilotTranscript' method handler.
+	 *
+	 * @param int $activityId
+	 * @param int $ownerTypeId
+	 * @param int $ownerId
+	 *
+	 * @return array|null
+	 */
 	public function getCopilotTranscriptAction(int $activityId, int $ownerTypeId, int $ownerId): ?array
 	{
 		$activity = $this->loadActivity($activityId, $ownerTypeId, $ownerId);
@@ -223,6 +269,16 @@ class AI extends Activity
 		];
 	}
 
+	/**
+	 * 'crm.timeline.ai.getCopilotSummary' method handler.
+	 *
+	 * @param int $activityId
+	 * @param int $ownerTypeId
+	 * @param int $ownerId
+	 * @param int|null $jobId
+	 *
+	 * @return array|null
+	 */
 	public function getCopilotSummaryAction(int $activityId, int $ownerTypeId, int $ownerId, ?int $jobId = null): ?array
 	{
 		$activity = $this->loadActivity($activityId, $ownerTypeId, $ownerId);
@@ -269,6 +325,17 @@ class AI extends Activity
 		return $result;
 	}
 
+	/**
+	 * 'crm.timeline.ai.getCopilotCallQuality' method handler.
+	 *
+	 * @param int $activityId
+	 * @param int $ownerTypeId
+	 * @param int $ownerId
+	 * @param int|null $jobId
+	 * @param int|null $assessmentSettingsId
+	 *
+	 * @return array|null
+	 */
 	public function getCopilotCallQualityAction(int $activityId, int $ownerTypeId, int $ownerId, ?int $jobId = null, ?int $assessmentSettingsId = null): ?array
 	{
 		$activity = $this->loadActivity($activityId, $ownerTypeId, $ownerId);
@@ -322,6 +389,13 @@ class AI extends Activity
 		return $data;
 	}
 
+	/**
+	 * 'crm.timeline.ai.fieldsFillingStatus' method handler.
+	 *
+	 * @param int $mergeId
+	 *
+	 * @return array
+	 */
 	public function fieldsFillingStatusAction(int $mergeId): array
 	{
 		$operation = $this->jobRepository->getFieldsFillingOperationById($mergeId);
@@ -335,7 +409,18 @@ class AI extends Activity
 		];
 	}
 
-	/** @noinspection PhpUnused */
+	/**
+	 * 'crm.timeline.ai.mergeFields' method handler.
+	 *
+	 * @param int $mergeUuid
+	 *
+	 * @return array|null
+	 *
+	 * @throws ArgumentException
+	 * @throws NotSupportedException
+	 *
+	 * @noinspection PhpUnused
+	 */
 	public function mergeFieldsAction(int $mergeUuid): ?array
 	{
 		$result = $this->getAndCheckFillFieldsResult($mergeUuid);
@@ -400,7 +485,15 @@ class AI extends Activity
 		];
 	}
 
-	/** @noinspection PhpUnused */
+	/**
+	 * 'crm.timeline.ai.rejectMerge' method handler.
+	 *
+	 * @param int $mergeUuid
+	 *
+	 * @throws ArgumentOutOfRangeException
+	 *
+	 * @noinspection PhpUnused
+	 */
 	public function rejectMergeAction(int $mergeUuid): void
 	{
 		$result = $this->getAndCheckFillFieldsResult($mergeUuid);
@@ -431,6 +524,13 @@ class AI extends Activity
 	}
 
 	/**
+	 * 'crm.timeline.ai.applyMerge' method handler.
+	 *
+	 * @param int $mergeUuid
+	 * @param array $fieldNamesToApply
+	 *
+	 * @throws ArgumentException
+	 *
 	 * @noinspection PhpUnused
 	 */
 	public function applyMergeAction(int $mergeUuid, array $fieldNamesToApply): void

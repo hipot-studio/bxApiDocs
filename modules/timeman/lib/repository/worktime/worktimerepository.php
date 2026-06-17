@@ -15,6 +15,7 @@ use Bitrix\Timeman\Model\Schedule\ScheduleTable;
 use Bitrix\Timeman\Model\Schedule\Shift\ShiftCollection;
 use Bitrix\Timeman\Model\Schedule\Shift\ShiftTable;
 use Bitrix\Timeman\Model\Worktime\EventLog\WorktimeEvent;
+use Bitrix\Timeman\Model\Worktime\EventLog\WorktimeEventCollection;
 use Bitrix\Timeman\Model\Worktime\EventLog\WorktimeEventTable;
 use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecord;
 use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordCollection;
@@ -189,6 +190,17 @@ class WorktimeRepository
 
 		}
 		return $record;
+	}
+
+	public function findAllWorktimeEventsByRecordId(int $recordId): WorktimeEventCollection
+	{
+		return WorktimeEventTable::query()
+			->addSelect('*')
+			->where('WORKTIME_RECORD_ID', $recordId)
+			->addOrder('ACTUAL_TIMESTAMP', 'ASC')
+			->addOrder('ID', 'ASC')
+			->exec()
+			->fetchCollection();
 	}
 
 	public function findLatestRecord($userId): ?WorktimeRecord

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Public\Entity\Document;
 
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Internal\Integration\BI\Dashboard\DocumentFieldTypes\BIDashboardType;
 use Bitrix\Bizproc\Internal\Integration\Rag\DocumentFieldTypes\RagKnowledgeBaseType;
 use Bitrix\Bizproc\Internal\Integration\Rag\Service\RagService;
 use Bitrix\Bizproc\Internal\Integration\Tasks\DocumentFieldTypes\ProjectType;
+use Bitrix\Bizproc\Public\Event\Document\OnGetDocumentFieldTypesEvent\OnGetDocumentFieldTypesEvent;
 use Bitrix\Bizproc\Starter;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\NotImplementedException;
@@ -226,6 +228,23 @@ class Workflow implements \IBPWorkflowDocument
 			];
 		}
 
+		$event = new OnGetDocumentFieldTypesEvent();
+		$event->send();
+		$extraTypes = $event->getFieldTypes();
+		if (!empty($extraTypes))
+		{
+			$types = array_merge($types, $extraTypes);
+		}
+
+		if (BIDashboardType::isTypeAvailable())
+		{
+			$types[BIDashboardType::getType()] = [
+				'Name' => BIDashboardType::getName(),
+				'BaseType' => FieldType::INT,
+				'typeClass' => BIDashboardType::class,
+			];
+		}
+		
 		return $types;
 	}
 }

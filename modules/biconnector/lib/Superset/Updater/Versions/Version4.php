@@ -24,6 +24,7 @@ final class Version4 extends BaseVersion
 		if (
 			SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DOESNT_EXISTS
 			|| SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_DELETED
+			|| SupersetInitializer::isSupersetPendingDelete()
 		)
 		{
 			return $result;

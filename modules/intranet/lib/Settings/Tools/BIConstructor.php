@@ -60,7 +60,7 @@ class BIConstructor extends Tool
 			return;
 		}
 
-		if ($notifySupersetInitializer && SupersetInitializer::isSupersetExist())
+		if ($notifySupersetInitializer)
 		{
 			SupersetInitializer::onDisableBiBuilderTool();
 		}
@@ -75,7 +75,46 @@ class BIConstructor extends Tool
 			return;
 		}
 
-		SupersetInitializer::onEnableBiBuilderTool();
+		$toolsData = Context::getCurrent()?->getRequest()->get('tools');
+		$mode = $toolsData[$this->getOptionCode() . '_enable_mode'] ?? null;
+		if ($mode === SupersetInitializer::ENABLE_MODE_RESET)
+		{
+			SupersetInitializer::resetSuperset();
+		}
+		else
+		{
+			SupersetInitializer::onEnableBiBuilderTool();
+		}
+	}
+
+	public function isNeedEnableConfirmation(): bool
+	{
+		if (!Loader::includeModule('biconnector'))
+		{
+			return false;
+		}
+
+		return SupersetInitializer::isSupersetPendingDelete() && SupersetInitializer::isSupersetInstanceExists();
+	}
+
+	public function getEnableConfirmationJsExtension(): ?string
+	{
+		if (!$this->isNeedEnableConfirmation())
+		{
+			return null;
+		}
+
+		return 'biconnector.restore-superset-popup';
+	}
+
+	public function getEnableConfirmationJsExportName(): ?string
+	{
+		if (!$this->isNeedEnableConfirmation())
+		{
+			return null;
+		}
+
+		return 'RestoreSupersetPopup';
 	}
 
 	public function isNeedDisableConfirmation(): bool
@@ -90,7 +129,7 @@ class BIConstructor extends Tool
 			return false;
 		}
 
-		return SupersetInitializer::isSupersetExist();
+		return SupersetInitializer::isSupersetInstanceExists();
 	}
 
 	public function getDisableConfirmationText(): ?string
@@ -100,6 +139,6 @@ class BIConstructor extends Tool
 			return Loc::getMessage('INTRANET_SETTINGS_TOOLS_BI_CONSTRUCTOR_DISABLE_CONFIRMATION_TEXT_REBIND');
 		}
 
-		return Loc::getMessage('INTRANET_SETTINGS_TOOLS_BI_CONSTRUCTOR_DISABLE_CONFIRMATION_TEXT');
+		return Loc::getMessage('INTRANET_SETTINGS_TOOLS_BI_CONSTRUCTOR_DISABLE_CONFIRMATION_TEXT_MSGVER_1');
 	}
 }

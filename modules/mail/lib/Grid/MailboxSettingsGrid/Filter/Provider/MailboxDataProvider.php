@@ -122,6 +122,14 @@ class MailboxDataProvider extends EntityDataProvider
 				'whiteList' => ['SENDER_NAME'],
 				'options' => ['default' => true],
 			],
+			'CONNECTION_REQUESTS' => [
+				'conditionMethod' => static function (): bool {
+					return (new \Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService())
+						->isResponsibleAdmin()
+						;
+				},
+				'options' => ['default' => true, 'type' => 'checkbox'],
+			],
 		];
 
 		foreach ($fieldsList as $column => $field)

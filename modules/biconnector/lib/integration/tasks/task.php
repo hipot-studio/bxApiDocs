@@ -35,6 +35,11 @@ class Task extends Dataset
 		return $this->getMessage('TASK_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('TASK_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	/**
 	 * @return Result
 	 */

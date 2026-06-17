@@ -179,6 +179,7 @@ class WorkflowState
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['bizproc_workflow_state']['TABLE_DESCRIPTION'] = $messages['BP_BIC_WF_STATE_TABLE'] ?: 'bizproc_workflow_state';
+		$result['bizproc_workflow_state']['TABLE_DESCRIPTION_FULL'] = $messages['BP_BIC_WF_STATE_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['bizproc_workflow_state']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = $messages['BP_BIC_WF_STATE_FIELD_' . $fieldCode];

@@ -22,7 +22,7 @@ trait AssignTrait
 	 * @param AccessibleTask|null $newTask
 	 * @return bool
 	 */
-	private function canAssignTask(AccessibleTask $oldTask, string $role, AccessibleTask $newTask, array $assignsFrom = null): bool
+	protected function canAssignTask(AccessibleTask $oldTask, string $role, AccessibleTask $newTask, array $assignsFrom = null): bool
 	{
 		$members = $oldTask->getMembers($role);
 		$groupId = $newTask->getGroupId();

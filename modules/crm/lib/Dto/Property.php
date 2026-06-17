@@ -4,8 +4,11 @@ namespace Bitrix\Crm\Dto;
 
 use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\TextWithTranslationDto;
 use Bitrix\Crm\Activity\Entity\ConfigurableRestApp\Dto\Caster;
+use Bitrix\Crm\Dto\Caster\DateTimeCaster;
+use Bitrix\Crm\Dto\Caster\ObjectCaster;
 use Bitrix\Crm\Dto\Exception\DtoPropertyTypeIsUndefined;
 use Bitrix\Main\ArgumentOutOfRangeException;
+use Bitrix\Main\Type\DateTime;
 
 final class Property
 {
@@ -101,14 +104,11 @@ final class Property
 			}
 			else // property type is a class
 			{
-				if ($propertyTypeName === TextWithTranslationDto::class)
-				{
-					$caster = new Caster\TextWithTranslationCaster();
-				}
-				else
-				{
-					$caster = new \Bitrix\Crm\Dto\Caster\ObjectCaster($propertyTypeName);
-				}
+				$caster = match (true) {
+					$propertyTypeName === TextWithTranslationDto::class => new Caster\TextWithTranslationCaster(),
+					$propertyTypeName === DateTime::class => new DateTimeCaster(),
+					default => new ObjectCaster($propertyTypeName),
+				};
 			}
 		}
 		$caster->nullable($propertyType->allowsNull());

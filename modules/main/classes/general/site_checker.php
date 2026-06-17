@@ -108,15 +108,16 @@ class CSiteCheckerTest
 
 		$arGroupName[8] = GetMessage("MAIN_SC_PERFORM");
 		$arGroupDesc[8] = '';
+		$arTestGroup[8] = [
+			['check_compression' => GetMessage("MAIN_SC_COMPRESSION_TEST")],
+		];
 		if (!IsModuleInstalled('bitrix24'))
 		{
 			$arTestGroup[8][] = ['check_perf' => GetMessage("MAIN_SC_PERF_TEST")];
 		}
-		$arTestGroup[8][] = ['check_compression' => GetMessage("MAIN_SC_COMPRESSION_TEST")];
 
 		$arGroupName[16] = GetMessage('SC_GR_EXTENDED');
 		$arTestGroup[16] = [
-			['check_dbconn' => GetMessage('SC_T_DBCONN')],
 			['check_session_ua' => GetMessage('SC_T_SESS_UA')],
 			['check_sites' => GetMessage('SC_T_SITES')],
 
@@ -140,6 +141,10 @@ class CSiteCheckerTest
 			['check_exec' => GetMessage('SC_T_EXEC')],
 			['check_getimagesize' => GetMessage('SC_T_GETIMAGESIZE')],
 		];
+		if (!IsModuleInstalled('bitrix24'))
+		{
+			array_unshift($arTestGroup[16], ['check_dbconn' => GetMessage('SC_T_DBCONN')]);
+		}
 
 		$arGroupName[32] = GetMessage('SC_GR_MYSQL');
 		$arTestGroup[32] = [

@@ -17,7 +17,6 @@ use CTimeZone;
  */
 class Deadline extends Date
 {
-	private const BXT_SELECTOR = 'bxt-tasks-grid-deadline';
 	private static $workTimeSettings = [];
 
 	public function prepare()
@@ -28,39 +27,25 @@ class Deadline extends Date
 		$timestamp = ($row['DEADLINE'] ? $this->getDateTimestamp($row['DEADLINE']) : $this->getCompanyWorkTimeEnd());
 
 		$jsDeadline = DateTime::createFromTimestamp($timestamp - CTimeZone::GetOffset());
-		$text = ($state['state'] ?: $this->formatDate($row['DEADLINE']));
+		$text = htmlspecialcharsbx(($state['text'] ?: $this->formatDate($row['DEADLINE'])));
 
+		$canChange = ($state['clickable'] ?? true) && $row['ACTION']['CHANGE_DEADLINE'];
 		$onClick = '';
-		$link = '';
 
-		$gridLabel = [
-			'html' => '<span class="'.self::BXT_SELECTOR.'">'.$text.'</span>',
-		];
-
-		if ($row['ACTION']['CHANGE_DEADLINE'])
+		if ($canChange)
 		{
 			$taskId = (int)$row['ID'];
 			$onClick = "onclick=\"BX.Tasks.GridActions.onDeadlineChangeClick({$taskId}, this, '{$jsDeadline}'); event.stopPropagation();\"";
-			$link = ' task-deadline-date';
-
-			$gridLabel['events'] = [
-				'click' => "BX.Tasks.GridActions.onDeadlineChangeClick.bind(BX.Tasks.GridActions, {$taskId}, null, '{$jsDeadline}', event);",
-			];
 		}
 
-		if ($state['state'])
-		{
-			$color = mb_strtoupper($state['color']);
-			$gridLabel['color'] = constant("Bitrix\Main\Grid\Cell\Label\Color::{$color}");
-			$gridLabel['light'] = !$state['fill'];
+		$readonlyClass = !$canChange ? 'task-deadline-readonly' : '';
+		$designClass = !empty($state['design']) ? '--' . $state['design'] : '--outline';
 
-			return [$gridLabel];
-		}
-
-		$link = ($link ?: 'task-deadline-datetime');
-		$link .= ' '.self::BXT_SELECTOR;
-
-		return "<span class=\"{$link}\"><span {$onClick}>{$text}</span></span>";
+		return <<<HTML
+			<div class="ui-chip $designClass --s --rounded --compact $readonlyClass" $onClick>
+				<div class="ui-chip-text">$text</div>
+			</div>
+		HTML;
 	}
 
 	/**
@@ -69,7 +54,8 @@ class Deadline extends Date
 	public function getDeadlineStateData(): array
 	{
 		$row = $this->getRowData();
-		return (new UI\Task\Deadline())->buildState($row['REAL_STATUS'], $row['DEADLINE']);
+
+		return (new UI\Task\Deadline())->buildChipState($row['REAL_STATUS'], $row['DEADLINE']);
 	}
 
 	private function getCompanyWorkTimeEnd(): int

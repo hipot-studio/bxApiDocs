@@ -191,10 +191,19 @@ class Extension
 			return null;
 		}
 
-		$configFilePath = Application::getDocumentRoot() . $extensionPath . "/bundle.config.js";
-		$configFile = new File($configFilePath);
+		$basePath = Application::getDocumentRoot() . $extensionPath;
+		$configFile = null;
+		foreach (['bundle.config.js', 'bundle.config.ts'] as $name)
+		{
+			$file = new File($basePath . '/' . $name);
+			if ($file->isExists())
+			{
+				$configFile = $file;
+				break;
+			}
+		}
 
-		if (!$configFile->isExists())
+		if ($configFile === null)
 		{
 			return null;
 		}

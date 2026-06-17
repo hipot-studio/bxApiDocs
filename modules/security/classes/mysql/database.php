@@ -118,7 +118,7 @@ class CSecurityDB
 				$result = self::$connection->query($strSql);
 				return $result;
 			}
-			catch (\Bitrix\Main\Db\SqlQueryException $e)
+			catch (\Bitrix\Main\DB\SqlQueryException $e)
 			{
 				AddMessage2Log($error_position." MySql Query Error: ".$strSql." [".$e."]", "security");
 			}

@@ -35,6 +35,11 @@ class TaskStages extends Dataset
 		return $this->getMessage('TASK_STAGES_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('TASK_STAGES_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	protected function getFilter(): DatasetFilter
 	{
 		return new DatasetFilter(

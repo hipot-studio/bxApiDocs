@@ -70,7 +70,7 @@ class ExternalSourceRepository
 
 		$actualSourceList[] = [
 			'CODE' => Type::Csv->value,
-			'NAME' => Type::Csv->value,
+			'NAME' => 'CSV',
 		];
 
 		return $actualSourceList;

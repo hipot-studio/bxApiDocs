@@ -44,7 +44,7 @@ class ThemePicker
 		self::BEHAVIOUR_RETURN,
 	];
 
-	public const DEFAULT_THEME_ID = 'light:space';
+	public const DEFAULT_THEME_ID = 'light:vibecode';
 
 	private static $instance = null;
 	private static $config = null;
@@ -946,24 +946,24 @@ class ThemePicker
 
 	public function getInitialDefaultThemeId(): string
 	{
-		$eastReleaseDate = \DateTime::createFromFormat('d.m.Y H:i', '07.11.2025 10:00', new \DateTimeZone('Europe/Moscow'));
-		if (in_array($this->getZoneId(), ['ru', 'kz', 'by']))
+		$eastReleaseDate = \DateTime::createFromFormat('d.m.Y H:i', '15.05.2026 10:00', new \DateTimeZone('Europe/Moscow'));
+		if (in_array($this->getZoneId(), ['ru', 'kz', 'by', 'uz']))
 		{
 			if (time() > $eastReleaseDate->getTimestamp())
 			{
-				return 'light:space'; // New Default East Theme
+				return 'light:vibecode'; // New Default East Theme
 			}
 
-			return 'light:lightness'; // Old Default East Theme
+			return 'light:space'; // Old Default East Theme
 		}
 
-		$westernReleaseDate = \DateTime::createFromFormat('d.m.Y H:i', '26.11.2025 10:00', new \DateTimeZone('Europe/Moscow'));
+		$westernReleaseDate = \DateTime::createFromFormat('d.m.Y H:i', '28.05.2026 10:00', new \DateTimeZone('Europe/Moscow'));
 		if (time() > $westernReleaseDate->getTimestamp())
 		{
-			return 'light:space'; // New Default West Theme
+			return 'light:vibecode'; // New Default West Theme
 		}
 
-		return 'light:lightness'; // Old Default West Theme
+		return 'light:space'; // Old Default West Theme
 	}
 
 	public function setDefaultTheme($themeId, $currentUserId = 0): bool

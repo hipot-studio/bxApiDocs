@@ -11,6 +11,7 @@ use Bitrix\Tasks\CheckList\Node\Nodes;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Logger;
 use Bitrix\Tasks\V2\Internal\Repository\FileRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\CheckList\CheckListIdService;
 use Bitrix\Tasks\V2\Internal\Service\CheckList\NodeIdGenerator;
 
 class CheckListMapper
@@ -19,6 +20,7 @@ class CheckListMapper
 		private readonly NodeIdGenerator $nodeIdGenerator,
 		private readonly UserMapper $userMapper,
 		private readonly FileRepositoryInterface $fileRepository,
+		private readonly CheckListIdService $checkListIdService,
 		private readonly Logger $logger,
 	)
 	{
@@ -93,8 +95,7 @@ class CheckListMapper
 				continue;
 			}
 
-			$itemId = $item['id'] ?? null;
-			$item['id'] = (is_string($itemId) || (int)$itemId === 0) ? null : (int)$itemId;
+			$item['id'] = $this->checkListIdService->resolveId($item['id'] ?? null);
 
 			$isComplete = $item['isComplete'] ?? null;
 			$item['isComplete'] = $isComplete === true || (int)$isComplete > 0;

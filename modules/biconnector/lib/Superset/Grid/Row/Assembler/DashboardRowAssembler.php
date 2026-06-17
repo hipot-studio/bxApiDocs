@@ -31,6 +31,9 @@ class DashboardRowAssembler extends RowAssembler
 				],
 				$this->settings,
 			),
+			new Field\Dashboard\ShareLinkFieldAssembler([
+				'SHARE_LINK',
+			]),
 			new Field\Dashboard\CreatedByFieldAssembler(
 				[
 					'CREATED_BY_ID',

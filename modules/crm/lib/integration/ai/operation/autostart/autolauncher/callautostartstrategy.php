@@ -5,12 +5,17 @@ namespace Bitrix\Crm\Integration\AI\Operation\Autostart\AutoLauncher;
 use Bitrix\Crm\Activity\IncomingChannel;
 use Bitrix\Crm\Activity\Provider\Call;
 use Bitrix\Crm\ActivityTable;
+use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItemChecker;
+use Bitrix\Crm\Copilot\CallAssessment\ItemFactory;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\JobRepository;
+use Bitrix\Crm\Integration\AI\Operation\AnalyzeCommunication;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\ScoreCallSettings;
+use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
+use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
 use Bitrix\Crm\Integration\AI\SuitableAudiosChecker;
 use Bitrix\Crm\ItemIdentifier;
@@ -24,13 +29,10 @@ final class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 	{
 		$fillFieldsSettings = $this->getFillFieldsSettings();
 		$scoreCallSettings = AIManager::isEnabledInGlobalSettings(GlobalSetting::CallAssessment)
-			? $this->orchestrator->getScoreCallSettingsByActivity($this->activityFields)
+			? $this->getScoreCallSettingsByActivity()
 			: null;
 
-		if (
-			$fillFieldsSettings === null
-			&& $scoreCallSettings === null
-		)
+		if ($fillFieldsSettings === null && $scoreCallSettings === null)
 		{
 			$this->logger->debug('{date}: Unable to autostart operation: launch options not found' . PHP_EOL);
 
@@ -126,33 +128,124 @@ final class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 	{
 		$shouldFillFieldsStart = false;
 		$shouldScoreCallStart = false;
+		$shouldAnalyzeCommunicationStart = false;
 		$direction = (int)($this->activityFields['DIRECTION'] ?? 0);
+		$isFirstCallActivityWithFiles = null;
 
 		if ($fillFieldsSettings?->shouldAutostart(TranscribeCallRecording::TYPE_ID, $direction))
 		{
-			if ($fillFieldsSettings?->isAutostartTranscriptionOnlyOnFirstCallWithRecording())
+			$shouldStartFillFieldsChain = !$fillFieldsSettings->isAutostartTranscriptionOnlyOnFirstCallWithRecording();
+			if (!$shouldStartFillFieldsChain)
 			{
-				$shouldFillFieldsStart = $this->isFirstCallActivityWithFilesForItem();
+				$isFirstCallActivityWithFiles ??= $this->isFirstCallActivityWithFilesForItem();
+				$shouldStartFillFieldsChain = $isFirstCallActivityWithFiles;
 			}
-			else
+
+			if ($shouldStartFillFieldsChain)
 			{
-				$shouldFillFieldsStart = true;
+				$shouldFillFieldsStart = self::shouldAutostartFillFields(
+					AIManager::isEnabledInGlobalSettings(),
+					AIManager::isEnabledInGlobalSettings(GlobalSetting::Summarize),
+					$fillFieldsSettings->shouldAutostart(
+						FillItemFieldsFromCallTranscription::TYPE_ID,
+						$direction,
+						false,
+					),
+				);
+				$shouldAnalyzeCommunicationStart = AIManager::isEnabledInGlobalSettings(GlobalSetting::AnalyzeCommunication)
+					&& $fillFieldsSettings->shouldAutostart(
+						AnalyzeCommunication::TYPE_ID,
+						$direction,
+						false,
+					)
+				;
 			}
 		}
 
 		if ($scoreCallSettings?->shouldAutostart(TranscribeCallRecording::TYPE_ID, $direction))
 		{
-			if ($scoreCallSettings?->isAutostartTranscriptionOnlyOnFirstCallWithRecording())
+			$shouldStartScoreCallChain = !$scoreCallSettings->isAutostartTranscriptionOnlyOnFirstCallWithRecording();
+			if (!$shouldStartScoreCallChain)
 			{
-				$shouldScoreCallStart = $this->isFirstCallActivityWithFilesForItem();
+				$isFirstCallActivityWithFiles ??= $this->isFirstCallActivityWithFilesForItem();
+				$shouldStartScoreCallChain = $isFirstCallActivityWithFiles;
 			}
-			else
+
+			if ($shouldStartScoreCallChain)
 			{
-				$shouldScoreCallStart = true;
+				$shouldScoreCallStart = $scoreCallSettings->shouldAutostart(ScoreCall::TYPE_ID, $direction);
 			}
 		}
 
-		if ($shouldFillFieldsStart && $shouldScoreCallStart)
+		$shouldSummarizeStart = false;
+		if (
+			self::shouldAutostartSummarize(
+				$shouldFillFieldsStart,
+				AIManager::isEnabledInGlobalSettings(GlobalSetting::Summarize),
+				$fillFieldsSettings?->shouldAutostart(TranscribeCallRecording::TYPE_ID, $direction) ?? false,
+			)
+		)
+		{
+			if ($fillFieldsSettings?->isAutostartTranscriptionOnlyOnFirstCallWithRecording())
+			{
+				$shouldSummarizeStart = $this->isFirstCallActivityWithFilesForItem();
+			}
+			else
+			{
+				$shouldSummarizeStart = true;
+			}
+		}
+
+		return self::resolveLaunchScenario(
+			$shouldFillFieldsStart,
+			$shouldScoreCallStart,
+			$shouldAnalyzeCommunicationStart,
+			$shouldSummarizeStart,
+		);
+	}
+
+	private static function shouldAutostartFillFields(
+		bool $isFillFieldsEnabled,
+		bool $isSummarizeEnabled,
+		bool $shouldAutostartFillFields,
+	): bool
+	{
+		// FillFields autostart always goes through Summarize as a prerequisite step.
+		return $isFillFieldsEnabled
+			&& $isSummarizeEnabled
+			&& $shouldAutostartFillFields
+		;
+	}
+
+	private static function shouldAutostartSummarize(
+		bool $shouldFillFieldsStart,
+		bool $isSummarizeEnabled,
+		bool $shouldAutostartTranscription,
+	): bool
+	{
+		// FillFields already includes summarize in its own chain.
+		// ScoreCall and AnalyzeCommunication must still be able to combine with Summarize via FULL.
+		return !$shouldFillFieldsStart
+			&& $isSummarizeEnabled
+			&& $shouldAutostartTranscription
+		;
+	}
+
+	private static function resolveLaunchScenario(
+		bool $shouldFillFieldsStart,
+		bool $shouldScoreCallStart,
+		bool $shouldAnalyzeCommunicationStart,
+		bool $shouldSummarizeStart = false,
+	): string
+	{
+		$enabledScenariosCount =
+			(int)$shouldFillFieldsStart
+			+ (int)$shouldScoreCallStart
+			+ (int)$shouldAnalyzeCommunicationStart
+			+ (int)$shouldSummarizeStart
+		;
+
+		if ($enabledScenariosCount > 1)
 		{
 			return Scenario::FULL_SCENARIO;
 		}
@@ -165,6 +258,16 @@ final class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 		if ($shouldScoreCallStart)
 		{
 			return Scenario::CALL_SCORING_SCENARIO;
+		}
+
+		if ($shouldSummarizeStart)
+		{
+			return Scenario::SUMMARIZE_SCENARIO;
+		}
+
+		if ($shouldAnalyzeCommunicationStart)
+		{
+			return Scenario::ANALYZE_COMMUNICATION_SCENARIO;
 		}
 
 		return Scenario::UNDEFINED_SCENARIO;
@@ -318,5 +421,23 @@ final class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 			array_map('intval', $storageElementIds),
 			static fn(int $id) => $id > 0
 		);
+	}
+
+	private function getScoreCallSettingsByActivity(): ?ScoreCallSettings
+	{
+		$activityId = (int)($this->activityFields['ID'] ?? 0);
+		if ($activityId <= 0)
+		{
+			return null;
+		}
+
+		$callAssessmentItem = ItemFactory::getByActivityId($activityId);
+		$checkerResult = CallAssessmentItemChecker::getInstance()->setItem($callAssessmentItem)->run();
+		if (!$checkerResult->isSuccess())
+		{
+			return null;
+		}
+
+		return new ScoreCallSettings($callAssessmentItem?->getAutoCheckTypeId());
 	}
 }

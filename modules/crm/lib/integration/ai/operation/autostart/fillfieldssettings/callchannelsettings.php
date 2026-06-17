@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings;
 
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\BaasManager;
+use Bitrix\Crm\Integration\AI\Operation\AnalyzeCommunication;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
@@ -50,10 +51,6 @@ final class CallChannelSettings extends BaseChannelSettings
 
 		$isAllowedOperationType = in_array($operationType, $this->operationTypes, true);
 		$isAllowedDirection = in_array($callDirection, $this->autostartCallDirections, true);
-		if ($operationType !== TranscribeCallRecording::TYPE_ID)
-		{
-			return true;
-		}
 
 		return $isAllowedOperationType && $isAllowedDirection;
 	}
@@ -121,6 +118,7 @@ final class CallChannelSettings extends BaseChannelSettings
 					TranscribeCallRecording::TYPE_ID,
 					SummarizeCallTranscription::TYPE_ID,
 					FillItemFieldsFromCallTranscription::TYPE_ID,
+					AnalyzeCommunication::TYPE_ID,
 				],
 				true,
 				[
@@ -133,6 +131,7 @@ final class CallChannelSettings extends BaseChannelSettings
 			[
 				SummarizeCallTranscription::TYPE_ID,
 				FillItemFieldsFromCallTranscription::TYPE_ID,
+				AnalyzeCommunication::TYPE_ID,
 			],
 			false,
 			[

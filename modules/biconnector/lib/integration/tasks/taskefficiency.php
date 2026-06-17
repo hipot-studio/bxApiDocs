@@ -34,6 +34,11 @@ class TaskEfficiency extends Dataset
 		return $this->getMessage('TASK_EFFICIENCY_TABLE_MSGVER_1');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('TASK_EFFICIENCY_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	protected function onBeforeEvent(): Result
 	{
 		$result = parent::onBeforeEvent();

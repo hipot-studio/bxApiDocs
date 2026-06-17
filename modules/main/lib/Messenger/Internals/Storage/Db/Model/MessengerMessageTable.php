@@ -7,6 +7,7 @@ namespace Bitrix\Main\Messenger\Internals\Storage\Db\Model;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
@@ -35,6 +36,10 @@ use Bitrix\Main\Type\DateTime;
  */
 class MessengerMessageTable extends DataManager
 {
+	protected const REQUEUE_BATCH_SIZE = 500;
+	protected const REQUEUE_MAX_BATCHES = 20;
+	private const REQUEUE_LOGGER_ID = 'main.Messenger.Requeue';
+
 	public static function onBeforeUpdate(Event $event): EventResult
 	{
 		$result = new EventResult();
@@ -101,15 +106,52 @@ class MessengerMessageTable extends DataManager
 	{
 		$connection = static::getEntity()->getConnection();
 
-		$sql = new SqlExpression(
-			'UPDATE ?# SET STATUS = ?s, UPDATED_AT = ? WHERE STATUS = ?s AND UPDATED_AT < ?',
-			static::getTableName(),
-			MessageStatus::New->value,
-			new DateTime(),
-			MessageStatus::Processing->value,
-			$thresholdDate,
-		);
+		for ($batch = 0; $batch < static::REQUEUE_MAX_BATCHES; $batch++)
+		{
+			$rows = static::query()
+				->setSelect(['ID'])
+				->where('STATUS', MessageStatus::Processing->value)
+				->where('UPDATED_AT', '<', $thresholdDate)
+				->setOrder(['ID' => 'ASC'])
+				->setLimit(static::REQUEUE_BATCH_SIZE)
+				->fetchAll()
+			;
 
-		$connection->queryExecute($sql->compile());
+			if (!$rows)
+			{
+				return;
+			}
+
+			$ids = array_map('intval', array_column($rows, 'ID'));
+			$idList = implode(',', $ids);
+
+			$sql = new SqlExpression(
+				'UPDATE ?# SET STATUS = ?s, UPDATED_AT = ? WHERE ID IN (' . $idList . ') AND STATUS = ?s',
+				static::getTableName(),
+				MessageStatus::New->value,
+				new DateTime(),
+				MessageStatus::Processing->value,
+			);
+
+			$connection->queryExecute($sql->compile());
+
+			if (count($rows) < static::REQUEUE_BATCH_SIZE)
+			{
+				return;
+			}
+		}
+
+		// Reached the batch limit - the remainder will be picked up on the next run after cache TTL expires
+		(new LoggerFactory())
+			->createById(self::REQUEUE_LOGGER_ID)
+			->warning(
+				sprintf(
+					'The requeueStaleMessages reached batch limit (%d x %d) for table "%s". Remainder will be processed on next run',
+					static::REQUEUE_MAX_BATCHES,
+					static::REQUEUE_BATCH_SIZE,
+					static::getTableName(),
+				),
+			)
+		;
 	}
 }

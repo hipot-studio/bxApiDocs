@@ -72,18 +72,12 @@ final class SegmentItemChecker
 			));
 		}
 
-		if (
-			$this->item->getCode() === SegmentCode::AI_SCREENING->value
-			|| $this->item->getCode() === SegmentCode::AI_APPROVE->value
-		)
+		if (SegmentCode::isNeedAiModule($this->item->getCode()) && !$checker->isAiSegmentsAvailable())
 		{
-			if (!$checker->isAiSegmentsAvailable())
-			{
-				return $result->addError(new Error(
-					Loc::getMessage('CRM_SEGMENT_ITEM_REPEAT_SALE_ACCESS_DENIED'),
-					ErrorCode::ACCESS_DENIED,
-				));
-			}
+			return $result->addError(new Error(
+				Loc::getMessage('CRM_SEGMENT_ITEM_REPEAT_SALE_ACCESS_DENIED'),
+				ErrorCode::ACCESS_DENIED,
+			));
 		}
 
 		return $result; // success

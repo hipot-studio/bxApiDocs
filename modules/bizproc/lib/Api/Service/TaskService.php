@@ -227,6 +227,11 @@ class TaskService
 			}
 
 			$result->addError(new Error($error['message']));
+
+			if ($error && $error['code'] === \CBPRuntime::EXCEPTION_CODE_INSTANCE_NOT_FOUND)
+			{
+				\CBPTaskService::deleteByWorkflow($task['WORKFLOW_ID'], \CBPTaskStatus::Running);
+			}
 		}
 
 		return $result;

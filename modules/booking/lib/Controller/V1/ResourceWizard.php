@@ -11,6 +11,7 @@ use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Integration;
+use Bitrix\Booking\Internals\Integration\Bizproc\AiAgentProvider;
 use Bitrix\Booking\Internals\Integration\Notifications\TemplateRepository;
 use Bitrix\Booking\Internals\Integration\Notifications\LegalEntityProvider;
 use Bitrix\Booking\Internals\Service\LicenseChecker;
@@ -29,6 +30,7 @@ class ResourceWizard extends BaseController
 	private TemplateRepository $templateRepository;
 	private LegalEntityProvider $notificationsLegalEntityProvider;
 	private LicenseChecker $licenseChecker;
+	private AiAgentProvider $aiAgentProvider;
 
 	public function __construct(Request $request = null)
 	{
@@ -38,6 +40,7 @@ class ResourceWizard extends BaseController
 		$this->templateRepository = new TemplateRepository();
 		$this->notificationsLegalEntityProvider = new LegalEntityProvider();
 		$this->licenseChecker = Container::getLicenseChecker();
+		$this->aiAgentProvider = Container::getAiAgentProvider();
 	}
 
 	public function getAction(CurrentUser $currentUser): ResourceWizardResponseResponse|null
@@ -54,6 +57,7 @@ class ResourceWizard extends BaseController
 				companyScheduleUrl: $this->getCompanyScheduleUrl(),
 				weekStart: $this->getWeekStart(),
 				isChannelChoiceAvailable: $this->notificationsLegalEntityProvider->isRu() === true,
+				aiAgent: $this->aiAgentProvider->getAiAgentData(),
 			);
 		}
 		catch (Exception $e)
@@ -69,7 +73,7 @@ class ResourceWizard extends BaseController
 		$notificationsExpanded = $this->getNotificationsExpanded();
 
 		return [
-			'showLicenseWarning' => !$this->licenseChecker->isPaidOrBox(),
+			'showLicenseWarning' => !$this->licenseChecker->isPaidB24OrBox(),
 			'notifications' => array_map(
 				fn (NotificationType $notificationType) => [
 					'type' => $notificationType->value,

@@ -10,7 +10,6 @@ use Bitrix\Main\Error;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
-use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\RegisterTypeEvent;
@@ -32,16 +31,16 @@ class Chat
 			'config' => new Config(
 				hasOwnRecentSection: true,
 				permissions: [
-					Action::Extend->value => \Bitrix\Im\V2\Chat::ROLE_MEMBER,
-					Action::ChangeAvatar->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
-					Action::ChangeDescription->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
-					Action::ChangeColor->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
-					Action::Rename->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
-					Action::Leave->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
-					Action::LeaveOwner->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
-					Action::Kick->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
-					Action::ChangeManagers->value => \Bitrix\Im\V2\Chat::ROLE_NONE,
-					Action::Mute->value => \Bitrix\Im\V2\Chat::ROLE_MEMBER,
+					Action::Extend->value => Im\V2\Chat::ROLE_MEMBER,
+					Action::ChangeAvatar->value => Im\V2\Chat::ROLE_NONE,
+					Action::ChangeDescription->value => Im\V2\Chat::ROLE_NONE,
+					Action::ChangeColor->value => Im\V2\Chat::ROLE_NONE,
+					Action::Rename->value => Im\V2\Chat::ROLE_NONE,
+					Action::Leave->value => Im\V2\Chat::ROLE_NONE,
+					Action::LeaveOwner->value => Im\V2\Chat::ROLE_NONE,
+					Action::Kick->value => Im\V2\Chat::ROLE_NONE,
+					Action::ChangeManagers->value => Im\V2\Chat::ROLE_NONE,
+					Action::Mute->value => Im\V2\Chat::ROLE_MEMBER,
 			],
 				isAutoJoinEnabled: true),
 		];
@@ -107,15 +106,19 @@ class Chat
 			return $result->addError(new Error('IM module is not installed'));
 		}
 
+		$chatAvatar = new ChatAvatar();
+		$avatarId = $chatAvatar->ensureFileId($chatAvatar->getTypeByTask($task));
+
 		$factory = ChatFactory::getInstance();
 		$chatResult = $factory->addUniqueChat([
 			'TITLE' => $task->title,
 			'SKIP_ADD_MESSAGE' => 'Y',
-			'TYPE' => \Bitrix\Im\V2\Chat::IM_TYPE_EXTERNAL,
+			'TYPE' => Im\V2\Chat::IM_TYPE_EXTERNAL,
 			'ENTITY_TYPE' => self::ENTITY_TYPE,
 			'ENTITY_ID' => $task->getId(),
 			'USERS' => $task->getMemberIds(),
 			'AUTHOR_ID' => $task->creator->id,
+			'AVATAR' => $avatarId > 0 ? $avatarId : null,
 		]);
 
 		if (!$chatResult->isSuccess())
@@ -141,7 +144,7 @@ class Chat
 			return;
 		}
 
-		$chat = \Bitrix\Im\V2\Chat::getInstance($task->chatId);
+		$chat = Im\V2\Chat::getInstance($task->chatId);
 		$dialogId = $chat->getDialogId();
 
 		$relations = $chat->getRelations();
@@ -172,7 +175,7 @@ class Chat
 			return;
 		}
 
-		\Bitrix\Im\V2\Chat::getInstance($task->chatId)?->addUsers($membersToAdd, new AddUsersConfig(hideHistory: false, withMessage: false));
+		Im\V2\Chat::getInstance($task->chatId)?->addUsers($membersToAdd, new AddUsersConfig(hideHistory: false, withMessage: false));
 	}
 
 	public function renameChat(Task $task, Task $taskBeforeUpdate): void
@@ -182,7 +185,7 @@ class Chat
 			return;
 		}
 
-		\Bitrix\Im\V2\Chat::getInstance($task->chatId)?->setTitle($task->title)->save();
+		Im\V2\Chat::getInstance($task->chatId)?->setTitle($task->title)->save();
 	}
 
 	/**
@@ -206,7 +209,7 @@ class Chat
 			return;
 		}
 
-		$chat = \Bitrix\Im\V2\Chat::getInstance($task->chatId);
+		$chat = Im\V2\Chat::getInstance($task->chatId);
 
 		$usersWithAccess = Container::getInstance()
 			->getTaskAccessService()
@@ -238,7 +241,38 @@ class Chat
 			return;
 		}
 
-		\Bitrix\Im\V2\Chat::getInstance($chatId)->deleteChat();
+		Im\V2\Chat::getInstance($chatId)->deleteChat();
 		$repository->delete($taskId);
+	}
+
+	public function updateChatAvatar(Task $task, ChatAvatarType $avatarType): void
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		if (!$task->chatId)
+		{
+			return;
+		}
+
+		$avatarFileId = (new ChatAvatar())->ensureFileId($avatarType);
+		if (empty($avatarFileId))
+		{
+			return;
+		}
+
+		$chat = Im\V2\Chat::getInstance($task->chatId);
+		if ($chat->getAvatarId() === $avatarFileId)
+		{
+			return;
+		}
+
+		(new Im\V2\Entity\File\ChatAvatar($chat))->updateSystemAvatar(
+			avatar: $avatarFileId,
+			withMessage: false,
+			skipRecent: true,
+		);
 	}
 }

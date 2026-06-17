@@ -8,6 +8,7 @@ use Bitrix\Bizproc\Api\Request\WorkflowCommentService\AddSystemCommentRequest;
 use Bitrix\Bizproc\Api\Response\WorkflowCommentService\AddSystemCommentResponse;
 use Bitrix\Bizproc\Integration\Push\CommentPush;
 use Bitrix\Bizproc\Integration\Push\Dto\UserCounter;
+use Bitrix\Bizproc\Internal\Event\WorkflowCommentEvent;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserCommentTable;
@@ -32,9 +33,13 @@ class WorkflowCommentService
 			$this->incrementUsersCounters($toIncrement);
 			$this->pushCounters($comment->workflowId, $toIncrement);
 
-			$documentId = \CBPStateService::getStateDocumentId($comment->workflowId); //TODO using events mechanism
-			$documentService = \CBPRuntime::getRuntime()->getDocumentService();
-			$documentService->onWorkflowCommentAdded($documentId, $comment->workflowId, $comment->authorId);
+			(new WorkflowCommentEvent(
+				WorkflowCommentEvent::EVENT_COMMENT_ADDED,
+				$comment->workflowId,
+				$comment->authorId,
+			))->send();
+
+			$this->callDocumentServiceFallback('onWorkflowCommentAdded', $comment->workflowId, $comment->authorId);
 		}
 	}
 
@@ -49,9 +54,13 @@ class WorkflowCommentService
 		$this->decrementUsersCounters($userIds);
 		$this->pushCounters($comment->workflowId, $userIds);
 
-		$documentId = \CBPStateService::getStateDocumentId($comment->workflowId); //TODO using events mechanism
-		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
-		$documentService->onWorkflowCommentDeleted($documentId, $comment->workflowId, $comment->authorId);
+		(new WorkflowCommentEvent(
+			WorkflowCommentEvent::EVENT_COMMENT_DELETED,
+			$comment->workflowId,
+			$comment->authorId,
+		))->send();
+
+		$this->callDocumentServiceFallback('onWorkflowCommentDeleted', $comment->workflowId, $comment->authorId);
 	}
 
 	public function markAsRead(MarkAsReadRequest $markRead): void
@@ -65,9 +74,13 @@ class WorkflowCommentService
 
 		if ($hasUnread)
 		{
-			$documentId = \CBPStateService::getStateDocumentId($markRead->workflowId); //TODO using events mechanism
-			$documentService = \CBPRuntime::getRuntime()->getDocumentService();
-			$documentService->onWorkflowAllCommentViewed($documentId, $markRead->workflowId, $markRead->userId);
+			(new WorkflowCommentEvent(
+				WorkflowCommentEvent::EVENT_ALL_COMMENT_VIEWED,
+				$markRead->workflowId,
+				$markRead->userId,
+			))->send();
+
+			$this->callDocumentServiceFallback('onWorkflowAllCommentViewed', $markRead->workflowId, $markRead->userId);
 
 			WorkflowUserCommentTable::delete([
 				'WORKFLOW_ID' => $markRead->workflowId,
@@ -238,6 +251,27 @@ class WorkflowCommentService
 			$userCounters = new WorkflowUserCounters($userId);
 			$userCounters->decrementComment();
 		}
+	}
+
+	private function callDocumentServiceFallback(string $method, string $workflowId, int $userId): void
+	{
+		//temporary method to avoid dependency on crm module
+		if (
+			Loader::includeModule('crm')
+			&& method_exists(\Bitrix\Crm\Integration\BizProc\EventHandler::class, 'onWorkflowCommentAdded')
+		)
+		{
+			return;
+		}
+
+		$documentId = \CBPStateService::getStateDocumentId($workflowId);
+		if (!$documentId)
+		{
+			return;
+		}
+
+		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
+		$documentService->$method($documentId, $workflowId, $userId);
 	}
 
 	private function updateUserCounters(int $userId): void

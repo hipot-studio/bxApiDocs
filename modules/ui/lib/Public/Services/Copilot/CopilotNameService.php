@@ -17,6 +17,11 @@ class CopilotNameService
 		return $this->isWestZone() ? CopilotName::COPILOT->value : CopilotName::BITRIX_GPT->value;
 	}
 
+	public function getCopilotAgentName(): string
+	{
+		return $this->isWestZone() ? CopilotName::COPILOT_AGENT->value : CopilotName::BITRIX_GPT_AGENT->value;
+	}
+
 	private function isWestZone(): bool
 	{
 		$zone = $this->getPortalZone();

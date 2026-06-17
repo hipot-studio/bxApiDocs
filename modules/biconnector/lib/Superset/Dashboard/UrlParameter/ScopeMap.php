@@ -2,9 +2,11 @@
 
 namespace Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
 final class ScopeMap
@@ -88,19 +90,183 @@ final class ScopeMap
 		];
 	}
 
-	/**
-	 * @param Parameter $code
-	 *
-	 * @return mixed
-	 */
-	public static function loadGlobalValue(Parameter $code): mixed
+	public static function loadGlobalValue(Parameter $code, ?int $userId = null): mixed
 	{
 		if ($code === Parameter::CurrentUser)
 		{
-			return (int)CurrentUser::get()->getId();
+			return $userId ?? (int)CurrentUser::get()->getId();
 		}
 
 		return null;
+	}
+
+	public static function isParameterValueAllowed(Parameter $code, int $userId, int $valueId): bool
+	{
+		if ($valueId <= 0)
+		{
+			return false;
+		}
+
+		if ($code === Parameter::TasksFlowsFlowId)
+		{
+			if (!Loader::includeModule('tasks'))
+			{
+				return false;
+			}
+
+			$row = \Bitrix\Tasks\Flow\Internal\FlowTable::getList([
+				'select' => ['ID'],
+				'filter' => ['=ID' => $valueId, '=ACTIVE' => 1],
+				'limit' => 1,
+			])->fetch();
+			if (!$row)
+			{
+				return false;
+			}
+
+			$controller = new \Bitrix\Tasks\Flow\Access\FlowAccessController($userId);
+
+			return $controller->checkByItemId(\Bitrix\Tasks\Flow\Access\FlowAction::READ, $valueId);
+		}
+
+		if ($code === Parameter::WorkflowTemplateId)
+		{
+			if (!Loader::includeModule('bizproc'))
+			{
+				return false;
+			}
+
+			$template = \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable::getList([
+				'select' => ['ID', 'MODULE_ID', 'ENTITY', 'DOCUMENT_TYPE'],
+				'filter' => ['=ID' => $valueId, '=ACTIVE' => 'Y', '!=MODULE_ID' => 'tasks'],
+				'limit' => 1,
+			])->fetchObject();
+			if (!$template)
+			{
+				return false;
+			}
+
+			try
+			{
+				return \CBPDocument::canUserOperateDocumentType(
+					\CBPCanUserOperateOperation::StartWorkflow,
+					$userId,
+					$template->getDocumentComplexType(),
+				);
+			}
+			catch (\Throwable $e)
+			{
+				AiToolsLogger::logErrors(
+					[new Error($e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine())],
+					[
+						'stage' => 'scope_map.workflow_template_acl_single',
+						'template_id' => $valueId,
+						'user_id' => $userId,
+					],
+				);
+
+				return false;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Resolve scope-level url parameter values accessible to a user, for the
+	 * AI assistant to present as options. Returns [] for globals.
+	 *
+	 * TODO: biconnector reaches into tasks/bizproc internals here — promote to
+	 * native list tools (`tasks/list_flows`, `bizproc/list_workflow_templates`)
+	 * once the cross-module work is unblocked.
+	 *
+	 * @return array<array{id:int|string, name:string}>
+	 */
+	public static function listParameterValues(Parameter $code, int $userId): array
+	{
+		if ($code === Parameter::TasksFlowsFlowId)
+		{
+			if (!Loader::includeModule('tasks'))
+			{
+				return [];
+			}
+
+			$rows = \Bitrix\Tasks\Flow\Internal\FlowTable::getList([
+				'select' => ['ID', 'NAME'],
+				'filter' => ['=ACTIVE' => 1],
+				'order' => ['NAME' => 'ASC'],
+				'limit' => 200,
+			])->fetchAll();
+
+			$controller = new \Bitrix\Tasks\Flow\Access\FlowAccessController($userId);
+			$result = [];
+			foreach ($rows as $row)
+			{
+				if (!$controller->checkByItemId(\Bitrix\Tasks\Flow\Access\FlowAction::READ, (int)$row['ID']))
+				{
+					continue;
+				}
+				$result[] = [
+					'id' => (int)$row['ID'],
+					'name' => (string)$row['NAME'],
+				];
+			}
+
+			return $result;
+		}
+
+		if ($code === Parameter::WorkflowTemplateId)
+		{
+			if (!Loader::includeModule('bizproc'))
+			{
+				return [];
+			}
+
+			$query = \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable::getList([
+				'select' => ['ID', 'NAME', 'MODULE_ID', 'ENTITY', 'DOCUMENT_TYPE'],
+				'filter' => ['=ACTIVE' => 'Y', '!=MODULE_ID' => 'tasks'],
+				'order' => ['NAME' => 'ASC'],
+				'limit' => 200,
+			]);
+
+			$result = [];
+			while ($template = $query->fetchObject())
+			{
+				try
+				{
+					$canStart = \CBPDocument::canUserOperateDocumentType(
+						\CBPCanUserOperateOperation::StartWorkflow,
+						$userId,
+						$template->getDocumentComplexType(),
+					);
+				}
+				catch (\Throwable $e)
+				{
+					AiToolsLogger::logErrors(
+						[new Error($e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine())],
+						[
+							'stage' => 'scope_map.workflow_template_acl',
+							'template_id' => (int)$template->getId(),
+							'user_id' => $userId,
+						],
+					);
+					$canStart = false;
+				}
+
+				if (!$canStart)
+				{
+					continue;
+				}
+				$result[] = [
+					'id' => (int)$template->getId(),
+					'name' => (string)$template->getName(),
+				];
+			}
+
+			return $result;
+		}
+
+		return [];
 	}
 
 	public static function getParamList(): array

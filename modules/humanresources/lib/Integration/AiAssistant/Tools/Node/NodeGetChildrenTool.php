@@ -14,10 +14,16 @@ use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Enum\SortDirection;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\NodeBaseTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Schema\InputProperty;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Type\StructureAction;
 use Bitrix\HumanResources\Util\StructureHelper;
 
+/**
+ * Get direct children of a node.
+ *
+ * @see \Bitrix\HumanResources\Rest\Controller\Node::childrenAction — REST analog
+ */
 abstract class NodeGetChildrenTool extends NodeBaseTool
 {
 	public function getInputSchema(): array
@@ -25,10 +31,7 @@ abstract class NodeGetChildrenTool extends NodeBaseTool
 		return [
 			'type' => 'object',
 			'properties' => [
-				'nodeId' => [
-					'description' => 'Identifier of the node to get children of',
-					'type' => 'number',
-				],
+				'nodeId' => InputProperty::nodeId('Identifier of the node to get children of'),
 			],
 			'additionalProperties' => false,
 			'required' => ['nodeId'],

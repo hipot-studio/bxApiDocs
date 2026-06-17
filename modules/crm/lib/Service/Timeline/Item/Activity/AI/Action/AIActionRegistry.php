@@ -5,11 +5,18 @@ declare(strict_types=1);
 namespace Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action;
 
 use Bitrix\Crm\Service\Timeline\Context;
+use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\AnalyzeCommunicationInCall;
+use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\AnalyzeCommunicationInChat;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\ConfirmFields;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\FillFieldsInCall;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\FillFieldsInChat;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\FillRepeatSaleTips;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\ScoreCall;
+use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\SummarizeInCall;
+use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\SummarizeInChat;
+use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\TranscribeInCall;
+use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\FullInCall;
+use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\Type\FullInChat;
 use Bitrix\Crm\Service\Timeline\Item\AssociatedEntityModel;
 
 final class AIActionRegistry
@@ -21,6 +28,13 @@ final class AIActionRegistry
 		ScoreCall::class,
 		ConfirmFields::class,
 		FillRepeatSaleTips::class,
+		AnalyzeCommunicationInCall::class,
+		AnalyzeCommunicationInChat::class,
+		SummarizeInCall::class,
+		SummarizeInChat::class,
+		TranscribeInCall::class,
+		FullInCall::class,
+		FullInChat::class,
 	];
 
 	private function __construct() {}

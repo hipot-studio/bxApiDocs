@@ -29,7 +29,7 @@ class ExternalDatasetDataProvider extends EntityDataProvider
 	{
 		$result = [
 			'TYPE' => $this->createField('TYPE', [
-				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TITLE_TYPE_MSGVER_1'),
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TITLE_TYPE_MSGVER_2'),
 				'default' => true,
 				'type' => 'list',
 				'partial' => true,
@@ -100,6 +100,7 @@ class ExternalDatasetDataProvider extends EntityDataProvider
 		if ($fieldID === 'TYPE')
 		{
 			$items = [
+				ExternalSource\Type::System->value => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_SYSTEM') ?? '',
 				ExternalSource\Type::Csv->value => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_CSV'),
 			];
 

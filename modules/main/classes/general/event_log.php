@@ -57,7 +57,7 @@ class CEventLog
 			self::SEVERITY_DEBUG => LogLevel::DEBUG,
 		];
 
-		$url = preg_replace("/(&?sessid=[0-9a-z]+)/", "", $_SERVER["REQUEST_URI"]);
+		$url = preg_replace("/(&?sessid=[0-9a-z]+)/", '', ($_SERVER['REQUEST_URI'] ?? ''));
 
 		$SITE_ID = (defined("ADMIN_SECTION") && ADMIN_SECTION == true) || !defined('SITE_ID')
 			? false
@@ -77,7 +77,7 @@ class CEventLog
 			"AUDIT_TYPE_ID" => $arFields["AUDIT_TYPE_ID"] == '' ? "UNKNOWN" : $arFields["AUDIT_TYPE_ID"],
 			"MODULE_ID" => $arFields["MODULE_ID"] == '' ? "UNKNOWN" : $arFields["MODULE_ID"],
 			"ITEM_ID" => empty($arFields["ITEM_ID"]) ? "UNKNOWN" : $arFields["ITEM_ID"],
-			"REMOTE_ADDR" => $_SERVER["REMOTE_ADDR"],
+			"REMOTE_ADDR" => $_SERVER["REMOTE_ADDR"] ?? '',
 			"USER_AGENT" => $_SERVER["HTTP_USER_AGENT"] ?? false,
 			"REQUEST_URI" => $url,
 			"SITE_ID" => empty($arFields["SITE_ID"]) ? $SITE_ID : $arFields["SITE_ID"],

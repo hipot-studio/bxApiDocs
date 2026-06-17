@@ -3,6 +3,7 @@
 namespace Bitrix\Mail\Integration\Im;
 
 use Bitrix\Mail\Helper\AnalyticsHelper;
+use Bitrix\Mail\Internal\Async\Message\MailboxAccessNotificationMessage;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\Web\Uri;
@@ -394,7 +395,7 @@ class Notification
 		$hasOwnerChanged = $finalOwnerId !== $originalOwnerId;
 
 		$mailboxId = (int)$mailbox['ID'];
-		$mailboxUrl = "/mail/config/edit?id=$mailboxId";
+		$mailboxUrl = self::getMailboxUrl($mailboxId);
 		$plainMailboxEmail = $mailbox['EMAIL'];
 
 		$safeMailboxEmail = htmlspecialcharsbx($plainMailboxEmail);
@@ -531,6 +532,72 @@ class Notification
 		]);
 	}
 
+
+	public static function sendPasswordlessRequestNotification(
+		int $userId,
+		int $adminId,
+		int $mailboxId,
+	): void
+	{
+		if (!Main\Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		$subjectCode = self::getPhraseKeyWithGenderSuffix(
+			'MAIL_PASSWORDLESS_REQUEST_NOTIFICATION_SUBJECT',
+			$adminId,
+		);
+
+		$subjectCallback = self::getNotificationMessageCallback(
+			$subjectCode,
+		);
+
+		$notifyMessageCode = self::getPhraseKeyWithGenderSuffix(
+			'MAIL_PASSWORDLESS_REQUEST_NOTIFICATION_MESSAGE',
+			$adminId,
+		);
+
+		$notifyMessageCallback = self::getNotificationMessageCallback(
+			$notifyMessageCode,
+		);
+
+		$componentParams = [
+			'SUBJECT' => $subjectCallback,
+			'LINKS' => [
+				[
+					'title' => Loc::getMessage('MAIL_PASSWORDLESS_REQUEST_NOTIFICATION_LINK'),
+					'href' => '/mail/',
+					'accent' => true,
+				],
+			],
+		];
+
+		\CIMNotify::Add([
+			'MESSAGE_TYPE' => IM_MESSAGE_SYSTEM,
+			'NOTIFY_TYPE' => IM_NOTIFY_FROM,
+			'NOTIFY_MODULE' => 'mail',
+			'NOTIFY_TAG' => 'MAIL|PASSWORDLESS_REQUEST|' . $mailboxId,
+			'NOTIFY_MESSAGE' => $notifyMessageCallback,
+			'TO_USER_ID' => $userId,
+			'FROM_USER_ID' => $adminId,
+			'PARAMS' => [
+				'COMPONENT_ID' => 'MailEntity',
+				'COMPONENT_PARAMS' => $componentParams,
+			],
+		]);
+	}
+
+	public static function deletePasswordlessRequestNotification(int $mailboxId): void
+	{
+		if (!Main\Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		\CIMNotify::DeleteByTag('MAIL|PASSWORDLESS_REQUEST|' . $mailboxId);
+	}
+
 	public static function getNotificationMessageCallback(string $messageCode, array $replacements = []): callable
 	{
 		return fn (?string $languageId = null) => Loc::getMessage(
@@ -538,5 +605,118 @@ class Notification
 			$replacements,
 			$languageId,
 		);
+	}
+
+	public static function dispatchAccessChangedNotifications(
+		int $mailboxId,
+		string $mailboxEmail,
+		array $previousAccessCodes,
+		array $currentAccessCodes,
+		int $editorUserId,
+		int $mailboxOwnerId = 0,
+	): void
+	{
+		$message = new MailboxAccessNotificationMessage(
+			mailboxId: $mailboxId,
+			mailboxEmail: $mailboxEmail,
+			previousAccessCodes: $previousAccessCodes,
+			currentAccessCodes: $currentAccessCodes,
+			editorUserId: $editorUserId,
+			mailboxOwnerId: $mailboxOwnerId,
+		);
+
+		$message->send('mail_access_notification');
+	}
+
+	public static function notifyUserAboutAccessGranted(
+		int $toUserId,
+		int $fromUserId,
+		int $mailboxId,
+		string $mailboxEmail,
+	): void
+	{
+		$url = self::getMailboxUrl($mailboxId);
+		$safeEmail = htmlspecialcharsbx($mailboxEmail);
+		$emailWithLink = "[url={$url}]{$safeEmail}[/url]";
+
+		$notifyMessageCode = self::getPhraseKeyWithGenderSuffix(
+			'MAIL_NOTIFY_ACCESS_GRANTED_MESSAGE',
+			$fromUserId,
+		);
+
+		$notifyMessage = self::getNotificationMessageCallback(
+			$notifyMessageCode,
+			['#EMAIL#' => $safeEmail],
+		);
+
+		$subjectCode = self::getPhraseKeyWithGenderSuffix(
+			'MAIL_NOTIFY_ACCESS_GRANTED_SUBJECT',
+			$fromUserId,
+		);
+
+		$subject = self::getNotificationMessageCallback(
+			$subjectCode,
+			['#EMAIL#' => $emailWithLink],
+		);
+
+		\CIMNotify::Add([
+			'TO_USER_ID' => $toUserId,
+			'FROM_USER_ID' => $fromUserId,
+			'NOTIFY_TYPE' => IM_NOTIFY_FROM,
+			'NOTIFY_MODULE' => 'mail',
+			'NOTIFY_TAG' => 'MAIL|ACCESS_GRANTED|' . $mailboxId,
+			'NOTIFY_MESSAGE' => $notifyMessage,
+			'PARAMS' => [
+				'COMPONENT_ID' => 'DefaultEntity',
+				'COMPONENT_PARAMS' => [
+					'SUBJECT' => $subject,
+				],
+			],
+		]);
+	}
+
+	public static function notifyUserAboutAccessRevoked(
+		int $toUserId,
+		int $fromUserId,
+		int $mailboxId,
+		string $mailboxEmail,
+	): void
+	{
+		$safeEmail = htmlspecialcharsbx($mailboxEmail);
+
+		$notifyMessageCode = self::getPhraseKeyWithGenderSuffix(
+			'MAIL_NOTIFY_ACCESS_REVOKED_MESSAGE',
+			$fromUserId,
+		);
+
+		$notifyMessage = self::getNotificationMessageCallback(
+			$notifyMessageCode,
+			['#EMAIL#' => $safeEmail],
+		);
+
+		$subjectCode = self::getPhraseKeyWithGenderSuffix(
+			'MAIL_NOTIFY_ACCESS_REVOKED_SUBJECT',
+			$fromUserId,
+		);
+
+		$subject = self::getNotificationMessageCallback(
+			$subjectCode,
+			['#EMAIL#' => $safeEmail],
+		);
+
+		\CIMNotify::Add([
+			'TO_USER_ID' => $toUserId,
+			'FROM_USER_ID' => $fromUserId,
+			'NOTIFY_TYPE' => IM_NOTIFY_FROM,
+			'NOTIFY_MODULE' => 'mail',
+			'NOTIFY_TAG' => 'MAIL|ACCESS_REVOKED|' . $mailboxId,
+			'NOTIFY_MESSAGE' => $notifyMessage,
+			'PARAMS' => [
+				'COMPONENT_ID' => 'DefaultEntity',
+				'COMPONENT_PARAMS' => [
+					'SUBJECT' => $subject,
+				],
+			],
+		]);
 	}
 }

@@ -10,7 +10,6 @@ use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 use Bitrix\Booking\Internals\Service\AiAssistant\DateTimeService;
 use Bitrix\Booking\Internals\Service\ResourceAvailabilityService;
-use Bitrix\Main\Web\Json;
 
 class FindAvailableSlotsByResourceTool extends BaseBookingTool
 {
@@ -27,7 +26,7 @@ class FindAvailableSlotsByResourceTool extends BaseBookingTool
 		$this->resourceRepository = Container::getResourceRepository();
 	}
 
-	protected function execute(int $userId, ...$args): string
+	protected function doExecuteStructured(int $userId, ...$args): array
 	{
 		$timezone = $this->contextBooking->getDatePeriod()?->getDateFrom()->getTimezone()?->getName() ?? '';
 
@@ -52,12 +51,15 @@ class FindAvailableSlotsByResourceTool extends BaseBookingTool
 			return $this->createFailureResponse('Resource not found');
 		}
 
-		return Json::encode(
-			$this->resourceAvailabilityService->getAvailableSlotsForResourceCollection(
-				new ResourceCollection($resource),
-				$date,
-				isset($args['rescheduleBookingId']) ? (int)$args['rescheduleBookingId'] : null
-			)
+		$slots = $this->resourceAvailabilityService->getAvailableSlotsForResourceCollection(
+			new ResourceCollection($resource),
+			$date,
+			isset($args['rescheduleBookingId']) ? (int)$args['rescheduleBookingId'] : null
+		);
+
+		return $this->createSuccessResponse(
+			message: 'Available slots retrieved',
+			data: ['slots' => $slots],
 		);
 	}
 
@@ -68,7 +70,8 @@ class FindAvailableSlotsByResourceTool extends BaseBookingTool
 
 	public function getDescription(): string
 	{
-		return 'Returns specific bookable time windows (e.g. 10:00–10:30) for a specified resource on a given date. Use when the client has chosen a specific resource. Call this after using find_available_dates_by_resource_tool to identify a suitable day.';
+		return 'Returns specific bookable time windows for a specified resource on a given date.'
+			. ' Response shape: {"slots": ["HH:MM", ...]}, where each item is a 24-hour clock start time in strict "HH:MM" format (hours:minutes). Examples: "09:00" = 9 hours 0 minutes, "14:30" = 14 hours 30 minutes, "20:30" = 20 hours 30 minutes. The colon separates hours and minutes — never minutes and seconds.';
 	}
 
 	public function getInputSchema(): array
@@ -86,7 +89,7 @@ class FindAvailableSlotsByResourceTool extends BaseBookingTool
 					'description' => 'Identifier of the resource. Must be a positive integer.',
 				],
 				'rescheduleBookingId' => [
-					'type' => 'integer',
+					'type' => ['integer', 'null'],
 					'description' => 'Optional. ID of an existing booking being rescheduled. When provided, the time slot of this booking is treated as available so it appears in search results.',
 				],
 			],

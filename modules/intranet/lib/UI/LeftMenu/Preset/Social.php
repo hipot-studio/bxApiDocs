@@ -1,6 +1,8 @@
 <?php
 namespace Bitrix\Intranet\UI\LeftMenu\Preset;
 
+use Bitrix\Intranet\Internal\Integration\Ui\CopilotService;
+
 class Social extends PresetAbstract
 {
 	const CODE = 'social';
@@ -75,8 +77,8 @@ class Social extends PresetAbstract
 
 		$structure['shown']['menu_teamwork'] = [
 			'menu_im_messenger',
-			'menu_live_feed',
 			'menu_im_collab',
+			'menu_live_feed',
 			'menu_calendar',
 			'menu_documents',
 			'menu_boards',
@@ -85,6 +87,11 @@ class Social extends PresetAbstract
 			'menu_all_groups',
 			'menu_all_spaces',
 		];
+
+		if (CopilotService::shouldShowInLeftMenu())
+		{
+			array_splice($structure['shown']['menu_teamwork'], 1, 0, ['menu_im_copilot']);
+		}
 
 		$found = false;
 		$filler = function(&$item, $key) use (&$filler, &$found) {

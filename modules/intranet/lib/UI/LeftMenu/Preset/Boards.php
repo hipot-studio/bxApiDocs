@@ -2,6 +2,8 @@
 
 namespace Bitrix\Intranet\UI\LeftMenu\Preset;
 
+use Bitrix\Intranet\Internal\Integration\Ui\CopilotService;
+
 class Boards extends Social
 {
 	const CODE = 'boards';
@@ -75,6 +77,11 @@ class Boards extends Social
 			'menu_all_groups',
 			'menu_all_spaces',
 		];
+
+		if (CopilotService::shouldShowInLeftMenu())
+		{
+			array_splice($structure['shown']['menu_teamwork'], 2, 0, ['menu_im_copilot']);
+		}
 
 		return $structure;
 	}

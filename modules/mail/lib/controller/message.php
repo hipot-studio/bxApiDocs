@@ -32,7 +32,7 @@ class Message extends Controller
 	 * @param boolean $deleteImmediately
 	 * @throws \Exception
 	 */
-	public function deleteAction(array $ids, bool $deleteImmediately = false): void
+	public function deleteAction(array $ids, bool $deleteImmediately = false): array
 	{
 		$result = \Bitrix\Mail\Helper\Message\MessageActions::delete($ids, $deleteImmediately);
 
@@ -41,6 +41,10 @@ class Message extends Controller
 			$errors = $result->getErrors();
 			$this->addError($errors[0]);
 		}
+
+		return [
+			'processedIds' => $result->getData()['processedIds'] ?? [],
+		];
 	}
 
 	/**
@@ -49,7 +53,7 @@ class Message extends Controller
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function markAsSpamAction(array $ids): void
+	public function markAsSpamAction(array $ids): array
 	{
 		$result = \Bitrix\Mail\Helper\Message\MessageActions::markAsSpam($ids, $this->getCurrentUser()->getId());
 
@@ -58,14 +62,18 @@ class Message extends Controller
 			$errors = $result->getErrors();
 			$this->addError($errors[0]);
 		}
+
+		return [
+			'processedIds' => $result->getData()['processedIds'] ?? [],
+		];
 	}
 
 	/**
 	 * @param string[] $ids
-	 * @return void
+	 * @return array
 	 * @throws \Exception
 	 */
-	public function restoreFromSpamAction(array $ids): void
+	public function restoreFromSpamAction(array $ids): array
 	{
 		$result = \Bitrix\Mail\Helper\Message\MessageActions::restoreFromSpam($ids, $this->getCurrentUser()->getId());
 
@@ -74,14 +82,18 @@ class Message extends Controller
 			$errors = $result->getErrors();
 			$this->addError($errors[0]);
 		}
+
+		return [
+			'processedIds' => $result->getData()['processedIds'] ?? [],
+		];
 	}
 
 	/**
 	 * @param array $ids
-	 * @return void
+	 * @return array
 	 * @throws \Exception
 	 */
-	public function moveToFolderAction(array $ids, string $folderPath): void
+	public function moveToFolderAction(array $ids, string $folderPath): array
 	{
 		$result = \Bitrix\Mail\Helper\Message\MessageActions::moveToFolder($ids, $folderPath, $this->getCurrentUser()->getId());
 
@@ -90,13 +102,17 @@ class Message extends Controller
 			$errors = $result->getErrors();
 			$this->addError($errors[0]);
 		}
+
+		return [
+			'processedIds' => $result->getData()['processedIds'] ?? [],
+		];
 	}
 
 	/**
 	 * @param array $ids
-	 * @return void
+	 * @return array
 	 */
-	public function markAsUnseenAction(array $ids): void
+	public function markAsUnseenAction(array $ids): array
 	{
 		$result = \Bitrix\Mail\Helper\Message\MessageActions::markAsUnseen($ids);
 
@@ -105,14 +121,18 @@ class Message extends Controller
 			$errors = $result->getErrors();
 			$this->addError($errors[0]);
 		}
+
+		return [
+			'processedIds' => $result->getData()['processedIds'] ?? [],
+		];
 	}
 
 	/**
 	 * @param array $ids
 	 * @param bool $isRead
-	 * @return void
+	 * @return array
 	 */
-	public function changeReadStatusAction(array $ids, int $isRead): void
+	public function changeReadStatusAction(array $ids, int $isRead): array
 	{
 		$result = \Bitrix\Mail\Helper\Message\MessageActions::markMessages($ids, (int)$isRead);
 
@@ -121,13 +141,17 @@ class Message extends Controller
 			$errors = $result->getErrors();
 			$this->addError($errors[0]);
 		}
+
+		return [
+			'processedIds' => $result->getData()['processedIds'] ?? [],
+		];
 	}
 
 	/**
 	 * @param array $ids
-	 * @return void
+	 * @return array
 	 */
-	public function markAsSeenAction(array $ids): void
+	public function markAsSeenAction(array $ids): array
 	{
 		$result = \Bitrix\Mail\Helper\Message\MessageActions::markAsSeen($ids);
 
@@ -136,6 +160,10 @@ class Message extends Controller
 			$errors = $result->getErrors();
 			$this->addError($errors[0]);
 		}
+
+		return [
+			'processedIds' => $result->getData()['processedIds'] ?? [],
+		];
 	}
 
 	/**

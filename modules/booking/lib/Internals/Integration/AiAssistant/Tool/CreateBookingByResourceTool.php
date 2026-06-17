@@ -31,7 +31,7 @@ class CreateBookingByResourceTool extends BaseBookingTool
 		$this->resourceRepository = Container::getResourceRepository();
 	}
 
-	protected function execute(int $userId, ...$args): string
+	protected function doExecuteStructured(int $userId, ...$args): array
 	{
 		$dateFrom = $this->dateTimeService->createDateTime(
 			isset($args['dateTime']) ? (string)$args['dateTime'] : '',
@@ -82,7 +82,12 @@ class CreateBookingByResourceTool extends BaseBookingTool
 			return $this->createFailureResponse(implode(', ', $result->getErrorMessages()));
 		}
 
-		return "Booking with identifier '{$result->getBooking()->getId()}' has been successfully created";
+		$booking = $result->getBooking();
+
+		return $this->createSuccessResponse(
+			message: "Booking with identifier '{$booking->getId()}' has been successfully created",
+			crmBindings: $this->crmBindingsBuilder->getExternalDataBindingsFromBooking($booking),
+		);
 	}
 
 	public function getName(): string

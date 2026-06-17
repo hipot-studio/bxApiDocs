@@ -432,13 +432,11 @@ class Manager
 		self::$handlers = [];
 		$handlersList = [];
 		$buildInHandlers = [
-			'\Bitrix\Main\Service\GeoIp\GeoIP2' => 'lib/service/geoip/geoip2.php',
-			'\Bitrix\Main\Service\GeoIp\MaxMind' => 'lib/service/geoip/maxmind.php',
-			'\Bitrix\Main\Service\GeoIp\Extension' => 'lib/service/geoip/extension.php',
-			'\Bitrix\Main\Service\GeoIp\SypexGeo' => 'lib/service/geoip/sypexgeo.php',
+			'\Bitrix\Main\Service\GeoIp\GeoIP2',
+			'\Bitrix\Main\Service\GeoIp\MaxMind',
+			'\Bitrix\Main\Service\GeoIp\Extension',
+			'\Bitrix\Main\Service\GeoIp\SypexGeo',
 		];
-
-		Loader::registerAutoLoadClasses('main', $buildInHandlers);
 
 		$handlersFields = [];
 		$res = HandlerTable::getList(['cache' => ['ttl' => static::getCacheTtl()]]);
@@ -448,7 +446,7 @@ class Manager
 			$handlersFields[$row['CLASS_NAME']] = $row;
 		}
 
-		foreach ($buildInHandlers as $class => $file)
+		foreach ($buildInHandlers as $class)
 		{
 			if (self::isHandlerClassValid($class))
 			{

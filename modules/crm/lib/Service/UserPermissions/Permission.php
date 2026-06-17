@@ -9,11 +9,16 @@ use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionList;
 use Bitrix\Crm\Security\Role\Manage\Entity\Button;
 use Bitrix\Crm\Security\Role\Manage\Entity\ButtonConfig;
 use Bitrix\Crm\Security\Role\Manage\Entity\ContractorConfig;
+use Bitrix\Crm\Security\Role\Manage\Entity\CrmConfig;
 use Bitrix\Crm\Security\Role\Manage\Entity\Event;
 use Bitrix\Crm\Security\Role\Manage\Entity\WebForm as WebFormEntity;
 use Bitrix\Crm\Security\Role\Manage\Entity\WebFormConfig;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\PermIdentifier;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Admin as EntityAdmin;
+use Bitrix\Crm\Security\Role\Manage\Entity\SaleTarget;
+use Bitrix\Crm\Security\Role\Manage\Entity\Exclusion;
+use Bitrix\Crm\Security\Role\Manage\Entity\CopilotCallAssessment;
+use Bitrix\Crm\Security\Role\Manage\Entity\RepeatSale;
 
 /**
  * @internal
@@ -45,6 +50,11 @@ final class Permission
 
 			ContractorConfig::CODE => $this->inventoryManagementContractor->canWriteConfig(),
 
+			SaleTarget::ENTITY_CODE,
+			Exclusion::ENTITY_CODE,
+			CopilotCallAssessment::ENTITY_CODE,
+			RepeatSale::ENTITY_CODE,
+			CrmConfig::ENTITY_CODE,
 			Event::ENTITY_CODE => $this->admin->isCrmAdmin(),
 
 			default => null,

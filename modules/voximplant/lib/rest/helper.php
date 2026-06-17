@@ -283,79 +283,94 @@ class Helper
 		}
 
 		$call = Call::create($callFields);
-		if (isset($fields['CRM_ENTITY_TYPE'], $fields['CRM_ENTITY_ID']))
-		{
-			$call->addCrmEntities([
-				[
-					'ENTITY_TYPE' => $fields['CRM_ENTITY_TYPE'],
-					'ENTITY_ID' => $fields['CRM_ENTITY_ID'],
-					'IS_CREATED' => 'N',
-					'IS_PRIMARY' => 'Y'
-				]
-			]);
 
-			if (is_array($fields['CRM_BINDINGS']))
+		try
+		{
+			if (isset($fields['CRM_ENTITY_TYPE'], $fields['CRM_ENTITY_ID']))
 			{
-				$activityBindings = \CVoxImplantCrmHelper::createActivityBindings([
-					'CRM_ENTITY_TYPE' => $fields['CRM_ENTITY_TYPE'],
-					'CRM_ENTITY_ID' => $fields['CRM_ENTITY_ID'],
-					'CRM_BINDINGS' => $fields['CRM_BINDINGS']
+				$call->addCrmEntities([
+					[
+						'ENTITY_TYPE' => $fields['CRM_ENTITY_TYPE'],
+						'ENTITY_ID' => $fields['CRM_ENTITY_ID'],
+						'IS_CREATED' => 'N',
+						'IS_PRIMARY' => 'Y'
+					]
 				]);
+
+				if (is_array($fields['CRM_BINDINGS']))
+				{
+					$activityBindings = \CVoxImplantCrmHelper::createActivityBindings([
+						'CRM_ENTITY_TYPE' => $fields['CRM_ENTITY_TYPE'],
+						'CRM_ENTITY_ID' => $fields['CRM_ENTITY_ID'],
+						'CRM_BINDINGS' => $fields['CRM_BINDINGS']
+					]);
+				}
+				else
+				{
+					$activityBindings = \CVoxImplantCrmHelper::getActivityBindings($call);
+				}
+
+				if (is_array($activityBindings) && !empty($activityBindings))
+				{
+					$call->updateCrmBindings($activityBindings);
+				}
 			}
 			else
 			{
+				$crmData = \CVoxImplantCrmHelper::getCrmEntities($call);
+				$call->updateCrmEntities($crmData);
 				$activityBindings = \CVoxImplantCrmHelper::getActivityBindings($call);
+				if (is_array($activityBindings) && !empty($activityBindings))
+				{
+					$call->updateCrmBindings($activityBindings);
+				}
 			}
 
-			if (is_array($activityBindings) && !empty($activityBindings))
+			if ($crmCreate)
 			{
-				$call->updateCrmBindings($activityBindings);
+				$createResult = \CVoxImplantCrmHelper::registerCallInCrm(
+					$call,
+					[
+						'CRM' => 'Y',
+						'CRM_CREATE' => \CVoxImplantConfig::CRM_CREATE_LEAD,
+						'CRM_CREATE_CALL_TYPE' => \CVoxImplantConfig::CRM_CREATE_CALL_TYPE_ALL,
+						'CRM_SOURCE' => $fields['CRM_SOURCE']
+					]
+				);
+
+				if (!$createResult)
+				{
+					$leadCreationError = \CVoxImplantCrmHelper::$lastError;
+				}
 			}
-		}
-		else
-		{
-			$crmData = \CVoxImplantCrmHelper::getCrmEntities($call);
-			$call->updateCrmEntities($crmData);
-			$activityBindings = \CVoxImplantCrmHelper::getActivityBindings($call);
-			if (is_array($activityBindings) && !empty($activityBindings))
+
+			if (\CVoxImplantConfig::GetLeadWorkflowExecution() == \CVoxImplantConfig::WORKFLOW_START_IMMEDIATE)
 			{
-				$call->updateCrmBindings($activityBindings);
+				\CVoxImplantCrmHelper::StartCallTrigger($call);
 			}
-		}
 
-		if ($crmCreate)
-		{
-			$createResult = \CVoxImplantCrmHelper::registerCallInCrm(
-				$call,
-				[
-					'CRM' => 'Y',
-					'CRM_CREATE' => \CVoxImplantConfig::CRM_CREATE_LEAD,
-					'CRM_CREATE_CALL_TYPE' => \CVoxImplantConfig::CRM_CREATE_CALL_TYPE_ALL,
-					'CRM_SOURCE' => $fields['CRM_SOURCE']
-				]
-			);
-
-			if (!$createResult)
-			{
-				$leadCreationError = \CVoxImplantCrmHelper::$lastError;
-			}
-		}
-
-		if (\CVoxImplantConfig::GetLeadWorkflowExecution() == \CVoxImplantConfig::WORKFLOW_START_IMMEDIATE)
-		{
-			\CVoxImplantCrmHelper::StartCallTrigger($call);
-		}
-
-		\CVoxImplantMain::sendCallStartEvent([
-			'CALL_ID' => $callId,
-			'USER_ID' => $fields['USER_ID']
-		]);
-
-		if ($fields['SHOW'])
-		{
-			self::showExternalCall([
-				'CALL_ID' => $callId
+			\CVoxImplantMain::sendCallStartEvent([
+				'CALL_ID' => $callId,
+				'USER_ID' => $fields['USER_ID']
 			]);
+
+			if ($fields['SHOW'])
+			{
+				self::showExternalCall([
+					'CALL_ID' => $callId
+				]);
+			}
+		}
+		catch (\Throwable $e)
+		{
+			$wrappedException = new \Bitrix\Main\SystemException(
+				'Voximplant externalCall error: ' . $e->getMessage(),
+				$e->getCode(),
+				$e->getFile(),
+				$e->getLine(),
+				$e
+			);
+			\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($wrappedException);
 		}
 
 		$createdEntities = array_map(

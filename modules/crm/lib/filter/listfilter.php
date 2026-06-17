@@ -21,15 +21,22 @@ class ListFilter
 
 	protected bool $isCrmTrackingEnabled = false;
 	protected bool $isStagesEnabled = false;
+	protected bool $isSearchStringLikeEnabled = false;
 	protected int $entityTypeId;
 	protected array $fields = [];
 	protected string $fieldStageSemantic;
 
-	public function __construct(int $entityTypeId, array $fields, string $fieldStageSemantic = 'STAGE_SEMANTIC_ID')
+	public function __construct(
+		int $entityTypeId,
+		array $fields,
+		string $fieldStageSemantic = 'STAGE_SEMANTIC_ID',
+		bool $isSearchStringLikeEnabled = true,
+	)
 	{
 		$this->entityTypeId = $entityTypeId;
 		$this->fields = $this->getFieldsToFilter($fields);
 		$this->fieldStageSemantic = $fieldStageSemantic;
+		$this->isSearchStringLikeEnabled = $isSearchStringLikeEnabled;
 
 		$factory = Container::getInstance()->getFactory($entityTypeId);
 		$this->isStagesEnabled = $factory?->isStagesEnabled() ?? false;
@@ -131,7 +138,8 @@ class ListFilter
 
 			if ((string)($requestFilter[$fieldName] ?? '') !== '')
 			{
-				$filter['%' . $fieldName] = $requestFilter[$fieldName];
+				$operation = $this->isSearchStringLikeEnabled ? '%' : '';
+				$filter[$operation . $fieldName] = $requestFilter[$fieldName];
 			}
 		}
 

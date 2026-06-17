@@ -12,7 +12,6 @@ use Bitrix\AI\Payload\IPayload;
 use Bitrix\AI\Result;
 use Bitrix\AI\Model\HistoryTable;
 use Bitrix\Main\Type\DateTime;
-use ReflectionClass;
 
 class Manager
 {
@@ -29,6 +28,30 @@ class Manager
 	public static function deleteForUser(int $userId): void
 	{
 		HistoryTable::deleteByFilter(['=CREATED_BY_ID' => $userId]);
+	}
+
+	public static function writeDiagnosticHistory(array $data): void
+	{
+		try
+		{
+			HistoryTable::add(array_merge([
+				'CONTEXT_MODULE' => 'ai',
+				'CONTEXT_ID' => '-',
+				'ENGINE_CLASS' => '-',
+				'ENGINE_CODE' => '',
+				'PAYLOAD_CLASS' => '-',
+				'PAYLOAD' => '-',
+				'PARAMETERS' => [],
+				'GROUP_ID' => -1,
+				'RESULT_TEXT' => '-',
+				'CACHED' => false,
+				'CREATED_BY_ID' => 0,
+			], $data));
+		}
+		catch (\Throwable)
+		{
+			// Best effort
+		}
 	}
 
 	/**
@@ -197,6 +220,26 @@ class Manager
 	{
 		$context = $this->engine->getContext();
 		$this->truncateForUser($context);
+
+		$data = $this->prepareHistoryData($result, $context);
+		$res = HistoryTable::add($data);
+
+		if (!$res->isSuccess())
+		{
+			$this->writeDiagnosticRecord(
+				$context,
+				implode('; ', $res->getErrorMessages()),
+				mb_strlen((string)$result->getPrettifiedData())
+			);
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private function prepareHistoryData(Result $result, Context $context): array
+	{
 		$requestText = null;
 		$contextText = null;
 
@@ -222,12 +265,12 @@ class Manager
 			}
 		}
 
-		$res = HistoryTable::add([
+		return [
 			'CONTEXT_MODULE' => $context->getModuleId(),
 			'CONTEXT_ID' => $context->getContextId(),
-			'ENGINE_CLASS' => (new ReflectionClass($this->engine))->getName(),
+			'ENGINE_CLASS' => $this->engine::class,
 			'ENGINE_CODE' => $this->engine->getCode(),
-			'PAYLOAD_CLASS' => (new ReflectionClass($this->engine->getPayload()))->getName(),
+			'PAYLOAD_CLASS' => $this->engine->getPayload()::class,
 			'PAYLOAD' => $this->engine->getPayload()->pack(),
 			'PARAMETERS' => $this->engine->getParameters(),
 			'GROUP_ID' => $this->engine->getHistoryGroupId(),
@@ -236,9 +279,31 @@ class Manager
 			'CONTEXT' => $contextText,
 			'CACHED' => $result->isCached(),
 			'CREATED_BY_ID' => $context->getUserId(),
-		]);
+		];
+	}
 
-		return $res->isSuccess();
+	private function writeDiagnosticRecord(Context $context, string $errorSummary, int $resultLength): void
+	{
+		try
+		{
+			HistoryTable::add([
+				'CONTEXT_MODULE' => $context->getModuleId(),
+				'CONTEXT_ID' => $context->getContextId(),
+				'ENGINE_CLASS' => $this->engine::class,
+				'ENGINE_CODE' => $this->engine->getCode(),
+				'PAYLOAD_CLASS' => $this->engine->getPayload()::class,
+				'PAYLOAD' => '-',
+				'PARAMETERS' => $this->engine->getParameters(),
+				'GROUP_ID' => $this->engine->getHistoryGroupId(),
+				'RESULT_TEXT' => '[HISTORY_WRITE_ERROR] ' . $errorSummary . ' | resultLength=' . $resultLength,
+				'CACHED' => false,
+				'CREATED_BY_ID' => $context->getUserId(),
+			]);
+		}
+		catch (\Throwable)
+		{
+			// Best effort
+		}
 	}
 
 	/**

@@ -39,6 +39,7 @@ use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Counter;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Prepare\Add\EntityFieldService;
+use Bitrix\Tasks\Internals\Task\ViewedTable;
 
 class AddService
 {

@@ -142,36 +142,6 @@ class Template extends Base
 		return ['activityErrors' => $response->getActivityErrors()];
 	}
 
-	public function saveDraftAction(): ?int
-	{
-		$json = $this->getRequest()->getJsonList();
-		$templateId = (int)$json->get('templateId');
-		$fields = (array)$json->get('fields');
-		$componentName = (string)$json->get('c');
-		$signedParameters = (string)$json->get('signedParameters');
-		$user = new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
-
-		$templateService = new Api\Service\WorkflowTemplateService();
-
-		$parameters = ParameterSigner::unsignParameters($componentName, $signedParameters);
-		$request = new Api\Request\WorkflowTemplateService\SaveTemplateRequest(
-			$templateId,
-			$parameters,
-			$fields,
-			$user
-		);
-
-		$response = $templateService->saveTemplateDraft($request);
-		if ($response->isSuccess())
-		{
-			return $response->getTemplateDraftId();
-		}
-
-		$this->addErrors($response->getErrors());
-
-		return null;
-	}
-
 	public function loadDraftAction(int $draftId): ?array
 	{
 		$templateService = new Api\Service\WorkflowTemplateService();

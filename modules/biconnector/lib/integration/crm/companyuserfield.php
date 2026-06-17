@@ -138,6 +138,7 @@ class CompanyUserField
 
 		$messages = \Bitrix\Main\Localization\Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_company_uf']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_COMPANY_UF_TABLE'] ?: 'crm_company_uf';
+		$result['crm_company_uf']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_COMPANY_UF_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_company_uf']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			if (isset($messages['CRM_BIC_COMPANY_UF_FIELD_' . $fieldCode]))

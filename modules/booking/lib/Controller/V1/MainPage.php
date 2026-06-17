@@ -68,9 +68,9 @@ class MainPage extends BaseController
 	}
 
 	public function getForBookingAction(
-		int $dateTs,
+		int $dateFromTs,
+		int $dateToTs,
 		int $bookingId,
-		string $timezone,
 		array|null $resourcesIds,
 	): MainPageGetResponse|null
 	{
@@ -80,16 +80,9 @@ class MainPage extends BaseController
 
 			$booking = $this->bookingProvider->getById($userId, $bookingId);
 
-			$date = new DateTimeImmutable('@' . $dateTs);
-			if ($dateTs <= 0 && !empty($booking))
-			{
-				$dateString = $booking->getDatePeriod()->getDateFrom()->format('Y-m-d');
-				$date = new DateTimeImmutable($dateString, new \DateTimeZone($timezone));
-			}
-
 			$datePeriod = new DatePeriod(
-				dateFrom: $date,
-				dateTo: $date->add(new DateInterval('P1D')), // add 1 day
+				dateFrom: new DateTimeImmutable('@' . $dateFromTs),
+				dateTo: new DateTimeImmutable('@' . $dateToTs),
 			);
 
 			$bookings = new Entity\Booking\BookingCollection();
@@ -113,8 +106,6 @@ class MainPage extends BaseController
 				waitListItemCollection: $waitListItemCollection,
 				isIntersectionForAll: true,
 				counters: $this->counterRepository->getList($userId),
-				//@todo deprecated and should be removed
-				formsMenu: [],
 				catalogSkuEntityOptions: (new ServiceSkuCreator())->getEntitySelectorEntityOptions($userId),
 				senders: array_map(
 					static fn (BaseMessageSender $sender) => [
@@ -134,16 +125,15 @@ class MainPage extends BaseController
 		}
 	}
 
-	public function getAction(int $dateTs): MainPageGetResponse|null
+	public function getAction(int $dateFromTs, int $dateToTs): MainPageGetResponse|null
 	{
 		try
 		{
 			$userId = (int)CurrentUser::get()->getId();
 
-			$date = new DateTimeImmutable('@' . $dateTs);
 			$datePeriod = new DatePeriod(
-				dateFrom: $date,
-				dateTo: $date->add(new DateInterval('P1D')), // add 1 day
+				dateFrom: new DateTimeImmutable('@' . $dateFromTs),
+				dateTo: new DateTimeImmutable('@' . $dateToTs),
 			);
 
 			$favorites = $this->getFavorites($userId, $datePeriod);
@@ -161,8 +151,6 @@ class MainPage extends BaseController
 				waitListItemCollection: $waitListItems,
 				isIntersectionForAll: $this->isIntersectionForAll($userId),
 				counters: $this->counterRepository->getList($userId),
-				//@todo deprecated and should be removed
-				formsMenu: [],
 				catalogSkuEntityOptions: (new ServiceSkuCreator())->getEntitySelectorEntityOptions($userId),
 				senders: array_map(
 					static fn (BaseMessageSender $sender) => [

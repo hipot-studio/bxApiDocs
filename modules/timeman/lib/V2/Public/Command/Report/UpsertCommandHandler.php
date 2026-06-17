@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Bitrix\Timeman\V2\Public\Command\Report;
+
+use Bitrix\Main\Result;
+use Bitrix\Timeman\V2\Internal\Service\ReportService;
+
+class UpsertCommandHandler
+{
+	public function __construct(private readonly ReportService $service)
+	{
+	}
+
+	public function __invoke(UpsertCommand $command): Result
+	{
+		return $this->service->saveRecordReport(
+			$command->recordId,
+			$command->userId,
+			$command->reportText,
+		);
+	}
+}

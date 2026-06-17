@@ -2,27 +2,16 @@
 
 use Bitrix\Crm\Component\Base;
 use Bitrix\Crm\Controller\ErrorCode;
+use Bitrix\Crm\Integration\Analytics;
 use Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository;
 use Bitrix\Crm\Security\Role\Manage\Manager\AllSelection;
-use Bitrix\Crm\Integration\Analytics;
 use Bitrix\Crm\Security\Role\Manage\Manager\ButtonSelection;
 use Bitrix\Crm\Security\Role\Manage\Manager\Contract\SectionableRoleSelectionManager;
-use Bitrix\Crm\Security\Role\Manage\Manager\CustomSectionSelection;
 use Bitrix\Crm\Security\Role\Manage\Manager\ContractorSelection;
+use Bitrix\Crm\Security\Role\Manage\Manager\CustomSectionSelection;
 use Bitrix\Crm\Security\Role\Manage\Manager\WebFormSelection;
 use Bitrix\Crm\Security\Role\Manage\RoleManagerSelectionFactory;
 use Bitrix\Crm\Security\Role\Manage\RoleSelectionManager;
-use Bitrix\Crm\Security\Role\Utils\RoleManagerUtils;
-use Bitrix\Crm\Service\Container;
-use Bitrix\Main\Config\Option;
-use Bitrix\Main\Engine\Contract\Controllerable;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Result;
-use Bitrix\Main\Web\Json;
-use Bitrix\UI\AccessRights\V2\Options;
-use Bitrix\UI\AccessRights\V2\Config;
-use Bitrix\Main\Engine\ActionFilter;
-use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Commands\DeleteRoleCommand;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Commands\DTO\UserGroupsData;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Commands\UpdateRoleCommand;
@@ -30,8 +19,19 @@ use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Queries\QueryAccessRights;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\UserGroupsProvider;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Utils\PermCodeTransformer;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Validators\UserGroupDataValidator;
+use Bitrix\Crm\Security\Role\Utils\RoleManagerUtils;
+use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
 use Bitrix\Crm\Security\Role\Validators\DeleteRoleValidator;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Main\Engine\Contract\Controllerable;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
+use Bitrix\Main\Web\Json;
+use Bitrix\UI\AccessRights\V2\Config;
+use Bitrix\UI\AccessRights\V2\Options;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -158,13 +158,20 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 		}
 
 		return $this->wrapInPermissionLogContext($parameters, function () use ($userGroups, $deletedUserGroups) {
-			$deleteResult = $this->deleteUserGroups($deletedUserGroups);
+			$accessRights = (new QueryAccessRights($this->manager))->execute();
+
+			// all user groups that fit the selection and therefore can be edited by the user
+			$allowedUserGroupIds = UserGroupsProvider::createByManager($this->manager, $accessRights)->loadAllIds();
+
+			$deleteResult = $this->deleteUserGroups($deletedUserGroups, $allowedUserGroupIds);
 			if (!$deleteResult->isSuccess())
 			{
 				$this->addErrors($deleteResult->getErrors());
 
 				return null;
 			}
+
+			$allowedUserGroupIds = array_diff($allowedUserGroupIds, $deleteResult->getData()['deletedUserGroupIds'] ?? []);
 
 			$userGroupDTOs = UserGroupsData::makeFromArray($userGroups, $this->manager->getGroupCode());
 
@@ -176,7 +183,7 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 				return null;
 			}
 
-			if (!$this->isSaveUserGroupsAllowed($userGroupDTOs))
+			if (!$this->isSaveUserGroupsAllowed($userGroupDTOs, $allowedUserGroupIds))
 			{
 				$this->addError(ErrorCode::getAccessDeniedError());
 
@@ -198,8 +205,6 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 
 				return null;
 			}
-
-			$accessRights = (new QueryAccessRights($this->manager))->execute();
 
 			return [
 				'USER_GROUPS' => UserGroupsProvider::createByManager($this->manager, $accessRights)
@@ -225,15 +230,20 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 		return $result;
 	}
 
-	private function deleteUserGroups(array $userGroupsToDelete): Result
+	private function deleteUserGroups(array $userGroupsToDelete, array $allowedUserGroupIds): Result
 	{
 		$result = new Result();
 
 		$validator = DeleteRoleValidator::getInstance();
 		$command = DeleteRoleCommand::getInstance();
 
+		$allowedUserGroupIdsInverted = array_flip($allowedUserGroupIds);
+
+		$deletedIds = [];
 		foreach ($userGroupsToDelete as $roleId)
 		{
+			$roleId = (int)$roleId;
+
 			$validationResult = $validator->validate($roleId);
 			if (!$validationResult->isSuccess())
 			{
@@ -241,27 +251,45 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 				continue;
 			}
 
+			if (!isset($allowedUserGroupIdsInverted[$roleId]))
+			{
+				$result->addError(ErrorCode::getAccessDeniedError());
+				continue;
+			}
+
 			$deleteResult = $command->execute($roleId);
-			if (!$deleteResult->isSuccess())
+			if ($deleteResult->isSuccess())
+			{
+				$deletedIds[] = $roleId;
+			}
+			else
 			{
 				$result->addErrors($deleteResult->getErrors());
 			}
 		}
 
-		return $result;
+		return $result->setData(['deletedUserGroupIds' => $deletedIds]);
 	}
 
 	/**
 	 * @param UserGroupsData[] $userGroups
+	 * @param int[] $allowedUserGroupIds
 	 * @return bool
 	 */
-	private function isSaveUserGroupsAllowed(array $userGroups): bool
+	private function isSaveUserGroupsAllowed(array $userGroups, array $allowedUserGroupIds): bool
 	{
 		$checkedEntities = [];
 		$transformer = PermCodeTransformer::getInstance();
 
+		$allowedUserGroupIdsInverted = array_flip($allowedUserGroupIds);
+
 		foreach ($userGroups as $userGroup)
 		{
+			if ($userGroup->id !== null && $userGroup->id > 0 && !isset($allowedUserGroupIdsInverted[$userGroup->id]))
+			{
+				return false;
+			}
+
 			foreach ($userGroup->accessRights as $accessRight)
 			{
 				try

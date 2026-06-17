@@ -101,6 +101,28 @@ class CJSCore
 
 		$ret = '';
 
+		if ($bNeedCore && !self::isBaselineLoaded())
+		{
+			self::markExtensionLoaded('main.baseline');
+
+			$baselineConfig = Extension::getConfig('main.baseline');
+			$baselineLang = self::_loadLang($baselineConfig['lang'], true);
+			$baselineSettings = self::loadSettings('main.baseline', $baselineConfig['settings'], true);
+			$baselineJs = self::_loadJS($baselineConfig['js'], true);
+
+			if ($bReturn)
+			{
+				$ret .= $baselineLang;
+				$ret .= $baselineSettings;
+				$ret .= $baselineJs;
+			}
+
+			$asset = Asset::getInstance();
+			$asset->addString($baselineLang, true, AssetLocation::AFTER_CSS);
+			$asset->addString($baselineSettings, true, AssetLocation::AFTER_CSS);
+			$asset->addString($baselineJs, true, AssetLocation::AFTER_CSS);
+		}
+
 		if ($bNeedCore && !self::isCoreLoaded())
 		{
 			$config = self::getCoreConfig();
@@ -202,6 +224,14 @@ class CJSCore
 			self::isExtensionLoaded("core")
 			|| self::isExtensionLoaded("main.core")
         );
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function isBaselineLoaded()
+	{
+		return self::isExtensionLoaded("main.baseline");
 	}
 
 	/**

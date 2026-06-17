@@ -12,6 +12,7 @@ use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\AIAction;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\AIOperationStateChecker;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\StateChecker\ResultStateChecker;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 final class FillRepeatSaleTips extends AIAction
 {
@@ -87,5 +88,10 @@ final class FillRepeatSaleTips extends AIAction
 		return [
 			'id' => self::BUTTON_TARGET_ID,
 		];
+	}
+
+	protected function getMenuIcon(): Outline
+	{
+		return Outline::REPEAT_SALES;
 	}
 }

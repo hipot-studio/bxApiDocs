@@ -1,9 +1,10 @@
 <?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2020 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Authentication;
@@ -40,7 +41,7 @@ class ShortCode
 
 	/**
 	 * Generates a 6-number code.
-	 * @return bool|string
+	 * @return string
 	 */
 	public function generate()
 	{
@@ -80,7 +81,7 @@ class ShortCode
 		{
 			list($otpResult, ) = $totp->verify($code);
 		}
-		catch(Main\ArgumentException $e)
+		catch(Main\ArgumentException)
 		{
 		}
 
@@ -114,7 +115,7 @@ class ShortCode
 			"resendInterval" => $this->resendInterval,
 		];
 
-		//alowed only once in a interval
+		//alowed only once in an interval
 		if($this->code->getDateResent())
 		{
 			$currentDateTime = new Main\Type\DateTime();

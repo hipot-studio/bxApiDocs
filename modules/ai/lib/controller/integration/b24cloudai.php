@@ -98,14 +98,28 @@ class B24CloudAi extends Controller
 	public function callbackSuccessAction(string $hash, JsonPayload $result): bool
 	{
 		$queueJob = QueueJob::createFromHash($hash);
-		if ($queueJob)
+		if (!$queueJob)
 		{
-			$queueJob->execute(Json::decode($result->getRaw()));
+			return false;
+		}
+
+		try
+		{
+			$decoded = Json::decode($result->getRaw());
+		}
+		catch (ArgumentException $e)
+		{
+			$queueJob->handleError(
+				'Invalid JSON in callback payload: ' . $e->getMessage(),
+				QueueJob::ERROR_INVALID_JSON
+			);
 
 			return true;
 		}
 
-		return false;
+		$queueJob->execute($decoded);
+
+		return true;
 	}
 
 	/**
@@ -118,14 +132,24 @@ class B24CloudAi extends Controller
 	public function callbackErrorAction(string $hash, JsonPayload $result): bool
 	{
 		$queueJob = QueueJob::createFromHash($hash);
-		if ($queueJob)
+		if (!$queueJob)
 		{
-			$queueJob->fail($result->getData());
-
-			return true;
+			return false;
 		}
 
-		return false;
+		try
+		{
+			$queueJob->fail($result->getData());
+		}
+		catch (\Throwable $e)
+		{
+			$queueJob->handleError(
+				'Error processing failure callback: ' . $e->getMessage(),
+				QueueJob::ERROR_FAIL_PROCESSING
+			);
+		}
+
+		return true;
 	}
 
 	/**

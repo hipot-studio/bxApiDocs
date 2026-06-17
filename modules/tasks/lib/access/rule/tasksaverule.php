@@ -1,6 +1,8 @@
 <?php
+
 /**
  * Bitrix Framework
+ *
  * @package bitrix
  * @subpackage tasks
  * @copyright 2001-2021 Bitrix
@@ -10,10 +12,12 @@ namespace Bitrix\Tasks\Access\Rule;
 
 use Bitrix\Main\Access\Rule\AbstractRule;
 use Bitrix\Main\Error;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\Model\TaskModel;
 use Bitrix\Main\Access\AccessibleItem;
+use Bitrix\Tasks\Access\Model\TemplateModel;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\Access\Rule\Traits\AssignTrait;
 use Bitrix\Tasks\Access\Rule\Traits\FlowTrait;
@@ -34,7 +38,10 @@ class TaskSaveRule extends AbstractRule
 	/* @var TaskModel $newTask */
 	private $newTask;
 
-	public function execute(AccessibleItem $task = null, $params = null): bool
+	/**
+	 * @throws LoaderException
+	 */
+	public function execute(?AccessibleItem $task = null, $params = null): bool
 	{
 		if (!$task)
 		{
@@ -79,15 +86,15 @@ class TaskSaveRule extends AbstractRule
 			return false;
 		}
 
-		if ($this->newTask->getFlowId() > 0 && $this->checkFlowPermissions($this->newTask->getFlowId()))
+		if (!$this->canChangeTaskGroupFlow())
 		{
-			return true;
+			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_SAVE_RULE_GROUP_DENIED')));
+			$this->controller->addError(static::class, 'Group does not belong to flow');
+
+			return false;
 		}
-		elseif (
-			$this->newTask->getFlowId() > 0
-			&& $this->oldTask->getFlowId() !== $this->newTask->getFlowId()
-			&& !$this->checkFlowPermissions($this->newTask->getFlowId())
-		)
+
+		if (!$this->canChangeTaskFlow())
 		{
 			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_SAVE_RULE_FLOW_DENIED')));
 			$this->controller->addError(static::class, 'Access to flow is denied');
@@ -96,11 +103,7 @@ class TaskSaveRule extends AbstractRule
 		}
 
 		// user can set group
-		if (
-			$this->newTask->getGroupId()
-			&& $this->newTask->getGroupId() !== $this->oldTask->getGroupId()
-			&& !$this->canSetGroup($this->user->getUserId(), $this->newTask->getGroupId())
-		)
+		if (!$this->canUserSetGroup())
 		{
 			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_SAVE_RULE_GROUP_DENIED')));
 			$this->controller->addError(static::class, 'Access to set group denied');
@@ -117,8 +120,7 @@ class TaskSaveRule extends AbstractRule
 			return false;
 		}
 
-		// user can assign task to co-executors
-		if (!$this->canAssignTask($this->oldTask, RoleDictionary::ROLE_ACCOMPLICE, $this->newTask, [$this->user->getUserId()]))
+		if (!$this->canAssignAccomplices())
 		{
 			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_SAVE_RULE_ACCOMPLICE_DENIED')));
 			$this->controller->addError(static::class, 'Access to assign accomplice denied');
@@ -156,6 +158,113 @@ class TaskSaveRule extends AbstractRule
 		}
 
 		return true;
+	}
+
+	protected function canChangeTaskGroupFlow(): bool
+	{
+		$newFlowId = $this->newTask->getFlowId();
+		$newGroupId = $this->newTask->getGroupId();
+
+		if ($newFlowId <= 0)
+		{
+			return true;
+		}
+
+		if ($newGroupId <= 0)
+		{
+			return true;
+		}
+
+		if (
+			$this->oldTask->getFlowId() === $newFlowId
+			&& $this->oldTask->getGroupId() === $newGroupId
+		)
+		{
+			return true;
+		}
+
+		return $this->doesGroupBelongToFlow($newFlowId, $newGroupId);
+	}
+
+	protected function canChangeTaskFlow(): bool
+	{
+		$flowId = $this->newTask->getFlowId();
+
+		if ($flowId <= 0)
+		{
+			return true;
+		}
+
+		return $this->checkFlowPermissions($flowId);
+	}
+
+	/**
+	 * @throws LoaderException
+	 */
+	protected function canUserSetGroup(): bool
+	{
+		if (!$this->newTask->getGroupId())
+		{
+			return true;
+		}
+
+		if ($this->newTask->getFlowId() > 0)
+		{
+			return true;
+		}
+
+		if ($this->newTask->getGroupId() === $this->oldTask->getGroupId())
+		{
+			return true;
+		}
+
+		return $this->canSetGroup($this->user->getUserId(), $this->newTask->getGroupId());
+	}
+
+	protected function canAssignAccomplices(): bool
+	{
+		$accomplicesToCheck = $this->getAccomplicesToCheck();
+
+		if (empty($accomplicesToCheck))
+		{
+			return true;
+		}
+
+		$taskForCheck = clone $this->newTask;
+		$members = $this->newTask->getMembers();
+		$members[RoleDictionary::ROLE_ACCOMPLICE] = $accomplicesToCheck;
+		$taskForCheck->setMembers($members);
+
+		return $this->canAssignTask(
+			$this->oldTask,
+			RoleDictionary::ROLE_ACCOMPLICE,
+			$taskForCheck,
+			[$this->user->getUserId()],
+		);
+	}
+
+	protected function getAccomplicesToCheck(): array
+	{
+		$accomplicesToCheck = $this->newTask->getMembers(RoleDictionary::ROLE_ACCOMPLICE);
+
+		if ($this->newTask->getFlowId() <= 0)
+		{
+			return $accomplicesToCheck;
+		}
+
+		$flowModel = $this->getFlowModel($this->newTask->getFlowId());
+
+		if (!$flowModel || $flowModel->getTemplateId() <= 0)
+		{
+			return $accomplicesToCheck;
+		}
+
+		$templateModel = TemplateModel::createFromId($flowModel->getTemplateId());
+		$accomplicesToSkip = $templateModel->getMembers(RoleDictionary::ROLE_ACCOMPLICE);
+
+		return empty($accomplicesToSkip)
+			? $accomplicesToCheck
+			: array_diff($accomplicesToCheck, $accomplicesToSkip);
 	}
 
 	private function changedDirector()

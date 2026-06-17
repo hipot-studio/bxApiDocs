@@ -21,6 +21,10 @@ final class HeaderSections
 
 	public function sections(?Service\Factory $factory): array
 	{
+		if ($factory === null)
+		{
+			return [];
+		}
 
 		$primaryEntitySection = [
 			'id' => $factory->getEntityName(),
@@ -31,7 +35,7 @@ final class HeaderSections
 
 		return $this->makeSections(
 			$primaryEntitySection,
-			$factory->getEntityTypeId()
+			$factory,
 		);
 	}
 
@@ -46,14 +50,10 @@ final class HeaderSections
 		{
 			$additionalProviders[] = $filterFactory->getRequisiteDataProvider($settings);
 		}
-		if (
-			$settings instanceof DealSettings
-			&& !$settings->checkFlag(DealSettings::FLAG_RECURRING)
-			&& $settings->checkFlag(DealSettings::FLAG_ENABLE_CLIENT_FIELDS)
-		)
-		{
-			$additionalProviders = array_merge($additionalProviders, $filterFactory->getClientDataProviders($settings));
-		}
+		$additionalProviders = array_merge(
+			$additionalProviders,
+			$filterFactory->getSupportedClientDataProviders($settings),
+		);
 
 		if ($this->isFastSearchCanBeUsed($settings))
 		{
@@ -69,13 +69,15 @@ final class HeaderSections
 		return $additionalProviders;
 	}
 
-	private function makeSections(array $primaryEntitySection, int $entityTypeId): array
+	private function makeSections(array $primaryEntitySection, Service\Factory $factory): array
 	{
 		$sections = [$primaryEntitySection];
+		$entityTypeId = $factory->getEntityTypeId();
 
-		if ($entityTypeId === CCrmOwnerType::Deal)
+		if ($factory->isClientFieldsEnabled())
 		{
-			$sections = array_merge($sections, $this->dealSpecificHeaderSections());
+			$hasCompany = $factory->isClientCompanyEnabled();
+			$sections = array_merge($sections, $this->makeClientFieldsSections($hasCompany));
 		}
 
 		if (
@@ -89,7 +91,7 @@ final class HeaderSections
 		return $sections;
 	}
 
-	private function dealSpecificHeaderSections(): array
+	private function makeClientFieldsSections(bool $hasCompany): array
 	{
 		$sections = [];
 
@@ -98,6 +100,11 @@ final class HeaderSections
 			'name' => Loc::getMessage('CRM_HEADER_SECTION_CONTACT'),
 			'selected' => true,
 		];
+		if (!$hasCompany)
+		{
+			return [$contactsSection];
+		}
+
 		$companiesSection = [
 			'id' => CCrmOwnerType::CompanyName,
 			'name' =>  Loc::getMessage('CRM_HEADER_SECTION_COMPANY'),

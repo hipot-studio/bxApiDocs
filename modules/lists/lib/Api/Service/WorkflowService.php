@@ -5,6 +5,8 @@ namespace Bitrix\Lists\Api\Service;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Dto\MetaDataDto;
+use Bitrix\Bizproc\Starter\Dto\StarterConfigDto;
+use Bitrix\Bizproc\Starter\Dto\StarterDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Bizproc\Workflow\Entity\EO_WorkflowMetadata;
@@ -197,13 +199,39 @@ final class WorkflowService
 		if ($this->isBpEnabled && $response->isSuccess())
 		{
 			$complexDocumentId = $this->getComplexDocumentId($request->elementId);
+			$documentStates = $this->getDocumentStates($request->isNewElement ? null : $complexDocumentId);
+			$timeToStart = (
+				isset($request->timeToStart) && $request->timeToStart >= 0
+					? $request->timeToStart
+					: null
+			);
 
-			if (class_exists(Starter::class) && Starter::isEnabled())
+			foreach ($documentStates as $state)
 			{
+				if (empty($state['ID']))
+				{
+					$workflowIds[(int)$state['TEMPLATE_ID']] = null;
+				}
+			}
+
+			$canUseStarter = (
+				method_exists(\Bitrix\Bizproc\Starter\Result\StartResult::class, 'getTemplateWorkflowIds')
+				&& Starter::isEnabled()
+			);
+
+			if ($canUseStarter)
+			{
+				$scenario = ($request->isNewElement ? Scenario::onDocumentAdd : Scenario::onDocumentUpdate);
 				$starter =
-					Starter::getByScenario(
-						$request->isNewElement ? Scenario::onDocumentAdd : Scenario::onDocumentUpdate
-					)
+					(new Starter(new StarterDto(
+						process: new StarterConfigDto(
+							scenario: $scenario,
+							checkFeature: false,
+							checkLimits: false,
+							validateParameters: false,
+							checkConstants: false,
+						),
+					)))
 						->setDocument(new DocumentDto(
 							$complexDocumentId,
 							$this->getComplexDocumentType(),
@@ -211,45 +239,45 @@ final class WorkflowService
 						))
 						->setUser($request->currentUserId)
 						->setParameters($request->parameters)
-						->setMetaData(new MetaDataDto($request->timeToStart))
-						->setValidateParameters(false)
+						->setMetaData(new MetaDataDto($timeToStart))
 						->setContext(new ContextDto('lists'))
 				;
 
 				$result = $starter->start();
 				if (!$result->isSuccess())
 				{
-					$result->addErrors($result->getErrors());
+					$response->addErrors($result->getErrors());
 				}
 
-				$workflowIds = $result->getWorkflowIds();
+				$workflowIds = array_replace($workflowIds, $result->getTemplateWorkflowIds());
 			}
 			else
 			{
-				$documentStates = $this->getDocumentStates($request->isNewElement ? null : $complexDocumentId);
 				foreach ($documentStates as $state)
 				{
 					if (empty($state['ID']))
 					{
 						$errors = [];
+						$templateId = (int)$state['TEMPLATE_ID'];
 
 						$startWorkflowParameters = [
 							\CBPDocument::PARAM_TAGRET_USER => 'user_' . $request->currentUserId,
 							\CBPDocument::PARAM_MODIFIED_DOCUMENT_FIELDS => $request->changedFields,
 						];
 
-						$workflowIds[$state['TEMPLATE_ID']] = \CBPDocument::startWorkflow(
-							$state['TEMPLATE_ID'],
+						$workflowId = \CBPDocument::startWorkflow(
+							$templateId,
 							$complexDocumentId,
-							array_merge($request->parameters[$state['TEMPLATE_ID']] ?? [], $startWorkflowParameters),
+							array_merge($request->parameters[$templateId] ?? [], $startWorkflowParameters),
 							$errors
 						);
+						$workflowIds[$templateId] = $workflowId;
 
-						if (!$errors && isset($request->timeToStart))
+						if (!$errors && is_string($workflowId) && isset($timeToStart))
 						{
 							$metadata = new EO_WorkflowMetadata();
-							$metadata->setWorkflowId($workflowIds[$state['TEMPLATE_ID']]);
-							$metadata->setStartDuration($request->timeToStart);
+							$metadata->setWorkflowId($workflowId);
+							$metadata->setStartDuration($timeToStart);
 							$metadata->save();
 						}
 

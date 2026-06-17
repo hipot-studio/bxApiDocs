@@ -117,25 +117,7 @@ abstract class UserModel
 				return $this->accessCodes;
 			}
 
-			// mantis #0160102, #0213214
-			$res = UserAccessTable::query()
-				->setSelect(['ACCESS_CODE'])
-				->where('USER_ID', $this->userId)
-				->whereNot('PROVIDER_ID', 'imchat')
-				->exec()
-				->fetchAll();
-
-			foreach ($res as $row)
-			{
-				$this->accessCodes[] = $row['ACCESS_CODE']; // mantis 0224146
-				$signature = (new AccessCode($row['ACCESS_CODE']))->getSignature();
-				if ($signature)
-				{
-					$this->accessCodes[$signature] = $signature;
-				}
-			}
-
-			$this->accessCodes = array_unique(array_values($this->accessCodes));
+			$this->accessCodes = $this->buildAccessCodes();
 
 			if (
 				Loader::includeModule('humanresources')
@@ -152,6 +134,30 @@ abstract class UserModel
 			}
 		}
 		return $this->accessCodes;
+	}
+
+	protected function buildAccessCodes(): array
+	{
+		// mantis #0160102, #0213214
+		$rows = UserAccessTable::query()
+			->setSelect(['ACCESS_CODE'])
+			->where('USER_ID', $this->userId)
+			->whereNot('PROVIDER_ID', 'imchat')
+			->exec()
+			->fetchAll();
+
+		$codes = [];
+		foreach (array_column($rows, 'ACCESS_CODE') as $code)
+		{
+			$codes[] = $code; // mantis 0224146
+			$signature = (new AccessCode($code))->getSignature();
+			if ($signature)
+			{
+				$codes[$signature] = $signature;
+			}
+		}
+
+		return array_unique(array_values($codes));
 	}
 
 	public function getSubordinate(int $userId): int

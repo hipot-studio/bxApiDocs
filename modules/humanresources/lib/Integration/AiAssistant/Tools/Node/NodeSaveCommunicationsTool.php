@@ -4,20 +4,27 @@ declare(strict_types=1);
 
 namespace Bitrix\HumanResources\Integration\AiAssistant\Tools\Node;
 
+use Bitrix\HumanResources\Access\Model\ChatListModel;
 use Bitrix\HumanResources\Access\Model\NodeModel;
 use Bitrix\HumanResources\Access\Model\UserModel;
 use Bitrix\HumanResources\Access\Permission\PermissionDictionary;
 use Bitrix\HumanResources\Access\Permission\PermissionVariablesDictionary;
-use Bitrix\HumanResources\Access\StructureActionDictionary;
+use Bitrix\HumanResources\Access\StructureAccessController;
 use Bitrix\HumanResources\Command\Structure\Node\SaveNodeChatsCommand;
 use Bitrix\HumanResources\Config\Storage;
-use Bitrix\HumanResources\Exception\CommandException;
-use Bitrix\HumanResources\Exception\CommandValidateException;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\NodeBaseTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Schema\InputProperty;
 use Bitrix\HumanResources\Type\NodeChatType;
 use Bitrix\HumanResources\Type\NodeEntityType;
-use Bitrix\Main\Error;
 
+/**
+ * Save (bind/unbind/create) communications for a node.
+ *
+ * @see \Bitrix\HumanResources\Rest\Controller\Node\Communication::saveAction — REST analog
+ * @see \Bitrix\HumanResources\Controller\Structure\Node\Member\Chat::saveChatListAction — ajax controller
+ * @see \Bitrix\HumanResources\Controller\Structure\Node\Member\Chat::saveChannelListAction
+ * @see \Bitrix\HumanResources\Controller\Structure\Node\Member\Chat::saveCollabListAction
+ */
 abstract class NodeSaveCommunicationsTool extends NodeBaseTool
 {
 	public function getInputSchema(): array
@@ -25,38 +32,24 @@ abstract class NodeSaveCommunicationsTool extends NodeBaseTool
 		return [
 			'type' => 'object',
 			'properties' => [
-				'nodeId' => [
-					'description' => 'Identifier of the node',
-					'type' => 'number',
-				],
+				'nodeId' => InputProperty::nodeId('Identifier of the node'),
 				'communicationType' => [
-					'description' => 'Type of communication to manage (chat, channel, collab)',
+					'description' => 'Type of communication to manage',
 					'type' => 'string',
 					'enum' => ['chat', 'channel', 'collab'],
 				],
 				'createDefault' => [
-					'description' => 'Whether to create a default communication',
+					'description' => 'Create a new default communication of `communicationType` for this node',
 					'type' => 'boolean',
 					'default' => false,
 				],
-				'ids' => [
-					'description' => 'Array of communication IDs to add the node to',
-					'type' => 'array',
-					'items' => [
-						'type' => 'number',
-					],
-					'default' => [],
-				],
-				'removeIds' => [
-					'description' => 'Array of communication IDs to remove the node from',
-					'type' => 'array',
-					'items' => [
-						'type' => 'number',
-					],
-					'default' => [],
-				],
+				'ids' => InputProperty::idList('Existing communication IDs to associate with the node'),
+				'removeIds' => InputProperty::idList('Existing communication IDs to detach from the node'),
 				'withChildren' => [
-					'description' => 'Whether to apply changes to child nodes',
+					'description' => 'If true, members of all descendant departments/teams are also added to '
+						. 'the bound chats/channels/collabs. If false, only members of the target node are added. '
+						. 'The flag affects only `createDefault` and `ids` — when unlinking via `removeIds`, '
+						. 'child bindings created earlier with this flag are removed automatically.',
 					'type' => 'boolean',
 					'default' => false,
 				],
@@ -76,33 +69,17 @@ abstract class NodeSaveCommunicationsTool extends NodeBaseTool
 		$removeIds = $args['removeIds'] ?? [];
 		$withChildren = $args['withChildren'] ?? false;
 
-		switch ($communicationType) {
-			case 'chat':
-				$actionPermission = $this->type === NodeEntityType::DEPARTMENT
-					? StructureActionDictionary::ACTION_DEPARTMENT_CHAT_EDIT
-					: StructureActionDictionary::ACTION_TEAM_CHAT_EDIT
-				;
-				$chatType = NodeChatType::Chat;
-				break;
-			case 'channel':
-				$actionPermission = $this->type === NodeEntityType::DEPARTMENT
-					? StructureActionDictionary::ACTION_DEPARTMENT_CHANNEL_EDIT
-					: StructureActionDictionary::ACTION_TEAM_CHANNEL_EDIT
-				;
-				$chatType = NodeChatType::Channel;
-				break;
-			case 'collab':
-				$actionPermission = $this->type === NodeEntityType::DEPARTMENT
-					? StructureActionDictionary::ACTION_DEPARTMENT_COLLAB_EDIT
-					: StructureActionDictionary::ACTION_TEAM_COLLAB_EDIT
-				;
-				$chatType = NodeChatType::Collab;
-				break;
-			default:
-				return "Invalid communication type. Must be 'chat', 'channel', or 'collab'.";
+		$chatType = NodeChatType::tryFrom(strtoupper($communicationType));
+		if ($chatType === null)
+		{
+			return "Invalid communication type. Must be 'chat', 'channel', or 'collab'.";
 		}
 
-		if (!$this->checkAccess($userId, $actionPermission, $item))
+		$chatModel = ChatListModel::createFromId((int)$args['nodeId']);
+		$chatModel->setIdsArray($ids);
+
+		$accessController = new StructureAccessController($userId);
+		if (!$accessController->check($chatType->getEditActionId($this->type), $chatModel))
 		{
 			return 'Access denied';
 		}
@@ -117,7 +94,8 @@ abstract class NodeSaveCommunicationsTool extends NodeBaseTool
 				createDefault: $createDefault,
 				ids: $ids,
 				removeIds: $removeIds,
-				withChildren: $withChildren
+				withChildren: $withChildren,
+				userId: $userId,
 			))->run();
 
 			if (!$commandResult->isSuccess())

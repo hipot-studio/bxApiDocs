@@ -4,6 +4,7 @@ namespace Bitrix\Forum;
 use Bitrix\Main;
 use Bitrix\Forum;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Data\DeleteResult;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
@@ -741,9 +742,9 @@ class Topic extends \Bitrix\Forum\Internals\Entity
 		return $result;
 	}
 
-	public static function delete(int $id): Main\Orm\Data\DeleteResult
+	public static function delete(int $id): DeleteResult
 	{
-		$result = new Main\Orm\Data\DeleteResult();
+		$result = new DeleteResult();
 		if (!($topicData = Forum\TopicTable::getById($id)->fetch()))
 		{
 			return $result;
@@ -752,9 +753,9 @@ class Topic extends \Bitrix\Forum\Internals\Entity
 		return self::deleteTopic($id, $topicData);
 	}
 
-	private static function deleteTopic(int $id, array $topicData): Main\Orm\Data\DeleteResult
+	private static function deleteTopic(int $id, array $topicData): DeleteResult
 	{
-		$result = new Main\Orm\Data\DeleteResult();
+		$result = new DeleteResult();
 
 		/***************** Event onBeforeTopicDelete ***********************/
 		foreach (GetModuleEvents("forum", "onBeforeTopicDelete", true) as $arEvent)

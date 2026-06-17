@@ -5,6 +5,7 @@ use Bitrix\Crm\Category\PermissionEntityTypeHelper;
 use Bitrix\Crm\Security\Role\Manage\DTO\PermissionModel;
 use Bitrix\Crm\Security\Role\Model\RolePermissionTable;
 use Bitrix\Crm\Security\Role\Model\RoleRelationTable;
+use Bitrix\Crm\Security\Role\Repositories\PermissionRepository;
 use Bitrix\Crm\Security\Role\RolePermission;
 use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
 use Bitrix\Main;
@@ -185,32 +186,45 @@ class CCrmRole
 
 	public static function getRolePermissionsAndSettings(int $id): array
 	{
-		$itemsIterator = RolePermissionTable::query()
-			->setSelect(['*'])
-			->where('ROLE_ID', $id)
-			->exec()
-		;
+		return self::getRolePermissionsAndSettingsBatch([$id])[$id] ?? [];
+	}
+
+	/**
+	 * @param int[] $roleIds
+	 * @return array<int, array> Map ROLE_ID => structure in getRolePermissionsAndSettings() format.
+	 *                            Roles without any permissions are absent from the map.
+	 */
+	public static function getRolePermissionsAndSettingsBatch(array $roleIds): array
+	{
+		if (empty($roleIds))
+		{
+			return [];
+		}
+
+		$rows = PermissionRepository::getInstance()->queryActualPermsByRoleIds($roleIds);
 
 		$result = [];
-		while ($item = $itemsIterator->fetch())
+		foreach ($rows as $row)
 		{
-			$attr = ($item['ATTR'] == '') ? null : trim($item['ATTR']);
-			$settings = empty($item['SETTINGS']) ? null : $item['SETTINGS'];
+			$roleId = (int)$row['ROLE_ID'];
+			$attr = ($row['ATTR'] == '') ? null : trim($row['ATTR']);
+			$settings = empty($row['SETTINGS']) ? null : $row['SETTINGS'];
 
 			$value = [
 				'ATTR' => $attr,
 				'SETTINGS' => $settings,
 			];
 
-			if ($item['FIELD'] != '-')
+			if ($row['FIELD'] != '-')
 			{
-				$result[$item['ENTITY']][$item['PERM_TYPE']][$item['FIELD']][$item['FIELD_VALUE']] = $value;
+				$result[$roleId][$row['ENTITY']][$row['PERM_TYPE']][$row['FIELD']][$row['FIELD_VALUE']] = $value;
 			}
 			else
 			{
-				$result[$item['ENTITY']][$item['PERM_TYPE']][$item['FIELD']] = $value;
+				$result[$roleId][$row['ENTITY']][$row['PERM_TYPE']][$row['FIELD']] = $value;
 			}
 		}
+
 		return $result;
 	}
 

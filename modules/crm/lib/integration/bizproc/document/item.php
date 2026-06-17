@@ -394,6 +394,7 @@ class Item extends \CCrmDocument implements \IBPWorkflowDocument
 		$entityFields += array_merge(
 			static::getAssignedByFields(),
 			static::getCommunicationFields(),
+			static::getBadgeFields(),
 			static::getUserFieldsMap($factory),
 			static::getUtmFields(),
 			static::getSiteFormFields($factory->getEntityTypeId()),

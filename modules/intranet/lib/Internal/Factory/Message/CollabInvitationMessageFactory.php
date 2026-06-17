@@ -8,6 +8,7 @@ use Bitrix\Intranet\Contract\Strategy\InvitationMessageFactoryContract;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Enum\InvitationStatus;
+use Bitrix\Intranet\Internal\Integration\Socialnetwork\FeatureProvider;
 use Bitrix\Intranet\Service\EmailMessage;
 use Bitrix\Intranet\Service\PhoneMessage;
 use Bitrix\Main\Loader;
@@ -77,6 +78,11 @@ class CollabInvitationMessageFactory implements InvitationMessageFactoryContract
 
 		if (Loader::includeModule('bitrix24') && \CBitrix24::isLicenseNeverPayed())
 		{
+			if ((new FeatureProvider())->isNewProjectsAvailable())
+			{
+				return Loc::getMessage('INTRANET_INVITATION_PROJECT_TITLE', null, $lang);
+			}
+
 			return Loc::getMessage('INTRANET_INVITATION_COLLAB_TITLE', null, $lang);
 		}
 
@@ -87,6 +93,12 @@ class CollabInvitationMessageFactory implements InvitationMessageFactoryContract
 			'LOGIN' => CurrentUser::get()->getLogin(),
 		], true);
 
-		return $formattedName . ' ' . Loc::getMessage('INTRANET_INVITATION_COLLAB_INVITE_YOU', null, $lang) . ' ' . $this->collab->getName();
+		$message = Loc::getMessage('INTRANET_INVITATION_COLLAB_INVITE_YOU', null, $lang);
+		if ((new FeatureProvider())->isNewProjectsAvailable())
+		{
+			$message = Loc::getMessage('INTRANET_INVITATION_PROJECT_INVITE_YOU', null, $lang);
+		}
+
+		return $formattedName . ' ' . $message . ' ' . $this->collab->getName();
 	}
 }

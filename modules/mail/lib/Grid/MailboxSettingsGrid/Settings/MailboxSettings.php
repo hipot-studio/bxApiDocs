@@ -62,7 +62,7 @@ class MailboxSettings extends Settings
 	{
 		return [
 			'EMAIL',
-			'OWNER', 
+			'OWNER',
 			'LAST_SYNC',
 			'CRM_INTEGRATION',
 			'ACCESS_USERS',

@@ -2,12 +2,16 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 
+use Bitrix\Calendar\Rooms\Manager;
+use Bitrix\Calendar\Rooms\Util;
 use Bitrix\Crm\Activity\Analytics\Dictionary;
 use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
+use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\EventHandler;
+use Bitrix\Crm\Integration\Calendar;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
@@ -29,12 +33,13 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
 use Bitrix\Crm\Service\Timeline\Layout\Header\Tag;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemFactory;
-use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
+use CCrmContentType;
 use CCrmOwnerType;
+use CUtil;
 
 class ToDo extends Activity
 {
@@ -108,9 +113,6 @@ class ToDo extends Activity
 		return ($eventId === null ? null : (int)$eventId);
 	}
 
-	/**
-	 * @throws ArgumentTypeException
-	 */
 	public function getContentBlocks(): array
 	{
 		$result = [];
@@ -187,10 +189,16 @@ class ToDo extends Activity
 			$result['fileList'] = $filesBlock;
 		}
 
-		$baseActivityBlock = $this->buildBaseActivityBlock();
+		$isAiCreated = $this->isAiCreated();
+		$baseActivityBlock = $this->buildBaseActivityBlock($isAiCreated ? AIManager::getCopilotName() : '');
 		if (isset($baseActivityBlock))
 		{
 			$result['createdFrom'] = $baseActivityBlock;
+		}
+
+		if ($baseActivityBlock === null && $isAiCreated)
+		{
+			$result['createdByAi'] = $this->buildAiCreatedBlock();
 		}
 
 		return $result;
@@ -285,11 +293,38 @@ class ToDo extends Activity
 		return $items;
 	}
 
+	public function getTags(): ?array
+	{
+		$tags = [];
+
+		if ($this->hasOverlapEventTag())
+		{
+			$tags['overlapEvent'] = (new Tag(
+				Loc::getMessage('CRM_TIMELINE_ITEM_TODO_OVERLAP_EVENT'),
+				Tag::TYPE_PRIMARY
+			));
+		}
+
+		return $tags;
+	}
+
+	public function getPayload(): ?Payload
+	{
+		$context = $this->getContext();
+
+		return (new Payload())
+			->addValueInt('ownerTypeId', $context->getEntityTypeId())
+			->addValueInt('ownerId', $context->getEntityId())
+			->addValueInt('id', $this->getActivityId())
+			;
+	}
+
 	public function needShowNotes(): bool
 	{
 		return true;
 	}
 
+	// region Build content blocks
 	private function buildCalendarEventBlock(): ?ContentBlockWithTitle
 	{
 		$calendarEvent = $this->getCalendarEvent();
@@ -299,7 +334,7 @@ class ToDo extends Activity
 			return null;
 		}
 
-		$entryDateFrom = \CUtil::JSescape($calendarEvent['DATE_FROM']);
+		$entryDateFrom = CUtil::JSescape($calendarEvent['DATE_FROM']);
 		$offset = (int)$calendarEvent['TZ_OFFSET_FROM'];
 
 		return (new ContentBlockWithTitle())
@@ -380,50 +415,6 @@ class ToDo extends Activity
 		;
 	}
 
-	private function getDeadlineEditableDateTitle(): string
-	{
-		$calendarEvent = $this->getCalendarEvent();
-		if ($calendarEvent)
-		{
-			return Loc::getMessage('CRM_TIMELINE_ITEM_TODO_COMPLETE_TO_WITH_CALENDAR_EVENT');
-		}
-
-		return Loc::getMessage('CRM_TIMELINE_ITEM_TODO_COMPLETE_TO');
-	}
-
-	private function getDeadlineEditableDateDuration(): ?int
-	{
-		$startTime = $this->getAssociatedEntityModel()?->get('START_TIME');
-		$endTime = $this->getAssociatedEntityModel()?->get('END_TIME');
-		if (
-			empty($startTime)
-			|| empty($endTime)
-			|| $startTime === $endTime
-			|| $this->getCalendarEventId() <= 0
-		)
-		{
-			return null;
-		}
-
-		$startDateTime = DateTime::createFromText($startTime);
-		$endDateTime = DateTime::createFromText($endTime);
-
-		return $endDateTime?->getTimestamp() - $startDateTime?->getTimestamp();
-	}
-
-	private function getCalendarEvent(): ?array
-	{
-		if ($this->getCalendarEventId() > 0)
-		{
-			return \Bitrix\Crm\Integration\Calendar::getEvent($this->getCalendarEventId());
-		}
-
-		return null;
-	}
-
-	/**
-	 * @throws ArgumentTypeException
-	 */
 	private function buildWebDeadlineAndPingSelectorBlock(): ?ContentBlock
 	{
 		$deadlineAndPingSelector = new ContentBlock\Activity\DeadlineAndPingSelector();
@@ -658,9 +649,9 @@ class ToDo extends Activity
 
 		// Temporarily removes [p] for mobile compatibility
 		$descriptionType = (int)$this->getAssociatedEntityModel()?->get('DESCRIPTION_TYPE');
-		if ($this->getContext()->getType() === Context::MOBILE && $descriptionType === \CCrmContentType::BBCode)
+		if ($this->getContext()->getType() === Context::MOBILE && $descriptionType === CCrmContentType::BBCode)
 		{
-			$description = \Bitrix\Crm\Format\TextHelper::removeParagraphs($description);
+			$description = TextHelper::removeParagraphs($description);
 		}
 
 		$editableDescriptionBlock = (new EditableDescription())
@@ -731,8 +722,8 @@ class ToDo extends Activity
 			return null;
 		}
 
-		$location = \Bitrix\Calendar\Rooms\Util::parseLocation($location);
-		$sectionList = \Bitrix\Calendar\Rooms\Manager::getRoomsList();
+		$location = Util::parseLocation($location);
+		$sectionList = Manager::getRoomsList();
 
 		$locationItem = null;
 		foreach($sectionList as $room)
@@ -801,31 +792,6 @@ class ToDo extends Activity
 		;
 	}
 
-	private function hasOnlyOneClient(array $users): bool
-	{
-		return (count($users) === 1 && (int)$users[0] === $this->getContext()->getUserId());
-	}
-
-	private function appendUserTextBlocks(LineOfTextBlocks $lineOfTextBlocks, array $items): void
-	{
-		foreach ($items as $item)
-		{
-			$id = (int) $item['ID'];
-			$userTextBlock = (new ContentBlock\Link())
-				->setValue($item['FORMATTED_NAME'])
-				->setAction(
-					(new JsEvent('Activity:ToDo:User:Click'))
-						->addActionParamInt('userId', $id)
-				)
-			;
-
-			$lineOfTextBlocks->addContentBlock(
-				'user_' . $id,
-				$userTextBlock
-			);
-		}
-	}
-
 	private function buildClientsBlock(): ?ContentBlock
 	{
 		$settings = $this->getAssociatedEntityModel()?->get('SETTINGS');
@@ -847,8 +813,8 @@ class ToDo extends Activity
 
 		[$contacts, $companies] = $this->getItemIds($clients);
 
-		$this->appendClientTextBlocks($lineOfTextBlocks, \CCrmOwnerType::Contact, $contacts);
-		$this->appendClientTextBlocks($lineOfTextBlocks, \CCrmOwnerType::Company, $companies);
+		$this->appendClientTextBlocks($lineOfTextBlocks, CCrmOwnerType::Contact, $contacts);
+		$this->appendClientTextBlocks($lineOfTextBlocks, CCrmOwnerType::Company, $companies);
 
 		if ($lineOfTextBlocks->isEmpty())
 		{
@@ -895,50 +861,6 @@ class ToDo extends Activity
 			)
 			->setInline()
 		;
-	}
-
-	private function getItemIds(array $clients): array
-	{
-		$contactBroker = Container::getInstance()->getContactBroker();
-		$companyBroker = Container::getInstance()->getCompanyBroker();
-
-		$contactIds = [];
-		$companyIds = [];
-
-		foreach ($clients as $client)
-		{
-			if ((int)$client['ENTITY_TYPE_ID'] === \CCrmOwnerType::Contact)
-			{
-				$contactIds[] = $client['ENTITY_ID'];
-			}
-			else if ((int)$client['ENTITY_TYPE_ID'] === \CCrmOwnerType::Company)
-			{
-				$companyIds[] = $client['ENTITY_ID'];
-			}
-		}
-
-		return [
-			$contactBroker->getBunchByIds($contactIds),
-			$companyBroker->getBunchByIds($companyIds),
-		];
-	}
-
-	private function appendClientTextBlocks(
-		LineOfTextBlocks $lineOfTextBlocks,
-		int $entityTypeId,
-		array $items
-	): void
-	{
-		foreach ($items as $item)
-		{
-			$id = $item->getId();
-			$itemIdentifier = new ItemIdentifier($entityTypeId, $id);
-
-			$lineOfTextBlocks->addContentBlock(
-				\CCrmOwnerType::ResolveName($entityTypeId) . '_' . $id,
-				$this->getClientContentBlock($item->getHeading(), $itemIdentifier)
-			);
-		}
 	}
 
 	private function getClientContentBlock(string $name, ItemIdentifier $item): ContentBlock\Link
@@ -1012,61 +934,7 @@ class ToDo extends Activity
 
 		return $fileListBlock;
 	}
-
-	private function buildBaseActivityBlock(): ?ContentBlock
-	{
-		$associatedActivityId = $this->getAssociatedEntityModel()?->get('ASSOCIATED_ENTITY_ID');
-		if (!isset($associatedActivityId))
-		{
-			return null;
-		}
-
-		$baseActivitySubject = Container::getInstance()
-			->getActivityBroker()
-			->getById($associatedActivityId)['SUBJECT'] ?? ''
-		;
-
-		if (empty($baseActivitySubject))
-		{
-			return null;
-		}
-
-		return (new LineOfTextBlocks())
-			->addContentBlock(
-				'createdFrom',
-				ContentBlockFactory::createTitle(Loc::getMessage('CRM_TIMELINE_ITEM_TODO_CREATED_FROM'))
-			)
-			->addContentBlock(
-				'baseActivity',
-				(new Text())
-					->setValue($baseActivitySubject)
-					->setColor(Text::COLOR_BASE_70)
-					->setFontWeight(Text::FONT_WEIGHT_MEDIUM)
-			)
-		;
-	}
-
-	private function getPingOffsets(): array
-	{
-		$offsets = (array)($this->getAssociatedEntityModel()?->get('PING_OFFSETS') ?? []);
-		if (empty($offsets))
-		{
-			$offsets = Provider\ToDo\ToDo::getPingOffsets($this->getActivityId());
-		}
-
-		return TodoPingSettingsProvider::getValuesByOffsets($offsets);
-	}
-
-	public function getPayload(): ?Payload
-	{
-		$context = $this->getContext();
-
-		return (new Payload())
-			->addValueInt('ownerTypeId', $context->getEntityTypeId())
-			->addValueInt('ownerId', $context->getEntityId())
-			->addValueInt('id', $this->getActivityId())
-		;
-	}
+	// endregion
 
 	protected function getCompleteAction(): Layout\Action\RunAjaxAction
 	{
@@ -1082,21 +950,7 @@ class ToDo extends Activity
 		return $action;
 	}
 
-	public function getTags(): ?array
-	{
-		$tags = [];
-
-		if ($this->hasOverlapEventTag())
-		{
-			$tags['overlapEvent'] = (new Tag(
-				Loc::getMessage('CRM_TIMELINE_ITEM_TODO_OVERLAP_EVENT'),
-				Tag::TYPE_PRIMARY
-			));
-		}
-
-		return $tags;
-	}
-
+	// region Internal utils
 	private function hasOverlapEventTag()
 	{
 		return $this->getAssociatedEntityModel()?->get('SETTINGS')['TAGS']['OVERLAP_EVENT'] ?? false;
@@ -1111,7 +965,7 @@ class ToDo extends Activity
 		{
 			$section = \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CATALOG_CONTRACTOR_CONTACT;
 		}
-		else if ($entityTypeId === CCrmOwnerType::Company && $categoryId !== 0)
+		elseif ($entityTypeId === CCrmOwnerType::Company && $categoryId !== 0)
 		{
 			$section = \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_CATALOG_CONTRACTOR_COMPANY;
 		}
@@ -1144,4 +998,142 @@ class ToDo extends Activity
 			'p1' => \Bitrix\Crm\Integration\Analytics\Dictionary::getCrmMode(),
 		]);
 	}
+
+	private function getDeadlineEditableDateTitle(): string
+	{
+		$calendarEvent = $this->getCalendarEvent();
+		if ($calendarEvent)
+		{
+			return Loc::getMessage('CRM_TIMELINE_ITEM_TODO_COMPLETE_TO_WITH_CALENDAR_EVENT');
+		}
+
+		return Loc::getMessage('CRM_TIMELINE_ITEM_TODO_COMPLETE_TO');
+	}
+
+	private function getDeadlineEditableDateDuration(): ?int
+	{
+		$startTime = $this->getAssociatedEntityModel()?->get('START_TIME');
+		$endTime = $this->getAssociatedEntityModel()?->get('END_TIME');
+		if (
+			empty($startTime)
+			|| empty($endTime)
+			|| $startTime === $endTime
+			|| $this->getCalendarEventId() <= 0
+		)
+		{
+			return null;
+		}
+
+		$startDateTime = DateTime::createFromText($startTime);
+		$endDateTime = DateTime::createFromText($endTime);
+
+		return $endDateTime?->getTimestamp() - $startDateTime?->getTimestamp();
+	}
+
+	private function getCalendarEvent(): ?array
+	{
+		if ($this->getCalendarEventId() > 0)
+		{
+			return Calendar::getEvent($this->getCalendarEventId());
+		}
+
+		return null;
+	}
+
+	private function hasOnlyOneClient(array $users): bool
+	{
+		return (count($users) === 1 && (int)$users[0] === $this->getContext()->getUserId());
+	}
+
+	private function appendClientTextBlocks(
+		LineOfTextBlocks $lineOfTextBlocks,
+		int $entityTypeId,
+		array $items
+	): void
+	{
+		foreach ($items as $item)
+		{
+			$id = $item->getId();
+			$itemIdentifier = new ItemIdentifier($entityTypeId, $id);
+
+			$lineOfTextBlocks->addContentBlock(
+				CCrmOwnerType::ResolveName($entityTypeId) . '_' . $id,
+				$this->getClientContentBlock($item->getHeading(), $itemIdentifier)
+			);
+		}
+	}
+
+	private function appendUserTextBlocks(LineOfTextBlocks $lineOfTextBlocks, array $items): void
+	{
+		foreach ($items as $item)
+		{
+			$id = (int) $item['ID'];
+			$userTextBlock = (new ContentBlock\Link())
+				->setValue($item['FORMATTED_NAME'])
+				->setAction(
+					(new JsEvent('Activity:ToDo:User:Click'))
+						->addActionParamInt('userId', $id)
+				)
+			;
+
+			$lineOfTextBlocks->addContentBlock(
+				'user_' . $id,
+				$userTextBlock
+			);
+		}
+	}
+
+	private function getItemIds(array $clients): array
+	{
+		$contactBroker = Container::getInstance()->getContactBroker();
+		$companyBroker = Container::getInstance()->getCompanyBroker();
+
+		$contactIds = [];
+		$companyIds = [];
+
+		foreach ($clients as $client)
+		{
+			if ((int)$client['ENTITY_TYPE_ID'] === CCrmOwnerType::Contact)
+			{
+				$contactIds[] = $client['ENTITY_ID'];
+			}
+			elseif ((int)$client['ENTITY_TYPE_ID'] === CCrmOwnerType::Company)
+			{
+				$companyIds[] = $client['ENTITY_ID'];
+			}
+		}
+
+		return [
+			$contactBroker->getBunchByIds($contactIds),
+			$companyBroker->getBunchByIds($companyIds),
+		];
+	}
+
+	private function getPingOffsets(): array
+	{
+		$offsets = (array)($this->getAssociatedEntityModel()?->get('PING_OFFSETS') ?? []);
+		if (empty($offsets))
+		{
+			$offsets = Provider\ToDo\ToDo::getPingOffsets($this->getActivityId());
+		}
+
+		return TodoPingSettingsProvider::getValuesByOffsets($offsets);
+	}
+
+	private function isAiCreated(): bool
+	{
+		$settings = $this->getAssociatedEntityModel()?->get('SETTINGS');
+		if ($settings === null)
+		{
+			return false;
+		}
+
+		$isAiCreated = isset($settings['IS_AI_CREATED']) && $settings['IS_AI_CREATED'] === true;
+		$isNotEdited = empty($this->getAssociatedEntityModel()?->get('LAST_UPDATED'))
+			|| $this->getAssociatedEntityModel()?->get('LAST_UPDATED') == $this->getAssociatedEntityModel()?->get('CREATED')
+		;
+
+		return $isAiCreated && $isNotEdited;
+	}
+	// endregion
 }

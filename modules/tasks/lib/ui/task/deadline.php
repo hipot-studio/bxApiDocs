@@ -24,7 +24,7 @@ class Deadline
 	 * @param string|null $deadline
 	 * @return array
 	 */
-	public function buildState(int $status, string $deadline = null): array
+	public function buildState(int $status, ?string $deadline = null): array
 	{
 		if ($status === Status::COMPLETED)
 		{
@@ -44,7 +44,7 @@ class Deadline
 			];
 		}
 
-		if ($status === \Bitrix\Tasks\Internals\Task\Status::SUPPOSEDLY_COMPLETED)
+		if ($status === Status::SUPPOSEDLY_COMPLETED)
 		{
 			return [
 				'state' => Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_DEADLINE_STATE_SUPPOSEDLY_COMPLETED'),
@@ -117,6 +117,104 @@ class Deadline
 		}
 
 		return [];
+	}
+
+	public function buildChipState(int $status, ?string $deadline = null): array
+	{
+		if ($status === Status::COMPLETED)
+		{
+			return [
+				'text' => Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_DEADLINE_STATE_COMPLETED'),
+				'design' => 'outline-no-accent',
+				'clickable' => false,
+			];
+		}
+
+		if ($status === Status::DEFERRED)
+		{
+			return [
+				'text' => Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_DEADLINE_STATE_DEFERRED'),
+				'design' => 'outline',
+				'clickable' => false,
+			];
+		}
+
+		if ($status === Status::SUPPOSEDLY_COMPLETED)
+		{
+			return [
+				'text' => Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_DEADLINE_STATE_SUPPOSEDLY_COMPLETED'),
+				'design' => 'outline-warning',
+				'clickable' => false,
+			];
+		}
+
+		if (
+			!$deadline
+			|| !($timestamp = $this->getDateTimestamp($deadline))
+		)
+		{
+			return [
+				'text' => Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_DEADLINE_STATE_NO_DEADLINE'),
+				'design' => 'outline',
+				'clickable' => true,
+			];
+		}
+
+		$timeFormat = UI::getHumanTimeFormat($timestamp);
+		$deadlineTime = ($timeFormat ? ', ' . DateTime::createFromTimestamp($timestamp)->format($timeFormat) : '');
+		$deadlineDateTime = $this->formatDate($deadline);
+
+		$expiredTime = $this->getExpiredTime($timestamp);
+		if ($expiredTime !== '')
+		{
+			return [
+				'text' => str_replace('&minus;', '-', $expiredTime),
+				'design' => 'tinted-alert',
+				'clickable' => true,
+			];
+		}
+
+		if ($this->isToday($timestamp))
+		{
+			return [
+				'text' => Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_DEADLINE_STATE_TODAY', ['#TIME#' => $deadlineTime]),
+				'design' => 'tinted-warning',
+				'clickable' => true,
+			];
+		}
+
+		if ($this->isTomorrow($timestamp))
+		{
+			return [
+				'text' => Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_DEADLINE_STATE_TOMORROW', ['#TIME#' => $deadlineTime]),
+				'design' => 'tinted-success',
+				'clickable' => true,
+			];
+		}
+
+		if ($this->isThisWeek($timestamp))
+		{
+			return [
+				'text' => $deadlineDateTime,
+				'design' => 'tinted',
+				'clickable' => true,
+			];
+		}
+
+		if ($this->isNextWeek($timestamp))
+		{
+			return [
+				'text' => $deadlineDateTime,
+				'design' => 'outline-accent-2',
+				'clickable' => true,
+			];
+		}
+
+		return [
+			'text' => $deadlineDateTime,
+			'design' => 'tinted-no-accent',
+			'clickable' => true,
+		];
 	}
 
 	/**

@@ -6,6 +6,7 @@ namespace Bitrix\Booking\Entity\Slot;
 
 use Bitrix\Booking\Entity\DatePeriod;
 use Bitrix\Booking\Entity\EntityInterface;
+use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\InvalidArgumentException;
 use Bitrix\Booking\Internals\Service\Time;
 use DateTimeImmutable;
@@ -197,7 +198,11 @@ class Range implements EntityInterface
 
 	public function setTimezone(string $timezone): self
 	{
-		$this->timezone = $timezone;
+		$this->timezone =
+			Container::getTimezoneService()->isValid($timezone)
+				? $timezone
+				: 'UTC'
+		;
 
 		return $this;
 	}

@@ -20,4 +20,10 @@ enum GlobalSetting: string
 
 	/** @see EventHandler::SETTINGS_MESSAGESENDER_EDITOR_ENABLED_CODE */
 	case MessageSenderEditor = 'crm_copilot_message_sender_editor_enabled';
+
+	/** @see EventHandler::SETTINGS_ANALYZE_COMMUNICATION_ENABLED_CODE */
+	case AnalyzeCommunication = 'crm_copilot_analyze_communication_enabled';
+
+	/** @see EventHandler::SETTINGS_SUMMARIZE_ENABLED_CODE */
+	case Summarize = 'crm_copilot_summarize_enabled';
 }

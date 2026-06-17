@@ -482,9 +482,9 @@ class TimelineEntry
 	protected static function fetchAuthorId(array $params): int
 	{
 		$authorId = $params['AUTHOR_ID'] ?? 0;
-		if ($authorId <= 0)
+		if ($authorId < 0)
 		{
-			throw new ArgumentException('Author ID must be greater than zero.', 'authorID');
+			throw new ArgumentException('Author ID must not be less than zero.', 'authorID');
 		}
 
 		return (int)$authorId;

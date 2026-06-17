@@ -48,8 +48,7 @@ class AnnotateCommand extends Command implements AnnotationInterface
 	protected $entitiesFound = [];
 
 	protected $excludedFiles = [
-		'main/lib/text/string.php',
-		'main/lib/composite/compatibility/aliases.php',
+		'main/lib/Composite/compatibility/aliases.php',
 		'sale/lib/delivery/extra_services/string.php',
 	];
 

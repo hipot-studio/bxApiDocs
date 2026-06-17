@@ -123,9 +123,12 @@ enum Outline: string
 	case EXPERT_MODE = 'o-expert-mode';
 	case FAVORITE = 'o-favorite';
 	case FEEDBACK = 'o-feedback';
+	case FILE_WITH_CALENDAR = 'o-file-with-calendar';
 	case FILE_WITH_CHECK_2 = 'o-file-with-check-2';
 	case FILE_WITH_CHECK = 'o-file-with-check';
 	case FILE_WITH_CLOCK = 'o-file-with-clock';
+	case FILE_WITH_CROWN = 'o-file-with-crown';
+	case FILE_WITH_PERSON = 'o-file-with-person';
 	case FILE = 'o-file';
 	case FILTER_2_LINES = 'o-filter-2-lines';
 	case FILTER_FUNNEL = 'o-filter-funnel';
@@ -199,6 +202,7 @@ enum Outline: string
 	case MARKET = 'o-market';
 	case MAXIMIZE = 'o-maximize';
 	case MAXIMIZE_2 = 'o-maximize-2';
+	case MAX = 'o-max';
 	case MEETING_POINT = 'o-meeting-point';
 	case MENTION = 'o-mention';
 	case MESSAGE = 'o-message';
@@ -238,6 +242,7 @@ enum Outline: string
 	case OBSERVER = 'o-observer';
 	case ONLINE_BOOKING = 'o-online-booking';
 	case OPEN_CHANNELS = 'o-open-channels';
+	case OPEN_CHANNELS_CROSS = 'o-open-channels-cross';
 	case OPEN_CHAT = 'o-open-chat';
 	case CHATS_WITH_CHECK = 'o-chats-with-check';
 	case REPLY = 'o-reply';
@@ -635,4 +640,11 @@ enum Outline: string
 	case LOWER_LEFT_ARROW = 'o-lower-left-arrow';
 	case MAIL_PLUS = 'o-mail-plus';
 	case MESSAGES_MULTI = 'o-messages-multi';
+	case SET_KANBAN = 'o-set-kanban';
+	case COOKIES = 'o-cookies';
+	case PAGES = 'o-pages';
+	case EXCLAMATION_XS = 'exclamation-xs';
+	case EXCLAMATION_S = 'exclamation-s';
+	case EXCLAMATION_M = 'exclamation-m';
+	case EXCLAMATION_L = 'exclamation-l';
 }

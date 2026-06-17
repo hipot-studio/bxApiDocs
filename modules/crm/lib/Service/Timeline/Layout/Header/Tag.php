@@ -15,11 +15,14 @@ class Tag extends Button
 
 	protected string $type;
 	protected string $hint = '';
+	protected string $tagId = '';
 
-	public function __construct(string $title, string $type)
+	public function __construct(string $title, string $type, string $tagId = '')
 	{
 		parent::__construct($title);
+
 		$this->type = $type;
+		$this->tagId = $tagId;
 	}
 
 	public function getType(): string
@@ -46,11 +49,24 @@ class Tag extends Button
 		return $this;
 	}
 
+	public function getTagId(): string
+	{
+		return $this->tagId;
+	}
+
+	public function setTagId(string $id): self
+	{
+		$this->tagId = $id;
+
+		return $this;
+	}
+
 	public function toArray(): array
 	{
 		return array_merge(
 			parent::toArray(),
 			[
+				'tagId' => $this->getTagId(),
 				'type' => $this->getType(),
 				'hint' => $this->getHint(),
 			]

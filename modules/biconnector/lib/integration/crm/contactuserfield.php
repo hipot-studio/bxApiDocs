@@ -138,6 +138,7 @@ class ContactUserField
 
 		$messages = \Bitrix\Main\Localization\Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_contact_uf']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_CONTACT_UF_TABLE'] ?: 'crm_contact_uf';
+		$result['crm_contact_uf']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_CONTACT_UF_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_contact_uf']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			if (isset($messages['CRM_BIC_CONTACT_UF_FIELD_' . $fieldCode]))

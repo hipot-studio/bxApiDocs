@@ -9,17 +9,17 @@ use Bitrix\Crm\Import\Strategy\ValueMapper\UserTypeValueMapper;
 use Bitrix\Main\Type\Contract\Arrayable;
 use CCrmUserType;
 
-final class UserField implements ImportEntityFieldInterface, Arrayable
+final readonly class UserField implements ImportEntityFieldInterface, Arrayable
 {
 	public function __construct(
-		private readonly CCrmUserType $userType,
-		private readonly string $id,
-		private readonly string $caption,
-		private readonly string|bool $sort,
-		private readonly bool $default,
-		private readonly bool|array $editable,
-		private readonly string $type,
-		private readonly bool $mandatory,
+		private CCrmUserType $userType,
+		private string $id,
+		private string $caption,
+		private string|bool $sort,
+		private bool $default,
+		private bool|array $editable,
+		private string $type,
+		private bool $mandatory,
 	)
 	{
 	}
@@ -59,17 +59,48 @@ final class UserField implements ImportEntityFieldInterface, Arrayable
 	 */
 	public static function tryFromHeader(array $header, CCrmUserType $userType): ?self
 	{
-		// todo: validation
+		$id = $header['id'] ?? null;
+		if (!is_string($id) || empty($id))
+		{
+			return null;
+		}
+
+		$caption = $header['name'] ?? $header['id'] ?? null;
+		if (!is_string($caption) || empty($caption))
+		{
+			return null;
+		}
+
+		$type = $header['type'] ?? null;
+		if (!is_string($type) || empty($type))
+		{
+			return null;
+		}
+
+		$sort = $header['sort'] ?? null;
+		if (!is_bool($sort) && !is_string($sort))
+		{
+			$sort = false;
+		}
+
+		$editable = $header['editable'] ?? null;
+		if (!is_bool($editable) && !is_array($editable))
+		{
+			$editable = false;
+		}
+
+		$mandatory = ($header['mandatory'] ?? null) === 'Y';
+		$default = ($header['default'] ?? null) === true;
 
 		return new self(
 			$userType,
-			$header['id'],
-			$header['name'],
-			$header['sort'],
-			$header['default'],
-			$header['editable'],
-			$header['type'],
-			$header['mandatory'] === 'Y',
+			$id,
+			$caption,
+			$sort,
+			$default,
+			$editable,
+			$type,
+			$mandatory,
 		);
 	}
 

@@ -5,15 +5,17 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
-use Bitrix\Mail;
+use Bitrix\Mail\Helper\Mailbox;
+use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Helper\MailboxDirectoryHelper;
+use Bitrix\Mail\Internal\Service\Directory\Settings\MailboxDirectorySettingsService;
 use Bitrix\Mail\MailboxDirectory;
 use Bitrix\Main;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\Contract\Controllerable;
-use Bitrix\Main\Error;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorCollection;
+use Bitrix\Main\Result;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -58,28 +60,42 @@ class CMailClientConfigDirsComponent extends CBitrixComponent implements Control
 			return;
 		}
 
-		if (!Mail\Helper\MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
+		if (!MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
 		{
 			showError(Loc::getMessage('MAIL_CLIENT_DENIED'));
 
 			return false;
 		}
 
-		$mailboxHelper = Mail\Helper\Mailbox::createInstance($mailboxId, false);
+		$mailboxHelper = Mailbox::createInstance($mailboxId, false);
 		if (!$mailboxHelper)
 		{
 			LocalRedirect('/mail');
+
+			return false;
 		}
 
-		$mailboxHelper->cacheDirs();
+		$cacheFailed = $mailboxHelper->cacheDirs() === false;
 
-		$mailboxDirsHelper = $mailboxHelper->getDirsHelper();
+		$dirHelper = new MailboxDirectoryHelper($mailboxId);
+		$dirHelper->reloadDirs();
 
-		$this->arResult['DIRS'] = $mailboxDirsHelper->buildTreeDirs();
+		if ($cacheFailed && empty($dirHelper->getDirs()))
+		{
+			$firstError = $mailboxHelper->getErrors()->toArray()[0] ?? null;
+			if ($firstError !== null)
+			{
+				showError($firstError->getMessage());
+			}
+
+			return false;
+		}
+
+		$this->arResult['DIRS'] = $dirHelper->buildTreeDirs();
 		$this->arResult['MAX_LEVEL'] = 1;
-		$this->arResult['OUTCOME'] = $mailboxDirsHelper->getOutcome();
-		$this->arResult['TRASH'] = $mailboxDirsHelper->getTrash();
-		$this->arResult['SPAM'] = $mailboxDirsHelper->getSpam();
+		$this->arResult['OUTCOME'] = $dirHelper->getOutcome();
+		$this->arResult['TRASH'] = $dirHelper->getTrash();
+		$this->arResult['SPAM'] = $dirHelper->getSpam();
 		$this->arResult['MAILBOX_ID'] = $mailboxId;
 		$this->arResult['MAX_LEVEL_DIRS'] = MailboxDirectoryHelper::getMaxLevelDirs();
 
@@ -94,27 +110,27 @@ class CMailClientConfigDirsComponent extends CBitrixComponent implements Control
 	{
 		$request = Context::getCurrent()->getRequest();
 
-		$mailboxId = (int)$request->getPost("mailboxId");
-		$dirs = (array)$request->getPost("dirs");
-		$dirsTypes = (array)$request->getPost("dirsTypes");
+		$mailboxId = (int)$request->getPost('mailboxId');
+		$dirs = (array)$request->getPost('dirs');
+		$dirsTypes = (array)$request->getPost('dirsTypes');
 
-		if (!$mailboxId || (empty($dirs) && empty($dirsTypes)))
+		if (!MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
 		{
-			$this->errorCollection[] = new Error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+			$this->errorCollection->setError(new Main\Error(
+				Loc::getMessage('MAIL_CLIENT_DENIED') ?: 'Access denied',
+				'MAIL_CLIENT_DENIED',
+			));
 
 			return false;
 		}
 
-		if (!Mail\Helper\MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
+		$result = (new MailboxDirectorySettingsService())->save($mailboxId, $dirs, $dirsTypes);
+		if (!$result->isSuccess())
 		{
-			$this->errorCollection[] = new Error('access denied');
+			$this->applyResultErrors($result);
 
 			return false;
 		}
-
-		$mailboxDirsHelper = new MailboxDirectoryHelper($mailboxId);
-		$mailboxDirsHelper->toggleSyncDirs($dirs);
-		$mailboxDirsHelper->saveDirsTypes($dirsTypes);
 
 		return [];
 	}
@@ -123,57 +139,94 @@ class CMailClientConfigDirsComponent extends CBitrixComponent implements Control
 	{
 		$request = Context::getCurrent()->getRequest();
 
-		$mailboxId = (int)$request->getPost("mailboxId");
-		$dir = (array)$request->getPost("dir");
+		$mailboxId = (int)$request->getPost('mailboxId');
+		$dir = (array)$request->getPost('dir');
+		$dirMd5 = (string)($dir['dirMd5'] ?? '');
 
-		if (!$mailboxId || empty($dir) || empty($dir['dirMd5']))
+		if (!MailboxAccess::hasCurrentUserAnyAccessToMailbox($mailboxId))
 		{
-			$this->errorCollection[] = new Error(Loc::getMessage('MAIL_CLIENT_FORM_ERROR'));
+			$this->errorCollection->setError(new Main\Error(
+				Loc::getMessage('MAIL_CLIENT_DENIED') ?: 'Access denied',
+				'MAIL_CLIENT_DENIED',
+			));
 
 			return false;
 		}
 
-		if (!Mail\Helper\MailboxAccess::hasCurrentUserAnyAccessToMailbox($mailboxId))
+		$dirHelper = new MailboxDirectoryHelper($mailboxId);
+		$loadResult = $this->loadChildrenForTemplate($mailboxId, $dirHelper, $dirMd5);
+		if (!$loadResult->isSuccess())
 		{
-			$this->errorCollection[] = new Error('access denied');
-			return false;
-		}
-
-		$parent = MailboxDirectory::fetchOneByMailboxIdAndHash($mailboxId, $dir['dirMd5']);
-
-		if ($parent == null)
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('MAIL_CLIENT_MAILBOX_NOT_FOUND'));
+			$this->applyResultErrors($loadResult);
 
 			return false;
 		}
 
-		if ($parent->getLevel() >= MailboxDirectoryHelper::getMaxLevelDirs())
-		{
-			$this->errorCollection[] = new Error(Loc::getMessage('MAIL_CLIENT_CONFIG_DIRS_MAX_LEVEL_DIRS'));
-
-			return false;
-		}
-
-		$mailboxDirsHelper = new MailboxDirectoryHelper($mailboxId);
-
-		if (!$mailboxDirsHelper->syncChildren($parent))
-		{
-			$this->errorCollection = $mailboxDirsHelper->getErrors();
-
-			return false;
-		}
-
-		$dirs = $mailboxDirsHelper->getAllLevelByParentId($parent);
-		$mailboxDirsHelper->setDirs($dirs);
-
-		$this->arResult['DIRS'] = $mailboxDirsHelper->buildTreeDirs();
+		$this->arResult['DIRS'] = $dirHelper->buildTreeDirs();
 		$this->arResult['MAX_LEVEL'] = 1;
 
 		ob_start();
 		$this->includeComponentTemplate('dirs');
 
 		return ['dirs' => $this->arResult['DIRS'], 'html' => ob_get_clean()];
+	}
+
+	private function loadChildrenForTemplate(int $mailboxId, MailboxDirectoryHelper $dirHelper, string $dirMd5): Result
+	{
+		$result = new Result();
+
+		if (trim($dirMd5) === '')
+		{
+			$result->addError(new Main\Error(
+				Loc::getMessage('MAIL_CLIENT_FORM_ERROR') ?: 'Error processing form',
+				'MAIL_CLIENT_FORM_ERROR',
+			));
+
+			return $result;
+		}
+
+		$parent = MailboxDirectory::fetchOneByMailboxIdAndHash($mailboxId, $dirMd5);
+		if ($parent === null)
+		{
+			$result->addError(new Main\Error(
+				Loc::getMessage('MAIL_CLIENT_MAILBOX_NOT_FOUND') ?: 'Mailbox was not found',
+				'MAIL_CLIENT_MAILBOX_NOT_FOUND',
+			));
+
+			return $result;
+		}
+
+		if ($parent->getLevel() >= MailboxDirectoryHelper::getMaxLevelDirs())
+		{
+			$result->addError(new Main\Error(
+				Loc::getMessage('MAIL_CLIENT_CONFIG_DIRS_MAX_LEVEL_DIRS') ?: 'Maximum nesting levels exceeded',
+				'MAIL_CLIENT_CONFIG_DIRS_MAX_LEVEL_DIRS',
+			));
+
+			return $result;
+		}
+
+		if (!$dirHelper->syncChildren($parent))
+		{
+			foreach ($dirHelper->getErrors()->toArray() as $error)
+			{
+				$result->addError($error);
+			}
+
+			return $result;
+		}
+
+		$dirHelper->setDirs($dirHelper->getAllLevelByParentId($parent));
+
+		return $result;
+	}
+
+	private function applyResultErrors(Result $result): void
+	{
+		foreach ($result->getErrors() as $error)
+		{
+			$this->errorCollection->setError($error);
+		}
 	}
 
 	/**

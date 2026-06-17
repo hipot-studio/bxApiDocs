@@ -8,6 +8,8 @@ use Bitrix\Tasks\Flow\Integration\AI\Configuration;
 use Bitrix\Tasks\Flow\Integration\AI\FlowCopilotFeature;
 use Bitrix\Tasks\Flow\Integration\AI\Provider\AdviceProvider;
 use Bitrix\Tasks\Flow\Internal\Entity\FlowCopilotAdvice;
+use Bitrix\Tasks\Flow\Integration\AI\Provider\CollectedDataProvider;
+use Bitrix\Tasks\Flow\Integration\AI\Provider\CollectedDataStatus;
 use Bitrix\Tasks\Flow\Provider\UserProvider;
 use Bitrix\Tasks\Flow\User\User;
 use Bitrix\TasksMobile\FlowAiAdvice\Dto\FlowAiAdviceDto;
@@ -21,19 +23,38 @@ class FlowAiAdviceProvider
 			return [];
 		}
 
+		$collectedDataProvider = new CollectedDataProvider();
+		$flowsAdviceInfo = $collectedDataProvider->getFlowAdviceInfoByFlowIds(...$flowIds);
+
 		$flowsAiAdvices = array_fill_keys(
 			$flowIds,
 			[
 				'minTasksCountForAdvice' => Configuration::getMinFlowTasksCount(),
 				'efficiencyThreshold' => Configuration::getMaxValueForLowEfficiency(),
+				'advices' => [],
+				'limitExceeded' => false,
+				'rateLimitExceeded' => false,
 			],
 		);
+
 		$adviceCollection = (new AdviceProvider())->getList($flowIds);
 
 		foreach ($flowIds as $flowId)
 		{
 			$adviceObject = $adviceCollection?->getByPrimary($flowId);
 			$flowTasksCount = $flowsTasksCount[$flowId] ?? 0;
+
+			$flowInfo = $flowsAdviceInfo[$flowId] ?? [];
+			$limitExceeded = (
+				isset($flowInfo['STATUS'])
+				&& $flowInfo['STATUS'] === CollectedDataStatus::LIMIT_EXCEEDED
+			);
+			$rateLimitExceeded = (
+				isset($flowInfo['STATUS'])
+				&& $flowInfo['STATUS'] === CollectedDataStatus::RATE_LIMIT_EXCEEDED
+			);
+			$flowsAiAdvices[$flowId]['limitExceeded'] = $limitExceeded;
+			$flowsAiAdvices[$flowId]['rateLimitExceeded'] = $rateLimitExceeded;
 
 			$flowsAiAdvices[$flowId]['advices'] = $this->getFlowAdvices($adviceObject, $flowTasksCount);
 		}

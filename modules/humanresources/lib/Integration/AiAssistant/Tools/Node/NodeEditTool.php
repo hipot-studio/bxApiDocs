@@ -7,29 +7,42 @@ namespace Bitrix\HumanResources\Integration\AiAssistant\Tools\Node;
 use Bitrix\HumanResources\Access\Model\NodeModel;
 use Bitrix\HumanResources\Access\StructureActionDictionary;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\NodeBaseTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Schema\InputProperty;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\NodeEntityType;
 
+/**
+ * Edit node properties (name, description, color).
+ *
+ * @see \Bitrix\HumanResources\Rest\Controller\Node::editAction — REST analog
+ * @see \Bitrix\HumanResources\Controller\Structure\Node::updateAction — ajax controller
+ */
 abstract class NodeEditTool extends NodeBaseTool
 {
 	public function getInputSchema(): array
 	{
+		$properties = [
+			'nodeId' => InputProperty::nodeId('Identifier of the node which name or description should be updated'),
+			'name' => [
+				'description' => 'New node name',
+				'type' => 'string',
+				'minLength' => 1,
+			],
+			'description' => [
+				'description' => 'New node description',
+				'type' => 'string',
+				'minLength' => 1,
+			],
+		];
+
+		if ($this->type === NodeEntityType::TEAM)
+		{
+			$properties['colorName'] = InputProperty::colorName();
+		}
+
 		return [
 			'type' => 'object',
-			'properties' => [
-				'nodeId' => [
-					'description' => 'Identifier of the node which name or description should be updated',
-					'type' => 'number',
-				],
-				'name' => [
-					'description' => 'New node name. Must not be an empty string',
-					'type' => 'string',
-				],
-				'description' => [
-					'description' => 'New node description. Must not be an empty string',
-					'type' => 'string',
-				],
-			],
+			'properties' => $properties,
 			'additionalProperties' => false,
 			'required' => ['nodeId'],
 		];
@@ -50,13 +63,17 @@ abstract class NodeEditTool extends NodeBaseTool
 
 		$node = $item->getNode();
 
-		if ($args['name'] !== null)
+		if (isset($args['name']))
 		{
 			$node->name = $args['name'];
 		}
-		if ($args['description'] !== null)
+		if (isset($args['description']))
 		{
 			$node->description = $args['description'];
+		}
+		if (isset($args['colorName']))
+		{
+			$node->colorName = $args['colorName'];
 		}
 
 		try

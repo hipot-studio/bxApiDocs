@@ -22,7 +22,7 @@ use Bitrix\Main\SystemException;
  *
  * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
  */
-final class NodeService
+class NodeService
 {
 	//region single node getters
 	/**

@@ -37,7 +37,7 @@ class ScopeFieldAssembler extends FieldAssembler
 					'#FIRST_SCOPES#' => $shownPart,
 					'[hint]' => <<<HTML
 						<span
-							data-hint='{$hiddenPart}' 
+							data-hint="{$hiddenPart}" 
 							data-hint-no-icon
 							data-hint-interactivity
 							data-hint-center

@@ -205,7 +205,7 @@ class CCrmEntityHelper
 
 		$options = static::extractArrayFromParams($params, 'options');
 		$authorId = null;
-		if (isset($options['CURRENT_USER']) && (int)$options['CURRENT_USER'] > 0)
+		if (isset($options['CURRENT_USER']) && is_numeric($options['CURRENT_USER']))
 		{
 			$authorId = (int)$options['CURRENT_USER'];
 		}

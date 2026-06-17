@@ -78,6 +78,7 @@ class CrmItemKanbanComponent extends Bitrix\Crm\Component\ItemList
 		{
 			$section = Dictionary::getAnalyticsEntityType($this->entityTypeId) . '_section';
 		}
+		$this->arResult['restrictedFields'] = $this->kanbanEntity->getFieldsRestrictions();
 		$this->arResult['analytics'] = [
 			'c_section' => $section,
 			'c_sub_section' => Dictionary::SUB_SECTION_KANBAN,

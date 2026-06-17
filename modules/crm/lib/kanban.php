@@ -697,6 +697,7 @@ abstract class Kanban
 		$gridFilter = $entity->getGridFilter($filterId);
 		$search = $grid->GetFilter($gridFilter);
 		\Bitrix\Crm\UI\Filter\EntityHandler::internalize($gridFilter, $search);
+		\Bitrix\Crm\Search\SearchEnvironment::convertEntityFilterValues($entity->getTypeId(), $search);
 
 		$filterFactory = Container::getInstance()->getFilterFactory();
 
@@ -880,11 +881,15 @@ abstract class Kanban
 				}
 			}
 			//search index
-			$find = $search['FIND'] ? trim($search['FIND']) : null;
+			$find = $search['SEARCH_CONTENT'] ? trim($search['SEARCH_CONTENT']) : null;
 			if(!empty($find))
 			{
 				$search['FIND'] = $find;
-				$filter['SEARCH_CONTENT'] = $search['FIND'];
+				$filter['SEARCH_CONTENT'] = $search['SEARCH_CONTENT'];
+				if (isset($search['__ENABLE_SEARCH_CONTENT_PHONE_DETECTION']))
+				{
+					$filter['__ENABLE_SEARCH_CONTENT_PHONE_DETECTION'] = $search['__ENABLE_SEARCH_CONTENT_PHONE_DETECTION'];
+				}
 			}
 		}
 		if(isset($filter['COMMUNICATION_TYPE']))
@@ -998,11 +1003,6 @@ abstract class Kanban
 		if(!$searchRestriction->isExceeded($entityTypeId))
 		{
 			$searchRestriction->notifyIfLimitAlmostExceed($entityTypeId);
-
-			SearchEnvironment::convertEntityFilterValues(
-				$entityTypeId,
-				$filter
-			);
 		}
 		//endregion
 

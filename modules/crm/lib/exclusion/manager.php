@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Crm\Exclusion;
 
 use Bitrix\Crm;
@@ -14,7 +15,12 @@ class Manager
 		return Store::isEntityTypeSupported($entityTypeId);
 	}
 
-	public static function checkCreatePermission()
+	public static function checkReadPermission(): bool
+	{
+		return Access::current()->canRead();
+	}
+
+	public static function checkCreatePermission(): bool
 	{
 		return Access::current()->canWrite();
 	}

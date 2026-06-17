@@ -80,6 +80,10 @@ final class UserGroupSerializer
 			$accessCodeParser = new AccessCode($code);
 			$entity = $provider->getEntity($accessCodeParser->getEntityType(), $accessCodeParser->getEntityId());
 
+			if (method_exists($entity, 'exists') && !$entity->exists())
+			{
+				continue;
+			}
 			$member = UserGroup\Member::tryFromArray($entity->getMetaData());
 			if (!$member)
 			{

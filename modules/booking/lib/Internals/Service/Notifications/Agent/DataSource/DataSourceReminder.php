@@ -16,15 +16,17 @@ class DataSourceReminder extends BaseDataSource
 		return NotificationType::Reminder;
 	}
 
-	protected function doGetBookingIds(): array
+	protected function doGetBookingIdsForSend(): array
 	{
-		$currentTimestamp = time();
-		$twoWeeksAheadTimestamp = $currentTimestamp + Time::SECONDS_IN_DAY * 7 * 2;
-		$oneHourBehindDateTime = $this->connection->getSqlHelper()->convertToDbDateTime(
-			DateTime::createFromTimestamp(
-				$currentTimestamp - Time::SECONDS_IN_HOUR
-			)
+		$businessRulesSql = $this->getBusinessRulesSql();
+		$oneHourBackDateTime = $this->sqlHelper->convertToDbDateTime(
+			DateTime::createFromTimestamp($this->currentTimestamp - Time::SECONDS_IN_HOUR)
 		);
+		$infoType = $this->sqlHelper->forSql(NotificationType::Info->value);
+		$reminderType = $this->sqlHelper->forSql(NotificationType::Reminder->value);
+		$morningDelay = (int)ReminderNotificationDelay::Morning->value;
+		$oneDayBackDateTime = $this->sqlHelper->addSecondsToDateTime(-Time::SECONDS_IN_DAY);
+		$delayBackDateTime = $this->sqlHelper->addSecondsToDateTime('-' . 'rns.REMINDER_DELAY');
 
 		$sql = "
 			SELECT
@@ -35,20 +37,16 @@ class DataSourceReminder extends BaseDataSource
 			FROM b_booking_booking b
 			JOIN b_booking_booking_resource bbr ON bbr.BOOKING_ID = b.ID AND bbr.IS_PRIMARY = 'Y'
 			JOIN b_booking_resource_notification_settings rns ON rns.RESOURCE_ID = bbr.RESOURCE_ID
-			WHERE
-				b.IS_DELETED = 'N'
-				AND rns.IS_REMINDER_ON = 'Y'
-				AND b.DATE_FROM > $currentTimestamp
-			  	AND b.DATE_FROM < $twoWeeksAheadTimestamp
-				AND " . $this->getVisitStatusUnknownSql() . "
+			WHERE 1 = 1
+				AND {$businessRulesSql}
 				AND NOT (
-					b.CREATED_AT > $oneHourBehindDateTime
+					b.CREATED_AT > {$oneHourBackDateTime}
 					AND EXISTS (
 						SELECT 1
 						FROM b_booking_booking_message
 						WHERE
 							BOOKING_ID = b.ID
-							AND NOTIFICATION_TYPE = '" . $this->connection->getSqlHelper()->forSql(NotificationType::Info->value) . "'
+							AND NOTIFICATION_TYPE = '{$infoType}'
 					)
 				)
 				AND NOT EXISTS (
@@ -56,31 +54,116 @@ class DataSourceReminder extends BaseDataSource
 					FROM b_booking_booking_message
 					WHERE
 						BOOKING_ID = b.ID
-						AND NOTIFICATION_TYPE = '" . $this->connection->getSqlHelper()->forSql(NotificationType::Reminder->value) . "'
+						AND NOTIFICATION_TYPE = '{$reminderType}'
 						AND
-							CASE WHEN (rns.REMINDER_DELAY = " . $this->connection->getSqlHelper()->forSql(ReminderNotificationDelay::Morning->value) . ") THEN
-								CREATED_AT > " . $this->connection->getSqlHelper()->addSecondsToDateTime(
-			'-' . Time::SECONDS_IN_DAY
-		) . "
+							CASE WHEN (rns.REMINDER_DELAY = {$morningDelay}) THEN
+								SENT_AT > {$oneDayBackDateTime}
 							ELSE
-								CREATED_AT > " . $this->connection->getSqlHelper()->addSecondsToDateTime(
-			'-' . 'rns.REMINDER_DELAY'
-		) . "
+								SENT_AT > {$delayBackDateTime}
 							END
 				)
-			" . $this->getWhereSql() . "
 		";
 
+		return $this->filterBySendTimeRules(
+			$this->connection->query($sql)->fetchAll(),
+		);
+	}
+
+	protected function doFilterEligibleForRetry(array $bookingIds): array
+	{
+		$bookingIdFilterSql = $this->getBookingIdFilterSql($bookingIds);
+		$businessRulesSql = $this->getBusinessRulesSql();
+		$oneHourBackDateTime = $this->sqlHelper->convertToDbDateTime(
+			DateTime::createFromTimestamp($this->currentTimestamp - Time::SECONDS_IN_HOUR)
+		);
+		$successInfoExistsSql = $this->getSuccessMessageExistsSql(NotificationType::Info);
+		$successReminderExistsSql = $this->getSuccessMessageExistsSql(NotificationType::Reminder);
+
+		$sql = "
+			SELECT b.ID
+			FROM b_booking_booking b
+			JOIN b_booking_booking_resource bbr ON bbr.BOOKING_ID = b.ID AND bbr.IS_PRIMARY = 'Y'
+			JOIN b_booking_resource_notification_settings rns ON rns.RESOURCE_ID = bbr.RESOURCE_ID
+			WHERE 1 = 1
+				AND {$bookingIdFilterSql}
+				AND {$businessRulesSql}
+				AND NOT (
+					b.CREATED_AT > {$oneHourBackDateTime}
+					AND {$successInfoExistsSql}
+				)
+				AND NOT {$successReminderExistsSql}
+		";
+
+		return array_map(
+			static fn(array $row) => (int)$row['ID'],
+			$this->connection->query($sql)->fetchAll(),
+		);
+	}
+
+	protected function doFilterReadyToSendNow(array $bookingIds): array
+	{
+		$bookingIdFilterSql = $this->getBookingIdFilterSql($bookingIds);
+
+		$sql = "
+			SELECT
+				b.ID,
+				b.DATE_FROM,
+				b.TIMEZONE_FROM,
+				rns.REMINDER_DELAY
+			FROM b_booking_booking b
+			JOIN b_booking_booking_resource bbr ON bbr.BOOKING_ID = b.ID AND bbr.IS_PRIMARY = 'Y'
+			JOIN b_booking_resource_notification_settings rns ON rns.RESOURCE_ID = bbr.RESOURCE_ID
+			WHERE 1 = 1
+				AND {$bookingIdFilterSql}
+		";
+
+		return $this->filterBySendTimeRules(
+			$this->connection->query($sql)->fetchAll(),
+		);
+	}
+
+	private function getBusinessRulesSql(): string
+	{
+		$twoWeeksAheadTimestamp = $this->currentTimestamp + Time::SECONDS_IN_DAY * 7 * 2;
+		$visitStatusSql = $this->getVisitStatusUnknownSql();
+		$clientAndSenderSql = $this->getClientAndSenderConditionsSql();
+
+		return "
+			b.IS_DELETED = 'N'
+			AND rns.IS_REMINDER_ON = 'Y'
+			AND b.DATE_FROM > {$this->currentTimestamp}
+			AND b.DATE_FROM < {$twoWeeksAheadTimestamp}
+			AND {$visitStatusSql}
+			{$clientAndSenderSql}
+		";
+	}
+
+	/**
+	 * Filters bookings by send time rules.
+	 * For morning scenario: allows sending on the same day as booking
+	 * or when there's not enough time left before overnight gap.
+	 * For precise delay (less than 1 day): allows sending at any time
+	 * when the delay has elapsed.
+	 * Otherwise: allows sending only during working hours.
+	 */
+	private function filterBySendTimeRules(array $rows): array
+	{
 		$bookingIds = [];
-		$list = $this->connection->query($sql)->fetchAll();
-		foreach ($list as $item)
+		foreach ($rows as $item)
 		{
-			$isNowWorkingHours = $this->isWorkingHours($currentTimestamp, $item['TIMEZONE_FROM']);
-			$isSameDay = $this->isSameDay($currentTimestamp, (int)$item['DATE_FROM'], $item['TIMEZONE_FROM']);
+			$isNowWorkingHours = $this->workingTimeService->isWithinWorkingHoursAt(
+				$this->currentTimestamp,
+				$item['TIMEZONE_FROM'],
+			);
+			$isSameDay = Time::isSameDay(
+				$this->currentTimestamp,
+				(int)$item['DATE_FROM'],
+				$item['TIMEZONE_FROM'],
+			);
 			$isMorningScenario = (int)$item['REMINDER_DELAY'] === ReminderNotificationDelay::Morning->value;
 			$isPreciseDelay = (
 				!$isMorningScenario
-				&& (int)$item['REMINDER_DELAY'] < $this->getPreciseDelay()
+				&& (int)$item['REMINDER_DELAY'] < $this->getPreciseDelayThreshold()
 			);
 
 			if (!$isNowWorkingHours && !$isPreciseDelay)
@@ -90,17 +173,8 @@ class DataSourceReminder extends BaseDataSource
 
 			if ($isMorningScenario)
 			{
-				$overnightGap =
-					(
-						Time::HOURS_IN_DAY -
-						(
-							Time::DAYTIME_END_HOUR
-							- Time::DAYTIME_START_HOUR
-							- 1
-						)
-					) * Time::SECONDS_IN_HOUR
-				;
-				$noTimeLeft = (int)$item['DATE_FROM'] - $currentTimestamp <= $overnightGap;
+				$overnightGap = $this->workingTimeService->getOvernightGapInSeconds();
+				$noTimeLeft = (int)$item['DATE_FROM'] - $this->currentTimestamp <= $overnightGap;
 
 				if (!$isSameDay && !$noTimeLeft)
 				{
@@ -109,7 +183,7 @@ class DataSourceReminder extends BaseDataSource
 			}
 			else
 			{
-				$isTimeToSend = (int)$item['DATE_FROM'] - (int)$item['REMINDER_DELAY'] <= $currentTimestamp;
+				$isTimeToSend = (int)$item['DATE_FROM'] - (int)$item['REMINDER_DELAY'] <= $this->currentTimestamp;
 				if (!$isTimeToSend)
 				{
 					continue;
@@ -123,12 +197,11 @@ class DataSourceReminder extends BaseDataSource
 	}
 
 	/**
-	 * If the delay is less than returned we consider it to be precise
-	 * and therefore can send notification at any time (not only in working time)
-	 *
-	 * @return int
+	 * Returns the threshold in seconds below which a delay
+	 * is considered precise enough to send at any time,
+	 * ignoring working hours restrictions.
 	 */
-	private function getPreciseDelay(): int
+	private function getPreciseDelayThreshold(): int
 	{
 		return Time::SECONDS_IN_DAY;
 	}

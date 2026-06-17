@@ -32,6 +32,7 @@ class NodeCatalogItemDto implements JsonSerializable
 		public readonly mixed $properties,
 		public readonly array $returnProperties,
 		public readonly array $defaultSettings,
+		public readonly bool $hasAuxPorts,
 	){}
 
 	public function jsonSerialize(): array
@@ -48,6 +49,7 @@ class NodeCatalogItemDto implements JsonSerializable
 			'properties' => $this->properties,
 			'defaultSettings' => $this->defaultSettings,
 			'returnProperties' => $this->returnProperties,
+			'hasAuxPorts' => $this->hasAuxPorts,
 		];
 	}
 }

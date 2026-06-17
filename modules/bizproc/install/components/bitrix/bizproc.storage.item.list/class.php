@@ -5,7 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
-use Bitrix\Bizproc\Internal\Model\StorageRecordTable;
+use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Service\StorageField\FieldService;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\Public\Provider\StorageItemProvider;
@@ -142,7 +142,7 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 			if ($itemCollection)
 			{
 				$data = $itemCollection->toArray();
-				$totalCount = $this->storageItemProvider->getCount(['STORAGE_ID' => $this->storageTypeId]);
+				$totalCount = $this->storageItemProvider->getCount();
 				$navigation->setRecordCount($totalCount);
 				$grid = $this->prepareGrid($data);
 			}
@@ -179,7 +179,8 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 			}
 		}
 
-		$fields = StorageRecordTable::getEntity()->getFields();
+		$dataManager = Container::getStorageRecordDataManager();
+		$fields = $dataManager::getEntity()->getFields();
 		foreach ($fields as $field)
 		{
 			$key = array_search($field->getName(), array_column($columns, 'id'), true);
@@ -212,7 +213,7 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 
 		$fields = $this->fieldService->getDynamicFields();
 		$documentService = CBPRuntime::GetRuntime(true)->getDocumentService();
-		$documentType = ['bizproc', 'CBPVirtualDocument', 'type_0'];
+		$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
 
 		if ($fields)
 		{
@@ -226,7 +227,8 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 				}
 
 				$code = $fieldProperties['FieldName'] ?? null;
-				$formattedValue = $fieldType->formatValue($field[$code] ?? null);
+				$rawValue = $field[$code] ?? null;
+				$formattedValue = !\CBPHelper::isEmptyValue($rawValue) ? $fieldType->formatValue($rawValue) : '';
 
 				$fieldColumns[strtoupper($code)] = htmlspecialcharsbx($formattedValue);
 			}

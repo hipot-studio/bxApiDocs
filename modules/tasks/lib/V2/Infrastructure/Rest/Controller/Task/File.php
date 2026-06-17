@@ -4,21 +4,18 @@ namespace Bitrix\Tasks\V2\Infrastructure\Rest\Controller\Task;
 
 use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
 use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
 use Bitrix\Rest\V3\Interaction\Response\BooleanResponse;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Controller\ActionFilter\IsEnabledFilter;
-use Bitrix\Tasks\V2\Infrastructure\Rest\Dto\TaskDto;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Request\Task\File\AttachFileRequest;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 use Bitrix\Tasks\V2\Internal\Access\Task\Attachment\Permission\Attach;
 use Bitrix\Tasks\V2\Internal\Entity\Task as TaskEntity;
 use Bitrix\Tasks\V2\Public\Command\Task\Attachment\AttachFilesCommand;
 
-#[DtoType(TaskDto::class)]
 class File extends RestController
 {
 	protected ?Context $context = null;

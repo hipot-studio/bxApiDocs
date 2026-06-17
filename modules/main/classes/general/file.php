@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Main;
@@ -19,6 +19,8 @@ use Bitrix\Main\File\Internal;
 use Bitrix\Main\ORM\Query;
 use Bitrix\Main\Security;
 use Bitrix\Main\Web\Http\Range;
+use Bitrix\Main\Application;
+use Bitrix\Main\FileTable;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -50,6 +52,7 @@ class CFile
 			}
 		}
 		unset($arFields[$field]);
+
 		return false;
 	}
 
@@ -59,47 +62,67 @@ class CFile
 		{
 			$arFile = $arFields[$field];
 
+			$arFile["name"] = (string)($arFile["name"] ?? '');
+
 			if ($arFile["name"] == "")
 			{
 				return "";
 			}
 
-			$fileName = self::transformName($arFile["name"]);
-			return self::validateFile($fileName, $arFile);
+			$result = static::transformName($arFile);
+			if (!$result->isSuccess())
+			{
+				return $result->getError()->getMessage();
+			}
 		}
-		else
-		{
-			return "";
-		}
+
+		return "";
 	}
 
-	protected static function transformName($name, $forceRandom = false, $bSkipExt = false)
+	protected static function transformOriginalName(string $name): string
 	{
-		//safe filename without path
-		$fileName = GetFileName($name);
-
-		$originalName = ($forceRandom != true && COption::GetOptionString("main", "save_original_file_name", "N") == "Y");
-		if ($originalName)
+		//transliteration
+		if (COption::GetOptionString("main", "translit_original_file_name", "N") == "Y")
 		{
-			//transforming original name:
+			$name = CUtil::translit($name, LANGUAGE_ID, [
+				"max_len" => 1024,
+				"safe_chars" => ".",
+				"replace_space" => '-',
+				"change_case" => false,
+			]);
+		}
 
-			//transliteration
-			if (COption::GetOptionString("main", "translit_original_file_name", "N") == "Y")
-			{
-				$fileName = CUtil::translit($fileName, LANGUAGE_ID, [
-					"max_len" => 1024,
-					"safe_chars" => ".",
-					"replace_space" => '-',
-					"change_case" => false,
-				]);
-			}
+		//replace invalid characters
+		if (COption::GetOptionString("main", "convert_original_file_name", "Y") == "Y")
+		{
+			$io = CBXVirtualIo::GetInstance();
+			$name = $io->RandomizeInvalidFilename($name);
+		}
 
-			//replace invalid characters
-			if (COption::GetOptionString("main", "convert_original_file_name", "Y") == "Y")
-			{
-				$io = CBXVirtualIo::GetInstance();
-				$fileName = $io->RandomizeInvalidFilename($fileName);
-			}
+		return $name;
+	}
+
+	protected static function transformName(array $arFile, bool $forceRandom = false, bool $bSkipExt = false): Main\Result
+	{
+		$result = new Main\Result();
+
+		$fileName = GetFileName($arFile["name"]);    /* filename.gif */
+
+		//transforming original name
+		$originalName = static::transformOriginalName($fileName);
+
+		//original name must be valid
+		if (($error = static::validateFile($originalName)) !== "")
+		{
+			$result->addError(new Main\Error($error));
+			return $result;
+		}
+
+		$saveOriginalName = ($forceRandom != true && COption::GetOptionString("main", "save_original_file_name", "N") == "Y");
+		if ($saveOriginalName)
+		{
+			//use original name
+			$fileName = $originalName;
 		}
 
 		//.jpe is not image type on many systems
@@ -111,16 +134,25 @@ class CFile
 		//double extension vulnerability
 		$fileName = RemoveScriptExtension($fileName);
 
-		if (!$originalName)
+		if (!$saveOriginalName)
 		{
 			//name is randomly generated
 			$fileName = Security\Random::getString(32) . ($bSkipExt || ($ext = GetFileExtension($fileName)) == '' ? '' : "." . $ext);
 		}
 
-		return $fileName;
+		//transformed name must be valid, check disk quota, etc.
+		if (($error = static::validateFile($fileName, $arFile)) !== "")
+		{
+			$result->addError(new Main\Error($error));
+			return $result;
+		}
+
+		$result->setData([$originalName, $fileName]);
+
+		return $result;
 	}
 
-	protected static function validateFile($strFileName, $arFile)
+	protected static function validateFile(string $strFileName, ?array $arFile = null)
 	{
 		if ($strFileName == '')
 		{
@@ -150,7 +182,7 @@ class CFile
 			return GetMessage("FILE_BAD_FILENAME");
 		}
 
-		if (COption::GetOptionInt("main", "disk_space") > 0)
+		if ($arFile && COption::GetOptionInt("main", "disk_space") > 0)
 		{
 			$quota = new CDiskQuota();
 			if (!$quota->checkDiskQuota($arFile))
@@ -164,18 +196,18 @@ class CFile
 
 	public static function SaveFile($arFile, $strSavePath, $forceRandom = false, $skipExtension = false, $dirAdd = '')
 	{
-		$strFileName = GetFileName($arFile["name"] ?? '');    /* filename.gif */
+		$arFile["name"] = (string)($arFile["name"] ?? '');
 
 		if (isset($arFile["del"]) && $arFile["del"] <> '')
 		{
 			static::Delete($arFile["old_file"] ?? 0);
-			if ($strFileName == '')
+			if ($arFile["name"] == '')
 			{
 				return "NULL";
 			}
 		}
 
-		if (!isset($arFile["name"]) || $arFile["name"] == '')
+		if ($arFile["name"] == '')
 		{
 			if (isset($arFile["description"]) && isset($arFile["old_file"]) && intval($arFile["old_file"]) > 0)
 			{
@@ -207,22 +239,20 @@ class CFile
 			}
 		}
 
-		$arFile["ORIGINAL_NAME"] = $strFileName;
-
 		//translit, replace unsafe chars, etc.
-		$strFileName = self::transformName($strFileName, $forceRandom, $skipExtension);
-
-		//transformed name must be valid, check disk quota, etc.
-		if (self::validateFile($strFileName, $arFile) !== "")
+		$result = static::transformName($arFile, $forceRandom, $skipExtension);
+		if (!$result->isSuccess())
 		{
 			return false;
 		}
+
+		[$arFile["ORIGINAL_NAME"], $strFileName] = $result->getData();
 
 		$arFile["type"] = Web\MimeType::normalize($arFile["type"]);
 
 		$original = null;
 
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 		$connection->lock('b_file', -1);
 
 		$io = CBXVirtualIo::GetInstance();
@@ -521,7 +551,7 @@ class CFile
 	 */
 	public static function DeleteDuplicates($originalId, array $duplicteIds)
 	{
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
 
 		$original = Internal\FileHashTable::getList([
@@ -539,7 +569,7 @@ class CFile
 		$uploadDir = COption::GetOptionString("main", "upload_dir", "upload");
 		$deleteSize = 0;
 
-		$fileList = \Bitrix\Main\FileTable::getList([
+		$fileList = FileTable::getList([
 			'select' => ['ID', 'FILE_SIZE', 'SUBDIR', 'FILE_NAME'],
 			'filter' => [
 				'=ID' => $duplicteIds,
@@ -713,7 +743,7 @@ class CFile
 			return;
 		}
 
-		$connection = Main\Application::getConnection();
+		$connection = Application::getConnection();
 		$connection->lock('b_file', -1);
 
 		$res = static::GetByID($ID, true);
@@ -722,7 +752,7 @@ class CFile
 		{
 			$delete = static::processDuplicates($ID);
 
-			if ($delete === self::DELETE_NONE)
+			if ($delete === static::DELETE_NONE)
 			{
 				//can't delete the file - duplicates found
 				$connection->unlock('b_file');
@@ -731,7 +761,7 @@ class CFile
 
 			$delete_size = 0;
 
-			if ($delete & self::DELETE_FILE)
+			if ($delete & static::DELETE_FILE)
 			{
 				$upload_dir = COption::GetOptionString("main", "upload_dir", "upload");
 				$dname = $_SERVER["DOCUMENT_ROOT"] . "/" . $upload_dir . "/" . $res["SUBDIR"];
@@ -766,7 +796,7 @@ class CFile
 				}
 			}
 
-			if ($delete & self::DELETE_DB)
+			if ($delete & static::DELETE_DB)
 			{
 				foreach (GetModuleEvents("main", "OnFileDelete", true) as $arEvent)
 				{
@@ -796,7 +826,7 @@ class CFile
 
 	protected static function processDuplicates($ID)
 	{
-		$result = self::DELETE_ALL;
+		$result = static::DELETE_ALL;
 
 		//Part 1: the file is a duplicate of another file, including referenses to itself
 		$original = Internal\FileDuplicateTable::query()
@@ -829,7 +859,7 @@ class CFile
 				);
 
 				//there are references still
-				$result = self::DELETE_NONE;
+				$result = static::DELETE_NONE;
 			}
 			else
 			{
@@ -849,7 +879,7 @@ class CFile
 					}
 
 					//there is the original somewhere, we shouldn't delete its file
-					$result = self::DELETE_DB;
+					$result = static::DELETE_DB;
 				}
 			}
 		}
@@ -861,7 +891,7 @@ class CFile
 			Internal\FileDuplicateTable::markDeleted($ID);
 
 			//duplicates found, should keep the original
-			$result = self::DELETE_NONE;
+			$result = static::DELETE_NONE;
 		}
 
 		return $result;
@@ -925,12 +955,12 @@ class CFile
 
 			$bucket = (int)($fileId / $bucket_size);
 
-			$cache = Main\Application::getInstance()->getManagedCache();
+			$cache = Application::getInstance()->getManagedCache();
 
-			$cache->clean(self::CACHE_DIR . '01' . $bucket, self::CACHE_DIR);
-			$cache->clean(self::CACHE_DIR . '11' . $bucket, self::CACHE_DIR);
-			$cache->clean(self::CACHE_DIR . '00' . $bucket, self::CACHE_DIR);
-			$cache->clean(self::CACHE_DIR . '10' . $bucket, self::CACHE_DIR);
+			$cache->clean(static::CACHE_DIR . '01' . $bucket, static::CACHE_DIR);
+			$cache->clean(static::CACHE_DIR . '11' . $bucket, static::CACHE_DIR);
+			$cache->clean(static::CACHE_DIR . '00' . $bucket, static::CACHE_DIR);
+			$cache->clean(static::CACHE_DIR . '10' . $bucket, static::CACHE_DIR);
 		}
 	}
 
@@ -938,7 +968,7 @@ class CFile
 	{
 		global $DB;
 
-		$cache = Main\Application::getInstance()->getManagedCache();
+		$cache = Application::getInstance()->getManagedCache();
 
 		$bucketSize = (int)CACHED_b_file_bucket_size;
 		if ($bucketSize <= 0)
@@ -948,9 +978,9 @@ class CFile
 
 		$bucket = (int)($fileId / $bucketSize);
 		$https = (int)Main\Context::getCurrent()->getRequest()->isHttps();
-		$cacheId = self::CACHE_DIR . $https . (int)$realId . $bucket;
+		$cacheId = static::CACHE_DIR . $https . (int)$realId . $bucket;
 
-		if ($cache->read(CACHED_b_file, $cacheId, self::CACHE_DIR))
+		if ($cache->read(CACHED_b_file, $cacheId, static::CACHE_DIR))
 		{
 			$files = $cache->get($cacheId);
 
@@ -1230,7 +1260,7 @@ class CFile
 		{
 			foreach ($source as $field => $sub_source)
 			{
-				self::ConvertFilesToPost($sub_source, $target, $field);
+				static::ConvertFilesToPost($sub_source, $target, $field);
 			}
 		}
 		else
@@ -1243,7 +1273,7 @@ class CFile
 				}
 				if (is_array($sub_source))
 				{
-					self::ConvertFilesToPost($sub_source, $target[$id], $field);
+					static::ConvertFilesToPost($sub_source, $target[$id], $field);
 				}
 				else
 				{
@@ -1557,18 +1587,18 @@ class CFile
 
 	public static function CheckFile($arFile, $intMaxSize = 0, $mimeType = false, $strExt = false, $bForceMD5 = false, $bSkipExt = false)
 	{
+		$arFile["name"] = (string)($arFile["name"] ?? '');
+
 		if ($arFile["name"] == "")
 		{
 			return "";
 		}
 
 		//translit, replace unsafe chars, etc.
-		$strFileName = self::transformName($arFile["name"], $bForceMD5, $bSkipExt);
-
-		//transformed name must be valid, check disk quota, etc.
-		if (($error = self::validateFile($strFileName, $arFile)) <> '')
+		$result = static::transformName($arFile, $bForceMD5, $bSkipExt);
+		if (!$result->isSuccess())
 		{
-			return $error;
+			return $result->getError()->getMessage();
 		}
 
 		if ($intMaxSize > 0 && $arFile["size"] > $intMaxSize)
@@ -1579,7 +1609,9 @@ class CFile
 		$strFileExt = '';
 		if ($strExt)
 		{
-			$strFileExt = GetFileExtension($strFileName);
+			[, $fileName] = $result->getData();
+
+			$strFileExt = GetFileExtension($fileName);
 			if ($strFileExt == '')
 			{
 				return GetMessage("FILE_BAD_TYPE");
@@ -2196,8 +2228,8 @@ function ImgShw(ID, width, height, alt)
 				CopyDirFiles($_SERVER["DOCUMENT_ROOT"] . $from, $_SERVER["DOCUMENT_ROOT"] . $to, true, true, true);
 
 				//Reset All b_file cache
-				$cache = Main\Application::getInstance()->getManagedCache();
-				$cache->cleanDir(self::CACHE_DIR);
+				$cache = Application::getInstance()->getManagedCache();
+				$cache->cleanDir(static::CACHE_DIR);
 			}
 		}
 	}
@@ -2992,7 +3024,7 @@ function ImgShw(ID, width, height, alt)
 				;
 
 				$response->writeHeaders();
-				self::terminate();
+				static::terminate();
 			}
 
 			$range = $ranges[0];
@@ -3052,7 +3084,7 @@ function ImgShw(ID, width, height, alt)
 					;
 
 					$response->writeHeaders();
-					self::terminate();
+					static::terminate();
 				}
 
 				$response->addHeader("ETag", $ETag);
@@ -3069,7 +3101,7 @@ function ImgShw(ID, width, height, alt)
 						;
 
 						$response->writeHeaders();
-						self::terminate();
+						static::terminate();
 					}
 				}
 			}
@@ -3176,7 +3208,7 @@ function ImgShw(ID, width, height, alt)
 			}
 		}
 
-		self::terminate();
+		static::terminate();
 
 		return true;
 	}
@@ -3190,7 +3222,7 @@ function ImgShw(ID, width, height, alt)
 			fastcgi_finish_request();
 		}
 
-		Main\Application::getInstance()->terminate();
+		Application::getInstance()->terminate();
 	}
 
 	/**

@@ -1371,9 +1371,9 @@ class CAllGroup
 			//compare with new ones
 			foreach ($arOldTasks as $gr_id => $task_id)
 			{
-				if ($task_id <> $arGroupTask[$gr_id]['ID'])
+				if (!isset($arGroupTask[$gr_id]['ID']) || $task_id != $arGroupTask[$gr_id]['ID'])
 				{
-					CEventLog::Log(CEventLog::SEVERITY_SECURITY, "MODULE_RIGHTS_CHANGED", "main", $gr_id, ['before' => [$module_id => $task_id], 'after' => [$module_id => $arGroupTask[$gr_id]['ID']]]);
+					CEventLog::Log(CEventLog::SEVERITY_SECURITY, "MODULE_RIGHTS_CHANGED", "main", $gr_id, ['before' => [$module_id => $task_id], 'after' => [$module_id => $arGroupTask[$gr_id]['ID'] ?? null]]);
 				}
 			}
 			foreach ($arGroupTask as $gr_id => $oTask)

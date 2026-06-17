@@ -92,6 +92,7 @@ class Product
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_product']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_PRODUCT_TABLE'] ?? 'crm_product';
+		$result['crm_product']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_PRODUCT_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_product']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_PRODUCT_FIELD_' . $fieldCode] ?? null;

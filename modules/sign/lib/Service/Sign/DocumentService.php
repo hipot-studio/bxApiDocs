@@ -63,6 +63,7 @@ class DocumentService
 	private readonly TemplateFolderRelationRepository $templateFolderRelationRepository;
 	private readonly BlockRepository $blockRepository;
 	private readonly Service\Integration\HumanResources\StructureNodeService $structureNodeService;
+	private readonly Service\Integration\Disk\DiskService $diskService;
 
 	public function __construct(
 		?DocumentRepository $documentRepository = null,
@@ -76,6 +77,7 @@ class DocumentService
 		?Service\Sign\Document\SignUntilService $signUntilService = null,
 		?MemberRepository $memberRepository = null,
 		?TemplateFolderRelationRepository $templateFolderRelationRepository = null,
+		?Service\Integration\Disk\DiskService $diskService = null,
 	)
 	{
 		$container = Container::instance();
@@ -93,6 +95,7 @@ class DocumentService
 		$this->templateFolderRelationRepository = $templateFolderRelationRepository ?? $container->getTemplateFolderRelationRepository();
 		$this->blockRepository = $container->getBlockRepository();
 		$this->structureNodeService = Service\Container::instance()->getHumanResourcesStructureNodeService();
+		$this->diskService = $diskService ?? $container->getDiskService();
 	}
 
 	/**
@@ -127,7 +130,7 @@ class DocumentService
 	): Main\Result
 	{
 		$result = new Main\Result();
-		if($createdById < 1)
+		if ($createdById < 1)
 		{
 			return $result->addError(new Main\Error(Loc::getMessage('SIGN_SERVICE_DOCUMENT_USER_NOT_FOUND')));
 		}
@@ -747,7 +750,12 @@ class DocumentService
 		return null;
 	}
 
-	public function changeBlank(string $uid, int $blankId, bool $copyBlocksFromPreviousBlank = false): Main\Result
+	public function changeBlank(
+		string $uid,
+		int $blankId,
+		bool $copyBlocksFromPreviousBlank = false,
+		bool $deleteOldBlank = true,
+	): Main\Result
 	{
 		['document' => $document, 'blank' => $blank, 'result' => $extractionResult] = $this->extractDocumentAndBlank($uid, $blankId);
 
@@ -794,16 +802,108 @@ class DocumentService
 				return $result;
 			}
 		}
-		$result = (new Delete($oldBlank))->launch();
-		$skippableErrors = [Delete::ERROR_BLANK_USED_IN_DOCUMENTS, Delete::ERROR_BLANK_USED_FOR_RESENT_DOCUMENTS];
-		$isErrorSkippable = in_array($result->getError()?->getCode(), $skippableErrors, true);
 
-		if (!$result->isSuccess() && !$isErrorSkippable)
+		if ($deleteOldBlank)
 		{
-			return $result;
+			$result = (new Delete($oldBlank))->launch();
+			$skippableErrors = [Delete::ERROR_BLANK_USED_IN_DOCUMENTS, Delete::ERROR_BLANK_USED_FOR_RESENT_DOCUMENTS];
+			$isErrorSkippable = in_array($result->getError()?->getCode(), $skippableErrors, true);
+
+			if (!$result->isSuccess() && !$isErrorSkippable)
+			{
+				return $result;
+			}
 		}
 
+		return \Bitrix\Sign\Result\Result::createByData([
+			'document' => $document,
+			'oldBlankId' => $oldBlankId,
+		]);
+	}
+
+	/**
+	 * Replace the document blank on the portal and in the signing service when necessary
+	 */
+	public function changeBlankAndUpload(
+		string $documentUid,
+		int $newBlankId,
+		bool $copyBlocksFromPreviousBlank = false,
+	): Main\Result
+	{
+		$changeBlankResult = $this->changeBlank(
+			$documentUid,
+			$newBlankId,
+			$copyBlocksFromPreviousBlank,
+			deleteOldBlank: false,
+		);
+		if (!$changeBlankResult->isSuccess())
+		{
+			$this->tryDeleteBlank($newBlankId, skipForTemplateCheck: true);
+
+			return $changeBlankResult;
+		}
+
+		$result = new Main\Result();
+		$document = $changeBlankResult->getData()['document'] ?? null;
+		$oldBlankId = $changeBlankResult->getData()['oldBlankId'] ?? null;
+
+		if (!$document instanceof Item\Document)
+		{
+			return $result->addError(new Main\Error('Cannot change document blank'));
+		}
+
+		if (!$document->uid)
+		{
+			return $result->addError(new Main\Error('Invalid document uid'));
+		}
+
+		if ($document->uid !== $documentUid)
+		{
+			return $result->addError(new Main\Error('Document uid has been changed after blank change, cannot upload document'));
+		}
+
+		$uploadResult = $this->upload($document->uid);
+		if (!$uploadResult->isSuccess())
+		{
+			$this->rollbackBlankChange($document, $oldBlankId);
+
+			return $result->addErrors($uploadResult->getErrors());
+		}
+
+		$this->tryDeleteBlank($oldBlankId);
+
 		return \Bitrix\Sign\Result\Result::createByData(['document' => $document]);
+	}
+
+	private function rollbackBlankChange(Item\Document $document, ?int $oldBlankId): void
+	{
+		if ($oldBlankId === null)
+		{
+			return;
+		}
+
+		$newBlankId = $document->blankId;
+		$document->blankId = $oldBlankId;
+		$this->documentRepository->update($document);
+
+		if ($newBlankId !== null && $newBlankId !== $oldBlankId)
+		{
+			$this->tryDeleteBlank($newBlankId, skipForTemplateCheck: true);
+		}
+	}
+
+	private function tryDeleteBlank(?int $blankId, bool $skipForTemplateCheck = false): void
+	{
+		if ($blankId === null)
+		{
+			return;
+		}
+
+		$blank = $this->blankRepository->getById($blankId);
+		if ($blank !== null)
+		{
+			(new Delete($blank, $skipForTemplateCheck))->launch();
+		}
 	}
 
 	/**
@@ -917,6 +1017,136 @@ class DocumentService
 		;
 	}
 
+	public function getEditUrl(string $uid, int $userId): Main\Result
+	{
+		$result = new Main\Result();
+
+		['document' => $document, 'blank' => $blank, 'result' => $extractionResult] = $this->extractDocumentAndBlank($uid);
+		if (!$extractionResult->isSuccess())
+		{
+			return $extractionResult;
+		}
+
+		if (!Type\DocumentScenario::isB2EScenario($document->scenario))
+		{
+			return $result->addError(new Main\Error('Editing is only available for B2E documents'));
+		}
+
+		if (!Type\DocumentStatus::isEditableByDocument($document))
+		{
+			return $result->addError(new Main\Error('Document status does not allow editing'));
+		}
+
+		return $this->diskService->getEditUrl($blank, $userId, $document->title);
+	}
+
+	public function applyEditedFile(string $documentUid, int $diskFileId, int $userId): Main\Result
+	{
+		$result = new Main\Result();
+
+		$validateResult = $this->diskService->getValidatedDiskFileById($diskFileId, $userId);
+		if (!$validateResult->isSuccess())
+		{
+			return $result->addErrors($validateResult->getErrors());
+		}
+
+		/** @var \Bitrix\Disk\File $diskFile */
+		$diskFile = $validateResult->getData()['diskFile'];
+
+		['document' => $document, 'blank' => $blank, 'result' => $extractionResult] = $this->extractDocumentAndBlank($documentUid);
+		if (!$extractionResult->isSuccess())
+		{
+			$this->diskService->deleteDiskFile($diskFile, $userId);
+
+			return $extractionResult;
+		}
+
+		if (!Type\DocumentScenario::isB2EScenario($document->scenario))
+		{
+			$this->diskService->deleteDiskFile($diskFile, $userId);
+
+			return $result->addError(new Main\Error('Editing is only available for B2E documents'));
+		}
+
+		if (!Type\DocumentStatus::isEditableByDocument($document))
+		{
+			$this->diskService->deleteDiskFile($diskFile, $userId);
+
+			return $result->addError(new Main\Error('Document status does not allow editing'));
+		}
+
+		$fileId = $diskFile->getFileId();
+		if (!$fileId)
+		{
+			$this->diskService->deleteDiskFile($diskFile, $userId);
+
+			return $result->addError(new Main\Error('Disk file has no associated CFile'));
+		}
+
+		$fileArray = \CFile::MakeFileArray($fileId);
+		if (!$fileArray)
+		{
+			$this->diskService->deleteDiskFile($diskFile, $userId);
+
+			return $result->addError(new Main\Error('Failed to read file from disk'));
+		}
+
+		$diskFileName = $diskFile->getName();
+		if ($diskFileName)
+		{
+			$fileArray['name'] = $diskFileName;
+		}
+
+		$clonedFileId = \CFile::SaveFile($fileArray, 'sign');
+		if (!$clonedFileId)
+		{
+			$this->diskService->deleteDiskFile($diskFile, $userId);
+
+			return $result->addError(new Main\Error('Failed to clone file from disk'));
+		}
+
+		$blankService = Service\Container::instance()->getSignBlankService();
+
+		$blankResult = $blankService->createFromFileIds(
+			[$clonedFileId],
+			$blank->scenario ?? Type\BlankScenario::B2E,
+			$blank->forTemplate,
+			$blank->hasPlaceholders,
+		);
+		if (!$blankResult->isSuccess())
+		{
+			\CFile::Delete($clonedFileId);
+			$this->diskService->deleteDiskFile($diskFile, $userId);
+
+			return $result->addErrors($blankResult->getErrors());
+		}
+
+		$newBlankId = $blankResult->getId();
+
+		$changeResult = $this->changeBlankAndUpload($documentUid, $newBlankId, true);
+		if (!$changeResult->isSuccess())
+		{
+			$blankService->rollbackById($newBlankId);
+			$this->diskService->deleteDiskFile($diskFile, $userId);
+
+			return $result->addErrors($changeResult->getErrors());
+		}
+
+		$this->diskService->deleteDiskFile($diskFile, $userId);
+
+		$result->setData([
+			'blankId' => $newBlankId,
+			'document' => $changeResult->getData()['document'] ?? $document,
+		]);
+
+		return $result;
+	}
+
+	public function discardEditedFile(int $diskFileId, int $userId): Main\Result
+	{
+		return $this->diskService->deleteDiskFileById($diskFileId, $userId);
+	}
+
 	/**
 	 * Reuse document file on the signing server
 	 *
@@ -942,6 +1172,11 @@ class DocumentService
 			return $result->addError(new Main\Error('Last document uid can not be empty'));
 		}
 
+		if ($lastDocumentByBlankId->uid === $documentUid)
+		{
+			return $result->addError(new Main\Error('No other document to reuse blank from'));
+		}
+
 		$documentReuseRequest = new Item\Api\Document\ReuseRequest($documentUid, $lastDocumentByBlankId->uid);
 		$documentReuseResponse = $apiDocument->reuse($documentReuseRequest);
 		if (!$documentReuseResponse->isSuccess())
@@ -958,7 +1193,7 @@ class DocumentService
 	 *
 	 * @return array{document: Item\Document, blank: Item\Blank, result: Main\Result}
 	 */
-	private function extractDocumentAndBlank(string $uid, ?int $blankId = null): array
+	public function extractDocumentAndBlank(string $uid, ?int $blankId = null): array
 	{
 		$result = (new Main\Result());
 		try

@@ -137,6 +137,27 @@ class ProductRowReservation extends Crm\Reservation\Internals\EO_ProductRowReser
 		];
 	}
 
+	public function hasChangedFields(): bool
+	{
+		$fields = [
+			self::ID,
+			self::ROW_ID,
+			self::RESERVE_QUANTITY,
+			self::RESERVE_DATE_END,
+			self::RESERVE_STORE_ID,
+			self::IS_AUTO,
+		];
+		foreach ($fields as $field)
+		{
+			if ($this->isChanged($field))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	private function loadSaleReserve(): void
 	{
 		$productRowId = $this->productRow ? $this->productRow->getId() : 0;

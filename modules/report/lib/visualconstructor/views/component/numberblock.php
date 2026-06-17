@@ -143,8 +143,17 @@ class NumberBlock extends Base
 
 		if ($withCalculatedData)
 		{
-			$resultWidget['content']['params']['color'] = $widget->getWidgetHandler()->getReportHandlers()[0]->getFormElement('color')->getValue();
-			$resultWidget['config']['title'] = $widget->getWidgetHandler()->getReportHandlers()[0]->getFormElement('label')->getValue();
+			$reportHandlers = $widget->getWidgetHandler()->getReportHandlers();
+			$firstHandler = $reportHandlers[0] ?? null;
+			if ($firstHandler)
+			{
+				$resultWidget['content']['params']['color'] =
+					$firstHandler->getFormElement('color')?->getValue() ?? $resultWidget['content']['params']['color']
+				;
+				$resultWidget['config']['title'] =
+					$firstHandler->getFormElement('label')?->getValue() ?? $resultWidget['config']['title']
+				;
+			}
 		}
 
 		return $resultWidget;

@@ -1,10 +1,11 @@
 <?php
 
+use Bitrix\Bizproc;
 use Bitrix\Bizproc\Debugger\Workflow\DebugWorkflow;
 use Bitrix\Bizproc\Internal\Service\Container;
+use Bitrix\Bizproc\Internal\Service\Debugger\DebugSessionServiceInterface;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
 use Bitrix\Main;
-use Bitrix\Bizproc;
 
 /**
  * Workflow runtime.
@@ -31,7 +32,7 @@ class CBPRuntime
 
 	public const REST_ACTIVITY_PREFIX = 'rest_';
 
-	public const ACTIVITY_API_VERSION = 1;
+	public const ACTIVITY_API_VERSION = 2;
 
 	private $isStarted = false;
 	/** @var CBPRuntime $instance*/
@@ -42,13 +43,13 @@ class CBPRuntime
 	private $debugServices = [];
 	private array $workflows = [];
 	private $workflowChains = [];
+	private DebugSessionServiceInterface|null $debugSessionService = null;
 
 	/*********************  SINGLETON PATTERN  **************************************************/
 
 	/**
-	* Private constructor prevents from instantiating this class. Singleton pattern.
-	*
-	*/
+	 * Private constructor prevents from instantiating this class. Singleton pattern.
+	 */
 	private function __construct()
 	{
 		$this->workflows = [];
@@ -65,6 +66,18 @@ class CBPRuntime
 		];
 	}
 
+	public function makeDebugger(): DebugSessionServiceInterface
+	{
+		$this->debugSessionService ??= \Bitrix\Bizproc\Internal\Container::getDebugSessionService();
+
+		return $this->debugSessionService;
+	}
+
+	public function getDebugSessionService(): ?DebugSessionServiceInterface
+	{
+		return $this->debugSessionService;
+	}
+
 	/**
 	 * Static method returns runtime object. Singleton pattern.
 	 *
@@ -75,7 +88,7 @@ class CBPRuntime
 		if (!isset(self::$instance))
 		{
 			$c = __CLASS__;
-			self::$instance = new $c;
+			self::$instance = new $c();
 			self::$instance->startRuntime();
 		}
 
@@ -91,7 +104,7 @@ class CBPRuntime
 	{
 		if (preg_match('|^get([a-z]+)service$|i', $name, $matches))
 		{
-			return $this->GetService($matches[1]. 'Service');
+			return $this->GetService($matches[1] . 'Service');
 		}
 
 		throw new Main\SystemException("Unknown method `{$name}`");
@@ -124,9 +137,8 @@ class CBPRuntime
 	/*********************  START / STOP RUNTIME  **************************************************/
 
 	/**
-	* Public method starts runtime
-	*
-	*/
+	 * Public method starts runtime
+	 */
 	public function startRuntime()
 	{
 		if ($this->isStarted)
@@ -154,9 +166,9 @@ class CBPRuntime
 	}
 
 	/**
-	* Public method stops runtime
-	* @deprecated Unused and not actual
-	*/
+	 * Public method stops runtime
+	 * @deprecated Unused and not actual
+	 */
 	public function stopRuntime()
 	{
 		if (!$this->isStarted)
@@ -187,7 +199,7 @@ class CBPRuntime
 	 * @throws Exception
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	public function createWorkflow($workflowTemplateId, $documentId, $workflowParameters = array(), $parentWorkflow = null)
+	public function createWorkflow($workflowTemplateId, $documentId, $workflowParameters = [], $parentWorkflow = null)
 	{
 		$workflowTemplateId = intval($workflowTemplateId);
 		if ($workflowTemplateId <= 0)
@@ -290,7 +302,7 @@ class CBPRuntime
 			$workflowParameters,
 			$workflowVariablesTypes,
 			$workflowParametersTypes,
-			$templateId
+			$templateId,
 		);
 
 		$starterUserId = 0;
@@ -377,9 +389,9 @@ class CBPRuntime
 	public function onWorkflowStatusChanged($workflowId, $status)
 	{
 		if (
-			$status === \CBPWorkflowStatus::Completed ||
-			$status === \CBPWorkflowStatus::Terminated ||
-			$status === \CBPWorkflowStatus::Suspended
+			$status === \CBPWorkflowStatus::Completed
+			|| $status === \CBPWorkflowStatus::Terminated
+			|| $status === \CBPWorkflowStatus::Suspended
 		)
 		{
 			unset($this->workflows[$workflowId]);
@@ -406,11 +418,11 @@ class CBPRuntime
 	/*******************  SERVICES  *********************************************************/
 
 	/**
-	* Returns service instance by its code.
-	*
-	* @param mixed $name - Service code.
-	* @return mixed|CBPSchedulerService|CBPStateService|CBPTrackingService|CBPTaskService|CBPHistoryService|CBPDocumentService|Bizproc\Service\Analytics - Service instance or null if service is not found.
-	*/
+	 * Returns service instance by its code.
+	 *
+	 * @param mixed $name - Service code.
+	 * @return mixed|CBPSchedulerService|CBPStateService|CBPTrackingService|CBPTaskService|CBPHistoryService|CBPDocumentService|Bizproc\Service\Analytics - Service instance or null if service is not found.
+	 */
 	public function getService($name)
 	{
 		if (array_key_exists($name, $this->services))
@@ -432,11 +444,11 @@ class CBPRuntime
 	}
 
 	/**
-	* Adds new service to runtime. Runtime should be stopped.
-	*
-	* @param string $name - Service code.
-	* @param CBPRuntimeService $service - Service object.
-	*/
+	 * Adds new service to runtime. Runtime should be stopped.
+	 *
+	 * @param string $name - Service code.
+	 * @param CBPRuntimeService $service - Service object.
+	 */
 	public function addService($name, CBPRuntimeService $service)
 	{
 		if ($this->isStarted)
@@ -465,12 +477,12 @@ class CBPRuntime
 	/*******************  EVENTS  ******************************************************************/
 
 	/**
-	* Static method transfer event to the specified workflow instance.
-	*
-	* @param mixed $workflowId - ID of the workflow instance.
-	* @param mixed $eventName - Event name.
-	* @param mixed $arEventParameters - Event parameters.
-	*/
+	 * Static method transfer event to the specified workflow instance.
+	 *
+	 * @param mixed $workflowId - ID of the workflow instance.
+	 * @param mixed $eventName - Event name.
+	 * @param mixed $arEventParameters - Event parameters.
+	 */
 	public static function sendExternalEvent($workflowId, $eventName, $arEventParameters = []): void
 	{
 		$workflow = static::getRuntime()->getWorkflow($workflowId);
@@ -519,10 +531,10 @@ class CBPRuntime
 	/*******************  UTILITIES  ***************************************************************/
 
 	/**
-	* Includes activity file by activity code.
-	*
-	* @param string $code - Activity code.
-	*/
+	 * Includes activity file by activity code.
+	 *
+	 * @param string $code - Activity code.
+	 */
 	public function includeActivityFile($code)
 	{
 		$searcher = Container::instance()->getActivitySearcherService();
@@ -603,21 +615,22 @@ class CBPRuntime
 				}
 			}
 		}
+
 		return $props;
 	}
 
 	public function includeActivityAiDescriptionFile(string $code): bool
 	{
-		return (
+		return
 			Container::instance()
 				->getActivitySearcherService()
 				->includeActivityAiDescriptionFile($code)
-		);
+		;
 	}
 
 	private function loadActivityLocalization($path, $file, $lang = false)
 	{
-		\Bitrix\Main\Localization\Loc::loadLanguageFile($path. '/'. $file);
+		\Bitrix\Main\Localization\Loc::loadLanguageFile($path . '/' . $file);
 	}
 
 	public function getResourceFilePath($activityPath, $filePath)
@@ -628,13 +641,13 @@ class CBPRuntime
 		$filePath = str_replace("\\", "/", $filePath);
 		$filePath = ltrim($filePath, "/");
 
-		if (file_exists($path.$filePath) && is_file($path.$filePath))
-			return array($path.$filePath, $path);
+		if (file_exists($path . $filePath) && is_file($path . $filePath))
+			return [$path . $filePath, $path];
 		else
 			return null;
 	}
 
-	public function executeResourceFile($activityPath, $filePath, $arParameters = array())
+	public function executeResourceFile($activityPath, $filePath, $arParameters = [])
 	{
 		$result = null;
 		$path = $this->GetResourceFilePath($activityPath, $filePath);
@@ -650,6 +663,7 @@ class CBPRuntime
 			$result = ob_get_contents();
 			ob_end_clean();
 		}
+
 		return $result;
 	}
 
@@ -663,8 +677,8 @@ class CBPRuntime
 
 		$searcher = Container::instance()->getActivitySearcherService();
 
-		$activities =
-			$searcher->searchByType($type, $documentType)
+		$activities
+			= $searcher->searchByType($type, $documentType)
 				->computeDescriptionFilter($documentType)
 		;
 
@@ -686,8 +700,8 @@ class CBPRuntime
 	{
 		$searcher = Container::instance()->getActivitySearcherService();
 
-		$activities =
-			$searcher->searchRestByType(Bizproc\Activity\Enum\ActivityType::ACTIVITY, $lang ?: null)
+		$activities
+			= $searcher->searchRestByType(Bizproc\Activity\Enum\ActivityType::ACTIVITY, $lang ?: null)
 				->computeDescriptionFilter($documentType)
 		;
 
@@ -704,8 +718,8 @@ class CBPRuntime
 	{
 		$searcher = Container::instance()->getActivitySearcherService();
 
-		$activities =
-			$searcher->searchRestByType(Bizproc\Activity\Enum\ActivityType::ROBOT, $lang ?: null)
+		$activities
+			= $searcher->searchRestByType(Bizproc\Activity\Enum\ActivityType::ROBOT, $lang ?: null)
 				->computeDescriptionFilter($documentType)
 		;
 
@@ -729,7 +743,7 @@ class CBPRuntime
 			{
 				return 'cbp' . $name;
 			},
-			$searcher->getLoadedActivities()
+			$searcher->getLoadedActivities(),
 		);
 
 		if (in_array('cbpstateactivity', $classesList))
@@ -742,7 +756,7 @@ class CBPRuntime
 		}
 
 		$classesList[] = \CBPWorkflow::class;
-		$classesList[] = \CBPRuntime::class;
+		$classesList[] = self::class;
 		$classesList[] = DebugWorkflow::class;
 		$classesList[] = Bizproc\BaseType\Value\Date::class;
 		$classesList[] = Bizproc\BaseType\Value\DateTime::class;
@@ -781,12 +795,13 @@ class CBPRuntime
 	private function addWorkflowToChain($childId, $parent)
 	{
 		$this->workflowChains[$childId] = $parent;
+
 		return $this;
 	}
 
 	private function checkWorkflowRecursion($workflowId, $currentTemplateId)
 	{
-		$templates = array($currentTemplateId);
+		$templates = [$currentTemplateId];
 		while (isset($this->workflowChains[$workflowId]))
 		{
 			$parent = $this->workflowChains[$workflowId];
@@ -795,6 +810,7 @@ class CBPRuntime
 			$templates[] = $parent['templateId'];
 			$workflowId = $parent['workflowId'];
 		}
+
 		return false;
 	}
 }

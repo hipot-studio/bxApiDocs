@@ -10,7 +10,7 @@ use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Type\StructureAction;
 use Bitrix\Main\ORM\Query\Query;
 
-final class NodeMemberService
+class NodeMemberService
 {
 	public function findAllByEntityIds(
 		array $entityIds,
@@ -49,6 +49,37 @@ final class NodeMemberService
 			$limit,
 			$offset,
 			$ascendingSort,
+		);
+	}
+
+	/**
+	 * Returns members of DEPARTMENT nodes where the user is head or deputy head.
+	 *
+	 * @return NodeMemberCollection
+	 */
+	public function getManagedDepartmentNodes(int $userId, ?int $structureId = null): NodeMemberCollection
+	{
+		return InternalContainer::getNodeMemberService()->getManagedDepartmentNodes($userId, $structureId);
+	}
+
+	/**
+	 * Inject sort fields for UserTable query to prioritize users from the same departments
+	 * as $userId, with heads appearing first.
+	 *
+	 * Requires injectUserNodeSubquery() to be called first (registers USER_NODE_MEMBER reference).
+	 *
+	 * @param Query $query
+	 * @param int $userId User ID whose departments should be prioritized
+	 * @return Query
+	 */
+	public function injectUserNodeSort(
+		Query $query,
+		int $userId,
+	): Query
+	{
+		return InternalContainer::getNodeMemberRepository()->injectUserNodeSort(
+			$query,
+			$userId,
 		);
 	}
 

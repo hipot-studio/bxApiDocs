@@ -162,10 +162,10 @@ class ExpensesPackTable extends Main\ORM\Data\DataManager
 	/**
 	 * On delete event handler.
 	 *
-	 * @param Main\Orm\Event $event Event.
-	 * @return Main\Orm\EventResult
+	 * @param Main\ORM\Event $event Event.
+	 * @return Main\ORM\EventResult
 	 */
-	public static function onDelete(Main\Orm\Event $event)
+	public static function onDelete(Main\ORM\Event $event)
 	{
 		$data = $event->getParameters();
 		$id = $data['primary']['ID'];
@@ -179,6 +179,6 @@ class ExpensesPackTable extends Main\ORM\Data\DataManager
 			SourceExpensesTable::delete($row['ID']);
 		}
 
-		return new Main\Orm\EventResult();
+		return new Main\ORM\EventResult();
 	}
 }

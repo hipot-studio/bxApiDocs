@@ -15,7 +15,7 @@ use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\ORM\EntityError;
-use Bitrix\Bizproc\Internal\Repository\Mapper\StorageFieldMapper;
+use Bitrix\Bizproc\Internal\Repository\Mapper\StorageItemMapper;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 
 /**
@@ -149,8 +149,10 @@ class StorageFieldTable extends DataManager
 			$result->addError(new EntityError(Loc::getMessage('BIZPROC_STORAGE_FIELD_MODEL_FIELD_WRONG_CODE') ?? ''));
 		}
 
-		$map = StorageFieldMapper::getFieldsMap();
-		if (array_key_exists(mb_strtoupper($code), $map) && $map[mb_strtoupper($code)] !== null)
+		$map = StorageItemMapper::getFieldsMap();
+		$upperCode = mb_strtoupper($code);
+		$upperMapValues = array_map('mb_strtoupper', $map);
+		if (array_key_exists($upperCode, $map) || in_array($upperCode, $upperMapValues, true))
 		{
 			$result->addError(new EntityError(Loc::getMessage('BIZPROC_STORAGE_FIELD_MODEL_FIELD_CODE_EXIST') ?? ''));
 		}

@@ -1,9 +1,12 @@
 <?php
+
 namespace Bitrix\Tasks\Rest\Controllers\Task;
 
+use Bitrix\Tasks\Helper;
 use Bitrix\Tasks\Rest\Controllers\Base;
 
 use Bitrix\Tasks\Manager\Task;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics;
 
 class Elapsedtime extends Base
 {
@@ -39,6 +42,24 @@ class Elapsedtime extends Base
 				'RETURN_ENTITY' => $params['RETURN_ENTITY'], // just an exception for this type of entity
 			]
 		);
+
+		$isSuccess = !empty($mgrResult['DATA']);
+
+		if ($isSuccess)
+		{
+			$taskId = (int)($fields['TASK_ID'] ?? 0);
+
+			Helper\Analytics::getInstance($this->getCurrentUser()->getId())->onTimeTrackingAdd(
+				event: Analytics\Event::TimeTracking->value,
+				section: Analytics\Section::Tasks->value,
+				element: Analytics\Element::Auto->value,
+				subSection: Analytics\SubSection::Rest->value,
+				type: Analytics\Type::ManualTimeTracking->value,
+				params: [
+					'p1' => 'taskId_' . $taskId,
+				],
+			);
+		}
 
 		return [__CLASS__ => $mgrResult['DATA']];
 	}

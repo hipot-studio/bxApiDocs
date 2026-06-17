@@ -8,6 +8,7 @@ use Bitrix\Intranet\Contract\Strategy\InvitationMessageFactoryContract;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Enum\InvitationStatus;
+use Bitrix\Intranet\Internal\Integration\Socialnetwork\FeatureProvider;
 use Bitrix\Intranet\Service\EmailMessage;
 use Bitrix\Intranet\Service\PhoneMessage;
 use Bitrix\Main\Loader;
@@ -69,6 +70,11 @@ class CollabJoinMessageFactory implements InvitationMessageFactoryContract
 	private function createCollabSubject()
 	{
 		$messages = Loc::loadLanguageFile($_SERVER["DOCUMENT_ROOT"] . '/bitrix/components/bitrix/intranet.template.mail/templates/.default/collab_join.php');
+
+		if ((new FeatureProvider())->isNewProjectsAvailable())
+		{
+			return $messages['INTRANET_PROJECT_JOIN_SUBJECT'];
+		}
 
 		return $messages['INTRANET_COLLAB_JOIN_SUBJECT'];
 	}

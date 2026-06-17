@@ -8,9 +8,17 @@ use Bitrix\HumanResources\Access\Model\NodeModel;
 use Bitrix\HumanResources\Access\StructureActionDictionary;
 use Bitrix\HumanResources\Exception\DeleteFailedException;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\NodeBaseTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Schema\InputProperty;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\NodeEntityType;
+use Bitrix\HumanResources\Type\NodeMemberRole;
 
+/**
+ * Add/update employees in a node by roles (save without moving from other nodes).
+ *
+ * @see \Bitrix\HumanResources\Rest\Controller\Node\Member::setAction — REST analog
+ * @see \Bitrix\HumanResources\Controller\Structure\Node\Member::saveUserListAction — ajax controller
+ */
 abstract class NodeEditEmployeesTool extends NodeBaseTool
 {
 	public function getInputSchema(): array
@@ -18,20 +26,8 @@ abstract class NodeEditEmployeesTool extends NodeBaseTool
 		return [
 			'type' => 'object',
 			'properties' => [
-				'nodeId' => [
-					'description' => 'Identifier of the node where employees should be updated',
-					'type' => 'number',
-				],
-				'userIds' => [
-					'description' => 'Array of user IDs grouped by roles. For example: {"MEMBER_HEAD":[1,2], "MEMBER_EMPLOYEE":[3,4,5], "MEMBER_DEPUTY_HEAD":[6]}',
-					'type' => 'object',
-					'additionalProperties' => [
-						'type' => 'array',
-						'items' => [
-							'type' => 'number',
-						]
-					]
-				],
+				'nodeId' => InputProperty::nodeId('Identifier of the node whose member list should be replaced'),
+				'userIds' => InputProperty::userIdsByRole($this->type),
 			],
 			'additionalProperties' => false,
 			'required' => ['nodeId', 'userIds'],
@@ -53,6 +49,15 @@ abstract class NodeEditEmployeesTool extends NodeBaseTool
 
 		$node = $item->getNode();
 		$userIds = $args['userIds'] ?? [];
+
+		$allowedRoles = NodeMemberRole::allowedValuesForNodeType($this->type);
+		$invalidRoles = array_diff(array_keys($userIds), $allowedRoles);
+		if (!empty($invalidRoles))
+		{
+			return 'Invalid role XML IDs: ' . implode(', ', $invalidRoles)
+				. '. Allowed roles: ' . implode(', ', $allowedRoles) . '.'
+			;
+		}
 
 		try
 		{

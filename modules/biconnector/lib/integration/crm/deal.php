@@ -180,6 +180,31 @@ class Deal
 					'JOIN' => 'INNER JOIN b_crm_company CO ON CO.ID = D.COMPANY_ID',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_company CO ON CO.ID = D.COMPANY_ID',
 				],
+				//MYCOMPANY_ID INT (18) UNSIGNED DEFAULT NULL,
+				'MYCOMPANY_ID' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'D.MYCOMPANY_ID',
+					'FIELD_TYPE' => 'int',
+				],
+				'MYCOMPANY_NAME' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'MCO.TITLE',
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'MCO',
+					'JOIN' => 'INNER JOIN b_crm_company MCO ON MCO.ID = D.MYCOMPANY_ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_crm_company MCO ON MCO.ID = D.MYCOMPANY_ID',
+				],
+				'MYCOMPANY' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' =>
+						'if(D.MYCOMPANY_ID is null, null, concat_ws(\' \', '
+						. 'concat(\'[\', D.MYCOMPANY_ID, \']\'), nullif(MCO.TITLE, \'\')))'
+					,
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'MCO',
+					'JOIN' => 'INNER JOIN b_crm_company MCO ON MCO.ID = D.MYCOMPANY_ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_crm_company MCO ON MCO.ID = D.MYCOMPANY_ID',
+				],
 				//CONTACT_ID INT (18) UNSIGNED DEFAULT NULL,
 				'CONTACT_ID' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -293,6 +318,43 @@ class Deal
 					'TABLE_ALIAS' => 'S',
 					'JOIN' => 'INNER JOIN b_crm_status S ON S.ENTITY_ID like \'DEAL_STAGE%\' and S.STATUS_ID = D.STAGE_ID',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_status S ON S.ENTITY_ID like \'DEAL_STAGE%\' and S.STATUS_ID = D.STAGE_ID',
+				],
+				//PREVIOUS_STAGE_ID VARCHAR (50) DEFAULT NULL,
+				'PREVIOUS_STAGE_ID' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'D.PREVIOUS_STAGE_ID',
+					'FIELD_TYPE' => 'string',
+				],
+				'PREVIOUS_STAGE_NAME' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'SP.NAME',
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'SP',
+					'JOIN' =>
+						'INNER JOIN b_crm_status SP '
+						. 'ON SP.ENTITY_ID like \'DEAL_STAGE%\' and SP.STATUS_ID = D.PREVIOUS_STAGE_ID'
+					,
+					'LEFT_JOIN' =>
+						'LEFT JOIN b_crm_status SP ON '
+						. 'SP.ENTITY_ID like \'DEAL_STAGE%\' and SP.STATUS_ID = D.PREVIOUS_STAGE_ID'
+					,
+				],
+				'PREVIOUS_STAGE' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' =>
+						'if(D.PREVIOUS_STAGE_ID is null or D.PREVIOUS_STAGE_ID = \'\', null, '
+						. 'concat_ws(\' \', concat(\'[\', D.PREVIOUS_STAGE_ID, \']\'), nullif(SP.NAME, \'\')))'
+					,
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'SP',
+					'JOIN' =>
+						'INNER JOIN b_crm_status SP '
+						. 'ON SP.ENTITY_ID like \'DEAL_STAGE%\' and SP.STATUS_ID = D.PREVIOUS_STAGE_ID'
+					,
+					'LEFT_JOIN' =>
+						'LEFT JOIN b_crm_status SP '
+						. 'ON SP.ENTITY_ID like \'DEAL_STAGE%\' and SP.STATUS_ID = D.PREVIOUS_STAGE_ID'
+					,
 				],
 				//TODO:STAGE_SEMANTIC_ID VARCHAR(3) NULL,
 				'STAGE_SEMANTIC_ID' => [
@@ -592,6 +654,7 @@ class Deal
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_deal']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_DEAL_TABLE'] ?: 'crm_deal';
+		$result['crm_deal']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_DEAL_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_deal']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_DEAL_FIELD_' . $fieldCode];

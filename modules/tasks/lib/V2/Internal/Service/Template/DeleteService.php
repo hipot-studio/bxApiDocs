@@ -16,6 +16,7 @@ use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\ResetCache;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\RunBeforeDeleteEvent;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\RunDeleteEvent;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\SafeDelete;
+use Bitrix\Tasks\V2\Internal\Service\Template\Recent\UpdateTemplateRecentMessage;
 
 class DeleteService
 {
@@ -24,6 +25,7 @@ class DeleteService
 	)
 	{
 	}
+
 	public function delete(int $templateId, DeleteConfig $config): bool
 	{
 		$this->loadMessages();
@@ -62,6 +64,12 @@ class DeleteService
 
 			$this->templateRepository->delete($templateId);
 		}
+
+		(new UpdateTemplateRecentMessage(
+			userId: $config->getUserId(),
+			templateId: $templateId,
+			action: UpdateTemplateRecentMessage::ACTION_REMOVE,
+		))->sendByInternalQueueId();
 
 		return $this->finalizeDelete($fullTemplateData);
 	}

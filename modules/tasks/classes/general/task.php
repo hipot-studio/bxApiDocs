@@ -55,6 +55,7 @@ use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Util\Db;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
 
 class CTasks
 {
@@ -219,6 +220,12 @@ class CTasks
 			}
 		}
 
+		$analyticsData = $arParams['ANALYTICS_DATA'] ?? null;
+		if ($analyticsData instanceof AnalyticsData)
+		{
+			$handler->withAnalyticsData($analyticsData);
+		}
+
 		$checkUserFields = (bool)($arParams['CHECK_USER_FIELDS'] ?? true);
 		if ($checkUserFields === false)
 		{
@@ -348,6 +355,12 @@ class CTasks
 			$handler->withSkipPush();
 		}
 
+		$analyticsData = $arParams['ANALYTICS_DATA'] ?? null;
+		if ($analyticsData instanceof AnalyticsData)
+		{
+			$handler->withAnalyticsData($analyticsData);
+		}
+
 		try
 		{
 			$handler->update($taskId, $arFields);
@@ -468,6 +481,12 @@ class CTasks
 		)
 		{
 			$handler->withSkipExchangeSync();
+		}
+
+		$analyticsData = $parameters['ANALYTICS_DATA'] ?? null;
+		if ($analyticsData instanceof AnalyticsData)
+		{
+			$handler->withAnalyticsData($analyticsData);
 		}
 
 		return $handler->delete((int)$taskId);

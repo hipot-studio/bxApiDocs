@@ -10,6 +10,7 @@ enum HandlerType: int
 	case ConfigurableHandler = 2;
 	case AiScreeningHandler = 3;
 	case AiApproveHandler = 4;
+	case RemainingHandler = 5;
 
 	public static function fromValue(int $value): self
 	{
@@ -33,6 +34,11 @@ enum HandlerType: int
 			return self::AiApproveHandler;
 		}
 
+		if ($value === self::RemainingHandler->value)
+		{
+			return self::RemainingHandler;
+		}
+
 		throw new ArgumentException('Unknown HandlerType value: ' . $value, 'value');
 	}
 
@@ -43,6 +49,18 @@ enum HandlerType: int
 			self::ConfigurableHandler->value,
 			self::AiScreeningHandler->value,
 			self::AiApproveHandler->value,
+			self::RemainingHandler->value,
 		];
+	}
+
+	public static function isAiHandler(self $type): bool
+	{
+		$aiHandlers = [
+			self::AiScreeningHandler,
+			self::AiApproveHandler,
+			self::RemainingHandler,
+		];
+
+		return in_array($type, $aiHandlers, true);
 	}
 }

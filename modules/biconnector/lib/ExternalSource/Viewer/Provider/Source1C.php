@@ -3,7 +3,7 @@
 namespace Bitrix\BIConnector\ExternalSource\Viewer\Provider;
 
 use Bitrix\BIConnector\ExternalSource\DatasetManager;
-use Bitrix\Biconnector\ExternalSource\FieldType;
+use Bitrix\BIConnector\ExternalSource\FieldType;
 use Bitrix\BIConnector\ExternalSource\Source;
 use Bitrix\BIConnector\ExternalSource;
 

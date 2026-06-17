@@ -10,6 +10,8 @@ interface TaskUserOptionRepositoryInterface
 	public function get(int $taskId, ?int $userId = null): Entity\Task\UserOptionCollection;
 	public function isSet(int $code, int $taskId, int $userId): bool;
 	public function add(Entity\Task\UserOption $userOption): void;
+	public function addBatch(Entity\Task\UserOptionCollection $userOptions): void;
 	public function delete(array $codes = [], int $taskId = 0, int $userId = 0): void;
+	public function deleteBatch(int $taskId, array $userIds, array $codes = []): void;
 	public function invalidate(int $taskId): void;
 }

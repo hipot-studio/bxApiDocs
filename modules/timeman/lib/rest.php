@@ -234,12 +234,13 @@ class Rest extends \IRestService
 
 			$reportData = $tmUser->SetReport('', 0, $currentInfo['ID']);
 
-			$dailyReportFields = array(
+			$dailyReportFields = [
+				'USER_ID' => $tmUser->GetID(),
 				'ENTRY_ID' => $currentInfo['ID'],
 				'REPORT_DATE' => $currentInfo['DATE_START'],
 				'ACTIVE' => $currentInfo['ACTIVE'],
 				'REPORT' => $reportData['REPORT'],
-			);
+			];
 
 			\CTimeManReportDaily::Add($dailyReportFields);
 		}

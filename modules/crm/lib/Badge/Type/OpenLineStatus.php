@@ -5,11 +5,13 @@ namespace Bitrix\Crm\Badge\Type;
 use Bitrix\Crm\Badge\Badge;
 use Bitrix\Crm\Badge\ValueItem;
 use Bitrix\Crm\Badge\ValueItemOptions;
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Main\Localization\Loc;
 
 class OpenLineStatus extends Badge
 {
 	public const CHAT_NOT_READ_VALUE = 'not_read_chat';
+	public const PROCESSED_BY_AI_AGENT = 'processed_by_ai_agent';
 
 	protected const TYPE = 'open_line_status';
 
@@ -26,6 +28,12 @@ class OpenLineStatus extends Badge
 				Loc::getMessage('CRM_BADGE__OPEN_LINE_CHAT_NOT_READ'),
 				ValueItemOptions::TEXT_COLOR_WARNING,
 				ValueItemOptions::BG_COLOR_WARNING
+			),
+			new ValueItem(
+				self::PROCESSED_BY_AI_AGENT,
+				Loc::getMessage('CRM_BADGE__OPEN_LINE_CHAT_PROCESSED_BY_AI_AGENT') ?? '',
+				ValueItemOptions::TEXT_COLOR_LAVENDER,
+				ValueItemOptions::BG_COLOR_LAVENDER,
 			),
 		];
 	}

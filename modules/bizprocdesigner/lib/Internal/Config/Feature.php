@@ -21,6 +21,11 @@ class Feature
 		return $this->getOptionValue('complex_node_connections_available', 'N') === 'Y';
 	}
 
+	public function isDebugBarAvailable(): bool
+	{
+		return $this->getOptionValue('debugger_available', 'N') === 'Y';
+	}
+
 	private function getOptionValue(string $option, mixed $defaultValue)
 	{
 		return Main\Config\Option::get(self::MODULE_NAME, $option, $defaultValue);
@@ -40,6 +45,11 @@ class Feature
 		if ($this->areComplexNodeConnectionsAvailable())
 		{
 			$featureCodes[] = 'complexNodeConnections';
+		}
+
+		if ($this->isDebugBarAvailable())
+		{
+			$featureCodes[] = 'debugBar';
 		}
 
 		return $featureCodes;

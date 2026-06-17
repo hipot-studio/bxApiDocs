@@ -1118,6 +1118,43 @@ class Dataset extends Controller
 		return $editUrl;
 	}
 
+	public function getCreateUrlByNameAction(string $tableName): ?string
+	{
+		if (!SupersetInitializer::isSupersetReady())
+		{
+			return null;
+		}
+
+		$integrator = Integrator::getInstance();
+		$response = $integrator->getDatasetCreateUrl($tableName);
+		if ($response->hasErrors())
+		{
+			$errors = $response->getErrors();
+			$this->addError(new Error($errors[0]?->getMessage() ?? '', 'CREATE_URL_ERROR'));
+
+			return null;
+		}
+
+		$editUrl = $response->getData()['url'] ?? null;
+		if (!$editUrl)
+		{
+			return null;
+		}
+
+		$loginUrl = (new SupersetController($integrator))->getLoginUrl();
+		if ($loginUrl)
+		{
+			$url = new Uri($loginUrl);
+			$url->addParams([
+				'next' => $editUrl,
+			]);
+
+			return $url->getLocator();
+		}
+
+		return $editUrl;
+	}
+
 	private function getDefaultDatasetName(ExternalSource\Type $type): string
 	{
 		if ($type === ExternalSource\Type::Csv)

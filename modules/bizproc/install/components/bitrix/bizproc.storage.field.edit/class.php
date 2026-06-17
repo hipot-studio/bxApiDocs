@@ -170,21 +170,26 @@ class BizprocStorageFieldEditComponent extends CBitrixComponent
 
 	private function getFieldsTypes(): array
 	{
-		$baseTypes = FieldType::getBaseTypesMap();
-		unset($baseTypes[FieldType::INTERNALSELECT], $baseTypes[FieldType::FILE], $baseTypes[FieldType::SELECT]);
+		$allowedTypes = [
+			FieldType::STRING,
+			FieldType::TEXT,
+			FieldType::INT,
+			FieldType::DOUBLE,
+			FieldType::BOOL,
+			FieldType::DATE,
+			FieldType::DATETIME,
+			FieldType::USER,
+		];
 
 		$documentTypes = \CBPHelper::GetDocumentFieldTypes();
 
 		$fieldTypes = [];
-
-		foreach ($documentTypes as $key => $value)
+		foreach ($allowedTypes as $type)
 		{
-			if (!isset($baseTypes[$key]))
+			if (isset($documentTypes[$type]))
 			{
-				continue;
+				$fieldTypes[$type] = $documentTypes[$type]['Name'];
 			}
-
-			$fieldTypes[$key] = $value['Name'];
 		}
 
 		return $fieldTypes;

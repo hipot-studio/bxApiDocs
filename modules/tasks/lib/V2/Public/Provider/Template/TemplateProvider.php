@@ -13,9 +13,12 @@ use Bitrix\Tasks\V2\Internal\Entity\Template;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Access\Service\CrmAccessService;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Service\DiskArchiveLinkService;
 use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\GroupAccessService;
+use Bitrix\Tasks\V2\Internal\Repository\Template\List;
 use Bitrix\Tasks\V2\Internal\Repository\Template\Select;
 use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Link\LinkService;
+use Bitrix\Tasks\V2\Public\Provider\Params\Template\List\Filter;
+use Bitrix\Tasks\V2\Public\Provider\Params\Template\ListParams;
 use Bitrix\Tasks\V2\Public\Provider\Params\Template\TemplateParams;
 
 class TemplateProvider
@@ -165,5 +168,33 @@ class TemplateProvider
 		}
 
 		return ['description' => $description];
+	}
+
+	public function getList(ListParams $params): Template\TemplateCollection
+	{
+		return $this->templateReadRepository->getList(
+			$params->select->mapToRepository(),
+			$params->filter->mapToRepository(),
+			$params->sort->mapToRepository(),
+			$params->pager->getLimit(),
+			$params->pager->getOffset()
+		);
+	}
+
+	public function getCount(Filter $filter): int
+	{
+		return $this->templateReadRepository->getCount(
+			$filter->mapToRepository()
+		);
+	}
+
+	public function getById(int $id, \Bitrix\Tasks\V2\Public\Provider\Params\Template\List\Select $select): ?Template
+	{
+		return $this->templateReadRepository->getList(
+			$select->mapToRepository(),
+			new List\Filter([['ID', '=', $id]]),
+			new List\Order(),
+			1,
+		)->findOneById($id);
 	}
 }

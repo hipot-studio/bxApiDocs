@@ -46,6 +46,7 @@ final class ImportOperation
 
 		$positionBefore = $reader->getPosition();
 		$lineBefore = $reader->getCurrentLine();
+		$nextImportCurrentLine = null;
 
 		foreach ($reader->read() as $row)
 		{
@@ -126,6 +127,8 @@ final class ImportOperation
 						}
 
 						$reader->setCurrentLine($lineBefore + 1);
+						$nextImportCurrentLine = $lineBefore;
+
 						$errorOccurred = false;
 					}
 
@@ -135,6 +138,7 @@ final class ImportOperation
 						$requisiteOptions->setPrevEntity($requisiteImportHelper->getCurrentEntityKey());
 
 						$reader->setCurrentLine($lineBefore + 1);
+						$nextImportCurrentLine = $lineBefore;
 
 						if ($searchNextEntity !== 1)
 						{
@@ -172,6 +176,12 @@ final class ImportOperation
 			{
 				if (($importItems->count() + $importResult->getFailImportCount()) >= $this->options->limit)
 				{
+					if ($nextImportCurrentLine !== null)
+					{
+						// We don't need to process the element since we already showed the error
+						$nextImportCurrentLine++;
+					}
+
 					break;
 				}
 
@@ -225,7 +235,10 @@ final class ImportOperation
 			$importItems->add($row->getIndex(), $item, $requisiteImportHelper);
 		}
 
-		$importResult->setCurrentLine($reader->getCurrentLine());
+		// Import processes the last item in each batch twice (at the end of the import and at the beginning of a new one),
+		// since there may be products in the import, and we cannot import them separately
+		// Importing requisites, on the contrary, sets the next line to be processed, which is why there are such crutches here
+		$importResult->setCurrentLine($nextImportCurrentLine ?? $reader->getCurrentLine());
 		$importResult->setIsFinished($reader->isEndOfFile());
 
 		foreach ($importItems->getAll() as $importItem)

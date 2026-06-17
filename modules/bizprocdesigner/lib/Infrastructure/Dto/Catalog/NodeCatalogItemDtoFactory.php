@@ -32,6 +32,7 @@ class NodeCatalogItemDtoFactory
 			properties: $description->get('PROPERTIES'),
 			returnProperties: self::makeReturnProperties($description->getClass()),
 			defaultSettings: $defaultSettings->toArray(),
+			hasAuxPorts: $description->getNodeSettings()?->ports?->aux !== null,
 		);
 	}
 

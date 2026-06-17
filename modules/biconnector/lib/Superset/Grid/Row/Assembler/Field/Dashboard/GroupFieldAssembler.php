@@ -46,7 +46,7 @@ class GroupFieldAssembler extends FieldAssembler
 					'#FIRST_GROUPS#' => $shownPart,
 					'[hint]' => <<<HTML
 						<span
-							data-hint='{$hiddenPart}' 
+							data-hint="{$hiddenPart}" 
 							data-hint-no-icon
 							data-hint-interactivity
 							data-hint-center

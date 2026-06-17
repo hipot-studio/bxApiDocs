@@ -392,24 +392,17 @@ class DynamicTypesMap
 
 		if ($typesData === null)
 		{
-			if (Application::getConnection()->isTableExists($this->typeDataClass::getTableName()))
+			try
 			{
-				try
-				{
-					$typesData = $this->typeDataClass::getList([
-						'filter' => [
-							'=IS_INITIALIZED' => true,
-						],
-					])->fetchAll();
-				}
-				catch (SqlQueryException $e)
-				{
-					$typesData = null;
-				}
+				$typesData = $this->typeDataClass::getList([
+					'filter' => [
+						'=IS_INITIALIZED' => true,
+					],
+				])->fetchAll();
 			}
-			else
+			catch (SqlQueryException $e)
 			{
-				$typesData = [];
+				$typesData = null;
 			}
 
 			if ($typesData !== null)

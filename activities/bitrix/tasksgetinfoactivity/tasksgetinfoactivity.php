@@ -14,7 +14,7 @@ use Bitrix\Im\V2\Message\Text\BbCode\User;
 use Bitrix\Tasks\Internals\Task\CheckListTable;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Tasks\Internals\TaskTable;
-use Bitrix\Tasks\UI\Task\Status;
+use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Main\Web\Json;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Tasks\V2\Internal\DI\Container;
@@ -44,7 +44,9 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const PARAM_TASK_LIMIT = 'TaskLimit';
 	private const PARAM_TASK_ACTIVITY_DAYS = 'TaskActivityDays';
 	private const PARAM_MESSAGES_DAYS = 'MessagesDays';
+	private const PARAM_PROJECT_ID = 'ProjectId';
 	private const PARAM_USER_TASK_ROLE = 'UserTaskRole';
+	private const PARAM_TASK_STATUS_FILTER = 'TaskStatusFilter';
 	private const PARAM_TASK_SELECT_FIELD = 'TaskSelectField';
 	private const RETURN_PARAM_TASKS_INFO_JSON = 'TASKS_INFO_JSON';
 	private const RETURN_PARAM_COUNTER_TASKS_INFO = 'COUNTER_TASKS_INFO';
@@ -62,6 +64,11 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const SELECT_FIELD_IS_OVERDUE = 'isOverdue';
 	private const SELECT_FIELD_URL = 'url';
 	private const SELECT_FIELD_PRIORITY = 'priority';
+	private const SELECT_FIELD_PROJECT = 'project';
+	private const SELECT_FIELD_DAYS_WITHOUT_UPDATES = 'daysWithoutUpdates';
+	private const SELECT_FIELD_DAYS_ON_CONTROL = 'daysOnControl';
+	private const PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE = 'nameForErrorMessage';
+	private const PROPERTY_MAP_FIELD_NAME = 'Name';
 
 	protected static $requiredModules = [
 		'tasks',
@@ -74,11 +81,13 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 
 		$this->arProperties = [
 			self::PARAM_USER_ID => null,
+			self::PARAM_PROJECT_ID => null,
 			self::PARAM_MESSAGE_COUNT_LIMIT => null,
 			self::PARAM_MESSAGES_DAYS => null,
 			self::PARAM_TASK_ACTIVITY_DAYS => null,
 			self::PARAM_TASK_LIMIT => null,
 			self::PARAM_USER_TASK_ROLE => null,
+			self::PARAM_TASK_STATUS_FILTER => null,
 			self::PARAM_TASK_SELECT_FIELD => null,
 			self::RETURN_PARAM_TASKS_INFO_JSON => null,
 			self::RETURN_PARAM_COUNTER_TASKS_INFO => null,
@@ -106,10 +115,11 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	{
 		$errors = new ErrorCollection();
 		$userId = $this->getTargetUserId();
+		$projectId = $this->getTargetProjectId();
 
 		try
 		{
-			[$tasks, $userIdList, $chatIdList] = $this->getTasks((int)$userId);
+			[$tasks, $userIdList, $chatIdList] = $this->getTasks($userId, $projectId);
 			$formattedTasks = $this->prepareTasks($tasks, $userIdList, $chatIdList);
 			$this->{self::RETURN_PARAM_TASKS_INFO_JSON} = Json::encode(
 				$formattedTasks,
@@ -132,31 +142,48 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_USER_ID'),
 				'FieldName' => self::PARAM_USER_ID,
 				'Type' => FieldType::USER,
-				'Required' => true,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_USER_ID_NAME'),
+			],
+			self::PARAM_PROJECT_ID => [
+				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_PROJECT_ID'),
+				'FieldName' => self::PARAM_PROJECT_ID,
+				'Type' => FieldType::ENTITYSELECTOR,
+				'Settings' => [
+					'entity' => [
+						'id' => 'project',
+						'dynamicLoad' => true,
+						'dynamicSearch' => true,
+					],
+				],
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_PROJECT_ID_NAME'),
 			],
 			self::PARAM_MESSAGE_COUNT_LIMIT => [
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_MESSAGE_COUNT_LIMIT'),
 				'FieldName' => self::PARAM_MESSAGE_COUNT_LIMIT,
 				'Type' => FieldType::INT,
 				'Default' => self::MESSAGE_COUNT_DEFAULT,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_MESSAGE_COUNT_LIMIT_NAME'),
 			],
 			self::PARAM_TASK_LIMIT => [
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_LIMIT'),
 				'FieldName' => self::PARAM_TASK_LIMIT,
 				'Type' => FieldType::INT,
 				'Default' => self::TASKS_LIMIT_DEFAULT,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_LIMIT_NAME'),
 			],
 			self::PARAM_TASK_ACTIVITY_DAYS => [
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_ACTIVITY_DAYS'),
 				'FieldName' => self::PARAM_TASK_ACTIVITY_DAYS,
 				'Type' => FieldType::INT,
 				'Default' => self::TASK_ACTIVITY_DAYS_DEFAULT,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_ACTIVITY_DAYS_NAME'),
 			],
 			self::PARAM_MESSAGES_DAYS => [
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_MESSAGE_DAYS'),
 				'FieldName' => self::PARAM_MESSAGES_DAYS,
 				'Type' => FieldType::INT,
 				'Default' => self::MESSAGES_DAYS_DEFAULT,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_MESSAGE_DAYS_NAME'),
 			],
 			self::PARAM_USER_TASK_ROLE => [
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_USER_TASK_ROLE'),
@@ -164,8 +191,17 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				'Type' => FieldType::SELECT,
 				'Default' => array_keys(self::getTaskRoles()),
 				'Options' => self::getTaskRoles(),
-				'Required' => true,
 				'Multiple' => true,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_USER_TASK_ROLE_NAME'),
+			],
+			self::PARAM_TASK_STATUS_FILTER => [
+				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_STATUS_FILTER'),
+				'FieldName' => self::PARAM_TASK_STATUS_FILTER,
+				'Type' => FieldType::SELECT,
+				'Default' => array_keys(self::getTaskStatuses()),
+				'Options' => self::getTaskStatuses(),
+				'Multiple' => true,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_STATUS_FILTER_NAME'),
 			],
 			self::PARAM_TASK_SELECT_FIELD  => [
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_SELECT_FIELD'),
@@ -174,6 +210,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				'Default' => array_keys(self::getSelectedFieldsOptions()),
 				'Options' => self::getSelectedFieldsOptions(),
 				'Multiple' => true,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_SELECT_FIELD_NAME'),
 			],
 		];
 	}
@@ -189,15 +226,27 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	protected function checkProperties(): ErrorCollection
 	{
 		$errorCollection = new ErrorCollection();
-		if (empty($this->getTargetUserId()))
+
+		$hasUserId = !empty($this->getTargetUserId());
+		$hasProjectId = !empty($this->getTargetProjectId());
+
+		if (!$hasUserId && !$hasProjectId)
 		{
-			$errorCollection->setError($this->getIncorrectPropertyError(self::PARAM_USER_ID));
+			$errorCollection->setError(
+				new Error(Loc::getMessage('TASKS_GET_INFO_FIELD_ERROR_REQUIRED_ONE_OF') ?? ''),
+			);
 		}
 
 		foreach (self::getPropertiesDialogMap() as $propertyId => $propertyFields)
 		{
 			$type = $propertyFields['Type'] ?? null;
 			$isRequired = (bool)($propertyFields['Required'] ?? false);
+
+			if ($propertyId === self::PARAM_USER_TASK_ROLE)
+			{
+				$isRequired = $hasUserId;
+			}
+
 			$error = match ($type)
 			{
 				FieldType::INT => $this->checkIntRuntimePropertyValue($propertyId),
@@ -214,9 +263,20 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		return $errorCollection;
 	}
 
-	public static function validateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null): array
+	public static function validateProperties($arTestProperties = [], ?CBPWorkflowTemplateUser $user = null): array
 	{
 		$errors = [];
+
+		$hasUserId = !empty($arTestProperties[self::PARAM_USER_ID]);
+		$hasProjectId = !empty($arTestProperties[self::PARAM_PROJECT_ID]);
+
+		if (!$hasUserId && !$hasProjectId)
+		{
+			$errors[] = [
+				'message' => Loc::getMessage('TASKS_GET_INFO_FIELD_ERROR_REQUIRED_ONE_OF') ?? '',
+			];
+		}
+
 		foreach (self::getPropertiesMap([]) as $id => $property)
 		{
 			$value = $arTestProperties[$id] ?? null;
@@ -225,6 +285,13 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				FieldType::INT => self::validateIntRangeValue($id, $value),
 				default => null,
 			};
+
+			if ($id === self::PARAM_USER_TASK_ROLE && $hasUserId && \CBPHelper::isEmptyValue($value))
+			{
+				$errors[] = [
+					'message' => Loc::getMessage('TASKS_GET_INFO_FIELD_ERROR_REQUIRED_USER_ROLE'),
+				];
+			}
 
 			if ($error)
 			{
@@ -235,17 +302,37 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		return array_merge($errors, parent::ValidateProperties($arTestProperties, $user));
 	}
 
-	private function getTasks(int $userId): array
+	private function getTasks(?int $userId, ?int $projectId): array
 	{
 		$activityDays = (int)$this->{self::PARAM_TASK_ACTIVITY_DAYS};
 
+		$filter = [
+			'>ACTIVITY_DATE' => (new DateTime())->add("-$activityDays days"),
+		];
+
+		if ($projectId)
+		{
+			$filter['=GROUP_ID'] = $projectId;
+		}
+
+		if ($userId)
+		{
+			$filter['=MEMBERS.USER_ID'] = $userId;
+			$filter['@MEMBERS.TYPE'] = (array)$this->{self::PARAM_USER_TASK_ROLE};
+		}
+
+		$statusFilter = (array)$this->{self::PARAM_TASK_STATUS_FILTER};
+		$allStatuses = array_keys(self::getTaskStatuses());
+		$statusFilter = array_intersect($statusFilter, $allStatuses);
+
+		if (!empty($statusFilter) && !empty(array_diff($allStatuses, $statusFilter)))
+		{
+			$filter['@STATUS'] = array_map('intval', $statusFilter);
+		}
+
 		$tasksResult = TaskTable::query()
 			->setSelect($this->getTaskQuerySelectFields())
-			->setFilter([
-				'>ACTIVITY_DATE' => (new DateTime())->add("-$activityDays days"),
-				'=MEMBERS.USER_ID' => $userId,
-				'@MEMBERS.TYPE' => (array)$this->{self::PARAM_USER_TASK_ROLE},
-			])
+			->setFilter($filter)
 			->setGroup(['ID'])
 			->setOrder(['ACTIVITY_DATE' => 'DESC'])
 			->setLimit((int)$this->{self::PARAM_TASK_LIMIT})
@@ -257,18 +344,21 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		$chatIdList = [];
 		while ($row = $tasksResult->fetch())
 		{
-			$status = $row['STATUS'] ?? null;
-			$status = Status::getList()[$status] ?? $status;
+			$statusCode = $row['STATUS'] ?? null;
+			$status = Bitrix\Tasks\UI\Task\Status::getList()[$statusCode] ?? $statusCode;
 			$tasks[$row['ID']] = [
 				'TITLE' => $row['TITLE'],
 				'DESCRIPTION' => $row['DESCRIPTION'] ?? null,
 				'STATUS' => $status,
+				'STATUS_CODE' => $statusCode,
+				'STATUS_CHANGED_DATE' => $row['STATUS_CHANGED_DATE'] ?? null,
 				'RESPONSIBLE' => $row['RESPONSIBLE_ID'] ?? null,
 				'DEADLINE' => $row['DEADLINE'] ?? null,
 				'CREATOR' => $row['CREATED_BY'] ?? null,
 				'ACTIVITY_DATE' => $row['ACTIVITY_DATE'] ?? null,
 				'CHAT_ID' => $row['CHAT_ID'] ?? null,
 				'PRIORITY' => $row['PRIORITY'] ?? null,
+				'PROJECT_NAME' => $row['PROJECT_NAME'] ?? null,
 			];
 
 			if (!empty($row['CHAT_ID']))
@@ -478,7 +568,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 					'NAME' => $author['NAME'],
 					'LAST_NAME' => $author['LAST_NAME'],
 					'LOGIN' => $author['LOGIN'],
-				]
+				],
 			);
 		}
 
@@ -554,11 +644,20 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		$this->replaceUserField($chatMessages, 'AUTHOR', $formatUsers, true);
 
 		$userSelectedFields = (array)$this->{self::PARAM_TASK_SELECT_FIELD};
+		$showStatus = in_array(self::SELECT_FIELD_STATUS, $userSelectedFields, true);
+		$showActivityDate = in_array(self::SELECT_FIELD_ACTIVITY_DATE, $userSelectedFields, true);
 		$showDeadline = in_array(self::SELECT_FIELD_DEADLINE, $userSelectedFields, true);
 		$showIsOverdue = in_array(self::SELECT_FIELD_IS_OVERDUE, $userSelectedFields, true);
 		$showUrl = in_array(self::SELECT_FIELD_URL, $userSelectedFields, true);
+		$showDaysWithoutUpdates = in_array(self::SELECT_FIELD_DAYS_WITHOUT_UPDATES, $userSelectedFields, true);
+		$showDaysOnControl = in_array(self::SELECT_FIELD_DAYS_ON_CONTROL, $userSelectedFields, true);
 		$linkService = Container::getInstance()->getLinkService();
 		$userId = (int)$this->getTargetUserId();
+		$projectId = $this->getTargetProjectId();
+		$group = $projectId !== null
+			? new Bitrix\Tasks\V2\Internal\Entity\Group(id: $projectId)
+			: null
+		;
 
 		$formattedTasks = [];
 		foreach ($tasks as $taskId => $task)
@@ -572,12 +671,12 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				$formattedTask['DESCRIPTION'] = $task['DESCRIPTION'];
 			}
 
-			if (!empty($task['STATUS']))
+			if ($showStatus && !empty($task['STATUS']))
 			{
 				$formattedTask['STATUS'] = $task['STATUS'];
 			}
 
-			if (isset($task['ACTIVITY_DATE']) && $task['ACTIVITY_DATE'] instanceof DateTime)
+			if ($showActivityDate && isset($task['ACTIVITY_DATE']) && $task['ACTIVITY_DATE'] instanceof DateTime)
 			{
 				$formattedTask['ACTIVITY_DATE'] = $task['ACTIVITY_DATE']->format('c');
 			}
@@ -627,15 +726,40 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				$formattedTask['IS_OVERDUE'] = $task['DEADLINE']->getTimestamp() <= time();
 			}
 
+			if ($showDaysWithoutUpdates && isset($task['ACTIVITY_DATE']) && $task['ACTIVITY_DATE'] instanceof DateTime)
+			{
+				$formattedTask['DAYS_WITHOUT_UPDATES'] = self::calculateDaysSince($task['ACTIVITY_DATE']);
+			}
+
+			if (
+				$showDaysOnControl
+				&& (int)($task['STATUS_CODE'] ?? 0) === Status::SUPPOSEDLY_COMPLETED
+				&& isset($task['STATUS_CHANGED_DATE'])
+				&& $task['STATUS_CHANGED_DATE'] instanceof DateTime
+			)
+			{
+				$daysOnControl = self::calculateDaysSince($task['STATUS_CHANGED_DATE']);
+
+				if ($daysOnControl > 0)
+				{
+					$formattedTask['DAYS_ON_CONTROL'] = $daysOnControl;
+				}
+			}
+
 			if ($showUrl)
 			{
-				$taskEntity = new Bitrix\Tasks\V2\Internal\Entity\Task(id: (int)$taskId);
+				$taskEntity = new Bitrix\Tasks\V2\Internal\Entity\Task(id: (int)$taskId, group: $group);
 				$formattedTask['URL'] = '/' . ltrim($linkService->get($taskEntity, $userId), '/');
 			}
 
 			if (isset($task['PRIORITY']))
 			{
 				$formattedTask['PRIORITY'] = (int)$task['PRIORITY'];
+			}
+
+			if (!empty($task['PROJECT_NAME']))
+			{
+				$formattedTask['PROJECT_NAME'] = $task['PROJECT_NAME'];
 			}
 
 			$formattedTasks[] = $formattedTask;
@@ -679,9 +803,24 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		unset($id);
 	}
 
+	private static function calculateDaysSince(DateTime $dateTime): int
+	{
+		$diff = (new DateTime())->getTimestamp() - $dateTime->getTimestamp();
+
+		return max(0, (int)floor($diff / 86400));
+	}
+
 	public static function getPropertiesDialogMap(?PropertiesDialog $dialog = null): array
 	{
-		return self::getPropertiesMap([]);
+		return array_map(
+			static function(array $property): array
+			{
+				$property[self::PROPERTY_MAP_FIELD_NAME] = $property[self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE];
+
+				return $property;
+			},
+			self::getPropertiesMap([]),
+		);
 	}
 
 	protected static function getFileName(): string
@@ -708,6 +847,22 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	}
 
 	/**
+	 * @return array<int, string>
+	 */
+	private static function getTaskStatuses(): array
+	{
+		return [
+			Status::NEW => Status::getMessage(Status::NEW),
+			Status::PENDING => Status::getMessage(Status::PENDING),
+			Status::IN_PROGRESS => Status::getMessage(Status::IN_PROGRESS),
+			Status::SUPPOSEDLY_COMPLETED => Status::getMessage(Status::SUPPOSEDLY_COMPLETED),
+			Status::COMPLETED => Status::getMessage(Status::COMPLETED),
+			Status::DEFERRED => Status::getMessage(Status::DEFERRED),
+			Status::DECLINED => Status::getMessage(Status::DECLINED),
+		];
+	}
+
+	/**
 	 * @return array<string, string>
 	 */
 	private static function getSelectedFieldsOptions(): array
@@ -727,6 +882,9 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			self::SELECT_FIELD_IS_OVERDUE => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_IS_OVERDUE'),
 			self::SELECT_FIELD_URL => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_URL'),
 			self::SELECT_FIELD_PRIORITY => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_PRIORITY'),
+			self::SELECT_FIELD_PROJECT => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_PROJECT'),
+			self::SELECT_FIELD_DAYS_WITHOUT_UPDATES => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_DAYS_WITHOUT_UPDATES'),
+			self::SELECT_FIELD_DAYS_ON_CONTROL => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_DAYS_ON_CONTROL'),
 		];
 	}
 
@@ -738,6 +896,13 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private function getTargetUserId(): ?int
 	{
 		return CBPHelper::extractFirstUser($this->{self::PARAM_USER_ID}, $this->getDocumentId());
+	}
+
+	private function getTargetProjectId(): ?int
+	{
+		$projectId = (int)$this->{self::PARAM_PROJECT_ID};
+
+		return $projectId > 0 ? $projectId : null;
 	}
 
 	private function setDefaultValuesToNullProperties(): void
@@ -840,6 +1005,13 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private function checkIntRuntimePropertyValue(string $propertyId): ?Error
 	{
 		$value = $this->{$propertyId};
+		if ($value === null)
+		{
+			$isRequired = (bool)(self::getPropertiesDialogMap()[$propertyId]['Required'] ?? false);
+
+			return $isRequired ? $this->getIncorrectPropertyError($propertyId) : null;
+		}
+
 		if (!is_numeric($value))
 		{
 			return $this->getIncorrectPropertyError($propertyId);
@@ -872,9 +1044,17 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			$select[] = 'DESCRIPTION';
 		}
 
-		if (in_array(self::SELECT_FIELD_STATUS, $userSelectedFields, true))
+		if (
+			in_array(self::SELECT_FIELD_STATUS, $userSelectedFields, true)
+			|| in_array(self::SELECT_FIELD_DAYS_ON_CONTROL, $userSelectedFields, true)
+		)
 		{
 			$select[] = 'STATUS';
+		}
+
+		if (in_array(self::SELECT_FIELD_DAYS_ON_CONTROL, $userSelectedFields, true))
+		{
+			$select[] = 'STATUS_CHANGED_DATE';
 		}
 
 		if (in_array(self::SELECT_FIELD_RESPONSIBLE, $userSelectedFields, true))
@@ -895,7 +1075,10 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			$select[] = 'CREATED_BY';
 		}
 
-		if (in_array(self::SELECT_FIELD_ACTIVITY_DATE, $userSelectedFields, true))
+		if (
+			in_array(self::SELECT_FIELD_ACTIVITY_DATE, $userSelectedFields, true)
+			|| in_array(self::SELECT_FIELD_DAYS_WITHOUT_UPDATES, $userSelectedFields, true)
+		)
 		{
 			$select[] = 'ACTIVITY_DATE';
 		}
@@ -911,6 +1094,11 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		if (in_array(self::SELECT_FIELD_PRIORITY, $userSelectedFields, true))
 		{
 			$select[] = 'PRIORITY';
+		}
+
+		if (in_array(self::SELECT_FIELD_PROJECT, $userSelectedFields, true))
+		{
+			$select['PROJECT_NAME'] = 'GROUP.NAME';
 		}
 
 		return $select;

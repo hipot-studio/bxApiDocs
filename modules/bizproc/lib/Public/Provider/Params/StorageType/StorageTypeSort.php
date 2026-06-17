@@ -18,6 +18,7 @@ class StorageTypeSort implements SortInterface
 		return array_intersect_key($this->sort, array_flip([
 			'ID',
 			'TITLE',
+			'CODE',
 			'CREATED_BY',
 			'UPDATED_BY',
 			'CREATED_TIME',

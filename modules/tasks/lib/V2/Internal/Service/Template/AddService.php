@@ -20,6 +20,7 @@ use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\SendPush;
 use Bitrix\Tasks\V2\Internal\Service\Template\Prepare\Add\EntityFieldService;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Service\Template\Recent\UpdateTemplateRecentMessage;
 
 class AddService
 {
@@ -67,6 +68,12 @@ class AddService
 		{
 			throw new TemplateAddException();
 		}
+
+		(new UpdateTemplateRecentMessage(
+			userId: $config->getUserId(),
+			templateId: $id,
+			action: UpdateTemplateRecentMessage::ACTION_ADD,
+		))->sendByInternalQueueId();
 
 		return [$template, $fields];
 	}

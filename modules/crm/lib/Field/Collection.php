@@ -83,6 +83,20 @@ class Collection implements \Iterator, \ArrayAccess, \Countable
 		return $this;
 	}
 
+	public function filter(callable $filter): self
+	{
+		$collection = new static();
+		foreach ($this->fields as $field)
+		{
+			if ($filter($field))
+			{
+				$collection->push($field);
+			}
+		}
+
+		return $collection;
+	}
+
 	public function current(): ?Field
 	{
 		return current($this->fields);

@@ -8,6 +8,7 @@ use Bitrix\Main\DB\SqlHelper;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Tasks\Access\TagAccessController;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Task\EO_TaskTag;
@@ -556,8 +557,8 @@ class Tag
 
 		foreach ($tags as $tag)
 		{
-			$names[] = trim($tag['NAME']);
-			$name = Application::getConnection()->getSqlHelper()->forSql(trim($tag['NAME']));
+			$names[] = Emoji::encode(trim($tag['NAME']));
+			$name = $this->prepareTagForSql($tag['NAME']);
 			$implode [] = "('{$name}', {$groupId})";
 		}
 
@@ -607,8 +608,8 @@ class Tag
 
 		foreach ($tags as $tag)
 		{
-			$names[] = trim($tag['NAME']);
-			$name = Application::getConnection()->getSqlHelper()->forSql(trim($tag['NAME']));
+			$names[] = Emoji::encode(trim($tag['NAME']));
+			$name = $this->prepareTagForSql($tag['NAME']);
 			$implode [] = "('{$name}', {$userId})";
 		}
 
@@ -987,6 +988,11 @@ class Tag
 	private function prepareTag(string $name): string
 	{
 		return mb_strtolower(trim($name));
+	}
+
+	private function prepareTagForSql(string $name): string
+	{
+		return Application::getConnection()->getSqlHelper()->forSql(Emoji::encode(trim($name)));
 	}
 
 	private function prepareTags(array $tags): array

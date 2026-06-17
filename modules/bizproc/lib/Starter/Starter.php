@@ -327,6 +327,7 @@ final class Starter
 				$result->addErrors($processResult->getErrors());
 			}
 			$result->addWorkflowIds($processResult->getWorkflowIds());
+			$result->addTemplateWorkflowIds($processResult->getTemplateWorkflowIds());
 			$result->setProcessTriggerApplied($processResult->isTriggerApplied());
 		}
 	}
@@ -341,6 +342,7 @@ final class Starter
 				$result->addErrors($automationResult->getErrors());
 			}
 			$result->addWorkflowIds($automationResult->getWorkflowIds());
+			$result->addTemplateWorkflowIds($automationResult->getTemplateWorkflowIds());
 			$result->setAutomationTriggerApplied($automationResult->isTriggerApplied());
 		}
 	}

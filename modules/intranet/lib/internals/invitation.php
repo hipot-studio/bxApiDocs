@@ -7,7 +7,9 @@
  */
 namespace Bitrix\Intranet\Internals;
 
+use Bitrix\Intranet\Internal\Integration\Bitrix24\License\InvitationLimiter;
 use Bitrix\Main\Access\Entity\DataManager;
+use Bitrix\Main\ORM\Event;
 use Bitrix\Main\Type;
 
 /**
@@ -105,5 +107,20 @@ class InvitationTable extends DataManager
 				'reference' => array('=this.ORIGINATOR_ID' => 'ref.ID')
 			),
 		];
+	}
+
+	public static function onAfterAdd(Event $event): void
+	{
+		InvitationLimiter::clearCache();
+	}
+
+	public static function onAfterUpdate(Event $event): void
+	{
+		InvitationLimiter::clearCache();
+	}
+
+	public static function onAfterDelete(Event $event): void
+	{
+		InvitationLimiter::clearCache();
 	}
 }

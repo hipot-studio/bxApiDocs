@@ -3,6 +3,7 @@
 namespace Bitrix\UI\Toolbar;
 
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\UI\Filter\Theme;
 use Bitrix\UI\Buttons\AirButtonStyle;
 use Bitrix\UI\Buttons\BaseButton;
@@ -32,6 +33,8 @@ class Toolbar
 	private string $defaultEditableTitle;
 //	private string $editableTitleSelector;
 	private ?array $copyLinkButtonParams = null;
+	private const FULLSCREEN_BUTTON_OPTION = 'toolbar_fullscreen_button';
+	private ?bool $fullscreenButton = null;
 	private $enabled = true;
 
 	/**
@@ -398,6 +401,26 @@ class Toolbar
 	public function getCopyLinkButton(): ?array
 	{
 		return $this->copyLinkButtonParams;
+	}
+
+	public function addFullscreenButton(): void
+	{
+		$this->fullscreenButton = true;
+	}
+
+	public function removeFullscreenButton(): void
+	{
+		$this->fullscreenButton = false;
+	}
+
+	public function hasFullscreenButton(): bool
+	{
+		if ($this->fullscreenButton !== null)
+		{
+			return $this->fullscreenButton;
+		}
+
+		return Option::get('ui', self::FULLSCREEN_BUTTON_OPTION, 'N') === 'Y';
 	}
 
 	/**

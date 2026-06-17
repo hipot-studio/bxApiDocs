@@ -140,7 +140,6 @@ final class SignDocument extends Activity
 					(new Layout\Body\ContentBlock\Date())
 						->setDate(
 							$document->getUpdatedTime()
-								->toUserTime()
 						)
 				);
 		}

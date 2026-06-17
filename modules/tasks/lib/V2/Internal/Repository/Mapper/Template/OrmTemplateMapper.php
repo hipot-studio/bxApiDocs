@@ -117,6 +117,11 @@ class OrmTemplateMapper
 			}
 		}
 
+		if ($template->replicateCount !== null)
+		{
+			$fields['TPARAM_REPLICATION_COUNT'] = $template->replicateCount;
+		}
+
 		if ($template->group?->id !== null)
 		{
 			$fields['GROUP_ID'] = $template->group->id;
@@ -400,6 +405,11 @@ class OrmTemplateMapper
 			{
 				$templateFields['replicateParams'] = $this->replicateParamsMapper->mapToValueObject($value);
 			}
+		}
+
+		if (isset($fields['TPARAM_REPLICATION_COUNT']))
+		{
+			$templateFields['replicateCount'] = (int)$fields['TPARAM_REPLICATION_COUNT'];
 		}
 
 		$userFields = $this->userFieldMapper->mapToCollection($fields);

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Tasks\Control;
 
+use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\LoaderException;
@@ -15,6 +16,7 @@ use Bitrix\Tasks\Control\Exception\TaskStopDeleteException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
 use Bitrix\Tasks\Control\Exception\WrongTaskIdException;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
 use Bitrix\Tasks\V2\Internal\Service\AddTaskService;
 use Bitrix\Tasks\V2\Internal\Service\DeleteTaskService;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
@@ -64,6 +66,7 @@ class Task
 	private $legacyOperationResultData;
 
 	private array $skipTimeZoneFields = [];
+	private ?AnalyticsData $analyticsData = null;
 	private bool $useConsistency = false;
 
 	public function __construct(private int $userId)
@@ -155,6 +158,22 @@ class Task
 		return $this;
 	}
 
+	public function withAnalyticsEvent(?AnalyticsEvent $analyticsEvent): self
+	{
+		if ($analyticsEvent === null)
+		{
+			return $this->withAnalyticsData(null);
+		}
+
+		return $this->withAnalyticsData(AnalyticsData::mapFromAnalyticsEvent($analyticsEvent));
+	}
+
+	public function withAnalyticsData(?AnalyticsData $analyticsData): self
+	{
+		$this->analyticsData = $analyticsData;
+		return $this;
+	}
+
 	public function skipBP(): self
 	{
 		$this->skipBP = true;
@@ -211,7 +230,8 @@ class Task
 			needCorrectDatePlan: $this->needCorrectDatePlan,
 			useConsistency: $this->useConsistency,
 			checkUserFields: $this->checkUserFields,
-			eventGuid: $this->eventGuid
+			eventGuid: $this->eventGuid,
+			analyticsData: $this->analyticsData,
 		);
 
 		$mapper = Container::getInstance()->getOrmTaskMapper();
@@ -261,7 +281,8 @@ class Task
 			skipPush: $this->skipPush,
 			skipBP: $this->skipBP,
 			useConsistency: $this->useConsistency,
-			eventGuid:$this->eventGuid
+			eventGuid:$this->eventGuid,
+			analyticsData: $this->analyticsData,
 		);
 
 		$mapper = Container::getInstance()->getOrmTaskMapper();
@@ -309,6 +330,7 @@ class Task
 			eventGuid: $this->eventGuid,
 			skipBP: $this->skipBP,
 			useConsistency: $this->useConsistency,
+			analyticsData: $this->analyticsData,
 		);
 
 		$service = Container::getInstance()->getDeleteTaskService();

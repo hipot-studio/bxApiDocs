@@ -444,6 +444,11 @@ class WorktimeAgentManager
 			return;
 		}
 
+		if ($recordStopUtcTimestamp <= $recordManager->getRecord()->getActualStartTimestamp())
+		{
+			return;
+		}
+
 		$nextExec = TimeHelper::getInstance()->createUserDateTimeFromFormat(
 			'U',
 			$recordStopUtcTimestamp,

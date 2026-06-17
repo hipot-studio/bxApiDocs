@@ -11,6 +11,19 @@ class RelatedTaskProvider extends AbstractRelationTaskProvider
 {
 	protected function getFilter(RelationTaskParams $relationTaskParams): array
 	{
+		if ($relationTaskParams->withCompleted)
+		{
+			return ['=DEPENDS_ON' => $relationTaskParams->taskId];
+		}
+
+		return [
+			...$this->getActiveTasksFilter(),
+			'=DEPENDS_ON' => $relationTaskParams->taskId,
+		];
+	}
+
+	protected function getFilterForIds(RelationTaskParams $relationTaskParams): array
+	{
 		return ['=DEPENDS_ON' => $relationTaskParams->taskId];
 	}
 

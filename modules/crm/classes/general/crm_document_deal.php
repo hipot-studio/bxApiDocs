@@ -410,6 +410,7 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 		}
 
 		$arResult += static::getCommunicationFields();
+		$arResult += static::getBadgeFields();
 
 		global $USER_FIELD_MANAGER;
 		$CCrmUserType = new CCrmUserType($USER_FIELD_MANAGER, 'CRM_DEAL');
@@ -463,7 +464,7 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 			[
 				'DISABLE_USER_FIELD_CHECK' => true,
 				'REGISTER_SONET_EVENT' => true,
-				'CURRENT_USER' => static::getSystemUserId(),
+				'CURRENT_USER' => $arFields['CREATED_BY_ID'] ?? static::getSystemUserId(),
 			]
 		);
 

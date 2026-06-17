@@ -36,6 +36,9 @@ final class Field
 		{
 			$segments = RepeatSaleSegmentController::getInstance()->getList([
 				'select' => ['ID', 'TITLE'],
+				'filter' => [
+					'=BASE_SEGMENT_CODE' => null,
+				],
 				'order' => ['TITLE' => 'ASC'],
 			]);
 

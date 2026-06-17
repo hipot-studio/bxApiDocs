@@ -563,8 +563,6 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 			{
 				$useLock = $this->useLock;
 				$this->useLock = false;
-
-				$baseDirVersion = $this->getBaseDirVersion($baseDir);
 				$baseListKey = $this->sid . '|' . $baseDirVersion . '|' . self::BX_BASE_LIST;
 
 				$partitionKeys = $this->getSet($baseListKey);
@@ -606,7 +604,9 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 		$delta = 10;
 		$deleted = 0;
 		$etime = time() + 5;
+		$interrupted = false;
 		$needClean = $this->get($this->sid . '|needClean');
+
 		if ($needClean !== 'Y')
 		{
 			$this->unlock($this->sid . '|cacheClean');
@@ -635,6 +635,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 			{
 				if (time() > $etime)
 				{
+					$interrupted = true;
 					$finished = false;
 					break;
 				}
@@ -654,6 +655,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 			}
 			if (time() > $etime)
 			{
+				$interrupted = true;
 				break;
 			}
 		}
@@ -662,7 +664,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 		{
 			$this->set($this->sid . '|delCount', 604800, $deleted);
 		}
-		elseif ($deleted < $count && $count > 1)
+		elseif ($interrupted && $deleted < $count && $count > 1)
 		{
 			$this->set($this->sid . '|delCount', 604800, --$count);
 		}

@@ -3,6 +3,9 @@
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationAvailabilityChecker;
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
+use Bitrix\Crm\Component\EntityList\ClientDataProvider;
+use Bitrix\Crm\Component\EntityList\ClientDataProvider\GridDataProvider;
+use Bitrix\Crm\Component\EntityList\ClientField\ClientFieldsPreparer;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
 use Bitrix\Crm\Component\EntityList\NearestActivity;
@@ -71,6 +74,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 	protected $exportType;
 	protected $notAccessibleFields;
 	protected FieldRestrictionManager $fieldRestrictionManager;
+	protected ?ClientFieldsPreparer $clientFieldsPreparer = null;
 
 	private ?array $gridColumns = null;
 	private ?Grid\Panel\Panel $panel = null;
@@ -156,10 +160,18 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		$this->filterOptions = new UiFilterOptions($this->getGridId(), $this->kanbanEntity->getFilterPresets());
 		$this->gridOptions = new Grid\Options($this->getGridId());
 
+		$fieldRestrictionTypes = [
+			FieldRestrictionManagerTypes::OBSERVERS,
+			FieldRestrictionManagerTypes::ACTIVITY,
+		];
+		if ($this->factory->isClientFieldsEnabled())
+		{
+			$fieldRestrictionTypes[] = FieldRestrictionManagerTypes::CLIENT;
+		}
 		$this->fieldRestrictionManager = new FieldRestrictionManager(
 			FieldRestrictionManager::MODE_GRID,
-			[FieldRestrictionManagerTypes::OBSERVERS, FieldRestrictionManagerTypes::ACTIVITY],
-			$this->entityTypeId
+			$fieldRestrictionTypes,
+			$this->entityTypeId,
 		);
 
 		$this->arResult['customSectionId'] = IntranetManager::getCustomSectionByEntityTypeId($this->entityTypeId)?->getId();
@@ -247,8 +259,8 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 		$params = [
 			$this->getGridId() ?? '',
-			[],
-			$this->filter
+			$this->gridColumns ?? [],
+			$this->filter,
 		];
 		$this->arResult['restrictedFieldsEngine'] = $this->fieldRestrictionManager->fetchRestrictedFieldsEngine(...$params);
 		$this->arResult['restrictedFields'] = $this->fieldRestrictionManager->getFilterFields(...$params);
@@ -320,6 +332,48 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		return $this->notAccessibleFields;
 	}
 
+	protected function getClientFieldsPreparer(): ClientFieldsPreparer
+	{
+		if ($this->clientFieldsPreparer === null)
+		{
+			$contactDataProvider = null;
+			$companyDataProvider = null;
+			$priorityEntityTypeId = null;
+
+			if ($this->factory->isClientContactEnabled())
+			{
+				$contactDataProvider = $this->createClientDataProvider(CCrmOwnerType::Contact);
+			}
+			if ($this->factory->isClientCompanyEnabled())
+			{
+				$companyDataProvider = $this->createClientDataProvider(CCrmOwnerType::Company);
+			}
+			if ($contactDataProvider && $companyDataProvider)
+			{
+				$priorityEntityTypeId = ClientDataProvider::getPriorityEntityTypeId();
+			}
+
+			$this->clientFieldsPreparer = new ClientFieldsPreparer(
+				$contactDataProvider,
+				$companyDataProvider,
+				$priorityEntityTypeId,
+			);
+		}
+
+		return $this->clientFieldsPreparer;
+	}
+
+	protected function createClientDataProvider(int $clientEntityTypeId): GridDataProvider
+	{
+		$clientDataProvider = new GridDataProvider($clientEntityTypeId);
+		$clientDataProvider
+			->setExportMode($this->isExportMode())
+			->setGridId($this->getGridId())
+		;
+
+		return $clientDataProvider;
+	}
+
 	private function getGridColumns(): array
 	{
 		$this->gridColumns ??= array_merge($this->provider->getGridColumns(), $this->ufProvider->getGridColumns());
@@ -340,6 +394,11 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				'default' => false,
 			];
 		}
+
+		$this->gridColumns = array_merge(
+			$this->gridColumns,
+			$this->getClientFieldsPreparer()->getHeaders(),
+		);
 
 		$this->gridColumns = array_values($this->gridColumns);
 
@@ -699,6 +758,15 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		$this->provider->prepareListFilter($filter, $requestFilter);
 		$this->ufProvider->prepareListFilter($filter, $filterFields, $requestFilter);
 
+		foreach ($this->getClientAdditionalProviders() as $provider)
+		{
+			$provider->prepareListFilter($filter, $requestFilter);
+		}
+		foreach ($this->getClientUserFieldAdditionalProviders() as $provider)
+		{
+			$provider->prepareListFilter($filter, $filterFields, $requestFilter);
+		}
+
 		foreach ($requestFilter as $key => $item)
 		{
 			if (str_starts_with($key, 'ACTIVITY_FASTSEARCH_'))
@@ -738,6 +806,28 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		);
 
 		return $filter;
+	}
+
+	/**
+	 * @return \Bitrix\Crm\Filter\ClientDataProvider[]
+	 */
+	protected function getClientAdditionalProviders(): array
+	{
+		return array_filter(
+			$this->additionalProviders,
+			static fn ($provider): bool => $provider instanceof \Bitrix\Crm\Filter\ClientDataProvider,
+		);
+	}
+
+	/**
+	 * @return \Bitrix\Crm\Filter\ClientUserFieldDataProvider[]
+	 */
+	protected function getClientUserFieldAdditionalProviders(): array
+	{
+		return array_filter(
+			$this->additionalProviders,
+			static fn ($provider): bool => $provider instanceof \Bitrix\Crm\Filter\ClientUserFieldDataProvider,
+		);
 	}
 
 	protected function applyRecurringSubFilter(&$filter): void
@@ -915,6 +1005,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		];
 
 		$visibleColumns = $this->getVisibleColumns();
+		$this->getClientFieldsPreparer()->prepareSelect($visibleColumns);
 
 		$select = [];
 		foreach ($visibleColumns as $columnName)
@@ -999,6 +1090,8 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			}
 			$list = $listById;
 			unset($listById);
+
+			$this->getClientFieldsPreparer()->appendResult($itemsData);
 
 			if ($this->isRecurring())
 			{
@@ -1311,10 +1404,18 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 					}
 				}
 
-				$displayField->setContext($context);
-
 				$displayFields[$baseField->getName()] = $displayField;
 			}
+		}
+
+		$displayFields = array_merge(
+			$displayFields,
+			$this->getClientFieldsPreparer()->getDisplayFields(),
+		);
+
+		foreach ($displayFields as $displayField)
+		{
+			$displayField->setContext($context);
 		}
 
 		return $displayFields;
@@ -1367,21 +1468,6 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				$columns['OPPORTUNITY_WITH_CURRENCY'] = Bitrix\Crm\Format\Money::format(
 					(float)$item->getOpportunity(),
 					(string)$item->getCurrencyId()
-				);
-			}
-			if ($this->isColumnVisible(Item::FIELD_NAME_OPPORTUNITY))
-			{
-				$columns[Item::FIELD_NAME_OPPORTUNITY] = number_format(
-					(float)$item->getOpportunity(),
-					2,
-					'.',
-					''
-				);
-			}
-			if ($this->isColumnVisible(Item::FIELD_NAME_CURRENCY_ID))
-			{
-				$columns[Item::FIELD_NAME_CURRENCY_ID] = htmlspecialcharsbx(
-					\Bitrix\Crm\Currency::getCurrencyCaption((string)$item->getCurrencyId())
 				);
 			}
 		}
@@ -1464,7 +1550,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			{
 				$columns[$parent['code']] = $isExport
 					? $parent['title']
-					: $parent['value'];
+					: $parent['miniCard'];
 			}
 		}
 	}
@@ -1510,7 +1596,6 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		$order = (array)$order;
 		$result = [];
 
-		$fakeItem = $this->factory->createItem();
 		foreach ($order as $field => $direction)
 		{
 			$direction = mb_strtolower($direction);
@@ -1518,9 +1603,14 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			{
 				continue;
 			}
-			if ($fakeItem->hasField($field))
+			if ($this->factory->isFieldExists($field))
 			{
 				$result[$field] = $direction;
+			}
+			elseif ($this->getClientFieldsPreparer()->isFieldExists($field))
+			{
+				$normalizedField = $this->getClientFieldsPreparer()->normalizeField($field);
+				$result[$normalizedField] = $direction;
 			}
 		}
 

@@ -270,14 +270,21 @@ class BizprocBot extends Base
 	{
 		$chatType = $fields[self::FIELD_MESSAGE_TYPE] ?? null;
 
-		return in_array(
-			$chatType,
-			[
-				IM_MESSAGE_CHAT,
-				IM_MESSAGE_PRIVATE,
-			],
-			true,
-		);
+		$allowedTypes = [
+			Chat::IM_TYPE_CHAT,
+			Chat::IM_TYPE_PRIVATE,
+			Chat::IM_TYPE_OPEN,
+			Chat::IM_TYPE_COLLAB,
+			Chat::IM_TYPE_CHANNEL,
+			Chat::IM_TYPE_OPEN_CHANNEL,
+		];
+
+		if (defined(Chat::class . '::IM_TYPE_OPEN_COLLAB'))
+		{
+			$allowedTypes[] = Chat::IM_TYPE_OPEN_COLLAB;
+		}
+
+		return in_array($chatType, $allowedTypes, true);
 	}
 
 	private static function leaveChat(string $dialogId, int $botId): void

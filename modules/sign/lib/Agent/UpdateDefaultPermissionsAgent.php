@@ -20,7 +20,6 @@ final class UpdateDefaultPermissionsAgent
 		SignPermissionDictionary::SIGN_B2E_MY_SAFE_DOCUMENTS,
 		SignPermissionDictionary::SIGN_B2E_MY_SAFE,
 		SignPermissionDictionary::SIGN_B2E_MY_SAFE_FIRED,
-		SignPermissionDictionary::SIGN_B2E_TEMPLATES,
 	];
 	private const B2E_CRM_PERMISSION_IDS = [
 		PermissionDictionary::SIGN_CRM_SMART_B2E_DOC_ADD,
@@ -177,10 +176,6 @@ final class UpdateDefaultPermissionsAgent
 					'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FIRED,
 					'value' => UserPermissions::PERMISSION_NONE,
 				],
-				[
-					'id' => SignPermissionDictionary::SIGN_B2E_TEMPLATES,
-					'value' => UserPermissions::PERMISSION_SELF,
-				],
 			];
 			$existedChiefPermissions = $settings[$employeeRoleId];
 			$b2eUpdatedPermissionIds = array_column($employeeAccessRights, 'id');
@@ -231,10 +226,6 @@ final class UpdateDefaultPermissionsAgent
 				[
 					'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FIRED,
 					'value' => UserPermissions::PERMISSION_NONE,
-				],
-				[
-					'id' => SignPermissionDictionary::SIGN_B2E_TEMPLATES,
-					'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
 				],
 			];
 

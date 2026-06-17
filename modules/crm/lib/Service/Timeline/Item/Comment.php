@@ -16,9 +16,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Crm\Service\Timeline\Layout\Header\ChangeStreamButton;
 use Bitrix\Crm\Service\Timeline\Layout\Menu\MenuItemFactory;
 use Bitrix\Crm\Timeline\CommentController;
-use Bitrix\Crm\Timeline\TimelineEntry;
 use Bitrix\Main\Localization\Loc;
-use CCrmActivity;
 
 class Comment extends Configurable
 {
@@ -74,6 +72,16 @@ class Comment extends Configurable
 		if ($filesBlock)
 		{
 			$result['fileList'] = $filesBlock;
+		}
+
+		$aiCreatedBlock =
+			$this->getHistoryItemModel()?->get('IS_AI_CREATED') === 'Y'
+				? $this->buildAiCreatedBlock()
+				: null
+		;
+		if (isset($aiCreatedBlock))
+		{
+			$result['aiCreatedBlock'] = $aiCreatedBlock;
 		}
 
 		return $result;

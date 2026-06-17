@@ -47,6 +47,14 @@ class ExternalDatasetActionDataProvider extends DataProvider
 				continue;
 			}
 
+			if (
+				!empty($rawFields['IS_SYSTEM'])
+				&& $actionsItem instanceof DeleteDatasetAction
+			)
+			{
+				continue;
+			}
+
 			$actionConfig = $actionsItem->getControl($rawFields);
 			if (isset($actionConfig))
 			{

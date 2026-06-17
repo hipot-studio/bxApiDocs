@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\HumanResources\Builder\Structure\Filter;
 
 use Bitrix\HumanResources\Builder\Structure\Filter\Column\EntityIdFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\RoleFilter;
 use Bitrix\HumanResources\Enum\DepthLevel;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Model\NodeMemberTable;
@@ -23,6 +24,7 @@ final class NodeMemberFilter extends BaseFilter
 		public ?NodeFilter $nodeFilter = null,
 		public bool $findRelatedMembers = false,
 		public ?bool $active = true,
+		public ?RoleFilter $roleFilter = null,
 	)
 	{}
 
@@ -65,6 +67,11 @@ final class NodeMemberFilter extends BaseFilter
 		if ($this->nodeFilter !== null)
 		{
 			$conditionTree->addCondition($this->nodeFilter->prepareFilter());
+		}
+
+		if ($this->roleFilter !== null)
+		{
+			$conditionTree->where($this->roleFilter->prepareFilter());
 		}
 
 		return $conditionTree;

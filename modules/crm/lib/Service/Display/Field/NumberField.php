@@ -20,6 +20,23 @@ class NumberField extends StringField
 		return $this->renderSingleValue($fieldValue, $itemId, $displayOptions);
 	}
 
+	protected function renderSingleValue($fieldValue, int $itemId, Options $displayOptions): string
+	{
+		$value = parent::renderSingleValue($fieldValue, $itemId, $displayOptions);
+
+		$valueType = $this->getDisplayParam(
+			'VALUE_TYPE',
+			\Bitrix\Crm\Field::VALUE_TYPE_PLAIN_TEXT,
+		);
+		if ($valueType === \Bitrix\Crm\Field::VALUE_TYPE_MONEY)
+		{
+			// see \Bitrix\Crm\Format\Money::format() without module "currency"
+			$value = number_format((float)$value, 2, '.', '');
+		}
+
+		return $value;
+	}
+
 	protected function getFormattedValueForMobile($fieldValue, int $itemId, Options $displayOptions): array
 	{
 		$result = parent::getFormattedValueForMobile($fieldValue, $itemId, $displayOptions);

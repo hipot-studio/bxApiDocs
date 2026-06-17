@@ -1,8 +1,10 @@
-<?
+<?php
 
-use Bitrix\Main\Context;
-use Bitrix\Main\Web\Cookie;
+use Bitrix\Main\Loader;
 use Bitrix\Timeman\Helper\EntityCodesHelper;
+use Bitrix\Timeman\Integration\Humanresources\ManagersLogic;
+use Bitrix\Timeman\Integration\Humanresources\ManagersResolver;
+use Bitrix\Timeman\Integration\Humanresources\SubordinateAccessUsersResolver;
 use Bitrix\Timeman\Model\Schedule\Schedule;
 use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecord;
 use Bitrix\Timeman\Service\DependencyManager;
@@ -12,7 +14,6 @@ class CTimeMan
 {
 	private static $SECTIONS_SETTINGS_CACHE = null;
 	private static $arWasElapedCache = [];
-
 	public static function CanUse($bAdminAction = false)
 	{
 		global $USER, $USER_FIELD_MANAGER;
@@ -355,6 +356,16 @@ class CTimeMan
 						$access['READ'][] = $arRes['ID'];
 					}
 
+					if ($access['READ'] !== ['*'])
+					{
+						$subordinateUsers = (new SubordinateAccessUsersResolver())
+							->getSubordinateAccessUsers((int)$USER->GetID());
+						if (!empty($subordinateUsers))
+						{
+							$access['READ'] = array_merge($access['READ'], $subordinateUsers);
+						}
+					}
+
 					$access['READ'] = array_values(array_unique($access['READ']));
 				}
 			}
@@ -397,6 +408,13 @@ class CTimeMan
 						{
 							$access['WRITE'][] = $arRes['ID'];
 						}
+					}
+
+					$subordinateUsers = (new SubordinateAccessUsersResolver())
+						->getSubordinateAccessUsers((int)$USER->GetID());
+					if (!empty($subordinateUsers))
+					{
+						$access['WRITE'] = array_merge($access['WRITE'], $subordinateUsers);
 					}
 
 					$access['WRITE'] = array_values(array_unique($access['WRITE']));
@@ -470,7 +488,14 @@ class CTimeMan
 			}
 		}
 
-		return array_unique($arEmployees);
+		$subordinateEmployees = (new SubordinateAccessUsersResolver())
+			->getSubordinateAccessUsers((int)$USER_ID);
+		if (!empty($subordinateEmployees))
+		{
+			$arEmployees = array_merge($arEmployees, $subordinateEmployees);
+		}
+
+		return array_values(array_unique($arEmployees));
 	}
 
 	public static function GetSectionPersonalSettings($section_id, $bHideParentLinks = false, $arNeededSettings = null)
@@ -806,6 +831,26 @@ class CTimeMan
 
 	public static function GetUserManagers($USER_ID, $bCheckExistance = true)
 	{
+		if (Loader::includeModule('humanresources'))
+		{
+			$resolver = new ManagersResolver();
+			$teamHeads = $resolver->getUserTeamHeads($USER_ID);
+			if ($teamHeads)
+			{
+				$sorted = (new ManagersLogic())->sortManagersWithRolesByReportRecipientPriority($teamHeads);
+
+				return array_values(array_column($sorted, 'id'));
+			}
+
+			$departmentHeads = $resolver->getUserDepartmentHeads($USER_ID);
+			if ($departmentHeads)
+			{
+				$sorted = (new ManagersLogic())->sortManagersWithRolesByReportRecipientPriority($departmentHeads);
+
+				return array_values(array_column($sorted, 'id'));
+			}
+		}
+
 		$arStruct = CIntranetUtils::GetStructure();
 
 		$arHeads = [];

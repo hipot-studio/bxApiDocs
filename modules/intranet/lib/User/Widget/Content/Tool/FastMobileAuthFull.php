@@ -30,7 +30,7 @@ class FastMobileAuthFull extends FastMobileAuth
 			return parent::getTitle();
 		}
 
-		return Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_TOOL_FAST_MOBILE_AUTH_TITLE_WITHOUT_APP');
+		return Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_TOOL_FAST_MOBILE_AUTH_TITLE_WITHOUT_APP_MSGVER_1');
 	}
 
 	private function getWarning(): string

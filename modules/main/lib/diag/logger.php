@@ -62,6 +62,8 @@ abstract class Logger extends Log\AbstractLogger
 		$this->context = $context;
 		$this->message = $message;
 
+		$this->context['level'] = $level;
+
 		// The message MAY contain placeholders which implementors MAY replace with values from the context array.
 		$message = $this->interpolate();
 

@@ -24,6 +24,7 @@ use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\UpdateParent;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\UpdateRights;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\UpdateTags;
 use Bitrix\Tasks\V2\Internal\Service\Template\Prepare\Update\EntityFieldService;
+use Bitrix\Tasks\V2\Internal\Service\Template\Recent\UpdateTemplateRecentMessage;
 
 class UpdateService
 {
@@ -98,6 +99,15 @@ class UpdateService
 			throw new TemplateAddException();
 		}
 
+		if ($this->shouldUpdateRecent($entityBefore, $template, $fields))
+		{
+			(new UpdateTemplateRecentMessage(
+				userId: $config->getUserId(),
+				templateId: $id,
+				action: UpdateTemplateRecentMessage::ACTION_ADD,
+			))->sendByInternalQueueId();
+		}
+
 		return [$template, $fields];
 	}
 
@@ -149,5 +159,37 @@ class UpdateService
 		}
 
 		return !Options::isNewAndCurrentOptionsEquals($before, $after);
+	}
+
+	private function shouldUpdateRecent(
+		Entity\Template $templateBefore,
+		Entity\Template $templateAfter,
+		array $fields,
+	): bool
+	{
+		$isReplicateCountIncreased =
+			$templateBefore->replicateCount !== null
+			&& $templateAfter->replicateCount !== null
+			&& $templateAfter->replicateCount > $templateBefore->replicateCount
+		;
+
+		if ($isReplicateCountIncreased)
+		{
+			return false;
+		}
+
+		if (
+			$templateAfter->replicateParams?->nextExecutionTime !== null
+			&& isset($fields['REPLICATE_PARAMS']['NEXT_EXECUTION_TIME'])
+		)
+		{
+			$nextExecutionTimeAfter = $fields['REPLICATE_PARAMS']['NEXT_EXECUTION_TIME'];
+			if ($nextExecutionTimeAfter === $templateAfter->replicateParams?->nextExecutionTime)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

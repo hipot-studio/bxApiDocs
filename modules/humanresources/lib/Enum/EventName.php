@@ -15,4 +15,5 @@ enum EventName implements Contract\Enum\EventName
 	case OnNodeAdded;
 	case OnNodeUpdated;
 	case OnNodeDeleted;
+	case OnAiReportsEnabled;
 }

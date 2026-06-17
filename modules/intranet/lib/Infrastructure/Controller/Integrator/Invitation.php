@@ -10,6 +10,7 @@ use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\IntegratorLimitContro
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\InviteLimitControl;
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\PortalCreatorEmailConfirmationControl;
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\UserEmailControl;
+use Bitrix\Intranet\Internal\Service\Invitation\Analytics;
 use Bitrix\Intranet\Public\Command\Integrator\InviteCommand;
 use Bitrix\Intranet\ActionFilter\UserType;
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl;
@@ -47,11 +48,19 @@ class Invitation extends Controller
 	public function sendAction(string $integratorEmail, array $partnerData = []): AjaxJson
 	{
 		$result = (new InviteCommand($integratorEmail, $partnerData))->run();
+		$analytics = new Analytics();
 
 		if (!$result->isSuccess())
 		{
 			return AjaxJson::createError($result->getErrorCollection());
 		}
+
+		$analytics->sendInvitation(
+			(int)$result->getData()['newIntegratorId'],
+			Analytics::ANALYTIC_INVITATION_TYPE_C_SUB_SECTION_INTEGRATOR,
+			true,
+			1,
+		);
 
 		return AjaxJson::createSuccess($result->getData());
 	}

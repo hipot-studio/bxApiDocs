@@ -2,7 +2,7 @@
 
 namespace Bitrix\Mail\Helper\Mailbox;
 
-use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxMassconnectDTO;
+use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxConnectDTO;
 use Bitrix\Mail\Internals\MailMassConnectTable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\ORM\Data\AddResult;
@@ -32,7 +32,7 @@ final class MailMassConnect
 	 * Append connection result to MailMassConnectTable entity
 	 *
 	 * @param int $massConnectId - id of MailMassConnectTable entity
-	 * @param MailboxMassconnectDTO $mailboxConnectDTO
+	 * @param MailboxConnectDTO $mailboxConnectDTO
 	 * @param array $result
 	 * @param array|null $errors
 	 * @return void
@@ -40,7 +40,7 @@ final class MailMassConnect
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function addResult(int $massConnectId, MailboxMassconnectDTO $mailboxConnectDTO, array $result, ?array $errors): void
+	public function addResult(int $massConnectId, MailboxConnectDTO $mailboxConnectDTO, array $result, ?array $errors): void
 	{
 		$historyItem = MailMassConnectTable::getById($massConnectId)->fetch();
 

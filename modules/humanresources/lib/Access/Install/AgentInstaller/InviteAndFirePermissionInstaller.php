@@ -18,7 +18,7 @@ use Bitrix\HumanResources\Service\Container;
 use Bitrix\Main;
 use Bitrix\Main\Access\AccessCode;
 use Bitrix\Main\Access\Exception\RoleRelationSaveException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 
 class InviteAndFirePermissionInstaller extends BaseInstaller
 {

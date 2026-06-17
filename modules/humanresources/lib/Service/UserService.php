@@ -52,6 +52,9 @@ final class UserService
 		return $this->userRepository->getUserCollectionByMemberCollection($nodeMemberCollection);
 	}
 
+	/**
+	 * @deprecated use Internals\Service\Structure\UserService::getUserName() instead
+	 */
 	public function getUserName(User $user): string
 	{
 		return CUser::FormatName(
@@ -108,7 +111,7 @@ final class UserService
 	}
 
 	/**
-	 * Check if user have relation with department node
+	 * Check if user have relation with any department node
 	 * @param int $userId
 	 *
 	 * @return bool

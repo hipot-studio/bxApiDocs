@@ -20,9 +20,20 @@ class Permissions
 		return self::$instance;
 	}
 
-	public function hasAccessToCrm(): bool
+	public function hasAccessToCrm(?int $userId = null): bool
 	{
-		return $this->isCrmInstalled && Container::getInstance()->getUserPermissions()->entityType()->canReadSomeItemsInCrm();
+		return $this->isCrmInstalled && Container::getInstance()->getUserPermissions($userId)->entityType()->canReadSomeItemsInCrm();
+	}
+
+	public function canEditExclusionItems(?int $userId = null): bool
+	{
+		return $this->isCrmInstalled && Container::getInstance()->getUserPermissions($userId)->exclusion()->canEditItems();
+	}
+
+	public function canDeleteActivity(?int $userId = null): bool
+	{
+		return $this->isCrmInstalled
+			&& Container::getInstance()->getUserPermissions($userId)->entityType()->canDeleteItems(\CCrmOwnerType::Activity);
 	}
 
 	private function __construct()

@@ -13,6 +13,7 @@ class Variable implements JsonSerializable, Arrayable
 	protected array $avatarOptions = [];
 	protected array $conflictsWith = [];
 	protected array $requires = [];
+	protected array $dependant = [];
 	protected ?bool $isSecondary = null;
 	protected ?string $hint = null;
 	protected ?bool $isUseGroupHeadValuesInHint = null;
@@ -134,6 +135,25 @@ class Variable implements JsonSerializable, Arrayable
 		return $this;
 	}
 
+	public function getDependant(): array
+	{
+		return $this->dependant;
+	}
+
+	public function setDependant(array $variableIds): static
+	{
+		$this->dependant = $variableIds;
+
+		return $this;
+	}
+
+	public function addDependant(string $variableId): static
+	{
+		$this->dependant[] = $variableId;
+
+		return $this;
+	}
+
 	public function isSecondary(): ?bool
 	{
 		return $this->isSecondary;
@@ -181,6 +201,7 @@ class Variable implements JsonSerializable, Arrayable
 			'avatarOptions' => $this->getAvatarOptions(),
 			'conflictsWith' => $this->getConflictsWith(),
 			'requires' => $this->getRequires(),
+			'dependant' => $this->getDependant(),
 			'secondary' => $this->isSecondary(),
 			'hint' => $this->getHint(),
 			'isUseGroupHeadValuesInHint' => $this->getIsUseGroupHeadValuesInHint(),
@@ -237,6 +258,11 @@ class Variable implements JsonSerializable, Arrayable
 		if (isset($data['requires']) && is_array($data['requires']))
 		{
 			$variable->setRequires($data['requires']);
+		}
+
+		if (isset($data['dependant']) && is_array($data['dependant']))
+		{
+			$variable->setDependant($data['dependant']);
 		}
 
 		if (isset($data['secondary']))

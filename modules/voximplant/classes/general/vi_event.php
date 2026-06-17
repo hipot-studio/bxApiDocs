@@ -287,14 +287,26 @@ class CVoxImplantEvent
 
 	public static function OnAfterUserUpdate(&$fields)
 	{
-		if ($fields['RESULT'] && isset($fields['ACTIVE']))
+		if (!$fields['RESULT'])
 		{
-			if ($fields['ACTIVE'] === 'N')
-			{
-				$userId = (int)$fields['ID'];
-				if($userId > 0)
-					VI\Model\QueueUserTable::deleteByUserId($userId);
-			}
+			return;
+		}
+
+		$userId = (int)$fields['ID'];
+		if ($userId <= 0)
+		{
+			return;
+		}
+
+		if (isset($fields['ACTIVE']) && $fields['ACTIVE'] === 'N')
+		{
+			VI\Model\QueueUserTable::deleteByUserId($userId);
+		}
+
+		$nameFields = ['NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'TITLE'];
+		if (array_intersect(array_keys($fields), $nameFields))
+		{
+			VI\Agent\StatisticReindexer::scheduleForUser($userId);
 		}
 	}
 

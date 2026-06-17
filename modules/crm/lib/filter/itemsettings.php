@@ -65,4 +65,20 @@ class ItemSettings extends EntitySettings implements ISettingsSupportsCategory
 	{
 		return $this->isRecurring;
 	}
+
+	public function isClientFilterSupported(): bool
+	{
+		return
+			!$this->isRecurring()
+			&& Container::getInstance()->getFactory($this->getEntityTypeId())?->isClientFieldsEnabled()
+		;
+	}
+
+	public function isClientCompanyFilterSupported(): bool
+	{
+		return
+			!$this->isRecurring()
+			&& Container::getInstance()->getFactory($this->getEntityTypeId())?->isClientCompanyEnabled()
+		;
+	}
 }

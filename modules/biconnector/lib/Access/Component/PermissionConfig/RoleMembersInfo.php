@@ -1,8 +1,8 @@
 <?php
 
-namespace Bitrix\BIconnector\Access\Component\PermissionConfig;
+namespace Bitrix\BIConnector\Access\Component\PermissionConfig;
 
-use Bitrix\BIconnector\Access\Role\RoleRelationTable;
+use Bitrix\BIConnector\Access\Role\RoleRelationTable;
 use Bitrix\Main\Access\AccessCode;
 use Bitrix\Main\UI\AccessRights\DataProvider;
 use Bitrix\Main\UI\AccessRights\Entity\User;

@@ -127,6 +127,7 @@ class RequisiteTable extends Entity\DataManager
 			'RQ_STATE_REG' =>  ['data_type' => 'string', 'validation' => [__CLASS__, 'validateRqStringField25']],
 			'RQ_MNPL_REG' =>  ['data_type' => 'string', 'validation' => [__CLASS__, 'validateRqStringField20']],
 			'RQ_CPF' =>  ['data_type' => 'string', 'validation' => [__CLASS__, 'validateRqStringField20']],
+			'RQ_TAX_REGIME' => ['data_type' => 'string', 'validation' => [__CLASS__, 'validateRqStringField50']],
 			'RQ_SIGNATURE' => ['data_type' => 'integer'],
 			'RQ_STAMP' => ['data_type' => 'integer'],
 		];

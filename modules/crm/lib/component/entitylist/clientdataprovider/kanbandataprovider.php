@@ -128,6 +128,11 @@ class KanbanDataProvider extends \Bitrix\Crm\Component\EntityList\ClientDataProv
 		}
 	}
 
+	public function normalizeFilter(array $filter): array
+	{
+		return $this->fieldHelper->normalizeFilter($filter);
+	}
+
 	protected function getAdditionalClientInfo(array $clientInfo): array
 	{
 		return [];

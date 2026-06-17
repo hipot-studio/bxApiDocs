@@ -25,6 +25,39 @@ class QueryBuilder
 		'!@MESSAGE_UID.IS_OLD' => MailMessageUidTable::HIDDEN_STATUSES,
 	];
 
+	private const VISIBLE_UID_FILTERS_DRIVER = [
+		'==DELETE_TIME' => 0,
+		'!@IS_OLD' => MailMessageUidTable::HIDDEN_STATUSES,
+	];
+
+	/*
+	 * Allowlist of fields that the fast path (`buildListQueryFromUid`) can
+	 * safely route to the UID-table driver. Anything outside this list —
+	 * unknown columns, fields from other tables, References to other entities —
+	 * must go through the slow path (`buildListQueryFromMessage`), which has
+	 * the full set of References registered.
+	 *
+	 * Adding a new field to this list — only after confirming it actually
+	 * exists in `b_mail_message_uid` (or is reachable from there without an
+	 * extra JOIN). When in doubt — don't add, slow path will handle it.
+	 */
+	private const UID_DRIVER_FIELDS = [
+		'ID',
+		'MAILBOX_ID',
+		'MESSAGE_ID',
+		'INTERNALDATE',
+		'DIR_MD5',
+		'DIR_UIDV',
+		'IS_SEEN',
+		'IS_OLD',
+		'DELETE_TIME',
+		'MSG_UID',
+		'HEADER_MD5',
+		'SESSION_ID',
+		'DATE_INSERT',
+		'TIMESTAMP_X',
+	];
+
 	private const DEFAULT_LIMIT = 26;
 	private const DEFAULT_OFFSET = 0;
 
@@ -40,6 +73,80 @@ class QueryBuilder
 		array $filter,
 		int $limit = self::DEFAULT_LIMIT,
 		int $offset = self::DEFAULT_OFFSET
+	): Query
+	{
+		if (self::isUidOnlyFilter($filter))
+		{
+			return self::buildListQueryFromUid($filter, $limit, $offset);
+		}
+
+		return self::buildListQueryFromMessage($filter, $limit, $offset);
+	}
+
+	private static function isUidOnlyFilter(array $filter): bool
+	{
+		foreach (array_keys($filter) as $key)
+		{
+			$cleanKey = ltrim((string)$key, "@!*<=>");
+			$cleanKey = preg_replace('/^MESSAGE_UID\./', '', $cleanKey);
+
+			if (!in_array($cleanKey, self::UID_DRIVER_FIELDS, true))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static function stripUidPrefix(array $filter): array
+	{
+		$result = [];
+		foreach ($filter as $key => $value)
+		{
+			$newKey = preg_replace(
+				'/^([!=<>@*]*)MESSAGE_UID\.(.+)$/',
+				'$1$2',
+				(string)$key,
+			);
+			$result[$newKey] = $value;
+		}
+
+		return $result;
+	}
+
+	private static function buildListQueryFromUid(
+		array $filter,
+		int $limit,
+		int $offset,
+	): Query
+	{
+		return MailMessageUidTable::query()
+			->registerRuntimeField(
+				'MAX_INTERNALDATE',
+				new ExpressionField(
+					'MAX_INTERNALDATE',
+					'MAX(%s)',
+					['INTERNALDATE'],
+				),
+			)
+			->addSelect('MESSAGE_ID', 'DISTINCT_ID')
+			->setFilter(array_merge(
+				self::VISIBLE_UID_FILTERS_DRIVER,
+				self::stripUidPrefix($filter),
+			))
+			->addGroup('MESSAGE_ID')
+			->addOrder('MAX_INTERNALDATE', 'DESC')
+			->addOrder('MESSAGE_ID', 'DESC')
+			->setLimit($limit)
+			->setOffset($offset)
+		;
+	}
+
+	private static function buildListQueryFromMessage(
+		array $filter,
+		int $limit,
+		int $offset,
 	): Query
 	{
 		$accessSubquery = (new Query(MessageAccessTable::getEntity()))
@@ -95,7 +202,7 @@ class QueryBuilder
 				new ExpressionField(
 					'FIELD_MAX_SORT',
 					'MAX(%s)',
-					['FIELD_DATE']
+					['MESSAGE_UID.INTERNALDATE']
 				),
 			)
 			->addSelect('ID', 'DISTINCT_ID')
@@ -138,6 +245,7 @@ class QueryBuilder
 				'FIELD_FROM',
 				'FIELD_TO',
 				'FIELD_DATE',
+				'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE',
 				'ATTACHMENTS',
 				'BODY',
 				'HEADER',
@@ -196,7 +304,7 @@ class QueryBuilder
 				self::VISIBLE_UID_FILTERS,
 				$filter,
 			))
-			->addOrder('FIELD_DATE', 'DESC')
+			->addOrder('MESSAGE_UID.INTERNALDATE', 'DESC')
 			->addOrder('MESSAGE_ID', 'DESC')
 			->addOrder('MSG_UID')
 		;

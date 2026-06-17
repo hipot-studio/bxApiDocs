@@ -232,23 +232,25 @@ class Manager
 	 * @param string $entityId
 	 * @param string $tabId
 	 *
-	 * @return array|array[]|null
+	 * @return array|array[]
 	 */
 	public static function getListForEntitySelector(string $entityId, string $tabId)
 	{
-		static $result = null;
-		if (!is_array($result))
+		static $formList = null;
+		if (!is_array($formList))
 		{
 			$formList = self::getListPlain(['select' => ['ID', 'NAME']]);
-			$result = array_map(fn($form): array => [
+		}
+
+		return array_map(
+			fn ($form): array => [
 				'id' => $form['ID'],
 				'entityId' => $entityId,
 				'tabs' => $tabId,
 				'title' => sprintf('%s [%d]', $form['NAME'], $form['ID']),
-			], $formList);
-		}
-
-		return $result;
+			],
+			$formList,
+		);
 	}
 
 	/**

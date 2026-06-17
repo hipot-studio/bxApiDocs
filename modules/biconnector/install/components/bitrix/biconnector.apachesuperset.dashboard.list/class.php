@@ -25,9 +25,12 @@ use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\UIHelper;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightOptions;
+use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightResolver;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Buttons\Button;
 use Bitrix\UI\Buttons\Color;
@@ -104,6 +107,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$this->prepareDeleteInstanceWarning();
 		$this->prepareDatasetTypingWarning();
 		$this->arResult['NEED_SHOW_DRAFT_GUIDE'] = $this->isNeedShowGuide('draft_guide');
+		$this->preparePublishAhaMoment();
 		$this->arResult['SUPERSET_STATUS'] = SupersetInitializer::getSupersetStatus();
 	}
 
@@ -375,5 +379,30 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 			? \Bitrix\Intranet\Portal::getInstance()->getSettings()->getSettingsUrl()
 			: '/settings/configs/'
 		;
+	}
+
+	private function preparePublishAhaMoment(): void
+	{
+		$spotlightConfig = $this->getAhaMomentSpotlightResolver()->resolve(
+			new AhaMomentSpotlightOptions(
+				baseId: 'biconnector-apachesuperset-dashboard-list-publish',
+				maxShows: 1,
+			),
+		);
+
+		$this->arResult['PUBLISH_AHA_MOMENT'] = [
+			'canShow' => $spotlightConfig->canShow(),
+			'id' => $spotlightConfig->getSpotlightId(),
+			'showDelaySeconds' => $spotlightConfig->getShowDelaySeconds(),
+			'title' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_PUBLISH_AHA_MOMENT_TITLE'),
+			'description' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_PUBLISH_AHA_MOMENT_DESCRIPTION'),
+			'laterButtonText' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_PUBLISH_AHA_MOMENT_LATER_BUTTON'),
+			'addButtonText' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_PUBLISH_AHA_MOMENT_ADD_BUTTON'),
+		];
+	}
+
+	private function getAhaMomentSpotlightResolver(): AhaMomentSpotlightResolver
+	{
+		return ServiceLocator::getInstance()->get('biconnector.service.ahaMomentSpotlightResolver');
 	}
 }

@@ -8,6 +8,8 @@ use Bitrix\Booking\Entity\Booking\Booking;
 use Bitrix\Booking\Entity\Client\Client;
 use Bitrix\Booking\Entity\ExternalData\ExternalDataCollection;
 use Bitrix\Booking\Internals\Integration\Notifications\TemplateRepository;
+use Bitrix\Booking\Internals\Integration\Pull\PushService;
+use Bitrix\Booking\Internals\Service\Notifications\Entity\BookingMessage;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\BookingDataExtractor;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSendResult;
 use Bitrix\Booking\Internals\Service\Notifications\MessageStatus;
@@ -48,11 +50,12 @@ class CrmMessageSender extends BaseMessageSender
 		private readonly ExternalDataItemExtractor $externalDataExtractor,
 		private readonly NotificationsLanguageProvider $notificationsLanguageProvider,
 		BookingMessageRepositoryInterface $bookingMessageRepository,
+		PushService $pushService,
 		private readonly BookingDataExtractor $bookingDataExtractor,
 		private readonly LicenseChecker $licenseChecker,
 	)
 	{
-		parent::__construct($bookingMessageRepository);
+		parent::__construct($bookingMessageRepository, $pushService);
 	}
 
 	public function getCode(): string
@@ -63,60 +66,6 @@ class CrmMessageSender extends BaseMessageSender
 		}
 
 		return NotificationsManager::getSenderCode();
-	}
-
-	protected function doSend(Booking $booking, NotificationType $notificationType): MessageSendResult
-	{
-		$result = new MessageSendResult();
-
-		if (!Loader::includeModule('crm'))
-		{
-			return $result->addError(new Error('CRM module is not available'));
-		}
-
-		$primaryClient = $booking->getPrimaryClient();
-		if (!$primaryClient)
-		{
-			return $result->addError(new Error('Primary client has not been found'));
-		}
-
-		$templateCode = $this->getTemplateCode($booking, $notificationType);
-		if (!$templateCode)
-		{
-			return $result->addError(new Error('Template code could not be resolved'));
-		}
-
-		$placeholders = $this->getDefaultPlaceholders($booking);
-
-		$senderCode = $channelId = NotificationsManager::getSenderCode();
-
-		$channelItemIdentifier = self::createItemIdentifierForChannel(
-			$primaryClient,
-			$this->getDealFromExternalDataCollection($booking->getExternalDataCollection())
-		);
-		$channel = ChannelRepository::create($channelItemIdentifier)->getById($senderCode, $channelId);
-
-		if (!$channel)
-		{
-			return $result->addError(new Error('Channel has not been found'));
-		}
-
-		$facilitator = (new SendFacilitator\Notifications($channel))
-			->setTo($this->makeTo($channelItemIdentifier, $primaryClient))
-			->setTemplateCode($templateCode)
-			->setPlaceholders($placeholders)
-			->setLanguageId($this->notificationsLanguageProvider->getLanguageId())
-		;
-
-		$sendResult = $facilitator->send();
-
-		$messageId = isset($sendResult->getData()['ID']) ? (int)$sendResult->getData()['ID'] : null;
-		if (!$messageId)
-		{
-			return $result->addError(new Error('Message can not be sent'));
-		}
-
-		return $result->setId((string)$messageId);
 	}
 
 	public function getMessageStatus(string $messageId): MessageStatus
@@ -165,7 +114,7 @@ class CrmMessageSender extends BaseMessageSender
 			return false;
 		}
 
-		if (!$this->licenseChecker->isPaidOrBox())
+		if (!$this->licenseChecker->isPaidB24OrBox())
 		{
 			return false;
 		}
@@ -257,6 +206,60 @@ class CrmMessageSender extends BaseMessageSender
 				message: $message,
 			);
 		}
+	}
+
+	protected function doSend(BookingMessage $bookingMessage, Booking $booking): MessageSendResult
+	{
+		$result = new MessageSendResult();
+
+		if (!Loader::includeModule('crm'))
+		{
+			return $result->addError(new Error('CRM module is not available'));
+		}
+
+		$primaryClient = $booking->getPrimaryClient();
+		if (!$primaryClient)
+		{
+			return $result->addError(new Error('Primary client has not been found'));
+		}
+
+		$templateCode = $this->getTemplateCode($booking, $bookingMessage->getNotificationType());
+		if (!$templateCode)
+		{
+			return $result->addError(new Error('Template code could not be resolved'));
+		}
+
+		$placeholders = $this->getDefaultPlaceholders($booking);
+
+		$senderCode = $channelId = NotificationsManager::getSenderCode();
+
+		$channelItemIdentifier = self::createItemIdentifierForChannel(
+			$primaryClient,
+			$this->getDealFromExternalDataCollection($booking->getExternalDataCollection())
+		);
+		$channel = ChannelRepository::create($channelItemIdentifier)->getById($senderCode, $channelId);
+
+		if (!$channel)
+		{
+			return $result->addError(new Error('Channel has not been found'));
+		}
+
+		$facilitator = (new SendFacilitator\Notifications($channel))
+			->setTo($this->makeTo($channelItemIdentifier, $primaryClient))
+			->setTemplateCode($templateCode)
+			->setPlaceholders($placeholders)
+			->setLanguageId($this->notificationsLanguageProvider->getLanguageId())
+		;
+
+		$sendResult = $facilitator->send();
+
+		$messageId = isset($sendResult->getData()['ID']) ? (int)$sendResult->getData()['ID'] : null;
+		if (!$messageId)
+		{
+			return $result->addError(new Error('Message can not be sent'));
+		}
+
+		return $result->setId((string)$messageId);
 	}
 
 	private static function isMessageStatusUpdateDuplicate(string $messageStatus, array $historyItems): bool

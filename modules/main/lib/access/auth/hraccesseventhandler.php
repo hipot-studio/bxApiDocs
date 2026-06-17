@@ -54,7 +54,14 @@ class HrAccessEventHandler
 
 	public static function onMemberDeleted(Event $event): void
 	{
-		self::onMemberUpdated($event);
+		$member = $event->getParameter('member');
+
+		if (!$member || $member->entityType !== MemberEntityType::USER)
+		{
+			return;
+		}
+
+		(new AccessAuthProvider())->DeleteByUser($member->entityId);
 	}
 
 	public static function onMemberAdded(Event $event): void

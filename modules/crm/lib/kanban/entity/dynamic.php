@@ -23,6 +23,7 @@ class Dynamic extends Kanban\Entity
 	use DynamicInlineEditorFieldsTrait;
 
 	protected $stages;
+	protected ?FieldRestrictionManager $dynamicFieldRestrictionManager = null;
 
 	public function initFactory(): void
 	{
@@ -151,19 +152,33 @@ class Dynamic extends Kanban\Entity
 
 	protected function getFilter(): Filter\Filter
 	{
-		$settings = new Filter\ItemSettings([
-			'ID' => $this->getGridId(),
-			'categoryId' => $this->getCategoryId(),
-			'isRecurring' => $this->isRecurring(),
-		], $this->factory->getType());
-		$provider = new ItemDataProvider($settings, $this->factory);
-		$ufProvider = new Filter\ItemUfDataProvider($settings);
+		if (!$this->filter)
+		{
+			$filterFactory = Container::getInstance()->getFilterFactory();
+			$settings = $filterFactory->getSettings(
+				$this->factory->getEntityTypeId(),
+				$this->getGridId(),
+				[
+					'categoryId' => $this->getCategoryId(),
+					'isRecurring' => $this->isRecurring(),
+					'type' => $this->factory->getType(),
+				],
+			);
 
-		return new Filter\Filter(
-			$settings->getID(),
-			$provider,
-			[$ufProvider],
-		);
+			$provider = $filterFactory->getDataProvider($settings);
+			$extraProviders = array_merge(
+				[$filterFactory->getUserFieldDataProvider($settings)],
+				$filterFactory->getSupportedClientDataProviders($settings),
+			);
+
+			$this->filter = $filterFactory->createFilter(
+				$settings->getID(),
+				$provider,
+				$extraProviders,
+			);
+		}
+
+		return $this->filter;
 	}
 
 	protected function getTotalSumFieldName(): string
@@ -226,11 +241,9 @@ class Dynamic extends Kanban\Entity
 
 	public function getItems(array $parameters): \CDBResult
 	{
-		$enabledFields = $this->factory->getFieldsCollection()->getFieldNameList();
-		$parameters['select'] = array_filter($parameters['select'], static function($field) use ($enabledFields)
-		{
-			return in_array($field, $enabledFields, true);
-		});
+		if (isset($parameters['select'])) {
+			$parameters['select'] = $this->prepareSelect($parameters['select']);
+		}
 
 		$filter = $parameters['filter'] ?? [];
 		if (isset($filter['SEARCH_CONTENT']))
@@ -275,6 +288,32 @@ class Dynamic extends Kanban\Entity
 		$result->InitFromArray($data);
 
 		return $result;
+	}
+
+	public function prepareFilter(array &$filter, ?string $viewMode = null): void
+	{
+		parent::prepareFilter($filter, $viewMode);
+
+		if ($this->factory->isClientEnabled())
+		{
+			$filter = $this->getClientFieldsPreparer()->normalizeFilter($filter);
+		}
+	}
+
+	protected function prepareSelect(array $select): array
+	{
+		if ($this->factory->isClientEnabled())
+		{
+			$this->getContactDataProvider()->prepareSelect($select);
+			$this->getCompanyDataProvider()->prepareSelect($select);
+		}
+
+		$enabledFields = $this->factory->getFieldsCollection()->getFieldNameList();
+
+		return array_filter($select, static function ($field) use ($enabledFields)
+		{
+			return in_array($field, $enabledFields, true);
+		});
 	}
 
 	public function prepareItemCommonFields(array $item): array
@@ -438,12 +477,7 @@ class Dynamic extends Kanban\Entity
 	{
 		$options = parent::getFilterOptions();
 
-		$dynamicFieldRestrictionManager = new FieldRestrictionManager(
-			FieldRestrictionManager::MODE_KANBAN,
-			[FieldRestrictionManagerTypes::OBSERVERS],
-			$this->factory->getEntityTypeId()
-		);
-		$dynamicFieldRestrictionManager->removeRestrictedFields($options);
+		$this->getDynamicFieldRestrictionManager()->removeRestrictedFields($options);
 
 		return $options;
 	}
@@ -451,15 +485,10 @@ class Dynamic extends Kanban\Entity
 	public function getFieldsRestrictionsEngine(): string
 	{
 		$parentFieldsRestrictions = parent::getFieldsRestrictionsEngine();
-		$dynamicFieldRestrictionManager = new FieldRestrictionManager(
-			FieldRestrictionManager::MODE_KANBAN,
-			[FieldRestrictionManagerTypes::OBSERVERS],
-			$this->factory->getEntityTypeId()
-		);
-		$dynamicFieldsRestrictions = $dynamicFieldRestrictionManager->fetchRestrictedFieldsEngine(
+		$dynamicFieldsRestrictions = $this->getDynamicFieldRestrictionManager()->fetchRestrictedFieldsEngine(
 			$this->getGridId(),
 			[],
-			$this->getFilter()
+			$this->getFilter(),
 		);
 
 		return implode("\n", [$parentFieldsRestrictions, $dynamicFieldsRestrictions]);
@@ -468,20 +497,41 @@ class Dynamic extends Kanban\Entity
 	public function getFieldsRestrictions(): array
 	{
 		$parentFieldsRestrictions = parent::getFieldsRestrictions();
-
-		$dynamicFieldRestrictionManager = new FieldRestrictionManager(
-			FieldRestrictionManager::MODE_KANBAN,
-			[FieldRestrictionManagerTypes::OBSERVERS],
-			$this->factory->getEntityTypeId()
-		);
-
-		$dynamicFieldsRestrictions = $dynamicFieldRestrictionManager->getFilterFields(
+		$dynamicFieldsRestrictions = $this->getDynamicFieldRestrictionManager()->getFilterFields(
 			$this->getGridId(),
 			[],
-			$this->getFilter()
+			$this->getFilter(),
 		);
 
 		return [...$parentFieldsRestrictions, ...$dynamicFieldsRestrictions];
+	}
+
+	protected function getDynamicFieldRestrictionManager(): FieldRestrictionManager
+	{
+		if (!isset($this->dynamicFieldRestrictionManager))
+		{
+			$this->dynamicFieldRestrictionManager = new FieldRestrictionManager(
+				FieldRestrictionManager::MODE_KANBAN,
+				$this->getFieldsRestrictionsTypes(),
+				$this->factory->getEntityTypeId(),
+			);
+		}
+
+		return $this->dynamicFieldRestrictionManager;
+	}
+
+	protected function getFieldsRestrictionsTypes(): array
+	{
+		$result = [
+			FieldRestrictionManagerTypes::OBSERVERS,
+		];
+
+		if ($this->factory->isClientEnabled())
+		{
+			$result[] = FieldRestrictionManagerTypes::CLIENT;
+		}
+
+		return $result;
 	}
 
 	protected function getPopupFieldsBeforeUserFields(): array
@@ -602,7 +652,33 @@ class Dynamic extends Kanban\Entity
 			);
 		}
 
+		if ($this->factory->isClientEnabled())
+		{
+			$this->getClientFieldsPreparer()->prepareFields($fields);
+			if ($viewType !== static::VIEW_TYPE_EDIT)
+			{
+				$clientFields = $this->getClientFieldsPreparer()->getClientFields();
+				$fields = array_merge($fields, $clientFields);
+			}
+		}
+
 		return $fields;
+	}
+
+	/**
+	 * @internal
+	 */
+	public function prepareFieldsSections(array $configuration): array
+	{
+		$sections = parent::prepareFieldsSections($configuration);
+
+		if ($this->factory->isClientEnabled())
+		{
+			$clientSections = $this->getClientFieldsPreparer()->getClientFieldsSections();
+			$sections = array_merge($sections, $clientSections);
+		}
+
+		return $sections;
 	}
 
 	public function isRecurringSupported(): bool

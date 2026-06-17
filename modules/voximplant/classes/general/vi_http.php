@@ -2,6 +2,7 @@
 
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
+use Bitrix\Main\Web\Json;
 use Bitrix\Voximplant\Result;
 use Bitrix\Main\Error;
 
@@ -291,6 +292,26 @@ class CVoxImplantHttp
 				'OPTIONS' => $options,
 			)
 		);
+		if (isset($query->error))
+		{
+			$this->error = new CVoxImplantError(__METHOD__, $query->error->code, $query->error->msg);
+			return false;
+		}
+
+		return $query;
+	}
+
+	public function StartAiCall(array $aiCallData, array $lineConfig = [])
+	{
+		if (\Bitrix\Voximplant\Limits::isRestOnly())
+		{
+			return false;
+		}
+
+		$query = $this->Query('StartAiCall', [
+			'AI_CALL_DATA' => \Bitrix\Main\Web\Json::encode($aiCallData),
+			'LINE_CONFIG' => \Bitrix\Main\Web\Json::encode($lineConfig),
+		]);
 		if (isset($query->error))
 		{
 			$this->error = new CVoxImplantError(__METHOD__, $query->error->code, $query->error->msg);
@@ -605,6 +626,34 @@ class CVoxImplantHttp
 		}
 
 		return $query;
+	}
+
+	public function PullCallHistory(int $limit = 100, array $ackCallIds = [], array $requestedCallIds = [])
+	{
+		// Encode list params to deterministic JSON strings so they are covered by
+		// the BX_HASH signature (Query() computes md5(implode("|", $params))).
+		$query = $this->Query(
+			'PullCallHistory',
+			[
+				'LIMIT' => $limit,
+				'ACK_CALL_IDS' => Json::encode(array_values($ackCallIds)),
+				'CALL_IDS' => Json::encode(array_values($requestedCallIds)),
+			],
+			['returnArray' => true]
+		);
+
+		if (isset($query->error))
+		{
+			$this->error = new CVoxImplantError(
+				__METHOD__,
+				$query->error['code'] ?? '',
+				$query->error['msg'] ?? ''
+			);
+			return false;
+		}
+
+		$records = $query['records'] ?? null;
+		return is_array($records) ? $records : [];
 	}
 
 	public function CreateSipRegistration($server, $login, $password = '', $authUser = '', $outboundProxy = '')

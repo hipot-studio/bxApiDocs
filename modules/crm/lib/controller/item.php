@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Controller;
 
 use Bitrix\Crm\Component\EntityDetails\FactoryBased;
+use Bitrix\Crm\Component\EntityList\ClientFieldHelper;
 use Bitrix\Crm\Entity\EntityEditorConfigScope;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
@@ -995,31 +996,56 @@ class Item extends Base
 			return null;
 		}
 
-		$item = $factory->getItem($id);
+		$isClientContactField = $this->isClientContactField($factory, $fieldName);
+		$isClientCompanyField = !$isClientContactField && $this->isClientCompanyField($factory, $fieldName);
+		$itemFieldName = match (true)
+		{
+			$isClientContactField => 'CONTACT_ID',
+			$isClientCompanyField => 'COMPANY_ID',
+			default => $fieldName,
+		};
+		$item = $this->getPermittedReadItem($factory, $id, $itemFieldName);
 		if (!$item)
 		{
-			$this->addError(new Error(
-				Loc::getMessage('CRM_TYPE_ITEM_NOT_FOUND'),
-				ErrorCode::NOT_FOUND
-			));
 			return null;
 		}
-		if (!Container::getInstance()->getUserPermissions()->item()->canReadItem($item))
+		$value = null;
+		$field = null;
+
+		if ($isClientContactField)
 		{
-			$this->addError(new Error(
-				Loc::getMessage('CRM_COMMON_READ_ACCESS_DENIED'),
-				ErrorCode::ACCESS_DENIED
-			));
+			$value = $this->getClientFileFieldValue(
+				$fieldName,
+				\CCrmOwnerType::Contact,
+				(int)$item->getContactId(),
+				['CONTACT_PHOTO'],
+			);
+		}
+		elseif ($isClientCompanyField)
+		{
+			$value = $this->getClientFileFieldValue(
+				$fieldName,
+				\CCrmOwnerType::Company,
+				(int)$item->getCompanyId(),
+				['COMPANY_LOGO'],
+			);
+		}
+		else
+		{
+			$field = $factory->getFieldsCollection()->getField($fieldName);
+			if (!$field || !$field->isFileUserField())
+			{
+				$this->addError(new Error('Field ' . $fieldName . ' is not a file field'));
+
+				return null;
+			}
+			$value = $item->get($fieldName);
+		}
+		if (!$value)
+		{
 			return null;
 		}
 
-		$field = $factory->getFieldsCollection()->getField($fieldName);
-		if (!$field || !$field->isFileUserField())
-		{
-			$this->addError(new Error('Field ' . $fieldName . ' is not a file field'));
-			return null;
-		}
-		$value = $item->get($fieldName);
 		if ((int)$value === $fileId && $fileId > 0)
 		{
 			return BFile::createByFileId($fileId);
@@ -1034,6 +1060,103 @@ class Item extends Base
 		}
 
 		return null;
+	}
+
+	protected function getPermittedReadItem(
+		Service\Factory $factory,
+		int $itemId,
+		string $fieldName,
+	): ?\Bitrix\Crm\Item
+	{
+		$fieldsToSelect = [
+			\Bitrix\Crm\Item::FIELD_NAME_ID,
+			$fieldName,
+		];
+		if ($factory->isCategoriesSupported())
+		{
+			$fieldsToSelect[] = \Bitrix\Crm\Item::FIELD_NAME_CATEGORY_ID; // for permissions checks
+		}
+		$item = $factory->getItem($itemId, $fieldsToSelect);
+		if (!$item)
+		{
+			$this->addError(new Error(
+				Loc::getMessage('CRM_TYPE_ITEM_NOT_FOUND'),
+				ErrorCode::NOT_FOUND,
+			));
+
+			return null;
+		}
+
+		if (!Container::getInstance()->getUserPermissions()->item()->canReadItem($item))
+		{
+			$this->addError(new Error(
+				Loc::getMessage('CRM_COMMON_READ_ACCESS_DENIED'),
+				ErrorCode::ACCESS_DENIED,
+			));
+
+			return null;
+		}
+
+		return $item;
+	}
+
+	protected function isClientContactField(Service\Factory $factory, string $fieldName): bool
+	{
+		return
+			$factory->isClientContactEnabled()
+			&& $this->isClientField($fieldName, \CCrmOwnerType::Contact)
+		;
+	}
+
+	protected function isClientCompanyField(Service\Factory $factory, string $fieldName): bool
+	{
+		return
+			$factory->isClientCompanyEnabled()
+			&& $this->isClientField($fieldName, \CCrmOwnerType::Company)
+		;
+	}
+
+	protected function isClientField(string $fieldId, int $clientEntityTypeId): bool
+	{
+		$clientFieldHelper = new ClientFieldHelper($clientEntityTypeId);
+
+		return $clientFieldHelper->isClientFieldId($fieldId);
+	}
+
+	protected function getClientFileFieldValue(
+		string $fieldId,
+		int $clientEntityTypeId,
+		int $clientEntityId,
+		array $allowedBaseFields = [],
+	): mixed {
+		$clientFieldHelper = new ClientFieldHelper($clientEntityTypeId);
+		$factory = $this->getFactory($clientEntityTypeId);
+		if (!$factory || $clientEntityId <= 0)
+		{
+			return null;
+		}
+
+		$fieldIdWithoutPrefix = $clientFieldHelper->getFieldIdWithoutPrefix($fieldId);
+		$item = $this->getPermittedReadItem($factory, $clientEntityId, $fieldIdWithoutPrefix);
+		if (!$item)
+		{
+			return null;
+		}
+
+		if (in_array($fieldId, $allowedBaseFields, true))
+		{
+			return $item->get($fieldIdWithoutPrefix);
+		}
+
+		$field = $factory->getFieldsCollection()->getField($fieldIdWithoutPrefix);
+		if (!$field || !$field->isFileUserField())
+		{
+			$this->addError(new Error('Field ' . $fieldId . ' is not a client file field'));
+
+			return null;
+		}
+
+		return $item->get($fieldIdWithoutPrefix);
 	}
 
 	/**

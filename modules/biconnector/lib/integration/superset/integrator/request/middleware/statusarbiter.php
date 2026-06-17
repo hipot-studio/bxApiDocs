@@ -31,6 +31,14 @@ final class StatusArbiter extends Base
 				return parent::afterRequest($request, $response);
 			}
 
+			// Instance is frozen for deferred deletion — don't overwrite PENDING_DELETE with LOAD,
+			// otherwise the cleanup agent won't fire and initializeOrCheckSupersetStatus() will
+			// keep retrying in an infinite loop (LOAD → request → 555 → LOAD → ...).
+			if (SupersetInitializer::isSupersetPendingDelete())
+			{
+				return parent::afterRequest($request, $response);
+			}
+
 			$this->logger->logMethodInfo($request->getAction(), $response->getStatus(), 'superset is load');
 			SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_LOAD);
 
@@ -59,7 +67,12 @@ final class StatusArbiter extends Base
 			}
 
 			$this->logger->logMethodErrors($request->getAction(), $response->getStatus(), $errors);
-			SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_ERROR);
+			// Don't overwrite PENDING_DELETE with ERROR — a transient proxy error must not
+			// prevent the cleanup agent from performing the actual deletion after timeout.
+			if (!SupersetInitializer::isSupersetPendingDelete())
+			{
+				SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_ERROR);
+			}
 		}
 		else if ($response->hasErrors())
 		{

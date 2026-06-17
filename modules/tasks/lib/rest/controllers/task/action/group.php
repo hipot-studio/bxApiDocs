@@ -392,8 +392,10 @@ class Group extends Controller
 		$taskIds = $this->checkTaskParams($data);
 		$accessedTaskIds = $this->tasksAccessCheck($taskIds, Task\GroupAction::ACTION_DELETE);
 
+		$groupId = (int)($data['groupId'] ?? 0);
+
 		$delete = new Delete();
-		$delete->runBatch($this->userId, $accessedTaskIds);
+		$delete->runBatch($this->userId, $accessedTaskIds, $groupId);
 
 		return $this->processAnswer(count($taskIds));
 	}

@@ -18,6 +18,8 @@ class TeamChangeParentTool extends NodeChangeParentTool
 
 	public function getDescription(): string
 	{
-		return 'Change node parent to `parentId` for the node identified by `nodeId` when node is a team. Use this function to change level of subordination';
+		return 'Reparent a team under a new `parentId`. '
+			. 'Side effect: changes the access scope for the team. '
+			. 'Always confirm with the user before calling.';
 	}
 }

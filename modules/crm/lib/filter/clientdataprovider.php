@@ -122,11 +122,32 @@ class ClientDataProvider extends Main\Filter\EntityDataProvider
 
 	protected function getEntityFields(): array
 	{
-		if ($this->settings instanceof DealSettings)
+		$fields = match ($this->clientEntityTypeId)
 		{
-			return \CCrmDeal::GetFields();
+			\CCrmOwnerType::Contact => \CCrmContact::GetFields([
+				'TABLE_ALIAS' => 'C',
+				'ADD_FIELD_ALIASES' => false,
+			]),
+			\CCrmOwnerType::Company => \CCrmCompany::GetFields([
+				'TABLE_ALIAS' => 'C',
+				'ADD_FIELD_ALIASES' => false,
+			]),
+			default => throw new Main\NotImplementedException(),
+		};
+
+		$result = [];
+		foreach ($fields as $fieldId => $fieldParams)
+		{
+			if ($fieldId === 'ID' || !empty($fieldParams['FROM']))
+			{
+				continue;
+			}
+
+			$fieldIdWithPrefix = $this->clientFieldHelper->addPrefixToFieldId($fieldId);
+			$result[$fieldIdWithPrefix] = $fieldParams;
 		}
-		throw new Main\NotImplementedException();
+
+		return $result;
 	}
 
 	protected function isIgnoredField(string $fieldIdWithPrefix): bool{
@@ -162,7 +183,7 @@ class ClientDataProvider extends Main\Filter\EntityDataProvider
 		$handledFields = $this->prepareFields();
 		foreach ($preparedFilter as $fieldName => $value)
 		{
-			if (!isset($handledFields[$fieldName]))
+			if (!isset($handledFields[$fieldName]) || is_bool($value))
 			{
 				continue;
 			}
@@ -183,5 +204,40 @@ class ClientDataProvider extends Main\Filter\EntityDataProvider
 		}
 
 		return $preparedFilter;
+	}
+
+	/**
+	 * Prepare ORM filter from data, received from the frontend filter
+	 */
+	public function prepareListFilter(array &$filter, array $requestFilter): void
+	{
+		$fields = $this->addPrefixToFields($this->clientDataProvider->prepareFields());
+
+		$listFilter = new ListFilter(
+			$this->clientEntityTypeId,
+			$fields,
+			isSearchStringLikeEnabled: false, // unified with kanban & user-fields default string search behavior
+		);
+		$listFilter->prepareListFilter($filter, $requestFilter);
+		$filter = $this->prepareFilterValue($filter);
+		$filter = $this->clientFieldHelper->normalizeFilter($filter);
+	}
+
+	/**
+	 * @param \Bitrix\Main\Filter\Field[] $fields
+	 * @return \Bitrix\Main\Filter\Field[]
+	 */
+	protected function addPrefixToFields(array $fieldsWithoutPrefix): array
+	{
+		$fields = [];
+		foreach ($fieldsWithoutPrefix as $fieldIdWithoutPrefix => $fieldWithoutPrefix)
+		{
+			$fieldId = $this->clientFieldHelper->addPrefixToFieldId($fieldIdWithoutPrefix);
+			$field = clone $fieldWithoutPrefix;
+			$field->setId($fieldId);
+			$fields[$fieldId] = $field;
+		}
+
+		return $fields;
 	}
 }

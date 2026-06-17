@@ -38,6 +38,8 @@ class FlowUpdateRule extends AbstractRule
 			return true;
 		}
 
+		$this->controller->addError(static::class, 'Access to update flow denied');
+
 		return false;
 	}
 }

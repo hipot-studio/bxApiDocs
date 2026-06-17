@@ -142,6 +142,7 @@ class Task
 		}
 		$newUsersExceptAuditors = array_unique($newUsersExceptAuditors);
 
+		$newMuted = [];
 		$autoMuteService = Main\DI\ServiceLocator::getInstance()->get('tasks.user.option.automute.service');
 		$disabledAutoMuteUsers = $autoMuteService->getDisabledAutoMuteUsers();
 
@@ -154,33 +155,40 @@ class Task
 				&& !in_array($userId, $disabledAutoMuteUsers)
 			)
 			{
-				UserOption::add($taskId, $userId, Option::MUTED);
+				$newMuted[] = $userId;
 			}
+		}
+
+		$userOptionService = Container::getInstance()->getUserOptionService();
+
+		if (!empty($newMuted))
+		{
+			$userOptionService->muteBatch(
+				taskId: $taskId,
+				userIds: $newMuted,
+			);
 		}
 
 		// removed users from task
-		foreach ($removedParticipants as $userId)
+		if (!empty($removedParticipants))
 		{
-			UserOption::deleteByTaskIdAndUserId($taskId, $userId);
+			$userOptionService->deleteByTaskIdAndUserIds(
+				taskId: $taskId,
+				userIds: $removedParticipants,
+			);
 		}
 
-		// user was removed from auditors and added to another role
-		$removedAuditors = array_unique(array_diff($oldAuditors, $newAuditors));
-		foreach ($removedAuditors as $userId)
-		{
-			if (in_array($userId, $newUsersExceptAuditors))
-			{
-				UserOption::deleteOnUserRoleChanged($taskId, $userId);
-			}
-		}
+		$allAuditors = array_unique(array_merge($oldAuditors, $newAuditors));
 
-		// user was not removed from auditors but added to another role
-		foreach ($newAuditors as $userId)
+		// find those who are both in the list of auditors and in the list of other roles
+		$usersWithRoleChanged = array_values(array_intersect($allAuditors, $newUsersExceptAuditors));
+
+		if (!empty($usersWithRoleChanged))
 		{
-			if (in_array($userId, $newUsersExceptAuditors))
-			{
-				UserOption::deleteOnUserRoleChanged($taskId, $userId);
-			}
+			$userOptionService->deleteOnUserRoleChanged(
+				taskId: $taskId,
+				userIds: array_unique($usersWithRoleChanged),
+			);
 		}
 
 		// sync muted users with chat if any users were added with muted state

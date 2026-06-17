@@ -12,7 +12,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Result;
 use Bitrix\Main\ORM\Entity;
-use Bitrix\Main\ORM\exception\CollectionFilterException;
+use Bitrix\Main\ORM\Exception\CollectionFilterException;
 use Bitrix\Main\ORM\Fields\Relations\Relation;
 use Bitrix\Main\ORM\Fields\ScalarField;
 use Bitrix\Main\ORM\Query\Query;

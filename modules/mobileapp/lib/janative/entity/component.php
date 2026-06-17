@@ -259,6 +259,7 @@ class Component extends Base
 		{
 			$isAdmin = \CBitrix24::IsPortalAdmin($userId);
 		}
+
 		$env = Utils::jsonEncode([
 			'siteId' => $siteId,
 			'isAdmin' => $isAdmin,
@@ -269,6 +270,7 @@ class Component extends Base
 			'isCollaber' => $this->isUserCollaber(),
 			'installedModules' => $installedModules,
 			'region' => \Bitrix\Main\Application::getInstance()->getLicense()->getRegion(),
+			'modulesData' => $this->collectEnvModulesDataFromEvents(),
 		]);
 		$file = new File(Application::getDocumentRoot() . "/bitrix/js/mobileapp/platform.js");
 		$export = $file->getContents();
@@ -285,6 +287,25 @@ $export
 JS;
 
 		return $inlineContent;
+	}
+
+	private function collectEnvModulesDataFromEvents(): array
+	{
+		$event = new \Bitrix\Main\Event('mobileapp', 'onBuildEnvVariable');
+		$event->send();
+		$results = $event->getResults();
+		$additionalData = [];
+
+		foreach ($results as $result)
+		{
+			$params = $result->getParameters();
+			if (!empty($params))
+			{
+				$additionalData[$result->getModuleId()] = $params;
+			}
+		}
+
+		return $additionalData;
 	}
 
 	private function isUserCollaber(): bool

@@ -49,6 +49,16 @@ class Deal extends Factory
 		return true;
 	}
 
+	public function isClientContactEnabled(): bool
+	{
+		return true;
+	}
+
+	public function isClientCompanyEnabled(): bool
+	{
+		return true;
+	}
+
 	public function isBeginCloseDatesEnabled(): bool
 	{
 		return true;
@@ -444,6 +454,13 @@ class Deal extends Factory
 				'TYPE' => Field::TYPE_USER,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Multiple],
 				'CLASS' => Field\Observers::class,
+			],
+			Item::FIELD_NAME_WEBFORM_ID => [
+				'TYPE' => Field::TYPE_CRM_WEBFORM,
+				'ATTRIBUTES' => [
+					\CCrmFieldInfoAttr::NotDisplayed,
+					\CCrmFieldInfoAttr::Immutable,
+				],
 			],
 			Item::FIELD_LAST_COMMUNICATION_TIME => [
 				'TYPE' => Field::TYPE_STRING,

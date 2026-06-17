@@ -47,7 +47,7 @@ class ScheduleSyncService
 	 * @throws SystemException
 	 * @throws \CBPArgumentOutOfRangeException
 	 */
-	public function syncByTemplate(int $templateId, ?array $triggers, ?bool $active): void
+	public function syncByTemplate(int $templateId, ?array $triggers, bool $active = false): void
 	{
 		if (!$this->searcher->includeActivityFile(strtolower(self::TRIGGER_TYPE)))
 		{

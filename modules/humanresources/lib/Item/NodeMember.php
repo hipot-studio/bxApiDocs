@@ -10,11 +10,13 @@ use Bitrix\Main\Type\DateTime;
 
 class NodeMember implements Item
 {
+	/** @deprecated Use \Bitrix\HumanResources\Type\NodeMemberRole enum instead */
 	public const DEFAULT_ROLE_XML_ID = [
 		'HEAD' => 'MEMBER_HEAD',
 		'EMPLOYEE' => 'MEMBER_EMPLOYEE',
 		'DEPUTY_HEAD' => 'MEMBER_DEPUTY_HEAD',
 	];
+	/** @deprecated Use \Bitrix\HumanResources\Type\NodeMemberRole enum instead */
 	public const TEAM_ROLE_XML_ID = [
 		'TEAM_HEAD' => 'MEMBER_TEAM_HEAD',
 		'TEAM_EMPLOYEE' => 'MEMBER_TEAM_EMPLOYEE',

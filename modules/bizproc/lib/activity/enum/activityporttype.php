@@ -8,4 +8,6 @@ enum ActivityPortType: string
 	case Output = 'output';
 	case Aux = 'aux';
 	case TopAux = 'topAux';
+	case InputRelation = 'inputRelation';
+	case OutputRelation = 'outputRelation';
 }

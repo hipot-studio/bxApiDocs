@@ -11,9 +11,12 @@ use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Gantt\LinkType;
 use Bitrix\Tasks\V2\Internal\Entity\TaskCollection;
 use Bitrix\Tasks\V2\Internal\Repository\GanttLinkRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\GroupRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\GanttRelationTaskMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskStatusMapper;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskParams;
+use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskByIdsParams;
 
 class GanttDependenceProvider extends AbstractRelationTaskProvider
 {
@@ -22,7 +25,9 @@ class GanttDependenceProvider extends AbstractRelationTaskProvider
 		protected readonly TaskList $taskList,
 		protected readonly GanttRelationTaskMapper $ganttRelationTaskMapper,
 		protected readonly UserRepositoryInterface $userRepository,
+		protected readonly GroupRepositoryInterface $groupRepository,
 		protected readonly GanttLinkRepositoryInterface $ganttLinkRepository,
+		protected readonly TaskStatusMapper $taskStatusMapper,
 	)
 	{
 
@@ -60,16 +65,20 @@ class GanttDependenceProvider extends AbstractRelationTaskProvider
 
 		$tasksGanttLinks = $this->ganttLinkRepository->getLinkTypes($relationTaskParams->taskId, $taskIds);
 		$rights = $this->getRelationRights($taskIds, $relationTaskParams->taskId, $relationTaskParams->userId);
+		$groups = $this->getGroups($tasks);
 
 		return $this->ganttRelationTaskMapper->mapToCollection(
 			tasks: $tasks,
 			rights: $rights,
 			tasksGanttLinks: $tasksGanttLinks,
+			groups: $groups,
 		);
 	}
 
-	public function getTasksByIds(array $ids, int $userId): TaskCollection
+	public function getTasksByIds(RelationTaskByIdsParams $params): TaskCollection
 	{
+		$ids = $params->taskIds;
+
 		Collection::normalizeArrayValuesByInt($ids, false);
 
 		if (empty($ids))
@@ -80,7 +89,7 @@ class GanttDependenceProvider extends AbstractRelationTaskProvider
 		$tasks = $this->fetchTasks(
 			select: $this->getDefaultSelect(),
 			filter: $this->getIdsFilter($ids),
-			userId: $userId,
+			userId: $params->userId,
 		);
 
 		if (empty($tasks))
@@ -97,12 +106,14 @@ class GanttDependenceProvider extends AbstractRelationTaskProvider
 			$tasksGanttLinks[$taskId][0] = LinkType::FinishStart;
 		}
 
-		$rights = $this->getRelationRights($taskIds, 0, $userId);
+		$rights = $this->getRelationRights($taskIds, 0, $params->userId);
+		$groups = $this->getGroups($tasks);
 
 		return $this->ganttRelationTaskMapper->mapToCollection(
 			tasks: $tasks,
 			rights: $rights,
 			tasksGanttLinks: $tasksGanttLinks,
+			groups: $groups,
 		);
 	}
 
@@ -111,6 +122,10 @@ class GanttDependenceProvider extends AbstractRelationTaskProvider
 		return [
 			'id',
 			'title',
+			'status',
+			'group',
+			'activityDate',
+			'changedDate',
 		];
 	}
 
@@ -119,11 +134,20 @@ class GanttDependenceProvider extends AbstractRelationTaskProvider
 		return ['=GANTT_ANCESTOR_ID' => $relationTaskParams->taskId];
 	}
 
+	protected function getFilterForIds(RelationTaskParams $relationTaskParams): array
+	{
+		return $this->getFilter($relationTaskParams);
+	}
+
 	protected function translateSelect(array $select): array
 	{
 		$map = [
 			'id' => 'ID',
 			'title' => 'TITLE',
+			'status' => 'STATUS',
+			'group' => 'GROUP_ID',
+			'activityDate' => 'ACTIVITY_DATE',
+			'changedDate' => 'CHANGED_DATE',
 		];
 
 		$result = [];

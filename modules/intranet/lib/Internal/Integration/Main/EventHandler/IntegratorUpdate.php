@@ -7,7 +7,7 @@ use Bitrix\Main\ModuleManager;
 
 class IntegratorUpdate
 {
-	public static function onAfterIntegratorUpdate(&$arEvent): void
+	public static function onAfterIntegratorUpdate($arEvent = null): void
 	{
 		if (ModuleManager::isModuleInstalled('bitrix24'))
 		{

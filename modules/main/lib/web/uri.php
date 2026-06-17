@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Web;
@@ -82,12 +82,9 @@ class Uri implements \JsonSerializable, UriInterface
 			{
 				$uri .= '/';
 			}
-			$uri .= $path;
 		}
-		else
-		{
-			$uri .= $path;
-		}
+
+		$uri .= $path;
 
 		$query = $this->getQuery();
 		if ($query != '')

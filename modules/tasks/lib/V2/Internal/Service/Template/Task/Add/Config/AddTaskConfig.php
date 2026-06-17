@@ -9,6 +9,7 @@ class AddTaskConfig
 	public function __construct(
 		public readonly int $userId,
 		public readonly bool $withSubTasks = false,
+		public readonly bool $view = false,
 	)
 	{
 

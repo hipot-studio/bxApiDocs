@@ -588,6 +588,7 @@ class Lead
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_lead']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_LEAD_TABLE'] ?: 'crm_lead';
+		$result['crm_lead']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_LEAD_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_lead']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_LEAD_FIELD_' . $fieldCode];

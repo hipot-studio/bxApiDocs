@@ -22,6 +22,7 @@ final class Factory
 				HandlerType::SystemHandler => new SystemHandler($segmentCode, $context),
 				HandlerType::AiScreeningHandler => new AiScreeningHandler($segmentCode, $context),
 				HandlerType::AiApproveHandler => new AiApproveHandler($segmentCode, $context),
+				HandlerType::RemainingHandler => new RemainingHandler($segmentCode, $context),
 				HandlerType::ConfigurableHandler => new ConfigurableHandler($context),
 				default => null,
 			};

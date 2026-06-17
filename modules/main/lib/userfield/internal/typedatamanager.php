@@ -89,10 +89,18 @@ abstract class TypeDataManager extends DataManager
 	 */
 	public static function onBeforeUpdate(Event $event): EventResult
 	{
+		$result = new EventResult();
+
 		$data = static::getByPrimary($event->getParameter('id'))->fetch();
+		if ($data === false)
+		{
+			$result->addError(new EntityError('Item was not found'));
+
+			return $result;
+		}
 		static::getTemporaryStorage()->saveData($event->getParameter('id'), $data);
 
-		return new EventResult();
+		return $result;
 	}
 
 	/**
@@ -158,16 +166,16 @@ abstract class TypeDataManager extends DataManager
 
 		$id = $event->getParameter('id');
 		$oldData = static::getByPrimary($id)->fetch();
-		static::getTemporaryStorage()->saveData($id, $oldData);
-		if(!$oldData)
+		if ($oldData === false)
 		{
 			return $result;
 		}
+		static::getTemporaryStorage()->saveData($id, $oldData);
 
 		$userFieldManager = UserFieldHelper::getInstance()->getManager();
 
 		// get file fields
-		$file_fields = [];
+		$fileFields = [];
 		/** @noinspection PhpMethodOrClassCallIsNotCaseSensitiveInspection */
 		$fields = $userFieldManager->getUserFields(static::getFactory()->getUserFieldEntityId($oldData['ID']));
 
@@ -175,26 +183,26 @@ abstract class TypeDataManager extends DataManager
 		{
 			if ($field['USER_TYPE']['BASE_TYPE'] === 'file')
 			{
-				$file_fields[] = $name;
+				$fileFields[] = $name;
 			}
 		}
 
 		// delete files
-		if (!empty($file_fields))
+		if (!empty($fileFields))
 		{
 			$oldEntity = static::compileEntity($oldData);
 
 			$query = new Query($oldEntity);
 
 			// select file ids
-			$query->setSelect($file_fields);
+			$query->setSelect($fileFields);
 
 			// if they are not empty
 			$filter = array('LOGIC' => 'OR');
 
-			foreach ($file_fields as $file_field)
+			foreach ($fileFields as $fileField)
 			{
-				$filter['!'.$file_field] = false;
+				$filter['!'.$fileField] = false;
 			}
 
 			$query->setFilter($filter);
@@ -204,20 +212,20 @@ abstract class TypeDataManager extends DataManager
 
 			while ($row = $queryResult->fetch())
 			{
-				foreach ($file_fields as $file_field)
+				foreach ($fileFields as $fileField)
 				{
-					if (!empty($row[$file_field]))
+					if (!empty($row[$fileField]))
 					{
-						if (is_array($row[$file_field]))
+						if (is_array($row[$fileField]))
 						{
-							foreach ($row[$file_field] as $value)
+							foreach ($row[$fileField] as $value)
 							{
 								\CFile::delete($value);
 							}
 						}
 						else
 						{
-							\CFile::delete($row[$file_field]);
+							\CFile::delete($row[$fileField]);
 						}
 					}
 				}

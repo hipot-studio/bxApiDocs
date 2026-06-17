@@ -1,4 +1,9 @@
 <?
+use Bitrix\Socialservices\OAuth\OAuthErrorCode;
+use Bitrix\Main\Web\Uri;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServOdnoklassniki extends CSocServAuth
@@ -42,28 +47,32 @@ class CSocServOdnoklassniki extends CSocServAuth
 
 	public function getUrl($location = 'opener', $addScope = null, $arParams = array())
 	{
-		global $APPLICATION;
+		$stateFields = [
+			'site_id' => SITE_ID,
+			'check_key' => \CSocServAuthManager::getUniqueKey(),
+			'redirect_url' => $this->getRedirectUrl($arParams),
+			'mode' => $location,
+		];
+		$state = \Bitrix\Socialservices\OAuth\StateService::getInstance()->createState($stateFields);
 
-		$this->entityOAuth = new COdnoklassnikiInterface();
-
-		if(IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
+		if ($this->isCloudPortal())
 		{
-			$redirect_uri = self::CONTROLLER_URL."/redirect.php";
-			$state = \CHTTP::URN2URI("/bitrix/tools/oauth/odnoklassniki.php")."?state=";
-			$backurl = urlencode($GLOBALS["APPLICATION"]->GetCurPageParam('check_key='.\CSocServAuthManager::getUniqueKey(), array("logout", "auth_service_error", "auth_service_id", "backurl"))).'&mode='.$location;
-			$state .= urlencode(urlencode("backurl=".$backurl));
+			$portalRedirectUri = new Uri(
+				\CHTTP::URN2URI('/bitrix/tools/oauth/odnoklassniki.php')
+			);
+			$portalRedirectUri->addParams([
+				'state' => $state,
+			]);
+
+			$state = (string)$portalRedirectUri;
+			$redirect_uri = self::CONTROLLER_URL . '/redirect.php';
 		}
 		else
 		{
-			$backurl = $APPLICATION->GetCurPageParam(
-				'check_key='.\CSocServAuthManager::getUniqueKey(),
-				array("logout", "auth_service_error", "auth_service_id", "backurl")
-			);
-			$redirect_uri = \CHTTP::URN2URI("/bitrix/tools/oauth/odnoklassniki.php");
-			$state = 'site_id='.SITE_ID.'&backurl='.urlencode($backurl).(isset($arParams['BACKURL']) ? '&redirect_url='.urlencode($arParams['BACKURL']) : '').'&mode='.$location;
+			$redirect_uri = \CHTTP::URN2URI('/bitrix/tools/oauth/odnoklassniki.php');
 		}
 
-		return $this->entityOAuth->GetAuthUrl($redirect_uri, $state);
+		return $this->getEntityOAuth()->GetAuthUrl($redirect_uri, $state);
 	}
 
 	public function Authorize()
@@ -73,12 +82,18 @@ class CSocServOdnoklassniki extends CSocServAuth
 		$APPLICATION->RestartBuffer();
 		$bSuccess = SOCSERV_AUTHORISATION_ERROR;
 		$bProcessState = false;
+		$this->logger->info('oauth.auth.start');
 
-		if((isset($_REQUEST["code"]) && $_REQUEST["code"] <> '') && CSocServAuthManager::CheckUniqueKey())
+		if (empty($_REQUEST['code']))
+		{
+			$this->logger->error('oauth.request.invalid_code');
+			$this->sendOauthError(OAuthErrorCode::MissingCode);
+		}
+		elseif (CSocServAuthManager::CheckUniqueKey())
 		{
 			$bProcessState = true;
 
-			if(IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
+			if ($this->isCloudPortal())
 				$redirect_uri = self::CONTROLLER_URL."/redirect.php";
 			else
 				$redirect_uri= \CHTTP::URN2URI("/bitrix/tools/oauth/odnoklassniki.php");
@@ -88,6 +103,7 @@ class CSocServOdnoklassniki extends CSocServAuth
 			$appKey = trim(self::GetOption("odnoklassniki_appkey"));
 
 			$gAuth = new COdnoklassnikiInterface($appID, $appSecret, $appKey, $_REQUEST["code"]);
+			$gAuth->setLogger($this->logger);
 
 			if($gAuth->GetAccessToken($redirect_uri) !== false)
 			{
@@ -134,63 +150,45 @@ class CSocServOdnoklassniki extends CSocServAuth
 
 					$bSuccess = $this->AuthorizeUser($arFields);
 				}
+				else
+				{
+					$this->logger->error('oauth.user.fetch_failed', [
+						'reason' => 'missing_user_id',
+					]);
+				}
+			}
+			else
+			{
+				$this->logger->error('oauth.token.exchange_failed', [
+					'reason' => 'get_access_token_failed',
+				]);
 			}
 		}
+		else
+		{
+			$this->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'check_key_validation_failed',
+			]);
+			$this->sendOauthError(OAuthErrorCode::InvalidCheckKey);
+		}
+
+		$this->logger->info('oauth.auth.finish', [
+			'success' => ($bSuccess === true),
+			'auth_result' => $bSuccess,
+		]);
 
 		if(!$bProcessState)
 		{
 			unset($_REQUEST["state"]);
 		}
 
-		$url = ($APPLICATION->GetCurDir() == "/login/") ? "" : $APPLICATION->GetCurDir();
-		$aRemove = array("logout", "auth_service_error", "auth_service_id", "code", "error_reason", "error", "error_description", "check_key", "current_fieldset");
-
 		$mode = 'opener';
-		if(isset($_REQUEST["state"]))
+		$arState = $this->getState();
+		if(isset($arState['mode']))
 		{
-			$arState = array();
-			parse_str($_REQUEST["state"], $arState);
-			if(isset($arState['backurl']) || isset($arState['redirect_url']))
-			{
-				$parseUrl = parse_url(!empty($arState['redirect_url']) ? $arState['redirect_url'] : $arState['backurl']);
-				$urlPath = $parseUrl["path"];
-				$arUrlQuery = explode('&', $parseUrl["query"]);
-
-				foreach($arUrlQuery as $key => $value)
-				{
-					foreach($aRemove as $param)
-					{
-						if(mb_strpos($value, $param."=") === 0)
-						{
-							unset($arUrlQuery[$key]);
-							break;
-						}
-					}
-				}
-
-				$url = (!empty($arUrlQuery)) ? $urlPath.'?'.implode("&", $arUrlQuery) : $urlPath;
-			}
-
-			if(isset($arState['mode']))
-			{
-				$mode = $arState['mode'];
-			}
+			$mode = $arState['mode'];
 		}
-
-		if($bSuccess === SOCSERV_REGISTRATION_DENY)
-		{
-			$url = (preg_match("/\?/", $url)) ? $url.'&' : $url.'?';
-			$url .= 'auth_service_id='.self::ID.'&auth_service_error='.SOCSERV_REGISTRATION_DENY;
-		}
-		elseif($bSuccess !== true)
-		{
-			$url = (isset($parseUrl))
-				? $urlPath.'?auth_service_id='.self::ID.'&auth_service_error='.$bSuccess
-				: $APPLICATION->GetCurPageParam(('auth_service_id='.self::ID.'&auth_service_error='.$bSuccess), $aRemove);
-		}
-
-		if(CModule::IncludeModule("socialnetwork") && mb_strpos($url, "current_fieldset=") === false)
-			$url = (preg_match("/\?/", $url)) ? $url."&current_fieldset=SOCSERV" : $url."?current_fieldset=SOCSERV";
+		$url = $this->getRedirectUriAfterAuthorize($bSuccess, self::ID);
 
 		$this->onAfterWebAuth(true, $mode, $url);
 
@@ -211,6 +209,8 @@ class CSocServOdnoklassniki extends CSocServAuth
 
 class COdnoklassnikiInterface
 {
+	const SERVICE_ID = 'Odnoklassniki';
+
 	const AUTH_URL = "https://www.odnoklassniki.ru/oauth/authorize";
 	const TOKEN_URL = "https://api.odnoklassniki.ru/oauth/token.do";
 	const CONTACTS_URL = "https://api.odnoklassniki.ru/fb.do";
@@ -223,6 +223,8 @@ class COdnoklassnikiInterface
 	protected $sign = false;
 	protected $refresh_token = '';
 	protected $userId = 0;
+
+	protected LoggerInterface $logger;
 
 	public function __construct($appID = false, $appSecret = false, $appKey = false, $code=false)
 	{
@@ -246,6 +248,12 @@ class COdnoklassnikiInterface
 		$this->appSecret = $appSecret;
 		$this->code = $code;
 		$this->appKey = $appKey;
+		$this->logger = new NullLogger();
+	}
+
+	public function setLogger(LoggerInterface $logger): void
+	{
+		$this->logger = $logger;
 	}
 
 	public function GetAuthUrl($redirect_uri, $state='')
@@ -260,7 +268,13 @@ class COdnoklassnikiInterface
 	public function GetAccessToken($redirect_uri)
 	{
 		if($this->code === false)
+		{
+			$this->logger->error('oauth.token.exchange_failed', [
+				'reason' => 'empty_code',
+			]);
+
 			return false;
+		}
 
 		$result = CHTTP::sPostHeader(self::TOKEN_URL, array(
 			"code"=>$this->code,
@@ -289,17 +303,36 @@ class COdnoklassnikiInterface
 			$this->sign = mb_strtolower(md5('application_key='.$arguments["application_key"].'method='.$arguments['method'].md5($this->access_token.$this->appSecret)));
 			return true;
 		}
+
+		$this->logger->error('oauth.token.exchange_failed', [
+			'reason' => 'token_not_found_in_response',
+		]);
+
 		return false;
 	}
 
 	public function GetCurrentUser()
 	{
 		if($this->access_token === false)
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'empty_access_token',
+			]);
+
 			return false;
+		}
 
 		$result = CHTTP::sGetHeader(self::CONTACTS_URL."?method=users.getCurrentUser&application_key=".$this->appKey."&access_token=".$this->access_token."&sig=".$this->sign, array(), $this->httpTimeout);
 
-		return CUtil::JsObjectToPhp($result);
+		$parsed = CUtil::JsObjectToPhp($result);
+		if (!is_array($parsed) || !isset($parsed['uid']) || $parsed['uid'] === '')
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'missing_user_id',
+			]);
+		}
+
+		return $parsed;
 	}
 
 	public function SendFeed($socServUserId, $message, $getNewToken=true)

@@ -135,6 +135,12 @@ class AccessRights extends Controller
 			\Bitrix\Main\Access\AccessCode::TYPE_DEPARTMENT,
 			\Bitrix\Main\Access\AccessCode::TYPE_STRUCTURE_DEPARTMENT,
 			\Bitrix\Main\Access\AccessCode::TYPE_STRUCTURE_TEAM,
+			\Bitrix\Main\Access\AccessCode::TYPE_ACCESS_DIRECTOR,
+			\Bitrix\Main\Access\AccessCode::TYPE_ACCESS_DEPUTY,
+			\Bitrix\Main\Access\AccessCode::TYPE_ACCESS_EMPLOYEE,
+			\Bitrix\Main\Access\AccessCode::TYPE_ACCESS_TEAM_DIRECTOR,
+			\Bitrix\Main\Access\AccessCode::TYPE_ACCESS_TEAM_DEPUTY,
+			\Bitrix\Main\Access\AccessCode::TYPE_ACCESS_TEAM_EMPLOYEE,
 		];
 	}
 

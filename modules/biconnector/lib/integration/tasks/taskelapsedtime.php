@@ -34,6 +34,11 @@ class TaskElapsedTime extends Dataset
 		return $this->getMessage('TASK_ELAPSED_TIME_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('TASK_ELAPSED_TIME_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	/**
 	 * @return Result
 	 */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\HumanResources\Public\Service\Node;
 
 use Bitrix\HumanResources\Builder\Structure\Filter\Column\EntityIdFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\RoleFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
 use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
@@ -14,6 +15,7 @@ use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
+use Bitrix\HumanResources\Type\NodeMemberRole;
 use Bitrix\HumanResources\Type\StructureRole;
 use Bitrix\Main\DB\SqlQueryException;
 
@@ -21,16 +23,18 @@ class UserService
 {
 	//region role checks
 	/**
-	 * Returns first NodeMember by user ID and structure roles
+	 * Returns first NodeMember by user ID and role XML IDs
 	 *
 	 * @param int $userId
-	 * @param array<StructureRole> $structureRoles
+	 * @param string[] $roleXmlIds Role XML IDs (e.g. NodeMember::DEFAULT_ROLE_XML_ID['HEAD'])
 	 *
 	 * @return NodeMember|null Found node member or null if not found
 	 */
-	public function findByUserIdAndStructureRoles(int $userId, array $structureRoles): ?NodeMember
+	public function findByUserIdAndRoleXmlIds(int $userId, array $roleXmlIds): ?NodeMember
 	{
-		if (empty($structureRoles))
+		$roles = NodeMemberRole::fromXmlIds($roleXmlIds);
+
+		if (empty($roles))
 		{
 			return null;
 		}
@@ -40,27 +44,29 @@ class UserService
 				->addFilter(
 					new NodeMemberFilter(
 						entityIdFilter: EntityIdFilter::fromEntityId($userId),
+						roleFilter: RoleFilter::fromRoles(...$roles),
 					),
 				)
-				->setStructureRoles($structureRoles)
 				->get()
 		;
 	}
 
 	/**
-	 * Returns all NodeMembers by user ID and structure roles
+	 * Returns all NodeMembers by user ID and role XML IDs
 	 *
 	 * @param int $userId
-	 * @param array<StructureRole> $structureRoles
+	 * @param string[] $roleXmlIds Role XML IDs (e.g. NodeMember::DEFAULT_ROLE_XML_ID['HEAD'])
 	 *
 	 * @return NodeMemberCollection
 	 */
-	public function findAllByUserIdAndStructureRoles(
+	public function findAllByUserIdAndRoleXmlIds(
 		int $userId,
-		array $structureRoles,
+		array $roleXmlIds,
 	): NodeMemberCollection
 	{
-		if (empty($structureRoles))
+		$roles = NodeMemberRole::fromXmlIds($roleXmlIds);
+
+		if (empty($roles))
 		{
 			return new NodeMemberCollection();
 		}
@@ -71,9 +77,9 @@ class UserService
 					new NodeMemberFilter(
 						entityIdFilter: EntityIdFilter::fromEntityId($userId),
 						entityType: MemberEntityType::USER,
+						roleFilter: RoleFilter::fromRoles(...$roles),
 					),
 				)
-				->setStructureRoles($structureRoles)
 				->getAll()
 		;
 	}
@@ -243,6 +249,75 @@ class UserService
 		}
 
 		return $result;
+	}
+	//endregion
+
+	//region deprecated
+	/**
+	 * @deprecated Use findByUserIdAndRoleXmlIds() instead
+	 * @see findByUserIdAndRoleXmlIds()
+	 *
+	 * @param int $userId
+	 * @param array<StructureRole> $structureRoles
+	 *
+	 * @return NodeMember|null Found node member or null if not found
+	 */
+	public function findByUserIdAndStructureRoles(int $userId, array $structureRoles): ?NodeMember
+	{
+		if (empty($structureRoles))
+		{
+			return null;
+		}
+
+		foreach ($structureRoles as $role)
+		{
+			if (!$role instanceof StructureRole)
+			{
+				throw new \InvalidArgumentException('Invalid structure role list');
+			}
+		}
+
+		$roleXmlIds = array_map(
+			static fn(StructureRole $role): string => $role->getXmlId(),
+			$structureRoles,
+		);
+
+		return $this->findByUserIdAndRoleXmlIds($userId, $roleXmlIds);
+	}
+
+	/**
+	 * @deprecated Use findAllByUserIdAndRoleXmlIds() instead
+	 * @see findAllByUserIdAndRoleXmlIds()
+	 *
+	 * @param int $userId
+	 * @param array<StructureRole> $structureRoles
+	 *
+	 * @return NodeMemberCollection
+	 */
+	public function findAllByUserIdAndStructureRoles(
+		int $userId,
+		array $structureRoles,
+	): NodeMemberCollection
+	{
+		if (empty($structureRoles))
+		{
+			return new NodeMemberCollection();
+		}
+
+		foreach ($structureRoles as $role)
+		{
+			if (!$role instanceof StructureRole)
+			{
+				throw new \InvalidArgumentException('Invalid structure role list');
+			}
+		}
+
+		$roleXmlIds = array_map(
+			static fn(StructureRole $role): string => $role->getXmlId(),
+			$structureRoles,
+		);
+
+		return $this->findAllByUserIdAndRoleXmlIds($userId, $roleXmlIds);
 	}
 	//endregion
 }

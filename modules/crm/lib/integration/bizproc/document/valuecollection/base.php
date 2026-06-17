@@ -4,6 +4,8 @@ namespace Bitrix\Crm\Integration\BizProc\Document\ValueCollection;
 
 use Bitrix\Bizproc\Document\ValueCollection;
 use Bitrix\Crm;
+use Bitrix\Crm\Badge\Model\BadgeTable;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -44,6 +46,7 @@ abstract class Base extends ValueCollection
 		$handlers = [
 			'form' => fn() => $this->loadFormValues(),
 			'communication' => fn() => $this->loadCommunicationValues(),
+			'badge' => fn() => $this->loadBadgeValues(),
 			'assigned' => fn() => $this->loadAssignedByValues(),
 			'created' => fn() => $this->loadCreatedByPrintable(),
 		];
@@ -155,6 +158,10 @@ abstract class Base extends ValueCollection
 		elseif (strpos($fieldId, 'COMMUNICATIONS.') === 0)
 		{
 			$this->loadCommunicationValues();
+		}
+		elseif (strpos($fieldId, 'BADGE.') === 0)
+		{
+			$this->loadBadgeValues();
 		}
 		elseif ($fieldId === 'TRACKING_SOURCE_ID')
 		{
@@ -699,6 +706,45 @@ abstract class Base extends ValueCollection
 		$this->document['COMMUNICATIONS.LAST_FORM_DATE'] = (string)$webFormDate;
 	}
 
+	protected function loadBadgeValues(): void
+	{
+		$row = BadgeTable::query()
+			->setSelect(['TYPE', 'VALUE'])
+			->where('ENTITY_TYPE_ID', $this->typeId)
+			->where('ENTITY_ID', $this->id)
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
+			->exec()
+			->fetch()
+		;
+
+		$this->document['BADGE.NAME'] = '';
+		$this->document['BADGE.VALUE'] = '';
+
+		if ($row)
+		{
+			try
+			{
+				$badge = Container::getInstance()->getBadge($row['TYPE'], $row['VALUE']);
+			}
+			catch (\Throwable $e)
+			{
+				return;
+			}
+
+			foreach($badge->getValuesMap() as $value)
+			{
+				if ($value->getValue() === $badge->getValue())
+				{
+					$textValue = $value->getTextValue();
+				}
+			}
+
+			$this->document['BADGE.NAME'] = $badge->getFieldName();
+			$this->document['BADGE.VALUE'] = $textValue ?? '';
+		}
+	}
+
 	protected function loadAddressValues(): void
 	{
 		$settings = Crm\EntityRequisite::getSingleInstance()->loadSettings($this->typeId, $this->id);
@@ -955,6 +1001,7 @@ abstract class Base extends ValueCollection
 				|| str_starts_with($field, 'PRODUCT_IDS')
 				|| str_starts_with($field, 'FORMS.')
 				|| str_starts_with($field, 'COMMUNICATIONS.')
+				|| str_starts_with($field, 'BADGE.')
 			;
 		});
 	}
@@ -987,6 +1034,7 @@ abstract class Base extends ValueCollection
 		$this->fieldGroups = [
 			'form' => $this->extractFieldsByPrefix('FORMS.'),
 			'communication' => $this->extractFieldsByPrefix('COMMUNICATIONS.'),
+			'badge' => $this->extractFieldsByPrefix('BADGE.'),
 			'assigned' => $this->extractFieldsByPrefix('ASSIGNED_BY'),
 			'created' => $this->extractFieldsByPrefix('CREATED_BY'),
 			'common' => $this->filterCommonFields(),

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Activity\Dto;
 
+use Bitrix\Bizproc\Activity\Enum\ActivityPortType;
 use Bitrix\Main\Type\Contract\Arrayable;
 
 final class NodePorts implements Arrayable, \JsonSerializable
@@ -13,6 +14,8 @@ final class NodePorts implements Arrayable, \JsonSerializable
 		public readonly ?PortCollection $output = null,
 		public readonly ?PortCollection $aux = null,
 		public readonly ?PortCollection $topAux = null,
+		public readonly ?PortCollection $inputRelation = null,
+		public readonly ?PortCollection $outputRelation = null,
 	) {}
 
 	public static function fromArray(array $array): self
@@ -20,20 +23,36 @@ final class NodePorts implements Arrayable, \JsonSerializable
 		$array = self::normalizeArrayCompatible($array);
 
 		return new self(
-			is_array($array['input'] ?? null) ? PortCollection::fromArray($array['input']) : null,
-			is_array($array['output'] ?? null) ? PortCollection::fromArray($array['output']) : null,
-			is_array($array['aux'] ?? null) ? PortCollection::fromArray($array['aux']) : null,
-			is_array($array['topAux'] ?? null) ? PortCollection::fromArray($array['topAux']) : null,
+			is_array($array[ActivityPortType::Input->value] ?? null)
+				? PortCollection::fromArray($array[ActivityPortType::Input->value]) : null
+			,
+			is_array($array[ActivityPortType::Output->value] ?? null)
+				? PortCollection::fromArray($array[ActivityPortType::Output->value]) : null
+			,
+			is_array($array[ActivityPortType::Aux->value] ?? null)
+				? PortCollection::fromArray($array[ActivityPortType::Aux->value]) : null
+			,
+			is_array($array[ActivityPortType::TopAux->value] ?? null)
+				? PortCollection::fromArray($array[ActivityPortType::TopAux->value]) : null
+			,
+			is_array($array[ActivityPortType::InputRelation->value] ?? null)
+				? PortCollection::fromArray($array[ActivityPortType::InputRelation->value]) : null
+			,
+			is_array($array[ActivityPortType::OutputRelation->value] ?? null)
+				? PortCollection::fromArray($array[ActivityPortType::OutputRelation->value]) : null
+			,
 		);
 	}
 
 	public function toArray(): array
 	{
 		return [
-			...self::portsToArray($this->input, 'input'),
-			...self::portsToArray($this->output, 'output'),
-			...self::portsToArray($this->aux, 'aux'),
-			...self::portsToArray($this->topAux, 'topAux'),
+			...self::portsToArray($this->input, ActivityPortType::Input->value),
+			...self::portsToArray($this->output, ActivityPortType::Output->value),
+			...self::portsToArray($this->aux, ActivityPortType::Aux->value),
+			...self::portsToArray($this->topAux, ActivityPortType::TopAux->value),
+			...self::portsToArray($this->inputRelation, ActivityPortType::InputRelation->value),
+			...self::portsToArray($this->outputRelation, ActivityPortType::OutputRelation->value),
 		];
 	}
 

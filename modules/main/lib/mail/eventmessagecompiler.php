@@ -409,7 +409,11 @@ class EventMessageCompiler
 	{
 		if (isset($this->event['ID']) && isset($this->eventMessageFields["ID"]))
 		{
-			$this->mailId = $this->event['ID'] . "." . $this->eventMessageFields["ID"] . " (" . $this->event["DATE_INSERT"] . ")";
+			$this->mailId = $this->event['ID'] . "." . $this->eventMessageFields["ID"];
+			if (!empty($this->event["DATE_INSERT"]))
+			{
+				$this->mailId .= " (" . $this->event["DATE_INSERT"] . ")";
+			}
 		}
 		else
 		{

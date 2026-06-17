@@ -7,10 +7,17 @@ namespace Bitrix\HumanResources\Integration\AiAssistant\Tools\Node;
 use Bitrix\HumanResources\Access\Model\NodeModel;
 use Bitrix\HumanResources\Access\StructureActionDictionary;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\NodeBaseTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Schema\InputProperty;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Util\StructureHelper;
 
+/**
+ * Get node details by ID.
+ *
+ * @see \Bitrix\HumanResources\Rest\Controller\Node::getAction — REST analog
+ * @see \Bitrix\HumanResources\Controller\Structure\Node::getAction — ajax controller
+ */
 abstract class NodeShowTool extends NodeBaseTool
 {
 	public function getInputSchema(): array
@@ -18,10 +25,7 @@ abstract class NodeShowTool extends NodeBaseTool
 		return [
 			'type' => 'object',
 			'properties' => [
-				'nodeId' => [
-					'description' => 'Identifier of the node to get information about',
-					'type' => 'number',
-				],
+				'nodeId' => InputProperty::nodeId('Identifier of the node to get information about'),
 			],
 			'additionalProperties' => false,
 			'required' => ['nodeId'],
@@ -36,6 +40,7 @@ abstract class NodeShowTool extends NodeBaseTool
 			? StructureActionDictionary::ACTION_STRUCTURE_VIEW
 			: StructureActionDictionary::ACTION_TEAM_VIEW
 		;
+
 		if (!$this->checkAccess($userId, $actionId, $item))
 		{
 			return 'Access denied';
@@ -56,15 +61,20 @@ abstract class NodeShowTool extends NodeBaseTool
 			$membersInfo = [];
 			$employeeUserCollection = Container::getUserService()->getUserCollectionFromMemberCollection($employees);
 			$rolesById = [];
-			foreach ($roles->getValues() as $role) {
+
+			foreach ($roles->getValues() as $role)
+			{
 				$rolesById[$role->id] = $role->xmlId;
 			}
-			foreach ($employeeUserCollection as $user) {
-				$userId = $user->id;
+
+			foreach ($employeeUserCollection as $user)
+			{
 				// Find corresponding employee by entityId
 				$employee = null;
-				foreach ($employees->getValues() as $emp) {
-					if ($emp->entityId === $userId) {
+				foreach ($employees->getValues() as $emp)
+				{
+					if ($emp->entityId === $user->id)
+					{
 						$employee = $emp;
 						break;
 					}
@@ -75,11 +85,15 @@ abstract class NodeShowTool extends NodeBaseTool
 				$membersInfo[] = $info;
 			}
 
-			return "The node with id {$nodeInfo['id']} is named \"{$nodeInfo['name']}\", has a parent {$nodeInfo['parentId']} and a description {$nodeInfo['description']}. It has {$nodeInfo['usersCount']} members: " .
+			return "The node with id {$nodeInfo['id']} is named \"{$nodeInfo['name']}\", has a parent {$nodeInfo['parentId']} and a description {$nodeInfo['description']}. It has {$nodeInfo['userCount']} members: " .
 				implode(
 					', ',
 					array_map(
-						fn($member) => $member['name'] . ' (' . $member['role'] . ($member['workPosition'] ? ', ' . $member['workPosition'] . ')' : ')'),
+						fn($member) => $member['name']
+							. ' (id:' . $member['id']
+							. ', role: ' . ($member['role'] ?? 'unknown')
+							. ($member['workPosition'] ? ', position: ' . $member['workPosition'] : '')
+							. ')',
 						$membersInfo,
 					),
 				) . '.'

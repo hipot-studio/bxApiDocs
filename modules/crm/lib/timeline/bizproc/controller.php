@@ -500,6 +500,11 @@ final class Controller extends Timeline\Controller
 			'WORKFLOW_STATUS' => $status,
 			'WORKFLOW_STATUS_NAME' => \CBPWorkflowStatus::Out($status),
 		];
+		$startDuration = (new Data\Workflow($workflowId))->getStartDuration();
+		if ($startDuration !== null)
+		{
+			$settings['WORKFLOW_START_DURATION'] = $startDuration;
+		}
 
 		if (!empty($additionalData))
 		{

@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Kanban;
 
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\Attribute\FieldAttributeManager;
+use Bitrix\Crm\Automation;
 use Bitrix\Crm\Component\EntityDetails\BaseComponent;
 use Bitrix\Crm\Component\EntityList\ClientDataProvider;
 use Bitrix\Crm\Component\EntityList\ClientDataProvider\KanbanDataProvider;
@@ -19,6 +20,7 @@ use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Kanban\Helper\ClientFieldsPreparer;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
@@ -95,6 +97,7 @@ abstract class Entity
 		'#invoice_id#',
 	];
 
+	protected ?ClientFieldsPreparer $clientFieldsPreparer = null;
 	/** @var $contactDataProvider KanbanDataProvider */
 	protected $contactDataProvider;
 	/** @var $companyDataProvider KanbanDataProvider */
@@ -345,6 +348,11 @@ abstract class Entity
 	public function isInlineEditorSupported(): bool
 	{
 		return true;
+	}
+
+	private function isRestartAutomationSupported(): bool
+	{
+		return $this->factory?->isAutomationEnabled() && Automation\Factory::isAutomationRunnable($this->getTypeId());
 	}
 
 	public function isContactCenterSupported(): bool
@@ -1414,6 +1422,17 @@ abstract class Entity
 
 		foreach ($ids as $id)
 		{
+			if (!$this->checkDeletePermissions((int)$id))
+			{
+				$result->addError(new Error(
+					Loc::getMessage('CRM_KANBAN_ERROR_ACCESS_DENIED'),
+					0,
+					['id' => $id],
+				));
+
+				continue;
+			}
+
 			$isDeleted = null;
 
 			if ($isIgnore)
@@ -1501,6 +1520,11 @@ abstract class Entity
 	public function checkUpdatePermissions(int $id): bool
 	{
 		return $this->userPermissions->item()->canUpdate($this->getTypeId(), $id);
+	}
+
+	public function checkDeletePermissions(int $id): bool
+	{
+		return $this->userPermissions->item()->canDelete($this->getTypeId(), $id);
 	}
 
 	/**
@@ -2340,7 +2364,13 @@ abstract class Entity
 	protected function getExtraDisplayedFields()
 	{
 		$result = [];
-		if ($this->hasClientFields())
+		$factory = Container::getInstance()->getFactory($this->getTypeId());
+		if (!$factory)
+		{
+			return $result;
+		}
+
+		if ($factory->isClientFieldsEnabled())
 		{
 			$contactDataProvider = $this->getContactDataProvider();
 			$companyDataProvider = $this->getCompanyDataProvider();
@@ -2350,12 +2380,6 @@ abstract class Entity
 				$contactDataProvider->getDisplayFields(),
 				$companyDataProvider->getDisplayFields(),
 			);
-		}
-
-		$factory = Container::getInstance()->getFactory($this->getTypeId());
-		if (!$factory)
-		{
-			return $result;
 		}
 
 		if ($factory->isObserversEnabled())
@@ -2415,6 +2439,7 @@ abstract class Entity
 			'canUseCreateTaskInPanel' => false,
 			'canUseCallListInPanel' => false,
 			'canUseMergeInPanel' => false,
+			'canUseRestartAutomationInPanel' => $this->isRestartAutomationSupported(),
 
 			'stageIdKey' => 'STAGE_ID',
 			'defaultQuickFormFields' => ['TITLE', 'OPPORTUNITY_WITH_CURRENCY', 'CLIENT'],
@@ -2508,6 +2533,20 @@ abstract class Entity
 			[],
 			$this->getFilter()
 		);
+	}
+
+	protected function getClientFieldsPreparer(): ClientFieldsPreparer
+	{
+		if (!$this->clientFieldsPreparer)
+		{
+			$this->clientFieldsPreparer = new ClientFieldsPreparer(
+				$this->getContactDataProvider(),
+				$this->getCompanyDataProvider(),
+				ClientDataProvider::getPriorityEntityTypeId(),
+			);
+		}
+
+		return $this->clientFieldsPreparer;
 	}
 
 	protected function getContactDataProvider()

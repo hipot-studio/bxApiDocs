@@ -16,6 +16,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorRespons
 use Bitrix\BIConnector\Integration\Superset\SupersetStatusOptionContainer;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\IO;
 use Bitrix\Main\ModuleManager;
@@ -30,10 +31,13 @@ class Integrator
 	private const PROXY_ACTION_START_SUPERSET = '/instance/start';
 	private const PROXY_ACTION_FREEZE_SUPERSET = '/instance/freeze';
 	private const PROXY_ACTION_UNFREEZE_SUPERSET = '/instance/unfreeze';
+	private const PROXY_ACTION_SUSPEND_SUPERSET = '/instance/suspend';
+	private const PROXY_ACTION_RESUME_SUPERSET = '/instance/resume';
 	private const PROXY_ACTION_DELETE_SUPERSET = '/instance/delete';
 	private const PROXY_ACTION_CHANGE_BI_TOKEN_SUPERSET = '/instance/changeToken';
 	private const PROXY_ACTION_REFRESH_DOMAIN_CONNECTION = '/instance/refreshDomain';
 	private const PROXY_ACTION_CLEAR_CACHE = '/instance/clearCache';
+	private const PROXY_ACTION_TIMEZONE_SET = '/timezone/set';
 	private const PROXY_ACTION_LIST_DASHBOARD = '/dashboard/list';
 	private const PROXY_ACTION_DASHBOARD_DETAIL = '/dashboard/get';
 	private const PROXY_ACTION_GET_EMBEDDED_DASHBOARD_CREDENTIALS = '/dashboard/embedded/get';
@@ -70,6 +74,8 @@ class Integrator
 	private const PROXY_ACTION_GET_DASHBOARD_REUSED_OBJECTS = '/dashboard/getReusedObjects';
 	private const PROXY_ACTION_SET_SUBSCRIPTION_EXPIRATION = '/subscription/expiration';
 	private const PROXY_ACTION_SET_SUBSCRIPTION_REQUIRE = '/subscription/require';
+	private const PROXY_ACTION_GET_DASHBOARD_OVERVIEW = '/dashboard/getOverview';
+	private const PROXY_ACTION_GET_FILTER_VALUES = '/dashboard/getFilterValues';
 
 	private const PROXY_EXTENDED_STREAM_TIMEOUT = 90;
 	static private self $instance;
@@ -312,13 +318,25 @@ class Integrator
 	 * If response code is not OK - returns empty data.
 	 *
 	 * @param int $dashboardId
+	 * @param array $rlsRules Optional RLS rules to include in guest token
+	 *        Format: [['dataset' => datasetId, 'clause' => 'SQL WHERE clause'], ...]
 	 * @return IntegratorResponse<Dto\DashboardEmbeddedCredentials>
 	 */
-	public function getDashboardEmbeddedCredentials(int $dashboardId): IntegratorResponse
+	public function getDashboardEmbeddedCredentials(int $dashboardId, array $rlsRules = [], int $expSeconds = 0): IntegratorResponse
 	{
 		$requestParams = [
 			'id' => $dashboardId,
 		];
+
+		if (!empty($rlsRules))
+		{
+			$requestParams['rlsRules'] = $rlsRules;
+		}
+
+		if ($expSeconds > 0)
+		{
+			$requestParams['expSeconds'] = $expSeconds;
+		}
 
 		$response =
 			$this
@@ -647,6 +665,52 @@ class Integrator
 	}
 
 	/**
+	 * Suspends superset instance.
+	 * Used for PENDING_DELETE scenario.
+	 *
+	 * @param array $params
+	 * @return IntegratorResponse<null>
+	 */
+	public function suspendSuperset(array $params = []): IntegratorResponse
+	{
+		$requestParams = [];
+		if (isset($params['reason']))
+		{
+			$requestParams['reason'] = $params['reason'];
+		}
+
+		return (new IntegratorRequest($this->sender))
+			->setAction(self::PROXY_ACTION_SUSPEND_SUPERSET)
+			->setParams($requestParams)
+			->addAfter(new Middleware\Logger($this->logger))
+			->perform()
+		;
+	}
+
+	/**
+	 * Resumes a previously suspended superset instance.
+	 * Used for cancelPendingDelete scenario.
+	 *
+	 * @param array $params
+	 * @return IntegratorResponse<null>
+	 */
+	public function resumeSuperset(array $params = []): IntegratorResponse
+	{
+		$requestParams = [];
+		if (isset($params['reason']))
+		{
+			$requestParams['reason'] = $params['reason'];
+		}
+
+		return (new IntegratorRequest($this->sender))
+			->setAction(self::PROXY_ACTION_RESUME_SUPERSET)
+			->setParams($requestParams)
+			->addAfter(new Middleware\Logger($this->logger))
+			->perform()
+		;
+	}
+
+	/**
 	 * Returns response with result of delete superset.
 	 * If status code is OK/IN_PROGRESS - superset was deleted.
 	 *
@@ -687,6 +751,15 @@ class Integrator
 	public function clearCache(): IntegratorResponse
 	{
 		return $this->createDefaultRequest(self::PROXY_ACTION_CLEAR_CACHE)->perform();
+	}
+
+	public function setTimezone(string $timezone): IntegratorResponse
+	{
+		return $this
+			->createDefaultRequest(self::PROXY_ACTION_TIMEZONE_SET)
+			->setParams(['timezone' => $timezone])
+			->perform()
+		;
 	}
 
 	public function refreshDomainConnection(): IntegratorResponse
@@ -760,6 +833,9 @@ class Integrator
 					'langCode' => CultureFormatter::getLanguageCode(),
 					'appCode' => $appCode,
 					'requiresSubscription' => $type === SupersetDashboardTable::DASHBOARD_TYPE_MARKET,
+				])
+				->setSenderHttpClientParams([
+					'streamTimeout' => self::PROXY_EXTENDED_STREAM_TIMEOUT,
 				])
 				->removeAfter(Middleware\StatusArbiter::getMiddlewareId())
 				->setMultipart(true)
@@ -1291,6 +1367,109 @@ class Integrator
 			->removeBefore(Middleware\UserAccess::getMiddlewareId())
 			->perform()
 		;
+	}
+
+	/**
+	 * Without `$chartIds` returns the dashboard skeleton (structure, stats,
+	 * dimensions, available filters). With `$chartIds` switches to drill-down:
+	 * only those charts come back, each with raw `query_result` + `column_meta`.
+	 *
+	 * @param int[] $chartIds
+	 */
+	public function getDashboardOverview(
+		int $dashboardId,
+		array $appliedFilters = [],
+		array $urlParams = [],
+		int $streamTimeout = 60 * 5,
+		array $chartIds = [],
+	): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$params = ['id' => $dashboardId];
+		if (!empty($appliedFilters))
+		{
+			$params['appliedFilters'] = $appliedFilters;
+		}
+		if (!empty($urlParams))
+		{
+			$params['urlParams'] = $urlParams;
+		}
+		if (!empty($chartIds))
+		{
+			$params['chartIds'] = array_values(array_map('intval', $chartIds));
+		}
+
+		return $this
+			->createDefaultRequest(self::PROXY_ACTION_GET_DASHBOARD_OVERVIEW)
+			->setParams($params)
+			->setSenderHttpClientParams([
+				'streamTimeout' => $streamTimeout,
+			])
+			->perform()
+		;
+	}
+
+	public function getFilterValues(
+		int $dashboardId,
+		string $filterColumn,
+		array $appliedFilters = [],
+		array $urlParams = [],
+		?string $search = null,
+		?int $limit = null,
+		int $streamTimeout = 60,
+	): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$params = [
+			'id' => $dashboardId,
+			'filterColumn' => $filterColumn,
+		];
+		if (!empty($appliedFilters))
+		{
+			$params['appliedFilters'] = $appliedFilters;
+		}
+		if (!empty($urlParams))
+		{
+			$params['urlParams'] = $urlParams;
+		}
+		if ($search !== null && $search !== '')
+		{
+			$params['search'] = $search;
+		}
+		if ($limit !== null)
+		{
+			$params['limit'] = $limit;
+		}
+
+		return $this
+			->createDefaultRequest(self::PROXY_ACTION_GET_FILTER_VALUES)
+			->setParams($params)
+			->setSenderHttpClientParams([
+				'streamTimeout' => $streamTimeout,
+			])
+			->perform()
+		;
+	}
+
+	private static function isAiToolsFeatureEnabled(): bool
+	{
+		return Option::get('biconnector', 'bitrixgpt_bi_constructor', 'N') === 'Y';
+	}
+
+	private static function aiToolsDisabledResponse(): IntegratorResponse
+	{
+		$response = new IntegratorResponse(status: IntegratorResponse::STATUS_NO_ACCESS);
+		$response->addError(new Error('AI tools are disabled.', 'ai_tools_disabled'));
+
+		return $response;
 	}
 
 	/**

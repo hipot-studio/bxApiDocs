@@ -15,15 +15,14 @@ use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Util\Type\DateTime;
-use Bitrix\Tasks\V2\FormV2Feature;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Chat;
+use Bitrix\Tasks\V2\Internal\Integration\Im\ChatAvatarType;
 use Bitrix\Tasks\V2\Internal\Integration\Im\ChatNotification;
 use Bitrix\Tasks\V2\Internal\Integration\Im\ChatNotificationInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Im\NotificationType;
 use CAgent;
 use CTimeZone;
-use DateTimeZone;
 
 /**
  * Class Agent
@@ -40,6 +39,7 @@ class Agent
 	private TimeLineManager $timeLineManager;
 	private ?CommentPoster $commentPoster;
 	private ChatNotificationInterface $chatNotification;
+	private Chat $taskChat;
 
 	private string $eventType;
 	private array $taskData;
@@ -154,6 +154,7 @@ class Agent
 			->sendEvent()
 			->triggerAutomation()
 			->runCrmEvent()
+			->updateChatAvatar()
 			->notifyTaskChat()
 			->finish();
 	}
@@ -218,7 +219,7 @@ class Agent
 
 	private function runCrmEvent(): static
 	{
-		if ($this->eventType == static::EVENT_TASK_EXPIRED)
+		if ($this->eventType === static::EVENT_TASK_EXPIRED)
 		{
 			$this->timeLineManager->onTaskExpired()->save();
 		}
@@ -230,14 +231,10 @@ class Agent
 
 	private function notifyTaskChat(): static
 	{
-		if (!FormV2Feature::isOn('create'))
-		{
-			return $this;
-		}
-
 		$taskEntity = Container::getInstance()
 			->getTaskRepository()
-			->getById($this->task->getId());
+			->getById($this->task->getId())
+		;
 
 		if ($taskEntity)
 		{
@@ -259,6 +256,33 @@ class Agent
 		return $this;
 	}
 
+	private function updateChatAvatar(): static
+	{
+		$avatarType = match ($this->eventType)
+		{
+			static::EVENT_TASK_EXPIRED => ChatAvatarType::Expired,
+			static::EVENT_TASK_EXPIRED_SOON => ChatAvatarType::ExpiredSoon,
+			default => null,
+		};
+
+		if (!$avatarType)
+		{
+			return $this;
+		}
+
+		$taskEntity = Container::getInstance()
+			->getTaskRepository()
+			->getById($this->task->getId())
+		;
+
+		if ($taskEntity)
+		{
+			$this->taskChat->updateChatAvatar($taskEntity, $avatarType);
+		}
+
+		return $this;
+	}
+
 	private function finish(): string
 	{
 		return '';
@@ -270,6 +294,7 @@ class Agent
 		$this->timeLineManager = new TimeLineManager($this->task->getId(), $this->task->getResponsibleId());
 		$this->commentPoster = CommentPoster::getInstance($this->task->getId(), $this->task->getCreatedBy());
 		$this->chatNotification = new ChatNotification();
+		$this->taskChat = new Chat();
 		$this->taskData = $this->task->toArray(true);
 	}
 

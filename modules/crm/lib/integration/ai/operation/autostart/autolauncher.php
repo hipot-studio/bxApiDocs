@@ -4,14 +4,32 @@ namespace Bitrix\Crm\Integration\AI\Operation\Autostart;
 
 use Bitrix\Crm\Activity\Provider\Call;
 use Bitrix\Crm\Activity\Provider\OpenLine;
+use Bitrix\Crm\Copilot\Pipeline\TargetResolver;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\BaasManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\AutoLauncher\ChannelAutoStartStrategyFactory;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings\CallChannelSettings;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings\ChatChannelSettings;
-use Bitrix\Crm\Integration\AI\Operation\Orchestrator;
 
+/**
+ * @todo migrate to PipelineExecutor
+ *
+ * AutoLauncher currently launches operations via AIManager::launch*() methods,
+ * which rely on Scenario::getNextTypeIdByScenario() for NEXT_TYPE_ID.
+ * This creates an implicit coupling: FULL_SCENARIO must return null from getNextTypeIdByScenario()
+ * because FULL and FILL_FIELDS share the same first transition (Transcribe→Summarize),
+ * and ScenarioResolver uses a fallback for null NEXT_TYPE_ID.
+ *
+ * Migrating strategies to use PipelineExecutor would:
+ * - Eliminate the null-NEXT_TYPE_ID special case
+ * - Set explicit NEXT_TYPE_ID per step via setNextTypeIdOverride()
+ * - Unify all operation launches through a single code path
+ *
+ * @see \Bitrix\Crm\Copilot\Pipeline\PipelineExecutor
+ * @see \Bitrix\Crm\Copilot\Pipeline\ScenarioResolver::resolve() — null fallback
+ * @see Scenario::getNextTypeIdByScenario() — FULL_SCENARIO special case
+ */
 final class AutoLauncher
 {
 	public static function isEnabled(): bool
@@ -21,6 +39,8 @@ final class AutoLauncher
 			&& (
 				AIManager::isEnabledInGlobalSettings()
 				|| AIManager::isEnabledInGlobalSettings(GlobalSetting::CallAssessment)
+				|| AIManager::isEnabledInGlobalSettings(GlobalSetting::AnalyzeCommunication)
+				|| AIManager::isEnabledInGlobalSettings(GlobalSetting::Summarize)
 			)
 		;
 	}
@@ -48,7 +68,7 @@ final class AutoLauncher
 		{
 			$strategy
 				->setLogger($logger)
-				->setOrchestrator(new Orchestrator())
+				->setTargetResolver(new TargetResolver())
 				->run($changedFields)
 			;
 		}

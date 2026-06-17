@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Provider;
 
 use Bitrix\Booking\Internals\Container;
+use Bitrix\Booking\Internals\Service\Enum\GridMode;
 use Bitrix\Booking\Internals\Service\OptionDictionary;
 use Bitrix\Booking\Internals\Repository\OptionRepositoryInterface;
 
@@ -22,7 +23,7 @@ class OptionProvider
 		$enabled = $this->optionRepository->get(
 			userId: $userId,
 			option: OptionDictionary::BookingEnabled,
-			default: 'true'
+			default: 'true',
 		);
 
 		return filter_var($enabled, FILTER_VALIDATE_BOOLEAN);
@@ -33,7 +34,7 @@ class OptionProvider
 		$enabled = $this->optionRepository->get(
 			userId: $userId,
 			option: OptionDictionary::IntersectionForAll,
-			default: 'true'
+			default: 'true',
 		);
 
 		return filter_var($enabled, FILTER_VALIDATE_BOOLEAN);
@@ -44,7 +45,7 @@ class OptionProvider
 		$enabled = $this->optionRepository->get(
 			userId: $userId,
 			option: OptionDictionary::WaitListExpanded,
-			default: 'true'
+			default: 'true',
 		);
 
 		return filter_var($enabled, FILTER_VALIDATE_BOOLEAN);
@@ -55,9 +56,18 @@ class OptionProvider
 		$enabled = $this->optionRepository->get(
 			userId: $userId,
 			option: OptionDictionary::CalendarExpanded,
-			default: 'true'
+			default: 'true',
 		);
 
 		return filter_var($enabled, FILTER_VALIDATE_BOOLEAN);
+	}
+
+	public function getGridMode(int $userId): string
+	{
+		return $this->optionRepository->get(
+			userId: $userId,
+			option: OptionDictionary::GridMode,
+			default: GridMode::Day->value,
+		);
 	}
 }

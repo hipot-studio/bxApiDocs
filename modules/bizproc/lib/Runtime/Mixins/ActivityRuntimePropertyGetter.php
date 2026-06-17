@@ -141,6 +141,11 @@ trait ActivityRuntimePropertyGetter
 			];
 		}
 
+		if ($workflowField === 'templateactivatedby')
+		{
+			return $this->getRuntimeTemplateActivatedBy($activity);
+		}
+
 		return [
 			['Type' => 'string'],
 			$activity->getWorkflowInstanceId(),
@@ -197,6 +202,40 @@ trait ActivityRuntimePropertyGetter
 		}
 
 		return [['Type' => Bizproc\FieldType::STRING], null];
+	}
+
+	private function getRuntimeTemplateActivatedBy(CBPActivity $activity): array
+	{
+		static $cache = [];
+
+		$templateId = $activity->getWorkflowTemplateId();
+		if ($templateId <= 0)
+		{
+			return [['Type' => Bizproc\FieldType::USER], null];
+		}
+
+		if (!isset($cache[$templateId]))
+		{
+			$row = Bizproc\Workflow\Template\Entity\WorkflowTemplateTable::query()
+				->setSelect([
+					'ID',
+					'ACTIVATED_BY',
+				])
+				->where('ID', $templateId)
+				->setLimit(1)
+				->fetchObject()
+			;
+
+			$activatedBy = $row?->getActivatedBy();
+
+			$cache[$templateId] = !is_null($activatedBy) && $activatedBy > 0
+				? 'user_' . $activatedBy
+				: false;
+		}
+
+		$result = $cache[$templateId] ?: null;
+
+		return [['Type' => Bizproc\FieldType::USER], $result];
 	}
 
 	private function getRuntimeActivityField(string $field, CBPActivity $activity): array

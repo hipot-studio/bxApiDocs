@@ -27,14 +27,15 @@ use Bitrix\Timeman\Service\DependencyManager;
  */
 class WorktimeReportTable extends Main\ORM\Data\DataManager
 {
-	const REPORT_TYPE_ERR_OPEN = 'ERR_OPEN';
-	const REPORT_TYPE_ERR_CLOSE = 'ERR_CLOSE';
-	const REPORT_TYPE_ERR_DURATION = 'ERR_DURATION';
-	const REPORT_TYPE_REPORT_OPEN = 'REPORT_OPEN';
-	const REPORT_TYPE_REPORT_CLOSE = 'REPORT_CLOSE';
-	const REPORT_TYPE_REPORT_REOPEN = 'REOPEN';
-	const REPORT_TYPE_REPORT_DURATION = 'REPORT_DURATION';
-	const REPORT_TYPE_RECORD_REPORT = 'REPORT';
+	public const REPORT_TYPE_ERR_OPEN = 'ERR_OPEN';
+	public const REPORT_TYPE_ERR_CLOSE = 'ERR_CLOSE';
+	public const REPORT_TYPE_ERR_DURATION = 'ERR_DURATION';
+	public const REPORT_TYPE_REPORT_OPEN = 'REPORT_OPEN';
+	public const REPORT_TYPE_REPORT_CLOSE = 'REPORT_CLOSE';
+	public const REPORT_TYPE_REPORT_REOPEN = 'REOPEN';
+	public const REPORT_TYPE_REPORT_DURATION = 'REPORT_DURATION';
+	public const REPORT_TYPE_RECORD_REPORT = 'REPORT';
+	public const REPORT_TYPE_RECORD_AI_REPORT = 'AI_REPORT';
 
 	public static function getObjectClass()
 	{

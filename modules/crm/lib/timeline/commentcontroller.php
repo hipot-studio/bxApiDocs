@@ -399,6 +399,7 @@ class CommentController extends EntityController
 	public function prepareHistoryDataModel(array $data, array $options = null)
 	{
 		$data['HAS_FILES'] = $data['SETTINGS']['HAS_FILES'] ?? 'N';
+		$data['IS_AI_CREATED'] = $data['SETTINGS']['IS_AI_CREATED'] ?? 'N';
 		$data['COMMENT_RAW'] = $data['COMMENT']; // COMMENT field is not accessible in HistoryItemModel, so make a copy
 
 		if (

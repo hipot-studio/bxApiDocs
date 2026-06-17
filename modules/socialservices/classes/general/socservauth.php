@@ -4,14 +4,24 @@ use Bitrix\Main\EventManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\HttpResponse;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Authentication;
+use Bitrix\Socialservices\OAuth\StateService;
+use Bitrix\Socialservices\OAuth\LoggerFactory;
+use Bitrix\Socialservices\OAuth\OAuthCallbackUrlCanonical;
+use Bitrix\Socialservices\OAuth\OAuthErrorCode;
+use Bitrix\Socialservices\OAuth\OAuthErrorTrait;
 use Bitrix\Socialservices\UserTable;
 use Bitrix\Socialservices\EncryptedToken\CryptoField;
+use Psr\Log\LoggerInterface;
 
 //base class for auth services
 class CSocServAuth
 {
+	use OAuthErrorTrait;
+
 	protected static $settingsSuffix = false;
+	protected LoggerInterface $logger;
 
 	protected $checkRestrictions = true;
 	protected $allowChangeOwner = true;
@@ -36,6 +46,8 @@ class CSocServAuth
 		{
 			$this->userId = $userId;
 		}
+
+		$this->logger = static::createLogger();
 	}
 
 	public static function getControllerUrl()
@@ -739,6 +751,137 @@ class CSocServAuth
 		Application::getInstance()->end(0, $httpResponse);
 	}
 
+	protected function getRedirectUrl(array $arParams, array $additionalRemoveParams = []): string
+	{
+		global $APPLICATION;
+
+		/**
+		 * @var \CMain $APPLICATION
+		 */
+
+		if (isset($arParams['BACKURL']))
+		{
+			return (string)$arParams['BACKURL'];
+		}
+
+		$removeParams = [
+			'logout',
+			'auth_service_error',
+			'auth_service_id',
+			'backurl',
+			...\Bitrix\Main\HttpRequest::getSystemParameters(),
+			...$additionalRemoveParams,
+		];
+
+		return (string)$APPLICATION->GetCurPageParam('', $removeParams);
+	}
+
+	protected function isCloudPortal(): bool
+	{
+		return IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME');
+	}
+
+	protected function getState(): ?array
+	{
+		$state = (string)($_REQUEST['state'] ?? '');
+		if ($state === '')
+		{
+			return null;
+		}
+
+		return StateService::getInstance()->getPayload($state);
+	}
+
+	protected function getRedirectUriAfterAuthorize($authError, string $serviceId): string
+	{
+		global $APPLICATION;
+
+		$removeParams = [
+			'logout',
+			'auth_service_error',
+			'auth_service_id',
+			'code',
+			'error_reason',
+			'error',
+			'error_description',
+			'check_key',
+			'current_fieldset',
+		];
+		$bSuccess = $authError === true;
+
+		$url = (string)$APPLICATION->GetCurDir();
+		if ($url === '/login/')
+		{
+			$url = '';
+		}
+		$urlPath = null;
+		$state = $this->getState() ?? [];
+
+		if (isset($state['redirect_url']))
+		{
+			$url = $state['redirect_url'];
+			if (!str_starts_with((string)$url, '#'))
+			{
+				$parseUrl = parse_url($url);
+				$urlPath = (string)($parseUrl['path'] ?? '');
+				$query = (string)($parseUrl['query'] ?? '');
+				$arUrlQuery = ($query !== '') ? explode('&', $query) : [];
+
+				foreach ($arUrlQuery as $key => $value)
+				{
+					foreach ($removeParams as $param)
+					{
+						if (str_starts_with((string)$value, $param . '='))
+						{
+							unset($arUrlQuery[$key]);
+							break;
+						}
+					}
+				}
+
+				$url = !empty($arUrlQuery)
+					? $urlPath . '?' . implode('&', $arUrlQuery)
+					: $urlPath;
+			}
+		}
+
+		if ($authError === SOCSERV_REGISTRATION_DENY)
+		{
+			$url = (preg_match('/\?/', (string)$url)) ? $url . '&' : $url . '?';
+			$url .= 'auth_service_id=' . $serviceId . '&auth_service_error=' . $authError;
+		}
+		elseif ($bSuccess !== true)
+		{
+			$errorParams = 'auth_service_id=' . $serviceId . '&auth_service_error=' . $authError;
+			$url = ($urlPath !== null && $urlPath !== '')
+				? $urlPath . '?' . $errorParams
+				: $APPLICATION->GetCurPageParam($errorParams, $removeParams);
+		}
+
+		if (
+			CModule::IncludeModule('socialnetwork')
+			&& mb_strpos($url, 'current_fieldset=') === false
+			&& !str_starts_with((string)$url, '#')
+		)
+		{
+			$url .= ((mb_strpos($url, '?') === false) ? '?' : '&') . 'current_fieldset=SOCSERV';
+		}
+
+		return $url;
+	}
+
+	protected function isSelfRedirectLoop(string $targetUrl): bool
+	{
+		$current = OAuthCallbackUrlCanonical::createFromCurrentUri();
+		$targetCanon = OAuthCallbackUrlCanonical::createFromUri($targetUrl);
+		if ($current === null || $targetCanon === null)
+		{
+			return false;
+		}
+
+		return $current->equals($targetCanon);
+	}
+
 	/**
 	 * @param  bool $addParams if `false`, that $url with only hash(#) part will be added to current URL, otherwise $url will replace current URL
 	 * @param  mixed $mode
@@ -748,6 +891,20 @@ class CSocServAuth
 	 */
 	protected function onAfterWebAuth($addParams, $mode, $url)
 	{
+		if ($this->isSelfRedirectLoop((string)$url))
+		{
+			$this->logger->info('oauth.redirect.skipped', [
+				'reason' => 'self_redirect_loop',
+			]);
+
+			$this->sendOauthError(OAuthErrorCode::Unknown);
+		}
+
+		$this->logger->info('oauth.redirect.before', [
+			'mode' => (string)$mode,
+			'addParams' => (bool)$addParams,
+		]);
+
 		$url = \CUtil::JSEscape($url);
 
 		if ($addParams)
@@ -774,23 +931,23 @@ class CSocServAuth
 		echo $JSScript;
 	}
 
-	protected static function log(string $provider, string $message, ?array $context = null)
+	public static function getServiceId(): string
 	{
-		$optionName = 'enable_auth_log_' . $provider;
-		$isEnabled = Option::get('socialservices', $optionName) === 'Y';
-		if (!$isEnabled)
+		if (defined(static::class . '::ID'))
 		{
-			return;
+			return (string)constant(static::class . '::ID');
 		}
 
-		AddMessage2Log(
-			[
-				'CSocServAuth',
-				'provider' => $provider,
-				'message' => $message,
-				'context' => $context,
-			],
-			'socialservices',
-		);
+		return static::class;
+	}
+
+	protected static function createLogger(): LoggerInterface
+	{
+		$serviceId = static::getServiceId();
+
+		/** @var LoggerFactory $factory */
+		$factory = ServiceLocator::getInstance()->get('socialservices.oauth.loggerfactory');
+
+		return $factory->create($serviceId);
 	}
 }

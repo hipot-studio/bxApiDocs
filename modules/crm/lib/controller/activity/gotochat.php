@@ -126,6 +126,7 @@ class GoToChat extends Base
 				'telegrambot' => true,
 				'ru-whatsapp' => false,
 				'whatsapp' => !$isBox,
+				'max' => true,
 			],
 		];
 	}

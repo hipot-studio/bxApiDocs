@@ -18,9 +18,26 @@ class RepeatSaleAiSegment extends BaseFeature
 		return 'CRM_FEATURE_REPEAT_SALE_AI_SEGMENT';
 	}
 
+	public function getCategory(): Category\RepeatSale
+	{
+		return Category\RepeatSale::getInstance();
+	}
+
 	protected function getEnabledValue(): bool
 	{
 		return true;
+	}
+
+	public function disable(): void
+	{
+		if (!$this->isEnabled())
+		{
+			return;
+		}
+
+		parent::disable();
+
+		Feature::disable(Feature\RepeatSaleRemainingSegment::class);
 	}
 
 	public function enable(): void

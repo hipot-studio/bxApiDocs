@@ -38,9 +38,9 @@ class BlankScenario
 
 	public static function getSignTemplatesPermissionByScenario(string $scenario): int
 	{
-		return  (int)[
+		return (int)[
 			self::B2B => SignPermissionDictionary::SIGN_TEMPLATES,
-			self::B2E => SignPermissionDictionary::SIGN_B2E_TEMPLATES,
+			self::B2E => SignPermissionDictionary::SIGN_B2E_TEMPLATE_READ,
 		][$scenario];
 	}
 

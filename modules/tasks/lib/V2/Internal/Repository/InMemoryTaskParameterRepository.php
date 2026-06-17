@@ -16,6 +16,31 @@ class InMemoryTaskParameterRepository implements TaskParameterRepositoryInterfac
 		unset($this->cache[$taskId]);
 	}
 
+	public function preload(array $taskIds): void
+	{
+		$missing = array_values(array_filter($taskIds, fn(int $id) => !isset($this->cache[$id])));
+
+		if (empty($missing))
+		{
+			return;
+		}
+
+		$codes = ParameterTable::paramsList();
+
+		$rows = ParameterTable::query()
+			->setSelect(['TASK_ID', 'CODE', 'VALUE'])
+			->whereIn('TASK_ID', $missing)
+			->whereIn('CODE', $codes)
+			->fetchAll()
+		;
+
+		foreach ($rows as $row)
+		{
+			$this->cache[(int)$row['TASK_ID']] ??= [];
+			$this->cache[(int)$row['TASK_ID']][(int)$row['CODE']] = $row['VALUE'];
+		}
+	}
+
 	public function matchesSubTasksTime(int $taskId): bool
 	{
 		return $this->getParameter($taskId, ParameterTable::PARAM_SUBTASKS_TIME);
@@ -55,7 +80,7 @@ class InMemoryTaskParameterRepository implements TaskParameterRepositoryInterfac
 	{
 		$parameters = $this->getParametersWithValues($taskId);
 		$value = $parameters[$code] ?? null;
-		
+
 		return $value === 'Y';
 	}
 
@@ -63,7 +88,7 @@ class InMemoryTaskParameterRepository implements TaskParameterRepositoryInterfac
 	{
 		$parameters = $this->getParametersWithValues($taskId);
 		$value = $parameters[$code] ?? null;
-		
+
 		if (!is_numeric($value))
 		{
 			return null;
@@ -76,7 +101,7 @@ class InMemoryTaskParameterRepository implements TaskParameterRepositoryInterfac
 	{
 		$parameters = $this->getParametersWithValues($taskId);
 		$value = $parameters[$code] ?? null;
-		
+
 		if (empty($value) || !is_numeric($value))
 		{
 			return null;

@@ -83,12 +83,12 @@ abstract class Image extends Engine implements IEngine
 				'code' => 'portrait',
 				'name' => Loc::getMessage('AI_IMAGE_ENGINE_FORMAT_PORTRAIT') ?? 'portrait (9:16)',
 				'width' => 1024,
-				'height' => 1792,
+				'height' => 1536,
 			],
 			'landscape' => [
 				'code' => 'landscape',
 				'name' => Loc::getMessage('AI_IMAGE_ENGINE_FORMAT_LANDSCAPE') ?? 'landscape (16:9)',
-				'width' => 1792,
+				'width' => 1536,
 				'height' => 1024,
 			],
 		];

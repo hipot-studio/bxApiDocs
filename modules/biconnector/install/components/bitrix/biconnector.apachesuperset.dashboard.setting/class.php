@@ -10,7 +10,6 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
-use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\IconController;
@@ -100,7 +99,7 @@ class ApacheSupersetDashboardSettingComponent
 					'color' => Buttons\Color::LIGHT_BORDER,
 					'size'  => Buttons\Size::MEDIUM,
 					'click' => new Buttons\JsCode(
-						"top.BX.Helper.show('redirect=detail&code=20337242');",
+						"top.BX.Helper.show('redirect=detail&code=28376530');",
 					),
 					'text' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_DASHBOARD_HELP'),
 					'dataset' => [

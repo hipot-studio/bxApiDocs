@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Service\Timeline\Item\Activity;
 
 use Bitrix\Crm\Activity\Provider\ProviderManager;
 use Bitrix\Crm\Badge\Model\BadgeTable;
+use Bitrix\Crm\Badge\Type\OpenLineStatus;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
@@ -185,9 +186,17 @@ final class OpenLine extends AIActivity
 
 		$userCode = $this->getOpenLineUserCode();
 		$responsibleId = $this->getAssociatedEntityModel()?->get('RESPONSIBLE_ID');
+		$sessionId = $this->getSessionId();
 
-		// the tag will not be removed until the responsible user reads all messages
-		if (
+		if ($sessionId > 0 && OpenLineManager::isProcessedByAiAgent($sessionId))
+		{
+			$tags['processedByAiAgent'] = new Tag(
+				title: Loc::getMessage('CRM_TIMELINE_TAG_PROCESSED_BY_AI_AGENT'),
+				type: Tag::TYPE_LAVENDER,
+				tagId: OpenLineStatus::PROCESSED_BY_AI_AGENT,
+			);
+		}
+		elseif ( // the tag will not be removed until the responsible user reads all messages
 			$this->isScheduled()
 			&& OpenLineManager::getChatUnReadMessagesCount($userCode, $responsibleId) > 0
 		)
@@ -215,11 +224,17 @@ final class OpenLine extends AIActivity
 		{
 			return [
 				Scenario::CONFIRM_FIELDS_SCENARIO,
+				Scenario::SUMMARIZE_SCENARIO, // in menu only
+				Scenario::ANALYZE_COMMUNICATION_SCENARIO, // in menu only
+				Scenario::FULL_SCENARIO, // in menu only
 			];
 		}
 
 		return [
+			Scenario::SUMMARIZE_SCENARIO, // in menu only
 			Scenario::FILL_FIELDS_SCENARIO,
+			Scenario::ANALYZE_COMMUNICATION_SCENARIO, // in menu only
+			Scenario::FULL_SCENARIO, // in menu only
 		];
 	}
 
@@ -381,9 +396,14 @@ final class OpenLine extends AIActivity
 	// endregion
 
 	// region Internal utils
+	private function getSessionId(): int
+	{
+		return (int)($this->getModel()->getAssociatedEntityModel()?->get('ASSOCIATED_ENTITY_ID') ?? 0);
+	}
+
 	private function getSessionData(): array
 	{
-		$sessionId = (int)($this->getModel()->getAssociatedEntityModel()?->get('ASSOCIATED_ENTITY_ID') ?? 0);
+		$sessionId = $this->getSessionId();
 
 		return $sessionId > 0
 			? OpenLineManager::getSessionData($sessionId)

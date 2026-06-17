@@ -707,6 +707,12 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 					->where('ROLE', '=', $this->memberRepository->convertRoleToInt(Role::ASSIGNEE))
 					->whereIn("DOCUMENT.REPRESENTATIVE_ID", $entityIds)
 				)
+				// filter assignee of employee-initiated documents by signer (document creator)
+				->where(\Bitrix\Main\ORM\Query\Query::filter()
+					->where('DOCUMENT.INITIATED_BY_TYPE', '=', Type\Document\InitiatedByType::EMPLOYEE->toInt())
+					->whereIn('DOCUMENT.CREATED_BY_ID', $entityIds)
+					->where('ROLE', '=', $this->memberRepository->convertRoleToInt(Role::ASSIGNEE))
+				)
 			);
 		}
 

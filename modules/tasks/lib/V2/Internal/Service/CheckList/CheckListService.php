@@ -227,7 +227,7 @@ class CheckListService extends BaseCheckListService
 
 	protected function saveChecklists(array $checklists, int $taskId, int $userId): Entity\Task
 	{
-		$checklists = $this->fieldsService->prepare($checklists);
+		$checklists = $this->fieldsService->prepare($checklists, $taskId, Entity\CheckList\Type::Task);
 
 		$items = $this->checkListMapper->mapToNodes($checklists);
 

@@ -5,7 +5,10 @@ namespace Bitrix\HumanResources\Internals\Entity\Provider\UI;
 use Bitrix\HumanResources\Internals\Enum\Provider\UI\DepartmentProviderAvatarMode;
 use Bitrix\HumanResources\Internals\Enum\Provider\UI\DepartmentProviderSelectMode;
 use Bitrix\HumanResources\Internals\Enum\Provider\UI\DepartmentProviderTagStyleMode;
+use Bitrix\HumanResources\Type\NodeMemberRole;
+use Bitrix\HumanResources\Type\StructureAction;
 use Bitrix\Socialnetwork\Integration\UI\EntitySelector\UserProvider;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Loader;
 
@@ -16,6 +19,9 @@ class DepartmentProviderOptions extends BaseProviderOptions
 	public readonly DepartmentProviderSelectMode $selectMode;
 	public readonly bool $shouldCountSubdepartments;
 	public readonly bool $allowOnlyUserDepartments;
+	public readonly bool $onlyManagedHierarchy;
+	/** @var list<NodeMemberRole> */
+	public readonly array $managedHierarchyRoles;
 	public readonly bool $allowSelectRootDepartment;
 	public readonly bool $allowFlatDepartments;
 	public readonly bool $fillDepartmentsTab;
@@ -25,6 +31,8 @@ class DepartmentProviderOptions extends BaseProviderOptions
 	public readonly bool $fillRecentTab;
 	public readonly bool $restricted;
 	public readonly bool $showIcons;
+	public readonly bool $showDepartmentCreationFooter;
+	public readonly bool $showDepartmentCreationFooterInRecentTab;
 	public readonly bool $isForSearch;
 	public readonly bool $isFlatMode;
 	public readonly array $userOptions;
@@ -32,6 +40,7 @@ class DepartmentProviderOptions extends BaseProviderOptions
 
 	/**
 	 * @throws LoaderException
+	 * @throws ArgumentException
 	 */
 	public function __construct(array $rawOptions = [])
 	{
@@ -41,6 +50,8 @@ class DepartmentProviderOptions extends BaseProviderOptions
 		$this->initSelectMode($rawOptions);
 		$this->initAllowFlatDepartments($rawOptions);
 		$this->initAllowOnlyUserDepartments($rawOptions);
+		$this->initOnlyManagedHierarchy($rawOptions);
+		$this->initManagedHierarchyRoles($rawOptions);
 		$this->initAllowSelectRootDepartment($rawOptions);
 		$this->initUserOptions($rawOptions);
 		$this->initFillDepartmentsTab($rawOptions);
@@ -52,6 +63,56 @@ class DepartmentProviderOptions extends BaseProviderOptions
 		$this->initFlatMode($rawOptions);
 		$this->initUseMultipleTabs($rawOptions);
 		$this->initVisualOptions($rawOptions);
+		$this->initShowDepartmentCreationFooter($rawOptions);
+		$this->initShowDepartmentCreationFooterInRecentTab($rawOptions);
+
+		$this->assertOnlyManagedHierarchyCompatibility();
+	}
+
+	/**
+	 * Guards against option combinations that onlyManagedHierarchy is not designed for.
+	 *
+	 * The managed-hierarchy path bypasses fetchNodes and its per-type limits / flat-mode /
+	 * multi-tab / CreateAction branching. Silently ignoring those knobs would produce output
+	 * that diverges from the regular mode without any warning, so we fail fast instead.
+	 *
+	 * The pair (onlyManagedHierarchy + allowOnlyUserDepartments) is also rejected: both
+	 * flags narrow the visible structure, but by different criteria (managing role vs.
+	 * membership). Letting one silently win leaves consumer-side bugs hard to spot.
+	 *
+	 * @throws ArgumentException
+	 */
+	private function assertOnlyManagedHierarchyCompatibility(): void
+	{
+		if (!$this->onlyManagedHierarchy)
+		{
+			return;
+		}
+
+		$conflicts = [];
+		if ($this->isFlatMode)
+		{
+			$conflicts[] = 'flatMode';
+		}
+		if ($this->useMultipleTabs)
+		{
+			$conflicts[] = 'useMultipleTabs';
+		}
+		if ($this->structureAction === StructureAction::CreateAction)
+		{
+			$conflicts[] = 'structureAction=create';
+		}
+		if ($this->allowOnlyUserDepartments)
+		{
+			$conflicts[] = 'allowOnlyUserDepartments';
+		}
+
+		if (!empty($conflicts))
+		{
+			throw new ArgumentException(
+				'onlyManagedHierarchy is not compatible with: ' . implode(', ', $conflicts) . '.',
+			);
+		}
 	}
 
 	private function initNodeActiveFilter(array $options): void
@@ -84,6 +145,56 @@ class DepartmentProviderOptions extends BaseProviderOptions
 			isset($options['allowOnlyUserDepartments'])
 			&& $options['allowOnlyUserDepartments'] === true
 		;
+	}
+
+	/**
+	 * Enables the "managed hierarchy only" mode.
+	 *
+	 * When enabled, the provider narrows the visible structure to the subtrees of nodes where
+	 * the current user holds one of {@see $managedHierarchyRoles} (by default: HEAD /
+	 * DEPUTY_HEAD and their team equivalents). This is used by consumers that must hide
+	 * departments the current user does not manage (tree, search, recent users).
+	 */
+	private function initOnlyManagedHierarchy(array $options): void
+	{
+		$this->onlyManagedHierarchy =
+			isset($options['onlyManagedHierarchy'])
+			&& $options['onlyManagedHierarchy'] === true
+		;
+	}
+
+	/**
+	 * List of roles that count as "managing" in the managed-hierarchy mode.
+	 *
+	 * Consumer may narrow or widen the set (e.g. only HEAD, without deputies) via
+	 * {@code managedHierarchyRoles}, as a list of NodeMemberRole XML IDs
+	 * ("MEMBER_HEAD", "MEMBER_DEPUTY_HEAD", etc).
+	 *
+	 * An empty / missing / fully-invalid list falls back to the default set of four
+	 * managing roles so that getManagedHierarchyNodes() never degrades to "any node the
+	 * user belongs to" (which would happen with an empty RoleFilter).
+	 */
+	private function initManagedHierarchyRoles(array $options): void
+	{
+		$default = [
+			NodeMemberRole::Head,
+			NodeMemberRole::DeputyHead,
+			NodeMemberRole::TeamHead,
+			NodeMemberRole::TeamDeputyHead,
+		];
+
+		$raw = $options['managedHierarchyRoles'] ?? null;
+		if (!is_array($raw) || empty($raw))
+		{
+			$this->managedHierarchyRoles = $default;
+
+			return;
+		}
+
+		$xmlIds = array_values(array_filter($raw, 'is_string'));
+		$roles = NodeMemberRole::fromXmlIds($xmlIds);
+
+		$this->managedHierarchyRoles = empty($roles) ? $default : $roles;
 	}
 
 	private function initAllowSelectRootDepartment(array $options): void
@@ -238,5 +349,21 @@ class DepartmentProviderOptions extends BaseProviderOptions
 		;
 
 		$this->showIcons = (bool)($visualOptions['showIcons'] ?? true);
+	}
+
+	private function initShowDepartmentCreationFooter(array $options): void
+	{
+		$this->showDepartmentCreationFooter =
+			isset($options['showDepartmentCreationFooter'])
+			&& $options['showDepartmentCreationFooter'] === true
+		;
+	}
+
+	private function initShowDepartmentCreationFooterInRecentTab(array $options): void
+	{
+		$this->showDepartmentCreationFooterInRecentTab =
+			isset($options['showDepartmentCreationFooterInRecentTab'])
+			&& $options['showDepartmentCreationFooterInRecentTab'] === true
+		;
 	}
 }

@@ -352,6 +352,8 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	#[Attribute\Access\LogicOr(
 		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT),
 		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_TEMPLATE_EDIT),
+		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_SIGNERS_LIST_EDIT),
+		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_SIGNERS_LIST_REFUSED_EDIT),
 	)]
 	public function getUniqSignersCountAction(
 		array $members,

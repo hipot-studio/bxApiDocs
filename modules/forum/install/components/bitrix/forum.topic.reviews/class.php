@@ -5,6 +5,8 @@ use Bitrix\Forum\Permission;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
 use Bitrix\Forum;
+use Bitrix\Main\ORM\Data\DeleteResult;
+use Bitrix\Main\ORM\Data\UpdateResult;
 
 Loc::loadMessages(__FILE__);
 
@@ -1134,7 +1136,7 @@ final class ForumTopicReviewsComponent extends CBitrixComponent implements Main\
 
 	protected function moderateMessageAction($id, $show = true)
 	{
-		$result = new Main\Orm\Data\UpdateResult();
+		$result = new UpdateResult();
 		$result->setPrimary(['ID' => $id]);
 		if (ForumModerateMessage(['MID' => $id], ($show === true ? 'SHOW' : 'HIDE'), $strErrorMessage, $strOKMessage))
 		{
@@ -1170,7 +1172,7 @@ final class ForumTopicReviewsComponent extends CBitrixComponent implements Main\
 
 	public function deleteMessageAction(int $id)
 	{
-		$result = new Main\Orm\Data\DeleteResult();
+		$result = new DeleteResult();
 		if (ForumDeleteMessage(
 			["MID" => $id],
 			$strErrorMessage,

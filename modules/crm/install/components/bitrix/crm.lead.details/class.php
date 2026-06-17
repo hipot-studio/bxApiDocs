@@ -1964,7 +1964,10 @@ class CCrmLeadDetailsComponent
 				$fileInfo = $file->ResizeImageGet(
 					$assignedByPhotoID,
 					array('width' => 60, 'height'=> 60),
-					BX_RESIZE_IMAGE_EXACT
+					BX_RESIZE_IMAGE_EXACT,
+					false,
+					false,
+					true
 				);
 				if(is_array($fileInfo) && isset($fileInfo['src']))
 				{

@@ -26,7 +26,6 @@ class AddStorageItemCommandHandler
 			->setStorageId($command->storageTypeId)
 			->setCreatedBy($command->createdBy)
 			->setUpdatedBy($command->createdBy)
-			->setCode($command->storageItem->getCode())
 			->setDocumentId($command->storageItem->getDocumentId())
 			->setWorkflowId($command->storageItem->getWorkflowId())
 			->setTemplateId($command->storageItem->getTemplateId())
@@ -46,7 +45,6 @@ class AddStorageItemCommandHandler
 		$storageItem
 			->setCreatedAt($result['CREATED_TIME']->getTimestamp())
 			->setUpdatedAt($result['UPDATED_TIME']->getTimestamp())
-			->setCode($result['CODE'])
 		;
 
 		return $storageItem;

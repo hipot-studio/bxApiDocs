@@ -482,7 +482,7 @@ final class Task extends Base
 
 		if (!empty($updateData))
 		{
-			$executorId = (int)($options['EXECUTOR_ID'] ?? $options['CURRENT_USER'] ?? null);
+			$executorId = (int)($options['EXECUTOR_ID'] ?? $options['~CURRENT_USER'] ?? null);
 			$executorId = $executorId > 0 ? $executorId : $responsibleId;
 
 			$handler = TaskHandler::getHandler($executorId)

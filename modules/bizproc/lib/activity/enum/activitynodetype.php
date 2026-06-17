@@ -11,4 +11,6 @@ enum ActivityNodeType: string
 	case TRIGGER = 'trigger';
 	case FRAME = 'frame';
 	case TOOL = 'tool';
+	case SERVICE = 'service';
+	case OPERATORS = 'operators';
 }

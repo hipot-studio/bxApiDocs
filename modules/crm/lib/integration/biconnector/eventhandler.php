@@ -134,6 +134,7 @@ class EventHandler
 		{
 			$entityName = strtoupper($key);
 			$mapping[$key]['TABLE_DESCRIPTION'] = Localization::getMessage($entityName . '_TABLE', $languageId) ?: $key;
+			$mapping[$key]['TABLE_DESCRIPTION_FULL'] = Localization::getMessage($entityName . '_TABLE_DESCRIPTION_FULL', $languageId) ?? '';
 			foreach ($mapping[$key]['FIELDS'] as $fieldCode => &$fieldInfo)
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] =  Localization::getMessage($entityName . '_FIELD_' . $fieldCode, $languageId) ?: $fieldCode;

@@ -646,20 +646,93 @@ class CUserReportFull
 					$tmDay,
 					true,
 				);
+
+				if (!$this->hasWorkShift($dates['DATE_FROM'], $dates['DATE_TO']))
+				{
+					if ($settings['UF_REPORT_PERIOD'] === 'MONTH')
+					{
+						$dates = $this->extendMonthRecalcRangePastSubmitDay(
+							$dates,
+							$firstWorkDayDate,
+							$submitDayTime,
+						);
+
+						if ($this->hasWorkShift($dates['DATE_FROM'], $dates['DATE_TO']))
+						{
+							return $dates;
+						}
+					}
+
+					return $this->getReportDataForWaitingNewEntry();
+				}
 			}
 			else
 			{
-				// skip report and waiting new entry
-				return [
-					'DATE_FROM' => '',
-					'DATE_TO' => '',
-					'DATE_SUBMIT' => '',
-					'LAST_REPORT' => '',
-				];
+				return $this->getReportDataForWaitingNewEntry();
 			}
 		}
 
 		return $dates;
+	}
+
+	/**
+	 * After a gap, monthly report window is [DATE_FROM..DATE_TO] with DATE_TO on submit day.
+	 * If the first shift in that month starts after DATE_TO, hasWorkShift stays false — extend to month end.
+	 */
+	private function extendMonthRecalcRangePastSubmitDay(
+		array $dates,
+		string $firstWorkDayDate,
+		int $submitDayTime,
+	): array
+	{
+		$shortFormat = CSite::getDateFormat('SHORT', SITE_ID);
+		$fullFormat = CSite::getDateFormat('FULL', SITE_ID);
+
+		$firstWorkDayTimestamp = MakeTimeStamp($firstWorkDayDate, $fullFormat);
+		if (!$firstWorkDayTimestamp)
+		{
+			$firstWorkDayTimestamp = MakeTimeStamp($firstWorkDayDate, $shortFormat);
+		}
+
+		$dateToTimestamp = MakeTimeStamp($dates['DATE_TO'], $shortFormat);
+		if (!$firstWorkDayTimestamp || !$dateToTimestamp)
+		{
+			return $dates;
+		}
+
+		if (!$this->shouldExtendMonthRecalcRangeToMonthEnd($firstWorkDayTimestamp, $dateToTimestamp))
+		{
+			return $dates;
+		}
+
+		$lastDayOfMonthTimestamp = strtotime('last day of this month', $firstWorkDayTimestamp);
+		$dates['DATE_TO'] = ConvertTimeStampForReport($lastDayOfMonthTimestamp, 'SHORT');
+		$dates['DATE_SUBMIT'] = ConvertTimeStampForReport(
+			CTimeMan::RemoveHoursTS($lastDayOfMonthTimestamp) + $submitDayTime,
+		);
+
+		return $dates;
+	}
+
+	private function shouldExtendMonthRecalcRangeToMonthEnd(
+		int $firstWorkDayTimestamp,
+		int $dateToTimestamp,
+	): bool
+	{
+		$isSameMonth = date('Y-m', $firstWorkDayTimestamp) === date('Y-m', $dateToTimestamp);
+		$isFirstWorkdayAfterRangeEnd = date('Y-m-d', $firstWorkDayTimestamp) > date('Y-m-d', $dateToTimestamp);
+
+		return $isSameMonth && $isFirstWorkdayAfterRangeEnd;
+	}
+
+	private function getReportDataForWaitingNewEntry(): array
+	{
+		return [
+			'DATE_FROM' => '',
+			'DATE_TO' => '',
+			'DATE_SUBMIT' => '',
+			'LAST_REPORT' => '',
+		];
 	}
 
 	private function calculateDatesForNewReport(
@@ -712,7 +785,10 @@ class CUserReportFull
 				{
 					if ($isRecalc)
 					{
-						$fields["DATE_FROM"] = strtotime("last mon", $lastReportDate - date('Z'));
+						$weekDay = (int)date('w', $lastReportDate);
+						$fields["DATE_FROM"] = ($weekDay === 0)
+							? strtotime("next mon", $lastReportDate)
+							: strtotime("monday this week", $lastReportDate);
 					}
 					elseif (
 						$lastReportDate > strtotime("last sun")
@@ -774,15 +850,13 @@ class CUserReportFull
 		switch ($reportPeriod)
 		{
 			case 'WEEK':
-				$inputTmDay = date('w', $lastEntriesDate);
-				$tmDayKey = is_numeric($tmDay) ? $this->days[$tmDay - 1] : reset($this->days);
-				$inputTmDayKey = $this->days[$inputTmDay - 1];
-				if ($tmDayKey !== $inputTmDayKey)
+				$inputTmDay = (int)date('w', $lastEntriesDate);
+				$tmDayComparable = is_numeric($tmDay) ? (int)$tmDay : 1;
+				$tmDayKey = is_numeric($tmDay) ? $this->days[$tmDayComparable - 1] : reset($this->days);
+				$inputTmDayComparable = $this->normalizeWeekdayToMondayFirstScale($inputTmDay);
+				if ($this->shouldUsePreviousWeekBoundaryForLastReportDate($inputTmDayComparable, $tmDayComparable))
 				{
-					if ($inputTmDay > $tmDay)
-					{
-						$lastReportDate = strtotime('last ' . $tmDayKey, $lastEntriesDate) - $this->oneDayTime;
-					}
+					$lastReportDate = strtotime('last ' . $tmDayKey, $lastEntriesDate) - $this->oneDayTime;
 				}
 				break;
 			case 'MONTH':
@@ -793,6 +867,21 @@ class CUserReportFull
 		}
 
 		return $lastReportDate;
+	}
+
+	private function normalizeWeekdayToMondayFirstScale(int $phpWeekday): int
+	{
+		// PHP date('w') returns Sunday as 0. Convert it to 7 to keep a consistent 1..7 scale.
+		return ($phpWeekday === 0) ? 7 : $phpWeekday;
+	}
+
+	private function shouldUsePreviousWeekBoundaryForLastReportDate(
+		int $inputTmDayComparable,
+		int $tmDayComparable
+	): bool
+	{
+		// Move to previous configured weekday only when the entry day is later within the same week scale.
+		return $inputTmDayComparable > $tmDayComparable;
 	}
 
 	private function getSubmitDateForNextReport(int $lastReportDate, int $submitDay): int
@@ -914,15 +1003,18 @@ class CUserReportFull
 	{
 		$shortFormat = CSite::getDateFormat('SHORT', SITE_ID);
 
-		$dateFrom = ConvertTimeStamp(MakeTimeStamp($dateFrom, $shortFormat));
-		$dateToInc = ConvertTimeStamp(strtotime('+1 day', MakeTimeStamp($dateTo, $shortFormat)));
+		$dateFromTS = MakeTimeStamp($dateFrom, $shortFormat);
+		$dateToTS = MakeTimeStamp($dateTo, $shortFormat);
+
+		$dateFromConverted = ConvertTimeStamp($dateFromTS);
+		$dateToNextDay = ConvertTimeStamp(strtotime('+1 day', $dateToTS));
 
 		$queryObject = CTimeManEntry::GetList(
 			['ID' => 'ASC'],
 			[
 				'USER_ID' => $this->USER_ID,
-				'>=DATE_START'=> $dateFrom,
-				'<DATE_START' => $dateToInc,
+				'>=DATE_START' => $dateFromConverted,
+				'<DATE_START' => $dateToNextDay,
 			],
 			false,
 			false,
@@ -980,9 +1072,9 @@ class CUserReportFull
 
 	public function GetReportInfo()
 	{
-		global $USER, $CACHE_MANAGER;
+		global $CACHE_MANAGER;
 
-		$cache_id = self::getInfoCacheId($USER->GetID());
+		$cache_id = self::getInfoCacheId($this->USER_ID);
 
 		if($CACHE_MANAGER->Read(86400, $cache_id, 'timeman_report_info'))
 		{
@@ -1006,7 +1098,7 @@ class CUserReportFull
 
 		if (!$this->isNeedSkipReport($arReportInfo, false))
 		{
-			self::clearReportCache($USER->GetID());
+			self::clearReportCache($this->USER_ID);
 
 			return $this->_GetReportInfo();
 		}
@@ -1237,7 +1329,7 @@ class CUserReportFull
 
 	private function getManagersData(int $userId): array
 	{
-		$managers = CTimeMan::getUserManagers($userId);
+		$managers = array_slice(CTimeMan::getUserManagers($userId), 0, 1);
 		$managers[] = $userId;
 
 		$userUrl = COption::getOptionString('intranet', 'path_user', '/company/personal/user/#USER_ID#/', SITE_ID);
@@ -1847,7 +1939,7 @@ class CReportNotifications
 				$gender_suffix = "";
 		}
 
-		$arManagers = CTimeMan::GetUserManagers($arReport["USER_ID"]);
+		$arManagers = array_slice(CTimeMan::getUserManagers($arReport["USER_ID"]), 0, 1);
 		if (is_array($arManagers) && count($arManagers) > 0)
 		{
 			foreach($arManagers as $managerID)
@@ -1881,7 +1973,7 @@ class CReportNotifications
 	public static function Subscribe($USER_ID)
 	{
 		CModule::IncludeModule("socialnetwork");
-		$arManagers = CTimeMan::GetUserManagers($USER_ID);
+		$arManagers = array_slice(CTimeMan::getUserManagers($USER_ID), 0, 1);
 		$arManagers[] = $USER_ID;
 		$arManagers = array_unique($arManagers);
 		if (is_array($arManagers) && count($arManagers) > 0)
@@ -2101,7 +2193,7 @@ class CReportNotifications
 			return false;
 		}
 
-		$arManagers = CTimeMan::GetUserManagers($arReport["USER_ID"]);
+		$arManagers = array_slice(CTimeMan::getUserManagers($arReport["USER_ID"]), 0, 1);
 		$arManagers[] = $arReport["USER_ID"];
 		$arManagers = array_unique($arManagers);
 
@@ -2433,7 +2525,7 @@ class CReportNotifications
 					};
 				}
 
-				$arManagers = CTimeMan::GetUserManagers($arReport["USER_ID"]);
+				$arManagers = array_slice(CTimeMan::getUserManagers($arReport["USER_ID"]), 0, 1);
 				if (is_array($arManagers))
 				{
 					$arUserIDToSend = array_merge($arUserIDToSend, $arManagers);

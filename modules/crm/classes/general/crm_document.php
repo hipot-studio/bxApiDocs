@@ -2852,6 +2852,22 @@ class CCrmDocument
 		];
 	}
 
+	protected static function getBadgeFields(): array
+	{
+		$badge = Loc::getMessage('CRM_DOCUMENT_FIELD_BADGE');
+
+		return [
+			'BADGE.NAME' => [
+				'Name' => $badge . ': ' . Loc::getMessage('CRM_DOCUMENT_FIELD_BADGE_NAME'),
+				'Type' => 'string',
+			],
+			'BADGE.VALUE' => [
+				'Name' => $badge . ': ' . Loc::getMessage('CRM_DOCUMENT_FIELD_BADGE_VALUE'),
+				'Type' => 'string',
+			],
+		];
+	}
+
 	/**
 	 * @deprecated
 	 * @see \Bitrix\Crm\Integration\BizProc\Document\ValueCollection\Base::loadCommunicationValues

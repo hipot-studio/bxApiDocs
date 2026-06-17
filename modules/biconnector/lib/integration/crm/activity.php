@@ -304,6 +304,7 @@ class Activity
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_activity']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_ACTIVITY_TABLE'] ?: 'crm_activity';
+		$result['crm_activity']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_ACTIVITY_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_activity']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_ACTIVITY_FIELD_' . $fieldCode];

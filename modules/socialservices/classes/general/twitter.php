@@ -1,6 +1,8 @@
 <?
 
 use Bitrix\Main\Web\Json;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -49,10 +51,12 @@ class CSocServTwitter extends CSocServAuth
 		$GLOBALS["APPLICATION"]->RestartBuffer();
 
 		$bSuccess = false;
+		$this->logger->info('oauth.auth.start');
 
 		if(!isset($_REQUEST["oauth_token"]) || $_REQUEST["oauth_token"] == '')
 		{
 			$tw = new CTwitterInterface();
+			$tw->setLogger($this->logger);
 			$callback = CSocServUtil::GetCurUrl('auth_service_id='.self::ID, false, false);
 
 			if($tw->GetRequestToken($callback))
@@ -63,6 +67,7 @@ class CSocServTwitter extends CSocServAuth
 		elseif(CSocServAuthManager::CheckUniqueKey())
 		{
 			$tw = new CTwitterInterface(false, false, $_REQUEST["oauth_token"], $_REQUEST["oauth_verifier"]);
+			$tw->setLogger($this->logger);
 			if(($arResult = $tw->GetAccessToken()) !== false && $arResult["user_id"] <> '')
 			{
 				$twUser = $tw->GetUserInfo($arResult["user_id"]);
@@ -105,6 +110,17 @@ class CSocServTwitter extends CSocServAuth
 				$bSuccess = $authError === true;
 			}
 		}
+		else
+		{
+			$this->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'check_key_validation_failed',
+			]);
+		}
+
+		$this->logger->info('oauth.auth.finish', [
+			'success' => $bSuccess,
+			'auth_result' => $bSuccess ? true : SOCSERV_AUTHORISATION_ERROR,
+		]);
 
 		if($bSuccess)
 		{
@@ -238,6 +254,8 @@ class CSocServTwitter extends CSocServAuth
 
 class CTwitterInterface
 {
+	const SERVICE_ID = 'Twitter';
+
 	const REQUEST_URL = "https://api.twitter.com/oauth/request_token";
 	const AUTH_URL = "https://api.twitter.com/oauth/authenticate";
 	const TOKEN_URL = "https://api.twitter.com/oauth/access_token";
@@ -253,6 +271,8 @@ class CTwitterInterface
 	protected $tokenVerifier = false;
 	protected $tokenSecret = false;
 	protected $oauthArray;
+
+	protected LoggerInterface $logger;
 
 	public function __construct($appID = false, $appSecret = false, $token = false, $tokenVerifier = false, $tokenSecret = false)
 	{
@@ -280,6 +300,13 @@ class CTwitterInterface
 		{
 			$this->tokenSecret = $tokenSecret;
 		}
+
+		$this->logger = new NullLogger();
+	}
+
+	public function setLogger(LoggerInterface $logger): void
+	{
+		$this->logger = $logger;
 	}
 
 	protected function GetDefParams()
@@ -326,7 +353,13 @@ class CTwitterInterface
 	public function GetAccessToken()
 	{
 		if(!$this->token || !$this->tokenVerifier || !$this->tokenSecret)
+		{
+			$this->logger->error('oauth.token.exchange_failed', [
+				'reason' => 'missing_oauth_parameters',
+			]);
+
 			return false;
+		}
 
 		$arParams = array_merge($this->GetDefParams(), array(
 			"oauth_token" => $this->token,
@@ -343,6 +376,11 @@ class CTwitterInterface
 			$_SESSION["OAUTH_DATA"] = array("OATOKEN" => $this->token, "OASECRET" => $this->tokenSecret);
 			return $arResult;
 		}
+
+		$this->logger->error('oauth.token.exchange_failed', [
+			'reason' => 'token_not_found_in_response',
+		]);
+
 		return false;
 	}
 
@@ -361,7 +399,15 @@ class CTwitterInterface
 
 		$result = CHTTP::sGetHeader(self::API_URL.'?user_id='.$user_id, $arHeaders, $this->httpTimeout);
 
-		return CUtil::JsObjectToPhp($result);
+		$parsed = CUtil::JsObjectToPhp($result);
+		if (!is_array($parsed) || isset($parsed['errors']))
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'invalid_response',
+			]);
+		}
+
+		return $parsed;
 	}
 
 	public function getUserFriends($user_id, $limit, &$next)

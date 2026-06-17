@@ -615,8 +615,9 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 
 		$nav->setRecordCount($nav->getOffset() + $rowCount);
 		$crmFields = CVoxImplantCrmHelper::resolveEntitiesFields($crmEntities);
+		$activityDescriptions = $this->loadActivityDescriptions($rows);
 		$this->userData = $this->getUserData($this->userIds);
-		$this->arResult["ROWS"] = $this->addCustomColumns($rows, $crmFields);
+		$this->arResult["ROWS"] = $this->addCustomColumns($rows, $crmFields, $activityDescriptions);
 		$this->arResult["SORT"] = $sorting["sort"];
 		$this->arResult["SORT_VARS"] = $sorting["vars"];
 		$this->arResult["NAV_OBJECT"] = $nav;
@@ -634,6 +635,7 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 			array("id" => "RECORD", "name" => GetMessage("TELEPHONY_HEADER_RECORD_2"), "default" => false, "editable" => false),
 			array("id" => "LOG", "name" => GetMessage("TELEPHONY_HEADER_LOG"), "default" => false, "editable" => false),
 			array("id" => "CRM", "name" => GetMessage("TELEPHONY_HEADER_CRM"), "default" => true, "editable" => false),
+			array("id" => "CRM_ACTIVITY_DESCRIPTION", "name" => GetMessage("TELEPHONY_HEADER_CRM_ACTIVITY_DESCRIPTION"), "default" => true, "editable" => false),
 			array("id" => "COMMENT", "name" => GetMessage("TELEPHONY_HEADER_COMMENT"), "default" => true, "editable" => false),
 		);
 	}
@@ -704,7 +706,50 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 		return $arUsers;
 	}
 
-	function addCustomColumns(array $data, array $crmFields)
+	protected function loadActivityDescriptions(array $rows): array
+	{
+		$activityIds = [];
+		foreach ($rows as $row)
+		{
+			$id = (int)($row['data']['CRM_ACTIVITY_ID'] ?? 0);
+			if ($id > 0)
+			{
+				$activityIds[] = $id;
+			}
+		}
+
+		if (empty($activityIds) || !Loader::includeModule('crm'))
+		{
+			return [];
+		}
+
+		$result = [];
+		$activities = \Bitrix\Crm\Service\Container::getInstance()
+			->getActivityBroker()
+			->getBunchByIds(array_unique($activityIds));
+
+		foreach ($activities as $id => $activity)
+		{
+			$desc = (string)$activity['DESCRIPTION'];
+			if ((int)$activity['DESCRIPTION_TYPE'] === \CCrmContentType::Html)
+			{
+				$desc = html_entity_decode(
+					\Bitrix\Crm\Format\TextHelper::convertHtmlToText($desc),
+					ENT_QUOTES | ENT_HTML5,
+					SITE_CHARSET
+				);
+			}
+			elseif ((int)$activity['DESCRIPTION_TYPE'] === \CCrmContentType::BBCode)
+			{
+				$desc = strip_tags((new \CTextParser())->convertText($desc));
+			}
+			$result[$id] = $desc;
+		}
+
+		return $result;
+	}
+
+	function addCustomColumns(array $data, array $crmFields, array $activityDescriptions = [])
 	{
 		$allowedUserIdsToViewRecord = Helper::getAllowedUserIds(
 			Helper::getCurrentUserId(),
@@ -729,11 +774,17 @@ class CVoximplantStatisticDetailComponent extends \CBitrixComponent implements \
 				);
 			}
 
+			$activityId = (int)($row['data']['CRM_ACTIVITY_ID'] ?? 0);
+			$activityDesc = ($activityId > 0 && isset($activityDescriptions[$activityId]))
+				? htmlspecialcharsbx($activityDescriptions[$activityId])
+				: '-';
+
 			$row["columns"] = array(
 				"USER_NAME" => $this->getUserHtml($row['data']['PORTAL_USER_ID'], $row["data"]["PHONE_NUMBER"], $row['data']['CALL_ICON']),
 				"LOG" => $row["data"]["CALL_LOG"] ? '<a href="'.$row["data"]["CALL_LOG"].'" target="_blank" class="tel-icon-log"></a>' : '-',
 				"RECORD" => $recordHtml,
-				"CRM" => $this->getCrmHtml($row['data'], $crmFields)
+				"CRM" => $this->getCrmHtml($row['data'], $crmFields),
+				"CRM_ACTIVITY_DESCRIPTION" => $activityDesc,
 			);
 			$result[$key] = $row;
 		}

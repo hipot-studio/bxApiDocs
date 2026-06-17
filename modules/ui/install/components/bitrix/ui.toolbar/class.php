@@ -22,7 +22,7 @@ class UIToolbarComponent extends CBitrixComponent
 	 */
 	public function executeComponent()
 	{
-		Extension::load(["ui.buttons", "ui.buttons.icons", 'ui.icon-set.outline', 'ui.icon-set.api.core']);
+		Extension::load(["ui.buttons", "ui.buttons.icons", 'ui.icon-set.outline', 'ui.icon-set.api.core', 'ui.hint']);
 
 		$this->toolbarId = $this->arParams["TOOLBAR_ID"] ?? Toolbar::DEFAULT_ID;
 

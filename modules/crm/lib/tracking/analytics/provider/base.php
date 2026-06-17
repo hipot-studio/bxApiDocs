@@ -9,7 +9,7 @@ namespace Bitrix\Crm\Tracking\Analytics\Provider;
 
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Orm;
+use Bitrix\Main\ORM;
 use Bitrix\Main\Config;
 use Bitrix\Main\Data\Cache;
 
@@ -175,7 +175,7 @@ abstract class Base
 		return in_array(self::TrackingSourceId, $this->group);
 	}
 
-	private function prepareQuery(Orm\Query\Query $query, $entityTypeId, array $options = [])
+	private function prepareQuery(ORM\Query\Query $query, $entityTypeId, array $options = [])
 	{
 		$mainSelect = [];
 		$query->setSelect(array_merge(
@@ -193,21 +193,21 @@ abstract class Base
 		if ($this->isGroupedByTrackingSource())
 		{
 			$query->addSelect(
-				new Orm\Fields\ExpressionField(self::TrackingSourceId, 'COALESCE(%s, 0)', ['TRACE_ENTITY.TRACE.SOURCE_ID'])
+				new ORM\Fields\ExpressionField(self::TrackingSourceId, 'COALESCE(%s, 0)', ['TRACE_ENTITY.TRACE.SOURCE_ID'])
 			);
 			$mainSelect[] = self::TrackingSourceId;
 		}
 		else
 		{
 			$query->addFilter('>TRACE_ENTITY.TRACE.SOURCE_ID', 0);
-			$query->registerRuntimeField(new Orm\Fields\ExpressionField(
+			$query->registerRuntimeField(new ORM\Fields\ExpressionField(
 				self::TrackingSourceId, '\'summary\''
 			));
 			$query->addSelect(self::TrackingSourceId);
 			$mainSelect[] = self::TrackingSourceId;
 		}
 
-		$query->registerRuntimeField(new Orm\Fields\Relations\Reference(
+		$query->registerRuntimeField(new ORM\Fields\Relations\Reference(
 			'TRACE_ENTITY',
 			Tracking\Internals\TraceEntityTable::class,
 			[
@@ -238,11 +238,11 @@ abstract class Base
 
 
 		$query->addGroup('ID');
-		$mainQuery = (new Orm\Query\Query($query));
-		$mainQuery->registerRuntimeField(new Orm\Fields\ExpressionField(
+		$mainQuery = (new ORM\Query\Query($query));
+		$mainQuery->registerRuntimeField(new ORM\Fields\ExpressionField(
 			'CNT', 'COUNT(*)'
 		));
-		$mainQuery->registerRuntimeField(new Orm\Fields\ExpressionField(
+		$mainQuery->registerRuntimeField(new ORM\Fields\ExpressionField(
 			'SUM', 'SUM(%s)', ['OPPORTUNITY_ACCOUNT']
 		));
 
@@ -258,7 +258,7 @@ abstract class Base
 		return $mainQuery;
 	}
 
-	protected function performQuery(Orm\Query\Query $query, $entityTypeId, array $options = [])
+	protected function performQuery(ORM\Query\Query $query, $entityTypeId, array $options = [])
 	{
 		$r = $this->prepareQuery($query, $entityTypeId, $options)
 			->exec();

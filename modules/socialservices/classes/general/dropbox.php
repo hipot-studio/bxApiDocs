@@ -1,4 +1,6 @@
 <?php
+use Bitrix\Socialservices\OAuth\OAuthErrorCode;
+use Bitrix\Main\Web\Uri;
 IncludeModuleLangFile(__FILE__);
 
 class CSocServDropboxAuth extends CSocServAuth
@@ -25,6 +27,8 @@ class CSocServDropboxAuth extends CSocServAuth
 		{
 			$this->entityOAuth->setCode($code);
 		}
+
+		$this->entityOAuth->setLogger($this->logger);
 
 		return $this->entityOAuth;
 	}
@@ -63,29 +67,28 @@ class CSocServDropboxAuth extends CSocServAuth
 
 	public function getUrl($location = 'opener', $addScope = null, $arParams = array())
 	{
-		global $APPLICATION;
-
 		$this->entityOAuth = $this->getEntityOAuth();
-		if(IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
+		$stateFields = [
+			'site_id' => SITE_ID,
+			'check_key' => \CSocServAuthManager::getUniqueKey(),
+			'redirect_url' => $this->getRedirectUrl($arParams),
+			'mode' => $location,
+		];
+		$state = \Bitrix\Socialservices\OAuth\StateService::getInstance()->createState($stateFields);
+		if ($this->isCloudPortal())
 		{
-			$redirect_uri = static::CONTROLLER_URL."/redirect.php";
-			$state = CDropboxOAuthInterface::GetRedirectURI()."?check_key=".\CSocServAuthManager::getUniqueKey()."&state=";
-			$backurl = $APPLICATION->GetCurPageParam('', array("logout", "auth_service_error", "auth_service_id", "backurl"));
+			$portalRedirectUri = new Uri(
+				CDropboxOAuthInterface::GetRedirectURI()
+			);
+			$portalRedirectUri->addParams([
+				'state' => $state,
+			]);
 
-			$stateIntoState = 'mode=' . $location;
-			if (isset($arParams['BACKURL']))
-			{
-				$stateIntoState .= '&redirect_url=' . urlencode($arParams['BACKURL']);
-			}
-			else
-			{
-				$stateIntoState .= "&backurl=" . urlencode($backurl);
-			}
-			$state .= urlencode("state=" . urlencode($stateIntoState));
+			$state = (string)$portalRedirectUri;
+			$redirect_uri = static::CONTROLLER_URL . '/redirect.php';
 		}
 		else
 		{
-			$state = 'site_id='.SITE_ID.'&backurl='.urlencode($APPLICATION->GetCurPageParam('check_key='.\CSocServAuthManager::getUniqueKey(), array("logout", "auth_service_error", "auth_service_id", "backurl"))).'&mode='.$location.(isset($arParams['BACKURL']) ? '&redirect_url='.urlencode($arParams['BACKURL']) : '');
 			$redirect_uri = CDropboxOAuthInterface::GetRedirectURI();
 		}
 
@@ -147,19 +150,22 @@ class CSocServDropboxAuth extends CSocServAuth
 		global $APPLICATION;
 		$APPLICATION->RestartBuffer();
 
-		$bSuccess = false;
 		$bProcessState = false;
 		$authError = SOCSERV_AUTHORISATION_ERROR;
+		$this->logger->info('oauth.auth.start');
 
-		if(
-			isset($_REQUEST["code"]) && $_REQUEST["code"] <> '' && CSocServAuthManager::CheckUniqueKey()
-		)
+		if (empty($_REQUEST['code']))
+		{
+			$this->logger->error('oauth.request.invalid_code');
+			$this->sendOauthError(OAuthErrorCode::MissingCode);
+		}
+		elseif (CSocServAuthManager::CheckUniqueKey())
 		{
 			$bProcessState = true;
 
 			$this->entityOAuth = $this->getEntityOAuth($_REQUEST['code']);
 
-			if(IsModuleInstalled('bitrix24') && defined('BX24_HOST_NAME'))
+			if ($this->isCloudPortal())
 			{
 				$redirect_uri = static::CONTROLLER_URL."/redirect.php";
 			}
@@ -175,76 +181,47 @@ class CSocServDropboxAuth extends CSocServAuth
 				{
 					$arFields = self::prepareUser($arDropboxUser);
 					$authError = $this->AuthorizeUser($arFields);
-					$bSuccess = $authError === true;
+				}
+				else
+				{
+					$this->logger->error('oauth.user.fetch_failed', [
+						'reason' => 'invalid_response_payload',
+					]);
 				}
 			}
+			else
+			{
+				$this->logger->error('oauth.token.exchange_failed', [
+					'reason' => 'get_access_token_failed',
+				]);
+			}
+		}
+		else
+		{
+			$this->logger->error('oauth.request.invalid_check_key', [
+				'reason' => 'check_key_validation_failed',
+			]);
+			$this->sendOauthError(OAuthErrorCode::InvalidCheckKey);
 		}
 
-		$url = ($APPLICATION->GetCurDir() == "/login/") ? "" : $APPLICATION->GetCurDir();
-		$aRemove = array("logout", "auth_service_error", "auth_service_id", "code", "error_reason", "error", "error_description", "check_key", "current_fieldset");
+		$this->logger->info('oauth.auth.finish', [
+			'success' => ($authError === true),
+			'auth_result' => $authError,
+		]);
 
 		if(!$bProcessState)
 		{
 			unset($_REQUEST["state"]);
 		}
 
+		$arState = $this->getState();
 		$mode = 'opener';
-		$addParams = true;
-		if(isset($_REQUEST["state"]))
+		if(isset($arState['mode']))
 		{
-			$arState = array();
-			parse_str($_REQUEST["state"], $arState);
-
-			if(isset($arState['backurl']) || isset($arState['redirect_url']))
-			{
-				$url = !empty($arState['redirect_url']) ? $arState['redirect_url'] : $arState['backurl'];
-				if(mb_substr($url, 0, 1) !== "#")
-				{
-					$parseUrl = parse_url($url);
-
-					$urlPath = $parseUrl["path"];
-					$arUrlQuery = explode('&', $parseUrl["query"]);
-
-					foreach($arUrlQuery as $key => $value)
-					{
-						foreach($aRemove as $param)
-						{
-							if(mb_strpos($value, $param."=") === 0)
-							{
-								unset($arUrlQuery[$key]);
-								break;
-							}
-						}
-					}
-
-					$url = (!empty($arUrlQuery)) ? $urlPath.'?'.implode("&", $arUrlQuery) : $urlPath;
-				}
-				else
-				{
-					$addParams = false;
-				}
-			}
-
-			if(isset($arState['mode']))
-			{
-				$mode = $arState['mode'];
-			}
+			$mode = $arState['mode'];
 		}
-
-		if($authError === SOCSERV_REGISTRATION_DENY)
-		{
-			$url = (preg_match("/\?/", $url)) ? $url.'&' : $url.'?';
-			$url .= 'auth_service_id='.static::ID.'&auth_service_error='.SOCSERV_REGISTRATION_DENY;
-		}
-		elseif($bSuccess !== true)
-		{
-			$url = (isset($urlPath)) ? $urlPath.'?auth_service_id='.static::ID.'&auth_service_error='.$authError : $APPLICATION->GetCurPageParam(('auth_service_id='.static::ID.'&auth_service_error='.$authError), $aRemove);
-		}
-
-		if($addParams && CModule::IncludeModule("socialnetwork") && mb_strpos($url, "current_fieldset=") === false)
-		{
-			$url = (preg_match("/\?/", $url)) ? $url."&current_fieldset=SOCSERV" : $url."?current_fieldset=SOCSERV";
-		}
+		$url = $this->getRedirectUriAfterAuthorize($authError, static::ID);
+		$addParams = !str_starts_with($url, '#');
 
 		$this->onAfterWebAuth($addParams, $mode, $url);
 
@@ -310,6 +287,10 @@ class CDropboxOAuthInterface extends CSocServOAuthTransport
 
 		if($this->code === false)
 		{
+			$this->logger->error('oauth.token.exchange_failed', [
+				'reason' => 'empty_code',
+			]);
+
 			return false;
 		}
 
@@ -338,13 +319,24 @@ class CDropboxOAuthInterface extends CSocServOAuthTransport
 
 			return true;
 		}
+
+		$this->logger->error('oauth.token.exchange_failed', [
+			'reason' => 'token_not_found_in_response',
+		]);
+
 		return false;
 	}
 
 	public function GetCurrentUser()
 	{
 		if($this->access_token === false)
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'empty_access_token',
+			]);
+
 			return false;
+		}
 
 		$h = new \Bitrix\Main\Web\HttpClient();
 		$h->setHeader("Authorization", "Bearer ".$this->access_token);
@@ -352,13 +344,30 @@ class CDropboxOAuthInterface extends CSocServOAuthTransport
 
 		$result = $h->post(static::ACCOUNT_URL);
 
-		$result = \Bitrix\Main\Web\Json::decode($result);
+		try
+		{
+			$result = \Bitrix\Main\Web\Json::decode($result);
+		}
+		catch (\Bitrix\Main\ArgumentException $e)
+		{
+			$this->logger->error('oauth.user.fetch_failed', [
+				'reason' => 'invalid_response',
+			]);
+
+			return false;
+		}
 
 		if(is_array($result))
 		{
 			$result["uid"] = $this->oauthResult['uid'];
 			$result["access_token"] = $this->access_token;
+
+			return $result;
 		}
+
+		$this->logger->error('oauth.user.fetch_failed', [
+			'reason' => 'invalid_response_payload',
+		]);
 
 		return $result;
 	}

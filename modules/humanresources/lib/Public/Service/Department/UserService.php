@@ -2,14 +2,16 @@
 
 namespace Bitrix\HumanResources\Public\Service\Department;
 
+use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Service\UserService as InternalUserService;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
-use Bitrix\HumanResources\Type\StructureRole;
+use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Util\StructureHelper;
 use Bitrix\Main\DB\SqlQueryException;
 
@@ -25,9 +27,9 @@ class UserService
 	 */
 	public function isHeadOfDepartment(int $userId): bool
 	{
-		$headMember = PublicContainer::getUserService()->findByUserIdAndStructureRoles(
+		$headMember = PublicContainer::getUserService()->findByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::HEAD],
+			[NodeMember::DEFAULT_ROLE_XML_ID['HEAD']],
 		);
 
 		return $headMember !== null;
@@ -42,9 +44,9 @@ class UserService
 	 */
 	public function isDeputyOfDepartment(int $userId): bool
 	{
-		$headMember = PublicContainer::getUserService()->findByUserIdAndStructureRoles(
+		$headMember = PublicContainer::getUserService()->findByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::DEPUTY_HEAD],
+			[NodeMember::DEFAULT_ROLE_XML_ID['DEPUTY_HEAD']],
 		);
 
 		return $headMember !== null;
@@ -59,9 +61,9 @@ class UserService
 	 */
 	public function isHeadOrDeputyOfDepartment(int $userId): bool
 	{
-		$headMember = PublicContainer::getUserService()->findByUserIdAndStructureRoles(
+		$headMember = PublicContainer::getUserService()->findByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::HEAD, StructureRole::DEPUTY_HEAD],
+			[NodeMember::DEFAULT_ROLE_XML_ID['HEAD'], NodeMember::DEFAULT_ROLE_XML_ID['DEPUTY_HEAD']],
 		);
 
 		return $headMember !== null;
@@ -92,9 +94,9 @@ class UserService
 	 */
 	public function getDepartmentIdsWhereUserIsHead(int $userId): array
 	{
-		$nodeMembers = PublicContainer::getUserService()->findAllByUserIdAndStructureRoles(
+		$nodeMembers = PublicContainer::getUserService()->findAllByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::HEAD],
+			[NodeMember::DEFAULT_ROLE_XML_ID['HEAD']],
 		);
 
 		return $nodeMembers->getNodeIds();
@@ -108,9 +110,9 @@ class UserService
 	 */
 	public function getDepartmentIdsWhereUserIsDeputy(int $userId): array
 	{
-		$nodeMembers = PublicContainer::getUserService()->findAllByUserIdAndStructureRoles(
+		$nodeMembers = PublicContainer::getUserService()->findAllByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::DEPUTY_HEAD],
+			[NodeMember::DEFAULT_ROLE_XML_ID['DEPUTY_HEAD']],
 		);
 
 		return $nodeMembers->getNodeIds();
@@ -124,9 +126,9 @@ class UserService
 	 */
 	public function getNodeMembersWhereUserIsHeadOrDeputy(int $userId): NodeMemberCollection
 	{
-		return PublicContainer::getUserService()->findAllByUserIdAndStructureRoles(
+		return PublicContainer::getUserService()->findAllByUserIdAndRoleXmlIds(
 			$userId,
-			[StructureRole::HEAD, StructureRole::DEPUTY_HEAD],
+			[NodeMember::DEFAULT_ROLE_XML_ID['HEAD'], NodeMember::DEFAULT_ROLE_XML_ID['DEPUTY_HEAD']],
 		);
 	}
 	//endregion
@@ -249,6 +251,91 @@ class UserService
 		}
 
 		return InternalContainer::getNodeMemberRepository()->countUniqueUsersByNodeIdWithSubNodes($rootDepartment->id);
+	}
+
+	/**
+	 * Returns true if the user has at least one node_member row on an existing DEPARTMENT node.
+	 *
+	 * @param int $userId
+	 * @return bool
+	 */
+	public function isEmployee(int $userId): bool
+	{
+		return Container::getUserService()->isEmployee($userId);
+	}
+	//endregion
+
+	//region mutators
+	/**
+	 * Moves the user into a single target department and clears the rest of their
+	 * department links. Intended for restoring users that ended up in a broken state
+	 * (no department links, only orphan rows, or links spread across stale departments).
+	 *
+	 * After the call {@see isEmployee()} is guaranteed to return true.
+	 *
+	 * UF_DEPARTMENT is synchronised in the background by
+	 * {@see \Bitrix\HumanResources\Compatibility\Event\NewToOldEventHandler} — this method
+	 * never writes UF_DEPARTMENT directly.
+	 *
+	 * @throws \InvalidArgumentException if $departmentId does not point to a DEPARTMENT node
+	 */
+	public function assignToSingleDepartment(int $userId, int $departmentId): void
+	{
+		$nodeRepository = Container::getNodeRepository();
+		$memberRepository = Container::getNodeMemberRepository();
+		$internalMemberRepository = InternalContainer::getNodeMemberRepository();
+
+		$targetNode = $nodeRepository->getById($departmentId);
+		if ($targetNode === null || $targetNode->type !== NodeEntityType::DEPARTMENT)
+		{
+			throw new \InvalidArgumentException('Target node is not a valid department');
+		}
+
+		$departmentLinks = $memberRepository->findAllByEntityIdAndEntityTypeAndNodeType(
+			$userId,
+			MemberEntityType::USER,
+			NodeEntityType::DEPARTMENT,
+			activeFilter: NodeActiveFilter::ALL,
+		);
+
+		$targetLink = null;
+		$linksToRemove = new NodeMemberCollection();
+		foreach ($departmentLinks as $link)
+		{
+			if ($link->nodeId === $departmentId)
+			{
+				$targetLink = $link;
+				continue;
+			}
+
+			$linksToRemove->add($link);
+		}
+
+		if (!$linksToRemove->empty())
+		{
+			$memberRepository->removeByCollection($linksToRemove);
+		}
+
+		if ($targetLink === null)
+		{
+			$memberRepository->create(new NodeMember(
+				entityType: MemberEntityType::USER,
+				entityId: $userId,
+				nodeId: $departmentId,
+				active: true,
+			));
+		}
+		else
+		{
+			// Always emit OnMemberUpdated (inside setActiveById) — even for no-op active=Y,
+			// UF_DEPARTMENT may have drifted (e.g. cleared during dismissal but not restored
+			// because RestoreUserHandler doesn't pass UF_DEPARTMENT to CUser::Update).
+			$internalMemberRepository->setActiveById($targetLink->id, true);
+		}
+
+		Container::getCacheManager()->clean(
+			sprintf(InternalUserService::USER_DEPARTMENT_EXISTS_KEY, $userId),
+		);
 	}
 	//endregion
 }

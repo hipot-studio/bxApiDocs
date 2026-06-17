@@ -4,15 +4,21 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository\Template;
 
+use Bitrix\Main\ORM\Query\Expression;
+use Bitrix\Main\ORM\Query\QueryHelper;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Tasks\V2\Internal\Entity\CheckList\Type;
 use Bitrix\Tasks\V2\Internal\Entity\Template;
+use Bitrix\Tasks\V2\Internal\Entity\Template\TemplateCollection;
+use Bitrix\Tasks\Internals\Task;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\CheckListRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\GroupRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TemplateMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Template\List\AccessChecker;
+use Bitrix\Tasks\V2\Internal\Repository\Template\List\Field;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 
 class TemplateReadRepository implements TemplateReadRepositoryInterface
@@ -28,6 +34,7 @@ class TemplateReadRepository implements TemplateReadRepositoryInterface
 		private readonly TemplatePermissionRepository $templatePermissionRepository,
 		private readonly SubTemplateRepositoryInterface $subTemplateRepository,
 		private readonly TemplateMapper $mapper,
+		private readonly List\QueryBuilder $queryBuilder,
 	)
 	{
 	}
@@ -191,5 +198,87 @@ class TemplateReadRepository implements TemplateReadRepositoryInterface
 		}
 
 		return $value;
+	}
+
+	public function getList(
+		List\Select $select,
+		List\Filter $filter,
+		List\Order $order,
+		int $limit = self::DEFAULT_LIMIT,
+		int $offset = 0
+	): TemplateCollection
+	{
+		$userId = $filter->getUserIdForAccessCheck();
+		if ($userId !== null)
+		{
+			$accessChecker = new AccessChecker($userId);
+			if (!$accessChecker->hasAccess())
+			{
+				return new TemplateCollection();
+			}
+		}
+
+		if (empty($select->getList()))
+		{
+			$select = new List\Select([Field::Id]);
+		}
+
+		if (empty($order->getList()))
+		{
+			$order = new List\Order([[Field::Id, 'ASC']]);
+		}
+
+		$query = $this->queryBuilder->buildListQuery($select, $filter, $order, $limit, $offset);
+
+		/** @var Task\Template\TemplateCollection $templatesCollection */
+		$templatesCollection = QueryHelper::decompose(query: $query, separateRelations: false);
+
+		return $this->prepareCollection($templatesCollection, $select);
+	}
+
+	public function getCount(List\Filter $filter): int
+	{
+		$query = $this->queryBuilder->buildListQuery(new List\Select(), $filter, new List\Order(), 1, 0);
+
+		$query->setSelect([])
+			->addSelect((new Expression())->countDistinct('ID'), 'cnt')
+		;
+
+		$result = $query->fetch();
+
+		return $result === false ? 0 : (int)$result['cnt'];
+	}
+
+	protected function prepareCollection(
+		Task\Template\TemplateCollection $templatesCollection,
+		List\Select $select
+	): TemplateCollection
+	{
+		$members = null;
+		if ($select->has(Field::Members))
+		{
+			$memberIds = [];
+			foreach ($templatesCollection as $templateObject)
+			{
+				$memberIds[] = $templateObject->getMembers()->getUserIdList();
+				$memberIds[] = array_filter([$templateObject->getCreatedBy(), $templateObject->getResponsibleId()]);
+			}
+
+			$memberIds = array_values(array_unique(array_merge(...$memberIds)));
+			$members = $this->userRepository->getByIds($memberIds);
+		}
+
+		$list = new TemplateCollection();
+		foreach ($templatesCollection as $templateObject)
+		{
+			$list->add(
+				$this->mapper->mapListItem(
+					templateObject: $templateObject,
+					members: $members,
+				)
+			);
+		}
+
+		return $list;
 	}
 }

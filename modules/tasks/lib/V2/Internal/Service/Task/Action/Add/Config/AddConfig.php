@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config;
 
 use Bitrix\Tasks\Processor;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
 
 class AddConfig
 {
@@ -22,6 +23,7 @@ class AddConfig
 	private ?string $eventGuid;
 	private RuntimeData $runtime;
 	private ?Processor\Task\Result $shiftResult = null;
+	private ?AnalyticsData $analyticsData;
 
 	public function __construct(
 		int $userId,
@@ -36,7 +38,8 @@ class AddConfig
 		bool $useConsistency = false,
 		bool $checkUserFields = true,
 		?string $eventGuid = null,
-		RuntimeData $runtime = new RuntimeData()
+		RuntimeData $runtime = new RuntimeData(),
+		?AnalyticsData $analyticsData = null,
 	) {
 		$this->userId = $userId;
 		$this->fromAgent = $fromAgent;
@@ -51,6 +54,7 @@ class AddConfig
 		$this->checkUserFields = $checkUserFields;
 		$this->eventGuid = $eventGuid;
 		$this->runtime = $runtime;
+		$this->analyticsData = $analyticsData;
 	}
 
 	// Getter methods
@@ -132,6 +136,11 @@ class AddConfig
 	public function getRuntime(): RuntimeData
 	{
 		return $this->runtime;
+	}
+
+	public function getAnalyticsData(): ?AnalyticsData
+	{
+		return $this->analyticsData;
 	}
 
 	public function getCheckUserFields(): bool

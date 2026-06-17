@@ -6,9 +6,11 @@
  * @copyright 2001-2013 Bitrix
  */
 
+use Bitrix\Tasks\Helper;
 use Bitrix\Tasks\Integration\Rest\ElapsedTimeTable;
 use Bitrix\Tasks\Util\User;
 use \Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\V2\Internal\Entity\Analytics;
 
 /**
  * Class CTaskElapsedItem
@@ -300,6 +302,20 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 				$oItem     = self::add($oTaskItem, $arFields);
 
 				$returnValue = $oItem->getId();
+
+				if ($returnValue > 0)
+				{
+					Helper\Analytics::getInstance($executiveUserId)->onTimeTrackingAdd(
+						event: Analytics\Event::TimeTracking->value,
+						section: Analytics\Section::Tasks->value,
+						element: Analytics\Element::Auto->value,
+						subSection: Analytics\SubSection::Rest->value,
+						type: Analytics\Type::ManualTimeTracking->value,
+						params: [
+							'p1' => 'taskId_' . $taskId,
+						],
+					);
+				}
 			}
 			elseif ($methodName === 'getlist')
 			{

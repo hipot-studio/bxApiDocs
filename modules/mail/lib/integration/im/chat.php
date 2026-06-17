@@ -6,6 +6,7 @@ use Bitrix\Im\Common;
 use Bitrix\Im\Dialog;
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Mail\Helper\Message;
+use Bitrix\Mail\Helper\MessageAccess;
 use Bitrix\Mail\Integration\Intranet\Secretary;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -40,7 +41,22 @@ class Chat
 			);
 		}
 
-		$entityId = Common::isChatId($dialogId) ? Dialog::getChatId($dialogId) : (int) $dialogId;
+		$chatId = self::resolveDialogChatId($dialogId, $userId);
+		if ($chatId === null)
+		{
+			$result->addError(new Error('create mail chat: failed to resolve dialog chat id'));
+
+			return $result;
+		}
+
+		if (!MessageAccess::checkAccessForChat($chatId, $userId))
+		{
+			$result->addError(new Error('create mail chat: user is not a chat member'));
+
+			return $result;
+		}
+
+		$entityId = Common::isChatId($dialogId) ? $chatId : (int)$dialogId;
 		$type = Common::isChatId($dialogId) ? Message::ENTITY_TYPE_CHAT_MESSAGE : Message::ENTITY_TYPE_USER_MESSAGE;
 
 		$isAccessProvided =
@@ -68,7 +84,27 @@ class Chat
 	/**
 	 * @throws LoaderException
 	 */
-	public static function postMailChatDiscussMessage(\Bitrix\Mail\Item\Message $message, string $dialogId, int $userId): Result
+	public static function resolveDialogChatId(string $dialogId, int $userId): ?int
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return null;
+		}
+
+		$chatId = (int)Dialog::getChatId($dialogId, $userId);
+
+		return $chatId > 0 ? $chatId : null;
+	}
+
+	/**
+	 * @throws LoaderException
+	 */
+	public static function postMailChatDiscussMessage(
+		\Bitrix\Mail\Item\Message $message,
+		string $dialogId,
+		int $userId,
+		?string $messageUrl = null,
+	): Result
 	{
 		$result = new Result();
 		if (!Loader::includeModule('im'))
@@ -77,9 +113,15 @@ class Chat
 		}
 
 		$attach = new CIMMessageParamAttach(null, CIMMessageParamAttach::CHAT);
+		$dateTimestamp = $message->getDate()->getTimestamp();
+		if ($messageUrl === null)
+		{
+			$dateTimestamp += \CTimeZone::getOffset();
+		}
+
 		$attach->AddMessage(Loc::getMessage(
 			'MAIL_POST_DISCUSS_MESSAGE_RECEIVED_DATE',
-			['#RECEIVED_DATE#' => \FormatDate('j F Y, H:i', $message->getDate()->getTimestamp())]
+			['#RECEIVED_DATE#' => \FormatDate('j F Y, H:i', $dateTimestamp)]
 		));
 		$attach->AddMessage(Loc::getMessage(
 			'MAIL_POST_DISCUSS_MESSAGE_FROM',
@@ -94,9 +136,16 @@ class Chat
 			['#BODY#' => trim(htmlspecialcharsbx(mb_substr($message->getBody(), 0, 200)))]
 		));
 
-		$pathToMessage = Common::isChatId($dialogId)
-			? Secretary::getMessageUrlForChatMessage($message->getId(), Dialog::getChatId($dialogId))
-			: Secretary::getMessageUrlForUserMessage($message->getId(), $dialogId)
+		$pathToMessage = $messageUrl
+			?? (Common::isChatId($dialogId)
+				? Secretary::getMessageUrlForChatMessage(
+					$message->getId(),
+					(int)Dialog::getChatId($dialogId, $userId),
+				)
+				: Secretary::getMessageUrlForUserMessage(
+					$message->getId(),
+					(int)$dialogId,
+				))
 		;
 		$chatMessageFields = [
 			'URL_PREVIEW' => 'N',

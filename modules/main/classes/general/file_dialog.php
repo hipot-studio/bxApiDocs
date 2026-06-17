@@ -110,13 +110,13 @@ class CAdminFileDialog
 					Params = {};
 
 				<?if(!$USER->CanDoOperation('fileman_view_file_structure')):?>
-					<?echo '
+					<?= '
 					alert(mess_ACCESS_DENIED);
 					return;
 					'?>
 				<?else:?>
 					var UserConfig;
-				<?
+				<?php
 				$fd_config = stripslashes(CUserOptions::GetOption("fileman", "file_dialog_config", "N"));
 				if ($fd_config == "N" || $arConfig['saveConfig'] === false)
 				{
@@ -129,7 +129,7 @@ class CAdminFileDialog
 						sort : "type",
 						sort_order : "asc"
 					};
-				<?
+				<?php
 				}
 				else
 				{
@@ -152,7 +152,7 @@ class CAdminFileDialog
 						sort : '<?= CUtil::JSEscape($res[3])?>',
 						sort_order : '<?= CUtil::JSEscape($res[4])?>'
 					};
-					<?
+					<?php
 				}
 				?>
 				if (!window.BXFileDialog)
@@ -199,7 +199,7 @@ class CAdminFileDialog
 			};
 			window.<?= CUtil::JSEscape($arConfig['event'])?>Result = function(filename, path, site, title, menu)
 			{
-<?
+<?php
 $arBuckets = array();
 if($bCloudsBrowse && CModule::IncludeModule('clouds'))
 {
@@ -223,7 +223,7 @@ if($bCloudsBrowse && CModule::IncludeModule('clouds'))
 				if (path == '')
 					path = '/';
 
-				var arBuckets = <?echo Json::encode($arBuckets)?>;
+				var arBuckets = <?= Json::encode($arBuckets)?>;
 				if(arBuckets[site])
 				{
 					full = arBuckets[site] + filename;
@@ -245,7 +245,7 @@ if($bCloudsBrowse && CModule::IncludeModule('clouds'))
 			};
 			<?self::AttachJSScripts();?>
 			</script>
-			<?
+			<?php
 		}
 		else
 		{
@@ -263,7 +263,7 @@ if (window.jsUtils)
 {
 	jsUtils.addEvent(window, 'load', function(){jsUtils.loadJSFile('<?=CUtil::GetAdditionalFileURL("/bitrix/js/main/file_dialog.js")?>');}, false);
 }
-<?
+<?php
 		}
 	}
 
@@ -396,7 +396,7 @@ if (window.jsUtils)
 						<img src="/bitrix/images/1.gif" class="fd_iconkit dir_path_root" title="<?=GetMessage("FD_GO_TO_ROOT")?>" id="__bx_dir_path_root" />
 						<img src="/bitrix/images/1.gif" class="fd_iconkit new_dir" title="<?=GetMessage("FD_NEW_FOLDER")?>" id="__bx_new_dir" />
 						<img src="/bitrix/images/1.gif" class="fd_iconkit refresh" title="<?=GetMessage("FD_REFRESH")?>" onclick="oBXDialogControls.RefreshOnclick();"/>
-						<?
+						<?php
 						$arViews = Array(
 							Array("ID" => 'list', "TEXT" => GetMessage("FD_VIEW_LIST"), "ONCLICK" => "oBXDialogControls.ViewSelector.OnChange('list')"),
 							Array("ID" => 'detail', "TEXT" => GetMessage("FD_VIEW_DETAIL"), "ONCLICK" => "oBXDialogControls.ViewSelector.OnChange('detail')"),
@@ -573,7 +573,7 @@ if (window.jsUtils)
 </table>
 </form>
 <div id="__bx_get_real_size_cont"></div>
-		<?
+		<?php
 	}
 
 	public static function ShowJS($Params)
@@ -594,7 +594,7 @@ if (!window.arFDDirs || !window.arFDFiles || !window.arFDPermission)
 }
 if (!window.arFDMenuTypes)
 	arFDMenuTypes = {};
-<?
+<?php
 		if (!empty($Params['arMenuTypesScript']))
 			echo $Params['arMenuTypesScript'];
 
@@ -667,7 +667,7 @@ else
 	BX.loadScript("<?=$fd_engine_js_src.'?v='.@filemtime($_SERVER['DOCUMENT_ROOT'].$fd_engine_js_src)?>", OnLoad);
 
 </script>
-<?
+<?php
 	}
 
 	public static function AppendLangMess()
@@ -714,7 +714,7 @@ var FD_MESS =
 	FD_FOLDER : '<?=GetMessageJS('FD_FOLDER')?>',
 	FD_IMAGE : '<?=GetMessageJS('FD_IMAGE')?>'
 };
-<?
+<?php
 	}
 
 	public static function GetMenuTypes($site, $path, $bEchoResult = false)
@@ -852,7 +852,7 @@ var FD_MESS =
 ?>
 arFDDirs['<?=$path_js?>'] = [];
 arFDFiles['<?=$path_js?>'] = [];
-<?
+<?php
 			foreach ($arFiles["dir"] as $ind => $dir)
 			{
 ?>
@@ -866,7 +866,7 @@ arFDDirs['<?=$path_js?>'][<?=$ind?>] =
 	timestamp : '',
 	size : 0
 };
-<?
+<?php
 			}
 
 
@@ -884,7 +884,7 @@ arFDFiles['<?=$path_js?>'][<?=$ind?>] =
 	timestamp : '',
 	size : '<?=$arFiles["file_size"][$ind];?>'
 };
-<?
+<?php
 				}
 			}
 
@@ -893,7 +893,7 @@ arFDPermission['<?=$path_js?>'] = {
 	new_folder : false,
 	upload : false
 };
-<?
+<?php
 
 			return;
 		}
@@ -923,7 +923,7 @@ arFDPermission['<?=$path_js?>'] = {
 ?>
 arFDDirs['<?=$path_js?>'] = [];
 arFDFiles['<?=$path_js?>'] = [];
-<?
+<?php
 		$ind = -1;
 		foreach ($arDirs as $Dir)
 		{
@@ -963,7 +963,7 @@ arFDDirs['<?=$path_js?>'][<?=$ind?>] =
 	timestamp : '<?=$Dir["TIMESTAMP"];?>',
 	size : 0
 };
-<?
+<?php
 		}
 
 		if ($Params['getFiles'])
@@ -1012,7 +1012,7 @@ arFDFiles['<?=$path_js?>'][<?=$ind?>] =
 	timestamp : '<?=$File["TIMESTAMP"];?>',
 	size : '<?=$File["SIZE"];?>'<?=$imageAddProps?>
 };
-<?
+<?php
 			}
 		}
 
@@ -1022,7 +1022,7 @@ arFDPermission['<?=$path_js?>'] = {
 	new_folder : <?= ($USER->CanDoFileOperation('fm_create_new_folder',$arPath) ? 'true' : 'false');?>,
 	upload : <?= ($USER->CanDoFileOperation('fm_upload_file',$arPath) ? 'true' : 'false');?>
 };
-<?
+<?php
 	}
 
 	public static function GetItemsRecursively($Params)
@@ -1272,7 +1272,7 @@ arFDPermission['<?=$path_js?>'] = {
 			window.action_status = false;
 		<?endif;?>
 		</script>
-<?
+<?php
 	}
 
 	public static function SetUserConfig($Params)
@@ -1312,7 +1312,7 @@ arFDPermission['<?=$path_js?>'] = {
 <embed id="__flash_preview" pluginspage="http://www.macromedia.com/go/getflashplayer" type="application/x-shockwave-flash" name="__flash_preview" quality="high" width="<?=$Params['width']?>" height="<?=$Params['height']?>" src="<?=htmlspecialcharsex($path)?>"></embed>
 </BODY>
 </HTML>
-<?
+<?php
 			die();
 		}
 	}
@@ -1369,7 +1369,7 @@ arFDPermission['<?=$path_js?>'] = {
 </form>
 </BODY>
 </HTML>
-<?
+<?php
 	}
 
 	public static function UploadFile($Params)

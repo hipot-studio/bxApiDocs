@@ -13,6 +13,7 @@ class Icon
 	protected ?CustomIcon $customIcon = null;
 
 	//region IconCodes
+	public const CROSS_AIR = 'cross-air';
 	public const CALL = 'call';
 	public const CALL_INCOMING_MISSED = 'call-incoming-missed';
 	public const CALL_INCOMING = 'call-incoming';

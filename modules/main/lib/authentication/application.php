@@ -18,6 +18,11 @@ class Application
 	{
 	}
 
+	protected function isCheckRequestUri(): bool
+	{
+		return false;
+	}
+
 	/**
 	 * Checks the valid scope for the applicaton.
 	 *
@@ -27,11 +32,18 @@ class Application
 	{
 		/** @var Main\HttpRequest $request */
 		$request = Main\Context::getCurrent()->getRequest();
-		$realPath = $request->getScriptFile();
 
-		foreach($this->validUrls as $url)
+		$scriptFile = $request->getScriptFile();
+		$requestUri = $request->getRequestUri();
+
+		foreach ($this->validUrls as $url)
 		{
-			if(mb_strpos($realPath, $url) === 0)
+			if (mb_strpos($scriptFile, $url) === 0)
+			{
+				return true;
+			}
+
+			if ($this->isCheckRequestUri() && mb_strpos($requestUri, $url) === 0)
 			{
 				return true;
 			}

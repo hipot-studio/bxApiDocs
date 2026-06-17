@@ -27,6 +27,14 @@ final class NodeModel implements AccessibleItem
 		return $model;
 	}
 
+	public static function createFromNode(Item\Node $node): self
+	{
+		$model = new self();
+		$model->node = $node;
+
+		return $model;
+	}
+
 	public function getId(): int
 	{
 		return $this->node?->id ?? 0;

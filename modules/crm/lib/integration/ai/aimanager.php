@@ -10,6 +10,7 @@ use Bitrix\AI\Services\CopilotNameService;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Crm\Activity\Provider\OpenLine;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
+use Bitrix\Crm\Integration\AI\Operation\AnalyzeCommunication;
 use Bitrix\Crm\Integration\AI\Operation\ExtractScoringCriteria;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\FillRepeatSaleTips;
@@ -30,6 +31,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Security\Random;
+use CCrmActivity;
 use CCrmOwnerType;
 use Psr\Log\LoggerInterface;
 
@@ -51,6 +53,8 @@ class AIManager
 		'kz' => 19021810,
 	];
 	private const AI_APP_COLLECTION_MARKET_DEFAULT = 19021800;
+
+	private static ?Manager $globalSettingsTuningManager = null;
 
 	public static function isAvailable(): bool
 	{
@@ -94,15 +98,23 @@ class AIManager
 			return false;
 		}
 
-		static $manager = null;
-		if (!$manager)
+		if (self::$globalSettingsTuningManager === null)
 		{
-			$manager = new Manager();
+			self::$globalSettingsTuningManager = new Manager();
 		}
 
-		$item = $manager->getItem($setting->value);
+		$item = self::$globalSettingsTuningManager->getItem($setting->value);
 
 		return isset($item) && $item->getValue();
+	}
+
+	/**
+	 * @internal Resets the cached Tuning\Manager so that subsequent calls re-read the `ai.tuning` option.
+	 *           Intended for tests that mutate global AI settings between cases.
+	 */
+	public static function resetGlobalSettingsCache(): void
+	{
+		self::$globalSettingsTuningManager = null;
 	}
 
 	public static function isEngineAvailable(string $type): bool
@@ -252,7 +264,7 @@ class AIManager
 
 			$storageTypeId = $activity['STORAGE_TYPE_ID'] ?? null;
 
-			$storageElementIds = \CCrmActivity::extractStorageElementIds($activity) ?? [];
+			$storageElementIds = CCrmActivity::extractStorageElementIds($activity) ?? [];
 			if (!empty($storageElementIds))
 			{
 				$storageElementId = max($storageElementIds);
@@ -308,7 +320,7 @@ class AIManager
 
 	public static function launchFillRepeatSaleTips(int $activityId, ?int $userId = null, bool $isManualLaunch = false): Result
 	{
-		$result = new Result(Operation\AbstractFillRepeatSaleTips::TYPE_ID);
+		$result = new Result(Operation\AbstractOperation::TYPE_ID);
 
 		if (!static::isAvailable() || !static::isAiCallProcessingEnabled())
 		{
@@ -337,7 +349,7 @@ class AIManager
 		?int $userId = null,
 	): Result
 	{
-		$result = new Result(Operation\AbstractFillRepeatSaleTips::TYPE_ID);
+		$result = new Result(Operation\AbstractOperation::TYPE_ID);
 
 		if (!static::isAvailable() || !static::isAiCallProcessingEnabled())
 		{
@@ -380,7 +392,13 @@ class AIManager
 		;
 	}
 
-	public static function launchSummarizeData(int $activityId, ?int $userId = null, bool $isManualLaunch = true): Result
+	// @todo - remove and fix tests (crm/tests/lib/integration/ai/aimanagerlaunchmethodstest.php)
+	public static function launchSummarizeDataInChat(
+		int $activityId,
+		?int $userId = null,
+		bool $isManualLaunch = true,
+		string $scenario = Scenario::SUMMARIZE_SCENARIO,
+	): Result
 	{
 		$result = new Result(SummarizeCallTranscription::TYPE_ID);
 
@@ -406,13 +424,15 @@ class AIManager
 			return $result->addError(ErrorCode::getNotEnoughMessagesError());
 		}
 
+		// Direct summarize launch is terminal. Scenario chains with follow-up steps must go through PipelineExecutor.
 		return (new SummarizeCallTranscription(
 			$itemIdentifier,
 			$messages,
 			$userId
 		))
 			->setIsManualLaunch($isManualLaunch)
-			->setScenario(Scenario::FILL_FIELDS_SCENARIO)
+			->setScenario($scenario)
+			->setNextTypeIdOverride(0)
 			->launch()
 		;
 	}
@@ -429,6 +449,7 @@ class AIManager
 			FillRepeatSaleTips::TYPE_ID,
 			ScreeningRepeatSaleItem::TYPE_ID,
 			Sandbox\FillRepeatSaleTips::TYPE_ID,
+			AnalyzeCommunication::TYPE_ID,
 		];
 	}
 

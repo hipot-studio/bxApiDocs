@@ -13,6 +13,7 @@ use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\AIAction;
 use Bitrix\Crm\Service\Timeline\Item\Activity\AI\Action\AIOperationStateChecker;
 use Bitrix\Crm\Service\Timeline\Layout\Action\JsEvent;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 final class ConfirmFields extends AIAction
 {
@@ -61,5 +62,10 @@ final class ConfirmFields extends AIAction
 			)
 			->addActionParamInt('summarizeJobId', $jobResult?->getParentJobId())
 		;
+	}
+
+	protected function getMenuIcon(): Outline
+	{
+		return Outline::CHECK_M;
 	}
 }

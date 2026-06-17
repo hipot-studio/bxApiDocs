@@ -18,6 +18,7 @@ use Bitrix\Crm\Service\UserPermissions\EntityEditor;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\CatalogEntityItem;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Category;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Item;
+use Bitrix\Crm\Service\UserPermissions\EntityPermissions\ItemFromOpenLine;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\ItemsList;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\SaleEntityItem;
 use Bitrix\Crm\Service\UserPermissions\EntityPermissions\Stage;
@@ -85,6 +86,7 @@ class UserPermissions
 	protected ?SaleTarget $saleTargetPermissions = null;
 	protected ?RepeatSale $repeatSalePermissions = null;
 	protected ?InventoryManagementContractor $inventoryManagementContractorPermissions = null;
+	protected ?ItemFromOpenLine $itemFromOpenLinePermissions = null;
 	protected ?MessageSender $messageSender = null;
 	protected ?Event $eventPermissions = null;
 
@@ -529,6 +531,16 @@ class UserPermissions
 		}
 
 		return $this->myCompanyPermissions;
+	}
+
+	public function itemFromOpenLine(): ItemFromOpenLine
+	{
+		if (!$this->itemFromOpenLinePermissions)
+		{
+			$this->itemFromOpenLinePermissions = new ItemFromOpenLine($this->userId);
+		}
+
+		return $this->itemFromOpenLinePermissions;
 	}
 
 	/**

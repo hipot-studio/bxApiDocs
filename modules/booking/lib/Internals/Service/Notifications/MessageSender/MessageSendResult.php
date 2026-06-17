@@ -8,7 +8,7 @@ use Bitrix\Main\Result;
 
 class MessageSendResult extends Result
 {
-	private string|null $id;
+	private string|null $id = null;
 
 	public function getId(): string|null
 	{

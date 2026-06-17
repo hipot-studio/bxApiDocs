@@ -6,10 +6,13 @@ use Bitrix\Im;
 use Bitrix\Im\Counter;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\CounterService;
+use Bitrix\ImBot\Bot\OpenLinesBizprocBot;
+use Bitrix\ImBot\Integration\Im\Repository\OpenLinesBotRepository;
 use Bitrix\ImOpenLines\Chat;
 use Bitrix\ImOpenLines\Config;
 use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\ImOpenLines\Operator;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
@@ -61,6 +64,7 @@ class OpenLineManager
 		'avito',
 		'telegrambot',
 		'telegram',
+		'max',
 	];
 
 	public static function isEnabled()
@@ -295,6 +299,58 @@ class OpenLineManager
 		}
 
 		return $counter;
+	}
+
+	public static function isProcessedByAiAgent(?int $sessionId): bool
+	{
+		if (
+			!Loader::includeModule('im')
+			|| !Loader::includeModule('imopenlines')
+			|| !Loader::includeModule('imbot')
+		)
+		{
+			return false;
+		}
+
+		if (!class_exists(OpenLinesBotRepository::class))
+		{
+			return false;
+		}
+
+		$session = self::getSessionData($sessionId);
+		if (empty($session))
+		{
+			return false;
+		}
+
+		$operatorId = (int)($session['OPERATOR_ID'] ?? 0);
+		if ($operatorId <= 0)
+		{
+			return false;
+		}
+
+		$operator = Im\User::getInstance($operatorId);
+		if (!$operator->isBot())
+		{
+			return false;
+		}
+
+		$botId = (int)($operator->getFields()['bot_data']['id'] ?? 0);
+		if ($botId <= 0)
+		{
+			return false;
+		}
+
+		$bot = ServiceLocator::getInstance()->get(OpenLinesBotRepository::class)?->getById($botId);
+		if ($bot === null)
+		{
+			return false;
+		}
+
+		return
+			$bot->getClass() === OpenLinesBizprocBot::class
+			&& str_starts_with($bot->getCode(), 'ai_agent_openlines_') //  hack: add badges if the chatbot code from bp template starts with "ai_agent_openlines_"
+		;
 	}
 
 	public static function closeDialog(?string $userCode, ?int $userId = null): ?Result

@@ -111,4 +111,28 @@ final class DepartmentAssigner
 
 		$this->assignUser($user);
 	}
+
+	public function reassignUsers(
+		UserCollection $userCollection,
+	): void
+	{
+		$currentNodeMemberCollection = Container::getNodeMemberRepository()->findAllByEntityIdsAndEntityTypeAndNodeType(
+			entityIds: $userCollection->getIds(),
+			entityType: MemberEntityType::USER,
+			nodeType: NodeEntityType::DEPARTMENT,
+		);
+		$newDepartmentsIds = $this->departmentCollection->map(
+			fn (\Bitrix\Intranet\Entity\Department $department) => $department->getId()
+		);
+		$nodeMemberCollectionToRemove = $currentNodeMemberCollection->filter(
+			fn(NodeMember $nodeMember) => !in_array($nodeMember->nodeId, $newDepartmentsIds)
+		);
+
+		if (!$nodeMemberCollectionToRemove->empty())
+		{
+			HumanResources\Service\Container::getNodeMemberRepository()->removeByCollection($nodeMemberCollectionToRemove);
+		}
+
+		$this->assignUsers($userCollection);
+	}
 }

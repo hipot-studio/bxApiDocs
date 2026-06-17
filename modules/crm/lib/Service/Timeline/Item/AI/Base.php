@@ -141,7 +141,12 @@ abstract class Base extends Configurable
 		;
 	}
 
-	private function buildBaseActivityBlock(): ?ContentBlock
+	/**
+	 * @param string $creator Unused; kept for LSP compatibility with Configurable::buildBaseActivityBlock().
+	 *
+	 * @return ContentBlock|null
+	 */
+	protected function buildBaseActivityBlock(string $creator = ''): ?ContentBlock
 	{
 		$subject = $this->getModel()->getAssociatedEntityModel()?->get('SUBJECT');
 

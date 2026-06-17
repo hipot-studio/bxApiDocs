@@ -2,19 +2,20 @@
 namespace Bitrix\Crm\Category;
 
 use Bitrix\Crm\Attribute\FieldAttributeManager;
+use Bitrix\Crm\Category\Entity\DealCategoryTable;
 use Bitrix\Crm\CategoryIdentifier;
 use Bitrix\Crm\Color\PhaseColorScheme;
-use Bitrix\Crm\Security\Role\RolePreset;
-use Bitrix\Main;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Type\Date;
-use Bitrix\Main\Entity\Query;
-use Bitrix\Crm\Category\Entity\DealCategoryTable;
 use Bitrix\Crm\DealTable;
 use Bitrix\Crm\Entry\AddException;
-use Bitrix\Crm\Entry\UpdateException;
 use Bitrix\Crm\Entry\DeleteException;
+use Bitrix\Crm\Entry\UpdateException;
+use Bitrix\Crm\Security\Role\Queries\QueryRoles;
 use Bitrix\Crm\Security\Role\RolePermission;
+use Bitrix\Crm\Security\Role\RolePreset;
+use Bitrix\Main;
+use Bitrix\Main\Entity\Query;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\Date;
 
 class DealCategory
 {
@@ -522,35 +523,36 @@ class DealCategory
 		//region Setup default rights
 		$permissionEntity = DealCategory::convertToPermissionEntityType($ID);
 
-		$systemRolesIds = \Bitrix\Crm\Security\Role\RolePermission::getSystemRolesIds();
-		$role = new \CCrmRole();
-		$roleDbResult = $role->GetList();
-		while($roleFields = $roleDbResult->Fetch())
+		$roles = (new QueryRoles())
+			// should affect only crm roles
+			->filterByGroup(null)
+			->fetchAll();
+
+		if (!empty($roles))
 		{
-			$roleID = (int)$roleFields['ID'];
-			$roleGroupCode = (string)$roleFields['GROUP_CODE'];
-			if (in_array($roleID, $systemRolesIds, false)) // do not affect system roles
-			{
-				continue;
-			}
-			if ($roleGroupCode) // should affect only crm roles
-			{
-				continue;
-			}
+			$roleIds = array_column($roles, 'ID');
+			Main\Type\Collection::normalizeArrayValuesByInt($roleIds);
+			$permsByRoleId = \CCrmRole::getRolePermissionsAndSettingsBatch($roleIds);
 
-			$roleRelation = \CCrmRole::getRolePermissionsAndSettings($roleID);
-			if(isset($roleRelation[$permissionEntity]))
+			$role = new \CCrmRole();
+			foreach ($roles as $roleFields)
 			{
-				continue;
+				$roleId = (int)$roleFields['ID'];
+				$roleRelation = $permsByRoleId[$roleId] ?? [];
+
+				if (isset($roleRelation[$permissionEntity]))
+				{
+					continue;
+				}
+
+				$roleRelation[$permissionEntity] = RolePreset::getDefaultPermissionSetForEntityByCode(
+					$roleFields['CODE'],
+					new CategoryIdentifier(\CCrmOwnerType::Deal, $ID)
+				);
+
+				$roleFieldsToUpdate = ['PERMISSIONS' => $roleRelation];
+				$role->Update($roleId, $roleFieldsToUpdate);
 			}
-
-			$roleRelation[$permissionEntity] = RolePreset::getDefaultPermissionSetForEntityByCode(
-				$roleFields['CODE'],
-				new CategoryIdentifier(\CCrmOwnerType::Deal, $ID)
-			);
-
-			$fields = ['PERMISSIONS' => $roleRelation];
-			$role->Update($roleID, $fields);
 		}
 		//endregion
 
@@ -1296,7 +1298,7 @@ class DealCategory
 
 				$connection->commitTransaction();
 			}
-			catch(Main\Db\SqlException $e)
+			catch(Main\DB\SqlException $e)
 			{
 				$connection->rollbackTransaction();
 			}

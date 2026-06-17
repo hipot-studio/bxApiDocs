@@ -1,12 +1,14 @@
 <?
 IncludeModuleLangFile(__FILE__);
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type as FieldType;
 use Bitrix\Voximplant as VI;
 use Bitrix\Voximplant\Tts;
-use Bitrix\Voximplant\Model\CallTable;
+use Bitrix\Main\Config\Option;
 
 class CVoxImplantOutgoing
 {
@@ -524,6 +526,108 @@ class CVoxImplantOutgoing
 		$result->setData(array(
 			'CALL_ID' => $infocallResult->call_id
 		));
+		return $result;
+	}
+
+	public static function CanUseAiCall(): bool
+	{
+		if (Option::get('voximplant', 'force_use_ai_call', 'N') === 'Y')
+		{
+			return true;
+		}
+
+		return (
+			Loader::includeModule('bitrix24')
+			&& (
+				\CBitrix24::IsLicensePaid()
+				|| \CBitrix24::IsNfrLicense()
+			)
+			&& (Application::getInstance()->getLicense()->getRegion() ?? 'en') === 'ru'
+		);
+	}
+
+	/**
+	 * Initiates AI call with given parameters for AI agent interaction.
+	 * @param array $aiCallData AI call parameters (Number, Prompt, PromptScenario, Mcp.ToolSetId, Mcp.UserId, Mcp.ToolContext, AuthToken).
+	 * @return Result Returns array with CALL_ID and MEDIA_SESSION_ACCESS_URL or error.
+	 */
+	public static function StartAiCall(array $aiCallData): Result
+	{
+		$result = new Result();
+		CVoxImplantHistory::WriteToLog(['phone' => $aiCallData['Number'] ?? '', 'moduleId' => $aiCallData['Mcp.ToolSetId'] ?? ''], 'StartAiCall');
+
+		if (empty($aiCallData['Number']))
+		{
+			$result->addError(new Error('Phone number is required'));
+			return $result;
+		}
+
+		if (!self::CanUseAiCall())
+		{
+			$result->addError(new Error('AI calls are not allowed'));
+
+			return $result;
+		}
+
+		$lineConfig = [];
+		$outputNumber = $aiCallData['OutputNumber'] ?? '';
+		if ($outputNumber !== '')
+		{
+			$numberConfig = CVoxImplantConfig::GetConfigBySearchId($outputNumber);
+			if (isset($numberConfig['ERROR']))
+			{
+				$result->addError(new Error('Could not find config for number ' . $outputNumber));
+				return $result;
+			}
+			$lineConfig = $numberConfig;
+		}
+
+		$httpClient = new CVoxImplantHttp();
+		$aiCallResult = $httpClient->StartAiCall($aiCallData, $lineConfig);
+
+		if ($aiCallResult === false)
+		{
+			$result->addError(new Error('AI call failure'));
+			return $result;
+		}
+
+		$callId = $aiCallResult->call_id ?? '';
+
+		$call = VI\Call::create([
+			'INCOMING' => CVoxImplantMain::CALL_OUTGOING,
+			'CALL_ID' => $callId,
+			'CALLER_ID' => $aiCallData['Number'] ?? '',
+			'STATUS' => VI\Model\CallTable::STATUS_CONNECTING,
+			'DATE_CREATE' => new FieldType\DateTime(),
+			'LAST_PING' => null,
+			'QUEUE_ID' => null,
+		]);
+
+		$crmEntityType = $aiCallData['CrmEntityType'] ?? '';
+		$crmEntityId = (int)($aiCallData['CrmEntityId'] ?? 0);
+		if ($crmEntityType !== '' && $crmEntityId > 0)
+		{
+			$call->updateCrmEntities([
+				[
+					'ENTITY_TYPE' => $crmEntityType,
+					'ENTITY_ID' => $crmEntityId,
+					'IS_PRIMARY' => 'Y',
+					'IS_CREATED' => 'N',
+				]
+			]);
+		}
+
+		$crmBindings = $aiCallData['CrmBindings'] ?? [];
+		if (!empty($crmBindings))
+		{
+			$call->updateCrmBindings($crmBindings);
+		}
+
+		$result->setData([
+			'CALL_ID' => $callId,
+			'MEDIA_SESSION_ACCESS_URL' => $aiCallResult->media_session_access_url ?? '',
+		]);
+
 		return $result;
 	}
 

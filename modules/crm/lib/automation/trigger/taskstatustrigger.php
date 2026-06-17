@@ -4,8 +4,8 @@ namespace Bitrix\Crm\Automation\Trigger;
 use Bitrix\Bizproc\Activity\Enum\ActivityColorIndex;
 use Bitrix\Bizproc\Activity\Enum\ActivityGroup;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
+use Bitrix\Bizproc\FieldType;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Main\Loader;
 Use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Tasks;
@@ -58,6 +58,31 @@ class TaskStatusTrigger extends BaseTrigger
 	public static function getName()
 	{
 		return Loc::getMessage('CRM_AUTOMATION_TRIGGER_TASK_STATUS_NAME_1');
+	}
+
+	public function setInputData($data)
+	{
+		$taskId = (int)($data['TASK']['ID'] ?? 0);
+		if ($taskId > 0 && is_callable([$this, 'setReturnValues']))
+		{
+			$this->setReturnValues([
+				'TaskDocument' => Tasks\Integration\Bizproc\Document\Task::resolveDocumentId($taskId),
+			]);
+		}
+
+		return parent::setInputData($data);
+	}
+
+	public static function getReturnProperties(): array
+	{
+		return [
+			[
+				'Id' => 'TaskDocument',
+				'Name' => Loc::getMessage('CRM_AUTOMATION_TRIGGER_TASK_STATUS_RETURN_TASK'),
+				'Type' => FieldType::DOCUMENT,
+				'Default' => ['tasks', Tasks\Integration\Bizproc\Document\Task::class, 'TASK'],
+			],
+		];
 	}
 
 	public function checkApplyRules(array $trigger)

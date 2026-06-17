@@ -58,17 +58,16 @@ final class NodeRepository
 	{
 		$map = [];
 
-		$nodeCollection =
-			(new NodeDataBuilder())
-				->setSelect(['ID', 'PARENT_ID', 'TYPE'])
-				->addFilter(
-					new NodeFilter(
-						entityTypeFilter: NodeTypeFilter::fromNodeTypes([NodeEntityType::DEPARTMENT, NodeEntityType::TEAM]),
-						structureId: $structureId,
-						depthLevel: DepthLevel::FULL,
-					),
-				)
-				->getAll()
+		$nodeCollection = (new NodeDataBuilder())
+			->setSelect(['ID', 'PARENT_ID', 'TYPE'])
+			->addFilter(
+				new NodeFilter(
+					entityTypeFilter: NodeTypeFilter::fromNodeTypes([NodeEntityType::DEPARTMENT, NodeEntityType::TEAM]),
+					structureId: $structureId,
+					depthLevel: DepthLevel::FULL,
+				),
+			)
+			->getAll()
 		;
 
 		foreach ($nodeCollection as $node)
@@ -94,6 +93,7 @@ final class NodeRepository
 	public function getById(
 		int $nodeId,
 		?StructureAction $structureAction = null,
+		?int $userId = null,
 	): ?Node
 	{
 		$nodeCacheKey = sprintf(self::NODE_ENTITY_CACHE_KEY, $nodeId);
@@ -128,18 +128,17 @@ final class NodeRepository
 			return $node;
 		}
 
-		return
-			(new NodeDataBuilder())
-				->addFilter(
-					new NodeFilter(
-						idFilter: IdFilter::fromId($node->id),
-						entityTypeFilter: NodeTypeFilter::fromNodeType($node->type),
-						structureId: $node->structureId,
-						accessFilter: new NodeAccessFilter($structureAction)
-					),
-				)
-				->setSort(new NodeSort(sort: SortDirection::Asc))
-				->get()
+		return (new NodeDataBuilder())
+			->addFilter(
+				new NodeFilter(
+					idFilter: IdFilter::fromId($node->id),
+					entityTypeFilter: NodeTypeFilter::fromNodeType($node->type),
+					structureId: $node->structureId,
+					accessFilter: new NodeAccessFilter($structureAction, $userId)
+				),
+			)
+			->setSort(new NodeSort(sort: SortDirection::Asc))
+			->get()
 		;
 	}
 
@@ -236,20 +235,44 @@ final class NodeRepository
 	{
 		$accessFilter = $structureAction ? new NodeAccessFilter($structureAction) : null;
 
-		return
-			(new NodeDataBuilder())
-				->addFilter(
-					new NodeFilter(
-						entityTypeFilter: NodeTypeFilter::fromNodeTypes($nodeTypes),
-						structureId: $structureId,
-						active: $activeFilter,
-						accessFilter: $accessFilter,
-					),
-				)
-				->setSort(new NodeSort(sort: SortDirection::Asc))
-				->setLimit($limit)
-				->setOffset($offset)
-				->getAll()
+		return (new NodeDataBuilder())
+			->addFilter(
+				new NodeFilter(
+					entityTypeFilter: NodeTypeFilter::fromNodeTypes($nodeTypes),
+					structureId: $structureId,
+					active: $activeFilter,
+					accessFilter: $accessFilter,
+				),
+			)
+			->setSort(new NodeSort(sort: SortDirection::Asc))
+			->setLimit($limit)
+			->setOffset($offset)
+			->getAll()
+		;
+	}
+
+	public function countAll(
+		array $nodeTypes = [NodeEntityType::DEPARTMENT],
+		?int $structureId = null,
+		?StructureAction $structureAction = null,
+		NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
+		?int $viewerUserId = null,
+	): int
+	{
+		$accessFilter = $structureAction
+			? new NodeAccessFilter($structureAction, userId: $viewerUserId)
+			: null;
+
+		return (int)NodeDataBuilder::createWithFilter(
+				new NodeFilter(
+					entityTypeFilter: NodeTypeFilter::fromNodeTypes($nodeTypes),
+					structureId: $structureId,
+					active: $activeFilter,
+					accessFilter: $accessFilter,
+				),
+			)
+			->prepareQuery()
+			->queryCountTotal()
 		;
 	}
 
@@ -263,19 +286,18 @@ final class NodeRepository
 	{
 		$accessFilter = $structureAction ? new NodeAccessFilter($structureAction) : null;
 
-		return
-			(new NodeDataBuilder())
-				->addFilter(
-					new NodeFilter(
-						idFilter: IdFilter::fromIds($nodeIds),
-						entityTypeFilter: NodeTypeFilter::fromNodeTypes($nodeTypes),
-						structureId: $structureId,
-						active: $activeFilter,
-						accessFilter: $accessFilter,
-					),
-				)
-				->setSort(new NodeSort(sort: SortDirection::Asc))
-				->getAll()
+		return (new NodeDataBuilder())
+			->addFilter(
+				new NodeFilter(
+					idFilter: IdFilter::fromIds($nodeIds),
+					entityTypeFilter: NodeTypeFilter::fromNodeTypes($nodeTypes),
+					structureId: $structureId,
+					active: $activeFilter,
+					accessFilter: $accessFilter,
+				),
+			)
+			->setSort(new NodeSort(sort: SortDirection::Asc))
+			->getAll()
 		;
 	}
 
@@ -373,17 +395,16 @@ final class NodeRepository
 			);
 		}
 
-		$nodeMemberCollection
-			= (new NodeMemberDataBuilder())
-				->addFilter(
-					new NodeMemberFilter(
-						entityIdFilter: EntityIdFilter::fromEntityId($entityId),
-						entityType: $memberEntityType,
-						nodeFilter: $nodeFilter ?? null,
-						active: null,
-					),
-				)
-				->getAll()
+		$nodeMemberCollection = (new NodeMemberDataBuilder())
+			->addFilter(
+				new NodeMemberFilter(
+					entityIdFilter: EntityIdFilter::fromEntityId($entityId),
+					entityType: $memberEntityType,
+					nodeFilter: $nodeFilter ?? null,
+					active: null,
+				),
+			)
+			->getAll()
 		;
 
 		$nodeIds = $nodeMemberCollection->getNodeIds();
@@ -392,18 +413,17 @@ final class NodeRepository
 			return new NodeCollection();
 		}
 
-		return
-			(new NodeDataBuilder())
-				->addFilter(
-					new NodeFilter(
-						idFilter: IdFilter::fromIds($nodeIds),
-						entityTypeFilter: NodeTypeFilter::fromNodeTypes($nodeTypes),
-						structureId: $structureId,
-						active: $activeFilter,
-						accessFilter: $structureAction ? new NodeAccessFilter($structureAction) : null,
-					),
-				)
-				->getAll()
+		return (new NodeDataBuilder())
+			->addFilter(
+				new NodeFilter(
+					idFilter: IdFilter::fromIds($nodeIds),
+					entityTypeFilter: NodeTypeFilter::fromNodeTypes($nodeTypes),
+					structureId: $structureId,
+					active: $activeFilter,
+					accessFilter: $structureAction ? new NodeAccessFilter($structureAction) : null,
+				),
+			)
+			->getAll()
 		;
 	}
 
@@ -417,24 +437,25 @@ final class NodeRepository
 		?StructureAction $structureAction = null,
 		NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
 		?int $limit = 100,
+		?int $userId = null,
 	): NodeCollection
 	{
-		$accessFilter = $structureAction ? new NodeAccessFilter($structureAction) : null;
+		$accessFilter = $structureAction ? new NodeAccessFilter($structureAction, $userId) : null;
 		$idFilter = empty($parentIds) ? null : IdFilter::fromIds($parentIds);
 		$nameFilter = new NodeNameFilter($name, $strict);
 
 		return NodeDataBuilder::createWithFilter(
-			new NodeFilter(
-				idFilter: $idFilter,
-				entityTypeFilter: NodeTypeFilter::fromNodeTypes($nodeTypes),
-				structureId:  $structureId,
-				direction: Direction::CHILD,
-				depthLevel: $depthLevel,
-				active: $activeFilter,
-				accessFilter: $accessFilter,
-				name:$nameFilter,
+				new NodeFilter(
+					idFilter: $idFilter,
+					entityTypeFilter: NodeTypeFilter::fromNodeTypes($nodeTypes),
+					structureId:  $structureId,
+					direction: Direction::CHILD,
+					depthLevel: $depthLevel,
+					active: $activeFilter,
+					accessFilter: $accessFilter,
+					name:$nameFilter,
+				)
 			)
-		)
 			->setSort(new NodeSort(depth: SortDirection::Asc, type: SortDirection::Asc))
 			->setLimit($limit)
 			->getAll()

@@ -10,7 +10,6 @@ use Bitrix\Booking\Internals\Service\AiAssistant\DateTimeService;
 use Bitrix\Booking\Internals\Service\AiAssistant\ResourceSkuService;
 use Bitrix\Booking\Internals\Service\ResourceAvailabilityService;
 use Bitrix\Booking\Internals\Service\Time;
-use Bitrix\Main\Web\Json;
 
 class FindAvailableDatesByServicesTool extends BaseBookingTool
 {
@@ -29,7 +28,7 @@ class FindAvailableDatesByServicesTool extends BaseBookingTool
 		$this->resourceAvailabilityService = Container::getAiAssistantResourceAvailabilityService();
 	}
 
-	protected function execute(int $userId, ...$args): string
+	protected function doExecuteStructured(int $userId, ...$args): array
 	{
 		$timezone = $this->contextBooking->getDatePeriod()?->getDateFrom()->getTimezone()?->getName() ?? '';
 
@@ -80,12 +79,15 @@ class FindAvailableDatesByServicesTool extends BaseBookingTool
 			return $this->createFailureResponse('Resources providing all specified service(s) have not been found');
 		}
 
-		return Json::encode(
-			$this->resourceAvailabilityService->getAvailableDatesForResourceCollection(
-				$searchDatePeriod,
-				$resourceCollection,
-				isset($args['rescheduleBookingId']) ? (int)$args['rescheduleBookingId'] : null
-			)
+		$dates = $this->resourceAvailabilityService->getAvailableDatesForResourceCollection(
+			$searchDatePeriod,
+			$resourceCollection,
+			isset($args['rescheduleBookingId']) ? (int)$args['rescheduleBookingId'] : null
+		);
+
+		return $this->createSuccessResponse(
+			message: 'Available dates retrieved',
+			data: ['dates' => $dates],
 		);
 	}
 
@@ -96,7 +98,8 @@ class FindAvailableDatesByServicesTool extends BaseBookingTool
 
 	public function getDescription(): string
 	{
-		return 'Returns calendar dates (days) that have at least one available time slot for the specified services within a date range. Use when the client has chosen services but has no preference for a specific resource. After finding a suitable date, call find_available_slots_by_services_tool to get specific bookable time windows on that day.';
+		return 'Returns calendar dates (days) that have at least one available time slot for the specified services within a date range.'
+			. ' Response shape: {"dates": ["YYYY-MM-DD", ...]}, where each item is a calendar date in strict ISO "YYYY-MM-DD" format. Examples: "2026-05-08" = May 8, 2026.';
 	}
 
 	public function getInputSchema(): array
@@ -123,7 +126,7 @@ class FindAvailableDatesByServicesTool extends BaseBookingTool
 					'description' => 'List of service identifiers',
 				],
 				'rescheduleBookingId' => [
-					'type' => 'integer',
+					'type' => ['integer', 'null'],
 					'description' => 'Optional. ID of an existing booking being rescheduled. When provided, the time slot of this booking is treated as available so it appears in search results.',
 				],
 			],

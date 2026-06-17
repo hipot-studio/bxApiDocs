@@ -169,7 +169,7 @@ class Company extends Service\Factory
 			],
 			//only for backwards compatibility. not used anymore.
 			Item\Company::FIELD_NAME_BANKING_DETAILS => [
-				'TYPE' => Field::TYPE_STRING,
+				'TYPE' => Field::TYPE_TEXT,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Deprecated],
 			],
 			Item\Company::FIELD_NAME_INDUSTRY => [
@@ -193,6 +193,7 @@ class Company extends Service\Factory
 			],
 			Item\Company::FIELD_NAME_REVENUE => [
 				'TYPE' => Field::TYPE_DOUBLE,
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
 			],
 			Item::FIELD_NAME_OPENED => [
 				'TYPE' => Field::TYPE_BOOLEAN,
@@ -296,6 +297,13 @@ class Company extends Service\Factory
 				'TYPE' => Field::TYPE_USER,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Multiple],
 				'CLASS' => Field\Observers::class,
+			],
+			Item::FIELD_NAME_WEBFORM_ID => [
+				'TYPE' => Field::TYPE_CRM_WEBFORM,
+				'ATTRIBUTES' => [
+					\CCrmFieldInfoAttr::NotDisplayed,
+					\CCrmFieldInfoAttr::Immutable,
+				],
 			],
 			Item::FIELD_LAST_COMMUNICATION_TIME => [
 				'TYPE' => Field::TYPE_STRING,

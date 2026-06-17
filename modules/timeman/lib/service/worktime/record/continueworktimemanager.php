@@ -19,6 +19,11 @@ class ContinueWorktimeManager extends WorktimeManager
 		return $record;
 	}
 
+	protected function needsWorktimeEventLoading(): bool
+	{
+		return true;
+	}
+
 	/**
 	 * @param WorktimeRecord $record
 	 * @return WorktimeEvent[]

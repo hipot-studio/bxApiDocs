@@ -36,6 +36,11 @@ class TaskUserField extends UserFieldDataset
 		return $this->getMessage('TASK_UF_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('TASK_UF_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	protected function getRawUserFields(): array
 	{
 		return Userfield\Task::getScheme(0, 0, $this->languageId);

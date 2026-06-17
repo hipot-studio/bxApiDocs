@@ -20,6 +20,7 @@ use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Filter\Condition;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\Comments\Internals\Comment;
@@ -436,7 +437,7 @@ class TaskFilterBuilder
 						array_map(
 							function (string $tag)
 							{
-								return ($tag ? trim($tag) : false);
+								return ($tag ? Emoji::encode(trim($tag)) : false);
 							},
 							$val
 						)
@@ -1170,7 +1171,7 @@ class TaskFilterBuilder
 						->whereNotNull(TaskQueryBuilder::ALIAS_TASK_COUNTERS . '.ID')
 						->whereIn(TaskQueryBuilder::ALIAS_TASK_COUNTERS . '.TYPE', $typesIn);
 
-					if ($field !== 'MENTIONED')	
+					if ($field !== 'MENTIONED')
 					{
 						$subFilter->whereExpr("NOT EXISTS({$subQuery->getQuery()})", ["GROUP_ID", "ID"]);
 					}
@@ -1182,7 +1183,7 @@ class TaskFilterBuilder
 
 				case 'WITH_COMMENT_COUNTERS':
 				case 'WITH_NEW_COMMENTS':
-					$types = array_values(CounterDictionary::MAP_COMMENTS);
+					$types = CounterDictionary::getMapCommentsFilterCounterList();
 					$conditionTree->where(
 						Query::filter()
 							->whereNotNull(TaskQueryBuilder::ALIAS_TASK_COUNTERS . '.ID')

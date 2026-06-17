@@ -38,6 +38,9 @@ final class Document implements Arrayable
 			$hcmLinkCompanyId = $documentHcmLinkCompanyId;
 		}
 
+		$blankId = (int)$this->document->blankId;
+		$blank = $this->blankService->getById($blankId);
+
 		return [
 			'id' => $this->document->id,
 			'blankId' => $this->document->blankId,
@@ -73,8 +76,9 @@ final class Document implements Arrayable
 			'hcmLinkCompanyId' => $hcmLinkCompanyId,
 			'dateStatusChanged' => $this->document->dateStatusChanged,
 			'dateSignUntil' => $this->document->dateSignUntil,
-			'previewUrl' => $this->blankService->getPreviewUrl((int)$this->document->blankId),
-			'hasPlaceholders' => $this->blankService->hasPlaceholders((int)$this->document->blankId),
+			'previewUrl' => $this->blankService->getPreviewUrl($blankId),
+			'hasPlaceholders' => $blank?->hasPlaceholders ?? false,
+			'isBlankDownloadable' => $this->blankService->hasDownloadableFile($blank),
 
 			'externalDateCreateSourceType' => $this->document->externalDateCreateSourceType,
 			'hcmLinkDateSettingId' => $this->document->hcmLinkDateSettingId,

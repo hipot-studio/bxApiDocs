@@ -14,8 +14,9 @@ class RelationTemplateParams extends GridParams
 		public int $userId,
 		public int $templateId,
 		public PagerInterface $pager,
-		public bool $checkRootAccess = true,
 		public ?SelectInterface $select = null,
+		public bool $checkRootAccess = true,
+		public bool $withSubTemplates = true,
 	)
 	{
 		parent::__construct(

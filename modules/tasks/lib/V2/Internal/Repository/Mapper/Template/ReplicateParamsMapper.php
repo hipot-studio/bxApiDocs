@@ -300,6 +300,11 @@ class ReplicateParamsMapper
 			$entityFields['weekDays'] = [];
 		}
 
+		if (isset($params['NEXT_EXECUTION_TIME']))
+		{
+			$entityFields['nextExecutionTime'] = (string)$params['NEXT_EXECUTION_TIME'];
+		}
+
 		return ReplicateParams::mapFromArray($entityFields);
 	}
 }

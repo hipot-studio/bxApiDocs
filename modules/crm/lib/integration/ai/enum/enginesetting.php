@@ -21,6 +21,12 @@ enum EngineSetting: string
 	/** @see EventHandler::SETTINGS_REPEAT_SALE_SCREENING_ITEM_ENGINE_CODE */
 	case RepeatSaleScreeningItem = 'crm_copilot_repeat_sale_screening_item_code';
 
+	/** @see EventHandler::SETTINGS_ANALYZE_COMMUNICATION_ENGINE_CODE */
+	case AnalyzeCommunication = 'crm_copilot_analyze_communication_engine_code';
+
+	/** @see EventHandler::SETTINGS_SUMMARIZE_ENGINE_CODE */
+	case Summarize = 'crm_copilot_summarize_engine_code';
+
 	public function getCode(): string
 	{
 		return $this->value;
@@ -30,7 +36,12 @@ enum EngineSetting: string
 	{
 		return match ($this)
 		{
-			self::FillItemFromCallText, self::CallAssessment, self::RepeatSale, self::RepeatSaleScreeningItem => 'text',
+			self::FillItemFromCallText,
+			self::CallAssessment,
+			self::RepeatSale,
+			self::RepeatSaleScreeningItem,
+			self::AnalyzeCommunication,
+			self::Summarize => 'text',
 			self::FillItemFromCallAudio => 'audio',
 		};
 	}

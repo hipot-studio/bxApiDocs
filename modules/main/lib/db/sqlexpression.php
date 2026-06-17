@@ -25,7 +25,7 @@ class SqlExpression
 	/** @var array */
 	protected $args = array();
 
-	protected $pattern = '/([^\\\\]|^)(\?[#sifv]?)/';
+	protected $pattern = '/([^\\\\]|^)(\?[#sifv@]?)/';
 
 	protected $i;
 
@@ -59,6 +59,8 @@ class SqlExpression
 	 * Returns $expression with replaced placeholders.
 	 *
 	 * @return string
+	 *
+	 * @throws \Bitrix\Main\ArgumentException
 	 */
 	public function compile()
 	{
@@ -94,6 +96,8 @@ class SqlExpression
 	 * @param array $matches Matches found by preg_replace.
 	 *
 	 * @return string
+	 *
+	 * @throws \Bitrix\Main\ArgumentException
 	 */
 	protected function execPlaceholders($matches)
 	{
@@ -108,7 +112,7 @@ class SqlExpression
 		{
 			$value = $this->args[$this->i];
 
-			if ($value === null && $ph !== '?#')
+			if ($value === null && $ph !== '?#' && $ph !== '?@')
 			{
 				$value = 'NULL';
 			}
@@ -147,11 +151,53 @@ class SqlExpression
 			{
 				$value = (float) $value;
 			}
+			elseif ($ph == '?@')
+			{
+				$value = $this->convertListPlaceholder($value);
+			}
 
 			return $pre . $value;
 		}
 
 		return $matches[0];
+	}
+
+	/**
+	 * @param mixed $value
+	 *
+	 * @return string
+	 *
+	 * @throws \Bitrix\Main\ArgumentException
+	 */
+	private function convertListPlaceholder($value)
+	{
+		if (is_array($value))
+		{
+			$items = $value;
+		}
+		elseif ($value instanceof \Traversable)
+		{
+			$items = iterator_to_array($value, false);
+		}
+		else
+		{
+			throw new \Bitrix\Main\ArgumentException('Placeholder ?@ expects an array or Traversable.');
+		}
+
+		if (empty($items))
+		{
+			throw new \Bitrix\Main\ArgumentException('Placeholder ?@ does not accept an empty list.');
+		}
+
+		$sqlHelper = $this->getConnection()->getSqlHelper();
+		$converted = [];
+
+		foreach ($items as $item)
+		{
+			$converted[] = $sqlHelper->convertToDb($item, null);
+		}
+
+		return implode(',', $converted);
 	}
 
 	public function __toString()

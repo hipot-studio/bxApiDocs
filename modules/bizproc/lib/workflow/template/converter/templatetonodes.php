@@ -72,6 +72,7 @@ final class TemplateToNodes
 		;
 
 		$iconMap = [];
+		$auxCapabilityMap = [];
 		/* @var ActivityDescription $activity*/
 		foreach ($defaultActivities as $activity)
 		{
@@ -91,6 +92,7 @@ final class TemplateToNodes
 						'CODE' => $presetActivity->getIcon(),
 						'COLOR' => $presetActivity->getColorIndex(),
 					];
+					$auxCapabilityMap[$id] = $presetActivity->getNodeSettings()?->ports?->aux !== null;
 				}
 			}
 			else
@@ -99,11 +101,12 @@ final class TemplateToNodes
 					'CODE' => $activity->getIcon(),
 					'COLOR' => $activity->getColorIndex(),
 				];
+				$auxCapabilityMap[$class] = $activity->getNodeSettings()?->ports?->aux !== null;
 			}
 		}
 
 		return array_map(
-			static function ($child) use ($iconMap) {
+			static function ($child) use ($iconMap, $auxCapabilityMap) {
 				$node = $child['Node'];
 				unset($child['Node']);
 
@@ -113,7 +116,8 @@ final class TemplateToNodes
 					$nodeType = 'trigger';
 				}
 
-				$activityType = $child['Type'] ?? null;
+				$rawActivityType = $child['Type'] ?? null;
+				$activityType = $rawActivityType;
 				if (isset($child['PresetId']))
 				{
 					$activityType .= '_' . $child['PresetId'];
@@ -122,21 +126,28 @@ final class TemplateToNodes
 				$icon = $activityType && isset($iconMap[$activityType]['CODE']) ? $iconMap[$activityType]['CODE'] : null;
 				$color = $activityType && isset($iconMap[$activityType]['COLOR']) ? $iconMap[$activityType]['COLOR'] : null;
 
+				$nodePorts = NodePorts::fromArray($node['ports'] ?? []);
+
+				$shouldShowAuxPorts = $activityType !== null && ($auxCapabilityMap[$activityType] ?? false);
+
 				return [
 					'id' => $node['id'],
 					'type' => $nodeType,
 					'position' => $node['position'],
 					'dimensions' => $node['dimensions'],
-					'ports' => NodePorts::fromArray($node['ports'])->toArray(), // normalize ports structure
+					'ports' => $nodePorts->toArray(), // normalize ports structure
 					'activity' => $child,
 					'node' => [
 						'type' => $nodeType,
 						'title' => $node['node']['title'],
 						'colorIndex' => $color,
 						'frameColorName' => $node['node']['frameColorName'] ?? null,
+						'frameTextAlign' => $node['node']['frameTextAlign'] ?? null,
+						'frameSeparatorPosition' => $node['node']['frameSeparatorPosition'] ?? null,
 						'icon' => $icon,
 						'updated' => $node['node']['updated'] ?? null,
 						'published' => $node['node']['published'] ?? null,
+						'shouldShowAuxPorts' => $shouldShowAuxPorts,
 					],
 				];
 			},
@@ -168,7 +179,7 @@ final class TemplateToNodes
 				}
 
 				$type = null;
-				if ($sourcePortId[0] === 'a' && $targetPortId[0] === 't')
+				if (strtolower($sourcePortId[0]) === 'a' && strtolower($targetPortId[0]) === 't')
 				{
 					$type = 'aux';
 				}

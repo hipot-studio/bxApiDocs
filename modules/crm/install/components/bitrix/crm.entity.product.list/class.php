@@ -1107,27 +1107,42 @@ final class CCrmEntityProductListComponent
 					$row['TAX_RATE'] = ($row['TAX_RATE'] === '') ? null : (float)$row['TAX_RATE'];
 				}
 			}
+			unset($row);
 		}
 		elseif ($this->entity['ID'] > 0)
 		{
 			$this->rows = CCrmProductRow::LoadRows($this->entity['TYPE_CODE'], $this->entity['ID']);
-			if ($this->isAllowedReservation())
+			$isReservationAllowed = $this->isAllowedReservation();
+			$shouldUpdateCatalogPrices =
+				$this->arParams['IS_COPY_MODE'] && !$this->crmSettings['ALLOW_CATALOG_PRICE_EDIT']
+			;
+			$shouldResetReservationData = $this->arParams['IS_COPY_MODE'] && !$isReservationAllowed;
+			if ($isReservationAllowed || $shouldUpdateCatalogPrices || $shouldResetReservationData)
 			{
-				foreach ($this->rows as &$row)
+				foreach ($this->rows as $rowIndex => $row)
 				{
-					$row['INPUT_RESERVE_QUANTITY'] = $row['RESERVE_QUANTITY'];
+					if ($isReservationAllowed)
+					{
+						$this->rows[$rowIndex]['INPUT_RESERVE_QUANTITY'] = $row['RESERVE_QUANTITY'];
+					}
+
+					if ($shouldUpdateCatalogPrices)
+					{
+						$this->rows[$rowIndex] =
+							Container::getInstance()->getProductRowChecker()->updateCatalogPrice(
+								$this->rows[$rowIndex],
+								$this->currency['ID'],
+							);
+					}
+
+					if ($shouldResetReservationData)
+					{
+						$this->rows[$rowIndex]['RESERVE_QUANTITY'] = null;
+						$this->rows[$rowIndex]['RESERVE_ID'] = null;
+						$this->rows[$rowIndex]['STORE_ID'] = null;
+						$this->rows[$rowIndex]['DATE_RESERVE_END'] = null;
+					}
 				}
-				unset($row);
-			}
-			if (
-				$this->arParams['IS_COPY_MODE']
-				&& !$this->crmSettings['ALLOW_CATALOG_PRICE_EDIT']
-			)
-			{
-				$this->rows = Container::getInstance()->getProductRowChecker()->updateCatalogPrices(
-					$this->rows,
-					$this->currency['ID'],
-				);
 			}
 		}
 

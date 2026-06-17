@@ -568,6 +568,45 @@ abstract class Configurable extends Item
 		;
 	}
 
+	protected function buildBaseActivityBlock(string $creator = ''): ?ContentBlock
+	{
+		$activityId = $this->getAssociatedEntityModel()?->get('ASSOCIATED_ENTITY_ID');
+		if (!isset($activityId))
+		{
+			return null;
+		}
+
+		$subject = Container::getInstance()->getActivityBroker()->getById($activityId)['SUBJECT'] ?? '';
+		if (empty($subject))
+		{
+			return null;
+		}
+
+		$value = Loc::getMessage(
+			'CRM_TIMELINE_BLOCK_CREATED_FROM',
+			[
+				'#SUBJECT#' => $subject,
+				'#CREATOR#' => trim($creator),
+			]
+		);
+		if (!is_string($value) || $value === '')
+		{
+			return null;
+		}
+
+		$value = preg_replace('/\s+/u', ' ', trim($value));
+		if (!is_string($value) || $value === '')
+		{
+			return null;
+		}
+
+		return (new Text())
+			->setValue($value)
+			->setColor(Text::COLOR_BASE_50)
+			->setFontSize(Text::FONT_SIZE_SM)
+		;
+	}
+
 	private function getMarketPanelPlacementCode(): ?string
 	{
 		if (Loader::includeModule('intranet'))

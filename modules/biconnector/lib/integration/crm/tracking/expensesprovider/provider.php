@@ -50,15 +50,35 @@ final class Provider
 	 */
 	public function getDailyExpenses(?Date $dateFrom, ?Date $dateTo): Result
 	{
+		$dailyExpensesResult = $this->getDailyExpensesRows($dateFrom, $dateTo);
+		if (!$dailyExpensesResult->isSuccess())
+		{
+			return $dailyExpensesResult;
+		}
+
+		$expensesResult = [];
+		foreach (($dailyExpensesResult->getData()['expenses'] ?? []) as $expenses)
+		{
+			$expensesResult[] = $expenses;
+		}
+
+		return (new Result())->setData($expensesResult);
+	}
+
+	/**
+	 * @return Result
+	 */
+	public function getDailyExpensesRows(?Date $dateFrom, ?Date $dateTo): Result
+	{
 		$result = new Result();
 		if ($this->account->hasAccounts() && !$this->accountId)
 		{
-			return $result->setData([]);
+			return $result->setData(['expenses' => []]);
 		}
 
 		if (!$this->account->hasDailyExpensesReport())
 		{
-			return $result->setData([]);
+			return $result->setData(['expenses' => []]);
 		}
 
 		Seo\Analytics\Service::getInstance()->setClientId($this->clientId);
@@ -84,14 +104,26 @@ final class Provider
 			return $result;
 		}
 
-		$expensesResult = [];
+		return $result->setData(['expenses' => $this->parseRows($expensesCollection)]);
+	}
+
+	public function getCacheKey(): string
+	{
+		return md5(implode('|', [
+			$this->id,
+			$this->seoCode,
+			(string)$this->accountId,
+			(string)$this->clientId,
+		]));
+	}
+
+	private function parseRows(Seo\Analytics\Internals\ExpensesCollection $expensesCollection): \Generator
+	{
 		/** @var Seo\Analytics\Internals\Expenses $expenses */
 		foreach ($expensesCollection as $expenses)
 		{
-			$expensesResult[] = $this->parseRow($expenses);
+			yield $this->parseRow($expenses);
 		}
-
-		return $result->setData($expensesResult);
 	}
 
 	/**

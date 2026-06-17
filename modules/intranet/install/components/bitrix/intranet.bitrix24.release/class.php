@@ -13,34 +13,35 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 
 class IntranetReleaseComponent extends \CBitrixComponent implements \Bitrix\Main\Engine\Contract\Controllerable
 {
-	protected string $id = 'space';
-	protected string $eastReleaseDate = '07.11.2025';
-	protected string $westReleaseDate = '27.11.2025';
+	protected string $id = 'vibecode';
+	protected string $eastReleaseDate = '15.05.2026';
+	protected string $westReleaseDate = '28.05.2026';
 
 	protected array $releaseMap = [
-		'ru' => ['https://space-release.bitrix24.tech/slider/', '10:00'],
-		'by' => ['https://space-release.bitrix24promo.by/slider/', '10:00'],
-		'kz' => ['https://space-release.bitrix24kz.works/slider/', '10:00'],
+		'ru' => ['https://vibe-release.bitrix24.tech', '10:00'],
+		'by' => ['https://vibe-release.bitrix24promo.by', '10:00'],
+		'kz' => ['https://vibe-release.bitrix24kz.works', '10:00'],
+		'uz' => ['https://vibe-release.bitrix24uz.events', '10:00'],
 
-		'uk' => ['https://www.bitrix24.uk/promo/fall-2025-release-slider/', '13:00'],
-		'in' => ['https://www.bitrix24.in/promo/fall-2025-release-slider/', '11:00'],
-		'eu' => ['https://www.bitrix24.eu/promo/fall-2025-release-slider/', '13:00'],
-		'br' => ['https://www.bitrix24.com.br/promo/fall-2025-release-slider/', '17:00'],
-		'la' => ['https://www.bitrix24.es/promo/fall-2025-release-slider/', '14:00'],
-		'mx' => ['https://www.bitrix24.mx/promo/fall-2025-release-slider/', '18:00'],
-		'co' => ['https://www.bitrix24.co/promo/fall-2025-release-slider/', '18:00'],
-		'tr' => ['https://www.bitrix24.com.tr/promo/fall-2025-release-slider/', '12:00'],
-		'fr' => ['https://www.bitrix24.fr/promo/fall-2025-release-slider/', '12:00'],
-		'it' => ['https://www.bitrix24.it/promo/fall-2025-release-slider/', '16:00'],
-		'pl' => ['https://www.bitrix24.pl/promo/fall-2025-release-slider/', '16:00'],
-		'de' => ['https://www.bitrix24.de/promo/fall-2025-release-slider/', '15:00'],
+		'uk' => ['https://www.bitrix24.uk/promo/spring-2026-release-slider/', '13:00'],
+		'in' => ['https://www.bitrix24.in/promo/spring-2026-release-slider/', '11:00'],
+		'eu' => ['https://www.bitrix24.eu/promo/spring-2026-release-slider/', '13:00'],
+		'br' => ['https://www.bitrix24.com.br/promo/spring-2026-release-slider/', '17:00'],
+		'la' => ['https://www.bitrix24.es/promo/spring-2026-release-slider/', '14:00'],
+		'mx' => ['https://www.bitrix24.mx/promo/spring-2026-release-slider/', '18:00'],
+		'co' => ['https://www.bitrix24.co/promo/spring-2026-release-slider/', '18:00'],
+		'tr' => ['https://www.bitrix24.com.tr/promo/spring-2026-release-slider/', '12:00'],
+		'fr' => ['https://www.bitrix24.fr/promo/spring-2026-release-slider/', '12:00'],
+		'it' => ['https://www.bitrix24.it/promo/spring-2026-release-slider/', '16:00'],
+		'pl' => ['https://www.bitrix24.pl/promo/spring-2026-release-slider/', '16:00'],
+		'de' => ['https://www.bitrix24.de/promo/spring-2026-release-slider/', '15:00'],
 
-		'en' => ['https://www.bitrix24.com/promo/fall-2025-release-slider/', '13:00'],
-		'cn' => ['https://www.bitrix24.com/promo/fall-2025-release-slider/', '11:00'],
-		'vn' => ['https://www.bitrix24.com/promo/fall-2025-release-slider/', '11:00'],
-		'jp' => ['https://www.bitrix24.com/promo/fall-2025-release-slider/', '11:00'],
-		'id' => ['https://www.bitrix24.com/promo/fall-2025-release-slider/', '11:00'],
-		'ae' => ['https://www.bitrix24.com/promo/fall-2025-release-slider/', '11:00'],
+		'en' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '13:00'],
+		'cn' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '11:00'],
+		'vn' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '11:00'],
+		'jp' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '11:00'],
+		'id' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '11:00'],
+		'ae' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '11:00'],
 	];
 
 	public function __construct($component = null)
@@ -181,7 +182,7 @@ class IntranetReleaseComponent extends \CBitrixComponent implements \Bitrix\Main
 		}
 
 		$zone = isset($this->releaseMap[$zone]) ? $zone : 'en';
-		$eastZone = in_array($zone, ['ru', 'by', 'kz']);
+		$eastZone = in_array($zone, ['ru', 'by', 'kz', 'uz']);
 
 		$releaseDate = $eastZone ? $this->eastReleaseDate : $this->westReleaseDate;
 		$releaseTime = $this->releaseMap[$zone][1];
@@ -363,7 +364,7 @@ class IntranetReleaseComponent extends \CBitrixComponent implements \Bitrix\Main
 				: 'light:dark-silk'
 		);*/
 
-		$newDefaultThemeId = 'light:space';
+		$newDefaultThemeId = 'light:vibecode';
 
 		$theme = new \Bitrix\Intranet\Integration\Templates\Bitrix24\ThemePicker('bitrix24', 's1');
 

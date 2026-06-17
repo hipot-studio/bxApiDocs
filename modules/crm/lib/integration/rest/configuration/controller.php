@@ -72,6 +72,43 @@ class Controller
 	/**
 	 * @param Event $event
 	 *
+	 * @return array|null
+	 */
+	public static function onManifestSetting(Event $event): ?array
+	{
+		$code = $event->getParameter('CODE');
+		if (
+			is_string($code)
+			&& str_starts_with($code, 'automated_solution')
+			&& (new \Bitrix\Crm\Restriction\AutomatedSolutionImportedLimit())->isRestricted()
+		)
+		{
+			return ['ERROR_EXCEPTION' => Loc::getMessage('CRM_ERROR_CONFIGURATION_AS_RESTRICTED')];
+		}
+
+		return null;
+	}
+
+	protected static function isAutomatedSolutionRestricted(Event $event): bool
+	{
+		$manifestCode = $event->getParameter('MANIFEST_CODE');
+		if (!is_string($manifestCode))
+		{
+			$manifest = $event->getParameter('MANIFEST');
+			if (is_array($manifest) && isset($manifest['CODE']))
+			{
+				$manifestCode = $manifest['CODE'];
+			}
+		}
+
+		return is_string($manifestCode)
+			&& str_starts_with($manifestCode, 'automated_solution')
+			&& (new \Bitrix\Crm\Restriction\AutomatedSolutionImportedLimit())->isRestricted();
+	}
+
+	/**
+	 * @param Event $event
+	 *
 	 * @return array export result
 	 * @return null for skip no access step
 	 */
@@ -122,6 +159,13 @@ class Controller
 					]
 				);
 			}
+		}
+		elseif (static::isAutomatedSolutionRestricted($event))
+		{
+			$result = [
+				'NEXT' => false,
+				'ERROR_EXCEPTION' => Loc::getMessage('CRM_ERROR_CONFIGURATION_AS_RESTRICTED'),
+			];
 		}
 
 		return $result;
@@ -181,6 +225,13 @@ class Controller
 				);
 			}
 		}
+		elseif (static::isAutomatedSolutionRestricted($event))
+		{
+			$result = [
+				'NEXT' => false,
+				'ERROR_EXCEPTION' => Loc::getMessage('CRM_ERROR_CONFIGURATION_AS_RESTRICTED'),
+			];
+		}
 
 		return $result;
 	}
@@ -238,6 +289,13 @@ class Controller
 					]
 				);
 			}
+		}
+		elseif (static::isAutomatedSolutionRestricted($event))
+		{
+			$result = [
+				'NEXT' => false,
+				'ERROR_EXCEPTION' => Loc::getMessage('CRM_ERROR_CONFIGURATION_AS_RESTRICTED'),
+			];
 		}
 
 		return $result;

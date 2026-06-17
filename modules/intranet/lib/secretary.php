@@ -1,10 +1,12 @@
 <?php
 namespace Bitrix\Intranet;
 
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail\Integration\Im\Chat;
+use Bitrix\Intranet\Service\CalendarParentChatResolver;
 
 // workaround for ControlButton translations
 Loc::loadMessages(__DIR__ . '/controlbutton.php');
@@ -22,6 +24,9 @@ class Secretary
 			throw new SystemException('create calendar chat: failed to load modules');
 		}
 
+		$chatParentResolver = ServiceLocator::getInstance()->get(CalendarParentChatResolver::class);
+		$parentChatId = $chatParentResolver->resolve($calendarData);
+
 		$chat = new \CIMChat(0);
 		$chatFields = [
 			'TITLE' => $calendarData['TITLE'],
@@ -32,6 +37,10 @@ class Secretary
 			'AUTHOR_ID' => $userId,
 			'USERS' => $calendarData['NOT_DECLINED_IDS'] ?? $calendarData['USER_IDS'],
 		];
+		if ($parentChatId > 0)
+		{
+			$chatFields['PARENT_ID'] = $parentChatId;
+		}
 
 		$chatId = $chat->add($chatFields);
 

@@ -1226,12 +1226,9 @@ class CWizardTemplate
 
 		if (isset($GLOBALS["APPLICATION"]) && is_object($GLOBALS["APPLICATION"]))
 		{
-			$GLOBALS["APPLICATION"]->AddHeadString($styles);
 			IncludeAJAX();
-		}
-		//IncludeAJAX();
 
-		$styles = <<<STYLES
+			$styles = <<<STYLES
 <style type="text/css">
 			/*Data table*/
 			table.wizard-data-table
@@ -1285,7 +1282,9 @@ class CWizardTemplate
 			}
 </style>
 STYLES;
-		//$GLOBALS["APPLICATION"]->AddHeadString($styles);
+
+			$GLOBALS["APPLICATION"]->AddHeadString($styles);
+		}
 
 		$arErrors = $obStep->GetErrors();
 		$strError = "";

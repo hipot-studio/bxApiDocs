@@ -115,16 +115,27 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 						'=this.ID' => 'ref.MESSAGE_ID',
 					)
 				),
+				new Main\Entity\ReferenceField(
+					'MESSAGE_UID',
+					Mail\MailMessageUidTable::class,
+					array(
+						'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+						'=this.ID' => 'ref.MESSAGE_ID',
+					),
+					array('join_type' => 'INNER'),
+				),
 			),
 			'select' => $this->getLogItemSelectFields(),
 			'filter' => array(
 				'=MAILBOX_ID' => $message['MAILBOX_ID'],
 				'=CLOSURE.PARENT_ID' => $message['ID'],
+				'!=ID' => $message['ID'],
+				'==MESSAGE_UID.DELETE_TIME' => 0,
+				'!@MESSAGE_UID.IS_OLD' => Mail\MailMessageUidTable::HIDDEN_STATUSES,
 			),
 			'order' => array(
-				'FIELD_DATE' => 'ASC',
+				'MESSAGE_UID.INTERNALDATE' => 'ASC',
 			),
-			'offset' => 1,
 			'limit' => $pageSize,
 		));
 
@@ -150,16 +161,27 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 							'=this.ID' => 'ref.PARENT_ID',
 						)
 					),
+					new Main\Entity\ReferenceField(
+						'MESSAGE_UID',
+						Mail\MailMessageUidTable::class,
+						array(
+							'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+							'=this.ID' => 'ref.MESSAGE_ID',
+						),
+						array('join_type' => 'INNER'),
+					),
 				),
 				'select' => $this->getLogItemSelectFields(),
 				'filter' => array(
 					'=MAILBOX_ID' => $message['MAILBOX_ID'],
 					'=CLOSURE.MESSAGE_ID' => $message['ID'],
+					'!=ID' => $message['ID'],
+					'==MESSAGE_UID.DELETE_TIME' => 0,
+					'!@MESSAGE_UID.IS_OLD' => Mail\MailMessageUidTable::HIDDEN_STATUSES,
 				),
 				'order' => array(
-					'FIELD_DATE' => 'DESC',
+					'MESSAGE_UID.INTERNALDATE' => 'DESC',
 				),
-				'offset' => 1,
 				'limit' => $pageSize,
 			));
 
@@ -181,7 +203,13 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 			$this->arResult['LOG']['A'],
 			[$this->arResult['MESSAGE']]
 		));
-		$APPLICATION->setTitle(htmlspecialcharsbx($message['SUBJECT']) ?: Loc::getMessage('MAIL_MESSAGE_EMPTY_SUBJECT_PLACEHOLDER'));
+		$displaySubject = $message['SUBJECT'];
+		if (trim((string)$displaySubject) === '')
+		{
+			$generated = Mail\Helper\Message::extractSubjectFromBody((string)$message['BODY']);
+			$displaySubject = $generated !== '' ? $generated : Loc::getMessage('MAIL_MESSAGE_EMPTY_SUBJECT_PLACEHOLDER');
+		}
+		$APPLICATION->setTitle(htmlspecialcharsbx($displaySubject));
 		$this->arResult['MESSAGE_UID_KEY'] = $message['UID'] . '-' . $message['MAILBOX_ID'];
 		$this->arResult['COPILOT_PARAMS'] = $this->prepareCopilotParams();
 		$this->arResult['ANALYTICS'] = $this->arParams['ANALYTICS'];
@@ -254,16 +282,28 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 							'=this.ID' => 'ref.MESSAGE_ID',
 						)
 					),
+					new Main\Entity\ReferenceField(
+						'MESSAGE_UID',
+						Mail\MailMessageUidTable::class,
+						array(
+							'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+							'=this.ID' => 'ref.MESSAGE_ID',
+						),
+						array('join_type' => 'INNER'),
+					),
 				),
 				'select' => $this->getLogItemSelectFields(),
 				'filter' => array(
 					'=MAILBOX_ID' => $message['MAILBOX_ID'],
 					'=CLOSURE.PARENT_ID' => $message['ID'],
+					'!=ID' => $message['ID'],
+					'==MESSAGE_UID.DELETE_TIME' => 0,
+					'!@MESSAGE_UID.IS_OLD' => Mail\MailMessageUidTable::HIDDEN_STATUSES,
 				),
 				'order' => array(
-					'FIELD_DATE' => 'ASC',
+					'MESSAGE_UID.INTERNALDATE' => 'ASC',
 				),
-				'offset' => $offset + 1,
+				'offset' => $offset,
 				'limit' => $size > 0 ? $size : 5,
 			));
 		}
@@ -284,16 +324,28 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 							'=this.ID' => 'ref.PARENT_ID',
 						)
 					),
+					new Main\Entity\ReferenceField(
+						'MESSAGE_UID',
+						Mail\MailMessageUidTable::class,
+						array(
+							'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+							'=this.ID' => 'ref.MESSAGE_ID',
+						),
+						array('join_type' => 'INNER'),
+					),
 				),
 				'select' => $this->getLogItemSelectFields(),
 				'filter' => array(
 					'=MAILBOX_ID' => $message['MAILBOX_ID'],
 					'=CLOSURE.MESSAGE_ID' => $message['ID'],
+					'!=ID' => $message['ID'],
+					'==MESSAGE_UID.DELETE_TIME' => 0,
+					'!@MESSAGE_UID.IS_OLD' => Mail\MailMessageUidTable::HIDDEN_STATUSES,
 				),
 				'order' => array(
-					'FIELD_DATE' => 'DESC',
+					'MESSAGE_UID.INTERNALDATE' => 'DESC',
 				),
-				'offset' => $offset + 1,
+				'offset' => $offset,
 				'limit' => $size > 0 ? $size : 5,
 			));
 		}
@@ -528,7 +580,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 			{
 				$chatData = CIMChat::GetChatData(['ID' => $chatId]);
 				// $defaultTitle = sprintf('%s #%u', Loc::getMessage('MAIL_MESSAGE_EXT_BIND_CHAT_EMPTY_TITLE'), $chatId);
-				$defaultTitle = Loc::getMessage('MAIL_MESSAGE_CREATE_IM_BTN');
+				$defaultTitle = Loc::getMessage('MAIL_MESSAGE_EXT_BIND_CHAT_EMPTY_TITLE');
 				$message['BIND_LINKS'][Loc::getMessage('MAIL_MESSAGE_EXT_BIND_CHAT_TITLE')][] = array(
 					'title' => isset($chatData['chat'][$chatId]['name']) ? htmlspecialcharsback($chatData['chat'][$chatId]['name']) : $defaultTitle,
 					'href' => \CComponentEngine::makePathFromTemplate(
@@ -825,6 +877,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 				'HEADER_MD5' => 'MESSAGE_UID.HEADER_MD5',
 				'MAILBOX_LOGIN' => 'MAILBOX.LOGIN',
 				'IS_SEEN' => 'MESSAGE_UID.IS_SEEN',
+				'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE',
 			],
 			'filter' => [
 				'=ID' => $id,
@@ -899,6 +952,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 			'ID',
 			'MAILBOX_ID',
 			'FIELD_DATE',
+			'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE',
 			'SUBJECT',
 			'FIELD_FROM',
 			'FIELD_REPLY_TO',
@@ -977,7 +1031,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 		$quote = Message::wrapTheMessageWithAQuote(
 			$messageHtml,
 			$message['SUBJECT'],
-			$message['FIELD_DATE'],
+			$message['INTERNALDATE'] ?? $message['FIELD_DATE'],
 			$message['__from'],
 			$message['__to'],
 			$message['__cc'],

@@ -31,6 +31,7 @@ use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 use Bitrix\Tasks\Internals\TaskTable;
 use Exception;
+use Bitrix\Main\Text\Emoji;
 
 /**
  * Class TagTable
@@ -103,6 +104,8 @@ class LabelTable extends TaskDataManager
 					'required' => true,
 					'validation' => [__CLASS__, 'validateName'],
 					'title' => Loc::getMessage('TAG_ENTITY_NAME_FIELD'),
+					'save_data_modification' => [Emoji::class, 'getSaveModificator'],
+					'fetch_data_modification' => [Emoji::class, 'getFetchModificator'],
 				]
 			),
 			new IntegerField(

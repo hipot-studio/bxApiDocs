@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings;
 
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\BaasManager;
+use Bitrix\Crm\Integration\AI\Operation\AnalyzeCommunication;
 use Bitrix\Crm\Integration\AI\Operation\FillItemFieldsFromCallTranscription;
 use Bitrix\Crm\Integration\AI\Operation\SummarizeCallTranscription;
 
@@ -79,6 +80,7 @@ final class ChatChannelSettings extends BaseChannelSettings
 				[
 					SummarizeCallTranscription::TYPE_ID,
 					FillItemFieldsFromCallTranscription::TYPE_ID,
+					AnalyzeCommunication::TYPE_ID,
 				],
 				true
 			);

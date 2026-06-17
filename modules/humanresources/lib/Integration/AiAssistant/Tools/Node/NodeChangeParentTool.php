@@ -7,9 +7,16 @@ namespace Bitrix\HumanResources\Integration\AiAssistant\Tools\Node;
 use Bitrix\HumanResources\Access\Model\NodeModel;
 use Bitrix\HumanResources\Access\StructureActionDictionary;
 use Bitrix\HumanResources\Integration\AiAssistant\Tools\NodeBaseTool;
+use Bitrix\HumanResources\Integration\AiAssistant\Tools\Schema\InputProperty;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\NodeEntityType;
 
+/**
+ * Move node to a new parent.
+ *
+ * @see \Bitrix\HumanResources\Rest\Controller\Node::moveAction — REST analog
+ * @see \Bitrix\HumanResources\Controller\Structure\Node::updateAction — ajax controller (parentId parameter)
+ */
 abstract class NodeChangeParentTool extends NodeBaseTool
 {
 	public function getInputSchema(): array
@@ -17,14 +24,8 @@ abstract class NodeChangeParentTool extends NodeBaseTool
 		return [
 			'type' => 'object',
 			'properties' => [
-				'nodeId' => [
-					'description' => 'Identifier of the node which name or description should be updated',
-					'type' => 'number',
-				],
-				'parentId' => [
-					'description' => 'Parent node identifier. Should not be null or 0',
-					'type' => 'number',
-				],
+				'nodeId' => InputProperty::nodeId('Identifier of the node whose parent should be changed'),
+				'parentId' => InputProperty::nodeId('New parent node identifier'),
 			],
 			'additionalProperties' => false,
 			'required' => ['nodeId', 'parentId'],

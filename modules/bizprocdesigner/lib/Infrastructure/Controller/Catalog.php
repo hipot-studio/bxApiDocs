@@ -31,7 +31,7 @@ class Catalog extends JsonController
 		$activities =
 			$searcher->searchByType([ActivityType::NODE->value, ActivityType::TRIGGER->value], $documentType)
 				//->computeDescriptionFilter($documentType)
-				->filter(static fn(ActivityDescription $description) => !$description->getExcluded())
+				->filter(static fn(ActivityDescription $description) => !$description->getExcluded() && !$description->getDeprecated())
 				->sort()
 		;
 
