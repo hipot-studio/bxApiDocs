@@ -263,6 +263,13 @@ class UIPromotionService implements PromotionServiceInterface
 			];
 		}
 
+		$result[] = [
+			"ID" => 'im:create-collab-nested-chat-description:20032026:all',
+			"USER_TYPE" =>  UserType::ALL->value,
+			"DEVICE_TYPE" => DeviceType::WEB->value,
+			"LIFETIME" => self::ENDLESS_LIFETIME,
+		];
+
 		$settings = Configuration::getValue('im');
 		if (isset($settings['promotion']) && is_array($settings['promotion']))
 		{

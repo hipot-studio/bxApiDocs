@@ -4,10 +4,13 @@ namespace Bitrix\Imbot\Bot;
 
 use Bitrix\AI\Context;
 use Bitrix\Ai\Services\MarkdownToBBCodeTranslationService;
+use Bitrix\AiAssistant\Config\Feature;
 use Bitrix\AiAssistant\Core\Dto\MessageDto;
 use Bitrix\AiAssistant\Core\Enum\MessageType;
+use Bitrix\AiAssistant\Core\Enum\UserPlatform;
 use Bitrix\AiAssistant\Core\Repository\MessageParamsRepository;
 use Bitrix\AiAssistant\Core\Service\AiBot;
+use Bitrix\Im\Bot;
 use Bitrix\Im\V2\Analytics\CopilotAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\Data\BotData;
@@ -147,7 +150,7 @@ class CopilotChatBot extends Base
 					$languageId
 				),
 				'COLOR' => 'COPILOT',
-			]
+			],
 		]);
 
 		$botAvatar = self::uploadAvatar($languageId);
@@ -306,7 +309,7 @@ class CopilotChatBot extends Base
 					$languageId
 				),
 				'COLOR' => 'COPILOT',
-			]
+			],
 		]);
 
 		$avatarUrl = self::uploadAvatar($languageId);
@@ -421,6 +424,12 @@ class CopilotChatBot extends Base
 			;
 		}
 
+		if (self::isBgptV2Enabled())
+		{
+			return self::handleMessageViaAiAssistant($messageId, $messageFields);
+		}
+
+
 		$reasoningIsEnabled = (
 			Im\V2\Application\Features::get()->isCopilotReasoningAvailable
 			&& $targetMessage->getParams()->get(Message\Params::COPILOT_REASONING)->getValue()
@@ -455,8 +464,8 @@ class CopilotChatBot extends Base
 					'PARAMS' => [
 						Im\V2\Message\Params::COMPONENT_PARAMS => [
 							self::MESSAGE_PARAMS_MORE => (bool)$output['HAS_MORE'],
-						]
-					]
+						],
+					],
 				];
 				self::sendMessage((int)$messageFields['TO_CHAT_ID'], $message);
 
@@ -500,9 +509,12 @@ class CopilotChatBot extends Base
 		return $result->isSuccess();
 	}
 
-	private static function isAiAssistantMentionEnabled(): bool
+	private static function isBgptV2Enabled(): bool
 	{
-		return Option::get(self::MODULE_ID, 'bitrixgpt_agent_mention', 'N') === 'Y';
+		return Loader::includeModule('aiassistant')
+			&& (Feature::getInstance()?->isBitrixGptV2Available()
+				|| Option::get(self::MODULE_ID, 'bgpt_v2_enabled', 'N') === 'Y'
+			);
 	}
 
 	public static function onExternalMention(int $messageId, array $messageFields): bool
@@ -512,7 +524,7 @@ class CopilotChatBot extends Base
 			return false;
 		}
 
-		if (Loader::includeModule('aiassistant') && self::isAiAssistantMentionEnabled())
+		if (self::isBgptV2Enabled())
 		{
 			return self::handleExternalMentionViaAiAssistant($messageId, $messageFields);
 		}
@@ -572,6 +584,11 @@ class CopilotChatBot extends Base
 			'senderBotId' => self::getBotId(),
 			'beforeMessageId' => $messageId,
 			'chatMode' => 'inline',
+			'userPlatform' => ($messageFields['PLATFORM_CONTEXT'] === Bot::PLATFORM_CONTEXT_MOBILE)
+				? UserPlatform::Mobile->value
+				: UserPlatform::Web->value
+			,
+			'mcpAuthId' => $messageFields['PARAMS']['COPILOT_MCP_AUTH_ID'] ?? null,
 		];
 		$messageDto = new MessageDto(
 			id: $messageId,
@@ -591,6 +608,57 @@ class CopilotChatBot extends Base
 		ServiceLocator::getInstance()
 					  ->get(AiBot::class)
 					  ->handleIncomingMessage($messageDto)
+		;
+
+		return true;
+	}
+
+	private static function handleMessageViaAiAssistant(int $messageId, array $messageFields): bool
+	{
+		$chatId = (int)$messageFields['TO_CHAT_ID'];
+		$userId = (int)$messageFields['FROM_USER_ID'];
+		self::sendTyping($chatId);
+
+		$persistentParams = [
+			'messageType' => MessageType::Default->value,
+			'senderBotId' => self::getBotId(),
+			'beforeMessageId' => $messageId,
+			'chatMode' => 'default',
+			'forceSearch' => ($messageFields['PARAMS']['COPILOT_FORCE_SEARCH'] ?? null) === 'Y',
+			'userPlatform' => ($messageFields['PLATFORM_CONTEXT'] === Bot::PLATFORM_CONTEXT_MOBILE)
+				? UserPlatform::Mobile->value
+				: UserPlatform::Web->value
+			,
+			'mcpAuthId' => $messageFields['PARAMS']['COPILOT_MCP_AUTH_ID'] ?? null,
+		];
+
+		$params = $persistentParams + [
+			'pageContext' => $messageFields['PARAMS']['COPILOT_PAGE_CONTEXT'] ?? null,
+		];
+
+		$preparedFields = \CIMMessenger::prepareFieldsForMessageObject($messageFields);
+		$preparedFields['ID'] = $messageId;
+		$targetMessage = (new Message())->fill(['PARAMS' => $preparedFields['PARAMS'] ?? []]);
+		$targetMessage->load($preparedFields);
+
+		$messageDto = new MessageDto(
+			id: $messageId,
+			chatId: $chatId,
+			authorId: $userId,
+			type: MessageType::Default,
+			content: $messageFields['MESSAGE'],
+			params: $params,
+			dateCreate: $targetMessage->getDateCreate()?->format(\DateTimeInterface::ATOM),
+		);
+		ServiceLocator::getInstance()->get(MessageParamsRepository::class)?->setMessageParams(
+			$messageId,
+			$chatId,
+			$persistentParams
+		);
+
+		ServiceLocator::getInstance()
+			->get(AiBot::class)
+			->handleIncomingMessage($messageDto)
 		;
 
 		return true;

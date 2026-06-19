@@ -1337,6 +1337,7 @@ class CCatalogArrivalDocs extends CCatalogDocsTypes
 
 		$isBatchMetodSelected = State::isProductBatchMethodSelected();
 
+		$totalAmount = [];
 		$elements = $document['ELEMENTS'] ?? [];
 		foreach ($elements as $productId => $element)
 		{
@@ -1373,9 +1374,15 @@ class CCatalogArrivalDocs extends CCatalogDocsTypes
 				}
 				elseif ($action === self::ACTION_CANCEL)
 				{
+					$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']] ??= 0;
+					$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']] += $item['AMOUNT'];
+
 					if (State::isProductBatchMethodSelected())
 					{
-						$actions[] = new ReduceStoreBatchAmountAction($item['ROW_ID']);
+						$actions[] = new ReduceStoreBatchAmountAction(
+							$item['ROW_ID'],
+							$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']],
+						);
 					}
 
 					$actions[] = new DecreaseStoreQuantityAction(
@@ -1383,6 +1390,7 @@ class CCatalogArrivalDocs extends CCatalogDocsTypes
 						$item['PRODUCT_ID'],
 						$item['AMOUNT'],
 						$document['DOC_TYPE'],
+						$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']],
 					);
 				}
 			}
@@ -1619,6 +1627,7 @@ class CCatalogMovingDocs extends CCatalogDocsTypes
 			return null;
 		}
 
+		$totalAmount = [];
 		$elements = $document['ELEMENTS'] ?? [];
 		foreach ($elements as $productId => $element)
 		{
@@ -1627,6 +1636,9 @@ class CCatalogMovingDocs extends CCatalogDocsTypes
 			{
 				if ($action === self::ACTION_CONDUCTION)
 				{
+					$totalAmount[$item['PRODUCT_ID']][$item['STORE_FROM']] ??= 0;
+					$totalAmount[$item['PRODUCT_ID']][$item['STORE_FROM']] += $item['AMOUNT'];
+
 					if (State::isProductBatchMethodSelected())
 					{
 						$actions[] = new MoveStoreBatchAction(
@@ -1634,6 +1646,7 @@ class CCatalogMovingDocs extends CCatalogDocsTypes
 							$item['STORE_TO'],
 							$item['PRODUCT_ID'],
 							$item['AMOUNT'],
+							$totalAmount[$item['PRODUCT_ID']][$item['STORE_FROM']],
 							$item['ROW_ID']
 						);
 					}
@@ -1642,8 +1655,10 @@ class CCatalogMovingDocs extends CCatalogDocsTypes
 						$item['STORE_FROM'],
 						$item['PRODUCT_ID'],
 						$item['AMOUNT'],
-						$document['DOC_TYPE']
+						$document['DOC_TYPE'],
+						$totalAmount[$item['PRODUCT_ID']][$item['STORE_FROM']],
 					);
+
 					$actions[] = new IncreaseStoreQuantityAction(
 						$item['STORE_TO'],
 						$item['PRODUCT_ID'],
@@ -1652,9 +1667,15 @@ class CCatalogMovingDocs extends CCatalogDocsTypes
 				}
 				elseif ($action === self::ACTION_CANCEL)
 				{
+					$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']] ??= 0;
+					$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']] += $item['AMOUNT'];
+
 					if (State::isProductBatchMethodSelected())
 					{
-						$actions[] = new ReduceStoreBatchAmountAction($item['ROW_ID']);
+						$actions[] = new ReduceStoreBatchAmountAction(
+							$item['ROW_ID'],
+							$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']],
+						);
 						$actions[] = new ReturnStoreBatchAction($item['ROW_ID']);
 					}
 
@@ -1663,11 +1684,13 @@ class CCatalogMovingDocs extends CCatalogDocsTypes
 						$item['PRODUCT_ID'],
 						$item['AMOUNT']
 					);
+
 					$actions[] = new DecreaseStoreQuantityAction(
 						$item['STORE_TO'],
 						$item['PRODUCT_ID'],
 						$item['AMOUNT'],
-						$document['DOC_TYPE']
+						$document['DOC_TYPE'],
+						$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']],
 					);
 				}
 			}
@@ -1863,6 +1886,7 @@ class CCatalogReturnsDocs extends CCatalogDocsTypes
 			return null;
 		}
 
+		$totalAmount = [];
 		$elements = $document['ELEMENTS'] ?? [];
 		foreach ($elements as $productId => $element)
 		{
@@ -1890,16 +1914,21 @@ class CCatalogReturnsDocs extends CCatalogDocsTypes
 				}
 				elseif ($action === self::ACTION_CANCEL)
 				{
+					$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']] ??= 0;
+					$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']] += $item['AMOUNT'];
 					if (State::isProductBatchMethodSelected())
 					{
-						$actions[] = new ReduceStoreBatchAmountAction($item['ROW_ID']);
+						$actions[] = new ReduceStoreBatchAmountAction(
+							$item['ROW_ID'],
+							$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']],
+						);
 					}
-
 					$actions[] = new DecreaseStoreQuantityAction(
 						$item['STORE_TO'],
 						$item['PRODUCT_ID'],
 						$item['AMOUNT'],
-						$document['DOC_TYPE']
+						$document['DOC_TYPE'],
+						$totalAmount[$item['PRODUCT_ID']][$item['STORE_TO']],
 					);
 				}
 			}
@@ -2043,6 +2072,7 @@ class CCatalogDeductDocs extends CCatalogDocsTypes
 		}
 
 		$elements = $document['ELEMENTS'] ?? [];
+		$totalAmount = [];
 		foreach ($elements as $productId => $element)
 		{
 			$positions = (array)($element['POSITIONS'] ?? []);
@@ -2050,19 +2080,23 @@ class CCatalogDeductDocs extends CCatalogDocsTypes
 			{
 				if ($action === self::ACTION_CONDUCTION)
 				{
+					$totalAmount[$item['PRODUCT_ID']][$item['STORE_FROM']] ??= 0;
+					$totalAmount[$item['PRODUCT_ID']][$item['STORE_FROM']] += $item['AMOUNT'];
 					if (State::isProductBatchMethodSelected())
 					{
 						$actions[] = new WriteOffStoreBatchAction(
 							$item['ROW_ID'],
 							$item['PRODUCT_ID'],
-							$item['AMOUNT']
+							$item['AMOUNT'],
+							$totalAmount[$item['PRODUCT_ID']][$item['STORE_FROM']],
 						);
 					}
 					$actions[] = new DecreaseStoreQuantityAction(
 						$item['STORE_FROM'],
 						$item['PRODUCT_ID'],
 						$item['AMOUNT'],
-						$document['DOC_TYPE']
+						$document['DOC_TYPE'],
+						$totalAmount[$item['PRODUCT_ID']][$item['STORE_FROM']],
 					);
 				}
 				elseif ($action === self::ACTION_CANCEL)

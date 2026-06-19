@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Folder;
 use Bitrix\Im\Access\ChatAuthProvider;
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Collab\CollabInfo;
 use Bitrix\Im\V2\Chat\Collab\GuestCounter;
 use Bitrix\Im\V2\Entity\User\User;
@@ -82,6 +83,11 @@ class CollabChat extends GroupChat
 		$accessProvider->updateChatCodesByRelations($this->getId());
 
 		return $folder;
+	}
+
+	public function canHaveChild(Chat $child): bool
+	{
+		return !($child instanceof CommentChat);
 	}
 
 	public function canDo(Action $action, mixed $target = null): bool

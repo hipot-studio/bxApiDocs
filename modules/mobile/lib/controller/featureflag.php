@@ -2,8 +2,16 @@
 
 namespace Bitrix\Mobile\Controller;
 
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\JsonController;
+use Bitrix\Main\Loader;
+use Bitrix\Mobile\Config\Feature;
+use Bitrix\Mobile\Feature\SecuritySettingsFeature;
+use Bitrix\Mobile\Feature\SettingsV2Feature;
+use Bitrix\Mobile\Feature\SupportFeature;
+use Bitrix\Mobile\Feature\WhatsNewFeature;
+use Bitrix\TimemanMobile\Public\Features\WorkReportsFeature;
 
 final class FeatureFlag extends JsonController
 {
@@ -24,11 +32,15 @@ final class FeatureFlag extends JsonController
 	public function getFeatureFlagsAction(): array
 	{
 		return [
-			'SettingsV2Feature' => (new \Bitrix\Mobile\Feature\SettingsV2Feature())->isEnabled(),
-			'SecuritySettingsFeature' => (new \Bitrix\Mobile\Feature\SecuritySettingsFeature())->isEnabled(),
-			'SupportFeature' => (new \Bitrix\Mobile\Feature\SupportFeature())->isEnabled(),
-			'WhatsNewFeature' => (new \Bitrix\Mobile\Feature\WhatsNewFeature())->isEnabled(),
-			'DeveloperMenuEnabled' => \Bitrix\Main\Config\Option::get('mobile', 'developers_menu_section', 'N') === 'Y',
+			'ProjectsV2Feature' => Option::get('socialnetwork', 'new_projects', 'N') === 'Y',
+			'SettingsV2Feature' => (new SettingsV2Feature())->isEnabled(),
+			'SecuritySettingsFeature' => (new SecuritySettingsFeature())->isEnabled(),
+			'SupportFeature' => (new SupportFeature())->isEnabled(),
+			'WhatsNewFeature' => (new WhatsNewFeature())->isEnabled(),
+			'DeveloperMenuEnabled' => Option::get('mobile', 'developers_menu_section', 'N') === 'Y',
+			'WorkReportsFeature' => Loader::includeModule('timeman')
+				&& Loader::includeModule('timemanmobile')
+				&& Feature::isEnabled(WorkReportsFeature::class),
 		];
 	}
 }

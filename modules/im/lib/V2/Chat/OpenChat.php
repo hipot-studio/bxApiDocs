@@ -2,9 +2,7 @@
 
 namespace Bitrix\Im\V2\Chat;
 
-use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Relation\DeleteUserConfig;
-use Bitrix\Im\V2\Result;
 use Bitrix\Main\Loader;
 use CIMContactList;
 
@@ -13,16 +11,6 @@ class OpenChat extends GroupChat
 	protected function getDefaultType(): string
 	{
 		return self::IM_TYPE_OPEN;
-	}
-
-	protected function checkAccessInternal(int $userId): Result
-	{
-		if (User::getInstance($userId)->isExtranet())
-		{
-			return parent::checkAccessInternal($userId);
-		}
-
-		return new Result();
 	}
 
 	public function getRecentSectionsForGuest(): array

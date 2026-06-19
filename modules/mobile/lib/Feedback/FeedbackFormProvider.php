@@ -94,6 +94,24 @@ class FeedbackFormProvider
 				'lang' => 'en',
 			],
 		],
+		'integrationConsultLt100' => [
+			'ru' => [
+				'portalZones' => ['ru'],
+				'portalUri' => 'https://bitrix24.team',
+				'formId' => 3636,
+				'sec' => 'gsx2bc',
+				'lang' => 'ru',
+			],
+		],
+		'integrationConsultGt100' => [
+			'ru' => [
+				'portalZones' => ['ru'],
+				'portalUri' => 'https://bitrix24.team',
+				'formId' => 3631,
+				'sec' => 'hoesxl',
+				'lang' => 'ru',
+			],
+		],
 		'appFeedbackLight' => [
 			'ru-by-kz' => [
 				'portalZones' => ['ru', 'by', 'kz'],

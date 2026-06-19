@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Message;
 
+use Bitrix\Im\V2\Message\Builder\Param\BuilderParam;
 use Bitrix\Main\ORM;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
@@ -72,7 +73,8 @@ class Params extends Registry
 		STICKER_PARAMS = 'STICKER_PARAMS',
 		AI_ASSISTANT_MCP_AUTH_ID = 'AI_ASSISTANT_MCP_AUTH_ID',
 		COPILOT_REASONING = 'COPILOT_REASONING',
-		AI_TASK_TRIGGER_MESSAGE_ID = 'AI_TASK_TRIGGER_MESSAGE_ID'
+		AI_TASK_TRIGGER_MESSAGE_ID = 'AI_TASK_TRIGGER_MESSAGE_ID',
+		BUILDER = 'BUILDER'
 	;
 
 	//todo: Move it into CRM module
@@ -290,6 +292,11 @@ class Params extends Registry
 		self::AI_TASK_TRIGGER_MESSAGE_ID => [
 			'type' => Param::TYPE_INT,
 			'default' => 0,
+		],
+		self::BUILDER => [
+			'className' => BuilderParam::class,
+			'type' => Param::TYPE_JSON,
+			'isHidden' => true,
 		],
 	];
 

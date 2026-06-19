@@ -1094,6 +1094,8 @@ class Chat
 			);
 		}
 
+		$filter['=PARENT_ID'] = 0;
+
 		return [
 			'select' => [
 				'*',
@@ -1129,17 +1131,9 @@ class Chat
 			return false;
 		}
 
-		$result = \Bitrix\Im\Model\RelationTable::getList(
-			[
-				'select' => ["ID"],
-				'filter' => [
-					'=USER_ID' => $userId,
-					'=CHAT_ID' => $chatId
-				]
-			]
-		)->fetch();
+		$chat = \Bitrix\Im\V2\Chat::getInstance((int)$chatId);
 
-		return (bool)$result['ID'];
+		return $chat->getRelationByUserId((int)$userId) !== null;
 	}
 
 	public static function isUserKickedFromChat($chatId, $userId = 0) : bool

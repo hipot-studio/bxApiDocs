@@ -25,11 +25,14 @@ class ReduceStoreBatchAmountAction implements Action
 	use WriteOffAmountValidator;
 
 	protected int $storeId;
-
 	protected int $productId;
 	protected ?EO_StoreDocumentElement $storeDocumentElement;
-	public function __construct(int $documentElementId)
+	protected float $totalAmount;
+
+	public function __construct(int $documentElementId, float $totalAmount)
 	{
+		$this->totalAmount = $totalAmount;
+
 		$this->storeDocumentElement = StoreDocumentElementTable::getList([
 				'filter' => [
 					'=ID' => $documentElementId,
@@ -56,7 +59,7 @@ class ReduceStoreBatchAmountAction implements Action
 			$this->storeId = $this->storeDocumentElement->getStoreTo();
 		}
 
-		return $this->checkStoreAmount($this->storeDocumentElement);
+		return $this->checkStoreAmount($this->storeDocumentElement, $this->totalAmount);
 	}
 
 	/**

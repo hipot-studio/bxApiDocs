@@ -3,6 +3,7 @@ namespace Bitrix\Imopenlines\Update;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Update\Stepper;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 
 Loc::loadMessages(__FILE__);
 
@@ -86,7 +87,7 @@ final class MigrateQueue extends Stepper
 			foreach ($relations as $relation)
 			{
 				$user = \Bitrix\Im\User::getInstance($relation['USER_ID']);
-				if (!$user->isConnector() && !$user->isBot())
+				if (!UserV2::getInstance((int)$relation['USER_ID'])->isConnector() && !UserV2::getInstance((int)$relation['USER_ID'])->isBot())
 				{
 					\Bitrix\Im\Model\RelationTable::deleteByFilter([
 						'CHAT_ID' => $recent['CHAT_ID'],

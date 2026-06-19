@@ -5,15 +5,8 @@ namespace Bitrix\StaffTrack\Integration\Timeman;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ObjectException;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\StaffTrack\Dictionary\Location;
-use Bitrix\StaffTrack\Dictionary\Status;
-use Bitrix\StaffTrack\Feature;
-use Bitrix\StaffTrack\Helper\DateHelper;
-use Bitrix\StaffTrack\Provider\ShiftProvider;
-use Bitrix\StaffTrack\Service\ShiftService;
-use Bitrix\StaffTrack\Shift\ShiftDto;
+use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
 use Bitrix\Timeman\Form\Schedule\ViolationForm;
 use Bitrix\Timeman\Form\Worktime\WorktimeRecordForm;
 use Bitrix\Timeman\Model\Schedule\Schedule;
@@ -222,61 +215,49 @@ class WorkDayService
 	 */
 	public static function onAfterTmDayStart($params): void
 	{
-		return;
-
-		if (!Loader::includeModule('stafftrack'))
+		if (!isset($params['DATE_START'], $params['START_OFFSET'], $params['USER_ID'], $params['ID']))
 		{
 			return;
 		}
 
-		if (!Feature::isCheckInEnabled())
+		if (Loader::includeModule('stafftrackmobile') && (new CheckInFeature())->isEnabled())
 		{
-			return;
+			(new self())->aggregatePreviousDayCheckIns((int)$params['USER_ID'], (int)$params['ID']);
 		}
-
-		if (!isset($params['DATE_START'], $params['START_OFFSET'], $params['USER_ID']))
-		{
-			return;
-		}
-
-		$dateStartUtc = DateHelper::getInstance()->getDateUtc($params['DATE_START']);
-		$userDate = DateTime::createFromTimestamp($dateStartUtc->getTimestamp() + $params['START_OFFSET']);
-		$userId = (int)$params['USER_ID'];
-
-		$provider = ShiftProvider::getInstance($userId);
-		$todayDateFormatted = $userDate->format(DateHelper::DATE_FORMAT);
-		$todayShift = $provider->findByDate($todayDateFormatted);
-
-		if ($todayShift !== null)
-		{
-			return;
-		}
-
-		$shiftDto = self::createShiftFromDefaultParams($userId, $params['DATE_START'], $params['START_OFFSET']);
-
-		ShiftService::getInstance($userId)->add($shiftDto);
 	}
 
 	/**
 	 * @param int $userId
-	 * @param string $date
-	 * @param int $offset
-	 * @return ShiftDto
-	 * @throws ObjectException
+	 * @return void
 	 */
-	private static function createShiftFromDefaultParams(int $userId, string $date, int $offset): ShiftDto
+	private function aggregatePreviousDayCheckIns(int $userId, int $currentRecordId): void
 	{
-		$dto = (new ShiftDto())
-			->setUserId($userId)
-			->setShiftDate(DateHelper::getInstance()->getServerDate($date))
-			->setTimezoneOffset($offset)
-			->setStatus(Status::WORKING->value)
-			->setLocation(Location::OFFICE->value)
-			->setSkipTm(true)
-			->setSkipOptions(true)
-			->setSkipCounter(true)
-		;
+		if (!Loader::includeModule('timeman'))
+		{
+			return;
+		}
 
-		return ShiftProvider::getInstance($userId)->prepareToAdd($dto);
+		$previousRecord = \Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordTable::query()
+			->setSelect(['RECORDED_START_TIMESTAMP', 'RECORDED_STOP_TIMESTAMP'])
+			->where('USER_ID', $userId)
+			->where('ID', '<', $currentRecordId)
+			->where('RECORDED_STOP_TIMESTAMP', '>', 0)
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
+			->exec()
+			->fetch();
+
+		if (!$previousRecord)
+		{
+			return;
+		}
+
+		$startTime = DateTime::createFromTimestamp($previousRecord['RECORDED_START_TIMESTAMP']);
+		$endTime = DateTime::createFromTimestamp($previousRecord['RECORDED_STOP_TIMESTAMP']);
+
+		$repository = new \Bitrix\StaffTrack\Internal\Repository\CheckInRepository();
+		$rows = $repository->getCheckInRowsForAggregation($userId, $startTime, $endTime);
+
+		(new \Bitrix\StaffTrack\Public\Services\CheckInAggregator())->aggregate($userId, $rows);
 	}
 }

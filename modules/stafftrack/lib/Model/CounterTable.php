@@ -70,21 +70,18 @@ class CounterTable extends DataManager
 				[
 					'primary' => true,
 					'autocomplete' => true,
-					'title' => Loc::getMessage('COUNTER_ENTITY_ID_FIELD'),
 				]
 			),
 			new IntegerField(
 				'USER_ID',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('COUNTER_ENTITY_USER_ID_FIELD'),
 				]
 			),
 			new IntegerField(
 				'MUTE_STATUS',
 				[
 					'default' => 0,
-					'title' => Loc::getMessage('COUNTER_ENTITY_MUTE_STATUS_FIELD'),
 				]
 			),
 			new DatetimeField(
@@ -94,7 +91,6 @@ class CounterTable extends DataManager
 					{
 						return new DateTime();
 					},
-					'title' => Loc::getMessage('COUNTER_ENTITY_MUTE_UNTIL_FIELD'),
 				]
 			),
 		];

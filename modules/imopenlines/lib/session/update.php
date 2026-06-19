@@ -2,6 +2,7 @@
 namespace Bitrix\ImOpenLines\Session;
 
 use Bitrix\Im\User;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 use Bitrix\ImOpenLines\Chat;
 use Bitrix\ImOpenLines\Config;
 use Bitrix\ImOpenLines\ConfigStatistic;
@@ -114,7 +115,7 @@ class Update
 
 		if (
 			isset($this->newData['USER_ID'])
-			&& User::getInstance($this->newData['USER_ID'])->isConnector()
+			&& UserV2::getInstance((int)$this->newData['USER_ID'])->isConnector()
 		)
 		{
 			if (
@@ -219,7 +220,7 @@ class Update
 		if (
 			$this->session->getSessionField('WAIT_ACTION') === 'N'
 			&& isset($this->newData['USER_ID'])
-			&& User::getInstance($this->newData['USER_ID'])->isConnector()
+			&& UserV2::getInstance((int)$this->newData['USER_ID'])->isConnector()
 		)
 		{
 			$dateClose->add('1 WEEK');

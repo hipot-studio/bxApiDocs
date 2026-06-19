@@ -5,14 +5,11 @@ namespace Bitrix\Location\Repository\Location;
 use Bitrix\Location\Entity\Address\Normalizer\Builder;
 use Bitrix\Location\Entity\Location;
 use Bitrix\Location\Model;
-use Bitrix\Location\Entity\Location\Parents;
 use Bitrix\Location\Repository\Location\Capability\ISave;
 use Bitrix\Location\Repository\Location\Capability\IDelete;
 use Bitrix\Location\Repository\Location\Capability\IFindByExternalId;
 use Bitrix\Location\Repository\Location\Capability\IFindById;
 use Bitrix\Location\Repository\Location\Capability\IFindByText;
-use Bitrix\Location\Repository\Location\Capability\IFindParents;
-use Bitrix\Location\Repository\Location\Capability\ISaveParents;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\Error;
@@ -28,15 +25,13 @@ final class Database
 	implements
 		IRepository,
 		IDatabase,
-		IFindById, IFindByExternalId, IFindByText, IFindParents,
-		ISave, ISaveParents,
+		IFindById, IFindByExternalId, IFindByText,
+		ISave,
 		IDelete,
 		IScope
 {
 	/** @var Model\LocationTable  */
 	protected $locationTable = Model\LocationTable::class;
-	/** @var Model\HierarchyTable  */
-	protected $hierarchyTable = Model\HierarchyTable::class;
 	/** @var Model\LocationNameTable  */
 	protected $locationNameTable = Model\LocationNameTable::class;
 	/** @var Model\AddressTable  */
@@ -112,32 +107,6 @@ final class Database
 			->fetchCollection();
 
 		return \Bitrix\Location\Entity\Location\Converter\OrmConverter::createCollection($result, $languageId);
-	}
-
-	/** @inheritDoc */
-	public function findParents(Location $location, string $languageId)
-	{
-		if($location->getId() <= 0)
-		{
-			return null;
-		}
-
-		$ormCollection = $this->hierarchyTable::getList([
-			'filter' => [
-				'=DESCENDANT_ID' => $location->getId(),
-				'=ANCESTOR.NAME.LANGUAGE_ID' => $languageId, //todo: if not found required language
-			],
-			'order' => ['LEVEL' => 'ASC'],
-			'select' => [
-				'*',
-				'ANCESTOR',
-				'ANCESTOR.NAME'
-			]
-		])->fetchCollection();
-
-		$result = \Bitrix\Location\Entity\Location\Converter\OrmConverter::createParentCollection($ormCollection, $languageId);
-		$result->setDescendant($location);
-		return $result;
 	}
 
 	protected function obtainLocationKeys(Location $location): array
@@ -304,64 +273,7 @@ final class Database
 		if($result->isSuccess())
 		{
 			$this->locationNameTable::deleteByLocationId($id);
-			$this->hierarchyTable::deleteByLocationId($id);
 			$this->fieldTable::deleteByLocationId($id);
-		}
-
-		return $result;
-	}
-
-	/**
-	 * @param Parents $parents
-	 * @return Result
-	 * @throws ArgumentNullException
-	 * @throws \Bitrix\Main\Db\SqlQueryException
-	 */
-	public function saveParents(Parents $parents): Result
-	{
-		$result = new Result();
-
-		if($parents->count() <= 0)
-		{
-			return new Result();
-		}
-
-		if($parents->getDescendant()->getId() <= 0)
-		{
-			throw new ArgumentNullException('descendant has not saved yet');
-		}
-
-		$data = [];
-		$items = $parents->getItems();
-		krsort($items);
-
-		/**
-		 * @var  int $level
-		 * @var  Location $parentLocation
-		 */
-		foreach($items as $level => $parentLocation)
-		{
-			if($parentLocation->getId() <= 0)
-			{
-				$res = $parentLocation->save();
-
-				if(!$res->isSuccess())
-				{
-					$result->addErrors($res->getErrors());
-					continue;
-				}
-			}
-
-			$data[] = [
-				'DESCENDANT_ID' => (int)$parents->getDescendant()->getId(),
-				'ANCESTOR_ID' => (int)$parentLocation->getId(),
-				'LEVEL' => (int)$level,
-			];
-		}
-
-		if(!empty($data))
-		{
-			$this->hierarchyTable::insertBatch($data);
 		}
 
 		return $result;

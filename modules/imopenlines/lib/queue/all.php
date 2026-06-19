@@ -4,6 +4,7 @@ namespace Bitrix\ImOpenLines\Queue;
 use \Bitrix\Main\Type\DateTime;
 
 use \Bitrix\Im;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 
 use \Bitrix\ImOpenLines,
 	\Bitrix\ImOpenLines\Chat,
@@ -135,7 +136,7 @@ class All extends Queue
 						(int)$this->session['OPERATOR_ID'] !== (int)$resultOperatorQueue['OPERATOR_ID']
 					)
 					{
-						$leaveTransfer = (string)$this->config['WELCOME_BOT_LEFT'] === Config::BOT_LEFT_CLOSE && Im\User::getInstance($this->session['OPERATOR_ID'])->isBot()? 'N':'Y';
+						$leaveTransfer = (string)$this->config['WELCOME_BOT_LEFT'] === Config::BOT_LEFT_CLOSE && UserV2::getInstance((int)$this->session['OPERATOR_ID'])->isBot()? 'N':'Y';
 
 						$this->chat->transfer(
 							[
@@ -160,7 +161,7 @@ class All extends Queue
 				}
 
 				if (
-					Im\User::getInstance($this->session['OPERATOR_ID'])->isBot()
+					UserV2::getInstance((int)$this->session['OPERATOR_ID'])->isBot()
 					&& $this->config['NO_ANSWER_RULE'] == Session::RULE_TEXT
 					&& $this->session['SEND_NO_ANSWER_TEXT'] !== 'Y'
 					&& $this->session['STATUS'] <= Session::STATUS_CLIENT
@@ -199,10 +200,18 @@ class All extends Queue
 
 	protected function prepareToQueue(): void
 	{
+		$previousOperatorId = (int)$this->session['OPERATOR_ID'];
+
 		parent::prepareToQueue();
 
 		$fakeRelations = new ImOpenLines\Relation((int)$this->session['CHAT_ID']);
+		$queueOperatorIds = $fakeRelations->getRelationUserIds();
 		$fakeRelations->removeAllRelations(true);
+
+		ImOpenLines\Im::clearOpenLineCounter(
+			(int)$this->session['CHAT_ID'],
+			array_merge($queueOperatorIds, [$previousOperatorId])
+		);
 	}
 
 	private function removeWelcomeBot(): void

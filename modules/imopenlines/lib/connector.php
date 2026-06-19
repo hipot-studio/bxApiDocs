@@ -16,6 +16,7 @@ use Bitrix\Im;
 use Bitrix\Im\Bot\Keyboard;
 use Bitrix\Im\Text;
 use Bitrix\Im\User;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\V2\Entity\User\Data\BotData;
@@ -759,7 +760,7 @@ class Connector
 							$this->callMessageTrigger($session, $messageId, $addMessage);
 
 							//In case it's not a vote message or system message we make a new record
-							if (!$voteSession && $params['message']['user_id'] != 0 && !User::getInstance($params['message']['user_id'])->isBot())
+							if (!$voteSession && $params['message']['user_id'] != 0 && !UserV2::getInstance((int)$params['message']['user_id'])->isBot())
 							{
 								$kpi = new KpiManager($session->getData('ID'));
 								$kpi->addMessage([
@@ -1068,7 +1069,7 @@ class Connector
 
 					if (
 						$params['message']['system'] !== 'Y'
-						&& !User::getInstance($session->getData('OPERATOR_ID'))->isBot()
+						&& !UserV2::getInstance((int)$session->getData('OPERATOR_ID'))->isBot()
 					)
 					{
 						KpiManager::setSessionLastKpiMessageAnswered($session->getData('ID'));
@@ -1235,7 +1236,7 @@ class Connector
 			return true;
 		}
 
-		if (User::getInstance($fields['FROM_USER_ID'])->isConnector())
+		if (UserV2::getInstance((int)$fields['FROM_USER_ID'])->isConnector())
 		{
 			return true;
 		}
@@ -1460,8 +1461,7 @@ class Connector
 
 		if ($messageFields['AUTHOR_ID'] > 0)
 		{
-			$user = User::getInstance($messageFields['AUTHOR_ID']);
-			if ($user->isConnector())
+			if (UserV2::getInstance((int)$messageFields['AUTHOR_ID'])->isConnector())
 			{
 				return false;
 			}
@@ -1524,7 +1524,7 @@ class Connector
 			}
 
 			$params = [];
-			$allowedFields = ['CLASS', 'TYPE', 'COMPONENT_ID', 'CRM_FORM_ID', 'CRM_FORM_SEC', 'CRM_FORM_FILLED', 'url', 'fromSalescenterApplication', 'richUrlPreview'];
+			$allowedFields = ['CLASS', 'TYPE', 'COMPONENT_ID', 'CRM_FORM_ID', 'CRM_FORM_SEC', 'CRM_FORM_FILLED', 'url', 'fromSalescenterApplication', 'richUrlPreview', 'isPaymentLink'];
 
 			foreach ($messageFields['PARAMS'] as $key => $value)
 			{
@@ -1545,6 +1545,65 @@ class Connector
 					foreach ($value as $fileId)
 					{
 						$messageFields['MESSAGE'] .= ' [DISK='.$fileId.']';
+					}
+				}
+			}
+
+			$liveChatStickerParams = $messageFields['PARAMS']['STICKER_PARAMS'] ?? null;
+			if (
+				is_array($liveChatStickerParams)
+				&& isset($liveChatStickerParams['id'], $liveChatStickerParams['packId'], $liveChatStickerParams['packType'])
+				&& (int)$connectorChatId > 0
+				&& Loader::includeModule('disk')
+			)
+			{
+				$liveChatStickerPackType = \Bitrix\Im\V2\Message\Sticker\PackType::tryFrom((string)$liveChatStickerParams['packType']);
+				if ($liveChatStickerPackType !== null)
+				{
+					$liveChatStickerItem = \Bitrix\Im\V2\Message\Sticker\PackFactory::getInstance()
+						->getByType($liveChatStickerPackType)
+						->getStickerById((int)$liveChatStickerParams['id'], (int)$liveChatStickerParams['packId'])
+					;
+					if ($liveChatStickerItem !== null && !empty($liveChatStickerItem->uri))
+					{
+						$liveChatStickerPath = parse_url($liveChatStickerItem->uri, PHP_URL_PATH) ?: '';
+						$liveChatStickerFsPath = \Bitrix\Main\Application::getDocumentRoot() . $liveChatStickerPath;
+						if (is_file($liveChatStickerFsPath))
+						{
+							$liveChatStickerExt = strtolower(pathinfo($liveChatStickerFsPath, PATHINFO_EXTENSION)) ?: 'png';
+							$liveChatStickerName = "sticker_{$liveChatStickerItem->packId}_{$liveChatStickerItem->id}.{$liveChatStickerExt}";
+							$liveChatStickerFolder = \CIMDisk::GetFolderModel((int)$connectorChatId);
+							if ($liveChatStickerFolder)
+							{
+								$liveChatStickerFileArray = \CFile::MakeFileArray($liveChatStickerFsPath);
+								if (is_array($liveChatStickerFileArray))
+								{
+									$liveChatStickerFileArray['name'] = $liveChatStickerName;
+									$liveChatStickerFileModel = $liveChatStickerFolder->uploadFile(
+										$liveChatStickerFileArray,
+										['CREATED_BY' => (int)$messageFields['AUTHOR_ID']],
+										[],
+										true
+									);
+									if ($liveChatStickerFileModel)
+									{
+										$liveChatStickerFileModel->increaseGlobalContentVersion();
+										$liveChatStickerDiskFileId = (int)$liveChatStickerFileModel->getId();
+										if ($liveChatStickerDiskFileId > 0)
+										{
+											// Both FILE_ID in params AND [DISK=id] BB-code are required:
+											// without FILE_ID the V2 message model treats the message as incomplete
+											// and the LiveChat widget renders it as a deleted message.
+											$params['FILE_ID'] = array_merge(
+												$params['FILE_ID'] ?? [],
+												[$liveChatStickerDiskFileId]
+											);
+											$messageFields['MESSAGE'] = trim(($messageFields['MESSAGE'] ?? '') . ' [DISK='.$liveChatStickerDiskFileId.']');
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			}
@@ -1623,7 +1682,7 @@ class Connector
 					//for livechat only condition
 					if (
 						$messageFields['SYSTEM'] !== 'Y'
-						&& !User::getInstance($session->getData('OPERATOR_ID'))->isBot()
+						&& !UserV2::getInstance((int)$session->getData('OPERATOR_ID'))->isBot()
 
 					)
 					{
@@ -1700,7 +1759,7 @@ class Connector
 			}
 
 			$params = [];
-			$allowedFields = ['CLASS', 'url', 'fromSalescenterApplication', 'richUrlPreview'];
+			$allowedFields = ['CLASS', 'url', 'fromSalescenterApplication', 'richUrlPreview', 'isPaymentLink'];
 			foreach ($messageFields['PARAMS'] as $key => $value)
 			{
 				if (in_array($key, $allowedFields))
@@ -1787,6 +1846,49 @@ class Connector
 				}
 			}
 
+			$stickerParams = $messageFields['PARAMS']['STICKER_PARAMS'] ?? null;
+			if (
+				is_array($stickerParams)
+				&& isset($stickerParams['id'], $stickerParams['packId'], $stickerParams['packType'])
+			)
+			{
+				$stickerPackType = \Bitrix\Im\V2\Message\Sticker\PackType::tryFrom((string)$stickerParams['packType']);
+				if ($stickerPackType !== null)
+				{
+					$stickerItem = \Bitrix\Im\V2\Message\Sticker\PackFactory::getInstance()
+						->getByType($stickerPackType)
+						->getStickerById((int)$stickerParams['id'], (int)$stickerParams['packId'])
+					;
+					if ($stickerItem !== null && !empty($stickerItem->uri))
+					{
+						$stickerPath = parse_url($stickerItem->uri, PHP_URL_PATH) ?: '';
+						$stickerExt = strtolower(pathinfo($stickerPath, PATHINFO_EXTENSION)) ?: 'png';
+						$stickerMime = match ($stickerExt) {
+							'png' => 'image/png',
+							'webp' => 'image/webp',
+							'gif' => 'image/gif',
+							'jpg', 'jpeg' => 'image/jpeg',
+							default => 'application/octet-stream',
+						};
+						$stickerFsPath = \Bitrix\Main\Application::getDocumentRoot() . $stickerPath;
+						$stickerSize = is_file($stickerFsPath) ? (int)@filesize($stickerFsPath) : 0;
+						$stickerLink = \Bitrix\Main\Engine\UrlManager::getInstance()->getHostUrl() . $stickerItem->uri;
+						$stickerName = "sticker_{$stickerItem->packId}_{$stickerItem->id}.{$stickerExt}";
+						$files[] = [
+							'name' => $stickerName,
+							'type' => 'image',
+							'mime' => $stickerMime,
+							'link' => $stickerLink,
+							'downloadLink' => $stickerLink,
+							'size' => $stickerSize,
+							'sizef' => $stickerSize > 0 ? \CFile::FormatSize($stickerSize) : '',
+							'width' => $stickerItem->width,
+							'height' => $stickerItem->height,
+						];
+					}
+				}
+			}
+
 			if (
 				empty($attaches)
 				&& empty($files)
@@ -1798,12 +1900,14 @@ class Connector
 				return false;
 			}
 
+			// Skip operator-name signature for a sticker-only message: the sticker is the whole payload.
 			if (
 				(empty($messageFields['SYSTEM']) || $messageFields['SYSTEM'] !== 'Y')
 				&& isset($messageFields['AUTHOR_ID'], $messageFields['MESSAGE'])
 				&& (int)$messageFields['AUTHOR_ID'] > 0
 				&& self::isEnableSendMessageWithSignature($connectorId, $lineId)
 				&& !self::isNeedRichLinkData($connectorId, $messageFields['MESSAGE'])
+				&& empty($messageFields['PARAMS']['STICKER_PARAMS'])
 			)
 			{
 				$messageFields['MESSAGE'] =
@@ -1892,9 +1996,15 @@ class Connector
 			}
 			else // LIVECHAT
 			{
-				$chatData = Chat::parseLinesChatEntityId($params['CHAT']['ENTITY_ID']);
-				$chatData['connectorChatId'] = 0;
-				$chatData['connectorId'] = self::TYPE_LIVECHAT;
+				// LIVECHAT entity_id is 2 segments: "lineId|userId". parseLiveChatEntityId stores
+				// lineId in the "connectorId" field (historical API naming).
+				$liveChatData = Chat::parseLiveChatEntityId($params['CHAT']['ENTITY_ID']);
+				$chatData = [
+					'connectorId' => self::TYPE_LIVECHAT,
+					'lineId' => (int)($liveChatData['connectorId'] ?? 0),
+					'connectorChatId' => 0,
+					'connectorUserId' => (int)$params['USER_ID'],
+				];
 
 				$userCode = $chatData['connectorId'] . '|' . $chatData['lineId'] . '|' . $params['CHAT']['ID'] . '|' . $params['USER_ID'];
 
@@ -1907,7 +2017,7 @@ class Connector
 				]);
 				if ($session = $orm->fetch())
 				{
-					$chatData['connectorChatId'] = $session['CHAT_ID'];
+					$chatData['connectorChatId'] = (int)$session['CHAT_ID'];
 				}
 			}
 
@@ -2159,7 +2269,7 @@ class Connector
 			&&
 			(
 				!Loader::includeModule('im')
-				|| User::getInstance($userId)->isConnector()
+				|| UserV2::getInstance($userId)->isConnector()
 			)
 		)
 		{
@@ -2419,7 +2529,7 @@ class Connector
 		}
 
 		// start parameter
-		$session->load([
+		$sessionLoaded = $session->load([
 			'USER_CODE' => self::getUserCode($fields['connector']),
 			'CONFIG_ID' => $fields['connector']['line_id'],
 			'USER_ID' => $fields['connector']['user_id'],
@@ -2427,6 +2537,26 @@ class Connector
 			'MODE' => ImOpenLines\Session::MODE_INPUT,
 			'CRM_TRACKER_REF' => $hasTrackerRef ? $fields['ref']['source'] : '',
 		]);
+
+		if ($sessionLoaded && $hasTrackerRef)
+		{
+			$sessionChat = $session->chat;
+			if ($sessionChat instanceof ImOpenLines\Chat && $sessionChat->isDataLoaded())
+			{
+				$chatId = (int)$sessionChat->getData('ID');
+				$imChat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+
+				if ($imChat instanceof \Bitrix\Im\V2\Chat)
+				{
+					\Bitrix\Im\Recent::raiseChat($imChat, $imChat->getRelations());
+				}
+
+				$sessionChat->updateSessionStatus(
+					$session->getData('STATUS'),
+					(int)$session->getData('ID')
+				);
+			}
+		}
 
 		return true;
 	}

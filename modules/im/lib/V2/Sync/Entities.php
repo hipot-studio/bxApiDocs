@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Sync;
 
 use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Recent\Config\ChatRecentConfigs;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Im\V2\Sync\Entity\Chats;
 use Bitrix\Im\V2\Sync\Entity\DialogIds;
@@ -36,6 +37,7 @@ class Entities
 		$this->rest[Chats::getRestEntityName()] = $this->chats->toRestFormat();
 		$this->rest[Messages::getRestEntityName()] = $this->messages->toRestFormat();
 		$this->rest[PinMessages::getRestEntityName()] = $this->pinMessages->toRestFormat();
+		$this->rest[ChatRecentConfigs::getRestEntityName()] = $this->chats->getRecentConfigs()->toRestFormat();
 
 		$messageCollection = $this->getMessageCollection();
 		$pinCollection = $this->pinMessages->getPinCollection();

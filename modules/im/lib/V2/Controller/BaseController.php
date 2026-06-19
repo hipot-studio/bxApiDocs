@@ -165,25 +165,6 @@ abstract class BaseController extends Controller
 		return $rest;
 	}
 
-	public static function recursiveWhiteList($fields, $whiteList, bool $sanitizeOnly = false)
-	{
-		$data = [];
-		$converter = new Converter(Converter::TO_SNAKE | Converter::TO_UPPER);
-		foreach ($fields as $field => $value)
-		{
-			if (is_array($value))
-			{
-				$data[$converter->process($field)] = self::recursiveWhiteList($value, $whiteList[$field], true);
-			}
-			elseif ((is_array($whiteList) && in_array($field, $whiteList)) || $sanitizeOnly)
-			{
-				$data[$converter->process($field)] = $value;
-			}
-		}
-
-		return $data;
-	}
-
 	//todo: think about recursion in method.
 	protected function checkWhiteList(array $fields, array $whiteList): array
 	{

@@ -197,6 +197,8 @@ class Permission
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::ChangeManagers->value => Chat::ROLE_NONE,
+			Action::CreateChildChat->value => Chat::ROLE_MANAGER,
+			Action::AttachToParent->value => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Tasks->value] = [
@@ -292,6 +294,8 @@ class Permission
 			Action::ChangeOwner->value => Chat::ROLE_GUEST,
 			Action::ChangeManagers->value => Chat::ROLE_GUEST,
 			Action::ManageSharingLinks->value => Chat::ROLE_NONE,
+			Action::CreateChildChat->value => Chat::ROLE_NONE,
+			Action::AttachToParent->value => Chat::ROLE_OWNER,
 		];
 	}
 
@@ -393,7 +397,7 @@ class Permission
 		if ($action === GlobalAction::CreateChat && is_array($target))
 		{
 			$type = $target['TYPE'] ?? Chat::IM_TYPE_CHAT;
-			$entityType = $target['ENTITY_ID'] ?? null;
+			$entityType = $target['ENTITY_TYPE'] ?? null;
 
 			if ($type === Chat::IM_TYPE_CHAT && $entityType === Chat::ENTITY_TYPE_VIDEOCONF)
 			{

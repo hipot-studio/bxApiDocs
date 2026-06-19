@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Message\Send;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Message\Builder\BuilderService;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Param\ParamError;
 use Bitrix\Im\V2\Message\Params;
@@ -13,6 +14,7 @@ use Bitrix\Im\V2\Message\Sticker\StickerError;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Result;
+use Bitrix\Main\DI\ServiceLocator;
 use CIMMessageParamAttach;
 
 class FieldsValidationService
@@ -26,6 +28,7 @@ class FieldsValidationService
 		'COPILOT',
 		'STICKER_PARAMS',
 		'AI_ASSISTANT',
+		'BUILDER',
 	];
 
 	private Chat $chat;
@@ -68,6 +71,7 @@ class FieldsValidationService
 				'COPILOT' => $this->checkCopilot(),
 				'STICKER_PARAMS' => $this->checkStickerParams(),
 				'AI_ASSISTANT' => $this->checkAiAssistant(),
+				'BUILDER' => $this->checkBuilder(),
 			};
 
 			if (!$result->isSuccess())
@@ -87,6 +91,7 @@ class FieldsValidationService
 				!isset($this->fields['MESSAGE'])
 				&& !isset($this->fields['ATTACH'])
 				&& !isset($this->fields['STICKER_PARAMS'])
+				&& !isset($this->fields['BUILDER'])
 			)
 			{
 				return true;
@@ -140,6 +145,10 @@ class FieldsValidationService
 			}
 		}
 		elseif (isset($this->fields['STICKER_PARAMS']))
+		{
+			return $result;
+		}
+		elseif (isset($this->fields['BUILDER']))
 		{
 			return $result;
 		}
@@ -434,6 +443,28 @@ class FieldsValidationService
 		}
 
 		$this->fields['PARAMS'] = [...($this->fields['PARAMS'] ?? []), ...$aiAssistantData];
+
+		return $result;
+	}
+
+	private function checkBuilder(): Result
+	{
+		$result = new Result();
+
+		if (empty($this->fields['BUILDER']))
+		{
+			return $result;
+		}
+
+		$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->create($this->fields['BUILDER']);
+		if (!$builderResult->isSuccess())
+		{
+			return $result->addError($builderResult->getError());
+		}
+
+		$builder = $builderResult->getBuilder();
+		$this->fields['PARAMS'][Params::BUILDER] = $builder;
+		$this->fields['MESSAGE'] = $builder->getPayloadText();
 
 		return $result;
 	}

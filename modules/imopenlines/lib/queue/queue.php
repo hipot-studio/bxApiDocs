@@ -8,6 +8,7 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
 
 use Bitrix\Im;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 
 use Bitrix\ImOpenLines;
 use Bitrix\ImOpenLines\Chat;
@@ -624,7 +625,7 @@ abstract class Queue
 				);
 				// END Event
 
-				$leaveTransfer = (string)$this->config['WELCOME_BOT_LEFT'] === Config::BOT_LEFT_CLOSE && Im\User::getInstance($this->session['OPERATOR_ID'])->isBot()? 'N':'Y';
+				$leaveTransfer = (string)$this->config['WELCOME_BOT_LEFT'] === Config::BOT_LEFT_CLOSE && UserV2::getInstance((int)$this->session['OPERATOR_ID'])->isBot()? 'N':'Y';
 
 				if ((bool)$resultOperatorQueue['RESULT'] === true)
 				{
@@ -672,7 +673,7 @@ abstract class Queue
 				}
 
 				if (
-					Im\User::getInstance($this->session['OPERATOR_ID'])->isBot()
+					UserV2::getInstance((int)$this->session['OPERATOR_ID'])->isBot()
 					&& $this->config['NO_ANSWER_RULE'] == Session::RULE_TEXT
 					&& $this->session['SEND_NO_ANSWER_TEXT'] !== 'Y'
 					&& $this->session['STATUS'] <= Session::STATUS_CLIENT
@@ -722,7 +723,7 @@ abstract class Queue
 		$removeOperator = true;
 		if (
 			(int)$this->session['OPERATOR_ID'] > 0
-			&& Im\User::getInstance($this->session['OPERATOR_ID'])->isBot()
+			&& UserV2::getInstance((int)$this->session['OPERATOR_ID'])->isBot()
 			&& (int)$this->session['OPERATOR_ID'] === (int)$this->config['WELCOME_BOT_ID']
 			&& (string)$this->config['WELCOME_BOT_LEFT'] === Config::BOT_LEFT_CLOSE
 		)

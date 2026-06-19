@@ -72,14 +72,12 @@ class OptionTable extends DataManager
 				[
 					'primary' => true,
 					'autocomplete' => true,
-					'title' => Loc::getMessage('OPTION_ENTITY_ID_FIELD'),
 				]
 			),
 			new IntegerField(
 				'USER_ID',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('OPTION_ENTITY_USER_ID_FIELD'),
 				]
 			),
 			new StringField(
@@ -92,7 +90,6 @@ class OptionTable extends DataManager
 							new LengthValidator(null, 255),
 						];
 					},
-					'title' => Loc::getMessage('OPTION_ENTITY_NAME_FIELD'),
 				]
 			),
 			new StringField(
@@ -105,7 +102,6 @@ class OptionTable extends DataManager
 							new LengthValidator(null, 255),
 						];
 					},
-					'title' => Loc::getMessage('OPTION_ENTITY_VALUE_FIELD'),
 				]
 			),
 		];

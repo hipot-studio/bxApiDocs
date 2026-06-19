@@ -12,7 +12,6 @@ class BotError extends Error
 	public const BOT_OWNERSHIP_ERROR = 'BOT_OWNERSHIP_ERROR';
 	public const BOT_ID_REQUIRED = 'BOT_ID_REQUIRED';
 	public const CODE_ALREADY_TAKEN = 'BOT_CODE_ALREADY_TAKEN';
-	public const LIMIT_EXCEEDED = 'BOT_LIMIT_EXCEEDED';
 	public const REGISTER_FAILED = 'BOT_REGISTER_FAILED';
 	public const UPDATE_FAILED = 'BOT_UPDATE_FAILED';
 	public const UNREGISTER_FAILED = 'BOT_UNREGISTER_FAILED';
@@ -24,13 +23,14 @@ class BotError extends Error
 	public const WEBHOOK_URL_REQUIRED = 'BOT_WEBHOOK_URL_REQUIRED';
 	public const AVATAR_INCORRECT_TYPE = 'BOT_AVATAR_INCORRECT_TYPE';
 	public const AVATAR_INCORRECT_SIZE = 'BOT_AVATAR_INCORRECT_SIZE';
+	public const TOKEN_ROTATION_FAILED = 'BOT_TOKEN_ROTATION_FAILED';
+	public const TOKEN_INVALID_LENGTH = 'BOT_TOKEN_INVALID_LENGTH';
 
 	private const MESSAGES = [
 		self::BOT_NOT_FOUND => 'Bot not found',
 		self::BOT_OWNERSHIP_ERROR => 'Bot does not belong to this application',
 		self::BOT_ID_REQUIRED => 'Bot ID is required',
 		self::CODE_ALREADY_TAKEN => 'Bot with this code already exists',
-		self::LIMIT_EXCEEDED => 'Bot registration limit exceeded',
 		self::REGISTER_FAILED => 'Bot registration failed',
 		self::UPDATE_FAILED => 'Bot update failed',
 		self::UNREGISTER_FAILED => 'Bot unregister failed',
@@ -42,6 +42,8 @@ class BotError extends Error
 		self::WEBHOOK_URL_REQUIRED => 'Webhook URL is required for webhook event mode',
 		self::AVATAR_INCORRECT_TYPE => 'Avatar must be an image file',
 		self::AVATAR_INCORRECT_SIZE => 'Avatar image exceeds maximum dimensions (5000x5000)',
+		self::TOKEN_ROTATION_FAILED => 'Bot token rotation failed',
+		self::TOKEN_INVALID_LENGTH => 'Bot token must not exceed 40 characters',
 	];
 
 	public function __construct(string $code, string $message = '')

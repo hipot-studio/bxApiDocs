@@ -496,6 +496,12 @@ class CIMHistory
 		global $DB;
 		$chatId = intval($chatId);
 
+		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+		if (!$chat->checkAccess((int)$this->user_id)->isSuccess())
+		{
+			return false;
+		}
+
 		$limitById = '';
 		$ar = \CIMChat::GetRelationById($chatId, $this->user_id, true, false);
 		if ($ar && $ar['START_ID'] > 0)
@@ -628,6 +634,12 @@ class CIMHistory
 
 		$chatId = intval($chatId);
 
+		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+		if (!$chat->checkAccess((int)$this->user_id)->isSuccess())
+		{
+			return false;
+		}
+
 		$sqlHelper = Bitrix\Main\Application::getInstance()->getConnection()->getSqlHelper();
 		try
 		{
@@ -732,6 +744,12 @@ class CIMHistory
 		if (!($chatData = $orm->fetch()))
 		{
 			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("IM_ERROR_CHAT_NOT_EXISTS"), "ERROR_CHAT_NOT_EXISTS");
+			return false;
+		}
+
+		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+		if (!$chat->checkAccess((int)$this->user_id)->isSuccess())
+		{
 			return false;
 		}
 

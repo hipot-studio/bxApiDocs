@@ -72,21 +72,18 @@ class ShiftMessageTable extends DataManager
 				[
 					'primary' => true,
 					'autocomplete' => true,
-					'title' => Loc::getMessage('SHIFT_MESSAGE_ENTITY_ID_FIELD'),
 				]
 			),
 			new IntegerField(
 				'SHIFT_ID',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('SHIFT_MESSAGE_ENTITY_SHIFT_ID_FIELD'),
 				]
 			),
 			new IntegerField(
 				'MESSAGE_ID',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('SHIFT_MESSAGE_ENTITY_MESSAGE_ID_FIELD'),
 				]
 			),
 			(new Reference(

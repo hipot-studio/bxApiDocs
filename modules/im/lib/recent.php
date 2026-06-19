@@ -9,24 +9,19 @@ use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
 use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Chat\EntityLink;
-use Bitrix\Im\V2\Chat\OpenChannelChat;
-use Bitrix\Im\V2\Chat\OpenChat;
 use Bitrix\Im\V2\Chat\Param\Params;
 use Bitrix\Im\V2\Chat\MessagesAutoDelete\MessagesAutoDeleteConfigs;
 use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
-use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Entity\User\NullUser;
 use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Integration\Socialnetwork\Group;
 use Bitrix\Im\V2\Message;
-use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Entity\File\FileCollection;
 use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Message\Param;
-use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\Pull\Event\ChatPin;
 use Bitrix\Im\V2\Pull\Event\RecentUpdate;
 use Bitrix\Im\V2\Reading\Counter\CountersProvider;
@@ -54,6 +49,7 @@ Loc::loadMessages(__FILE__);
 class Recent
 {
 	private const PINNED_CHATS_LIMIT = 45;
+	private const MAX_RAISE_DEPTH = 2;
 
 	static private bool $limitError = false;
 
@@ -385,7 +381,35 @@ class Recent
 			$ormParams = Permission\Filter::getRoleGetListFilter($ormParams, Permission\ActionGroup::ManageMessages, 'RELATION', 'CHAT');
 		}
 
-		$orm = \Bitrix\Im\Model\RecentTable::getList($ormParams);
+		$query = RecentTable::query()
+			->setSelect($ormParams['select'])
+			->setFilter($ormParams['filter'])
+		;
+		foreach ($ormParams['runtime'] as $rt)
+		{
+			$query->registerRuntimeField($rt);
+		}
+		if (isset($ormParams['limit']))
+		{
+			$query->setLimit($ormParams['limit']);
+		}
+		if (isset($ormParams['offset']))
+		{
+			$query->setOffset($ormParams['offset']);
+		}
+		if (isset($ormParams['order']))
+		{
+			$query->setOrder($ormParams['order']);
+		}
+		if ($unreadOnly)
+		{
+			\Bitrix\Main\DI\ServiceLocator::getInstance()
+				->get(\Bitrix\Im\V2\Chat\Tree\ChatTreeFilterFactory::class)
+				->forUnread($userId)
+				->apply($query);
+		}
+
+		$orm = $query->exec();
 
 		$counter = 0;
 		$result = [];
@@ -775,23 +799,8 @@ class Recent
 			$shortInfoFields['MESSAGE_CODE'] = 'CODE.PARAM_VALUE';
 		}
 
-		$unreadTable = MessageUnreadTable::getTableName();
-
-		$additionalRuntime = [
-			new ExpressionField(
-				'HAS_UNREAD_MESSAGE',
-				"EXISTS(SELECT 1 FROM {$unreadTable} WHERE CHAT_ID = %s AND USER_ID = %s)",
-				['ITEM_CID', 'USER_ID']
-			),
-			new ExpressionField(
-				'HAS_UNREAD_COMMENTS',
-				"EXISTS(SELECT 1 FROM {$unreadTable} WHERE PARENT_ID = %s AND USER_ID = %s AND PARENT_ID > 0)",
-				['ITEM_CID', 'USER_ID']
-			)
-		];
-
 		$select = $shortInfo ? $shortInfoFields : array_merge($shortInfoFields, $additionalInfoFields);
-		$runtime = $shortInfo ? $shortRuntime : array_merge($shortRuntime, $additionalRuntime);
+		$runtime = $shortRuntime;
 
 		if (!$withoutCommonUsers)
 		{
@@ -843,16 +852,6 @@ class Recent
 					['@USER.ID' => new SqlExpression($subQuery->getQuery())],
 				];
 			}
-		}
-
-		if ($unreadOnly)
-		{
-			$filter[] = [
-				'LOGIC' => 'OR',
-				['==HAS_UNREAD_MESSAGE' => true],
-				['==HAS_UNREAD_COMMENTS' => true],
-				['=UNREAD' => true],
-			];
 		}
 
 		if ($chatIds)
@@ -1001,6 +1000,7 @@ class Recent
 				'FILE' => false,
 				'AUTHOR_ID' =>  0,
 				'ATTACH' => false,
+				'BUILDER' => false,
 				'STICKER' => null,
 				'DATE' => $row['DATE_MESSAGE']?: $row['DATE_UPDATE'],
 				'STATUS' => $row['CHAT_LAST_MESSAGE_STATUS'],
@@ -1066,6 +1066,7 @@ class Recent
 			'FILE' => $row['MESSAGE_FILE'],
 			'AUTHOR_ID' =>  (int)$row['MESSAGE_AUTHOR_ID'],
 			'ATTACH' => $attach,
+			'BUILDER' => $row['BUILDER'],
 			'STICKER' => $sticker,
 			'DATE' => $row['DATE_MESSAGE']?: $row['DATE_UPDATE'],
 			'STATUS' => $row['CHAT_LAST_MESSAGE_STATUS'],
@@ -1625,7 +1626,7 @@ class Recent
 		RecentTable::updateByFilter($filter, $fields);
 	}
 
-	public static function raiseChat(\Bitrix\Im\V2\Chat $chat, RelationCollection $relations, ?DateTime $lastActivity = null): void
+	public static function raiseChat(\Bitrix\Im\V2\Chat $chat, RelationCollection $relations, ?DateTime $lastActivity = null, int $depth = 0): void
 	{
 		$userIds = $relations->getUserIds();
 		if (empty($userIds))
@@ -1664,6 +1665,13 @@ class Recent
 		);
 
 		(new RecentUpdate($chat, $userIds, $dateCreate))->send();
+
+		if ($chat->hasParent() && $depth < self::MAX_RAISE_DEPTH)
+		{
+			$parentChat = $chat->getParentChat();
+			$parentRelations = $parentChat->getRelationsByUserIds($userIds);
+			static::raiseChat($parentChat, $parentRelations, $lastActivity, $depth + 1);
+		}
 	}
 
 	public static function addRecent(\Bitrix\Im\V2\Chat $chat, Relation $relation, ?DateTime $lastActivity = null): void
@@ -2087,6 +2095,10 @@ class Recent
 				$fileIds[$messageId] = (int)$item['PARAM_VALUE'];
 				$result[$messageId]['MESSAGE_FILE'] = true;
 			}
+			elseif ($paramName === 'BUILDER')
+			{
+				$result[$messageId]['BUILDER'] = true;
+			}
 		}
 
 		return self::fillFiles($result, $fileIds);
@@ -2142,6 +2154,7 @@ class Recent
 			$rows[$key]['MESSAGE_FILE'] = $params[$messageId]['MESSAGE_FILE'] ?? false;
 			$rows[$key]['RELATION_USER_ID'] = $row['RELATION_ID'] ? $userId : null;
 			$rows[$key]['MESSAGE_STICKER'] = $params[$messageId]['STICKER'] ?? null;
+			$rows[$key]['BUILDER'] = $params[$messageId]['BUILDER'] ?? false;
 		}
 
 		return $rows;

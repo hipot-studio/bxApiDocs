@@ -15,7 +15,10 @@ trait WriteOffAmountValidator
 {
 	use ProductAndStoreInfo;
 
-	protected function checkStoreAmount(?EO_StoreDocumentElement $storeDocumentElement = null): Result
+	protected function checkStoreAmount(
+		?EO_StoreDocumentElement $storeDocumentElement = null,
+		float $totalAmount = 0.0,
+	): Result
 	{
 		$result = new Result();
 
@@ -26,7 +29,7 @@ trait WriteOffAmountValidator
 			return $result;
 		}
 
-		if ($this->getStoreProductAmount() - $storeDocumentElement->getAmount() < 0)
+		if ($this->getStoreProductAmount() - $totalAmount < 0)
 		{
 			$message = Loc::getMessage(
 				"CATALOG_STORE_DOCS_ERR_INSUFFICIENTLY_AMOUNT_EXT",

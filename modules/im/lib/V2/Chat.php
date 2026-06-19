@@ -56,6 +56,8 @@ use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Chat\ChatError;
+use Bitrix\Im\V2\Chat\Access\ParentChainFilterFactory;
+use Bitrix\Im\V2\Chat\Tree\TreeOrigin;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Common\ActiveRecordImplementation;
 use Bitrix\Im\V2\Common\RegistryEntryImplementation;
@@ -150,31 +152,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		self::ENTITY_TYPE_LIVECHAT,
 		self::ENTITY_TYPE_FAVORITE,
 		self::ENTITY_TYPE_VIDEOCONF,
-	];
-
-	public const AVAILABLE_PARAMS = [
-		'type',
-		'entityType',
-		'entityId',
-		'entityData1',
-		'entityData2',
-		'entityData3',
-		'title',
-		'description',
-		'searchable',
-		'color',
-		'ownerId',
-		'users',
-		'managers',
-		'manageUsersAdd',
-		'manageUsersDelete',
-		'manageUi',
-		'manageSettings',
-		'messagesAutoDeleteDelay',
-		'manageMessages',
-		'avatar',
-		'conferencePassword',
-		'memberEntities',
 	];
 
 	public const NON_CACHED_FIELDS = ['MESSAGE_COUNT', 'USER_COUNT', 'LAST_MESSAGE_ID'];
@@ -760,6 +737,13 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return $this->getRelations()->filterActiveMembers();
 	}
 
+	protected function getRelationsForParentRaise(): RelationCollection
+	{
+		return $this->getParentChat()->getRelationsByUserIds(
+			$this->getUsersToNotify()->getUserIds()
+		);
+	}
+
 	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void
 	{
 		$authorContext = $message->getContext();
@@ -777,6 +761,14 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 		$this->getMentionService($sendingConfig)->setContext($authorContext)->onMessageSend($message);
 		$counters = $this->updateCountersAfterMessageSend($message, $sendingConfig);
+		if ($this->hasParent() && !$sendingConfig->skipCounterIncrements())
+		{
+			Recent::raiseChat(
+				$this->getParentChat(),
+				$this->getRelationsForParentRaise(),
+				new DateTime()
+			);
+		}
 		$this->getPushService($message, $sendingConfig)->setContext($authorContext)->sendPush($counters);
 		$sendingService->fireEventAfterMessageSend($this, $message);
 		(new Im\V2\Link\LinkFacade($sendingConfig))->setContext($authorContext)->saveLinksFromMessage($message);
@@ -1110,12 +1102,17 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return;
 		}
 
-		$relationEntities = RelationTable::query()
+		$query = RelationTable::query()
 			->setSelect(RelationCollection::COMMON_FIELDS)
 			->where('USER_ID', $userId)
 			->whereIn('CHAT_ID', $chatIds)
-			->fetchAll()
 		;
+
+		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
+			->forUser($userId, TreeOrigin::forChat('CHAT'))
+			->apply($query);
+
+		$relationEntities = $query->fetchAll();
 		$relations = new RelationCollection($relationEntities);
 
 		foreach ($chats as $chat)
@@ -1685,7 +1682,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			self::IM_TYPE_COLLAB,
 		];
 
-		$recentCollection = Im\Model\RecentTable::query()
+		$query = Im\Model\RecentTable::query()
 			->setSelect(['ITEM_ID', 'DATE_MESSAGE'])
 			->registerRuntimeField(
 				new Reference(
@@ -1701,8 +1698,14 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			->setOrder(['DATE_MESSAGE' => 'DESC'])
 			->setLimit($limit)
 			->setOffset($offset)
-			->fetchCollection()
 		;
+
+		$origin = TreeOrigin::forChat('CHAT');
+		$factory = ServiceLocator::getInstance()->get(ParentChainFilterFactory::class);
+		$factory->forUser($currentUserId, $origin)->apply($query);
+		$factory->forUser($userId, $origin)->apply($query);
+
+		$recentCollection = $query->fetchCollection();
 
 		foreach ($recentCollection as $recentItem)
 		{
@@ -1881,6 +1884,13 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	abstract protected function getDefaultType(): string;
 
+	public function getChatType(): Chat\Type
+	{
+		return ServiceLocator::getInstance()->get(Chat\Type\TypeRegistry::class)
+			->getByLiteralAndEntity($this->getType(), $this->getEntityType())
+		;
+	}
+
 	public function getCounterType(): string
 	{
 		return
@@ -1994,6 +2004,26 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	public function getParentChatId(): ?int
 	{
 		return $this->parentChatId;
+	}
+
+	public function hasParent(): bool
+	{
+		return ($this->getParentChatId() ?? 0) > 0;
+	}
+
+	public function getParentChat(): ?Chat
+	{
+		if (!$this->hasParent())
+		{
+			return null;
+		}
+
+		return Chat::getInstance($this->getParentChatId());
+	}
+
+	public function canHaveChild(Chat $child): bool
+	{
+		return false;
 	}
 
 	// parent message
@@ -2308,6 +2338,16 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$this->fillNonCachedData();
 
 		return $this->lastMessageId;
+	}
+
+	public function getLastMessage(): ?Message
+	{
+		if (empty($this->getLastMessageId()))
+		{
+			return null;
+		}
+
+		return new Message($this->getLastMessageId());
 	}
 
 	public function getLastFileId(): int
@@ -3053,6 +3093,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			{
 				$usersToAdd[$userId] = $userId;
 			}
+		}
+
+		if ($this->hasParent() && !empty($usersToAdd))
+		{
+			$parentUserIds = $this->getParentChat()->getRelationsByUserIds(array_values($usersToAdd))->getUserIds();
+			$usersToAdd = array_intersect_key($usersToAdd, array_flip($parentUserIds));
 		}
 
 		return $usersToAdd;

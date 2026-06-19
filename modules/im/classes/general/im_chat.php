@@ -73,6 +73,12 @@ class CIMChat
 			{
 				return false;
 			}
+			$chat = \Bitrix\Im\V2\Chat::getInstance((int)$arRes['CHAT_ID']);
+			if (!$chat->checkAccess((int)$this->user_id)->isSuccess())
+			{
+				return false;
+			}
+
 			unset($arRes['CHAT_TYPE']);
 			unset($arRes['RID']);
 

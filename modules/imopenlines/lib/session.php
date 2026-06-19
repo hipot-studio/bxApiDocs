@@ -9,6 +9,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UserConsent\Consent;
 
 use Bitrix\Im\User;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\V2\Message\ReadService;
@@ -385,7 +386,7 @@ class Session
 			$fields['STATUS'] = self::STATUS_ANSWER;
 		}
 
-		if (User::getInstance($fields['USER_ID'])->isConnector())
+		if (UserV2::getInstance((int)$fields['USER_ID'])->isConnector())
 		{
 			$fields['DATE_FIRST_LAST_USER_ACTION'] = new DateTime();
 		}
@@ -1133,7 +1134,7 @@ class Session
 		];
 		if (
 			$this->getData('DATE_OPERATOR_ANSWER') <= 0 &&
-			!User::getInstance($userId)->isBot()
+			!UserV2::getInstance((int)$userId)->isBot()
 		)
 		{
 			$currentDate = new DateTime();
@@ -1463,7 +1464,7 @@ class Session
 
 					if (!$auto)
 					{
-						if (!User::getInstance($this->session['OPERATOR_ID'])->isBot())
+						if (!UserV2::getInstance((int)$this->session['OPERATOR_ID'])->isBot())
 						{
 							$update['DATE_OPERATOR_CLOSE'] = $currentDate;
 						}
@@ -1503,7 +1504,7 @@ class Session
 				if (
 					$this->session['DATE_CREATE'] instanceof DateTime
 					&& $this->session['TIME_BOT'] <= 0
-					&& User::getInstance($this->session['OPERATOR_ID'])->isBot()
+					&& UserV2::getInstance((int)$this->session['OPERATOR_ID'])->isBot()
 				)
 				{
 					$update['TIME_BOT'] = $update['DATE_CLOSE']->getTimestamp() - $this->session['DATE_CREATE']->getTimestamp();
@@ -1617,7 +1618,7 @@ class Session
 		{
 			if ($this->config['ACTIVE'] != 'N')
 			{
-				if (!User::getInstance($this->session['OPERATOR_ID'])->isBot())
+				if (!UserV2::getInstance((int)$this->session['OPERATOR_ID'])->isBot())
 				{
 					$update['DATE_OPERATOR_CLOSE'] = $closeDate;
 				}
@@ -1644,7 +1645,7 @@ class Session
 		{
 			$update['TIME_CLOSE'] = $update['DATE_CLOSE']->getTimestamp()-$this->session['DATE_CREATE']->getTimestamp();
 		}
-		if (User::getInstance($this->session['OPERATOR_ID'])->isBot() && $this->session['TIME_BOT'] <= 0 && $this->session['DATE_CREATE'])
+		if (UserV2::getInstance((int)$this->session['OPERATOR_ID'])->isBot() && $this->session['TIME_BOT'] <= 0 && $this->session['DATE_CREATE'])
 		{
 			$update['TIME_BOT'] = $update['DATE_CLOSE']->getTimestamp()-$this->session['DATE_CREATE']->getTimestamp();
 		}

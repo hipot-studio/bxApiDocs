@@ -6,7 +6,6 @@ use Bitrix\Location\Entity\Location\Converter\ArrayConverter;
 use Bitrix\Location\Entity\Location\Field;
 use Bitrix\Location\Entity\Location\FieldCollection;
 use Bitrix\Location\Entity\Location\Type;
-use Bitrix\Location\Entity\Location\Parents;
 use Bitrix\Location\Service;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Web\Json;
@@ -43,51 +42,12 @@ final class Location implements \Serializable
 	/** @var Address Location could contain the Address*/
 	protected $address = null;
 
-	/** @var Parents Location parents */
-	protected $parents = null;
-
 	/**
 	 * Location constructor.
 	 */
 	public function __construct()
 	{
 		$this->fieldCollection = new FieldCollection();
-	}
-
-	/**
-	 * Check if this Location is parent of the other Location
-	 *
-	 * @param Location $childCandidate
-	 * @return bool
-	 */
-	public function isParentOf(Location $childCandidate): bool
-	{
-		$candidateParents = $childCandidate->getParents();
-
-		if(!$candidateParents)
-		{
-			return false;
-		}
-
-		return $candidateParents->isContain($this);
-	}
-
-	/**
-	 * Check if this Location is parent of the other Location
-	 *
-	 * @param Location $parentCandidate
-	 * @return bool
-	 */
-	public function isChildOf(Location $parentCandidate): bool
-	{
-		$parents = $this->getParents();
-
-		if(!$parents)
-		{
-			return false;
-		}
-
-		return $parents->isContain($parentCandidate);
 	}
 
 	/**
@@ -149,71 +109,7 @@ final class Location implements \Serializable
 			return false;
 		}
 
-		$thisParents = $this->getParents();
-		$otherParents = $location->getParents();
-
-		if($thisParents && $otherParents && !$thisParents->isEqualTo($otherParents))
-		{
-			return false;
-		}
-
 		return true;
-	}
-
-	/**
-	 * @return Parents|bool
-	 * @internal
-	 */
-	public function getParents()
-	{
-		$this->loadParents();
-		return $this->parents;
-	}
-
-	/**
-	 * Load Location parents
-	 * @internal
-	 */
-	public function loadParents(): void
-	{
-		if($this->parents === null)
-		{
-			$this->parents = Service\LocationService::getInstance()->findParents($this, $this->languageId);
-		}
-	}
-
-	/**
-	 * @param int $level
-	 * @return mixed
-	 * @internal
-	 */
-	public function getParentByLevel(int $level): ?Location
-	{
-		$parents = $this->getParents();
-		return (bool)$parents ? $parents[$level] : null;
-	}
-
-	/**
-	 * @param int $type
-	 * @return Location|null
-	 * @internal
-	 */
-	public function getParentByType(int $type): ?Location
-	{
-		$parents = $this->getParents();
-		return (bool)$parents ? $parents->getItemByType($type) : null;
-	}
-
-	/**
-	 * @param Parents $parents
-	 * @return $this
-	 * @internal
-	 */
-	public function setParents(Parents $parents): self
-	{
-		$this->parents = $parents;
-		$this->parents->setDescendant($this);
-		return $this;
 	}
 
 	/**
@@ -261,24 +157,12 @@ final class Location implements \Serializable
 	}
 
 	/**
-	 * Return Location name imploded with parents names
-	 *
+	 * @deprecated Location hierarchy is no longer supported.
 	 * @return string
-	 * @todo: customize delimiter and the names order
 	 */
 	public function getNameWithParents(): string
 	{
-		$result = $this->getName();
-
-		if($parents = $this->getParents())
-		{
-			foreach ($parents as $parent)
-			{
-				$result = $parent->getName().', '.$this->getName();
-			}
-		}
-
-		return $result;
+		return '';
 	}
 
 	/**

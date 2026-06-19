@@ -34,6 +34,8 @@ enum Action: string
 	case HideChat = 'HIDE_CHAT';
 	case ManageSharingLinks = 'MANAGE_SHARING_LINKS';
 	case UpdateSharingLink = 'UPDATE_SHARING_LINK';
+	case CreateChildChat = 'CREATE_CHILD_CHAT';
+	case AttachToParent = 'ATTACH_TO_PARENT';
 
 	public function getRelatedGlobalAction(): ?GlobalAction
 	{

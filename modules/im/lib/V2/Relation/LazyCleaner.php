@@ -81,6 +81,11 @@ class LazyCleaner
 		foreach ($this->toDelete as $chatId => $userIds)
 		{
 			$chat = Chat::getInstance($chatId);
+			if (!$chat->isExist())
+			{
+				continue;
+			}
+
 			foreach ($userIds as $userId)
 			{
 				$chat->deleteUser($userId, new DeleteUserConfig(withMessage: false, withNotification: false));

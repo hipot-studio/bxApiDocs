@@ -4,12 +4,10 @@ namespace Bitrix\Location\Repository\Location\Strategy;
 
 use Bitrix\Location\Entity\Location;
 use Bitrix\Location\Entity\Generic\Collection;
-use Bitrix\Location\Entity\Location\Parents;
 use Bitrix\Location\Repository\Location\Capability\IFindByCoords;
 use Bitrix\Location\Repository\Location\Capability\IFindByExternalId;
 use Bitrix\Location\Repository\Location\Capability\IFindById;
 use Bitrix\Location\Repository\Location\Capability\IFindByText;
-use Bitrix\Location\Repository\Location\Capability\IFindParents;
 use Bitrix\Location\Repository\Location\Capability\ISupportAutocomplete;
 use Bitrix\Location\Repository\Location\IScope;
 use Bitrix\Location\Repository\Location\IRepository;
@@ -91,21 +89,6 @@ class Find extends Base
 		return $result ?? [];
 	}
 
-	public function findParents(Location $location, string $languageId, int $searchScope)
-	{
-		$result = $this->find(
-			IFindParents::class,
-			'findParents',
-			[
-				$location,
-				$languageId,
-			],
-			$searchScope
-		);
-
-		return $result ?? new Parents();
-	}
-
 	/** @inheritDoc */
 	public function setLocationRepositories(array $locationRepositories): Base
 	{
@@ -117,7 +100,6 @@ class Find extends Base
 				$repository instanceof IFindById
 				|| $repository instanceof IFindByExternalId
 				|| $repository instanceof IFindByText
-				|| $repository instanceof IFindParents
 			)
 			{
 				$key = (string)$this->getRepoPriority($repository) . (string)($idx++);

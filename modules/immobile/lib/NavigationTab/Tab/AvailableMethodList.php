@@ -23,4 +23,5 @@ enum AvailableMethodList: string
 	case OPEN_LINES_LIST = 'openlinesList';
 
 	case TASK_LIST = 'taskList';
+	case NESTED_LIST = 'nestedList';
 }

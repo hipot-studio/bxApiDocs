@@ -17,6 +17,7 @@ use Bitrix\Crm\Automation\Trigger\OpenLineMessageTrigger;
 use Bitrix\Crm\Automation\Trigger\OpenLineAnswerControlTrigger;
 
 use Bitrix\Im;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 
 use Bitrix\ImOpenLines\Crm\Fields;
 use Bitrix\ImOpenLines\Im\Messages;
@@ -1543,7 +1544,7 @@ class Crm
 
 			if (
 				$session->getData('SOURCE') == Connector::TYPE_LIVECHAT
-				&& Im\User::getInstance($session->getData('USER_ID'))->isConnector()
+				&& UserV2::getInstance((int)$session->getData('USER_ID'))->isConnector()
 				&& Im\User::getInstance($session->getData('USER_ID'))->getName() == ''
 				&& !empty($entitys)
 			)
@@ -1704,7 +1705,7 @@ class Crm
 
 				while ($queueUser = $res->fetch())
 				{
-					if (Im\User::getInstance($queueUser['USER_ID'])->isActive())
+					if (UserV2::getInstance((int)$queueUser['USER_ID'])->isActive())
 					{
 						$queueUserList[] = $queueUser['USER_ID'];
 					}

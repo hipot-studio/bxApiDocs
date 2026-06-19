@@ -45,6 +45,8 @@ class Bot
 	public const EVENT_MODE_WEBHOOK = 'WEBHOOK';
 	public const EVENT_MODE_FETCH = 'FETCH';
 
+	public const WEBHOOK_CLIENT_ID_PREFIX = 'custom';
+
 	public const PLATFORM_CONTEXT_MOBILE = 'mobile';
 	public const PLATFORM_CONTEXT_WEB = 'web';
 
@@ -329,24 +331,12 @@ class Bot
 		$cache = \Bitrix\Main\Data\Cache::createInstance();
 		$cache->cleanDir(self::CACHE_PATH);
 
-		if (!empty($deletedBot['APP_ID']))
+		if (
+			!empty($deletedBot['APP_ID'])
+			&& \Bitrix\Main\Loader::includeModule('imbot')
+		)
 		{
-			$remainingBots = BotTable::getCount(['=APP_ID' => $deletedBot['APP_ID']]);
-			if (
-				$remainingBots === 0
-				&& \Bitrix\Main\Loader::includeModule('imbot')
-				&& \Bitrix\Main\Loader::includeModule('rest')
-			)
-			{
-				$appResult = \Bitrix\Rest\AppTable::getList([
-					'filter' => ['=CLIENT_ID' => $deletedBot['APP_ID']],
-					'select' => ['ID'],
-				]);
-				if ($app = $appResult->fetch())
-				{
-					\Bitrix\ImBot\V2\Controller\Bot::unbindV2RestEvents((int)$app['ID']);
-				}
-			}
+			\Bitrix\ImBot\V2\Controller\Bot::unbindV2RestEvents($botId, (string)$deletedBot['APP_ID']);
 		}
 
 		$user = new \CUser;
@@ -612,6 +602,16 @@ class Bot
 		)
 		{
 			\Bitrix\Im\Model\EventLogTable::deleteBatch(['=USER_ID' => $botId]);
+		}
+
+		if (
+			$oldEventMode === self::EVENT_MODE_WEBHOOK
+			&& ($update['EVENT_MODE'] ?? null) === self::EVENT_MODE_FETCH
+			&& !empty($bot['APP_ID'])
+			&& \Bitrix\Main\Loader::includeModule('imbot')
+		)
+		{
+			\Bitrix\ImBot\V2\Controller\Bot::unbindV2RestEvents($botId, (string)$bot['APP_ID']);
 		}
 
 		self::sendPullNotify($botId, 'botUpdate');

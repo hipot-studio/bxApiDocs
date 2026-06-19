@@ -64,6 +64,12 @@ class CIMMessage
 		if (!$message)
 			return false;
 
+		$chat = \Bitrix\Im\V2\Chat::getInstance((int)$message['CHAT_ID']);
+		if (!$chat->checkAccess((int)$this->user_id)->isSuccess())
+		{
+			return false;
+		}
+
 		if ($files)
 		{
 			$files = CIMMessageParam::Get($id, 'FILE_ID');

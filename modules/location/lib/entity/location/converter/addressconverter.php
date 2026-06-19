@@ -29,15 +29,6 @@ final class AddressConverter
 			->setLongitude($location->getLongitude())
 			->setFieldValue($type, $location->getName());
 
-		if($parents = $location->getParents())
-		{
-			/** @var Location $parent */
-			foreach ($parents as $parent)
-			{
-				$result->setFieldValue($parent->getType(), $parent->getName());
-			}
-		}
-
 		if($fields = $location->getAllFieldsValues())
 		{
 			foreach($fields as $type => $value)

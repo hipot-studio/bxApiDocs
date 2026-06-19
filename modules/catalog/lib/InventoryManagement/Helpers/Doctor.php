@@ -4,8 +4,10 @@ namespace Bitrix\Catalog\InventoryManagement\Helpers;
 
 use Bitrix\Catalog\ProductTable;
 use Bitrix\Catalog\StoreProductTable;
+use Bitrix\Catalog\Model\Product;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentNullException;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\HtmlFilter;
 
 /**
@@ -34,6 +36,13 @@ use Bitrix\Main\Text\HtmlFilter;
  */
 final class Doctor
 {
+	private static bool $isDoctorWorking = false;
+
+	public static function isDoctorWorking(): bool
+	{
+		return self::$isDoctorWorking;
+	}
+
 	/**
 	 * Get SQL to select information about reserves and stocks.
 	 *
@@ -361,5 +370,81 @@ final class Doctor
 		{
 			StoreProductTable::cleanCache();
 		}
+	}
+
+	public function printProductWithFailStoreAmount(): void
+	{
+		$conn = Application::getConnection();
+		$helper = $conn->getSqlHelper();
+
+		$sql = '
+			SELECT
+				sb.' . $helper->quote('ELEMENT_ID') . ' AS ' . $helper->quote('PRODUCT_ID') . ',
+				sb.' . $helper->quote('STORE_ID') . ',
+				sb.' . $helper->quote('BATCH_AMOUNT') . ',
+				csp.ID AS ' . $helper->quote('STORE_AMOUNT_ID') . ',
+				COALESCE(csp.AMOUNT, 0) AS ' . $helper->quote('STORE_AMOUNT') . ',
+				ABS(sb.BATCH_AMOUNT - COALESCE(csp.AMOUNT, 0)) AS ' . $helper->quote('DIFF') . '
+			FROM (
+				SELECT
+					ELEMENT_ID,
+					STORE_ID,
+					SUM(AVAILABLE_AMOUNT) AS BATCH_AMOUNT
+				FROM
+					b_catalog_store_batch
+				GROUP BY
+					ELEMENT_ID, STORE_ID
+			) AS sb
+			LEFT JOIN b_catalog_store_product AS csp
+				ON csp.PRODUCT_ID = sb.ELEMENT_ID AND csp.STORE_ID = sb.STORE_ID
+			WHERE
+				sb.BATCH_AMOUNT != COALESCE(csp.AMOUNT, 0)
+			ORDER BY
+				sb.ELEMENT_ID, sb.STORE_ID
+		';
+
+		$this->printTable($conn->query($sql)->fetchAll());
+	}
+
+	public function fixProductQuantitySubtract(int $productId, float $diff): void
+	{
+		if ($productId <= 0)
+		{
+			throw new ArgumentNullException('productId');
+		}
+
+		if ($diff <= 0.0)
+		{
+			throw new \InvalidArgumentException('Amount must be positive.');
+		}
+
+		$row = ProductTable::getList([
+			'select' => ['ID', 'QUANTITY'],
+			'filter' => ['=ID' => $productId],
+		])->fetch();
+
+		if (!$row)
+		{
+			throw new SystemException('Product not found.');
+		}
+
+		$currentQuantity = (float)$row['QUANTITY'];
+		$newQuantity = $currentQuantity - $diff;
+
+		$saveResult = Product::update($productId, [
+			'QUANTITY' => $newQuantity,
+		]);
+
+		if (!$saveResult->isSuccess())
+		{
+			throw new SystemException($saveResult->getError()->getMessage());
+		}
+	}
+
+	public function cancelFailedDocument(int $documentId): void
+	{
+		self::$isDoctorWorking = true;
+		\CCatalogDocs::cancellationDocument($documentId);
+		self::$isDoctorWorking = false;
 	}
 }

@@ -73,6 +73,18 @@ class Relation
 		]);
 		$chat = \Bitrix\Im\V2\Chat::getInstance($this->chatId);
 
+		$relationsRest = $chat->getRelationsByUserIds([$this->userId])->toRestFormat();
+		if (empty($relationsRest))
+		{
+			$relationsRest = [[
+				'id' => 0,
+				'userId' => $this->userId,
+				'chatId' => $this->chatId,
+				'isHidden' => false,
+				'role' => mb_strtolower(\Bitrix\Im\V2\Chat::ROLE_MEMBER),
+			]];
+		}
+
 		$pushMessage = [
 			'module_id' => 'im',
 			'command' => 'chatUserAdd',
@@ -85,7 +97,7 @@ class Relation
 				'containsCollaber' => false,
 				'users' => $users['users'],
 				'newUsers' => [$this->userId],
-				'relations' => $chat->getRelationsByUserIds([$this->userId])->toRestFormat(),
+				'relations' => $relationsRest,
 				'userCount' => count($this->userIds),
 				'date' => date('H:i:s'),
 				'lines' => $this->getLine()

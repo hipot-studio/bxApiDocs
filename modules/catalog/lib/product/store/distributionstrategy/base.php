@@ -11,6 +11,7 @@ use Bitrix\Catalog\Product\Price\Calculation;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
+use \Bitrix\Catalog\InventoryManagement\Helpers\Doctor;
 
 /**
  * Class Batch
@@ -74,7 +75,10 @@ abstract class Base
 
 		if ($items->isEmpty())
 		{
-			$result->addError(new Error('Shipment item was not found'));
+			if (!Doctor::isDoctorWorking())
+			{
+				$result->addError(new Error('Shipment item was not found'));
+			}
 
 			return $result;
 		}

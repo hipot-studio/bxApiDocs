@@ -197,7 +197,6 @@ class BotData implements RestEntity
 			'id' => $this->getId(),
 			'code' => $code,
 			'type' => $type,
-			'appId' => $this->botData['APP_ID'],
 			'isHidden' => $this->botData['HIDDEN'] === 'Y',
 			'isSupportOpenline' => $this->botData['OPENLINE'] === 'Y',
 			'openline' => $this->botData['OPENLINE'] === 'Y',

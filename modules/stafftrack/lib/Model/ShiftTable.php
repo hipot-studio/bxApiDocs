@@ -98,21 +98,18 @@ class ShiftTable extends DataManager
 				[
 					'primary' => true,
 					'autocomplete' => true,
-					'title' => Loc::getMessage('SHIFT_ENTITY_ID_FIELD'),
 				]
 			),
 			new IntegerField(
 				'USER_ID',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('SHIFT_ENTITY_USER_ID_FIELD'),
 				]
 			),
 			new DateField(
 				'SHIFT_DATE',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('SHIFT_ENTITY_SHIFT_DATE_FIELD'),
 				]
 			),
 			new DatetimeField(
@@ -122,21 +119,16 @@ class ShiftTable extends DataManager
 					{
 						return new DateTime();
 					},
-					'title' => Loc::getMessage('SHIFT_ENTITY_DATE_CREATE_FIELD'),
 				]
 			),
 			new IntegerField(
 				'STATUS',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('SHIFT_ENTITY_STATUS_FIELD'),
 				]
 			),
 			new TextField(
 				'LOCATION',
-				[
-					'title' => Loc::getMessage('SHIFT_ENTITY_LOCATION_FIELD'),
-				]
 			),
 			(new Reference(
 				'GEO',

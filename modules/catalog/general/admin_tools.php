@@ -61,6 +61,110 @@ class CCatalogAdminTools extends CCatalogAdminToolsAll
 		];
 	}
 
+	/**
+	 * Returns the number of fraction digits for displaying a price in the given currency.
+	 * Falls back to CATALOG_VALUE_PRECISION when the currency has no localized format.
+	 *
+	 * @param string $currency
+	 * @return int
+	 */
+	public static function getCurrencyDecimals(string $currency): int
+	{
+		$decimals = defined('CATALOG_VALUE_PRECISION') ? CATALOG_VALUE_PRECISION : 2;
+		if ($currency !== '' && Loader::includeModule('currency'))
+		{
+			$format = \CCurrencyLang::GetCurrencyFormat($currency);
+			if (isset($format['DECIMALS']))
+			{
+				$decimals = (int)$format['DECIMALS'];
+			}
+		}
+
+		return $decimals;
+	}
+
+	/**
+	 * Formats a raw price for display in an admin input by the currency display precision.
+	 *
+	 * Mirrors the service-based approach used by CRM (\Bitrix\Crm\Format\Money::toNumberString):
+	 * the value is rounded to the currency display format through the catalog price service
+	 * Catalog\Product\Price\Calculation::roundByFormatCurrency(), which delegates to the
+	 * 'sale.priceRounder' service (ServiceLocator) and falls back to CATALOG_VALUE_PRECISION
+	 * when the sale module is absent. The rounded value is then rendered with number_format()
+	 * using the currency DECIMALS, a dot decimal point and no thousands separator on purpose,
+	 * so the value stays parseable by the legacy inline parseFloat()-based price calculations.
+	 *
+	 * @param mixed $value raw price value (DECIMAL(26,8)); empty string is returned as is
+	 * @param string $currency
+	 * @return string
+	 */
+	public static function formatMoneyForDisplay($value, string $currency): string
+	{
+		if (is_string($value))
+		{
+			$value = trim($value);
+		}
+		if ($value === '' || $value === null)
+		{
+			return '';
+		}
+
+		$value = (float)$value;
+		if ($currency !== '')
+		{
+			$value = Catalog\Product\Price\Calculation::roundByFormatCurrency($value, $currency);
+		}
+
+		return number_format($value, self::getCurrencyDecimals($currency), '.', '');
+	}
+
+	/**
+	 * Renders an editable money input: the visible value is formatted by the currency DECIMALS,
+	 * while the full DECIMAL(26,8) precision is preserved in data-money-raw and restored on submit
+	 * for untouched fields. Behaviour (display reformat on currency change, submit-restore) is
+	 * provided by the "catalog.admin-money-field" JS extension.
+	 *
+	 * @param array $params NAME (required), ID, VALUE (raw price), CURRENCY, CURRENCY_CONTROL_ID,
+	 *                      DISABLED (bool), SIZE (int), ATTRIBUTES (raw html attrs)
+	 * @return string
+	 */
+	public static function renderMoneyEditField(array $params): string
+	{
+		$name = (string)($params['NAME'] ?? '');
+		$id = (string)($params['ID'] ?? $name);
+		$rawValue = $params['VALUE'] ?? '';
+		$rawValue = is_string($rawValue) ? trim($rawValue) : (string)$rawValue;
+		$currency = (string)($params['CURRENCY'] ?? '');
+		$currencyControlId = (string)($params['CURRENCY_CONTROL_ID'] ?? '');
+		$size = (int)($params['SIZE'] ?? 0);
+		$disabled = !empty($params['DISABLED']) ? ' disabled' : '';
+		$extraAttributes = (string)($params['ATTRIBUTES'] ?? '');
+
+		$displayValue = self::formatMoneyForDisplay($rawValue, $currency);
+
+		$html = '<input type="text"' . $disabled
+			. ' id="' . htmlspecialcharsbx($id) . '"'
+			. ' name="' . htmlspecialcharsbx($name) . '"'
+			. ' class="catalog-money-edit"'
+			. ' value="' . htmlspecialcharsbx($displayValue) . '"'
+			. ' data-money-raw="' . htmlspecialcharsbx($rawValue) . '"';
+		if ($currencyControlId !== '')
+		{
+			$html .= ' data-money-currency-source="' . htmlspecialcharsbx($currencyControlId) . '"';
+		}
+		if ($size > 0)
+		{
+			$html .= ' size="' . $size . '"';
+		}
+		if ($extraAttributes !== '')
+		{
+			$html .= ' ' . $extraAttributes;
+		}
+		$html .= '>';
+
+		return $html;
+	}
+
 	public static function getTabDescriptions(): array
 	{
 		return [

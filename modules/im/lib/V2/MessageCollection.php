@@ -57,6 +57,7 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	protected bool $isUnreadFilled = false;
 	protected bool $isViewedFilled = false;
 	protected bool $isReactionsFilled = false;
+	protected bool $isBuilderFilled = false;
 
 	//region Collection
 
@@ -591,6 +592,26 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return $this;
 	}
 
+	protected function fillBuilder(): self
+	{
+		if ($this->isBuilderFilled)
+		{
+			return $this;
+		}
+
+		$this->fillParams();
+
+		foreach ($this as $message)
+		{
+			$builder = $message->getParams()->get(Params::BUILDER)->getValue();
+			$message->setBuilder($builder);
+		}
+
+		$this->isBuilderFilled = true;
+
+		return $this;
+	}
+
 	/**
 	 * @return self
 	 */
@@ -609,6 +630,7 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return $this
 			->fillParams()
 			->fillUuid()
+			->fillBuilder()
 		;
 	}
 

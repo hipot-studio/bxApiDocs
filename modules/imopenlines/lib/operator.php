@@ -3,6 +3,7 @@ namespace Bitrix\ImOpenLines;
 
 use Bitrix\Im\Bot\Keyboard;
 use Bitrix\Im\Model\ChatTable;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 use Bitrix\ImConnector\Output;
 use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\ImOpenlines\QuickAnswers\ListsDataManager;
@@ -478,7 +479,7 @@ class Operator
 
 	public function openChat($userCode)
 	{
-		if (\Bitrix\Im\User::getInstance($this->userId)->isExtranet())
+		if (UserV2::getInstance($this->userId)->isExtranet())
 		{
 			return false;
 		}

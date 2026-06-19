@@ -1137,33 +1137,68 @@ class Config
 						\CFile::Delete($config['DEFAULT_OPERATOR_DATA']['AVATAR_ID']);
 					}
 
+					$queueChanged = false;
 					if (
 						isset($params['QUEUE'])
 						&& is_array($params['QUEUE'])
 					)
 					{
+						$oldQueueUsers = [];
+						$oldRows = Model\QueueTable::getList([
+							'select' => ['USER_ID'],
+							'filter' => ['=CONFIG_ID' => $configId],
+						])->fetchAll();
+						foreach ($oldRows as $row)
+						{
+							$oldQueueUsers[] = (int)$row['USER_ID'];
+						}
+						$oldQueueUsers = array_unique($oldQueueUsers);
+						sort($oldQueueUsers);
+
 						if(!isset($params['QUEUE_USERS_FIELDS']))
 						{
 							$params['QUEUE_USERS_FIELDS'] = false;
 						}
 						$queueManager = new QueueManager($configId);
 						$queueManager->compatibleUpdate($params['QUEUE'], $params['QUEUE_USERS_FIELDS']);
+
+						$newQueueUsers = [];
+						foreach ($params['QUEUE'] as $item)
+						{
+							if (is_array($item))
+							{
+								if (($item['ENTITY_TYPE'] ?? 'user') === 'user' && !empty($item['ENTITY_ID']))
+								{
+									$newQueueUsers[] = (int)$item['ENTITY_ID'];
+								}
+							}
+							elseif ((int)$item > 0)
+							{
+								$newQueueUsers[] = (int)$item;
+							}
+						}
+						$newQueueUsers = array_unique($newQueueUsers);
+						sort($newQueueUsers);
+
+						$queueChanged = $oldQueueUsers !== $newQueueUsers;
 					}
 
-					if (isset($fields['QUICK_ANSWERS_IBLOCK_ID']))
-					{
-						if(
-							$config['QUICK_ANSWERS_IBLOCK_ID'] != $fields['QUICK_ANSWERS_IBLOCK_ID']
-							&& $config['QUICK_ANSWERS_IBLOCK_ID'] > 0
-						)
-						{
-							ListsDataManager::updateIblockRights($config['QUICK_ANSWERS_IBLOCK_ID']);
-						}
+					$iblockChanged =
+						isset($fields['QUICK_ANSWERS_IBLOCK_ID'])
+						&& $config['QUICK_ANSWERS_IBLOCK_ID'] != $fields['QUICK_ANSWERS_IBLOCK_ID'];
 
-						if($fields['QUICK_ANSWERS_IBLOCK_ID'] > 0)
-						{
-							ListsDataManager::updateIblockRights($fields['QUICK_ANSWERS_IBLOCK_ID']);
-						}
+					if ($iblockChanged && $config['QUICK_ANSWERS_IBLOCK_ID'] > 0)
+					{
+						self::scheduleQuickAnswersRightsUpdate((int)$config['QUICK_ANSWERS_IBLOCK_ID']);
+					}
+
+					$targetIblockId = $iblockChanged
+						? (int)$fields['QUICK_ANSWERS_IBLOCK_ID']
+						: (int)($config['QUICK_ANSWERS_IBLOCK_ID'] ?? 0);
+
+					if ($targetIblockId > 0 && ($iblockChanged || $queueChanged))
+					{
+						self::scheduleQuickAnswersRightsUpdate($targetIblockId);
 					}
 
 					$sendUpdate = false;
@@ -1553,7 +1588,7 @@ class Config
 			$configId > 0
 		)
 		{
-			$orm = Model\ConfigTable::getById($configId);
+			$orm = Model\ConfigTable::getByPrimary($configId, ['cache' => ['ttl' => self::CONFIG_CACHE_TIME]]);
 			if ($config = $orm->fetch())
 			{
 				$config['WORKTIME_DAYOFF'] = explode(',', $config['WORKTIME_DAYOFF']);
@@ -2179,7 +2214,8 @@ class Config
 				'id' => $data['ID'],
 				'name' => $isDelete? '': $data['NAME'],
 				'PRIORITY' => $data['SESSION_PRIORITY'],
-				'queue_type' => $data['QUEUE_TYPE']
+				'queue_type' => $data['QUEUE_TYPE'],
+				'color' => $isDelete? '': \Bitrix\Im\Color::getColorByNumber($data['ID']),
 			),
 		));
 
@@ -2226,6 +2262,24 @@ class Config
 		return '';
 	}
 
+
+	private static function scheduleQuickAnswersRightsUpdate(int $iblockId): void
+	{
+		if ($iblockId <= 0)
+		{
+			return;
+		}
+
+		\CAgent::AddAgent(
+			'Bitrix\ImOpenlines\QuickAnswers\ListsDataManager::updateIblockRightsAgent(' . $iblockId . ');',
+			'imopenlines',
+			'N',
+			0,
+			'',
+			'Y',
+			\ConvertTimeStamp(time() + \CTimeZone::GetOffset(), 'FULL')
+		);
+	}
 	public static function checkLinesLimit()
 	{
 		$maxLines = Limit::getLinesLimit();

@@ -18,7 +18,12 @@ class CrmFormProvider extends BaseProvider
 
 	public function isAvailable(): bool
 	{
-		return $GLOBALS['USER']->isAuthorized();
+		if (!Loader::includeModule('crm'))
+		{
+			return false;
+		}
+
+		return \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->webForm()->canRead();
 	}
 
 	public function getItems(array $ids): array

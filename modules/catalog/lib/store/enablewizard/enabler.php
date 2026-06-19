@@ -129,11 +129,6 @@ abstract class Enabler
 
 	private static function resetQuantities(): void
 	{
-		if (!ConditionsChecker::doesProductWithQuantityExist())
-		{
-			return;
-		}
-
 		self::resetQuantity();
 		self::resetQuantityTrace();
 		self::resetSaleReserve();

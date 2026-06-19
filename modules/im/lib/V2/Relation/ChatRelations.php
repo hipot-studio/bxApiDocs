@@ -2,7 +2,7 @@
 
 namespace Bitrix\Im\V2\Relation;
 
-use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 
@@ -28,6 +28,11 @@ class ChatRelations
 		$this->chatId = $chatId;
 	}
 
+	protected function getChat(): Chat
+	{
+		return Chat::getInstance($this->chatId);
+	}
+
 	public static function getInstance(int $chatId): static
 	{
 		self::$instances[$chatId] ??= new static($chatId);
@@ -43,19 +48,48 @@ class ChatRelations
 
 	public function filterUserIdsByAccess(array $userIds): array
 	{
+		$parentChat = $this->getChat()->getParentChat();
+		if ($parentChat !== null)
+		{
+			return $parentChat->getRelationsByUserIds($userIds)->getUserIds();
+		}
+
 		return $userIds;
 	}
 
 	protected function filterRelationsByAccess(RelationCollection $relations): RelationCollection
 	{
-		if (!static::NEED_ADDITIONAL_FILTER_BY_ACCESS)
+		$hasParent = $this->getChat()->hasParent();
+
+		if (!static::NEED_ADDITIONAL_FILTER_BY_ACCESS && !$hasParent)
 		{
 			return $relations;
 		}
 
-		$usersWithAccess = $this->filterUserIdsByAccess($relations->getUserIds());
+		$allUserIds = $relations->getUserIds();
+		$usersWithAccess = $this->filterUserIdsByAccess($allUserIds);
 
-		return $relations->filter(fn (Relation $relation) => in_array($relation->getUserId(), $usersWithAccess, true));
+		$filtered = $relations->filter(fn (Relation $relation) => in_array($relation->getUserId(), $usersWithAccess, true));
+
+		$removedUserIds = array_diff($allUserIds, $usersWithAccess);
+		if (!empty($removedUserIds))
+		{
+			$this->markRemovedForDeletion($removedUserIds);
+		}
+
+		return $filtered;
+	}
+
+	protected function markRemovedForDeletion(array $removedUserIds): void
+	{
+		$cleaner = LazyCleaner::getInstance();
+		foreach ($removedUserIds as $userId)
+		{
+			if (!$cleaner->markForDeletion($this->chatId, $userId))
+			{
+				break;
+			}
+		}
 	}
 
 	public function preloadUserRelation(int $userId, ?Relation $relation): void

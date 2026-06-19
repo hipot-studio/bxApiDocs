@@ -139,6 +139,11 @@ class UrlService
 	protected function saveUrlsFromMessageInternal(Message $message): Result
 	{
 		$result = new Result();
+		if ($message->isUrlPreviewDisabled())
+		{
+			return $result;
+		}
+
 		$urlCollection = $this->initUrlsByMessage($message);
 
 		if ($urlCollection->hasUnsaved())

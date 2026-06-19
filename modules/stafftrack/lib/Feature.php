@@ -79,6 +79,16 @@ class Feature
 	}
 
 	/**
+	 * @return bool
+	 */
+	public static function isWesternPortal(): bool
+	{
+		$portalZone = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?? 'en';
+
+		return !in_array($portalZone, ['ru', 'by', 'kz', 'br', 'in'], true);
+	}
+
+	/**
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
 	 */

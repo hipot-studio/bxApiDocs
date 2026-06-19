@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Recent\Config;
 
@@ -17,6 +18,8 @@ class RecentConfigManager
 	public const DEFAULT_SECTION_NAME = 'default';
 
 	private array $configByTypes = [];
+	/** @var array<string, ComposedSection> */
+	private array $composedAliases = [];
 	private bool $isLoaded = false;
 	private Converter $converterToCamelCase;
 
@@ -44,10 +47,49 @@ class RecentConfigManager
 
 	public function getRecentSectionsByChat(Chat $chat): array
 	{
-		return $this->getRecentSectionsByChatExtendedType($chat->getExtendedType(false));
+		$type = $chat->getExtendedType(false);
+
+		if ($chat->hasParent())
+		{
+			return $this->getAllRecentSectionsByType($type);
+		}
+
+		return $this->getBaseRecentSections($type);
 	}
 
-	public function getRecentSectionsByChatExtendedType(string $type): array
+	public function getAllRecentSectionsByType(string $type): array
+	{
+		$baseSections = $this->getBaseRecentSections($type);
+		$allSections = $baseSections;
+
+		foreach ($this->composedAliases as $alias => $composedSection)
+		{
+			if ($composedSection->matchesSections($baseSections))
+			{
+				$allSections[] = $alias;
+			}
+		}
+
+		return $allSections;
+	}
+
+	public function getExcludedComposedSections(string $type): array
+	{
+		$baseSections = $this->getBaseRecentSections($type);
+		$excluded = [];
+
+		foreach ($this->composedAliases as $alias => $composedSection)
+		{
+			if ($composedSection->excludesSections($baseSections))
+			{
+				$excluded[] = $alias;
+			}
+		}
+
+		return $excluded;
+	}
+
+	public function getBaseRecentSections(string $type): array
 	{
 		$config = $this->getByExtendedType($type);
 		$recentSections = [];
@@ -70,6 +112,7 @@ class RecentConfigManager
 		$this->isLoaded = true;
 		$this->loadInternal();
 		$this->loadExternal();
+		$this->loadComposedSections();
 	}
 
 	private function loadInternal(): void
@@ -77,7 +120,15 @@ class RecentConfigManager
 		$this->configByTypes[ExtendedType::Copilot->value] =
 			new RecentConfig(CopilotChat::isHistoryAvailable(), CopilotChat::isActive(), CounterType::Copilot);
 		$this->configByTypes[ExtendedType::Collab->value] =
-			new RecentConfig(true, true, CounterType::Collab);
+			(new RecentConfig(true, true, CounterType::Collab))
+				->addComposedChildSection('collabDefault', new ComposedSection(
+					include: [self::DEFAULT_SECTION_NAME, 'tasksTask', 'calendar'],
+				))
+				->addComposedChildSection('collabChat', new ComposedSection(
+					include: [self::DEFAULT_SECTION_NAME],
+					exclude: ['tasksTask', 'calendar'],
+				))
+		;
 		$this->configByTypes[ExtendedType::Lines->value] =
 			new RecentConfig(false, true, CounterType::Openline);
 		$this->configByTypes[ExtendedType::Comment->value] =
@@ -86,6 +137,9 @@ class RecentConfigManager
 			new RecentConfig(true, true);
 		$this->configByTypes[ExtendedType::GeneralChannel->value]
 			= (new RecentConfig(true, true))->setOwnSectionName('openChannel')
+		;
+		$this->configByTypes[ExtendedType::Calendar->value]
+			= (new RecentConfig(true, true))
 		;
 		$this->configByTypes[ExtendedType::System->value] =
 			new RecentConfig(false, false)
@@ -110,6 +164,17 @@ class RecentConfigManager
 			);
 
 			$this->configByTypes[$type] = $recentConfig;
+		}
+	}
+
+	private function loadComposedSections(): void
+	{
+		foreach ($this->configByTypes as $config)
+		{
+			foreach ($config->getComposedChildSections() as $alias => $composedSection)
+			{
+				$this->composedAliases[$alias] = $composedSection;
+			}
 		}
 	}
 }

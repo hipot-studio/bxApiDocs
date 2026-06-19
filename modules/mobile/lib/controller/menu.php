@@ -10,10 +10,14 @@ use Bitrix\Mobile\Context;
 use Bitrix\Mobile\Menu\MenuList;
 use Bitrix\Mobile\Menu\AhaMoment;
 use Bitrix\Mobile\Menu\Service\MenuListCache;
+use Bitrix\Mobile\Menu\Service\SupportBanners;
 use Bitrix\Mobile\Provider\UserRepository;
 use Bitrix\Mobile\Provider\ThemeProvider;
 use Bitrix\Timeman\Model\Schedule\Schedule;
 use Bitrix\Timeman\Model\Schedule\ScheduleTable;
+use Bitrix\Mobile\Config\Feature;
+use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
+use Bitrix\StaffTrack\Public\Provider\CheckInProvider;
 
 class Menu extends Controller
 {
@@ -78,6 +82,8 @@ class Menu extends Controller
 			$canManageWorkTimeOnMobile = $this->canManageWorkTimeOnMobile($userId, $forceRefresh);
 		}
 
+		$checkInData = $this->getCheckInData($userId, $context);
+
 		return [
 			'user' => $user,
 			'menuList' => (new MenuList($context, $cache))->build($forceRefresh),
@@ -86,13 +92,16 @@ class Menu extends Controller
 			'company' => $this->getCompany($context),
 			'helpdeskUrl' => Loader::includeModule('ui') ? \Bitrix\UI\Util::getHelpdeskUrl(true) : null,
 			'supportBotId' => $supportBotId,
+			'supportBanners' => $this->getSupportBanners(),
 			'ahaMoment' => $this->getAhaMoment(),
 			'currentTheme' => $currentTheme,
+			'isNewCheckInEnabled' => $checkInData['isNewCheckInEnabled'],
+			'checkInAmount' => $checkInData['checkInAmount'],
 
 			'restrictions' => [
 				'canEditProfile' => $USER->CanDoOperation('edit_own_profile'),
 				'canUseTimeMan' => $canUseTimeMan,
-				'canUseCheckIn' => $this->canUseCheckIn($context),
+				'canUseCheckIn' => $checkInData['canUseCheckIn'],
 				'canUseSupport' => $supportBotId > 0,
 				'canInvite' => $this->canInvite(),
 				'canUseTelephony' => \Bitrix\Main\Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
@@ -100,6 +109,27 @@ class Menu extends Controller
 				'canManageWorkTimeOnMobile' => $canManageWorkTimeOnMobile,
 				'canUseSecuritySettings' => \Bitrix\Mobile\Config\Feature::isEnabled(\Bitrix\Mobile\Feature\SecuritySettingsFeature::class),
 			],
+		];
+	}
+
+	private function getCheckInData(int $userId, Context $context): ?array
+	{
+		$isNewCheckInEnabled = false;
+		$checkInAmount = null;
+		$canUseCheckIn = $this->canUseCheckIn($context);
+
+		if ($canUseCheckIn)
+		{
+			$isNewCheckInEnabled =  Feature::isEnabled(CheckInFeature::class);
+			$checkInAmount = $isNewCheckInEnabled
+				? CheckInProvider::getInstance()->getManualCheckInCountByDate($userId, time())
+				: null;
+		}
+
+		return [
+			'isNewCheckInEnabled' => $isNewCheckInEnabled,
+			'checkInAmount' => $checkInAmount,
+			'canUseCheckIn' => $canUseCheckIn,
 		];
 	}
 
@@ -131,11 +161,7 @@ class Menu extends Controller
 
 	private function getCurrentShift(Context $context, int $userId): ?\Bitrix\StaffTrack\Model\Shift
 	{
-		if (
-			$context->isCollaber || $context->extranet
-			|| !Loader::includeModule('stafftrack')
-			||  !\Bitrix\StaffTrack\Feature::isCheckInEnabled()
-		)
+		if (!$this->canUseCheckIn($context))
 		{
 			return null;
 		}
@@ -163,6 +189,16 @@ class Menu extends Controller
 		}
 
 		return  (int)(new \Bitrix\Mobile\Provider\SupportProvider())->getBotId();
+	}
+
+	private function getSupportBanners(): array
+	{
+		$service = new SupportBanners();
+
+		return [
+			'shouldShow' => $service->shouldShowSupportBanners(),
+			'formCode' => $service->getFormCode(),
+		];
 	}
 
 	private function canInvite(): bool

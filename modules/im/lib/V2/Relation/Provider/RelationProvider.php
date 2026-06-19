@@ -6,7 +6,9 @@ namespace Bitrix\Im\V2\Relation\Provider;
 
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Access\ParentChainFilterFactory;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -59,6 +61,9 @@ class RelationProvider
 	protected function prepareQuery(Query $query, ?RelationCursor $cursor): void
 	{
 		$this->defineRoles($query);
+		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
+			->forChat((int)$this->chat->getId())
+			->apply($query);
 		if ($cursor)
 		{
 			$this->applyCursor($query, $cursor);

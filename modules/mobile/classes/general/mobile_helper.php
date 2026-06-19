@@ -710,6 +710,7 @@ class CMobileHelper
 
 	public static function createLink($tag)
 	{
+
 		global $USER;
 
 		$link = SITE_DIR.'mobile/log/?ACTION=CONVERT';
@@ -930,7 +931,7 @@ class CMobileHelper
 			$params = explode("|", $tag);
 			if (isset($params[2]))
 			{
-				$result = SITE_DIR.'mobile/bp/detail.php?task_id='.(int)$params[2];
+				$result = SITE_DIR . 'company/personal/bizproc/' . (int)$params[2]. '/';
 			}
 		}
 

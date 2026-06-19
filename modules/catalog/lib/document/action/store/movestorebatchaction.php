@@ -17,22 +17,25 @@ use Bitrix\Main\Result;
 class MoveStoreBatchAction extends UpsertStoreBatchAction
 {
 	use WriteOffAmountValidator;
-	private int $storeFromId;
 
+	private int $storeFromId;
 	private int $storeToId;
 	private int $storeId;
-
+	private float $totalAmount;
 	private ?EO_StoreDocumentElement $storeDocumentElement;
+
 	public function __construct(
 		int $storeFromId,
 		int $storeToId,
 		int $productId,
 		float $amount,
+		float $totalAmount,
 		?int $documentElementId = null,
 	)
 	{
 		$this->storeFromId = $storeFromId;
 		$this->storeToId = $storeToId;
+		$this->totalAmount = $totalAmount;
 
 		parent::__construct($storeToId, $productId, $amount, $documentElementId);
 
@@ -54,7 +57,7 @@ class MoveStoreBatchAction extends UpsertStoreBatchAction
 		$this->productId = $this->storeDocumentElement->getElementId();
 		$this->storeId = $this->storeDocumentElement->getStoreFrom();
 
-		return $this->checkStoreAmount($this->storeDocumentElement);
+		return $this->checkStoreAmount($this->storeDocumentElement, $this->totalAmount);
 	}
 
 	/**

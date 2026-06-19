@@ -4,7 +4,6 @@ namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Disk\Folder;
 use Bitrix\Im\Model\ChatTable;
-use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message\Send\MentionService;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
@@ -19,7 +18,6 @@ use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Pull\Event;
 
 /**
@@ -188,33 +186,12 @@ class CommentChat extends GroupChat
 		$this->subscribe(true, $message->getAuthorId());
 		Message\LastMessages::insert($message);
 
-		if (!$sendingService->getConfig()->skipCounterIncrements())
-		{
-			Recent::raiseChat($this->getParentChat(), $this->getParentRelationsForRaiseChat(), new DateTime());
-		}
-
 		parent::onAfterMessageSend($message, $sendingService);
 	}
 
 	public function filterUsersToMention(array $userIds): array
 	{
 		return $this->getParentChat()->filterUsersToMention($userIds);
-	}
-
-	public function getRelations(): RelationCollection
-	{
-		$relations = parent::getRelations();
-		$userIds = $relations->getUserIds();
-		if (empty($userIds))
-		{
-			return $relations;
-		}
-
-		$parentRelations = $this->getParentChat()->getRelationsByUserIds($userIds);
-
-		return $relations->filter(
-			fn (Relation $relation) => $parentRelations->getByUserId($relation->getUserId(), $this->getParentChatId())
-		);
 	}
 
 	public function getAllUserIdsForMention(): array
@@ -230,13 +207,6 @@ class CommentChat extends GroupChat
 	public function getUsersToNotify(): RelationCollection
 	{
 		return parent::getUsersToNotify()->filterNotifySubscribed();
-	}
-
-	protected function getParentRelationsForRaiseChat(): RelationCollection
-	{
-		$userIds = $this->getUsersToNotify()->getUserIds();
-
-		return $this->getParentChat()->getRelationsByUserIds($userIds);
 	}
 
 	public function subscribe(bool $subscribe = true, ?int $userId = null): Result
@@ -260,13 +230,6 @@ class CommentChat extends GroupChat
 		}
 
 		return $result;
-	}
-
-	protected function getValidUsersToAdd(array $userIds): array
-	{
-		$userIds = parent::getValidUsersToAdd($userIds);
-
-		return $this->getParentChat()->getRelationsByUserIds($userIds)->getUserIds();
 	}
 
 	public function subscribeUsers(bool $subscribe = true, array $userIds = [], ?int $lastId = null): Result

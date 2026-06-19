@@ -15,6 +15,7 @@ use Bitrix\ImOpenLines\Widget\FormHandler;
 use Bitrix\ImOpenlines\Security\Permissions;
 
 use Bitrix\Im;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\Exceptions\ArgumentNullException;
@@ -1884,9 +1885,9 @@ class Rest extends \IRestService
 				throw new ArgumentNullException('Empty USER_ID');
 			}
 
-			$user = Im\User::getInstance($arParams['USER_ID']);
+			$userV2 = UserV2::getInstance($arParams['USER_ID']);
 
-			if (!$user->isExists() || !$user->isActive())
+			if (!$userV2->isExist() || !$userV2->isActive())
 			{
 				throw new RestException('User not active', 'CRM_CHAT_USER_NOT_ACTIVE', \CRestServer::STATUS_WRONG_REQUEST);
 			}
@@ -1974,9 +1975,9 @@ class Rest extends \IRestService
 				throw new RestException('You don\'t have access to delete a user from this chat', 'CHAT_DELETE_USER_PERMISSION_DENIED', \CRestServer::STATUS_FORBIDDEN);
 			}
 
-			$user = Im\User::getInstance($arParams['USER_ID']);
+			$userV2 = UserV2::getInstance($arParams['USER_ID']);
 
-			if (!$user->isExists() || !$user->isActive())
+			if (!$userV2->isExist() || !$userV2->isActive())
 			{
 				throw new RestException('User not active', 'CRM_CHAT_USER_NOT_ACTIVE', \CRestServer::STATUS_WRONG_REQUEST);
 			}

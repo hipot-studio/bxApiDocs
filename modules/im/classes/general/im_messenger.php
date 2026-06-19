@@ -2741,7 +2741,7 @@ class CIMMessenger
 						'turnServerFirefox' : '".CUtil::JSEscape($arTemplate['TURN_SERVER_FIREFOX'])."',
 						'turnServerLogin' : '".CUtil::JSEscape($arTemplate['TURN_SERVER_LOGIN'])."',
 						'turnServerPassword' : '".CUtil::JSEscape($arTemplate['TURN_SERVER_PASSWORD'])."',
-						'bitrixCallEnabled': ".(\Bitrix\Call\Call::isCallServerEnabled() ? 'true' : 'false').",
+						'bitrixCallEnabled': ".(\Bitrix\Main\Loader::includeModule('call') && \Bitrix\Call\Call::isCallServerEnabled() ? 'true' : 'false').",
 						'mobileSupport': false,
 						'phoneEnabled': ".($phoneEnabled? 'true': 'false').",
 						'phoneDeviceActive': '".($phoneDeviceActive? 'Y': 'N')."',

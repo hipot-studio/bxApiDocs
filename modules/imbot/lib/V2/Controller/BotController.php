@@ -196,7 +196,7 @@ abstract class BotController extends BaseController
 
 	protected static function buildCustomClientId(string $token): string
 	{
-		return 'custom' . $token;
+		return \Bitrix\Im\Bot::WEBHOOK_CLIENT_ID_PREFIX . $token;
 	}
 
 	protected function getRequestParamAny(array $keys): ?string

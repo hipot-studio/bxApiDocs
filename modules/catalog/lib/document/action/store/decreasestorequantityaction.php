@@ -26,6 +26,7 @@ class DecreaseStoreQuantityAction  implements Action
 	use BaseStoreQuantityAction;
 
 	private string $docType;
+	private float $totalAmount;
 
 	/**
 	 * @param int $storeId
@@ -33,12 +34,13 @@ class DecreaseStoreQuantityAction  implements Action
 	 * @param float $amount
 	 * @param string $docType
 	 */
-	public function __construct(int $storeId, int $productId, float $amount, string $docType)
+	public function __construct(int $storeId, int $productId, float $amount, string $docType, float $totalAmount)
 	{
 		$this->storeId = $storeId;
 		$this->productId = $productId;
 		$this->amount = $amount;
 		$this->docType = $docType;
+		$this->totalAmount = $totalAmount;
 	}
 
 	/**
@@ -48,8 +50,7 @@ class DecreaseStoreQuantityAction  implements Action
 	{
 		$result = new Result();
 
-		$amount = $this->getProductAmountNew();
-		if ($amount < 0)
+		if ($this->getStoreProductAmount() - $this->totalAmount < 0)
 		{
 			$can = false;
 

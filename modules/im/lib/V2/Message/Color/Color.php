@@ -8,6 +8,7 @@ enum Color: string
 	case SECONDARY = 'secondary';
 	case ALERT = 'alert';
 	case BASE = 'base';
+	case AI_ASSISTANT = 'ai-assistant';
 
 	public static function validateColor($color): string
 	{

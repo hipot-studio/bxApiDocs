@@ -747,13 +747,13 @@ class General extends Base
 
 					break;
 				case 'callAcceptIncomingVideo':
-					\Bitrix\Main\Loader::includeModule('call');
-					$verifiedSettings[$name] =
-						in_array($value, \Bitrix\Call\VideoStrategyType::getList())
-							? $value
-							: $defaultSettings[$name]
-					;
-
+					if (\Bitrix\Main\Loader::includeModule('call'))
+					{
+						$verifiedSettings[$name] =
+							in_array($value, \Bitrix\Call\VideoStrategyType::getList())
+								? $value
+								: $defaultSettings[$name];
+					}
 					break;
 				case 'sendByEnter': // for legacy
 					$verifiedSettings[$name] = $value === 'Y' || $value === true;

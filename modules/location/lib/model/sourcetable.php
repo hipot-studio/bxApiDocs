@@ -14,9 +14,9 @@ use	Bitrix\Main\ORM\Fields;
  *
  * <<< ORMENTITYANNOTATION
  * @method static EO_Source_Query query()
- * @method static EO_Source_Result getByPrimary($primary, array $parameters = array())
+ * @method static EO_Source_Result getByPrimary($primary, array $parameters = [])
  * @method static EO_Source_Result getById($id)
- * @method static EO_Source_Result getList(array $parameters = array())
+ * @method static EO_Source_Result getList(array $parameters = [])
  * @method static EO_Source_Entity getEntity()
  * @method static \Bitrix\Location\Model\EO_Source createObject($setDefaultValues = true)
  * @method static \Bitrix\Location\Model\EO_Source_Collection createCollection()

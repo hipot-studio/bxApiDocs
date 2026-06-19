@@ -3,7 +3,6 @@
 namespace Bitrix\Location\Repository\Location\Strategy;
 
 use Bitrix\Location\Entity\Location;
-use Bitrix\Location\Repository\Location\Capability\ISaveParents;
 use Bitrix\Location\Repository\Location\IRepository;
 use Bitrix\Location\Repository\Location\ICache;
 use Bitrix\Location\Repository\Location\IDatabase;
@@ -17,7 +16,7 @@ use Bitrix\Main\Result;
  */
 class Save
 	extends Base
-	implements ISave, ISaveParents
+	implements ISave
 {
 	/** @var \Bitrix\Location\Repository\Location\Capability\ISave[] */
 	protected $locationRepositories = [];
@@ -65,7 +64,6 @@ class Save
 	/**
 	 * @param Location $location
 	 * @return Result
-	 * todo: save parents hierarchy
 	 * todo: update fields or not if exist
 	 * todo: if smth wrong with lang part - error + rollback
 	 */
@@ -86,36 +84,6 @@ class Save
 			if(!$res->isSuccess())
 			{
 				$result->addErrors($res->getErrors());
-			}
-		}
-
-		if($parents = $location->getParents())
-		{
-			$res = $this->saveParents($parents);
-
-			if (!$res->isSuccess())
-			{
-				$result->addErrors($res->getErrors());
-			}
-		}
-
-		return $result;
-	}
-
-	public function saveParents(Location\Parents $parents): Result
-	{
-		$result = new Result();
-
-		foreach($this->locationRepositories as $repository)
-		{
-			if($repository instanceof ISaveParents)
-			{
-				$res = $repository->saveParents($parents);
-
-				if (!$res->isSuccess())
-				{
-					$result->addErrors($res->getErrors());
-				}
 			}
 		}
 

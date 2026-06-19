@@ -132,31 +132,6 @@ final class LocationService extends BaseService
 	}
 
 	/**
-	 * Find Location parents
-	 *
-	 * @param Entity\Location $location
-	 * @param string $languageId
-	 * @param int $searchScope
-	 * @return Entity\Location\Parents|bool
-	 * @internal
-	 */
-	public function findParents(Entity\Location $location, string $languageId, int $searchScope = LOCATION_SEARCH_SCOPE_ALL)
-	{
-		$result = false;
-
-		try
-		{
-			$result = $this->repository->findParents($location, $languageId, $searchScope);
-		}
-		catch (RuntimeException $exception)
-		{
-			$this->processException($exception);
-		}
-
-		return $result;
-	}
-
-	/**
 	 * Save Location
 	 *
 	 * @param Entity\Location $location
@@ -190,15 +165,4 @@ final class LocationService extends BaseService
 		parent::__construct($config);
 	}
 
-	/**
-	 * Save parents from the location
-	 *
-	 * @param Entity\Location\Parents $parents
-	 * @return Result
-	 * @internal
-	 */
-	public function saveParents(Entity\Location\Parents $parents): Result
-	{
-		return $this->repository->saveParents($parents);
-	}
 }

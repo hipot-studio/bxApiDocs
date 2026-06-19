@@ -9,13 +9,14 @@ use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Link\File\FileService;
 use Bitrix\Im\V2\Link\Url\UrlService;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Builder\BuilderService;
 use Bitrix\Im\V2\Message\Delete\DeleteService;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Im\V2\Sync;
 
 class UpdateService
 {
@@ -76,7 +77,13 @@ class UpdateService
 
 		$previousMessage = clone $this->message;
 
-		$this->message->fill($fieldsToUpdate);
+		$result = $this->fillParams($fieldsToUpdate);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		$this->message->fill($result->getResult());
 
 		if ($this->message->isCompletelyEmpty())
 		{
@@ -116,6 +123,29 @@ class UpdateService
 		(new Message\Send\MentionService())->onMessageUpdate($this->message, $previousMessage);
 
 		return $result;
+	}
+
+	protected function fillParams(array $fieldsToUpdate): Result
+	{
+		$result = new Result();
+
+		if (isset($fieldsToUpdate['BUILDER']))
+		{
+			$builderData = $fieldsToUpdate['BUILDER'];
+
+			$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->create($builderData);
+			if (!$builderResult->isSuccess())
+			{
+				return $result->addError($builderResult->getError());
+			}
+
+			$builder = $builderResult->getBuilder();
+			$fieldsToUpdate['PARAMS'][Params::BUILDER] = $builder;
+			$fieldsToUpdate['MESSAGE'] = $builder->getPayloadText();
+			unset($fieldsToUpdate['BUILDER']);
+		}
+
+		return $result->setResult($fieldsToUpdate);
 	}
 
 	public function canUpdate(): bool

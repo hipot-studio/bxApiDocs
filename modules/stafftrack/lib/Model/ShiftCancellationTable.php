@@ -60,21 +60,18 @@ class ShiftCancellationTable extends DataManager
 				[
 					'primary' => true,
 					'autocomplete' => true,
-					'title' => Loc::getMessage('SHIFT_CANCELLATION_ENTITY_ID_FIELD'),
 				]
 			),
 			new IntegerField(
 				'SHIFT_ID',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('SHIFT_CANCELLATION_ENTITY_SHIFT_ID_FIELD'),
 				]
 			),
 			new TextField(
 				'REASON',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('SHIFT_CANCELLATION_ENTITY_REASON_FIELD'),
 				]
 			),
 			new DatetimeField(
@@ -84,7 +81,6 @@ class ShiftCancellationTable extends DataManager
 					{
 						return new DateTime();
 					},
-					'title' => Loc::getMessage('SHIFT_CANCELLATION_ENTITY_DATE_CANCEL_FIELD'),
 				]
 			),
 		];

@@ -196,11 +196,12 @@ class CopilotChat extends GroupChat
 
 	public function sendBanner(?int $authorId = null, ?string $copilotName = null, ?bool $isUpdate = false): void
 	{
+		$roleManager = (new Im\V2\Integration\AI\RoleManager())->setContextUser($this->getContext()->getUser());
+		$copilotCode = $roleManager->getValidRoleCode($roleManager->getMainRole($this->getChatId()));
+
 		if (!isset($copilotName))
 		{
-			$roleManager = (new Im\V2\Integration\AI\RoleManager())->setContextUser($this->getContext()->getUser());
-			$copilotCode = $roleManager->getMainRole($this->getChatId());
-			$copilotName = $roleManager->getRoles([$copilotCode])[$copilotCode]['name'];
+			$copilotName = $roleManager->getRoles([$copilotCode])[$copilotCode]['name'] ?? '';
 		}
 
 		\CIMMessage::Add([
@@ -219,7 +220,7 @@ class CopilotChat extends GroupChat
 				Params::COMPONENT_ID => Bot\CopilotChatBot::MESSAGE_COMPONENT_START,
 				Params::COMPONENT_PARAMS => [self::COPILOT_ROLE_UPDATED => $isUpdate],
 				Params::NOTIFY => 'N',
-				Params::COPILOT_ROLE => (new Im\V2\Integration\AI\RoleManager())->getMainRole($this->getId()),
+				Params::COPILOT_ROLE => $copilotCode,
 			]
 		]);
 	}

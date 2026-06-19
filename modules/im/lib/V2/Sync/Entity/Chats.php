@@ -4,6 +4,7 @@ namespace Bitrix\Im\V2\Sync\Entity;
 
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\PrivateChat;
+use Bitrix\Im\V2\Recent\Config\ChatRecentConfigs;
 use Bitrix\Im\V2\Sync\ChatsSync;
 use Bitrix\Im\V2\Sync\Recent\RecentSync;
 use Bitrix\Im\V2\Sync\Entity;
@@ -76,6 +77,11 @@ class Chats implements Entity
 		return new ChatsSync($this->getChats(), $this->getRecent(), $withCounters);
 	}
 
+	public function getRecentConfigs(): ChatRecentConfigs
+	{
+		return new ChatRecentConfigs($this->getChats());
+	}
+
 	private function getChats(): array
 	{
 		if (isset($this->chats))
@@ -100,6 +106,8 @@ class Chats implements Entity
 				$this->chats[$chatId] = $chat;
 			}
 		}
+
+		Chat::fillSelfRelations($this->chats);
 
 		return $this->chats;
 	}

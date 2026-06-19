@@ -21,7 +21,7 @@ class Revision
 	 * @filesource synchronize immobile/install/components/bitrix/immobile.webcomponent/webcomponents/im.dialog/bundle/component/src/component.js:3
 	 * @filesource synchronize immobile/install/components/bitrix/immobile.webcomponent/webcomponents/im.dialog/bundle/component/src/mobile_dialog.js:22
 	 */
-	const MOBILE = 23;
+	const MOBILE = 24;
 
 	/**
 	 * Desktop Api revision
@@ -31,7 +31,7 @@ class Revision
 	/**
 	 * Rest Api revision
 	 */
-	const REST = 33;
+	const REST = 35;
 
 	/**
 	 * Menu revision

@@ -6,6 +6,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Mobile\Profile\Enum\TabType;
 use Bitrix\Mobile\Profile\Tab\ProfileTabFactory;
+use Bitrix\Mobile\Provider\ThemeProvider;
 
 class ProfileProvider
 {
@@ -45,10 +46,17 @@ class ProfileProvider
 			$selectedTabId = $availableTabs[0]['id'];
 		}
 
+		$themeProvider = new ThemeProvider($this->ownerId);
+		$currentTheme = $themeProvider->getCurrentTheme();
+		$currentTheme = $themeProvider->isSvgTheme($currentTheme)
+			? $themeProvider->getFallbackTheme()
+			: $currentTheme;
+
 		return [
 			'tabs' => $availableTabs,
 			'selectedTabId' => $selectedTabId,
 			'canView' => true,
+			'currentTheme' => $currentTheme,
 		];
 	}
 

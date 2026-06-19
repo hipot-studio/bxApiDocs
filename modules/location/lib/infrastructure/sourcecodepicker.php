@@ -4,8 +4,6 @@ namespace Bitrix\Location\Infrastructure;
 
 use Bitrix\Location\Entity\Source\Factory;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Loader;
-use Bitrix\Main\ModuleManager;
 
 /**
  * Class SourceCodePicker
@@ -21,17 +19,7 @@ final class SourceCodePicker
 	 */
 	public static function getSourceCode(): string
 	{
-		return Option::get(
-			'location',
-			self::OPTION_NAME,
-			(
-				ModuleManager::isModuleInstalled('bitrix24')
-				&& Loader::includeModule('bitrix24')
-			)
-				? Factory::OSM_SOURCE_CODE
-				: Factory::GOOGLE_SOURCE_CODE
-
-		);
+		return Option::get('location', self::OPTION_NAME, Factory::OSM_SOURCE_CODE);
 	}
 
 	/**

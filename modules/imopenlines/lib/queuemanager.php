@@ -3,6 +3,7 @@ namespace Bitrix\ImOpenLines;
 
 use Bitrix\Main\Loader;
 use Bitrix\Im\User;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 use Bitrix\ImOpenLines\Model\QueueTable;
 use Bitrix\ImOpenLines\Model\ConfigQueueTable;
 use Bitrix\ImOpenLines\Integrations\HumanResources\StructureService;
@@ -330,8 +331,8 @@ class QueueManager
 			(
 				!Loader::includeModule('im') ||
 				(
-					!User::getInstance($userId)->isExtranet()
-					&& User::getInstance($userId)->isActive()
+					!UserV2::getInstance((int)$userId)->isExtranet()
+					&& UserV2::getInstance((int)$userId)->isActive()
 				)
 			)
 		;

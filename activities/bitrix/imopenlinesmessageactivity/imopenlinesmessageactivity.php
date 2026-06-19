@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 {
@@ -49,7 +50,7 @@ class CBPImOpenLinesMessageActivity extends CBPActivity
 
 		$fromUserId = \CCrmOwnerType::GetResponsibleID($entityTypeId, $entityId, false);
 
-		if(\Bitrix\Im\User::getInstance($fromUserId)->isConnector())
+		if(UserV2::getInstance((int)$fromUserId)->isConnector())
 		{
 			$fromUserId = 0;
 		}

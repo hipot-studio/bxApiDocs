@@ -3,11 +3,8 @@
 namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Im\Alias;
-use Bitrix\Call\Conference;
 use Bitrix\Im\Color;
 use Bitrix\Im\Model\BlockUserTable;
-use Bitrix\Call\Model\ConferenceTable;
-use Bitrix\Call\Model\ConferenceUserRoleTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Relation\DeleteUserConfig;
@@ -15,6 +12,8 @@ use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use CGlobalCounter;
 use CIMMessageParamAttach;
@@ -82,15 +81,22 @@ class VideoConfChat extends GroupChat
 
 		$conferenceData['IS_BROADCAST'] = isset($params['VIDEOCONF']['IS_BROADCAST']) && $params['VIDEOCONF']['IS_BROADCAST'] === 'Y'? 'Y': 'N';
 
-		$creationResult = ConferenceTable::add($conferenceData);
+		if (!Loader::includeModule('call'))
+		{
+			$addResult->addError(new Error('Module "call" is not installed', 'CALL_MODULE_NOT_INSTALLED'));
+
+			return $addResult;
+		}
+
+		$creationResult = \Bitrix\Call\Model\ConferenceTable::add($conferenceData);
 		if (isset($params['VIDEOCONF']['PRESENTERS']))
 		{
 			foreach ($params['VIDEOCONF']['PRESENTERS'] as $presenter)
 			{
-				ConferenceUserRoleTable::add([
+				\Bitrix\Call\Model\ConferenceUserRoleTable::add([
 					'CONFERENCE_ID' => $creationResult->getId(),
 					'USER_ID' => $presenter,
-					'ROLE' => Conference::ROLE_PRESENTER
+					'ROLE' => \Bitrix\Call\Conference::ROLE_PRESENTER
 				]);
 			}
 		}
@@ -171,8 +177,13 @@ class VideoConfChat extends GroupChat
 
 		$paramData = $params->getResult();
 
+		if (!Loader::includeModule('call'))
+		{
+			return $params->addError(new Error('Module "call" is not installed', 'CALL_MODULE_NOT_INSTALLED'));
+		}
+
 		//todo: drag method into this class
-		$confParams = Conference::prepareParamsForAdd($paramData);
+		$confParams = \Bitrix\Call\Conference::prepareParamsForAdd($paramData);
 		if (!$confParams->isSuccess())
 		{
 			return $confParams;

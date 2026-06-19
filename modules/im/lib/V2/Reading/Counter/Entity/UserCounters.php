@@ -59,7 +59,7 @@ final class UserCounters extends Registry implements RestConvertible
 		$this->addCounter(new ChatCounter(
 			chatId: $chatId,
 			counter: $existing?->counter ?? 0,
-			parentChatId: $existing?->parentChatId ?? 0,
+			parentChatId: (int)($counter['PARENT_ID'] ?? 0) ?: ($existing?->parentChatId ?? 0),
 			isMuted: ($counter['IS_MUTED'] ?? 'N') === 'Y',
 			isMarkedAsUnread: true,
 			recentSections: $recentSections,

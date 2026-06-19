@@ -74,13 +74,13 @@ class UserCountersCollector
 			}
 			else
 			{
-				$counters->addMessageCounter($counter, $this->getRecentSections($type), $type);
+				$counters->addMessageCounter($counter, $this->getRecentSections($type, (int)($counter['PARENT_ID'] ?? 0)), $type);
 			}
 		}
 		foreach ($unreadChats as $chat)
 		{
 			$type = $this->getType($chat);
-			$counters->addUnreadChat($chat, $this->getRecentSections($type), $type);
+			$counters->addUnreadChat($chat, $this->getRecentSections($type, (int)($chat['PARENT_ID'] ?? 0)), $type);
 		}
 		foreach ($additionalOpenLinesCounters as $chatId)
 		{
@@ -134,6 +134,7 @@ class UserCountersCollector
 				'CHAT_ID' => 'ITEM_CID',
 				'CHAT_TYPE' => 'ITEM_TYPE',
 				'CHAT_ENTITY_TYPE' => 'CHAT.ENTITY_TYPE',
+				'PARENT_ID' => 'CHAT.PARENT_ID',
 				'IS_MUTED' => 'RELATION.NOTIFY_BLOCK',
 			])
 			->where('USER_ID', $userId)
@@ -220,7 +221,12 @@ class UserCountersCollector
 		foreach ($unreadChats as $unreadChat)
 		{
 			$id = (int)$unreadChat['CHAT_ID'];
+			$parentId = (int)($unreadChat['PARENT_ID'] ?? 0);
 			$ids[$id] = $id;
+			if ($parentId)
+			{
+				$parentIds[$parentId] = $parentId;
+			}
 		}
 
 		foreach ($parentIds as $parentId)
@@ -260,9 +266,14 @@ class UserCountersCollector
 		);
 	}
 
-	protected function getRecentSections(Chat\Type $type): array
+	protected function getRecentSections(Chat\Type $type, int $parentId = 0): array
 	{
-		return $this->recentConfigManager->getRecentSectionsByChatExtendedType($type->getExtendedType(false));
+		if ($parentId > 0)
+		{
+			return $this->recentConfigManager->getAllRecentSectionsByType($type->getExtendedType(false));
+		}
+
+		return $this->recentConfigManager->getBaseRecentSections($type->getExtendedType(false));
 	}
 
 	private function getLimit(): int

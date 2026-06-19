@@ -215,7 +215,7 @@ class Crm
 					continue;
 				}
 
-				$entityGrid = [];
+				$details = [];
 				if ($entityType == ImOpenLines\Crm::ENTITY_LEAD)
 				{
 					if (isset($entityData['TITLE']))
@@ -231,27 +231,15 @@ class Crm
 						&& mb_strpos($entityData['TITLE'], $entityData['FULL_NAME']) === false
 					)
 					{
-						$entityGrid[] = [
-							'DISPLAY' => 'COLUMN',
-							'NAME' => Loc::getMessage('IMOL_MESSAGE_CRM_CARD_FULL_NAME'),
-							'VALUE' => $entityData['FULL_NAME']
-						];
+						$details[] = Loc::getMessage('IMOL_MESSAGE_CRM_CARD_LINE_FULL_NAME', ['#VALUE#' => $entityData['FULL_NAME']]);
 					}
 					if (!empty($entityData['COMPANY_TITLE']))
 					{
-						$entityGrid[] = [
-							'DISPLAY' => 'COLUMN',
-							'NAME' => Loc::getMessage('IMOL_MESSAGE_CRM_CARD_COMPANY_TITLE'),
-							'VALUE' => $entityData['COMPANY_TITLE']
-						];
+						$details[] = Loc::getMessage('IMOL_MESSAGE_CRM_CARD_LINE_COMPANY_TITLE', ['#VALUE#' => $entityData['COMPANY_TITLE']]);
 					}
 					if (!empty($entityData['POST']))
 					{
-						$entityGrid[] = [
-							'DISPLAY' => 'COLUMN',
-							'NAME' => Loc::getMessage('IMOL_MESSAGE_CRM_CARD_POST'),
-							'VALUE' => $entityData['POST']
-						];
+						$details[] = Loc::getMessage('IMOL_MESSAGE_CRM_CARD_LINE_POST', ['#VALUE#' => $entityData['POST']]);
 					}
 				}
 				elseif ($entityType == ImOpenLines\Crm::ENTITY_CONTACT)
@@ -266,11 +254,7 @@ class Crm
 
 					if (!empty($entityData['POST']))
 					{
-						$entityGrid[] = [
-							'DISPLAY' => 'COLUMN',
-							'NAME' => Loc::getMessage('IMOL_MESSAGE_CRM_CARD_POST'),
-							'VALUE' => $entityData['POST']
-						];
+						$details[] = Loc::getMessage('IMOL_MESSAGE_CRM_CARD_LINE_POST', ['#VALUE#' => $entityData['POST']]);
 					}
 				}
 				elseif ($entityType == ImOpenLines\Crm::ENTITY_COMPANY || $entityType == ImOpenLines\Crm::ENTITY_DEAL)
@@ -290,40 +274,39 @@ class Crm
 					&& isset($entityData['FM']['PHONE'])
 				)
 				{
-					$fields = [];
-					foreach ($entityData['FM']['PHONE'] as $phones)
+					$phones = [];
+					foreach ($entityData['FM']['PHONE'] as $phoneSet)
 					{
-						foreach ($phones as $phone)
+						foreach ($phoneSet as $phone)
 						{
-							$fields[] = $phone;
+							$phones[] = $phone;
 						}
 					}
-					$entityGrid[] = [
-						'DISPLAY' => 'LINE',
-						'NAME' => Loc::getMessage('IMOL_MESSAGE_CRM_CARD_PHONE'),
-						'VALUE' => implode('[br]', $fields),
-						'HEIGHT' => '20'
-					];
+					if (!empty($phones))
+					{
+						$details[] = Loc::getMessage('IMOL_MESSAGE_CRM_CARD_LINE_PHONE', ['#VALUE#' => implode(', ', $phones)]);
+					}
 				}
-				if ($entityData['HAS_EMAIL'] == 'Y' && $entityData['FM']['EMAIL'])
+				if (($entityData['HAS_EMAIL'] ?? '') == 'Y' && !empty($entityData['FM']['EMAIL']))
 				{
-					$fields = [];
-					foreach ($entityData['FM']['EMAIL'] as $emails)
+					$emails = [];
+					foreach ($entityData['FM']['EMAIL'] as $emailSet)
 					{
-						foreach ($emails as $email)
+						foreach ($emailSet as $email)
 						{
-							$fields[] = $email;
+							$emails[] = $email;
 						}
 					}
-					$entityGrid[] = [
-						'DISPLAY' => 'LINE',
-						'NAME' => Loc::getMessage('IMOL_MESSAGE_CRM_CARD_EMAIL'),
-						'VALUE' => implode('[br]', $fields),
-						'HEIGHT' => '20'
-					];
+					if (!empty($emails))
+					{
+						$details[] = Loc::getMessage('IMOL_MESSAGE_CRM_CARD_LINE_EMAIL', ['#VALUE#' => implode(', ', $emails)]);
+					}
 				}
 
-				$attach->addGrid($entityGrid);
+				if (!empty($details))
+				{
+					$attach->addMessage(implode('[br]', $details));
+				}
 			}
 
 			if (!$attach->isEmpty())

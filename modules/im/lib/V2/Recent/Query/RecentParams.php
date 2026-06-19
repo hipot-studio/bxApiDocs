@@ -1,18 +1,20 @@
 <?php
+declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Recent\Query;
 
-use Bitrix\Im\Model\MessageUnreadTable;
-use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Im\V2\AccessCheckable;
+use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Result;
 use Bitrix\Main\ORM\Query\Query;
 
-class RecentParams
+class RecentParams implements AccessCheckable
 {
-	public readonly ?RecentFilter $filter;
+	public readonly RecentFilter $filter;
 	public readonly ?int $limit;
 	public readonly ?array $order;
 
-	public function __construct(?RecentFilter $filter = null, ?int $limit = null, ?array $order = null)
+	public function __construct(RecentFilter $filter, ?int $limit = null, ?array $order = null)
 	{
 		$this->filter = $filter;
 		$this->limit = $limit;
@@ -31,35 +33,16 @@ class RecentParams
 			$query->setOrder($this->order);
 		}
 
-		if (isset($this->filter))
-		{
-			if ($this->filter->unreadOnly)
-			{
-				$this->registerRuntimeMessageUnreadFields($this->filter->userId ?? 0, $query);
-			}
-
-			$query->where($this->filter->prepareFilter());
-		}
+		$this->filter->prepareQuery($query);
 	}
 
-	private function registerRuntimeMessageUnreadFields(int $userId, Query $query): void
+	public function checkAccess(?int $userId = null): Result
 	{
-		$unreadTableName = MessageUnreadTable::getTableName();
+		if ($this->filter->parentChatId)
+		{
+			return Chat::getInstance($this->filter->parentChatId)->checkAccess($userId);
+		}
 
-		$query->registerRuntimeField(
-			new ExpressionField(
-				'HAS_UNREAD_MESSAGE',
-				"EXISTS(SELECT 1 FROM {$unreadTableName} WHERE CHAT_ID = %s AND USER_ID = {$userId})",
-				['ITEM_CID']
-			)
-		);
-
-		$query->registerRuntimeField(
-			new ExpressionField(
-				'HAS_UNREAD_COMMENTS',
-				"EXISTS(SELECT 1 FROM {$unreadTableName} WHERE PARENT_ID = %s AND USER_ID = {$userId} AND PARENT_ID > 0)",
-				['ITEM_CID']
-			)
-		);
+		return new Result();
 	}
 }

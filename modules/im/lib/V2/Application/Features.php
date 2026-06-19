@@ -62,7 +62,9 @@ class Features
 		public readonly bool $isCopilotFileUploadAvailable,
 		public readonly bool $isMountedTasksCardAvailable,
 		public readonly bool $isBitrixGptV2Available,
+		public readonly bool $isMessageBuilderAvailable,
 		public readonly bool $isAddingUserByMentionAvailable,
+		public readonly bool $isNestedChatAvailable,
 	){}
 
 	public static function get(): self
@@ -117,7 +119,9 @@ class Features
 			isCopilotFileUploadAvailable: self::isCopilotFileUploadAvailable(),
 			isMountedTasksCardAvailable: self::isMountedTasksCardAvailable(),
 			isBitrixGptV2Available: self::isBitrixGptV2Available(),
+			isMessageBuilderAvailable: self::isMessageBuilderAvailable(),
 			isAddingUserByMentionAvailable: self::isAddingUserByMentionAvailable(),
+			isNestedChatAvailable: self::isNestedChatAvailable(),
 		);
 	}
 
@@ -254,8 +258,18 @@ class Features
 		return Option::get('aiassistant', 'show_chat_in_right_panel', 'N') === 'Y';
 	}
 
+	public static function isMessageBuilderAvailable(): bool
+	{
+		return Option::get('im', 'message_builder_available', 'N') === 'Y';
+	}
+
 	public static function isAddingUserByMentionAvailable(): bool
 	{
 		return Option::get('im', 'adding_user_by_mention_available', 'N') === 'Y';
+	}
+
+	public static function isNestedChatAvailable(): bool
+	{
+		return Option::get('im', 'nested_chat_available', 'N') === 'Y';
 	}
 }

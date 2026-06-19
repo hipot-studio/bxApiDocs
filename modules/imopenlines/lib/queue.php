@@ -14,6 +14,7 @@ use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Pull;
 
 use Bitrix\Im;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 use Bitrix\Im\Model\RecentTable;
 
 use Bitrix\ImOpenLines\Queue\Cache;
@@ -458,7 +459,7 @@ class Queue
 					'ONLINE' => $user->isOnline()
 				];
 
-				if ($user->isExtranet())
+				if (UserV2::getInstance($userId)->isExtranet())
 				{
 					$result = $nullForUnprocessed? null: $currentUserData;
 				}
@@ -663,11 +664,9 @@ class Queue
 
 		if (Loader::includeModule('im'))
 		{
-			$userIm = Im\User::getInstance($id);
-
 			if(
-				$userIm->isConnector() ||
-				$userIm->isBot()
+				UserV2::getInstance($id)->isConnector()
+				|| UserV2::getInstance($id)->isBot()
 			)
 			{
 				$result = false;
@@ -695,8 +694,8 @@ class Queue
 		)
 		{
 			if (
-				$result === true &&
-				!Im\User::getInstance($userId)->isActive()
+				$result === true
+				&& !UserV2::getInstance($userId)->isActive()
 			)
 			{
 				$result = self::REASON_OPERATOR_DELETED;

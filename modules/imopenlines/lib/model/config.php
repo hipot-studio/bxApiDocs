@@ -134,7 +134,6 @@ class ConfigTable extends Main\Entity\DataManager
 			]),
 			new BooleanField('SHOW_NOTIFICATION_REDIRECT', [
 				'values' => ['N', 'Y'],
-				'title' => Loc::getMessage('CONFIG_ENTITY_SHOW_NOTIFICATION_REDIRECT_FIELD'),
 			]),
 			new BooleanField('WATCH_TYPING', [
 				'values' => ['N', 'Y'],

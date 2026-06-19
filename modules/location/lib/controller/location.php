@@ -2,7 +2,6 @@
 
 namespace Bitrix\Location\Controller;
 
-use Bitrix\Location\Entity\Location\Parents;
 use Bitrix\Location\Infrastructure\Service\ErrorService;
 use Bitrix\Location\Repository\FormatRepository;
 use Bitrix\Location\Service;
@@ -58,38 +57,6 @@ class Location extends Controller
 	public function autocompleteAction(array $params)
 	{
 		return Service\LocationService::getInstance()->autocomplete($params, LOCATION_SEARCH_SCOPE_EXTERNAL);
-	}
-
-	/**
-	 * @param array $location
-	 * @return array|AjaxJson
-	 */
-	public function findParentsAction(array $location)
-	{
-		$result = new Parents();
-
-		$entity = Entity\Location::fromArray($location);
-
-		if ($entity)
-		{
-			$parents = $entity->getParents();
-
-			if ($parents)
-			{
-				$result = ArrayConverter::convertParentsToArray($parents);
-			}
-			else if($parents === false)
-			{
-				if (ErrorService::getInstance()->hasErrors())
-				{
-					$result = AjaxJson::createError(
-						ErrorService::getInstance()->getErrors()
-					);
-				}
-			}
-		}
-
-		return $result;
 	}
 
 	/**

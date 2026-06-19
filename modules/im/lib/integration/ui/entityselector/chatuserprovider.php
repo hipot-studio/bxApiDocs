@@ -121,6 +121,11 @@ class ChatUserProvider extends ChatProvider
 		);
 
 		$query->where('RELATION.USER_ID', User::getInstance()->getId());
+		$query->where(
+			Query::filter()->logic('or')
+				->where('PARENT_ID', 0)
+				->whereNull('PARENT_ID')
+		);
 		$query->setOrder($order);
 		$query->setLimit(static::MAX_CHATS_IN_SAMPLE);
 

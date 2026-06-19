@@ -36,7 +36,6 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 	{
 		$rest = [];
 
-		Chat::fillSelfRelations($this->chats);
 		$this->fillAllForRest();
 		$this->fillDialogIds();
 

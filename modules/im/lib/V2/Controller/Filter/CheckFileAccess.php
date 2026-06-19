@@ -15,11 +15,17 @@ use Bitrix\Main\File\Image;
 class CheckFileAccess extends Base
 {
 	private array $path;
+	private ?\Closure $extractor;
 
-	public function __construct(array $path)
+	/**
+	 * @param array $path
+	 * @param null|\Closure(array): int $extractor
+	 */
+	public function __construct(array $path = [], ?\Closure $extractor = null)
 	{
 		parent::__construct();
 		$this->path = $path;
+		$this->extractor = $extractor;
 	}
 
 	public function onBeforeAction(Event $event)
@@ -67,9 +73,12 @@ class CheckFileAccess extends Base
 
 	private function extractFileId()
 	{
-		$arguments = $this->getAction()->getArguments();
+		if ($this->extractor !== null)
+		{
+			return ($this->extractor)($this->getAction()->getArguments());
+		}
 
-		$value = $arguments;
+		$value = $this->getAction()->getArguments();
 
 		foreach ($this->path as $key)
 		{

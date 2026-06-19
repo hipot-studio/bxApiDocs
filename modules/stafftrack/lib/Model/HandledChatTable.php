@@ -55,7 +55,6 @@ class HandledChatTable extends DataManager
 				[
 					'primary' => true,
 					'autocomplete' => true,
-					'title' => Loc::getMessage('HANDLED_CHAT_ENTITY_ID_FIELD'),
 				]
 			),
 
@@ -63,7 +62,6 @@ class HandledChatTable extends DataManager
 				'CHAT_ID',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('HANDLED_CHAT_ENTITY_CHAT_ID_FIELD'),
 				]
 			),
 		];

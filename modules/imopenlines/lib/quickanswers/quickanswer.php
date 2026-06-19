@@ -285,6 +285,14 @@ class QuickAnswer
 	/**
 	 * @return int
 	 */
+	public function getRating(): int
+	{
+		return (int)$this->rating;
+	}
+
+	/**
+	 * @return int
+	 */
 	public function getCategory()
 	{
 		if($this->category > 0)

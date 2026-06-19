@@ -3,8 +3,6 @@
 namespace Bitrix\Location\Entity\Location\Converter;
 
 use Bitrix\Location\Entity\Location;
-use Bitrix\Location\Model\EO_Hierarchy;
-use Bitrix\Location\Model\EO_Hierarchy_Collection;
 use Bitrix\Location\Model\EO_Location;
 use Bitrix\Location\Model\EO_Location_Collection;
 use Bitrix\Location\Model\EO_LocationField_Collection;
@@ -115,31 +113,4 @@ final class OrmConverter
 		return $result;
 	}
 
-	/**
-	 * Convert EO_Hierarchy_Collection to Location\Parents
-	 *
-	 * @param EO_Hierarchy_Collection $ormHierarchy
-	 * @param string $languageId
-	 * @return Location\Parents
-	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
-	 * @throws \Bitrix\Main\ArgumentTypeException
-	 * @throws \Bitrix\Main\SystemException
-	 */
-	public static function createParentCollection(EO_Hierarchy_Collection $ormHierarchy, string $languageId): Location\Parents
-	{
-		$result = new Location\Parents();
-
-		/** @var EO_Hierarchy $item */
-		foreach ($ormHierarchy as $item)
-		{
-			$result->addItem(
-				self::createLocation(
-					$item->getAncestor(),
-					$languageId
-				)
-			);
-		}
-
-		return $result;
-	}
 }

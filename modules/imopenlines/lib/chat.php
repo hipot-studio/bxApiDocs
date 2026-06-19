@@ -14,6 +14,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Entity\ReferenceField;
 
 use Bitrix\Im\User;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 use Bitrix\Im\Color;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\RelationTable;
@@ -148,7 +149,7 @@ class Chat
 	{
 		$this->isCreated = false;
 
-		if (self::parseLinesChatEntityId($chat['ENTITY_ID'])['connectorId'] === 'telegrambot')
+		if (in_array(self::parseLinesChatEntityId($chat['ENTITY_ID'])['connectorId'], ['telegrambot', 'max'], true))
 		{
 			$orderDirection = 'ASC';
 
@@ -584,7 +585,7 @@ class Chat
 			]);
 			if (
 				$resultLoadSession
-				&& User::getInstance($session->getData('OPERATOR_ID'))->isBot()
+				&& UserV2::getInstance((int)$session->getData('OPERATOR_ID'))->isBot()
 			)
 			{
 				if ($this->validationAction($session->getData('CHAT_ID')))
@@ -696,7 +697,7 @@ class Chat
 						//Transfer to the operator
 						else
 						{
-							if (User::getInstance($params['TO'])->isActive())
+							if (UserV2::getInstance((int)$params['TO'])->isActive())
 							{
 								$result = $this->transferToOperator($params, $session, $mode, $selfExit, $skipCheck);
 							}
@@ -758,10 +759,10 @@ class Chat
 				foreach ($relations as $relation)
 				{
 					if (
-						!User::getInstance($relation['USER_ID'])->isConnector()
+						!UserV2::getInstance((int)$relation['USER_ID'])->isConnector()
 						&& (
 							$relation['USER_ID'] != $params['FROM']
-							|| !User::getInstance($relation['USER_ID'])->isBot()
+							|| !UserV2::getInstance((int)$relation['USER_ID'])->isBot()
 						)
 					)
 					{
@@ -772,7 +773,13 @@ class Chat
 				if ((int)$session->getData('STATUS') < Session::STATUS_ANSWER)
 				{
 					$fakeRelation = new Relation((int)$this->chat['ID']);
+					$queueOperatorIds = $fakeRelation->getRelationUserIds();
 					$fakeRelation->removeAllRelations(true);
+
+					Im::clearOpenLineCounter(
+						(int)$this->chat['ID'],
+						array_merge($queueOperatorIds, [(int)($params['FROM'] ?? 0)])
+					);
 				}
 
 				if ($queueId == 0)
@@ -801,7 +808,7 @@ class Chat
 				];
 
 				if (
-					$userFrom->isBot()
+					UserV2::getInstance((int)$params['FROM'])->isBot()
 					&& !$session->getData('DATE_OPERATOR')
 				)
 				{
@@ -895,18 +902,20 @@ class Chat
 		if ($this->isDataLoaded())
 		{
 			$fakeRelation = false;
+			$queueOperatorIds = [];
 			if ($session->getData('STATUS') < Session::STATUS_ANSWER)
 			{
 				$fakeRelation = new Relation((int)$this->chat['ID']);
+				$queueOperatorIds = $fakeRelation->getRelationUserIds();
 			}
 			$transferUserId = (int)$params['TO'];
 
 			if (
 				$skipCheck
 				|| (
-					!User::getInstance($transferUserId)->isBot() &&
-					!User::getInstance($transferUserId)->isExtranet() &&
-					!User::getInstance($transferUserId)->isConnector()
+					!UserV2::getInstance($transferUserId)->isBot() &&
+					!UserV2::getInstance($transferUserId)->isExtranet() &&
+					!UserV2::getInstance($transferUserId)->isConnector()
 				)
 			)
 			{
@@ -924,6 +933,18 @@ class Chat
 					}
 
 					$fakeRelation->removeAllRelations(false, $excludeUserIds);
+
+					Im::clearOpenLineCounter(
+						(int)$this->chat['ID'],
+						array_diff(
+							array_merge(
+								array_map('intval', $queueOperatorIds),
+								[(int)($params['FROM'] ?? 0)]
+							),
+							$excludeUserIds,
+							[$transferUserId]
+						)
+					);
 				}
 				else
 				{
@@ -932,8 +953,8 @@ class Chat
 					{
 						if (
 							$relation['USER_ID'] != $params['FROM']
-							&& !User::getInstance($relation['USER_ID'])->isConnector()
-							&& !User::getInstance($relation['USER_ID'])->isBot()
+							&& !UserV2::getInstance((int)$relation['USER_ID'])->isConnector()
+							&& !UserV2::getInstance((int)$relation['USER_ID'])->isBot()
 						)
 						{
 							$chat->DeleteUser($this->chat['ID'], $relation['USER_ID'], false, true);
@@ -948,7 +969,7 @@ class Chat
 					{
 						$fakeRelation->removeRelation((int)$params['FROM']);
 						if (
-							$userFrom->isBot()
+							UserV2::getInstance((int)$params['FROM'])->isBot()
 							&& $session->getConfig('WELCOME_BOT_ENABLE') === 'Y'
 							&& $session->getConfig('WELCOME_BOT_LEFT') === Config::BOT_LEFT_QUEUE
 							&& (int)$session->getConfig('WELCOME_BOT_ID') === $userFrom->getId()
@@ -1045,7 +1066,7 @@ class Chat
 					'SKIP_CHANGE_STATUS' => true,
 				];
 
-				if ($userFrom->isBot() && !$session->getData('DATE_OPERATOR'))
+				if (UserV2::getInstance((int)$params['FROM'])->isBot() && !$session->getData('DATE_OPERATOR'))
 				{
 					$currentDate = new DateTime();
 					$updateDataSession['DATE_OPERATOR'] = $currentDate;
@@ -1514,7 +1535,7 @@ class Chat
 						{
 							if(
 								$this->chat['AUTHOR_ID'] <= 0 &&
-								!User::getInstance($userId)->isConnector()
+								!UserV2::getInstance((int)$userId)->isConnector()
 							)
 							{
 								$this->answer($userId);
@@ -1802,7 +1823,7 @@ class Chat
 
 				if ($result->isSuccess())
 				{
-					if (User::getInstance($userId)->isConnector())
+					if (UserV2::getInstance((int)$userId)->isConnector())
 					{
 						$mode = Session::MODE_INPUT;
 					}
@@ -1832,7 +1853,7 @@ class Chat
 							'CHECK_DATE_CLOSE' => $dateClose
 						];
 
-						if (User::getInstance($userId)->isConnector())
+						if (UserV2::getInstance((int)$userId)->isConnector())
 						{
 							$sessionUpdate['DATE_FIRST_LAST_USER_ACTION'] = new DateTime();
 						}
@@ -1929,7 +1950,7 @@ class Chat
 						if (
 							$userId > 0
 							&& !$USER->IsAuthorized()
-							&& User::getInstance($userId)->isConnector()
+							&& UserV2::getInstance((int)$userId)->isConnector()
 						)
 						{
 							if ($USER->Authorize($userId, false, false))
@@ -2130,7 +2151,8 @@ class Chat
 
 		if($this->isDataLoaded())
 		{
-			$active = $active? 'Y': '';
+			$isActive = (bool)$active;
+			$active = $isActive ? 'Y' : '';
 			if ($this->chat[self::getFieldName(self::FIELD_SILENT_MODE)] == $active)
 			{
 				$result = true;
@@ -2143,15 +2165,43 @@ class Chat
 
 				Im::addMessage([
 					'TO_CHAT_ID' => $this->chat['ID'],
-					'MESSAGE' => Loc::getMessage($active? 'IMOL_CHAT_STEALTH_ON': 'IMOL_CHAT_STEALTH_OFF'),
+					'MESSAGE' => Loc::getMessage($isActive ? 'IMOL_CHAT_STEALTH_ON' : 'IMOL_CHAT_STEALTH_OFF'),
 					'SYSTEM' => 'Y',
 				]);
+
+				$this->sendPullUpdateSilentMode($isActive);
 
 				$result = true;
 			}
 		}
 
 		return $result;
+	}
+
+	protected function sendPullUpdateSilentMode(bool $silentMode): void
+	{
+		if (!Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		$chat = \Bitrix\Im\V2\Chat::getInstance((int)$this->chat['ID']);
+		$users = $chat->getPullRecipients()->getUserIds();
+
+		if (empty($users))
+		{
+			return;
+		}
+
+		Pull\Event::add($users, [
+			'module_id' => 'imopenlines',
+			'command' => 'updateSilentMode',
+			'params' => [
+				'chatId' => (int)$this->chat['ID'],
+				'dialogId' => $chat->getDialogId(),
+				'silentMode' => $silentMode,
+			],
+		]);
 	}
 
 	/**
@@ -2695,9 +2745,9 @@ class Chat
 			while ($relation = $relationList->fetch())
 			{
 				if (
-					!User::getInstance($relation['USER_ID'])->isBot() &&
-					!User::getInstance($relation['USER_ID'])->isNetwork() &&
-					(isset($fields[self::FIELD_LIVECHAT]) || !User::getInstance($relation['USER_ID'])->isConnector())
+					!UserV2::getInstance((int)$relation['USER_ID'])->isBot() &&
+					!UserV2::getInstance((int)$relation['USER_ID'])->isNetwork() &&
+					(isset($fields[self::FIELD_LIVECHAT]) || !UserV2::getInstance((int)$relation['USER_ID'])->isConnector())
 				)
 				{
 					\CIMContactList::CleanChatCache($relation['USER_ID']);
@@ -2775,7 +2825,7 @@ class Chat
 				if (array_key_exists('AUTHOR_ID', $fields))
 				{
 					//CRM
-					if(!empty($fields['AUTHOR_ID']) && !User::getInstance($fields['AUTHOR_ID'])->isBot())
+					if(!empty($fields['AUTHOR_ID']) && !UserV2::getInstance((int)$fields['AUTHOR_ID'])->isBot())
 					{
 						$session = new Session();
 						$session->setChat($this);

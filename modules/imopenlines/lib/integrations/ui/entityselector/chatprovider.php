@@ -5,6 +5,7 @@ namespace Bitrix\ImOpenlines\Integrations\UI\EntitySelector;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\Model\RelationTable;
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\ImOpenLines\Model\ChatIndexTable;
 use Bitrix\Main\Entity\ExpressionField;
@@ -58,10 +59,11 @@ class ChatProvider extends BaseProvider
 	{
 		$this->sortEnable = false;
 		$ids = array_slice($ids, 0, self::LIMIT);
-		$this->setChatIds($ids);
+		$numericChatIds = array_map(fn($id) => (int)str_replace('chat', '', $id), $ids);
+		$this->setChatIds($numericChatIds);
 		$datesUpdate = $this->getChatIdsWithDates();
-		$ids = array_keys($datesUpdate);
-		$items = $this->getBlankItems($ids, $datesUpdate);
+		$chatIds = array_keys($datesUpdate);
+		$items = $this->getBlankItems($chatIds, $datesUpdate);
 		$this->fillItems($items);
 
 		return $items;
@@ -71,9 +73,11 @@ class ChatProvider extends BaseProvider
 	{
 		$this->sortEnable = false;
 		$ids = array_slice($ids, 0, self::LIMIT);
-		$this->setChatIds($ids);
+		$numericChatIds = array_map(fn($id) => (int)str_replace('chat', '', $id), $ids);
+		$this->setChatIds($numericChatIds);
 		$datesUpdate = $this->getChatIdsWithDates();
-		$items = $this->getBlankItems($ids, $datesUpdate);
+		$chatIds = array_keys($datesUpdate);
+		$items = $this->getBlankItems($chatIds, $datesUpdate);
 		$this->fillItems($items);
 
 		return $items;
@@ -108,13 +112,14 @@ class ChatProvider extends BaseProvider
 				'RECENT_DATE_UPDATE' => 'RECENT.DATE_UPDATE',
 				'RECENT_DATE_UPDATE_OL' => 'RECENT_OL.DATE_CREATE',
 			])
+			->where('TYPE', Chat::IM_TYPE_OPEN_LINE)
 			->setLimit(self::LIMIT)
 			->registerRuntimeField(
 				new Reference(
 					'RECENT',
 					RecentTable::class,
 					Join::on('this.ID', 'ref.ITEM_CID')->where('ref.USER_ID', User::getCurrent()->getId()),
-					['join_type' => isset($this->preparedSearchString) ? Join::TYPE_LEFT : Join::TYPE_INNER]
+					['join_type' => Join::TYPE_LEFT]
 				)
 			)
 			->registerRuntimeField(
@@ -198,7 +203,7 @@ class ChatProvider extends BaseProvider
 		}
 
 		return new Item([
-			'id' => $chatId,
+			'id' => 'chat' . $chatId,
 			'entityId' => self::ENTITY_ID,
 			'sort' => $sort,
 			'customData' => $customData,
@@ -215,7 +220,7 @@ class ChatProvider extends BaseProvider
 
 		foreach ($items as $item)
 		{
-			$id = (int)$item->getId();
+			$id = $this->getChatIdFromItemId($item->getId());
 			$chatIds[$id] = $id;
 		}
 
@@ -223,7 +228,7 @@ class ChatProvider extends BaseProvider
 
 		foreach ($items as $item)
 		{
-			$chat = $chats[(int)$item->getId()] ?? null;
+			$chat = $chats[$this->getChatIdFromItemId($item->getId())] ?? null;
 			if ($chat === null)
 			{
 				continue;
@@ -272,6 +277,11 @@ class ChatProvider extends BaseProvider
 		}
 
 		return $chatsByIds;
+	}
+
+	private function getChatIdFromItemId(string $itemId): int
+	{
+		return (int)str_replace('chat', '', $itemId);
 	}
 
 	private function setChatIds(array $ids): void

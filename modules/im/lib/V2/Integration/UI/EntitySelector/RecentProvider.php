@@ -8,7 +8,10 @@ use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\Model\UserTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Access\ParentChainFilterFactory;
+use Bitrix\Im\V2\Chat\Tree\TreeOrigin;
 use Bitrix\Im\V2\Chat\Type\Query\TypeFilter;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Im\V2\Chat\Type\TypeCondition;
 use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\CopilotChat;
@@ -500,7 +503,7 @@ class RecentProvider extends BaseProvider
 
 	private function getChatsByUserNameQuery(): Query
 	{
-		return RelationTable::query()
+		$query = RelationTable::query()
 			->setSelect(['CHAT_ID'])
 			->registerRuntimeField(
 				'USER',
@@ -523,6 +526,12 @@ class RecentProvider extends BaseProvider
 			->whereMatch('USER_INDEX.SEARCH_USER_CONTENT', $this->preparedSearchString)
 			->setGroup(['CHAT_ID'])
 		;
+
+		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
+			->forUser($this->getContext()->getUserId(), TreeOrigin::forChat('CHAT'))
+			->apply($query);
+
+		return $query;
 	}
 
 	protected function getChatItemsByRawResult(array $raw, array $additionalCustomData = []): array
@@ -621,7 +630,9 @@ class RecentProvider extends BaseProvider
 			$query->whereNotIn('ID', $this->searchOptions->getExcludeIds());
 		}
 
-		$query->where('PARENT_ID', 0);
+		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
+			->forUser($this->getContext()->getUserId(), TreeOrigin::forChat())
+			->apply($query);
 
 		$chatTypeCondition = $this->searchOptions->getChatTypeCondition() ?? new TypeCondition(include: []);
 		$query->where((new TypeFilter($chatTypeCondition, 'TYPE', 'ENTITY_TYPE'))->toConditionTree());

@@ -82,7 +82,6 @@ class BotItem implements RestEntity, PopupDataAggregatable
 		if ($this->isOwnerFormat)
 		{
 			$result['moduleId'] = $this->botData['MODULE_ID'] ?? '';
-			$result['appId'] = $this->botData['APP_ID'] ?? '';
 			$result['eventMode'] = mb_strtolower($this->botData['EVENT_MODE'] ?? Bot::EVENT_MODE_WEBHOOK);
 			$result['countMessage'] = (int)($this->botData['COUNT_MESSAGE'] ?? 0);
 			$result['countCommand'] = (int)($this->botData['COUNT_COMMAND'] ?? 0);

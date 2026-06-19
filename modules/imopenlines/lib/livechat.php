@@ -5,6 +5,7 @@ namespace Bitrix\ImOpenLines;
 use \Bitrix\Main,
 	\Bitrix\Main\Localization\Loc;
 
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 use \Bitrix\Disk\File;
 
 Loc::loadMessages(__FILE__);
@@ -231,7 +232,7 @@ class LiveChat
 			{
 				$extraFields['EXTRA_URL'] = $user->getWebsite();
 			}
-			else if (!$user->isConnector() && !$user->isBot())
+			else if (!UserV2::getInstance((int)$messageFields['AUTHOR_ID'])->isConnector() && !UserV2::getInstance((int)$messageFields['AUTHOR_ID'])->isBot())
 			{
 				return false;
 			}
@@ -301,7 +302,7 @@ class LiveChat
 
 		if ($userId && \Bitrix\Im\User::getInstance($userId)->isExists())
 		{
-			if (\Bitrix\Im\User::getInstance($userId)->isConnector())
+			if (UserV2::getInstance((int)$userId)->isConnector())
 			{
 				return $userId;
 			}

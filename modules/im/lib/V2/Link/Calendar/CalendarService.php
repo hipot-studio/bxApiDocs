@@ -15,6 +15,9 @@ use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Uri;
+use Bitrix\Tasks\Slider\Path\TaskPathMaker;
+use Bitrix\Im\V2\Integration\Tasks\Provider\TaskProvider;
 
 class CalendarService
 {
@@ -174,6 +177,11 @@ class CalendarService
 			$users = array_values(array_map(static fn($item) => ['id' => (int)$item, 'entityId' => 'user'], $userIds));
 			$data['params']['participantsEntityList'] = $users;
 			$data['params']['type'] = 'user';
+
+			if ($chat->getEntityType() === 'TASKS_TASK' && $chat->getEntityId() !== null)
+			{
+				$this->prepareParamsForTask($chat, $currentUserId, $data['params']);
+			}
 		}
 
 		if (isset($message))
@@ -282,6 +290,54 @@ class CalendarService
 				'#LINK#' => $calendar->getEntity()->getUrl(),
 				'#USER_ID#' => $this->getContext()->getUserId(),
 				'#EVENT_TITLE#' => $calendar->getEntity()->getTitle(),
+			]
+		);
+	}
+
+	protected function prepareParamsForTask(Chat $chat, int $currentUserId, array &$params): void
+	{
+		$task = (new TaskProvider())->getTaskById((int)$chat->getEntityId(), $currentUserId);
+
+		if ($task === null)
+		{
+			return;
+		}
+
+		$allChatUsers = $params['participantsEntityList'];
+
+		$allParticipantIds = array_flip(array_filter([
+			$task->responsible?->getId(),
+			$task->creator?->getId(),
+			...$task->accomplices?->getIdList() ?? [],
+			$currentUserId,
+		]));
+
+		$allParticipants = array_filter(
+			$allChatUsers,
+			static fn ($item) => isset($allParticipantIds[$item['id']])
+		);
+
+		$params['participantsEntityList'] = array_values($allParticipants);
+
+		$linkToTask = new Uri(
+			TaskPathMaker::getPath([
+				'user_id' => $currentUserId,
+				'task_id' => $task->id,
+				'group_id' => $task->group?->id,
+				'action' => 'view',
+			])
+		);
+		$params['entryDescription'] = Loc::getMessage(
+			'IM_CHAT_CALENDAR_SERVICE_FROM_TASK_CHAT_DESCRIPTION',
+			[
+				'#TASK_URL#' => $linkToTask->toAbsolute(),
+			]
+		);
+
+		$params['entryName'] = Loc::getMessage(
+			'IM_CHAT_CALENDAR_SERVICE_FROM_TASK_CHAT_TITLE',
+			[
+				'#TASK_TITLE#' => $task->title,
 			]
 		);
 	}

@@ -12,6 +12,7 @@ class Type
 		public readonly string $literal,
 		public readonly ?string $entityType,
 		public readonly string $extendedType,
+		public readonly bool $isOpen = false,
 	){}
 
 	public function getExtendedType(bool $camelCase = true): string

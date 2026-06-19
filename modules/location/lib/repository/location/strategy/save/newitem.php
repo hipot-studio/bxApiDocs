@@ -37,16 +37,6 @@ final class NewItem extends Save
 			}
 		}
 
-		if($parents = $location->getParents())
-		{
-			$res = $this->saveParents($parents);
-
-			if (!$res->isSuccess())
-			{
-				$result->addErrors($res->getErrors());
-			}
-		}
-
 		return $result;
 	}
 

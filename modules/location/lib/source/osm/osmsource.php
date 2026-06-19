@@ -98,7 +98,7 @@ final class OsmSource extends Source
 		}
 		else
 		{
-			$result = Context::getCurrent()->getServer()->get('HTTP_HOST');
+			$result = Context::getCurrent()->getServer()->get('HTTP_HOST') || Option::get('main', 'server_name');
 
 			if (strpos($result, ':') !== false)
 			{

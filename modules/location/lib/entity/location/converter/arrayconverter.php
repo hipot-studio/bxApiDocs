@@ -57,24 +57,6 @@ final class ArrayConverter
 	}
 
 	/**
-	 * Convert Parents to array
-	 *
-	 * @param Location\Parents $parents
-	 * @return array
-	 */
-	public static function convertParentsToArray(Entity\Location\Parents $parents): array
-	{
-		$result = [];
-
-		foreach ($parents as $location)
-		{
-			$result[] = ArrayConverter::convertToArray($location);
-		}
-
-		return $result;
-	}
-
-	/**
 	 * Convert Array to Location
 	 *
 	 * @param array $data

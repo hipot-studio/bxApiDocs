@@ -68,7 +68,7 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 		if (empty($members))
 		{
 			$this->trackError(
-				Loc::getMessage('IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_ERROR_EMPTY_MEMBERS') ?? ''
+				Loc::getMessage('IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_ERROR_EMPTY_MEMBERS') ?? '',
 			);
 
 			return CBPActivityExecutionStatus::Closed;
@@ -76,7 +76,7 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 		if (count($members) < 2)
 		{
 			$this->trackError(
-				Loc::getMessage('IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_ERROR_COUNT_MEMBERS') ?? ''
+				Loc::getMessage('IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_ERROR_COUNT_MEMBERS') ?? '',
 			);
 
 			return CBPActivityExecutionStatus::Closed;
@@ -84,32 +84,50 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 
 		$moduleId = $this->getDocumentType()[0];
 
+		$authorId = $this->getAuthorId($members);
+
 		$result = Bitrix\Im\V2\Chat\ChatFactory::getInstance()->addChat([
-				'AUTHOR_ID' => $this->getAuthorId($members),
-				'TITLE' => $chatName,
-				'USERS' => $members,
-				'MESSAGE' => Loc::getMessage('IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_WELCOME_MESSAGE'),
-				'ENTITY_TYPE' => 'BP_ACTIVITY_' . mb_strtoupper($moduleId),
-			]
+			'AUTHOR_ID' => $authorId,
+			'TITLE' => $chatName,
+			'USERS' => $members,
+			'ENTITY_TYPE' => 'BP_ACTIVITY_' . mb_strtoupper($moduleId),
+		],
 		);
 
 		if (!$result->isSuccess())
 		{
 			$this->trackError(
-				implode('. ', $result->getErrorMessages())
+				implode('. ', $result->getErrorMessages()),
 			);
 
 			return CBPActivityExecutionStatus::Closed;
 		}
 
 		$this->ChatId = $result->getChatId();
+
+		$welcomeMessage = Loc::getMessage('IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_WELCOME_MESSAGE');
+		if ($welcomeMessage)
+		{
+			\CIMMessage::Add([
+				'MESSAGE_TYPE' => IM_MESSAGE_CHAT,
+				'TO_CHAT_ID' => $this->ChatId,
+				'FROM_USER_ID' => $authorId,
+				'MESSAGE' => $welcomeMessage,
+				'SYSTEM' => 'Y',
+				'PUSH' => 'N',
+				'SKIP_COUNTER_INCREMENTS' => 'Y',
+				'PARAMS' => [
+					'NOTIFY' => 'N',
+				],
+			]);
+		}
 		$this->writeToTrackingService(
 			Loc::getMessage(
 				'IM_ACTIVITIES_CREATE_GROUP_CHAT_ACTIVITY_NEW_CHAT_CREATED',
-				['#CHAT_ID#' => $this->ChatId ]
+				['#CHAT_ID#' => $this->ChatId],
 			),
 			0,
-			CBPTrackingType::AttachedEntity
+			CBPTrackingType::AttachedEntity,
 		);
 
 		if (
@@ -164,7 +182,7 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 		$currentValues = null,
 		$formName = '',
 		$popupWindow = null,
-		$siteId = ''
+		$siteId = '',
 	)
 	{
 		if (!\Bitrix\Main\Loader::includeModule('im'))
@@ -183,7 +201,7 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 				'currentValues' => $currentValues,
 				'formName' => $formName,
 				'siteId' => $siteId,
-			]
+			],
 		);
 
 		$dialog->setMap(static::getPropertiesMap($documentType));
@@ -222,7 +240,7 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 		&$workflowParameters,
 		&$workflowVariables,
 		$currentValues,
-		&$errors
+		&$errors,
 	)
 	{
 		if (!\Bitrix\Main\Loader::includeModule('im'))
@@ -241,7 +259,7 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 				$property,
 				$property['FieldName'],
 				$currentValues,
-				$errors
+				$errors,
 			);
 
 			if ($errors)
@@ -266,7 +284,7 @@ class CBPImCreateGroupChatActivity extends CBPActivity
 		return true;
 	}
 
-	public static function validateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null)
+	public static function validateProperties($arTestProperties = [], ?CBPWorkflowTemplateUser $user = null)
 	{
 		$errors = [];
 

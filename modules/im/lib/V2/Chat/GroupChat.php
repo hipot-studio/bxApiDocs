@@ -26,7 +26,9 @@ use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
 use Bitrix\Im\V2\Result;
+use Bitrix\Im\V2\Chat\Access\OpenChatAccessPolicy;
 use Bitrix\Im\V2\Service\Context;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\ImBot\Bot\Network;
 use Bitrix\ImBot\Bot\Support24;
 use Bitrix\ImBot\Bot\SupportBox;
@@ -64,8 +66,27 @@ class GroupChat extends Chat
 		return !$this->getEntityType();
 	}
 
+	public function isOpen(): bool
+	{
+		return $this->getChatType()->isOpen;
+	}
+
 	protected function checkAccessInternal(int $userId): Result
 	{
+		if ($this->isOpen() && $this->canAccessWithoutMembership($userId))
+		{
+			if (!$this->hasParent())
+			{
+				return new Result();
+			}
+
+			$parentAccess = $this->getParentChat()?->checkAccess($userId);
+			if ($parentAccess !== null && $parentAccess->isSuccess())
+			{
+				return new Result();
+			}
+		}
+
 		$result = new Result();
 
 		if ($this->getRelationByUserId($userId) === null)
@@ -74,6 +95,13 @@ class GroupChat extends Chat
 		}
 
 		return $result;
+	}
+
+	private function canAccessWithoutMembership(int $userId): bool
+	{
+		return ServiceLocator::getInstance()->get(OpenChatAccessPolicy::class)
+			->canSkipMembershipForOpenChats($userId)
+		;
 	}
 
 	public function linkToStructureNodes(array $structureNodes): void
@@ -231,6 +259,20 @@ class GroupChat extends Chat
 	{
 		$result = new Result();
 		$params = $this->filterParams($params);
+		if (isset($params['PARENT_ID']) && (int)$params['PARENT_ID'] > 0 && !isset($params['PARENT_CHAT']))
+		{
+			$params['PARENT_CHAT'] = Chat::getInstance((int)$params['PARENT_ID']);
+		}
+
+		if (isset($params['PARENT_CHAT']) && $params['PARENT_CHAT'] instanceof Chat)
+		{
+			$parentChat = $params['PARENT_CHAT'];
+			if (!$parentChat->canHaveChild($this))
+			{
+				return $result->addError(new ChatError(ChatError::WRONG_PARENT_CHAT));
+			}
+			$params['PARENT_ID'] = $parentChat->getChatId();
+		}
 
 		$params['AUTHOR_ID'] = (int)($params['AUTHOR_ID'] ?? $this->getContext()->getUserId());
 		$validateAuthorIdResult = $this->validateAuthorId((int)$params['AUTHOR_ID']);
@@ -743,6 +785,10 @@ class GroupChat extends Chat
 			'set' => 'setEngineCode', /** @see static::setEngineCode */
 			'default' => 'getDefaultEngineCode', /** @see static::getDefaultEngineCode */
 			'nullable' => true,
+			'skipSave' => true,
+		];
+
+		$result['PARENT_CHAT'] = [
 			'skipSave' => true,
 		];
 

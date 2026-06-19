@@ -24,7 +24,7 @@ class RecentProvider
 	public function getList(RecentParams $params): Recent
 	{
 		$typeCondition = $this->buildTypeCondition();
-		$filter = $params->filter?->with(typeCondition: $typeCondition) ?? new RecentFilter(typeCondition: $typeCondition);
+		$filter = $params->filter->with(typeCondition: $typeCondition);
 
 		$enrichedParams = new RecentParams(
 			filter: $filter,

@@ -7,9 +7,12 @@ use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Pull\Dto\Diff;
 use Bitrix\Im\V2\Pull\EventType;
+use Bitrix\Im\V2\Pull\RecentPreviewPullTrait;
 
 class ChatMute extends BaseChatEvent
 {
+	use RecentPreviewPullTrait;
+
 	protected int $userId;
 	protected bool $isMuted;
 	protected int $counter;
@@ -24,23 +27,28 @@ class ChatMute extends BaseChatEvent
 
 	protected function getBasePullParamsInternal(): array
 	{
-		return [
-			'chatId' => $this->chat->getId(),
-			'muted' => $this->isMuted,
-			'mute' => $this->isMuted, // TODO remove this later
-			'lines' => $this->chat instanceof Chat\OpenLineChat,
-			'counterType' => $this->chat->getCounterType(),
-			'recentConfig' => $this->chat->getRecentConfig()->toPullFormat(),
-		];
+		return array_merge(
+			$this->getBaseRecentPreviewParams($this->chat),
+			[
+				'muted' => $this->isMuted,
+				'mute' => $this->isMuted, // TODO remove this later
+				'lines' => $this->chat instanceof Chat\OpenLineChat,
+			]
+		);
 	}
 
 	protected function getDiffByUser(int $userId): Diff
 	{
-		return new Diff($userId, [
-			'dialogId' => $this->chat->getDialogId($userId),
-			'counter' => $this->counter,
-			'unread' => Recent::isUnread($userId, $this->chat->getType(), $this->chat->getDialogId($userId)),
-		]);
+		return new Diff(
+			$userId,
+			array_merge(
+				$this->getRecentPreviewUserDiffParams($this->chat, $userId),
+				[
+					'counter' => $this->counter,
+					'unread' => Recent::isUnread($userId, $this->chat->getType(), $this->chat->getDialogId($userId)),
+				],
+			),
+		);
 	}
 
 	protected function getRecipients(): array

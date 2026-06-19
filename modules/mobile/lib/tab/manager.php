@@ -274,17 +274,6 @@ class Manager
 		return $optionValue === 'Y';
 	}
 
-	private function setPresetManuallySet(): void
-	{
-		\CUserOptions::SetOption(
-			'mobile',
-			'tabs_preset_manually_set',
-			'Y',
-			false,
-			$this->context->userId,
-		);
-	}
-
 	public function canSyncWithWebPresetForUser(): bool
 	{
 		if (!Loader::includeModule('intranet'))
@@ -393,7 +382,7 @@ class Manager
 	 * @param null $tabId
 	 * @return bool
 	 */
-	public function getTabAvailabilityState($tabId = null)
+	public function getTabAvailabilityState($tabId = null): bool
 	{
 		return $this->tabList[$tabId] && $this->tabList[$tabId]->isAvailable($this->context);
 	}
@@ -402,54 +391,37 @@ class Manager
 	 * Return list of available presets
 	 * @return array
 	 */
-	public function getPresetList()
+	public function getPresetList(): array
 	{
 		$result = [];
 		$presets = $this->config["presets"];
 		$presetsOptions = $this->config["presetsOptions"] ?? [];
-		$optionalTabs = $this->config["presetOptionalTabs"] ?? [];
+		$requiredTabs = $this->config["presetRequiredTabs"] ?? [];
 
 		foreach ($presets as $presetId => $tabs)
 		{
 			$tabsIDs = array_keys($tabs);
-			$available = true;
-			$unavailableOptionalTabs = [];
-			if (count($tabsIDs) === 0)
+			if (empty($tabsIDs))
 			{
-				$available = false;
+				continue;
 			}
-			else
+
+			$presetRequired = $requiredTabs[$presetId] ?? $tabsIDs;
+			$available = true;
+			foreach ($presetRequired as $tabId)
 			{
-				foreach ($tabsIDs as $tabId)
+				if ($this->getTabInstance($tabId) === null || !$this->getTabInstance($tabId)->isAvailable())
 				{
-					if ($this->getTabInstance($tabId) == null)
-					{
-						break;
-					}
+					$available = false;
 
-					if (!$this->getTabInstance($tabId)->isAvailable())
-					{
-						if (isset($optionalTabs[$presetId]) && is_array($optionalTabs[$presetId]))
-						{
-							if (in_array($tabId, $optionalTabs[$presetId]))
-							{
-								$unavailableOptionalTabs[] = $tabId;
-
-								continue;
-							}
-						}
-
-						$available = false;
-
-						break;
-					}
+					break;
 				}
 			}
 
 			if ($available)
 			{
-				$tabs = array_filter($tabs, static function( $sort, $id) use ($unavailableOptionalTabs) {
-					return !in_array($id, $unavailableOptionalTabs);
+				$tabs = array_filter($tabs, function ($sort, $id) {
+					return $this->getTabInstance($id) !== null && $this->getTabInstance($id)->isAvailable();
 				}, ARRAY_FILTER_USE_BOTH);
 
 				$presetOption = $presetsOptions[$presetId];
@@ -465,6 +437,17 @@ class Manager
 		return $result;
 	}
 
+	private function setPresetManuallySet(): void
+	{
+		\CUserOptions::SetOption(
+			'mobile',
+			'tabs_preset_manually_set',
+			'Y',
+			false,
+			$this->context->userId,
+		);
+	}
+
 	private function isTabable(array $interfaces): bool
 	{
 		return in_array('Bitrix\\Mobile\\Tab\\Tabable', $interfaces, true);
@@ -477,11 +460,12 @@ class Manager
 
 	/**
 	 * Resolve and return final configuration
+	 *
 	 * @param $config
 	 * @param array $required
 	 * @return array
 	 */
-	private function resolveTabs($config, $required = [])
+	private function resolveTabs($config, array $required = []): array
 	{
 		$result = array_keys($required);
 		$unchangeable = is_array($this->config["unchangeable"]) ? $this->config["unchangeable"] : [];
@@ -489,7 +473,7 @@ class Manager
 		$sorts = array_merge($required, $config, $unchangeable);
 
 		$tabs = array_reduce($configKeys, function ($result, $tabId) {
-			if (count($result) < Manager::maxCount)
+			if (count($result) < Manager::maxCount && $this->getTabAvailabilityState($tabId))
 			{
 				$result[] = $tabId;
 			}
@@ -513,7 +497,7 @@ class Manager
 	 * @throws ArgumentNullException
 	 * @throws ArgumentOutOfRangeException
 	 */
-	private function getUserPresetConfig()
+	private function getUserPresetConfig(): mixed
 	{
 		$option = Option::get("mobile", "tabs_{$this->context->userId}", false, $this->context->siteId);
 		$result = false;
@@ -550,7 +534,7 @@ class Manager
 			'mobile',
 			'tabs_presets_migration_version',
 			0,
-			$this->context->userId
+			$this->context->userId,
 		);
 
 		if ($currentVersion > $migrationVersion)
@@ -567,7 +551,7 @@ class Manager
 				'tabs_presets_migration_version',
 				$currentVersion,
 				false,
-				$this->context->userId
+				$this->context->userId,
 			);
 		}
 	}

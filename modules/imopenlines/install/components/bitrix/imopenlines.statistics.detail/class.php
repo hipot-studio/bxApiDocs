@@ -1549,7 +1549,6 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 				'name' => Loc::getMessage('OL_STATS_HEADER_DATE_MODIFY'),
 				'default' => false,
 				'editable' => false,
-				'sort' => 'DATE_MODIFY',
 			],
 			[
 				'id' => 'TIME_FIRST_ANSWER',

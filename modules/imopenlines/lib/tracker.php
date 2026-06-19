@@ -196,6 +196,11 @@ class Tracker
 			return '';
 		}
 
+		if (empty($params))
+		{
+			return '';
+		}
+
 		$filter = [
 			'=ACTION' => self::ACTION_EXPECT,
 			'>DATE_CREATE' => (new DateTime())->add('-'.self::EXPECTATION_LIVE_TIME),

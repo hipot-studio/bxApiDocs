@@ -173,7 +173,7 @@ class WorkTime
 			$this->session['SEND_NO_WORK_TIME_TEXT'] != 'N'
 			&& !empty($this->session['OPERATOR_ID'])
 			&& Queue::isRealOperator($this->session['OPERATOR_ID'])
-			&& $this->checkOperatorWorkTime()
+			&& $this->isWorkTimeLine()
 		)
 		{
 			$this->sessionManager->update(['SEND_NO_WORK_TIME_TEXT' => 'N']);
@@ -200,7 +200,6 @@ class WorkTime
 			&& $this->sessionManager->isEnableSendSystemMessage()
 			&& $this->sessionManager->getAction() != Session::ACTION_CLOSED
 			&& !$this->isWorkTimeLine()
-			&& $this->session['STATUS'] < Session::STATUS_ANSWER
 		)
 		{
 			$result = Im::addMessage([

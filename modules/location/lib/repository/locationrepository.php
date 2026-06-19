@@ -102,19 +102,4 @@ class LocationRepository
 		return $this->deleteStrategy->delete($location);
 	}
 
-	/**
-	 * @param Entity\Location $location
-	 * @param string $languageId
-	 * @param int $searchScope
-	 * @return Entity\Location\Parents
-	 */
-	public function findParents(Entity\Location $location, string $languageId, int $searchScope)
-	{
-		return $this->findStrategy->findParents($location, $languageId, $searchScope);
-	}
-
-	public function saveParents(Entity\Location\Parents $parents): Result
-	{
-		return $this->saveStrategy->saveParents($parents);
-	}
 }

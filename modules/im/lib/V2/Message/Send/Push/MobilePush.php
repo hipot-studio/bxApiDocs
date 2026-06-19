@@ -6,6 +6,8 @@ use Bitrix\Im\Text;
 use Bitrix\Im\User;
 use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\Builder\Entity\Builder;
+use Bitrix\Im\V2\Message\Builder\BuilderService;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
@@ -331,6 +333,12 @@ class MobilePush
 			$messageText .= self::getAttachmentSuffixForPush($message);
 		}
 
+		$builder = $message['message']['builder'] ?? null;
+		if ($builder instanceof Builder && empty($messageText))
+		{
+			$messageText = BuilderService::getPlaceholder();
+		}
+
 		$codeIcon = Text::getEmoji('code', '['.Loc::getMessage('IM_MESSAGE_CODE').']');
 		$quoteIcon = Text::getEmoji('quote', '['.Loc::getMessage('IM_MESSAGE_QUOTE').']');
 
@@ -479,6 +487,14 @@ class MobilePush
 			{
 				$chat['extranet'] = true;
 			}
+			if (isset($eventChat['parent_chat_id']))
+			{
+				$chat['parent_chat_id'] = (int)$eventChat['parent_chat_id'];
+			}
+			if (isset($eventChat['parent_message_id']))
+			{
+				$chat['parent_message_id'] = (int)$eventChat['parent_message_id'];
+			}
 
 			$result['chat'] = $chat;
 		}
@@ -617,6 +633,11 @@ class MobilePush
 		{
 			$result['sticker'] = $event['stickers'][0];
 		}
+		
+		if (isset($event['recentConfig']))
+		{
+			$result['recentConfig'] = $event['recentConfig'];
+		}
 
 		$indexToNameMap = [
 			'chat' => 1,
@@ -633,6 +654,7 @@ class MobilePush
 			'notify' => 12,
 			'type' => 13,
 			'extranet' => 14,
+			'recentConfig' => 15,
 
 			'date_create' => 20,
 			'owner' => 21,
@@ -645,6 +667,8 @@ class MobilePush
 			'call_number' => 202,
 			'manager_list' => 209,
 			'mute_list' => 210,
+			'parent_chat_id' => 220,
+			'parent_message_id' => 221,
 
 			'first_name' => 40,
 			'last_name' => 41,
@@ -681,6 +705,8 @@ class MobilePush
 			'width' => 88,
 			'height' => 89,
 			'isVideoNote' => 801,
+
+			'sections' => 90,
 		];
 
 		return $this->changeKeysPushEvent($result, $indexToNameMap);

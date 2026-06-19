@@ -6,12 +6,15 @@ use Bitrix\Im\V2\Registry;
 use Bitrix\Im\V2\Rest\RestConvertible;
 use Bitrix\ImOpenLines\Model\ConfigTable;
 use Bitrix\ImOpenLines\Model\EO_Config_Collection;
+use Bitrix\Main\Type\Collection;
 
 /**
  * @extends Registry<QueueItem>
  */
 class Queue extends Registry implements RestConvertible
 {
+	private const CACHE_TTL = 86400;
+
 	public static function getQueues(): self
 	{
 		$queue = new self();
@@ -19,14 +22,37 @@ class Queue extends Registry implements RestConvertible
 
 		foreach ($queueEntities as $entity)
 		{
-			$queueItem = new QueueItem();
-			$queueItem
-				->setId($entity->getId())
-				->setName($entity->getLineName())
-				->setType($entity->getQueueType())
-				->setIsActive($entity->getActive())
-			;
-			$queue[] = $queueItem;
+			$queue[] = QueueItem::createFromEntity($entity);
+		}
+
+		return $queue;
+	}
+
+	public static function getQueuesByIds(array $ids): self
+	{
+		$queue = new self();
+
+		Collection::normalizeArrayValuesByInt($ids);
+		if (empty($ids))
+		{
+			return $queue;
+		}
+
+		$queueEntities = ConfigTable::query()
+			->setSelect([
+				'ID',
+				'LINE_NAME',
+				'ACTIVE',
+				'QUEUE_TYPE',
+			])
+			->whereIn('ID', $ids)
+			->setCacheTtl(self::CACHE_TTL)
+			->fetchCollection()
+		;
+
+		foreach ($queueEntities as $entity)
+		{
+			$queue[] = QueueItem::createFromEntity($entity);
 		}
 
 		return $queue;
@@ -35,7 +61,13 @@ class Queue extends Registry implements RestConvertible
 	protected static function getQueueEntities(): EO_Config_Collection
 	{
 		$query = ConfigTable::query()
-			->setSelect(['ID', 'LINE_NAME', 'ACTIVE', 'QUEUE_TYPE'])
+			->setSelect([
+				'ID',
+				'LINE_NAME',
+				'ACTIVE',
+				'QUEUE_TYPE',
+			])
+			->setCacheTtl(self::CACHE_TTL)
 		;
 
 		return $query->fetchCollection();

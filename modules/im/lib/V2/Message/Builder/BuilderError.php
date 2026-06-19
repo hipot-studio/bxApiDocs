@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Bitrix\Im\V2\Message\Builder;
+
+use Bitrix\Im\V2\Error;
+
+class BuilderError extends Error
+{
+	public const BUILDER_NOT_AVAILABLE = 'BUILDER_NOT_AVAILABLE';
+	public const EMPTY_REQUIRED_FIELD = 'EMPTY_REQUIRED_FIELD';
+	public const EMPTY_BLOCKS = 'EMPTY_BLOCKS';
+	public const MAX_BLOCKS_ERROR = 'MAX_BLOCKS_ERROR';
+	public const INVALID_BLOCKS_FIELD = 'INVALID_BLOCKS_FIELD';
+	public const WRONG_BLOCK_TYPE = 'WRONG_BLOCK_TYPE';
+	public const MAX_TEXT_LENGTH = 'MAX_TEXT_LENGTH';
+	public const INVALID_ELEMENTS_FIELD = 'INVALID_ELEMENTS_FIELD';
+	public const EMPTY_ELEMENTS_FIELD = 'EMPTY_ELEMENTS_FIELD';
+	public const INVALID_IMAGE_URL_FIELD = 'INVALID_IMAGE_URL_FIELD';
+	public const INVALID_ROWS_FIELD = 'INVALID_ROWS_FIELD';
+	public const EMPTY_ROWS_FIELD = 'EMPTY_ROWS_FIELD';
+	public const INVALID_SIZE_FIELD = 'INVALID_SIZE_FIELD';
+	public const INVALID_STATUS_FIELD = 'INVALID_STATUS_FIELD';
+	public const INVALID_TEXT_FIELD = 'INVALID_TEXT_FIELD';
+	public const INVALID_TYPE_FIELD = 'INVALID_TYPE_FIELD';
+	public const MAX_COLUMN_COUNT = 'MAX_COLUMN_COUNT';
+}

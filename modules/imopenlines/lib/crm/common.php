@@ -17,6 +17,7 @@ use Bitrix\ImConnector\Connector;
 use Bitrix\Crm\Category\DealCategory;
 
 use Bitrix\Im;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 
 Crm::loadMessages();
 
@@ -352,7 +353,7 @@ class Common
 		if (
 			Loader::includeModule('im')
 			&& (
-				!Im\User::getInstance($assignedId)->isActive()
+				!UserV2::getInstance($assignedId)->isActive()
 				|| Im\User::getInstance($assignedId)->isAbsent()
 			)
 		)

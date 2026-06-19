@@ -5,7 +5,10 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im\Model\ChatIndexTable;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\RelationTable;
+use Bitrix\Im\V2\Chat\Access\ParentChainFilterFactory;
+use Bitrix\Im\V2\Chat\Tree\TreeOrigin;
 use Bitrix\Im\V2\Permission\ActionGroup;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Filter\Helper;
 use Bitrix\Main\ORM\Query\Join;
@@ -65,6 +68,8 @@ class Filter
 		;
 
 		\Bitrix\Im\V2\Permission\Filter::getRoleOrmFilter($this->query, $action, 'RELATION', '');
+
+		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)->forUser($userId, TreeOrigin::forChat())->apply($this->query);
 
 		return $this;
 	}
@@ -127,6 +132,8 @@ class Filter
 					['join_type' => Join::TYPE_INNER]
 				)
 			);
+
+			ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)->forUser($userId, TreeOrigin::forChat())->apply($this->query);
 		}
 
 		return $this;

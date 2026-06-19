@@ -21,7 +21,14 @@ class SilentModeModifier implements MessageModifierInterface
 		$entityData = $chat->getEntityData();
 		$silentMode = $entityData['entityData3']['silentMode'] ?? 'N';
 
-		return $silentMode === 'Y';
+		if ($silentMode !== 'Y')
+		{
+			return false;
+		}
+
+		$author = $message->getAuthor();
+
+		return $author !== null && !$author->isConnector();
 	}
 
 	public function modify(Message $message): void

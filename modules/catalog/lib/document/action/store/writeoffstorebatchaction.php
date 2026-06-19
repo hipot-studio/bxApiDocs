@@ -15,19 +15,23 @@ use Bitrix\Catalog\Product\Store\DistributionStrategy\DeductDocument;
 class WriteOffStoreBatchAction implements Action
 {
 	use WriteOffAmountValidator;
+
 	private ?EO_StoreDocumentElement $storeDocumentElement;
 	private int $productId;
-
 	private int $storeId;
 	private float $amount;
+	private float $totalAmount;
+
 	public function __construct(
 		int $documentElementId,
 		int $productId,
 		float $amount,
+		float $totalAmount,
 	)
 	{
 		$this->productId = $productId;
 		$this->amount = $amount;
+		$this->totalAmount = $totalAmount;
 
 		$this->storeDocumentElement = StoreDocumentElementTable::getList([
 				'filter' => [
@@ -44,7 +48,7 @@ class WriteOffStoreBatchAction implements Action
 		$this->productId = $this->storeDocumentElement->getElementId();
 		$this->storeId = $this->storeDocumentElement->getStoreFrom();
 
-		return $this->checkStoreAmount($this->storeDocumentElement);
+		return $this->checkStoreAmount($this->storeDocumentElement, $this->totalAmount);
 	}
 
 	/**

@@ -14,6 +14,7 @@ use Bitrix\Main\Localization\Loc;
 class Config
 {
 	private const CACHE_TIME = 600;
+	private const ORM_CACHE_TIME = 86400;
 	public const CACHE_DIR = '/imopenlines/livechat/';
 	public const CACHE_ID_PREFIX_ = 'livechat_config_';
 
@@ -53,7 +54,8 @@ class Config
 		{
 			$result = \Bitrix\ImOpenLines\Model\LivechatTable::getList([
 				'select' => ['CONFIG_ID', 'TEXT_PHRASES', 'SHOW_SESSION_ID'],
-				'filter' => ['=URL_CODE' => $code]
+				'filter' => ['=URL_CODE' => $code],
+				'cache' => ['ttl' => self::ORM_CACHE_TIME],
 			])->fetch();
 
 			if (!$result)

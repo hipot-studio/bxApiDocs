@@ -13,7 +13,7 @@ final class SecuritySettingsFeature extends FeatureFlag
 
 	public function isEnabled(): bool
 	{
-		return (bool)Option::get('mobile', self::$FEATURE_CODE, false);
+		return (bool)Option::get('mobile', self::$FEATURE_CODE, true);
 	}
 
 	public function enable(): void

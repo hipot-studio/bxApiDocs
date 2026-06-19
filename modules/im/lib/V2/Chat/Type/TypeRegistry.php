@@ -22,7 +22,10 @@ class TypeRegistry
 	 * @var array<string, array<string, Type>>
 	 */
 	private array $byLiteralAndEntity = [];
+	/** @var array<string, array<string, Type>> */
 	private array $byRecentSection = [];
+	/** @var array<string, array<string, Type>> */
+	private array $byRecentSectionExclude = [];
 
 	/**
 	 * @var array<string, Type>
@@ -40,7 +43,17 @@ class TypeRegistry
 
 	public function getConditionByRecentSection(string $recentSection): TypeCondition
 	{
-		return new TypeCondition(include: $this->byRecentSection[$recentSection] ?? []);
+		return new TypeCondition(
+			include: array_values($this->byRecentSection[$recentSection] ?? []),
+			exclude: array_values($this->byRecentSectionExclude[$recentSection] ?? []),
+		);
+	}
+
+	public function getOpenTypeCondition(): TypeCondition
+	{
+		$openTypes = array_filter($this->registry, static fn(Type $type) => $type->isOpen);
+
+		return new TypeCondition(include: array_values($openTypes));
 	}
 
 	public function getByExtendedType(string $type): Type
@@ -75,8 +88,8 @@ class TypeRegistry
 		return match (true)
 		{
 			$matched !== null => $matched, // exact match: C+VIDEOCONF, B+SONET
-			$base?->allowsDynamic() && $entityType => new Type($literal, $entityType, $entityType), // C+CUSTOM, O+CUSTOM
-			$base !== null => new Type($literal, $entityType, $base->extendedType), // P+ANY=PRIVATE, but save entityType
+			$base?->allowsDynamic() && $entityType => new Type($literal, $entityType, $entityType, $base->isOpen), // C+CUSTOM, O+CUSTOM
+			$base !== null => new Type($literal, $entityType, $base->extendedType, $base->isOpen), // P+ANY=PRIVATE, but save entityType
 			default => throw new SystemException("Unknown type: {$literal}, {$entityType}"), // not found
 		};
 	}
@@ -86,7 +99,7 @@ class TypeRegistry
 		$fallbackType = $this->fallbackByLiteral[$literal] ?? null;
 		if ($fallbackType)
 		{
-			return new Type($literal, $entityType, $fallbackType->extendedType);
+			return new Type($literal, $entityType, $fallbackType->extendedType, $fallbackType->isOpen);
 		}
 
 		return new Type(Chat::IM_TYPE_CHAT, $entityType, $entityType ?? 'CHAT');
@@ -136,9 +149,11 @@ class TypeRegistry
 			ExtendedType::System->value => [Chat::IM_TYPE_SYSTEM],
 		];
 
+		$openTypes = [ExtendedType::OpenChat->value, ExtendedType::General->value, ExtendedType::OpenChannel->value, ExtendedType::GeneralChannel->value];
+
 		foreach ($withLiteral as $extendedType => $typeInfo)
 		{
-			$this->registerType(new Type($typeInfo[0], $typeInfo[1] ?? null, $extendedType));
+			$this->registerType(new Type($typeInfo[0], $typeInfo[1] ?? null, $extendedType, in_array($extendedType, $openTypes, true)));
 		}
 	}
 
@@ -189,10 +204,15 @@ class TypeRegistry
 	private function fillByRecentSection(Type $type): void
 	{
 		$extendedType = $type->getExtendedType(camelCase: false);
-		$recentSections = $this->recentConfigManager->getRecentSectionsByChatExtendedType($extendedType);
-		foreach ($recentSections as $recentSection)
+
+		foreach ($this->recentConfigManager->getAllRecentSectionsByType($extendedType) as $section)
 		{
-			$this->byRecentSection[$recentSection][$extendedType] = $type;
+			$this->byRecentSection[$section][$extendedType] = $type;
+		}
+
+		foreach ($this->recentConfigManager->getExcludedComposedSections($extendedType) as $section)
+		{
+			$this->byRecentSectionExclude[$section][$extendedType] = $type;
 		}
 	}
 }

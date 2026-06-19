@@ -85,6 +85,22 @@ class RoleManager
 		return !empty($roleData) ? $roleData : null;
 	}
 
+	public function getValidRoleCode(?string $roleCode): ?string
+	{
+		if ($roleCode === null)
+		{
+			return self::getDefaultRoleCode();
+		}
+
+		$roles = $this->getRoles([$roleCode]);
+		if (isset($roles[$roleCode]))
+		{
+			return $roleCode;
+		}
+
+		return self::getDefaultRoleCode();
+	}
+
 	protected function fillRoles(array $roleCodes): void
 	{
 		$roleManager = $this->getAiManager();

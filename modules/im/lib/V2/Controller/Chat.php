@@ -6,7 +6,9 @@ use Bitrix\Im\Dialog;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Chat\ChatError;
+use Bitrix\Im\V2\Chat\Add\ChatCreateFields;
 use Bitrix\Im\V2\Chat\ChatFactory;
+use Bitrix\Im\V2\Controller\Chat\Dto\ChatCreateFieldsDto;
 use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Chat\ExternalChat;
@@ -16,7 +18,6 @@ use Bitrix\Im\V2\Chat\MessagesAutoDelete\MessagesAutoDeleteConfigs;
 use Bitrix\Im\V2\Chat\OpenChannelChat;
 use Bitrix\Im\V2\Chat\OpenChat;
 use Bitrix\Im\V2\Chat\OpenLineChat;
-use Bitrix\Im\V2\Chat\Param\Params;
 use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 use Bitrix\Im\V2\Common\FormatConverter;
@@ -52,21 +53,12 @@ class Chat extends BaseController
 	{
 		return [
 			'add' => [
-				'+prefilters' => [
-					new CheckActionAccess(
-						Permission\GlobalAction::CreateChat,
-						fn (Base $filter) => [
-							'TYPE' => $this->getValidatedType(
-								$filter->getAction()->getArguments()['fields']['type'] ?? ''
-							),
-							'ENTITY_TYPE' => $this->getValidatedEntityType(
-								$filter->getAction()->getArguments()['fields']['entityType'] ?? null
-							),
-						]
-					),
-					new CheckFileAccess(['fields', 'avatar']),
+					'+prefilters' => [
+						new CheckFileAccess(
+							extractor: fn(array $args) => ($args['createFields'] ?? null)?->getAvatar()
+						),
+					],
 				],
-			],
 			'update' => [
 				'+prefilters' => [
 					new CheckFileAccess(['fields', 'avatar']),
@@ -266,6 +258,15 @@ class Chat extends BaseController
 						return ServiceLocator::getInstance()->get(TypeRegistry::class)->getByExtendedType($type);
 					}
 				),
+				new ExactParameter(
+					ChatCreateFields::class,
+					'createFields',
+					function ($className, array $fields) {
+						$dto = ChatCreateFieldsDto::create($fields);
+
+						return ChatCreateFields::fromDto($dto);
+					}
+				),
 			]
 		);
 	}
@@ -433,35 +434,9 @@ class Chat extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.add
 	 */
-	public function addAction(array $fields): ?array
+	public function addAction(ChatCreateFields $createFields): ?array
 	{
-		$fields['type'] = $this->getValidatedType($fields['type'] ?? null);
-		$fields['entityType'] = $this->getValidatedEntityType($fields['entityType'] ?? null);
-
-		if (
-			!isset($fields['entityType'])
-			|| $fields['entityType'] !== 'VIDEOCONF'
-			|| !isset($fields['conferencePassword'])
-		)
-		{
-			unset($fields['conferencePassword']);
-		}
-
-		if (isset($fields['copilotMainRole']))
-		{
-			$fields['chatParams'][] = [
-				'paramName' => Params::COPILOT_MAIN_ROLE,
-				'paramValue' => $fields['copilotMainRole']
-			];
-		}
-
-		$data = self::recursiveWhiteList($fields, \Bitrix\Im\V2\Chat::AVAILABLE_PARAMS);
-		if (isset($data['OWNER_ID']))
-		{
-			$data['AUTHOR_ID'] = $data['OWNER_ID'];
-		}
-
-		$result = ChatFactory::getInstance()->addChat($data);
+		$result = ChatFactory::getInstance()->addChat($createFields->toArray());
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -894,21 +869,6 @@ class Chat extends BaseController
 		return ['result' => true];
 	}
 
-	private function getValidatedType(?string $type): string
-	{
-		return match ($type)
-		{
-			'CHANNEL' => \Bitrix\Im\V2\Chat::IM_TYPE_CHANNEL,
-			'COPILOT' => \Bitrix\Im\V2\Chat::IM_TYPE_COPILOT,
-			'COLLAB' => \Bitrix\Im\V2\Chat::IM_TYPE_COLLAB,
-			default => \Bitrix\Im\V2\Chat::IM_TYPE_CHAT,
-		};
-	}
-
-	private function getValidatedEntityType(?string $entityType): ?string
-	{
-		return ServiceLocator::getInstance()->get(TypeRegistry::class)->getValidatedEntityType($entityType);
-	}
 	//endregion
 	//endregion
 }

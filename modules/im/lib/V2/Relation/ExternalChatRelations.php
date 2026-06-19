@@ -11,6 +11,8 @@ class ExternalChatRelations extends ChatRelations
 
 	public function filterUserIdsByAccess(array $userIds): array
 	{
+		$userIds = parent::filterUserIdsByAccess($userIds);
+
 		$chat = ExternalChat::getInstance($this->chatId);
 		if (!$chat instanceof ExternalChat)
 		{
@@ -24,29 +26,6 @@ class ExternalChatRelations extends ChatRelations
 			return $userIds;
 		}
 
-		$usersWithAccess = $event->getUsersWithAccess();
-		self::deleteUsersWithoutAccess($this->chatId, $userIds, $usersWithAccess);
-
-		return $usersWithAccess;
-	}
-
-	private static function deleteUsersWithoutAccess(int $chatId, array $userIds, array $usersWithAccess): void
-	{
-		$cleaner = LazyCleaner::getInstance();
-		if (!$cleaner->canMarkForDeletion())
-		{
-			return;
-		}
-
-		$toDelete = array_diff($userIds, $usersWithAccess);
-
-		foreach ($toDelete as $userId)
-		{
-			$canMark = LazyCleaner::getInstance()->markForDeletion($chatId, $userId);
-			if (!$canMark)
-			{
-				break;
-			}
-		}
+		return $event->getUsersWithAccess();
 	}
 }

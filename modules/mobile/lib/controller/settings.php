@@ -10,6 +10,7 @@ use Bitrix\Intranet\Service\MobileAppSettings;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Intranet\Dto\EntitySelector\EntitySelectorCodeDto;
 use Bitrix\Intranet\Public\Service\OtpSettingsService;
+use Bitrix\Main\Loader;
 use Bitrix\Mobile\Settings\Dto\SecuritySettingsDto;
 use Bitrix\Mobile\Settings\Dto\RightsDto;
 
@@ -27,19 +28,19 @@ final class Settings extends JsonController
 		];
 
 		return [
-			'getSecuritySettingsAction' => [
+			'getSecuritySettings' => [
 				'+prefilters' => $commonPrefilters,
 			],
-			'setTakeScreenshotDisabledAction' => [
+			'setTakeScreenshotDisabled' => [
 				'+prefilters' => $adminPrefilters,
 			],
-			'setCopyTextDisabledAction' => [
+			'setCopyTextDisabled' => [
 				'+prefilters' => $adminPrefilters,
 			],
-			'setTakeScreenshotRightsAction' => [
+			'setTakeScreenshotRights' => [
 				'+prefilters' => $adminPrefilters,
 			],
-			'setCopyTextRightsAction' => [
+			'setCopyTextRights' => [
 				'+prefilters' => $adminPrefilters,
 			],
 		];
@@ -64,6 +65,10 @@ final class Settings extends JsonController
 		$mobileAppSettings = self::getMobileAppSettings();
 		$userId = $this->getCurrentUser()->getId();
 		$otpService = self::getOtpService();
+		$isUserLoginHistoryFeatureEnabled =
+			!Loader::includeModule('bitrix24')
+			|| Feature::isFeatureEnabled('user_login_history');
+		$isLoginHistoryToolAvailable = ToolsManager::getInstance()->checkAvailabilityByToolId('login_history');
 
 		return SecuritySettingsDto::make([
 			'isTakeScreenshotDisabled' => $mobileAppSettings->isTakeScreenshotDisabled(),
@@ -74,10 +79,7 @@ final class Settings extends JsonController
 			'isHighPushOtpPromote' => $otpService->isPushOtpHighPromote(),
 			'takeScreenshotRights' => $this->getTakeScreenshotRights(),
 			'copyTextRights' => $this->getCopyTextRights($mobileAppSettings),
-			'isLoginHistoryAvailable' =>
-				ToolsManager::getInstance()->checkAvailabilityByToolId('login_history')
-				&& Feature::isFeatureEnabled('user_login_history')
-			,
+			'isLoginHistoryAvailable' => $isLoginHistoryToolAvailable && $isUserLoginHistoryFeatureEnabled,
 		]);
 	}
 

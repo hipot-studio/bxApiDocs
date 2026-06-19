@@ -11,7 +11,7 @@ if ($request->isPost() &&
 	$chatId = intval($request->getPost('CHAT_ID'));
 	$userId = intval($USER->GetId());
 
-	if ($userId <= 0 || !(\Bitrix\Main\ModuleManager::isModuleInstalled('imopenlines') && \Bitrix\Main\Loader::includeModule('im') && \Bitrix\Im\User::getInstance($userId)->isConnector()))
+	if ($userId <= 0 || !(\Bitrix\Main\ModuleManager::isModuleInstalled('imopenlines') && \Bitrix\Main\Loader::includeModule('im') && \Bitrix\Im\V2\Entity\User\User::getInstance((int)$userId)->isConnector()))
 	{
 		echo \Bitrix\ImOpenLines\Common::objectEncode(Array('ERROR' => 'AUTHORIZE_ERROR'));
 		CMain::FinalActions();

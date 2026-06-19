@@ -10,6 +10,7 @@ use Bitrix\ImOpenLines\Chat,
 
 use Bitrix\Im,
 	Bitrix\Im\Model\MessageTable;
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 
 use Bitrix\Main\ORM,
 	Bitrix\Main\Loader,
@@ -124,7 +125,7 @@ class Correction
 						$session['STATUS'] < Session::STATUS_ANSWER
 						|| empty($session['OPERATOR_ID'])
 						|| !Queue::isRealOperator($session['OPERATOR_ID'])
-						|| !(Im\User::getInstance($session['OPERATOR_ID'])->isActive()))
+						|| !(UserV2::getInstance((int)$session['OPERATOR_ID'])->isActive()))
 					{
 						$addFields['DATE_QUEUE'] = new DateTime();
 					}

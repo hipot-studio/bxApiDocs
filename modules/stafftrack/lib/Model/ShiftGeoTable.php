@@ -62,28 +62,24 @@ class ShiftGeoTable extends DataManager
 				[
 					'primary' => true,
 					'autocomplete' => true,
-					'title' => Loc::getMessage('SHIFT_GEO_ENTITY_ID_FIELD'),
 				]
 			),
 			new IntegerField(
 				'SHIFT_ID',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('SHIFT_GEO_ENTITY_SHIFT_ID_FIELD'),
 				]
 			),
 			new TextField(
 				'IMAGE_URL',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('SHIFT_GEO_ENTITY_IMAGE_URL_FIELD'),
 				]
 			),
 			new TextField(
 				'ADDRESS',
 				[
 					'required' => true,
-					'title' => Loc::getMessage('SHIFT_GEO_ENTITY_ADDRESS_FIELD'),
 				]
 			),
 		];

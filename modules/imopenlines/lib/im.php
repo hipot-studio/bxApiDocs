@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\ImOpenLines;
 
+use Bitrix\Im\V2\Entity\User\User as UserV2;
 use Bitrix\Im\V2\Pull\Event\ChatHide;
 use \Bitrix\Main\Loader,
 	\Bitrix\Main\UserTable,
@@ -195,6 +196,48 @@ class Im
 		return self::hideFromRecent($chatId);
 	}
 
+	/**
+	 * Drops the IM open-lines counter for $chatId on the listed users via a
+	 * `chatUnread` push with empty `recentConfig.sections`.
+	 *
+	 * @param int $chatId
+	 * @param int[] $userIds
+	 */
+	public static function clearOpenLineCounter(int $chatId, array $userIds): void
+	{
+		$userIds = array_values(array_unique(array_filter(array_map('intval', $userIds))));
+		if ($chatId <= 0 || empty($userIds) || !Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		// `lines=true` routes the legacy handler in im/install/js/im/common.js to
+		// `linesDetailCounter`; `muted=true` makes the same legacy handler resolve
+		// counter to 0 (without it, `counter=0` is treated as `1`). On the v2 client
+		// the empty `recentConfig.sections` is what actually drops the entry, and
+		// `isMuted=true` only excludes the item from `getCounterByRecentType` —
+		// matching our intent.
+		\Bitrix\Pull\Event::add($userIds, [
+			'module_id' => 'im',
+			'command' => 'chatUnread',
+			'params' => [
+				'chatId' => $chatId,
+				'dialogId' => 'chat' . $chatId,
+				'counter' => 0,
+				'active' => false,
+				'muted' => true,
+				'unread' => false,
+				'markedId' => 0,
+				'parentChatId' => 0,
+				'lines' => true,
+				'recentConfig' => [
+					'chatId' => $chatId,
+					'sections' => [],
+				],
+			],
+		]);
+	}
+
 	public static function hideFromRecent($chatId, bool $sendPull = true)
 	{
 		if (!Loader::includeModule('im'))
@@ -220,7 +263,7 @@ class Im
 
 			if (
 				$sendPull
-				&& !\Bitrix\Im\User::getInstance($recent['USER_ID'])->isConnector()
+				&& !UserV2::getInstance((int)$recent['USER_ID'])->isConnector()
 			)
 			{
 				$pushList[] = $recent['USER_ID'];

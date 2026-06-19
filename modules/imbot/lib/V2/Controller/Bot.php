@@ -18,7 +18,14 @@ use Bitrix\Rest\HandlerHelper;
 
 class Bot extends BotController
 {
-	private const BOT_LIMIT_DEFAULT = 100;
+	private const BOT_TOKEN_MAX_LENGTH = 40;
+
+	private const APPLICATION_TOKEN_MAX_LENGTH = 50;
+
+	private static function applicationTokenPrefix(string $clientId): string
+	{
+		return mb_substr($clientId, 0, self::APPLICATION_TOKEN_MAX_LENGTH);
+	}
 
 	protected function processBeforeAction(Action $action): bool
 	{
@@ -124,19 +131,6 @@ class Bot extends BotController
 			$this->addError(new BotError(BotError::CODE_ALREADY_TAKEN));
 
 			return null;
-		}
-
-		if (Loader::includeModule('bitrix24'))
-		{
-			$appBotCount = \Bitrix\Im\Model\BotTable::getCount(['=APP_ID' => $clientId]);
-			$limit = (int)(\Bitrix\Bitrix24\Feature::getVariable('imbot_rest_register_limit') ?: self::BOT_LIMIT_DEFAULT);
-
-			if ($appBotCount >= $limit)
-			{
-				$this->addError(new BotError(BotError::LIMIT_EXCEEDED));
-
-				return null;
-			}
 		}
 
 		$botType = BotType::fromRestName($type);
@@ -299,6 +293,29 @@ class Bot extends BotController
 			$botUpdateFields['EVENT_MODE'] = mb_strtoupper($normalizedMode);
 		}
 
+		$rawNewToken = $fields['botToken'] ?? $fields['BOT_TOKEN'] ?? null;
+		if ($rawNewToken !== null && trim((string)$rawNewToken) !== '')
+		{
+			$newToken = trim((string)$rawNewToken);
+			if (mb_strlen($newToken) > self::BOT_TOKEN_MAX_LENGTH)
+			{
+				$this->addError(new BotError(BotError::TOKEN_INVALID_LENGTH));
+
+				return null;
+			}
+
+			$newClientId = self::buildCustomClientId($newToken);
+			if (
+				$newClientId !== $clientId
+				&& !$this->rotateBotToken($botId, $clientId, $newClientId)
+			)
+			{
+				return null;
+			}
+
+			$clientId = $this->clientId;
+		}
+
 		if (!empty($botUpdateFields))
 		{
 			\Bitrix\Im\Bot::update(
@@ -316,6 +333,7 @@ class Bot extends BotController
 			$methods = $this->prepareWebhookUrl($fields['webhookUrl']);
 			if ($methods !== null)
 			{
+				self::unbindV2RestEvents($botId, $clientId);
 				$this->bindV2RestEvents($restServer, $botId, $methods, $clientId);
 			}
 		}
@@ -514,35 +532,125 @@ class Bot extends BotController
 		}
 	}
 
-	public static function unbindV2RestEvents(int $restAppId): void
+	public static function unbindV2RestEvents(int $botId, string $applicationToken): void
 	{
 		if (!Loader::includeModule('rest'))
 		{
 			return;
 		}
 
-		$v2Events = [
-			'ONIMBOTV2MESSAGEADD',
-			'ONIMBOTV2MESSAGEUPDATE',
-			'ONIMBOTV2MESSAGEDELETE',
-			'ONIMBOTV2JOINCHAT',
-			'ONIMBOTV2DELETE',
-			'ONIMBOTV2CONTEXTGET',
-			'ONIMBOTV2COMMANDADD',
-			'ONIMBOTV2REACTIONCHANGE',
-		];
-
-		foreach ($v2Events as $eventName)
+		if ($botId <= 0 || $applicationToken === '')
 		{
-			$res = \Bitrix\Rest\EventTable::getList([
-				'filter' => ['=EVENT_NAME' => $eventName, '=APP_ID' => $restAppId],
+			return;
+		}
+
+		$siblings = \Bitrix\Im\Model\BotTable::getCount([
+			'=APP_ID' => $applicationToken,
+			'!=BOT_ID' => $botId,
+		]);
+		if ($siblings > 0)
+		{
+			return;
+		}
+
+		$tokenPrefix = self::applicationTokenPrefix($applicationToken);
+
+		$rows = \Bitrix\Rest\EventTable::getList([
+			'filter' => [
+				'%=EVENT_NAME' => 'ONIMBOTV2%',
+				'=APPLICATION_TOKEN' => $tokenPrefix,
+			],
+			'select' => ['ID'],
+		]);
+		while ($row = $rows->fetch())
+		{
+			\Bitrix\Rest\EventTable::delete($row['ID']);
+		}
+	}
+
+	private function rotateBotToken(int $botId, string $oldClientId, string $newClientId): bool
+	{
+		if (!str_starts_with($oldClientId, \Bitrix\Im\Bot::WEBHOOK_CLIENT_ID_PREFIX))
+		{
+			$this->addError(new BotError(BotError::TOKEN_ROTATION_FAILED));
+
+			return false;
+		}
+
+		$isExists = \Bitrix\Im\Model\BotTable::getList([
+			'filter' => ['=APP_ID' => $newClientId, '!=BOT_ID' => $botId],
+			'select' => ['BOT_ID'],
+			'limit' => 1,
+		])->fetch();
+		if ($isExists)
+		{
+			$this->addError(new BotError(BotError::TOKEN_ROTATION_FAILED));
+
+			return false;
+		}
+
+		$connection = \Bitrix\Main\Application::getConnection();
+		$connection->startTransaction();
+		try
+		{
+			\Bitrix\Im\Model\BotTable::update($botId, ['APP_ID' => $newClientId]);
+
+			$commandRows = \Bitrix\Im\Model\CommandTable::getList([
+				'filter' => ['=BOT_ID' => $botId, '=APP_ID' => $oldClientId],
 				'select' => ['ID'],
 			]);
-			while ($row = $res->fetch())
+			$commandsTouched = false;
+			while ($row = $commandRows->fetch())
 			{
-				\Bitrix\Rest\EventTable::delete($row['ID']);
+				\Bitrix\Im\Model\CommandTable::update($row['ID'], ['APP_ID' => $newClientId]);
+				$commandsTouched = true;
 			}
+			if ($commandsTouched)
+			{
+				\Bitrix\Main\Data\Cache::createInstance()->cleanDir(\Bitrix\Im\Command::CACHE_PATH);
+			}
+
+			$appRows = \Bitrix\Im\Model\AppTable::getList([
+				'filter' => ['=BOT_ID' => $botId, '=APP_ID' => $oldClientId],
+				'select' => ['ID'],
+			]);
+			$appsTouched = false;
+			while ($row = $appRows->fetch())
+			{
+				\Bitrix\Im\Model\AppTable::update($row['ID'], ['APP_ID' => $newClientId]);
+				$appsTouched = true;
+			}
+			if ($appsTouched)
+			{
+				\Bitrix\Main\Data\Cache::createInstance()->cleanDir(\Bitrix\Im\App::CACHE_PATH);
+			}
+
+			$oldPrefix = self::applicationTokenPrefix($oldClientId);
+			$newPrefix = self::applicationTokenPrefix($newClientId);
+			if ($oldPrefix !== $newPrefix)
+			{
+				$rows = \Bitrix\Rest\EventTable::getList([
+					'filter' => ['%=EVENT_NAME' => 'ONIMBOTV2%', '=APPLICATION_TOKEN' => $oldPrefix],
+					'select' => ['ID'],
+				]);
+				while ($row = $rows->fetch())
+				{
+					\Bitrix\Rest\EventTable::update($row['ID'], ['APPLICATION_TOKEN' => $newPrefix]);
+				}
+			}
+
+			$connection->commitTransaction();
 		}
+		catch (\Throwable $e)
+		{
+			$connection->rollbackTransaction();
+			throw $e;
+		}
+
+		$this->clientId = $newClientId;
+		BotData::cleanCache($botId);
+
+		return true;
 	}
 
 	/**

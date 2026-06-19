@@ -754,6 +754,23 @@ class ListsDataManager extends DataManager
 	}
 
 	/**
+	 * One-shot agent wrapper for self::updateIblockRights.
+	 * Scheduled via CAgent from Config::update so rights propagation
+	 * happens in the background and doesn't block the save request.
+	 *
+	 * @param int $iblockId
+	 * @return string
+	 */
+	public static function updateIblockRightsAgent(int $iblockId): string
+	{
+		if ($iblockId > 0 && Loader::includeModule('iblock'))
+		{
+			self::updateIblockRights($iblockId);
+		}
+		return '';
+	}
+
+	/**
 	 * Returns true ic current user has rights to work with current list.
 	 *
 	 * @return bool

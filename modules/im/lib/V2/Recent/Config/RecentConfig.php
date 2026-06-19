@@ -7,7 +7,7 @@ use Bitrix\Im\V2\Message\Counter\CounterType;
 class RecentConfig
 {
 	private ?string $ownSectionName = null;
-
+	private array $composedChildSections = [];
 	public function __construct(
 		public readonly bool $useDefaultRecentSection = true,
 		public readonly bool $hasOwnRecentSection = false,
@@ -24,6 +24,21 @@ class RecentConfig
 	public function getOwnSectionName(): ?string
 	{
 		return $this->ownSectionName;
+	}
+
+	public function addComposedChildSection(string $alias, ComposedSection $section): self
+	{
+		$this->composedChildSections[$alias] = $section;
+
+		return $this;
+	}
+
+	/**
+	 * @return array<string, ComposedSection>
+	 */
+	public function getComposedChildSections(): array
+	{
+		return $this->composedChildSections;
 	}
 
 	public function setCounterType(string $counterType): self

@@ -79,7 +79,8 @@ class BotWebhookPayloadBuilder
 		$commandData = null;
 		foreach ($arParams[0] as $candidate)
 		{
-			if (($candidate['APP_ID'] ?? '') !== $appCode || ($candidate['BOT_ID'] ?? 0) <= 0)
+			$candidateAppId = (string)($candidate['APP_ID'] ?? '');
+			if (!$this->appCodesEqual($candidateAppId, $appCode) || ($candidate['BOT_ID'] ?? 0) <= 0)
 			{
 				continue;
 			}
@@ -172,8 +173,9 @@ class BotWebhookPayloadBuilder
 		}
 
 		$botData = $arParams[0];
+		$botAppId = (string)($botData['APP_ID'] ?? '');
 
-		if (($botData['APP_ID'] ?? '') !== $appCode)
+		if (!$this->appCodesEqual($botAppId, $appCode))
 		{
 			throw new BotWebhookException('No bots matched for this application', 0);
 		}
@@ -204,18 +206,42 @@ class BotWebhookPayloadBuilder
 
 	private function resolveAppCode(array $arHandler): ?string
 	{
-		if (!$arHandler['APP_CODE'])
+		if (!empty($arHandler['APP_CODE']))
 		{
-			$parts = parse_url($arHandler['EVENT_HANDLER']);
-			parse_str($parts['query'] ?? '', $query);
-			$query = array_change_key_case($query, CASE_UPPER);
-			if (!empty($query['CLIENT_ID']))
-			{
-				$arHandler['APP_CODE'] = 'custom' . $query['CLIENT_ID'];
-			}
+			return $arHandler['APP_CODE'];
 		}
 
-		return $arHandler['APP_CODE'] ?: null;
+		if (!empty($arHandler['APPLICATION_TOKEN']))
+		{
+			return $arHandler['APPLICATION_TOKEN'];
+		}
+
+		// Legacy v1 fallback
+		$parts = parse_url($arHandler['EVENT_HANDLER'] ?? '');
+		parse_str($parts['query'] ?? '', $query);
+		$query = array_change_key_case($query, CASE_UPPER);
+		if (!empty($query['CLIENT_ID']))
+		{
+			return \Bitrix\Im\Bot::WEBHOOK_CLIENT_ID_PREFIX . $query['CLIENT_ID'];
+		}
+
+		return null;
+	}
+
+	private function appCodesEqual(string $botAppId, string $appCode): bool
+	{
+		if ($appCode === '' || $botAppId === '')
+		{
+			return false;
+		}
+		if ($botAppId === $appCode)
+		{
+			return true;
+		}
+
+		return mb_strlen($appCode) === 50
+			&& mb_strlen($botAppId) > 50
+			&& str_starts_with($botAppId, $appCode);
 	}
 
 	private function resolveBots(array $botList, string $appCode, int $appId): array
@@ -223,7 +249,8 @@ class BotWebhookPayloadBuilder
 		$bots = [];
 		foreach ($botList as $botData)
 		{
-			if ($botData['APP_ID'] !== $appCode)
+			$botAppId = (string)($botData['APP_ID'] ?? '');
+			if (!$this->appCodesEqual($botAppId, $appCode))
 			{
 				continue;
 			}
