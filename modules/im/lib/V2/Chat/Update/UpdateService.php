@@ -5,6 +5,8 @@ namespace Bitrix\Im\V2\Chat\Update;
 use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Converter;
+use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
+use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Entity\File\ChatAvatar;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
@@ -62,6 +64,7 @@ class UpdateService
 		;
 
 		$this->sendPushUpdateChat();
+		$this->markCopilotTitleAsCustom();
 		$this->compareAnalyticsData($prevAnalyticsData);
 
 		ChatAnalytics::unblockSingleUserEventsByChat($this->chat);
@@ -270,6 +273,14 @@ class UpdateService
 		}
 	}
 
+	protected function markCopilotTitleAsCustom(): void
+	{
+		if ($this->updateFields->getTitle() !== null && $this->chat instanceof CopilotChat)
+		{
+			(new CopilotTitle($this->chat->getChatId()))->markAsCustom();
+		}
+	}
+
 	protected function getArrayToSave(): array
 	{
 		$fields = $this->filterFieldsByDifference($this->updateFields->getArrayToSave());
@@ -313,7 +324,8 @@ class UpdateService
 			$diff('manageUI') ||
 			$diff('manageUsersAdd') ||
 			$diff('manageUsersDelete') ||
-			$diff('manageMessages')
+			$diff('manageMessages') ||
+			$diff('manageGuestInvites')
 		)
 		{
 			$analytics->addEditPermissions();
@@ -330,6 +342,7 @@ class UpdateService
 			'manageUsersAdd' => $this->chat->getManageUsersAdd(),
 			'manageUsersDelete' => $this->chat->getManageUsersDelete(),
 			'manageMessages' => $this->chat->getManageMessages(),
+			'manageGuestInvites' => $this->chat->getManageGuestInvites(),
 		];
 	}
 }

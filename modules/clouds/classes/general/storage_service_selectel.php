@@ -44,13 +44,14 @@ class CCloudStorageService_Selectel extends CCloudStorageService_OpenStackStorag
 			<tr id="SETTINGS_3_' . $htmlID . '" style="display:' . $display . '" class="settings-tr">
 				<td>' . GetMessage('CLO_STORAGE_SELECTEL_EDIT_MIGRATION') . ':</td>
 				<td><input type="checkbox" name="SETTINGS[' . $htmlID . '][MIGRATE_TO]" id="' . $htmlID . '_MIGRATE" value="generic_s3" onclick="
-					BX(\'' . $htmlID . 'INP_HOST\').value = this.checked ? \'s3.storage.selcloud.ru\' : \'' . htmlspecialcharsbx($arSettings['HOST']) . '\';
+					BX(\'SETTINGS_0_' . $htmlID . '\').style.display = this.checked ? \'none\' : \'\';
 					BX(\'SETTINGS_1_' . $htmlID . '\').style.display = this.checked ? \'none\' : \'\';
 					BX(\'SETTINGS_2_' . $htmlID . '\').style.display = this.checked ? \'none\' : \'\';
 					BX(\'NSETTINGS_4_' . $htmlID . '\').style.display = this.checked ? \'\' : \'none\';
 					BX(\'NSETTINGS_5_' . $htmlID . '\').style.display = this.checked ? \'\' : \'none\';
 					BX(\'NSETTINGS_6_' . $htmlID . '\').style.display = this.checked ? \'\' : \'none\';
 					BX(\'NSETTINGS_7_' . $htmlID . '\').style.display = this.checked ? \'\' : \'none\';
+					BX(\'NSETTINGS_8_' . $htmlID . '\').style.display = this.checked ? \'\' : \'none\';
 				"></td>
 			</tr>
 			<tr id="NSETTINGS_4_' . $htmlID . '" style="display:none" class="settings-tr">
@@ -82,6 +83,16 @@ class CCloudStorageService_Selectel extends CCloudStorageService_OpenStackStorag
 		if (!$isNew)
 		{
 			$result .= '
+			<tr id="NSETTINGS_8_' . $htmlID . '" style="display:none" class="settings-tr adm-detail-required-field">
+				<td>' . GetMessage('CLO_STORAGE_EDIT_LOCATION') . ':</td>
+				<td><select name="SETTINGS[' . $htmlID . '][NEW_LOCATION]">
+			';
+			foreach (CCloudStorage::GetServiceLocationList('selectel_s3_storage') as $LOCATION_ID => $LOCATION_NAME)
+			{
+				$result .= '<option value="' . htmlspecialcharsbx($LOCATION_ID) . '">' . htmlspecialcharsEx($LOCATION_NAME) . '</option>';
+			}
+			$result .= '</select></td>
+			</tr>
 			<tr id="NSETTINGS_5_' . $htmlID . '" style="display:none" class="settings-tr adm-detail-required-field">
 				<td>' . GetMessage('CLO_STORAGE_S3_EDIT_ACCESS_KEY') . ':</td>
 				<td><input type="text" size="55" name="SETTINGS[' . $htmlID . '][ACCESS_KEY]" id="' . $htmlID . 'INP_ACCESS_KEY" value="' . htmlspecialcharsbx($arSettings['ACCESS_KEY']) . '" ' . ($arBucket['READ_ONLY'] === 'Y' ? '"disabled"' : '') . '></td>

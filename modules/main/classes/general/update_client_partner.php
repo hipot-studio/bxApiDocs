@@ -1882,7 +1882,9 @@ class CUpdateClientPartner
 
 		$errorMessage = "";
 
+		$updater->beforeIncludeUpdaterFile();
 		include($path);
+		$updater->afterIncludeUpdaterFile();
 
 		if ($errorMessage <> '')
 			$strError .= $errorMessage;

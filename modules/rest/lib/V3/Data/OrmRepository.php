@@ -196,6 +196,7 @@ class OrmRepository extends Repository
 	{
 		/** @var Dto $dto */
 		$dto = $dtoClass::create();
+		$dtoFields = $dto->getFields();
 
 		foreach ($object->collectValues() as $key => $value)
 		{
@@ -210,6 +211,14 @@ class OrmRepository extends Repository
 				continue;
 			}
 			$dtoProperty = self::mapOrmFieldToDtoProperty($key);
+			if ($value !== null && isset($dtoFields[$dtoProperty]))
+			{
+				$propertyType = $dtoFields[$dtoProperty]->getPropertyType();
+				if (is_subclass_of($propertyType, \BackedEnum::class))
+				{
+					$value = self::coerceOrmValueToEnum($propertyType, $value, $dtoProperty);
+				}
+			}
 			$dto->{$dtoProperty} = $value;
 		}
 
@@ -340,6 +349,23 @@ class OrmRepository extends Repository
 					$ormFieldName,
 				);
 			}
+
+			// backed enum → scalar
+			if ($operand instanceof \BackedEnum)
+			{
+				$operand = $operand->value;
+			}
+			elseif (is_array($operand))
+			{
+				foreach ($operand as &$item)
+				{
+					if ($item instanceof \BackedEnum)
+					{
+						$item = $item->value;
+					}
+				}
+				unset($item);
+			}
 		}
 
 		return new \Bitrix\Main\ORM\Query\Filter\Condition(
@@ -453,6 +479,77 @@ class OrmRepository extends Repository
 	protected static function mapOrmFieldToDtoProperty(string $field): string
 	{
 		return StringHelper::snake2camel($field, true);
+	}
+
+	/**
+	 * Coerce a raw ORM value into the target BackedEnum, failing loud on bad data.
+	 *
+	 * Three behaviours, in order:
+	 *  1. Value is already an instance of the target enum → return as-is.
+	 *     ORM normally yields scalars from the column, but custom field handlers
+	 *     can pre-hydrate the enum; without this guard tryFrom() would TypeError
+	 *     because its signature accepts only `int|string`.
+	 *  2. Value matches the enum's backing type → tryFrom() it. If tryFrom returns
+	 *     null (stored value does not correspond to any case → likely corrupt or
+	 *     stale data after an enum-case removal), throw a {@see \UnexpectedValueException}
+	 *     instead of silently substituting null. Silent null would either mask
+	 *     data corruption on nullable fields or blow up later on non-nullable
+	 *     ones — both worse than failing fast here with a contextful message.
+	 *  3. Value does not match the backing type (e.g. non-numeric string in an
+	 *     int-backed column) → also throw, with the same reasoning. Letting
+	 *     tryFrom() raise TypeError directly would surface a generic engine
+	 *     error rather than the actionable "column X holds bad data" message.
+	 *
+	 * @param class-string<\BackedEnum> $enumClass
+	 */
+	private static function coerceOrmValueToEnum(string $enumClass, mixed $value, string $dtoProperty): \BackedEnum
+	{
+		if ($value instanceof $enumClass)
+		{
+			return $value;
+		}
+
+		$backingType = null;
+		try
+		{
+			$backingType = (new ReflectionClass($enumClass))->isEnum()
+				? (new \ReflectionEnum($enumClass))->getBackingType()?->getName()
+				: null;
+		}
+		catch (\ReflectionException)
+		{
+			// Fall through to the type-mismatch path below — failing here would
+			// hide the underlying schema issue (enum class disappeared from the
+			// process).
+		}
+
+		// Match PHP's BackedEnum::tryFrom() acceptance contract exactly: it
+		// raises TypeError only for non-numeric strings on int-backed enums;
+		// every other scalar combination (int into str-backed, numeric string
+		// into int-backed) is accepted and resolved or returns null.
+		$assignable = match ($backingType)
+		{
+			'int' => is_int($value) || (is_string($value) && is_numeric($value)),
+			'string' => is_string($value) || is_int($value),
+			default => false,
+		};
+
+		if ($assignable)
+		{
+			$enumValue = $enumClass::tryFrom($value);
+			if ($enumValue !== null)
+			{
+				return $enumValue;
+			}
+		}
+
+		throw new \UnexpectedValueException(sprintf(
+			'ORM value %s for DTO property "%s" cannot be mapped to enum %s (backing type: %s). Storage likely holds stale or corrupt data; investigate the column instead of swallowing the mismatch.',
+			var_export($value, true),
+			$dtoProperty,
+			$enumClass,
+			$backingType ?? 'unknown',
+		));
 	}
 
 	public static function mapDtoPropertyToOrmField(string $property): string

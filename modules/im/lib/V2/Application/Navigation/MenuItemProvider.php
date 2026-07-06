@@ -6,6 +6,7 @@ namespace Bitrix\Im\V2\Application\Navigation;
 
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\Im\V2\Marketplace\Application;
 use Bitrix\Im\V2\Marketplace\Placement;
@@ -39,6 +40,7 @@ class MenuItemProvider
 	protected Features $applicationFeatures;
 
 	protected array $phoneSettings;
+	private const GUEST_ALLOWED_MENU_ITEMS = ['chat', 'notification', 'settings'];
 
 	public function __construct()
 	{
@@ -52,6 +54,11 @@ class MenuItemProvider
 	public function getMenuItems(): MenuItemCollection
 	{
 		$collection = new MenuItemCollection($this->getDefaultMenuItems());
+
+		if ($this->isGuest())
+		{
+			return $this->filterMenuItemsForGuest($collection);
+		}
 
 		$this->fillExternalChatsItems($collection);
 
@@ -174,6 +181,29 @@ class MenuItemProvider
 		}
 
 		return $menuItems;
+	}
+
+	/**
+	 * Filters menu items for guest user, keeping only allowed items.
+	 */
+	private function filterMenuItemsForGuest(MenuItemCollection $collection): MenuItemCollection
+	{
+		$filtered = new MenuItemCollection();
+
+		foreach ($collection as $item)
+		{
+			if (in_array($item->getId(), self::GUEST_ALLOWED_MENU_ITEMS, true))
+			{
+				$filtered->add($item);
+			}
+		}
+
+		return $filtered;
+	}
+
+	private function isGuest(): bool
+	{
+		return $this->getContext()->getUser() instanceof UserGuest;
 	}
 
 	protected function fillExternalChatsItems(MenuItemCollection $collection): void

@@ -3,6 +3,7 @@
 namespace Bitrix\Baas\UseCase\External\Entity;
 
 use \Bitrix\Baas;
+use Bitrix\Main\Web\Json;
 
 class Client
 {
@@ -61,6 +62,16 @@ class Client
 
 	public function turnOff(): static
 	{
+		\CEventLog::Log(
+			\CEventLog::SEVERITY_INFO,
+			'BAAS_TURN_OFF',
+			'baas',
+			'',
+			Json::encode([
+				'time' => date("Y-m-d H:i:s"),
+			]),
+		);
+
 		$this->getConfigs()->turnOff();
 
 		return $this;

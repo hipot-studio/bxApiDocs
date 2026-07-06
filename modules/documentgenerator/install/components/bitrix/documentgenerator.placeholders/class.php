@@ -166,7 +166,7 @@ class DocumentsPlaceholderComponent extends CBitrixComponent
 					'columns' => [
 						'PLACEHOLDER' => '{'.htmlspecialcharsbx($placeholder).'}',
 						//'TITLE' => htmlspecialcharsbx($field['TITLE']),
-						'COPY' => '<a class="docgen-placeholder-copy" onclick="BX.DocumentGenerator.Placeholders.Copy(this, \''.CUtil::JSEscape($placeholder).'\');">'.Loc::getMessage('DOCGEN_PLACEHOLDERS_COPY_ACTION_TITLE').'</a>',
+						'COPY' => '<a class="docgen-placeholder-copy" onclick="BX.DocumentGenerator.Placeholders.Copy(this, \''.htmlspecialcharsbx(CUtil::JSEscape($placeholder)).'\');">'.Loc::getMessage('DOCGEN_PLACEHOLDERS_COPY_ACTION_TITLE').'</a>',
 						'TITLE' => implode(self::TITLE_CHAIN_SEPARATOR, array_map('htmlspecialcharsbx', $field['GROUP'])),
 						'VALUE' => htmlspecialcharsbx($field['VALUE']),
 						'TYPE' => $this->getTypeName($field['TYPE']),

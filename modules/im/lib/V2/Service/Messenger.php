@@ -219,10 +219,10 @@ class Messenger
 	{
 		try
 		{
-			$taskService = new TaskService();
+			$taskService = (new TaskService())->withContext($this->getContext());
 			if ($messageId)
 			{
-				$message = new Message($messageId);
+				$message = (new Message($messageId))->withContext($this->getContext());
 				$chat = $message->getChat();
 			}
 			else
@@ -231,6 +231,7 @@ class Messenger
 				$chat = Chat::getInstance($chatId);
 			}
 
+			$chat = $chat->withContext($this->getContext());
 			if (
 				!$chat->checkAccess()->isSuccess()
 				|| !$chat->canDo(Action::CreateTask)

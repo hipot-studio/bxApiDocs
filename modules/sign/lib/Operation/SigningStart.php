@@ -5,7 +5,7 @@ namespace Bitrix\Sign\Operation;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Sign\Contract;
-use Bitrix\Sign\Debug\Logger;
+use Psr\Log\LoggerInterface;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
 use Bitrix\Sign\Item\Api\Document\Signing\StartRequest;
 use Bitrix\Sign\Item\Document;
@@ -25,13 +25,13 @@ class SigningStart implements Contract\Operation
 		private ?DocumentRepository $documentRepository = null,
 		private ?EventHandlerService $eventHandlerService = null,
 		private ?LegalLogService $legalLogService = null,
-		private ?Logger $logger = null,
+		private ?LoggerInterface $logger = null,
 	)
 	{
 		$this->documentRepository ??= Container::instance()->getDocumentRepository();
 		$this->eventHandlerService ??= Container::instance()->getEventHandlerService();
 		$this->legalLogService ??= Container::instance()->getLegalLogService();
-		$this->logger = $logger ?? Logger::getInstance();
+		$this->logger = $logger ?? Container::instance()->getLogger('Operation');
 	}
 
 	public function launch(): Main\Result

@@ -17,7 +17,6 @@ use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
 use Bitrix\Sign\Config\Feature;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Connector\Crm\MyCompany;
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
 use Bitrix\Sign\Item\Document\Template;
 use Bitrix\Sign\Item\Document\TemplateCollection;
@@ -912,7 +911,7 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 			$message .= "{$error->getMessage()} ({$error->getCode()})\n";
 		}
 
-		Logger::getInstance()->alert($message);
+		Container::instance()->getLogger('Component')->alert($message);
 	}
 
 	private function getEntitySelectorParamsByType(string $entityType): array

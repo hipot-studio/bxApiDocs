@@ -226,4 +226,27 @@ class VendorConfig
 			8 => ['name' => '8.png', 'width' => 512, 'height' => 512],
 		];
 	}
+
+	public static function getUnstoppableOptimist(): array
+	{
+		return [
+			1 => ['name' => '1.png', 'width' => 512, 'height' => 512],
+			2 => ['name' => '2.png', 'width' => 512, 'height' => 512],
+			3 => ['name' => '3.png', 'width' => 512, 'height' => 512],
+			4 => ['name' => '4.png', 'width' => 512, 'height' => 512],
+			5 => ['name' => '5.png', 'width' => 512, 'height' => 512],
+			6 => ['name' => '6.png', 'width' => 512, 'height' => 512],
+			7 => ['name' => '7.png', 'width' => 512, 'height' => 512],
+			8 => ['name' => '8.png', 'width' => 512, 'height' => 512],
+			9 => ['name' => '9.png', 'width' => 512, 'height' => 512],
+			10 => ['name' => '10.png', 'width' => 512, 'height' => 512],
+			11 => ['name' => '11.png', 'width' => 512, 'height' => 512],
+			12 => ['name' => '12.png', 'width' => 512, 'height' => 512],
+			13 => ['name' => '13.png', 'width' => 512, 'height' => 512],
+			14 => ['name' => '14.png', 'width' => 512, 'height' => 512],
+			15 => ['name' => '15.png', 'width' => 512, 'height' => 512],
+			16 => ['name' => '16.png', 'width' => 512, 'height' => 512],
+			17 => ['name' => '17.png', 'width' => 512, 'height' => 512],
+		];
+	}
 }

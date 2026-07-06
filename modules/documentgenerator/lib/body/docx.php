@@ -81,15 +81,15 @@ class Docx extends ZipDocument
 			);
 		}
 
-		if($this->open() === true)
+		if ($this->open() === true)
 		{
 			$this->fillInnerDocuments();
-			foreach($this->innerDocuments as $path => $data)
+			foreach ($this->innerDocuments as $path => $data)
 			{
 				/** @var DocxXml $document */
 				$document = $data['document'];
 				$documentResult = $document->process();
-				if($documentResult->isSuccess())
+				if ($documentResult->isSuccess())
 				{
 					$documentData = $documentResult->getData();
 					$this->addContentToZip($document->getContent(), $path);
@@ -119,10 +119,10 @@ class Docx extends ZipDocument
 	{
 		$placeholders = [];
 
-		if($this->isFileProcessable() && $this->open() === true)
+		if ($this->isFileProcessable() && $this->open() === true)
 		{
 			$this->fillInnerDocuments();
-			foreach($this->innerDocuments as $path => $data)
+			foreach ($this->innerDocuments as $path => $data)
 			{
 				$document = $data['document'];
 				/** @var DocxXml $document */
@@ -138,10 +138,10 @@ class Docx extends ZipDocument
 	 */
 	public function normalizeContent(): void
 	{
-		if($this->isFileProcessable() && $this->open() === true)
+		if ($this->isFileProcessable() && $this->open() === true)
 		{
 			$this->fillInnerDocuments();
-			foreach($this->innerDocuments as $path => $data)
+			foreach ($this->innerDocuments as $path => $data)
 			{
 				/** @var DocxXml $document */
 				$document = $data['document'];
@@ -154,7 +154,76 @@ class Docx extends ZipDocument
 	}
 
 	/**
-	 * @return DocxXml
+	 * @return Data\DocxNodesDto[]|null
+	 */
+	public function getTextNodes(): ?array
+	{
+		if (!$this->isFileProcessable() || $this->open() !== true)
+		{
+			return null;
+		}
+
+		$this->fillInnerDocuments();
+
+		$textNodes = [];
+		foreach ($this->innerDocuments as $path => $innerDocument)
+		{
+			/** @var $document ?DocxXml */
+			$document = $innerDocument['document'] ?? null;
+			if (!isset($document))
+			{
+				continue;
+			}
+
+			$document->normalizeContent();
+
+			$docsNodes = new Data\DocxNodesDto();
+			$docsNodes->documentPath = $path;
+			$docsNodes->nodes = $document->findTextNodes();
+
+			$textNodes[] = $docsNodes;
+		}
+
+		return $textNodes;
+	}
+
+	/**
+	 * @param Data\DocxNodesDto[] $nodes
+	 * @return bool
+	 */
+	public function setNodes(array $nodes): bool
+	{
+		if (!$this->isFileProcessable() || $this->open() !== true)
+		{
+			return false;
+		}
+
+		$this->fillInnerDocuments();
+
+		foreach ($nodes as $documentNodes)
+		{
+			$path = $documentNodes->documentPath;
+
+			$innerDocument = $this->innerDocuments[$path] ?? null;
+			if (!isset($innerDocument))
+			{
+				continue;
+			}
+
+			/** @var $document ?DocxXml */
+			$document = $innerDocument['document'] ?? null;
+			if (!isset($document))
+			{
+				continue;
+			}
+			$document->setNodes($documentNodes->nodes);
+		}
+
+		return true;
+	}
+
+	/**
+	 * @return DocxXml::class
 	 */
 	protected function getXmlClassName(): string
 	{
@@ -166,39 +235,58 @@ class Docx extends ZipDocument
 		$xmlClassName = $this->getXmlClassName();
 		$this->innerDocuments[static::PATH_DOCUMENT] = [
 			'relationships' => $this->parseRelationships(static::PATH_DOCUMENT),
-			'document' => (new $xmlClassName($this->zip->getFromName(static::PATH_DOCUMENT)))->setValues($this->values)->setFields($this->fields),
+			'document' => (new $xmlClassName($this->zip->getFromName(static::PATH_DOCUMENT)))
+				->setValues($this->values)
+				->setFields($this->fields)
+			,
 		];
-		if(isset($this->innerDocuments[static::PATH_DOCUMENT]['relationships']['data'][static::REL_TYPE_FOOTER]))
+
+		$footerRelationships =
+			$this->innerDocuments[static::PATH_DOCUMENT]['relationships']['data'][static::REL_TYPE_FOOTER];
+		if (isset($footerRelationships))
 		{
-			foreach($this->innerDocuments[static::PATH_DOCUMENT]['relationships']['data'][static::REL_TYPE_FOOTER] as $relationship)
+			foreach ($footerRelationships as $relationship)
 			{
-				$documentPath = 'word/'.$relationship['target'];
+				$documentPath = 'word/' . $relationship['target'];
 				$this->innerDocuments[$documentPath] = [
 					'relationships' => $this->parseRelationships($documentPath),
-					'document' => (new $xmlClassName($this->zip->getFromName($documentPath)))->setValues($this->values)->setFields($this->fields),
+					'document' => (new $xmlClassName($this->zip->getFromName($documentPath)))
+						->setValues($this->values)
+						->setFields($this->fields)
+					,
 				];
 			}
 		}
-		if(isset($this->innerDocuments[static::PATH_DOCUMENT]['relationships']['data'][static::REL_TYPE_HEADER]))
+
+		$headerRelationships =
+			$this->innerDocuments[static::PATH_DOCUMENT]['relationships']['data'][static::REL_TYPE_HEADER];
+		if (isset($headerRelationships))
 		{
-			foreach($this->innerDocuments[static::PATH_DOCUMENT]['relationships']['data'][static::REL_TYPE_HEADER] as $relationship)
+			foreach ($headerRelationships as $relationship)
 			{
-				$documentPath = 'word/'.$relationship['target'];
+				$documentPath = 'word/' . $relationship['target'];
 				$this->innerDocuments[$documentPath] = [
 					'relationships' => $this->parseRelationships($documentPath),
-					'document' => (new $xmlClassName($this->zip->getFromName($documentPath)))->setValues($this->values)->setFields($this->fields),
+					'document' => (new $xmlClassName($this->zip->getFromName($documentPath)))
+						->setValues($this->values)
+						->setFields($this->fields)
+					,
 				];
 			}
 		}
+
 		// take only the first numbering.xml - we will add only
-		if(isset($this->innerDocuments[static::PATH_DOCUMENT]['relationships']['data'][static::REL_TYPE_NUMBERING]))
+		$numberingRelationships =
+			$this->innerDocuments[static::PATH_DOCUMENT]['relationships']['data'][static::REL_TYPE_NUMBERING];
+		if (isset($numberingRelationships))
 		{
-			foreach($this->innerDocuments[static::PATH_DOCUMENT]['relationships']['data'][static::REL_TYPE_NUMBERING] as $relationship)
+			foreach ($numberingRelationships as $relationship)
 			{
-				$this->numbering['documentPath'] = 'word/'.$relationship['target'];
+				$this->numbering['documentPath'] = 'word/' . $relationship['target'];
 				break;
 			}
 		}
+
 		$this->contentTypesDocument = new \DOMDocument();
 		try
 		{
@@ -218,7 +306,7 @@ class Docx extends ZipDocument
 	{
 		$documentPath = mb_substr($documentPath, 5);
 
-		return 'word/_rels/'.$documentPath.'.rels';
+		return 'word/_rels/' . $documentPath . '.rels';
 	}
 
 	/**
@@ -232,7 +320,7 @@ class Docx extends ZipDocument
 		$relationshipsContent = $this->zip->getFromName($relationshipPath);
 		$relationshipsData = [];
 		$relationshipsDocument = new \DOMDocument();
-		if(!empty($relationshipsContent))
+		if (!empty($relationshipsContent))
 		{
 			try
 			{
@@ -242,24 +330,24 @@ class Docx extends ZipDocument
 			{
 				Application::getInstance()->getExceptionHandler()->writeToLog($emptyArgumentError);
 			}
-			foreach($relationshipsDocument->getElementsByTagName('Relationship') as $relationship)
+			foreach ($relationshipsDocument->getElementsByTagName('Relationship') as $relationship)
 			{
 				$id = $relationship->attributes->getNamedItem('Id');
-				if($id)
+				if ($id)
 				{
 					$id = $id->value;
 				}
 				$target = $relationship->attributes->getNamedItem('Target');
-				if($target)
+				if ($target)
 				{
 					$target = $target->value;
 				}
 				$type = $relationship->attributes->getNamedItem('Type');
-				if($type)
+				if ($type)
 				{
 					$type = $type->value;
 				}
-				if($id && $target && $type)
+				if ($id && $target && $type)
 				{
 					$relationshipsData[$type][$id] = [
 						'type' => $type,
@@ -314,7 +402,7 @@ class Docx extends ZipDocument
 					/** @var \DOMElement $originalNode */
 					$originalNode = $relData[static::REL_TYPE_IMAGE][$originalImageID]['node'];
 					$image = $this->getImage($path);
-					if($image && $image->isExists() && $image->isReadable() && $originalNode->parentNode)
+					if ($image && $image->isExists() && $image->isReadable() && $originalNode->parentNode)
 					{
 						$newNode = clone $originalNode;
 						$document->importNode($newNode);
@@ -326,7 +414,7 @@ class Docx extends ZipDocument
 				}
 				if ($originalImageID)
 				{
-					$relFilesToDelete[] = 'word/'.$relData[static::REL_TYPE_IMAGE][$originalImageID]['target'];
+					$relFilesToDelete[] = 'word/' . $relData[static::REL_TYPE_IMAGE][$originalImageID]['target'];
 				}
 				if ($originalNode)
 				{
@@ -342,25 +430,33 @@ class Docx extends ZipDocument
 					$placeholder = $data['placeholder'] ?? '';
 					$modifier = static::getModifierFromPlaceholder($placeholder);
 					$modifierData = Value::parseModifier($modifier);
-					$index = (int) $modifierData[static::ARRAY_INDEX_MODIFIER];
+					$index = (int)$modifierData[static::ARRAY_INDEX_MODIFIER];
 					$value = $this->values[$fieldName];
 					$valueNameParts = explode('.', $value);
 					$name = implode('.', array_slice($valueNameParts, 2));
 					$arrayProvider = $this->values[$valueNameParts[0]];
-					$image = $this->getImage($this->printArrayValueByIndex($arrayProvider, $fieldName, $name, $index, $modifier));
+					$image = $this->getImage(
+						$this->printArrayValueByIndex(
+							$arrayProvider,
+							$fieldName,
+							$name,
+							$index,
+							$modifier
+						)
+					);
 				}
 				if ($image && $image->isExists() && $image->isReadable())
 				{
 					$originalImageID = $originalNode = false;
-					foreach($data['innerIDs'] as $imageID)
+					foreach ($data['innerIDs'] as $imageID)
 					{
 						$originalImageID = $data['originalId'][$imageID];
-						if(!isset($relData[static::REL_TYPE_IMAGE][$originalImageID]))
+						if (!isset($relData[static::REL_TYPE_IMAGE][$originalImageID]))
 						{
 							continue;
 						}
 						$originalNode = $relData[static::REL_TYPE_IMAGE][$originalImageID]['node'];
-						if(!$originalNode->parentNode)
+						if (!$originalNode->parentNode)
 						{
 							continue;
 						}
@@ -373,7 +469,7 @@ class Docx extends ZipDocument
 					}
 					if ($originalImageID)
 					{
-						$relFilesToDelete[] = 'word/'.$relData[static::REL_TYPE_IMAGE][$originalImageID]['target'];
+						$relFilesToDelete[] = 'word/' . $relData[static::REL_TYPE_IMAGE][$originalImageID]['target'];
 					}
 					if ($originalNode)
 					{
@@ -383,28 +479,28 @@ class Docx extends ZipDocument
 			}
 			if ($isDeleteImages)
 			{
-				foreach($data['innerIDs'] as $imageID)
+				foreach ($data['innerIDs'] as $imageID)
 				{
-					$relFilesToDelete[] = 'word/'.$data[static::REL_TYPE_IMAGE][$imageID]['target'];
+					$relFilesToDelete[] = 'word/' . $data[static::REL_TYPE_IMAGE][$imageID]['target'];
 				}
 				$originalImageID = $data['originalId'][$imageID];
-				if(isset($relData[static::REL_TYPE_IMAGE][$originalImageID]))
+				if (isset($relData[static::REL_TYPE_IMAGE][$originalImageID]))
 				{
 					$nodesToDelete[] = $relData[static::REL_TYPE_IMAGE][$originalImageID]['node'];
 				}
 			}
 		}
 		$nodesToDelete = $this->getUniqueObjects($nodesToDelete);
-		foreach($nodesToDelete as $node)
+		foreach ($nodesToDelete as $node)
 		{
 			$node->parentNode->removeChild($node);
 			$isDocumentChanged = true;
 		}
-		if($isDocumentChanged)
+		if ($isDocumentChanged)
 		{
 			$this->addContentToZip($document->saveXML(), $relationshipsData['path']);
 		}
-		foreach($relFilesToDelete as $path)
+		foreach ($relFilesToDelete as $path)
 		{
 			$this->zip->deleteName($path);
 		}
@@ -445,9 +541,21 @@ class Docx extends ZipDocument
 
 	private function getNormalizedImagePath(string $path): ?string
 	{
+		if ($path === '')
+		{
+			return null;
+		}
+
 		if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://'))
 		{
 			return $path;
+		}
+
+		// compatibility
+		/** @see \CFile::MakeFileArray() */
+		if (!file_exists($path) && file_exists($_SERVER['DOCUMENT_ROOT'] . $path))
+		{
+			$path = $_SERVER['DOCUMENT_ROOT'] . $path;
 		}
 
 		try
@@ -457,13 +565,6 @@ class Docx extends ZipDocument
 		catch (InvalidPathException)
 		{
 			return null;
-		}
-
-		// compatibility
-		/** @see \CFile::MakeFileArray() */
-		if (!file_exists($path) && file_exists($_SERVER['DOCUMENT_ROOT'] . $path))
-		{
-			$normalizedPath = $_SERVER['DOCUMENT_ROOT'] . $path;
 		}
 
 		$absoluteUpload = Path::convertRelativeToAbsolute(Option::get('main', 'upload_dir', 'upload'));
@@ -486,11 +587,11 @@ class Docx extends ZipDocument
 	{
 		$mimeType = $this->getMimeType($image);
 		$extension = $image->getExtension() ?: $this->getPrintableMimeTypes()[$mimeType] ?? '';
-		$newName = Random::getString(15).'.'.$extension;
-		$this->zip->addFile($image->getPhysicalPath(), 'word/media/'.$newName);
+		$newName = Random::getString(15) . '.' . $extension;
+		$this->zip->addFile($image->getPhysicalPath(), 'word/media/' . $newName);
 		$relationshipNode->removeAttribute('Target');
-		$relationshipNode->setAttribute('Target', 'media/'.$newName);
-		if(is_string($newId) && !empty($newId))
+		$relationshipNode->setAttribute('Target', 'media/' . $newName);
+		if (is_string($newId) && !empty($newId))
 		{
 			$relationshipNode->removeAttribute('Id');
 			$relationshipNode->setAttribute('Id', $newId);
@@ -506,10 +607,10 @@ class Docx extends ZipDocument
 	{
 		return [
 			'image/jpeg' => 'jpeg',
-			'image/png'  => 'png',
+			'image/png' => 'png',
 			'image/webp' => 'webp',
-			'image/bmp'  => 'bmp',
-			'image/gif'  => 'gif',
+			'image/bmp' => 'bmp',
+			'image/gif' => 'gif',
 			'application/pdf' => 'pdf',
 		];
 	}
@@ -519,7 +620,7 @@ class Docx extends ZipDocument
 		$types = $this->getPrintableMimeTypes();
 
 		$mimeType = $file->getContentType();
-		if(isset($types[$mimeType]))
+		if (isset($types[$mimeType]))
 		{
 			return $mimeType;
 		}
@@ -536,20 +637,20 @@ class Docx extends ZipDocument
 	 */
 	protected function addNumberings(array $numberingIds): void
 	{
-		if(empty($numberingIds))
+		if (empty($numberingIds))
 		{
 			return;
 		}
-		if(!$this->numbering['documentPath'])
+		if (!$this->numbering['documentPath'])
 		{
 			/** @var \DOMDocument $relationshipsDocument */
 			$relationshipsDocument = $this->innerDocuments[static::PATH_DOCUMENT]['relationships']['document'];
-			if(!$relationshipsDocument)
+			if (!$relationshipsDocument)
 			{
 				return;
 			}
 			$relationshipsNode = $relationshipsDocument->getElementsByTagName('Relationships')->item(0);
-			if(!$relationshipsNode)
+			if (!$relationshipsNode)
 			{
 				return;
 			}
@@ -560,14 +661,17 @@ class Docx extends ZipDocument
 				$relationshipsDocument,
 				$relationshipsNode
 			);
-			$this->addContentToZip($relationshipsDocument->saveXML(), $this->innerDocuments[static::PATH_DOCUMENT]['relationships']['path']);
+			$this->addContentToZip(
+				$relationshipsDocument->saveXML(),
+				$this->innerDocuments[static::PATH_DOCUMENT]['relationships']['path']
+			);
 			$this->addRecordToContentTypes([
 				'path' => '/word/numbering.xml',
 				'type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml',
 			]);
 		}
 
-		if(!$this->numbering['document'])
+		if (!$this->numbering['document'])
 		{
 			$numberingContent = $this->zip->getFromName($this->numbering['documentPath']);
 			if (empty($numberingContent))
@@ -591,82 +695,119 @@ class Docx extends ZipDocument
 		$numberingDocument = $this->numbering['document'];
 		$numberingNode = null;
 		$numberingNodes = $numberingDocument->getElementsByTagNameNS(DocxXml::getNamespaces()['w'], 'numbering');
-		if($numberingNodes)
+		if ($numberingNodes)
 		{
 			$numberingNode = $numberingNodes->item(0);
 		}
 
-		if(!$numberingNode)
+		if (!$numberingNode)
 		{
 			return;
 		}
 
-		if(!isset($this->numbering['abstractOrderedNumberingId']) || !isset($this->numbering['abstractUnorderedNumberingId']))
+		if (
+			!isset($this->numbering['abstractOrderedNumberingId'])
+			|| !isset($this->numbering['abstractUnorderedNumberingId'])
+		)
 		{
-			foreach($numberingDocument->getElementsByTagNameNS(DocxXml::getNamespaces()['w'], 'abstractNum') as $abstractNum)
+			foreach (
+				$numberingDocument->getElementsByTagNameNS(DocxXml::getNamespaces()['w'], 'abstractNum')
+				as $abstractNum
+			)
 			{
 				/** @var \DOMElement $abstractNum */
-				$abstractNumId = $abstractNum->attributes->getNamedItemNS(DocxXml::getNamespaces()['w'], 'abstractNumId');
-				if($abstractNumId === static::ABSTRACT_ORDERED_NUMBERING_ID)
+				$abstractNumId =
+					$abstractNum->attributes->getNamedItemNS(DocxXml::getNamespaces()['w'], 'abstractNumId');
+				if ($abstractNumId === static::ABSTRACT_ORDERED_NUMBERING_ID)
 				{
 					$this->numbering['abstractOrderedNumberingId'] = $abstractNumId;
 				}
-				elseif($abstractNumId === static::ABSTRACT_UNORDERED_NUMBERING_ID)
+				elseif ($abstractNumId === static::ABSTRACT_UNORDERED_NUMBERING_ID)
 				{
 					$this->numbering['abstractUnorderedNumberingId'] = $abstractNumId;
 				}
 			}
 		}
 
-		if(!isset($this->numbering['firstConcreteNumNode']))
+		if (!isset($this->numbering['firstConcreteNumNode']))
 		{
 			$numNodes = $numberingDocument->getElementsByTagNameNS(DocxXml::getNamespaces()['w'], 'num');
-			if($numNodes)
+			if ($numNodes)
 			{
 				$this->numbering['firstConcreteNumNode'] = $numNodes->item(0);
 			}
 		}
 
-		if(!isset($this->numbering['abstractOrderedNumberingId']))
+		if (!isset($this->numbering['abstractOrderedNumberingId']))
 		{
-			if($this->numbering['firstConcreteNumNode'] && $this->numbering['firstConcreteNumNode'] instanceof \DOMNode)
+			if (
+				$this->numbering['firstConcreteNumNode']
+				&& $this->numbering['firstConcreteNumNode'] instanceof \DOMNode
+			)
 			{
-				DocxXml::insertXmlBeforeNode($this->getAbstractOrderedNumberingDescription(), $numberingDocument, $this->numbering['firstConcreteNumNode']);
+				DocxXml::insertXmlBeforeNode(
+					$this->getAbstractOrderedNumberingDescription(),
+					$numberingDocument,
+					$this->numbering['firstConcreteNumNode']
+				);
 			}
 			else
-			{
-				DocxXml::appendXmlToNode($this->getAbstractOrderedNumberingDescription(), $numberingDocument, $numberingNode);
-			}
-			$this->numbering['abstractOrderedNumberingId'] = static::ABSTRACT_ORDERED_NUMBERING_ID;
-		}
-
-		if(!isset($this->numbering['abstractUnorderedNumberingId']))
-		{
-			if($this->numbering['firstConcreteNumNode'] && $this->numbering['firstConcreteNumNode'] instanceof \DOMNode)
-			{
-				DocxXml::insertXmlBeforeNode($this->getAbstractUnorderedNumberingDescription(), $numberingDocument, $this->numbering['firstConcreteNumNode']);
-			}
-			else
-			{
-				DocxXml::appendXmlToNode($this->getAbstractUnorderedNumberingDescription(), $numberingDocument, $numberingNode);
-			}
-			$this->numbering['abstractUnorderedNumberingId'] = static::ABSTRACT_UNORDERED_NUMBERING_ID;
-		}
-
-		foreach($numberingIds as $numbering)
-		{
-			if($numbering['type'] === DocxXml::NUMBERING_TYPE_ORDERED)
 			{
 				DocxXml::appendXmlToNode(
-					'<w:num w:numId="'.$numbering['id'].'"><w:abstractNumId w:val="'.$this->numbering['abstractOrderedNumberingId'].'" /></w:num>',
+					$this->getAbstractOrderedNumberingDescription(),
 					$numberingDocument,
 					$numberingNode
 				);
 			}
-			elseif($numbering['type'] === DocxXml::NUMBERING_TYPE_UNORDERED)
+			$this->numbering['abstractOrderedNumberingId'] = static::ABSTRACT_ORDERED_NUMBERING_ID;
+		}
+
+		if (!isset($this->numbering['abstractUnorderedNumberingId']))
+		{
+			if (
+				$this->numbering['firstConcreteNumNode']
+				&& $this->numbering['firstConcreteNumNode'] instanceof \DOMNode
+			)
+			{
+				DocxXml::insertXmlBeforeNode(
+					$this->getAbstractUnorderedNumberingDescription(),
+					$numberingDocument,
+					$this->numbering['firstConcreteNumNode']
+				);
+			}
+			else
 			{
 				DocxXml::appendXmlToNode(
-					'<w:num w:numId="'.$numbering['id'].'"><w:abstractNumId w:val="'.$this->numbering['abstractUnorderedNumberingId'].'" /></w:num>',
+					$this->getAbstractUnorderedNumberingDescription(),
+					$numberingDocument,
+					$numberingNode
+				);
+			}
+			$this->numbering['abstractUnorderedNumberingId'] = static::ABSTRACT_UNORDERED_NUMBERING_ID;
+		}
+
+		foreach ($numberingIds as $numbering)
+		{
+			if ($numbering['type'] === DocxXml::NUMBERING_TYPE_ORDERED)
+			{
+				DocxXml::appendXmlToNode(
+					'<w:num w:numId="'
+					. $numbering['id']
+					. '"><w:abstractNumId w:val="'
+					. $this->numbering['abstractOrderedNumberingId']
+					. '" /></w:num>',
+					$numberingDocument,
+					$numberingNode
+				);
+			}
+			elseif ($numbering['type'] === DocxXml::NUMBERING_TYPE_UNORDERED)
+			{
+				DocxXml::appendXmlToNode(
+					'<w:num w:numId="'
+					. $numbering['id']
+					. '"><w:abstractNumId w:val="'
+					. $this->numbering['abstractUnorderedNumberingId']
+					. '" /></w:num>',
 					$numberingDocument,
 					$numberingNode
 				);
@@ -681,9 +822,11 @@ class Docx extends ZipDocument
 	 */
 	protected function getEmptyNumberingXmlContent(): string
 	{
-		return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'.
-			'<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml">'.
-		'</w:numbering>';
+		return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+			.
+			'<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml">'
+			.
+			'</w:numbering>';
 	}
 
 	/**
@@ -692,25 +835,25 @@ class Docx extends ZipDocument
 	 */
 	protected function getAbstractOrderedNumberingDescription(string $abstractNumberId = null): string
 	{
-		if(!$abstractNumberId)
+		if (!$abstractNumberId)
 		{
 			$abstractNumberId = static::ABSTRACT_ORDERED_NUMBERING_ID;
 		}
 
-		return '<w:abstractNum w:abstractNumId="'.$abstractNumberId.'">'.
-        '<w:lvl w:ilvl="0">'.
-            '<w:start w:val="1" />'.
-            '<w:numFmt w:val="decimal" />'.
-            '<w:lvlText w:val="%1." />'.
-            '<w:lvlJc w:val="left" />'.
-            '<w:pPr>'.
-                '<w:tabs>'.
-                    '<w:tab w:val="num" w:pos="720" />'.
-                '</w:tabs>'.
-                '<w:ind w:left="720" w:hanging="360" />'.
-            '</w:pPr>'.
-        '</w:lvl>'.
-        '</w:abstractNum>';
+		return '<w:abstractNum w:abstractNumId="' . $abstractNumberId . '">' .
+			'<w:lvl w:ilvl="0">' .
+			'<w:start w:val="1" />' .
+			'<w:numFmt w:val="decimal" />' .
+			'<w:lvlText w:val="%1." />' .
+			'<w:lvlJc w:val="left" />' .
+			'<w:pPr>' .
+			'<w:tabs>' .
+			'<w:tab w:val="num" w:pos="720" />' .
+			'</w:tabs>' .
+			'<w:ind w:left="720" w:hanging="360" />' .
+			'</w:pPr>' .
+			'</w:lvl>' .
+			'</w:abstractNum>';
 	}
 
 	/**
@@ -719,33 +862,33 @@ class Docx extends ZipDocument
 	 */
 	protected function getAbstractUnorderedNumberingDescription(string $abstractNumberId = null): string
 	{
-		if(!$abstractNumberId)
+		if (!$abstractNumberId)
 		{
 			$abstractNumberId = static::ABSTRACT_UNORDERED_NUMBERING_ID;
 		}
 
-		return '<w:abstractNum w:abstractNumId="'.$abstractNumberId.'">'.
-        '<w:lvl w:ilvl="0">'.
-            '<w:start w:val="1" />'.
-            '<w:numFmt w:val="bullet" />'.
-            '<w:lvlText w:val="-" />'.
-            '<w:lvlJc w:val="left" />'.
-            '<w:pPr>'.
-                '<w:tabs>'.
-                    '<w:tab w:val="num" w:pos="720" />'.
-                '</w:tabs>'.
-                '<w:ind w:left="720" w:hanging="360" />'.
-            '</w:pPr>'.
-         '</w:lvl>'.
-        '</w:abstractNum>';
+		return '<w:abstractNum w:abstractNumId="' . $abstractNumberId . '">' .
+			'<w:lvl w:ilvl="0">' .
+			'<w:start w:val="1" />' .
+			'<w:numFmt w:val="bullet" />' .
+			'<w:lvlText w:val="-" />' .
+			'<w:lvlJc w:val="left" />' .
+			'<w:pPr>' .
+			'<w:tabs>' .
+			'<w:tab w:val="num" w:pos="720" />' .
+			'</w:tabs>' .
+			'<w:ind w:left="720" w:hanging="360" />' .
+			'</w:pPr>' .
+			'</w:lvl>' .
+			'</w:abstractNum>';
 	}
 
 	protected function addRecordToContentTypes(array $attributes): void
 	{
-		if($this->contentTypesDocument)
+		if ($this->contentTypesDocument)
 		{
 			$typesNode = $this->contentTypesDocument->getElementsByTagName('Types')->item(0);
-			if(!$typesNode)
+			if (!$typesNode)
 			{
 				return;
 			}

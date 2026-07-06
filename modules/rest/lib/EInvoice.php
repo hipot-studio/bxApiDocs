@@ -17,11 +17,13 @@ class EInvoice
 	public static function getApplicationList(): array
 	{
 		$cache = Main\Application::getInstance()->getCache();
-		$cacheId = self::APP_TAG . '_marketplace';
+		$cacheId = self::APP_TAG . '_marketplace_v3';
 		$cacheTtl = 60 * 60 * 24; // 24 hour
 		$cachePath = '/rest/einvoice/';
-		$region = Main\Application::getInstance()->getLicense()->getRegion();
-		$tags = [self::APP_TAG, $region];
+		$region = mb_strtolower(Main\Application::getInstance()->getLicense()->getRegion());
+		$country = mb_strtolower(Main\Config\Option::get('bitrix24', 'REG_COUNTRY', $region));
+		$tagsViaRegion = [self::APP_TAG, $region];
+		$tagsViaCountry = [self::APP_TAG, $country];
 
 		if ($cache->initCache($cacheTtl, $cacheId, $cachePath))
 		{
@@ -29,7 +31,22 @@ class EInvoice
 		}
 		else
 		{
-			$result = Marketplace\Client::getByTag($tags)['ITEMS'] ?? [];
+			$apps = Marketplace\Client::getByTag($tagsViaRegion)['ITEMS'] ?? [];
+
+			if($country !== $region && !empty($country))
+			{
+				$apps = array_merge(
+					$apps,
+					Marketplace\Client::getByTag($tagsViaCountry)['ITEMS'] ?? [],
+				);
+			}
+			$result = [];
+			foreach ($apps as $app)
+			{
+				$result[$app['ID']] = $app;
+			}
+			$result = array_values($result);
+
 			$cache->startDataCache();
 			$cache->endDataCache($result);
 		}

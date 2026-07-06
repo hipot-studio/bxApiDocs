@@ -9,7 +9,7 @@ use Bitrix\Sign\Compatibility\Document\Scheme;
 use Bitrix\Sign\Compatibility\Role;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Contract;
-use Bitrix\Sign\Debug\Logger;
+use Psr\Log\LoggerInterface;
 use Bitrix\Sign\Factory;
 use Bitrix\Sign\Helper\Field\NameHelper;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
@@ -49,7 +49,7 @@ class ConfigureDocument implements Contract\Operation
 	private readonly Service\Api\Document\SigningService $apiDocumentSigningService;
 	private readonly Service\Sign\BlockService $signBlockService;
 	private readonly Service\Sign\Document\ProviderCodeService $providerCodeService;
-	private readonly Logger $logger;
+	private readonly LoggerInterface $logger;
 	private readonly Service\Integration\HumanResources\HcmLinkService $hcmLinkService;
 	private readonly Service\Integration\HumanResources\HcmLinkFieldService $hcmLinkFieldService;
 	private Service\Placeholder\FieldAlias\FieldAliasService $fieldAliasService;
@@ -76,7 +76,7 @@ class ConfigureDocument implements Contract\Operation
 		$this->apiDocumentSigningService = $container->getApiDocumentSigningService();
 		$this->signBlockService = $container->getSignBlockService();
 		$this->providerCodeService = $container->getProviderCodeService();
-		$this->logger = $container->getLogger();
+		$this->logger = $container->getLogger('Operation');
 		$this->hcmLinkService = $container->getHcmLinkService();
 		$this->hcmLinkFieldService = $container->getHcmLinkFieldService();
 		$this->fieldAliasService = $container->getFieldAliasService();

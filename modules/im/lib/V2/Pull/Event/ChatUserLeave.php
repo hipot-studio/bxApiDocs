@@ -5,9 +5,10 @@ declare(strict_types = 1);
 namespace Bitrix\Im\V2\Pull\Event;
 
 use Bitrix\Im\Text;
+use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Guest\GuestCounter;
 use Bitrix\Im\V2\Chat\OpenLineChat;
 use Bitrix\Im\V2\Pull\EventType;
-use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 
@@ -34,6 +35,7 @@ class ChatUserLeave extends BaseChatEvent
 			'relations' => $this->chat->getRelationsByUserIds([$this->deletedUserId])->toRestFormat(),
 			'message' => $this->getLeaveMessageText(),
 			'userCount' => $this->chat->getUserCount(),
+			'guestCount' => $this->chat->containsGuest() ? (new GuestCounter($this->chat))->getGuestCount() : 0,
 			'chatExtranet' => $this->chat->getExtranet() ?? false,
 			'containsCollaber' => $this->chat->containsCollaber(),
 		];

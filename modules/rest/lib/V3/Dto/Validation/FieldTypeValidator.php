@@ -37,6 +37,11 @@ class FieldTypeValidator extends DtoFieldValidator
 			return $field->getPropertyType() === get_class($value);
 		}
 
+		if (is_subclass_of($type, \BackedEnum::class))
+		{
+			return $value instanceof $type;
+		}
+
 		if ($field->getPropertyType() === DtoCollection::class)
 		{
 			$elementType = $field->getElementType();

@@ -7,7 +7,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
 use Bitrix\Sign;
-use Bitrix\Sign\Debug\Logger;
+use Bitrix\Sign\Service\Container;
 
 Loc::loadMessages(__FILE__);
 
@@ -63,7 +63,7 @@ class Proxy
 
 			if (!$result)
 			{
-				Logger::getInstance()->error('proxy no result');
+				Container::instance()->getLogger('Proxy')->error('proxy no result');
 				return null;
 			}
 
@@ -76,7 +76,7 @@ class Proxy
 
 			if ($result['status'] === 'error')
 			{
-				Logger::getInstance()->dump($result['errors'], 'proxy result errors');
+				Container::instance()->getLogger('Proxy')->dump($result['errors'], 'proxy result errors');
 				foreach ($result['errors'] as $error)
 				{
 					Error::getInstance()->addError(
@@ -90,7 +90,7 @@ class Proxy
 		}
 		catch (\Exception $e)
 		{
-			Logger::getInstance()->trace('PROXY_SEND_ERROR: ' . $e->getMessage());
+			Container::instance()->getLogger('Proxy')->trace('PROXY_SEND_ERROR: ' . $e->getMessage());
 			Error::getInstance()->addError(
 				'PROXY_SEND_ERROR',
 				Loc::getMessage('SIGN_CORE_PROXY_SEND_ERROR')
@@ -119,7 +119,7 @@ class Proxy
 	public static function sendCommand(string $commandName, array $data, array $params = [])
 	{
 		$http = new HttpClient;
-		// $http->setLogger(Logger::getInstance());
+		// $http->setLogger(Container::instance()->getLogger('Proxy'));
 
 		if ($params['timeout'] ?? null)
 		{
@@ -131,7 +131,7 @@ class Proxy
 			return null;
 		}
 
-		Logger::getInstance()->dump($data, 'proxy command: ' . $commandName);
+		Container::instance()->getLogger('Proxy')->dump($data, 'proxy command: ' . $commandName);
 
 		$http->post(self::getBackendUrl() . '?action=signproxy.api.safe.command', [
 			'commandName' => $commandName,
@@ -140,14 +140,14 @@ class Proxy
 		]);
 
 		$result = self::processAnswer($http);
-		Logger::getInstance()->dump($result, 'proxy command result');
+		Container::instance()->getLogger('Proxy')->dump($result, 'proxy command result');
 		return $result;
 	}
 
 	private static function prepareSafeClientIdentifier(HttpClient $httpClient): bool
 	{
 		$http = new HttpClient;
-		// $http->setLogger(Logger::getInstance());
+		// $http->setLogger(Container::instance()->getLogger('Proxy'));
 		$clientId = Option::get('sign', self::SAFE_CLIENT_ID_OPTION, false);
 		$clientToken = Option::get('sign', self::SAFE_CLIENT_TOKEN_OPTION, false);
 
@@ -203,11 +203,11 @@ class Proxy
 	public static function sendFile(string $commandName, File $file, array $data = [], array $params = [])
 	{
 		$http = new HttpClient;
-		// $http->setLogger(Logger::getInstance());
+		// $http->setLogger(Container::instance()->getLogger('Proxy'));
 
 		if (!$file->isExist())
 		{
-			Logger::getInstance()->trace('FILE_NOT_FOUND');
+			Container::instance()->getLogger('Proxy')->trace('FILE_NOT_FOUND');
 			Error::getInstance()->addError(
 				'FILE_NOT_FOUND',
 				Loc::getMessage('SIGN_CORE_PROXY_FILE_NOT_FOUND')
@@ -233,7 +233,7 @@ class Proxy
 		$data['commandName'] = $commandName;
 		$data['action'] = 'signproxy.api.safe.file';
 		$url = self::getBackendUrl() . '?' . http_build_query($data);
-		Logger::getInstance()->dump($url, 'proxy file');
+		Container::instance()->getLogger('Proxy')->dump($url, 'proxy file');
 
 		$http->post($url, [
 			'file' => [
@@ -244,7 +244,7 @@ class Proxy
 		], true);
 
 		$result = self::processAnswer($http);
-		Logger::getInstance()->dump($result, 'proxy file result');
+		Container::instance()->getLogger('Proxy')->dump($result, 'proxy file result');
 		return $result;
 	}
 

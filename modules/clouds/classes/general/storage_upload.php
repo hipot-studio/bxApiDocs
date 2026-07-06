@@ -399,16 +399,24 @@ class CCloudStorageUpload
 	protected function UpdateProgress($arUploadInfo, $bSuccess)
 	{
 		global $DB;
+		$connection = \Bitrix\Main\Application::getConnection();
+		$lockId = '';
 
 		if ($bSuccess)
 		{
+			$lockId = 'CCloudStorageUpload::UpdateProgress(' . $this->_ID . ')';
+			$connection->lock($lockId, -1);
+
+			$dbUploadInfo = $connection->queryScalar("SELECT NEXT_STEP FROM b_clouds_file_upload WHERE ID = '" . $this->_ID . "'");
+			if ($dbUploadInfo)
+			{
+				$arUploadInfo = array_replace_recursive(unserialize($dbUploadInfo, ['allowed_classes' => false]), $arUploadInfo);
+			}
+
 			$arFields = [
 				'NEXT_STEP' => serialize($arUploadInfo),
 				'~PART_NO' => 'PART_NO + 1',
 				'PART_FAIL_COUNTER' => 0,
-			];
-			$arBinds = [
-				'NEXT_STEP' => $arFields['NEXT_STEP'],
 			];
 		}
 		else
@@ -416,22 +424,33 @@ class CCloudStorageUpload
 			$arFields = [
 				'~PART_FAIL_COUNTER' => 'PART_FAIL_COUNTER + 1',
 			];
-			$arBinds = [
-			];
 		}
 
 		$strUpdate = $DB->PrepareUpdate('b_clouds_file_upload', $arFields);
-		if ($strUpdate != '')
+		if ($strUpdate !== '')
 		{
-			$strSql = 'UPDATE b_clouds_file_upload SET ' . $strUpdate . " WHERE ID = '" . $this->_ID . "'";
-			if (!$DB->QueryBind($strSql, $arBinds))
+			try
 			{
+				$connection->query('UPDATE b_clouds_file_upload SET ' . $strUpdate . " WHERE ID = '" . $this->_ID . "'");
+			}
+			catch (\Bitrix\Main\DB\SqlQueryException $_)
+			{
+				if ($bSuccess)
+				{
+					$connection->unlock($lockId);
+				}
 				unset($this->_cache);
+
 				return false;
 			}
 		}
 
+		if ($bSuccess)
+		{
+			$connection->unlock($lockId);
+		}
 		unset($this->_cache);
+
 		return true;
 	}
 

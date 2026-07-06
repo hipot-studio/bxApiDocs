@@ -29,7 +29,7 @@ class Subscription
 		)
 		{
 			return $result->addError(
-				new Error('Subscription is not available')
+				new Error('Subscription is not available'),
 			);
 		}
 

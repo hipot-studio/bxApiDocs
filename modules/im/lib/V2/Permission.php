@@ -237,6 +237,7 @@ class Permission
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
+			Action::ManageGuestLink->value => Chat::ROLE_MEMBER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::OpenChat->value] = [
@@ -296,6 +297,8 @@ class Permission
 			Action::ManageSharingLinks->value => Chat::ROLE_NONE,
 			Action::CreateChildChat->value => Chat::ROLE_NONE,
 			Action::AttachToParent->value => Chat::ROLE_OWNER,
+			Action::UpdateSharingLink->value => Chat::ROLE_NONE,
+			Action::ManageGuestLink->value => Chat::ROLE_NONE,
 		];
 	}
 
@@ -337,6 +340,7 @@ class Permission
 				GlobalAction::ChangeMessagesAutoDeleteDelay->value => true,
 				GlobalAction::CreateStickerPack->value => true,
 				GlobalAction::ChangeStickerPack->value => true,
+				GlobalAction::JoinChat->value => true,
 			],
 			UserType::EXTRANET->value => [
 				GlobalAction::GetChannels->value => false,
@@ -351,6 +355,7 @@ class Permission
 				GlobalAction::ChangeMessagesAutoDeleteDelay->value => false,
 				GlobalAction::CreateStickerPack->value => false,
 				GlobalAction::ChangeStickerPack->value => false,
+				GlobalAction::JoinChat->value => true,
 			],
 			UserType::COLLABER->value => [
 				GlobalAction::GetChannels->value => false,
@@ -365,6 +370,22 @@ class Permission
 				GlobalAction::ChangeMessagesAutoDeleteDelay->value => false,
 				GlobalAction::CreateStickerPack->value => false,
 				GlobalAction::ChangeStickerPack->value => false,
+				GlobalAction::JoinChat->value => true,
+			],
+			UserType::GUEST->value => [
+				GlobalAction::GetChannels->value => false,
+				GlobalAction::CreateChannel->value => false,
+				GlobalAction::CreateConference->value => false,
+				GlobalAction::CreateCopilot->value => false,
+				GlobalAction::CreateChat->value => false,
+				GlobalAction::GetMarket->value => false,
+				GlobalAction::GetOpenlines->value => false,
+				GlobalAction::CreateCollab->value => false,
+				GlobalAction::LeaveCollab->value => false,
+				GlobalAction::ChangeMessagesAutoDeleteDelay->value => false,
+				GlobalAction::CreateStickerPack->value => false,
+				GlobalAction::ChangeStickerPack->value => false,
+				GlobalAction::JoinChat->value => false,
 			],
 		];
 

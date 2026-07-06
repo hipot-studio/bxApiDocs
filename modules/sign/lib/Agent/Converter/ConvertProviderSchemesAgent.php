@@ -2,7 +2,6 @@
 
 namespace Bitrix\Sign\Agent\Converter;
 
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Type\Document\SchemeType;
 use Bitrix\Sign\Type\ProviderCode;
@@ -30,7 +29,7 @@ final class ConvertProviderSchemesAgent
 		$result = $documentRepository->updateSchemeToDocumentIds($sesRuDocumentIds, SchemeType::ORDER);
 		if (!$result->isSuccess())
 		{
-			$logger = Logger::getInstance();
+			$logger = Container::instance()->getLogger('Agent');
 			$logger->error(
 				'Failed to update schemes by converter agent. Errors: {errorText}',
 				['errorText' => implode('| ', $result->getErrorMessages())],

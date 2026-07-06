@@ -1,5 +1,8 @@
 <?php
 
+use Bitrix\Im\V2\Guest\Auth\JoinStatus;
+use Bitrix\Im\V2\Guest\Auth\Token;
+use Bitrix\Im\V2\Guest\GuestService;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
 use Bitrix\Im\V2\Service\Locator;
@@ -14,6 +17,7 @@ Loc::loadMessages(__FILE__);
 class ImRouterComponent extends \CBitrixComponent
 {
 	private const NETWORK_LINE = 'networkLines';
+	private const GUEST_PATH = '/guest/';
 
 	/** @var \Bitrix\Main\HttpRequest $request */
 	protected $request = array();
@@ -105,6 +109,14 @@ class ImRouterComponent extends \CBitrixComponent
 		$this->arResult['MESSENGER_V2'] = \Bitrix\Im\Settings::isLegacyChatActivated()  ? 'N' : 'Y';
 		$this->arResult['WRONG_ALIAS'] = false;
 
+		$guestCode = $this->extractGuestCode();
+		if ($guestCode !== null)
+		{
+			$this->handleGuestLink($guestCode);
+
+			return;
+		}
+
 		if ($this->request->get('alias'))
 		{
 			$videoconfFlag = $this->request->get('videoconf');
@@ -153,6 +165,63 @@ class ImRouterComponent extends \CBitrixComponent
 				LocalRedirect('/');
 			}
 		}
+	}
+
+	/**
+	 * Extract guest link code from URI path /guest/{code}.
+	 */
+	private function extractGuestCode(): ?string
+	{
+		$requestUri = $this->request->getRequestUri();
+		$path = parse_url($requestUri, PHP_URL_PATH);
+
+		if ($path === null || !str_starts_with($path, self::GUEST_PATH))
+		{
+			return null;
+		}
+
+		$code = substr($path, strlen(self::GUEST_PATH));
+		$code = rtrim($code, '/');
+
+		if ($code === '' || $code === false)
+		{
+			return null;
+		}
+
+		return $code;
+	}
+
+	/**
+	 * Handle guest invite link (/guest/{code}).
+	 *
+	 * If a portal user follows the link, redirects them to the chat.
+	 * If a guest follows the link, renders the messenger in place.
+	 */
+	private function handleGuestLink(string $code): void
+	{
+		$token = Token::createFromRequest();
+		$result = GuestService::getInstance()->joinByCode($code, $token);
+
+		if (!$result->isSuccess())
+		{
+			LocalRedirect('/');
+
+			return;
+		}
+
+		$dialogId = $result->getChat()->getDialogId();
+
+		if ($result->getJoinStatus() === JoinStatus::PORTAL_USER)
+		{
+			LocalRedirect('/online/?IM_DIALOG=' . $dialogId);
+
+			return;
+		}
+
+		$this->arResult['DIALOG_ID'] = $dialogId;
+		$this->arResult['IS_GUEST_WELCOME'] = ($result->getJoinStatus() === JoinStatus::NEW_GUEST);
+		$this->setTemplateName('guest');
+		$this->includeComponentTemplate();
 	}
 
 	private function checkNetworkLines(): void

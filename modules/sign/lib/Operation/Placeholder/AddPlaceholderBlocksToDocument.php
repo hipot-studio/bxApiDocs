@@ -5,7 +5,7 @@ namespace Bitrix\Sign\Operation\Placeholder;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Sign\Contract;
-use Bitrix\Sign\Debug\Logger;
+use Psr\Log\LoggerInterface;
 use Bitrix\Sign\Helper\Field\NameHelper;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Repository\BlockRepository;
@@ -21,13 +21,13 @@ final class AddPlaceholderBlocksToDocument implements Contract\Operation
 	private array $placeholders = [];
 	private readonly FieldAliasService $fieldAliasService;
 	private readonly AliasRoleResolver $aliasRoleResolver;
-	private readonly Logger $logger;
+	private readonly LoggerInterface $logger;
 
 	public function __construct(
 		private readonly Item\Document $document,
 		private ?BlockRepository $blockRepository = null,
 		?FieldAliasService $fieldAliasService = null,
-		?Logger $logger = null,
+		?LoggerInterface $logger = null,
 		?AliasRoleResolver $aliasRoleResolver = null,
 	)
 	{
@@ -35,7 +35,7 @@ final class AddPlaceholderBlocksToDocument implements Contract\Operation
 		$this->blockRepository = $blockRepository ?? $container->getBlockRepository();
 		$this->fieldAliasService = $fieldAliasService ?? $container->getFieldAliasService();
 		$this->aliasRoleResolver = $aliasRoleResolver ?? $container->getAliasRoleResolver();
-		$this->logger = $logger ?? $container->getLogger();
+		$this->logger = $logger ?? $container->getLogger('Operation');
 	}
 
 	public function launch(): Result

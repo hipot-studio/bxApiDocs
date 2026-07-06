@@ -6,7 +6,11 @@ use Bitrix\Call\Recent;
 use Bitrix\Im\Department;
 use Bitrix\Im\Promotion;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Folder\FolderProvider;
+use Bitrix\Im\V2\Folder\FolderRecentProvider;
+use Bitrix\Im\V2\Folder\Query\FolderProviderParams;
 use Bitrix\Im\V2\Reading\Counter\UserCountersCollector;
 use Bitrix\Im\V2\Recent\Query\RecentFilter;
 use Bitrix\Im\V2\Recent\Query\RecentParams;
@@ -105,6 +109,12 @@ abstract class Tab extends BaseController
 					break;
 				case (AvailableMethodList::NESTED_LIST->value):
 					$data[$method] = $this->getNestedList();
+					break;
+				case (AvailableMethodList::FOLDER_LIST->value):
+					$data[$method] = $this->getFolderList();
+					break;
+				case (AvailableMethodList::FOLDER_RECENT_LIST->value):
+					$data[$method] = $this->getFolderRecentList();
 					break;
 				case (AvailableMethodList::ACTIVE_CALLS->value):
 					$data[$method] = [];
@@ -365,6 +375,69 @@ abstract class Tab extends BaseController
 			limit: $limit,
 			order: \Bitrix\Im\V2\Recent\Recent::getOrder((int)$this->currentUser->getId()),
 		);
+	}
+
+	private function getFolderList(): array
+	{
+		if (!Features::get()->isChatFoldersAvailable)
+		{
+			return [];
+		}
+
+		$userId = (int)$this->currentUser->getId();
+		if ($userId <= 0)
+		{
+			return [];
+		}
+
+		return ServiceLocator::getInstance()
+			->get(\Bitrix\Im\V2\Folder\FolderProvider::class)
+			->getByUser($userId)
+			->onlyAvailable($userId)
+			->toRestFormat()
+		;
+	}
+
+	private function getFolderRecentList(): array
+	{
+		if (!Features::get()->isChatFoldersAvailable)
+		{
+			return $this->toRestFormatWithPaginationData([], self::LIMIT, 0);
+		}
+
+		$userId = (int)$this->currentUser->getId();
+		$folderId = (int)($this->options['folderId'] ?? 0);
+		if ($userId <= 0 || $folderId <= 0)
+		{
+			return $this->toRestFormatWithPaginationData([], self::LIMIT, 0);
+		}
+
+		$folder = ServiceLocator::getInstance()
+			->get(FolderProvider::class)
+			->getById($folderId)
+		;
+		if ($folder === null || !$folder->checkAccess($userId)->isSuccess())
+		{
+			return $this->toRestFormatWithPaginationData([], self::LIMIT, 0);
+		}
+
+		$filter = $this->options['filter'] ?? [];
+		$params = FolderProviderParams::fromArray($filter, self::LIMIT);
+
+		$result = ServiceLocator::getInstance()
+			->get(FolderRecentProvider::class)
+			->getTail($folder, $params, self::LIMIT)
+		;
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return $this->toRestFormatWithPaginationData([], self::LIMIT, 0);
+		}
+
+		$recent = $result->getResult();
+
+		return $this->toRestFormatWithPaginationData([$recent], self::LIMIT, $recent->count());
 	}
 
 	abstract protected function getRecentList(): array;

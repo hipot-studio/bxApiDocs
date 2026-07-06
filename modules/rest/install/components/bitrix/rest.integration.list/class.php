@@ -85,8 +85,8 @@ class RestIntegratorsListComponent extends CBitrixComponent
 		if (!$isAdmin)
 		{
 			global $USER;
-			$userContext = new Internal\Access\UserContext($USER?->GetID());
-			$accessChecker = new Internal\Access\Preset\PresetAccessChecker($userContext);
+			$userAccessModel = Internal\Access\User\Model\RestUserModel::createFromId((int)$USER?->GetID());
+			$accessChecker = new Internal\Access\Preset\PresetAccessChecker($userAccessModel);
 
 			$items = array_filter(
 				$items,

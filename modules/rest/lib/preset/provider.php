@@ -51,7 +51,7 @@ class Provider
 	 * @throws \Bitrix\Main\LoaderException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 */
-	public static function deleteIntegration($id)
+	public static function deleteIntegration($id, ?int $userId = null)
 	{
 		$result = [
 			'result' => 'success'
@@ -78,7 +78,8 @@ class Provider
 		if ($integration = $res->fetch())
 		{
 			global $USER;
-			if ($integration['USER_ID'] === $USER->GetID() || \CRestUtil::isAdmin())
+			$userId ??= $USER instanceof \CUser ? $USER->GetID() : null;
+			if (($userId !== null && (int)$integration['USER_ID'] === (int)$userId) || \CRestUtil::isAdmin())
 			{
 				$filterEvent = [
 					'=INTEGRATION_ID' => $integration['ID']
@@ -355,24 +356,25 @@ class Provider
 	 * @throws \Bitrix\Main\LoaderException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 */
-	public static function saveIntegration($requestData, $elementCode = '', $id = 0)
+	public static function saveIntegration($requestData, $elementCode = '', $id = 0, ?int $userId = null)
 	{
-		global $USER;
 		$result = [
 			'status' => true,
 		];
 		$itemsEvent = [];
 		$errorList = [];
 		$id = (isset($requestData['ID']) && intVal($requestData['ID']) > 0) ? intVal($requestData['ID']) : $id;
-		$userId = $GLOBALS['USER']->getID();
-		$userContext = new Internal\Access\UserContext($userId);
-		$isAdmin = $userContext->isAdmin();
+		$userId = $userId ?? $GLOBALS['USER']->getID();
+		$user = Internal\Access\User\Model\RestUserModel::createFromId((int)$userId);
+		$isAdmin = $user->isAdmin();
 		$presetData = Element::get($elementCode);
 		$integrationData = $id > 0 ? IntegrationTable::getById($id)->fetch() : null;
 
+		$presetData['OPTIONS']['IS_APPLICATION_PERSONAL'] = $requestData['IS_APPLICATION_PERSONAL'] ?? 'N';
+
 		try
 		{
-			$accessChecker = new Internal\Access\Preset\PresetAccessChecker($userContext);
+			$accessChecker = new Internal\Access\Preset\PresetAccessChecker($user);
 			if (empty($integrationData))
 			{
 				$accessChecker->ensureCanCreateOwn($presetData);
@@ -413,7 +415,7 @@ class Provider
 
 		$saveData = [
 			'ELEMENT_CODE' => $elementCode,
-			'USER_ID' => $USER->GetID(),
+			'USER_ID' => $userId,
 			'TITLE' => $requestData['TITLE'],
 			'SCOPE' => is_array($requestData['SCOPE']) ? $requestData['SCOPE'] : [],
 			'QUERY' => $requestData['QUERY'] ?? '',
@@ -478,13 +480,8 @@ class Provider
 			{
 				if (!empty($integrationData))
 				{
-					if (!$isAdmin && $integrationData['USER_ID'] != $userId)
-					{
-						$result['status'] = false;
-						$result['errors'][] = Loc::getMessage('INTEGRATION_PRESET_PROVIDER_ERROR_ACCESS_DENIED');
-						return $result;
-					}
-					if ($integrationData['PASSWORD_ID'] > 0 && ($requestData['MODE'] === 'GEN_SAVE' || $integrationData['USER_ID'] != $userId))
+					if (
+						$integrationData['PASSWORD_ID'] > 0 && ($requestData['MODE'] === 'GEN_SAVE' || $integrationData['USER_ID'] != $userId))
 					{
 						Analytic::logToFile(
 							'integrationRegen',
@@ -665,7 +662,7 @@ class Provider
 
 			if (!isset($presetData['QUERY_NEEDED']) || $presetData['QUERY_NEEDED'] !== 'D')
 			{
-				$webhook = static::getWebHook($saveData['SCOPE'], $saveData['PASSWORD_ID'] ?? null, $title);
+				$webhook = static::getWebHook($saveData['SCOPE'], $saveData['PASSWORD_ID'] ?? null, $title, $userId);
 				$saveData['PASSWORD_ID'] = $webhook['ID'];
 			}
 
@@ -794,7 +791,7 @@ class Provider
 			{
 				$app = static::saveApp(
 					[
-						'ID' => $saveData['APP_ID'],
+						'ID' => $saveData['APP_ID'] ?? 0,
 						'FIELDS' => [
 							'URL' => trim($requestData['APPLICATION_URL_HANDLER']),
 							'URL_INSTALL' => trim($requestData['APPLICATION_URL_INSTALL']),
@@ -809,11 +806,11 @@ class Provider
 											:
 											[],
 						'INTEGRATION_CODE' => $saveData['ELEMENT_CODE'],
-						'INTEGRATION_ID' => $saveData['ID']
+						'INTEGRATION_ID' => $saveData['ID'] ?? 0
 					]
 				);
 
-				if ($app['ID'] > 0)
+				if (!empty($app['ID']))
 				{
 					$saveData['APP_ID'] = $app['ID'];
 				}
@@ -1016,9 +1013,21 @@ class Provider
 							{
 								Sender::bind('rest', 'OnRestAppInstall');
 							}
+
+							$bindUserReady = EventTable::add(
+								[
+									'APP_ID' => $return['ID'],
+									'EVENT_NAME' => 'ONAPPUSERREADY',
+									'EVENT_HANDLER' => $data['FIELDS']['URL_INSTALL'],
+								]
+							);
+							if ($bindUserReady->isSuccess())
+							{
+								Sender::bind('rest', 'OnRestAppUserReady');
+							}
 						}
 
-						if ($app['ID'] <= 0)
+						if (empty($app['ID']))
 						{
 							AppTable::install($return['ID']);
 						}
@@ -1227,7 +1236,7 @@ class Provider
 		return $return;
 	}
 
-	private static function getWebHook($scopeList = [], $id = 0, $title = '')
+	private static function getWebHook($scopeList = [], $id = 0, $title = '', ?int $userId = null)
 	{
 		$password = [];
 		$id = intVal($id);
@@ -1299,7 +1308,7 @@ class Provider
 
 		if (empty($password))
 		{
-			$userId = $GLOBALS['USER']->GetID();
+			$userId = $userId ?? $GLOBALS['USER']->GetID();
 			$passwordCreat = PasswordTable::createPassword(
 				$userId,
 				$scopeList,

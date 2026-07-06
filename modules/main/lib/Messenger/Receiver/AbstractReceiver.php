@@ -116,11 +116,16 @@ abstract class AbstractReceiver implements ReceiverInterface
 	 */
 	public function run(): void
 	{
+		global $USER;
+
 		$messageBoxes = $this->getMessages();
 
 		/** @var MessageBox $messageBox */
 		foreach ($messageBoxes as $messageBox)
 		{
+			// global $USER should not be available here
+			$USER = null;
+
 			try
 			{
 				$this->process($messageBox->getMessage());

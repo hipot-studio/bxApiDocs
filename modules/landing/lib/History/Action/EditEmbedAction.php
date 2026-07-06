@@ -3,11 +3,17 @@
 namespace Bitrix\Landing\History\Action;
 
 use Bitrix\Landing\Block;
+use Bitrix\Landing\History\ActionParamsGuard;
 use Bitrix\Landing\Node;
 
 class EditEmbedAction extends BaseAction
 {
 	protected const JS_COMMAND = 'editEmbed';
+
+	public static function getSanitizableParamKeys(): array
+	{
+		return ['valueBefore', 'valueAfter'];
+	}
 
 	public function execute(bool $undo = true): bool
 	{
@@ -15,6 +21,11 @@ class EditEmbedAction extends BaseAction
 		$selector = $this->params['selector'] ?: '';
 		$position = (int)($this->params['position'] ?: 0);
 		$value = $undo ? $this->params['valueBefore'] : $this->params['valueAfter'];
+		$value = ActionParamsGuard::prepareNodeValue($value);
+		if ($value === null)
+		{
+			return false;
+		}
 
 		if ($selector)
 		{
@@ -41,14 +52,22 @@ class EditEmbedAction extends BaseAction
 		 * @var $block Block
 		 */
 		$block = $params['block'];
+		$checked = ActionParamsGuard::rejectUnsafeValueParams(
+			[
+				'valueAfter' => $params['valueAfter'] ?? '',
+				'valueBefore' => $params['valueBefore'] ?? '',
+			],
+			static::getSanitizableParamKeys(),
+			static::class,
+		);
 
 		return [
 			'block' => $block->getId(),
 			'selector' => $params['selector'] ?: '',
 			'position' => $params['position'] ?: 0,
 			'lid' => $block->getLandingId(),
-			'valueAfter' => $params['valueAfter'] ?: '',
-			'valueBefore' => $params['valueBefore'] ?: '',
+			'valueAfter' => $checked['valueAfter'],
+			'valueBefore' => $checked['valueBefore'],
 		];
 	}
 

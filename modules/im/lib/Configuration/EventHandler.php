@@ -5,7 +5,9 @@ namespace Bitrix\Im\Configuration;
 use Bitrix\Im\Model\OptionAccessTable;
 use Bitrix\Im\Model\OptionGroupTable;
 use Bitrix\Im\Model\OptionUserTable;
+use Bitrix\Im\V2\Folder\FolderCascadeHandler;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity\Query\Filter\ConditionTree;
@@ -153,6 +155,18 @@ class EventHandler
 	public static function onAfterUserDelete($userId): void
 	{
 		$userId = (int)$userId;
+
+		if ($userId > 0)
+		{
+			try
+			{
+				ServiceLocator::getInstance()->get(FolderCascadeHandler::class)->deleteByUser($userId);
+			}
+			catch (\Throwable $e)
+			{
+				Application::getInstance()->getExceptionHandler()->writeToLog($e);
+			}
+		}
 
 		$row = OptionUserTable::getById($userId);
 		if (!$row->fetch())

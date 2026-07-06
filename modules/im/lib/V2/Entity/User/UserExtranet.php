@@ -32,6 +32,16 @@ class UserExtranet extends User
 			return $result;
 		}
 
+		if ($otherUser->isGuest())
+		{
+			if (!$otherUser->checkAccess($this->getId())->isSuccess())
+			{
+				$result->addError(new ChatError(ChatError::ACCESS_DENIED));
+			}
+
+			return $result;
+		}
+
 		$inGroup = Extranet::isUserInGroup(
 			$this->getId(),
 			$otherUser->getId(),

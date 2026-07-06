@@ -16,6 +16,7 @@ class ChatCacheRegistry extends DomainCacheRegistry
 	private const GENERAL_CHAT_ID = 'general_chat_id';
 	private const GENERAL_CHANNEL_ID = 'general_channel_id';
 	private const GENERAL_CHAT_MANAGERS = 'general_chat_managers';
+	private const GUEST_COUNT = 'guest_count';
 
 	/**
 	 * @return CacheManager<Chat>
@@ -47,6 +48,14 @@ class ChatCacheRegistry extends DomainCacheRegistry
 	public function getGeneralChatManagersManager(): CacheManager
 	{
 		return $this->getManager(self::GENERAL_CHAT_MANAGERS);
+	}
+
+	/**
+	 * @return CacheManager<PrimitiveCacheable<int>>
+	 */
+	public function getGuestCountManager(): CacheManager
+	{
+		return $this->getManager(self::GUEST_COUNT);
 	}
 
 	protected function load(): void
@@ -88,6 +97,17 @@ class ChatCacheRegistry extends DomainCacheRegistry
 				ttl: $this->getTtl(),
 				domain: 'chat',
 				version: 1,
+			),
+			new PrimitiveMapper()
+		);
+
+		$this->register(
+			new CacheConfig(
+				entityType: self::GUEST_COUNT,
+				ttl: $this->getTtl(),
+				domain: 'chat',
+				version: 1,
+				partitioningLevels: 1,
 			),
 			new PrimitiveMapper()
 		);

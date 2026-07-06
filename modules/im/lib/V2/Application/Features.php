@@ -65,6 +65,10 @@ class Features
 		public readonly bool $isMessageBuilderAvailable,
 		public readonly bool $isAddingUserByMentionAvailable,
 		public readonly bool $isNestedChatAvailable,
+		public readonly bool $isExternalChatMessageForwardingAvailable,
+		public readonly bool $isChatWithGuestsAvailable,
+		public readonly bool $isCopilotForceSearchAvailable,
+		public readonly bool $isChatFoldersAvailable,
 	){}
 
 	public static function get(): self
@@ -122,6 +126,10 @@ class Features
 			isMessageBuilderAvailable: self::isMessageBuilderAvailable(),
 			isAddingUserByMentionAvailable: self::isAddingUserByMentionAvailable(),
 			isNestedChatAvailable: self::isNestedChatAvailable(),
+			isExternalChatMessageForwardingAvailable: self::isExternalChatMessageForwardingAvailable(),
+			isChatWithGuestsAvailable: self::isChatWithGuestsAvailable(),
+			isCopilotForceSearchAvailable: self::isCopilotForceSearchAvailable(),
+			isChatFoldersAvailable: self::isChatFoldersAvailable(),
 		);
 	}
 
@@ -245,7 +253,10 @@ class Features
 
 	public static function isCopilotFileUploadAvailable(): bool
 	{
-		return Option::get('im', 'copilot_file_upload_available', 'N') === 'Y';
+		return ServiceLocator::getInstance()
+			->get(AiAssistantService::class)
+			->isBitrixGptV2Available('copilot_file_upload_available')
+		;
 	}
 
 	public static function isMountedTasksCardAvailable(): bool
@@ -255,7 +266,10 @@ class Features
 
 	public static function isBitrixGptV2Available(): bool
 	{
-		return Option::get('aiassistant', 'show_chat_in_right_panel', 'N') === 'Y';
+		return ServiceLocator::getInstance()
+			->get(AiAssistantService::class)
+			->isBitrixGptV2Available('bitrixgpt_v2_available')
+		;
 	}
 
 	public static function isMessageBuilderAvailable(): bool
@@ -271,5 +285,28 @@ class Features
 	public static function isNestedChatAvailable(): bool
 	{
 		return Option::get('im', 'nested_chat_available', 'N') === 'Y';
+	}
+
+	public static function isExternalChatMessageForwardingAvailable(): bool
+	{
+		return Option::get('im', 'external_chat_message_forwarding_available', 'N') === 'Y';
+	}
+
+	public static function isChatWithGuestsAvailable(): bool
+	{
+		return Option::get('im', 'chat_with_guests_available', 'N') === 'Y';
+	}
+
+	public static function isCopilotForceSearchAvailable(): bool
+	{
+		return ServiceLocator::getInstance()
+			->get(AiAssistantService::class)
+			->isBitrixGptV2Available('copilot_force_search_available')
+		;
+	}
+
+	public static function isChatFoldersAvailable(): bool
+	{
+		return Option::get('im', 'chat_folders_available', 'N') === 'Y';
 	}
 }

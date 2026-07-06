@@ -33,7 +33,8 @@ class HandlerHelper
 		$callbackData = parse_url($handlerUrl);
 
 		if(is_array($callbackData)
-			&& $callbackData['host'] <> ''
+			&& !empty($callbackData['host'])
+			&& is_string($callbackData['host'])
 			&& mb_strpos($callbackData['host'], '.') > 0
 		)
 		{

@@ -6,6 +6,7 @@ interface TabInterface
 {
 	public function isAvailable(): bool;
 	public function getId(): string;
+	public function getTabTitle(): ?string;
 	/** @deprecated */
 	public function isPreload(): bool;
 	/** @deprecated */

@@ -16,6 +16,11 @@ use Bitrix\Rest\Repository\APAuth\PasswordRepository;
 use Bitrix\Rest\Repository\Exception\CreationFailedException;
 use Bitrix\Rest\Service\ServiceContainer;
 
+/**
+ * @deprecated Low-level legacy service. For creating system incoming webhooks use
+ * {@see \Bitrix\Rest\Internal\Service\IncomingWebhook\SystemIncomingWebhookCreator}
+ * (via {@see \Bitrix\Rest\Public\Command\IncomingWebhook\CreateSystemIncomingWebhookCommand}).
+ */
 class PasswordService implements Contract\Service\APAuth\PasswordService
 {
 	private const BASE_CACHE_DIR = 'rest/apauth/password';

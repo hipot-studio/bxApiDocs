@@ -67,6 +67,11 @@ class DtoValidatorHelper
 				continue;
 			}
 
+			if ($field->isNullable() && $field->getValue() === null)
+			{
+				continue;
+			}
+
 			// validate rules
 			foreach ($field->getValidationRules() as $rule)
 			{

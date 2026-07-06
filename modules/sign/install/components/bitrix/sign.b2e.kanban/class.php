@@ -185,7 +185,7 @@ final class SignB2eKanbanComponent extends SignBaseComponent
 
 				if (!$result->isSuccess())
 				{
-					\Bitrix\Sign\Debug\Logger::getInstance()->error('onboarding template install errors: ' . implode('; ', $result->getErrorMessages()));
+					Container::instance()->getLogger('Component')->error('onboarding template install errors: ' . implode('; ', $result->getErrorMessages()));
 					Storage::instance()->setDemoTemplateInstalled(false);
 				}
 			}

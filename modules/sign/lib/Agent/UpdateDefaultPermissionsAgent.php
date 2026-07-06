@@ -6,7 +6,6 @@ use Bitrix\Main\Loader;
 use Bitrix\Sign\Access\Permission\PermissionDictionary;
 use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
 use Bitrix\Sign\Access\Service\RolePermissionService;
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
 
@@ -35,7 +34,7 @@ final class UpdateDefaultPermissionsAgent
 			return '';
 		}
 
-		$logger = Logger::getInstance();
+		$logger = Container::instance()->getLogger('Agent');
 		$rolePermissionService = Container::instance()->getRolePermissionService();
 		if ($rolePermissionService === null)
 		{

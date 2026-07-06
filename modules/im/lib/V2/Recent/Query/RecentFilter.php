@@ -17,7 +17,7 @@ use Bitrix\Main\Provider\Params\PrepareQueryInterface;
 use Bitrix\Main\Type\DateTime;
 
 /**
- * @method self with(int $userId = null,?DateTime $lastMessageDate = null,?int $lastMessageId = null,bool $unreadOnly = null,array $chatIds = null,?string $recentSection = null,?int $parentChatId = null,?TypeCondition $typeCondition = null,)
+ * @method self with(int $userId = null,?DateTime $lastMessageDate = null,?int $lastMessageId = null,bool $unreadOnly = null,array $chatIds = null,array $excludeChatIds = null,?string $recentSection = null,?int $parentChatId = null,?TypeCondition $typeCondition = null,)
  */
 class RecentFilter implements FilterInterface, PrepareQueryInterface
 {
@@ -29,6 +29,7 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 		public readonly ?int $lastMessageId = null,
 		public readonly bool $unreadOnly = false,
 		public readonly array $chatIds = [],
+		public readonly array $excludeChatIds = [],
 		public readonly ?string $recentSection = null,
 		public readonly ?int $parentChatId = null,
 		public readonly ?TypeCondition $typeCondition = null,
@@ -43,6 +44,7 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 			lastMessageId: isset($filter['lastMessageId']) ? (int)$filter['lastMessageId'] : null,
 			unreadOnly: isset($filter['unread']) && $filter['unread'] === 'Y',
 			chatIds: is_array($filter['chatIds'] ?? null) ? $filter['chatIds'] : [],
+			excludeChatIds: is_array($filter['excludeChatIds'] ?? null) ? $filter['excludeChatIds'] : [],
 			recentSection: isset($filter['recentSection']) ? (string)$filter['recentSection'] : null,
 			parentChatId: isset($filter['parentId']) ? (int)$filter['parentId'] : null,
 			typeCondition: $filter['typeCondition'] instanceof TypeCondition ? $filter['typeCondition'] : null,
@@ -83,7 +85,22 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 			$result->whereIn('ITEM_CID', $this->chatIds);
 		}
 
+		if (!empty($this->excludeChatIds))
+		{
+			$result->whereNotIn('ITEM_CID', $this->excludeChatIds);
+		}
+
 		return $result;
+	}
+
+	private function applyTypeConditionFilter(ConditionTree $result): void
+	{
+		$condition = $this->resolveTypeCondition();
+
+		if ($condition->hasConditions())
+		{
+			$result->where((new TypeFilter($condition))->toConditionTree());
+		}
 	}
 
 	public function prepareQuery(Query $query): void
@@ -122,16 +139,6 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 		}
 
 		return $condition;
-	}
-
-	private function applyTypeConditionFilter(ConditionTree $result): void
-	{
-		$condition = $this->resolveTypeCondition();
-
-		if ($condition->hasConditions())
-		{
-			$result->where((new TypeFilter($condition))->toConditionTree());
-		}
 	}
 
 	private function getTypeRegistry(): TypeRegistry

@@ -10,9 +10,12 @@ use Bitrix\Main\Type\Date;
 use Bitrix\Main\Web\Json;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Infrastructure\Market\MarketSubscription;
+use Bitrix\Rest\Internal\Exception\Payment\MarketSubscriptionRequiredException;
+use Bitrix\Rest\Internal\Exception\Payment\RestUnavailableException;
 use Bitrix\Rest\Marketplace\Client;
 use Bitrix\Rest\Marketplace\Immune;
 use Bitrix\Rest\Service\ServiceContainer;
+use Throwable;
 
 /**
  * Class Access
@@ -41,8 +44,9 @@ class Access
 	private const DEFAULT_AVAILABLE_COUNT = -1;
 	private const DEFAULT_AVAILABLE_COUNT_DEMO = 10;
 	private const SYSTEM_METHODS = ['crm.automation.trigger'];
+	private const ALWAYS_AVAILABLE_METHODS = ['rest.portal.license.get'];
 
-	private static $availableApp = [];
+	private static $appDeniedException = [];
 	private static $availableAppCount = [];
 
 	/**
@@ -66,48 +70,80 @@ class Access
 	 *
 	 * @return bool
 	 */
-	public static function isAvailable($app = '') : bool
+	public static function isAvailable($app = ''): bool
+	{
+		try
+		{
+			static::ensureIsAvailable($app);
+			return true;
+		}
+		catch (Throwable)
+		{
+			return false;
+		}
+	}
+
+	public static function ensureIsAvailable($app = ''): void
 	{
 		if (!static::isActiveRules())
 		{
-			return true;
+			return;
 		}
 
-		if (!array_key_exists($app, static::$availableApp))
+		if (static::isRequestedMethodAlwaysAvailable())
 		{
-			static::$availableApp[$app] = false;
+			return;
+		}
+
+		if (!array_key_exists($app, static::$appDeniedException))
+		{
+			static::$appDeniedException[$app] = false;
+
 			if (Client::isSubscriptionAvailable())
 			{
-				static::$availableApp[$app] = true;
+				static::$appDeniedException[$app] = null;
 			}
 			elseif (
 				!MarketSubscription::createByDefault()->isRequiredSubscriptionModelStarted()
 				&& self::isFeatureEnabled()
 			)
 			{
-				static::$availableApp[$app] = true;
+				static::$appDeniedException[$app] = null;
 			}
 			elseif ($app !== '')
 			{
 				if (in_array($app, Immune::getList(), true))
 				{
-					static::$availableApp[$app] = true;
+					static::$appDeniedException[$app] = null;
 				}
-				else if ($appInfo = AppTable::getByClientId($app))
+				elseif ($appInfo = AppTable::getByClientId($app))
 				{
 					if ($appInfo['CODE'] && in_array($appInfo['CODE'], Immune::getList(), true))
 					{
-						static::$availableApp[$app] = true;
+						static::$appDeniedException[$app] = null;
 					}
 					elseif ($appInfo['STATUS'] === AppTable::STATUS_FREE && self::isFeatureEnabled())
 					{
-						static::$availableApp[$app] = true;
+						static::$appDeniedException[$app] = null;
 					}
 				}
 			}
+
+			if (static::$appDeniedException[$app] === false)
+			{
+				static::$appDeniedException[$app] = self::isFeatureEnabled()
+					? MarketSubscriptionRequiredException::class
+					: RestUnavailableException::class
+				;
+			}
 		}
 
-		return static::$availableApp[$app];
+		/** @var null|class-string<MarketSubscriptionRequiredException|RestUnavailableException> $exceptionClass */
+		$exceptionClass = static::$appDeniedException[$app] ?? null;
+		if ($exceptionClass !== null)
+		{
+			throw new $exceptionClass();
+		}
 	}
 
 	public static function canInstallApp(array $installAppData): bool
@@ -133,19 +169,37 @@ class Access
 
 	public static function isAvailableAPAuthByPasswordId(int $passwordId): bool
 	{
+		try
+		{
+			static::ensureIsAvailableAPAuthByPasswordId($passwordId);
+			return true;
+		}
+		catch (Throwable)
+		{
+			return false;
+		}
+	}
+
+	public static function ensureIsAvailableAPAuthByPasswordId(int $passwordId): void
+	{
 		if (!ModuleManager::isModuleInstalled('bitrix24'))
 		{
-			return true;
+			return;
+		}
+
+		if (static::isRequestedMethodAlwaysAvailable())
+		{
+			return;
 		}
 
 		if (Client::isSubscriptionAvailable())
 		{
-			return true;
+			return;
 		}
 
 		if (self::isFeatureEnabled() && !MarketSubscription::createByDefault()->isRequiredSubscriptionModelStarted())
 		{
-			return true;
+			return;
 		}
 
 		if (
@@ -154,10 +208,15 @@ class Access
 			&& (!\CRestServer::instance() || in_array(\CRestServer::instance()?->getMethod(), static::SYSTEM_METHODS, true))
 		)
 		{
-			return true;
+			return;
 		}
 
-		return false;
+		if (!self::isFeatureEnabled())
+		{
+			throw new RestUnavailableException();
+		}
+
+		throw new MarketSubscriptionRequiredException();
 	}
 
 	/**
@@ -750,9 +809,18 @@ class Access
 	 */
 	public static function reset() : bool
 	{
-		static::$availableApp = [];
+		static::$appDeniedException = [];
 		static::$availableAppCount = [];
 
 		return true;
+	}
+
+	private static function isRequestedMethodAlwaysAvailable(): bool
+	{
+		return in_array(
+			\CRestServer::instance()?->getMethod() ?? null,
+			static::ALWAYS_AVAILABLE_METHODS,
+			true,
+		);
 	}
 }

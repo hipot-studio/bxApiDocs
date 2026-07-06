@@ -95,9 +95,9 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Main\Engi
 		$result = [
 			'ERROR_MESSAGE' => [],
 		];
-		$userContext = new Internal\Access\UserContext($USER?->GetID());
-		$isAdmin = $userContext->isAdmin();
-		$userId = $userContext->getId();
+		$userAccessModel = Internal\Access\User\Model\RestUserModel::createFromId((int)$USER?->GetID());
+		$isAdmin = $userAccessModel->isAdmin();
+		$userId = $userAccessModel->getId();
 		$params = $this->arParams;
 		$presetData = Element::get($params['ELEMENT_CODE']);
 
@@ -130,7 +130,7 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Main\Engi
 		$result['ID'] = $params['ID'];
 		$result = $this->getSavedData($result);
 
-		$accessChecker = new Internal\Access\Preset\PresetAccessChecker($userContext);
+		$accessChecker = new Internal\Access\Preset\PresetAccessChecker($userAccessModel);
 		if (empty($result['ID']))
 		{
 			$accessChecker->ensureCanCreateOwn($presetData);
@@ -375,8 +375,37 @@ class RestIntegrationEditComponent extends CBitrixComponent implements Main\Engi
 		$result = [];
 		$request = Application::getInstance()->getContext()->getRequest();
 		$items = $request->getPostList();
+		$allowedKeys = [
+			'ID',
+			'TITLE',
+			'SCOPE',
+			'QUERY',
+			'OUTGOING_HANDLER_URL',
+			'OUTGOING_EVENTS',
+			'APPLICATION_ONLY_API',
+			'APPLICATION_NEEDED',
+			'APPLICATION_EVENTS',
+			'OUTGOING_NEEDED',
+			'WIDGET_NEEDED',
+			'WIDGET_HANDLER_URL',
+			'WIDGET_LIST',
+			'WIDGET_LANG_LIST',
+			'BOT_HANDLER_URL',
+			'MODE',
+			'BOT_NAME',
+			'BOT_TYPE',
+			'APPLICATION_URL_HANDLER',
+			'APPLICATION_URL_INSTALL',
+			'APPLICATION_MOBILE',
+			'APPLICATION_LANG_NAME',
+		];
+
 		foreach ($items as $code => $value)
 		{
+			if (!in_array($code, $allowedKeys, true))
+			{
+				continue;
+			}
 			if (is_array($value))
 			{
 				if ($code == 'QUERY')

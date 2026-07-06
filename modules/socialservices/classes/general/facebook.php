@@ -372,7 +372,7 @@ class CFacebookInterface extends CSocServOAuthTransport
 
 	public function GetRedirectURI()
 	{
-		return \CHTTP::URN2URI("/bitrix/tools/oauth/facebook.php");
+		return (string)(new Uri("/bitrix/tools/oauth/facebook.php"))->toAbsolute();
 	}
 
 	public function GetAuthUrl($redirect_uri, $state = '')

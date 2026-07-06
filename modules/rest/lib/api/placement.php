@@ -573,7 +573,6 @@ class Placement extends \IRestService
 
 			while($placementHandler = $dbRes->fetch())
 			{
-				$cnt++;
 				$result = PlacementTable::delete($placementHandler["ID"]);
 				if($result->isSuccess())
 				{

@@ -114,7 +114,12 @@ class QrCodeAuth extends Main\Engine\Controller
 
 		if ($uniqueId !== static::getUniqueId())
 		{
-			$this->addError(new Main\Error(Loc::getMessage('qrcodeauth_error_unique_id'), 'ERR_UNIQUE_ID'));
+			$this->addError(new Main\Error(
+				Loc::getMessage('qrcodeauth_error_unique_id_msgver_v1', [
+					'#HOST#' => Main\Context::getCurrent()->getRequest()->getHttpHost(),
+				]),
+				'ERR_UNIQUE_ID'
+			));
 
 			return null;
 		}

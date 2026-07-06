@@ -134,7 +134,7 @@ class CRatingRule
 		$bHideAction = isset($arRatingRuleConfigs['CONDITION_CONFIG'][$arFields["CONDITION_NAME"]]['HIDE_ACTION']) 
 							&& $arRatingRuleConfigs['CONDITION_CONFIG'][$arFields["CONDITION_NAME"]]['HIDE_ACTION'] == true? true: false;
 		
-		$conditionModuleId = $arRatingRuleConfigs['CONDITION_CONFIG'][$arFields["CONDITION_NAME"]]['MODULE'];
+		$conditionModuleId = $arRatingRuleConfigs['CONDITION_CONFIG'][$arFields["CONDITION_NAME"]]['MODULE'] ?? '';
 		$arFields_i = Array(
 			"ACTIVE"					=> $arFields["ACTIVE"] == 'Y' ? 'Y' : 'N',
 			"NAME"					=> $arFields["NAME"],

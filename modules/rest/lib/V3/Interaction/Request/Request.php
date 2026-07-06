@@ -66,7 +66,11 @@ abstract class Request
 		// input data
 		try
 		{
-			$httpRequest->decodeJsonStrict();
+			if (!empty($httpRequest::getInput()))
+			{
+				$httpRequest->decodeJsonStrict();
+			}
+
 			$input = $httpRequest->getJsonList()->getValues();
 		}
 		catch (SystemException)

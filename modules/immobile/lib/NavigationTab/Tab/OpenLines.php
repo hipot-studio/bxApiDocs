@@ -2,6 +2,7 @@
 
 namespace Bitrix\ImMobile\NavigationTab\Tab;
 
+use Bitrix\Im\V2\Folder\Folder;
 use Bitrix\ImMobile\NavigationTab\MessengerComponentTitle;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
@@ -13,7 +14,7 @@ class OpenLines extends BaseRecent
 
 	private ?Context $context = null;
 
-	public function __construct(Context $context)
+	public function __construct(Context $context, private readonly ?Folder $folder = null)
 	{
 		parent::__construct();
 
@@ -56,7 +57,7 @@ class OpenLines extends BaseRecent
 		return 'im.openlines.recent';
 	}
 
-	protected function getTabTitle(): ?string
+	public function getTabTitle(): ?string
 	{
 		return Loc::getMessage('TAB_NAME_IM_OPENLINES_SHORT');
 	}

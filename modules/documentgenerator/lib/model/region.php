@@ -3,7 +3,7 @@
 namespace Bitrix\DocumentGenerator\Model;
 
 use Bitrix\Main;
-use Bitrix\Main\Orm\Event;
+use Bitrix\Main\ORM\Event;
 
 /**
  * Class RegionTable
@@ -63,7 +63,7 @@ class RegionTable extends Main\ORM\Data\DataManager
 
 	/**
 	 * @param Event $event
-	 * @return Main\Orm\EventResult
+	 * @return Main\ORM\EventResult
 	 */
 	public static function onBeforeDelete(Event $event)
 	{
@@ -79,6 +79,6 @@ class RegionTable extends Main\ORM\Data\DataManager
 
 		RegionPhraseTable::deleteByRegionId($id);
 
-		return new Main\Orm\EventResult();
+		return new Main\ORM\EventResult();
 	}
 }

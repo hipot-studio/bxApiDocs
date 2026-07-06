@@ -720,8 +720,9 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			{
 				foreach ($data['PREPARE_BLOCK_DATA']['PARAMS'] as $paramName => $paramValue)
 				{
-					$search = "'" . $paramName . "' => '',";
-					$replace = "'" . $paramName . "' => '". $paramValue . "',";
+					$escapedParamName = \EscapePHPString($paramName, "'");
+					$search = "'" . $escapedParamName . "' => '',";
+					$replace = "'" . $escapedParamName . "' => '" . \EscapePHPString($paramValue, "'") . "',";
 					$content = str_replace($search, $replace, $content);
 				}
 			}
@@ -2170,6 +2171,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			$calledClasses[$landingPath]->init([
 				'site_id' => $this->getSiteId(),
 				'landing_id' => $this->getLandingId(),
+				'block' => $this,
 			]);
 		}
 

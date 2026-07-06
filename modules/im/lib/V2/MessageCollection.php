@@ -603,8 +603,8 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 
 		foreach ($this as $message)
 		{
-			$builder = $message->getParams()->get(Params::BUILDER)->getValue();
-			$message->setBuilder($builder);
+			$builder = $message->getParams()->get(Params::BLOCKS_BUILDER)->getValue();
+			$message->setBlocksBuilder($builder);
 		}
 
 		$this->isBuilderFilled = true;

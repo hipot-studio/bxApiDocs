@@ -13,7 +13,7 @@ abstract class BaseRecent implements TabInterface
 		$this->params = $this->getParams();
 	}
 
-	abstract protected function getTabTitle(): ?string;
+	abstract public function getTabTitle(): ?string;
 	abstract protected function isWidgetSupported(): bool;
 	abstract protected function getWidgetSettings(): array;
 

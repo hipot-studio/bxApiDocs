@@ -7,19 +7,19 @@ use Bitrix\Im\V2\SharingLink\Entity\LinkEntityType;
 use Bitrix\Im\V2\SharingLink\Type;
 use Bitrix\Main\Type\DateTime;
 
-final class CreateDto
+final readonly class CreateDto
 {
 	private function __construct(
-		public readonly string $entityId,
-		public readonly LinkEntityType $entityType,
-		public readonly int $authorId,
-		public readonly string $code = '',
-		public readonly Type $type = Type::Custom,
-		public readonly DateTime $dateCreate = new DateTime,
-		public readonly ?DateTime $dateExpire = null,
-		public readonly ?int $maxUses = null,
-		public readonly bool $requireApproval = false,
-		public readonly ?string $name = null,
+		public string $entityId,
+		public LinkEntityType $entityType,
+		public int $authorId,
+		public string $code = '',
+		public Type $type = Type::Custom,
+		public DateTime $dateCreate = new DateTime,
+		public ?DateTime $dateExpire = null,
+		public ?int $maxUses = null,
+		public bool $requireApproval = false,
+		public ?string $name = null,
 	){}
 
 	public static function initForPrimary(string $entityId, LinkEntityType $entityType, int $authorId): self
@@ -39,6 +39,51 @@ final class CreateDto
 			entityType: $entityType,
 			authorId: $authorId,
 			type: Type::Individual,
+		);
+	}
+
+	public static function initForGuestChat(string $chatId, int $authorId, ?int $maxUses = null): self
+	{
+		return new self(
+			entityId: $chatId,
+			entityType: LinkEntityType::GuestChat,
+			authorId: $authorId,
+			type: Type::Individual,
+			maxUses: $maxUses,
+		);
+	}
+
+	/**
+	 * Create DTO for a custom (non-unique) sharing link.
+	 *
+	 * Custom links allow multiple links per entity, useful for personalized invitations.
+	 */
+	public static function initForCustom(
+		string $entityId,
+		LinkEntityType $entityType,
+		int $authorId,
+		?string $name = null,
+		?int $maxUses = null,
+	): self
+	{
+		return new self(
+			entityId: $entityId,
+			entityType: $entityType,
+			authorId: $authorId,
+			type: Type::Custom,
+			name: $name,
+			maxUses: $maxUses,
+		);
+	}
+
+	public static function initForGuestChatCustom(string $chatId, int $authorId, ?string $name = null, ?int $maxUses = null): self
+	{
+		return self::initForCustom(
+			entityId: $chatId,
+			entityType: LinkEntityType::GuestChat,
+			authorId: $authorId,
+			name: $name,
+			maxUses: $maxUses,
 		);
 	}
 

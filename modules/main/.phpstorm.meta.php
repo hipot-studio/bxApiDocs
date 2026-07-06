@@ -164,4 +164,26 @@ namespace PHPSTORM_META
 	expectedArguments(\Bitrix\Main\Config\Option::set(), 0, argumentsSet('bitrix_main_modules_list'));
 	expectedArguments(\Bitrix\Main\Config\Configuration::getInstance(), 0, argumentsSet('bitrix_main_modules_list'));
 	expectedArguments(\Bitrix\Main\DI\ServiceLocator::registerByModuleSettings(), 0, argumentsSet('bitrix_main_modules_list'));
+
+	expectedArguments(
+		\Bitrix\Main\UpdateSystem\Migration\Table::create(),
+		0,
+		function (\Bitrix\Main\UpdateSystem\Migration\CreateTableBuilder $table) {
+
+},
+	);
+	expectedArguments(
+		\Bitrix\Main\UpdateSystem\Migration\Table::alter(),
+		0,
+		function (\Bitrix\Main\UpdateSystem\Migration\AlterTableBuilder $table) {
+
+},
+	);
+	expectedArguments(
+		\Bitrix\Main\UpdateSystem\Migration\Table::drop(),
+		0,
+		function (\Bitrix\Main\UpdateSystem\Migration\DropTableBuilder $table) {
+
+},
+	);
 }

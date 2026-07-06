@@ -1,76 +1,43 @@
 <?php
+
 namespace Bitrix\Sign\Debug;
 
 use Bitrix\Main\Diag;
 use Psr\Log;
-use Stringable;
 
+/**
+ * Decorator on top of a PSR-3 logger. Adds non-PSR-3 methods dump()/trace().
+ * Log level threshold and formatter are owned by the inner logger.
+ */
 class Logger extends Diag\Logger implements Log\LoggerAwareInterface
 {
 	use Log\LoggerAwareTrait;
 
-	private const INTERNAL_LOGGER_ID = 'SignDebugLogger';
-
-	private ?string $host;
-
-	public static function getInstance(string $host = null): self
-	{
-		static $instance;
-		if ($instance === null)
-		{
-			if (is_null($host))
-			{
-				$context = \Bitrix\Main\Context::getCurrent();
-				$host = $context ? $context->getServer()->getHttpHost() : null;
-			}
-
-			$logger = Diag\Logger::create(self::INTERNAL_LOGGER_ID, [$host]);
-			if ($logger)
-			{
-				$logger->setFormatter(new LogFormatter());
-			}
-
-			$instance = new self($logger, $host);
-		}
-		return $instance;
-	}
-
-	protected function __construct(?Log\LoggerInterface $logger, ?string $host)
+	public function __construct(?Log\LoggerInterface $logger = null)
 	{
 		if ($logger)
 		{
 			$this->setLogger($logger);
 		}
-		$this->host = $host;
-	}
-
-	public function trace(string|\Stringable $message = ''): void
-	{
-		$this->debug($message, [
-			LogFormatter::PLACEHOLDER_TRACE => debug_backtrace(),
-		]);
-	}
-
-	public function dump(mixed $dump, string|\Stringable $message = ''): void
-	{
-		$this->debug($message, [
-			LogFormatter::SIGN_PLACEHOLDER_DUMP => $dump,
-		]);
 	}
 
 	public function log($level, string|\Stringable $message, array $context = []): void
 	{
-		if ($logger = $this->getInternalLogger())
-		{
-			$context[LogFormatter::SIGN_PLACEHOLDER_HOST] = $this->host;
-			$logger->log($level, $message, $context);
-		}
+		$this->logger?->log($level, $message, $context);
+	}
+
+	public function dump(mixed $dump, string|\Stringable $message = ''): void
+	{
+		$placeholder = '{' . SecretMaskingFormatter::PLACEHOLDER_DUMP . '}';
+		$text = $message !== '' ? ($message . ' ' . $placeholder) : $placeholder;
+		$this->debug($text, [SecretMaskingFormatter::PLACEHOLDER_DUMP => $dump]);
+	}
+
+	public function trace(string|\Stringable $message = ''): void
+	{
+		$text = $message !== '' ? ($message . ' {trace}') : '{trace}';
+		$this->debug($text, ['trace' => debug_backtrace()]);
 	}
 
 	protected function logMessage(string $level, string $message) {}
-
-	private function getInternalLogger(): ?Log\LoggerInterface
-	{
-		return $this->logger;
-	}
 }

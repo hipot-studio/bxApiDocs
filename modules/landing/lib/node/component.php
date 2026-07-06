@@ -3,6 +3,7 @@ namespace Bitrix\Landing\Node;
 
 use Bitrix\Landing\Block;
 use Bitrix\Landing\History;
+use Bitrix\Landing\Node\Component\SaveParametersNormalizer;
 use \Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
 
@@ -36,6 +37,44 @@ class Component extends \Bitrix\Landing\Node
 		{
 			self::$predefineForDynamicProps[$code] = $val;
 		}
+	}
+
+	/**
+	 * Check if manual add-to-basket action can work for current block.
+	 * @param Block $block Block instance.
+	 * @return bool
+	 */
+	protected static function isManualAddToBasketActionAvailable(Block $block): bool
+	{
+		if (!\Bitrix\Main\ModuleManager::isModuleInstalled('sale'))
+		{
+			return false;
+		}
+
+		$classBlock = $block->getBlockClass();
+		if (!$classBlock)
+		{
+			return false;
+		}
+
+		$syspageType = $classBlock->getAddToBasketActionSyspageType($block);
+		if ($syspageType === null)
+		{
+			return false;
+		}
+
+		$siteId = (int)$block->getSiteId();
+		if ($siteId <= 0)
+		{
+			return false;
+		}
+
+		$syspages = \Bitrix\Landing\Syspage::get(
+			$siteId,
+			$classBlock->isAddToBasketActionSyspageActiveOnly($block)
+		);
+
+		return isset($syspages[$syspageType]);
 	}
 
 	/**
@@ -159,6 +198,12 @@ class Component extends \Bitrix\Landing\Node
 			}
 			if (!empty($updateProps))
 			{
+				$updateProps = SaveParametersNormalizer::normalize(
+					$block,
+					$selector,
+					$updateProps,
+					$allowedProps
+				);
 				// !tmp bugfix about set section id to null
 				if (
 					array_key_exists('SECTION_ID', $updateProps) &&
@@ -251,6 +296,7 @@ class Component extends \Bitrix\Landing\Node
 		$classBlock = $block->getBlockClass();
 		foreach ($components as $component)
 		{
+			$componentParamsOriginal = $component['DATA']['PARAMS'];
 			foreach ($component['DATA']['PARAMS'] as $key => $param)
 			{
 				if (
@@ -331,7 +377,49 @@ class Component extends \Bitrix\Landing\Node
 					{
 						// change node manifest
 						$newExtra[$field] = $props[$field];
+						if (isset($fieldItem['VALUES']))
+						{
+							$newExtra[$field]['VALUES'] =
+								$fieldItem['VALUES'] + ($newExtra[$field]['VALUES'] ?? []);
+						}
+						if (isset($fieldItem['DEFAULT']))
+						{
+							$newExtra[$field]['DEFAULT'] = $fieldItem['DEFAULT'];
+						}
+						if (isset($fieldItem['MULTIPLE']))
+						{
+							$newExtra[$field]['MULTIPLE'] = $fieldItem['MULTIPLE'];
+						}
 						$newExtra[$field]['VALUE'] = $component['DATA']['PARAMS'][$field] ?? null;
+						if (
+							isset($fieldItem['DYNAMIC_VALUE'])
+							&& isset($componentParamsOriginal[$field])
+							&& self::checkPhpCode([$field => $componentParamsOriginal[$field]])
+						)
+						{
+							$newExtra[$field]['VALUE'] = $fieldItem['DYNAMIC_VALUE'];
+						}
+						if (
+							isset($newExtra[$field]['MULTIPLE'])
+							&& $newExtra[$field]['MULTIPLE'] === 'N'
+							&& is_array($newExtra[$field]['VALUE'])
+						)
+						{
+							$fieldValue = $newExtra[$field]['VALUE'];
+							$newExtra[$field]['VALUE'] = reset($fieldValue);
+						}
+						if (
+							$field === 'ADD_TO_BASKET_ACTION'
+							&& isset($newExtra[$field]['VALUES']['ADD'])
+							&& !self::isManualAddToBasketActionAvailable($block)
+						)
+						{
+							unset($newExtra[$field]['VALUES']['ADD']);
+							if ($newExtra[$field]['VALUE'] === 'ADD')
+							{
+								$newExtra[$field]['VALUE'] = 'BUY';
+							}
+						}
 						// add attr
 						if (!isset($manifestFull['attrs'][$componentName]))
 						{

@@ -131,7 +131,7 @@ class Notification
 	{
 		foreach($this->data->entity->getFields() as $fieldName => $field)
 		{
-			if(!isset($values[$fieldName]))
+			if(!isset($values[$fieldName]) && !($field instanceof Fields\BooleanField))
 			{
 				continue;
 			}
@@ -144,7 +144,7 @@ class Notification
 				continue;
 			}
 
-			$value = $values[$fieldName];
+			$value = $values[$fieldName] ?? '';
 			if($field instanceof Fields\BooleanField)
 			{
 				$value = ($value == "Y");
@@ -214,7 +214,6 @@ class Notification
 	{
 		if(($first = substr($name, 0, 3)) == "get" || $first == "set")
 		{
-			/** @noinspection PhpUndefinedMethodInspection */
 			return $this->data->__call($name, $arguments);
 		}
 

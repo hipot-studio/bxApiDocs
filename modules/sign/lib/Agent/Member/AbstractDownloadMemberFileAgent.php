@@ -2,7 +2,6 @@
 
 namespace Bitrix\Sign\Agent\Member;
 
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Operation\Member\AbstractDownloadMemberFile;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Type\EntityType;
@@ -20,7 +19,7 @@ abstract class AbstractDownloadMemberFileAgent
 
 	public static function run(int $documentId, int $memberId, int $attempt = 1): string
 	{
-		$logger = Logger::getInstance();
+		$logger = Container::instance()->getLogger('Agent');
 		$agentClassName = static::class;
 		try
 		{

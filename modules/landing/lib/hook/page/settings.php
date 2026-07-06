@@ -33,6 +33,7 @@ class Settings extends \Bitrix\Landing\Hook\Page
 		'HIDE_NOT_AVAILABLE_OFFERS' => 'N',
 		'PRODUCT_SUBSCRIPTION' => 'Y',
 		'USE_PRODUCT_QUANTITY' => 'Y',
+		'ADD_TO_BASKET_ACTION' => 'AUTO',
 		'DISPLAY_COMPARE' => 'Y',
 		'PRICE_CODE' => [
 			'BASE'

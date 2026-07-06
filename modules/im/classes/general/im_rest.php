@@ -292,12 +292,15 @@ class CIMRestService extends IRestService
 			throw new Bitrix\Rest\RestException("User is not exists", "USER_NOT_EXISTS", CRestServer::STATUS_WRONG_REQUEST);
 		}
 
-		$currentUserId = \Bitrix\Im\User::getInstance()->getId();
-		$isExtranet = \Bitrix\Im\User::getInstance()->isExtranet();
+		$currentUser = \Bitrix\Im\V2\Entity\User\User::getCurrent();
+		$currentUserId = $currentUser->getId();
 
-		if ($isExtranet && !\Bitrix\Im\Integration\Socialnetwork\Extranet::isUserInGroup($userId, $currentUserId))
+		if ($currentUser->isExtranet())
 		{
-			throw new Bitrix\Rest\RestException("You can request only users who consist of your extranet group", "ACCESS_DENIED", CRestServer::STATUS_WRONG_REQUEST);
+			if (!$currentUser->checkAccess($userId)->isSuccess())
+			{
+				throw new Bitrix\Rest\RestException("You can request only users who consist of your extranet group", "ACCESS_DENIED", CRestServer::STATUS_WRONG_REQUEST);
+			}
 		}
 
 		$result = $user->getArray(Array('JSON' => 'Y', 'HR_PHOTO' => isset($arParams['AVATAR_HR']) && $arParams['AVATAR_HR'] == 'Y'));
@@ -739,6 +742,11 @@ class CIMRestService extends IRestService
 			}
 
 			$arParams['DIALOG_ID'] = 'chat'.$arParams['CHAT_ID'];
+		}
+
+		if (!\Bitrix\Im\Dialog::hasAccess($arParams['DIALOG_ID']))
+		{
+			throw new Bitrix\Rest\RestException("You don't have access to this dialog", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
 		}
 
 		$result = CIMMessenger::StartWriting($arParams['DIALOG_ID']);
@@ -1981,6 +1989,11 @@ class CIMRestService extends IRestService
 		if (CIMChat::GetGeneralChatId() == $arParams['CHAT_ID'])
 		{
 			throw new Bitrix\Rest\RestException("Action unavailable", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
+		}
+
+		if (!\Bitrix\Im\Dialog::hasAccess('chat' . $arParams['CHAT_ID']))
+		{
+			throw new Bitrix\Rest\RestException("You don't have access to this chat", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
 		}
 
 		$userId = $USER->GetID();

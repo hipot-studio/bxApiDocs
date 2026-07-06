@@ -4,44 +4,48 @@ declare(strict_types=1);
 
 namespace Bitrix\Rest\Internal\Access\Preset;
 
-use Bitrix\Rest\Internal\Entity\Access\EntityType;
-use Bitrix\Rest\Internal\Entity\Access\PermissionType;
-use Bitrix\Rest\Internal\Service\AccessPermissionService;
+use Bitrix\Rest\Internal\Access\AppAccessChecker;
 use Bitrix\Rest\Preset\Data\Element;
 use Bitrix\Main\AccessDeniedException;
 use Bitrix\Main\SystemException;
-use Bitrix\Rest\Internal\Access\UserContext;
+use Bitrix\Rest\Internal\Access\WebhookAccessChecker;
+use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
 
 class PresetAccessChecker
 {
-	private AccessPermissionService $accessPermissionService;
+	private WebhookAccessChecker $webhookAccessChecker;
+	private AppAccessChecker $appAccessChecker;
 
-	public function __construct(protected UserContext $userContext)
+	public function __construct(protected RestUserModel $user)
 	{
-		$this->accessPermissionService = new AccessPermissionService();
+		$this->webhookAccessChecker = new WebhookAccessChecker($user->getId());
+		$this->appAccessChecker = new AppAccessChecker($user->getId());
 	}
 
 	public function ensureCanEdit(array $presetData): void
 	{
 		$this->checkIntegrity($presetData);
-		$this->checkAccess($presetData);
-		$this->checkAccessToIncomingWebhook($presetData, PermissionType::Manage);
+		$this->checkAccess($presetData, allowNonAdminNonWebhookPreset: false);
+		$this->checkAccessToIncomingWebhook($presetData, $this->webhookAccessChecker->canManageAnyIncomingWebhook(...));
+		$this->checkAccessToApplication($presetData, $this->appAccessChecker->canInstallLocal(...));
 	}
 
 	public function ensureCanEditOwn(array $presetData): void
 	{
 		$this->checkIntegrity($presetData);
-		$this->checkAccess($presetData);
-		$this->checkAccessToIncomingWebhook($presetData,  PermissionType::ManageOwn);
+		$this->checkAccess($presetData, allowNonAdminNonWebhookPreset: false);
+		$this->checkAccessToIncomingWebhook($presetData, $this->webhookAccessChecker->canManageOwnIncomingWebhook(...));
+		$this->checkAccessToApplication($presetData, $this->getAppAccessCheckerCallback($presetData));
 	}
 
-	public function ensureCanCreateOwn(array $presetData)
+	public function ensureCanCreateOwn(array $presetData): void
 	{
 		$this->checkIntegrity($presetData);
-		$this->checkAccess($presetData);
-		$this->checkAccessToIncomingWebhook($presetData,  PermissionType::CreateOwn);
+		$this->checkAccess($presetData, allowNonAdminNonWebhookPreset: true);
+		$this->checkAccessToIncomingWebhook($presetData, $this->webhookAccessChecker->canCreateOwnIncomingWebhook(...));
+		$this->checkAccessToApplication($presetData, $this->getAppAccessCheckerCallback($presetData));
 	}
 
 	/**
@@ -82,18 +86,21 @@ class PresetAccessChecker
 	 * @return void
 	 * @throws AccessDeniedException
 	 */
-	protected function checkAccess(array $presetData): void
+	protected function checkAccess(array $presetData, bool $allowNonAdminNonWebhookPreset): void
 	{
-		if ($this->userContext->isAdmin())
+		if ($this->user->isAdmin())
 		{
 			return;
 		}
 
-		$isAdminOnly = ($presetData['ADMIN_ONLY'] ?? Element::VALUE_NO) === Element::VALUE_YES;
-		$widgetNeeded = ($presetData['OPTIONS']['WIDGET_NEEDED'] ?? Element::VALUE_NO) !== Element::VALUE_DEFAULT;
-		$applicationNeeded = ($presetData['OPTIONS']['APPLICATION_NEEDED'] ?? Element::VALUE_NO) !== Element::VALUE_DEFAULT;
+		if (($presetData['ADMIN_ONLY'] ?? Element::VALUE_NO) === Element::VALUE_YES)
+		{
+			throw new AccessDeniedException(
+				Loc::getMessage('REST_INTEGRATION_ACCESS_DENIED')
+			);
+		}
 
-		if ($isAdminOnly || $widgetNeeded || $applicationNeeded)
+		if (!$allowNonAdminNonWebhookPreset && !$this->isWebhookPreset($presetData))
 		{
 			throw new AccessDeniedException(
 				Loc::getMessage('REST_INTEGRATION_ACCESS_DENIED')
@@ -101,30 +108,76 @@ class PresetAccessChecker
 		}
 	}
 
-	protected function checkAccessToIncomingWebhook(array $presetData, PermissionType $permissionType): void
+	/**
+	 * @param callable(): bool $accessCheck
+	 * @throws AccessDeniedException
+	 */
+	protected function checkAccessToIncomingWebhook(array $presetData, callable $accessCheck): void
 	{
-		if ($this->userContext->isAdmin())
+		if (!$this->isWebhookPreset($presetData))
 		{
 			return;
 		}
 
-		if (($presetData['QUERY_NEEDED'] ?? 'Y') === 'N')
+		if (!$accessCheck())
+		{
+			throw new AccessDeniedException(
+				Loc::getMessage('REST_INTEGRATION_ACCESS_DENIED')
+			);
+		}
+	}
+
+	protected function checkAccessToApplication(array $presetData, callable $accessCheck): void
+	{
+		if (!$this->isApplicationPreset($presetData))
 		{
 			return;
 		}
-
-		$accessCodes = $this->accessPermissionService->getAccessCodes(
-			EntityType::IncomingWebhook,
-			$permissionType
-		);
-
-		if ($this->userContext->canAccess($accessCodes))
+		if (!$accessCheck())
 		{
-			return;
+			throw new AccessDeniedException(
+				Loc::getMessage('REST_INTEGRATION_ACCESS_DENIED')
+			);
+		}
+	}
+
+	private function isApplicationPreset(array $presetData): bool
+	{
+		return $this->getPresetValue($presetData, 'APPLICATION_NEEDED', Element::VALUE_DEFAULT) !== Element::VALUE_DEFAULT
+			|| $this->getPresetValue($presetData, 'WIDGET_NEEDED', Element::VALUE_DEFAULT) !== Element::VALUE_DEFAULT;
+	}
+
+	private function isWebhookPreset(array $presetData): bool
+	{
+		return $this->getPresetValue($presetData, 'QUERY_NEEDED', Element::VALUE_YES) !== Element::VALUE_DEFAULT;
+	}
+
+	private function getPresetValue(array $presetData, string $key, string $default): string
+	{
+		if (array_key_exists($key, $presetData))
+		{
+			return (string)$presetData[$key];
 		}
 
-		throw new AccessDeniedException(
-			Loc::getMessage('REST_INTEGRATION_ACCESS_DENIED')
-		);
+		$options = $presetData['OPTIONS'] ?? null;
+		if (is_array($options) && array_key_exists($key, $options))
+		{
+			return (string)$options[$key];
+		}
+
+		return $default;
+	}
+
+	private function isPersonalApplicationPreset(array $presetData): bool
+	{
+		return $this->getPresetValue($presetData, 'IS_APPLICATION_PERSONAL', Element::VALUE_DEFAULT) === Element::VALUE_YES;
+	}
+
+	private function getAppAccessCheckerCallback(array $presetData): callable
+	{
+		return ($this->isApplicationPreset($presetData) && !$this->isPersonalApplicationPreset($presetData))
+			? $this->appAccessChecker->canInstallLocal(...)
+			: $this->appAccessChecker->canInstallPersonal(...)
+		;
 	}
 }

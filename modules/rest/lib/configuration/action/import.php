@@ -557,6 +557,18 @@ class Import extends Base
 					{
 						Sender::bind('rest', 'OnRestAppInstall');
 					}
+					// checkCallback is already called inside checkFields
+					$bindUserReady = EventTable::add(
+						[
+							'APP_ID' => $app['ID'],
+							'EVENT_NAME' => 'ONAPPUSERREADY',
+							'EVENT_HANDLER' => $app['URL_INSTALL'],
+						]
+					);
+					if ($bindUserReady->isSuccess())
+					{
+						Sender::bind('rest', 'OnRestAppUserReady');
+					}
 				}
 
 				AppTable::install($app['ID']);

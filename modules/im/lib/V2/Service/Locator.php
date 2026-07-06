@@ -3,6 +3,8 @@
 namespace Bitrix\Im\V2\Service;
 
 use Bitrix\Im\V2\Pull\Sender;
+use Bitrix\Im\V2\SharingLink\Transport\GuestInviteEmailTransportInterface;
+use Bitrix\Im\V2\SharingLink\Transport\GuestInviteSmsTransportInterface;
 use Bitrix\Main\DI\ServiceLocator;
 
 class Locator
@@ -25,6 +27,16 @@ class Locator
 	public static function getAccessService(): AccessService
 	{
 		return ServiceLocator::getInstance()->get('Im.AccessService');
+	}
+
+	public static function getGuestInviteSmsTransport(): GuestInviteSmsTransportInterface
+	{
+		return ServiceLocator::getInstance()->get('Im.GuestInviteSmsTransport');
+	}
+
+	public static function getGuestInviteEmailTransport(): GuestInviteEmailTransportInterface
+	{
+		return ServiceLocator::getInstance()->get('Im.GuestInviteEmailTransport');
 	}
 
 	public static function getContext(): Context

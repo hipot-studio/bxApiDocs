@@ -30,6 +30,28 @@ class RecentUpdater
 		$this->cache->remove($forUserId, $forChatId);
 	}
 
+	public function setPinned(int $forUserId, Chat $chat, bool $pinned): void
+	{
+		$chatId = (int)$chat->getChatId();
+		if ($chatId <= 0)
+		{
+			return;
+		}
+
+		RecentTable::updateByFilter(
+			[
+				'=USER_ID' => $forUserId,
+				'=ITEM_CID' => $chatId,
+			],
+			[
+				'PINNED' => $pinned ? 'Y' : 'N',
+				'DATE_UPDATE' => new DateTime(),
+			],
+		);
+
+		$this->cache->remove($forUserId, $chatId);
+	}
+
 	public function updateByType(
 		int $forUserId,
 		Chat\Type $forType,

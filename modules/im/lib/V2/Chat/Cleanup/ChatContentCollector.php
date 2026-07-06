@@ -12,6 +12,8 @@ use Bitrix\Im\Model\BlockUserTable;
 use Bitrix\Im\Model\ChatIndexTable;
 use Bitrix\Im\Model\ChatParamTable;
 use Bitrix\Im\Model\ChatTable;
+use Bitrix\Im\Model\FolderChatTable;
+use Bitrix\Im\Model\FolderPinTable;
 use Bitrix\Im\Model\LastMessageTable;
 use Bitrix\Im\Model\LinkCalendarIndexTable;
 use Bitrix\Im\Model\LinkCalendarTable;
@@ -287,6 +289,8 @@ class ChatContentCollector
 		$this->deleteByColumn(ChatTable::class, [$this->chatId]);
 		Chat::cleanCache($this->chatId);
 		$this->deleteByColumn(RecentTable::class, [$this->chatId], 'ITEM_CID');
+		$this->deleteByColumn(FolderChatTable::class, [$this->chatId], 'CHAT_ID');
+		$this->deleteByColumn(FolderPinTable::class, [$this->chatId], 'CHAT_ID');
 		$this->deleteByColumn(MessageUnreadTable::class, [$this->chatId], 'CHAT_ID');
 		$this->deleteByColumn(MessageUnreadTable::class, [$this->chatId], 'PARENT_ID');
 		$this->cleanupCounterCache();

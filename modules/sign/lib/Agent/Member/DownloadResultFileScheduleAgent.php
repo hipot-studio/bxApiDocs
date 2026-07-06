@@ -2,7 +2,6 @@
 
 namespace Bitrix\Sign\Agent\Member;
 
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Service\Container;
 use CAgent;
 use CTimeZone;
@@ -12,7 +11,7 @@ final class DownloadResultFileScheduleAgent
 {
 	public static function run(): string
 	{
-		$logger = Logger::getInstance();
+		$logger = Container::instance()->getLogger('Agent');
 		try {
 			$members = Container::instance()->getMemberService()->listMembersWithResultFileMissing();
 			$assigneeMembers = Container::instance()->getMemberService()->listAssigneesWithResultFileMissing();

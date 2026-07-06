@@ -3,19 +3,20 @@
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
-use \Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
-use \Bitrix\Main\Web\HttpClient;
-use \Bitrix\Main\Web\Json;
-use \Bitrix\Main\Web\JWT;
+use Bitrix\Main\Web\HttpClient;
+use Bitrix\Main\Web\Json;
+use Bitrix\Main\Web\JWT;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Socialservices\OAuth\StateService;
 use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Socialservices\UserTable;
 use Bitrix\Socialservices\ZoomMeetingTable;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServZoom extends CSocServAuth
@@ -35,7 +36,7 @@ class CSocServZoom extends CSocServAuth
 			[
 				'note' => Loc::getMessage(
 						'SOCSERV_ZOOM_SETT_NOTE_2',
-						['#URL#'=>\CHTTP::URN2URI('/bitrix/tools/oauth/zoom.php')]
+						['#URL#'=>(string)(new Uri('/bitrix/tools/oauth/zoom.php'))->toAbsolute()]
 				)
 			],
 		];
@@ -66,11 +67,11 @@ class CSocServZoom extends CSocServAuth
 	{
 		$url = $this->getUrl($arParams);
 
-		$phrase = ($arParams['FOR_INTRANET'])
+		$phrase = isset($arParams['FOR_INTRANET']) && $arParams['FOR_INTRANET']
 			? GetMessage('SOCSERV_ZOOM_NOTE_INTRANET')
 			: GetMessage('SOCSERV_ZOOM_NOTE');
 
-		return $arParams['FOR_INTRANET']
+		return isset($arParams['FOR_INTRANET']) && $arParams['FOR_INTRANET']
 			? array('ON_CLICK' => 'onclick="BX.util.popup(\'' . htmlspecialcharsbx(CUtil::JSEscape($url)) . '\', 680, 800)"')
 			: '<a href="javascript:void(0)" onclick="BX.util.popup(\'' . htmlspecialcharsbx(CUtil::JSEscape($url)) . '\', 680, 800)" class="bx-ss-button zoom-button"></a><span class="bx-spacer"></span><span>' . $phrase . '</span>';
 	}
@@ -512,7 +513,7 @@ class CSocServZoom extends CSocServAuth
 
 	private function attachPasswordToUrl(string $conferenceUrl, string $password): string
 	{
-		$url = new \Bitrix\Main\Web\Uri($conferenceUrl);
+		$url = new Uri($conferenceUrl);
 		$queryParams = $url->getQuery();
 		$parsedParams = [];
 		parse_str($queryParams, $parsedParams);
@@ -582,7 +583,7 @@ class CZoomInterface extends CSocServOAuthTransport
 
 	public function GetRedirectURI(): string
 	{
-		return \CHTTP::URN2URI('/bitrix/tools/oauth/zoom.php');
+		return (string)(new Uri('/bitrix/tools/oauth/zoom.php'))->toAbsolute();
 	}
 
 	public function GetAuthUrl($redirect_uri, $state = ''): string

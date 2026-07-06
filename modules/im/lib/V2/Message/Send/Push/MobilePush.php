@@ -6,8 +6,8 @@ use Bitrix\Im\Text;
 use Bitrix\Im\User;
 use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Message;
-use Bitrix\Im\V2\Message\Builder\Entity\Builder;
-use Bitrix\Im\V2\Message\Builder\BuilderService;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlocksBuilder;
+use Bitrix\Im\V2\Message\BlocksBuilder\BuilderService;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
@@ -334,7 +334,7 @@ class MobilePush
 		}
 
 		$builder = $message['message']['builder'] ?? null;
-		if ($builder instanceof Builder && empty($messageText))
+		if ($builder instanceof BlocksBuilder && empty($messageText))
 		{
 			$messageText = BuilderService::getPlaceholder();
 		}
@@ -633,7 +633,7 @@ class MobilePush
 		{
 			$result['sticker'] = $event['stickers'][0];
 		}
-		
+
 		if (isset($event['recentConfig']))
 		{
 			$result['recentConfig'] = $event['recentConfig'];

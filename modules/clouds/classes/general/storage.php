@@ -531,6 +531,12 @@ class CCloudStorage
 		}
 		else
 		{
+			$obSourceBucket = new CCloudStorageBucket(intval($arFile['HANDLER_ID']));
+			if ($obSourceBucket->Init())
+			{
+				$cacheImageFile = $obSourceBucket->GetFileSRC($arFile, false);
+			}
+
 			return false;
 		}
 
@@ -715,6 +721,23 @@ class CCloudStorage
 		//File in the Sky with Diamonds
 		if ($task['ERROR_CODE'] == 9)
 		{
+			$touchPeriodDays = COption::GetOptionInt('clouds', 'resize_touch_period_days');
+			$touchBefore = time() - ($touchPeriodDays * 86400);
+			$taskTimestamp = MakeTimeStamp($task['TIMESTAMP_X']);
+
+			if ($taskTimestamp > 0 && $taskTimestamp < ($touchBefore + CTimeZone::GetOffset()))
+			{
+				$DB->Query('
+					UPDATE b_clouds_file_resize
+					SET TIMESTAMP_X = ' . $DB->CurrentTimeFunction() . '
+					WHERE ID = ' . (int)$task['ID'] . '
+						AND ERROR_CODE = 9
+						AND TIMESTAMP_X < ' . $DB->CharToDateFunction(
+							ConvertTimeStamp($touchBefore, 'FULL'), 'FULL',
+						) . '
+				');
+			}
+
 			return true;
 		}
 
@@ -941,6 +964,117 @@ class CCloudStorage
 		\Bitrix\Clouds\FileHashTable::deleteByFilePath($bucket->ID, '/' . $arFile['SUBDIR'] . '/' . $arFile['FILE_NAME']);
 
 		return $result;
+	}
+
+	public static function ResizeImageCleanAgent()
+	{
+		$cutoffDays = COption::GetOptionInt('clouds', 'resize_cache_max_age_days');
+		$batchSize = COption::GetOptionInt('clouds', 'resize_cache_clean_batch');
+
+		$cutoffDate = new \Bitrix\Main\Type\DateTime();
+		$cutoffDate->add('-' . $cutoffDays . ' days');
+
+		$rows = \Bitrix\Clouds\FileResizeTable::query()
+			->setSelect(['ID', 'TO_PATH'])
+			->where('ERROR_CODE', 9)
+			->where('TIMESTAMP_X', '<', $cutoffDate)
+			->setOrder(['TIMESTAMP_X' => 'ASC'])
+			->setLimit($batchSize)
+			->fetchAll()
+		;
+
+		$deletedIds = [];
+		$deleteSize = 0;
+		$errorCount = 0;
+
+		$buckets = [];
+		foreach (CCloudStorageBucket::GetAllBuckets() as $arBucket)
+		{
+			if ($arBucket['ACTIVE'] !== 'Y')
+			{
+				continue;
+			}
+			if ($arBucket['READ_ONLY'] === 'Y')
+			{
+				continue;
+			}
+			$obBucket = new CCloudStorageBucket($arBucket['ID']);
+			if ($obBucket->Init())
+			{
+				$baseURL = preg_replace('/^https?:/i', '', $obBucket->GetFileSRC('/'));
+				$buckets[] = ['bucket' => $obBucket, 'baseURL' => $baseURL];
+			}
+		}
+
+		foreach ($rows as $task)
+		{
+			$toPathEncoded = $task['TO_PATH'];
+
+			$bucket = null;
+			$baseURL = '';
+			foreach ($buckets as $item)
+			{
+				if (mb_strpos($toPathEncoded, $item['baseURL']) === 0)
+				{
+					$bucket = $item['bucket'];
+					$baseURL = $item['baseURL'];
+					break;
+				}
+			}
+
+			if (!$bucket)
+			{
+				$deletedIds[] = (int)$task['ID'];
+
+				continue;
+			}
+
+			$pathInBucket = rawurldecode(mb_substr($toPathEncoded, mb_strlen($baseURL) - 1));
+
+			if (!$bucket->FileExists($pathInBucket))
+			{
+				$deletedIds[] = (int)$task['ID'];
+
+				continue;
+			}
+
+			$fileSize = $bucket->GetFileSize($pathInBucket);
+
+			if ($bucket->DeleteFile($pathInBucket))
+			{
+				$bucket->DecFileCounter($fileSize);
+				$deleteSize += $fileSize;
+				$deletedIds[] = (int)$task['ID'];
+			}
+			else
+			{
+				$errorCount++;
+			}
+		}
+
+		if (!empty($deletedIds))
+		{
+			\Bitrix\Clouds\FileResizeTable::deleteByFilter(['@ID' => $deletedIds]);
+		}
+
+		/****************************** QUOTA ******************************/
+		if ($deleteSize > 0 && COption::GetOptionInt('main', 'disk_space') > 0)
+		{
+			CDiskQuota::updateDiskQuota('file', $deleteSize, 'delete');
+		}
+		/****************************** QUOTA ******************************/
+
+		if (COption::GetOptionString('clouds', 'resize_cache_clean_log', 'N') === 'Y')
+		{
+			$deletedCount = count($deletedIds);
+			if ($deletedCount > 0 || $errorCount > 0)
+			{
+				CEventLog::Log('INFO', 'CLOUDS_RESIZE_CLEAN', 'clouds', $deletedCount,
+					'Deleted: ' . $deletedCount . ', Errors: ' . $errorCount);
+			}
+		}
+
+		return __CLASS__ . '::ResizeImageCleanAgent();';
 	}
 
 	public static function DeleteDirFilesEx($path)

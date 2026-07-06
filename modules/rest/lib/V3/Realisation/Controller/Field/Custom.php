@@ -5,11 +5,9 @@ namespace Bitrix\Rest\V3\Realisation\Controller\Field;
 use Bitrix\Main\Request;
 use Bitrix\Main\SystemException;
 use Bitrix\Rest\V3\Attribute\RequiredGroup;
-use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Exception\EntityAlreadyExistsException;
 use Bitrix\Rest\V3\Exception\EntityNotFoundException;
 use Bitrix\Rest\V3\Exception\Internal\InternalException;
-use Bitrix\Rest\V3\Exception\Validation\DtoValidationException;
 use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
 use Bitrix\Rest\V3\Interaction\Request\AddRequest;
 use Bitrix\Rest\V3\Interaction\Request\DeleteRequest;
@@ -20,19 +18,15 @@ use Bitrix\Rest\V3\Interaction\Response\BooleanResponse;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
 use Bitrix\Rest\V3\Interaction\Response\ListResponse;
 use Bitrix\Rest\V3\Realisation\Dto\Field\CustomDto;
-use Bitrix\Rest\V3\Realisation\Dto\Mapping\CustomMapper;
 use CUserTypeEntity;
 
 final class Custom extends AbstractCustom
 {
 	private CUserTypeEntity $userTypeEntity;
-	private CustomMapper $mapper;
 
 	public function __construct(Request $request = null)
 	{
 		$this->userTypeEntity = new CUserTypeEntity();
-		$this->mapper = new CustomMapper();
-
 		return parent::__construct($request);
 	}
 
@@ -40,15 +34,9 @@ final class Custom extends AbstractCustom
 	{
 		$selectedFields = $request->select ? $request->select->getList() : [];
 		$customFields = $this->getCustomFieldsByFieldId($entityId, $this->getCurrentUser()->getId(), $this->getResponseLanguage());
-		$result = $this->mapper->mapCollection($customFields, $selectedFields);
+		$result = $this->getDtoMapper()->mapCollection($customFields, $selectedFields);
 
 		return new ListResponse($result);
-	}
-
-	public function getAction(GetRequest $request, string $entityId): GetResponse
-	{
-		$selectedFields = $request->select ? $request->select->getList() : [];
-		return $this->getResponseWithOneField($entityId, $request->id, $selectedFields);
 	}
 
 	public function addAction(AddRequest $request): GetResponse
@@ -62,8 +50,8 @@ final class Custom extends AbstractCustom
 			throw new EntityAlreadyExistsException($dto->name);
 		}
 
-		$valuesForAdd = $this->mapper->getValuesForAdd($dto);
-		$fieldId = $this->userTypeEntity->Add($valuesForAdd);
+		$mapper = $this->getDtoMapper();
+		$fieldId = $this->userTypeEntity->Add($mapper->getValuesForAdd($dto));
 		if ($fieldId === false)
 		{
 			global $APPLICATION;
@@ -72,6 +60,12 @@ final class Custom extends AbstractCustom
 		$this->unsetFieldsByEntityId($dto->entityId);
 
 		return $this->getResponseWithOneField($dto->entityId, $fieldId);
+	}
+
+	public function getAction(GetRequest $request, string $entityId): GetResponse
+	{
+		$selectedFields = $request->select ? $request->select->getList() : [];
+		return $this->getResponseWithOneField($entityId, $request->id, $selectedFields);
 	}
 
 	public function deleteAction(DeleteRequest $request, string $entityId): BooleanResponse
@@ -91,7 +85,7 @@ final class Custom extends AbstractCustom
 		/** @var CustomDto $dto */
 		$dto = $request->fields->convertToDto((RequiredGroup::Update)->value);
 
-		$valuesForUpdate = $this->mapper->getValuesForUpdate($dto);
+		$valuesForUpdate = $this->getDtoMapper()->getValuesForUpdate($dto);
 		if (empty($valuesForUpdate))
 		{
 			return $this->getResponseWithOneField($dto->entityId, $request->id);
@@ -106,7 +100,7 @@ final class Custom extends AbstractCustom
 	private function getResponseWithOneField(string $entityId, int $id, array $selectedFields = []): GetResponse
 	{
 		$customField = $this->getCustomField($entityId, $id);
-		$dto = $this->mapper->mapOne($customField, $selectedFields);
+		$dto = $this->getDtoMapper()->mapOne($customField, $selectedFields);
 
 		return new GetResponse($dto);
 	}

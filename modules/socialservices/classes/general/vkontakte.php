@@ -336,7 +336,7 @@ class CVKontakteOAuthInterface extends CSocServOAuthTransport
 
 	public function GetRedirectURI()
 	{
-		return \CHTTP::URN2URI("/bitrix/tools/oauth/vkontakte.php");
+		return (string)(new Uri("/bitrix/tools/oauth/vkontakte.php"))->toAbsolute();
 	}
 
 	public function GetAuthUrl($redirect_uri, $state = '')

@@ -5,7 +5,6 @@ namespace Bitrix\Sign\Operation;
 use Bitrix\Main;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Sign\Contract;
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Operation;
 use Bitrix\Sign\Repository\DocumentRepository;
@@ -363,7 +362,7 @@ final class ChangeDocumentStatus implements Contract\Operation
 			}
 			catch (Throwable $e)
 			{
-				Logger::getInstance()->error(
+				Container::instance()->getLogger('Operation')->error(
 					"Failed to send event {event} for document {documentUid}: {errorsText}",
 					[
 						'event' => EventType::DOCUMENT_STATUS_CHANGED->value,

@@ -9,6 +9,7 @@ use Bitrix\Main\EventManager;
 use Bitrix\Main\Event;
 use Bitrix\Rest\UserField\Callback;
 use Bitrix\Rest\Lang;
+use CRestUtil;
 
 Loc::loadMessages(__FILE__);
 
@@ -56,8 +57,6 @@ class PlacementTable extends Main\Entity\DataManager
 
 	const CACHE_TTL = 86400;
 	const CACHE_DIR = 'rest/placement';
-
-	protected static $handlersListCache = [];
 	private static $beforeDeleteList = [];
 
 	/**
@@ -144,11 +143,7 @@ class PlacementTable extends Main\Entity\DataManager
 	{
 		if (is_null($userId))
 		{
-			global $USER;
-			if ($USER instanceof \CUser)
-			{
-				$userId = (int)$USER->getId();
-			}
+			$userId = (int)(Internal\Entity\CurrentUser::getInstance()->getId() ?? 0);
 		}
 
 		if ($userId > 0)
@@ -184,6 +179,7 @@ class PlacementTable extends Main\Entity\DataManager
 				],
 				'select' => [
 					'ID',
+					'USER_ID',
 					'ICON_ID',
 					'TITLE',
 					'GROUP_NAME',
@@ -191,10 +187,12 @@ class PlacementTable extends Main\Entity\DataManager
 					'COMMENT',
 					'APP_ID',
 					'ADDITIONAL',
+					'PLACEMENT_HANDLER',
 					'INSTALLED' => 'REST_APP.INSTALLED',
 					'APP_NAME' => 'REST_APP.APP_NAME',
 					'APP_ACCESS' => 'REST_APP.ACCESS',
 				],
+				'order' => ['ID' => 'ASC'],
 			]
 		);
 
@@ -263,100 +261,54 @@ class PlacementTable extends Main\Entity\DataManager
 	 *
 	 * @return array
 	 */
-	public static function getHandlersList($placement, $skipInstallCheck = false, int $userId = null)
+	public static function getHandlersList($placement, $skipInstallCheck = false, ?int $userId = null)
 	{
-		if(!array_key_exists($placement, static::$handlersListCache))
+		$userId ??= (int)(Internal\Entity\CurrentUser::getInstance()->getId() ?? self::DEFAULT_USER_ID_VALUE);
+
+		$cacheManager = Main\Application::getInstance()->getManagedCache();
+
+		$cacheId = static::getPlacementCacheId($placement, $userId);
+
+		$placementHandlers = [];
+		if ($cacheManager->read(static::CACHE_TTL, $cacheId, static::CACHE_DIR))
 		{
-			static::$handlersListCache[$placement] = array();
-
-			$cache = Main\Application::getInstance()->getManagedCache();
-			if($cache->read(static::CACHE_TTL, static::getCacheId($placement), static::CACHE_DIR))
+			$placementHandlers = $cacheManager->get($cacheId);
+		}
+		else
+		{
+			$handlersQueryResult = static::getHandlers($placement, $userId);
+			foreach ($handlersQueryResult->fetchCollection() as $handler)
 			{
-				static::$handlersListCache = $cache->get(static::getCacheId($placement));
+				$placementHandlers[] = static::preparePlacementHandler($handler);
 			}
-			else
-			{
-				$res = static::getHandlers($placement, $userId);
-				foreach ($res->fetchCollection() as $handler)
-				{
-					$id = $handler->getId();
-					$app = $handler->getRestApp();
-					$placementItem = [
-						'ID' => $id,
-						'APP_ID' => $handler->getAppId(),
-						'USER_ID' => $handler->getUserId(),
-						'ICON_ID' => $handler->getIconId(),
-						'ADDITIONAL' => $handler->getAdditional(),
-						'TITLE' => '',
-						/**
-						 * @deprecated
-						 * Use DESCRIPTION
-						 */
-						'COMMENT' => '',
-						'DESCRIPTION' => '',
-						'GROUP_NAME' => '',
-						'OPTIONS' => $handler->getOptions(),
-						'INSTALLED' => $app->getInstalled(),
-						'APP_NAME' => $app->getAppName(),
-						'APP_ACCESS' => $app->getAccess(),
-						'LANG_ALL' => [],
-					];
 
-					if ($placementItem['ICON_ID'] > 0 && ($file = \CFile::GetFileArray($placementItem['ICON_ID'])))
-					{
-						$placementItem['ICON'] = array_change_key_case($file, CASE_LOWER);
-					}
-
-					$handler->fillLangAll();
-					if (!is_null($handler->getLangAll()))
-					{
-						foreach ($handler->getLangAll() as $lang)
-						{
-							$placementItem['LANG_ALL'][$lang->getLanguageId()] = [
-								'TITLE' => $lang->getTitle(),
-								'DESCRIPTION' => $lang->getDescription(),
-								'GROUP_NAME' => $lang->getGroupName(),
-							];
-						}
-					}
-					static::$handlersListCache[$placement][] = $placementItem;
-				}
-
-				$cache->set(static::getCacheId($placement), static::$handlersListCache);
-			}
+			$cacheManager->set($cacheId, $placementHandlers);
 		}
 
-		$result = static::$handlersListCache[$placement];
-
-		foreach($result as $key => $handler)
+		foreach ($placementHandlers as $key => $handler)
 		{
-			if(!$skipInstallCheck && $handler['INSTALLED'] === AppTable::NOT_INSTALLED)
+			if (!$skipInstallCheck && !$handler['INSTALLED'])
 			{
-				unset($result[$key]);
+				unset($placementHandlers[$key]);
 			}
-			elseif(
+			elseif (
 				$placement !== Api\UserFieldType::PLACEMENT_UF_TYPE
-				&& !\CRestUtil::checkAppAccess($handler['APP_ID'], array(
-					'ACCESS' => $handler['APP_ACCESS']
-				)
-				)
+				&& !CRestUtil::checkAppAccess($handler['APP_ID'], ['ACCESS' => $handler['APP_ACCESS']])
 			)
 			{
-				unset($result[$key]);
+				unset($placementHandlers[$key]);
 			}
 			else
 			{
-				$result[$key] = Lang::mergeFromLangAll($handler);
-				if (empty($result[$key]['TITLE']))
+				$placementHandlers[$key] = Lang::mergeFromLangAll($handler);
+				if (empty($placementHandlers[$key]['TITLE']))
 				{
-					$result[$key]['TITLE'] = static::getDefaultTitle($handler['ID']);
+					$placementHandlers[$key]['TITLE'] = static::getDefaultTitle($handler['ID']);
 				}
 			}
 		}
 
-		$result = array_values($result);
-
-		return $result;
+		return array_values($placementHandlers);
 	}
 
 	/**
@@ -381,7 +333,6 @@ class PlacementTable extends Main\Entity\DataManager
 	{
 		$cache = Main\Application::getInstance()->getManagedCache();
 		$cache->cleanDir(static::CACHE_DIR);
-		static::$handlersListCache = array();
 		if (defined('BX_COMP_MANAGED_CACHE'))
 		{
 			global $CACHE_MANAGER;
@@ -487,9 +438,9 @@ class PlacementTable extends Main\Entity\DataManager
 		static::clearHandlerCache();
 	}
 
-	protected static function getCacheId($placement)
+	protected static function getPlacementCacheId($placement, int $userId): string
 	{
-		return 'rest_placement_list|'.$placement.'|'.LANGUAGE_ID;
+		return 'rest_placement_list|' . $placement . '|' . LANGUAGE_ID . '|user_' . $userId;
 	}
 
 	protected static function checkUniq(Main\Entity\Event $event, $add = false)
@@ -580,6 +531,53 @@ class PlacementTable extends Main\Entity\DataManager
 		}
 
 		return $result;
+	}
+
+	private static function preparePlacementHandler(EO_Placement $handler): array
+	{
+		$id = $handler->getId();
+		$app = $handler->getRestApp();
+		$placementItem = [
+			'ID' => $id,
+			'APP_ID' => $handler->getAppId(),
+			'USER_ID' => $handler->getUserId() ?? 0,
+			'ICON_ID' => $handler->getIconId(),
+			'ADDITIONAL' => $handler->getAdditional(),
+			'HANDLER' => $handler->getPlacementHandler(),
+			'TITLE' => '',
+			/**
+			 * @deprecated
+			 * Use DESCRIPTION
+			 */
+			'COMMENT' => '',
+			'DESCRIPTION' => '',
+			'GROUP_NAME' => '',
+			'OPTIONS' => $handler->getOptions(),
+			'INSTALLED' => $app->getInstalled(),
+			'APP_NAME' => $app->getAppName(),
+			'APP_ACCESS' => $app->getAccess(),
+			'LANG_ALL' => [],
+		];
+
+		if ($placementItem['ICON_ID'] > 0 && ($file = \CFile::GetFileArray($placementItem['ICON_ID'])))
+		{
+			$placementItem['ICON'] = array_change_key_case($file, CASE_LOWER);
+		}
+
+		$handler->fillLangAll();
+		if (!is_null($handler->getLangAll()))
+		{
+			foreach ($handler->getLangAll() as $lang)
+			{
+				$placementItem['LANG_ALL'][$lang->getLanguageId()] = [
+					'TITLE' => $lang->getTitle(),
+					'DESCRIPTION' => $lang->getDescription(),
+					'GROUP_NAME' => $lang->getGroupName(),
+				];
+			}
+		}
+
+		return $placementItem;
 	}
 
 }

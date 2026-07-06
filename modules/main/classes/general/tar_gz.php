@@ -414,7 +414,7 @@ class CArchiver implements IBXArchive
 
 	/**
 	 * Archives files and folders
-	 * @param array $vFileList containing files and folders to be packed into archive
+	 * @param array|string $vFileList containing files and folders to be packed into archive
 	 * @param string|bool $strAddPath - if specified contains path to add to each packed file/folder
 	 * @param string|bool $strRemovePath - if specified contains path to remove from each packed file/folder
 	 * @return mixed 0 or false if error, array with the list of packed files and folders if success. Errors can be seen using GetErrors() method

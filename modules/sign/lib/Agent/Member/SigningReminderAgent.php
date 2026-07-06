@@ -2,7 +2,6 @@
 
 namespace Bitrix\Sign\Agent\Member;
 
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Operation\Member\Reminder\CheckForgottenReminder;
 use Bitrix\Sign\Operation\Member\Reminder\PlanNextRemindDate;
 use Bitrix\Sign\Operation\Member\Reminder\Send;
@@ -41,7 +40,7 @@ final class SigningReminderAgent
 		$result = (new PlanNextRemindDate($document, (new NotifyCalculationService())->getPlanMemberAndSendReminderLimit($documentId)))->launch();
 		if (!$result->isSuccess())
 		{
-			$logger = Logger::getInstance();
+			$logger = Container::instance()->getLogger('Agent');
 			$logger->warning(
 				'Failed to plan next remind date for document {documentId}: ' . implode('|| ', $result->getErrorMessages()),
 				[
@@ -80,7 +79,7 @@ final class SigningReminderAgent
 		$result = (new Send($document, (new NotifyCalculationService())->getPlanMemberAndSendReminderLimit($documentId)))->launch();
 		if (!$result->isSuccess())
 		{
-			$logger = Logger::getInstance();
+			$logger = Container::instance()->getLogger('Agent');
 			$logger->warning(
 				'Failed to send signing remind for document {documentId}: ' . implode('|| ', $result->getErrorMessages()),
 				[

@@ -23,7 +23,7 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 	public const PREFILTER_KEY = 'ACCESS_CHECK';
 	private const ERROR_INVALID_AUTHENTICATION = 'invalid_authentication';
 
-	private AccessController $accessController;
+	private ?AccessController $accessController = null;
 	private readonly DocumentRepository $documentRepository;
 	/** @var array<string, RuleWithPayload>  */
 	private array $rules = [];
@@ -36,12 +36,18 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 	public function __construct()
 	{
 		parent::__construct();
-		$this->accessController = new AccessController(Main\Engine\CurrentUser::get()->getId());
 
 		$this->documentRepository = Container::instance()->getDocumentRepository();
 		$this->templateRepository = Container::instance()->getDocumentTemplateRepository();
 		$this->templateFolderRepository = Container::instance()->getTemplateFolderRepository();
 		$this->signersListService = Container::instance()->getSignersListService();
+	}
+
+	private function getAccessController(): AccessController
+	{
+		return $this->accessController ??= new AccessController(
+			(int)(Main\Engine\CurrentUser::get()->getId()),
+		);
 	}
 
 	public function addRuleFromAttribute(ActionAccess|LogicOr|LogicAnd $attribute): self
@@ -331,12 +337,12 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 	{
 		if (empty($accessibleItems))
 		{
-			return $this->accessController->check($accessPermission);
+			return $this->getAccessController()->check($accessPermission);
 		}
 
 		foreach ($accessibleItems as $accessibleItem)
 		{
-			if (!$this->accessController->check($accessPermission, $accessibleItem))
+			if (!$this->getAccessController()->check($accessPermission, $accessibleItem))
 			{
 				return false;
 			}

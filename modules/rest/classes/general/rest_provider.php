@@ -113,6 +113,15 @@ class CRestProvider extends IRestService
 								"category" => \Bitrix\Rest\Sqs::CATEGORY_IMPORTANT,
 							)
 						),
+						'OnAppUserReady' => array(
+							'rest',
+							'OnRestAppUserReady',
+							array(__CLASS__, 'OnAppEvent'),
+							array(
+								"sendRefreshToken" => true,
+								"category" => \Bitrix\Rest\Sqs::CATEGORY_IMPORTANT,
+							)
+						),
 						'OnAppUpdate' => array(
 							'rest',
 							'OnRestAppUpdate',

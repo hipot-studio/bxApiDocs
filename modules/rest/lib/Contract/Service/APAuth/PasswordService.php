@@ -8,6 +8,10 @@ use Bitrix\Rest\Entity\Collection\APAuth\PasswordCollection;
 use Bitrix\Rest\Entity\APAuth\Password;
 use Bitrix\Rest\Dto;
 
+/**
+ * @deprecated Low-level legacy contract. For creating system incoming webhooks use
+ * {@see \Bitrix\Rest\Internal\Service\IncomingWebhook\SystemIncomingWebhookCreator}.
+ */
 interface PasswordService
 {
 	public function getSystemPasswordCollection(): PasswordCollection;

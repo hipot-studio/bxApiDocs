@@ -60,6 +60,11 @@ class DateTimeField
 		$sqlWhere = new \CSQLWhere();
 		foreach ($filter as $filterField => $filterValue)
 		{
+			if (!is_string($filterValue) || $filterValue === '')
+			{
+				continue;
+			}
+
 			$fieldName = $sqlWhere->MakeOperation($filterField)['FIELD'];
 			if (in_array($fieldName, $fieldsToProcess))
 			{

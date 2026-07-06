@@ -1,10 +1,11 @@
-<?
+<?php
 
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Socialservices\OAuth\StateService;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServMailRu2 extends CSocServAuth
@@ -24,7 +25,7 @@ class CSocServMailRu2 extends CSocServAuth
 					'socserv_mailru2_sett_note_2',
 					array(
 						'#URL#' => $this->getEntityOAuth()->getRedirectUri(),
-						'#MAIL_URL#' => \CHttp::urn2uri('/bitrix/tools/mail_oauth.php'),
+						'#MAIL_URL#' => (string)(new Uri('/bitrix/tools/mail_oauth.php'))->toAbsolute(),
 					)
 				),
 			),
@@ -286,7 +287,7 @@ class CMailRu2Interface extends CSocServOAuthTransport
 	 */
 	public function GetRedirectURI()
 	{
-		return \CHTTP::URN2URI("/bitrix/tools/oauth/mailru2.php");
+		return (string)(new Uri("/bitrix/tools/oauth/mailru2.php"))->toAbsolute();
 	}
 
 	/**

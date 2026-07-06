@@ -107,14 +107,40 @@ abstract class CCloudStorageService
 	public function DownloadToFile($arBucket, $arFile, $filePath)
 	{
 		$url = $this->GetFileSRC($arBucket, $arFile);
+
+		$this->status = 0;
+		$this->verb = 'GET';
+		$this->url = $url;
+		$this->headers = [];
+		$this->errno = 0;
+		$this->errstr = '';
+		$this->result = '';
+
 		$request = new Bitrix\Main\Web\HttpClient([
 			'streamTimeout' => $this->streamTimeout,
 		]);
 		$result = $request->download($url, $filePath);
-		if ($request->getStatus() == 404 || $request->getStatus() == 403)
+
+		$this->status = $request->getStatus();
+		foreach ($request->getHeaders() as $key => $value)
+		{
+			$this->headers[$key] = is_array($value) ? $value[0] : $value;
+		}
+
+		if ($this->status == 404 || $this->status == 403)
 		{
 			return false;
 		}
+
+		if ($result === false && defined('BX_CLOUDS_ERROR_DEBUG') && $request->getError())
+		{
+			foreach ($request->getError() as $code => $error)
+			{
+				$this->errstr .= $code . ': ' . $error . "\n";
+			}
+			AddMessage2Log($this);
+		}
+
 		return $result;
 	}
 

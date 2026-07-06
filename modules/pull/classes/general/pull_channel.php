@@ -138,6 +138,128 @@ class CPullChannel
 		return $result;
 	}
 
+	/**
+	 * Batched counterpart of {@see self::Get()} for hot fan-out paths (e.g. Pull\Event::getChannelIds for multi recipients).
+	 *
+	 * Resolves N userIds in one SELECT against b_pull_channel (joined to b_user for ACTIVE filter)
+	 * and warms self::$staticCache with the results so subsequent per-user Get() calls in the same request are cache-hits.
+	 *
+	 * @param int[] $userIds
+	 * @param string $channelType
+	 * @return array<int, array{CHANNEL_ID: string, CHANNEL_PUBLIC_ID: ?string, CHANNEL_TYPE: string, CHANNEL_DT: int, LAST_ID: int}>
+	 */
+	public static function getMany(array $userIds, string $channelType = self::TYPE_PRIVATE): array
+	{
+		if (!CPullOptions::GetQueueServerStatus())
+		{
+			return [];
+		}
+
+		$channelType = $channelType ?: self::TYPE_PRIVATE;
+		$userIds = array_values(array_unique(array_map('intval', $userIds)));
+		if ($userIds === [])
+		{
+			return [];
+		}
+
+		$result = [];
+		$missing = [];
+		foreach ($userIds as $userId)
+		{
+			$lockId = self::getLockKey($userId, $channelType);
+			$cached = self::$staticCache[$lockId] ?? null;
+			if ($cached && !self::isExpired((int)$cached['CHANNEL_DT']))
+			{
+				$result[$userId] = $cached;
+				continue;
+			}
+			$missing[] = $userId;
+		}
+
+		if ($missing === [])
+		{
+			return $result;
+		}
+
+		// USER_ID=0 is the shared channel — there is no matching b_user row, so
+		// the INNER JOIN below would silently drop it. Skip zeros from the
+		// batched SELECT; the foreach fallback at the end routes them through
+		// per-user Get(), which knows how to issue/renew shared channels.
+		$realUsers = array_values(array_filter($missing, static fn (int $uid): bool => $uid > 0));
+
+		$rows = $realUsers === [] ? [] : \Bitrix\Pull\Model\ChannelTable::getList([
+			'select' => [
+				'USER_ID',
+				'CHANNEL_ID',
+				'CHANNEL_PUBLIC_ID',
+				'CHANNEL_TYPE',
+				'DATE_CREATE',
+				'LAST_ID',
+				'USER_ACTIVE' => 'USER.ACTIVE',
+			],
+			'filter' => [
+				'=USER_ID' => $realUsers,
+				'=CHANNEL_TYPE' => $channelType,
+			],
+		])->fetchAll();
+
+		$resolved = [];
+		foreach ($rows as $row)
+		{
+			$userId = (int)$row['USER_ID'];
+			if ($userId > 0 && ($row['USER_ACTIVE'] ?? 'Y') !== 'Y')
+			{
+				// Inactive user: per-user Get returns false, mirror that here.
+				$resolved[$userId] = true;
+				continue;
+			}
+			$ts = $row['DATE_CREATE'] instanceof \Bitrix\Main\Type\DateTime
+				? $row['DATE_CREATE']->getTimestamp()
+				: (int)$row['DATE_CREATE'];
+			if (self::isExpired($ts))
+			{
+				// TTL passed — per-user Get must renew under its own lock.
+				continue;
+			}
+			$entry = [
+				'CHANNEL_ID' => $row['CHANNEL_ID'],
+				'CHANNEL_PUBLIC_ID' => $row['CHANNEL_PUBLIC_ID'],
+				'CHANNEL_TYPE' => $row['CHANNEL_TYPE'],
+				'CHANNEL_DT' => $ts,
+				'LAST_ID' => (int)$row['LAST_ID'],
+			];
+			$lockId = self::getLockKey($userId, $channelType);
+			self::$staticCache[$lockId] = $entry;
+			$result[$userId] = $entry;
+			$resolved[$userId] = true;
+		}
+
+		// Fallback only for the rare branch: no row, expired row, or active user with a never-issued channel. Uses the existing per-user lock.
+		foreach ($missing as $userId)
+		{
+			if (isset($resolved[$userId]))
+			{
+				continue;
+			}
+			$entry = self::Get($userId, true, false, $channelType);
+			if ($entry)
+			{
+				$result[$userId] = $entry;
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Drops the in-process channel cache. Intended for bench/test harnesses.
+	 * @internal
+	 */
+	public static function clearCache(): void
+	{
+		self::$staticCache = [];
+	}
+
 	private static function getInternal(int $userId, $channelType = self::TYPE_PRIVATE)
 	{
 		global $DB;

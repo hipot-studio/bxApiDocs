@@ -1,4 +1,4 @@
-<?
+<?php
 
 use Bitrix\Bitrix24\Integration\Network\Broadcast;
 use Bitrix\Bitrix24\License;
@@ -12,6 +12,7 @@ use Bitrix\Socialservices\OAuth\StateService;
 use Bitrix\Socialservices\UserTable;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages(__FILE__);
 
@@ -235,7 +236,7 @@ class CSocServBitrix24Net extends CSocServAuth
 
 		if ($canProcess)
 		{
-			$redirect_uri = \CHTTP::URN2URI('/bitrix/tools/oauth/bitrix24net.php');
+			$redirect_uri = (string)(new Uri('/bitrix/tools/oauth/bitrix24net.php'))->toAbsolute();
 			$bProcessState = true;
 			$bAdmin = false;
 
@@ -402,7 +403,7 @@ class CSocServBitrix24Net extends CSocServAuth
 
 		if ($url == '' || preg_match("'^(http://|https://|ftp://|//)'i", $url))
 		{
-			$url = \CHTTP::URN2URI('/');
+			$url = (string)(new Uri('/'))->toAbsolute();
 		}
 
 		if ($bSuccess)
@@ -541,7 +542,7 @@ class CBitrix24NetOAuthInterface
 			throw new \Bitrix\Main\ArgumentTypeException('appSecret', 'string');
 		}
 
-		list($prefix, $suffix) = explode(".", $appID, 2);
+		[$prefix, $suffix] = explode(".", $appID, 2);
 
 		if($prefix === 'site')
 		{
@@ -1110,7 +1111,7 @@ class CBitrix24NetTransport
 		{
 			foreach ($actions as $query_key => $arCmd)
 			{
-				list($cmd, $arParams) = array_values($arCmd);
+				[$cmd, $arParams] = array_values($arCmd);
 				$arBatch['cmd'][$query_key] = $cmd.(is_array($arParams) ? '?'.http_build_query($arParams) : '');
 			}
 		}

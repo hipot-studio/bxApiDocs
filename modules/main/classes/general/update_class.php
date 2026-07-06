@@ -2272,6 +2272,15 @@ class CUpdateSystem
 
 				if ($strError_tmp1 == '')
 				{
+					$filesProcessor = new CUpdateFilesProcessor();
+					if (!$filesProcessor->process($from_dir, $arModules[$i]))
+					{
+						$strError_tmp1 = implode(', ', $filesProcessor->getErrorMessages());
+					}
+				}
+
+				if ($strError_tmp1 == '')
+				{
 					CUpdateSystem::CopyDirFiles($from_dir, $to_dir, $strError_tmp1);
 				}
 
@@ -3636,8 +3645,12 @@ class CUpdateSystem
 
 		$errorMessage = "";
 
+		$updater->beforeIncludeUpdaterFile();
 		if(file_exists($path))
+		{
 			include($path);
+		}
+		$updater->afterIncludeUpdaterFile();
 
 		if ($errorMessage <> '')
 			$strError .= $errorMessage;
@@ -4296,6 +4309,9 @@ class CUpdater
 	var $callType; // Прямой вызов (ALL - все, KERNEL - ядро, PERSONAL - персональные файлы, DATABASE - база данных  // DB=PERSONAL+DATABASE)
 	var $kernelPath; // Путь к ядру
 
+	static $config;
+	static $migrationErrors;
+
 	function Init($curPath, $dbType, $updater, $curDir, $moduleID, $callType = "ALL")
 	{
 		$this->errorMessage = array();
@@ -4334,6 +4350,9 @@ class CUpdater
 						$this->callType[] = "PERSONAL";
 					if (!in_array("DATABASE", $this->callType))
 						$this->callType[] = "DATABASE";
+					break;
+				case "DATABASE_DDL":
+					$this->callType = array("DATABASE_DDL");
 					break;
 			}
 		}
@@ -4738,12 +4757,23 @@ class CUpdater
 			return false;
 		}
 
-		return $DB->Query("SELECT {$columnName} FROM {$tableName} WHERE 1 = 0", true) !== false;
+		$strSql = sprintf(
+			'SELECT %s FROM %s WHERE 1 = 0',
+			$DB->quote($columnName),
+			$DB->quote($tableName),
+		);
+
+		return $DB->Query($strSql, true) !== false;
 	}
 
 	function CanUpdateDatabase()
 	{
 		return (in_array("DATABASE", $this->callType));
+	}
+
+	function CanRunDdlQuery()
+	{
+		return (in_array("DATABASE_DDL", $this->callType));
 	}
 
 	function CanUpdateKernel()
@@ -4754,5 +4784,216 @@ class CUpdater
 	function CanUpdatePersonalFiles()
 	{
 		return (in_array("PERSONAL", $this->callType));
+	}
+
+	public static function getCurrentConfig()
+	{
+		return self::$config;
+	}
+
+	public static function addError($errorMessage)
+	{
+		if (!is_array(self::$migrationErrors))
+		{
+			self::$migrationErrors = array();
+		}
+
+		self::$migrationErrors[] = (string)$errorMessage;
+	}
+
+	public function beforeIncludeUpdaterFile()
+	{
+		self::$config = array(
+			'moduleId' => $this->moduleID,
+			'canUpdateDatabase' => $this->CanUpdateDatabase(),
+			'canUpdateKernel' => $this->CanUpdateKernel(),
+			'canUpdatePersonalFiles' => $this->CanUpdatePersonalFiles(),
+			'canRunDdlQuery' => $this->CanRunDdlQuery(),
+			'updaterFilename' => $this->updater,
+			'updaterRootDirectory' => $this->curModulePath,
+		);
+	}
+
+	public function afterIncludeUpdaterFile()
+	{
+		self::$config = null;
+
+		if (!empty(self::$migrationErrors))
+		{
+			$this->errorMessage = array_merge($this->errorMessage, self::$migrationErrors);
+		}
+		self::$migrationErrors = null;
+	}
+
+	public function canRunUpdater()
+	{
+		if (!in_array('DATABASE_DDL', $this->callType))
+		{
+			return true;
+		}
+
+		// Updater in DATABASE_DDL mode should not be executed for old updates and modules without modern migration_config.json support:
+		if (file_exists($_SERVER["DOCUMENT_ROOT"] . $this->curModulePath . '/migration_config.json'))
+		{
+			return true;
+		}
+		if (file_exists($_SERVER['DOCUMENT_ROOT'] . $this->kernelPath . '/modules/' . $this->moduleID . '/migration_config.json'))
+		{
+			return true;
+		}
+
+		return false;
+	}
+}
+
+class CUpdateFilesProcessor
+{
+	var $errorMessages;
+	var $moduleMigrationConfig;
+	var $updatesRootDirectory;
+	var $moduleId;
+
+	public function process($updatesRootDirectory, $moduleId)
+	{
+		$this->updatesRootDirectory = $updatesRootDirectory;
+		$this->moduleId = $moduleId;
+		$this->moduleMigrationConfig = $this->loadMigrationConfigFile();
+
+		$this->copyInstallFiles();
+		$this->copyPersonalFiles();
+		$this->deleteFiles();
+
+		return empty($this->errorMessages);
+	}
+
+	public function getErrorMessages()
+	{
+		return $this->errorMessages;
+	}
+
+	private function loadMigrationConfigFile()
+	{
+		$configCandidates = array(
+			$this->updatesRootDirectory . '/migration_config.json',
+			$_SERVER['DOCUMENT_ROOT'] . US_SHARED_KERNEL_PATH . '/modules/' . $this->moduleId . '/migration_config.json',
+		);
+
+		$moduleMigrationConfig = null;
+
+		foreach ($configCandidates as $configCandidate)
+		{
+			if (file_exists($configCandidate))
+			{
+				$moduleMigrationConfig = json_decode(file_get_contents($configCandidate), true);
+				if (is_array($moduleMigrationConfig))
+				{
+					break;
+				}
+				else
+				{
+					$moduleMigrationConfig = null;
+				}
+			}
+		}
+
+		return $moduleMigrationConfig;
+	}
+
+	private function copyInstallFiles()
+	{
+		if (!IsModuleInstalled($this->moduleId))
+		{
+			return;
+		}
+
+		$installFilesToCopy = $this->getMigrationConfigValue('installDirectoriesMapping');
+		foreach ($installFilesToCopy as $dirFrom => $dirTo)
+		{
+			if (file_exists($this->updatesRootDirectory . '/' . $dirFrom))
+			{
+				CUpdateSystem::AddMessage2Log("Process module '" . $this->moduleId . "': copyInstallFiles(" . $dirFrom . ", " . $dirTo . ")", 'CRUPDCF1');
+				$this->CopyFiles($this->updatesRootDirectory . '/' . $dirFrom, $_SERVER["DOCUMENT_ROOT"] . US_SHARED_KERNEL_PATH .  '/' . $dirTo);
+			}
+		}
+	}
+
+	private function copyPersonalFiles()
+	{
+		if (!IsModuleInstalled($this->moduleId))
+		{
+			return;
+		}
+
+		$personalFilesToCopy = $this->getMigrationConfigValue('publicDirectoriesMapping');
+		foreach ($personalFilesToCopy as $dirFrom => $dirTo)
+		{
+			if (file_exists($this->updatesRootDirectory . '/' . $dirFrom))
+			{
+				CUpdateSystem::AddMessage2Log("Process module '" . $this->moduleId . "': copyPersonalFiles(" . $dirFrom . ", " . $dirTo . ")", 'CRUPDCF1');
+				$this->CopyFiles($this->updatesRootDirectory . '/' . $dirFrom, $_SERVER["DOCUMENT_ROOT"] . '/' . $dirTo);
+			}
+		}
+
+	}
+
+	private function deleteFiles()
+	{
+		if ($handle = @opendir($this->updatesRootDirectory))
+		{
+			while (($file = readdir($handle)) !== false)
+			{
+				if ($file == '.' || $file == '..')
+				{
+					continue;
+				}
+
+				if (substr($file, 0, 13) === 'deleted_files' && substr($file, -4) === '.txt')
+				{
+					$fullFileName = $this->updatesRootDirectory . '/' . $file;
+					$filesToDelete = file($fullFileName, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+					if ($filesToDelete === false)
+					{
+						$this->errorMessages[] = str_replace("#FILE#", $fullFileName, GetMessage("SUPP_RV_READ_DESCR_FILE"));
+					} else
+					{
+						foreach ($filesToDelete as $fileName)
+						{
+							CUpdateSystem::deleteDirFilesEx($_SERVER['DOCUMENT_ROOT'] . US_SHARED_KERNEL_PATH . '/' . $fileName);
+						}
+					}
+					@unlink($fullFileName);
+				}
+			}
+		}
+	}
+
+	private function getMigrationConfigValue($key)
+	{
+		if (
+			is_array($this->moduleMigrationConfig)
+			&& isset($this->moduleMigrationConfig[$key])
+			&& is_array($this->moduleMigrationConfig[$key])
+		)
+		{
+			return $this->moduleMigrationConfig[$key];
+		}
+
+		return array();
+	}
+
+	private function copyFiles($fromDirFull, $toDirFull)
+	{
+		if (!file_exists($fromDirFull))
+		{
+			return;
+		}
+
+		$errorMessage = '';
+		$result = CUpdateSystem::CopyDirFiles($fromDirFull, $toDirFull, $errorMessage);
+
+		if (!$result)
+		{
+			$this->errorMessages[] = $errorMessage;
+		}
 	}
 }

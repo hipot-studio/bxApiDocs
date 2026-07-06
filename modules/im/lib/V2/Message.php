@@ -4,7 +4,7 @@ namespace Bitrix\Im\V2;
 
 use ArrayAccess;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
-use Bitrix\Im\V2\Message\Builder\Entity\Builder;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlocksBuilder;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Reaction\ReactionMessage;
@@ -183,7 +183,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	protected ?int $prevId = null;
 
 	protected ?bool $hasMentionAll = null;
-	protected ?Builder $builder = null;
+	protected ?BlocksBuilder $builder = null;
 
 	/**
 	 * @param int|array|EO_Message|null $source
@@ -1842,7 +1842,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			&& !$this->getParams()->isSet(Params::KEYBOARD)
 			&& !$this->getParams()->isSet(Params::ATTACH)
 			&& !$this->getParams()->isSet(Params::STICKER_PARAMS)
-			&& !$this->getParams()->isSet(Params::BUILDER)
+			&& !$this->getParams()->isSet(Params::BLOCKS_BUILDER)
 		);
 	}
 
@@ -1902,7 +1902,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			'forward' => $this->getForwardInfo(),
 			'params' => $this->getEnrichedParams(!$messageShortInfo)->toRestFormat(),
 			'viewedByOthers' => $this->isViewedByOthers(),
-			'builder' => $this->getBuilder(),
+			'builder' => $this->getBlocksBuilder(),
 		];
 		$rest = $onlyCommonRest;
 
@@ -2177,15 +2177,15 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		return false;
 	}
 
-	public function getBuilder(): ?Builder
+	public function getBlocksBuilder(): ?BlocksBuilder
 	{
-		$this->builder ??= $this->getParams()->get(Params::BUILDER)->getValue();
+		$this->builder ??= $this->getParams()->get(Params::BLOCKS_BUILDER)->getValue();
 		return $this->builder;
 	}
 
-	public function setBuilder(?Builder $builder): self
+	public function setBlocksBuilder(?BlocksBuilder $builder): self
 	{
-		$this->getParams()->get(Params::BUILDER)->setValue($builder);
+		$this->getParams()->get(Params::BLOCKS_BUILDER)->setValue($builder);
 		$this->builder = $builder;
 
 		return $this;
@@ -2193,6 +2193,6 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function isUrlPreviewDisabled(): bool
 	{
-		return $this->getBuilder() !== null;
+		return $this->getBlocksBuilder() !== null;
 	}
 }

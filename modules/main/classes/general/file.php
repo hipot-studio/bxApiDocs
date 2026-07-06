@@ -327,6 +327,10 @@ class CFile
 					return false;
 				}
 			}
+			elseif (!isset($arFile['tmp_name']) || empty($arFile['tmp_name']))
+			{
+				return false;
+			}
 			else
 			{
 				if (!copy($arFile["tmp_name"], $physicalFileName) && !move_uploaded_file($arFile["tmp_name"], $physicalFileName))
@@ -2468,7 +2472,11 @@ function ImgShw(ID, width, height, alt)
 
 		$d = $io->GetDirectory($_SERVER["DOCUMENT_ROOT"] . "/" . $upload_dir . "/resize_cache/" . $arImage["SUBDIR"]);
 
-		/** @var CBXVirtualFileFileSystem|CBXVirtualDirectoryFileSystem $dir_entry */
+		if (!$d->IsExists())
+		{
+			return $delete_size;
+		}
+
 		foreach ($d->GetChildren() as $dir_entry)
 		{
 			if ($dir_entry->IsDirectory())
@@ -2490,25 +2498,17 @@ function ImgShw(ID, width, height, alt)
 					}
 				}
 
-				try
-				{
-					@rmdir($io->GetPhysicalName($dir_entry->GetPathWithName()));
-				}
-				catch (\ErrorException)
-				{
-					// Ignore a E_WARNING Error
-				}
+				// Handle E_WARNING
+				set_error_handler(function () {});
+				rmdir($io->GetPhysicalName($dir_entry->GetPathWithName()));
+				restore_error_handler();
 			}
 		}
 
-		try
-		{
-			@rmdir($io->GetPhysicalName($d->GetPathWithName()));
-		}
-		catch (\ErrorException)
-		{
-			// Ignore a E_WARNING Error
-		}
+		// Handle E_WARNING
+		set_error_handler(function () {});
+		rmdir($io->GetPhysicalName($d->GetPathWithName()));
+		restore_error_handler();
 
 		return $delete_size;
 	}

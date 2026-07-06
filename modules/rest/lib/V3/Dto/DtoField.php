@@ -43,6 +43,9 @@ class DtoField implements Arrayable
 		if (is_array($relation))
 		{
 			$this->relation = DtoFieldRelation::fromArray($relation);
+		} else if ($relation instanceof DtoFieldRelation)
+		{
+			$this->relation = $relation;
 		}
 
 		$this->title = $this->title !== null ? $title : $this->propertyName;

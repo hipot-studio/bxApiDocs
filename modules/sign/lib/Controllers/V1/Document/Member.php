@@ -11,17 +11,14 @@ use Bitrix\Main\Request;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Attribute;
 use Bitrix\Sign\Debug\Logger;
-use Bitrix\Sign\Item\Hr\EntitySelector\Entity;
 use Bitrix\Sign\Item\Hr\EntitySelector\EntityCollection;
 use Bitrix\Sign\Item\Hr\NodeSync;
-use Bitrix\Sign\Item\MemberCollection;
 use Bitrix\Sign\Operation\Member\GetMembersFromUserPartyEntities;
 use Bitrix\Sign\Operation\Member\SyncDepartmentsPage;
 use Bitrix\Sign\Operation\Member\Validation\ValidateEntitySelectorMembers;
 use Bitrix\Sign\Result\Operation\Member\ValidateEntitySelectorMembersResult;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Type\Access\AccessibleItemType;
-use Bitrix\Sign\Type\Hr\EntitySelector;
 use Bitrix\Sign\Type\Member\EntityType;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\MemberStatus;
@@ -35,8 +32,8 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	public function __construct(Request $request = null)
 	{
 		parent::__construct($request);
-		$this->memberService = Service\Container::instance()->getMemberService();
-		$this->documentService = Service\Container::instance()->getDocumentService();
+		$this->memberService = $this->container->getMemberService();
+		$this->documentService = $this->container->getDocumentService();
 	}
 
 	/**
@@ -357,6 +354,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	)]
 	public function getUniqSignersCountAction(
 		array $members,
+		Logger $logger,
 		bool $excludeRejected = true,
 	): array
 	{
@@ -382,7 +380,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 
 		if (!$result->isSuccess())
 		{
-			Logger::getInstance()->error($result->getError());
+			$logger->error($result->getError()?->getMessage() ?? 'unknown error', ['errors' => $result->getErrors()]);
 			$this->addErrorByMessage('Error while getting unique signers count');
 
 			return [];
@@ -441,6 +439,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	public function syncB2eMembersWithDepartmentsAction(
 		string $documentUid,
 		int $currentParty,
+		Logger $logger,
 		bool $excludeRejected = true,
 	): array
 	{
@@ -470,7 +469,7 @@ class Member extends \Bitrix\Sign\Engine\Controller
 
 		if (!$result->isSuccess())
 		{
-			Logger::getInstance()->error($result->getError());
+			$logger->error($result->getError()?->getMessage() ?? 'unknown error', ['errors' => $result->getErrors()]);
 			$this->addErrorByMessage('Error while syncing departments');
 
 			return [];
@@ -643,12 +642,22 @@ class Member extends \Bitrix\Sign\Engine\Controller
 		new Attribute\ActionAccess(ActionDictionary::ACTION_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid'),
 		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid')
 	)]
-	public function loadCommunicationsAction(string $uid): array
+	public function loadCommunicationsAction(
+		string $uid,
+		Service\Integration\Crm\AccessService $crmAccessService,
+	): array
 	{
 		$member = $this->memberService->getByUid($uid);
 
 		if (!$member)
 		{
+			return [];
+		}
+
+		if ($crmAccessService->isContactReadDeniedByMember($member))
+		{
+			$this->addError(new Error(Loc::getMessage('SIGN_CONTROLLER_MEMBER_ACCESS_DENIED_TO_CONTACT_COMMUNICATIONS')));
+
 			return [];
 		}
 
@@ -659,12 +668,22 @@ class Member extends \Bitrix\Sign\Engine\Controller
 		new Attribute\ActionAccess(ActionDictionary::ACTION_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid'),
 		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid')
 	)]
-	public function loadAppliedCommunicationAction(string $uid): array
+	public function loadAppliedCommunicationAction(
+		string $uid,
+		Service\Integration\Crm\AccessService $crmAccessService,
+	): array
 	{
 		$member = $this->memberService->getByUid($uid);
 
 		if (!$member || !$member->channelType)
 		{
+			return [];
+		}
+
+		if ($crmAccessService->isContactReadDeniedByMember($member))
+		{
+			$this->addError(new Error(Loc::getMessage('SIGN_CONTROLLER_MEMBER_ACCESS_DENIED_TO_CONTACT_COMMUNICATIONS')));
+
 			return [];
 		}
 

@@ -70,7 +70,10 @@ if (\Bitrix\Main\Loader::includeModule('baas'))
 		return (new Main\Result())->addError(new Main\Error('Baas is not available'));
 	}
 
-
+	public function forceSync(): Main\Result
+	{
+		return BillingSynchronizationService::getInstance()->sync();
+	}
 
 	/**
 	 * @return array<Contract\Purchase>

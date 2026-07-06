@@ -5,7 +5,6 @@ namespace Bitrix\Sign\Operation\Document\Template\Onboarding;
 use Bitrix\Sign\Contract\Operation;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Item\Api\Company\RegisterByClientResponse;
 use Bitrix\Sign\Service\B2e\CompanyService;
 use Bitrix\Sign\Service\Container;
@@ -31,7 +30,7 @@ class GetFirstSuitableCompany implements Operation
 		$this->myCompanyService = $container->getCrmMyCompanyService();
 		$this->companyService = $container->getCompanyService();
 		$this->providerCodeService = $container->getApiProviderCodeService();
-		$this->logger = Logger::getInstance();
+		$this->logger = Container::instance()->getLogger('Operation');
 	}
 
 	public function getCompanyUid(): ?string

@@ -145,6 +145,7 @@ class CopilotPopupItem implements PopupDataItem
 				'dialogId' => $chat->getDialogId(),
 				'role' => $chat->getCopilotRole(),
 				'engine' => $engineCode,
+				'titleIsCustom' => (new CopilotTitle($chat->getId()))->isCustom(),
 			];
 		}
 
@@ -270,7 +271,8 @@ class CopilotPopupItem implements PopupDataItem
 			$result[] = [
 				'dialogId' => $id,
 				'role' => $item['role'],
-				'engine' => $item['engine'] ?? null
+				'engine' => $item['engine'] ?? null,
+				'titleIsCustom' => $item['titleIsCustom'] ?? false,
 			];
 		}
 

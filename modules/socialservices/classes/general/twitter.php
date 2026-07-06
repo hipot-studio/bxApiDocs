@@ -1,6 +1,7 @@
-<?
+<?php
 
 use Bitrix\Main\Web\Json;
+use Bitrix\Main\Web\Uri;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -15,7 +16,7 @@ class CSocServTwitter extends CSocServAuth
 		return array(
 			array("twitter_key", GetMessage("socserv_tw_key"), "", Array("text", 40)),
 			array("twitter_secret", GetMessage("socserv_tw_secret"), "", Array("text", 40)),
-			array("note"=>GetMessage("socserv_tw_sett_note", array('#URL#'=>\CHTTP::URN2URI("/bitrix/tools/oauth/twitter.php")))),
+			array("note"=>GetMessage("socserv_tw_sett_note", array('#URL#'=>(string)(new Uri("/bitrix/tools/oauth/twitter.php"))->toAbsolute()))),
 		);
 	}
 

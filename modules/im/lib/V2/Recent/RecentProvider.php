@@ -37,6 +37,22 @@ class RecentProvider
 		return Recent::initByArray($recentEntities);
 	}
 
+	public function getItemsByChatIds(int $userId, array $chatIds): Recent
+	{
+		$filter = new RecentFilter(userId: $userId, chatIds: $chatIds);
+		$params = new RecentParams(filter: $filter);
+
+		return Recent::initByArray(Recent::getRecentEntities($params));
+	}
+
+	public function countPinned(int $userId): int
+	{
+		return RecentTable::getCount([
+			'=USER_ID' => $userId,
+			'=PINNED' => 'Y',
+		]);
+	}
+
 	public function getItem(int $userId, int $chatId): ?RecentItem
 	{
 		if ($this->cache->has($userId, $chatId))

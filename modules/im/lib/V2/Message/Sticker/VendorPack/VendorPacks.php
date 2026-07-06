@@ -20,6 +20,30 @@ use Bitrix\Main\Localization\Loc;
 
 class VendorPacks implements StickerPacks
 {
+	private const CIS_PACK_ORDER = [
+		VendorPackName::UnstoppableOptimist,
+		VendorPackName::Celebration,
+		VendorPackName::OfficeRoutine,
+		VendorPackName::Animals,
+		VendorPackName::BitrixVibe,
+		VendorPackName::WorkDay,
+		VendorPackName::Smileys,
+		VendorPackName::Zefir,
+		VendorPackName::Hands,
+		VendorPackName::ArkashaAndCat,
+	];
+
+	private const WEST_PACK_ORDER = [
+		VendorPackName::BitrixReactions,
+		VendorPackName::Celebration,
+		VendorPackName::BittyBob,
+		VendorPackName::Animals,
+		VendorPackName::Airy,
+		VendorPackName::WorkDay,
+		VendorPackName::Hands,
+		VendorPackName::Smileys,
+	];
+
 	private static self $instance;
 
 	private static ?PackCollection $vendorPacks = null;
@@ -50,17 +74,18 @@ class VendorPacks implements StickerPacks
 
 		$lastId = $lastId ?? 0;
 		$lastPack = null;
+		$remainingPacks = $this->getRemainingPacks($lastId);
 
-		foreach (self::$vendorPacks as $pack)
+		foreach ($remainingPacks as $pack)
 		{
-			if ($pack->id > $lastId && count($packCollection) < $limit)
+			if (count($packCollection) < $limit)
 			{
 				$packCollection->append($pack);
 				$lastPack = $pack;
 			}
 		}
 
-		if (isset($lastPack) && $lastPack->id === $this->getLastPackId())
+		if (!isset($lastPack) || $lastPack->id === $this->getLastPackId())
 		{
 			$packCollection->setHasNextPage(false);
 		}
@@ -68,13 +93,41 @@ class VendorPacks implements StickerPacks
 		return $packCollection;
 	}
 
+	protected function getRemainingPacks(int $lastPackId): PackCollection
+	{
+		$packs = new PackCollection();
+
+		if ($lastPackId === 0)
+		{
+			return self::$vendorPacks;
+		}
+
+		$shouldAdd = false;
+		foreach (self::$vendorPacks as $packName => $pack)
+		{
+			if ($pack->id === $lastPackId)
+			{
+				$shouldAdd = true;
+
+				continue;
+			}
+
+			if ($shouldAdd)
+			{
+				$packs->offsetSet($packName, $pack);
+			}
+		}
+
+		return $packs;
+	}
+
 	protected function getLastPackId(): int
 	{
 		$packId = 0;
 
-		foreach (self::$vendorPacks as $pack)
+		foreach ($this->getOrderPackMap() as $packName)
 		{
-			$packId = $pack->id;
+			$packId = $packName->getId();
 		}
 
 		return $packId;
@@ -194,6 +247,7 @@ class VendorPacks implements StickerPacks
 			VendorPackName::WorkDay => VendorConfig::getWorkDay(),
 			VendorPackName::Animals => VendorConfig::getAnimals(),
 			VendorPackName::Celebration => VendorConfig::getCelebration(),
+			VendorPackName::UnstoppableOptimist => VendorConfig::getUnstoppableOptimist(),
 		};
 
 		foreach ($files as $id => $file)
@@ -208,65 +262,22 @@ class VendorPacks implements StickerPacks
 
 	private function fill(): void
 	{
-		self::$vendorPacks = (new PackCollection());
+		self::$vendorPacks = new PackCollection();
+
+		foreach ($this->getOrderPackMap() as $packName)
+		{
+			self::$vendorPacks->offsetSet($packName->value, $this->getPackByName($packName));
+		}
+	}
+
+	private function getOrderPackMap(): array
+	{
 		$license = Application::getInstance()->getLicense();
 
-
-		if ($license->isCis())
-		{
-			self::$vendorPacks->offsetSet(
-				VendorPackName::BitrixVibe->value,
-				$this->getPackByName(VendorPackName::BitrixVibe)
-			);
-			self::$vendorPacks->offsetSet(
-				VendorPackName::Zefir->value,
-				$this->getPackByName(VendorPackName::Zefir)
-			);
-			self::$vendorPacks->offsetSet(
-				VendorPackName::ArkashaAndCat->value,
-				$this->getPackByName(VendorPackName::ArkashaAndCat)
-			);
-			self::$vendorPacks->offsetSet(
-				VendorPackName::OfficeRoutine->value,
-				$this->getPackByName(VendorPackName::OfficeRoutine)
-			);
-		}
-		else
-		{
-			self::$vendorPacks->offsetSet(
-				VendorPackName::BitrixReactions->value,
-				$this->getPackByName(VendorPackName::BitrixReactions)
-			);
-			self::$vendorPacks->offsetSet(
-				VendorPackName::Airy->value,
-				$this->getPackByName(VendorPackName::Airy)
-			);
-			self::$vendorPacks->offsetSet(
-				VendorPackName::BittyBob->value,
-				$this->getPackByName(VendorPackName::BittyBob)
-			);
-		}
-
-		self::$vendorPacks->offsetSet(
-			VendorPackName::Smileys->value,
-			$this->getPackByName(VendorPackName::Smileys)
-		);
-		self::$vendorPacks->offsetSet(
-			VendorPackName::Hands->value,
-			$this->getPackByName(VendorPackName::Hands)
-		);
-		self::$vendorPacks->offsetSet(
-			VendorPackName::WorkDay->value,
-			$this->getPackByName(VendorPackName::WorkDay)
-		);
-		self::$vendorPacks->offsetSet(
-			VendorPackName::Animals->value,
-			$this->getPackByName(VendorPackName::Animals)
-		);
-		self::$vendorPacks->offsetSet(
-			VendorPackName::Celebration->value,
-			$this->getPackByName(VendorPackName::Celebration)
-		);
+		return $license->isCis()
+			? self::CIS_PACK_ORDER
+			: self::WEST_PACK_ORDER
+		;
 	}
 
 	private function packExists(?VendorPackName $packName): bool
@@ -290,6 +301,7 @@ class VendorPacks implements StickerPacks
 			VendorPackName::WorkDay => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_WORK_DAY') ?? '',
 			VendorPackName::Animals => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_ANIMALS') ?? '',
 			VendorPackName::Celebration => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_CELEBRATION') ?? '',
+			VendorPackName::UnstoppableOptimist => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_UNSTOPPABLE_OPTIMIST') ?? '',
 		};
 	}
 

@@ -19,12 +19,18 @@ class CSocServOdnoklassniki extends CSocServAuth
 			array("odnoklassniki_appid", GetMessage("socserv_odnoklassniki_client_id"), "", Array("text", 40)),
 			array("odnoklassniki_appkey", GetMessage("socserv_odnoklassniki_client_key"), "", Array("text", 40)),
 			array("odnoklassniki_appsecret", GetMessage("socserv_odnoklassniki_client_secret"), "", Array("text", 40)),
-			array("note"=>GetMessage("socserv_odnoklassniki_form_note", array('#URL#'=>\CHTTP::URN2URI("/bitrix/tools/oauth/odnoklassniki.php")))),
+			array("note"=>GetMessage("socserv_odnoklassniki_form_note", array('#URL#'=>(string)(new Uri("/bitrix/tools/oauth/odnoklassniki.php"))->toAbsolute()))),
 		);
 	}
 
 	public function getEntityOAuth()
 	{
+		if ($this->entityOAuth === null)
+		{
+			$this->entityOAuth = new COdnoklassnikiInterface();
+			$this->entityOAuth->setLogger($this->logger);
+		}
+
 		return $this->entityOAuth;
 	}
 
@@ -57,19 +63,17 @@ class CSocServOdnoklassniki extends CSocServAuth
 
 		if ($this->isCloudPortal())
 		{
-			$portalRedirectUri = new Uri(
-				\CHTTP::URN2URI('/bitrix/tools/oauth/odnoklassniki.php')
-			);
-			$portalRedirectUri->addParams([
-				'state' => $state,
-			]);
+			$portalRedirectUri = (new Uri('/bitrix/tools/oauth/odnoklassniki.php'))
+				->addParams(['state' => $state,])
+				->toAbsolute()
+			;
 
 			$state = (string)$portalRedirectUri;
 			$redirect_uri = self::CONTROLLER_URL . '/redirect.php';
 		}
 		else
 		{
-			$redirect_uri = \CHTTP::URN2URI('/bitrix/tools/oauth/odnoklassniki.php');
+			$redirect_uri = (string)(new Uri('/bitrix/tools/oauth/odnoklassniki.php'))->toAbsolute();
 		}
 
 		return $this->getEntityOAuth()->GetAuthUrl($redirect_uri, $state);
@@ -96,7 +100,7 @@ class CSocServOdnoklassniki extends CSocServAuth
 			if ($this->isCloudPortal())
 				$redirect_uri = self::CONTROLLER_URL."/redirect.php";
 			else
-				$redirect_uri= \CHTTP::URN2URI("/bitrix/tools/oauth/odnoklassniki.php");
+				$redirect_uri= (string)(new Uri("/bitrix/tools/oauth/odnoklassniki.php"))->toAbsolute();
 
 			$appID = trim(self::GetOption("odnoklassniki_appid"));
 			$appSecret = trim(self::GetOption("odnoklassniki_appsecret"));

@@ -5,7 +5,7 @@ use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
-use Bitrix\Sign\Debug\Logger;
+use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Document;
 use Bitrix\Sign\Document\Member;
 use Bitrix\Sign\Error;
@@ -246,7 +246,7 @@ class Form extends \Bitrix\Sign\Internal\BaseTable
 					$error = Error::getInstance()->getErrorsAsArray()[0]['message'] ?? false;
 					if ($error)
 					{
-						Logger::getInstance()->error($error);
+						Container::instance()->getLogger('Integration')->error($error);
 					}
 				}
 			}

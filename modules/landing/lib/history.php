@@ -151,6 +151,7 @@ class History
 			if (!is_array($row['ACTION_PARAMS']))
 			{
 				$this->fixBrokenStep($step, $row['ID']);
+
 				continue;
 			}
 
@@ -393,7 +394,6 @@ class History
 		$this->stack = $newStack;
 	}
 
-
 	/**
 	 * Remove history records older X days. And save new step.
 	 * @param int $days
@@ -593,13 +593,26 @@ class History
 		}
 		$action->setParams($params);
 
+		$sanitizableParamKeys = $action::getSanitizableParamKeys();
+		if (
+			$sanitizableParamKeys !== []
+			&& !History\ActionParamsGuard::validateParams(
+				$action->getParams(),
+				$sanitizableParamKeys,
+				$action::class,
+			)
+		)
+		{
+			return false;
+		}
+
 		$fields = [
 			'ENTITY_TYPE' => $this->entityType,
 			'ENTITY_ID' => $this->entityId,
 			'ACTION' => $actionName,
 			'ACTION_PARAMS' => $action->getParams(),
 			'CREATED_BY_ID' => Manager::getUserId() ?: 1,
-			'DATE_CREATE' => new DateTime,
+			'DATE_CREATE' => new DateTime(),
 		];
 
 		// check duplicates
@@ -628,8 +641,7 @@ class History
 		$nextStep =
 			(self::$multiplyMode && self::$multiplyStep !== null)
 				? self::$multiplyStep
-				: $this->step + 1
-		;
+				: $this->step + 1;
 
 		if (!$this->saveStep($nextStep))
 		{
@@ -678,8 +690,7 @@ class History
 		return
 			$this->step > 0
 			&& $this->getStackCount() > 0
-			&& $this->step <= $this->getStackCount()
-		;
+			&& $this->step <= $this->getStackCount();
 	}
 
 	public function redo(): bool
@@ -702,8 +713,7 @@ class History
 		return
 			$this->step >= 0
 			&& $this->getStackCount() > 0
-			&& $this->step < $this->getStackCount()
-		;
+			&& $this->step < $this->getStackCount();
 	}
 
 	/**
@@ -715,7 +725,7 @@ class History
 	{
 		$action = $this->getActionForStep(
 			$undo ? $this->step : ($this->step + 1),
-			$undo
+			$undo,
 		);
 
 		return $action ? $action->getJsCommand($undo) : [];
@@ -763,6 +773,4 @@ class History
 
 		return $action;
 	}
-
-
 }

@@ -3,11 +3,27 @@
 namespace Bitrix\Landing\History\Action;
 
 use Bitrix\Landing\Block;
+use Bitrix\Landing\History\ActionParamsGuard;
 use Bitrix\Main\Text\Emoji;
 
 class EditTextAction extends BaseAction
 {
 	protected const JS_COMMAND = 'editText';
+
+	public static function getSanitizableParamKeys(): array
+	{
+		return ['valueBefore', 'valueAfter'];
+	}
+
+	public static function normalizeSanitizableParam(string $key, mixed $value): mixed
+	{
+		if (is_string($value) && str_starts_with($key, 'value'))
+		{
+			return Emoji::decode($value);
+		}
+
+		return $value;
+	}
 
 	public function execute(bool $undo = true): bool
 	{
@@ -23,6 +39,11 @@ class EditTextAction extends BaseAction
 			{
 				$content = $undo ? $this->params['valueBefore'] : $this->params['valueAfter'];
 				$content = Emoji::decode($content);
+				$content = ActionParamsGuard::prepareHtmlForSave($content);
+				if ($content === null)
+				{
+					return false;
+				}
 				$resultList[$position]->setInnerHTML($content);
 				$block->saveContent($doc->saveHTML());
 
@@ -41,8 +62,20 @@ class EditTextAction extends BaseAction
 		$block = $params['block'];
 
 		$valueBefore = $params['valueBefore'] ?: '';
-		$valueBefore = Emoji::encode($valueBefore);
 		$valueAfter = $params['valueAfter'] ?: '';
+
+		$checked = ActionParamsGuard::rejectUnsafeValueParams(
+			[
+				'valueBefore' => $valueBefore,
+				'valueAfter' => $valueAfter,
+			],
+			static::getSanitizableParamKeys(),
+			static::class,
+		);
+		$valueBefore = $checked['valueBefore'];
+		$valueAfter = $checked['valueAfter'];
+
+		$valueBefore = Emoji::encode($valueBefore);
 		$valueAfter = Emoji::encode($valueAfter);
 
 		return [

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Rest\Contract\Service;
 
-use Bitrix\Rest\Entity\Collection\AppCollection;
+use Bitrix\Rest\Internal\Entity\Application\AppCollection;
 
 interface AppService
 {

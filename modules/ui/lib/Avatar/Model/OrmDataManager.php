@@ -5,14 +5,14 @@ use Bitrix\Main;
 
 abstract class OrmDataManager extends Main\ORM\Data\DataManager
 {
-	public static function deleteByFilter(array $filter): Main\Orm\Data\DeleteResult
+	public static function deleteByFilter(array $filter): Main\ORM\Data\DeleteResult
 	{
 		$entity = static::getEntity();
 		$sqlTableName = static::getTableName();
 		$sqlHelper = $entity->getConnection()->getSqlHelper();
 
 		$where = Main\ORM\Query\Query::buildFilterSql($entity, $filter);
-		$result = new Main\Orm\Data\DeleteResult();
+		$result = new Main\ORM\Data\DeleteResult();
 		if ($where !== '')
 		{
 			$sql = "DELETE FROM {$sqlHelper->quote($sqlTableName)} WHERE " . $where;

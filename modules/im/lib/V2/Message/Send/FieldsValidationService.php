@@ -5,7 +5,7 @@ namespace Bitrix\Im\V2\Message\Send;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
-use Bitrix\Im\V2\Message\Builder\BuilderService;
+use Bitrix\Im\V2\Message\BlocksBuilder\BuilderService;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Param\ParamError;
 use Bitrix\Im\V2\Message\Params;
@@ -117,6 +117,31 @@ class FieldsValidationService
 				if ($key === 'reasoning' && Features::get()->isCopilotReasoningAvailable)
 				{
 					$this->fields['PARAMS'][Params::COPILOT_REASONING] = $item === 'Y' ? 'Y' : 'N';
+				}
+
+				if ($key === 'agentMode')
+				{
+					$this->fields['PARAMS'][Params::COPILOT_AGENT_MODE] = $item === 'Y' ? 'Y' : 'N';
+				}
+
+				if ($key === 'forceSearch' && Features::get()->isCopilotForceSearchAvailable)
+				{
+					$this->fields['PARAMS'][Params::COPILOT_FORCE_SEARCH] = $item === 'Y' ? 'Y' : 'N';
+				}
+
+				if ($key === 'pageContext' && is_array($item))
+				{
+					$this->fields['PARAMS'][Params::COPILOT_PAGE_CONTEXT] = $item;
+				}
+
+				if (
+					$key === 'mcpAuthId'
+					&& is_numeric($item)
+					&& (int)$item > 0
+					&& Features::get()->aiAssistantMcpSelectorAvailable
+				)
+				{
+					$this->fields['PARAMS'][Params::COPILOT_MCP_AUTH_ID] = (int)$item;
 				}
 			}
 		}
@@ -462,8 +487,8 @@ class FieldsValidationService
 			return $result->addError($builderResult->getError());
 		}
 
-		$builder = $builderResult->getBuilder();
-		$this->fields['PARAMS'][Params::BUILDER] = $builder;
+		$builder = $builderResult->getBlocksBuilder();
+		$this->fields['PARAMS'][Params::BLOCKS_BUILDER] = $builder;
 		$this->fields['MESSAGE'] = $builder->getPayloadText();
 
 		return $result;

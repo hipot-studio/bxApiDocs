@@ -261,6 +261,9 @@ class Sender
 
 			if($authData)
 			{
+				$authData['domain'] = Context::getCurrent()->getRequest()->getHttpHost();
+				$authData['member_id'] = \CRestUtil::getMemberId();
+
 				if ($handler['EVENT_HANDLER'] !== '')
 				{
 					$eventBufferAddResult = Buffer::getInstance()->addEvent([

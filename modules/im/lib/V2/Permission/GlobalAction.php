@@ -16,4 +16,5 @@ enum GlobalAction: string
 	case ChangeMessagesAutoDeleteDelay = 'CHANGE_MESSAGES_AUTO_DELETE_DELAY';
 	case CreateStickerPack = 'CREATE_STICKER_PACK';
 	case ChangeStickerPack = 'CHANGE_STICKER_PACK';
+	case JoinChat = 'JOIN_CHAT';
 }

@@ -17,6 +17,7 @@ use Bitrix\Main\ORM\Query\Filter\ConditionTree as Filter;
 use Bitrix\Main\ORM\Query\Filter\Expressions\ColumnExpression;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\StringHelper;
+use Bitrix\Main\Text\Converter;
 
 /**
  * Query builder for Entities.
@@ -463,7 +464,7 @@ class Query
 	 * Sets a list of fields for ORDER BY clause.
 	 * Format:
 	 *   setOrder('ID') -- ORDER BY `ID` ASC
-	 *   setOrder(['ID' => 'DESC', 'NAME' => 'ASC]) -- ORDER BY `ID` DESC, `NAME` ASC
+	 *   setOrder(['ID' => 'DESC', 'NAME' => 'ASC']) -- ORDER BY `ID` DESC, `NAME` ASC
 	 *
 	 * @param mixed $order
 	 *
@@ -549,7 +550,7 @@ class Query
 	/**
 	 * Sets a limit for LIMIT n clause
 	 *
-	 * @param int $limit
+	 * @param int|null $limit
 	 * @return $this
 	 */
 	public function setLimit($limit)
@@ -571,7 +572,7 @@ class Query
 	/**
 	 * Sets an offset for LIMIT n, m clause
 
-	 * @param int $offset
+	 * @param int|null $offset
 	 * @return $this
 	 */
 	public function setOffset($offset)
@@ -862,7 +863,7 @@ class Query
 
 		if ($chain->getLastElement()->getValue() instanceof ExpressionField)
 		{
-			$this->collectExprChains($chain, array('hidden'));
+			$this->collectExprChains($chain);
 		}
 
 		return $this;
@@ -992,13 +993,13 @@ class Query
 	/**
 	 * Short alias for $result->fetch()
 	 *
-	 * @param Main\Text\Converter|null $converter
+	 * @param Converter|null $converter
 	 *
 	 * @return array|false
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function fetch(?\Bitrix\Main\Text\Converter $converter = null)
+	public function fetch(?Converter $converter = null)
 	{
 		return $this->exec()->fetch($converter);
 	}
@@ -1006,13 +1007,13 @@ class Query
 	/**
 	 * Short alias for $result->fetchAll()
 	 *
-	 * @param Main\Text\Converter|null $converter
+	 * @param Converter|null $converter
 	 *
 	 * @return array
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public function fetchAll(?\Bitrix\Main\Text\Converter $converter = null)
+	public function fetchAll(?Converter $converter = null)
 	{
 		return $this->exec()->fetchAll($converter);
 	}
@@ -1069,7 +1070,7 @@ class Query
 		}
 
 		// check for primaries in select
-		foreach ($entities as list($entity, $join))
+		foreach ($entities as [$entity, $join])
 		{
 			/** @var Entity $entity */
 			foreach ($entity->getPrimaryArray() as $primary)
@@ -1159,7 +1160,7 @@ class Query
 				}
 				elseif (is_array($lastElemValue))
 				{
-					list($localEntity, ) = $lastElemValue;
+					[$localEntity, ] = $lastElemValue;
 				}
 				else
 				{
@@ -1249,7 +1250,7 @@ class Query
 			}
 			elseif (is_array($last_elem->getValue()))
 			{
-				list($expand_entity, ) = $last_elem->getValue();
+				[$expand_entity, ] = $last_elem->getValue();
 			}
 			elseif ($last_elem->getValue() instanceof Entity)
 			{
@@ -1368,7 +1369,7 @@ class Query
 			{
 				$sqlWhere = new \CSQLWhere();
 				$csw_result = $sqlWhere->makeOperation($filter_def);
-				list($definition, ) = array_values($csw_result);
+				[$definition, ] = array_values($csw_result);
 
 				// do not register it in global chain registry - get it in a smuggled way
 				// - we will do the registration later after UF rewriting and data doubling checking
@@ -1748,7 +1749,7 @@ class Query
 			{
 				$sqlWhere = new \CSQLWhere();
 				$csw_result = $sqlWhere->makeOperation($filter_def);
-				list($definition, ) = array_values($csw_result);
+				[$definition, ] = array_values($csw_result);
 
 				$chain = $this->filter_chains[$definition];
 				$last = $chain->getLastElement();
@@ -1975,7 +1976,7 @@ class Query
 				elseif (is_array($element->getValue()))
 				{
 					// link from another entity to this
-					list($dst_entity, $ref_field) = $element->getValue();
+					[$dst_entity, $ref_field] = $element->getValue();
 					$joinType = $ref_field->getJoinType();
 				}
 				elseif ($element->getValue() instanceof OneToMany)
@@ -2603,7 +2604,7 @@ class Query
 			{
 				$sqlWhere = new \CSQLWhere();
 				$csw_result = $sqlWhere->makeOperation($filter_def);
-				list($definition, $operation) = array_values($csw_result);
+				[$definition, $operation] = array_values($csw_result);
 
 				$chain = $this->filter_chains[$definition];
 				$last = $chain->getLastElement();
@@ -2783,7 +2784,7 @@ class Query
 				// key
 				$sqlWhere = new \CSQLWhere();
 				$csw_result = $sqlWhere->makeOperation($k);
-				list($field, $operation) = array_values($csw_result);
+				[$field, $operation] = array_values($csw_result);
 
 				if (str_starts_with($field, 'this.'))
 				{
@@ -3255,7 +3256,7 @@ class Query
 				// key
 				$sqlWhere = new \CSQLWhere();
 				$csw_result = $sqlWhere->makeOperation($k);
-				list($field, ) = array_values($csw_result);
+				[$field, ] = array_values($csw_result);
 
 				$fields[$field] = array(
 					'TABLE_ALIAS' => 'alias',

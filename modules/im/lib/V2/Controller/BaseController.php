@@ -11,6 +11,9 @@ use Bitrix\Im\V2\Controller\Filter\AutoJoinToChat;
 use Bitrix\Im\V2\Controller\Filter\CheckEntityAccess;
 use Bitrix\Im\V2\Controller\Filter\SameChatMessageFilter;
 use Bitrix\Im\V2\Controller\Filter\UpdateStatus;
+use Bitrix\Im\V2\Error;
+use Bitrix\Im\V2\Folder\Error\FolderError;
+use Bitrix\Im\V2\Folder\FolderProvider;
 use Bitrix\Im\V2\Link\Pin\PinCollection;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\MessageError;
@@ -25,6 +28,7 @@ use Bitrix\Im\V2\Rest\RestError;
 use Bitrix\Im\V2\SharingLink\SharingLinkError;
 use Bitrix\Im\V2\SharingLink\SharingLinkFactory;
 use Bitrix\Im\V2\SharingLink\SharingLink;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
@@ -105,6 +109,21 @@ abstract class BaseController extends Controller
 					}
 
 					return $sharingLink;
+				}
+			),
+			new ExactParameter(
+				\Bitrix\Im\V2\Folder\Folder::class,
+				'folder',
+				function ($className, int $folderId) {
+					$folder = ServiceLocator::getInstance()->get(FolderProvider::class)->getById($folderId);
+					if ($folder === null)
+					{
+						$this->addError(new Error(FolderError::FOLDER_NOT_FOUND));
+
+						return null;
+					}
+
+					return $folder;
 				}
 			),
 		];

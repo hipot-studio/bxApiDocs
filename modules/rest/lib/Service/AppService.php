@@ -4,16 +4,14 @@ declare(strict_types=1);
 
 namespace Bitrix\Rest\Service;
 
-use Bitrix\Main\Web\Uri;
 use Bitrix\Rest\Contract;
-use Bitrix\Rest\Entity\Collection\AppCollection;
-use Bitrix\Rest\Internals\FreeAppTable;
-use Bitrix\Rest\Marketplace\Client;
+use Bitrix\Rest\Internal;
+use Bitrix\Rest\Internal\Entity\Application\AppCollection;
 
 class AppService implements Contract\Service\AppService
 {
 	public function __construct(
-		private readonly Contract\Repository\AppRepository $appRepository,
+		private readonly Internal\Repository\Application\AppRepository $appRepository,
 	)
 	{}
 
@@ -24,7 +22,7 @@ class AppService implements Contract\Service\AppService
 
 	public function hasPaidApps(): bool
 	{
-		return $this->appRepository->hasPaidApps();
+		return $this->appRepository->getPaidApplications(0, 1)->isEmpty() !== true;
 	}
 
 	public function getInstalledAppsCount(): int

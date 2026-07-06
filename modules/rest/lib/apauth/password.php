@@ -9,6 +9,7 @@ use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\ORM;
 use Bitrix\Rest\Internal\Integration\Rest\EventHandlers\PasswordEventHandler;
+use Bitrix\Rest\Internal\Model\IncomingWebhookAttributeTable;
 use Bitrix\Rest\Internal\Service\SystemUserService;
 use Bitrix\Rest\Preset\EventController;
 use Bitrix\Rest\Enum;
@@ -196,6 +197,7 @@ class PasswordTable extends ORM\Data\DataManager
 			return;
 		}
 		self::clearServiceCache((int)$event->getParameter('id')['ID']);
+		IncomingWebhookAttributeTable::deleteByPasswordId((int)$event->getParameter('id')['ID']);
 		if (isset(self::$itemsToDelete[(int)$event->getParameter('id')['ID']]))
 		{
 			$deletedItem = self::$itemsToDelete[(int)$event->getParameter('id')['ID']];

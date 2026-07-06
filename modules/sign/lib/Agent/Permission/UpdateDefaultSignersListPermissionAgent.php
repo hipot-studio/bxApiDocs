@@ -5,7 +5,6 @@ namespace Bitrix\Sign\Agent\Permission;
 use Bitrix\Main\Loader;
 use Bitrix\Sign\Access\Permission\PermissionDictionary as CrmPermissionDictionary;
 use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Sign\PermissionsService;
 use Psr\Log\LoggerInterface;
@@ -22,7 +21,7 @@ class UpdateDefaultSignersListPermissionAgent
 	public static function run(): string
 	{
 		$permissionsService = Container::instance()->getPermissionsService();
-		$logger = Logger::getInstance();
+		$logger = Container::instance()->getLogger('Agent');
 		(new static($permissionsService, $logger))->copyFromDocumentPermissions();
 		
 		return '';

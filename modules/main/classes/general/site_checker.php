@@ -3008,18 +3008,30 @@ class CSiteCheckerTest
 		{
 			$file = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/' . $module . '/install/mysql/install.sql';
 		}
-		if (file_exists($file)) // uses database...
+		$migrationFile = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/' . $module . '/install/migrations/tables.php';
+
+		if (file_exists($file) || file_exists($migrationFile)) // uses database...
 		{
 			$arTableColumns = [];
 			$bModuleInstalled = ModuleTable::getById($module)->fetch();
 
-			if (false === ($query = file_get_contents($file)))
+			$arQuery = [];
+			if (file_exists($file))
 			{
-				return false;
+				$query = file_get_contents($file);
+				$arQuery = $DB->ParseSQLBatch(str_replace("\r", "", $query));
+			}
+			if (file_exists($migrationFile))
+			{
+				$collector = new \Bitrix\Main\UpdateSystem\Migration\Tools\MigrationQueryCollector(
+					absoluteMigrationFileName: $migrationFile,
+					moduleId: $module,
+					mode: \Bitrix\Main\UpdateSystem\Migration\DatabaseUpdateMode::SiteChecker,
+				);
+				$arQuery = array_merge($arQuery, $collector->collect());
 			}
 
 			$arTables = [];
-			$arQuery = $DB->ParseSQLBatch(str_replace("\r", "", $query));
 			foreach ($arQuery as $sql)
 			{
 				if (preg_match('#^(CREATE TABLE )(IF NOT EXISTS)? *`?([a-z0-9_]+)`?(.*);?$#mis', $sql, $regs))
@@ -3765,7 +3777,7 @@ function InitPureDB()
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/autoload.php");
 	require_once($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/tools.php");
 
-	global $DB, $DBDebug, $DBDebugToFile;
+	global $DB, $DBDebug, $DBDebugToFile, $CACHE_MANAGER;
 
 	/**
 	 * Defined in dbconn.php
@@ -3788,6 +3800,8 @@ function InitPureDB()
 		CDatabase::showConnectionError();
 		die();
 	}
+
+	$CACHE_MANAGER = new CCacheManager;
 }
 
 function TableFieldConstruct($field)

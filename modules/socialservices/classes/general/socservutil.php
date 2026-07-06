@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Web\Uri;
+
 class CSocServUtil
 {
 	const OAUTH_PACK_PARAM = "oauth_proxy_params";
@@ -33,7 +35,7 @@ class CSocServUtil
 				$addParam .= ($addParam == "" ? "" : "&").self::packOAuthProxyString($proxyString);
 			}
 		}
-		return \CHTTP::URN2URI($APPLICATION->GetCurPageParam($addParam, $arRemove));
+		return (string)(new Uri($APPLICATION->GetCurPageParam($addParam, $arRemove)))->toAbsolute();
 	}
 
 	/**

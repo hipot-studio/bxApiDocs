@@ -9,7 +9,7 @@ use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Grid;
-use Bitrix\Main\Grid\Cell;
+use Bitrix\Main\Grid\Export\ExcelExporter;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Context;
 use Bitrix\Main\ObjectPropertyException;
@@ -28,6 +28,7 @@ use Bitrix\Sign\Callback\Handler;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Connector\Crm\MyCompany;
 use Bitrix\Sign\Document\Entity\SmartB2e;
+use Bitrix\Sign\Exception\ObjectNotFoundException;
 use Bitrix\Sign\Integration\CRM\Entity;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Item\MemberCollection;
@@ -40,11 +41,11 @@ use Bitrix\Sign\Type\Member\EntityType;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\MemberStatus;
 use Bitrix\Sign\Ui;
+use Bitrix\Sign\Util\Request\File;
 
 Loc::loadMessages(__FILE__);
 
 CBitrixComponent::includeComponentClass('bitrix:sign.base');
-\Bitrix\Main\Loader::includeModule('sign');
 
 class SignUserDocumentListComponent extends SignBaseComponent implements Controllerable
 {
@@ -80,6 +81,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 	private const BANNER_OPTION_CLOSE_PERSONAL = 'show_b2e_personal_grid_banner';
 	private const BANNER_OPTION_CLOSE_SAFE = 'show_b2e_safe_grid_banner';
 	private const BANNER_OPTION_CLOSE_CURRENT = 'show_b2e_current_grid_banner';
+	private const EXCEL_DEFAULT_FILE_NAME = 'sign-document-members';
 
 	private const ROLE_RELEVANCE = [
 		Role::REVIEWER => 100,
@@ -203,7 +205,20 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			return;
 		}
 
-		$this->prepareResult();
+		try
+		{
+			$this->prepareResult();
+		}
+		catch (ObjectNotFoundException $e)
+		{
+			ShowError($e->getMessage());
+			return;
+		}
+
+		if ($this->isExcelExportMode())
+		{
+			$this->setTemplateName('excel');
+		}
 	}
 
 	public function getAction(): array
@@ -245,6 +260,9 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		};
 	}
 
+	/**
+	 * @throws ObjectNotFoundException
+	 */
 	private function prepareResult(): void
 	{
 		$this->prepareComponentParams();
@@ -305,7 +323,8 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 
 	private function prepareGridParams(): void
 	{
-		$this->arResult['GRID_ID'] = match ($this->type) {
+		$this->arResult['GRID_ID'] = match ($this->type)
+		{
 			self::DOCUMENT_TYPE => self::DOCUMENT_DOCUMENT_GRID_ID,
 			self::PERSONAL_TYPE => self::PERSONAL_DOCUMENT_GRID_ID,
 			self::SAFE_TYPE => self::SAFE_DOCUMENT_GRID_ID,
@@ -313,10 +332,17 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			default => self::DEFAULT_GRID_ID
 		};
 		$this->arResult['COLUMNS'] = $this->getGridColumns();
-
 		$this->arResult['DOCUMENT_RESULT_FILE_DOWNLOAD_URL_TEMPLATE'] ??= self::DEFAULT_RESULT_FILE_DOWNLOAD_URL_TEMPLATE;
 		$this->arResult['DOCUMENT_RESULT_FILE_DOWNLOAD_URL_TEMPLATE_HASH_KEY'] ??=
 			self::DEFAULT_RESULT_FILE_DOWNLOAD_URL_TEMPLATE_HASH_KEY;
+		$this->arResult['IS_EXCEL_EXPORT_MODE'] = $this->isExcelExportMode();
+		$this->arResult['VISIBLE_COLUMNS_FOR_EXCEL'] = $this->getVisibleColumnsForExcel();
+	}
+
+	private function isExcelExportMode(): bool
+	{
+		return $this->isDocumentType()
+			&& $this->getRequest(ExcelExporter::REQUEST_PARAM_NAME) === ExcelExporter::REQUEST_PARAM_VALUE;
 	}
 
 	private function getDefaultGridColumnsList(): array
@@ -498,7 +524,6 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 	{
 		return new Grid\Options($this->arResult["GRID_ID"]);
 	}
-
 	private function getPersonalMemberCollection(array $requestFilter): MemberCollection
 	{
 		return $this->memberRepository->listSignersByUserIdIsDone(
@@ -509,6 +534,9 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		);
 	}
 
+	/**
+	 * @throws ObjectNotFoundException
+	 */
 	private function getDocumentMemberCollection(array $requestFilter): MemberCollection
 	{
 		$filter = $this->getFilterForQuery($requestFilter);
@@ -534,6 +562,14 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		}
 
 		$document = $this->documentRepository->getById($this->entityId);
+		if ($document === null)
+		{
+			throw new ObjectNotFoundException(
+				Loc::getMessage('SIGN_DOCUMENT_LIST_DOC_NOT_FOUND', ['#DOC_ID#' => $this->entityId])
+			);
+		}
+
+		$this->setResult('EXCEL_DOCUMENT_NAME', $this->getExcelFileName($this->getDocumentTitle($document)));
 
 		if (isset($requestFilter['MEMBER_STATUS']) && is_array($requestFilter['MEMBER_STATUS']))
 		{
@@ -569,9 +605,9 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			$filter->whereIn('SIGNED', array_unique($signed));
 		}
 
-		$limit = $this->getLimitForQuery() + 1;
-		$page = $this->getNavigation()->getCurrentPage() - 1;
-		$offset = $page * $this->getNavigation()->getPageSize();
+		$isExcelExportMode = $this->isExcelExportMode();
+		$limit = $isExcelExportMode ? 0 : $this->getLimitForQuery() + 1;
+		$offset = $isExcelExportMode ? 0 : (($this->getNavigation()->getCurrentPage() - 1) * $this->getNavigation()->getPageSize());
 
 		$memberCollection = $this->memberRepository->listB2eMemberByDocumentId(
 			(int)$this->entityId,
@@ -605,12 +641,12 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		}
 		// get N+1 to understand there are any more elements in the database after that,
 		// and we will display N elements.
-		if ($memberCollection->count() === $limit)
+		if (!$isExcelExportMode && $memberCollection->count() === $limit)
 		{
 			array_pop($items);
 		}
 		$resultCollection = new MemberCollection(...$items);
-		$resultCollection->setQueryTotal($memberCollection->count() + $this->getNavigation()->getOffset());
+		$resultCollection->setQueryTotal($memberCollection->count() + ($isExcelExportMode ? 0 : $this->getNavigation()->getOffset()));
 		$this->arResult['SHOW_TOTAL_COUNTER'] = false;
 
 		return $resultCollection;
@@ -750,11 +786,15 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		return (int)$this->getNavigation()->getLimit();
 	}
 
+	/**
+	 * @throws ObjectNotFoundException
+	 */
 	private function prepareData(): void
 	{
 		$filterOptions = $this->getFilterOptions();
 		$requestFilter = $this->getRequestFilters($filterOptions);
-		$memberCollection = match ($this->type) {
+		$memberCollection = match ($this->type)
+		{
 			self::PERSONAL_TYPE => $this->getPersonalMemberCollection($requestFilter),
 			self::DOCUMENT_TYPE => $this->getDocumentMemberCollection($requestFilter),
 			self::SAFE_TYPE => $this->getSafeMemberCollection($requestFilter),
@@ -787,10 +827,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			if (isset($this->arResult['COLUMNS']['title']))
 			{
 				$withLink = !in_array($this->type, [self::PERSONAL_TYPE, self::CURRENT_TYPE], true);
-				$title = $this->type === self::PERSONAL_TYPE
-					? $this->documentService->getComposedTitleByDocument($document)
-					: $this->documentService->getTitleWithAutoNumber($document)
-				;
+				$title = $this->getDocumentTitle($document);
 				$memberData['TITLE_INFO'] = $this->getTitleInfo($title, $document->entityId, $withLink);
 			}
 
@@ -1601,4 +1638,79 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 
 		return true;
 	}
+
+	private function isDocumentType(): bool
+	{
+		return $this->type === self::DOCUMENT_TYPE;
+	}
+
+	private function getDocumentTitle(Item\Document $document): string
+	{
+		return $this->type === self::PERSONAL_TYPE
+			? $this->documentService->getComposedTitleByDocument($document)
+			: $this->documentService->getTitleWithAutoNumber($document);
+	}
+
+	private function getExcelFileName(string $documentName): string
+	{
+		$extension = '.xls';
+		$fileName = File::sanitizeFilename($documentName . $extension);
+		return $fileName !== null ? $fileName : self::EXCEL_DEFAULT_FILE_NAME . $extension;
+	}
+
+	private function getVisibleGridColumns(): array
+	{
+		$visibleColumnIds = $this->getGridOptions()->GetVisibleColumns();
+		if (!is_array($visibleColumnIds) || $visibleColumnIds === [])
+		{
+			return $this->getDefaultVisibleGridColumns();
+		}
+
+		$availableColumnsById = [];
+		foreach ($this->arResult['COLUMNS'] as $column)
+		{
+			$columnId = $column['id'] ?? null;
+			if (is_string($columnId) && $columnId !== '')
+			{
+				$availableColumnsById[$columnId] = $column;
+			}
+		}
+
+		$visibleColumns = [];
+		foreach ($visibleColumnIds as $columnId)
+		{
+			if (is_string($columnId) && isset($availableColumnsById[$columnId]))
+			{
+				$visibleColumns[] = $availableColumnsById[$columnId];
+			}
+		}
+
+		return $visibleColumns !== [] ? $visibleColumns : $this->getDefaultVisibleGridColumns();
+	}
+
+	private function getDefaultVisibleGridColumns(): array
+	{
+		return array_values(array_filter(
+			$this->arResult['COLUMNS'],
+			static fn(array $column): bool => (bool)($column['default'] ?? false),
+		));
+	}
+
+	private function getVisibleColumnsForExcel(): array
+	{
+		$visibleColumns = $this->getVisibleGridColumns();
+		$columns = [];
+		foreach ($visibleColumns as $visibleColumn)
+		{
+			if ($visibleColumn['id'] === 'ACTION')
+			{
+				continue;
+			}
+
+			$columns[] = $visibleColumn;
+		}
+
+		return $columns;
+	}
+
 }

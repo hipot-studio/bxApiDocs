@@ -192,6 +192,34 @@ final class SharingLinkFactory
 	}
 
 	/**
+	 * Create a custom (non-unique) sharing link.
+	 *
+	 * Unlike generateLink(), this method does not use locking or uniqueness checks,
+	 * because Custom type links allow multiple instances per entity.
+	 *
+	 * @return Result<SharingLink|null>
+	 */
+	public function createCustomLink(CreateDto $dto): Result
+	{
+		$result = new Result();
+
+		if ($dto->type !== Type::Custom)
+		{
+			return $result->addError(new SharingLinkError(SharingLinkError::WRONG_PARAMS));
+		}
+
+		$code = $this->generateUniqueCode();
+		if (!isset($code))
+		{
+			return $result->addError(new SharingLinkError(SharingLinkError::CREATION_ERROR));
+		}
+
+		$createDto = $dto->withCode($code);
+
+		return $this->createLink($createDto);
+	}
+
+	/**
 	 * @return Result<SharingLink|null>
 	 */
 	public function generateLink(CreateDto $dto, bool $forceGenerate = false): Result
@@ -329,6 +357,7 @@ final class SharingLinkFactory
 		return match ($entityType)
 		{
 			LinkEntityType::Chat => (new ChatLink($params)),
+			LinkEntityType::GuestChat => (new GuestChatLink($params)),
 			default => null,
 		};
 	}

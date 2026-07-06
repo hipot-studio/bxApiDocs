@@ -21,11 +21,14 @@ use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access\LoadLimiter;
 use Bitrix\Rest\Engine\RestManager;
 use Bitrix\Rest\Event\Session;
+use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 use Bitrix\Rest\LicenseException;
 use Bitrix\Rest\Notify;
 use Bitrix\Rest\OAuthService;
+use Bitrix\Rest\Public\Services\AppScopeRequestService;
 use Bitrix\Rest\RestException;
 use Bitrix\Rest\AccessException;
+use Bitrix\Rest\Public\Event\RestInitEvent;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Json;
 use Bitrix\Rest\RestExceptionInterface;
@@ -276,6 +279,21 @@ class CRestServer
 			$authData = $this->getAuthData();
 
 			$this->authScope = explode(',', $authData['scope']);
+
+			if ($authData['auth_type'] === \Bitrix\Rest\OAuth\Auth::AUTH_TYPE && isset($authData['client_id']))
+			{
+				$appRepository = Main\DI\ServiceLocator::getInstance()->get(AppRepository::class);
+				$app = $appRepository->getByClientId($authData['client_id']);
+				if ($app !== null && $app->isActive())
+				{
+					$appScopeRequestService = Main\DI\ServiceLocator::getInstance()->get(AppScopeRequestService::class);
+					$extraAppScopes = $appScopeRequestService->getApprovedScopes($app->getId());
+					if (!empty($extraAppScopes))
+					{
+						$this->authScope = array_unique(array_merge($this->authScope, $extraAppScopes));
+					}
+				}
+			}
 		}
 
 		return $this->authScope;
@@ -484,6 +502,18 @@ class CRestServer
 	protected function checkSite(): bool
 	{
 		return Option::get("main", "site_stopped", "N") !== 'Y';
+	}
+
+	/**
+	 * @throws AccessException
+	 * @throws Main\LoaderException
+	 * @throws SystemException
+	 */
+	protected function executeRestInitEvent(): void
+	{
+		$event = new RestInitEvent($this);
+		$event->send();
+		$event->throwIfHasErrors();
 	}
 
 	protected function getMethodDescriptions()
@@ -816,8 +846,10 @@ class CRestServer
 
 		if ($this->init())
 		{
-			$handler = new $this->class();
+			//event OnRestInit
+			$this->executeRestInitEvent();
 
+			$handler = new $this->class();
 			/* @var IRestService $handler */
 			$this->arServiceDesc = $handler->getDescription();
 
@@ -857,7 +889,7 @@ class CRestServer
 		}
 	}
 
-	protected function processException(RestExceptionInterface|Exception $e): array
+	protected function processException(RestExceptionInterface|\Throwable $e): array
 	{
 		global $APPLICATION;
 

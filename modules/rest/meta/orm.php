@@ -480,6 +480,26 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_App resetStatus()
 	 * @method \Bitrix\Rest\EO_App unsetStatus()
 	 * @method \string fillStatus()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Rest\EO_App setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Rest\EO_App resetDateCreate()
+	 * @method \Bitrix\Rest\EO_App unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime getDateInstall()
+	 * @method \Bitrix\Rest\EO_App setDateInstall(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateInstall)
+	 * @method bool hasDateInstall()
+	 * @method bool isDateInstallFilled()
+	 * @method bool isDateInstallChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateInstall()
+	 * @method \Bitrix\Main\Type\DateTime requireDateInstall()
+	 * @method \Bitrix\Rest\EO_App resetDateInstall()
+	 * @method \Bitrix\Rest\EO_App unsetDateInstall()
+	 * @method \Bitrix\Main\Type\DateTime fillDateInstall()
 	 * @method \Bitrix\Main\Type\Date getDateFinish()
 	 * @method \Bitrix\Rest\EO_App setDateFinish(\Bitrix\Main\Type\Date|\Bitrix\Main\DB\SqlExpression $dateFinish)
 	 * @method bool hasDateFinish()
@@ -694,6 +714,10 @@ namespace Bitrix\Rest {
 	 * @method \string[] fillScope()
 	 * @method \string[] getStatusList()
 	 * @method \string[] fillStatus()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateInstallList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateInstall()
 	 * @method \Bitrix\Main\Type\Date[] getDateFinishList()
 	 * @method \Bitrix\Main\Type\Date[] fillDateFinish()
 	 * @method \boolean[] getIsTrialedList()
@@ -785,6 +809,387 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_App_Collection createCollection()
 	 * @method \Bitrix\Rest\EO_App wakeUpObject($row)
 	 * @method \Bitrix\Rest\EO_App_Collection wakeUpCollection($rows)
+	 */
+	class EO_App_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Rest\Internal\Model\AppTable:rest/lib/Internal/Model/AppTable.php */
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * EO_App
+	 * @see \Bitrix\Rest\Internal\Model\AppTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getClientId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setClientId(\string|\Bitrix\Main\DB\SqlExpression $clientId)
+	 * @method bool hasClientId()
+	 * @method bool isClientIdFilled()
+	 * @method bool isClientIdChanged()
+	 * @method \string remindActualClientId()
+	 * @method \string requireClientId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetClientId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetClientId()
+	 * @method \string fillClientId()
+	 * @method \string getCode()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetCode()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetCode()
+	 * @method \string fillCode()
+	 * @method \boolean getActive()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setActive(\boolean|\Bitrix\Main\DB\SqlExpression $active)
+	 * @method bool hasActive()
+	 * @method bool isActiveFilled()
+	 * @method bool isActiveChanged()
+	 * @method \boolean remindActualActive()
+	 * @method \boolean requireActive()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetActive()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetActive()
+	 * @method \boolean fillActive()
+	 * @method \boolean getInstalled()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setInstalled(\boolean|\Bitrix\Main\DB\SqlExpression $installed)
+	 * @method bool hasInstalled()
+	 * @method bool isInstalledFilled()
+	 * @method bool isInstalledChanged()
+	 * @method \boolean remindActualInstalled()
+	 * @method \boolean requireInstalled()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetInstalled()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetInstalled()
+	 * @method \boolean fillInstalled()
+	 * @method \string getUrl()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setUrl(\string|\Bitrix\Main\DB\SqlExpression $url)
+	 * @method bool hasUrl()
+	 * @method bool isUrlFilled()
+	 * @method bool isUrlChanged()
+	 * @method \string remindActualUrl()
+	 * @method \string requireUrl()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetUrl()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetUrl()
+	 * @method \string fillUrl()
+	 * @method \string getUrlDemo()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setUrlDemo(\string|\Bitrix\Main\DB\SqlExpression $urlDemo)
+	 * @method bool hasUrlDemo()
+	 * @method bool isUrlDemoFilled()
+	 * @method bool isUrlDemoChanged()
+	 * @method \string remindActualUrlDemo()
+	 * @method \string requireUrlDemo()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetUrlDemo()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetUrlDemo()
+	 * @method \string fillUrlDemo()
+	 * @method \string getUrlInstall()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setUrlInstall(\string|\Bitrix\Main\DB\SqlExpression $urlInstall)
+	 * @method bool hasUrlInstall()
+	 * @method bool isUrlInstallFilled()
+	 * @method bool isUrlInstallChanged()
+	 * @method \string remindActualUrlInstall()
+	 * @method \string requireUrlInstall()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetUrlInstall()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetUrlInstall()
+	 * @method \string fillUrlInstall()
+	 * @method \string getUrlSettings()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setUrlSettings(\string|\Bitrix\Main\DB\SqlExpression $urlSettings)
+	 * @method bool hasUrlSettings()
+	 * @method bool isUrlSettingsFilled()
+	 * @method bool isUrlSettingsChanged()
+	 * @method \string remindActualUrlSettings()
+	 * @method \string requireUrlSettings()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetUrlSettings()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetUrlSettings()
+	 * @method \string fillUrlSettings()
+	 * @method \string getVersion()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setVersion(\string|\Bitrix\Main\DB\SqlExpression $version)
+	 * @method bool hasVersion()
+	 * @method bool isVersionFilled()
+	 * @method bool isVersionChanged()
+	 * @method \string remindActualVersion()
+	 * @method \string requireVersion()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetVersion()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetVersion()
+	 * @method \string fillVersion()
+	 * @method \string getScope()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setScope(\string|\Bitrix\Main\DB\SqlExpression $scope)
+	 * @method bool hasScope()
+	 * @method bool isScopeFilled()
+	 * @method bool isScopeChanged()
+	 * @method \string remindActualScope()
+	 * @method \string requireScope()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetScope()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetScope()
+	 * @method \string fillScope()
+	 * @method \string getStatus()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \string remindActualStatus()
+	 * @method \string requireStatus()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetStatus()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetStatus()
+	 * @method \string fillStatus()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetDateCreate()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime getDateInstall()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setDateInstall(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateInstall)
+	 * @method bool hasDateInstall()
+	 * @method bool isDateInstallFilled()
+	 * @method bool isDateInstallChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateInstall()
+	 * @method \Bitrix\Main\Type\DateTime requireDateInstall()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetDateInstall()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetDateInstall()
+	 * @method \Bitrix\Main\Type\DateTime fillDateInstall()
+	 * @method \Bitrix\Main\Type\Date getDateFinish()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setDateFinish(\Bitrix\Main\Type\Date|\Bitrix\Main\DB\SqlExpression $dateFinish)
+	 * @method bool hasDateFinish()
+	 * @method bool isDateFinishFilled()
+	 * @method bool isDateFinishChanged()
+	 * @method \Bitrix\Main\Type\Date remindActualDateFinish()
+	 * @method \Bitrix\Main\Type\Date requireDateFinish()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetDateFinish()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetDateFinish()
+	 * @method \Bitrix\Main\Type\Date fillDateFinish()
+	 * @method \boolean getIsTrialed()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setIsTrialed(\boolean|\Bitrix\Main\DB\SqlExpression $isTrialed)
+	 * @method bool hasIsTrialed()
+	 * @method bool isIsTrialedFilled()
+	 * @method bool isIsTrialedChanged()
+	 * @method \boolean remindActualIsTrialed()
+	 * @method \boolean requireIsTrialed()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetIsTrialed()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetIsTrialed()
+	 * @method \boolean fillIsTrialed()
+	 * @method \string getSharedKey()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setSharedKey(\string|\Bitrix\Main\DB\SqlExpression $sharedKey)
+	 * @method bool hasSharedKey()
+	 * @method bool isSharedKeyFilled()
+	 * @method bool isSharedKeyChanged()
+	 * @method \string remindActualSharedKey()
+	 * @method \string requireSharedKey()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetSharedKey()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetSharedKey()
+	 * @method \string fillSharedKey()
+	 * @method \string getClientSecret()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setClientSecret(\string|\Bitrix\Main\DB\SqlExpression $clientSecret)
+	 * @method bool hasClientSecret()
+	 * @method bool isClientSecretFilled()
+	 * @method bool isClientSecretChanged()
+	 * @method \string remindActualClientSecret()
+	 * @method \string requireClientSecret()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetClientSecret()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetClientSecret()
+	 * @method \string fillClientSecret()
+	 * @method \string getAppName()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setAppName(\string|\Bitrix\Main\DB\SqlExpression $appName)
+	 * @method bool hasAppName()
+	 * @method bool isAppNameFilled()
+	 * @method bool isAppNameChanged()
+	 * @method \string remindActualAppName()
+	 * @method \string requireAppName()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetAppName()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetAppName()
+	 * @method \string fillAppName()
+	 * @method \string getAccess()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setAccess(\string|\Bitrix\Main\DB\SqlExpression $access)
+	 * @method bool hasAccess()
+	 * @method bool isAccessFilled()
+	 * @method bool isAccessChanged()
+	 * @method \string remindActualAccess()
+	 * @method \string requireAccess()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetAccess()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetAccess()
+	 * @method \string fillAccess()
+	 * @method \string getApplicationToken()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setApplicationToken(\string|\Bitrix\Main\DB\SqlExpression $applicationToken)
+	 * @method bool hasApplicationToken()
+	 * @method bool isApplicationTokenFilled()
+	 * @method bool isApplicationTokenChanged()
+	 * @method \string remindActualApplicationToken()
+	 * @method \string requireApplicationToken()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetApplicationToken()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetApplicationToken()
+	 * @method \string fillApplicationToken()
+	 * @method \boolean getMobile()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setMobile(\boolean|\Bitrix\Main\DB\SqlExpression $mobile)
+	 * @method bool hasMobile()
+	 * @method bool isMobileFilled()
+	 * @method bool isMobileChanged()
+	 * @method \boolean remindActualMobile()
+	 * @method \boolean requireMobile()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetMobile()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetMobile()
+	 * @method \boolean fillMobile()
+	 * @method \boolean getUserInstall()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App setUserInstall(\boolean|\Bitrix\Main\DB\SqlExpression $userInstall)
+	 * @method bool hasUserInstall()
+	 * @method bool isUserInstallFilled()
+	 * @method bool isUserInstallChanged()
+	 * @method \boolean remindActualUserInstall()
+	 * @method \boolean requireUserInstall()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App resetUserInstall()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unsetUserInstall()
+	 * @method \boolean fillUserInstall()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Rest\Internal\Model\EO_App set($fieldName, $value)
+	 * @method \Bitrix\Rest\Internal\Model\EO_App reset($fieldName)
+	 * @method \Bitrix\Rest\Internal\Model\EO_App unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Rest\Internal\Model\EO_App wakeUp($data)
+	 */
+	class EO_App extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Rest\Internal\Model\AppTable */
+		static public $dataClass = '\Bitrix\Rest\Internal\Model\AppTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * EO_App_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getClientIdList()
+	 * @method \string[] fillClientId()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \boolean[] getActiveList()
+	 * @method \boolean[] fillActive()
+	 * @method \boolean[] getInstalledList()
+	 * @method \boolean[] fillInstalled()
+	 * @method \string[] getUrlList()
+	 * @method \string[] fillUrl()
+	 * @method \string[] getUrlDemoList()
+	 * @method \string[] fillUrlDemo()
+	 * @method \string[] getUrlInstallList()
+	 * @method \string[] fillUrlInstall()
+	 * @method \string[] getUrlSettingsList()
+	 * @method \string[] fillUrlSettings()
+	 * @method \string[] getVersionList()
+	 * @method \string[] fillVersion()
+	 * @method \string[] getScopeList()
+	 * @method \string[] fillScope()
+	 * @method \string[] getStatusList()
+	 * @method \string[] fillStatus()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateInstallList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateInstall()
+	 * @method \Bitrix\Main\Type\Date[] getDateFinishList()
+	 * @method \Bitrix\Main\Type\Date[] fillDateFinish()
+	 * @method \boolean[] getIsTrialedList()
+	 * @method \boolean[] fillIsTrialed()
+	 * @method \string[] getSharedKeyList()
+	 * @method \string[] fillSharedKey()
+	 * @method \string[] getClientSecretList()
+	 * @method \string[] fillClientSecret()
+	 * @method \string[] getAppNameList()
+	 * @method \string[] fillAppName()
+	 * @method \string[] getAccessList()
+	 * @method \string[] fillAccess()
+	 * @method \string[] getApplicationTokenList()
+	 * @method \string[] fillApplicationToken()
+	 * @method \boolean[] getMobileList()
+	 * @method \boolean[] fillMobile()
+	 * @method \boolean[] getUserInstallList()
+	 * @method \boolean[] fillUserInstall()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Rest\Internal\Model\EO_App $object)
+	 * @method bool has(\Bitrix\Rest\Internal\Model\EO_App $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Rest\Internal\Model\EO_App getByPrimary($primary)
+	 * @method \Bitrix\Rest\Internal\Model\EO_App[] getAll()
+	 * @method bool remove(\Bitrix\Rest\Internal\Model\EO_App $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Rest\Internal\Model\EO_App_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Rest\Internal\Model\EO_App current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Rest\Internal\Model\EO_App_Collection merge(?\Bitrix\Rest\Internal\Model\EO_App_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\Internal\Model\EO_App|null find(callable $callback)
+	 * @method \Bitrix\Rest\Internal\Model\EO_App_Collection filter(callable $callback)
+	 */
+	class EO_App_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Rest\Internal\Model\AppTable */
+		static public $dataClass = '\Bitrix\Rest\Internal\Model\AppTable';
+	}
+}
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_App_Result exec()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App fetchObject()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App_Collection fetchCollection()
+	 */
+	class EO_App_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Rest\Internal\Model\EO_App fetchObject()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App_Collection fetchCollection()
+	 */
+	class EO_App_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Rest\Internal\Model\EO_App createObject($setDefaultValues = true)
+	 * @method \Bitrix\Rest\Internal\Model\EO_App_Collection createCollection()
+	 * @method \Bitrix\Rest\Internal\Model\EO_App wakeUpObject($row)
+	 * @method \Bitrix\Rest\Internal\Model\EO_App_Collection wakeUpCollection($rows)
 	 */
 	class EO_App_Entity extends \Bitrix\Main\ORM\Entity {}
 }
@@ -3486,6 +3891,467 @@ namespace Bitrix\Rest {
 	 * @method \Bitrix\Rest\EO_AppLog_Collection wakeUpCollection($rows)
 	 */
 	class EO_AppLog_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Rest\Internal\Model\AppFreeWhitelistTable:rest/lib/Internal/Model/AppFreeWhitelistTable.php */
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * EO_AppFreeWhitelist
+	 * @see \Bitrix\Rest\Internal\Model\AppFreeWhitelistTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string getAppCode()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist setAppCode(\string|\Bitrix\Main\DB\SqlExpression $appCode)
+	 * @method bool hasAppCode()
+	 * @method bool isAppCodeFilled()
+	 * @method bool isAppCodeChanged()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist set($fieldName, $value)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist reset($fieldName)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist wakeUp($data)
+	 */
+	class EO_AppFreeWhitelist extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Rest\Internal\Model\AppFreeWhitelistTable */
+		static public $dataClass = '\Bitrix\Rest\Internal\Model\AppFreeWhitelistTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * EO_AppFreeWhitelist_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string[] getAppCodeList()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist $object)
+	 * @method bool has(\Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist getByPrimary($primary)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist[] getAll()
+	 * @method bool remove(\Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist_Collection merge(?\Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist|null find(callable $callback)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist_Collection filter(callable $callback)
+	 */
+	class EO_AppFreeWhitelist_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Rest\Internal\Model\AppFreeWhitelistTable */
+		static public $dataClass = '\Bitrix\Rest\Internal\Model\AppFreeWhitelistTable';
+	}
+}
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_AppFreeWhitelist_Result exec()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist fetchObject()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist_Collection fetchCollection()
+	 */
+	class EO_AppFreeWhitelist_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist fetchObject()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist_Collection fetchCollection()
+	 */
+	class EO_AppFreeWhitelist_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist createObject($setDefaultValues = true)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist_Collection createCollection()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist wakeUpObject($row)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppFreeWhitelist_Collection wakeUpCollection($rows)
+	 */
+	class EO_AppFreeWhitelist_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Rest\Internal\Model\AppAttributeTable:rest/lib/Internal/Model/AppAttributeTable.php */
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * EO_AppAttribute
+	 * @see \Bitrix\Rest\Internal\Model\AppAttributeTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getAppId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute setAppId(\int|\Bitrix\Main\DB\SqlExpression $appId)
+	 * @method bool hasAppId()
+	 * @method bool isAppIdFilled()
+	 * @method bool isAppIdChanged()
+	 * @method \int remindActualAppId()
+	 * @method \int requireAppId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute resetAppId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute unsetAppId()
+	 * @method \int fillAppId()
+	 * @method \string getCode()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute resetCode()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute unsetCode()
+	 * @method \string fillCode()
+	 * @method null|\string getValue()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute setValue(null|\string|\Bitrix\Main\DB\SqlExpression $value)
+	 * @method bool hasValue()
+	 * @method bool isValueFilled()
+	 * @method bool isValueChanged()
+	 * @method null|\string remindActualValue()
+	 * @method null|\string requireValue()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute resetValue()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute unsetValue()
+	 * @method null|\string fillValue()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute resetDateCreate()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method \Bitrix\Rest\EO_App getApp()
+	 * @method \Bitrix\Rest\EO_App remindActualApp()
+	 * @method \Bitrix\Rest\EO_App requireApp()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute setApp(\Bitrix\Rest\EO_App $object)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute resetApp()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute unsetApp()
+	 * @method bool hasApp()
+	 * @method bool isAppFilled()
+	 * @method bool isAppChanged()
+	 * @method \Bitrix\Rest\EO_App fillApp()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute set($fieldName, $value)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute reset($fieldName)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Rest\Internal\Model\EO_AppAttribute wakeUp($data)
+	 */
+	class EO_AppAttribute extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Rest\Internal\Model\AppAttributeTable */
+		static public $dataClass = '\Bitrix\Rest\Internal\Model\AppAttributeTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * EO_AppAttribute_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getAppIdList()
+	 * @method \int[] fillAppId()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method null|\string[] getValueList()
+	 * @method null|\string[] fillValue()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method \Bitrix\Rest\EO_App[] getAppList()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection getAppCollection()
+	 * @method \Bitrix\Rest\EO_App_Collection fillApp()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Rest\Internal\Model\EO_AppAttribute $object)
+	 * @method bool has(\Bitrix\Rest\Internal\Model\EO_AppAttribute $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute getByPrimary($primary)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute[] getAll()
+	 * @method bool remove(\Bitrix\Rest\Internal\Model\EO_AppAttribute $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection merge(?\Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute|null find(callable $callback)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection filter(callable $callback)
+	 */
+	class EO_AppAttribute_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Rest\Internal\Model\AppAttributeTable */
+		static public $dataClass = '\Bitrix\Rest\Internal\Model\AppAttributeTable';
+	}
+}
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_AppAttribute_Result exec()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute fetchObject()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection fetchCollection()
+	 */
+	class EO_AppAttribute_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute fetchObject()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection fetchCollection()
+	 */
+	class EO_AppAttribute_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute createObject($setDefaultValues = true)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection createCollection()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute wakeUpObject($row)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppAttribute_Collection wakeUpCollection($rows)
+	 */
+	class EO_AppAttribute_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Rest\Internal\Model\AppLangTable:rest/lib/Internal/Model/AppLangTable.php */
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * EO_AppLang
+	 * @see \Bitrix\Rest\Internal\Model\AppLangTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getAppId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang setAppId(\int|\Bitrix\Main\DB\SqlExpression $appId)
+	 * @method bool hasAppId()
+	 * @method bool isAppIdFilled()
+	 * @method bool isAppIdChanged()
+	 * @method \int remindActualAppId()
+	 * @method \int requireAppId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang resetAppId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang unsetAppId()
+	 * @method \int fillAppId()
+	 * @method \string getLanguageId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang setLanguageId(\string|\Bitrix\Main\DB\SqlExpression $languageId)
+	 * @method bool hasLanguageId()
+	 * @method bool isLanguageIdFilled()
+	 * @method bool isLanguageIdChanged()
+	 * @method \string remindActualLanguageId()
+	 * @method \string requireLanguageId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang resetLanguageId()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang unsetLanguageId()
+	 * @method \string fillLanguageId()
+	 * @method \string getMenuName()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang setMenuName(\string|\Bitrix\Main\DB\SqlExpression $menuName)
+	 * @method bool hasMenuName()
+	 * @method bool isMenuNameFilled()
+	 * @method bool isMenuNameChanged()
+	 * @method \string remindActualMenuName()
+	 * @method \string requireMenuName()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang resetMenuName()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang unsetMenuName()
+	 * @method \string fillMenuName()
+	 * @method \Bitrix\Rest\EO_App getApp()
+	 * @method \Bitrix\Rest\EO_App remindActualApp()
+	 * @method \Bitrix\Rest\EO_App requireApp()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang setApp(\Bitrix\Rest\EO_App $object)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang resetApp()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang unsetApp()
+	 * @method bool hasApp()
+	 * @method bool isAppFilled()
+	 * @method bool isAppChanged()
+	 * @method \Bitrix\Rest\EO_App fillApp()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang set($fieldName, $value)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang reset($fieldName)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Rest\Internal\Model\EO_AppLang wakeUp($data)
+	 */
+	class EO_AppLang extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Rest\Internal\Model\AppLangTable */
+		static public $dataClass = '\Bitrix\Rest\Internal\Model\AppLangTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * EO_AppLang_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getAppIdList()
+	 * @method \int[] fillAppId()
+	 * @method \string[] getLanguageIdList()
+	 * @method \string[] fillLanguageId()
+	 * @method \string[] getMenuNameList()
+	 * @method \string[] fillMenuName()
+	 * @method \Bitrix\Rest\EO_App[] getAppList()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang_Collection getAppCollection()
+	 * @method \Bitrix\Rest\EO_App_Collection fillApp()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Rest\Internal\Model\EO_AppLang $object)
+	 * @method bool has(\Bitrix\Rest\Internal\Model\EO_AppLang $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang getByPrimary($primary)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang[] getAll()
+	 * @method bool remove(\Bitrix\Rest\Internal\Model\EO_AppLang $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Rest\Internal\Model\EO_AppLang_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang_Collection merge(?\Bitrix\Rest\Internal\Model\EO_AppLang_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang|null find(callable $callback)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang_Collection filter(callable $callback)
+	 */
+	class EO_AppLang_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Rest\Internal\Model\AppLangTable */
+		static public $dataClass = '\Bitrix\Rest\Internal\Model\AppLangTable';
+	}
+}
+namespace Bitrix\Rest\Internal\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_AppLang_Result exec()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang fetchObject()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang_Collection fetchCollection()
+	 */
+	class EO_AppLang_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang fetchObject()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang_Collection fetchCollection()
+	 */
+	class EO_AppLang_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang createObject($setDefaultValues = true)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang_Collection createCollection()
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang wakeUpObject($row)
+	 * @method \Bitrix\Rest\Internal\Model\EO_AppLang_Collection wakeUpCollection($rows)
+	 */
+	class EO_AppLang_Entity extends \Bitrix\Main\ORM\Entity {}
 }
 /* ORMENTITYANNOTATION:Bitrix\Rest\Internal\Model\AccessPermissionTable:rest/lib/Internal/Model/AccessPermissionTable.php */
 namespace Bitrix\Rest\Internal\Model {

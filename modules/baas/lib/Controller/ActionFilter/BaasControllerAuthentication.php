@@ -14,6 +14,8 @@ use UnexpectedValueException;
 
 final class BaasControllerAuthentication extends ActionFilter\Base
 {
+	private const JWT_LEEWAY = 300;
+
 	public function __construct(
 		private readonly string $secretKey,
 	)
@@ -33,6 +35,8 @@ final class BaasControllerAuthentication extends ActionFilter\Base
 			return new Main\EventResult(Main\EventResult::ERROR, null, null, $this);
 		}
 
+		$previousLeeway = JWT::$leeway;
+		JWT::$leeway = self::JWT_LEEWAY;
 		try
 		{
 			$authorizationHeader = substr($authorizationHeader, \strlen('Bearer '));
@@ -57,6 +61,10 @@ final class BaasControllerAuthentication extends ActionFilter\Base
 				'invalidBearer' => $authorizationHeader,
 				'message' => $e->getMessage(),
 			]));
+		}
+		finally
+		{
+			JWT::$leeway = $previousLeeway;
 		}
 
 		if (!$this->errorCollection->isEmpty())

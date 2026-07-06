@@ -323,7 +323,7 @@ function CalendarDate($fieldName, $value, $formName = "", $size = "10", $param =
 		return CAdminCalendar::CalendarDate($fieldName, $value, $size, ($size > 10));
 	}
 
-	return '<input type="text" name="' . $fieldName . '" id="' . $fieldName . '" size="' . $size . '" value="' . htmlspecialcharsbx($value) . '" ' . $param . ' /> ' . "\n" . Calendar($fieldName, $formName) . "\n";
+	return '<input type="text" name="' . $fieldName . '" id="' . $fieldName . '" size="' . $size . '" value="' . htmlspecialcharsbx($value, ENT_COMPAT, false) . '" ' . $param . ' /> ' . "\n" . Calendar($fieldName, $formName) . "\n";
 }
 
 function CalendarPeriod($sFromName, $sFromVal, $sToName, $sToVal, $sFormName = "skform", $show_select = "N", $field_select = "class=\"typeselect\"", $field_input = "class=\"typeinput\"", $size = "10")

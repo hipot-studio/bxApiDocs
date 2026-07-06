@@ -181,6 +181,31 @@ class AppConfiguration
 							Sender::bind('rest', 'OnRestAppInstall');
 						}
 
+						$eventList = EventTable::getList(
+							[
+								'filter' => [
+									"APP_ID" => $app['ID'],
+									"EVENT_NAME" => "ONAPPUSERREADY",
+									"EVENT_HANDLER" => $app["URL_INSTALL"],
+								],
+								'limit' => 1
+							]
+						);
+						if (!$eventList->fetch())
+						{
+							$bindUserReady = EventTable::add(
+								[
+									'APP_ID' => $app['ID'],
+									'EVENT_NAME' => 'ONAPPUSERREADY',
+									'EVENT_HANDLER' => $app['URL_INSTALL'],
+								]
+							);
+							if ($bindUserReady->isSuccess())
+							{
+								Sender::bind('rest', 'OnRestAppUserReady');
+							}
+						}
+
 						AppTable::setSkipRemoteUpdate(true);
 						AppTable::update(
 							$app['ID'],

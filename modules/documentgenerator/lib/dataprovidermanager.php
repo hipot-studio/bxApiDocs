@@ -988,6 +988,9 @@ class DataProviderManager
 			$valueHash = md5(serialize($this->sortArrayRecursive($value)));
 		}
 
+		// 'data' option contains pre-fetched entity fields and can be very large.
+		// Provider identity is already determined by $value (entity ID), so we exclude it.
+		unset($options['data']);
 		$valueHash .= md5(serialize($this->sortArrayRecursive($options)));
 
 		return $valueHash;

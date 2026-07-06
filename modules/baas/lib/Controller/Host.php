@@ -42,7 +42,7 @@ class Host extends Main\Engine\Controller
 	public function refreshAction(): Main\Engine\Response\Json
 	{
 		return $this->fullFill(function() {
-			$result = Baas\Baas::getInstance()->sync(true);
+			$result = Baas\Baas::getInstance()->forceSync();
 
 			if ($result->isSuccess())
 			{

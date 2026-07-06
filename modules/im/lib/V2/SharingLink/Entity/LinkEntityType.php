@@ -9,6 +9,7 @@ use JsonSerializable;
 enum LinkEntityType: string implements JsonSerializable
 {
 	case Chat = 'CHAT';
+	case GuestChat = 'GUEST_CHAT';
 
 	public function jsonSerialize(): string
 	{

@@ -31,7 +31,7 @@ class HttpApplication extends Application
 	 *
 	 * @param array $params Request parameters
 	 */
-	protected function initializeContext(array $params)
+	public function initializeContext(array $params)
 	{
 		$context = new HttpContext($this);
 

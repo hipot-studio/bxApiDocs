@@ -3,10 +3,16 @@
 namespace Bitrix\Landing\History\Action;
 
 use Bitrix\Landing\Block;
+use Bitrix\Landing\History\ActionParamsGuard;
 
 class UpdateContentAction extends BaseAction
 {
 	protected const JS_COMMAND = 'updateContent';
+
+	public static function getSanitizableParamKeys(): array
+	{
+		return ['contentBefore', 'contentAfter'];
+	}
 
 	public function execute(bool $undo = true): bool
 	{
@@ -14,6 +20,12 @@ class UpdateContentAction extends BaseAction
 		if ($block->exist())
 		{
 			$content = $undo ? $this->params['contentBefore'] : $this->params['contentAfter'];
+			$content = ActionParamsGuard::prepareHtmlForSave((string)$content);
+			if ($content === null)
+			{
+				return false;
+			}
+
 			$block->saveContent($content, $this->params['designed']);
 
 			return $block->save();
@@ -24,10 +36,19 @@ class UpdateContentAction extends BaseAction
 
 	public static function enrichParams(array $params): array
 	{
+		$checked = ActionParamsGuard::rejectUnsafeValueParams(
+			[
+				'contentAfter' => $params['contentAfter'] ?: '',
+				'contentBefore' => $params['contentBefore'] ?: '',
+			],
+			static::getSanitizableParamKeys(),
+			static::class,
+		);
+
 		return [
 			'block' => $params['block'],
-			'contentAfter' => $params['contentAfter'] ?: '',
-			'contentBefore' => $params['contentBefore'] ?: '',
+			'contentAfter' => $checked['contentAfter'],
+			'contentBefore' => $checked['contentBefore'],
 			'designed' => (bool)$params['designed'],
 		];
 	}

@@ -18,43 +18,36 @@ enum VendorPackName: string
 	case WorkDay = 'workDay';
 	case Animals = 'animals';
 	case Celebration = 'celebration';
+	case UnstoppableOptimist = 'unstoppableOptimist';
+
+	private static function getIdMap(): array
+	{
+		return [
+			self::BitrixVibe->value => 1,
+			self::Zefir->value => 2,
+			self::ArkashaAndCat->value => 3,
+			self::BitrixReactions->value => 4,
+			self::Airy->value => 5,
+			self::BittyBob->value => 6,
+			self::OfficeRoutine->value => 7,
+			self::Smileys->value => 8,
+			self::Hands->value => 9,
+			self::WorkDay->value => 10,
+			self::Animals->value => 11,
+			self::Celebration->value => 12,
+			self::UnstoppableOptimist->value => 13,
+		];
+	}
 
 	public function getId(): int
 	{
-		return match ($this)
-		{
-			self::BitrixVibe => 1,
-			self::Zefir => 2,
-			self::ArkashaAndCat => 3,
-			self::BitrixReactions => 4,
-			self::Airy => 5,
-			self::BittyBob => 6,
-			self::OfficeRoutine => 7,
-			self::Smileys => 8,
-			self::Hands => 9,
-			self::WorkDay => 10,
-			self::Animals => 11,
-			self::Celebration => 12,
-		};
+		return self::getIdMap()[$this->value];
 	}
 
 	public static function getById(int $id): ?self
 	{
-		return match ($id)
-		{
-			1 => self::BitrixVibe,
-			2 => self::Zefir,
-			3 => self::ArkashaAndCat,
-			4 => self::BitrixReactions,
-			5 => self::Airy,
-			6 => self::BittyBob,
-			7 => self::OfficeRoutine,
-			8 => self::Smileys,
-			9 => self::Hands,
-			10 => self::WorkDay,
-			11 => self::Animals,
-			12 => self::Celebration,
-			default => null,
-		};
+		$packName = array_search($id, self::getIdMap(), true);
+
+		return $packName !== false ? self::from($packName) : null;
 	}
 }

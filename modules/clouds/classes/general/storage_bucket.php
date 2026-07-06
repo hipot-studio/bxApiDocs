@@ -1163,6 +1163,16 @@ class CCloudStorageBucket
 			$this->SERVICE_ID = $arFields['SERVICE_ID'] = $arFields['SETTINGS']['MIGRATE_TO'];
 		}
 
+		if (
+			array_key_exists('SETTINGS', $arFields)
+			&& is_array($arFields['SETTINGS'])
+			&& isset($arFields['SETTINGS']['NEW_LOCATION'])
+			&& $arFields['SETTINGS']['NEW_LOCATION']
+		)
+		{
+			$arFields['LOCATION'] = $arFields['SETTINGS']['NEW_LOCATION'];
+		}
+
 		$this->service = CCloudStorage::GetServiceByID($this->SERVICE_ID);
 		if (!is_object($this->service))
 		{

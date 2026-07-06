@@ -8,6 +8,8 @@
 * License:  LGPL                                                               *
 *******************************************************************************/
 
+use Bitrix\Main\Web\Uri;
+
 define('tFPDF_VERSION','1.24');
 
 class tFPDF
@@ -1230,7 +1232,7 @@ function Output($name='', $dest='', $utfName  = '')
 				header('Content-Type: application/pdf');
 				if (is_string($utfName) && !empty($utfName))
 				{
-					$utfName = CHTTP::urnEncode($utfName, 'UTF-8');
+					$utfName = Uri::urnEncode($utfName);
 					header("Content-Disposition: attachment; filename=\"".$name."\"; filename*=utf-8''".$utfName);
 				}
 				else
@@ -1248,7 +1250,7 @@ function Output($name='', $dest='', $utfName  = '')
 			header('Content-Type: application/octet-stream');
 			if (is_string($utfName) && !empty($utfName))
 			{
-				$utfName = CHTTP::urnEncode($utfName, 'UTF-8');
+				$utfName = Uri::urnEncode($utfName);
 				header("Content-Disposition: attachment; filename=\"".$name."\"; filename*=utf-8''".$utfName);
 			}
 			else

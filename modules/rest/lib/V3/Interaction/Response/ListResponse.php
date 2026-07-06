@@ -6,10 +6,8 @@ use Bitrix\Rest\V3\Dto\DtoCollection;
 
 class ListResponse extends ResponseWithRelations
 {
-	public array $items;
 
-	public function __construct(DtoCollection $items)
+	public function __construct(public DtoCollection $items)
 	{
-		$this->items = $items->toArray();
 	}
 }

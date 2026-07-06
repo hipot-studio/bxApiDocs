@@ -43,6 +43,26 @@ class LandingBlock
 	}
 
 	/**
+	 * Returns system page type required for manual add-to-basket action.
+	 * @param Block $block Block instance.
+	 * @return string|null
+	 */
+	public function getAddToBasketActionSyspageType(Block $block): ?string
+	{
+		return null;
+	}
+
+	/**
+	 * Returns true when add-to-basket system page must be active.
+	 * @param Block $block Block instance.
+	 * @return bool
+	 */
+	public function isAddToBasketActionSyspageActiveOnly(Block $block): bool
+	{
+		return false;
+	}
+
+	/**
 	 * Method, which will be called once time.
 	 * @param array Params array.
 	 * @return void

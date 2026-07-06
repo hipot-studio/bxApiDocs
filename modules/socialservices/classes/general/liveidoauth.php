@@ -1,4 +1,4 @@
-<?
+<?php
 
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Web\Json;
@@ -38,8 +38,8 @@ class CSocServLiveIDOAuth extends CSocServAuth
 				'note' => getMessage(
 					'socserv_liveid_form_note_3',
 					array(
-						'#URL#' => \CHttp::urn2uri('/bitrix/tools/oauth/liveid.php'),
-						'#MAIL_URL#' => \CHttp::urn2uri('/bitrix/tools/mail_oauth.php'),
+						'#URL#' => (string)(new Uri('/bitrix/tools/oauth/liveid.php'))->toAbsolute(),
+						'#MAIL_URL#' => (string)(new Uri('/bitrix/tools/mail_oauth.php'))->toAbsolute(),
 					)
 				),
 			),
@@ -81,19 +81,17 @@ class CSocServLiveIDOAuth extends CSocServAuth
 
 		if ($this->isCloudPortal())
 		{
-			$portalRedirectUri = new Uri(
-				\CHTTP::URN2URI('/bitrix/tools/oauth/liveid.php')
-			);
-			$portalRedirectUri->addParams([
-				'state' => $state,
-			]);
+			$portalRedirectUri = (new Uri('/bitrix/tools/oauth/liveid.php'))
+				->addParams(['state' => $state,])
+				->toAbsolute()
+			;
 
 			$state = (string)$portalRedirectUri;
 			$redirect_uri = self::CONTROLLER_URL . '/redirect.php';
 		}
 		else
 		{
-			$redirect_uri = \CHTTP::URN2URI("/bitrix/tools/oauth/liveid.php");
+			$redirect_uri = (string)(new Uri("/bitrix/tools/oauth/liveid.php"))->toAbsolute();
 		}
 
 		return $this->getEntityOAuth()->GetAuthUrl($redirect_uri, $state);
@@ -146,7 +144,7 @@ class CSocServLiveIDOAuth extends CSocServAuth
 			if ($this->isCloudPortal())
 				$redirect_uri = self::CONTROLLER_URL."/redirect.php";
 			else
-				$redirect_uri = \CHTTP::URN2URI("/bitrix/tools/oauth/liveid.php");
+				$redirect_uri = (string)(new Uri("/bitrix/tools/oauth/liveid.php"))->toAbsolute();
 
 			$appID = trim(self::GetOption("liveid_appid"));
 			$appSecret = trim(self::GetOption("liveid_appsecret"));
@@ -254,7 +252,7 @@ class CSocServLiveIDOAuth extends CSocServAuth
 		}
 		else
 		{
-			$redirect_uri = \CHTTP::URN2URI("/bitrix/tools/oauth/liveid.php");
+			$redirect_uri = (string)(new Uri("/bitrix/tools/oauth/liveid.php"))->toAbsolute();
 		}
 
 		if($li->GetAccessToken($redirect_uri) !== false)

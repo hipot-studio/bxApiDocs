@@ -1,7 +1,8 @@
-<?
+<?php
 
 use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Socialservices\UserTable;
+use Bitrix\Main\Web\Uri;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -133,7 +134,7 @@ class CSocServBitrixOAuth extends CSocServAuth
 		}
 		else
 		{
-			$redirect_uri = \CHTTP::URN2URI('/bitrix/tools/oauth/bitrix24.php');
+			$redirect_uri = (string)(new Uri('/bitrix/tools/oauth/bitrix24.php'))->toAbsolute();
 			$userId = intval($_REQUEST['uid']);
 			$appID = trim(COption::GetOptionString("socialservices", "bitrix24_gadget_appid", ''));
 			$appSecret = trim(COption::GetOptionString("socialservices", "bitrix24_gadget_appsecret", ''));
@@ -163,7 +164,7 @@ class CSocServBitrixOAuth extends CSocServAuth
 			'auth_result' => $tokenOk,
 		]);
 
-		$url = \CHTTP::URN2URI(BX_ROOT);
+		$url = (string)(new Uri(BX_ROOT))->toAbsolute();
 		if (!$tokenOk)
 		{
 			$url .= (mb_strpos($url, '?') !== false ? '&' : '?')
@@ -208,7 +209,7 @@ class CSocServBitrixOAuth extends CSocServAuth
 			'auth_result' => $stored,
 		]);
 
-		$url = \CHTTP::URN2URI(BX_ROOT);
+		$url = (string)(new Uri(BX_ROOT))->toAbsolute();
 		$mode = 'opener';
 		$url = CUtil::JSEscape($url);
 		$location = ($mode == "opener") ? 'if(window.opener){window.opener.location = \''.$url.'\'; window.close();}else{window.location = \''.$url.'\';}' : ' window.location = \''.$url.'\';';
@@ -515,7 +516,7 @@ class CBitrixPHPAppTransport
 		{
 			foreach($actions as $query_key => $arCmd)
 			{
-				list($cmd, $arParams) = array_values($arCmd);
+				[$cmd, $arParams] = array_values($arCmd);
 				$arBatch['cmd'][$query_key] = $cmd.'?'.CHTTP::PrepareData($arParams);
 			}
 		}

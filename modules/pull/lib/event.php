@@ -572,13 +572,20 @@ class Event
 
 	public static function getChannelIds(array $users, $type = \CPullChannel::TYPE_PRIVATE)
 	{
+		if (empty($users))
+		{
+			return [];
+		}
+
+		$rows = \CPullChannel::getMany($users, $type);
+
 		$result = [];
 		foreach ($users as $userId)
 		{
-			$data = \CPullChannel::Get($userId, true, false, $type);
-			if ($data)
+			$userId = (int)$userId;
+			if (!empty($rows[$userId]['CHANNEL_ID']))
 			{
-				$result[] = $data['CHANNEL_ID'];
+				$result[] = $rows[$userId]['CHANNEL_ID'];
 			}
 		}
 

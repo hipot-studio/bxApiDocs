@@ -182,7 +182,11 @@ class TypeRegistry
 
 		foreach ($entityOnly as $extendedType)
 		{
-			$this->registerType(new Type(Chat::IM_TYPE_CHAT, $extendedType, $extendedType));
+			$this->registerType(new Type(
+				Chat::IM_TYPE_CHAT,
+				$extendedType,
+				$extendedType,
+			));
 		}
 	}
 

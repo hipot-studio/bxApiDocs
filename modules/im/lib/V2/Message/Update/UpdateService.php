@@ -9,7 +9,7 @@ use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Link\File\FileService;
 use Bitrix\Im\V2\Link\Url\UrlService;
 use Bitrix\Im\V2\Message;
-use Bitrix\Im\V2\Message\Builder\BuilderService;
+use Bitrix\Im\V2\Message\BlocksBuilder\BuilderService;
 use Bitrix\Im\V2\Message\Delete\DeleteService;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Result;
@@ -139,8 +139,8 @@ class UpdateService
 				return $result->addError($builderResult->getError());
 			}
 
-			$builder = $builderResult->getBuilder();
-			$fieldsToUpdate['PARAMS'][Params::BUILDER] = $builder;
+			$builder = $builderResult->getBlocksBuilder();
+			$fieldsToUpdate['PARAMS'][Params::BLOCKS_BUILDER] = $builder;
 			$fieldsToUpdate['MESSAGE'] = $builder->getPayloadText();
 			unset($fieldsToUpdate['BUILDER']);
 		}

@@ -238,6 +238,11 @@ class User implements RestEntity, CacheableEntity
 			return $result;
 		}
 
+		if ($otherUser->isGuest())
+		{
+			return $result;
+		}
+
 		if ($otherUser->isExtranet())
 		{
 			$inGroup = Extranet::isUserInGroup(
@@ -566,6 +571,11 @@ class User implements RestEntity, CacheableEntity
 	public function isCollaber(): bool
 	{
 		return $this->getType() === UserType::COLLABER;
+	}
+
+	public function isGuest(): bool
+	{
+		return $this->getType() === UserType::GUEST;
 	}
 
 	public function isActive(): bool

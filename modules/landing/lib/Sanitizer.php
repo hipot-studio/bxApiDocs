@@ -69,6 +69,11 @@ class Sanitizer
 			}, $text);
 		}
 
+		if (self::containsUnneutralizedPhpOpenTag($text))
+		{
+			$bad = true;
+		}
+
 		$needReverse = $this->checkFilter(self::AVAILABLE_TEXT_FILTERS['reverseSanitize']);
 		if ($needReverse)
 		{
@@ -104,9 +109,15 @@ class Sanitizer
 	}
 
 	/**
+	 * Raw PHP open tag (<? …), not landing-neutralized form (< ? …).
+	 */
+	public static function containsUnneutralizedPhpOpenTag(string $content): bool
+	{
+		return str_contains($content, '<?');
+	}
+
+	/**
 	 * Replaces some specific for landing substitutions back after sanitize
-	 * @param string $text
-	 * @return string
 	 */
 	private function reverseSanitizeText(string $text): string
 	{

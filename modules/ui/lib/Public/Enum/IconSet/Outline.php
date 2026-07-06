@@ -647,4 +647,5 @@ enum Outline: string
 	case EXCLAMATION_S = 'exclamation-s';
 	case EXCLAMATION_M = 'exclamation-m';
 	case EXCLAMATION_L = 'exclamation-l';
+	case EXCLAMATION_CIRCLE = 'o-exclamation-circle';
 }

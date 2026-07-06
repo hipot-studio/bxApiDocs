@@ -151,6 +151,10 @@ abstract class Dto implements Arrayable
 							{
 								$fieldValue[] = $value->toArray($rawData);
 							}
+							elseif ($value instanceof \BackedEnum)
+							{
+								$fieldValue[] = $value->value;
+							}
 							else
 							{
 								$fieldValue[] = $value;
@@ -165,6 +169,10 @@ abstract class Dto implements Arrayable
 					if (is_subclass_of($field->getPropertyType(), Dto::class))
 					{
 						$values[$field->getPropertyName()] = $field->getValue()?->toArray($rawData);
+					}
+					elseif (is_subclass_of($field->getPropertyType(), \BackedEnum::class))
+					{
+						$values[$field->getPropertyName()] = $field->getValue()?->value;
 					}
 					else
 					{

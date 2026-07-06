@@ -1,4 +1,4 @@
-<?
+<?php
 
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;

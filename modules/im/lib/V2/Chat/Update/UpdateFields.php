@@ -26,6 +26,7 @@ class UpdateFields
 		protected array $addedManagers,
 		protected array $deletedManagers,
 		protected ?string $manageMessagesAutoDelete,
+		protected ?string $manageGuestInvites,
 	){}
 
 	public static function create(array $fields): self
@@ -52,6 +53,7 @@ class UpdateFields
 			self::prepareArrayField($fields['ADDED_MANAGERS'] ?? []),
 			self::prepareArrayField($fields['DELETED_MANAGERS'] ?? []),
 			$fields['MANAGE_MESSAGES_AUTO_DELETE'] ?? null,
+			$fields['MANAGE_GUEST_INVITES'] ?? null,
 		);
 	}
 
@@ -98,6 +100,11 @@ class UpdateFields
 	public function getDeletedManagers(): array
 	{
 		return $this->deletedManagers;
+	}
+
+	public function getTitle(): ?string
+	{
+		return $this->title;
 	}
 
 	public function getOwnerId(): ?int
@@ -164,6 +171,7 @@ class UpdateFields
 			'MANAGE_USERS_DELETE' => $this->manageUsersDelete,
 			'MANAGE_MESSAGES' => $this->manageMessages,
 			'MANAGE_MESSAGES_AUTO_DELETE' => $this->manageMessagesAutoDelete,
+			'MANAGE_GUEST_INVITES' => $this->manageGuestInvites,
 		];
 		return array_filter($array, function ($value) {
 			return $value !== null;

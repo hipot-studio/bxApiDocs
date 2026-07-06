@@ -54,7 +54,7 @@ class Text
 			}
 			$parser->allow['EMOJI'] = 'Y';
 			$parser->allow['HTML'] = 'Y';
-			$parser->allow['ANCHOR'] = 'Y';
+			$parser->allow['ANCHOR'] = $linkParam === 'N' ? 'N' : 'Y';
 			$parser->allow['TEXT_ANCHOR'] = 'Y';
 
 			self::$parsers[$parseId] = $parser;

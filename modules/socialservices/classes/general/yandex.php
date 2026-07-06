@@ -1,4 +1,5 @@
-<?
+<?php
+
 use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Main\Web\Uri;
 
@@ -44,7 +45,7 @@ class CSocServYandexAuth extends CSocServAuth
 					'socserv_yandex_note_2',
 					array(
 						'#URL#' => \CYandexOAuthInterface::getRedirectUri(),
-						'#MAIL_URL#' => \CHttp::urn2uri('/bitrix/tools/mail_oauth.php'),
+						'#MAIL_URL#' => (string)(new Uri('/bitrix/tools/mail_oauth.php'))->toAbsolute(),
 					)
 				),
 			),
@@ -281,7 +282,7 @@ class CYandexOAuthInterface extends CSocServOAuthTransport
 
 	public static function GetRedirectURI()
 	{
-		return \CHTTP::URN2URI("/bitrix/tools/oauth/yandex.php");
+		return (string)(new Uri("/bitrix/tools/oauth/yandex.php"))->toAbsolute();
 	}
 
 	public function getResult()

@@ -7,6 +7,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Application;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Data\Cache;
+use Bitrix\Rest\Internal\Integration\UI\CopilotService;
 use CRestProvider;
 use CRestUtil;
 
@@ -141,6 +142,9 @@ class ScopeManager
 	{
 		$langScope = Application::getDocumentRoot() . BX_ROOT . '/modules/rest/scope.php';
 		Loc::loadMessages($langScope);
+		$copilotReplacements = [
+			'#COPILOT_NAME#' => CopilotService::getName(),
+		];
 		$result = [];
 		foreach ($this->listScope() as $code)
 		{
@@ -150,10 +154,15 @@ class ScopeManager
 				$name = Loc::getMessage('REST_SCOPE_LOG_MSGVER_1');
 				$description = Loc::getMessage('REST_SCOPE_LOG_DESCRIPTION_MSGVER_1');
 			}
+			elseif (mb_strtoupper($key) === 'AI_ADMIN')
+			{
+				$name = Loc::getMessage('REST_SCOPE_AI_ADMIN_MSGVER_1', $copilotReplacements);
+				$description = Loc::getMessage('REST_SCOPE_AI_ADMIN_DESCRIPTION', $copilotReplacements);
+			}
 			else
 			{
-				$name = Loc::getMessage('REST_SCOPE_' . $key);
-				$description = Loc::getMessage('REST_SCOPE_' . $key . '_DESCRIPTION');
+				$name = Loc::getMessage('REST_SCOPE_' . $key, $copilotReplacements);
+				$description = Loc::getMessage('REST_SCOPE_' . $key . '_DESCRIPTION', $copilotReplacements);
 			}
 
 			$result[$code] = [

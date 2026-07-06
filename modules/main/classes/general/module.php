@@ -10,6 +10,8 @@
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleTable;
+use Bitrix\Main\UpdateSystem\Migration\Config;
+use Bitrix\Main\UpdateSystem\Migration\ConfigFactory;
 
 class CModule
 {
@@ -71,6 +73,92 @@ class CModule
 
 	function DoInstall()
 	{
+	}
+
+	protected function installMigrations(): \Bitrix\Main\Result
+	{
+		$moduleDir = getLocalPath('modules/' . $this->MODULE_ID);
+
+		$migrationConfig = new Config(
+			$this->MODULE_ID,
+			$moduleDir . '/install/index.php',
+			true,
+			false,
+		);
+		$migrationConfig->setDatabaseUpdateMode(\Bitrix\Main\UpdateSystem\Migration\DatabaseUpdateMode::ModuleInstall);
+
+		$moduleMigrationDir = $_SERVER['DOCUMENT_ROOT'] . $moduleDir . '/install/migrations/';
+
+		$tablesMigrationFile = $moduleMigrationDir . 'tables.php';
+		$eventsMigrationFile = $moduleMigrationDir . 'events.php';
+		$agentsMigrationFile = $moduleMigrationDir . 'agents.php';
+
+		foreach ([
+			$tablesMigrationFile,
+			$eventsMigrationFile,
+			$agentsMigrationFile,
+		] as $migrationFile)
+		{
+			if (file_exists($migrationFile))
+			{
+				ConfigFactory::setDefaultConfig($migrationConfig);
+				$result = include($migrationFile);
+				if ($result instanceof \Bitrix\Main\Result && !$result->isSuccess())
+				{
+					ConfigFactory::clearDefaultConfig();
+
+					return $result;
+				}
+			}
+		}
+		ConfigFactory::clearDefaultConfig();
+
+		return new \Bitrix\Main\Result();
+	}
+
+	protected function uninstallMigrations(bool $dropTables): \Bitrix\Main\Result
+	{
+		$moduleDir = getLocalPath('modules/' . $this->MODULE_ID);
+
+		$migrationConfig = new Config(
+			$this->MODULE_ID,
+			$moduleDir . '/install/index.php',
+			false,
+			false,
+		);
+
+		$migrationConfig->setDatabaseUpdateMode(\Bitrix\Main\UpdateSystem\Migration\DatabaseUpdateMode::ModuleUninstall);
+
+		$moduleMigrationDir = $_SERVER['DOCUMENT_ROOT'] . $moduleDir . '/install/migrations/';
+
+		$tablesMigrationFile = $moduleMigrationDir . 'tables.php';
+		$eventsMigrationFile = $moduleMigrationDir . 'events.php';
+
+		if ($dropTables && file_exists($tablesMigrationFile))
+		{
+			ConfigFactory::setDefaultConfig($migrationConfig);
+			$result = include($tablesMigrationFile);
+			if ($result instanceof \Bitrix\Main\Result && !$result->isSuccess())
+			{
+				ConfigFactory::clearDefaultConfig();
+
+				return $result;
+			}
+		}
+		if (file_exists($eventsMigrationFile))
+		{
+			ConfigFactory::setDefaultConfig($migrationConfig);
+			$result = include($eventsMigrationFile);
+			if ($result instanceof \Bitrix\Main\Result && !$result->isSuccess())
+			{
+				ConfigFactory::clearDefaultConfig();
+
+				return $result;
+			}
+		}
+		ConfigFactory::clearDefaultConfig();
+
+		return new \Bitrix\Main\Result();
 	}
 
 	public function GetModuleTasks()

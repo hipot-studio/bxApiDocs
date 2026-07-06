@@ -2,9 +2,14 @@
 
 namespace Bitrix\ImMobile\NavigationTab;
 
+use Bitrix\Im\V2\Application\Features;
+use Bitrix\Im\V2\Folder\FolderCollection;
+use Bitrix\Im\V2\Folder\FolderProvider;
+use Bitrix\Im\V2\Folder\System\SystemFolder;
 use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\EventManager;
 use DateTimeInterface;
 use CCloudStorageBucket;
@@ -34,23 +39,13 @@ class Manager
 
 	private Mobile\Context $context;
 
-	private Tab\Copilot $copilot;
-	private Tab\Messenger $messenger;
-	private Tab\OpenLines $openLines;
-	private Tab\Channel $channel;
-	private Tab\Collab $collab;
-	private Tab\Task $task;
+	/** @var Tab\BaseRecent[]|null */
+	private ?array $sortedItemsCache = null;
+	private ?FolderCollection $folderCollectionCache = null;
 
 	public function __construct(Mobile\Context $context)
 	{
 		$this->context = $context;
-
-		$this->messenger = new Tab\Messenger();
-		$this->copilot = new Tab\Copilot();
-		$this->openLines = new Tab\OpenLines($context);
-		$this->channel = new Tab\Channel();
-		$this->collab = new Tab\Collab();
-		$this->task = new Tab\Task();
 	}
 
 	public static function getShortTitle()
@@ -116,7 +111,7 @@ class Manager
 						'objectName' => 'tabs',
 						'titleParams'=> [
 							'text' => $this->getTitle(),
-							'useLargeTitleMode' => true
+							'type' => 'section',
 						],
 						'grabTitle' => false,
 						'grabButtons' => true,
@@ -129,39 +124,90 @@ class Manager
 		];
 	}
 
-	private function getTabs(): array
-	{
-		return [
-			$this->messenger,
-			$this->copilot,
-			$this->openLines,
-			$this->channel,
-			$this->collab,
-			$this->task,
-		];
-	}
-
 	private function getCacheId($additionalString = ''): string
 	{
-		$enabledIds = [];
-		$tabs = $this->getTabs();
+		if (Features::get()->isChatFoldersAvailable)
+		{
+			$folders = $this->getFolderCollection();
+			if ($folders->count() > 0)
+			{
+				$folderIds = [];
+				foreach ($folders as $folder)
+				{
+					if ($folder->getId() !== null)
+					{
+						$folderIds[] = $folder->getId();
+					}
+				}
+				return 'chat_tabs_folders_' . hash('sha256', implode(',', $folderIds) . $additionalString);
+			}
+		}
 
-		foreach ($tabs as $tab)
+		// fallback: preset-mode
+		$sortedTabs = $this->getSortedItems();
+		$enabledIds = [];
+		foreach ($sortedTabs as $tab)
 		{
 			if ($tab->isAvailable())
 			{
 				$enabledIds[] = $tab->getId();
 			}
 		}
-
 		sort($enabledIds);
 		return 'chat_tabs_' . hash('sha256', implode('_', $enabledIds) . $additionalString);
 	}
 
 	/**
-	 * @return Tab\TabInterface[]
+	 * @return Tab\BaseRecent[]
 	 */
 	private function getSortedItems(): array
+	{
+		if ($this->sortedItemsCache !== null)
+		{
+			return $this->sortedItemsCache;
+		}
+
+		$this->sortedItemsCache = $this->buildSortedItems();
+
+		return $this->sortedItemsCache;
+	}
+
+	/**
+	 * @return Tab\BaseRecent[]
+	 */
+	private function buildSortedItems(): array
+	{
+		if (!Features::get()->isChatFoldersAvailable)
+		{
+			return $this->getDefaultPresetByContext();
+		}
+
+		$folders = $this->getFolderCollection();
+		if ($folders->count() === 0)
+		{
+			return $this->getDefaultPresetByContext();
+		}
+
+		$tabs = [];
+		foreach ($folders as $folder)
+		{
+			$folderId = $folder->getId();
+			if ($folderId === null)
+			{
+				continue;
+			}
+
+			$tab = $folder instanceof SystemFolder
+				? $this->createSystemTab($folder->getCode(), $folder)
+				: null;
+
+			$tabs[] = $tab ?? new Tab\Folder($folder);
+		}
+
+		return $tabs;
+	}
+
+	private function getDefaultPresetByContext(): array
 	{
 		if ($this->isLinesOperator())
 		{
@@ -176,39 +222,52 @@ class Manager
 		return $this->getDefaultPreset();
 	}
 
+	private function createSystemTab(string $code, ?\Bitrix\Im\V2\Folder\Folder $folder = null): ?Tab\BaseRecent
+	{
+		return match ($code) {
+			'default'     => new Tab\Messenger($folder),
+			'tasksTask'   => new Tab\Task($folder),
+			'copilot'     => new Tab\Copilot($folder),
+			'openChannel' => new Tab\Channel($folder),
+			'collab'      => new Tab\Collab($folder),
+			'openlines'   => new Tab\OpenLines($this->context, $folder),
+			default       => null,
+		};
+	}
+
 	private function getCrmOpenLineOperatorPreset(): array
 	{
 		return [
-			$this->openLines,
-			$this->messenger,
-			$this->task,
-			$this->copilot,
-			$this->channel,
-			$this->collab,
+			$this->createSystemTab('openlines'),
+			$this->createSystemTab('default'),
+			$this->createSystemTab('tasksTask'),
+			$this->createSystemTab('copilot'),
+			$this->createSystemTab('openChannel'),
+			$this->createSystemTab('collab'),
 		];
 	}
 
 	private function getOpenLineOperatorPreset(): array
 	{
 		return [
-			$this->messenger,
-			$this->openLines,
-			$this->task,
-			$this->copilot,
-			$this->channel,
-			$this->collab,
+			$this->createSystemTab('default'),
+			$this->createSystemTab('openlines'),
+			$this->createSystemTab('tasksTask'),
+			$this->createSystemTab('copilot'),
+			$this->createSystemTab('openChannel'),
+			$this->createSystemTab('collab'),
 		];
 	}
 
 	private function getDefaultPreset(): array
 	{
 		return [
-			$this->messenger,
-			$this->task,
-			$this->copilot,
-			$this->channel,
-			$this->collab,
-			$this->openLines,
+			$this->createSystemTab('default'),
+			$this->createSystemTab('tasksTask'),
+			$this->createSystemTab('copilot'),
+			$this->createSystemTab('openChannel'),
+			$this->createSystemTab('collab'),
+			$this->createSystemTab('openlines'),
 		];
 	}
 
@@ -305,7 +364,7 @@ class Manager
 		}
 
 		$copilot = null;
-		if ($this->copilot->isAvailable())
+		if ((new Tab\Copilot())->isAvailable())
 		{
 			$copilot = $this->getCopilotData();
 		}
@@ -314,11 +373,12 @@ class Manager
 			'USER_ID' => $this->context->userId,
 			'SITE_ID' => $this->context->siteId,
 			'SITE_DIR' => $this->context->siteDir,
+			'STARTUP_FOLDER_LIST' => $this->getStartupFolderList(),
 			'LANGUAGE_ID' => LANGUAGE_ID,
 			'LIMIT_ONLINE' => CUser::GetSecondsForLimitOnline(),
 			'IM_GENERAL_CHAT_ID' => GeneralChat::getGeneralChatId(),
 			'SEARCH_MIN_SIZE' => Helper::getMinTokenSize()?: 3,
-			'OPENLINES_USER_IS_OPERATOR' => $this->openLines->isAvailable(),
+			'OPENLINES_USER_IS_OPERATOR' => (new Tab\OpenLines($this->context))->isAvailable(),
 
 			'COMPONENT_CHAT_DIALOG_VERSION' => Mobile\WebComponentManager::getWebComponentVersion('im.dialog'),
 			'COMPONENT_CHAT_DIALOG_VUE_VERSION' => Mobile\WebComponentManager::getWebComponentVersion('im.dialog.vue'),
@@ -328,6 +388,7 @@ class Manager
 				'IMOL_CHAT_ANSWER_M' => Localize::get(Localize::FILE_LIB_CHAT, "IMOL_CHAT_ANSWER_M"),
 				'IMOL_CHAT_ANSWER_F' => Localize::get(Localize::FILE_LIB_CHAT, "IMOL_CHAT_ANSWER_F"),
 				'AI_ASSISTANT' => $this->getAiAssistantStatusMessages(),
+				'NAVIGATION_TAB_TITLES' => $this->getNavigationTabTitles(),
 			],
 			'IS_CLOUD' => $isCloud,
 			'HAS_ACTIVE_CLOUD_STORAGE_BUCKET' => $hasActiveBucket,
@@ -335,9 +396,14 @@ class Manager
 			'IS_COPILOT_SELECT_MODEL_ENABLED' => Settings::isCopilotSelectModelEnabled(),
 			'IS_CHAT_LOCAL_STORAGE_AVAILABLE' => Settings::isChatLocalStorageAvailable(),
 			'IS_AI_ASSISTANT_MCP_SELECTOR_AVAILABLE' => Settings::isAiAssistantMcpSelectorAvailable(),
+			'IS_MARKDOWN_PARSER_ENABLED' => Settings::isMarkdownParserEnabled(),
 			'IS_OPENLINES_IN_MESSENGER_V2_AVAILABLE' => Settings::isOpenlinesInMessengerV2Available(),
 			'IS_RECENT_FILTER_AVAILABLE' => Settings::isRecentFilterAvailable(),
+			'IS_EXTERNAL_CHAT_MESSAGE_FORWARDING_AVAILABLE' => Settings::isExternalChatMessageForwardingAvailable(),
 			'IS_TASKS_RECENT_LIST_AVAILABLE' => Settings::isTasksRecentListAvailable(),
+			'IS_COPILOT_MCP_BUTTON_AVAILABLE' => Settings::isCopilotMCPButtonAvailable(),
+			'IS_SEARCH_MODE_BUTTON_AVAILABLE' => Settings::isSearchModeAvailable(),
+			'IS_AGENT_BUTTON_AVAILABLE' => Settings::isAgentButtonAvailable(),
 			'IS_AUTO_TASKS_ENABLED' => Settings::isAutoTaskEnabled(),
 			'IS_AUTO_TASKS_UI_AVAILABLE' => Settings::isAutoTaskUIAvailable(),
 			'SMILE_LAST_UPDATE_DATE' => CSmile::getLastUpdate()->format(DateTimeInterface::ATOM),
@@ -363,6 +429,33 @@ class Manager
 			'COPILOT_AVAILABLE_ENGINES' => $this->getAvailableEngines(),
 			'COPILOT_BOT_NAME' => $this->getCopilotBotName(),
 		];
+	}
+
+	private function getFolderCollection(): FolderCollection
+	{
+		if ($this->folderCollectionCache !== null)
+		{
+			return $this->folderCollectionCache;
+		}
+
+		$userId = (int)$this->context->userId;
+		$this->folderCollectionCache = ServiceLocator::getInstance()
+			->get(FolderProvider::class)
+			->getByUser($userId)
+			->onlyAvailable($userId)
+		;
+
+		return $this->folderCollectionCache;
+	}
+
+	private function getStartupFolderList(): array
+	{
+		if (!Features::get()->isChatFoldersAvailable)
+		{
+			return [];
+		}
+
+		return $this->getFolderCollection()->toRestFormat();
 	}
 
 	/**
@@ -467,6 +560,20 @@ class Manager
 	private function canUseAudioPanel(): bool
 	{
 		return Option::get('im', 'can_use_audio_panel', 'N') !== 'N';
+	}
+
+	private function getNavigationTabTitles(): array
+	{
+		$titles = [];
+		foreach ($this->getSortedItems() as $tab)
+		{
+			if ($tab->isAvailable())
+			{
+				$titles[$tab->getId()] = $tab->getTabTitle();
+			}
+		}
+
+		return $titles;
 	}
 
 	private function getAiAssistantStatusMessages(): array

@@ -1,7 +1,6 @@
-<?
+<?php
 
-use \Bitrix\Main\Web\HttpClient;
-use Bitrix\Main\Web\Json;
+use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\JWK;
 use Bitrix\Main\Web\JWT;
 use Bitrix\Main\Web\Uri;
@@ -49,7 +48,7 @@ class CSocServGoogleOAuth extends CSocServAuth
 					'socserv_google_note_2_MSGVER_1',
 					[
 						'#URL#' => $this->getEntityOAuth()->getRedirectUri(),
-						'#MAIL_URL#' => \CHttp::urn2uri('/bitrix/tools/mail_oauth.php'),
+						'#MAIL_URL#' => (string)(new Uri('/bitrix/tools/mail_oauth.php'))->toAbsolute(),
 					]
 				),
 			],
@@ -891,6 +890,6 @@ class CGoogleOAuthInterface extends CSocServOAuthTransport
 
 	public function getRedirectUri()
 	{
-		return \CHTTP::URN2URI(static::REDIRECT_URI);
+		return (string)(new Uri(static::REDIRECT_URI))->toAbsolute();
 	}
 }

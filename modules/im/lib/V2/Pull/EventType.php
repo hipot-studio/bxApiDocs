@@ -35,6 +35,7 @@ enum EventType: string
 	case StickerRecentDeleteAll = 'stickerRecentDeleteAll';
 	case AutoTaskStatus = 'autoTaskStatus';
 	case ChatPin = 'chatPin';
+	case SetCopilotTitle = 'setCopilotTitle';
 	case ReadMessages = 'readMessageChat';
 	case ReadMessagesForOpponent = 'readMessageChatOpponent';
 	case UnreadChat = 'chatUnread';
@@ -42,4 +43,13 @@ enum EventType: string
 	case ReadAllNotifications = 'notifyReadAll';
 	case UnreadNotifications = 'notifyUnread';
 	case ReadChildren = 'readChildren';
+	case BuilderBlockAppend = 'builderBlockAppend';
+	case BuilderBlockUpdate = 'builderBlockUpdate';
+	case BuilderBlockDelete = 'builderBlockDelete';
+	case FolderCreate = 'folderCreate';
+	case FolderUpdate = 'folderUpdate';
+	case FolderDelete = 'folderDelete';
+	case FolderSort = 'folderSort';
+	case FolderChatAdd = 'folderChatAdd';
+	case FolderChatDelete = 'folderChatDelete';
 }

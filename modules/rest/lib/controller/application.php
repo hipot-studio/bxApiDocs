@@ -3,8 +3,10 @@
 namespace Bitrix\Rest\Controller;
 
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Main\Error;
 use Bitrix\Rest\Marketplace;
 use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Rest\PlacementTable;
 
 class Application extends Controller
 {
@@ -37,6 +39,17 @@ class Application extends Controller
 	public function getRightsAction($appId)
 	{
 		return Marketplace\Application::getRights($appId);
+	}
+
+	public function embeddingListAction(string $placement, ?int $userId = null): ?array
+	{
+		if (!preg_match('/^[A-Z][A-Z0-9_]+$/', $placement))
+		{
+			$this->addError(new Error('Wrong placement code.', 'ERROR_PLACEMENT_WRONG_CODE'));
+			return null;
+		}
+
+		return PlacementTable::getHandlersList(placement: $placement, userId: $userId);
 	}
 
 	/**

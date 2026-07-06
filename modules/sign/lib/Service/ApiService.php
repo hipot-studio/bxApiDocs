@@ -27,7 +27,7 @@ class ApiService
 	{
 		$this->apiEndpoint = $apiEndpoint;
 		$this->timeout = $timeout;
-		$this->logger ??= Debug\Logger::getInstance();
+		$this->logger ??= Container::instance()->getLogger('Api');
 	}
 
 	/**
@@ -90,7 +90,7 @@ class ApiService
 			return $result->addError($this->getDefaultErrorWithCode('INCORRECT_JSON'));
 		}
 
-		$this->getLogger()->debug('api raw response: ', [Debug\LogFormatter::SIGN_PLACEHOLDER_DUMP => $data]);
+		$this->getLogger()->debug('api raw response {' . Debug\SecretMaskingFormatter::PLACEHOLDER_DUMP . '}', [Debug\SecretMaskingFormatter::PLACEHOLDER_DUMP => $data]);
 
 		$data = is_array($data) ? $data : [];
 		foreach ((array)($data['errors'] ?? []) as $error)

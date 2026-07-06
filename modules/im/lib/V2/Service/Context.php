@@ -86,6 +86,17 @@ class Context
 	}
 
 	/**
+	 * Returns the global \CUser instance if available.
+	 * @return \CUser|null
+	 */
+	public function getCUser(): ?\CUser
+	{
+		global $USER;
+
+		return ($USER instanceof \CUser) ? $USER : null;
+	}
+
+	/**
 	 * Returns current user.
 	 * @return User
 	 */

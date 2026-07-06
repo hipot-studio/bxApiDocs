@@ -109,12 +109,12 @@ class CAdminFileDialog
 				if (!Params)
 					Params = {};
 
-				<?if(!$USER->CanDoOperation('fileman_view_file_structure')):?>
+				<?php if(!$USER->CanDoOperation('fileman_view_file_structure')):?>
 					<?= '
 					alert(mess_ACCESS_DENIED);
 					return;
 					'?>
-				<?else:?>
+				<?php else:?>
 					var UserConfig;
 				<?php
 				$fd_config = stripslashes(CUserOptions::GetOption("fileman", "file_dialog_config", "N"));
@@ -195,7 +195,7 @@ class CAdminFileDialog
 
 				oBXFileDialog = new BXFileDialog();
 				oBXFileDialog.Open(oConfig, UserConfig);
-				<?endif;?>
+				<?php endif;?>
 			};
 			window.<?= CUtil::JSEscape($arConfig['event'])?>Result = function(filename, path, site, title, menu)
 			{
@@ -233,15 +233,15 @@ if($bCloudsBrowse && CModule::IncludeModule('clouds'))
 				if ('<?= CUtil::JSEscape($arConfig['select'])?>' == 'D')
 					name = full;
 
-				<?if ($resultDest == "FUNCTION"): ?>
+				<?php if ($resultDest == "FUNCTION"): ?>
 					<?= CUtil::JSEscape($arConfig['arResultDest']["FUNCTION_NAME"])."(filename, path, site, title || '', menu || '');"?>
-				<?elseif($resultDest == "FORM"): ?>
+				<?php elseif($resultDest == "FORM"): ?>
 					document.<?= CUtil::JSEscape($arConfig['arResultDest']["FORM_NAME"])?>.<?= CUtil::JSEscape($arConfig['arResultDest']["FORM_ELEMENT_NAME"])?>.value = full;
 					BX.fireEvent(document.<?= CUtil::JSEscape($arConfig['arResultDest']["FORM_NAME"])?>.<?= CUtil::JSEscape($arConfig['arResultDest']["FORM_ELEMENT_NAME"])?>, 'change');
-				<?elseif($resultDest == "ID"): ?>
+				<?php elseif($resultDest == "ID"): ?>
 					BX('<?= CUtil::JSEscape($arConfig['arResultDest']["ELEMENT_ID"])?>').value = full;
 					BX.fireEvent(BX('<?= CUtil::JSEscape($arConfig['arResultDest']["ELEMENT_ID"])?>'), 'change');
-				<?endif;?>
+				<?php endif;?>
 			};
 			<?self::AttachJSScripts();?>
 			</script>
@@ -380,11 +380,11 @@ if (window.jsUtils)
 		<div id="__bx_fd_top_controls_container">
 			<table class="bx-fd-top-contr-tbl">
 				<tr>
-					<?if (count($arSites) > 1):?>
+					<?php if (count($arSites) > 1):?>
 						<td style="width:22px!important; padding: 0 4px 0 5px !important;">
 						<div id="__bx_site_selector" bxvalue="<?=htmlspecialcharsbx($Params['site'])?>" onclick="oBXDialogControls.SiteSelectorOnClick(this);" class="site_selector_div"><span><?=htmlspecialcharsbx($Params['site'])?></span><span class="fd_iconkit site_selector_div_arrow">&nbsp;&nbsp;</span></div>
 						</td>
-					<?endif;?>
+					<?php endif;?>
 					<td style="padding: 0 2px 0 2px !important;">
 						<input class="fd_input" type="text" id="__bx_dir_path_bar">
 					</td>
@@ -481,7 +481,7 @@ if (window.jsUtils)
 		<div id="__bx_fd_load" style="display:none;">
 			<div id="bxfd_upload_container"><iframe id="bxfd_iframe_upload" src="javascript:''" frameborder="0"></iframe></div>
 		</div>
-		<div id="__bx_fd_container_add2menu" class="bxfd-add-2-menu-tab"><? if ($Params['bAddToMenu']) :?><table class="bx-fd-add-2-menu-tbl">
+		<div id="__bx_fd_container_add2menu" class="bxfd-add-2-menu-tab"><?php if ($Params['bAddToMenu']) :?><table class="bx-fd-add-2-menu-tbl">
 			<tr>
 				<td style="height:30px">
 					<table class="fd_tab_title">
@@ -510,9 +510,9 @@ if (window.jsUtils)
 							<td align="right"><?=GetMessage("FD_MENU_TYPE")?></td>
 							<td>
 								<select id="__bx_fd_menutype" name="menutype">
-								<?for($i = 0, $n = count($Params['arMenuTypes']); $i < $n; $i++): ?>
+								<?php for($i = 0, $n = count($Params['arMenuTypes']); $i < $n; $i++): ?>
 								<option value="<?=htmlspecialcharsbx($Params['arMenuTypes'][$i]['key'])?>"><?=htmlspecialcharsbx($Params['arMenuTypes'][$i]['title'])?></option>
-								<? endfor;?>
+								<?php endfor;?>
 								</select>
 							</td>
 						</tr>
@@ -531,9 +531,9 @@ if (window.jsUtils)
 							<td align="right"><?=GetMessage("FD_ATTACH_BEFORE")?></td>
 							<td>
 								<select name="newppos" id="__bx_fd_newppos">
-									<?for($i = 0, $n = count($Params['menuItems']); $i < $n; $i++):?>
+									<?php for($i = 0, $n = count($Params['menuItems']); $i < $n; $i++):?>
 									<option value="<?= $i + 1 ?>"><?=htmlspecialcharsbx($Params['menuItems'][$i])?></option>
-									<?endfor;?>
+									<?php endfor;?>
 									<option value="0" selected="selected"><?=GetMessage("FD_LAST_POINT")?></option>
 								</select>
 							</td>
@@ -542,9 +542,9 @@ if (window.jsUtils)
 							<td  align="right"><?=GetMessage("FD_ATTACH_2_ITEM")?></td>
 							<td>
 								<select name="menuitem" id="__bx_fd_menuitem">
-									<?for($i = 0; $i < $n; $i++):?>
+									<?php for($i = 0; $i < $n; $i++):?>
 									<option value="<?= $i + 1 ?>"><?=htmlspecialcharsbx($Params['menuItems'][$i])?></option>
-									<?endfor;?>
+									<?php endfor;?>
 								</select>
 							</td>
 						</tr>
@@ -564,7 +564,7 @@ if (window.jsUtils)
 					<input type="button" onclick="oBXFileDialog.Close()" value="<?=GetMessage("FD_BUT_CANCEL");?>">
 				</td>
 			</tr>
-		</table><?endif;?></div>
+		</table><?php endif;?></div>
 	</td>
 </tr>
 <tr>
@@ -615,9 +615,9 @@ if (!window.arFDMenuTypes)
 
 // Sites array
 var arSites = [];
-<?foreach ($arSites as $key => $val):?>
+<?php foreach ($arSites as $key => $val):?>
 arSites['<?= CUtil::JSEscape($key)?>'] = '<?= CUtil::JSEscape($val)?>';
-<?endforeach;?>
+<?php endforeach;?>
 
 <?self::AppendLangMess();?>
 function OnLoad()
@@ -1265,12 +1265,12 @@ arFDPermission['<?=$path_js?>'] = {
 	{
 ?>
 		<script>
-		<? if ($strWarning == ''): ?>
+		<?php if ($strWarning == ''): ?>
 			window.action_status = true;
-		<?else: ?>
+		<?php else: ?>
 			window.action_warning = '<?= CUtil::JSEscape($strWarning)?>';
 			window.action_status = false;
-		<?endif;?>
+		<?php endif;?>
 		</script>
 <?php
 	}

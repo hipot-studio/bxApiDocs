@@ -6,12 +6,14 @@ use Bitrix\Disk\Folder;
 use Bitrix\Im\Alias;
 use Bitrix\Im\V2\Analytics\MessageAnalytics;
 use Bitrix\Im\V2\Chat\Background\Background;
+use Bitrix\Im\V2\Guest\GuestCounter;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
 use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Entity\User\UserError;
 use Bitrix\Im\V2\Async\Promise\BackgroundJobPromise;
 use Bitrix\Im\V2\Entity\User\UserType;
+use Bitrix\Im\V2\Folder\FolderCascadeHandler;
 use Bitrix\Im\V2\Integration\AI\AIHelper;
 use Bitrix\Im\V2\Integration\Call\CallToken;
 use Bitrix\Im\Recent;
@@ -412,6 +414,11 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	public function containsCollaber(): bool
 	{
 		return (bool)$this->getChatParams()->get(Params::CONTAINS_COLLABER)?->getValue();
+	}
+
+	public function containsGuest(): bool
+	{
+		return (bool)$this->getChatParams()->get(Params::CONTAINS_GUEST)?->getValue();
 	}
 
 	public function containsCopilot(): bool
@@ -1505,6 +1512,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			],
 			'MANAGE_MESSAGES' => [
 				'alias' => 'CAN_POST'
+			],
+			'MANAGE_GUEST_INVITES' => [
+				'get' => 'getManageGuestInvites',  /** @see Chat::getManageGuestInvites */
+				'set' => 'setManageGuestInvites',  /** @see Chat::setManageGuestInvites */
+				'default' => 'getDefaultManageGuestInvites', /** @see Chat::getDefaultManageGuestInvites */
+				'skipSave' => true,
 			],
 			'USERS' => [
 				'get' => 'getUserIds',  /** @see Chat::getUserIds */
@@ -2693,6 +2706,52 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return self::MANAGE_RIGHTS_MEMBER;
 	}
 
+	/**
+	 * @param string $manageGuestInvites NONE|MEMBER|OWNER|MANAGER
+	 * @return self
+	 */
+	public function setManageGuestInvites(string $manageGuestInvites): self
+	{
+		$manageGuestInvites = mb_strtoupper($manageGuestInvites);
+
+		if (!in_array(
+			$manageGuestInvites,
+			[
+				self::MANAGE_RIGHTS_NONE,
+				self::MANAGE_RIGHTS_MEMBER,
+				self::MANAGE_RIGHTS_OWNER,
+				self::MANAGE_RIGHTS_MANAGERS,
+			],
+			true
+		))
+		{
+			return $this;
+		}
+
+		$manageGuestInvites === $this->getDefaultManageGuestInvites()
+			? $this->getChatParams()?->deleteParam(Params::MANAGE_GUEST_INVITES, false)
+			: $this->getChatParams()?->addParamByName(Params::MANAGE_GUEST_INVITES, $manageGuestInvites, false)
+		;
+
+		return $this;
+	}
+
+	public function getManageGuestInvites(): ?string
+	{
+		$manageGuestInvites = $this->getChatParams()?->get(Params::MANAGE_GUEST_INVITES);
+
+		return
+			isset($manageGuestInvites)
+			? (string)$manageGuestInvites->getValue()
+			: $this->getDefaultManageGuestInvites()
+		;
+	}
+
+	public function getDefaultManageGuestInvites(): string
+	{
+		return self::MANAGE_RIGHTS_MANAGERS;
+	}
+
 	public function setManageMessagesAutoDelete(string $manageMessagesAutoDelete): self
 	{
 		$manageMessagesAutoDelete = mb_strtoupper($manageMessagesAutoDelete);
@@ -3017,6 +3076,14 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		if (!$this->containsCopilot() && AIHelper::containsCopilotBot($newMembers))
 		{
 			$this->getChatParams()->addParamByName(Chat\Param\Params::IS_COPILOT, true);
+		}
+		if (UserCollection::hasUserByType($newMembers, UserType::GUEST))
+		{
+			if (!$this->containsGuest())
+			{
+				$this->getChatParams()->addParamByName(Params::CONTAINS_GUEST, true);
+			}
+			GuestCounter::cleanCache($this->chatId);
 		}
 
 		$userCount = $this->getRelationFacade()?->getUserCount();
@@ -3376,6 +3443,15 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			$this->getChatParams()->deleteParam(Params::CONTAINS_COLLABER);
 		}
 
+		if (
+			$deletedUser->getType() === UserType::GUEST
+			&& $this->containsGuest()
+			&& !UserCollection::hasUserByType($userIds, UserType::GUEST)
+		)
+		{
+			$this->getChatParams()->deleteParam(Params::CONTAINS_GUEST);
+		}
+
 		if (AIHelper::containsCopilotBot([$deletedUserId]) && $this->containsCopilot())
 		{
 			$this->getChatParams()->deleteParam(Chat\Param\Params::IS_COPILOT);
@@ -3396,6 +3472,14 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	{
 		$this->processUpdateStateAfterMemberDelete($deletedUserId, $config);
 		\CIMDisk::ChangeFolderMembers($this->getId(), $deletedUserId, false);
+
+		ServiceLocator::getInstance()->get(FolderCascadeHandler::class)
+			->onUserLeave($this->getChatId(), $deletedUserId);
+
+		if (Im\V2\Entity\User\User::getInstance($deletedUserId)->getType() === UserType::GUEST)
+		{
+			GuestCounter::cleanCache($this->chatId);
+		}
 
 		return $this;
 	}
@@ -3621,6 +3705,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'manageSettings' => mb_strtolower($this->getManageSettings()),
 			'manageMessages' => mb_strtolower($this->getManageMessages()),
 			'manageMessagesAutoDelete' => mb_strtolower($this->getManageMessagesAutoDelete()),
+			'manageGuestInvites' => mb_strtolower($this->getManageGuestInvites()),
 			'canPost' => mb_strtolower($this->getManageMessages()),
 		];
 	}
@@ -3681,6 +3766,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'public' => $this->getPublicOption() ?? '',
 			'unreadId' => $this->getUnreadId(),
 			'userCounter' => $this->getUserCount(),
+			'guestCount' => $this->containsGuest() ? (new GuestCounter($this))->getGuestCount() : 0,
 		];
 
 		return array_merge($commonFields, $additionalFields);
@@ -3720,6 +3806,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'description' => \Bitrix\Im\Text::decodeEmoji($this->getDescription() ?? ''),
 			'textFieldEnabled' => $this->getTextFieldEnabled()->get(),
 			'backgroundId' => $this->getBackground()->get(),
+			'guestCount' => $this->containsGuest() ? (new GuestCounter($this))->getGuestCount() : 0,
 		];
 	}
 
@@ -4003,6 +4090,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			Permission\ActionGroup::ManageSettings => $this->getManageSettings(),
 			Permission\ActionGroup::ManageMessages => $this->getManageMessages(),
 			Permission\ActionGroup::ManageMessagesAutoDelete => $this->getManageMessagesAutoDelete(),
+			Permission\ActionGroup::ManageGuestInvites => $this->getManageGuestInvites(),
 			default => Chat::ROLE_GUEST,
 		};
 

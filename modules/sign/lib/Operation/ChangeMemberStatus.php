@@ -3,7 +3,6 @@
 namespace Bitrix\Sign\Operation;
 
 use Bitrix\Sign\Callback\Messages\Member\MemberStatusChanged;
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
 use Bitrix\Sign\Operation\DocumentChat\AddMemberByDocument;
 use Bitrix\Sign\Operation\Kanban\B2e\SendUpdateEntityPullEvent;
@@ -389,7 +388,7 @@ final class ChangeMemberStatus implements Contract\Operation
 			}
 			catch (Throwable $e)
 			{
-				Logger::getInstance()->error(
+				Container::instance()->getLogger('Operation')->error(
 					"Failed to send event {event} for member {documentUid}: {errorsText}",
 					[
 						'event' => EventType::MEMBER_STATUS_CHANGED->value,

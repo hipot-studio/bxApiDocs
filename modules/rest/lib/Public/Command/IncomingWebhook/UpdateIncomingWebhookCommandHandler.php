@@ -1,0 +1,85 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Bitrix\Rest\Public\Command\IncomingWebhook;
+
+use Bitrix\Main\AccessDeniedException;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ObjectNotFoundException;
+use Bitrix\Rest\APAuth\PermissionTable;
+use Bitrix\Rest\Enum\Integration\ElementCodeType;
+use Bitrix\Rest\Internal\Access\WebhookAccessChecker;
+use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
+use Bitrix\Rest\Internal\Contract\Repository\IncomingWebhookRepositoryInterface;
+use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhook;
+use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
+use Bitrix\Rest\Internal\Repository\IntegrationRepository;
+use Bitrix\Rest\Preset\Provider;
+
+class UpdateIncomingWebhookCommandHandler
+{
+	public function __construct(
+		private IncomingWebhookRepositoryInterface $repository = new IncomingWebhookRepository(),
+		private IntegrationRepository $integrationRepository = new IntegrationRepository(),
+	)
+	{
+	}
+
+	/**
+	 * @throws AccessDeniedException
+	 * @throws ObjectNotFoundException
+	 * @throws ArgumentException
+	 */
+	public function __invoke(UpdateIncomingWebhookCommand $command): IncomingWebhook
+	{
+		$user = RestUserModel::createFromId($command->userId);
+		if ($user->getData() === null)
+		{
+			throw new ObjectNotFoundException(
+				'User with ID ' . $command->userId . ' not found'
+			);
+		}
+
+		$scopes = PermissionTable::cleanPermissionList($command->scopes);
+		if (empty($scopes))
+		{
+			throw new ArgumentException('At least one valid scope is required');
+		}
+
+		$webhook = $this->repository->getByWebhookId($command->webHookPassword);
+		if ($webhook === null)
+		{
+			throw new ObjectNotFoundException('Incoming webhook not found');
+		}
+
+		$accessChecker = new WebhookAccessChecker($command->userId);
+		if (!$accessChecker->canManageIncomingWebhook($webhook))
+		{
+			throw new AccessDeniedException(
+				'User does not have rights to edit incoming webhook'
+			);
+		}
+
+		$integration = $this->integrationRepository->getByIncomingWebhookPasswordId($webhook->getId());
+		if ($integration === null)
+		{
+			throw new ObjectNotFoundException('Integration for incoming webhook not found');
+		}
+
+		Provider::saveIntegration(
+			[
+				'PASSWORD_ID' => $webhook->getId(),
+				'TITLE' => $command->title ?? $webhook->getTitle(),
+				'SCOPE' => $scopes,
+				'QUERY' => 'Y',
+				'MODE' => 'INCOMING_WEBHOOK',
+			],
+			ElementCodeType::IN_WEBHOOK->value,
+			$integration->getId(),
+			$user->getId(),
+		);
+
+		return $this->repository->getByWebhookId($command->webHookPassword);
+	}
+}

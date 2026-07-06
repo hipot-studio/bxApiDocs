@@ -3003,7 +3003,7 @@ class CAllBlogPost
 			{
 				$arTitle = self::processNotifyTitle($arParams["TITLE"]);
 				$title = $arTitle['TITLE'];
-				$title_out = $arTitle['TITLE_OUT'];
+				$titleOut = $arTitle['TITLE_OUT'];
 
 				$arNotifyParams = array(
 					"LOG_ID" => $arMessageFields["LOG_ID"],
@@ -3018,12 +3018,13 @@ class CAllBlogPost
 					),
 					"MESSAGE_OUT" => fn (?string $languageId = null) => Loc::getMessage(
 						"SONET_IM_NEW_POST",
-						Array("#title#" => $title_out),
+						Array("#title#" => $titleOut),
 						$languageId
 					)." #URL#",
 					"MESSAGE_CHAT" => GetMessage("SONET_IM_NEW_POST_CHAT".$aditGM, Array(
-						"#title#" => "[URL=#URL#]".$title_out."[/URL]",
+						"#title#" => "[URL=#URL#]".$titleOut."[/URL]",
 					)),
+					'MESSAGE_CHAT_TYPE' => 'GROUP_BLOG_POST',
 					"EXCLUDE_USERS" => array_merge([$arParams["FROM_USER_ID"]], $arUserIDSent),
 					"PERMISSION" => array(
 						"FEATURE" => "blog",

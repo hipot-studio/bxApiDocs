@@ -238,20 +238,21 @@ class UserDataProvider extends EntityDataProvider
 		{
 			return [
 				'params' => [
-					'apiVersion' => 3,
-					'context' => 'USER_LIST_FILTER_DEPARTMENT',
 					'multiple' => 'N',
-					'contextCode' => 'DR',
-					'enableDepartments' => 'Y',
-					'departmentFlatEnable' => ($fieldID === 'DEPARTMENT_FLAT' ? 'Y' : 'N'),
-					'enableAll' => 'N',
-					'enableUsers' => 'N',
-					'enableSonetgroups' => 'N',
-					'allowEmailInvitation' => 'N',
-					'allowSearchEmailUsers' => 'N',
-					'departmentSelectDisable' => 'N',
-					'isNumeric' => 'N',
-				]
+					'dialogOptions' => [
+						'context' => 'USER_LIST_FILTER_DEPARTMENT',
+						'dropdownMode' => false,
+						'entities' => [
+							[
+								'id' => 'structure-node',
+								'options' => [
+									'selectMode' => 'departmentsOnly',
+									'allowSelectRootDepartment' => true,
+								],
+							],
+						],
+					],
+				],
 			];
 		}
 
@@ -309,11 +310,11 @@ class UserDataProvider extends EntityDataProvider
 			],
 			'DEPARTMENT' => [
 				'whiteList' => [ 'UF_DEPARTMENT' ],
-				'options' => [ 'default' => true, 'type' => 'dest_selector', 'partial' => true ]
+				'options' => [ 'default' => true, 'type' => 'entity_selector', 'partial' => true ]
 			],
 			'DEPARTMENT_FLAT' => [
 				'whiteList' => [ 'UF_DEPARTMENT_FLAT' ],
-				'options' => [ 'type' => 'dest_selector', 'partial' => true ]
+				'options' => [ 'type' => 'entity_selector', 'partial' => true ]
 			],
 			'TAGS' => [
 				'whiteList' => [ 'TAGS' ],

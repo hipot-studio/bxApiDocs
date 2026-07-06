@@ -1,6 +1,8 @@
-<?
+<?php
+
 use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Main\Web\Uri;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServOffice365OAuth extends CSocServAuth
@@ -42,7 +44,7 @@ class CSocServOffice365OAuth extends CSocServAuth
 			array("office365_tenant", GetMessage("socserv_office365_tenant"), "", Array("text", 40)),
 			array("note"=>GetMessage("socserv_office365_form_note", array(
 				'#URL#'	=>	$this->getEntityOAuth()->getRedirectUri(),
-				'#MAIL_URL#'	=> \CHttp::urn2uri('/bitrix/tools/mail_oauth.php')))),
+				'#MAIL_URL#'	=> (string)(new Uri('/bitrix/tools/mail_oauth.php'))->toAbsolute()))),
 		);
 	}
 
@@ -541,7 +543,7 @@ class COffice365OAuthInterface extends CSocServOAuthTransport
 
 	public function getRedirectUri()
 	{
-		return \CHTTP::URN2URI(static::REDIRECT_URI);
+		return (string)(new Uri(static::REDIRECT_URI))->toAbsolute();
 	}
 }
 

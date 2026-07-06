@@ -62,7 +62,7 @@ class DocumentGeneratorDocumentsComponent extends CBitrixComponent
 		}
 		if(!Loader::includeModule($moduleId))
 		{
-			$this->showError(Loc::getMessage('DOCGEN_DOCUMENTS_MODULE_ERROR', ['#MODULE_ID#' => $moduleId]));
+			$this->showError(Loc::getMessage('DOCGEN_DOCUMENTS_MODULE_ERROR', ['#MODULE_ID#' => htmlspecialcharsbx($moduleId)]));
 			return;
 		}
 		if(empty($this->arParams['provider']) || !DataProviderManager::checkProviderName($this->arParams['provider'], $moduleId))
@@ -198,6 +198,11 @@ class DocumentGeneratorDocumentsComponent extends CBitrixComponent
 		if($viewUrl)
 		{
 			$viewUrl = new \Bitrix\Main\Web\Uri($viewUrl);
+			// relative url only
+			if ($viewUrl->getScheme() !== '' || $viewUrl->getHost() !== '')
+			{
+				$viewUrl = null;
+			}
 		}
 		$templateViewUrl = \CComponentEngine::makeComponentPath('bitrix:documentgenerator.templates');
 		$templateViewUrl = getLocalPath('components'.$templateViewUrl.'/slider.php');
@@ -212,7 +217,7 @@ class DocumentGeneratorDocumentsComponent extends CBitrixComponent
 				{
 					if(\Bitrix\DocumentGenerator\Driver::getInstance()->getUserPermissions()->canModifyTemplate($document['TEMPLATE_ID']))
 					{
-						$template = '<a href="javascript:void(0);" onclick="BX.DocumentGenerator.DocumentList.viewTemplate(\''.$templateViewUrl->addParams(['ID' => $document['TEMPLATE_ID']])->getLocator().'\')">'.htmlspecialcharsbx($templates[$document['TEMPLATE_ID']]['NAME']).'</a>';
+						$template = '<a href="javascript:void(0);" onclick="BX.DocumentGenerator.DocumentList.viewTemplate(\''.htmlspecialcharsbx(CUtil::JSEscape($templateViewUrl->addParams(['ID' => $document['TEMPLATE_ID']])->getLocator())).'\')">'.htmlspecialcharsbx($templates[$document['TEMPLATE_ID']]['NAME']).'</a>';
 					}
 					else
 					{
@@ -223,9 +228,9 @@ class DocumentGeneratorDocumentsComponent extends CBitrixComponent
 				{
 					$viewUrl->addParams(['documentId' => $document['ID']])->deleteParams(['analyticsLabel']);
 					$onDocumentClick =
-						"BX.DocumentGenerator.Document.onBeforeCreate('{$viewUrl->getLocator()}', {sliderWidth: 1060}, '"
-						. htmlspecialcharsbx(CUtil::JSEscape($this->arParams['loaderPath']))
-						. "', '{$this->arParams['module']}')"
+						"BX.DocumentGenerator.Document.onBeforeCreate('" . CUtil::JSEscape($viewUrl->getLocator()) . "', {sliderWidth: 1060}, '"
+						. CUtil::JSEscape($this->arParams['loaderPath'])
+						. "', '" . CUtil::JSEscape($this->arParams['module']) . "')"
 					;
 					$actions[] = [
 						'ICONCLASS' => 'edit',
@@ -237,12 +242,12 @@ class DocumentGeneratorDocumentsComponent extends CBitrixComponent
 				$actions[] = [
 					'ICONCLASS' => 'delete',
 					'TEXT' => Loc::getMessage('DOCGEN_DOCUMENTS_DELETE_ACTION'),
-					'ONCLICK' => 'BX.DocumentGenerator.DocumentList.delete(\''.$document['ID'].'\')',
+					'ONCLICK' => 'BX.DocumentGenerator.DocumentList.delete(\''.(int)$document['ID'].'\')',
 				];
 				$documentTitle = htmlspecialcharsbx($document['TITLE']);
 				if($onDocumentClick)
 				{
-					$documentTitle = '<a href="javascript:void(0);" onclick="'.$onDocumentClick.'">'.$documentTitle.'</a>';
+					$documentTitle = '<a href="javascript:void(0);" onclick="'.htmlspecialcharsbx($onDocumentClick).'">'.$documentTitle.'</a>';
 				}
 				$grid['ROWS'][] = [
 					'id' => $document['ID'],

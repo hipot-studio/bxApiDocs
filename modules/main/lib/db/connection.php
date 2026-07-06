@@ -5,6 +5,11 @@ namespace Bitrix\Main\DB;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Data;
+use Bitrix\Main\DB\Ddl\Builder\AlterTableBuilder;
+use Bitrix\Main\DB\Ddl\Builder\CreateTableBuilder;
+use Bitrix\Main\DB\Ddl\Builder\DropTableBuilder;
+use Bitrix\Main\DB\Ddl\DbType;
+use Bitrix\Main\DB\Ddl\Renderer\RendererFactory;
 use Bitrix\Main\Diag;
 use Bitrix\Main\ORM\Fields\ScalarField;
 
@@ -774,6 +779,41 @@ abstract class Connection extends Data\Connection
 		$sql = 'ALTER TABLE ' . $this->getSqlHelper()->quote($tableName) . ' ADD PRIMARY KEY(' . join(', ', $columnNames) . ')';
 
 		return $this->query($sql);
+	}
+
+	/**
+	 * Renders DDL queries for a CREATE/ALTER/DROP table builder.
+	 *
+	 * @return string[]
+	 */
+	public function renderDdl(CreateTableBuilder|AlterTableBuilder|DropTableBuilder $builder): array
+	{
+		$renderer = RendererFactory::get(DbType::getByConnectionType($this->getType()));
+
+		if ($builder instanceof CreateTableBuilder)
+		{
+			return $renderer->renderCreateTable($builder->toData());
+		}
+
+		if ($builder instanceof AlterTableBuilder)
+		{
+			return $renderer->renderAlterTable($builder->toData());
+		}
+
+		return [$renderer->renderDropTable($builder->getTableName())];
+	}
+
+	/**
+	 * Renders DDL queries for a CREATE/ALTER/DROP table builder and executes them
+	 *
+	 * @throws SqlQueryException
+	 */
+	public function runDdl(CreateTableBuilder|AlterTableBuilder|DropTableBuilder $builder): void
+	{
+		foreach ($this->renderDdl($builder) as $sql)
+		{
+			$this->query($sql);
+		}
 	}
 
 	/**

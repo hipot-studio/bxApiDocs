@@ -5,7 +5,6 @@ namespace Bitrix\Sign\Agent\Permission;
 use Bitrix\Main\Loader;
 use Bitrix\Sign\Access\Permission\PermissionDictionary as CrmPermissionDictionary;
 use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Service\Container;
 
 class UpdateDefaultTemplatePermissionAgent
@@ -26,7 +25,7 @@ class UpdateDefaultTemplatePermissionAgent
 		]);
 		if (!$result->isSuccess())
 		{
-			Logger::getInstance()->error('UpdateDefaultTemplatePermissionAgent error: ' . implode(', ', $result->getErrorMessages()));
+			Container::instance()->getLogger('Agent')->error('UpdateDefaultTemplatePermissionAgent error: ' . implode(', ', $result->getErrorMessages()));
 
 			return '';
 		}

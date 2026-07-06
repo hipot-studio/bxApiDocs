@@ -6,9 +6,13 @@ use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\AutoWire\Parameter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
+use Bitrix\Main\SystemException;
 use Bitrix\Rest\V3\Attribute\DtoType;
+use Bitrix\Rest\V3\Dto\Mapping\Mapper;
+use Bitrix\Rest\V3\Dto\Mapping\MapperRegistry;
 use Bitrix\Rest\V3\Exception\ClassRequireAttributeException;
 use Bitrix\Rest\V3\Exception\Internal\InternalException;
+use Bitrix\Rest\V3\Exception\LogicException;
 use Bitrix\Rest\V3\Exception\RestException;
 use Bitrix\Rest\V3\Exception\SkipWriteToLogException;
 use Bitrix\Rest\V3\Exception\TooManyAttributesException;
@@ -17,6 +21,7 @@ use Bitrix\Rest\V3\Interaction\Response\Response;
 use Bitrix\Rest\V3\Interaction\Response\ResponseWithRelations;
 use Bitrix\Rest\V3\Schema\Scope;
 use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
+use CRestServer;
 use Throwable;
 
 abstract class RestController extends Controller
@@ -28,6 +33,8 @@ abstract class RestController extends Controller
 	protected ?string $dtoClass = null;
 
 	protected ?array $queryParams = null;
+
+	protected ?CRestServer $server = null;
 
 	public function getAutoWiredParameters(): array
 	{
@@ -75,16 +82,36 @@ abstract class RestController extends Controller
 	protected function getActionResponse(Action $action)
 	{
 		$response = $action->runWithSourceParametersList();
+
 		if ($response instanceof ResponseWithRelations)
 		{
 			$args = $action->getArguments();
-			$request = $args['request'];
-			$response->setParentRequest($request);
-			$this->updateRequestRelationFilters($request, $response);
-
-			if (!empty($request->getRelations()))
+			$request = null;
+			if (isset($args['request']) && $args['request'] instanceof Request)
 			{
-				$response->setRelations($request->getRelations());
+				$request = $args['request'];
+			}
+			else
+			{
+				foreach ($args as $arg)
+				{
+					if ($arg instanceof Request)
+					{
+						$request = $arg;
+						break;
+					}
+				}
+			}
+
+			if ($request !== null)
+			{
+				$response->setParentRequest($request);
+				$this->updateRequestRelationFilters($request, $response);
+
+				if (!empty($request->getRelations()))
+				{
+					$response->setRelations($request->getRelations());
+				}
 			}
 		}
 
@@ -117,12 +144,12 @@ abstract class RestController extends Controller
 		{
 			foreach ($response->items as $item)
 			{
-				$this->fillResultRelationFilterField($item, $relationFields, $result);
+				$this->fillResultRelationFilterField($item->toArray(), $relationFields, $result);
 			}
 		}
 		else
 		{
-			$this->fillResultRelationFilterField($response->item, $relationFields, $result);
+			$this->fillResultRelationFilterField($response->item->toArray(), $relationFields, $result);
 		}
 
 		return $result;
@@ -214,5 +241,65 @@ abstract class RestController extends Controller
 		$this->queryParams = $queryParams;
 
 		return $this;
+	}
+
+	public function getServer(): ?CRestServer
+	{
+		return $this->server;
+	}
+
+	public function setServer(?CRestServer $server = null): self
+	{
+		$this->server = $server;
+
+		return $this;
+	}
+
+	/**
+	 * Resolves the DTO class from #[DtoType] attribute or $this->dtoClass property.
+	 */
+	protected function resolveDtoClass(): ?string
+	{
+		if ($this->dtoClass !== null)
+		{
+			return $this->dtoClass;
+		}
+
+		$attributes = (new \ReflectionClass($this))->getAttributes(DtoType::class);
+		if (!empty($attributes))
+		{
+			/** @var DtoType $dtoTypeAttribute */
+			$dtoTypeAttribute = $attributes[0]->newInstance();
+
+			return $dtoTypeAttribute->type;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Returns the Mapper instance declared via #[MappedBy] on the controller's DTO class.
+	 *
+	 * @throws LogicException When DTO class cannot be resolved or has no MappedBy attribute.
+	 */
+	protected function getDtoMapper(): Mapper
+	{
+		$dtoClass = $this->resolveDtoClass();
+		if ($dtoClass === null)
+		{
+			throw new LogicException(
+				new SystemException('Cannot resolve DTO class: no #[DtoType] attribute or $dtoClass property set on ' . static::class),
+			);
+		}
+
+		$mapper = MapperRegistry::getForDto($dtoClass);
+		if ($mapper === null)
+		{
+			throw new LogicException(
+				new SystemException("DTO class {$dtoClass} has no #[MappedBy] attribute or #[OrmEntity] is present — MappedBy is disabled."),
+			);
+		}
+
+		return $mapper;
 	}
 }

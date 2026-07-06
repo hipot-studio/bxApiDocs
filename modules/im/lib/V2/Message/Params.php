@@ -2,7 +2,7 @@
 
 namespace Bitrix\Im\V2\Message;
 
-use Bitrix\Im\V2\Message\Builder\Param\BuilderParam;
+use Bitrix\Im\V2\Message\BlocksBuilder\Param\BlocksBuilderParam;
 use Bitrix\Main\ORM;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
@@ -73,8 +73,12 @@ class Params extends Registry
 		STICKER_PARAMS = 'STICKER_PARAMS',
 		AI_ASSISTANT_MCP_AUTH_ID = 'AI_ASSISTANT_MCP_AUTH_ID',
 		COPILOT_REASONING = 'COPILOT_REASONING',
+		COPILOT_AGENT_MODE = 'COPILOT_AGENT_MODE',
+		COPILOT_FORCE_SEARCH = 'COPILOT_FORCE_SEARCH',
+		COPILOT_PAGE_CONTEXT = 'COPILOT_PAGE_CONTEXT',
+		COPILOT_MCP_AUTH_ID = 'COPILOT_MCP_AUTH_ID',
 		AI_TASK_TRIGGER_MESSAGE_ID = 'AI_TASK_TRIGGER_MESSAGE_ID',
-		BUILDER = 'BUILDER'
+		BLOCKS_BUILDER = 'BLOCKS_BUILDER'
 	;
 
 	//todo: Move it into CRM module
@@ -267,6 +271,25 @@ class Params extends Registry
 			'isHidden' => true,
 			'default' => false,
 		],
+		self::COPILOT_AGENT_MODE => [
+			'type' => Param::TYPE_BOOL,
+			'isHidden' => true,
+			'default' => false,
+		],
+		self::COPILOT_FORCE_SEARCH => [
+			'type' => Param::TYPE_BOOL,
+			'isHidden' => true,
+			'default' => false,
+		],
+		self::COPILOT_PAGE_CONTEXT => [
+			'className' => Message\Param\CopilotPageContext::class,
+			'type' => Param::TYPE_JSON,
+			'isHidden' => true,
+		],
+		self::COPILOT_MCP_AUTH_ID => [
+			'type' => Param::TYPE_INT,
+			'isHidden' => true,
+		],
 		self::AI_ASSISTANT_MCP_AUTH_ID => [
 			'type' => Param::TYPE_INT,
 			'isHidden' => true,
@@ -293,8 +316,8 @@ class Params extends Registry
 			'type' => Param::TYPE_INT,
 			'default' => 0,
 		],
-		self::BUILDER => [
-			'className' => BuilderParam::class,
+		self::BLOCKS_BUILDER => [
+			'className' => BlocksBuilderParam::class,
 			'type' => Param::TYPE_JSON,
 			'isHidden' => true,
 		],

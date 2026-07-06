@@ -28,6 +28,15 @@ class Callback
 	 */
 	public static function __callStatic($name, $arguments)
 	{
+		if (
+			isset($arguments[0])
+			&& $arguments[0] instanceof Main\Event
+			&& $name === 'rest__ONRESTAPPUSERREADY'
+		)
+		{
+			$arguments[0] = $arguments[0]->getParameters();
+		}
+
 		$event = Sender::parseEventName($name);
 		LoggerManager::getInstance()->getLogger()?->info(
 			"\n{delimiter}\n"

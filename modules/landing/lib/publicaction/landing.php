@@ -1193,6 +1193,18 @@ class Landing
 
 		if ($landing->exist())
 		{
+			if (!$landing->canEdit())
+			{
+				$error = new \Bitrix\Landing\Error;
+				$error->addError(
+					'ACCESS_DENIED',
+					Loc::getMessage('LANDING_BLOCK_ACCESS_DENIED')
+				);
+				$result->setError($error);
+
+				return $result;
+			}
+
 			// fix module security
 			$content = str_replace('<st yle', '<style', $content);
 			$content = str_replace('<li nk ', '<link ', $content);

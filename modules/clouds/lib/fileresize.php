@@ -1,8 +1,10 @@
 <?php
+
 namespace Bitrix\Clouds;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields;
 
 /**
@@ -25,6 +27,8 @@ use Bitrix\Main\ORM\Fields;
 
 class FileResizeTable extends DataManager
 {
+	use DeleteByFilterTrait;
+
 	/**
 	 * Returns DB table name for entity.
 	 *
@@ -49,53 +53,53 @@ class FileResizeTable extends DataManager
 					'primary' => true,
 					'autocomplete' => true,
 					'title' => Loc::getMessage('FILE_RESIZE_ENTITY_ID_FIELD'),
-				]
+				],
 			),
 			new Fields\DatetimeField(
 				'TIMESTAMP_X',
 				[
 					'required' => true,
 					'title' => Loc::getMessage('FILE_RESIZE_ENTITY_TIMESTAMP_X_FIELD'),
-				]
+				],
 			),
 			new Fields\IntegerField(
 				'ERROR_CODE',
 				[
 					'default' => 0,
 					'title' => Loc::getMessage('FILE_RESIZE_ENTITY_ERROR_CODE_FIELD'),
-				]
+				],
 			),
 			new Fields\IntegerField(
 				'FILE_ID',
 				[
 					'title' => Loc::getMessage('FILE_RESIZE_ENTITY_FILE_ID_FIELD'),
-				]
+				],
 			),
 			new Fields\TextField(
 				'PARAMS',
 				[
 					'title' => Loc::getMessage('FILE_RESIZE_ENTITY_PARAMS_FIELD'),
-				]
+				],
 			),
 			new Fields\StringField(
 				'FROM_PATH',
 				[
 					'validation' => [__CLASS__, 'validateFromPath'],
 					'title' => Loc::getMessage('FILE_RESIZE_ENTITY_FROM_PATH_FIELD'),
-				]
+				],
 			),
 			new Fields\StringField(
 				'TO_PATH',
 				[
 					'validation' => [__CLASS__, 'validateToPath'],
 					'title' => Loc::getMessage('FILE_RESIZE_ENTITY_TO_PATH_FIELD'),
-				]
+				],
 			),
 			new Fields\Relations\Reference(
 				'FILE',
 				'\Bitrix\Main\File',
 				['=this.FILE_ID' => 'ref.ID'],
-				['join_type' => 'LEFT']
+				['join_type' => 'LEFT'],
 			),
 		];
 	}

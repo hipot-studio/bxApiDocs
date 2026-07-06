@@ -9,6 +9,11 @@ class FieldsValidator
 {
 	public static function validateTypeAndValue(?string $type, mixed $value): bool
 	{
+		if ($type !== null && is_subclass_of($type, \BackedEnum::class))
+		{
+			return $value instanceof $type;
+		}
+
 		return match ($type)
 		{
 			'int' => is_int($value),

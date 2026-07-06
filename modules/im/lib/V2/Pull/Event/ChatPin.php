@@ -16,7 +16,12 @@ class ChatPin extends BaseChatEvent
 	protected int $userId;
 	protected bool $active;
 
-	public function __construct(Chat $chat, bool $active, $userId)
+	public function __construct(
+		Chat $chat,
+		bool $active,
+		$userId,
+		protected readonly ?int $folderId = null,
+	)
 	{
 		parent::__construct($chat);
 
@@ -26,12 +31,19 @@ class ChatPin extends BaseChatEvent
 
 	protected function getBasePullParamsInternal(): array
 	{
-		return array_merge(
+		$payload = array_merge(
 			$this->getBaseRecentPreviewParams($this->chat),
 			[
 				'active' => $this->active,
 			]
 		);
+
+		if ($this->folderId !== null)
+		{
+			$payload['folderId'] = $this->folderId;
+		}
+
+		return $payload;
 	}
 
 	protected function getDiffByUser(int $userId): Diff

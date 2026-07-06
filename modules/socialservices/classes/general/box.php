@@ -1,8 +1,10 @@
 <?php
+
 use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServBoxAuth extends CSocServAuth
@@ -288,7 +290,7 @@ class CBoxOAuthInterface extends CSocServOAuthTransport
 
 	public static function GetRedirectURI()
 	{
-		return \CHTTP::URN2URI("/bitrix/tools/oauth/box.php");
+		return (string)(new Uri("/bitrix/tools/oauth/box.php"))->toAbsolute();
 	}
 
 	public function GetAuthUrl($redirect_uri, $state = '')

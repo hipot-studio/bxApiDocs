@@ -29,6 +29,24 @@ abstract class BaseAction
 	abstract public static function enrichParams(array $params): array;
 
 	/**
+	 * Param keys that may carry user HTML and must pass ActionParamsGuard.
+	 *
+	 * @return list<string>
+	 */
+	public static function getSanitizableParamKeys(): array
+	{
+		return [];
+	}
+
+	/**
+	 * Normalize param value before sanitization check (e.g. emoji decode in stored params).
+	 */
+	public static function normalizeSanitizableParam(string $key, mixed $value): mixed
+	{
+		return $value;
+	}
+
+	/**
 	 * If need - do preliminary operations before del from table
 	 * @return bool
 	 */

@@ -7,6 +7,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main;
+use Bitrix\Rest\Internal\Access\AppAccessChecker;
 use Bitrix\Rest\PlacementTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\AppLangTable;
@@ -16,6 +17,8 @@ use Bitrix\Rest\AppLogTable;
 use Bitrix\Rest\EventTable;
 use Bitrix\Rest\Analytic;
 use Bitrix\Rest\AppTable;
+use Bitrix\Rest\Internal\Repository\Application\AppRepository;
+use Bitrix\Rest\Public\Command\Application\Access\SetAppAccessCommand;
 use CRestUtil;
 
 Loc::loadMessages(__FILE__);
@@ -31,6 +34,11 @@ class Application
 	public static function setContextUserId(int $id): void
 	{
 		self::$contextUserId = $id;
+	}
+
+	public static function getContextUserId(): ?int
+	{
+		return self::$contextUserId;
 	}
 
 	public static function install($code, $version = false, $checkHash = false, $installHash = false, $from = null) : array
@@ -263,6 +271,22 @@ class Application
 								if ($result->isSuccess())
 								{
 									Sender::bind('rest', 'OnRestAppInstall');
+								}
+							}
+
+							if (!empty($appFields['URL_INSTALL']))
+							{
+								// checkCallback is already called inside checkFields
+								$result = EventTable::add(
+									[
+										'APP_ID' => $appId,
+										'EVENT_NAME' => 'ONAPPUSERREADY',
+										'EVENT_HANDLER' => $appFields['URL_INSTALL'],
+									]
+								);
+								if ($result->isSuccess())
+								{
+									Sender::bind('rest', 'OnRestAppUserReady');
 								}
 							}
 
@@ -514,53 +538,79 @@ class Application
 
 	public static function setRights($appId, $rights) : array
 	{
-		$result = [];
-		// todo: maybe can add self::$contextUser to isAdmin check
-		if (CRestUtil::isAdmin())
+		if ($appId <= 0)
 		{
-			if ($appId > 0)
-			{
-				$appInfo = AppTable::getByClientId($appId);
-				if ($appInfo['CODE'])
-				{
-					Analytic::logToFile(
-						'setAppRight',
-						$appInfo['CODE'],
-						$appInfo['CODE']
-					);
-				}
-				AppTable::setAccess($appId, $rights);
-				PlacementTable::clearHandlerCache();
-				$result = ['success' => 1];
-			}
-		}
-		else
-		{
-			$result = ['error' => Loc::getMessage('RMP_ACCESS_DENIED')];
+			return [];
 		}
 
-		return $result;
+		$appInfo = AppTable::getByClientId($appId);
+		if (!$appInfo)
+		{
+			return [];
+		}
+
+		if ($appInfo['CODE'])
+		{
+			Analytic::logToFile('setAppRight', $appInfo['CODE'], $appInfo['CODE']);
+		}
+
+		$codes = [];
+		if (is_array($rights) && !empty($rights))
+		{
+			foreach ($rights as $rightsList)
+			{
+				foreach ($rightsList as $rightId => $ar)
+				{
+					$codes[] = $rightId;
+				}
+			}
+		}
+
+		$userId = self::$contextUserId ?? (int)($GLOBALS['USER']?->GetID() ?? 0);
+
+		try
+		{
+			$commandResult = (new SetAppAccessCommand(
+				userId: $userId,
+				clientId: $appInfo['CLIENT_ID'],
+				accessCodes: $codes,
+			))->run();
+		}
+		catch (Main\Command\Exception\CommandException | Main\Command\Exception\CommandValidationException)
+		{
+			return ['error' => Loc::getMessage('RMP_ACCESS_DENIED')];
+		}
+
+		if (!$commandResult->isSuccess())
+		{
+			return ['error' => Loc::getMessage('RMP_ACCESS_DENIED')];
+		}
+
+		return ['success' => 1];
 	}
 
 	public static function getRights($appId)
 	{
-		// todo: maybe can add self::$contextUser to isAdmin check
-		if (CRestUtil::isAdmin())
+		if ($appId <= 0)
 		{
-			if ($appId > 0)
-			{
-				$result = AppTable::getAccess($appId);
-			}
-			else
-			{
-				$result = 0;
-			}
-		}
-		else
-		{
-			$result = ['error' => Loc::getMessage('RMP_ACCESS_DENIED')];
+			return 0;
 		}
 
-		return $result;
+		$appRepository = new AppRepository();
+		$app = $appRepository->getById((int)$appId);
+		if ($app === null)
+		{
+			return 0;
+		}
+
+		$userId = self::$contextUserId ?? (int)($GLOBALS['USER']?->GetID() ?? 0);
+		$accessChecker = new AppAccessChecker($userId);
+
+		if (!$accessChecker->canManageAppAccess($app))
+		{
+			return ['error' => Loc::getMessage('RMP_ACCESS_DENIED')];
+		}
+
+		return AppTable::getAccess($appId);
 	}
 }

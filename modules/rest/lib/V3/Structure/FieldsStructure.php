@@ -110,23 +110,50 @@ final class FieldsStructure extends Structure
 	{
 		foreach ($items as $propertyName => $value)
 		{
-			if (!isset($dto->getFields()[$propertyName]))
+			$field = $dto->getFields()[$propertyName] ?? null;
+			if ($field === null)
 			{
 				throw new UnknownDtoPropertyException($dto->getShortName(), ($parentField ? $parentField . '.' . $propertyName : $propertyName));
 			}
 
-			if (is_subclass_of($dto->getFields()[$propertyName]->getPropertyType(), Dto::class))
+			$propertyType = $field->getPropertyType();
+			$qualifiedName = $parentField ? $parentField . '.' . $propertyName : $propertyName;
+
+			// Null shortcut for nested-structure types. The Dto and
+			// DtoCollection branches below both ASSUME `$value` is iterable
+			// (`is_array` check, then `foreach`). Letting null reach them
+			// either throws InvalidRequestFieldTypeException for a legitimate
+			// nullable assignment (Dto branch) or raises a raw TypeError on
+			// `foreach(null)` under PHP 8+ (DtoCollection branch). Both are
+			// wrong — nullable nested properties must accept null cleanly.
+			//
+			// We honour the property's PHP nullability flag exactly:
+			//  - nullable + null → assign null and skip the structural branch
+			//  - non-nullable + null → fall through; the Dto branch will hit
+			//    the existing `is_array` guard and surface
+			//    InvalidRequestFieldTypeException with the proper field name,
+			//    while the scalar/collection branches let PHP's TypeError
+			//    rethrow as InvalidRequestFieldTypeException via the catch
+			//    block at the bottom.
+			if ($value === null && $field->isNullable())
 			{
-				$subDto = Structure::getDto($dto->getFields()[$propertyName]->getPropertyType());
+				$dto->{$propertyName} = null;
+
+				continue;
+			}
+
+			if (is_subclass_of($propertyType, Dto::class))
+			{
+				$subDto = Structure::getDto($propertyType);
 				if ($subDto === null)
 				{
-					$subDto = $dto->getFields()[$propertyName]->getPropertyType()::create();
+					$subDto = $propertyType::create();
 					Structure::addDto($dto);
 				}
 
 				if (!is_array($value))
 				{
-					throw new InvalidRequestFieldTypeException(($parentField ? $parentField . '.' . $propertyName : $propertyName), $dto->getFields()[$propertyName]->getPropertyType());
+					throw new InvalidRequestFieldTypeException($qualifiedName, $propertyType);
 				}
 
 				$this->fillDto($subDto, $value, $propertyName);
@@ -135,9 +162,9 @@ final class FieldsStructure extends Structure
 				continue;
 			}
 
-			if ($dto->getFields()[$propertyName]->getPropertyType() === DtoCollection::class)
+			if ($propertyType === DtoCollection::class)
 			{
-				$elementType = $dto->getFields()[$propertyName]->getElementType();
+				$elementType = $field->getElementType();
 				if ($elementType !== null && is_subclass_of($elementType, Dto::class))
 				{
 					$collection = new DtoCollection($elementType);
@@ -145,11 +172,25 @@ final class FieldsStructure extends Structure
 					{
 						Structure::addDto($elementType::create());
 					}
-					foreach ($value as $itemIndex => $itemValue)
+					// Lenient on non-iterable values by design — the existing
+					// test contract (see FileCest "SUCCESS AVATAR WITH WRONG
+					// IMAGES") relies on `foreach` over a non-array (string,
+					// null, int) producing a PHP Warning and silently leaving
+					// the collection empty. Adding an `is_array` guard here
+					// would tighten that to a typed exception and break
+					// production callers that depend on the lenient coercion.
+					// Nullable + null is already handled by the null shortcut
+					// above, so this only ever runs for non-nullable fields
+					// where the application has consciously chosen to accept
+					// "whatever, give me an empty collection".
+					if (is_iterable($value))
 					{
-						$subDto = $elementType::create();
-						$this->fillDto($subDto, $itemValue, $propertyName . '.' . $itemIndex);
-						$collection->add($subDto);
+						foreach ($value as $itemIndex => $itemValue)
+						{
+							$subDto = $elementType::create();
+							$this->fillDto($subDto, $itemValue, $propertyName . '.' . $itemIndex);
+							$collection->add($subDto);
+						}
 					}
 					$dto->{$propertyName} = $collection;
 				}

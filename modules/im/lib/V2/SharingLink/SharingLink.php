@@ -156,6 +156,14 @@ abstract class SharingLink implements RestConvertible, ActiveRecord
 		return $this;
 	}
 
+	/**
+	 * Check if the link is still usable (not revoked and not exhausted).
+	 */
+	public function isActive(): bool
+	{
+		return !$this->isRevoked() && !$this->isExhausted();
+	}
+
 	public function isRevoked(): bool
 	{
 		return $this->isRevoked;
@@ -165,6 +173,14 @@ abstract class SharingLink implements RestConvertible, ActiveRecord
 	{
 		$this->isRevoked = $isRevoked;
 		return $this;
+	}
+
+	/**
+	 * Check if the link has reached its maximum usage limit.
+	 */
+	public function isExhausted(): bool
+	{
+		return $this->maxUses !== null && $this->usesCount >= $this->maxUses;
 	}
 
 	public function getMaxUses(): ?int

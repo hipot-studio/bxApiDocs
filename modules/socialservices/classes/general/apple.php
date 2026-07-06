@@ -8,6 +8,7 @@ use Bitrix\Main\Web\JWT;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Socialservices\OAuth\StateService;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServApple extends CSocServAuth
@@ -286,7 +287,7 @@ class CAppleInterface extends CSocServOAuthTransport
 
 	public function GetRedirectURI(): string
 	{
-		return \CHTTP::URN2URI('/bitrix/tools/oauth/apple.php');
+		return (string)(new Uri('/bitrix/tools/oauth/apple.php'))->toAbsolute();
 	}
 
 	public function GetAuthUrl($redirect_uri, $state = ''): string

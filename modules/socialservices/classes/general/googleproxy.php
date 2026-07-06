@@ -33,7 +33,6 @@ class CSocServGoogleProxyOAuth extends CSocServGoogleOAuth
 		$APPLICATION->RestartBuffer();
 
 		$bSuccess = false;
-		$addParams = false;
 
 		$authError = SOCSERV_AUTHORISATION_ERROR;
 		$this->logger->info('oauth.auth.start');
@@ -55,8 +54,6 @@ class CSocServGoogleProxyOAuth extends CSocServGoogleOAuth
 		else
 		{
 			$this->getEntityOAuth()->setCode($_REQUEST["code"]);
-
-			unset($_REQUEST["state"]);
 
 			if($this->getEntityOAuth()->GetAccessToken() !== false)
 			{

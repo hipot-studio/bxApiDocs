@@ -33,6 +33,7 @@ if (class_exists(Application::class) === false)
 }
 
 $application = new Application();
+$application->setAutoExit(false);
 
 // register  commands
 $modules = \Bitrix\Main\ModuleManager::getInstalledModules();
@@ -58,4 +59,7 @@ foreach ($modules as $moduleId => $_)
 }
 
 // run console
-$application->run();
+$status = $application->run();
+
+// finish bitrix application
+\Bitrix\Main\Application::getInstance()->terminate($status);

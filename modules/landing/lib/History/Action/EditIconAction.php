@@ -3,6 +3,7 @@
 namespace Bitrix\Landing\History\Action;
 
 use Bitrix\Landing\Block;
+use Bitrix\Landing\History\ActionParamsGuard;
 use Bitrix\Landing\Node;
 use Bitrix\Main\Web\Json;
 
@@ -10,12 +11,22 @@ class EditIconAction extends BaseAction
 {
 	protected const JS_COMMAND = 'editIcon';
 
+	public static function getSanitizableParamKeys(): array
+	{
+		return ['valueBefore', 'valueAfter'];
+	}
+
 	public function execute(bool $undo = true): bool
 	{
 		$block = new Block((int)$this->params['block']);
 		$selector = $this->params['selector'] ?: '';
 		$position = (int)($this->params['position'] ?: 0);
 		$value = $undo ? $this->params['valueBefore'] : $this->params['valueAfter'];
+		$value = ActionParamsGuard::prepareNodeValue($value);
+		if ($value === null)
+		{
+			return false;
+		}
 
 		if ($selector)
 		{
@@ -38,12 +49,26 @@ class EditIconAction extends BaseAction
 
 	public static function enrichParams(array $params): array
 	{
+		$checked = ActionParamsGuard::rejectUnsafeValueParams(
+			[
+				'valueBefore' => $params['valueBefore'] ?? [],
+				'valueAfter' => $params['valueAfter'] ?? [],
+			],
+			static::getSanitizableParamKeys(),
+			static::class,
+		);
+		$params['valueBefore'] = $checked['valueBefore'];
+		$params['valueAfter'] = $checked['valueAfter'];
+
 		// convert format form getNode to js-command like
-		if (count($params['valueBefore']['classList']) === 1)
+		if (
+			is_array($params['valueBefore']['classList'] ?? null)
+			&& count($params['valueBefore']['classList']) === 1
+		)
 		{
 			$params['valueBefore']['classList'] = explode(' ', $params['valueBefore']['classList'][0]);
 		}
-		if ($params['valueBefore']['data-pseudo-url'])
+		if (!empty($params['valueBefore']['data-pseudo-url']))
 		{
 			$params['valueBefore']['url'] = $params['valueBefore']['data-pseudo-url'];
 			unset($params['valueBefore']['data-pseudo-url']);
@@ -59,8 +84,8 @@ class EditIconAction extends BaseAction
 			'selector' => $params['selector'] ?: '',
 			'position' => $params['position'] ?: 0,
 			'lid' => $block->getLandingId(),
-			'valueAfter' => $params['valueAfter'] ?: '',
-			'valueBefore' => $params['valueBefore'] ?: '',
+			'valueAfter' => $params['valueAfter'] ?: [],
+			'valueBefore' => $params['valueBefore'] ?: [],
 		];
 	}
 

@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Authentication;
@@ -34,17 +34,23 @@ class Device
 
 	public static function addLogin(Context $context, array $user): void
 	{
-		$device = static::findByCookie($context);
+		$device = null;
+		$cookable = false;
+
+		// App password has the highest priority
+		if ($context->getApplicationPasswordId())
+		{
+			$device = static::findByAppPasswordId($context);
+		}
 
 		if ($device === null)
 		{
-			$cookable = false;
-			$device = static::findByUserAgent($context);
+			$device = static::findByCookie($context);
+		}
 
-			if ($device === null && $context->getApplicationPasswordId())
-			{
-				$device = static::findByAppPasswordId($context);
-			}
+		if ($device === null)
+		{
+			$device = static::findByUserAgent($context);
 		}
 		else
 		{
@@ -128,7 +134,6 @@ class Device
 		$query = Internal\UserDeviceTable::query()
 			->setSelect(['*'])
 			->where('USER_ID', $context->getUserId())
-			->where('COOKABLE', true)
 			->where('APP_PASSWORD_ID', $context->getApplicationPasswordId())
 			->exec()
 		;

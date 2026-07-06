@@ -894,7 +894,7 @@ In addition to the Google Terms of Service (http://www.google.com/accounts/TOS),
 				->setCopyright("Copyright (c) 2024, Vladimir Agafonkin")
 				->setProductUrl('https://github.com/mourner/quickselect')
 				->setLicence(Copyright::LICENCE_ISC)
-				->setLicenceUrl('https://github.com/mourner/quickselect/blob/main/LICENSE'),
+				->setLicenceUrl('https://github.com/mourner/quickselect/blob/main/LICENSE.md'),
 
 			(new static("rbush"))
 				->setCopyright("Copyright (c) 2024 Volodymyr Agafonkin")
@@ -914,7 +914,19 @@ In addition to the Google Terms of Service (http://www.google.com/accounts/TOS),
 				->setCopyright("Copyright (c) 2013-2018 Emanuil Rusev, erusev.com")
 				->setProductUrl('https://github.com/erusev/parsedown')
 				->setLicence(static::LICENCE_MIT),
-			];
+
+			(new static('symfony/yaml'))
+				->setCopyright('Copyright (c) 2004 Fabien Potencier')
+				->setProductUrl('https://github.com/symfony/symfony/tree/8.1/src/Symfony/Component/Yaml')
+				->setLicence(Copyright::LICENCE_MIT)
+				->setLicenceUrl('https://github.com/symfony/symfony/blob/8.1/src/Symfony/Component/Yaml/LICENSE'),
+
+			(new static('symfony/polyfill-ctype'))
+				->setCopyright('Copyright (c) 2018 Fabien Potencier')
+				->setProductUrl('https://github.com/symfony/polyfill/tree/1.x/src/Ctype')
+				->setLicence(Copyright::LICENCE_MIT)
+				->setLicenceUrl('https://github.com/symfony/polyfill/blob/1.x/src/Ctype/LICENSE'),
+		];
 	}
 }
 

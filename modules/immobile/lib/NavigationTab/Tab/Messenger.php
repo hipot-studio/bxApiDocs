@@ -2,12 +2,18 @@
 
 namespace Bitrix\ImMobile\NavigationTab\Tab;
 
+use Bitrix\Im\V2\Folder\Folder;
 use Bitrix\ImMobile\NavigationTab\MessengerComponentTitle;
 use Bitrix\Main\Localization\Loc;
 
 class Messenger extends BaseRecent
 {
 	use MessengerComponentTitle;
+
+	public function __construct(private readonly ?Folder $folder = null)
+	{
+		parent::__construct();
+	}
 
 	public function isAvailable(): bool
 	{
@@ -29,7 +35,7 @@ class Messenger extends BaseRecent
 		return 'im.messenger';
 	}
 
-	protected function getTabTitle(): ?string
+	public function getTabTitle(): ?string
 	{
 		return Loc::getMessage("TAB_NAME_IM_RECENT_SHORT");
 	}

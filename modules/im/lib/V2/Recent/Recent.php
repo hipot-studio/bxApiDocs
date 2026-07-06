@@ -78,6 +78,18 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 
 	public static function getOrder(int $userId): array
 	{
+		// TODO: Pin sort by cost (`pinnedChatSort='byCost'`, the default) is temporarily
+		//   disabled — always sort by PINNED + DATE_LAST_ACTIVITY regardless of user
+		//   preference. Reason: `PIN_SORT` is never reset on unpin. `RecentUpdater::setPinned`
+		//   only flips `PINNED` to 'N' and updates `DATE_UPDATE`, leaving the stale
+		//   `PIN_SORT` value on the row. With `ORDER BY PIN_SORT ASC` MySQL puts NULLs
+		//   first, so any chat that was once pinned ends up after every never-pinned
+		//   chat in the unpinned section, silently dropping out of the first page.
+		return [
+			'PINNED' => 'DESC',
+			'DATE_LAST_ACTIVITY' => 'DESC',
+		];
+
 		$userSettings = (new UserConfiguration($userId))->getGeneralSettings();
 
 		if (isset($userSettings['pinnedChatSort']) && $userSettings['pinnedChatSort'] === 'byCost')

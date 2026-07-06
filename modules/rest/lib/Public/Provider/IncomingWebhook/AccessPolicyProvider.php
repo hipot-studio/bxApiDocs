@@ -6,11 +6,11 @@ namespace Bitrix\Rest\Public\Provider\IncomingWebhook;
 
 use Bitrix\Rest\Internal\Entity\Access\EntityType;
 use Bitrix\Rest\Internal\Entity\Access\PermissionType;
-use Bitrix\Rest\Internal\Service\AccessPermissionService;
+use Bitrix\Rest\Internal\Service\AccessCodesService;
 
 class AccessPolicyProvider
 {
-	public function __construct(private AccessPermissionService $service = new AccessPermissionService())
+	public function __construct(private AccessCodesService $service = new AccessCodesService())
 	{
 	}
 

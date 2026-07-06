@@ -12,6 +12,9 @@ use Traversable;
 
 final class SharingLinkFilter implements \IteratorAggregate, FilterInterface
 {
+	/** @var ConditionTree[] */
+	private array $extraConditions = [];
+
 	private function __construct(
 		public readonly ?int $id = null,
 		public readonly ?LinkEntityType $entityType = null,
@@ -34,28 +37,43 @@ final class SharingLinkFilter implements \IteratorAggregate, FilterInterface
 
 	public static function initForPrimary(LinkEntityType $entityType, string $entityId): self
 	{
-		return new self(
+		$filter = new self(
 			entityType: $entityType,
 			entityId: $entityId,
 			type: Type::Primary,
 			isRevoked: false,
 		);
+		$filter->addNotExhaustedCondition();
+
+		return $filter;
 	}
 
 	public static function initForIndividual(LinkEntityType $entityType, string $entityId, int $authorId): self
 	{
-		return new self(
+		$filter = new self(
 			entityType: $entityType,
 			entityId: $entityId,
 			authorId: $authorId,
 			type: Type::Individual,
 			isRevoked: false,
 		);
+		$filter->addNotExhaustedCondition();
+
+		return $filter;
+	}
+
+	private function addNotExhaustedCondition(): void
+	{
+		$this->extraConditions[] = (new ConditionTree())
+			->logic('or')
+			->whereNull('MAX_USES')
+			->whereColumn('USES_COUNT', '<', 'MAX_USES')
+		;
 	}
 
 	public function isEmpty(): bool
 	{
-		return empty(iterator_to_array($this));
+		return empty(iterator_to_array($this)) && empty($this->extraConditions);
 	}
 
 	public function getIterator(): Traversable
@@ -64,7 +82,7 @@ final class SharingLinkFilter implements \IteratorAggregate, FilterInterface
 
 		foreach ($properties as $key => $value)
 		{
-			if (!isset($value))
+			if (!isset($value) || is_array($value))
 			{
 				continue;
 			}
@@ -87,6 +105,11 @@ final class SharingLinkFilter implements \IteratorAggregate, FilterInterface
 		foreach ($this as $key => $value)
 		{
 			$this->applyOperator($result, $key, $value);
+		}
+
+		foreach ($this->extraConditions as $condition)
+		{
+			$result->where($condition);
 		}
 
 		return $result;

@@ -4,6 +4,8 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security;
+use Bitrix\Rest\Event\Sender;
+use Bitrix\Rest\EventTable;
 use Bitrix\Rest\Public;
 use Bitrix\Rest;
 use Bitrix\Main;
@@ -835,6 +837,22 @@ class CRestUtil
 							if($result->isSuccess())
 							{
 								\Bitrix\Rest\Event\Sender::bind('rest', 'OnRestAppInstall');
+							}
+						}
+
+						if (!empty($appFields['URL_INSTALL']))
+						{
+							// checkCallback is already called inside checkFields
+							$result = EventTable::add(
+								[
+									'APP_ID' => $appId,
+									'EVENT_NAME' => 'ONAPPUSERREADY',
+									'EVENT_HANDLER' => $appFields['URL_INSTALL'],
+								]
+							);
+							if ($result->isSuccess())
+							{
+								Sender::bind('rest', 'OnRestAppUserReady');
 							}
 						}
 

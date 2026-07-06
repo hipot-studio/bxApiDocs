@@ -21,7 +21,12 @@ class CCloudStorageService_Selectel_S3 extends CCloudStorageService_S3
 	public function GetLocationList()
 	{
 		return [
-			'' => 's3.storage.selcloud.ru',
+			'ru-7' => 'Moscow (ru-7)',
+			'gis-1' => 'Moscow (gis-1)',
+			'ru-1' => 'Saint Petersburg (ru-1)',
+			'ru-3' => 'Saint Petersburg (ru-3)',
+			'uz-2' => 'Tashkent (uz-2)',
+			'kz-1' => 'Almaty (kz-1)',
 		];
 	}
 
@@ -43,8 +48,41 @@ class CCloudStorageService_Selectel_S3 extends CCloudStorageService_S3
 
 		$htmlID = htmlspecialcharsbx($this->GetID());
 		$display = $cur_SERVICE_ID == $this->GetID() || !$bServiceSet ? '' : 'none';
+		$isNew = !isset($arBucket['ID']) || !$arBucket['ID'];
 
-		$result = '
+		if (!$isNew && !$arBucket['LOCATION'])
+		{
+			$result = '
+			<tr id="SETTINGS_3_' . $htmlID . '" style="display:' . $display . '" class="settings-tr">
+				<td>' . GetMessage('CLO_STORAGE_SELECTEL_S3_LOCATION_MIGRATION') . ':</td>
+				<td><input type="checkbox" id="' . $htmlID . '_NEW_LOCATION" onclick="
+					BX(\'NSETTINGS_1_' . $htmlID . '\').style.display = this.checked ? \'\' : \'none\';
+					BX(\'NSETTINGS_2_' . $htmlID . '\').style.display = this.checked ? \'\' : \'none\';
+					BX(\'SETTINGS_' . $htmlID . '_NEW_LOCATION\').disabled = this.checked ? false : true;
+				"></td>
+			</tr>
+			<tr id="NSETTINGS_1_' . $htmlID . '" style="display:none" class="settings-tr">
+				<td>&nbsp;</td>
+				<td>' . BeginNote() . GetMessage('CLO_STORAGE_SELECTEL_S3_EDIT_MIGRATION_GUIDE') . EndNote() . '</td>
+			</tr>
+			<tr id="NSETTINGS_2_' . $htmlID . '" style="display:none" class="settings-tr">
+				<td>' . GetMessage('CLO_STORAGE_SELECTEL_S3_NEW_LOCATION') . ':</td>
+				<td><select name="SETTINGS[' . $htmlID . '][NEW_LOCATION]" id="SETTINGS_' . $htmlID . '_NEW_LOCATION" disabled>
+			';
+			foreach ($this->GetLocationList() as $LOCATION_ID => $LOCATION_NAME)
+			{
+				$result .= '<option value="' . htmlspecialcharsbx($LOCATION_ID) . '">' . htmlspecialcharsEx($LOCATION_NAME) . '</option>';
+			}
+			$result .= '</select></td>
+			</tr>
+			';
+		}
+		else
+		{
+			$result = '';
+		}
+
+		$result .= '
 		<tr id="SETTINGS_0_' . $htmlID . '" style="display:' . $display . '" class="settings-tr adm-detail-required-field">
 			<td>' . GetMessage('CLO_STORAGE_SELECTEL_S3_EDIT_ACCESS_KEY') . ':</td>
 			<td><input type="hidden" name="SETTINGS[' . $htmlID . '][ACCESS_KEY]" id="' . $htmlID . 'ACCESS_KEY" value="' . htmlspecialcharsbx($arSettings['ACCESS_KEY']) . '"><input type="text" size="55" name="' . $htmlID . 'INP_ACCESS_KEY" id="' . $htmlID . 'INP_ACCESS_KEY" value="' . htmlspecialcharsbx($arSettings['ACCESS_KEY']) . '" ' . ($arBucket['READ_ONLY'] === 'Y' ? '"disabled"' : '') . ' onchange="BX(\'' . $htmlID . 'ACCESS_KEY\').value = this.value"></td>
@@ -76,6 +114,7 @@ class CCloudStorageService_Selectel_S3 extends CCloudStorageService_S3
 			'SECRET_KEY' => is_array($arSettings) ? trim($arSettings['SECRET_KEY']) : '',
 			'USE_HTTPS' => 'Y',
 		];
+
 		if (is_array($arSettings) && array_key_exists('SESSION_TOKEN', $arSettings))
 		{
 			$result['SESSION_TOKEN'] = trim($arSettings['SESSION_TOKEN']);
@@ -119,6 +158,17 @@ class CCloudStorageService_Selectel_S3 extends CCloudStorageService_S3
 		)
 		{
 			return $bucket . $match[2];
+		}
+		elseif ($this->location)
+		{
+			if ($bucket !== '')
+			{
+				return $bucket . '.s3.' . $this->location . '.storage.selcloud.ru';
+			}
+			else
+			{
+				return 's3.' . $this->location . '.storage.selcloud.ru';
+			}
 		}
 		else
 		{

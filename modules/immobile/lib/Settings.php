@@ -73,6 +73,22 @@ class Settings
 		return Loader::includeModule('tasks');
 	}
 
+
+	public static function isCopilotMCPButtonAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('immobile', 'is_copilot_mcp_button_available', 'N') === 'Y';
+	}
+
+	public static function isSearchModeAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('immobile', 'is_search_mode_button_available', 'N') === 'Y';
+	}
+
+	public static function isAgentButtonAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('immobile', 'is_agent_button_available', 'N') === 'Y';
+	}
+
 	public static function isCopilotSelectModelEnabled(): bool
 	{
 		return true;
@@ -83,6 +99,11 @@ class Settings
 		return \Bitrix\Main\Config\Option::get('immobile', 'ai_assistant_mcp_selector_available', 'N') === 'Y';
 	}
 
+	public static function isMarkdownParserEnabled(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('immobile', 'markdown_parser_enabled', 'N') === 'Y';
+	}
+
 	public static function isOpenlinesInMessengerV2Available(): bool
 	{
 		return \Bitrix\Main\Config\Option::get('immobile', 'openlines_in_messenger_v2_available', 'Y') === 'Y';
@@ -91,6 +112,11 @@ class Settings
 	public static function isRecentFilterAvailable(): bool
 	{
 		return \Bitrix\Main\Config\Option::get('immobile', 'recent_filter_available', 'N') === 'Y';
+	}
+
+	public static function isExternalChatMessageForwardingAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('immobile', 'external_chat_message_forwarding_available', 'N') === 'Y';
 	}
 
 	public static function isAutoTaskEnabled(): bool

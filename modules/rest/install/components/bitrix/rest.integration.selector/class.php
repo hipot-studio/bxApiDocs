@@ -1,4 +1,4 @@
-<?
+<?php
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -11,6 +11,7 @@ use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
 use Bitrix\Im\Bot;
+use Bitrix\Rest\Internal\Integration\UI\CopilotService;
 use Bitrix\Rest\Preset\Data\Webhook;
 use Bitrix\Rest\Preset\Data\Rest;
 use Bitrix\Rest\Preset\Data\Placement;
@@ -229,11 +230,14 @@ class RestIntegrationSelectComponent extends CBitrixComponent implements Control
 		{
 			$langScope = Application::getDocumentRoot().BX_ROOT. '/modules/rest/scope.php';
 			Loc::loadMessages($langScope);
+			$copilotReplacements = [
+				'#COPILOT_NAME#' => CopilotService::getName(),
+			];
 
 			if ($action === Rest::PLACEMENT)
 			{
 				$scope = 'placement';
-				$name = Loc::getMessage('REST_SCOPE_' . mb_strtoupper($scope));
+				$name = Loc::getMessage('REST_SCOPE_' . mb_strtoupper($scope), $copilotReplacements);
 				$result[] = [
 					'id' => $scope,
 					'name' => (!empty($name)) ? $name . ' (' . $scope . ')' : $scope
@@ -248,9 +252,13 @@ class RestIntegrationSelectComponent extends CBitrixComponent implements Control
 					{
 						$name = Loc::getMessage('REST_SCOPE_LOG_MSGVER_1');
 					}
+					elseif (mb_strtoupper($scope) === 'AI_ADMIN')
+					{
+						$name = Loc::getMessage('REST_SCOPE_AI_ADMIN_MSGVER_1', $copilotReplacements);
+					}
 					else
 					{
-						$name = Loc::getMessage('REST_SCOPE_' . mb_strtoupper($scope));
+						$name = Loc::getMessage('REST_SCOPE_' . mb_strtoupper($scope), $copilotReplacements);
 					}
 
 					$result[] = [

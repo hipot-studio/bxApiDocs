@@ -9,6 +9,5 @@ class BooleanResponse extends Response
 	 */
 	public function __construct(public bool $result = true)
 	{
-		return $this;
 	}
 }

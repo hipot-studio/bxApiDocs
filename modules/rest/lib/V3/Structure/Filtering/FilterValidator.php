@@ -129,7 +129,7 @@ class FilterValidator
 		self::validateArrayValue($operator, $value);
 		foreach ($value as $valueItem)
 		{
-			if ($valueItem !== null && !is_scalar($valueItem))
+			if ($valueItem !== null && !is_scalar($valueItem) && !$valueItem instanceof \BackedEnum)
 			{
 				throw new InvalidFilterException("Operator \"$operator->value\" requires an array with scalar or null items.");
 			}

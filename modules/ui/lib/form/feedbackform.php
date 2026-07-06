@@ -83,12 +83,15 @@ class FeedbackForm
 			$presets['b24_partner_name'] = $partnerParams['partnerName'] ?? '';
 		}
 
+		$presets['db_name'] = Application::getConnection()->getDatabase();
 		$presets['hosturl'] = Main\Engine\UrlManager::getInstance()->getHostUrl();
 		$presets['hostname'] = parse_url($presets['hosturl'], PHP_URL_HOST);
 
 		global $USER;
 		$name = '';
 		$email = '';
+		$userId = '';
+
 		if (is_object($USER))
 		{
 			$name = $USER->GetFirstName();
@@ -97,7 +100,10 @@ class FeedbackForm
 				$name = $USER->GetLogin();
 			}
 			$email = $USER->GetEmail();
+			$userId = $USER->GetID();
 		}
+
+		$presets['c_id'] = $userId;
 		$presets['c_name'] = $name;
 		$presets['c_email'] = $email;
 

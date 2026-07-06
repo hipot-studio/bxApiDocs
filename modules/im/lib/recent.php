@@ -7,6 +7,7 @@ use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
+use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
 use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Chat\EntityLink;
 use Bitrix\Im\V2\Chat\Param\Params;
@@ -359,22 +360,33 @@ class Recent
 			$ormParams['limit'] = 50;
 		}
 
-		$sortOption = (new UserConfiguration((int)$userId))->getGeneralSettings()['pinnedChatSort'];
-		if ($sortOption === 'byCost')
-		{
-			$ormParams['order'] = [
-				'PINNED' => 'DESC',
-				'PIN_SORT' => 'ASC',
-				'DATE_LAST_ACTIVITY' => 'DESC',
-			];
-		}
-		else
-		{
-			$ormParams['order'] = [
+//		TODO: Pin sort by cost (`pinnedChatSort='byCost'`, the default) is temporarily
+//		   disabled — always sort by PINNED + DATE_LAST_ACTIVITY regardless of user
+//		   preference. Reason: `PIN_SORT` is never reset on unpin. `RecentUpdater::setPinned`
+//		   only flips `PINNED` to 'N' and updates `DATE_UPDATE`, leaving the stale
+//		   `PIN_SORT` value on the row. With `ORDER BY PIN_SORT ASC` MySQL puts NULLs
+//		   first, so any chat that was once pinned ends up after every never-pinned
+//		   chat in the unpinned section, silently dropping out of the first page.
+		$ormParams['order'] = [
 				'PINNED' => 'DESC',
 				'DATE_LAST_ACTIVITY' => 'DESC',
 			];
-		}
+//		$sortOption = (new UserConfiguration((int)$userId))->getGeneralSettings()['pinnedChatSort'];
+//		if ($sortOption === 'byCost')
+//		{
+//			$ormParams['order'] = [
+//				'PINNED' => 'DESC',
+//				'PIN_SORT' => 'ASC',
+//				'DATE_LAST_ACTIVITY' => 'DESC',
+//			];
+//		}
+//		else
+//		{
+//			$ormParams['order'] = [
+//				'PINNED' => 'DESC',
+//				'DATE_LAST_ACTIVITY' => 'DESC',
+//			];
+//		}
 
 		if ($canManageMessagesOption === 'Y')
 		{
@@ -625,6 +637,10 @@ class Recent
 				$chats[$itemId] = [
 					'role' => $copilotChatRole,
 					'engine' => $chat instanceof CopilotChat ? $chat->getEngineCode() : null,
+					'titleIsCustom' => (
+						$chat instanceof CopilotChat
+						&& (new CopilotTitle($chatId))->isCustom()
+					),
 				];
 			}
 		}
@@ -1363,106 +1379,49 @@ class Recent
 			return false;
 		}
 
-		$pinnedCount = \Bitrix\Im\Model\RecentTable::getCount(['=USER_ID' => $userId, '=PINNED' => 'Y']);
-
 		self::$limitError = false;
-		if ($pin && (int)$pinnedCount >= self::PINNED_CHATS_LIMIT)
-		{
-			self::$limitError = true;
 
+		if (mb_substr((string)$dialogId, 0, 4) === 'chat')
+		{
+			$chatId = (int)mb_substr((string)$dialogId, 4);
+		}
+		else
+		{
+			$chatId = (int)\Bitrix\Im\Dialog::getChatId($dialogId, $userId);
+		}
+
+		if ($chatId <= 0)
+		{
 			return false;
 		}
 
-		$pin = $pin === true? 'Y': 'N';
-
-		$id = $dialogId;
-		if (mb_substr($dialogId, 0, 4) == 'chat')
-		{
-			$itemTypes = \Bitrix\Im\Chat::getTypes();
-			$id = mb_substr($dialogId, 4);
-			$chatId = (int)$id;
-		}
-		else
-		{
-			$itemTypes = IM_MESSAGE_PRIVATE;
-			$chatId = \Bitrix\Im\Dialog::getChatId($dialogId);
-		}
-
 		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
-
-		$element = \Bitrix\Im\Model\RecentTable::getList(
-			[
-				'select' => ['USER_ID', 'ITEM_TYPE', 'ITEM_ID', 'PINNED', 'PIN_SORT'],
-				'filter' => [
-					'=USER_ID' => $userId,
-					'=ITEM_TYPE' => $itemTypes,
-					'=ITEM_ID' => $id
-				]
-			]
-		)->fetch();
-		if (!$element)
+		if (!$chat || !$chat->getChatId())
 		{
-			if (!$chat->checkAccess($userId))
+			return false;
+		}
+
+		$service = ServiceLocator::getInstance()->get(\Bitrix\Im\V2\Folder\Pin\PinService::class);
+
+		// folderId=null → legacy global path inside Pin\PinService:
+		// PINNED='Y'/'N' + shadow fan-out across matching folders + single chatPin pull.
+		$result = $pin
+			? $service->pinChat((int)$userId, $chat, null)
+			: $service->unpinChat((int)$userId, $chat, null);
+
+		if (!$result->isSuccess())
+		{
+			foreach ($result->getErrors() as $error)
 			{
-				return false;
+				if ($error->getCode() === \Bitrix\Im\V2\Folder\Error\FolderError::FOLDER_PINS_LIMIT_EXCEEDED)
+				{
+					self::$limitError = true;
+					break;
+				}
 			}
 
-			$relation = $chat->getRelationByUserId($userId);
-			if ($relation === null)
-			{
-				return false;
-			}
-
-			self::addRecent($chat, $relation);
-
-			$element['USER_ID'] = $userId;
-			$element['ITEM_TYPE'] = $chat->getType();
-			$element['ITEM_ID'] = $id;
+			return false;
 		}
-
-		if ($element['PINNED'] == $pin)
-		{
-			return true;
-		}
-
-		$connection = Application::getConnection();
-		$connection->lock("PIN_SORT_CHAT_{$userId}", 10);
-
-		if ($pin === 'Y')
-		{
-			self::increasePinSortCost($userId);
-		}
-		else
-		{
-			$pinSort = $element['PIN_SORT'] ? (int)$element['PIN_SORT'] : null;
-			self::decreasePinSortCost($userId, $pinSort);
-		}
-
-
-		\Bitrix\Im\Model\RecentTable::update(
-			[
-				'USER_ID' => $element['USER_ID'],
-				'ITEM_TYPE' => $element['ITEM_TYPE'],
-				'ITEM_ID' => $element['ITEM_ID'],
-			],
-			[
-				'PINNED' => $pin,
-				'DATE_UPDATE' => new \Bitrix\Main\Type\DateTime(),
-				'PIN_SORT' => ($pin === 'Y') ? 1 : null,
-			]
-		);
-
-		$connection->unlock("PIN_SORT_CHAT_{$userId}");
-
-		Sync\Logger::getInstance()->add(
-			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chatId),
-			$userId,
-			$chat
-		);
-
-		self::clearCache($element['USER_ID']);
-
-		(new ChatPin($chat, $pin == 'Y', $userId))->send();
 
 		return true;
 	}
@@ -1713,6 +1672,11 @@ class Recent
 				'DATE_UPDATE' => $dateCreate
 			],
 		);
+
+		\Bitrix\Main\DI\ServiceLocator::getInstance()
+			->get(\Bitrix\Im\V2\Recent\Internal\RecentItemCache::class)
+			->remove($userId, $chat->getId())
+		;
 
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chat->getId()),

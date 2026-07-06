@@ -5,9 +5,10 @@ declare(strict_types = 1);
 namespace Bitrix\Im\V2\Pull\Event;
 
 use Bitrix\Im\Text;
+use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Guest\GuestCounter;
 use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Im\V2\Pull\EventType;
-use Bitrix\Im\V2\Chat;
 
 class ChatUserAdd extends BaseChatEvent
 {
@@ -33,6 +34,7 @@ class ChatUserAdd extends BaseChatEvent
 			'newUsers' => array_values($this->usersToAdd),
 			'relations' => $this->chat->getRelationsByUserIds($this->usersToAdd)->toRestFormat(),
 			'userCount' => $this->chat->getUserCount(),
+			'guestCount' => $this->chat->containsGuest() ? (new GuestCounter($this->chat))->getGuestCount() : 0,
 			'callToken' => $this->chat->getCallToken()->getToken(),
 		];
 	}

@@ -11,6 +11,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Rest\Engine\Access\LoadLimiter;
 use Bitrix\Rest\Engine\RestManager;
 use Bitrix\Rest\Event\Session;
+use Bitrix\Rest\RestException as LegacyRestException;
 use Bitrix\Rest\RestExceptionInterface;
 use Bitrix\Rest\Tools\Diagnostics\RestServerProcessLogger;
 use Bitrix\Rest\UsageStatTable;
@@ -25,7 +26,7 @@ use Bitrix\Rest\V3\Exception\LicenseException;
 use Bitrix\Rest\V3\Exception\MethodNotFoundException;
 use Bitrix\Rest\V3\Exception\RateLimitException;
 use Bitrix\Rest\V3\Exception\RelationMethodNotFoundException;
-use Bitrix\Rest\V3\Exception\RestException;
+use Bitrix\Rest\V3\Exception\RestException as V3RestException;
 use Bitrix\Rest\V3\Interaction\Request\BatchRequest;
 use Bitrix\Rest\V3\Interaction\Request\ServerRequest;
 use Bitrix\Rest\V3\Interaction\Response\BatchResponse;
@@ -35,6 +36,8 @@ use Bitrix\Rest\V3\Interaction\Response\ResponseWithRelations;
 use Bitrix\Rest\V3\Schema\MethodDescription;
 use Bitrix\Rest\V3\Schema\SchemaManager;
 use Bitrix\Rest\V3\Schema\Scope;
+use Bitrix\Rest\Internal;
+use Bitrix\Rest\V3;
 
 class CRestApiServer extends CRestServer
 {
@@ -112,6 +115,7 @@ class CRestApiServer extends CRestServer
 	private function processServerExecution(ServerRequest $request)
 	{
 		$this->initServerExecution($request);
+		$this->executeRestInitEvent();
 
 		$methodDescription = $this->getMethodDescription($request->getMethod());
 		if ($methodDescription === null || !Loader::includeModule($methodDescription->module))
@@ -444,6 +448,7 @@ class CRestApiServer extends CRestServer
 		$controller->setDtoClass($methodDescription->dtoFqcn);
 		$controller->setProcessedScope($availableScope);
 		$controller->setResponseLanguage($this->responseLanguage);
+		$controller->setServer($this);
 
 		$manager = new RestManager();
 		$autoWirings = $manager->getAutoWirings();
@@ -512,7 +517,7 @@ class CRestApiServer extends CRestServer
 		return $response;
 	}
 
-	protected function processException(RestExceptionInterface|Exception $e): array
+	protected function processException(RestExceptionInterface|\Throwable $e): array
 	{
 		global $APPLICATION;
 
@@ -572,7 +577,22 @@ class CRestApiServer extends CRestServer
 			$res = [];
 			if (!CRestUtil::checkAuth($query, '_global', $res))
 			{
-				throw new AccessDeniedException(status: $res['error'] === 'insufficient_scope' ? self::STATUS_FORBIDDEN : self::STATUS_UNAUTHORIZED);
+				$exception = $res['exception'] ?? null;
+				if ($exception instanceof Internal\Exception\Payment\RestUnavailableException)
+				{
+					throw new V3\Exception\RestUnavailableException();
+				}
+
+				if ($exception instanceof Internal\Exception\Payment\MarketSubscriptionRequiredException)
+				{
+					throw new V3\Exception\MarketSubscriptionRequiredException();
+				}
+
+				throw new AccessDeniedException(
+					status: $res['error'] === 'insufficient_scope'
+						? self::STATUS_FORBIDDEN
+						: self::STATUS_UNAUTHORIZED
+				);
 			}
 
 			$this->requestAccess = $res;
@@ -614,11 +634,29 @@ class CRestApiServer extends CRestServer
 
 	protected function outputError(): array
 	{
-		if (!is_subclass_of($this->error, RestException::class))
+		if ($this->error instanceof LegacyRestException)
+		{
+			return [
+				'error' => $this->convertLegacyRestExceptionToOutput($this->error),
+			];
+		}
+
+		if (!is_subclass_of($this->error, V3RestException::class))
 		{
 			$this->error = new InternalException($this->error);
 		}
 		return ['error' => $this->error->output($this->responseLanguage)];
+	}
+
+	private function convertLegacyRestExceptionToOutput(LegacyRestException $exception): array
+	{
+		return array_merge(
+			[
+				'code' => $exception->getErrorCode(),
+				'message' => $exception->getMessage(),
+			],
+			$exception->getAdditional(),
+		);
 	}
 
 	private function getRequestByMethodDescription(ServerRequest $request, MethodDescription $methodDescription): ServerRequest

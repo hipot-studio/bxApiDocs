@@ -1,6 +1,8 @@
 <?php
+
 use Bitrix\Socialservices\OAuth\OAuthErrorCode;
 use Bitrix\Main\Web\Uri;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSocServDropboxAuth extends CSocServAuth
@@ -257,7 +259,7 @@ class CDropboxOAuthInterface extends CSocServOAuthTransport
 
 	public static function GetRedirectURI()
 	{
-		return \CHTTP::URN2URI("/bitrix/tools/oauth/dropbox.php");
+		return (string)(new Uri("/bitrix/tools/oauth/dropbox.php"))->toAbsolute();
 	}
 
 	public function GetAuthUrl($redirect_uri, $state = '')

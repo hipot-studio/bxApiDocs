@@ -17,9 +17,9 @@ use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Engine\Access\HoldEntity;
 use Bitrix\Rest\Event\Session;
 use Bitrix\Rest\Internal\Access\UserAccessChecker;
-use Bitrix\Rest\Internal\Access\UserContext;
 use Bitrix\Rest\OAuthService;
 use Bitrix\Main\SystemException;
+use Throwable;
 
 class Auth
 {
@@ -91,22 +91,36 @@ class Auth
 					$error = true;
 				}
 
-				if (
-					!$error
-					&& (
-						!Access::isAvailable($tokenInfo['client_id'])
+				if (!$error)
+				{
+					try
+					{
+						Access::ensureIsAvailable($tokenInfo['client_id']);
+						$accessException = null;
+					}
+					catch(Throwable $e)
+					{
+						$accessException = $e;
+					}
+
+					if (
+						$accessException !== null
 						|| (
 							Access::needCheckCount()
 							&& !Access::isAvailableCount(Access::ENTITY_TYPE_APP, $tokenInfo['client_id'])
 						)
 					)
-				)
-				{
-					$tokenInfo = [
-						'error' => 'ACCESS_DENIED',
-						'error_description' => 'REST is available only on commercial plans.'
-					];
-					$error = true;
+					{
+						$tokenInfo = [
+							'error' => 'ACCESS_DENIED',
+							'error_description' => 'REST is available only on commercial plans.',
+						];
+						if ($accessException instanceof Throwable)
+						{
+							$tokenInfo['exception'] = $accessException;
+						}
+						$error = true;
+					}
 				}
 
 				if(!$error)
@@ -262,7 +276,7 @@ class Auth
 					$authResult = $tokenInfo['result'];
 					$authResult['user_id'] = $authResult['parameters'][static::PARAM_LOCAL_USER];
 					unset($authResult['parameters'][static::PARAM_LOCAL_USER]);
-					$accessChecker = new UserAccessChecker(new UserContext((int)$authResult['user_id']));
+					$accessChecker = new UserAccessChecker((int)$authResult['user_id']);
 
 					if (!$accessChecker->canAuthorize())
 					{

@@ -85,6 +85,10 @@ class UserFactory
 		{
 			return UserCollaber::initByArray($userData);
 		}
+		if ($this->isGuest($userData))
+		{
+			return UserGuest::initByArray($userData);
+		}
 		if ($userData['IS_EXTRANET'])
 		{
 			return UserExtranet::initByArray($userData);
@@ -227,6 +231,11 @@ class UserFactory
 		}
 
 		return Color::getColor($code);
+	}
+
+	protected function isGuest(array $params): bool
+	{
+		return ($params['EXTERNAL_AUTH_ID'] ?? '') === UserGuest::AUTH_ID;
 	}
 
 	protected function isExternal(array $params): bool

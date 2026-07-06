@@ -10,6 +10,7 @@
 namespace Bitrix\Main;
 
 use Bitrix\Main\Config\Configuration;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Messenger\Config\WorkerRunMode;
 use Bitrix\Main\Messenger\Internals\Worker;
@@ -25,6 +26,8 @@ use Bitrix\Main\Session\Handlers\CookieSessionHandler;
 use Bitrix\Main\Data\ManagedCache;
 use Bitrix\Main\Data\TaggedCache;
 use Bitrix\Main\Diag\ExceptionHandler;
+use Bitrix\Main\Security\Notifications\VendorNotifier;
+use Bitrix\Main\Security\W\WWall;
 
 /**
  * Base class for any application.
@@ -124,17 +127,57 @@ abstract class Application
 	}
 
 	/**
-	 * Does full kernel initialization. Should be called somewhere after initializeBasicKernel().
-	 *
-	 * @param array $params Parameters of the current request (depends on application type)
+	 * @deprecated Will be removed soon. Did you mean Application::initializeContext()?
+	 * @see Application::initializeContext()
 	 */
 	public function initializeExtendedKernel(array $params)
 	{
 		$this->initializeContext($params);
+	}
 
-		if (!$this->initialized)
+	/**
+	 * Does one time full kernel initialization. Should be called somewhere after the first getInstance().
+	 *
+	 * @param array $params Parameters of the current request (depends on application type)
+	 */
+	public function initialize(array $params): void
+	{
+		if ($this->initialized)
 		{
-			$this->initialized = true;
+			return;
+		}
+
+		$this->initializeContext($params);
+
+		$this->initializeBackgroundJobs();
+
+		// Register main's services
+		ServiceLocator::getInstance()->registerByModuleSettings('main');
+
+		$this->initialized = true;
+	}
+
+	private function initializeBackgroundJobs(): void
+	{
+		if (!ModuleManager::isModuleInstalled('bitrix24'))
+		{
+			// wwall rules
+			$this->addBackgroundJob([WWall::class, 'refreshRules']);
+
+			// vendor security notifications
+			$this->addBackgroundJob([VendorNotifier::class, 'refreshNotifications']);
+		}
+
+		//agents
+		if (Option::get('main', 'check_agents', 'Y') == 'Y')
+		{
+			$this->addBackgroundJob(['CAgent', 'CheckAgents'], [], static::JOB_PRIORITY_LOW);
+		}
+
+		//send email events
+		if (Option::get('main', 'check_events', 'Y') !== 'N')
+		{
+			$this->addBackgroundJob(['\Bitrix\Main\Mail\EventManager', 'checkEvents'], [], static::JOB_PRIORITY_LOW - 1);
 		}
 	}
 
@@ -281,7 +324,7 @@ abstract class Application
 	 * Should be implemented in subclass.
 	 * @param array $params
 	 */
-	abstract protected function initializeContext(array $params);
+	abstract public function initializeContext(array $params);
 
 	/**
 	 * Starts request execution. Should be called after initialize.

@@ -30,7 +30,7 @@ class ForwardService
 		Message\Params::FORWARD_CHAT_TITLE => Message\Params::FORWARD_CHAT_TITLE,
 		Message\Params::REPLY_ID => Message\Params::REPLY_ID,
 		Message\Params::STICKER_PARAMS => Message\Params::STICKER_PARAMS,
-		Message\Params::BUILDER => Message\Params::BUILDER,
+		Message\Params::BLOCKS_BUILDER => Message\Params::BLOCKS_BUILDER,
 	];
 
 	private Chat $toChat;

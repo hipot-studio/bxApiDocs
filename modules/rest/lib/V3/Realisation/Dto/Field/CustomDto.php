@@ -5,9 +5,12 @@ namespace Bitrix\Rest\V3\Realisation\Dto\Field;
 use Bitrix\Main\Validation\Rule\InArray;
 use Bitrix\Rest\V3\Attribute\Editable;
 use Bitrix\Rest\V3\Attribute\Filterable;
+use Bitrix\Rest\V3\Attribute\MappedBy;
 use Bitrix\Rest\V3\Attribute\Required;
 use Bitrix\Rest\V3\Dto\Dto;
+use Bitrix\Rest\V3\Realisation\Dto\Mapping\CustomMapper;
 
+#[MappedBy(CustomMapper::class)]
 class CustomDto extends Dto
 {
 	#[Filterable]

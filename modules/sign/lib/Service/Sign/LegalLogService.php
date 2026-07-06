@@ -14,7 +14,6 @@ use Bitrix\Sign\Type\DocumentStatus;
 use Bitrix\Sign\Type\LegalLogCode;
 use Bitrix\Sign\Type\MemberStatus;
 use Psr\Log\LoggerInterface;
-use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\Item\B2e\LegalLog;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Member;
@@ -39,7 +38,7 @@ class LegalLogService
 		$this->logRepository = $logRepository ?? Container::instance()->getLegalLogRepository();
 		$this->userService = $userService ?? Container::instance()->getUserService();
 		$this->memberService = $memberService ?? Container::instance()->getMemberService();
-		$this->logger = $logger ?? Logger::getInstance();
+		$this->logger = $logger ?? Container::instance()->getLogger('Legal');
 		$this->memberRepository = $memberRepository ?? Container::instance()->getMemberRepository();
 	}
 

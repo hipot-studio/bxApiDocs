@@ -4,10 +4,8 @@ namespace Bitrix\Im\V2\Controller\Chat;
 
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Controller\BaseController;
-use Bitrix\Im\V2\Controller\Filter\CheckActionAccess;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\V2\Relation\Reason;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\UI\EntitySelector\Converter;
 
 class MemberEntities extends BaseController

@@ -4,12 +4,10 @@ namespace Bitrix\Rest\Internals;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlQueryException;
-use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Rest\Internal\Model\AppFreeWhitelistTable;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
-use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Rest\AppTable;
-
 /**
  * Class FreeAppTable
  *
@@ -26,25 +24,20 @@ use Bitrix\Rest\AppTable;
  * @method static \Bitrix\Rest\Internals\EO_FreeApp wakeUpObject($row)
  * @method static \Bitrix\Rest\Internals\EO_FreeApp_Collection wakeUpCollection($rows)
  */
-class FreeAppTable extends DataManager
+class FreeAppTable extends AppFreeWhitelistTable
 {
-	public static function getTableName()
+	public static function getMap(): array
 	{
-		return 'b_rest_free_app';
-	}
-
-	public static function getMap()
-	{
-		return [
-			new StringField('APP_CODE', [
-				'primary' => true,
-			]),
-			(new Reference(
-				'APP',
-				AppTable::class,
-				Join::on('this.APP_CODE', 'ref.CODE')
-			)),
-		];
+		return array_merge(
+			parent::getMap(),
+			[
+				(new Reference(
+					'APP',
+					AppTable::class,
+					Join::on('this.APP_CODE', 'ref.CODE')
+				))
+			]
+		);
 	}
 
 	final public static function updateFreeAppTable(array $freeAppList): void

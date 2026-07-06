@@ -19,6 +19,7 @@ use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Engine\Access\HoldEntity;
 use Bitrix\Rest\Internal\Entity\SystemUser\ResourceType;
 use Bitrix\Rest\Internal\Repository\SystemUser\SystemUserRepository;
+use Throwable;
 
 class Auth
 {
@@ -68,22 +69,39 @@ class Auth
 				$error = true;
 			}
 
-			if (
-				!$error
-					&& (
-						!Access::isAvailableAPAuthByPasswordId((int)$tokenInfo['password_id'])
-						|| (
-							Access::needCheckCount()
-							&& !Access::isAvailableCount(Access::ENTITY_TYPE_WEBHOOK, $tokenInfo['password_id'])
-						)
+			if (!$error)
+			{
+				$passwordId = (int)$tokenInfo['password_id'];
+
+				try
+				{
+					Access::ensureIsAvailableAPAuthByPasswordId($passwordId);
+					$accessException = null;
+				}
+				catch(Throwable $e)
+				{
+					$accessException = $e;
+				}
+
+				if (
+					$accessException !== null
+					|| (
+						Access::needCheckCount()
+						&& !Access::isAvailableCount(Access::ENTITY_TYPE_WEBHOOK, $passwordId)
 					)
 				)
-			{
+				{
 					$tokenInfo = [
 						'error' => 'ACCESS_DENIED',
-						'error_description' => 'REST is available only by subscription.'
+						'error_description' => 'REST is available only by subscription.',
 					];
+					if ($accessException instanceof Throwable)
+					{
+						$tokenInfo['exception'] = $accessException;
+					}
+
 					$error = true;
+				}
 			}
 
 			if (!$error && $tokenInfo['user_id'] > 0)

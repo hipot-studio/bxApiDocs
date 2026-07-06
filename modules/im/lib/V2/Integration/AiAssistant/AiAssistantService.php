@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Integration\AiAssistant;
 
+use Bitrix\AiAssistant\Config\Feature;
 use Bitrix\AiAssistant\Core\Service\Bot\BotManager;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Main\DI\ServiceLocator;
@@ -56,5 +57,15 @@ class AiAssistantService
 		}
 
 		return $chat->getRelationByUserId($this->getBotId()) !== null;
+	}
+
+	public function isBitrixGptV2Available(string $option): bool
+	{
+		if (!Loader::includeModule('aiassistant'))
+		{
+			return false;
+		}
+
+		return Feature::getInstance()->isBitrixGptV2Available($option, 'im');
 	}
 }
