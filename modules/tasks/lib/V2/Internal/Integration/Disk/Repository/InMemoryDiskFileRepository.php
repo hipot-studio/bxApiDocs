@@ -12,7 +12,11 @@ class InMemoryDiskFileRepository implements DiskFileRepositoryInterface
 	private DiskFileRepositoryInterface $diskFileRepository;
 
 	private DiskFileCollection $cache;
+
+	/** @var array<int, int> objectId => attachmentId */
 	private array $objectToAttachmentCache = [];
+
+	/** @var array<int, int> fileId => ownerId */
 	private array $ownerToAttachmentCache = [];
 
 	public function __construct(DiskFileRepository $diskFileRepository)
@@ -37,7 +41,7 @@ class InMemoryDiskFileRepository implements DiskFileRepositoryInterface
 
 		$this->cache->merge($files);
 
-		return $files;
+		return $this->cache->findAllByIds($ids);
 	}
 
 	public function getObjectIdsByAttachmentIds(array $attachmentIds): array
@@ -60,14 +64,18 @@ class InMemoryDiskFileRepository implements DiskFileRepositoryInterface
 
 	public function getOwnerIdsByFileIds(array $fileIds, int $taskId): array
 	{
-		$notStored = array_diff($fileIds, $this->ownerToAttachmentCache);
+		$allStoredFileIds = array_keys($this->ownerToAttachmentCache);
 
-		if (!empty($notStored))
+		$notStoredFileIds = array_values(array_diff($fileIds, $allStoredFileIds));
+
+		if (!empty($notStoredFileIds))
 		{
-			$attachmentMap = $this->diskFileRepository->getOwnerIdsByFileIds($notStored, $taskId);
+			$attachmentMap = $this->diskFileRepository->getOwnerIdsByFileIds($notStoredFileIds, $taskId);
 			$this->ownerToAttachmentCache += $attachmentMap;
 		}
 
-		return $this->ownerToAttachmentCache;
+		$fileIdMap = array_flip($fileIds);
+
+		return array_intersect_key($this->ownerToAttachmentCache, $fileIdMap);
 	}
 }

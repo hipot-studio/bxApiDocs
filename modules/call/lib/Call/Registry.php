@@ -59,7 +59,7 @@ class Registry
 			}
 		}
 		$row = CallTable::getList([
-			'select' => ['*'],
+			'select' => array_keys(CallTable::getEntity()->getScalarFields()),
 			'filter' => ['=UUID' => $uuid],
 			'limit' => 1,
 		])->fetch();

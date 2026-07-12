@@ -18,7 +18,6 @@ namespace PHPSTORM_META
 		'socialnetwork.onboarding.queue.service',
 		'socialnetwork.onboarding.queue.provider',
 		'socialnetwork.onboarding.promotion.service',
-		'socialnetwork.collab.converter.service',
 	);
 
 	expectedArguments(\Bitrix\Main\DI\ServiceLocator::get(), 0, argumentsSet('bitrix_socialnetwork_locator_codes'));
@@ -41,7 +40,6 @@ namespace PHPSTORM_META
 				'socialnetwork.onboarding.queue.service' => \Bitrix\Socialnetwork\Collab\Onboarding\Service\QueueService::class,
 				'socialnetwork.onboarding.queue.provider' => \Bitrix\Socialnetwork\Collab\Onboarding\Provider\QueueProvider::class,
 				'socialnetwork.onboarding.promotion.service' => \Bitrix\Socialnetwork\Collab\Onboarding\Integration\Im\Promotion\PromotionService::class,
-				'socialnetwork.collab.converter.service' => \Bitrix\Socialnetwork\Collab\Converter\ConverterService::class,
 			]
 		)
 	);

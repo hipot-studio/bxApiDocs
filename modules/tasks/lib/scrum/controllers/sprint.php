@@ -65,6 +65,24 @@ class Sprint extends Controller
 			return false;
 		}
 
+		$sprintId = (int)($post['sprintId'] ?? 0);
+		if ($sprintId)
+		{
+			$sprintService = new SprintService();
+			$sprint = $sprintService->getSprintById($sprintId);
+			if ($sprint->getGroupId() !== $groupId)
+			{
+				$this->errorCollection->setError(
+					new Error(
+						Loc::getMessage('TSSC_ERROR_ACCESS_DENIED'),
+						self::ERROR_ACCESS_DENIED
+					)
+				);
+
+				return false;
+			}
+		}
+
 		return parent::processBeforeAction($action);
 	}
 

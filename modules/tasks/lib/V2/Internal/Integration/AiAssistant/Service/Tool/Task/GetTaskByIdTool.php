@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task;
 
 use Bitrix\AiAssistant\Facade\TracedLogger;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Main\Web\Json;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
@@ -21,17 +22,24 @@ class GetTaskByIdTool extends BaseTool
 
 	public function __construct(
 		private readonly TaskProvider $taskProvider,
+		ToolService $toolService,
 		TaskSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
 	)
 	{
-		parent::__construct($schemaBuilder, $validationService, $tracedLogger);
+		parent::__construct($toolService, $schemaBuilder, $validationService, $tracedLogger);
 	}
 
 	public function getDescription(): string
 	{
-		return 'Retrieves full task data by its identifier.';
+		return
+			'Retrieves full task data by its identifier. '
+			. 'The returned task\'s "group" includes id, name and type. '
+			. 'NOTATION: when "group" contains a "displayType" field, '
+			. 'you MUST use group.displayType — not group.type — whenever you mention the task\'s group '
+			. 'or project to the user.'
+		;
 	}
 
 	protected function execute(int $userId, ...$args): string

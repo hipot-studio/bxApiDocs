@@ -173,24 +173,6 @@ class Cloud extends BaseReceiver
 			$previewTrack = $this->makeTrack($call, new FileInfo($previewData));
 		}
 
-		if (!$recordingRequest->preview && str_starts_with($recordTrack->getFileMimeType(), 'video/'))
-		{
-			$log && $logger->info("Cloud::recordingReadyAction: make default preview track");
-			$result = TrackService::getInstance()->createDefaultPreview($call->getId());
-			if (!$result->isSuccess())
-			{
-				$log && $logger->error(
-					"Cloud::recordingReadyAction: failed to create preview track -> "
-					. implode("\n", $result->getErrors())
-				);
-				$this->addErrors($result->getErrors());
-			}
-			else
-			{
-				$previewTrack = $result->getData()['track'];
-			}
-		}
-
 		if ($previewTrack)
 		{
 			$log && $logger->info("Cloud::recordingReadyAction: preview track created: {$previewTrack->getId()}");
@@ -243,6 +225,33 @@ class Cloud extends BaseReceiver
 	}
 
 	/**
+	 * Find track by specified parameters
+	 *
+	 * Generic method to search for a track record using dynamic field conditions.
+	 * Builds a query with WHERE clauses based on the provided parameters array.
+	 *
+	 * @param array $params Associative array of field => value pairs for filtering
+	 *                      Example: ['CALL_ID' => 123, 'EXTERNAL_TRACK_ID' => 456]
+	 *                      Example: ['CALL_ID' => 123, 'TYPE' => Track::TYPE_VIDEO_RECORD]
+	 * @return Track|null Track object if found, null otherwise
+	 */
+	private function getTrack(array $params): ?Track
+	{
+		$query = CallTrackTable::query()
+			->setSelect(['*'])
+			->setLimit(1);
+
+		foreach ($params as $field => $value)
+		{
+			$query->where($field, $value);
+		}
+
+		$trackList = $query->exec();
+
+		return $trackList->fetchObject() ?: null;
+	}
+
+	/**
 	 * Create track record in database from file info
 	 *
 	 * @param \Bitrix\Call\Call $call Call instance
@@ -256,19 +265,28 @@ class Cloud extends BaseReceiver
 
 		$log && $logger->info("Cloud::makeTrack: starting. Create {$fileInfo->type} track for call {$call->getId()}");
 
-		$trackList = CallTrackTable::query()
-			->setSelect(['ID'])
-			->where('CALL_ID', $call->getId())
-			->where('TYPE', $fileInfo->type)
-			->setLimit(1)
-			->exec();
-		if ($trackList->getSelectedRowsCount() > 0) {
-			$existingTrack = $trackList->fetch();
-			$log && $logger->info("Cloud::makeTrack: Track already exists: {$existingTrack['ID']}");
-			return CallTrackTable::getById($existingTrack['ID'])->fetchObject();
+		$searchParams = [
+			'CALL_ID' => $call->getId(),
+		];
+		if ($fileInfo->id > 0)
+		{
+			$searchParams['EXTERNAL_TRACK_ID'] = $fileInfo->id;
+		}
+		else
+		{
+			$searchParams['TYPE'] = $fileInfo->type;
 		}
 
-		// Create track record
+		$existingTrack = $this->getTrack($searchParams);
+		if ($existingTrack)
+		{
+			$log && $logger->info("Cloud::makeTrack: Track already exists: {$existingTrack->getId()}");
+			return $existingTrack;
+		}
+
+		// Create new track
+		$log && $logger->info("Cloud::makeTrack: Creating new track");
+
 		$track = (new Track)
 			->setCallId($call->getId())
 			->setExternalTrackId($fileInfo->id)
@@ -303,7 +321,7 @@ class Cloud extends BaseReceiver
 		{
 			$log && $logger->error(
 				"Cloud::makeTrack: failed to save {$fileInfo->type} track for call {$call->getId()} -> "
-				. implode("\n", $saveResult->getErrors())
+				. implode("\n", $saveResult->getErrorMessages())
 			);
 			$this->addErrors($saveResult->getErrors());
 			return null;

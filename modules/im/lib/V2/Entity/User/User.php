@@ -783,4 +783,9 @@ class User implements RestEntity, CacheableEntity
 
 		return !empty($resultAdminIds) ? (int)min($resultAdminIds) : 0;
 	}
+
+	public static function clearCache(int $userId): void
+	{
+		UserFactory::getInstance()->clearCache($userId);
+	}
 }

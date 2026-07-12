@@ -235,6 +235,7 @@ final class DocumentService extends Engine\Controller
 		}
 
 		$canEdit = false;
+		$canRead = false;
 
 		if ($versionId)
 		{
@@ -253,6 +254,7 @@ final class DocumentService extends Engine\Controller
 			{
 				$securityContext = $file->getStorage()->getSecurityContext($this->getCurrentUser());
 				$canEdit = $file->canUpdate($securityContext);
+				$canRead = $file->canRead($securityContext);
 				$objectIdForSessionCheck = (int)$objectId;
 			}
 		}
@@ -264,11 +266,12 @@ final class DocumentService extends Engine\Controller
 			if ($attachedObject)
 			{
 				$canEdit = $canEdit || $attachedObject->canUpdate($this->getCurrentUser()->getId());
+				$canRead = $canRead || $attachedObject->canRead($this->getCurrentUser()->getId());
 				$objectIdForSessionCheck = (int)$attachedObject->getObjectId();
 			}
 		}
 
-		if (isset($file) && $file->supportsUnifiedLink())
+		if (isset($file) && $canRead && $file->supportsUnifiedLink())
 		{
 			$unifiedLinkOptions = [];
 			if ((int)$attachedObjectId > 0)

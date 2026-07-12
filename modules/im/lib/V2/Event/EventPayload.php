@@ -13,6 +13,8 @@ use Bitrix\Main\Engine\Response\Converter;
 
 class EventPayload
 {
+	protected ?Message $message = null;
+
 	public function messageAdd(int $messageId, array $messageFields): array
 	{
 		$chatId = $this->resolveChatId($messageFields);
@@ -24,6 +26,7 @@ class EventPayload
 				(int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID'] ?? 0)
 			),
 			'language' => $this->getLanguage(),
+			'additionalMessages' => $this->loadAdditionalMessagesRest($messageId),
 		];
 	}
 
@@ -98,6 +101,7 @@ class EventPayload
 				(int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID'] ?? 0)
 			),
 			'language' => $this->getLanguage(),
+			'additionalMessages' => $this->loadAdditionalMessagesRest($messageId),
 		];
 	}
 
@@ -128,6 +132,7 @@ class EventPayload
 			'chat' => $chatId > 0 ? $this->loadChatRest($chatId) : [],
 			'user' => $this->loadUserRest($userId),
 			'language' => $this->getLanguage(),
+			'additionalMessages' => $this->loadAdditionalMessagesRest($messageId),
 		];
 	}
 
@@ -154,13 +159,47 @@ class EventPayload
 			return [];
 		}
 
-		$message = new Message($messageId);
+		$message = $this->getMessage($messageId);
 		if ($message->getId() === null)
 		{
 			return ['id' => $messageId];
 		}
 
 		return $message->toRestFormat(['MESSAGE_ONLY_COMMON_FIELDS' => true]);
+	}
+
+	public function loadAdditionalMessagesRest(int $messageId): array
+	{
+		if ($messageId <= 0)
+		{
+			return [];
+		}
+
+		$originalMessage = $this->getMessage($messageId);
+		if (!$originalMessage->hasReply())
+		{
+			return [];
+		}
+
+		$replyMessage = $originalMessage->getReplyMessage();
+		if ($replyMessage?->getId() === null)
+		{
+			return [];
+		}
+
+		return [
+			$replyMessage->toRestFormat(['MESSAGE_ONLY_COMMON_FIELDS' => true]),
+		];
+	}
+
+	protected function getMessage(int $messageId): Message
+	{
+		if ($this->message === null || $this->message->getId() !== $messageId)
+		{
+			$this->message = new Message($messageId);
+		}
+
+		return $this->message;
 	}
 
 	public function resolveChatId(array $messageFields): int

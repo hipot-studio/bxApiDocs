@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool;
 
 use Bitrix\AiAssistant\Facade\TracedLogger;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Main\Web\Json;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\DtoValidationException;
@@ -19,12 +20,13 @@ class SearchUsersTool extends BaseTool
 
 	public function __construct(
 		private readonly UserProvider $userProvider,
+		ToolService $toolService,
 		MemberSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
 	)
 	{
-		parent::__construct($schemaBuilder, $validationService, $tracedLogger);
+		parent::__construct($toolService, $schemaBuilder, $validationService, $tracedLogger);
 	}
 
 	public function getDescription(): string

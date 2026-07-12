@@ -14,9 +14,11 @@ class SearchOptions
 {
 	// Mode
 	public const SEARCH_RECENT_SECTION_OPTION = 'searchRecentSection';
+	public const SEARCH_RECENT_SECTION_PARENT_ID_OPTION = 'parentId';
 	public const INCLUDE_ONLY_OPTION = 'includeOnly';
 	public const EXCLUDE_OPTION = 'exclude';
 	public const SEARCH_CHAT_TYPES_OPTION = 'searchChatTypes';
+	public const EXCLUDE_CHAT_TYPES_OPTION = 'excludeChatTypes';
 
 	// Filters
 	public const FILL_DIALOG_BY_RECENT_OPTION = 'fillDialogByRecent';
@@ -33,6 +35,7 @@ class SearchOptions
 	private FlagOption $flagOption;
 	private ?TypeCondition $chatTypeCondition = null;
 	private bool $isRecentSectionMode = false;
+	private ?int $recentSectionParentId = null;
 	private bool $shouldToFillDefaultItems = true;
 	private ?int $contextChatId = null;
 
@@ -56,6 +59,11 @@ class SearchOptions
 
 	public function isUserSearchEnabled(): bool
 	{
+		if ($this->isNestedRecentSectionSearch())
+		{
+			return false;
+		}
+
 		return $this->flagOption->isFlagEnabled(SearchingFlag::Users);
 	}
 
@@ -135,6 +143,11 @@ class SearchOptions
 		return $this->shouldToFillDefaultItems;
 	}
 
+	public function getRecentSectionParentId(): ?int
+	{
+		return $this->recentSectionParentId;
+	}
+
 	public function isChatContext(): bool
 	{
 		return isset($this->contextChatId);
@@ -163,11 +176,17 @@ class SearchOptions
 
 		$this->applySearchFlags($rawOptions);
 		$this->applyFilters($rawOptions);
+
+		if ($this->chatTypeCondition !== null)
+		{
+			$this->flagOption->merge(FlagOption::byTypeCondition($this->chatTypeCondition));
+		}
 	}
 
 	private function resolveAsRecentSectionMode(array $rawOptions): void
 	{
 		$this->isRecentSectionMode = true;
+		$this->recentSectionParentId = $this->resolveRecentSectionParentId($rawOptions);
 		$section = $rawOptions[self::SEARCH_RECENT_SECTION_OPTION] ?? RecentConfigManager::DEFAULT_SECTION_NAME;
 		if ($section !== RecentConfigManager::DEFAULT_SECTION_NAME)
 		{
@@ -175,7 +194,6 @@ class SearchOptions
 		}
 
 		$this->chatTypeCondition = $this->typeRegistry->getConditionByRecentSection($section);
-		$this->flagOption->merge(FlagOption::byTypeCondition($this->chatTypeCondition));
 	}
 
 	private function applyFilters(array $rawOptions): void
@@ -192,6 +210,28 @@ class SearchOptions
 		{
 			$this->excludeIds = $rawOptions[self::EXCLUDE_IDS_OPTION];
 		}
+
+		$this->applyChatTypeExclusion($rawOptions);
+	}
+
+	private function applyChatTypeExclusion(array $rawOptions): void
+	{
+		$excludeLiterals = $rawOptions[self::EXCLUDE_CHAT_TYPES_OPTION] ?? null;
+		if (!is_array($excludeLiterals) || empty($excludeLiterals))
+		{
+			return;
+		}
+
+		$extraExclude = [];
+		foreach ($excludeLiterals as $literal)
+		{
+			$extraExclude[] = $this->typeRegistry->getByLiteralAndEntity($literal, null);
+		}
+
+		$currentCondition = $this->chatTypeCondition ?? new TypeCondition();
+		$this->chatTypeCondition = $currentCondition->merge(
+			new TypeCondition(exclude: $extraExclude),
+		);
 	}
 
 	private function resolveAsDefaultMode(array $rawOptions): void
@@ -205,8 +245,35 @@ class SearchOptions
 				$types[] = $this->typeRegistry->getByLiteralAndEntity($literal, null);
 			}
 			$this->chatTypeCondition = new TypeCondition(include: $types);
-			$this->flagOption->merge(FlagOption::byTypeCondition($this->chatTypeCondition));
 		}
+	}
+
+	private function resolveRecentSectionParentId(array $rawOptions): ?int
+	{
+		if (!array_key_exists(self::SEARCH_RECENT_SECTION_PARENT_ID_OPTION, $rawOptions))
+		{
+			return 0;
+		}
+
+		$parentId = $rawOptions[self::SEARCH_RECENT_SECTION_PARENT_ID_OPTION];
+		if ($parentId === null)
+		{
+			return null;
+		}
+
+		if (!is_numeric($parentId))
+		{
+			return 0;
+		}
+
+		$parentId = (int)$parentId;
+
+		return $parentId > 0 ? $parentId : 0;
+	}
+
+	private function isNestedRecentSectionSearch(): bool
+	{
+		return $this->isRecentSectionMode && $this->recentSectionParentId !== null && $this->recentSectionParentId > 0;
 	}
 
 	private function applySearchFlags(array $rawOptions): void

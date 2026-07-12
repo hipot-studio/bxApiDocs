@@ -24,8 +24,17 @@ class FeatureProvider
 		'chat' => [],
 		'files' => [],
 		'tasks' => [
-			'delete_tasks' => UserRole::MODERATOR,
+			'view' => UserRole::MEMBER,
+			'sort' => UserRole::MEMBER,
+			'create_tasks' => UserRole::MEMBER,
 			'edit_tasks' => UserRole::MODERATOR,
+			'delete_tasks' => UserRole::MODERATOR,
+		],
+		'landing_knowledge' => [
+			'read' => UserRole::MEMBER,
+			'edit' => UserRole::MEMBER,
+			'sett' => UserRole::MEMBER,
+			'delete' => UserRole::MEMBER,
 		],
 	];
 

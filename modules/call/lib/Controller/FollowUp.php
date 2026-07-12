@@ -290,7 +290,7 @@ class FollowUp extends Engine\Controller
 		/** @var Transcription $transcription */
 		$transcription = null;
 		$outcomes = ['version' => 1];
-		$outcomeCollection = OutcomeCollection::getOutcomesByCallId($callId) ?? [];
+		$outcomeCollection = OutcomeCollection::getOutcomesByCallId($callId);
 		foreach ($outcomeCollection as $outcome)
 		{
 			$content = $outcome->getSenseContent();

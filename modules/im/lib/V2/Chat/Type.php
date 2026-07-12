@@ -11,9 +11,26 @@ class Type
 	public function __construct(
 		public readonly string $literal,
 		public readonly ?string $entityType,
+		/**
+		 * Public display type. The same value may be shared across multiple Type
+		 * instances (e.g. closed and open collab both use 'COLLAB'). Do NOT use
+		 * as a unique identifier — rely on literal+entityType pair.
+		 */
 		public readonly string $extendedType,
 		public readonly bool $isOpen = false,
+		/**
+		 * Internal key for indexing in TypeRegistry. Defaults to extendedType.
+		 * @internal Not part of the public API — consumers should use
+		 * getAllByExtendedType() or getByLiteralAndEntity() instead.
+		 */
+		public readonly ?string $registryKey = null,
+		public readonly bool $requiresParentMembership = true,
 	){}
+
+	public function getRegistryKey(): string
+	{
+		return $this->registryKey ?? $this->extendedType;
+	}
 
 	public function getExtendedType(bool $camelCase = true): string
 	{

@@ -417,4 +417,24 @@ class Settings
 
 		return (int)\CUserOptions::GetOption('call', 'accident_log_group_max_age_secs', 0);
 	}
+
+	/**
+	 * //@todo: Remove in future
+	 * @return int[]
+	 */
+	public static function getBigRoomChats(): array
+	{
+		static $chatIds;
+		if ($chatIds === null)
+		{
+			$chatIds = [];
+			$option = Option::get('call', 'big_room_chats', '');
+			if (!empty($option))
+			{
+				$chatIds = array_filter(array_map('intVal', explode(',', $option)));
+			}
+		}
+
+		return $chatIds;
+	}
 }

@@ -11,6 +11,13 @@ use Bitrix\Im\V2\Rest\OutputFilter;
 
 class BotWebhookPayloadBuilder
 {
+	private static array $accessTokenCache = [];
+
+	private const ACCESS_TOKEN_CACHE_DIR = '/im/bot/oauth_event_auth';
+	private const ACCESS_TOKEN_CACHE_MAX_TTL = 3600;
+	private const ACCESS_TOKEN_CACHE_MIN_TTL = 60;
+	private const ACCESS_TOKEN_CACHE_SAFETY_MARGIN = 60;
+
 	public function buildMessageAdd(array $arParams, array $arHandler): array
 	{
 		return $this->buildForBotList($arParams, $arHandler, static function (array $p): array {
@@ -133,6 +140,7 @@ class BotWebhookPayloadBuilder
 			'chat' => $eventPayload->loadChatRest($chatId),
 			'user' => $eventPayload->loadUserRest((int)($messageFields['FROM_USER_ID'] ?? 0)),
 			'language' => Bot::getDefaultLanguage(),
+			'additionalMessages' => $eventPayload->loadAdditionalMessagesRest($messageId),
 		];
 
 		return $this->applyFilter($this->fixDialogIdForBot($payload, $botUserId));
@@ -273,10 +281,39 @@ class BotWebhookPayloadBuilder
 
 	private function getAccessToken(int $appId, int $userId): array
 	{
+		if (!\Bitrix\Main\Loader::includeModule('rest'))
+		{
+			return [];
+		}
+
 		$session = \Bitrix\Rest\Event\Session::get();
 		if (!$session)
 		{
 			return [];
+		}
+
+		$cacheKey = $appId . ':' . $userId;
+
+		if (isset(self::$accessTokenCache[$cacheKey]))
+		{
+			return self::$accessTokenCache[$cacheKey];
+		}
+
+		$cache = \Bitrix\Main\Data\Cache::createInstance();
+		if ($cache->initCache(self::ACCESS_TOKEN_CACHE_MAX_TTL, $cacheKey, self::ACCESS_TOKEN_CACHE_DIR))
+		{
+			$cached = $cache->getVars();
+			if (
+				is_array($cached)
+				&& !empty($cached['access_token'])
+				&& (int)($cached['expires'] ?? 0) > time() + self::ACCESS_TOKEN_CACHE_SAFETY_MARGIN
+			)
+			{
+				self::$accessTokenCache[$cacheKey] = $cached;
+
+				return $cached;
+			}
+			$cache->clean($cacheKey, self::ACCESS_TOKEN_CACHE_DIR);
 		}
 
 		$auth = \Bitrix\Rest\Event\Sender::getAuth(
@@ -289,7 +326,23 @@ class BotWebhookPayloadBuilder
 			],
 		);
 
-		return $auth ?: [];
+		$auth = $auth ?: [];
+		self::$accessTokenCache[$cacheKey] = $auth;
+
+		if (!empty($auth['access_token']))
+		{
+			$usableTtl = (int)($auth['expires'] ?? 0) - time() - self::ACCESS_TOKEN_CACHE_SAFETY_MARGIN;
+			if ($usableTtl >= self::ACCESS_TOKEN_CACHE_MIN_TTL)
+			{
+				$ttl = min($usableTtl, self::ACCESS_TOKEN_CACHE_MAX_TTL);
+				if ($cache->startDataCache($ttl, $cacheKey, self::ACCESS_TOKEN_CACHE_DIR))
+				{
+					$cache->endDataCache($auth);
+				}
+			}
+		}
+
+		return $auth;
 	}
 
 	/**

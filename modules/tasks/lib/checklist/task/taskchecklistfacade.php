@@ -3,7 +3,7 @@ namespace Bitrix\Tasks\CheckList\Task;
 
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\SystemException;

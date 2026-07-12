@@ -10,7 +10,6 @@ use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
 use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
 use Bitrix\Rest\V3\Interaction\Response\BooleanResponse;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Controller\ActionFilter\IsEnabledFilter;
-use Bitrix\Tasks\V2\Infrastructure\Rest\Request\Task\File\AttachFileRequest;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 use Bitrix\Tasks\V2\Internal\Access\Task\Attachment\Permission\Attach;
 use Bitrix\Tasks\V2\Internal\Entity\Task as TaskEntity;
@@ -38,16 +37,16 @@ class File extends RestController
 		];
 	}
 
-	public function attachAction(AttachFileRequest $request): BooleanResponse
+	public function attachAction(int $taskId, array $fileIds): BooleanResponse
 	{
-		$task = TaskEntity::mapFromId($request->taskId);
+		$task = TaskEntity::mapFromId($taskId);
 		$accessProvider = new Attach();
 		if (!$accessProvider->check($task, $this->context))
 		{
 			throw new AccessDeniedException();
 		}
 
-		foreach ($request->fileIds as $fileId)
+		foreach ($fileIds as $fileId)
 		{
 			if (gettype($fileId) !== 'integer')
 			{
@@ -57,7 +56,7 @@ class File extends RestController
 
 		$commandFileIds = [];
 
-		foreach ($request->fileIds as $fileId)
+		foreach ($fileIds as $fileId)
 		{
 			$commandFileIds[] = 'n' . $fileId;
 		}

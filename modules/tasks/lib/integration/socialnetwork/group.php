@@ -17,6 +17,8 @@ use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\Helper\Workgroup;
+use Bitrix\Socialnetwork\V2\Feature;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 use Bitrix\Tasks\Integration\SocialNetwork\Exception\NotFoundException;
 use Bitrix\Tasks\Integration\SocialNetwork\Exception\SocialnetworkException;
 use Bitrix\Tasks\Internals\TaskTable;
@@ -411,6 +413,12 @@ class Group extends \Bitrix\Tasks\Integration\SocialNetwork
 		foreach ($permissions as $groupId => $canUpdate)
 		{
 			$result[$groupId] = ($canUpdate ? \CSocNetGroup::Update($groupId, ['CLOSED' => 'Y']) : false);
+		}
+
+		$archivedGroupIds = array_keys(array_filter($result));
+		if (!empty($archivedGroupIds) && Feature::isNewProjectsOn())
+		{
+			Container::getInstance()->getProjectChatHider()->hideForProjects($archivedGroupIds);
 		}
 
 		return $result;

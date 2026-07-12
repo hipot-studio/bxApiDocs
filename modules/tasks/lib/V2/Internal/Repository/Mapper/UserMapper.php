@@ -87,4 +87,26 @@ class UserMapper
 			email: $userObject->getEmail(),
 		);
 	}
+
+	public function mapNamesToArray(array $users): array
+	{
+		$result = [];
+		if (empty($users))
+		{
+			return $result;
+		}
+
+		foreach ($users as $user)
+		{
+			$userId = (int)($user['ID'] ?? null);
+			if ($userId <= 0)
+			{
+				continue;
+			}
+
+			$result[$userId] = $this->nameService->format($user);
+		}
+
+		return $result;
+	}
 }

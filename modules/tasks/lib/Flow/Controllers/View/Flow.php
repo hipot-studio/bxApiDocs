@@ -21,7 +21,9 @@ use Bitrix\Tasks\Flow\Integration\HumanResources\AccessCodeConverter;
 use Bitrix\Tasks\Flow\Provider\Exception\FlowNotFoundException;
 use Bitrix\Tasks\Flow\Provider\FlowProvider;
 use Bitrix\Tasks\Helper\Analytics;
+use Bitrix\Tasks\Integration\SocialNetwork\Collab\Url\UrlManager;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
+use Bitrix\Tasks\V2\Internal\Entity\GroupTypes;
 use Bitrix\Tasks\Internals\Registry\GroupRegistry;
 use Bitrix\Tasks\Internals\Routes\RouteDictionary;
 use CComponentEngine;
@@ -116,10 +118,18 @@ class Flow extends Controller
 			return null;
 		}
 
+		$type = (string)($project['TYPE'] ?? GroupTypes::Project->value);
+
+		$uri = $type === GroupTypes::Collab->value
+			? UrlManager::getUrlByType($groupId, GroupTypes::Collab->value)
+			: "/workgroups/group/$groupId/tasks/"
+		;
+
 		return [
 			'name' => $project['NAME'],
-			'url' => "/workgroups/group/$groupId/tasks/",
+			'uri' => $uri,
 			'avatar' => $this->getProjectAvatar($project),
+			'type' => $type,
 		];
 	}
 

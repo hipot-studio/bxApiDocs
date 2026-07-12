@@ -28,7 +28,11 @@ class ChatMute extends BaseChatEvent
 	protected function getBasePullParamsInternal(): array
 	{
 		return array_merge(
-			$this->getBaseRecentPreviewParams($this->chat),
+			$this->getBaseRecentPreviewParams(
+				$this->chat,
+				$this->chat->getLastMessage(),
+				$this->resolveUserDateLastActivity($this->chat, $this->userId),
+			),
 			[
 				'muted' => $this->isMuted,
 				'mute' => $this->isMuted, // TODO remove this later

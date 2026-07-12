@@ -76,7 +76,7 @@ class CallAiComponent extends \CBitrixComponent
 		$mentionService = MentionService::getInstance();
 		$mentionService->loadMentionsForCall($this->callId);
 
-		$this->outcomeCollection = OutcomeCollection::getOutcomesByCallId($this->callId) ?? [];
+		$this->outcomeCollection = OutcomeCollection::getOutcomesByCallId($this->callId);
 		foreach ($this->outcomeCollection as $outcome)
 		{
 			$type = strtoupper($outcome->getType());

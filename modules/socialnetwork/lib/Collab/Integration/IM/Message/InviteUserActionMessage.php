@@ -8,6 +8,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageFactory;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class InviteUserActionMessage implements ActionMessageInterface
 {
@@ -38,7 +39,7 @@ class InviteUserActionMessage implements ActionMessageInterface
 
 		if (!$skipChat)
 		{
-			$this->addUsersToChat($this->collabId, ...$recipientIds);
+			$this->addUsersToChat($this->collabId, $parameters, ...$recipientIds);
 		}
 
 		$recipientNames = [];
@@ -77,6 +78,11 @@ class InviteUserActionMessage implements ActionMessageInterface
 			],
 		);
 
-		return $this->sendMessage($message, $this->senderId, $this->collabId);
+		return $this->sendMessage(
+			message: $message,
+			senderId: $this->senderId,
+			groupId: $this->collabId,
+			silent: Feature::isNewProjectsOn() ? self::SILENT_WITH_RECENT : self::SILENT_OFF,
+		);
 	}
 }

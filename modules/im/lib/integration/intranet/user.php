@@ -253,6 +253,8 @@ class User
 
 		if (!self::isEmployee($userId) && !($user instanceof UserCollaber))
 		{
+			\Bitrix\Im\V2\Entity\User\User::clearCache($userId);
+
 			return false;
 		}
 

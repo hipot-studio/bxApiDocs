@@ -49,6 +49,7 @@ use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Integration\Extranet;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\FeatureService;
 use Bitrix\Tasks\V2\Internal\Repository\GanttLinkRepositoryInterface;
 
 Loc::loadMessages(__FILE__);
@@ -622,6 +623,8 @@ class TasksTaskListComponent extends TasksBaseComponent
 
 		$groupId = $arParams['GROUP_ID'];
 
+		$projectFeatureService = new FeatureService();
+
 		// check group access here
 		if ($groupId > 0)
 		{
@@ -648,9 +651,11 @@ class TasksTaskListComponent extends TasksBaseComponent
 
 			if (!$canViewGroup)
 			{
+				$messageKeySuffix = ($projectFeatureService->isNewProjectsOn() ? '_V2' : '');
+
 				$message =
 					isset($arParams['CONTEXT']) && $arParams['CONTEXT'] === Context::getCollab()
-					? Loc::getMessage('TASKS_TL_ACCESS_TO_COLLAB_DENIED')
+					? Loc::getMessage('TASKS_TL_ACCESS_TO_COLLAB_DENIED' . $messageKeySuffix)
 					: Loc::getMessage('TASKS_TL_ACCESS_TO_GROUP_DENIED');
 
 				$errors->add(
@@ -1518,9 +1523,15 @@ class TasksTaskListComponent extends TasksBaseComponent
 
 		if ($this->arResult['CONTEXT'] === Context::getCollab())
 		{
+			$stubTitle = (
+				(new FeatureService())->isNewProjectsOn()
+					? Loc::getMessage('TASKS_GRID_STUB_PROJECT_CREATE_PROJECT')
+					: Loc::getMessage('TASKS_GRID_STUB_PROJECT_CREATE_COLLAB')
+			);
+
 			return '
 				<div class="tasks-list-create">
-					<div class="tasks-list-collab-empty-state-title">' . Loc::getMessage('TASKS_GRID_STUB_PROJECT_CREATE_COLLAB') . '</div>
+					<div class="tasks-list-collab-empty-state-title">' . $stubTitle . '</div>
 					<div class="tasks-list-collab-empty-state-subtitle">'
 						. Loc::getMessage(
 							'TASKS_GRID_STUB_PROJECT_CREATE_COLLAB_SUBTITLE',

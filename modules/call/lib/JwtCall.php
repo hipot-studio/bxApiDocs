@@ -425,6 +425,15 @@ class JwtCall
 	 */
 	private static function generateCallJwt(int $chatId, int $tokenVersion, array $userRoles, array|null $additionalData = null): string
 	{
+		$roomType = \Bitrix\Call\Call\BitrixCall::ROOM_TYPE_SMALL;
+		$isLargeCallsEnabled = Option::get('im', 'force_large_calls') === 'Y';
+		$bigRoomChats = Settings::getBigRoomChats();
+
+		if ($isLargeCallsEnabled || in_array($chatId, $bigRoomChats))
+		{
+			$roomType = \Bitrix\Call\Call\BitrixCall::ROOM_TYPE_BIG;
+		}
+
 		$callToken = [
 			'portalId' => Settings::getPortalId(),
 			'chatId' => $chatId,
@@ -433,7 +442,7 @@ class JwtCall
 			'portalType' => Client::getPortalType(),
 			'portalUrl' => Client::getServerName(),
 			'controllerUrl' => (new ControllerClient())->getServiceUrl(),
-			'roomType' => 1,
+			'roomType' => $roomType,
 		];
 		if (!empty($additionalData))
 		{

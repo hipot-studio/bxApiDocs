@@ -27,7 +27,7 @@ class CollabUpdateCommand extends UpdateCommand
 {
 	#[NotContainsUrl]
 	#[Map('NAME')]
-	#[NotEmpty]
+	#[NotEmpty(allowZero: true)]
 	protected ?string $name;
 
 	#[Validatable]

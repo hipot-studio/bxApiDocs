@@ -179,7 +179,7 @@ class SendingService
 		}
 
 		$botService = (new BotService($this->sendingConfig))->setContext($this->context);
-		$botService->runMessageCommand($message->getId(), $compatibleFields);
+		$botService->runMessageCommand($message, $compatibleFields);
 
 		try
 		{

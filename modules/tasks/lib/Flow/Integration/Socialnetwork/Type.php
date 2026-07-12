@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\Flow\Integration\Socialnetwork;
 
-use Bitrix\Socialnetwork\Item\Workgroup;
-
 use Bitrix\Main\Loader;
+use Bitrix\Socialnetwork\Item\Workgroup;
 
 class Type
 {
@@ -25,7 +24,16 @@ class Type
 
 		$type = Workgroup\Type::tryFrom($value);
 
+		return in_array($type, self::getAllowedTypes(), true);
+	}
 
-		return in_array($type, [Workgroup\Type::Group, Workgroup\Type::Project, Workgroup\Type::Scrum], true);
+	private static function getAllowedTypes(): array
+	{
+		return [
+			Workgroup\Type::Group,
+			Workgroup\Type::Project,
+			Workgroup\Type::Scrum,
+			Workgroup\Type::Collab,
+		];
 	}
 }

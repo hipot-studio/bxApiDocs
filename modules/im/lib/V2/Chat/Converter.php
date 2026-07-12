@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\Reading\Counter\CountersUpdater;
+use Bitrix\Im\V2\Relation\ChatRelations;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
@@ -20,11 +21,13 @@ class Converter
 	private const PUSH_CONVERT_NAME = 'chatConvert';
 	private const VALID_CONVERSIONS = [
 		Chat::IM_TYPE_OPEN => [Chat::IM_TYPE_CHAT, Chat::IM_TYPE_CHANNEL, Chat::IM_TYPE_OPEN_CHANNEL],
-		Chat::IM_TYPE_CHAT => [Chat::IM_TYPE_OPEN, Chat::IM_TYPE_CHANNEL, Chat::IM_TYPE_OPEN_CHANNEL, Chat::IM_TYPE_COLLAB],
+		Chat::IM_TYPE_CHAT => [Chat::IM_TYPE_OPEN, Chat::IM_TYPE_CHANNEL, Chat::IM_TYPE_OPEN_CHANNEL, Chat::IM_TYPE_COLLAB, Chat::IM_TYPE_OPEN_COLLAB],
 		Chat::IM_TYPE_OPEN_CHANNEL => [Chat::IM_TYPE_CHANNEL, Chat::IM_TYPE_CHAT, Chat::IM_TYPE_OPEN],
 		Chat::IM_TYPE_CHANNEL => [Chat::IM_TYPE_OPEN_CHANNEL,  Chat::IM_TYPE_CHAT, Chat::IM_TYPE_OPEN],
+		Chat::IM_TYPE_COLLAB => [Chat::IM_TYPE_OPEN_COLLAB],
+		Chat::IM_TYPE_OPEN_COLLAB => [Chat::IM_TYPE_COLLAB],
 	];
-	private const OPEN_TYPES = [Chat::IM_TYPE_OPEN, Chat::IM_TYPE_OPEN_CHANNEL];
+	private const OPEN_TYPES = [Chat::IM_TYPE_OPEN, Chat::IM_TYPE_OPEN_CHANNEL, Chat::IM_TYPE_OPEN_COLLAB];
 	private const CHANNEL_TYPES = [Chat::IM_TYPE_CHANNEL, Chat::IM_TYPE_OPEN_CHANNEL];
 	private int $chatId;
 	private ?Chat $chat;
@@ -106,6 +109,7 @@ class Converter
 		Chat::cleanCache($this->chatId);
 		Chat::cleanAccessCache($this->chatId);
 		CounterService::clearCache();
+		ChatRelations::cleanInstance($this->chatId);
 		$this->sendPush();
 	}
 
@@ -194,7 +198,7 @@ class Converter
 				'newPermissions' => $chat->getPermissions(),
 				'newTypeParams' => null,
 			],
-			'extra' => \Bitrix\Im\Common::getPullExtra()
+			'extra' => \Bitrix\Im\Common::getPullExtra(),
 		];
 
 		if ($chat instanceof CollabChat)
@@ -224,7 +228,7 @@ class Converter
 			return;
 		}
 
-		$departmentCode = \CIMDisk::GetTopDepartmentCode();
+		$departmentCode = \Bitrix\Im\V2\Integration\HumanResources\Department\Department::getInstance()->getTopCode();
 		if (!$departmentCode)
 		{
 			return;
@@ -234,7 +238,7 @@ class Converter
 		$rightsManager = $driver->getRightsManager();
 		$departmentRight = [[
 			'ACCESS_CODE' => $departmentCode,
-			'TASK_ID' => $rightsManager->getTaskIdByName($rightsManager::TASK_READ)
+			'TASK_ID' => $rightsManager->getTaskIdByName($rightsManager::TASK_READ),
 		]];
 		$rightsManager->append($folder, $departmentRight);
 	}
@@ -247,16 +251,30 @@ class Converter
 			return;
 		}
 
+		$departmentCode = \Bitrix\Im\V2\Integration\HumanResources\Department\Department::getInstance()->getTopCode();
+		if (!$departmentCode)
+		{
+			return;
+		}
+
 		$driver = \Bitrix\Disk\Driver::getInstance();
 		$rightsManager = $driver->getRightsManager();
-		$accessProvider = new \Bitrix\Im\Access\ChatAuthProvider;
+		$readTaskId = (int)$rightsManager->getTaskIdByName($rightsManager::TASK_READ);
 
-		$accessCodes = [];
-		$accessCodes[] = [
-			'ACCESS_CODE' => $accessProvider->generateAccessCode($this->chatId),
-			'TASK_ID' => $rightsManager->getTaskIdByName($rightsManager::TASK_EDIT)
-		];
-		$rightsManager->set($folder, $accessCodes);
+		$existingRights = $rightsManager->getSpecificRights($folder);
+		$filteredRights = array_filter(
+			$existingRights,
+			static function (array $right) use ($departmentCode, $readTaskId): bool {
+				$isDepartmentReadBaseRight
+					= $right['ACCESS_CODE'] === $departmentCode
+					&& (int)$right['TASK_ID'] === $readTaskId
+					&& ($right['DOMAIN'] ?? null) === null;
+
+				return !$isDepartmentReadBaseRight;
+			},
+		);
+
+		$rightsManager->set($folder, array_values($filteredRights));
 	}
 
 	protected function fromCloseToOpenType(): bool
@@ -285,7 +303,8 @@ class Converter
 
 	protected function toCollab(): bool
 	{
-		return $this->oldType === Chat::IM_TYPE_CHAT && $this->newType === Chat::IM_TYPE_COLLAB;
+		return $this->oldType === Chat::IM_TYPE_CHAT
+			&& in_array($this->newType, [Chat::IM_TYPE_COLLAB, Chat::IM_TYPE_OPEN_COLLAB], true);
 	}
 
 	protected function setChatPermissionToDefaultValues(): void

@@ -332,4 +332,38 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 
 		return $result !== false;
 	}
+
+	public function getTasksResultsExistenceMap(array $taskIds): array
+	{
+		if (empty($taskIds))
+		{
+			return [];
+		}
+
+		Collection::normalizeArrayValuesByInt($taskIds, false);
+
+		if (empty($taskIds))
+		{
+			return [];
+		}
+
+		$queryResult = ResultTable::query()
+			->setSelect(['TASK_ID'])
+			->whereIn('TASK_ID', $taskIds)
+			->setDistinct()
+			->exec()
+		;
+
+		$result = array_fill_keys($taskIds, false);
+		while ($row = $queryResult->fetch())
+		{
+			$taskId = $row['TASK_ID'] ?? null;
+			if ($taskId !== null)
+			{
+				$result[(int)$taskId] = true;
+			}
+		}
+
+		return $result;
+	}
 }

@@ -5,26 +5,34 @@ namespace Bitrix\Disk\Internals\Engine\ActionFilter;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Document\TrackedObject;
+use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Storage;
 use Bitrix\Disk\Type;
 use Bitrix\Disk\Version;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Security\Sign\Signer;
 
 class CheckReadPermission extends ActionFilter\Base
 {
 	const ERROR_COULD_NOT_READ_OBJECT = 'read_right';
 
 	protected $currentUser;
+	protected UnifiedLinkAccessService $unifiedLinkAccessService;
+	protected Signer $signer;
 
 	public function __construct()
 	{
 		parent::__construct();
 		$this->currentUser = CurrentUser::get();
+		$this->unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
+		$this->signer = new Signer();
 	}
 
 	public function onBeforeAction(Event $event)
@@ -120,6 +128,19 @@ class CheckReadPermission extends ActionFilter\Base
 
 	protected function checkObject(BaseObject $object): bool
 	{
+		$uls = $this->action->getController()->getRequest()->getQuery('_uls');
+
+		if (
+			$object instanceof File
+			&& $object->supportsUnifiedLink()
+			&& $this->unifiedLinkAccessService->check($object)->canRead()
+			&& is_string($uls)
+			&& $this->signer->validate((string)$object->getId(), $uls)
+		)
+		{
+			return true;
+		}
+
 		$securityContext = $object->getStorage()?->getSecurityContext($this->currentUser->getId());
 		if (!$securityContext)
 		{

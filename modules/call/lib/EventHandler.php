@@ -2,10 +2,14 @@
 
 namespace Bitrix\Call;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Event;
+use Bitrix\Main\EventManager;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\ORM\EntityError;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Call\Model\CallUserTable;
+use Bitrix\Call\Model\CallUserLogTable;
 use Bitrix\Call\Service\CallLogService;
 use Bitrix\Call\Integration\EntityType;
 
@@ -134,6 +138,53 @@ class EventHandler
 
 		Recent::updateCallCache($call->getId());
 		Recent::terminateAllCallsInChat($call->getChatId(), $call->getId());
+
+		$userIds = array_keys($call->getCallUsers());
+		if ($userIds !== [])
+		{
+			Application::getInstance()->addBackgroundJob(
+				[self::class, 'broadcastCallLogFinish'],
+				[$call->getId(), $userIds],
+				Application::JOB_PRIORITY_LOW
+			);
+		}
+	}
+
+	/**
+	 * Push a final CallLog update to every call participant so clients refresh
+	 * record data (duration, status time) right after the call is finished.
+	 * Status is reused from the existing b_call_userlog row, matching what
+	 * CallLog.list would return on a fresh fetch.
+	 *
+	 * Runs as a background job via Application::addBackgroundJob — must stay
+	 * public static and accept primitives only (no Call instance).
+	 */
+	public static function broadcastCallLogFinish(int $callId, array $userIds): void
+	{
+		$existing = CallUserLogTable::getList([
+			'select' => ['USER_ID', 'STATUS'],
+			'filter' => [
+				'=SOURCE_TYPE' => CallUserLogTable::SOURCE_TYPE_CALL,
+				'=SOURCE_CALL_ID' => $callId,
+				'@USER_ID' => $userIds,
+			],
+		])->fetchAll();
+
+		if ($existing === [])
+		{
+			return;
+		}
+
+		$service = new CallLogService();
+		foreach ($existing as $row)
+		{
+			$service->addOrUpdateEvent(
+				CallUserLogTable::SOURCE_TYPE_CALL,
+				$callId,
+				(int)$row['USER_ID'],
+				$row['STATUS']
+			);
+		}
 	}
 
 	/**
@@ -214,14 +265,27 @@ class EventHandler
 
 			foreach ($usersToInvite as $userId)
 			{
-				$signaling->sendInviteToUser(
-					$initiatorId,
-					$userId,
-					$usersToInvite,
-					false,
-					true,
-					true
-				);
+				if ($call->getScheme() === Call::SCHEME_JWT)
+				{
+					$signaling->sendCallInviteToUser(
+						senderId: $initiatorId,
+						toUserId: $userId,
+						isLegacyMobile: false,
+						video: true,
+						sendPush: true,
+					);
+				}
+				else
+				{
+					$signaling->sendInviteToUser(
+						senderId: $initiatorId,
+						toUserId: $userId,
+						invitedUsers: $usersToInvite,
+						isLegacyMobile: false,
+						video: true,
+						sendPush: true
+					);
+				}
 				Recent::updateUserActiveCallsCache($userId);
 			}
 
@@ -378,5 +442,105 @@ class EventHandler
  		}
 
 		return $result;
+	}
+
+	/**
+	 * Background-job entry point for {@see Call::markUsersCalling()}.
+	 *
+	 * Replays the per-user OnCallUserStateChange events that used to fire
+	 * synchronously inside markUsersCalling. Listeners (e.g.
+	 * CallLogService::addOrUpdateEvent) run after the HTTP response is
+	 * flushed, so the response time is no longer blocked by N × GET_LOCK +
+	 * 4–6 SQL per invitee.
+	 *
+	 * Compare-and-set guard: between the schedule call and this background
+	 * job a peer can transition further (calling → ready/idle/declined via
+	 * answerAction/declineAction/hangup). The synchronous handlers for those
+	 * terminal transitions write `b_call_user_log` immediately. Re-read the
+	 * current STATE per (callId, userId) and drop events whose recorded
+	 * `newState` no longer matches — otherwise a stale background event
+	 * could feed `CallLogService::addOrUpdateEvent` (unconditional addMerge
+	 * by SOURCE_CALL_ID/USER_ID) and overwrite the terminal call_user_log
+	 * record. The current $statusMap in {@see self::onCallUserStateChange()}
+	 * does not map *:calling transitions, so the issue is latent today —
+	 * but the guard makes deferred dispatch safe against any future
+	 * extension of the map or new deferred transitions.
+	 *
+	 * @see EventHandler::onCallUserStateChange
+	 *
+	 * @param array<int, array{callId:int,userId:int,oldState:string,newState:string}> $changes
+	 * @internal
+	 */
+	public static function dispatchUserStateChangeEventsBatch(array $changes): void
+	{
+		if ($changes === [])
+		{
+			return;
+		}
+
+		$affected = [];
+		$allUserIds = [];
+		foreach ($changes as $change)
+		{
+			$callId = (int)($change['callId'] ?? 0);
+			$userId = (int)($change['userId'] ?? 0);
+			if ($callId > 0 && $userId > 0)
+			{
+				$affected[$callId][$userId] = true;
+				$allUserIds[$userId] = true;
+			}
+		}
+		if ($affected === [])
+		{
+			return;
+		}
+
+		$rows = CallUserTable::getList([
+			'select' => ['CALL_ID', 'USER_ID', 'STATE'],
+			'filter' => [
+				'=CALL_ID' => array_keys($affected),
+				'=USER_ID' => array_keys($allUserIds),
+			],
+		])->fetchAll();
+
+		$currentStates = [];
+		foreach ($rows as $row)
+		{
+			$callId = (int)$row['CALL_ID'];
+			$userId = (int)$row['USER_ID'];
+			if (isset($affected[$callId][$userId]))
+			{
+				$currentStates[$callId][$userId] = (string)$row['STATE'];
+			}
+		}
+
+		$eventManager = EventManager::getInstance();
+		foreach ($changes as $change)
+		{
+			$callId = (int)($change['callId'] ?? 0);
+			$userId = (int)($change['userId'] ?? 0);
+			$newState = (string)($change['newState'] ?? '');
+
+			if (($currentStates[$callId][$userId] ?? null) !== $newState)
+			{
+				continue;
+			}
+
+			try
+			{
+				$eventManager->send(new Event(
+					'im',
+					'OnCallUserStateChange',
+					[
+						'callId' => $callId,
+						'userId' => $userId,
+						'oldState' => (string)($change['oldState'] ?? ''),
+						'newState' => $newState,
+					],
+				));
+			}
+			catch (\Throwable $e)
+			{}
+		}
 	}
 }

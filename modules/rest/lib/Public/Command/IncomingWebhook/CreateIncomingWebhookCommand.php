@@ -21,23 +21,9 @@ class CreateIncomingWebhookCommand extends AbstractCreateIncomingWebhookCommand
 
 	protected function execute(): Main\Result
 	{
-		$result = new Main\Result();
+		$data = (new CreateIncomingWebhookCommandHandler())($this);
 
-		try
-		{
-			$data = (new CreateIncomingWebhookCommandHandler())($this);
-			$result->setData([$data]);
-		}
-		catch (Main\AccessDeniedException | Main\ObjectNotFoundException $e)
-		{
-			$result->addError(new Main\Error($e->getMessage(), $e->getCode()));
-		}
-		catch (Main\ArgumentException $e)
-		{
-			$result->addError(new Main\Error($e->getMessage(), 'INVALID_ARGUMENT'));
-		}
-
-		return $result;
+		return (new Main\Result())->setData([$data]);
 	}
 
 	public function toArray(): array

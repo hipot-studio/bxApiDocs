@@ -32,6 +32,22 @@ class Recent extends BaseController
 	}
 
 	/**
+	 * @restMethod im.v2.Recent.load
+	 */
+	public function loadAction(
+		RecentProvider $recentProvider,
+		?RecentParams $params,
+	): ?array
+	{
+		if ($params === null)
+		{
+			return null;
+		}
+
+		return $recentProvider->getSection($params)->toRestFormat();
+	}
+
+	/**
 	 * @restMethod im.v2.Recent.tail
 	 */
 	public function tailAction(

@@ -671,7 +671,6 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 							'post_id' => $item['ID'],
 						]
 					),
-					'onclick' => 'top.BX.SidePanel.Instance.open(this.href, {loader: \'socialnetwork:userblogpost\'}); return false; ',
 				);
 			}
 		}

@@ -65,7 +65,7 @@ class PushFormat
 				'importantFor' => $message->getImportantFor(),
 				'additionalEntities' => $this->getAdditionalEntities(),
 				'forward' => $message->getForwardInfo(),
-				'builder' => $message->getBlocksBuilder(),
+				'block' => $message->getBlocksBuilder(),
 			],
 			'counterType' => $chat->getCounterType(),
 			'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
@@ -238,7 +238,7 @@ class PushFormat
 				'chatId' => $message->getChatId(),
 				'senderId' => $message->getAuthorId(),
 				'params' => $message->getEnrichedParams()->toPullFormat(['IS_EDITED', 'URL_ID', 'ATTACH', 'DATE_TEXT', 'DATE_TS']),
-				'builder' => $message->getBlocksBuilder(),
+				'block' => $message->getBlocksBuilder(),
 			],
 			'extra' => \Bitrix\Im\Common::getPullExtra()
 		];

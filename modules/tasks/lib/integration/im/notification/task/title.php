@@ -6,6 +6,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Internals\Registry\GroupRegistry;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Grid\Scope\Scope;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\FeatureService;
 
 class Title
 {
@@ -36,11 +37,17 @@ class Title
 
 		if ($this->task->getGroupId() && \CModule::IncludeModule('socialnetwork'))
 		{
+			Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/modules/tasks/classes/general/tasknotifications.php');
+
 			$group = GroupRegistry::getInstance()->get($this->task->getGroupId());
 			if (isset($group['NAME']))
 			{
 				$isCollab = $group['TYPE'] === Scope::COLLAB;
 				$messageText = $isCollab ? 'TASKS_NOTIFICATIONS_IN_COLLAB' : 'TASKS_NOTIFICATIONS_IN_GROUP';
+				if ((new FeatureService())->isNewProjectsOn())
+				{
+					$messageText = 'TASKS_NOTIFICATIONS_IN_PROJECT';
+				}
 				$decodedName = \Bitrix\Main\Text\Emoji::decode($group['NAME']);
 				$text = Loc::getMessage($messageText, null, $lang) . ' ' . $decodedName;
 				$name .= ' (' . $text . ')';

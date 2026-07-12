@@ -11,6 +11,7 @@ use Bitrix\Tasks\V2\Internal\Entity\AbstractEntityCollection;
  * @method null|DiskFile findOneById(int $id, string $idKey = 'id')
  * @method DiskFileCollection findAll(array $conditions)
  * @method DiskFileCollection findAllByIds(array $ids, string $idKey = 'id')
+ * @method DiskFile[] getIterator()
  */
 class DiskFileCollection extends AbstractEntityCollection
 {

@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\TariffLimit;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Integration\AiAssistant\AiAssistantService;
+use Bitrix\Im\V2\TariffLimit\Event\CollectRestrictionsEvent;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
@@ -56,12 +57,30 @@ class Limit
 
 	public function getRestrictions(): array
 	{
-		return [
-			'fullChatHistory' => [
-				'isAvailable' => !$this->hasRestrictions(),
-				'limitDays' => $this->getLimitDays(),
-			],
-		];
+		return $this
+			->enrichByExternalRestrictions(restrictions: $this->getInternalRestrictions())
+			->jsonSerialize()
+		;
+	}
+
+	private function getInternalRestrictions(): TariffRestrictionCollection
+	{
+		return (new TariffRestrictionCollection())
+			->withAdded(
+				new FullChatHistoryRestriction(
+					!$this->hasRestrictions(),
+					$this->getLimitDays(),
+				)
+			)
+		;
+	}
+
+	private function enrichByExternalRestrictions(TariffRestrictionCollection $restrictions): TariffRestrictionCollection
+	{
+		$event = new CollectRestrictionsEvent($restrictions);
+		$event->send();
+
+		return $event->getNewRestrictions();
 	}
 
 	protected function getLimitDays(): ?int

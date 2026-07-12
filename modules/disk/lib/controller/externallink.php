@@ -7,10 +7,8 @@ use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Main\Engine\ActionFilter\ClosureWrapper;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 
 final class ExternalLink extends Engine\Controller
@@ -32,7 +30,6 @@ final class ExternalLink extends Engine\Controller
 
 		$defaultPreFilters[] = function(Event $event) {
 			/** @var ClosureWrapper $this */
-			$currentUser = CurrentUser::get();
 			foreach ($this->getAction()->getArguments() as $argument)
 			{
 				if (!($argument instanceof Disk\ExternalLink))
@@ -40,11 +37,20 @@ final class ExternalLink extends Engine\Controller
 					continue;
 				}
 
-				if ($argument->getCreatedBy() != $currentUser->getId())
+				$object = $argument->getObject();
+
+				if (!$object instanceof Disk\BaseObject)
 				{
-					$this->errorCollection[] = new Error(
-						Loc::getMessage('Could not operate with external link of stranger')
-					);
+					$this->errorCollection->add([new Error('object not found')]);
+
+					return new EventResult(EventResult::ERROR, null, null, $this);
+				}
+
+				$securityContext = $object->getStorage()?->getCurrentUserSecurityContext();
+
+				if (!$securityContext || !$object->canRead($securityContext))
+				{
+					$this->errorCollection->add([new Error('invalid rights')]);
 
 					return new EventResult(EventResult::ERROR, null, null, $this);
 				}

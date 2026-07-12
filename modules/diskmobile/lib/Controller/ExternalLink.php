@@ -92,10 +92,11 @@ class ExternalLink extends BaseFileList
 	private function parseExternalLinkObject(Disk\ExternalLink $extLink): array
 	{
 		$driver = Driver::getInstance();
-		$link = new Uri($driver->getUrlManager()->getShortUrlExternalLink(array(
-			'hash' => $extLink->getHash(),
-			'action' => 'default',
-		), true));
+
+		$link = new Uri($driver->getUrlManager()->getPublicExternalLink(
+			object: $extLink->getObject(),
+			hash: $extLink->getHash(),
+		));
 
 		$canEditDocument = null;
 		$availableEdit = $extLink->availableEdit();

@@ -4,6 +4,7 @@ namespace Bitrix\Mail\Integration\Im;
 
 use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Mail\Internal\Async\Message\MailboxAccessNotificationMessage;
+use Bitrix\Mail\Internal\Async\Message\OrphanedMailboxAutoDisconnectNotificationMessage;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\Web\Uri;
@@ -65,6 +66,20 @@ class Notification
 		}
 
 		$url = AnalyticsHelper::addSourceAnalyticsToMessage($url, AnalyticsHelper::ENTITY_TYPE_NOTIFICATION);
+
+		return $url;
+	}
+
+	private static function getMailboxEditUrl(int $mailboxId, bool $absoluteUrl = false): string
+	{
+		$url = htmlspecialcharsbx(sprintf("/mail/config/edit?id=%u", $mailboxId));
+
+		if ($absoluteUrl)
+		{
+			$uri = new Uri($url);
+
+			return $uri->toAbsolute()->getLocator();
+		}
 
 		return $url;
 	}
@@ -396,61 +411,16 @@ class Notification
 
 		$mailboxId = (int)$mailbox['ID'];
 		$mailboxUrl = self::getMailboxUrl($mailboxId);
-		$plainMailboxEmail = $mailbox['EMAIL'];
-
-		$safeMailboxEmail = htmlspecialcharsbx($plainMailboxEmail);
-		$mailboxWithBBCode = "[url={$mailboxUrl}] {$safeMailboxEmail} [/url]";
-
-		if ($hasOwnerChanged && $editorUserId !== $originalOwnerId)
-		{
-			self::notifyOriginalOwnerAboutOwnershipChange($originalOwnerId, $editorUserId, $safeMailboxEmail);
-		}
+		$mailboxWithBBCode = "[url={$mailboxUrl}] " . htmlspecialcharsbx($mailbox['EMAIL']) . " [/url]";
 
 		if ($hasOwnerChanged && $editorUserId !== $finalOwnerId)
 		{
-			self::notifyFinalOwnerAboutOwnershipChange($finalOwnerId, $editorUserId, $safeMailboxEmail);
+			self::notifyFinalOwnerAboutOwnershipChange($finalOwnerId, $editorUserId, $mailboxWithBBCode);
 		}
-
-		if ($editorUserId !== $finalOwnerId)
+		elseif ($editorUserId !== $finalOwnerId)
 		{
 			self::notifyFinalOwnerAboutSettingsChange($finalOwnerId, $editorUserId, $mailboxWithBBCode);
 		}
-	}
-
-	public static function notifyOriginalOwnerAboutOwnershipChange(
-		int $originalOwnerId,
-		int $editorUserId,
-		string $mailboxEmail,
-	): void
-	{
-		$replacements = ['#EMAIL#' => $mailboxEmail];
-
-		$notifyMessage = self::getNotificationMessageCallback(
-			'MAIL_CLIENT_CONFIG_OWNER_CHANGE_FROM_NOTIFY_MESSAGE',
-			$replacements,
-		);
-		$subject = self::getNotificationMessageCallback(
-			'MAIL_CLIENT_CONFIG_OWNER_CHANGE_FROM_NOTIFY_MESSAGE_PARAMS',
-			$replacements,
-		);
-		$plainText = self::getNotificationMessageCallback(
-			'MAIL_CLIENT_CONFIG_OWNER_CHANGE_FROM_NOTIFY_MESSAGE_PARAMS_PLAIN_TEXT',
-		);
-
-		\CIMNotify::Add([
-			"TO_USER_ID" => $originalOwnerId,
-			"NOTIFY_TYPE" => IM_NOTIFY_FROM,
-			"FROM_USER_ID" => $editorUserId,
-			"NOTIFY_MODULE" => 'mail',
-			"NOTIFY_MESSAGE" => $notifyMessage,
-			"PARAMS" => [
-				'COMPONENT_ID' => 'DefaultEntity',
-				'COMPONENT_PARAMS' => [
-					'SUBJECT' => $subject,
-					'PLAIN_TEXT' => $plainText,
-				],
-			],
-		]);
 	}
 
 	public static function notifyFinalOwnerAboutOwnershipChange(
@@ -461,16 +431,24 @@ class Notification
 	{
 		$replacements = ['#EMAIL#' => $mailboxWithBBCode];
 
-		$notifyMessage = self::getNotificationMessageCallback(
+		$notifyMessageCode = self::getPhraseKeyWithGenderSuffix(
 			'MAIL_CLIENT_CONFIG_OWNER_CHANGE_TO_NOTIFY_MESSAGE',
+			$editorUserId,
+		);
+
+		$notifyMessage = self::getNotificationMessageCallback(
+			$notifyMessageCode,
 			$replacements,
 		);
+
+		$subjectCode = self::getPhraseKeyWithGenderSuffix(
+			'MAIL_CLIENT_CONFIG_OWNER_CHANGE_TO_NOTIFY_MESSAGE_SUBJECT',
+			$editorUserId,
+		);
+
 		$subject = self::getNotificationMessageCallback(
-			'MAIL_CLIENT_CONFIG_OWNER_CHANGE_TO_NOTIFY_MESSAGE_PARAMS',
+			$subjectCode,
 			$replacements,
-		);
-		$plainText = self::getNotificationMessageCallback(
-			'MAIL_CLIENT_CONFIG_OWNER_CHANGE_TO_NOTIFY_MESSAGE_PARAMS_PLAIN_TEXT',
 		);
 
 		\CIMNotify::Add([
@@ -480,10 +458,9 @@ class Notification
 			"NOTIFY_MODULE" => 'mail',
 			"NOTIFY_MESSAGE" => $notifyMessage,
 			"PARAMS" => [
-				'COMPONENT_ID' => 'DefaultEntity',
+				'COMPONENT_ID' => 'MailEntity',
 				'COMPONENT_PARAMS' => [
 					'SUBJECT' => $subject,
-					'PLAIN_TEXT' => $plainText,
 				],
 			],
 		]);
@@ -524,7 +501,7 @@ class Notification
 			"NOTIFY_MODULE" => 'mail',
 			"NOTIFY_MESSAGE" => $notifyMessage,
 			"PARAMS" => [
-				'COMPONENT_ID' => 'DefaultEntity',
+				'COMPONENT_ID' => 'MailEntity',
 				'COMPONENT_PARAMS' => [
 					'SUBJECT' => $subject,
 				],
@@ -667,7 +644,7 @@ class Notification
 			'NOTIFY_TAG' => 'MAIL|ACCESS_GRANTED|' . $mailboxId,
 			'NOTIFY_MESSAGE' => $notifyMessage,
 			'PARAMS' => [
-				'COMPONENT_ID' => 'DefaultEntity',
+				'COMPONENT_ID' => 'MailEntity',
 				'COMPONENT_PARAMS' => [
 					'SUBJECT' => $subject,
 				],
@@ -712,7 +689,54 @@ class Notification
 			'NOTIFY_TAG' => 'MAIL|ACCESS_REVOKED|' . $mailboxId,
 			'NOTIFY_MESSAGE' => $notifyMessage,
 			'PARAMS' => [
-				'COMPONENT_ID' => 'DefaultEntity',
+				'COMPONENT_ID' => 'MailEntity',
+				'COMPONENT_PARAMS' => [
+					'SUBJECT' => $subject,
+				],
+			],
+		]);
+	}
+
+	public static function dispatchOrphanedMailboxAutoDisconnectNotifications(
+		int $mailboxId,
+		string $mailboxEmail,
+	): void
+	{
+		$message = new OrphanedMailboxAutoDisconnectNotificationMessage(
+			mailboxId: $mailboxId,
+			mailboxEmail: $mailboxEmail,
+		);
+
+		$message->send('mail_orphan_autodisconnect_notification');
+	}
+
+	public static function notifyAdminAboutOrphanedMailboxAutoDisconnect(
+		int $adminUserId,
+		int $mailboxId,
+		string $mailboxEmail,
+	): void
+	{
+		$url = self::getMailboxEditUrl($mailboxId);
+		$safeEmail = htmlspecialcharsbx($mailboxEmail);
+		$emailWithLink = "[url={$url}]{$safeEmail}[/url]";
+
+		$notifyMessage = self::getNotificationMessageCallback(
+			'MAIL_NOTIFY_ORPHAN_MAILBOX_AUTODISCONNECT_7D_MESSAGE',
+			['#EMAIL#' => $safeEmail],
+		);
+		$subject = self::getNotificationMessageCallback(
+			'MAIL_NOTIFY_ORPHAN_MAILBOX_AUTODISCONNECT_7D_MESSAGE',
+			['#EMAIL#' => $emailWithLink],
+		);
+
+		\CIMNotify::Add([
+			'TO_USER_ID' => $adminUserId,
+			'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
+			'NOTIFY_MODULE' => 'mail',
+			'NOTIFY_TAG' => 'MAIL|ORPHAN_AUTODISCONNECT_7D|' . $mailboxId,
+			'NOTIFY_MESSAGE' => $notifyMessage,
+			'PARAMS' => [
+				'COMPONENT_ID' => 'MailEntity',
 				'COMPONENT_PARAMS' => [
 					'SUBJECT' => $subject,
 				],

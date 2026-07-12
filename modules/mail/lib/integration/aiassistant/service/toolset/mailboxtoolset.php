@@ -21,6 +21,7 @@ use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\GetEmailThreadTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\MoveEmailsToFolderTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\RemoveCrmEmailActivityTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\ReplyToEmailTool;
+use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\SearchEmailsByTasksTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\SearchEmailsTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\SearchEmployeeEmailsTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\ListMailRecipientsTool;
@@ -30,6 +31,7 @@ class MailboxToolSet extends BaseToolSet
 {
 	public const TOOLS = [
 		SearchEmailsTool::class,
+		SearchEmailsByTasksTool::class,
 		GetEmailContentTool::class,
 		GetEmailThreadTool::class,
 		ListMailboxesTool::class,

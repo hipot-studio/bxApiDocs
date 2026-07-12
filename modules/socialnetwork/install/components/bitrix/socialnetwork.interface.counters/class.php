@@ -96,6 +96,8 @@ class CSocialnetworkInterfaceCountersComponent extends CBitrixComponent	implemen
 	{
 		try
 		{
+			//todo add here counter component for new sonet counters
+
 			$this->checkModules();
 			$this->init();
 			$this->loadData();

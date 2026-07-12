@@ -95,7 +95,7 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 				'Name' => Loc::getMessage('IMBOT_NEW_MESSAGE_TRIGGER_PROPERTY_SENDER_IDS'),
 				'FieldName' => self::PARAM_SENDER_IDS,
 				'Type' => FieldType::USER,
-				'Required' => true,
+				'Required' => false,
 				'Multiple' => true,
 			],
 		];
@@ -230,6 +230,11 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 		if ($eventBot !== $this->getBotIdWithCodeIfNeeded())
 		{
 			return $this->makeIncorrectBotErrorResult();
+		}
+
+		if (CBPHelper::isEmptyValue($this->{self::PARAM_SENDER_IDS}))
+		{
+			return \Bitrix\Bizproc\Result::createOk();
 		}
 
 		$allowedSenderIds = CBPHelper::ExtractUsers(

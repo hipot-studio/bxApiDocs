@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Esg\Handler;
 
+use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Integration\Im\ChatNotificationInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Im\NotificationType;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
@@ -35,22 +36,33 @@ class SaveCheckListHandler
 			// Get checklist data from before and after states
 			$checklistBefore = $command->taskBeforeUpdate?->checklist ?? [];
 			$checklistAfter = $command->task->checklist ?? [];
-			
+
 			// Normalize both arrays to have the same structure (indexed arrays)
 			$normalizedBefore = $this->normalizeChecklistArray($checklistBefore);
 			$normalizedAfter = $this->normalizeChecklistArray($checklistAfter);
-			
+
 			// Detect all operations that occurred
 			$operations = $this->operationDetector->detectOperations($normalizedBefore, $normalizedAfter);
-			
+
 			// Group operations by checklist and operation type
 			$groupedOperations = $this->operationGrouper->groupOperations($operations);
-
-			foreach ($groupedOperations as $checklistName => $operationGroup)
+			if (empty($groupedOperations))
 			{
-				$this->processOperationGroup($operationGroup, (string)$checklistName, $command);
+				return;
 			}
-			
+
+			// Get the user who triggered the change
+			$triggeredUser = $this->getTriggeredUser($command);
+			if (!$triggeredUser)
+			{
+				return;
+			}
+
+			foreach ($groupedOperations as $operationGroup)
+			{
+				$this->processOperationGroup($operationGroup, $command->task, $triggeredUser);
+			}
+
 		}
 		catch (Throwable $e)
 		{
@@ -58,7 +70,7 @@ class SaveCheckListHandler
 			$this->logger->logError($e);
 		}
 	}
-	
+
 	/**
 	 * Normalizes checklist array to ensure consistent structure for comparison
 	 * Converts both indexed arrays and key-value arrays to indexed arrays
@@ -70,15 +82,15 @@ class SaveCheckListHandler
 		{
 			return $checklist;
 		}
-		
+
 		// If it's a key-value array (nodeId keys), convert to indexed array
 		return array_values($checklist);
 	}
-	
+
 	private function processOperationGroup(
-		ChecklistOperationGroup $operationGroup, 
-		string $checklistName, 
-		SaveCheckListCommand $command
+		ChecklistOperationGroup $operationGroup,
+		Task $task,
+		User $triggeredUser,
 	): void
 	{
 		// Check if entire checklist was completed - this takes priority over individual item completions
@@ -89,16 +101,8 @@ class SaveCheckListHandler
 			// Send only the checklist completed message, skip individual item completions
 			foreach ($checklistCompletedOperations as $operation)
 			{
-				$this->sendIndividualNotification($operation, $command);
+				$this->sendIndividualNotification($operation, $task, $triggeredUser);
 			}
-
-			return;
-		}
-		
-		if ($operationGroup->hasMultipleOperationTypes())
-		{
-			// Send grouped message
-			$this->sendGroupedNotification($operationGroup, $checklistName, $command);
 
 			return;
 		}
@@ -106,58 +110,35 @@ class SaveCheckListHandler
 		// Send individual messages for single operation type
 		foreach ($operationGroup->getOperations() as $operation)
 		{
-			$this->sendIndividualNotification($operation, $command);
+			$this->sendIndividualNotification($operation, $task, $triggeredUser);
 		}
 	}
 
-	private function sendGroupedNotification(
-		ChecklistOperationGroup $operationGroup, 
-		string $checklistName, 
-		SaveCheckListCommand $command
-	): void
+	private function getTriggeredUser(SaveCheckListCommand $command): ?User
 	{
-		try
-		{
-			// Get the user who triggered the change
-			$triggeredBy = $this->userRepository->getByIds([$command->updatedBy])->findOneById($command->updatedBy);
-			
-			$this->chatNotification->notify(
-				type: NotificationType::ChecklistGroupedOperations,
-				task: $command->task,
-				args: [
-					'triggeredBy' => $triggeredBy,
-					'checklistName' => $checklistName,
-					'operationGroup' => $operationGroup
-				],
-			);
-		}
-		catch (Throwable $e)
-		{
-			// Log error but continue processing
-			$this->logger->logError($e);
-		}
+		return $this->userRepository
+			->getByIds([$command->updatedBy])
+			->findOneById($command->updatedBy)
+		;
 	}
 
-	private function sendIndividualNotification(ChecklistOperation $operation, SaveCheckListCommand $command): void
+	private function sendIndividualNotification(ChecklistOperation $operation, Task $task, User $triggeredUser): void
 	{
 		try
 		{
-			// Get the user who triggered the change
-			$triggeredBy = $this->userRepository->getByIds([$command->updatedBy])->findOneById($command->updatedBy);
-			
 			// Prepare arguments for notification
 			$args = [
-				'triggeredBy' => $triggeredBy,
+				'triggeredBy' => $triggeredUser,
 				'checklistName' => $operation->getChecklistName(),
 				'itemCount' => $operation->getItemCount(),
 			];
-			
+
 			// For file additions, use fileCount instead of itemCount
 			if ($operation->getType() === NotificationType::ChecklistFilesAdded)
 			{
 				$args['fileCount'] = $operation->getItemCount();
 			}
-			
+
 			// Add assignee name and ID if present (for auditor/accomplice assignments)
 			if ($operation->getAssigneeName() !== null)
             {
@@ -166,7 +147,7 @@ class SaveCheckListHandler
 					name: $operation->getAssigneeName()
 				);
 			}
-			
+
 			// Add item name if present (for single item notifications)
 			if ($operation->getItemName() !== null)
 			{
@@ -187,14 +168,14 @@ class SaveCheckListHandler
 			{
 				$args['additionalData'] = $operation->getAdditionalData();
 			}
-			
+
 			// Send notification
 			$this->chatNotification->notify(
 				type: $operation->getType(),
-				task: $command->task,
-				args: $args
+				task: $task,
+				args: $args,
 			);
-			
+
 		}
 		catch (Throwable $e)
 		{

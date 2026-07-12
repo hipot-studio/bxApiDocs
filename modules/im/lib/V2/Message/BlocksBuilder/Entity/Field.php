@@ -15,9 +15,11 @@ enum Field: string
 	case Elements = 'elements';
 	case Icon = 'icon';
 	case Color = 'color';
-	case Blocks = 'blocks';
 	case Type = 'type';
 	case Fold = 'fold';
 	case Title = 'title';
 	case Sources = 'sources';
+	case Buttons = 'buttons';
+	case FileIds = 'fileIds';
+	case Background = 'background';
 }

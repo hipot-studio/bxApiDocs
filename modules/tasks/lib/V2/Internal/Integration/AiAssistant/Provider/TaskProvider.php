@@ -16,6 +16,7 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Provider\Mapper\TaskRespons
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Provider\Task\QueryBuilder;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\GetTaskByIdDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\SearchTasksDto;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\GroupDisplayTypeResolver;
 use Bitrix\Tasks\V2\Internal\Repository\CheckListRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 
@@ -28,6 +29,7 @@ class TaskProvider
 		private readonly TaskList $taskProvider,
 		private readonly CheckListRepositoryInterface $checkListRepository,
 		private readonly QueryBuilder $queryBuilder,
+		private readonly GroupDisplayTypeResolver $groupDisplayTypeResolver,
 	)
 	{
 	}
@@ -56,7 +58,12 @@ class TaskProvider
 
 		$checkList = $this->checkListRepository->getByEntity((int)$task->getId(), Type::Task);
 
-		return $this->taskResponseMapper->mapFromEntity($task, $checkList, $userId);
+		return $this->taskResponseMapper->mapFromEntity(
+			$task,
+			$checkList,
+			$userId,
+			$this->groupDisplayTypeResolver->resolveForGroup($task->group),
+		);
 	}
 
 	/**
@@ -78,13 +85,21 @@ class TaskProvider
 
 		$taskResponses = [];
 
+		$groupDisplayTypes = $this->groupDisplayTypeResolver->resolveForRawTasks($tasks);
+
 		foreach ($tasks as $task)
 		{
 			$taskId = (int)($task['ID'] ?? 0);
+			$groupId = (int)($task['GROUP_ID'] ?? 0);
 
 			$checkList = $checkListsByTaskId[$taskId] ?? new CheckList();
 
-			$taskResponses[] = $this->taskResponseMapper->mapFromArray($task, $checkList, $userId);
+			$taskResponses[] = $this->taskResponseMapper->mapFromArray(
+				$task,
+				$checkList,
+				$userId,
+				$groupDisplayTypes[$groupId] ?? null,
+			);
 		}
 
 		return $taskResponses;

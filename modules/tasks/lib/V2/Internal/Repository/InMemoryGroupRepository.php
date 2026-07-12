@@ -113,11 +113,11 @@ class InMemoryGroupRepository implements GroupRepositoryInterface
 			return $stored;
 		}
 
-		$groups = $this->groupRepository->getByIds($ids);
+		$groups = $this->groupRepository->getByIds($notStoredIds);
 
 		$this->cache->merge($groups);
 
-		return $groups;
+		return $this->cache->findAllByIds($ids);
 	}
 
 	public function getGroupIdsByTaskIds(array $taskIds): array

@@ -8,10 +8,15 @@ use Bitrix\Tasks\V2\Internal\Entity\Priority;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Status;
 use Bitrix\Tasks\V2\Internal\Entity\Template\RepeatTill;
 use Bitrix\Tasks\V2\Internal\Entity\Template\ReplicateParams;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Enum\ProjectTasksForAnalysisSort;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\GetProjectTasksForAnalysisDto;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\GetTaskForAnalysisDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\ClearTaskDeadlineTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\CreateTaskTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\DeleteTaskTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\DetachTaskFromGroupTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\GetProjectTasksForAnalysisTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\GetTaskForAnalysisTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\GetTaskByIdTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetDailyTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetMonthlyByMonthDaysTaskRecurrenceTool;
@@ -41,6 +46,8 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			SetYearlyByMonthDaysTaskRecurrenceTool::ACTION_NAME => $this->buildSetYearlyByDaysRecurrenceProperties(),
 			SetYearlyByWeekDaysTaskRecurrenceTool::ACTION_NAME => $this->buildSetYearlyByWeeksRecurrenceProperties(),
 			GetTaskByIdTool::ACTION_NAME => $this->buildGetTaskByIdProperties(),
+			GetTaskForAnalysisTool::ACTION_NAME => $this->buildGetTaskForAnalysisProperties(),
+			GetProjectTasksForAnalysisTool::ACTION_NAME => $this->buildGetProjectTasksForAnalysisProperties(),
 			default => [],
 		};
 	}
@@ -57,9 +64,11 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			SetYearlyByMonthDaysTaskRecurrenceTool::ACTION_NAME,
 			SetYearlyByWeekDaysTaskRecurrenceTool::ACTION_NAME,
 			DeleteTaskTool::ACTION_NAME,
-			GetTaskByIdTool::ACTION_NAME
+			GetTaskByIdTool::ACTION_NAME,
+			GetTaskForAnalysisTool::ACTION_NAME
 			=> ['taskId'],
 			CreateTaskTool::ACTION_NAME => ['title'],
+			GetProjectTasksForAnalysisTool::ACTION_NAME => ['projectId'],
 			default => [],
 		};
 	}
@@ -74,7 +83,7 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			],
 			'description' => [
 				'type' => ['string', 'null'],
-				'description' => 'Task description',
+				'description' => 'Task description.' . BaseSchemaBuilder::FORMATTING_NOTE,
 			],
 			'creatorId' => [
 				'type' => ['integer', 'null'],
@@ -151,7 +160,7 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			],
 			'description' => [
 				'type' => ['string', 'null'],
-				'description' => 'New description. Null to leave unchanged.',
+				'description' => 'New description. Null to leave unchanged.' . BaseSchemaBuilder::FORMATTING_NOTE,
 			],
 			'creatorId' => [
 				'type' => ['integer', 'null'],
@@ -501,6 +510,96 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 				'type' => 'integer',
 				'description' => 'Identifier of the task. Must be a positive integer.',
 				'minimum' => 1,
+			],
+		];
+	}
+
+	private function buildGetTaskForAnalysisProperties(): array
+	{
+		return [
+			'taskId' => [
+				'type' => 'integer',
+				'description' => 'Identifier of the task. Must be a positive integer.',
+				'minimum' => 1,
+			],
+			'messagesLimit' => [
+				'type' => ['integer', 'null'],
+				'description' =>
+					'Number of chat messages to return.'
+					. ' Must be an integer between ' . GetTaskForAnalysisDto::MESSAGES_LIMIT_MIN
+					. ' and ' . GetTaskForAnalysisDto::MESSAGES_LIMIT_MAX . '.'
+					. ' Pass null or omit if messages not needed.'
+				,
+				'minimum' => GetTaskForAnalysisDto::MESSAGES_LIMIT_MIN,
+				'maximum' => GetTaskForAnalysisDto::MESSAGES_LIMIT_MAX,
+			],
+			'historyLimit' => [
+				'type' => ['integer', 'null'],
+				'description' =>
+					'Number of significant history entries to return.'
+					. ' Must be an integer between ' . GetTaskForAnalysisDto::HISTORY_LIMIT_MIN
+					. ' and ' . GetTaskForAnalysisDto::HISTORY_LIMIT_MAX . '.'
+					. ' Pass null or omit if history not needed.'
+				,
+				'minimum' => GetTaskForAnalysisDto::HISTORY_LIMIT_MIN,
+				'maximum' => GetTaskForAnalysisDto::HISTORY_LIMIT_MAX,
+			],
+		];
+	}
+
+	private function buildGetProjectTasksForAnalysisProperties(): array
+	{
+		return [
+			'projectId' => [
+				'type' => 'integer',
+				'description' => 'Project (group) ID. Must be a positive integer.',
+				'minimum' => 1,
+			],
+			'responsibleId' => [
+				'type' => ['integer', 'null'],
+				'description' =>
+					'Filter by responsible user ID. Use for personal context — '
+					. 'returns only tasks where the user is the responsible. '
+					. 'Must be a positive integer or null if not needed.'
+				,
+				'minimum' => 1,
+			],
+			'creatorId' => [
+				'type' => ['integer', 'null'],
+				'description' =>
+					'Filter by creator user ID. Use for personal context — '
+					. 'returns only tasks the user has created. '
+					. 'Combined with responsibleId narrows to tasks where the user is both creator and responsible. '
+					. 'Must be a positive integer or null if not needed.'
+				,
+				'minimum' => 1,
+			],
+			'limit' => [
+				'type' => ['integer', 'null'],
+				'description' =>
+					'Number of task entries to return.'
+					. ' Must be between ' . GetProjectTasksForAnalysisDto::LIMIT_MIN
+					. ' and ' . GetProjectTasksForAnalysisDto::LIMIT_MAX . '.'
+				,
+				'minimum' => GetProjectTasksForAnalysisDto::LIMIT_MIN,
+				'maximum' => GetProjectTasksForAnalysisDto::LIMIT_MAX,
+				'default' => GetProjectTasksForAnalysisDto::LIMIT_DEFAULT,
+			],
+			'sort' => [
+				'type' => 'string',
+				'description' =>
+					'Controls the order in which tasks are selected from the database '
+					. 'and which then fill the page when the total number of matches '
+					. 'exceeds "limit". Values: '
+					. '"' . ProjectTasksForAnalysisSort::RecentlyChanged->value
+					. '" — most recently updated first (default; best for "what changed" / overall status). '
+					. '"' . ProjectTasksForAnalysisSort::Deadline->value
+					. '" — closest deadline first (best for risk-of-missing-deadline analysis; '
+					. 'tasks without a deadline are added at the end of the page if there is room). '
+					. 'Omit the parameter to use the default ("recently_changed").'
+				,
+				'enum' => [...ProjectTasksForAnalysisSort::values()],
+				'default' => ProjectTasksForAnalysisSort::RecentlyChanged->value,
 			],
 		];
 	}

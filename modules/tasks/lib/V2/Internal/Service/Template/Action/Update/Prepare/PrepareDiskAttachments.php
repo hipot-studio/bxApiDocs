@@ -7,10 +7,20 @@ namespace Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\Prepare;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Repository\DiskFileRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\Trait\DiskAttachmentsTrait;
 
 class PrepareDiskAttachments implements PrepareFieldInterface
 {
+	use DiskAttachmentsTrait;
+
 	public function __invoke(array $fields, array $fullTemplateData): array
+	{
+		$fields = $this->replaceDiskFileIdsWithAttachmentIds($fields, $fullTemplateData);
+
+		return $this->stripDetachedInlineFiles($fields, $fullTemplateData);
+	}
+
+	private function replaceDiskFileIdsWithAttachmentIds(array $fields, array $fullTemplateData): array
 	{
 		$attachedObjectIds = $fullTemplateData[UserField::TASK_ATTACHMENTS] ?? null;
 		if (empty($attachedObjectIds))

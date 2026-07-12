@@ -13,20 +13,9 @@ use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Imbot\V2\Error\BotError;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Error;
-use Bitrix\Main\Loader;
-use Bitrix\Rest\HandlerHelper;
 
 class Bot extends BotController
 {
-	private const BOT_TOKEN_MAX_LENGTH = 40;
-
-	private const APPLICATION_TOKEN_MAX_LENGTH = 50;
-
-	private static function applicationTokenPrefix(string $clientId): string
-	{
-		return mb_substr($clientId, 0, self::APPLICATION_TOKEN_MAX_LENGTH);
-	}
-
 	protected function processBeforeAction(Action $action): bool
 	{
 		$restServer = $this->resolveRestServer();
@@ -110,10 +99,15 @@ class Bot extends BotController
 			return null;
 		}
 
+		if ($eventMode === 'webhook' && !\Bitrix\Im\RestBot::isValidCallback((string)$webhookUrl))
+		{
+			$this->addError(new BotError(BotError::INVALID_CALLBACK));
+
+			return null;
+		}
+
 		$clientId = $this->getClientId();
 
-		// Bot::register() deduplicates by MODULE_ID+CODE, ignoring APP_ID.
-		// Pre-check to prevent returning another app's bot.
 		$existingBot = BotTable::getList([
 			'filter' => ['=MODULE_ID' => 'rest', '=CODE' => $code],
 			'limit' => 1,
@@ -142,16 +136,6 @@ class Bot extends BotController
 		}
 		$dbType = $botType->value;
 
-		$methods = [];
-		if ($eventMode === 'webhook')
-		{
-			$methods = $this->prepareWebhookUrl($webhookUrl);
-			if ($methods === null)
-			{
-				return null;
-			}
-		}
-
 		$rawAvatar = $properties['avatar'] ?? $properties['PERSONAL_PHOTO'] ?? null;
 		if (!empty($rawAvatar))
 		{
@@ -167,31 +151,32 @@ class Bot extends BotController
 		$userProperties = $this->mapUserProperties($properties);
 		$dbBackgroundId = Background::normalizeBackgroundId($backgroundId);
 
-		$registerFields = array_merge($methods, [
+		$botToken = $this->resolveBotToken();
+
+		$registerFields = [
 			'CODE' => $code,
 			'TYPE' => $dbType,
-			'MODULE_ID' => 'rest',
-			'APP_ID' => $clientId,
 			'PROPERTIES' => $userProperties,
 			'OPENLINE' => self::normalizeBooleanVariable($isSupportOpenline) ? 'Y' : 'N',
 			'HIDDEN' => self::normalizeBooleanVariable($isHidden) ? 'Y' : 'N',
 			'REACTIONS_ENABLED' => self::normalizeBooleanVariable($isReactionsEnabled) ? 'Y' : 'N',
 			'BACKGROUND_ID' => $dbBackgroundId,
 			'EVENT_MODE' => mb_strtoupper($eventMode),
-		]);
+		];
+		if ($eventMode === 'webhook')
+		{
+			$registerFields['WEBHOOK_URL'] = (string)$webhookUrl;
+		}
+		$registerFields += $botToken !== ''
+			? ['BOT_TOKEN' => $botToken]
+			: ['APP_ID' => $clientId];
 
-		$botId = \Bitrix\Im\Bot::register($registerFields);
-
+		$botId = \Bitrix\Im\RestBot::register($registerFields);
 		if (!$botId)
 		{
 			$this->addError(new BotError(BotError::REGISTER_FAILED));
 
 			return null;
-		}
-
-		if ($eventMode === 'webhook')
-		{
-			$this->bindV2RestEvents($restServer, $botId, $methods, $clientId);
 		}
 
 		$botItem = BotItem::createFromId($botId, true);
@@ -210,9 +195,8 @@ class Bot extends BotController
 			return null;
 		}
 
-		$result = \Bitrix\Im\Bot::unRegister([
+		$result = \Bitrix\Im\RestBot::unRegister([
 			'BOT_ID' => $botId,
-			'MODULE_ID' => 'rest',
 			'APP_ID' => $this->getClientId(),
 		]);
 
@@ -293,49 +277,54 @@ class Bot extends BotController
 			$botUpdateFields['EVENT_MODE'] = mb_strtoupper($normalizedMode);
 		}
 
-		$rawNewToken = $fields['botToken'] ?? $fields['BOT_TOKEN'] ?? null;
-		if ($rawNewToken !== null && trim((string)$rawNewToken) !== '')
+		$requestedNewToken = $fields['botToken'] ?? $fields['BOT_TOKEN'] ?? null;
+		$requestedNewToken = ($requestedNewToken !== null && trim((string)$requestedNewToken) !== '')
+			? trim((string)$requestedNewToken)
+			: null;
+
+		if ($requestedNewToken !== null)
 		{
-			$newToken = trim((string)$rawNewToken);
-			if (mb_strlen($newToken) > self::BOT_TOKEN_MAX_LENGTH)
+			if (mb_strlen($requestedNewToken) > \Bitrix\Im\RestBot::BOT_TOKEN_MAX_LENGTH)
 			{
 				$this->addError(new BotError(BotError::TOKEN_INVALID_LENGTH));
 
 				return null;
 			}
-
-			$newClientId = self::buildCustomClientId($newToken);
-			if (
-				$newClientId !== $clientId
-				&& !$this->rotateBotToken($botId, $clientId, $newClientId)
-			)
+			if (!str_starts_with((string)$clientId, \Bitrix\Im\Bot::WEBHOOK_CLIENT_ID_PREFIX))
 			{
+				$this->addError(new BotError(BotError::TOKEN_ROTATION_FAILED));
+
 				return null;
 			}
-
-			$clientId = $this->clientId;
 		}
 
-		if (!empty($botUpdateFields))
+		$newWebhookUrl = $fields['webhookUrl'] ?? $fields['WEBHOOK_URL'] ?? null;
+		if ($newWebhookUrl !== null && $newWebhookUrl !== '' && !\Bitrix\Im\RestBot::isValidCallback((string)$newWebhookUrl))
 		{
-			\Bitrix\Im\Bot::update(
-				['BOT_ID' => $botId, 'MODULE_ID' => 'rest', 'APP_ID' => $clientId],
-				$botUpdateFields,
-			);
+			$this->addError(new BotError(BotError::INVALID_CALLBACK));
+
+			return null;
 		}
 
-		$effectiveEventMode = mb_strtolower(
-			$fields['eventMode'] ?? $currentBot['EVENT_MODE'] ?? 'fetch'
+		$webhookSpecific = array_filter(
+			[
+				'WEBHOOK_URL' => $newWebhookUrl,
+				'BOT_TOKEN' => $requestedNewToken,
+			],
+			static fn($v) => $v !== null && $v !== '',
 		);
 
-		if ($effectiveEventMode === 'webhook' && !empty($fields['webhookUrl'] ?? null))
+		$result = \Bitrix\Im\RestBot::update(
+			['BOT_ID' => $botId, 'APP_ID' => $clientId],
+			$botUpdateFields + $webhookSpecific,
+		);
+		if (!$result)
 		{
-			$methods = $this->prepareWebhookUrl($fields['webhookUrl']);
-			if ($methods !== null)
-			{
-				self::unbindV2RestEvents($botId, $clientId);
-				$this->bindV2RestEvents($restServer, $botId, $methods, $clientId);
-			}
+			$this->addError(new BotError(
+				$requestedNewToken !== null ? BotError::TOKEN_ROTATION_FAILED : BotError::UPDATE_FAILED,
+			));
+
+			return null;
 		}
 
 		\Bitrix\Im\Bot::clearCache();
@@ -451,208 +440,6 @@ class Bot extends BotController
 		return null;
 	}
 
-
-	private function prepareWebhookUrl(?string $webhookUrl): ?array
-	{
-		if ($webhookUrl === null || $webhookUrl === '')
-		{
-			return [];
-		}
-
-		if (Loader::includeModule('rest'))
-		{
-			try
-			{
-				HandlerHelper::checkCallback($webhookUrl);
-			}
-			catch (\Bitrix\Rest\RestException $e)
-			{
-				$this->addError(new BotError(BotError::INVALID_CALLBACK, $e->getMessage()));
-
-				return null;
-			}
-		}
-
-		return ['EVENT_HANDLER' => $webhookUrl];
-	}
-
-	private function bindV2RestEvents(
-		\CRestServer $restServer,
-		int $botId,
-		array $methods,
-		string $clientId,
-	): void
-	{
-		if (!Loader::includeModule('rest'))
-		{
-			return;
-		}
-
-		$handlerUrl = $methods['EVENT_HANDLER'] ?? null;
-		if ($handlerUrl === null || $handlerUrl === '')
-		{
-			return;
-		}
-
-		$appCode = $clientId;
-
-		$dbRes = \Bitrix\Rest\AppTable::getList([
-			'filter' => ['=CLIENT_ID' => $clientId],
-			'select' => ['ID'],
-		]);
-		$arApp = $dbRes->fetch();
-		$appId = $arApp['ID'] ?? '';
-
-		$v2Events = [
-			'OnImBotV2MessageAdd' => 'onImBotV2MessageAdd',
-			'OnImBotV2MessageUpdate' => 'onImBotV2MessageUpdate',
-			'OnImBotV2MessageDelete' => 'onImBotV2MessageDelete',
-			'OnImBotV2JoinChat' => 'onImBotV2JoinChat',
-			'OnImBotV2Delete' => 'onImBotV2Delete',
-			'OnImBotV2ContextGet' => 'onImBotV2ContextGet',
-			'OnImBotV2CommandAdd' => 'onImBotV2CommandAdd',
-			'OnImBotV2ReactionChange' => 'onImBotV2ReactionChange',
-		];
-
-		foreach ($v2Events as $restEventName => $phpEventName)
-		{
-			$updateFields = [
-				'APP_ID' => $appId,
-				'EVENT_NAME' => mb_strtoupper($restEventName),
-				'EVENT_HANDLER' => $handlerUrl,
-				'APPLICATION_TOKEN' => $appCode,
-			];
-			$insertFields = [
-				...$updateFields,
-				'USER_ID' => 0,
-			];
-
-			\Bitrix\Rest\EventTable::merge($insertFields, $updateFields);
-			\Bitrix\Rest\Event\Sender::bind('im', $phpEventName);
-		}
-	}
-
-	public static function unbindV2RestEvents(int $botId, string $applicationToken): void
-	{
-		if (!Loader::includeModule('rest'))
-		{
-			return;
-		}
-
-		if ($botId <= 0 || $applicationToken === '')
-		{
-			return;
-		}
-
-		$siblings = \Bitrix\Im\Model\BotTable::getCount([
-			'=APP_ID' => $applicationToken,
-			'!=BOT_ID' => $botId,
-		]);
-		if ($siblings > 0)
-		{
-			return;
-		}
-
-		$tokenPrefix = self::applicationTokenPrefix($applicationToken);
-
-		$rows = \Bitrix\Rest\EventTable::getList([
-			'filter' => [
-				'%=EVENT_NAME' => 'ONIMBOTV2%',
-				'=APPLICATION_TOKEN' => $tokenPrefix,
-			],
-			'select' => ['ID'],
-		]);
-		while ($row = $rows->fetch())
-		{
-			\Bitrix\Rest\EventTable::delete($row['ID']);
-		}
-	}
-
-	private function rotateBotToken(int $botId, string $oldClientId, string $newClientId): bool
-	{
-		if (!str_starts_with($oldClientId, \Bitrix\Im\Bot::WEBHOOK_CLIENT_ID_PREFIX))
-		{
-			$this->addError(new BotError(BotError::TOKEN_ROTATION_FAILED));
-
-			return false;
-		}
-
-		$isExists = \Bitrix\Im\Model\BotTable::getList([
-			'filter' => ['=APP_ID' => $newClientId, '!=BOT_ID' => $botId],
-			'select' => ['BOT_ID'],
-			'limit' => 1,
-		])->fetch();
-		if ($isExists)
-		{
-			$this->addError(new BotError(BotError::TOKEN_ROTATION_FAILED));
-
-			return false;
-		}
-
-		$connection = \Bitrix\Main\Application::getConnection();
-		$connection->startTransaction();
-		try
-		{
-			\Bitrix\Im\Model\BotTable::update($botId, ['APP_ID' => $newClientId]);
-
-			$commandRows = \Bitrix\Im\Model\CommandTable::getList([
-				'filter' => ['=BOT_ID' => $botId, '=APP_ID' => $oldClientId],
-				'select' => ['ID'],
-			]);
-			$commandsTouched = false;
-			while ($row = $commandRows->fetch())
-			{
-				\Bitrix\Im\Model\CommandTable::update($row['ID'], ['APP_ID' => $newClientId]);
-				$commandsTouched = true;
-			}
-			if ($commandsTouched)
-			{
-				\Bitrix\Main\Data\Cache::createInstance()->cleanDir(\Bitrix\Im\Command::CACHE_PATH);
-			}
-
-			$appRows = \Bitrix\Im\Model\AppTable::getList([
-				'filter' => ['=BOT_ID' => $botId, '=APP_ID' => $oldClientId],
-				'select' => ['ID'],
-			]);
-			$appsTouched = false;
-			while ($row = $appRows->fetch())
-			{
-				\Bitrix\Im\Model\AppTable::update($row['ID'], ['APP_ID' => $newClientId]);
-				$appsTouched = true;
-			}
-			if ($appsTouched)
-			{
-				\Bitrix\Main\Data\Cache::createInstance()->cleanDir(\Bitrix\Im\App::CACHE_PATH);
-			}
-
-			$oldPrefix = self::applicationTokenPrefix($oldClientId);
-			$newPrefix = self::applicationTokenPrefix($newClientId);
-			if ($oldPrefix !== $newPrefix)
-			{
-				$rows = \Bitrix\Rest\EventTable::getList([
-					'filter' => ['%=EVENT_NAME' => 'ONIMBOTV2%', '=APPLICATION_TOKEN' => $oldPrefix],
-					'select' => ['ID'],
-				]);
-				while ($row = $rows->fetch())
-				{
-					\Bitrix\Rest\EventTable::update($row['ID'], ['APPLICATION_TOKEN' => $newPrefix]);
-				}
-			}
-
-			$connection->commitTransaction();
-		}
-		catch (\Throwable $e)
-		{
-			$connection->rollbackTransaction();
-			throw $e;
-		}
-
-		$this->clientId = $newClientId;
-		BotData::cleanCache($botId);
-
-		return true;
-	}
-
 	/**
 	 * Validates and saves uploaded avatar image.
 	 *
@@ -716,4 +503,10 @@ class Bot extends BotController
 
 		return $mapped;
 	}
+
+	private function resolveBotToken(): string
+	{
+		return (string)($this->getRequestParamAny(['botToken', 'BOT_TOKEN']) ?? '');
+	}
+
 }

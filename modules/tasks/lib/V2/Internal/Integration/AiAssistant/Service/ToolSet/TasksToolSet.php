@@ -29,7 +29,9 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\ClearTask
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\CreateTaskTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\DeleteTaskTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\DetachTaskFromGroupTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\GetProjectTasksForAnalysisTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\GetTaskByIdTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\GetTaskForAnalysisTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetDailyTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetMonthlyByMonthDaysTaskRecurrenceTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence\SetMonthlyByWeekDaysTaskRecurrenceTool;
@@ -84,6 +86,8 @@ class TasksToolSet extends BaseToolSet
 			AddReminderTool::class,
 			AddResultTool::class,
 			SearchUsersTool::class,
+			GetTaskForAnalysisTool::class,
+			GetProjectTasksForAnalysisTool::class,
 		];
 
 		if (FormV2Feature::isOn())

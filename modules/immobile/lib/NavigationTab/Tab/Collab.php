@@ -50,6 +50,11 @@ class Collab extends BaseRecent
 
 	public function getTabTitle(): ?string
 	{
+		if (Settings::getImFeatures()->isNestedChatAvailable)
+		{
+			return Loc::getMessage('IMMOBILE_NAVIGATION_TAB_PROJECT_TAB_TITLE');
+		}
+
 		return Loc::getMessage('IMMOBILE_NAVIGATION_TAB_COLLAB_TAB_TITLE');
 	}
 

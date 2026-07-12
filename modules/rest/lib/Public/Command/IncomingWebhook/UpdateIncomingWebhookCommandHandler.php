@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Bitrix\Rest\Public\Command\IncomingWebhook;
 
 use Bitrix\Main\AccessDeniedException;
-use Bitrix\Main\ArgumentException;
+use Bitrix\Rest\Internal\Exception\ArgumentException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Rest\APAuth\PermissionTable;
 use Bitrix\Rest\Enum\Integration\ElementCodeType;
 use Bitrix\Rest\Internal\Access\WebhookAccessChecker;
 use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
+use Bitrix\Rest\Internal\Exception\IncomingWebhook\IncomingWebhookNotFoundException;
 use Bitrix\Rest\Internal\Contract\Repository\IncomingWebhookRepositoryInterface;
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhook;
 use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
@@ -29,6 +30,7 @@ class UpdateIncomingWebhookCommandHandler
 	/**
 	 * @throws AccessDeniedException
 	 * @throws ObjectNotFoundException
+	 * @throws IncomingWebhookNotFoundException
 	 * @throws ArgumentException
 	 */
 	public function __invoke(UpdateIncomingWebhookCommand $command): IncomingWebhook
@@ -44,13 +46,13 @@ class UpdateIncomingWebhookCommandHandler
 		$scopes = PermissionTable::cleanPermissionList($command->scopes);
 		if (empty($scopes))
 		{
-			throw new ArgumentException('At least one valid scope is required');
+			throw new ArgumentException('At least one valid scope is required', 'scopes');
 		}
 
 		$webhook = $this->repository->getByWebhookId($command->webHookPassword);
 		if ($webhook === null)
 		{
-			throw new ObjectNotFoundException('Incoming webhook not found');
+			throw new IncomingWebhookNotFoundException();
 		}
 
 		$accessChecker = new WebhookAccessChecker($command->userId);

@@ -17,7 +17,7 @@ class DocumentSupportPolicy extends BaseSupportPolicy
 
 		if ($contentType === 'text/plain' || $file->getExtension() === 'txt')
 		{
-			return false;
+			return true;
 		}
 
 		$documentHandler = DocumentViewPolicy::getDefaultHandlerForView();

@@ -27,7 +27,12 @@ class TaskResponseMapper
 	{
 	}
 
-	public function mapFromArray(array $taskData, CheckList $checkList, int $userId): array
+	public function mapFromArray(
+		array $taskData,
+		CheckList $checkList,
+		int $userId,
+		?string $groupDisplayType = null,
+	): array
 	{
 		$taskId = (int)($taskData['ID'] ?? 0);
 
@@ -44,10 +49,10 @@ class TaskResponseMapper
 			parent: $this->mapTask((int)($taskData['PARENT_ID'] ?? 0)),
 		);
 
-		return $this->mapFromEntity($task, $checkList, $userId);
+		return $this->mapFromEntity($task, $checkList, $userId, $groupDisplayType);
 	}
 
-	public function mapFromEntity(Task $task, CheckList $checkList, int $userId): array
+	public function mapFromEntity(Task $task, CheckList $checkList, int $userId, ?string $groupDisplayType = null): array
 	{
 		$deadline = $task->deadlineTs ? DateTime::createFromTimestamp($task->deadlineTs) : null;
 
@@ -59,7 +64,7 @@ class TaskResponseMapper
 			'responsible' => $this->mapUserFromEntity($task->responsible),
 			'deadline' => $deadline?->format(BaseSchemaBuilder::DATE_FORMAT),
 			'checklist' => $this->mapCheckList($checkList),
-			'group' => $this->mapGroupFromEntity($task->group),
+			'group' => $this->mapGroupFromEntity($task->group, $groupDisplayType),
 			'priority' => $task->priority?->value,
 			'status' => $task->status?->value,
 			'parentTaskId' => $task->parent?->getId(),
@@ -118,18 +123,25 @@ class TaskResponseMapper
 		];
 	}
 
-	private function mapGroupFromEntity(?Group $group): ?array
+	private function mapGroupFromEntity(?Group $group, ?string $displayType): ?array
 	{
 		if ($group === null)
 		{
 			return null;
 		}
 
-		return [
-			'id' => $group->getId(),
+		$result = [
+			'id' => $group->id,
 			'name' => $group->name,
 			'type' => $group->type,
 		];
+
+		if ($displayType !== null)
+		{
+			$result['displayType'] = $displayType;
+		}
+
+		return $result;
 	}
 
 	private function mapUserFromArray(int $id, ?string $name, ?string $lastName): ?User

@@ -46,7 +46,12 @@ class TemplateEditRule extends AbstractRule
 			return true;
 		}
 
-		$isInDepartment = $item->isInDepartment($this->user->getUserId(), false, [RoleDictionary::ROLE_DIRECTOR]);
+		$isInDepartment = $item->isInMembersDepartments(
+			$this->user->getUserId(),
+			[
+				RoleDictionary::ROLE_DIRECTOR,
+			],
+		);
 
 		if (
 			$isInDepartment

@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class LeaveUserActionMessage implements ActionMessageInterface
 {
@@ -29,13 +30,25 @@ class LeaveUserActionMessage implements ActionMessageInterface
 
 		$this->deleteUsersFromChat($this->collabId, $this->senderId);
 
+		$isNewProjectsOn = Feature::isNewProjectsOn();
+
+		$phraseCode = $isNewProjectsOn
+			? 'SOCIALNETWORK_V2_PROJECT_CHAT_USER_LEAVE'
+			: 'SOCIALNETWORK_COLLAB_CHAT_USER_LEAVE'
+		;
+
 		$message = (string)Loc::getMessage(
-			'SOCIALNETWORK_COLLAB_CHAT_USER_LEAVE' . $this->getGenderSuffix($this->senderId),
+			$phraseCode . $this->getGenderSuffix($this->senderId),
 			[
 				'#SENDER_NAME#' => $this->getName($this->senderId, $this->senderId, $this->collabId),
 			],
 		);
 
-		return $this->sendMessage($message, $this->senderId, $this->collabId);
+		return $this->sendMessage(
+			message: $message,
+			senderId: $this->senderId,
+			groupId: $this->collabId,
+			silent: $isNewProjectsOn ? self::SILENT_WITH_RECENT : self::SILENT_OFF,
+		);
 	}
 }

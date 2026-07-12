@@ -859,6 +859,8 @@ class Task implements Recyclebinable
 				return;
 			}
 
+			Container::getInstance()->getChatIntegration()->updateParentChat($taskEntity);
+
 			$members = $taskEntity->getMembers();
 
 			if (!$members->isEmpty())

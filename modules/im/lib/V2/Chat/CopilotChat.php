@@ -113,8 +113,18 @@ class CopilotChat extends GroupChat
 			return $result->addError(new Error(ChatError::COPILOT_NOT_INSTALLED));
 		}
 
-		$context ??= new Context();
-		$params['USERS'] = [$context->getUserId(), $copilotBotId];
+		if (isset($params['USERS']))
+		{
+			if (!in_array($copilotBotId, $params['USERS'], true))
+			{
+				$params['USERS'][] = $copilotBotId;
+			}
+		}
+		else
+		{
+			$context ??= new Context();
+			$params['USERS'] = [$context->getUserId(), $copilotBotId];
+		}
 
 		return parent::add($params, $context);
 	}
@@ -287,13 +297,6 @@ class CopilotChat extends GroupChat
 		return null;
 	}
 
-	protected function prepareParams(array $params = []): Result
-	{
-		unset($params['TITLE']);
-
-		return parent::prepareParams($params);
-	}
-
 	public static function getTitleTemplate(): ?string
 	{
 		return Loc::getMessage('IM_CHAT_COPILOT_CHAT_TITLE');
@@ -363,6 +366,13 @@ class CopilotChat extends GroupChat
 		}
 
 		return parent::deleteUser($userId, $config);
+	}
+
+	protected function getConfigForCascadeAddUsers(AddUsersConfig $config): AddUsersConfig
+	{
+		return parent::getConfigForCascadeAddUsers($config)
+			->addHiddenUserIds([CopilotChatBot::getBotId()])
+		;
 	}
 
 	public function toPullFormat(): array

@@ -36,6 +36,11 @@ class CallUser
 		return $instance;
 	}
 
+	public function getUserId(): int
+	{
+		return (int)$this->userId;
+	}
+
 	/**
 	 * @return string
 	 */

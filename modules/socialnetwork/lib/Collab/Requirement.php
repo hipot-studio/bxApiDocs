@@ -12,6 +12,8 @@ use Bitrix\SocialNetwork\Collab\Access\CollabAccessController;
 use Bitrix\SocialNetwork\Collab\Access\CollabDictionary;
 use Bitrix\SocialNetwork\Collab\Access\Model\CollabModel;
 use Bitrix\Socialnetwork\Collab\Integration\Extranet\Extranet;
+use Bitrix\Socialnetwork\Helper\Workgroup\Access;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class Requirement
 {
@@ -27,19 +29,40 @@ class Requirement
 
 	public static function checkWithAccess(int $userId): Result
 	{
+		static $cache = [];
+
+		if (isset($cache[$userId]))
+		{
+			return $cache[$userId];
+		}
+
 		$result = static::check();
 
 		if (!$result->isSuccess())
 		{
-			return $result;
+			return $cache[$userId] = $result;
+		}
+
+		$isNewProjectOn = Feature::isNewProjectsOn();
+		if ($isNewProjectOn)
+		{
+			if (!Access::canCreate())
+			{
+				$result->addError(new Error('Access denied'));
+			}
+
+			return $cache[$userId] = $result;
 		}
 
 		$accessController = CollabAccessController::getInstance($userId);
-		$accessController->check(CollabDictionary::CREATE, new CollabModel());
+		$accessResult = $accessController->check(CollabDictionary::CREATE, new CollabModel());
 
-		$result->addErrors($accessController->getErrors());
+		if (!$accessResult)
+		{
+			$result->addErrors($accessController->getErrors());
+		}
 
-		return $result;
+		return $cache[$userId] = $result;
 	}
 
 	public static function check(): Result

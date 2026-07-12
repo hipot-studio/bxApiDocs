@@ -2,7 +2,7 @@
 namespace Bitrix\Tasks\Rest\Controllers\Template;
 
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;

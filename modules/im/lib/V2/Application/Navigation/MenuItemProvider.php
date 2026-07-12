@@ -96,7 +96,10 @@ class MenuItemProvider
 			),
 			new MenuItem(
 				id: 'collab',
-				text: Loc::getMessage('IM_NAVIGATION_MENU_COLLAB'),
+				text:
+					$this->applicationFeatures->isNestedChatAvailable
+						? Loc::getMessage('IM_NAVIGATION_MENU_PROJECTS')
+						: Loc::getMessage('IM_NAVIGATION_MENU_COLLAB'),
 				isVisible: $this->applicationFeatures->collabAvailable,
 				sort: self::SORT_COLLAB,
 			),

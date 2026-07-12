@@ -23,7 +23,7 @@ class Collabs extends BaseCollabSource
 			->setDistinct()
 			->setSelect([self::USER_ID_FIELD_NAME => 'OTHER.USER_ID'])
 			->where('USER_ID', $this->targetId)
-			->where('MESSAGE_TYPE', Chat::IM_TYPE_COLLAB)
+			->whereIn('MESSAGE_TYPE', [Chat::IM_TYPE_COLLAB, Chat::IM_TYPE_OPEN_COLLAB])
 			->registerRuntimeField($this->getSelfJoin())
 			->whereNotNull('OTHER.USER.LAST_ACTIVITY_DATE')
 			->setLimit($limit)
@@ -75,8 +75,8 @@ class Collabs extends BaseCollabSource
 			RelationTable::class,
 			Join::on('this.CHAT_ID', 'ref.CHAT_ID')
 				->whereColumn('this.USER_ID', '!=', 'ref.USER_ID')
-				->where('this.MESSAGE_TYPE', Chat::IM_TYPE_COLLAB)
-				->where('ref.MESSAGE_TYPE', Chat::IM_TYPE_COLLAB)
+				->whereIn('this.MESSAGE_TYPE', [Chat::IM_TYPE_COLLAB, Chat::IM_TYPE_OPEN_COLLAB])
+				->whereIn('ref.MESSAGE_TYPE', [Chat::IM_TYPE_COLLAB, Chat::IM_TYPE_OPEN_COLLAB])
 				->where('this.USER_ID', $this->targetId),
 			['join_type' => Join::TYPE_INNER]
 		);

@@ -820,9 +820,12 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 		$this->debugMode = (isset($post['debugMode']) && $post['debugMode'] === 'Y');
 		$this->userId = Util\User::getId();
 
+		$groupId = (int)$this->arParams['GROUP_ID'];
+
 		$itemIds = (is_array($post['itemIds'] ?? null) ? $post['itemIds'] : []);
 		$epicId = (is_numeric($post['epicId'] ?? null) ? (int) $post['epicId'] : 0);
 
+		$entityService = new EntityService();
 		$itemService = new ItemService();
 		$epicService = new EpicService();
 		$pushService = (Loader::includeModule('pull') ? new PushService() : null);
@@ -830,11 +833,24 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 		$epic = $epicService->getEpic($epicId);
 		$epicId = $epic->getId() ?: 0;
 
+		if ($epic->getGroupId() !== $groupId)
+		{
+			$this->setError(Loc::getMessage('TASKS_SCRUM_SYSTEM_ERROR'));
+
+			return null;
+		}
+
 		foreach ($itemIds as $itemId)
 		{
 			$itemId = (is_numeric($itemId) ? (int) $itemId : 0);
 
 			$item = $itemService->getItemById($itemId);
+			$itemEntity = $entityService->getEntityById($item->getEntityId());
+			if ($itemEntity->getGroupId() !== $groupId)
+			{
+				continue;
+			}
+
 			if (
 				!$item->isEmpty()
 				&& TaskAccessController::can(
@@ -1048,6 +1064,13 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 			return null;
 		}
 
+		if ($sprint->getGroupId() !== $groupId)
+		{
+			$this->setError(Loc::getMessage('TASKS_SCRUM_SPRINT_GET_COMPLETED_ITEMS_ERROR'));
+
+			return null;
+		}
+
 		$itemService = new ItemService();
 		$taskService = new TaskService($this->userId);
 		$taskService->setOwnerId($this->arParams['OWNER_ID']);
@@ -1186,6 +1209,10 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 				if ($item->getEntityId() !== $targetEntity->getId())
 				{
 					$sourceEntity = $entityService->getEntityById($item->getEntityId());
+					if ($sourceEntity->getGroupId() !== $groupId)
+					{
+						continue;
+					}
 
 					$taskId = $item->getSourceId();
 					$subTaskIds = $taskService->getSubTaskIds($groupId, $taskId);
@@ -1262,11 +1289,20 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 		$name = (is_string($post['name'] ?? null) ? $post['name'] : '');
 		$storyPoints = (is_string($post['storyPoints'] ?? null) ? $post['storyPoints'] : null);
 
+		$entityService = new EntityService();
 		$itemService = new ItemService();
 		$pushService = (Loader::includeModule('pull') ? new PushService() : null);
 
 		$item = $itemService->getItemById($itemId);
 		if ($item->isEmpty())
+		{
+			$this->setError(Loc::getMessage('TASKS_SCRUM_ITEM_UPDATE_ERROR'));
+
+			return null;
+		}
+
+		$entity = $entityService->getEntityById($item->getEntityId());
+		if ($entity->getGroupId() !== $groupId)
 		{
 			$this->setError(Loc::getMessage('TASKS_SCRUM_ITEM_UPDATE_ERROR'));
 
@@ -1732,6 +1768,13 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 		$this->userId = Util\User::getId();
 		$groupId = (int) $this->arParams['GROUP_ID'];
 
+		if (!$this->canReadGroupTasks($groupId))
+		{
+			$this->setError(Loc::getMessage('TASKS_SCRUM_ACCESS_TO_GROUP_DENIED'));
+
+			return null;
+		}
+
 		$pageNumber = (is_numeric($post['pageNumber'] ?? null) ? (int) $post['pageNumber'] : 1);
 
 		$nav = $this->getNavToCompletedSprints($pageNumber);
@@ -1774,6 +1817,8 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 	public function getCompletedSprintsStatsAction()
 	{
 		$this->checkModules();
+
+
 
 		$request = Context::getCurrent()->getRequest();
 		$post = $request->getPostList()->toArray();

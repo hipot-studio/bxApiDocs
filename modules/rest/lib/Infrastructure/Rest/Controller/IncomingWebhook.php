@@ -6,6 +6,7 @@ namespace Bitrix\Rest\Infrastructure\Rest\Controller;
 
 use Bitrix\Main;
 use Bitrix\Main\Provider\Params\Pager;
+use Bitrix\Rest\Enum\APAuth\PasswordType;
 use Bitrix\Rest\Infrastructure\Rest\Dto\IncomingWebhook\IncomingWebhookDto;
 use Bitrix\Rest\Infrastructure\Rest\Dto\IncomingWebhook\IncomingWebhookDtoMapper;
 use Bitrix\Rest\Infrastructure\Rest\Request\AddIncomingWebhookRequest;
@@ -105,6 +106,7 @@ final class IncomingWebhook extends RestController
 			new IncomingWebhookParams(
 				webhookFilter: new IncomingWebhookFilter(
 					userId: (int)$this->getCurrentUser()->getId(),
+					type: PasswordType::User,
 				),
 				pager: new Pager(
 					limit: $request->pagination?->getLimit() ?? 50,

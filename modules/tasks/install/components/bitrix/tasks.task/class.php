@@ -16,7 +16,7 @@ use Bitrix\AI;
 use Bitrix\Disk\Driver;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\Response\Component;

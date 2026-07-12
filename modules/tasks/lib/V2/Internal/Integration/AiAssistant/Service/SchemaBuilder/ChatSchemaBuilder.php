@@ -36,7 +36,7 @@ class ChatSchemaBuilder extends BaseSchemaBuilder
 			],
 			'text' => [
 				'type' => 'string',
-				'description' => 'Text to send. Must not be an empty string.',
+				'description' => 'Text to send. Must not be an empty string.' . BaseSchemaBuilder::FORMATTING_NOTE,
 				'minLength' => 1,
 			],
 		];

@@ -2,18 +2,20 @@
 
 namespace Bitrix\Tasks\Flow\Control\Decorator;
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
-use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\LoaderException;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Flow\Control\Command\AddCommand;
 use Bitrix\Tasks\Flow\Control\Command\UpdateCommand;
 use Bitrix\Tasks\Flow\Control\Exception\CommandNotFoundException;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotAddedException;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotFoundException;
 use Bitrix\Tasks\Flow\Control\Exception\FlowNotUpdatedException;
-use Bitrix\Tasks\Flow\Integration\Socialnetwork\UpdateGroupCommand;
 use Bitrix\Tasks\Flow\Control\Exception\InvalidCommandException;
 use Bitrix\Tasks\Flow\Flow;
-use Bitrix\Tasks\Flow\Integration\Socialnetwork\GroupService;
+use Bitrix\Tasks\Flow\Integration\Socialnetwork\MemberService;
 use Psr\Container\NotFoundExceptionInterface;
 
 class ProjectMembersProxyDecorator extends AbstractFlowServiceDecorator
@@ -54,16 +56,14 @@ class ProjectMembersProxyDecorator extends AbstractFlowServiceDecorator
 		return parent::update($command);
 	}
 
-	protected function addOwnerToProject(AddCommand|UpdateCommand $command): int
+	/**
+	 * @throws ArgumentException
+	 * @throws LoaderException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	protected function addOwnerToProject(AddCommand|UpdateCommand $command): void
 	{
-		$updateCommand =
-			(new UpdateGroupCommand())
-				->setId($command->groupId)
-				->setMembers([$command->ownerId])
-		;
-
-		$service = ServiceLocator::getInstance()->get('tasks.flow.socialnetwork.project.service');
-
-		return $service->update($updateCommand);
+		(new MemberService())->addMembers($command->groupId, [$command->ownerId], $command->ownerId);
 	}
 }

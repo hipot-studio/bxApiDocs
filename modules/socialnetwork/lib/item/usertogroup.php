@@ -362,7 +362,8 @@ class UserToGroup
 					'=USER_ID' => (int)$userFields['ID'],
 					'@GROUP_ID' => $groupListMinus,
 					'@ROLE' => [ UserToGroupTable::ROLE_OWNER, UserToGroupTable::ROLE_MODERATOR, UserToGroupTable::ROLE_USER ],
-					'AUTO_MEMBER' => 'Y'
+					'AUTO_MEMBER' => 'Y',
+					'!INITIATED_BY_TYPE' => UserToGroupTable::INITIATED_BY_STRUCTURE,
 				],
 				'select' => [ 'ID' ],
 			]);
@@ -543,11 +544,6 @@ class UserToGroup
 			return false;
 		}
 
-		if (!$group->isCollab() && !Integration\Im\Chat\Workgroup::getUseChat())
-		{
-			return false;
-		}
-
 		if ($group->isCollab() && ActionType::isValid($action))
 		{
 			$factory = ActionMessageFactory::getInstance();
@@ -655,6 +651,7 @@ class UserToGroup
 				"MESSAGE" => $chatMessage,
 				"SYSTEM" => "Y",
 				"INCREMENT_COUNTER" => "N",
+				'SKIP_COUNTER_INCREMENTS' => 'Y',
 				"PUSH" => "N"
 			];
 

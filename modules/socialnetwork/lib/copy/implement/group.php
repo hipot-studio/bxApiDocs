@@ -63,6 +63,11 @@ class Group extends CopyImplementer
 		$this->projectTerm = $projectTerm;
 	}
 
+	public function getProjectTerm(): array
+	{
+		return $this->projectTerm;
+	}
+
 	public function setChangedFields($changedFields)
 	{
 		$this->changedFields = array_merge($this->changedFields, $changedFields);
@@ -108,7 +113,7 @@ class Group extends CopyImplementer
 		{
 			\CSocNetFeatures::setFeature(SONET_ENTITY_GROUP, $groupId, "files", true, false);
 
-			if (isset($fields["OWNER_ID"]))
+			if ($this->shouldUpdateOwner($fields))
 			{
 				if (\CSocNetUserToGroup::setOwner($fields["OWNER_ID"], $groupId))
 				{
@@ -127,6 +132,11 @@ class Group extends CopyImplementer
 		}
 
 		return $groupId;
+	}
+
+	private function shouldUpdateOwner(array $fields): bool
+	{
+		return isset($fields['OWNER_ID']) && (int)$fields['OWNER_ID'] !== (int)$this->executiveUserId;
 	}
 
 	public function getFields(Container $container, $entityId)

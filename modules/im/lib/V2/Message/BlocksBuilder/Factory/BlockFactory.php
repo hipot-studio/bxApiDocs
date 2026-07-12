@@ -6,6 +6,7 @@ namespace Bitrix\Im\V2\Message\BlocksBuilder\Factory;
 
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\AbstractBlock;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\AiAssistantSearch;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Gallery;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\LineDivider;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Map;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\OrderedList;
@@ -15,6 +16,7 @@ use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Text;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Title;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\UnorderedList;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlockType;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Card;
 
 class BlockFactory
 {
@@ -31,6 +33,8 @@ class BlockFactory
 			BlockType::Map => Map::create($blockData),
 			BlockType::Table => Table::create($blockData),
 			BlockType::AiAssistantSearch => AiAssistantSearch::create($blockData),
+			BlockType::Card => Card::create($blockData),
+			BlockType::Gallery => Gallery::create($blockData),
 			default => null,
 		};
 	}
@@ -48,6 +52,8 @@ class BlockFactory
 			BlockType::Map => Map::getRequiredFields(),
 			BlockType::Table => Table::getRequiredFields(),
 			BlockType::AiAssistantSearch => AiAssistantSearch::getRequiredFields(),
+			BlockType::Card => Card::getRequiredFields(),
+			BlockType::Gallery => Gallery::getRequiredFields(),
 			default => [],
 		};
 	}

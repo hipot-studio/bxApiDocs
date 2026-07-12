@@ -25,6 +25,11 @@ class CollabOptions implements ValueObjectInterface, CreateWithDefaultValueInter
 		$data = array_merge(OptionFactory::DEFAULT_OPTIONS, $data);
 		foreach ($data as $optionName => $optionValue)
 		{
+			if (is_int($optionValue) || is_float($optionValue))
+			{
+				$optionValue = (string)$optionValue;
+			}
+
 			$option = AbstractOption::create([$optionName => $optionValue]);
 			$value->addOption($option);
 		}

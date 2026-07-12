@@ -24,13 +24,13 @@ class BotService
 		$this->sendingConfig = $sendingConfig;
 	}
 
-	public function runMessageCommand(int $messageId, array $fields): void
+	public function runMessageCommand(Im\V2\Message $message, array $fields): void
 	{
 		$fields['COMMAND_CONTEXT'] = 'TEXTAREA';
-		$result = Im\Command::onCommandAdd($messageId, $fields);
+		$result = Im\Command::onCommandAdd($message->getId(), $fields);
 		if (!$result)
 		{
-			Im\Bot::onMessageAdd($messageId, $fields);
+			Im\Bot::onMessageAdd($message->getId(), $fields, $message);
 		}
 	}
 }

@@ -329,6 +329,7 @@ class Recent
 			if ($skipCollabOption === 'Y')
 			{
 				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_COLLAB;
+				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_COLLAB;
 			}
 			if (!RecentConfigManager::EXTERNAL_CHAT_USE_DEFAULT_RECENT_SECTION)
 			{
@@ -1016,7 +1017,7 @@ class Recent
 				'FILE' => false,
 				'AUTHOR_ID' =>  0,
 				'ATTACH' => false,
-				'BUILDER' => false,
+				'BLOCK' => false,
 				'STICKER' => null,
 				'DATE' => $row['DATE_MESSAGE']?: $row['DATE_UPDATE'],
 				'STATUS' => $row['CHAT_LAST_MESSAGE_STATUS'],
@@ -1082,7 +1083,7 @@ class Recent
 			'FILE' => $row['MESSAGE_FILE'],
 			'AUTHOR_ID' =>  (int)$row['MESSAGE_AUTHOR_ID'],
 			'ATTACH' => $attach,
-			'BUILDER' => $row['BUILDER'],
+			'BLOCK' => $row['BLOCK'],
 			'STICKER' => $sticker,
 			'DATE' => $row['DATE_MESSAGE']?: $row['DATE_UPDATE'],
 			'STATUS' => $row['CHAT_LAST_MESSAGE_STATUS'],
@@ -2059,9 +2060,9 @@ class Recent
 				$fileIds[$messageId] = (int)$item['PARAM_VALUE'];
 				$result[$messageId]['MESSAGE_FILE'] = true;
 			}
-			elseif ($paramName === 'BUILDER')
+			elseif ($paramName === 'BLOCK')
 			{
-				$result[$messageId]['BUILDER'] = true;
+				$result[$messageId]['BLOCK'] = true;
 			}
 		}
 
@@ -2118,7 +2119,7 @@ class Recent
 			$rows[$key]['MESSAGE_FILE'] = $params[$messageId]['MESSAGE_FILE'] ?? false;
 			$rows[$key]['RELATION_USER_ID'] = $row['RELATION_ID'] ? $userId : null;
 			$rows[$key]['MESSAGE_STICKER'] = $params[$messageId]['STICKER'] ?? null;
-			$rows[$key]['BUILDER'] = $params[$messageId]['BUILDER'] ?? false;
+			$rows[$key]['BLOCK'] = $params[$messageId]['BLOCK'] ?? false;
 		}
 
 		return $rows;

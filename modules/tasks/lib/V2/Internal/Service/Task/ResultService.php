@@ -384,6 +384,7 @@ class ResultService
 				'fileIds' => $result->fileIds ?? [],
 				'messageId' => $result->messageId ?? 0,
 				'type' => $result->type ?? null,
+				'resultId' => $result->getId(),
 			],
 		);
 	}

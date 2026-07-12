@@ -19,7 +19,9 @@ use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\Integration\AI\CallAIError;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Integration\AI\CallAIService;
+use Bitrix\Call\Idempotence;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
+use Bitrix\Call\Controller\Filter\UniqueRequestFilter;
 
 /**
  * @internal
@@ -57,12 +59,25 @@ class CallController extends BaseReceiver
 	}
 
 	/**
+	 * @return array[]
+	 */
+	public function configureActions(): array
+	{
+		return [
+			'trackReady' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(),
+				],
+			],
+		];
+	}
+
+
+	/**
 	 * @restMethod call.CallController.finishCall
 	 */
 	public function finishCallAction(ControllerRequest $callRequest): ?array
 	{
-		Loader::includeModule('im');
-
 		$call = CallFactory::searchActiveByUuid(Call::PROVIDER_BITRIX, $callRequest->callUuid);
 		if (!isset($call))
 		{
@@ -81,8 +96,6 @@ class CallController extends BaseReceiver
 	 */
 	public function disconnectUserAction(ControllerRequest $callRequest): ?array
 	{
-		Loader::includeModule('im');
-
 		$call = CallFactory::searchActiveByUuid(Call::PROVIDER_BITRIX, $callRequest->callUuid);
 		if (!isset($call))
 		{
@@ -200,6 +213,11 @@ class CallController extends BaseReceiver
 			$log && $logger->error("Save track error: ".implode('; ', $saveResult->getErrorMessages()));
 			$this->addErrors($saveResult->getErrors());
 			return null;
+		}
+
+		if ($trackFile->trackId)
+		{
+			Idempotence::addKey('track:' . $trackFile->trackId);
 		}
 
 		(new FollowUpAnalytics($call))

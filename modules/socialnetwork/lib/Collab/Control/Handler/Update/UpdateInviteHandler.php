@@ -41,13 +41,27 @@ class UpdateInviteHandler implements UpdateHandlerInterface
 
 		$add = array_diff($membersByCommand, $this->getMemberIds($command->getId()));
 
-		[$employeeIds, $guestIds] = EmployeeProvider::getInstance()->splitIntoEmployeesAndGuests($add);
+		[$employeeIds, $guestIds, $botIds] = EmployeeProvider::getInstance()->splitIntoEmployeesGuestsAndBots($add);
 
-		$handlerResult = $this->inviteMembers(
+		$nonBotIds = array_merge($employeeIds, $guestIds);
+
+		$inviteResult = $this->inviteMembers(
 			$command->getId(),
 			$command->getInitiatorId(),
-			...$add
+			...$nonBotIds,
 		);
+
+		$handlerResult->merge($inviteResult);
+
+		$botResult = $this->addMembers(
+			$command->getId(),
+			$command->getInitiatorId(),
+			UserToGroupTable::ROLE_USER,
+			UserToGroupTable::INITIATED_BY_GROUP,
+			...$botIds,
+		);
+
+		$handlerResult->merge($botResult);
 
 		if (!$handlerResult->isSuccess())
 		{
@@ -65,15 +79,31 @@ class UpdateInviteHandler implements UpdateHandlerInterface
 
 		ActionMessageBuffer::getInstance()
 			->put(ActionType::InviteGuest, $command->getId(), $command->getInitiatorId(), $guestIds, $parameters)
-			->put(ActionType::InviteUser, $command->getId(), $command->getInitiatorId(), $employeeIds, $parameters);
+			->put(ActionType::InviteUser, $command->getId(), $command->getInitiatorId(), $employeeIds, $parameters)
+			->put(ActionType::AddBot, $command->getId(), $command->getInitiatorId(), $botIds)
+		;
 
-		$writeToLogResult = $this->writeAddMemberLog(
-			$add,
+		$writeInviteLogResult = $this->writeAddMemberLog(
+			$nonBotIds,
 			$command->getId(),
 			$command->getInitiatorId(),
 			UserToGroupTable::ROLE_REQUEST
 		);
 
-		return $handlerResult->merge($writeToLogResult);
+		$handlerResult->merge($writeInviteLogResult);
+
+		if (!empty($botIds))
+		{
+			$writeBotLogResult = $this->writeAddMemberLog(
+				$botIds,
+				$command->getId(),
+				$command->getInitiatorId(),
+				UserToGroupTable::ROLE_USER,
+			);
+
+			$handlerResult->merge($writeBotLogResult);
+		}
+
+		return $handlerResult;
 	}
 }

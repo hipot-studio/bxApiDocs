@@ -18,7 +18,7 @@ class UserRowAssembler extends RowAssembler
 
 	protected function prepareFieldAssemblers(): array
 	{
-		return [
+		$assemblers = [
 			new Field\UFFieldAssembler(
 				array_keys($this->settings->getUserFields()),
 				$this->settings
@@ -35,15 +35,23 @@ class UserRowAssembler extends RowAssembler
 			new Field\JsFields\ActivityDateFieldAssembler(['LAST_ACTIVITY_DATE'], $this->settings),
 			new Field\MobileAppsField(['MOBILE_APPS'], $this->settings),
 			new Field\DesktopAppsField(['DESKTOP_APPS'], $this->settings),
-			new Field\CountryFieldAssembler(['PERSONAL_COUNTRY', 'WORK_COUNTRY']),
-			new Field\PhoneNumberField(['PERSONAL_PHONE', 'PERSONAL_MOBILE', 'WORK_PHONE']),
-			new Field\StringFieldAssembler([
-				'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'PERSONAL_WWW', 'PERSONAL_CITY', 'WORK_STATE',
-				'PERSONAL_STREET', 'PERSONAL_ZIP', 'PERSONAL_MAILBOX', 'PERSONAL_COUNTRY', 'WORK_CITY', 'WORK_STREET',
-				'WORK_ZIP', 'WORK_MAILBOX', 'WORK_COUNTRY', 'WORK_POSITION', 'WORK_COMPANY', 'WORK_DEPARTMENT'
-				]),
-			new Field\JsFields\ConnectFieldAssembler(['CONNECT'], $this->settings),
-			new Field\IntegratorFieldAssembler(['INTEGRATOR'], $this->settings),
 		];
+
+		if ($this->settings->isCurrentUserAdmin() && \Bitrix\Main\Loader::includeModule('security'))
+		{
+			$assemblers[] = new Field\JsFields\OtpStatusFieldAssembler(['OTP_STATUS'], $this->settings);
+		}
+
+		$assemblers[] = new Field\CountryFieldAssembler(['PERSONAL_COUNTRY', 'WORK_COUNTRY']);
+		$assemblers[] = new Field\PhoneNumberField(['PERSONAL_PHONE', 'PERSONAL_MOBILE', 'WORK_PHONE']);
+		$assemblers[] = new Field\StringFieldAssembler([
+			'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'PERSONAL_WWW', 'PERSONAL_CITY', 'WORK_STATE',
+			'PERSONAL_STREET', 'PERSONAL_ZIP', 'PERSONAL_MAILBOX', 'PERSONAL_COUNTRY', 'WORK_CITY', 'WORK_STREET',
+			'WORK_ZIP', 'WORK_MAILBOX', 'WORK_COUNTRY', 'WORK_POSITION', 'WORK_COMPANY', 'WORK_DEPARTMENT'
+		]);
+		$assemblers[] = new Field\JsFields\ConnectFieldAssembler(['CONNECT'], $this->settings);
+		$assemblers[] = new Field\IntegratorFieldAssembler(['INTEGRATOR'], $this->settings);
+
+		return $assemblers;
 	}
 }

@@ -4,20 +4,21 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\SharingLink;
 
+use Bitrix\Im\Integration\Network\GuestNetworkPortalRegistry;
 use Bitrix\Im\Model\SharingLinkTable;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Im\V2\SharingLink\Entity\LinkEntityType;
 use Bitrix\Main\Application;
-use Bitrix\Main\ModuleManager;
+use Bitrix\Main\DI\ServiceLocator;
 
 /**
  * Guest chat sharing link implementation.
  *
  * Uses individual links for each guest user.
- * External URL format: https://b24.to/gi/{base64url(protocol://portal/code)}
- * Internal URL format: /guest/{code}
+ * External URL format: https://b24.to/gi/{portalId}-{code}
+ * Fallback (no portal id / network unavailable): {publicDomain}/guest/{code}
  */
 class GuestChatLink extends ChatLink
 {
@@ -45,18 +46,22 @@ class GuestChatLink extends ChatLink
 		return parent::canDo($action, $target);
 	}
 
+	protected function getGuestNetworkPortalRegistry(): GuestNetworkPortalRegistry
+	{
+		return ServiceLocator::getInstance()->get(GuestNetworkPortalRegistry::class);
+	}
+
 	protected function getUrl(): string
 	{
-		$internalUrl = \Bitrix\Im\Common::getPublicDomain() . '/guest/' . $this->getCode();
+		$guestCode = $this->getCode();
 
-		if (!ModuleManager::isModuleInstalled('bitrix24'))
+		$portalId = $this->getGuestNetworkPortalRegistry()->getPortalId();
+		if ($portalId !== null && $portalId !== '')
 		{
-			return $internalUrl;
+			return self::DEEPLINK_BASE_URL . $portalId . '-' . $guestCode;
 		}
 
-		$encoded = rtrim(strtr(base64_encode($internalUrl), '+/', '-_'), '=');
-
-		return self::DEEPLINK_BASE_URL . $encoded;
+		return \Bitrix\Im\Common::getPublicDomain() . '/guest/' . $guestCode;
 	}
 
 	/**

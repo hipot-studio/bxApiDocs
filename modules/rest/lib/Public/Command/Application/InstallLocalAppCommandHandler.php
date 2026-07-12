@@ -26,9 +26,7 @@ class InstallLocalAppCommandHandler
 	)
 	{
 		$this->applicationInstaller = $applicationInstaller
-			?? new ApplicationInstaller(
-				ServiceLocator::getInstance()->get('rest.repository.app'),
-			);
+			?? ServiceLocator::getInstance()->get(ApplicationInstaller::class);
 	}
 
 	/**

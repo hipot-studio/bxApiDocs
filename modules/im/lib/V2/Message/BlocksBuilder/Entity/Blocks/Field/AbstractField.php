@@ -32,4 +32,9 @@ abstract class AbstractField
 
 		return in_array(mb_strtoupper((string)$value), ['Y', '1', 'TRUE'], true);
 	}
+
+	protected function isAllowedUrl(string $url): bool
+	{
+		return (bool)preg_match('~^(?:/(?!/)|https?://[^/?#]+)~i', $url);
+	}
 }

@@ -30,6 +30,7 @@ class Dictionary
 		'shared' => '#shared#',
 		'shared_crm' => '#shared_crm#',
 		'resource_booking' => '#resourcebooking#',
+		// @deprecated
 		'collab' => '#collab#',
 		'shared_collab' => '#shared_collab#',
 		'booking' => '#booking#',

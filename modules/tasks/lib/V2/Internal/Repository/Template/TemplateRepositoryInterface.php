@@ -17,4 +17,8 @@ interface TemplateRepositoryInterface
 	public function delete(int $id): void;
 
 	public function invalidate(int $id): void;
+
+	public function getReplicateParams(int $templateId): ?array;
+
+	public function getReplicableTemplateIds(int $afterId, int $limit): array;
 }

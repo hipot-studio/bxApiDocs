@@ -17,6 +17,7 @@ class NotifyTaskOverdue extends AbstractNotify
 	public function __construct(
 		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
+		private readonly ChatActionLinkService $chatActionLinkService,
 	)
 	{
 		parent::__construct();
@@ -32,16 +33,16 @@ class NotifyTaskOverdue extends AbstractNotify
 
 	public function getMessageData(): array
 	{
+		$responsibleId = (int)$this->task->responsible?->id;
+
+		$completeTaskLink = $this->chatActionLinkService->get($this->task, $responsibleId, ChatAction::CompleteTask);
+		$changeDeadlineLink = $this->chatActionLinkService->get($this->task, $responsibleId, ChatAction::ChangeDeadline);
+
 		return [
 			'#RESPONSIBLE#' => $this->formatUser($this->task->responsible),
 			'#DEADLINE#' => $this->deadlineFormatter->format($this->task->deadlineTs),
+			'#COMPLETE_TASK_URL#' => $completeTaskLink,
+			'#CHANGE_DEADLINE_URL#' => $changeDeadlineLink,
 		];
-	}
-
-	public function toString(): string
-	{
-		$message = parent::toString();
-
-		return $this->stripBbCodeUrl($message);
 	}
 }

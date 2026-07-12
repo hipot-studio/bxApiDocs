@@ -4,7 +4,7 @@ namespace Bitrix\Tasks\Internals\Task;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\HttpApplication;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectPropertyException;

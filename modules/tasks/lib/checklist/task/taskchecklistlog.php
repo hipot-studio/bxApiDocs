@@ -3,7 +3,7 @@ namespace Bitrix\Tasks\CheckList\Task;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentTypeException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\CheckList\Internals\CheckList;
 use Bitrix\Tasks\UI;

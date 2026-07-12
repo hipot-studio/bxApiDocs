@@ -82,7 +82,7 @@ class CollabOnboardingPromotionService implements PromotionServiceInterface
 
 		$chat = Chat::getInstance((int)$promotion->getChatId());
 
-		$isCollabChat = $chat->getType() === Chat::IM_TYPE_COLLAB;
+		$isCollabChat = in_array($chat->getType(), [Chat::IM_TYPE_COLLAB, Chat::IM_TYPE_OPEN_COLLAB], true);
 		$collabId = (int)$chat->getEntityId();
 
 		$jobType = Type::createFromPromotionId($promotion->getId());

@@ -631,7 +631,8 @@ class DeleteService
 
 			\Bitrix\Im\Bot::onMessageDelete(
 				$id,
-				$messageForEvent
+				$messageForEvent,
+				$message
 			);
 
 			$deleteFlags = [

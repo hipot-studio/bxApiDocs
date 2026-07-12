@@ -10,6 +10,7 @@ enum ActionType: string
 	case InviteUser = 'invite_user';
 	case AddUser = 'add_user';
 	case AddGuest = 'add_guest';
+	case AddBot = 'add_bot';
 	case AcceptUser = 'accept_user';
 	case CreateCollab = 'create_collab';
 	case JoinUser = 'join_user';
@@ -19,6 +20,8 @@ enum ActionType: string
 	case RegenerateLink = 'regenerate_link';
 	case ConvertGroupToCollab = 'convert_group_to_collab';
 	case ConvertGroupToCollabRich = 'convert_group_to_collab_rich';
+	case CreateProject = 'create_project';
+	case CreateProjectRich = 'create_project_rich';
 
 	public static function values(): array
 	{

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Helper\Mailbox;
 
-use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\Enum\MailboxConnectionRequestStatus;
 use Bitrix\Mail\Helper\Message;
+use Bitrix\Mail\Internal\Async\Message\RepairConnectionRequestChatsMessage;
 use Bitrix\Mail\Integration\Im\ConnectionRequestChat;
 use Bitrix\Mail\Internals\MailboxConnectionRequestTable;
 use Bitrix\Main\Application;
@@ -17,13 +17,16 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Data\UpdateResult;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\UserTable;
 use Bitrix\Pull\Event;
 
 final class MailboxConnectionRequestService
 {
 	public const ERROR_LIMIT_EXCEEDED = 'MAIL_CONNECTION_REQUEST_LIMIT_EXCEEDED';
+	public const ERROR_MESSAGE_DELIVERY_FAILED = 'MAIL_CONNECTION_REQUEST_MESSAGE_DELIVERY_FAILED';
 	private const ERROR_ACCESS_DENIED = 'MAIL_CONNECTION_REQUEST_ACCESS_DENIED';
 	private const CONNECTION_REQUEST_RESPONSIBLE_ADMIN_ID_OPTION = 'connection_request_responsible_admin_id';
 
@@ -46,11 +49,6 @@ final class MailboxConnectionRequestService
 
 	public function isResponsibleAdmin(): bool
 	{
-		if (!Feature::isMailboxConnectionRequestAvailable())
-		{
-			return false;
-		}
-
 		return in_array($this->userId, $this->getResponsible(), true);
 	}
 
@@ -65,14 +63,7 @@ final class MailboxConnectionRequestService
 			return $result;
 		}
 
-		if (!MailboxConnector::checkConnectionLimits($this->userId))
-		{
-			$result->addError(new Error('Mailbox limit exceeded', self::ERROR_LIMIT_EXCEEDED));
-
-			return $result;
-		}
-
-		$addResult = $this->addPendingRequest($this->userId, $comment);
+		$addResult = $this->addPendingRequest($this->userId);
 		if (!$addResult->isSuccess())
 		{
 			$result->addErrors($addResult->getErrors());
@@ -84,16 +75,30 @@ final class MailboxConnectionRequestService
 
 		$adminIds = $this->getResponsible();
 
-		$chat = new ConnectionRequestChat();
-		$chatResult = $chat->getOrCreateChat($this->userId, $adminIds);
+		$chatResult = $this->getOrCreateChatForRequest([
+			'ID' => $addResult->getId(),
+			'REQUESTER_ID' => $this->userId,
+			'CHAT_ID' => 0,
+		], $adminIds);
 		if ($chatResult->isSuccess())
 		{
-			$chatData = $chatResult->getData();
-			$chatId = $chatData['chatId'];
+			$chat = new ConnectionRequestChat();
+			$chatId = (int)($chatResult->getData()['chatId'] ?? 0);
+			try
+			{
+				$chat->sendRequestMessage($chatId, $this->userId, $comment);
+			}
+			catch (\Throwable $exception)
+			{
+				Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+				MailboxConnectionRequestTable::delete($addResult->getId());
+				$this->invalidateAndNotifyPendingCountChange();
+				$result->addError(
+					new Error('Failed to send connection request message', self::ERROR_MESSAGE_DELIVERY_FAILED),
+				);
 
-			MailboxConnectionRequestTable::update($addResult->getId(), ['CHAT_ID' => $chatId]);
-
-			$chat->sendRequestMessage($chatId, $this->userId, $comment);
+				return $result;
+			}
 		}
 
 		$result->setData([
@@ -173,6 +178,22 @@ final class MailboxConnectionRequestService
 		return (new Result())->setData(['pendingCount' => $pendingCount]);
 	}
 
+	public function getOwnPendingRequest(): Result
+	{
+		$row = MailboxConnectionRequestTable::query()
+			->setSelect(['ID'])
+			->where('REQUESTER_ID', $this->userId)
+			->where('STATUS', MailboxConnectionRequestStatus::Pending->value)
+			->setLimit(1)
+			->fetch()
+		;
+
+		return (new Result())->setData([
+			'hasActiveRequest' => (bool)$row,
+			'canSendRequest' => !$this->isResponsibleAdmin(),
+		]);
+	}
+
 	public function cancelOwnRequest(): Result
 	{
 		$request = MailboxConnectionRequestTable::getList([
@@ -226,14 +247,13 @@ final class MailboxConnectionRequestService
 	 * @return array<array{
 	 *     ID: int,
 	 *     REQUESTER_ID: int,
-	 *     COMMENT: ?string,
 	 *     CREATED_AT: \Bitrix\Main\Type\DateTime
 	 * }>
 	 */
 	public function getPendingRequestsPaginated(int $limit, int $offset): array
 	{
 		return MailboxConnectionRequestTable::query()
-			->setSelect(['ID', 'REQUESTER_ID', 'COMMENT', 'CREATED_AT'])
+			->setSelect(['ID', 'REQUESTER_ID', 'CREATED_AT'])
 			->where('STATUS', MailboxConnectionRequestStatus::Pending->value)
 			->setOrder(['CREATED_AT' => 'DESC'])
 			->setLimit($limit)
@@ -347,19 +367,34 @@ final class MailboxConnectionRequestService
 			]);
 		}
 
-		// Find all pending requests with chats and ensure admins are present
+		(new MailboxGridButtonCounterRefreshService())->sendToUsers(array_values($adminIds));
+
+		self::dispatchPendingRequestChatsRepair();
+	}
+
+	public function repairPendingRequestChats(): void
+	{
+		$adminIds = array_values($this->getResponsible());
+		if (empty($adminIds))
+		{
+			return;
+		}
+
+		$chat = new ConnectionRequestChat();
 		$pendingRequests = MailboxConnectionRequestTable::getList([
 			'filter' => ['=STATUS' => MailboxConnectionRequestStatus::Pending->value],
 			'select' => ['ID', 'CHAT_ID', 'REQUESTER_ID'],
-		])->fetchAll();
+		]);
 
-		$chat = new ConnectionRequestChat();
-		foreach ($pendingRequests as $pendingRequest)
+		while ($pendingRequest = $pendingRequests->fetch())
 		{
-			$chatId = $service->getOrCreateChatIdForRequest($pendingRequest, array_values($adminIds));
-			if ($chatId > 0)
+			try
 			{
-				$chat->ensureAdminsInChat($chatId, array_values($adminIds));
+				$this->repairPendingRequestChat($pendingRequest, $adminIds, $chat);
+			}
+			catch (\Throwable $exception)
+			{
+				Application::getInstance()->getExceptionHandler()->writeToLog($exception);
 			}
 		}
 	}
@@ -369,19 +404,28 @@ final class MailboxConnectionRequestService
 		$responsibleId = $this->getResponsibleAdminId();
 		if ($responsibleId > 0)
 		{
-			return [$responsibleId];
+			$activeResponsibleIds = $this->filterActiveUserIds([$responsibleId]);
+			if (!empty($activeResponsibleIds))
+			{
+				return $activeResponsibleIds;
+			}
 		}
 
+		return $this->filterActiveUserIds($this->getAllAdminIds());
+	}
+
+	private function getAllAdminIds(): array
+	{
 		$adminIds = [];
 		if (Loader::includeModule('bitrix24'))
 		{
 			$adminIdsRaw = \CBitrix24::getAllAdminId();
-			foreach($adminIdsRaw as $adminIdRaw)
+			foreach ($adminIdsRaw as $adminIdRaw)
 			{
 				$adminIds[] = (int)$adminIdRaw;
 			}
 
-			return $adminIds;
+			return array_values(array_unique($adminIds));
 		}
 
 		$res = \CGroup::getGroupUserEx(1);
@@ -390,7 +434,7 @@ final class MailboxConnectionRequestService
 			$adminIds[] = (int)$row['USER_ID'];
 		}
 
-		return $adminIds;
+		return array_values(array_unique($adminIds));
 	}
 
 	public function hasActivePendingRequest(int $requesterId): bool
@@ -430,6 +474,8 @@ final class MailboxConnectionRequestService
 			]);
 		}
 
+		(new MailboxGridButtonCounterRefreshService())->sendToUsers($adminIds);
+
 		return $pendingCount;
 	}
 
@@ -440,44 +486,118 @@ final class MailboxConnectionRequestService
 		return self::PENDING_COUNT_CACHE_DIR_BASE . '/' . $hashPrefix . '/' . self::PENDING_COUNT_CACHE_KEY . '/';
 	}
 
+	private static function dispatchPendingRequestChatsRepair(): void
+	{
+		(new RepairConnectionRequestChatsMessage())->send('mail_connection_request_chats_repair');
+	}
+
+	private function filterActiveUserIds(array $userIds): array
+	{
+		$userIds = array_values(array_unique(array_filter(
+			array_map('intval', $userIds),
+			static fn (int $userId): bool => $userId > 0,
+		)));
+
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		$activeUserIdMap = [];
+		$users = UserTable::query()
+			->setSelect(['ID'])
+			->whereIn('ID', $userIds)
+			->where('ACTIVE', 'Y')
+			->where(
+				Query::filter()
+					->logic('or')
+					->where('CONFIRM_CODE', '')
+					->whereNull('CONFIRM_CODE'),
+			)
+			->exec()
+		;
+
+		while ($user = $users->fetch())
+		{
+			$activeUserIdMap[(int)$user['ID']] = true;
+		}
+
+		return array_values(array_filter(
+			$userIds,
+			static fn (int $userId): bool => isset($activeUserIdMap[$userId]),
+		));
+	}
+
 	private function getOrCreateChatIdForRequest(array $request, ?array $adminIds = null): int
 	{
-		$chatId = (int)($request['CHAT_ID'] ?? 0);
-		if ($chatId > 0)
+		$chatResult = $this->getOrCreateChatForRequest($request, $adminIds);
+
+		return (int)($chatResult->getData()['chatId'] ?? 0);
+	}
+
+	private function repairPendingRequestChat(array $request, array $adminIds, ConnectionRequestChat $chat): void
+	{
+		$chatResult = $this->getOrCreateChatForRequest($request, $adminIds);
+		if (!$chatResult->isSuccess())
 		{
-			return $chatId;
+			return;
 		}
+
+		$newChatId = (int)($chatResult->getData()['chatId'] ?? 0);
+		if ($newChatId <= 0)
+		{
+			return;
+		}
+
+		if (!(bool)($chatResult->getData()['needsRequestMessage'] ?? false))
+		{
+			return;
+		}
+
+		$requesterId = (int)($request['REQUESTER_ID'] ?? 0);
+		$chat->sendRequestMessage($newChatId, $requesterId, '');
+	}
+
+	private function getOrCreateChatForRequest(array $request, ?array $adminIds = null): Result
+	{
+		$result = new Result();
 
 		$requestId = (int)($request['ID'] ?? 0);
 		$requesterId = (int)($request['REQUESTER_ID'] ?? 0);
-		if ($requestId <= 0 || $requesterId <= 0)
+		$adminIds = array_values($adminIds ?? $this->getResponsible());
+
+		if ($requestId <= 0 || $requesterId <= 0 || empty($adminIds))
 		{
-			return 0;
+			return $result;
 		}
 
 		$chat = new ConnectionRequestChat();
-		$chatResult = $chat->getOrCreateChat($requesterId, array_values($adminIds ?? $this->getResponsible()));
+		$chatResult = $chat->getOrCreateValidChat($requesterId, $adminIds);
 		if (!$chatResult->isSuccess())
 		{
-			return 0;
+			return $result->addErrors($chatResult->getErrors());
 		}
 
 		$chatId = (int)($chatResult->getData()['chatId'] ?? 0);
 		if ($chatId <= 0)
 		{
-			return 0;
+			return $result;
 		}
 
-		MailboxConnectionRequestTable::update($requestId, ['CHAT_ID' => $chatId]);
+		if ($chatId !== (int)($request['CHAT_ID'] ?? 0))
+		{
+			MailboxConnectionRequestTable::update($requestId, ['CHAT_ID' => $chatId]);
+		}
 
-		return $chatId;
+		$chat->ensureAdminsInChat($chatId, $adminIds);
+
+		return $result->setData($chatResult->getData());
 	}
 
-	private function addPendingRequest(int $requesterId, string $comment): AddResult
+	private function addPendingRequest(int $requesterId): AddResult
 	{
 		return MailboxConnectionRequestTable::add([
 			'REQUESTER_ID' => $requesterId,
-			'COMMENT' => $comment !== '' ? $comment : null,
 			'STATUS' => MailboxConnectionRequestStatus::Pending->value,
 			'CREATED_AT' => new DateTime(),
 			'UPDATED_AT' => new DateTime(),

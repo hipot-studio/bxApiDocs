@@ -77,10 +77,13 @@ final class TrackDeletionService
 		$trackTypes = [Track::TYPE_VIDEO_RECORD, Track::TYPE_VIDEO_PREVIEW];
 		foreach ($trackTypes as $type)
 		{
-			$track = Track::getTrackForCall($callId, $type);
-			if ($track && $track->getExternalTrackId())
+			$tracks = Track::getTracksForCall($callId, $type);
+			foreach ($tracks as $track)
 			{
-				$this->deleteFromMixer($track);
+				if ($track->getExternalTrackId())
+				{
+					$this->deleteFromMixer($track);
+				}
 			}
 		}
 	}

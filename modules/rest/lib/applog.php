@@ -2,6 +2,7 @@
 namespace Bitrix\Rest;
 
 use Bitrix\Main;
+use \CUser;
 
 /**
  * Class AppLogTable
@@ -91,19 +92,17 @@ class AppLogTable extends Main\Entity\DataManager
 	{
 		global $USER;
 
-		$fields = array(
+		$fields = [
 			'APP_ID' => $appId,
 			'ACTION_TYPE' => $action,
-			'USER_ID' => $USER->getId(),
-		);
+			'USER_ID' => 0,
+			'USER_ADMIN' => static::USER_NOT_ADMIN,
+		];
 
-		if($USER->IsAuthorized())
+		if (isset($USER) && ($USER instanceof CUser) && $USER->IsAuthorized())
 		{
+			$fields['USER_ID'] = $USER->GetID();
 			$fields['USER_ADMIN'] = \CRestUtil::isAdmin() ? static::USER_ADMIN : static::USER_NOT_ADMIN;
-		}
-		else
-		{
-			$fields['USER_ADMIN'] = static::USER_NOT_ADMIN;
 		}
 
 		return static::add($fields);

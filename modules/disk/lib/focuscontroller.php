@@ -2,14 +2,11 @@
 
 namespace Bitrix\Disk;
 
-use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
-use Bitrix\Disk\Internals;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Grid\FolderListOptions;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Main;
 use Bitrix\Main\Application;
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Localization\Loc;
@@ -190,18 +187,10 @@ final class FocusController extends Internals\Controller
 
 	private function checkReadRights(BaseObject $object)
 	{
-		if ($object instanceof File && $object->supportsUnifiedLink())
-		{
-			$unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
 
-			$canRead = $unifiedLinkAccessService->check($object)->canRead();
-		}
-		else
-		{
-			$storage = $object->getStorage();
-			$securityContext = $storage->getCurrentUserSecurityContext();
-			$canRead = $object->canRead($securityContext);
-		}
+		$storage = $object->getStorage();
+		$securityContext = $storage->getCurrentUserSecurityContext();
+		$canRead = $object->canRead($securityContext);
 
 		if (!$canRead)
 		{

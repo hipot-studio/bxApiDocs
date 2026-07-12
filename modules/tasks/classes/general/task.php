@@ -5391,7 +5391,7 @@ class CTasks
 	{
 		global $DB;
 
-		if (!CModule::IncludeModule('forum'))
+		if (!CModule::IncludeModule('forum') || !CModule::IncludeModule('search'))
 		{
 			return;
 		}
@@ -5404,14 +5404,6 @@ class CTasks
 			return;
 		}
 
-		CSearch::ChangePermission('forum', $permissions, false, $forumTopic['FORUM_ID'], $topicId);
-
-		$forumMessageResult = $DB->Query("SELECT ID FROM b_forum_message WHERE TOPIC_ID = {$topicId}");
-		while ($message = $forumMessageResult->Fetch())
-		{
-			CSearch::ChangeSite('forum', [$siteId => $path], $message['ID']);
-		}
-
 		$params = [
 			'feature_id' => "S{$entityType}_{$entityId}_{$feature}_{$operation}",
 			'socnet_user' => $entityId,
@@ -5419,7 +5411,11 @@ class CTasks
 
 		CSearch::ChangeIndex(
 			'forum',
-			['PARAMS' => $params],
+			[
+				'PERMISSIONS' => $permissions,
+				'SITE_ID' => [$siteId => $path],
+				'PARAMS' => $params,
+			],
 			false,
 			$forumTopic['FORUM_ID'],
 			$topicId

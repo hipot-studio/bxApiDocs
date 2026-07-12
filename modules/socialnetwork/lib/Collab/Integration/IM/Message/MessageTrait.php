@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 
+use Bitrix\Im\Bot;
+use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Relation\AddUsersConfig;
+use Bitrix\Im\V2\Relation\DeleteUserConfig;
+use Bitrix\Im\V2\Relation\Reason;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Socialnetwork\Collab\Collab;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\ShowHistoryOption;
@@ -11,12 +16,18 @@ use Bitrix\Socialnetwork\Collab\Integration\Intranet\ServiceContainer;
 use Bitrix\Socialnetwork\Collab\Registry\CollabRegistry;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\Item\Workgroup;
+use Bitrix\Socialnetwork\UserToGroupTable;
 use CAllSocNetUser;
 use CIMChat;
 use CUser;
 
 trait MessageTrait
 {
+	private const SILENT_OFF = 0;
+	private const SILENT_WITH_RECENT = 1;
+	private const SILENT_WITHOUT_RECENT = 2;
+	private const CONTEXT_USER = 0;
+
 	protected static array $users = [];
 
 	protected function getCollab(int $collabId): Collab
@@ -43,14 +54,16 @@ trait MessageTrait
 
 	protected function getChat(): CIMChat
 	{
-		return new CIMChat(0);
+		return new CIMChat(self::CONTEXT_USER);
 	}
 
 	protected function getName(int $senderId, int $recipientId, int $collabId): string
 	{
+		$recipientBbCode = "[USER={$recipientId}][/USER]";
+
 		if ($senderId === $recipientId)
 		{
-			return "[USER={$recipientId}][/USER]";
+			return $recipientBbCode;
 		}
 
 		$workgroup = $this->getWorkgroup($collabId);
@@ -59,8 +72,13 @@ trait MessageTrait
 		{
 			if (CAllSocNetUser::CanProfileView($this->senderId, $recipientId, $siteId))
 			{
-				return "[USER={$recipientId}][/USER]";
+				return $recipientBbCode;
 			}
+		}
+
+		if ($this->isBot($recipientId))
+		{
+			return $recipientBbCode;
 		}
 
 		$inviteService = ServiceContainer::getInstance()?->getUserService();
@@ -68,6 +86,15 @@ trait MessageTrait
 		$names = $inviteService?->getFormattedInvitationNameByIds([$recipientId]);
 
 		return $names[$recipientId] ?? '';
+	}
+
+	protected function isBot(int $userId): bool
+	{
+		$user = $this->getUser($userId);
+
+		$externalAuthId = $user['EXTERNAL_AUTH_ID'] ?? null;
+
+		return $externalAuthId === Bot::EXTERNAL_AUTH_ID;
 	}
 
 	protected function getUser(int $id): array
@@ -83,10 +110,7 @@ trait MessageTrait
 
 	protected function getGenderSuffix(int $userId): string
 	{
-		$user = $this->getUser($userId);
-		$gender = $user['PERSONAL_GENDER'] ?? '';
-
-		return match($gender)
+		return match ($this->getGender($userId))
 		{
 			'F' => '_F',
 			'M' => '_M',
@@ -94,32 +118,60 @@ trait MessageTrait
 		};
 	}
 
-	protected function addUsersToChat(int $collabId, int ...$userIds): void
+	protected function getGender(int $userId): string
+	{
+		$user = $this->getUser($userId);
+
+		return $user['PERSONAL_GENDER'] ?? '';
+	}
+
+	protected function addUsersToChat(int $collabId, array $parameters, int ...$userIds): void
 	{
 		$collab = $this->getCollab($collabId);
 
-		$this->getChat()->addUser(
-			$collab->getChatId(),
-			$userIds,
-			$collab->getOptionValue(ShowHistoryOption::DB_NAME) !== 'Y',
-			true,
-			true,
-			false,
-			false
+		$initiatedByType = $parameters['initiatedByType'] ?? UserToGroupTable::INITIATED_BY_GROUP;
+		$isInitiatedByStructure = $initiatedByType === UserToGroupTable::INITIATED_BY_STRUCTURE;
+
+		$config = new AddUsersConfig(
+			hideHistory: $collab->getOptionValue(ShowHistoryOption::DB_NAME) !== 'Y',
+			withMessage: false,
+			skipRecent: true,
+			reason: $isInitiatedByStructure ? Reason::STRUCTURE : Reason::DEFAULT,
+			skipAnalytics: false,
 		);
+
+		Chat::getInstance($collab->getChatId())
+			->withContextUser(self::CONTEXT_USER)
+			->addUsers($userIds, $config)
+		;
 	}
 
 	protected function deleteUsersFromChat(int $collabId, int ...$userIds): void
 	{
 		$collab = $this->getCollab($collabId);
 
+		$config = new DeleteUserConfig(withMessage: false, skipCheckReason: true);
+
+		$chat = Chat::getInstance($collab->getChatId())->withContextUser(self::CONTEXT_USER);
+
+		if (!$chat instanceof Chat\CollabChat)
+		{
+			return;
+		}
+
 		foreach ($userIds as $recipientId)
 		{
-			$this->getChat()->deleteUser($collab->getChatId(), $recipientId, false, true);
+			$chat->deleteUser($recipientId, $config);
 		}
 	}
 
-	protected function sendMessage(string $message, int $senderId, int $groupId, ?string $componentId = null): int
+	protected function sendMessage(
+		string $message,
+		int $senderId,
+		int $groupId,
+		?string $componentId = null,
+		int $silent = self::SILENT_OFF,
+	): int
 	{
 		$fields = [
 			'MESSAGE' => $message,
@@ -133,6 +185,12 @@ trait MessageTrait
 			],
 		];
 
+		$silentOptions = $this->getSilentOptions($silent);
+		if ($silentOptions)
+		{
+			$fields = array_merge($fields, $silentOptions);
+		}
+
 		if ($componentId)
 		{
 			$fields['PARAMS']['COMPONENT_ID'] = $componentId;
@@ -141,5 +199,20 @@ trait MessageTrait
 		$chat = $this->getChat();
 
 		return (int)$chat::addMessage($fields);
+	}
+
+	private function getSilentOptions(int $silent): array
+	{
+		return match ($silent)
+		{
+			self::SILENT_WITH_RECENT => [
+				'SKIP_COUNTER_INCREMENTS' => 'Y',
+			],
+			self::SILENT_WITHOUT_RECENT => [
+				'SKIP_COUNTER_INCREMENTS' => 'Y',
+				'RECENT_ADD' => 'N',
+			],
+			default => [],
+		};
 	}
 }

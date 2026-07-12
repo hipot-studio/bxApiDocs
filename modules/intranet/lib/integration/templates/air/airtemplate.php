@@ -165,22 +165,26 @@ final class AirTemplate
 		?>
 		<script data-skip-moving="true">
 		try {
-			const _ss = sessionStorage;
-			const _expanded = _ss.getItem('b24_right_panel_expanded');
-			if (_expanded === 'Y' && !BX.Dom.hasClass(document.body, '--right-panel-expanded'))
+			const ss = sessionStorage;
+			const expanded = ss.getItem('b24_right_panel_expanded');
+			if (expanded === 'Y' && !document.body.classList.contains('--right-panel-expanded'))
 			{
-				BX.Dom.addClass(document.body, ['--right-panel-expanded', '--right-panel-no-transition']);
+				document.body.classList.add('--right-panel-expanded', '--right-panel-no-transition');
 			}
-			if (_expanded === 'N' && document.body.classList.contains('--right-panel-expanded'))
+
+			if (expanded === 'N' && document.body.classList.contains('--right-panel-expanded'))
 			{
-				BX.Dom.removeClass(document.body, ['--right-panel-expanded', '--right-panel-no-transition']);
+				document.body.classList.remove('--right-panel-expanded', '--right-panel-no-transition');
 			}
-			const _width = _ss.getItem('b24_right_panel_width');
-			if (_width && parseInt(_width, 10) > 0)
+
+			const width = ss.getItem('b24_right_panel_width');
+			if (width && parseInt(width, 10) > 0)
 			{
-				BX.Dom.style(document.body, '--air-right-panel-width', `${_width}px`);
+				document.body.style.setProperty('--air-right-panel-width', `${width}px`);
 			}
-		} catch(e) {}
+		} catch(e) {
+			console.log('Error restoring right panel state', e);
+		}
 		</script>
 		<?php
 	}

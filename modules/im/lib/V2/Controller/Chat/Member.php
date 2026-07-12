@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Controller\Chat;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Controller\BaseController;
+use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
+use Bitrix\Im\V2\Entity\User\UserShortPopupItem;
 use Bitrix\Im\V2\Relation\Provider\RelationCursor;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Main\Validation\Engine\AutoWire\ValidationParameter;
@@ -43,12 +46,29 @@ class Member extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.Member.filterUsersByParticipation
 	 */
-	public function filterUsersByParticipationAction(Chat $chat, array $userIds): ?array
+	public function filterUsersByParticipationAction(Chat $chat, array $userIds = []): ?array
 	{
 		$userIds = array_map('intval', $userIds);
 
 		$relations = $chat->getRelationsByUserIds($userIds)->filterActiveMembers();
 
 		return (new RestAdapter($relations))->toRestFormat(['POPUP_DATA_EXCLUDE' => [UserPopupItem::class]]);
+	}
+
+	/**
+	 * @restMethod im.v2.Chat.Member.checkMembership
+	 */
+	public function checkMembershipAction(Chat $chat, array $userIds = []): ?array
+	{
+		$userIds = Normalizer::toUniquePositiveIntegers($userIds);
+
+		$usersInChat = $chat->getRelationsByUserIds($userIds)->filterActiveMembers()->getUserIds();
+		$usersNotInChat = array_diff($userIds, $usersInChat);
+
+		return [
+			'usersInChat' => array_values($usersInChat),
+			'usersNotInChat' => array_values($usersNotInChat),
+			'users' => (new UserShortPopupItem($userIds))->toRestFormat(),
+		];
 	}
 }

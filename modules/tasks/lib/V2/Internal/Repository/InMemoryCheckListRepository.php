@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
+use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\V2\Internal\Entity;
 
 class InMemoryCheckListRepository implements CheckListRepositoryInterface
@@ -13,6 +14,7 @@ class InMemoryCheckListRepository implements CheckListRepositoryInterface
 	private array $cache = [];
 	private array $idsCache = [];
 	private array $attachmentCache = [];
+	private array $tasksCompletedItemsExistenceCache = [];
 
 	public function __construct(CheckListRepository $checkListRepository)
 	{
@@ -112,5 +114,49 @@ class InMemoryCheckListRepository implements CheckListRepositoryInterface
 		}
 
 		return $this->attachmentCache[$key];
+	}
+
+	public function getTasksCompletedItemsExistenceMap(array $taskIds): array
+	{
+		$result = [];
+
+		if (empty($taskIds))
+		{
+			return $result;
+		}
+
+		Collection::normalizeArrayValuesByInt($taskIds, false);
+
+		if (empty($taskIds))
+		{
+			return $result;
+		}
+
+		$missingTaskIdMap = array_flip($taskIds);
+
+		foreach ($missingTaskIdMap as $taskId => $_)
+		{
+			if (isset($this->tasksCompletedItemsExistenceCache[$taskId]))
+			{
+				$result[$taskId] = $this->tasksCompletedItemsExistenceCache[$taskId];
+
+				unset($missingTaskIdMap[$taskId]);
+			}
+		}
+
+		if (empty($missingTaskIdMap))
+		{
+			return $result;
+		}
+
+		$tasksMap = $this->checkListRepository->getTasksCompletedItemsExistenceMap(array_keys($missingTaskIdMap));
+		foreach ($tasksMap as $id => $value)
+		{
+			$this->tasksCompletedItemsExistenceCache[$id] = $value;
+
+			$result[$id] = $value;
+		}
+
+		return $result;
 	}
 }

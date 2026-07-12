@@ -68,7 +68,12 @@ class ExternalTypeRegistry
 				continue;
 			}
 
-			$this->registerType(new Type(Chat::IM_TYPE_EXTERNAL, $type, $type), $config);
+			$this->registerType(new Type(
+				literal: Chat::IM_TYPE_EXTERNAL,
+				entityType: $type,
+				extendedType: $type,
+				requiresParentMembership: $config->requiresParentMembership,
+			), $config);
 		}
 	}
 

@@ -56,6 +56,7 @@ class IncomingWebhookProvider
 			->userId($filter->userId)
 			->scopes($filter->scopes !== [] ? $filter->scopes : null)
 			->externalAttributes($filter->attributes !== [] ? $filter->attributes : null)
+			->type($filter->type)
 		;
 	}
 

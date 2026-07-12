@@ -44,6 +44,8 @@ final class MailboxConnector
 	public const SERVER_RESPONSE_ERROR_KEY = 'SERVER_RESPONSE_ERROR';
 	// SMTP sender verification failed or sender was not confirmed
 	public const SMTP_SENDER_ERROR_KEY = 'SMTP_SENDER_ERROR';
+	// Plan limit for shared mailboxes is reached, cannot add new shared users
+	public const SHARED_LIMIT_EXCEEDED_ERROR_KEY = 'SHARED_LIMIT_EXCEEDED';
 
 	public const DEFAULT_IMAP_PORT = '993';
 	public const DEFAULT_SMTP_PORT = '587';
@@ -557,6 +559,15 @@ final class MailboxConnector
 		$senderFields = $this->prepareSmtpSender($mailboxData, $mailboxConnectDTO);
 
 		if ($this->hasErrors())
+		{
+			return [];
+		}
+
+		if (!$this->assertSharedMailboxLimit(
+			$mailboxConnectDTO->shareAccess ?? [],
+			(int)$mailboxData['USER_ID'],
+			null,
+		))
 		{
 			return [];
 		}
@@ -1086,21 +1097,6 @@ final class MailboxConnector
 		return $senderFields;
 	}
 
-	private function findReusableSmtpConfig(array $mailboxSenders): ?array
-	{
-		foreach ($mailboxSenders as $sender)
-		{
-			$smtpOptions = $sender['OPTIONS']['smtp'] ?? null;
-
-			if (!empty($smtpOptions['server']) && empty($smtpOptions['encrypted']))
-			{
-				return $smtpOptions;
-			}
-		}
-
-		return null;
-	}
-
 	private function canReuseImapCredentialsForSmtp(
 		array $service,
 		bool $isSmtpOauthEnabled,
@@ -1181,14 +1177,17 @@ final class MailboxConnector
 		}
 
 		$accessState = $this->applyMailboxShareAccess($access, (int)$mailboxData['USER_ID'], $mailboxId);
-		Notification::dispatchAccessChangedNotifications(
-			$mailboxId,
-			(string)$mailboxData['EMAIL'],
-			$accessState['previousAccess'],
-			$accessState['currentAccess'],
-			(int)Main\Engine\CurrentUser::get()->getId(),
-			(int)$mailboxData['USER_ID'],
-		);
+		if ($accessState !== null)
+		{
+			Notification::dispatchAccessChangedNotifications(
+				$mailboxId,
+				(string)$mailboxData['EMAIL'],
+				$accessState['previousAccess'],
+				$accessState['currentAccess'],
+				(int)Main\Engine\CurrentUser::get()->getId(),
+				(int)$mailboxData['USER_ID'],
+			);
+		}
 
 		if (in_array(CrmFlag::Connect->value, $mailboxData['OPTIONS']['flags'] ?? [], true))
 		{
@@ -1263,6 +1262,8 @@ final class MailboxConnector
 		];
 		$dto->shareAccess ??= $existingData['shareAccess'];
 		$dto->useSenderName ??= $existingData['useSenderName'];
+		$dto->link ??= $existingData['mailbox']['link'] ?? null;
+		$dto->uploadOutgoing ??= !in_array('deny_upload', (array)($existingData['options']['flags'] ?? []), true);
 	}
 
 	private function hasCredentialsChanged(MailboxConnectDTO $dto): bool
@@ -1312,9 +1313,11 @@ final class MailboxConnector
 
 	/**
 	 * @return array{
-	 *     imap: array{email: string, login: string, serviceId: int, server: string, port: string, ssl: string},
+	 *     imap: array{email: string, login: string, serviceId: int, server: string, port: string, ssl: string, isOAuth: bool, oauthUid: string|null},
 	 *     smtp: array{enabled: 'Y'|'N', server: string, port: string, ssl: 'Y'|'N', login: string, useLimit: bool, limit: int|null},
-	 *     service: array{name: string|null, type: string|null},
+	 *     service: array{name: string|null, type: string|null, link: string|null, isOAuth: bool, oauthSmtpEnabled: bool, smtpServer: string, smtpLoginAsImap: bool, smtpPasswordAsImap: bool},
+	 *     mailbox: array{link: string},
+	 *     denyUpload: bool,
 	 *     mailboxName: string,
 	 *     senderName: string,
 	 *     useSenderName: bool,
@@ -1352,17 +1355,22 @@ final class MailboxConnector
 
 	/**
 	 * @return array{
-	 *     imap: array{email: string, login: string, password: string, serviceId: int, server: string, port: string, ssl: string},
+	 *     imap: array{email: string, login: string, password: string, serviceId: int, server: string, port: string, ssl: string, isOAuth: bool, oauthUid: string|null},
 	 *     smtp: array{enabled: 'Y'|'N', server: string, port: string, ssl: 'Y'|'N', login: string, useLimit: bool, limit: int|null},
-	 *     service: array{name: string|null, type: string|null},
+	 *     service: array{name: string|null, type: string|null, link: string|null, isOAuth: bool, oauthSmtpEnabled: bool, smtpServer: string, smtpLoginAsImap: bool, smtpPasswordAsImap: bool},
+	 *     mailbox: array{link: string},
+	 *     denyUpload: bool,
 	 *     mailboxName: string,
 	 *     senderName: string,
+	 *     defaultSenderName: string,
 	 *     useSenderName: bool,
 	 *     iCalAccess: string,
 	 *     crmOptions: array{enabled: 'Y'|'N', config: array<string, mixed>},
 	 *     shareAccess: string[],
+	 *     shareAccessUsers: array<array{id: int, title: string, imageUrl: string|null}>,
 	 *     userId: int,
 	 *     periodCheck: int,
+	 *     lastMailCheck: array{date: int|null, isSuccess: bool},
 	 *     options: array,
 	 * }|null
 	 */
@@ -1399,20 +1407,30 @@ final class MailboxConnector
 		$options = $mailbox['OPTIONS'] ?? [];
 		$shareAccess = $this->getShareAccessData($mailboxId);
 
+		$passwordlessSmtp = is_array($options['passwordless_smtp'] ?? null) ? $options['passwordless_smtp'] : [];
+		$senderName = !empty($passwordlessSmtp['senderName'])
+			? (string)$passwordlessSmtp['senderName']
+			: (string)($mailbox['USERNAME'] ?? '');
+
 		return [
 			'imap' => $this->getImapData($mailbox),
 			'smtp' => $this->getSmtpData($mailboxId, $mailbox),
 			'service' => [
 				'name' => $service['NAME'] ?? null,
 				'type' => $service['SERVICE_TYPE'] ?? null,
+				'link' => $service['LINK'] ?? null,
 				'isOAuth' => $this->isMailboxOAuth($mailbox),
 				'oauthSmtpEnabled' => !empty($service) && self::isOauthSmtpEnabled($service['NAME'] ?? ''),
 				'smtpServer' => $service['SMTP_SERVER'] ?? '',
 				'smtpLoginAsImap' => ($service['SMTP_LOGIN_AS_IMAP'] ?? 'N') === 'Y',
 				'smtpPasswordAsImap' => ($service['SMTP_PASSWORD_AS_IMAP'] ?? 'N') === 'Y',
 			],
+			'mailbox' => [
+				'link' => (string)($mailbox['LINK'] ?? ''),
+			],
+			'denyUpload' => in_array('deny_upload', (array)($options['flags'] ?? []), true),
 			'mailboxName' => $mailbox['NAME'],
-			'senderName' => $mailbox['USERNAME'],
+			'senderName' => $senderName,
 			'defaultSenderName' => $this->getDefaultSenderName(),
 			'useSenderName' => $this->resolveUseSenderName($mailbox, $mailboxId),
 			'iCalAccess' => $options['ical_access'] ?? 'N',
@@ -1421,7 +1439,21 @@ final class MailboxConnector
 			'shareAccessUsers' => $this->resolveShareAccessUsers($shareAccess),
 			'userId' => (int)$mailbox['USER_ID'],
 			'periodCheck' => (int)$mailbox['PERIOD_CHECK'],
+			'lastMailCheck' => $this->getLastMailCheckData($mailboxId, (int)$mailbox['USER_ID']),
 			'options' => $options,
+		];
+	}
+
+	/**
+	 * @return array{date: int|null, isSuccess: bool}
+	 */
+	private function getLastMailCheckData(int $mailboxId, int $userId): array
+	{
+		$syncManager = new MailboxSyncManager($userId);
+
+		return [
+			'date' => $syncManager->getLastMailboxSyncTime($mailboxId),
+			'isSuccess' => $syncManager->getCachedConnectionStatus($mailboxId),
 		];
 	}
 
@@ -1483,15 +1515,24 @@ final class MailboxConnector
 				continue;
 			}
 
+			$parentId = (int)($sender['PARENT_ID'] ?? 0);
+			if (
+				$sender['PARENT_MODULE_ID'] === 'mail'
+				&& $parentId > 0
+				&& $parentId !== $mailboxId
+			)
+			{
+				continue;
+			}
+
 			if (!$readOnly && ($sender['PARENT_MODULE_ID'] !== 'mail' || (int)$sender['PARENT_ID'] !== $mailboxId))
 			{
-				Main\Mail\Sender::updateSender(
-					$sender['ID'],
+				Main\Mail\Internal\SenderTable::update(
+					(int)$sender['ID'],
 					[
 						'PARENT_MODULE_ID' => 'mail',
 						'PARENT_ID' => $mailboxId,
 					],
-					checkSenderAccess: false,
 				);
 
 				$sender['PARENT_MODULE_ID'] = 'mail';
@@ -1506,6 +1547,23 @@ final class MailboxConnector
 		return $mailboxSender;
 	}
 
+	private static function rebindMailboxSendersToOwner(int $mailboxId, int $newOwnerId): void
+	{
+		$senderIds = array_column(
+			Main\Mail\Internal\SenderTable::query()
+				->setSelect(['ID'])
+				->where('PARENT_MODULE_ID', 'mail')
+				->where('PARENT_ID', $mailboxId)
+				->fetchAll(),
+			'ID',
+		);
+
+		foreach ($senderIds as $senderId)
+		{
+			Main\Mail\Internal\SenderTable::update((int)$senderId, ['USER_ID' => $newOwnerId]);
+		}
+	}
+
 	private function resolveUseSenderName(array $mailbox, int $mailboxId): bool
 	{
 		$sender = self::getMailboxSender($mailboxId, $mailbox['EMAIL'], (int)($mailbox['USER_ID'] ?? 0), readOnly: true);
@@ -1516,7 +1574,16 @@ final class MailboxConnector
 		}
 
 		$options = $mailbox['OPTIONS'] ?? [];
-		$senderName = $mailbox['USERNAME'] ?? '';
+		$passwordlessSmtp = is_array($options['passwordless_smtp'] ?? null) ? $options['passwordless_smtp'] : [];
+
+		if (array_key_exists('useSenderName', $passwordlessSmtp))
+		{
+			return (bool)$passwordlessSmtp['useSenderName'];
+		}
+
+		$senderName = !empty($passwordlessSmtp['senderName'])
+			? (string)$passwordlessSmtp['senderName']
+			: (string)($mailbox['USERNAME'] ?? '');
 
 		if (isset($options['useSenderName']))
 		{
@@ -1546,6 +1613,17 @@ final class MailboxConnector
 	 */
 	private function getImapData(array $mailbox): array
 	{
+		$oauthMeta = Mail\Helper\OAuth::parseMeta($mailbox['PASSWORD'] ?? '');
+		$oauthUser = null;
+		if ($oauthMeta !== null)
+		{
+			$oauthUser = Mail\Helper\OAuth::getUserDataByMeta($mailbox['PASSWORD'] ?? '') ?: null;
+			if (is_array($oauthUser))
+			{
+				$oauthUser['email'] = $mailbox['EMAIL'];
+			}
+		}
+
 		return [
 			'email' => $mailbox['EMAIL'],
 			'login' => $mailbox['LOGIN'],
@@ -1554,6 +1632,9 @@ final class MailboxConnector
 			'server' => $mailbox['SERVER'],
 			'port' => (string)$mailbox['PORT'],
 			'ssl' => $mailbox['USE_TLS'] ?: 'N',
+			'isOAuth' => $oauthMeta !== null,
+			'oauthUid' => $oauthMeta['key'] ?? null,
+			'oauthUser' => $oauthUser,
 		];
 	}
 
@@ -1625,6 +1706,12 @@ final class MailboxConnector
 			$syncDays = (int)$options[CrmOption::SyncDays->value];
 		}
 
+		$flags = (array)($options['flags'] ?? []);
+		$isIncomingEntityDenied = in_array(CrmFlag::DenyNewLead->value, $flags, true)
+			|| in_array(CrmFlag::DenyEntityIn->value, $flags, true);
+		$isOutgoingEntityDenied = in_array(CrmFlag::DenyNewLead->value, $flags, true)
+			|| in_array(CrmFlag::DenyEntityOut->value, $flags, true);
+
 		$newLeadFor = $options[CrmOption::NewLeadFor->value] ?? [];
 		if (is_array($newLeadFor))
 		{
@@ -1633,14 +1720,14 @@ final class MailboxConnector
 
 		$crmOptions['config'] = [
 			'crm_sync_days' => $syncDays,
-			'crm_new_entity_in' => $options[CrmOption::NewEntityIn->value] ?? '',
-			'crm_new_entity_out' => $options[CrmOption::NewEntityOut->value] ?? '',
+			'crm_new_entity_in' => $isIncomingEntityDenied ? '' : ($options[CrmOption::NewEntityIn->value] ?? ''),
+			'crm_new_entity_out' => $isOutgoingEntityDenied ? '' : ($options[CrmOption::NewEntityOut->value] ?? ''),
 			'crm_lead_source' => $options[CrmOption::LeadSource->value] ?? '',
 			'crm_lead_resp' => (array)($options[CrmOption::LeadResp->value] ?? []),
 			'crm_lead_resp_users' => $this->getCrmLeadRespUsers((array)($options[CrmOption::LeadResp->value] ?? [])),
 			'crm_new_lead_for' => $newLeadFor ?? '',
-			'crm_public' => in_array(CrmFlag::PublicBind->value, $options['flags'] ?? [], true) ? 'Y' : 'N',
-			'crm_vcf' => !in_array(CrmFlag::DenyNewContact->value, $options['flags'] ?? [], true) ? 'Y' : 'N',
+			'crm_public' => in_array(CrmFlag::PublicBind->value, $flags, true) ? 'Y' : 'N',
+			'crm_vcf' => !in_array(CrmFlag::DenyNewContact->value, $flags, true) ? 'Y' : 'N',
 		];
 
 		return $crmOptions;
@@ -1850,7 +1937,7 @@ final class MailboxConnector
 
 		if ($ownerChanged)
 		{
-			if (!MailboxAccess::hasCurrentUserAccessToChangeMailboxOwner())
+			if (!MailboxAccess::hasCurrentUserAccessToChangeMailboxOwner($mailboxId))
 			{
 				$this->addErrorWithMessage();
 
@@ -1900,7 +1987,17 @@ final class MailboxConnector
 
 		$existingOptions = $existingData['options'] ?? [];
 		$mailboxData['OPTIONS'] = array_merge($existingOptions, $mailboxData['OPTIONS']);
-		$mailboxData['OPTIONS']['flags'] = $existingOptions['flags'] ?? [];
+
+		$preservedFlags = array_values(array_diff(
+			(array)($existingOptions['flags'] ?? []),
+			['deny_upload'],
+		));
+		$serviceUploadOutgoing = $dto->service['UPLOAD_OUTGOING'] ?? '';
+		if ($serviceUploadOutgoing === 'N' || (empty($serviceUploadOutgoing) && $dto->uploadOutgoing === false))
+		{
+			$preservedFlags[] = 'deny_upload';
+		}
+		$mailboxData['OPTIONS']['flags'] = $preservedFlags;
 		if ($dto->messageMaxAge !== null && $dto->messageMaxAge > 0)
 		{
 			$this->applyMessageSyncFrom($mailboxData, $dto->messageMaxAge);
@@ -1998,6 +2095,47 @@ final class MailboxConnector
 			}
 
 			$this->mergeSenderWithExisting($senderFields, $mailboxId, $mailboxData['EMAIL'], $existingData['userId'] ?? 0);
+
+			if ($dto->useLimitSmtp === false)
+			{
+				unset($senderFields['OPTIONS']['smtp']['limit']);
+			}
+		}
+
+		if (!$this->assertSharedMailboxLimit(
+			$dto->shareAccess ?? [],
+			(int)$mailboxData['USER_ID'],
+			$mailboxId,
+		))
+		{
+			return [];
+		}
+
+		if ($ownerChanged)
+		{
+			$crmLeadResp = array_map('intval', (array)($mailboxData['OPTIONS']['crm_lead_resp'] ?? []));
+			$pos = array_search($originalOwnerId, $crmLeadResp, true);
+			if ($pos !== false)
+			{
+				$crmLeadResp[$pos] = $newOwnerId;
+				$crmLeadResp = array_values(array_unique($crmLeadResp));
+			}
+			$mailboxData['OPTIONS']['crm_lead_resp'] = $crmLeadResp;
+
+			unset(
+				$mailboxData['OPTIONS']['fired_owner_at'],
+				$mailboxData['OPTIONS']['fired_owner_notified_7d_at'],
+			);
+
+			// Drop the previous owner from share-access — he/she has been fired
+			if (is_array($dto->shareAccess))
+			{
+				$previousOwnerAccessCode = 'U' . $originalOwnerId;
+				$dto->shareAccess = array_values(array_filter(
+					$dto->shareAccess,
+					static fn($code) => $code !== $previousOwnerAccessCode,
+				));
+			}
 		}
 
 		return $this->updateMailboxInternal(
@@ -2063,7 +2201,7 @@ final class MailboxConnector
 			Mail\MailboxTable::cleanOwnerCacheByUserId($originalOwnerId);
 			Mail\MailboxTable::cleanOwnerCacheByUserId($newOwnerId);
 			Mail\MailboxTable::cleanAllSharedCache();
-			Mail\Helper\MailboxSettingsGridHelper::rebindSenders($mailboxId, $newOwnerId);
+			self::rebindMailboxSendersToOwner($mailboxId, $newOwnerId);
 		}
 
 		if (!$skipConnectionValidation && !$this->updateMailboxSender($mailboxId, $senderFields, $isOAuth))
@@ -2358,6 +2496,44 @@ final class MailboxConnector
 	}
 
 	/**
+	 * Pre-validate that applying $access codes to mailbox won't exceed the shared-mailbox license limit.
+	 * Returns false and adds an error when the limit would be exceeded; true otherwise.
+	 *
+	 * @param string[] $access
+	 */
+	private function assertSharedMailboxLimit(array $access, int $userId, ?int $mailboxId): bool
+	{
+		$ownerAccessCode = 'U' . $userId;
+		if (!in_array($ownerAccessCode, $access, true))
+		{
+			$access[] = $ownerAccessCode;
+		}
+		$uniqueAccess = array_values(array_unique($access));
+
+		$sharedMailboxesLimit = LicenseManager::getSharedMailboxesLimit();
+		if ($sharedMailboxesLimit < 0 || count($uniqueAccess) <= 1)
+		{
+			return true;
+		}
+
+		$alreadySharedMailboxesIds = Mail\Helper\Mailbox\SharedMailboxesManager::getSharedMailboxesIds();
+		if (
+			count($alreadySharedMailboxesIds) >= $sharedMailboxesLimit
+			&& ($mailboxId === null || !in_array($mailboxId, $alreadySharedMailboxesIds, true))
+		)
+		{
+			$this->addError(
+				(string)Loc::getMessage('MAIL_MAILBOX_CONNECTOR_SHARED_LIMIT_EXCEEDED'),
+				self::SHARED_LIMIT_EXCEEDED_ERROR_KEY,
+			);
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
 	 * @param string[] $access Access codes list (e.g., 'U1', 'DR5', 'D10')
 	 * @return array{previousAccess: string[], currentAccess: string[]}
 	 */
@@ -2365,7 +2541,7 @@ final class MailboxConnector
 		array $access,
 		int $userId,
 		int $mailboxId,
-	): array
+	): ?array
 	{
 		$previousAccessCodes = Mail\Internals\MailboxAccessTable::getList([
 			'select' => ['ACCESS_CODE'],
@@ -2390,7 +2566,12 @@ final class MailboxConnector
 				&& !in_array($mailboxId, $alreadySharedMailboxesIds, true)
 			)
 			{
-				$uniqueAccess = [$ownerAccessCode];
+				$this->addError(
+					(string)Loc::getMessage('MAIL_MAILBOX_CONNECTOR_SHARED_LIMIT_EXCEEDED'),
+					self::SHARED_LIMIT_EXCEEDED_ERROR_KEY,
+				);
+
+				return null;
 			}
 		}
 

@@ -6,11 +6,14 @@ use Bitrix\Im\Dialog;
 use Bitrix\Im\Model\AliasTable;
 use Bitrix\Call\Model\CallTable;
 use Bitrix\Call\Model\CallUserTable;
+use Bitrix\Main\Application;
+use Bitrix\Main\EventManager;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Event;
+use Bitrix\Main\ORM;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Web\JWT;
 use Bitrix\Main\Error;
@@ -50,6 +53,7 @@ class Call
 	protected int $scheme;
 	protected $initiatorId;
 	protected ?int $actionUserId = null;
+	protected bool $silentFinish = false;
 	protected $isPublic = false;
 	protected $publicId;
 	protected $provider;
@@ -210,6 +214,21 @@ class Call
 	}
 
 	/**
+	 * Marks finish() as silent clean-up of a stuck call.
+	 * Integrations on state change (e.g. chat messages) should skip side effects.
+	 */
+	public function setSilentFinish(bool $silent = true): self
+	{
+		$this->silentFinish = $silent;
+		return $this;
+	}
+
+	public function isSilentFinish(): bool
+	{
+		return $this->silentFinish;
+	}
+
+	/**
 	 * @param int $userId
 	 * @return CallUser|null
 	 */
@@ -241,11 +260,29 @@ class Call
 
 	/**
 	 * Returns arrays of information about the users currently participating in the call.
+	 * @param int[] $users
 	 * @return array
 	 */
-	public function getUserData(): array
+	public function getUserData(array $users = []): array
 	{
-		if (!isset($this->userData))
+		$usersCount = count($users);
+		$usersById = array_flip($users);
+
+		if ($usersCount && isset($this->userData))
+		{
+			$intersection = array_intersect_key($this->userData, $usersById);
+			if ($usersCount !== count($intersection))
+			{
+				$usersWithoutData = array_diff_key($usersById, $intersection);
+				$userData = $this->prepareUserData(array_keys($usersWithoutData));
+				$this->userData = array_replace($this->userData, $userData);
+			}
+		}
+		elseif ($usersCount && !isset($this->userData))
+		{
+			$this->userData = $this->prepareUserData($users);
+		}
+		else
 		{
 			$this->userData = $this->prepareUserData($this->getUsers());
 		}
@@ -314,37 +351,513 @@ class Call
 	/**
 	 * Adds new user to the call.
 	 *
+	 * @deprecated prefer {@see self::addUsers()} for batches — avoids N per-user
+	 *             INSERTs and N per-user onUserAdd integration callbacks on the
+	 *             startCall hot path.
+	 *
 	 * @param int $newUserId
 	 * @return CallUser|null
 	 */
 	public function addUser($newUserId): ?CallUser
 	{
+		$newUserId = (int)$newUserId;
+		$added = $this->addUsers([$newUserId]);
+		if ($added === [])
+		{
+			$this->loadUsers();
+			return $this->users[$newUserId] ?? null;
+		}
+		return $this->users[$newUserId];
+	}
+
+	/**
+	 * Batched counterpart of {@see self::addUser()}.
+	 *
+	 * Inserts all missing users in a single SQL statement, then fires
+	 * associatedEntity->onUsersAdd once for the inserted subset. Respects
+	 * {@see self::getMaxUsers()} — the tail of the input is silently dropped
+	 * when the call is already at capacity.
+	 *
+	 * @param int[] $newUserIds
+	 * @return int[] users actually inserted (those already present or overflowing are excluded)
+	 */
+	public function addUsers(array $newUserIds): array
+	{
 		$this->loadUsers();
-		if ($this->users[$newUserId])
+
+		$toInsert = [];
+		foreach ($newUserIds as $id)
 		{
-			return $this->users[$newUserId];
+			$id = (int)$id;
+			if ($id <= 0 || isset($this->users[$id]) || isset($toInsert[$id]))
+			{
+				continue;
+			}
+			$toInsert[$id] = true;
+		}
+		$toInsert = array_keys($toInsert);
+		if ($toInsert === [])
+		{
+			return [];
 		}
 
-		if (count($this->users) >= $this->getMaxUsers())
+		$capacity = $this->getMaxUsers() - count($this->users);
+		if ($capacity <= 0)
 		{
-			return null;
+			return [];
+		}
+		if (count($toInsert) > $capacity)
+		{
+			$toInsert = array_slice($toInsert, 0, $capacity);
 		}
 
-		$this->users[$newUserId] = CallUser::create([
-			'CALL_ID' => $this->id,
-			'USER_ID' => $newUserId,
-			'STATE' => CallUser::STATE_IDLE,
-			'LAST_SEEN' => null
-		]);
-		$this->users[$newUserId]->save();
+		$this->bulkInsertCallUsers($toInsert, CallUser::STATE_IDLE);
+
+		foreach ($toInsert as $uid)
+		{
+			$this->users[$uid] = CallUser::create([
+				'CALL_ID' => $this->id,
+				'USER_ID' => $uid,
+				'STATE' => CallUser::STATE_IDLE,
+				'LAST_SEEN' => null,
+			]);
+		}
 		unset($this->userData);
 
 		if ($this->associatedEntity)
 		{
-			$this->associatedEntity->onUserAdd($newUserId);
+			$this->associatedEntity->onUsersAdd($toInsert);
 		}
 
-		return $this->users[$newUserId];
+		return $toInsert;
+	}
+
+	/**
+	 * Single INSERT IGNORE for N (CALL_ID, USER_ID, STATE) rows.
+	 *
+	 * Portable across MySQL/PgSQL via {@see \Bitrix\Main\DB\SqlHelper::getInsertIgnore()}.
+	 * Mirrors the batch shape of ORM\Data\AddStrategy\InsertIgnore — avoids
+	 * DataManager::addMulti, which fires onBefore/after events per row and
+	 * has no ignore-on-conflict variant exposed.
+	 *
+	 * @internal Use {@see self::addUsers()} or higher-level helpers; this
+	 *           method only inserts rows and does NOT touch the in-memory
+	 *           $this->users map.
+	 *
+	 * @param int[] $userIds
+	 */
+	private function bulkInsertCallUsers(array $userIds, string $state): void
+	{
+		if ($userIds === [])
+		{
+			return;
+		}
+
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableName = CallUserTable::getTableName();
+
+		$sharedColumns = null;
+		$sqlValues = [];
+		foreach ($userIds as $uid)
+		{
+			$row = [
+				'CALL_ID' => $this->id,
+				'USER_ID' => (int)$uid,
+				'STATE' => $state,
+				'LAST_SEEN' => null,
+			];
+			[$columns, $values] = $sqlHelper->prepareInsert($tableName, $row, true);
+			if ($sharedColumns === null)
+			{
+				$sharedColumns = $columns;
+			}
+			$sqlValues[] = '(' . implode(', ', $values) . ')';
+		}
+
+		$sql = $sqlHelper->getInsertIgnore(
+			$tableName,
+			' (' . implode(', ', $sharedColumns) . ')',
+			' VALUES ' . implode(', ', $sqlValues),
+		);
+		$connection->queryExecute($sql);
+	}
+
+	/**
+	 * Bulk-transitions multiple users to STATE_CALLING in one UPDATE.
+	 * STATE_CALLING transition:
+	 *   - sets STATE = 'calling' and refreshes LAST_SEEN to now()
+	 *   - skips users already in STATE_READY (they have answered)
+	 *   - fires OnCallUserStateChange per affected user so listeners (e.g.
+	 *
+	 * @param int[] $userIds
+	 * @return int[] users actually transitioned to CALLING
+	 */
+	public function markUsersCalling(array $userIds): array
+	{
+		$this->loadUsers();
+
+		$now = new DateTime();
+		$targets = [];
+		$oldStates = [];
+		foreach ($userIds as $uid)
+		{
+			$uid = (int)$uid;
+			$callUser = $this->users[$uid] ?? null;
+			if (!$callUser || $callUser->getState() === CallUser::STATE_READY)
+			{
+				continue;
+			}
+			$targets[] = $uid;
+			$oldStates[$uid] = $callUser->getState();
+		}
+		if ($targets === [])
+		{
+			return [];
+		}
+
+		$entity = CallUserTable::getEntity();
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableName = CallUserTable::getTableName();
+
+		[$updateClause] = $sqlHelper->prepareUpdate($tableName, [
+			'STATE' => CallUser::STATE_CALLING,
+			'LAST_SEEN' => $now,
+		]);
+		$whereClause = ORM\Query\Query::buildFilterSql($entity, [
+			'=CALL_ID' => $this->id,
+			'@USER_ID' => $targets,
+			'!=STATE' => CallUser::STATE_READY,
+		]);
+
+		if ($updateClause === '' || $whereClause === '')
+		{
+			return [];
+		}
+
+		$connection->queryExecute("UPDATE {$tableName} SET {$updateClause} WHERE {$whereClause}");
+
+		// Race-with-answerAction guard
+		$transitioned = [];
+		$rows = CallUserTable::getList([
+			'select' => ['USER_ID'],
+			'filter' => [
+				'=CALL_ID' => $this->id,
+				'@USER_ID' => $targets,
+				'=STATE' => CallUser::STATE_CALLING,
+			],
+		])->fetchAll();
+		foreach ($rows as $row)
+		{
+			$transitioned[(int)$row['USER_ID']] = true;
+		}
+
+		// Collect state changes for deferred event dispatch
+		$changes = [];
+		$applied = [];
+		foreach ($targets as $uid)
+		{
+			if (!isset($transitioned[$uid]))
+			{
+				// !=STATE_READY filter, leave the in-memory CallUser as-is so it stays consistent with the DB
+				continue;
+			}
+
+			$this->users[$uid]->setFields([
+				'STATE' => CallUser::STATE_CALLING,
+				'LAST_SEEN' => $now,
+			]);
+			$applied[] = $uid;
+
+			// OnCallUserStateChange contract is "state actually changed":
+			// suppress for users whose snapshot already matches the target.
+			if ($oldStates[$uid] === CallUser::STATE_CALLING)
+			{
+				continue;
+			}
+
+			$changes[] = [
+				'callId' => $this->id,
+				'userId' => $uid,
+				'oldState' => $oldStates[$uid],
+				'newState' => CallUser::STATE_CALLING,
+			];
+		}
+
+		if ($changes !== [])
+		{
+			Application::getInstance()->addBackgroundJob([EventHandler::class, 'dispatchUserStateChangeEventsBatch'], [$changes]);
+		}
+
+		return $applied;
+	}
+
+	/**
+	 * Bulk transition to {@see CallUser::STATE_READY}: one UPDATE grouped by
+	 * the IS_MOBILE flag (1–2 statements vs N pairs of UPDATEs in the
+	 * legacy per-user path), in-memory mirroring, and one
+	 * `OnCallUserStateChange` event per affected user. Sets STATE='ready',
+	 * LAST_SEEN=NOW(), FIRST_JOINED=COALESCE(FIRST_JOINED, NOW()) so a user
+	 * who briefly drops and reconnects keeps the original join timestamp.
+	 *
+	 * Users absent from the in-memory roster (`getUser` returns null) are
+	 * silently skipped — they would no-op in the legacy path too.
+	 *
+	 * @param array<int, bool> $usersWithMobile [userId => isMobile]
+	 * @return int[] users actually transitioned
+	 */
+	public function setUsersStateReady(array $usersWithMobile): array
+	{
+		$this->loadUsers();
+
+		$now = new DateTime();
+		$mobileGroups = ['Y' => [], 'N' => []];
+		$mobileFlagByUid = [];
+		$oldStates = [];
+		$preservedFirstJoined = [];
+		foreach ($usersWithMobile as $uid => $isMobile)
+		{
+			$uid = (int)$uid;
+			$callUser = $this->users[$uid] ?? null;
+			if (!$callUser)
+			{
+				continue;
+			}
+			$flag = $isMobile ? 'Y' : 'N';
+			$mobileGroups[$flag][] = $uid;
+			$mobileFlagByUid[$uid] = $flag;
+			$oldStates[$uid] = $callUser->getState();
+			$preservedFirstJoined[$uid] = $callUser->getFirstJoined();
+		}
+		if ($mobileGroups['Y'] === [] && $mobileGroups['N'] === [])
+		{
+			return [];
+		}
+
+		$entity = CallUserTable::getEntity();
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableName = CallUserTable::getTableName();
+		$nowSql = $sqlHelper->getCurrentDateTimeFunction();
+		$firstJoinedColumn = $sqlHelper->quote('FIRST_JOINED');
+
+		$transitioned = [];
+		foreach ($mobileGroups as $flag => $userIds)
+		{
+			if ($userIds === [])
+			{
+				continue;
+			}
+
+			[$updateClause] = $sqlHelper->prepareUpdate($tableName, [
+				'STATE' => CallUser::STATE_READY,
+				'LAST_SEEN' => $now,
+				'IS_MOBILE' => $flag,
+			]);
+			$updateClause .= ", {$firstJoinedColumn} = COALESCE({$firstJoinedColumn}, {$nowSql})";
+
+			$whereClause = ORM\Query\Query::buildFilterSql($entity, [
+				'=CALL_ID' => $this->id,
+				'@USER_ID' => $userIds,
+			]);
+			if ($updateClause === '' || $whereClause === '')
+			{
+				continue;
+			}
+
+			$connection->queryExecute("UPDATE {$tableName} SET {$updateClause} WHERE {$whereClause}");
+			array_push($transitioned, ...$userIds);
+		}
+		if ($transitioned === [])
+		{
+			return [];
+		}
+
+		$eventManager = EventManager::getInstance();
+		foreach ($transitioned as $uid)
+		{
+			$this->users[$uid]->setFields([
+				'STATE' => CallUser::STATE_READY,
+				'LAST_SEEN' => $now,
+				'FIRST_JOINED' => $preservedFirstJoined[$uid] ?: $now,
+				'IS_MOBILE' => $mobileFlagByUid[$uid],
+			]);
+
+			// OnCallUserStateChange contract is "state actually changed":
+			// reconnect of an already-READY peer refreshes LAST_SEEN/IS_MOBILE
+			// (intentional heartbeat) but does not warrant a state-change event.
+			if ($oldStates[$uid] === CallUser::STATE_READY)
+			{
+				continue;
+			}
+
+			$eventManager->send(new Event(
+				'im',
+				'OnCallUserStateChange',
+				[
+					'callId' => $this->id,
+					'userId' => $uid,
+					'oldState' => $oldStates[$uid],
+					'newState' => CallUser::STATE_READY,
+				],
+			));
+		}
+
+		return $transitioned;
+	}
+
+	/**
+	 * Bulk transition to {@see CallUser::STATE_IDLE}: one UPDATE, in-memory
+	 * mirroring, and one `OnCallUserStateChange` event per user. Used by
+	 * `userStatusAction` for `disconnectedUsers` instead of a per-user
+	 * `updateState` + `updateLastSeen` pair (2 ORM operations × N).
+	 *
+	 * @param int[] $userIds
+	 * @return int[] users actually transitioned
+	 */
+	public function setUsersStateIdle(array $userIds): array
+	{
+		$this->loadUsers();
+
+		$now = new DateTime();
+		$targets = [];
+		$oldStates = [];
+		foreach ($userIds as $uid)
+		{
+			$uid = (int)$uid;
+			$callUser = $this->users[$uid] ?? null;
+			if (!$callUser)
+			{
+				continue;
+			}
+			$targets[] = $uid;
+			$oldStates[$uid] = $callUser->getState();
+		}
+		if ($targets === [])
+		{
+			return [];
+		}
+
+		$entity = CallUserTable::getEntity();
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableName = CallUserTable::getTableName();
+
+		[$updateClause] = $sqlHelper->prepareUpdate($tableName, [
+			'STATE' => CallUser::STATE_IDLE,
+			'LAST_SEEN' => $now,
+		]);
+		$whereClause = ORM\Query\Query::buildFilterSql($entity, [
+			'=CALL_ID' => $this->id,
+			'@USER_ID' => $targets,
+		]);
+
+		if ($updateClause === '' || $whereClause === '')
+		{
+			return [];
+		}
+
+		$connection->queryExecute("UPDATE {$tableName} SET {$updateClause} WHERE {$whereClause}");
+
+		$eventManager = EventManager::getInstance();
+		foreach ($targets as $uid)
+		{
+			$this->users[$uid]->setFields([
+				'STATE' => CallUser::STATE_IDLE,
+				'LAST_SEEN' => $now,
+			]);
+
+			// OnCallUserStateChange contract is "state actually changed":
+			// suppress for users whose snapshot already matches the target.
+			if ($oldStates[$uid] === CallUser::STATE_IDLE)
+			{
+				continue;
+			}
+
+			$eventManager->send(new Event(
+				'im',
+				'OnCallUserStateChange',
+				[
+					'callId' => $this->id,
+					'userId' => $uid,
+					'oldState' => $oldStates[$uid],
+					'newState' => CallUser::STATE_IDLE,
+				],
+			));
+		}
+
+		return $targets;
+	}
+
+	/**
+	 * Batched counterpart of {@see self::checkAccess()}. Users already on the
+	 * call's roster are accepted in O(1) via an in-memory flip; the rare
+	 * out-of-roster subset falls back to the per-user
+	 * `getAssociatedEntity()->checkAccess()` path.
+	 *
+	 * @param int[] $userIds
+	 * @return int[] subset of $userIds that have access (order preserved)
+	 */
+	public function checkAccessBatch(array $userIds): array
+	{
+		if ($userIds === [])
+		{
+			return [];
+		}
+
+		$members = array_flip(array_map('intval', $this->getUsers()));
+		$entity = $this->getAssociatedEntity();
+
+		$allowed = [];
+		foreach ($userIds as $uid)
+		{
+			$uid = (int)$uid;
+			if (isset($members[$uid]))
+			{
+				$allowed[] = $uid;
+				continue;
+			}
+			if ($entity?->checkAccess($uid))
+			{
+				$allowed[] = $uid;
+			}
+		}
+
+		return $allowed;
+	}
+
+	/**
+	 * Injects pre-fetched `b_call_user` rows into `$this->users` so a
+	 * subsequent {@see self::loadUsers()} short-circuits without hitting the
+	 * DB. Used by cache-rebuild paths (e.g. {@see \Bitrix\Call\Cache\ActiveCallsCache})
+	 * that already SELECTed every CallUser row in one batched query and want
+	 * the per-call instance to consume them without re-issuing per-call
+	 * SELECTs.
+	 *
+	 * Each row must follow the {@see CallUserTable::getList()} shape (USER_ID,
+	 * CALL_ID, STATE, LAST_SEEN, FIRST_JOINED, IS_MOBILE, SHARED_SCREEN,
+	 * RECORDED). Rows whose CALL_ID does not match this instance are
+	 * silently ignored — defends the rebuild path against accidentally
+	 * pushing rows from a different call into the bucket.
+	 *
+	 * @param array<int, array> $rows
+	 */
+	public function setPreloadedUsers(array $rows): self
+	{
+		$this->users = [];
+		foreach ($rows as $row)
+		{
+			$userId = (int)($row['USER_ID'] ?? 0);
+			$callId = (int)($row['CALL_ID'] ?? 0);
+			if ($userId <= 0 || ($callId !== 0 && $callId !== (int)$this->id))
+			{
+				continue;
+			}
+			$this->users[$userId] = CallUser::create($row);
+		}
+		unset($this->userData);
+		return $this;
 	}
 
 	public function removeUser($userId): void
@@ -362,24 +875,58 @@ class Call
 	 * Call is considered active if it has at least:
 	 *  - one user in ready state
 	 *  - another user in ready or calling state
+	 *
+	 * @param bool $mustHaveLiveConversation
 	 * @return bool
 	 */
-	public function hasActiveUsers(bool $strict = true): bool
+	public function hasActiveUsers(bool $mustHaveLiveConversation = true): bool
 	{
 		$this->loadUsers();
 		$states = [];
-
+		$readyUserIds = [];
 		foreach ($this->users as $user)
 		{
 			$userState = $user->getState();
 			$states[$userState] = isset($states[$userState]) ? $states[$userState] + 1 : 1;
-		}
-		if (in_array($this->type, [static::TYPE_PERMANENT, static::TYPE_LANGE]) || !$strict)
-		{
-			return $states[CallUser::STATE_READY] >= 1;
+			if ($userState === CallUser::STATE_READY)
+			{
+				$readyUserIds[] = $user->getUserId();
+			}
 		}
 
-		return $states[CallUser::STATE_READY] >= 2 || ($states[CallUser::STATE_READY] >= 1 && $states[CallUser::STATE_CALLING] >= 1);
+		if (in_array($this->type, [static::TYPE_PERMANENT, static::TYPE_LANGE], true))
+		{
+			$readyCount = $states[CallUser::STATE_READY] ?? 0;
+			if ($readyCount >= 2)
+			{
+				return true;
+			}
+
+			if ($readyCount !== 1)
+			{
+				return false;
+			}
+
+			// Exactly one READY user — keep the room alive only if they are
+			// privileged (initiator, chat owner / ADMIN, chat manager / MANAGER).
+			$roles = $this->getUserRoles($readyUserIds);
+			$userId = $readyUserIds[0];
+
+			return $userId === $this->initiatorId
+				|| in_array($roles[$userId] ?? null, ['ADMIN', 'MANAGER'], true);
+		}
+
+		if (!$mustHaveLiveConversation)
+		{
+			$ready = $states[CallUser::STATE_READY] ?? 0;
+			$calling = $states[CallUser::STATE_CALLING] ?? 0;
+			$unavailable = $states[CallUser::STATE_UNAVAILABLE] ?? 0;
+
+			return $ready >= 1 && ($ready + $calling + $unavailable >= 2);
+		}
+
+		return ($states[CallUser::STATE_READY] ?? 0) >= 2
+			|| (($states[CallUser::STATE_READY] ?? 0) >= 1 && ($states[CallUser::STATE_CALLING] ?? 0) >= 1);
 	}
 
 	//endregion
@@ -652,20 +1199,20 @@ class Call
 		$isLegacyMobile,
 		$video = false,
 		$sendPush = true,
-		string $sendMode = Signaling::MODE_ALL
+		string $sendMode = Signaling::MODE_ALL,
+		?array $usersInOtherCalls = null
 	): void
 	{
-		foreach ($toUserIds as $toUserId)
-		{
-			$this->getSignaling()->sendCallInviteToUser(
-				$senderId,
-				$toUserId,
-				$isLegacyMobile,
-				$video,
-				$sendPush,
-				$sendMode
-			);
-		}
+		$usersInOtherCalls ??= CallFactory::filterUsersInActiveCalls($toUserIds, $this->getId());
+		$this->getSignaling()->sendCallInviteBatch(
+			senderId: $senderId,
+			toUserIds: $toUserIds,
+			isLegacyMobile: $isLegacyMobile,
+			video: $video,
+			sendPush: $sendPush,
+			sendMode: $sendMode,
+			usersInOtherCalls: $usersInOtherCalls
+		);
 	}
 
 	/**
@@ -843,9 +1390,9 @@ class Call
 	public function createChildCall(
 		string $newUuid,
 		string $entityId,
-		string $newProvider = null,
-		int $scheme = null,
-		int $newInitiator = null,
+		?string $newProvider = null,
+		?int $scheme = null,
+		?int $newInitiator = null,
 	): Call
 	{
 		$callFields = $this->toArray();
@@ -1043,15 +1590,8 @@ class Call
 			return  '';
 		}
 
-		if (Loader::includeModule("bitrix24") && defined('BX24_HOST_NAME'))
-		{
-			$portalId = BX24_HOST_NAME;
-		}
-		else if (defined('IM_CALL_LOG_HOST'))
-		{
-			$portalId = \IM_CALL_LOG_HOST;
-		}
-		else
+		$portalId = parse_url(Library::getPortalPublicUrl(), PHP_URL_HOST);
+		if (empty($portalId))
 		{
 			return '';
 		}
@@ -1164,15 +1704,32 @@ class Call
 		$instance->associatedEntity->onCallCreate();
 
 		$instance->users = [];
+		$entityUserIds = [];
 		foreach ($instance->associatedEntity->getUsers() as $userId)
 		{
-			$instance->users[$userId] = CallUser::create([
-				'CALL_ID' => $instance->id,
-				'USER_ID' => $userId,
-				'STATE' => CallUser::STATE_UNAVAILABLE,
-				'LAST_SEEN' => null
-			]);
-			$instance->users[$userId]->save();
+			$userId = (int)$userId;
+			if ($userId > 0 && !isset($entityUserIds[$userId]))
+			{
+				$entityUserIds[$userId] = true;
+			}
+		}
+		$entityUserIds = array_keys($entityUserIds);
+
+		// Single INSERT IGNORE for the whole chat membership instead of N
+		// per-user CallUserTable::merge() calls — for chat with 142 users
+		// this collapses 142 INSERTs into 1.
+		if ($entityUserIds !== [])
+		{
+			$instance->bulkInsertCallUsers($entityUserIds, CallUser::STATE_UNAVAILABLE);
+			foreach ($entityUserIds as $userId)
+			{
+				$instance->users[$userId] = CallUser::create([
+					'CALL_ID' => $instance->id,
+					'USER_ID' => $userId,
+					'STATE' => CallUser::STATE_UNAVAILABLE,
+					'LAST_SEEN' => null,
+				]);
+			}
 		}
 
 		$instance->initCall();
@@ -1321,7 +1878,7 @@ class Call
 	public static function loadWithUuid($uuid): ?Call
 	{
 		$row = CallTable::getList([
-			'select' => ['*'],
+			'select' => array_keys(CallTable::getEntity()->getScalarFields()),
 			'filter' => ['=UUID' => $uuid],
 			'limit' => 1,
 		])->fetch();

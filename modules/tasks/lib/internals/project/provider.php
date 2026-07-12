@@ -17,12 +17,15 @@ use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Mobile\Project\Helper;
+use Bitrix\Socialnetwork\Collab\Integration\IM\Dialog;
 use Bitrix\Socialnetwork\Component\WorkgroupList;
 use Bitrix\Socialnetwork\Component\WorkgroupList\RuntimeFieldsManager;
 use Bitrix\Socialnetwork\Component\WorkgroupList\TasksCounter;
 use Bitrix\Socialnetwork\Helper\Workgroup;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
+use Bitrix\Socialnetwork\V2\Public\Dto\CounterColor as PublicCounterColor;
 use Bitrix\Socialnetwork\WorkgroupFavoritesTable;
 use Bitrix\Socialnetwork\WorkgroupPinTable;
 use Bitrix\Socialnetwork\WorkgroupSiteTable;
@@ -30,24 +33,29 @@ use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\WorkgroupTagTable;
 use Bitrix\Tasks\Integration\Socialnetwork;
 use Bitrix\Tasks\Internals\Counter\Template\ProjectCounter;
+use Bitrix\Tasks\Internals\Counter\Template\CounterStyle;
 use Bitrix\Tasks\Internals\Counter\Template\ScrumCounter;
 use Bitrix\Tasks\Internals\Effective;
 use Bitrix\Tasks\Internals\Task\ProjectLastActivityTable;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\FeatureService;
+use Bitrix\Socialnetwork\V2\Public\Provider\Grid\ProjectCounterProvider;
 
 class Provider
 {
 	private int $userId;
 	private bool $isScrum;
+	private bool $allowCollabs;
 	private string $mode;
 	private RuntimeFieldsManager $runtimeFieldsManager;
 
-	public function __construct(int $userId = 0, string $mode = '')
+	public function __construct(int $userId = 0, string $mode = '', bool $allowCollabs = false)
 	{
 		$this->userId = ($userId ?: User::getId());
 		$this->mode = $mode;
 		$this->isScrum = ($mode === WorkgroupList::MODE_TASKS_SCRUM);
+		$this->allowCollabs = $allowCollabs;
 		$this->runtimeFieldsManager = new RuntimeFieldsManager();
 	}
 
@@ -79,6 +87,7 @@ class Provider
 			'PRIVACY_TYPE',
 			'EFFICIENCY',
 			'ACTIVITY_DATE',
+			'TYPE',
 		];
 	}
 
@@ -106,6 +115,7 @@ class Provider
 			'SCRUM',
 			'ACTIVITY_DATE',
 			'IS_PINNED',
+			'TYPE',
 		];
 	}
 
@@ -126,6 +136,7 @@ class Provider
 			'ACTIVITY_DATE',
 			'IS_PINNED',
 			'SCRUM_MASTER_ID',
+			'TYPE',
 		];
 
 		return array_intersect($select, $allowedFields);
@@ -258,7 +269,10 @@ class Provider
 			}
 		}
 
-		$query->where('TYPE', '!=', Type::Collab->value);
+		if (!$this->allowCollabs)
+		{
+			$query->where('TYPE', '!=', Type::Collab->value);
+		}
 
 		return $this->addQueryFilter($query, $filterValues);
 	}
@@ -492,11 +506,40 @@ class Provider
 
 	public function fillCounters(array $projects): array
 	{
+		$projectIds = array_keys($projects);
 		$projectCounter = $this->isScrum ? new ScrumCounter($this->userId) : new ProjectCounter($this->userId);
 
-		foreach (array_keys($projects) as $projectId)
+		foreach ($projectIds as $projectId)
 		{
 			$projects[$projectId]['COUNTER'] = $projectCounter->getRowCounter($projectId);
+		}
+
+		if (
+			$this->isScrum
+			|| empty($projects)
+			|| !(new FeatureService())->isNewProjectsOn()
+		)
+		{
+			return $projects;
+		}
+
+		$counterCollection = (new ProjectCounterProvider())->get($projectIds, $this->userId);
+
+		foreach ($counterCollection as $counter)
+		{
+			$projectId = $counter->groupId;
+			if (!isset($projects[$projectId]['COUNTER']))
+			{
+				continue;
+			}
+
+			$projects[$projectId]['COUNTER']['VALUE'] = $counter->value;
+			$projects[$projectId]['COUNTER']['COLOR'] = match ($counter->color)
+			{
+				PublicCounterColor::Danger => CounterStyle::STYLE_RED,
+				PublicCounterColor::Success => CounterStyle::STYLE_GREEN,
+				default => CounterStyle::STYLE_RED,
+			};
 		}
 
 		return $projects;
@@ -634,25 +677,51 @@ class Provider
 
 	public function fillTabsData(array $projects): array
 	{
-		if (!empty($projects))
+		if (empty($projects))
 		{
-			$projectIds = array_keys($projects);
-			$additionalData = Workgroup::getAdditionalData([
-				'ids' => $projectIds,
-				'features' => Helper::getMobileFeatures(),
-				'mandatoryFeatures' => Helper::getMobileMandatoryFeatures(),
-				'currentUserId' => $this->userId,
-			]);
+			return $projects;
+		}
 
-			foreach ($projectIds as $id)
+		$projectIds = array_keys($projects);
+		$additionalData = Workgroup::getAdditionalData([
+			'ids' => $projectIds,
+			'features' => Helper::getMobileFeatures(),
+			'mandatoryFeatures' => Helper::getMobileMandatoryFeatures(),
+			'currentUserId' => $this->userId,
+		]);
+
+		foreach ($projectIds as $id)
+		{
+			if (!isset($additionalData[$id]))
 			{
-				if (!isset($additionalData[$id]))
-				{
-					continue;
-				}
-
-				$projects[$id]['ADDITIONAL_DATA'] = ($additionalData[$id] ?? []);
+				continue;
 			}
+
+			$projects[$id]['ADDITIONAL_DATA'] = $additionalData[$id];
+		}
+
+		if (!$this->allowCollabs)
+		{
+			return $projects;
+		}
+
+		if (!Loader::includeModule('im'))
+		{
+			return $projects;
+		}
+
+		$chatData = Container::getInstance()->getProjectChatResolver()->getByProjectIds($projectIds);
+
+		foreach ($projectIds as $id)
+		{
+			$chatId = $chatData[$id] ?? 0;
+			if ($chatId <= 0)
+			{
+				continue;
+			}
+
+			$projects[$id]['ADDITIONAL_DATA']['CHAT_ID'] = $chatId;
+			$projects[$id]['ADDITIONAL_DATA']['DIALOG_ID'] = Dialog::getDialogId($chatId);
 		}
 
 		return $projects;

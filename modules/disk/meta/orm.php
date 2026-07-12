@@ -61,7 +61,7 @@ namespace Bitrix\Disk\Internal\Model {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internal\Model\EO_UnifiedLinkAccess wakeUp($data)
 	 */
-	class EO_UnifiedLinkAccess {
+	class EO_UnifiedLinkAccess extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internal\Model\UnifiedLinkAccessTable */
 		static public $dataClass = '\Bitrix\Disk\Internal\Model\UnifiedLinkAccessTable';
 		/**
@@ -110,8 +110,10 @@ namespace Bitrix\Disk\Internal\Model {
 	 * @method \Bitrix\Disk\Internal\Model\EO_UnifiedLinkAccess_Collection merge(?\Bitrix\Disk\Internal\Model\EO_UnifiedLinkAccess_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internal\Model\EO_UnifiedLinkAccess|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internal\Model\EO_UnifiedLinkAccess_Collection filter(callable $callback)
 	 */
-	class EO_UnifiedLinkAccess_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_UnifiedLinkAccess_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internal\Model\UnifiedLinkAccessTable */
 		static public $dataClass = '\Bitrix\Disk\Internal\Model\UnifiedLinkAccessTable';
 	}
@@ -240,7 +242,7 @@ namespace Bitrix\Disk\Document\Models {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Document\Models\RestrictionLog wakeUp($data)
 	 */
-	class EO_RestrictionLog {
+	class EO_RestrictionLog extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Document\Models\RestrictionLogTable */
 		static public $dataClass = '\Bitrix\Disk\Document\Models\RestrictionLogTable';
 		/**
@@ -297,8 +299,10 @@ namespace Bitrix\Disk\Document\Models {
 	 * @method \Bitrix\Disk\Document\Models\EO_RestrictionLog_Collection merge(?\Bitrix\Disk\Document\Models\EO_RestrictionLog_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Document\Models\RestrictionLog|null find(callable $callback)
+	 * @method \Bitrix\Disk\Document\Models\EO_RestrictionLog_Collection filter(callable $callback)
 	 */
-	class EO_RestrictionLog_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_RestrictionLog_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Document\Models\RestrictionLogTable */
 		static public $dataClass = '\Bitrix\Disk\Document\Models\RestrictionLogTable';
 	}
@@ -447,7 +451,7 @@ namespace Bitrix\Disk\Document\Models {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Document\Models\EO_DocumentInfo wakeUp($data)
 	 */
-	class EO_DocumentInfo {
+	class EO_DocumentInfo extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Document\Models\DocumentInfoTable */
 		static public $dataClass = '\Bitrix\Disk\Document\Models\DocumentInfoTable';
 		/**
@@ -508,8 +512,10 @@ namespace Bitrix\Disk\Document\Models {
 	 * @method \Bitrix\Disk\Document\Models\EO_DocumentInfo_Collection merge(?\Bitrix\Disk\Document\Models\EO_DocumentInfo_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Document\Models\EO_DocumentInfo|null find(callable $callback)
+	 * @method \Bitrix\Disk\Document\Models\EO_DocumentInfo_Collection filter(callable $callback)
 	 */
-	class EO_DocumentInfo_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DocumentInfo_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Document\Models\DocumentInfoTable */
 		static public $dataClass = '\Bitrix\Disk\Document\Models\DocumentInfoTable';
 	}
@@ -688,7 +694,7 @@ namespace Bitrix\Disk\Document\Models {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Document\Models\EO_DocumentSession wakeUp($data)
 	 */
-	class EO_DocumentSession {
+	class EO_DocumentSession extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Document\Models\DocumentSessionTable */
 		static public $dataClass = '\Bitrix\Disk\Document\Models\DocumentSessionTable';
 		/**
@@ -755,8 +761,10 @@ namespace Bitrix\Disk\Document\Models {
 	 * @method \Bitrix\Disk\Document\Models\EO_DocumentSession_Collection merge(?\Bitrix\Disk\Document\Models\EO_DocumentSession_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Document\Models\EO_DocumentSession|null find(callable $callback)
+	 * @method \Bitrix\Disk\Document\Models\EO_DocumentSession_Collection filter(callable $callback)
 	 */
-	class EO_DocumentSession_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DocumentSession_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Document\Models\DocumentSessionTable */
 		static public $dataClass = '\Bitrix\Disk\Document\Models\DocumentSessionTable';
 	}
@@ -875,7 +883,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_DeletedLogV2 wakeUp($data)
 	 */
-	class EO_DeletedLogV2 {
+	class EO_DeletedLogV2 extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\DeletedLogV2Table */
 		static public $dataClass = '\Bitrix\Disk\Internals\DeletedLogV2Table';
 		/**
@@ -930,8 +938,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_DeletedLogV2_Collection merge(?\Bitrix\Disk\Internals\EO_DeletedLogV2_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_DeletedLogV2|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_DeletedLogV2_Collection filter(callable $callback)
 	 */
-	class EO_DeletedLogV2_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DeletedLogV2_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\DeletedLogV2Table */
 		static public $dataClass = '\Bitrix\Disk\Internals\DeletedLogV2Table';
 	}
@@ -1010,7 +1020,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_ObjectSaveIndex wakeUp($data)
 	 */
-	class EO_ObjectSaveIndex {
+	class EO_ObjectSaveIndex extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\ObjectSaveIndexTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ObjectSaveIndexTable';
 		/**
@@ -1057,8 +1067,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_ObjectSaveIndex_Collection merge(?\Bitrix\Disk\Internals\EO_ObjectSaveIndex_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectSaveIndex|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectSaveIndex_Collection filter(callable $callback)
 	 */
-	class EO_ObjectSaveIndex_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ObjectSaveIndex_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\ObjectSaveIndexTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ObjectSaveIndexTable';
 	}
@@ -1514,6 +1526,26 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_Object resetUniqueCode()
 	 * @method \Bitrix\Disk\Internals\EO_Object unsetUniqueCode()
 	 * @method \string fillUniqueCode()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions getAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions remindActualAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions requireAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_Object setAllowDownloadOnRead(\Bitrix\Disk\Internals\EO_ObjectOptions $object)
+	 * @method \Bitrix\Disk\Internals\EO_Object resetAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_Object unsetAllowDownloadOnRead()
+	 * @method bool hasAllowDownloadOnRead()
+	 * @method bool isAllowDownloadOnReadFilled()
+	 * @method bool isAllowDownloadOnReadChanged()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions fillAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions getAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions remindActualAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions requireAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_Object setAllowManagePublicAccessOnRead(\Bitrix\Disk\Internals\EO_ObjectOptions $object)
+	 * @method \Bitrix\Disk\Internals\EO_Object resetAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_Object unsetAllowManagePublicAccessOnRead()
+	 * @method bool hasAllowManagePublicAccessOnRead()
+	 * @method bool isAllowManagePublicAccessOnReadFilled()
+	 * @method bool isAllowManagePublicAccessOnReadChanged()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions fillAllowManagePublicAccessOnRead()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1541,7 +1573,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_Object wakeUp($data)
 	 */
-	class EO_Object {
+	class EO_Object extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\ObjectTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ObjectTable';
 		/**
@@ -1657,6 +1689,12 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_TrackedObject_Collection fillTrackedObject()
 	 * @method \string[] getUniqueCodeList()
 	 * @method \string[] fillUniqueCode()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions[] getAllowDownloadOnReadList()
+	 * @method \Bitrix\Disk\Internals\EO_Object_Collection getAllowDownloadOnReadCollection()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection fillAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions[] getAllowManagePublicAccessOnReadList()
+	 * @method \Bitrix\Disk\Internals\EO_Object_Collection getAllowManagePublicAccessOnReadCollection()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection fillAllowManagePublicAccessOnRead()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1685,8 +1723,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_Object_Collection merge(?\Bitrix\Disk\Internals\EO_Object_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_Object|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_Object_Collection filter(callable $callback)
 	 */
-	class EO_Object_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Object_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\ObjectTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ObjectTable';
 	}
@@ -1875,6 +1915,16 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_ExternalLink resetCreatedBy()
 	 * @method \Bitrix\Disk\Internals\EO_ExternalLink unsetCreatedBy()
 	 * @method \int fillCreatedBy()
+	 * @method \boolean getCanDownloadWithReadAccess()
+	 * @method \Bitrix\Disk\Internals\EO_ExternalLink setCanDownloadWithReadAccess(\boolean|\Bitrix\Main\DB\SqlExpression $canDownloadWithReadAccess)
+	 * @method bool hasCanDownloadWithReadAccess()
+	 * @method bool isCanDownloadWithReadAccessFilled()
+	 * @method bool isCanDownloadWithReadAccessChanged()
+	 * @method \boolean remindActualCanDownloadWithReadAccess()
+	 * @method \boolean requireCanDownloadWithReadAccess()
+	 * @method \Bitrix\Disk\Internals\EO_ExternalLink resetCanDownloadWithReadAccess()
+	 * @method \Bitrix\Disk\Internals\EO_ExternalLink unsetCanDownloadWithReadAccess()
+	 * @method \boolean fillCanDownloadWithReadAccess()
 	 * @method \Bitrix\Main\EO_User getCreateUser()
 	 * @method \Bitrix\Main\EO_User remindActualCreateUser()
 	 * @method \Bitrix\Main\EO_User requireCreateUser()
@@ -1912,7 +1962,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_ExternalLink wakeUp($data)
 	 */
-	class EO_ExternalLink {
+	class EO_ExternalLink extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\ExternalLinkTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ExternalLinkTable';
 		/**
@@ -1961,6 +2011,8 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\Type\DateTime[] fillCreateTime()
 	 * @method \int[] getCreatedByList()
 	 * @method \int[] fillCreatedBy()
+	 * @method \boolean[] getCanDownloadWithReadAccessList()
+	 * @method \boolean[] fillCanDownloadWithReadAccess()
 	 * @method \Bitrix\Main\EO_User[] getCreateUserList()
 	 * @method \Bitrix\Disk\Internals\EO_ExternalLink_Collection getCreateUserCollection()
 	 * @method \Bitrix\Main\EO_User_Collection fillCreateUser()
@@ -1992,8 +2044,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_ExternalLink_Collection merge(?\Bitrix\Disk\Internals\EO_ExternalLink_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_ExternalLink|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_ExternalLink_Collection filter(callable $callback)
 	 */
-	class EO_ExternalLink_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ExternalLink_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\ExternalLinkTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ExternalLinkTable';
 	}
@@ -2489,7 +2543,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_Volume wakeUp($data)
 	 */
-	class EO_Volume {
+	class EO_Volume extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\VolumeTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\VolumeTable';
 		/**
@@ -2622,8 +2676,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_Volume_Collection merge(?\Bitrix\Disk\Internals\EO_Volume_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_Volume|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_Volume_Collection filter(callable $callback)
 	 */
-	class EO_Volume_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Volume_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\VolumeTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\VolumeTable';
 	}
@@ -2712,7 +2768,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_SimpleRight wakeUp($data)
 	 */
-	class EO_SimpleRight {
+	class EO_SimpleRight extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\SimpleRightTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\SimpleRightTable';
 		/**
@@ -2761,8 +2817,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_SimpleRight_Collection merge(?\Bitrix\Disk\Internals\EO_SimpleRight_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_SimpleRight|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_SimpleRight_Collection filter(callable $callback)
 	 */
-	class EO_SimpleRight_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_SimpleRight_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\SimpleRightTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\SimpleRightTable';
 	}
@@ -2861,7 +2919,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_ObjectPath wakeUp($data)
 	 */
-	class EO_ObjectPath {
+	class EO_ObjectPath extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\ObjectPathTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ObjectPathTable';
 		/**
@@ -2912,8 +2970,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_ObjectPath_Collection merge(?\Bitrix\Disk\Internals\EO_ObjectPath_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectPath|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectPath_Collection filter(callable $callback)
 	 */
-	class EO_ObjectPath_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ObjectPath_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\ObjectPathTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ObjectPathTable';
 	}
@@ -3112,7 +3172,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_AttachedObject wakeUp($data)
 	 */
-	class EO_AttachedObject {
+	class EO_AttachedObject extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\AttachedObjectTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\AttachedObjectTable';
 		/**
@@ -3186,8 +3246,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_AttachedObject_Collection merge(?\Bitrix\Disk\Internals\EO_AttachedObject_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_AttachedObject|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_AttachedObject_Collection filter(callable $callback)
 	 */
-	class EO_AttachedObject_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_AttachedObject_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\AttachedObjectTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\AttachedObjectTable';
 	}
@@ -3643,6 +3705,26 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_File resetUniqueCode()
 	 * @method \Bitrix\Disk\Internals\EO_File unsetUniqueCode()
 	 * @method \string fillUniqueCode()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions getAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions remindActualAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions requireAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_File setAllowDownloadOnRead(\Bitrix\Disk\Internals\EO_ObjectOptions $object)
+	 * @method \Bitrix\Disk\Internals\EO_File resetAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_File unsetAllowDownloadOnRead()
+	 * @method bool hasAllowDownloadOnRead()
+	 * @method bool isAllowDownloadOnReadFilled()
+	 * @method bool isAllowDownloadOnReadChanged()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions fillAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions getAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions remindActualAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions requireAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_File setAllowManagePublicAccessOnRead(\Bitrix\Disk\Internals\EO_ObjectOptions $object)
+	 * @method \Bitrix\Disk\Internals\EO_File resetAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_File unsetAllowManagePublicAccessOnRead()
+	 * @method bool hasAllowManagePublicAccessOnRead()
+	 * @method bool isAllowManagePublicAccessOnReadFilled()
+	 * @method bool isAllowManagePublicAccessOnReadChanged()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions fillAllowManagePublicAccessOnRead()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -3670,7 +3752,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_File wakeUp($data)
 	 */
-	class EO_File {
+	class EO_File extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\FileTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\FileTable';
 		/**
@@ -3786,6 +3868,12 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_TrackedObject_Collection fillTrackedObject()
 	 * @method \string[] getUniqueCodeList()
 	 * @method \string[] fillUniqueCode()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions[] getAllowDownloadOnReadList()
+	 * @method \Bitrix\Disk\Internals\EO_File_Collection getAllowDownloadOnReadCollection()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection fillAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions[] getAllowManagePublicAccessOnReadList()
+	 * @method \Bitrix\Disk\Internals\EO_File_Collection getAllowManagePublicAccessOnReadCollection()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection fillAllowManagePublicAccessOnRead()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -3814,8 +3902,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_File_Collection merge(?\Bitrix\Disk\Internals\EO_File_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_File|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_File_Collection filter(callable $callback)
 	 */
-	class EO_File_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_File_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\FileTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\FileTable';
 	}
@@ -3914,7 +4004,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_RecentlyUsed wakeUp($data)
 	 */
-	class EO_RecentlyUsed {
+	class EO_RecentlyUsed extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\RecentlyUsedTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\RecentlyUsedTable';
 		/**
@@ -3965,8 +4055,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_RecentlyUsed_Collection merge(?\Bitrix\Disk\Internals\EO_RecentlyUsed_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_RecentlyUsed|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_RecentlyUsed_Collection filter(callable $callback)
 	 */
-	class EO_RecentlyUsed_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_RecentlyUsed_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\RecentlyUsedTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\RecentlyUsedTable';
 	}
@@ -4172,7 +4264,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_TmpFile wakeUp($data)
 	 */
-	class EO_TmpFile {
+	class EO_TmpFile extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\TmpFileTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\TmpFileTable';
 		/**
@@ -4246,8 +4338,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_TmpFile_Collection merge(?\Bitrix\Disk\Internals\EO_TmpFile_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_TmpFile|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_TmpFile_Collection filter(callable $callback)
 	 */
-	class EO_TmpFile_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TmpFile_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\TmpFileTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\TmpFileTable';
 	}
@@ -4403,7 +4497,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_ObjectLock wakeUp($data)
 	 */
-	class EO_ObjectLock {
+	class EO_ObjectLock extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\ObjectLockTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ObjectLockTable';
 		/**
@@ -4467,8 +4561,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_ObjectLock_Collection merge(?\Bitrix\Disk\Internals\EO_ObjectLock_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectLock|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectLock_Collection filter(callable $callback)
 	 */
-	class EO_ObjectLock_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ObjectLock_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\ObjectLockTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ObjectLockTable';
 	}
@@ -4617,7 +4713,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_TrackedObject wakeUp($data)
 	 */
-	class EO_TrackedObject {
+	class EO_TrackedObject extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\TrackedObjectTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\TrackedObjectTable';
 		/**
@@ -4679,8 +4775,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_TrackedObject_Collection merge(?\Bitrix\Disk\Internals\EO_TrackedObject_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_TrackedObject|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_TrackedObject_Collection filter(callable $callback)
 	 */
-	class EO_TrackedObject_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_TrackedObject_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\TrackedObjectTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\TrackedObjectTable';
 	}
@@ -4859,7 +4957,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_EditSession wakeUp($data)
 	 */
-	class EO_EditSession {
+	class EO_EditSession extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\EditSessionTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\EditSessionTable';
 		/**
@@ -4928,8 +5026,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_EditSession_Collection merge(?\Bitrix\Disk\Internals\EO_EditSession_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_EditSession|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_EditSession_Collection filter(callable $callback)
 	 */
-	class EO_EditSession_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_EditSession_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\EditSessionTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\EditSessionTable';
 	}
@@ -5188,7 +5288,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_VolumeDeletedLog wakeUp($data)
 	 */
-	class EO_VolumeDeletedLog {
+	class EO_VolumeDeletedLog extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\VolumeDeletedLogTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\VolumeDeletedLogTable';
 		/**
@@ -5275,8 +5375,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_VolumeDeletedLog_Collection merge(?\Bitrix\Disk\Internals\EO_VolumeDeletedLog_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_VolumeDeletedLog|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_VolumeDeletedLog_Collection filter(callable $callback)
 	 */
-	class EO_VolumeDeletedLog_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_VolumeDeletedLog_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\VolumeDeletedLogTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\VolumeDeletedLogTable';
 	}
@@ -5395,7 +5497,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_DeletedLog wakeUp($data)
 	 */
-	class EO_DeletedLog {
+	class EO_DeletedLog extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\DeletedLogTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\DeletedLogTable';
 		/**
@@ -5450,8 +5552,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_DeletedLog_Collection merge(?\Bitrix\Disk\Internals\EO_DeletedLog_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_DeletedLog|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_DeletedLog_Collection filter(callable $callback)
 	 */
-	class EO_DeletedLog_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_DeletedLog_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\DeletedLogTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\DeletedLogTable';
 	}
@@ -5535,7 +5639,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_AttachedViewType wakeUp($data)
 	 */
-	class EO_AttachedViewType {
+	class EO_AttachedViewType extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\AttachedViewTypeTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\AttachedViewTypeTable';
 		/**
@@ -5583,8 +5687,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_AttachedViewType_Collection merge(?\Bitrix\Disk\Internals\EO_AttachedViewType_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_AttachedViewType|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_AttachedViewType_Collection filter(callable $callback)
 	 */
-	class EO_AttachedViewType_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_AttachedViewType_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\AttachedViewTypeTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\AttachedViewTypeTable';
 	}
@@ -6040,6 +6146,26 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_Folder resetUniqueCode()
 	 * @method \Bitrix\Disk\Internals\EO_Folder unsetUniqueCode()
 	 * @method \string fillUniqueCode()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions getAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions remindActualAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions requireAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_Folder setAllowDownloadOnRead(\Bitrix\Disk\Internals\EO_ObjectOptions $object)
+	 * @method \Bitrix\Disk\Internals\EO_Folder resetAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_Folder unsetAllowDownloadOnRead()
+	 * @method bool hasAllowDownloadOnRead()
+	 * @method bool isAllowDownloadOnReadFilled()
+	 * @method bool isAllowDownloadOnReadChanged()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions fillAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions getAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions remindActualAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions requireAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_Folder setAllowManagePublicAccessOnRead(\Bitrix\Disk\Internals\EO_ObjectOptions $object)
+	 * @method \Bitrix\Disk\Internals\EO_Folder resetAllowManagePublicAccessOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_Folder unsetAllowManagePublicAccessOnRead()
+	 * @method bool hasAllowManagePublicAccessOnRead()
+	 * @method bool isAllowManagePublicAccessOnReadFilled()
+	 * @method bool isAllowManagePublicAccessOnReadChanged()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions fillAllowManagePublicAccessOnRead()
 	 * @method \boolean getHasSubfolders()
 	 * @method \boolean remindActualHasSubfolders()
 	 * @method \boolean requireHasSubfolders()
@@ -6074,7 +6200,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_Folder wakeUp($data)
 	 */
-	class EO_Folder {
+	class EO_Folder extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\FolderTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\FolderTable';
 		/**
@@ -6190,6 +6316,12 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_TrackedObject_Collection fillTrackedObject()
 	 * @method \string[] getUniqueCodeList()
 	 * @method \string[] fillUniqueCode()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions[] getAllowDownloadOnReadList()
+	 * @method \Bitrix\Disk\Internals\EO_Folder_Collection getAllowDownloadOnReadCollection()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection fillAllowDownloadOnRead()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions[] getAllowManagePublicAccessOnReadList()
+	 * @method \Bitrix\Disk\Internals\EO_Folder_Collection getAllowManagePublicAccessOnReadCollection()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection fillAllowManagePublicAccessOnRead()
 	 * @method \boolean[] getHasSubfoldersList()
 	 * @method \boolean[] fillHasSubfolders()
 	 *
@@ -6220,8 +6352,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_Folder_Collection merge(?\Bitrix\Disk\Internals\EO_Folder_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_Folder|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_Folder_Collection filter(callable $callback)
 	 */
-	class EO_Folder_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Folder_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\FolderTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\FolderTable';
 	}
@@ -6367,7 +6501,7 @@ namespace Bitrix\Disk\Internals\Rights\Table {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\Rights\Table\EO_RightSetupSession wakeUp($data)
 	 */
-	class EO_RightSetupSession {
+	class EO_RightSetupSession extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\Rights\Table\RightSetupSessionTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\Rights\Table\RightSetupSessionTable';
 		/**
@@ -6430,8 +6564,10 @@ namespace Bitrix\Disk\Internals\Rights\Table {
 	 * @method \Bitrix\Disk\Internals\Rights\Table\EO_RightSetupSession_Collection merge(?\Bitrix\Disk\Internals\Rights\Table\EO_RightSetupSession_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\Rights\Table\EO_RightSetupSession|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\Rights\Table\EO_RightSetupSession_Collection filter(callable $callback)
 	 */
-	class EO_RightSetupSession_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_RightSetupSession_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\Rights\Table\RightSetupSessionTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\Rights\Table\RightSetupSessionTable';
 	}
@@ -6680,7 +6816,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_Version wakeUp($data)
 	 */
-	class EO_Version {
+	class EO_Version extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\VersionTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\VersionTable';
 		/**
@@ -6766,8 +6902,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_Version_Collection merge(?\Bitrix\Disk\Internals\EO_Version_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_Version|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_Version_Collection filter(callable $callback)
 	 */
-	class EO_Version_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Version_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\VersionTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\VersionTable';
 	}
@@ -6953,7 +7091,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_ShowSession wakeUp($data)
 	 */
-	class EO_ShowSession {
+	class EO_ShowSession extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\ShowSessionTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ShowSessionTable';
 		/**
@@ -7024,8 +7162,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_ShowSession_Collection merge(?\Bitrix\Disk\Internals\EO_ShowSession_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_ShowSession|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_ShowSession_Collection filter(callable $callback)
 	 */
-	class EO_ShowSession_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ShowSession_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\ShowSessionTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ShowSessionTable';
 	}
@@ -7204,7 +7344,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_Storage wakeUp($data)
 	 */
-	class EO_Storage {
+	class EO_Storage extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\StorageTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\StorageTable';
 		/**
@@ -7272,8 +7412,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_Storage_Collection merge(?\Bitrix\Disk\Internals\EO_Storage_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_Storage|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_Storage_Collection filter(callable $callback)
 	 */
-	class EO_Storage_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Storage_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\StorageTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\StorageTable';
 	}
@@ -7502,7 +7644,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_CloudImport wakeUp($data)
 	 */
-	class EO_CloudImport {
+	class EO_CloudImport extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\CloudImportTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\CloudImportTable';
 		/**
@@ -7583,8 +7725,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_CloudImport_Collection merge(?\Bitrix\Disk\Internals\EO_CloudImport_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_CloudImport|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_CloudImport_Collection filter(callable $callback)
 	 */
-	class EO_CloudImport_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_CloudImport_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\CloudImportTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\CloudImportTable';
 	}
@@ -7693,7 +7837,7 @@ namespace Bitrix\Disk\Internals\Index {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\Index\EO_ObjectExtendedIndex wakeUp($data)
 	 */
-	class EO_ObjectExtendedIndex {
+	class EO_ObjectExtendedIndex extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\Index\ObjectExtendedIndexTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\Index\ObjectExtendedIndexTable';
 		/**
@@ -7747,8 +7891,10 @@ namespace Bitrix\Disk\Internals\Index {
 	 * @method \Bitrix\Disk\Internals\Index\EO_ObjectExtendedIndex_Collection merge(?\Bitrix\Disk\Internals\Index\EO_ObjectExtendedIndex_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\Index\EO_ObjectExtendedIndex|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\Index\EO_ObjectExtendedIndex_Collection filter(callable $callback)
 	 */
-	class EO_ObjectExtendedIndex_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ObjectExtendedIndex_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\Index\ObjectExtendedIndexTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\Index\ObjectExtendedIndexTable';
 	}
@@ -7847,7 +7993,7 @@ namespace Bitrix\Disk\Internals\Index {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\Index\EO_ObjectHeadIndex wakeUp($data)
 	 */
-	class EO_ObjectHeadIndex {
+	class EO_ObjectHeadIndex extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\Index\ObjectHeadIndexTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\Index\ObjectHeadIndexTable';
 		/**
@@ -7899,8 +8045,10 @@ namespace Bitrix\Disk\Internals\Index {
 	 * @method \Bitrix\Disk\Internals\Index\EO_ObjectHeadIndex_Collection merge(?\Bitrix\Disk\Internals\Index\EO_ObjectHeadIndex_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\Index\EO_ObjectHeadIndex|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\Index\EO_ObjectHeadIndex_Collection filter(callable $callback)
 	 */
-	class EO_ObjectHeadIndex_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ObjectHeadIndex_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\Index\ObjectHeadIndexTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\Index\ObjectHeadIndexTable';
 	}
@@ -8199,7 +8347,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_Sharing wakeUp($data)
 	 */
-	class EO_Sharing {
+	class EO_Sharing extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\SharingTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\SharingTable';
 		/**
@@ -8300,8 +8448,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_Sharing_Collection merge(?\Bitrix\Disk\Internals\EO_Sharing_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_Sharing|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_Sharing_Collection filter(callable $callback)
 	 */
-	class EO_Sharing_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Sharing_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\SharingTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\SharingTable';
 	}
@@ -8417,7 +8567,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_ObjectTtl wakeUp($data)
 	 */
-	class EO_ObjectTtl {
+	class EO_ObjectTtl extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\ObjectTtlTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ObjectTtlTable';
 		/**
@@ -8473,8 +8623,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_ObjectTtl_Collection merge(?\Bitrix\Disk\Internals\EO_ObjectTtl_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectTtl|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectTtl_Collection filter(callable $callback)
 	 */
-	class EO_ObjectTtl_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_ObjectTtl_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\ObjectTtlTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\ObjectTtlTable';
 	}
@@ -8643,7 +8795,7 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Disk\Internals\EO_Right wakeUp($data)
 	 */
-	class EO_Right {
+	class EO_Right extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Disk\Internals\RightTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\RightTable';
 		/**
@@ -8713,8 +8865,10 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_Right_Collection merge(?\Bitrix\Disk\Internals\EO_Right_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_Right|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_Right_Collection filter(callable $callback)
 	 */
-	class EO_Right_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Right_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Disk\Internals\RightTable */
 		static public $dataClass = '\Bitrix\Disk\Internals\RightTable';
 	}
@@ -8741,4 +8895,157 @@ namespace Bitrix\Disk\Internals {
 	 * @method \Bitrix\Disk\Internals\EO_Right_Collection wakeUpCollection($rows)
 	 */
 	class EO_Right_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Disk\Internals\ObjectOptionsTable:disk/lib/internals/objectoptionstable.php */
+namespace Bitrix\Disk\Internals {
+	/**
+	 * EO_ObjectOptions
+	 * @see \Bitrix\Disk\Internals\ObjectOptionsTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getObjectId()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions setObjectId(\int|\Bitrix\Main\DB\SqlExpression $objectId)
+	 * @method bool hasObjectId()
+	 * @method bool isObjectIdFilled()
+	 * @method bool isObjectIdChanged()
+	 * @method \int remindActualObjectId()
+	 * @method \int requireObjectId()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions resetObjectId()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions unsetObjectId()
+	 * @method \int fillObjectId()
+	 * @method \string getName()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions resetName()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions unsetName()
+	 * @method \string fillName()
+	 * @method \string getValue()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions setValue(\string|\Bitrix\Main\DB\SqlExpression $value)
+	 * @method bool hasValue()
+	 * @method bool isValueFilled()
+	 * @method bool isValueChanged()
+	 * @method \string remindActualValue()
+	 * @method \string requireValue()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions resetValue()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions unsetValue()
+	 * @method \string fillValue()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions set($fieldName, $value)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions reset($fieldName)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Disk\Internals\EO_ObjectOptions wakeUp($data)
+	 */
+	class EO_ObjectOptions extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Disk\Internals\ObjectOptionsTable */
+		static public $dataClass = '\Bitrix\Disk\Internals\ObjectOptionsTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Disk\Internals {
+	/**
+	 * EO_ObjectOptions_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getObjectIdList()
+	 * @method \int[] fillObjectId()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getValueList()
+	 * @method \string[] fillValue()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Disk\Internals\EO_ObjectOptions $object)
+	 * @method bool has(\Bitrix\Disk\Internals\EO_ObjectOptions $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions getByPrimary($primary)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions[] getAll()
+	 * @method bool remove(\Bitrix\Disk\Internals\EO_ObjectOptions $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Disk\Internals\EO_ObjectOptions_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection merge(?\Bitrix\Disk\Internals\EO_ObjectOptions_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions|null find(callable $callback)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection filter(callable $callback)
+	 */
+	class EO_ObjectOptions_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Disk\Internals\ObjectOptionsTable */
+		static public $dataClass = '\Bitrix\Disk\Internals\ObjectOptionsTable';
+	}
+}
+namespace Bitrix\Disk\Internals {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_ObjectOptions_Result exec()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions fetchObject()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection fetchCollection()
+	 */
+	class EO_ObjectOptions_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions fetchObject()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection fetchCollection()
+	 */
+	class EO_ObjectOptions_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions createObject($setDefaultValues = true)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection createCollection()
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions wakeUpObject($row)
+	 * @method \Bitrix\Disk\Internals\EO_ObjectOptions_Collection wakeUpCollection($rows)
+	 */
+	class EO_ObjectOptions_Entity extends \Bitrix\Main\ORM\Entity {}
 }

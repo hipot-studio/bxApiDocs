@@ -10,17 +10,20 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Entity\User\Gender;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\FeatureService;
 use Bitrix\Tasks\V2\Internal\Util\MBString;
 
 #[Recipients(creator: false, responsible: true, accomplices: true, auditors: false)]
 class NotifyGroupAdded extends AbstractNotify
 {
-	private const MESSAGE_CODE_TEMPLATE = 'TASKS_IM_TASK_GROUP_ADDED_OR_CHANGED_%s_%s';
+	private const MESSAGE_CODE_TEMPLATE = 'TASKS_IM_TASK_GROUP_ADDED_OR_CHANGED_%s_%s_MSGVER_1';
 
 	public function __construct(
 		private readonly Task $task,
 		MessageSenderInterface $sender,
 		protected readonly ?User $triggeredBy = null,
+		private readonly ChatActionLinkService $chatActionLinkService,
+		private readonly FeatureService $featureService,
 		private readonly ?Group $group,
 	)
 	{
@@ -43,6 +46,11 @@ class NotifyGroupAdded extends AbstractNotify
 			GroupTypes::Collab->value => $this->group?->type,
 			default => GroupTypes::Group->value,
 		};
+		if ($this->featureService->isNewProjectsOn())
+		{
+			$groupTypeCode = GroupTypes::Project->value;
+		}
+
 		$groupTypeCode = mb_strtoupper($groupTypeCode);
 
 		return sprintf(
@@ -54,9 +62,17 @@ class NotifyGroupAdded extends AbstractNotify
 
 	public function getMessageData(): array
 	{
+		$groupUrl = $this->chatActionLinkService->get(
+			task: $this->task,
+			userId: (int)$this->triggeredBy?->id,
+			action: ChatAction::OpenGroup,
+			entityId: (int)$this->group?->id,
+		);
+
 		return [
 			'#USER#' => $this->formatUser($this->triggeredBy),
 			'#GROUP#' => MBString::ucfirst((string)$this->group?->name),
+			'#OPEN_GROUP_URL#' => $groupUrl,
 		];
 	}
 }

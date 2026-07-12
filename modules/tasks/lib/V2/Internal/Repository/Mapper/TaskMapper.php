@@ -11,6 +11,7 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Entity\CrmItemCollection;
 use Bitrix\Tasks\V2\Internal\Integration\Im;
 use Bitrix\Tasks\V2\Internal\Integration\Mail\Entity\Email;
+use Bitrix\Tasks\V2\Internal\Integration\Mail\Repository\Mapper\EmailMapper;
 use Bitrix\Tasks\V2\Internal\Service\Task\ChecksumService;
 
 class TaskMapper
@@ -23,6 +24,7 @@ class TaskMapper
 		private readonly TaskMarkMapper $taskMarkMapper,
 		private readonly UserFieldMapper $userFieldMapper,
 		private readonly ChecksumService $checksumService,
+		private readonly EmailMapper $emailMapper,
 	)
 	{
 
@@ -111,6 +113,11 @@ class TaskMapper
 			tags: $tags,
 			crmItemIds: $crmItems?->getIdList(),
 			crmItems: $crmItems,
+			email: static::mapEntity(
+				['emailId' => $this->emailMapper->extractId($taskData)],
+				'email',
+				Email::class,
+			),
 			sprintId: static::mapInteger($taskData, 'SPRINT_ID'),
 			backlogId: static::mapInteger($taskData, 'BACKLOG_ID'),
 			stageId: static::mapInteger($taskData, 'STAGE_ID'),

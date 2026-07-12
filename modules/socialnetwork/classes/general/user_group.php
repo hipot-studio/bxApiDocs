@@ -7,6 +7,7 @@ use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main;
 use Bitrix\Main\Type\Collection;
+use Bitrix\Main\Web\Uri;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageFactory;
 use Bitrix\Socialnetwork\Collab\Registry\CollabRegistry;
@@ -17,6 +18,7 @@ use Bitrix\Socialnetwork\Item\UserToGroup;
 use Bitrix\Socialnetwork\Integration;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
+use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\Internals\Counter;
 use Bitrix\Socialnetwork\Internals\EventService;
@@ -321,7 +323,7 @@ class CAllSocNetUserToGroup
 						"NOTIFY_EVENT" => "invite_group",
 						"NOTIFY_TAG" => "SOCNET|INVITE_GROUP|" . (int)$relationFields["USER_ID"] . "|" . (int)$relationFields["ID"],
 						"NOTIFY_MESSAGE" => fn (?string $languageId = null) => Loc::getMessage(
-							'SONET_UG_EXCLUDE_MESSAGE',
+							self::getProjectAwareMessageKey('SONET_UG_EXCLUDE_MESSAGE'),
 							["#NAME#" => $relationFields["GROUP_NAME"]],
 							$languageId
 						),
@@ -911,7 +913,7 @@ class CAllSocNetUserToGroup
 						$recipientRelationFields["USER_ID"],
 						$groupSiteId
 					);
-					$groupUrl = $arTmp["URLS"]["GROUP_URL"];
+					$groupUrl = self::getScrumAwareGroupUrl($arTmp["URLS"]["GROUP_URL"], $groupId);
 					$domainName = (
 						mb_strpos($groupUrl, "http://") === 0
 						|| mb_strpos($groupUrl, "https://") === 0
@@ -924,6 +926,10 @@ class CAllSocNetUserToGroup
 							)
 					);
 
+					$requestConfirmTextEmptyMessageKey = self::getProjectAwareMessageKey('SONET_UG_REQUEST_CONFIRM_TEXT_EMPTY');
+					$requestConfirmTextMessageKey = self::getProjectAwareMessageKey('SONET_UG_REQUEST_CONFIRM_TEXT');
+					$groupLinkMessageKey = self::getProjectAwareMessageKey('SONET_UG_GROUP_LINK');
+
 					$messageFields = array(
 						"TO_USER_ID" => $recipientRelationFields["USER_ID"],
 						"FROM_USER_ID" => $userId,
@@ -935,7 +941,7 @@ class CAllSocNetUserToGroup
 						"NOTIFY_TITLE" => str_replace(
 							"#GROUP_NAME#",
 							truncateText($groupFields["NAME"], 150),
-							Loc::getMessage('SONET_UG_REQUEST_CONFIRM_TEXT_EMPTY')
+							Loc::getMessage($requestConfirmTextEmptyMessageKey)
 						),
 						"NOTIFY_MESSAGE" => fn (?string $languageId = null) => str_replace(
 							[
@@ -947,8 +953,8 @@ class CAllSocNetUserToGroup
 								"<a href=\"".$domainName.$groupUrl."\" class=\"bx-notifier-item-action\">".$groupFields["NAME"]."</a>"
 							],
 							(empty($message)
-								? Loc::getMessage('SONET_UG_REQUEST_CONFIRM_TEXT_EMPTY', null, $languageId)
-								: Loc::getMessage('SONET_UG_REQUEST_CONFIRM_TEXT', null, $languageId)
+								? Loc::getMessage($requestConfirmTextEmptyMessageKey, null, $languageId)
+								: Loc::getMessage($requestConfirmTextMessageKey, null, $languageId)
 							)
 						),
 						"NOTIFY_BUTTONS" => [
@@ -965,7 +971,10 @@ class CAllSocNetUserToGroup
 						],
 					);
 
-					$groupUrl = $serverName.str_replace("#group_id#", $groupId, Path::get('group_path_template'));
+					$groupUrl = self::getScrumAwareGroupUrl(
+						$serverName.str_replace("#group_id#", $groupId, Path::get('group_path_template')),
+						$groupId
+					);
 
 					$messageFields["NOTIFY_MESSAGE_OUT"] = fn (?string $languageId = null) => str_replace(
 						[
@@ -977,11 +986,11 @@ class CAllSocNetUserToGroup
 							"<a href=\"".$domainName.$groupUrl."\" class=\"bx-notifier-item-action\">".$groupFields["NAME"]."</a>"
 						],
 						(empty($message)
-							? Loc::getMessage('SONET_UG_REQUEST_CONFIRM_TEXT_EMPTY', null, $languageId)
-							: Loc::getMessage('SONET_UG_REQUEST_CONFIRM_TEXT', null, $languageId)
+							? Loc::getMessage($requestConfirmTextEmptyMessageKey, null, $languageId)
+							: Loc::getMessage($requestConfirmTextMessageKey, null, $languageId)
 						)
 					)
-						. "\n\n".Loc::getMessage("SONET_UG_GROUP_LINK", null, $languageId).$groupUrl
+						. "\n\n".Loc::getMessage($groupLinkMessageKey, null, $languageId).$groupUrl
 						. "\n\n".Loc::getMessage("SONET_UG_REQUEST_CONFIRM_REJECT", null, $languageId).": ".$requestConfirmUrl
 					;
 
@@ -1069,6 +1078,10 @@ class CAllSocNetUserToGroup
 			return false;
 		}
 
+		$inviteConfirmTextEmptyMessageKey = self::getProjectAwareMessageKey('SONET_UG_INVITE_CONFIRM_TEXT_EMPTY');
+		$inviteConfirmTextMessageKey = self::getProjectAwareMessageKey('SONET_UG_INVITE_CONFIRM_TEXT');
+		$groupLinkMessageKey = self::getProjectAwareMessageKey('SONET_UG_GROUP_LINK');
+
 		$relationFields = array(
 			"USER_ID" => $userId,
 			"GROUP_ID" => $groupId,
@@ -1080,8 +1093,8 @@ class CAllSocNetUserToGroup
 				[ $message, $groupFields["NAME"] ],
 				(
 					empty($message)
-						? Loc::getMessage("SONET_UG_INVITE_CONFIRM_TEXT_EMPTY")
-						: Loc::getMessage("SONET_UG_INVITE_CONFIRM_TEXT")
+						? Loc::getMessage($inviteConfirmTextEmptyMessageKey)
+						: Loc::getMessage($inviteConfirmTextMessageKey)
 				)
 			),
 			"INITIATED_BY_TYPE" => SONET_INITIATED_BY_GROUP,
@@ -1152,15 +1165,15 @@ class CAllSocNetUserToGroup
 				"NOTIFY_TITLE" => fn (?string $languageId = null) => str_replace(
 					"#GROUP_NAME#",
 					truncateText($groupFields["NAME"], 150),
-					Loc::getMessage("SONET_UG_INVITE_CONFIRM_TEXT_EMPTY", null, $languageId)
+					Loc::getMessage($inviteConfirmTextEmptyMessageKey, null, $languageId)
 				),
 				"NOTIFY_MESSAGE" => fn (?string $languageId = null) => str_replace(
 					[ "#TEXT#", "#GROUP_NAME#" ],
 					[ $message, $groupFields["NAME"] ],
 					(
 						empty($message)
-							? Loc::getMessage("SONET_UG_INVITE_CONFIRM_TEXT_EMPTY", null, $languageId)
-							: Loc::getMessage("SONET_UG_INVITE_CONFIRM_TEXT", null, $languageId)
+							? Loc::getMessage($inviteConfirmTextEmptyMessageKey, null, $languageId)
+							: Loc::getMessage($inviteConfirmTextMessageKey, null, $languageId)
 					)
 				),
 				"NOTIFY_BUTTONS" => [
@@ -1220,7 +1233,10 @@ class CAllSocNetUserToGroup
 			);
 
 			$requestUrl = $serverName.str_replace(array("#USER_ID#", "#user_id#"), $userId, $requestUrl);
-			$groupUrl = $serverName.str_replace("#group_id#", $groupId, Path::get('group_path_template', $siteId));
+			$groupUrl = self::getScrumAwareGroupUrl(
+				$serverName.str_replace("#group_id#", $groupId, Path::get('group_path_template', $siteId)),
+				$groupId
+			);
 
 			$messageFields['NOTIFY_MESSAGE_OUT'] = fn (?string $languageId = null) =>
 				str_replace(
@@ -1228,11 +1244,11 @@ class CAllSocNetUserToGroup
 					[ $message, $groupFields["NAME"] ],
 					(
 					empty($message)
-						? Loc::getMessage("SONET_UG_INVITE_CONFIRM_TEXT_EMPTY", null, $languageId)
-						: Loc::getMessage("SONET_UG_INVITE_CONFIRM_TEXT", null, $languageId)
+						? Loc::getMessage($inviteConfirmTextEmptyMessageKey, null, $languageId)
+						: Loc::getMessage($inviteConfirmTextMessageKey, null, $languageId)
 					)
 				)
-				. "\n\n" . Loc::getMessage('SONET_UG_GROUP_LINK', null, $languageId) . $groupUrl
+				. "\n\n" . Loc::getMessage($groupLinkMessageKey, null, $languageId) . $groupUrl
 				. "\n\n" . Loc::getMessage('SONET_UG_INVITE_CONFIRM', null, $languageId) . ": " . $requestUrl . '?INVITE_GROUP=' . $relationId . '&CONFIRM=Y'
 				. "\n\n" . Loc::getMessage('SONET_UG_INVITE_REJECT', null, $languageId) . ": " . $requestUrl . '?INVITE_GROUP=' . $relationId . '&CONFIRM=N'
 			;
@@ -1384,7 +1400,7 @@ class CAllSocNetUserToGroup
 						$relationFields["USER_ID"],
 						$groupSiteId
 					);
-					$groupUrl = $arTmp["URLS"]["GROUP_URL"];
+					$groupUrl = self::getScrumAwareGroupUrl($arTmp["URLS"]["GROUP_URL"], $groupId);
 
 					$serverName = (
 						mb_strpos($groupUrl, "http://") === 0
@@ -1414,14 +1430,14 @@ class CAllSocNetUserToGroup
 						"NOTIFY_TAG" => "SOCNET|INVITE_GROUP|" . (int)$relationFields["USER_ID"] . "|" . (int)$relationFields["ID"],
 						"NOTIFY_MESSAGE" => fn (?string $languageId = null) =>
 							Loc::getMessage(
-								"SONET_UG_CONFIRM_MEMBER_MESSAGE_G",
+								self::getProjectAwareMessageKey("SONET_UG_CONFIRM_MEMBER_MESSAGE_G"),
 								['#NAME#' => "<a href=\"".$domainName.$groupUrl."\" class=\"bx-notifier-item-action\">".$arGroup["NAME"]."</a>"],
 								$languageId
 							)
 						,
 						"NOTIFY_MESSAGE_OUT" => fn (?string $languageId = null) =>
 							Loc::getMessage(
-								"SONET_UG_CONFIRM_MEMBER_MESSAGE_G",
+								self::getProjectAwareMessageKey("SONET_UG_CONFIRM_MEMBER_MESSAGE_G"),
 								['#NAME#' => $arGroup['NAME']],
 								$languageId
 							)
@@ -1592,7 +1608,7 @@ class CAllSocNetUserToGroup
 					"TO_USER_ID" => $arRelation["USER_ID"],
 					"MESSAGE" => fn (?string $languageId = null) =>
 						Loc::getMessage(
-							'SONET_UG_REJECT_MEMBER_MESSAGE_G',
+							self::getProjectAwareMessageKey('SONET_UG_REJECT_MEMBER_MESSAGE_G'),
 							[
 								'#NAME#' => $groupFields['NAME']
 							],
@@ -1711,7 +1727,7 @@ class CAllSocNetUserToGroup
 						$arResult["INITIATED_BY_USER_ID"],
 						$groupSiteId
 					);
-					$url = $arTmp["URLS"]["GROUP_URL"];
+					$url = self::getScrumAwareGroupUrl($arTmp["URLS"]["GROUP_URL"], (int)$arResult["GROUP_ID"]);
 					$serverName = (
 					mb_strpos($url, "http://") === 0
 						|| mb_strpos($url, "https://") === 0
@@ -1739,14 +1755,14 @@ class CAllSocNetUserToGroup
 						"NOTIFY_TAG" => "SOCNET|INVITE_GROUP|" . (int)$arResult['USER_ID'] . "|". $relationID,
 						"NOTIFY_MESSAGE" => fn (?string $languageId = null) =>
 							Loc::getMessage(
-								"SONET_UG_CONFIRM_MEMBER_MESSAGE_G",
+								self::getProjectAwareMessageKey("SONET_UG_CONFIRM_MEMBER_MESSAGE_G"),
 								['#NAME#' => "<a href=\"".$domainName.$url."\" class=\"bx-notifier-item-action\">".$arResult["GROUP_NAME"]."</a>"],
 								$languageId
 							)
 						,
 						"NOTIFY_MESSAGE_OUT" => fn (?string $languageId = null) =>
 							Loc::getMessage(
-								"SONET_UG_CONFIRM_MEMBER_MESSAGE_G",
+								self::getProjectAwareMessageKey("SONET_UG_CONFIRM_MEMBER_MESSAGE_G"),
 								['#NAME#' => $arResult['GROUP_NAME']],
 								$languageId
 							)
@@ -1785,14 +1801,14 @@ class CAllSocNetUserToGroup
 							"NOTIFY_TAG" => "SOCNET|INVITE_GROUP_SUCCESS|" . (int)$arResult["GROUP_ID"],
 							"NOTIFY_MESSAGE" => fn (?string $languageId = null) =>
 								Loc::getMessage(
-									"SONET_UG_CONFIRM_MEMBER_MESSAGE_MSGVER_1",
+									self::getProjectAwareMessageKey("SONET_UG_CONFIRM_MEMBER_MESSAGE_MSGVER_1"),
 									["#NAME#" => "<a href=\"".$domainName.$url."\" class=\"bx-notifier-item-action\">".$arResult["GROUP_NAME"]."</a>"],
 									$languageId
 								)
 							,
 							"NOTIFY_MESSAGE_OUT" => fn (?string $languageId = null) =>
 								Loc::getMessage(
-									"SONET_UG_CONFIRM_MEMBER_MESSAGE_MSGVER_1",
+									self::getProjectAwareMessageKey("SONET_UG_CONFIRM_MEMBER_MESSAGE_MSGVER_1"),
 									['#NAME#' => $arResult['GROUP_NAME'],
 									$languageId]
 								)
@@ -1899,7 +1915,7 @@ class CAllSocNetUserToGroup
 						$arResult["INITIATED_BY_USER_ID"],
 						$groupSiteId
 					);
-					$url = $arTmp["URLS"]["GROUP_URL"];
+					$url = self::getScrumAwareGroupUrl($arTmp["URLS"]["GROUP_URL"], (int)$arResult["GROUP_ID"]);
 					$serverName = (
 					mb_strpos($url, "http://") === 0
 						|| mb_strpos($url, "https://") === 0
@@ -1928,14 +1944,14 @@ class CAllSocNetUserToGroup
 						"NOTIFY_TAG" => "SOCNET|INVITE_GROUP_REJECT|" . (int)$arResult["GROUP_ID"],
 						"NOTIFY_MESSAGE" => fn (?string $languageId = null) =>
 							Loc::getMessage(
-								"SONET_UG_REJECT_MEMBER_MESSAGE_MSGVER_1",
+								self::getProjectAwareMessageKey("SONET_UG_REJECT_MEMBER_MESSAGE_MSGVER_1"),
 								["#NAME#" => "<a href=\"".$domainName.$url."\" class=\"bx-notifier-item-action\">".$arResult["GROUP_NAME"]."</a>"],
 								$languageId
 							)
 						,
 						"NOTIFY_MESSAGE_OUT" => fn (?string $languageId = null) =>
 							Loc::getMessage(
-								"SONET_UG_REJECT_MEMBER_MESSAGE_MSGVER_1",
+								self::getProjectAwareMessageKey("SONET_UG_REJECT_MEMBER_MESSAGE_MSGVER_1"),
 								['#NAME#' => $arResult['GROUP_NAME']],
 								$languageId
 							) . " (".$serverName.$url.")"
@@ -2062,7 +2078,7 @@ class CAllSocNetUserToGroup
 						$arRelation["USER_ID"],
 						$groupSiteId
 					);
-					$groupUrl = $arTmp["URLS"]["GROUP_URL"];
+					$groupUrl = self::getScrumAwareGroupUrl($arTmp["URLS"]["GROUP_URL"], $groupId);
 					$serverName = (
 					mb_strpos($groupUrl, "http://") === 0
 						|| mb_strpos($groupUrl, "https://") === 0
@@ -2081,6 +2097,8 @@ class CAllSocNetUserToGroup
 							)
 					);
 
+					$notifyMessageKey = self::getProjectAwareMessageKey('SONET_UG_MOD2MEMBER_MESSAGE');
+
 					$arMessageFields = array(
 						"TO_USER_ID" => $arRelation["USER_ID"],
 						"FROM_USER_ID" => $userID,
@@ -2090,14 +2108,14 @@ class CAllSocNetUserToGroup
 						"NOTIFY_TAG" => "SOCNET|MOD_GROUP|" . (int)$userID . "|" . $groupId . "|" . $arRelation["ID"] . "|" . $arRelation["USER_ID"],
 						"NOTIFY_MESSAGE" => fn (?string $languageId = null) =>
 							Loc::getMessage(
-								"SONET_UG_MOD2MEMBER_MESSAGE",
+								$notifyMessageKey,
 								['#NAME#' => "<a href=\"".$domainName.$groupUrl."\" class=\"bx-notifier-item-action\">".$arGroup["NAME"]."</a>"],
 								$languageId
 							)
 						,
 						"NOTIFY_MESSAGE_OUT" => fn (?string $languageId = null) =>
 							Loc::getMessage(
-								"SONET_UG_MOD2MEMBER_MESSAGE",
+								$notifyMessageKey,
 								['#NAME#' => $arGroup["NAME"]],
 								$languageId
 							)
@@ -2383,7 +2401,7 @@ class CAllSocNetUserToGroup
 					"FROM_USER_ID" => $userID,
 					"TO_USER_ID" => $arRelation["USER_ID"],
 					"MESSAGE" => fn (?string $languageId = null) => Loc::getMessage(
-						"SONET_UG_BANMEMBER_MESSAGE",
+						self::getProjectAwareMessageKey("SONET_UG_BANMEMBER_MESSAGE"),
 						[
 							"#NAME#" => $arGroup["NAME"]
 						],
@@ -2492,7 +2510,7 @@ class CAllSocNetUserToGroup
 					"FROM_USER_ID" => $userID,
 					"TO_USER_ID" => $arRelation["USER_ID"],
 					"MESSAGE" => fn (?string $languageId = null) => Loc::getMessage(
-						"SONET_UG_UNBANMEMBER_MESSAGE",
+						self::getProjectAwareMessageKey("SONET_UG_UNBANMEMBER_MESSAGE"),
 						[
 							"#NAME#" => $arGroup["NAME"]
 						],
@@ -2740,7 +2758,7 @@ class CAllSocNetUserToGroup
 				$groupFields["OWNER_ID"],
 				$groupSiteId
 			);
-			$groupUrl = $arTmp["URLS"]["GROUP_URL"];
+			$groupUrl = self::getScrumAwareGroupUrl($arTmp["URLS"]["GROUP_URL"], $groupId);
 			$serverName = (
 			mb_strpos($groupUrl, "http://") === 0
 				|| mb_strpos($groupUrl, "https://") === 0
@@ -2751,7 +2769,10 @@ class CAllSocNetUserToGroup
 			$notifyNewOwnerMessageKey = 'SONET_UG_OWNER2MEMBER_MESSAGE';
 			if (($groupFields['TYPE'] ?? null) === Workgroup\Type::Collab->value)
 			{
-				$notifyNewOwnerMessageKey = 'SONET_UG_OWNER2MEMBER_MESSAGE_COLLAB';
+				$notifyNewOwnerMessageKey = self::getProjectAwareMessageKey(
+					'SONET_UG_OWNER2MEMBER_MESSAGE',
+					'SONET_UG_OWNER2MEMBER_MESSAGE_COLLAB'
+				);
 			}
 			$messageFields = array(
 				"TO_USER_ID" => $groupFields["OWNER_ID"],
@@ -2767,9 +2788,9 @@ class CAllSocNetUserToGroup
 						$languageId
 					)
 				,
-				"NOTIFY_MESSAGE_OUT" => function (?string $languageId = null) use ($groupFields, $serverName, $groupUrl) {
+				"NOTIFY_MESSAGE_OUT" => function (?string $languageId = null) use ($groupFields, $serverName, $groupUrl, $notifyNewOwnerMessageKey) {
 					$message = Loc::getMessage(
-						"SONET_UG_OWNER2MEMBER_MESSAGE",
+						$notifyNewOwnerMessageKey,
 						["#NAME#" => $groupFields['NAME']],
 						$languageId
 					);
@@ -2792,7 +2813,7 @@ class CAllSocNetUserToGroup
 				$userId,
 				$groupSiteId
 			);
-			$groupUrl = $arTmp["URLS"]["GROUP_URL"];
+			$groupUrl = self::getScrumAwareGroupUrl($arTmp["URLS"]["GROUP_URL"], $groupId);
 
 			if (
 				mb_strpos($groupUrl, "http://") === 0
@@ -2809,7 +2830,10 @@ class CAllSocNetUserToGroup
 			$notifyOldOwnerMessageKey = 'SONET_UG_MEMBER2OWNER_MESSAGE';
 			if (($groupFields['TYPE'] ?? null) === Workgroup\Type::Collab->value)
 			{
-				$notifyOldOwnerMessageKey = 'SONET_UG_MEMBER2OWNER_MESSAGE_COLLAB';
+				$notifyOldOwnerMessageKey = self::getProjectAwareMessageKey(
+					'SONET_UG_MEMBER2OWNER_MESSAGE',
+					'SONET_UG_MEMBER2OWNER_MESSAGE_COLLAB'
+				);
 			}
 
 			$messageFields = array(
@@ -2826,9 +2850,9 @@ class CAllSocNetUserToGroup
 						$languageId
 					)
 				,
-				"NOTIFY_MESSAGE_OUT" => function (?string $languageId = null) use ($groupFields, $serverName, $groupUrl) {
+				"NOTIFY_MESSAGE_OUT" => function (?string $languageId = null) use ($groupFields, $serverName, $groupUrl, $notifyOldOwnerMessageKey) {
 					$message = Loc::getMessage(
-						"SONET_UG_MEMBER2OWNER_MESSAGE",
+						$notifyOldOwnerMessageKey,
 						["#NAME#" => $groupFields['NAME']],
 						$languageId
 					);
@@ -3373,6 +3397,11 @@ class CAllSocNetUserToGroup
 			default:
 		}
 
+		if ($messageCode)
+		{
+			$messageCode = self::getProjectAwareMessageKey($messageCode);
+		}
+
 		$gender_suffix = "";
 		$rsUser = CUser::GetByID($arNotifyParams["USER_ID"]);
 		if ($arUser = $rsUser->Fetch())
@@ -3453,11 +3482,13 @@ class CAllSocNetUserToGroup
 				SITE_ID
 			);
 
+			$groupPageUrl = self::getScrumAwareGroupUrl($arTmp["URLS"]["GROUP_PAGE"], (int)$arNotifyParams["GROUP_ID"]);
+
 			$arMessageFields["NOTIFY_MESSAGE"] = fn (?string $languageId = null) =>
 			Loc::getMessage(
 				$messageCode.$gender_suffix,
 				[
-					"#group_name#" => "<a href=\"".$arTmp["URLS"]["GROUP_PAGE"]."\" class=\"bx-notifier-item-action\">".$arNotifyParams["GROUP_NAME"]."</a>",
+					"#group_name#" => "<a href=\"".$groupPageUrl."\" class=\"bx-notifier-item-action\">".$arNotifyParams["GROUP_NAME"]."</a>",
 				],
 				$languageId
 			);
@@ -3470,7 +3501,7 @@ class CAllSocNetUserToGroup
 					],
 					$languageId
 				)
-				." (".$arTmp["SERVER_NAME"].$arTmp["URLS"]["GROUP_PAGE"].")"
+				." (".$arTmp["SERVER_NAME"].$groupPageUrl.")"
 			;
 
 			CIMNotify::Add($arMessageFields);
@@ -3480,6 +3511,40 @@ class CAllSocNetUserToGroup
 	public static function getMessage($message)
 	{
 		return Loc::getMessage($message);
+	}
+
+	private static function getProjectAwareMessageKey(string $messageKey, ?string $fallbackMessageKey = null): string
+	{
+		return (
+			Feature::isNewProjectsOn()
+				? $messageKey . '_PROJECT'
+				: ($fallbackMessageKey ?? $messageKey)
+		);
+	}
+
+	private static function getScrumAwareGroupUrl(string $groupUrl, int $groupId): string
+	{
+		static $scrumGroupCache = [];
+
+		if ($groupId <= 0)
+		{
+			return $groupUrl;
+		}
+
+		if (!isset($scrumGroupCache[$groupId]))
+		{
+			$group = Workgroup::getById($groupId);
+			$scrumGroupCache[$groupId] = ($group && $group->isScrumProject());
+		}
+
+		if ($scrumGroupCache[$groupId] !== true)
+		{
+			return $groupUrl;
+		}
+
+		return (new Uri($groupUrl))->addParams([
+			'scrum' => 'y',
+		])->getUri();
 	}
 
 	public static function notifyModeratorAdded($params): void
@@ -3561,7 +3626,7 @@ class CAllSocNetUserToGroup
 			$relationFields["USER_ID"],
 			$groupSiteId
 		);
-		$groupUrl = $arTmp["URLS"]["GROUP_URL"];
+		$groupUrl = self::getScrumAwareGroupUrl($arTmp["URLS"]["GROUP_URL"], $groupId);
 
 		$serverName = (
 			mb_strpos($groupUrl, "http://") === 0
@@ -3581,6 +3646,8 @@ class CAllSocNetUserToGroup
 				)
 		);
 
+		$notifyMessageKey = self::getProjectAwareMessageKey('SONET_UG_MEMBER2MOD_MESSAGE');
+
 		$arMessageFields = array(
 			"TO_USER_ID" => $relationFields["USER_ID"],
 			"FROM_USER_ID" => $userId,
@@ -3590,14 +3657,14 @@ class CAllSocNetUserToGroup
 			"NOTIFY_TAG" => "SOCNET|MOD_GROUP|" . $userId . "|".$groupId."|".$relationFields["ID"]."|".$relationFields["USER_ID"],
 			"NOTIFY_MESSAGE" => fn (?string $languageId = null) =>
 				Loc::getMessage(
-					"SONET_UG_MEMBER2MOD_MESSAGE",
+					$notifyMessageKey,
 					['#NAME#' => "<a href=\"".$domainName.$groupUrl."\" class=\"bx-notifier-item-action\">".$groupFields["NAME"]."</a>"],
 					$languageId
 				)
 			,
 			"NOTIFY_MESSAGE_OUT" => fn (?string $languageId = null) =>
 				Loc::getMessage(
-					"SONET_UG_MEMBER2MOD_MESSAGE",
+					$notifyMessageKey,
 					['#NAME#' => $groupFields["NAME"]],
 					$languageId
 				)

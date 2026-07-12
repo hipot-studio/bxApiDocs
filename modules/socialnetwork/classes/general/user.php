@@ -557,7 +557,7 @@ class CAllSocNetUser
 		}
 
 		if (
-			(int)$currentUserId === (int)$USER->GetId()
+			(int)$currentUserId === (int)($USER?->GetID() ?? 0)
 			&& self::isCurrentUserModuleAdmin()
 		)
 		{

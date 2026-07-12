@@ -8,7 +8,7 @@ use Bitrix\Im\V2\Chat\Tree\ChatAncestorNavigator;
 use Bitrix\Im\V2\Chat\Tree\TreeLevel;
 use Bitrix\Im\V2\Chat\Tree\TreeOrigin;
 use Bitrix\Im\V2\Chat\Type\Query\TypeFilter;
-use Bitrix\Im\V2\Chat\Type\TypeCondition;
+use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
@@ -18,10 +18,11 @@ readonly class ParentChainForUserFilter
 {
 	public function __construct(
 		private ChatAncestorNavigator $navigator,
+		private SingleLevelAccessFilterFactory $singleLevelFilterFactory,
+		private TypeRegistry $typeRegistry,
 		private int $userId,
 		private TreeOrigin $origin,
 		private int $maxDepth,
-		private ?TypeCondition $openParentCondition,
 	) {}
 
 	public function apply(Query $query): void
@@ -34,8 +35,6 @@ readonly class ParentChainForUserFilter
 			joinLastLevel: true,
 		);
 
-		$condition = new ConditionTree();
-
 		foreach ($levels as $level)
 		{
 			if ($level->depth === 0)
@@ -44,10 +43,9 @@ readonly class ParentChainForUserFilter
 			}
 
 			$this->registerRelationJoin($query, $level);
-			$condition->where($this->buildLevelCondition($level));
 		}
 
-		$query->where($condition);
+		$query->where($this->buildChainCondition($levels));
 	}
 
 	private function registerRelationJoin(Query $query, TreeLevel $level): void
@@ -65,25 +63,81 @@ readonly class ParentChainForUserFilter
 		);
 	}
 
-	private function buildLevelCondition(TreeLevel $level): ConditionTree
+	private function buildLevelAccessCondition(TreeLevel $level): ConditionTree
 	{
-		$filter = Query::filter()->logic('or')
+		$singleLevelFilter = $this->singleLevelFilterFactory->forUser(
+			userId: $this->userId,
+			relationAlias: "PARENT_REL_{$this->userId}_{$level->depth}",
+			chatAlias: $level->alias,
+		);
+
+		return Query::filter()->logic('or')
 			->whereNull($level->idExpression)
 			->where($level->idExpression, 0)
-			->whereNotNull("PARENT_REL_{$this->userId}_{$level->depth}.ID")
+			->where($singleLevelFilter->toConditionTree())
 		;
+	}
 
-		if ($this->openParentCondition !== null && $level->alias !== null)
+	/**
+	 * Builds: B0 OR (A1 AND (B1 OR (A2 AND ...))), where:
+	 * Bn - source level does not require parent membership,
+	 * An - target parent level is accessible or absent.
+	 *
+	 * @param TreeLevel[] $levels
+	 */
+	private function buildChainCondition(array $levels): ConditionTree
+	{
+		$condition = null;
+		for ($depth = count($levels) - 1; $depth >= 1; $depth--)
 		{
-			$filter->where(
-				(new TypeFilter(
-					$this->openParentCondition,
-					"{$level->alias}.TYPE",
-					"{$level->alias}.ENTITY_TYPE",
-				))->toConditionTree()
-			);
+			$level = $levels[$depth] ?? null;
+			if ($level === null)
+			{
+				continue;
+			}
+
+			$requiredCondition = $this->buildLevelAccessCondition($level);
+			if ($condition !== null)
+			{
+				$requiredCondition = Query::filter()
+					->where($requiredCondition)
+					->where($condition)
+				;
+			}
+
+			$boundaryCondition = $this->buildParentMembershipNotRequiredCondition($levels[$depth - 1] ?? null);
+			if ($boundaryCondition === null)
+			{
+				$condition = $requiredCondition;
+				continue;
+			}
+
+			$condition = Query::filter()->logic('or')
+				->where($boundaryCondition)
+				->where($requiredCondition)
+			;
 		}
 
-		return $filter;
+		return $condition ?? new ConditionTree();
+	}
+
+	private function buildParentMembershipNotRequiredCondition(?TreeLevel $sourceLevel): ?ConditionTree
+	{
+		$typeCondition = $this->typeRegistry->getParentMembershipNotRequiredCondition();
+		if ($typeCondition === null || $sourceLevel === null)
+		{
+			return null;
+		}
+
+		return (new TypeFilter(
+			$typeCondition,
+			$this->getChatField($sourceLevel->alias, 'TYPE'),
+			$this->getChatField($sourceLevel->alias, 'ENTITY_TYPE'),
+		))->toConditionTree();
+	}
+
+	private function getChatField(?string $alias, string $field): string
+	{
+		return $alias !== null ? "{$alias}.{$field}" : $field;
 	}
 }

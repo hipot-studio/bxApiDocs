@@ -14,6 +14,8 @@ use Bitrix\Main\SystemException;
 
 class TypeRegistry
 {
+	private const OPEN_COLLAB_REGISTRY_KEY = 'OPEN_COLLAB';
+
 	/**
 	 * @var array<string, Type>
 	 */
@@ -56,14 +58,37 @@ class TypeRegistry
 		return new TypeCondition(include: array_values($openTypes));
 	}
 
-	public function getByExtendedType(string $type): Type
+	public function getParentMembershipNotRequiredCondition(): ?TypeCondition
 	{
-		return $this->registry[$type] ?? new Type(Chat::IM_TYPE_CHAT, $type, $type);
+		$types = array_filter($this->registry, static fn(Type $type) => !$type->requiresParentMembership);
+
+		if (empty($types))
+		{
+			return null;
+		}
+
+		return new TypeCondition(include: array_values($types));
+	}
+
+	/**
+	 * @return Type[]
+	 */
+	public function getAllByExtendedType(string $extendedType): array
+	{
+		return array_values(array_filter(
+			$this->registry,
+			static fn(Type $type) => $type->getExtendedType(camelCase: false) === $extendedType,
+		));
 	}
 
 	public function getByLiteralAndEntity(string $literal, ?string $entityType): Type
 	{
 		return $this->tryGetByLiteralAndEntity($literal, $entityType) ?? $this->getFallback($literal, $entityType);
+	}
+
+	public function requiresParentMembership(string $literal, ?string $entityType): bool
+	{
+		return $this->getByLiteralAndEntity($literal, $entityType)->requiresParentMembership;
 	}
 
 	public function tryGetByLiteralAndEntity(string $literal, ?string $entityType): ?Type
@@ -88,8 +113,20 @@ class TypeRegistry
 		return match (true)
 		{
 			$matched !== null => $matched, // exact match: C+VIDEOCONF, B+SONET
-			$base?->allowsDynamic() && $entityType => new Type($literal, $entityType, $entityType, $base->isOpen), // C+CUSTOM, O+CUSTOM
-			$base !== null => new Type($literal, $entityType, $base->extendedType, $base->isOpen), // P+ANY=PRIVATE, but save entityType
+			$base?->allowsDynamic() && $entityType => new Type(
+				$literal,
+				$entityType,
+				$entityType,
+				$base->isOpen,
+				requiresParentMembership: $base->requiresParentMembership,
+			), // C+CUSTOM, O+CUSTOM
+			$base !== null => new Type(
+				$literal,
+				$entityType,
+				$base->extendedType,
+				$base->isOpen,
+				requiresParentMembership: $base->requiresParentMembership,
+			), // P+ANY=PRIVATE, but save entityType
 			default => throw new SystemException("Unknown type: {$literal}, {$entityType}"), // not found
 		};
 	}
@@ -99,7 +136,13 @@ class TypeRegistry
 		$fallbackType = $this->fallbackByLiteral[$literal] ?? null;
 		if ($fallbackType)
 		{
-			return new Type($literal, $entityType, $fallbackType->extendedType, $fallbackType->isOpen);
+			return new Type(
+				$literal,
+				$entityType,
+				$fallbackType->extendedType,
+				$fallbackType->isOpen,
+				requiresParentMembership: $fallbackType->requiresParentMembership,
+			);
 		}
 
 		return new Type(Chat::IM_TYPE_CHAT, $entityType, $entityType ?? 'CHAT');
@@ -155,12 +198,29 @@ class TypeRegistry
 		{
 			$this->registerType(new Type($typeInfo[0], $typeInfo[1] ?? null, $extendedType, in_array($extendedType, $openTypes, true)));
 		}
+
+		// Open collab shares display extendedType 'COLLAB' with closed collab
+		// (frontend sees single 'collab' type), but uses a distinct registryKey.
+		$this->registerType(new Type(
+			literal: Chat::IM_TYPE_OPEN_COLLAB,
+			entityType: ExtendedType::Sonet->value,
+			extendedType: ExtendedType::Collab->value,
+			isOpen: true,
+			registryKey: self::OPEN_COLLAB_REGISTRY_KEY,
+		));
 	}
 
 	private function registerFallbacks(): void
 	{
 		$this->fallbackByLiteral = [
 			Chat::IM_TYPE_COLLAB => new Type(Chat::IM_TYPE_COLLAB, null, ExtendedType::Collab->value),
+			Chat::IM_TYPE_OPEN_COLLAB => new Type(
+				Chat::IM_TYPE_OPEN_COLLAB,
+				null,
+				ExtendedType::Collab->value,
+				true,
+				self::OPEN_COLLAB_REGISTRY_KEY,
+			),
 		];
 	}
 
@@ -172,7 +232,6 @@ class TypeRegistry
 			ExtendedType::Support24Notifier->value,
 			ExtendedType::Support24Question->value,
 			ExtendedType::NetworkDialog->value,
-			ExtendedType::Calendar->value,
 			ExtendedType::Mail->value,
 			ExtendedType::Crm->value,
 			ExtendedType::Sonet->value,
@@ -188,6 +247,13 @@ class TypeRegistry
 				$extendedType,
 			));
 		}
+
+		$this->registerType(new Type(
+			literal: Chat::IM_TYPE_CHAT,
+			entityType: ExtendedType::Calendar->value,
+			extendedType: ExtendedType::Calendar->value,
+			requiresParentMembership: false,
+		));
 	}
 
 	private function loadExternal(): void
@@ -200,23 +266,24 @@ class TypeRegistry
 
 	private function registerType(Type $type): void
 	{
-		$this->registry[$type->extendedType] = $type;
+		$this->registry[$type->getRegistryKey()] = $type;
 		$this->byLiteralAndEntity[$type->literal][$type->entityType ?? ''] = $type;
 		$this->fillByRecentSection($type);
 	}
 
 	private function fillByRecentSection(Type $type): void
 	{
-		$extendedType = $type->getExtendedType(camelCase: false);
+		$displayKey = $type->getExtendedType(camelCase: false);
+		$registryKey = $type->getRegistryKey();
 
-		foreach ($this->recentConfigManager->getAllRecentSectionsByType($extendedType) as $section)
+		foreach ($this->recentConfigManager->getAllRecentSectionsByType($displayKey) as $section)
 		{
-			$this->byRecentSection[$section][$extendedType] = $type;
+			$this->byRecentSection[$section][$registryKey] = $type;
 		}
 
-		foreach ($this->recentConfigManager->getExcludedComposedSections($extendedType) as $section)
+		foreach ($this->recentConfigManager->getExcludedComposedSections($displayKey) as $section)
 		{
-			$this->byRecentSectionExclude[$section][$extendedType] = $type;
+			$this->byRecentSectionExclude[$section][$registryKey] = $type;
 		}
 	}
 }

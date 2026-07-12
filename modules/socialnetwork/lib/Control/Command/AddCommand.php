@@ -62,7 +62,7 @@ class AddCommand extends InitiatedCommand implements DefaultValueCommandInterfac
 	#[PositiveNumber]
 	protected int $ownerId;
 
-	#[NotEmpty]
+	#[NotEmpty(allowZero: true)]
 	#[Map('NAME')]
 	protected string $name;
 

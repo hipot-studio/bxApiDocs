@@ -3,7 +3,6 @@ namespace Bitrix\Mail\Helper\Mailbox;
 
 use COption;
 use Bitrix\Mail\MailboxTable;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Mail\Internals\MailEntityOptionsTable;
 use Bitrix\Mail\MailFilterTable;
 use Bitrix\Main\Loader;
@@ -103,7 +102,8 @@ class MailboxSyncManager
 
 	public function setDefaultSyncData($mailboxId)
 	{
-		$this->saveSyncStatus($mailboxId, true, 0);
+		$transitionResult = (new ProblemMailboxStateService())->setDefaultSyncData((int)$mailboxId);
+		$this->sendMailboxGridButtonRefreshIfNeeded((int)$mailboxId, $transitionResult);
 	}
 
 	private function buildTimeForSyncStatus($time): int
@@ -118,26 +118,35 @@ class MailboxSyncManager
 
 	public function setSyncStartedData($mailboxId, $time = null)
 	{
-		$this->saveSyncStatus($mailboxId, true, $this->buildTimeForSyncStatus($time));
+		$timestamp = $this->buildTimeForSyncStatus($time);
+
+		(new ProblemMailboxStateService())->setSyncStartedData((int)$mailboxId, $timestamp);
 	}
 
 	public function setSyncStatus(int $mailboxId, bool $isSuccess, ?int $time = null): void
 	{
-		$this->saveSyncStatus($mailboxId, $isSuccess, $this->buildTimeForSyncStatus($time));
+		$timestamp = $this->buildTimeForSyncStatus($time);
 
-		if ($isSuccess)
-		{
-			$this->removeConnectErrorCache($mailboxId);
-		}
+		$transitionResult = (new ProblemMailboxStateService())->setSyncStatus($mailboxId, $isSuccess, $timestamp);
+		$this->sendMailboxGridButtonRefreshIfNeeded($mailboxId, $transitionResult);
+	}
+
+	public function registerFailedConnection(int $mailboxId): void
+	{
+		$transitionResult = (new ProblemMailboxStateService())->registerFailedConnectionAttempt($mailboxId);
+		$this->sendMailboxGridButtonRefreshIfNeeded($mailboxId, $transitionResult);
 	}
 
 	public function getCachedConnectionStatus(int $mailboxId): bool
 	{
+		$problemMailboxStateService = new ProblemMailboxStateService();
+
 		$lastMailboxSyncStatus = $this->getLastMailboxSyncIsSuccessStatus($mailboxId);
 
 		if ($lastMailboxSyncStatus)
 		{
-			$this->removeConnectErrorCache($mailboxId);
+			$transitionResult = $this->markConnectionRecovered($mailboxId, $problemMailboxStateService);
+			$this->sendMailboxGridButtonRefreshIfNeeded($mailboxId, $transitionResult);
 
 			return true;
 		}
@@ -153,7 +162,8 @@ class MailboxSyncManager
 
 		if ($mailboxHelper->isAuthenticated())
 		{
-			$this->removeConnectErrorCache($mailboxId);
+			$transitionResult = $this->markConnectionRecovered($mailboxId, $problemMailboxStateService);
+			$this->sendMailboxGridButtonRefreshIfNeeded($mailboxId, $transitionResult);
 
 			return true;
 		}
@@ -161,34 +171,37 @@ class MailboxSyncManager
 		// After token renewal, re-authorization is performed
 		if ($mailboxHelper->renewOauthTokens() && $mailboxHelper->isAuthenticated())
 		{
-			$this->removeConnectErrorCache($mailboxId);
+			$transitionResult = $this->markConnectionRecovered($mailboxId, $problemMailboxStateService);
+			$this->sendMailboxGridButtonRefreshIfNeeded($mailboxId, $transitionResult);
 
 			return true;
 		}
 
-		$error = $this->getConnectError($mailboxId);
+		$transitionResult = $problemMailboxStateService->registerFailedConnectionAttempt($mailboxId);
+		$this->sendMailboxGridButtonRefreshIfNeeded($mailboxId, $transitionResult);
 
-		$dateAttempt = new DateTime();
-		$connectErrorAttempt = isset($error['VALUE']) ? (int) $error['VALUE'] + 1 : 0;
+		return !$transitionResult['isProblem'];
+	}
 
-		if ($connectErrorAttempt > 0)
+	/**
+	 * @return array{wasProblem: bool, isProblem: bool, stateChanged: bool}
+	 */
+	private function markConnectionRecovered(int $mailboxId, ProblemMailboxStateService $problemMailboxStateService): array
+	{
+		return $problemMailboxStateService->markConnectionRecovered($mailboxId);
+	}
+
+	/**
+	 * @param array{wasProblem: bool, isProblem: bool, stateChanged: bool} $transitionResult
+	 */
+	private function sendMailboxGridButtonRefreshIfNeeded(int $mailboxId, array $transitionResult): void
+	{
+		if (!$transitionResult['stateChanged'])
 		{
-			if ($error['DATE_INSERT'] <= (clone $dateAttempt)->add('- '.self::MIN_INTERVAL_BETWEEN_CONNECTION_ATTEMPTS.' seconds'))
-			{
-				$this->updateConnectError($mailboxId, $connectErrorAttempt, $dateAttempt);
-			}
-		}
-		else
-		{
-			$this->addConnectError($mailboxId);
+			return;
 		}
 
-		if ($connectErrorAttempt >= self::MAX_CONNECTION_ATTEMPTS_BEFORE_UNAVAILABLE)
-		{
-			return false;
-		}
-
-		return true;
+		(new MailboxGridButtonCounterRefreshService())->sendForMailbox($mailboxId);
 	}
 
 	private function getOptionFilter(int $mailboxId, string $propertyName): array
@@ -201,139 +214,79 @@ class MailboxSyncManager
 		];
 	}
 
-	private function removeConnectErrorCache(int $mailboxId): void
-	{
-		MailEntityOptionsTable::deleteList($this->getOptionFilter($mailboxId, MailEntityOptionsTable::CONNECT_ERROR_ATTEMPT_COUNT_PROPERTY_NAME));
-	}
-
-	private function getConnectError(int $mailboxId): array|null
-	{
-		return MailEntityOptionsTable::getRow([
-			'select' => [
-				'DATE_INSERT',
-				'VALUE',
-			],
-			'filter' => $this->getOptionFilter($mailboxId, MailEntityOptionsTable::CONNECT_ERROR_ATTEMPT_COUNT_PROPERTY_NAME),
-		]);
-	}
-
-	private function updateConnectError(int $mailboxId, int $attemptNumber, DateTime $dateAttempt = new DateTime()): void
-	{
-		MailEntityOptionsTable::update(
-			[
-				'MAILBOX_ID' => $mailboxId,
-				'ENTITY_TYPE' => MailEntityOptionsTable::MAILBOX_TYPE_NAME,
-				'ENTITY_ID' => $mailboxId,
-				'PROPERTY_NAME' => MailEntityOptionsTable::CONNECT_ERROR_ATTEMPT_COUNT_PROPERTY_NAME,
-			],
-			[
-				'DATE_INSERT' => $dateAttempt,
-				'VALUE' => $attemptNumber,
-			],
-		);
-	}
-
-	private function addConnectError(int $mailboxId, DateTime $dateAttempt = new DateTime()): void
-	{
-		MailEntityOptionsTable::insertIgnore(
-			$mailboxId,
-			$mailboxId,
-			MailEntityOptionsTable::MAILBOX_TYPE_NAME,
-			MailEntityOptionsTable::CONNECT_ERROR_ATTEMPT_COUNT_PROPERTY_NAME,
-			1,
-			$dateAttempt
-		);
-	}
-
-	private function saveSyncStatus(int $mailboxId, bool $status, int $timestamp): void
-	{
-		$date = DateTime::createFromTimestamp($timestamp);
-
-		if(MailEntityOptionsTable::getCount($this->getOptionFilter($mailboxId, MailEntityOptionsTable::SYNC_STATUS_PROPERTY_NAME)))
-		{
-			MailEntityOptionsTable::update(
-				[
-					'MAILBOX_ID' => $mailboxId,
-					'ENTITY_TYPE' => MailEntityOptionsTable::MAILBOX_TYPE_NAME,
-					'ENTITY_ID' => $mailboxId,
-					'PROPERTY_NAME' => MailEntityOptionsTable::SYNC_STATUS_PROPERTY_NAME,
-				],
-				[
-					'DATE_INSERT' => $date,
-					'VALUE' => $status,
-				],
-			);
-		}
-		else
-		{
-			MailEntityOptionsTable::insertIgnore(
-				$mailboxId,
-				$mailboxId,
-				MailEntityOptionsTable::MAILBOX_TYPE_NAME,
-				MailEntityOptionsTable::SYNC_STATUS_PROPERTY_NAME,
-				$status,
-				$date
-			);
-		}
-	}
-
 	/**
 	 * @param int|null $userId
 	 * @return int[]
 	 */
 	public function getCachedMailboxesIdsWithConnectionError(?int $userId = null): array
 	{
-		global $USER;
-
-		if (!$userId && is_object($USER) && $USER->isAuthorized())
-		{
-			$userId = (int)$USER->getId();
-		}
+		$userId = $userId ?? $this->userId;
 
 		if (!$userId)
 		{
 			return [];
 		}
 
-	    static $userMailboxesIdsWithConnectionError = [];
+		return $this->loadMailboxSyncState((int)$userId)['connectionErrorIds'];
+	}
 
-	    if (isset($userMailboxesIdsWithConnectionError[$userId]))
+	/**
+	 * Single bulk+cached read of per-mailbox sync state for a user:
+	 * combines SYNC_STATUS and PROBLEM_STATUS into one cached fetch.
+	 */
+	private function loadMailboxSyncState(int $userId): array
+	{
+		static $cache = [];
+
+		if (isset($cache[$userId]))
 		{
-	        return $userMailboxesIdsWithConnectionError[$userId];
-	    }
+			return $cache[$userId];
+		}
 
-	    $userMailboxesIdsWithConnectionError[$userId] = [];
+		$cache[$userId] = [
+			'syncInfo' => [],
+			'connectionErrorIds' => [],
+		];
 
-	    $userMailboxIds = array_keys(MailboxTable::getUserMailboxes($userId, true));
+		$userMailboxIds = array_keys(MailboxTable::getUserMailboxes($userId, true));
 
-	    if (empty($userMailboxIds))
+		if (empty($userMailboxIds))
 		{
-	        return $userMailboxesIdsWithConnectionError[$userId];
-	    }
+			return $cache[$userId];
+		}
 
-	    $mailboxesWithConnectionError = MailEntityOptionsTable::getList(
-	        [
-	            'select' => [
-	                'ENTITY_ID',
-	                'VALUE',
-	            ],
-	            'filter' => [
-	                '=ENTITY_TYPE' => MailEntityOptionsTable::MAILBOX_TYPE_NAME,
-	                '=ENTITY_ID' => $userMailboxIds,
-	                '=PROPERTY_NAME' => MailEntityOptionsTable::CONNECT_ERROR_ATTEMPT_COUNT_PROPERTY_NAME,
-	            ],
-	        ]
-	    );
+		$mailboxesOptions = MailEntityOptionsTable::getCachedMailboxesOptions(
+			$userMailboxIds,
+			[
+				MailEntityOptionsTable::SYNC_STATUS_PROPERTY_NAME,
+				MailEntityOptionsTable::PROBLEM_STATUS_PROPERTY_NAME,
+			]
+		);
 
-	    while ($error = $mailboxesWithConnectionError->fetch())
+		foreach ($userMailboxIds as $rawMailboxId)
 		{
-	        if ((int)$error['VALUE'] >= self::MAX_CONNECTION_ATTEMPTS_BEFORE_UNAVAILABLE)
+			$mailboxId = (int)$rawMailboxId;
+			$options = $mailboxesOptions[$mailboxId] ?? [];
+
+			$syncStatus = $options[MailEntityOptionsTable::SYNC_STATUS_PROPERTY_NAME] ?? null;
+
+			if ($syncStatus !== null && isset($syncStatus['VALUE']))
 			{
-	            $userMailboxesIdsWithConnectionError[$userId][] = (int)$error['ENTITY_ID'];
-	        }
-	    }
+				$cache[$userId]['syncInfo'][$mailboxId] = [
+					'isSuccess' => (bool)$syncStatus['VALUE'],
+					'timeStarted' => $syncStatus['DATE_INSERT']->getTimestamp(),
+				];
+			}
 
-	    return $userMailboxesIdsWithConnectionError[$userId];
+			$problemStatus = $options[MailEntityOptionsTable::PROBLEM_STATUS_PROPERTY_NAME] ?? null;
+
+			if ($problemStatus !== null && ($problemStatus['VALUE'] ?? null) === 'Y')
+			{
+				$cache[$userId]['connectionErrorIds'][] = $mailboxId;
+			}
+		}
+
+		return $cache[$userId];
 	}
 
 	/**
@@ -360,23 +313,14 @@ class MailboxSyncManager
 			return [];
 		}
 
-		global $DB;
-
 		$query = MailEntityOptionsTable::query()
-			->registerRuntimeField(
-				new \Bitrix\Main\ORM\Fields\ExpressionField(
-					'VALUE_INT',
-					$DB->ToNumber('%s'),
-					['VALUE', 'VALUE'],
-				),
-			)
 			->setSelect([
 				'ENTITY_ID',
 			])
 			->where('ENTITY_TYPE', '=', MailEntityOptionsTable::MAILBOX_TYPE_NAME)
-			->where('PROPERTY_NAME', '=', MailEntityOptionsTable::CONNECT_ERROR_ATTEMPT_COUNT_PROPERTY_NAME)
+			->where('PROPERTY_NAME', '=', MailEntityOptionsTable::PROBLEM_STATUS_PROPERTY_NAME)
+			->where('VALUE', '=', 'Y')
 			->whereIn('ENTITY_ID', $mailboxIds)
-			->where('VALUE_INT', '>=', self::MAX_CONNECTION_ATTEMPTS_BEFORE_UNAVAILABLE)
 		;
 
 		$result = $query->exec();
@@ -392,48 +336,14 @@ class MailboxSyncManager
 
 	public function getMailboxesSyncInfo(): array
 	{
-		static $mailboxesSyncInfo = null;
+		$userId = (int)$this->userId;
 
-		if (is_null($mailboxesSyncInfo))
+		if (!$userId)
 		{
-			$mailboxesSyncInfo = [];
-
-			$userMailboxIds = array_keys(MailboxTable::getUserMailboxes(onlyIds: true));
-
-			if (empty($userMailboxIds))
-			{
-				return $mailboxesSyncInfo;
-			}
-
-			$datesLastOpening = MailEntityOptionsTable::getList(
-				[
-					'select' => [
-						'ENTITY_ID',
-						'VALUE',
-						'DATE_INSERT',
-					],
-					'filter' => [
-						'=ENTITY_TYPE' => MailEntityOptionsTable::MAILBOX_TYPE_NAME,
-						'=ENTITY_ID' => $userMailboxIds,
-						'=PROPERTY_NAME' => MailEntityOptionsTable::SYNC_STATUS_PROPERTY_NAME,
-					],
-				]
-			)->fetchAll();
-
-			foreach ($datesLastOpening as $date)
-			{
-				if (isset($date['VALUE']))
-				{
-					$mailboxesSyncInfo[(int)$date['ENTITY_ID']] = [
-						'isSuccess' => (bool)$date['VALUE'],
-						'timeStarted' => $date['DATE_INSERT']->getTimestamp(),
-					];
-				}
-			}
-
+			return [];
 		}
 
-		return $mailboxesSyncInfo;
+		return $this->loadMailboxSyncState($userId)['syncInfo'];
 	}
 
 	/**

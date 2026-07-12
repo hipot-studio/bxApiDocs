@@ -7,7 +7,7 @@ use Bitrix\Main\Type\DateTime;
 
 /**
  * Class ExternalLinkTable
- * 
+ *
  * Fields:
  * <ul>
  * <li> ID int mandatory
@@ -22,6 +22,7 @@ use Bitrix\Main\Type\DateTime;
  * <li> TYPE int optional
  * <li> CREATE_TIME datetime mandatory
  * <li> CREATED_BY int mandatory
+ * <li> CAN_DOWNLOAD_WITH_READ_ACCESS int mandatory
  * </ul>
  *
  * @package Bitrix\Disk
@@ -131,6 +132,9 @@ final class ExternalLinkTable extends DataManager
 				},
 			),
 			'CREATED_BY' => array(
+				'data_type' => 'integer',
+			),
+			'CAN_DOWNLOAD_WITH_READ_ACCESS' => array(
 				'data_type' => 'integer',
 			),
 			'CREATE_USER' => array(

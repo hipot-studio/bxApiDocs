@@ -1,0 +1,72 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Bitrix\Socialnetwork\V2\Internal\Entity;
+
+use Bitrix\Main\Validation\Rule\PositiveNumber;
+use Bitrix\Socialnetwork\V2\Internal\Entity\Trait\MapTypeTrait;
+use Bitrix\Socialnetwork\V2\Internal\Entity\User\Gender;
+use Bitrix\Socialnetwork\V2\Internal\Entity\User\Role;
+use Bitrix\Socialnetwork\V2\Internal\Entity\User\Type;
+
+class User extends AbstractEntity
+{
+	use MapTypeTrait;
+
+	public function __construct(
+		#[PositiveNumber]
+		public readonly ?int $id = null,
+		public readonly ?string $name = null,
+		public readonly ?Role $role = null,
+		public readonly ?Type $type = null,
+		public readonly ?File $image = null,
+		public readonly ?Gender $gender = null,
+		public readonly ?string $email = null,
+		public readonly ?string $externalAuthId = null,
+		public readonly ?array $rights = null,
+	)
+	{
+
+	}
+
+	public function getId(): ?int
+	{
+		return $this->id;
+	}
+
+	public function getGender(): Gender
+	{
+		return $this->gender ?? Gender::Male;
+	}
+
+	public static function mapFromArray(array $props): static
+	{
+		return new static(
+			id: static::mapInteger($props, 'id'),
+			name: static::mapString($props, 'name'),
+			role: static::mapBackedEnum($props, 'role', Role::class),
+			type: static::mapBackedEnum($props, 'type', Type::class),
+			image: static::mapEntity($props, 'image', File::class),
+			gender: static::mapBackedEnum($props, 'gender', Gender::class),
+			email: static::mapString($props, 'email'),
+			externalAuthId: static::mapString($props, 'externalAuthId'),
+			rights: static::mapArray($props, 'rights'),
+		);
+	}
+
+	public function toArray(): array
+	{
+		return [
+			'id' => $this->id,
+			'name' => $this->name,
+			'role' => $this->role?->value,
+			'type' => $this->type?->value,
+			'image' => $this->image?->toArray(),
+			'gender' => $this->gender?->value,
+			'email' => $this->email,
+			'externalAuthId' => $this->externalAuthId,
+			'rights' => $this->rights,
+		];
+	}
+}

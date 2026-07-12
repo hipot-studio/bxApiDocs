@@ -227,6 +227,7 @@ class Config implements \JsonSerializable
 		return [
 			'availableEngines' => (new EngineManager())->getAvailableEnginesForRest(),
 			'botName' => CopilotNameResolver::getInstance()->getName(),
+			'agentName' => CopilotNameResolver::getInstance()->getAgentName(),
 		];
 	}
 

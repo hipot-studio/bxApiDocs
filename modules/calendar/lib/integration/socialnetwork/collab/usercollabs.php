@@ -26,7 +26,8 @@ final class UserCollabs
 
 		return (new CollabProvider())
 			->getListByUserId($userId, (new CollabQuery())->setSelect(['ID', 'NAME']))
-			->toArray();
+			->toArray()
+		;
 	}
 
 	/**

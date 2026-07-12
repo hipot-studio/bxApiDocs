@@ -7,6 +7,7 @@ use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
 use Bitrix\Im\V2\Entity\User\UserError;
+use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Imopenlines\Model\SessionTable;
 use Bitrix\Im\V2\Sync;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -2632,6 +2633,13 @@ class CIMChat
 			return false;
 		}
 
+		$targetChat = Chat::getInstance($chatId);
+		if ($targetChat->getParentChatId() !== (int)$message['CHAT_ID'])
+		{
+			$GLOBALS["APPLICATION"]->ThrowException(GetMessage("IM_ERROR_ACCESS_JOIN"), "ACCESS_JOIN");
+			return false;
+		}
+
 		$relations = IM\Chat::getRelation($chatId, ['WITHOUT_COUNTERS' => 'Y']);
 		if (!isset($relations[$this->user_id]))
 		{
@@ -3025,11 +3033,31 @@ class CIMChat
 		return self::$entityOption;
 	}
 
-	public static function GetSonetGroupChatId($groupId)
+	public static function GetSonetGroupChatId($groupId, ?int $userId = 0)
 	{
-		if (!CModule::IncludeModule('socialnetwork'))
+		if (
+			!CModule::IncludeModule('socialnetwork')
+			|| !$userId
+		)
+		{
 			return false;
+		}
 
+		if (Collab::isNewProjectsAvailable())
+		{
+			$projectChatService = new \Bitrix\Socialnetwork\V2\Public\Service\Project\Chat();
+
+			return $projectChatService->ensureChatExistsAndReturnId($groupId, $userId);
+		}
+
+		return self::createLegacyGroupChat($groupId);
+	}
+
+	/**
+	 * @deprecated Remove after new projects.
+	 */
+	private static function createLegacyGroupChat($groupId)
+	{
 		$chatData = \Bitrix\Socialnetwork\Integration\Im\Chat\Workgroup::getChatData(Array(
 			'group_id' => $groupId,
 			'skipAvailabilityCheck' => true
@@ -3295,6 +3323,7 @@ class CIMChat
 			Chat::IM_TYPE_CHANNEL,
 			Chat::IM_TYPE_OPEN_CHANNEL,
 			Chat::IM_TYPE_COLLAB,
+			Chat::IM_TYPE_OPEN_COLLAB,
 			Chat::IM_TYPE_EXTERNAL,
 		];
 	}

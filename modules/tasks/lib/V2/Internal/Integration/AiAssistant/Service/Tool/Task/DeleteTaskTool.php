@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task;
 
 use Bitrix\AiAssistant\Facade\TracedLogger;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
@@ -22,12 +23,13 @@ class DeleteTaskTool extends BaseTool
 
 	public function __construct(
 		private readonly TaskService $taskService,
+		ToolService $toolService,
 		TaskSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
 	)
 	{
-		parent::__construct($schemaBuilder, $validationService, $tracedLogger);
+		parent::__construct($toolService, $schemaBuilder, $validationService, $tracedLogger);
 	}
 
 	public function getDescription(): string

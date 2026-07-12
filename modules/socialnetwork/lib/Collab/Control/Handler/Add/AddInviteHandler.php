@@ -34,7 +34,10 @@ class AddInviteHandler implements AddHandlerInterface
 			->getUsers()
 			->getUserIds();
 
-		[$employeeIds, $guestIds] = EmployeeProvider::getInstance()->splitIntoEmployeesAndGuests($membersByCommand);
+		[$employeeIds, $guestIds, $botIds] =
+			EmployeeProvider::getInstance()
+				->splitIntoEmployeesGuestsAndBots($membersByCommand)
+		;
 
 		$guestResult = $this->addMembers(
 			$entity->getId(),
@@ -46,13 +49,23 @@ class AddInviteHandler implements AddHandlerInterface
 
 		$handlerResult->merge($guestResult);
 
-		$employeeResult = $this->inviteMembers(
+		$inviteResult = $this->inviteMembers(
 			$entity->getId(),
 			$command->getInitiatorId(),
 			...$employeeIds,
 		);
 
-		$handlerResult->merge($employeeResult);
+		$handlerResult->merge($inviteResult);
+
+		$botResult = $this->addMembers(
+			$entity->getId(),
+			$command->getInitiatorId(),
+			UserToGroupTable::ROLE_USER,
+			UserToGroupTable::INITIATED_BY_GROUP,
+			...$botIds,
+		);
+
+		$handlerResult->merge($botResult);
 
 		if (!$handlerResult->isSuccess())
 		{
@@ -70,7 +83,9 @@ class AddInviteHandler implements AddHandlerInterface
 
 		ActionMessageBuffer::getInstance()
 			->put(ActionType::InviteGuest, $entity->getId(), $command->getInitiatorId(), $guestIds)
-			->put(ActionType::InviteUser, $entity->getId(), $command->getInitiatorId(), $employeeIds, $parameters);
+			->put(ActionType::InviteUser, $entity->getId(), $command->getInitiatorId(), $employeeIds, $parameters)
+			->put(ActionType::AddBot, $entity->getId(), $command->getInitiatorId(), $botIds)
+		;
 
 		return $handlerResult;
 	}

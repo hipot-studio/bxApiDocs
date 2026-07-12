@@ -59,13 +59,22 @@ class UserRegistry
 				$groups = $this->userCollabs;
 				break;
 			case self::MODE_EXCLUDE_SCRAM:
-				$groups = array_replace($this->userProjects, $this->userWorkgroups);
+				$groups = array_replace(
+					$this->userProjects,
+					$this->userWorkgroups,
+					$this->userCollabs,
+				);
 				break;
 			default:
 				$groups = $this->userGroups;
 		}
 
 		return $groups;
+	}
+
+	public function getUserProjects(): array
+	{
+		return $this->getUserGroups(self::MODE_EXCLUDE_SCRAM);
 	}
 
 	public function invalidate(int $userId): static
@@ -132,6 +141,12 @@ class UserRegistry
 			elseif ($row['PROJECT'] === 'Y')
 			{
 				$this->userProjects[$row['GROUP_ID']] = $row['ROLE'];
+
+				// Converted project marked as "collab" type
+				if ($row['TYPE'] === Type::Collab->value)
+				{
+					$this->userCollabs[$row['GROUP_ID']] = $row['ROLE'];
+				}
 			}
 			elseif ($row['TYPE'] === Type::Collab->value)
 			{

@@ -293,7 +293,7 @@ class CCalendarLiveFeed
 					{
 						if (array_key_exists('UF_SONET_COM_DOC', $arTmp))
 						{
-							$GLOBALS['UF_FORUM_MESSAGE_DOC'] = $arTmp['UF_SONET_COM_DOC'];
+							$arFieldsMessage['UF_FORUM_MESSAGE_DOC'] = $arTmp['UF_SONET_COM_DOC'];
 						}
 						else if (array_key_exists('UF_SONET_COM_FILE', $arTmp))
 						{

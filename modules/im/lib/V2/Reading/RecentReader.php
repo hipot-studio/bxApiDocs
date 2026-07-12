@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Reading;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Tree\ChatAncestorIterator;
 use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Pull\Event\RecentUpdate;
 use Bitrix\Im\V2\Reading\Counter\CountersProvider;
 use Bitrix\Im\V2\Reading\Counter\Internal\CountersCache;
 use Bitrix\Im\V2\Reading\Pull\UnreadChat;
@@ -19,6 +21,7 @@ class RecentReader
 		private readonly RecentUpdater $updater,
 		private readonly CountersCache $countersCache,
 		private readonly CountersProvider $countersProvider,
+		private readonly ChatAncestorIterator $ancestorIterator,
 	) {}
 
 	public function read(int $userId, int $chatId): ReadResult
@@ -68,6 +71,11 @@ class RecentReader
 
 		$chat = Chat::getInstance($chatId);
 
+		if ($unread)
+		{
+			$this->sendAncestorContext($chat, $userId);
+		}
+
 		(new UnreadChat($chat, $userId, $counter, $item))->send();
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chatId),
@@ -76,5 +84,17 @@ class RecentReader
 		);
 
 		return new ReadResult($counter, new MessageCollection());
+	}
+
+	private function sendAncestorContext(Chat $chat, int $userId): void
+	{
+		foreach ($this->ancestorIterator->ancestorsOf($chat) as $ancestor)
+		{
+			$parentItem = $this->provider->getItem($userId, $ancestor->getChatId());
+			if ($parentItem !== null)
+			{
+				(new RecentUpdate($ancestor, [$userId], $parentItem->getDateLastActivity()))->send();
+			}
+		}
 	}
 }

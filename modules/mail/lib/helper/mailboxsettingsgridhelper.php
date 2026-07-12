@@ -125,101 +125,63 @@ class MailboxSettingsGridHelper
 			$rows = array_merge($rows, $connectionRequestRows);
 		}
 
-		$mailboxLimit = $limit - count($rows);
-		if ($mailboxLimit <= 0)
+		$remainingLimit = $limit - count($rows);
+		if ($remainingLimit <= 0)
 		{
 			return $rows;
 		}
 
 		$mailboxOffset = max(0, $offset - $totalRequestCount);
+		$hideProblemMailboxes = ($filterData['HIDE_PROBLEM_MAILBOXES'] ?? '') === 'Y';
+		$allProblemIds = $this->getAllProblemMailboxIds();
 
-		$mailboxes = $this->getMailboxesWithOwners($mailboxLimit, $mailboxOffset, $filterData);
-		$this->setCanEditFlag($mailboxes);
+		$mailboxes = [];
+
+		if (!$hideProblemMailboxes && !empty($allProblemIds))
+		{
+			$totalProblemCount = $this->getFilteredProblemMailboxCount($allProblemIds, $filterData);
+
+			if ($totalProblemCount > 0 && $mailboxOffset < $totalProblemCount)
+			{
+				$problemLimit = min($remainingLimit, $totalProblemCount - $mailboxOffset);
+				$problemMailboxes = $this->getMailboxesWithOwners(
+					$problemLimit,
+					$mailboxOffset,
+					$filterData,
+					includeOnlyIds: $allProblemIds,
+				);
+				$this->setCanEditFlag($problemMailboxes);
+				$mailboxes = array_merge($mailboxes, $problemMailboxes);
+
+				$remainingLimit -= count($problemMailboxes);
+			}
+
+			$regularOffset = max(0, $mailboxOffset - $totalProblemCount);
+		}
+		else
+		{
+			$regularOffset = $mailboxOffset;
+		}
+
+		if ($remainingLimit > 0)
+		{
+			$excludeIds = !empty($allProblemIds) ? $allProblemIds : [];
+			$regularMailboxes = $this->getMailboxesWithOwners(
+				$remainingLimit,
+				$regularOffset,
+				$filterData,
+				excludeIds: $excludeIds,
+			);
+			$this->setCanEditFlag($regularMailboxes);
+			$mailboxes = array_merge($mailboxes, $regularMailboxes);
+		}
 
 		if (empty($mailboxes))
 		{
 			return $rows;
 		}
 
-		$mailboxIds = array_column($mailboxes, 'ID');
-		$emails = array_column($mailboxes, 'EMAIL');
-
-		$emailLimitsAndCounters = $this->getEmailLimitsAndCounters($emails);
-
-		$entityAccessData = $this->getEntityAccessData($mailboxIds);
-
-		$allUserIds = array_column(($entityAccessData[self::USER_ENTITY] ?? []), 'ENTITY_ID');
-		$allDepartmentAccessCodes = array_column(($entityAccessData[self::DEPARTMENT_ENTITY] ?? []), 'ACCESS_CODE');
-
-		$ownerIds = [];
-		foreach ($mailboxes as &$mailbox)
-		{
-			$mailbox['SENT_LIMITS_AND_COUNTERS'] = $emailLimitsAndCounters[$mailbox['EMAIL']];
-
-			$options = $mailbox['OPTIONS'] ?? [];
-			$crmLeadResp = $options['crm_lead_resp'] ?? [];
-			$allUserIds = array_merge($allUserIds, $crmLeadResp);
-
-			if ($mailbox['OWNER_ID'])
-			{
-				$allUserIds[] = $mailbox['OWNER_ID'];
-				$ownerIds[] = $mailbox['OWNER_ID'];
-			}
-		}
-		unset($mailbox);
-
-		$errorMailboxIds = MailboxSyncManager::getMailboxesWithConnectionErrorForUsers(array_unique($ownerIds));
-		$errorMailboxIdsMap = array_flip($errorMailboxIds);
-
-		$allUserIds = array_unique(array_filter($allUserIds));
-		$users = $this->userProvider->getEntitiesInfo($allUserIds);
-
-		$allDepartmentAccessCodes = array_unique(array_filter($allDepartmentAccessCodes));
-		$departments = $this->departmentProvider->getEntitiesInfo($allDepartmentAccessCodes);
-
-		$allEntitiesInfo = [];
-		foreach ($entityAccessData[self::USER_ENTITY] as $userAccessData)
-		{
-			$keyValue = (string)$userAccessData['ENTITY_ID'];
-			$allEntitiesInfo[$userAccessData['MAILBOX_ID']][] = $users[$keyValue];
-		}
-
-		foreach ($entityAccessData[self::DEPARTMENT_ENTITY] as $departmentAccessData)
-		{
-			$keyValue = str_replace('DR', 'D', $departmentAccessData['ACCESS_CODE']);
-			$department = $departments[$keyValue];
-
-			if ($department)
-			{
-				$allEntitiesInfo[$departmentAccessData['MAILBOX_ID']][] = $department;
-			}
-		}
-
-		foreach ($mailboxes as $mailbox)
-		{
-			$entitiesInfo = $allEntitiesInfo[$mailbox['ID']] ?? [];
-			$dataFromOptions = $this->extractDataFromOptions($mailbox);
-			$crmLeadRespIds = $dataFromOptions['crmLeadResp'];
-			$crmLeadRespData = [];
-
-			foreach ($crmLeadRespIds as $userId)
-			{
-				if (isset($users[$userId]))
-				{
-					$crmLeadRespData[] = $users[$userId];
-				}
-			}
-
-			$ownerData = null;
-			if ($mailbox['OWNER_ID'] && isset($users[$mailbox['OWNER_ID']]))
-			{
-				$ownerData = $users[$mailbox['OWNER_ID']];
-			}
-
-			$rows[] = $this->prepareGridRow($mailbox, $entitiesInfo, $crmLeadRespData, $ownerData, $errorMailboxIdsMap);
-		}
-
-		return $rows;
+		return array_merge($rows, $this->enrichAndPrepareMailboxRows($mailboxes));
 	}
 
 	/**
@@ -276,10 +238,104 @@ class MailboxSettingsGridHelper
 		return $this->getGridData($limit, $offset, $filterData);
 	}
 
+	private function enrichAndPrepareMailboxRows(array $mailboxes): array
+	{
+		$mailboxIds = array_column($mailboxes, 'ID');
+		$emails = array_column($mailboxes, 'EMAIL');
+
+		$emailLimitsAndCounters = $this->getEmailLimitsAndCounters($emails);
+
+		$entityAccessData = $this->getEntityAccessData($mailboxIds);
+
+		$allUserIds = array_column(($entityAccessData[self::USER_ENTITY] ?? []), 'ENTITY_ID');
+		$allDepartmentAccessCodes = array_column(($entityAccessData[self::DEPARTMENT_ENTITY] ?? []), 'ACCESS_CODE');
+
+		$ownerIds = [];
+		foreach ($mailboxes as &$mailbox)
+		{
+			$mailbox['SENT_LIMITS_AND_COUNTERS'] = $emailLimitsAndCounters[$mailbox['EMAIL']];
+
+			$options = $mailbox['OPTIONS'] ?? [];
+			$crmLeadResp = $options['crm_lead_resp'] ?? [];
+			$allUserIds = array_merge($allUserIds, $crmLeadResp);
+
+			if ($mailbox['OWNER_ID'])
+			{
+				$allUserIds[] = $mailbox['OWNER_ID'];
+				$ownerIds[] = $mailbox['OWNER_ID'];
+			}
+		}
+		unset($mailbox);
+
+		$errorMailboxIds = MailboxSyncManager::getMailboxesWithConnectionErrorForUsers(array_unique($ownerIds));
+		$errorMailboxIdsMap = array_flip($errorMailboxIds);
+
+		$allUserIds = array_unique(array_filter($allUserIds));
+		$users = $this->userProvider->getEntitiesInfo($allUserIds);
+
+		$allDepartmentAccessCodes = array_unique(array_filter($allDepartmentAccessCodes));
+		$departments = $this->departmentProvider->getEntitiesInfo($allDepartmentAccessCodes);
+
+		$allEntitiesInfo = [];
+		foreach ($entityAccessData[self::USER_ENTITY] as $userAccessData)
+		{
+			$keyValue = (string)$userAccessData['ENTITY_ID'];
+			$allEntitiesInfo[$userAccessData['MAILBOX_ID']][] = $users[$keyValue];
+		}
+
+		foreach ($entityAccessData[self::DEPARTMENT_ENTITY] as $departmentAccessData)
+		{
+			$keyValue = str_replace('DR', 'D', $departmentAccessData['ACCESS_CODE']);
+			$department = $departments[$keyValue];
+
+			if ($department)
+			{
+				$allEntitiesInfo[$departmentAccessData['MAILBOX_ID']][] = $department;
+			}
+		}
+
+		$rows = [];
+		foreach ($mailboxes as $mailbox)
+		{
+			$entitiesInfo = $allEntitiesInfo[$mailbox['ID']] ?? [];
+			$dataFromOptions = $this->extractDataFromOptions($mailbox);
+			$crmLeadRespIds = $dataFromOptions['crmLeadResp'];
+			$crmLeadRespData = [];
+
+			foreach ($crmLeadRespIds as $userId)
+			{
+				if (isset($users[$userId]))
+				{
+					$crmLeadRespData[] = $users[$userId];
+				}
+			}
+
+			$ownerData = null;
+			if ($mailbox['OWNER_ID'] && isset($users[$mailbox['OWNER_ID']]))
+			{
+				$ownerData = $users[$mailbox['OWNER_ID']];
+			}
+
+			$rows[] = $this->prepareGridRow($mailbox, $entitiesInfo, $crmLeadRespData, $ownerData, $errorMailboxIdsMap);
+		}
+
+		return $rows;
+	}
+
 	public function getTotalCount(array $filterData = []): int
 	{
 		$query = $this->buildMailboxesWithOwnersQuery();
 		$this->applyFilterToQuery($query, $filterData);
+
+		$hideProblemMailboxes = ($filterData['HIDE_PROBLEM_MAILBOXES'] ?? '') === 'Y';
+		if ($hideProblemMailboxes)
+		{
+			$problemIds = $this->getAllProblemMailboxIds();
+			if (!empty($problemIds))
+			{
+				$query->whereNotIn('ID', $problemIds);
+			}
+		}
 
 		$query->setSelect([new ExpressionField('CNT', 'COUNT(DISTINCT %s)', 'ID')]);
 
@@ -352,24 +408,6 @@ class MailboxSettingsGridHelper
 		}
 
 		return $result;
-	}
-
-	public static function rebindSenders(int $mailboxId, int $newOwnerId): void
-	{
-		$senders =
-			SenderTable::query()
-				->setSelect(['ID'])
-				->where('PARENT_MODULE_ID', 'mail')
-				->where('PARENT_ID', $mailboxId)
-				->fetchCollection()
-		;
-
-		foreach ($senders as $sender)
-		{
-			$sender->setUserId($newOwnerId);
-		}
-
-		$senders->save();
 	}
 
 	/**
@@ -456,10 +494,14 @@ class MailboxSettingsGridHelper
 		$actualCount = (int)$mailbox['UNSEEN_CNT'];
 		$volumeMb = round((float)$mailbox['TOTAL_VOLUME_BYTES'] / (1024 * 1024), 2);
 
+		$isOrphan = \Bitrix\Mail\Helper\OrphanedMailboxLifecycle::isOrphan($mailbox);
+
 		return [
 			'ID' => (int)$mailbox['ID'],
 			'ENTITIES_DATA' => $entitiesFormattedData,
 			'OWNER_DATA' => $ownerFormattedData,
+			'OWNER_GENDER' => (string)($mailbox['OWNER_GENDER'] ?? ''),
+			'IS_ORPHAN' => $isOrphan,
 			'EMAIL' => $mailbox['EMAIL'],
 			'SERVICE_NAME' => $mailbox['SERVICE_NAME'],
 			'COUNTERS' => [
@@ -616,12 +658,16 @@ class MailboxSettingsGridHelper
 					'NAME',
 					'USERNAME',
 					'EMAIL',
+					'SERVER_TYPE',
+					'PASSWORD',
 					'SERVICE_NAME' => 'SERVICE.NAME',
 					'OPTIONS',
 					'OWNER_ID' => 'USER_ID',
 					'OWNER_NAME' => 'OWNER.NAME',
 					'OWNER_LAST_NAME' => 'OWNER.LAST_NAME',
 					'OWNER_LOGIN' => 'OWNER.LOGIN',
+					'OWNER_ACTIVE' => 'OWNER.ACTIVE',
+					'OWNER_GENDER' => 'OWNER.PERSONAL_GENDER',
 					'LAST_ACTIVITY' => 'ENTITY_OPTIONS.DATE_INSERT',
 					'TOTAL_VOLUME_BYTES',
 					'UNSEEN_CNT',
@@ -891,16 +937,64 @@ class MailboxSettingsGridHelper
 		int $limit,
 		int $offset,
 		array $filterData,
+		array $includeOnlyIds = [],
+		array $excludeIds = [],
 	): array
 	{
 		$query = $this->buildMailboxesWithOwnersQuery();
 		$query->setLimit($limit);
 		$query->setOffset($offset);
-		$query->setOrder(['ID' => 'DESC']);
+		$query->setOrder(['OWNER_ACTIVE' => 'ASC', 'ID' => 'DESC']);
+
+		if (!empty($includeOnlyIds))
+		{
+			$query->whereIn('ID', $includeOnlyIds);
+		}
+
+		if (!empty($excludeIds))
+		{
+			$query->whereNotIn('ID', $excludeIds);
+		}
 
 		$this->applyFilterToQuery($query, $filterData);
 
 		return $query->fetchAll();
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function getAllProblemMailboxIds(): array
+	{
+		$rows = MailEntityOptionsTable::query()
+			->setSelect(['ENTITY_ID'])
+			->where('ENTITY_TYPE', MailEntityOptionsTable::MAILBOX_TYPE_NAME)
+			->where('PROPERTY_NAME', MailEntityOptionsTable::PROBLEM_STATUS_PROPERTY_NAME)
+			->where('VALUE', 'Y')
+			->fetchAll()
+		;
+
+		return array_map('intval', array_column($rows, 'ENTITY_ID'));
+	}
+
+	/**
+	 * @param int[] $problemMailboxIds
+	 */
+	private function getFilteredProblemMailboxCount(array $problemMailboxIds, array $filterData): int
+	{
+		if (empty($problemMailboxIds))
+		{
+			return 0;
+		}
+
+		$query = $this->buildMailboxesWithOwnersQuery();
+		$this->applyFilterToQuery($query, $filterData);
+		$query->whereIn('ID', $problemMailboxIds);
+		$query->setSelect([new ExpressionField('CNT', 'COUNT(DISTINCT %s)', 'ID')]);
+
+		$result = $query->exec()->fetch();
+
+		return (int)($result['CNT'] ?? 0);
 	}
 
 	private function applyFilterToQuery(Query $query, array $filterData): void

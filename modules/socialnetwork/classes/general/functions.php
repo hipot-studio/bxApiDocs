@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Loader;
 
@@ -1505,6 +1506,7 @@ class CSocNetAllowed
 				if (
 					Loader::includeModule('bitrix24')
 					&& !\Bitrix\Bitrix24\Feature::isFeatureEnabled('socialnetwork_wiki')
+					&& Option::get('socialnetwork', 'allow_wiki_group', 'N') !== 'Y'
 				)
 				{
 					$ignoreList[] = $arEvent['TO_MODULE_ID'];
@@ -2057,10 +2059,7 @@ class CSocNetAllowed
 		}
 
 		// chat
-		if (
-			ModuleManager::isModuleInstalled('im')
-			&& (COption::GetOptionString('socialnetwork', 'use_workgroup_chat', "Y") == "Y")
-		)
+		if (ModuleManager::isModuleInstalled('im'))
 		{
 			$arFeatureTmp = array(
 				"allowed" => array(SONET_ENTITY_GROUP),

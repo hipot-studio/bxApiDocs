@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Access\UnifiedLink;
 
 use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Main\Engine\CurrentUser;
 
 final class AccessCheckHandlerFactory
@@ -12,6 +13,15 @@ final class AccessCheckHandlerFactory
 	/** @var array<string, ChainableAccessCheckHandler> */
 	private array $cacheForAuthorizedUser = [];
 	private ?ExternalLinkAccessCheckHandler $externalLinkAccessCheckHandler = null;
+
+	/**
+	 * @param ExternalLinkProvider $externalLinkProvider
+	 */
+	public function __construct(
+		protected readonly ExternalLinkProvider $externalLinkProvider,
+	)
+	{
+	}
 
 	public function create(?AttachedObject $attachedObject = null, int $userId = 0): AccessCheckHandler
 	{
@@ -27,7 +37,7 @@ final class AccessCheckHandlerFactory
 			return $this->cacheForAuthorizedUser[$cacheKey] ??= $this->createForAuthorizedUser($userId, $attachedObject);
 		}
 
-		return $this->externalLinkAccessCheckHandler ??= new ExternalLinkAccessCheckHandler();
+		return $this->externalLinkAccessCheckHandler ??= new ExternalLinkAccessCheckHandler($this->externalLinkProvider);
 	}
 
 	private function createForAuthorizedUser(int $userId, ?AttachedObject $attachedObject = null): ChainableAccessCheckHandler
@@ -36,7 +46,7 @@ final class AccessCheckHandlerFactory
 		$attachedObjectsAccessCheckHandler = new AttachedObjectsAccessCheckHandler($userId, $attachedObject);
 		$permissionSystemAccessCheckHandler = new PermissionSystemAccessCheckHandler($userId);
 
-		return (new ExternalLinkAccessCheckHandler())
+		return (new ExternalLinkAccessCheckHandler($this->externalLinkProvider))
 			->setNext($unifiedLinkAccessCheckHandler
 				->setNext($permissionSystemAccessCheckHandler
 					->setNext($attachedObjectsAccessCheckHandler),

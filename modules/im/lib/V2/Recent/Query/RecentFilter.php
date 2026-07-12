@@ -23,6 +23,8 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 {
 	use WithableTrait;
 
+	private const ROOT_PARENT_CHAT_ID = 0;
+
 	public function __construct(
 		public readonly int $userId,
 		public readonly ?DateTime $lastMessageDate = null,
@@ -46,7 +48,7 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 			chatIds: is_array($filter['chatIds'] ?? null) ? $filter['chatIds'] : [],
 			excludeChatIds: is_array($filter['excludeChatIds'] ?? null) ? $filter['excludeChatIds'] : [],
 			recentSection: isset($filter['recentSection']) ? (string)$filter['recentSection'] : null,
-			parentChatId: isset($filter['parentId']) ? (int)$filter['parentId'] : null,
+			parentChatId: self::resolveParentChatId($filter),
 			typeCondition: $filter['typeCondition'] instanceof TypeCondition ? $filter['typeCondition'] : null,
 			typeRegistry: $typeRegistry,
 		);
@@ -117,7 +119,8 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 
 		if ($this->canIncludeNestedChats())
 		{
-			ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
+			ServiceLocator::getInstance()
+				->get(ParentChainFilterFactory::class)
 				->forUser($this->userId, TreeOrigin::forChat('CHAT'))
 				->apply($query);
 		}
@@ -125,7 +128,19 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 
 	private function canIncludeNestedChats(): bool
 	{
-		return $this->parentChatId !== 0;
+		return $this->parentChatId !== self::ROOT_PARENT_CHAT_ID;
+	}
+
+	private static function resolveParentChatId(array $filter): ?int
+	{
+		$parentId = $filter['parentId'] ?? null;
+
+		return match (true)
+		{
+			(!array_key_exists('parentId', $filter)), ($parentId === null) => null,
+			is_numeric($parentId) => (int)$parentId > 0 ? (int)$parentId : self::ROOT_PARENT_CHAT_ID,
+			default => self::ROOT_PARENT_CHAT_ID,
+		};
 	}
 
 	private function resolveTypeCondition(): TypeCondition

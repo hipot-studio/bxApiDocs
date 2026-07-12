@@ -38,7 +38,7 @@ class AddGuestActionMessage implements ActionMessageInterface
 
 		if (!$skipChat)
 		{
-			$this->addUsersToChat($this->collabId, ...$recipientIds);
+			$this->addUsersToChat($this->collabId, $parameters, ...$recipientIds);
 		}
 
 		$recipientNames = [];
@@ -49,7 +49,7 @@ class AddGuestActionMessage implements ActionMessageInterface
 				$factory = ActionMessageFactory::getInstance();
 				$acceptMessage = $factory->getActionMessage(ActionType::AcceptUser, $this->collabId, $this->senderId);
 
-				$acceptMessage->send();
+				$acceptMessage->send(parameters: $parameters);
 
 				continue;
 			}

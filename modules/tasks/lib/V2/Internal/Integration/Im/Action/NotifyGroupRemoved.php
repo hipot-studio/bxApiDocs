@@ -10,6 +10,7 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Entity\User\Gender;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\FeatureService;
 use Bitrix\Tasks\V2\Internal\Util\MBString;
 
 #[Recipients(creator: false, responsible: true, accomplices: true, auditors: false)]
@@ -20,6 +21,7 @@ class NotifyGroupRemoved extends AbstractNotify
 	public function __construct(
 		private readonly Task $task,
 		MessageSenderInterface $sender,
+		private readonly FeatureService $featureService,
 		protected readonly ?User $triggeredBy = null,
 		private readonly ?Group $group,
 	)
@@ -43,6 +45,11 @@ class NotifyGroupRemoved extends AbstractNotify
 			GroupTypes::Collab->value => $this->group?->type,
 			default => GroupTypes::Group->value,
 		};
+		if ($this->featureService->isNewProjectsOn())
+		{
+			$groupTypeCode = GroupTypes::Project->value;
+		}
+
 		$groupTypeCode = mb_strtoupper($groupTypeCode);
 
 		return sprintf(

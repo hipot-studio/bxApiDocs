@@ -7,11 +7,11 @@ use Bitrix\Disk\Bitrix24Disk\TmpFile;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internals\Path;
+use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\Sharing;
 use Bitrix\Disk\SpecificFolder;
 use Bitrix\Disk\Storage;
 use Bitrix\Disk\TypeFile;
-use Bitrix\Disk\Ui;
 use Bitrix\Disk\User;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data;
@@ -24,6 +24,7 @@ use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Bitrix24Disk\Legacy\Exceptions\AccessDeniedException;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\IO;
@@ -45,6 +46,7 @@ class DiskStorage extends AbstractStorage
 	protected $isEnabledObjectLock = false;
 	/** @var \Bitrix\Main\DB\Connection */
 	protected $connection;
+	protected ExternalLinkProvider $externalLinkProvider;
 	private $cacheBreadcrumbs = array();
 	private $errorCollection = array();
 	/** @var array */
@@ -62,6 +64,7 @@ class DiskStorage extends AbstractStorage
 		global $USER;
 		$this->userId = User::resolveUserId($user?: $USER);
 		$this->connection = Application::getConnection();
+		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
 
 		Application::getInstance()->addBackgroundJob([$this, 'finalize']);
 	}
@@ -1234,19 +1237,11 @@ class DiskStorage extends AbstractStorage
 			throw new AccessDeniedException;
 		}
 
-		$extLinks = $object->getExternalLinks(array(
-			'filter' => array(
-				'OBJECT_ID' => $object->getId(),
-				'CREATED_BY' => $this->getUser()->getId(),
-				'TYPE' => ExternalLinkTable::TYPE_MANUAL,
-				'IS_EXPIRED' => false,
-			),
-			'limit' => 1,
-		));
-		$extModel = array_pop($extLinks);
+		$extModel = $this->externalLinkProvider->getForUse($object->getRealObjectId());
+
 		if(!$extModel)
 		{
-			$extModel = $object->addExternalLink(array(
+			$extModel = $object->getRealObject()->addExternalLink(array(
 				'CREATED_BY' => $this->getUser()->getId(),
 				'TYPE' => ExternalLinkTable::TYPE_MANUAL,
 			));
@@ -1259,10 +1254,10 @@ class DiskStorage extends AbstractStorage
 			return '';
 		}
 
-		return Driver::getInstance()->getUrlManager()->getShortUrlExternalLink(array(
-			'hash' => $extModel->getHash(),
-			'action' => 'default',
-		), true);
+		return Driver::getInstance()->getUrlManager()->getPublicExternalLink(
+			object: $object,
+			hash: $extModel->getHash(),
+		);
 	}
 
 	public function lockFile(array $file)

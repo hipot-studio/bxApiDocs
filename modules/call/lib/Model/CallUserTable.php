@@ -32,11 +32,14 @@ class CallUserTable extends DataManager
 	public static function getTableName(): string
 	{
 		//todo remove migration option check
-		if (\Bitrix\Main\Config\Option::get('call', 'call_db_migrated', 0) >= 5)
+		static $tableName = null;
+		if ($tableName === null)
 		{
-			return 'b_call_user';
+			$tableName = \Bitrix\Main\Config\Option::get('call', 'call_db_migrated', 0) >= 5
+				? 'b_call_user'
+				: 'b_im_call_user';
 		}
-		return 'b_im_call_user';
+		return $tableName;
 	}
 
 	public static function getMap(): array

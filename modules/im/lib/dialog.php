@@ -124,7 +124,13 @@ class Dialog
 		}
 		else if (preg_match('/^sg[0-9]{1,}$/i', $dialogId))
 		{
-			$chatId = \CIMChat::GetSonetGroupChatId(mb_substr($dialogId, 2));
+			$userId = \Bitrix\Im\Common::getUserId($userId);
+			if (!$userId)
+			{
+				return false;
+			}
+
+			$chatId = \CIMChat::GetSonetGroupChatId(mb_substr($dialogId, 2), $userId);
 		}
 		else
 		{

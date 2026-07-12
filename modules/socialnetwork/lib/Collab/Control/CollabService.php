@@ -40,6 +40,8 @@ use Bitrix\Socialnetwork\Control\Command\UpdateCommand;
 use Bitrix\Socialnetwork\Control\GroupResult;
 use Bitrix\Socialnetwork\Control\Handler\Add\AddFeatureHandler;
 use Bitrix\Socialnetwork\Control\Handler\Update\UpdatePermissionsHandler;
+use Bitrix\Socialnetwork\Control\Operation\AddOperation;
+use Bitrix\Socialnetwork\Control\Operation\UpdateOperation;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\SocialNetwork\Validation\Validator\NotContainsUrlValidator;
 
@@ -183,6 +185,16 @@ class CollabService extends AbstractGroupService
 		$event = new CollabDeleteEvent($command, $entityBefore);
 
 		$event->send();
+	}
+
+	protected function createAddOperation(AddCommand $command): AddOperation
+	{
+		return new Operation\AddOperation($command);
+	}
+
+	protected function createUpdateOperation(UpdateCommand $command): UpdateOperation
+	{
+		return new Operation\UpdateOperation($command);
 	}
 
 	private function setCollabToResult(GroupResult $result): CollabResult

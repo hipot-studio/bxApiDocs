@@ -12,6 +12,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Call\Recent;
 use Bitrix\Call\Settings;
 use Bitrix\Call\CallFactory;
 use Bitrix\Call\NotifyService;
@@ -24,6 +25,7 @@ use Bitrix\Call\Integration\AI\CallAISettings;
 class CallManager extends Engine\Controller
 {
 	protected const LOCK_TTL = 10; // in seconds
+	private const VALID_TRUE_VALUES = [true, 1, '1', 'Y', 'y', 'true'];
 
 	/**
 	 * @restMethod call.CallManager.create
@@ -65,7 +67,7 @@ class CallManager extends Engine\Controller
 		$targetUserIsBusy = false;
 		if (!$call && ($provider == \Bitrix\Call\Call::PROVIDER_PLAIN))
 		{
-			if (CallFactory::hasUserActiveCalls((int)$entityId))
+			if (CallFactory::hasUserActiveCalls((int)$entityId, $currentUserId))
 			{
 				$targetUserIsBusy = true;
 
@@ -127,6 +129,15 @@ class CallManager extends Engine\Controller
 			else
 			{
 				$isNew = true;
+
+				// Terminate any stuck 1-1 calls of the initiator before creating a new one.
+				// Skipped when the target is already known to be busy: in that case we only
+				// create a technical "busy" call and return user_is_busy, so cleaning up the
+				// initiator's calls here would needlessly tear down an ongoing live 1-1.
+				if ($provider === \Bitrix\Call\Call::PROVIDER_PLAIN && !$targetUserIsBusy)
+				{
+					Recent::terminateStuckPlainCallsForUser($currentUserId);
+				}
 
 				try
 				{
@@ -688,6 +699,13 @@ class CallManager extends Engine\Controller
 			return null;
 		}
 
+		if ($callUser->getState() === CallUser::STATE_READY)
+		{
+			Application::getConnection()->unlock($lockName);
+			$this->addError(new Error("Can not decline in {$callUser->getState()} user state", "wrong_user_state"));
+			return null;
+		}
+
 		if ($code === 486)
 		{
 			$callUser->updateState(CallUser::STATE_BUSY);
@@ -700,10 +718,10 @@ class CallManager extends Engine\Controller
 
 		Application::getConnection()->unlock($lockName);
 
-		$userIds = $call->getUsers();
+		$userIds = array_values($call->getUsers());
 		$call->getSignaling()->sendHangup($currentUserId, $userIds, $callInstanceId, $code);
 
-		if (!$call->hasActiveUsers())
+		if (!$call->hasActiveUsers(false))
 		{
 			$call->setActionUserId($currentUserId)->finish();
 		}
@@ -1006,30 +1024,84 @@ class CallManager extends Engine\Controller
 
 	/**
 	 * @restMethod call.CallManager.finish
-	 * @param int $callId
-	 * @return void|null
+	 * @param int|null $callId
+	 * @param string|null $callUuid
+	 * @param string $silent Suppresses chat messages on finish; pass "Y" / "1" / "true".
+	 * @return array|null
 	 */
-	public function finishAction(int $callId): ?array
+	public function finishAction(?int $callId = null, ?string $callUuid = null, string $silent = 'N'): ?array
 	{
-		$call = Registry::getCallWithId($callId);
+		$silent = in_array($silent, self::VALID_TRUE_VALUES, true);
+		$call = $callId
+			? Registry::getCallWithId($callId)
+			: ($callUuid ? Registry::getCallWithUuid($callUuid) : null);
+
 		if (!$call)
 		{
 			$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
 			return null;
 		}
+
 		$currentUserId = $this->getCurrentUser()->getId();
 		if (!$this->checkCallAccess($call, $currentUserId))
 		{
-			$this->addError(new Error("You do not have access to the parent call", "access_denied"));
+			$this->addError(new Error("You do not have access to the call", "access_denied"));
 			return null;
 		}
 
-		$call->setActionUserId($currentUserId)->finish();
+		// UUID-based lock to serialize with Controller\Call::answerAction and
+		// Controller\Call::finishCallAction on the JWT scheme.
+		$lockName = "call_state_call_{$call->getUuid()}";
+		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+		{
+			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
+			return null;
+		}
+
+		try
+		{
+			Registry::clearCache($call->getId());
+			$call = Registry::getCallWithId($call->getId());
+			if (!$call)
+			{
+				$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+				return null;
+			}
+
+			if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
+			{
+				// Already finished: re-broadcast finish pull and refresh Recent
+				// so stuck clients still showing the call can clean up.
+				// Pass $forRecovery=true to bypass the  suppression — without it any recovery attempt that lands
+				// inside the 10s window after the original Call::finish would silently no-op.
+				$call->setActionUserId($currentUserId)
+					->getSignaling()
+					->sendFinish(forRecovery: true)
+				;
+			}
+			else
+			{
+				$call
+					->setActionUserId($currentUserId)
+					->setSilentFinish($silent)
+					->finish()
+				;
+				Recent::terminateAllCallsInChat($call->getChatId(), $call->getId());
+			}
+		}
+		finally
+		{
+			if ($call instanceof \Bitrix\Call\Call)
+			{
+				Recent::updateCallCache($call->getId());
+			}
+			Application::getConnection()->unlock($lockName);
+		}
 
 		return [
 			'call' => $call->toArray($currentUserId),
 			'connectionData' => $call->getConnectionData($currentUserId),
-			'logToken' => $call->getLogToken($currentUserId)
+			'logToken' => $call->getLogToken($currentUserId),
 		];
 	}
 

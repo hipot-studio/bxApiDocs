@@ -38,6 +38,8 @@ enum Action: string
 	case AttachToParent = 'ATTACH_TO_PARENT';
 	case ManageGuestLink = 'MANAGE_GUEST_LINK';
 	case UpdateGuestLink = 'UPDATE_GUEST_LINK';
+	case UnpinChat = 'UNPIN_CHAT';
+	case ReadChat = 'READ_CHAT';
 
 	public function getRelatedGlobalAction(): ?GlobalAction
 	{

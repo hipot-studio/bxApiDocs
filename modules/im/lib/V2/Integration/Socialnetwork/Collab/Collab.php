@@ -18,6 +18,7 @@ use Bitrix\Socialnetwork\Collab\Requirement;
 use Bitrix\Socialnetwork\Control\Decorator\AccessDecorator;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\Provider\GroupProvider;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class Collab
 {
@@ -28,6 +29,14 @@ class Collab
 			&& CollabFeature::isOn()
 			&& CollabFeature::isFeatureEnabledInPortalSettings()
 			&& Requirement::check()->isSuccess()
+		;
+	}
+
+	public static function isNewProjectsAvailable(): bool
+	{
+		return
+			Loader::includeModule('socialnetwork')
+			&& Feature::isNewProjectsOn()
 		;
 	}
 

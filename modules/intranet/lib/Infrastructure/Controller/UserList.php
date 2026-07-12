@@ -260,9 +260,6 @@ class UserList extends Controller
 				if ($user->getActive())
 				{
 					$skippedActiveUsers[$user->getId()] = $user->getFormattedName();
-				{
-					$this->addError(new Error('Could not decline invitation for user ID '.$user['ID']));
-				}
 				}
 				else
 				{

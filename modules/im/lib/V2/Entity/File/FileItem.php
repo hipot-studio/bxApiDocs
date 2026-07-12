@@ -307,6 +307,11 @@ class FileItem implements RestEntity, PopupDataAggregatable
 		}
 	}
 
+	public function isGalleryType(): bool
+	{
+		return $this->getContentType() === 'image' || $this->getContentType() === 'video';
+	}
+
 	public function setContentType(string $contentType): self
 	{
 		$this->contentType = $contentType;

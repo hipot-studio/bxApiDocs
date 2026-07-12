@@ -5,9 +5,7 @@ namespace Bitrix\CalendarMobile\Provider;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
 use Bitrix\Calendar\Integration\Bitrix24Manager;
-use Bitrix\Calendar\Integration\SocialNetwork\Collab\UserCollabs;
 use Bitrix\Calendar\Rooms;
-use Bitrix\Calendar\UserSettings;
 use Bitrix\Calendar\Util;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Error;
@@ -56,7 +54,7 @@ final class EditFormProvider
 		return $result->setData([
 			'user' => UserRepository::getByIds([$this->userId]),
 			'users' => $users,
-			'sections' => $this->getSections(),
+			'sections' => $this->getSections($baseInfoProvider),
 			'settings' => $baseInfoProvider->getCalendarSettings(),
 			'meetSection' => $this->getMeetingSection(),
 			'firstWeekday' => $this->getFirstWeekday(),
@@ -77,42 +75,39 @@ final class EditFormProvider
 	}
 
 	/**
+	 * @param BaseInfoProvider $baseInfoProvider
+	 *
 	 * @return array
+	 * @throws \Bitrix\Main\LoaderException
 	 */
-	private function getSections(): array
+	private function getSections(BaseInfoProvider $baseInfoProvider): array
 	{
-		$sections = [];
-		$userCollabIds = [];
-		$isCollabUser = Util::isCollabUser($this->userId);
+		$isCollabContext = Util::isCollabUser($this->userId)
+			&& $this->calType === Dictionary::CALENDAR_TYPE['user']
+		;
 
-		if ($isCollabUser && $this->calType === Dictionary::CALENDAR_TYPE['user'])
+		if ($isCollabContext)
 		{
-			$userCollabIds = UserCollabs::getInstance()->getIds($this->userId);
+			$userCollabIds = $baseInfoProvider->getCollabIds();
 
 			if (empty($userCollabIds))
 			{
-				return $sections;
+				return [];
 			}
 
-			$sectionList = \CCalendar::getSectionList([
-				'CAL_TYPE' => Dictionary::CALENDAR_TYPE['group'],
-				'OWNER_ID' => $userCollabIds,
+			$sectionList = $baseInfoProvider->getCollabSections($userCollabIds, [
 				'ACTIVE' => 'Y',
-				'checkPermissions' => true,
-				'getPermissions' => true
 			]);
 		}
 		else
 		{
-			$sectionList = \CCalendar::getSectionList([
-				'CAL_TYPE' => $this->calType,
-				'OWNER_ID' => $this->ownerId,
-				'ACTIVE' => 'Y',
+			$sectionList = $baseInfoProvider->getMergedSections([
 				'checkPermissions' => true,
-				'getPermissions' => true
+				'getPermissions' => true,
 			]);
 		}
 
+		$sections = [];
 		foreach ($sectionList as $section)
 		{
 			if ($section['PERM']['edit'] || $section['PERM']['add'])
@@ -121,24 +116,19 @@ final class EditFormProvider
 			}
 		}
 
-		if (
-			$isCollabUser
-			&& $this->calType === Dictionary::CALENDAR_TYPE['user']
-			&& empty($sections)
-			&& empty($sectionList)
-		)
+		if (!empty($sections) || !empty($sectionList))
 		{
-			$collabId = current($userCollabIds);
+			return $sections;
+		}
 
+		if ($isCollabContext)
+		{
 			$sections[] = \CCalendarSect::createDefault([
 				'type' => Dictionary::CALENDAR_TYPE['group'],
-				'ownerId' => $collabId,
+				'ownerId' => current($userCollabIds),
 			]);
 		}
-		else if (
-			empty($sections)
-			&& empty($sectionList) // Have no rights to create events in this calendar type
-		)
+		else
 		{
 			$sections[] = \CCalendarSect::createDefault([
 				'type' => $this->calType,

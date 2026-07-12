@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Promotion;
 
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Onboarding\CollabOnboardingPromotionService;
+use Bitrix\Im\V2\Integration\Socialnetwork\Collab\ProjectAiPromotionService;
 use Bitrix\Im\V2\Promotion\Service\PromotionServiceInterface;
 use Bitrix\Im\V2\Promotion\Service\UIPromotionService;
 
@@ -16,6 +17,7 @@ class PromotionServiceFactory
 		return [
 			UIPromotionService::getInstance(),
 			CollabOnboardingPromotionService::getInstance(),
+			ProjectAiPromotionService::getInstance(),
 		];
 	}
 

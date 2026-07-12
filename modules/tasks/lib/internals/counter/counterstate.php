@@ -10,6 +10,7 @@ namespace Bitrix\Tasks\Internals\Counter;
 
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\Internals\Counter;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\FeatureService;
 use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\UserService;
 
 abstract class CounterState implements \Iterator
@@ -19,6 +20,7 @@ abstract class CounterState implements \Iterator
 	protected int $userId;
 	protected array $counters = [];
 	protected array $mentions = [];
+	private FeatureService $sonetFeatureService;
 
 	/**
 	 * CounterState constructor.
@@ -28,6 +30,7 @@ abstract class CounterState implements \Iterator
 	{
 		$this->userId = $userId;
 		$this->loader = $loader;
+		$this->sonetFeatureService = Container::getInstance()->get(FeatureService::class);
 		$this->init();
 	}
 
@@ -129,6 +132,16 @@ abstract class CounterState implements \Iterator
 		$scrum = $userService->getScrum($this->userId);
 		$collabs = $userService->getCollabs($this->userId);
 
+		$sonetGroupMap = [
+			CounterDictionary::META_PROP_PROJECT => true,
+			CounterDictionary::META_PROP_GROUP => true,
+		];
+
+		if ($this->sonetFeatureService->isNewProjectsOn())
+		{
+			$sonetGroupMap[CounterDictionary::META_PROP_COLLAB] = true;
+		}
+
 		$tmpHeap[] = [];
 		foreach ($this as $item)
 		{
@@ -154,6 +167,8 @@ abstract class CounterState implements \Iterator
 				$tmpHeap[$meta][$subType][$groupId] = [];
 			}
 
+			$isSonet = \array_key_exists($meta, $sonetGroupMap);
+
 			$this->counterInitIfNotExist(CounterDictionary::META_PROP_SONET, $type, $groupId);
 			$this->counterInitIfNotExist(CounterDictionary::META_PROP_SONET, $subType, $groupId);
 			$this->counterInitIfNotExist(CounterDictionary::META_PROP_ALL, $type, $groupId);
@@ -175,14 +190,14 @@ abstract class CounterState implements \Iterator
 				$tmpHeap[$meta][$type][$groupId][$taskId] = $value;
 				$this->counters[$meta][$type][$groupId] += $value;
 
-				if (in_array($meta, [CounterDictionary::META_PROP_GROUP, CounterDictionary::META_PROP_PROJECT]))
+				if ($isSonet)
 				{
 					$this->counters[CounterDictionary::META_PROP_SONET][$type][$groupId] += $value;
 				}
 
 				if ($type === CounterDictionary::COUNTER_MENTIONED)
 				{
-					$this->addMention($meta, $groupId, $taskId, $flowId, $value);
+					$this->addMention($meta, $groupId, $taskId, $flowId, $value, $isSonet);
 				}
 			}
 
@@ -194,7 +209,7 @@ abstract class CounterState implements \Iterator
 				$tmpHeap[$meta][$subType][$groupId][$taskId] = $value;
 				$this->counters[$meta][$subType][$groupId] += $value;
 
-				if (in_array($meta, [CounterDictionary::META_PROP_GROUP, CounterDictionary::META_PROP_PROJECT]))
+				if ($isSonet)
 				{
 					$this->counters[CounterDictionary::META_PROP_SONET][$subType][$groupId] += $value;
 				}
@@ -242,7 +257,7 @@ abstract class CounterState implements \Iterator
 			{
 				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0] += $value;
 				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] -= $value;
-				if (in_array($meta, [CounterDictionary::META_PROP_PROJECT, CounterDictionary::META_PROP_GROUP]))
+				if ($isSonet)
 				{
 					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED][0] += $value;
 					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] -= $value;
@@ -262,7 +277,7 @@ abstract class CounterState implements \Iterator
 
 				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] += $value;
 				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] -= $value;
-				if (in_array($meta, [CounterDictionary::META_PROP_PROJECT, CounterDictionary::META_PROP_GROUP]))
+				if ($isSonet)
 				{
 					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS][0] += $value;
 					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] -= $value;
@@ -279,7 +294,7 @@ abstract class CounterState implements \Iterator
 			)
 			{
 				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] += $value;
-				if (in_array($meta, [CounterDictionary::META_PROP_PROJECT, CounterDictionary::META_PROP_GROUP]))
+				if ($isSonet)
 				{
 					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] += $value;
 					$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_FOREIGN_EXPIRED][0] += $value;
@@ -294,7 +309,7 @@ abstract class CounterState implements \Iterator
 			)
 			{
 				$this->counters[$meta][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] += $value;
-				if (in_array($meta, [CounterDictionary::META_PROP_PROJECT, CounterDictionary::META_PROP_GROUP]))
+				if ($isSonet)
 				{
 					$this->counters[CounterDictionary::META_PROP_ALL][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] += $value;
 					$this->counters[CounterDictionary::META_PROP_SONET][CounterDictionary::COUNTER_GROUPS_FOREIGN_COMMENTS][0] += $value;
@@ -395,7 +410,7 @@ abstract class CounterState implements \Iterator
 		}
 	}
 
-	private function addMention(string $meta, int $groupId, int $taskId, int $flowId, int $value): void
+	private function addMention(string $meta, int $groupId, int $taskId, int $flowId, int $value, bool $isSonet): void
 	{
 		$key = sprintf('%s|%s|%s|%s', $meta, $groupId, $taskId, $flowId);
 		$this->mentions[$key] = [
@@ -404,6 +419,7 @@ abstract class CounterState implements \Iterator
 			'flowId' => $flowId,
 			'value' => $value,
 			'taskId' => $taskId,
+			'isSonet' => $isSonet,
 		];
 	}
 
@@ -419,6 +435,7 @@ abstract class CounterState implements \Iterator
 			$value = $mentionInfo['value'];
 			$taskId = $mentionInfo['taskId'];
 			$flowId = $mentionInfo['flowId'];
+			$isSonet = $mentionInfo['isSonet'];
 
 			if (!isset($tmpHeap[$meta][CounterDictionary::COUNTER_MUTED_NEW_COMMENTS][$groupId][$taskId]))
 			{
@@ -426,6 +443,7 @@ abstract class CounterState implements \Iterator
 			}
 
 			$this->counterAddValue(-$value, $meta, CounterDictionary::COUNTER_MUTED_NEW_COMMENTS, $groupId);
+			$this->counterAddValue($value, $meta, CounterDictionary::COUNTER_MUTED_MENTIONED, $groupId);
 
 			if ($meta === CounterDictionary::META_PROP_SCRUM)
 			{
@@ -457,11 +475,13 @@ abstract class CounterState implements \Iterator
 				// add no-all-meta counters to all total
 				$this->counterAddValue(-$value, CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_MUTED_NEW_COMMENTS, $groupId);
 				$this->counterAddValue($value, CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_NEW_COMMENTS, $groupId);
+				$this->counterAddValue($value, CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_MUTED_MENTIONED, $groupId);
 
-				if ($groupId > 0 && ($meta === CounterDictionary::META_PROP_GROUP || $meta === CounterDictionary::META_PROP_PROJECT))
+				if ($groupId > 0 && $isSonet)
 				{
 					// groups and projects use group total from meta-all
 					$this->counterAddValue($value, CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_GROUPS_TOTAL_COMMENTS, 0);
+					$this->counterAddValue($value, CounterDictionary::META_PROP_ALL, CounterDictionary::COUNTER_SONET_MUTED_MENTIONED, 0);
 				}
 			}
 		}

@@ -13,6 +13,7 @@ use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Mappers\Factory;
 use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\UserCollabs;
+use Bitrix\Calendar\Integration\SocialNetwork\FeatureService;
 use Bitrix\Calendar\OpenEvents\Service\DefaultCategoryService;
 use Bitrix\Calendar\OpenEvents\Service\OpenEventAttendeeService;
 use Bitrix\Calendar\Internals\SectionTable;
@@ -611,14 +612,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				$responseParams['defaultCategoryId'] = DefaultCategoryService::getInstance()->getCategoryId();
 			}
 
-			if (Loader::includeModule('socialnetwork'))
-			{
-				$projectLimitFeatureId = \Bitrix\Socialnetwork\Helper\Feature::PROJECTS_GROUPS;
-
-				$responseParams['projectFeatureEnabled'] = \Bitrix\Socialnetwork\Helper\Feature::isFeatureEnabled($projectLimitFeatureId)
-					|| \Bitrix\Socialnetwork\Helper\Feature::canTurnOnTrial($projectLimitFeatureId)
-				;
-			}
+			$responseParams['projectFeatureEnabled'] = FeatureService::isProjectFeatureEnabled();
 
 			$responseParams['isCollabUser'] = $isCollabUser;
 

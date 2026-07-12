@@ -81,4 +81,15 @@ class BlockCollection extends Registry implements \JsonSerializable
 
 		return null;
 	}
+
+	public function getFiles(): array
+	{
+		$files = [];
+		foreach ($this as $block)
+		{
+			$files[] = $block->getFiles();
+		}
+
+		return array_merge(...$files);
+	}
 }

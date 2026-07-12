@@ -97,6 +97,11 @@ class WorkgroupTable extends Entity\DataManager
 				'save_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getSaveModificator'],
 				'fetch_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getFetchModificator'],
 			],
+			'GOAL' => [
+				'data_type' => 'text',
+				'save_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getSaveModificator'],
+				'fetch_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getFetchModificator'],
+			],
 			'KEYWORDS' => [
 				'data_type' => 'string',
 			],

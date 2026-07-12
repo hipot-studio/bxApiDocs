@@ -35,6 +35,15 @@ abstract class AbstractDownloader
 		$log = CallAISettings::isLoggingEnable();
 		$logger = Logger::getInstance();
 
+		$validateResult = DownloadHelper::validateFile($track);
+		if (!$validateResult->isSuccess())
+		{
+			$log && $logger->error("AbstractDownloader::complete: Validation failed. TrackId: {$track->getId()}");
+			$result->addErrors($validateResult->getErrors());
+
+			return $this->fail($result);
+		}
+
 		$log && $logger->info("AbstractDownloader::complete: Firing event. TrackId: {$track->getId()}");
 
 		// Fire event instead of calling callback

@@ -36,7 +36,7 @@ class ResultSchemaBuilder extends BaseSchemaBuilder
 			],
 			'text' => [
 				'type' => 'string',
-				'description' => 'The result text. Must not be an empty string.',
+				'description' => 'The result text. Must not be an empty string.' . BaseSchemaBuilder::FORMATTING_NOTE,
 				'minLength' => 1,
 			],
 		];

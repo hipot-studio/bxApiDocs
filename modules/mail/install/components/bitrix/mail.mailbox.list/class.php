@@ -34,7 +34,7 @@ class CMailMailboxListComponent extends CBitrixComponent
 
 		if (!$canManage)
 		{
-			showError('access denied');
+			$this->includeComponentTemplate('access_denied');
 
 			return;
 		}
@@ -64,12 +64,9 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$grid = $this->getGrid();
 		$grid->processRequest();
 
-		$grid->setRawRowsWithLazyLoadPagination(function (array $ormParams) {
-			$filterOptions = new \Bitrix\Main\UI\Filter\Options($this->filterId);
-			$filterData = $filterOptions->getFilter();
-
-			return $this->mailboxHelper->getGridDataWithOrmParams($ormParams, $filterData);
-		});
+		$grid->setRawRowsWithLazyLoadPagination(
+			fn(array $ormParams) => $this->getGridDataForCurrentFilter($ormParams),
+		);
 
 		$result['GRID_PARAMS'] = \Bitrix\Main\Grid\Component\ComponentParams::get(
 			$grid,
@@ -95,12 +92,35 @@ class CMailMailboxListComponent extends CBitrixComponent
 			]);
 
 			$this->grid = new MailboxGrid($settings);
-			$this->grid->setTotalCountCalculator(function () {
-				return $this->mailboxHelper->getTotalCount();
-			});
+			$this->grid->setTotalCountCalculator(
+				fn() => $this->getGridTotalCountForCurrentFilter(),
+			);
 		}
 
 		return $this->grid;
+	}
+
+	protected function getGridDataForCurrentFilter(array $ormParams): array
+	{
+		return $this->getMailboxHelper()->getGridDataWithOrmParams(
+			$ormParams,
+			$this->getCurrentFilterData(),
+		);
+	}
+
+	protected function getGridTotalCountForCurrentFilter(): int
+	{
+		return $this->getMailboxHelper()->getTotalCount($this->getCurrentFilterData());
+	}
+
+	protected function getCurrentFilterData(): array
+	{
+		return (new \Bitrix\Main\UI\Filter\Options($this->filterId))->getFilter();
+	}
+
+	protected function getMailboxHelper(): MailboxSettingsGridHelper
+	{
+		return $this->mailboxHelper;
 	}
 
 	private function getAccess(): array

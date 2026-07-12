@@ -77,12 +77,23 @@ class CSocNetFeatures extends CAllSocNetFeatures
 	{
 		global $DB;
 
+		static $hasBaseField = null;
+		if ($hasBaseField === null)
+		{
+			$tableFields = \Bitrix\Main\Application::getConnection()->getTableFields('b_sonet_features');
+			$hasBaseField = array_key_exists('BASE', $tableFields);
+		}
+
 		if (count($arSelectFields) <= 0)
 		{
 			$arSelectFields = array("ID", "ENTITY_TYPE", "ENTITY_ID", "FEATURE", "FEATURE_NAME", "ACTIVE", "DATE_CREATE", "DATE_UPDATE");
+			if ($hasBaseField)
+			{
+				$arSelectFields[] = "BASE";
+			}
 		}
 
-		static $arFields = array(
+		$arFields = array(
 			"ID" => Array("FIELD" => "GF.ID", "TYPE" => "int"),
 			"ENTITY_TYPE" => Array("FIELD" => "GF.ENTITY_TYPE", "TYPE" => "string"),
 			"ENTITY_ID" => Array("FIELD" => "GF.ENTITY_ID", "TYPE" => "int"),
@@ -93,6 +104,10 @@ class CSocNetFeatures extends CAllSocNetFeatures
 			"DATE_UPDATE" => Array("FIELD" => "GF.DATE_UPDATE", "TYPE" => "datetime"),
 			"GROUP_NAME" => Array("FIELD" => "G.NAME", "TYPE" => "string", "FROM" => "INNER JOIN b_sonet_group G ON (GF.GROUP_ID = G.ID)"),
 		);
+		if ($hasBaseField)
+		{
+			$arFields["BASE"] = Array("FIELD" => "GF.BASE", "TYPE" => "string");
+		}
 
 		$arSqls = CSocNetGroup::PrepareSql($arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields);
 

@@ -14,8 +14,10 @@ class NotifyResultFromMessage extends AbstractNotify
 		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
 		protected readonly ?Entity\User $triggeredBy = null,
+		private readonly ChatActionLinkService $chatActionLinkService,
 		private readonly int $messageId = 0,
 		private readonly int $dateTs = 0,
+		private readonly int $resultId = 0,
 		private readonly ?Entity\Result\Type $type = null,
 	)
 	{
@@ -25,16 +27,24 @@ class NotifyResultFromMessage extends AbstractNotify
 	public function getMessageCode(): string
 	{
 		return $this->triggeredBy?->getGender() === Entity\User\Gender::Female
-			? 'TASKS_IM_RESULT_FROM_MESSAGE_F'
-			: 'TASKS_IM_RESULT_FROM_MESSAGE_M'
+			? 'TASKS_IM_RESULT_FROM_MESSAGE_F_MSGVER_1'
+			: 'TASKS_IM_RESULT_FROM_MESSAGE_M_MSGVER_1'
 		;
 	}
 
 	public function getMessageData(): array
 	{
+		$openResultUrl = $this->chatActionLinkService->get(
+			task: $this->task,
+			userId: (int)$this->triggeredBy?->id,
+			action: ChatAction::OpenResult,
+			entityId: $this->resultId,
+		);
+
 		return [
 			'#USER#' => $this->formatUser($this->triggeredBy),
 			'#DATE#' => "[TIMESTAMP=$this->dateTs FORMAT=LONG_DATE_FORMAT]",
+			'#OPEN_RESULT_URL#' => $openResultUrl,
 		];
 	}
 

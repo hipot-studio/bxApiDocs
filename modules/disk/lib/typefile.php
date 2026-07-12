@@ -19,7 +19,11 @@ final class TypeFile
 	const AUDIO        = 9;
 	const KNOWN        = 10;
 	const VECTOR_IMAGE = 11;
+	/**
+	 * @deprecated use TypeFile::BOARD instead
+	 */
 	const FLIPCHART    = 12;
+	const BOARD        = 12;
 
 	/**
 	 * Allowed values.

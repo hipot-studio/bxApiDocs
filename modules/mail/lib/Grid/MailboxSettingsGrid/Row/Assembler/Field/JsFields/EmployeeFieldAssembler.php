@@ -3,6 +3,7 @@
 namespace Bitrix\Mail\Grid\MailboxSettingsGrid\Row\Assembler\Field\JsFields;
 
 use Bitrix\Main\Grid\Settings;
+use Bitrix\Main\Localization\Loc;
 
 class EmployeeFieldAssembler extends JsExtensionFieldAssembler
 {
@@ -26,23 +27,47 @@ class EmployeeFieldAssembler extends JsExtensionFieldAssembler
 	 *         height: int,
 	 *         size: int,
 	 *     },
+	 *     position: string,
 	 *     pathToProfile: string,
 	 * }
 	 */
 	protected function getRenderParams(array $rawValue): array
 	{
 		$userData = $rawValue[$this->dataKey] ?? [];
+		$isOrphan = (bool)($rawValue['IS_ORPHAN'] ?? false);
 
 		if (empty($userData))
 		{
+			if ($isOrphan)
+			{
+				return [
+					[
+						'name' => $rawValue['EMAIL'] ?? '',
+						'position' => $this->getFiredBadge((string)($rawValue['OWNER_GENDER'] ?? '')),
+					],
+				];
+			}
+
 			return [
 				[],
 			];
 		}
 
+		if ($isOrphan)
+		{
+			$userData['position'] = $this->getFiredBadge((string)($rawValue['OWNER_GENDER'] ?? ''));
+		}
+
 		return [
 			...$userData,
 		];
+	}
+
+	private function getFiredBadge(string $gender): string
+	{
+		$suffix = $gender === 'F' ? '_F' : '_M';
+
+		return (string)Loc::getMessage('MAIL_CLIENT_CONFIG_OWNER_BADGE_FIRED' . $suffix);
 	}
 
 	/**

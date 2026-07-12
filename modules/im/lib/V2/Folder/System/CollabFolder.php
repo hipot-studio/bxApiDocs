@@ -26,6 +26,11 @@ final class CollabFolder extends SystemFolder
 
 	public function getTitleLangKey(): string
 	{
+		if (Collab::isNewProjectsAvailable())
+		{
+			return 'IM_FOLDER_SYSTEM_PROJECTS';
+		}
+
 		return 'IM_FOLDER_SYSTEM_COLLABS';
 	}
 

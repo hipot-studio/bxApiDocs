@@ -10,10 +10,10 @@ use Bitrix\Main\Command\Exception\CommandException;
 use Bitrix\Main\Result;
 use Bitrix\Rest\Infrastructure;
 use Bitrix\Rest\Internal;
-use Bitrix\Rest\V3\Exception\Internal\InternalException;
-use Bitrix\Rest\V3\Exception\RestException;
 use Bitrix\Rest\V3\Exception\AccessDeniedException;
+use Bitrix\Rest\V3\Exception\Internal\InternalException;
 use Bitrix\Rest\V3\Exception\Internal\OrmSaveException;
+use Bitrix\Rest\V3\Exception\RestException;
 use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
 
 trait CommandRunner
@@ -54,6 +54,11 @@ trait CommandRunner
 				throw new Infrastructure\Rest\Exception\ApplicationNotInstalledException($previousException);
 			}
 
+			if ($previousException instanceof Internal\Exception\IncomingWebhook\IncomingWebhookNotFoundException)
+			{
+				throw new Infrastructure\Rest\Exception\IncomingWebhookNotFoundException($previousException);
+			}
+
 			if ($previousException instanceof Main\AccessDeniedException)
 			{
 				throw new AccessDeniedException($previousException);
@@ -62,6 +67,13 @@ trait CommandRunner
 			if ($previousException instanceof Main\Repository\Exception\PersistenceException)
 			{
 				throw new OrmSaveException($previousException);
+			}
+
+			if ($previousException instanceof Internal\Exception\ArgumentException)
+			{
+				throw new RequestValidationException([
+					new Main\Error($previousException->getMessage(), $previousException->getParameter()),
+				]);
 			}
 
 			throw new InternalException($exception);

@@ -5,11 +5,14 @@ namespace Bitrix\Mail\Controller;
 use Bitrix\Mail\Access\MailActionDictionary;
 use Bitrix\Mail\Access\MailboxAccessController;
 use Bitrix\Mail\Helper\Enum\Mailbox\EntityOptionsType;
+use Bitrix\Mail\Helper\Mailbox\MailboxGridCounterAggregator;
 use Bitrix\Mail\Helper\Mailbox\Options\EntityDataHelper;
 use Bitrix\Mail\Helper\Enum\Mailbox\FolderSortMode;
 use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Internal\Entity\Directory\DirectoriesSettings;
 use Bitrix\Mail\Internal\Service\Directory\Settings\MailboxDirectorySettingsService;
+use Bitrix\Mail\Helper\MailAccess;
+use Bitrix\Mail\Helper\MailboxDirectoryHelper;
 use Bitrix\Main;
 use Bitrix\Intranet;
 use Bitrix\Main\Access\AccessibleController;
@@ -31,6 +34,17 @@ class MailboxSettings extends Controller implements AccessCheckControllerInterfa
 			new Main\Engine\ActionFilter\Csrf(),
 			new Intranet\ActionFilter\IntranetUser(),
 		];
+	}
+
+	public function getMailboxGridButtonCounterAction(): array
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		if ($userId <= 0 || !MailAccess::hasCurrentUserAccessToMailboxGrid())
+		{
+			return ['count' => 0];
+		}
+
+		return ['count' => (new MailboxGridCounterAggregator())->getButtonCounter($userId)];
 	}
 
 	public function getAccessController(): AccessibleController

@@ -16,7 +16,6 @@ class RecentUpdate extends BaseChatEvent
 	use RecentPreviewPullTrait;
 
 	protected array $recipients;
-	protected UsersCounterMap $counters;
 	protected DateTime $lastActivity;
 
 	/**
@@ -25,7 +24,6 @@ class RecentUpdate extends BaseChatEvent
 	public function __construct(Chat $chat, array $recipients, ?DateTime $lastActivity = null)
 	{
 		$this->recipients = array_map('intval', $recipients);
-		$this->counters = ServiceLocator::getInstance()->get(CountersProvider::class)->getForUsers($chat->getChatId(), $recipients);
 		$this->lastActivity = $lastActivity ?? new DateTime();
 
 		parent::__construct($chat);
@@ -38,19 +36,14 @@ class RecentUpdate extends BaseChatEvent
 
 	protected function getBasePullParamsInternal(): array
 	{
-		return $this->getBaseRecentPreviewParams($this->chat, lastActivityDate: $this->lastActivity);
+		return $this->getBaseRecentPreviewParams($this->chat, $this->chat->getLastMessage(), $this->lastActivity);
 	}
 
 	protected function getDiffByUser(int $userId): Diff
 	{
 		return new Diff(
 			$userId,
-			array_merge(
-				$this->getRecentPreviewUserDiffParams($this->chat, $userId),
-				[
-					'counter' => $this->counters->getByUserId($userId),
-				],
-			),
+			$this->getRecentPreviewUserDiffParams($this->chat, $userId),
 		);
 	}
 

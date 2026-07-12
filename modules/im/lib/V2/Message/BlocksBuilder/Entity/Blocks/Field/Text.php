@@ -18,7 +18,8 @@ class Text extends AbstractField
 			BlockType::Title => $this->validateByTitle($field),
 			BlockType::Map => $this->validateByMap($field),
 			BlockType::AiAssistantSearch => $this->validateByAiAssistantSearch($field),
-			default => (new Result())->addError(new BuilderError(BuilderError::WRONG_BLOCK_TYPE)),
+			BlockType::Card => $this->validateByCard($field),
+			default => (new Result())->addError(new BuilderError(BuilderError::WRONG_ELEMENT_TYPE)),
 		};
 	}
 
@@ -85,6 +86,18 @@ class Text extends AbstractField
 		if (!is_string($field))
 		{
 			return $result->addError(new BuilderError(BuilderError::INVALID_TEXT_FIELD));
+		}
+
+		return $result->setResult($field);
+	}
+
+	protected function validateByCard(mixed $field): Result
+	{
+		$result = new Result();
+
+		if (!is_string($field) || $field === '')
+		{
+			$field = null;
 		}
 
 		return $result->setResult($field);

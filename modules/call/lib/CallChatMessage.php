@@ -13,8 +13,10 @@ use Bitrix\Im\V2\Message\Params;
 
 class CallChatMessage
 {
-	public static function makeCloudRecordReadyMessage(Call $call, Chat $chat, string $downloadUrl): ?Message
+	public static function makeCloudRecordReadyMessage(Call $call, Chat $chat, Track $track): ?Message
 	{
+		$downloadUrl = $track->getDownloadLink();
+
 		$phrase =
 			self::getPhraseWithCallLink('CALL_CLOUD_RECORDING_READY_MESSAGE', $call->getId(), $chat)
 			.' '. self::getMessage('CALL_CLOUD_RECORDING_READY_DOWNLOAD', ['#DOWNLOAD_URL#' => $downloadUrl]);
@@ -27,6 +29,7 @@ class CallChatMessage
 		$params->get(Params::COMPONENT_PARAMS)->setValue([
 			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_CLOUD_RECORD_READY,
 			'CALL_ID' => $call->getId(),
+			'TRACK_ID' => $track->getId(),
 		]);
 
 		return $message;

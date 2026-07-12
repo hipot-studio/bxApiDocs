@@ -137,13 +137,6 @@ class CommentChat extends GroupChat
 		return parent::canUserAutoJoin($userId) && $this->getParentChat()->getSelfRelation() !== null;
 	}
 
-	public function join(bool $withMessage = true, bool $byAutoJoin = false): Chat
-	{
-		$this->getParentChat()->join(byAutoJoin: $byAutoJoin);
-
-		return parent::join(withMessage: false, byAutoJoin: $byAutoJoin);
-	}
-
 	public function getRole(): string
 	{
 		if (isset($this->role))
@@ -196,7 +189,7 @@ class CommentChat extends GroupChat
 
 	public function getAllUserIdsForMention(): array
 	{
-		return $this->getParentChat()->getRelations()->getUserIds();
+		return $this->getParentChat()->getAllUserIdsForMention();
 	}
 
 	public function getPullRecipients(): RelationCollection
@@ -241,7 +234,7 @@ class CommentChat extends GroupChat
 			return $result;
 		}
 
-		$this->addUsers($userIds, new Relation\AddUsersConfig(hideHistory: false));
+		$this->addUsers($userIds, new Relation\AddUsersConfig(hideHistory: false, cascadeToParent: false));
 		$relations = $this->getRelations();
 		$subscribedUsers = [];
 		foreach ($userIds as $userId)
@@ -423,7 +416,12 @@ class CommentChat extends GroupChat
 
 		$params['PARENT_ID'] = $params['PARENT_CHAT']->getId();
 		$params['PARENT_MID'] = $params['PARENT_MESSAGE']->getId();
-		$params['USERS'][] = $params['PARENT_MESSAGE']->getAuthorId();
+
+		$messageAuthorId = $params['PARENT_MESSAGE']->getAuthorId();
+		if ($messageAuthorId > 0 && $params['PARENT_CHAT']->getRelationByUserId($messageAuthorId) !== null)
+		{
+			$params['USERS'][] = $params['PARENT_MESSAGE']->getAuthorId();
+		}
 
 		return parent::prepareParams($params);
 	}

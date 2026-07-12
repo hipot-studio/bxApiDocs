@@ -195,6 +195,18 @@ final class CallAIService
 			$log && $logger->error('Empty payload for AI');
 
 			$error = new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR);
+			$call = Registry::getCallWithId($task->getCallId());
+
+			(new FollowUpAnalytics($call))
+				->sendTelemetry(
+					source: $task,
+					status: 'error',
+					errorCode: $error->getCode(),
+					event: 'task_launch_error',
+					error: $error
+				)
+			;
+
 			$this->fireCallAiFailedEvent($task, $error);
 
 			return $result->addError($error);
@@ -368,36 +380,42 @@ final class CallAIService
 			return $this->processTrack($trackPack);
 		}
 
-		$taskToLaunch = $this->getTaskToLaunchByOutcome($transcribe);
-		foreach ($taskToLaunch as $taskSenseType)
+		$outcomeCollectionCopy = clone $outcomeCollection;// avoid recursion
+
+		foreach ($outcomeCollection as $outcomeExisting)
 		{
-			$outcome = $outcomeCollection?->getOutcomeByType($taskSenseType->value);
-			if (!$outcome)
+			$taskToLaunch = $this->getTaskToLaunchByOutcome($outcomeExisting);
+			foreach ($taskToLaunch as $taskSenseType)
 			{
-				// Check Task
-				$task = AITask::getTaskForCall($callId, $taskSenseType);
-				if ($task)
+				$outcome = $outcomeCollectionCopy?->getOutcomeByType($taskSenseType->value);
+				if (!$outcome)
 				{
-					if ($task->isPending() || $task->isFinished())
+					// Check Task
+					$task = AITask::getTaskForCall($callId, $taskSenseType);
+					if ($task)
 					{
-						continue;// wait more
+						if ($task->isPending() || $task->isFinished())
+						{
+							continue;// wait more
+						}
 					}
-				}
 
-				$taskClass = $taskSenseType->getTaskClass();
-
-				$task = new $taskClass();
-				$dbResult = $task
-					->setPayload($transcribe)
-					->save()
-				;
-				if ($dbResult->isSuccess())
-				{
-					$launchResult = $this->launchTask($task);
-					if (!$launchResult->isSuccess())
+					$taskClass = $taskSenseType->getTaskClass();
+					$task = new $taskClass();
+					$task->setPayload($outcome);
+					if ($outcome->getLanguageId())
 					{
-						$result->addErrors($launchResult->getErrors());
-						break;
+						$task->setLanguageId($outcome->getLanguageId());
+					}
+					$dbResult = $task->save();
+					if ($dbResult->isSuccess())
+					{
+						$launchResult = $this->launchTask($task);
+						if (!$launchResult->isSuccess())
+						{
+							$result->addErrors($launchResult->getErrors());
+							break;
+						}
 					}
 				}
 			}
@@ -878,8 +896,12 @@ final class CallAIService
 			$taskOutcome = Outcome::getOutcomeForCall($callId, $senseType);
 			if ($taskOutcome)
 			{
-				$taskCompleted ++;
-				continue;// ok
+				$senseContent = $taskOutcome->getSenseContent();
+				if ($senseContent)
+				{
+					$taskCompleted++;
+					continue;// ok
+				}
 			}
 
 			$task = AITask::getTaskForCall($callId, $senseType);

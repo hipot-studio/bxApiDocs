@@ -78,7 +78,8 @@ class Params extends Registry
 		COPILOT_PAGE_CONTEXT = 'COPILOT_PAGE_CONTEXT',
 		COPILOT_MCP_AUTH_ID = 'COPILOT_MCP_AUTH_ID',
 		AI_TASK_TRIGGER_MESSAGE_ID = 'AI_TASK_TRIGGER_MESSAGE_ID',
-		BLOCKS_BUILDER = 'BLOCKS_BUILDER'
+		COPILOT_TRIGGER_MESSAGE_ID = 'COPILOT_TRIGGER_MESSAGE_ID',
+		BLOCK = 'BLOCK'
 	;
 
 	//todo: Move it into CRM module
@@ -316,7 +317,12 @@ class Params extends Registry
 			'type' => Param::TYPE_INT,
 			'default' => 0,
 		],
-		self::BLOCKS_BUILDER => [
+		self::COPILOT_TRIGGER_MESSAGE_ID => [
+			'type' => Param::TYPE_INT,
+			'isHidden' => true,
+			'default' => 0,
+		],
+		self::BLOCK => [
 			'className' => BlocksBuilderParam::class,
 			'type' => Param::TYPE_JSON,
 			'isHidden' => true,

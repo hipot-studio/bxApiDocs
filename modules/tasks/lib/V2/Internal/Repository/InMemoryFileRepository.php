@@ -49,6 +49,6 @@ class InMemoryFileRepository implements FileRepositoryInterface
 
 		$this->cache->merge($files);
 
-		return $files;
+		return $this->cache->findAllByIds($ids);
 	}
 }

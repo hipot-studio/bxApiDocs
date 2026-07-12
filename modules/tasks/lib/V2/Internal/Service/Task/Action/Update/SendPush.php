@@ -46,6 +46,11 @@ class SendPush
 		$lastResult = $resultService->getLastResult($taskId);
 		$isLastResultOpened = $lastResult && $lastResult->isOpen();
 		$isResultRequired = $resultService->isResultRequired($taskId);
+		$requireDeadlineChangeReason =
+			Container::getInstance()
+				->getTaskParameterRepository()
+				->requireDeadlineChangeReason($taskId)
+		;
 
 		$byPassParameters = $this->config->getByPassParameters();
 
@@ -65,6 +70,7 @@ class SendPush
 			'taskHasResult' => $lastResult ? 'Y' : 'N',
 			'taskHasOpenResult' => $isLastResultOpened ? 'Y' : 'N',
 			'updateDate' => strtotime($taskData['CHANGED_DATE'] ?? '') ?: null,
+			'requireDeadlineChangeReason' => $requireDeadlineChangeReason,
 		];
 
 		if (isset($after['STAGE']) || $after['GROUP_ID'] !== $before['GROUP_ID'])

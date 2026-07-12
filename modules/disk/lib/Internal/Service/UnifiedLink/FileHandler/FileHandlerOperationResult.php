@@ -14,13 +14,20 @@ class FileHandlerOperationResult
 	private function __construct(
 		private readonly ?string $value = null,
 		private readonly ?ErrorCollection $errorCollection = null,
+		private readonly ?string $redirectUrl = null,
 	)
 	{
 	}
 
-	public static function createSuccess(string $value): static
+	public static function createSuccess(
+		string $value,
+		?string $redirectUrl = null,
+	): static
 	{
-		return new static($value);
+		return new static(
+			value: $value,
+			redirectUrl: $redirectUrl,
+		);
 	}
 
 	public static function createError(ErrorCollection $errorCollection): static
@@ -58,5 +65,10 @@ class FileHandlerOperationResult
 		}
 
 		return $this->errorCollection;
+	}
+
+	public function getRedirectUrl(): ?string
+	{
+		return $this->redirectUrl;
 	}
 }

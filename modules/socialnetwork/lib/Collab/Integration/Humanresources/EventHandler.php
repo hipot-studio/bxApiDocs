@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Socialnetwork\Collab\Integration\Humanresources;
 
 use Bitrix\HumanResources\Item\NodeMember;
@@ -7,8 +9,10 @@ use Bitrix\HumanResources\Item\NodeRelation;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\RelationEntityType;
 use Bitrix\Main\Event;
-use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Socialnetwork\Collab\Integration\Humanresources\Service\StructureService;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
+use Bitrix\Socialnetwork\V2\Internal\Integration\HumanResources\Mapper\DepartmentRelationMapper;
+use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ProjectChatAncestorResolver;
+use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\MemberEntityMapper;
 
 /**
  * Handles events from the humanresources module.
@@ -20,18 +24,57 @@ class EventHandler
 	{
 		/** @var NodeRelation $relation */
 		$relation = $event->getParameter('relation');
-		if (
-			$relation->entityType !== RelationEntityType::COLLAB
-			|| $relation->node === null
-		)
+		if ($relation->node === null)
 		{
 			return;
 		}
 
-		ServiceLocator::getInstance()
-			->get(StructureService::class)
-			->handleRelationAdded($relation)
+		if ($relation->entityType === RelationEntityType::CHAT)
+		{
+			self::synchronizeRelationFromChatToProject($relation);
+
+			return;
+		}
+
+		if ($relation->entityType !== RelationEntityType::COLLAB)
+		{
+			return;
+		}
+
+		Container::getInstance()
+			->getStructureSyncService()
+			->enqueueRelationAdded(
+				nodeId: $relation->nodeId,
+				entityId: $relation->entityId,
+				createdBy: $relation->createdBy,
+				withChildNodes: $relation->withChildNodes,
+			)
 		;
+	}
+
+	private static function synchronizeRelationFromChatToProject(NodeRelation $relation): void
+	{
+		$container = Container::getInstance();
+
+		$collabId = $container->get(ProjectChatAncestorResolver::class)->getProjectIdByChatId($relation->entityId);
+		if ($collabId === null)
+		{
+			return;
+		}
+
+		$department = $container->get(DepartmentRelationMapper::class)->map($relation);
+		if ($department === null)
+		{
+			return;
+		}
+
+		$accessCode = $container->get(MemberEntityMapper::class)->toAccessCode($department);
+		if ($accessCode === null)
+		{
+			return;
+		}
+
+		$container->getStructureRelationService()->linkDepartments([$accessCode], $collabId);
 	}
 
 	public static function OnMemberAdded(Event $event): void
@@ -43,9 +86,9 @@ class EventHandler
 			return;
 		}
 
-		ServiceLocator::getInstance()
-			->get(StructureService::class)
-			->handleMemberAdded($member)
+		Container::getInstance()
+			->getStructureSyncService()
+			->handleMemberAdded(nodeId: $member->nodeId, userId: $member->entityId)
 		;
 	}
 
@@ -61,10 +104,41 @@ class EventHandler
 			return;
 		}
 
-		ServiceLocator::getInstance()
-			->get(StructureService::class)
-			->handleRelationDeleted($relation)
+		Container::getInstance()
+			->getStructureSyncService()
+			->enqueueRelationDeleted(
+				nodeId: $relation->nodeId,
+				entityId: $relation->entityId,
+				createdBy: $relation->createdBy,
+				withChildNodes: $relation->withChildNodes,
+			)
 		;
+
+		self::unlinkRelatedChatRelations($relation);
+	}
+
+	private static function unlinkRelatedChatRelations(NodeRelation $relation): void
+	{
+		$container = Container::getInstance();
+
+		$structureRelationService = $container->getStructureRelationService();
+		$resolver = $container->get(ProjectChatAncestorResolver::class);
+
+		$collabId = $relation->entityId;
+		$nodeId = $relation->nodeId;
+
+		$chatIdsToUnlink = [];
+		foreach ($structureRelationService->getChatRelations($nodeId) as $chatId)
+		{
+			if ($resolver->getProjectIdByChatId($chatId) !== $collabId)
+			{
+				continue;
+			}
+
+			$chatIdsToUnlink[] = $chatId;
+		}
+
+		$structureRelationService->unlinkChatRelations($nodeId, $chatIdsToUnlink);
 	}
 
 	public static function OnMemberDeleted(Event $event): void
@@ -76,9 +150,9 @@ class EventHandler
 			return;
 		}
 
-		ServiceLocator::getInstance()
-			->get(StructureService::class)
-			->handleMemberDeleted($member)
+		Container::getInstance()
+			->getStructureSyncService()
+			->handleMemberDeleted(nodeId: $member->nodeId, userId: $member->entityId)
 		;
 	}
 
@@ -98,14 +172,10 @@ class EventHandler
 			return;
 		}
 
-		ServiceLocator::getInstance()
-			->get(StructureService::class)
-			->handleMemberAdded($member)
-		;
-
-		ServiceLocator::getInstance()
-			->get(StructureService::class)
-			->handleMemberDeleted($previousMember)
-		;
+		// Order matters: add first, then delete. The delete handler checks getUsersNotInOtherRelations()
+		// and must see the new relation created by add — otherwise the user would briefly lose access.
+		$service = Container::getInstance()->getStructureSyncService();
+		$service->handleMemberAdded(nodeId: $member->nodeId, userId: $member->entityId);
+		$service->handleMemberDeleted(nodeId: $previousMember->nodeId, userId: $previousMember->entityId);
 	}
 }

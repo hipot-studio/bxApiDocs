@@ -1217,13 +1217,13 @@ final class TaskProvider
 				ActionDictionary::ACTION_TASK_DEFER => 'CAN_DEFER',
 				ActionDictionary::ACTION_TASK_TAKE => 'CAN_TAKE',
 				ActionDictionary::ACTION_TASK_CREATE => 'CAN_CREATE',
-				ActionDictionary::ACTION_TASK_ADD_AUDITORS => 'CAN_UPDATE_AUDITORS',
 			];
 			$taskModel = TaskModel::createFromId($id);
 			$accessController = new TaskAccessController($this->userId);
 			$rights = $accessController->batchCheck(array_map(fn(string $key) => $taskModel, $request), $taskModel);
 
 			$tasks[$id]['ACTION'] = array_combine($request, $rights);
+			$tasks[$id]['ACTION']['CAN_UPDATE_AUDITORS'] = $tasks[$id]['ACTION']['CAN_UPDATE'] ?? false;
 		}
 
 		return $tasks;

@@ -170,10 +170,13 @@ class IncomingWebhookRepository implements IncomingWebhookRepositoryInterface
 		$userId = $filter->getUserId();
 		if ($userId !== null)
 		{
-			$query
-				->where('USER_ID', $userId)
-				->where('TYPE', PasswordType::User->value)
-			;
+			$query->where('USER_ID', $userId);
+		}
+
+		$type = $filter->getType();
+		if ($type !== null)
+		{
+			$query->where('TYPE', $type->value);
 		}
 
 		$scopes = $filter->getScopes();

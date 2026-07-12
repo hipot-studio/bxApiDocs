@@ -77,7 +77,7 @@ class UpdateService
 
 		$previousMessage = clone $this->message;
 
-		$result = $this->fillParams($fieldsToUpdate);
+		$result = $this->fillBuilder($fieldsToUpdate);
 		if (!$result->isSuccess())
 		{
 			return $result;
@@ -102,22 +102,13 @@ class UpdateService
 			return $result;
 		}
 
-		Application::getConnection()->queryExecute("
-			UPDATE b_im_recent
-			SET DATE_UPDATE = NOW()
-			WHERE ITEM_MID = " . $this->message->getId()
-		);
-
 		$this->message->getChat()->sendPushUpdateMessage($this->message);
 		(new Message\Param\PushService())->sendPull($this->message, ['KEYBOARD', 'ATTACH', 'MENU']);
-
-		MessageTable::indexRecord($this->message->getId());
 
 		(new UrlService())->updateUrlsFromMessage($this->message);
 		(new FileService())->saveFilesFromMessage($filesFromText, $this->message);
 
-		$this->fireEventAfterMessageUpdate();
-		$this->message->getChat()->onAfterMessageUpdate($this->message);
+		$this->onAfterMessageUpdate();
 
 		// update mentions after all events
 		(new Message\Send\MentionService())->onMessageUpdate($this->message, $previousMessage);
@@ -125,27 +116,17 @@ class UpdateService
 		return $result;
 	}
 
-	protected function fillParams(array $fieldsToUpdate): Result
+	public function onAfterMessageUpdate(): void
 	{
-		$result = new Result();
+		Application::getConnection()->queryExecute("
+			UPDATE b_im_recent
+			SET DATE_UPDATE = NOW()
+			WHERE ITEM_MID = " . $this->message->getId()
+		);
 
-		if (isset($fieldsToUpdate['BUILDER']))
-		{
-			$builderData = $fieldsToUpdate['BUILDER'];
-
-			$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->create($builderData);
-			if (!$builderResult->isSuccess())
-			{
-				return $result->addError($builderResult->getError());
-			}
-
-			$builder = $builderResult->getBlocksBuilder();
-			$fieldsToUpdate['PARAMS'][Params::BLOCKS_BUILDER] = $builder;
-			$fieldsToUpdate['MESSAGE'] = $builder->getPayloadText();
-			unset($fieldsToUpdate['BUILDER']);
-		}
-
-		return $result->setResult($fieldsToUpdate);
+		MessageTable::indexRecord($this->message->getId());
+		$this->fireEventAfterMessageUpdate();
+		$this->message->getChat()->onAfterMessageUpdate($this->message);
 	}
 
 	public function canUpdate(): bool
@@ -209,7 +190,7 @@ class UpdateService
 			'AUTHOR_ID' => $this->message->getAuthorId(),
 			'MESSAGE' => $this->message->getMessage(),
 			'MESSAGE_OUT' => $this->message->getMessageOut(),
-			'DATE_CREATE' => $this->message->getDateCreate()->getTimestamp(),
+			'DATE_CREATE' => $this->message->getDateCreate()?->getTimestamp(),
 			'EMAIL_TEMPLATE' => $this->message->getEmailTemplate(),
 			'NOTIFY_TYPE' => $this->message->getNotifyType(),
 			'NOTIFY_MODULE' => $this->message->getNotifyModule(),
@@ -243,6 +224,8 @@ class UpdateService
 			$messageFields['BOT_IN_CHAT'] = $this->getBotInChat();
 		}
 
+		$messageFields['REPLY_MESSAGE'] = Message\Send\Event\MessageEventLegacy::getReplyField($this->message);
+
 		$updateFlags = [
 			'ID' => $this->message->getId(),
 			'TEXT' => $this->message->getMessage(),
@@ -257,7 +240,7 @@ class UpdateService
 			ExecuteModuleEventEx($event, [$this->message->getId(), $messageFields, $updateFlags]);
 		}
 
-		Bot::onMessageUpdate($this->message->getId(), $messageFields);
+		Bot::onMessageUpdate($this->message->getId(), $messageFields, $this->message);
 
 		try
 		{
@@ -270,5 +253,29 @@ class UpdateService
 		catch (\Throwable)
 		{
 		}
+	}
+
+	private function fillBuilder(array $fieldsToUpdate): Result
+	{
+		$result = new Result();
+		if (!isset($fieldsToUpdate['BLOCK']) || !is_array($fieldsToUpdate['BLOCK']))
+		{
+			return $result->setResult($fieldsToUpdate);
+		}
+
+		$chat = $this->message->getChat();
+		$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->create($fieldsToUpdate['BLOCK'], $chat);
+		if (!$builderResult->isSuccess())
+		{
+			return $result->addError($builderResult->getError());
+		}
+
+		$builder = $builderResult->getBlocksBuilder();
+		$fieldsToUpdate['PARAMS'][Params::BLOCK] = $builder;
+		$fieldsToUpdate['MESSAGE'] = $builder->getPayloadText();
+		$this->message->setBlocksBuilder($builder);
+		unset($fieldsToUpdate['BLOCK']);
+
+		return $result->setResult($fieldsToUpdate);
 	}
 }

@@ -1,5 +1,12 @@
-<?
-if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
+<?php
+if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)
+{
+	die();
+}
+
+use Bitrix\Socialnetwork\V2\Feature;
+use Bitrix\Socialnetwork\V2\Public\Command\Project\AddProjectCommand;
+use Bitrix\Socialnetwork\V2\Public\Dto\Project\Project;
 
 class CBPCreateWorkGroup
 	extends CBPActivity
@@ -27,8 +34,32 @@ class CBPCreateWorkGroup
 		$rootActivity = $this->GetRootActivity();
 		$documentId = $rootActivity->GetDocumentId();
 
-		$ownerId = CBPHelper::ExtractUsers($this->OwnerId, $documentId, true);
+		$ownerId = (int)CBPHelper::ExtractUsers($this->OwnerId, $documentId, true);
 		$users = array_unique(CBPHelper::ExtractUsers($this->Users, $documentId, false));
+		$groupName = CBPHelper::stringify($this->GroupName);
+		$siteId = ($this->GroupSite ? $this->GroupSite : SITE_ID);
+		if (
+			\Bitrix\Main\Loader::includeModule('extranet')
+			&& ($siteId == \CExtranet::getExtranetSiteID())
+		)
+		{
+			$siteId = [
+				$siteId,
+				\CSite::getDefSite()
+			];
+		}
+
+		$isNewProjectsOn = Feature::isNewProjectsOn();
+		if ($isNewProjectsOn)
+		{
+			$project = Project::mapFromArray([
+				'name' => $groupName,
+			]);
+
+			$this->createProject($ownerId, $project);
+
+			return CBPActivityExecutionStatus::Closed;
+		}
 
 		$dbSubjects = CSocNetGroupSubject::GetList(
 			array("SORT"=>"ASC", "NAME" => "ASC"),
@@ -47,10 +78,8 @@ class CBPCreateWorkGroup
 		$subjectId = $row['ID'];
 		unset($dbSubjects, $row);
 
-		$groupName = CBPHelper::stringify($this->GroupName);
-
 		$options = array(
-			"SITE_ID" => ($this->GroupSite ? $this->GroupSite : SITE_ID),
+			"SITE_ID" => $siteId,
 			"NAME" => $groupName,
 			"VISIBLE" => "Y",
 			"OPENED" => "N",
@@ -59,17 +88,6 @@ class CBPCreateWorkGroup
 			"INITIATE_PERMS" => SONET_ROLES_OWNER,
 			"SPAM_PERMS" => SONET_ROLES_USER,
 		);
-
-		if (
-			\Bitrix\Main\Loader::includeModule('extranet')
-			&& ($options['SITE_ID'] == \CExtranet::getExtranetSiteID())
-		)
-		{
-			$options['SITE_ID'] = [
-				$options['SITE_ID'],
-				\CSite::getDefSite()
-			];
-		}
 
 		$userFieldsList = $USER_FIELD_MANAGER->getUserFields("SONET_GROUP", 0, LANGUAGE_ID);
 		foreach($userFieldsList as $field => $arUserField)
@@ -140,15 +158,34 @@ class CBPCreateWorkGroup
 		return CBPActivityExecutionStatus::Closed;
 	}
 
+	private function createProject(int $userId, Project $project): int
+	{
+		$result = (new AddProjectCommand(
+			input: $project,
+			userId: $userId,
+			isCurrentUserModuleAdmin: CSocNetUser::isCurrentUserModuleAdmin(),
+		))->run();
+
+		if (!$result->isSuccess())
+		{
+			$this->WriteToTrackingService(GetMessage('BPCWG_ERROR_CREATE_GROUP_V2'));
+		}
+
+		return CBPActivityExecutionStatus::Closed;
+	}
+
 	public static function ValidateProperties($arTestProperties = array(), CBPWorkflowTemplateUser $user = null)
 	{
+		$isNewProjectsOn = CModule::IncludeModule("socialnetwork") && Feature::isNewProjectsOn();
+		$messageSuffix = ($isNewProjectsOn ? '_V2' : '');
+
 		$arErrors = array();
 		if (!array_key_exists("GroupName", $arTestProperties) || $arTestProperties["GroupName"] == '')
-			$arErrors[] = array("code" => "NotExist", "parameter" => "GroupName", "message" => GetMessage("BPCWG_EMPTY_GROUP_NAME"));
+			$arErrors[] = array("code" => "NotExist", "parameter" => "GroupName", "message" => GetMessage("BPCWG_EMPTY_GROUP_NAME" . $messageSuffix));
 		if (!array_key_exists("OwnerId", $arTestProperties) || count($arTestProperties["OwnerId"]) <= 0)
-			$arErrors[] = array("code" => "NotExist", "parameter" => "OwnerId", "message" => GetMessage("BPCWG_EMPTY_OWNER"));
+			$arErrors[] = array("code" => "NotExist", "parameter" => "OwnerId", "message" => GetMessage("BPCWG_EMPTY_OWNER" . $messageSuffix));
 		if (!array_key_exists("Users", $arTestProperties) || count($arTestProperties["Users"]) <= 0)
-			$arErrors[] = array("code" => "NotExist", "parameter" => "Users", "message" => GetMessage("BPCWG_EMPTY_USERS"));
+			$arErrors[] = array("code" => "NotExist", "parameter" => "Users", "message" => GetMessage("BPCWG_EMPTY_USERS" . $messageSuffix));
 
 		return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));
 	}

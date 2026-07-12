@@ -12,6 +12,7 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareDatePlan;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareDates;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareDependencies;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareDescription;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareDiskAttachments;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareFlags;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareFlow;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Prepare\PrepareGroup;
@@ -61,6 +62,7 @@ class PrepareFields
 			PrepareCreator::class,
 			PrepareTitle::class,
 			PrepareDescription::class,
+			PrepareDiskAttachments::class,
 			PrepareStatus::class,
 			PreparePriority::class,
 			PrepareMark::class,

@@ -3,6 +3,7 @@
 namespace Bitrix\Tasks\Internals;
 
 use Bitrix\Main;
+use Bitrix\Main\Config\Option;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Tasks\Internals\Counter\CounterDictionary;
 use Bitrix\Tasks\Internals\Counter\CounterController;
@@ -24,6 +25,7 @@ class Counter
 {
 	private const FLAG_SONET_DISABLE = 'tasksSonetCountersDisable';
 	private const FLAG_SONET_ENABLE = 'tasksSonetCountersEnable';
+	private const FLAG_RECOUNT_ENABLE = 'tasks_recount_counters_enable';
 
 	private const DEFAULT_LIMIT = 4999;
 
@@ -39,6 +41,11 @@ class Counter
 	public static function isReady($userId): bool
 	{
 		return array_key_exists($userId, self::$instance);
+	}
+
+	public static function isRecountEnable(): bool
+	{
+		return Option::get('tasks', self::FLAG_RECOUNT_ENABLE, 'Y') === 'Y';
 	}
 
 	/**
@@ -370,6 +377,7 @@ class Counter
 
 			case CounterDictionary::COUNTER_SONET_TOTAL_EXPIRED:
 			case CounterDictionary::COUNTER_SONET_TOTAL_COMMENTS:
+			case CounterDictionary::COUNTER_SONET_MUTED_MENTIONED:
 				$counters = $this->getRawCounters();
 				$type = CounterDictionary::MAP_SONET_TOTAL[$name];
 				$value = (isset($counters[$type][0]) && $counters[$type][0]) ? $counters[$type][0] : 0;

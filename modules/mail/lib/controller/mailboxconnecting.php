@@ -4,16 +4,17 @@ namespace Bitrix\Mail\Controller;
 
 use Bitrix\Mail\Controller\ActionFilter\ConnectionRequestResponsibleAdminAccess;
 use Bitrix\Mail\Controller\ActionFilter\MassConnectAccess;
+use Bitrix\Mail\Helper;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxConnectDTO;
 use Bitrix\Mail\Helper\Mailbox\MailMassConnect;
 use Bitrix\Mail\Helper\Enum\MailboxStatus;
+use Bitrix\Mail\Helper\Enum\MailboxConnectionRequestStatus;
 use Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService;
 use Bitrix\Mail\Helper\Mailbox\MailboxConnector;
 use Bitrix\Mail\Helper\Mailbox\MailboxSettingsConfig;
 use Bitrix\Mail\Helper\Mailbox\PasswordlessConnectHelper;
-use Bitrix\Mail\Internals\MailboxConnectionRequestTable;
 use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Helper\OAuth;
@@ -84,21 +85,38 @@ class MailboxConnecting extends Controller
 	/**
 	 * @param string $serviceName
 	 * @param string $type
-	 * @return string
-	 * @throws \Bitrix\Main\LoaderException
+	 * @return string|null
 	 */
-	public function getUrlOauthAction(string $serviceName, string $type = OAuth::WEB_TYPE): string
+	public function getUrlOauthAction(string $serviceName, string $type = OAuth::WEB_TYPE): ?string
 	{
-		$oauthHelper = OAuth::getInstance($serviceName);
-
-		if (!$oauthHelper)
+		$oauthHelper = $this->resolveOAuthHelper($serviceName);
+		if ($oauthHelper === null)
 		{
 			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_MAIL_MODULE_OAUTH_SERVICE_IS_NOT_CONFIGURED')));
 
-			return false;
+			return null;
 		}
 
 		return $oauthHelper->getUrl($type);
+	}
+
+	/**
+	 * Resolves OAuth helper by OAuth service name (e.g. "google") or by mail service NAME (e.g. "gmail").
+	 *
+	 * @param string $serviceName
+	 * @return OAuth|null
+	 */
+	private function resolveOAuthHelper(string $serviceName): ?OAuth
+	{
+		$oauthHelper = OAuth::getInstance($serviceName);
+		if ($oauthHelper instanceof OAuth)
+		{
+			return $oauthHelper;
+		}
+
+		$oauthHelper = MailServicesTable::getOAuthHelper(['NAME' => $serviceName]);
+
+		return $oauthHelper instanceof OAuth ? $oauthHelper : null;
 	}
 
 	/**
@@ -136,12 +154,30 @@ class MailboxConnecting extends Controller
 
 	public function connectMailboxAction(MailboxConnectDTO $mailboxConnectDTO): array
 	{
-		if (!MailboxAccess::hasCurrentUserAccessToAddMailbox())
-		{
-			$this->addError(new Error('Mailbox connection is not allowed'));
+		$currentUserId = (int)CurrentUser::get()->getId();
+		$targetUserId = $mailboxConnectDTO->userIdToConnect ?? $currentUserId;
+		$isSelfConnect = $targetUserId === $currentUserId;
 
-			return [];
+		if ($isSelfConnect)
+		{
+			if (!MailboxAccess::hasCurrentUserAccessToAddMailbox())
+			{
+				$this->addError(new Error('Mailbox connection is not allowed'));
+
+				return [];
+			}
 		}
+		else
+		{
+			if (!MailAccess::hasCurrentUserAccessToConnectMailboxToUser($targetUserId))
+			{
+				$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_HAS_NOT_PERMISSION_TO_CONNECT_TO_USER')));
+
+				return [];
+			}
+		}
+
+		$mailboxConnectDTO->userIdToConnect = $targetUserId;
 
 		$mailboxConnector = new MailboxConnector();
 		$result = $mailboxConnectDTO->crmOptions !== null
@@ -178,7 +214,7 @@ class MailboxConnecting extends Controller
 			return [];
 		}
 
-		if ($request['STATUS'] !== MailboxConnectionRequestTable::STATUS_PENDING)
+		if ($request['STATUS'] !== MailboxConnectionRequestStatus::Pending->value)
 		{
 			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_CONNECTION_REQUEST_NOT_PENDING')));
 
@@ -239,6 +275,70 @@ class MailboxConnecting extends Controller
 	public function getSettingsConfigAction(): array
 	{
 		return MailboxSettingsConfig::getClientConfig();
+	}
+
+	public function checkEmailAvailabilityAction(int $serviceId, string $email, string $oauthUid): bool
+	{
+		if (!MailboxAccess::hasCurrentUserAccessToAddMailbox())
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_HAS_NOT_PERMISSION')));
+
+			return false;
+		}
+
+		if ($oauthUid === '')
+		{
+			return false;
+		}
+
+		$service = MailServicesTable::getList([
+			'filter' => [
+				'=ID' => $serviceId,
+				'=ACTIVE' => 'Y',
+				'=SERVICE_TYPE' => 'imap',
+			],
+		])->fetch();
+
+		if (empty($service))
+		{
+			return false;
+		}
+
+		$oauthHelper = MailServicesTable::getOAuthHelper($service);
+		if (!$oauthHelper instanceof OAuth)
+		{
+			return false;
+		}
+
+		$oauthHelper->getStoredToken($oauthUid);
+
+		$mailbox = [
+			'USE_TLS' => $service['ENCRYPTION'],
+			'LOGIN' => $email,
+			'SERVER' => $service['SERVER'],
+			'PORT' => $service['PORT'],
+			'PASSWORD' => $oauthHelper->buildMeta(),
+		];
+
+		$error = null;
+		$result = Helper::getImapUnseen($mailbox, 'inbox', $error);
+
+		if ($result === false && !empty($error))
+		{
+			AddMessage2Log(
+				sprintf(
+					'checkEmailAvailability failed: service=%d, email=%s, error=%s',
+					$serviceId,
+					$email,
+					is_array($error) ? json_encode($error) : (string)$error,
+				),
+				'mail',
+				2,
+				true,
+			);
+		}
+
+		return $result !== false;
 	}
 
 	public function updateMailboxAction(int $mailboxId, MailboxConnectDTO $dto): array

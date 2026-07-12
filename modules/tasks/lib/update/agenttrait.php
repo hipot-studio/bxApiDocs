@@ -36,7 +36,12 @@ trait AgentTrait
 			$name,
 			'tasks',
 			'N', // don't care about how many times agent rises
-			self::$interval
+			self::getInterval(),
 		);
+	}
+
+	public static function getInterval(): int
+	{
+		return self::$interval;
 	}
 }

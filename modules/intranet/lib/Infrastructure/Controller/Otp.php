@@ -228,7 +228,7 @@ class Otp extends Controller
 	 * @throws CommandValidationException
 	 * @throws CommandException
 	 */
-	public function sendRequestRecoverAccessAction(User $user): void
+	public function sendRequestRecoverAccessAction(): void
 	{
 		if (!Loader::includeModule('security'))
 		{
@@ -237,15 +237,49 @@ class Otp extends Controller
 			return;
 		}
 
+		$user = $this->getOtpSessionUser();
+		if (!$user)
+		{
+			return;
+		}
+
 		$currentUserId = (int)CurrentUser::get()->getId();
 		if ($currentUserId > 0 && !(new UserPermission($user))->canEdit())
 		{
-			$this->addError(new Error("No rights"));
+			$this->addError(new Error('No rights'));
 
 			return;
 		}
 
 		(new SendRequestRecoverAccessCommand($user))->run();
+	}
+
+	protected function getOtpSessionUser(): ?User
+	{
+		if (!Loader::includeModule('security'))
+		{
+			return null;
+		}
+
+		$otpParams = \Bitrix\Security\Mfa\Otp::getDeferredParams();
+		$userId = (int)($otpParams['USER_ID'] ?? 0);
+
+		if ($userId <= 0)
+		{
+			$this->addError(new Error('User not found'));
+
+			return null;
+		}
+
+		$user = (new UserRepository())->getUserById($userId);
+		if (!$user)
+		{
+			$this->addError(new Error('User not found'));
+
+			return null;
+		}
+
+		return $user;
 	}
 
 	/**

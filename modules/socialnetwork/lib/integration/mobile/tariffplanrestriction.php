@@ -28,6 +28,12 @@ class TariffPlanRestriction
 						),
 						'isPromo' => Feature::isFeaturePromo(Feature::PROJECTS_GROUPS),
 					],
+					Feature::PROJECTS_ACCESS_PERMISSIONS => [
+						'code' => Feature::PROJECTS_ACCESS_PERMISSIONS,
+						'title' => Loc::getMessage('SOCIALNETWORK_TARIFF_PLAN_RESTRICTION_SOCIALNETWORK_PROJECTS_ACCESS_PERMISSIONS'),
+						'isRestricted' => !Feature::isFeatureEnabled(Feature::PROJECTS_ACCESS_PERMISSIONS),
+						'isPromo' => Feature::isFeaturePromo(Feature::PROJECTS_ACCESS_PERMISSIONS),
+					],
 				],
 			],
 			'socialnetwork',

@@ -86,7 +86,7 @@ class TaskSaveRule extends AbstractRule
 			return false;
 		}
 
-		if (!$this->canChangeTaskGroupFlow())
+		if (!$this->canChangeTaskGroupInFlow())
 		{
 			$this->controller->addUserError(new Error(Loc::getMessage('TASKS_TASK_SAVE_RULE_GROUP_DENIED')));
 			$this->controller->addError(static::class, 'Group does not belong to flow');
@@ -160,7 +160,7 @@ class TaskSaveRule extends AbstractRule
 		return true;
 	}
 
-	protected function canChangeTaskGroupFlow(): bool
+	protected function canChangeTaskGroupInFlow(): bool
 	{
 		$newFlowId = $this->newTask->getFlowId();
 		$newGroupId = $this->newTask->getGroupId();

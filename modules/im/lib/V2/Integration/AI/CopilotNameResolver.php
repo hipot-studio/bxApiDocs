@@ -51,10 +51,24 @@ class CopilotNameResolver implements NameResolverInterface
 			return (new CopilotNameService())->getCopilotName();
 		}
 
-		/** @see \Bitrix\AI\Enum\CopilotName */
+		/** @see \Bitrix\Ui\Public\Enum\Copilot\CopilotName */
 		return $this->isWestZone()
 			? 'CoPilot'
 			: 'BitrixGPT'
+		;
+	}
+
+	public function getAgentName(): string
+	{
+		if (Loader::includeModule('ui'))
+		{
+			return (new CopilotNameService())->getCopilotAgentName();
+		}
+
+		/** @see \Bitrix\Ui\Public\Enum\Copilot\CopilotName */
+		return $this->isWestZone()
+			? 'CoPilot Agent'
+			: 'BitrixGPT 5.5 Agent'
 		;
 	}
 

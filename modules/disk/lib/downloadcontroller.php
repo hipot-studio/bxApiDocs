@@ -2,12 +2,13 @@
 
 namespace Bitrix\Disk;
 
-use Bitrix\Disk\Integration\TransformerManager;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Security\ParameterSigner;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\EventResult;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Security\Sign\Signer;
 
 Loc::loadMessages(__FILE__);
 
@@ -18,12 +19,22 @@ class DownloadController extends Internals\Controller
 	const ERROR_BAD_RIGHTS               = 'DISK_DC_22005';
 	const ERROR_COULD_NOT_FIND_REAL_FILE = 'DISK_DC_22006';
 
+	protected UnifiedLinkAccessService $unifiedLinkAccessService;
+	protected Signer $signer;
 	protected $fileId;
 	protected $versionId;
 	/** @var File */
 	protected $file;
 	/** @var Version */
 	protected $version;
+
+	public function __construct()
+	{
+		parent::__construct();
+
+		$this->unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
+		$this->signer = new Signer();
+	}
 
 	protected function listActions()
 	{
@@ -159,6 +170,18 @@ class DownloadController extends Internals\Controller
 
 	protected function checkPermissions()
 	{
+		$uls = $this->request->getQuery('_uls');
+
+		if (
+			$this->file->supportsUnifiedLink()
+			&& $this->unifiedLinkAccessService->check($this->file)->canRead()
+			&& is_string($uls)
+			&& $this->signer->validate((string)$this->fileId, $uls)
+		)
+		{
+			return;
+		}
+
 		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext();
 		if(!$this->file->canRead($securityContext))
 		{

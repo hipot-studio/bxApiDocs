@@ -21,6 +21,7 @@ class Auth
 	];
 
 	protected const METHODS_WITH_AUTH = [
+		'call.Call.getCallToken',
 		'call.CallManager.create',
 		'call.CallManager.invite',
 		'call.CallManager.answer',
@@ -32,6 +33,8 @@ class Auth
 		'call.CallManager.getusers',
 		'call.CallManager.get',
 		'call.CallManager.tryJoinCall',
+		'call.Disk.upload',
+		'call.Disk.commit',
 		'local.call.log',
 		// user
 		'im.call.user.update',/** @deprecated  */
@@ -45,16 +48,20 @@ class Auth
 		'call.call.getcalltoken',
 		// im
 		'pull.config.get',
-		'im.dialog.users.list',
 		'im.message.add',
 		'im.message.like',
 		'im.chat.get',
 		'im.dialog.read',
 		'im.dialog.read.all',
+		'im.dialog.writing',
+		'im.dialog.users.list',
 		'im.dialog.messages.get',
 		'im.dialog.messages.get.init',
 		'im.user.get',
 		'mobile.browser.const.get',
+		'im.disk.folder.get',
+		'im.disk.file.commit',
+		'smile.get',
 	];
 
 	// TODO sync AUTH_ID_PARAM with file /rest/services/rest/index.php
@@ -300,10 +307,11 @@ class Auth
 
 	private static function checkQueryMethod($whiteListMethods)
 	{
+		$whiteListMethods = array_map('mb_strtolower', $whiteListMethods);
 		if (\CRestServer::instance()->getMethod() == 'batch')
 		{
 			$result = false;
-			foreach (\CRestServer::instance()->getQuery()['cmd'] as $key => $method)
+			foreach (\CRestServer::instance()->getQuery()['cmd'] as $method)
 			{
 				$method = mb_substr($method, 0, mb_strrpos($method, '?'));
 				$result = in_array(mb_strtolower($method), $whiteListMethods);
@@ -315,7 +323,8 @@ class Auth
 		}
 		else
 		{
-			$result = in_array(\CRestServer::instance()->getMethod(), $whiteListMethods);
+			$method = mb_strtolower(\CRestServer::instance()->getMethod());
+			$result = in_array($method, $whiteListMethods);
 		}
 
 		return $result;

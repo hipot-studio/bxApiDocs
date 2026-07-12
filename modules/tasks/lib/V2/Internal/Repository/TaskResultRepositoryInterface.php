@@ -46,4 +46,6 @@ interface TaskResultRepositoryInterface
 	public function getLast(int $taskId): ?Entity\Result;
 
 	public function containsResults(int $taskId): bool;
+
+	public function getTasksResultsExistenceMap(array $taskIds): array;
 }

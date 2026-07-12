@@ -4,6 +4,7 @@ use Bitrix\Mail;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\Mailbox\Options\EntityDataHelper;
 use Bitrix\Mail\Helper\MailboxAccess;
+use Bitrix\Mail\Helper\Mailbox\MailboxGridCounterAggregator;
 use Bitrix\Mail\Helper\MailboxDirectoryHelper;
 use Bitrix\Mail\Internal\Service\MailboxCountersService;
 use Bitrix\Mail\Helper\Message;
@@ -15,6 +16,7 @@ use Bitrix\Mail\MessageView\AvatarManager;
 use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Mail\Address;
 use Bitrix\Main\Context;
 use Bitrix\Main\Text\Encoding;
 use Bitrix\Main\ModuleManager;
@@ -439,6 +441,9 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 		$this->arResult['ALL_MAIL_MODE_GUIDE_OPTION_NAME'] = Mail\Helper\Config\Guide::getAllMailModeGuideOptionName();
 
 		$this->arResult['PENDING_CONNECTION_REQUESTS_COUNT'] = $this->getPendingConnectionRequestsCount();
+		$this->arResult['MAILBOX_GRID_BUTTON_COUNTER'] = $this->arResult['HAS_ACCESS_TO_MAILBOX_GRID']
+			? $this->getMailboxGridButtonCounter((int)Main\Engine\CurrentUser::get()->getId())
+			: 0;
 
 		$this->includeComponentTemplate();
 	}
@@ -549,52 +554,66 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 
 			if (trim((string)$item['SUBJECT']) !== '')
 			{
-				$columns['SUBJECT'] = htmlspecialcharsbx($item['SUBJECT']);
+				$columns['SUBJECT'] = htmlspecialcharsbx($item['SUBJECT'], ENT_QUOTES);
 			}
 			else
 			{
 				$generated = Message::extractSubjectFromBody((string)$item['BODY']);
 				$columns['SUBJECT'] = htmlspecialcharsbx(
 					$generated !== '' ? $generated : Loc::getMessage('MAIL_MESSAGE_EMPTY_SUBJECT_PLACEHOLDER'),
+					ENT_QUOTES,
 				);
 			}
 
-			$from = MessageLoader::buildContactList($item['FIELD_FROM']);
 			$avatarKey = AvatarManager::getAvatarKeyByString($item['FIELD_FROM']);
 
-			if (count($from) && $from[0]->email === $this->mailbox['EMAIL'] && !empty($item['FIELD_TO']))
+			$isOutgoing = false;
+			foreach (Message::parseAddressList($item['FIELD_FROM']) as $candidate)
 			{
-				//Outcome message
-				$columns['FROM'] = htmlspecialcharsbx($item['FIELD_TO']);
+				$address = new Address($candidate);
+				if ($address->validate())
+				{
+					$isOutgoing = ($address->getEmail() === $this->mailbox['EMAIL']);
+					break;
+				}
+			}
+
+			$sourceField = ($isOutgoing && !empty($item['FIELD_TO'])) ? $item['FIELD_TO'] : $item['FIELD_FROM'];
+			if ($isOutgoing && !empty($item['FIELD_TO']))
+			{
 				$avatarKey = AvatarManager::getAvatarKeyByString($item['FIELD_TO']);
-				$from = MessageLoader::buildContactList($item['FIELD_TO']);
 			}
 
 			$avatarParams = !empty($avatarKey) && !empty($avatarConfigs[$avatarKey])
 				? $avatarConfigs[$avatarKey]
-				: []
-			;
+				: [];
 
 			$fromValues = [];
 
-			if (count($from))
+			foreach (Message::parseAddressList($sourceField) as $rawItem)
 			{
-				foreach ($from as $contact)
+				$address = new Address($rawItem);
+
+				if ($address->validate())
 				{
-					$name = !empty($contact->name) ? Mail\Message::stripQuotes($contact->name) : null;
-					$email = !empty($contact->email) ? Mail\Message::stripQuotes($contact->email) : null;
-					$fromValues[] = "<a onclick='" . $onclickEventOpenMessageMethod . $onclickOpenMessageViewMethod . "' class='mail-msg-from-title' title='" . htmlspecialcharsbx($name ? $name . ' / ' : '') . $email . "'>" . htmlspecialcharsbx($name ?: $email) . "</a>";
+					$name = $address->getName();
+					$email = $address->getEmail();
+					$name = $name ? Mail\Message::stripQuotes($name) : null;
+					$email = $email ? Mail\Message::stripQuotes($email) : null;
+					$titleText = ($name ? $name . ' / ' : '') . $email;
+					$displayText = $name ?: $email;
 				}
-			}
-			else
-			{
-				$emails = explode(",", (string)$columns['FROM']);
-				foreach ($emails as $email)
+				else
 				{
-					$email = htmlspecialcharsbx(trim($email));
-					$fromValues[] = "<a onclick='" . $onclickEventOpenMessageMethod . $onclickOpenMessageViewMethod . "' class='mail-msg-from-title' title='" . $email . "'/>" . $email . "</a>";
+					$titleText = $rawItem;
+					$displayText = $rawItem;
 				}
+
+				$fromValues[] = "<a onclick='" . $onclickEventOpenMessageMethod . $onclickOpenMessageViewMethod
+					. "' class='mail-msg-from-title' title='" . htmlspecialcharsbx($titleText, ENT_QUOTES) . "'>"
+					. htmlspecialcharsbx($displayText, ENT_QUOTES) . "</a>";
 			}
+
 			$columns['FROM'] = $this->getSenderColumnCell($avatarParams);
 			$columns['FROM'] .= implode(Loc::getMessage('MAIL_MESSAGE_SEPARATOR_OF_NAMES_AND_EMAILS_IN_LISTS'), $fromValues);
 
@@ -1707,5 +1726,15 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 	private function getPendingConnectionRequestsCount(): int
 	{
 		return (new Mail\Helper\Mailbox\MailboxConnectionRequestService())->getPendingCount();
+	}
+
+	private function getMailboxGridButtonCounter(int $userId): int
+	{
+		if ($userId <= 0)
+		{
+			return 0;
+		}
+
+		return (new MailboxGridCounterAggregator())->getButtonCounter($userId);
 	}
 }

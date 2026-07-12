@@ -74,7 +74,6 @@ class TaskProvider
 		);
 	}
 
-
 	public function getCount(TaskListParams $taskListParams): int
 	{
 		return $this->taskRepository->getCount(

@@ -199,6 +199,28 @@ class Track extends EO_CallTrack
 		return $this->delete();
 	}
 
+	public function getDownloadLink(): string
+	{
+		if ($this->getDiskFileId() && Loader::includeModule('disk'))
+		{
+			$diskFile = \Bitrix\Disk\File::getById($this->getDiskFileId());
+			if ($diskFile)
+			{
+				$urlManager = \Bitrix\Main\Engine\UrlManager::getInstance();
+				$uri = $urlManager->create('disk.api.file.download', [
+					'humanRE' => 1,
+					'fileId' => $diskFile->getId(),
+					'exact' => 'N',
+					'fileName' => $diskFile->getName(),
+				], true);
+
+				return $uri->getUri();
+			}
+		}
+
+		return $this->getUrl(true, true);
+	}
+
 	/**
 	 * @see \Bitrix\Call\Controller\Track::downloadAction
 	 * @param bool $absolute
@@ -438,5 +460,14 @@ class Track extends EO_CallTrack
 			'order' => ['ID' => 'DESC'],
 			'limit' => 1,
 		])?->fetchObject();
+	}
+
+	public static function getTracksForCall(int $callId, string $type): Track\TrackCollection
+	{
+		return CallTrackTable::getList([
+			'select' => ['*'],
+			'filter' => ['=CALL_ID' => $callId, '=TYPE' => $type],
+			'order' => ['ID' => 'ASC'],
+		])->fetchCollection();
 	}
 }

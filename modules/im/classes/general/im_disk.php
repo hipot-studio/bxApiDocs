@@ -2009,7 +2009,7 @@ class CIMDisk
 			'TASK_ID' => $rightsManager->getTaskIdByName($rightsManager::TASK_EDIT)
 		];
 
-		if ($chatType === IM\V2\Chat::IM_TYPE_COLLAB)
+		if ($chatType === IM\V2\Chat::IM_TYPE_COLLAB || $chatType === IM\V2\Chat::IM_TYPE_OPEN_COLLAB)
 		{
 			$folder = $storageModel->getFolderForUploadedFiles();
 			if (!$folder)
@@ -2018,6 +2018,18 @@ class CIMDisk
 			}
 
 			$driver->getRightsManager()->append($folder, $accessCodes);
+
+			if ($chatType === IM\V2\Chat::IM_TYPE_OPEN_COLLAB)
+			{
+				$departmentCode = IM\V2\Integration\HumanResources\Department\Department::getInstance()->getTopCode();
+				if ($departmentCode)
+				{
+					$driver->getRightsManager()->append($folder, [[
+						'ACCESS_CODE' => $departmentCode,
+						'TASK_ID' => $rightsManager->getTaskIdByName($rightsManager::TASK_READ)
+					]]);
+				}
+			}
 
 			return $folder;
 		}

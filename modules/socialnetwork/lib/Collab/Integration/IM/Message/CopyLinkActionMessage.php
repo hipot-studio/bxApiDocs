@@ -7,6 +7,7 @@ namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\SocialNetwork\Collab\Analytics\CollabAnalytics;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class CopyLinkActionMessage implements ActionMessageInterface
 {
@@ -28,14 +29,19 @@ class CopyLinkActionMessage implements ActionMessageInterface
 			return 0;
 		}
 
+		CollabAnalytics::getInstance()->onCopyLink($this->senderId, $this->collabId);
+
+		if (Feature::isNewProjectsOn())
+		{
+			return 0;
+		}
+
 		$message = (string)Loc::getMessage(
 			'SOCIALNETWORK_COLLAB_CHAT_COPY_LINK' . $this->getGenderSuffix($this->senderId),
 			[
 				'#SENDER_NAME#' => $this->getName($this->senderId, $this->senderId, $this->collabId),
 			],
 		);
-
-		CollabAnalytics::getInstance()->onCopyLink($this->senderId, $this->collabId);
 
 		return $this->sendMessage($message, $this->senderId, $this->collabId);
 	}

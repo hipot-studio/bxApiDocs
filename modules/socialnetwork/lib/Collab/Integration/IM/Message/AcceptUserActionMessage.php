@@ -8,6 +8,7 @@ use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Collab\Integration\Intranet\Invitation;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class AcceptUserActionMessage implements ActionMessageInterface
 {
@@ -29,10 +30,16 @@ class AcceptUserActionMessage implements ActionMessageInterface
 			return 0;
 		}
 
-		$this->addUsersToChat($this->collabId, $this->senderId);
+		$this->addUsersToChat($this->collabId, $parameters, $this->senderId);
+		$isNewProjectsOn = Feature::isNewProjectsOn();
+
+		$phraseCode = $isNewProjectsOn
+			? 'SOCIALNETWORK_V2_PROJECT_CHAT_USER_ACCEPT'
+			: 'SOCIALNETWORK_COLLAB_CHAT_USER_ACCEPT'
+		;
 
 		$message = (string)Loc::getMessage(
-			'SOCIALNETWORK_COLLAB_CHAT_USER_ACCEPT' . $this->getGenderSuffix($this->senderId),
+			$phraseCode . $this->getGenderSuffix($this->senderId),
 			[
 				'#SENDER_NAME#' => $this->getName($this->senderId, $this->senderId, $this->collabId),
 			],
@@ -40,7 +47,12 @@ class AcceptUserActionMessage implements ActionMessageInterface
 
 		$this->sendAcceptUserAnalytics();
 
-		return $this->sendMessage($message, $this->senderId, $this->collabId);
+		return $this->sendMessage(
+			message: $message,
+			senderId: $this->senderId,
+			groupId: $this->collabId,
+			silent: $isNewProjectsOn ? self::SILENT_WITH_RECENT : self::SILENT_OFF,
+		);
 	}
 
 	private function sendAcceptUserAnalytics(): void

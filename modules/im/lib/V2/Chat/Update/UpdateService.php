@@ -4,6 +4,7 @@ namespace Bitrix\Im\V2\Chat\Update;
 
 use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Chat\Converter;
 use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
 use Bitrix\Im\V2\Chat\CopilotChat;
@@ -30,6 +31,12 @@ class UpdateService
 	public function updateChat(): Result
 	{
 		$prevAnalyticsData = $this->getAnalyticsData();
+
+		$validateParentResult = $this->validateParent();
+		if (!$validateParentResult->isSuccess())
+		{
+			return $validateParentResult;
+		}
 
 		$convertResult = $this->convertChat();
 
@@ -72,6 +79,35 @@ class UpdateService
 		return $result->setResult($this->chat);
 	}
 
+	protected function validateParent(): Result
+	{
+		$result = new Result();
+		$parentChatId = $this->updateFields->getParentChatId();
+
+		if ($parentChatId === null)
+		{
+			return $result;
+		}
+
+		if ($parentChatId === $this->chat->getChatId())
+		{
+			return $result->addError(new ChatError(ChatError::WRONG_PARENT_CHAT));
+		}
+
+		$parentChat = Chat::getInstance($parentChatId);
+		if ($parentChat->getChatId() <= 0)
+		{
+			return $result->addError(new ChatError(ChatError::WRONG_PARENT_CHAT));
+		}
+
+		if (!$parentChat->canHaveChild($this->chat))
+		{
+			return $result->addError(new ChatError(ChatError::PARENT_CAN_NOT_HAVE_CHILD));
+		}
+
+		return $result;
+	}
+
 	protected function convertChat(): Result
 	{
 		$result = new Result();
@@ -110,6 +146,8 @@ class UpdateService
 			$currentType === Chat::IM_TYPE_OPEN && $searchable === 'N' => \Bitrix\Im\V2\Chat::IM_TYPE_CHAT,
 			$currentType === Chat::IM_TYPE_CHANNEL && $searchable === 'Y' => \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_CHANNEL,
 			$currentType === Chat::IM_TYPE_OPEN_CHANNEL && $searchable === 'N' => \Bitrix\Im\V2\Chat::IM_TYPE_CHANNEL,
+			$currentType === Chat::IM_TYPE_COLLAB && $searchable === 'Y' => \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_COLLAB,
+			$currentType === Chat::IM_TYPE_OPEN_COLLAB && $searchable === 'N' => \Bitrix\Im\V2\Chat::IM_TYPE_COLLAB,
 			default => $newType,
 		};
 
@@ -119,11 +157,17 @@ class UpdateService
 	{
 		$updateFields = $this->updateFields;
 
+		$ownerId = $updateFields->getOwnerId();
 		$addedUsers = array_unique(array_merge(
 			$updateFields->getAddedUsers(),
 			$updateFields->getAddedManagers(),
-			[$updateFields->getOwnerId()]
+			$ownerId !== null ? [$ownerId] : [],
 		));
+
+		if (empty($addedUsers))
+		{
+			return $this;
+		}
 
 		$config = new AddUsersConfig(
 			managerIds: $updateFields->getAddedManagers(),
@@ -225,21 +269,21 @@ class UpdateService
 
 	protected function updateAvatarBeforeSave(): self
 	{
-		$avatarId = $this->updateFields->getAvatar();
-		if (!isset($avatarId))
+		$avatar = $this->updateFields->getAvatar();
+		if (!is_int($avatar) && !is_string($avatar))
 		{
 			return $this;
 		}
 
-		(new ChatAvatar($this->chat))->update($avatarId, false, false, true);
+		(new ChatAvatar($this->chat))->update($avatar, false, false, true);
 
 		return $this;
 	}
 
 	protected function sendMessageAfterUpdateAvatar(): self
 	{
-		$avatarId = $this->updateFields->getAvatar();
-		if (!isset($avatarId))
+		$avatar = $this->updateFields->getAvatar();
+		if (!is_int($avatar) && !is_string($avatar))
 		{
 			return $this;
 		}

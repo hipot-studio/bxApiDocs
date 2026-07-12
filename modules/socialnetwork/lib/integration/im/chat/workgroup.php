@@ -10,7 +10,6 @@ namespace Bitrix\Socialnetwork\Integration\Im\Chat;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\Integration\Im\ChatFactory;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
@@ -24,11 +23,6 @@ class Workgroup
 {
 	const CHAT_ENTITY_TYPE = "SONET_GROUP";
 	private static $staticCache = array();
-
-	public static function getUseChat(): bool
-	{
-		return Option::get('socialnetwork', 'use_workgroup_chat', "Y") === "Y";
-	}
 
 	public static function getChatData($params)
 	{
@@ -63,17 +57,6 @@ class Workgroup
 
 
 		$groupIds = $params['group_id'];
-
-		if (!static::getUseChat())
-		{
-			$provider = GroupProvider::getInstance();
-			$provider->loadGroupTypes(...$groupIds);
-
-			$groupIds = array_filter(
-				$groupIds,
-				static fn (int $groupId): bool => $provider->getGroupType($groupId) === Item\Workgroup\Type::Collab
-			);
-		}
 
 		if (empty($groupIds))
 		{
@@ -157,11 +140,6 @@ class Workgroup
 			return false;
 		}
 
-		if (!$group->isCollab() && !static::getUseChat())
-		{
-			return false;
-		}
-
 		$result = ChatFactory::createChat($group);
 
 		if ($result->isSuccess())
@@ -204,13 +182,6 @@ class Workgroup
 		$groupId = intval($params['group_id']);
 		$setFlag = (isset($params['set']) && $params['set']);
 
-		$groupType = GroupProvider::getInstance()->getGroupType($groupId);
-
-		if ($groupType !== Item\Workgroup\Type::Collab && !static::getUseChat())
-		{
-			return false;
-		}
-
 		$chatData = self::getChatData(array(
 			'group_id' => $groupId
 		));
@@ -243,7 +214,6 @@ class Workgroup
 			!array($params)
 			|| !isset($params['group_id'])
 			|| intval($params['group_id']) <= 0
-			|| !self::getUseChat()
 			|| !Loader::includeModule('im')
 		)
 		{

@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Relation;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 
@@ -35,9 +36,17 @@ class ChatRelations
 
 	public static function getInstance(int $chatId): static
 	{
-		self::$instances[$chatId] ??= new static($chatId);
+		if (!isset(self::$instances[$chatId]) || !(self::$instances[$chatId] instanceof static))
+		{
+			self::$instances[$chatId] = new static($chatId);
+		}
 
 		return self::$instances[$chatId];
+	}
+
+	public static function cleanInstance(int $chatId): void
+	{
+		unset(self::$instances[$chatId]);
 	}
 
 	public function forceRelations(RelationCollection $relations): void
@@ -48,20 +57,33 @@ class ChatRelations
 
 	public function filterUserIdsByAccess(array $userIds): array
 	{
-		$parentChat = $this->getChat()->getParentChat();
-		if ($parentChat !== null)
+		$chat = $this->getChat();
+		if (!$chat->requiresParentMembership())
 		{
-			return $parentChat->getRelationsByUserIds($userIds)->getUserIds();
+			return $userIds;
 		}
 
-		return $userIds;
+		$parentChat = $chat->getParentChat();
+		if ($parentChat === null)
+		{
+			return $userIds;
+		}
+
+		// preload
+		$parentChat->getRelationsByUserIds($userIds);
+
+		return array_values(array_filter(
+			$userIds,
+			static fn (int $userId): bool => $parentChat->checkAccess($userId)->isSuccess(),
+		));
 	}
 
 	protected function filterRelationsByAccess(RelationCollection $relations): RelationCollection
 	{
-		$hasParent = $this->getChat()->hasParent();
+		$chat = $this->getChat();
+		$needsParentAccess = $chat->hasParent() && $chat->requiresParentMembership();
 
-		if (!static::NEED_ADDITIONAL_FILTER_BY_ACCESS && !$hasParent)
+		if (!static::NEED_ADDITIONAL_FILTER_BY_ACCESS && !$needsParentAccess)
 		{
 			return $relations;
 		}
@@ -71,13 +93,31 @@ class ChatRelations
 
 		$filtered = $relations->filter(fn (Relation $relation) => in_array($relation->getUserId(), $usersWithAccess, true));
 
-		$removedUserIds = array_diff($allUserIds, $usersWithAccess);
-		if (!empty($removedUserIds))
-		{
-			$this->markRemovedForDeletion($removedUserIds);
-		}
+		$this->markRemovedForDeletion(
+			$this->filterUserIdsForCleanup(array_diff($allUserIds, $usersWithAccess))
+		);
 
 		return $filtered;
+	}
+
+	/**
+	 * Excludes soft denials (e.g. tariff restriction) — they should not trigger relation cleanup.
+	 *
+	 * @param int[] $deniedUserIds
+	 * @return int[]
+	 */
+	protected function filterUserIdsForCleanup(array $deniedUserIds): array
+	{
+		$parentChat = $this->getChat()->getParentChat();
+		if ($parentChat === null)
+		{
+			return $deniedUserIds;
+		}
+
+		return array_values(array_filter(
+			$deniedUserIds,
+			static fn (int $userId): bool => $parentChat->checkAccess($userId)->getError()?->revokeAccess !== false,
+		));
 	}
 
 	protected function markRemovedForDeletion(array $removedUserIds): void
@@ -179,6 +219,7 @@ class ChatRelations
 
 	public function getByUserIds(array $userIds): RelationCollection
 	{
+		$userIds = Normalizer::toUniquePositiveIntegers($userIds);
 		if (empty($userIds))
 		{
 			return new RelationCollection();
@@ -220,6 +261,11 @@ class ChatRelations
 			$loadedRelations = $this->filterRelationsByAccess($rawRelations);
 			$this->fillRelationByUserId($loadedRelations);
 			$resultCollection->mergeRegistry($loadedRelations);
+		}
+
+		foreach ($userIdsToLoad as $userId)
+		{
+			$this->relationByUserId[$userId] ??= false;
 		}
 
 		return $resultCollection;

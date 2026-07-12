@@ -6,7 +6,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity\DataManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;

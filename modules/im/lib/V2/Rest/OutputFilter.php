@@ -71,6 +71,17 @@ class OutputFilter
 			}
 		}
 
+		if (isset($payload['additionalMessages']) && is_array($payload['additionalMessages']))
+		{
+			foreach ($payload['additionalMessages'] as $key => $message)
+			{
+				if (is_array($message))
+				{
+					$payload['additionalMessages'][$key] = self::filterMessage($message);
+				}
+			}
+		}
+
 		if (isset($payload['user']) && is_array($payload['user']))
 		{
 			$payload['user'] = self::filterUser($payload['user']);

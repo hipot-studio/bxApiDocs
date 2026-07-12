@@ -24,9 +24,9 @@ class ProjectLimit extends Limit
 		return false;
 	}
 
-	public static function isFeatureEnabledOrTrial(): bool
+	public static function isFeatureEnabledOrTrial(int $groupId = 0): bool
 	{
-		return static::isFeatureEnabled() || static::canTurnOnTrial();
+		return static::isFeatureEnabled($groupId) || static::canTurnOnTrial();
 	}
 
 	public static function canTurnOnTrial(): bool

@@ -6,6 +6,7 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Integration\AiAssistant\AiAssistantService;
 use Bitrix\Im\V2\Chat\Ai\AiAssistantPrivateChat;
+use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Main\DI\ServiceLocator;
 
 /**
@@ -45,10 +46,15 @@ final class ChatClassResolver
 			$type === Chat::IM_TYPE_OPEN => OpenChat::class,
 			$type === Chat::IM_TYPE_SYSTEM => NotifyChat::class,
 			$type === Chat::IM_TYPE_PRIVATE => $this->resolvePrivateChatType($params),
+			$type === Chat::IM_TYPE_CHAT
+				&& $entityType === Chat\ExtendedType::Sonet->value
+				&& Collab::isNewProjectsAvailable()
+					=> WorkgroupChat::class,
 			$type === Chat::IM_TYPE_CHAT => GroupChat::class,
 			$type === Chat::IM_TYPE_COMMENT => CommentChat::class,
 			$type === Chat::IM_TYPE_COPILOT => CopilotChat::class,
 			$type === Chat::IM_TYPE_COLLAB => CollabChat::class,
+			$type === Chat::IM_TYPE_OPEN_COLLAB => OpenCollabChat::class,
 			$type === Chat::IM_TYPE_EXTERNAL => ExternalChat::class,
 			default => NullChat::class,
 		};

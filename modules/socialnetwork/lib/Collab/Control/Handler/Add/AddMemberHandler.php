@@ -8,6 +8,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
+use Bitrix\Socialnetwork\Collab\Control\Handler\Trait\SplitAccessCodesTrait;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageBuffer;
 use Bitrix\Socialnetwork\Provider\EmployeeProvider;
 use Bitrix\Socialnetwork\Control\Member\Trait\AddMemberTrait;
@@ -19,11 +20,13 @@ use Bitrix\Socialnetwork\Control\Member\Trait\GetMembersTrait;
 use Bitrix\Socialnetwork\Integration\HumanResources\AccessCodeConverter;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 
 class AddMemberHandler implements AddHandlerInterface
 {
 	use GetMembersTrait;
 	use AddMemberTrait;
+	use SplitAccessCodesTrait;
 
 	/**
 	 * @throws LoaderException
@@ -41,9 +44,22 @@ class AddMemberHandler implements AddHandlerInterface
 			return $handlerResult;
 		}
 
-		$membersByCommand = (new AccessCodeConverter(...$members))
-			->getUsers()
-			->getUserIds();
+		[$userCodes, $departmentCodes] = $this->splitAccessCodes($members);
+
+		if (!empty($departmentCodes))
+		{
+			Container::getInstance()
+				->getStructureRelationService()
+				->linkDepartments($departmentCodes, $entity->getId());
+		}
+
+		if (empty($userCodes))
+		{
+			return $handlerResult;
+		}
+
+		$membersByCommand = (new AccessCodeConverter(...$userCodes))
+			->getAccessCodeIdList();
 
 		$add = array_diff($membersByCommand, $this->getMemberIds($entity->getId()));
 
@@ -60,11 +76,16 @@ class AddMemberHandler implements AddHandlerInterface
 			return $handlerResult;
 		}
 
-		[$employeeIds, $guestIds] = EmployeeProvider::getInstance()->splitIntoEmployeesAndGuests($membersByCommand);
+		[$employeeIds, $guestIds, $botIds] =
+			EmployeeProvider::getInstance()
+				->splitIntoEmployeesGuestsAndBots($add)
+		;
 
 		ActionMessageBuffer::getInstance()
 			->put(ActionType::AddUser, $entity->getId(), $command->getInitiatorId(), $employeeIds)
-			->put(ActionType::AddGuest, $entity->getId(), $command->getInitiatorId(), $guestIds);
+			->put(ActionType::AddGuest, $entity->getId(), $command->getInitiatorId(), $guestIds)
+			->put(ActionType::AddBot, $entity->getId(), $command->getInitiatorId(), $botIds)
+		;
 
 		return $handlerResult;
 	}

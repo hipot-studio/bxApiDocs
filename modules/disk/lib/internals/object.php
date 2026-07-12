@@ -317,6 +317,22 @@ class ObjectTable extends DataManager
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateUniqueCode'),
 			),
+			'ALLOW_DOWNLOAD_ON_READ' => array(
+				'data_type' => '\Bitrix\Disk\Internals\ObjectOptionsTable',
+				'reference' => array(
+					'=this.ID' => 'ref.OBJECT_ID',
+					'=ref.NAME' => ['?', ObjectOptionsTable::NAME_ALLOW_DOWNLOAD_ON_READ],
+				),
+				'join_type' => 'LEFT',
+			),
+			'ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ' => array(
+				'data_type' => '\Bitrix\Disk\Internals\ObjectOptionsTable',
+				'reference' => array(
+					'=this.ID' => 'ref.OBJECT_ID',
+					'=ref.NAME' => ['?', ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ],
+				),
+				'join_type' => 'LEFT',
+			),
 		);
 	}
 
@@ -460,10 +476,11 @@ class ObjectTable extends DataManager
 	public static function delete($primary)
 	{
 		$deleteResult = parent::delete($primary);
-		if($deleteResult->isSuccess())
+		if ($deleteResult->isSuccess())
 		{
 			ObjectPathTable::deleteByObject($primary);
 			UnifiedLinkAccessRepository::deleteByObjectId((int)$primary);
+			ObjectOptionsTable::deleteByFilter(['=OBJECT_ID' => $primary]);
 		}
 
 		return $deleteResult;

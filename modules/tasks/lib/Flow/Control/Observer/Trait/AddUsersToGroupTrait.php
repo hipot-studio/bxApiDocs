@@ -2,22 +2,12 @@
 
 namespace Bitrix\Tasks\Flow\Control\Observer\Trait;
 
-use Bitrix\Main\Loader;
+use Bitrix\Tasks\Flow\Integration\Socialnetwork\MemberService;
 
 trait AddUsersToGroupTrait
 {
-	protected function addUsersToGroup(int $groupId, array $responsibleUsers): void
+	protected function addUsersToGroup(int $groupId, array $responsibleUsers, int $initiatorId = 0): void
 	{
-		if (!Loader::includeModule('socialnetwork'))
-		{
-			return;
-		}
-
-		$users = \CSocNetUserToGroup::GetGroupUsers($groupId);
-		$userIds = array_map('intval', array_column($users, 'USER_ID'));
-		$responsibleUsers = array_map('intval', $responsibleUsers);
-		$usersToAdd = array_diff($responsibleUsers, $userIds);
-
-		\CSocNetUserToGroup::AddUsersToGroup($groupId, $usersToAdd);
+		(new MemberService())->addMembers($groupId, $responsibleUsers, $initiatorId);
 	}
 }

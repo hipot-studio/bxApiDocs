@@ -1,16 +1,26 @@
 <?php
 
-
 namespace Bitrix\Disk\Rest\Service;
 
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internals\ExternalLinkTable;
+use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\RestException;
 use Bitrix\Disk;
 
 abstract class BaseObject extends Base
 {
+	protected ExternalLinkProvider $externalLinkProvider;
+
+	public function __construct($methodName, array $params, $start, \CRestServer $restServer)
+	{
+		parent::__construct($methodName, $params, $start, $restServer);
+
+		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
+	}
+
 	/**
 	 * Returns work-object by id.
 	 * @param int $id Id of object.
@@ -201,20 +211,11 @@ abstract class BaseObject extends Base
 	protected function getExternalLink($id)
 	{
 		$object = $this->get($id);
+		$extModel = $this->externalLinkProvider->getForUse($object->getRealObjectId());
 
-		$extLinks = $object->getExternalLinks(array(
-			'filter' => array(
-				'OBJECT_ID' => $object->getId(),
-				'CREATED_BY' => $this->userId,
-				'TYPE' => ExternalLinkTable::TYPE_MANUAL,
-				'IS_EXPIRED' => false,
-			),
-			'limit' => 1,
-		));
-		$extModel = array_pop($extLinks);
 		if(!$extModel)
 		{
-			$extModel = $object->addExternalLink(array(
+			$extModel = $object->getRealObject()->addExternalLink(array(
 				'CREATED_BY' => $this->userId,
 				'TYPE' => ExternalLinkTable::TYPE_MANUAL,
 			));
@@ -226,10 +227,10 @@ abstract class BaseObject extends Base
 			return null;
 		}
 
-		return Driver::getInstance()->getUrlManager()->getShortUrlExternalLink(array(
-			'hash' => $extModel->getHash(),
-			'action' => 'default',
-		), true);
+		return Driver::getInstance()->getUrlManager()->getPublicExternalLink(
+			object: $object,
+			hash: $extModel->getHash(),
+		);
 	}
 
 	/**

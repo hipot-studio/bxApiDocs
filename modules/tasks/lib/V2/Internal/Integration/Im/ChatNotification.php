@@ -8,6 +8,8 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Action\AbstractNotify;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Action\ChatActionLinkService;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\FeatureService;
 use Bitrix\Tasks\V2\Internal\Result\Result;
 
 class ChatNotification implements ChatNotificationInterface, MessageSenderInterface
@@ -60,6 +62,7 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
+				chatActionLinkService: $this->getChatActionLinkService(),
 				newDeadlineTs: $args['newDeadlineTs'] ?? null,
 				oldDeadlineTs: $args['oldDeadlineTs'] ?? null
 			),
@@ -83,27 +86,34 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
+				chatActionLinkService: $this->getChatActionLinkService(),
+				featureService: new FeatureService(),
 				group: $args['group'] ?? null,
 			),
 			NotificationType::GroupChanged => new Action\NotifyGroupChanged(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
+				chatActionLinkService: $this->getChatActionLinkService(),
+				featureService: new FeatureService(),
 				newGroup: $args['newGroup'] ?? null,
 			),
 			NotificationType::GroupRemoved => new Action\NotifyGroupRemoved(
 				task: $task,
 				sender: $this,
+				featureService: new FeatureService(),
 				triggeredBy: $args['triggeredBy'] ?? null,
 				group: $args['group'] ?? null,
 			),
 			NotificationType::TaskOverdue => new Action\NotifyTaskOverdue(
 				task: $task,
 				sender: $this,
+				chatActionLinkService: $this->getChatActionLinkService(),
 			),
 			NotificationType::TaskOverdueSoon => new Action\NotifyTaskOverdueSoon(
 				task: $task,
 				sender: $this,
+				chatActionLinkService: $this->getChatActionLinkService(),
 			),
 			NotificationType::TaskStatusChanged => new Action\NotifyTaskStatusChanged(
 				task: $task,
@@ -114,81 +124,23 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 			NotificationType::TaskTimerStarted => new Action\NotifyTaskTimerStarted(
 				task: $task,
 				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null
+				chatActionLinkService: $this->getChatActionLinkService(),
+				triggeredBy: $args['triggeredBy'] ?? null,
 			),
 			NotificationType::TaskTimerStopped => new Action\NotifyTaskTimerStopped(
 				task: $task,
 				sender: $this,
+				chatActionLinkService: $this->getChatActionLinkService(),
 				triggeredBy: $args['triggeredBy'] ?? null,
 				seconds: $args['seconds'] ?? null,
+				elapsedTimeId: $args['elapsedTimeId'] ?? null,
 			),
 			NotificationType::TaskTimersStopped => new Action\NotifyTaskTimersStopped(
 				task: $task,
 				sender: $this,
+				chatActionLinkService: $this->getChatActionLinkService(),
 				triggeredBy: $args['triggeredBy'] ?? null,
 				seconds: $args['seconds'] ?? null,
-			),
-			NotificationType::ChecklistItemsAdded => new Action\NotifyChecklistItemsAdded(
-				task: $task,
-				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null,
-				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? '',
-				checkListId: $args['itemId'] ?? null,
-				itemIds: $args['itemIds'] ?? [],
-			),
-			NotificationType::ChecklistItemsDeleted => new Action\NotifyChecklistItemsDeleted(
-				task: $task,
-				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null,
-				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? '',
-				checkListId: $args['itemId'] ?? null,
-			),
-			NotificationType::ChecklistItemsModified => new Action\NotifyChecklistItemsModified(
-				task: $task,
-				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null,
-				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? '',
-				checkListId: $args['itemId'] ?? null,
-				itemIds: $args['itemIds'] ?? [],
-			),
-			NotificationType::ChecklistItemsCompleted => new Action\NotifyChecklistItemsCompleted(
-				task: $task,
-				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null,
-				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? '',
-				checkListId: $args['itemId'] ?? null,
-				itemIds: $args['itemIds'] ?? [],
-			),
-			NotificationType::ChecklistItemsUnchecked => new Action\NotifyChecklistItemsUnchecked(
-				task: $task,
-				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null,
-				itemCount: $args['itemCount'] ?? 1,
-				checklistName: $args['checklistName'] ?? '',
-				checkListId: $args['itemId'] ?? null,
-				itemIds: $args['itemIds'] ?? [],
-			),
-			NotificationType::ChecklistSingleItemCompleted => new Action\NotifyChecklistSingleItemCompleted(
-				task: $task,
-				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null,
-				checklistName: $args['checklistName'] ?? '',
-				itemName: $args['itemName'] ?? '',
-				checkListId: $args['itemId'] ?? null,
-				itemIds: $args['itemIds'] ?? [],
-			),
-			NotificationType::ChecklistSingleItemUnchecked => new Action\NotifyChecklistSingleItemUnchecked(
-				task: $task,
-				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null,
-				checklistName: $args['checklistName'] ?? '',
-				itemName: $args['itemName'] ?? '',
-				checkListId: $args['itemId'] ?? null,
-				itemIds: $args['itemIds'] ?? [],
 			),
 			NotificationType::ChecklistAuditorAssigned => new Action\NotifyChecklistAuditorAssigned(
 				task: $task,
@@ -208,6 +160,7 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
+				chatActionLinkService: $this->getChatActionLinkService(),
 				fileCount: $args['fileCount'] ?? 1,
 				checklistName: $args['checklistName'] ?? '',
 				checkListId: $args['itemId'] ?? null,
@@ -217,19 +170,15 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
+				chatActionLinkService: $this->getChatActionLinkService(),
 				checklistName: $args['checklistName'] ?? '',
 				checkListId: $args['itemId'] ?? null,
-			),
-			NotificationType::ChecklistGroupedOperations => new Action\NotifyChecklistGroupedOperations(
-				task: $task,
-				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null,
-				operations: $args
 			),
 			NotificationType::ChecklistAdded => new Action\NotifyChecklistAdded(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
+				chatActionLinkService: $this->getChatActionLinkService(),
 				itemsCount: $args['itemCount'] ?? 1,
 				checklistName: $args['checklistName'] ?? '',
 				checkListId: $args['itemId'] ?? null,
@@ -248,16 +197,19 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
+				chatActionLinkService: $this->getChatActionLinkService(),
 				resultText: $args['resultText'] ?? '',
 				dateTs: $args['dateTs'] ?? '',
 				fileIds: $args['fileIds'] ?? [],
+				resultId: $args['resultId'] ?? 0,
 			),
 			NotificationType::ResultModified => new Action\NotifyResultModified(
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
+				chatActionLinkService: $this->getChatActionLinkService(),
 				dateTs: $args['dateTs'] ?? '',
-
+				resultId: $args['resultId'] ?? 0,
 			),
 			NotificationType::ResultDeleted => new Action\NotifyResultDeleted(
 				task: $task,
@@ -269,15 +221,11 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				task: $task,
 				sender: $this,
 				triggeredBy: $args['triggeredBy'] ?? null,
+				chatActionLinkService: $this->getChatActionLinkService(),
 				messageId: $args['messageId'] ?? 0,
 				dateTs: $args['dateTs'] ?? 0,
+				resultId: $args['resultId'] ?? 0,
 				type: $args['type'] ?? null,
-			),
-			NotificationType::TaskDescriptionChanged => new Action\NotifyTaskDescriptionChanged(
-				task: $task,
-				triggeredBy: $args['triggeredBy'] ?? null,
-				oldDescription: $args['oldDescription'] ?? null,
-				newDescription: $args['newDescription'] ?? null
 			),
 			NotificationType::TaskPriorityChanged => new Action\NotifyPriorityChanged(
 				task: $task,
@@ -288,7 +236,7 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				task: $task,
 				triggeredBy: $args['triggeredBy'] ?? null,
 			),
-			NotificationType::TaskAttachmentChanged => new Action\NotifyFilesChanged(
+			NotificationType::TaskAttachmentChanged => new Action\NotifyFileChanged(
 				task: $task,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				fileId: $args['fileId'] ?? null,
@@ -334,6 +282,7 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 				task: $task,
 				triggeredBy: $args['triggeredBy'] ?? null,
 				elapsedTime: $args['elapsedTime'] ?? null,
+				chatActionLinkService: $this->getChatActionLinkService(),
 			),
 			NotificationType::TaskMarkChanged => new Action\NotifyMarkChanged(
 				task: $task,
@@ -362,5 +311,9 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 	private function loadMessages(): void
 	{
 		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/V2/Internal/Integration/Im/ChatNotification.php');
+	}
+	private function getChatActionLinkService(): ChatActionLinkService
+	{
+		return Container::getInstance()->get(ChatActionLinkService::class);
 	}
 }

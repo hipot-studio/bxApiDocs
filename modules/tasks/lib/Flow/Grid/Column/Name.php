@@ -31,6 +31,7 @@ final class Name extends Column
 				: Loc::getMessage('TASKS_FLOW_LIST_COLUMN_NAME_PIN')
 			),
 			'groupId' => $flow->getGroupId(),
+			'groupType' => $project['type'] ?? '',
 			'groupName' => (
 				$flow->isDemo()
 					? Loc::getMessage('TASKS_FLOW_LIST_COLUMN_NAME_DEMO_PROJECT')

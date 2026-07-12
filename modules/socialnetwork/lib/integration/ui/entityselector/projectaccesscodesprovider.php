@@ -7,6 +7,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Socialnetwork\EO_Workgroup;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
+use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
@@ -158,6 +159,19 @@ final class ProjectAccessCodesProvider extends BaseProvider
 	{
 		static $rolesMapCache = null;
 
+		$isNewProjectsOn = Feature::isNewProjectsOn();
+
+		$projectMap = [
+			SONET_ROLES_OWNER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_PROJECT_OWNER'),
+			SONET_ROLES_MODERATOR => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_PROJECT_MODERATOR'),
+			SONET_ROLES_USER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_PROJECT_USER'),
+		];
+		$collabMap = [
+			SONET_ROLES_OWNER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_COLLAB_OWNER'),
+			SONET_ROLES_MODERATOR => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_COLLAB_MODERATOR'),
+			SONET_ROLES_USER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_COLLAB_USER'),
+		];
+
 		// roles here are sorted from more specific to more generic, as last role could be used as root in a tree branch
 		$rolesMapCache ??= [
 			Type::Group->value => [
@@ -165,21 +179,13 @@ final class ProjectAccessCodesProvider extends BaseProvider
 				SONET_ROLES_MODERATOR => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_GROUP_MODERATOR'),
 				SONET_ROLES_USER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_GROUP_USER'),
 			],
-			Type::Project->value => [
-				SONET_ROLES_OWNER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_PROJECT_OWNER'),
-				SONET_ROLES_MODERATOR => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_PROJECT_MODERATOR'),
-				SONET_ROLES_USER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_PROJECT_USER'),
-			],
+			Type::Project->value => $projectMap,
 			Type::Scrum->value => [
 				SONET_ROLES_OWNER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_SCRUM_OWNER'),
 				SONET_ROLES_MODERATOR => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_SCRUM_MODERATOR'),
 				SONET_ROLES_USER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_SCRUM_USER'),
 			],
-			Type::Collab->value => [
-				SONET_ROLES_OWNER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_COLLAB_OWNER'),
-				SONET_ROLES_MODERATOR => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_COLLAB_MODERATOR'),
-				SONET_ROLES_USER => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_COLLAB_USER'),
-			],
+			Type::Collab->value => $isNewProjectsOn ? $projectMap : $collabMap,
 		];
 
 		return $rolesMapCache;
@@ -222,9 +228,14 @@ final class ProjectAccessCodesProvider extends BaseProvider
 			'.36.622l3.103%201.792a.719.719%200%2000.719%200l3.102-1.791a.719.719%200%2000.36-.623v'.
 			'-3.583z%22%20fill%3D%22%23ABB1B8%22/%3E%3C/svg%3E';
 
+		$isNewProjectsOn = Feature::isNewProjectsOn();
+
 		$dialog->addTab(new Tab([
 			'id' => self::TAB_ID,
-			'title' => (string)Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_TAB'),
+			'title' => (
+			(string)Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECT_ACCESS_CODES_TAB'
+				. ($isNewProjectsOn ? '_V2' : ''))
+			),
 			'icon' => [
 				'default' => $icon,
 				'selected' => str_replace('ABB1B8', 'fff', $icon),

@@ -10,22 +10,28 @@ use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 
 abstract class AbstractOperation
 {
-	private Mapper $mapper;
-	private GroupRegistry $registry;
+	private ?Mapper $mapper = null;
+	private ?GroupRegistry $registry = null;
 
 	abstract public function run(): GroupResult;
 
 	protected function getMapper(): Mapper
 	{
-		$this->mapper ??= new Mapper();
+		return $this->mapper ??= $this->createMapper();
+	}
 
-		return $this->mapper;
+	protected function createMapper(): Mapper
+	{
+		return new Mapper();
 	}
 
 	protected function getRegistry(): GroupRegistry
 	{
-		$this->registry ??= GroupRegistry::getInstance();
+		return $this->registry ??= $this->createRegistry();
+	}
 
-		return $this->registry;
+	protected function createRegistry(): GroupRegistry
+	{
+		return GroupRegistry::getInstance();
 	}
 }

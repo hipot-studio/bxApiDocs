@@ -130,6 +130,9 @@ class MailboxDataProvider extends EntityDataProvider
 				},
 				'options' => ['default' => true, 'type' => 'checkbox'],
 			],
+			'HIDE_PROBLEM_MAILBOXES' => [
+				'options' => ['default' => true, 'type' => 'checkbox'],
+			],
 		];
 
 		foreach ($fieldsList as $column => $field)

@@ -19,6 +19,7 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
+use Bitrix\Main\Web\Uri;
 
 class UrlManager implements IErrorable
 {
@@ -226,6 +227,27 @@ class UrlManager implements IErrorable
 	}
 
 	/**
+	 * @param BaseObject|null $object
+	 * @param string $hash
+	 * @return string
+	 */
+	public function getPublicExternalLink(?BaseObject $object, string $hash): string
+	{
+		if ($object instanceof File && $object->supportsUnifiedLink())
+		{
+			return $this->getUnifiedLink($object, [
+				'absolute' => true,
+			]);
+		}
+
+		// fallback
+		return $this->getShortUrlExternalLink([
+			'hash' => $hash,
+			'action' => 'default',
+		], true);
+	}
+
+	/**
 	 * Gets url for external link by parameters.
 	 *
 	 * Tries to find rewrite condition for disk.external.link.
@@ -268,6 +290,7 @@ class UrlManager implements IErrorable
 	 * @param array $paramsUri  Parameters for uri.
 	 * @param bool  $absolute Prepend host url.
 	 * @return string
+	 * @deprecated use getPublicExternalLink
 	 */
 	public function getShortUrlExternalLink(array $paramsUri, $absolute = false)
 	{
@@ -1427,5 +1450,10 @@ class UrlManager implements IErrorable
 			'common' => Driver::getInstance()->getStorageByCommonId($entityId),
 			default => null,
 		};
+	}
+
+	public function getUrlForUserDisk(mixed $userId): Uri
+	{
+		return new Uri("/company/personal/user/$userId/disk/path/");
 	}
 }

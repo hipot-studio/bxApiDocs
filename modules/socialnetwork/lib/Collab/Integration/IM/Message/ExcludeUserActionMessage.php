@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class ExcludeUserActionMessage implements ActionMessageInterface
 {
@@ -43,14 +44,26 @@ class ExcludeUserActionMessage implements ActionMessageInterface
 		$userNames = implode(', ', $recipientNames);
 		$senderName = $this->getName($this->senderId, $this->senderId, $this->collabId);
 
+		$isNewProjectsOn = Feature::isNewProjectsOn();
+
+		$phraseCode = $isNewProjectsOn
+			? 'SOCIALNETWORK_V2_PROJECT_CHAT_USER_EXCLUDE'
+			: 'SOCIALNETWORK_COLLAB_CHAT_USER_EXCLUDE'
+		;
+
 		$message = (string)Loc::getMessage(
-			'SOCIALNETWORK_COLLAB_CHAT_USER_EXCLUDE' . $this->getGenderSuffix($this->senderId),
+			$phraseCode . $this->getGenderSuffix($this->senderId),
 			[
 				'#SENDER_NAME#' => $senderName,
 				'#RECIPIENT#' => $userNames,
 			],
 		);
 
-		return $this->sendMessage($message, $this->senderId, $this->collabId);
+		return $this->sendMessage(
+			message: $message,
+			senderId: $this->senderId,
+			groupId: $this->collabId,
+			silent: $isNewProjectsOn ? self::SILENT_WITH_RECENT : self::SILENT_OFF,
+		);
 	}
 }

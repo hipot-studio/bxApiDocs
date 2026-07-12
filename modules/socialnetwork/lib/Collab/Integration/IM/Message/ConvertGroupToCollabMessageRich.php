@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class ConvertGroupToCollabMessageRich implements ActionMessageInterface
 {
@@ -29,8 +30,19 @@ class ConvertGroupToCollabMessageRich implements ActionMessageInterface
 			return 0;
 		}
 
-		$message = (string)Loc::getMessage('SOCIALNETWORK_COLLAB_CONVERT_GROUP_TO_COLLAB_RICH');
+		$phraseCode = Feature::isNewProjectsOn()
+			? 'SOCIALNETWORK_V2_PROJECT_CONVERT_GROUP_TO_COLLAB_RICH'
+			: 'SOCIALNETWORK_COLLAB_CONVERT_GROUP_TO_COLLAB_RICH'
+		;
 
-		return $this->sendMessage($message, $this->senderId, $this->collabId, self::COMPONENT_ID);
+		$message = (string)Loc::getMessage($phraseCode);
+
+		return $this->sendMessage(
+			message: $message,
+			senderId: $this->senderId,
+			groupId: $this->collabId,
+			componentId: self::COMPONENT_ID,
+			silent: self::SILENT_WITHOUT_RECENT,
+		);
 	}
 }

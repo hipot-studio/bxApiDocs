@@ -71,13 +71,13 @@ class Bot
 
 		/* vars for module install */
 		$class = isset($fields['CLASS'])? $fields['CLASS']: '';
-		$methodBotDelete = isset($fields['METHOD_BOT_DELETE'])? $fields['METHOD_BOT_DELETE']: '';
-		$methodMessageAdd = isset($fields['METHOD_MESSAGE_ADD'])? $fields['METHOD_MESSAGE_ADD']: '';
-		$methodMessageUpdate = isset($fields['METHOD_MESSAGE_UPDATE'])? $fields['METHOD_MESSAGE_UPDATE']: '';
-		$methodMessageDelete = isset($fields['METHOD_MESSAGE_DELETE'])? $fields['METHOD_MESSAGE_DELETE']: '';
-		$methodWelcomeMessage = isset($fields['METHOD_WELCOME_MESSAGE'])? $fields['METHOD_WELCOME_MESSAGE']: '';
-		$methodContextGet = isset($fields['METHOD_CONTEXT_GET']) ? $fields['METHOD_CONTEXT_GET'] : '';
-		$methodReactionChange = isset($fields['METHOD_REACTION_CHANGE']) ? $fields['METHOD_REACTION_CHANGE'] : '';
+		$methodBotDelete = $class !== '' && isset($fields['METHOD_BOT_DELETE'])? $fields['METHOD_BOT_DELETE']: '';
+		$methodMessageAdd = $class !== '' && isset($fields['METHOD_MESSAGE_ADD'])? $fields['METHOD_MESSAGE_ADD']: '';
+		$methodMessageUpdate = $class !== '' && isset($fields['METHOD_MESSAGE_UPDATE'])? $fields['METHOD_MESSAGE_UPDATE']: '';
+		$methodMessageDelete = $class !== '' && isset($fields['METHOD_MESSAGE_DELETE'])? $fields['METHOD_MESSAGE_DELETE']: '';
+		$methodWelcomeMessage = $class !== '' && isset($fields['METHOD_WELCOME_MESSAGE'])? $fields['METHOD_WELCOME_MESSAGE']: '';
+		$methodContextGet = $class !== '' && isset($fields['METHOD_CONTEXT_GET']) ? $fields['METHOD_CONTEXT_GET'] : '';
+		$methodReactionChange = $class !== '' && isset($fields['METHOD_REACTION_CHANGE']) ? $fields['METHOD_REACTION_CHANGE'] : '';
 		$textPrivateWelcomeMessage = isset($fields['TEXT_PRIVATE_WELCOME_MESSAGE'])? $fields['TEXT_PRIVATE_WELCOME_MESSAGE']: '';
 		$textChatWelcomeMessage = isset($fields['TEXT_CHAT_WELCOME_MESSAGE'])? $fields['TEXT_CHAT_WELCOME_MESSAGE']: '';
 		$openline = isset($fields['OPENLINE']) && $fields['OPENLINE'] == 'Y'? 'Y': 'N';
@@ -331,12 +331,9 @@ class Bot
 		$cache = \Bitrix\Main\Data\Cache::createInstance();
 		$cache->cleanDir(self::CACHE_PATH);
 
-		if (
-			!empty($deletedBot['APP_ID'])
-			&& \Bitrix\Main\Loader::includeModule('imbot')
-		)
+		if (!empty($deletedBot['APP_ID']))
 		{
-			\Bitrix\ImBot\V2\Controller\Bot::unbindV2RestEvents($botId, (string)$deletedBot['APP_ID']);
+			\Bitrix\Im\RestBot::unbindRestEvents($botId, (string)$deletedBot['APP_ID']);
 		}
 
 		$user = new \CUser;
@@ -608,10 +605,9 @@ class Bot
 			$oldEventMode === self::EVENT_MODE_WEBHOOK
 			&& ($update['EVENT_MODE'] ?? null) === self::EVENT_MODE_FETCH
 			&& !empty($bot['APP_ID'])
-			&& \Bitrix\Main\Loader::includeModule('imbot')
 		)
 		{
-			\Bitrix\ImBot\V2\Controller\Bot::unbindV2RestEvents($botId, (string)$bot['APP_ID']);
+			\Bitrix\Im\RestBot::unbindRestEvents($botId, (string)$bot['APP_ID']);
 		}
 
 		self::sendPullNotify($botId, 'botUpdate');
@@ -765,9 +761,9 @@ class Bot
 		return true;
 	}
 
-	public static function onMessageAdd($messageId, $messageFields)
+	public static function onMessageAdd($messageId, $messageFields, ?Message $message = null)
 	{
-		$botExecModule = self::getBotsForMessage($messageFields);
+		$botExecModule = self::getBotsForMessage($messageFields, $message ?? new Message($messageId));
 		if (!$botExecModule)
 		{
 			return true;
@@ -843,9 +839,9 @@ class Bot
 		return true;
 	}
 
-	public static function onMessageUpdate($messageId, $messageFields)
+	public static function onMessageUpdate($messageId, $messageFields, ?Message $message = null)
 	{
-		$botExecModule = self::getBotsForMessage($messageFields);
+		$botExecModule = self::getBotsForMessage($messageFields, $message ?? new Message($messageId));
 		if (!$botExecModule)
 		{
 			return true;
@@ -909,9 +905,9 @@ class Bot
 		return true;
 	}
 
-	public static function onMessageDelete($messageId, $messageFields)
+	public static function onMessageDelete($messageId, $messageFields, ?Message $message = null)
 	{
-		$botExecModule = self::getBotsForMessage($messageFields);
+		$botExecModule = self::getBotsForMessage($messageFields, $message ?? new Message($messageId));
 		if (!$botExecModule)
 		{
 			return true;
@@ -2004,7 +2000,7 @@ class Bot
 	 * @param $messageFields
 	 * @return array
 	 */
-	private static function getBotsForMessage($messageFields): array
+	private static function getBotsForMessage($messageFields, Message $message): array
 	{
 		if (
 			isset($messageFields['FROM_USER_ID'])
@@ -2034,7 +2030,6 @@ class Bot
 		else
 		{
 			$botFound = [];
-			$message = $messageFields['MESSAGE'] ?? null;
 			if (
 				$messageFields['CHAT_ENTITY_TYPE'] === 'LINES'
 				|| $messageFields['CHAT_ENTITY_TYPE'] === 'SUPPORT24_QUESTION' /** @see \Bitrix\ImBot\Bot\Support24::CHAT_ENTITY_TYPE */
@@ -2043,16 +2038,9 @@ class Bot
 			{
 				$botFound = $messageFields['BOT_IN_CHAT'];
 			}
-			else if (preg_match_all("/\[USER=([0-9]+)( REPLACE)?](.*?)\[\/USER]/i", $message, $matches))
+			else
 			{
-				foreach ($matches[1] as $userId)
-				{
-					$botByUserIdExists = BotData::getInstance((int)$userId)->exists();
-					if ($botByUserIdExists && isset($messageFields['BOT_IN_CHAT'][$userId]))
-					{
-						$botFound[$userId] = $userId;
-					}
-				}
+				$botFound = self::checkBotMentioned($messageFields, $message);
 			}
 
 			foreach ($messageFields['BOT_IN_CHAT'] as $botId)
@@ -2083,6 +2071,39 @@ class Bot
 		}
 
 		return $botExecModule;
+	}
+
+	private static function checkBotMentioned(array $messageFields, Message $message): array
+	{
+		$messageText = $messageFields['MESSAGE'] ?? null;
+		$botFound = [];
+
+		if (preg_match_all("/\[USER=([0-9]+)( REPLACE)?](.*?)\[\/USER]/i", $messageText, $matches))
+		{
+			foreach ($matches[1] as $userId)
+			{
+				$botByUserIdExists = BotData::getInstance((int)$userId)->exists();
+				if ($botByUserIdExists && isset($messageFields['BOT_IN_CHAT'][$userId]))
+				{
+					$botFound[$userId] = $userId;
+				}
+			}
+		}
+
+		if ($message->hasReply())
+		{
+			$replyMessage = $message->getReplyMessage();
+			if (
+				$replyMessage !== null
+				&& BotData::getInstance($replyMessage->getAuthorId())->exists()
+				&& isset($messageFields['BOT_IN_CHAT'][$replyMessage->getAuthorId()])
+			)
+			{
+				$botFound[$replyMessage->getAuthorId()] = $replyMessage->getAuthorId();
+			}
+		}
+
+		return $botFound;
 	}
 
 	public static function setPlatformContext(string $context): void

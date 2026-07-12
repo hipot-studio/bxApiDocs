@@ -140,6 +140,15 @@ class DiskSecurityContext extends SecurityContext
 	 * @param $objectId
 	 * @return bool
 	 */
+	public function canDownload($objectId)
+	{
+		return $this->canDoOperation($objectId, RightsManager::OP_DOWNLOAD);
+	}
+
+	/**
+	 * @param $objectId
+	 * @return bool
+	 */
 	public function canRename($objectId)
 	{
 		return $this->canDoOperation($objectId, RightsManager::OP_EDIT);

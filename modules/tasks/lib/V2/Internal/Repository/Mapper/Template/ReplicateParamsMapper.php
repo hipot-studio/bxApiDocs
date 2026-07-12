@@ -20,7 +20,7 @@ class ReplicateParamsMapper
 	{
 		$data = [];
 
-		if ($params->period)
+		if ($params->period !== null)
 		{
 			$data['PERIOD'] = $this->periodMapper->mapFromEnum($params->period);
 		}

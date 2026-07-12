@@ -48,13 +48,7 @@ class MailboxAccess extends MailAccess
 			return true;
 		}
 
-		$mailbox = MailboxTable::getById($mailboxId)->fetch();
-		if (!$mailbox)
-		{
-			return false;
-		}
-
-		return (int)$mailbox['USER_ID'] === $userId;
+		return self::isMailboxOwner($mailboxId, $userId);
 	}
 
 	public static function hasCurrentUserAccessToMailbox(int $mailboxId, bool $withSharedMailboxes = false): bool
@@ -80,9 +74,9 @@ class MailboxAccess extends MailAccess
 
 		if (!Feature::isMailboxGridAvailable())
 		{
-			$mailbox = MailboxTable::getById($mailboxId)->fetch();
+			$ownerId = MailboxTable::getOwnerId($mailboxId);
 
-			return $mailbox && self::isUserMailboxOwnerOrAdminAccess($userId, (int)($mailbox['USER_ID'] ?? 0));
+			return $ownerId > 0 && self::isUserMailboxOwnerOrAdminAccess($userId, $ownerId);
 		}
 
 		/** @var MailboxAccessController $controllerClass */
@@ -133,9 +127,26 @@ class MailboxAccess extends MailAccess
 		return \Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm();
 	}
 
-	public static function hasCurrentUserAccessToChangeMailboxOwner(): bool
+	public static function hasCurrentUserAccessToChangeMailboxOwner(int $mailboxId): bool
 	{
-		return self::hasCurrentUserAdminAccess();
+		if (!self::hasCurrentUserAdminAccess())
+		{
+			return false;
+		}
+
+		$mailbox = MailboxTable::query()
+			->setSelect(['ID', 'SERVER_TYPE', 'PASSWORD', 'OPTIONS'])
+			->where('ID', $mailboxId)
+			->setLimit(1)
+			->fetch()
+		;
+
+		if (!$mailbox)
+		{
+			return false;
+		}
+
+		return OrphanedMailboxLifecycle::isOrphan($mailbox);
 	}
 
 	protected static function getAccessControllerClass(): string

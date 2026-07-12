@@ -11,7 +11,9 @@ enum BackgroundId: string
 	case MartaAI = 'martaAI';
 	case Copilot = 'copilot';
 	case AiAssistant = 'aiAssistant';
+	case AiAssistantWidget = 'aiAssistantWidget';
 	case Collab = 'collab';
+	case CollabV2 = 'collabV2';
 	case Notifications = 'notifications';
 	case Transparent = 'transparent';
 
@@ -58,7 +60,7 @@ enum BackgroundId: string
 	{
 		return match ($this)
 		{
-			self::MartaAI, self::Copilot, self::AiAssistant, self::Collab, self::Notifications, self::Transparent => true,
+			self::MartaAI, self::Copilot, self::AiAssistant, self::AiAssistantWidget, self::Collab, self::Notifications, self::Transparent => true,
 			default => false,
 		};
 	}

@@ -9,8 +9,10 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Socialnetwork\Collab\Integration\IM\ChatType;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
+use Bitrix\Socialnetwork\V2\Feature;
 use CSite;
 
 class ChatFactory
@@ -76,7 +78,11 @@ class ChatFactory
 
 	private function getCollabChatFields(): array
 	{
-		return array_merge($this->getCommonFields(), self::getUniqueCollabChatFields());
+		return [
+			...$this->getCommonFields(),
+			...self::getUniqueCollabChatFields(),
+			'TYPE' => ChatType::getCollabType($this->group->isOpened()),
+		];
 	}
 
 	public static function getUniqueFieldsByType(Type $type): array
@@ -102,7 +108,7 @@ class ChatFactory
 		$fields = [];
 
 		$fields['TYPE'] = Chat::IM_TYPE_COLLAB;
-		$fields['SKIP_ADD_MESSAGE'] = 'N';
+		$fields['SKIP_ADD_MESSAGE'] = Feature::isNewProjectsOn() ? 'Y' : 'N';
 		$fields['MANAGE_USERS_DELETE'] = Chat::MANAGE_RIGHTS_OWNER;
 		$fields['MANAGE_UI'] = Chat::MANAGE_RIGHTS_OWNER;
 

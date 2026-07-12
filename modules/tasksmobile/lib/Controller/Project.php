@@ -12,6 +12,8 @@ use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Socialnetwork\Component\WorkgroupList;
+use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Tasks\Internals\Project\Provider;
 use Bitrix\Tasks\Internals\Project\Pull\PullDictionary;
 
@@ -35,8 +37,13 @@ class Project extends Controller
 	): ?Response\DataType\Page
 	{
 		$projects = [];
+		$isNewProjectsOn = class_exists(Feature::class) && Feature::isNewProjectsOn();
 
-		$provider = new Provider(CurrentUser::get()->getId(), $params['mode']);
+		$provider = new Provider(
+			CurrentUser::get()->getId(),
+			$params['mode'],
+			$params['mode'] === WorkgroupList::MODE_TASKS_PROJECT && $isNewProjectsOn,
+		);
 
 		$query = $provider->getPrimaryProjectsQuery($select);
 		$query = $provider->getQueryWithFilter($query, $filter, ($params['siftThroughFilter']['presetId'] ?? ''));

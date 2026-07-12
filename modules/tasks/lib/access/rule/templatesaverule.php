@@ -199,13 +199,6 @@ class TemplateSaveRule extends AbstractRule
 			return false;
 		}
 
-		if (!Loader::includeModule('extranet'))
-		{
-			$this->controller->addError(static::class, 'Unable to load extranet');
-
-			return false;
-		}
-
 		$currentUser = $this->createUserModel($this->user->getUserId());
 
 		$addedMemberIds = $this->getAddedMemberIds($oldTemplate, $newTemplate);

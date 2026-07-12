@@ -17,18 +17,9 @@ class DeleteIncomingWebhookCommand extends Main\Command\AbstractCommand
 
 	protected function execute(): Main\Result
 	{
-		$result = new Main\Result();
+		(new DeleteIncomingWebhookCommandHandler())($this);
 
-		try
-		{
-			(new DeleteIncomingWebhookCommandHandler())($this);
-		}
-		catch (Main\AccessDeniedException | Main\ObjectNotFoundException $e)
-		{
-			$result->addError(new Main\Error($e->getMessage(), $e->getCode()));
-		}
-
-		return $result;
+		return new Main\Result();
 	}
 
 	public function toArray(): array

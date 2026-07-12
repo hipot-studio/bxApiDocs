@@ -347,9 +347,8 @@ abstract class Tab extends BaseController
 		}
 
 		$recentProvider = ServiceLocator::getInstance()->get(RecentProvider::class);
-		$recent = $recentProvider->getList($params);
 
-		return $this->toRestFormatWithPaginationData([$recent], $params->limit, $recent->count());
+		return $recentProvider->getSection($params)->toRestFormat();
 	}
 
 	private function buildNestedListParams(): ?RecentParams

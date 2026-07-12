@@ -30,4 +30,9 @@ abstract class AbstractBlock implements \JsonSerializable
 	{
 		return $this->id;
 	}
+
+	public function getFiles(): array
+	{
+		return [];
+	}
 }

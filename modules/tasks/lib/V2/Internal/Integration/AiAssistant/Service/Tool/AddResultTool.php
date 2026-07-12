@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool;
 
 use Bitrix\AiAssistant\Facade\TracedLogger;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\InvalidIdentifierException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\AddResultDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\DtoValidationException;
-use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\ToolException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\ResultService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder\ResultSchemaBuilder;
 
@@ -20,12 +20,13 @@ class AddResultTool extends BaseTool
 
 	public function __construct(
 		private readonly ResultService $resultService,
+		ToolService $toolService,
 		ResultSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
 	)
 	{
-		parent::__construct($schemaBuilder, $validationService, $tracedLogger);
+		parent::__construct($toolService, $schemaBuilder, $validationService, $tracedLogger);
 	}
 
 	public function getDescription(): string

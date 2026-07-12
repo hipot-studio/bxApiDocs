@@ -91,6 +91,7 @@ class Filter
 		'scenarioName',
 		'imChatId',
 		'imChatChatId',
+		'ufMailMessage',
 	];
 
 	public function __construct(

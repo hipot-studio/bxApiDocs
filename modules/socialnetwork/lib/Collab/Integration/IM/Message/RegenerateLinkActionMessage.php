@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class RegenerateLinkActionMessage implements ActionMessageInterface
 {
@@ -23,6 +24,11 @@ class RegenerateLinkActionMessage implements ActionMessageInterface
 	public function send(array $recipientIds = [], array $parameters = []): int
 	{
 		if (!Loader::includeModule('im'))
+		{
+			return 0;
+		}
+
+		if (Feature::isNewProjectsOn())
 		{
 			return 0;
 		}

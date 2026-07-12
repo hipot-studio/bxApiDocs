@@ -3,14 +3,13 @@
 namespace Bitrix\Tasks\Flow\Access;
 
 use Bitrix\Main\Access\AccessibleItem;
-use Bitrix\Main\ORM\Query\Filter\ConditionTree;
-use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Tasks\Flow\FlowRegistry;
 use Bitrix\Tasks\Flow\Internal\Entity\FlowEntity;
 use Bitrix\Tasks\Flow\Internal\Entity\FlowMemberCollection;
 use Bitrix\Tasks\Flow\Internal\FlowMemberTable;
-use Bitrix\Tasks\Integration\Intranet\Flow\Department;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\FlowModel\EntityType;
 
 final class FlowModel implements AccessibleItem
 {
@@ -151,7 +150,25 @@ final class FlowModel implements AccessibleItem
 		return self::$forAll[$this->id];
 	}
 
-	public function getDepartments(): array
+	public function isInFlowDepartments(int $userId): bool
+	{
+		$userDepartments = Container::getInstance()->getUserDepartmentsInMemoryFacade()->getByUserId($userId);
+		if (empty($userDepartments))
+		{
+			return false;
+		}
+
+		$flowDepartments = $this->getFlowDepartments();
+
+		$matchedDepartments = array_intersect($userDepartments, $flowDepartments);
+
+		return !empty($matchedDepartments);
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function getFlowDepartments(): array
 	{
 		if ($this->id <= 0)
 		{
@@ -163,50 +180,47 @@ final class FlowModel implements AccessibleItem
 			return self::$departments[$this->id];
 		}
 
-		$filter = Query::filter()
-			->logic(ConditionTree::LOGIC_OR)
-			->where('ENTITY_TYPE', 'D')
-			->where('ENTITY_TYPE', 'DR');
+		self::$departments[$this->id] = [];
 
-		$departments = FlowMemberTable::query()
-			->setSelect(['ID', 'ENTITY_ID', 'ENTITY_TYPE'])
-			->where($filter)
-			->where('FLOW_ID', $this->id)
-			->exec()
-			->fetchCollection();
-
-		if ($departments->isEmpty())
+		$oldIdsByType = Container::getInstance()->getFlowMemberRepository()->getDepartmentsOldIdsByType($this->id);
+		if (!empty($oldIdsByType))
 		{
-			self::$departments[$this->id] = [];
-			return self::$departments[$this->id];
+			$this->loadDepartments($oldIdsByType);
 		}
-
-		$ids = [];
-		foreach ($departments as $department)
-		{
-			if ($department->getEntityType() === 'DR') // department recursive
-			{
-				$ids = array_merge($ids,$this->getSubDepartments($department->getEntityId()));
-			}
-			elseif ($department->getEntityType() === 'D')
-			{
-				$ids[] = $department->getEntityId();
-			}
-		}
-
-		self::$departments[$this->id] = $ids;
 
 		return self::$departments[$this->id];
+	}
+
+	private function loadDepartments(array $oldIdsByType): void
+	{
+		$departmentsIds = [];
+		$subdepartmentsIds = [];
+
+		$oldDepartmentsIds = $oldIdsByType[EntityType::Department->value] ?? [];
+		if (!empty($oldDepartmentsIds))
+		{
+			$departmentsIds = Container::getInstance()->getDepartmentsFacade()->getByOldIds(
+				$oldDepartmentsIds,
+			);
+		}
+
+		$oldDepartmentsWithSubsIds = $oldIdsByType[EntityType::DepartmentRecursive->value] ?? [];
+		if (!empty($oldDepartmentsWithSubsIds))
+		{
+			$subdepartmentsIds = Container::getInstance()->getSubdepartmentsFacade()->getByOldDepartmentsIds(
+				$oldDepartmentsWithSubsIds,
+			);
+		}
+
+		self::$departments[$this->id] = array_values(
+			array_unique(
+				array_merge($departmentsIds, $subdepartmentsIds),
+			),
+		);
 	}
 
 	protected function getEntity(array $additionalSelect = []): ?FlowEntity
 	{
 		return FlowRegistry::getInstance()->get($this->id, array_merge(['*'], $additionalSelect));
-	}
-
-	protected function getSubDepartments(int $departmentId): array
-	{
-		$subDepartments = array_map('intval', Department::getSubDepartments($departmentId));
-		return array_unique(array_merge([$departmentId], $subDepartments));
 	}
 }

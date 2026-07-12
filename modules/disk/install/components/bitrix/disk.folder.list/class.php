@@ -1,9 +1,11 @@
 <?php
 
+use Bitrix\Disk\Analytics\Availability;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Integration\Collab\CollabService;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\QuickAccess\ScopeTokenService;
 use Bitrix\Disk\Search\Reindex\BaseObjectIndex;
 use Bitrix\Disk\Search\Reindex\ExtendedIndex;
@@ -54,6 +56,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Search\Content;
+use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Filter\Options;
@@ -100,13 +103,17 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	private bool $isUserCollaber = false;
 	private ?Cookie $readOnlyCollabFolderStateCookie = null;
 	private ScopeTokenService $scopeTokenService;
+	private UnifiedLinkAccessService $unifiedLinkAccessService;
 	private ?array $analytics = null;
 
 	public function __construct($component = null)
 	{
 		parent::__construct($component);
 
-		$this->scopeTokenService = ServiceLocator::getInstance()->get('disk.scopeTokenService');
+		$serviceLocator = ServiceLocator::getInstance();
+
+		$this->scopeTokenService = $serviceLocator->get('disk.scopeTokenService');
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
 	}
 
 	protected function processBeforeAction($actionName)
@@ -370,6 +377,41 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			'ANALYTICS' => $this->analytics,
 		];
 
+		$user = $this->getUser();
+		$showFileUniqueCode = $this->request->getQuery('show_file_code');
+
+		if ($user instanceof CUser && is_string($showFileUniqueCode) && $showFileUniqueCode !== '')
+		{
+			$fileForShow = File::loadByUniqueCode($showFileUniqueCode);
+
+			if ($fileForShow instanceof File && $this->unifiedLinkAccessService->check($fileForShow)->canRead())
+			{
+				$urlManager = $this->getUrlManager();
+				$downloadUrl = new Uri($urlManager->getUrlForDownloadFile($fileForShow));
+				$accessInfo = $this->scopeTokenService->grantAccessWithScope($fileForShow, $this->gridOptions->getGridId());
+				$uls = (new Signer())->getSignature($fileForShow->getId());
+
+				$downloadUrl->addParams([
+					'_esd' => $accessInfo['encryptedScope'] ?? '',
+					'_uls' => $uls,
+				]);
+
+				$fileForShowData = $fileForShow->getFile();
+				$fileForShowData[FileAttributes::KEY_FILE_OBJECT] = $fileForShow;
+				$attr = FileAttributes::buildByFileData($fileForShowData, '');
+
+				// trigger unified link set
+				$attr->toDataSet();
+
+				$this->arResult['SHOW_FILE'] = [
+					'url' => $attr->getAttribute(FileAttributes::ATTRIBUTE_UNIFIED_LINK),
+					'downloadUrl' => (string)$downloadUrl,
+					'type' => $attr->getViewerType(),
+					'name' => $fileForShow->getName(),
+				];
+			}
+		}
+
 		if ($this->gridOptions->getViewMode() === FolderListOptions::VIEW_MODE_TILE)
 		{
 			$isEnabledObjectLock = Configuration::isEnabledObjectLock();
@@ -583,10 +625,12 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				'ID' => $objectId,
 			];
 
-			$isFolder = $object instanceof Folder;
-			$isFile = !$isFolder;
-			$supportsUnifiedLink = $isFile && $object->supportsUnifiedLink();
-			$isBoard = $isFile && (int)$object->getTypeFile() === TypeFile::FLIPCHART;
+				$isFolder = $object instanceof Folder;
+				$isFile = !$isFolder;
+				$supportsUnifiedLink = $isFile && $object->supportsUnifiedLink();
+				$supportsSharingAccessPopup = $supportsUnifiedLink;
+				$fileType = $isFile ? (int)$object->getTypeFile() : null;
+			$isBoard = $fileType === TypeFile::FLIPCHART;
 
 			$actions = $columns = [];
 
@@ -617,7 +661,6 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			{
 				$onlyRead = false;
 			}
-
 
 			if ($object->canRead($securityContext))
 			{
@@ -669,7 +712,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				{
 					$viewUnifiedLinkOptions = [];
 
-					if (!empty($this->analytics))
+					if (!empty($this->analytics) && Availability::isAvailableForObject($object))
 					{
 						$viewUnifiedLinkOptions['additionalQueryParams']['analytics'] = $this->analytics;
 					}
@@ -762,8 +805,6 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					], true);
 				}
 
-				$actionToShare = [];
-
 				$closeActionsMenu = "
 					(function() {
 						if (BX.Main.gridManager)
@@ -781,30 +822,18 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					})();
 				";
 
-				if (!$object->isDeleted() && Configuration::isPossibleToShowExternalLinkControl())
-				{
-					$actionToShare[] = [
-						"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_GET_EXT_LINK'),
-						'className' => 'disk-folder-list-context-menu-item',
-						"onclick" => $this->filterB24Feature(
-							$this->getExternalLinkFeature($object),
-							"BX.Disk['FolderListClass_{$this->componentId}'].openExternalLinkDetailSettingsWithEditing({$objectId});",
-						),
-					];
-				}
 
-				if (!$object->isDeleted())
-				{
-					$actionToShare[] = [
-						"id" => "copy-buffer",
-						'className' => 'disk-folder-list-context-menu-item',
-						'dataset' => [
-							'preventCloseContextMenu' => true,
-						],
-						"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_COPY_INTERNAL_LINK'),
-						"onclick" => "BX.Disk['FolderListClass_{$this->componentId}'].copyLinkInternalLink('{$internalLink}', this);",
-					];
-				}
+				$actionToShare = $this->buildShareSectionItems(
+					$object,
+					$securityContext,
+					$internalLink,
+					$closeActionsMenu,
+					$objectId,
+					$name,
+					$isFolder,
+					$supportsUnifiedLink,
+					$supportsSharingAccessPopup,
+				);
 
 				if (!$isFolder && !$object->isDeleted() && $isEnabledObjectLock && $object->canLock($securityContext))
 				{
@@ -836,62 +865,6 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 								name: '" . CUtil::JSEscape($name) . "'
 							}
 						}); BX.fireEvent(document.body, 'click');",
-					];
-				}
-
-				if (!$object->isDeleted() && !$object->canChangeRights($securityContext) && !$object->canShare($securityContext))
-				{
-					$actionToShare[] = [
-						"id" => "share",
-						'className' => 'disk-folder-list-context-menu-item',
-						"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_SHOW_SHARING_DETAIL_3'),
-						"onclick" => $this->filterB24Feature(
-							$isFolder ? 'disk_folder_sharing' : 'disk_file_sharing',
-							"{$closeActionsMenu}BX.Disk.showSharingDetailWithoutEdit({
-								ajaxUrl: '/bitrix/components/bitrix/disk.folder.list/ajax.php',
-								object: {
-									id: {$objectId},
-									name: '" . CUtil::JSEscape($name) . "',
-									isFolder: " . ($isFolder ? 'true' : 'false') . "
-								 }
-							});",
-						),
-					];
-				}
-				elseif (!$object->isDeleted() && $object->canChangeRights($securityContext))
-				{
-					$actionToShare[] = [
-						"id" => "share",
-						'className' => 'disk-folder-list-context-menu-item',
-						"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_SHOW_SHARING_DETAIL_3'),
-						"onclick" => $this->filterB24Feature(
-							$isFolder ? 'disk_folder_sharing' : 'disk_file_sharing',
-							"{$closeActionsMenu}BX.Disk['FolderListClass_{$this->componentId}'].showSharingDetailWithChangeRights({
-								object: {
-									id: {$objectId},
-									name: '" . CUtil::JSEscape($name) . "',
-									isFolder: " . ($isFolder ? 'true' : 'false') . "
-								 }
-							});",
-						),
-					];
-				}
-				elseif (!$object->isDeleted() && $object->canShare($securityContext))
-				{
-					$actionToShare[] = [
-						"id" => "share",
-						'className' => 'disk-folder-list-context-menu-item',
-						"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_SHOW_SHARING_DETAIL_3'),
-						"onclick" => $this->filterB24Feature(
-							$isFolder ? 'disk_folder_sharing' : 'disk_file_sharing',
-							"{$closeActionsMenu}BX.Disk['FolderListClass_{$this->componentId}'].showSharingDetailWithSharing({
-								object: {
-									id: {$objectId},
-									name: '" . CUtil::JSEscape($name) . "',
-									isFolder: " . ($isFolder ? 'true' : 'false') . "
-								 }
-							});",
-						),
 					];
 				}
 
@@ -1178,7 +1151,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 						);
 					}
 				}
-				elseif ($isFile && $supportsUnifiedLink && !empty($this->analytics))
+				elseif (
+					$supportsUnifiedLink
+					&& !empty($this->analytics)
+					&& Availability::isAvailableForObject($object)
+				)
 				{
 					$attr->setUnifiedLinkOptions([
 						'additionalQueryParams' => [
@@ -2744,6 +2721,212 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		return false;
 	}
 
+	private function buildShareSectionItems(
+		BaseObject $object,
+		SecurityContext $securityContext,
+		string $internalLink,
+		string $closeActionsMenu,
+		int $objectId,
+		string $objectName,
+		bool $isFolder,
+		bool $supportsUnifiedLink,
+		bool $supportsSharingAccessPopup,
+	): array
+	{
+		if ($supportsUnifiedLink)
+		{
+			return $this->buildUnifiedShareMenuItems(
+				$object,
+				$securityContext,
+				$internalLink,
+				$closeActionsMenu,
+				$objectId,
+				$objectName,
+				$isFolder,
+				$supportsSharingAccessPopup,
+			);
+		}
+
+		return $this->buildLegacyShareMenuItems(
+			$object,
+			$securityContext,
+			$internalLink,
+			$closeActionsMenu,
+			$objectId,
+			$objectName,
+			$isFolder,
+		);
+	}
+
+	private function buildUnifiedShareMenuItems(
+		BaseObject $object,
+		SecurityContext $securityContext,
+		string $internalLink,
+		string $closeActionsMenu,
+		int $objectId,
+		string $objectName,
+		bool $isFolder,
+		bool $supportsSharingAccessPopup,
+	): array
+	{
+		$items = [];
+
+		if (!$object->isDeleted())
+		{
+			$items[] = [
+				'id' => 'copy-buffer',
+				'className' => 'disk-folder-list-context-menu-item',
+				'dataset' => [
+					'preventCloseContextMenu' => true,
+				],
+				'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_COPY_LINK'),
+				'onclick' => "BX.Disk['FolderListClass_{$this->componentId}'].copyLinkInternalLink('{$internalLink}', this);",
+			];
+		}
+
+		$sharingItem = $this->buildSharingMenuItem(
+			$object,
+			$securityContext,
+			$closeActionsMenu,
+			$objectId,
+			$objectName,
+			$isFolder,
+			$supportsSharingAccessPopup,
+			Loc::getMessage('DISK_FOLDER_LIST_ACCESS_BY_LINK'),
+		);
+
+		if ($sharingItem !== null)
+		{
+			$items[] = $sharingItem;
+		}
+
+		return $items;
+	}
+
+	private function buildLegacyShareMenuItems(
+		BaseObject $object,
+		SecurityContext $securityContext,
+		string $internalLink,
+		string $closeActionsMenu,
+		int $objectId,
+		string $objectName,
+		bool $isFolder,
+	): array
+	{
+		$items = [];
+
+		if (Configuration::isEnabledExternalLink() && !$object->isDeleted())
+		{
+			$externalLinkOnClick = "BX.Disk['FolderListClass_{$this->componentId}'].openExternalLinkDetailSettingsWithEditing({$objectId});";
+
+			$items[] = [
+				'id' => 'ext-link',
+				'className' => 'disk-folder-list-context-menu-item',
+				'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_GET_EXT_LINK'),
+				'onclick' => $this->filterB24Feature(
+					$this->getExternalLinkFeature($object),
+					$closeActionsMenu . $externalLinkOnClick,
+				),
+			];
+		}
+
+		if (!$object->isDeleted())
+		{
+			$items[] = [
+				'id' => 'copy-buffer',
+				'className' => 'disk-folder-list-context-menu-item',
+				'dataset' => [
+					'preventCloseContextMenu' => true,
+				],
+				'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_COPY_INTERNAL_LINK'),
+				'onclick' => "BX.Disk['FolderListClass_{$this->componentId}'].copyLinkInternalLink('{$internalLink}', this);",
+			];
+		}
+
+		$sharingItem = $this->buildSharingMenuItem(
+			$object,
+			$securityContext,
+			$closeActionsMenu,
+			$objectId,
+			$objectName,
+			$isFolder,
+			false,
+			Loc::getMessage('DISK_FOLDER_LIST_ACT_SHOW_SHARING_DETAIL_2'),
+		);
+
+		if ($sharingItem !== null)
+		{
+			$items[] = $sharingItem;
+		}
+
+		return $items;
+	}
+
+	private function buildSharingMenuItem(
+		BaseObject $object,
+		SecurityContext $securityContext,
+		string $closeActionsMenu,
+		int $objectId,
+		string $objectName,
+		bool $isFolder,
+		bool $supportsSharingAccessPopup,
+		string $text,
+	): ?array
+	{
+		if ($object->isDeleted())
+		{
+			return null;
+		}
+
+		if (!$object->canChangeRights($securityContext) && !$object->canShare($securityContext))
+		{
+			$mode = 'without-edit';
+		}
+		elseif ($object->canChangeRights($securityContext))
+		{
+			$mode = 'with-change-rights';
+		}
+		elseif ($object->canShare($securityContext))
+		{
+			$mode = 'with-sharing';
+		}
+		else
+		{
+			return null;
+		}
+
+		$uniqueCode = null;
+		if ($supportsSharingAccessPopup && $object instanceof File)
+		{
+			$uniqueCode = $object->getUniqueCode();
+		}
+
+		$clickJsHandler = $this->getSharingPopupOnClick(
+			$closeActionsMenu,
+			$objectId,
+			$objectName,
+			$isFolder,
+			$supportsSharingAccessPopup,
+			$mode,
+			$uniqueCode,
+		);
+
+		if (!$supportsSharingAccessPopup)
+		{
+			$clickJsHandler = $this->filterB24Feature(
+				feature: $isFolder ? 'disk_folder_sharing' : 'disk_file_sharing',
+				js: $clickJsHandler,
+			);
+		}
+
+		return [
+			'id' => 'share',
+			'className' => 'disk-folder-list-context-menu-item',
+			'text' => $text,
+			'onclick' => $clickJsHandler,
+		];
+	}
+
 	private function getExternalLinkFeature(BaseObject $object): string
 	{
 		$isFolder = $object instanceof Folder;
@@ -2760,6 +2943,58 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		}
 
 		return 'disk_manual_external_link';
+	}
+
+	private function getSharingPopupOnClick(
+		string $closeActionsMenu,
+		int $objectId,
+		string $objectName,
+		bool $isFolder,
+		bool $supportsSharingAccessPopup,
+		string $mode,
+		?string $uniqueCode = null,
+	): string
+	{
+		$isFolderJs = $isFolder ? 'true' : 'false';
+		$escapedObjectName = CUtil::JSEscape($objectName);
+		$escapedUniqueCode = ($uniqueCode === null || $uniqueCode === '')
+			? 'null'
+			: "'" . CUtil::JSEscape($uniqueCode) . "'";
+
+		if (!$supportsSharingAccessPopup)
+		{
+			$legacyMethodByMode = [
+				'without-edit' => 'showSharingDetailWithoutEdit',
+				'with-change-rights' => 'showSharingDetailWithChangeRights',
+				'with-sharing' => 'showSharingDetailWithSharing',
+			];
+			$legacyMethod = $legacyMethodByMode[$mode] ?? 'showSharingDetailWithChangeRights';
+
+			return <<<JS
+{$closeActionsMenu}
+BX.Runtime.loadExtension('disk.sharing-legacy-popup').then((exports) => {
+	const popup = new exports.LegacyPopup();
+	popup.{$legacyMethod}({
+		object: {
+			id: {$objectId},
+			name: '{$escapedObjectName}',
+			isFolder: {$isFolderJs}
+		}
+	});
+});
+JS;
+		}
+
+		return <<<JS
+{$closeActionsMenu}
+BX.Runtime.loadExtension('disk.sharing-access-popup').then((exports) => {
+	const popup = new exports.SharingPopupDialog();
+	popup.open({
+		objectId: {$objectId},
+		uniqueCode: {$escapedUniqueCode}
+	});
+});
+JS;
 	}
 
 	private function isInCollabFolder(): bool

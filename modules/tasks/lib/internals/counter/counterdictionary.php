@@ -26,6 +26,7 @@ class CounterDictionary
 
 	public const
 		COUNTER_MENTIONED						= 'mentioned',
+		COUNTER_MUTED_MENTIONED					= 'muted_mentioned',
 		COUNTER_TOTAL							= 'total',
 		COUNTER_MEMBER_TOTAL					= 'member_total',
 
@@ -79,6 +80,7 @@ class CounterDictionary
 		COUNTER_SONET_TOTAL_COMMENTS			= 'sonet_total_comments',
 		COUNTER_SONET_FOREIGN_EXPIRED			= 'sonet_foreign_expired',
 		COUNTER_SONET_FOREIGN_COMMENTS			= 'sonet_foreign_comments',
+		COUNTER_SONET_MUTED_MENTIONED			= 'sonet_muted_mentioned', // quotient of sonet_total_comments
 		COUNTER_SONET_MAJOR						= 'sonet_major',
 
 		COUNTER_SCRUM_TOTAL_COMMENTS			= 'scrum_total_comments',
@@ -134,6 +136,7 @@ class CounterDictionary
 		self::COUNTER_SONET_TOTAL_COMMENTS => self::COUNTER_GROUPS_TOTAL_COMMENTS,
 		self::COUNTER_SONET_FOREIGN_EXPIRED => self::COUNTER_GROUPS_FOREIGN_EXPIRED,
 		self::COUNTER_SONET_FOREIGN_COMMENTS => self::COUNTER_GROUPS_FOREIGN_COMMENTS,
+		self::COUNTER_SONET_MUTED_MENTIONED => self::COUNTER_SONET_MUTED_MENTIONED,
 	];
 
 	public const MAP_SCRUM_TOTAL = [

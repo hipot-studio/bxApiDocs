@@ -5,6 +5,7 @@ namespace Bitrix\Tasks\V2\Internal\Repository;
 use Bitrix\Tasks\Util\UserField;
 use Bitrix\Tasks\V2\Internal\Entity\UserFieldSchemeCollection;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\UserFieldSchemeMapper;
+use CUserTypeEntity;
 
 class UserFieldSchemeRepository implements UserFieldSchemeRepositoryInterface
 {
@@ -20,6 +21,13 @@ class UserFieldSchemeRepository implements UserFieldSchemeRepositoryInterface
 		$scheme = $this->getControllerClass($entityCode)::getScheme($entityCode, $userId);
 
 		return $this->userFieldSchemeMapper->mapToCollection($scheme);
+	}
+
+	public function hasMandatory(string $entityCode): bool
+	{
+		$fields = CUserTypeEntity::GetList([], ['ENTITY_ID' => $entityCode, 'MANDATORY' => 'Y']);
+
+		return (bool)$fields->Fetch();
 	}
 
 	private function getControllerClass(string $entityCode): UserField

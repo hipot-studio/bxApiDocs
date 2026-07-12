@@ -6,13 +6,14 @@ class CSocNetFeaturesPerms extends CAllSocNetFeaturesPerms
 	/***************************************/
 	/********  DATA MODIFICATION  **********/
 	/***************************************/
-	public static function Add($arFields)
+	public static function Add($arFields, array $options = [])
 	{
 		global $DB, $CACHE_MANAGER;
 
 		$arFields1 = \Bitrix\Socialnetwork\Util::getEqualityFields($arFields);
 
-		if (!CSocNetFeaturesPerms::CheckFields("ADD", $arFields))
+		$checkFields = (bool)($options['checkFields'] ?? true);
+		if ($checkFields && !CSocNetFeaturesPerms::CheckFields("ADD", $arFields))
 		{
 			return false;
 		}

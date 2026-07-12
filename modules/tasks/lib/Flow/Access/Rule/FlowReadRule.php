@@ -42,7 +42,7 @@ class FlowReadRule extends AbstractRule
 			return true;
 		}
 
-		if (!empty(array_intersect($this->user->getUserDepartments(), $item->getDepartments())))
+		if ($item->isInFlowDepartments($this->user->getUserId()))
 		{
 			return true;
 		}

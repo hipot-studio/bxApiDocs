@@ -40,17 +40,6 @@ class CloudRecordExpectationAgent
 
 	/**
 	 * Main agent callback
-	 *
-	 * Logic flow:
-	 * [1] Record track missing? -> sendErrorToChat() -> STOP
-	 * [2] Record track not downloaded?
-	 *     - Download agent exists? -> reschedule (1h) -> CONTINUE
-	 *     - No agent? -> sendErrorToChat() -> STOP
-	 * [3] Preview not downloaded?
-	 *     - Download agent exists? -> reschedule (1h) -> CONTINUE
-	 *     - No agent? -> delete preview, create default, link, notify -> STOP
-	 * [4] All good -> STOP (already processed by TrackService)
-	 *
 	 * @param int $callId Call ID
 	 * @param int $startTime Agent start timestamp
 	 * @return string Agent name to reschedule or empty string to stop
@@ -67,7 +56,6 @@ class CloudRecordExpectationAgent
 
 		$log && $logger->info("CloudRecordExpectationAgent::run: CallId: {$callId}, StartTime: {$startTime}");
 
-		// Telemetry: agent run started
 		$call = Registry::getCallWithId($callId);
 		if (!$call)
 		{
@@ -100,14 +88,12 @@ class CloudRecordExpectationAgent
 			return '';
 		}
 
-		// Get tracks
-		$record = Track::getTrackForCall($callId, Track::TYPE_VIDEO_RECORD);
-		$preview = Track::getTrackForCall($callId, Track::TYPE_VIDEO_PREVIEW);
+		$records = Track::getTracksForCall($callId, Track::TYPE_VIDEO_RECORD);
 
-		// [1] Record track missing?
-		if (!$record)
+		// [1] Record tracks missing?
+		if ($records->count() === 0)
 		{
-			$log && $logger->error("CloudRecordExpectationAgent: Record track not found. CallId: {$callId}");
+			$log && $logger->error("CloudRecordExpectationAgent: Record tracks not found. CallId: {$callId}");
 
 			(new FollowUpAnalytics($call))
 				->sendTelemetry(
@@ -120,62 +106,33 @@ class CloudRecordExpectationAgent
 			return '';
 		}
 
-		// [2] Record track not downloaded?
-		if (!$record->getDownloaded())
+		// Process each record track individually
+		$needsReschedule = false;
+		foreach ($records as $record)
 		{
-			if (self::hasDownloadAgentForTrack($record->getId()))
+			$status = self::processRecordTrack($record, $callId);
+			if ($status === 'reschedule')
 			{
-				$log && $logger->info("CloudRecordExpectationAgent: Record download in progress. Rescheduling. CallId: {$callId}");
-				(new FollowUpAnalytics($call))
-					->sendTelemetry(
-						source: null,
-						status: 'success',
-						event: 'cloud_record_expectation_reschedule_' . $record->getId()
-					);
-
-				return self::buildAgentName($callId, $startTime);
+				$needsReschedule = true;
 			}
-
-			$log && $logger->error("CloudRecordExpectationAgent: Record not downloaded and no download agent. CallId: {$callId}");
-			(new FollowUpAnalytics($call))
-				->sendTelemetry(
-					source: null,
-					status: 'success',
-					event: 'cloud_record_expectation_record_not_downloaded_' . $record->getId()
-				);
-
-			self::sendErrorToChat($callId);
-			return '';
 		}
 
-		// Record is downloaded
-		// [3] Preview not downloaded?
-		if (
-			($preview && !$preview->getDownloaded())
-			|| (!$preview && str_starts_with($record->getFileMimeType(), 'video/'))
-		)
+		if ($needsReschedule)
 		{
-			$log && $logger->warning("CloudRecordExpectationAgent: Preview failed. Creating default. CallId: {$callId}");
+			$log && $logger->info("CloudRecordExpectationAgent: Some tracks still downloading. Rescheduling. CallId: {$callId}");
+
 			(new FollowUpAnalytics($call))
 				->sendTelemetry(
 					source: null,
 					status: 'success',
-					event: 'cloud_record_expectation_create_default_preview'
+					event: 'cloud_record_expectation_reschedule'
 				);
 
-			self::createDefaultPreviewAndNotify($callId, $record, $preview);
+			return self::buildAgentName($callId, $startTime);
 		}
 
-		(new FollowUpAnalytics($call))
-			->sendTelemetry(
-				source: null,
-				status: 'success',
-				event: 'cloud_record_expectation_process_track'
-			);
-		TrackService::getInstance()->processCloudTrack($record);
-
-		// [4] Both downloaded - should already be processed by TrackService
-		$log && $logger->info("CloudRecordExpectationAgent: All tracks downloaded. CallId: {$callId}");
+		// All tracks processed or failed — cleanup
+		$log && $logger->info("CloudRecordExpectationAgent: All tracks processed. CallId: {$callId}");
 
 		(new FollowUpAnalytics($call))
 			->sendTelemetry(
@@ -344,64 +301,57 @@ class CloudRecordExpectationAgent
 	}
 
 	/**
-	 * Create default preview and send recording ready notification
+	 * Process a single record track.
 	 *
+	 * Checks download status per-track and processes downloaded tracks immediately.
+	 *
+	 * @param Track $record Record track to process
 	 * @param int $callId Call ID
-	 * @param Track $record Record track (must be downloaded)
-	 * @param Track|null $preview Existing preview track (will be deleted if exists)
+	 * @return string 'processed'|'reschedule'|'failed'
 	 */
-	private static function createDefaultPreviewAndNotify(int $callId, Track $record, ?Track $preview): void
+	private static function processRecordTrack(Track $record, int $callId): string
 	{
 		$log = CallAISettings::isLoggingEnable();
 		$logger = Logger::getInstance();
 
-		$call = Registry::getCallWithId($callId);
-		if (!$call)
+		// Track not downloaded yet — check per-track download agent
+		if (!$record->getDownloaded())
 		{
-			$log && $logger->error("CloudRecordExpectationAgent: Call not found. CallId: {$callId}");
-			return;
-		}
-
-		// Delete existing failed preview
-		if ($preview)
-		{
-			$preview->delete();
-		}
-
-		// Create default preview
-		$result = TrackService::getInstance()->createDefaultPreview($callId);
-		if (!$result->isSuccess())
-		{
-			$errorCode = 'default_preview_creation_failed';
-			$errors = $result->getErrors();
-			if (!empty($errors))
+			if (self::hasDownloadAgentForTrack($record->getId()))
 			{
-				$errorCode = $errors[0]->getCode();
+				$log && $logger->info("CloudRecordExpectationAgent: Record download in progress. TrackId: {$record->getId()}, CallId: {$callId}");
+				return 'reschedule';
 			}
 
-			$log && $logger->error("CloudRecordExpectationAgent: Could not create default preview. CallId: {$callId}, Error: {$errorCode}. Send record as a file.");
+			$log && $logger->error("CloudRecordExpectationAgent: Record not downloaded and no download agent. TrackId: {$record->getId()}, CallId: {$callId}");
 
-			(new FollowUpAnalytics($call))
-				->sendTelemetry(
-					source: null,
-					status: 'error',
-					errorCode: $errorCode,
-					event: 'cloud_preview_default_creation_failed'
-				);
+			$call = Registry::getCallWithId($callId);
+			if ($call)
+			{
+				(new FollowUpAnalytics($call))
+					->sendTelemetry(
+						source: null,
+						status: 'error',
+						errorCode: 'track_download_stuck',
+						event: 'cloud_record_expectation_track_failed'
+					);
+			}
 
-			// Send record without preview
-			NotifyService::getInstance()->sendRecordingReadyMessage($call, $record);
-			return;
+			return 'failed';
 		}
 
-		$defaultPreview = $result->getData()['track'];
-		$log && $logger->info("CloudRecordExpectationAgent: Default preview created. CallId: {$callId}");
+		// Downloaded but no file — broken track
+		if (!$record->getFileId())
+		{
+			$log && $logger->error("CloudRecordExpectationAgent: Record downloaded but no file. TrackId: {$record->getId()}, CallId: {$callId}");
+			return 'failed';
+		}
 
-		(new FollowUpAnalytics($call))
-			->sendTelemetry(
-				source: null,
-				status: 'success',
-				event: 'cloud_preview_default_created'
-			);
+		// Track is downloaded and has a file — process it
+		$log && $logger->info("CloudRecordExpectationAgent: Processing record track. TrackId: {$record->getId()}, CallId: {$callId}");
+
+		TrackService::getInstance()->processCloudTrack($record);
+
+		return 'processed';
 	}
 }

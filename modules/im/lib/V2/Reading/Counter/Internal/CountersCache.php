@@ -10,7 +10,7 @@ use Bitrix\Main\Data\Cache;
 
 class CountersCache
 {
-	private const CACHE_DIR = '/bx/im/counter/v8/';
+	private const CACHE_DIR = '/bx/im/counter/v9/';
 	private const CACHE_KEY_PREFIX = 'user_counters_';
 	private const CACHE_TTL = 86400;
 

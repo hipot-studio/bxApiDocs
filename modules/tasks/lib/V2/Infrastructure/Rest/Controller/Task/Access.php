@@ -6,7 +6,6 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\Interaction\Response\ArrayResponse;
 use Bitrix\Tasks\V2\Infrastructure\Rest\Controller\ActionFilter\IsEnabledFilter;
-use Bitrix\Tasks\V2\Infrastructure\Rest\Request\Task\Access\GetTaskAccessRequest;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
 use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
@@ -33,9 +32,9 @@ class Access extends RestController
 		];
 	}
 
-	public function getAction(GetTaskAccessRequest $request, TaskRightService $taskRightService): ArrayResponse
+	public function getAction(int $id, TaskRightService $taskRightService): ArrayResponse
 	{
-		$rights = $taskRightService->get(ActionDictionary::TASK_ACTIONS, $request->id, $this->userId);
+		$rights = $taskRightService->get(ActionDictionary::TASK_ACTIONS, $id, $this->userId);
 
 		return new ArrayResponse($rights);
 	}

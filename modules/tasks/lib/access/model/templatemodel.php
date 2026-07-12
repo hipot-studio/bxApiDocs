@@ -8,20 +8,20 @@
 
 namespace Bitrix\Tasks\Access\Model;
 
-
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\Access\User\AccessibleUser;
-use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Access\Permission\TasksTemplatePermissionTable;
 use Bitrix\Tasks\Access\Role\RoleDictionary;
 use Bitrix\Tasks\Access\AccessibleTask;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable;
-use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Tasks\V2\Internal\Access\Registry\TemplateRegistry;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
-class TemplateModel
-	implements AccessibleTask
+class TemplateModel implements AccessibleTask
 {
 	private static $cache = [];
 
@@ -30,6 +30,7 @@ class TemplateModel
 	private ?string $description = null;
 	private $id = 0;
 	private ?array $members = null;
+	private array $membersDepartments = [];
 	private $groupId;
 	private $replicate;
 
@@ -382,19 +383,26 @@ class TemplateModel
 	}
 
 	/**
-	 * @param int $userId
-	 * @param bool $recursive
-	 * @param array $roles
-	 * @return bool
+	 * @param string[] $membersRoles - RoleDictionary::ROLE_* constants
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 *
+	 * @see Method TaskModel::isInMembersDepartments() has smilar logic
 	 */
-	public function isInDepartment(int $userId, bool $recursive = false, array $roles = []): bool
+	public function isInMembersDepartments(int $userId, array $membersRoles = []): bool
 	{
-		$userDepartments = \CIntranetUtils::GetUserDepartments($userId);
-		if (!is_array($userDepartments))
+		$userDepartments = Container::getInstance()->getUserDepartmentsInMemoryFacade()->getByUserId($userId);
+		if (empty($userDepartments))
 		{
 			return false;
 		}
-		return !empty(array_intersect($userDepartments, $this->getDepartments($roles)));
+
+		$templateMembersDepartments = $this->getMembersDepartments($membersRoles);
+
+		$matchedDepartments = array_intersect($userDepartments, $templateMembersDepartments);
+
+		return !empty($matchedDepartments);
 	}
 
 	public function getParentId(): ?int
@@ -488,56 +496,71 @@ class TemplateModel
 	}
 
 	/**
-	 * @param array $roles
-	 * @return array
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * @param string[] $membersRoles
+	 * @return int[]
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 *
+	 * @see Method TaskModel::getMembersDepartments() has smilar logic
 	 */
-	private function getDepartments(array $roles = []): array
+	private function getMembersDepartments(array $membersRoles): array
 	{
-		$key = 'DEP_' . static::class . '_' . $this->getId() . '_' . implode(',', $roles);
+		$cacheKey = $this->getMembersDepartmentsCacheKey($membersRoles);
 
-		if (!array_key_exists($key, static::$cache))
+		if (!isset($this->membersDepartments[$cacheKey]))
 		{
-			$members = $this->getMembers();
+			$this->loadMembersDepartments($membersRoles);
+		}
 
-			$userIds = [];
+		return $this->membersDepartments[$cacheKey];
+	}
 
-			foreach ($members as $role => $ids)
+	/**
+	 * @see Method TaskModel::getMembersDepartmentsCacheKey() has smilar logic
+	 */
+	private function getMembersDepartmentsCacheKey(array $membersRoles): string
+	{
+		return $this->getId() . '_' . implode('_', $membersRoles);
+	}
+
+	/**
+	 * @param string[] $membersRoles
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 *
+	 * @see Method TaskModel::loadMembersDepartments() has smilar logic
+	 */
+	private function loadMembersDepartments(array $membersRoles = []): void
+	{
+		$members = $this->getMembers();
+
+		$membersRolesMap = array_flip($membersRoles);
+
+		$userIds = [];
+		foreach ($members as $role => $ids)
+		{
+			if (empty($membersRoles) || isset($membersRolesMap[$role]))
 			{
-				if (
-					empty($roles)
-					|| in_array($role, $roles)
-				)
-				{
-					$userIds = array_merge($userIds, $ids);
-				}
-			}
-
-			static::$cache[$key] = [];
-			if (!empty($userIds))
-			{
-				$userIds = implode(',', $userIds);
-
-				$res = \Bitrix\Tasks\Util\User::getList(
-					[
-						'filter' => [
-							'@ID' => new SqlExpression($userIds),
-						],
-						'select' => ['ID', 'UF_DEPARTMENT'],
-					]
-				);
-
-				foreach ($res as $row)
-				{
-					if (is_array($row['UF_DEPARTMENT']) && !empty($row['UF_DEPARTMENT']))
-					{
-						static::$cache[$key] = array_merge(static::$cache[$key], $row['UF_DEPARTMENT']);
-					}
-				}
+				$userIds = array_merge($userIds, $ids);
 			}
 		}
-		return static::$cache[$key];
+
+		$cacheKey = $this->getMembersDepartmentsCacheKey($membersRoles);
+
+		if (empty($userIds))
+		{
+			$this->membersDepartments[$cacheKey] = [];
+
+			return;
+		}
+
+		$userIds = array_map('intval', $userIds);
+
+		$this->membersDepartments[$cacheKey] = Container::getInstance()
+			->getUserDepartmentsInMemoryFacade()
+			->getByUsersIds($userIds)
+		;
 	}
 }

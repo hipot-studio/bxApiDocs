@@ -73,6 +73,11 @@ class NotifyTaskCreated extends AbstractNotify implements ExcludeNotifyRecipient
 		return false;
 	}
 
+	public function isClickable(): bool
+	{
+		return true;
+	}
+
 	public function getExcludedNotifyRecipients(): UserCollection
 	{
 		return $this->task->getMembers();

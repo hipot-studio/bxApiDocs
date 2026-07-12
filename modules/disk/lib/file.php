@@ -57,6 +57,12 @@ class File extends BaseObject
 
 	const CODE_RECORDED_FILE = 'RECORDED';
 
+	protected array $fileTypeFixes = [
+		TypeFile::UNKNOWN => [
+			'xlsm' => TypeFile::DOCUMENT,
+		],
+	];
+
 	/** @var int */
 	protected $typeFile;
 	/** @var int */
@@ -283,6 +289,7 @@ class File extends BaseObject
 	/**
 	 * Returns file (@see CFile::getById());
 	 * @return array|null
+	 * @throws \Bitrix\Main\NotImplementedException
 	 */
 	public function getFile()
 	{
@@ -300,7 +307,7 @@ class File extends BaseObject
 
 		if(!$this->file)
 		{
-			return [];
+			return array();
 		}
 
 		return $this->file;
@@ -423,7 +430,7 @@ class File extends BaseObject
 	 */
 	public function getTypeFile()
 	{
-		return $this->typeFile;
+		return $this->fileTypeFixes[(int)$this->typeFile][$this->getExtension()] ?? $this->typeFile;
 	}
 
 	/**
@@ -1853,9 +1860,20 @@ class File extends BaseObject
 		]);
 		$urlShowObjectInGrid = new Main\Web\Uri($urlShowObjectInGrid);
 
+		$downloadUri = Main\Engine\UrlManager::getInstance()->create('disk.file.download', ['fileId' => $this->getId()]);
+
+		if ($this->supportsUnifiedLink())
+		{
+			$uls = (new Main\Security\Sign\Signer())->getSignature((string)$this->getId());
+
+			$downloadUri->addParams([
+				'_uls' => $uls,
+			]);
+		}
+
 		$links = [
 			/** @see \Bitrix\Disk\Controller\File::downloadAction() */
-			'download' => Main\Engine\UrlManager::getInstance()->create('disk.file.download', ['fileId' => $this->getId()]),
+			'download' => $downloadUri,
 			'showInGrid' => $urlShowObjectInGrid,
 			'preview' => $this->getPreviewLink(),
 		];

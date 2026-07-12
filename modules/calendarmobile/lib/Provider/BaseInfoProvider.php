@@ -12,6 +12,7 @@ use Bitrix\Calendar\Ui\CalendarFilter;
 use Bitrix\Calendar\UserSettings;
 use Bitrix\Calendar\Util;
 use Bitrix\CalendarMobile\Dto\Sharing;
+use Bitrix\CalendarMobile\Integration\Socialnetwork\FeatureService;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Error;
@@ -73,7 +74,7 @@ final class BaseInfoProvider
 
 		$sections = $this->getSectionInfo();
 		$collabs = $this->getCollabs();
-		$collabSections = $this->getCollabSections($collabs);
+		$collabSections = $this->getCollabSections(array_keys($collabs));
 
 		if ($this->isCollabContext())
 		{
@@ -190,28 +191,13 @@ final class BaseInfoProvider
 	}
 
 	/**
+	 * @param array $extraOptions
+	 *
 	 * @return array
 	 */
-	public function getSectionInfo(): array
+	public function getSectionInfo(array $extraOptions = []): array
 	{
-		$sections = [
-			...$this->getSectionListForContext(),
-			...$this->getSectionListAvailableForUser(),
-		];
-
-		$sectionIdList = [];
-		$sections = array_filter($sections, static function ($section) use (&$sectionIdList) {
-			$sectionId = (int)$section['ID'];
-
-			if (!in_array($sectionId, $sectionIdList, true))
-			{
-				$sectionIdList[] = $sectionId;
-
-				return true;
-			}
-
-			return false;
-		});
+		$sections = $this->getMergedSections($extraOptions);
 
 		if ($this->hasToCreateDefaultCalendar($sections))
 		{
@@ -225,9 +211,39 @@ final class BaseInfoProvider
 	}
 
 	/**
+	 * @param array $extraOptions
+	 *
 	 * @return array
 	 */
-	private function getSectionListForContext(): array
+	public function getMergedSections(array $extraOptions = []): array
+	{
+		$sections = [
+			...$this->getSectionListForContext($extraOptions),
+			...$this->getSectionListAvailableForUser($extraOptions),
+		];
+
+		$sectionIdList = [];
+
+		return array_filter($sections, static function ($section) use (&$sectionIdList) {
+			$sectionId = (int)$section['ID'];
+
+			if (!in_array($sectionId, $sectionIdList, true))
+			{
+				$sectionIdList[] = $sectionId;
+
+				return true;
+			}
+
+			return false;
+		});
+	}
+
+	/**
+	 * @param array $extraOptions
+	 *
+	 * @return array
+	 */
+	private function getSectionListForContext(array $extraOptions = []): array
 	{
 		$followedSectionList = $this->isCollaber ? [] : UserSettings::getFollowedSectionIdList($this->userId);
 
@@ -236,13 +252,16 @@ final class BaseInfoProvider
 			'OWNER_ID' => $this->ownerId,
 			'ACTIVE' => 'Y',
 			'ADDITIONAL_IDS' => $followedSectionList,
+			...$extraOptions,
 		]);
 	}
 
 	/**
+	 * @param array $extraOptions
+	 *
 	 * @return array
 	 */
-	private function getSectionListAvailableForUser(): array
+	private function getSectionListAvailableForUser(array $extraOptions = []): array
 	{
 		if ($this->isCollaber || $this->isPersonalContext())
 		{
@@ -253,6 +272,7 @@ final class BaseInfoProvider
 			'CAL_TYPE' => Dictionary::CALENDAR_TYPE['user'],
 			'OWNER_ID' => $this->userId,
 			'ACTIVE' => 'Y',
+			...$extraOptions,
 		]);
 	}
 
@@ -298,6 +318,7 @@ final class BaseInfoProvider
 			'yearHolidays' => $this->getYearHolidays($calendarSettings['year_holidays']),
 			'userTimezoneName' => \CCalendar::GetUserTimezoneName($this->userId),
 			'isCollabCalendar' => $this->isCollabCalendar(),
+			'isNewProjectsOn' => FeatureService::isNewProjectsOn(),
 		];
 	}
 
@@ -335,13 +356,13 @@ final class BaseInfoProvider
 	}
 
 	/**
-	 * @param array $collabGroup
+	 * @param int[] $collabIds
+	 * @param array $extraOptions
+	 *
 	 * @return array
 	 */
-	private function getCollabSections(array $collabGroup): array
+	public function getCollabSections(array $collabIds, array $extraOptions = []): array
 	{
-		$collabIds = array_keys($collabGroup);
-
 		if (empty($collabIds))
 		{
 			return [];
@@ -352,7 +373,17 @@ final class BaseInfoProvider
 			'OWNER_ID' => $collabIds,
 			'checkPermissions' => true,
 			'getPermissions' => true,
+			...$extraOptions,
 		]);
+	}
+
+	/**
+	 * @return int[]
+	 * @throws LoaderException
+	 */
+	public function getCollabIds(): array
+	{
+		return array_keys($this->getCollabs());
 	}
 
 

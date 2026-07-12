@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter;
 
+use Bitrix\Disk\Controller\UnifiedLinkController;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Meta\ActionsMetadata;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
@@ -56,7 +57,9 @@ class UnifiedLinkAccessLevelRouter extends Base
 		}
 
 		$fileAccessLevel = $service->getAccessLevel();
-		if ($fileAccessLevel === UnifiedLinkAccessLevel::Denied)
+		$shouldRenderExternal = $service->shouldRenderExternal();
+
+		if ($fileAccessLevel === UnifiedLinkAccessLevel::Denied && !$shouldRenderExternal)
 		{
 			return $this->setAccessDeniedResult();
 		}
@@ -74,7 +77,7 @@ class UnifiedLinkAccessLevelRouter extends Base
 				return $this->setRedirectResult($uriToRedirect);
 			}
 
-			if ($methodAccessLevel->value > $fileAccessLevel->value)
+			if ($methodAccessLevel->value > $fileAccessLevel->value && !$shouldRenderExternal)
 			{
 				return $this->setAccessDeniedResult();
 			}
@@ -120,6 +123,12 @@ class UnifiedLinkAccessLevelRouter extends Base
 		$request = $this->controller->getRequest();
 
 		if ($request->get(UrlGenerator::QUERY_PARAM_NO_REDIRECT) !== null)
+		{
+			return false;
+		}
+
+		// some files should always open without /edit in url
+		if ($fileAccessLevel === UnifiedLinkAccessLevel::Edit && in_array(strtolower($file->getExtension()), UrlGenerator::EXTENSIONS_TO_OPEN_WITHOUT_EDIT_SUFFIX))
 		{
 			return false;
 		}

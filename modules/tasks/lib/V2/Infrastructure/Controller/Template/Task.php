@@ -8,7 +8,10 @@ use Bitrix\Main\Engine\ActionFilter\Attribute\Rule\CloseSession;
 use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Tasks\V2\Internal\Access\Template\Permission;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
+use Bitrix\Tasks\V2\Infrastructure\Controller\Response\Template\AddTaskResponse;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Integration\Disk\Provider\DiskFileProvider;
+use Bitrix\Tasks\V2\Internal\Result\Result;
 use Bitrix\Tasks\V2\Internal\Service\Template\Task\Add\Config\AddTaskConfig;
 use Bitrix\Tasks\V2\Public\Command\Template\Task\AddTaskCommand;
 use Bitrix\Tasks\V2\Public\Provider\Params\Template\Task\TemplateToTaskParams;
@@ -39,6 +42,7 @@ class Task extends BaseController
 		#[Permission\Read]
 		Entity\Template $template,
 		Entity\Task $task,
+		DiskFileProvider $diskFileProvider,
 		bool $withSubTasks = false,
 		bool $view = false,
 	): ?Arrayable
@@ -46,6 +50,7 @@ class Task extends BaseController
 		$userId = $this->userId;
 		$templateId = $template->getId();
 
+		/** @var Result $result */
 		$result = (new AddTaskCommand(
 			templateId: $templateId,
 			taskData: $task,
@@ -63,6 +68,15 @@ class Task extends BaseController
 			return null;
 		}
 
-		return $result->getObject();
+		/** @var Entity\Task $createdTask */
+		$createdTask = $result->getObject();
+
+		$files = $diskFileProvider->getTaskAttachmentsByIds(
+			ids: $createdTask->fileIds ?? [],
+			taskId: (int)$createdTask->id,
+			userId: $userId,
+		);
+
+		return new AddTaskResponse(task: $createdTask, files: $files);
 	}
 }

@@ -5,7 +5,7 @@ namespace Bitrix\Im\Configuration;
 use Bitrix\Im\Model\OptionStateTable;
 use Bitrix\Im\Model\OptionUserTable;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\Relations\Reference;

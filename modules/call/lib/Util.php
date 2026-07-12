@@ -2,6 +2,7 @@
 
 namespace Bitrix\Call;
 
+use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Main\Loader;
 
 /**
@@ -9,35 +10,87 @@ use Bitrix\Main\Loader;
  */
 class Util
 {
+	/** @var array<int, array> */
+	private static array $userDataCache = [];
+
 	/**
 	 * @param int[] $userIds
 	 */
 	public static function getUsers(array $userIds): array
 	{
-		Loader::includeModule('im');
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		$userIds = array_unique(array_map('intval', $userIds));
 
 		$result = [];
+		$missing = [];
 		foreach ($userIds as $userId)
 		{
-			$user = \Bitrix\Im\User::getInstance($userId)->getArray(['JSON' => 'Y', 'HR_PHOTO' => true]);
-			$result[$userId] = [
-				'id' => $user['id'],
-				'first_name' => $user['first_name'],
-				'last_name' => $user['last_name'],
-				'name' => $user['name'],
-				'work_position' => $user['work_position'],
-				'extranet' => $user['extranet'],
-				'invited' => $user['invited'],
-				'last_activity_date' => $user['last_activity_date'],
-				'avatar' => $user['avatar'],
-				'avatar_hr' => $user['avatar_hr'],
-				'gender' => $user['gender'],
-				'color' => $user['color'],
-				'type' => $user['type'],
+			if (isset(self::$userDataCache[$userId]))
+			{
+				$result[$userId] = self::$userDataCache[$userId];
+			}
+			else
+			{
+				$missing[] = $userId;
+			}
+		}
+
+		if (empty($missing))
+		{
+			return $result;
+		}
+
+		Loader::includeModule('im');
+
+		$collection = new UserCollection($missing);
+		foreach ($collection as $user)
+		{
+			$userData = $user->getArray(['JSON' => 'Y', 'WITHOUT_ONLINE' => true]);
+			if (!$userData || empty($userData['id']))
+			{
+				continue;
+			}
+
+			$userId = (int)$userData['id'];
+			$entry = [
+				'id' => $userData['id'],
+				'first_name' => $userData['first_name'] ?? null,
+				'last_name' => $userData['last_name'] ?? null,
+				'name' => $userData['name'] ?? null,
+				'work_position' => $userData['work_position'] ?? null,
+				'extranet' => $userData['extranet'] ?? null,
+				'invited' => $userData['invited'] ?? null,
+				'last_activity_date' => $userData['last_activity_date'] ?? false,
+				'avatar' => $userData['avatar'] ?? null,
+				'avatar_hr' => $userData['avatar_hr'] ?? null,
+				'gender' => $userData['gender'] ?? null,
+				'color' => $userData['color'] ?? null,
+				'type' => $userData['type'] ?? null,
 			];
+
+			self::$userDataCache[$userId] = $entry;
+			$result[$userId] = $entry;
 		}
 
 		return $result;
+	}
+
+	public static function clearUsersCache(?array $userIds = null): void
+	{
+		if ($userIds === null)
+		{
+			self::$userDataCache = [];
+			return;
+		}
+
+		foreach ($userIds as $userId)
+		{
+			unset(self::$userDataCache[(int)$userId]);
+		}
 	}
 
 	public static function generateUUID(): string

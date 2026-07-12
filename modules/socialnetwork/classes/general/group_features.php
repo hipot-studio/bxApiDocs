@@ -129,6 +129,14 @@ class CAllSocNetFeatures
 			$arFields["ACTIVE"] = "Y";
 		}
 
+		if (
+			(is_set($arFields, "BASE") || $ACTION === "ADD")
+			&& !in_array(($arFields["BASE"] ?? null), array("Y", "N"), true)
+		)
+		{
+			$arFields["BASE"] = "N";
+		}
+
 		return True;
 	}
 

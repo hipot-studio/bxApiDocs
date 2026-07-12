@@ -57,6 +57,7 @@ class RecentProvider extends BaseProvider
 		Chat::IM_TYPE_CHANNEL,
 		Chat::IM_TYPE_OPEN_CHANNEL,
 		Chat::IM_TYPE_COLLAB,
+		Chat::IM_TYPE_OPEN_COLLAB,
 		Chat::IM_TYPE_PRIVATE,
 	];
 
@@ -630,9 +631,19 @@ class RecentProvider extends BaseProvider
 			$query->whereNotIn('ID', $this->searchOptions->getExcludeIds());
 		}
 
-		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
-			->forUser($this->getContext()->getUserId(), TreeOrigin::forChat())
-			->apply($query);
+		if ($this->searchOptions->isRecentSectionMode())
+		{
+			$this->applyRecentSectionScope($query);
+		}
+
+		// Root section search already excludes nested chats, so ancestor-chain access
+		// checks would only add redundant joins without changing the result set.
+		if ($this->shouldApplyParentChainFilter())
+		{
+			ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
+				->forUser($this->getContext()->getUserId(), TreeOrigin::forChat())
+				->apply($query);
+		}
 
 		$chatTypeCondition = $this->searchOptions->getChatTypeCondition() ?? new TypeCondition(include: []);
 		$query->where((new TypeFilter($chatTypeCondition, 'TYPE', 'ENTITY_TYPE'))->toConditionTree());
@@ -647,6 +658,29 @@ class RecentProvider extends BaseProvider
 		}
 
 		return $query;
+	}
+
+	private function applyRecentSectionScope(Query $query): void
+	{
+		$parentId = $this->searchOptions->getRecentSectionParentId();
+		if ($parentId === 0)
+		{
+			$query->where(
+				Query::filter()
+					->logic('or')
+					->whereNull('PARENT_ID')
+					->where('PARENT_ID', 0)
+			);
+		}
+		elseif ($parentId !== null)
+		{
+			$query->where('PARENT_ID', $parentId);
+		}
+	}
+
+	private function shouldApplyParentChainFilter(): bool
+	{
+		return !$this->searchOptions->isRecentSectionMode() || $this->searchOptions->getRecentSectionParentId() !== 0;
 	}
 
 	private function getRelationFilter(): ConditionTree
@@ -664,7 +698,7 @@ class RecentProvider extends BaseProvider
 		return Query::filter()
 			->logic('or')
 			->where($relationFilter)
-			->whereIn('TYPE', [Chat::IM_TYPE_OPEN, Chat::IM_TYPE_OPEN_CHANNEL])
+			->whereIn('TYPE', [Chat::IM_TYPE_OPEN, Chat::IM_TYPE_OPEN_CHANNEL, Chat::IM_TYPE_OPEN_COLLAB])
 		;
 	}
 

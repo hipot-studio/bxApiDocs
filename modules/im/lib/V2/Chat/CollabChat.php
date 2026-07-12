@@ -19,18 +19,15 @@ use Bitrix\Im\V2\Recent\Initializer;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Result;
 
-class CollabChat extends GroupChat
+class CollabChat extends ExternalChat
 {
 	protected const EXTRANET_CAN_SEE_HISTORY = true;
 
 	private const UNAVAILABLE_ACTION_GROUPS = [
 		ActionGroup::ManageUi,
 		ActionGroup::ManageSettings,
-		ActionGroup::ManageUsersDelete,
-		ActionGroup::ManageUsersAdd
 	];
 	private const UNAVAILABLE_ACTIONS = [
-		Action::Leave,
 		Action::LeaveOwner,
 		Action::Update,
 		Action::Delete,
@@ -152,10 +149,5 @@ class CollabChat extends GroupChat
 	protected function filterCollabers(array $userIds): array
 	{
 		return array_filter($userIds, fn (int $userId) => User::getInstance($userId) instanceof UserCollaber);
-	}
-
-	protected function needToSendMessageUserDelete(): bool
-	{
-		return false;
 	}
 }

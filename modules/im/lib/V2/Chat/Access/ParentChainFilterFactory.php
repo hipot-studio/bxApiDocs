@@ -11,9 +11,9 @@ use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 class ParentChainFilterFactory
 {
 	public function __construct(
-		private readonly OpenChatAccessPolicy $policy,
-		private readonly TypeRegistry $typeRegistry,
+		private readonly SingleLevelAccessFilterFactory $singleLevelFilterFactory,
 		private readonly ChatAncestorNavigator $navigator,
+		private readonly TypeRegistry $typeRegistry,
 	) {}
 
 	public function forUser(
@@ -22,14 +22,14 @@ class ParentChainFilterFactory
 		int $maxDepth = ChatAncestorNavigator::DEFAULT_DEPTH,
 	): ParentChainForUserFilter
 	{
-		$openCondition = null;
-		if ($this->policy->canSkipMembershipForOpenChats($userId))
-		{
-			$condition = $this->typeRegistry->getOpenTypeCondition();
-			$openCondition = $condition->hasConditions() ? $condition : null;
-		}
-
-		return new ParentChainForUserFilter($this->navigator, $userId, $origin, $maxDepth, $openCondition);
+		return new ParentChainForUserFilter(
+			$this->navigator,
+			$this->singleLevelFilterFactory,
+			$this->typeRegistry,
+			$userId,
+			$origin,
+			$maxDepth,
+		);
 	}
 
 	public function forChat(
@@ -41,7 +41,11 @@ class ParentChainFilterFactory
 		$ancestorIds = [];
 
 		$current = $chat;
-		while ($current->hasParent() && count($ancestorIds) < ChatAncestorNavigator::DEFAULT_DEPTH)
+		while (
+			$current->hasParent()
+			&& $current->requiresParentMembership()
+			&& count($ancestorIds) < ChatAncestorNavigator::DEFAULT_DEPTH
+		)
 		{
 			$ancestorIds[] = $current->getParentChatId();
 			$current = Chat::getInstance($current->getParentChatId());

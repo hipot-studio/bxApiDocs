@@ -273,6 +273,10 @@ class Task implements \IBPWorkflowDocument
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_CHANGED_DATE'),
 				'Type' => 'datetime',
 			],
+			'ACTIVITY_DATE' => [
+				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_ACTIVITY_DATE'),
+				'Type' => 'datetime',
+			],
 			'CLOSED_BY' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_CLOSED_BY'),
 				'Type' => 'user',
@@ -817,6 +821,11 @@ class Task implements \IBPWorkflowDocument
 	public static function resolveDocumentId($taskId)
 	{
 		return ['tasks', __CLASS__, $taskId];
+	}
+
+	public static function resolveDocumentType(): array
+	{
+		return ['tasks', static::class, self::getDocumentType(null)];
 	}
 
 	public static function getAllowableOperations($documentType)

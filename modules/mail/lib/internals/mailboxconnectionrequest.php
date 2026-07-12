@@ -45,11 +45,6 @@ class MailboxConnectionRequestTable extends DataManager
 				->configureRequired()
 				->configureTitle('Requester user id')
 			,
-			(new ORM\Fields\StringField('COMMENT'))
-				->configureNullable()
-				->configureSize(100)
-				->configureTitle('Comment from requester')
-			,
 			(new ORM\Fields\EnumField('STATUS'))
 				->configureRequired()
 				->configureValues(MailboxConnectionRequestStatus::values())

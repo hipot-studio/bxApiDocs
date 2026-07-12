@@ -63,7 +63,7 @@ class GroupManager
 	/**
 	 * Setting the start date of a project to update dates in entities.
 	 *
-	 * @param array $projectTerm ["project" => true, "start_point" => "", "end_point" => ""].
+	 * @param array $projectTerm ["project" => true, "start_point" => "", "end_point" => "", "old_start_point" => ""].
 	 */
 	public function setProjectTerm(array $projectTerm)
 	{
@@ -95,6 +95,7 @@ class GroupManager
 
 		$this->result = $groupCopier->copy($containerCollection);
 		$this->mapIdsCopiedGroups = $groupCopier->getMapIdsCopiedEntity();
+		$this->projectTerm = $groupImplementer->getProjectTerm();
 
 		return $this->result;
 	}
@@ -107,6 +108,11 @@ class GroupManager
 	public function getMapIdsCopiedGroups(): array
 	{
 		return $this->mapIdsCopiedGroups;
+	}
+
+	public function getProjectTerm(): array
+	{
+		return $this->projectTerm;
 	}
 
 	private function getContainerCollection()

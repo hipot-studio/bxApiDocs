@@ -121,12 +121,13 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		$this->arResult['HEADER_LOGO_URL'] = $this->getHeaderLogoUrl();
 	}
 
-	private function prepareOtherParams(): void
+	private function prepareOtherParams(User $user): void
 	{
 		$featureBlocker = Bitrix24Manager::filterJsAction('disk_board_external_link', '');
+
 		$this->arResult['SHOULD_BLOCK_EXTERNAL_LINK_FEATURE'] = (bool)$featureBlocker;
 		$this->arResult['BLOCKER_EXTERNAL_LINK_FEATURE'] = $featureBlocker;
-		$this->arResult['SHOULD_SHOW_SHARING_BUTTON'] = $this->isEditMode && !$this->isExternalLinkMode;
+		$this->arResult['SHOULD_SHOW_SHARING_BUTTON'] = $this->shouldShowSharingButton($user);
 		$this->arResult['SHARING_CONTROL_TYPE'] = $this->getSharingControlType()->value;
 		$this->arResult['DISPLAY_VARIANT'] = $this->getDisplayVariant();
 		$this->arResult['UNIFIED_LINK_ACCESS_ONLY'] = $this->unifiedLinkAccessOnly;
@@ -153,8 +154,10 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 
 	protected function processActionDefault(): void
 	{
+		$user = $this->getCurrentUser();
+
 		$this->prepareSdkParams();
-		$this->prepareOtherParams();
+		$this->prepareOtherParams($user);
 		$this->includeComponentTemplate();
 		$this->sendAnalytics();
 	}
@@ -247,5 +250,30 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		}
 
 		return SharingControlType::WithoutEdit;
+	}
+
+	/**
+	 * @param User $user
+	 * @return bool
+	 */
+	private function shouldShowSharingButton(User $user): bool
+	{
+		if (!$this->isValidUserForSharing($user))
+		{
+			return false;
+		}
+
+		$isUnifiedLinkPage = !empty($this->arParams['FILE_UNIQUE_CODE']);
+
+		return $this->isEditMode || $isUnifiedLinkPage;
+	}
+
+	/**
+	 * @param User $user
+	 * @return bool
+	 */
+	private function isValidUserForSharing(User $user): bool
+	{
+		return $user->isIntranetUser() || $user->isCollaber();
 	}
 }

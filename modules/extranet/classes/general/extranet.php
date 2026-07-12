@@ -249,6 +249,15 @@ class CExtranet
 			&& (mb_strpos($curPage, "/rest/") !== 0)
 			&& (mb_strpos($curPage, "/disk/boards/") !== 0)
 			&& (mb_strpos($curPage, "/disk/file/") !== 0)
+			&& (mb_strpos($curPage, "/picture/") !== 0)
+			&& (mb_strpos($curPage, "/media/") !== 0)
+			&& (mb_strpos($curPage, "/audio/") !== 0)
+			&& (mb_strpos($curPage, "/board/") !== 0)
+			&& (mb_strpos($curPage, "/doc/") !== 0)
+			&& (mb_strpos($curPage, "/sheet/") !== 0)
+			&& (mb_strpos($curPage, "/pres/") !== 0)
+			&& (mb_strpos($curPage, "/file/") !== 0)
+			&& (mb_strpos($curPage, "/note/") !== 0)
 			&& (!self::IsExtranetSite())
 			&& self::GetExtranetSiteID() <> ''
 			&& $USER->IsAuthorized()
@@ -1147,19 +1156,29 @@ class CExtranet
 			}
 		}
 
+		$isNewProjectsOn = (
+			class_exists(\Bitrix\Socialnetwork\V2\Feature::class)
+			&& \Bitrix\Socialnetwork\V2\Feature::isNewProjectsOn()
+		);
+
 		if ($bFromOpenToArchive)
 		{
 			foreach($arEmail as $recipient)
 			{
 				$arEventFields = array(
 					"WG_ID" => $ID,
-					"WG_NAME" => $arFields["NAME"],
+					"WG_NAME" => $arFields["NAME"] ?? '',
 					"MEMBER_NAME" => $recipient["NAME"],
 					"MEMBER_LAST_NAME" => $recipient["LAST_NAME"],
 					"MEMBER_EMAIL" => $recipient["EMAIL"],
 				);
 
-				CEvent::Send("EXTRANET_WG_TO_ARCHIVE", SITE_ID, $arEventFields);
+				$evenName = (
+					$isNewProjectsOn
+						? 'EXTRANET_PROJECT_TO_ARCHIVE'
+						: 'EXTRANET_WG_TO_ARCHIVE'
+				);
+				CEvent::Send($evenName, SITE_ID, $arEventFields);
 			}
 		}
 
@@ -1169,13 +1188,18 @@ class CExtranet
 			{
 				$arEventFields = array(
 					"WG_ID" => $ID,
-					"WG_NAME" => $arFields["NAME"],
+					"WG_NAME" => $arFields["NAME"] ?? '',
 					"MEMBER_NAME" => $recipient["NAME"],
 					"MEMBER_LAST_NAME" => $recipient["LAST_NAME"],
 					"MEMBER_EMAIL" => $recipient["EMAIL"],
 				);
 
-				CEvent::Send("EXTRANET_WG_FROM_ARCHIVE", SITE_ID, $arEventFields);
+				$evenName = (
+					$isNewProjectsOn
+						? 'EXTRANET_PROJECT_FROM_ARCHIVE'
+						: 'EXTRANET_WG_FROM_ARCHIVE'
+				);
+				CEvent::Send($evenName, SITE_ID, $arEventFields);
 			}
 		}
 
@@ -1781,7 +1805,7 @@ class CExtranet
 	{
 		global $USER;
 
-		if ((int)$currentUserId === (int)$USER->getId())
+		if ((int)$currentUserId === (int)($USER?->getId() ?? 0))
 		{
 			return self::isProfileViewable($arUser, $siteId, $bOnlyActive, $arContext);
 		}

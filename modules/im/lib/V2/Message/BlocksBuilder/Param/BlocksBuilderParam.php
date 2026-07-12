@@ -31,7 +31,7 @@ class BlocksBuilderParam extends Param
 		if (isset($this->builder))
 		{
 			$this->value = $this->builder->toArray();
-			$this->jsonValue = Common::jsonEncode($this->value);
+			$this->jsonValue = $this->builder->getJson();
 		}
 
 		return $this;
@@ -83,7 +83,7 @@ class BlocksBuilderParam extends Param
 			return $this->builder;
 		}
 
-		$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->create($this->value);
+		$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->get($this->value);
 		if (!$builderResult->isSuccess())
 		{
 			return null;

@@ -208,7 +208,7 @@ class CAllSocNetFeaturesPerms
 		return $bSuccess;
 	}
 
-	public static function Update($ID, $arFields)
+	public static function Update($ID, $arFields, array $options = [])
 	{
 		global $DB, $CACHE_MANAGER;
 
@@ -219,7 +219,8 @@ class CAllSocNetFeaturesPerms
 
 		$arFields1 = \Bitrix\Socialnetwork\Util::getEqualityFields($arFields);
 
-		if (!CSocNetFeaturesPerms::CheckFields("UPDATE", $arFields, $ID))
+		$checkFields = (bool)($options['checkFields'] ?? true);
+		if ($checkFields && !CSocNetFeaturesPerms::CheckFields("UPDATE", $arFields, $ID))
 			return false;
 
 		$db_events = GetModuleEvents("socialnetwork", "OnBeforeSocNetFeaturesPermsUpdate");
@@ -277,7 +278,7 @@ class CAllSocNetFeaturesPerms
 		return $ID;
 	}
 
-	public static function SetPerm($featureID, $operation, $perm)
+	public static function SetPerm($featureID, $operation, $perm, array $options = [])
 	{
 		global $APPLICATION;
 
@@ -300,11 +301,11 @@ class CAllSocNetFeaturesPerms
 
 		if ($arResult = $dbResult->Fetch())
 		{
-			$r = CSocNetFeaturesPerms::Update($arResult["ID"], array("ROLE" => $perm));
+			$r = CSocNetFeaturesPerms::Update($arResult["ID"], array("ROLE" => $perm), $options);
 		}
 		else
 		{
-			$r = CSocNetFeaturesPerms::Add(array("FEATURE_ID" => $featureID, "OPERATION_ID" => $operation, "ROLE" => $perm));
+			$r = CSocNetFeaturesPerms::Add(array("FEATURE_ID" => $featureID, "OPERATION_ID" => $operation, "ROLE" => $perm), $options);
 		}
 
 		if (!$r)

@@ -56,7 +56,7 @@ abstract class AbstractGroupService
 			return $this->finalizeAddResult($validationResult);
 		}
 
-		$operationResult = (new AddOperation($command))->run();
+		$operationResult = $this->createAddOperation($command)->run();
 		if (!$operationResult->isSuccess())
 		{
 			return $this->finalizeAddResult($operationResult);
@@ -109,7 +109,7 @@ abstract class AbstractGroupService
 
 		$this->sendBeforeUpdateEvent($command, $entityBefore);
 
-		$operationResult = (new UpdateOperation($command))->run();
+		$operationResult = $this->createUpdateOperation($command)->run();
 		if (!$operationResult->isSuccess())
 		{
 			return $this->finalizeUpdateResult($operationResult);
@@ -227,6 +227,16 @@ abstract class AbstractGroupService
 	protected function sendDeleteEvent(DeleteCommand $command, Workgroup $entityBefore): void
 	{
 
+	}
+
+	protected function createAddOperation(AddCommand $command): AddOperation
+	{
+		return new AddOperation($command);
+	}
+
+	protected function createUpdateOperation(UpdateCommand $command): UpdateOperation
+	{
+		return new UpdateOperation($command);
 	}
 
 	protected function init(): void

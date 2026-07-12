@@ -50,9 +50,7 @@ class MailboxConnectionRequest extends Controller
 
 	public function rejectRequestAction(int $requestId): array
 	{
-		$service = new MailboxConnectionRequestService();
-
-		$result = $service->rejectRequest($requestId);
+		$result = $this->mailboxConnectionRequestService->rejectRequest($requestId);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -82,5 +80,18 @@ class MailboxConnectionRequest extends Controller
 			->getPendingCountForController()
 			->getData()
 		;
+	}
+
+	public function getOwnRequestStatusAction(): array
+	{
+		$result = $this->mailboxConnectionRequestService->getOwnPendingRequest();
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		return $result->getData();
 	}
 }

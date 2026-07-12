@@ -5,37 +5,46 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\Render;
 
 use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\FileHandlerOperationResult;
-use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HtmlRenderableFileHandler;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler\HtmlRenderableFileHandlerFactory;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileResolver;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
+use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Version;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\CurrentUser;
 use LogicException;
 
 class UnifiedLinkFileRenderer
 {
 	private UnifiedLinkAccessService $unifiedLinkAccessService;
-	private HtmlRenderableFileHandler $fileHandler;
+	private HtmlRenderableFileHandlerFactory $fileHandlerFactory;
+	private ExternalLinkProvider $externalLinkProvider;
+	private ?CurrentUser $currentUser;
 	private ?UnifiedLinkAccessLevel $accessLevel = null;
+	private ?bool $shouldRenderExternal = null;
 
 	public function __construct(
 		private readonly File $file,
 		private readonly ?AttachedObject $attachedObject = null,
 		private readonly ?Version $version = null,
 		private readonly array $analytics = [],
+		?CurrentUser $currentUser = null,
 	) {
+		if ($currentUser instanceof CurrentUser && (int)$currentUser->getId() === 0)
+		{
+			$currentUser = null;
+		}
+
 		$serviceLocator = ServiceLocator::getInstance();
 		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
-		$this->fileHandler = $serviceLocator->get(HtmlRenderableFileHandlerFactory::class)->createHandler(
-			$this->file,
-			$this->attachedObject,
-			$this->version,
-			$this->analytics,
-		);
+		$this->fileHandlerFactory = $serviceLocator->get(HtmlRenderableFileHandlerFactory::class);
+		$this->externalLinkProvider = $serviceLocator->get(ExternalLinkProvider::class);
+		$this->currentUser = $currentUser;
 	}
 
 	public function getAccessLevel(): UnifiedLinkAccessLevel
@@ -49,6 +58,21 @@ class UnifiedLinkFileRenderer
 		return $this->accessLevel;
 	}
 
+	public function shouldRenderExternal(): bool
+	{
+		return $this->shouldRenderExternal ??= (function (): bool {
+			if ($this->getAccessLevel() !== UnifiedLinkAccessLevel::Denied)
+			{
+				return false;
+			}
+
+			$file = $this->resolveFile();
+			$externalLink = $this->externalLinkProvider->getForUnifiedLinkAccessCheck($file->getId());
+
+			return $externalLink instanceof ExternalLink && $externalLink->hasPassword();
+		})();
+	}
+
 	public function resolveFile(): File
 	{
 		return FileResolver::resolve($this->file, $this->version);
@@ -56,16 +80,27 @@ class UnifiedLinkFileRenderer
 
 	public function render(?UnifiedLinkAccessLevel $accessLevel = null): RenderResult
 	{
-		$accessLevel ??= $this->getAccessLevel();
-		if ($accessLevel === UnifiedLinkAccessLevel::Denied)
+		$accessLevel = $this->getAccessLevelForRender($accessLevel);
+		$shouldRenderExternal = $this->shouldRenderExternal();
+
+		if ($accessLevel === UnifiedLinkAccessLevel::Denied && !$shouldRenderExternal)
 		{
 			return new RenderResult(self::renderAccessDeniedPage(), 403);
 		}
 
+		$fileHandler = $this->fileHandlerFactory->createHandler(
+			file: $this->file,
+			attachedObject: $this->attachedObject,
+			version: $this->version,
+			analytics: $this->analytics,
+			currentUser: $this->currentUser,
+			forceExternal: $shouldRenderExternal,
+		);
+
 		$result = match ($accessLevel)
 		{
-			UnifiedLinkAccessLevel::Edit => $this->fileHandler->edit(),
-			default => $this->fileHandler->view(),
+			UnifiedLinkAccessLevel::Edit => $fileHandler->edit(),
+			default => $fileHandler->view(),
 		};
 
 		if (!$result->isSuccess())
@@ -75,7 +110,7 @@ class UnifiedLinkFileRenderer
 			return new RenderResult($content, 500);
 		}
 
-		return new RenderResult($result->getValue(), 200);
+		return new RenderResult($result->getValue(), 200, $result->getRedirectUrl());
 	}
 
 	public static function renderAccessDeniedPage(): string
@@ -104,5 +139,18 @@ class UnifiedLinkFileRenderer
 		}
 
 		return 'Server error occurred. Please try again later.';
+	}
+
+	private function getAccessLevelForRender(?UnifiedLinkAccessLevel $accessLevel): UnifiedLinkAccessLevel
+	{
+		$file = $this->resolveFile();
+		$fileAccessLevel = $this->getAccessLevel();
+
+		if ((int)$file->getTypeFile() === TypeFile::BOARD)
+		{
+			return $fileAccessLevel;
+		}
+
+		return $accessLevel ?? $fileAccessLevel;
 	}
 }

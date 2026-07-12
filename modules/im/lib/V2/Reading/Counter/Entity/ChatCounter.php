@@ -8,7 +8,7 @@ use Bitrix\Im\V2\Common\WithableTrait;
 use Bitrix\Im\V2\Rest\RestConvertible;
 
 /**
- * @method self with(int $chatId = null, int $counter = null,int $parentChatId = null,bool $isMuted = null,bool $isMarkedAsUnread = null,array $recentSections = null,Type $type = null)
+ * @method self with(int $chatId = null, int $counter = null,int $parentChatId = null,bool $isMuted = null,bool $isMarkedAsUnread = null,array $recentSections = null,Type $type = null,bool $requiresParentMembership = null)
  */
 final class ChatCounter implements RestConvertible
 {
@@ -22,6 +22,7 @@ final class ChatCounter implements RestConvertible
 		public readonly bool $isMarkedAsUnread,
 		public readonly array $recentSections,
 		public readonly Type $type,
+		public readonly bool $requiresParentMembership = true,
 	) {}
 
 	public static function getRestEntityName(): string

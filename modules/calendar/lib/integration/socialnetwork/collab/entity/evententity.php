@@ -5,6 +5,7 @@ namespace Bitrix\Calendar\Integration\SocialNetwork\Collab\Entity;
 use Bitrix\Calendar\Core\Event\Event;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Mappers;
+use Bitrix\Calendar\Internal\Integration\Socialnetwork\CollabService;
 use Bitrix\Calendar\Internals\EventTable;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
@@ -42,18 +43,17 @@ final class EventEntity extends CollabEntity
 	}
 
 	/**
-	 * @return Collab|null
+	 * Event-to-Collab binding for collab log / last activity. A calendar event is
+	 * treated as belonging to a collab when its (effective) section's group has
+	 * external users (HAS_COLLABERS='Y'). Stored EVENT_TYPE is irrelevant — the
+	 * decision is derived from the current state of the group.
+	 *
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
 	protected function fillCollab(): ?Collab
 	{
-		if ($this->internalObject->getSpecialLabel() !== Dictionary::EVENT_TYPE['collab'])
-		{
-			return null;
-		}
-
 		if (
 			$this->internalObject->isBaseEvent()
 			&& $this->internalObject->getCalendarType() !== Dictionary::CALENDAR_TYPE['group']
@@ -74,7 +74,7 @@ final class EventEntity extends CollabEntity
 				->fetchObject()
 			;
 
-			if ($parentEvent->getCalType() !== Dictionary::CALENDAR_TYPE['group'])
+			if ($parentEvent?->getCalType() !== Dictionary::CALENDAR_TYPE['group'])
 			{
 				return null;
 			}
@@ -82,7 +82,21 @@ final class EventEntity extends CollabEntity
 			$collabId = $parentEvent->getOwnerId();
 		}
 
-		return $this->collabRegistry->get($collabId);
+		$collab = $this->collabRegistry->get((int)$collabId);
+
+		if ($collab === null)
+		{
+			return null;
+		}
+
+		$hasCollabers = ServiceLocator::getInstance()->get(CollabService::class)->hasCollabers((int)$collabId);
+
+		if (!$hasCollabers)
+		{
+			return null;
+		}
+
+		return $collab;
 	}
 
 	/**

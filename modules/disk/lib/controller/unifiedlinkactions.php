@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Controller;
@@ -11,8 +10,12 @@ use Bitrix\Disk\Internals\Engine\ActionFilter\CheckReadPermission;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\UnifiedLinkAccessChecker;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\UnifiedLink\FileResolver;
+use Bitrix\Disk\Public\Command\ExternalLink\ValidatePassword\ExternalLinkValidatePasswordCommand;
+use Bitrix\Main\Command\Exception\CommandException;
+use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
+use Bitrix\Main\Error;
 use Bitrix\Main\Request;
 
 class UnifiedLinkActions extends BaseObject
@@ -48,11 +51,11 @@ class UnifiedLinkActions extends BaseObject
 		return $defaultPostFilters;
 	}
 
-	public function configureActions()
+	public function configureActions(): array
 	{
 		$configureActions = parent::configureActions();
 
-		$readAccessChecker = new UnifiedLinkAccessChecker(UnifiedLinkAccessLevel::Read);
+		$readAccessChecker = new UnifiedLinkAccessChecker(UnifiedLinkAccessLevel::Read, false);
 		$editAccessChecker = new UnifiedLinkAccessChecker(UnifiedLinkAccessLevel::Edit);
 
 		$configureActions['getExternalLink'] = [
@@ -123,6 +126,38 @@ class UnifiedLinkActions extends BaseObject
 	{
 		/** @noinspection NullPointerExceptionInspection */
 		return $this->disableExternalLink($file);
+	}
+
+	/**
+	 * @param File|null $file uniqueCode is passed as string and converted to File object via autowiring
+	 * @param Disk\Version|null $version versionId is passed as int and converted to Version object via autowiring
+	 * @return array|null
+	 * @throws CommandException
+	 * @throws CommandValidationException
+	 */
+	public function validatePasswordAction(?File $file, ?Disk\Version $version = null): ?array
+	{
+		$resolvedFile = FileResolver::resolve($file, $version);
+		$password = $this->request->get('password');
+
+		$validatePasswordCommand = new ExternalLinkValidatePasswordCommand(
+			fileId: $resolvedFile->getId(),
+			password: $password,
+		);
+
+		$validatePasswordResult = $validatePasswordCommand->run();
+		$validatePasswordError = $validatePasswordResult->getError();
+
+		if (!$validatePasswordResult->isSuccess() && $validatePasswordError instanceof Error)
+		{
+			$this->addError($validatePasswordError);
+
+			return null;
+		}
+
+		$_SESSION['DISK_DATA']['EXT_LINK_PASSWORD'] = $password;
+
+		return $this->get($resolvedFile);
 	}
 
 	/**

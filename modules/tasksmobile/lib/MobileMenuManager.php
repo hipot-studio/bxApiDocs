@@ -2,18 +2,20 @@
 
 namespace Bitrix\TasksMobile;
 
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mobile\Context;
 use Bitrix\Mobile\Menu\Manager\MobileMenuManager as BaseMobileMenuManager;
 use Bitrix\Mobile\Tab\Manager;
 use Bitrix\Mobile\Menu\MenuList;
 use Bitrix\Mobile\Menu\Analytics;
+use Bitrix\Socialnetwork\Helper\Feature;
 
 class MobileMenuManager extends BaseMobileMenuManager
 {
 	public static function onMobileMenuStructureBuilt(array $menu, $context): array
 	{
-		if (($context instanceof Context) && \Bitrix\Main\Loader::includeModule('intranet'))
+		if (($context instanceof Context) && Loader::includeModule('intranet'))
 		{
 			$manager = new Manager();
 			$active = array_keys($manager->getActiveTabs());
@@ -24,7 +26,11 @@ class MobileMenuManager extends BaseMobileMenuManager
 				$items[] = self::prepareFlowItem();
 			}
 
-			if (!in_array('projects', $active, true) && \Bitrix\Intranet\Settings\Tools\ToolsManager::getInstance()->checkAvailabilityByToolId('projects'))
+			if (
+				!in_array('projects', $active, true)
+				&& Loader::includeModule('socialnetwork')
+				&& \Bitrix\Intranet\Settings\Tools\ToolsManager::getInstance()->checkAvailabilityByToolId('projects')
+			)
 			{
 				$items[] = self::prepareProjectsItem();
 			}
@@ -37,16 +43,20 @@ class MobileMenuManager extends BaseMobileMenuManager
 
 	private static function prepareProjectsItem(): array
 	{
+		$isEnabledByFeature = Feature::isFeatureEnabled(Feature::PROJECTS_GROUPS)
+			|| Feature::canTurnOnTrial(Feature::PROJECTS_GROUPS)
+		;
+
 		return [
 			'id' => 'projects',
 			'sort' => 200,
 			'title' => Loc::getMessage('MENU_TASKS_SECTION_PROJECTS'),
-			'imageName' => 'kanban',
+			'imageName' => $isEnabledByFeature ? 'kanban' : 'lock',
 			'counter' => 'projects',
 			'path' => '/projects/',
 			'params' => [
 				'title' => Loc::getMessage('MENU_TASKS_SECTION_PROJECTS'),
-				'analytics' => Analytics::projects(),
+				'analytics' => $isEnabledByFeature ? Analytics::projects() : null,
 			],
 		];
 	}

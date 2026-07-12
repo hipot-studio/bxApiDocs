@@ -17,6 +17,7 @@ class IntranetUserSettings extends UserSettings
 	public const WAIT_CONFIRMATION_FIELD = 'WAIT_CONFIRMATION';
 	public const INTEGRATOR_FIELD = 'INTEGRATOR';
 	public const VISITOR_FIELD = 'VISITOR';
+	public const OTP_STATUS_FIELD = 'OTP_STATUS';
 
 	protected array $filterAvailability;
 
@@ -87,5 +88,9 @@ class IntranetUserSettings extends UserSettings
 			);
 
 		$this->filterAvailability[self::VISITOR_FIELD] = $canEditAllUsers;
+
+		$this->filterAvailability[self::OTP_STATUS_FIELD] =
+			$this->isCurrentUserAdmin()
+			&& Loader::includeModule('security');
 	}
 }

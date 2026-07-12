@@ -14,6 +14,7 @@ use Bitrix\Calendar\Core;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
 use Bitrix\Calendar\Integration\Pull\PushCommand;
+use Bitrix\Calendar\Integration\SocialNetwork;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\CollabFeature;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\Collabs;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\UserCollabs;
@@ -446,7 +447,7 @@ class CCalendar
 			'plannerFeatureEnabled' => Bitrix24Manager::isPlannerFeatureEnabled(),
 			'eventWithEmailGuestEnabled' => Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_EVENTS_WITH_EMAIL_GUESTS),
 			'sharingFeatureLimitEnable' => Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_SHARING),
-			'projectFeatureEnabled' => false,
+			'projectFeatureEnabled' => SocialNetwork\FeatureService::isProjectFeatureEnabled(),
 			'isSharingFeatureEnabled' => \Bitrix\Calendar\Sharing\SharingFeature::isEnabled(),
 			'payAttentionToNewSharingFeature' => \Bitrix\Calendar\Sharing\Helper::payAttentionToNewSharingFeature(),
 			'showAfterSyncAccent' => isset($_GET['googleAuthSuccess']) && $_GET['googleAuthSuccess'] === 'y',
@@ -457,16 +458,6 @@ class CCalendar
 			'isBitrix24Template' => SITE_TEMPLATE_ID === 'bitrix24',
 			'isBitrix24Enabled' => Bitrix24Manager::isEnabled(),
 		];
-
-		if (Loader::includeModule('socialnetwork'))
-		{
-			$projectLimitFeatureId = \Bitrix\Socialnetwork\Helper\Feature::PROJECTS_GROUPS;
-
-			$JSConfig['projectFeatureEnabled'] =
-				\Bitrix\Socialnetwork\Helper\Feature::isFeatureEnabled($projectLimitFeatureId)
-				|| \Bitrix\Socialnetwork\Helper\Feature::canTurnOnTrial($projectLimitFeatureId)
-			;
-		}
 
 		if (self::$type === 'user' && (int)self::$userId !== (int)self::$ownerId)
 		{
@@ -651,7 +642,7 @@ class CCalendar
 				}
 			}
 
-			if (in_array($section['ID'], $followedSectionList))
+			if (in_array((int)$section['ID'], $followedSectionList, true))
 			{
 				$sections[$i]['SUPERPOSED'] = true;
 			}
@@ -812,6 +803,7 @@ class CCalendar
 		$JSConfig['sharingOptions'] = $isGroupCalendar ? null : $sharing->getOptions();
 		$JSConfig['isCollabUser'] = $isCollabUser;
 		$JSConfig['isCollabCalendar'] = $isCollabCalendar;
+		$JSConfig['isNewProjectsOn'] = (new SocialNetwork\FeatureService())->isNewProjectsOn();
 		$JSConfig['isCollabFeatureEnabled'] = CollabFeature::isAvailable();
 
 		$userSettings = UserSettings::get(self::$ownerId);

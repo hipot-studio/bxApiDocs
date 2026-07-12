@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
+use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\V2\Internal\Entity;
 
 class InMemoryUserRepository implements UserRepositoryInterface
@@ -13,6 +14,7 @@ class InMemoryUserRepository implements UserRepositoryInterface
 	protected Entity\UserCollection $cache;
 	protected ?Entity\UserCollection $adminCache = null;
 	protected array $existenceCache = [];
+	protected array $nameCache = [];
 
 	public function __construct(UserRepository $userRepository)
 	{
@@ -37,9 +39,74 @@ class InMemoryUserRepository implements UserRepositoryInterface
 		$this->cache->merge($users);
 		foreach ($users as $user) {
 			$this->existenceCache[$user->getId()] = true;
+			$this->nameCache[$user->getId()] = $user->name;
 		}
 
 		return $this->cache->findAllByIds($userIds);
+	}
+
+	public function getNamesByIds(array $userIds): array
+	{
+		$result = [];
+
+		if (empty($userIds))
+		{
+			return $result;
+		}
+
+		Collection::normalizeArrayValuesByInt($userIds, false);
+
+		if (empty($userIds))
+		{
+			return $result;
+		}
+
+		$missingUserIdMap = array_flip($userIds);
+
+		foreach ($missingUserIdMap as $userId => $_)
+		{
+			if (isset($this->nameCache[$userId]))
+			{
+				$result[$userId] = $this->nameCache[$userId];
+
+				unset($missingUserIdMap[$userId]);
+			}
+		}
+
+		if (empty($missingUserIdMap))
+		{
+			return $result;
+		}
+
+		$usersInCache = $this->cache->findAllByIds(array_keys($missingUserIdMap));
+		foreach ($usersInCache as $user)
+		{
+			$userId = $user->getId();
+			$userName = $user->name;
+
+			$this->nameCache[$userId] = $userName;
+			$this->existenceCache[$userId] = true;
+
+			$result[$userId] = $userName;
+
+			unset($missingUserIdMap[$userId]);
+		}
+
+		if (empty($missingUserIdMap))
+		{
+			return $result;
+		}
+
+		$userNames = $this->userRepository->getNamesByIds(array_keys($missingUserIdMap));
+		foreach ($userNames as $id => $name)
+		{
+			$this->nameCache[$id] = $name;
+			$this->existenceCache[$id] = true;
+
+			$result[$id] = $name;
+		}
+
+		return $result;
 	}
 
 	public function getAdmins(): Entity\UserCollection

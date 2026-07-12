@@ -7,8 +7,7 @@ namespace Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Meta;
 use Bitrix\Disk\File;
 use Bitrix\Main\Application;
 use Bitrix\Main\Diag\ExceptionHandler;
-use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Attributes\
-{UrlGenerator};
+use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Attributes\{RedirectToView, UrlGenerator};
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Attributes\FileTypes;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Attributes\LevelAccess;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
@@ -30,6 +29,11 @@ class ActionsMetadata
 	/** @var SplObjectStorage<UnifiedLinkAccessLevel, callable(File): string>|null $urlGeneratorByAccessLevels */
 	private ?SplObjectStorage $urlGeneratorByAccessLevels = null;
 
+	/**
+	 * @var array<string, int[]>|null
+	 */
+	private ?array $redirectFileTypesByActions = null;
+
 	/** @var array<string, int[]>|null $allowedFileTypesByActions */
 	private ?array $allowedFileTypesByActions = null;
 
@@ -42,6 +46,20 @@ class ActionsMetadata
 	) {
 		$this->attributesByActions = $this->getActionAttributes();
 		$this->exceptionHandler = Application::getInstance()->getExceptionHandler();
+	}
+
+	public function shouldRedirectToView(string $actionName, File $file): bool
+	{
+		$fileTypes = $this->getRedirectFileTypesByActions()[$actionName] ?? [];
+
+		if (empty($fileTypes))
+		{
+			return false;
+		}
+
+		$fileType = (int)$file->getTypeFile();
+
+		return in_array($fileType, $fileTypes, true);
 	}
 
 	public function isFileTypeAllowed(string $actionName, File $file): bool
@@ -61,6 +79,19 @@ class ActionsMetadata
 		$typeFile = (int)$file->getTypeFile();
 
 		return in_array($typeFile, $allowedFileTypesForAction, true);
+	}
+
+	private function getRedirectFileTypesByActions(): array
+	{
+		if (is_null($this->redirectFileTypesByActions))
+		{
+			foreach ($this->attributesByActions as $actionName => $actionAttributes)
+			{
+				$this->redirectFileTypesByActions[$actionName] = $actionAttributes[RedirectToView::class]?->getArguments() ?? [];
+			}
+		}
+
+		return $this->redirectFileTypesByActions;
 	}
 
 	private function collectFileTypeByActions(): void

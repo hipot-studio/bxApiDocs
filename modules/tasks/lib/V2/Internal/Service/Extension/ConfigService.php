@@ -21,6 +21,7 @@ use Bitrix\Tasks\V2\Internal\Integration\HumanResources\Repository\StructureRepo
 use Bitrix\Tasks\V2\Internal\Integration\Im\Chat;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\UserUrlService;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\FeatureService;
 use Bitrix\Tasks\V2\Internal\Repository\GroupRepository;
 use Bitrix\Tasks\V2\Internal\Repository\TaskAccessRequestRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserFieldSchemeRepositoryInterface;
@@ -65,6 +66,8 @@ class ConfigService
 		$mainDepartmentAccessCode = $this->structureRepository->getMainDepartment()?->accessCode ?? '';
 		$mainDepartmentUfId = (new AccessCode($mainDepartmentAccessCode))->getEntityId();
 
+		$projectFeatureService = new FeatureService();
+
 		return [
 			'externalExtensions' => ['tasks.external'],
 			'currentUser' => $this->userRepository->getByIds([$userId])->findOneById($userId),
@@ -96,6 +99,7 @@ class ConfigService
 				'im' => ModuleManager::isModuleInstalled('im'),
 				'disk' => ModuleManager::isModuleInstalled('disk'),
 				'allowedGroups' => FormV2Feature::getAllowedGroups(), // @todo Remove 'team_form' before release
+				'isNewProjectsOn' => $projectFeatureService->isNewProjectsOn(),
 			],
 			'paths' => [
 				'editPath' => $this->linkService->getCreateTask($userId),
@@ -129,8 +133,8 @@ class ConfigService
 			'groupTaskPath' => RouteDictionary::PATH_TO_GROUP_TASK,
 			'templatePath' => RouteDictionary::PATH_TO_USER_TEMPLATE,
 			'userDetailUrlTemplate' => $this->userUrlService->getDetailUrlTemplate(),
-			'hasMandatoryTaskUserFields' => $this->userFieldSchemeRepository->getCollection($userId, Task::getEntityCode())->findOne(['mandatory' => true]) !== null,
-			'hasMandatoryTemplateUserFields' => $this->userFieldSchemeRepository->getCollection($userId, Template::getEntityCode())->findOne(['mandatory' => true]) !== null,
+			'hasMandatoryTaskUserFields' => $this->userFieldSchemeRepository->hasMandatory(Task::getEntityCode()),
+			'hasMandatoryTemplateUserFields' => $this->userFieldSchemeRepository->hasMandatory(Template::getEntityCode()),
 		];
 	}
 }

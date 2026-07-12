@@ -18,10 +18,10 @@ class BuilderFactory
 
 	public function create(array $builderData): BlocksBuilder
 	{
-		$config = Config::create($builderData);
+		$config = Config::create($builderData['config'] ?? []);
 		$blockCollection = new BlockCollection();
 
-		foreach ($builderData['blocks'] ?? [] as $blockData)
+		foreach ($builderData['elements'] ?? [] as $blockData)
 		{
 			if (!isset($blockData['id']) || !$this->isUniqueId((string)$blockData['id'], $blockCollection))
 			{

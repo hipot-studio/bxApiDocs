@@ -543,6 +543,28 @@ class UserRepository implements UserRepositoryContract
 		}
 	}
 
+	public function getActiveConfirmedUserIds(array $userIds): array
+	{
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		$rows = UserTable::query()
+			->whereIn('ID', $userIds)
+			->where('ACTIVE', true)
+			->where(Query::filter()
+				->logic('or')
+				->where('CONFIRM_CODE', '')
+				->whereNull('CONFIRM_CODE')
+			)
+			->setSelect(['ID'])
+			->fetchAll()
+		;
+
+		return array_map('intval', array_column($rows, 'ID'));
+	}
+
 	public function getUserActivityById(int $id): bool
 	{
 		$user = UserTable::query()

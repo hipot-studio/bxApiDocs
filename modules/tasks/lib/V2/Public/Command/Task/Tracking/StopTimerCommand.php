@@ -22,6 +22,7 @@ class StopTimerCommand extends AbstractCommand
 		public readonly bool $canStop = false,
 		public readonly bool $useConsistency = false,
 		public readonly ?int $seconds = null,
+		public readonly ?int $elapsedTimeId = null,
 	)
 	{
 

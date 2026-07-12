@@ -9,16 +9,27 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internals;
+use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Analytics\AnalyticsEvent;
-use Bitrix\Main\Diag\Debug;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Request;
 use Bitrix\Main\Web\Uri;
 
 abstract class BaseObject extends Internals\Engine\Controller
 {
+	protected ExternalLinkProvider $externalLinkProvider;
+
+	public function __construct(?Request $request = null)
+	{
+		parent::__construct($request);
+
+		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
+	}
+
 	protected function get(Disk\BaseObject $object)
 	{
 		return [
@@ -195,7 +206,7 @@ abstract class BaseObject extends Internals\Engine\Controller
 		$extLink = $this->getExternalLinkObject($object);
 		if (!$extLink)
 		{
-			$extLink = $object->addExternalLink(array(
+			$extLink = $object->getRealObject()->addExternalLink(array(
 				'CREATED_BY' => $this->getCurrentUser()->getId(),
 				'TYPE' => ExternalLink::TYPE_MANUAL,
 			));
@@ -259,26 +270,16 @@ abstract class BaseObject extends Internals\Engine\Controller
 	 */
 	private function getExternalLinkObject(Disk\BaseObject $object): ?Disk\ExternalLink
 	{
-		$extLinks = $object->getExternalLinks([
-			'filter' => [
-				'OBJECT_ID' => $object->getId(),
-				'CREATED_BY' => $this->getCurrentUser()->getId(),
-				'TYPE' => ExternalLink::TYPE_MANUAL,
-				'=IS_EXPIRED' => false,
-			],
-			'limit' => 1,
-		]);
-
-		return array_pop($extLinks);
+		return $this->externalLinkProvider->getForUse($object->getRealObjectId());
 	}
 
 	private function parseExternalLinkObject(Disk\ExternalLink $extLink, Disk\BaseObject $object): array
 	{
 		$driver = Driver::getInstance();
-		$link = new Uri($driver->getUrlManager()->getShortUrlExternalLink(array(
-			'hash' => $extLink->getHash(),
-			'action' => 'default',
-		), true));
+		$link = new Uri($driver->getUrlManager()->getPublicExternalLink(
+			object: $object,
+			hash: $extLink->getHash(),
+		));
 
 		$isBoard = false;
 		$canEditDocument = null;

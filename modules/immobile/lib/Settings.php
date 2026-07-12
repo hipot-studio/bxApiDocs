@@ -74,29 +74,14 @@ class Settings
 	}
 
 
-	public static function isCopilotMCPButtonAvailable(): bool
+	public static function isMarketAvailable(): bool
 	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'is_copilot_mcp_button_available', 'N') === 'Y';
-	}
-
-	public static function isSearchModeAvailable(): bool
-	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'is_search_mode_button_available', 'N') === 'Y';
-	}
-
-	public static function isAgentButtonAvailable(): bool
-	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'is_agent_button_available', 'N') === 'Y';
+		return \Bitrix\Main\Config\Option::get('immobile', 'is_market_available', 'N') === 'Y';
 	}
 
 	public static function isCopilotSelectModelEnabled(): bool
 	{
 		return true;
-	}
-
-	public static function isAiAssistantMcpSelectorAvailable(): bool
-	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'ai_assistant_mcp_selector_available', 'N') === 'Y';
 	}
 
 	public static function isMarkdownParserEnabled(): bool

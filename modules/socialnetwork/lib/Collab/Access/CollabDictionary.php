@@ -20,8 +20,10 @@ class CollabDictionary implements AccessDictionaryInterface
 	public const VIEW = 'collab_view';
 	public const EXCLUDE_MODERATOR = 'collab_exclude_moderator';
 	public const SET_MODERATOR = 'collab_set_moderator';
+	public const SET_OWNER = 'collab_set_owner';
 
 	public const COPY_LINK = 'collab_copy_link';
+	public const CONVERT = 'project_convert';
 
 	public function create(): string
 	{

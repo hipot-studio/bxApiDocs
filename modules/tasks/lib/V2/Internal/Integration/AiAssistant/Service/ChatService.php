@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service;
 
 use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Integration\Ai\Service\MarkdownConversionService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\InvalidIdentifierException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\NotFoundException;
@@ -20,6 +21,7 @@ class ChatService
 		private readonly ChatAccessService $chatAccessService,
 		private readonly TaskRepositoryInterface $taskRepository,
 		private readonly MessageSenderInterface $messageSender,
+		private readonly MarkdownConversionService $markdownConversionService,
 	)
 	{
 	}
@@ -49,7 +51,7 @@ class ChatService
 
 		$user = new User($userId);
 
-		$message = new NotifyCustomMessage($user, $dto->text);
+		$message = new NotifyCustomMessage($user, $this->markdownConversionService->convertToBbCode($dto->text));
 
 		$this->messageSender->sendMessage($task, $message);
 

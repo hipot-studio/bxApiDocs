@@ -3189,6 +3189,165 @@ namespace Bitrix\Mail\Internals {
 	 */
 	class EO_MailEntityOptions_Entity extends \Bitrix\Main\ORM\Entity {}
 }
+/* ORMENTITYANNOTATION:Bitrix\Mail\Internals\MailEntityDataTable:mail/lib/internals/mailentitydata.php */
+namespace Bitrix\Mail\Internals {
+	/**
+	 * EO_MailEntityData
+	 * @see \Bitrix\Mail\Internals\MailEntityDataTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getMailboxId()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData setMailboxId(\int|\Bitrix\Main\DB\SqlExpression $mailboxId)
+	 * @method bool hasMailboxId()
+	 * @method bool isMailboxIdFilled()
+	 * @method bool isMailboxIdChanged()
+	 * @method \string getEntityType()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData setEntityType(\string|\Bitrix\Main\DB\SqlExpression $entityType)
+	 * @method bool hasEntityType()
+	 * @method bool isEntityTypeFilled()
+	 * @method bool isEntityTypeChanged()
+	 * @method \string getEntityId()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData setEntityId(\string|\Bitrix\Main\DB\SqlExpression $entityId)
+	 * @method bool hasEntityId()
+	 * @method bool isEntityIdFilled()
+	 * @method bool isEntityIdChanged()
+	 * @method \string getPropertyName()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData setPropertyName(\string|\Bitrix\Main\DB\SqlExpression $propertyName)
+	 * @method bool hasPropertyName()
+	 * @method bool isPropertyNameFilled()
+	 * @method bool isPropertyNameChanged()
+	 * @method \string getValue()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData setValue(\string|\Bitrix\Main\DB\SqlExpression $value)
+	 * @method bool hasValue()
+	 * @method bool isValueFilled()
+	 * @method bool isValueChanged()
+	 * @method \string remindActualValue()
+	 * @method \string requireValue()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData resetValue()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData unsetValue()
+	 * @method \string fillValue()
+	 * @method \Bitrix\Main\Type\DateTime getDateInsert()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData setDateInsert(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateInsert)
+	 * @method bool hasDateInsert()
+	 * @method bool isDateInsertFilled()
+	 * @method bool isDateInsertChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateInsert()
+	 * @method \Bitrix\Main\Type\DateTime requireDateInsert()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData resetDateInsert()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData unsetDateInsert()
+	 * @method \Bitrix\Main\Type\DateTime fillDateInsert()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData set($fieldName, $value)
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData reset($fieldName)
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Mail\Internals\EO_MailEntityData wakeUp($data)
+	 */
+	class EO_MailEntityData extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Mail\Internals\MailEntityDataTable */
+		static public $dataClass = '\Bitrix\Mail\Internals\MailEntityDataTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Mail\Internals {
+	/**
+	 * EO_MailEntityData_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getMailboxIdList()
+	 * @method \string[] getEntityTypeList()
+	 * @method \string[] getEntityIdList()
+	 * @method \string[] getPropertyNameList()
+	 * @method \string[] getValueList()
+	 * @method \string[] fillValue()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateInsertList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateInsert()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Mail\Internals\EO_MailEntityData $object)
+	 * @method bool has(\Bitrix\Mail\Internals\EO_MailEntityData $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData getByPrimary($primary)
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData[] getAll()
+	 * @method bool remove(\Bitrix\Mail\Internals\EO_MailEntityData $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Mail\Internals\EO_MailEntityData_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData_Collection merge(?\Bitrix\Mail\Internals\EO_MailEntityData_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData|null find(callable $callback)
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData_Collection filter(callable $callback)
+	 */
+	class EO_MailEntityData_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Mail\Internals\MailEntityDataTable */
+		static public $dataClass = '\Bitrix\Mail\Internals\MailEntityDataTable';
+	}
+}
+namespace Bitrix\Mail\Internals {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_MailEntityData_Result exec()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData fetchObject()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData_Collection fetchCollection()
+	 */
+	class EO_MailEntityData_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData fetchObject()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData_Collection fetchCollection()
+	 */
+	class EO_MailEntityData_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData createObject($setDefaultValues = true)
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData_Collection createCollection()
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData wakeUpObject($row)
+	 * @method \Bitrix\Mail\Internals\EO_MailEntityData_Collection wakeUpCollection($rows)
+	 */
+	class EO_MailEntityData_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\Mail\Internals\MailboxAccessTable:mail/lib/internals/mailboxaccess.php */
 namespace Bitrix\Mail\Internals {
 	/**
@@ -3366,16 +3525,6 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetRequesterId()
 	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetRequesterId()
 	 * @method \int fillRequesterId()
-	 * @method null|\string getComment()
-	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setComment(null|\string|\Bitrix\Main\DB\SqlExpression $comment)
-	 * @method bool hasComment()
-	 * @method bool isCommentFilled()
-	 * @method bool isCommentChanged()
-	 * @method null|\string remindActualComment()
-	 * @method null|\string requireComment()
-	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetComment()
-	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetComment()
-	 * @method null|\string fillComment()
 	 * @method \string getStatus()
 	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
 	 * @method bool hasStatus()
@@ -3406,6 +3555,16 @@ namespace Bitrix\Mail\Internals {
 	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetMailboxId()
 	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetMailboxId()
 	 * @method null|\int fillMailboxId()
+	 * @method null|\int getChatId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setChatId(null|\int|\Bitrix\Main\DB\SqlExpression $chatId)
+	 * @method bool hasChatId()
+	 * @method bool isChatIdFilled()
+	 * @method bool isChatIdChanged()
+	 * @method null|\int remindActualChatId()
+	 * @method null|\int requireChatId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest resetChatId()
+	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest unsetChatId()
+	 * @method null|\int fillChatId()
 	 * @method \Bitrix\Main\Type\DateTime getCreatedAt()
 	 * @method \Bitrix\Mail\Internals\EO_MailboxConnectionRequest setCreatedAt(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $createdAt)
 	 * @method bool hasCreatedAt()
@@ -3472,14 +3631,14 @@ namespace Bitrix\Mail\Internals {
 	 * @method \int[] getIdList()
 	 * @method \int[] getRequesterIdList()
 	 * @method \int[] fillRequesterId()
-	 * @method null|\string[] getCommentList()
-	 * @method null|\string[] fillComment()
 	 * @method \string[] getStatusList()
 	 * @method \string[] fillStatus()
 	 * @method null|\int[] getAdminIdList()
 	 * @method null|\int[] fillAdminId()
 	 * @method null|\int[] getMailboxIdList()
 	 * @method null|\int[] fillMailboxId()
+	 * @method null|\int[] getChatIdList()
+	 * @method null|\int[] fillChatId()
 	 * @method \Bitrix\Main\Type\DateTime[] getCreatedAtList()
 	 * @method \Bitrix\Main\Type\DateTime[] fillCreatedAt()
 	 * @method \Bitrix\Main\Type\DateTime[] getUpdatedAtList()
@@ -4279,16 +4438,16 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Mail\EO_Mailbox resetLid()
 	 * @method \Bitrix\Mail\EO_Mailbox unsetLid()
 	 * @method \string fillLid()
-	 * @method \boolean getActive()
-	 * @method \Bitrix\Mail\EO_Mailbox setActive(\boolean|\Bitrix\Main\DB\SqlExpression $active)
+	 * @method \string getActive()
+	 * @method \Bitrix\Mail\EO_Mailbox setActive(\string|\Bitrix\Main\DB\SqlExpression $active)
 	 * @method bool hasActive()
 	 * @method bool isActiveFilled()
 	 * @method bool isActiveChanged()
-	 * @method \boolean remindActualActive()
-	 * @method \boolean requireActive()
+	 * @method \string remindActualActive()
+	 * @method \string requireActive()
 	 * @method \Bitrix\Mail\EO_Mailbox resetActive()
 	 * @method \Bitrix\Mail\EO_Mailbox unsetActive()
-	 * @method \boolean fillActive()
+	 * @method \string fillActive()
 	 * @method \int getServiceId()
 	 * @method \Bitrix\Mail\EO_Mailbox setServiceId(\int|\Bitrix\Main\DB\SqlExpression $serviceId)
 	 * @method bool hasServiceId()
@@ -4597,8 +4756,8 @@ namespace Bitrix\Mail {
 	 * @method \Bitrix\Main\Type\DateTime[] fillTimestampX()
 	 * @method \string[] getLidList()
 	 * @method \string[] fillLid()
-	 * @method \boolean[] getActiveList()
-	 * @method \boolean[] fillActive()
+	 * @method \string[] getActiveList()
+	 * @method \string[] fillActive()
 	 * @method \int[] getServiceIdList()
 	 * @method \int[] fillServiceId()
 	 * @method \string[] getEmailList()

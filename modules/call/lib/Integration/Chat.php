@@ -6,6 +6,7 @@ use Bitrix\Call\Call;
 use Bitrix\Call\CallUser;
 use Bitrix\Im\Common;
 use Bitrix\Im\Dialog;
+use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Chat\NullChat;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -266,12 +267,15 @@ class Chat extends AbstractEntity
 		}
 		if ($this->chatFields['message_type'] == IM_MESSAGE_PRIVATE)
 		{
-			$chat = new \CIMChat();
-
 			$users = $this->chatUsers;
 			$users[] = $userId;
 
-			$chatId = $chat->add(['USERS' => $users]);
+			$addResult = ChatFactory::getInstance()->addChat(['USERS' => $users]);
+			if (!$addResult->isSuccess())
+			{
+				return false;
+			}
+			$chatId = $addResult->getChatId();
 			if (!$chatId)
 			{
 				return false;
@@ -291,7 +295,75 @@ class Chat extends AbstractEntity
 		{
 			$chat = new \CIMChat();
 			$chatId = \Bitrix\Im\Dialog::getChatId($this->getEntityId());
-			$chat->addUser($chatId, $userId);
+			if (
+				$chatId
+				&& $chat->addUser($chatId, $userId)
+				&& !in_array($userId, $this->chatUsers)
+			)
+			{
+				$this->chatUsers[] = $userId;
+			}
+		}
+
+		return true;
+	}
+
+	public function onUsersAdd(array $userIds): bool
+	{
+		if (!$this->canExtendChat())
+		{
+			return false;
+		}
+
+		$userIds = array_values(array_unique(array_map('intval', $userIds)));
+		if ($userIds === [])
+		{
+			return true;
+		}
+
+		if ($this->chatFields['message_type'] == \IM_MESSAGE_PRIVATE)
+		{
+			$addResult = ChatFactory::getInstance()->addChat([
+				'USERS' => array_values(array_unique(array_merge($this->chatUsers, $userIds))),
+			]);
+			if (!$addResult->isSuccess())
+			{
+				return false;
+			}
+			$newChatId = $addResult->getChatId();
+			if (!$newChatId)
+			{
+				return false;
+			}
+
+			if ($this->call)
+			{
+				$this->call->setAssociatedEntity(static::getEntityType(), 'chat' . $newChatId);
+				// todo: remove when the calls are supported in the mobile
+				$this->call->getAssociatedEntity()?->onCallCreate();
+			}
+
+			return true;
+		}
+
+		$chatId = \Bitrix\Im\Dialog::getChatId($this->getEntityId());
+		if (!$chatId)
+		{
+			return false;
+		}
+
+		$chat = new \CIMChat();
+		if (!$chat->addUser($chatId, $userIds))
+		{
+			return false;
+		}
+
+		foreach ($userIds as $userId)
+		{
+			if (!in_array($userId, $this->chatUsers, true))
+			{
+				$this->chatUsers[] = $userId;
+			}
 		}
 
 		return true;
@@ -326,6 +398,12 @@ class Chat extends AbstractEntity
 		}
 		elseif ($state === Call::STATE_FINISHED)
 		{
+			// Silent clean-up of a stuck call: no chat notifications.
+			if ($this->call->isSilentFinish())
+			{
+				return;
+			}
+
 			$message = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_FINISHED_V2", [
 				'#CALL_DURATION#' => $this->getCallDuration(),
 			]);
@@ -465,6 +543,8 @@ class Chat extends AbstractEntity
 			'avatar' => $this->getAvatar($initiatorId),
 			'avatarColor' => $this->getAvatarColor($initiatorId),
 			'userCounter' => count($this->chatUsers),
+			'ownerId' => $this->getOwnerId(),
+			'managerIds' => array_values($this->getManagerIds()),
 			'advanced' => [
 				'chatType' => $this->chatFields['type'],
 				'entityType' => $this->chatFields['entity_type'],

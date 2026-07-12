@@ -145,7 +145,7 @@ class TariffService
 
 	public function isProjectAvailable(int $groupId = 0): bool
 	{
-		return ProjectLimit::isFeatureEnabled($groupId);
+		return ProjectLimit::isFeatureEnabledOrTrial($groupId);
 	}
 
 	public function isLimitExceed(): bool

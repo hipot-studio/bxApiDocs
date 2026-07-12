@@ -105,7 +105,7 @@ class Filter
 				'EXCLUDE' => null,
 			],
 			'NEW_COMMENTS' => [
-				'INCLUDE' => Counter\CounterDictionary::MAP_COMMENTS,
+				'INCLUDE' => Counter\CounterDictionary::getMapCommentsFilterCounterList(),
 				'EXCLUDE' => null,
 			],
 			'PROJECT_EXPIRED' => [

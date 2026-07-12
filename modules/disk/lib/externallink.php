@@ -8,6 +8,7 @@ use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\ExternalLinkTable;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Web\Uri;
 use CBXShortUri;
 
 final class ExternalLink extends Internals\Model
@@ -48,6 +49,8 @@ final class ExternalLink extends Internals\Model
 	protected $createdBy;
 	/** @var User */
 	protected $createUser;
+	/** @var int */
+	protected $canDownloadWithReadAccess;
 
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
@@ -281,6 +284,23 @@ final class ExternalLink extends Internals\Model
 		return (int)$this->accessRight;
 	}
 
+	public function getCanDownloadWithReadAccess(): int
+	{
+		return (int)$this->canDownloadWithReadAccess;
+	}
+
+	public function isCanDownloadWithReadAccess(): bool
+	{
+		return (bool)$this->getCanDownloadWithReadAccess();
+	}
+
+	public function changeCanDownloadWithReadAccess($val)
+	{
+		return $this->update([
+			'CAN_DOWNLOAD_WITH_READ_ACCESS' => $val ? 1 : 0,
+		]);
+	}
+
 	public function allowEdit(): bool
 	{
 		return $this->getAccessRight() === self::ACCESS_RIGHT_EDIT;
@@ -372,6 +392,7 @@ final class ExternalLink extends Internals\Model
 			'CREATE_TIME' => 'createTime',
 			'CREATED_BY' => 'createdBy',
 			'CREATE_USER' => 'createUser',
+			'CAN_DOWNLOAD_WITH_READ_ACCESS' => 'canDownloadWithReadAccess',
 		);
 	}
 
@@ -588,5 +609,16 @@ final class ExternalLink extends Internals\Model
 		{
 			CBXShortUri::delete($result['ID']);
 		}
+	}
+
+	public function generateUrl(): Uri
+	{
+		$driver = Driver::getInstance();
+		return new Uri(
+			$driver->getUrlManager()->getPublicExternalLink(
+				object: $this->getObject(),
+				hash: $this->getHash(),
+			),
+		);
 	}
 }

@@ -2,7 +2,9 @@
 
 namespace Bitrix\Im\V2\Chat\ExternalChat\Event;
 
+use Bitrix\Im\V2\AccessError;
 use Bitrix\Im\V2\Chat\ExternalChat;
+use Bitrix\Main\Error;
 
 class FilterUsersByAccessEvent extends ChatEvent
 {
@@ -32,5 +34,24 @@ class FilterUsersByAccessEvent extends ChatEvent
 		}
 
 		return $userIds;
+	}
+
+	public function getError(): ?AccessError
+	{
+		$error = $this->getParameterFromResult('error');
+		if (!$error instanceof Error)
+		{
+			return null;
+		}
+
+		return AccessError::fromError($error, revokeAccess: !$this->areUsersUntouched());
+	}
+
+	private function areUsersUntouched(): bool
+	{
+		$input = $this->getUserIds();
+		$output = $this->getUsersWithAccess();
+
+		return count($input) === count($output) && array_diff($input, $output) === [];
 	}
 }

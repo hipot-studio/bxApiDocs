@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Integration\Collab;
 
+use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\ProxyType\Group;
 use Bitrix\Disk\Storage;
@@ -161,5 +162,33 @@ final class CollabService
 		$collab = $entity->getCollab();
 
 		return Driver::getInstance()->getStorageByGroupId($collab->getId());
+	}
+
+	/**
+	 * @param BaseObject $baseObject
+	 * @param int $userId
+	 * @return bool
+	 * @throws ArgumentException
+	 * @throws LoaderException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function isUserMemberOfCollabByObject(BaseObject $baseObject, int $userId): bool
+	{
+		$storage = $baseObject->getStorage();
+
+		if (!$storage instanceof Storage)
+		{
+			return false;
+		}
+
+		$collab = $this->getCollabByStorage($storage);
+
+		if (!$collab instanceof Collab)
+		{
+			return false;
+		}
+
+		return in_array($userId, $collab->getUserMemberIds(), true);
 	}
 }

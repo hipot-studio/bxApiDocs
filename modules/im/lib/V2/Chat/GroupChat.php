@@ -75,16 +75,7 @@ class GroupChat extends Chat
 	{
 		if ($this->isOpen() && $this->canAccessWithoutMembership($userId))
 		{
-			if (!$this->hasParent())
-			{
-				return new Result();
-			}
-
-			$parentAccess = $this->getParentChat()?->checkAccess($userId);
-			if ($parentAccess !== null && $parentAccess->isSuccess())
-			{
-				return new Result();
-			}
+			return new Result();
 		}
 
 		$result = new Result();
@@ -149,12 +140,13 @@ class GroupChat extends Chat
 		}
 
 		$addedUsers = $usersToInvite = $chat->getUserIds() ?? [];
-		if ($chat->getAuthorId())
+		$authorId = $chat->getAuthorId();
+		if ($authorId)
 		{
-			$addedUsers[$chat->getAuthorId()] = $chat->getAuthorId();
-			unset($usersToInvite[$chat->getAuthorId()]);
+			unset($usersToInvite[$authorId]);
 		}
 		$addUsersConfig = new AddUsersConfig($params['MANAGERS'] ?? [], false);
+
 		$chat->addUsersToRelation($addedUsers, $addUsersConfig);
 		$needToSendGreetingMessages = !$skipAddMessage && ($chat->needToSendGreetingMessages() || $forceSendGreetingMessages);
 		if ($needToSendGreetingMessages)
@@ -187,11 +179,17 @@ class GroupChat extends Chat
 	protected function onBeforeAdd(?Context $context = null): void
 	{
 		$userIds = $this->getUserIds() ?? [];
+		if ($this->hasParent() && $this->requiresParentMembership())
+		{
+			$this->addUsersToParentCascade($userIds, new AddUsersConfig(hideHistory: false));
+			$userIds = $this->getParentChat()->getRelationsByUserIds($userIds)->getUserIds();
+			$this->setUserIds($userIds);
+		}
+
 		$containsExtranet = UserCollection::hasUserByType($userIds, UserType::EXTRANET);
 		$this->setExtranet($containsExtranet)->setContext($context);
 		if (UserCollection::hasUserByType($userIds, UserType::COLLABER))
 		{
-			$this->getChatParams()->addParamByName(Params::CONTAINS_COLLABER, true, false);
 			$this->getChatParams()->addParamByName(Params::CONTAINS_COLLABER, true, false);
 		}
 		if (AIHelper::containsCopilotBot($this->usersIds))

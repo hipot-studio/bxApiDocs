@@ -30,7 +30,7 @@ trait FlowTrait
 			return true;
 		}
 
-		if (!empty(array_intersect($this->user->getUserDepartments(), $flowModel->getDepartments())))
+		if ($flowModel->isInFlowDepartments($this->user->getUserId()))
 		{
 			return true;
 		}

@@ -16,6 +16,7 @@ use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhookAttributeCollecti
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhookExternalAttribute;
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\WebhookType;
 use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
+use Bitrix\Rest\Preset\EventController;
 
 final class SystemIncomingWebhookCreator
 {
@@ -44,6 +45,8 @@ final class SystemIncomingWebhookCreator
 
 		try
 		{
+			EventController::disableEvents();
+
 			$webhook = new IncomingWebhook(
 				userId: $userId,
 				password: PasswordTable::generatePassword(),
@@ -71,7 +74,7 @@ final class SystemIncomingWebhookCreator
 			}
 
 			$reloaded = $this->repository->getById($passwordId) ?? $webhook;
-
+			EventController::enableEvents();
 			$connection->commitTransaction();
 
 			return $reloaded;

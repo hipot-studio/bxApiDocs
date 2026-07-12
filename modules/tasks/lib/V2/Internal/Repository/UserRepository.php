@@ -15,10 +15,9 @@ class UserRepository implements UserRepositoryInterface
 {
 	public function __construct(
 		private readonly FileRepositoryInterface $fileRepository,
-		private readonly UserMapper $userMapper
+		private readonly UserMapper $userMapper,
 	)
 	{
-
 	}
 
 	public function getByIds(array $userIds): Entity\UserCollection
@@ -61,6 +60,39 @@ class UserRepository implements UserRepositoryInterface
 		$files = $this->fileRepository->getByIds($fileIds);
 
 		return $this->userMapper->mapToCollection($users, $files);
+	}
+
+	public function getNamesByIds(array $userIds): array
+	{
+		$result = [];
+
+		if (empty($userIds))
+		{
+			return $result;
+		}
+
+		Collection::normalizeArrayValuesByInt($userIds, false);
+
+		if (empty($userIds))
+		{
+			return $result;
+		}
+
+		$select = [
+			'ID',
+			'NAME',
+			'LAST_NAME',
+			'SECOND_NAME',
+		];
+
+		$users = UserTable::query()
+			->setSelect($select)
+			->whereIn('ID', $userIds)
+			->exec()
+			->fetchAll()
+		;
+
+		return $this->userMapper->mapNamesToArray($users);
 	}
 
 	public function getAdmins(): Entity\UserCollection

@@ -745,6 +745,13 @@ class Imap extends Mail\Helper\Mailbox
 	{
 		if (!$this->client->authenticate($error))
 		{
+			$userId = (int)($this->mailbox['USER_ID'] ?? 0);
+			$mailboxId = (int)($this->mailbox['ID'] ?? 0);
+			if ($userId > 0 && $mailboxId > 0)
+			{
+				(new MailboxSyncManager($userId))->registerFailedConnection($mailboxId);
+			}
+
 			return false;
 		}
 

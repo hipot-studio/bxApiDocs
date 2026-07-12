@@ -55,6 +55,7 @@ class MessageEventLegacy
 			'URL_ATTACH' => $message->getUrl()?->getUrlAttach()?->GetArray() ?? [],
 			'AUTHOR_ID' => $message->getAuthorId(),
 			'SYSTEM' => $message->isSystem() ? 'Y' : 'N',
+			'NOTIFY_TYPE' => $message->getNotifyType(),
 		];
 
 		$result['FILES'] = [];
@@ -75,6 +76,8 @@ class MessageEventLegacy
 		{
 			$result['TO_USER_ID'] = $message->getChat()->getDialogId();
 		}
+
+		$result['REPLY_MESSAGE'] = self::getReplyField($this->message);
 
 		return $result;
 	}
@@ -116,5 +119,21 @@ class MessageEventLegacy
 		}
 
 		return $result;
+	}
+
+	public static function getReplyField(Message $message): ?array
+	{
+		$replyMessage = $message->getReplyMessage();
+
+		if ($replyMessage === null)
+		{
+			return null;
+		}
+
+		return [
+			'ID' => $replyMessage->getId(),
+			'MESSAGE' => $replyMessage->getMessage(),
+			'AUTHOR_ID' => $replyMessage->getAuthorId(),
+		];
 	}
 }

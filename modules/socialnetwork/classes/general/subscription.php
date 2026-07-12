@@ -1,9 +1,13 @@
 <?php
 
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Socialnetwork\Integration;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ChatMessageSender;
+use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\Message\NotifyLiveFeedPostAdd;
+use Bitrix\Socialnetwork\V2\Internal\Service\UserService;
 
 class CAllSocNetSubscription
 {
@@ -242,19 +246,7 @@ class CAllSocNetSubscription
 			);
 			$chatUrl = $tmp["URLS"]["URL"];
 
-			$chatMessageFields = array(
-				"MESSAGE" => str_replace(
-					array("#URL#", "#url#"),
-					$chatUrl,
-					$arFields["MESSAGE_CHAT"]
-				),
-			);
-
-			if (intval($arFields["FROM_USER_ID"]) > 0)
-			{
-				$chatMessageFields["FROM_USER_ID"] = intval($arFields["FROM_USER_ID"]);
-			}
-
+			$sendChatIds = [];
 			foreach($chatData as $groupId => $chatId)
 			{
 				// don't send message to chat if it's unavailable for all members
@@ -266,12 +258,23 @@ class CAllSocNetSubscription
 					continue;
 				}
 
-				CIMChat::addMessage(array_merge(
-					$chatMessageFields, array(
-						"TO_CHAT_ID" => $chatId
-					)
-				));
+				$sendChatIds[] = $chatId;
 			}
+
+			if (
+				$sendChatIds
+				&& isset($arFields['MESSAGE_CHAT_TYPE'])
+				&& $arFields['MESSAGE_CHAT_TYPE'] === 'GROUP_BLOG_POST'
+			)
+			{
+				self::makeGroupBlogPostNotifySender($arFields, $chatUrl, $sendChatIds);
+			}
+			else
+			{
+				self::makeGroupNotifySender($arFields, $chatUrl, $sendChatIds);
+			}
+
+			unset($sendChatIds);
 		}
 
 		// if all groups processed by chats
@@ -588,5 +591,60 @@ class CAllSocNetSubscription
 		$userId = intval($fields['USER_ID']);
 
 		return self::set($userId, "SG".$groupId, ($fields['MUTE'] ? "N" : "Y"));
+	}
+
+	private static function makeGroupBlogPostNotifySender(array $arFields, string $chatUrl, array $chatIds): void
+	{
+		$user = null;
+		$locator = ServiceLocator::getInstance();
+
+		$userId = (int)($arFields['FROM_USER_ID'] ?? 0);
+		if ($userId > 0)
+		{
+			$userService = $locator->get(UserService::class);
+			$userCollection = $userService->getUsers([$userId]);
+			$user = $userCollection->isEmpty()
+				? null
+				: $userCollection->getFirstEntity();
+		}
+
+		$message = new NotifyLiveFeedPostAdd(
+			contextUser: $user,
+			url: $chatUrl,
+		);
+
+		$messageSender = $locator->get(ChatMessageSender::class);
+
+		foreach ($chatIds as $chatId)
+		{
+			$messageSender->sendMessage((int)$chatId, $message);
+		}
+	}
+
+	private static function makeGroupNotifySender(array $arFields, string $chatUrl, array $chatIds): void
+	{
+		$chatMessageFields = [
+			'MESSAGE' => str_replace(
+				['#URL#', '#url#'],
+				$chatUrl,
+				$arFields['MESSAGE_CHAT'],
+			),
+		];
+
+		$userId = (int)$arFields['FROM_USER_ID'];
+		if ($userId > 0)
+		{
+			$chatMessageFields['FROM_USER_ID'] = $userId;
+		}
+
+		foreach ($chatIds as $chatId)
+		{
+			CIMChat::addMessage(
+				array_merge(
+					$chatMessageFields,
+					['TO_CHAT_ID' => (int)$chatId],
+				),
+			);
+		}
 	}
 }

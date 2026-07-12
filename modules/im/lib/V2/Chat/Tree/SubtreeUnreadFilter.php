@@ -5,6 +5,8 @@ namespace Bitrix\Im\V2\Chat\Tree;
 
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
+use Bitrix\Im\Model\RelationTable;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
@@ -49,6 +51,7 @@ readonly class SubtreeUnreadFilter
 			if ($depth > 0)
 			{
 				$source->where($target->idExpression, '>', 0);
+				$this->requireUnmutedAncestors($source, array_slice($levels, 1));
 			}
 
 			$source->setSelect([$target->idExpression]);
@@ -81,8 +84,31 @@ readonly class SubtreeUnreadFilter
 			$target = end($levels);
 
 			$source->where($target->idExpression, '>', 0);
+			$this->requireUnmutedAncestors($source, array_slice($levels, 1));
 			$source->setSelect([$target->idExpression]);
 			$filter->whereIn('ITEM_CID', $source);
+		}
+	}
+
+	/**
+	 * @param TreeLevel[] $ancestorLevels
+	 */
+	private function requireUnmutedAncestors(Query $query, array $ancestorLevels): void
+	{
+		foreach ($ancestorLevels as $level)
+		{
+			$relAlias = "UNREAD_REL_{$this->userId}_{$level->depth}";
+
+			$query->registerRuntimeField(
+				$relAlias,
+				(new Reference(
+					$relAlias,
+					RelationTable::class,
+					Join::on('ref.CHAT_ID', "this.{$level->idExpression}")
+						->where('ref.USER_ID', $this->userId),
+				))->configureJoinType(Join::TYPE_INNER),
+			);
+			$query->where("{$relAlias}.NOTIFY_BLOCK", 'N');
 		}
 	}
 }

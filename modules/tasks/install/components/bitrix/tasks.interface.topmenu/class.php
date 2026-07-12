@@ -19,6 +19,8 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Integration\Intranet;
 use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\ProjectTotalService;
 
 Loc::loadMessages(__FILE__);
 
@@ -148,10 +150,10 @@ class TasksTopmenuComponent extends TasksBaseComponent
 		)
 		{
 			$counter = Counter::getInstance($this->arParams['USER_ID']);
+			$projectTotalService = Container::getInstance()->get(ProjectTotalService::class);
 
 			$this->arResult['TOTAL'] = $counter->get(Counter\CounterDictionary::COUNTER_MEMBER_TOTAL);
-			$this->arResult['PROJECTS_COUNTER'] = $counter->get(Counter\CounterDictionary::COUNTER_SONET_TOTAL_EXPIRED)
-				+ $counter->get(Counter\CounterDictionary::COUNTER_SONET_TOTAL_COMMENTS);
+			$this->arResult['PROJECTS_COUNTER'] = $projectTotalService->getTotal($this->arParams['USER_ID']);
 			$this->arResult['SCRUM_COUNTER'] = $counter->get(Counter\CounterDictionary::COUNTER_SCRUM_TOTAL_COMMENTS);
 			$this->arResult['FLOW_COUNTER'] = $counter->get(Counter\CounterDictionary::COUNTER_FLOW_TOTAL);
 		}

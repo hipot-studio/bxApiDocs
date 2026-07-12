@@ -2,7 +2,7 @@
 namespace Bitrix\Tasks\CheckList\Internals;
 
 use Bitrix\Main\Application;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity\DataManager;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Tasks\CheckList\CheckListFacade;

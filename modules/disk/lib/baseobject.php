@@ -6,6 +6,7 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\UniqueCodeBackfiller;
 use Bitrix\Disk\Internals\Entity\ModelSynchronizer;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\ObjectNameService;
+use Bitrix\Disk\Internals\ObjectOptionsTable;
 use Bitrix\Disk\Internals\ObjectPathTable;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internals\SharingTable;
@@ -86,6 +87,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	protected $deleteUser;
 	/** @var string|null */
 	protected $uniqueCode;
+	protected ?array $objectOptions = null;
 
 	/**
 	 * Returns the fully qualified name of table class which belongs to current model.
@@ -146,6 +148,16 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	public function canRead(SecurityContext $securityContext)
 	{
 		return $securityContext->canRead($this->id);
+	}
+
+	/**
+	 * Checks rights to download current object.
+	 * @param SecurityContext $securityContext Security context.
+	 * @return bool
+	 */
+	public function canDownload(SecurityContext $securityContext)
+	{
+		return $securityContext->canDownload($this->id);
 	}
 
 	/**
@@ -555,6 +567,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * Returns external links by file.
 	 * @param array $parameters Parameters.
 	 * @return ExternalLink[]
+	 * @deprecated
 	 */
 	public function getExternalLinks(array $parameters = array())
 	{
@@ -1680,6 +1693,65 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	public function makeObjectEvent(string $category, array $data = []): ObjectEvent
 	{
 		return new ObjectEvent($this, $category, $data);
+	}
+
+	public function getObjectOptions(): array
+	{
+		if (is_null($this->objectOptions))
+		{
+			$options = [
+				ObjectOptionsTable::NAME_ALLOW_DOWNLOAD_ON_READ => true,
+				ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ => true,
+			];
+
+			$items = ObjectOptionsTable::getList([
+				'select' => ['NAME', 'VALUE'],
+				'filter' => ['=OBJECT_ID' => $this->getId()],
+			]);
+
+			$items = $items->fetchAll();
+
+			foreach ($items as $item)
+			{
+				if (array_key_exists($item['NAME'], $options) && $item['VALUE'])
+				{
+					$options[$item['NAME']] = json_decode($item['VALUE']);
+				}
+			}
+
+			$this->objectOptions = $options;
+		}
+
+		return $this->objectOptions;
+	}
+
+	public function setObjectOption($name, $value): self
+	{
+		$options = [
+			ObjectOptionsTable::NAME_ALLOW_DOWNLOAD_ON_READ,
+			ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ,
+		];
+		if (!in_array($name, $options))
+		{
+			throw new \Bitrix\Main\ArgumentException("Option is not allowed", "name");
+		}
+
+		$items = ObjectOptionsTable::getList([
+			'filter' => [
+				'=OBJECT_ID' => $this->getId(),
+				'=NAME' => $name,
+			],
+		]);
+		$item = $items->fetchObject();
+		if (!$item)
+		{
+			$item = new \Bitrix\Disk\Internals\EO_ObjectOptions();
+			$item->setObjectId($this->getId());
+			$item->setName($name);
+		}
+		$item->setValue(json_encode($value));
+		$item->save();
+		return $this;
 	}
 
 	/**

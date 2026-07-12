@@ -52,7 +52,7 @@ use Bitrix\Im\V2\Permission\ChatActionAccessCheckable;
 /**
  * Chat version #2
  */
-class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, PopupDataAggregatable, DateFilterable, AccessCheckable, ChatActionAccessCheckable
+class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, PopupDataAggregatable, DateFilterable, AccessCheckable, ChatActionAccessCheckable, ChatHolder
 {
 	use FieldAccessImplementation;
 	use ActiveRecordImplementation
@@ -144,6 +144,8 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	/** Message additional parameters. */
 	protected Params $params;
+
+	protected ?Message $replyMessage = null;
 
 	/**
 	 * Message file attachments
@@ -441,6 +443,21 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		return $this->getParams()->get(Params::REPLY_ID)->getValue();
 	}
 
+	public function getReplyMessage(): ?Message
+	{
+		if ($this->replyMessage !== null)
+		{
+			return $this->replyMessage;
+		}
+
+		if ($this->getReplyId() !== null)
+		{
+			$this->replyMessage = new Message($this->getReplyId());
+		}
+
+		return $this->replyMessage;
+	}
+
 	public function hasReply(): bool
 	{
 		return $this->getParams()->isSet(Params::REPLY_ID);
@@ -639,12 +656,22 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	 */
 	public function getFileIds(): array
 	{
+		$fileIds = [];
 		if ($this->getParams()->isSet(Params::FILE_ID))
 		{
-			return $this->getParams()->get(Params::FILE_ID)->getValue();
+			$fileIds = $this->getParams()->get(Params::FILE_ID)->getValue();
 		}
 
-		return [];
+		if ($this->getBlocksBuilder() !== null)
+		{
+			$builderFiles = $this->getBlocksBuilder()->getFiles();
+			foreach ($builderFiles as $fileId)
+			{
+				$fileIds[] = $fileId;
+			}
+		}
+
+		return $fileIds;
 	}
 
 	/**
@@ -652,9 +679,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	 */
 	public function hasFiles(): bool
 	{
-		return
-			$this->getParams()->isSet(Params::FILE_ID)
-			&& ($this->getParams()->get(Params::FILE_ID)->count() > 0);
+		return !empty($this->getFileIds());
 	}
 
 	/**
@@ -1842,7 +1867,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			&& !$this->getParams()->isSet(Params::KEYBOARD)
 			&& !$this->getParams()->isSet(Params::ATTACH)
 			&& !$this->getParams()->isSet(Params::STICKER_PARAMS)
-			&& !$this->getParams()->isSet(Params::BLOCKS_BUILDER)
+			&& !$this->getParams()->isSet(Params::BLOCK)
 		);
 	}
 
@@ -1902,7 +1927,7 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			'forward' => $this->getForwardInfo(),
 			'params' => $this->getEnrichedParams(!$messageShortInfo)->toRestFormat(),
 			'viewedByOthers' => $this->isViewedByOthers(),
-			'builder' => $this->getBlocksBuilder(),
+			'block' => $this->getBlocksBuilder(),
 		];
 		$rest = $onlyCommonRest;
 
@@ -2179,14 +2204,18 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	public function getBlocksBuilder(): ?BlocksBuilder
 	{
-		$this->builder ??= $this->getParams()->get(Params::BLOCKS_BUILDER)->getValue();
+		$this->builder ??= $this->getParams()->get(Params::BLOCK)->getValue();
 		return $this->builder;
 	}
 
 	public function setBlocksBuilder(?BlocksBuilder $builder): self
 	{
-		$this->getParams()->get(Params::BLOCKS_BUILDER)->setValue($builder);
+		$this->getParams()->get(Params::BLOCK)->setValue($builder);
 		$this->builder = $builder;
+		if ($builder !== null)
+		{
+			$this->setMessage($builder?->getPayloadText());
+		}
 
 		return $this;
 	}

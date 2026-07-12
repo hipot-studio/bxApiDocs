@@ -34,6 +34,8 @@ use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\Item;
 use Bitrix\Socialnetwork\Helper;
+use Bitrix\Socialnetwork\V2\Feature;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 
 class Workgroup
 {
@@ -604,8 +606,8 @@ class Workgroup
 		{
 			return true;
 		}
-		
-		return Feature::isFeatureEnabled(Feature::PROJECTS_COPY);
+
+		return Helper\Feature::isFeatureEnabled(Helper\Feature::PROJECTS_COPY);
 	}
 
 	public static function isProjectAccessFeatureEnabled(): bool
@@ -617,7 +619,7 @@ class Workgroup
 			return true;
 		}
 
-		return Feature::isFeatureEnabled(Feature::PROJECTS_ACCESS_PERMISSIONS);
+		return Helper\Feature::isFeatureEnabled(Helper\Feature::PROJECTS_ACCESS_PERMISSIONS);
 	}
 
 	public static function setArchive(array $fields = []): bool
@@ -662,7 +664,18 @@ class Workgroup
 			throw new AccessDeniedException(Loc::getMessage('SOCIALNETWORK_HELPER_WORKGROUP_ERROR_OPERATION_NO_PERMS'));
 		}
 
-		if (!\CSocNetGroup::update($groupId, [ 'CLOSED' => ($archive ? 'Y' : 'N') ], false, true, false))
+		if (
+			!\CSocNetGroup::update(
+				$groupId,
+				[
+					'CLOSED' => ($archive ? 'Y' : 'N'),
+					'NAME' => $groupFields['NAME'],
+				],
+				false,
+				true,
+				false
+			)
+		)
 		{
 			if ($ex = $APPLICATION->getException())
 			{
@@ -676,6 +689,11 @@ class Workgroup
 			}
 
 			throw new SystemException($errorMessage, $errorCode);
+		}
+
+		if ($archive && Feature::isNewProjectsOn())
+		{
+			Container::getInstance()->getProjectChatHider()->hide($groupId);
 		}
 
 		return true;

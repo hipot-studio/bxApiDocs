@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
 use Bitrix\Im\Bot\Keyboard;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Service\Time\Trait\FormatElapsedTimeTrait;
@@ -28,12 +29,26 @@ abstract class AbstractNotify
 
 	public function toString(): string
 	{
-		return $this->getMessage($this->getMessageCode(), $this->getMessageData()) ?? $this->getMessageCode();
+		$message = $this->getMessage($this->getMessageCode(), $this->getMessageData()) ?? $this->getMessageCode();
+
+		if (!$this->isClickable())
+		{
+			return $this->stripBbCodeUrl($message);
+		}
+
+		return $message;
 	}
 
 	public function toPluralString(int $count = 1): string
 	{
-		return $this->getMessagePlural($this->getMessageCode(), $count, $this->getMessageData());
+		$message = $this->getMessagePlural($this->getMessageCode(), $count, $this->getMessageData());
+
+		if (!$this->isClickable())
+		{
+			return $this->stripBbCodeUrl($message);
+		}
+
+		return $message;
 	}
 
 	public function getMessage(string $code, array $data = [])
@@ -84,6 +99,11 @@ abstract class AbstractNotify
 		return [];
 	}
 
+	public function isClickable(): bool
+	{
+		return Option::get('tasks', 'clickable_sys_msgs', 'N') === 'Y';
+	}
+
 	public function getDisableNotify(): bool
 	{
 		return false;
@@ -101,6 +121,6 @@ abstract class AbstractNotify
 
 	protected function stripBbCodeUrl(string $text): string
 	{
-		return preg_replace('#\[URL=[^]]*]([^\[]*)\[/URL]#i', '$1', $text);
+		return preg_replace('#\[URL=[^]]*](.*?)\[/URL]#i', '$1', $text);
 	}
 }

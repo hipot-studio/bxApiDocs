@@ -5,12 +5,18 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\EventLog;
 
 use Bitrix\Im\Model\EventLogTable;
+use Bitrix\Im\V2\Common\PeriodAgentTrait;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
 
 class EventService
 {
+	use PeriodAgentTrait;
+
 	private const EXPIRY_HOURS = 24;
+	private const CLEAN_LIMIT = 1000;
+	private const AGENT_SHORT_PERIOD = 60;
+	private const AGENT_LONG_PERIOD = 3600;
 
 	private PendingCache $pendingCache;
 
@@ -124,8 +130,40 @@ class EventService
 		$expireDate = new DateTime();
 		$expireDate->add('-' . self::EXPIRY_HOURS . ' hours');
 
-		EventLogTable::deleteBatch(['<DATE_CREATE' => $expireDate]);
+		$rows = EventLogTable::query()
+			->setSelect(['ID'])
+			->where('DATE_CREATE', '<', $expireDate)
+			->setLimit(self::CLEAN_LIMIT)
+			->fetchAll()
+		;
 
-		return __METHOD__ . '();';
+		$ids = array_column($rows, 'ID');
+		if (!empty($ids))
+		{
+			EventLogTable::deleteBatch(['=ID' => $ids]);
+		}
+
+		self::calculateAndSetPeriod(true, count($ids) >= self::CLEAN_LIMIT);
+
+		return self::getAgentName();
+	}
+
+	private static function getAgentName(): string
+	{
+		return 'Bitrix\Im\V2\EventLog\EventService::cleanAgent();';
+	}
+
+	private static function calculateAndSetPeriod(bool $fromAgent, bool $hasMore): void
+	{
+		self::setPeriodByName(
+			$fromAgent,
+			self::getAgentName(),
+			static fn () => $hasMore ? self::AGENT_SHORT_PERIOD : self::AGENT_LONG_PERIOD
+		);
+	}
+
+	protected static function isAgentPeriodShort(int $newPeriod): bool
+	{
+		return $newPeriod === self::AGENT_SHORT_PERIOD;
 	}
 }

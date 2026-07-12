@@ -170,8 +170,8 @@ class CollabAnalytics extends Analytics
 
 		$this->sendAnalytics(
 			analyticsEvent: $analyticsEvent,
-			type: $type,
 			section: static::SECTION_COLLAB,
+			subSection: $type,
 			params: $parameters,
 		);
 	}

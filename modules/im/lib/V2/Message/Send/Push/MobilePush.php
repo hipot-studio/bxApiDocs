@@ -333,7 +333,7 @@ class MobilePush
 			$messageText .= self::getAttachmentSuffixForPush($message);
 		}
 
-		$builder = $message['message']['builder'] ?? null;
+		$builder = $message['message']['block'] ?? null;
 		if ($builder instanceof BlocksBuilder && empty($messageText))
 		{
 			$messageText = BuilderService::getPlaceholder();

@@ -70,8 +70,8 @@ class NotifyService
 		{
 			if (
 				$checkDuplicateDepth <= 0
-				||
-				$this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AI_FAILED, $checkDuplicateDepth) === null
+				|| $error->isAiGeneratedError()
+				|| $this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AI_FAILED, $checkDuplicateDepth) === null
 			)
 			{
 				$message = ChatMessage::generateTaskFailedMessage($call->getId(), $error, $chat);
@@ -208,6 +208,17 @@ class NotifyService
 
 	public function findMessage(int $chatId, int $callId, string $messageType, int $depth = 100): ?Message
 	{
+		return $this->findMessageByParams($chatId, ['CALL_ID' => $callId, 'MESSAGE_TYPE' => $messageType], $depth);
+	}
+
+	/**
+	 * @param int $chatId
+	 * @param array $messageParams
+	 * @param int $depth
+	 * @return Message|null
+	 */
+	public function findMessageByParams(int $chatId, array $messageParams, int $depth = 100): ?Message
+	{
 		$messages = MessageCollection::find(['CHAT_ID' => $chatId], ['ID' => 'DESC'], $depth);
 		if ($messages->count() === 0)
 		{
@@ -219,34 +230,44 @@ class NotifyService
 		foreach ($messages as $message)
 		{
 			$params = $message->getParams();
+			if (!$params->isSet(Params::COMPONENT_PARAMS))
+			{
+				continue;
+			}
 
-			/** @see \Bitrix\Call\Integration\Chat::onStateChange */
+			$componentParams = $params->get(Params::COMPONENT_PARAMS)->getValue();
 			if (
-				$params->isSet(Params::COMPONENT_PARAMS)
-				&& isset($params->get(Params::COMPONENT_PARAMS)->getValue()['MESSAGE_TYPE'])
-				&& $params->get(Params::COMPONENT_PARAMS)->getValue()['CALL_ID'] == $callId
+				!isset($componentParams['CALL_ID'], $componentParams['MESSAGE_TYPE'])
+				|| $componentParams['CALL_ID'] != $messageParams['CALL_ID']
 			)
 			{
-				if ($params->get(Params::COMPONENT_PARAMS)->getValue()['MESSAGE_TYPE'] == $messageType)
+				continue;
+			}
+
+			$allMatched = true;
+			foreach ($messageParams as $key => $value)
+			{
+				if (!isset($componentParams[$key]) || $componentParams[$key] != $value)
 				{
-					return $message;
-				}
-				if ($params->get(Params::COMPONENT_PARAMS)->getValue()['MESSAGE_TYPE'] == self::MESSAGE_TYPE_START)
-				{
+					$allMatched = false;
 					break;
 				}
+			}
+
+			if ($allMatched)
+			{
+				return $message;
+			}
+
+			if ($componentParams['MESSAGE_TYPE'] === self::MESSAGE_TYPE_START)
+			{
+				break;
 			}
 		}
 
 		return null;
 	}
 
-	/**
-	 * @param int $chatId
-	 * @param int $callId
-	 * @param int $depth
-	 * @return MessageCollection<Message>
-	 */
 	public function findMessagesForCall(int $chatId, int $callId, int $depth = 100): MessageCollection
 	{
 		$result = new MessageCollection();
@@ -299,7 +320,15 @@ class NotifyService
 			return;
 		}
 
-		if ($this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_CLOUD_RECORD_READY) !== null)
+		$existingMessage = $this->findMessageByParams(
+			$chat->getId(),
+			[
+				'CALL_ID' => $call->getId(),
+				'MESSAGE_TYPE' => self::MESSAGE_TYPE_CLOUD_RECORD_READY,
+				'TRACK_ID' => $track->getId(),
+			]
+		);
+		if ($existingMessage !== null)
 		{
 			return;
 		}
@@ -334,23 +363,7 @@ class NotifyService
 			);
 		}
 
-		$downloadUrl = null;
-		if ($track->getDiskFileId() && \Bitrix\Main\Loader::includeModule('disk'))
-		{
-			$diskFile = \Bitrix\Disk\File::getById($track->getDiskFileId());
-			if ($diskFile)
-			{
-				$urlManager = \Bitrix\Disk\Driver::getInstance()->getUrlManager();
-				$downloadUrl = $urlManager->getUrlForDownloadFile($diskFile, true);
-			}
-		}
-
-		if (!$downloadUrl)
-		{
-			$downloadUrl = $track->getUrl(true, true);
-		}
-
-		$message = CallChatMessage::makeCloudRecordReadyMessage($call, $chat, $downloadUrl);
+		$message = CallChatMessage::makeCloudRecordReadyMessage($call, $chat, $track);
 
 		$sendingConfig = (new SendingConfig())
 			->enableSkipCounterIncrements()
@@ -375,7 +388,7 @@ class NotifyService
 		if ($chat->getId() > 0)
 		{
 			// Check if audio record message already exists in chat
-			if ($this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AUDIO_RECORD, 10) === null)
+			if ($this->findMessage($chat->getId(), $call->getId(), self::MESSAGE_TYPE_AUDIO_RECORD) === null)
 			{
 				$messages = ChatMessage::generateAudioRecordMessages($call, $chat);
 				if (!empty($messages))

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\SharingLink;
 
 use Bitrix\Im\V2\AccessCheckable;
+use Bitrix\Im\V2\ChatHolder;
 use Bitrix\Im\V2\Permission\ChatActionAccessCheckable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Permission;
@@ -15,7 +16,7 @@ use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Im\V2\SharingLink\Entity\LinkEntityType;
 
-class ChatLink extends SharingLink implements ChatActionAccessCheckable
+class ChatLink extends SharingLink implements ChatActionAccessCheckable, ChatHolder
 {
 	private const GET_PARAM = 'IM_CODE';
 
@@ -32,7 +33,7 @@ class ChatLink extends SharingLink implements ChatActionAccessCheckable
 		return \Bitrix\Im\Common::getPublicDomain() . $path . $getParam . $this->getCode();
 	}
 
-	protected function getChat(): Chat
+	public function getChat(): Chat
 	{
 		return Chat::getInstance((int)$this->getEntityId());
 	}

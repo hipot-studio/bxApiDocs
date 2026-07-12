@@ -156,16 +156,25 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	{
 		$this->fillParams();
 
-		$ids = [];
+		$fileIds = [];
 		foreach ($this as $message)
 		{
 			if ($message->getParams()->isSet(Params::FILE_ID))
 			{
-				$ids[$message->getId()] = $message->getParams()->get(Params::FILE_ID)->getValue();
+				$fileIds[$message->getId()] = $message->getParams()->get(Params::FILE_ID)->getValue();
+			}
+
+			if ($message->getBlocksBuilder() !== null)
+			{
+				$builderFiles = $message->getBlocksBuilder()->getFiles();
+				foreach ($builderFiles as $fileId)
+				{
+					$fileIds[$message->getId()][] = $fileId;
+				}
 			}
 		}
 
-		return $ids;
+		return $fileIds;
 	}
 
 	public function getCommonChatId(): ?int
@@ -603,8 +612,11 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 
 		foreach ($this as $message)
 		{
-			$builder = $message->getParams()->get(Params::BLOCKS_BUILDER)->getValue();
-			$message->setBlocksBuilder($builder);
+			$builder = $message->getParams()->get(Params::BLOCK)->getValue();
+			if ($builder !== null)
+			{
+				$message->setBlocksBuilder($builder);
+			}
 		}
 
 		$this->isBuilderFilled = true;

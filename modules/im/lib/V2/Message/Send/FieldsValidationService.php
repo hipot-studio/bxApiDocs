@@ -28,7 +28,7 @@ class FieldsValidationService
 		'COPILOT',
 		'STICKER_PARAMS',
 		'AI_ASSISTANT',
-		'BUILDER',
+		'BLOCK',
 	];
 
 	private Chat $chat;
@@ -71,7 +71,7 @@ class FieldsValidationService
 				'COPILOT' => $this->checkCopilot(),
 				'STICKER_PARAMS' => $this->checkStickerParams(),
 				'AI_ASSISTANT' => $this->checkAiAssistant(),
-				'BUILDER' => $this->checkBuilder(),
+				'BLOCK' => $this->checkBlock(),
 			};
 
 			if (!$result->isSuccess())
@@ -91,7 +91,7 @@ class FieldsValidationService
 				!isset($this->fields['MESSAGE'])
 				&& !isset($this->fields['ATTACH'])
 				&& !isset($this->fields['STICKER_PARAMS'])
-				&& !isset($this->fields['BUILDER'])
+				&& !isset($this->fields['BLOCK'])
 			)
 			{
 				return true;
@@ -173,7 +173,7 @@ class FieldsValidationService
 		{
 			return $result;
 		}
-		elseif (isset($this->fields['BUILDER']))
+		elseif (isset($this->fields['BLOCK']))
 		{
 			return $result;
 		}
@@ -472,23 +472,24 @@ class FieldsValidationService
 		return $result;
 	}
 
-	private function checkBuilder(): Result
+	private function checkBlock(): Result
 	{
 		$result = new Result();
 
-		if (empty($this->fields['BUILDER']))
+		if (empty($this->fields['BLOCK']))
 		{
 			return $result;
 		}
 
-		$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->create($this->fields['BUILDER']);
+		$builderService = ServiceLocator::getInstance()->get(BuilderService::class);
+		$builderResult = $builderService->create($this->fields['BLOCK'], $this->chat);
 		if (!$builderResult->isSuccess())
 		{
 			return $result->addError($builderResult->getError());
 		}
 
 		$builder = $builderResult->getBlocksBuilder();
-		$this->fields['PARAMS'][Params::BLOCKS_BUILDER] = $builder;
+		$this->fields['PARAMS'][Params::BLOCK] = $builder;
 		$this->fields['MESSAGE'] = $builder->getPayloadText();
 
 		return $result;

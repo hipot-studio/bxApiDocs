@@ -32,6 +32,11 @@ class CounterController
 	 */
 	public static function recountForUser(int $userId): void
 	{
+		if (!Counter::isRecountEnable())
+		{
+			return;
+		}
+
 		(new self($userId))->recount(CounterDictionary::COUNTER_EXPIRED);
 		(new PushSender())->sendUserCounters([$userId]);
 	}
@@ -59,6 +64,11 @@ class CounterController
 	 */
 	public function recount(string $counter, array $taskIds = [], array $groupIds = []): void
 	{
+		if (!Counter::isRecountEnable())
+		{
+			return;
+		}
+
 		$projectCounters = [
 			CounterDictionary::COUNTER_GROUP_COMMENTS,
 			CounterDictionary::COUNTER_GROUP_EXPIRED,
@@ -88,7 +98,7 @@ class CounterController
 	 */
 	public function recountAll(): void
 	{
-		if (!$this->userId)
+		if (!$this->userId || !Counter::isRecountEnable())
 		{
 			return;
 		}

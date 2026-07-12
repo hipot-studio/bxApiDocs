@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Rest\Internal\Repository\IncomingWebhook;
 
+use Bitrix\Rest\Enum\APAuth\PasswordType;
+
 final class WebhookFilter
 {
 	private ?int $userId = null;
@@ -11,10 +13,18 @@ final class WebhookFilter
 	private ?array $scopes = null;
 	/** @var array<string, string|null>|null */
 	private ?array $attributes = null;
+	private ?PasswordType $type = null;
 
 	public function userId(?int $userId): self
 	{
 		$this->userId = $userId;
+
+		return $this;
+	}
+
+	public function type(?PasswordType $type): self
+	{
+		$this->type = $type;
 
 		return $this;
 	}
@@ -43,6 +53,11 @@ final class WebhookFilter
 	public function getUserId(): ?int
 	{
 		return $this->userId;
+	}
+
+	public function getType(): ?PasswordType
+	{
+		return $this->type;
 	}
 
 	/**

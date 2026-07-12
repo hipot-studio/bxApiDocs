@@ -2,13 +2,9 @@
 
 use Bitrix\Disk\File;
 use Bitrix\Intranet\Integration\Templates\Bitrix24\ThemePicker;
-use Bitrix\Main\AccessDeniedException;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\ArgumentTypeException;
-use Bitrix\Main\InvalidOperationException;
-use Bitrix\Main\ObjectNotFoundException;
-use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\Emoji;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Socialnetwork\ComponentHelper;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -18,6 +14,13 @@ use Bitrix\Socialnetwork\Helper\Workgroup;
 use Bitrix\Socialnetwork\Item\Helper;
 use Bitrix\Socialnetwork\Item\UserToGroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\Item\Workgroup\Type;
+use Bitrix\Socialnetwork\V2\Feature;
+use Bitrix\Socialnetwork\V2\Internal\Entity\PrivacyType;
+use Bitrix\Socialnetwork\V2\Internal\Entity\Project\ProjectDates;
+use Bitrix\Socialnetwork\V2\Public\Command\Project\AddProjectCommand;
+use Bitrix\Socialnetwork\V2\Public\Dto\Project\Avatar;
+use Bitrix\Socialnetwork\V2\Public\Dto\Project\Project;
 
 if (!Loader::includeModule('rest'))
 {
@@ -1742,6 +1745,24 @@ class CSocNetLogRestService extends IRestService
 			unset($fields['IMAGE']);
 		}
 
+		$type = $fields['TYPE'] ?? null;
+
+		if (Feature::isNewProjectsOn() && $type !== null)
+		{
+			if (!in_array($type, [Type::Collab->value, Type::Scrum->value], true))
+			{
+				throw new RestException('Field \'TYPE\' can only be set for a \'collab\' or a \'scrum\'');
+			}
+
+			if (
+				$type === Type::Collab->value
+				&& ($fields['PROJECT'] ?? null) !== 'Y'
+			)
+			{
+				throw new RestException('Field \'PROJECT\' must be set to \'Y\' for a collab');
+			}
+		}
+
 		$validateExtranetField = static fn ($siteId) =>
 			Option::get('socialnetwork', 'enable_extranet_for_groups', 0)
 			|| (
@@ -1851,7 +1872,53 @@ class CSocNetLogRestService extends IRestService
 
 		Workgroup::mutateScrumFormFields($fields);
 
-		$groupId = CSocNetGroup::createGroup($ownerId, $fields, false);
+		if (Feature::isNewProjectsOn())
+		{
+			$projectDateStart = !empty($fields['PROJECT_DATE_START'])
+				? DateTime::createFromText($fields['PROJECT_DATE_START'])
+				: null;
+			$projectDateFinish = !empty($fields['PROJECT_DATE_FINISH'])
+				? DateTime::createFromText($fields['PROJECT_DATE_FINISH'])
+				: null;
+
+			$projectDates = null;
+			if ($projectDateStart !== null || $projectDateFinish !== null)
+			{
+				$projectDates = (new ProjectDates(
+					start: $projectDateStart,
+					finish: $projectDateFinish,
+				))->toArray();
+			}
+
+			$project = Project::mapFromArray([
+				'name' => $fields['NAME'] ?? null,
+				'description' => $fields['DESCRIPTION'] ?? null,
+				'goal' => $fields['GOAL'] ?? null,
+				'ownerId' => $ownerId,
+				'privacyType' => PrivacyType::fromLegacyFlags(
+					visible: $fields['VISIBLE'] ?? null,
+					opened: $fields['OPENED'] ?? null,
+				)->value,
+				'dates' => $projectDates,
+			]);
+
+			$result = (new AddProjectCommand(
+				input: $project,
+				userId: self::getCurrentUserId(),
+				isCurrentUserModuleAdmin: \CSocNetUser::isCurrentUserModuleAdmin(),
+			))->run();
+
+			if (!$result->isSuccess())
+			{
+				throw new RestException($result->getError()?->getMessage());
+			}
+
+			$groupId = (int)($result->getData()['projectId'] ?? null);
+		}
+		else
+		{
+			$groupId = CSocNetGroup::createGroup($ownerId, $fields, false);
+		}
 
 		if ($groupId <= 0)
 		{
@@ -1985,12 +2052,54 @@ class CSocNetLogRestService extends IRestService
 		$groupFields = \Bitrix\Socialnetwork\WorkgroupTable::getList([
 			'select' => [
 				'TYPE',
+				'PROJECT',
 				'SITE_ID',
 				'OWNER_ID',
 				'NAME',
 			],
 			'filter' => ['ID' => $groupID],
 		])->fetch();
+
+		$currentType = $groupFields['TYPE'] ?? null;
+		$newType = $arFields['TYPE'] ?? null;
+		$currentProjectValue = $groupFields['PROJECT'] ?? null;
+		$newProjectValue = isset($arFields['PROJECT']) ? (string)$arFields['PROJECT'] : $currentProjectValue;
+
+		if (Feature::isNewProjectsOn())
+		{
+			if (
+				$newType !== null
+				&& !in_array($newType, [Type::Scrum->value, Type::Collab->value], true)
+			)
+			{
+				throw new RestException('Field \'TYPE\' can be updated only for scrum or collab');
+			}
+
+			$isCollab = ($currentType === Type::Collab->value);
+			if ($isCollab)
+			{
+				if ($newType !== null && $newType !== $currentType)
+				{
+					throw new RestException('Field \'TYPE\' can not be updated for collab');
+				}
+
+				if (
+					$currentProjectValue === 'Y'
+					&& $newProjectValue !== 'Y'
+				)
+				{
+					throw new RestException('Field \'PROJECT\' can not be updated from \'Y\' for collab');
+				}
+			}
+
+			$isScrum = ($currentType === Type::Scrum->value);
+			if ($isScrum && $newType === Type::Collab->value)
+			{
+				throw new RestException(
+					'Field \'TYPE\' can not be updated from scrum to collab. Use \\Bitrix\\Socialnetwork\\V2\\Internal\\Service\\Convert\\ConvertService for conversion'
+				);
+			}
+		}
 
 		$res = CSocNetGroup::Update($groupID, $arFields, false);
 		if ((int)$res <= 0)

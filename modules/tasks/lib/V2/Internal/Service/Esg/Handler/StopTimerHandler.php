@@ -37,6 +37,7 @@ class StopTimerHandler
 			args: [
 				'triggeredBy' => $triggeredBy,
 				'seconds' => $command->seconds,
+				'elapsedTimeId' => $command->elapsedTimeId,
 			],
 		);
 	}

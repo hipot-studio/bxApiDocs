@@ -52,7 +52,14 @@ class TaskRemoveRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return true;
 		}
 
-		$isInDepartment = $task->isInDepartment($this->user->getUserId(), false, [RoleDictionary::ROLE_RESPONSIBLE, RoleDictionary::ROLE_DIRECTOR, RoleDictionary::ROLE_ACCOMPLICE]);
+		$isInDepartment = $task->isInMembersDepartments(
+			$this->user->getUserId(),
+			[
+				RoleDictionary::ROLE_RESPONSIBLE,
+				RoleDictionary::ROLE_DIRECTOR,
+				RoleDictionary::ROLE_ACCOMPLICE,
+			],
+		);
 
 		if (
 			$this->user->getPermission(PermissionDictionary::TASK_DEPARTMENT_DELETE)

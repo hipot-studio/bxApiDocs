@@ -43,9 +43,9 @@ enum EventType: string
 	case ReadAllNotifications = 'notifyReadAll';
 	case UnreadNotifications = 'notifyUnread';
 	case ReadChildren = 'readChildren';
-	case BuilderBlockAppend = 'builderBlockAppend';
-	case BuilderBlockUpdate = 'builderBlockUpdate';
-	case BuilderBlockDelete = 'builderBlockDelete';
+	case MessageBlockElementAppend = 'messageBlockElementAppend';
+	case MessageBlockElementUpdate = 'messageBlockElementUpdate';
+	case MessageBlockElementDelete = 'messageBlockElementDelete';
 	case FolderCreate = 'folderCreate';
 	case FolderUpdate = 'folderUpdate';
 	case FolderDelete = 'folderDelete';

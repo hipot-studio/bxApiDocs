@@ -479,6 +479,8 @@ class ItemService implements Errorable
 	{
 		if (empty($itemIds))
 		{
+			$this->normalizeEntitySort($entityId);
+
 			return;
 		}
 

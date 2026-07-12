@@ -68,7 +68,7 @@ class UpdateCommand extends InitiatedCommand
 	protected ?int $ownerId;
 
 	#[Map('NAME')]
-	#[NotEmpty]
+	#[NotEmpty(allowZero: true)]
 	protected ?string $name;
 
 	#[Map('DESCRIPTION')]

@@ -40,7 +40,7 @@ class BlockValidationService
 		$blockType = BlockType::tryFrom($blockData['type'] ?? '');
 		if ($blockType === null)
 		{
-			return $result->addError(new BuilderError(BuilderError::WRONG_BLOCK_TYPE));
+			return $result->addError(new BuilderError(BuilderError::WRONG_ELEMENT_TYPE));
 		}
 
 		foreach ($blockData as $fieldName => $value)

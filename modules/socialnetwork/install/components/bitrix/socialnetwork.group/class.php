@@ -16,6 +16,7 @@ use Bitrix\Socialnetwork\Integration\Tasks\Flow\Path\FlowPath;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\Helper\Path;
+use Bitrix\Socialnetwork\V2\Public\Provider\ProjectProvider;
 
 if (!Loader::includeModule('socialnetwork'))
 {
@@ -197,6 +198,15 @@ final class SocialnetworkGroup extends CBitrixComponent implements \Bitrix\Main\
 			return false;
 		}
 
+		$projectProvider = new ProjectProvider();
+		if (
+			$projectProvider->isProject($this->arParams['GROUP_ID'])
+			&& $this->getTemplateName() !== ''
+		)
+		{
+			$this->errorCollection[] = new Error(Loc::getMessage('SONET_C5_NO_PERMS'));
+		}
+
 		$result['bExtranet'] = (Loader::includeModule('extranet') && CExtranet::IsExtranetSite());
 		$groupFields['IS_EXTRANET_GROUP'] = (
 			Loader::includeModule('extranet')
@@ -292,6 +302,12 @@ final class SocialnetworkGroup extends CBitrixComponent implements \Bitrix\Main\
 					? 'G'
 					: 'U'
 			);
+		}
+
+		if ((new ProjectProvider())->isProject($this->arParams['GROUP_ID']))
+		{
+			$result['bUserCanRequestGroup'] = null;
+			$result['bShowRequestSentMessage'] = null;
 		}
 
 		if (!$result['CurrentUserPerms'] || !$result['CurrentUserPerms']['UserCanViewGroup'])

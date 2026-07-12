@@ -80,6 +80,18 @@ class FileCollection extends BaseLinkCollection
 		return (new static($entity))->fillFiles();
 	}
 
+	public static function getByDiskFileIds(array $diskFileIds, Message $message): self
+	{
+		$entity = LinkFileTable::query()
+			->setSelect(['ID', 'MESSAGE_ID', 'CHAT_ID', 'SUBTYPE', 'DISK_FILE_ID', 'DATE_CREATE', 'AUTHOR_ID'])
+			->whereIn('DISK_FILE_ID', $diskFileIds)
+			->where('MESSAGE_ID', $message->getId())
+			->fetchCollection()
+		;
+
+		return (new static($entity))->fillFiles();
+	}
+
 	public static function getByMessageIds(array $messageIds): self
 	{
 		$messageIds = array_map('intval', $messageIds);

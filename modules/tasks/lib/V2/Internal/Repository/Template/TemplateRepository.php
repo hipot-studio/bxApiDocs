@@ -12,6 +12,7 @@ use Bitrix\Tasks\V2\Internal\Entity\Template;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Template\OrmTemplateMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Trait\ApplicationErrorTrait;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TemplateMapper;
+use Bitrix\Tasks\Validation\Validator\SerializedValidator;
 
 class TemplateRepository implements TemplateRepositoryInterface
 {
@@ -141,5 +142,51 @@ class TemplateRepository implements TemplateRepositoryInterface
 	public function invalidate(int $id): void
 	{
 
+	}
+
+	public function getReplicateParams(int $templateId): ?array
+	{
+		$row = TemplateTable::query()
+			->setSelect(['REPLICATE_PARAMS'])
+			->where('ID', $templateId)
+			->setLimit(1)
+			->exec()
+			->fetch();
+
+		if (!$row)
+		{
+			return null;
+		}
+
+		$raw = (string)($row['REPLICATE_PARAMS'] ?? '');
+		if ($raw === '')
+		{
+			return [];
+		}
+
+		$params = null;
+
+		$validator = new SerializedValidator();
+		if ($validator->validate($raw)->isSuccess())
+		{
+			$params = unserialize($raw, ['allowed_classes' => false]);
+		}
+
+		return $params;
+	}
+
+	public function getReplicableTemplateIds(int $afterId, int $limit): array
+	{
+		$rows = TemplateTable::query()
+			->setSelect(['ID'])
+			->where('REPLICATE', 'Y')
+			->whereNot('ZOMBIE', 'Y')
+			->where('ID', '>', $afterId)
+			->setOrder(['ID' => 'ASC'])
+			->setLimit($limit)
+			->exec()
+			->fetchAll();
+
+		return array_map(static fn (array $row): int => (int)$row['ID'], $rows);
 	}
 }

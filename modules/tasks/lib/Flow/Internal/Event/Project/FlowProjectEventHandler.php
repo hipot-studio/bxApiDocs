@@ -53,7 +53,7 @@ class FlowProjectEventHandler
 				? Loc::getMessage('TASKS_FLOW_EVENT_PROJECT_WITH_FLOWS_TYPE_PROJECT')
 				: Loc::getMessage('TASKS_FLOW_EVENT_PROJECT_WITH_FLOWS_TYPE_GROUP');
 
-			$this->application->throwException($message);
+			$this->application->throwException($message, 'GROUP_WITH_FLOW');
 			return false;
 		}
 

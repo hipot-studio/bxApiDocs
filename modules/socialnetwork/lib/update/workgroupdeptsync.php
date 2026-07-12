@@ -18,11 +18,11 @@ final class WorkgroupDeptSync extends Stepper
 
 	protected static $moduleId = 'socialnetwork';
 
-	public static function getUsers($workgroupId)
+	public static function getUsers($workgroupId, bool $useCache = true)
 	{
 		static $cache = [];
 
-		if (isset($cache[$workgroupId]))
+		if ($useCache && isset($cache[$workgroupId]))
 		{
 			return $cache[$workgroupId];
 		}
@@ -84,6 +84,7 @@ final class WorkgroupDeptSync extends Stepper
 				'=GROUP_ID' => (int) ($groupFields['ID'] ?? 0),
 				'@ROLE' => UserToGroupTable::getRolesMember(),
 				'=AUTO_MEMBER' => 'Y',
+				'!=INITIATED_BY_TYPE' => UserToGroupTable::INITIATED_BY_STRUCTURE,
 			],
 			'select' => [ 'ID', 'USER_ID' ]
 		]);
@@ -112,7 +113,10 @@ final class WorkgroupDeptSync extends Stepper
 			'OLD_RELATIONS' => $oldRelationList,
 		];
 
-		$cache[$workgroupId] = $result;
+		if ($useCache)
+		{
+			$cache[$workgroupId] = $result;
+		}
 
 		return $result;
 	}

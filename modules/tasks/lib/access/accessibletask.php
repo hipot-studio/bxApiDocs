@@ -8,16 +8,14 @@
 
 namespace Bitrix\Tasks\Access;
 
-
 use Bitrix\Main\Access\AccessibleItem;
 
-interface AccessibleTask
-	extends AccessibleItem
+interface AccessibleTask extends AccessibleItem
 {
 	public function getGroupId(): int;
 	public function isClosed(): bool;
 	public function isDeleted(): bool;
 	public function getStatus(): ?int;
-	public function isInDepartment(int $userId, bool $recursive = false, array $roles = []): bool;
+	public function isInMembersDepartments(int $userId, array $membersRoles = []): bool;
 	public function getMembers(string $role = null): array;
 }

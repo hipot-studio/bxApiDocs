@@ -105,6 +105,7 @@ enum FieldsEnum: string
 	case Flow = 'flow';
 	case ChatId = 'chatId';
 	case UfCrmTask = 'ufCrmTask';
+	case UfMailMessage = 'ufMailMessage';
 	case FullSearchIndex = 'fullSearchIndex';
 	case CommentSearchIndex = 'commentSearchIndex';
 	case Tag = 'tag';
@@ -283,6 +284,7 @@ enum FieldsEnum: string
 			self::Flow,
 			self::ChatId,
 			self::UfCrmTask,
+			self::UfMailMessage,
 			self::Accomplices,
 			self::Auditors,
 			self::Tags,
@@ -371,6 +373,7 @@ enum FieldsEnum: string
 			self::ScenarioName,
 			self::ImChatId,
 			self::ImChatChatId,
+			self::UfMailMessage,
 		];
 	}
 }

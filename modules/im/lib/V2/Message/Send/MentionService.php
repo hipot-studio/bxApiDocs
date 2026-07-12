@@ -4,6 +4,7 @@ namespace Bitrix\Im\V2\Message\Send;
 
 use Bitrix\Im\Bot;
 use Bitrix\Im\Text;
+use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Im\V2\Anchor\AnchorFeature;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Entity\User\User;
@@ -286,7 +287,7 @@ class MentionService
 	{
 		$relation = $chat->getRelationByUserId($userId);
 
-		return ($chat instanceof Chat\OpenChannelChat || $chat instanceof Chat\OpenChat) && !$relation;
+		return $chat instanceof Chat\GroupChat && $chat->isOpen() && !$relation;
 	}
 
 	private function deleteMentionNotifications(Message $message, array $unmentionedUserIds): void
@@ -299,7 +300,15 @@ class MentionService
 
 	private function processBotExternalMention(Message $message): void
 	{
-		$mentionedBotIds = $this->getExternalMentionedBotIds($message);
+		$botsInChat = $message->getChat()->getBotInChat();
+		$mentionedBotIds = $this->getExternalMentionedBotIds($message, $botsInChat);
+		$replyBotId = $this->getExternalReplyBotId($message, $botsInChat);
+
+		if ($replyBotId !== null)
+		{
+			$mentionedBotIds[$replyBotId] = $replyBotId;
+		}
+
 		if (empty($mentionedBotIds))
 		{
 			return;
@@ -312,7 +321,29 @@ class MentionService
 		Bot::onExternalMention($message->getId(), $fields);
 	}
 
-	private function getExternalMentionedBotIds(Message $message): array
+	private function getExternalReplyBotId(Message $message, array $botsInChat): ?int
+	{
+		$replyMessage = $message->getReplyMessage();
+		if ($replyMessage === null)
+		{
+			return null;
+		}
+
+		$replyAuthorId = $replyMessage->getAuthorId();
+
+		if (!BotData::getInstance($replyAuthorId)->exists())
+		{
+			return null;
+		}
+		if (isset($botsInChat[$replyAuthorId]))
+		{
+			return null;
+		}
+
+		return $replyAuthorId;
+	}
+
+	private function getExternalMentionedBotIds(Message $message, array $botsInChat): array
 	{
 		$mentionedUsers = $message->getMentionedUserIds();
 		if (empty($mentionedUsers))
@@ -326,9 +357,7 @@ class MentionService
 			return [];
 		}
 
-		$botInChat = $message->getChat()->getBotInChat();
-
-		return array_diff_key($mentionedBots, $botInChat);
+		return array_diff_key($mentionedBots, $botsInChat);
 	}
 
 	private function addAnchors(Message $message, array $mentionedUserIds): void

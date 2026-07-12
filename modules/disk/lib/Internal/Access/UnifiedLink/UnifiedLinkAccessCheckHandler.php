@@ -9,10 +9,6 @@ use Bitrix\Disk\Integration\Collab\CollabService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration;
 use Bitrix\Disk\Internal\Repository\UnifiedLinkAccessRepository;
 use Bitrix\Disk\User;
-use Bitrix\Main\ArgumentException;
-use Bitrix\Main\LoaderException;
-use Bitrix\Main\ObjectPropertyException;
-use Bitrix\Main\SystemException;
 
 class UnifiedLinkAccessCheckHandler extends ChainableAccessCheckHandler
 {
@@ -37,26 +33,17 @@ class UnifiedLinkAccessCheckHandler extends ChainableAccessCheckHandler
 			return $checkAccessByLink;
 		}
 
-		if ($user->isCollaber() && $this->isUserMemberOfCollab($file))
+		if (
+			$user->isCollaber()
+			&& $this->collabService->isUserMemberOfCollabByObject(
+				baseObject: $file,
+				userId: (int)$user->getId(),
+			)
+		)
 		{
 			return $checkAccessByLink;
 		}
 
 		return UnifiedLinkAccessLevel::Denied;
-	}
-
-	/**
-	 * @param File $file
-	 * @return bool
-	 * @throws ArgumentException
-	 * @throws LoaderException
-	 * @throws ObjectPropertyException
-	 * @throws SystemException
-	 */
-	private function isUserMemberOfCollab(File $file): bool
-	{
-		$collab = $this->collabService->getCollabByStorage($file->getStorage());
-
-		return $collab && in_array($this->userId, $collab->getUserMemberIds(), true);
 	}
 }

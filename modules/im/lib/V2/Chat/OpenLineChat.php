@@ -206,8 +206,8 @@ class OpenLineChat extends EntityChat
 		$entityData = $this->getEntityData(true);
 		$canJoin = Config::canJoin(
 			$entityData['entityId']['lineId'] ?? 0,
-			$entityData['crmEntityType'] ?? null,
-			$entityData['crmEntityId'] ?? null
+			$entityData['entityData1']['crmEntityType'] ?? null,
+			$entityData['entityData1']['crmEntityId'] ?? null
 		);
 
 		if (!$canJoin && !$this->checkAccessByRecentTable($userId))

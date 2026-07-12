@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Reading\Counter\Entity;
 
+use Bitrix\Im\V2\Chat\Tree\ChatAncestorNavigator;
 use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Im\V2\Registry;
 use Bitrix\Im\V2\Rest\RestConvertible;
@@ -48,6 +49,7 @@ final class UserCounters extends Registry implements RestConvertible
 			isMarkedAsUnread: $this[$chatId]?->isMarkedAsUnread ?? false,
 			recentSections: $recentSections,
 			type: $type,
+			requiresParentMembership: $type->requiresParentMembership,
 		));
 	}
 
@@ -64,6 +66,7 @@ final class UserCounters extends Registry implements RestConvertible
 			isMarkedAsUnread: true,
 			recentSections: $recentSections,
 			type: $type,
+			requiresParentMembership: $type->requiresParentMembership,
 		));
 	}
 
@@ -71,15 +74,21 @@ final class UserCounters extends Registry implements RestConvertible
 	{
 		$chatId = (int)$chat['CHAT_ID'];
 		$existing = $this[$chatId] ?? null;
+		$parentChatId = (int)($chat['PARENT_ID'] ?? 0);
+		$isMuted = array_key_exists('IS_MUTED', $chat)
+			? ($chat['IS_MUTED'] ?? 'N') === 'Y'
+			: ($existing?->isMuted ?? false)
+		;
 
 		$this->addCounter(new ChatCounter(
 			chatId: $chatId,
 			counter: $existing?->counter ?? 0,
-			parentChatId: $existing?->parentChatId ?? 0,
-			isMuted: $existing?->isMuted ?? false,
+			parentChatId: $parentChatId,
+			isMuted: $isMuted,
 			isMarkedAsUnread: $existing?->isMarkedAsUnread ?? false,
 			recentSections: $recentSections,
 			type: $type,
+			requiresParentMembership: $type->requiresParentMembership,
 		));
 	}
 
@@ -103,11 +112,69 @@ final class UserCounters extends Registry implements RestConvertible
 			isMarkedAsUnread: false,
 			recentSections: $recentSections,
 			type: $type,
+			requiresParentMembership: $type->requiresParentMembership,
 		));
+	}
+
+	public function removeOrphaned(): void
+	{
+		$toRemove = [];
+		foreach ($this as $counter)
+		{
+			if (
+				$counter->parentChatId > 0
+				&& $counter->requiresParentMembership
+				&& !$this->isAncestorChainComplete($counter)
+			)
+			{
+				$toRemove[] = $counter->chatId;
+			}
+		}
+
+		foreach ($toRemove as $chatId)
+		{
+			unset($this[$chatId]);
+		}
+	}
+
+	private function isAncestorChainComplete(ChatCounter $counter): bool
+	{
+		$current = $counter;
+		$maxDepth = ChatAncestorNavigator::DEFAULT_DEPTH;
+
+		for ($depth = 0; $current->parentChatId > 0 && $depth < $maxDepth; $depth++)
+		{
+			if (!$current->requiresParentMembership)
+			{
+				return true;
+			}
+
+			$parent = $this[$current->parentChatId] ?? null;
+			if ($parent === null)
+			{
+				return false;
+			}
+			$current = $parent;
+		}
+
+		return $current->parentChatId === 0;
 	}
 
 	public function getByChatId(int $chatId): ?ChatCounter
 	{
 		return $this[$chatId] ?? null;
+	}
+
+	/** @return int[] */
+	public function getChatIds(): array
+	{
+		$result = [];
+
+		foreach ($this as $counter)
+		{
+			$result[] = $counter->chatId;
+		}
+
+		return $result;
 	}
 }

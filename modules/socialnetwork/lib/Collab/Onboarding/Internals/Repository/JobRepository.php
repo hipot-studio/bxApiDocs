@@ -22,14 +22,49 @@ class JobRepository implements JobRepositoryInterface
 	 */
 	public function getAll(DateTime $from = new DateTime(), int $limit = 500): JobCollection
 	{
+		return $this->fetchBySchedule(limit: $limit, from: $from);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function getAllIncludingProcessing(int $limit = 500): JobCollection
+	{
 		$jobCollectionModel = QueueTable::query()
 			->setSelect(['ID', 'COLLAB_ID', 'USER_ID', 'TYPE', 'NEXT_EXECUTION', 'CREATED_DATE'])
-			->where('IS_PROCESSED', false)
-			->where('NEXT_EXECUTION', '<=', $from)
 			->setLimit($limit)
 			->exec()
 			->fetchCollection()
 		;
+
+		if ($jobCollectionModel === null)
+		{
+			return new JobCollection();
+		}
+
+		return JobCollectionMapper::convertFromOrm($jobCollectionModel);
+	}
+
+	/**
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	private function fetchBySchedule(int $limit, ?DateTime $from = null): JobCollection
+	{
+		$query = QueueTable::query()
+			->setSelect(['ID', 'COLLAB_ID', 'USER_ID', 'TYPE', 'NEXT_EXECUTION', 'CREATED_DATE'])
+			->where('IS_PROCESSED', false)
+			->setLimit($limit)
+		;
+
+		if ($from !== null)
+		{
+			$query->where('NEXT_EXECUTION', '<=', $from);
+		}
+
+		$jobCollectionModel = $query->exec()->fetchCollection();
 
 		if ($jobCollectionModel === null)
 		{

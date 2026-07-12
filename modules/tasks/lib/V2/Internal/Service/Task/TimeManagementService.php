@@ -138,7 +138,7 @@ class TimeManagementService
 			stopTs:      $stopTs,
 		);
 
-		[, $timeSpent] = $this->elapsedTimeService->add($elapsedTime);
+		[$elapsedTimeId, $timeSpent] = $this->elapsedTimeService->add($elapsedTime);
 
 		if ($timer->taskId <= 0)
 		{
@@ -199,6 +199,7 @@ class TimeManagementService
 				userId: $userId,
 				taskId: $timer->taskId,
 				seconds: $timer->seconds,
+				elapsedTimeId: $elapsedTimeId,
 			)
 		);
 

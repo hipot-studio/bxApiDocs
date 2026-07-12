@@ -12,6 +12,8 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Socialnetwork\Integration\AiAssistant\Exception\DtoValidationException;
 use Bitrix\Socialnetwork\Integration\AiAssistant\Service\Dto\SearchGroupsDto;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
+use Bitrix\Socialnetwork\V2\Feature;
+use Bitrix\Socialnetwork\V2\Internal\Service\ProjectOptionService;
 use CSocNetGroup;
 use CSocNetUser;
 
@@ -21,6 +23,7 @@ class SearchGroupsTool extends BaseTool
 	public const LIMIT = 10;
 
 	public function __construct(
+		private readonly ProjectOptionService $projectOptionService,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
 	)
@@ -35,7 +38,11 @@ class SearchGroupsTool extends BaseTool
 
 	public function getDescription(): string
 	{
-		return 'Searches for groups. Returns their identifiers, names and types.';
+		return
+			'Searches for groups. Returns their identifiers, names and types. '
+			. 'NOTATION: when a result row contains a "DISPLAY_TYPE" field, '
+			. 'you MUST use DISPLAY_TYPE — not TYPE — whenever you mention this group to the user.'
+		;
 	}
 
 	public function getInputSchema(): array
@@ -138,6 +145,45 @@ class SearchGroupsTool extends BaseTool
 		while ($group = $result->fetch())
 		{
 			$groups[] = $group;
+		}
+
+		return $this->appendDisplayType($groups);
+	}
+
+	private function appendDisplayType(array $groups): array
+	{
+		if ($groups === [] || !Feature::isNewProjectsOn())
+		{
+			return $groups;
+		}
+
+		$collabIds = [];
+		foreach ($groups as $group)
+		{
+			$id = (int)($group['ID'] ?? 0);
+			$type = (string)($group['TYPE'] ?? '');
+
+			if ($id > 0 && $type === Type::Collab->value)
+			{
+				$collabIds[] = $id;
+			}
+		}
+
+		if ($collabIds === [])
+		{
+			return $groups;
+		}
+
+		$convertedMap = $this->projectOptionService->isCollabConvertedBatch($collabIds);
+
+		foreach ($groups as $key => $group)
+		{
+			$id = (int)($group['ID'] ?? 0);
+
+			if ($id > 0 && ($convertedMap[$id] ?? false))
+			{
+				$groups[$key]['DISPLAY_TYPE'] = Type::Project->value;
+			}
 		}
 
 		return $groups;

@@ -59,6 +59,23 @@ abstract class AbstractEntity
 
 	abstract public function onUserAdd($userId): bool;
 
+	/**
+	 * Batched counterpart of {@see self::onUserAdd()}. Default implementation calls
+	 * onUserAdd once per id. Override in entities that can perform a single
+	 * underlying operation (e.g. Chat can add multiple users via one CIMChat::AddUser).
+	 *
+	 * @param int[] $userIds
+	 */
+	public function onUsersAdd(array $userIds): bool
+	{
+		$allOk = true;
+		foreach ($userIds as $userId)
+		{
+			$allOk = $this->onUserAdd($userId) && $allOk;
+		}
+		return $allOk;
+	}
+
 	abstract public function onExistingUsersInvite($userIds): bool;
 
 	abstract public function onStateChange($state, $prevState);

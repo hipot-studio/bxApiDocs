@@ -229,6 +229,8 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			'infoToken' => $infoToken,
 		]);
 
+		$this->arResult['SHOULD_DISABLE_SHARING_BUTTON'] = $this->shouldDisableSharingButton();
+
 		if ($this->arResult['EXTERNAL_LINK_MODE'])
 		{
 			$configBuilder->allowDownload(false);
@@ -269,9 +271,6 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			}
 		}
 
-		$featureBlocker = Bitrix24Manager::filterJsAction('disk_manual_external_link', '');
-		$this->arResult['SHOULD_BLOCK_EXTERNAL_LINK_FEATURE'] = (bool)$featureBlocker;
-		$this->arResult['BLOCKER_EXTERNAL_LINK_FEATURE'] = $featureBlocker;
 		$this->arResult['SESSION_BOOST_OPTIONS'] = $this->getSessionBoostOptions($documentSession);
 
 		if ($allowEdit && $configBuilder->isEditMode() && $this->shouldUseRestriction())
@@ -796,5 +795,13 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		}
 
 		return null;
+	}
+
+	/**
+	 * @return bool
+	 */
+	protected function shouldDisableSharingButton(): bool
+	{
+		return !$this->currentUser->isIntranetUser() && !$this->currentUser->isCollaber();
 	}
 }

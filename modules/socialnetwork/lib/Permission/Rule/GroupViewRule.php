@@ -26,7 +26,10 @@ class GroupViewRule extends AbstractRule
 			return false;
 		}
 
-		if ($item->getId() <= 0)
+		if (
+			$item->getId() <= 0
+			|| $item->getDomainObject() === null
+		)
 		{
 			$this->controller->addError(static::class, 'Group not found');
 

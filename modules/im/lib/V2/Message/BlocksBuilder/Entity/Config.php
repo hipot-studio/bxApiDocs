@@ -6,28 +6,29 @@ namespace Bitrix\Im\V2\Message\BlocksBuilder\Entity;
 
 class Config implements \JsonSerializable
 {
-	private function __construct()
-	{}
+	protected ?string $background;
 
-	public static function create(array $builderData): self
+	private function __construct(array $configData)
 	{
-		return new self();
+		$this->background = $configData[Field::Background->value] ?? null;
+	}
+
+	public static function create(array $configData): self
+	{
+		return new self($configData);
 	}
 
 	public function jsonSerialize(): array
 	{
-		return [];
+		return [
+			Field::Background->value => $this->background,
+		];
 	}
 
 	public function toArray(): array
 	{
-		return [];
-	}
-
-	public static function getRequiredFields(): array
-	{
 		return [
-			Field::Blocks->value,
+			Field::Background->value => $this->background,
 		];
 	}
 }

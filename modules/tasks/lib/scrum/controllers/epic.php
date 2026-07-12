@@ -631,12 +631,16 @@ class Epic extends BaseController
 			return null;
 		}
 
+		$post = $this->request->getPostList()->toArray();
+
+		$groupId = (is_numeric($post['groupId']) ? (int) $post['groupId'] : 0);
+
 		$epicService = new EpicService();
 
 		$description = '';
 
 		$epic = $epicService->getEpic($epicId);
-		if ($epic->getId())
+		if ($epic->getId() && $epic->getGroupId() === $groupId)
 		{
 			$description = (new \CBXSanitizer)->sanitizeHtml($epic->getDescription());
 		}

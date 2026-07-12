@@ -19,7 +19,6 @@ use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Integration\AI\Task\AITask;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
 use Bitrix\Call\Track\Downloader\AbstractDownloader;
-use Bitrix\Call\Track\Downloader\DownloadHelper;
 use Bitrix\Main\Application;
 use Bitrix\Main\IO\File;
 
@@ -126,22 +125,27 @@ final class TrackService
 			->setDownloadUrl('')
 			->setFileName("preview_default_{$callId}.png")
 			->setFileMimeType('image/png')
-			->setDownloaded(true)
+			->setDownloaded(false)
 		;
 
-		$attachResult = $track->attachFileFromPath($previewPath, 'image/png');
-		if (!$attachResult->isSuccess())
-		{
-			$log && $logger->error("TrackService::createDefaultPreview: Could not attach file. CallId: {$callId}");
-			return $result->addErrors($attachResult->getErrors());
-		}
-
+		// Save first — makes the row visible to concurrent requests
 		$saveResult = $track->save();
 		if (!$saveResult->isSuccess())
 		{
 			$log && $logger->error("TrackService::createDefaultPreview: Could not save track. CallId: {$callId}");
 			return $result->addErrors($saveResult->getErrors());
 		}
+
+		$attachResult = $track->attachFileFromPath($previewPath, 'image/png');
+		if (!$attachResult->isSuccess())
+		{
+			$log && $logger->error("TrackService::createDefaultPreview: Could not attach file. CallId: {$callId}");
+			$track->delete();
+			return $result->addErrors($attachResult->getErrors());
+		}
+
+		$track->setDownloaded(true);
+		$track->save();
 
 		$fileId = $track->getFileId();
 		$log && $logger->info("TrackService::createDefaultPreview: Success. CallId: {$callId}, FileId: {$fileId}");
@@ -198,14 +202,14 @@ final class TrackService
 	public function processCloudTrack(Call\Track $track): Result
 	{
 		if (
-			str_starts_with($track->getFileMimeType(), 'video/')
-			|| str_starts_with($track->getFileMimeType(), 'image/')
+			str_starts_with($track->getFileMimeType(), 'video')
+			|| str_starts_with($track->getFileMimeType(), 'image')
 		)
 		{
 			return $this->processCloudVideoTrack($track);
 		}
 
-		if (str_starts_with($track->getFileMimeType(), 'audio/'))
+		if (str_starts_with($track->getFileMimeType(), 'audio'))
 		{
 			return $this->processCloudAudioTrack($track);
 		}
@@ -237,6 +241,44 @@ final class TrackService
 		));
 	}
 
+	/**
+	 * Resolve a usable preview for the call.
+	 *
+	 * - Preview ready → return it
+	 * - Preview stuck → delete and create default
+	 * - No preview → create default, return it (or null on failure)
+	 */
+	private function resolvePreview(int $callId, ?Track $knownPreview = null): ?Track
+	{
+		if ($log = CallAISettings::isLoggingEnable())
+		{
+			$logger = Logger::getInstance();
+		}
+
+		$preview = $knownPreview ?? Track::getTrackForCall($callId, Track::TYPE_VIDEO_PREVIEW);
+
+		if ($preview && $preview->getDownloaded() && $preview->getFileId())
+		{
+			return $preview;
+		}
+
+		if ($preview)
+		{
+			$log && $logger->warning("Preview not ready. Deleting stuck preview. CallId: {$callId}, TrackId: {$preview->getId()}");
+			$preview->delete();
+		}
+
+		$log && $logger->info("No preview track found. Creating default. CallId: {$callId}");
+
+		$previewResult = $this->createDefaultPreview($callId);
+		if ($previewResult->isSuccess())
+		{
+			return $previewResult->getData()['track'];
+		}
+
+		return null;
+	}
+
 	protected function processCloudVideoTrack(Call\Track $track): Result
 	{
 		$result = new Result();
@@ -256,47 +298,47 @@ final class TrackService
 
 		$callId = $track->getCallId();
 
-		$record = Track::getTrackForCall($callId, Track::TYPE_VIDEO_RECORD);
-		$preview = Track::getTrackForCall($callId, Track::TYPE_VIDEO_PREVIEW);
-
-		// Check if tracks are exists
-		if (!$record)
+		if ($track->getType() === Track::TYPE_VIDEO_PREVIEW)
 		{
-			$log && $logger->info("Waiting for record track. CallId: {$callId}");
-			return $result;
+			$records = Track::getTracksForCall($callId, Track::TYPE_VIDEO_RECORD);
+		}
+		else
+		{
+			if (!$track->getDownloaded() || !$track->getFileId())
+			{
+				$log && $logger->info("Record not ready yet. TrackId: {$track->getId()}, Downloaded: "
+					. ($track->getDownloaded() ? 'yes' : 'no'));
+				return $result;
+			}
+
+			$records = [$track];
 		}
 
+		$knownPreview = $track->getType() === Track::TYPE_VIDEO_PREVIEW ? $track : null;
+		$preview = $this->resolvePreview($callId, $knownPreview);
 		if (!$preview)
 		{
-			$log && $logger->info("Waiting for preview track. CallId: {$callId}");
 			return $result;
 		}
 
-		// If record is downloaded but preview is still downloading, continue waiting
-		// CloudRecordExpectationAgent will handle the fallback to default preview
-		if ($record->getDownloaded() && !$preview->getDownloaded())
+		foreach ($records as $record)
 		{
-			$log && $logger->info("Record downloaded, preview still downloading. Waiting for CloudRecordExpectationAgent. CallId: {$callId}");
-			return $result;
+			if ($record->getDownloaded() && $record->getFileId())
+			{
+				$this->processVideoRecordWithPreview($record, $preview, $callId);
+			}
 		}
 
-		// If both are not downloaded, continue waiting
-		if (!$record->getDownloaded() || !$preview->getDownloaded())
-		{
-			$log && $logger->info("Waiting for downloads. CallId: {$callId}, Record: "
-				. ($record->getDownloaded() ? 'yes' : 'no')
-				. ", Preview: " . ($preview->getDownloaded() ? 'yes' : 'no'));
-			return $result;
-		}
+		$this->cleanupIfAllRecordsProcessed($callId);
 
-		// Both are downloaded - check file IDs
-		if (!$record->getFileId() || !$preview->getFileId())
+		return $result;
+	}
+
+	protected function processVideoRecordWithPreview(Call\Track $record, Call\Track $preview, int $callId): void
+	{
+		if ($log = CallAISettings::isLoggingEnable())
 		{
-			$log && $logger->error("Missing file IDs. RecordFileId: {$record->getFileId()}, PreviewFileId: {$preview->getFileId()}");
-			return $result->addError(new \Bitrix\Main\Error(
-				"Missing file IDs. RecordFileId: {$record->getFileId()}, PreviewFileId: {$preview->getFileId()}",
-				'MISSING_FILE_IDS'
-			));
+			$logger = Logger::getInstance();
 		}
 
 		$log && $logger->info("Attaching preview to record. RecordFileId: {$record->getFileId()}, PreviewFileId: {$preview->getFileId()}");
@@ -311,25 +353,40 @@ final class TrackService
 		{
 			$log && $logger->info("Sending recording ready message. CallId: {$callId}, RecordId: {$record->getId()}");
 			NotifyService::getInstance()->sendRecordingReadyMessage($call, $record);
-
-			// Remove expectation agent if it was scheduled
-			CloudRecordExpectationAgent::removeAgent($callId);
-
-			TrackDeletionService::getInstance()->deleteCloudTracksFromMixer($callId);
 		}
 		else
 		{
 			$log && $logger->error("Call not found. CallId: {$callId}");
 		}
+	}
 
-		return $result;
+	protected function cleanupIfAllRecordsProcessed(int $callId): void
+	{
+		if ($log = CallAISettings::isLoggingEnable())
+		{
+			$logger = Logger::getInstance();
+		}
+
+		$records = Track::getTracksForCall($callId, Track::TYPE_VIDEO_RECORD);
+		foreach ($records as $record)
+		{
+			if (!$record->getDownloaded() || !$record->getFileId())
+			{
+				$log && $logger->info("Not all records processed yet. CallId: {$callId}, TrackId: {$record->getId()}");
+				return;
+			}
+		}
+
+		$log && $logger->info("All records processed. Running cleanup. CallId: {$callId}");
+
+		CloudRecordExpectationAgent::removeAgent($callId);
+		TrackDeletionService::getInstance()->deleteCloudTracksFromMixer($callId);
 	}
 
 	/**
 	 * Process audio track without preview
 	 *
 	 * @param Call\Track $track Audio track
-	 * @param Result $result Result object
 	 * @return Result
 	 */
 	protected function processCloudAudioTrack(Call\Track $track): Result
@@ -358,42 +415,17 @@ final class TrackService
 			return $result->addError(new \Bitrix\Main\Error("Call not found: {$callId}", 'CALL_NOT_FOUND'));
 		}
 
-		$record = Track::getTrackForCall($callId, Track::TYPE_VIDEO_RECORD);
-
-		if (!$record)
+		if (!$track->getDownloaded() || !$track->getFileId())
 		{
-			$log && $logger->info("Waiting for record track. CallId: {$callId}");
+			$log && $logger->info("Track not ready yet. TrackId: {$track->getId()}, Downloaded: "
+				. ($track->getDownloaded() ? 'yes' : 'no'));
 			return $result;
 		}
 
-		if (!$record->getDownloaded())
-		{
-			$log && $logger->info(
-				"Waiting for downloads. CallId: {$callId}, Record: "
-				. ($record->getDownloaded() ? 'yes' : 'no')
-			);
-			return $result;
-		}
+		$log && $logger->info("Sending recording ready message. CallId: {$callId}, RecordId: {$track->getId()}");
+		NotifyService::getInstance()->sendRecordingReadyMessage($call, $track);
 
-		if (!$record->getFileId())
-		{
-			$log && $logger->error("Missing file ID. RecordFileId: {$record->getFileId()}");
-			return $result->addError(new \Bitrix\Main\Error(
-				"Missing file ID. RecordFileId: {$record->getFileId()}",
-				'MISSING_FILE_IDS'
-			));
-		}
-
-		// Send audio record message to chat
-		$log && $logger->info("Sending audio record message. CallId: {$callId}, TrackId: {$track->getId()}");
-
-		$log && $logger->info("Sending recording ready message. CallId: {$callId}, RecordId: {$record->getId()}");
-		NotifyService::getInstance()->sendRecordingReadyMessage($call, $record);
-
-		// Remove expectation agent if it was scheduled
-		CloudRecordExpectationAgent::removeAgent($callId);
-
-		TrackDeletionService::getInstance()->deleteCloudTracksFromMixer($callId);
+		$this->cleanupIfAllRecordsProcessed($callId);
 
 		return $result;
 	}
@@ -467,7 +499,9 @@ final class TrackService
 	}
 
 	/**
-	 * Finalize download: validate, attach to storage, fire events, process track.
+	 * Finalize download: attach to storage, fire events, process track.
+	 *
+	 * File validation is performed in AbstractDownloader::complete() before this method is called.
 	 *
 	 * @param Call\Track $track
 	 */
@@ -477,15 +511,6 @@ final class TrackService
 		$logger = Logger::getInstance();
 
 		$log && $logger->info("finalizeDownload: Starting. TrackId: {$track->getId()}");
-
-		// Validate downloaded file
-		$validateResult = DownloadHelper::validateFile($track);
-		if (!$validateResult->isSuccess())
-		{
-			$log && $logger->error("finalizeDownload: Validation failed. TrackId: {$track->getId()}");
-			$this->fireTrackErrorEvent($track, $validateResult->getError());
-			return;
-		}
 
 		// Attach to file storage
 		$attachResult = $track->attachTempFile();

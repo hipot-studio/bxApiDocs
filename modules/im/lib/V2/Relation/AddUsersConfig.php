@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Relation;
 
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\SharingLink\ChatLink;
 
 final class AddUsersConfig
@@ -16,6 +17,9 @@ final class AddUsersConfig
 	public readonly array $hiddenUserIds;
 	public readonly bool $byAutoJoin;
 	public readonly ?ChatLink $sharingLink;
+	public readonly bool $cascadeToParent;
+	public readonly array $visitedChatIds;
+	public readonly ?Chat $originChat;
 
 	public function __construct(
 		array $managerIds = [],
@@ -27,7 +31,10 @@ final class AddUsersConfig
 		array $hiddenUserIds = [],
 		bool $skipAnalytics = true,
 		bool $byAutoJoin = false,
-		?ChatLink $sharingLink = null
+		?ChatLink $sharingLink = null,
+		bool $cascadeToParent = true,
+		array $visitedChatIds = [],
+		?Chat $originChat = null,
 	)
 	{
 		$this->managerIds = $this->normalizeIds($managerIds);
@@ -40,6 +47,14 @@ final class AddUsersConfig
 		$this->skipAnalytics = $skipAnalytics;
 		$this->byAutoJoin = $byAutoJoin;
 		$this->sharingLink = $sharingLink;
+		$this->cascadeToParent = $cascadeToParent;
+		$this->visitedChatIds = $this->normalizeIds($visitedChatIds);
+		$this->originChat = $originChat;
+	}
+
+	public function hasVisited(int $chatId): bool
+	{
+		return isset($this->visitedChatIds[$chatId]);
 	}
 
 	public function isManager(int $userId): bool
@@ -76,6 +91,24 @@ final class AddUsersConfig
 	public function setWithMessage(bool $withMessage): self
 	{
 		return $this->with(['withMessage' => $withMessage]);
+	}
+
+	public function withCascadeToParent(bool $cascadeToParent): self
+	{
+		return $this->with(['cascadeToParent' => $cascadeToParent]);
+	}
+
+	public function withOriginChat(?Chat $originChat): self
+	{
+		return $this->with(['originChat' => $originChat]);
+	}
+
+	public function addVisitedChatId(int $chatId): self
+	{
+		$visited = $this->visitedChatIds;
+		$visited[$chatId] = $chatId;
+
+		return $this->with(['visitedChatIds' => $visited]);
 	}
 
 	public function isHidden(int $userId): bool

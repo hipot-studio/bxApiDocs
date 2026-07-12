@@ -161,7 +161,8 @@ final class MentionService
 		{
 			$hash = $this->generateShortId($callId, $userId);
 			$this->hashAi[$hash] = $userId;
-			$this->searchAi[$userId] = "@?([[:alnum:]]+)_({$hash})";
+			$userName = $this->getAIUserName($userId);
+			$this->searchAi[$userId] = "@?" . preg_quote($userName, '#') . "\s*_\s*({$hash})";
 			$this->searchBb[$userId] = "\[user={$userId}\](.+?)\[/user\]";
 
 			$this->getBbMention($userId);
@@ -186,8 +187,10 @@ final class MentionService
 		if (!isset($this->userAiName[$userId]))
 		{
 			$user = User::getInstance($userId);
-			$userName = preg_replace("#\s+#", '_', trim($user->getName())) ?: "User";
-			$this->userAiName[$userId] = trim($userName);
+			$userName = trim($user->getName());
+			$userName = preg_replace("#\s+#", '_', $userName);
+			$userName = preg_replace("#[^\p{L}\p{N}_]#u", '', $userName);
+			$this->userAiName[$userId] = $userName ?: "User";
 		}
 		return $this->userAiName[$userId];
 	}

@@ -21,6 +21,7 @@ class NotifyDeadlineChanged extends AbstractNotify
 		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
 		protected readonly ?Entity\User $triggeredBy = null,
+		private readonly ChatActionLinkService $chatActionLinkService,
 		private readonly ?int $newDeadlineTs = null,
 		private readonly ?int $oldDeadlineTs = null,
 	)
@@ -33,12 +34,18 @@ class NotifyDeadlineChanged extends AbstractNotify
 		}
 		elseif ($oldDeadlineTs !== null && $newDeadlineTs === null)
 		{
-			$notification = new NotifyDeadlineRemoved($this->task, $this->triggeredBy);
+			$notification = new NotifyDeadlineRemoved($this->chatActionLinkService, $this->task, $this->triggeredBy);
 			$sender->sendMessage(task: $this->task, notification: $notification);
 		}
 		elseif ($newDeadlineTs !== null)
 		{
-			$notification = new NotifyDeadlineAdded($this->deadlineFormatter, $this->task, $this->triggeredBy, $this->newDeadlineTs);
+			$notification = new NotifyDeadlineAdded(
+				deadlineFormatter: $this->deadlineFormatter,
+				chatActionLinkService: $this->chatActionLinkService,
+				task: $this->task,
+				triggeredBy: $this->triggeredBy,
+				deadlineTs: $this->newDeadlineTs,
+			);
 			$sender->sendMessage(task: $this->task, notification: $notification);
 		}
 	}
@@ -49,19 +56,26 @@ class NotifyDeadlineChanged extends AbstractNotify
 
 		return match ($this->triggeredBy?->getGender())
 		{
-			Entity\User\Gender::Female => 'TASKS_IM_TASK_DEADLINE_CHANGED' . $messageKey . '_F_MSGVER_1',
-			default => 'TASKS_IM_TASK_DEADLINE_CHANGED' . $messageKey . '_M_MSGVER_1',
+			Entity\User\Gender::Female => 'TASKS_IM_TASK_DEADLINE_CHANGED' . $messageKey . '_F_MSGVER_2',
+			default => 'TASKS_IM_TASK_DEADLINE_CHANGED' . $messageKey . '_M_MSGVER_2',
 		};
 	}
 
 	public function getMessageData(): array
 	{
+		$changeDeadlineLink = $this->chatActionLinkService->get(
+			task: $this->task,
+			userId: (int)$this->triggeredBy?->id,
+			action: ChatAction::ChangeDeadline,
+		);
+
 		$newDeadline = $this->deadlineFormatter->format($this->newDeadlineTs);
 
 		$reason = $this->isReasonRequired() ? $this->task->deadlineChangeReason : '';
 
 		return [
 			'#USER#' => $this->formatUser($this->triggeredBy),
+			'#CHANGE_DEADLINE_URL#' => $changeDeadlineLink,
 			'#NEW_DEADLINE#' => $newDeadline,
 			'#REASON#' => $reason,
 		];

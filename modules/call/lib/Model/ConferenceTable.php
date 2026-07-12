@@ -30,11 +30,14 @@ class ConferenceTable extends DataManager
 	public static function getTableName(): string
 	{
 		//todo remove migration option check
-		if (\Bitrix\Main\Config\Option::get('call', 'call_db_migrated', 0) >= 5)
+		static $tableName = null;
+		if ($tableName === null)
 		{
-			return 'b_call_conference';
+			$tableName = \Bitrix\Main\Config\Option::get('call', 'call_db_migrated', 0) >= 5
+				? 'b_call_conference'
+				: 'b_im_conference';
 		}
-		return 'b_im_conference';
+		return $tableName;
 	}
 
 	public static function getMap(): array

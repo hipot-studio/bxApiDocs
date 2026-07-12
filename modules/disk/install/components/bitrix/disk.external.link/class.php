@@ -14,11 +14,13 @@ use Bitrix\Disk\Document\Models\DocumentSessionContext;
 use Bitrix\Disk\Document\Models\GuestUser;
 use Bitrix\Disk\Document\OnlyOffice;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\DiskComponent;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\ObjectTable;
+use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Disk\Ui\Icon;
@@ -28,6 +30,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Disk\Internals\Grid;
 use Bitrix\Main\Context;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\Redirect;
 use Bitrix\Main\Localization\Loc;
@@ -59,15 +62,25 @@ class CDiskExternalLinkComponent extends DiskComponent
 		self::BOARD_FILE_VIEWER,
 	];
 
-	/** @var \Bitrix\Disk\ExternalLink */
+	protected ExternalLinkProvider $externalLinkProvider;
+	/** @var ExternalLink */
 	protected $externalLink;
-	/** @var string */
-	protected $hash;
+	protected ?string $hash = null;
+	protected bool $fromUnifiedLink = false;
+	protected ?File $file;
+	protected ?string $unifiedLink = null;
 	/** @var string */
 	protected $downloadToken;
 	/** @var DocumentHandler  */
 	protected $defaultHandlerForView;
 	protected $langId;
+
+	public function __construct($component = null)
+	{
+		parent::__construct($component);
+
+		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
+	}
 
 	/**
 	 * Common operations before run action.
@@ -77,6 +90,9 @@ class CDiskExternalLinkComponent extends DiskComponent
 	protected function processBeforeAction($actionName)
 	{
 		$this->findLink();
+		$this->maybeGenerateUnifiedLink($actionName);
+		$this->maybeRedirectToUnifiedLink($actionName);
+
 		$this->defaultHandlerForView = $this->getHandlerForView();
 
 		$isBoardsHandler = $this->isBoardsHandler();
@@ -203,17 +219,25 @@ class CDiskExternalLinkComponent extends DiskComponent
 	protected function prepareParams()
 	{
 		$hash = $this->request->get('hash');
-		if(!$hash)
+
+		if (is_string($hash))
 		{
-			throw new SystemException('Empty hash', self::EXCEPTION_CODE_ACCESS_DENIED);
+			if (!ExternalLink::isValidValueForField('HASH', $hash, $this->errorCollection))
+			{
+				throw new SystemException('Hash contains invalid character', self::EXCEPTION_CODE_ACCESS_DENIED);
+			}
+
+			$this->hash = $hash;
 		}
 
-		if(!\Bitrix\Disk\ExternalLink::isValidValueForField('HASH', $hash, $this->errorCollection))
+		$this->fromUnifiedLink = $this->arParams['FROM_UNIFIED_LINK'] ?? false;
+		$this->file = $this->arParams['FILE'] ?? null;
+
+		if (!is_string($this->hash) && !$this->file instanceof File)
 		{
-			throw new SystemException('Hash contains invalid character', self::EXCEPTION_CODE_ACCESS_DENIED);
+			throw new SystemException('Neither hash nor file were provided', self::EXCEPTION_CODE_ACCESS_DENIED);
 		}
 
-		$this->hash = $hash;
 		$this->langId = $this->request->get('langId')?: LANGUAGE_ID;
 
 		return $this;
@@ -295,11 +319,19 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		$server = Application::getInstance()->getContext()->getServer();
 		$this->arResult = array(
+			'HASH' => $this->externalLink->getHash(),
 			'PROTECTED_BY_PASSWORD' => $this->externalLink->hasPassword(),
 			'VALID_PASSWORD' => $this->validatePassword(),
 			'SESSION_EXPIRED' => $this->request->getQuery('session') === 'expired',
 			'SITE_NAME' => Option::get('main', 'site_name', $server->getServerName()),
+			'FROM_UNIFIED_LINK' => $this->fromUnifiedLink,
+			'UNIFIED_LINK' => $this->unifiedLink,
 		);
+
+		if ($this->arResult['VALID_PASSWORD'] && isset($_POST['PASSWORD']))
+		{
+			$this->maybeRedirectToUnifiedLink('default', true);
+		}
 
 		if ($isFile)
 		{
@@ -771,10 +803,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				'token' => $this->downloadToken,
 				'path' => '/',
 			)),
-			'VIEW_URL' => $this->getUrlManager()->getShortUrlExternalLink(array(
-				'hash' => $this->externalLink->getHash(),
-				'action' => 'default',
-			), true),
+			'VIEW_URL' => $this->getUrlManager()->getPublicExternalLink($rootFolder, $this->externalLink->getHash()),
 		);
 	}
 
@@ -814,7 +843,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'showFile',
 				'token' => $this->downloadToken,
-			), true),
+			)),
 			'SHOW_PREVIEW_URL' => $this->getUrlManager()->getUrlExternalLink(array(
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'showPreview',
@@ -825,10 +854,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				'action' => 'showFile',
 				'token' => $this->downloadToken,
 			)),
-			'VIEW_URL' => $this->getUrlManager()->getShortUrlExternalLink(array(
-				'hash' => $this->externalLink->getHash(),
-				'action' => 'default',
-			), true),
+			'VIEW_URL' => $this->getUrlManager()->getPublicExternalLink($file, $this->externalLink->getHash()),
 			'VIEW_FULL_URL' => $this->getUrlManager()->getUrlExternalLink(array(
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'default',
@@ -856,12 +882,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 					'token' => $this->downloadToken,
 					'ts' => $file->getUpdateTime()->getTimestamp(),
 					'ncc' => 1,
-				), true),
+				)),
 				$this->getUrlManager()->getUrlExternalLink(array(
 					'hash' => $this->externalLink->getHash(),
 					'action' => 'showFile',
 					'token' => $this->downloadToken,
-				), true)
+				))
 			);
 
 			$height = 520;
@@ -1231,7 +1257,14 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	protected function findLink()
 	{
-		$this->externalLink = \Bitrix\Disk\ExternalLink::load(array('=HASH' => $this->hash), array('OBJECT'));
+		if (is_string($this->hash))
+		{
+			$this->externalLink = $this->externalLinkProvider->getForComponentByHash($this->hash);
+		}
+		elseif ($this->file instanceof File)
+		{
+			$this->externalLink = $this->externalLinkProvider->getForComponent($this->file->getId());
+		}
 
 		if(!$this->externalLink || $this->externalLink->isExpired() || !$this->externalLink->getObject())
 		{
@@ -1376,5 +1409,49 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		return $session->get($sessionKey);
+	}
+
+	private function maybeGenerateUnifiedLink(string $actionName): void
+	{
+		$file = $this->externalLink->getFile();
+
+		if (!$file instanceof File || !$file->supportsUnifiedLink())
+		{
+			return;
+		}
+
+		$urlManager = Driver::getInstance()->getUrlManager();
+
+		if ($actionName === 'goToEdit')
+		{
+			$this->unifiedLink = $urlManager->getUnifiedEditLink($file);
+		}
+		else
+		{
+			$this->unifiedLink = $urlManager->getUnifiedLink($file);
+		}
+	}
+
+	private function maybeRedirectToUnifiedLink(string $actionName, bool $skipPostCheck = false): void
+	{
+		if (
+			$this->fromUnifiedLink
+			|| (
+				$actionName !== 'default'
+				&& $actionName !== 'goToEdit'
+			)
+			|| (
+				!$skipPostCheck
+				&& $this->request->isPost()
+			)
+			|| !is_string($this->unifiedLink)
+		)
+		{
+			return;
+		}
+
+		$redirect = new Redirect($this->unifiedLink);
+
+		Application::getInstance()->end(0, $redirect);
 	}
 }

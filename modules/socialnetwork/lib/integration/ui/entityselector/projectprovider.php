@@ -185,6 +185,11 @@ class ProjectProvider extends BaseProvider
 
 	public function getItems(array $ids): array
 	{
+		if (!self::isAvailableByFeature())
+		{
+			return [];
+		}
+
 		return $this->getProjectItems([
 			'projectId' => $ids
 		]);
@@ -207,6 +212,11 @@ class ProjectProvider extends BaseProvider
 
 	public function fillDialog(Dialog $dialog): void
 	{
+		if (!self::isAvailableByFeature())
+		{
+			return;
+		}
+
 		$limit = 100;
 		$projects = $this->getProjectCollection(['limit' => $limit]);
 		$dialog->addItems($this->makeProjectItems($projects, ['tabs' => 'projects']));
@@ -223,11 +233,18 @@ class ProjectProvider extends BaseProvider
 			}
 		}
 */
+
+		$groupTitle = Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECTS_TAB_TITLE');
+		$collabTitle = Loc::getMessage('SOCNET_ENTITY_SELECTOR_COLLAB_TAB_TITLE');
+		$projectTitle = Loc::getMessage('SOCNET_ENTITY_SELECTOR_NEW_PROJECTS_TAB_TITLE');
+
+		$isNewProjectsOn = \Bitrix\Socialnetwork\V2\Feature::isNewProjectsOn();
+
 		if ($isCollaber)
 		{
 			$dialog->addTab(new Tab([
 				'id' => 'projects',
-				'title' => Loc::getMessage('SOCNET_ENTITY_SELECTOR_COLLAB_TAB_TITLE'),
+				'title' => $isNewProjectsOn ? $projectTitle : $collabTitle,
 				'stub' => true,
 				'icon' => [
 					'default' => 'o-collab',
@@ -237,15 +254,15 @@ class ProjectProvider extends BaseProvider
 		}
 		else
 		{
-		$dialog->addTab(new Tab([
-			'id' => 'projects',
-			'title' => Loc::getMessage('SOCNET_ENTITY_SELECTOR_PROJECTS_TAB_TITLE'),
-			'stub' => true,
-			'icon' => [
-				'default' => 'o-department',
-				'selected' => 's-department',
-			]
-		]));
+			$dialog->addTab(new Tab([
+				'id' => 'projects',
+				'title' => $isNewProjectsOn ? $projectTitle : $groupTitle,
+				'stub' => true,
+				'icon' => [
+					'default' => 'o-department',
+					'selected' => 's-department',
+				]
+			]));
 		}
 
 		$onlyProjectsMode = count($dialog->getEntities()) === 1;
@@ -396,6 +413,17 @@ class ProjectProvider extends BaseProvider
 			if (is_array($options['!type']) && !in_array(Type::Collab->value, $options['!type']))
 			{
 				$options['!type'][] = Type::Collab->value;
+			}
+		}
+
+		if (\Bitrix\Socialnetwork\V2\Feature::isNewProjectsOn())
+		{
+			if (is_array($options['!type'] ?? null) && in_array(Type::Collab->value, $options['!type']))
+			{
+				$options['!type'] = array_filter($options['!type'], function($item) {
+					return $item !== Type::Collab->value;
+				});
+				$options['!type'] = array_values($options['!type']);
 			}
 		}
 
@@ -1275,5 +1303,17 @@ class ProjectProvider extends BaseProvider
 				$limit--;
 			}
 		}
+	}
+
+	private static function isAvailableByFeature(): bool
+	{
+		if (\Bitrix\Socialnetwork\V2\Feature::isNewProjectsOn())
+		{
+			return Feature::isFeatureEnabled(Feature::PROJECTS_GROUPS)
+				|| Feature::canTurnOnTrial(Feature::PROJECTS_GROUPS)
+			;
+		}
+
+		return true;
 	}
 }

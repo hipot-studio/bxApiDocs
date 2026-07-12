@@ -6,7 +6,6 @@ namespace Bitrix\Socialnetwork\Control\Operation;
 
 use Bitrix\Main\Error;
 use Bitrix\Socialnetwork\Control\Command\AddCommand;
-use Bitrix\Socialnetwork\Control\Exception\GroupNotAddedException;
 use Bitrix\Socialnetwork\Control\GroupResult;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use CSocNetGroup;
@@ -25,9 +24,9 @@ class AddOperation extends AbstractOperation
 	{
 		$result = new GroupResult();
 
-		$fields = $this->getMapper()->toArray($this->command);
+		$fields = $this->getFields();
 
-		$id = (int)CSocNetGroup::createGroup($this->command->getOwnerId(), $fields);
+		$id = $this->createGroup($this->command->getOwnerId(), $fields);
 
 		if ($id === 0)
 		{
@@ -49,5 +48,15 @@ class AddOperation extends AbstractOperation
 		$result->setGroup($this->entity);
 
 		return $result;
+	}
+
+	protected function getFields(): array
+	{
+		return $this->getMapper()->toArray($this->command);
+	}
+
+	protected function createGroup(int $ownerId, array $fields): int
+	{
+		return (int)CSocNetGroup::createGroup($ownerId, $fields);
 	}
 }

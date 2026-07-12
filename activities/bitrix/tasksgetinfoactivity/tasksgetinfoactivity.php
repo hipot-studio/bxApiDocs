@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Bizproc\Automation\Helper;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -17,6 +18,7 @@ use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Main\Web\Json;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
+use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -26,6 +28,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableActivity
 {
+	use \Bitrix\Bizproc\Activity\Mixins\EntityFilter;
+
 	private const MAX_MESSAGE_COUNT_LIMIT_MAX = 500;
 	private const MESSAGE_COUNT_DEFAULT = 50;
 	private const MESSAGE_COUNT_MIN = 0;
@@ -33,9 +37,6 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const TASKS_LIMIT_DEFAULT = 50;
 	private const TASKS_LIMIT_MIN = 1;
 	private const USER_NAME_SYSTEM = 'System';
-	private const TASK_ACTIVITY_DAYS_DEFAULT = 7;
-	private const TASK_ACTIVITY_DAYS_MAX = 365;
-	private const TASK_ACTIVITY_DAYS_MIN = 1;
 	private const MESSAGES_DAYS_DEFAULT = 7;
 	private const MESSAGES_DAYS_MAX = 365;
 	private const MESSAGES_DAYS_MIN = 0;
@@ -48,8 +49,15 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const PARAM_USER_TASK_ROLE = 'UserTaskRole';
 	private const PARAM_TASK_STATUS_FILTER = 'TaskStatusFilter';
 	private const PARAM_TASK_SELECT_FIELD = 'TaskSelectField';
+	private const PARAM_ONLY_OVERDUE = 'OnlyOverdue';
+	private const PARAM_EXCLUDE_RESPONSIBLE_ROLE = 'ExcludeIfAlsoResponsible';
+	private const PARAM_CONDITION = 'DynamicFilterFields';
+	private const FILTER_CUSTOM_TYPE = 'filterFields';
+	private const FILTER_FIELD_NAME = 'filter_fields';
 	private const RETURN_PARAM_TASKS_INFO_JSON = 'TASKS_INFO_JSON';
 	private const RETURN_PARAM_COUNTER_TASKS_INFO = 'COUNTER_TASKS_INFO';
+	private const RETURN_PARAM_TASKS_TITLES_LIST = 'TASKS_TITLES_LIST';
+	private const RETURN_PARAM_TASKS_TITLES_BB_LIST = 'TASKS_TITLES_BB_LIST';
 	private const SELECT_FIELD_DESCRIPTION = 'description';
 	private const SELECT_FIELD_STATUS = 'status';
 	private const SELECT_FIELD_DEADLINE = 'deadline';
@@ -89,8 +97,13 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			self::PARAM_USER_TASK_ROLE => null,
 			self::PARAM_TASK_STATUS_FILTER => null,
 			self::PARAM_TASK_SELECT_FIELD => null,
+			self::PARAM_ONLY_OVERDUE => null,
+			self::PARAM_EXCLUDE_RESPONSIBLE_ROLE => null,
+			self::PARAM_CONDITION => ['items' => []],
 			self::RETURN_PARAM_TASKS_INFO_JSON => null,
 			self::RETURN_PARAM_COUNTER_TASKS_INFO => null,
+			self::RETURN_PARAM_TASKS_TITLES_LIST => null,
+			self::RETURN_PARAM_TASKS_TITLES_BB_LIST => null,
 		];
 
 		$this->setPropertiesTypes([
@@ -99,6 +112,12 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			],
 			self::RETURN_PARAM_COUNTER_TASKS_INFO => [
 				'Type' => FieldType::INT,
+			],
+			self::RETURN_PARAM_TASKS_TITLES_LIST => [
+				'Type' => FieldType::TEXT,
+			],
+			self::RETURN_PARAM_TASKS_TITLES_BB_LIST => [
+				'Type' => FieldType::TEXT,
 			],
 		]);
 	}
@@ -109,6 +128,8 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 
 		$this->{self::RETURN_PARAM_TASKS_INFO_JSON} = null;
 		$this->{self::RETURN_PARAM_COUNTER_TASKS_INFO} = null;
+		$this->{self::RETURN_PARAM_TASKS_TITLES_LIST} = null;
+		$this->{self::RETURN_PARAM_TASKS_TITLES_BB_LIST} = null;
 	}
 
 	protected function internalExecute(): ErrorCollection
@@ -121,11 +142,14 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		{
 			[$tasks, $userIdList, $chatIdList] = $this->getTasks($userId, $projectId);
 			$formattedTasks = $this->prepareTasks($tasks, $userIdList, $chatIdList);
+			[$titles, $bbTitles] = $this->buildTitleLists($tasks, $userId, $projectId);
 			$this->{self::RETURN_PARAM_TASKS_INFO_JSON} = Json::encode(
 				$formattedTasks,
 				JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
 			);
 			$this->{self::RETURN_PARAM_COUNTER_TASKS_INFO} = count($tasks);
+			$this->{self::RETURN_PARAM_TASKS_TITLES_LIST} = implode("\n", $titles);
+			$this->{self::RETURN_PARAM_TASKS_TITLES_BB_LIST} = implode("\n", $bbTitles);
 		}
 		catch (\Throwable $exception)
 		{
@@ -171,13 +195,6 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				'Default' => self::TASKS_LIMIT_DEFAULT,
 				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_LIMIT_NAME'),
 			],
-			self::PARAM_TASK_ACTIVITY_DAYS => [
-				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_ACTIVITY_DAYS'),
-				'FieldName' => self::PARAM_TASK_ACTIVITY_DAYS,
-				'Type' => FieldType::INT,
-				'Default' => self::TASK_ACTIVITY_DAYS_DEFAULT,
-				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_ACTIVITY_DAYS_NAME'),
-			],
 			self::PARAM_MESSAGES_DAYS => [
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_MESSAGE_DAYS'),
 				'FieldName' => self::PARAM_MESSAGES_DAYS,
@@ -211,6 +228,29 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				'Options' => self::getSelectedFieldsOptions(),
 				'Multiple' => true,
 				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_SELECT_FIELD_NAME'),
+			],
+			self::PARAM_EXCLUDE_RESPONSIBLE_ROLE => [
+				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_EXCLUDE_RESPONSIBLE_ROLE'),
+				'FieldName' => self::PARAM_EXCLUDE_RESPONSIBLE_ROLE,
+				'Type' => FieldType::BOOL,
+				'Default' => 'N',
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_EXCLUDE_RESPONSIBLE_ROLE_NAME'),
+			],
+			self::PARAM_CONDITION => [
+				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_CONDITION'),
+				'FieldName' => self::FILTER_FIELD_NAME,
+				'Type' => FieldType::CUSTOM,
+				'CustomType' => self::FILTER_CUSTOM_TYPE,
+				'Required' => false,
+				'AllowSelection' => true,
+				'Options' => [
+					'documentType' => self::getFilterDocumentType(),
+					'filteringFieldsPrefix' => self::FILTER_FIELD_NAME . '_',
+					'filterFieldsMap' => array_values(self::getFilteringFieldsMap()),
+					'conditions' => self::resolveConditions($context),
+					'collapsedCaption' => Loc::getMessage('TASKS_GET_INFO_FIELD_CONDITION_COLLAPSED'),
+				],
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_CONDITION'),
 			],
 		];
 	}
@@ -304,11 +344,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 
 	private function getTasks(?int $userId, ?int $projectId): array
 	{
-		$activityDays = (int)$this->{self::PARAM_TASK_ACTIVITY_DAYS};
-
-		$filter = [
-			'>ACTIVITY_DATE' => (new DateTime())->add("-$activityDays days"),
-		];
+		$filter = [];
 
 		if ($projectId)
 		{
@@ -318,16 +354,18 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		if ($userId)
 		{
 			$filter['=MEMBERS.USER_ID'] = $userId;
-			$filter['@MEMBERS.TYPE'] = (array)$this->{self::PARAM_USER_TASK_ROLE};
 		}
 
-		$statusFilter = (array)$this->{self::PARAM_TASK_STATUS_FILTER};
-		$allStatuses = array_keys(self::getTaskStatuses());
-		$statusFilter = array_intersect($statusFilter, $allStatuses);
+		$filter = array_merge($filter, $this->getFieldFilter($userId));
 
-		if (!empty($statusFilter) && !empty(array_diff($allStatuses, $statusFilter)))
+		$conditionFilter = $this->getConditionOrmFilter();
+		if ($conditionFilter)
 		{
-			$filter['@STATUS'] = array_map('intval', $statusFilter);
+			$filter[] = $conditionFilter;
+		}
+		else
+		{
+			$filter = array_merge($filter, $this->getLegacyDateFilter());
 		}
 
 		$tasksResult = TaskTable::query()
@@ -768,6 +806,36 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		return $formattedTasks;
 	}
 
+	private function buildTitleLists(array $tasks, ?int $userId, ?int $projectId): array
+	{
+		$titles = [];
+		$bbTitles = [];
+
+		if (empty($tasks))
+		{
+			return [$titles, $bbTitles];
+		}
+
+		$linkService = Container::getInstance()->getLinkService();
+		$group = $projectId !== null
+			? new Bitrix\Tasks\V2\Internal\Entity\Group(id: $projectId)
+			: null
+		;
+		$linkUserId = (int)$userId;
+
+		foreach ($tasks as $taskId => $task)
+		{
+			$title = (string)($task['TITLE'] ?? '');
+			$titles[] = '- ' . $title;
+
+			$taskEntity = new Bitrix\Tasks\V2\Internal\Entity\Task(id: (int)$taskId, group: $group);
+			$url = '/' . ltrim($linkService->get($taskEntity, $linkUserId), '/');
+			$bbTitles[] = '- [url=' . $url . ']' . $title . '[/url]';
+		}
+
+		return [$titles, $bbTitles];
+	}
+
 	private function replaceUserField(array &$list, string $field, array $users, bool $useUnsetEmptyId = false): void
 	{
 		foreach ($list as &$group)
@@ -823,6 +891,22 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		);
 	}
 
+	protected static function extractPropertiesValues(PropertiesDialog $dialog, array $fieldsMap): \Bitrix\Main\Result
+	{
+		$simpleMap = $fieldsMap;
+		unset($simpleMap[self::PARAM_CONDITION]);
+		$result = parent::extractPropertiesValues($dialog, $simpleMap);
+
+		if ($result->isSuccess())
+		{
+			$currentValues = $result->getData();
+			$currentValues[self::PARAM_CONDITION] = static::extractFilterFromProperties($dialog, $fieldsMap)->getData();
+			$result->setData($currentValues);
+		}
+
+		return $result;
+	}
+
 	protected static function getFileName(): string
 	{
 		return __FILE__;
@@ -860,6 +944,142 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			Status::DEFERRED => Status::getMessage(Status::DEFERRED),
 			Status::DECLINED => Status::getMessage(Status::DECLINED),
 		];
+	}
+
+	private static function getFilteringFieldsMap(): array
+	{
+		$documentFields = Helper::getDocumentFields(self::getFilterDocumentType());
+
+		$map = [];
+		foreach (['CREATED_DATE', 'CLOSED_DATE', 'DEADLINE', 'ACTIVITY_DATE'] as $fieldId)
+		{
+			if (isset($documentFields[$fieldId]))
+			{
+				$map[$fieldId] = $documentFields[$fieldId];
+			}
+		}
+
+		return $map;
+	}
+
+	private static function getFilterDocumentType(): array
+	{
+		return \Bitrix\Tasks\Integration\Bizproc\Document\Task::resolveDocumentType();
+	}
+
+	private function getConditionOrmFilter(): ?array
+	{
+		$conditionGroup = new ConditionGroup($this->{self::PARAM_CONDITION});
+		$ormFilter = $this->getOrmFilter($conditionGroup, self::getFilterDocumentType(), self::getFilteringFieldsMap());
+
+		if (!$this->isOrmFilterValid())
+		{
+			return null;
+		}
+
+		foreach ($ormFilter as $key => $part)
+		{
+			if ($key !== 'LOGIC' && !empty($part))
+			{
+				return $ormFilter;
+			}
+		}
+
+		return null;
+	}
+
+	private function getFieldFilter(?int $userId): array
+	{
+		$filter = [];
+
+		if ($userId)
+		{
+			$filter['@MEMBERS.TYPE'] = (array)$this->{self::PARAM_USER_TASK_ROLE};
+
+			if (\CBPHelper::getBool($this->{self::PARAM_EXCLUDE_RESPONSIBLE_ROLE}))
+			{
+				$filter['!=RESPONSIBLE_ID'] = $userId;
+			}
+		}
+
+		$statusFilter = (array)$this->{self::PARAM_TASK_STATUS_FILTER};
+		$allStatuses = array_keys(self::getTaskStatuses());
+		$statusFilter = array_intersect($statusFilter, $allStatuses);
+		if (!empty($statusFilter) && !empty(array_diff($allStatuses, $statusFilter)))
+		{
+			$filter['@STATUS'] = array_map('intval', $statusFilter);
+		}
+
+		return $filter;
+	}
+
+	private function getLegacyDateFilter(): array
+	{
+		$filter = [];
+
+		$activityDays = (int)$this->{self::PARAM_TASK_ACTIVITY_DAYS};
+		if ($activityDays > 0)
+		{
+			$filter['>ACTIVITY_DATE'] = (new DateTime())->add("-$activityDays days");
+		}
+
+		if (\CBPHelper::getBool($this->{self::PARAM_ONLY_OVERDUE}))
+		{
+			$filter['<=DEADLINE'] = new DateTime();
+		}
+
+		return $filter;
+	}
+
+	private static function resolveConditions(array $context): array
+	{
+		$properties = $context['Properties'] ?? [];
+		$condition = $properties[self::PARAM_CONDITION] ?? null;
+
+		if (is_array($condition['items'] ?? null) && !empty($condition['items']))
+		{
+			return $condition;
+		}
+
+		return self::migrateLegacyDateConditions($properties);
+	}
+
+	private static function migrateLegacyDateConditions(array $properties): array
+	{
+		$items = [];
+
+		$activityDays = $properties[self::PARAM_TASK_ACTIVITY_DAYS] ?? null;
+		$hasActivityDays = is_numeric($activityDays)
+			? (int)$activityDays > 0
+			: !\CBPHelper::isEmptyValue($activityDays)
+		;
+		if ($hasActivityDays)
+		{
+			$items[] = [
+				[
+					'object' => 'Document',
+					'field' => 'ACTIVITY_DATE',
+					'operator' => '>=',
+					'value' => '=dateadd({=System:Now}, "-' . $activityDays . 'd")',
+				],
+				'AND',
+			];
+		}
+
+		if (\CBPHelper::getBool($properties[self::PARAM_ONLY_OVERDUE] ?? 'N'))
+		{
+			$items[] = [
+				[
+					'object' => 'Document',
+					'field' => 'DEADLINE',
+					'operator' => '<=',
+					'value' => '{=System:Now}',
+				],
+				'AND',
+			];
+		}
+
+		return ['items' => $items];
 	}
 
 	/**
@@ -953,7 +1173,6 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		return match ($propertyId)
 		{
 			self::PARAM_TASK_LIMIT => self::TASKS_LIMIT_MIN,
-			self::PARAM_TASK_ACTIVITY_DAYS => self::TASK_ACTIVITY_DAYS_MIN,
 			self::PARAM_MESSAGE_COUNT_LIMIT => self::MESSAGE_COUNT_MIN,
 			self::PARAM_MESSAGES_DAYS => self::MESSAGES_DAYS_MIN,
 			default => null,
@@ -965,7 +1184,6 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		return match ($propertyId)
 		{
 			self::PARAM_TASK_LIMIT => self::TASKS_LIMIT_MAX,
-			self::PARAM_TASK_ACTIVITY_DAYS => self::TASK_ACTIVITY_DAYS_MAX,
 			self::PARAM_MESSAGE_COUNT_LIMIT => self::MAX_MESSAGE_COUNT_LIMIT_MAX,
 			self::PARAM_MESSAGES_DAYS => self::MESSAGES_DAYS_MAX,
 			default => null,

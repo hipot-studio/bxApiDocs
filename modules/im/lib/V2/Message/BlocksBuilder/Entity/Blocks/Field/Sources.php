@@ -67,6 +67,10 @@ class Sources extends AbstractField
 		{
 			return $result->addError(new BuilderError(BuilderError::EMPTY_URL_FIELD));
 		}
+		if (!$this->isAllowedUrl($url))
+		{
+			return $result->addError(new BuilderError(BuilderError::INVALID_URL_FIELD));
+		}
 
 		$result = $this->validateMetaData($source['metaData'] ?? null);
 		$metaData = $result->getResult();

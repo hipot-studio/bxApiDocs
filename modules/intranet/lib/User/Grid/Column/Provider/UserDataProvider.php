@@ -229,6 +229,17 @@ class UserDataProvider extends DataProvider
 				->setDefault(true)
 		;
 
+		if ($this->getSettings()->isCurrentUserAdmin() && \Bitrix\Main\Loader::includeModule('security'))
+		{
+			$result[] =
+				$this->createColumn('OTP_STATUS')
+					->setSelect(['ID'])
+					->setName(Loc::getMessage('INTRANET_USER_LIST_COLUMN_OTP_STATUS'))
+					->setDefault(true)
+					->setWidth(220)
+			;
+		}
+
 		$result[] =
 			$this->createColumn('ID')
 				->setType(Type::NUMBER)

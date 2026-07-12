@@ -251,6 +251,11 @@ class CAllSocNetGroup
 			$arFields['DESCRIPTION'] = Emoji::encode($arFields['DESCRIPTION']);
 		}
 
+		if (!empty($arFields['GOAL']))
+		{
+			$arFields['GOAL'] = Emoji::encode($arFields['GOAL']);
+		}
+
 		if (isset($arFields['TYPE']))
 		{
 			if (!Type::isValid($arFields['TYPE']))
@@ -716,6 +721,10 @@ class CAllSocNetGroup
 				if (!empty($result['DESCRIPTION']))
 				{
 					$result['DESCRIPTION'] = Emoji::decode($result['DESCRIPTION']);
+				}
+				if (!empty($result['GOAL']))
+				{
+					$result['GOAL'] = Emoji::decode($result['GOAL']);
 				}
 
 				$result['NAME_FORMATTED'] = $result['NAME'];

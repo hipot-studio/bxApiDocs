@@ -91,8 +91,11 @@ class ApplicationInstaller
 		App $app,
 		bool $onlyApi,
 		?string $applicationToken = null,
+		?int $initiatorUserId = null,
 	): App
 	{
+		$installerUserId = $initiatorUserId ?? $userId;
+
 		//region Needs to refactor into just Application installation
 		$existingIntegration = null;
 		if ($app->getClientId())
@@ -116,7 +119,7 @@ class ApplicationInstaller
 			],
 			ElementCodeType::APPLICATION->value,
 			$existingIntegration?->getId(),
-			$userId
+			$installerUserId //Delete after refactoring Provider::saveIntegration
 		);
 		// endregion
 
@@ -128,6 +131,13 @@ class ApplicationInstaller
 		}
 
 		$integration = $this->integrationRepository->getById($integrationResult['ID']);
+
+		if ($installerUserId !== $userId)
+		{
+			$integration->setUserId($userId);
+			$this->integrationRepository->save($integration);
+		}
+
 		$appId = $integration->getAppId();
 
 		$savedApp = $this->appRepository->getById($appId);

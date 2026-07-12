@@ -21,7 +21,7 @@ use Bitrix\Main;
 
 class MailMessageChainProvider extends AbstractMailMessageChainProvider
 {
-	const SELECT_MESSAGE_FIELDS = [
+	protected const SELECT_MESSAGE_FIELDS = [
 		'MAILBOX_EMAIL' => 'MAILBOX.EMAIL',
 		'UID_ID' => 'MESSAGE_UID.ID',
 		'IS_SEEN' => 'MESSAGE_UID.IS_SEEN',
@@ -35,23 +35,23 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		'OPTIONS',
 	];
 
-	const SELECT_MESSAGE_ACCESS_FIELDS = [
+	protected const SELECT_MESSAGE_ACCESS_FIELDS = [
 		'BIND_ENTITY_TYPE' => 'MESSAGE_ACCESS.ENTITY_TYPE',
 		'BIND_ENTITY_ID' => 'MESSAGE_ACCESS.ENTITY_ID',
 	];
 
-	const SELECT_MESSAGE_CRM_ACCESS_FIELDS = [
+	protected const SELECT_MESSAGE_CRM_ACCESS_FIELDS = [
 		'CRM_ACTIVITY_OWNER_TYPE_ID' => 'MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_TYPE_ID',
 		'CRM_ACTIVITY_OWNER_ID' => 'MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_ID',
 	];
 
-	const SELECT_MESSAGE_FIELDS_FOR_TAKE_ATTACHMENTS = [
+	protected const SELECT_MESSAGE_FIELDS_FOR_TAKE_ATTACHMENTS = [
 		'ID',
 		'OPTIONS',
 		'MAILBOX_ID',
 	];
 
-	const SELECT_RECIPIENTS_FIELDS = [
+	protected const SELECT_RECIPIENTS_FIELDS = [
 		'FIELD_FROM',
 		'FIELD_REPLY_TO',
 		'FIELD_TO',
@@ -66,7 +66,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		$this->errorCollection = new ErrorCollection();
 	}
 
-	private function hasUserAccessToMessage(int $messageId): bool
+	protected function hasUserAccessToMessage(int $messageId): bool
 	{
 		if (!Loader::includeModule('mail'))
 		{
@@ -82,7 +82,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		return MailboxAccess::hasCurrentUserAccessToMailbox($mailboxId, true);
 	}
 
-	private function getMessageAsArray(int $id, ?array $select = null): ?array
+	protected function getMessageAsArray(int $id, ?array $select = null): ?array
 	{
 		if (!$this->hasUserAccessToMessage($id))
 		{
@@ -93,7 +93,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		{
 			$select = array_merge(
 				self::SELECT_MESSAGE_FIELDS,
-				self::SELECT_RECIPIENTS_FIELDS
+				self::SELECT_RECIPIENTS_FIELDS,
 			);
 		}
 
@@ -108,7 +108,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 						'=this.MAILBOX_ID' => 'ref.ID',
 					],
 					['join_type' => 'INNER'],
-				)
+				),
 			)
 			->registerRuntimeField(
 				new Reference(
@@ -118,15 +118,16 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 						'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
 						'=this.ID' => 'ref.MESSAGE_ID',
 					],
-					['join_type' => 'INNER']
-				)
+					['join_type' => 'INNER'],
+				),
 			)
 			->setSelect($select)
 			->setFilter(
 				[
-					'=ID' => $id
+					'=ID' => $id,
 				],
-			)->setLimit(1)->exec()->fetchAll();
+			)->setLimit(1)->exec()->fetchAll()
+		;
 
 		if (count($threadMessageRows) > 0)
 		{
@@ -134,6 +135,16 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		}
 
 		return null;
+	}
+
+	protected function addMessageBinding(MailMessage $mailMessage, array $row): void
+	{
+		MessageLoader::addBinding($mailMessage, $row);
+	}
+
+	protected function findMailbox(int $mailboxId): ?Mailbox
+	{
+		return Mailbox::findBy($mailboxId);
 	}
 
 	protected function loadAttachments(MailMessage $mailMessage, int $mailboxId, int $attachmentsCount): void
@@ -250,7 +261,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 				$message->isRead = true;
 			}
 
-			$message->uidId = $messageData['UID_ID'].'-'.$messageData['MAILBOX_ID'];
+			$message->uidId = $messageData['UID_ID'] . '-' . $messageData['MAILBOX_ID'];
 			$message->body = $this->cleanCharset($messageData['BODY_HTML']);
 			$message->id = $messageData['ID'];
 			$message->subject = $messageData['SUBJECT'];
@@ -275,14 +286,14 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		return $message;
 	}
 
-	private function getMessagesRows(bool $takeParentMessages, int $threadId, int $limit = 50): array
+	protected function getMessagesRows(bool $takeParentMessages, int $threadId, int $limit = 50): array
 	{
 		$messageQuery = new Query(MailMessageTable::getEntity());
 
 		if ($takeParentMessages)
 		{
 			$order = [
-				'MESSAGE_UID.INTERNALDATE' => 'DESC'
+				'MESSAGE_UID.INTERNALDATE' => 'DESC',
 			];
 
 			$filter = [
@@ -298,7 +309,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		else
 		{
 			$order = [
-				'MESSAGE_UID.INTERNALDATE' => 'ASC'
+				'MESSAGE_UID.INTERNALDATE' => 'ASC',
 			];
 
 			$filter = [
@@ -336,7 +347,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 						'=this.MAILBOX_ID' => 'ref.ID',
 					],
 					['join_type' => 'INNER'],
-				)
+				),
 			)
 			->registerRuntimeField(
 				new ReferenceField(
@@ -344,7 +355,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 					Mail\Internals\MessageClosureTable::class,
 					$mergeFilter,
 					['join_type' => 'INNER'],
-				)
+				),
 			)
 			->registerRuntimeField(
 				new Reference(
@@ -354,8 +365,8 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 						'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
 						'=this.ID' => 'ref.MESSAGE_ID',
 					],
-					['join_type' => 'INNER']
-				)
+					['join_type' => 'INNER'],
+				),
 			)
 			->registerRuntimeField(
 				new Reference(
@@ -364,14 +375,15 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 					[
 						'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
 						'=this.ID' => 'ref.MESSAGE_ID',
-					]
-				)
+					],
+				),
 			)
 			->setSelect($selectChainNodes)
 			->setFilter($filter)
 			->setOrder($order)
 			->setOffset(1)
-			->setLimit($limit)->exec()->fetchAll();
+			->setLimit($limit)->exec()->fetchAll()
+		;
 	}
 
 	public function getChain(int $messageId): MailMessageChain
@@ -395,7 +407,9 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		$childMessagesRows = $this->getMessagesRows(false, $messageId);
 		$parentMessagesRows = $this->getMessagesRows(true, $messageId);
 
-		$allRows = array_merge($childMessagesRows, [$threadMessageRow], $parentMessagesRows);
+		$allRows = self::deduplicateRowsByMessageId(
+			array_merge($childMessagesRows, [$threadMessageRow], $parentMessagesRows),
+		);
 
 		$messages = [];
 
@@ -404,26 +418,13 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 		$mailboxId = (int)$threadMessageRow['MAILBOX_ID'];
 		$index = 0;
 
-		$uniqueMessages = [];
-
 		foreach ($allRows as $row)
 		{
 			$messageId = (int)$row['ID'];
 
-			/*
-				In some services, the same letter can be located in different folders
-				(if the folders are shortcuts)
-			*/
-			if (isset($uniqueMessages[$messageId]))
-			{
-				continue;
-			}
-
-			$uniqueMessages[$messageId] = true;
-
 			$mailMessage = new MailMessage();
 			$mailMessage->id = $messageId;
-			$mailMessage->uidId = $row['UID_ID'].'-'.$row['MAILBOX_ID'];
+			$mailMessage->uidId = $row['UID_ID'] . '-' . $row['MAILBOX_ID'];
 
 			if ($row['IS_SEEN'] === 'Y')
 			{
@@ -438,7 +439,7 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 			$mailMessage->date = ($row['INTERNALDATE'] ?? $row['FIELD_DATE'])->getTimestamp();
 			$mailMessage->replyFromEmail = $row['MAILBOX_EMAIL'];
 			$mailMessage->mailboxId = (int)$row['MAILBOX_ID'];
-			MessageLoader::addBinding($mailMessage, $row);
+			$this->addMessageBinding($mailMessage, $row);
 
 			if (isset($row['BODY_HTML']))
 			{
@@ -475,11 +476,10 @@ class MailMessageChainProvider extends AbstractMailMessageChainProvider
 			$mailMessageChain->list[$lastIncomingKey]->attachments = $full->attachments;
 		}
 
-		$mailboxHelper = Mailbox::findBy($mailboxId);
+		$mailboxHelper = $this->findMailbox($mailboxId);
 		$dirs = $mailboxHelper
 			? $mailboxHelper->getDirsHelper()->buildDirectoryTreeForContextMenu($mailboxId, $mailboxHelper)
-			: []
-		;
+			: [];
 
 		$mailMessageChain->properties = [
 			'lastIncomingId' => $lastIncomingId,

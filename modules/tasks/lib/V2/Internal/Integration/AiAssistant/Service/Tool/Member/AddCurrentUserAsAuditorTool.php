@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Member;
 
+use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\AiAssistant\Facade\TracedLogger;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\InvalidIdentifierException;
@@ -14,24 +16,42 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\DtoValidationExce
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\MemberService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder\MemberSchemaBuilder;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\BaseTool;
+use Bitrix\Tasks\V2\Internal\Service\TariffService;
 
 class AddCurrentUserAsAuditorTool extends BaseTool
 {
 	public const ACTION_NAME = 'add_current_user_as_auditor';
 
 	public function __construct(
+		private readonly TariffService $tariffService,
 		private readonly MemberService $memberService,
+		ToolService $toolService,
 		MemberSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
 	)
 	{
-		parent::__construct($schemaBuilder, $validationService, $tracedLogger);
+		parent::__construct($toolService, $schemaBuilder, $validationService, $tracedLogger);
 	}
 
 	public function getDescription(): string
 	{
 		return 'Adds current user as an auditor to the specified task.';
+	}
+
+	public function canRun(int $userId): bool
+	{
+		parent::canRun($userId);
+
+		if (!$this->tariffService->isStakeholderAvailable())
+		{
+			throw new McpException(
+				'The Observers and Participants feature is not available on the current Bitrix24 plan, '
+				. 'so auditors cannot be added to a task. Upgrade to a suitable Bitrix24 plan to enable this',
+			);
+		}
+
+		return true;
 	}
 
 	protected function execute(int $userId, ...$args): string

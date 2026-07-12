@@ -88,7 +88,7 @@ class InMemoryCrmItemRepository implements CrmItemRepositoryInterface
 
 		$this->itemCache->merge($crmItems);
 
-		return $crmItems;
+		return $this->itemCache->findAllByIds($ids);
 	}
 
 	public function invalidate(int $taskId): void

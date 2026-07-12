@@ -75,6 +75,12 @@ class Path
 			case 'group_tasks_path_template':
 				$result = self::get('group_path_template', $siteId) . 'tasks/';
 				break;
+			case 'group_files_path_template':
+				$result = self::get('group_path_template', $siteId) . 'disk/path/#PATH#/';
+				break;
+			case 'group_photo_path_template':
+				$result = self::get('group_path_template', $siteId) . 'photo/';
+				break;
 			case 'group_tasks_task_path_template':
 				$result = self::get('group_tasks_path_template', $siteId) . 'task/#action#/#task_id#/';
 				break;
@@ -86,6 +92,21 @@ class Path
 				break;
 			case 'group_calendar_path_template':
 				$result = self::get('group_path_template', $siteId) . 'calendar/';
+				break;
+			case 'group_blog_path_template':
+				$result = self::get('group_path_template', $siteId) . 'blog/';
+				break;
+			case 'group_forum_path_template':
+				$result = self::get('group_path_template', $siteId) . 'forum/';
+				break;
+			case 'group_wiki_path_template':
+				$result = self::get('group_path_template', $siteId) . 'wiki/';
+				break;
+			case 'group_lists_path_template':
+				$result = self::get('group_path_template', $siteId) . 'lists/';
+				break;
+			case 'group_marketplace_path_template':
+				$result = self::get('group_path_template', $siteId) . 'marketplace/';
 				break;
 			case 'group_users_path_template':
 				$result = self::get('group_path_template', $siteId) . 'users/';

@@ -10,26 +10,8 @@ class CreateSystemIncomingWebhookCommand extends AbstractCreateIncomingWebhookCo
 {
 	protected function execute(): Main\Result
 	{
-		$result = new Main\Result();
+		$data = (new CreateSystemIncomingWebhookCommandHandler())($this);
 
-		try
-		{
-			$data = (new CreateSystemIncomingWebhookCommandHandler())($this);
-			$result->setData([$data]);
-		}
-		catch (Main\ObjectNotFoundException $e)
-		{
-			$result->addError(new Main\Error($e->getMessage(), $e->getCode()));
-		}
-		catch (Main\ArgumentException $e)
-		{
-			$result->addError(new Main\Error($e->getMessage(), 'INVALID_ARGUMENT'));
-		}
-		catch (Main\SystemException $e)
-		{
-			$result->addError(new Main\Error($e->getMessage(), $e->getCode()));
-		}
-
-		return $result;
+		return (new Main\Result())->setData([$data]);
 	}
 }

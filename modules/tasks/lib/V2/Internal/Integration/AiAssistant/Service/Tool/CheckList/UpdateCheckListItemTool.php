@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\CheckList;
 
 use Bitrix\AiAssistant\Facade\TracedLogger;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Tasks\V2\Internal\Exception\CheckList\CheckListNotFoundException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
@@ -21,12 +22,13 @@ class UpdateCheckListItemTool extends BaseTool
 
 	public function __construct(
 		private readonly CheckListService $checkListService,
+		ToolService $toolService,
 		CheckListSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
 	)
 	{
-		parent::__construct($schemaBuilder, $validationService, $tracedLogger);
+		parent::__construct($toolService, $schemaBuilder, $validationService, $tracedLogger);
 	}
 
 	public function getDescription(): string

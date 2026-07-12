@@ -19,12 +19,18 @@ use Bitrix\Tasks\V2\Internal\Access\Service\TaskAccessService;
 use Bitrix\Tasks\V2\Internal\EventDispatcher\EventDispatcher;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Access\Service\CrmAccessService;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Repository\DiskFileRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Integration\HumanResources\Facade\DepartmentsFacade;
+use Bitrix\Tasks\V2\Internal\Integration\HumanResources\Facade\SubdepartmentsFacade;
+use Bitrix\Tasks\V2\Internal\Integration\HumanResources\Facade\UserDepartmentsInMemoryFacade;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Chat;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Repository\MessageRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\ProjectChatResolver;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\AbsenceService;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\UserUrlService;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepository;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\FlowMemberRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\CheckListMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\ReminderMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Template\OrmTemplateMapper;
@@ -37,6 +43,7 @@ use Bitrix\Tasks\V2\Internal\Repository\TaskReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskTagRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskResultRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateParameterRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\ViewedAbsenceRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\AddTaskService;
 use Bitrix\Tasks\V2\Internal\Service\AddTemplateService;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
@@ -503,9 +510,29 @@ class Container extends AbstractContainer
 		return $this->get(CopyTaskService::class);
 	}
 
+	public function getUserDepartmentsInMemoryFacade(): UserDepartmentsInMemoryFacade
+	{
+		return $this->get(UserDepartmentsInMemoryFacade::class);
+	}
+
+	public function getDepartmentsFacade(): DepartmentsFacade
+	{
+		return $this->get(DepartmentsFacade::class);
+	}
+
+	public function getSubdepartmentsFacade(): SubdepartmentsFacade
+	{
+		return $this->get(SubdepartmentsFacade::class);
+	}
+
 	public function getFeedbackService(): FeedbackService
 	{
 		return $this->get(FeedbackService::class);
+	}
+
+	public function getFlowMemberRepository(): FlowMemberRepositoryInterface
+	{
+		return $this->get(FlowMemberRepositoryInterface::class);
 	}
 
 	public function getTemplateParameterRepository(): TemplateParameterRepositoryInterface
@@ -516,6 +543,21 @@ class Container extends AbstractContainer
 	public function getChatIntegration(): Chat
 	{
 		return $this->get(Chat::class);
+	}
+
+	public function getProjectChatResolver(): ProjectChatResolver
+	{
+		return $this->get(ProjectChatResolver::class);
+	}
+
+	public function getViewedAbsenceRepository(): ViewedAbsenceRepositoryInterface
+	{
+		return $this->get(ViewedAbsenceRepositoryInterface::class);
+	}
+
+	public function getAbsenceService(): AbsenceService
+	{
+		return $this->get(AbsenceService::class);
 	}
 
 	public function getNotificationController(): Notification\Controller

@@ -197,7 +197,7 @@ class Permission
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::ChangeManagers->value => Chat::ROLE_NONE,
-			Action::CreateChildChat->value => Chat::ROLE_MANAGER,
+			Action::CreateChildChat->value => Chat::ROLE_MEMBER,
 			Action::AttachToParent->value => Chat::ROLE_NONE,
 		];
 

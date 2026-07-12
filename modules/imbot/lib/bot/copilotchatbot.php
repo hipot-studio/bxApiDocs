@@ -276,9 +276,24 @@ class CopilotChatBot extends Base
 	 */
 	public static function refreshAgent(bool $regular = false): string
 	{
+		if (!$regular)
+		{
+			self::updateBotProperties();
+
+			return '';
+		}
+
+		if (
+			!Loader::includeModule('im')
+			|| !Im\V2\Application\Features::isBitrixGptV2Available()
+		)
+		{
+			return '\\' . __METHOD__ . '(true);';
+		}
+
 		self::updateBotProperties();
 
-		return $regular ? __METHOD__.'();' : '';
+		return '';
 	}
 
 	/**
@@ -325,6 +340,27 @@ class CopilotChatBot extends Base
 		Im\Bot::update(['BOT_ID' => self::getBotId()], $newData);
 
 		return true;
+	}
+
+	public static function uploadAvatar($lang = LANGUAGE_ID): array|bool|string
+	{
+		if (
+			Loader::includeModule('im')
+			&& Im\V2\Application\Features::isBitrixGptV2Available()
+		)
+		{
+			$avatarPath =
+				Main\Application::getDocumentRoot()
+				. '/bitrix/modules/imbot/install/avatar/' . self::BOT_CODE . '/ai-v2.png'
+			;
+
+			if (Main\IO\File::isFileExists($avatarPath))
+			{
+				return \CFile::makeFileArray($avatarPath);
+			}
+		}
+
+		return parent::uploadAvatar($lang);
 	}
 
 	//endregion
@@ -410,7 +446,11 @@ class CopilotChatBot extends Base
 			return false;
 		}
 
-		if ($chat->getType() !== Chat::IM_TYPE_COPILOT && !self::checkBotMention($originalMessage))
+		if (
+			$chat->getType() !== Chat::IM_TYPE_COPILOT
+			&& !self::checkBotMention($originalMessage)
+			&& !self::checkBotReply($messageFields)
+		)
 		{
 			return false;
 		}
@@ -467,7 +507,7 @@ class CopilotChatBot extends Base
 						],
 					],
 				];
-				self::sendMessage((int)$messageFields['TO_CHAT_ID'], $message);
+				self::sendMessage((int)$messageFields['TO_CHAT_ID'], $message, true, $messageId);
 
 				if (
 					strlen($messageFields['MESSAGE']) >= 30
@@ -559,7 +599,7 @@ class CopilotChatBot extends Base
 			->setChat($chat)
 		;
 
-		if (!self::checkBotMention($originalMessage))
+		if (!self::checkBotMention($originalMessage) && !self::checkBotReply($messageFields))
 		{
 			return false;
 		}
@@ -606,8 +646,8 @@ class CopilotChatBot extends Base
 		);
 
 		ServiceLocator::getInstance()
-					  ->get(AiBot::class)
-					  ->handleIncomingMessage($messageDto)
+			->get(AiBot::class)
+			->handleIncomingMessage($messageDto)
 		;
 
 		return true;
@@ -619,11 +659,16 @@ class CopilotChatBot extends Base
 		$userId = (int)$messageFields['FROM_USER_ID'];
 		self::sendTyping($chatId);
 
+		// In a private 1-on-1 chat with the bot there are exactly 2 participants (user + bot) and the
+		// bot answers every message in default mode. Once other people are added (collective copilot
+		// chat or any non-private chat with the bot) it must switch to inline mode.
+		$chatMode = Im\V2\Chat::getInstance($chatId)->getUserCount() > 2 ? 'inline' : 'default';
+
 		$persistentParams = [
 			'messageType' => MessageType::Default->value,
 			'senderBotId' => self::getBotId(),
 			'beforeMessageId' => $messageId,
-			'chatMode' => 'default',
+			'chatMode' => $chatMode,
 			'forceSearch' => ($messageFields['PARAMS']['COPILOT_FORCE_SEARCH'] ?? null) === 'Y',
 			'userPlatform' => ($messageFields['PLATFORM_CONTEXT'] === Bot::PLATFORM_CONTEXT_MOBILE)
 				? UserPlatform::Mobile->value
@@ -680,6 +725,8 @@ class CopilotChatBot extends Base
 
 		return
 			!($chat instanceof Chat\ChannelChat)
+			&& !($chat instanceof Chat\OpenLineChat)
+			&& !($chat instanceof Chat\OpenLineLiveChat)
 			&& Loader::includeModule('im')
 			&& Im\V2\Application\Features::isCopilotMentionAvailable()
 		;
@@ -706,6 +753,14 @@ class CopilotChatBot extends Base
 	{
 		$mentionedUserIds = $message->getMentionedUserIds();
 		return in_array(self::getBotId(), $mentionedUserIds, true);
+	}
+
+	private static function checkBotReply(array $messageFields): bool
+	{
+		return
+			($messageFields['REPLY_MESSAGE'] ?? null) !== null
+			&& ($messageFields['REPLY_MESSAGE']['AUTHOR_ID'] ?? null) === self::getBotId()
+		;
 	}
 
 	/**
@@ -781,7 +836,7 @@ class CopilotChatBot extends Base
 				->setHistoryState(false)
 				->onSuccess(function (AI\Result $queueResult, ?string $queueHash = null) use($engine, &$result) {
 					$isQueueable = $engine instanceof AI\Engine\IQueue;
-					$message = $isQueueable ? $queueResult->getRawData() : $queueResult->getPrettifiedData();
+					$message = $isQueueable ? $queueResult->getRawData() : ($queueResult?->getBBCodeData() ?? $queueResult->getPrettifiedData());
 
 					$rawData = $queueResult->getRawData();
 					$hasMore =
@@ -872,7 +927,7 @@ class CopilotChatBot extends Base
 					->setHistoryState(false)
 					->onSuccess(function (AI\Result $queueResult, ?string $queueHash = null) use($engine, &$result) {
 						$isQueueable = $engine instanceof AI\Engine\IQueue;
-						$message = $isQueueable ? $queueResult->getRawData() : $queueResult->getPrettifiedData();
+						$message = $isQueueable ? $queueResult->getRawData() : ($queueResult?->getPlainTextData() ?? $queueResult->getPrettifiedData());
 
 						$result->setData([
 							'SUMMARY' => $message,
@@ -979,12 +1034,17 @@ class CopilotChatBot extends Base
 
 			if ($contextId == self::CONTEXT_SUMMARY)
 			{
-				self::renameChat($chat, $result->getPrettifiedData());
+				self::renameChat($chat, ($result->getPlainTextData() ?? $result->getPrettifiedData()));
 
 				return;
 			}
 
-			self::sendMessage($chatId, $result->getPrettifiedData());
+			self::sendMessage(
+				$chatId,
+				($result?->getBBCodeData() ?? $result->getPrettifiedData()),
+				true,
+				(int)$messageId
+			);
 			$message = new Message((int)$messageId);
 			$messageText = $message->getMessage();
 
@@ -1118,6 +1178,14 @@ class CopilotChatBot extends Base
 
 	public static function getEngineByChat(Im\V2\Chat $chat, ?Context $context = null): ?AI\Engine
 	{
+		if (
+			Loader::includeModule('im')
+			&& Im\V2\Application\Features::isBitrixGptV2Available()
+		)
+		{
+			return Im\V2\Integration\AI\EngineManager::getDefaultEngine($context);
+		}
+
 		$engine = null;
 
 		if ($chat instanceof Im\V2\Chat\GroupChat)
@@ -1371,9 +1439,15 @@ class CopilotChatBot extends Base
 	 * @param int $chatId
 	 * @param array|string $message
 	 * @param bool $needToReplaceAiMentions
+	 * @param int|null $triggerMessageId
 	 * @return void
 	 */
-	protected static function sendMessage(int $chatId, $message, bool $needToReplaceAiMentions = true): void
+	protected static function sendMessage(
+		int $chatId,
+		$message,
+		bool $needToReplaceAiMentions = true,
+		?int $triggerMessageId = null
+	): void
 	{
 		if (!is_array($message))
 		{
@@ -1393,6 +1467,10 @@ class CopilotChatBot extends Base
 
 		$message['PARAMS'][Im\V2\Message\Params::COMPONENT_ID] = self::MESSAGE_COMPONENT_ID;
 		$message['PARAMS'][Im\V2\Message\Params::COPILOT_ROLE] = (new Im\V2\Integration\AI\RoleManager())->getMainRole($chatId);
+		if ($triggerMessageId !== null)
+		{
+			$message['PARAMS'][Im\V2\Message\Params::COPILOT_TRIGGER_MESSAGE_ID] = $triggerMessageId;
+		}
 		if (!$chat->getRelationByUserId(self::getBotId()))
 		{
 			$message['SKIP_USER_CHECK'] = 'Y';

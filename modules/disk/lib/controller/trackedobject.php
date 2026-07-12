@@ -275,7 +275,10 @@ class TrackedObject extends BaseObject
 			return null;
 		}
 
-		return $this->generateExternalLink($object->getFile());
+		return $this->extendExternalLinkResponse(
+			$this->generateExternalLink($object->getFile()),
+			$object,
+		);
 	}
 
 	public function disableExternalLinkAction(Disk\Document\TrackedObject $object)
@@ -285,7 +288,22 @@ class TrackedObject extends BaseObject
 
 	public function getExternalLinkAction(Disk\Document\TrackedObject $object)
 	{
-		return $this->getExternalLink($object->getFile());
+		return $this->extendExternalLinkResponse(
+			$this->getExternalLink($object->getFile()),
+			$object,
+		);
+	}
+
+	private function extendExternalLinkResponse(?array $result, Disk\Document\TrackedObject $object): ?array
+	{
+		if ($result === null)
+		{
+			return null;
+		}
+
+		$result['externalLink']['supportsSharingAccessPopup'] = $object->getFile()->supportsUnifiedLink();
+
+		return $result;
 	}
 
 	public function downloadAction(Disk\Document\TrackedObject $object)

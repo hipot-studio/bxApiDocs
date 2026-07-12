@@ -9,9 +9,11 @@ use Bitrix\Im\V2\Entity\File\ParamCollection;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscriptionCopyManager;
 use Bitrix\Im\V2\Message;
+use Bitrix\Im\V2\Message\BlocksBuilder\BuilderService;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Result;
 use Bitrix\Imbot\Bot\CopilotChatBot;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
 class ForwardService
@@ -30,7 +32,7 @@ class ForwardService
 		Message\Params::FORWARD_CHAT_TITLE => Message\Params::FORWARD_CHAT_TITLE,
 		Message\Params::REPLY_ID => Message\Params::REPLY_ID,
 		Message\Params::STICKER_PARAMS => Message\Params::STICKER_PARAMS,
-		Message\Params::BLOCKS_BUILDER => Message\Params::BLOCKS_BUILDER,
+		Message\Params::BLOCK => Message\Params::BLOCK,
 	];
 
 	private Chat $toChat;
@@ -148,7 +150,7 @@ class ForwardService
 
 		$diskFiles = [];
 
-		if ($forwardingMessage->getParams()->isSet(Message\Params::FILE_ID))
+		if ($this->hasFilesToCopy($forwardingMessage))
 		{
 			$newFileIds = [];
 			foreach ($forwardingMessage->getFiles() as $file)
@@ -162,7 +164,7 @@ class ForwardService
 				}
 			}
 
-			$newParams[Message\Params::FILE_ID] = $newFileIds;
+			$newParams = $this->setFileIds($forwardingMessage, $newFileIds, $newParams);
 		}
 
 		if (Loader::includeModule('imbot') && $forwardingMessage->getAuthorId() === CopilotChatBot::getBotId())
@@ -176,6 +178,28 @@ class ForwardService
 		}
 
 		return $result->setResult(['PARAMS' => $newParams, 'FILE_MODELS' => $diskFiles]);
+	}
+
+	private function hasFilesToCopy(Message $forwardingMessage): bool
+	{
+		return !empty($forwardingMessage->getFileIds());
+	}
+
+	private function setFileIds(Message $forwardingMessage, array $newFileIds, array $newParams): array
+	{
+		if ($forwardingMessage->getBlocksBuilder() !== null)
+		{
+			$builder = $forwardingMessage->getBlocksBuilder();
+			$builderService = ServiceLocator::getInstance()->get(BuilderService::class);
+			$builderResult = $builderService->updateFileIds($builder, $newFileIds, $this->toChat);
+			$newParams[Message\Params::BLOCK] = $builderResult->getBlocksBuilder();
+
+			return $newParams;
+		}
+
+		$newParams[Message\Params::FILE_ID] = $newFileIds;
+
+		return $newParams;
 	}
 
 	/**

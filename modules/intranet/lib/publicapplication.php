@@ -16,6 +16,10 @@ class PublicApplication extends \Bitrix\Main\Authentication\Application
 		"/guest/",
 		"/video/",
 		"/docs/pub/",
+		"/doc/",
+		"/sheet/",
+		"/pres/",
+		"/board/",
 		"/pub/",
 		"/rest/",
 		"/bitrix/services/main/ajax.php",
@@ -55,5 +59,10 @@ class PublicApplication extends \Bitrix\Main\Authentication\Application
 				}
 			}
 		}
+	}
+
+	protected function isCheckRequestUri(): bool
+	{
+		return true;
 	}
 }

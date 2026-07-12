@@ -11,4 +11,6 @@ enum ChatAction: string
 	case OpenResult = 'openResult';
 	case ShowCheckList = 'showCheckList';
 	case ShowCheckListItems = 'showCheckListItems';
+	case OpenGroup = 'openGroup';
+	case OpenTimeTracking = 'openTimeTracking';
 }

@@ -9,6 +9,8 @@ use Bitrix\Socialnetwork\Helper\Workgroup;
 
 trait CanInviteTrait
 {
+	use UserAccessCodeTrait;
+
 	protected static array $commonGroups = [];
 
 	protected function canInvite(UserModel $user, CollabModel $item): bool
@@ -21,7 +23,12 @@ trait CanInviteTrait
 		$addMembers = $item->getAddMembers();
 		foreach ($addMembers as $accessCode)
 		{
-			$userId = (new AccessCode($accessCode))->getEntityId();
+			$userId = $this->extractUserIdFromAccessCode($accessCode);
+			if ($userId === null)
+			{
+				return false;
+			}
+
 			if (!$this->isUsersHaveCommonGroups($user->getUserId(), $userId))
 			{
 				return false;

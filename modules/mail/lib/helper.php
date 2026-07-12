@@ -318,6 +318,8 @@ class Helper
 
 	public static function cleanupMailboxAgent($id)
 	{
+		Helper\OrphanedMailboxLifecycle::tick((int)$id);
+
 		$mailboxHelper = Helper\Mailbox::rawInstance($id, false);
 
 		if (empty($mailboxHelper))

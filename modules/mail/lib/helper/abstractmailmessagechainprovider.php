@@ -61,4 +61,27 @@ abstract class AbstractMailMessageChainProvider implements MailMessageChainProvi
 
 		return Parsers\CharsetCleaner::parse($body);
 	}
+
+	/*
+		Gmail and some other label-based providers (labels act as folders, one message
+		can have many) return the same message once per label — keep the first row only.
+	*/
+	protected static function deduplicateRowsByMessageId(array $rows): array
+	{
+		$seen = [];
+		$unique = [];
+
+		foreach ($rows as $row)
+		{
+			$id = (int)$row['ID'];
+			if (isset($seen[$id]))
+			{
+				continue;
+			}
+			$seen[$id] = true;
+			$unique[] = $row;
+		}
+
+		return $unique;
+	}
 }

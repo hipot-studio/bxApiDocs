@@ -7,6 +7,7 @@ use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Section\Section;
 use Bitrix\Calendar\Integration\Pull\PushCommand;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab;
+use Bitrix\Calendar\Internal\Integration\Socialnetwork\CollabService;
 use Bitrix\Calendar\Internals\EventTable;
 use Bitrix\Calendar\Internals\SectionConnectionTable;
 use Bitrix\Calendar\Internals\SectionTable;
@@ -1305,15 +1306,21 @@ class CCalendarSect
 
 		$userId = $params['type'] === 'user' ? $params['ownerId'] : CCalendar::GetCurUserId();
 
-		$isCollabSection = $params['type'] === Dictionary::CALENDAR_TYPE['group']
-			&& Collab\Collabs::getInstance()->getCollabIfExists((int)$params['ownerId'])
-		;
+		// Under the new_projects schema all groups carry TYPE='collab'. The
+		// "collab" visual (green color, IS_COLLAB flag) must apply only to
+		// projects that actually have external users; otherwise the section
+		// belongs to a regular project and gets the default group color.
+		$isCollabSection = false;
 
-		$color = '#9DCF00';
-		if ($isCollabSection)
+		if ($params['type'] === Dictionary::CALENDAR_TYPE['group'])
 		{
-			$color = '#19CC45';
+			$isCollabSection = ServiceLocator::getInstance()
+				->get(CollabService::class)
+				->hasCollabers((int)$params['ownerId'])
+			;
 		}
+
+		$color = $isCollabSection ? '#19CC45' : '#9DCF00';
 
 		if ($userId > 0)
 		{

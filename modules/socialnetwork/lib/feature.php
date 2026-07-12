@@ -20,6 +20,7 @@ create table b_sonet_features
   FEATURE varchar(50) not null,
   FEATURE_NAME varchar(250) null,
   ACTIVE char(1) not null default 'Y',
+  BASE char(1) not null default 'N',
   DATE_CREATE datetime not null,
   DATE_UPDATE datetime not null,
   primary key (ID),
@@ -74,6 +75,9 @@ class FeatureTable extends Entity\DataManager
 				'data_type' => 'string'
 			],
 			'ACTIVE' => [
+				'data_type' => 'string'
+			],
+			'BASE' => [
 				'data_type' => 'string'
 			],
 			'DATE_CREATE' => [

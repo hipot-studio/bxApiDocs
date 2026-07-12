@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\Recurrence;
 
+use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\AiAssistant\Facade\TracedLogger;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Validation\ValidationService;
@@ -17,21 +18,41 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder\TaskS
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\TaskService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\TemplateService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\BaseTool;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
+use Bitrix\Tasks\V2\Internal\Service\TariffService;
 
 abstract class BaseRecurrenceTool extends BaseTool
 {
 	public function __construct(
+		private readonly TariffService $tariffService,
 		private readonly TaskService $taskService,
 		private readonly TemplateService $templateService,
+		ToolService $toolService,
 		TaskSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
 	)
 	{
-		parent::__construct($schemaBuilder, $validationService, $tracedLogger);
+		parent::__construct($toolService, $schemaBuilder, $validationService, $tracedLogger);
 	}
 
 	abstract protected function buildDto(array $args): MakeTaskRecurringDto;
+
+	public function canRun(int $userId): bool
+	{
+		parent::canRun($userId);
+
+		if (!$this->tariffService->isEnabled($this->tariffService->getRecurringTasksFeatureId()))
+		{
+			throw new McpException(
+				'The Recurring Tasks feature is not available on the current Bitrix24 plan, '
+				. 'so a task cannot be made recurring. '
+				. 'Upgrade to a suitable Bitrix24 plan to enable this',
+			);
+		}
+
+		return true;
+	}
 
 	protected function execute(int $userId, ...$args): string
 	{

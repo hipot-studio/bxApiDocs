@@ -32,7 +32,11 @@ class ChatPin extends BaseChatEvent
 	protected function getBasePullParamsInternal(): array
 	{
 		$payload = array_merge(
-			$this->getBaseRecentPreviewParams($this->chat),
+			$this->getBaseRecentPreviewParams(
+				$this->chat,
+				$this->chat->getLastMessage(),
+				$this->resolveUserDateLastActivity($this->chat, $this->userId),
+			),
 			[
 				'active' => $this->active,
 			]

@@ -8,5 +8,6 @@ class Config
 		public readonly bool $hasOwnRecentSection = false,
 		public readonly array $permissions = [],
 		public readonly bool $isAutoJoinEnabled = false,
+		public readonly bool $requiresParentMembership = true,
 	) {}
 }

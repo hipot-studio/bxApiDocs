@@ -79,12 +79,7 @@ class Result extends RestController
 	): GetResponse
 	{
 		/** @var ResultDto $requestDto */
-		$requestDto = $request->fields->getAsDto();
-		if (!$this->validateDto($requestDto, 'add'))
-		{
-			throw new DtoValidationException($this->getErrors());
-		}
-
+		$requestDto = $request->fields->convertToDto('add');
 		$requestEntity = $mapper->mapToEntityForAddRequest($requestDto);
 
 		$accessProvider = new Add();
@@ -131,11 +126,7 @@ class Result extends RestController
 	): GetResponse
 	{
 		/** @var ResultDto $requestDto */
-		$requestDto = $request->fields->getAsDto();
-		if (!$this->validateDto($requestDto, 'addFromChatMessage'))
-		{
-			throw new DtoValidationException($this->getErrors());
-		}
+		$requestDto = $request->fields->convertToDto('addFromChatMessage');
 
 		$messageEntity = new Message($requestDto->messageId);
 
@@ -188,12 +179,7 @@ class Result extends RestController
 		}
 
 		/** @var ResultDto $requestDto */
-		$requestDto = $request->fields->getAsDto();
-		if (!$this->validateDto($requestDto, 'update'))
-		{
-			throw new DtoValidationException($this->getErrors());
-		}
-
+		$requestDto = $request->fields->convertToDto('update');
 		$requestDto->id = (int)$request->id;
 
 		$requestEntity = $mapper->mapToEntity($requestDto);

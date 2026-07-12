@@ -2,14 +2,31 @@
 
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Application;
+use Bitrix\Socialnetwork\V2\Feature;
 
 IncludeModuleLangFile(__FILE__);
 
 class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterface
 {
+	private bool $isNewProjectsOn;
+
 	public function __construct()
 	{
 		$this->id = 'socnetgroup';
+
+		$this->isNewProjectsOn = Feature::isNewProjectsOn();
+	}
+
+	private function getMessage(string $code): string
+	{
+		return self::resolveMessage($code, $this->isNewProjectsOn);
+	}
+
+	private static function resolveMessage(string $code, ?bool $isNewProjectsOn = null): string
+	{
+		$suffix = (($isNewProjectsOn ?? Feature::isNewProjectsOn()) ? '_v2' : '');
+
+		return GetMessage($code . $suffix) ?: GetMessage($code);
 	}
 
 	public function UpdateCodes($USER_ID)
@@ -71,9 +88,9 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 				"NAME" => Emoji::decode($arGroup['NAME']),
 				"DESC" => Emoji::decode($arGroup['DESCRIPTION']),
 				"CHECKBOX" => array(
-					"#ID#_A" => GetMessage("authprov_sg_a"),
-					"#ID#_E" => GetMessage("authprov_sg_e"),
-					"#ID#_K" => GetMessage("authprov_sg_k"),
+					"#ID#_A" => $this->getMessage("authprov_sg_a"),
+					"#ID#_E" => $this->getMessage("authprov_sg_e"),
+					"#ID#_K" => $this->getMessage("authprov_sg_k"),
 				),
 			);
 			if($arGroup["IMAGE_ID"])
@@ -136,9 +153,9 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 					"DESC" => Emoji::decode($arGroup['DESCRIPTION']),
 					"OPEN" => "Y",
 					"CHECKBOX" => array(
-						"#ID#_A" => GetMessage("authprov_sg_a"),
-						"#ID#_E" => GetMessage("authprov_sg_e"),
-						"#ID#_K" => GetMessage("authprov_sg_k"),
+						"#ID#_A" => $this->getMessage("authprov_sg_a"),
+						"#ID#_E" => $this->getMessage("authprov_sg_e"),
+						"#ID#_K" => $this->getMessage("authprov_sg_k"),
 					),
 				);
 				if($arGroup["IMAGE_ID"])
@@ -227,17 +244,17 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 							if ($match[2] == 'K')
 							{
 								$arItem['ID'] = 'SG'.$arElements[$match[1]]['ID'].'_K';
-								$arItem['NAME'] = $arElements[$match[1]]['NAME'].': '.GetMessage("authprov_sg_k");
+								$arItem['NAME'] = $arElements[$match[1]]['NAME'].': '.$this->getMessage("authprov_sg_k");
 							}
 							else if ($match[2] == 'E')
 							{
 								$arItem['ID'] = 'SG'.$arElements[$match[1]]['ID'].'_E';
-								$arItem['NAME'] = $arElements[$match[1]]['NAME'].': '.GetMessage("authprov_sg_e");
+								$arItem['NAME'] = $arElements[$match[1]]['NAME'].': '.$this->getMessage("authprov_sg_e");
 							}
 							else if ($match[2] == 'A')
 							{
 								$arItem['ID'] = 'SG'.$arElements[$match[1]]['ID'].'_A';
-								$arItem['NAME'] = $arElements[$match[1]]['NAME'].': '.GetMessage("authprov_sg_a");
+								$arItem['NAME'] = $arElements[$match[1]]['NAME'].': '.$this->getMessage("authprov_sg_a");
 							}
 							$elements .= CFinder::GetFinderItem($arFinderParams, $arItem);
 						}
@@ -278,9 +295,9 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 				"NAME" => $arGroup['GROUP_NAME'],
 				"DESC" => $arGroup['GROUP_DESCRIPTION'],
 				"CHECKBOX" => array(
-					"#ID#_A" => GetMessage("authprov_sg_a"),
-					"#ID#_E" => GetMessage("authprov_sg_e"),
-					"#ID#_K" => GetMessage("authprov_sg_k"),
+					"#ID#_A" => $this->getMessage("authprov_sg_a"),
+					"#ID#_E" => $this->getMessage("authprov_sg_e"),
+					"#ID#_K" => $this->getMessage("authprov_sg_k"),
 				),
 			);
 			if($arGroup["GROUP_IMAGE_ID"])
@@ -302,21 +319,21 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 		if($currElements <> '')
 		{
 			$arPanels[] = array(
-				"NAME" => GetMessage("authprov_sg_current"),
+				"NAME" => $this->getMessage("authprov_sg_current"),
 				"ELEMENTS" => $currElements,
 			);
 		}
 		$arPanels[] = array(
-			"NAME" => GetMessage("authprov_sg_panel_last"),
+			"NAME" => $this->getMessage("authprov_sg_panel_last"),
 			"ELEMENTS" => $elements,
 		);
 		$arPanels[] = array(
-			"NAME" => GetMessage("authprov_sg_panel_my_group"),
+			"NAME" => $this->getMessage("authprov_sg_panel_my_group"),
 			"ELEMENTS" => $myElements,
 		);
 		$arPanels[] = array(
-			"NAME" => GetMessage("authprov_sg_panel_search"),
-			"ELEMENTS" => CFinder::GetFinderItem(Array("TYPE" => "text"), Array("TEXT" => GetMessage("authprov_sg_panel_search_text"))),
+			"NAME" => $this->getMessage("authprov_sg_panel_search"),
+			"ELEMENTS" => CFinder::GetFinderItem(Array("TYPE" => "text"), Array("TEXT" => $this->getMessage("authprov_sg_panel_search_text"))),
 			"SEARCH" => "Y",
 		);
 		$html = CFinder::GetFinderAppearance($arFinderParams, $arPanels);
@@ -341,9 +358,9 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 			$rsGroups = CSocNetGroup::GetList(array(), array("ID"=>$arID));
 			while($arGroup = $rsGroups->Fetch())
 			{
-				$arResult["SG".$arGroup["ID"]."_A"] = array("provider" => GetMessage("authprov_sg_socnet_group"), "name"=> Emoji::decode($arGroup["NAME"]) .": ".GetMessage("authprov_sg_a"));
-				$arResult["SG".$arGroup["ID"]."_E"] = array("provider" => GetMessage("authprov_sg_socnet_group"), "name"=> Emoji::decode($arGroup["NAME"]) .": ".GetMessage("authprov_sg_e"));
-				$arResult["SG".$arGroup["ID"]."_K"] = array("provider" => GetMessage("authprov_sg_socnet_group"), "name"=> Emoji::decode($arGroup["NAME"]) .": ".GetMessage("authprov_sg_k"));
+				$arResult["SG".$arGroup["ID"]."_A"] = array("provider" => $this->getMessage("authprov_sg_socnet_group"), "name"=> Emoji::decode($arGroup["NAME"]) .": ".$this->getMessage("authprov_sg_a"));
+				$arResult["SG".$arGroup["ID"]."_E"] = array("provider" => $this->getMessage("authprov_sg_socnet_group"), "name"=> Emoji::decode($arGroup["NAME"]) .": ".$this->getMessage("authprov_sg_e"));
+				$arResult["SG".$arGroup["ID"]."_K"] = array("provider" => $this->getMessage("authprov_sg_socnet_group"), "name"=> Emoji::decode($arGroup["NAME"]) .": ".$this->getMessage("authprov_sg_k"));
 			}
 			return $arResult;
 		}
@@ -355,8 +372,8 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 		return array(
 			array(
 				"ID" => "socnetgroup",
-				"NAME" => GetMessage("authprov_sg_name"),
-				"PROVIDER_NAME" => GetMessage("authprov_sg_socnet_group"),
+				"NAME" => self::resolveMessage("authprov_sg_name"),
+				"PROVIDER_NAME" => self::resolveMessage("authprov_sg_socnet_group"),
 				"SORT" => 400,
 				"CLASS" => "CSocNetGroupAuthProvider",
 			),

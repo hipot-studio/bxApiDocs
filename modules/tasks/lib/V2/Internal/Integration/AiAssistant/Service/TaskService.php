@@ -16,6 +16,7 @@ use Bitrix\Tasks\V2\Internal\Entity\Group;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
+use Bitrix\Tasks\V2\Internal\Integration\Ai\Service\MarkdownConversionService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\InvalidIdentifierException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\NotFoundException;
@@ -39,6 +40,8 @@ class TaskService
 		private readonly UpdateTaskService $updateService,
 		private readonly DeleteTaskService $deleteService,
 		private readonly TaskResponseMapper $taskResponseMapper,
+		private readonly MarkdownConversionService $markdownConversionService,
+		private readonly GroupDisplayTypeResolver $groupDisplayTypeResolver,
 	)
 	{
 	}
@@ -52,7 +55,7 @@ class TaskService
 	{
 		$task = new Task(
 			title: $dto->title,
-			description: $dto->description,
+			description: $this->markdownConversionService->convertToBbCode($dto->description),
 			creator: new User($dto->creatorId),
 			responsible: new User($dto->responsibleId),
 			deadlineTs: $dto->deadlineTs,
@@ -73,7 +76,12 @@ class TaskService
 
 		$task = $this->addService->add($task, $config);
 
-		return $this->taskResponseMapper->mapFromEntity($task, new CheckList(), $userId);
+		return $this->taskResponseMapper->mapFromEntity(
+			$task,
+			new CheckList(),
+			$userId,
+			$this->groupDisplayTypeResolver->resolveForGroup($task->group),
+		);
 	}
 
 	/**
@@ -94,7 +102,7 @@ class TaskService
 		$task = new Task(
 			id: $dto->taskId,
 			title: $dto->title,
-			description: $dto->description,
+			description: $this->markdownConversionService->convertToBbCode($dto->description),
 			creator: $dto->creatorId !== null ? new User($dto->creatorId) : null,
 			responsible: $dto->responsibleId !== null ? new User($dto->responsibleId) : null,
 			deadlineTs: $dto->deadlineTs,

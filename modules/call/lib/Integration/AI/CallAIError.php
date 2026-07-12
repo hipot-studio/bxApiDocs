@@ -59,7 +59,11 @@ class CallAIError extends \Bitrix\Call\Error
 
 		if ($processingError instanceof \Bitrix\Main\Error)
 		{
-			$error->code = $processingError->getCode();
+			$innerCode = $processingError->getCode();
+			if (!empty($innerCode))
+			{
+				$error->code = $innerCode;
+			}
 			$error->message = static::htmlToBbCodeLink($processingError->getMessage());
 			$error->customData = $processingError->getCustomData();
 		}

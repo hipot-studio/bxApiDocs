@@ -552,7 +552,6 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 					if ($isBoard)
 					{
-						$unifiedLinkOptions['noRedirect'] = true;
 						$unifiedLinkOptions['additionalQueryParams'] = ['c_element' => 'docs_attach'];
 					}
 

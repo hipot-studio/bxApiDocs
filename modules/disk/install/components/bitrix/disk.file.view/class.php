@@ -3,13 +3,17 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internals\DiskComponent;
 use Bitrix\Disk\Internals\Engine\Contract\SidePanelWrappable;
-use Bitrix\Disk\Internals\ExternalLinkTable;
+use Bitrix\Disk\Internals\ObjectOptionsTable;
+use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Disk\Ui\Icon;
 use Bitrix\Disk\Uf;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Disk\ProxyType;
@@ -26,6 +30,8 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 	const ERROR_COULD_NOT_SAVE_FILE    = 'DISK_FV_22002';
 	const ERROR_COULD_NOT_FIND_VERSION = 'DISK_FV_22003';
 
+	protected ExternalLinkProvider $externalLinkProvider;
+	protected UnifiedLinkAccessService $unifiedLinkAccessService;
 	/** @var \Bitrix\Disk\File */
 	protected $file;
 	/** @var  array */
@@ -34,6 +40,15 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 	protected $imageSize = array('width' => 600, 'height' => 800);
 
 	protected $componentId = 'file_view_with_version';
+
+	public function __construct($component = null)
+	{
+		parent::__construct($component);
+
+		$serviceLocator = ServiceLocator::getInstance();
+		$this->externalLinkProvider = $serviceLocator->get(ExternalLinkProvider::class);
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+	}
 
 	protected function listActions()
 	{
@@ -139,6 +154,29 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		$externalLinkData = array(
 			'ENABLED' => Configuration::isEnabledExternalLink(),
 		);
+
+		if ($externalLinkData['ENABLED'])
+		{
+			$realFile = $this->file->getRealObject();
+			$unifiedLinkAccessLevel = $this->unifiedLinkAccessService->check($realFile);
+			$onlyRead = $unifiedLinkAccessLevel === UnifiedLinkAccessLevel::Read;
+
+			if ($onlyRead)
+			{
+				/** @see \Bitrix\Disk\Controller\AccessRights::checkManageExternalLink */
+				$objectOptions = $realFile->getObjectOptions();
+
+				$allowManagePublicAccessWithViewingRights =
+					$objectOptions[ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ]
+				;
+
+				if (!$allowManagePublicAccessWithViewingRights)
+				{
+					$externalLinkData['ENABLED'] = false;
+				}
+			}
+		}
+
 		$externalLink = $this->getExternalLink();
 		if($externalLink)
 		{
@@ -149,10 +187,11 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			$externalLinkData['HAS_DEATH_TIME'] = $externalLink->hasDeathTime();
 			$externalLinkData['DEATH_TIME_TIMESTAMP'] = $externalLink->hasDeathTime()? $externalLink->getDeathTime()->getTimestamp() : null;
 			$externalLinkData['DEATH_TIME'] = $externalLink->hasDeathTime()? $externalLink->getDeathTime()->toString() : null;
-			$externalLinkData['LINK'] = Driver::getInstance()->getUrlManager()->getShortUrlExternalLink(array(
-				'hash' => $externalLink->getHash(),
-				'action' => 'default',
-			), true);
+
+			$externalLinkData['LINK'] = Driver::getInstance()->getUrlManager()->getPublicExternalLink(
+				object: $this->file,
+				hash: $externalLink->getHash(),
+			);
 		}
 
 		$createdByLink = \CComponentEngine::makePathFromTemplate($this->arParams['PATH_TO_USER'], array("user_id" => $this->file->getCreatedBy()));
@@ -234,6 +273,25 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			}
 		}
 
+		if ($this->file->supportsUnifiedLink())
+		{
+			$showFileAbsoluteUrl =
+				Driver::getInstance()
+					->getUrlManager()
+					->getUnifiedLink($this->file, [
+						'absolute' => true,
+					])
+			;
+		}
+		else
+		{
+			$showFileAbsoluteUrl =
+				Driver::getInstance()
+					->getUrlManager()
+					->getUrlForShowFile($this->file, array(), true)
+			;
+		}
+
 		$this->arResult = array(
 			'STORAGE' => $this->storage,
 			'USE_IN_ENTITIES' => false,
@@ -269,9 +327,9 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 				'FOLDER_LIST_WEBDAV' => rtrim(end($breadcrumbs), '/') . '/' . $this->file->getName(),
 				'DOWNLOAD_URL' => $urlManager->getUrlForDownloadFile($this->file),
 
-				'SHOW_PREVIEW_URL' => \Bitrix\Disk\Driver::getInstance()->getUrlManager()->getUrlForShowFile($this->file, array('width' => $this->imageSize['width'], 'height' => $this->imageSize['height'],)),
-				'SHOW_FILE_URL' => \Bitrix\Disk\Driver::getInstance()->getUrlManager()->getUrlForShowFile($this->file),
-				'SHOW_FILE_ABSOLUTE_URL' => \Bitrix\Disk\Driver::getInstance()->getUrlManager()->getUrlForShowFile($this->file, array(), true),
+				'SHOW_PREVIEW_URL' => Driver::getInstance()->getUrlManager()->getUrlForShowFile($this->file, array('width' => $this->imageSize['width'], 'height' => $this->imageSize['height'],)),
+				'SHOW_FILE_URL' => Driver::getInstance()->getUrlManager()->getUrlForShowFile($this->file),
+				'SHOW_FILE_ABSOLUTE_URL' => $showFileAbsoluteUrl,
 				'SHOW_PREVIEW_IMAGE_URL' => $previewImage,
 			),
 			'CAN_UPDATE' => $canUpdate,
@@ -530,17 +588,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 	 */
 	protected function getExternalLink()
 	{
-		$extLinks = $this->file->getExternalLinks(array(
-			'filter' => array(
-				'OBJECT_ID' => $this->file->getId(),
-				'CREATED_BY' => $this->getUser()->getId(),
-				'TYPE' => ExternalLinkTable::TYPE_MANUAL,
-				'IS_EXPIRED' => false,
-			),
-			'limit' => 1,
-		));
-
-		return array_pop($extLinks);
+		return $this->externalLinkProvider->getForUse($this->file->getRealObjectId());
 	}
 
 	protected function getBreadcrumbs()
@@ -1004,7 +1052,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 
 	protected function fillUserFieldForFile()
 	{
-		$userFieldsObject = \Bitrix\Disk\Driver::getInstance()->getUserFieldManager()->getFieldsForObject($this->file);
+		$userFieldsObject = Driver::getInstance()->getUserFieldManager()->getFieldsForObject($this->file);
 		if($userFieldsObject)
 		{
 			$this->arResult['SHOW_USER_FIELDS'] = true;

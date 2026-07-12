@@ -1,14 +1,18 @@
 <?php
 
 use Bitrix\Disk;
+use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internals\ObjectOptionsTable;
 use Bitrix\Disk\Type\DocumentGridVariant;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Main;
 use Bitrix\Main\Analytics\AnalyticsEvent;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\UI\UiTour;
 
@@ -23,6 +27,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 	protected $paginationName = 'nav';
 
 	private $userId;
+	private UnifiedLinkAccessService $unifiedLinkAccessService;
 	private $storage;
 	private $nowTime;
 	private $fullFormatWithoutSec;
@@ -34,6 +39,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 	{
 		parent::__construct($component);
 		$this->userId = (int)$this->getUser()->getId();
+		$this->unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
 	}
 
 	public function getUserId(): int
@@ -239,7 +245,11 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 					},  $this->arResult['DOCUMENT_HANDLERS']),
 				]);
 
-				if ($file->supportsUnifiedLink() && !empty($this->analytics))
+				if (
+					$file->supportsUnifiedLink()
+					&& !empty($this->analytics)
+					&& Disk\Analytics\Availability::isAvailableForObject($file)
+				)
 				{
 					$attr->setUnifiedLinkOptions([
 						'additionalQueryParams' => [
@@ -782,10 +792,36 @@ HTML;
 	{
 		$fileType = (int)$file->getTypeFile();
 
-		return match ($fileType) {
+		$isAllowedByFileType = match ($fileType) {
 			TypeFile::FLIPCHART => Disk\Configuration::isEnabledBoardExternalLink(),
 			default => Disk\Configuration::isEnabledManualExternalLink(),
 		};
+
+		if (!$isAllowedByFileType)
+		{
+			return false;
+		}
+
+		$realFile = $file->getRealObject();
+		$unifiedLinkAccessLevel = $this->unifiedLinkAccessService->check($realFile);
+		$onlyRead = $unifiedLinkAccessLevel === UnifiedLinkAccessLevel::Read;
+
+		if ($onlyRead)
+		{
+			/** @see \Bitrix\Disk\Controller\AccessRights::checkManageExternalLink */
+			$objectOptions = $realFile->getObjectOptions();
+
+			$allowManagePublicAccessWithViewingRights =
+				$objectOptions[ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ]
+			;
+
+			if (!$allowManagePublicAccessWithViewingRights)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private function getBoardsGuideId(): string

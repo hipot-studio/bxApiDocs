@@ -10,8 +10,13 @@ use Bitrix\Main\Web\Uri;
 
 class UrlGenerator
 {
-	public const PREFIX = '/disk/file/';
+	public const PREFIX = UnifiedLinkPrefix::Default->value;
 	public const EDIT_SUFFIX = '/edit';
+	public const EXTENSIONS_TO_OPEN_WITHOUT_EDIT_SUFFIX = [
+		'board',
+		'flp',
+		'pdf',
+	];
 	public const QUERY_PARAM_NO_REDIRECT = 'no_redirect';
 	public const QUERY_PARAM_ATTACHED_ID = 'attachedId';
 	public const QUERY_PARAM_VERSION_ID = 'versionId';
@@ -31,14 +36,18 @@ class UrlGenerator
 	{
 		$uniqueCode = (string)$file->getRealObject()?->getUniqueCode();
 
-		$path = self::PREFIX . $uniqueCode;
+		$fileType = FileExtensionMap::getByExtension($file->getExtension());
+		$prefix = UnifiedLinkPrefix::getByFileExtensionMap($fileType)->value;
+		$ext = strtolower($file->getExtension());
 
-		if ($this->editMode)
+		$path = $prefix . $uniqueCode;
+
+		if ($this->editMode && !in_array($ext, self::EXTENSIONS_TO_OPEN_WITHOUT_EDIT_SUFFIX))
 		{
 			$path .= self::EDIT_SUFFIX;
 		}
 
-		$uri = (new Uri($this->hostUrl))
+		$uri = (new Uri($this->absolute ? $this->hostUrl : '/'))
 			->setPath($path)
 			->addParams(array_filter([
 				self::QUERY_PARAM_ATTACHED_ID => $attachedId,
@@ -51,14 +60,14 @@ class UrlGenerator
 			$uri->addParams([self::QUERY_PARAM_NO_REDIRECT => 'Y']);
 		}
 
-		if ($this->absolute)
-		{
-			$uri->toAbsolute();
-		}
-
 		if (!empty($this->additionalQueryParams))
 		{
 			$uri->addParams($this->additionalQueryParams);
+		}
+
+		if ($this->absolute)
+		{
+			$uri->toAbsolute();
 		}
 
 		$this->resetState();

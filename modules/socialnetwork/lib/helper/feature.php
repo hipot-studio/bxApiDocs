@@ -24,7 +24,7 @@ class Feature
 		{
 			return true;
 		}
-		
+
 		if (
 			$featureName === self::PROJECTS_GROUPS
 			&& Loader::includeModule('tasks')
@@ -34,7 +34,7 @@ class Feature
 			return true;
 		}
 
-		if ($groupId)
+		if ($groupId && !\Bitrix\Socialnetwork\V2\Feature::isNewProjectsOn())
 		{
 			$isCollab = (CollabRegistry::getInstance()->get($groupId) !== null);
 			if ($isCollab && CollabFeature::isFeatureEnabled())

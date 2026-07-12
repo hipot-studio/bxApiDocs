@@ -4,24 +4,22 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
-use Bitrix\Tasks\V2\Internal\Integration\Disk\Provider\DiskFileProvider;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
 #[Recipients(creator: true, responsible: true, accomplices: true, auditors: false)]
-class NotifyResultAdded extends AbstractNotify
+class NotifyResultAdded extends AbstractNotifyWithFiles
 {
 	public function __construct(
 		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
 		protected readonly ?Entity\User $triggeredBy = null,
+		private readonly ChatActionLinkService $chatActionLinkService,
 		private readonly string $resultText = '',
 		private readonly int $dateTs = 0,
 		private readonly array $fileIds = [],
-
+		private readonly int $resultId = 0,
 	)
 	{
 		$sender->sendMessage(task: $task, notification: $this);
@@ -30,16 +28,24 @@ class NotifyResultAdded extends AbstractNotify
 	public function getMessageCode(): string
 	{
 		return $this->triggeredBy?->getGender() === Entity\User\Gender::Female
-			? 'TASKS_IM_RESULT_ADDED_MSGVER_1_F'
-			: 'TASKS_IM_RESULT_ADDED_MSGVER_1_M'
+			? 'TASKS_IM_RESULT_ADDED_F_MSGVER_2'
+			: 'TASKS_IM_RESULT_ADDED_M_MSGVER_2'
 		;
 	}
 
 	public function getMessageData(): array
 	{
+		$actionLink = $this->chatActionLinkService->get(
+			task: $this->task,
+			userId: (int)$this->triggeredBy?->id,
+			action: ChatAction::OpenResult,
+			entityId: $this->resultId,
+		);
+
 		return [
 			'#USER#' => $this->formatUser($this->triggeredBy),
 			'#DATE#' => "[TIMESTAMP=$this->dateTs FORMAT=LONG_DATE_FORMAT]",
+			'#OPEN_RESULT_URL#' => $actionLink,
 		];
 	}
 
@@ -48,7 +54,7 @@ class NotifyResultAdded extends AbstractNotify
 		$attach = new \CIMMessageParamAttach();
 
 		$resultText = $this->prepareResultText();
-		if (empty($resultText) && empty($this->fileIds))
+		if (empty($resultText))
 		{
 			return null;
 		}
@@ -56,22 +62,12 @@ class NotifyResultAdded extends AbstractNotify
 		$attach->AddMessage('[b]' . Loc::getMessage('TASKS_IM_NOTIFY_ATTACH_RESULT_TEXT') . '[/b][br]');
 		$attach->AddMessage($resultText);
 
-		if (!empty($this->fileIds) && Loader::includeModule('disk'))
-		{
-			$diskFileProvider = Container::getInstance()->get(DiskFileProvider::class);
-			$files = $diskFileProvider->getObjectsByIds($this->fileIds);
-
-			$fileNames = array_map(static fn($file) => $file['name'], $files->toArray());
-
-			if (!empty($fileNames))
-			{
-				$attach->AddDelimiter(['SIZE' => 400]);
-				$attach->AddMessage('[b]' . Loc::getMessage('TASKS_IM_NOTIFY_ATTACH_FILE') . '[/b][br]');
-				$attach->AddMessage(implode('[br]', $fileNames));
-			}
-		}
-
 		return $attach;
+	}
+
+	public function getTaskAttachIds(): array
+	{
+		return $this->fileIds;
 	}
 
 	private function prepareResultText(): string

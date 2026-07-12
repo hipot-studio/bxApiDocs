@@ -17,4 +17,6 @@ enum BlockType: string
 	case Map = 'map';
 	case Table = 'table';
 	case AiAssistantSearch = 'aiAssistantSearch';
+	case Card = 'card';
+	case Gallery = 'gallery';
 }

@@ -580,7 +580,7 @@ class CRestUtil
 
 		static $cache = [];
 
-		$userId = $USER->GetID();
+		$userId = (isset($USER) && ($USER instanceof CUser) && $USER->IsAuthorized() ? $USER->GetID() : 0);
 		$accessRights = $appInfo['ACCESS'] ?? null;
 		$cacheKey = $appId . '_' . $userId . '_' . md5(serialize($accessRights));
 

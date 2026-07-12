@@ -37,6 +37,7 @@ class ProjectPreloader
 
 				static::$storage[$projectId]['name'] = $project['NAME'];
 				static::$storage[$projectId]['hidden'] = false;
+				static::$storage[$projectId]['type'] = $project['TYPE'] ?? '';
 			}
 		}
 		catch (Exception $e)

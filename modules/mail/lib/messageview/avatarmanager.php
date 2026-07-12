@@ -2,6 +2,7 @@
 namespace Bitrix\Mail\MessageView;
 
 use Bitrix\Main;
+use Bitrix\Mail\Helper\Message;
 use Bitrix\Mail\Internals\MailContactTable;
 
 class AvatarManager
@@ -15,13 +16,13 @@ class AvatarManager
 
 	public static function getAvatarKeyByString($string): ?string
 	{
-		$parts = explode(",", $string);
-		$firstContact = trim($parts[0]);
-
-		$address = new Main\Mail\Address($firstContact);
-		if ($address->validate())
+		foreach (Message::parseAddressList($string) as $candidate)
 		{
-			return $address->getEmail();
+			$address = new Main\Mail\Address($candidate);
+			if ($address->validate())
+			{
+				return $address->getEmail();
+			}
 		}
 
 		return null;
@@ -132,7 +133,7 @@ class AvatarManager
 
 		if ($parsedListOfEmails)
 		{
-			foreach (\Bitrix\Mail\Helper\Message::parseAddressList($parsedListOfEmails) as $mailCopy)
+			foreach (Message::parseAddressList($parsedListOfEmails) as $mailCopy)
 			{
 				$avatarKey = static::getAvatarKeyByString($mailCopy);
 				if ($avatarKey)

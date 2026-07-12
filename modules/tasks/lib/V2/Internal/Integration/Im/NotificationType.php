@@ -25,18 +25,10 @@ enum NotificationType: string
 	case TaskTimerStarted = 'task_timer_started';
 	case TaskTimerStopped = 'task_timer_stopped';
 	case TaskTimersStopped = 'task_timers_stopped';
-	case ChecklistItemsAdded = 'checklist_items_added';
-	case ChecklistItemsDeleted = 'checklist_items_deleted';
-	case ChecklistItemsModified = 'checklist_items_modified';
-	case ChecklistItemsCompleted = 'checklist_items_completed';
-	case ChecklistItemsUnchecked = 'checklist_items_unchecked';
-	case ChecklistSingleItemCompleted = 'checklist_single_item_completed';
-	case ChecklistSingleItemUnchecked = 'checklist_single_item_unchecked';
 	case ChecklistAuditorAssigned = 'checklist_auditor_assigned';
 	case ChecklistAccompliceAssigned = 'checklist_accomplice_assigned';
 	case ChecklistFilesAdded = 'checklist_files_added';
 	case ChecklistCompleted = 'checklist_completed';
-	case ChecklistGroupedOperations = 'checklist_grouped_operations';
 	case ChecklistAdded = 'checklist_added';
 	case ChecklistDeleted = 'checklist_deleted';
 	case TaskStatusPinged = 'task_status_pinged';
@@ -44,7 +36,6 @@ enum NotificationType: string
 	case ResultModified = 'result_modified';
 	case ResultDeleted = 'result_deleted';
 	case ResultFromMessage = 'result_from_message';
-	case TaskDescriptionChanged = 'task_description_changed';
 	case TaskPriorityChanged = 'task_priority_changed';
 	case TaskCrmItemsChanged = 'task_crm_items_changed';
 	case TaskAttachmentAdded = 'task_attachment_added';

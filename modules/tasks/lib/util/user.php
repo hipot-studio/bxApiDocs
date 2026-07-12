@@ -15,6 +15,7 @@ use Bitrix\Tasks\Integration\IMConnector;
 use Bitrix\Tasks\Integration\Intranet;
 use Bitrix\Tasks\Integration\Mail;
 use Bitrix\Tasks\Integration\Replica;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 final class User
 {
@@ -649,34 +650,17 @@ final class User
 
 	public static function getAbsences(Main\Type\DateTime $from, Main\Type\DateTime $to, int ...$userIds): array
 	{
-		if (!Loader::includeModule('intranet'))
-		{
-			return [];
-		}
-
-		$usersAbsence = \CIntranetUtils::GetAbsenceData([
-			'USERS' => $userIds,
-			'DATE_START' => $from,
-			'DATE_FINISH' => $to,
-			'PER_USER' => true,
-		]);
+		$absenceService = Container::getInstance()->getAbsenceService();
+		$usersAbsence = $absenceService->getAbsenceDataPerUser($userIds, $from, $to);
 
 		$result = [];
-		foreach ($usersAbsence as $userId => $absenceData)
+		foreach ($usersAbsence as $userId => $absenceCollection)
 		{
-			foreach ($absenceData as $event)
+			foreach ($absenceCollection as $absence)
 			{
-				$from = Main\Type\DateTime::tryParse($event['DATE_FROM'] ?? '');
-				$to = Main\Type\DateTime::tryParse($event['DATE_TO'] ?? '');
-
-				if (null === $from || null === $to)
-				{
-					continue;
-				}
-
 				$result[$userId][] = [
-					'from' => $from,
-					'to' => $to,
+					'from' => $absence->dateTimeFrom,
+					'to' => $absence->dateTimeTo,
 				];
 			}
 		}
@@ -704,52 +688,49 @@ final class User
 		$dateNow = ConvertTimeStamp(false, 'SHORT');
 		$dateTimeNow = MakeTimeStamp(ConvertTimeStamp(false, 'FULL'));
 
-		$absenceData = \CIntranetUtils::GetAbsenceData([
-			'USERS' => $realUserIds,
-			'DATE_START' => $dateNow,
-			'DATE_FINISH' => $dateNow,
-			'PER_USER' => false,
-		]);
+		$absenceService = Container::getInstance()->getAbsenceService();
+		$dateTimeFrom = Main\Type\DateTime::createFromTimestamp(MakeTimeStamp($dateNow));
+		$dateTimeTo = Main\Type\DateTime::createFromTimestamp(MakeTimeStamp($dateNow));
 
-		if (empty($absenceData))
+		$absenceData = $absenceService->getAbsenceData($realUserIds, $dateTimeFrom, $dateTimeTo);
+
+		if ($absenceData->isEmpty())
 		{
 			return [];
 		}
 
 		$list = [];
-		$userNames = static::getUserName(array_column($absenceData, 'USER_ID'));
-
-		foreach ($absenceData as $item)
+		$userIds = [];
+		foreach ($absenceData as $dto)
 		{
-			if (array_key_exists('DATE_ACTIVE_FROM', $item) && array_key_exists('DATE_ACTIVE_TO', $item))
-			{
-				$absenceFrom = MakeTimeStamp($item['DATE_ACTIVE_FROM']);
-				$absenceTo = MakeTimeStamp($item['DATE_ACTIVE_TO']);
-			}
-			else
-			{
-				$absenceFrom = MakeTimeStamp($item['DATE_FROM']);
-				$absenceTo = MakeTimeStamp($item['DATE_TO']);
-			}
+			$userIds[$dto->userId] = true;
+		}
 
-			$absenceEnd = (\CIntranetUtils::IsDateTime($absenceTo)? $absenceTo : $absenceTo + 86399);
+		$userNames = static::getUserName(array_keys($userIds));
+
+		foreach ($absenceData as $dto)
+		{
+			$absenceFrom = $dto->dateTimeFrom->getTimestamp();
+			$absenceTo = $dto->dateTimeTo->getTimestamp();
+
+			$absenceEnd = (\CIntranetUtils::IsDateTime($absenceTo) ? $absenceTo : $absenceTo + 86399);
 
 			if ($absenceEnd > $dateTimeNow)
 			{
-				$absenceFrom = UI::formatDateTime(
+				$absenceFromFormatted = UI::formatDateTime(
 					$absenceFrom,
-					\CSite::GetDateFormat((\CIntranetUtils::IsDateTime($absenceFrom)? 'FULL' : 'SHORT'))
+					\CSite::GetDateFormat((\CIntranetUtils::IsDateTime($absenceFrom) ? 'FULL' : 'SHORT'))
 				);
-				$absenceTo = UI::formatDateTime(
+				$absenceToFormatted = UI::formatDateTime(
 					$absenceTo,
-					\CSite::GetDateFormat((\CIntranetUtils::IsDateTime($absenceTo)? 'FULL' : 'SHORT'))
+					\CSite::GetDateFormat((\CIntranetUtils::IsDateTime($absenceTo) ? 'FULL' : 'SHORT'))
 				);
 
-				$list[]= GetMessageJS('TASKS_WARNING_RESPONSIBLE_IS_ABSENCE', [
-					'#FORMATTED_USER_NAME#' => htmlspecialcharsbx($userNames[$item['USER_ID']]),
-					'#DATE_FROM#' => $absenceFrom,
-					'#DATE_TO#' => $absenceTo,
-					'#ABSCENCE_REASON#' => htmlspecialcharsbx($item['NAME']),
+				$list[] = GetMessageJS('TASKS_WARNING_RESPONSIBLE_IS_ABSENCE', [
+					'#FORMATTED_USER_NAME#' => htmlspecialcharsbx($userNames[$dto->userId]),
+					'#DATE_FROM#' => $absenceFromFormatted,
+					'#DATE_TO#' => $absenceToFormatted,
+					'#ABSCENCE_REASON#' => htmlspecialcharsbx($dto->name),
 				]);
 			}
 		}

@@ -14,6 +14,7 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\ChatService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\SendChatMessageDto;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\DtoValidationException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder\ChatSchemaBuilder;
+use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 
 class SendChatMessageTool extends BaseTool
 {
@@ -21,12 +22,13 @@ class SendChatMessageTool extends BaseTool
 
 	public function __construct(
 		private readonly ChatService $chatService,
+		ToolService $toolService,
 		ChatSchemaBuilder $schemaBuilder,
 		ValidationService $validationService,
 		TracedLogger $tracedLogger,
 	)
 	{
-		parent::__construct($schemaBuilder, $validationService, $tracedLogger);
+		parent::__construct($toolService, $schemaBuilder, $validationService, $tracedLogger);
 	}
 
 	public function getDescription(): string

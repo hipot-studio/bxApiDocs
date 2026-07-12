@@ -122,7 +122,6 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 					'USER_ID' => (string)$documentSession->getUserId(),
 					'USERNAME' => $documentSession->getUser()->getFormattedName(),
 					'AVATAR_URL' => $avatarUri,
-					'CAN_EDIT_BOARD' => true,
 					'SHOW_TEMPLATES_MODAL' => $showTemplatesModal,
 					'EXTERNAL_LINK_MODE' => false,
 					'UNIFIED_LINK_ACCESS_ONLY' => !$documentSession->canUserRead(CurrentUser::get()),

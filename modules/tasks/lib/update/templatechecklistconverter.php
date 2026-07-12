@@ -2,7 +2,7 @@
 namespace Bitrix\Tasks\Update;
 
 use Bitrix\Main\Application;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity\DataManager;
 use Bitrix\Tasks\Internals\Task\Template\CheckListTable;
 

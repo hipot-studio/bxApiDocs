@@ -32,8 +32,11 @@ class CustomPacks implements StickerPacks
 	protected const MAX_STICKERS = 50;
 	protected const MAX_PACKS = 50;
 
+	protected const STICKER_RESIZE_WIDTH = 512;
+	protected const STICKER_RESIZE_HEIGHT = 512;
+
 	protected const CACHE_ID = 'sticker_pack_';
-	protected const CACHE_DIR = '/bx/imc/sticker/pack/v1/';
+	protected const CACHE_DIR = '/bx/imc/sticker/pack/v2/';
 	protected const CACHE_TTL = 18144000;
 
 	protected static self $instance;
@@ -83,9 +86,9 @@ class CustomPacks implements StickerPacks
 
 	public function getPackById(int $packId): ?PackItem
 	{
-		if (isset($this->packs[$packId]))
+		if (isset(self::$packs[$packId]))
 		{
-			return $this->packs[$packId];
+			return self::$packs[$packId];
 		}
 
 		$cache = $this->getCache($packId);
@@ -423,7 +426,8 @@ class CustomPacks implements StickerPacks
 
 		$stickerCollection = new StickerCollection();
 
-		foreach ($packData['STICKERS'] as $stickerData)
+		$stickersData = $this->fillFileData($packData['STICKERS'] ?? []);
+		foreach ($stickersData as $stickerData)
 		{
 			$sticker = new StickerItem(
 				(int)$stickerData['ID'],
@@ -468,7 +472,6 @@ class CustomPacks implements StickerPacks
 			->fetchAll()
 		;
 
-		$stickers = $this->fillFileData($stickers);
 		$pack['STICKERS'] = $stickers;
 
 		return $pack;
@@ -487,7 +490,7 @@ class CustomPacks implements StickerPacks
 		{
 			$file = \CFile::ResizeImageGet(
 				$fileId,
-				['width' => 512, 'height' => 512],
+				['width' => self::STICKER_RESIZE_WIDTH, 'height' => self::STICKER_RESIZE_HEIGHT],
 				BX_RESIZE_IMAGE_PROPORTIONAL,
 				true,
 				false,

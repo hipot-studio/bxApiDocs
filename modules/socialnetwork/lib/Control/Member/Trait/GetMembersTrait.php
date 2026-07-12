@@ -7,7 +7,7 @@ use Bitrix\Socialnetwork\UserToGroupTable;
 
 trait GetMembersTrait
 {
-	protected function getMemberIds(int $groupId, ?string $role = null): array
+	protected function getMemberIds(int $groupId, ?string $role = null, ?string $excludeRole = null): array
 	{
 		$query = UserToGroupTable::query()
 			->setSelect(['USER_ID'])
@@ -17,6 +17,11 @@ trait GetMembersTrait
 		if ($role !== null)
 		{
 			$query->setFilter(['ROLE' => $role]);
+		}
+
+		if ($excludeRole !== null)
+		{
+			$query->where('ROLE', '!=', $excludeRole);
 		}
 
 		$rows = $query->exec()->fetchAll();

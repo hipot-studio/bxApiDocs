@@ -16,6 +16,7 @@ use Bitrix\Intranet\Settings\Controls\Selector;
 use Bitrix\Intranet\Settings\Controls\Switcher;
 use Bitrix\Intranet\Settings\Controls\Text;
 use Bitrix\Intranet\Settings\Search\SearchEngine;
+use Bitrix\Intranet\User;
 use Bitrix\Bitrix24\Portal;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
@@ -559,6 +560,11 @@ class ConfigurationSettings extends AbstractSettings
 		if (is_string($value) && preg_match('/^U(\d+)$/', $value, $matches))
 		{
 			$adminId = (int)$matches[1];
+		}
+
+		if ($adminId > 0 && !(new User($adminId))->isAdmin())
+		{
+			return;
 		}
 
 		MailConnectionRequestService::setResponsibleAdminId($adminId);

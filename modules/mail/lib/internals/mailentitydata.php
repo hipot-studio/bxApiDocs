@@ -7,6 +7,22 @@ use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Fields;
 use Bitrix\Main\Type\DateTime;
 
+/**
+ * Class MailEntityDataTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_MailEntityData_Query query()
+ * @method static EO_MailEntityData_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_MailEntityData_Result getById($id)
+ * @method static EO_MailEntityData_Result getList(array $parameters = [])
+ * @method static EO_MailEntityData_Entity getEntity()
+ * @method static \Bitrix\Mail\Internals\EO_MailEntityData createObject($setDefaultValues = true)
+ * @method static \Bitrix\Mail\Internals\EO_MailEntityData_Collection createCollection()
+ * @method static \Bitrix\Mail\Internals\EO_MailEntityData wakeUpObject($row)
+ * @method static \Bitrix\Mail\Internals\EO_MailEntityData_Collection wakeUpCollection($rows)
+ */
 class MailEntityDataTable extends Entity\DataManager
 {
 	public static function getTableName()

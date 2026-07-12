@@ -5,12 +5,18 @@ namespace Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ExternalChat\Config;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterCreateEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterLoadEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterMuteEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeCreateEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterUsersDeleteEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterUsersHideEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeUsersAddEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeUsersDeleteEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeUsersHideEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterDeleteMessagesEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\FilterUsersByAccessEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\GetUsersForRecentEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\ResolveRecentFixedChatIdsEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterReadAllMessagesEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterReadMessagesEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterSendMessageEvent;
@@ -23,6 +29,7 @@ use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Message\Send\SendingService;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
+use Bitrix\Im\V2\Relation\DeleteUserConfig;
 use Bitrix\Im\V2\Relation\ExternalChatRelations;
 use Bitrix\Im\V2\Relation\RelationChangeSet;
 use Bitrix\Im\V2\Result;
@@ -34,6 +41,8 @@ use Bitrix\Main\DI\ServiceLocator;
 class ExternalChat extends GroupChat
 {
 	protected Config $config;
+
+	private static array $loadedChatIds = [];
 
 	public function add(array $params, ?Context $context = null): AddResult
 	{
@@ -74,8 +83,13 @@ class ExternalChat extends GroupChat
 		}
 
 		$result = new Result();
-		$usersWithAccess = $event->getUsersWithAccess();
+		$error = $event->getError();
+		if ($error !== null)
+		{
+			return $result->addError($error);
+		}
 
+		$usersWithAccess = $event->getUsersWithAccess();
 		if (!in_array($userId, $usersWithAccess, true))
 		{
 			return $result->addError(new ChatError(ChatError::ACCESS_DENIED));
@@ -94,6 +108,17 @@ class ExternalChat extends GroupChat
 		}
 
 		return $event->getUsersForRecent();
+	}
+
+	/**
+	 * @return int[]
+	 */
+	public function getRecentFixedChatIds(?string $recentSection, int $userId): array
+	{
+		$event = new ResolveRecentFixedChatIdsEvent($this, $recentSection, $userId);
+		$event->send();
+
+		return $event->getRecentFixedChatIds();
 	}
 
 	public function getRelationFacade(): ?ExternalChatRelations
@@ -131,6 +156,61 @@ class ExternalChat extends GroupChat
 		(new Chat\ExternalChat\Event\AfterUsersAddEvent($this, $changes))->send();
 
 		return parent::processUpdateStateOnRelationsChanged($changes);
+	}
+
+	public function deleteUser(int $userId, DeleteUserConfig $config = new DeleteUserConfig()): Result
+	{
+		$event = new BeforeUsersDeleteEvent($this, [$userId], $config);
+		$event->send();
+
+		if ($event->isCancelled())
+		{
+			return new Result();
+		}
+
+		$allowedUserIds = $event->getNewUserIds() ?? [$userId];
+		$config = $event->getNewDeleteUserConfig() ?? $config;
+
+		if (!in_array($userId, $allowedUserIds, true))
+		{
+			return new Result();
+		}
+
+		$result = parent::deleteUser($userId, $config);
+
+		if ($result->isSuccess())
+		{
+			(new AfterUsersDeleteEvent($this, [$userId], $config))->send();
+		}
+
+		return $result;
+	}
+
+	public function hideUser(int $userId): Result
+	{
+		$event = new BeforeUsersHideEvent($this, [$userId]);
+		$event->send();
+
+		if ($event->isCancelled())
+		{
+			return new Result();
+		}
+
+		$allowedUserIds = $event->getNewUserIds() ?? [$userId];
+
+		if (!in_array($userId, $allowedUserIds, true))
+		{
+			return new Result();
+		}
+
+		$result = parent::hideUser($userId);
+
+		if ($result->isSuccess())
+		{
+			(new AfterUsersHideEvent($this, [$userId]))->send();
+		}
+
+		return $result;
 	}
 
 	public function getConfig(): Config
@@ -194,6 +274,18 @@ class ExternalChat extends GroupChat
 		(new AfterReadMessagesEvent($this, $messages, $readerId))->send();
 
 		return parent::onAfterMessagesRead($messages, $readerId);
+	}
+
+	public function onAfterLoad(int $userId): void
+	{
+		$chatId = $this->getChatId();
+		if ($chatId <= 0 || isset(self::$loadedChatIds[$chatId]))
+		{
+			return;
+		}
+		self::$loadedChatIds[$chatId] = true;
+
+		(new AfterLoadEvent($this, $userId))->send();
 	}
 
 	public function onAfterAllMessagesRead(int $readerId): Result

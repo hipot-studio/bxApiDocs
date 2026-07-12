@@ -1,9 +1,10 @@
-<?
+<?php
 namespace Bitrix\Socialnetwork\Integration\Main\UISelector;
 
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Socialnetwork\WorkgroupTable;
 
 class SonetGroups extends \Bitrix\Main\UI\Selector\EntityBase
@@ -30,6 +31,8 @@ class SonetGroups extends \Bitrix\Main\UI\Selector\EntityBase
 
 	public function getData($params = array())
 	{
+		$isNewProjectsOn = Feature::isNewProjectsOn();
+
 		$result = array(
 			'ITEMS' => array(),
 			'ITEMS_LAST' => array(),
@@ -37,7 +40,7 @@ class SonetGroups extends \Bitrix\Main\UI\Selector\EntityBase
 			'ADDITIONAL_INFO' => array(
 				'GROUPS_LIST' => array(
 					'sonetgroups' => array(
-						'TITLE' => Loc::getMessage('MAIN_UI_SELECTOR_TITLE_SONETGROUPS'),
+						'TITLE' => Loc::getMessage('MAIN_UI_SELECTOR_TITLE_SONETGROUPS' . ($isNewProjectsOn ? '_V2' : '')),
 						'TYPE_LIST' => array(Handler::ENTITY_TYPE_SONETGROUPS),
 						'DESC_LESS_MODE' => 'Y',
 						'SORT' => 20
@@ -275,10 +278,12 @@ class SonetGroups extends \Bitrix\Main\UI\Selector\EntityBase
 	{
 		$options = (!empty($params['options']) ? $params['options'] : array());
 
+		$isNewProjectsOn = Feature::isNewProjectsOn();
+
 		return array(
 			array(
 				'id' => 'sonetgroups',
-				'name' => Loc::getMessage('MAIN_UI_SELECTOR_TAB_SONETGROUPS'),
+				'name' => Loc::getMessage('MAIN_UI_SELECTOR_TAB_SONETGROUPS' . ($isNewProjectsOn ? '_V2' : '')),
 				'sort' => 30
 			)
 		);

@@ -7,7 +7,6 @@ namespace Bitrix\Mail\Helper\Dto\MailboxConnect;
 use Bitrix\Mail\Helper\Enum\CrmEntityType;
 use Bitrix\Mail\Helper\Enum\CrmFormField;
 use Bitrix\Mail\Helper\Mailbox\MailboxConnector;
-use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Mail\Address;
 use Bitrix\Main\Web\Json;
@@ -72,13 +71,10 @@ final class MailboxConnectDTO
 	public static function createFromFormFields(array $fields): self
 	{
 		$newOwnerId = null;
-		if (MailboxAccess::hasCurrentUserAccessToChangeMailboxOwner())
+		$parsedOwnerId = self::parseUserCode($fields['owner_id'] ?? '');
+		if ($parsedOwnerId > 0)
 		{
-			$parsedOwnerId = self::parseUserCode($fields['owner_id'] ?? '');
-			if ($parsedOwnerId > 0)
-			{
-				$newOwnerId = $parsedOwnerId;
-			}
+			$newOwnerId = $parsedOwnerId;
 		}
 
 		$password = null;
@@ -213,6 +209,8 @@ final class MailboxConnectDTO
 			userIdToConnect: $request->get('userIdToConnect') !== null ? (int)$request->get('userIdToConnect') : null,
 			messageMaxAge: $request->get('messageMaxAge') !== null ? (int)$request->get('messageMaxAge') : null,
 			serviceConfig: $request->get('serviceConfig'),
+			uploadOutgoing: self::toBoolFlag($request->get('uploadOutgoing')),
+			link: $request->get('link') !== null ? (string)$request->get('link') : null,
 			shareAccess: $request->get('shareAccess'),
 			useSenderName: self::toBoolFlag($request->get('useSenderName')),
 		);
@@ -245,6 +243,8 @@ final class MailboxConnectDTO
 			userIdToConnect: isset($mailbox['userIdToConnect']) ? (int)$mailbox['userIdToConnect'] : null,
 			messageMaxAge: isset($mailbox['messageMaxAge']) ? (int)$mailbox['messageMaxAge'] : null,
 			serviceConfig: $mailbox['serviceConfig'] ?? null,
+			uploadOutgoing: self::toBoolFlag($mailbox['uploadOutgoing'] ?? null),
+			link: isset($mailbox['link']) ? (string)$mailbox['link'] : null,
 			shareAccess: $mailbox['shareAccess'] ?? null,
 			service: $mailbox['service'] ?? null,
 			site: $mailbox['site'] ?? null,
@@ -264,6 +264,11 @@ final class MailboxConnectDTO
 		if ($value === 'Y' || $value === 'N')
 		{
 			return $value === 'Y';
+		}
+
+		if ($value === 'true' || $value === 'false')
+		{
+			return $value === 'true';
 		}
 
 		return (bool)$value;

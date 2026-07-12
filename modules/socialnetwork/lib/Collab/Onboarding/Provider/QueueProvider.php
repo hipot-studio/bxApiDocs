@@ -43,6 +43,21 @@ class QueueProvider implements QueueProviderInterface
 		return $jobCollection;
 	}
 
+	public function getAllIncludingProcessing(int $limit = 500): JobCollection
+	{
+		try
+		{
+			$jobCollection = $this->repository->getAllIncludingProcessing($limit);
+		}
+		catch (Throwable $t)
+		{
+			$jobCollection = new JobCollection();
+			$this->logUnknownThrowable($t);
+		}
+
+		return $jobCollection;
+	}
+
 	public function getByCollabId(int $collabId, DateTime $from = new DateTime()): JobCollection
 	{
 		if ($collabId <= 0)

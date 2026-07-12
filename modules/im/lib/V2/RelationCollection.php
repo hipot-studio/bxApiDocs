@@ -132,6 +132,26 @@ class RelationCollection extends Collection implements RestConvertible, PopupDat
 		return $this->relationsByUserId[$chatId][$userId] ?? null;
 	}
 
+	/**
+	 * @param int[] $userIds
+	 */
+	public function filterByUserIds(array $userIds): self
+	{
+		$userIds = array_combine($userIds, $userIds);
+
+		return $this->filter(static fn (Relation $relation) => isset($userIds[(int)$relation->getUserId()]));
+	}
+
+	/**
+	 * @param int[] $userIds
+	 */
+	public function filterExcludingUserIds(array $userIds): self
+	{
+		$userIds = array_combine($userIds, $userIds);
+
+		return $this->filter(static fn (Relation $relation) => !isset($userIds[(int)$relation->getUserId()]));
+	}
+
 	public function filterActive(): self
 	{
 		if (isset($this->activeOnly))

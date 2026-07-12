@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\Control\Operation;
 
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
-use Bitrix\Main\ObjectPropertyException;
-use Bitrix\Main\SystemException;
 use Bitrix\Socialnetwork\Control\Command\UpdateCommand;
-use Bitrix\Socialnetwork\Control\Exception\GroupNotUpdatedException;
 use Bitrix\Socialnetwork\Control\GroupResult;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use CSocNetGroup;
@@ -28,12 +24,12 @@ class UpdateOperation extends AbstractOperation
 	{
 		$result = new GroupResult();
 
-		$fields = $this->getMapper()->toArray($this->command);
+		$fields = $this->getFields();
 		if ($fields !== [])
 		{
-			$updateResult = CSocNetGroup::Update($this->command->getId(), $fields);
+			$updateResult = $this->updateGroup($this->command->getId(), $fields, $this->shouldRunSync());
 
-			if ($updateResult === false)
+			if (!$updateResult)
 			{
 				$result->addApplicationError();
 
@@ -54,5 +50,24 @@ class UpdateOperation extends AbstractOperation
 		$result->setGroup($this->entity);
 
 		return $result;
+	}
+
+	protected function getFields(): array
+	{
+		return $this->getMapper()->toArray($this->command);
+	}
+
+	protected function shouldRunSync(): bool
+	{
+		return true;
+	}
+
+	protected function updateGroup(int $id, array $fields, bool $sync): bool
+	{
+		return CSocNetGroup::Update(
+			ID: $id,
+			arFields: $fields,
+			bSync: $sync,
+		) !== false;
 	}
 }

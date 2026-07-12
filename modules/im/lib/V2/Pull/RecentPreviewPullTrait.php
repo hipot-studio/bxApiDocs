@@ -9,31 +9,48 @@ use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\MessagePopupItem;
 use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Recent\RecentProvider;
 use Bitrix\Im\V2\Rest\RestAdapter;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Type\DateTime;
 
 trait RecentPreviewPullTrait
 {
 	protected function getBaseRecentPreviewParams(
 		Chat $chat,
-		?Message $lastMessage = null,
-		?DateTime $lastActivityDate = null,
+		?Message $lastMessage,
+		?DateTime $lastActivityDate,
 	): array
 	{
-		$message = $this->resolveRecentPreviewMessage($chat, $lastMessage);
-		$payload = $this->buildRecentPreviewRestPayload($chat, $message);
+		$payload = $this->buildRecentPreviewRestPayload($chat, $this->resolveRecentPreviewMessage($lastMessage));
 
 		return array_merge(
 			$payload,
 			[
 				'chatId' => $chat->getId(),
 				'chat' => $chat->toPullFormat(),
-				'lastActivityDate' => $lastActivityDate ?? $message?->getDateCreate(),
+				'lastActivityDate' => $lastActivityDate,
 				'counterType' => $chat->getCounterType(),
 				'recentConfig' => $chat->getRecentConfig()->toPullFormat(),
 				'parentChatId' => $this->chat->getParentChatId(),
 			],
 		);
+	}
+
+	/**
+	 * Resolves the date for a per-user pull event (ChatPin, ChatMute, ...): user's existing recent
+	 * item date if there is one, otherwise the chat's last message creation date as a fallback
+	 * for the case when the user hasn't loaded the chat yet and the event itself adds it to recent.
+	 */
+	protected function resolveUserDateLastActivity(Chat $chat, int $userId): ?DateTime
+	{
+		$chatId = $chat->getId();
+		$item = $chatId !== null
+			? ServiceLocator::getInstance()->get(RecentProvider::class)->getItem($userId, $chatId)
+			: null
+		;
+
+		return $item?->getDateLastActivity() ?? $chat->getLastMessage()?->getDateCreate();
 	}
 
 	protected function getRecentPreviewUserDiffParams(Chat $chat, int $userId): array
@@ -48,14 +65,9 @@ trait RecentPreviewPullTrait
 		];
 	}
 
-	private function resolveRecentPreviewMessage(Chat $chat, ?Message $message): ?Message
+	private function resolveRecentPreviewMessage(?Message $message): ?Message
 	{
-		if (($message?->getId() ?? 0) > 0)
-		{
-			return $message;
-		}
-
-		return $chat->getLastMessage();
+		return (($message?->getId() ?? 0) > 0) ? $message : null;
 	}
 
 	private function buildRecentPreviewRestPayload(Chat $chat, ?Message $message): array

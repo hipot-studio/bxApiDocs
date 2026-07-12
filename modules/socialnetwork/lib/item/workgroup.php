@@ -136,6 +136,11 @@ class Workgroup implements Main\Type\Contract\Arrayable, Main\Type\Contract\Json
 		return ($this->fields['VISIBLE'] ?? null) === 'Y';
 	}
 
+	public function isOpened(): bool
+	{
+		return ($this->fields['OPENED'] ?? null) === 'Y';
+	}
+
 	public function getType(): ?Type
 	{
 		$type = $this->fields['TYPE'] ?? null;

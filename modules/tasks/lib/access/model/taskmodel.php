@@ -24,6 +24,7 @@ class TaskModel implements AccessibleTask
 
 	private $id = 0;
 	private $members;
+	private array $membersDepartments = [];
 	private $groupId;
 	private $status;
 	private $group;
@@ -563,14 +564,24 @@ class TaskModel implements AccessibleTask
 		return in_array($userId, $task['IN_FAVORITES']);
 	}
 
-	public function isInDepartment(int $userId, bool $recursive = false, array $roles = []): bool
+	/**
+	 * @param string[] $membersRoles RoleDictionary::ROLE_* constants
+	 *
+	 * @see Method TemplateModel::isInMembersDepartments() has smilar logic
+	 */
+	public function isInMembersDepartments(int $userId, array $membersRoles = []): bool
 	{
-		$userDepartments = \CIntranetUtils::GetUserDepartments($userId);
-		if (!is_array($userDepartments))
+		$userDepartments = Container::getInstance()->getUserDepartmentsInMemoryFacade()->getByUserId($userId);
+		if (empty($userDepartments))
 		{
 			return false;
 		}
-		return !empty(array_intersect($userDepartments, $this->getDepartments($roles)));
+
+		$taskMembersDepartments = $this->getMembersDepartments($membersRoles);
+
+		$matchedDepartments = array_intersect($userDepartments, $taskMembersDepartments);
+
+		return !empty($matchedDepartments);
 	}
 
 	private function getTask(bool $withRelations = false): ?array
@@ -579,28 +590,71 @@ class TaskModel implements AccessibleTask
 		{
 			return null;
 		}
+
 		return TaskRegistry::getInstance()->get($this->id, $withRelations);
 	}
 
-	private function getDepartments(array $roles = []): array
+	/**
+	 * @param string[] $membersRoles
+	 * @return int[]
+	 *
+	 * @see Method TemplateModel::getMembersDepartments() has smilar logic
+	 */
+	private function getMembersDepartments(array $membersRoles): array
 	{
-		$task = $this->getTask(true);
-		if (!$task)
+		$cacheKey = $this->getMembersDepartmentsCacheKey($membersRoles);
+
+		if (!isset($this->membersDepartments[$cacheKey]))
 		{
-			return [];
+			$this->loadMembersDepartments($membersRoles);
 		}
 
-		$res = [];
-		foreach ($task['DEPARTMENTS'] as $role => $deps)
+		return $this->membersDepartments[$cacheKey];
+	}
+
+	/**
+	 * @see Method TemplateModel::getMembersDepartmentsCacheKey() has smilar logic
+	 */
+	private function getMembersDepartmentsCacheKey(array $membersRoles): string
+	{
+		return $this->getId() . '_' . implode('_', $membersRoles);
+	}
+
+	/**
+	 * @param string[] $membersRoles
+	 *
+	 * @see Method TemplateModel::loadMembersDepartments() has smilar logic
+	 */
+	private function loadMembersDepartments(array $membersRoles = []): void
+	{
+		$members = $this->getMembers();
+
+		$membersRolesMap = array_flip($membersRoles);
+
+		$userIds = [];
+		foreach ($members as $role => $ids)
 		{
-			if (!in_array($role, $roles))
+			if (empty($membersRoles) || isset($membersRolesMap[$role]))
 			{
-				continue;
+				$userIds = array_merge($userIds, $ids);
 			}
-			$res = array_merge($res, $deps);
 		}
 
-		return array_unique($res);
+		$cacheKey = $this->getMembersDepartmentsCacheKey($membersRoles);
+
+		if (empty($userIds))
+		{
+			$this->membersDepartments[$cacheKey] = [];
+
+			return;
+		}
+
+		$userIds = array_map('intval', $userIds);
+
+		$this->membersDepartments[$cacheKey] = Container::getInstance()
+			->getUserDepartmentsInMemoryFacade()
+			->getByUsersIds($userIds)
+		;
 	}
 
 	public function getDeadlineChangeContext(): ?DeadlinePolicyChangeContext

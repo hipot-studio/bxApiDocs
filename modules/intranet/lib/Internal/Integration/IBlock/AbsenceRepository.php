@@ -60,8 +60,8 @@ class AbsenceRepository
 				'PROPERTY_USER' => $userId,
 				[
 					'LOGIC' => 'AND',
-					'>=ACTIVE_FROM' => $dateFrom->toString(),
-					'<=ACTIVE_TO' => $dateTo->toString(),
+					['<=DATE_ACTIVE_FROM' => $dateTo->toString()],
+					['>=DATE_ACTIVE_TO' => $dateFrom->toString()],
 				]
 			],
 			false,

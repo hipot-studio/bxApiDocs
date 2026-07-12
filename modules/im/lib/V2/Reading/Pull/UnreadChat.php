@@ -29,7 +29,7 @@ class UnreadChat extends BaseChatEvent
 	protected function getBasePullParamsInternal(): array
 	{
 		return array_merge(
-			$this->getBaseRecentPreviewParams($this->chat, lastActivityDate: $this->recentItem->getDateLastActivity()),
+			$this->getBaseRecentPreviewParams($this->chat, $this->chat->getLastMessage(), $this->recentItem->getDateLastActivity()),
 			[
 				'parentChatId' => $this->chat->getParentChatId(),
 				'active' => $this->recentItem->isUnread(),

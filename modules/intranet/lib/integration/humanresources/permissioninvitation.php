@@ -50,6 +50,19 @@ class PermissionInvitation
 		return $this->structureAccessService->canDoActionWithAnyNode();
 	}
 
+	public function canCreateDepartment(): bool
+	{
+		$accessService = new StructureAccessService();
+		$accessService->setAction(StructureAction::CreateAction);
+
+		if ((int)$this->userId > 0)
+		{
+			$accessService->setUserId($this->userId);
+		}
+
+		return $accessService->canDoActionWithAnyNode();
+	}
+
 	public function canInviteToDepartment(Department $department): bool
 	{
 		return $this->structureAccessService->canDoActionWithTheNode($department->getId());

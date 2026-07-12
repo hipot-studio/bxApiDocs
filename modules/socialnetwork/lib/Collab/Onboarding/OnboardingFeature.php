@@ -7,6 +7,7 @@ namespace Bitrix\Socialnetwork\Collab\Onboarding;
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Config\Option;
 use Bitrix\Socialnetwork\Collab\CollabFeature;
+use Bitrix\Socialnetwork\V2\Feature;
 
 final class OnboardingFeature
 {
@@ -22,6 +23,13 @@ final class OnboardingFeature
 
 	public static function isAvailable(): bool
 	{
+		// Lifecycle event handlers are intentionally disabled when Projects 2.0 is on
+		// QueueAgent cleans up the queue instead
+		if (Feature::isNewProjectsOn())
+		{
+			return false;
+		}
+
 		if (self::isDevMode())
 		{
 			return true;

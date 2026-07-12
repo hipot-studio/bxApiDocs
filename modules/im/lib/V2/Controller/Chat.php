@@ -5,11 +5,13 @@ namespace Bitrix\Im\V2\Controller;
 use Bitrix\Im\Dialog;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat\ChannelChat;
+use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Folder\Pin\PinService;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Chat\Add\ChatCreateFields;
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Controller\Chat\Dto\ChatCreateFieldsDto;
+use Bitrix\Im\V2\Controller\Chat\Dto\ChatUpdateFieldsDto;
 use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
@@ -20,8 +22,8 @@ use Bitrix\Im\V2\Chat\GroupChat;
 use Bitrix\Im\V2\Chat\MessagesAutoDelete\MessagesAutoDeleteConfigs;
 use Bitrix\Im\V2\Chat\OpenChannelChat;
 use Bitrix\Im\V2\Chat\OpenChat;
+use Bitrix\Im\V2\Chat\OpenCollabChat;
 use Bitrix\Im\V2\Chat\OpenLineChat;
-use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 use Bitrix\Im\V2\Common\FormatConverter;
 use Bitrix\Im\V2\Controller\Filter\DiskQuickAccessGrantor;
@@ -50,7 +52,6 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\Engine\Response\Converter;
 
 class Chat extends BaseController
 {
@@ -66,7 +67,9 @@ class Chat extends BaseController
 				],
 			'update' => [
 				'+prefilters' => [
-					new CheckFileAccess(['fields', 'avatar']),
+					new CheckFileAccess(
+						extractor: fn(array $args) => ($args['updateFields'] ?? null)?->getAvatar()
+					),
 					new CheckActionAccess(Permission\Action::Update),
 					new ChatTypeFilter([GroupChat::class]),
 				],
@@ -200,11 +203,13 @@ class Chat extends BaseController
 				'+prefilters' => [
 					new ExtendPullWatchPrefilter(),
 					new DiskQuickAccessGrantor(),
+					new Filter\ExternalChatLoadedNotifier(),
 				],
 			],
 			'loadInContext' => [
 				'+prefilters' => [
 					new ExtendPullWatchPrefilter(),
+					new Filter\ExternalChatLoadedNotifier(),
 				],
 			],
 			'join' => [
@@ -216,6 +221,7 @@ class Chat extends BaseController
 						OpenChannelChat::class,
 						CommentChat::class,
 						ExternalChat::class,
+						OpenCollabChat::class,
 					]),
 					new CheckActionAccess(Permission\GlobalAction::JoinChat),
 				],
@@ -227,7 +233,7 @@ class Chat extends BaseController
 			],
 			'extendPullWatch' => [
 				'+prefilters' => [
-					new ChatTypeFilter([OpenChat::class, OpenLineChat::class, ChannelChat::class]),
+					new ChatTypeFilter([OpenChat::class, OpenLineChat::class, ChannelChat::class, OpenCollabChat::class]),
 				],
 			],
 			'pin' => [
@@ -238,6 +244,22 @@ class Chat extends BaseController
 			'sortPin' => [
 				'+prefilters' => [
 					new CheckActionAccess(Permission\Action::PinChat),
+				],
+			],
+			'unpin' => [
+				'-prefilters' => [
+					CheckEntityAccess::class,
+				],
+				'+prefilters' => [
+					new CheckActionAccess(Permission\Action::UnpinChat),
+				],
+			],
+			'read' => [
+				'-prefilters' => [
+					CheckEntityAccess::class,
+				],
+				'+prefilters' => [
+					new CheckActionAccess(Permission\Action::ReadChat),
 				],
 			],
 		];
@@ -267,21 +289,21 @@ class Chat extends BaseController
 					}
 				),
 				new ExactParameter(
-					Type::class,
-					'chatType',
-					function($className, string $type) {
-						$type = FormatConverter::normalizeToUpperSnakeCase($type);
-
-						return ServiceLocator::getInstance()->get(TypeRegistry::class)->getByExtendedType($type);
-					}
-				),
-				new ExactParameter(
 					ChatCreateFields::class,
 					'createFields',
 					function ($className, array $fields) {
 						$dto = ChatCreateFieldsDto::create($fields);
 
 						return ChatCreateFields::fromDto($dto);
+					}
+				),
+				new ExactParameter(
+					UpdateFields::class,
+					'updateFields',
+					function ($className, array $fields) {
+						$dto = ChatUpdateFieldsDto::create($fields);
+
+						return UpdateFields::fromDto($dto);
 					}
 				),
 			]
@@ -410,10 +432,16 @@ class Chat extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.readByType
 	 */
-	public function readByTypeAction(CurrentUser $user, Reader $reader, Type $chatType): ?array
+	public function readByTypeAction(CurrentUser $user, Reader $reader, string $type): ?array
 	{
 		$userId = (int)$user->getId();
-		$reader->readAllByType($chatType, $userId);
+		$normalizedType = FormatConverter::normalizeToUpperSnakeCase($type);
+		$types = ServiceLocator::getInstance()->get(TypeRegistry::class)->getAllByExtendedType($normalizedType);
+
+		foreach ($types as $typeItem)
+		{
+			$reader->readAllByType($typeItem, $userId);
+		}
 
 		return ['result' => true];
 	}
@@ -467,10 +495,9 @@ class Chat extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.update
 	 */
-	public function updateAction(GroupChat $chat, array $fields)
+	public function updateAction(GroupChat $chat, UpdateFields $updateFields)
 	{
-		$converter = new Converter(Converter::TO_SNAKE | Converter::TO_UPPER | Converter::KEYS);
-		$updateService = new UpdateService($chat, UpdateFields::create($converter->process($fields)));
+		$updateService = new UpdateService($chat, $updateFields);
 
 		$result = $updateService->updateChat();
 		if (!$result->isSuccess())
@@ -509,6 +536,7 @@ class Chat extends BaseController
 	 */
 	public function addUsersAction(\Bitrix\Im\V2\Chat $chat, array $userIds, ?string $hideHistory = null): ?array
 	{
+		$userIds = Normalizer::toUniquePositiveIntegers($userIds);
 		$hideHistoryBool = $hideHistory === null ? null : $this->convertCharToBool($hideHistory, true);
 		$chat->addUsers($userIds, new AddUsersConfig(hideHistory: $hideHistoryBool, skipAnalytics: false));
 

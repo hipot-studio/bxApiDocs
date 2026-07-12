@@ -62,7 +62,7 @@ class TasksScrumBurnDownComponent extends \CBitrixComponent implements Controlle
 		{
 			$this->checkModules();
 
-			$this->arResult['groupId'] = (int) $this->arParams['groupId'];
+			$this->arResult['groupId'] = (int)$this->arParams['groupId'];
 
 			$this->setTitle();
 			$this->init();
@@ -83,6 +83,11 @@ class TasksScrumBurnDownComponent extends \CBitrixComponent implements Controlle
 
 			$this->arResult['sprint'] = $chartData['sprint'];
 			$this->arResult['chart'] = $chartData['chart'];
+
+			if ($this->arResult['groupId'] !== $this->arResult['sprint']['groupId'])
+			{
+				throw new SystemException(Loc::getMessage('TASKS_SCRUM_BURN_DOWN_ACCESS_DENIED'));
+			}
 
 			$this->includeComponentTemplate();
 		}
@@ -123,6 +128,15 @@ class TasksScrumBurnDownComponent extends \CBitrixComponent implements Controlle
 		}
 
 		$chartData = $this->getChartData($sprintId);
+
+		if ($groupId !== $chartData['sprint']['groupId'])
+		{
+			$this->errorCollection->setError(
+				new Error(Loc::getMessage('TASKS_SCRUM_BURN_DOWN_ACCESS_DENIED'))
+			);
+
+			return null;
+		}
 
 		return [
 			'sprint' => $chartData['sprint'],

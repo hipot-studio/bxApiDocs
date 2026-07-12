@@ -38,6 +38,6 @@ final class AddObserver implements AddObserverInterface
 			return;
 		}
 
-		$this->addUsersToGroup($flowEntity->getGroupId(), $userIds);
+		$this->addUsersToGroup($flowEntity->getGroupId(), $userIds, $command->ownerId);
 	}
 }

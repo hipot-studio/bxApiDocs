@@ -8,6 +8,7 @@ use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Manager;
 use Bitrix\Im\V2\Analytics\CopilotAnalytics;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Pull\Event\ChangeEngine;
 use Bitrix\Im\V2\Result;
@@ -25,8 +26,6 @@ class EngineManager
 	 * @see \Bitrix\AI\Quality::QUALITIES
 	 */
 	protected const QUALITY = 'chat_talk';
-
-	protected static ?string $defaultEngineCode = null;
 
 	/**
 	 * @var null|Engine\IEngine[]
@@ -176,31 +175,12 @@ class EngineManager
 
 	public static function getDefaultEngineCode(): ?string
 	{
-		if (!self::isAvailable())
-		{
-			return null;
-		}
-
-		if (!isset(self::$defaultEngineCode))
-		{
-			self::$defaultEngineCode =
-				(string)(new Manager())
-					->getItem(Restriction::SETTING_COPILOT_CHAT_PROVIDER)
-					?->getValue()
-			;
-		}
-
-		return !empty(self::$defaultEngineCode) ? self::$defaultEngineCode : null;
+		return self::getDefaultEngine()?->getIEngine()?->getCode();
 	}
 
 	public static function getDefaultEngineName(): ?string
 	{
-		if (!self::isAvailable())
-		{
-			return null;
-		}
-
-		return self::getDefaultEngine()?->getIEngine()->getName();
+		return self::getDefaultEngine()?->getIEngine()?->getName();
 	}
 
 	public static function getDefaultEngine(?Context $context = null): ?Engine
@@ -210,14 +190,22 @@ class EngineManager
 			return null;
 		}
 
-		$engineCode = self::getDefaultEngineCode();
 		$context ??= Context::getFake();
 
-		if (!isset($engineCode))
+		if (Features::isBitrixGptV2Available())
+		{
+			return Engine::getByCategory(self::CATEGORY, $context);
+		}
+
+		$engineCode = (string)(new Manager())
+			->getItem(Restriction::SETTING_COPILOT_CHAT_PROVIDER)
+			?->getValue()
+		;
+
+		if (empty($engineCode))
 		{
 			return null;
 		}
-
 
 		return Engine::getByCode($engineCode, $context, self::CATEGORY);
 	}

@@ -11,6 +11,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Tasks\Integration\Bizproc\Document\Task;
 use Bitrix\Tasks\Slider\Path\TaskPathMaker;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -27,6 +28,7 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 	private const RETURN_PARAM_TASK_CREATED_DATE = 'TASK_CREATED_DATE';
 	private const RETURN_PARAM_TASK_RESPONSIBLE = 'TASK_RESPONSIBLE';
 	private const RETURN_PARAM_TASK_URL = 'TASK_URL';
+	private const RETURN_PARAM_RETURN_DOCUMENT = 'ReturnDocument';
 	private const FIELD_TASK_ID = 'ID';
 	private const FIELD_TASK_TITLE = 'TITLE';
 	private const FIELD_TASK_CREATED_DATE = 'CREATED_DATE';
@@ -34,6 +36,11 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 
 	public function execute(): int
 	{
+		if (!Loader::includeModule('tasks'))
+		{
+			return CBPActivityExecutionStatus::Closed;
+		}
+
 		$context = $this->getRootActivity()->{\CBPDocument::PARAM_TRIGGER_EVENT_DATA} ?? [];
 
 		$taskId = (int)($context[self::FIELD_TASK_ID] ?? 0);
@@ -63,6 +70,11 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 
 		$this->{self::RETURN_PARAM_TASK_URL} = $this->makeTaskUrl($taskId);
 
+		if (!empty($taskId))
+		{
+			$this->{self::RETURN_PARAM_RETURN_DOCUMENT} = Task::resolveDocumentId($taskId);
+		}
+
 		return CBPActivityExecutionStatus::Closed;
 	}
 
@@ -76,6 +88,7 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 			self::RETURN_PARAM_TASK_CREATED_DATE => null,
 			self::RETURN_PARAM_TASK_RESPONSIBLE => null,
 			self::RETURN_PARAM_TASK_URL => null,
+			self::RETURN_PARAM_RETURN_DOCUMENT => null,
 		];
 
 		$this->setPropertiesTypes([
@@ -94,6 +107,9 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 			self::RETURN_PARAM_TASK_URL => [
 				'Type' => FieldType::STRING,
 			],
+			self::RETURN_PARAM_RETURN_DOCUMENT => [
+				'Type' => FieldType::DOCUMENT,
+			],
 		]);
 	}
 
@@ -105,34 +121,7 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 				'FieldName' => self::PARAM_PROJECT_ID,
 				'Type' => FieldType::SELECT,
 				'Options' => self::getProjectOptions(),
-				'Required' => true,
 			],
-		];
-	}
-
-	public static function validateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null): array
-	{
-		$errors = [];
-		foreach (self::getPropertiesMap([]) as $id => $property)
-		{
-			if (!empty($property['Required']) && empty($arTestProperties[$id]))
-			{
-				$errors[] = self::makeEmptyError($id);
-			}
-		}
-
-		return array_merge($errors, parent::ValidateProperties($arTestProperties, $user));
-	}
-
-	private static function makeEmptyError(string $property): array
-	{
-		return [
-			'code' => 'NotExist',
-			'message' => match ($property)
-			{
-				self::PARAM_PROJECT_ID => Loc::getMessage('TASKS_EXPIRED_TRIGGER_PROPERTY_PROJECT_ID_EMPTY'),
-				default => '',
-			},
 		];
 	}
 
@@ -216,13 +205,17 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 
 	public function checkApplyRules(array $rules, TriggerParameters $parameters): Result
 	{
-		$eventProjectId = (int)$parameters->get(self::PARAM_GROUP_ID);
 		$configProjectId = (int)$this->{self::PARAM_PROJECT_ID};
+		if ($configProjectId <= 0)
+		{
+			return Result::createOk();
+		}
 
+		$eventProjectId = (int)$parameters->get(self::PARAM_GROUP_ID);
 		if ($eventProjectId !== $configProjectId)
 		{
 			return Result::createError(
-				new  Error(
+				new Error(
 					Loc::getMessage('TASKS_EXPIRED_TRIGGER_PROPERTY_PROJECT_ID_INCORRECT'),
 					'',
 				)

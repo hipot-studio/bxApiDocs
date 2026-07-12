@@ -369,15 +369,21 @@ class ChatFactory
 		return $chat;
 	}
 
-	private function getEntityChatId(string $entityType, string $entityId): ?int
+	private function getEntityChatId(string $entityType, string $entityId, ?int $authorId = null): ?int
 	{
-		$row = ChatTable::query()
+		$query = ChatTable::query()
 			->setSelect(['ID'])
 			->where('ENTITY_TYPE', $entityType)
 			->where('ENTITY_ID', $entityId)
 			->setLimit(1)
-			->fetch()
 		;
+
+		if ($authorId !== null)
+		{
+			$query->where('AUTHOR_ID', $authorId);
+		}
+
+		$row = $query->fetch();
 
 		if (!$row)
 		{
@@ -411,6 +417,10 @@ class ChatFactory
 			{
 				$params['TYPE'] = Chat::IM_TYPE_OPEN_CHANNEL;
 			}
+			elseif ($params['TYPE'] === Chat::IM_TYPE_COLLAB)
+			{
+				$params['TYPE'] = Chat::IM_TYPE_OPEN_COLLAB;
+			}
 			else
 			{
 				$params['SEARCHABLE'] = 'N';
@@ -426,7 +436,7 @@ class ChatFactory
 			'TO_USER_ID' => $params['TO_USER_ID'] ?? null,
 		];
 		$chat = $this->initChat($initParams);
-		$addResult = $chat->add($params);
+		$addResult = $chat->add($params, $this->context);
 
 		if ($chat instanceof NullChat)
 		{
@@ -451,19 +461,61 @@ class ChatFactory
 	 */
 	public function addUniqueChat(array $params): AddResult
 	{
-		$result = new AddResult();
 		if (!isset($params['ENTITY_TYPE']))
 		{
-			return $result->addError(new ChatError(ChatError::ENTITY_TYPE_EMPTY));
+			return (new AddResult())->addError(new ChatError(ChatError::ENTITY_TYPE_EMPTY));
 		}
 		if (!isset($params['ENTITY_ID']))
 		{
-			return $result->addError(new ChatError(ChatError::ENTITY_ID_EMPTY));
+			return (new AddResult())->addError(new ChatError(ChatError::ENTITY_ID_EMPTY));
 		}
 
-		$entityType = (string)$params['ENTITY_TYPE'];
-		$entityId = (string)$params['ENTITY_ID'];
-		$lockName = self::getUniqueAdditionLockName($entityType, $entityId);
+		return $this->addUniqueChatInternal(
+			$params,
+			(string)$params['ENTITY_TYPE'],
+			(string)$params['ENTITY_ID'],
+			null,
+		);
+	}
+
+	/**
+	 * Creates a chat ensuring uniqueness for the (ENTITY_TYPE, ENTITY_ID, AUTHOR_ID) triple.
+	 * @param array $params ENTITY_TYPE, ENTITY_ID and AUTHOR_ID are required keys
+	 * @return AddResult
+	 * @see static::addUniqueChat()
+	 */
+	public function addUniqueChatPerAuthor(array $params): AddResult
+	{
+		if (!isset($params['ENTITY_TYPE']))
+		{
+			return (new AddResult())->addError(new ChatError(ChatError::ENTITY_TYPE_EMPTY));
+		}
+		if (!isset($params['ENTITY_ID']))
+		{
+			return (new AddResult())->addError(new ChatError(ChatError::ENTITY_ID_EMPTY));
+		}
+		if (!isset($params['AUTHOR_ID']) || (int)$params['AUTHOR_ID'] <= 0)
+		{
+			return (new AddResult())->addError(new ChatError(ChatError::AUTHOR_ID_EMPTY));
+		}
+
+		return $this->addUniqueChatInternal(
+			$params,
+			(string)$params['ENTITY_TYPE'],
+			(string)$params['ENTITY_ID'],
+			(int)$params['AUTHOR_ID'],
+		);
+	}
+
+	private function addUniqueChatInternal(
+		array $params,
+		string $entityType,
+		string $entityId,
+		?int $authorId,
+	): AddResult
+	{
+		$result = new AddResult();
+		$lockName = self::getUniqueAdditionLockName($entityType, $entityId, $authorId);
 		$connection = Application::getConnection();
 
 		$isLocked = $connection->lock($lockName, self::LOCK_TIMEOUT);
@@ -474,7 +526,7 @@ class ChatFactory
 
 		try
 		{
-			$chatId = $this->getEntityChatId($entityType, $entityId);
+			$chatId = $this->getEntityChatId($entityType, $entityId, $authorId);
 			if ($chatId)
 			{
 				return $result->setResult([
@@ -498,8 +550,13 @@ class ChatFactory
 		}
 	}
 
-	private static function getUniqueAdditionLockName(string $entityType, string $entityId): string
+	private static function getUniqueAdditionLockName(string $entityType, string $entityId, ?int $authorId = null): string
 	{
+		if ($authorId !== null)
+		{
+			return "add_unique_chat_{$entityType}_{$entityId}_{$authorId}";
+		}
+
 		return "add_unique_chat_{$entityType}_{$entityId}";
 	}
 

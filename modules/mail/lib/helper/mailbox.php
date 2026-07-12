@@ -662,16 +662,16 @@ abstract class Mailbox
 			return $finalResult;
 		}
 
-		$mailbox = null;
+		$ownerId = 0;
 
 		if (MailboxAccess::hasCurrentUserAnyAccessToMailbox($id))
 		{
-			$mailbox = MailboxTable::getById($id)->fetch();
+			$ownerId = MailboxTable::getOwnerId($id);
 		}
 
 		$mailboxHelper = Helper\Mailbox::createInstance($id);
 
-		if ($mailbox && !empty($mailboxHelper))
+		if ($ownerId > 0 && !empty($mailboxHelper))
 		{
 			session_write_close();
 
@@ -686,7 +686,7 @@ abstract class Mailbox
 				'sessid' => $sessionId,
 			));
 
-			$mailboxSyncManager = new MailboxSyncManager($mailbox['USER_ID']);
+			$mailboxSyncManager = new MailboxSyncManager($ownerId);
 			$mailboxSyncManager->setSyncStartedData($id);
 
 			$result = $mailboxHelper->syncDir($dir);
@@ -753,7 +753,7 @@ abstract class Mailbox
 			$finalResult->addError(new \Bitrix\Main\Error(Loc::getMessage('MAIL_THE_MAILBOX_HAS_BEEN_DELETED_1')));
 		}
 
-		if($mailbox && $response['new'] > 0 || $response['deleted'] > 0 || $response['updated'] > 0)
+		if ($ownerId > 0 && ($response['new'] > 0 || $response['deleted'] > 0 || $response['updated'] > 0))
 		{
 			$mailboxHelper->syncCounters();
 			$mailboxHelper->sendCountersEvent();

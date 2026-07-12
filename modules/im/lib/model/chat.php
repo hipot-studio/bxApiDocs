@@ -2,6 +2,7 @@
 namespace Bitrix\Im\Model;
 
 use Bitrix\Im\Internals\ChatIndex;
+use Bitrix\Im\V2\Common\UpdateByFilterTrait;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Sync;
 use Bitrix\Main\DB\SqlQueryException;
@@ -57,6 +58,8 @@ use Bitrix\Im\Text;
 
 class ChatTable extends Entity\DataManager
 {
+	use UpdateByFilterTrait;
+
 	public static function getFilePath()
 	{
 		return __FILE__;
@@ -238,7 +241,7 @@ class ChatTable extends Entity\DataManager
 		);
 	}
 
-	public static function withRelation(Query $query, ?int $userId): void
+	public static function withRelation(Query $query, ?int $userId, string $joinType = Join::TYPE_LEFT): void
 	{
 		$join = Join::on('this.ID', 'ref.CHAT_ID');
 		if ($userId !== null)
@@ -251,7 +254,7 @@ class ChatTable extends Entity\DataManager
 				'RELATION',
 				RelationTable::class,
 				$join,
-				['join_type' => Join::TYPE_LEFT]
+				['join_type' => $joinType]
 			)
 		);
 	}
@@ -279,6 +282,11 @@ class ChatTable extends Entity\DataManager
 		{
 			Chat::updateStateAfterOrmEvent($chatId, $fields);
 			Chat::cleanCache($chatId, false);
+		}
+		else
+		{
+			$scalarFields = array_filter($fields, static fn ($field): bool => is_scalar($field));
+			Chat::updateStateAfterOrmEvent($chatId, $scalarFields);
 		}
 
 		Sync\Logger::getInstance()->add(

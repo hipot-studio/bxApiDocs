@@ -97,15 +97,6 @@ class TaskUpdateHandler
 					task: $command->task,
 					taskBeforeUpdate: $taskBeforeUpdate,
 				),
-				'description' => $this->chatNotification->notify(
-					type: NotificationType::TaskDescriptionChanged,
-					task: $command->task,
-					args: [
-						'triggeredBy' => $triggeredBy,
-						'oldDescription' => $taskBeforeUpdate->description,
-						'newDescription' => $command->task->description,
-					],
-				),
 				'priority' => $this->chatNotification->notify(
 					type: NotificationType::TaskPriorityChanged,
 					task: $command->task,
@@ -251,6 +242,8 @@ class TaskUpdateHandler
 		?Group $oldGroup = null,
 	): void
 	{
+		$this->chatIntegration->updateParentChat($task);
+
 		if ($oldGroup !== null && $newGroup !== null)
 		{
 			$this->chatNotification->notify(

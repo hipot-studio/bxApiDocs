@@ -32,6 +32,7 @@ use Bitrix\Socialnetwork\Collab\Registry\CollabRegistry;
 use Bitrix\Socialnetwork\Control\Decorator\AccessDecorator;
 use Bitrix\Socialnetwork\Provider\FileProvider;
 use Bitrix\Socialnetwork\Provider\UserProvider;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class Collab extends Controller
 {
@@ -91,7 +92,7 @@ class Collab extends Controller
 
 	public function configureActions(): array
 	{
-		return [
+		$actions = [
 			'add' => [
 				'+prefilters' => [
 					new IntranetUserFilter(),
@@ -110,6 +111,19 @@ class Collab extends Controller
 				],
 			],
 		];
+
+		if (Feature::isNewProjectsOn())
+		{
+			$actions['delete']['+prefilters'][] = new FeatureFilter();
+
+			$actions['get'] = [
+				'+prefilters' => [
+					new FeatureFilter(),
+				],
+			];
+		}
+
+		return $actions;
 	}
 
 	/**

@@ -5,6 +5,7 @@ use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxConnectDTO;
 use Bitrix\Mail\Helper\Enum\MailboxStatus;
 use Bitrix\Mail\Helper\Enum\MailboxConnectionRequestStatus;
 use Bitrix\Mail\Helper\Mailbox;
+use Bitrix\Mail\Helper\Mailbox\MailboxGridCounterAggregator;
 use Bitrix\Mail\Helper\Mailbox\MailboxConnector;
 use Bitrix\Mail\Helper\Mailbox\MailboxSettingsConfig;
 use Bitrix\Mail\Helper\MailAccess;
@@ -45,6 +46,17 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		$this->errorCollection = new Main\ErrorCollection();
 
 		return [];
+	}
+
+	public function getMailboxGridButtonCounterAction(): array
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		if ($userId <= 0 || !Mail\Helper\MailAccess::hasCurrentUserAccessToMailboxGrid())
+		{
+			return ['count' => 0];
+		}
+
+		return ['count' => $this->getMailboxGridButtonCounter($userId)];
 	}
 
 	public function executeComponent()
@@ -222,8 +234,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			&& !MailboxAccess::hasCurrentUserAccessToEditMailboxAccess(
 				$mailbox['ID'] ?? 0,
 				$mailbox['USER_ID'] ?? 0,
-			)
-		;
+			);
 
 		$this->arParams['IS_CALENDAR_AVAILABLE'] = \Bitrix\Main\Loader::includeModule('calendar');
 		$this->arParams['IS_ICAL_CHECK'] = $mailbox['OPTIONS']['ical_access'] === self::POSITIVE_ANSWER;
@@ -452,10 +463,13 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		}
 		$this->arResult['FORBIDDEN_TO_SHARE_MAILBOX'] = false;
 		$sharedMailboxesLimit = LicenseManager::getSharedMailboxesLimit();
+		$this->arResult['SHARED_MAILBOXES_COUNT'] = 0;
 		if ($sharedMailboxesLimit >= 0)
 		{
 			$sharedMailboxesIds = Mail\Helper\Mailbox\SharedMailboxesManager::getSharedMailboxesIds();
-			if (count($sharedMailboxesIds) >= $sharedMailboxesLimit
+			$sharedMailboxesCount = count($sharedMailboxesIds);
+			$this->arResult['SHARED_MAILBOXES_COUNT'] = $sharedMailboxesCount;
+			if ($sharedMailboxesCount >= $sharedMailboxesLimit
 				&& (!empty($mailbox) ? (!in_array((int)$mailbox['ID'], $sharedMailboxesIds, true)) : true))
 			{
 				$this->arResult['FORBIDDEN_TO_SHARE_MAILBOX'] = true;
@@ -482,8 +496,14 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		$this->arParams['OWNER_ACCESS_CODE']
 			= !empty($mailbox['USER_ID'])
 				? self::ACCESS_CODE_USER_PREFIX . (int)$mailbox['USER_ID']
-				: ''
-		;
+				: '';
+
+		if (Feature::isMailboxConfigRedesignAvailable())
+		{
+			$this->includeComponentTemplate('mailbox_config');
+
+			return;
+		}
 
 		$this->includeComponentTemplate('edit');
 	}
@@ -930,10 +950,20 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				continue;
 			}
 
+			$parentId = (int)($sender['PARENT_ID'] ?? 0);
+			if (
+				$sender['PARENT_MODULE_ID'] === 'mail'
+				&& $parentId > 0
+				&& $parentId !== $mailboxId
+			)
+			{
+				continue;
+			}
+
 			if ($sender['PARENT_MODULE_ID'] !== 'mail' || (int)$sender['PARENT_ID'] !== $mailboxId)
 			{
-				Sender::updateSender(
-					$sender['ID'],
+				Main\Mail\Internal\SenderTable::update(
+					(int)$sender['ID'],
 					[
 						'PARENT_MODULE_ID' => 'mail',
 						'PARENT_ID' => $mailboxId,
@@ -991,14 +1021,13 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 	{
 		$button = $this->createMailboxGridButton()
 			?? $this->createMassConnectButton()
-			?? $this->createConnectionRequestButton()
-		;
+			?? $this->createConnectionRequestButton();
 
 		$isConnectionRequest = $this->arParams['IS_CONNECTION_REQUEST_BUTTON'] ?? false;
 
 		if (!$isConnectionRequest && !$isMainMailPage)
 		{
-			$button = $this->createConnectionRequestButton();
+			return;
 		}
 
 		if ($isConnectionRequest)
@@ -1042,13 +1071,23 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			'limit_v2_mail_mailboxes_management_grid',
 		);
 
-		$pendingCount = (new Mail\Helper\Mailbox\MailboxConnectionRequestService())->getPendingCount();
-		if ($pendingCount > 0)
+		$buttonCounter = $this->getMailboxGridButtonCounter((int)CurrentUser::get()->getId());
+		if ($buttonCounter > 0)
 		{
-			$button->setCounter($pendingCount);
+			$button->setCounter($buttonCounter);
 		}
 
 		return $button;
+	}
+
+	private function getMailboxGridButtonCounter(int $userId): int
+	{
+		if ($userId <= 0)
+		{
+			return 0;
+		}
+
+		return (new MailboxGridCounterAggregator())->getButtonCounter($userId);
 	}
 
 	private function createMassConnectButton(): ?Button

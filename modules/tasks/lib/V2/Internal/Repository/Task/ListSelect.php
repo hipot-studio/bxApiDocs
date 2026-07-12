@@ -103,6 +103,7 @@ class ListSelect
 		'ufCrmTaskCompany',
 		'ufCrmTaskDeal',
 		'ufCrmTask',
+		'ufMailMessage',
 		'tags',
 		'links',
 	];

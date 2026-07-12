@@ -13,6 +13,8 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Internals;
 use Bitrix\Tasks\Internals\Counter\CounterDictionary;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\ProjectTotalService;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 Loader::requireModule('socialnetwork');
 
@@ -62,6 +64,9 @@ class Counter extends Controller
 		{
 			$counters[$type] = $counterProvider->get($type);
 		}
+
+		$projectTotalService = Container::getInstance()->get(ProjectTotalService::class);
+		$counters['projects_total'] = $projectTotalService->getTotal($userId);
 
 		return $this->convertKeysToCamelCase($counters);
 	}

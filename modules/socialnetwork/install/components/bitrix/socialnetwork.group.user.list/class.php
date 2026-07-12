@@ -18,6 +18,7 @@ use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Socialnetwork\Item\Workgroup\AccessManager;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Main\Search;
+use Bitrix\Socialnetwork\V2\Public\Provider\ProjectProvider;
 use Bitrix\Socialnetwork\WorkgroupTable;
 
 Loader::includeModule('socialnetwork');
@@ -1307,6 +1308,20 @@ class CSocialnetworkGroupUserListComponent extends WorkgroupUserList
 		if (!$this->checkRequiredParams())
 		{
 			$this->printErrors();
+			return;
+		}
+
+		$projectProvider = new ProjectProvider();
+		if ($projectProvider->isProject($this->arParams['GROUP_ID']))
+		{
+			$this->addError(
+				new Error(
+					Loc::getMessage('SOCIALNETWORK_GROUP_USER_LIST_ERROR_NO_GROUP_PERMS_PROJECT')
+				)
+			);
+
+			$this->printErrors();
+
 			return;
 		}
 

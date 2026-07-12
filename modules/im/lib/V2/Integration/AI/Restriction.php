@@ -6,9 +6,9 @@ use Bitrix\AI\Engine;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Tuning\Defaults;
 use Bitrix\AI\Tuning\Manager;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Integration\AI\Restriction\Type;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\EventResult;
@@ -116,16 +116,19 @@ class Restriction
 				'sort' => 100,
 			];
 
-			$items[self::SETTING_COPILOT_CHAT_PROVIDER] = array_merge(
-				[
-					'group' => 'im_copilot_chat',
-					'title' => Loc::getMessage('IM_RESTRICTION_COPILOT_PROVIDER_TITLE'),
-					'sort' => 120,
-				],
-				Defaults::getProviderSelectFieldParams(self::AI_TEXT_CATEGORY)
-			);
+			if (!Features::isBitrixGptV2Available())
+			{
+				$items[self::SETTING_COPILOT_CHAT_PROVIDER] = array_merge(
+					[
+						'group' => 'im_copilot_chat',
+						'title' => Loc::getMessage('IM_RESTRICTION_COPILOT_PROVIDER_TITLE'),
+						'sort' => 120,
+					],
+					Defaults::getProviderSelectFieldParams(self::AI_TEXT_CATEGORY)
+				);
 
-			$itemRelations[self::SETTING_COPILOT_CHAT] = [self::SETTING_COPILOT_CHAT_PROVIDER];
+				$itemRelations[self::SETTING_COPILOT_CHAT] = [self::SETTING_COPILOT_CHAT_PROVIDER];
+			}
 
 			$items[self::SETTING_TRANSCRIPTION] = [
 				'group' => 'im_copilot_chat',

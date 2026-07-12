@@ -2,6 +2,12 @@
 
 namespace Bitrix\Intranet\User\Filter\Provider;
 
+use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
+use Bitrix\Intranet\Internal\Enum\Otp\UserOtpStatus;
+use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
+use Bitrix\Intranet\Internal\Integration\Security\OtpUserProvider;
+use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
+use Bitrix\Intranet\Internal\Service\Otp\UserOtpStatusService;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\Filter\EntityDataProvider;
@@ -20,6 +26,7 @@ class IntranetUserDataProvider extends EntityDataProvider
 	private const WINDOWS_APP = 'windows';
 	private const NOT_INSTALLED_APP = 'notInstalled';
 	private IntranetUserSettings $settings;
+	private ?UserOtpStatusService $otpStatusService = null;
 
 	public function __construct(IntranetUserSettings $settings)
 	{
@@ -62,6 +69,18 @@ class IntranetUserDataProvider extends EntityDataProvider
 			);
 		}
 
+		if ($this->getSettings()->isFilterAvailable(IntranetUserSettings::OTP_STATUS_FIELD))
+		{
+			$fieldList[IntranetUserSettings::OTP_STATUS_FIELD] = $this->createField(
+				IntranetUserSettings::OTP_STATUS_FIELD,
+				[
+					'name' => Loc::getMessage('INTRANET_USER_FILTER_OTP_STATUS') ?? '',
+					'type' => 'list',
+					'partial' => true,
+				],
+			);
+		}
+
 		return $fieldList;
 	}
 
@@ -94,6 +113,22 @@ class IntranetUserDataProvider extends EntityDataProvider
 			];
 		}
 
+		if ($fieldID === IntranetUserSettings::OTP_STATUS_FIELD)
+		{
+			$items = [];
+			$service = $this->getOtpStatusService();
+
+			foreach ($service->getAvailableStatuses() as $status)
+			{
+				$items[$status->value] = Loc::getMessage('INTRANET_USER_FILTER_OTP_STATUS_' . mb_strtoupper($status->value)) ?? $status->value;
+			}
+
+			$result = [
+				'params' => ['multiple' => 'Y'],
+				'items' => $items,
+			];
+		}
+
 		return $result;
 	}
 
@@ -111,6 +146,7 @@ class IntranetUserDataProvider extends EntityDataProvider
 		$this->checkInvitedField($filterValue);
 		$this->checkWaitConfirmationField($filterValue);
 		$this->checkAppField($filterValue);
+		$this->checkOtpStatusField($filterValue);
 
 		return $filterValue;
 	}
@@ -470,5 +506,176 @@ class IntranetUserDataProvider extends EntityDataProvider
 		}
 
 		return $userIds;
+	}
+
+	private function getOtpStatusService(): UserOtpStatusService
+	{
+		if ($this->otpStatusService === null)
+		{
+			$this->otpStatusService = new UserOtpStatusService();
+		}
+
+		return $this->otpStatusService;
+	}
+
+	private function checkOtpStatusField(array &$filterValue): void
+	{
+		if (
+			empty($filterValue[IntranetUserSettings::OTP_STATUS_FIELD])
+			|| !$this->getSettings()->isFilterAvailable(IntranetUserSettings::OTP_STATUS_FIELD)
+		)
+		{
+			return;
+		}
+
+		$selectedStatuses = (array)$filterValue[IntranetUserSettings::OTP_STATUS_FIELD];
+		unset($filterValue[IntranetUserSettings::OTP_STATUS_FIELD]);
+
+		$otpSettings = new OtpSettings();
+		$mobilePush = MobilePush::createByDefault();
+		$otpUserProvider = new OtpUserProvider();
+
+		$statusSets = $this->computeOtpStatusIdSets($otpSettings, $mobilePush, $otpUserProvider);
+
+		$selectedEnums = [];
+		foreach ($selectedStatuses as $statusValue)
+		{
+			$status = UserOtpStatus::tryFrom($statusValue);
+			if ($status !== null)
+			{
+				$selectedEnums[] = $status;
+			}
+		}
+
+		if (empty($selectedEnums))
+		{
+			return;
+		}
+
+		$this->applyOtpStatusFilter($filterValue, $selectedEnums, $statusSets);
+	}
+
+	private function computeOtpStatusIdSets(
+		OtpSettings $otpSettings,
+		MobilePush $mobilePush,
+		OtpUserProvider $otpUserProvider,
+	): array
+	{
+		$pushOtp = $otpUserProvider->getActivePushOtpUserIds();
+		$nonPushOtp = $otpUserProvider->getActiveNonPushOtpUserIds();
+		$allActiveOtp = array_merge($pushOtp, $nonPushOtp);
+
+		$isMandatory = $otpSettings->isMandatoryUsing();
+		$isMandatoryPush = $isMandatory && $otpSettings->isDefaultTypePush();
+		$promoteMode = $mobilePush->getPromoteMode();
+
+		$mandatory = [];
+		if ($isMandatory)
+		{
+			$mandatory = $otpUserProvider->getAllMandatoryUserIds();
+		}
+
+		$needCheck = [];
+		if ($isMandatory)
+		{
+			$needCheck = array_diff($mandatory, $allActiveOtp);
+		}
+		if ($isMandatoryPush)
+		{
+			$needCheck = array_unique(array_merge($needCheck, array_intersect($nonPushOtp, $mandatory)));
+		}
+		if ($promoteMode->isGreaterOrEqual(PromoteMode::Medium))
+		{
+			$needCheck = array_unique(array_merge($needCheck, $nonPushOtp));
+		}
+
+		$activeSubset = [];
+		if (!empty($needCheck))
+		{
+			$activeSubset = (new \Bitrix\Intranet\Repository\UserRepository())->getActiveConfirmedUserIds($needCheck);
+		}
+
+		$enableRequired = array_values(array_intersect(
+			array_diff($mandatory, $allActiveOtp),
+			$activeSubset,
+		));
+
+		$updateRequired = [];
+		if ($isMandatoryPush)
+		{
+			$updateRequired = array_values(array_intersect($nonPushOtp, $mandatory, $activeSubset));
+		}
+
+		$updateRecommended = [];
+		if ($promoteMode->isGreaterOrEqual(PromoteMode::Medium))
+		{
+			$updateRecommended = array_values(array_diff(
+				array_intersect($nonPushOtp, $activeSubset),
+				$updateRequired,
+			));
+		}
+
+		$enabled = array_values(array_diff($allActiveOtp, $updateRequired, $updateRecommended));
+
+		return [
+			UserOtpStatus::Enabled->value => $enabled,
+			UserOtpStatus::UpdateRequired->value => $updateRequired,
+			UserOtpStatus::UpdateRecommended->value => $updateRecommended,
+			UserOtpStatus::EnableRequired->value => $enableRequired,
+		];
+	}
+
+	private function applyOtpStatusFilter(
+		array &$filterValue,
+		array $selectedEnums,
+		array $statusSets,
+	): void
+	{
+		$hasDisabled = in_array(UserOtpStatus::Disabled, $selectedEnums, true);
+
+		$includeIds = [];
+		foreach ($selectedEnums as $status)
+		{
+			if ($status === UserOtpStatus::Disabled)
+			{
+				continue;
+			}
+
+			$ids = $statusSets[$status->value] ?? [];
+			if (!empty($ids))
+			{
+				$includeIds = array_merge($includeIds, $ids);
+			}
+		}
+		$includeIds = array_unique($includeIds);
+
+		$allActiveOtp = array_merge(
+			$statusSets[UserOtpStatus::Enabled->value] ?? [],
+			$statusSets[UserOtpStatus::UpdateRequired->value] ?? [],
+			$statusSets[UserOtpStatus::UpdateRecommended->value] ?? [],
+		);
+		$enableRequired = $statusSets[UserOtpStatus::EnableRequired->value] ?? [];
+		$disabledExclude = array_unique(array_merge($allActiveOtp, $enableRequired));
+
+		if (!empty($includeIds) && $hasDisabled)
+		{
+			$filterValue[] = [
+				'LOGIC' => 'OR',
+				['@ID' => $includeIds],
+				['!@ID' => $disabledExclude ?: [0]],
+			];
+		}
+		elseif ($hasDisabled)
+		{
+			$filterValue[] = ['!@ID' => $disabledExclude ?: [0]];
+		}
+		elseif (!empty($includeIds))
+		{
+			$filterValue['@ID'] = $includeIds;
+		}
+		else
+		{
+			$filterValue['@ID'] = [0];
+		}
 	}
 }

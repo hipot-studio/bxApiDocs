@@ -10,26 +10,8 @@ class ForceCreateIncomingWebhookCommand extends AbstractCreateIncomingWebhookCom
 {
 	protected function execute(): Main\Result
 	{
-		$result = new Main\Result();
+		$data = (new ForceCreateIncomingWebhookCommandHandler())($this);
 
-		try
-		{
-			$data = (new ForceCreateIncomingWebhookCommandHandler())($this);
-			$result->setData([$data]);
-		}
-		catch (Main\ObjectNotFoundException $e)
-		{
-			$result->addError(new Main\Error($e->getMessage(), $e->getCode()));
-		}
-		catch (Main\ArgumentException $e)
-		{
-			$result->addError(new Main\Error($e->getMessage(), 'INVALID_ARGUMENT'));
-		}
-		catch (Main\SystemException $e)
-		{
-			$result->addError(new Main\Error($e->getMessage(), $e->getCode()));
-		}
-
-		return $result;
+		return (new Main\Result())->setData([$data]);
 	}
 }

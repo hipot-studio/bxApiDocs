@@ -18,11 +18,22 @@ use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\FilterUsersByAccessEvent;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Chat\ChatFactory;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\ProjectChatResolver;
 use Bitrix\Tasks\V2\Internal\Result\Result;
 
 class Chat
 {
 	public const ENTITY_TYPE = 'TASKS_TASK';
+
+	protected function getProjectChatResolver(): ProjectChatResolver
+	{
+		return Container::getInstance()->getProjectChatResolver();
+	}
+
+	protected function getImChat(int $chatId): Im\V2\Chat
+	{
+		return Im\V2\Chat::getInstance($chatId);
+	}
 
 	public static function onRegisterType(RegisterTypeEvent $event): EventResult
 	{
@@ -41,8 +52,10 @@ class Chat
 					Action::Kick->value => Im\V2\Chat::ROLE_NONE,
 					Action::ChangeManagers->value => Im\V2\Chat::ROLE_NONE,
 					Action::Mute->value => Im\V2\Chat::ROLE_MEMBER,
-			],
-				isAutoJoinEnabled: true),
+				],
+				isAutoJoinEnabled: true,
+				requiresParentMembership: false,
+			),
 		];
 
 		return new EventResult(EventResult::SUCCESS, $parameters);
@@ -119,6 +132,7 @@ class Chat
 			'USERS' => $task->getMemberIds(),
 			'AUTHOR_ID' => $task->creator->id,
 			'AVATAR' => $avatarId > 0 ? $avatarId : null,
+			'PARENT_ID' => $this->getProjectChatResolver()->getParentChatIdForGroup($task->group),
 		]);
 
 		if (!$chatResult->isSuccess())
@@ -126,10 +140,48 @@ class Chat
 			return $result->addErrors($chatResult->getErrors());
 		}
 
-		$result->setData(['alreadyExists' => $chatResult->getData()['RESULT']['ALREADY_EXISTS'] ?? false]);
-		$result->setId($chatResult->getChatId());
+		$chatId = (int)$chatResult->getChatId();
+		$alreadyExists = ($chatResult->getData()['RESULT']['ALREADY_EXISTS'] ?? false) === true;
+
+		if ($alreadyExists && $chatId > 0)
+		{
+			$this->updateParentChat($task->cloneWith(['chatId' => $chatId]));
+		}
+
+		$result->setData(['alreadyExists' => $alreadyExists]);
+		$result->setId($chatId);
 
 		return $result;
+	}
+
+	public function updateParentChat(Task $task): void
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		if ($task->chatId <= 0)
+		{
+			return;
+		}
+
+		$chat = $this->getImChat($task->chatId);
+		if (($chat->getChatId() ?? 0) <= 0)
+		{
+			return;
+		}
+
+		$parentChatId = $this->getProjectChatResolver()->getParentChatIdForGroup($task->group);
+		if ((int)($chat->getParentChatId() ?? 0) === $parentChatId)
+		{
+			return;
+		}
+
+		$chat
+			->setParentChatId($parentChatId)
+			->save()
+		;
 	}
 
 	public function hideChat(Task $task): void
@@ -144,7 +196,7 @@ class Chat
 			return;
 		}
 
-		$chat = Im\V2\Chat::getInstance($task->chatId);
+		$chat = $this->getImChat($task->chatId);
 		$dialogId = $chat->getDialogId();
 
 		$relations = $chat->getRelations();
@@ -175,7 +227,7 @@ class Chat
 			return;
 		}
 
-		Im\V2\Chat::getInstance($task->chatId)?->addUsers($membersToAdd, new AddUsersConfig(hideHistory: false, withMessage: false));
+		$this->getImChat($task->chatId)->addUsers($membersToAdd, new AddUsersConfig(hideHistory: false, withMessage: false));
 	}
 
 	public function renameChat(Task $task, Task $taskBeforeUpdate): void
@@ -185,7 +237,7 @@ class Chat
 			return;
 		}
 
-		Im\V2\Chat::getInstance($task->chatId)?->setTitle($task->title)->save();
+		$this->getImChat((int)$task->chatId)->setTitle($task->title)->save();
 	}
 
 	/**
@@ -209,7 +261,7 @@ class Chat
 			return;
 		}
 
-		$chat = Im\V2\Chat::getInstance($task->chatId);
+		$chat = $this->getImChat($task->chatId);
 
 		$usersWithAccess = Container::getInstance()
 			->getTaskAccessService()
@@ -241,7 +293,7 @@ class Chat
 			return;
 		}
 
-		Im\V2\Chat::getInstance($chatId)->deleteChat();
+		$this->getImChat($chatId)->deleteChat();
 		$repository->delete($taskId);
 	}
 
@@ -263,7 +315,7 @@ class Chat
 			return;
 		}
 
-		$chat = Im\V2\Chat::getInstance($task->chatId);
+		$chat = $this->getImChat($task->chatId);
 		if ($chat->getAvatarId() === $avatarFileId)
 		{
 			return;

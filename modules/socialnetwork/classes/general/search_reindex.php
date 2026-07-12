@@ -69,7 +69,7 @@ class CSocNetSearchReindex extends CSocNetSearch
 	{
 		global $DB;
 
-		if(!CModule::IncludeModule('forum'))
+		if (!CModule::IncludeModule('forum') || !CModule::IncludeModule('search'))
 			return false;
 
 		$rsForumMessages = $DB->Query("
@@ -105,10 +105,6 @@ class CSocNetSearchReindex extends CSocNetSearch
 				$path_template
 			);
 
-			CSearch::ChangeSite("forum", array(
-				SITE_ID => $url,
-			), $arMessage["ID"]);
-
 			$arGroups = $this->GetSearchGroups(
 				$entity_type,
 				$entity_type=="G"? $arMessage["SOCNET_GROUP_ID"]: $arMessage["OWNER_ID"],
@@ -123,8 +119,12 @@ class CSocNetSearchReindex extends CSocNetSearch
 				'view'
 			);
 
-			CSearch::ChangePermission('forum', $arGroups, $arMessage["ID"]);
-			CSearch::ChangeIndex("forum", array("UPD" => $this->_sess_id, "PARAMS" => $arParams), $arMessage["ID"]);
+			CSearch::ChangeIndex('forum', [
+					'UPD' => $this->_sess_id,
+					'PARAMS' => $arParams,
+					'PERMISSIONS' => $arGroups,
+					'SITE_ID' => [SITE_ID => $url],
+			], $arMessage['ID']);
 
 			$this->_counter++;
 
@@ -299,7 +299,7 @@ class CSocNetSearchReindex extends CSocNetSearch
 	{
 		global $DB;
 
-		if(!CModule::IncludeModule("forum"))
+		if (!CModule::IncludeModule('forum') || !CModule::IncludeModule('search'))
 			return;
 
 		$topic_id = intval($topic_id);
@@ -308,15 +308,6 @@ class CSocNetSearchReindex extends CSocNetSearch
 		$arForumTopic = $rsForumTopic->Fetch();
 		if(!$arForumTopic)
 			return;
-
-		$arGroups = $this->GetSearchGroups(
-			$entity_type,
-			$entity_id,
-			$feature,
-			$operation
-		);
-
-		CSearch::ChangePermission("forum", $arGroups, false, $arForumTopic["FORUM_ID"], $topic_id);
 
 		$rsForumMessages = $DB->Query("
 			SELECT ID
@@ -353,7 +344,18 @@ class CSocNetSearchReindex extends CSocNetSearch
 			$operation
 		);
 
-		CSearch::ChangeIndex("forum", array("UPD" => $this->_sess_id, "PARAMS"=>$arParams), false, $arForumTopic["FORUM_ID"], $topic_id);
+		$arGroups = $this->GetSearchGroups(
+			$entity_type,
+			$entity_id,
+			$feature,
+			$operation
+		);
+
+		CSearch::ChangeIndex('forum', [
+			'UPD' => $this->_sess_id,
+			'PARAMS' => $arParams,
+			'PERMISSIONS' => $arGroups
+		], false, $arForumTopic["FORUM_ID"], $topic_id);
 	}
 
 	function ReindexIBlock($iblock_id, $entity_type, $feature, $operation, $path_template, $arFieldList, $last_id)

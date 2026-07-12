@@ -58,8 +58,8 @@ class Chat
 
 		$type = match ($chatId)
 		{
-			(int)GeneralChannel::getGeneralChannelId() => $registry->getByExtendedType(ExtendedType::GeneralChannel->value),
-			(int)GeneralChat::getGeneralChatId() => $registry->getByExtendedType(ExtendedType::General->value),
+			(int)GeneralChannel::getGeneralChannelId() => $registry->getByLiteralAndEntity(V2\Chat::IM_TYPE_OPEN_CHANNEL, ExtendedType::GeneralChannel->value),
+			(int)GeneralChat::getGeneralChatId() => $registry->getByLiteralAndEntity(V2\Chat::IM_TYPE_OPEN, ExtendedType::General->value),
 			default => $registry->getByLiteralAndEntity($messageType, $entityType),
 		};
 
@@ -1094,7 +1094,10 @@ class Chat
 			);
 		}
 
-		$filter['=PARENT_ID'] = 0;
+		if (!isset($filter['=ID']))
+		{
+			$filter['=PARENT_ID'] = 0;
+		}
 
 		return [
 			'select' => [

@@ -3,7 +3,7 @@ namespace Bitrix\Calendar;
 
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Integration\Pull\PushCommand;
-use Bitrix\Main\Loader;
+use Bitrix\Calendar\Integration\SocialNetwork\FeatureService;
 use Bitrix\Main\Web\Json;
 
 class UserSettings
@@ -361,7 +361,52 @@ class UserSettings
 				\CUserOptions::SetOption("calendar", "superpose_displayed", serialize($sectionIdList));
 				\CUserOptions::SetOption("calendar", "superpose_displayed_default", false);
 			}
+
+			$sectionIdList = self::filterProjectSectionsByFeature($sectionIdList);
 		}
 		return $sectionIdList;
+	}
+
+	private static function filterProjectSectionsByFeature(array $sectionIdList): array
+	{
+		if (empty($sectionIdList) || FeatureService::isProjectFeatureEnabled())
+		{
+			return $sectionIdList;
+		}
+
+		$groupSections = \CCalendarSect::GetList([
+			'arFilter' => [
+				'ID' => $sectionIdList,
+				'CAL_TYPE' => Dictionary::CALENDAR_TYPE['group'],
+			],
+			'arSelect' => ['ID', 'CAL_TYPE', 'OWNER_ID'],
+			'checkPermissions' => false,
+			'getPermissions' => false,
+		]);
+
+		if (empty($groupSections))
+		{
+			return $sectionIdList;
+		}
+
+		$isNewProjectsOn = FeatureService::isNewProjectsOn();
+		$excludeIds = [];
+		foreach ($groupSections as $section)
+		{
+			if ($isNewProjectsOn || empty($section['IS_COLLAB']))
+			{
+				$excludeIds[(int)$section['ID']] = true;
+			}
+		}
+
+		if (empty($excludeIds))
+		{
+			return $sectionIdList;
+		}
+
+		return array_values(array_filter(
+			$sectionIdList,
+			static fn ($id) => !isset($excludeIds[(int)$id]),
+		));
 	}
 }

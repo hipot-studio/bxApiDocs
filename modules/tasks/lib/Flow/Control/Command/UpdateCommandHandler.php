@@ -100,7 +100,7 @@ class UpdateCommandHandler extends CommandHandler
 			catch (Throwable $t)
 			{
 				$this->connection->rollbackTransaction();
-				throw new FlowNotUpdatedException($t->getMessage());
+				throw new FlowNotUpdatedException(message: $t->getMessage(), previous: $t);
 			}
 
 			if (!$result->isSuccess())
@@ -121,7 +121,7 @@ class UpdateCommandHandler extends CommandHandler
 		catch (Throwable $t)
 		{
 			$this->connection->rollbackTransaction();
-			throw new FlowNotUpdatedException($t->getMessage());
+			throw new FlowNotUpdatedException(message: $t->getMessage(), previous: $t);
 		}
 
 		$this->flowRegistry->invalidate($this->command->id);

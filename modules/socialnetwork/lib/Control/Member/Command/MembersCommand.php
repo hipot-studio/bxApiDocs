@@ -17,8 +17,7 @@ use Bitrix\Socialnetwork\UserToGroupTable;
  * @method self setMembers(?array $members)
  * @method null|array getMembers()
  * @method self setInitiatedByType(string $type)
- * @method string InitiatedByType()
- *
+ * @method string getInitiatedByType()
  * @method int getInitiatorId()
  * @method self setInitiatorId(int $initiatorId)
  * @method bool hasInitiatorId()

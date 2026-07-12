@@ -12,7 +12,7 @@ use Bitrix\SocialNetwork\Collab\Access\CollabAccessController;
 use Bitrix\SocialNetwork\Collab\Access\CollabDictionary;
 use Bitrix\SocialNetwork\Collab\Access\Model\CollabModel;
 use Bitrix\SocialNetwork\Collab\Access\Rule\Trait\GetOptionTrait;
-use Bitrix\Socialnetwork\Collab\Controller\Collab;
+use Bitrix\Socialnetwork\Collab\Collab;
 
 class CollabUpdateRule extends AbstractRule
 {
@@ -30,9 +30,25 @@ class CollabUpdateRule extends AbstractRule
 			return false;
 		}
 
-		/** @var Collab $collabBefore */
+		/** @var ?Collab $collabBefore */
 		$collabBefore = $params;
 		$collabAfter = $item;
+
+		if ($collabBefore instanceof Collab)
+		{
+			$oldOwnerId = $collabBefore->getOwnerId();
+			$newOwnerId = $collabAfter->getOwnerId();
+
+			if (
+				$oldOwnerId !== $newOwnerId
+				&& !$this->controller->check(CollabDictionary::SET_OWNER, $item, $params)
+			)
+			{
+				$this->controller->addError(static::class, 'Access denied by set owner rule');
+
+				return false;
+			}
+		}
 
 		$addMembers = array_merge($collabAfter->getAddInvitedMembers(), $collabAfter->getAddMembers());
 		if (

@@ -9,18 +9,15 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkFileRenderer;
 use Bitrix\Main\ArgumentTypeException;
-use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\
-{FileTypeControl};
+use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\{FileTypeControl, RedirectToCorrectPrefix};
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\UnifiedLinkAccessLevelRouter;
-use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Attributes\
-{UrlGenerator};
+use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Attributes\{RedirectToView, UrlGenerator};
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Attributes\FileTypes;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Attributes\LevelAccess;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Version;
-use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Main\Engine\ActionFilter\HttpMethod;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -33,12 +30,14 @@ class UnifiedLinkController extends Controller
 	private RequiredParameter $requiredParameterFilter;
 	private UnifiedLinkAccessLevelRouter $accessControlFilter;
 	private FileTypeControl $fileTypeFilter;
+	private RedirectToCorrectPrefix $redirectToCorrectPrefix;
 
 	public function __construct(?Request $request = null)
 	{
 		$this->requiredParameterFilter = new RequiredParameter('service');
 		$this->fileTypeFilter = new FileTypeControl($this);
 		$this->accessControlFilter = new UnifiedLinkAccessLevelRouter($this);
+		$this->redirectToCorrectPrefix = new RedirectToCorrectPrefix($this);
 
 		parent::__construct($request);
 	}
@@ -46,9 +45,9 @@ class UnifiedLinkController extends Controller
 	protected function getDefaultPreFilters(): array
 	{
 		return [
-			new Authentication(true), // while external links are not implemented
 			$this->requiredParameterFilter,
 			new HttpMethod([HttpMethod::METHOD_GET]),
+			$this->redirectToCorrectPrefix,
 			$this->fileTypeFilter,
 			$this->accessControlFilter,
 		];
@@ -58,6 +57,7 @@ class UnifiedLinkController extends Controller
 	{
 		return [
 			$this->requiredParameterFilter,
+			$this->redirectToCorrectPrefix,
 			$this->fileTypeFilter,
 			$this->accessControlFilter,
 		];
@@ -82,8 +82,15 @@ class UnifiedLinkController extends Controller
 					$attachedObject = AttachedObject::loadById((int)$this->request->get('attachedId'));
 					$version = Version::loadById((int)$this->request->get('versionId'));
 					$analytics = $this->request->getQuery('analytics') ?? [];
+					$currentUser = $this->getCurrentUser();
 
-					return new UnifiedLinkFileRenderer($file, $attachedObject, $version, $analytics);
+					return new UnifiedLinkFileRenderer(
+						file: $file,
+						attachedObject: $attachedObject,
+						version: $version,
+						analytics: $analytics,
+						currentUser: $currentUser,
+					);
 				},
 			),
 		];
@@ -91,7 +98,19 @@ class UnifiedLinkController extends Controller
 
 	#[LevelAccess(UnifiedLinkAccessLevel::Read)]
 	#[UrlGenerator([new UrlManager(), 'getUnifiedLink'])]
-	#[FileTypes(TypeFile::FLIPCHART, TypeFile::DOCUMENT, TypeFile::PDF)]
+	#[FileTypes(
+		TypeFile::IMAGE,
+		TypeFile::VIDEO,
+		TypeFile::DOCUMENT,
+		TypeFile::ARCHIVE,
+		TypeFile::SCRIPT,
+		TypeFile::UNKNOWN,
+		TypeFile::PDF,
+		TypeFile::AUDIO,
+		TypeFile::KNOWN,
+		TypeFile::VECTOR_IMAGE,
+		TypeFile::BOARD,
+	)]
 	public function viewAction(?UnifiedLinkFileRenderer $service): HttpResponse
 	{
 		return $this->createResponse($service, UnifiedLinkAccessLevel::Read);
@@ -99,7 +118,18 @@ class UnifiedLinkController extends Controller
 
 	#[LevelAccess(UnifiedLinkAccessLevel::Edit)]
 	#[UrlGenerator([new UrlManager(), 'getUnifiedEditLink'])]
-	#[FileTypes(TypeFile::FLIPCHART, TypeFile::DOCUMENT)]
+	#[FileTypes(TypeFile::DOCUMENT)]
+	#[RedirectToView(
+		TypeFile::IMAGE,
+		TypeFile::VIDEO,
+		TypeFile::ARCHIVE,
+		TypeFile::SCRIPT,
+		TypeFile::UNKNOWN,
+		TypeFile::AUDIO,
+		TypeFile::KNOWN,
+		TypeFile::VECTOR_IMAGE,
+		TypeFile::BOARD,
+	)]
 	public function editAction(?UnifiedLinkFileRenderer $service): HttpResponse
 	{
 		return $this->createResponse($service, UnifiedLinkAccessLevel::Edit);
@@ -107,6 +137,7 @@ class UnifiedLinkController extends Controller
 
 	/**
 	 * @param UnifiedLinkFileRenderer|null $service
+	 * @param UnifiedLinkAccessLevel $accessLevel
 	 * @return HttpResponse
 	 * @throws ArgumentTypeException
 	 */
@@ -121,6 +152,12 @@ class UnifiedLinkController extends Controller
 		}
 
 		$result = $service->render($accessLevel);
+		$redirectUrl = $result->getRedirectUrl();
+
+		if(is_string($redirectUrl))
+		{
+			return $this->redirectTo($redirectUrl);
+		}
 
 		return (new HttpResponse())
 			->setStatus($result->getStatus())

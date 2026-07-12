@@ -192,11 +192,13 @@ class CBPCallGetFollowUpActivity extends BaseActivity implements IBPConfigurable
 			return [];
 		}
 
+		$outcomeCollection = OutcomeCollection::getOutcomesByCallIds($callIds, [SenseType::OVERVIEW->value]);
+
 		$overviews = [];
 		foreach ($callIds as $callId)
 		{
-			$overview = OutcomeCollection::getOutcomesByCallId($callId, [SenseType::OVERVIEW->value])
-				?->getOutcomeByType(SenseType::OVERVIEW->value)
+			$overview = $outcomeCollection
+				->getOutcomeByCallIdAndType($callId, SenseType::OVERVIEW->value)
 				?->getSenseContent()
 			;
 

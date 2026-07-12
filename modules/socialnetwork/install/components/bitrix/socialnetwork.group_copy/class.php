@@ -31,6 +31,7 @@ use Bitrix\Photogallery\Copy\Integration\Group as PhotoFeature;
 use Bitrix\Socialnetwork\Component\WorkgroupForm;
 use Bitrix\Socialnetwork\Copy\GroupManager;
 use Bitrix\Socialnetwork\Item\Workgroup;
+use Bitrix\Socialnetwork\V2\Public\Provider\ProjectProvider;
 use Bitrix\Socialnetwork\WorkgroupSiteTable;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Tasks\Copy\Integration\Group as TasksFeature;
@@ -71,6 +72,12 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 		try
 		{
 			$this->checkModules();
+
+			$projectProvider = new ProjectProvider();
+			if ($projectProvider->isProject($this->arParams["GROUP_ID"]))
+			{
+				throw new SystemException("System error");
+			}
 
 			if (!$this->isFeatureEnabled())
 			{

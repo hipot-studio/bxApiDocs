@@ -13,6 +13,7 @@ use Bitrix\Main\LoaderException;
 use Bitrix\Main\SystemException;
 use Bitrix\Security\Mfa\Otp;
 use Bitrix\Security\Mfa\OtpType;
+use Bitrix\Bitrix24;
 
 class OtpSettings
 {
@@ -188,6 +189,15 @@ class OtpSettings
 			$event = $isMandatory ? '2fa_on_portal' : '2fa_off_portal';
 			$analyticEvent = new AnalyticsEvent($event, 'user_settings', 'security');
 			$analyticEvent->send();
+
+			if ($isMandatory)
+			{
+				(new Bitrix24\Public\Command\Otp\EnableNotificationsCommand())->run();
+			}
+			else
+			{
+				(new Bitrix24\Public\Command\Otp\DisableNotificationsCommand())->run();
+			}
 		}
 		else
 		{

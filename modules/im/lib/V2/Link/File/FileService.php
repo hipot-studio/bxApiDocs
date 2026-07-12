@@ -92,6 +92,13 @@ class FileService
 		return $this->deleteFiles($links);
 	}
 
+	public function deleteFilesByDiskFileIds(array $diskFileIds, Message $message): Result
+	{
+		$links = FileCollection::getByDiskFileIds($diskFileIds, $message);
+
+		return $this->deleteFiles($links);
+	}
+
 	public function deleteFilesByMessageIds(array $messageIds): Result
 	{
 		$links = FileCollection::getByMessageIds($messageIds);

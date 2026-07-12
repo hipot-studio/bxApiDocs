@@ -66,7 +66,7 @@ class ElapsedTimeService
 		$event->send();
 
 		$this->egressController->process(new AddElapsedTimeCommand(
-			elapsedTime: $elapsedTime,
+			elapsedTime: $elapsedTime->cloneWith(['id' => $id]),
 		));
 
 		return [$id, $currentDuration];

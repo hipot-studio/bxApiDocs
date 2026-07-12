@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Socialnetwork\Collab\Onboarding\Internals\Agent;
 
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Socialnetwork\Collab\Onboarding\Command\Type\DeleteJobsCommand;
 use Bitrix\Socialnetwork\Collab\Onboarding\Entity\JobCollection;
 use Bitrix\Socialnetwork\Collab\Onboarding\Execution\Executor\BatchJobExecutor;
 use Bitrix\Socialnetwork\Collab\Onboarding\OnboardingFeature;
@@ -12,6 +13,7 @@ use Bitrix\Socialnetwork\Collab\Onboarding\Provider\QueueProviderInterface;
 use Bitrix\Socialnetwork\Collab\Onboarding\Service\AbstractQueueService;
 use Bitrix\Socialnetwork\Collab\Onboarding\Internals\Repository\Cache\JobCacheProxy;
 use Bitrix\Socialnetwork\Log\Logger;
+use Bitrix\Socialnetwork\V2\Feature;
 
 final class QueueAgent
 {
@@ -29,12 +31,38 @@ final class QueueAgent
 
 	public static function execute(): string
 	{
+		if (Feature::isNewProjectsOn())
+		{
+			(new self())->clearQueue();
+
+			return self::getAgentName();
+		}
+
 		if (!OnboardingFeature::isAvailable())
 		{
 			return self::getAgentName();
 		}
 
 		return (new self())->run();
+	}
+
+	private function clearQueue(): void
+	{
+		$jobs = $this->queueProvider->getAllIncludingProcessing();
+
+		if ($jobs->isEmpty())
+		{
+			return;
+		}
+
+		$userIds = $jobs->getUserIdList();
+
+		$result = (new DeleteJobsCommand(filter: ['USER_IDS' => $userIds]))->run();
+
+		if (!$result->isSuccess())
+		{
+			Logger::log($result->getErrorCollection(), 'SOCIALNETWORK_COLLAB_ONBOARDING_DELETE_JOBS');
+		}
 	}
 
 	private function run(): string

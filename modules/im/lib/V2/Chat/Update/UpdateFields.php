@@ -2,31 +2,32 @@
 
 namespace Bitrix\Im\V2\Chat\Update;
 
-use Bitrix\Im\V2\Entity\File\ChatAvatar;
+use Bitrix\Im\V2\Controller\Chat\Dto\ChatUpdateFieldsDto;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 
 class UpdateFields
 {
-	protected function __construct(
-		protected ?string $title,
-		protected ?string $description,
-		protected ?int $avatar,
-		protected ?int $ownerId,
-		protected ?string $type,
-		protected ?string $searchable,
-		protected ?string $manageUI,
-		protected ?string $manageUsersAdd,
-		protected ?string $manageUsersDelete,
-		protected ?string $manageMessages,
-		protected array $addedUsers,
-		protected ?bool $hideHistory,
-		protected array $deletedUsers,
-		protected array $addedDepartments,
-		protected array $deletedDepartments,
-		protected array $addedManagers,
-		protected array $deletedManagers,
-		protected ?string $manageMessagesAutoDelete,
-		protected ?string $manageGuestInvites,
+	public function __construct(
+		protected ?string $title = null,
+		protected ?string $description = null,
+		protected mixed $avatar = null,
+		protected ?int $ownerId = null,
+		protected ?string $type = null,
+		protected ?string $searchable = null,
+		protected ?string $manageUI = null,
+		protected ?string $manageUsersAdd = null,
+		protected ?string $manageUsersDelete = null,
+		protected ?string $manageMessages = null,
+		protected array $addedUsers = [],
+		protected ?bool $hideHistory = null,
+		protected array $deletedUsers = [],
+		protected array $addedDepartments = [],
+		protected array $deletedDepartments = [],
+		protected array $addedManagers = [],
+		protected array $deletedManagers = [],
+		protected ?string $manageMessagesAutoDelete = null,
+		protected ?int $parentChatId = null,
+		protected ?string $manageGuestInvites = null,
 	){}
 
 	public static function create(array $fields): self
@@ -37,7 +38,7 @@ class UpdateFields
 		return new self(
 			$fields['TITLE'] ?? null,
 			$fields['DESCRIPTION'] ?? null,
-			self::prepareAvatar($fields['AVATAR'] ?? null),
+			$fields['AVATAR'] ?? null,
 			isset($fields['OWNER_ID']) ? (int)$fields['OWNER_ID'] : null,
 			$fields['TYPE'] ?? null,
 			$fields['SEARCHABLE'] ?? null,
@@ -53,8 +54,31 @@ class UpdateFields
 			self::prepareArrayField($fields['ADDED_MANAGERS'] ?? []),
 			self::prepareArrayField($fields['DELETED_MANAGERS'] ?? []),
 			$fields['MANAGE_MESSAGES_AUTO_DELETE'] ?? null,
+			null,
 			$fields['MANAGE_GUEST_INVITES'] ?? null,
 		);
+	}
+
+	public static function fromDto(ChatUpdateFieldsDto $dto): self
+	{
+		return self::create([
+			'TITLE' => $dto->title,
+			'DESCRIPTION' => $dto->description,
+			'AVATAR' => $dto->avatar,
+			'OWNER_ID' => $dto->ownerId,
+			'TYPE' => $dto->type,
+			'SEARCHABLE' => $dto->searchable,
+			'MANAGE_UI' => $dto->manageUi,
+			'MANAGE_USERS_ADD' => $dto->manageUsersAdd,
+			'MANAGE_USERS_DELETE' => $dto->manageUsersDelete,
+			'MANAGE_MESSAGES' => $dto->manageMessages,
+			'MANAGE_MESSAGES_AUTO_DELETE' => $dto->manageMessagesAutoDelete,
+			'ADDED_MEMBER_ENTITIES' => $dto->addedMemberEntities ?? [],
+			'DELETED_MEMBER_ENTITIES' => $dto->deletedMemberEntities ?? [],
+			'HIDE_HISTORY' => $dto->hideHistory,
+			'ADDED_MANAGERS' => $dto->addedManagers ?? [],
+			'DELETED_MANAGERS' => $dto->deletedManagers ?? [],
+		]);
 	}
 
 	public function getType(): ?string
@@ -112,9 +136,14 @@ class UpdateFields
 		return $this->ownerId;
 	}
 
-	public function getAvatar(): ?int
+	public function getAvatar(): mixed
 	{
 		return $this->avatar;
+	}
+
+	public function getParentChatId(): ?int
+	{
+		return $this->parentChatId;
 	}
 
 	protected static function prepareArrayField(array $array): array
@@ -129,20 +158,6 @@ class UpdateFields
 		}
 
 		return $result;
-	}
-
-	protected static function prepareAvatar(mixed $avatar): ?int
-	{
-		if (!isset($avatar))
-		{
-			return null;
-		}
-		if (is_numeric($avatar))
-		{
-			return (int)$avatar;
-		}
-
-		return (ChatAvatar::saveAvatarByString((string)$avatar));
 	}
 
 	protected static function prepareBool(?string $value, ?bool $default = null): ?bool
@@ -171,6 +186,7 @@ class UpdateFields
 			'MANAGE_USERS_DELETE' => $this->manageUsersDelete,
 			'MANAGE_MESSAGES' => $this->manageMessages,
 			'MANAGE_MESSAGES_AUTO_DELETE' => $this->manageMessagesAutoDelete,
+			'PARENT_ID' => $this->parentChatId,
 			'MANAGE_GUEST_INVITES' => $this->manageGuestInvites,
 		];
 		return array_filter($array, function ($value) {

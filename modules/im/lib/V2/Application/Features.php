@@ -8,6 +8,7 @@ use Bitrix\Im\Settings;
 use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Integration\AI\Restriction;
 use Bitrix\Im\V2\Integration\AiAssistant\AiAssistantService;
+use Bitrix\Im\V2\Integration\AiAssistant\WebSearchService;
 use Bitrix\Im\V2\Integration\Extranet\CollaberService;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\V2\Integration\Intranet\Invitation;
@@ -68,7 +69,12 @@ class Features
 		public readonly bool $isExternalChatMessageForwardingAvailable,
 		public readonly bool $isChatWithGuestsAvailable,
 		public readonly bool $isCopilotForceSearchAvailable,
+		public readonly bool $isCopilotWebSearchEnabledByAdmin,
+		public readonly bool $isCopilotWebSearchAllowedByTariff,
+		public readonly bool $isAiAssistantFeedbackAvailable,
+		public readonly bool $isAiAssistantAgentModeAvailable,
 		public readonly bool $isChatFoldersAvailable,
+		public readonly bool $isAiAssistantRegenerateAvailable,
 	){}
 
 	public static function get(): self
@@ -125,11 +131,16 @@ class Features
 			isBitrixGptV2Available: self::isBitrixGptV2Available(),
 			isMessageBuilderAvailable: self::isMessageBuilderAvailable(),
 			isAddingUserByMentionAvailable: self::isAddingUserByMentionAvailable(),
-			isNestedChatAvailable: self::isNestedChatAvailable(),
 			isExternalChatMessageForwardingAvailable: self::isExternalChatMessageForwardingAvailable(),
+			isNestedChatAvailable: Collab::isNewProjectsAvailable(),
 			isChatWithGuestsAvailable: self::isChatWithGuestsAvailable(),
 			isCopilotForceSearchAvailable: self::isCopilotForceSearchAvailable(),
+			isCopilotWebSearchEnabledByAdmin: self::isCopilotWebSearchEnabledByAdmin(),
+			isCopilotWebSearchAllowedByTariff: self::isCopilotWebSearchAllowedByTariff(),
+			isAiAssistantFeedbackAvailable: self::isAiAssistantFeedbackAvailable(),
+			isAiAssistantAgentModeAvailable: self::isAiAssistantAgentModeAvailable(),
 			isChatFoldersAvailable: self::isChatFoldersAvailable(),
+			isAiAssistantRegenerateAvailable: self::isAiAssistantRegenerateAvailable(),
 		);
 	}
 
@@ -282,11 +293,6 @@ class Features
 		return Option::get('im', 'adding_user_by_mention_available', 'N') === 'Y';
 	}
 
-	public static function isNestedChatAvailable(): bool
-	{
-		return Option::get('im', 'nested_chat_available', 'N') === 'Y';
-	}
-
 	public static function isExternalChatMessageForwardingAvailable(): bool
 	{
 		return Option::get('im', 'external_chat_message_forwarding_available', 'N') === 'Y';
@@ -305,8 +311,33 @@ class Features
 		;
 	}
 
+	public static function isAiAssistantFeedbackAvailable(): bool
+	{
+		return Option::get('im', 'ai_assistant_feedback_available', 'N') === 'Y';
+	}
+
+	public static function isAiAssistantAgentModeAvailable(): bool
+	{
+		return Option::get('im', 'ai_assistant_agent_mode_available', 'N') === 'Y';
+	}
+
 	public static function isChatFoldersAvailable(): bool
 	{
 		return Option::get('im', 'chat_folders_available', 'N') === 'Y';
+	}
+
+	public static function isCopilotWebSearchEnabledByAdmin(): bool
+	{
+		return ServiceLocator::getInstance()->get(WebSearchService::class)->isEnabledByAdmin();
+	}
+
+	public static function isCopilotWebSearchAllowedByTariff(): bool
+	{
+		return ServiceLocator::getInstance()->get(WebSearchService::class)->isAllowedByTariff();
+	}
+
+	public static function isAiAssistantRegenerateAvailable(): bool
+	{
+		return Option::get('im', 'ai_assistant_regenerate_available', 'N') === 'Y';
 	}
 }

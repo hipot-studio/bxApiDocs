@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\CheckListMapper;
@@ -99,5 +100,52 @@ class CheckListRepository implements CheckListRepositoryInterface
 		Collection::normalizeArrayValuesByInt($attachments, false);
 
 		return $attachments;
+	}
+
+	public function getTasksCompletedItemsExistenceMap(array $taskIds): array
+	{
+		$result = [];
+		if (empty($taskIds))
+		{
+			return $result;
+		}
+
+		Collection::normalizeArrayValuesByInt($taskIds, false);
+
+		if (empty($taskIds))
+		{
+			return $result;
+		}
+
+		$facade = $this->facadeResolver->resolveByType(Entity\CheckList\Type::Task);
+
+		/** @var DataManager $dataTable */
+		$dataTable = $facade::getCheckListDataController();
+
+		$hasCompletedExpression = new ExpressionField(
+			'HAS_COMPLETED',
+			'MAX(CASE WHEN %s = \'Y\' THEN 1 ELSE 0 END)',
+			'IS_COMPLETE',
+		);
+
+		$queryResult = $dataTable::query()
+			->setSelect(['TASK_ID', $hasCompletedExpression])
+			->whereIn('TASK_ID', $taskIds)
+			->setGroup(['TASK_ID'])
+			->exec()
+		;
+
+		while ($row = $queryResult->fetch())
+		{
+			$taskId = (int)($row['TASK_ID'] ?? 0);
+			$hasCompleted = isset($row['HAS_COMPLETED']) ? (int)$row['HAS_COMPLETED'] === 1 : null;
+
+			if ($taskId > 0 && $hasCompleted !== null)
+			{
+				$result[$taskId] = $hasCompleted;
+			}
+		}
+
+		return $result;
 	}
 }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Integration\Im;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Entity\File\FileCollection;
+use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Main\Loader;
@@ -13,6 +15,9 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Event\Chat\OnAfterSendMessageEvent;
 use Bitrix\Tasks\V2\Internal\EventDispatcher\EventDispatcher;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Action\AbstractNotify;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Action\AbstractNotifyWithFiles;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Action\NotifyFileChanged;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Service\SendResultAdapter;
 use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Result\Result;
@@ -94,6 +99,12 @@ class MessageSender implements MessageSenderInterface
 			$message->setAttach($attach);
 		}
 
+		$diskObjectIds = $this->getObjectIdsByAttachIds($notification);
+		if (!empty($diskObjectIds))
+		{
+			$this->addTaskFilesToChat($chat, $message, $diskObjectIds);
+		}
+
 		if ($notification->getDisableNotify())
 		{
 			$message->disableNotify();
@@ -135,5 +146,27 @@ class MessageSender implements MessageSenderInterface
 		}
 
 		return self::DEFAULT_AUTHOR_ID;
+	}
+
+	private function getObjectIdsByAttachIds(AbstractNotify $notification): array
+	{
+		if ($notification instanceof AbstractNotifyWithFiles)
+		{
+			return $notification->getDiskObjectIds();
+		}
+
+		return [];
+	}
+
+	private function addTaskFilesToChat(Chat $chat, Message $message, array $diskObjectIds): void
+	{
+		foreach ($diskObjectIds as $diskObjectId)
+		{
+			$copy = (new FileItem($diskObjectId))->getCopyToChat($chat);
+			if ($copy !== null)
+			{
+				$message->addFile($copy);
+			}
+		}
 	}
 }

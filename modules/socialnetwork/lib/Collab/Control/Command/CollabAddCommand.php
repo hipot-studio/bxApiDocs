@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\Collab\Control\Command;
 
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Validation\Rule\NotEmpty;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use Bitrix\SocialNetwork\Collab\Access\CollabAccessController;
+use Bitrix\SocialNetwork\Validation\Rule\NotContainsUrl;
 use Bitrix\Socialnetwork\Collab\Control\Command\ValueObject\CollabFeatures;
 use Bitrix\Socialnetwork\Collab\Control\Command\ValueObject\CollabFeaturesPermissions;
 use Bitrix\Socialnetwork\Collab\Control\Command\ValueObject\CollabOptions;
@@ -23,17 +25,22 @@ use Bitrix\Socialnetwork\Control\Enum\ViewMode;
 use Bitrix\Socialnetwork\Control\Mapper\Attribute\Map;
 use Bitrix\Socialnetwork\Control\Mapper\Field\ViewModeMapper;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
-use Bitrix\SocialNetwork\Validation\Rule\NotContainsUrl;
 
 /**
  * @method self setOptions(CollabOptions $options)
  * @method CollabOptions getOptions()
+ * @method self setGoal(?string $goal)
+ * @method ?string getGoal()
+ * @method self setDateStart(?DateTime $dateStart)
+ * @method ?DateTime getDateStart()
+ * @method self setDateFinish(?DateTime $dateFinish)
+ * @method ?DateTime getDateFinish()
  */
 #[AccessController(CollabAccessController::class)]
 class CollabAddCommand extends AddCommand
 {
 	#[NotContainsUrl]
-	#[NotEmpty]
+	#[NotEmpty(allowZero: true)]
 	#[Map('NAME')]
 	protected string $name;
 
@@ -59,6 +66,10 @@ class CollabAddCommand extends AddCommand
 	#[Validatable]
 	#[Map('INITIATE_PERMS', InitiatePermissionMapper::class)]
 	protected CollabOptions $options;
+
+	protected ?string $goal;
+	protected ?DateTime $dateStart;
+	protected ?DateTime $dateFinish;
 
 	public function addOption(AbstractOption $option): static
 	{

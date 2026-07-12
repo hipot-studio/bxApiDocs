@@ -7,12 +7,15 @@ use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeResolver;
+use Bitrix\Im\V2\Chat\Tree\ResolvedChatNode;
 use Bitrix\Im\V2\Message\Counter\CounterOverflowService;
 use Bitrix\Im\V2\Reading\Counter\Entity\UserCounters;
 use Bitrix\Im\V2\Reading\Counter\Internal\CountersCache;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 
@@ -25,6 +28,7 @@ class UserCountersCollector
 		protected readonly TypeRegistry $typeRegistry,
 		protected readonly CountersCache $countersCache,
 		protected readonly CounterOverflowService $counterOverflowService,
+		protected readonly ChatTreeResolver $chatTreeResolver,
 	) {}
 
 	public function get(int $userId): UserCounters
@@ -46,7 +50,7 @@ class UserCountersCollector
 		$groupedMessageCounters = $this->fetchGroupedMessageCounters($userId);
 		$groupedMessageCounters = $this->enrichWithChatData($groupedMessageCounters, $userId);
 		$unreadChats = $this->fetchUnreadChats($userId);
-		$parentChats = $this->fetchUnknownParentChats($groupedMessageCounters, $unreadChats);
+		$parentChats = $this->fetchUnknownParentChats($groupedMessageCounters, $unreadChats, $userId);
 		$additionalOpenLinesCounters = $this->fetchAdditionalOpenLinesCounters($userId);
 
 		return $this->buildUserCounters(
@@ -90,8 +94,14 @@ class UserCountersCollector
 		foreach ($parentChats as $chat)
 		{
 			$type = $this->getType($chat);
-			$counters->addParentChat($chat, $this->getRecentSections($type), $type);
+			$counters->addParentChat(
+				$chat,
+				$this->getRecentSections($type, (int)($chat['PARENT_ID'] ?? 0)),
+				$type,
+			);
 		}
+
+		$counters->removeOrphaned();
 
 		return $counters;
 	}
@@ -100,7 +110,7 @@ class UserCountersCollector
 	{
 		$overflowedChatIds = $this->counterOverflowService->getOverflowedChatIdsByUserId(
 			$userId,
-			$this->getLimit()
+			$this->getLimit(),
 		);
 		$limit = $this->getLimit() - count($overflowedChatIds);
 		$query = MessageUnreadTable::query()
@@ -176,25 +186,8 @@ class UserCountersCollector
 
 	protected function fetchChatData(array $chatIds, int $userId): array
 	{
-		if (empty($chatIds))
-		{
-			return [];
-		}
-
 		$result = [];
-		$raw = ChatTable::query()
-			->setSelect([
-				'CHAT_ID' => 'ID',
-				'CHAT_ENTITY_TYPE' => 'ENTITY_TYPE',
-				'CHAT_TYPE' => 'TYPE',
-				'PARENT_ID' => 'PARENT_ID',
-				'IS_MUTED' => 'RELATION.NOTIFY_BLOCK',
-			])
-			->whereIn('ID', $chatIds)
-			->withRelation($userId)
-			->fetchAll()
-		;
-		foreach ($raw as $chat)
+		foreach ($this->fetchChatRows($chatIds, $userId) as $chat)
 		{
 			$result[$chat['CHAT_ID']] = $chat;
 		}
@@ -202,67 +195,76 @@ class UserCountersCollector
 		return $result;
 	}
 
-	protected function fetchUnknownParentChats(array $groupedMessageCounters, array $unreadChats): array
+	protected function fetchUnknownParentChats(array $groupedMessageCounters, array $unreadChats, int $userId): array
 	{
-		$ids = [];
-		$parentIds = [];
-		$unknownParentIds = [];
+		$knownIds = [];
 		foreach ($groupedMessageCounters as $counters)
 		{
-			$id = (int)$counters['CHAT_ID'];
-			$parentId = (int)$counters['PARENT_ID'];
-			$ids[$id] = $id;
-			if ($parentId)
-			{
-				$parentIds[$parentId] = $parentId;
-			}
+			$knownIds[(int)$counters['CHAT_ID']] = true;
 		}
-
 		foreach ($unreadChats as $unreadChat)
 		{
-			$id = (int)$unreadChat['CHAT_ID'];
-			$parentId = (int)($unreadChat['PARENT_ID'] ?? 0);
-			$ids[$id] = $id;
-			if ($parentId)
-			{
-				$parentIds[$parentId] = $parentId;
-			}
+			$knownIds[(int)$unreadChat['CHAT_ID']] = true;
 		}
 
-		foreach ($parentIds as $parentId)
+		$unknownParentIds
+			= $this->collectUnknownParentIds($groupedMessageCounters, $knownIds)
+			+ $this->collectUnknownParentIds($unreadChats, $knownIds);
+
+		return array_map(
+			static fn(ResolvedChatNode $node): array => [
+				'CHAT_ID' => $node->chatId,
+				'CHAT_TYPE' => $node->chatType,
+				'CHAT_ENTITY_TYPE' => $node->entityType,
+				'PARENT_ID' => $node->parentChatId,
+				'IS_MUTED' => $node->isMuted ? 'Y' : 'N',
+			],
+			$this->chatTreeResolver->resolveForUser($userId, array_values($unknownParentIds), array_keys($knownIds)),
+		);
+	}
+
+	private function collectUnknownParentIds(array $chats, array $knownIds): array
+	{
+		$unknownParentIds = [];
+		foreach ($chats as $chat)
 		{
-			if (!array_key_exists($parentId, $ids))
+			$parentId = (int)($chat['PARENT_ID'] ?? 0);
+			if ($parentId > 0 && !isset($knownIds[$parentId]))
 			{
 				$unknownParentIds[$parentId] = $parentId;
 			}
 		}
 
-		return $this->fetchParentChats($unknownParentIds);
+		return $unknownParentIds;
 	}
 
-	protected function fetchParentChats(array $unknownParentIds): array
+	protected function fetchChatRows(array $chatIds, int $userId): array
 	{
-		if (empty($unknownParentIds))
+		if (empty($chatIds))
 		{
 			return [];
 		}
 
-		return ChatTable::query()
+		$query = ChatTable::query()
 			->setSelect([
 				'CHAT_ID' => 'ID',
 				'CHAT_TYPE' => 'TYPE',
 				'CHAT_ENTITY_TYPE' => 'ENTITY_TYPE',
+				'PARENT_ID' => 'PARENT_ID',
+				'IS_MUTED' => 'RELATION.NOTIFY_BLOCK',
 			])
-			->whereIn('ID', $unknownParentIds)
-			->fetchAll()
+			->whereIn('ID', $chatIds)
+			->withRelation($userId, Join::TYPE_INNER)
 		;
+
+		return $query->fetchAll();
 	}
 
 	protected function getType(array $counter): Chat\Type
 	{
 		return $this->typeRegistry->getByLiteralAndEntity(
 			$counter['CHAT_TYPE'] ?? '',
-			$counter['CHAT_ENTITY_TYPE'] ?? null
+			$counter['CHAT_ENTITY_TYPE'] ?? null,
 		);
 	}
 

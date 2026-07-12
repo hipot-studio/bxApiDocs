@@ -115,8 +115,13 @@ class CrmItemRepository implements CrmItemRepositoryInterface
 				continue;
 			}
 
-			$typeName = $this->getTypeName($typeId);
 			$title = $this->getItemTitle($entityId, $typeId);
+			if ($title === '')
+			{
+				continue;
+			}
+
+			$typeName = $this->getTypeName($typeId);
 			$url = $this->getItemUrl($entityId, $typeId);
 
 			$items[] = [

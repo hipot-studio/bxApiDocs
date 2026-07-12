@@ -2,9 +2,8 @@
 
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
-use Bitrix\Disk\ProxyType;
+use Bitrix\Disk\File;
 use Bitrix\Disk\Internals\DiskComponent;
-use Bitrix\Disk\User;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Grid;
 use Bitrix\Main\Localization\Loc;
@@ -177,7 +176,7 @@ class CDiskExternalLinkListComponent extends DiskComponent
 					),
 					array(
 						"text" => Loc::getMessage('DISK_EXTERNAL_LINK_LIST_ACT_GET_EXTERNAL_LINK'),
-						"onclick" => "BX.Disk['ExternalLinkListClass_{$this->getComponentId()}'].showExternalLink({$externalLink->getId()}, {$externalLink->getObjectId()}, '{$this->getShortUrlExternalLink($externalLink)}');",
+						"onclick" => "BX.Disk['ExternalLinkListClass_{$this->getComponentId()}'].showExternalLink({$externalLink->getId()}, {$externalLink->getObjectId()}, '{$this->getShortUrlExternalLink($file, $externalLink->getHash())}');",
 					),
 					array(
 						"text" => Loc::getMessage('DISK_EXTERNAL_LINK_LIST_ACT_DISABLE_EXTERNAL_LINK'),
@@ -284,14 +283,8 @@ class CDiskExternalLinkListComponent extends DiskComponent
 		);
 	}
 
-	protected function getShortUrlExternalLink(ExternalLink $externalLink)
+	protected function getShortUrlExternalLink(File $file, string $hash)
 	{
-		return $this->getUrlManager()->getShortUrlExternalLink(
-			array(
-				'hash' => $externalLink->getHash(),
-				'action' => 'default',
-			),
-			true
-		);
+		return $this->getUrlManager()->getPublicExternalLink($file, $hash);
 	}
 }

@@ -9,6 +9,7 @@ final class RenderResult
 	public function __construct(
 		private readonly string $content,
 		private readonly int $status,
+		private readonly ?string $redirectUrl = null,
 	) {
 	}
 
@@ -20,5 +21,10 @@ final class RenderResult
 	public function getStatus(): int
 	{
 		return $this->status;
+	}
+
+	public function getRedirectUrl(): ?string
+	{
+		return $this->redirectUrl;
 	}
 }

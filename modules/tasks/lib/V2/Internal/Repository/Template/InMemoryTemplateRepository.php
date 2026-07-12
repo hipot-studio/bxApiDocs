@@ -91,4 +91,14 @@ class InMemoryTemplateRepository implements TemplateRepositoryInterface
 	{
 		unset($this->cache[$id]);
 	}
+
+	public function getReplicateParams(int $templateId): ?array
+	{
+		return $this->templateRepository->getReplicateParams($templateId);
+	}
+
+	public function getReplicableTemplateIds(int $afterId, int $limit): array
+	{
+		return $this->templateRepository->getReplicableTemplateIds($afterId, $limit);
+	}
 }

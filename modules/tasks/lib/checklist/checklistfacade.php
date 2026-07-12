@@ -3,7 +3,7 @@
 namespace Bitrix\Tasks\CheckList;
 
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Entity\DataManager;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Entity\Query\Join;

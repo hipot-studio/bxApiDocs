@@ -10,6 +10,7 @@ class PromotionFactory
 		{
 			PromotionType::FEED_AI => new FeedAi(),
 			PromotionType::CHAT_AI => new ChatAi(),
+			PromotionType::PROJECT_AI => new ProjectAi(),
 		};
 	}
 }

@@ -36,7 +36,7 @@ Got exception: 8; /var/www/sites/RAM/cpb24.bxram.bsr/html/bitrix/modules/tasks/c
 */
 
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Db\SqlQueryException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\ObjectException;

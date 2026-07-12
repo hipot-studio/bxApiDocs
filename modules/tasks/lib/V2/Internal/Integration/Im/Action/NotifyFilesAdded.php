@@ -4,14 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Main\Loader;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
-use Bitrix\Tasks\V2\Internal\Integration\Disk\Provider\DiskFileProvider;
 
 #[Recipients(creator: false, responsible: true, accomplices: true, auditors: false)]
-class NotifyFilesAdded extends AbstractNotify implements ShouldSend
+class NotifyFilesAdded extends AbstractNotifyWithFiles implements ShouldSend
 {
 	public function __construct(
 		private readonly Entity\Task $task,
@@ -46,26 +42,8 @@ class NotifyFilesAdded extends AbstractNotify implements ShouldSend
 		];
 	}
 
-	public function getAttach(): ?\CIMMessageParamAttach
+	public function getTaskAttachIds(): array
 	{
-		$attach = new \CIMMessageParamAttach();
-
-		if (!empty($this->fileIds) && Loader::includeModule('disk'))
-		{
-			$diskFileProvider = Container::getInstance()->get(DiskFileProvider::class);
-			$files = $diskFileProvider->getObjectsByIds($this->fileIds);
-
-			$fileNames = array_map(static fn($file) => $file['name'], $files->toArray());
-
-			if (!empty($fileNames))
-			{
-				$attach->AddMessage('[b]' . Loc::getMessage('TASKS_IM_NOTIFY_ATTACH_FILE') . '[/b][br]');
-				$attach->AddMessage(implode('[br]', $fileNames));
-
-				return $attach;
-			}
-		}
-
-		return null;
+		return $this->fileIds ?? [];
 	}
 }

@@ -38,6 +38,8 @@ final class UpdateObserver implements UpdateObserverInterface
 			return;
 		}
 
-		$this->addUsersToGroup($flowEntity->getGroupId(), $userIds);
+		$initiatorId = $command->ownerId ?? $flowEntityBeforeUpdate->getOwnerId();
+
+		$this->addUsersToGroup($flowEntity->getGroupId(), $userIds, $initiatorId);
 	}
 }

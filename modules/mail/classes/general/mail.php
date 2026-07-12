@@ -2,6 +2,7 @@
 
 use Bitrix\Mail\Helper\AttachmentHelper;
 use Bitrix\Mail\Helper\MailContact;
+use Bitrix\Mail\Internals\MailEntityOptionsTable;
 use Bitrix\Mail\MailMessageTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Text\Emoji;
@@ -96,15 +97,29 @@ class CMail
 
 	public static function onUserUpdate($arFields)
 	{
-		if ($arFields['RESULT'] && isset($arFields['ACTIVE']) && $arFields['ACTIVE'] == 'N')
+		if (!$arFields['RESULT'] || !isset($arFields['ACTIVE']))
 		{
-			$selectResult = CMailbox::getList(array(), array('USER_ID' => intval($arFields['ID']), 'ACTIVE' => 'Y'));
-			while ($mailbox = $selectResult->fetch())
-				CMailbox::update($mailbox['ID'], array('ACTIVE' => 'N'));
+			return;
+		}
 
-			\Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService::resetResponsibleAdminIfNeeded(
-				(int)$arFields['ID'],
-			);
+		$userId = (int)$arFields['ID'];
+
+		if ($arFields['ACTIVE'] === 'N')
+		{
+			if (\Bitrix\Mail\Integration\Intranet\UserService::isUserFired($userId))
+			{
+				\Bitrix\Mail\Helper\OrphanedMailboxLifecycle::handleUserFired($userId);
+			}
+			else
+			{
+				\Bitrix\Mail\Helper\OrphanedMailboxLifecycle::handleUserDeactivated($userId);
+			}
+
+			\Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService::resetResponsibleAdminIfNeeded($userId);
+		}
+		else
+		{
+			\Bitrix\Mail\Helper\OrphanedMailboxLifecycle::handleUserReactivated($userId);
 		}
 	}
 
@@ -112,7 +127,9 @@ class CMail
 	{
 		$selectResult = CMailbox::getList(array(), array('USER_ID' => intval($id)));
 		while ($mailbox = $selectResult->fetch())
+		{
 			CMailbox::delete($mailbox['ID']);
+		}
 
 		\Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService::resetResponsibleAdminIfNeeded(
 			(int)$id,
@@ -754,7 +771,7 @@ class CAllMailBox
 		\Bitrix\Mail\Internals\MailEntityDataTable::deleteList(['=MAILBOX_ID' => $ID]);
 		$DB->query(sprintf('DELETE FROM b_mail_mailbox_dir WHERE MAILBOX_ID = %u', $ID));
 		$DB->query(sprintf('DELETE FROM b_mail_counter WHERE MAILBOX_ID = %u', $ID));
-		$DB->query(sprintf('DELETE FROM b_mail_entity_options WHERE MAILBOX_ID = %u', $ID));
+		MailEntityOptionsTable::deleteList(['=MAILBOX_ID' => (int)$ID]);
 		$DB->query(sprintf('DELETE FROM b_mail_mailbox_list_search_index WHERE MAILBOX_ID = %u', $ID));
 
 		CMailbox::SMTPReload();
@@ -2118,7 +2135,7 @@ class CAllMailMessage
 
 	private static function addDefferedDownload($mailboxID, $ID): void
 	{
-		\Bitrix\Mail\Internals\MailEntityOptionsTable::add([
+		MailEntityOptionsTable::add([
 			'MAILBOX_ID' => $mailboxID,
 			'ENTITY_TYPE' => 'MESSAGE',
 			'ENTITY_ID' => $ID,

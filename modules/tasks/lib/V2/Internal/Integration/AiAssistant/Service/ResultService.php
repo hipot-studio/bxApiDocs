@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service;
 use Bitrix\Tasks\V2\Internal\Access\Service\ResultAccessService;
 use Bitrix\Tasks\V2\Internal\Entity\Result;
 use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Integration\Ai\Service\MarkdownConversionService;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\InvalidIdentifierException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\AddResultDto;
@@ -16,6 +17,7 @@ class ResultService
 	public function __construct(
 		private readonly ResultAccessService $accessService,
 		private readonly \Bitrix\Tasks\V2\Internal\Service\Task\ResultService $resultService,
+		private readonly MarkdownConversionService $markdownConversionService,
 	)
 	{
 	}
@@ -33,7 +35,7 @@ class ResultService
 
 		$result = new Result(
 			taskId: $dto->taskId,
-			text: $dto->text,
+			text: $this->markdownConversionService->convertToBbCode($dto->text),
 			author: new User($dto->authorId),
 		);
 

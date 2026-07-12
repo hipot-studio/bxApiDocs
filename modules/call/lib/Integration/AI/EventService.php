@@ -117,33 +117,49 @@ class EventService
 			&& in_array($outcome->getType(), $waitForTasks, true)
 		)
 		{
-			$outcomeCollection = OutcomeCollection::getOutcomesByCallId($outcome->getCallId(), $waitForTasks);
+			$callId = $outcome->getCallId();
+			$outcomeCollection = OutcomeCollection::getOutcomesByCallId($callId, $waitForTasks);
 			if ($outcomeCollection->count() >= count($waitForTasks))
 			{
 				$call = $outcome->fillCall();
 				$chat = Chat::getInstance($call->getChatId());
 				if ($chat->getId() == $call->getChatId())
 				{
-					$messageOutcome = ChatMessage::generateOverviewMessage($outcome->getCallId(), $outcomeCollection, $chat);
-					if ($messageOutcome)
+					$transcriptionOutcomeId = $outcomeCollection->getOutcomeByType(SenseType::TRANSCRIBE->value)->getId();
+					$existingOverviewMessage = NotifyService::getInstance()->findMessageByParams(
+						$chat->getId(),
+						[
+							'CALL_ID' => $callId,
+							'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_OVERVIEW,
+							'OUTCOME_ID' => $transcriptionOutcomeId,
+						]
+					);
+					if (
+						$chat->getId() == $call->getChatId()
+						&& $existingOverviewMessage === null
+					)
 					{
-						$sendingConfig = (new SendingConfig())->enableSkipUrlIndex();
-						$context = (new Context())->setUser($call->getInitiatorId());
-						NotifyService::getInstance()->sendMessageDeferred($chat, $messageOutcome, $sendingConfig, $context);
+						$messageOutcome = ChatMessage::generateOverviewMessage($callId, $outcomeCollection, $chat);
+						if ($messageOutcome)
+						{
+							$sendingConfig = (new SendingConfig())->enableSkipUrlIndex();
+							$context = (new Context())->setUser($call->getInitiatorId());
+							NotifyService::getInstance()->sendMessageDeferred($chat, $messageOutcome, $sendingConfig, $context);
 
-						CallAIService::getInstance()->removeExpectation($call->getId());
+							CallAIService::getInstance()->removeExpectation($call->getId());
 
-						$callInstance = Registry::getCallWithId($call->getId());
-						(new FollowUpAnalytics($callInstance))
-							->addFollowUpResultMessage()
-							->sendTelemetry(
-								source: null,
-								status: 'success',
-								event: 'follow_up_result'
-							)
-						;
+							$callInstance = Registry::getCallWithId($call->getId());
+							(new FollowUpAnalytics($callInstance))
+								->addFollowUpResultMessage()
+								->sendTelemetry(
+									source: null,
+									status: 'success',
+									event: 'follow_up_result'
+								)
+							;
 
-						TrackDeletionService::getInstance()->tryDeleteAiTracksFromMixer($call->getId());
+							TrackDeletionService::getInstance()->tryDeleteAiTracksFromMixer($call->getId());
+						}
 					}
 				}
 			}

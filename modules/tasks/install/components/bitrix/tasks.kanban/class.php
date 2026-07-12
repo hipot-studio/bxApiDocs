@@ -51,6 +51,7 @@ use Bitrix\Tasks\Scrum\Service\TaskService;
 use Bitrix\Tasks\Scrum\Service\KanbanService;
 use Bitrix\Tasks\Scrum\Utility\ViewHelper;
 
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\FeatureService;
 use Bitrix\Tasks\V2\Internal\Service\Kanban\Display\Service\Display\AbstractDisplayService;
 use Bitrix\Tasks\V2\Internal\Service\Kanban\Display\DisplayFactory;
 use Bitrix\Tasks\V2\Internal\Service\Kanban\Display\Service\MemberService;
@@ -149,6 +150,8 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 			return $init;
 		}
 
+		$projectFeatureService = new FeatureService();
+
 		$this->initVars();
 
 		// get data of user or group
@@ -172,7 +175,13 @@ class TasksKanbanComponent extends \CBitrixComponent implements Controllerable, 
 			// check sonet perms
 			elseif (!$this->canReadGroupTasks($params['GROUP_ID']))
 			{
-				$this->addError('TASK_LIST_ACCESS_TO_GROUP_DENIED_V2');
+				$messageAccessDeniedSuffix = (
+					$projectFeatureService->isNewProjectsOn()
+						? '_V3'
+						: '_V2'
+				);
+
+				$this->addError('TASK_LIST_ACCESS_TO_GROUP_DENIED' . $messageAccessDeniedSuffix);
 				$init = false;
 			}
 		}

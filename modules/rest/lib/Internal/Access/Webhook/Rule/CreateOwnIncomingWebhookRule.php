@@ -44,6 +44,6 @@ class CreateOwnIncomingWebhookRule extends AbstractRule
 			return true;
 		}
 
-		return !(!empty($createOwnAccessCodes) || !empty($createAccessCodes));
+		return false;
 	}
 }

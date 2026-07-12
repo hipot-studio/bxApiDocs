@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Im\Action;
 
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
@@ -15,7 +14,9 @@ class NotifyResultModified extends AbstractNotify
 		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
 		protected readonly ?Entity\User $triggeredBy = null,
+		private readonly ChatActionLinkService $chatActionLinkService,
 		private readonly int $dateTs = 0,
+		private readonly int $resultId = 0,
 	)
 	{
 		$sender->sendMessage(task: $task, notification: $this);
@@ -24,16 +25,24 @@ class NotifyResultModified extends AbstractNotify
 	public function getMessageCode(): string
 	{
 		return $this->triggeredBy?->getGender() === Entity\User\Gender::Female
-			? 'TASKS_IM_RESULT_MODIFIED_MSGVER_1_F'
-			: 'TASKS_IM_RESULT_MODIFIED_MSGVER_1_M'
+			? 'TASKS_IM_RESULT_MODIFIED_F_MSGVER_2'
+			: 'TASKS_IM_RESULT_MODIFIED_M_MSGVER_2'
 		;
 	}
 
 	public function getMessageData(): array
 	{
+		$actionLink = $this->chatActionLinkService->get(
+			task: $this->task,
+			userId: (int)$this->triggeredBy?->id,
+			action: ChatAction::OpenResult,
+			entityId: $this->resultId,
+		);
+
 		return [
 			'#USER#' => $this->formatUser($this->triggeredBy),
 			'#DATE#' => "[TIMESTAMP=$this->dateTs FORMAT=LONG_DATE_FORMAT]",
+			'#OPEN_RESULT_URL#' => $actionLink,
 		];
 	}
 }

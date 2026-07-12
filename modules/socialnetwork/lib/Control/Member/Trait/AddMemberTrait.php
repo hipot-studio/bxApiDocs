@@ -29,6 +29,9 @@ trait AddMemberTrait
 
 		$handlerResult->setGroupChanged();
 
+		$initiatedByType ??= UserToGroupTable::INITIATED_BY_GROUP;
+		$isInitiatedByStructure = $initiatedByType === UserToGroupTable::INITIATED_BY_STRUCTURE;
+
 		foreach ($members as $userId)
 		{
 			$user = [
@@ -37,8 +40,9 @@ trait AddMemberTrait
 				'ROLE' => $role,
 				'DATE_CREATE' => new DateTime(),
 				'DATE_UPDATE' => new DateTime(),
-				'INITIATED_BY_TYPE' => $initiatedByType ?? UserToGroupTable::INITIATED_BY_GROUP,
+				'INITIATED_BY_TYPE' => $initiatedByType,
 				'INITIATED_BY_USER_ID' => $initiatorId,
+				'AUTO_MEMBER' => $isInitiatedByStructure ? 'Y' : 'N',
 			];
 
 			$result = CSocNetUserToGroup::Add($user, true, true, true);

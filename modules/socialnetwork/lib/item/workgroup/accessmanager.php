@@ -10,7 +10,7 @@ namespace Bitrix\Socialnetwork\Item\Workgroup;
 
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
-use Bitrix\Socialnetwork\Collab\Converter\ConverterFeature;
+use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Socialnetwork\EO_UserToGroup;
 use Bitrix\Socialnetwork\EO_Workgroup;
 use Bitrix\Socialnetwork\EO_WorkgroupFavorites;
@@ -517,6 +517,7 @@ class AccessManager
 			'GROUP_ID',
 			'ROLE',
 			'AUTO_MEMBER',
+			'INITIATED_BY_TYPE',
 		]);
 
 		if (
@@ -536,6 +537,7 @@ class AccessManager
 			!$this->targetUserRelation
 			|| !$this->checkRelationGroupId($this->targetUserRelation)
 			|| $this->targetUserRelation->get('AUTO_MEMBER')
+			|| $this->targetUserRelation->get('INITIATED_BY_TYPE') === UserToGroupTable::INITIATED_BY_STRUCTURE
 			|| $this->targetUserRelation->get('USER_ID') === $this->currentUserId
 			|| !in_array($this->targetUserRelation->get('ROLE'), [
 				UserToGroupTable::ROLE_MODERATOR,
@@ -665,9 +667,9 @@ class AccessManager
 	public function canConvertToCollab(): bool
 	{
 		return
-			ConverterFeature::isOn()
+			Feature::isNewProjectsOn()
 			&& $this->currentUserRelation
-			&& $this->group->getType() === Type::Group->value
+			&& ($this->group->getType() === Type::Group->value || $this->group->getType() === Type::Project->value)
 			&& $this->checkOwner($this->currentUserRelation)
 		;
 	}

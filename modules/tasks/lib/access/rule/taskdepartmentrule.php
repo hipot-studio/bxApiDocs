@@ -36,7 +36,14 @@ class TaskDepartmentRule extends AbstractRule
 			return true;
 		}
 
-		$isInDepartment = $item->isInDepartment($this->user->getUserId(), false, [RoleDictionary::ROLE_RESPONSIBLE, RoleDictionary::ROLE_DIRECTOR, RoleDictionary::ROLE_ACCOMPLICE]);
+		$isInDepartment = $item->isInMembersDepartments(
+			$this->user->getUserId(),
+			[
+				RoleDictionary::ROLE_RESPONSIBLE,
+				RoleDictionary::ROLE_DIRECTOR,
+				RoleDictionary::ROLE_ACCOMPLICE,
+			],
+		);
 
 		if (
 			$isInDepartment

@@ -325,6 +325,8 @@ class ChatMessage extends CallChatMessage
 			}
 		}
 
+		$transcribeOutcomeId = $outcomeCollection->getOutcomeByType(SenseType::TRANSCRIBE->value)->getId();
+
 		$link = Library::getCallSliderUrl($callId);
 		$attach->AddMessage('[br]'. static::getMessage('CALL_NOTIFY_COPILOT_DETAIL', ['#CALL_DETAIL#' => $link]). '[br]');
 
@@ -339,6 +341,7 @@ class ChatMessage extends CallChatMessage
 		$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
 			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_OVERVIEW,
 			'CALL_ID' => $callId,
+			'OUTCOME_ID' => $transcribeOutcomeId,
 		]);
 
 		return $message;
@@ -409,7 +412,7 @@ class ChatMessage extends CallChatMessage
 
 		if (
 			$error instanceof CallAIError
-			&& $error->recoverable()
+			&& ($error->recoverable() || $error->isAiGeneratedError())
 			&& ($errorMessage = static::getMessage('CALL_NOTIFY_COPILOT_CONTINUE'))
 		)
 		{

@@ -14,7 +14,7 @@ use Bitrix\Calendar\Core\Queue\Processor\SendingEmailNotification;
 use Bitrix\Calendar\Core\Section\Section;
 use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
 use Bitrix\Calendar\Integration\Pull\PushCommand;
-use Bitrix\Calendar\Integration\SocialNetwork\Collab;
+use Bitrix\Calendar\Internal\Integration\Socialnetwork\CollabService;
 use Bitrix\Calendar\Sharing;
 use Bitrix\Calendar\Sync\Factories\FactoriesCollection;
 use Bitrix\Calendar\Core\Event\Tools\UidGenerator;
@@ -280,15 +280,6 @@ class CCalendarEvent
 			{
 				$entryFields['CAL_TYPE'] = $section['CAL_TYPE'];
 				$entryFields['OWNER_ID'] = $section['OWNER_ID'] ?? '';
-
-				if (
-					$section['CAL_TYPE'] === Dictionary::CALENDAR_TYPE['group']
-					&& Collab\Entity\SectionEntityHelper::getIfCollab($sectionId)
-					&& $entryFields['EVENT_TYPE'] !== Dictionary::EVENT_TYPE['shared_collab']
-				)
-				{
-					$entryFields['EVENT_TYPE'] = Dictionary::EVENT_TYPE['collab'];
-				}
 			}
 
 			if (($entryFields['CAL_TYPE'] ?? null) === 'user')
@@ -738,7 +729,7 @@ class CCalendarEvent
 
 				if (isset($params['attendeeStatuses']))
 				{
-					$attendeeList = $params['attendeeStatuses'];
+					$attendeeList = array_values($params['attendeeStatuses']);
 				}
 				else
 				{
@@ -765,19 +756,7 @@ class CCalendarEvent
 					: ''
 				;
 
-				$collabId = 0;
-
-				if (
-					!empty($entryFields['EVENT_TYPE'])
-					&& in_array(
-						$entryFields['EVENT_TYPE'],
-						[Dictionary::EVENT_TYPE['collab'], Dictionary::EVENT_TYPE['shared_collab']],
-						true
-					)
-				)
-				{
-					$collabId = self::getCollabIdByParentId($entryFields['PARENT_ID']);
-				}
+				$collabId = self::resolvePullCollabId($entryFields);
 
 				Util::addPullEvent(
 					PushCommand::EditEvent,
@@ -888,6 +867,7 @@ class CCalendarEvent
 			$userIndex = self::getUsersDetails($involvedUsersIdList);
 
 			$parentCollabConnections = self::getParentCollabConnections($eventList);
+			$hasCollabersMap = self::getHasCollabersMapForEvents($eventList, $parentCollabConnections);
 
 			foreach ($eventList as $event)
 			{
@@ -973,7 +953,7 @@ class CCalendarEvent
 
 				if ($event !== false)
 				{
-					$event['COLLAB_ID'] = self::getCollabIdByEvent($event, $parentCollabConnections);
+					$event['COLLAB_ID'] = self::getCollabIdByEvent($event, $parentCollabConnections, $hasCollabersMap);
 
 					$event = self::PreHandleEvent($event, [
 						'parseDescription' => $params['parseDescription'],
@@ -1180,6 +1160,12 @@ class CCalendarEvent
 						if ((int)$value)
 						{
 							$query->where('ID', '>', $value);
+						}
+						break;
+					case '<ID':
+						if ((int)$value)
+						{
+							$query->where('ID', '<', $value);
 						}
 						break;
 					case 'CAL_TYPE':
@@ -3489,6 +3475,8 @@ class CCalendarEvent
 
 					if ($attendeeStatuses[$attendeeId]['sendInvitations'])
 					{
+						$childParams['arFields']['MEETING_STATUS'] = 'Q';
+
 						$childParams['sendInvitations'] = true;
 					}
 
@@ -4565,8 +4553,8 @@ class CCalendarEvent
 			}
 
 			$shouldNotifyExtranetInCollab = $status === 'Y'
-				&& $event['EVENT_TYPE'] === Dictionary::EVENT_TYPE['collab']
 				&& Util::isCollabUser($userId)
+				&& !empty($event['COLLAB_ID'])
 			;
 
 			if ($shouldNotifyExtranetInCollab)
@@ -7297,22 +7285,21 @@ class CCalendarEvent
 		return $openEventSection;
 	}
 
+	/**
+	 * Collects parent → owner mapping for child events whose parent lives in a
+	 * group calendar. The mapping is keyed by parent event ID and the value is
+	 * the parent's OWNER_ID (group id).
+	 *
+	 * No EVENT_TYPE pre-filter: under the HAS_COLLABERS-driven model, "is this
+	 * a collab project event" is decided downstream by reading HAS_COLLABERS
+	 * for the effective group id, not by a stored EVENT_TYPE marker.
+	 */
 	private static function getParentCollabConnections(array $eventList): array
 	{
 		$parentIds = [];
 		foreach ($eventList as $event)
 		{
-			$collabEventTypes = [
-				Dictionary::EVENT_TYPE['collab'],
-				Dictionary::EVENT_TYPE['shared_collab'],
-			];
-
-			$isCollabEvent = (
-				!empty($event['EVENT_TYPE'])
-				&& in_array($event['EVENT_TYPE'], $collabEventTypes, true)
-			);
-
-			if (!$isCollabEvent || $event['ID'] === $event['PARENT_ID'])
+			if ((int)$event['ID'] === (int)$event['PARENT_ID'])
 			{
 				continue;
 			}
@@ -7353,32 +7340,121 @@ class CCalendarEvent
 		return $cachedCollabIdsByParent + $nonCachedCollabIdsByParent;
 	}
 
-	private static function getCollabIdByEvent(array $event, array $parentCollabConnections): ?int
+	/**
+	 * Returns map of HAS_COLLABERS for every group that could host events from
+	 * the given list (own OWNER_IDs of group-cal base events + ownerIds picked
+	 * up via parent connections for child events).
+	 *
+	 * Single batch query on b_sonet_collab_option.
+	 *
+	 * @return array<int, bool>
+	 */
+	private static function getHasCollabersMapForEvents(array $eventList, array $parentCollabConnections): array
 	{
-		if (
-			!($event['EVENT_TYPE'] ?? null)
-			|| !in_array(
-				$event['EVENT_TYPE'],
-				[Dictionary::EVENT_TYPE['collab'], Dictionary::EVENT_TYPE['shared_collab']],
-				true
-			)
-		)
+		$groupIds = [];
+
+		foreach ($eventList as $event)
+		{
+			$id = (int)($event['ID'] ?? 0);
+			$parentId = (int)($event['PARENT_ID'] ?? 0);
+
+			if ($id !== $parentId && isset($parentCollabConnections[$parentId]))
+			{
+				$groupIds[(int)$parentCollabConnections[$parentId]] = true;
+			}
+			elseif (($event['CAL_TYPE'] ?? null) === Dictionary::CALENDAR_TYPE['group'])
+			{
+				$ownerId = (int)($event['OWNER_ID'] ?? 0);
+				if ($ownerId > 0)
+				{
+					$groupIds[$ownerId] = true;
+				}
+			}
+		}
+
+		if (empty($groupIds))
+		{
+			return [];
+		}
+
+		return ServiceLocator::getInstance()
+			->get(CollabService::class)
+			->getHasCollabersMap(array_keys($groupIds))
+		;
+	}
+
+	/**
+	 * Resolves COLLAB_ID for a single event row.
+	 *
+	 * A COLLAB_ID is returned only when the effective group actually has external
+	 * users (HAS_COLLABERS='Y'). Stored EVENT_TYPE is not consulted — this lets
+	 * legacy '#collab#' rows degrade gracefully and treats '#shared_collab#'
+	 * symmetrically: in external calendars its highlight semantic is identical to
+	 * regular collab events, so the same HAS_COLLABERS gate applies. The
+	 * "no-highlight inside the source group's own calendar" rule for
+	 * '#shared_collab#' is enforced on the JS side via view context.
+	 */
+	private static function getCollabIdByEvent(
+		array $event,
+		array $parentCollabConnections,
+		array $hasCollabersMap,
+	): ?int
+	{
+		$parentId = (int)$event['PARENT_ID'];
+		$groupId = null;
+
+		if ((int)$event['ID'] !== $parentId && !empty($parentCollabConnections[$parentId]))
+		{
+			$groupId = (int)$parentCollabConnections[$parentId];
+		}
+		elseif (($event['CAL_TYPE'] ?? null) === Dictionary::CALENDAR_TYPE['group'])
+		{
+			$groupId = (int)$event['OWNER_ID'];
+		}
+
+		if ($groupId === null || $groupId <= 0)
 		{
 			return null;
 		}
 
-		$collabId = null;
-		$parentId = (int)$event['PARENT_ID'];
-		if ((int)$event['ID'] !== $parentId && !empty($parentCollabConnections[$parentId]))
+		return !empty($hasCollabersMap[$groupId]) ? $groupId : null;
+	}
+
+	/**
+	 * Builds COLLAB_ID for a freshly persisted event, used in pull/EditEvent
+	 * payloads. Mirrors {@see self::getCollabIdByEvent}:
+	 *   - for a child event (ID != PARENT_ID) the group id is resolved via the
+	 *     parent (whether the event itself lives in a user, group or any other
+	 *     calendar);
+	 *   - for a base event in a group calendar the OWNER_ID is the group id.
+	 * Both paths gate on HAS_COLLABERS of the effective group. EVENT_TYPE is no
+	 * longer consulted — '#shared_collab#' falls into the same branches because
+	 * its structure (base in group, child in user) overlaps with the rules above.
+	 */
+	private static function resolvePullCollabId(array $entryFields): int
+	{
+		$id = (int)($entryFields['ID'] ?? 0);
+		$parentId = (int)($entryFields['PARENT_ID'] ?? 0);
+		$groupId = 0;
+
+		if ($parentId > 0 && $id !== $parentId)
 		{
-			$collabId = $parentCollabConnections[$parentId];
-		}
-		else if ($event['CAL_TYPE'] === Dictionary::CALENDAR_TYPE['group'])
-		{
-			$collabId = (int)$event['OWNER_ID'];
+			$groupId = self::getCollabIdByParentId($parentId);
 		}
 
-		return $collabId;
+		if ($groupId <= 0 && ($entryFields['CAL_TYPE'] ?? null) === Dictionary::CALENDAR_TYPE['group'])
+		{
+			$groupId = (int)($entryFields['OWNER_ID'] ?? 0);
+		}
+
+		if ($groupId <= 0)
+		{
+			return 0;
+		}
+
+		$hasCollabers = ServiceLocator::getInstance()->get(CollabService::class)->hasCollabers($groupId);
+
+		return $hasCollabers ? $groupId : 0;
 	}
 
 	/**
@@ -7472,8 +7548,7 @@ class CCalendarEvent
 				$meetingStatus = 'Y';
 			}
 			elseif (
-				!empty($params['saveAttendeesStatus'])
-				&& !empty($params['currentEvent']['ATTENDEE_LIST'])
+				!empty($params['currentEvent']['ATTENDEE_LIST'])
 				&& is_array($params['currentEvent']['ATTENDEE_LIST'])
 			)
 			{

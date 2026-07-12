@@ -34,7 +34,7 @@ class Message extends BaseController
 		'ATTACH',
 		'KEYBOARD',
 		'MENU',
-		'BUILDER',
+		'BLOCK',
 	];
 	private const ALLOWED_FIELDS_SEND = [
 		'MESSAGE',
@@ -51,7 +51,7 @@ class Message extends BaseController
 		'SILENT_CONNECTOR',
 		'STICKER_PARAMS',
 		'AI_ASSISTANT',
-		'BUILDER',
+		'BLOCK',
 	];
 
 	public function getPrimaryAutoWiredParameter()

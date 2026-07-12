@@ -76,12 +76,14 @@ final class FileAttributes extends ItemAttributes
 	private function setUnifiedLink(): void
 	{
 		$file = $this->getFileObject();
-		if ($this->needSetUnifiedLink
-			&& isset($file)
-			&& $this->getTypeClass() === self::JS_TYPE_CLASS_UNIFIED_LINK
-		)
+		if ($this->needSetUnifiedLink && isset($file))
 		{
 			$unifiedLinkOptions = $this->unifiedLinkOptions;
+
+			if (!array_key_exists('absolute', $unifiedLinkOptions))
+			{
+				$unifiedLinkOptions['absolute'] = true;
+			}
 
 			$versionId = (int)$this->getAttribute(self::ATTRIBUTE_VERSION_ID);
 			if ($versionId > 0)
@@ -170,9 +172,16 @@ final class FileAttributes extends ItemAttributes
 	{
 		parent::setDefaultAttributes();
 
+		$isSupportsUnifiedLink = $this->supportsUnifiedLink();
+
+		if ($isSupportsUnifiedLink)
+		{
+			$this->needSetUnifiedLink = true;
+		}
+
 		if ($this->getViewerType() === Disk\UI\Viewer\Renderer\Board::getJsType())
 		{
-			if ($this->supportsUnifiedLink())
+			if ($isSupportsUnifiedLink)
 			{
 				$this->setUnifiedLinkViewer();
 			}
@@ -194,7 +203,7 @@ final class FileAttributes extends ItemAttributes
 			$documentHandler = Document\DocumentViewPolicy::getDefaultHandlerForView();
 			if ($documentHandler instanceof OnlyOfficeHandler)
 			{
-				if ($this->supportsUnifiedLink())
+				if ($isSupportsUnifiedLink)
 				{
 					$this->setUnifiedLinkViewer();
 				}
@@ -226,8 +235,6 @@ final class FileAttributes extends ItemAttributes
 			->setAsSeparateItem()
 			->setExtension('disk.viewer.unified-link-item')
 		;
-
-		$this->needSetUnifiedLink = true;
 
 		Extension::load('disk.viewer.unified-link-item');
 	}

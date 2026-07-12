@@ -211,6 +211,8 @@ class BlogPost extends Base
 		$pathToPost = ($params['pathToPost'] ?? '');
 		$currentUserId = $this->getCurrentUser()->getId();
 
+		$allowToAll = ComponentHelper::getAllowToAllDestination((int)$currentUserId);
+
 		$data = [
 			'ALLOW_EMAIL_INVITATION' => (
 				ModuleManager::isModuleInstalled('mail')
@@ -326,6 +328,21 @@ class BlogPost extends Base
 			catch(ArgumentException $e)
 			{
 			}
+		}
+
+		if (
+			!$allowToAll
+			&& in_array('UA', $destCodesList, true)
+		)
+		{
+			$this->addError(
+				new Error(
+					Loc::getMessage('SONET_CONTROLLER_LIVEFEED_BLOGPOST_NOT_FOUND'),
+					'SONET_CONTROLLER_LIVEFEED_BLOGPOST_NOT_FOUND'
+				)
+			);
+
+			return null;
 		}
 
 		foreach($destCodesList as $destCode)

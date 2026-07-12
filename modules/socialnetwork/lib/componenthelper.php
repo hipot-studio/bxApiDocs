@@ -4,8 +4,10 @@ namespace Bitrix\Socialnetwork;
 
 use Bitrix\Blog\Item\Post;
 use Bitrix\Crm\Activity\Provider\Tasks\Task;
+use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Main\Component\ParameterSigner;
 use Bitrix\Disk\Driver;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main;
@@ -683,6 +685,15 @@ class ComponentHelper
 		$userFieldManager = Driver::getInstance()->getUserFieldManager();
 		[ $connectorClass, $moduleId ] = $userFieldManager->getConnectorDataByEntityType($entityType);
 
+		if (class_exists(ExternalLinkProvider::class))
+		{
+			$externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
+		}
+		else
+		{
+			$externalLinkProvider = null;
+		}
+
 		foreach($valueList as $value)
 		{
 			$attachedFileId = false;
@@ -731,27 +742,30 @@ class ComponentHelper
 					{
 						$file = $attachedObject->getFile();
 
-						$extLinks = $file->getExternalLinks([
-							'filter' => [
-								'OBJECT_ID' => $file->getId(),
-								'CREATED_BY' => $authorId,
-								'TYPE' => \Bitrix\Disk\Internals\ExternalLinkTable::TYPE_MANUAL,
-								'IS_EXPIRED' => false,
-							],
-							'limit' => 1,
-						]);
-
-						if (empty($extLinks))
+						if (!is_null($externalLinkProvider))
 						{
-							$externalLink = $file->addExternalLink([
-								'CREATED_BY' => $authorId,
-								'TYPE' => \Bitrix\Disk\Internals\ExternalLinkTable::TYPE_MANUAL,
-							]);
+							$externalLink = $externalLinkProvider->getForUse($file->getRealObjectId());
 						}
 						else
 						{
-							/** @var \Bitrix\Disk\ExternalLink $externalLink */
-							$externalLink = reset($extLinks);
+							$extLinks = $file->getExternalLinks([
+								'filter' => [
+									'OBJECT_ID' => $file->getRealObjectId(),
+									'TYPE' => \Bitrix\Disk\Internals\ExternalLinkTable::TYPE_MANUAL,
+									'IS_EXPIRED' => false,
+								],
+								'limit' => 1,
+							]);
+
+							$externalLink = array_pop($extLinks);
+						}
+
+						if (!$externalLink)
+						{
+							$externalLink = $file->getRealObject()->addExternalLink([
+								'CREATED_BY' => $authorId,
+								'TYPE' => \Bitrix\Disk\Internals\ExternalLinkTable::TYPE_MANUAL,
+							]);
 						}
 
 						if ($externalLink)
