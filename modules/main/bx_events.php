@@ -1353,8 +1353,7 @@ class _CEventsMain
 	 * @param array &$arParams <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cuser/index.php#fuser">Массив полей</a> нового
 	 * пользователя.
 	 *
-	 * @return bool <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cuser/add.php">CUser::Add</a><nobr>$APPLICATION-&gt;<a
-	 * href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/throwexception.php">ThrowException()</a></nobr><i>false</i><br>
+	 * @return bool <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cuser/add.php">CUser::Add</a><nobr>$APPLICATION-&gt;<a href="http://dev.1c-bitrix.ru/api_help/main/reference/cmain/throwexception.php">ThrowException()</a></nobr><i>false</i><br>
 	 *
 	 * <h4>Example</h4>
 	 * <pre bgcolor="#323232" style="padding:5px;">
@@ -1614,8 +1613,7 @@ class _CEventsMain
 	}
 
 	/**
-	 * Событие "OnBeforeUserRegister" вызывается до попытки регистрации нового пользователя методом <a
-	 * href="http://dev.1c-bitrix.ru/api_help/main/reference/cuser/register.php">CUser::Register</a> и может быть использовано для прекращения процесса
+	 * Событие "OnBeforeUserRegister" вызывается до попытки регистрации нового пользователя методом <a href="http://dev.1c-bitrix.ru/api_help/main/reference/cuser/register.php">CUser::Register</a> и может быть использовано для прекращения процесса
 	 * регистрации или переопределения некоторых полей.  <p class="note"><b>Примечание</b>: функция будет вызываться также при подтверждении регистрации
 	 * (событие <a href="http://dev.1c-bitrix.ru/api_help/main/events/onbeforeuserupdate.php">OnBeforeUserUpdate</a>), где ключа LOGIN нет.</p>
 	 *
