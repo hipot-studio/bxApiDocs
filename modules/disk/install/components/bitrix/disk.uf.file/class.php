@@ -346,7 +346,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 			$securityContext = $fileModel->getStorage()->getCurrentUserSecurityContext();
 			$name = $fileModel->getName();
 
-			$accessInfo = ['encryptedScope' => ''];
+			$quickAccessGetParam = [];
 			if ($attachedModel)
 			{
 				$scope = $scopeTokenService->getTokenScopeByAttachedObject($attachedModel);
@@ -357,7 +357,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 				if ($result !== null)
 				{
-					$accessInfo = $result;
+					$quickAccessGetParam['_esd'] = $result['encryptedScope'];
 				}
 			}
 
@@ -381,7 +381,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 				'VIEW_URL' => $urlManager->getUrlToShowAttachedFileByService($id, 'gvdrive'),
 				'EDIT_URL' => $urlManager->getUrlToStartEditUfFileByService($id, 'gdrive'),
-				'DOWNLOAD_URL' => $urlManager->getUrlUfController('download', ['attachedId' => $id, '_esd' => $accessInfo['encryptedScope']]),
+				'DOWNLOAD_URL' => $urlManager->getUrlUfController('download', ['attachedId' => $id, ...$quickAccessGetParam]),
 				'COPY_TO_ME_URL' => $urlManager->getUrlUfController('copyToMe', ['attachedId' => $id]),
 
 				'DELETE_URL' => ''
@@ -392,7 +392,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 				$data['PREVIEW_URL'] = (
 					$attachedModel === null ?
 						$urlManager->getUrlForShowFile($fileModel) :
-						$urlManager->getUrlUfController('show', ['attachedId' => $id, '_esd' => $accessInfo['encryptedScope']])
+						$urlManager->getUrlUfController('show', ['attachedId' => $id, ...$quickAccessGetParam])
 				);
 
 				$data['IMAGE'] = $fileModel->getFile();
@@ -426,7 +426,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 								'attachedId' => $id,
 								'filename' => $fileModel->getName(),
 								'viewId' => $fileModel->getView()->getId(),
-								'_esd' => $accessInfo['encryptedScope'],
+								...$quickAccessGetParam,
 							];
 
 							$viewPath = [
@@ -500,7 +500,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 				$sourceUri = new Uri($urlManager->getUrlUfController('download', [
 					'attachedId' => $attachedModel->getId(),
-					'_esd' => $accessInfo['encryptedScope'],
+					...$quickAccessGetParam,
 				]));
 
 				$groupId = $this->componentId;

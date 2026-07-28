@@ -484,7 +484,7 @@ class Dataset extends Base
 
 	private static function checkDatasetName(?string $name = null): bool
 	{
-		return preg_match('/^[a-z][a-z0-9_]*$/', $name);
+		return preg_match('/^[a-z][a-z0-9_]*$/', $name ?? '');
 	}
 
 	public static function fieldsUpdate(array $params, $n, \CRestServer $server): array|bool

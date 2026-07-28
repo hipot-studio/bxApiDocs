@@ -10,20 +10,17 @@ use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
 
 class CopilotService
 {
-	private bool $isAvailable;
-
-	public function __construct()
+	public static function getName(): string
 	{
-		$this->isAvailable = Loader::includeModule('ui');
-	}
+		if (
+			Loader::includeModule('ui')
+			&& class_exists(CopilotNameService::class)
+		)
+		{
+			return (new CopilotNameService())->getCopilotName();
+		}
 
-	public function getName(): string
-	{
-		return
-			$this->isAvailable
-			? (new CopilotNameService())->getCopilotName()
-			: ''
-		;
+		return Application::getInstance()->getLicense()->isCis() ? 'BitrixGPT' : 'CoPilot';
 	}
 
 	public static function shouldShowInLeftMenu(): bool

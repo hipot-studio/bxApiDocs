@@ -30,12 +30,12 @@ class Link extends BaseController
 			],
 			'regenerate' => [
 				'+prefilters' => [
-					new CheckActionAccess(Action::UpdateGuestLink),
+					new CheckActionAccess(Action::ManageGuestLink),
 				],
 			],
 			'revoke' => [
 				'+prefilters' => [
-					new CheckActionAccess(Action::UpdateGuestLink),
+					new CheckActionAccess(Action::ManageGuestLink),
 				],
 			],
 			'inviteByEmail' => [

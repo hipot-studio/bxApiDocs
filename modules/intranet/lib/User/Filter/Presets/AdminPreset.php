@@ -2,12 +2,10 @@
 
 namespace Bitrix\Intranet\User\Filter\Presets;
 
-use Bitrix\Main\Filter\UserDataProvider;
 use Bitrix\Main\Localization\Loc;
 
 class AdminPreset extends FilterPreset
 {
-
 	public function getId(): string
 	{
 		return 'admin';
@@ -21,7 +19,7 @@ class AdminPreset extends FilterPreset
 	public function getFilterFields(): array
 	{
 		return [
-			'ADMIN' => 'Y'
+			'ADMIN' => 'Y',
 		];
 	}
 

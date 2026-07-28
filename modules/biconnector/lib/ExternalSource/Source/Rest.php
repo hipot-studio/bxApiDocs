@@ -26,7 +26,7 @@ class Rest extends Base
 
 	private ?ExternalSourceRestConnector $connector = null;
 
-	public function __construct(?int $sourceId)
+	public function __construct(int $sourceId)
 	{
 		parent::__construct($sourceId);
 
@@ -99,7 +99,7 @@ class Rest extends Base
 
 		if (!$this->connector?->getUrlCheck())
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_EMPTY_CHECK_URL')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_EMPTY_CHECK_URL') ?? ''));
 
 			return $result;
 		}
@@ -115,7 +115,7 @@ class Rest extends Base
 
 		try {
 			$this->query(
-				$this->connector?->getUrlCheck(),
+				$this->connector?->getUrlCheck() ?? '',
 				[
 					'connection' => $queryParams,
 				]
@@ -142,9 +142,9 @@ class Rest extends Base
 	public function getEntityList(?string $searchString = null): Result
 	{
 		$result = new Result();
-		if (!$this->source->getConnector()?->getUrlTableList())
+		if (!$this->source?->getConnector()?->getUrlTableList())
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_EMPTY_DATA_URL')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_EMPTY_DATA_URL') ?? ''));
 
 			return $result;
 		}
@@ -155,21 +155,21 @@ class Rest extends Base
 
 		try {
 			$resultQuery = $this->query(
-				$this->source->getConnector()?->getUrlTableList(),
+				$this->source?->getConnector()?->getUrlTableList() ?? '',
 				$query
 			);
 
 			$tableList = $this->decode($resultQuery);
 			if ($tableList === null || !self::checkTableList($tableList))
 			{
-				$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_EMPTY_TABLE_LIST_ERROR')));
+				$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_EMPTY_TABLE_LIST_ERROR') ?? ''));
 
 				return $result;
 			}
 		}
 		catch (SystemException)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_404_ERROR')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_404_ERROR') ?? ''));
 
 			return $result;
 		}
@@ -200,7 +200,7 @@ class Rest extends Base
 	 */
 	public function getDescription(string $entityName): array
 	{
-		if (!$this->source->getConnector()?->getUrlTableDescription())
+		if (!$this->source?->getConnector()?->getUrlTableDescription())
 		{
 			return [];
 		}
@@ -211,7 +211,7 @@ class Rest extends Base
 
 		try {
 			$result = $this->query(
-				$this->source->getConnector()?->getUrlTableDescription(),
+				$this->source?->getConnector()?->getUrlTableDescription() ?? '',
 				$query
 			);
 
@@ -219,12 +219,12 @@ class Rest extends Base
 		}
 		catch (SystemException)
 		{
-			throw new SystemException(Loc::getMessage('BICONNECTOR_REST_CONNECTION_TABLE_DESCRIPTION_404_ERROR'));
+			throw new SystemException(Loc::getMessage('BICONNECTOR_REST_CONNECTION_TABLE_DESCRIPTION_404_ERROR') ?? '');
 		}
 
 		if (!$columns || !is_array($columns) || !self::checkTableDescription($columns))
 		{
-			throw new SystemException(Loc::getMessage('BICONNECTOR_REST_EMPTY_TABLE_DESCRIPTION_ERROR'));
+			throw new SystemException(Loc::getMessage('BICONNECTOR_REST_EMPTY_TABLE_DESCRIPTION_ERROR') ?? '');
 		}
 
 		$result = [];
@@ -248,14 +248,14 @@ class Rest extends Base
 	 */
 	public function getData(string $tableName, array $query): string
 	{
-		if (!$this->source->getSource()?->getActive())
+		if (!$this->source?->getSource()?->getActive())
 		{
-			throw new SystemException(Loc::getMessage('BICONNECTOR_REST_CONNECTION_NOT_ACTIVE'));
+			throw new SystemException(Loc::getMessage('BICONNECTOR_REST_CONNECTION_NOT_ACTIVE') ?? '');
 		}
 
-		if (!$this->source->getConnector()?->getUrlData())
+		if (!$this->source?->getConnector()?->getUrlData())
 		{
-			throw new SystemException(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_EMPTY_DATA_URL'));
+			throw new SystemException(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_EMPTY_DATA_URL') ?? '');
 		}
 
 		$query = array_intersect_key($query, array_flip(['limit', 'filter', 'select']));
@@ -264,7 +264,7 @@ class Rest extends Base
 		$mapFields = $this->getMapFields($tableName, $query['select'] ?? []);
 		$query['mapFields'] = $mapFields;
 
-		return $this->query($this->source->getConnector()?->getUrlData(), $query);
+		return $this->query($this->source?->getConnector()?->getUrlData() ?? '', $query);
 	}
 
 	/**
@@ -279,7 +279,7 @@ class Rest extends Base
 			implode(',', array_keys($fields))
 			. implode(',', array_values($fields))
 		;
-		$cacheKey = "biconnector_rest_preview_data_{$entityName}_{$n}_{$this->source->getSourceId()}_{$fieldsForCacheKey}";
+		$cacheKey = "biconnector_rest_preview_data_{$entityName}_{$n}_{$this->source?->getSourceId()}_{$fieldsForCacheKey}";
 		$cacheManager = \Bitrix\Main\Application::getInstance()->getManagedCache();
 
 		if ($cacheManager->read(3600, $cacheKey))
@@ -348,7 +348,7 @@ class Rest extends Base
 
 		if (!$responseResult->isSuccess())
 		{
-			throw new SystemException($responseResult->getError()->getMessage());
+			throw new SystemException($responseResult->getError()?->getMessage() ?? 'Unknown error');
 		}
 
 		return $answer;
@@ -371,14 +371,14 @@ class Rest extends Base
 
 		if (!$answer)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_CANT_CONNECT')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_CANT_CONNECT') ?? ''));
 
 			return $result;
 		}
 
 		if ($client->getStatus() !== 200)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_404_ERROR')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_REST_CONNECTION_ERROR_404_ERROR') ?? ''));
 
 			return $result;
 		}
@@ -442,7 +442,13 @@ class Rest extends Base
 	private function fillConnectionSettings(array $queryFields): array
 	{
 		$settingFields = [];
-		$settings = \Bitrix\BIConnector\ExternalSource\SourceManager::getSourceSettings($this->source->getSource());
+		$source = $this->source?->getSource();
+		if (!$source)
+		{
+			return $queryFields;
+		}
+
+		$settings = \Bitrix\BIConnector\ExternalSource\SourceManager::getSourceSettings($source);
 		foreach ($settings as $setting)
 		{
 			$settingFields[$setting->getCode()] = $setting->getValue();

@@ -28,10 +28,10 @@ final class DeactivateSourceAction extends BaseAction
 
 	public function getControl(array $rawFields): ?array
 	{
-		$id = (int)$rawFields['ID'];
-		$moduleId = CUtil::JSEscape($rawFields['MODULE']);
+		$id = (int)($rawFields['ID'] ?? 0);
+		$moduleId = CUtil::JSEscape(($rawFields['MODULE'] ?? ''));
 
-		if ($rawFields['ACTIVE'] === 'Y')
+		if (($rawFields['ACTIVE'] ?? '') === 'Y')
 		{
 			$this->onclick = "BX.BIConnector.ExternalSourceManager.Instance.changeActivitySource({$id}, '{$moduleId}')";
 

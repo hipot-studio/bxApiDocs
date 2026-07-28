@@ -35,7 +35,7 @@ class DeleteAction implements Panel\Action\Action
 		$deleteButton->setClass(Panel\DefaultValue::REMOVE_BUTTON_CLASS);
 		$deleteButton->setId(Panel\DefaultValue::REMOVE_BUTTON_ID);
 		$deleteButton->setOnchange($onchange);
-		$deleteButton->setText(Loc::getMessage('BI_UNUSED_ELEMENTS_GRID_BULK_DELETE_BUTTON'));
+		$deleteButton->setText(Loc::getMessage('BI_UNUSED_ELEMENTS_GRID_BULK_DELETE_BUTTON') ?? '');
 
 		return $deleteButton->toArray();
 	}

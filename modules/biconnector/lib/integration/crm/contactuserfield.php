@@ -153,7 +153,7 @@ class ContactUserField
 
 			if (isset($messages['CRM_BIC_CONTACT_UF_FIELD_' . $fieldCode . '_FULL']))
 			{
-				$fieldInfo['FIELD_DESCRIPTION_FULL'] = $messages['CRM_BIC_CONTACT_UF_FIELD_' . $fieldCode . '_FULL'] ?? '';
+				$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['CRM_BIC_CONTACT_UF_FIELD_' . $fieldCode . '_FULL']) ? $messages['CRM_BIC_CONTACT_UF_FIELD_' . $fieldCode . '_FULL'] : '';
 			}
 		}
 		unset($fieldInfo);

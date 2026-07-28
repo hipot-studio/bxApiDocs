@@ -14,10 +14,10 @@ use Bitrix\Calendar\Core;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
 use Bitrix\Calendar\Integration\Pull\PushCommand;
-use Bitrix\Calendar\Integration\SocialNetwork;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\CollabFeature;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\Collabs;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\UserCollabs;
+use Bitrix\Calendar\Integration\SocialNetwork;
 use Bitrix\Calendar\Integration\Tasks\TaskQueryParameter;
 use Bitrix\Calendar\Internals\EventTable;
 use Bitrix\Calendar\Sharing\SharingEventManager;
@@ -803,7 +803,7 @@ class CCalendar
 		$JSConfig['sharingOptions'] = $isGroupCalendar ? null : $sharing->getOptions();
 		$JSConfig['isCollabUser'] = $isCollabUser;
 		$JSConfig['isCollabCalendar'] = $isCollabCalendar;
-		$JSConfig['isNewProjectsOn'] = (new SocialNetwork\FeatureService())->isNewProjectsOn();
+		$JSConfig['isNewProjectsOn'] = SocialNetwork\FeatureService::isNewProjectsOn();
 		$JSConfig['isCollabFeatureEnabled'] = CollabFeature::isAvailable();
 
 		$userSettings = UserSettings::get(self::$ownerId);
@@ -4125,8 +4125,8 @@ class CCalendar
 		{
 			return [];
 		}
-		$users = \CSocNetLogDestination::getDestinationUsers($codes, $fetchUsers);
 
+		$users = \CSocNetLogDestination::getDestinationUsers($codes, $fetchUsers);
 		if ($fetchUsers)
 		{
 			foreach ($users as $i => $user)

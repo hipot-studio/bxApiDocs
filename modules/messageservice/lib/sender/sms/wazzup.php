@@ -14,9 +14,12 @@ class Wazzup extends Sender\BaseConfigurable
 	public const ID = 'wazzup';
 	public const NAME = 'Wazzup';
 	public const AVAILABLE_CHANNELS = [
-		'tgapi',
-		'whatsapp',
+		self::CHANNEL_TYPE_TGAPI,
+		self::CHANNEL_TYPE_WHATSAPP,
 	];
+
+	public const CHANNEL_TYPE_TGAPI = 'tgapi';
+	public const CHANNEL_TYPE_WHATSAPP = 'whatsapp';
 
 	public function getId()
 	{
@@ -200,7 +203,7 @@ class Wazzup extends Sender\BaseConfigurable
 			return '';
 		}
 
-		$contactCenterUrl = \Bitrix\ImOpenLines\Common::getContactCenterPublicFolder();
+		$contactCenterUrl = \Bitrix\MessageService\Integration\ImOpenLines::getContactCenterUrl();
 
 		return $contactCenterUrl . 'connector/?ID=' . Library::ID_WAZZUP_CONNECTOR;
 	}
@@ -212,20 +215,7 @@ class Wazzup extends Sender\BaseConfigurable
 			return false;
 		}
 
-		if (
-			\Bitrix\Main\Config\Option::get('imconnector', 'feature_wazzup', 'N') === 'Y'
-			||
-			(
-				\Bitrix\Main\Loader::includeModule('crm')
-				&& class_exists(\Bitrix\Crm\Feature\TelegramActivity::class)
-				&& \Bitrix\Crm\Feature::enabled(\Bitrix\Crm\Feature\TelegramActivity::class)
-			)
-		)
-		{
-			return parent::isSupported();
-		}
-
-		return false;
+		return parent::isSupported();
 	}
 
 	private function getLineIdFromChannelId(string $channelId): ?int

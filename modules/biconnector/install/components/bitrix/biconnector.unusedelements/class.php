@@ -7,9 +7,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\ExternalSource\DatasetManager;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Superset\ActionFilter;
 use Bitrix\BIConnector\Superset\Grid\UnusedElementsGrid;
@@ -135,7 +133,7 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 			return;
 		}
 
-		$integrator = Bitrix\BIConnector\Integration\Superset\Integrator\Integrator::getInstance();
+		$integrator = IntegratorFactory::getInstance();
 		$pagination = $this->grid->getPagination();
 		$page = $pagination?->getCurrentPage();
 		$pageSize = $pagination?->getPageSize();
@@ -289,7 +287,7 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 
 		if ($elements)
 		{
-			$response = Integrator::getInstance()->deleteUnusedElements($elements);
+			$response = IntegratorFactory::getInstance()->deleteUnusedElements($elements);
 			if ($response->hasErrors())
 			{
 				$this->errorCollection->add($response->getErrors());
@@ -303,7 +301,7 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 
 	public function getOpenUrlAction(string $openUrl): ?string
 	{
-		$loginUrl = (new SupersetController(Integrator::getInstance()))->getLoginUrl();
+		$loginUrl = (new SupersetController())->getLoginUrl();
 
 		if ($loginUrl)
 		{

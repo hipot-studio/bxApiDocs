@@ -5,6 +5,12 @@ namespace Bitrix\BIConnector\Superset\UI\SettingsPanel;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\EntityEditorController;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Section\EntityEditorSection;
 
+/**
+ * @todo Drop this layer after biconnector.apachesuperset.dashboard.setting migrates to the biconnector.settings-panel
+ *       (TS) extension. This is the last consumer — once it is gone, remove the whole
+ *       Bitrix\BIConnector\Superset\UI\SettingsPanel namespace together with the
+ *       biconnector.apachesuperset.settings.panel component.
+ */
 final class SettingsPanel
 {
 	private ?string $entityId = null;

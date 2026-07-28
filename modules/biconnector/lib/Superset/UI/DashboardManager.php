@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Superset\UI;
 use Bitrix\BIConnector\Integration\Pull\PullManager;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
+use Bitrix\BIConnector\Superset\Selfhost\SupersetHostMode;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -74,6 +75,11 @@ final class DashboardManager
 	public static function notifySupersetCreated(int $userId, int $dashboardId): void
 	{
 		if (!Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		if (SupersetHostMode::isSelfHosted())
 		{
 			return;
 		}

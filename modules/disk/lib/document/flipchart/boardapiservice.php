@@ -42,20 +42,33 @@ class BoardApiService
 		$this->baseUrl = $baseUrl;
 	}
 
-	public function downloadBoard(string $url, string $method = Method::GET, $entityBody = null, $creatingNew = false, $isNewBoard = false): Result
+	public function downloadBoard(
+		string $url,
+		string $method = Method::GET,
+		$entityBody = null,
+		$creatingNew = false,
+		$isNewBoard = false,
+		?string $documentId = null,
+	): Result
 	{
 		$url = $this->baseUrl . $url;
+		$additionalData = [
+			'analytics' => [
+				'action' => $creatingNew ? 'creating' : 'save_changes',
+				'value1' =>
+					$creatingNew
+						? null
+						: ($isNewBoard ? 'new_element' : 'old_element'),
+			],
+		];
+		if ($documentId !== null)
+		{
+			$additionalData['document_id'] = $documentId;
+		}
+
 		$token = (new JwtService())->generateToken(
 			false,
-			[
-				'analytics' => [
-					'action' => $creatingNew ? 'creating' : 'save_changes',
-					'value1' =>
-						$creatingNew
-							? null
-							: ($isNewBoard ? 'new_element' : 'old_element'),
-				],
-			],
+			$additionalData,
 		);
 
 		$httpClient = new HttpClient();

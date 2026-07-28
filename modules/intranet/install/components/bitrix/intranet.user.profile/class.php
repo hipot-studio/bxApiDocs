@@ -3,10 +3,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)die();
 
 use Bitrix\Bitrix24\Feature;
 
+use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Entity\UserOtp;
 use Bitrix\Intranet\Internal\Integration;
 use Bitrix\Intranet\Internal\Service;
-use Bitrix\Intranet\Internal\Enum;
 use Bitrix\Intranet\Internal\Access;
 use Bitrix\Intranet\User\Access\Model\TargetUserModel;
 use Bitrix\Intranet\User\Access\UserAccessController;
@@ -82,6 +82,19 @@ class CIntranetUserProfileComponent extends UserProfile
 		$this->arResult["Urls"] = $this->getUrls();
 		$this->arResult["User"] = $this->getUserData();
 
+		$userEntity = User::initByArray($this->arResult['User']);
+
+		if (!$isAdminRights)
+		{
+			if ($userEntity->isImGuest() || $this->isCurrentUserImGuest())
+			{
+				$this->arResult['Permissions']['view'] = false;
+				$this->includeComponentTemplate();
+
+				return;
+			}
+		}
+
 		$currentUser = \Bitrix\Main\Engine\CurrentUser::get();
 		$this->arResult["CurrentUser"] = [
 			'ID' => $currentUser->getId(),
@@ -145,7 +158,6 @@ class CIntranetUserProfileComponent extends UserProfile
 		$this->arResult["Tags"] = $this->getTagsInstance()->getStub();
 		$this->arResult["FormId"] = "intranet-user-profile";
 		$this->arResult["IsOwnProfile"] = $currentUserId === $ownerUserId;
-		$userEntity = \Bitrix\Intranet\Entity\User::initByArray($this->arResult['User']);
 
 		$this->filterHiddenFields();
 		$this->checkNumAdminRestrictions();
@@ -207,6 +219,18 @@ class CIntranetUserProfileComponent extends UserProfile
 		$this->includeComponentTemplate();
 	}
 
+	private function isCurrentUserImGuest(): bool
+	{
+		global $USER;
+
+		$currentUser = new User(
+			id: (int)$USER->GetID(),
+			externalAuthId: $USER->GetParam('EXTERNAL_AUTH_ID') ?: null,
+		);
+
+		return $currentUser->isImGuest();
+	}
+
 	private function prepareOtpInfo(\Bitrix\Intranet\Entity\User $userEntity): void
 	{
 		$otpSettings = Loader::includeModule('security') ? new Integration\Security\OtpSettings() : null;
@@ -241,9 +265,6 @@ class CIntranetUserProfileComponent extends UserProfile
 		if (
 			$otpUser->getDeactivateRemainder()
 			&& $userEntity->getActive()
-			&& Service\Otp\MobilePush::createByDefault()
-				->getPromoteMode()
-				->isGreaterOrEqual(Enum\Otp\PromoteMode::Low)
 		)
 		{
 			[$deactivateStatus, $deactivateTitle] = $this->getDeactivateOtpStatusText($otpUser);

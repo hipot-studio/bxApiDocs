@@ -35,7 +35,7 @@ final class Rest implements Provider
 
 		if (empty($description))
 		{
-			$description = $source->getDescription($this->settings['dataset']['EXTERNAL_CODE']);
+			$description = $source->getDescription((string)($this->settings['dataset']['EXTERNAL_CODE'] ?? ''));
 		}
 
 		$codesMap = [];
@@ -53,7 +53,7 @@ final class Rest implements Provider
 			$codesMap[$code] = $item['NAME'];
 		}
 
-		$sourceData = $source->getFirstNData($this->settings['dataset']['EXTERNAL_CODE'], self::N_FIRST, $codesMap);
+		$sourceData = $source->getFirstNData((string)($this->settings['dataset']['EXTERNAL_CODE'] ?? ''), self::N_FIRST, $codesMap);
 		$rowCollection = new RowCollection();
 		foreach ($sourceData as $sourceRow)
 		{

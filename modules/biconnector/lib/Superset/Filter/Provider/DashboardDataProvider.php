@@ -250,6 +250,7 @@ class DashboardDataProvider extends EntityDataProvider
 		if ($fieldID === 'URL_PARAMS.CODE')
 		{
 			$items = [];
+			$preselectedItems = [];
 			foreach (ScopeMap::getAvailableParameters() as $parameter)
 			{
 				$parameterScopes = ScopeMap::getParameterScopeCodes($parameter);

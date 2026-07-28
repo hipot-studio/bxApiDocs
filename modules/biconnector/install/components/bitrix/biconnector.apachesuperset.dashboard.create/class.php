@@ -8,7 +8,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Service\DashboardGroupService;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
@@ -178,7 +178,7 @@ class ApacheSupersetDashboardCreateComponent
 
 		if (SupersetInitializer::isSupersetReady())
 		{
-			$integrator = Integrator::getInstance();
+			$integrator = IntegratorFactory::getInstance();
 			$response = $integrator->createEmptyDashboard([
 				'name' => $title,
 				'json_metadata' => $jsonMetadata,
@@ -244,7 +244,7 @@ class ApacheSupersetDashboardCreateComponent
 		}
 
 		$data = [];
-		$superset = new SupersetController(Integrator::getInstance());
+		$superset = new SupersetController();
 		$dashboard = $superset->getDashboardRepository()->getById($saveResult->getId(), true);
 		if ($dashboard)
 		{

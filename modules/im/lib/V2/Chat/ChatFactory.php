@@ -444,7 +444,7 @@ class ChatFactory
 		}
 
 		$resultChat = $addResult->getChat();
-		if ($resultChat instanceof Chat)
+		if ($resultChat instanceof Chat && ($params['SKIP_ANALYTICS'] ?? 'N') !== 'Y')
 		{
 			(new ChatAnalytics($resultChat))->addSubmitCreateNew();
 		}

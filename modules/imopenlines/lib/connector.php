@@ -1472,7 +1472,10 @@ class Connector
 			&&
 			(
 				$messageFields['SILENT_CONNECTOR'] === 'Y'
-				|| $messageFields['CHAT_'.Chat::getFieldName(Chat::FIELD_SILENT_MODE)] === 'Y'
+				|| SilentMode\PersonalSilentMode::isEnabled(
+					(int)($messageFields['AUTHOR_ID'] ?? 0),
+					(int)($messageFields['CHAT_ID'] ?? 0)
+				)
 			)
 		)
 		{
@@ -2030,10 +2033,9 @@ class Connector
 			}
 			else
 			{
-				$chat = new Chat($params['CHAT']['ID']);
 				if (
-					$chat->isSilentModeEnabled() ||
-					$params['LINES_SILENT_MODE']
+					SilentMode\PersonalSilentMode::isEnabled((int)$params['USER_ID'], (int)$params['CHAT']['ID'])
+					|| $params['LINES_SILENT_MODE']
 				)
 				{
 					$result = true;
@@ -2263,6 +2265,10 @@ class Connector
 		$userId = (int)$params['user'];
 
 		global $USER;
+		if (!is_object($USER))
+		{
+			$USER = new \CUser;
+		}
 		if (
 			$userId > 0
 			&& !$USER->IsAuthorized()
@@ -2522,10 +2528,26 @@ class Connector
 		/** @var ImOpenLines\Tracker $tracker */
 		$tracker = ServiceLocator::getInstance()->get('ImOpenLines.Services.Tracker');
 
+		$crmTrackerRef = '';
+		$crmTrackerExpectation = null;
 		$hasTrackerRef = false;
-		if (!empty($fields['ref']['source']))
+		if (
+			!empty($fields['ref']['source'])
+			&& strpos($fields['ref']['source'], ImConnector\Connectors\Base::REF_PREFIX) === 0
+		)
 		{
-			$hasTrackerRef = !empty($tracker->findExpectationByTrackId($fields['ref']['source'])); //todo: Replace it with session method
+			$crmTrackerRef = $fields['ref']['source'];
+			$expectation = $tracker->findExpectationByTrackId($crmTrackerRef);
+			$crmTrackerExpectation = $expectation ?: false;
+			$hasTrackerRef = !empty($expectation);
+
+			if (!$hasTrackerRef)
+			{
+				Log::write(
+					['ref' => $crmTrackerRef, 'connector' => $fields['connector']],
+					'CONNECTOR - COMMAND START - EXPECTATION NOT FOUND'
+				);
+			}
 		}
 
 		// start parameter
@@ -2535,7 +2557,8 @@ class Connector
 			'USER_ID' => $fields['connector']['user_id'],
 			'SOURCE' => $fields['connector']['connector_id'],
 			'MODE' => ImOpenLines\Session::MODE_INPUT,
-			'CRM_TRACKER_REF' => $hasTrackerRef ? $fields['ref']['source'] : '',
+			'CRM_TRACKER_REF' => $crmTrackerRef,
+			'CRM_TRACKER_EXPECTATION' => $crmTrackerExpectation,
 		]);
 
 		if ($sessionLoaded && $hasTrackerRef)

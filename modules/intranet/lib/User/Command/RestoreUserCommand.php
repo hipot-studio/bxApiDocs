@@ -24,11 +24,19 @@ class RestoreUserCommand extends AbstractCommand
 	{
 		$isActionAvailable = ServiceContainer::getInstance()
 			->getUserService()
-			->isActionAvailableForUser($this->user, UserActionDictionary::RESTORE);
+			->isActionAvailableForUser($this->user, UserActionDictionary::RESTORE)
+		;
 
 		if (!$isActionAvailable)
 		{
 			return (new Result())->addError(new Error('User already active'));
+		}
+
+		$errors = UserStatusEventHelper::collectErrors(UserStatusEventHelper::EVENT_BEFORE_RESTORE, $this->user);
+
+		if (!empty($errors))
+		{
+			return (new Result())->addErrors($errors);
 		}
 
 		return null;
@@ -48,7 +56,7 @@ class RestoreUserCommand extends AbstractCommand
 		}
 		catch (UpdateFailedException $e)
 		{
-			return $result->addErrors($e->getErrors());
+			return $result->addErrors($e->getErrors()->toArray());
 		}
 	}
 

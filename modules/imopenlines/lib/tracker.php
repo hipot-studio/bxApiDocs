@@ -313,16 +313,21 @@ class Tracker
 	/**
 	 * @param string $trackId
 	 * @param Chat $chat
+	 * @param array|false|null $expectation Pre-fetched expectation row, false if explicitly not found,
+	 *                                       null to perform internal lookup (default).
 	 * @return void
 	 */
-	public function bindExpectationToChat(string $trackId, Chat $chat): void
+	public function bindExpectationToChat(string $trackId, Chat $chat, $expectation = null): void
 	{
 		if (!Loader::includeModule('crm'))
 		{
 			return;
 		}
 
-		$expectation = $this->findExpectationByTrackId($trackId);
+		if ($expectation === null)
+		{
+			$expectation = $this->findExpectationByTrackId($trackId);
+		}
 		if ($expectation)
 		{
 			$crmManager = $this->getSession()->getCrmManager();

@@ -156,6 +156,7 @@ class ThirdPartyRegisterService
 	private function validateCompletionsUrl(array $data): void
 	{
 		$http = new HttpClient();
+		$http->setPrivateIp(false);
 		$http->get($data['completions_url']);
 		if ($http->getStatus() !== 200)
 		{

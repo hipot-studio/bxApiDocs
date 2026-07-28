@@ -7,6 +7,7 @@ namespace Bitrix\Im\V2\Promotion\Service;
 use Bitrix\Im\Common;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Common\SingletonTrait;
+use Bitrix\Im\V2\Integration\AiAssistant\AiAssistantService;
 use Bitrix\Im\V2\Promotion\Entity\Promotion;
 use Bitrix\Im\V2\Promotion\Entity\PromotionList;
 use Bitrix\Im\V2\Promotion\Internals\DeviceType;
@@ -14,6 +15,7 @@ use Bitrix\Im\V2\Promotion\Internals\PromotionType;
 use Bitrix\Im\V2\Promotion\Internals\UserType;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\Config\Configuration;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
@@ -165,6 +167,19 @@ class UIPromotionService implements PromotionServiceInterface
 			"USER_TYPE" =>  UserType::ALL->value,
 			"DEVICE_TYPE" => DeviceType::ALL->value,
 		];
+
+		if (
+			Features::isBitrixGptV2Available()
+			&& ServiceLocator::getInstance()->get(AiAssistantService::class)->isBitrixGptAgentPromoAllowedByPortalAge()
+		)
+		{
+			$result[] = [
+				"ID" => 'im:bitrix-gpt-agent:20052026:all',
+				"USER_TYPE" => UserType::ALL->value,
+				"DEVICE_TYPE" => DeviceType::WEB->value,
+				"LIFETIME" => self::ENDLESS_LIFETIME,
+			];
+		}
 
 		if (Locator::getMessenger()->getApplication()->isAirDesignEnabled())
 		{

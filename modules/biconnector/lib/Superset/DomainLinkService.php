@@ -2,7 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Registrar;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -87,7 +87,7 @@ final class DomainLinkService
 			return $result;
 		}
 
-		$response = Integrator::getInstance()->refreshDomainConnection();
+		$response = IntegratorFactory::getInstance()->refreshDomainConnection();
 
 		if (!$response->hasErrors())
 		{

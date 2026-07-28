@@ -32,7 +32,8 @@ class Params extends Registry
 		MANAGE_GUEST_INVITES = 'MANAGE_GUEST_INVITES',
 		COPILOT_ENGINE_CODE = 'COPILOT_ENGINE_CODE',
 		USER_DELETE_MESSAGE_DISABLED = 'USER_DELETE_MESSAGE_DISABLED',
-		COPILOT_TITLE_IS_CUSTOM = 'COPILOT_TITLE_IS_CUSTOM'
+		COPILOT_TITLE_IS_CUSTOM = 'COPILOT_TITLE_IS_CUSTOM',
+		IS_COPILOT_DRAFT = 'IS_COPILOT_DRAFT'
 	;
 
 	public const CHAT_PARAMS = [
@@ -48,6 +49,7 @@ class Params extends Registry
 		self::COPILOT_ENGINE_CODE,
 		self::USER_DELETE_MESSAGE_DISABLED,
 		self::COPILOT_TITLE_IS_CUSTOM,
+		self::IS_COPILOT_DRAFT,
 	];
 
 	protected int $chatId;
@@ -90,7 +92,8 @@ class Params extends Registry
 			self::TEXT_FIELD_ENABLED,
 			self::IS_COPILOT,
 			self::USER_DELETE_MESSAGE_DISABLED,
-			self::COPILOT_TITLE_IS_CUSTOM => (new Param())->setType(Param::TYPE_BOOL),
+			self::COPILOT_TITLE_IS_CUSTOM,
+			self::IS_COPILOT_DRAFT => (new Param())->setType(Param::TYPE_BOOL),
 			default => (new Param())->setType(Param::TYPE_STRING),
 		};
 	}

@@ -81,7 +81,7 @@ class Builder
 
 		if (!preg_match(ExternalDatasetTable::TABLE_NAME_REGEXP, $this->tableName))
 		{
-			$result->addError(new Main\Error(Loc::getMessage('BICONNECTOR_TABLE_BUILDER_TABLE_NAME_ERROR')));
+			$result->addError(new Main\Error(Loc::getMessage('BICONNECTOR_TABLE_BUILDER_TABLE_NAME_ERROR') ?? ''));
 		}
 
 		if (mb_strlen($this->tableName) > self::TABLE_NAME_MAX_LENGTH)
@@ -93,14 +93,14 @@ class Builder
 						[
 							'#MAX_LENGTH#' => self::TABLE_NAME_MAX_LENGTH,
 						]
-					)
+					) ?? ''
 				)
 			);
 		}
 
 		if ($this->tableFieldCollection->isEmpty())
 		{
-			$result->addError(new Main\Error(Loc::getMessage('BICONNECTOR_TABLE_BUILDER_FIELDS_NOT_FOUND')));
+			$result->addError(new Main\Error(Loc::getMessage('BICONNECTOR_TABLE_BUILDER_FIELDS_NOT_FOUND') ?? ''));
 		}
 
 		/** @var Field\Base $field */
@@ -115,7 +115,7 @@ class Builder
 							[
 								'#FIELD_NAME#' => $field->getName(),
 							]
-						)
+						) ?? ''
 					)
 				);
 			}
@@ -130,7 +130,7 @@ class Builder
 								'#FIELD_NAME#' => $field->getName(),
 								'#MAX_LENGTH#' => self::COLUMN_NAME_MAX_LENGTH,
 							]
-						)
+						) ?? ''
 					)
 				);
 			}

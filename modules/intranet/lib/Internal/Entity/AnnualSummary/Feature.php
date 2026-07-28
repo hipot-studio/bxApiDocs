@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Internal\Entity\AnnualSummary;
 
 use Bitrix\Intranet\Internal\Integration\Main\AnnualSummarySign;
+use Bitrix\Intranet\Internal\Integration\Ui\CopilotService;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Entity\EntityInterface;
 use Bitrix\Main\Localization\Loc;
@@ -122,23 +123,48 @@ class Feature implements Arrayable, EntityInterface
 		$feature = mb_strtoupper($this->id->value);
 		$code = "INTRANET_ANNUAL_SUMMARY_CARD_DESCRIPTION_{$feature}_COUNT_{$this->countVariation}_VARIETY_{$this->randomVariation}";
 
-		if (!Loc::getMessage("{$code}_PLURAL_1"))
+		if (!$this->hasDescriptionMessage($code))
 		{
 			$code = "INTRANET_ANNUAL_SUMMARY_CARD_DESCRIPTION_{$feature}_COUNT_{$this->countVariation}_VARIETY_1";
 
-			if (!Loc::getMessage("{$code}_PLURAL_1"))
+			if (!$this->hasDescriptionMessage($code))
 			{
 				$code = "INTRANET_ANNUAL_SUMMARY_CARD_DESCRIPTION_{$feature}_COUNT_1_VARIETY_1";
 			}
 		}
 
-		return Loc::getMessagePlural(
-			$code,
-			$this->count,
-			[
-				'#COUNT#' => $this->count,
-			],
-		) ?? '';
+		return $this->getDescriptionMessage($code);
+	}
+
+	private function hasDescriptionMessage(string $code): bool
+	{
+		$messageCode = "{$code}_PLURAL_1";
+
+		if ($this->id === FeatureType::Copilot)
+		{
+			$messageCode .= '_MSGVER_1';
+		}
+
+		return Loc::getMessage($messageCode) !== null;
+	}
+
+	private function getDescriptionMessage(string $code): string
+	{
+		$replace = [
+			'#COUNT#' => $this->count,
+			'#COPILOT_NAME#' => CopilotService::getName(),
+		];
+
+		if ($this->id === FeatureType::Copilot)
+		{
+			$pluralForm = Loc::getPluralForm($this->count);
+
+			return Loc::getMessage("{$code}_PLURAL_{$pluralForm}_MSGVER_1", $replace)
+				?? Loc::getMessage("{$code}_PLURAL_1_MSGVER_1", $replace)
+				?? '';
+		}
+
+		return Loc::getMessagePlural($code, $this->count, $replace) ?? '';
 	}
 
 	public function getMessage(): array

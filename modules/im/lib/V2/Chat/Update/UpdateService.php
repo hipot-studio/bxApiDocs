@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Chat\Converter;
 use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
 use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Entity\File\ChatAvatar;
+use Bitrix\Im\V2\Guest\GuestLinkService;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Integration\Socialnetwork\Group;
@@ -70,13 +71,37 @@ class UpdateService
 			->addDepartments()
 		;
 
+		// A successful update through the general chat-update path counts as the
+		// first user interaction with a copilot draft (e.g. a description-only
+		// change, which has no dedicated activation point): turn it into a real
+		// chat so it stops being hidden. Run after membership/department changes
+		// so the search index is built once with the final roster instead of
+		// being created early and then rewritten. No-op for non-draft/non-copilot chats.
+		CopilotChat::activateDraftIfNeeded($this->chat);
+
 		$this->sendPushUpdateChat();
 		$this->markCopilotTitleAsCustom();
 		$this->compareAnalyticsData($prevAnalyticsData);
+		$this->revokeStaleGuestLinks($prevAnalyticsData);
 
 		ChatAnalytics::unblockSingleUserEventsByChat($this->chat);
 
 		return $result->setResult($this->chat);
+	}
+
+	private function revokeStaleGuestLinks(array $prevAnalyticsData): void
+	{
+		$oldRights = $prevAnalyticsData['manageGuestInvites'] ?? null;
+		$newRights = $this->chat->getManageGuestInvites();
+
+		if ($oldRights === null || $newRights === null || $oldRights === $newRights)
+		{
+			return;
+		}
+
+		GuestLinkService::getInstance()
+			->onManageGuestInvitesChanged($this->chat, $oldRights, $newRights)
+		;
 	}
 
 	protected function validateParent(): Result

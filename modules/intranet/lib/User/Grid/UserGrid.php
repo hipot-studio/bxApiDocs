@@ -2,6 +2,8 @@
 
 namespace Bitrix\Intranet\User\Grid;
 
+use Bitrix\Intranet\Internal\Integration\Humanresources\UserDepartmentProvider;
+use Bitrix\Intranet\Internal\Integration\Humanresources\UserQueryModifier;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
@@ -59,26 +61,6 @@ final class UserGrid extends Grid
 			];
 		}
 
-		if (key_exists('STRUCTURE_SORT', $params['order']))
-		{
-			$currentUser = new \Bitrix\Intranet\User();
-			$sort = $currentUser->getStructureSort(false);
-
-			if (!empty($sort))
-			{
-				$sqlHelper = \Bitrix\Main\Application::getInstance()->getConnection()->getSqlHelper();
-				$params['select'][]
-					= new \Bitrix\Main\Entity\ExpressionField(
-						'STRUCTURE_SORT',
-						$sqlHelper->getOrderByIntField('%s', $sort, false),
-						'ID');
-			}
-			else
-			{
-				unset($params['order']['STRUCTURE_SORT']);
-			}
-		}
-
 		$params['group'] = ['ID'];
 
 		return $params;
@@ -103,6 +85,13 @@ final class UserGrid extends Grid
 		if (!$this->getSettings()->getFilterFields())
 		{
 			$result = parent::getOrmFilter();
+			$filter = $this->getFilter();
+			if ($filter instanceof UserFilter)
+			{
+				$this->getSettings()->setSelectedDepartmentFilterValue(
+					$filter->getSelectedDepartmentFilterValue(),
+				);
+			}
 
 			$ufCodesList = array_keys($this->getSettings()->getUserFields());
 
@@ -196,7 +185,19 @@ final class UserGrid extends Grid
 
 		if (isset($params['order']))
 		{
-			$query->setOrder($params['order']);
+			$userQueryModifier = new UserQueryModifier();
+			$useStructureSort = array_key_exists('STRUCTURE_SORT', $params['order']);
+
+			if ($useStructureSort)
+			{
+				$userQueryModifier->injectStructureSort($query, $this->getSettings()->getCurrentUserId());
+				unset($params['order']['STRUCTURE_SORT']);
+			}
+
+			foreach ($params['order'] as $field => $direction)
+			{
+				$query->addOrder($field, $direction);
+			}
 		}
 
 		if (isset($params['limit']))
@@ -226,13 +227,13 @@ final class UserGrid extends Grid
 	{
 		parent::setRawRows($rawValue);
 
-		if (is_array($rawValue))
-		{
-			$userCollection = ServiceContainer::getInstance()
-				->userRepository()
-				->makeUserCollectionFromModelArray($rawValue);
-			$this->getSettings()->setUserCollection($userCollection);
-		}
+		$userCollection = ServiceContainer::getInstance()
+			->userRepository()
+			->makeUserCollectionFromModelArray($this->getRawRows());
+		$this->getSettings()->setUserCollection($userCollection);
+		$this->getSettings()->setUserDepartmentsMap(
+			(new UserDepartmentProvider())->getMapByUserIds($userCollection->getIds()),
+		);
 	}
 
 	protected function getFilterOptions(): \Bitrix\Main\UI\Filter\Options

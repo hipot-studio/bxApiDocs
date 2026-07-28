@@ -281,7 +281,7 @@ final class ScopeService
 					$smartProcess = $container->getType($typeId);
 					if ($smartProcess)
 					{
-						if (!$checkPermissions || $userPermissions->entityType()->canReadItems($smartProcess->getEntityTypeId()))
+						if (!$checkPermissions || $userPermissions->entityType()->canReadItems((int)$smartProcess->getEntityTypeId()))
 						{
 							$code = self::BIC_SCOPE_AUTOMATED_SOLUTION_PREFIX . $automatedSolution['ID'];
 							$result[] = $code;

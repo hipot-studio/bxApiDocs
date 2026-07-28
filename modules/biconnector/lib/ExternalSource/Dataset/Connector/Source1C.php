@@ -38,14 +38,14 @@ final class Source1C extends Base
 		$sourceId = $dataset->getSourceId();
 
 		/* @var ExternalSource\Source\Source1C $source */
-		$source = Source\Factory::getSource(ExternalSource\Type::Source1C, $sourceId);
+		$source = Source\Factory::getSource(ExternalSource\Type::Source1C, $sourceId ?? 0);
 
 		$fieldCodeMap = $this->getFieldCodesMap($dataset->getId());
-		$fields = $data->getConnectorData()->schema;
+		$fields = $data->getConnectorData()?->schema;
 		$queryFields = [
-			'select' => array_column($fields, 'NAME'),
+			'select' => array_column($fields ?? [], 'NAME'),
 			'columnNames' => $fieldCodeMap,
-			'filter' => $data->getConnectorData()->filter,
+			'filter' => $data->getConnectorData()?->filter ?? [],
 			'limit' => $limit,
 		];
 

@@ -35,7 +35,7 @@ class NodeService implements Contract\Service\NodeService
 	/**
 	 * Finds all departments for a given user.
 	 *
-	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllByNodeMemberId() instead.
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllByMemberEntityId() instead.
 	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
 	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByMemberEntityId()
 	 */
@@ -55,7 +55,7 @@ class NodeService implements Contract\Service\NodeService
 	/**
 	 * Deprecated service method for getting child nodeCollection for a given node (returns only departments).
 	 *
-	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllChildrenByNodeId() instead.
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findChildrenByNodeIds() instead.
 	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
 	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findChildrenByNodeIds()
 	 */

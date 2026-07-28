@@ -1185,19 +1185,8 @@ class NewDiskStorage extends DiskStorage
 	private function checkRootNodeReadRights()
 	{
 		$rootObjectId = $this->storage->getRootObjectId();
-		$userId = $this->userId;
-		$intranetUserCode = $this->connection->getSqlHelper()->forSql('IU' . $userId);
-		$simpleUserCode = $this->connection->getSqlHelper()->forSql('U' . $userId);
 
-		$hasReadRight = $this->connection->queryScalar("
-			SELECT 'x'
-			FROM b_disk_simple_right simple_right
-			INNER JOIN b_user_access uaccess ON uaccess.ACCESS_CODE = simple_right.ACCESS_CODE
-			WHERE simple_right.OBJECT_ID = {$rootObjectId} AND uaccess.USER_ID = {$userId} AND
-			(uaccess.ACCESS_CODE = '{$intranetUserCode}' OR uaccess.ACCESS_CODE = '{$simpleUserCode}')
-		");
-
-		return (bool)$hasReadRight;
+		return Driver::getInstance()->getRightsManager()->hasSimpleRight($this->userId, $rootObjectId);
 	}
 
 	private function checkNegativeRightsInSubTree()

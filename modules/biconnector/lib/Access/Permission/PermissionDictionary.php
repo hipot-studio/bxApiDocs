@@ -268,12 +268,12 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 		return $variables;
 	}
 
-	private static function getGroupIconClass(string $groupType): string
+	private static function getGroupIconClass(?string $groupType): string
 	{
 		return match ($groupType)
 		{
 			SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM => 'ui-icon ui-icon-file-air-folder-24',
-			SupersetDashboardGroupTable::GROUP_TYPE_CUSTOM => 'ui-icon ui-icon-file-air-folder-person',
+			default => 'ui-icon ui-icon-file-air-folder-person',
 		};
 	}
 

@@ -9,6 +9,8 @@ class Factory
 		return match ($userField['USER_TYPE_ID'])
 		{
 			\Bitrix\Main\UserField\Types\FileType::USER_TYPE_ID => new FileField($userField),
+			\Bitrix\Main\UserField\Types\DateType::USER_TYPE_ID,
+			\Bitrix\Main\UserField\Types\DateTimeType::USER_TYPE_ID => new DateField($userField),
 			default => new BaseField($userField),
 		};
 	}

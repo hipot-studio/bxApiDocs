@@ -19,21 +19,21 @@ class BIConstructorAccess extends Base
 	{
 		if (!Feature::isBuilderEnabled())
 		{
-			$this->addError(new Error(Loc::getMessage('BIC_ACTION_FILTER_FEATURE_UNAVAILABLE')));
+			$this->addError(new Error(Loc::getMessage('BIC_ACTION_FILTER_FEATURE_UNAVAILABLE') ?? ''));
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
 		}
 
 		if (Loader::includeModule('intranet') && !ToolsManager::getInstance()->checkAvailabilityByToolId('crm_bi'))
 		{
-			$this->addError(new Error(Loc::getMessage('BIC_ACTION_FILTER_TOOL_DISABLED')));
+			$this->addError(new Error(Loc::getMessage('BIC_ACTION_FILTER_TOOL_DISABLED') ?? ''));
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
 		}
 
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
 		{
-			$this->addError(new Error(Loc::getMessage('BIC_ACTION_FILTER_ACCESS_DENIED')));
+			$this->addError(new Error(Loc::getMessage('BIC_ACTION_FILTER_ACCESS_DENIED') ?? ''));
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
 		}

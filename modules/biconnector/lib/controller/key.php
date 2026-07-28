@@ -3,18 +3,24 @@
 namespace Bitrix\BIConnector\Controller;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\BIConnector\KeyManager;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\BIConnector\KeyTable;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Services\ApacheSuperset;
+use Bitrix\BIConnector\Superset\KeyManager as SupersetKeyManager;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\ActionFilter\AuthType;
 use Bitrix\BIConnector\KeyUserTable;
-use Bitrix\BIConnector\LogTable;
 
 /**
  * Class Key
@@ -60,10 +66,10 @@ class Key extends Controller
 		$res = KeyManager::save(
 			[
 				'APP_ID' => $this->getAppId($server),
-				'CONNECTION' => $fields['CONNECTION'],
+				'CONNECTION' => $fields['CONNECTION'] ?? '',
 				'USER_ID' => $fields['USER_ID'],
 				'ACCESS_KEY' => $fields['ACCESS_KEY'] ?? '',
-				'ACTIVE' => $fields['ACTIVE'] === 'Y',
+				'ACTIVE' => ($fields['ACTIVE'] ?? 'N') === 'Y',
 			]
 		);
 		if ($res instanceof ErrorCollection)
@@ -371,6 +377,10 @@ class Key extends Controller
 	private function getAppId(\CRestServer $server): int
 	{
 		$clientId = $server->getClientId();
+		if ($clientId === null)
+		{
+			return 0;
+		}
 
 		$app = AppTable::getByClientId($clientId);
 
@@ -400,6 +410,73 @@ class Key extends Controller
 	}
 
 	/**
+	 * @return string|null
+	 */
+	public function changeSupersetKeyAction(): ?string
+	{
+		$user = CurrentUser::get();
+		if (!SupersetKeyManager::canManageKey($user))
+		{
+			$this->addError(new Error('Access denied'));
+
+			return null;
+		}
+
+		$activeKeys = KeyTable::getList([
+				'select' => ['ID'],
+				'filter' => [
+					'=SERVICE_ID' => ApacheSuperset::getServiceId(),
+					'=ACTIVE' => 'Y',
+					'=APP_ID' => false,
+				],
+			])
+			->fetchCollection()
+		;
+
+		$createResult = SupersetKeyManager::createAccessKey($user);
+		if (!$createResult->isSuccess())
+		{
+			$this->addErrors($createResult->getErrors());
+
+			return null;
+		}
+
+		$accessKey = $createResult->getData()['ACCESS_KEY'] ?? null;
+		if (empty($accessKey))
+		{
+			$this->addError(new Error('Failed to create access key'));
+
+			return null;
+		}
+
+		$integrator = IntegratorFactory::getInstance();
+		$response = $integrator->changeBiconnectorToken($accessKey);
+		if ($response->hasErrors())
+		{
+			SupersetKeyManager::deleteKey($accessKey);
+
+			$this->addError(new Error('Failed to update token in Superset'));
+
+			return null;
+		}
+		$integrator->refreshDomainConnection();
+
+		if (!$activeKeys->isEmpty())
+		{
+			foreach ($activeKeys as $key)
+			{
+				$key->delete();
+			}
+		}
+		else
+		{
+			Option::delete('biconnector', ['name' => SupersetKeyManager::SUPERSET_KEY_OPTION_NAME]);
+		}
+
+		return $accessKey;
+	}
+
+	/**
 	 * Returns array of rest filters.
 	 *
 	 * @return array
@@ -408,7 +485,6 @@ class Key extends Controller
 	{
 		return [
 			new ActionFilter\Authentication(),
-			new ActionFilter\Scope(ActionFilter\Scope::REST),
 			new AuthType(AuthType::APPLICATION),
 		];
 	}

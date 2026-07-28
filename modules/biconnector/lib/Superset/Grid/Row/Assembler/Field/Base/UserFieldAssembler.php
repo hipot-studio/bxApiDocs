@@ -48,7 +48,7 @@ class UserFieldAssembler extends Main\Grid\Row\Assembler\Field\UserFieldAssemble
 		$ormFilter = $this->getSettings()->getOrmFilter();
 		$isFiltered = isset($ormFilter[$fieldId], $value[$fieldId]) && in_array((int)$value[$fieldId], $ormFilter[$fieldId]);
 
-		$userId = (int)$value[$fieldId];
+		$userId = (int)($value[$fieldId] ?? 0);
 
 		if ($userId > 0)
 		{

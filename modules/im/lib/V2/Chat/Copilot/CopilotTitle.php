@@ -26,19 +26,26 @@ class CopilotTitle
 
 	public function markAsCustom(): void
 	{
-		if (!$this->chatId || $this->isCustom())
+		if (!$this->chatId)
+		{
+			return;
+		}
+
+		$chat = Chat::getInstance($this->chatId);
+		Chat\CopilotChat::activateDraftIfNeeded($chat);
+
+		if ($this->isCustom())
 		{
 			return;
 		}
 
 		$this->params->addParamByName(Params::COPILOT_TITLE_IS_CUSTOM, true);
 
-		$this->sendPush();
+		$this->sendPush($chat);
 	}
 
-	protected function sendPush(): void
+	protected function sendPush(Chat $chat): void
 	{
-		$chat = Chat::getInstance($this->chatId);
 		(new SetCopilotTitle($chat))->send();
 	}
 }

@@ -34,22 +34,22 @@ class SourceManager
 		{
 			$result['1c'] = [
 				[
-					'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_HOST'),
+					'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_HOST') ?? '',
 					'type' => ExternalSource\SourceSettingType::String->value,
 					'code' => 'host',
 					'placeholder' => 'http://localhost_23740259475',
 				],
 				[
-					'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_USERNAME'),
+					'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_USERNAME') ?? '',
 					'type' => ExternalSource\SourceSettingType::String->value,
 					'code' => 'username',
 					'placeholder' => 'user@mail.com',
 				],
 				[
-					'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD'),
+					'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD') ?? '',
 					'type' => ExternalSource\SourceSettingType::String->value,
 					'code' => 'password',
-					'placeholder' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD'),
+					'placeholder' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD') ?? '',
 				],
 			];
 		}
@@ -74,7 +74,7 @@ class SourceManager
 								'name' => $setting['name'],
 								'type' => $setting['type'],
 								'code' => $setting['code'],
-								'placeholder' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_REST_EXTERNAL_PARAM_PLACEHOLDER'),
+								'placeholder' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_REST_EXTERNAL_PARAM_PLACEHOLDER') ?? '',
 							];
 						}
 					}
@@ -96,31 +96,31 @@ class SourceManager
 			{
 				$result[$type] = [
 					[
-						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_HOST'),
+						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_HOST') ?? '',
 						'type' => ExternalSource\SourceSettingType::String->value,
 						'code' => 'host',
 						'placeholder' => 'http://localhost_23740259475',
 					],
 					[
-						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PORT'),
+						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PORT') ?? '',
 						'type' => ExternalSource\SourceSettingType::Int->value,
 						'code' => 'port',
 						'placeholder' => $defaultPorts[$type] ?? '3306',
 					],
 					[
-						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_USERNAME'),
+						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_USERNAME') ?? '',
 						'type' => ExternalSource\SourceSettingType::String->value,
 						'code' => 'login',
 						'placeholder' => 'user',
 					],
 					[
-						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD'),
+						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD') ?? '',
 						'type' => ExternalSource\SourceSettingType::String->value,
 						'code' => 'password',
-						'placeholder' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD'),
+						'placeholder' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PASSWORD') ?? '',
 					],
 					[
-						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_DATABASE'),
+						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_DATABASE') ?? '',
 						'type' => ExternalSource\SourceSettingType::String->value,
 						'code' => 'database',
 						'placeholder' => 'example_db',
@@ -281,8 +281,8 @@ class SourceManager
 					->fetchObject()
 				;
 
-				$avatar = $connector->getLogo();
-				$isSupportMapping = $connector->getSupportMapping();
+				$avatar = $connector?->getLogo();
+				$isSupportMapping = $connector?->getSupportMapping();
 			}
 
 			$connection = [
@@ -320,18 +320,18 @@ class SourceManager
 
 		if (empty($data['title'] ?? null))
 		{
-			$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE')));
+			$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE') ?? ''));
 
 			return $result;
 		}
 
-		$type = ExternalSource\Type::tryFrom($data['type']);
+		$type = ExternalSource\Type::tryFrom($data['type'] ?? '');
 		if (!$type)
 		{
 			$result->addError(
 				new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_UNKNOWN_TYPE', [
-					'#CONNECTION_TYPE#' => htmlspecialcharsbx($data['type']),
-				])),
+					'#CONNECTION_TYPE#' => htmlspecialcharsbx($data['type'] ?? ''),
+				]) ?? ''),
 			);
 
 			return $result;
@@ -363,7 +363,7 @@ class SourceManager
 			$source = ExternalSourceTable::getById($sourceId)->fetchObject();
 			if (!$source)
 			{
-				$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_NOT_FOUND')));
+				$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_NOT_FOUND') ?? ''));
 
 				return $result;
 			}
@@ -442,7 +442,7 @@ class SourceManager
 
 		if (empty($data['title'] ?? null))
 		{
-			$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE')));
+			$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE') ?? ''));
 
 			return $result;
 		}
@@ -540,7 +540,7 @@ class SourceManager
 			}
 			elseif ($source->getType() !== Type::Rest->value)
 			{
-				$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE')));
+				$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE') ?? ''));
 
 				return $result;
 			}
@@ -570,7 +570,7 @@ class SourceManager
 		$source = ExternalSourceTable::getById($id)->fetchObject();
 		if (!$source)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND') ?? ''));
 
 			return $result;
 		}

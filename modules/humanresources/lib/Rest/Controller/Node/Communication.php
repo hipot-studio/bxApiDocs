@@ -10,16 +10,13 @@ use Bitrix\HumanResources\Command\Structure\Node\SaveNodeChatsCommand;
 use Bitrix\HumanResources\Exception\CommandException;
 use Bitrix\HumanResources\Exception\CommandValidateException;
 use Bitrix\HumanResources\Item\Node as NodeItem;
-use Bitrix\HumanResources\Rest\Dto\NodeDto;
 use Bitrix\HumanResources\Rest\RequestParams;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\NodeChatType;
 use Bitrix\Main\Error;
-use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
-use Bitrix\Rest\V3\Interaction\Request\GetRequest;
 use Bitrix\Rest\V3\Interaction\Response\ArrayResponse;
 
 /**
@@ -29,7 +26,6 @@ use Bitrix\Rest\V3\Interaction\Response\ArrayResponse;
  * @see \Bitrix\HumanResources\Integration\AiAssistant\Tools\Node\NodeGetCommunicationsTool
  * @see \Bitrix\HumanResources\Integration\AiAssistant\Tools\Node\NodeSaveCommunicationsTool
  */
-#[DtoType(NodeDto::class)]
 class Communication extends RestController
 {
 	use NodeControllerTrait;
@@ -47,9 +43,11 @@ class Communication extends RestController
 	 * @see \Bitrix\HumanResources\Controller\Structure\Node\Member\Chat::getListAction
 	 * @see \Bitrix\HumanResources\Integration\AiAssistant\Tools\Node\NodeGetCommunicationsTool
 	 */
-	public function listAction(GetRequest $request): ArrayResponse
+	public function listAction(): ArrayResponse
 	{
-		$nodeId = (int)$request->id;
+		$params = new RequestParams($this->getRequest()->getJsonList());
+
+		$nodeId = $params->requireInt('id');
 
 		$node = $this->requireNodeById($nodeId);
 

@@ -3,6 +3,7 @@
 namespace Bitrix\AI;
 
 use Bitrix\AI\Cache\EngineResultCache;
+use Bitrix\AI\Engine\Enum\Category;
 use Bitrix\AI\Engine\IEngine;
 use Bitrix\AI\Engine\IQueue;
 use Bitrix\AI\Engine\ThirdParty;
@@ -175,6 +176,19 @@ final class QueueJob
 			$engine->setHistoryState($row['HISTORY_WRITE'] === 'Y');
 			$engine->setHistoryGroupId($row['HISTORY_GROUP_ID']);
 
+			if (
+				$engine->getCategory() === Category::VISION->value
+				&& !empty($engineCustomSettings['IMAGES'])
+				&& is_array($engineCustomSettings['IMAGES'])
+			)
+			{
+				$images = array_filter(array_map(
+					Image\ImageReference::fromStorable(...),
+					$engineCustomSettings['IMAGES'],
+				));
+				$engine->setImages($images);
+			}
+
 			$queueJob = new self();
 
 			$queueJob->id = $row['ID'];
@@ -222,6 +236,14 @@ final class QueueJob
 				'HIDDEN_TOKENS' => $this->engine->getPayload()->getTokenProcessor()->getReplacements(),
 			],
 		];
+		if ($this->engine->getCategory() === Category::VISION->value)
+		{
+			$data['ENGINE_CUSTOM_SETTINGS']['IMAGES'] = array_map(
+				fn(Image\ImageReference $img) => $img->toStorable(),
+				$this->engine->getImages(),
+			);
+		}
+
 		$cacheHash = md5(serialize($data));
 		$data['HASH'] = $hash;
 		$data['CACHE_HASH'] = $cacheHash;

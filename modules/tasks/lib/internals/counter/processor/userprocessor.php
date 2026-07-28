@@ -82,6 +82,27 @@ class UserProcessor
 	}
 
 	/**
+	 * Resets comment-cover counter types for the given list of tasks only.
+	 * Does NOT call reloadState — caller is responsible for a single reload.
+	 */
+	public function readByTaskList(array $taskIds): void
+	{
+		if (!$this->userId || empty($taskIds))
+		{
+			return;
+		}
+
+		$coverTypes = array_merge(
+			array_values(CounterDictionary::MAP_COMMENTS),
+			array_values(CounterDictionary::MAP_MUTED_COMMENTS),
+		);
+		$coverTypes[] = CounterDictionary::COUNTER_GROUP_COMMENTS;
+		$coverTypes[] = CounterDictionary::COUNTER_MENTIONED;
+
+		self::reset($this->userId, $coverTypes, $taskIds);
+	}
+
+	/**
 	 * @param string $counter
 	 * @param array $taskIds
 	 * @throws UnknownCounterException

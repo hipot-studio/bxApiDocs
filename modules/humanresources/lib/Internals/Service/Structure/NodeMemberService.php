@@ -16,9 +16,11 @@ use Bitrix\HumanResources\Item;
 use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Enum\DepthLevel;
+use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Repository\NodeMemberRepository;
 use Bitrix\HumanResources\Repository\NodeSettingsRepository;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Service\UserService as InternalUserService;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Type\NodeMemberRole;
@@ -42,27 +44,7 @@ class NodeMemberService
 		$this->nodeSettingsRepository = Container::getNodeSettingsRepository();
 	}
 
-	/**
-	 * Returns members of DEPARTMENT nodes where the user is head or deputy head.
-	 */
-	public function getManagedDepartmentNodes(int $userId, ?int $structureId = null): NodeMemberCollection
-	{
-		return (new NodeMemberDataBuilder())
-			->addFilter(new NodeMemberFilter(
-				entityIdFilter: EntityIdFilter::fromEntityId($userId),
-				nodeFilter: new NodeFilter(
-					entityTypeFilter: NodeTypeFilter::createForDepartment(),
-					structureId: $structureId,
-				),
-				roleFilter: RoleFilter::fromRoles(
-					NodeMemberRole::Head,
-					NodeMemberRole::DeputyHead,
-				),
-			))
-			->getAll()
-		;
-	}
-
+	//region mutators
 	/**
 	 * Move a single member to another node. Validates node type match and role correctness,
 	 * throws UpdateFailedException on invalid input.
@@ -93,6 +75,9 @@ class NodeMemberService
 			));
 		}
 
+		$sourceNode = $nodeMember->node;
+		$sourceRoleId = (int)($nodeMember->roles[0] ?? 0);
+
 		if ($role)
 		{
 			if (!$this->isRoleCorrectForNode($node, $role))
@@ -118,6 +103,14 @@ class NodeMemberService
 
 		$nodeMember->nodeId = $node->id;
 		$this->nodeMemberRepository->update($nodeMember);
+
+		InternalContainer::getNodeMemberNotificationService()->sendAllMoveMemberNotifications(
+			$nodeMember,
+			$sourceNode,
+			$node,
+			$sourceRoleId,
+			$role,
+		);
 
 		return $nodeMember;
 	}
@@ -169,8 +162,149 @@ class NodeMemberService
 		}
 
 		$this->nodeMemberRepository->createByCollection($result);
+		$notificationService = InternalContainer::getNodeMemberNotificationService();
+		$notificationService->preloadEmployeeNames($result);
+		$notificationService->sendAllAddMemberNotifications($result, $node, $role);
 
 		return $result;
+	}
+
+	/**
+	 * Assigns the user to the given set of DEPARTMENT nodes.
+	 *
+	 * By default ($replaceExisting = false) the passed departments are added to the user's
+	 * current department links without touching the rest. When $replaceExisting is true,
+	 * department links absent from the passed set are removed (replace semantics, matching
+	 * {@see \Bitrix\HumanResources\Public\Service\Department\UserService::assignToSingleDepartment()}).
+	 *
+	 * For each department the link is created or reactivated. Reactivation goes through
+	 * {@see \Bitrix\HumanResources\Internals\Repository\Structure\NodeMemberRepository::setActiveById()}
+	 * so OnMemberUpdated is emitted even for an already-active link — this keeps the
+	 * compatibility-sync recovery of UF_DEPARTMENT working. UF_DEPARTMENT is never written directly.
+	 *
+	 * @param int $userId
+	 * @param int[] $departmentIds non-empty list of DEPARTMENT node IDs
+	 * @param bool $replaceExisting when true, also removes department links absent from $departmentIds
+	 * @param int|null $structureId structure the departments belong to; null resolves to the default structure
+	 *
+	 * @throws \InvalidArgumentException if $departmentIds is empty or contains an ID that is not a DEPARTMENT node of the structure
+	 */
+	public function assignUserToDepartments(
+		int $userId,
+		array $departmentIds,
+		bool $replaceExisting = false,
+		?int $structureId = null,
+	): void
+	{
+		if (empty($departmentIds))
+		{
+			throw new \InvalidArgumentException('Department list must not be empty');
+		}
+
+		$targetIds = array_values(array_unique(array_map('intval', $departmentIds)));
+
+		// Validate all targets in a single query before any mutation: findAllByIds returns only
+		// DEPARTMENT nodes of $structureId (null resolves to the default structure).
+		$foundDepartmentIds = [];
+		foreach (InternalContainer::getNodeRepository()->findAllByIds(
+			nodeIds: $targetIds,
+			structureId: $structureId,
+			activeFilter: NodeActiveFilter::ALL,
+		) as $node)
+		{
+			$foundDepartmentIds[$node->id] = true;
+		}
+
+		foreach ($targetIds as $departmentId)
+		{
+			if (!isset($foundDepartmentIds[$departmentId]))
+			{
+				throw new \InvalidArgumentException('Target node is not a valid department');
+			}
+		}
+
+		// Deliberately not wrapped in a DB transaction: repository writes emit OnMember* events
+		// synchronously, and compatibility-sync updates UF_DEPARTMENT outside this transaction,
+		// so a rollback would desync them. Atomicity is ensured by the upfront validation above;
+		// proper transactional support would require queue-aware repository writes.
+		$memberRepository = Container::getNodeMemberRepository();
+		$internalMemberRepository = InternalContainer::getNodeMemberRepository();
+
+		$departmentMembers = $memberRepository->findAllByEntityIdAndEntityTypeAndNodeType(
+			$userId,
+			MemberEntityType::USER,
+			NodeEntityType::DEPARTMENT,
+			activeFilter: NodeActiveFilter::ALL,
+		);
+
+		$existingByNodeId = [];
+		foreach ($departmentMembers as $member)
+		{
+			$existingByNodeId[$member->nodeId] = $member;
+		}
+
+		if ($replaceExisting)
+		{
+			$membersToRemove = new NodeMemberCollection();
+			foreach ($departmentMembers as $member)
+			{
+				if (!in_array($member->nodeId, $targetIds, true))
+				{
+					$membersToRemove->add($member);
+				}
+			}
+
+			if (!$membersToRemove->empty())
+			{
+				$memberRepository->removeByCollection($membersToRemove);
+			}
+		}
+
+		foreach ($targetIds as $departmentId)
+		{
+			$existingMember = $existingByNodeId[$departmentId] ?? null;
+			if ($existingMember === null)
+			{
+				$memberRepository->create(new NodeMember(
+					entityType: MemberEntityType::USER,
+					entityId: $userId,
+					nodeId: $departmentId,
+					active: true,
+				));
+			}
+			else
+			{
+				// setActiveById intentionally emits OnMemberUpdated even for a no-op (see docblock).
+				$internalMemberRepository->setActiveById($existingMember->id, true);
+			}
+		}
+
+		Container::getCacheManager()->clean(
+			sprintf(InternalUserService::USER_DEPARTMENT_EXISTS_KEY, $userId),
+		);
+	}
+	//endregion
+
+	//region membership queries
+	/**
+	 * Returns members of DEPARTMENT nodes where the user is head or deputy head.
+	 */
+	public function getManagedDepartmentNodes(int $userId, ?int $structureId = null): NodeMemberCollection
+	{
+		return (new NodeMemberDataBuilder())
+			->addFilter(new NodeMemberFilter(
+				entityIdFilter: EntityIdFilter::fromEntityId($userId),
+				nodeFilter: new NodeFilter(
+					entityTypeFilter: NodeTypeFilter::createForDepartment(),
+					structureId: $structureId,
+				),
+				roleFilter: RoleFilter::fromRoles(
+					NodeMemberRole::Head,
+					NodeMemberRole::DeputyHead,
+				),
+			))
+			->getAll()
+		;
 	}
 
 	public function isUserInMultipleNodes(int $userId, NodeEntityType $nodeEntityType = NodeEntityType::DEPARTMENT): bool
@@ -178,13 +312,87 @@ class NodeMemberService
 		$nodeMemberCollection = $this->nodeMemberRepository->findAllByEntityIdAndEntityTypeAndNodeType(
 			entityId: $userId,
 			entityType: MemberEntityType::USER,
-			nodeType: NodeEntityType::DEPARTMENT,
+			nodeType: $nodeEntityType,
 			limit: 2,
 		);
 
 		return $nodeMemberCollection->count() > 1;
 	}
 
+	/**
+	 * Get departments where the user is HEAD or DEPUTY_HEAD, with subordinate counts.
+	 * Pass $viewerUserId to filter results by viewer's access permissions.
+	 *
+	 * @return array<int, array{nodeId: int, name: string, role: string, subordinatesCount: int}>
+	 */
+	public function getSubordinatesCountByUser(int $userId, ?int $viewerUserId = null): array
+	{
+		$roleRepository = Container::getRoleRepository();
+		$nodeRepository = Container::getNodeRepository();
+		$internalNodeRepository = InternalContainer::getNodeRepository();
+		$nodeMemberRepository = InternalContainer::getNodeMemberRepository();
+
+		$headRole = $roleRepository->findByXmlId(NodeMemberRole::Head->value);
+		$deputyRole = $roleRepository->findByXmlId(NodeMemberRole::DeputyHead->value);
+
+		$managedNodes = [];
+
+		if ($headRole)
+		{
+			foreach ($nodeRepository->findAllByUserIdAndRoleId($userId, $headRole->id) as $node)
+			{
+				if ($node->type === NodeEntityType::DEPARTMENT)
+				{
+					$managedNodes[$node->id] = ['role' => 'HEAD', 'node' => $node];
+				}
+			}
+		}
+
+		if ($deputyRole)
+		{
+			foreach ($nodeRepository->findAllByUserIdAndRoleId($userId, $deputyRole->id) as $node)
+			{
+				if ($node->type === NodeEntityType::DEPARTMENT && !isset($managedNodes[$node->id]))
+				{
+					$managedNodes[$node->id] = ['role' => 'DEPUTY_HEAD', 'node' => $node];
+				}
+			}
+		}
+
+		$result = [];
+		foreach ($managedNodes as $entry)
+		{
+			$node = $entry['node'];
+
+			if ($viewerUserId !== null)
+			{
+				$visibleNode = $internalNodeRepository->getById(
+					$node->id,
+					StructureAction::ViewAction,
+					$viewerUserId,
+				);
+				if ($visibleNode === null)
+				{
+					continue;
+				}
+			}
+
+			$count = $nodeMemberRepository->countUniqueUsersByNodeIdWithSubNodes($node->id);
+			$count = max(0, $count - 1);
+
+			$result[] = [
+				'nodeId' => $node->id,
+				'name' => $node->name,
+				'role' => $entry['role'],
+				'subordinatesCount' => $count,
+			];
+		}
+
+		return $result;
+	}
+	//endregion
+
+	//region hierarchy
 	/**
 	 * Returns the nearest members with specified role from the branch where the given entity belongs
 	 */
@@ -456,81 +664,12 @@ class NodeMemberService
 			->getAll()
 		;
 	}
+	//endregion
 
+	//region helpers
 	private function isRoleCorrectForNode(Item\Node $node, Item\Role $role): bool
 	{
 		return in_array($role->xmlId, NodeMemberRole::allowedValuesForNodeType($node->type), true);
 	}
-
-	/**
-	 * Get departments where the user is HEAD or DEPUTY_HEAD, with subordinate counts.
-	 * Pass $viewerUserId to filter results by viewer's access permissions.
-	 *
-	 * @return array<int, array{nodeId: int, name: string, role: string, subordinatesCount: int}>
-	 */
-	public function getSubordinatesCountByUser(int $userId, ?int $viewerUserId = null): array
-	{
-		$roleRepository = Container::getRoleRepository();
-		$nodeRepository = Container::getNodeRepository();
-		$internalNodeRepository = InternalContainer::getNodeRepository();
-		$nodeMemberRepository = InternalContainer::getNodeMemberRepository();
-
-		$headRole = $roleRepository->findByXmlId(NodeMemberRole::Head->value);
-		$deputyRole = $roleRepository->findByXmlId(NodeMemberRole::DeputyHead->value);
-
-		$managedNodes = [];
-
-		if ($headRole)
-		{
-			foreach ($nodeRepository->findAllByUserIdAndRoleId($userId, $headRole->id) as $node)
-			{
-				if ($node->type === NodeEntityType::DEPARTMENT)
-				{
-					$managedNodes[$node->id] = ['role' => 'HEAD', 'node' => $node];
-				}
-			}
-		}
-
-		if ($deputyRole)
-		{
-			foreach ($nodeRepository->findAllByUserIdAndRoleId($userId, $deputyRole->id) as $node)
-			{
-				if ($node->type === NodeEntityType::DEPARTMENT && !isset($managedNodes[$node->id]))
-				{
-					$managedNodes[$node->id] = ['role' => 'DEPUTY_HEAD', 'node' => $node];
-				}
-			}
-		}
-
-		$result = [];
-		foreach ($managedNodes as $entry)
-		{
-			$node = $entry['node'];
-
-			if ($viewerUserId !== null)
-			{
-				$visibleNode = $internalNodeRepository->getById(
-					$node->id,
-					StructureAction::ViewAction,
-					$viewerUserId,
-				);
-				if ($visibleNode === null)
-				{
-					continue;
-				}
-			}
-
-			$count = $nodeMemberRepository->countUniqueUsersByNodeIdWithSubNodes($node->id);
-			$count = max(0, $count - 1);
-
-			$result[] = [
-				'nodeId' => $node->id,
-				'name' => $node->name,
-				'role' => $entry['role'],
-				'subordinatesCount' => $count,
-			];
-		}
-
-		return $result;
-	}
+	//endregion
 }

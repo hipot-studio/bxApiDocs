@@ -25,15 +25,14 @@ final class Factory
 		};
 	}
 
-	private static function resolveId(Type $type, int $sourceId, ?int $datasetId = null): ?int
+	private static function resolveId(Type $type, int $sourceId, ?int $datasetId = null): int
 	{
-		$id = $sourceId;
 		if ($type === Type::Csv)
 		{
-			$id = $datasetId;
+			return (int)$datasetId;
 		}
 
-		return $id;
+		return $sourceId;
 	}
 
 	private static function checkParams(Type $type, ?int $datasetId = null): void

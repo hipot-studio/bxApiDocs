@@ -45,7 +45,7 @@ class Reader implements BIConnector\ExternalSource\FileReader\Base
 
 		if ($this->settings->hasHeaders)
 		{
-			$headers = fgetcsv($this->handle, 0, $this->settings->delimiter);
+			$headers = fgetcsv($this->handle, 0, $this->settings->delimiter, '"', '\\');
 			if ($headers)
 			{
 				$this->headers = $headers;
@@ -84,7 +84,7 @@ class Reader implements BIConnector\ExternalSource\FileReader\Base
 
 		try
 		{
-			while (($row = fgetcsv($this->handle, 0, $this->settings->delimiter)) !== false && $i < $n)
+			while (($row = fgetcsv($this->handle, 0, $this->settings->delimiter, '"', '\\')) !== false && $i < $n)
 			{
 				$rows[] = $row;
 				$i++;
@@ -108,7 +108,7 @@ class Reader implements BIConnector\ExternalSource\FileReader\Base
 		$rows = [];
 		try
 		{
-			while (($row = fgetcsv($this->handle, 0, $this->settings->delimiter)) !== false)
+			while (($row = fgetcsv($this->handle, 0, $this->settings->delimiter, '"', '\\')) !== false)
 			{
 				$rows[] = $row;
 			}
@@ -128,7 +128,7 @@ class Reader implements BIConnector\ExternalSource\FileReader\Base
 	{
 		$this->openFile();
 
-		while (($row = fgetcsv($this->handle, 0, $this->settings->delimiter)) !== false)
+		while (($row = fgetcsv($this->handle, 0, $this->settings->delimiter, '"', '\\')) !== false)
 		{
 			yield $row;
 		}

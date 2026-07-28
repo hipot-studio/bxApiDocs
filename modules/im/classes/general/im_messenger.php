@@ -1521,28 +1521,34 @@ class CIMMessenger
 		if ($chat['TYPE'] == IM_MESSAGE_PRIVATE)
 		{
 			$fromUserId = (int)$userId;
+			$toUserId = $fromUserId;
 			foreach ($relations as $rel)
 			{
 				if ($rel['USER_ID'] != $fromUserId)
 				{
 					$toUserId = (int)$rel['USER_ID'];
+
+					break;
 				}
 			}
 			$dialogId = $toUserId;
 
-			\Bitrix\Pull\Event::add($fromUserId, Array(
+			\Bitrix\Pull\Event::add($fromUserId, [
 				'module_id' => 'im',
 				'command' => 'messageLike',
 				'params' => array_merge($arPullMessage, ['dialogId' => $toUserId]),
 				'extra' => \Bitrix\Im\Common::getPullExtra()
-			));
+			]);
 
-			\Bitrix\Pull\Event::add($toUserId, Array(
-				'module_id' => 'im',
-				'command' => 'messageLike',
-				'params' => array_merge($arPullMessage, ['dialogId' => $fromUserId]),
-				'extra' => \Bitrix\Im\Common::getPullExtra()
-			));
+			if ($toUserId !== $fromUserId)
+			{
+				\Bitrix\Pull\Event::add($toUserId, [
+					'module_id' => 'im',
+					'command' => 'messageLike',
+					'params' => array_merge($arPullMessage, ['dialogId' => $fromUserId]),
+					'extra' => \Bitrix\Im\Common::getPullExtra()
+				]);
+			}
 		}
 		else
 		{

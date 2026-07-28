@@ -596,6 +596,9 @@ class Util
 		return true;
 	}
 
+	/**
+	 * @deprecated use \Bitrix\Intranet\User\Command\FireUserCommand
+	 */
 	public static function deactivateUser($params)
 	{
 		$userId = (!empty($params['userId']) ? intval($params['userId']) : 0);
@@ -632,6 +635,9 @@ class Util
 		return true;
 	}
 
+	/**
+	 * @deprecated use \Bitrix\Intranet\User\Command\RestoreUserCommand
+	 */
 	public static function activateUser($params)
 	{
 		$userId = (!empty($params['userId']) ? intval($params['userId']) : 0);

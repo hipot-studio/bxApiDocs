@@ -13,4 +13,5 @@ enum Category: string
 	case IMAGE = 'image';
 	case AUDIO = 'audio';
 	case CALL = 'call';
+	case VISION = 'vision';
 }

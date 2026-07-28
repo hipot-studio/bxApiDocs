@@ -27,8 +27,8 @@ class DeleteDatasetAction extends BaseAction
 
 	public function getControl(array $rawFields): ?array
 	{
-		$datasetId = (int)$rawFields['ID'];
-		$datasetType = CUtil::JSEscape($rawFields['TYPE']);
+		$datasetId = (int)($rawFields['ID'] ?? 0);
+		$datasetType = CUtil::JSEscape($rawFields['TYPE'] ?? '');
 		if (!$datasetId && !$datasetType)
 		{
 			return null;

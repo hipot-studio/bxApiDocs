@@ -120,6 +120,15 @@ abstract class LimitManager
 	abstract public function getLimit(): int;
 
 	/**
+	 * Sets row limit.
+	 * Available only for selfhost supersets in box.
+	 *
+	 * @param int $rowLimit
+	 * @return self
+	 */
+	abstract public function setLimit(int $rowLimit): self;
+
+	/**
 	 * Returns a date when data export will be disabled.
 	 *
 	 * @return Date

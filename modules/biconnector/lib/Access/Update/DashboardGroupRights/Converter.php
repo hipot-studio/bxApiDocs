@@ -482,7 +482,7 @@ final class Converter
 					"BICONNECTOR_NEW_USER_CONVERTED_GROUP_NAME",
 					['#GROUP_ID#' => $this->newGroupCounter],
 					$this->getDefaultLanguage(),
-				)
+				) ?? ''
 			)
 			->setCode("user_converted_group_{$this->newGroupCounter}")
 		;

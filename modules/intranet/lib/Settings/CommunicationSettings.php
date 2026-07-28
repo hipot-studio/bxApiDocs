@@ -95,6 +95,15 @@ class CommunicationSettings extends AbstractSettings
 			\COption::SetOptionString("im", "general_chat_message_leave", false);
 		}
 
+		if (Loader::includeModule('im') && isset($this->data['chat_with_guests_available']))
+		{
+			\COption::SetOptionString(
+				'im',
+				'chat_with_guests_available',
+				$this->data['chat_with_guests_available'] !== 'N' ? 'Y' : 'N',
+			);
+		}
+
 		if (isset($this->data["url_preview_enable"]) && $this->data["url_preview_enable"] <> 'N')
 		{
 			\COption::SetOptionString("main", "url_preview_enable", "Y");
@@ -517,6 +526,17 @@ class CommunicationSettings extends AbstractSettings
 				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_LEAVE_MESSAGE'),
 				Option::get("im", "general_chat_message_leave") ? 'Y' : 'N',
 			);
+
+			$data['chat_with_guests_available'] = new Switcher(
+				'settings-communication-field-chat_with_guests_available',
+				'chat_with_guests_available',
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_CHAT_WITH_GUESTS'),
+				Option::get('im', 'chat_with_guests_available', 'N'),
+				[
+					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALLOW_CHAT_WITH_GUESTS_ON'),
+				],
+				helpDesk: 'redirect=detail&code=28188420',
+			);
 		}
 
 		$data['url_preview_enable'] = new Switcher(
@@ -774,6 +794,7 @@ class CommunicationSettings extends AbstractSettings
 			'allow_post_general_chat' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_POST_GEN_CHAT'),
 			'allow_post_general_channel' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_POST_GEN_CHANNEL') ?? '',
 			'general_chat_message_leave' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_LEAVE_MESSAGE'),
+			'chat_with_guests_available' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_CHAT_WITH_GUESTS'),
 			'url_preview_enable' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_URL_PREVIEW'),
 			'default_viewer_service' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SELECT_FILE_VIEWER'),
 			'disk_version_limit_per_file' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_MAX_FILE_LIMIT'),

@@ -3,7 +3,7 @@
 namespace Bitrix\BIConnector\Superset\Updater\Versions;
 
 use Bitrix\BIConnector\Configuration\DataTimezone;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Cache\CacheManager;
 use Bitrix\Main\Error;
@@ -28,7 +28,7 @@ final class Version10 extends BaseVersion
 		$timezone = DataTimezone::getTimezone();
 		if ($timezone)
 		{
-			$setTimezoneResult = Integrator::getInstance()->setTimezone($timezone);
+			$setTimezoneResult = IntegratorFactory::getInstance()->setTimezone($timezone);
 			if ($setTimezoneResult->hasErrors())
 			{
 				$result->addErrors($setTimezoneResult->getErrors());

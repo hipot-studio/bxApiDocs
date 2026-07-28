@@ -70,13 +70,13 @@ class ProductProperty
 		$result['crm_product_property']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_PRODUCT_PROPERTY_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_product_property']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
-			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_PRODUCT_PROPERTY_FIELD_' . $fieldCode] ?? null;
+			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_PRODUCT_PROPERTY_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_PRODUCT_PROPERTY_FIELD_' . $fieldCode] : null;
 			if (!$fieldInfo['FIELD_DESCRIPTION'])
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] = $fieldCode;
 			}
 
-			$fieldInfo['FIELD_DESCRIPTION_FULL'] = $messages['CRM_BIC_PRODUCT_PROPERTY_FIELD_' . $fieldCode . '_FULL'] ?? '';
+			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['CRM_BIC_PRODUCT_PROPERTY_FIELD_' . $fieldCode . '_FULL']) ? $messages['CRM_BIC_PRODUCT_PROPERTY_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
 	}

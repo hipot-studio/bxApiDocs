@@ -16,7 +16,7 @@ use Bitrix\BIConnector\ExternalSource\FieldType;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\BIConnector\ExternalSource\Source;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Configuration\DataTimezone;
@@ -241,7 +241,7 @@ class DatasetImportComponent extends CBitrixComponent
 			return [];
 		}
 
-		$integrator = Integrator::getInstance();
+		$integrator = IntegratorFactory::getInstance();
 		$response = $integrator->getDatasetListByTableName($tableName);
 		if ($response->hasErrors())
 		{
@@ -269,7 +269,7 @@ class DatasetImportComponent extends CBitrixComponent
 			}
 		}
 
-		$integrator = Integrator::getInstance();
+		$integrator = IntegratorFactory::getInstance();
 		$response = $integrator->getDatasetCreateUrl($tableName, $isVirtual);
 		if ($response->hasErrors())
 		{
@@ -283,7 +283,7 @@ class DatasetImportComponent extends CBitrixComponent
 
 	private function getSupersetLoginUrl(string $editUrl): string
 	{
-		$loginUrl = (new SupersetController(Integrator::getInstance()))->getLoginUrl();
+		$loginUrl = (new SupersetController())->getLoginUrl();
 		if ($loginUrl)
 		{
 			$url = new Uri($loginUrl);

@@ -8,7 +8,7 @@ use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
 use Bitrix\BIConnector\Superset\Config\ConfigContainer;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
 use Bitrix\BIConnector\Superset\ActionFilter\ProxyAuth;
@@ -20,22 +20,21 @@ use Bitrix\BIConnector\Superset\KeyManager;
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\BIConnector\Superset\Logger\SupersetInitializerLogger;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\BIConnector\Superset\Selfhost\SupersetHostMode;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\DashboardManager;
 use Bitrix\BIConnector\ExternalSource\DatasetManager;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
 use Bitrix\BIConnector\ExternalSource\Source\Csv;
 use Bitrix\Bitrix24\Feature;
-use Bitrix\Intranet\Settings\Tools;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
+use Bitrix\Main\Event;
 use Bitrix\Main\DB\SqlQueryException;
-use Bitrix\Main\UI\Filter;
 use Bitrix\Rest\AppTable;
 
 final class SupersetInitializer
@@ -56,6 +55,7 @@ final class SupersetInitializer
 	public const ENABLE_MODE_RESET = 'reset';
 
 	public const ERROR_DELETE_INSTANCE_OPTION = 'error_superset_delete_instance';
+	public const EVENT_ON_AFTER_SUPERSET_STATUS_CHANGE = 'onAfterSupersetStatusChange';
 
 	private const SUPERSET_CLEAN_TIMESTAMP_OPTION = 'superset_clean_timestamp';
 	private const SUPERSET_CLEAN_TIMEOUT_OPTION = 'superset_clean_timeout';
@@ -131,6 +131,11 @@ final class SupersetInitializer
 	{
 		if (self::getSupersetStatus() === self::SUPERSET_STATUS_DOESNT_EXISTS)
 		{
+			if (SupersetHostMode::isSelfHosted())
+			{
+				return self::makeSupersetCreateRequest();
+			}
+
 			Application::getInstance()->addBackgroundJob(static function () {
 				self::makeSupersetCreateRequest();
 			});
@@ -199,26 +204,26 @@ final class SupersetInitializer
 
 	public static function freezeSuperset(array $params = []): void
 	{
-		$proxyIntegrator = Integrator::getInstance();
+		$proxyIntegrator = IntegratorFactory::getInstance();
 		$proxyIntegrator->freezeSuperset($params);
 	}
 
 	public static function unfreezeSuperset(array $params = []): IntegratorResponse
 	{
-		$proxyIntegrator = Integrator::getInstance();
+		$proxyIntegrator = IntegratorFactory::getInstance();
 
 		return $proxyIntegrator->unfreezeSuperset($params);
 	}
 
 	public static function suspendSuperset(array $params = []): void
 	{
-		$proxyIntegrator = Integrator::getInstance();
+		$proxyIntegrator = IntegratorFactory::getInstance();
 		$proxyIntegrator->suspendSuperset($params);
 	}
 
 	public static function resumeSuperset(array $params = []): IntegratorResponse
 	{
-		$proxyIntegrator = Integrator::getInstance();
+		$proxyIntegrator = IntegratorFactory::getInstance();
 
 		return $proxyIntegrator->resumeSuperset($params);
 	}
@@ -259,6 +264,8 @@ final class SupersetInitializer
 
 	public static function setSupersetStatus(string $status): void
 	{
+		$oldStatus = self::getSupersetStatus();
+
 		SupersetInitializerLogger::logInfo('Superset status changed to ' . $status);
 		if (!isset(self::$statusContainer))
 		{
@@ -266,6 +273,18 @@ final class SupersetInitializer
 		}
 
 		self::$statusContainer->set($status);
+
+		if ($oldStatus !== $status)
+		{
+			(new Event(
+				'biconnector',
+				self::EVENT_ON_AFTER_SUPERSET_STATUS_CHANGE,
+				[
+					'oldStatus' => $oldStatus,
+					'status' => $status,
+				]
+			))->send();
+		}
 	}
 
 	public static function getSupersetStatus(): string
@@ -288,7 +307,7 @@ final class SupersetInitializer
 	 */
 	private static function makeSupersetCreateRequest(): string
 	{
-		$proxyIntegrator = Integrator::getInstance();
+		$integrator = IntegratorFactory::getInstance();
 
 		$getKeyResult = self::getOrCreateAccessKey();
 		if (!$getKeyResult->isSuccess())
@@ -298,14 +317,16 @@ final class SupersetInitializer
 			return self::SUPERSET_STATUS_ERROR;
 		}
 
-		$response = $proxyIntegrator->startSuperset($getKeyResult->getData()['ACCESS_KEY']);
+		$accessKey = $getKeyResult->getData()['ACCESS_KEY'];
+		$response = $integrator->startSuperset($accessKey);
 
 		$responseStatus = $response->getStatus();
 
 		$status = self::SUPERSET_STATUS_LOAD;
 		if ($responseStatus === IntegratorResponse::STATUS_CREATED)
 		{
-			self::enableSuperset($response->getData()['superset_address'] ?? '');
+			$responseData = $response->getData();
+			self::enableSuperset($responseData['superset_address'] ?? '');
 			$status = self::SUPERSET_STATUS_READY;
 		}
 		else if ($response->hasErrors())
@@ -314,6 +335,19 @@ final class SupersetInitializer
 			{
 				self::onLimitExceeded(...$response->getErrors());
 				$status = self::SUPERSET_STATUS_LIMIT_EXCEEDED;
+			}
+			elseif (self::isInstanceUnavailableStartupStatus($responseStatus))
+			{
+				// A deactivated/unreachable instance can't finish startup yet: the proxy reports it as a
+				// frozen instance (DEACTIVATED_INSTANCE) or a gateway error (502/503/504, sometimes as an
+				// unparsable Bad Gateway page). Keep LOAD — the portal is waiting for reactivation —
+				// instead of flipping to ERROR and re-registering. Mirrors the data-path FROZEN→LOAD
+				// mapping done by StatusArbiter.
+				SupersetInitializerLogger::logInfo(
+					'Superset instance unavailable on startup, keep waiting',
+					['response_status' => $responseStatus],
+				);
+				$status = self::SUPERSET_STATUS_LOAD;
 			}
 			else
 			{
@@ -329,6 +363,20 @@ final class SupersetInitializer
 		}
 
 		return $status;
+	}
+
+	/**
+	 * Startup response statuses that mean "instance is not reachable yet" rather than a genuine failure:
+	 * a deactivated (frozen) instance or a gateway-level error. Such a startup must keep the portal in
+	 * LOAD (waiting for reactivation), not flip it to ERROR.
+	 */
+	private static function isInstanceUnavailableStartupStatus(int $responseStatus): bool
+	{
+		return $responseStatus === IntegratorResponse::STATUS_FROZEN // 555 - deactivated instance
+			|| $responseStatus === 502 // Bad Gateway
+			|| $responseStatus === 503 // Service Unavailable
+			|| $responseStatus === 504 // Gateway Timeout
+		;
 	}
 
 	public static function isSupersetReady(): bool
@@ -468,7 +516,7 @@ final class SupersetInitializer
 
 		$isRetry = Option::get('biconnector', self::REFRESH_DOMAIN_RETRY_OPTION, 'N') === 'Y';
 
-		$response = Integrator::getInstance()->refreshDomainConnection();
+		$response = IntegratorFactory::getInstance()->refreshDomainConnection();
 
 		if (!$response->hasErrors() && $response->getStatus() === IntegratorResponse::STATUS_OK)
 		{
@@ -538,8 +586,13 @@ final class SupersetInitializer
 			return $result;
 		}
 
-		$response = Integrator::getInstance()->deleteSuperset();
-		if ($response->hasErrors())
+		$response = IntegratorFactory::getInstance()->deleteSuperset();
+		if (!$response->hasErrors())
+		{
+			Registrar::getRegistrar()->clear(__CLASS__ . '::' . __FUNCTION__);
+			self::fixDeleteTimestamp();
+		}
+		else
 		{
 			$result->addErrors($response->getErrors());
 		}
@@ -838,56 +891,62 @@ final class SupersetInitializer
 	 */
 	public static function onDisableBiBuilderTool(): void
 	{
-		if (self::isSupersetPendingDelete())
-		{
-			return;
-		}
-
-		if (self::isRebindRequired())
-		{
-			// Local portalId is detached in rebind state.
-			// Pull portalId back from proxy so the real DELETE can target it.
-			$response = Integrator::getInstance()->registerPortal();
-			$portalId = $response->getData()['portalId'] ?? null;
-			if (!empty($portalId))
+			//add a few tab for graft in 26.300.100, remove soon
+			if (SupersetHostMode::isSelfHosted())
 			{
-				$config = ConfigContainer::getConfigContainer();
-				$config->setPortalId($portalId);
-				$config->setPortalIdVerified(true);
+				return;
 			}
 
-			self::deleteInstance();
-			self::clearSupersetData();
-			// Proxy releases the SupersetServer record only after Callback::deleteAction is called.
-			// Until then it keeps verified=Y, so a fast re-enable would loop on "Portal has already registered".
-			// DELETED activates the create_superset stub,
-			// which blocks the user from initiating any new proxy call. The callback flips DELETED->DOESNT_EXISTS
-			// and sends a PULL event so the page reloads into a clean state. The safety-net agent unblocks
-			// the user if the callback never arrives (see 0244532).
-			self::setSupersetStatus(self::SUPERSET_STATUS_DELETED);
-			\CAgent::AddAgent(
-				Agent::class . '::recoverDeletedAfterRebindTimeout();',
-				'biconnector',
-				'N',
-				0,
-				'',
-				'Y',
-				\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
-			);
-			AccessInstaller::install();
+			if (self::isSupersetPendingDelete())
+			{
+				return;
+			}
 
-			return;
-		}
+			if (self::isRebindRequired())
+			{
+				// Local portalId is detached in rebind state.
+				// Pull portalId back from proxy so the real DELETE can target it.
+				$response = IntegratorFactory::getInstance()->registerPortal();
+				$portalId = $response->getData()['portalId'] ?? null;
+				if (!empty($portalId))
+				{
+					$config = ConfigContainer::getConfigContainer();
+					$config->setPortalId($portalId);
+					$config->setPortalIdVerified(true);
+				}
 
-		if (!self::isSupersetInstanceExists() && !self::isSupersetLoading())
-		{
-			self::setSupersetStatus(self::SUPERSET_STATUS_DOESNT_EXISTS);
-			self::deleteInstance();
-			Registrar::getRegistrar()->clear(__CLASS__ . '::' . __FUNCTION__);
+				self::deleteInstance();
+				self::clearSupersetData();
+				// Proxy releases the SupersetServer record only after Callback::deleteAction is called.
+				// Until then it keeps verified=Y, so a fast re-enable would loop on "Portal has already registered".
+				// DELETED activates the create_superset stub,
+				// which blocks the user from initiating any new proxy call. The callback flips DELETED->DOESNT_EXISTS
+				// and sends a PULL event so the page reloads into a clean state. The safety-net agent unblocks
+				// the user if the callback never arrives (see 0244532).
+				self::setSupersetStatus(self::SUPERSET_STATUS_DELETED);
+				\CAgent::AddAgent(
+					Agent::class . '::recoverDeletedAfterRebindTimeout();',
+					'biconnector',
+					'N',
+					0,
+					'',
+					'Y',
+					\ConvertTimeStamp(time() + \CTimeZone::GetOffset() + 600, 'FULL'),
+				);
+				AccessInstaller::install();
 
-			return;
-		}
+				return;
+			}
 
-		self::pendingDeleteInstance();
+			if (!self::isSupersetInstanceExists() && !self::isSupersetLoading())
+			{
+				self::setSupersetStatus(self::SUPERSET_STATUS_DOESNT_EXISTS);
+				self::deleteInstance();
+				Registrar::getRegistrar()->clear(__CLASS__ . '::' . __FUNCTION__);
+
+				return;
+			}
+
+			self::pendingDeleteInstance();
 	}
 }

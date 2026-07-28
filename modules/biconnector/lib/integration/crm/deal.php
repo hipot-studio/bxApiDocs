@@ -657,13 +657,13 @@ class Deal
 		$result['crm_deal']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_DEAL_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_deal']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
-			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_DEAL_FIELD_' . $fieldCode];
+			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_DEAL_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_DEAL_FIELD_' . $fieldCode] : $fieldCode;
 			if (!$fieldInfo['FIELD_DESCRIPTION'])
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] = $fieldCode;
 			}
 
-			$fieldInfo['FIELD_DESCRIPTION_FULL'] = $messages['CRM_BIC_DEAL_FIELD_' . $fieldCode . '_FULL'] ?? '';
+			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['CRM_BIC_DEAL_FIELD_' . $fieldCode . '_FULL']) ? $messages['CRM_BIC_DEAL_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
 	}
@@ -681,7 +681,7 @@ class Deal
 		if ($name === '')
 		{
 			$messages = Loc::loadLanguageFile($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/crm/lib/category/dealcategory.php', $languageId);
-			$name = $messages['CRM_DEAL_CATEGORY_DEFAULT'];
+			$name = !empty($messages['CRM_DEAL_CATEGORY_DEFAULT']) ? $messages['CRM_DEAL_CATEGORY_DEFAULT'] : '';
 		}
 		return $name;
 	}

@@ -66,7 +66,7 @@ class UserTable	extends ORM\Data\DataManager
 			),
 			'TYPE' => array(
 				'data_type' => 'string',
-				'values' => array(OtpType::Totp->value, OtpType::Hotp->value),
+				'values' => array(OtpType::Totp->value, OtpType::Hotp->value, OtpType::Push->value),
 				'default' => Otp::TYPE_DEFAULT->value
 			),
 			'ATTEMPTS' => array(
@@ -86,6 +86,8 @@ class UserTable	extends ORM\Data\DataManager
 				'data_type' => 'datetime'
 			),
 			(new ORM\Fields\ArrayField('INIT_PARAMS')),
+			(new ORM\Fields\StringField('EMAIL')),
+			(new ORM\Fields\DatetimeField('DATE_SENT_EMAIL')),
 		);
 	}
 

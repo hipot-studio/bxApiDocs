@@ -34,6 +34,9 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 	private const RETURN_PARAM_JSON = 'ResultJson';
 	private const RETURN_PARAM_AI = 'ResultJsonAi';
 	private const RETURN_EVENTS_COUNT = 'EventsCount';
+	private const RETURN_PARAM_TITLES_LIST = 'EVENTS_TITLES_LIST';
+	private const RETURN_PARAM_TITLES_BB_LIST = 'EVENTS_TITLES_BB_LIST';
+	private const RETURN_MEETINGS_TOTAL_MINUTES = 'MeetingsTotalMinutes';
 	private const EVENT_FIELD_DESCRIPTION = 'description';
 	private const EVENT_FIELD_LOCATION = 'location';
 	private const EVENT_FIELD_ATTENDEES = 'attendees';
@@ -42,6 +45,9 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 	private const EVENT_FIELD_URL = 'url';
 
 	protected static $requiredModules = ['calendar'];
+
+	/** @var int|null Computed inside fetchEvents(); consumed by internalExecute(). */
+	private ?int $meetingsTotalMinutes = null;
 
 	public function __construct($name)
 	{
@@ -57,6 +63,9 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 			self::RETURN_PARAM_JSON => '',
 			self::RETURN_PARAM_AI => '',
 			self::RETURN_EVENTS_COUNT => '',
+			self::RETURN_PARAM_TITLES_LIST => null,
+			self::RETURN_PARAM_TITLES_BB_LIST => null,
+			self::RETURN_MEETINGS_TOTAL_MINUTES => null,
 		];
 
 		$this->setPropertiesTypes(
@@ -69,6 +78,9 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 				self::RETURN_PARAM_JSON  => ['Type' => FieldType::STRING],
 				self::RETURN_PARAM_AI => ['Type' => FieldType::STRING],
 				self::RETURN_EVENTS_COUNT => ['Type' => FieldType::INT],
+				self::RETURN_PARAM_TITLES_LIST => ['Type' => FieldType::TEXT],
+				self::RETURN_PARAM_TITLES_BB_LIST => ['Type' => FieldType::TEXT],
+				self::RETURN_MEETINGS_TOTAL_MINUTES => ['Type' => FieldType::INT],
 			],
 		);
 	}
@@ -78,6 +90,10 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 		$this->{self::RETURN_PARAM_JSON} = null;
 		$this->{self::RETURN_PARAM_AI} = null;
 		$this->{self::RETURN_EVENTS_COUNT} = null;
+		$this->{self::RETURN_PARAM_TITLES_LIST} = null;
+		$this->{self::RETURN_PARAM_TITLES_BB_LIST} = null;
+		$this->{self::RETURN_MEETINGS_TOTAL_MINUTES} = null;
+		$this->meetingsTotalMinutes = null;
 
 		parent::reInitialize();
 	}
@@ -120,7 +136,7 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 			return $errors;
 		}
 
-		$results = $this->fetchEvents($ownerId, $calendarType, $fromTs, $toTs, $select);
+		$results = $this->fetchEvents($ownerId, $calendarType, $fromTs, $toTs, $select, $userId);
 
 		$this->{self::RETURN_PARAM_JSON} = Json::encode($results);
 		$this->{self::RETURN_PARAM_AI} = Json::encode(
@@ -129,7 +145,53 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 		);
 		$this->{self::RETURN_EVENTS_COUNT} = count($results);
 
+		[$titles, $bbTitles] = $this->buildTitleLists($results);
+		$this->{self::RETURN_PARAM_TITLES_LIST} = implode("\n", $titles);
+		$this->{self::RETURN_PARAM_TITLES_BB_LIST} = implode("\n", $bbTitles);
+
+		if ($this->meetingsTotalMinutes !== null)
+		{
+			$this->{self::RETURN_MEETINGS_TOTAL_MINUTES} = $this->meetingsTotalMinutes;
+		}
+
 		return $errors;
+	}
+
+	private function buildTitleLists(array $events): array
+	{
+		$titles = [];
+		$bbTitles = [];
+
+		foreach ($events as $event)
+		{
+			$name = (string)($event['name'] ?? '');
+			$url = (string)($event['url'] ?? '');
+			$prefix = $this->formatEventTimePrefix($event);
+
+			$plain = $prefix === '' ? $name : $prefix . ' ' . $name;
+			$linked = $url !== '' ? '[url=' . $url . ']' . $name . '[/url]' : $name;
+
+			$titles[] = '- ' . $plain;
+			$bbTitles[] = '- ' . ($prefix === '' ? $linked : $prefix . ' ' . $linked);
+		}
+
+		return [$titles, $bbTitles];
+	}
+
+	private function formatEventTimePrefix(array $event): string
+	{
+		$dateFrom = (string)($event['dateFrom'] ?? '');
+		$dateTo = (string)($event['dateTo'] ?? '');
+
+		if ($dateFrom === '' || !str_contains($dateFrom, 'T'))
+		{
+			return '';
+		}
+
+		$from = (new \DateTimeImmutable($dateFrom))->format('H:i');
+		$to = $dateTo !== '' ? (new \DateTimeImmutable($dateTo))->format('H:i') : '';
+
+		return $to !== '' ? "{$from} - {$to}" : $from;
 	}
 
 	protected function prepareProperties(): void {}
@@ -178,10 +240,17 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 		return static::getPropertiesMap([]);
 	}
 
-	private function fetchEvents(int $ownerId, string $calendarType, int $fromTs, int $toTs, array $select): array
+	private function fetchEvents(
+		int $ownerId,
+		string $calendarType,
+		int $fromTs,
+		int $toTs,
+		array $select,
+		int $viewerId = 0,
+	): array
 	{
 		$dateFrom = Util::formatDateTimeTimestampUTC($fromTs);
-		$dateTo = Util::formatDateTimeTimestampUTC($toTs);
+		$dateTo = Util::formatDateTimeTimestampUTC($toTs - \CCalendar::GetDayLen());
 
 		$events = \CCalendarEvent::GetList(
 			[
@@ -193,10 +262,12 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 					'ACTIVE_SECTION' => 'Y',
 				],
 				'parseRecursion' => true,
+				'preciseLimits' => true,
 				'fetchAttendees' => in_array(self::EVENT_FIELD_ATTENDEES, $select, true),
 				'fetchSection' => true,
 				'setDefaultLimit' => false,
 				'checkPermissions' => false,
+				'userId' => $viewerId,
 			],
 		);
 
@@ -212,12 +283,40 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 		$events = array_values($uniqueEvents);
 		$events = array_filter($events, fn(array $event) => !$this->isDeclinedMeeting($event));
 
-		return $this->formatEvents($events, $select, $calendarType);
+		usort(
+			$events,
+			fn(array $a, array $b) => $this->getEventStartTimestamp($a) <=> $this->getEventStartTimestamp($b),
+		);
+
+		$this->meetingsTotalMinutes = $this->computeMeetingsTotalMinutes($events);
+
+		return $this->formatEvents($events, $select, $calendarType, $viewerId);
 	}
 
-	private function formatEvents(array $events, array $select, string $calType = self::CALENDAR_TYPE_USER): array
+	private function getEventStartTimestamp(array $event): int
+	{
+		$date = $this->mapEventDateToObject(
+			$event['DATE_FROM'] ?? null,
+			$event['TZ_FROM'] ?? null,
+			($event['DT_SKIP_TIME'] ?? null) === 'Y',
+		);
+
+		return $date ? $date->getTimestamp() : 0;
+	}
+
+	private function formatEvents(
+		array $events,
+		array $select,
+		string $calType = self::CALENDAR_TYPE_USER,
+		int $viewerId = 0,
+	): array
 	{
 		$result = [];
+
+		$viewerTimezone = $viewerId
+			? Util::prepareTimezone(\CCalendar::GetUserTimezoneName($viewerId))
+			: null
+		;
 
 		$selectAttendees = in_array(self::EVENT_FIELD_ATTENDEES, $select, true);
 		$selectComments = in_array(self::EVENT_FIELD_COMMENTS, $select, true);
@@ -249,6 +348,18 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 			if ($dateTo && $isFullDayEvent)
 			{
 				$dateTo->add('+1 day');
+			}
+
+			if (!$isFullDayEvent && $viewerTimezone)
+			{
+				if ($dateFrom instanceof DateTime)
+				{
+					$dateFrom->setTimeZone($viewerTimezone);
+				}
+				if ($dateTo instanceof DateTime)
+				{
+					$dateTo->setTimeZone($viewerTimezone);
+				}
 			}
 
 			$item = [
@@ -304,6 +415,175 @@ class CBPCalendarGetInform extends BaseActivity implements IBPConfigurableActivi
 	private function isDeclinedMeeting(array $event): bool
 	{
 		return !empty($event['IS_MEETING']) && ($event['MEETING_STATUS'] ?? '') === 'N';
+	}
+
+	/**
+	 * Returns true if the event counts as a "real meeting" for time-on-meetings accounting.
+	 *
+	 * Exclusion criteria (INVARIANT — do not change without task specification):
+	 *  - All-day events (DT_SKIP_TIME === 'Y')
+	 *  - Events where the user is free or absent (ACCESSIBILITY ∈ {'free', 'absent'})
+	 *  - Meeting events where the user declined or is undecided (MEETING_STATUS ∈ {'N', 'Q'})
+	 *
+	 * Included: confirmed meetings (MEETING_STATUS === 'Y'), host/owner events (MEETING_STATUS === 'H'),
+	 * and regular non-meeting events that are not free/absent/all-day.
+	 */
+	private function isRealMeeting(array $event): bool
+	{
+		if (($event['DT_SKIP_TIME'] ?? null) === 'Y')
+		{
+			return false;
+		}
+
+		$accessibility = $event['ACCESSIBILITY'] ?? '';
+		if ($accessibility === 'free' || $accessibility === 'absent')
+		{
+			return false;
+		}
+
+		if (!empty($event['IS_MEETING']))
+		{
+			$meetingStatus = $event['MEETING_STATUS'] ?? '';
+			if ($meetingStatus === 'N' || $meetingStatus === 'Q')
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Extracts the UTC timestamp interval [fromTs, toTs) for a raw calendar event.
+	 *
+	 * Primary source: DATE_FROM / DATE_TO strings parsed with their timezone offsets via
+	 * mapEventDateToObject(). This gives the correct per-instance UTC time for recurrent
+	 * event instances produced by CCalendarEvent::ParseRecursion(), whose DATE_FROM_TS_UTC /
+	 * DATE_TO_TS_UTC fields are not updated and retain the master-event timestamps.
+	 *
+	 * Fallback: DATE_FROM_TS_UTC / DATE_TO_TS_UTC (used when string date fields are absent).
+	 *
+	 * @return array{0: int, 1: int}|null  [fromTs, toTs] in UTC seconds, or null if dates cannot be resolved.
+	 */
+	private function getEventUtcInterval(array $event): ?array
+	{
+		$dateFrom = $this->mapEventDateToObject(
+			$event['DATE_FROM'] ?? null,
+			$event['TZ_FROM'] ?? null,
+			false,
+		);
+		$fromTs = $dateFrom !== null
+			? $dateFrom->getTimestamp()
+			: (isset($event['DATE_FROM_TS_UTC']) ? (int)$event['DATE_FROM_TS_UTC'] : null);
+
+		if ($fromTs === null)
+		{
+			return null;
+		}
+
+		$dateTo = $this->mapEventDateToObject(
+			$event['DATE_TO'] ?? null,
+			$event['TZ_TO'] ?? null,
+			false,
+		);
+		$toTs = $dateTo !== null
+			? $dateTo->getTimestamp()
+			: (isset($event['DATE_TO_TS_UTC']) ? (int)$event['DATE_TO_TS_UTC'] : null);
+
+		if ($toTs === null)
+		{
+			return null;
+		}
+
+		return [$fromTs, $toTs];
+	}
+
+	/**
+	 * Computes the total meeting minutes for the given raw events using interval merge (ALG-01).
+	 * Returns null if there are no qualifying meetings with non-zero duration.
+	 */
+	private function computeMeetingsTotalMinutes(array $rawEvents): ?int
+	{
+		$intervals = [];
+
+		foreach ($rawEvents as $event)
+		{
+			if (!$this->isRealMeeting($event))
+			{
+				continue;
+			}
+
+			$interval = $this->getEventUtcInterval($event);
+			if ($interval === null)
+			{
+				continue;
+			}
+
+			[$fromTs, $toTs] = $interval;
+			if ($toTs <= $fromTs)
+			{
+				continue;
+			}
+
+			$intervals[] = [$fromTs, $toTs];
+		}
+
+		if (empty($intervals))
+		{
+			return null;
+		}
+
+		$minutes = $this->mergeIntervalsToMinutes($intervals);
+
+		return $minutes > 0 ? $minutes : null;
+	}
+
+	/**
+	 * Merges overlapping/adjacent intervals and returns the total duration in whole minutes (ALG-01).
+	 *
+	 * @param array<array{0: int, 1: int}> $intervals  List of [fromTs, toTs] pairs in UTC seconds.
+	 */
+	private function mergeIntervalsToMinutes(array $intervals): int
+	{
+		usort($intervals, static fn(array $a, array $b) => $a[0] <=> $b[0]);
+
+		$mergedSeconds = 0;
+		$mergeStart    = null;
+		$mergeEnd      = null;
+
+		foreach ($intervals as [$from, $to])
+		{
+			if ($to <= $from)
+			{
+				continue;
+			}
+
+			if ($mergeStart === null)
+			{
+				$mergeStart = $from;
+				$mergeEnd   = $to;
+			}
+			elseif ($from <= $mergeEnd)
+			{
+				if ($to > $mergeEnd)
+				{
+					$mergeEnd = $to;
+				}
+			}
+			else
+			{
+				$mergedSeconds += $mergeEnd - $mergeStart;
+				$mergeStart = $from;
+				$mergeEnd   = $to;
+			}
+		}
+
+		if ($mergeStart !== null)
+		{
+			$mergedSeconds += $mergeEnd - $mergeStart;
+		}
+
+		return intdiv($mergedSeconds, 60);
 	}
 
 	private function formatAttendees(array $events): array

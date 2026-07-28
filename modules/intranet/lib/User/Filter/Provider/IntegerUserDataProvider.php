@@ -2,16 +2,20 @@
 
 namespace Bitrix\Intranet\User\Filter\Provider;
 
+use Bitrix\Intranet\Internal\Integration\Humanresources\UserQueryModifier;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Filter\EntityDataProvider;
 use Bitrix\Main\Filter\UserSettings;
 
 class IntegerUserDataProvider extends EntityDataProvider
 {
 	private UserSettings $settings;
+	private UserQueryModifier $userQueryModifier;
 
 	public function __construct(UserSettings $settings)
 	{
 		$this->settings = $settings;
+		$this->userQueryModifier = new UserQueryModifier();
 	}
 
 	public function getSettings(): UserSettings
@@ -31,8 +35,6 @@ class IntegerUserDataProvider extends EntityDataProvider
 
 	private function getIntegerFieldList($gridFilter): array
 	{
-		$gridFilter['DEPARTMENT'] ??= null;
-
 		return [
 			[
 				'FILTER_FIELD_NAME' => 'ID',
@@ -51,30 +53,6 @@ class IntegerUserDataProvider extends EntityDataProvider
 				'FIELD_NAME' => 'WORK_COUNTRY',
 				'OPERATION' => '@',
 				'VALUE' => $gridFilter['WORK_COUNTRY'] ?? null
-			],
-			[
-				'FILTER_FIELD_NAME' => 'DEPARTMENT',
-				'FIELD_NAME' => 'UF_DEPARTMENT',
-				'OPERATION' => '=',
-				'VALUE' => (
-					!empty($gridFilter['DEPARTMENT'])
-						? (
-							preg_match('/^(?:DR|)(\d+)$/', $gridFilter['DEPARTMENT'], $matches)
-							? $matches[1]
-							: false
-					)
-						: false
-				)
-			],
-			[
-				'FILTER_FIELD_NAME' => 'DEPARTMENT',
-				'FIELD_NAME' => 'UF_DEPARTMENT_FLAT',
-				'OPERATION' => '=',
-				'VALUE' => (
-					$gridFilter['DEPARTMENT'] && preg_match('/^D(\d+)$/', $gridFilter['DEPARTMENT'], $matches)
-						? $matches[1]
-						: false
-				)
 			]
 		];
 	}
@@ -131,6 +109,48 @@ class IntegerUserDataProvider extends EntityDataProvider
 			}
 		}
 
+		$this->checkDepartmentField($rawFilterValue);
+
 		return $rawFilterValue;
+	}
+
+	private function checkDepartmentField(array &$filterValue): void
+	{
+		$departmentFilterValue = null;
+		$withSubDepartments = true;
+
+		if (
+			!empty($filterValue['DEPARTMENT'])
+			&& is_scalar($filterValue['DEPARTMENT'])
+		)
+		{
+			$departmentFilterValue = (string)$filterValue['DEPARTMENT'];
+		}
+		elseif (
+			!empty($filterValue['DEPARTMENT_FLAT'])
+			&& is_scalar($filterValue['DEPARTMENT_FLAT'])
+		)
+		{
+			$departmentFilterValue = (string)$filterValue['DEPARTMENT_FLAT'];
+			$withSubDepartments = false;
+		}
+
+		if ($departmentFilterValue === null)
+		{
+			return;
+		}
+
+		$subQuery = $this->userQueryModifier->createDepartmentUserIdSubQuery(
+			$departmentFilterValue,
+			$withSubDepartments,
+		);
+		if ($subQuery === null)
+		{
+			return;
+		}
+
+		$filterValue[] = [
+			'@ID' => new SqlExpression($subQuery),
+		];
 	}
 }

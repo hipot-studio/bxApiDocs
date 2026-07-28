@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\ExternalSource\Source;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\IpAddress;
+use Bitrix\BIConnector\ExternalSource\Internal\EO_ExternalSource;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\BIConnector\ExternalSource\SourceManager;
@@ -15,6 +16,7 @@ abstract class ExternalSql extends Base
 	private const NO_CONNECTION_FLAGS = 0;
 
 	protected int $id;
+	private ?EO_ExternalSource $source = null;
 	private ?string $lastConnectionError = null;
 
 	abstract protected function buildConnection(array $config): ExternalSqlConnectionInterface;
@@ -22,7 +24,7 @@ abstract class ExternalSql extends Base
 	/**
 	 * @param int $id source id
 	 */
-	public function __construct(?int $sourceId)
+	public function __construct(int $sourceId)
 	{
 		parent::__construct($sourceId);
 
@@ -50,7 +52,7 @@ abstract class ExternalSql extends Base
 
 		if (empty($settings))
 		{
-			$this->lastConnectionError = Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_LAST_CONNECTION_ERROR_EMPTY_SETTINGS');
+			$this->lastConnectionError = Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_LAST_CONNECTION_ERROR_EMPTY_SETTINGS') ?? '';
 
 			return null;
 		}
@@ -78,7 +80,7 @@ abstract class ExternalSql extends Base
 			$ip = IpAddress::createByName($config['host']);
 			if ($ip->isPrivate())
 			{
-				$this->lastConnectionError = Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_PRIVATE_IP');
+				$this->lastConnectionError = Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_PRIVATE_IP') ?? '';
 
 				return null;
 			}
@@ -123,7 +125,7 @@ abstract class ExternalSql extends Base
 		$connection = $this->getConnection($settings);
 		if (!$connection)
 		{
-			$error = $this->getLastConnectionError() ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_NOT_CONNECTED');
+			$error = $this->getLastConnectionError() ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_NOT_CONNECTED') ?? '';
 			$result->addError(new Main\Error($error));
 
 			return $result;
@@ -139,11 +141,11 @@ abstract class ExternalSql extends Base
 			$errorMessage = $e->getMessage();
 			if (empty($errorMessage))
 			{
-				$result->addError(new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_NOT_CONNECTED')));
+				$result->addError(new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_NOT_CONNECTED') ?? ''));
 			}
 			else
 			{
-				$result->addError(new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR', ['#ERROR_MESSAGE#' => $errorMessage])));
+				$result->addError(new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR', ['#ERROR_MESSAGE#' => $errorMessage]) ?? ''));
 			}
 		}
 
@@ -159,7 +161,7 @@ abstract class ExternalSql extends Base
 		$connection = $this->getConnection();
 		if (!$connection)
 		{
-			$error = $this->getLastConnectionError() ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_NOT_CONNECTED');
+			$error = $this->getLastConnectionError() ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_NOT_CONNECTED') ?? '';
 			$result->addError(new Main\Error($error));
 
 			return $result;
@@ -193,7 +195,7 @@ abstract class ExternalSql extends Base
 		$connection = $this->getConnection();
 		if (!$connection)
 		{
-			$error = $this->getLastConnectionError() ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_NOT_CONNECTED');
+			$error = $this->getLastConnectionError() ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_NOT_CONNECTED') ?? '';
 
 			throw new Main\SystemException($error);
 		}
@@ -222,14 +224,14 @@ abstract class ExternalSql extends Base
 		$connection = $this->getConnection();
 		if (!$connection)
 		{
-			$error = $this->getLastConnectionError() ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_NOT_CONNECTED');
+			$error = $this->getLastConnectionError() ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTION_ERROR_NOT_CONNECTED') ?? '';
 
 			throw new Main\SystemException($error);
 		}
 
 		if ($n < 0)
 		{
-			throw new Main\ArgumentException(Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_GET_FIRST_N_DATA_INVALID_N'), 'n');
+			throw new Main\ArgumentException(Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_GET_FIRST_N_DATA_INVALID_N') ?? '', 'n');
 		}
 
 		if (!$connection->isTableExists($entityName))

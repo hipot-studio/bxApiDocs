@@ -62,6 +62,11 @@ class NodeMemberCollection extends BaseCollection
 		);
 	}
 
+	public function merge(self $collection): static
+	{
+		return new static(...$this, ...$collection);
+	}
+
 	public function getUniqueEntityIds(): array
 	{
 		return array_values(

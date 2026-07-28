@@ -6,8 +6,8 @@ namespace Bitrix\Intranet\Public\Command\Otp\Notification;
 
 use Bitrix\Intranet\Internal\Integration\Im\Notification\Message;
 use Bitrix\Intranet\Internal\Integration\Im\Notification\NotifySender;
-use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
 use Bitrix\Intranet\Internal\Integration\Ui\Helpdesk\ArticleLinkProvider;
+use Bitrix\Intranet\Internal\Service\Otp\RecoverAccessRequestService;
 use Bitrix\Intranet\Service\UserService;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\ArgumentTypeException;
@@ -28,23 +28,22 @@ class SendRequestRecoverAccessHandler
 	public function __invoke(SendRequestRecoverAccessCommand $command): Result
 	{
 		$result = new Result();
-		$personalOtp = (new PersonalOtp($command->user));
 		$userService = new UserService();
+		$recoverAccessRequestService = new RecoverAccessRequestService(userService: $userService);
 
-		if (!$personalOtp->canSendRequestRecoverAccess() || !NotifySender::isAvailable())
+		if (!$recoverAccessRequestService->canSend($command->user))
 		{
 			return $result->addError(new Error('Cannot send request to recover access'));
 		}
 
 		$user = $command->user;
-		$adminIds = $userService->getAdminUserIds();
+		$adminIds = $recoverAccessRequestService->getAdminIdsToNotify($user);
 
 		if (empty($adminIds))
 		{
 			return $result->addError(new Error('No administrators found to notify'));
 		}
 
-		$adminIds = array_filter($adminIds, static fn($adminId) => $adminId !== $user->getId());
 		$articleLink = (new ArticleLinkProvider())->getByCode('26676294');
 		$subject = static fn (?string $languageId = null) => Loc::getMessage('INTRANET_COMMAND_OTP_NOTIFICATION_SEND_REQUEST_RECOVER_ACCESS_SUBJECT', null, $languageId);
 		$userDetailLink = $userService->getDetailUrl($user->getId());
@@ -75,7 +74,7 @@ class SendRequestRecoverAccessHandler
 			$notifySender->send($message);
 		}
 
-		$personalOtp->markRequestRecoverAccessSent();
+		$recoverAccessRequestService->markSent($user);
 
 		return $result;
 	}

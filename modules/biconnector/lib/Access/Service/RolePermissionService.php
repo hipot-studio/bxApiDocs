@@ -98,8 +98,8 @@ final class RolePermissionService
 
 			foreach ($permissionSettings as &$setting)
 			{
-				$roleId = (int)$setting['id'];
-				$roleTitle = (string)$setting['title'];
+				$roleId = (int)($setting['id'] ?? 0);
+				$roleTitle = (string)($setting['title'] ?? '');
 
 				$saveRoleResult = $this->saveRole($roleTitle, $roleId);
 				if (!$saveRoleResult->isSuccess())
@@ -136,7 +136,7 @@ final class RolePermissionService
 			{
 				if (!PermissionTable::deleteList(['=ROLE_ID' => $roles]))
 				{
-					$result->addError(new Error(Loc::getMessage('BICONNECTOR_APACHESUPERSET_CONFIG_PERMISSIONS_DB_ERROR')));
+					$result->addError(new Error(Loc::getMessage('BICONNECTOR_APACHESUPERSET_CONFIG_PERMISSIONS_DB_ERROR') ?? ''));
 					$db->rollbackTransaction();
 
 					return $result;
@@ -175,7 +175,7 @@ final class RolePermissionService
 
 		if (empty($name))
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_ACCESS_SAVE_ROLE_ERROR_NO_NAME')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_ACCESS_SAVE_ROLE_ERROR_NO_NAME') ?? ''));
 
 			return $result;
 		}

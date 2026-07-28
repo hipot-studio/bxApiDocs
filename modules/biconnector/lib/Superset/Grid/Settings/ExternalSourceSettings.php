@@ -4,6 +4,9 @@ namespace Bitrix\BIConnector\Superset\Grid\Settings;
 
 final class ExternalSourceSettings extends \Bitrix\Main\Grid\Settings
 {
+	private bool $isSupersetAvailable;
+	private ?array $ormFilter = null;
+
 	public function __construct(array $params)
 	{
 		$this->isSupersetAvailable = $params['IS_SUPERSET_AVAILABLE'] ?? true;
@@ -29,5 +32,4 @@ final class ExternalSourceSettings extends \Bitrix\Main\Grid\Settings
 	{
 		return $this->ormFilter;
 	}
-
 }

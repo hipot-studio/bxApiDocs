@@ -7,9 +7,14 @@ use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals;
+use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
+use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\Type\DateTime;
+use Throwable;
 
 /**
  * Class SetupSession
@@ -161,29 +166,37 @@ final class SetupSession extends Internals\Entity\Model
 			'STATUS' => self::STATUS_DUPLICATE,
 		));
 	}
-	
+
 	/**
 	 * Finishes the logic of setup session. It moves simple rights to original table.
 	 * @return void
+	 * @throws ArgumentException
+	 * @throws SqlQueryException
+	 * @throws NotImplementedException
+	 * @throws Throwable
 	 */
 	public function finish()
 	{
-		if($this->getObject() instanceof Folder)
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+		try
 		{
-			$type = Internals\FolderTable::TYPE_FOLDER;
+			Internals\SimpleRightTable::deleteSimpleFromSelfAndChildren($this->objectId);
+			Table\TmpSimpleRight::moveToOriginalSimpleRights($this->id);
+			Table\TmpSimpleRight::deleteBySessionId($this->id);
+
+			$this->update([
+				'STATUS' => self::STATUS_FINISHED,
+			]);
+
+			$connection->commitTransaction();
 		}
-		else
+		catch (Throwable $exception)
 		{
-			$type = Internals\FileTable::TYPE_FILE;
+			$connection->rollbackTransaction();
+
+			throw $exception;
 		}
-
-		Internals\SimpleRightTable::deleteSimpleFromSelfAndChildren($this->objectId, $type);
-		Table\TmpSimpleRight::moveToOriginalSimpleRights($this->id);
-		Table\TmpSimpleRight::deleteBySessionId($this->id);
-
-		$this->update(array(
-			'STATUS' => self::STATUS_FINISHED,
-		));
 	}
 
 	/**

@@ -8,7 +8,11 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Service\DashboardGroupService;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
+use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightOptions;
+use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightResolver;
+use Bitrix\BIConnector\Superset\Logger\Logger;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
@@ -158,7 +162,34 @@ class ApacheSupersetDashboardEditComponent
 			'requiredParamList' => $this->getRequiredParamList(),
 			'groupIds' => $defaultValues['groups'],
 			'activeUrlParamsSelector' => SupersetInitializer::isSupersetReady(),
+			'attachAhaMoment' => $this->prepareAttachAhaMoment(),
 		];
+	}
+
+	private function prepareAttachAhaMoment(): array
+	{
+		if ($this->isEditMode() || !SupersetInitializer::isSupersetExist())
+		{
+			return ['canShow' => false];
+		}
+
+		$config = $this->getAhaMomentSpotlightResolver()->resolve(
+			new AhaMomentSpotlightOptions(
+				baseId: 'biconnector-apachesuperset-dashboard-attach',
+				maxShows: 1,
+			),
+		);
+
+		return [
+			'canShow' => $config->canShow(),
+			'id' => $config->getSpotlightId(),
+			'showDelaySeconds' => $config->getShowDelaySeconds(),
+		];
+	}
+
+	private function getAhaMomentSpotlightResolver(): AhaMomentSpotlightResolver
+	{
+		return ServiceLocator::getInstance()->get('biconnector.service.ahaMomentSpotlightResolver');
 	}
 
 	private function getDefaultValues(): array
@@ -521,13 +552,40 @@ class ApacheSupersetDashboardEditComponent
 		array $imageValidationData,
 	): ?array
 	{
+		if ($saveData->externalId > 0)
+		{
+			$attachResult = $this->validateAttach($saveData->externalId);
+			if (!$attachResult->isSuccess())
+			{
+				$this->errorCollection->add($attachResult->getErrors());
+
+				return null;
+			}
+		}
+
 		$dashboard = SupersetDashboardTable::createObject();
 		$dashboard
 			->setTitle($saveData->title)
 			->setType(SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM)
-			->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
 			->setCreatedById((int)$user->getId())
 		;
+
+		if ($saveData->externalId > 0)
+		{
+			$status = $saveData->externalPublished
+				? SupersetDashboardTable::DASHBOARD_STATUS_READY
+				: SupersetDashboardTable::DASHBOARD_STATUS_DRAFT
+			;
+			$dashboard
+				->setExternalId($saveData->externalId)
+				->setStatus($status)
+			;
+		}
+		else
+		{
+			$dashboard->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED);
+		}
+
 		$this->applyPeriodData($dashboard, $saveData->getPeriodData());
 
 		$isSaved = $this->executeInTransaction(
@@ -567,7 +625,14 @@ class ApacheSupersetDashboardEditComponent
 			return null;
 		}
 
-		$this->createDashboardInSuperset($dashboard, $saveData);
+		if ($saveData->externalId > 0)
+		{
+			$this->syncAttachedDashboardToSuperset($saveData, (int)$user->getId());
+		}
+		else
+		{
+			$this->createDashboardInSuperset($dashboard, $saveData);
+		}
 
 		return $this->buildDashboardResponse($dashboard->getId());
 	}
@@ -639,6 +704,57 @@ class ApacheSupersetDashboardEditComponent
 		return $this->buildDashboardResponse($dashboardObject->getId());
 	}
 
+	private function validateAttach(int $externalId): Main\Result
+	{
+		$result = new Main\Result();
+		$existing = SupersetDashboardTable::getRow([
+			'filter' => ['=EXTERNAL_ID' => $externalId],
+			'select' => ['ID'],
+		]);
+
+		if ($existing)
+		{
+			$result->addError(new Error(Loc::getMessage('DASHBOARD_EDIT_FORM_ERROR')));
+		}
+
+		return $result;
+	}
+
+	private function syncAttachedDashboardToSuperset(DashboardSaveData $saveData, int $userId): void
+	{
+		$integrator = IntegratorFactory::getInstance();
+
+		$updateResponse = $integrator->updateDashboard($saveData->externalId, [
+			'dashboard_title' => $saveData->title,
+		]);
+		if ($updateResponse->hasErrors())
+		{
+			Logger::logErrors(
+				$updateResponse->getErrors(),
+				[
+					'context' => 'Attach: update dashboard title',
+					'externalId' => $saveData->externalId,
+				],
+			);
+		}
+
+		$user = (new SupersetUserRepository())->getById($userId);
+		if ($user !== null)
+		{
+			$ownerResponse = $integrator->setDashboardOwner($saveData->externalId, $user);
+			if ($ownerResponse->hasErrors())
+			{
+				Logger::logErrors(
+					$ownerResponse->getErrors(),
+					[
+						'context' => 'Attach: set dashboard owner',
+						'externalId' => $saveData->externalId,
+					],
+				);
+			}
+		}
+	}
+
 	private function createDashboardInSuperset(SupersetDashboard $dashboard, DashboardSaveData $saveData): void
 	{
 		if (!SupersetInitializer::isSupersetReady())
@@ -646,7 +762,7 @@ class ApacheSupersetDashboardEditComponent
 			return;
 		}
 
-		$response = Integrator::getInstance()->createEmptyDashboard([
+		$response = IntegratorFactory::getInstance()->createEmptyDashboard([
 			'name' => $saveData->title,
 			'json_metadata' => $this->getJsonMetadata($saveData),
 		]);
@@ -679,7 +795,7 @@ class ApacheSupersetDashboardEditComponent
 			return;
 		}
 
-		$response = Integrator::getInstance()->updateDashboard($externalId, ['dashboard_title' => $title]);
+		$response = IntegratorFactory::getInstance()->updateDashboard($externalId, ['dashboard_title' => $title]);
 		if ($response->hasErrors())
 		{
 			return;
@@ -1178,7 +1294,7 @@ class ApacheSupersetDashboardEditComponent
 
 	private function buildDashboardResponse(int $dashboardId): ?array
 	{
-		$superset = new SupersetController(Integrator::getInstance());
+		$superset = new SupersetController();
 		$dashboard = $superset->getDashboardRepository()->getById($dashboardId, true);
 		if ($dashboard === null)
 		{
@@ -1208,7 +1324,7 @@ class ApacheSupersetDashboardEditComponent
 			return;
 		}
 
-		$superset = new SupersetController(Integrator::getInstance());
+		$superset = new SupersetController();
 		$this->dashboard = $superset->getDashboardRepository()->getById((int)$this->arParams['DASHBOARD_ID']);
 	}
 
@@ -1285,6 +1401,8 @@ class ApacheSupersetDashboardEditComponent
 			coverImage: $coverImageData,
 			galleryImage: $galleryImageData,
 			period: $periodData,
+			externalId: max(0, (int)($data['externalId'] ?? 0)),
+			externalPublished: (bool)($data['externalPublished'] ?? false),
 		);
 	}
 

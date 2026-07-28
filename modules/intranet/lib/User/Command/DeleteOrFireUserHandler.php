@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\User\Command;
 
+use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Exception\DeleteFailedException;
 use Bitrix\Intranet\Exception\UpdateFailedException;
 use Bitrix\Intranet\Exception\WrongIdException;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Intranet\Service\UserService;
 use Bitrix\Intranet\User\Access\UserActionDictionary;
+use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\ObjectNotFoundException;
 
 class DeleteOrFireUserHandler
@@ -38,9 +40,7 @@ class DeleteOrFireUserHandler
 			}
 			catch (DeleteFailedException)
 			{
-				$user->setActive(false);
-				$user->setConfirmCode('');
-				$this->userRepository->update($user);
+				$this->fireUser($command->user);
 			}
 
 			$this->userService->clearCache();
@@ -48,7 +48,39 @@ class DeleteOrFireUserHandler
 			return;
 		}
 
+		$this->fireUser($command->user);
+	}
+
+	/**
+	 * @throws UpdateFailedException
+	 */
+	private function fireUser(User $user): void
+	{
+		$this->assertCanFire($user);
 		$user->setActive(false);
+		$user->setConfirmCode('');
 		$this->userRepository->update($user);
+	}
+
+	/**
+	 * @throws UpdateFailedException
+	 */
+	private function assertCanFire(User $user): void
+	{
+		$errors = UserStatusEventHelper::collectErrors(UserStatusEventHelper::EVENT_BEFORE_FIRE, $user);
+
+		if (empty($errors))
+		{
+			return;
+		}
+
+		$errorCollection = new ErrorCollection();
+
+		foreach ($errors as $error)
+		{
+			$errorCollection[] = $error;
+		}
+
+		throw new UpdateFailedException($errorCollection);
 	}
 }

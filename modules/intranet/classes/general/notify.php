@@ -56,6 +56,13 @@ class CIntranetNotify
 			}
 		}
 
+		$newUserPostOption = CUserOptions::GetOption('intranet', 'socnet_new_user_post', 'Y', $USER_ID);
+
+		if ($newUserPostOption !== 'Y')
+		{
+			return;
+		}
+
 		$dbRes = CUser::GetList(
 			"ID",
 			"asc",

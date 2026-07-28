@@ -77,7 +77,7 @@ final class IncomingWebhook extends RestController
 			userId: (int)$this->getCurrentUser()->getId(),
 			webHookPassword: $request->getWebhookPassword(),
 			title: $items['title'] ?? null,
-			scopes: $items['scopes'] ?? [],
+			scopes: $items['scopes'] ?? null,
 		));
 
 		return new UpdateResponse($result->isSuccess());

@@ -125,13 +125,9 @@ final class PermissionRestrictedNodeRepository extends NodeRepository
 	/**
 	 * Internal repository method for getting child node IDs for a given nodeId (returns only departments).
 	 *
-	 * @param int $nodeId
-	 *
-	 * @return int[]
-	 *@see \Bitrix\HumanResources\Public\Service\NodeService::findChildrenByNodeIds()
-	 *
-	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllChildrenByNodeId() instead.
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findChildrenByNodeIds() instead.
 	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
+	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findChildrenByNodeIds()
 	 */
 	public function getAllChildIdsByNodeId(int $nodeId): array
 	{
@@ -145,7 +141,7 @@ final class PermissionRestrictedNodeRepository extends NodeRepository
 	/**
 	 * Internal repository method for getting child nodeCollection for a given node (returns only departments).
 	 *
-	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllChildrenByNodeId() instead.
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findChildrenByNodeIds() instead.
 	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
 	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findChildrenByNodeIds()
 	 */
@@ -167,7 +163,7 @@ final class PermissionRestrictedNodeRepository extends NodeRepository
 	/**
 	 * Internal repository method for getting parent nodeCollection.
 	 *
-	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllParentsByNodeId() instead.
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findParentsByNodeId() instead.
 	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
 	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findParentsByNodeId()
 	 */
@@ -249,7 +245,7 @@ final class PermissionRestrictedNodeRepository extends NodeRepository
 	/**
 	 * Finds all departments for a given user.
 	 *
-	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllByNodeMemberId() instead.
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllByMemberEntityId() instead.
 	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
 	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByMemberEntityId()
 	 */
@@ -313,9 +309,9 @@ final class PermissionRestrictedNodeRepository extends NodeRepository
 	}
 
 	/**
-	 * Internal repository method for getting nodes by access codes. Use public node service instead.
+	 * Internal repository method for getting nodes by name. Use public node service instead.
 	 *
-	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::getByAccessCode() instead.
+	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllByName() instead.
 	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
 	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByName()
 	 */
@@ -346,7 +342,7 @@ final class PermissionRestrictedNodeRepository extends NodeRepository
 	/**
 	 * Internal repository method for getting child nodeCollection for a given nodeCollection (returns only departments).
 	 *
-	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllChildrenByNodeIds() instead.
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findChildrenByNodeIds() instead.
 	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
 	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findChildrenByNodeIds()
 	 */
@@ -374,7 +370,7 @@ final class PermissionRestrictedNodeRepository extends NodeRepository
 	/**
 	 * Internal repository method for getting nodes by xmlId. Use public node service instead.
 	 *
-	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::getByAccessCode() instead.
+	 * @deprecated Internal. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllByXmlId() instead.
 	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
 	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByXmlId()
 	 */
@@ -393,7 +389,7 @@ final class PermissionRestrictedNodeRepository extends NodeRepository
 	/**
 	 * Internal repository method for departments by ids.
 	 *
-	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllChildrenByNodeIds() instead.
+	 * @deprecated Deprecated. Use \Bitrix\HumanResources\Public\Service\Container::getNodeService() and call NodeService::findAllByIds() instead.
 	 * @see \Bitrix\HumanResources\Public\Service\Container::getNodeService()
 	 * @see \Bitrix\HumanResources\Public\Service\NodeService::findAllByIds()
 	 */

@@ -7,6 +7,7 @@ use Bitrix\Im\V2\Chat\EntityLink;
 use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Im\V2\Chat\ExternalChat;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\CreateEntityLinkEvent;
+use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Main\Loader;
 
 class EntityLinkFactory
@@ -15,6 +16,15 @@ class EntityLinkFactory
 
 	public function create(Chat $chat): EntityLink
 	{
+		if (User::getCurrent()->isGuest())
+		{
+			return new EntityLink(new EntityLinkDto(
+				type: $chat->getEntityType() ?? '',
+				chatId: $chat->getChatId() ?? 0,
+				entityId: '',
+			));
+		}
+
 		return $this->initInternalLink($chat)
 			?? (($chat instanceof ExternalChat) ? $this->initExternalLink($chat) : null)
 			?? new EntityLink($this->createEntityLinkDto($chat));

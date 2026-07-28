@@ -17,6 +17,7 @@ use Bitrix\Im\V2\Rest\PopupDataItem;
 use Bitrix\Im\V2\Rest\RestEntity;
 use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\ImOpenLines\Rest;
+use Bitrix\ImOpenLines\SilentMode\PersonalSilentMode;
 use Bitrix\ImOpenLines\V2\Status\StatusGroup;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Query\Query;
@@ -160,16 +161,8 @@ class Session implements RegistryEntry, ActiveRecord, PopupDataItem, RestEntity,
 
 	public function getSilentMode(): bool
 	{
-		if ($this->chat instanceof \Bitrix\Im\V2\Chat)
-		{
-			$entityData3 = $this->chat->getEntityData3();
-			if ($entityData3 !== null && $entityData3 !== '')
-			{
-				return $entityData3 === 'Y';
-			}
-		}
-
-		return false;
+		// The personal hidden messages mode is treated as the state of the session owner operator.
+		return PersonalSilentMode::isEnabled((int)$this->getOperatorId(), (int)$this->getChatId());
 	}
 
 	public function setSilentMode(?bool $silentMode): self
@@ -968,9 +961,12 @@ class Session implements RegistryEntry, ActiveRecord, PopupDataItem, RestEntity,
 			$this->setStatus($option['OVERWRITE_STATUS']);
 		}
 
+		$operatorId = (int)$this->getOperatorId();
+
 		$rest = [
 			'id' => $this->getId(),
 			'operatorId' => $this->getOperatorId(),
+			'operatorIsBot' => $operatorId > 0 && \Bitrix\Im\User::getInstance($operatorId)->isBot(),
 			'chatId' => $this->getChatId(),
 			'status' => $this->getStatusGroup(),
 			'queueId' => $this->getConfigId(),

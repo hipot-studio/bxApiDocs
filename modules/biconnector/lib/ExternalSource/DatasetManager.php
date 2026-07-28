@@ -48,7 +48,7 @@ class DatasetManager
 				$result->addError(
 					$error instanceof Main\Error
 						? $error
-						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_ADD_ERROR_MSGVER_1'))
+						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_ADD_ERROR_MSGVER_1') ?? '')
 				);
 
 				return $result;
@@ -152,7 +152,7 @@ class DatasetManager
 			{
 				$result->addError(
 					new Main\Error(
-						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_ALREADY_EXIST_ERROR_MSGVER_1')
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_ALREADY_EXIST_ERROR_MSGVER_1') ?? ''
 					)
 				);
 			}
@@ -217,7 +217,7 @@ class DatasetManager
 				$result->addError(
 					$error instanceof Main\Error
 						? $error
-						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_UPDATE_ERROR_MSGVER_1'))
+						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_UPDATE_ERROR_MSGVER_1') ?? '')
 				);
 
 				return $result;
@@ -367,7 +367,7 @@ class DatasetManager
 		{
 			$result->addError(
 				new Main\Error(
-					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_NOT_FOUND_MSGVER_1')
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_NOT_FOUND_MSGVER_1') ?? ''
 				)
 			);
 

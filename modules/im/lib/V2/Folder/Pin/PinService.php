@@ -37,6 +37,11 @@ class PinService
 
 	public function pinChat(int $userId, Chat $chat, ?Folder $folder): Result
 	{
+		// Pinning a copilot draft chat is the first user action with it: turn it
+		// into a real chat before any recent row is created, otherwise the draft
+		// would leak into recent while still hidden from search.
+		Chat\CopilotChat::activateDraftIfNeeded($chat);
+
 		// Lazy bootstrap is required for legacy fan-out across system folders.
 		$this->folderBootstrapper->ensureSystemFolders($userId);
 

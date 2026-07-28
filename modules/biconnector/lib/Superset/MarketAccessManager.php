@@ -2,9 +2,14 @@
 
 namespace Bitrix\BIConnector\Superset;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
+use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\Date;
@@ -14,6 +19,10 @@ final class MarketAccessManager
 {
 	private static MarketAccessManager $instance;
 	private bool $isRest;
+
+	private const OPTION_EXPECTED_EXPIRATION = '~market_subscription_expected_expiration';
+	private const OPTION_SYNCED_EXPIRATION = '~market_subscription_synced_expiration';
+	private const LOCK_KEY = 'biconnector_market_subscription_expiration_sync';
 
 	private function __construct()
 	{
@@ -86,9 +95,7 @@ final class MarketAccessManager
 
 	public function updateExpirationDate(?Date $date): bool
 	{
-		$result = Integrator::getInstance()->setExpirationDate($date);
-
-		return !$result->hasErrors();
+		return $this->sendExpirationDate($date)->isSuccess();
 	}
 
 	public function syncMarketDashboards(): Result
@@ -102,7 +109,7 @@ final class MarketAccessManager
 			$marketDashboardsIdList = [];
 		}
 
-		$integratorResult = Integrator::getInstance()->syncMarketDashboards($marketDashboardsIdList);
+		$integratorResult = IntegratorFactory::getInstance()->syncMarketDashboards($marketDashboardsIdList);
 
 		if ($integratorResult->hasErrors())
 		{
@@ -128,21 +135,89 @@ final class MarketAccessManager
 		return array_unique(array_column($dashboards, 'EXTERNAL_ID'));
 	}
 
-	public static function onRestSubscriptionRenew(): void
+	public function rememberActualExpirationDate(): void
 	{
-		$manager = self::getInstance();
+		$date = !$this->isSubscriptionAccessible()
+			? new Date('2099-12-31', 'Y-m-d')
+			: $this->getSubscriptionFinalDate();
 
-		if (!$manager->isSubscriptionAccessible())
+		Option::set('biconnector', self::OPTION_EXPECTED_EXPIRATION, (string)($date?->getTimestamp() ?? 0));
+	}
+
+	public function syncPendingExpirationDate(): void
+	{
+		if (!Application::getConnection()->lock(self::LOCK_KEY, 0))
 		{
-			$manager->updateExpirationDate(new Date('2099-12-31', 'Y-m-d'));
-
 			return;
 		}
 
-		$finalDate = $manager->getSubscriptionFinalDate();
-		if ($manager->isSubscriptionAvailable())
+		try
 		{
-			$manager->updateExpirationDate($finalDate);
+			$expected = (int)Option::get('biconnector', self::OPTION_EXPECTED_EXPIRATION, '0');
+			$synced = (int)Option::get('biconnector', self::OPTION_SYNCED_EXPIRATION, '-1');
+
+			if ($expected === $synced)
+			{
+				return;
+			}
+
+			$date = $expected > 0 ? Date::createFromTimestamp($expected) : Date::createFromTimestamp(24 * 60 * 60);
+			$result = $this->sendExpirationDate($date);
+
+			if ($result->isSuccess())
+			{
+				Option::set('biconnector', self::OPTION_SYNCED_EXPIRATION, (string)$expected);
+			}
+
+			return;
 		}
+		finally
+		{
+			Application::getConnection()->unlock(self::LOCK_KEY);
+		}
+	}
+
+	private function sendExpirationDate(?Date $date): Result
+	{
+		$result = new Result();
+		$response = IntegratorFactory::getInstance()->setExpirationDate($date);
+
+		if ($response->hasErrors())
+		{
+			$result->addErrors($response->getErrors());
+		}
+
+		if ($response->getStatus() !== IntegratorResponse::STATUS_OK)
+		{
+			$result->addError(new Error('Unexpected Superset subscription status: ' . $response->getStatus()));
+		}
+
+		return $result;
+	}
+
+	public function actualizeSubscriptionExpirationDate(): void
+	{
+		$this->rememberActualExpirationDate();
+
+		$this->syncPendingExpirationDate();
+	}
+
+	public static function onAfterSupersetStatusChange(Event $event): void
+	{
+		if ($event->getParameter('status') !== SupersetInitializer::SUPERSET_STATUS_READY)
+		{
+			return;
+		}
+
+		Application::getInstance()->addBackgroundJob(static function (): void {
+			self::getInstance()->syncPendingExpirationDate();
+		});
+	}
+
+	public static function onRestSubscriptionRenew(): void
+	{
+		Application::getInstance()->addBackgroundJob(static function (): void {
+			self::getInstance()->actualizeSubscriptionExpirationDate();
+		});
 	}
 }

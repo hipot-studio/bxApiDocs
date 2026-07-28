@@ -40,7 +40,7 @@ class Csv extends Base
 	/**
 	 * @inheritDoc
 	 */
-	public function getEntityList(): Main\Result
+	public function getEntityList(?string $searchString = null): Main\Result
 	{
 		$result = new Main\Result;
 
@@ -166,7 +166,7 @@ class Csv extends Base
 							[
 								'#FIELD_NAME#' => $field['NAME'],
 							]
-						)
+						) ?? ''
 					)
 				);
 			}
@@ -214,7 +214,7 @@ class Csv extends Base
 			return new Main\EventResult(
 				Main\EventResult::ERROR,
 				new Main\Error(
-					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_SOURCE_CSV_UPDATE_ERROR_MSGVER_1')
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_SOURCE_CSV_UPDATE_ERROR_MSGVER_1') ?? ''
 				)
 			);
 		}
@@ -229,7 +229,7 @@ class Csv extends Base
 			return new Main\EventResult(
 				Main\EventResult::ERROR,
 				new Main\Error(
-					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_SOURCE_CSV_UPDATE_ERROR_MSGVER_1')
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_SOURCE_CSV_UPDATE_ERROR_MSGVER_1') ?? ''
 				)
 			);
 		}
@@ -260,7 +260,7 @@ class Csv extends Base
 				return new Main\EventResult(
 					Main\EventResult::ERROR,
 					new Main\Error(
-						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_SOURCE_CSV_UPDATE_ERROR_MSGVER_1')
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_SOURCE_CSV_UPDATE_ERROR_MSGVER_1') ?? ''
 					)
 				);
 			}

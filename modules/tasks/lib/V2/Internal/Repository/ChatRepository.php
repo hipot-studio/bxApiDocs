@@ -69,6 +69,26 @@ class ChatRepository implements ChatRepositoryInterface
 		return $data;
 	}
 
+	public function findTaskIdsByChatIds(array $chatIds): array
+	{
+		Collection::normalizeArrayValuesByInt($chatIds);
+
+		if (empty($chatIds))
+		{
+			return [];
+		}
+
+		$rows = TaskChatTable::query()
+			->setSelect(['TASK_ID'])
+			->whereIn('CHAT_ID', $chatIds)
+			->fetchAll();
+
+		$taskIds = array_column($rows, 'TASK_ID');
+		Collection::normalizeArrayValuesByInt($taskIds);
+
+		return $taskIds;
+	}
+
 	public function save(int $chatId, int $taskId): void
 	{
 		TaskChatTable::add([

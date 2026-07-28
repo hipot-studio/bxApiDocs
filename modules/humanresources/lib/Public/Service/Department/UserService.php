@@ -2,13 +2,11 @@
 
 namespace Bitrix\HumanResources\Public\Service\Department;
 
-use Bitrix\HumanResources\Enum\NodeActiveFilter;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Service\Container;
-use Bitrix\HumanResources\Service\UserService as InternalUserService;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Item\NodeMember;
@@ -273,68 +271,53 @@ class UserService
 	 *
 	 * After the call {@see isEmployee()} is guaranteed to return true.
 	 *
-	 * UF_DEPARTMENT is synchronised in the background by
+	 * Thin wrapper over {@see assignToDepartments()} with replace semantics. UF_DEPARTMENT is
+	 * synchronised in the background by
 	 * {@see \Bitrix\HumanResources\Compatibility\Event\NewToOldEventHandler} — this method
 	 * never writes UF_DEPARTMENT directly.
 	 *
-	 * @throws \InvalidArgumentException if $departmentId does not point to a DEPARTMENT node
+	 * @param int $userId
+	 * @param int $departmentId DEPARTMENT node ID
+	 * @param int|null $structureId structure the department belongs to; null resolves to the default structure
+	 *
+	 * @throws \InvalidArgumentException if $departmentId does not point to a DEPARTMENT node of the structure
 	 */
-	public function assignToSingleDepartment(int $userId, int $departmentId): void
+	public function assignToSingleDepartment(int $userId, int $departmentId, ?int $structureId = null): void
 	{
-		$nodeRepository = Container::getNodeRepository();
-		$memberRepository = Container::getNodeMemberRepository();
-		$internalMemberRepository = InternalContainer::getNodeMemberRepository();
+		$this->assignToDepartments($userId, [$departmentId], replaceExisting: true, structureId: $structureId);
+	}
 
-		$targetNode = $nodeRepository->getById($departmentId);
-		if ($targetNode === null || $targetNode->type !== NodeEntityType::DEPARTMENT)
-		{
-			throw new \InvalidArgumentException('Target node is not a valid department');
-		}
-
-		$departmentLinks = $memberRepository->findAllByEntityIdAndEntityTypeAndNodeType(
+	/**
+	 * Assigns the user to the given set of DEPARTMENT nodes.
+	 *
+	 * By default ($replaceExisting = false) the passed departments are ADDED to the user's
+	 * current department links without removing the rest. When $replaceExisting is true,
+	 * department links absent from $departmentIds are removed (replace semantics) — this is how
+	 * {@see assignToSingleDepartment()} restores a user into a single department.
+	 *
+	 * For each department a membership is created or reactivated. UF_DEPARTMENT is synchronised
+	 * in the background by {@see \Bitrix\HumanResources\Compatibility\Event\NewToOldEventHandler} —
+	 * this method never writes UF_DEPARTMENT directly.
+	 *
+	 * @param int $userId
+	 * @param int[] $departmentIds non-empty list of DEPARTMENT node IDs
+	 * @param bool $replaceExisting when true, also removes department links absent from $departmentIds
+	 * @param int|null $structureId structure the departments belong to; null resolves to the default structure
+	 *
+	 * @throws \InvalidArgumentException if $departmentIds is empty or contains an ID that is not a DEPARTMENT node of the structure
+	 */
+	public function assignToDepartments(
+		int $userId,
+		array $departmentIds,
+		bool $replaceExisting = false,
+		?int $structureId = null,
+	): void
+	{
+		InternalContainer::getNodeMemberService()->assignUserToDepartments(
 			$userId,
-			MemberEntityType::USER,
-			NodeEntityType::DEPARTMENT,
-			activeFilter: NodeActiveFilter::ALL,
-		);
-
-		$targetLink = null;
-		$linksToRemove = new NodeMemberCollection();
-		foreach ($departmentLinks as $link)
-		{
-			if ($link->nodeId === $departmentId)
-			{
-				$targetLink = $link;
-				continue;
-			}
-
-			$linksToRemove->add($link);
-		}
-
-		if (!$linksToRemove->empty())
-		{
-			$memberRepository->removeByCollection($linksToRemove);
-		}
-
-		if ($targetLink === null)
-		{
-			$memberRepository->create(new NodeMember(
-				entityType: MemberEntityType::USER,
-				entityId: $userId,
-				nodeId: $departmentId,
-				active: true,
-			));
-		}
-		else
-		{
-			// Always emit OnMemberUpdated (inside setActiveById) — even for no-op active=Y,
-			// UF_DEPARTMENT may have drifted (e.g. cleared during dismissal but not restored
-			// because RestoreUserHandler doesn't pass UF_DEPARTMENT to CUser::Update).
-			$internalMemberRepository->setActiveById($targetLink->id, true);
-		}
-
-		Container::getCacheManager()->clean(
-			sprintf(InternalUserService::USER_DEPARTMENT_EXISTS_KEY, $userId),
+			$departmentIds,
+			$replaceExisting,
+			$structureId,
 		);
 	}
 	//endregion

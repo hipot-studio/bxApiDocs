@@ -26,8 +26,8 @@ final class OpenDatasetAction extends BaseAction
 
 	public function getControl(array $rawFields): ?array
 	{
-		$datasetId = $rawFields['ID'];
-		$datasetType = $rawFields['TYPE'];
+		$datasetId = $rawFields['ID'] ?? 0;
+		$datasetType = $rawFields['TYPE'] ?? '';
 
 		if (!empty($rawFields['IS_SYSTEM']))
 		{

@@ -20,13 +20,17 @@ final class RestDatasetManager extends DatasetManager
 			return $result;
 		}
 
-		$datasetId = $result->getData()['id'];
+		$datasetId = $result->getData()['id'] ?? null;
+		if ($datasetId === null)
+		{
+			return $result;
+		}
 
 		$event = new Event(
 			'biconnector',
 			self::EVENT_ON_AFTER_ADD_DATASET,
 			[
-				'dataset' => self::getById($datasetId),
+				'dataset' => self::getById((int)$datasetId),
 			]
 		);
 		$event->send();

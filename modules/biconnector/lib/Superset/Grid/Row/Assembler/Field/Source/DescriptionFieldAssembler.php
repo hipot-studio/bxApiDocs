@@ -15,7 +15,7 @@ class DescriptionFieldAssembler extends FieldAssembler
 	{
 		$result = htmlspecialcharsbx($value['DESCRIPTION'] ?? '');
 
-		return $this->addPencil('DESCRIPTION', $result, $value['ID']);
+		return $this->addPencil('DESCRIPTION', $result, ($value['ID'] ?? 0));
 	}
 
 	protected function prepareRow(array $row): array

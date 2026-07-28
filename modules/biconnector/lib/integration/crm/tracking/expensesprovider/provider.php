@@ -19,7 +19,7 @@ final class Provider
 		protected readonly ?string $clientId
 	)
 	{
-		$service = Seo\Analytics\Service::getInstance()->setClientId($this->clientId);
+		$service = Seo\Analytics\Service::getInstance()->setClientId($this->clientId ?? '');
 		$this->account = $service::getAccount($this->seoCode);
 	}
 
@@ -81,7 +81,7 @@ final class Provider
 			return $result->setData(['expenses' => []]);
 		}
 
-		Seo\Analytics\Service::getInstance()->setClientId($this->clientId);
+		Seo\Analytics\Service::getInstance()->setClientId($this->clientId ?? '');
 		$accountResult = $this->account->getDailyExpensesReport($this->accountId, $dateFrom, $dateTo);
 		if (!$accountResult->isSuccess())
 		{

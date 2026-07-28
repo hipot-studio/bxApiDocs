@@ -19,6 +19,9 @@ class LoadListAction extends BaseAction
 		if ($pageNavigation->getOffset() === 0)
 		{
 			Bizproc\Integration\Push\WorkflowPush::subscribeUser($currentUserId);
+
+			$userCounters = new \Bitrix\Bizproc\Workflow\WorkflowUserCounters($currentUserId);
+			$userCounters->sync();
 		}
 
 		$service = new WorkflowStateService();

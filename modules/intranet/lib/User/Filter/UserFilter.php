@@ -2,8 +2,6 @@
 
 namespace Bitrix\Intranet\User\Filter;
 
-use Bitrix\Intranet\Entity\Department;
-use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\User\Filter\Presets\FilterPresetManager;
 use Bitrix\Main\Filter\DataProvider;
 use Bitrix\Main\Filter\Filter;
@@ -15,6 +13,7 @@ class UserFilter extends Filter
 	private Options $filterOptions;
 	private array $filterPresets;
 	private ?IntranetUserSettings $filterSettings = null;
+	private ?string $selectedDepartmentFilterValue = null;
 	protected $uiFilterServiceFields = [
 		'FIRED',
 		'ADMIN',
@@ -36,6 +35,7 @@ class UserFilter extends Filter
 		'PHONE_APPS',
 		'DESKTOP_APPS',
 		'COLLABER',
+		'DEPARTMENT_FLAT',
 	];
 
 	public function __construct(
@@ -55,8 +55,8 @@ class UserFilter extends Filter
 
 		foreach ($defaultFilterIds as $fieldId)
 		{
-			$value = match ($fields[$fieldId]) {
-				'dest_selector' => false,
+			$value = match ($fields[$fieldId]->getType()) {
+				'dest_selector', 'entity_selector' => false,
 				default => '',
 			};
 			$defaultFieldsValues[$fieldId] = $value;
@@ -117,6 +117,11 @@ class UserFilter extends Filter
 		return $this->filterPresets;
 	}
 
+	public function getSelectedDepartmentFilterValue(): ?string
+	{
+		return $this->selectedDepartmentFilterValue;
+	}
+
 	public function removeServiceUiFilterFields(array &$filter): void
 	{
 		parent::removeServiceUiFilterFields($filter);
@@ -150,34 +155,46 @@ class UserFilter extends Filter
 		}
 
 		$result = $rawValue;
+		$this->selectedDepartmentFilterValue = null;
 		$this->removeNotUiFilterFields($result);
 		$this->prepareListFilterParams($result);
 		$this->prepareFilterValue($result);
+		$this->storeSelectedDepartmentFilterValue($result);
 		$this->removeServiceUiFilterFields($result);
 		$this->addSearchFilter($result, $searchString);
 
-		if (isset($result['=UF_DEPARTMENT']))
+		return $result;
+	}
+
+	private function storeSelectedDepartmentFilterValue(array $filter): void
+	{
+		if (
+			isset($filter['DEPARTMENT'])
+			&& is_scalar($filter['DEPARTMENT'])
+			&& $filter['DEPARTMENT'] !== ''
+		)
 		{
-			$selectedDepartment = ServiceContainer::getInstance()
-				->departmentRepository()
-				->getById((int)$result['=UF_DEPARTMENT']);
+			$this->selectedDepartmentFilterValue = (string)$filter['DEPARTMENT'];
 
-			// filter by all sub departments, as it was in old user grid
-			if ($selectedDepartment)
-			{
-				$subDepartments = ServiceContainer::getInstance()
-					->departmentRepository()
-					->getAllTree($selectedDepartment);
-
-				if (!$subDepartments->empty())
-				{
-					$result['@UF_DEPARTMENT'] = $subDepartments->map(fn(Department $department) => $department->getId());
-					unset($result['=UF_DEPARTMENT']);
-				}
-			}
+			return;
 		}
 
-		return $result;
+		if (
+			!isset($filter['DEPARTMENT_FLAT'])
+			|| !is_scalar($filter['DEPARTMENT_FLAT'])
+			|| $filter['DEPARTMENT_FLAT'] === ''
+		)
+		{
+			return;
+		}
+
+		$selectedDepartmentFilterValue = (string)$filter['DEPARTMENT_FLAT'];
+		if (!str_ends_with($selectedDepartmentFilterValue, ':F'))
+		{
+			$selectedDepartmentFilterValue .= ':F';
+		}
+
+		$this->selectedDepartmentFilterValue = $selectedDepartmentFilterValue;
 	}
 
 	private function addSearchFilter(&$result, string $searchString): void

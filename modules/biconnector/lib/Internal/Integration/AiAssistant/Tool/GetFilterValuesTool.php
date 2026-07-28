@@ -3,10 +3,12 @@
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\AiAssistant\Exceptions\McpException;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Result;
 
 final class GetFilterValuesTool extends BaseBiTool
 {
@@ -101,7 +103,7 @@ final class GetFilterValuesTool extends BaseBiTool
 
 		$dashboardId = (int)$args['dashboardId'];
 
-		$loadResult = $this->loadDashboard($dashboardId, $userId);
+		$loadResult = $this->loadReadyDashboard($dashboardId, $userId);
 		if (!$loadResult->isSuccess())
 		{
 			throw self::toMcpException($loadResult);
@@ -131,17 +133,25 @@ final class GetFilterValuesTool extends BaseBiTool
 		$urlParamOverrides = is_array($args['urlParams'] ?? null) ? $args['urlParams'] : [];
 
 		$filters = new AppliedFilters($userId);
+		$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById($externalId);
+		if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
+		{
+			throw self::unavailableDashboardException(
+				$dashboardDtoResp->getErrors(),
+				['stage' => 'get_filter_values.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
+			);
+		}
+		$dashboardDto = $dashboardDtoResp->getData();
+
+		$filterColumnCheck = $filters->validate($dashboardDto, [['name' => $filterColumn, 'value' => []]]);
+		if (!$filterColumnCheck->isSuccess())
+		{
+			throw self::toMcpException($filterColumnCheck);
+		}
+
 		if (!empty($callerFilters))
 		{
-			$dashboardDtoResp = Integrator::getInstance()->getDashboardById($externalId);
-			if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
-			{
-				throw self::unavailableDashboardException(
-					$dashboardDtoResp->getErrors(),
-					['stage' => 'get_filter_values.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
-				);
-			}
-			$validateResult = $filters->validate($dashboardDtoResp->getData(), $callerFilters);
+			$validateResult = $filters->validate($dashboardDto, $callerFilters);
 			if (!$validateResult->isSuccess())
 			{
 				throw self::toMcpException($validateResult);
@@ -162,18 +172,23 @@ final class GetFilterValuesTool extends BaseBiTool
 		}
 		$urlParams = $urlParamsResult->getData()['urlParams'];
 
-		$response = Integrator::getInstance()->getFilterValues(
+		$response = IntegratorFactory::getInstance()->getFilterValues(
 			$externalId,
 			$filterColumn,
 			$supersetFilters,
 			$urlParams,
 			$search,
 			$limit,
-			self::INTEGRATOR_TIMEOUT_SEC,
 		);
 
 		if ($response->hasErrors())
 		{
+			$columnCheck = $this->checkFilterColumn($externalId, $filterColumn, $filters, $dashboardDto);
+			if (!$columnCheck->isSuccess())
+			{
+				throw self::toMcpException($columnCheck);
+			}
+
 			throw self::unavailableDashboardException(
 				$response->getErrors(),
 				['stage' => 'get_filter_values.fetch', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
@@ -195,5 +210,31 @@ final class GetFilterValuesTool extends BaseBiTool
 			'values_for_filter' => $rawData['values_for_filter'] ?? [],
 			'has_more' => (bool)($rawData['has_more'] ?? false),
 		];
+	}
+
+	/**
+	 * Validates $filterColumn against the dashboard's known filter columns (reusing
+	 * the AppliedFilters fuzzy-suggest check). A failed Result means the column is
+	 * unknown; a successful one means it is valid and the caller should surface the
+	 * original Superset error.
+	 */
+	private function checkFilterColumn(
+		int $externalId,
+		string $filterColumn,
+		AppliedFilters $filters,
+		?Dto\Dashboard $dashboardDto,
+	): Result
+	{
+		if ($dashboardDto === null)
+		{
+			$resp = IntegratorFactory::getInstance()->getDashboardById($externalId);
+			if ($resp->hasErrors() || !$resp->getData())
+			{
+				return new Result();
+			}
+			$dashboardDto = $resp->getData();
+		}
+
+		return $filters->validate($dashboardDto, [['name' => $filterColumn, 'value' => []]]);
 	}
 }

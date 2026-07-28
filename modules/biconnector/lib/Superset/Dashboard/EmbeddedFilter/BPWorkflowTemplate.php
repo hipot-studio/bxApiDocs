@@ -2,11 +2,11 @@
 
 namespace Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 
-use Bitrix\Main\Loader;
+use Bitrix\BIConnector\Public\Provider\ScopeAccessibleValueProvider;
+use Bitrix\BIConnector\Superset\Dashboard\UrlParameter\Parameter;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\Entity\ReferenceField;
-use Bitrix\Bizproc\Workflow\Entity\WorkflowStateTable;
-use Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable;
+use Bitrix\Main\Loader;
+use Bitrix\Main\DI\ServiceLocator;
 
 class BPWorkflowTemplate extends PresetFilter
 {
@@ -47,7 +47,7 @@ class BPWorkflowTemplate extends PresetFilter
 			return $presetValueCollection;
 		}
 
-		$userId = CurrentUser::get()->getId();
+		$userId = (int)CurrentUser::get()->getId();
 		if (!$userId)
 		{
 			return new PresetValueCollection();
@@ -55,35 +55,16 @@ class BPWorkflowTemplate extends PresetFilter
 
 		$presetValueCollection = new PresetValueCollection();
 
-		$stateQuery = WorkflowStateTable::query();
-		$stateQuery->setSelect([
-			'TID' => 'WORKFLOW_TEMPLATE_ID',
-			'TNAME' => 'TEMPLATE.NAME',
-		]);
-		$stateQuery->addOrder('TID');
-
-		$subQuery = WorkflowUserTable::query();
-		$subQuery->addSelect('WORKFLOW_ID');
-		$subQuery->addFilter('USER_ID', $userId);
-
-		$stateQuery->registerRuntimeField('',
-			new ReferenceField('M',
-				\Bitrix\Main\ORM\Entity::getInstanceByQuery($subQuery),
-				['=this.ID' => 'ref.WORKFLOW_ID'],
-				['join_type' => 'INNER'],
-			),
-		);
-
-		$workflows = $stateQuery->exec();
-		while ($workflow = $workflows->fetch())
+		/** @var ScopeAccessibleValueProvider $valueProvider */
+		$valueProvider = ServiceLocator::getInstance()->get('biconnector.provider.scopeAccessibleValue');
+		$values = $valueProvider->getList(Parameter::WorkflowTemplateId, $userId, limit: 0);
+		foreach ($values as $value)
 		{
-			$id = (int)$workflow['TID'];
-
 			$presetValueCollection->set(
-				$id,
+				$value['id'],
 				new PresetValue(
-					value: $id,
-					label: sprintf('[%d] %s', $id, $workflow['TNAME']),
+					value: $value['id'],
+					label: sprintf('[%d] %s', $value['id'], $value['name']),
 				),
 			);
 		}

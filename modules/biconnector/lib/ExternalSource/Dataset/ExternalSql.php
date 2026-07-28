@@ -34,26 +34,28 @@ final class ExternalSql extends Base
 
 	protected function getConnector(string $name, BIConnector\DataSourceConnector\FieldCollection $fields, array $datasetInfo): BIConnector\DataSourceConnector\Connector\Base
 	{
-		return Connector\Factory::getConnector($this->dataset->getEnumType(), $name, $fields, $datasetInfo);
+		return Connector\Factory::getConnector($this->getDataset()->getEnumType(), $name, $fields, $datasetInfo);
 	}
 
 	protected function getResultTableName(): string
 	{
-		return $this->dataset->getName();
+		return $this->getDataset()->getName() ?? '';
 	}
 
 	public function getSqlTableAlias(): string
 	{
+		$dataset = $this->getDataset();
+
 		return sprintf(
 			'%s%s',
-			strtoupper($this->dataset->getType()),
-			strtoupper($this->dataset->getExternalCode()),
+			strtoupper($dataset->getType() ?? ''),
+			strtoupper($dataset->getExternalCode() ?? ''),
 		);
 	}
 
 	protected function getConnectionTableName(): string
 	{
-		return $this->dataset->getExternalCode();
+		return $this->getDataset()->getExternalCode() ?? '';
 	}
 
 	protected function getField(BIConnector\ExternalSource\Internal\ExternalDatasetField $datasetField): BIConnector\DataSource\DatasetField
@@ -68,6 +70,7 @@ final class ExternalSql extends Base
 			BIConnector\ExternalSource\FieldType::Double, BIConnector\ExternalSource\FieldType::Money => new BIConnector\DataSource\Field\DoubleField($name),
 			BIConnector\ExternalSource\FieldType::Date => new BIConnector\DataSource\Field\DateField($name),
 			BIConnector\ExternalSource\FieldType::DateTime => new BIConnector\DataSource\Field\DateTimeField($name),
+			default => new BIConnector\DataSource\Field\StringField($name),
 		};
 
 		$field->setExpression($externalCode, isPrepared: false);

@@ -41,6 +41,11 @@ class MicrosoftPowerBI extends Service
 	/**
 	 * @param string $tableName
 	 * @param array $parameters
+	 * @param string $requestMethod
+	 * @param string $requestUri
+	 * @param int $limit
+	 * @param LimitManager $limitManager
+	 * @param array|null $queryMetadata Query metadata from Superset/Trino (bx_query_metadata).
 	 * @return Result
 	 */
 	public function printQuery(
@@ -49,7 +54,8 @@ class MicrosoftPowerBI extends Service
 		string $requestMethod,
 		string $requestUri,
 		int $limit,
-		LimitManager $limitManager
+		LimitManager $limitManager,
+		?array $queryMetadata = null,
 	): Result
 	{
 		$result = new Result();
@@ -75,12 +81,13 @@ class MicrosoftPowerBI extends Service
 		$schema = $data['schema'] ?? [];
 
 		$logId = $manager->startQuery(
-			$tableName
-			,implode(', ', array_map($getIdFunction, $schema))
-			,Json::encode($data['where'], JSON_UNESCAPED_UNICODE)
-			,Json::encode($parameters, JSON_UNESCAPED_UNICODE)
-			,$requestMethod
-			,preg_replace('/(?:^|\\?|&)token=(.+?)(?:$|&)/', 'token=hide-the-key-from-the-log', $requestUri)
+			$tableName,
+			implode(', ', array_map($getIdFunction, $schema)),
+			Json::encode($data['where'], JSON_UNESCAPED_UNICODE),
+			Json::encode($parameters, JSON_UNESCAPED_UNICODE),
+			$requestMethod,
+			preg_replace('/(?:^|\\?|&)token=(.+?)(?:$|&)/', 'token=hide-the-key-from-the-log', $requestUri),
+			$queryMetadata
 		);
 
 		$fields = [];

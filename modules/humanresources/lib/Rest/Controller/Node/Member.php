@@ -7,7 +7,7 @@ namespace Bitrix\HumanResources\Rest\Controller\Node;
 use Bitrix\HumanResources\Access\Model\NodeModel;
 use Bitrix\HumanResources\Rest\Trait\NodeControllerTrait;
 use Bitrix\HumanResources\Access\StructureActionDictionary;
-use Bitrix\HumanResources\Rest\Dto\NodeDto;
+use Bitrix\HumanResources\Rest\Dto\NodeMemberDto;
 use Bitrix\HumanResources\Rest\RequestParams;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Service\Container;
@@ -25,7 +25,7 @@ use Bitrix\Rest\V3\Interaction\Response\ArrayResponse;
  *
  * @see \Bitrix\HumanResources\Controller\Structure\Node\Member — existing ajax controller
  */
-#[DtoType(NodeDto::class)]
+#[DtoType(NodeMemberDto::class)]
 class Member extends RestController
 {
 	use NodeControllerTrait;

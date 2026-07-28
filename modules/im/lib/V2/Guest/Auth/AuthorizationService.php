@@ -6,24 +6,25 @@ namespace Bitrix\Im\V2\Guest\Auth;
 
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserGuest;
+use Bitrix\Im\V2\Guest\Pull\UserLogout;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Locator;
+use Bitrix\Im\V2\SharingLink\Entity\LinkEntityType;
+use Bitrix\Im\V2\SharingLink\GuestChatLink;
+use Bitrix\Im\V2\SharingLink\SharingLinkFactory;
 use Bitrix\Main\Application;
 use Bitrix\Main\Web\Cookie;
 
 /**
- * Service for guest user authorization.
+ * Session and cookie management for guest users.
  *
- * Handles Bitrix session authorization and cookie management for guest users.
- * Responsible for the "log in" step: creating a session and persisting auth cookies.
- *
- * @see AuthenticationService for token-based authentication (token → user lookup)
- * @see \Bitrix\Im\V2\Guest\GuestService for high-level guest operations
+ * @see AuthenticationService for token → user lookup.
+ * @see \Bitrix\Im\V2\Guest\GuestService for high-level guest operations.
  */
 class AuthorizationService
 {
-	public const COOKIE_AUTH = 'BITRIX_IM_GUEST_AUTH';
 	public const COOKIE_HASH = 'BITRIX_IM_GUEST_HASH';
+	public const COOKIE_INVITE_CODE = 'BITRIX_IM_GUEST_INVITE_CODE';
 
 	protected static ?self $instance = null;
 
@@ -38,12 +39,6 @@ class AuthorizationService
 		return self::$instance;
 	}
 
-	/**
-	 * Authorize guest user and set cookies.
-	 *
-	 * @param User $user Guest user to authorize
-	 * @return Result
-	 */
 	public function authorize(User $user): Result
 	{
 		$result = new Result();
@@ -69,7 +64,7 @@ class AuthorizationService
 			return $result;
 		}
 
-		if (!$globalUser->Authorize($user->getId(), false, false, 'public'))
+		if (!$globalUser->Authorize($user->getId(), false, false, GuestApplication::ID))
 		{
 			return $result->addError(new AuthError(AuthError::AUTHORIZE_ERROR));
 		}
@@ -79,24 +74,92 @@ class AuthorizationService
 		return $result;
 	}
 
+	public function setInviteCode(string $code): void
+	{
+		if (!InviteCode::isValid($code))
+		{
+			return;
+		}
+
+		// Invite code is public by design (it lives in the /guest/{code} URL). We expose it
+		// to JS on purpose so the web UserLogout handler can compare params.deactivatedCodes
+		// against the guest's own code before redirecting. The auth secret stays HttpOnly via
+		// {@see self::COOKIE_HASH}.
+		Application::getInstance()->getContext()->getResponse()->addCookie(
+			$this->buildPersistentCookie(self::COOKIE_INVITE_CODE, $code, httpOnly: false)
+		);
+	}
+
 	/**
-	 * Set auth cookies for the current response.
+	 * Cookies must be cleared together with Logout — a leftover BITRIX_IM_GUEST_HASH
+	 * would re-authenticate the guest on the next request.
+	 *
+	 * @param list<string> $deactivatedCodes
 	 */
+	public function terminate(array $deactivatedCodes = []): void
+	{
+		$globalUser = Locator::getContext()->getCUser();
+		if ($globalUser === null)
+		{
+			return;
+		}
+
+		$userId = (int)$globalUser->GetID();
+		if ($userId > 0)
+		{
+			(new UserLogout([$userId], $deactivatedCodes))->send();
+		}
+
+		$this->clearGuestCookies();
+		$globalUser->Logout();
+	}
+
+	/**
+	 * Self-action: terminate iff the affected chat is the cookie chat (cookies are in the request).
+	 * External kick: deactivate the user (kills the token) and push userLogout.
+	 */
+	public function invalidateGuestUser(int $userId, int $chatId): void
+	{
+		if ($userId <= 0 || $chatId <= 0)
+		{
+			return;
+		}
+
+		$user = User::getInstance($userId);
+		if (!$user->isExist() || !$user->isGuest())
+		{
+			return;
+		}
+
+		if (Locator::getContext()->getUserId() === $userId)
+		{
+			$cookieCode = $this->getCookieCodeIfMatchesChat($chatId);
+			if ($cookieCode !== null)
+			{
+				$this->terminate([$cookieCode]);
+			}
+
+			return;
+		}
+
+		$primaryCode = $this->getPrimaryGuestCodeForChat($chatId);
+		$deactivatedCodes = $primaryCode !== null ? [$primaryCode] : [];
+
+		(new UserLogout([$userId], $deactivatedCodes))->send();
+		$this->deactivateGuestUser($userId);
+	}
+
 	protected function setCookies(string $xmlId): void
 	{
-		$context = Application::getInstance()->getContext();
-
-		$cookie = new Cookie(self::COOKIE_AUTH, 'Y', null, false);
-		$cookie->setHttpOnly(true);
-		$context->getResponse()->addCookie($cookie);
-
 		$hash = $this->extractHashFromXmlId($xmlId);
-		if ($hash !== null)
+		if ($hash === null)
 		{
-			$cookie = new Cookie(self::COOKIE_HASH, $hash, null, false);
-			$cookie->setHttpOnly(true);
-			$context->getResponse()->addCookie($cookie);
+			return;
 		}
+
+		Application::getInstance()->getContext()->getResponse()->addCookie(
+			$this->buildPersistentCookie(self::COOKIE_HASH, $hash)
+		);
 	}
 
 	protected function extractHashFromXmlId(string $xmlId): ?string
@@ -104,5 +167,60 @@ class AuthorizationService
 		$prefix = UserGuest::AUTH_ID . '|';
 
 		return str_starts_with($xmlId, $prefix) ? mb_substr($xmlId, mb_strlen($prefix)) : null;
+	}
+
+	/** Caller must guarantee the current request belongs to the affected guest. */
+	private function getCookieCodeIfMatchesChat(int $chatId): ?string
+	{
+		$code = InviteCode::createFromRequest();
+		if ($code === null)
+		{
+			return null;
+		}
+
+		$link = SharingLinkFactory::getInstance()->getLinkByCode($code->getValue());
+		if (!($link instanceof GuestChatLink) || $link->getChatId() !== $chatId)
+		{
+			return null;
+		}
+
+		return $code->getValue();
+	}
+
+	/** Best-guess code when the guest's own cookies aren't accessible (external kick). */
+	private function getPrimaryGuestCodeForChat(int $chatId): ?string
+	{
+		$link = SharingLinkFactory::getInstance()
+			->getActivePrimaryLinkByEntityFields(LinkEntityType::GuestChat, (string)$chatId)
+		;
+
+		return $link?->getCode();
+	}
+
+	/** Same pattern as {@see \Bitrix\Im\V2\Guest\CleanupService}: ACTIVE='N' kills token, Authorize and relation/recent queries. */
+	private function deactivateGuestUser(int $userId): void
+	{
+		(new \CUser())->Update($userId, ['ACTIVE' => 'N']);
+	}
+
+	private function buildPersistentCookie(string $name, string $value, bool $httpOnly = true): Cookie
+	{
+		$cookie = new Cookie($name, $value, null, false);
+		$cookie->setHttpOnly($httpOnly);
+
+		return $cookie;
+	}
+
+	private function clearGuestCookies(): void
+	{
+		$response = Application::getInstance()->getContext()->getResponse();
+		$pastExpire = time() - 3600;
+
+		foreach ([self::COOKIE_HASH, self::COOKIE_INVITE_CODE] as $name)
+		{
+			$cookie = new Cookie($name, '', $pastExpire, false);
+			$cookie->setHttpOnly(true);
+			$response->addCookie($cookie);
+		}
 	}
 }

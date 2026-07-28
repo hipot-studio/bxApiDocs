@@ -259,19 +259,9 @@ final class Member extends Controller
 	 */
 	#[Attribute\Access\LogicOr(
 		new Attribute\StructureActionAccess(
-			permission: StructureActionDictionary::ACTION_DEPARTMENT_CREATE,
-			itemType: AccessibleItemType::NODE,
-			itemParentIdRequestKey: 'parentId',
-		),
-		new Attribute\StructureActionAccess(
 			permission: StructureActionDictionary::ACTION_EMPLOYEE_ADD_TO_DEPARTMENT,
 			itemType: AccessibleItemType::NODE,
 			itemIdRequestKey: 'nodeId',
-		),
-		new Attribute\StructureActionAccess(
-			permission: StructureActionDictionary::ACTION_TEAM_CREATE,
-			itemType: AccessibleItemType::NODE,
-			itemParentIdRequestKey: 'parentId',
 		),
 		new Attribute\StructureActionAccess(
 			permission: StructureActionDictionary::ACTION_TEAM_MEMBER_ADD,
@@ -319,17 +309,10 @@ final class Member extends Controller
 		return $this->userService->findByNodeAndSearchQuery($node, $query);
 	}
 
-	#[Attribute\Access\LogicOr(
-		new Attribute\StructureActionAccess(
-			permission: StructureActionDictionary::ACTION_DEPARTMENT_CREATE,
-			itemType: AccessibleItemType::NODE,
-			itemParentIdRequestKey: 'parentId',
-		),
-		new Attribute\StructureActionAccess(
-			permission: StructureActionDictionary::ACTION_EMPLOYEE_ADD_TO_DEPARTMENT,
-			itemType: AccessibleItemType::NODE,
-			itemIdRequestKey: 'nodeId',
-		),
+	#[Attribute\StructureActionAccess(
+		permission: StructureActionDictionary::ACTION_EMPLOYEE_ADD_TO_DEPARTMENT,
+		itemType: AccessibleItemType::NODE,
+		itemIdRequestKey: 'nodeId',
 	)]
 	public function moveUserListToDepartmentAction(Item\Node $node, array $userIds = []): array
 	{

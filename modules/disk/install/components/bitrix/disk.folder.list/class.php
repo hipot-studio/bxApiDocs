@@ -6,7 +6,7 @@ use Bitrix\Disk\Integration\Collab\CollabService;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
-use Bitrix\Disk\QuickAccess\ScopeTokenService;
+use Bitrix\Disk\QuickAccess\FileDataParameterService;
 use Bitrix\Disk\Search\Reindex\BaseObjectIndex;
 use Bitrix\Disk\Search\Reindex\ExtendedIndex;
 use Bitrix\Disk\Search\Reindex\HeadIndex;
@@ -102,9 +102,9 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	private $collabService;
 	private bool $isUserCollaber = false;
 	private ?Cookie $readOnlyCollabFolderStateCookie = null;
-	private ScopeTokenService $scopeTokenService;
 	private UnifiedLinkAccessService $unifiedLinkAccessService;
 	private ?array $analytics = null;
+	private FileDataParameterService $fileDataParameterService;
 
 	public function __construct($component = null)
 	{
@@ -112,7 +112,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		$serviceLocator = ServiceLocator::getInstance();
 
-		$this->scopeTokenService = $serviceLocator->get('disk.scopeTokenService');
+		$this->fileDataParameterService = $serviceLocator->get('disk.fileDataParameterService');
 		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
 	}
 
@@ -388,13 +388,17 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			{
 				$urlManager = $this->getUrlManager();
 				$downloadUrl = new Uri($urlManager->getUrlForDownloadFile($fileForShow));
-				$accessInfo = $this->scopeTokenService->grantAccessWithScope($fileForShow, $this->gridOptions->getGridId());
 				$uls = (new Signer())->getSignature($fileForShow->getId());
 
-				$downloadUrl->addParams([
-					'_esd' => $accessInfo['encryptedScope'] ?? '',
+				$downloadUrlParams = [
 					'_uls' => $uls,
-				]);
+				];
+				$encryptedFileData = $this->fileDataParameterService->getEncryptedFileData($fileForShow);
+				if ($encryptedFileData !== null)
+				{
+					$downloadUrlParams[FileDataParameterService::PARAMETER_NAME] = $encryptedFileData;
+				}
+				$downloadUrl->addParams($downloadUrlParams);
 
 				$fileForShowData = $fileForShow->getFile();
 				$fileForShowData[FileAttributes::KEY_FILE_OBJECT] = $fileForShow;
@@ -446,13 +450,19 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 				if ($object instanceof File && TypeFile::isImage($object))
 				{
-					$accessInfo = $this->scopeTokenService->grantAccessWithScope($object, $this->gridOptions->getGridId());
+					$quickAccessGetParam = [];
+					$encryptedFileData = $this->fileDataParameterService->getEncryptedFileData($object);
+					if ($encryptedFileData !== null)
+					{
+						$quickAccessGetParam[FileDataParameterService::PARAMETER_NAME] = $encryptedFileData;
+					}
+
 					$info['image'] = UrlManager::getInstance()->create('disk.api.file.showImage', [
 						'fileId' => $object->getId(),
 						'signature' => ParameterSigner::getImageSignature($object->getId(), 400, 400),
 						'width' => 400,
 						'height' => 400,
-						'_esd' => $accessInfo['encryptedScope'] ?? '',
+						...$quickAccessGetParam,
 					]);
 				}
 				elseif ($object instanceof File && $object->getPreviewId())
@@ -625,11 +635,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				'ID' => $objectId,
 			];
 
-				$isFolder = $object instanceof Folder;
-				$isFile = !$isFolder;
-				$supportsUnifiedLink = $isFile && $object->supportsUnifiedLink();
-				$supportsSharingAccessPopup = $supportsUnifiedLink;
-				$fileType = $isFile ? (int)$object->getTypeFile() : null;
+			$isFolder = $object instanceof Folder;
+			$isFile = !$isFolder;
+			$supportsUnifiedLink = $isFile && $object->supportsUnifiedLink();
+			$supportsSharingAccessPopup = $supportsUnifiedLink;
+			$fileType = $isFile ? (int)$object->getTypeFile() : null;
 			$isBoard = $fileType === TypeFile::FLIPCHART;
 
 			$actions = $columns = [];
@@ -1056,9 +1066,13 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			{
 				$sourceUri = new Uri($urlManager->getUrlForDownloadFile($object));
 
-				$accessInfo = $this->scopeTokenService->grantAccessWithScope($object, $this->gridOptions->getGridId());
-
-				$sourceUri->addParams(['_esd' => $accessInfo['encryptedScope'] ?? '']);
+				$encryptedFileData = $this->fileDataParameterService->getEncryptedFileData($object);
+				if ($encryptedFileData !== null)
+				{
+					$sourceUri->addParams([
+						FileDataParameterService::PARAMETER_NAME => $encryptedFileData,
+					]);
+				}
 
 				$fileData = [
 					'ID' => $object->getFileId(),

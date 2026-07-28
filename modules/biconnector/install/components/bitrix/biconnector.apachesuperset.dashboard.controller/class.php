@@ -2,7 +2,6 @@
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Integration\Superset\Stepper\DashboardOwner;
 use Bitrix\BIConnector\Superset;
@@ -12,7 +11,6 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\Main\Web\Uri;
 use Bitrix\BIConnector;
@@ -118,7 +116,7 @@ class ApacheSupersetDashboardController extends CBitrixComponent
 			return;
 		}
 
-		$superset = new SupersetController(Integrator::getInstance());
+		$superset = new SupersetController();
 		$superset->initializeOrCheckSupersetStatus();
 
 		if (SupersetInitializer::isRebindRequired())

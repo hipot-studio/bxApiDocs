@@ -53,28 +53,25 @@ class IntranetUserSettings extends UserSettings
 		$canEditAllUsers = CurrentUser::get()->canDoOperation('edit_all_users');
 		$user = new User();
 
-		$this->filterAvailability[self::ADMIN_FIELD] =
-			$canEditAllUsers
-			&& (
-				!ModuleManager::isModuleInstalled('extranet')
-				|| Option::get('extranet', 'extranet_site', '') === ''
-				|| !$isExtranetSite
-			);
+		$this->filterAvailability[self::ADMIN_FIELD] = $user->isIntranet();
 
 		$this->filterAvailability[self::FIRED_FIELD] =
 			!$isExtranetSite
 			&& (
 				$canEditAllUsers || Option::get('bitrix24', 'show_fired_employees', 'Y') === 'Y'
-			);
+			)
+		;
 
 		$this->filterAvailability[self::INVITED_FIELD] =
 			!ModuleManager::isModuleInstalled('extranet')
 			|| Option::get('extranet', 'extranet_site') == ''
-			|| !$isExtranetSite;
+			|| !$isExtranetSite
+		;
 
 		$this->filterAvailability[self::WAIT_CONFIRMATION_FIELD] =
 			ModuleManager::isModuleInstalled('bitrix24')
-			&& CurrentUser::get()->IsAdmin();
+			&& CurrentUser::get()->IsAdmin()
+		;
 
 		$this->filterAvailability[self::INTEGRATOR_FIELD] =
 			$canEditAllUsers
@@ -85,7 +82,8 @@ class IntranetUserSettings extends UserSettings
 					Option::get("extranet", "extranet_site") <> ''
 					&& !$isExtranetSite
 				)
-			);
+			)
+		;
 
 		$this->filterAvailability[self::VISITOR_FIELD] = $canEditAllUsers;
 

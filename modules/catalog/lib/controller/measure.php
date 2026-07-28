@@ -200,7 +200,13 @@ final class Measure extends Controller implements EventBindInterface
 	{
 		$r = new Result();
 
-		if (!$this->accessController->check(ActionDictionary::ACTION_STORE_VIEW))
+		if (
+			!(
+				$this->accessController->check(ActionDictionary::ACTION_CATALOG_READ)
+				|| $this->accessController->check(ActionDictionary::ACTION_STORE_VIEW)
+			)
+			|| !$this->accessController->check(ActionDictionary::ACTION_MEASURE_EDIT)
+		)
 		{
 			$r->addError($this->getErrorModifyAccessDenied());
 		}

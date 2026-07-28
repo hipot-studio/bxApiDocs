@@ -37,7 +37,6 @@ enum Action: string
 	case CreateChildChat = 'CREATE_CHILD_CHAT';
 	case AttachToParent = 'ATTACH_TO_PARENT';
 	case ManageGuestLink = 'MANAGE_GUEST_LINK';
-	case UpdateGuestLink = 'UPDATE_GUEST_LINK';
 	case UnpinChat = 'UNPIN_CHAT';
 	case ReadChat = 'READ_CHAT';
 
@@ -46,6 +45,8 @@ enum Action: string
 		return match ($this)
 		{
 			self::ChangeMessagesAutoDeleteDelay => GlobalAction::ChangeMessagesAutoDeleteDelay,
+			self::Extend => GlobalAction::Extend,
+			self::ManageGuestLink => GlobalAction::ManageGuestLink,
 			default => null
 		};
 	}

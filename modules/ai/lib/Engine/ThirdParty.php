@@ -217,6 +217,7 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 	public function completions(): void
 	{
 		$http = new HttpClient;
+		$http->setPrivateIp(false);
 		$http->setHeader('Content-Type', 'application/json');
 		$http->setTimeout(self::HTTP_TIMEOUT);
 

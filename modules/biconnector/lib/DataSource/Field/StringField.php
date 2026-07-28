@@ -32,8 +32,18 @@ class StringField extends DatasetField
 	 */
 	public function mapDictionaryToSqlCase(string $fieldName): string
 	{
+		if ($this->dictionary === null)
+		{
+			return $fieldName;
+		}
+
 		ksort($this->dictionary);
-		$helper = $this->dataset->getSqlHelper();
+		$helper = $this->dataset?->getSqlHelper();
+		if ($helper === null)
+		{
+			return $fieldName;
+		}
+
 		$dictionaryForSql = [];
 		foreach ($this->dictionary as $id => $value)
 		{

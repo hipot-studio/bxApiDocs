@@ -5,6 +5,7 @@ declare(strict_types = 1);
 namespace Bitrix\Intranet\Public\Service;
 
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
+use Bitrix\Intranet\Internal\Integration\Main\VerifyEmailService;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
@@ -45,6 +46,18 @@ class OtpSettingsService
 		if ($user)
 		{
 			return (new VerifyPhoneService($user))->canLoginBySms();
+		}
+
+		return false;
+	}
+
+	public function canLoginByEmail(int $userId): bool
+	{
+		$user = (new UserRepository())->getUserById($userId);
+
+		if ($user)
+		{
+			return (new VerifyEmailService($user))->canLoginByEmail();
 		}
 
 		return false;

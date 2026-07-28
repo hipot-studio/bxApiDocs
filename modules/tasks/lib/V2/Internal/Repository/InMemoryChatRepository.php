@@ -63,6 +63,11 @@ class InMemoryChatRepository implements ChatRepositoryInterface
 		return $this->chatIdsByUserIdCache[$userId];
 	}
 
+	public function findTaskIdsByChatIds(array $chatIds): array
+	{
+		return $this->chatRepository->findTaskIdsByChatIds($chatIds);
+	}
+
 	public function save(int $chatId, int $taskId): void
 	{
 		if (isset($this->cache[$taskId]))

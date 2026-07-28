@@ -6,8 +6,10 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 use Bitrix\Intranet\Entity\Type\Phone;
 use Bitrix\Intranet\Internal\Access\Otp\UserPermission;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
+use Bitrix\Intranet\Internal\Integration\Main\VerifyEmailService;
 use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
+use Bitrix\Intranet\Internal\Repository\BackupEmailConfirmationRepository;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
@@ -73,6 +75,7 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		}
 
 		$verifyPhone = new VerifyPhoneService($user);
+		$verifyEmail = new VerifyEmailService($user, new BackupEmailConfirmationRepository());
 		$personalOtp = new PersonalOtp($user);
 		$mobilePush = PersonalMobilePush::createByUser($user);
 
@@ -104,9 +107,10 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		$this->arResult["OTP"]["CAN_USE_RECOVERED_CODES"] = $personalOtp->isActivated()
 			&& $otpSettings->isRecoveredCodesEnabled()
 			&& $user->isCurrent();
+		$otpConfig = $personalOtp->getOtpConfig();
 		if ($canEditOtp)
 		{
-			$this->arResult['OTP']['PUSH_OTP_CONFIG'] = $personalOtp->getOtpConfig();
+			$this->arResult['OTP']['PUSH_OTP_CONFIG'] = $otpConfig;
 		}
 		elseif ($canDeactivateOtp)
 		{
@@ -121,6 +125,8 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		$authPhone = new Phone($user->getAuthPhoneNumber() ?? '');
 		$this->arResult['OTP']['PHONE_NUMBER'] = $authPhone->format(Format::INTERNATIONAL);
 		$this->arResult['OTP']['PHONE_NUMBER_CONFIRMED'] = $verifyPhone->isConfirmed($authPhone);
+		$this->arResult['OTP']['EMAIL'] = $otpConfig['email'] ?? '';
+		$this->arResult['PROVIDE_EMAIL_OTP'] = $verifyEmail->canSendEmail();
 		$this->arResult['PROVIDE_SMS_OTP'] = $verifyPhone->canSendSms();
 
 		$dateDeactivate = $personalOtp->getDeactivateUntil();

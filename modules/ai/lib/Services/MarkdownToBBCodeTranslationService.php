@@ -215,8 +215,10 @@ class MarkdownToBBCodeTranslationService
 	private function extractAndProcessImages(): void
 	{
 		$this->images = [];
+		// CommonMark image: ![alt](url) or ![alt](url "title") / 'title' / (title).
+		// URL is a run without ASCII spaces or ')'; an optional title follows after whitespace.
 		$this->text = preg_replace_callback(
-			'/!\[(.*?)]\((.*?)\)/',
+			'/!\[(.*?)]\(\s*([^\s)]*)(?:\s+(?:"[^"]*"|\'[^\']*\'|\([^)]*\)))?\s*\)/',
 			function (array $m): string {
 				$alt = trim($m[1]);
 				$url = $this->sanitizeUrl($m[2]);

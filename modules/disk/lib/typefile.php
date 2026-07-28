@@ -4,6 +4,7 @@ namespace Bitrix\Disk;
 
 use Bitrix\Disk\Uf\Integration\DiskUploaderController;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\NotImplementedException;
 
 Loc::loadMessages(__FILE__);
 
@@ -196,7 +197,7 @@ final class TypeFile
 	/**
 	 * @param AttachedObject|File|string$file
 	 * @return bool
-	 * @throws \Bitrix\Main\NotImplementedException
+	 * @throws NotImplementedException
 	 */
 	public static function isImage($file): bool
 	{

@@ -127,6 +127,7 @@ class Recent extends \Bitrix\Im\V2\Recent\Recent
 					'SESSION_ID',
 				])
 				->where('USER_ID', $userId)
+				->where(\Bitrix\ImOpenLines\Recent::getActiveLinesFilter())
 				->setOrder(['SESSION_ID' => $orderDirection])
 			;
 

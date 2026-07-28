@@ -2,9 +2,9 @@
 
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\Dashboard as DashboardDto;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
-use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter\DateTime as DashboardDateFilter;
+use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\Date;
@@ -22,7 +22,7 @@ final class AppliedFilters
 	 * columns BEFORE hitting the heavy /overview endpoint. Returns a Result
 	 * with the unknown-name details on failure, no data on success.
 	 */
-	public function validate(DashboardDto $dashboard, array $appliedFilters): Result
+	public function validate(Dto\Dashboard $dashboard, array $appliedFilters): Result
 	{
 		$result = new Result();
 		$validColumns = self::extractValidFilterColumns($dashboard);
@@ -76,6 +76,7 @@ final class AppliedFilters
 	{
 		$result = new Result();
 
+		$hasPeriod = false;
 		foreach ($appliedFilters as $filter)
 		{
 			if (($filter['name'] ?? '') === 'period')
@@ -86,8 +87,13 @@ final class AppliedFilters
 					return $periodCheck;
 				}
 
-				return $result->setData(['filters' => $appliedFilters]);
+				$hasPeriod = true;
 			}
+		}
+
+		if ($hasPeriod)
+		{
+			return $result->setData(['filters' => $appliedFilters]);
 		}
 
 		$resolved = self::resolveDashboardDefaultPeriod($dashboard);
@@ -159,7 +165,7 @@ final class AppliedFilters
 	/**
 	 * @return string[]
 	 */
-	private static function extractValidFilterColumns(DashboardDto $dashboard): array
+	private static function extractValidFilterColumns(Dto\Dashboard $dashboard): array
 	{
 		$valid = ['period'];
 		foreach ($dashboard->nativeFilterConfig as $nf)
@@ -275,7 +281,7 @@ final class AppliedFilters
 	}
 
 	/**
-	 * TODO: reuse DashboardDateFilter once getDateStart/getDateEnd return Date
+	 * TODO: reuse EmbeddedFilter\DateTime once getDateStart/getDateEnd return Date
 	 * (currently typed `?string` but return Date — coerced to DD.MM.YYYY).
 	 */
 	private static function resolveDashboardDefaultPeriod(SupersetDashboard $dashboard): ?array
@@ -283,24 +289,20 @@ final class AppliedFilters
 		$period = $dashboard->getFilterPeriod();
 		if ($period === '' || $period === null)
 		{
-			$period = DashboardDateFilter::getDefaultPeriod();
+			$period = EmbeddedFilter\DateTime::getDefaultPeriod();
 		}
 
-		if ($period === DashboardDateFilter::PERIOD_NONE)
+		if ($period === EmbeddedFilter\DateTime::PERIOD_NONE)
 		{
 			return null;
 		}
 
 		$today = new Date();
 
-		if ($period === DashboardDateFilter::PERIOD_RANGE)
+		if ($period === EmbeddedFilter\DateTime::PERIOD_RANGE)
 		{
-			$from = $dashboard->getDateFilterStart();
-			$to = $dashboard->getDateFilterEnd();
-			if (!$from instanceof Date || !$to instanceof Date)
-			{
-				return null;
-			}
+			$from = $dashboard->getDateFilterStart() ?? EmbeddedFilter\DateTime::getDefaultDateStart();
+			$to = $dashboard->getDateFilterEnd() ?? EmbeddedFilter\DateTime::getDefaultDateEnd();
 
 			return [
 				'from' => $from->format('Y-m-d'),
@@ -308,7 +310,7 @@ final class AppliedFilters
 			];
 		}
 
-		if ($period === DashboardDateFilter::PERIOD_CURRENT_MONTH)
+		if ($period === EmbeddedFilter\DateTime::PERIOD_CURRENT_MONTH)
 		{
 			return [
 				'from' => $today->format('Y-m-01'),
@@ -316,7 +318,7 @@ final class AppliedFilters
 			];
 		}
 
-		if ($period === DashboardDateFilter::PERIOD_CURRENT_YEAR)
+		if ($period === EmbeddedFilter\DateTime::PERIOD_CURRENT_YEAR)
 		{
 			$year = (int)$today->format('Y');
 
@@ -326,7 +328,7 @@ final class AppliedFilters
 			];
 		}
 
-		if ($period === DashboardDateFilter::PERIOD_CURRENT_WEEK)
+		if ($period === EmbeddedFilter\DateTime::PERIOD_CURRENT_WEEK)
 		{
 			$weekDay = (int)$today->format('w');
 			$weekDay = $weekDay === 0 ? 7 : $weekDay;
@@ -337,11 +339,11 @@ final class AppliedFilters
 		}
 
 		$lastDaysMap = [
-			DashboardDateFilter::PERIOD_LAST_7 => 7,
-			DashboardDateFilter::PERIOD_LAST_30 => 30,
-			DashboardDateFilter::PERIOD_LAST_90 => 90,
-			DashboardDateFilter::PERIOD_LAST_180 => 180,
-			DashboardDateFilter::PERIOD_LAST_365 => 365,
+			EmbeddedFilter\DateTime::PERIOD_LAST_7 => 7,
+			EmbeddedFilter\DateTime::PERIOD_LAST_30 => 30,
+			EmbeddedFilter\DateTime::PERIOD_LAST_90 => 90,
+			EmbeddedFilter\DateTime::PERIOD_LAST_180 => 180,
+			EmbeddedFilter\DateTime::PERIOD_LAST_365 => 365,
 		];
 		if (isset($lastDaysMap[$period]))
 		{

@@ -8,6 +8,7 @@ use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
+use Bitrix\Intranet\Internal\Integration\Vibecodeconnector\PermissionSource as VibecodePermissionSource;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Intranet\Service\MobileAppSettings;
@@ -38,6 +39,7 @@ class SecuritySettings extends AbstractSettings
 	private ?User $user;
 	private ?PersonalOtp $personalOtp;
 	private Integration\Rest\AccessPolicy $integrationAccessPolicy;
+	private VibecodePermissionSource $vibecodePermissionSource;
 
 	public function __construct(array $data = [])
 	{
@@ -62,6 +64,7 @@ class SecuritySettings extends AbstractSettings
 		$this->user = (new UserRepository())->getUserById((int)CurrentUser::get()->getId());
 		$this->personalOtp = ($this->user && $this->otpSettings->isAvailable()) ? new PersonalOtp($this->user) : null;
 		$this->integrationAccessPolicy = new Integration\Rest\AccessPolicy();
+		$this->vibecodePermissionSource = new VibecodePermissionSource();
 	}
 
 	public function validate(): ErrorCollection
@@ -134,6 +137,7 @@ class SecuritySettings extends AbstractSettings
 		$this->saveDeviceHistorySettings();
 		$this->saveDataLeakProtectionSettings();
 		$this->saveRestIntegrationSettings();
+		$this->saveVibecodePermissionSource();
 
 		return new Result();
 	}
@@ -368,6 +372,26 @@ class SecuritySettings extends AbstractSettings
 			}
 		}
 
+		if ($this->vibecodePermissionSource->isAvailable())
+		{
+			$data['sectionVibecodePermissionSource'] = new Section(
+				'settings-security-section-vibecode-permission-source',
+				Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_VIBECODE_PERMISSION_SOURCE'),
+				'ui-icon-set --apps',
+				false,
+			);
+
+			$data['switcherVibecodePermissionSource'] = new Switcher(
+				id: 'settings-security-field-vibecode-permission-source',
+				name: 'vibecode_permission_source',
+				label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_VIBECODE_PERMISSION_SOURCE'),
+				value: $this->vibecodePermissionSource->isVibecodeSource() ? 'Y' : 'N',
+				hints: [
+					'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_VIBECODE_PERMISSION_SOURCE'),
+				],
+			);
+		}
+
 		$data['isWaterMarksEnabled'] = new Switcher(
 			id: 'settings-communication-field-isWaterMarksEnabled',
 			name: 'isWaterMarksEnabled',
@@ -572,6 +596,16 @@ class SecuritySettings extends AbstractSettings
 		return $result;
 	}
 
+	private function saveVibecodePermissionSource(): void
+	{
+		if (!isset($this->data['vibecode_permission_source']) || !$this->vibecodePermissionSource->isAvailable())
+		{
+			return;
+		}
+
+		$this->vibecodePermissionSource->setVibecodeSource($this->data['vibecode_permission_source'] === 'Y');
+	}
+
 	private function saveRestIntegrationSettings(): void
 	{
 		if ($this->integrationAccessPolicy->isIncomingWebhookAccessPolicyEnabled())
@@ -694,6 +728,12 @@ class SecuritySettings extends AbstractSettings
 				$searchIndex['rest_local_app_create_rights'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_REST_LOCAL_APP_CREATE');
 				$searchIndex['rest_personal_app_create_rights'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_REST_PERSONAL_APP_CREATE');
 			}
+		}
+
+		if ($this->vibecodePermissionSource->isAvailable())
+		{
+			$searchIndex['settings-security-section-vibecode-permission-source'] = Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_VIBECODE_PERMISSION_SOURCE');
+			$searchIndex['vibecode_permission_source'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_VIBECODE_PERMISSION_SOURCE');
 		}
 
 		$searchEngine = SearchEngine::initWithDefaultFormatter($searchIndex);

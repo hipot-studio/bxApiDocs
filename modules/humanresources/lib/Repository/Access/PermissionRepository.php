@@ -155,6 +155,37 @@ class PermissionRepository
 		return $permissions;
 	}
 
+	/**
+	 * Returns IDs of roles that have the given permission set to any of the given values.
+	 *
+	 * @param string $permissionId
+	 * @param int[] $values values that count as "permission granted"
+	 * @return int[]
+	 */
+	public function getRoleIdsByPermissionValues(string $permissionId, array $values): array
+	{
+		if (empty($values))
+		{
+			return [];
+		}
+
+		$roleIds = [];
+
+		foreach (
+			AccessPermissionTable::query()
+				->addSelect('ROLE_ID')
+				->where('PERMISSION_ID', $permissionId)
+				->whereIn('VALUE', $values)
+				->setCacheTtl(86400)
+				->fetchAll() as $row
+		)
+		{
+			$roleIds[(int)$row['ROLE_ID']] = (int)$row['ROLE_ID'];
+		}
+
+		return array_values($roleIds);
+	}
+
 	public function setPermissionByRoleId(int $roleId, string $permissionId, int $value): void
 	{
 		$rolePermissionId = AccessPermissionTable::query()

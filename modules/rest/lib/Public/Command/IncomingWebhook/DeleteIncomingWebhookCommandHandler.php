@@ -9,6 +9,7 @@ use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Rest\Internal\Access\WebhookAccessChecker;
 use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
 use Bitrix\Rest\Internal\Contract\Repository\IncomingWebhookRepositoryInterface;
+use Bitrix\Rest\Internal\Exception\IncomingWebhook\IncomingWebhookNotFoundException;
 use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
 use Bitrix\Rest\Internal\Repository\IntegrationRepository;
 use Bitrix\Rest\Preset\Provider;
@@ -40,7 +41,7 @@ class DeleteIncomingWebhookCommandHandler
 		$webhook = $this->repository->getByWebhookId($command->webHookPassword);
 		if ($webhook === null)
 		{
-			throw new ObjectNotFoundException('Incoming webhook not found');
+			throw new IncomingWebhookNotFoundException();
 		}
 
 		$accessChecker = new WebhookAccessChecker($command->userId);

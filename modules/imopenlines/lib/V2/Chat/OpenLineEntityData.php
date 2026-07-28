@@ -124,11 +124,21 @@ final class OpenLineEntityData
 	// endregion
 
 	// region entityData3 - additional flags
+	/**
+	 * @deprecated The chat-level hidden messages mode (ENTITY_DATA_3) moved to the personal
+	 * level. Use \Bitrix\ImOpenLines\SilentMode\PersonalSilentMode. Kept during deprecation of
+	 * the legacy field (see ADR/SDD, Q-2).
+	 */
 	public function isSilentModeRaw(): ?string
 	{
 		return $this->entityData3['silentMode'] ?? null;
 	}
 
+	/**
+	 * @deprecated The chat-level hidden messages mode (ENTITY_DATA_3) moved to the personal
+	 * level. Use \Bitrix\ImOpenLines\SilentMode\PersonalSilentMode. Kept during deprecation of
+	 * the legacy field (see ADR/SDD, Q-2).
+	 */
 	public function isSilentMode(): bool
 	{
 		return $this->toBool($this->entityData3['silentMode'] ?? null);

@@ -140,6 +140,8 @@ class Manager
 					'=ACCESS_KEY' => $key,
 					'=ACTIVE' => 'Y',
 				],
+				'limit' => 1,
+				'cache' => ['ttl' => 24 * 60 * 60],
 			])->fetch();
 			if ($dbKey)
 			{
@@ -322,12 +324,61 @@ class Manager
 			else
 			{
 				throw new \Bitrix\Main\Config\ConfigurationException(sprintf(
-					"Class '%s' for '%s' connection is not supported", get_class($conn), $this->connectionName
+					"Class '%s' for '%s' connection is not supported", ($conn !== null ? get_class($conn) : 'null'), $this->connectionName
 				));
 			}
 		}
 
 		return $conn;
+	}
+
+	/**
+	 * @param array $queryMetadata Query metadata from Superset/Trino (bx_query_metadata contract).
+	 *
+	 * @return array
+	 */
+	public static function normalizeQueryMetadata(array $queryMetadata): array
+	{
+		$result = [];
+
+		$source = (string)($queryMetadata['source'] ?? '');
+		if ($source)
+		{
+			$result['SOURCE'] = $source;
+		}
+
+		foreach (['dashboard_id' => 'EXTERNAL_DASHBOARD_ID', 'dataset_id' => 'EXTERNAL_DATASET_ID'] as $metadataKey => $field)
+		{
+			if (isset($queryMetadata[$metadataKey]) && is_int($queryMetadata[$metadataKey]))
+			{
+				$result[$field] = $queryMetadata[$metadataKey];
+			}
+		}
+
+		// CHART_ID is a string: charts use numeric ids, dashboard native filters use string ids.
+		if (isset($queryMetadata['chart_id']))
+		{
+			$rawChartId = $queryMetadata['chart_id'];
+			if (is_string($rawChartId) || is_int($rawChartId))
+			{
+				$value = (string)$rawChartId;
+				if ($value !== '')
+				{
+					$result['EXTERNAL_CHART_ID'] = mb_strlen($value) > 255 ? mb_substr($value, 0, 255) : $value;
+				}
+			}
+		}
+
+		foreach (['dashboard_name' => 'EXTERNAL_DASHBOARD_NAME', 'chart_name' => 'EXTERNAL_CHART_NAME', 'dataset_name' => 'EXTERNAL_DATASET_NAME'] as $metadataKey => $field)
+		{
+			if (isset($queryMetadata[$metadataKey]) && is_string($queryMetadata[$metadataKey]))
+			{
+				$value = $queryMetadata[$metadataKey];
+				$result[$field] = mb_strlen($value) > 1024 ? mb_substr($value, 0, 1021) . '...' : $value;
+			}
+		}
+
+		return $result;
 	}
 
 	/**
@@ -339,10 +390,19 @@ class Manager
 	 * @param string $input Raw command input.
 	 * @param string $requestMethod Request method (POST, GET, etc.).
 	 * @param string $requestUri Request URI.
+	 * @param array|null $queryMetadata Query metadata from Superset/Trino (bx_query_metadata contract).
 	 *
 	 * @return int|false
 	 */
-	public function startQuery($sourceId, $fields = '', $filters = '', $input = '', $requestMethod = '', $requestUri = '')
+	public function startQuery(
+		$sourceId,
+		$fields = '',
+		$filters = '',
+		$input = '',
+		$requestMethod = '',
+		$requestUri = '',
+		?array $queryMetadata = null,
+	)
 	{
 		$now = new \Bitrix\Main\Type\DateTime();
 
@@ -374,11 +434,31 @@ class Manager
 			$statData['REQUEST_URI'] = $requestUri;
 		}
 
+		if ($queryMetadata !== null)
+		{
+			$statData += self::normalizeQueryMetadata($queryMetadata);
+		}
+
 		if ($this->keyId)
 		{
-			\Bitrix\BIConnector\KeyTable::update($this->keyId, [
-				'LAST_ACTIVITY_DATE' => $now,
-			]);
+			$cache = \Bitrix\Main\Data\Cache::createInstance();
+			$cacheTtl = 24 * 60 * 60;
+			$cacheId = 'key_last_activity_' . $this->keyId;
+			$cacheDir = '/biconnector/key_last_activity/';
+
+			$today = (new \Bitrix\Main\Type\Date())->format('Y-m-d');
+
+			if (!$cache->initCache($cacheTtl, $cacheId, $cacheDir) || $cache->getVars() !== $today)
+			{
+				$updateResult = \Bitrix\BIConnector\KeyTable::update($this->keyId, [
+					'LAST_ACTIVITY_DATE' => $now,
+				]);
+
+				if ($updateResult->isSuccess() && $cache->startDataCache($cacheTtl, $cacheId, $cacheDir))
+				{
+					$cache->endDataCache($today);
+				}
+			}
 		}
 
 		$addResult = \Bitrix\BIConnector\LogTable::add($statData);

@@ -256,7 +256,7 @@ abstract class Importer
 				break;
 
 			case BIConnector\ExternalSource\FieldType::Double:
-				$delimiter = $field->format;
+				$delimiter = $field->format ?? '.';
 				$result = BIConnector\ExternalSource\TypeConverter::convertToDouble(
 					$value,
 					delimiter: $delimiter
@@ -265,7 +265,7 @@ abstract class Importer
 				break;
 
 			case BIConnector\ExternalSource\FieldType::Date:
-				$format = $field->format;
+				$format = $field->format ?? '';
 				$result = BIConnector\ExternalSource\TypeConverter::convertToDate(
 					$value,
 					$format
@@ -274,7 +274,7 @@ abstract class Importer
 				break;
 
 			case BIConnector\ExternalSource\FieldType::DateTime:
-				$format = $field->format;
+				$format = $field->format ?? '';
 				$result = BIConnector\ExternalSource\TypeConverter::convertToDateTime(
 					$value,
 					$format,
@@ -284,7 +284,7 @@ abstract class Importer
 				break;
 
 			case BIConnector\ExternalSource\FieldType::Money:
-				$delimiter = $field->format;
+				$delimiter = $field->format ?? '.';
 				$result = BIConnector\ExternalSource\TypeConverter::convertToMoney(
 					$value,
 					delimiter: $delimiter

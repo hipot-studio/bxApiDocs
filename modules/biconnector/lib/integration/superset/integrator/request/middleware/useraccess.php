@@ -2,8 +2,7 @@
 
 namespace Bitrix\BIConnector\Integration\Superset\Integrator\Request\Middleware;
 
-use Bitrix\BIConnector\Access\Superset\Synchronizer;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorRequest;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
@@ -13,7 +12,6 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Result;
-use Bitrix\Main\Error;
 
 final class UserAccess extends Base
 {
@@ -45,7 +43,7 @@ final class UserAccess extends Base
 		{
 			if (!$user->clientId)
 			{
-				$superset = new SupersetController(Integrator::getInstance());
+				$superset = new SupersetController();
 				$result = $superset->createUser($user->id);
 				if ($result->isSuccess())
 				{
@@ -101,7 +99,7 @@ final class UserAccess extends Base
 	{
 		$result = new Result();
 
-		$integrator = Integrator::getInstance();
+		$integrator = IntegratorFactory::getInstance();
 
 		if ($user->active)
 		{

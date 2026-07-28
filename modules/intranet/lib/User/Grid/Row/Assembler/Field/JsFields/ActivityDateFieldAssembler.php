@@ -2,13 +2,9 @@
 
 namespace Bitrix\Intranet\User\Grid\Row\Assembler\Field\JsFields;
 
-use Bitrix\Intranet\CurrentUser;
-use Bitrix\Intranet\User\Grid\Settings\UserSettings;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Grid\Settings;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ModuleManager;
 
 class ActivityDateFieldAssembler extends JsExtensionFieldAssembler
 {
@@ -38,7 +34,7 @@ class ActivityDateFieldAssembler extends JsExtensionFieldAssembler
 			'enabled' => $this->getSettings()->isInvitationAvailable(),
 			'email' => $rawValue['EMAIL'],
 			'phoneNumber' => $rawValue['PERSONAL_MOBILE'],
-			'isExtranet' => empty($rawValue['UF_DEPARTMENT']),
+			'isExtranet' => $this->getSettings()->isUserExtranetById((int)$rawValue['ID']),
 			'isCloud' => Loader::includeModule('bitrix24')
 		];
 	}

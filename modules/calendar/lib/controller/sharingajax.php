@@ -112,6 +112,11 @@ class SharingAjax extends \Bitrix\Main\Engine\Controller
 					new ActionFilter\Cors(),
 				],
 			],
+			'enableAndGetSharingConfig' => [
+				'+prefilters' => [
+					new RestrictExternalUser(),
+				],
+			],
 			'enableUserSharing' => [
 				'+prefilters' => [
 					new RestrictExternalUser(),
@@ -151,6 +156,35 @@ class SharingAjax extends \Bitrix\Main\Engine\Controller
 	public function disableOptionPayAttentionToNewSharingFeatureAction(): void
 	{
 		Sharing\Helper::disableOptionPayAttentionToNewSharingFeature();
+	}
+
+	public function enableAndGetSharingConfigAction(): ?array
+	{
+		$sharing = new Sharing\Sharing($this->userId);
+		if (!$sharing->isEnabled())
+		{
+			$result = $sharing->enable();
+
+			if (!$result->isSuccess())
+			{
+				$this->addErrors($result->getErrors());
+
+				return null;
+			}
+		}
+
+		$portalCalendarConfig = \CCalendar::GetSettings();
+
+		return [
+			'link' => $sharing->getLinkInfo(),
+			'userCalendarSettings' => [
+				'week_holidays' => $portalCalendarConfig['week_holidays'],
+				'week_start' => $portalCalendarConfig['week_start'],
+				'work_time_start' => $portalCalendarConfig['work_time_start'],
+				'work_time_end' => $portalCalendarConfig['work_time_end'],
+			],
+			'user' => $sharing->getUserInfo(),
+		];
 	}
 
 	/**

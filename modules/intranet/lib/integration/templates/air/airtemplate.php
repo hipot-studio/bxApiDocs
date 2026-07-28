@@ -234,7 +234,7 @@ final class AirTemplate
 	{
 		$attributes = [];
 
-		$savedWidth = (int)\CUserOptions::GetOption('intranet', 'right_panel_width', '380');
+		$savedWidth = (int)\CUserOptions::GetOption('intranet', 'right_panel_width', '360');
 
 		$attributes[] = 'style="--air-right-panel-width: ' . $savedWidth . 'px"';
 

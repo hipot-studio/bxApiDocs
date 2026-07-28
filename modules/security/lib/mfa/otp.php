@@ -51,6 +51,9 @@ class Otp
 	protected $skipMandatory = null;
 	/** @var Type\DateTime */
 	protected $deactivateUntil = null;
+	protected $email = null;
+	/** @var Type\DateTime */
+	protected $dateSentEmail = null;
 
 	/**
 	 * @param OtpType | null $type
@@ -136,6 +139,28 @@ class Otp
 	public function getInitParams(): array
 	{
 		return $this->initParams;
+	}
+
+	public function setEmail(?string $email)
+	{
+		$this->email = $email;
+		return $this;
+	}
+
+	public function getEmail(): ?string
+	{
+		return $this->email;
+	}
+
+	public function setDateSentEmail(?Type\DateTime $dateSentEmail)
+	{
+		$this->dateSentEmail = $dateSentEmail;
+		return $this;
+	}
+
+	public function getDateSentEmail(): ?Type\DateTime
+	{
+		return $this->dateSentEmail;
 	}
 
 	/**
@@ -330,6 +355,8 @@ class Otp
 			'PARAMS' => $this->getParams(),
 			'SKIP_MANDATORY' => $this->isMandatorySkipped() ? 'Y' : 'N',
 			'DEACTIVATE_UNTIL' => $this->getDeactivateUntil(),
+			'EMAIL' => $this->getEmail(),
+			'DATE_SENT_EMAIL' => $this->getDateSentEmail(),
 		];
 
 		if ($this->regenerated)
@@ -474,21 +501,13 @@ class Otp
 			->setAttempts($userInfo['ATTEMPTS'])
 			->setSecret($userInfo['SECRET'])
 			->setInitParams($userInfo['INIT_PARAMS'])
+			->setInitialDate($userInfo['INITIAL_DATE'])
 			->setParams($userInfo['PARAMS'])
 			->setSkipMandatory($userInfo['SKIP_MANDATORY'])
+			->setDeactivateUntil($userInfo['DEACTIVATE_UNTIL'])
+			->setEmail($userInfo['EMAIL'])
+			->setDateSentEmail($userInfo['DATE_SENT_EMAIL'])
 		;
-
-		// Old users haven't INITIAL_DATE and DEACTIVATE_UNTIL
-		// ToDo: maybe it's not the best approach, think about it later
-		if ($userInfo['INITIAL_DATE'])
-		{
-			$this->setInitialDate($userInfo['INITIAL_DATE']);
-		}
-
-		if ($userInfo['DEACTIVATE_UNTIL'])
-		{
-			$this->setDeactivateUntil($userInfo['DEACTIVATE_UNTIL']);
-		}
 
 		return $this;
 	}
@@ -496,10 +515,10 @@ class Otp
 	/**
 	 * Set new OTP initialization date
 	 *
-	 * @param Type\DateTime $date Initialization date.
+	 * @param Type\DateTime|null $date Initialization date.
 	 * @return $this
 	 */
-	protected function setInitialDate(Type\DateTime $date)
+	protected function setInitialDate(?Type\DateTime $date)
 	{
 		$this->initialDate = $date;
 
@@ -509,7 +528,7 @@ class Otp
 	/**
 	 * Returns OTP initialization date
 	 *
-	 * @return Type\DateTime
+	 * @return Type\DateTime|null
 	 */
 	public function getInitialDate()
 	{
@@ -522,7 +541,7 @@ class Otp
 	 * @param Type\DateTime|null $date Datetime. "null" means never.
 	 * @return $this
 	 */
-	protected function setDeactivateUntil($date)
+	protected function setDeactivateUntil(?Type\DateTime $date)
 	{
 		$this->deactivateUntil = $date;
 
@@ -530,7 +549,7 @@ class Otp
 	}
 
 	/**
-	 * @return Type\DateTime
+	 * @return Type\DateTime|null
 	 */
 	public function getDeactivateUntil()
 	{
@@ -1493,7 +1512,7 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	public static function isOtpEnabled()
+	public static function isOtpEnabled(): bool
 	{
 		return (Option::get('security', 'otp_enabled') === 'Y');
 	}
@@ -1503,12 +1522,22 @@ class Otp
 	 *
 	 * @return bool
 	 */
-	public static function isRecoveryCodesEnabled()
+	public static function isRecoveryCodesEnabled(): bool
 	{
 		return (Option::get('security', 'otp_allow_recovery_codes') === 'Y');
 	}
 
-	public static function isPushPossible()
+	public static function isSmsEnabled(): bool
+	{
+		return (Option::get('security', 'otp_allow_sms') !== 'N');
+	}
+
+	public static function isEmailEnabled(): bool
+	{
+		return (Option::get('security', 'otp_allow_email') === 'Y');
+	}
+
+	public static function isPushPossible(): bool
 	{
 		if (Main\ModuleManager::isModuleInstalled('mobile') && Main\Loader::includeModule('pull') && \CPullOptions::GetQueueServerStatus())
 		{
@@ -1537,7 +1566,7 @@ class Otp
 
 		if ($cacheTtl !== false)
 		{
-			$cacheId = "otp_users_{$userId}";
+			$cacheId = "otp_users_{$userId}_v1";
 			$cacheDir = static::getCacheDir($userId);
 
 			if ($cache->read($cacheTtl, $cacheId, $cacheDir))
@@ -1548,7 +1577,7 @@ class Otp
 
 		// note USER.ACTIVE - need a special handling on user change
 		$userInfo = UserTable::getRowById($userId, [
-			'select' => ['ACTIVE', 'USER_ID', 'SECRET', 'INIT_PARAMS', 'PARAMS', 'TYPE', 'ATTEMPTS', 'INITIAL_DATE', 'SKIP_MANDATORY', 'DEACTIVATE_UNTIL', 'USER_ACTIVE' => 'USER.ACTIVE'],
+			'select' => ['*', 'USER_ACTIVE' => 'USER.ACTIVE'],
 		]);
 
 		if ($cacheTtl !== false)
@@ -1563,11 +1592,19 @@ class Otp
 	{
 		if (static::getCacheTtl() !== false)
 		{
-			$cacheId = "otp_users_{$userId}";
+			$cacheId = "otp_users_{$userId}_v1";
 			$cacheDir = static::getCacheDir($userId);
 
 			$cache = Application::getInstance()->getManagedCache();
 			$cache->clean($cacheId, $cacheDir);
 		}
+	}
+
+	public static function getAuditTypes()
+	{
+		return [
+			"SECURITY_OTP" => "[SECURITY_OTP] " . Loc::getMessage('SECURITY_OTP_AUDIT_OTP'),
+			"SECURITY_OTP_SENDING" => "[SECURITY_OTP_SENDING] " . Loc::getMessage('SECURITY_OTP_AUDIT_OTP_SENDING'),
+		];
 	}
 }

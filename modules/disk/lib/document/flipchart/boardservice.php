@@ -90,7 +90,11 @@ class BoardService
 				return false;
 				break;
 		}
-		$downloadResult = $boardApiService->downloadBoard("/api/v1/flip/{$boardId}/download", isNewBoard: $isNewBoard);
+		$downloadResult = $boardApiService->downloadBoard(
+			"/api/v1/flip/{$boardId}/download",
+			isNewBoard: $isNewBoard,
+			documentId: $boardId,
+		);
 		if (!$downloadResult->isSuccess())
 		{
 			return new Error('Could not download the file.');

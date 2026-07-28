@@ -100,8 +100,8 @@ class DocumentSaleOrderItem extends Dataset
 		$shipmentJoin = $this->getShipmentJoin();
 		$shipmentStoreJoin = $this->getShipmentStoreJoin();
 		$shipmentBatchJoin = $this->getShipmentBatchJoin();
-		$batchAmountField = $shipmentBatchJoin->getJoinFieldName('AMOUNT');
-		$batchPriceField = $shipmentBatchJoin->getJoinFieldName('BATCH_PRICE');
+		$batchNumeratorField = $shipmentBatchJoin->getJoinFieldName('COST_NUMERATOR');
+		$batchDenominatorField = $shipmentBatchJoin->getJoinFieldName('COST_DENOMINATOR');
 
 		return [
 			(new IntegerField('ID'))
@@ -128,7 +128,7 @@ class DocumentSaleOrderItem extends Dataset
 			(new DoubleField('COST_PRICE'))
 				->setExpression("
 					CAST(
-						SUM(-{$batchAmountField} * {$batchPriceField}) / NULLIF(SUM(-{$batchAmountField}), 0)
+						SUM({$batchNumeratorField}) / NULLIF(SUM({$batchDenominatorField}), 0)
 						AS DECIMAL(18,4)
 					)
 				")
@@ -177,10 +177,22 @@ class DocumentSaleOrderItem extends Dataset
 		{
 			$shipmentStoreField = $this->getShipmentStoreJoin()->getJoinFieldName('ID');
 
+			// Pre-aggregate batch rows to one row per SHIPMENT_ITEM_STORE_ID so the join
+			// does not multiply SHIPMENT_STORE rows when an item is consumed from multiple FIFO lots.
+			$preAggregated = "(
+				SELECT
+					SHIPMENT_ITEM_STORE_ID,
+					SUM(-AMOUNT * BATCH_PRICE) AS COST_NUMERATOR,
+					SUM(-AMOUNT) AS COST_DENOMINATOR,
+					MAX(BATCH_CURRENCY) AS BATCH_CURRENCY
+				FROM b_catalog_store_batch_docs_element
+				GROUP BY SHIPMENT_ITEM_STORE_ID
+			)";
+
 			$this->shipmentBatchJoin = $this->createJoin(
 				'SHIPMENT_BATCH',
-				"LEFT JOIN b_catalog_store_batch_docs_element SHIPMENT_BATCH ON SHIPMENT_BATCH.SHIPMENT_ITEM_STORE_ID = {$shipmentStoreField}",
-				"LEFT JOIN b_catalog_store_batch_docs_element SHIPMENT_BATCH ON SHIPMENT_BATCH.SHIPMENT_ITEM_STORE_ID = {$shipmentStoreField}"
+				"LEFT JOIN {$preAggregated} SHIPMENT_BATCH ON SHIPMENT_BATCH.SHIPMENT_ITEM_STORE_ID = {$shipmentStoreField}",
+				"LEFT JOIN {$preAggregated} SHIPMENT_BATCH ON SHIPMENT_BATCH.SHIPMENT_ITEM_STORE_ID = {$shipmentStoreField}"
 			);
 		}
 

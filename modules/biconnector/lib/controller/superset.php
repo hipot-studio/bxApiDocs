@@ -46,7 +46,7 @@ class Superset extends Controller
 	{
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_ACCESS))
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_CACHE_RIGHTS_ERROR')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_CACHE_RIGHTS_ERROR') ?? ''));
 
 			return null;
 		}
@@ -59,7 +59,7 @@ class Superset extends Controller
 				'BICONNECTOR_CONTROLLER_SUPERSET_CACHE_TIMEOUT',
 				ceil($time / 60),
 				['#COUNT#' => ceil($time / 60)],
-			);
+			) ?? '';
 			$this->addError(new Error($errorMessage));
 
 			return null;

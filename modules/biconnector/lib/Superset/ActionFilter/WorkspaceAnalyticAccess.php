@@ -17,14 +17,14 @@ class WorkspaceAnalyticAccess extends Base
 	{
 		if (!BIConnector\Configuration\Feature::isExternalEntitiesEnabled())
 		{
-			$this->addError(new Error(Loc::getMessage('BI_ACTION_FILTER_WORKSPACE_FEATURE')));
+			$this->addError(new Error(Loc::getMessage('BI_ACTION_FILTER_WORKSPACE_FEATURE') ?? ''));
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
 		}
 
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG))
 		{
-			$this->addError(new Error(Loc::getMessage('BI_ACTION_FILTER_WORKSPACE_ACCESS')));
+			$this->addError(new Error(Loc::getMessage('BI_ACTION_FILTER_WORKSPACE_ACCESS') ?? ''));
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
 		}

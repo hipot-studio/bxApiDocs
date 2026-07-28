@@ -2,10 +2,12 @@
 
 namespace Bitrix\Im\V2\Application;
 
+use Bitrix\AiAssistant\Config\Restriction as AiAssistantRestriction;
 use Bitrix\Im\Integration\Socialservices\Zoom;
 use Bitrix\Im\Integration\Disk\Documents;
 use Bitrix\Im\Settings;
 use Bitrix\Im\V2\Chat\CopilotChat;
+use Bitrix\Im\V2\Guest\GuestService;
 use Bitrix\Im\V2\Integration\AI\Restriction;
 use Bitrix\Im\V2\Integration\AiAssistant\AiAssistantService;
 use Bitrix\Im\V2\Integration\AiAssistant\WebSearchService;
@@ -75,6 +77,7 @@ class Features
 		public readonly bool $isAiAssistantAgentModeAvailable,
 		public readonly bool $isChatFoldersAvailable,
 		public readonly bool $isAiAssistantRegenerateAvailable,
+		public readonly bool $isCopilotDraftChatAvailable,
 	){}
 
 	public static function get(): self
@@ -133,7 +136,7 @@ class Features
 			isAddingUserByMentionAvailable: self::isAddingUserByMentionAvailable(),
 			isExternalChatMessageForwardingAvailable: self::isExternalChatMessageForwardingAvailable(),
 			isNestedChatAvailable: Collab::isNewProjectsAvailable(),
-			isChatWithGuestsAvailable: self::isChatWithGuestsAvailable(),
+			isChatWithGuestsAvailable: self::isChatWithGuestsAvailable(GuestService::getInstance()->getCurrentInviterId()),
 			isCopilotForceSearchAvailable: self::isCopilotForceSearchAvailable(),
 			isCopilotWebSearchEnabledByAdmin: self::isCopilotWebSearchEnabledByAdmin(),
 			isCopilotWebSearchAllowedByTariff: self::isCopilotWebSearchAllowedByTariff(),
@@ -141,6 +144,7 @@ class Features
 			isAiAssistantAgentModeAvailable: self::isAiAssistantAgentModeAvailable(),
 			isChatFoldersAvailable: self::isChatFoldersAvailable(),
 			isAiAssistantRegenerateAvailable: self::isAiAssistantRegenerateAvailable(),
+			isCopilotDraftChatAvailable: self::isCopilotDraftChatAvailable(),
 		);
 	}
 
@@ -249,6 +253,11 @@ class Features
 
 	public static function isAiAssistantMcpSelectorAvailable(): bool
 	{
+		if (self::isAiAssistantRestricted())
+		{
+			return false;
+		}
+
 		return Option::get('im', 'ai_assistant_mcp_selector_available', 'N') === 'Y';
 	}
 
@@ -298,9 +307,14 @@ class Features
 		return Option::get('im', 'external_chat_message_forwarding_available', 'N') === 'Y';
 	}
 
-	public static function isChatWithGuestsAvailable(): bool
+	public static function isChatWithGuestsAvailable(?int $inviterId = null): bool
 	{
-		return Option::get('im', 'chat_with_guests_available', 'N') === 'Y';
+		if (Option::get('im', 'chat_with_guests_available', 'N') === 'Y')
+		{
+			return true;
+		}
+
+		return \CUserOptions::GetOption('im', 'chat_with_guests_available_user', 'N', $inviterId ?? false) === 'Y';
 	}
 
 	public static function isCopilotForceSearchAvailable(): bool
@@ -318,7 +332,19 @@ class Features
 
 	public static function isAiAssistantAgentModeAvailable(): bool
 	{
+		if (self::isAiAssistantRestricted())
+		{
+			return false;
+		}
+
 		return Option::get('im', 'ai_assistant_agent_mode_available', 'N') === 'Y';
+	}
+
+	private static function isAiAssistantRestricted(): bool
+	{
+		return Loader::includeModule('aiassistant')
+			&& class_exists(AiAssistantRestriction::class)
+			&& !AiAssistantRestriction::getInstance()->isAvailable();
 	}
 
 	public static function isChatFoldersAvailable(): bool
@@ -339,5 +365,10 @@ class Features
 	public static function isAiAssistantRegenerateAvailable(): bool
 	{
 		return Option::get('im', 'ai_assistant_regenerate_available', 'N') === 'Y';
+	}
+
+	public static function isCopilotDraftChatAvailable(): bool
+	{
+		return Option::get('im', 'copilot_draft_chat_available', 'N') === 'Y';
 	}
 }

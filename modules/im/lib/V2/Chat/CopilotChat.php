@@ -3,7 +3,9 @@
 namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Im;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Param\Params as ChatParams;
 use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Integration\AI\EngineManager;
 use Bitrix\Im\V2\Integration\AI\AIHelper;
@@ -14,6 +16,8 @@ use Bitrix\Im\V2\Relation\DeleteUserConfig;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Message\Params;
+use Bitrix\Im\V2\Message\Send\SendingConfig;
+use Bitrix\Im\V2\Message\Send\SendResult;
 use Bitrix\ImBot\Bot;
 use Bitrix\Imbot\Bot\CopilotChatBot;
 use Bitrix\Main\Loader;
@@ -91,27 +95,13 @@ class CopilotChat extends GroupChat
 	{
 		$result = new AddResult();
 
-		if (!Loader::includeModule('imbot'))
+		$availability = self::checkCopilotAvailability();
+		if (!$availability->isSuccess())
 		{
-			return $result->addError(new ChatError(ChatError::IMBOT_NOT_INSTALLED));
-		}
-
-		if (!self::isAvailable())
-		{
-			return $result->addError(new Error(CopilotError::AI_NOT_AVAILABLE));
-		}
-
-		if (!self::isActive())
-		{
-			return $result->addError(new Error(CopilotError::AI_NOT_ACTIVE));
+			return $result->addErrors($availability->getErrors());
 		}
 
 		$copilotBotId = AIHelper::getCopilotBotId();
-
-		if (!$copilotBotId)
-		{
-			return $result->addError(new Error(ChatError::COPILOT_NOT_INSTALLED));
-		}
 
 		if (isset($params['USERS']))
 		{
@@ -204,10 +194,22 @@ class CopilotChat extends GroupChat
 		return;
 	}
 
-	public function sendBanner(?int $authorId = null, ?string $copilotName = null, ?bool $isUpdate = false): void
+	public function sendBanner(?int $authorId = null, ?string $copilotName = null, bool $isUpdate = false): void
 	{
 		$roleManager = (new Im\V2\Integration\AI\RoleManager())->setContextUser($this->getContext()->getUser());
 		$copilotCode = $roleManager->getValidRoleCode($roleManager->getMainRole($this->getChatId()));
+		$defaultRoleCode = Im\V2\Integration\AI\RoleManager::getDefaultRoleCode();
+
+		if (
+			!$isUpdate
+			&& Features::get()->isBitrixGptV2Available
+			&& Features::get()->isCopilotDraftChatAvailable
+			&& $defaultRoleCode !== null
+			&& $copilotCode === $defaultRoleCode
+		)
+		{
+			return;
+		}
 
 		if (!isset($copilotName))
 		{
@@ -274,6 +276,52 @@ class CopilotChat extends GroupChat
 	public function containsCopilot(): bool
 	{
 		return true;
+	}
+
+	public static function activateDraftIfNeeded(Chat $chat): void
+	{
+		if ($chat instanceof self)
+		{
+			$chat->activateDraftChat();
+		}
+	}
+
+	public function isDraftChat(): bool
+	{
+		return $this->getChatParams()->get(ChatParams::IS_COPILOT_DRAFT) !== null;
+	}
+
+	public function activateDraftChat(): void
+	{
+		if (!$this->isDraftChat())
+		{
+			return;
+		}
+
+		$this->getChatParams()->deleteParam(ChatParams::IS_COPILOT_DRAFT);
+		$this->addIndex();
+	}
+
+	public function sendMessage(Im\V2\Message $message, ?SendingConfig $sendingConfig = null): SendResult
+	{
+		$result = parent::sendMessage($message, $sendingConfig);
+
+		if ($result->isSuccess() && $result->getMessageId())
+		{
+			$this->activateDraftChat();
+		}
+
+		return $result;
+	}
+
+	protected function addIndex(): self
+	{
+		if ($this->isDraftChat())
+		{
+			return $this;
+		}
+
+		return parent::addIndex();
 	}
 
 	private function getUsersForBanner(array $addedUsers): string
@@ -351,6 +399,33 @@ class CopilotChat extends GroupChat
 	public static function isAvailable(): bool
 	{
 		return (new Restriction())->isAvailable();
+	}
+
+	public static function checkCopilotAvailability(): Result
+	{
+		$result = new Result();
+
+		if (!Loader::includeModule('imbot'))
+		{
+			return $result->addError(new ChatError(ChatError::IMBOT_NOT_INSTALLED));
+		}
+
+		if (!self::isAvailable())
+		{
+			return $result->addError(new Error(CopilotError::AI_NOT_AVAILABLE));
+		}
+
+		if (!self::isActive())
+		{
+			return $result->addError(new Error(CopilotError::AI_NOT_ACTIVE));
+		}
+
+		if (!AIHelper::getCopilotBotId())
+		{
+			return $result->addError(new Error(ChatError::COPILOT_NOT_INSTALLED));
+		}
+
+		return $result;
 	}
 
 	public static function isHistoryAvailable(): bool

@@ -74,6 +74,13 @@ class MarketAppInstaller
 			return $result;
 		}
 
+		if (!isset($installResult['id']))
+		{
+			$result->addError(new Error('Has no id after installation'));
+
+			return $result;
+		}
+
 		$importResult = $this->importConfiguration($installResult['id']);
 		if (!$importResult->isSuccess())
 		{
@@ -93,6 +100,13 @@ class MarketAppInstaller
 		$result = new Result();
 
 		$app = AppTable::getRowById($appId);
+		if ($app === null)
+		{
+			$result->addError(new Error("App with id {$appId} not found"));
+
+			return $result;
+		}
+
 		$prepareArchiveResult = $this->prepareArchive($app);
 		if (!$prepareArchiveResult->isSuccess())
 		{
@@ -104,6 +118,8 @@ class MarketAppInstaller
 		if (!$prepareContentResult->isSuccess())
 		{
 			$result->addErrors($prepareContentResult->getErrors());
+
+			return $result;
 		}
 
 		$content = $prepareContentResult->getData()['content'];
@@ -268,7 +284,7 @@ class MarketAppInstaller
 		}
 
 		$content = $provider->getContent($path, $step);
-		if ($content['ERROR_CODE'])
+		if (!empty($content['ERROR_CODE']))
 		{
 			$result->addError(new Error("prepareContent: \Bitrix\Rest\Configuration\DataProvider\ProviderBase::getContent caught {$content['ERROR_CODE']} exception."));
 

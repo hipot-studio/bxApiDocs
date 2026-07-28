@@ -32,7 +32,7 @@ class Sql extends Base
 	 */
 	protected function getQueryErrorMessage(): string
 	{
-		return $this->getConnection()->getErrorMessage();
+		return $this->getConnection()?->getErrorMessage() ?? '';
 	}
 
 	/**
@@ -52,6 +52,12 @@ class Sql extends Base
 	{
 		$result = new Result();
 		$data = $this->getFormattedData($parameters, $dateFormats);
+		if (isset($data['error']))
+		{
+			$result->addError(new Error($data['error']));
+
+			return $result;
+		}
 
 		$resultQuery = $this->biQuery($data['sql']);
 		if (!$resultQuery)
@@ -263,10 +269,15 @@ class Sql extends Base
 			$primaryKey = null;
 			foreach ($tableInfo['FIELDS'] as $id => $fieldInfo)
 			{
-				if ($fieldInfo['IS_PRIMARY'] === 'Y')
+				if (($fieldInfo['IS_PRIMARY'] ?? null) === 'Y')
 				{
 					$primaryKey = $fieldInfo['FIELD_NAME'];
-					$helper = $this->getConnection()->getSqlHelper();
+					$connection = $this->getConnection();
+					if (!$connection)
+					{
+						break;
+					}
+					$helper = $connection->getSqlHelper();
 					$primaryKey = $helper->forSql($primaryKey);
 
 					break;

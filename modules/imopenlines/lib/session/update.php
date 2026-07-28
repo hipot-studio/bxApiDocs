@@ -8,6 +8,7 @@ use Bitrix\ImOpenLines\Config;
 use Bitrix\ImOpenLines\ConfigStatistic;
 use Bitrix\ImOpenLines\Connector;
 use Bitrix\ImOpenLines\Debug;
+use Bitrix\ImOpenLines\Im;
 use Bitrix\ImOpenLines\Mail;
 use Bitrix\ImOpenLines\Model\SessionCheckTable;
 use Bitrix\ImOpenLines\Model\SessionTable;
@@ -338,9 +339,19 @@ class Update
 			&& !$this->skipRecent
 		)
 		{
-			$relation = new Relation($this->session->getSessionField('CHAT_ID'));
-			$relation->removeAllRelations(false, [(int)$this->session->getSessionField('OPERATOR_ID')]);
+			$chatId = (int)$this->session->getSessionField('CHAT_ID');
+			$operatorId = (int)$this->session->getSessionField('OPERATOR_ID');
+
+			$relation = new Relation($chatId);
+			$removedOperatorIds = array_values(array_diff(
+				array_map('intval', $relation->getRelationUserIds()),
+				[$operatorId]
+			));
+
+			$relation->removeAllRelations(false, [$operatorId]);
 			Recent::clearRecent($this->session->getSessionField('ID'));
+
+			Im::clearOpenLineCounter($chatId, $removedOperatorIds);
 		}
 	}
 

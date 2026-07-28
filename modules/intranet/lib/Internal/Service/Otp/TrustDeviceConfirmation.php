@@ -5,6 +5,7 @@ declare(strict_types = 1);
 namespace Bitrix\Intranet\Internal\Service\Otp;
 
 use Bitrix\Intranet\Entity\User;
+use Bitrix\Intranet\Internal\Integration\Main\VerifyEmailService;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\Type\Date;
@@ -63,6 +64,7 @@ class TrustDeviceConfirmation
 			...$this->personalOtpSettings->getOtpConfig(),
 			'isDeactivated' => !$this->personalOtpSettings->isActivated(),
 			'canSendSms' => (new VerifyPhoneService(new User($this->userId)))->canSendSms(),
+			'canSendEmail' => (new VerifyEmailService(new User($this->userId)))->canSendEmail(),
 		];
 	}
 

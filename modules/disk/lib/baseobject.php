@@ -151,16 +151,6 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	}
 
 	/**
-	 * Checks rights to download current object.
-	 * @param SecurityContext $securityContext Security context.
-	 * @return bool
-	 */
-	public function canDownload(SecurityContext $securityContext)
-	{
-		return $securityContext->canDownload($this->id);
-	}
-
-	/**
 	 * Checks rights to rename current object.
 	 * @param SecurityContext $securityContext Security context.
 	 * @return bool
@@ -1723,6 +1713,11 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		}
 
 		return $this->objectOptions;
+	}
+
+	public function isAllowManagePublicAccessOnRead(): bool
+	{
+		return (bool)$this->getObjectOptions()[ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ];
 	}
 
 	public function setObjectOption($name, $value): self

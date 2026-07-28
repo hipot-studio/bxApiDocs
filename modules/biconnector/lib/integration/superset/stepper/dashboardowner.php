@@ -6,7 +6,6 @@ use Bitrix\Main;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 
 /**
  * @deprecated
@@ -52,7 +51,7 @@ class DashboardOwner extends Main\Update\Stepper
 
 	private function createUser(int $userId): void
 	{
-		$superset = new SupersetController(Integrator::getInstance());
+		$superset = new SupersetController();
 		$superset->createUser($userId);
 	}
 

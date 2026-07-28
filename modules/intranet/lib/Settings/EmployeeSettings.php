@@ -345,7 +345,7 @@ class EmployeeSettings extends AbstractSettings
 		$data['fieldFormatPhoneNumber'] = new Selector(
 			'settings-employee-field-phone_number_default_country',
 			'phone_number_default_country',
-			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COUNTRY_PHONE_NUMBER'),
+			Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COUNTRY_PHONE_NUMBER_MSGVER_1'),
 			$countries,
 			$currentCountry,
 			hints: $phoneNumberHint
@@ -446,7 +446,7 @@ class EmployeeSettings extends AbstractSettings
 
 		$searchEngine = SearchEngine::initWithDefaultFormatter($index + [
 			'allow_invite_collabers' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLABERS_INVITE' . $collabMessageKeySuffix),
-			'phone_number_default_country' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COUNTRY_PHONE_NUMBER'),
+			'phone_number_default_country' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COUNTRY_PHONE_NUMBER_MSGVER_1'),
 			'FORMAT_NAME_selector' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_NAME_FORMAT'),
 			'show_fired_employees' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SHOW_QUIT_EMPLOYEE'),
 			'general_chat_message_join' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SHOW_MESSAGE_NEW_EMPLOYEE'),

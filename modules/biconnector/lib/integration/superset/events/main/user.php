@@ -6,7 +6,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Access\Superset\Synchronizer;
@@ -179,7 +179,7 @@ class User
 
 	private static function changeActivity(Dto\User $user, bool $isActive): void
 	{
-		$integrator = Integrator::getInstance();
+		$integrator = IntegratorFactory::getInstance();
 
 		Application::getInstance()->addBackgroundJob(function() use ($integrator, $user, $isActive) {
 			if ($isActive)
@@ -213,7 +213,7 @@ class User
 		$user->firstName = $firstName;
 		$user->lastName = $lastName;
 
-		$integrator = Integrator::getInstance();
+		$integrator = IntegratorFactory::getInstance();
 
 		Application::getInstance()->addBackgroundJob(function() use ($integrator, $user) {
 			$updateResult = $integrator->updateUser($user);

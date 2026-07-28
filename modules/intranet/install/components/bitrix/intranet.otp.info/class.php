@@ -11,16 +11,13 @@ use Bitrix\Intranet\Internal\Enum\Otp\OtpBannerType;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Factory\Otp\BannerTypeFactory;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
+use Bitrix\Intranet\Internal\Service\Otp\OtpBannerSessionDelay;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Portal;
-use Bitrix\Main\Application;
 use Bitrix\Security\Mfa\OtpType;
 
 class CIntranetOtpInfoComponent extends CBitrixComponent
 {
-	private const SESSION_BANNER_TTL = 900;
-	private const SESSION_BANNER_KEY = 'otp_banner_type';
-
 	private CurrentUser $currentUser;
 	private OtpSettings $otpSettings;
 
@@ -113,16 +110,15 @@ class CIntranetOtpInfoComponent extends CBitrixComponent
 
 	private function getBannerType(): ?OtpBannerType
 	{
-		$session = Application::getInstance()->getLocalSession(self::SESSION_BANNER_KEY);
-		$lastCheckTime = $session->get('lastCheckTime');
+		$otpBannerSessionDelay = new OtpBannerSessionDelay();
 
-		if ($lastCheckTime !== null && (time() - $lastCheckTime) < self::SESSION_BANNER_TTL)
+		if ($otpBannerSessionDelay->isPostponed())
 		{
 			return null;
 		}
 
 		$type = (new BannerTypeFactory())->create();
-		$session->set('lastCheckTime', time());
+		$otpBannerSessionDelay->postpone();
 
 		return $type;
 	}

@@ -142,7 +142,6 @@ class Form extends BaseController
 			'MESSAGE' => FormHandler::buildSentFormMessageForClient($formLinkWithParams),
 			'AUTHOR_ID' => $currentUserId,
 			'FROM_USER_ID' => $currentUserId,
-			'IMPORTANT_CONNECTOR' => 'Y',
 			'PARAMS' => [
 				'COMPONENT_ID' => FormHandler::FORM_COMPONENT_NAME,
 				'CRM_FORM_ID' => $formData['ID'],

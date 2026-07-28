@@ -25,6 +25,7 @@ abstract class Service
 	public function __construct(\Bitrix\BIConnector\Manager $manager)
 	{
 		$this->manager = $manager;
+		$this->languageId = \Bitrix\Main\Localization\Loc::getCurrentLang() ?? 'en';
 	}
 
 	/**
@@ -552,6 +553,11 @@ abstract class Service
 	/**
 	 * @param string $tableName
 	 * @param array $parameters
+	 * @param string $requestMethod
+	 * @param string $requestUri
+	 * @param int $limit
+	 * @param LimitManager $limitManager
+	 * @param array|null $queryMetadata Query metadata from Superset/Trino (bx_query_metadata).
 	 *
 	 * @return Result
 	 */
@@ -562,6 +568,7 @@ abstract class Service
 		string $requestUri,
 		int $limit,
 		LimitManager $limitManager,
+		?array $queryMetadata = null,
 	): Result
 	{
 		return new Result();

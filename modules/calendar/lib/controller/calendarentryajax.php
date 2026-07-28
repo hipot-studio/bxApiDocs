@@ -831,6 +831,9 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 		$dates = $this->getDates($request);
 		$timezone = $this->getTimeZones($request);
 		$reminderList = \CCalendarReminder::prepareReminder($request['reminder']);
+		$eventType = isset($request['event_type']) && in_array($request['event_type'], Dictionary::EVENT_TYPE, true)
+			? $request['event_type']
+			: null;
 
 		return [
 			$userId,
@@ -870,6 +873,7 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 			$request['category'] !== null ? (int)$request['category'] : null,
 			$request['analyticsSubSection'] ?? null,
 			(int)($request['analyticsChatId'] ?? 0),
+			$eventType,
 		];
 	}
 

@@ -8,6 +8,7 @@ use Bitrix\AI\Engine\Enum\Category;
 use Bitrix\AI\Engine\IEngine;
 use Bitrix\AI\Engine\IQueue;
 use Bitrix\AI\Engine\IQueueOptional;
+use Bitrix\AI\Image\ImageReference;
 use Bitrix\AI\Facade\Analytics;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Facade\Portal;
@@ -39,6 +40,7 @@ class Engine
 		'image' => 'image',
 		'audio' => 'audio',
 		'call' => 'call',
+		'vision' => 'vision',
 	];
 
 	private const CONFIG_PREFIX = 'engine_';
@@ -637,6 +639,18 @@ class Engine
 	public function setHistoryState(bool $state): self
 	{
 		$this->engine->setHistoryState($state);
+		return $this;
+	}
+
+	/**
+	 * Sets images for vision engine requests.
+	 *
+	 * @param ImageReference[] $images
+	 * @return $this
+	 */
+	public function setImages(array $images): self
+	{
+		$this->engine->setImages($images);
 		return $this;
 	}
 

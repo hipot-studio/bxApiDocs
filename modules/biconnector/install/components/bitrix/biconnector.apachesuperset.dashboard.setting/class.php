@@ -7,7 +7,6 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
@@ -35,6 +34,12 @@ use Bitrix\BIConnector\Configuration\Feature;
 
 Loader::includeModule('biconnector');
 
+/**
+ * @todo Migrate to the biconnector.settings-panel (TS cards) extension and drop
+ *       Bitrix\BIConnector\Superset\UI\SettingsPanel together with the biconnector.apachesuperset.settings.panel
+ *       component. This component is the last consumer of the EntityEditor-based panel; all other panels have
+ *       already moved to the new extension.
+ */
 class ApacheSupersetDashboardSettingComponent
 	extends CBitrixComponent
 	implements Controllerable, Errorable
@@ -183,34 +188,22 @@ class ApacheSupersetDashboardSettingComponent
 
 	private function initDashboard(): void
 	{
-		$superset = new SupersetController(Integrator::getInstance());
+		$superset = new SupersetController();
 		$this->dashboard = $superset->getDashboardRepository()->getById((int)$this->arParams['DASHBOARD_ID']);
 	}
 
 	private function getFilterSection(): EntityEditorSection
 	{
-		$dateFilterSection = (new EntityEditorSection(
+		return (new EntityEditorSection(
 			name: 'DASHBOARD_FILTER',
 			title: Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_SECTION_PERIOD_TITLE'),
 		))
-			->setIconClass('--calendar-1')
-		;
-
-		if ($this->dashboard !== null)
-		{
-			$dateFilterSection->addField(new Field\DashboardPeriodFilterField(
+			->addField(new Field\DashboardPeriodFilterField(
 				id: 'DASHBOARD_FILTER',
 				dashboard: $this->dashboard,
-			));
-		}
-		else
-		{
-			$dateFilterSection->addField(new Field\PeriodFilterField(
-				id: 'DASHBOARD_FILTER',
-			));
-		}
-
-		return $dateFilterSection;
+			))
+			->setIconClass('--calendar-1')
+		;
 	}
 
 	private function getGroupsSection(): EntityEditorSection

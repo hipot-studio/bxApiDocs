@@ -127,9 +127,19 @@ class Item
 		return $this->title;
 	}
 
+	public function setTitle(string $title): void
+	{
+		$this->title = $title;
+	}
+
 	public function getHeader(): ?string
 	{
 		return $this->header;
+	}
+
+	public function setHeader(?string $header): void
+	{
+		$this->header = $header;
 	}
 
 	/**

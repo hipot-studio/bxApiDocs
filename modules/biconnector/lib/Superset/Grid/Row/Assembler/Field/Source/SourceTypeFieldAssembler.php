@@ -10,9 +10,9 @@ class SourceTypeFieldAssembler extends FieldAssembler
 {
 	protected function prepareColumn($value)
 	{
-		if (Type::tryFrom($value['TYPE']) === Type::Rest)
+		if (Type::tryFrom(($value['TYPE'] ?? '')) === Type::Rest)
 		{
-			$connectorOfSource = ExternalSourceRepository::getRestLogoBySourceId((int)$value['ID']);
+			$connectorOfSource = ExternalSourceRepository::getRestLogoBySourceId((int)($value['ID'] ?? 0));
 			$logo = htmlspecialcharsbx($connectorOfSource['LOGO'] ?? '');
 			$title = htmlspecialcharsbx($connectorOfSource['TITLE'] ?? '');
 
@@ -27,7 +27,7 @@ class SourceTypeFieldAssembler extends FieldAssembler
 		$listSource = ExternalSourceRepository::getStaticSourceList();
 
 		$source = current(array_filter($listSource, static function($source) use ($value) {
-			return $source['CODE'] === $value['TYPE'];
+			return $source['CODE'] === ($value['TYPE'] ?? '');
 		}));
 
 		if ($source)

@@ -79,7 +79,7 @@ class TeamWork extends Tool
 		return match ($id)
 		{
 			'instant_messenger' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_MESSENGER'),
-			'copilot' => (new CopilotService())->getName(),
+			'copilot' => CopilotService::getName(),
 			'news' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_NEWS_FEED'),
 			'disk' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_DISK_MSGVER_1'),
 			'docs' => Loc::getMessage('INTRANET_SETTINGS_TOOLS_TEAMWORK_SUBGROUP_DOCS_MSGVER_1'),

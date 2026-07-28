@@ -18,7 +18,7 @@ class IntegratorUserDataProvider extends DataProvider
 
 		$result[] =
 			$this->createColumn('EMPLOYEE_CARD')
-				->setSelect(['ID', 'LOGIN', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'EMAIL', 'TITLE', 'PERSONAL_PHOTO', 'WORK_POSITION', 'PERSONAL_GENDER', 'CONFIRM_CODE', 'ACTIVE', 'UF_DEPARTMENT'])
+				->setSelect(['ID', 'LOGIN', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'EMAIL', 'TITLE', 'PERSONAL_PHOTO', 'WORK_POSITION', 'PERSONAL_GENDER', 'CONFIRM_CODE', 'ACTIVE'])
 				->setName(Loc::getMessage('INTRANET_USER_LIST_COLUMN_EMPLOYEE_CARD'))
 				->setDefault(true)
 				->setSort('LAST_NAME')

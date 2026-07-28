@@ -521,11 +521,15 @@ class ImOpenLinesComponentStatisticsDetail extends \CBitrixComponent implements 
 				$result = '
 				<div id="ol-comment-head-text-'.$sessionId.'" title="">' . $comment . '</div>
 				<div id="ol-comment-head-placeholder-'.$sessionId.'" title=""></div><script>BX.ready(function(){
-					if (typeof BX.MessengerCommon !== "undefined")
+					// MessengerCommon.linesCommentHeadNodes synchronously dereferences BXIM.messenger;
+					// on pages without a messenger bootstrap (e.g. Contact Center -> Dialog list)
+					// keep the plain comment text visible to avoid a TypeError.
+					var textNode = BX("ol-comment-head-text-'.$sessionId.'");
+					if (typeof BX.MessengerCommon !== "undefined" && BX.MessengerCommon.BXIM && BX.MessengerCommon.BXIM.messenger)
 					{
-						var voteChild = BX.MessengerCommon.linesCommentHeadNodes('.$sessionId.', BX("ol-comment-head-text-'.$sessionId.'").innerHTML.replace(/<br>/g, "\n"), true, "statistics");
+						var voteChild = BX.MessengerCommon.linesCommentHeadNodes('.$sessionId.', textNode.innerHTML.replace(/<br>/g, "\n"), true, "statistics");
 						BX("ol-comment-head-placeholder-'.$sessionId.'").appendChild(voteChild);
-						BX.style(BX("ol-comment-head-text-'.$sessionId.'"), \'display\', \'none\');
+						BX.style(textNode, \'display\', \'none\');
 					}
 			})</script>';
 			}

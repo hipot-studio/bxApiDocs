@@ -406,9 +406,55 @@ final class Section extends Controller
 	}
 
 	//region checkPermissionController
+	protected function checkCreatePermissionEntity()
+	{
+		$checkReadResult = $this->checkReadPermissionEntity();
+		if (!$checkReadResult->isSuccess())
+		{
+			return $checkReadResult;
+		}
+
+		$checkCreateResult = new Result();
+		if (!$this->accessController->check(ActionDictionary::ACTION_PRODUCT_ADD))
+		{
+			$checkCreateResult->addError($this->getErrorModifyAccessDenied());
+		}
+
+		return $checkCreateResult;
+	}
+
 	protected function checkModifyPermissionEntity()
 	{
-		return $this->checkReadPermissionEntity();
+		$checkReadResult = $this->checkReadPermissionEntity();
+		if (!$checkReadResult->isSuccess())
+		{
+			return $checkReadResult;
+		}
+
+		$checkModifyResult = new Result();
+		if (!$this->accessController->check(ActionDictionary::ACTION_PRODUCT_EDIT))
+		{
+			$checkModifyResult->addError($this->getErrorModifyAccessDenied());
+		}
+
+		return $checkModifyResult;
+	}
+
+	protected function checkDeletePermissionEntity()
+	{
+		$checkReadResult = $this->checkReadPermissionEntity();
+		if (!$checkReadResult->isSuccess())
+		{
+			return $checkReadResult;
+		}
+
+		$checkDeleteResult = new Result();
+		if (!$this->accessController->check(ActionDictionary::ACTION_PRODUCT_DELETE))
+		{
+			$checkDeleteResult->addError($this->getErrorModifyAccessDenied());
+		}
+
+		return $checkDeleteResult;
 	}
 
 	protected function checkReadPermissionEntity()
@@ -449,7 +495,7 @@ final class Section extends Controller
 
 		if ($iblock)
 		{
-			$isBadIblock = !\CIBlockSectionRights::UserHasRightTo($iblockId, $sectionId, self::IBLOCK_EDIT);
+			$isBadIblock = !\CIBlockSectionRights::UserHasRightTo($iblockId, $sectionId, self::IBLOCK_SECTION_EDIT);
 		}
 		else
 		{
@@ -492,14 +538,18 @@ final class Section extends Controller
 	{
 		$iblockId = $this->getIBlockBySectionId($iblockSectionId);
 
-		return $this->checkPermissionIBlockSectionModify($iblockId, $iblockSectionId);
+		return $this->checkPermissionIBlockSectionSectionBindModify($iblockId, $iblockSectionId);
 	}
 
 	protected function checkPermissionIBlockSectionDelete($sectionId)
 	{
 		$r = new Result();
-		$iblockId = \CIBlockElement::GetIBlockByID($sectionId);
-		$isBadIblock = !\CIBlockElementRights::UserHasRightTo($iblockId, $sectionId, self::IBLOCK_SECTION_DELETE); //access delete
+		$iblockId = $this->getIBlockBySectionId($sectionId);
+		$isBadIblock = !\CIBlockSectionRights::UserHasRightTo(
+			$iblockId,
+			$sectionId,
+			self::IBLOCK_SECTION_DELETE,
+		);
 
 		if ($isBadIblock)
 		{

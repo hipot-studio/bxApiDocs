@@ -766,6 +766,7 @@ class CIMEvent
 		IM\V2\Message\CounterService::onAfterUserUpdate($arParams);
 		IM\V2\Chat\User\OwnerService::onAfterUserUpdate($arParams);
 		IM\V2\Message\Sticker\CustomPacks\PackDeleteAgent::onAfterUserUpdate($arParams);
+		IM\V2\Guest\GuestCounter::onAfterUserUpdate($arParams);
 
 		if ((isset($arParams['ACTIVE']) || isset($arParams['UF_DEPARTMENT'])) && CIMChat::GetGeneralChatId())
 		{

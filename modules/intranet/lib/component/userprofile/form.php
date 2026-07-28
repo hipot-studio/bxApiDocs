@@ -310,7 +310,7 @@ class Form
 		);
 
 		$fields[] = array(
-			"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_COUNTRY"),
+			"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_PERSONAL_COUNTRY_MSGVER_1"),
 			"name" => "PERSONAL_COUNTRY",
 			"type" => "list",
 			"editable" => true,
@@ -378,7 +378,7 @@ class Form
 				"editable" => true
 			);
 			$fields[] = array(
-				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_WORK_COUNTRY"),
+				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_WORK_COUNTRY_MSGVER_1"),
 				"name" => "WORK_COUNTRY",
 				"type" => "text",
 				"editable" => true

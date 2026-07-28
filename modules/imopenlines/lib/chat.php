@@ -476,14 +476,40 @@ class Chat
 	{
 		$result = false;
 
+		if (!$this->isDataLoaded())
+		{
+			return false;
+		}
+
+		$previousOwnerId = (int)$this->chat['AUTHOR_ID'];
+
+		// The dialog is held by a chat-bot (no human operator, AUTHOR_ID is not set):
+		// allow taking it over from the bot, treating the bot as the previous owner.
+		if ($previousOwnerId <= 0)
+		{
+			$session = new Session();
+			$session->setChat($this);
+
+			$loadSession = $session->load([
+				'USER_CODE' => $this->chat['ENTITY_ID'],
+				'MODE' => Session::MODE_OUTPUT,
+				'SKIP_CREATE' => 'Y',
+			]);
+			if (
+				$loadSession
+				&& (int)$session->getData('OPERATOR_ID') > 0
+				&& User::getInstance((int)$session->getData('OPERATOR_ID'))->isBot()
+			)
+			{
+				$previousOwnerId = (int)$session->getData('OPERATOR_ID');
+			}
+		}
+
 		if(
-			$this->isDataLoaded() &&
-			$this->chat['AUTHOR_ID'] > 0 &&
-			$this->chat['AUTHOR_ID'] != $userId
+			$previousOwnerId > 0 &&
+			$previousOwnerId != $userId
 		)
 		{
-			$previousOwnerId = $this->chat['AUTHOR_ID'];
-
 			$resultAnswer = $this->answer($userId, false, true);
 
 			if($resultAnswer->isSuccess())
@@ -1054,6 +1080,11 @@ class Chat
 					$session->update(['STATUS' => Session::STATUS_ANSWER]);
 				}
 
+				if (!in_array($mode, [self::TRANSFER_MODE_MANUAL, self::TRANSFER_MODE_BOT], true))
+				{
+					$session->setOperatorId($transferUserId, true, true);
+				}
+
 				Im::addMessage([
 					"TO_CHAT_ID" => $this->chat['ID'],
 					"MESSAGE" => $message,
@@ -1082,10 +1113,6 @@ class Chat
 					}
 					$updateDataSession['DATE_MODIFY'] = new DateTime();
 					$updateDataSession['SKIP_DATE_CLOSE'] = true;
-				}
-				else
-				{
-					$session->setOperatorId($transferUserId, true, true);
 				}
 
 				$session->update($updateDataSession);
@@ -1208,10 +1235,20 @@ class Chat
 
 				if(!empty($delete))
 				{
+					$removedUserIds = [];
 					foreach ($delete as $userId)
 					{
 						$result = $chat->DeleteUser($this->chat['ID'], $userId, false, true);
+						if ($result)
+						{
+							$removedUserIds[] = $userId;
+						}
 					}
+
+					// Drop the "non-answered line" from the counter/list only for operators that were
+					// actually removed (symmetric to answer()); cleaning it after a failed DeleteUser
+					// would hide the chat from an operator who is still in it.
+					Recent::removeRecentForUserIds($this->chat['ID'], $removedUserIds);
 				}
 			}
 		}
@@ -1309,6 +1346,9 @@ class Chat
 				'AUTHOR_ID' => 0,
 				self::getFieldName(self::FIELD_SILENT_MODE) => 'N'
 			]);
+
+			// Reset the personal hidden messages mode for all operators of the chat.
+			SilentMode\PersonalSilentMode::resetByChat((int)$this->chat['ID']);
 
 			$result = true;
 		}
@@ -1424,10 +1464,92 @@ class Chat
 			if($raw->isSuccess())
 			{
 				$result = true;
+				$this->sendCrmUpdatePull($updateDate);
 			}
 		}
 
 		return $result;
+	}
+
+	private function sendCrmUpdatePull(array $updateData): void
+	{
+		if (!\Bitrix\Main\Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		$sessionFields = $updateData[self::FIELD_SESSION] ?? [];
+		$crmFields = $updateData[self::FIELD_CRM] ?? [];
+
+		$crm = [];
+		if (array_key_exists('CRM', $sessionFields))
+		{
+			$crm['crmEnabled'] = $sessionFields['CRM'] === 'Y';
+		}
+		if (array_key_exists('CRM_ENTITY_TYPE', $sessionFields))
+		{
+			$crm['crmEntityType'] = $sessionFields['CRM_ENTITY_TYPE'];
+		}
+		if (array_key_exists('CRM_ENTITY_ID', $sessionFields))
+		{
+			$crm['crmEntityId'] = (int)$sessionFields['CRM_ENTITY_ID'];
+		}
+		if (array_key_exists('LEAD', $crmFields))
+		{
+			$crm['leadId'] = (int)$crmFields['LEAD'] ?: null;
+		}
+		if (array_key_exists('COMPANY', $crmFields))
+		{
+			$crm['companyId'] = (int)$crmFields['COMPANY'] ?: null;
+		}
+		if (array_key_exists('CONTACT', $crmFields))
+		{
+			$crm['contactId'] = (int)$crmFields['CONTACT'] ?: null;
+		}
+		if (array_key_exists('DEAL', $crmFields))
+		{
+			$crm['dealId'] = (int)$crmFields['DEAL'] ?: null;
+		}
+
+		if (empty($crm))
+		{
+			return;
+		}
+
+		$users = $this->getRecipientUserIds();
+		if (empty($users))
+		{
+			return;
+		}
+
+		\Bitrix\Pull\Event::add($users, [
+			'module_id' => 'imopenlines',
+			'command' => 'updateCrm',
+			'params' => [
+				'dialogId' => \Bitrix\Im\Dialog::getDialogId((int)$this->chat['ID']),
+				'crm' => $crm,
+			],
+		]);
+	}
+
+	private function getRecipientUserIds(): array
+	{
+		$users = [];
+		$relations = \Bitrix\Im\Chat::getRelation($this->chat['ID'], [
+			'SELECT' => ['USER_ID'],
+			'USER_DATA' => 'Y',
+			'WITHOUT_COUNTERS' => 'Y',
+		]);
+		foreach ($relations as $relation)
+		{
+			if (($relation['USER_DATA']['EXTERNAL_AUTH_ID'] ?? '') === 'imconnector')
+			{
+				continue;
+			}
+			$users[] = $relation['USER_ID'];
+		}
+
+		return $users;
 	}
 
 	/**
@@ -1440,20 +1562,7 @@ class Chat
 
 		if($this->isDataLoaded())
 		{
-			$users = [];
-			$relations = \Bitrix\Im\Chat::getRelation($this->chat['ID'], [
-				'SELECT' => Array('USER_ID'),
-				'USER_DATA' => 'Y',
-				'WITHOUT_COUNTERS' => 'Y',
-			]);
-			foreach ($relations as $relation)
-			{
-				if ($relation['USER_DATA']["EXTERNAL_AUTH_ID"] == 'imconnector')
-				{
-					continue;
-				}
-				$users[] = $relation['USER_ID'];
-			}
+			$users = $this->getRecipientUserIds();
 
 			$chat = \Bitrix\Im\V2\Chat::getInstance((int)$this->chat['ID']);
 			$lastMessageId = $chat->getLastMessageId();
@@ -2142,43 +2251,25 @@ class Chat
 	}
 
 	/**
+	 * @deprecated Hidden messages mode moved to the personal level (per operator+chat).
+	 * Use \Bitrix\ImOpenLines\Operator::setSilentMode and
+	 * \Bitrix\ImOpenLines\SilentMode\PersonalSilentMode. The chat-level flag (ENTITY_DATA_3)
+	 * is no longer stored and no system message is broadcast.
+	 *
 	 * @param bool $active
 	 * @return bool
 	 */
 	public function setSilentMode($active = true): bool
 	{
-		$result = false;
-
-		if($this->isDataLoaded())
-		{
-			$isActive = (bool)$active;
-			$active = $isActive ? 'Y' : '';
-			if ($this->chat[self::getFieldName(self::FIELD_SILENT_MODE)] == $active)
-			{
-				$result = true;
-			}
-			else
-			{
-				ChatTable::update($this->chat['ID'], [
-					self::getFieldName(self::FIELD_SILENT_MODE) => $active
-				]);
-
-				Im::addMessage([
-					'TO_CHAT_ID' => $this->chat['ID'],
-					'MESSAGE' => Loc::getMessage($isActive ? 'IMOL_CHAT_STEALTH_ON' : 'IMOL_CHAT_STEALTH_OFF'),
-					'SYSTEM' => 'Y',
-				]);
-
-				$this->sendPullUpdateSilentMode($isActive);
-
-				$result = true;
-			}
-		}
-
-		return $result;
+		return true;
 	}
 
-	protected function sendPullUpdateSilentMode(bool $silentMode): void
+	/**
+	 * Pull notification about a personal mode change. Addressed to the specific operator
+	 * ($userId); without $userId falls back to all chat participants (BC). Payload shape
+	 * is unchanged.
+	 */
+	public function sendPullUpdateSilentMode(bool $silentMode, ?int $userId = null): void
 	{
 		if (!Loader::includeModule('pull'))
 		{
@@ -2186,7 +2277,15 @@ class Chat
 		}
 
 		$chat = \Bitrix\Im\V2\Chat::getInstance((int)$this->chat['ID']);
-		$users = $chat->getPullRecipients()->getUserIds();
+
+		if ($userId !== null && $userId > 0)
+		{
+			$users = [$userId];
+		}
+		else
+		{
+			$users = $chat->getPullRecipients()->getUserIds();
+		}
 
 		if (empty($users))
 		{
@@ -2205,6 +2304,10 @@ class Chat
 	}
 
 	/**
+	 * @deprecated The chat-level hidden messages mode moved to the personal level.
+	 * Use \Bitrix\ImOpenLines\SilentMode\PersonalSilentMode::isEnabled($userId, $chatId).
+	 * The legacy ENTITY_DATA_3 field is no longer written (see ADR/SDD, Q-2).
+	 *
 	 * @return bool
 	 */
 	public function isSilentModeEnabled()

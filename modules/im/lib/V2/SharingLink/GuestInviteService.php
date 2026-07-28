@@ -39,7 +39,13 @@ class GuestInviteService
 	 *
 	 * @return Result<GuestChatLink>
 	 */
-	public function inviteByEmail(Chat $chat, int $authorId, string $email, ?string $name = null): Result
+	public function inviteByEmail(
+		Chat $chat,
+		int $authorId,
+		string $email,
+		?string $name = null,
+		?DateTime $dateExpire = null,
+	): Result
 	{
 		$result = new Result();
 
@@ -54,7 +60,7 @@ class GuestInviteService
 			return $result->addErrors($cooldownResult->getErrors());
 		}
 
-		$linkResult = $this->createPersonalizedLink($chat, $authorId, $email);
+		$linkResult = $this->createPersonalizedLink($chat, $authorId, $email, $dateExpire);
 		if (!$linkResult->isSuccess())
 		{
 			return $result->addErrors($linkResult->getErrors());
@@ -83,7 +89,13 @@ class GuestInviteService
 	 *
 	 * @return Result<GuestChatLink>
 	 */
-	public function inviteByPhoneNumber(Chat $chat, int $authorId, string $phone, ?string $name = null): Result
+	public function inviteByPhoneNumber(
+		Chat $chat,
+		int $authorId,
+		string $phone,
+		?string $name = null,
+		?DateTime $dateExpire = null,
+	): Result
 	{
 		$result = new Result();
 
@@ -99,7 +111,7 @@ class GuestInviteService
 			return $result->addErrors($cooldownResult->getErrors());
 		}
 
-		$linkResult = $this->createPersonalizedLink($chat, $authorId, $phoneE164);
+		$linkResult = $this->createPersonalizedLink($chat, $authorId, $phoneE164, $dateExpire);
 		if (!$linkResult->isSuccess())
 		{
 			return $result->addErrors($linkResult->getErrors());
@@ -127,7 +139,12 @@ class GuestInviteService
 	 *
 	 * @return Result<GuestChatLink>
 	 */
-	private function createPersonalizedLink(Chat $chat, int $authorId, string $recipientContact): Result
+	private function createPersonalizedLink(
+		Chat $chat,
+		int $authorId,
+		string $recipientContact,
+		?DateTime $dateExpire = null,
+	): Result
 	{
 		$result = new Result();
 
@@ -136,6 +153,7 @@ class GuestInviteService
 			authorId: $authorId,
 			name: $recipientContact,
 			maxUses: GuestChatLink::PERSONAL_LINK_MAX_USES,
+			dateExpire: $dateExpire,
 		);
 
 		$linkResult = SharingLinkFactory::getInstance()->createCustomLink($dto);

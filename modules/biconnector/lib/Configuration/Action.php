@@ -122,7 +122,7 @@ class Action
 		{
 			return [
 				'ERROR_EXCEPTION' => [
-					'message' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_SUPERSET_TARIFF_ERROR'),
+					'message' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_SUPERSET_TARIFF_ERROR') ?? '',
 				],
 			];
 		}
@@ -131,7 +131,7 @@ class Action
 		{
 			return [
 				'ERROR_EXCEPTION' => [
-					'message' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_SUPERSET_TOOL_DISABLED'),
+					'message' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_SUPERSET_TOOL_DISABLED') ?? '',
 				],
 			];
 		}
@@ -171,7 +171,7 @@ class Action
 				$error = $importResult->getError();
 				return [
 					'ERROR_EXCEPTION' => [
-						'message' => $error->getMessage(),
+						'message' => $error?->getMessage() ?? 'Unknown import error',
 					],
 				];
 			}
@@ -240,7 +240,7 @@ class Action
 					{
 						$result['ERROR_EXCEPTION'] = [
 							'code' => $error->getCode(),
-							'message' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_ERROR_DATA_STUDIO_SAVE_KEY') . ' ' . $error->getMessage(),
+							'message' =>(Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_ERROR_DATA_STUDIO_SAVE_KEY') ?? '') . ' ' . $error->getMessage(),
 						];
 					}
 				}
@@ -337,7 +337,7 @@ class Action
 		if (static::checkAccess($event))
 		{
 			$result = [
-				'ERROR_MESSAGES' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_EXPORT_HOLD'),
+				'ERROR_MESSAGES' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_EXPORT_HOLD') ?? '',
 			];
 		}
 
@@ -358,39 +358,43 @@ class Action
 		];
 
 		$ratio = $event->getParameter('RATIO');
+		$entityRatio = $ratio[self::ENTITY_CODE] ?? null;
 
-		if ((int)$ratio[self::ENTITY_CODE]['DOWNLOAD_FILE_ID'] > 0)
+		if (is_array($entityRatio))
 		{
-			$path = CFile::getPath((int)$ratio[self::ENTITY_CODE]['DOWNLOAD_FILE_ID']);
-			if ($path)
+			if ((int)($entityRatio['DOWNLOAD_FILE_ID'] ?? 0) > 0)
+			{
+				$path = CFile::getPath((int)$entityRatio['DOWNLOAD_FILE_ID']);
+				if ($path)
+				{
+					$result['CREATE_DOM_LIST'][] = [
+						'TAG' => 'a',
+						'DATA' => [
+							'attrs' => [
+								'class' => 'ui-btn ui-btn-lg ui-btn-primary',
+								'href' => $path,
+								'download' => htmlspecialcharsbx($entityRatio['DOWNLOAD_FILE_NAME'] ?? ''),
+							],
+							'text' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_DOWNLOAD_BTN') ?? '',
+						],
+					];
+				}
+			}
+
+			if (!empty($entityRatio['URL']))
 			{
 				$result['CREATE_DOM_LIST'][] = [
 					'TAG' => 'a',
 					'DATA' => [
 						'attrs' => [
 							'class' => 'ui-btn ui-btn-lg ui-btn-primary',
-							'href' => $path,
-							'download' => htmlspecialcharsbx($ratio[self::ENTITY_CODE]['DOWNLOAD_FILE_NAME']),
+							'href' => $entityRatio['URL'],
+							'target' => '_blank',
 						],
-						'text' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_DOWNLOAD_BTN'),
+						'text' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_CONNECT_BTN') ?? '',
 					],
 				];
 			}
-		}
-
-		if (!empty($ratio[self::ENTITY_CODE]['URL']))
-		{
-			$result['CREATE_DOM_LIST'][] = [
-				'TAG' => 'a',
-				'DATA' => [
-					'attrs' => [
-						'class' => 'ui-btn ui-btn-lg ui-btn-primary',
-						'href' => $ratio[self::ENTITY_CODE]['URL'],
-						'target' => '_blank',
-					],
-					'text' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_CONNECT_BTN'),
-				],
-			];
 		}
 
 		$manifestCode = $event->getParameter('MANIFEST_CODE');
@@ -415,7 +419,7 @@ class Action
 							'href' => $urlService->getEmbeddedUrl(),
 							'target' => '_blank',
 						],
-						'text' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_DASHBOARD_IMPORT_FINISH_BUTTON'),
+						'text' => Loc::getMessage('BI_CONNECTOR_CONFIGURATION_ACTION_DASHBOARD_IMPORT_FINISH_BUTTON') ?? '',
 					],
 				];
 			}

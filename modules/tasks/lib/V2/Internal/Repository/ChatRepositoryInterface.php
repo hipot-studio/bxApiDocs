@@ -17,6 +17,14 @@ interface ChatRepositoryInterface
 	 */
 	public function findChatIdsByTaskIds(array $taskIds): array;
 	public function findChatIdsByUserIdAndGroupIds(int $userId, array $groupIds): array;
+	/**
+	 * Returns task IDs linked to the given chat IDs.
+	 * Queries the binding table directly without joining b_tasks_task.
+	 *
+	 * @param int[] $chatIds
+	 * @return int[]
+	 */
+	public function findTaskIdsByChatIds(array $chatIds): array;
 	public function save(int $chatId, int $taskId): void;
 	public function delete(int $taskId): void;
 }

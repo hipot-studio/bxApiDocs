@@ -187,6 +187,18 @@ class ExternalSourceRestConnectorTable extends DataManager
 					'title' => Loc::getMessage('EXTERNAL_SOURCE_ENTITY_SUPPORT_MAPPING_FIELD'),
 				]
 			),
+			new StringField(
+				'SOURCE_CODE',
+				[
+					'validation' => function()
+					{
+						return[
+							new LengthValidator(null, 64),
+						];
+					},
+					'title' => Loc::getMessage('EXTERNAL_SOURCE_REST_CONNECTOR_SOURCE_CODE_FIELD'),
+				]
+			),
 		];
 	}
 

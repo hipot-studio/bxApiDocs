@@ -640,6 +640,8 @@ class Chat extends BaseController
 			return $this->convertKeysToCamelCase($result->getErrors());
 		}
 
+		CopilotChat::activateDraftIfNeeded($chat);
+
 		return $result->isSuccess();
 	}
 
@@ -661,6 +663,8 @@ class Chat extends BaseController
 		{
 			return $this->convertKeysToCamelCase($result->getErrors());
 		}
+
+		CopilotChat::activateDraftIfNeeded($chat);
 
 		return $result->isSuccess();
 	}

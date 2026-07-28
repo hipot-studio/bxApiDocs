@@ -425,7 +425,11 @@ class Session
 						$tracker = new ImOpenLines\Tracker();
 						$tracker
 							->setSession($this)
-							->bindExpectationToChat($params['CRM_TRACKER_REF'], $this->chat)
+							->bindExpectationToChat(
+								$params['CRM_TRACKER_REF'],
+								$this->chat,
+								$params['CRM_TRACKER_EXPECTATION'] ?? null
+							)
 						;
 					}
 				}
@@ -1512,6 +1516,9 @@ class Session
 			}
 
 			$this->update($update);
+
+			// Reset the personal hidden messages mode for all operators of the chat on session finish.
+			SilentMode\PersonalSilentMode::resetByChat((int)$this->session['CHAT_ID']);
 
 			// send messages
 			foreach ($messages as $message)

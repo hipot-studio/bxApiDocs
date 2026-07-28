@@ -4,7 +4,6 @@ namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Postprocess;
 
 use Bitrix\BIConnector\Superset\Logger\AiToolsLogger;
 use Bitrix\Main\Error;
-use Bitrix\Main\Localization\Loc;
 
 class DashboardDataTransformer
 {
@@ -14,6 +13,12 @@ class DashboardDataTransformer
 	private const COLTYPE_STRING = 1;
 	private const COLTYPE_TEMPORAL = 2;
 	private const COLTYPE_BOOLEAN = 3;
+
+	private const TYPE_DATE = 'date';
+	private const TYPE_INTEGER = 'integer';
+	private const TYPE_FLOAT = 'float';
+	private const TYPE_STRING = 'string';
+	private const TYPE_BOOLEAN = 'boolean';
 
 	private const RFC_2822_PATTERN = '/^[A-Z][a-z]{2},\s+\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s+\w+$/';
 
@@ -151,6 +156,8 @@ class DashboardDataTransformer
 			$qr['data'] = $records;
 		}
 		unset($qr);
+
+		$chart['query_result'] = $queryResult;
 	}
 
 	private function flattenQueryResult(array &$chart): void
@@ -233,17 +240,16 @@ class DashboardDataTransformer
 					continue;
 				}
 
-				$ts = strtotime($val);
-				if ($ts === false)
+				$dt = date_create_immutable($val);
+				if ($dt === false)
 				{
 					$parsedValues[] = null;
 
 					continue;
 				}
 
-				$parsedValues[] = $ts;
-				$timeStr = date('H:i:s', $ts);
-				if ($timeStr !== '00:00:00')
+				$parsedValues[] = $dt;
+				if ($dt->format('H:i:s') !== '00:00:00')
 				{
 					$allMidnight = false;
 				}
@@ -252,9 +258,10 @@ class DashboardDataTransformer
 			$format = $allMidnight ? 'Y-m-d' : 'Y-m-d\TH:i:s';
 			foreach ($rows as $i => &$row)
 			{
-				if (isset($parsedValues[$i]) && $parsedValues[$i] !== null)
+				$dt = $parsedValues[$i] ?? null;
+				if ($dt instanceof \DateTimeImmutable)
 				{
-					$row[$colName] = date($format, $parsedValues[$i]);
+					$row[$colName] = $dt->format($format);
 				}
 			}
 			unset($row);
@@ -483,11 +490,6 @@ class DashboardDataTransformer
 		{
 			try
 			{
-				if ($this->config->computeStats)
-				{
-					$this->computeStats($chart, $idx);
-				}
-
 				if ($this->config->generateColumnDescriptions)
 				{
 					$this->generateColumnDescriptions($chart, $idx);
@@ -503,61 +505,6 @@ class DashboardDataTransformer
 
 			$data['charts'][$idx] = $chart;
 		}
-	}
-
-	private function computeStats(array &$chart, int $chartIdx): void
-	{
-		$rows = $chart['data'] ?? [];
-		if (empty($rows) || !is_array($rows[0]))
-		{
-			return;
-		}
-
-		$numericCols = $this->getNumericColumns($rows, $chartIdx);
-		$fractionCols = $this->detectFractionColumns($rows, $numericCols);
-		$statsCols = array_diff($numericCols, array_keys($fractionCols));
-
-		$stats = ['record_count' => count($rows)];
-
-		foreach ($statsCols as $colName)
-		{
-			$values = [];
-			foreach ($rows as $row)
-			{
-				$val = $row[$colName] ?? null;
-				if (is_numeric($val))
-				{
-					$values[] = $val;
-				}
-			}
-
-			if (empty($values))
-			{
-				continue;
-			}
-
-			$sum = array_sum($values);
-			$mean = $sum / count($values);
-			$min = min($values);
-			$max = max($values);
-
-			$colStats = [
-				'min' => ($min == (int)$min) ? (int)$min : round($min, $this->config->defaultDecimalPlaces),
-				'max' => ($max == (int)$max) ? (int)$max : round($max, $this->config->defaultDecimalPlaces),
-				'mean' => round($mean, $this->config->defaultDecimalPlaces),
-				'sum' => ($sum == (int)$sum) ? (int)$sum : round($sum, $this->config->defaultDecimalPlaces),
-			];
-
-			$meanRounded = $colStats['mean'];
-			if ($meanRounded == (int)$meanRounded)
-			{
-				$colStats['mean'] = (int)$meanRounded;
-			}
-
-			$stats[$colName] = $colStats;
-		}
-
-		$chart['stats'] = $stats;
 	}
 
 	private function generateColumnDescriptions(array &$chart, int $chartIdx): void
@@ -636,7 +583,7 @@ class DashboardDataTransformer
 
 		if ($type === self::COLTYPE_TEMPORAL)
 		{
-			return 'date';
+			return self::TYPE_DATE;
 		}
 
 		if ($type === self::COLTYPE_NUMERIC)
@@ -653,17 +600,17 @@ class DashboardDataTransformer
 				}
 			}
 
-			return $allInt ? 'integer' : 'float';
+			return $allInt ? self::TYPE_INTEGER : self::TYPE_FLOAT;
 		}
 
 		if ($type === self::COLTYPE_STRING)
 		{
-			return 'string';
+			return self::TYPE_STRING;
 		}
 
 		if ($type === self::COLTYPE_BOOLEAN)
 		{
-			return 'boolean';
+			return self::TYPE_BOOLEAN;
 		}
 
 		$firstVal = null;
@@ -679,14 +626,14 @@ class DashboardDataTransformer
 
 		if (is_int($firstVal))
 		{
-			return 'integer';
+			return self::TYPE_INTEGER;
 		}
 		if (is_float($firstVal))
 		{
-			return 'float';
+			return self::TYPE_FLOAT;
 		}
 
-		return 'string';
+		return self::TYPE_STRING;
 	}
 
 	private function autoDescribeColumn(string $colName, array $rows, int $chartIdx): array
@@ -709,40 +656,34 @@ class DashboardDataTransformer
 
 		switch ($type)
 		{
-			case 'date':
+			case self::TYPE_DATE:
 				$sorted = $values;
 				sort($sorted);
 				$from = reset($sorted);
 				$to = end($sorted);
 
 				return [
-					'type' => 'date',
-					'description' => Loc::getMessage('BICONNECTOR_AI_TRANSFORMER_DATE_DESCRIPTION', [
-						'#FROM#' => $from,
-						'#TO#' => $to,
-					]),
+					'type' => self::TYPE_DATE,
+					'description' => 'Date (from ' . $from . ' to ' . $to . ')',
 				];
 
-			case 'integer':
-			case 'float':
+			case self::TYPE_INTEGER:
+			case self::TYPE_FLOAT:
 				$min = min($values);
 				$max = max($values);
 
 				return [
 					'type' => $type,
-					'description' => Loc::getMessage('BICONNECTOR_AI_TRANSFORMER_NUMERIC_DESCRIPTION', [
-						'#MIN#' => $min,
-						'#MAX#' => $max,
-					]),
+					'description' => 'Numeric value (range: ' . $min . ' — ' . $max . ')',
 				];
 
-			case 'boolean':
+			case self::TYPE_BOOLEAN:
 				return [
-					'type' => 'boolean',
-					'description' => Loc::getMessage('BICONNECTOR_AI_TRANSFORMER_BOOLEAN_DESCRIPTION'),
+					'type' => self::TYPE_BOOLEAN,
+					'description' => 'Boolean value (yes/no)',
 				];
 
-			case 'string':
+			case self::TYPE_STRING:
 				$unique = array_unique($values);
 				$count = count($unique);
 				if ($count <= 20)
@@ -751,22 +692,18 @@ class DashboardDataTransformer
 					$list = implode(', ', $unique);
 
 					return [
-						'type' => 'string',
-						'description' => Loc::getMessagePlural(
-							'BICONNECTOR_AI_TRANSFORMER_CATEGORY_DESCRIPTION',
-							$count,
-							['#COUNT#' => $count, '#VALUES#' => $list],
-						),
+						'type' => self::TYPE_STRING,
+						'description' => $count === 1
+							? 'Category (1 value: ' . $list . ')'
+							: 'Category (' . $count . ' values: ' . $list . ')',
 					];
 				}
 
 				return [
-					'type' => 'string',
-					'description' => Loc::getMessagePlural(
-						'BICONNECTOR_AI_TRANSFORMER_TEXT_DESCRIPTION',
-						$count,
-						['#COUNT#' => $count],
-					),
+					'type' => self::TYPE_STRING,
+					'description' => $count === 1
+						? 'Text (1 unique value)'
+						: 'Text (' . $count . ' unique values)',
 				];
 
 			default:
@@ -891,7 +828,21 @@ class DashboardDataTransformer
 			return;
 		}
 
-		$columns = array_keys($rows[0]);
+		$columns = [];
+		foreach ($rows as $row)
+		{
+			if (!is_array($row))
+			{
+				continue;
+			}
+			foreach (array_keys($row) as $col)
+			{
+				if (!in_array($col, $columns, true))
+				{
+					$columns[] = $col;
+				}
+			}
+		}
 		$chart['columns'] = $columns;
 		$chart['data'] = array_map(
 			static fn(array $row) => array_map(
@@ -904,32 +855,18 @@ class DashboardDataTransformer
 
 	private function assemble(array &$data): void
 	{
-		$chartFieldOrder = ['id', 'name', 'chart_type', 'tab_id', 'tab_path', 'description', 'column_descriptions', 'stats', 'columns', 'data', 'row_limit', 'total_rows', 'has_more'];
+		$chartFields = $this->config->chartFields;
 
 		foreach ($data['charts'] ?? [] as $i => $chart)
 		{
-			if ($this->config->includeRows)
-			{
-				$this->convertDataToColumnar($chart);
-			}
-			else
-			{
-				unset($chart['data'], $chart['columns']);
-			}
+			$this->convertDataToColumnar($chart);
 
 			$ordered = [];
-			foreach ($chartFieldOrder as $field)
+			foreach ($chartFields as $field)
 			{
 				if (array_key_exists($field, $chart))
 				{
 					$ordered[$field] = $chart[$field];
-				}
-			}
-			foreach ($chart as $key => $val)
-			{
-				if (!array_key_exists($key, $ordered))
-				{
-					$ordered[$key] = $val;
 				}
 			}
 			$data['charts'][$i] = $ordered;

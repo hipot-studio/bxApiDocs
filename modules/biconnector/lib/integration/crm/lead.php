@@ -591,13 +591,13 @@ class Lead
 		$result['crm_lead']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_LEAD_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_lead']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
-			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_LEAD_FIELD_' . $fieldCode];
+			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_LEAD_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_LEAD_FIELD_' . $fieldCode] : $fieldCode;
 			if (!$fieldInfo['FIELD_DESCRIPTION'])
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] = $fieldCode;
 			}
 
-			$fieldInfo['FIELD_DESCRIPTION_FULL'] = $messages['CRM_BIC_LEAD_FIELD_' . $fieldCode . '_FULL'] ?? '';
+			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['CRM_BIC_LEAD_FIELD_' . $fieldCode . '_FULL']) ? $messages['CRM_BIC_LEAD_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
 	}

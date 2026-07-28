@@ -5,6 +5,7 @@ namespace Bitrix\AI\History;
 use Bitrix\AI\Config;
 use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
+use Bitrix\AI\Engine\Enum\Category;
 use Bitrix\AI\Engine\IContext;
 use Bitrix\AI\Engine\IEngine;
 use Bitrix\AI\Facade\User;
@@ -265,6 +266,16 @@ class Manager
 			}
 		}
 
+		$parameters = $this->engine->getParameters();
+		if ($this->engine->getCategory() === Category::VISION->value)
+		{
+			$imageDiagnostics = $this->engine->getImageDiagnostics();
+			if (!empty($imageDiagnostics))
+			{
+				$parameters['_images'] = $imageDiagnostics;
+			}
+		}
+
 		return [
 			'CONTEXT_MODULE' => $context->getModuleId(),
 			'CONTEXT_ID' => $context->getContextId(),
@@ -272,7 +283,7 @@ class Manager
 			'ENGINE_CODE' => $this->engine->getCode(),
 			'PAYLOAD_CLASS' => $this->engine->getPayload()::class,
 			'PAYLOAD' => $this->engine->getPayload()->pack(),
-			'PARAMETERS' => $this->engine->getParameters(),
+			'PARAMETERS' => $parameters,
 			'GROUP_ID' => $this->engine->getHistoryGroupId(),
 			'REQUEST_TEXT' => $requestText,
 			'RESULT_TEXT' => $result->getPrettifiedData(),

@@ -32,6 +32,12 @@ final class DateIsCorrectFormatRule extends Rule
 
 		$errors = \DateTime::getLastErrors();
 
+		// PHP 8.2+: getLastErrors() returns false when there were no warnings/errors.
+		if ($errors === false)
+		{
+			return new RuleValidationResult();
+		}
+
 		if ($errors['error_count'] > 0)
 		{
 			return new RuleValidationResult(false, str_replace('#VALUE#', $this->getValueForError($value), $this->invalidErrorTemplate));

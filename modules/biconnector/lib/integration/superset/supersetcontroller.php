@@ -3,9 +3,10 @@
 namespace Bitrix\BIConnector\Integration\Superset;
 
 
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorInterface;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardRepository;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
@@ -13,11 +14,13 @@ use Bitrix\Main;
 
 final class SupersetController
 {
+	private IntegratorInterface $integrator;
 	private DashboardRepository $dashboardRepository;
 	private DashboardGroupRepository $dashboardGroupRepository;
 
-	public function __construct(private Integrator $integrator)
+	public function __construct()
 	{
+		$this->integrator = IntegratorFactory::getInstance();
 		$this->initRepositories();
 	}
 
@@ -25,6 +28,19 @@ final class SupersetController
 	{
 		$this->dashboardRepository = new DashboardRepository($this->integrator);
 		$this->dashboardGroupRepository = new DashboardGroupRepository($this->integrator);
+	}
+
+	public function getIntegrator(): IntegratorInterface
+	{
+		return $this->integrator;
+	}
+
+	public function setIntegrator(IntegratorInterface $integrator): self
+	{
+		$this->integrator = $integrator;
+		$this->initRepositories();
+
+		return $this;
 	}
 
 	public function getDashboardRepository(): DashboardRepository

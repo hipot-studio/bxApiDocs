@@ -36,24 +36,14 @@ final class RedisScopeStorage extends ScopeStorage
 		]);
 		$this->connection = $this->createConnection();
 
-		if (isset($options['compression']) || defined('Redis::COMPRESSION_LZ4'))
+		if (defined('\Redis::OPT_SERIALIZER') && defined('\Redis::SERIALIZER_NONE'))
 		{
-			$this->connection->setOption(
-				\Redis::OPT_COMPRESSION,
-				$options['compression'] ?? \Redis::COMPRESSION_LZ4
-			);
-			$this->connection->setOption(
-				\Redis::OPT_COMPRESSION_LEVEL,
-				$options['compression_level'] ?? \Redis::COMPRESSION_ZSTD_MAX
-			);
+			$this->connection->setOption(\Redis::OPT_SERIALIZER, \Redis::SERIALIZER_NONE);
 		}
 
-		if (isset($options['serializer']) || defined('Redis::SERIALIZER_IGBINARY'))
+		if (defined('\Redis::OPT_COMPRESSION') && defined('\Redis::COMPRESSION_NONE'))
 		{
-			$this->connection->setOption(
-				\Redis::OPT_SERIALIZER,
-				$options['serializer'] ?? \Redis::SERIALIZER_IGBINARY
-			);
+			$this->connection->setOption(\Redis::OPT_COMPRESSION, \Redis::COMPRESSION_NONE);
 		}
 	}
 

@@ -43,7 +43,7 @@ class TaskUserField extends UserFieldDataset
 
 	protected function getRawUserFields(): array
 	{
-		return Userfield\Task::getScheme(0, 0, $this->languageId);
+		return Userfield\Task::getScheme(0, 0, $this->languageId ?? '');
 	}
 
 	/**

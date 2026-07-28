@@ -2,6 +2,7 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Access\AccessCodeEnum;
 use Bitrix\Disk\Document\TrackedObject;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
@@ -11,6 +12,7 @@ use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internals\Rights\SetupSession;
 use Bitrix\Disk\Internals\Rights\Table\TmpSimpleRight;
 use Bitrix\Disk\Internals\RightTable;
+use Bitrix\Disk\Internals\SimpleRightTable;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -56,6 +58,8 @@ class RightsManager implements IErrorable
 	protected $accessTasks;
 	/** @var array  */
 	private $operationsByTask = [];
+	/** @var array<int, bool> */
+	private array $readableTaskIdMap = [];
 
 	public function __construct()
 	{
@@ -130,6 +134,7 @@ class RightsManager implements IErrorable
 				$right['NEGATIVE'] = 0;
 			}
 		}
+		unset($right);
 
 		$rights = $this->uniqualizeRightsOnObject($rights);
 		$rights = $this->cleanWrongNegativeRights($object, $rights);
@@ -288,16 +293,187 @@ class RightsManager implements IErrorable
 
 	public function hasSimpleRight(int $userId, int $objectId): bool
 	{
-		$sql = "
-			SELECT 'x' FROM b_disk_simple_right simple_right
-			INNER JOIN b_user_access uaccess ON uaccess.ACCESS_CODE = simple_right.ACCESS_CODE AND uaccess.USER_ID = {$userId}
-			WHERE (simple_right.OBJECT_ID = {$objectId})
-			LIMIT 1
-		";
+		$userId = (int)$userId;
+		$objectId = (int)$objectId;
+
+		if ($userId <= 0 || $objectId <= 0)
+		{
+			return false;
+		}
+
+		$checkpointObjectId = $this->findNearestCheckpointObjectId($objectId);
+		if ($checkpointObjectId === null)
+		{
+			return false;
+		}
+
+		$tableObject = ObjectTable::getTableName();
+		$tableSimpleRight = SimpleRightTable::getTableName();
+		$accessCodeCreator = AccessCodeEnum::CREATOR->value;
+		$accessCodeAuthorizedUser = AccessCodeEnum::AUTHORIZED_USER->value;
 
 		$connection = Application::getConnection();
+		$sql = <<<SQL
+			SELECT 'x'
+			FROM {$tableObject} object_table
+			WHERE object_table.ID = {$objectId}
+				AND EXISTS (
+					SELECT 1
+					FROM {$tableSimpleRight} simple_right
+					WHERE simple_right.OBJECT_ID = {$checkpointObjectId}
+						AND (
+							(simple_right.ACCESS_CODE = '{$accessCodeCreator}' AND object_table.CREATED_BY = {$userId})
+							OR simple_right.ACCESS_CODE = '{$accessCodeAuthorizedUser}'
+							OR simple_right.ACCESS_CODE IN (
+								SELECT ACCESS_CODE
+								FROM b_user_access
+								WHERE USER_ID = {$userId}
+							)
+						)
+				)
+			SQL;
 
-		return (bool)$connection->query($sql)->getSelectedRowsCount();
+		return (bool)$connection->queryScalar($sql);
+	}
+
+	/**
+	 * Returns task identifiers that contain the read operation.
+	 *
+	 * @return int[]
+	 */
+	public function getReadableTaskIds(): array
+	{
+		if (!$this->readableTaskIdMap)
+		{
+			foreach ($this->getTasks() as $task)
+			{
+				$taskId = (int)$task['ID'];
+				if ($this->containsOperationInTask(self::OP_READ, $taskId))
+				{
+					$this->readableTaskIdMap[$taskId] = true;
+				}
+			}
+			unset($task);
+		}
+
+		return array_keys($this->readableTaskIdMap);
+	}
+
+	/**
+	 * Returns effective simple-right access codes for the object via the nearest checkpoint snapshot.
+	 *
+	 * @param int $objectId
+	 * @return string[]
+	 */
+	public function getSimpleRightAccessCodesForObject(int $objectId): array
+	{
+		$checkpointObjectId = $this->findNearestCheckpointObjectId($objectId);
+		if ($checkpointObjectId === null)
+		{
+			return [];
+		}
+
+		$permissions = [];
+		$query = SimpleRightTable::getList([
+			'select' => ['ACCESS_CODE'],
+			'filter' => ['OBJECT_ID' => $checkpointObjectId],
+		]);
+		while ($row = $query->fetch())
+		{
+			$permissions[] = (string)$row['ACCESS_CODE'];
+		}
+
+		return array_values(array_unique($permissions));
+	}
+
+	public function findNearestCheckpointObjectId(int $objectId): ?int
+	{
+		$objectId = (int)$objectId;
+		$readableTaskIds = $this->getReadableTaskIds();
+		if ($objectId <= 0 || empty($readableTaskIds))
+		{
+			return null;
+		}
+
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableObjectPath = $sqlHelper->quote(ObjectPathTable::getTableName());
+		$tableRight = $sqlHelper->quote(RightTable::getTableName());
+		$readableTaskIdsSql = implode(', ', array_map('intval', $readableTaskIds));
+
+		$sql = <<<SQL
+			SELECT path.PARENT_ID
+			FROM {$tableObjectPath} path
+			WHERE path.OBJECT_ID = {$objectId}
+				AND EXISTS (
+					SELECT 1
+					FROM {$tableRight} readable_right
+					WHERE readable_right.OBJECT_ID = path.PARENT_ID
+						AND readable_right.TASK_ID IN ({$readableTaskIdsSql})
+				)
+			ORDER BY path.DEPTH_LEVEL ASC
+			SQL;
+
+		$row = $connection->query($sqlHelper->getTopSql($sql, 1))->fetch();
+
+		return $row ? (int)$row['PARENT_ID'] : null;
+	}
+
+	public function getCheckpointDescendantsBatch(
+		int $rootObjectId,
+		int $lastDepthLevel = 0,
+		int $lastObjectId = 0,
+		int $limit = 1000,
+	): array {
+		$rootObjectId = (int)$rootObjectId;
+		$lastDepthLevel = (int)$lastDepthLevel;
+		$lastObjectId = (int)$lastObjectId;
+		$limit = max(1, (int)$limit);
+		$readableTaskIds = $this->getReadableTaskIds();
+		if ($rootObjectId <= 0 || empty($readableTaskIds))
+		{
+			return [];
+		}
+
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableObjectPath = $sqlHelper->quote(ObjectPathTable::getTableName());
+		$tableObject = $sqlHelper->quote(ObjectTable::getTableName());
+		$tableRight = $sqlHelper->quote(RightTable::getTableName());
+		$readableTaskIdsSql = implode(', ', array_map('intval', $readableTaskIds));
+		$seekCondition = '';
+		if ($lastDepthLevel > 0 || $lastObjectId > 0)
+		{
+			$seekCondition = "
+				AND (
+					path.DEPTH_LEVEL > {$lastDepthLevel}
+					OR (path.DEPTH_LEVEL = {$lastDepthLevel} AND path.OBJECT_ID > {$lastObjectId})
+				)
+			";
+		}
+
+		$sql = <<<SQL
+			SELECT
+				path.OBJECT_ID AS ID,
+				object_table.PARENT_ID,
+				object_table.TYPE,
+				path.DEPTH_LEVEL
+			FROM {$tableObjectPath} path
+				INNER JOIN {$tableObject} object_table ON object_table.ID = path.OBJECT_ID
+			WHERE
+				path.PARENT_ID = {$rootObjectId}
+				AND path.OBJECT_ID <> {$rootObjectId}
+				{$seekCondition}
+				AND EXISTS (
+					SELECT 1
+					FROM {$tableRight} readable_right
+					WHERE readable_right.OBJECT_ID = path.OBJECT_ID
+						AND readable_right.TASK_ID IN ({$readableTaskIdsSql})
+				)
+			ORDER BY path.DEPTH_LEVEL ASC, path.OBJECT_ID ASC
+			SQL;
+
+		return $connection->query($sqlHelper->getTopSql($sql, $limit))->fetchAll();
 	}
 
 	public function revokeByAccessCodes(BaseObject $object, array $accessCodes)
@@ -512,52 +688,6 @@ class RightsManager implements IErrorable
 		Collection::sortByColumn($rights, ['DEPTH_LEVEL' => SORT_DESC]);
 
 		return $rights;
-	}
-
-	/**
-	 * Get rights for all descendants by objectId.
-	 * @param $objectId
-	 * @return array
-	 */
-	public function getDescendantsRights($objectId)
-	{
-		$query = new Query(RightTable::getEntity());
-		$query
-			->setSelect(['*', 'DEPTH_LEVEL' => 'PATH_CHILD.DEPTH_LEVEL'])
-			->setFilter([
-				'PATH_CHILD.PARENT_ID' => $objectId,
-				'!PATH_CHILD.OBJECT_ID' => $objectId,
-			])
-		;
-
-		return $query->exec()->fetchAll();
-	}
-
-	public function hasDescendantRights(int $objectId): bool
-	{
-		return RightTable::getCount([
-			'PATH_CHILD.PARENT_ID' => $objectId,
-			'!PATH_CHILD.OBJECT_ID' => $objectId,
-		]) > 0;
-	}
-
-	/**
-	 * Get rights for direct children by objectId.
-	 * @param $objectId
-	 * @return array
-	 */
-	public function getChildrenRights($objectId)
-	{
-		$query = new Query(RightTable::getEntity());
-		$query
-			->setSelect(['*'])
-			->setFilter([
-				'PATH_CHILD.PARENT_ID' => $objectId,
-				'PATH_CHILD.DEPTH_LEVEL' => 1,
-			])
-		;
-
-		return $query->exec()->fetchAll();
 	}
 
 	/**
@@ -1275,6 +1405,10 @@ final class SimpleReBuilder
 	protected $setupSession;
 	/** @var string */
 	protected $scenario = self::SCENARIO_FULL_RECALC;
+	/** @var array<int, int> */
+	private array $parentIdByObjectId = [];
+	/** @var array<int, int> */
+	private array $checkpointSourceIdByObjectId = [];
 
 	public function __construct(BaseObject $object, array $specificRights)
 	{
@@ -1330,17 +1464,14 @@ final class SimpleReBuilder
 			$this->specificRights,
 		);
 		$this->simpleRights = $this->buildSimpleRightsFromReadableRightsState($this->readableRightsState);
-		$items = [];
-		foreach($this->simpleRights as $right)
+		if (!$this->isCheckpointObject($this->specificRights))
 		{
-			$items[] = [
-				'OBJECT_ID' => $this->object->getId(),
-				'ACCESS_CODE' => $right['ACCESS_CODE'],
-			];
+			return;
 		}
-		unset($right);
 
-		TmpSimpleRight::insertBatchBySessionId($items, $this->setupSession->getId());
+		$items = [];
+		$this->appendSimpleRightItemsForObject($this->object->getId(), $this->simpleRights, $items);
+		$this->flushSimpleRightItems($items);
 	}
 
 	/**
@@ -1499,138 +1630,180 @@ final class SimpleReBuilder
 		}
 
 		$rootFolderId = $this->object->getId();
+		$rightsManager = Driver::getInstance()->getRightsManager();
 
-		$hasDescendantRights = Driver::getInstance()->getRightsManager()->hasDescendantRights($rootFolderId);
-
-		if (!$hasDescendantRights)
-		{
-			TmpSimpleRight::fillDescendants($rootFolderId, $this->setupSession->getId());
-
-			return;
-		}
-
+		$checkpointReadableRightsStateByObjectId = [
+			$rootFolderId => $this->readableRightsState,
+		];
 		$lastDepthLevel = 0;
 		$lastObjectId = 0;
-		$rootDepthLevel = 0;
-
-		// initialize rights
-		$specificRightsByObjectId = [
-			$rootDepthLevel => [
-				$rootFolderId => $this->specificRights,
-			],
-		];
-		$readableRightsStateByObjectId = [
-			$rootDepthLevel => [
-				$rootFolderId => $this->readableRightsState,
-			],
-		];
-		$simpleRightsByObjectId = [
-			$rootDepthLevel => [
-				$rootFolderId => $this->simpleRights,
-			],
-		];
-
-		$hierarchyLevel = 1;
+		$allItems = [];
 		while (true)
 		{
-			$descendants = $this->getDescendants($rootFolderId, $lastDepthLevel, $lastObjectId);
-
-			if (empty($descendants))
+			$checkpointDescendants = $rightsManager->getCheckpointDescendantsBatch(
+				$rootFolderId,
+				$lastDepthLevel,
+				$lastObjectId,
+				self::BATCH_SIZE,
+			);
+			if (empty($checkpointDescendants))
 			{
 				break;
 			}
 
-			$lastDescendant = end($descendants);
-			$lastDepthLevel = (int)$lastDescendant['DEPTH_LEVEL'];
-			$lastObjectId = (int)$lastDescendant['ID'];
-			reset($descendants);
+			$this->processCheckpointDescendantsBatch(
+				$checkpointDescendants,
+				$rootFolderId,
+				$checkpointReadableRightsStateByObjectId,
+				$allItems,
+			);
 
-			$objectIds = [];
-			$depthLevels = [];
-			foreach ($descendants as $descendant)
-			{
-				$objectId = (int)$descendant['ID'];
-				$objectIds[] = $objectId;
-				$depthLevels[$objectId] = (int)$descendant['DEPTH_LEVEL'];
-			}
-			unset($descendant, $lastDescendant);
-
-			$objectIdsWithChildren = $this->getObjectIdsWithChildren($objectIds);
-
-			$descendantsSpecificRights = $this->getSpecificRightsForObjects($objectIds);
-			foreach ($descendantsSpecificRights as $descendantRight)
-			{
-				$descendantRightObjectId = $descendantRight['OBJECT_ID'];
-				$descendantRightObjectDepthLevel = $depthLevels[$descendantRightObjectId];
-				$specificRightsByObjectId[$descendantRightObjectDepthLevel][$descendantRightObjectId][] = $descendantRight;
-			}
-			unset($descendantRight, $descendantsSpecificRights);
-
-			$allItems = [];
-			foreach ($descendants as $descendant)
-			{
-				$objectId = (int)$descendant['ID'];
-				$parentId = (int)$descendant['PARENT_ID'];
-				$hasChildren = isset($objectIdsWithChildren[$objectId]);
-				$depthLevel = (int)$descendant['DEPTH_LEVEL'];
-				$prevDepthLevel = $depthLevel - 1;
-
-				$parentReadableRightsState = $readableRightsStateByObjectId[$prevDepthLevel][$parentId] ?? [];
-				$parentSimpleRights = $simpleRightsByObjectId[$prevDepthLevel][$parentId]
-					?? $this->buildSimpleRightsFromReadableRightsState($parentReadableRightsState);
-				$specificRights = $specificRightsByObjectId[$depthLevel][$objectId] ?? [];
-
-				if (empty($specificRights))
-				{
-					$descendantReadableRightsState = $parentReadableRightsState;
-					$descendantSimpleRights = $parentSimpleRights;
-				}
-				else
-				{
-					$descendantReadableRightsState = $this->buildReadableRightsState($parentReadableRightsState, $specificRights);
-					$descendantSimpleRights = $this->buildSimpleRightsFromReadableRightsState($descendantReadableRightsState);
-				}
-
-				foreach ($descendantSimpleRights as $right)
-				{
-					$allItems[] = [
-						'OBJECT_ID' => $objectId,
-						'ACCESS_CODE' => $right['ACCESS_CODE'],
-					];
-
-					if (count($allItems) >= self::BATCH_SIZE)
-					{
-						$this->flushSimpleRightItems($allItems);
-					}
-				}
-				unset($right);
-
-				// save only if needed for next levels
-				if ($hasChildren)
-				{
-					$readableRightsStateByObjectId[$depthLevel][$objectId] = $descendantReadableRightsState;
-					$simpleRightsByObjectId[$depthLevel][$objectId] = $descendantSimpleRights;
-				}
-
-				// cleanup memory
-				if ($depthLevel > $hierarchyLevel)
-				{
-					$grandParentDepthLevel = $prevDepthLevel - 1;
-					unset(
-						$specificRightsByObjectId[$grandParentDepthLevel],
-						$readableRightsStateByObjectId[$grandParentDepthLevel],
-						$simpleRightsByObjectId[$grandParentDepthLevel],
-					);
-					$hierarchyLevel = $depthLevel;
-				}
-
-				unset($parentReadableRightsState, $parentSimpleRights, $specificRights, $descendantReadableRightsState, $descendantSimpleRights);
-			}
-			unset($descendant);
+			$lastCheckpointDescendant = end($checkpointDescendants);
+			$lastDepthLevel = (int)$lastCheckpointDescendant['DEPTH_LEVEL'];
+			$lastObjectId = (int)$lastCheckpointDescendant['ID'];
+			reset($checkpointDescendants);
 
 			$this->flushSimpleRightItems($allItems);
-			unset($allItems, $descendants, $objectIds, $depthLevels, $objectIdsWithChildren);
 		}
+
+		$this->flushSimpleRightItems($allItems);
+	}
+
+	private function processCheckpointDescendantsBatch(
+		array $checkpointDescendants,
+		int $rootFolderId,
+		array &$checkpointReadableRightsStateByObjectId,
+		array &$allItems,
+	): void {
+		$checkpointObjectIds = [];
+		foreach ($checkpointDescendants as $checkpointDescendant)
+		{
+			$objectId = (int)$checkpointDescendant['ID'];
+			$checkpointObjectIds[] = $objectId;
+			$this->parentIdByObjectId[$objectId] = (int)$checkpointDescendant['PARENT_ID'];
+		}
+		unset($checkpointDescendant);
+
+		$specificRightsByObjectId = [];
+		foreach ($this->getSpecificRightsForObjects($checkpointObjectIds) as $descendantRight)
+		{
+			$specificRightsByObjectId[(int)$descendantRight['OBJECT_ID']][] = $descendantRight;
+		}
+		unset($descendantRight);
+
+		foreach ($checkpointDescendants as $checkpointDescendant)
+		{
+			$objectId = (int)$checkpointDescendant['ID'];
+			$specificRights = $specificRightsByObjectId[$objectId] ?? [];
+			if (!$this->isCheckpointObject($specificRights))
+			{
+				continue;
+			}
+
+			$parentReadableRightsState = $this->resolveParentReadableRightsState(
+				(int)$checkpointDescendant['PARENT_ID'],
+				$rootFolderId,
+				$checkpointReadableRightsStateByObjectId,
+			);
+			$checkpointReadableRightsStateByObjectId[$objectId] = $this->buildReadableRightsState($parentReadableRightsState, $specificRights);
+			$this->appendSimpleRightItemsForObject(
+				$objectId,
+				$this->buildSimpleRightsFromReadableRightsState($checkpointReadableRightsStateByObjectId[$objectId]),
+				$allItems,
+			);
+		}
+		unset($checkpointDescendant);
+	}
+
+	private function isCheckpointObject(array $specificRights): bool
+	{
+		foreach ($specificRights as $right)
+		{
+			if ($this->isReadableTaskId((int)$right['TASK_ID']))
+			{
+				return true;
+			}
+		}
+		unset($right);
+
+		return false;
+	}
+
+	private function appendSimpleRightItemsForObject(int $objectId, array $simpleRights, array &$items): void
+	{
+		foreach ($simpleRights as $right)
+		{
+			$items[] = [
+				'OBJECT_ID' => $objectId,
+				'ACCESS_CODE' => $right['ACCESS_CODE'],
+			];
+
+			if (count($items) >= self::BATCH_SIZE)
+			{
+				$this->flushSimpleRightItems($items);
+			}
+		}
+		unset($right);
+	}
+
+	private function resolveParentReadableRightsState(
+		int $parentId,
+		int $rootFolderId,
+		array $checkpointReadableRightsStateByObjectId,
+	): array {
+		$sourceObjectId = $this->resolveCheckpointSourceId($parentId, $rootFolderId, $checkpointReadableRightsStateByObjectId);
+
+		return $sourceObjectId === $rootFolderId
+			? $this->readableRightsState
+			: ($checkpointReadableRightsStateByObjectId[$sourceObjectId] ?? $this->readableRightsState);
+	}
+
+	private function resolveCheckpointSourceId(int $objectId, int $rootFolderId, array $checkpointReadableRightsStateByObjectId): int
+	{
+		if ($objectId === $rootFolderId)
+		{
+			return $rootFolderId;
+		}
+
+		if (isset($this->checkpointSourceIdByObjectId[$objectId]))
+		{
+			return $this->checkpointSourceIdByObjectId[$objectId];
+		}
+
+		$visitedObjectIds = [];
+		$currentObjectId = $objectId;
+		while ($currentObjectId !== $rootFolderId && !isset($checkpointReadableRightsStateByObjectId[$currentObjectId]))
+		{
+			$visitedObjectIds[] = $currentObjectId;
+			$currentObjectId = $this->getParentIdByObjectId($currentObjectId);
+			if ($currentObjectId <= 0)
+			{
+				$currentObjectId = $rootFolderId;
+				break;
+			}
+		}
+
+		$sourceObjectId = $currentObjectId === $rootFolderId ? $rootFolderId : $currentObjectId;
+		foreach ($visitedObjectIds as $visitedObjectId)
+		{
+			$this->checkpointSourceIdByObjectId[$visitedObjectId] = $sourceObjectId;
+		}
+		unset($visitedObjectId);
+
+		return $sourceObjectId;
+	}
+
+	private function getParentIdByObjectId(int $objectId): int
+	{
+		if (isset($this->parentIdByObjectId[$objectId]))
+		{
+			return $this->parentIdByObjectId[$objectId];
+		}
+
+		$row = $this->connection->query("SELECT PARENT_ID FROM b_disk_object WHERE ID = {$objectId}")->fetch();
+		$this->parentIdByObjectId[$objectId] = $row ? (int)$row['PARENT_ID'] : 0;
+
+		return $this->parentIdByObjectId[$objectId];
 	}
 
 	private function flushSimpleRightItems(array &$items): void
@@ -1642,71 +1815,6 @@ final class SimpleReBuilder
 
 		TmpSimpleRight::insertBatchBySessionId($items, $this->setupSession->getId());
 		$items = [];
-	}
-
-	/**
-	 * @param int $rootFolderId
-	 * @param int $lastDepthLevel
-	 * @param int $lastObjectId
-	 * @return array
-	 * @throws ArgumentException
-	 * @throws SystemException
-	 */
-	private function getDescendants(int $rootFolderId, int $lastDepthLevel, int $lastObjectId): array
-	{
-		$rootFolderId = (int)$rootFolderId;
-		$lastDepthLevel = (int)$lastDepthLevel;
-		$lastObjectId = (int)$lastObjectId;
-
-		$pathTableName = $this->sqlHelper->quote(ObjectPathTable::getTableName());
-		$objectTableName = $this->sqlHelper->quote(ObjectTable::getTableName());
-		$seekCondition = '';
-		if ($lastDepthLevel > 0 || $lastObjectId > 0)
-		{
-			$seekCondition = "
-				AND (
-					path.DEPTH_LEVEL > {$lastDepthLevel}
-					OR (path.DEPTH_LEVEL = {$lastDepthLevel} AND path.OBJECT_ID > {$lastObjectId})
-				)
-			";
-		}
-
-		$sql = "
-			SELECT
-				path.OBJECT_ID AS ID,
-				object_table.PARENT_ID,
-				path.DEPTH_LEVEL
-			FROM {$pathTableName} path
-				INNER JOIN {$objectTableName} object_table ON object_table.ID = path.OBJECT_ID
-			WHERE
-				path.PARENT_ID = {$rootFolderId}
-				AND path.OBJECT_ID <> {$rootFolderId}
-				{$seekCondition}
-			ORDER BY path.DEPTH_LEVEL ASC, path.OBJECT_ID ASC
-		";
-
-		return $this->connection->query($this->sqlHelper->getTopSql($sql, self::BATCH_SIZE))->fetchAll();
-	}
-
-	private function getObjectIdsWithChildren(array $objectIds): array
-	{
-		if (empty($objectIds))
-		{
-			return [];
-		}
-
-		$pathTableName = $this->sqlHelper->quote(ObjectPathTable::getTableName());
-		$objectIdsSql = implode(', ', array_map('intval', array_unique($objectIds)));
-		$rows = $this->connection->query("SELECT DISTINCT path.PARENT_ID AS OBJECT_ID FROM {$pathTableName} path WHERE path.DEPTH_LEVEL = 1 AND path.PARENT_ID IN ({$objectIdsSql})")->fetchAll();
-
-		$objectIdsWithChildren = [];
-		foreach ($rows as $row)
-		{
-			$objectIdsWithChildren[(int)$row['OBJECT_ID']] = true;
-		}
-		unset($row);
-
-		return $objectIdsWithChildren;
 	}
 
 	private function getSpecificRightsForObjects(array $objectIds): array

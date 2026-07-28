@@ -289,13 +289,13 @@ class Group
 				$fieldCode = $fieldCode . '_MSGVER_1';
 			}
 
-			$fieldInfo['FIELD_DESCRIPTION'] = $messages['SN_BIC_GROUP_FIELD_' . $fieldCode];
+			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['SN_BIC_GROUP_FIELD_' . $fieldCode]) ? $messages['SN_BIC_GROUP_FIELD_' . $fieldCode] : $fieldCode;
 			if (!$fieldInfo['FIELD_DESCRIPTION'])
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] = $fieldCode;
 			}
 
-			$fieldInfo['FIELD_DESCRIPTION_FULL'] = $messages['SN_BIC_GROUP_FIELD_' . $fieldCode . '_FULL'] ?? '';
+			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['SN_BIC_GROUP_FIELD_' . $fieldCode . '_FULL']) ? $messages['SN_BIC_GROUP_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
 	}

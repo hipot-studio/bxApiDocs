@@ -3,6 +3,8 @@
 namespace Bitrix\Disk\Security;
 
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Internals\ObjectPathTable;
+use Bitrix\Disk\Internals\RightTable;
 use Bitrix\Disk\Internals\SimpleRightTable;
 use Bitrix\Disk\RightsManager;
 use Bitrix\Disk\Access\AccessCodeEnum;
@@ -37,7 +39,6 @@ class DiskSecurityContext extends SecurityContext
 	protected function getOperationsByObject($objectId)
 	{
 		$access = new CAccess;
-		/** @noinspection PhpParamsInspection */
 		$access->updateCodes(array('USER_ID' => $this->userId));
 
 		return Driver::getInstance()->getRightsManager()->getUserOperationsByObject($objectId, $this->userId);
@@ -140,15 +141,6 @@ class DiskSecurityContext extends SecurityContext
 	 * @param $objectId
 	 * @return bool
 	 */
-	public function canDownload($objectId)
-	{
-		return $this->canDoOperation($objectId, RightsManager::OP_DOWNLOAD);
-	}
-
-	/**
-	 * @param $objectId
-	 * @return bool
-	 */
 	public function canRename($objectId)
 	{
 		return $this->canDoOperation($objectId, RightsManager::OP_EDIT);
@@ -192,10 +184,23 @@ class DiskSecurityContext extends SecurityContext
 
 	public function getSqlExpressionForList($columnObjectId, $columnCreatedBy)
 	{
+		if ($this->userId === static::GUEST_USER)
+		{
+			return '1 = 0';
+		}
+
 		$userId = (int)$this->userId;
+		$readableTaskIds = Driver::getInstance()->getRightsManager()->getReadableTaskIds();
+		if (empty($readableTaskIds))
+		{
+			return '1 = 0';
+		}
 
 		$tableDiskSimpleRight = SimpleRightTable::getTableName();
+		$tableDiskRight = RightTable::getTableName();
+		$tableObjectPath = ObjectPathTable::getTableName();
 		$tableUserAccess = UserAccessTable::getTableName();
+		$readableTaskIdsSql = implode(', ', array_map('intval', $readableTaskIds));
 
 		$accessCodeCreator = AccessCodeEnum::CREATOR->value;
 		$accessCodeAuthorizedUser = AccessCodeEnum::AUTHORIZED_USER->value;
@@ -204,7 +209,19 @@ class DiskSecurityContext extends SecurityContext
 			EXISTS (
 				SELECT 1
 				FROM $tableDiskSimpleRight simple_right
-				WHERE simple_right.OBJECT_ID = $columnObjectId
+				WHERE simple_right.OBJECT_ID = (
+					SELECT path.PARENT_ID
+					FROM $tableObjectPath path
+					WHERE path.OBJECT_ID = $columnObjectId
+					  AND EXISTS (
+						  SELECT 1
+						  FROM $tableDiskRight readable_right
+						  WHERE readable_right.OBJECT_ID = path.PARENT_ID
+							AND readable_right.TASK_ID IN ($readableTaskIdsSql)
+					  )
+					ORDER BY path.DEPTH_LEVEL ASC
+					LIMIT 1
+				)
 				  AND (
 					  (simple_right.ACCESS_CODE = '$accessCodeCreator' AND $columnCreatedBy = $userId)
 		

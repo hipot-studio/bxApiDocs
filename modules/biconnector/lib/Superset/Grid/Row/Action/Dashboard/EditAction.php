@@ -67,6 +67,11 @@ final class EditAction extends BaseAction
 		}
 
 		$service = \Bitrix\BIConnector\Manager::getInstance()->createService(ApacheSuperset::getServiceId());
+		if ($service === null)
+		{
+			return null;
+		}
+
 		$manager = LimitManager::getInstance()->setService($service);
 		if (!$manager->checkLimit())
 		{

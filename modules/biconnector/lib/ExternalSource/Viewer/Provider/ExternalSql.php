@@ -24,7 +24,7 @@ final class ExternalSql implements Provider
 		/* @var ExternalSource\Source\ExternalSql $source */
 		$source = Source\Factory::getSource($this->type, $this->sourceId);
 		$datasetId = (int)($this->settings['dataset']['ID'] ?? null);
-		$tableName = $this->settings['dataset']['EXTERNAL_CODE'];
+		$tableName = $this->settings['dataset']['EXTERNAL_CODE'] ?? '';
 		if ($datasetId)
 		{
 			$description = array_map(

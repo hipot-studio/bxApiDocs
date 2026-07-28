@@ -5,7 +5,6 @@ use Bitrix\Disk\Internals\ObjectPathTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DB\SqlHelper as MainSqlHelper;
-use Bitrix\Main\Diag\Debug;
 
 final class TmpSimpleRight
 {

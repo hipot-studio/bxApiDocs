@@ -91,7 +91,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\FilterMask wakeUp($data)
 	 */
-	class EO_FilterMask {
+	class EO_FilterMask extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\FilterMaskTable */
 		static public $dataClass = '\Bitrix\Security\FilterMaskTable';
 		/**
@@ -146,8 +146,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\FilterMasks merge(?\Bitrix\Security\FilterMasks $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\FilterMask|null find(callable $callback)
+	 * @method \Bitrix\Security\FilterMasks filter(callable $callback)
 	 */
-	class EO_FilterMask_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_FilterMask_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\FilterMaskTable */
 		static public $dataClass = '\Bitrix\Security\FilterMaskTable';
 	}
@@ -266,7 +268,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\FrameMask wakeUp($data)
 	 */
-	class EO_FrameMask {
+	class EO_FrameMask extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\FrameMaskTable */
 		static public $dataClass = '\Bitrix\Security\FrameMaskTable';
 		/**
@@ -321,8 +323,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\FrameMasks merge(?\Bitrix\Security\FrameMasks $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\FrameMask|null find(callable $callback)
+	 * @method \Bitrix\Security\FrameMasks filter(callable $callback)
 	 */
-	class EO_FrameMask_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_FrameMask_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\FrameMaskTable */
 		static public $dataClass = '\Bitrix\Security\FrameMaskTable';
 	}
@@ -399,6 +403,16 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\IPRuleExclIP resetIpEnd()
 	 * @method \Bitrix\Security\IPRuleExclIP unsetIpEnd()
 	 * @method null|\int fillIpEnd()
+	 * @method \Bitrix\Security\IPRule getIprule()
+	 * @method \Bitrix\Security\IPRule remindActualIprule()
+	 * @method \Bitrix\Security\IPRule requireIprule()
+	 * @method \Bitrix\Security\IPRuleExclIP setIprule(\Bitrix\Security\IPRule $object)
+	 * @method \Bitrix\Security\IPRuleExclIP resetIprule()
+	 * @method \Bitrix\Security\IPRuleExclIP unsetIprule()
+	 * @method bool hasIprule()
+	 * @method bool isIpruleFilled()
+	 * @method bool isIpruleChanged()
+	 * @method \Bitrix\Security\IPRule fillIprule()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -426,7 +440,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\IPRuleExclIP wakeUp($data)
 	 */
-	class EO_IPRuleExclIP {
+	class EO_IPRuleExclIP extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\IPRuleExclIPTable */
 		static public $dataClass = '\Bitrix\Security\IPRuleExclIPTable';
 		/**
@@ -450,6 +464,9 @@ namespace Bitrix\Security {
 	 * @method null|\int[] fillIpStart()
 	 * @method null|\int[] getIpEndList()
 	 * @method null|\int[] fillIpEnd()
+	 * @method \Bitrix\Security\IPRule[] getIpruleList()
+	 * @method \Bitrix\Security\IPRuleExclIPs getIpruleCollection()
+	 * @method \Bitrix\Security\IPRules fillIprule()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -478,8 +495,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\IPRuleExclIPs merge(?\Bitrix\Security\IPRuleExclIPs $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\IPRuleExclIP|null find(callable $callback)
+	 * @method \Bitrix\Security\IPRuleExclIPs filter(callable $callback)
 	 */
-	class EO_IPRuleExclIP_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_IPRuleExclIP_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\IPRuleExclIPTable */
 		static public $dataClass = '\Bitrix\Security\IPRuleExclIPTable';
 	}
@@ -556,6 +575,16 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\IPRuleExclMask resetPregMask()
 	 * @method \Bitrix\Security\IPRuleExclMask unsetPregMask()
 	 * @method null|\string fillPregMask()
+	 * @method \Bitrix\Security\IPRule getIprule()
+	 * @method \Bitrix\Security\IPRule remindActualIprule()
+	 * @method \Bitrix\Security\IPRule requireIprule()
+	 * @method \Bitrix\Security\IPRuleExclMask setIprule(\Bitrix\Security\IPRule $object)
+	 * @method \Bitrix\Security\IPRuleExclMask resetIprule()
+	 * @method \Bitrix\Security\IPRuleExclMask unsetIprule()
+	 * @method bool hasIprule()
+	 * @method bool isIpruleFilled()
+	 * @method bool isIpruleChanged()
+	 * @method \Bitrix\Security\IPRule fillIprule()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -583,7 +612,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\IPRuleExclMask wakeUp($data)
 	 */
-	class EO_IPRuleExclMask {
+	class EO_IPRuleExclMask extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\IPRuleExclMaskTable */
 		static public $dataClass = '\Bitrix\Security\IPRuleExclMaskTable';
 		/**
@@ -607,6 +636,9 @@ namespace Bitrix\Security {
 	 * @method null|\string[] fillLikeMask()
 	 * @method null|\string[] getPregMaskList()
 	 * @method null|\string[] fillPregMask()
+	 * @method \Bitrix\Security\IPRule[] getIpruleList()
+	 * @method \Bitrix\Security\IPRuleExclMasks getIpruleCollection()
+	 * @method \Bitrix\Security\IPRules fillIprule()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -635,8 +667,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\IPRuleExclMasks merge(?\Bitrix\Security\IPRuleExclMasks $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\IPRuleExclMask|null find(callable $callback)
+	 * @method \Bitrix\Security\IPRuleExclMasks filter(callable $callback)
 	 */
-	class EO_IPRuleExclMask_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_IPRuleExclMask_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\IPRuleExclMaskTable */
 		static public $dataClass = '\Bitrix\Security\IPRuleExclMaskTable';
 	}
@@ -713,6 +747,16 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\IPRuleInclIP resetIpEnd()
 	 * @method \Bitrix\Security\IPRuleInclIP unsetIpEnd()
 	 * @method null|\int fillIpEnd()
+	 * @method \Bitrix\Security\IPRule getIprule()
+	 * @method \Bitrix\Security\IPRule remindActualIprule()
+	 * @method \Bitrix\Security\IPRule requireIprule()
+	 * @method \Bitrix\Security\IPRuleInclIP setIprule(\Bitrix\Security\IPRule $object)
+	 * @method \Bitrix\Security\IPRuleInclIP resetIprule()
+	 * @method \Bitrix\Security\IPRuleInclIP unsetIprule()
+	 * @method bool hasIprule()
+	 * @method bool isIpruleFilled()
+	 * @method bool isIpruleChanged()
+	 * @method \Bitrix\Security\IPRule fillIprule()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -740,7 +784,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\IPRuleInclIP wakeUp($data)
 	 */
-	class EO_IPRuleInclIP {
+	class EO_IPRuleInclIP extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\IPRuleInclIPTable */
 		static public $dataClass = '\Bitrix\Security\IPRuleInclIPTable';
 		/**
@@ -764,6 +808,9 @@ namespace Bitrix\Security {
 	 * @method null|\int[] fillIpStart()
 	 * @method null|\int[] getIpEndList()
 	 * @method null|\int[] fillIpEnd()
+	 * @method \Bitrix\Security\IPRule[] getIpruleList()
+	 * @method \Bitrix\Security\IPRuleInclIPs getIpruleCollection()
+	 * @method \Bitrix\Security\IPRules fillIprule()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -792,8 +839,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\IPRuleInclIPs merge(?\Bitrix\Security\IPRuleInclIPs $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\IPRuleInclIP|null find(callable $callback)
+	 * @method \Bitrix\Security\IPRuleInclIPs filter(callable $callback)
 	 */
-	class EO_IPRuleInclIP_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_IPRuleInclIP_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\IPRuleInclIPTable */
 		static public $dataClass = '\Bitrix\Security\IPRuleInclIPTable';
 	}
@@ -870,6 +919,16 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\IPRuleInclMask resetPregMask()
 	 * @method \Bitrix\Security\IPRuleInclMask unsetPregMask()
 	 * @method null|\string fillPregMask()
+	 * @method \Bitrix\Security\IPRule getIprule()
+	 * @method \Bitrix\Security\IPRule remindActualIprule()
+	 * @method \Bitrix\Security\IPRule requireIprule()
+	 * @method \Bitrix\Security\IPRuleInclMask setIprule(\Bitrix\Security\IPRule $object)
+	 * @method \Bitrix\Security\IPRuleInclMask resetIprule()
+	 * @method \Bitrix\Security\IPRuleInclMask unsetIprule()
+	 * @method bool hasIprule()
+	 * @method bool isIpruleFilled()
+	 * @method bool isIpruleChanged()
+	 * @method \Bitrix\Security\IPRule fillIprule()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -897,7 +956,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\IPRuleInclMask wakeUp($data)
 	 */
-	class EO_IPRuleInclMask {
+	class EO_IPRuleInclMask extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\IPRuleInclMaskTable */
 		static public $dataClass = '\Bitrix\Security\IPRuleInclMaskTable';
 		/**
@@ -921,6 +980,9 @@ namespace Bitrix\Security {
 	 * @method null|\string[] fillLikeMask()
 	 * @method null|\string[] getPregMaskList()
 	 * @method null|\string[] fillPregMask()
+	 * @method \Bitrix\Security\IPRule[] getIpruleList()
+	 * @method \Bitrix\Security\IPRuleInclMasks getIpruleCollection()
+	 * @method \Bitrix\Security\IPRules fillIprule()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -949,8 +1011,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\IPRuleInclMasks merge(?\Bitrix\Security\IPRuleInclMasks $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\IPRuleInclMask|null find(callable $callback)
+	 * @method \Bitrix\Security\IPRuleInclMasks filter(callable $callback)
 	 */
-	class EO_IPRuleInclMask_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_IPRuleInclMask_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\IPRuleInclMaskTable */
 		static public $dataClass = '\Bitrix\Security\IPRuleInclMaskTable';
 	}
@@ -1119,7 +1183,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\IPRule wakeUp($data)
 	 */
-	class EO_IPRule {
+	class EO_IPRule extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\IPRuleTable */
 		static public $dataClass = '\Bitrix\Security\IPRuleTable';
 		/**
@@ -1184,8 +1248,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\IPRules merge(?\Bitrix\Security\IPRules $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\IPRule|null find(callable $callback)
+	 * @method \Bitrix\Security\IPRules filter(callable $callback)
 	 */
-	class EO_IPRule_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_IPRule_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\IPRuleTable */
 		static public $dataClass = '\Bitrix\Security\IPRuleTable';
 	}
@@ -1213,7 +1279,7 @@ namespace Bitrix\Security {
 	 */
 	class EO_IPRule_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Security\Mfa\RecoveryCodesTable:security/lib/mfa/recoverycodes.php */
+/* ORMENTITYANNOTATION:Bitrix\Security\Mfa\RecoveryCodesTable:security/lib/mfa/recoverycodestable.php */
 namespace Bitrix\Security\Mfa {
 	/**
 	 * EO_RecoveryCodes
@@ -1314,7 +1380,7 @@ namespace Bitrix\Security\Mfa {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\Mfa\EO_RecoveryCodes wakeUp($data)
 	 */
-	class EO_RecoveryCodes {
+	class EO_RecoveryCodes extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\Mfa\RecoveryCodesTable */
 		static public $dataClass = '\Bitrix\Security\Mfa\RecoveryCodesTable';
 		/**
@@ -1372,8 +1438,10 @@ namespace Bitrix\Security\Mfa {
 	 * @method \Bitrix\Security\Mfa\EO_RecoveryCodes_Collection merge(?\Bitrix\Security\Mfa\EO_RecoveryCodes_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\Mfa\EO_RecoveryCodes|null find(callable $callback)
+	 * @method \Bitrix\Security\Mfa\EO_RecoveryCodes_Collection filter(callable $callback)
 	 */
-	class EO_RecoveryCodes_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_RecoveryCodes_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\Mfa\RecoveryCodesTable */
 		static public $dataClass = '\Bitrix\Security\Mfa\RecoveryCodesTable';
 	}
@@ -1401,7 +1469,7 @@ namespace Bitrix\Security\Mfa {
 	 */
 	class EO_RecoveryCodes_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Security\Mfa\UserTable:security/lib/mfa/user.php */
+/* ORMENTITYANNOTATION:Bitrix\Security\Mfa\UserTable:security/lib/mfa/usertable.php */
 namespace Bitrix\Security\Mfa {
 	/**
 	 * EO_User
@@ -1515,6 +1583,26 @@ namespace Bitrix\Security\Mfa {
 	 * @method \Bitrix\Security\Mfa\EO_User resetInitParams()
 	 * @method \Bitrix\Security\Mfa\EO_User unsetInitParams()
 	 * @method array fillInitParams()
+	 * @method \string getEmail()
+	 * @method \Bitrix\Security\Mfa\EO_User setEmail(\string|\Bitrix\Main\DB\SqlExpression $email)
+	 * @method bool hasEmail()
+	 * @method bool isEmailFilled()
+	 * @method bool isEmailChanged()
+	 * @method \string remindActualEmail()
+	 * @method \string requireEmail()
+	 * @method \Bitrix\Security\Mfa\EO_User resetEmail()
+	 * @method \Bitrix\Security\Mfa\EO_User unsetEmail()
+	 * @method \string fillEmail()
+	 * @method \Bitrix\Main\Type\DateTime getDateSentEmail()
+	 * @method \Bitrix\Security\Mfa\EO_User setDateSentEmail(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateSentEmail)
+	 * @method bool hasDateSentEmail()
+	 * @method bool isDateSentEmailFilled()
+	 * @method bool isDateSentEmailChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateSentEmail()
+	 * @method \Bitrix\Main\Type\DateTime requireDateSentEmail()
+	 * @method \Bitrix\Security\Mfa\EO_User resetDateSentEmail()
+	 * @method \Bitrix\Security\Mfa\EO_User unsetDateSentEmail()
+	 * @method \Bitrix\Main\Type\DateTime fillDateSentEmail()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1542,7 +1630,7 @@ namespace Bitrix\Security\Mfa {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\Mfa\EO_User wakeUp($data)
 	 */
-	class EO_User {
+	class EO_User extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\Mfa\UserTable */
 		static public $dataClass = '\Bitrix\Security\Mfa\UserTable';
 		/**
@@ -1580,6 +1668,10 @@ namespace Bitrix\Security\Mfa {
 	 * @method \Bitrix\Main\Type\DateTime[] fillDeactivateUntil()
 	 * @method array[] getInitParamsList()
 	 * @method array[] fillInitParams()
+	 * @method \string[] getEmailList()
+	 * @method \string[] fillEmail()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateSentEmailList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateSentEmail()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1608,8 +1700,10 @@ namespace Bitrix\Security\Mfa {
 	 * @method \Bitrix\Security\Mfa\EO_User_Collection merge(?\Bitrix\Security\Mfa\EO_User_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\Mfa\EO_User|null find(callable $callback)
+	 * @method \Bitrix\Security\Mfa\EO_User_Collection filter(callable $callback)
 	 */
-	class EO_User_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_User_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\Mfa\UserTable */
 		static public $dataClass = '\Bitrix\Security\Mfa\UserTable';
 	}
@@ -1703,7 +1797,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\RedirectRule wakeUp($data)
 	 */
-	class EO_RedirectRule {
+	class EO_RedirectRule extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\RedirectRuleTable */
 		static public $dataClass = '\Bitrix\Security\RedirectRuleTable';
 		/**
@@ -1753,8 +1847,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\RedirectRules merge(?\Bitrix\Security\RedirectRules $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\RedirectRule|null find(callable $callback)
+	 * @method \Bitrix\Security\RedirectRules filter(callable $callback)
 	 */
-	class EO_RedirectRule_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_RedirectRule_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\RedirectRuleTable */
 		static public $dataClass = '\Bitrix\Security\RedirectRuleTable';
 	}
@@ -1843,7 +1939,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\EO_Session wakeUp($data)
 	 */
-	class EO_Session {
+	class EO_Session extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\SessionTable */
 		static public $dataClass = '\Bitrix\Security\SessionTable';
 		/**
@@ -1892,8 +1988,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\EO_Session_Collection merge(?\Bitrix\Security\EO_Session_Collection $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\EO_Session|null find(callable $callback)
+	 * @method \Bitrix\Security\EO_Session_Collection filter(callable $callback)
 	 */
-	class EO_Session_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Session_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\SessionTable */
 		static public $dataClass = '\Bitrix\Security\SessionTable';
 	}
@@ -1982,7 +2080,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\SiteCheck wakeUp($data)
 	 */
-	class EO_SiteCheck {
+	class EO_SiteCheck extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\SiteCheckTable */
 		static public $dataClass = '\Bitrix\Security\SiteCheckTable';
 		/**
@@ -2031,8 +2129,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\SiteChecks merge(?\Bitrix\Security\SiteChecks $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\SiteCheck|null find(callable $callback)
+	 * @method \Bitrix\Security\SiteChecks filter(callable $callback)
 	 */
-	class EO_SiteCheck_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_SiteCheck_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\SiteCheckTable */
 		static public $dataClass = '\Bitrix\Security\SiteCheckTable';
 	}
@@ -2141,7 +2241,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\Virus wakeUp($data)
 	 */
-	class EO_Virus {
+	class EO_Virus extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\VirusTable */
 		static public $dataClass = '\Bitrix\Security\VirusTable';
 		/**
@@ -2194,8 +2294,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\Viruss merge(?\Bitrix\Security\Viruss $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\Virus|null find(callable $callback)
+	 * @method \Bitrix\Security\Viruss filter(callable $callback)
 	 */
-	class EO_Virus_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_Virus_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\VirusTable */
 		static public $dataClass = '\Bitrix\Security\VirusTable';
 	}
@@ -2274,7 +2376,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\WhiteList wakeUp($data)
 	 */
-	class EO_WhiteList {
+	class EO_WhiteList extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\WhiteListTable */
 		static public $dataClass = '\Bitrix\Security\WhiteListTable';
 		/**
@@ -2321,8 +2423,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\WhiteLists merge(?\Bitrix\Security\WhiteLists $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\WhiteList|null find(callable $callback)
+	 * @method \Bitrix\Security\WhiteLists filter(callable $callback)
 	 */
-	class EO_WhiteList_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_WhiteList_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\WhiteListTable */
 		static public $dataClass = '\Bitrix\Security\WhiteListTable';
 	}
@@ -2461,7 +2565,7 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
 	 * @method static \Bitrix\Security\XScanResult wakeUp($data)
 	 */
-	class EO_XScanResult {
+	class EO_XScanResult extends \Bitrix\Main\ORM\Objectify\EntityObject {
 		/* @var \Bitrix\Security\XScanResultTable */
 		static public $dataClass = '\Bitrix\Security\XScanResultTable';
 		/**
@@ -2520,8 +2624,10 @@ namespace Bitrix\Security {
 	 * @method \Bitrix\Security\XScanResults merge(?\Bitrix\Security\XScanResults $collection)
 	 * @method bool isEmpty()
 	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Security\XScanResult|null find(callable $callback)
+	 * @method \Bitrix\Security\XScanResults filter(callable $callback)
 	 */
-	class EO_XScanResult_Collection implements \ArrayAccess, \Iterator, \Countable {
+	class EO_XScanResult_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Security\XScanResultTable */
 		static public $dataClass = '\Bitrix\Security\XScanResultTable';
 	}

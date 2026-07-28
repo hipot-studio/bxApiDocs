@@ -185,11 +185,36 @@ class Operator
 		if ($access['RESULT'])
 		{
 			$chat = new Chat($this->chatId);
+			if (
+				$chat->isDataLoaded()
+				&& $chat->getData('AUTHOR_ID') > 0
+				&& $chat->getData('AUTHOR_ID') != $this->userId
+				&& !UserV2::getInstance((int)$chat->getData('AUTHOR_ID'))->isBot()
+			)
+			{
+				$this->error = new BasicError(
+					__METHOD__,
+					'ANSWER_ALREADY_TAKEN',
+					Loc::getMessage('IMOL_OPERATOR_ERROR_ANSWER_ALREADY_TAKEN')
+				);
+
+				return false;
+			}
+
 			$resultAnswer = $chat->answer($this->userId);
 
 			if ($resultAnswer->isSuccess())
 			{
 				$result = true;
+			}
+			else
+			{
+				$errors = $resultAnswer->getErrors();
+				if (!empty($errors))
+				{
+					$error = current($errors);
+					$this->error = new BasicError(__METHOD__, $error->getCode(), $error->getMessage());
+				}
 			}
 		}
 
@@ -260,14 +285,14 @@ class Operator
 			return false;
 		}
 
-		$chat = new Chat($this->chatId);
-		$chat->setSilentMode($active);
+		$isActive = (bool)$active;
 
-		$session = \Bitrix\ImOpenLines\V2\Session\Session::getInstanceByChatId($this->chatId);
-		if ($session)
-		{
-			$session->setSilentMode($active);
-		}
+		// Personal hidden messages mode: the state is stored for the specific operator,
+		// not for the whole chat. No system message about the mode change is broadcast.
+		SilentMode\PersonalSilentMode::set($this->userId, $this->chatId, $isActive);
+
+		$chat = new Chat($this->chatId);
+		$chat->sendPullUpdateSilentMode($isActive, $this->userId);
 
 		return true;
 	}

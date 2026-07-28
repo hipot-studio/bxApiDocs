@@ -17,7 +17,6 @@ use Bitrix\Main\Result;
 class FireUserCommand extends AbstractCommand
 {
 	private bool $isSuccess = false;
-	private bool $wasIntegrator = false;
 
 	public function __construct(
 		public readonly User $user,
@@ -27,8 +26,6 @@ class FireUserCommand extends AbstractCommand
 
 	protected function beforeRun(): ?Result
 	{
-		$this->wasIntegrator = $this->user->isIntegrator();
-
 		$isActionAvailable = ServiceContainer::getInstance()
 			->getUserService()
 			->isActionAvailableForUser($this->user, UserActionDictionary::FIRE)
@@ -37,6 +34,13 @@ class FireUserCommand extends AbstractCommand
 		if (!$isActionAvailable)
 		{
 			return (new Result())->addError(new Error('User already fired'));
+		}
+
+		$errors = UserStatusEventHelper::collectErrors(UserStatusEventHelper::EVENT_BEFORE_FIRE, $this->user);
+
+		if (!empty($errors))
+		{
+			return (new Result())->addErrors($errors);
 		}
 
 		return null;
@@ -72,7 +76,17 @@ class FireUserCommand extends AbstractCommand
 
 	protected function afterRun(): void
 	{
-		if ($this->isSuccess && $this->wasIntegrator)
+		if ($this->isSuccess)
+		{
+			$event = new Event('intranet', UserStatusEventHelper::EVENT_AFTER_FIRE, [
+				'event' => null,
+				'user' => $this->user,
+			]);
+			$event->setParameter('event', $event);
+			$event->send();
+		}
+
+		if ($this->isSuccess && $this->user->isIntegrator())
 		{
 			(new Event('intranet', 'onIntegratorUserFired', [
 				'user' => $this->user,

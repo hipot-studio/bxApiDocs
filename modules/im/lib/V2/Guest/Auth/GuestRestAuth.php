@@ -6,33 +6,20 @@ namespace Bitrix\Im\V2\Guest\Auth;
 
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Entity\User\UserGuest;
+use Bitrix\Im\V2\Guest\GuestService;
 use Bitrix\Im\V2\Service\Locator;
 
 /**
- * Handler for old REST API authentication (via rest:onRestCheckAuth event).
- *
- * Provides authentication for old REST methods (im.message.add, im.chat.get, etc.)
- * called by mobile app and legacy widgets.
- *
- * Must run BEFORE SessionAuth (lower SORT value) to prevent SessionAuth from rejecting
- * guest users, since SessionAuth blocks all external user types in isAccessAllowed().
- *
- * For new REST controllers (im.v2.*), guest auth is handled by AuthorizationPrefilter.
- *
- * @see \Bitrix\Im\V2\Controller\Filter\AuthorizationPrefilter for controller-based authentication
- * @see AuthenticationService for token-based authentication logic
- * @see AuthorizationService for session authorization
+ * Old REST API auth handler (rest:onRestCheckAuth). Must run before SessionAuth so guests
+ * are not rejected as external users. V2 controllers (im.v2.*) are handled by
+ * {@see \Bitrix\Im\V2\Controller\Filter\AuthorizationPrefilter}.
  */
 class GuestRestAuth
 {
 	/** @var list<string>|null */
 	private static ?array $allowedMethodsLowerCache = null;
 
-	/**
-	 * REST methods allowed for guest users.
-	 * V2 controller methods (im.v2.*) are not listed here — they are handled
-	 * by AuthorizationPrefilter's allowedGuestControllers whitelist.
-	 */
+	/** Old REST methods allowed for guests. V2 methods (im.v2.*) bypass this list. */
 	protected const ALLOWED_METHODS = [
 		'server.time',
 		'smile.get',
@@ -44,6 +31,8 @@ class GuestRestAuth
 		// Chat
 		'im.chat.get',
 		'im.chat.user.list',
+		'im.chat.mute',
+		'im.chat.file.get',
 
 		// Messages
 		'im.message.add',
@@ -53,6 +42,7 @@ class GuestRestAuth
 
 		// Dialog
 		'im.dialog.messages.get',
+		'im.dialog.messages.search',
 		'im.dialog.read',
 		'im.dialog.writing',
 		'im.dialog.users.list',
@@ -79,6 +69,7 @@ class GuestRestAuth
 
 		// Sidebar
 		'im.chat.favorite.get',
+		'im.chat.favorite.add',
 		'im.chat.favorite.counter.get',
 		'im.chat.url.get',
 		'im.chat.url.counter.get',
@@ -88,26 +79,13 @@ class GuestRestAuth
 	];
 
 	/**
-	 * Handler for rest:onRestCheckAuth event.
+	 * Activates when a guest token is in the request (header/cookie) or the user is
+	 * already authorized as im_guest (intercepts before SessionAuth rejects).
 	 *
-	 * Activates in two cases:
-	 * 1. Guest token found in request (header/cookie via Token::createFromRequest)
-	 * 2. User already authorized via session as im_guest (intercepts before SessionAuth rejects)
-	 *
-	 * @param array $query Request query parameters
-	 * @param mixed $scope Requested scope
-	 * @param mixed &$res Result reference
 	 * @return bool|null null = not handled, true = success, false = error
 	 */
 	public static function onRestCheckAuth(array $query, $scope, &$res): ?bool
 	{
-		if (!Features::isChatWithGuestsAvailable())
-		{
-			return null;
-		}
-
-		$token = Token::createFromRequest();
-
 		$globalUser = Locator::getContext()->getCUser();
 		if ($globalUser === null)
 		{
@@ -118,6 +96,25 @@ class GuestRestAuth
 			&& $globalUser->GetParam('EXTERNAL_AUTH_ID') === UserGuest::AUTH_ID
 		;
 
+		if ($isSessionGuest && !GuestService::getInstance()->isCurrentGuestSessionValid())
+		{
+			AuthorizationService::getInstance()->terminate();
+
+			$res = self::buildErrorResult(
+				AuthError::GUEST_SESSION_TERMINATED,
+				'IM Guest: session terminated'
+			);
+
+			return false;
+		}
+
+		if (!Features::isChatWithGuestsAvailable(GuestService::getInstance()->getCurrentInviterId()))
+		{
+			return null;
+		}
+
+		$token = Token::createFromRequest();
+
 		if ($token === null && !$isSessionGuest)
 		{
 			return null;
@@ -126,7 +123,7 @@ class GuestRestAuth
 		if (!self::isMethodAllowed())
 		{
 			$res = self::buildErrorResult(
-				AuthError::METHOD_NOT_ALLOWED,
+				AuthError::GUEST_METHOD_NOT_ALLOWED,
 				'IM Guest: method not allowed for guest users'
 			);
 
@@ -143,7 +140,28 @@ class GuestRestAuth
 			return true;
 		}
 
-		return self::authenticateByToken($token, $res);
+		$authResult = self::authenticateByToken($token, $res);
+		if ($authResult !== true)
+		{
+			return $authResult;
+		}
+
+		// Symmetric with the session-guest branch above: after token-auth set up the user,
+		// run the full session check (link, chat membership, inviter role) so a guest with
+		// a revoked link cannot squeeze a single V1-REST call through on token alone.
+		if (!GuestService::getInstance()->isCurrentGuestSessionValid())
+		{
+			AuthorizationService::getInstance()->terminate();
+
+			$res = self::buildErrorResult(
+				AuthError::GUEST_SESSION_TERMINATED,
+				'IM Guest: session terminated'
+			);
+
+			return false;
+		}
+
+		return true;
 	}
 
 	private static function authenticateByToken(Token $token, &$res): ?bool

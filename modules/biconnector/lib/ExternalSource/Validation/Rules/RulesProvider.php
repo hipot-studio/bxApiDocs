@@ -28,7 +28,7 @@ final class RulesProvider
 					new MoneyRule($datasetSettings[FieldType::Money->value]),
 				],
 			],
-			Type::Source1C => [],
+			default => [],
 		};
 	}
 }

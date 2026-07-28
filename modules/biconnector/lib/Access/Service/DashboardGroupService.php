@@ -47,7 +47,7 @@ class DashboardGroupService
 
 		if (is_null($group))
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SAVE_GROUP_ERROR_NOT_FOUND')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SAVE_GROUP_ERROR_NOT_FOUND') ?? ''));
 
 			return $result;
 		}
@@ -59,7 +59,7 @@ class DashboardGroupService
 		{
 			if (empty($groupInfo['name']))
 			{
-				$result->addError(new Error(Loc::getMessage('BICONNECTOR_SAVE_GROUP_ERROR_NO_NAME')));
+				$result->addError(new Error(Loc::getMessage('BICONNECTOR_SAVE_GROUP_ERROR_NO_NAME') ?? ''));
 
 				return $result;
 			}
@@ -313,10 +313,13 @@ class DashboardGroupService
 
 		foreach ($dashboardList as $dashboardId => $scopes)
 		{
-			$existScopeCollection = $existDashboards
-				->getByPrimary($dashboardId)
-				->getScope()
-			;
+			$existDashboard = $existDashboards?->getByPrimary($dashboardId);
+			if ($existDashboard === null)
+			{
+				continue;
+			}
+
+			$existScopeCollection = $existDashboard->getScope();
 
 			$scopeToAdd = array_diff($scopes, $existScopeCollection->getScopeCodeList());
 			if (!empty($scopeToAdd))

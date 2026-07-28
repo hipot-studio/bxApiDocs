@@ -25,7 +25,7 @@ abstract class Base
 	/**
 	 * @return array
 	 */
-	abstract public function getEntityList(): Main\Result;
+	abstract public function getEntityList(?string $searchString = null): Main\Result;
 
 	/**
 	 * @param string $entityName

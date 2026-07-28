@@ -242,13 +242,13 @@ class Call
 		$result['telephony_call']['TABLE_DESCRIPTION_FULL'] = $messages['VI_BIC_CALL_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['telephony_call']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
-			$fieldInfo['FIELD_DESCRIPTION'] = $messages['VI_BIC_CALL_FIELD_' . $fieldCode];
+			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['VI_BIC_CALL_FIELD_' . $fieldCode]) ? $messages['VI_BIC_CALL_FIELD_' . $fieldCode] : $fieldCode;
 			if (!$fieldInfo['FIELD_DESCRIPTION'])
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] = $fieldCode;
 			}
 
-			$fieldInfo['FIELD_DESCRIPTION_FULL'] = $messages['VI_BIC_CALL_FIELD_' . $fieldCode . '_FULL'] ?? '';
+			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['VI_BIC_CALL_FIELD_' . $fieldCode . '_FULL']) ? $messages['VI_BIC_CALL_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
 	}

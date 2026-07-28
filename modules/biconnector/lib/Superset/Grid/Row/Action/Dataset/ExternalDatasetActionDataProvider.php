@@ -40,7 +40,7 @@ class ExternalDatasetActionDataProvider extends DataProvider
 		foreach ($this->prepareActions() as $actionsItem)
 		{
 			if (
-				$rawFields['TYPE'] !== Type::Csv->value
+				($rawFields['TYPE'] ?? '') !== Type::Csv->value
 				&& $actionsItem instanceof ExportCsvDatasetAction
 			)
 			{

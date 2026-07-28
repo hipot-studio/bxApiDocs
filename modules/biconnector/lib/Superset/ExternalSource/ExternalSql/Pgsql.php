@@ -46,12 +46,12 @@ final class Pgsql implements ExternalSource\Source
 
 	public function getTitle(): string
 	{
-		return Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_POSTGRESQL_TITLE');
+		return Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_POSTGRESQL_TITLE') ?? '';
 	}
 
 	public function getDescription(): string
 	{
-		return Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_POSTGRESQL_DESCRIPTION');
+		return Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_POSTGRESQL_DESCRIPTION') ?? '';
 	}
 
 	public function getLogo(): ?string

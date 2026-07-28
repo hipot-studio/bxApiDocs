@@ -34,6 +34,7 @@ final class AfterCalendarEventCreated extends BaseEvent
 		return [
 			new EventSubscriber\Event\CheckIsOpenEvent(),
 			new EventSubscriber\Event\EventAnalytics(),
+			new EventSubscriber\Event\CreateCallSyncChat(),
 		];
 	}
 }

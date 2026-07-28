@@ -41,8 +41,8 @@ final class Rest extends Base
 		$sourceId = $dataset->getSourceId();
 
 		$queryFields = [
-			'select' => array_column($data->getConnectorData()->schema, 'NAME'),
-			'filter' => $data->getConnectorData()->filter,
+			'select' => array_column($data->getConnectorData()?->schema ?? [], 'NAME'),
+			'filter' => $data->getConnectorData()?->filter ?? [],
 			'limit' => $limit,
 			'timezone' => DataTimezone::getTimezone(),
 		];
@@ -50,7 +50,7 @@ final class Rest extends Base
 		try
 		{
 			/* @var ExternalSource\Source\Rest $source */
-			$source = Source\Factory::getSource(ExternalSource\Type::Rest, $sourceId);
+			$source = Source\Factory::getSource(ExternalSource\Type::Rest, $sourceId ?? 0);
 			yield $source->getData($dataset->getExternalCode(), $queryFields);
 		}
 		catch (\Exception $e)

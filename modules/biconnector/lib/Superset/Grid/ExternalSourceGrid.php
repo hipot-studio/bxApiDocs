@@ -32,14 +32,7 @@ final class ExternalSourceGrid extends Grid
 	protected function createRows(): Rows
 	{
 		$rowAssembler = new ExternalSourceRowAssembler(
-			[
-				'TITLE',
-				'TYPE',
-				'ACTIVE',
-				'DATE_CREATE',
-				'CREATED_BY_ID',
-				'DESCRIPTION',
-			],
+			$this->getVisibleColumnsIds(),
 			$this->getSettings()
 		);
 
@@ -47,6 +40,22 @@ final class ExternalSourceGrid extends Grid
 			$rowAssembler,
 			new \Bitrix\BIConnector\Superset\Grid\Row\Action\Source\ExternalSourceActionDataProvider($this->getSettings())
 		);
+	}
+
+	public function getOrmParams(): array
+	{
+		$ormParams = parent::getOrmParams();
+
+		$requiredFields = ['ID', 'TYPE', 'ACTIVE', 'MODULE'];
+		foreach ($requiredFields as $field)
+		{
+			if (!in_array($field, $ormParams['select'], true))
+			{
+				$ormParams['select'][] = $field;
+			}
+		}
+
+		return $ormParams;
 	}
 
 	protected function createFilter(): ?Filter

@@ -42,13 +42,19 @@ final readonly class CreateDto
 		);
 	}
 
-	public static function initForGuestChat(string $chatId, int $authorId, ?int $maxUses = null): self
+	public static function initForGuestChat(
+		string $chatId,
+		int $authorId,
+		?int $maxUses = null,
+		?DateTime $dateExpire = null,
+	): self
 	{
 		return new self(
 			entityId: $chatId,
 			entityType: LinkEntityType::GuestChat,
 			authorId: $authorId,
 			type: Type::Individual,
+			dateExpire: $dateExpire,
 			maxUses: $maxUses,
 		);
 	}
@@ -76,14 +82,22 @@ final readonly class CreateDto
 		);
 	}
 
-	public static function initForGuestChatCustom(string $chatId, int $authorId, ?string $name = null, ?int $maxUses = null): self
+	public static function initForGuestChatCustom(
+		string $chatId,
+		int $authorId,
+		?string $name = null,
+		?int $maxUses = null,
+		?DateTime $dateExpire = null,
+	): self
 	{
-		return self::initForCustom(
+		return new self(
 			entityId: $chatId,
 			entityType: LinkEntityType::GuestChat,
 			authorId: $authorId,
-			name: $name,
+			type: Type::Custom,
+			dateExpire: $dateExpire,
 			maxUses: $maxUses,
+			name: $name,
 		);
 	}
 

@@ -19,6 +19,7 @@ use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Integration\AI\Transcription\Item\TranscribeFileItem;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
+use Bitrix\Im\V2\Logger;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\PopupDataAggregatable;
@@ -28,6 +29,7 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Throwable;
 
 class FileItem implements RestEntity, PopupDataAggregatable
 {
@@ -502,8 +504,15 @@ class FileItem implements RestEntity, PopupDataAggregatable
 		$scope = self::getQuickAccessScope($chatId);
 		$scopeTokenService = ServiceLocator::getInstance()->get('disk.scopeTokenService');
 
-		return $scopeTokenService?->getEncryptedScopeForObject($file, $scope);
-
+		try
+		{
+			return $scopeTokenService?->getEncryptedScopeForObject($file, $scope);
+		}
+		catch (Throwable $e)
+		{
+			(new Logger('file_item_unable_to_get_encrypted_scope_for_quick_access'))->logThrowable($e);
+			return null;
+		}
 	}
 
 	private function getViewerAttributes(): ?array

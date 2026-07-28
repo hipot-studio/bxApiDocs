@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\User\Filter\Provider;
 
+use Bitrix\Intranet\Internal\Integration\Humanresources\UserQueryModifier;
 use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Filter\EntityDataProvider;
@@ -12,10 +13,12 @@ use Bitrix\Socialnetwork\UserToGroupTable;
 class ExtranetUserDataProvider extends EntityDataProvider
 {
 	private ExtranetUserSettings $settings;
+	private UserQueryModifier $userQueryModifier;
 
 	public function __construct(ExtranetUserSettings $settings)
 	{
 		$this->settings = $settings;
+		$this->userQueryModifier = new UserQueryModifier();
 	}
 
 	public function getSettings(): ExtranetUserSettings
@@ -33,7 +36,7 @@ class ExtranetUserDataProvider extends EntityDataProvider
 						'name' => Loc::getMessage('INTRANET_USER_FILTER_COLLABER') ?? '',
 						'type' => 'checkbox',
 						'partial' => true,
-					]
+					],
 				),
 			]
 			: [];
@@ -60,44 +63,47 @@ class ExtranetUserDataProvider extends EntityDataProvider
 
 		if (
 			!$this->getSettings()->isCurrentUserExtranetAdmin()
-			&& (
-				(
-					isset($result['=UF_DEPARTMENT'])
-					&& $result['=UF_DEPARTMENT']
-				)
-				|| $this->getSettings()->isCurrentUserExtranet()
-				|| !isset($result['=UF_DEPARTMENT'])
-			)
-			&& (
-				!isset($result['!UF_DEPARTMENT'])
-				|| $result['!UF_DEPARTMENT'] !== false
-				|| $this->getSettings()->isCurrentUserExtranet()
-			)
+			&& !$this->isExtranetRoleFilterEnabled($rawFilterValue)
 			&& Loader::includeModule('socialnetwork')
 		)
 		{
+			$employeeUserIdSubQuery = $this->userQueryModifier->createEmployeeUserIdSubQuery();
+			$hasDepartmentFilter = !empty($result['DEPARTMENT']);
+			$isVisitorFilterEnabled
+				= !empty($result[ExtranetUserSettings::VISITOR_FIELD])
+				&& $result[ExtranetUserSettings::VISITOR_FIELD] === 'Y';
 			$workgroupIdList = $this->getSettings()->getWorkgroupIdList();
 
 			if (
-				!isset($filter['UF_DEPARTMENT'])
+				!$hasDepartmentFilter
+				&& !$isVisitorFilterEnabled
 				&& !$this->getSettings()->isCurrentUserExtranet()
 			)
 			{
 				if (!empty($workgroupIdList))
 				{
+					$directoryFilter = [];
+					if ($employeeUserIdSubQuery !== null)
+					{
+						$directoryFilter[] = [
+							'@ID' => new SqlExpression($employeeUserIdSubQuery),
+						];
+					}
+
+					$directoryFilter[] = [
+						'@ID' => new SqlExpression($this->getWorkgroupUsersSubQuery($workgroupIdList)),
+					];
+
 					$result[] = [
 						'LOGIC' => 'OR',
-						[
-							'!UF_DEPARTMENT' => false
-						],
-						[
-							'@ID' => new SqlExpression($this->getWorkgroupUsersSubQuery($workgroupIdList))
-						],
+						...$directoryFilter,
 					];
 				}
-				else
+				elseif ($employeeUserIdSubQuery !== null)
 				{
-					$result[] = ['!UF_DEPARTMENT' => false];
+					$result[] = [
+						'@ID' => new SqlExpression($employeeUserIdSubQuery),
+					];
 				}
 			}
 			else
@@ -111,7 +117,7 @@ class ExtranetUserDataProvider extends EntityDataProvider
 				{
 					$result[] = ['ID' => $this->getSettings()->getCurrentUserId()];
 				}
-				else if (!empty($workgroupIdList))
+				elseif (!empty($workgroupIdList))
 				{
 					if (!empty($publicUserIdList))
 					{
@@ -119,10 +125,10 @@ class ExtranetUserDataProvider extends EntityDataProvider
 							'LOGIC' => 'OR',
 							[
 								'<=UG.ROLE' => UserToGroupTable::ROLE_USER,
-								'@UG.GROUP_ID' => $workgroupIdList
+								'@UG.GROUP_ID' => $workgroupIdList,
 							],
 							[
-								'@ID' => $publicUserIdList
+								'@ID' => $publicUserIdList,
 							],
 						];
 					}
@@ -184,6 +190,15 @@ class ExtranetUserDataProvider extends EntityDataProvider
 		{
 			$filterValue['!=EXTRANET.ROLE'] = 'extranet';
 		}
+	}
+
+	private function isExtranetRoleFilterEnabled(array $filterValue): bool
+	{
+		return
+			!empty($filterValue[ExtranetUserSettings::EXTRANET_FIELD])
+			&& $this->getSettings()->isFilterAvailable(ExtranetUserSettings::EXTRANET_FIELD)
+			&& $filterValue[ExtranetUserSettings::EXTRANET_FIELD] === 'Y'
+		;
 	}
 
 	public function getWorkgroupUsersSubQuery(array $workgroupIdList): string

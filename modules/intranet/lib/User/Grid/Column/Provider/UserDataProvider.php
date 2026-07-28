@@ -91,7 +91,7 @@ class UserDataProvider extends DataProvider
 			],
 			[
 				'id' => 'PERSONAL_COUNTRY',
-				'name' => Loc::getMessage('INTRANET_USER_LIST_COLUMN_PERSONAL_COUNTRY'),
+				'name' => Loc::getMessage('INTRANET_USER_LIST_COLUMN_PERSONAL_COUNTRY_MSGVER_1'),
 				'sort' => 'PERSONAL_COUNTRY',
 			],
 			[
@@ -121,7 +121,7 @@ class UserDataProvider extends DataProvider
 			],
 			[
 				'id' => 'WORK_COUNTRY',
-				'name' => Loc::getMessage('INTRANET_USER_LIST_COLUMN_WORK_COUNTRY'),
+				'name' => Loc::getMessage('INTRANET_USER_LIST_COLUMN_WORK_COUNTRY_MSGVER_1'),
 				'sort' => 'WORK_COUNTRY',
 			],
 			[
@@ -180,7 +180,7 @@ class UserDataProvider extends DataProvider
 
 		$result[] =
 			$this->createColumn('EMPLOYEE_CARD')
-				->setSelect(['ID', 'LOGIN', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'EMAIL', 'TITLE', 'PERSONAL_PHOTO', 'WORK_POSITION', 'PERSONAL_GENDER', 'CONFIRM_CODE', 'ACTIVE', 'UF_DEPARTMENT'])
+				->setSelect(['ID', 'LOGIN', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'EMAIL', 'TITLE', 'PERSONAL_PHOTO', 'WORK_POSITION', 'PERSONAL_GENDER', 'CONFIRM_CODE', 'ACTIVE'])
 				->setName(Loc::getMessage('INTRANET_USER_LIST_COLUMN_EMPLOYEE_CARD'))
 				->setDefault(true)
 				->setSort('LAST_NAME')
@@ -188,6 +188,7 @@ class UserDataProvider extends DataProvider
 
 		$result[] =
 			$this->createColumn('UF_DEPARTMENT')
+				->setSelect([])
 				->setName(Loc::getMessage('INTRANET_USER_LIST_COLUMN_UF_DEPARTMENT'))
 				->setDefault(true)
 				->setWidth(180)
@@ -209,7 +210,7 @@ class UserDataProvider extends DataProvider
 
 		$result[] =
 			$this->createColumn('LAST_ACTIVITY_DATE')
-				->setSelect(['LAST_ACTIVITY_DATE', 'ACTIVE', 'CONFIRM_CODE', 'ID', 'UF_DEPARTMENT'])
+				->setSelect(['LAST_ACTIVITY_DATE', 'ACTIVE', 'CONFIRM_CODE', 'ID'])
 				->setName(Loc::getMessage('INTRANET_USER_LIST_COLUMN_LAST_ACTIVITY_DATE'))
 				->setDefault(true)
 				->setSort('LAST_ACTIVITY_DATE')
@@ -251,7 +252,7 @@ class UserDataProvider extends DataProvider
 
 		$result[] =
 			$this->createColumn('FULL_NAME')
-				->setSelect(['ID', 'LOGIN', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'EMAIL', 'TITLE', 'WORK_POSITION', 'CONFIRM_CODE', 'ACTIVE', 'UF_DEPARTMENT'])
+				->setSelect(['ID', 'LOGIN', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'EMAIL', 'TITLE', 'WORK_POSITION', 'CONFIRM_CODE', 'ACTIVE'])
 				->setName(Loc::getMessage('INTRANET_USER_LIST_COLUMN_FULL_NAME'))
 				->setDefault(false)
 				->setSort('LAST_NAME')

@@ -259,18 +259,23 @@ class PrivateChat extends Chat
 	{
 		$pushFormat = new Message\PushFormat($message);
 		$push = $pushFormat->formatMessageUpdate();
-		$authorId = $message->getAuthorId();
-		$opponentId = $this->getCompanion($authorId)->getId();
 
-		$push['params']['dialogId'] = $authorId;
-		$push['params']['fromUserId'] = $authorId;
-		$push['params']['toUserId'] = $opponentId;
-		Event::add($opponentId, $push);
+		$participantIds = $this->getRelations()->getUserIds();
 
-		$push['params']['dialogId'] = $opponentId;
-		$push['params']['fromUserId'] = $opponentId;
-		$push['params']['toUserId'] = $authorId;
-		Event::add($authorId, $push);
+		foreach ($participantIds as $recipientId)
+		{
+			if ($recipientId <= 0)
+			{
+				continue;
+			}
+
+			$opponentId = $this->getCompanion($recipientId)?->getId() ?: $recipientId;
+
+			$push['params']['dialogId'] = $opponentId;
+			$push['params']['fromUserId'] = $opponentId;
+			$push['params']['toUserId'] = $recipientId;
+			Event::add($recipientId, $push);
+		}
 	}
 
 	protected function getPushService(\Bitrix\Im\V2\Message $message, SendingConfig $config): PushService

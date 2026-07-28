@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\Infrastructure\Controller;
 
+use Bitrix\Intranet\ActionFilter\AdminUser;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
 use Bitrix\Intranet\Entity\Collection\UserCollection;
@@ -73,6 +74,11 @@ class UserList extends Controller
 					new InviteIntranetAccessControl(),
 					new PortalCreatorEmailConfirmationControl(),
 					new InviteLimitControl(),
+				],
+			],
+			'changeDepartment' => [
+				'+prefilters' => [
+					new AdminUser(),
 				],
 			],
 		];
@@ -391,6 +397,13 @@ class UserList extends Controller
 	 */
 	public function changeDepartmentAction(UserCollection $userCollection, DepartmentCollection $departmentCollection): Response
 	{
+		if ($departmentCollection->empty())
+		{
+			$this->addError(new Error('No available departments'));
+
+			return AjaxJson::createError($this->errorCollection);
+		}
+
 		$intranetUserCollection = new UserCollection();
 		$extranetUserCollection = new UserCollection();
 

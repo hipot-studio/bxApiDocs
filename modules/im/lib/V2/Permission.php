@@ -211,6 +211,7 @@ class Permission
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
+			Action::ManageGuestLink->value => Chat::ROLE_MEMBER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Crm->value] = [
@@ -246,6 +247,7 @@ class Permission
 			Action::ChangeMessagesAutoDeleteDelay->value => Chat::ROLE_MANAGER,
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
+			Action::ManageGuestLink->value => Chat::ROLE_MEMBER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Videoconference->value] = [
@@ -341,6 +343,7 @@ class Permission
 				GlobalAction::CreateStickerPack->value => true,
 				GlobalAction::ChangeStickerPack->value => true,
 				GlobalAction::JoinChat->value => true,
+				GlobalAction::Extend->value => true,
 			],
 			UserType::EXTRANET->value => [
 				GlobalAction::GetChannels->value => false,
@@ -356,6 +359,7 @@ class Permission
 				GlobalAction::CreateStickerPack->value => false,
 				GlobalAction::ChangeStickerPack->value => false,
 				GlobalAction::JoinChat->value => true,
+				GlobalAction::Extend->value => true,
 			],
 			UserType::COLLABER->value => [
 				GlobalAction::GetChannels->value => false,
@@ -371,6 +375,7 @@ class Permission
 				GlobalAction::CreateStickerPack->value => false,
 				GlobalAction::ChangeStickerPack->value => false,
 				GlobalAction::JoinChat->value => true,
+				GlobalAction::Extend->value => true,
 			],
 			UserType::GUEST->value => [
 				GlobalAction::GetChannels->value => false,
@@ -386,6 +391,8 @@ class Permission
 				GlobalAction::CreateStickerPack->value => false,
 				GlobalAction::ChangeStickerPack->value => false,
 				GlobalAction::JoinChat->value => false,
+				GlobalAction::Extend->value => false,
+				GlobalAction::ManageGuestLink->value => false,
 			],
 		];
 

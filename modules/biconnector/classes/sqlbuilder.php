@@ -58,21 +58,23 @@ class CBIConnectorSqlBuilder extends CSQLWhere
 
 	private function formatFieldExpression(array $fieldInfo, array $options, SqlHelper $sqlHelper, ?string $timezone): string
 	{
-		$fieldName = $fieldInfo['FIELD_NAME'];
+		$fieldName = $fieldInfo['FIELD_NAME'] ?? '';
 
 		if (($fieldInfo['IS_FIELD_NAME_PREPARED'] ?? 'Y') === 'N')
 		{
 			$fieldName = $sqlHelper->quote($fieldName);
 		}
 
-		if ($fieldInfo['FIELD_TYPE'] === 'datetime' && isset($options['datetime_format']))
+		$fieldType = $fieldInfo['FIELD_TYPE'] ?? '';
+
+		if ($fieldType === 'datetime' && isset($options['datetime_format']))
 		{
 			$fieldExpression = $this->applyTimezoneConversion($fieldName, $sqlHelper, $timezone);
 
 			return $sqlHelper->formatDate($options['datetime_format'], $fieldExpression);
 		}
 
-		if ($fieldInfo['FIELD_TYPE'] === 'date' && isset($options['date_format']))
+		if ($fieldType === 'date' && isset($options['date_format']))
 		{
 			return $sqlHelper->formatDate($options['date_format'], $fieldName);
 		}

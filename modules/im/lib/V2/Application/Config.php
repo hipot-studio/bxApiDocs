@@ -8,9 +8,10 @@ use Bitrix\Im\V2\Application\Config\PreloadedEntities;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
+use Bitrix\Im\V2\Integration\AI\EngineManager;
+use Bitrix\Im\V2\Integration\AI\SuggestProvider;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Promotion\Internals\DeviceType;
-use Bitrix\Im\V2\Integration\AI\EngineManager;
 use Bitrix\Im\V2\Reading\Counter\Entity\UserCounters;
 use Bitrix\Im\V2\Reading\Counter\UserCountersCollector;
 use Bitrix\ImOpenLines\V2\Status\Status;
@@ -61,6 +62,7 @@ class Config implements \JsonSerializable
 			'copilot' => $this->getCopilotData(),
 			'preloadedEntities' => $this->getPreloadedEntities()->toRestFormat(),
 			'serviceHealthUrl' => $this->getServiceHealthUrl(),
+			'videoCallsTermsUrl' => $this->getVideoCallsTermsUrl(),
 			'aiSettings' => $this->getAiSettings(),
 		];
 	}
@@ -111,6 +113,20 @@ class Config implements \JsonSerializable
 		;
 
 		return $baseUrl . $license->getRegion();
+	}
+
+	protected function getVideoCallsTermsUrl(): string
+	{
+		$license = Application::getInstance()->getLicense();
+
+		return match ($license->getRegion()) {
+			'ru' => 'https://www.bitrix24.ru/about/terms_of_use_videocalls.php',
+			'kz' => 'https://www.bitrix24.kz/about/terms_of_use_videocalls.php',
+			'by' => 'https://www.bitrix24.by/about/terms-of-use-videocalls.php',
+			default => $license->isCis()
+				? 'https://www.bitrix24.kz/about/terms_of_use_videocalls.php'
+				: 'https://www.bitrix24.com/terms/terms-of-use-videocalls.php',
+		};
 	}
 
 	protected function getPreloadedList(): array
@@ -227,6 +243,7 @@ class Config implements \JsonSerializable
 		return [
 			'availableEngines' => (new EngineManager())->getAvailableEnginesForRest(),
 			'botName' => CopilotNameResolver::getInstance()->getName(),
+			'suggests' => SuggestProvider::getList(),
 			'agentName' => CopilotNameResolver::getInstance()->getAgentName(),
 		];
 	}

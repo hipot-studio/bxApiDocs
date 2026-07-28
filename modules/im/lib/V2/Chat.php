@@ -162,6 +162,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	public const NON_CACHED_FIELDS = ['MESSAGE_COUNT', 'USER_COUNT', 'LAST_MESSAGE_ID'];
 
+	// Backed by chat params (see Chat\Param\Params), which maintains its own cache.
+	// Keeping them in the Chat cache lets fill() rerun their side-effecting setters on
+	// cache-load and, if the cached value is stale, wipes the param from the shared
+	// Params singleton. Access is served lazily from Params.
+	private const CHAT_PARAM_BACKED_FIELDS = ['MANAGE_MESSAGES_AUTO_DELETE', 'MANAGE_GUEST_INVITES'];
+
 	public const
 		MANAGE_RIGHTS_NONE = 'NONE',
 		MANAGE_RIGHTS_MEMBER = 'MEMBER',
@@ -2781,6 +2787,22 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return self::MANAGE_RIGHTS_MANAGERS;
 	}
 
+	/**
+	 * Whether the new chat manage-rights value is stricter than the old one.
+	 * Lattice (low → high strictness): MEMBER < MANAGER < OWNER < NONE.
+	 */
+	public static function isManageRightsTightened(string $oldRights, string $newRights): bool
+	{
+		static $order = [
+			self::MANAGE_RIGHTS_MEMBER => 1,
+			self::MANAGE_RIGHTS_MANAGERS => 2,
+			self::MANAGE_RIGHTS_OWNER => 3,
+			self::MANAGE_RIGHTS_NONE => 4,
+		];
+
+		return ($order[$newRights] ?? 0) > ($order[$oldRights] ?? 0);
+	}
+
 	public function setManageMessagesAutoDelete(string $manageMessagesAutoDelete): self
 	{
 		$manageMessagesAutoDelete = mb_strtoupper($manageMessagesAutoDelete);
@@ -3367,6 +3389,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 		(new Im\V2\Analytics\ChatAnalytics($this))->addDeleteUser();
 
+		Im\V2\Guest\Auth\AuthorizationService::getInstance()->invalidateGuestUser($userId, $this->getId() ?? 0);
+		Im\V2\Guest\GuestLinkService::getInstance()->onChatMemberDeleted($this, $userId);
+
 		return new Result();
 	}
 
@@ -3787,16 +3812,18 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	public function toRestFormat(array $option = []): array
 	{
+		$isGuest = $this->getContext()->getUser()->isGuest();
+
 		$commonFields = [
 			'avatar' => $this->getAvatar(),
 			'color' => $this->getColor(true),
 			'description' => $this->getDescription() ?? '',
 			'dialogId' => $this->getDialogId(),
 			'diskFolderId' => $this->getDiskFolderId(),
-			'entityData1' => $this->getEntityData1() ?? '',
-			'entityData2' => $this->getEntityData2() ?? '',
-			'entityData3' => $this->getEntityData3() ?? '',
-			'entityId' => $this->getEntityId() ?? '',
+			'entityData1' => $isGuest ? '' : ($this->getEntityData1() ?? ''),
+			'entityData2' => $isGuest ? '' : ($this->getEntityData2() ?? ''),
+			'entityData3' => $isGuest ? '' : ($this->getEntityData3() ?? ''),
+			'entityId' => $isGuest ? '' : ($this->getEntityId() ?? ''),
 			'entityType' => $this->getEntityType() ?? '',
 			'extranet' => $this->getExtranet() ?? false,
 			'containsCollaber' => (bool)$this->getChatParams()->get(Params::CONTAINS_COLLABER)?->getValue(),
@@ -4169,6 +4196,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	{
 		$result = $this->toArray();
 		foreach (self::NON_CACHED_FIELDS as $key)
+		{
+			unset($result[$key]);
+		}
+		foreach (self::CHAT_PARAM_BACKED_FIELDS as $key)
 		{
 			unset($result[$key]);
 		}

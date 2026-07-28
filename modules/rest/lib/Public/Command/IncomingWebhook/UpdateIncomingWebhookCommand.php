@@ -12,7 +12,7 @@ class UpdateIncomingWebhookCommand extends Main\Command\AbstractCommand
 		public readonly int $userId,
 		public readonly string $webHookPassword,
 		public readonly ?string $title,
-		public readonly array $scopes,
+		public readonly ?array $scopes,
 	)
 	{
 	}

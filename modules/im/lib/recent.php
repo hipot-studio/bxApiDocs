@@ -5,6 +5,7 @@ namespace Bitrix\Im;
 use Bitrix\Im\Model\MessageParamTable;
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
+use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
 use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
@@ -16,6 +17,8 @@ use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Chat\TextField\TextFieldEnabled;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Entity\User\NullUser;
+use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Integration\Socialnetwork\Group;
@@ -41,6 +44,9 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
 use Bitrix\Pull\Event;
@@ -860,7 +866,10 @@ class Recent
 
 		if ($isIntranetInstalled && !$isIntranet)
 		{
-			$subQuery = Group::getExtranetAccessibleUsersQuery($userId);
+			$subQuery = User::getInstance($userId) instanceof UserGuest
+				? self::getGuestSharedUsersQuery($userId)
+				: Group::getExtranetAccessibleUsersQuery($userId)
+			;
 			if ($subQuery !== null)
 			{
 				$filter[] = [
@@ -885,6 +894,24 @@ class Recent
 			'filter' => $filter,
 			'runtime' => $runtime,
 		];
+	}
+
+	private static function getGuestSharedUsersQuery(int $userId): Query
+	{
+		$query = RelationTable::query();
+		$query->addSelect(new ExpressionField('DISTINCT_USER_ID', 'DISTINCT %s', 'OTHER.USER_ID'));
+		$query->registerRuntimeField(
+			new Reference(
+				'OTHER',
+				RelationTable::class,
+				Join::on('this.CHAT_ID', 'ref.CHAT_ID'),
+				['join_type' => Join::TYPE_INNER]
+			)
+		);
+		$query->where('USER_ID', $userId);
+		$query->whereNot('MESSAGE_TYPE', \IM_MESSAGE_PRIVATE);
+
+		return $query;
 	}
 
 	private static function formatRow($row, $options = []): ?array

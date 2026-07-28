@@ -17,4 +17,6 @@ enum GlobalAction: string
 	case CreateStickerPack = 'CREATE_STICKER_PACK';
 	case ChangeStickerPack = 'CHANGE_STICKER_PACK';
 	case JoinChat = 'JOIN_CHAT';
+	case Extend = 'EXTEND';
+	case ManageGuestLink = 'MANAGE_GUEST_LINK';
 }

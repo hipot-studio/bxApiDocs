@@ -11,6 +11,7 @@ use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
+use Bitrix\Intranet\Internal\Service\Otp\RecoverAccessRequestService;
 use Bitrix\Intranet\Internal\Service\Otp\TrustDeviceConfirmation;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\ArgumentOutOfRangeException;
@@ -180,10 +181,16 @@ class PersonalOtp
 			'pullConfig' =>  $config['pullConfig'] ?? [],
 			'ttl' => 600,
 			'intent' => $intent,
+			'email' => $this->getBackupEmail(),
 			'phoneNumber' => $phoneAuthNumber,
 			'isPhoneNumberConfirmed' => $phoneConfirmed,
 			'signedUserId' => (new OtpSigner())->signUserId($this->user->getId()),
 		];
+	}
+
+	public function getBackupEmail(): ?string
+	{
+		return $this->getOtpByUser()->getEmail();
 	}
 
 	public function getDeeplink(string $intent, int $ttl = 600): string
@@ -226,14 +233,11 @@ class PersonalOtp
 
 	public function canSendRequestRecoverAccess(): bool
 	{
-		return !isset(Otp::getDeferredParams()['RECOVER_ACCESS_REQUEST_SENT']);
-	}
+		$service = new RecoverAccessRequestService(
+			otpActiveChecker: fn(User $user): bool => $this->isActivated(),
+		);
 
-	public function markRequestRecoverAccessSent(): void
-	{
-		$params = Otp::getDeferredParams();
-		$params['RECOVER_ACCESS_REQUEST_SENT'] = true;
-		Otp::setDeferredParams($params);
+		return $service->canSend($this->user);
 	}
 
 	/**

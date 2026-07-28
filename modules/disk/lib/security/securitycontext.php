@@ -101,15 +101,6 @@ abstract class SecurityContext implements IErrorable
 	 * @param $objectId
 	 * @return bool
 	 */
-	public function canDownload($objectId)
-	{
-		return $this->canRead($objectId);
-	}
-
-	/**
-	 * @param $objectId
-	 * @return bool
-	 */
 	abstract public function canRename($objectId);
 
 	/**

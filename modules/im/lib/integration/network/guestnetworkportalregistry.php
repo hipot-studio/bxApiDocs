@@ -66,7 +66,7 @@ final class GuestNetworkPortalRegistry
 		if ($response === false)
 		{
 			$this->logger->error(
-				'network_portal_register_sync: HTTP request failed',
+				'network_portal_register_sync: HTTP request failed {httpError}',
 				['httpError' => $http->getError()],
 			);
 
@@ -77,7 +77,7 @@ final class GuestNetworkPortalRegistry
 		if ($status < 200 || $status >= 300)
 		{
 			$this->logger->error(
-				'network_portal_register_sync: unexpected HTTP status',
+				'network_portal_register_sync: unexpected HTTP status {status} {response}',
 				[
 					'status' => $status,
 					'response' => mb_substr((string)$response, 0, 100),
@@ -94,7 +94,7 @@ final class GuestNetworkPortalRegistry
 		catch (ArgumentException)
 		{
 			$this->logger->error(
-				'network_portal_register_sync: response is not valid JSON',
+				'network_portal_register_sync: response is not valid JSON {status} {response}',
 				[
 					'status' => $status,
 					'response' => mb_substr((string)$response, 0, 100),
@@ -108,7 +108,7 @@ final class GuestNetworkPortalRegistry
 		if (!is_string($portalId) || $portalId === '')
 		{
 			$this->logger->error(
-				'network_portal_register_sync: portalId missing or invalid',
+				'network_portal_register_sync: portalId missing or invalid {error}',
 				[
 					'error' => isset($data['error'])
 						? $data['error']

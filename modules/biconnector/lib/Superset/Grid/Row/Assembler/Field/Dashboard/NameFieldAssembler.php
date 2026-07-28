@@ -7,7 +7,6 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
 use Bitrix\BIConnector\Configuration\Feature;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
@@ -120,7 +119,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 				. 'openFrom=grid'
 			;
 
-			if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($value['TYPE']))
+			if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($value['TYPE'] ?? ''))
 			{
 				$link = "
 					<div style='display: flex; align-items: center;'>
@@ -213,7 +212,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 			return false;
 		}
 
-		$supersetController = new SupersetController(Integrator::getInstance());
+		$supersetController = new SupersetController();
 		if (
 			!$supersetController->isSupersetEnabled()
 			|| SupersetInitializer::isSupersetUnavailable()

@@ -401,6 +401,7 @@ class Manager
 			'IS_EXTERNAL_CHAT_MESSAGE_FORWARDING_AVAILABLE' => Settings::isExternalChatMessageForwardingAvailable(),
 			'IS_TASKS_RECENT_LIST_AVAILABLE' => Settings::isTasksRecentListAvailable(),
 			'IS_MARKET_AVAILABLE' => Settings::isMarketAvailable(),
+			'IS_VIBECODE_BUTTON_AVAILABLE' => Settings::isVibecodeButtonAvailable(),
 			'IS_AUTO_TASKS_ENABLED' => Settings::isAutoTaskEnabled(),
 			'IS_AUTO_TASKS_UI_AVAILABLE' => Settings::isAutoTaskUIAvailable(),
 			'SMILE_LAST_UPDATE_DATE' => CSmile::getLastUpdate()->format(DateTimeInterface::ATOM),

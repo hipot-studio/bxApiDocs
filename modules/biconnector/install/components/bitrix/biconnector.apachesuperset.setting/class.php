@@ -8,45 +8,33 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\BIConnector;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Configuration\DataTimezone;
+use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
-use Bitrix\BIConnector\Superset\Cache\CacheManager;
-use Bitrix\BIConnector\Superset\Config\DatasetSettings;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\IconController;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\KeyTable;
 use Bitrix\BIConnector\Services\ApacheSuperset;
-use Bitrix\BIConnector\Superset\KeyManager;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\KeyInfoField;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\DashboardLanguageField;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\TimeZoneField;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\GlobalSettingsButtonField;
-use Bitrix\Intranet\Portal;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Section\EntityEditorSection;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\EntityEditorController;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\SettingsComponentController;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\PeriodFilterField;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\ClearCacheField;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field\DatasetTypingField;
-use Bitrix\BIConnector\Superset\UI\SettingsPanel\SettingsPanel;
+use Bitrix\BIConnector\Superset\Cache\CacheManager;
+use Bitrix\BIConnector\Superset\Config\DatasetSettings;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
-use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
-use Bitrix\BIConnector\Configuration\DataTimezone;
+use Bitrix\BIConnector\Superset\KeyManager;
+use Bitrix\Intranet\Portal;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorableImplementation;
 use Bitrix\Main\ErrorCollection;
+use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
-use Bitrix\Main\Error;
 use Bitrix\Main\Type\Date;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons;
-use Bitrix\BIConnector\Configuration\Feature;
 
-Loader::includeModule("biconnector");
+Loader::includeModule('biconnector');
 
 class ApacheSupersetSettingComponent
 	extends CBitrixComponent
@@ -77,7 +65,7 @@ class ApacheSupersetSettingComponent
 		{
 			foreach ($checkingResult->getErrorMessages() as $message)
 			{
-				$this->arResult['ERROR_MESSAGES'][] = $message;
+				$this->arResult['errorMessages'][] = $message;
 			}
 
 			$this->includeComponentTemplate();
@@ -85,9 +73,11 @@ class ApacheSupersetSettingComponent
 			return;
 		}
 
-		$this->arResult['TITLE'] = $this->getTitle();
-
-		$this->initSettingsPanel();
+		$this->arResult['title'] = $this->getTitle();
+		$this->arResult['componentName'] = $this->getName();
+		$this->arResult['signedParameters'] = $this->getSignedParameters();
+		$this->arResult['cardsData'] = $this->getCardsData();
+		$this->arResult['collapsedState'] = $this->getCollapsedState();
 
 		Toolbar::addButton(
 			new Buttons\Button(
@@ -108,52 +98,116 @@ class ApacheSupersetSettingComponent
 		$this->includeComponentTemplate();
 	}
 
-	private function initSettingsPanel(): void
+	private function getCardsData(): array
 	{
-		$ajaxData = [
-			'COMPONENT_NAME' => $this->getName(),
-			'ACTION_NAME' => 'save',
-			'SIGNED_PARAMETERS' => $this->getSignedParameters(),
-		];
+		$cards = [];
 
-		$settingsPanel =
-			(new SettingsPanel('BICONNECTOR_SUPERSET_SETTINGS'))
-			->addController(
-				$this->getController(),
-				new IconController('ICON_CONTROLLER')
-			)
-			->addSection($this->getFilterSection())
-			->setAjaxData($ajaxData)
-		;
+		$cards['periodFilter'] = $this->getPeriodFilterData();
 
 		if (!DatasetSettings::isTypingLocked())
 		{
-			$settingsPanel->addSection($this->getDatasetSettingsSection());
+			$cards['datasetTyping'] = [
+				'enabled' => DatasetSettings::isTypingEnabled(),
+				'locked' => false,
+			];
 		}
 
 		if (BIConnector\Manager::isAdmin())
 		{
-			$settingsPanel->addSection($this->getDashboardGlobalSettingsSection());
+			$cards['languageTimezone'] = $this->getLanguageTimezoneData();
 		}
 
 		if (SupersetInitializer::isSupersetExist())
 		{
-			$settingsPanel->addSection($this->getClearCacheSection());
+			$cards['clearCache'] = $this->getClearCacheData();
 
 			$user = CurrentUser::get();
-
 			if (KeyManager::canManageKey($user))
 			{
-				$settingsPanel->addSection($this->getSupersetKeySection());
+				$cards['encryptionKey'] = [
+					'key' => KeyManager::getAccessKey(),
+				];
 			}
 		}
 
-		$this->arResult['SETTINGS_PANEL'] = $settingsPanel;
+		return $cards;
 	}
 
-	private function getController(): EntityEditorController
+	private function getPeriodFilterData(): array
 	{
-		return new SettingsComponentController('SETTING_COMPONENT_CONTROLLER');
+		$periods = [
+			EmbeddedFilter\DateTime::PERIOD_LAST_7,
+			EmbeddedFilter\DateTime::PERIOD_LAST_30,
+			EmbeddedFilter\DateTime::PERIOD_LAST_90,
+			EmbeddedFilter\DateTime::PERIOD_LAST_180,
+			EmbeddedFilter\DateTime::PERIOD_LAST_365,
+			EmbeddedFilter\DateTime::PERIOD_CURRENT_WEEK,
+			EmbeddedFilter\DateTime::PERIOD_CURRENT_MONTH,
+			EmbeddedFilter\DateTime::PERIOD_CURRENT_YEAR,
+			EmbeddedFilter\DateTime::PERIOD_RANGE,
+		];
+
+		$items = [];
+		foreach ($periods as $period)
+		{
+			$items[] = [
+				'name' => EmbeddedFilter\DateTime::getPeriodName($period),
+				'value' => $period,
+			];
+		}
+
+		return [
+			'items' => $items,
+			'currentPeriod' => EmbeddedFilter\DateTime::getDefaultPeriod(),
+			'dateStart' => EmbeddedFilter\DateTime::getDefaultDateStart()->toString(),
+			'dateEnd' => EmbeddedFilter\DateTime::getDefaultDateEnd()->toString(),
+		];
+	}
+
+	private function getLanguageTimezoneData(): array
+	{
+		$settingsUrl = '';
+		if (Loader::includeModule('intranet'))
+		{
+			$settingsUrl = Portal::getInstance()->getSettings()->getSettingsUrl()
+				. '?page=configuration&option=settings-configuration-section-biconnector';
+		}
+
+		$timezoneList = \CTimeZone::GetZones();
+
+		return [
+			'currentLanguage' => CultureFormatter::getLanguage(),
+			'currentTimeZone' => $timezoneList[DataTimezone::getTimezone()] ?? '',
+			'settingsUrl' => $settingsUrl,
+		];
+	}
+
+	private function getCollapsedState(): array
+	{
+		$stored = \CUserOptions::GetOption('biconnector', 'settings_panel_collapsed', []);
+		if (!is_array($stored))
+		{
+			return [];
+		}
+
+		$state = [];
+		foreach ($stored as $cardId => $value)
+		{
+			$state[(string)$cardId] = ($value === 'Y');
+		}
+
+		return $state;
+	}
+
+	private function getClearCacheData(): array
+	{
+		$cacheManager = CacheManager::getInstance();
+		$canClearCache = $cacheManager->canClearCache();
+
+		return [
+			'canClearCache' => $canClearCache,
+			'clearCacheTimeout' => !$canClearCache ? $cacheManager->getNextClearTimeout() : null,
+		];
 	}
 
 	private function checkAccess(): Result
@@ -182,76 +236,6 @@ class ApacheSupersetSettingComponent
 		}
 
 		return $result;
-	}
-
-	private function getFilterSection(): EntityEditorSection
-	{
-		$dateFilterSection = new EntityEditorSection(
-			name: 'DEFAULT_RANGE_SETTINGS',
-			title: Loc::getMessage('BICONNECTOR_SUPERSET_SETTINGS_RANGE_FILTER_SECTION'),
-		);
-		$dateFilterSection->setIconClass('--calendar-1');
-		$dateFilterSection->addField(new PeriodFilterField('DASHBOARD_FILTER'));
-
-		return $dateFilterSection;
-	}
-
-	private function getClearCacheSection(): EntityEditorSection
-	{
-		return (new EntityEditorSection(
-			name: 'CLEAR_CACHE_SECTION',
-			title: Loc::getMessage('BICONNECTOR_SUPERSET_NEW_DASHBOARD_CLEAR_CACHE_SECTION'),
-		))
-			->setIconClass('--refresh-5')
-			->addField(new ClearCacheField('CLEAR_CACHE'))
-		;
-	}
-
-	private function getDatasetSettingsSection(): EntityEditorSection
-	{
-		return (new EntityEditorSection(
-			name: 'DATASET_SETTINGS_SECTION',
-			title: Loc::getMessage('BICONNECTOR_SUPERSET_SETTINGS_DATASET_SECTION'),
-		))
-			->setIconClass('--table')
-			->addField(new DatasetTypingField(DatasetTypingField::FIELD_NAME))
-		;
-	}
-
-	private function getSupersetKeySection(): EntityEditorSection
-	{
-		return
-			(new EntityEditorSection(
-				name: 'KEY_INFO',
-				title: Loc::getMessage('BICONNECTOR_SUPERSET_SETTINGS_KEY_INFO_SECTION'),
-			))
-				->setIconClass('--key')
-				->addField(new KeyInfoField('KEY_VALUE'))
-		;
-	}
-
-	private function getDashboardGlobalSettingsSection(): EntityEditorSection
-	{
-		$settingsUrl = '';
-		if (Loader::includeModule('intranet'))
-		{
-			$settingsUrl = Portal::getInstance()->getSettings()->getSettingsUrl()
-				. '?page=configuration&option=settings-configuration-section-biconnector';
-		}
-
-		return
-			(new EntityEditorSection(
-				name: 'DASHBOARD_GLOBAL_SETTINGS',
-				title: Loc::getMessage('BICONNECTOR_SUPERSET_SETTINGS_DASHBOARD_GLOBAL_SETTINGS'),
-			))
-			->setIconClass('--o-earth')
-			->addField(new DashboardLanguageField(DashboardLanguageField::FIELD_NAME))
-			->addField(new TimeZoneField(TimeZoneField::FIELD_NAME))
-			->addField(new GlobalSettingsButtonField(
-				GlobalSettingsButtonField::FIELD_NAME,
-				$settingsUrl
-			))
-		;
 	}
 
 	private function getTitle(): string
@@ -291,7 +275,7 @@ class ApacheSupersetSettingComponent
 		];
 	}
 
-	public function saveAction(array $data): ?array
+	public function savePeriodFilterAction(array $data): ?array
 	{
 		$checkingResult = $this->checkAccess();
 		if (!$checkingResult->isSuccess())
@@ -303,8 +287,9 @@ class ApacheSupersetSettingComponent
 
 		$startTime = null;
 		$endTime = null;
+		$filterPeriod = $data['FILTER_PERIOD'] ?? '';
 
-		if ($data['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_RANGE)
+		if ($filterPeriod === EmbeddedFilter\DateTime::PERIOD_RANGE)
 		{
 			try
 			{
@@ -313,42 +298,22 @@ class ApacheSupersetSettingComponent
 			}
 			catch (\Bitrix\Main\ObjectException)
 			{
-				$error = new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_INVALID_RANGE'));
-				$this->errorCollection->setError($error);
+				$this->errorCollection->setError(
+					new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_INVALID_RANGE'))
+				);
 
 				return null;
 			}
 		}
 
 		$period = EmbeddedFilter\DateTime::getDefaultPeriod();
-		$innerPeriod = $data['FILTER_PERIOD'] ?? '';
-		if (is_string($innerPeriod) && EmbeddedFilter\DateTime::isAvailablePeriod($innerPeriod))
+		if (is_string($filterPeriod) && EmbeddedFilter\DateTime::isAvailablePeriod($filterPeriod))
 		{
-			$period = $innerPeriod;
+			$period = $filterPeriod;
 		}
-
-		$wasTypingEnabled = DatasetSettings::isTypingEnabled();
-		$newTypingValue = $data[DatasetTypingField::FIELD_NAME] ?? null;
-		$isTypingChanging =
-			($newTypingValue === 'Y' || $newTypingValue === 'N')
-			&& $wasTypingEnabled !== ($newTypingValue === 'Y')
-			&& !DatasetSettings::isTypingLocked()
-		;
-
-		if ($isTypingChanging)
-		{
-			$clearResult = CacheManager::getInstance()->clear();
-			if (!$clearResult->isSuccess())
-			{
-				$this->errorCollection->add($clearResult->getErrors());
-
-				return null;
-			}
-		}
-
-		$isTypingEnabled = DatasetSettings::setTypingOption($newTypingValue);
 
 		Option::set('biconnector', EmbeddedFilter\DateTime::CONFIG_PERIOD_OPTION_NAME, $period);
+
 		if ($startTime !== null)
 		{
 			Option::set('biconnector', EmbeddedFilter\DateTime::CONFIG_DATE_START_OPTION_NAME, $startTime->toString());
@@ -371,14 +336,70 @@ class ApacheSupersetSettingComponent
 			'FILTER_PERIOD' => $period,
 			'DATE_FILTER_START' => $startTime,
 			'DATE_FILTER_END' => $endTime,
-			DatasetTypingField::FIELD_NAME => $isTypingEnabled,
-			'INCLUDE_LAST_FILTER_DATE' => 'Y',
+		];
+	}
+
+	public function saveDatasetTypingAction(string $newTypingValue): ?array
+	{
+		$checkingResult = $this->checkAccess();
+		if (!$checkingResult->isSuccess())
+		{
+			$this->errorCollection->add($checkingResult->getErrors());
+
+			return null;
+		}
+
+		$wasTypingEnabled = DatasetSettings::isTypingEnabled();
+		$isTypingChanging =
+			($newTypingValue === 'Y' || $newTypingValue === 'N')
+			&& $wasTypingEnabled !== ($newTypingValue === 'Y')
+			&& !DatasetSettings::isTypingLocked()
+		;
+
+		if ($isTypingChanging)
+		{
+			$clearResult = CacheManager::getInstance()->clear();
+			if (!$clearResult->isSuccess())
+			{
+				$this->errorCollection->add($clearResult->getErrors());
+
+				return null;
+			}
+		}
+
+		$isTypingEnabled = DatasetSettings::setTypingOption($newTypingValue);
+		return [
+			'enabled' => $isTypingEnabled,
 		];
 	}
 
 	/**
-	 * @return string|null
+	 * @deprecated Use savePeriodFilterAction + saveDatasetTypingAction instead
 	 */
+	public function saveAction(array $data): ?array
+	{
+		$checkingResult = $this->checkAccess();
+		if (!$checkingResult->isSuccess())
+		{
+			$this->errorCollection->add($checkingResult->getErrors());
+
+			return null;
+		}
+
+		$periodResult = $this->savePeriodFilterAction($data);
+		if ($periodResult === null)
+		{
+			return null;
+		}
+
+		$isTypingEnabled = DatasetSettings::setTypingOption($data['DATASET_TYPING_ENABLED'] ?? null);
+
+		return array_merge($periodResult, [
+			'DATASET_TYPING_ENABLED' => $isTypingEnabled,
+			'INCLUDE_LAST_FILTER_DATE' => 'Y',
+		]);
+	}
+
 	public function changeBiTokenAction(): ?string
 	{
 		$user = CurrentUser::get();
@@ -412,7 +433,7 @@ class ApacheSupersetSettingComponent
 			return null;
 		}
 
-		$proxyIntegrator = Integrator::getInstance();
+		$proxyIntegrator = IntegratorFactory::getInstance();
 		$response = $proxyIntegrator->changeBiconnectorToken($accessKey);
 
 		if ($response->hasErrors())

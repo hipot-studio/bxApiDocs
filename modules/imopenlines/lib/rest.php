@@ -280,7 +280,6 @@ class Rest extends \IRestService
 			'MESSAGE' => FormHandler::buildSentFormMessageForClient($formLinkWithParams),
 			'AUTHOR_ID' => CurrentUser::get()->getId(),
 			'FROM_USER_ID' => CurrentUser::get()->getId(),
-			'IMPORTANT_CONNECTOR' => 'Y',
 			'PARAMS' => [
 				'COMPONENT_ID' => FormHandler::FORM_COMPONENT_NAME,
 				'CRM_FORM_ID' => $params['CRM_FORM']['ID'],

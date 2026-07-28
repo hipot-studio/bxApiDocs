@@ -129,6 +129,18 @@ final class UserRepository
 		}
 
 		$users = UserTable::query()
+			->setSelect([
+				'ID',
+				'LOGIN',
+				'NAME',
+				'LAST_NAME',
+				'SECOND_NAME',
+				'PERSONAL_PHOTO',
+				'WORK_POSITION',
+				'PERSONAL_GENDER',
+				'CONFIRM_CODE',
+				'ACTIVE',
+			])
 			->whereIn('ID', $userIds)
 			->fetchAll()
 		;

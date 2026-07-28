@@ -36,6 +36,34 @@ class Logger
 	}
 
 	/**
+	 * @param Error[] $errors
+	 * @param Array<string, string|array> $additionalFields
+	 * @return void
+	 */
+	final public static function logWarning(array $errors, array $additionalFields = []): void
+	{
+		$result = [];
+
+		foreach ($errors as $error)
+		{
+			$result['errors'][] = $error->getMessage();
+		}
+
+		if (!empty($additionalFields))
+		{
+			$result += $additionalFields;
+		}
+
+		\CEventLog::Add([
+			'SEVERITY' => \CEventLog::SEVERITY_WARNING,
+			'AUDIT_TYPE_ID' => static::getAuditType(\CEventLog::SEVERITY_WARNING),
+			'MODULE_ID' => 'biconnector',
+			'ITEM_ID' => 'superset',
+			'DESCRIPTION' => Json::encode($result),
+		]);
+	}
+
+	/**
 	 * @param string $message
 	 * @param array $params additional data that contains in log message
 	 * @return void

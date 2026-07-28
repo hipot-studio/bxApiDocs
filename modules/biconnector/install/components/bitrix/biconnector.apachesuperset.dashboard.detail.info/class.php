@@ -23,7 +23,7 @@ use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardRepository;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Entity\ValueObject\DashboardDetailInfo\DashboardInfo as DashboardInfoValueObject;
 
 Loader::includeModule("biconnector");
@@ -38,7 +38,7 @@ class BiconnectorApachesupersetDashboardDetailInfoComponent extends CBitrixCompo
 	{
 		parent::__construct($component);
 		$this->errorCollection = new ErrorCollection();
-		$this->dashboardRepository = new DashboardRepository(Integrator::getInstance());
+		$this->dashboardRepository = new DashboardRepository(IntegratorFactory::getInstance());
 	}
 
 	public function onPrepareComponentParams($arParams): array

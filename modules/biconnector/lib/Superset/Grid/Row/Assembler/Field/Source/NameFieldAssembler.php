@@ -9,9 +9,9 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 {
 	protected function prepareColumn($value): string
 	{
-		$id = (int)$value['ID'];
-		$title = htmlspecialcharsbx($value['TITLE']);
-		$moduleId = CUtil::JSEscape($value['MODULE']);
+		$id = (int)($value['ID'] ?? 0);
+		$title = htmlspecialcharsbx(($value['TITLE'] ?? ''));
+		$moduleId = CUtil::JSEscape(($value['MODULE'] ?? ''));
 
 		$link = "
 				<a 

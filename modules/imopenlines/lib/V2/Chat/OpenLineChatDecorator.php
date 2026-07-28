@@ -3,6 +3,7 @@
 namespace Bitrix\ImOpenLines\V2\Chat;
 
 use Bitrix\Im\V2\Chat as BaseChat;
+use Bitrix\ImOpenLines\SilentMode\PersonalSilentMode;
 use Bitrix\Main\Loader;
 
 class OpenLineChatDecorator
@@ -43,12 +44,24 @@ class OpenLineChatDecorator
 					'waitAction' => $this->data->isWaitingForAction(),
 					'blockDate' => $this->data->getBlockDate(),
 					'blockReason' => $this->data->getBlockReason(),
-					'silentMode' => $this->data->isSilentMode(),
+					'silentMode' => $this->isSilentModeForCurrentUser(),
 					'dateCreate' => $this->data->getDateCreate(),
 					'multidialog' => $this->isMultidialog(),
 				],
 			],
 		];
+	}
+
+	/**
+	 * Personal hidden messages mode for the current user of the response.
+	 * The currentSession.silentMode REST field shape is unchanged - no frontend changes.
+	 */
+	private function isSilentModeForCurrentUser(): bool
+	{
+		$userId = (int)$this->chat->getContext()->getUserId();
+		$chatId = (int)$this->chat->getId();
+
+		return PersonalSilentMode::isEnabled($userId, $chatId);
 	}
 
 	private function isMultidialog(): bool

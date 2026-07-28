@@ -2,7 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset\Updater\Versions;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Manager;
@@ -80,7 +80,7 @@ final class Version4 extends BaseVersion
 			$externalDashboardId = $systemDashboard->getExternalId();
 			if ($externalDashboardId)
 			{
-				$response = Integrator::getInstance()->deleteDashboard([$externalDashboardId]);
+				$response = IntegratorFactory::getInstance()->deleteDashboard([$externalDashboardId]);
 				if (
 					$response->hasErrors()
 					&& $response->getStatus() !== IntegratorResponse::STATUS_NOT_FOUND

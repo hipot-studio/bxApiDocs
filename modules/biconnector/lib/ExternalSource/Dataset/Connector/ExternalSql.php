@@ -68,7 +68,7 @@ abstract class ExternalSql extends Sql
 		try
 		{
 			/* @var ExternalSource\Source\ExternalSql $source */
-			$source = Source\Factory::getSource($this->getType(), $this->sourceId);
+			$source = Source\Factory::getSource($this->getType(), $this->sourceId ?? 0);
 			$connection = $source->getConnection();
 		}
 		catch (DB\ConnectionException $e)
@@ -107,7 +107,7 @@ abstract class ExternalSql extends Sql
 		$connection = $this->getConnection();
 		if (!$connection)
 		{
-			$this->logQueryError($this->connectionError ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTOR_NO_CONNECTION'), $sql);
+			$this->logQueryError($this->connectionError ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTOR_NO_CONNECTION') ?? '', $sql);
 
 			return false;
 		}
@@ -131,7 +131,7 @@ abstract class ExternalSql extends Sql
 		$connection = $this->getConnection();
 		if (!$connection)
 		{
-			return $this->connectionError ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTOR_NO_CONNECTION');
+			return $this->connectionError ?? Loc::getMessage('BICONNECTOR_EXTERNAL_SQL_CONNECTOR_NO_CONNECTION') ?? '';
 		}
 
 		if (method_exists($connection, 'getLastBiError') && $connection->getLastBiError())

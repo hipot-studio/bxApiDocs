@@ -53,7 +53,7 @@ class DepartmentProvider extends BaseStructureProvider
 {
 	public const ENTITY_ID = 'structure-node';
 	/**
-	 * @deprecated use DepartmentProviderSelectMode::USERS_ONLY
+	 * @deprecated use DepartmentProviderSelectMode::UsersOnly
 	 */
 	public const MODE_USERS_ONLY = 'usersOnly';
 	private const IMAGE_DEPARTMENT_OPTION = '/bitrix/js/humanresources/entity-selector/src/images/department-option.svg';

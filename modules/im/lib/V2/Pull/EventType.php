@@ -52,4 +52,5 @@ enum EventType: string
 	case FolderSort = 'folderSort';
 	case FolderChatAdd = 'folderChatAdd';
 	case FolderChatDelete = 'folderChatDelete';
+	case UserLogout = 'userLogout';
 }

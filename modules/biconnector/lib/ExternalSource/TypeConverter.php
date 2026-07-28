@@ -99,12 +99,12 @@ final class TypeConverter
 	 */
 	public static function convertToDateTime(?string $value, string $format, ?\DateTimeZone $tz = null): Main\Type\DateTime|bool
 	{
-		$date = \DateTime::createFromFormat($format, $value, $tz);
+		$date = \DateTime::createFromFormat($format, $value ?? '', $tz);
 		if ($date)
 		{
 			$errors = \DateTime::getLastErrors();
 
-			if ($errors['error_count'] > 0 || $errors['warning_count'] > 0)
+			if ($errors && ($errors['error_count'] > 0 || $errors['warning_count'] > 0))
 			{
 				return false;
 			}
@@ -143,12 +143,12 @@ final class TypeConverter
 	 */
 	public static function convertToDate(?string $value, string $format): Main\Type\Date|bool
 	{
-		$date = \DateTime::createFromFormat($format, $value);
+		$date = \DateTime::createFromFormat($format, $value ?? '');
 		if ($date)
 		{
 			$errors = \DateTime::getLastErrors();
 
-			if ($errors['error_count'] > 0 || $errors['warning_count'] > 0)
+			if ($errors && ($errors['error_count'] > 0 || $errors['warning_count'] > 0))
 			{
 				return false;
 			}

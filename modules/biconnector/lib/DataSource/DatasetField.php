@@ -44,7 +44,7 @@ abstract class DatasetField
 			return $this->code;
 		}
 
-		return $this->dataset->getMessage($phraseCode, $this->code);
+		return $this->dataset?->getMessage($phraseCode, $this->code) ?? $this->code;
 	}
 
 	private function getDescriptionFull(): string
@@ -61,7 +61,7 @@ abstract class DatasetField
 		}
 		$phraseCode .= '_FULL';
 
-		return $this->dataset->getMessage($phraseCode);
+		return $this->dataset?->getMessage($phraseCode) ?? '';
 	}
 
 	protected function getName(): string

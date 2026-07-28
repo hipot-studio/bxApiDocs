@@ -68,6 +68,11 @@ final class FileImporter
 		$datasetSettings = $this->getDatasetSettings();
 		$fieldCollection = $this->initFields($datasetSettings);
 
+		if ($fieldCollection === null)
+		{
+			throw new Main\SystemException('Failed to initialize fields');
+		}
+
 		return new ExternalSource\Importer\Settings(
 			tableName: $this->getTableName(),
 			reader: $this->getReader(),
@@ -132,9 +137,9 @@ final class FileImporter
 
 	private function getTimezone(ExternalSource\Internal\ExternalDatasetFieldFormatCollection $datasetSettings): \DateTimeZone
 	{
-		if ($datasetSettings->getFormatByType(ExternalSource\FieldType::Timezone))
+		$timezone = $datasetSettings->getFormatByType(ExternalSource\FieldType::Timezone);
+		if ($timezone)
 		{
-			$timezone = $datasetSettings->getFormatByType(ExternalSource\FieldType::Timezone);
 			try
 			{
 				return new \DateTimeZone($timezone);

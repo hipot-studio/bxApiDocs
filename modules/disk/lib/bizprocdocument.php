@@ -824,7 +824,7 @@ class BizProcDocument implements \IBPWorkflowDocument
 
 			if($operation === CBPCanUserOperateOperation::StartWorkflow)
 			{
-				return $storage->canCreateWorkflow($securityContext);
+				return $storage->getRootObject()->canAdd($securityContext);
 			}
 		}
 

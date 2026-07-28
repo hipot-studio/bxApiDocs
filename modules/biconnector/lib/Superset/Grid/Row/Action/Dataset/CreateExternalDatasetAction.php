@@ -34,7 +34,7 @@ final class CreateExternalDatasetAction extends BaseAction
 			return parent::getControl($rawFields);
 		}
 
-		$datasetId = (int)$rawFields['ID'];
+		$datasetId = (int)($rawFields['ID'] ?? 0);
 		if (!$datasetId)
 		{
 			return null;

@@ -51,7 +51,7 @@ final class OpenAction extends BaseAction
 			. 'openFrom=grid'
 		;
 
-		if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($rawFields['TYPE']))
+		if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($rawFields['TYPE'] ?? ''))
 		{
 			$this->onclick = "BX.UI.InfoHelper.show(\"limit_benefit_market_active\")";
 

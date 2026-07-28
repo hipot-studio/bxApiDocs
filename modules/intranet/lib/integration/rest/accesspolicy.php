@@ -19,7 +19,7 @@ class AccessPolicy
 
 	public function __construct()
 	{
-		if (Main\Config\Option::get('intranet', 'rest_access_policy_is_enabled', 'N') !== 'Y')
+		if (Main\Config\Option::get('intranet', 'rest_access_policy_is_enabled', 'Y') !== 'Y')
 		{
 			$this->included = false;
 		}

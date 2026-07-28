@@ -92,6 +92,7 @@ class Event
 		{
 			case EventDictionary::EVENT_AFTER_TASK_VIEW:
 			case EventDictionary::EVENT_AFTER_COMMENTS_READ_ALL:
+			case EventDictionary::EVENT_AFTER_COMMENTS_READ_LIST:
 			case EventDictionary::EVENT_AFTER_PROJECT_READ_ALL:
 			case EventDictionary::EVENT_AFTER_SCRUM_READ_ALL:
 			case EventDictionary::EVENT_PROJECT_USER_ADD:
@@ -105,6 +106,20 @@ class Event
 		}
 
 		return $userId;
+	}
+
+	/**
+	 * @return array<int>
+	 */
+	public function getTaskIds(): array
+	{
+		switch ($this->type)
+		{
+			case EventDictionary::EVENT_AFTER_COMMENTS_READ_LIST:
+				return $this->data['TASK_IDS'] ?? [];
+		}
+
+		return [];
 	}
 
 	/**
@@ -176,6 +191,7 @@ class Event
 			'FEATURE_PERM',
 			'USER_ID',
 			'TASK_ID',
+			'TASK_IDS',
 			'ID',
 			'OLD_RECORD',
 			'NEW_RECORD',
@@ -193,6 +209,23 @@ class Event
 			{
 				unset($data[$key]);
 			}
+		}
+
+		if (isset($data['TASK_IDS']))
+		{
+			$unique = [];
+			if (is_array($data['TASK_IDS']))
+			{
+				foreach ($data['TASK_IDS'] as $raw)
+				{
+					$id = (int) $raw;
+					if ($id > 0)
+					{
+						$unique[$id] = true;
+					}
+				}
+			}
+			$data['TASK_IDS'] = array_keys($unique);
 		}
 
 		if (isset($data['OLD_RECORD']['ID']))

@@ -12,7 +12,6 @@ use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
 use Bitrix\BIConnector\Configuration\Feature;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Integrator\ServiceLocation;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardUrlParameterTable;
@@ -57,7 +56,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 	{
 		if (!isset($this->supersetController))
 		{
-			$this->supersetController = new SupersetController(Integrator::getInstance());
+			$this->supersetController = new SupersetController();
 		}
 
 		return $this->supersetController;
@@ -132,7 +131,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			LocalRedirect('/bi/dashboard/');
 		}
 
-		$superset = new SupersetController(Integrator::getInstance());
+		$superset = new SupersetController();
 		$superset->initializeOrCheckSupersetStatus();
 
 		if (SupersetInitializer::isSupersetLoading())
@@ -204,11 +203,21 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		if ($this->dashboard->getStatus() === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
 		{
 			$isSupersetReady = SupersetInitializer::isSupersetReady();
-			$this->showStartupTemplate($this->dashboard->toArray(), firstStartup: !$isSupersetReady);
+			$isSelfHosted = Superset\Selfhost\SupersetHostMode::isSelfHosted();
 			if (!$isSupersetReady)
 			{
+				SupersetInitializer::saveInitData($this->dashboardId);
+				if ($isSelfHosted)
+				{
+					SupersetInitializer::startupSuperset();
+					$isSupersetReady = SupersetInitializer::isSupersetReady();
+				}
+			}
+
+			$this->showStartupTemplate($this->dashboard->toArray(), firstStartup: !$isSupersetReady);
+			if (!$isSupersetReady && !$isSelfHosted)
+			{
 				Application::getInstance()->addBackgroundJob(function() {
-					SupersetInitializer::saveInitData($this->dashboardId);
 					SupersetInitializer::startupSuperset();
 				});
 			}
@@ -217,6 +226,16 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		}
 
 		$this->prepareResult();
+
+		// Status can become LOAD during initDashboard if instance was freezed. Then fetching embedded token will
+		// be blocked by ReadyGate and this will render "dashboard not found".
+		if (SupersetInitializer::isSupersetLoading())
+		{
+			$this->arResult['PERIODIC_RELOAD'] = true; // Waiting for Superset to unfreeze
+			$this->showStartupTemplate($this->dashboard->toArray());
+
+			return;
+		}
 
 		if (SupersetInitializer::isSupersetUnavailable())
 		{
@@ -241,6 +260,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 				&& !$this->dashboard->isSupersetDashboardDataLoaded()
 			)
 			|| !$this->dashboard->isAvailableDashboard()
+			|| !$this->dashboard->getEmbeddedCredentials()
 		)
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_DETAIL_NOT_FOUND');
@@ -407,9 +427,14 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		}
 		$this->arResult['CAN_EDIT'] = $canEdit ? 'Y' : 'N';
 
+		// Drafts can't be shared; FAILED can't be shared either — the share page has no retry for it.
+		$nonSharableStatuses = [
+			SupersetDashboardTable::DASHBOARD_STATUS_DRAFT,
+			SupersetDashboardTable::DASHBOARD_STATUS_FAILED,
+		];
 		$canShare =
 			$accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_SHARE)
-			&& ($this->dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_DRAFT)
+			&& !in_array($this->dashboard->getStatus(), $nonSharableStatuses, true)
 		;
 		$this->arResult['CAN_SHARE'] = $canShare ? 'Y' : 'N';
 

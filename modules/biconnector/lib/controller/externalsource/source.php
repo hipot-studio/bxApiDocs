@@ -59,7 +59,7 @@ class Source extends Controller
 		$saveResult = $source->save();
 		if (!$saveResult->isSuccess())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_SAVED')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_SAVED') ?? ''));
 
 			return null;
 		}
@@ -71,7 +71,7 @@ class Source extends Controller
 	{
 		if ($moduleId !== 'BI')
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_DELETE_ERROR_WRONG_MODULE')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_DELETE_ERROR_WRONG_MODULE') ?? ''));
 
 			return null;
 		}
@@ -79,7 +79,7 @@ class Source extends Controller
 		$source = BIConnector\ExternalSource\Internal\ExternalSourceTable::getById($id)->fetchObject();
 		if (!$source)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND') ?? ''));
 
 			return null;
 		}
@@ -99,7 +99,7 @@ class Source extends Controller
 	{
 		if ($moduleId !== 'BI')
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_DELETE_ERROR_WRONG_MODULE')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_DELETE_ERROR_WRONG_MODULE') ?? ''));
 
 			return null;
 		}
@@ -120,7 +120,7 @@ class Source extends Controller
 		$sourceEntity = BIConnector\ExternalSource\Internal\ExternalSourceTable::getById($sourceId)->fetchObject();
 		if (!$sourceEntity)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND') ?? ''));
 
 			return null;
 		}
@@ -144,7 +144,7 @@ class Source extends Controller
 	{
 		if (!isset($data['type']) || !$data['type'])
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FIELDS_INCOMPLETE')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FIELDS_INCOMPLETE') ?? ''));
 
 			return null;
 		}
@@ -156,7 +156,7 @@ class Source extends Controller
 		{
 			if (!isset($data[$requiredField['code']]) || !$data[$requiredField['code']])
 			{
-				$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FIELDS_INCOMPLETE')));
+				$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FIELDS_INCOMPLETE') ?? ''));
 
 				return null;
 			}
@@ -176,7 +176,7 @@ class Source extends Controller
 		{
 			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_UNKNOWN_TYPE', [
 				'#CONNECTION_TYPE#' => htmlspecialcharsbx($data['type']),
-			])));
+			]) ?? ''));
 
 			return null;
 		}
@@ -189,7 +189,7 @@ class Source extends Controller
 
 			if (!$connector)
 			{
-				$this->errorCollection[] = new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND'));
+				$this->errorCollection[] = new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND') ?? '');
 
 				return null;
 			}
@@ -253,7 +253,7 @@ class Source extends Controller
 		$saveResult = $source->save();
 		if (!$saveResult->isSuccess())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_SAVED')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_SAVED') ?? ''));
 
 			return null;
 		}
@@ -283,7 +283,7 @@ class Source extends Controller
 
 		if (!$source)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND') ?? ''));
 
 			return $result;
 		}

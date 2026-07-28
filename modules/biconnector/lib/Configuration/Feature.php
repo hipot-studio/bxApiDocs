@@ -20,6 +20,7 @@ final class Feature
 	public const BI_BUILDER_EXPORT = 'bi_constructor_export';
 	public const BI_BUILDER_EXTERNAL_SQL_DATASET = 'bi_constructor_external_sql_dataset';
 	public const CHECK_PERMISSION_BY_GROUP_OPTION = 'check_permissions_by_group';
+	public const BITRIXGPT_BI_CONSTRUCTOR = 'bitrixgpt_bi_constructor';
 
 	public static function isBuilderEnabled(): bool
 	{
@@ -63,6 +64,11 @@ final class Feature
 	public static function isCheckPermissionsByGroup(): bool
 	{
 		return self::checkFeatureOption(self::CHECK_PERMISSION_BY_GROUP_OPTION);
+	}
+
+	public static function isBitrixGptBiConstructorEnabled(): bool
+	{
+		return self::checkFeatureOption(self::BITRIXGPT_BI_CONSTRUCTOR);
 	}
 
 	public static function checkFeatureOption(string $optionName): bool

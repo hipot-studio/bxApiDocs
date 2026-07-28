@@ -9,7 +9,6 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
 use Bitrix\BIConnector\Configuration\Feature;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
@@ -309,7 +308,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 	{
 		if (!isset($this->supersetController))
 		{
-			$this->supersetController = new SupersetController(Integrator::getInstance());
+			$this->supersetController = new SupersetController();
 		}
 
 		return $this->supersetController;

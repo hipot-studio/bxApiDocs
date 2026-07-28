@@ -97,7 +97,7 @@ class SupersetGroupProvider extends BaseProvider
 
 		foreach ($groups as $group)
 		{
-			$isEditable = !$this->options['onlyEditGroupsSelectable'] || in_array($group->getId(), $editableGroupIds);
+			$isEditable = !$this->options['onlyEditGroupsSelectable'] || in_array($group->getId(), $editableGroupIds ?? []);
 
 			$result[] = $this->makeItem($group, $isEditable);
 		}

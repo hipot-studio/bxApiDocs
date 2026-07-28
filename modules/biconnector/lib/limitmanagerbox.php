@@ -1,11 +1,14 @@
 <?php
 namespace Bitrix\BIConnector;
 
+use Bitrix\BIConnector\Superset\Selfhost\SupersetHostMode;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Type\Date;
 
 class LimitManagerBox extends LimitManager
 {
-	public const SUPERSET_LIMIT = 10000000;
+	public const SUPERSET_LIMIT = 10_000_000;
+	public const DEFAULT_SELFHOST_LIMIT = 1_000_000;
 
 	protected $license = null;
 
@@ -19,7 +22,7 @@ class LimitManagerBox extends LimitManager
 	 */
 	public function fixLimit(int $rowsCount): bool
 	{
-		if (!$this->isSuperset())
+		if (!$this->isSuperset() && $this->getLimit() === 0)
 		{
 			return false;
 		}
@@ -37,10 +40,40 @@ class LimitManagerBox extends LimitManager
 	{
 		if ($this->isSuperset())
 		{
+			if (SupersetHostMode::isSelfHosted())
+			{
+				return (int)Option::get('biconnector', 'selfhost_row_limit', static::DEFAULT_SELFHOST_LIMIT);
+			}
+
 			return static::SUPERSET_LIMIT;
 		}
 
 		return 0;
+	}
+
+	/**
+	 * Sets row limit.
+	 * Available only for selfhost supersets in box.
+	 *
+	 * @param int $rowLimit
+	 * @return self
+	 */
+	public function setLimit(int $rowLimit): self
+	{
+		if ($rowLimit < 0)
+		{
+			Option::set('biconnector', 'selfhost_row_limit', self::DEFAULT_SELFHOST_LIMIT);
+		}
+		else if ($rowLimit === self::DEFAULT_SELFHOST_LIMIT)
+		{
+			Option::delete('biconnector', ['name' => 'selfhost_row_limit']);
+		}
+		else
+		{
+			Option::set('biconnector', 'selfhost_row_limit', $rowLimit);
+		}
+
+		return $this;
 	}
 
 	public function isLimitByLicence(): bool

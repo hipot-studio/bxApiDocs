@@ -3,6 +3,7 @@
 use Bitrix\Intranet\Integration\Socialnetwork\Collab\CollabProviderData;
 use Bitrix\Intranet\Internal\Factory\Message\CollabJoinMessageFactory;
 use Bitrix\Intranet\Internal\Repository\IntranetUserRepository;
+use Bitrix\Intranet\Internal\Service\Otp\OtpBannerSessionDelay;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Intranet\Public\Command;
 use Bitrix\Main\Command\Exception\CommandValidationException;
@@ -1090,7 +1091,12 @@ class CIntranetEventHandlers
 
 			if (!IsModuleInstalled('bitrix24'))
 			{
-				CIntranetNotify::NewUserMessage($arUser['ID']);
+				$userId = (int)$arUser['ID'];
+				\Bitrix\Main\Application::getInstance()->addBackgroundJob(
+					static function () use ($userId): void {
+						CIntranetNotify::NewUserMessage($userId);
+					}
+				);
 			}
 
 			$processedIdListIblock[] = $arUser['ID'];
@@ -1210,7 +1216,12 @@ class CIntranetEventHandlers
 				&& !IsModuleInstalled('bitrix24')
 			)
 			{
-				CIntranetNotify::NewUserMessage($fields['ID']);
+				$userId = (int)$fields['ID'];
+				\Bitrix\Main\Application::getInstance()->addBackgroundJob(
+					static function () use ($userId): void {
+						CIntranetNotify::NewUserMessage($userId);
+					}
+				);
 			}
 		}
 	}
@@ -1904,6 +1915,14 @@ RegisterModuleDependences('main', 'OnBeforeProlog', 'intranet', 'CIntranetEventH
 		$userId = (int)$arParams["user_fields"]["ID"];
 		if ($userId > 0 && (!defined('BX_SECURITY_SESSION_VIRTUAL') || BX_SECURITY_SESSION_VIRTUAL !== true))
 		{
+			if (
+				array_key_exists('LAST_LOGIN', $arParams['user_fields'])
+				&& trim((string)$arParams['user_fields']['LAST_LOGIN']) === ''
+			)
+			{
+				(new OtpBannerSessionDelay())->postpone();
+			}
+
 			(new Service\UserService())->handleAuthorizeById($userId);
 			(new Integration\Im\Desktop\AccountConnection())->handleAuthorizeUser();
 		}

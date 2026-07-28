@@ -119,9 +119,10 @@ abstract class Base
 		}
 
 		$queryWhere = new \CBIConnectorSqlBuilder();
-		if ($this->getConnection())
+		$connection = $this->getConnection();
+		if ($connection)
 		{
-			$queryWhere->setConnection($this->getConnection());
+			$queryWhere->setConnection($connection);
 		}
 
 		$queryWhere->SetFields($tableFields);
@@ -362,7 +363,7 @@ abstract class Base
 		;
 		if ($endDate)
 		{
-			if ($dateRange['endDate'] === '9999-12-31')
+			if (($dateRange['endDate'] ?? null) === '9999-12-31')
 			{
 				// Prevent date overflow while adding timezone offset
 				$endDate = MakeTimeStamp('9999-12-31 23:59:59', 'YYYY-MM-DD HH:MI:SS');

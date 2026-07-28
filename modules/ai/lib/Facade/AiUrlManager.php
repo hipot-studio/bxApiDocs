@@ -2,6 +2,7 @@
 
 namespace Bitrix\AI\Facade;
 
+use Bitrix\AI\Config;
 use Bitrix\Main\License\UrlProvider;
 
 class AiUrlManager
@@ -38,7 +39,8 @@ class AiUrlManager
 
 	public function getPromptBaseUrl(): string
 	{
-		return self::STATIC_PROXY_HOST . $this->domain . self::PROMPT_BASE_ENDPOINT;
+		return Config::getValue('ai_box_prompt_db_uri')
+			?? self::STATIC_PROXY_HOST . $this->domain . self::PROMPT_BASE_ENDPOINT;
 	}
 
 	public function getServerListConfigUrl(): string

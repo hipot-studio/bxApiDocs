@@ -10,6 +10,7 @@ use Bitrix\AI\Facade\Analytics;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\History;
+use Bitrix\AI\Image\ImageReference;
 use Bitrix\AI\Payload\IPayload;
 use Bitrix\AI\Payload\Prompt;
 use Bitrix\AI\Quality;
@@ -18,6 +19,7 @@ use Bitrix\AI\Result;
 use Bitrix\AI\Role\RoleManager;
 use Bitrix\AI\Service\BasicAuthToken;
 use Bitrix\AI\Services\ImageService;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -36,6 +38,7 @@ abstract class Engine
 	protected const SHARD_PREFIX = '';
 	protected const REQUIRES_PERSONAL_DATA_OBFUSCATION = true;
 
+	private const MAX_IMAGES_PER_REQUEST = 8;
 	protected const PARAM_CONSUMPTION_ID = 'consumptionId';
 	protected const PARAM_QUALITY = 'qualityParam';
 
@@ -46,6 +49,8 @@ abstract class Engine
 	protected ImageService $imageService;
 	protected int $modelContextLimit = 0;
 	protected array $params = [];
+	/** @var ImageReference[] */
+	protected array $images = [];
 	protected bool $historyState = false;
 	protected bool $cache = false;
 	protected bool $isModeResponseJson = false;
@@ -258,6 +263,48 @@ abstract class Engine
 			$this->getSystemParameters(),
 			$this->params,
 			\Bitrix\AI\Engine::getConfigParameters($this->getCode())
+		);
+	}
+
+	/**
+	 * Sets images for vision engine requests.
+	 * Images are stored separately from parameters to avoid queue payload bloat.
+	 */
+	public function setImages(array $images): static
+	{
+		if (count($images) > self::MAX_IMAGES_PER_REQUEST)
+		{
+			throw new ArgumentException(
+				sprintf('Too many images: %d provided, max %d allowed', count($images), self::MAX_IMAGES_PER_REQUEST)
+			);
+		}
+
+		foreach ($images as $image)
+		{
+			if (!$image instanceof ImageReference)
+			{
+				throw new ArgumentException('Expected ImageReference instances');
+			}
+		}
+		$this->images = $images;
+
+		return $this;
+	}
+
+	public function getImages(): array
+	{
+		return $this->images;
+	}
+
+	/**
+	 * Returns compact image metadata for diagnostic storage (b_ai_history).
+	 * Does not include image data — only type, URL, or size.
+	 */
+	public function getImageDiagnostics(): array
+	{
+		return array_map(
+			fn(ImageReference $image) => $image->toDiagnostic(),
+			$this->images,
 		);
 	}
 

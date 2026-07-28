@@ -226,10 +226,10 @@ final class SystemDashboardManager
 		{
 			if ($dashboardRow->getStatus() === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
 			{
-				$appData = $apps[$oldVendorCodes[$dashboardRow->getAppId()]] //hack for apps from `alaio` vendor
-					?? $apps[$dashboardRow->getAppId()]
-					?? null
-				;
+				$appId = $dashboardRow->getAppId();
+				$mappedCode = $oldVendorCodes[$appId] ?? $appId; //hack for apps from `alaio` vendor
+				$appData = $apps[$mappedCode] ?? null;
+
 				if ($appData)
 				{
 					$dashboardRow->setAppId($appData['code']);
@@ -296,7 +296,13 @@ final class SystemDashboardManager
 	public static function tryToGetAdditionalSystemVendorByAppCode(string $appCode): null|string
 	{
 		$vendors = self::getAdditionalSystemVendors();
-		$currentVendor = substr($appCode, 0, strpos($appCode, '.'));
+		$dotPos = strpos($appCode, '.');
+		if ($dotPos === false)
+		{
+			return null;
+		}
+
+		$currentVendor = substr($appCode, 0, $dotPos);
 		$index = array_search($currentVendor, $vendors);
 
 		return is_int($index) ? $vendors[$index] : null;

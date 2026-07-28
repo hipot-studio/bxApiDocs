@@ -293,14 +293,12 @@ class Session extends BaseController
 	 */
 	public function isSilentModeAction(\Bitrix\Im\V2\Chat $chat): ?array
 	{
-		$session = \Bitrix\ImOpenLines\V2\Session\Session::getInstanceByChatId($chat->getChatId());
+		$currentUser = $this->getCurrentUser();
+		$userId = (int)$currentUser?->getId();
 
-		if ($session)
-		{
-			$session->setChat($chat);
-			return ['result' => $session->getSilentMode()];
-		}
-
-		return null;
+		// Personal mode: return the requesting user's state, not the session owner's.
+		return [
+			'result' => \Bitrix\ImOpenLines\SilentMode\PersonalSilentMode::isEnabled($userId, $chat->getChatId()),
+		];
 	}
 }

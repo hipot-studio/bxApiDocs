@@ -119,7 +119,6 @@ final class Version extends Internals\Model
 
 	/**
 	 * @return array|null
-	 * @throws \Bitrix\Main\NotImplementedException
 	 */
 	public function getFile()
 	{

@@ -39,6 +39,11 @@ class Container
 		return self::getService('humanresources.public.service.nodeService');
 	}
 
+	public static function getAccessService(): AccessService
+	{
+		return self::getService('humanresources.public.service.access');
+	}
+
 	public static function getNodeMemberService(): NodeMemberService
 	{
 		return self::getService('humanresources.public.service.nodeMemberService');

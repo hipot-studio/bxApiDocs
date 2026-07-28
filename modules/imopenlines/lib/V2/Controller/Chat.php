@@ -26,6 +26,12 @@ class Chat extends \Bitrix\Im\V2\Controller\Chat
 			return $chatData;
 		}
 
+		$userId = (int)($this->getCurrentUser()?->getId() ?? 0);
+		if ($userId > 0)
+		{
+			\Bitrix\Im\Disk\NoRelationPermission::add($chat->getId(), $userId);
+		}
+
 		$openLineChat = new OpenLineChatDecorator($chat);
 
 		return array_merge($chatData, $openLineChat->toRestFormat());

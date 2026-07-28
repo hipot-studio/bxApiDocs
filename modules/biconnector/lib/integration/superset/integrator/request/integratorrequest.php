@@ -16,8 +16,9 @@ final class IntegratorRequest
 	private string $action;
 	private bool $isMultipart = false;
 	private array $requestParams = [];
+	private ?\Closure $handler = null;
 
-	public function __construct(private readonly Sender $sender)
+	public function __construct(private readonly ?Sender $sender = null)
 	{
 		$this->beforeRequestMiddlewareQueue = new BeforeRequestQueue();
 		$this->afterRequestMiddlewareQueue = new AfterRequestQueue();
@@ -46,24 +47,32 @@ final class IntegratorRequest
 			return $this->afterRequestMiddlewareQueue->execute($this, $beforeResult);
 		}
 
-		if ($this->isMultipart)
+		if ($this->handler !== null)
 		{
-			$result = $this->sender->performMultipartRequest(
-				$this->action,
-				$this->requestParams,
-				$this->user
+			$response = ($this->handler)($this);
+		}
+		elseif ($this->isMultipart)
+		{
+			$response = $this->unpackSenderResult(
+				$this->sender->performMultipartRequest(
+					$this->action,
+					$this->requestParams,
+					$this->user
+				)
 			);
 		}
 		else
 		{
-			$result = $this->sender->performRequest(
-				$this->action,
-				$this->requestParams,
-				$this->user
+			$response = $this->unpackSenderResult(
+				$this->sender->performRequest(
+					$this->action,
+					$this->requestParams,
+					$this->user
+				)
 			);
 		}
 
-		return $this->afterRequestMiddlewareQueue->execute($this, $this->unpackSenderResult($result));
+		return $this->afterRequestMiddlewareQueue->execute($this, $response);
 	}
 
 	private function unpackSenderResult(Result $requestResult): IntegratorResponse
@@ -148,6 +157,13 @@ final class IntegratorRequest
 	public function setParams(array $params): self
 	{
 		$this->requestParams = $params;
+
+		return $this;
+	}
+
+	public function setHandler(\Closure $handler): self
+	{
+		$this->handler = $handler;
 
 		return $this;
 	}

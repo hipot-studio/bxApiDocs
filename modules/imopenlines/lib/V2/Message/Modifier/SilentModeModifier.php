@@ -3,6 +3,7 @@ namespace Bitrix\ImOpenLines\V2\Message\Modifier;
 
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Chat;
+use Bitrix\ImOpenLines\SilentMode\PersonalSilentMode;
 
 class SilentModeModifier implements MessageModifierInterface
 {
@@ -18,17 +19,15 @@ class SilentModeModifier implements MessageModifierInterface
 			return false;
 		}
 
-		$entityData = $chat->getEntityData();
-		$silentMode = $entityData['entityData3']['silentMode'] ?? 'N';
+		$author = $message->getAuthor();
 
-		if ($silentMode !== 'Y')
+		if ($author === null || $author->isConnector())
 		{
 			return false;
 		}
 
-		$author = $message->getAuthor();
-
-		return $author !== null && !$author->isConnector();
+		// Hide the message only if its AUTHOR has the personal mode enabled in this chat.
+		return PersonalSilentMode::isEnabled($message->getAuthorId(), $message->getChatId());
 	}
 
 	public function modify(Message $message): void

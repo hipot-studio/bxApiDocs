@@ -2,10 +2,11 @@
 
 namespace Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 
-use Bitrix\Main\Loader;
+use Bitrix\BIConnector\Public\Provider\ScopeAccessibleValueProvider;
+use Bitrix\BIConnector\Superset\Dashboard\UrlParameter\Parameter;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Tasks\Flow\Provider\FlowProvider;
-use Bitrix\Tasks\Flow\Provider\Query\ExpandedFlowQuery;
+use Bitrix\Main\Loader;
+use Bitrix\Main\DI\ServiceLocator;
 
 class TasksFlowsFlow extends PresetFilter
 {
@@ -46,7 +47,7 @@ class TasksFlowsFlow extends PresetFilter
 			return $presetValueCollection;
 		}
 
-		$userId = CurrentUser::get()->getId();
+		$userId = (int)CurrentUser::get()->getId();
 		if (!$userId)
 		{
 			return new PresetValueCollection();
@@ -54,22 +55,16 @@ class TasksFlowsFlow extends PresetFilter
 
 		$presetValueCollection = new PresetValueCollection();
 
-		$provider = new FlowProvider();
-		$query = new ExpandedFlowQuery($userId);
-		$query
-			->setSelect(['ID', 'NAME'])
-			->setOrderBy(['ID' => 'ASC'])
-		;
-
-		$flows = $provider->getList($query);
-
-		foreach ($flows as $flow)
+		/** @var ScopeAccessibleValueProvider $valueProvider */
+		$valueProvider = ServiceLocator::getInstance()->get('biconnector.provider.scopeAccessibleValue');
+		$values = $valueProvider->getList(Parameter::TasksFlowsFlowId, $userId, limit: 0);
+		foreach ($values as $value)
 		{
 			$presetValueCollection->set(
-				$flow->getId(),
+				$value['id'],
 				new PresetValue(
-					value: $flow->getId(),
-					label: sprintf('[%d] %s', $flow->getId(), $flow->getName()),
+					value: $value['id'],
+					label: sprintf('[%d] %s', $value['id'], $value['name']),
 				),
 			);
 		}

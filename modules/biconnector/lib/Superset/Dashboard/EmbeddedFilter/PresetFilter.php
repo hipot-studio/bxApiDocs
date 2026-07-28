@@ -2,7 +2,7 @@
 
 namespace Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 
 abstract class PresetFilter extends UrlFilter
 {
@@ -100,7 +100,7 @@ abstract class PresetFilter extends UrlFilter
 			return $cacheManager->get($cacheKey);
 		}
 
-		$integrator = Integrator::getInstance();
+		$integrator = IntegratorFactory::getInstance();
 		$response = $integrator->getDatasetByName($datasetName);
 		if ($response->hasErrors())
 		{

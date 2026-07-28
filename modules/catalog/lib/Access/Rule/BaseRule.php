@@ -30,7 +30,7 @@ class BaseRule extends AbstractRule
 
 		if (!Feature::isAccessControllerCheckingEnabled())
 		{
-			$userDepartments = $this->user->getUserDepartments();
+			$userDepartments = $this->getUserDepartments();
 
 			if (empty($userDepartments))
 			{
@@ -48,6 +48,27 @@ class BaseRule extends AbstractRule
 		$params['item'] = $item;
 
 		return $this->check($params);
+	}
+
+	private function getUserDepartments(): array
+	{
+		global $USER;
+
+		if (
+			isset($USER)
+			&& $USER instanceof \CUser
+			&& (int)$USER->GetID() === $this->user->getUserId()
+		)
+		{
+			$userData = \CUser::GetByID($USER->GetID())->Fetch();
+			$departments = $userData['UF_DEPARTMENT'] ?? null;
+			if (is_array($departments))
+			{
+				return $departments;
+			}
+		}
+
+		return $this->user->getUserDepartments();
 	}
 
 	public function getPermissionValue($params): ?int

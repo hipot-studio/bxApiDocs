@@ -61,15 +61,15 @@ class AuthenticationService
 	}
 
 	/**
-	 * Find user ID by token.
-	 *
-	 * @return int|null User ID or null if not found
+	 * ACTIVE='N' guests are treated as unknown — that's how kick and inactivity
+	 * cleanup invalidate tokens without deleting the user row.
 	 */
 	public function findUserByToken(Token $token): ?int
 	{
 		$userData = UserTable::query()
 			->setSelect(['ID', 'EXTERNAL_AUTH_ID'])
 			->where('XML_ID', $this->buildXmlId($token->getValue()))
+			->where('ACTIVE', 'Y')
 			->fetch()
 		;
 
@@ -118,7 +118,7 @@ class AuthenticationService
 		$userId = $this->findUserByToken($token);
 		if ($userId === null)
 		{
-			return $result->addError(new AuthError(AuthError::USER_NOT_FOUND));
+			return $result->addError(new AuthError(AuthError::GUEST_NOT_FOUND));
 		}
 
 		$user = User::getInstance($userId);

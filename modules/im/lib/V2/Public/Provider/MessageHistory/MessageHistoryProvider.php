@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Public\Provider\MessageHistory;
 
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Chat\CommentChat;
@@ -110,6 +111,12 @@ final class MessageHistoryProvider
 		$messages = new MessageCollection();
 		$cursor = $filter->getBeforeMessageId();
 
+		// In CopilotChat the legacy context drops messages that mention other (non-bot) users.
+		// While the V2 feature is enabled they are kept so the mention reaches the assistant (task 708783).
+		// The gate is invariant within a single getList(), so resolve it once here instead of reading
+		// the feature flag for every message inside the loop below.
+		$cutForeignMention = $chat instanceof CopilotChat && !Features::isBitrixGptV2Available();
+
 		while ($messages->count() < $filter->getLimit())
 		{
 			$fetched = $this->fetchMessages($filter->getChatId(), $this->startId, $cursor, $filter->getLimit());
@@ -127,7 +134,7 @@ final class MessageHistoryProvider
 			{
 				$cursor = $message->getId();
 
-				if ($this->shouldSkip($chat, $message))
+				if ($this->shouldSkip($message, $cutForeignMention))
 				{
 					continue;
 				}
@@ -219,14 +226,27 @@ final class MessageHistoryProvider
 		return $result;
 	}
 
-	private function shouldSkip(Chat $chat, Message $message): bool
+	private function shouldSkip(Message $message, bool $cutForeignMention): bool
 	{
 		return $message->isSystem()
 			|| $message->getParams()->isSet(Params::IS_DELETED)
 			|| $this->isWelcomeMessage($message)
 			|| $this->isErrorMessage($message)
-			|| ($chat instanceof CopilotChat && $this->hasMentionOtherUser($message))
+			|| $this->shouldCutForeignMention($message, $cutForeignMention)
 		;
+	}
+
+	/**
+	 * Whether a message must be excluded because it mentions other (non-bot) users.
+	 *
+	 * Whether the cut applies at all (CopilotChat with the V2 feature flag off) is resolved
+	 * once per getList() in loadMessages() and passed in as $cutForeignMention; here it is just
+	 * combined with the per-message mention check. When V2 is enabled such messages are kept so
+	 * the mention reaches the model.
+	 */
+	private function shouldCutForeignMention(Message $message, bool $cutForeignMention): bool
+	{
+		return $cutForeignMention && $this->hasMentionOtherUser($message);
 	}
 
 	private function isWelcomeMessage(Message $message): bool

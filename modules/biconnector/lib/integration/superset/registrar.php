@@ -2,7 +2,7 @@
 
 namespace Bitrix\BIConnector\Integration\Superset;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Superset\Config\ConfigContainer;
 use Bitrix\BIConnector\Superset\DomainLinkService;
@@ -59,7 +59,7 @@ final class Registrar
 	public function rebind(): Result
 	{
 		$result = new Result();
-		$response = Integrator::getInstance()->registerPortal();
+		$response = IntegratorFactory::getInstance()->registerPortal();
 
 		$responseData = $response->getData();
 
@@ -161,7 +161,7 @@ final class Registrar
 			return $result;
 		}
 
-		$response = Integrator::getInstance()->registerPortal();
+		$response = IntegratorFactory::getInstance()->registerPortal();
 
 		if ($response->getStatus() === IntegratorResponse::STATUS_CREATED)
 		{
@@ -193,7 +193,7 @@ final class Registrar
 	private static function verifyPortal(): Result
 	{
 		$result = new Result();
-		$response = Integrator::getInstance()->verifyPortal();
+		$response = IntegratorFactory::getInstance()->verifyPortal();
 		if ($response->getStatus() !== IntegratorResponse::STATUS_OK)
 		{
 			SupersetInitializerLogger::logErrors([new Error('Verify register request end with errors'), ...$response->getErrors()], [

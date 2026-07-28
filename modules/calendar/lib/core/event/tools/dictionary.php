@@ -34,6 +34,7 @@ class Dictionary
 		'collab' => '#collab#',
 		'shared_collab' => '#shared_collab#',
 		'booking' => '#booking#',
+		'call_sync' => '#call_sync#',
 	];
 
 	public const MEETING_STATUS = [

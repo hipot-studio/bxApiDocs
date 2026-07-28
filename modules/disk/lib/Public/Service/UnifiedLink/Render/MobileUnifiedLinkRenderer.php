@@ -10,6 +10,7 @@ use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkFileRenderer;
 use Bitrix\Disk\Version;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\NotImplementedException;
+use Bitrix\Main\SystemException;
 
 class MobileUnifiedLinkRenderer
 {
@@ -85,6 +86,13 @@ class MobileUnifiedLinkRenderer
 			return new RenderResult(UnifiedLinkFileRenderer::renderAccessDeniedPage(), 403);
 		}
 
+		$securityContext = $file->getStorage()?->getSecurityContext($currentUser);
+
+		if (!$securityContext || !$file->canRead($securityContext))
+		{
+			return new RenderResult(UnifiedLinkFileRenderer::renderAccessDeniedPage(), 403);
+		}
+
 		$attachedObject = AttachedObject::loadById($attachedObjectId);
 		$version = Version::loadById($versionId);
 
@@ -97,6 +105,7 @@ class MobileUnifiedLinkRenderer
 	 * @param CurrentUser $currentUser
 	 * @return RenderResult
 	 * @throws NotImplementedException
+	 * @throws SystemException
 	 */
 	public static function renderByAttachedObject(
 		int $attachedObjectId,
@@ -105,7 +114,14 @@ class MobileUnifiedLinkRenderer
 	): RenderResult
 	{
 		$attachedObject = AttachedObject::loadById($attachedObjectId);
+
+		if (!$attachedObject?->canRead((int)$currentUser->getId()))
+		{
+			return new RenderResult(UnifiedLinkFileRenderer::renderAccessDeniedPage(), 403);
+		}
+
 		$file = $attachedObject?->getFile()?->getRealObject();
+
 		if (!$file)
 		{
 			return new RenderResult(UnifiedLinkFileRenderer::renderAccessDeniedPage(), 403);

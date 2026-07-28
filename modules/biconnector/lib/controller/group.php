@@ -48,7 +48,7 @@ class Group extends Controller
 				$groupId = (int)$id;
 				if ($groupId <= 0)
 				{
-					$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ERROR_NOT_FOUND')));
+					$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ERROR_NOT_FOUND') ?? ''));
 
 					return null;
 				}
@@ -56,7 +56,7 @@ class Group extends Controller
 				$group = Model\SupersetDashboardGroupTable::getById($groupId)->fetchObject();
 				if (!$group)
 				{
-					$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ERROR_NOT_FOUND')));
+					$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ERROR_NOT_FOUND') ?? ''));
 
 					return null;
 				}
@@ -69,7 +69,7 @@ class Group extends Controller
 	public function loadSettingsDataAction(string $groupIdCode): ?array
 	{
 		$allowedGroups = array_flip(
-			AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW),
+			AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW) ?? [],
 		);
 
 		if (
@@ -77,7 +77,7 @@ class Group extends Controller
 			|| !str_starts_with($groupIdCode, 'new_') && !isset($allowedGroups[PermissionDictionary::getDashboardGroupIdFromPermission($groupIdCode)])
 		)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY') ?? ''));
 
 			return null;
 		}
@@ -151,7 +151,7 @@ class Group extends Controller
 	public function deleteAction(Model\SupersetDashboardGroup $group): ?bool
 	{
 		$allowedGroups = array_flip(
-			AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW),
+			AccessController::getCurrent()->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW) ?? [],
 		);
 
 		if (
@@ -159,14 +159,14 @@ class Group extends Controller
 			|| !isset($allowedGroups[$group->getId()])
 		)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_DELETE')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_DELETE') ?? ''));
 
 			return null;
 		}
 
 		if ($group->isSystem())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_NOT_ALLOWED_DELETE_SYSTEM')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_NOT_ALLOWED_DELETE_SYSTEM') ?? ''));
 
 			return null;
 		}
@@ -188,7 +188,7 @@ class Group extends Controller
 
 		if (!$accessController->check(ActionDictionary::ACTION_BIC_SETTINGS_EDIT_RIGHTS))
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY') ?? ''));
 
 			return null;
 		}
@@ -201,12 +201,12 @@ class Group extends Controller
 		];
 
 		$allowedGroups = array_flip(
-			$accessController->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW),
+			$accessController->getAllowedGroupValue(ActionDictionary::ACTION_BIC_DASHBOARD_VIEW) ?? [],
 		);
 
 		if ($groupInfo['id'] !== null && !isset($allowedGroups[$groupInfo['id']]))
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_GROUP_ACCESS_ERROR_MODIFY') ?? ''));
 
 			return null;
 		}

@@ -34,7 +34,7 @@ class UserCreator
 
 		if (!$userId)
 		{
-			return $result->addError(new AuthError(AuthError::REGISTRATION_ERROR));
+			return $result->addError(new AuthError(AuthError::GUEST_REGISTRATION_ERROR));
 		}
 
 		return $result

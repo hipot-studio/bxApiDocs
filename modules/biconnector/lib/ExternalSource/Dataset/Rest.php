@@ -6,7 +6,7 @@ final class Rest extends Base
 {
 	protected function getResultTableName(): string
 	{
-		return $this->dataset->getName();
+		return $this->getDataset()->getName();
 	}
 
 	public function getSqlTableAlias(): string
@@ -14,12 +14,12 @@ final class Rest extends Base
 		return sprintf(
 			'%s_%s',
 			'EXTERNAL_REST',
-			strtoupper($this->dataset->getName())
+			strtoupper($this->getDataset()->getName())
 		);
 	}
 
 	protected function getConnectionTableName(): string
 	{
-		return $this->dataset->getName();
+		return $this->getDataset()->getName();
 	}
 }

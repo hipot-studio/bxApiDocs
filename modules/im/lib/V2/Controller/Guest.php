@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Controller;
 
 use Bitrix\Im\V2\Application\Features;
+use Bitrix\Im\V2\Controller\Filter\AuthorizationPrefilter;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Guest\Auth\AuthError;
 use Bitrix\Im\V2\Guest\Auth\Token;
@@ -27,9 +28,10 @@ class Guest extends BaseController
 	public function configureActions(): array
 	{
 		return [
-			'joinByCode' => [
+			'checkSession' => [
 				'-prefilters' => [
 					Authentication::class,
+					AuthorizationPrefilter::class,
 				],
 			],
 		];
@@ -42,9 +44,9 @@ class Guest extends BaseController
 	 */
 	public function setNameAction(string $name): ?array
 	{
-		if (!Features::isChatWithGuestsAvailable())
+		if (!Features::isChatWithGuestsAvailable(GuestService::getInstance()->getCurrentInviterId()))
 		{
-			$this->addError(new AuthError(AuthError::FEATURE_DISABLED));
+			$this->addError(new AuthError(AuthError::GUEST_FEATURE_DISABLED));
 
 			return null;
 		}
@@ -66,34 +68,16 @@ class Guest extends BaseController
 	}
 
 	/**
-	 * Main entry point for guests.
-	 * Handles user creation, authentication, and joining the chat via invite code.
+	 * Token is auto-wired from the request (cookie); missing token means invalid session.
 	 *
-	 * @restMethod im.v2.Guest.joinByCode
+	 * @restMethod im.v2.Guest.checkSession
 	 */
-	public function joinByCodeAction(string $code, ?Token $token = null, ?string $name = null): ?array
+	public function checkSessionAction(string $code, ?Token $token = null): array
 	{
-		if (!Features::isChatWithGuestsAvailable())
-		{
-			$this->addError(new AuthError(AuthError::FEATURE_DISABLED));
+		$isValid = $token !== null
+			&& GuestService::getInstance()->isGuestSessionValid($code, $token)
+		;
 
-			return null;
-		}
-
-		$result = GuestService::getInstance()->joinByCode($code, $token, $name);
-
-		if (!$result->isSuccess())
-		{
-			$this->addErrors($result->getErrors());
-
-			return null;
-		}
-
-		return [
-			'token' => $result->getToken(),
-			'user' => $result->getUser()->toRestFormat(),
-			'chatId' => $result->getChat()->getChatId(),
-			'chatTitle' => $result->getChat()->getTitle(),
-		];
+		return ['isValid' => $isValid];
 	}
 }

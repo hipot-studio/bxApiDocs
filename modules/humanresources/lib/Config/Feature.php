@@ -24,6 +24,7 @@ class Feature
 	private const MULTIPLE_USERS_BP_SETTINGS_ARE_AVAILABLE_OPTION_NAME = 'multiple_users_settings_available';
 	private const MULTIPLE_USERS_REPORT_SETTINGS_ARE_AVAILABLE_OPTION_NAME = 'multiple_users_report_settings_available';
 	private const TEAM_REPORT_EXCEPTIONS_ARE_AVAILABLE_OPTION_NAME = 'team_report_exceptions_available';
+	private const STRUCTURE_CHANGE_NOTIFICATIONS_ARE_AVAILABLE_OPTION_NAME = 'structure_change_notifications_available';
 
 	public function isHcmLinkAvailable(): bool
 	{
@@ -87,6 +88,16 @@ class Feature
 	public function areTeamReportExceptionsAvailable(): bool
 	{
 		return $this->getOptionValue(self::TEAM_REPORT_EXCEPTIONS_ARE_AVAILABLE_OPTION_NAME, 'N') === 'Y';
+	}
+
+	/**
+	 * IM notifications about org structure changes (member moved/added/removed,
+	 * head/deputy changed, department removed). Disabled by default: acts as
+	 * a kill-switch in case the notification fan-out hurts performance.
+	 */
+	public function areStructureChangeNotificationsAvailable(): bool
+	{
+		return $this->getOptionValue(self::STRUCTURE_CHANGE_NOTIFICATIONS_ARE_AVAILABLE_OPTION_NAME, 'N') === 'Y';
 	}
 
 	public function setDeputyApprovesBPAvailable(bool $value): void

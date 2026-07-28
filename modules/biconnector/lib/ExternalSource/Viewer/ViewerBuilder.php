@@ -72,7 +72,7 @@ final class ViewerBuilder
 			$settings = $this->settings;
 			$settings['dataset'] = $this->externalTableData;
 			$provider
-				->setSourceId($this->sourceId)
+				->setSourceId($this->sourceId ?? 0)
 				->setSettings($settings)
 			;
 		}
@@ -83,7 +83,7 @@ final class ViewerBuilder
 			$settings = $this->settings;
 			$settings['dataset'] = $this->externalTableData;
 			$provider
-				->setSourceId($this->sourceId)
+				->setSourceId($this->sourceId ?? 0)
 				->setSettings($settings)
 			;
 		}
@@ -96,7 +96,7 @@ final class ViewerBuilder
 			$settings = $this->settings;
 			$settings['dataset'] = $this->externalTableData;
 			$provider
-				->setSourceId($this->sourceId)
+				->setSourceId($this->sourceId ?? 0)
 				->setSettings($settings)
 			;
 		}

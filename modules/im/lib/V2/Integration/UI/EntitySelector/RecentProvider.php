@@ -20,6 +20,7 @@ use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserBot;
 use Bitrix\Im\V2\Entity\User\UserCollection;
+use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Integration\HumanResources\Department\Department;
 use Bitrix\Im\V2\Integration\Socialnetwork\Group;
@@ -286,7 +287,7 @@ class RecentProvider extends BaseProvider
 		if ($this->searchOptions->isChatContext())
 		{
 			$targetChat = Chat::getInstance($this->searchOptions->getContextChatId());
-			$chatMembers = $targetChat->getRelationsByUserIds($userIds)->getUserIds();
+			$chatMembers = $targetChat->getRelationsByUserIds($userIds)->filterActiveMembers()->getUserIds();
 		}
 
 		foreach ($items as $item)
@@ -757,6 +758,16 @@ class RecentProvider extends BaseProvider
 		}
 
 		$query->where($this->getIntranetFilter());
+
+		if ($this->searchOptions->shouldExcludeGuests())
+		{
+			$query->where(
+				Query::filter()
+					->logic('or')
+					->whereNot('EXTERNAL_AUTH_ID', UserGuest::AUTH_ID)
+					->whereNull('EXTERNAL_AUTH_ID')
+			);
+		}
 
 		$raw = $query->fetchAll();
 

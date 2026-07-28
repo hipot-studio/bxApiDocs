@@ -2,7 +2,7 @@
 
 namespace Bitrix\BIConnector\Configuration;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Superset\Cache\CacheManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
@@ -38,7 +38,7 @@ class DataTimezone
 
 		Application::getInstance()->addBackgroundJob(static function () use ($timezone): void
 		{
-			Integrator::getInstance()->setTimezone($timezone);
+			IntegratorFactory::getInstance()->setTimezone($timezone);
 			CacheManager::getInstance()->clear();
 		});
 	}

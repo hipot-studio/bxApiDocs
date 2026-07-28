@@ -41,6 +41,7 @@ class CreateEventCommand implements Command, BusyAttendees
 	private ?int $maxAttendees;
 	private ?string $analyticsSubSection;
 	private ?int $analyticsChatId;
+	private ?string $eventType;
 
 	public function __construct(
 		int $userId,
@@ -80,6 +81,7 @@ class CreateEventCommand implements Command, BusyAttendees
 		?int $category,
 		?string $analyticsSubSection,
 		?int $analyticsChatId,
+		?string $eventType = null,
 	)
 	{
 		$this->userId = $userId;
@@ -119,6 +121,7 @@ class CreateEventCommand implements Command, BusyAttendees
 		$this->maxAttendees = $maxAttendees;
 		$this->analyticsSubSection = $analyticsSubSection;
 		$this->analyticsChatId = $analyticsChatId;
+		$this->eventType = $eventType;
 	}
 
 	public function isCheckLocationOccupancy(): bool
@@ -304,5 +307,10 @@ class CreateEventCommand implements Command, BusyAttendees
 	public function getAnalyticsChatId(): ?int
 	{
 		return $this->analyticsChatId;
+	}
+
+	public function getEventType(): ?string
+	{
+		return $this->eventType;
 	}
 }

@@ -8,6 +8,7 @@ use Bitrix\Im\V2\SharingLink\Entity\LinkEntityType;
 use Bitrix\Im\V2\SharingLink\Type;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\Provider\Params\FilterInterface;
+use Bitrix\Main\Type\DateTime;
 use Traversable;
 
 final class SharingLinkFilter implements \IteratorAggregate, FilterInterface
@@ -44,6 +45,7 @@ final class SharingLinkFilter implements \IteratorAggregate, FilterInterface
 			isRevoked: false,
 		);
 		$filter->addNotExhaustedCondition();
+		$filter->addNotExpiredCondition();
 
 		return $filter;
 	}
@@ -58,6 +60,7 @@ final class SharingLinkFilter implements \IteratorAggregate, FilterInterface
 			isRevoked: false,
 		);
 		$filter->addNotExhaustedCondition();
+		$filter->addNotExpiredCondition();
 
 		return $filter;
 	}
@@ -68,6 +71,15 @@ final class SharingLinkFilter implements \IteratorAggregate, FilterInterface
 			->logic('or')
 			->whereNull('MAX_USES')
 			->whereColumn('USES_COUNT', '<', 'MAX_USES')
+		;
+	}
+
+	private function addNotExpiredCondition(): void
+	{
+		$this->extraConditions[] = (new ConditionTree())
+			->logic('or')
+			->whereNull('DATE_EXPIRE')
+			->where('DATE_EXPIRE', '>', new DateTime())
 		;
 	}
 

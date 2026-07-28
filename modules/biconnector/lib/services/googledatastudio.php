@@ -44,6 +44,11 @@ class GoogleDataStudio extends Service
 	/**
 	 * @param string $tableName
 	 * @param array $parameters
+	 * @param string $requestMethod
+	 * @param string $requestUri
+	 * @param int $limit
+	 * @param LimitManager $limitManager
+	 * @param array|null $queryMetadata Ignored for Google Data Studio.
 	 * @return Result
 	 */
 	public function printQuery(
@@ -52,7 +57,8 @@ class GoogleDataStudio extends Service
 		string $requestMethod,
 		string $requestUri,
 		int $limit,
-		LimitManager $limitManager
+		LimitManager $limitManager,
+		?array $queryMetadata = null,
 	): Result
 	{
 		$result = new Result();
@@ -78,12 +84,12 @@ class GoogleDataStudio extends Service
 		$schema = $data['schema'] ?? [];
 
 		$logId = $manager->startQuery(
-			$tableName
-			,implode(', ', array_map($getIdFunction, $schema))
-			,Json::encode($data['where'], JSON_UNESCAPED_UNICODE)
-			,Json::encode($parameters, JSON_UNESCAPED_UNICODE)
-			,$requestMethod
-			,preg_replace('/(?:^|\\?|&)token=(.+?)(?:$|&)/', 'token=hide-the-key-from-the-log', $requestUri)
+			$tableName,
+			implode(', ', array_map($getIdFunction, $schema)),
+			Json::encode($data['where'], JSON_UNESCAPED_UNICODE),
+			Json::encode($parameters, JSON_UNESCAPED_UNICODE),
+			$requestMethod,
+			preg_replace('/(?:^|\\?|&)token=(.+?)(?:$|&)/', 'token=hide-the-key-from-the-log', $requestUri)
 		);
 
 		foreach ($schema as $i => $tableInfo)
@@ -218,8 +224,8 @@ class GoogleDataStudio extends Service
 				'BICONNECTOR_TABLE_OVER_LIMIT_ERROR_MSGVER_1',
 				$count - $limit,
 				[
-					'#LIMIT#' => $this->formatLimitValue($count - $limit),
-					'#OVERLIMIT_COUNT#' => $this->formatLimitValue($limit),
+					'#LIMIT#' => $this->formatLimitValue($limit),
+					'#OVERLIMIT_COUNT#' => $this->formatLimitValue($count - $limit),
 				],
 				$this->getLanguage(),
 			),

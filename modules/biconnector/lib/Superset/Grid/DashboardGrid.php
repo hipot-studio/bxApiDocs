@@ -2,7 +2,6 @@
 
 namespace Bitrix\BIConnector\Superset\Grid;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
 use Bitrix\BIConnector\Integration\Superset\Model;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
@@ -79,7 +78,7 @@ final class DashboardGrid extends Grid
 
 	public static function prepareDashboardRowData(Model\Dashboard $dashboard, array $additionalOptions = []): array
 	{
-		$supersetController = new SupersetController(Integrator::getInstance());
+		$supersetController = new SupersetController();
 
 		$settings = new DashboardSettings([
 			'ID' => self::SUPERSET_DASHBOARD_GRID_ID,

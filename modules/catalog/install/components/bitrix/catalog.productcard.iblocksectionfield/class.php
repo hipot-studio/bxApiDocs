@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorableImplementation;
@@ -16,6 +18,8 @@ class CatalogProductCardIblockSectionField
 	implements Controllerable, Errorable
 {
 	use ErrorableImplementation;
+
+	private const IBLOCK_READ = 'iblock_admin_display';
 
 	private $iblockId;
 	private $productId;
@@ -50,10 +54,10 @@ class CatalogProductCardIblockSectionField
 
 	public function onPrepareComponentParams($params)
 	{
-		$params['IBLOCK_ID'] = $params['IBLOCK_ID'] ?? 0;
-		$params['PRODUCT_ID'] = $params['PRODUCT_ID'] ?? 0;
+		$params['IBLOCK_ID'] ??= 0;
+		$params['PRODUCT_ID'] ??= 0;
 
-		$params['SELECTED_SECTION_IDS'] = $params['SELECTED_SECTION_IDS'] ?? [];
+		$params['SELECTED_SECTION_IDS'] ??= [];
 
 		if (!is_array($params['SELECTED_SECTION_IDS']))
 		{
@@ -65,7 +69,7 @@ class CatalogProductCardIblockSectionField
 
 	public function executeComponent()
 	{
-		if ($this->checkModules() && $this->checkPermissions() && $this->checkRequiredParameters())
+		if ($this->checkModules() && $this->checkRequiredParameters() && $this->checkPermissions())
 		{
 			$this->initializeSections();
 
@@ -90,6 +94,29 @@ class CatalogProductCardIblockSectionField
 
 	protected function checkPermissions()
 	{
+		if (
+			!AccessController::getCurrent()->check(ActionDictionary::ACTION_CATALOG_READ)
+			&& !AccessController::getCurrent()->check(ActionDictionary::ACTION_CATALOG_VIEW)
+		)
+		{
+			$this->errorCollection[] = new \Bitrix\Main\Error('Access Denied');
+
+			return false;
+		}
+
+		if (
+			!\CIBlockRights::UserHasRightTo(
+				$this->arParams['IBLOCK_ID'],
+				$this->arParams['IBLOCK_ID'],
+				self::IBLOCK_READ,
+			)
+		)
+		{
+			$this->errorCollection[] = new \Bitrix\Main\Error('Access Denied');
+
+			return false;
+		}
+
 		return true;
 	}
 
@@ -143,9 +170,12 @@ class CatalogProductCardIblockSectionField
 		{
 			$sectionList = CIBlockSection::GetList(
 				[], // ['left_margin' => 'asc'],
-				['ID' => $sectionIds],
+				[
+					'ID' => $sectionIds,
+					'=IBLOCK_ID' => $this->arParams['IBLOCK_ID'],
+				],
 				false,
-				['ID', 'NAME']
+				['ID', 'NAME'],
 			);
 			while ($section = $sectionList->Fetch())
 			{
@@ -166,23 +196,31 @@ class CatalogProductCardIblockSectionField
 		}
 		elseif ($this->hasProductId())
 		{
-			$sectionIds = $this->loadSectionsForProduct($this->arParams['PRODUCT_ID']);
+			$sectionIds = $this->loadSectionsForProduct(
+				$this->arParams['PRODUCT_ID'],
+				$this->arParams['IBLOCK_ID'],
+			);
 		}
 
 		return $sectionIds;
 	}
 
-	private function loadSectionsForProduct($productId)
+	private function loadSectionsForProduct($productId, $iblockId)
 	{
 		$sectionIds = [];
 
 		$result = CIBlockElement::GetElementGroups(
 			$productId,
 			true,
-			['ID', 'IBLOCK_ELEMENT_ID']
+			['ID', 'IBLOCK_ID', 'IBLOCK_ELEMENT_ID'],
 		);
 		while ($group = $result->Fetch())
 		{
+			if ((int)$group['IBLOCK_ID'] !== (int)$iblockId)
+			{
+				continue;
+			}
+
 			$sectionIds[] = (int)$group['ID'];
 		}
 

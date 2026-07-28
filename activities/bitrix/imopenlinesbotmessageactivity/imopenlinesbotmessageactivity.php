@@ -7,6 +7,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\AI\Services\MarkdownToBBCodeTranslationService;
 use Bitrix\Bizproc\Activity\BaseActivity;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\FieldType;
@@ -196,7 +197,7 @@ final class CBPImOpenLinesBotMessageActivity extends BaseActivity implements IBP
 
 		$messageFields = [
 			'DIALOG_ID' => 'chat' . $chatId,
-			'MESSAGE' => $message,
+			'MESSAGE' => $this->formatMessage($message),
 		];
 
 		$messageId = Bot::addMessage($botIdentifier, $messageFields);
@@ -241,5 +242,21 @@ final class CBPImOpenLinesBotMessageActivity extends BaseActivity implements IBP
 	protected static function getFileName(): string
 	{
 		return __FILE__;
+	}
+
+	private function formatMessage(string $message): string
+	{
+		if (
+			!Loader::includeModule('ai')
+			|| !class_exists(MarkdownToBBCodeTranslationService::class)
+		)
+		{
+			return $message;
+		}
+
+		return ServiceLocator::getInstance()
+			->get(MarkdownToBBCodeTranslationService::class)
+			?->convert($message)
+		;
 	}
 }

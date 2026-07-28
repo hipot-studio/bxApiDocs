@@ -21,4 +21,9 @@ class TaskAccessService
 	{
 		return $this->delegate->canSave($userId, $task);
 	}
+
+	public function canDelete(int $userId, int $taskId): bool
+	{
+		return $this->delegate->canDelete($userId, $taskId);
+	}
 }

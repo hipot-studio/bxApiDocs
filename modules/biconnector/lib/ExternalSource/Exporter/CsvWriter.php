@@ -20,13 +20,13 @@ class CsvWriter extends Writer
 
 	public function close(): void
 	{
-		$this->file->close();
+		$this->file?->close();
 		$this->fileHandle = null;
 	}
 
 	public function writeLine(array $data): void
 	{
-		if (!$this->file)
+		if (!$this->file || !$this->fileHandle)
 		{
 			return;
 		}
@@ -36,7 +36,7 @@ class CsvWriter extends Writer
 
 	public function writeLines(iterable $data): void
 	{
-		if (!$this->file)
+		if (!$this->file || !$this->fileHandle)
 		{
 			return;
 		}

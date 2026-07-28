@@ -30,6 +30,34 @@ class RoleRelationRepository
 	}
 
 	/**
+	 * Returns relation codes (access codes) of the given roles.
+	 *
+	 * @param int[] $roleIds
+	 * @return string[]
+	 */
+	public function getRelationCodesByRoleIds(array $roleIds): array
+	{
+		if (empty($roleIds))
+		{
+			return [];
+		}
+
+		$codes = [];
+		foreach (
+			AccessRoleRelationTable::query()
+				->addSelect('RELATION')
+				->whereIn('ROLE_ID', $roleIds)
+				->setCacheTtl(86400)
+				->fetchAll() as $row
+		)
+		{
+			$codes[(string)$row['RELATION']] = (string)$row['RELATION'];
+		}
+
+		return array_values($codes);
+	}
+
+	/**
 	 * @inheritDoc
 	 */
 	public function deleteRelationsByRoleIds(array $roleIds): void

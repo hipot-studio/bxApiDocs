@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\Settings\Tools;
 
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Config\ConfigContainer;
+use Bitrix\BIConnector\Superset\Selfhost\SupersetHostMode;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
@@ -120,6 +121,11 @@ class BIConstructor extends Tool
 	public function isNeedDisableConfirmation(): bool
 	{
 		if (!Loader::includeModule('biconnector'))
+		{
+			return false;
+		}
+
+		if (SupersetHostMode::isSelfHosted())
 		{
 			return false;
 		}

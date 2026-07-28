@@ -4,17 +4,18 @@ namespace Bitrix\BIConnector\ExternalSource;
 
 use Bitrix\Main;
 use Bitrix\BIConnector;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorInterface;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 
 final class SupersetIntegration
 {
-	private Integrator $integrator;
+	private IntegratorInterface $integrator;
 
 	public function __construct()
 	{
-		$this->integrator = Integrator::getInstance();
+		$this->integrator = IntegratorFactory::getInstance();
 	}
 
 	/**
@@ -31,7 +32,7 @@ final class SupersetIntegration
 		if ($response->hasErrors())
 		{
 			$result->addError(new Main\Error(
-				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_CREATE_DATASET_ERROR_MSGVER_1'))
+				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_CREATE_DATASET_ERROR_MSGVER_1') ?? '')
 			);
 
 			return $result;
@@ -69,7 +70,7 @@ final class SupersetIntegration
 			if ($response->getStatus() === IntegratorResponse::STATUS_NO_ACCESS)
 			{
 				$result->addError(new Main\Error(
-						Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DELETE_DATASET_PERMISSION_ERROR_MSGVER_1'),
+						Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DELETE_DATASET_PERMISSION_ERROR_MSGVER_1') ?? '',
 						IntegratorResponse::STATUS_NO_ACCESS
 					),
 				);
@@ -77,7 +78,7 @@ final class SupersetIntegration
 			else
 			{
 				$result->addError(new Main\Error(
-						Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DELETE_DATASET_ERROR_MSGVER_1'),
+						Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DELETE_DATASET_ERROR_MSGVER_1') ?? '',
 						$response->getStatus()
 					)
 				);
@@ -100,7 +101,7 @@ final class SupersetIntegration
 		if (!$dataset->getExternalId())
 		{
 			$result->addError(new Main\Error(
-				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR_MSGVER_1')
+				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR_MSGVER_1') ?? ''
 			));
 
 			return $result;
@@ -110,7 +111,7 @@ final class SupersetIntegration
 		if ($response->hasErrors())
 		{
 			$result->addError(new Main\Error(
-				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_GET_URL_ERROR'))
+				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_GET_URL_ERROR') ?? '')
 			);
 
 			return $result;
@@ -137,7 +138,7 @@ final class SupersetIntegration
 		if ($response->hasErrors())
 		{
 			$result->addError(
-				new Main\Error(Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_GET_URL_ERROR'))
+				new Main\Error(Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_GET_URL_ERROR') ?? '')
 			);
 
 			return $result;
@@ -165,7 +166,7 @@ final class SupersetIntegration
 		if (!$id)
 		{
 			$result->addError(new Main\Error(
-				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR_MSGVER_1')
+				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR_MSGVER_1') ?? ''
 			));
 
 			return $result;
@@ -192,7 +193,7 @@ final class SupersetIntegration
 		if (!$id)
 		{
 			$result->addError(new Main\Error(
-				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR_MSGVER_1')
+				Main\Localization\Loc::getMessage('SUPERSET_INTEGRATION_DATASET_NOT_FOUND_ERROR_MSGVER_1') ?? ''
 			));
 
 			return $result;
@@ -261,7 +262,11 @@ final class SupersetIntegration
 		$createDatasetResult = $supersetIntegration->createDataset($dataset);
 		if (!$createDatasetResult->isSuccess())
 		{
-			return new Main\EventResult(Main\EventResult::ERROR, new Main\Error($createDatasetResult->getError()));
+			$error = $createDatasetResult->getError();
+			if ($error)
+			{
+				return new Main\EventResult(Main\EventResult::ERROR, new Main\Error($error->getMessage()));
+			}
 		}
 
 		return new Main\EventResult(Main\EventResult::SUCCESS);
@@ -287,7 +292,11 @@ final class SupersetIntegration
 		$updateDatasetResult = $supersetIntegration->updateDataset($dataset);
 		if (!$updateDatasetResult->isSuccess())
 		{
-			return new Main\EventResult(Main\EventResult::ERROR, new Main\Error($updateDatasetResult->getError()));
+			$error = $updateDatasetResult->getError();
+			if ($error)
+			{
+				return new Main\EventResult(Main\EventResult::ERROR, new Main\Error($error->getMessage()));
+			}
 		}
 
 		return new Main\EventResult(Main\EventResult::SUCCESS);
@@ -322,9 +331,9 @@ final class SupersetIntegration
 		if (!$deleteDatasetResult->isSuccess())
 		{
 			$error = $deleteDatasetResult->getError();
-			if ($error?->getCode() !== IntegratorResponse::STATUS_NOT_FOUND)
+			if ($error !== null && $error->getCode() !== IntegratorResponse::STATUS_NOT_FOUND)
 			{
-				return new Main\EventResult(Main\EventResult::ERROR, new Main\Error($error));
+				return new Main\EventResult(Main\EventResult::ERROR, new Main\Error($error->getMessage()));
 			}
 		}
 

@@ -51,7 +51,7 @@ class DashboardTag extends Controller
 	 */
 	public function addAction(string $title): ?array
 	{
-		$userId = $this->getCurrentUser()->getId();
+		$userId = $this->getCurrentUser()?->getId();
 
 		$userTag = SupersetTagTable::getRow([
 			'filter' => [
@@ -61,7 +61,7 @@ class DashboardTag extends Controller
 
 		if ($userTag)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_HAS_EXIST_TAG')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_HAS_EXIST_TAG') ?? ''));
 
 			return null;
 		}
@@ -103,7 +103,7 @@ class DashboardTag extends Controller
 
 		if (!$tag)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_EMPTY_TAG')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_EMPTY_TAG') ?? ''));
 
 			return null;
 		}
@@ -117,7 +117,7 @@ class DashboardTag extends Controller
 
 		if ($existedTitle && $id !== (int)$existedTitle['ID'])
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_HAS_EXIST_TAG')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_HAS_EXIST_TAG') ?? ''));
 
 			return null;
 		}
@@ -152,7 +152,7 @@ class DashboardTag extends Controller
 
 		if (!$tag)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_EMPTY_TAG')));
+			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_EMPTY_TAG') ?? ''));
 
 			return null;
 		}

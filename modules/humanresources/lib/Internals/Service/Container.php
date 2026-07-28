@@ -12,6 +12,7 @@ use Bitrix\HumanResources\Internals\Repository\Structure\NodePathRepository;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeChatService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeCollabService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeMemberService;
+use Bitrix\HumanResources\Internals\Service\Structure\NodeMemberNotificationService;
 use Bitrix\HumanResources\Internals\Service\Structure\NodeSettingsService;
 use Bitrix\HumanResources\Internals\Service\Structure\UserSettingsService;
 use Bitrix\HumanResources\Internals\Service\Structure\RoleService;
@@ -60,6 +61,11 @@ class Container
 	public static function getNodeMemberService(): NodeMemberService
 	{
 		return self::getService('humanresources.internal.service.nodeMemberService');
+	}
+
+	public static function getNodeMemberNotificationService(): NodeMemberNotificationService
+	{
+		return self::getService('humanresources.internal.service.nodeMemberNotificationService');
 	}
 
 	public static function getNodeSettingsService(): NodeSettingsService

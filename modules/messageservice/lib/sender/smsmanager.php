@@ -4,11 +4,11 @@ namespace Bitrix\MessageService\Sender;
 use Bitrix\Main;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
+use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\Result;
 use Bitrix\MessageService\Internal\Entity\MessageTable;
 use Bitrix\MessageService\Message;
 use Bitrix\MessageService\MessageType;
-use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\MessageService\Sender\Result\SendMessage;
 
 /**

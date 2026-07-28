@@ -28,12 +28,12 @@ class XScanResultTable extends DataManager
 	private const trace = [
 		'/bitrix/modules/security/lib/controller/xscan.php',
 		'',
-		'/bitrix/modules/main/lib/engine/autowire/binder.php',
-		'/bitrix/modules/main/lib/engine/action.php',
-		'/bitrix/modules/main/lib/engine/controller.php',
-		'/bitrix/modules/main/lib/engine/controller.php',
-		'/bitrix/modules/main/lib/httpapplication.php',
-		'/bitrix/modules/main/lib/httpapplication.php',
+		'/bitrix/modules/main/lib/Engine/AutoWire/Binder.php',
+		'/bitrix/modules/main/lib/Engine/Action.php',
+		'/bitrix/modules/main/lib/Engine/Controller.php',
+		'/bitrix/modules/main/lib/Engine/Controller.php',
+		'/bitrix/modules/main/lib/HttpApplication.php',
+		'/bitrix/modules/main/lib/HttpApplication.php',
 		'/bitrix/modules/main/services/ajax.php',
 		'/bitrix/services/main/ajax.php',
 	];

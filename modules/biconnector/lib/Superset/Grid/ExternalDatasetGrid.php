@@ -31,17 +31,7 @@ final class ExternalDatasetGrid extends Grid
 	protected function createRows(): Rows
 	{
 		$rowAssembler = new ExternalDatasetRowAssembler(
-			[
-				'ID',
-				'TYPE',
-				'NAME',
-				'SOURCE',
-				'DESCRIPTION',
-				'DATE_CREATE',
-				'DATE_UPDATE',
-				'CREATED_BY_ID',
-				'UPDATED_BY_ID',
-			],
+			$this->getVisibleColumnsIds(),
 			$this->getSettings()
 		);
 
@@ -64,14 +54,14 @@ final class ExternalDatasetGrid extends Grid
 	public function getOrmParams(): array
 	{
 		$ormParams = parent::getOrmParams();
-		if (!in_array('ID', $ormParams['select'], true))
-		{
-			$ormParams['select'][] = 'ID';
-		}
 
-		if (!in_array('TYPE', $ormParams['select'], true))
+		$requiredFields = ['ID', 'TYPE', 'NAME'];
+		foreach ($requiredFields as $field)
 		{
-			$ormParams['select'][] = 'TYPE';
+			if (!in_array($field, $ormParams['select'], true))
+			{
+				$ormParams['select'][] = $field;
+			}
 		}
 
 		return $ormParams;

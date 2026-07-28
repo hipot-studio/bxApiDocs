@@ -13,6 +13,12 @@ final class SourceRepository
 	public static function getSources(): array
 	{
 		$result = CrmTracking\SourceProvider::getSources() + ExternalSql\SourceProvider::getSources();
+
+		if (Loader::includeModule('bitrix24'))
+		{
+			$result = array_merge(ExternalSql\SourceProvider::getCloudSources(), $result);;
+		}
+
 		if (Loader::includeModule('rest'))
 		{
 			$result = array_merge(Rest\SourceProvider::getSources(), $result);

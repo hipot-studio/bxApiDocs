@@ -3,9 +3,8 @@
 namespace Bitrix\BIConnector\Superset;
 
 use Bitrix\BIConnector;
-use Bitrix\BIConnector\Integration\Superset\Model;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardCollection;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorInterface;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\Main\Error;
@@ -17,7 +16,7 @@ final class DashboardRelationsFinder
 	private const TYPE_CHART = 'chart';
 	private const TYPE_DATASET = 'dataset';
 
-	private Integrator $integrator;
+	private IntegratorInterface $integrator;
 
 	/**
 	 * @var Array<int, Dashboard> map (externalId -> DashboardModel) of market dashboard ids that figured in finder request
@@ -25,7 +24,7 @@ final class DashboardRelationsFinder
 	private array $usedMarketDashboardExternalIdToModel = [];
 	private string $supersetDomain = '';
 
-	public function __construct(Integrator $integrator)
+	public function __construct(IntegratorInterface $integrator)
 	{
 		$this->integrator = $integrator;
 	}

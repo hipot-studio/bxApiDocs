@@ -43,16 +43,26 @@ class UpdateIncomingWebhookCommandHandler
 			);
 		}
 
-		$scopes = PermissionTable::cleanPermissionList($command->scopes);
-		if (empty($scopes))
-		{
-			throw new ArgumentException('At least one valid scope is required', 'scopes');
-		}
-
 		$webhook = $this->repository->getByWebhookId($command->webHookPassword);
 		if ($webhook === null)
 		{
 			throw new IncomingWebhookNotFoundException();
+		}
+
+		// Partial update: keep the webhook's current scopes only when the field is
+		// omitted (null). An explicit empty list means "no scopes" and is rejected,
+		// as is a list where none of the provided scopes is valid.
+		if ($command->scopes === null)
+		{
+			$scopes = $webhook->getScopes();
+		}
+		else
+		{
+			$scopes = PermissionTable::cleanPermissionList($command->scopes);
+			if (empty($scopes))
+			{
+				throw new ArgumentException('At least one valid scope is required', 'scopes');
+			}
 		}
 
 		$accessChecker = new WebhookAccessChecker($command->userId);

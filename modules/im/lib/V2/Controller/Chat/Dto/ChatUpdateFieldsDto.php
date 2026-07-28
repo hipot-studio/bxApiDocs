@@ -22,6 +22,7 @@ final class ChatUpdateFieldsDto
 		public readonly ?string $hideHistory,
 		public readonly ?array $addedManagers,
 		public readonly ?array $deletedManagers,
+		public readonly ?string $manageGuestInvites,
 	)
 	{
 	}
@@ -45,6 +46,7 @@ final class ChatUpdateFieldsDto
 			hideHistory: $fields['hideHistory'] ?? null,
 			addedManagers: $fields['addedManagers'] ?? null,
 			deletedManagers: $fields['deletedManagers'] ?? null,
+			manageGuestInvites: $fields['manageGuestInvites'] ?? null,
 		);
 	}
 }

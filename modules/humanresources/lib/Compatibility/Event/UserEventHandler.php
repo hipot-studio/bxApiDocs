@@ -2,11 +2,17 @@
 
 namespace Bitrix\HumanResources\Compatibility\Event;
 
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\EntityIdFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
+use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
 use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Config\Storage;
 use Bitrix\HumanResources\Enum\EventName;
 use Bitrix\HumanResources\Enum\LoggerEntityType;
 use Bitrix\HumanResources\Exception\CreationFailedException;
+use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
+use Bitrix\HumanResources\Item;
+use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Service\UserService;
@@ -113,8 +119,14 @@ class UserEventHandler
 		$userId = $fields['ID'];
 		$isActive = ($fields['ACTIVE'] ?? 'N') === 'Y';
 
-		$currentLinks = Container::getNodeMemberRepository()
-			->findAllByEntityIdAndEntityType($userId, MemberEntityType::USER)
+		$nodeMemberFilter = new NodeMemberFilter(
+			entityIdFilter: EntityIdFilter::fromEntityId($userId),
+			entityType: MemberEntityType::USER,
+			active: null,
+		);
+		$currentLinks = (new NodeMemberDataBuilder())
+			->setFilter($nodeMemberFilter)
+			->getAll()
 		;
 
 		Container::getEventSenderService()->removeEventHandlers(
@@ -130,6 +142,9 @@ class UserEventHandler
 		array_walk(
 			$departments, fn(&$department) => $department = DepartmentBackwardAccessCode::makeById((int)$department)
 		);
+
+		$removedMembers = [];
+		$addedMembers = [];
 
 		try
 		{
@@ -154,6 +169,7 @@ class UserEventHandler
 						Container::getNodeMemberRepository()
 							->remove($link);
 						$currentLinks->remove($link);
+						// we don't send notifications for removed node
 
 						continue;
 					}
@@ -172,6 +188,7 @@ class UserEventHandler
 						->remove($link)
 					;
 					$currentLinks->remove($link);
+					$removedMembers[] = ['member' => $link, 'node' => $node];
 				}
 			}
 
@@ -197,6 +214,7 @@ class UserEventHandler
 						Container::getNodeMemberRepository()
 							->create($nodeMember)
 						;
+						$addedMembers[] = $nodeMember;
 					}
 					catch (CreationFailedException $exception)
 					{
@@ -222,11 +240,65 @@ class UserEventHandler
 		{
 		}
 
+		self::sendNotifications($removedMembers, $addedMembers);
+
 		NewToOldEventHandler::clearCacheInBackground(
 			shouldClearHRCacheImmediately: true,
 		);
 
 		Container::getCacheManager()->clean(sprintf(UserService::USER_DEPARTMENT_EXISTS_KEY, $userId));
+	}
+
+	/**
+	 * Sends add/remove notifications for members changed via the old user API,
+	 * where native HR event handlers are intentionally disabled to avoid infinite loops.
+	 *
+	 * @param array<array{member: NodeMember, node: ?Item\Node}> $removedMembers
+	 * @param NodeMember[] $addedMembers
+	 */
+	private static function sendNotifications(array $removedMembers, array $addedMembers): void
+	{
+		$notificationService = InternalContainer::getNodeMemberNotificationService();
+		$nodeRepository = Container::getNodeRepository();
+
+		$notificationService->preloadEmployeeNames(
+			(new NodeMemberCollection(...array_column($removedMembers, 'member')))
+				->merge(new NodeMemberCollection(...$addedMembers)),
+		);
+
+		foreach ($removedMembers as $entry)
+		{
+			$node = $entry['node'];
+			if ($node === null)
+			{
+				continue;
+			}
+
+			$notificationService->sendAllRemoveMemberNotifications($entry['member'], $node);
+		}
+
+		$addedByNodeId = [];
+		foreach ($addedMembers as $member)
+		{
+			$addedByNodeId[$member->nodeId][] = $member;
+		}
+
+		foreach ($addedByNodeId as $nodeId => $members)
+		{
+			$node = $nodeRepository->getById($nodeId);
+			if ($node === null)
+			{
+				continue;
+			}
+
+			$collection = new NodeMemberCollection();
+			foreach ($members as $member)
+			{
+				$collection->add($member);
+			}
+
+			$notificationService->sendAllAddMemberNotifications($collection, $node);
+		}
 	}
 
 	private static function updateNodeMemberActive(array $fields): void

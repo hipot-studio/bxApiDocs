@@ -28,7 +28,7 @@ final class ScreenshotExporter
 
 		if (\CFile::checkFile($file, strExt: $fileFormat))
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_PDF_EXPORT_ERROR_WRONG_FILE_TYPE')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_PDF_EXPORT_ERROR_WRONG_FILE_TYPE') ?? ''));
 
 			return $result;
 		}
@@ -36,7 +36,7 @@ final class ScreenshotExporter
 		$fileId = \CFile::saveFile($file, 'biconnector/dashboard_screenshot');
 		if ((int)$fileId <= 0)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_PDF_EXPORT_ERROR_FILE_SAVE')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_PDF_EXPORT_ERROR_FILE_SAVE') ?? ''));
 
 			return $result;
 		}
@@ -55,7 +55,7 @@ final class ScreenshotExporter
 		$result = new Result();
 		if ($fileType !== self::FILE_FORMAT_PDF && $fileType !== self::FILE_FORMAT_JPEG)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_PDF_EXPORT_ERROR_WRONG_FILE_TYPE')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_PDF_EXPORT_ERROR_WRONG_FILE_TYPE') ?? ''));
 
 			return $result;
 		}

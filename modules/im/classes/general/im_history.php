@@ -13,7 +13,7 @@ class CIMHistory
 	{
 		global $USER;
 		$this->user_id = intval($user_id);
-		if ($user_id == 0)
+		if ($user_id == 0 && is_object($USER))
 			$this->user_id = intval($USER->GetID());
 		if (isset($arParams['HIDE_LINK']) && $arParams['HIDE_LINK'] == 'Y')
 			$this->bHideLink = true;

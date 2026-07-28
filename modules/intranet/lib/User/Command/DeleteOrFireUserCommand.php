@@ -25,7 +25,6 @@ use Bitrix\Main\Result;
 class DeleteOrFireUserCommand extends AbstractCommand
 {
 	private ?User $firedUser = null;
-	private bool $wasIntegrator = false;
 
 	public function __construct(
 		public readonly User $user,
@@ -36,8 +35,6 @@ class DeleteOrFireUserCommand extends AbstractCommand
 	protected function execute(): Result
 	{
 		$result = new Result();
-
-		$this->wasIntegrator = $this->user->isIntegrator();
 
 		$userService = ServiceContainer::getInstance()->getUserService();
 		$isActionAvailable = $userService->isActionAvailableForUser($this->user, UserActionDictionary::FIRE)
@@ -80,7 +77,17 @@ class DeleteOrFireUserCommand extends AbstractCommand
 
 	protected function afterRun(): void
 	{
-		if ($this->firedUser && $this->wasIntegrator)
+		if ($this->firedUser)
+		{
+			$event = new Event('intranet', UserStatusEventHelper::EVENT_AFTER_FIRE, [
+				'event' => null,
+				'user' => $this->firedUser,
+			]);
+			$event->setParameter('event', $event);
+			$event->send();
+		}
+
+		if ($this->firedUser && $this->firedUser->isIntegrator())
 		{
 			(new Event('intranet', 'onIntegratorUserFired', [
 				'user' => $this->firedUser,

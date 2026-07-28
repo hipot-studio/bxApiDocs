@@ -12,7 +12,6 @@ use Bitrix\Disk\Internals\Index\ObjectExtendedIndexTable;
 use Bitrix\Disk\Internals\Index\ObjectHeadIndexTable;
 use Bitrix\Disk\Internals\ObjectSaveIndexTable;
 use Bitrix\Disk\Internals\ObjectTable;
-use Bitrix\Disk\Internals\SimpleRightTable;
 use Bitrix\Disk\ProxyType\Group;
 use Bitrix\Disk\Search\Reindex\HeadIndex;
 use Bitrix\Disk\Storage;
@@ -677,19 +676,7 @@ final class IndexManager
 
 	private function getSimpleRights(BaseObject $object)
 	{
-		$query = SimpleRightTable::getList(array(
-			'select' => array('ACCESS_CODE'),
-			'filter' => array(
-				'OBJECT_ID' => $object->getId(),
-			)
-		));
-		$permissions = array();
-		while($row = $query->fetch())
-		{
-			$permissions[] = $row['ACCESS_CODE'];
-		}
-
-		return $permissions;
+		return Driver::getInstance()->getRightsManager()->getSimpleRightAccessCodesForObject($object->getId());
 	}
 
 	/**

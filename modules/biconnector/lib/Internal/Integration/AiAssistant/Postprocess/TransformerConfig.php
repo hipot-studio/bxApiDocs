@@ -9,12 +9,11 @@ class TransformerConfig
 	public bool $transposeDictData = true;
 	public bool $removeEmptyFields = true;
 
-	public bool $computeStats = true;
 	public bool $generateColumnDescriptions = true;
 	public bool $includeMeta = true;
 
 	public bool $preserveChartIds = false;
-	public bool $includeRows = true;
+	public array $chartFields = [];
 
 	public int $defaultDecimalPlaces = 2;
 	public int $fractionDecimalPlaces = 4;

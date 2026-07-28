@@ -30,6 +30,7 @@ class SearchOptions
 	public const ONLY_WITH_NULL_ENTITY_TYPE_OPTION = 'onlyWithNullEntityType';
 	public const EXCLUDE_IDS_OPTION = 'excludeIds';
 	public const CONTEXT_CHAT_ID = 'contextChatId';
+	public const EXCLUDE_GUESTS_OPTION = 'excludeGuests';
 
 	// Resolved state
 	private FlagOption $flagOption;
@@ -46,6 +47,7 @@ class SearchOptions
 	private bool $onlyWithOwnerRight = false;
 	private bool $onlyWithNullEntityType = false;
 	private bool $fillDialogByRecent = false;
+	private bool $excludeGuests = false;
 	private array $excludeIds = [];
 
 	private readonly TypeRegistry $typeRegistry;
@@ -163,6 +165,11 @@ class SearchOptions
 		return $this->fillDialogByRecent;
 	}
 
+	public function shouldExcludeGuests(): bool
+	{
+		return $this->excludeGuests;
+	}
+
 	private function resolve(array $rawOptions): void
 	{
 		$isRecentSectionSearchEnabled = isset($rawOptions[self::SEARCH_RECENT_SECTION_OPTION]) && is_string($rawOptions[self::SEARCH_RECENT_SECTION_OPTION]);
@@ -204,6 +211,7 @@ class SearchOptions
 		$this->onlyWithOwnerRight = ($rawOptions[self::ONLY_WITH_OWNER_RIGHT_OPTION] ?? false) === true;
 		$this->onlyWithNullEntityType = ($rawOptions[self::ONLY_WITH_NULL_ENTITY_TYPE_OPTION] ?? false) === true;
 		$this->fillDialogByRecent = ($rawOptions[self::FILL_DIALOG_BY_RECENT_OPTION] ?? false) === true;
+		$this->excludeGuests = ($rawOptions[self::EXCLUDE_GUESTS_OPTION] ?? false) === true;
 		$this->contextChatId = isset($rawOptions[self::CONTEXT_CHAT_ID]) ? (int)$rawOptions[self::CONTEXT_CHAT_ID] : null;
 
 		if (isset($rawOptions[self::EXCLUDE_IDS_OPTION]) && is_array($rawOptions[self::EXCLUDE_IDS_OPTION]))

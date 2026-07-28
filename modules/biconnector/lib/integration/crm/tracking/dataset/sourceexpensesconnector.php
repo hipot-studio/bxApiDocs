@@ -41,7 +41,7 @@ class SourceExpensesConnector extends Base
 		}
 
 		$dto = $dataResult->getConnectorData();
-		if (empty($dto->getColumns()))
+		if ($dto === null || empty($dto->getColumns()))
 		{
 			$result->addError(new Error('QUERY_ERROR', 0, ['description' => 'No column selected']));
 

@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\User\Grid\Settings;
 
 use Bitrix\Intranet\Component\UserList;
 use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
 use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\User;
 use Bitrix\Intranet\Invitation;
@@ -20,9 +21,11 @@ class UserSettings extends \Bitrix\Main\Grid\Settings
 	private ?array $integratorIdList = null;
 	private array $viewFields;
 	private ?array $filterFields = null;
+	private ?string $selectedDepartmentFilterValue = null;
 	private ?bool $isInvitationAvailable = null;
 	private int $userId;
 	private ?UserCollection $userCollection = null;
+	private array $userDepartmentsMap = [];
 	private User $currentUser;
 	private string $view;
 
@@ -107,6 +110,11 @@ class UserSettings extends \Bitrix\Main\Grid\Settings
 		return ModuleManager::isModuleInstalled('bitrix24');
 	}
 
+	public function getSelectedDepartmentFilterValue(): ?string
+	{
+		return $this->selectedDepartmentFilterValue;
+	}
+
 	public function isFirstAdminConfirmationEnabled(): bool
 	{
 		if ($this->isCloud() && Loader::includeModule('bitrix24'))
@@ -138,6 +146,11 @@ class UserSettings extends \Bitrix\Main\Grid\Settings
 		$this->filterFields = $filterFields;
 	}
 
+	public function setSelectedDepartmentFilterValue(?string $selectedDepartmentFilterValue): void
+	{
+		$this->selectedDepartmentFilterValue = $selectedDepartmentFilterValue;
+	}
+
 	public function isInvitationAvailable(): bool
 	{
 		if (!isset($this->isInvitationAvailable))
@@ -162,6 +175,27 @@ class UserSettings extends \Bitrix\Main\Grid\Settings
 	public function setUserCollection(UserCollection $userCollection): void
 	{
 		$this->userCollection = $userCollection;
+	}
+
+	/**
+	 * @param array<int, DepartmentCollection> $userDepartmentsMap
+	 */
+	public function setUserDepartmentsMap(array $userDepartmentsMap): void
+	{
+		$this->userDepartmentsMap = $userDepartmentsMap;
+	}
+
+	public function getUserDepartmentsByUserId(int $userId): DepartmentCollection
+	{
+		return $this->userDepartmentsMap[$userId] ?? new DepartmentCollection();
+	}
+
+	public function isUserExtranetById(int $userId): bool
+	{
+		return
+			array_key_exists($userId, $this->userDepartmentsMap)
+			&& $this->userDepartmentsMap[$userId]->empty()
+		;
 	}
 
 	private function initViewFields(): void

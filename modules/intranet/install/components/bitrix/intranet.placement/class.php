@@ -48,18 +48,7 @@ class IntranetPlacementComponent extends \CBitrixComponent implements Controller
 		$result = [];
 		$server = Application::getInstance()->getContext()->getServer();
 
-		$res = PlacementTable::getList(
-			[
-				'filter' => [
-					'=PLACEMENT' => $placementCode,
-				],
-				'cache' => [
-					'ttl' => 86400
-				]
-			]
-		);
-
-		while ($handler = $res->fetch())
+		foreach (PlacementTable::getHandlersList($placementCode) as $handler)
 		{
 			$result[] = [
 				'ID' => 'placement_rest_' . $handler['ID'],

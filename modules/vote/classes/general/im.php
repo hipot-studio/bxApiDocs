@@ -17,13 +17,16 @@ class CVoteNotifySchema
 
 	public static function OnGetNotifySchema()
 	{
-		return array(
-			"vote" => array(
-				"voting" => Array(
-					"NAME" => GetMessage('V_VOTING'),
-				)
-			)
-		);
+		return [
+			"vote" => [
+				"NAME" => GetMessage("V_NS_GROUP"),
+				"NOTIFY" => [
+					"voting" => [
+						"NAME" => GetMessage("V_VOTING"),
+					],
+				],
+			],
+		];
 	}
 }
 ?>

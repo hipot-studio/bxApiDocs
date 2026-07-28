@@ -24,6 +24,18 @@ class LimitManagerBitrix24 extends LimitManager
 	}
 
 	/**
+	 * Sets row limit.
+	 * Available only for selfhost supersets in box.
+	 *
+	 * @param int $rowLimit
+	 * @return self
+	 */
+	public function setLimit(int $rowLimit): self
+	{
+		return $this;
+	}
+
+	/**
 	 * Returns a date when data export will be disabled.
 	 *
 	 * @return Date

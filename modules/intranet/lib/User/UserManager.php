@@ -2,9 +2,8 @@
 
 namespace Bitrix\Intranet\User;
 
-use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
-use Bitrix\Intranet\Entity\Department;
-use Bitrix\Intranet\Service\ServiceContainer;
+use Bitrix\Intranet\Internal\Integration\Humanresources\UserDepartmentProvider;
+use Bitrix\Intranet\Internal\Integration\Humanresources\UserQueryModifier;
 use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
 use Bitrix\Intranet\User\Filter\Presets\FilterPreset;
@@ -28,8 +27,6 @@ final class UserManager
 	public const SORT_WAITING_CONFIRMATION = ['WAITING_CONFIRMATION_SORT' => 'ASC'];
 
 	private UserFilter $filter;
-
-	private ?DepartmentCollection $departmentCollection = null;
 
 	/**
 	 * @param string $filterId ID of filter for getting last saved filter preset
@@ -108,36 +105,12 @@ final class UserManager
 			$params['filter']['FIND'] = $search;
 		}
 
-		if (key_exists('STRUCTURE_SORT', $params['order'] ?? []))
+		if (isset($params['select']) && is_array($params['select']))
 		{
-			$currentUser = new \Bitrix\Intranet\User();
-			$sort = $currentUser->getStructureSort(false);
-
-			if (!empty($sort))
-			{
-				$sqlHelper = \Bitrix\Main\Application::getInstance()->getConnection()->getSqlHelper();
-				$params['select'][] =
-					new \Bitrix\Main\Entity\ExpressionField(
-						'STRUCTURE_SORT',
-						$sqlHelper->getOrderByIntField('%s', $sort, false),
-						'ID');
-			}
-			else
-			{
-				unset($params['order']['STRUCTURE_SORT']);
-			}
-		}
-
-		if (isset($params['filter']['DEPARTMENT']))
-		{
-			$department = $this->getDepartmentCollection()
-				->filter(fn (Department $department) => $department->getId() === $params['filter']['DEPARTMENT'])
-				->first();
-
-			if ($department)
-			{
-				$params['filter']['DEPARTMENT'] = $department->getIblockSectionId();
-			}
+			$params['select'] = array_values(array_filter(
+				$params['select'],
+				static fn(mixed $field): bool => $field !== 'UF_DEPARTMENT',
+			));
 		}
 
 		$params['filter'] = $this->filter->getValue($params['filter'] ?? null);
@@ -150,7 +123,22 @@ final class UserManager
 
 		if (isset($params['order']))
 		{
-			$query->setOrder($params['order']);
+			$userQueryModifier = new UserQueryModifier();
+			$useStructureSort = array_key_exists('STRUCTURE_SORT', $params['order']);
+
+			if ($useStructureSort)
+			{
+				$userQueryModifier->injectStructureSort(
+					$query,
+					$this->filter->getFilterSettings()?->getCurrentUserId() ?? 0
+				);
+				unset($params['order']['STRUCTURE_SORT']);
+			}
+
+			foreach ($params['order'] as $field => $direction)
+			{
+				$query->addOrder($field, $direction);
+			}
 		}
 
 		if (isset($params['limit']))
@@ -163,24 +151,23 @@ final class UserManager
 			$query->setOffset($params['offset']);
 		}
 
-		foreach ($query->fetchAll() as $user)
+		$userList = $query->fetchAll();
+		$userDepartmentMap = (new UserDepartmentProvider())->getMapByUserIds(
+			array_map('intval', array_column($userList, 'ID')),
+		);
+
+		foreach ($userList as $user)
 		{
-			if (!empty($user['UF_DEPARTMENT']))
+			$user['UF_DEPARTMENT'] = [];
+			foreach ($userDepartmentMap[(int)$user['ID']] ?? [] as $department)
 			{
-				$filteredDepartments = $this
-					->getDepartmentCollection()
-					->filterByUsersDepartmentIdList($user['UF_DEPARTMENT']);
-
-				$user['UF_DEPARTMENT'] = [];
-
-				foreach ($filteredDepartments as $department)
+				$departmentId = $department->getId();
+				if ($departmentId === null)
 				{
-					$user['UF_DEPARTMENT'][$department->getId()] = htmlspecialcharsbx($department->getName());
+					continue;
 				}
-			}
-			else
-			{
-				$user['UF_DEPARTMENT'] = [];
+
+				$user['UF_DEPARTMENT'][$departmentId] = htmlspecialcharsbx($department->getName());
 			}
 
 			$userId = $user['ID'];
@@ -189,14 +176,6 @@ final class UserManager
 		}
 
 		return $result;
-	}
-
-	private function getDepartmentCollection(): DepartmentCollection
-	{
-		$this->departmentCollection ??= (new \Bitrix\Intranet\Repository\HrDepartmentRepository())
-			->getAllTree();
-
-		return $this->departmentCollection;
 	}
 
 	/**

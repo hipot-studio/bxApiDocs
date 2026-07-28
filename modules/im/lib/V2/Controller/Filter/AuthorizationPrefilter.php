@@ -6,8 +6,11 @@ use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Controller;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Guest\Auth\AuthenticationService;
+use Bitrix\Im\V2\Guest\Auth\AuthorizationService;
 use Bitrix\Im\V2\Guest\Auth\Token;
+use Bitrix\Im\V2\Guest\GuestService;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Event;
@@ -35,12 +38,35 @@ class AuthorizationPrefilter extends Base
 			return null;
 		}
 
+		if ($this->shouldTerminateGuestSession())
+		{
+			AuthorizationService::getInstance()->terminate();
+
+			return null;
+		}
+
 		return $this->checkGuestAccess();
+	}
+
+	protected function shouldTerminateGuestSession(): bool
+	{
+		$globalUser = Locator::getContext()->getCUser();
+		if ($globalUser === null)
+		{
+			return false;
+		}
+
+		if ($globalUser->GetParam('EXTERNAL_AUTH_ID') !== UserGuest::AUTH_ID)
+		{
+			return false;
+		}
+
+		return !GuestService::getInstance()->isCurrentGuestSessionValid();
 	}
 
 	protected function tryAuthenticateGuest(): void
 	{
-		if (!Features::isChatWithGuestsAvailable())
+		if (!Features::isChatWithGuestsAvailable(GuestService::getInstance()->getCurrentInviterId()))
 		{
 			return;
 		}
@@ -72,6 +98,8 @@ class AuthorizationPrefilter extends Base
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
 		}
+
+		\CUser::SetLastActivityDate((int)$globalUser->GetID(), true);
 
 		return null;
 	}

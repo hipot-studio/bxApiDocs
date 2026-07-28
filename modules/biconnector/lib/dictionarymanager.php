@@ -88,7 +88,8 @@ class DictionaryManager
 		if (
 			$userFields['RESULT']
 			&& isset($userFields['UF_DEPARTMENT'])
-			&& (int)$userFields['ID'] === static::$userBefore?->getId()
+			&& static::$userBefore !== null
+			&& (int)$userFields['ID'] === static::$userBefore->getId()
 		)
 		{
 			$departmentBefore = static::$userBefore->getUfDepartment();

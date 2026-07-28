@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\User\Filter\Provider;
 
+use Bitrix\Intranet\Internal\Integration\Humanresources\UserQueryModifier;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Enum\Otp\UserOtpStatus;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
@@ -10,6 +11,7 @@ use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\UserOtpStatusService;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
 use Bitrix\Intranet\Util;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Filter\EntityDataProvider;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -26,11 +28,13 @@ class IntranetUserDataProvider extends EntityDataProvider
 	private const WINDOWS_APP = 'windows';
 	private const NOT_INSTALLED_APP = 'notInstalled';
 	private IntranetUserSettings $settings;
+	private UserQueryModifier $userQueryModifier;
 	private ?UserOtpStatusService $otpStatusService = null;
 
 	public function __construct(IntranetUserSettings $settings)
 	{
 		$this->settings = $settings;
+		$this->userQueryModifier = new UserQueryModifier();
 	}
 
 	public function getSettings(): IntranetUserSettings
@@ -230,13 +234,22 @@ class IntranetUserDataProvider extends EntityDataProvider
 
 	private function checkVisitorField(array &$filterValue): void
 	{
+		$employeeUserIdSubQuery = $this->userQueryModifier->createEmployeeUserIdSubQuery();
+
+		if ($employeeUserIdSubQuery === null)
+		{
+			return;
+		}
+
 		if (
 			!empty($filterValue[IntranetUserSettings::VISITOR_FIELD])
 			&& $filterValue[IntranetUserSettings::VISITOR_FIELD] === 'Y'
 			&& $this->getSettings()->isFilterAvailable(IntranetUserSettings::VISITOR_FIELD)
 		)
 		{
-			$filterValue['UF_DEPARTMENT'] = false;
+			$filterValue[] = [
+				'!@ID' => new SqlExpression($employeeUserIdSubQuery),
+			];
 
 			if (Loader::includeModule('extranet'))
 			{
@@ -255,13 +268,17 @@ class IntranetUserDataProvider extends EntityDataProvider
 			{
 				$filterValue[] = [
 					'LOGIC' => 'OR',
-					'!UF_DEPARTMENT' => false,
+					[
+						'@ID' => new SqlExpression($employeeUserIdSubQuery),
+					],
 					'!=EXTRANET.ID' => null,
 				];
 			}
 			else
 			{
-				$filterValue['!UF_DEPARTMENT'] = false;
+				$filterValue[] = [
+					'@ID' => new SqlExpression($employeeUserIdSubQuery),
+				];
 			}
 		}
 	}

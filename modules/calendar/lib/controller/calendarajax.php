@@ -640,6 +640,54 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		return [];
 	}
 
+	public function getStandaloneCompactFormDataAction(): array
+	{
+		if (
+			Loader::includeModule('intranet')
+			&& !ToolsManager::getInstance()->checkAvailabilityByToolId('calendar')
+		)
+		{
+			$this->addError(new Error('Tool not available'));
+
+			return [];
+		}
+
+		// for personal context only
+		$type = Dictionary::CALENDAR_TYPE['user'];
+		$ownerId = \CCalendar::GetCurUserId();
+		$userId = \CCalendar::GetCurUserId();
+
+		$isCollabUser = Util::isCollabUser($userId);
+		$sections = \CCalendarSect::prepareSectionListResponse($type, (string)$ownerId);
+
+		$responseParams = [];
+		$responseParams['sections'] = $sections;
+		$responseParams['userId'] = $userId;
+		$responseParams['userSettings'] = UserSettings::get($userId);
+		$responseParams['userIndex'] = \CCalendarEvent::getUserIndex();
+		$responseParams['isCollabUser'] = $isCollabUser;
+		$responseParams['hiddenSections'] = UserSettings::getHiddenSections($userId, [
+			'isPersonalCalendarContext' => true,
+			'type' => $type,
+		]);
+		$responseParams['trackingUsersList'] = UserSettings::getTrackingUsers($userId);
+
+		$locationFeatureEnabled = Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_LOCATION);
+		$responseParams['locationFeatureEnabled'] = !$isCollabUser && $locationFeatureEnabled;
+		if ($locationFeatureEnabled || $isCollabUser)
+		{
+			$responseParams['locationList'] = Rooms\Manager::getRoomsList();
+			$responseParams['locationAccess'] = Rooms\Util::getLocationAccess($userId);
+		}
+
+		$responseParams['plannerFeatureEnabled'] = Bitrix24Manager::isPlannerFeatureEnabled();
+		$responseParams['eventWithEmailGuestEnabled'] = Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_EVENTS_WITH_EMAIL_GUESTS);
+		$responseParams['isCollabFeatureEnabled'] = \Bitrix\Calendar\Integration\SocialNetwork\Collab\CollabFeature::isAvailable();
+		$responseParams['projectFeatureEnabled'] = FeatureService::isProjectFeatureEnabled();
+
+		return $responseParams;
+	}
+
 	private function getEventEditFormHiddenFields(array $entry): array
 	{
 		$hiddenFields = [];

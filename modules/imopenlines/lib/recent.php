@@ -17,6 +17,7 @@ use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\ORM\Data\Result;
 use Bitrix\Main\DB\SqlExpression;
@@ -208,6 +209,31 @@ class Recent
 		return array_merge($lineRecent, $commonRecent);
 	}
 
+	/**
+	 * "Valid non-answered line" predicate for a b_imopenlines_recent row.
+	 * Shared by the counter (getNonAnsweredLines) and the NEW group of the list
+	 * (V2\Recent\Recent::getQuery) so they stay in sync.
+	 *
+	 * A row is valid when:
+	 *  - the session exists and is not answered yet (SESSION.STATUS < STATUS_ANSWER) —
+	 *    the LEFT join + STATUS comparison also drops orphans (NULL fails the comparison);
+	 *  - the line is currently assigned/offered to an operator, i.e. not an "unassigned backlog"
+	 *    (SESSION_CHECK.UNDISTRIBUTED != 'Y'); a missing session_check row is treated as
+	 *    "distributed" so a legitimate new chat is not lost.
+	 */
+	public static function getActiveLinesFilter(): \Bitrix\Main\ORM\Query\Filter\ConditionTree
+	{
+		return Query::filter()
+			->where('SESSION.STATUS', '<', Session::STATUS_ANSWER)
+			->where(
+				Query::filter()
+					->logic('or')
+					->whereNull('SESSION_CHECK.UNDISTRIBUTED')
+					->where('SESSION_CHECK.UNDISTRIBUTED', false)
+			)
+		;
+	}
+
 	public static function getNonAnsweredLines(?int $userId = null): array
 	{
 		$result = [];
@@ -218,14 +244,12 @@ class Recent
 			return $result;
 		}
 
-		$recentRows = RecentTable::getList([
-			'select' => [
-				'CHAT_ID'
-			],
-			'filter' => [
-				'=USER_ID' => $userId
-			],
-		])->fetchAll();
+		$recentRows = RecentTable::query()
+			->setSelect(['CHAT_ID'])
+			->where('USER_ID', $userId)
+			->where(self::getActiveLinesFilter())
+			->fetchAll()
+		;
 
 		foreach ($recentRows as $row)
 		{

@@ -3,7 +3,7 @@
 namespace Bitrix\BIConnector\Integration\Superset\Integrator\Request\Middleware;
 
 use Bitrix\Main\Config\Option;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorRequest;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Manager;
@@ -35,7 +35,7 @@ final class RequiredDatasetSync extends Base
 			return null;
 		}
 
-		$initResponse = Integrator::getInstance()->initRequiredDataset($tableList);
+		$initResponse = IntegratorFactory::getInstance()->initRequiredDataset($tableList);
 		if ($initResponse->hasErrors())
 		{
 			return null;

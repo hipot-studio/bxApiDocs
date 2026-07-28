@@ -15,6 +15,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Security\Mfa\Otp;
 
 class VerifyPhoneService
 {
@@ -87,7 +88,7 @@ class VerifyPhoneService
 
 	public function canSendSms(): bool
 	{
-		if (!$this->user->isIntranet())
+		if (!$this->user->isIntranet() || !Otp::isSmsEnabled())
 		{
 			return false;
 		}

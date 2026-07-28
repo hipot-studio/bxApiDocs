@@ -6,7 +6,7 @@ use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
 use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Public\Command\Share\DeleteSharesCommand;
 use Bitrix\Main\Error;
@@ -232,7 +232,7 @@ final class Dashboard
 			return $result->addError(new Error("Cannot change title without external id"));
 		}
 
-		$response = Integrator::getInstance()->updateDashboard($externalId, ['dashboard_title' => $title]);
+		$response = IntegratorFactory::getInstance()->updateDashboard($externalId, ['dashboard_title' => $title]);
 		if ($response->getStatus() !== IntegratorResponse::STATUS_OK || $response->hasErrors())
 		{
 			return $result->addError(new Error("Error while changing title in superset"));
@@ -276,7 +276,7 @@ final class Dashboard
 			return $result->addError(new Error("Cannot change publish property without external id"));
 		}
 
-		$response = Integrator::getInstance()->updateDashboard($externalId, ['published' => $published]);
+		$response = IntegratorFactory::getInstance()->updateDashboard($externalId, ['published' => $published]);
 		if ($response->getStatus() !== IntegratorResponse::STATUS_OK || $response->hasErrors())
 		{
 			return $result->addError(new Error("Error while changing publish property in superset"));
@@ -322,7 +322,7 @@ final class Dashboard
 	 */
 	public function loadCredentials(array $rlsRules = [], int $expSeconds = 0): self
 	{
-		$integrator = Integrator::getInstance();
+		$integrator = IntegratorFactory::getInstance();
 		$credentialsResponse = $integrator->getDashboardEmbeddedCredentials(
 			$this->getExternalId(),
 			$rlsRules,
@@ -340,7 +340,7 @@ final class Dashboard
 
 	public function loadProxyData(): self
 	{
-		$integrator = Integrator::getInstance();
+		$integrator = IntegratorFactory::getInstance();
 		$integratorResult = $integrator->getDashboardById($this->getExternalId());
 		if ($integratorResult->hasErrors())
 		{
@@ -375,7 +375,7 @@ final class Dashboard
 			return $cacheManager->get($cacheKey);
 		}
 
-		$getDatasetsResult = Integrator::getInstance()->getDashboardDatasets($dashboardId);
+		$getDatasetsResult = IntegratorFactory::getInstance()->getDashboardDatasets($dashboardId);
 		if ($getDatasetsResult->hasErrors())
 		{
 			return false;

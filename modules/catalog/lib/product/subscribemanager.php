@@ -12,6 +12,7 @@ use Bitrix\Main\Security\Random;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Entity;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages(__FILE__);
 
@@ -295,7 +296,7 @@ class SubscribeManager
 
 		/* Preparation of data for the mail template */
 		$dataSendToNotice = array();
-		$listSubscribesUrl = \CHTTP::URN2URI('/personal/subscribe/');
+		$listSubscribesUrl = (string)(new Uri('/personal/subscribe/'))->toAbsolute();
 		$dataSendToNotice[$subscriberData['contactType']][$subscriberData['userContact']][] = array(
 			'EVENT_NAME' => 'CATALOG_PRODUCT_SUBSCRIBE_LIST_CONFIRM',
 			'EMAIL_TO' => $subscriberData['userContact'],

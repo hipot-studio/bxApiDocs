@@ -145,6 +145,22 @@ class RolePermissionService
 	 */
 	public function deleteRoles(array $roleIds): void
 	{
+		$allowedRoleIds = [];
+		foreach ($this->roleRepository->getRoleList($this->category) as $role)
+		{
+			$allowedRoleIds[(int)$role['ID']] = true;
+		}
+
+		$roleIds = array_values(array_filter(
+			array_map('intval', $roleIds),
+			static fn(int $roleId): bool => isset($allowedRoleIds[$roleId]),
+		));
+
+		if (empty($roleIds))
+		{
+			return;
+		}
+
 		try
 		{
 			$this->permissionRepository->deleteByRoleIds($roleIds);

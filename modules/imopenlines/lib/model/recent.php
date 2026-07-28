@@ -100,6 +100,11 @@ class RecentTable extends DataManager
 				'reference' => ['=this.SESSION_ID' => 'ref.ID'],
 				'join_type' => 'LEFT'
 			],
+			'SESSION_CHECK' => [
+				'data_type' => 'Bitrix\ImOpenLines\Model\SessionCheckTable',
+				'reference' => ['=this.SESSION_ID' => 'ref.SESSION_ID'],
+				'join_type' => 'LEFT'
+			],
 		];
 	}
 }

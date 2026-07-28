@@ -7,6 +7,7 @@ use Bitrix\Disk\Integration\TransformerManager;
 use Bitrix\Disk\Internals\AttachedObjectTable;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\TrackedObjectTable;
+use Bitrix\Disk\Public\Event\OnAfterDeleteAttachedObjectEvent;
 use Bitrix\Disk\Uf\Connector;
 use Bitrix\Disk\Uf\StubConnector;
 use Bitrix\Main\Loader;
@@ -511,6 +512,19 @@ final class AttachedObject extends Internals\Model
 		{
 			$file->delete(SystemUser::SYSTEM_USER_ID);
 		}
+
+		(new OnAfterDeleteAttachedObjectEvent($this->toArray([], [
+			'ID',
+			'OBJECT_ID',
+			'VERSION_ID',
+			'ALLOW_EDIT',
+			'ALLOW_AUTO_COMMENT',
+			'MODULE_ID',
+			'ENTITY_TYPE',
+			'ENTITY_ID',
+			'CREATE_TIME',
+			'CREATED_BY',
+		])))->send();
 
 		return $success;
 	}

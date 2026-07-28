@@ -390,13 +390,13 @@ class Contact
 		$result['crm_contact']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_CONTACT_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_contact']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
-			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode];
+			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode] : $fieldCode;
 			if (!$fieldInfo['FIELD_DESCRIPTION'])
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] = $fieldCode;
 			}
 
-			$fieldInfo['FIELD_DESCRIPTION_FULL'] = $messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode . '_FULL'] ?? '';
+			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode . '_FULL']) ? $messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
 	}

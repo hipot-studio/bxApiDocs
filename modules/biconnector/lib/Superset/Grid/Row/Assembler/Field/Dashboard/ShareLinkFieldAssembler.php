@@ -98,10 +98,12 @@ class ShareLinkFieldAssembler extends FieldAssembler
 			$type = $row['data']['TYPE'] ?? '';
 
 			// Drafts can't be shared.
-			// LOAD/FAILED/system-NOT_INSTALLED are sharable — opening the share triggers install/retry.
+			// FAILED can't be shared either: the share page has no retry for it and shows an endless stub.
+			// LOAD/system-NOT_INSTALLED are sharable — opening the share triggers install/retry.
 			// Custom NOT_INSTALLED is a transient state with nothing to share yet.
 			$isHidden =
 				$status === SupersetDashboardTable::DASHBOARD_STATUS_DRAFT
+				|| $status === SupersetDashboardTable::DASHBOARD_STATUS_FAILED
 				|| ($status === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED && $type === SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM)
 			;
 

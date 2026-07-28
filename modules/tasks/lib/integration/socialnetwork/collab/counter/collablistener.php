@@ -13,6 +13,7 @@ use Bitrix\Tasks\Internals\Counter\Event\Event;
 use Bitrix\Tasks\Internals\Counter\Event\EventResourceCollection;
 use Bitrix\Tasks\Internals\Counter\Event\EventCollection;
 use Bitrix\Tasks\Internals\Counter\CounterDictionary;
+use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 
 class CollabListener
 {
@@ -35,11 +36,13 @@ class CollabListener
 			return;
 		}
 
+		$taskRegistry = $this->preloadTaskGroups($eventList);
+
 		$taskIds = [];
 		foreach ($eventList as $event)
 		{
 			/** @var Event $event */
-			$groupId = $event->getRawGroupId();
+			$groupId = $this->resolveGroupId($event, $taskRegistry);
 			if ($groupId <= 0)
 			{
 				continue;
@@ -61,6 +64,54 @@ class CollabListener
 
 			$this->notifyDispatcher($groupId, $memberIds);
 		}
+	}
+
+	/**
+	 * Comment add/read events (e.g. onAfterCommentsRead) carry only TASK_ID without GROUP_ID,
+	 * so their group has to be resolved from the task itself; preload them in one query.
+	 */
+	private function preloadTaskGroups(array $eventList): TaskRegistry
+	{
+		$taskIdsToLoad = [];
+		foreach ($eventList as $event)
+		{
+			/** @var Event $event */
+			if ($event->getRawGroupId() <= 0)
+			{
+				$taskId = $event->getTaskId();
+				if ($taskId > 0)
+				{
+					$taskIdsToLoad[] = $taskId;
+				}
+			}
+		}
+
+		$taskRegistry = TaskRegistry::getInstance();
+		if (!empty($taskIdsToLoad))
+		{
+			$taskRegistry->load(array_unique($taskIdsToLoad));
+		}
+
+		return $taskRegistry;
+	}
+
+	private function resolveGroupId(Event $event, TaskRegistry $taskRegistry): int
+	{
+		$groupId = $event->getRawGroupId();
+		if ($groupId > 0)
+		{
+			return $groupId;
+		}
+
+		$taskId = $event->getTaskId();
+		if ($taskId <= 0)
+		{
+			return 0;
+		}
+
+		$task = $taskRegistry->get($taskId);
+
+		return (int)($task['GROUP_ID'] ?? 0);
 	}
 
 	private function notifyDispatcher(int $groupId, array $userIds): void

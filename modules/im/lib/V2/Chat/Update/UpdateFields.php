@@ -78,6 +78,7 @@ class UpdateFields
 			'HIDE_HISTORY' => $dto->hideHistory,
 			'ADDED_MANAGERS' => $dto->addedManagers ?? [],
 			'DELETED_MANAGERS' => $dto->deletedManagers ?? [],
+			'MANAGE_GUEST_INVITES' => $dto->manageGuestInvites,
 		]);
 	}
 

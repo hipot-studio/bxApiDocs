@@ -31,8 +31,8 @@ final class ExportCsvDatasetAction extends BaseAction
 
 	public function getControl(array $rawFields): ?array
 	{
-		$dashboardId = (int)$rawFields['ID'];
-		$dashboardTitle = \CUtil::JSEscape($rawFields['NAME']);
+		$dashboardId = (int)($rawFields['ID'] ?? 0);
+		$dashboardTitle = \CUtil::JSEscape($rawFields['NAME'] ?? '');
 		$onClickHandler = <<<JS
 			/** @see BX.BIConnector.ExternalDatasetManager.exportDataset */
 			BX.BIConnector.ExternalDatasetManager.Instance.exportDataset({id: $dashboardId, title: '{$dashboardTitle}'});

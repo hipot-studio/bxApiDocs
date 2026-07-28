@@ -34,6 +34,7 @@ use Bitrix\UI\FileUploader\RemoveResultCollection;
 use Bitrix\UI\FileUploader\UploaderController;
 use Bitrix\UI\FileUploader\UploadRequest;
 use Bitrix\UI\FileUploader\UploadResult;
+use Bitrix\Disk\QuickAccess\FileDataParameterService;
 use Bitrix\Main\Engine;
 
 Loader::requireModule('ui');
@@ -309,9 +310,14 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 		];
 
 		$attachedObjectId = 0;
+		$quickAccessGetParam = [];
 		if ($fileModel instanceof Disk\AttachedObject)
 		{
-			$encryptedScopeForQuickAccess = $this->getEncryptedScopeForQuickAccess($fileModel);
+			$encryptedFileDataForQuickAccess = $this->getEncryptedFileDataForQuickAccess($fileModel);
+			if ($encryptedFileDataForQuickAccess !== null)
+			{
+				$quickAccessGetParam[FileDataParameterService::PARAMETER_NAME] = $encryptedFileDataForQuickAccess;
+			}
 		}
 
 		if ($fileModel instanceof Disk\File)
@@ -347,9 +353,7 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 				['attachedObjectId' => $id]
 			);
 
-			$downloadUrl->addParams([
-				'_esd' => $encryptedScopeForQuickAccess ?? '',
-			]);
+			$downloadUrl->addParams($quickAccessGetParam);
 
 			$fileInfo->setDownloadUrl($downloadUrl);
 
@@ -413,15 +417,13 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 			}
 			else
 			{
-				$previewOptions = ['width' => 1200, 'height' => 1200]; // double size (see edit.php and html-parser.js)
+				$previewOptions = ['width' => 1200, 'height' => 1200, ...$quickAccessGetParam]; // double size (see edit.php and html-parser.js)
 				if ($fileModel instanceof Disk\File)
 				{
 					$previewUrl = $this->urlManager->getUrlForShowFile($fileModel, $previewOptions);
 				}
 				else
 				{
-					$previewOptions['_esd'] = $encryptedScopeForQuickAccess ?? '';
-
 					$previewUrl = \Bitrix\Disk\UrlManager::getUrlToActionShowUfFile($fileModel->getId(), $previewOptions);
 				}
 
@@ -435,24 +437,11 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 		return $fileInfo;
 	}
 
-	private function getEncryptedScopeForQuickAccess(AttachedObject $fileModel): string
+	private function getEncryptedFileDataForQuickAccess(AttachedObject $fileModel): ?string
 	{
-		$scopeTokenService = ServiceLocator::getInstance()->get('disk.scopeTokenService');
+		$fileDataParameterService = ServiceLocator::getInstance()->get('disk.fileDataParameterService');
 
-		$accessInfo = ['encryptedScope' => ''];
-		$scope = $scopeTokenService->getTokenScopeByAttachedObject($fileModel);
-
-		$result = $scopeTokenService->grantAccessWithScope(
-			$fileModel,
-			$scope,
-		);
-
-		if ($result !== null)
-		{
-			$accessInfo = $result;
-		}
-
-		return $accessInfo['encryptedScope'];
+		return $fileDataParameterService->getEncryptedFileData($fileModel);
 	}
 
 	private function getFolderAndStorage(string $filename): array

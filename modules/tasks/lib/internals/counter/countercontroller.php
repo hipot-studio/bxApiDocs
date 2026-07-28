@@ -132,6 +132,19 @@ class CounterController
 	}
 
 	/**
+	 * Resets comment-cover counter types for the given list of tasks only.
+	 * Does NOT call reloadState — caller is responsible for a single reload.
+	 */
+	public function readByTaskList(array $taskIds): void
+	{
+		if (!$this->userId)
+		{
+			return;
+		}
+		UserProcessor::getInstance($this->userId)->readByTaskList($taskIds);
+	}
+
+	/**
 	 * @param int $groupId
 	 * @throws Main\DB\SqlQueryException
 	 */

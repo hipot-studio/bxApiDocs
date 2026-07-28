@@ -157,8 +157,8 @@ class ProductPropertyValue
 					],
 				],
 				'UNIONS' => [
-					self::getMultipleUnion($helper, $crmCatalogIblockOfferId),
-					...self::getSingleUnion($helper, $crmCatalogIblockOfferId),
+					...($crmCatalogIblockOfferId !== null ? [self::getMultipleUnion($helper, $crmCatalogIblockOfferId)] : []),
+					...($crmCatalogIblockOfferId !== null ? self::getSingleUnion($helper, $crmCatalogIblockOfferId) : []),
 				],
 			];
 		}
@@ -247,8 +247,8 @@ class ProductPropertyValue
 				],
 				'UNIONS' => [
 					...self::getSingleUnion($helper, $crmCatalogIblockId),
-					self::getMultipleUnion($helper, $crmCatalogIblockOfferId),
-					...self::getSingleUnion($helper, $crmCatalogIblockOfferId),
+					...($crmCatalogIblockOfferId !== null ? [self::getMultipleUnion($helper, $crmCatalogIblockOfferId)] : []),
+					...($crmCatalogIblockOfferId !== null ? self::getSingleUnion($helper, $crmCatalogIblockOfferId) : []),
 				],
 			];
 		}
@@ -258,7 +258,7 @@ class ProductPropertyValue
 		$result['crm_product_property_value']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_PRODUCT_PROPERTY_VALUE_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['crm_product_property_value']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
-			$fieldInfo['FIELD_DESCRIPTION'] = $messages['CRM_BIC_PRODUCT_PROPERTY_VALUE_FIELD_' . $fieldCode] ?? null;
+			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_PRODUCT_PROPERTY_VALUE_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_PRODUCT_PROPERTY_VALUE_FIELD_' . $fieldCode] : null;
 			if (!$fieldInfo['FIELD_DESCRIPTION'])
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] =
@@ -267,7 +267,7 @@ class ProductPropertyValue
 				;
 			}
 
-			$fieldInfo['FIELD_DESCRIPTION_FULL'] = $messages['CRM_BIC_PRODUCT_PROPERTY_VALUE_FIELD_' . $fieldCode . '_FULL'] ?? '';
+			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['CRM_BIC_PRODUCT_PROPERTY_VALUE_FIELD_' . $fieldCode . '_FULL']) ? $messages['CRM_BIC_PRODUCT_PROPERTY_VALUE_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
 	}

@@ -27,7 +27,7 @@ final class Source1C implements Provider
 		}
 		else
 		{
-			$description = $source->getDescription($this->settings['dataset']['EXTERNAL_CODE']);
+			$description = $source->getDescription((string)($this->settings['dataset']['EXTERNAL_CODE'] ?? ''));
 		}
 
 		$headers = [];
@@ -45,7 +45,7 @@ final class Source1C implements Provider
 			$namesMap[$name] = $item['EXTERNAL_CODE'];
 		}
 
-		$sourceData = $source->getFirstNData($this->settings['dataset']['EXTERNAL_CODE'], self::N_FIRST, $namesMap);
+		$sourceData = $source->getFirstNData((string)($this->settings['dataset']['EXTERNAL_CODE'] ?? ''), self::N_FIRST, $namesMap);
 
 		$rowCollection = new RowCollection();
 		foreach ($sourceData as $rowNumber => $sourceRow)
@@ -96,6 +96,6 @@ final class Source1C implements Provider
 	{
 		$transliteratedName = \CUtil::translit($name, 'ru', ['change_case' => false]);
 
-		return mb_strtoupper(preg_replace('/(?<!^)(?<!_)(?=[A-Z](?=[a-z])|(?<=[a-z])[A-Z])/u', '_', $transliteratedName));
+		return mb_strtoupper((string)preg_replace('/(?<!^)(?<!_)(?=[A-Z](?=[a-z])|(?<=[a-z])[A-Z])/u', '_', $transliteratedName));
 	}
 }

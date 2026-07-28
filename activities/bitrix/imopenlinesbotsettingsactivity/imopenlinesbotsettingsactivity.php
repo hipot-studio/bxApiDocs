@@ -15,6 +15,7 @@ use Bitrix\ImOpenLines\Common;
 use Bitrix\ImOpenLines\Config;
 use Bitrix\ImOpenlines\Security\Permissions;
 use Bitrix\ImOpenLines\V2\Queue\Queue;
+use Bitrix\ImOpenLines\V2\Queue\QueueItem;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -317,9 +318,9 @@ final class CBPImOpenLinesBotSettingsActivity extends BaseActivity implements IB
 			{
 				$error = new Error(
 					Loc::getMessage(
-						'IMOL_BOT_SETTINGS_ACTIVITY_ERROR_QUEUE_CONFIG_NOT_FOUND',
+						'IMOL_BOT_SETTINGS_ACTIVITY_ERROR_QUEUE_CONFIG_NOT_FOUND_MSGVER_1',
 						[
-							'#LINE#' => htmlspecialcharsbx($queue->getName()),
+							'#LINE#' => $this->formatOpenLineName($queue),
 						],
 					)
 				);
@@ -342,7 +343,7 @@ final class CBPImOpenLinesBotSettingsActivity extends BaseActivity implements IB
 					Loc::getMessage(
 						'IMOL_BOT_SETTINGS_ACTIVITY_ERROR_QUEUE_HAS_WELCOME_BOT',
 						[
-							'#LINE#' => htmlspecialcharsbx($queue->getName()),
+							'#LINE#' => $this->formatOpenLineName($queue),
 							'[link]' => "<a href='{$queueUrl}'>",
 							'[/link]' => '</a>',
 						],
@@ -366,9 +367,9 @@ final class CBPImOpenLinesBotSettingsActivity extends BaseActivity implements IB
 			{
 				$error = new Error(
 					Loc::getMessage(
-						'IMOL_BOT_SETTINGS_ACTIVITY_ERROR_CANNOT_QUEUE_UPDATE',
+						'IMOL_BOT_SETTINGS_ACTIVITY_ERROR_CANNOT_QUEUE_UPDATE_MSGVER_1',
 						[
-							'#LINE#' => htmlspecialcharsbx($queue->getName()),
+							'#LINE#' => $this->formatOpenLineName($queue),
 							'[link]' => '<a href="/crm">',
 							'[/link]' => '</a>',
 						],
@@ -380,7 +381,12 @@ final class CBPImOpenLinesBotSettingsActivity extends BaseActivity implements IB
 				continue;
 			}
 
-			$connectedQueues[] = htmlspecialcharsbx($queue->getName());
+			$connectedQueues[] = Loc::getMessage(
+				'IMOL_BOT_SETTINGS_ACTIVITY_OPENLINE_NAME_WITH_QUOTE',
+				[
+					'#LINE#' => $this->formatOpenLineName($queue),
+				],
+			);
 		}
 
 		$this->{self::RETURN_PARAM_SUCCESS_QUEUE_CONNECTED_LIST} = implode(', ', $connectedQueues);
@@ -574,5 +580,10 @@ final class CBPImOpenLinesBotSettingsActivity extends BaseActivity implements IB
 	protected static function getFileName(): string
 	{
 		return __FILE__;
+	}
+
+	private function formatOpenLineName(QueueItem $queue): string
+	{
+		return htmlspecialcharsbx(trim((string)$queue->getName(), ' '));
 	}
 }

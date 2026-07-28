@@ -38,7 +38,7 @@ class Source1C extends Base
 	private const TABLE_DESCRIPTION_ENDPOINT = '/hs/bitrixAnalytics/getMetadata';
 	private const DATA_ENDPOINT = '/hs/bitrixAnalytics/getData';
 
-	public function __construct(?int $sourceId)
+	public function __construct(int $sourceId)
 	{
 		parent::__construct($sourceId);
 
@@ -60,7 +60,7 @@ class Source1C extends Base
 		if ($connectResult->getData()['statusCode'] === 404)
 		{
 			$result = new Result();
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_CONNECTION_NOT_FOUND')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_CONNECTION_NOT_FOUND') ?? ''));
 
 			return $result;
 		}
@@ -84,7 +84,15 @@ class Source1C extends Base
 		$queryResult = $this->post(self::TABLE_LIST_ENDPOINT, [
 			'searchString' => $searchString,
 		]);
-		$tableList = $this->decode($queryResult->getData()['answer']);
+		if (!$queryResult->isSuccess())
+		{
+			$result->addErrors($queryResult->getErrors());
+			$result->setData([]);
+
+			return $result;
+		}
+
+		$tableList = $this->decode($queryResult->getData()['answer'] ?? '');
 		if (!$tableList)
 		{
 			$result->setData([]);
@@ -116,14 +124,19 @@ class Source1C extends Base
 	public function getDescription(string $entityName): array
 	{
 		$result = $this->post(self::TABLE_DESCRIPTION_ENDPOINT, ['code' => $entityName]);
-		$tableData = $this->decode($result->getData()['answer']);
+		if (!$result->isSuccess())
+		{
+			return [];
+		}
+
+		$tableData = $this->decode($result->getData()['answer'] ?? '');
 		if (!$tableData)
 		{
 			return [];
 		}
 
 		$columns = [];
-		foreach ($tableData['columns'] as $column)
+		foreach ($tableData['columns'] ?? [] as $column)
 		{
 			$type = $this->mapType($column['type']);
 			if ($type)
@@ -147,9 +160,9 @@ class Source1C extends Base
 	 */
 	public function getData(string $tableName, array $query): string
 	{
-		if (!$this->source->getActive())
+		if (!$this->source?->getActive())
 		{
-			throw new SystemException(Loc::getMessage('BICONNECTOR_1C_SOURCE_NOT_ACTIVE'));
+			throw new SystemException(Loc::getMessage('BICONNECTOR_1C_SOURCE_NOT_ACTIVE') ?? '');
 		}
 
 		$selectFields = $query['select'];
@@ -186,7 +199,7 @@ class Source1C extends Base
 	public function getFirstNData(string $entityName, int $n, array $fields = []): array
 	{
 		$fieldsForCacheKey = implode(',', array_keys($fields));
-		$cacheKey = "biconnector_1c_preview_data_{$entityName}_{$n}_{$this->source->getId()}_{$fieldsForCacheKey}";
+		$cacheKey = "biconnector_1c_preview_data_{$entityName}_{$n}_{$this->source?->getId()}_{$fieldsForCacheKey}";
 		$cacheManager = \Bitrix\Main\Application::getInstance()->getManagedCache();
 
 		if ($cacheManager->read(3600, $cacheKey))
@@ -347,14 +360,14 @@ class Source1C extends Base
 					return $result;
 				}
 			}
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_PASSWORD')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_PASSWORD') ?? ''));
 
 			return $result;
 		}
 
 		if ($client->getStatus() === 0)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_WRONG_HOST')));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_WRONG_HOST') ?? ''));
 
 			return $result;
 		}
@@ -373,6 +386,7 @@ class Source1C extends Base
 		}
 
 		// Other statuses and errors
+		$responseData = $this->decode($answer);
 		if (isset($responseData['odata.error']))
 		{
 			$result->addError(new Error($responseData['odata.error']['message']['value']));
@@ -387,7 +401,7 @@ class Source1C extends Base
 			return $result;
 		}
 
-		$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_CANT_CONNECT')));
+		$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_CANT_CONNECT') ?? ''));
 
 		return $result;
 	}

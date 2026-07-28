@@ -2,7 +2,9 @@
 
 namespace Bitrix\BIConnector\Superset\Cache;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\ProxyIntegrator;
+use Bitrix\BIConnector\Dictionary;
+use Bitrix\BIConnector\DictionaryManager;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Result;
 
@@ -31,7 +33,12 @@ final class CacheManager
 	{
 		$result = new Result();
 
-		$integrator = ProxyIntegrator::getInstance();
+		DictionaryManager::invalidateCache(Dictionary::USER_DEPARTMENT);
+		DictionaryManager::invalidateCache(Dictionary::USER_DEPARTMENT_HEAD);
+		DictionaryManager::invalidateCache(Dictionary::USER_STRUCTURE_DEPARTMENT);
+		DictionaryManager::invalidateCache(Dictionary::DEPARTMENT_PARENT_AGGREGATION);
+
+		$integrator = IntegratorFactory::getInstance();
 		$response = $integrator->clearCache();
 		if ($response->hasErrors())
 		{

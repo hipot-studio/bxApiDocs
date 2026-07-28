@@ -87,14 +87,14 @@ class ExternalSourceRepository
 	{
 		$queryForBiconnectorTable = ExternalSourceTable::query()
 			->setSelect(['ID'])
-			->setFilter($this->grid->getOrmFilter())
+			->setFilter($this->grid->getOrmFilter() ?? [])
 			->setCacheTtl(3600)
 		;
 
 		$queryForCrmTable = SourceTable::query()
 			->setSelect(['TITLE' => 'NAME', 'TYPE' => 'CODE'])
 			->addSelect(new ExpressionField('CREATED_BY_ID', 'NULL'))
-			->setFilter($this->grid->getOrmFilter())
+			->setFilter($this->grid->getOrmFilter() ?? [])
 			->addFilter('=TYPE', self::getSourceFilter())
 			->setCacheTtl(3600)
 		;
@@ -107,13 +107,13 @@ class ExternalSourceRepository
 		$result = ExternalSourceTable::query()
 			->setSelect($this->getBiconnectorSourceSelect())
 			->addSelect(new ExpressionField('MODULE', '\'BI\''))
-			->setFilter($this->grid->getOrmFilter())
+			->setFilter($this->grid->getOrmFilter() ?? [])
 			->addFilter('=TYPE', $this->getAvailableTypes())
 			->unionAll(SourceTable::query()
 				->setSelect($this->getCrmSourceTableSelect())
 				->addSelect(new ExpressionField('DESCRIPTION', 'NULL'))
 				->addSelect(new ExpressionField('MODULE', '\'CRM\''))
-				->setFilter($this->grid->getOrmFilter())
+				->setFilter($this->grid->getOrmFilter() ?? [])
 				->addFilter('=TYPE', self::getSourceFilter())
 			)
 			->setUnionOrder($this->grid->getOrmOrder())

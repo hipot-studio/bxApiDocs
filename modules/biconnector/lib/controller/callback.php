@@ -85,7 +85,7 @@ class Callback extends Controller
 		$status = $responseBody?->get('status');
 		if ($status === 'error')
 		{
-			$errorMessage = $responseBody->get('error') ?? 'Unknown server error during deleting superset instance';
+			$errorMessage = $responseBody?->get('error') ?? 'Unknown server error during deleting superset instance';
 			SupersetInitializerLogger::logErrors([new Error($errorMessage)]);
 
 			if (Option::get('biconnector', SupersetInitializer::ERROR_DELETE_INSTANCE_OPTION, 'N') === 'N')

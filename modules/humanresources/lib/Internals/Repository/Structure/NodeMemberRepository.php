@@ -164,6 +164,32 @@ final class NodeMemberRepository
 		return $result;
 	}
 
+	/**
+	 * Returns USER entity IDs of all members in the given node — one SELECT
+	 * without ORM hydration. Suitable for snapshots and broadcast recipient
+	 * lists on large nodes.
+	 *
+	 * @param int[] $excludeUserIds entity IDs to skip (NOT IN at the SQL level).
+	 * @return int[]
+	 */
+	public function getUserIdsByNodeId(int $nodeId, array $excludeUserIds = []): array
+	{
+		$query = NodeMemberTable::query()
+			->setSelect(['ENTITY_ID'])
+			->where('NODE_ID', $nodeId)
+			->where('ENTITY_TYPE', MemberEntityType::USER->value)
+		;
+
+		if (!empty($excludeUserIds))
+		{
+			$query->whereNotIn('ENTITY_ID', $excludeUserIds);
+		}
+
+		$rows = $query->fetchAll();
+
+		return array_map(static fn (array $row): int => (int)$row['ENTITY_ID'], $rows);
+	}
+
 	public function countUniqueUsersByNodeIdWithSubNodes(int $nodeId): int
 	{
 		$cacheManager = Container::getCacheManager();

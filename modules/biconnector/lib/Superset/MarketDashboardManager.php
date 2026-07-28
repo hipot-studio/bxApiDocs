@@ -4,7 +4,8 @@ namespace Bitrix\BIConnector\Superset;
 
 use Bitrix\BIConnector\Access\Service\DashboardGroupService;
 use Bitrix\BIConnector\Configuration\Feature;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorInterface;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Model;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
@@ -35,7 +36,7 @@ final class MarketDashboardManager
 	private const EVENT_ON_AFTER_DASHBOARD_INSTALL = 'onAfterDashboardInstall';
 
 	private static ?MarketDashboardManager $instance = null;
-	private Integrator $integrator;
+	private IntegratorInterface $integrator;
 
 	public static function getInstance(): self
 	{
@@ -44,7 +45,7 @@ final class MarketDashboardManager
 
 	private function __construct()
 	{
-		$this->integrator = Integrator::getInstance();
+		$this->integrator = IntegratorFactory::getInstance();
 	}
 
 	public static function getMarketCollectionUrl(): string
@@ -78,12 +79,22 @@ final class MarketDashboardManager
 		])
 			->fetchObject()
 		;
-		$appCode = $app->getCode();
 
 		$result = new Result();
+		if (!$app)
+		{
+			$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_INSTALL_PROXY') ?? ''));
+			MarketDashboardLogger::logErrors($result->getErrors(), [
+				'message' => "App not found by ID {$appId}",
+			]);
+
+			return $result;
+		}
+
+		$appCode = $app->getCode();
 		if (!$appCode)
 		{
-			$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_INSTALL_PROXY')));
+			$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_INSTALL_PROXY') ?? ''));
 			MarketDashboardLogger::logErrors($result->getErrors(), [
 				'message' => 'Empty app code',
 			]);
@@ -114,19 +125,19 @@ final class MarketDashboardManager
 				]);
 
 				$this->handleUnsuccessfulInstall($appCode);
-				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_INSTALL_PROXY')));
+				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_INSTALL_PROXY') ?? ''));
 
 				return $result;
 			}
 
-			$externalDashboards = $response->getData()['dashboards'];
+			$externalDashboards = $response->getData()['dashboards'] ?? null;
 			if (!is_array($externalDashboards))
 			{
 				MarketDashboardLogger::logInfo('No dashboards in import response', [
 					'app_code' => $appCode,
 				]);
 				$this->handleUnsuccessfulInstall($appCode);
-				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_INSTALL_PROXY')));
+				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_INSTALL_PROXY') ?? ''));
 
 				return $result;
 			}
@@ -138,6 +149,7 @@ final class MarketDashboardManager
 		}
 		else
 		{
+			$externalDashboard = null;
 			$externalDashboardId = null;
 			$dashboardTitle = $app->getAppName();
 			$dashboardStatus = SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED;
@@ -164,15 +176,16 @@ final class MarketDashboardManager
 		}
 
 		$isDashboardExists = $dashboard->getExternalId() > 0;
+		$lang = $externalDashboard ? ($externalDashboard['langCode'] ?? null) : null;
 
 		$dashboard
-			->setExternalId($externalDashboardId)
+			->setExternalId($externalDashboardId ?? 0)
 			->setTitle($dashboardTitle)
 			->setType($type)
 			->setAppId($appCode)
 			->setStatus($dashboardStatus)
 			->setDateModify(new DateTime())
-			->setLang($externalDashboard['langCode'] ?? null)
+			->setLang($lang)
 			->save()
 		;
 
@@ -396,7 +409,7 @@ final class MarketDashboardManager
 		$appRow = AppTable::getRowById($appId);
 		if (!isset($appRow['CODE']))
 		{
-			$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_APP_NOT_FOUND')));
+			$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_APP_NOT_FOUND') ?? ''));
 
 			return $result;
 		}
@@ -416,7 +429,7 @@ final class MarketDashboardManager
 			&& self::isSystemAppByAppCode($appRow['CODE'])
 		)
 		{
-			$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_SYSTEM_DASHBOARD')));
+			$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_SYSTEM_DASHBOARD') ?? ''));
 
 			return $result;
 		}
@@ -444,14 +457,14 @@ final class MarketDashboardManager
 				&& $dashboard->getType() === SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM
 			)
 			{
-				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_SYSTEM_DASHBOARD')));
+				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_SYSTEM_DASHBOARD') ?? ''));
 
 				return $result;
 			}
 
 			if ($dashboard->getSourceId() > 0)
 			{
-				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_HAS_COPIES')));
+				$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_HAS_COPIES') ?? ''));
 
 				return $result;
 			}
@@ -469,7 +482,7 @@ final class MarketDashboardManager
 					MarketDashboardLogger::logErrors($relatedItemsResult->getErrors(), [
 						'message' => 'Failed to get related entities for market dashboard during deletion',
 					]);
-					$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_DELETE_PROXY')));
+					$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_DELETE_PROXY') ?? ''));
 
 					return $result;
 				}
@@ -477,7 +490,7 @@ final class MarketDashboardManager
 				$relatedItems = $relatedItemsResult->getData();
 				if (!empty($relatedItems[$originalDashboard->getId()]))
 				{
-					$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_HAS_RELATED_ENTITIES')));
+					$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_DELETE_ERROR_HAS_RELATED_ENTITIES') ?? ''));
 
 					return $result;
 				}
@@ -496,7 +509,7 @@ final class MarketDashboardManager
 						return $result;
 					}
 
-					$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_DELETE_PROXY')));
+					$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_DELETE_PROXY') ?? ''));
 
 					return $result;
 				}

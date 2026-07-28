@@ -26,7 +26,7 @@ class MemberEntities extends BaseController
 			foreach ($relations->getUserIds() as $userId)
 			{
 				$user = \Bitrix\Im\V2\Entity\User\User::getInstance($userId);
-				if (!$user->isBot())
+				if (!$user->isBot() && !$user->isGuest())
 				{
 					$users[] = ['user', $userId];
 				}

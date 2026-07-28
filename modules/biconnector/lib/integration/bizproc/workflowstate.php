@@ -182,13 +182,13 @@ class WorkflowState
 		$result['bizproc_workflow_state']['TABLE_DESCRIPTION_FULL'] = $messages['BP_BIC_WF_STATE_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['bizproc_workflow_state']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
-			$fieldInfo['FIELD_DESCRIPTION'] = $messages['BP_BIC_WF_STATE_FIELD_' . $fieldCode];
+			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['BP_BIC_WF_STATE_FIELD_' . $fieldCode]) ? $messages['BP_BIC_WF_STATE_FIELD_' . $fieldCode] : $fieldCode;
 			if (!$fieldInfo['FIELD_DESCRIPTION'])
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] = $fieldCode;
 			}
 
-			$fieldInfo['FIELD_DESCRIPTION_FULL'] = $messages['BP_BIC_WF_STATE_FIELD_' . $fieldCode . '_FULL'] ?? '';
+			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['BP_BIC_WF_STATE_FIELD_' . $fieldCode . '_FULL']) ? $messages['BP_BIC_WF_STATE_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
 	}

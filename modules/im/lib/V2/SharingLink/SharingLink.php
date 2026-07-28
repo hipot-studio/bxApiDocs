@@ -157,11 +157,19 @@ abstract class SharingLink implements RestConvertible, ActiveRecord
 	}
 
 	/**
-	 * Check if the link is still usable (not revoked and not exhausted).
+	 * Check if the link is still usable (not revoked, not exhausted and not expired).
 	 */
 	public function isActive(): bool
 	{
-		return !$this->isRevoked() && !$this->isExhausted();
+		return !$this->isRevoked() && !$this->isExhausted() && !$this->isExpired();
+	}
+
+	/**
+	 * Check if the link's expiration date has passed.
+	 */
+	public function isExpired(): bool
+	{
+		return $this->dateExpire !== null && $this->dateExpire->getTimestamp() <= time();
 	}
 
 	public function isRevoked(): bool

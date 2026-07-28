@@ -43,12 +43,12 @@ final class Mysql implements ExternalSource\Source
 
 	public function getTitle(): string
 	{
-		return Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_MYSQL_TITLE');
+		return Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_MYSQL_TITLE') ?? '';
 	}
 
 	public function getDescription(): string
 	{
-		return Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_MYSQL_DESCRIPTION');
+		return Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_MYSQL_DESCRIPTION') ?? '';
 	}
 
 	public function getLogo(): ?string

@@ -508,6 +508,11 @@ class User implements RestEntity, CacheableEntity
 		return $this->userData['EMAIL'] ?? '';
 	}
 
+	public function getLogin(): ?string
+	{
+		return $this->userData['LOGIN'] ?? null;
+	}
+
 	public function getPhones(): array
 	{
 		$result = [];

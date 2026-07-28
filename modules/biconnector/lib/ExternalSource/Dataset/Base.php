@@ -7,7 +7,7 @@ use Bitrix\BIConnector;
 
 abstract class Base extends BIConnector\DataSource\BIBuilderDataset
 {
-	protected ?BIConnector\ExternalSource\Internal\ExternalDataset $dataset;
+	protected ?BIConnector\ExternalSource\Internal\ExternalDataset $dataset = null;
 
 	/**
 	 * @return Main\Result
@@ -31,6 +31,16 @@ abstract class Base extends BIConnector\DataSource\BIBuilderDataset
 	): self
 	{
 		return (new static($dataConnection, $languageId))->setDataset($dataset);
+	}
+
+	protected function getDataset(): BIConnector\ExternalSource\Internal\ExternalDataset
+	{
+		if ($this->dataset === null)
+		{
+			throw new \Bitrix\Main\SystemException('Dataset is not initialized. Use createDataset() factory method.');
+		}
+
+		return $this->dataset;
 	}
 
 	protected function setDataset(BIConnector\ExternalSource\Internal\ExternalDataset $dataset): self
@@ -59,7 +69,7 @@ abstract class Base extends BIConnector\DataSource\BIBuilderDataset
 	{
 		$result = [];
 
-		$fields = BIConnector\ExternalSource\DatasetManager::getDatasetFieldsById($this->dataset->getId());
+		$fields = BIConnector\ExternalSource\DatasetManager::getDatasetFieldsById($this->getDataset()->getId());
 		foreach ($fields as $field)
 		{
 			if (!$field->getVisible())
@@ -83,7 +93,8 @@ abstract class Base extends BIConnector\DataSource\BIBuilderDataset
 			BIConnector\ExternalSource\FieldType::String => new BIConnector\DataSource\Field\StringField($name),
 			BIConnector\ExternalSource\FieldType::Double, BIConnector\ExternalSource\FieldType::Money => new BIConnector\DataSource\Field\DoubleField($name),
 			BIConnector\ExternalSource\FieldType::Date => new BIConnector\DataSource\Field\DateField($name),
-			BIConnector\ExternalSource\FieldType::DateTime => new BIConnector\DataSource\Field\DateTimeField($name)
+			BIConnector\ExternalSource\FieldType::DateTime => new BIConnector\DataSource\Field\DateTimeField($name),
+			default => new BIConnector\DataSource\Field\StringField($name),
 		};
 
 		$filed->setDescription($datasetField->getName());
@@ -94,12 +105,12 @@ abstract class Base extends BIConnector\DataSource\BIBuilderDataset
 
 	protected function getTableDescription(): string
 	{
-		return $this->dataset->getDescription() ?: $this->dataset->getName();
+		return $this->getDataset()->getDescription() ?: $this->getDataset()->getName();
 	}
 
 	protected function getConnector(string $name, BIConnector\DataSourceConnector\FieldCollection $fields, array $datasetInfo): BIConnector\DataSourceConnector\Connector\Base
 	{
-		return Connector\Factory::getConnector($this->dataset->getEnumType(), $name, $fields, $datasetInfo);
+		return Connector\Factory::getConnector($this->getDataset()->getEnumType(), $name, $fields, $datasetInfo);
 	}
 
 	public static function onBIBuilderExternalDataSources(Main\Event $event)

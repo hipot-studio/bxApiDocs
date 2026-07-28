@@ -3,6 +3,7 @@
 namespace Bitrix\HumanResources\Service;
 
 use Bitrix\HumanResources\Command\Structure\Node\NodeOrderCommand;
+use Bitrix\HumanResources\Config\Feature;
 use Bitrix\HumanResources\Contract;
 use Bitrix\HumanResources\Contract\Repository\NodeMemberRepository;
 use Bitrix\HumanResources\Contract\Repository\NodeRepository;
@@ -158,6 +159,22 @@ class StructureWalkerService implements Contract\Service\StructureWalkerService
 			throw (new DeleteFailedException('You can\'t remove root node'));
 		}
 
+		// Snapshot for the post-commit notification job (registered at the end of
+		// this method): member ids must be collected BEFORE the transaction,
+		// because moveMembers() relocates them to the parent node.
+		$parentNode = null;
+		$movedUserIds = [];
+		if (
+			$node->type === NodeEntityType::DEPARTMENT
+			&& Feature::instance()->areStructureChangeNotificationsAvailable()
+		)
+		{
+			$parentNode = $this->nodeRepository->getById($node->parentId);
+			$movedUserIds = InternalContainer::getNodeMemberRepository()
+				->getUserIdsByNodeId($node->id)
+			;
+		}
+
 		try
 		{
 			$this->connection->startTransaction();
@@ -181,14 +198,23 @@ class StructureWalkerService implements Contract\Service\StructureWalkerService
 			}
 			$this->processNodeRelationParts($node, $nodeRelationPartCollection);
 			$this->connection->commitTransaction();
-
-			return;
 		}
 		catch (Throwable $exception)
 		{
 			$this->logger?->log(LogLevel::ERROR, $exception->getMessage());
 			$this->connection->rollbackTransaction();
 			throw $exception;
+		}
+
+		// Notifications use the pre-transaction snapshot taken above; sent in the
+		// background only after a successful commit, so a rollback can't produce
+		// notifications about a removal that didn't happen.
+		if ($parentNode !== null && !empty($movedUserIds))
+		{
+			Application::getInstance()->addBackgroundJob(
+				[InternalContainer::getNodeMemberNotificationService(), 'sendAllNodeRemovedNotifications'],
+				[$node, $parentNode, $movedUserIds],
+			);
 		}
 	}
 

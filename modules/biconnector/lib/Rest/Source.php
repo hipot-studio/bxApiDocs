@@ -333,6 +333,7 @@ class Source extends Base
 			'limit' => $limit,
 		])->fetchCollection();
 
+		$settingsArray = [];
 		if ($selectSetting && $sourceIdList = $sourceCollection->getSourceCollection()->getIdList())
 		{
 			$settingsCollection = ExternalSourceSettingsTable::getList([
@@ -342,7 +343,6 @@ class Source extends Base
 				],
 			])->fetchCollection();
 
-			$settingsArray = [];
 			foreach ($settingsCollection as $setting)
 			{
 				$settingsArray[$setting->getSourceId()][] = [
@@ -364,7 +364,7 @@ class Source extends Base
 			}
 			if ($selectSetting)
 			{
-				$item['SETTINGS'] = $settingsArray[$rawData->getSource()->getId()];
+				$item['SETTINGS'] = $settingsArray[$rawData->getSource()->getId()] ?? [];
 			}
 			$resultArray[] = $item;
 		}

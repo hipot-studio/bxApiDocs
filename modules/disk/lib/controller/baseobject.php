@@ -203,6 +203,13 @@ abstract class BaseObject extends Internals\Engine\Controller
 
 	protected function generateExternalLink(Disk\BaseObject $object)
 	{
+		if (!$this->canManageExternalLink($object))
+		{
+			$this->errorCollection[] = new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED'));
+
+			return null;
+		}
+
 		$extLink = $this->getExternalLinkObject($object);
 		if (!$extLink)
 		{
@@ -243,6 +250,13 @@ abstract class BaseObject extends Internals\Engine\Controller
 
 	protected function disableExternalLink(Disk\BaseObject $object)
 	{
+		if (!$this->canManageExternalLink($object))
+		{
+			$this->errorCollection[] = new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED'));
+
+			return false;
+		}
+
 		$extLink = $this->getExternalLinkObject($object);
 		if (!$extLink)
 		{
@@ -261,6 +275,34 @@ abstract class BaseObject extends Internals\Engine\Controller
 		}
 
 		return false;
+	}
+
+	/**
+	 * @param Disk\BaseObject $object
+	 * @return bool
+	 */
+	private function canManageExternalLink(Disk\BaseObject $object): bool
+	{
+		$realObject = $object->getRealObject();
+
+		if (!$realObject)
+		{
+			return false;
+		}
+
+		$securityContext = $realObject->getStorage()?->getCurrentUserSecurityContext();
+
+		if (!$securityContext || !$realObject->canRead($securityContext))
+		{
+			return false;
+		}
+
+		if ($realObject->canUpdate($securityContext))
+		{
+			return true;
+		}
+
+		return $realObject->isAllowManagePublicAccessOnRead();
 	}
 
 	/**

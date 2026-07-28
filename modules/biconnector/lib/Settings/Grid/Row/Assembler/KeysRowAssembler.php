@@ -4,6 +4,7 @@ namespace Bitrix\BiConnector\Settings\Grid\Row\Assembler;
 
 use Bitrix\BiConnector\Settings\Grid\Row\Assembler\Field\ActiveFieldAssembler;
 use Bitrix\BiConnector\Settings\Grid\Row\Assembler\Field\DateFieldAssembler;
+use Bitrix\BiConnector\Settings\Grid\Row\Assembler\Field\LastActivityDateFieldAssembler;
 use Bitrix\BiConnector\Settings\Grid\Row\Assembler\Field\KeyFieldAssembler;
 use Bitrix\BiConnector\Settings\Grid\Row\Assembler\Field\NameFieldAssembler;
 use Bitrix\BiConnector\Settings\Grid\Row\Assembler\Field\UserCardFieldAssembler;
@@ -40,9 +41,11 @@ class KeysRowAssembler extends RowAssembler
 			),
 			new DateFieldAssembler([
 				'DATE_CREATE',
-				'LAST_ACTIVITY_DATE',
 				'TIMESTAMP_X',
 			]),
+			new LastActivityDateFieldAssembler([
+				'LAST_ACTIVITY_DATE',
+			])
 		];
 	}
 }

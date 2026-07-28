@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Im;
 
+use Bitrix\Im\V2\Guest\GuestService;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
@@ -62,8 +63,7 @@ class Settings
 
 	public static function isV2Available(): bool
 	{
-		$userId = Common::getUserId();
-		if (!$userId)
+		if (!Common::getUserId() && !GuestService::isOnGuestRoute())
 		{
 			return false;
 		}

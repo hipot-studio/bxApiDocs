@@ -79,6 +79,11 @@ class Settings
 		return \Bitrix\Main\Config\Option::get('immobile', 'is_market_available', 'N') === 'Y';
 	}
 
+	public static function isVibecodeButtonAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('immobile', 'is_vibecode_button_available', 'N') === 'Y';
+	}
+
 	public static function isCopilotSelectModelEnabled(): bool
 	{
 		return true;

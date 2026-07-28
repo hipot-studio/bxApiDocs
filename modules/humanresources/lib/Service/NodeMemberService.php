@@ -443,6 +443,9 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		if ($node->type === NodeEntityType::TEAM)
 		{
 			$this->nodeMemberRepository->remove($nodeMember);
+			InternalContainer::getNodeMemberNotificationService()
+				->sendAllRemoveMemberNotifications($nodeMember, $node)
+			;
 			$connection->unlock($lockName);
 
 			return null;
@@ -464,6 +467,9 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		}
 
 		$this->nodeMemberRepository->remove($nodeMember);
+		InternalContainer::getNodeMemberNotificationService()
+			->sendAllRemoveMemberNotifications($nodeMember, $node)
+		;
 		$connection->unlock($lockName);
 
 		return null;
@@ -498,6 +504,10 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 
 		$nodeMemberCollectionToAdd = new Item\Collection\NodeMemberCollection();
 		$nodeMemberCollectionToUpdate = new Item\Collection\NodeMemberCollection();
+		/** @var array<int, Item\Role> $addedMemberRoles */
+		$addedMemberRoles = [];
+		/** @var array<array{member: Item\NodeMember, oldRoleId: int, newRole: Item\Role}> $roleChanges */
+		$roleChanges = [];
 		foreach ($departmentUserIds as $roleXmlId => $userIds)
 		{
 			$isRoleAllowedForNodeType = in_array(
@@ -534,10 +544,16 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 				{
 					if (($userMember->roles[0] ?? 0) !== $role->id)
 					{
+						$oldRoleId = (int)($userMember->roles[0] ?? 0);
 						$updatedMember = $userMember;
 						$updatedMember->role = $role->id;
 						$nodeMemberCollectionToUpdate->add($updatedMember);
 						$nodeMemberCollection->add($updatedMember);
+						$roleChanges[] = [
+							'member' => $updatedMember,
+							'oldRoleId' => $oldRoleId,
+							'newRole' => $role,
+						];
 					}
 
 					continue;
@@ -552,6 +568,7 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 				);
 				$nodeMemberCollectionToAdd->add($nodeMemberToAdd);
 				$nodeMemberCollection->add($nodeMemberToAdd);
+				$addedMemberRoles[$role->id] = $role;
 			}
 		}
 
@@ -563,7 +580,25 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		);
 
 		$this->nodeMemberRepository->createByCollection($nodeMemberCollectionToAdd);
+
+		$notificationService = InternalContainer::getNodeMemberNotificationService();
+		$notificationService->preloadEmployeeNames(
+			$nodeMemberCollectionToAdd
+				->merge($nodeMemberCollectionToUpdate)
+				->merge($nodeMemberCollectionToRemove),
+		);
+
+		foreach ($addedMemberRoles as $roleId => $role)
+		{
+			$membersForRole = $nodeMemberCollectionToAdd->filter(
+				static fn(Item\NodeMember $member) => $member->role === $roleId,
+			);
+			$notificationService->sendAllAddMemberNotifications($membersForRole, $node, $role);
+		}
+
 		$this->nodeMemberRepository->updateByCollection($nodeMemberCollectionToUpdate);
+		$notificationService->sendAllRoleChangedNotifications($roleChanges, $node);
+
 		$movedToRootUserNodeMemberCollection =
 			$this->removeUserMembersFromDepartmentByCollection($nodeMemberCollectionToRemove)
 		;
@@ -648,6 +683,9 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		$nodeMemberCollectionToUpdate = new Item\Collection\NodeMemberCollection();
 		$nodeMemberCollectionToRemove = new Item\Collection\NodeMemberCollection();
 
+		/** @var array<int, array{sourceNodeId: int, sourceRoleId: int, role: Item\Role}> $moveDetails */
+		$moveDetails = [];
+
 		foreach ($departmentUserIds as $roleXmlId => $userIds)
 		{
 			$role = $this->roleRepository->findByXmlId($roleXmlId);
@@ -699,16 +737,63 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 					continue;
 				}
 
+				$sourceNodeId = $userMember->nodeId;
+				$sourceRoleId = (int)($userMember->roles[0] ?? 0);
+
 				$updatedUserMember = $userMember;
 				$updatedUserMember->nodeId = $node->id;
 				$updatedUserMember->role = $role->id;
 				$nodeMemberCollectionToUpdate->add($updatedUserMember);
 				$nodeMemberCollection->add($updatedUserMember);
+
+				$moveDetails[$updatedUserMember->entityId] = [
+					'sourceNodeId' => $sourceNodeId,
+					'sourceRoleId' => $sourceRoleId,
+					'role' => $role,
+				];
+			}
+		}
+
+		$notificationService = InternalContainer::getNodeMemberNotificationService();
+		$notificationService->preloadEmployeeNames(
+			$nodeMemberCollectionToUpdate->merge($nodeMemberCollectionToRemove),
+		);
+
+		foreach ($nodeMemberCollectionToRemove as $removedMember)
+		{
+			// this line uses cache under the hood, but excess query is possible
+			$removedFromNode = $this->nodeRepository->getById($removedMember->nodeId);
+			if ($removedFromNode !== null)
+			{
+				$notificationService->sendAllRemoveMemberNotifications($removedMember, $removedFromNode);
 			}
 		}
 
 		$this->nodeMemberRepository->removeByCollection($nodeMemberCollectionToRemove);
 		$this->nodeMemberRepository->updateByCollection($nodeMemberCollectionToUpdate);
+
+		foreach ($nodeMemberCollectionToUpdate as $movedMember)
+		{
+			$details = $moveDetails[$movedMember->entityId] ?? null;
+			if ($details === null)
+			{
+				continue;
+			}
+
+			$sourceNode = $this->nodeRepository->getById($details['sourceNodeId']);
+			if ($sourceNode === null)
+			{
+				continue;
+			}
+
+			$notificationService->sendAllMoveMemberNotifications(
+				$movedMember,
+				$sourceNode,
+				$node,
+				$details['sourceRoleId'],
+				$details['role'],
+			);
+		}
 
 		return $nodeMemberCollection;
 	}

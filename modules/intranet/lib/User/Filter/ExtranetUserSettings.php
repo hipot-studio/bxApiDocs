@@ -2,10 +2,10 @@
 
 namespace Bitrix\Intranet\User\Filter;
 
-use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\Internal\Integration\Humanresources\UserQueryModifier;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Filter\UserSettings;
 use Bitrix\Main\Loader;
+use Bitrix\Main\UserTable;
 use Bitrix\Socialnetwork\UserToGroupTable;
 
 class ExtranetUserSettings extends IntranetUserSettings
@@ -51,13 +51,19 @@ class ExtranetUserSettings extends IntranetUserSettings
 
 	public function getPublicUserIdList(): array
 	{
-		$res = \Bitrix\Main\UserTable::getList([
-			'filter' => [
-				'!UF_DEPARTMENT' => false,
-				'=UF_PUBLIC' => true,
-			],
-			'select' => [ 'ID' ]
-		]);
+		$userQueryModifier = new UserQueryModifier();
+		$employeeUserIdQuery = $userQueryModifier->createEmployeeUserIdQuery();
+		if ($employeeUserIdQuery === null)
+		{
+			return [];
+		}
+
+		$res = UserTable::query()
+			->setSelect(['ID'])
+			->where('UF_PUBLIC', true)
+			->whereIn('ID', $employeeUserIdQuery)
+			->exec()
+		;
 		$publicUserIdList = [];
 
 		while($userFields = $res->fetch())

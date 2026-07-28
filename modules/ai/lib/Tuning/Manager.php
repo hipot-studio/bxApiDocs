@@ -6,7 +6,9 @@ use Bitrix\AI\Config;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Event;
+use Bitrix\Main\Loader;
 use Bitrix\Main\ORM;
+use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
 
 /**
  * Class for manage tuning options
@@ -27,6 +29,51 @@ class Manager
 		$this->loadInternal();
 
 		$this->onAfterLoad();
+		$this->applyCopilotName();
+	}
+
+	private function applyCopilotName(): void
+	{
+		if (!Loader::includeModule('ui'))
+		{
+			return;
+		}
+
+		$copilotName = (new CopilotNameService())->getCopilotName();
+		if ($copilotName === '')
+		{
+			return;
+		}
+
+		$replacements = [
+			'#COPILOT_NAME#' => $copilotName,
+			'CoPilot' => $copilotName,
+		];
+
+		foreach ($this->groups as $group)
+		{
+			/** @var Group $group */
+			foreach ($group->getItems() as $item)
+			{
+				/** @var Item $item */
+				$title = $item->getTitle();
+				$replacedTitle = strtr($title, $replacements);
+				if ($replacedTitle !== $title)
+				{
+					$item->setTitle($replacedTitle);
+				}
+
+				$header = $item->getHeader();
+				if ($header !== null)
+				{
+					$replacedHeader = strtr($header, $replacements);
+					if ($replacedHeader !== $header)
+					{
+						$item->setHeader($replacedHeader);
+					}
+				}
+			}
+		}
 	}
 
 	/**
@@ -65,7 +112,7 @@ class Manager
 		$storage = self::getTuningStorage();
 		foreach ($event->getResults() as $result)
 		{
-			if (!$result instanceof Orm\EventResult)
+			if (!$result instanceof ORM\EventResult)
 			{
 				continue;
 			}

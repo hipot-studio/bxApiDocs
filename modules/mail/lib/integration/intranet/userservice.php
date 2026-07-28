@@ -13,8 +13,17 @@ final class UserService
 {
 	public static function isUserFired(int $userId): bool
 	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return false;
+		}
+
 		$userRepository = ServiceContainer::getInstance()->userRepository();
 		$intranetUser = $userRepository->getUserById($userId);
+		if ($intranetUser === null)
+		{
+			return false;
+		}
 
 		return $intranetUser->getInviteStatus() === InvitationStatus::FIRED;
 	}

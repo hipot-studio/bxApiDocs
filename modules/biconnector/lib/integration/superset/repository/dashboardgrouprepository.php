@@ -156,7 +156,7 @@ final class DashboardGroupRepository extends DashboardRepository
 		$allowedIds = AccessController::getCurrent()->getAllowedDashboardValue(
 			ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
 		);
-		$allowedIds = array_map('intval', $allowedIds);
+		$allowedIds = array_map('intval', $allowedIds ?? []);
 
 		$dashboardRows = [];
 		$dashboards = parent::getList($dashboardOrmParams, $needLoadProxyData);
@@ -178,7 +178,7 @@ final class DashboardGroupRepository extends DashboardRepository
 		$allowedIds = AccessController::getCurrent()->getAllowedGroupValue(
 			ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
 		);
-		$allowedIds = array_map('intval', $allowedIds);
+		$allowedIds = array_map('intval', $allowedIds ?? []);
 
 		$groupOrmParams = [
 			'filter' => ['ID' => $ids],

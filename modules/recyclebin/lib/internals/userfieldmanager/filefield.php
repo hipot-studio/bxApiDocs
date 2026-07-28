@@ -30,6 +30,11 @@ class FileField extends BaseField
 
 	public function onRestoreFromRecycleBin(&$value): void
 	{
+		if (empty($value))
+		{
+			return;
+		}
+
 		$values = is_array($value) ? $value : [$value];
 
 		$uf = \CUserTypeEntity::GetList([], [

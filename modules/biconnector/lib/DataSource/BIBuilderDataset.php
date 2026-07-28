@@ -65,14 +65,14 @@ abstract class BIBuilderDataset extends Dataset
 			$fields['FIELD_DESCRIPTION'] ?? '',
 			$fields['FIELD_DESCRIPTION_FULL'] ?? '',
 			$fields['FIELD_TYPE'] ?? 'string',
-			($fieldInfo['IS_METRIC'] ?? 'N') === 'Y',
-			($fieldInfo['IS_SYSTEM'] ?? 'Y') === 'Y',
-			($fieldInfo['IS_PRIMARY'] ?? 'N') === 'Y',
-			$fieldInfo['AGGREGATION_TYPE'] ?? null,
-			$fieldInfo['GROUP_KEY'] ?? null,
-			$fieldInfo['GROUP_CONCAT'] ?? null,
-			$fieldInfo['GROUP_COUNT'] ?? null,
-			$fieldInfo['IS_VALUE_SPLITABLE'] ?? null,
+			($fields['IS_METRIC'] ?? 'N') === 'Y',
+			($fields['IS_SYSTEM'] ?? 'Y') === 'Y',
+			($fields['IS_PRIMARY'] ?? 'N') === 'Y',
+			$fields['AGGREGATION_TYPE'] ?? null,
+			$fields['GROUP_KEY'] ?? null,
+			$fields['GROUP_CONCAT'] ?? null,
+			$fields['GROUP_COUNT'] ?? null,
+			$fields['IS_VALUE_SPLITABLE'] ?? null,
 		);
 	}
 

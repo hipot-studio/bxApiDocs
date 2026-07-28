@@ -3,10 +3,16 @@
 namespace Bitrix\BizprocMobile\Controller;
 
 use Bitrix\Bizproc\Api\Data\WorkflowStateService\WorkflowStateFilter;
+use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\PrepareParametersRequest;
 use Bitrix\Bizproc\Api\Request\WorkflowStateService\GetTimelineRequest;
 use Bitrix\Bizproc\Api\Service\WorkflowStateService;
+use Bitrix\Bizproc\Api\Service\WorkflowTemplateService;
+use Bitrix\Bizproc\Public\Service\Workflow\StarterService;
 use Bitrix\Bizproc\Result\Entity\ResultTable;
 use Bitrix\Bizproc\Result\RenderedResult;
+use Bitrix\Bizproc\Starter\Dto\ContextDto;
+use Bitrix\Bizproc\Starter\Dto\DocumentDto;
+use Bitrix\Bizproc\Starter\Enum\Face;
 use Bitrix\BizprocMobile\EntityEditor\Converter;
 use Bitrix\BizprocMobile\UI\BbCodeView;
 use Bitrix\Main\Engine\ActionFilter;
@@ -184,49 +190,45 @@ class Workflow extends BaseController
 		$pendingFiles = null;
 		if ($parameters)
 		{
-			$converter = new Converter($templateParameters, $complexDocumentId, $parameters);
-			$converter
-				->setDocumentType($complexDocumentType)
-				->setContext(
-					Converter::CONTEXT_PARAMETERS,
-					['signedDocument' => $signedDocument, 'templateId' => $templateId]
-				)
-			;
-
-			$convertedParameters = $converter->toWeb()->getConvertedValues();
-			$pendingFiles = $converter->getPendingFiles();
-
-			$errors = [];
-			$convertedParameters = \CBPWorkflowTemplateLoader::checkWorkflowParameters(
-				$templateParameters,
-				$convertedParameters,
-				$complexDocumentType,
-				$errors
+			$preparedParameters = $this->prepareWorkflowParameters(
+				templateParameters: $templateParameters,
+				complexDocumentId: $complexDocumentId,
+				complexDocumentType: $complexDocumentType,
+				parameters: $parameters,
+				signedDocument: $signedDocument,
+				templateId: $templateId,
 			);
 
-			if ($errors)
+			if ($preparedParameters === null)
 			{
-				foreach ($errors as $error)
-				{
-					$this->addError(new Error($error['message']));
-				}
-
 				return null;
 			}
+
+			$convertedParameters = $preparedParameters['parameters'];
+			$pendingFiles = $preparedParameters['pendingFiles'];
 		}
 
-		$convertedParameters[\CBPDocument::PARAM_TAGRET_USER] =  'user_' . (int)$this->getCurrentUser()->getId();
-		// $convertedParameters[\CBPDocument::PARAM_DOCUMENT_EVENT_TYPE] = \CBPDocumentEventType::Manual;
+		$result =
+			$this->createManualDocumentStarter(
+				templateId: $templateId,
+				complexDocumentId: $complexDocumentId,
+				complexDocumentType: $complexDocumentType,
+				parameters: $convertedParameters,
+			)
+				->start()
+		;
 
-		$errors = [];
-		$workflowId = \CBPDocument::startWorkflow($templateId, $complexDocumentId, $convertedParameters, $errors);
-
-		if ($errors)
+		if (!$result->isSuccess())
 		{
-			foreach ($errors as $error)
-			{
-				$this->addError(new Error($error['message']));
-			}
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		$workflowId = current($result->getWorkflowIds());
+		if (!is_string($workflowId) || $workflowId === '')
+		{
+			$this->addError(new Error(Loc::getMessage('M_BP_LIB_CONTROLLER_WORKFLOW_ERROR')));
 
 			return null;
 		}
@@ -239,9 +241,7 @@ class Workflow extends BaseController
 			}
 		}
 
-		return [
-			'workflowId' => $workflowId,
-		];
+		return ['workflowId' => $workflowId];
 	}
 
 	private function unSignDocument(string $signedDocument): ?array
@@ -305,6 +305,72 @@ class Workflow extends BaseController
 		}
 
 		return false;
+	}
+
+	private function prepareWorkflowParameters(
+		array $templateParameters,
+		array $complexDocumentId,
+		array $complexDocumentType,
+		array $parameters,
+		string $signedDocument,
+		int $templateId,
+	): ?array
+	{
+		$converter = new Converter($templateParameters, $complexDocumentId, $parameters);
+		$converter
+			->setDocumentType($complexDocumentType)
+			->setContext(
+				Converter::CONTEXT_PARAMETERS,
+				['signedDocument' => $signedDocument, 'templateId' => $templateId]
+			)
+		;
+
+		$convertedParameters = $converter->toWeb()->getConvertedValues();
+		$pendingFiles = $converter->getPendingFiles();
+
+		$preparedParameters = (new WorkflowTemplateService())->prepareParameters(
+			new PrepareParametersRequest(
+				templateParameters: $templateParameters,
+				requestParameters: $convertedParameters,
+				complexDocumentType: $complexDocumentType,
+			),
+		);
+
+		if (!$preparedParameters->isSuccess())
+		{
+			$this->addErrors($preparedParameters->getErrors());
+
+			return null;
+		}
+
+		return [
+			'parameters' => $preparedParameters->getParameters(),
+			'pendingFiles' => $pendingFiles,
+		];
+	}
+
+	private function createManualDocumentStarter(
+		int $templateId,
+		array $complexDocumentId,
+		array $complexDocumentType,
+		array $parameters,
+	): \Bitrix\Bizproc\Starter\Starter
+	{
+		$currentUserId = (int)$this->getCurrentUser()->getId();
+
+		return (new StarterService())
+			->getStarterForManualDocumentScenario(
+				templateIds: [$templateId],
+				context: new ContextDto('bizprocmobile', Face::MOBILE),
+				document: new DocumentDto(
+					complexDocumentId: $complexDocumentId,
+					complexDocumentType: $complexDocumentType,
+				),
+				userId: $currentUserId,
+				parameters: $parameters,
+			)
+			->setValidateParameters(false)
+		;
 	}
 
 	private function getWorkflowResult(string $workflowId)

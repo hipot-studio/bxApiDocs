@@ -14,7 +14,7 @@ class ConcatState extends BaseState
 	{
 		if ($value !== null)
 		{
-			$this->state[$id] = $value;
+			$this->state[(string)$id] = $value;
 		}
 	}
 	public function output()

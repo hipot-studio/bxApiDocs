@@ -17,6 +17,9 @@ namespace PHPSTORM_META
 		'disk.deletionNotifyManager',
 		'disk.onlyofficeConfiguration',
 		'disk.storageRuntimeCache',
+		'disk.scopeTokenService',
+		'disk.fileDataParameterService',
+		'disk.userQuickAccessTokenManager',
 	);
 
 	expectedArguments(\Bitrix\Main\DI\ServiceLocator::get(), 0, argumentsSet('bitrix_disk_serviceLocator_codes'));
@@ -36,6 +39,8 @@ namespace PHPSTORM_META
 		'disk.onlyofficeConfiguration' => \Bitrix\Disk\Document\OnlyOffice\Configuration::class,
 		'disk.storageRuntimeCache' => \Bitrix\Disk\Internals\Runtime\StorageRuntimeCache::class,
 		'disk.scopeTokenService' => \Bitrix\Disk\QuickAccess\ScopeTokenService::class,
+		'disk.fileDataParameterService' => \Bitrix\Disk\QuickAccess\FileDataParameterService::class,
+		'disk.userQuickAccessTokenManager' => \Bitrix\Disk\QuickAccess\UserQuickAccessTokenManager::class,
     ]));
 	
 	exitPoint(\Bitrix\Disk\Internals\Controller::end());

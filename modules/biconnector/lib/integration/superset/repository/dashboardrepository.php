@@ -2,7 +2,7 @@
 
 namespace Bitrix\BIConnector\Integration\Superset\Repository;
 
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorInterface;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
@@ -12,7 +12,7 @@ use Bitrix\Main\Type\Collection;
 
 class DashboardRepository
 {
-	public function __construct(private Integrator $integrator)
+	public function __construct(private IntegratorInterface $integrator)
 	{}
 
 	/**

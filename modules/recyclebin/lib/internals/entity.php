@@ -332,7 +332,9 @@ class Entity
 				$field['ENTITY_ID'] = $this->getUserFieldEntityId();
 				$field['VALUE'] ??= null;
 				Factory::getManager($field)->onRestoreFromRecycleBin($field['VALUE']);
+				$userFields[$fieldName]['VALUE'] = $field['VALUE'];
 			}
+			$this->setUserFieldsValues($userFields);
 		}
 	}
 

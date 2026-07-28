@@ -6,7 +6,7 @@ use Bitrix\Main;
 use Bitrix\Main\Result;
 use Bitrix\BIConnector;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 
 /**
  * Updates fields of tracking_source_expenses.
@@ -55,7 +55,7 @@ final class Version3 extends BaseVersion
 			];
 		}
 
-		Integrator::getInstance()->updateDataset(0, $fields);
+		IntegratorFactory::getInstance()->updateDataset(0, $fields);
 
 		return $result;
 	}

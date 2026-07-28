@@ -3,7 +3,7 @@
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\AiAssistant\Exceptions\McpException;
-use Bitrix\BIConnector\Integration\Superset\Integrator\Integrator;
+use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Postprocess\DashboardDataTransformer;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Postprocess\TransformerConfig;
@@ -13,8 +13,14 @@ use Bitrix\Main\Loader;
 final class GetChartDataTool extends BaseBiTool
 {
 	private const ROW_LIMIT_DEFAULT = 20;
-	private const ROW_LIMIT_MAX = 50;
-	private const MAX_CHARTS_PER_CALL = 3;
+	private const ROW_LIMIT_MAX = 300;
+	private const MAX_CHARTS_PER_CALL = 5;
+
+	private const CHART_FIELDS = [
+		'id', 'name', 'kind', 'viz_label', 'tab_path', 'description',
+		'column_descriptions', 'stats', 'slice_stable',
+		'columns', 'data', 'offset', 'row_limit', 'total_rows', 'has_more',
+	];
 
 	public function getName(): string
 	{
@@ -28,6 +34,21 @@ final class GetChartDataTool extends BaseBiTool
 			. 'by default (max ' . self::ROW_LIMIT_MAX . ' via `rowLimit`), with the actual column '
 			. 'values (not only stats), column descriptions, and a `has_more` / `total_rows` pair '
 			. 'per chart indicating truncation. '
+			. 'To page through a chart with more rows than `rowLimit`, repeat the call with '
+			. '`offset` advanced by `rowLimit` (0, then rowLimit, then 2·rowLimit, …) while '
+			. '`has_more` is true. Paging is only meaningful when rows are deterministically '
+			. 'ordered — set `sortBy` and check `slice_stable` first, otherwise pages may overlap '
+			. 'or skip rows. '
+			. 'Per-chart `stats` here carries TWO slices for every numeric column: '
+			. '`stats.<col>.full` — min/max/avg/sum/count/stddev computed over the whole chart, '
+			. 'and `stats.<col>.slice` — the same shape recomputed over only the rows returned in '
+			. 'this response. Reason about named individual rows using `slice`; reason about whether '
+			. 'those rows are unusual versus the chart as a whole using `full`. Do not mix them in '
+			. 'one number without saying which slice you cite. '
+			. 'Per-chart `slice_stable` is a boolean: when `false`, the chart query has no ORDER BY '
+			. 'AND its row_limit was hit, so the rows we sorted in-memory are a non-deterministic '
+			. 'cut of the dataset — the top-N you got may not be the real top-N of the chart. '
+			. 'When `slice_stable: false`, tell the user the slice may be incomplete. '
 			. 'Use this ONLY after get_dashboard_meta, and ONLY when the user asks for concrete '
 			. 'row-level detail (e.g. "who closed how many tasks", "top-N rows", "what exactly '
 			. 'is in this column"). Do NOT call this tool for generic dashboard summaries — '
@@ -107,6 +128,14 @@ final class GetChartDataTool extends BaseBiTool
 					'minimum' => 1,
 					'maximum' => self::ROW_LIMIT_MAX,
 				],
+				'offset' => [
+					'type' => 'integer',
+					'description' => 'Number of rows to skip before returning, for paging through '
+						. 'a chart with more rows than `rowLimit`. Default 0. Advance by `rowLimit` '
+						. 'on each call while `has_more` is true. Combine with `sortBy` so pages are '
+						. 'deterministic; otherwise pages may overlap or skip rows.',
+					'minimum' => 0,
+				],
 				'sortBy' => [
 					'type' => 'string',
 					'description' => 'Column name to sort rows by before truncation to rowLimit. '
@@ -131,7 +160,7 @@ final class GetChartDataTool extends BaseBiTool
 
 		$dashboardId = (int)$args['dashboardId'];
 
-		$loadResult = $this->loadDashboard($dashboardId, $userId);
+		$loadResult = $this->loadReadyDashboard($dashboardId, $userId);
 		if (!$loadResult->isSuccess())
 		{
 			throw self::toMcpException($loadResult);
@@ -146,6 +175,12 @@ final class GetChartDataTool extends BaseBiTool
 		if (isset($args['rowLimit']) && is_numeric($args['rowLimit']))
 		{
 			$rowLimit = max(1, min(self::ROW_LIMIT_MAX, (int)$args['rowLimit']));
+		}
+
+		$offset = 0;
+		if (isset($args['offset']) && is_numeric($args['offset']))
+		{
+			$offset = max(0, (int)$args['offset']);
 		}
 
 		$sortBy = null;
@@ -186,7 +221,7 @@ final class GetChartDataTool extends BaseBiTool
 		$filters = new AppliedFilters($userId);
 		if (!empty($callerFilters))
 		{
-			$dashboardDtoResp = Integrator::getInstance()->getDashboardById($externalId);
+			$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById($externalId);
 			if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
 			{
 				throw self::unavailableDashboardException(
@@ -215,12 +250,20 @@ final class GetChartDataTool extends BaseBiTool
 		}
 		$urlParams = $urlParamsResult->getData()['urlParams'];
 
-		$response = Integrator::getInstance()->getDashboardOverview(
+		$sort = [];
+		if ($sortBy !== null)
+		{
+			$sort = ['by' => $sortBy, 'order' => $sortOrder];
+		}
+
+		$response = IntegratorFactory::getInstance()->getDashboardOverview(
 			$externalId,
 			$supersetFilters,
 			$urlParams,
-			self::INTEGRATOR_TIMEOUT_SEC,
-			$requestedChartIds,
+			chartIds: $requestedChartIds,
+			sort: $sort,
+			limit: $rowLimit,
+			offset: $offset,
 		);
 		if ($response->hasErrors())
 		{
@@ -250,7 +293,6 @@ final class GetChartDataTool extends BaseBiTool
 		}
 
 		$matchedCharts = [];
-		$paginationMeta = [];
 		$missing = [];
 		if (isset($rawData['missing_chart_ids']) && is_array($rawData['missing_chart_ids']))
 		{
@@ -272,66 +314,22 @@ final class GetChartDataTool extends BaseBiTool
 			}
 
 			$chart = $chartsById[$chartId];
-			$totalRows = 0;
-			$hasMore = false;
 
-			$queryResult = $chart['query_result'] ?? null;
-			if (is_array($queryResult) && isset($queryResult[0]['data']) && is_array($queryResult[0]['data']))
+			if (isset($chart['error']) && is_string($chart['error']) && $chart['error'] !== '')
 			{
-				$rows = $queryResult[0]['data'];
-				$totalRows = count($rows);
-
-				if ($sortBy !== null && $totalRows > 0 && is_array($rows[0]))
-				{
-					if (!array_key_exists($sortBy, $rows[0]))
-					{
-						$available = array_keys($rows[0]);
-						$chartName = $chart['name'] ?? $chart['slice_name'] ?? '';
-						throw new McpException(sprintf(
-							'Unknown sortBy column "%s" for chart %d%s. Available columns: %s. '
-							. 'Pick the column name verbatim from the chart\'s `stats` keys (numeric '
-							. 'metrics) or `column_descriptions` keys returned by the preceding '
-							. 'get_dashboard_meta call.',
-							$sortBy,
-							$chartId,
-							$chartName !== '' ? ' ("' . $chartName . '")' : '',
-							json_encode(array_values($available), JSON_UNESCAPED_UNICODE),
-						));
-					}
-
-					if ($totalRows > 1)
-					{
-						usort($rows, static function ($a, $b) use ($sortBy, $sortOrder) {
-							$av = $a[$sortBy] ?? null;
-							$bv = $b[$sortBy] ?? null;
-							if (is_numeric($av) && is_numeric($bv))
-							{
-								$cmp = $av <=> $bv;
-							}
-							else
-							{
-								$cmp = strcmp((string)$av, (string)$bv);
-							}
-
-							return $sortOrder === 'asc' ? $cmp : -$cmp;
-						});
-					}
-				}
-
-				if ($totalRows > $rowLimit)
-				{
-					$hasMore = true;
-					$rows = array_slice($rows, 0, $rowLimit);
-				}
-
-				$chart['query_result'][0]['data'] = $rows;
+				throw self::unavailableDashboardException(
+					[new \Bitrix\Main\Error($chart['error'])],
+					[
+						'stage' => 'get_chart_data.chart_error',
+						'dashboard_id' => $dashboardId,
+						'user_id' => $userId,
+						'chart_id' => $chartId,
+						'chart_name' => $chart['name'] ?? $chart['slice_name'] ?? '',
+					],
+				);
 			}
 
 			$matchedCharts[] = $chart;
-			$paginationMeta[$chartId] = [
-				'total_rows' => $totalRows,
-				'has_more' => $hasMore,
-			];
 		}
 
 		if (empty($matchedCharts))
@@ -363,22 +361,10 @@ final class GetChartDataTool extends BaseBiTool
 		$config = new TransformerConfig();
 		$config->appliedFilters = $humanFilters;
 		$config->preserveChartIds = true;
+		$config->chartFields = self::CHART_FIELDS;
 
 		$transformer = new DashboardDataTransformer($config);
 		$result = $transformer->transform($filteredData);
-
-		foreach ($result['charts'] ?? [] as $idx => $chart)
-		{
-			$chartId = (int)($chart['id'] ?? 0);
-			if (!isset($paginationMeta[$chartId]))
-			{
-				continue;
-			}
-
-			$result['charts'][$idx]['row_limit'] = $rowLimit;
-			$result['charts'][$idx]['total_rows'] = $paginationMeta[$chartId]['total_rows'];
-			$result['charts'][$idx]['has_more'] = $paginationMeta[$chartId]['has_more'];
-		}
 
 		if (!empty($missing))
 		{

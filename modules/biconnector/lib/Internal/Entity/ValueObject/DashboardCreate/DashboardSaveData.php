@@ -13,6 +13,8 @@ final class DashboardSaveData
 		public readonly array $coverImage = [],
 		public readonly array $galleryImage = [],
 		public readonly array $period = [],
+		public readonly int $externalId = 0,
+		public readonly bool $externalPublished = false,
 	)
 	{
 	}

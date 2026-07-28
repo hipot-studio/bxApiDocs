@@ -35,12 +35,12 @@ class MainProvider extends BaseProvider
 		return null;
 	}
 
-	public function getId(): int
+	public function getBFileId(): int
 	{
 		return $this->fileId;
 	}
 
-	public function getName(): string
+	public function getFileName(): string
 	{
 		return $this->getFileData()['ORIGINAL_NAME'];
 	}
@@ -57,21 +57,44 @@ class MainProvider extends BaseProvider
 		return self::createFileInfo($fileData);
 	}
 
+	public function getSourceId(): string
+	{
+		return 'BFile:' . $this->fileId;
+	}
+
 	private function isMediaFile(): bool
 	{
-		return $this->isImage() || $this->isVideo();
+		return $this->isImage() || $this->isVideo() || $this->isAudio();
 	}
 
 	private function isImage(): bool
 	{
-		return \CFile::IsImage($this->getName(), $this->getFileData()['CONTENT_TYPE']);
+		return \CFile::IsImage($this->getFileName(), $this->getFileData()['CONTENT_TYPE']);
 	}
 
 	private function isVideo(): bool
 	{
-		$mime = MimeType::getByFilename($this->getName());
+		return $this->hasMimeCategory('video');
+	}
 
-		return str_contains($mime, 'video/');
+	private function isAudio(): bool
+	{
+		return $this->hasMimeCategory('audio');
+	}
+
+	private function hasMimeCategory(string $category): bool
+	{
+		$fileData = $this->getFileData();
+		$contentType = MimeType::normalize((string)($fileData['CONTENT_TYPE'] ?? ''));
+
+		if (str_starts_with($contentType, $category . '/'))
+		{
+			return true;
+		}
+
+		$mimeByFilename = MimeType::getByFilename($this->getFileName());
+
+		return str_starts_with($mimeByFilename, $category . '/');
 	}
 
 	private function getFileData(): array

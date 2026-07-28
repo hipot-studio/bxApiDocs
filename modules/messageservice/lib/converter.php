@@ -1,8 +1,10 @@
 <?php
 namespace Bitrix\MessageService;
 
-use Bitrix\Main;
 use Bitrix\Bizproc;
+use Bitrix\Main;
+use Bitrix\MessageService\Sender\Sms\SmsRu;
+use Bitrix\MessageService\Sender\Sms\Twilio;
 
 class Converter
 {
@@ -36,7 +38,7 @@ class Converter
 
 	public static function convertOptions()
 	{
-		$checkList = array('smsru', 'twilio');
+		$checkList = [SmsRu::ID, Twilio::ID];
 
 		foreach ($checkList as $senderId)
 		{

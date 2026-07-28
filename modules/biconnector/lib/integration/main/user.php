@@ -283,13 +283,13 @@ class User
 		$result['user']['TABLE_DESCRIPTION_FULL'] = $messages['MAIN_BIC_USER_TABLE_DESCRIPTION_FULL'] ?? '';
 		foreach ($result['user']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
-			$fieldInfo['FIELD_DESCRIPTION'] = $messages['MAIN_BIC_USER_FIELD_' . $fieldCode];
+			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['MAIN_BIC_USER_FIELD_' . $fieldCode]) ? $messages['MAIN_BIC_USER_FIELD_' . $fieldCode] : $fieldCode;
 			if (!$fieldInfo['FIELD_DESCRIPTION'])
 			{
 				$fieldInfo['FIELD_DESCRIPTION'] = $fieldCode;
 			}
 
-			$fieldInfo['FIELD_DESCRIPTION_FULL'] = $messages['MAIN_BIC_USER_FIELD_' . $fieldCode . '_FULL'] ?? '';
+			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['MAIN_BIC_USER_FIELD_' . $fieldCode . '_FULL']) ? $messages['MAIN_BIC_USER_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
 	}

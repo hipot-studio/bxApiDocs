@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Internal\Integration\Bitrix24\Integrator;
 
 use Bitrix\Bitrix24\Public\Command\Partner\AddIntegratorInfoCommand;
+use Bitrix\Bitrix24\Public\Command\Partner\RemoveIntegratorInfoCommand;
 use Bitrix\Bitrix24\Public\Provider\User\PartnerInfoProvider;
 use Bitrix\Bitrix24\Internal\Entity\User\PartnerInfo as PartnerInfoEntity;
 use Bitrix\Bitrix24\Internal\Entity\User\PartnerInfoCollection;
@@ -40,5 +41,15 @@ class PartnerInfo
 
 		$command = (new AddIntegratorInfoCommand($response, $userId));
 		$command->run();
+	}
+
+	public function removeByUserId(int $userId): void
+	{
+		if (!$this->isAvailable || $userId < 1)
+		{
+			return;
+		}
+
+		(new RemoveIntegratorInfoCommand($userId))->run();
 	}
 }

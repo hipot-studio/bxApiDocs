@@ -148,6 +148,7 @@ class CreateEventHandler implements CommandHandler
 			'SECTION_OWNER_ID' => $section->getOwner()?->getId(),
 			'MEETING_HOST' => $meetingHostId,
 			'OWNER_ID' => $command->getUserId(),
+			'EVENT_TYPE' => $command->getEventType(),
 			'MEETING' => [
 				'HOST_NAME' => \CCalendar::GetUserName($meetingHostId),
 				'NOTIFY' => $command->isMeetingNotify(),
@@ -255,4 +256,5 @@ class CreateEventHandler implements CommandHandler
 			&& $event->getAttendeesCollection()?->hasAttendeeId($owner->getId())
 		;
 	}
+
 }

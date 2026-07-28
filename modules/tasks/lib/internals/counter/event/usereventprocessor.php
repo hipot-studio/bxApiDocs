@@ -35,6 +35,7 @@ class UserEventProcessor
 		$efficiencyUpdated = [];
 		$readAll = null;
 		$toDelete = [];
+		$readListChunksByUser = [];
 
 		$originData = $this->getResourceCollection()->getOrigin();
 		$updatedData = $this->getResourceCollection()->getModified();
@@ -50,6 +51,16 @@ class UserEventProcessor
 			if ($eventType === EventDictionary::EVENT_AFTER_COMMENTS_READ_ALL)
 			{
 				$readAll = $event;
+				continue;
+			}
+
+			if ($eventType === EventDictionary::EVENT_AFTER_COMMENTS_READ_LIST)
+			{
+				$taskIds = $event->getTaskIds();
+				if (!empty($taskIds))
+				{
+					$readListChunksByUser[$userId][] = $taskIds;
+				}
 				continue;
 			}
 
@@ -156,10 +167,22 @@ class UserEventProcessor
 			(new CounterController($readAllUser))->readAll($readAll->getGroupId(), $readAll->getData()['ROLE']);
 		}
 
+		$readListUsers = [];
+		foreach ($readListChunksByUser as $readListUserId => $chunks)
+		{
+			$readListController = new CounterController($readListUserId);
+			foreach ($chunks as $chunk)
+			{
+				$readListController->readByTaskList($chunk);
+			}
+			$readListUsers[] = $readListUserId;
+			Counter\State\Factory::reloadState($readListUserId);
+		}
+
 		$deletedMembers = $this->handleDeleted($toDelete);
 		$members = $this->handleUpdated($toUpdate, $toDelete, $readAllUser);
 
-		$users = array_unique(array_merge($members, $deletedMembers));
+		$users = array_unique(array_merge($members, $deletedMembers, $readListUsers));
 		(new PushSender())->sendUserCounters($users);
 
 		if (!empty($efficiencyUpdated))

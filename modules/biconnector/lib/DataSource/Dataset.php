@@ -141,11 +141,12 @@ abstract class Dataset
 			'FIELDS' => $this->getResultFields(),
 		];
 
-		if (!empty($this->getFilter()?->filterFields()))
+		$filter = $this->getFilter();
+		if ($filter !== null && !empty($filter->filterFields()))
 		{
-			$result['FILTER'] = $this->getFilter()->datasetFilter();
+			$result['FILTER'] = $filter->datasetFilter();
 			$result['FILTER_FIELDS'] = [];
-			foreach ($this->getFilter()->filterFields() as $field)
+			foreach ($filter->filterFields() as $field)
 			{
 				$result['FILTER_FIELDS'][$field->getCode()] =
 					$field
