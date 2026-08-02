@@ -56,12 +56,26 @@ class NodesInstallerService
 		return $dir;
 	}
 
-	public function trySyncSection(string $sectionId, string $langId = LANGUAGE_ID): void
+	public function trySyncSection(string $sectionId, string $langId = LANGUAGE_ID, bool $force = false): void
 	{
-		if ($this->shouldTry($sectionId))
+		if (!$force && $this->wasTriedRecently($sectionId))
+		{
+			return;
+		}
+
+		if (!$this->lockDb($sectionId))
+		{
+			return;
+		}
+
+		try
 		{
 			$this->syncSection($sectionId, $langId);
-			$this->setTried($sectionId);
+			$this->markTried($sectionId);
+		}
+		finally
+		{
+			$this->lockDb($sectionId, release: true);
 		}
 	}
 
@@ -234,23 +248,16 @@ PHP;
 		return $messages;
 	}
 
-	private function shouldTry(string $sectionId): bool
+	private function wasTriedRecently(string $sectionId): bool
 	{
 		$cache = Application::getInstance()->getManagedCache();
 
-		if ($cache->read(self::SHOULD_TRY_TTL, self::SHOULD_TRY_CACHE_TAG . $sectionId))
-		{
-			return false;
-		}
-
-		return $this->lockDb($sectionId);
+		return (bool)$cache->read(self::SHOULD_TRY_TTL, self::SHOULD_TRY_CACHE_TAG . $sectionId);
 	}
 
-	private function setTried(string $sectionId): void
+	private function markTried(string $sectionId): void
 	{
-		$cache = Application::getInstance()->getManagedCache();
-		$cache->set(self::SHOULD_TRY_CACHE_TAG . $sectionId, 1);
-		$this->lockDb($sectionId, true);
+		Application::getInstance()->getManagedCache()->set(self::SHOULD_TRY_CACHE_TAG . $sectionId, 1);
 	}
 
 	private function lockDb(string $sectionId, bool $release = false): bool
@@ -363,7 +370,31 @@ PHP;
 		$template['ACTIVE'] = 'N';
 		$template['TYPE'] = WorkflowTemplateType::Nodes->value;
 
-		$this->upsertTpl($tpl?->getId() ?? 0, $template);
+		$isNewInstall = $tpl === null;
+		$templateId = $this->upsertTpl($tpl?->getId() ?? 0, $template);
+
+		if ($templateId === null)
+		{
+			return; // upsert failed, do not fire lifecycle hook
+		}
+
+		$this->invokeLifecycleHook(
+			$installerInstance,
+			$isNewInstall ? 'onInstall' : 'onUpdate',
+			$templateId,
+		);
+	}
+
+	private function invokeLifecycleHook(NodesInstaller $installer, string $method, int $templateId): void
+	{
+		try
+		{
+			$installer->$method($templateId);
+		}
+		catch (\Throwable $e)
+		{
+			Application::getInstance()->getExceptionHandler()->writeToLog($e);
+		}
 	}
 
 	private function createInstallerInstance(?IO\FileEntry $installerFile): ?NodesInstaller
@@ -418,16 +449,18 @@ PHP;
 		return $template;
 	}
 
-	private function upsertTpl(int $id, array $data): void
+	private function upsertTpl(int $id, array $data): ?int
 	{
 		if ($id > 0)
 		{
-			WorkflowTemplateTable::update($id, $data);
+			$result = WorkflowTemplateTable::update($id, $data);
+
+			return $result->isSuccess() ? $id : null;
 		}
-		else
-		{
-			WorkflowTemplateTable::add($data);
-		}
+
+		$result = WorkflowTemplateTable::add($data);
+
+		return $result->isSuccess() ? (int)$result->getId() : null;
 	}
 
 	private function getNodesDir(): string

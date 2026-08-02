@@ -13,6 +13,7 @@ use Bitrix\UI\Buttons\Button;
 use Bitrix\UI\Buttons\Color;
 use Bitrix\UI\Buttons\LinkTarget;
 use Bitrix\UI\Buttons\Size;
+use Bitrix\UI\Buttons\Tag;
 use CBPViewHelper;
 
 final class WorkflowTemplateGridHelper
@@ -53,10 +54,10 @@ final class WorkflowTemplateGridHelper
 	private function createActionCell(EO_WorkflowTemplate $template): string
 	{
 		$actionButton = new Button([
-			'id' => 'add_new_workflow_button',
+			'tag' => Tag::LINK,
 			'color' => Color::PRIMARY,
 			'size' => Size::SMALL,
-			'className' => 'ui-text-underline-none',
+			'className' => 'ui-text-underline-none bizproc-template-processes-grid-edit-link',
 			'text' => Loc::getMessage('BIZPROC_TEMPLATE_PROCESSES_CHANGE_BUTTON'),
 			'link' => "/bizprocdesigner/editor/?ID={$template->getId()}",
 			'air' => true,

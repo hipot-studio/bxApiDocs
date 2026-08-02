@@ -20,10 +20,11 @@ class Stepper {
 	/**
 	 * Add stepper $stepperClass. Checks if canUpdateDatabase and moduleTablesExist
 	 * @param string $stepperClass
+	 * @param int|null $execDelay First execution delay in seconds.
 	 * @return $this|self
 	 * @throws Exception
 	 */
-	public function add(string $stepperClass): self
+	public function add(string $stepperClass, ?int $execDelay = null): self
 	{
 		if (!$this->context->getDatabaseUpdateMode()->canUpdateDatabase())
 		{
@@ -35,16 +36,17 @@ class Stepper {
 			return $this;
 		}
 
-		return $this->doAdd($stepperClass);
+		return $this->doAdd($stepperClass, $execDelay);
 	}
 
 	/**
 	 * Add stepper $stepperClass. Checks if canUpdateDatabase and isModuleInstalled
 	 * @param string $stepperClass
+	 * @param int|null $execDelay First execution delay in seconds.
 	 * @return $this|self
 	 * @throws Exception
 	 */
-	public function addIfModuleInstalled(string $stepperClass): self
+	public function addIfModuleInstalled(string $stepperClass, ?int $execDelay = null): self
 	{
 		if (!$this->context->getDatabaseUpdateMode()->canUpdateDatabase())
 		{
@@ -56,21 +58,22 @@ class Stepper {
 			return $this;
 		}
 
-		return $this->doAdd($stepperClass);
+		return $this->doAdd($stepperClass, $execDelay);
 	}
 
 	/**
 	 * Add stepper $stepperClass. Checks if canUpdateDatabase and moduleTablesExist
 	 * @param string $stepperClass
+	 * @param int|null $execDelay First execution delay in seconds.
 	 * @return $this|self
 	 * @throws Exception
 	 */
-	public function addIfModuleExists(string $stepperClass): self
+	public function addIfModuleExists(string $stepperClass, ?int $execDelay = null): self
 	{
-		return $this->add($stepperClass);
+		return $this->add($stepperClass, $execDelay);
 	}
 
-	private function doAdd(string $stepperClass): self
+	private function doAdd(string $stepperClass, ?int $execDelay = null): self
 	{
 		if (
 			$this->context->isDevMode()
@@ -95,7 +98,22 @@ class Stepper {
 			);
 		}
 
-		$delay = $this->context->isCloud() ? 600 : 0;
+		$delay = 60;
+
+		if ($this->context->isCloud())
+		{
+			$delay = 60 * 10;
+		}
+		elseif (defined('BX_PRODUCT_INSTALLATION') && BX_PRODUCT_INSTALLATION === true) // distr installation
+		{
+			$delay = 60 * 15;
+		}
+		elseif ($this->context->getDatabaseUpdateMode() === DatabaseUpdateMode::ModuleInstall)  // module installation from an updater
+		{
+			$delay = 60;
+		}
+
+		$delay = max($delay, $execDelay ?? 0);
 
 		$stepper = $this->stepperClass;
 		$stepper::bindClass($stepperClass, $this->context->getModuleId(), $delay);

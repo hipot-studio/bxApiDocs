@@ -85,6 +85,7 @@ class Task extends AbstractEntity
 		public readonly ?int $estimatedTime = null,
 		public readonly ?bool $replicate = null,
 		public readonly ?ReplicateParams $replicateParams = null,
+		public readonly ?Template $replicateTemplate = null,
 		public readonly ?int $changedTs = null,
 		#[Validatable]
 		public readonly ?User $changedBy = null,
@@ -254,6 +255,7 @@ class Task extends AbstractEntity
 			estimatedTime: static::mapInteger($props, 'estimatedTime'),
 			replicate: static::mapBool($props, 'replicate'),
 			replicateParams: static::mapValueObject($props, 'replicateParams', ReplicateParams::class),
+			replicateTemplate: static::mapEntity($props, 'replicateTemplate', Template::class),
 			changedTs: static::mapInteger($props, 'changedTs'),
 			changedBy: static::mapEntity($props, 'changedBy', User::class),
 			statusChangedBy: static::mapEntity($props, 'statusChangedBy', User::class),
@@ -355,6 +357,7 @@ class Task extends AbstractEntity
 			'estimatedTime' => $this->estimatedTime,
 			'replicate' => $this->replicate,
 			'replicateParams' => $this->replicateParams,
+			'replicateTemplate' => $this->replicateTemplate?->toArray(),
 			'changedTs' => $this->changedTs,
 			'statusChangedBy' => $this->statusChangedBy?->toArray(),
 			'changedBy' => $this->changedBy?->toArray(),

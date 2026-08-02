@@ -15,6 +15,7 @@ enum OptionDictionary: string
 	case CalendarExpanded = 'calendar_expanded';
 	case NotificationsExpanded = 'notificationsExpanded';
 	case WhatsAppEmergencyNotified = 'whatsapp_emergency_notified';
+	case AiCallBanner = 'ai_call_banner';
 
 	/** AhaMoments */
 	case AhaBanner = 'aha_banner';
@@ -29,4 +30,5 @@ enum OptionDictionary: string
 	case AhaCyclePopup = 'aha_cycle_popup';
 	case AhaSearchNavigation = 'aha_search_navigation';
 	case AhaIntegrationMapsYa = 'aha_integration_maps_ya';
+	case AhaWeekView = 'aha_week_view';
 }

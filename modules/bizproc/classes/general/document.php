@@ -334,6 +334,22 @@ class CBPDocument
 		return in_array($operation, $operations);
 	}
 
+	private static function findActiveDebugSession(int $workflowTemplateId): ?Bizproc\Internal\Entity\Debugger\Debug
+	{
+		$currentUserId = Main\Engine\CurrentUser::get()?->getId();
+
+		if ($currentUserId === null)
+		{
+			return null;
+		}
+
+		return Bizproc\Internal\Container::getDebugService()?->getDebug(
+			(int)$currentUserId,
+			$workflowTemplateId,
+			isEnabled: true,
+		);
+	}
+
 	/**
 	 * Method starts workflow.
 	 *
@@ -368,12 +384,7 @@ class CBPDocument
 
 			if (Option::get('bizproc', 'debugger_available', 'N') === 'Y')
 			{
-				$debugService = Bizproc\Internal\Container::getDebugService();
-				$debug = $debugService?->getDebug(
-					Main\Engine\CurrentUser::get()->getId(),
-					$workflowTemplateId,
-					isEnabled: true,
-				);
+				$debug = static::findActiveDebugSession($workflowTemplateId);
 			}
 
 			if ($debug !== null)

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Integration\ImBot;
 
 use Bitrix\Bizproc\Error;
-use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
 use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Result;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
@@ -18,13 +17,17 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Security\Random;
 use Bitrix\ImBot\Bot\Base;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\UserTable;
 
 Loader::includeModule('imbot');
@@ -57,6 +60,8 @@ class BizprocBot extends Base
 	 * @var array<string, ?int> ['code' => 123, ...]
 	 */
 	private static array $botIdsByCodes = [];
+
+	private const UNAVAILABLE_TARIFF_ERROR_CODE = 'BP_DESIGNER_UNAVAILABLE_BY_TARIFF';
 
 	/**
 	 * @param array{name: string, position?: string, code?: string, avatar?: string} $params
@@ -177,6 +182,16 @@ class BizprocBot extends Base
 		return $somethingRemoved;
 	}
 
+	/**
+	 * @param $messageId
+	 * @param $messageFields
+	 *
+	 * @return bool
+	 * @throws ArgumentException
+	 * @throws LoaderException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
 	public static function onMessageAdd($messageId, $messageFields): bool
 	{
 		if (!Loader::includeModule('im') || !Loader::includeModule('imbot'))
@@ -194,15 +209,6 @@ class BizprocBot extends Base
 		$chatId = (int)($messageFields[self::MESSAGE_FIELD_TO_CHAT_ID] ?? $messageFields['CHAT_ID'] ?? 0);
 		if ($botId === 0 || $chatId === 0)
 		{
-			return false;
-		}
-
-		$aiAgentsFeature = new AiAgentsFeature();
-		if (!$aiAgentsFeature->isAvailable())
-		{
-			$dialogId = (string)($messageFields[self::FIELD_DIALOG_ID] ?? '');
-			self::sendError($botId, $dialogId, (string)Loc::getMessage('BIZPROC_IMBOT_BIZPROCBOT_UNAVAILABLE_BY_TARIFF'));
-
 			return false;
 		}
 
@@ -225,15 +231,18 @@ class BizprocBot extends Base
 		);
 
 		$triggerErrorSent = false;
-		if (!$sentResult->isSuccess())
+		if (!$sentResult->isSuccess() && !self::isSomeWorkflowStarted($sentResult))
 		{
 			$triggerErrorSent = static::sendTriggerErrorMessageIfNeeded($messageFields, $sentResult);
 		}
 
 		if (!self::isSomeWorkflowStarted($sentResult) && !$triggerErrorSent)
 		{
-			$dialogId = (string)($messageFields[self::FIELD_DIALOG_ID] ?? '');
-			self::sendError($botId, $dialogId, (string)Loc::getMessage('BIZPROC_IMBOT_BIZPROCBOT_NO_TRIGGERS_ERROR'));
+			if (!self::answerWithBitrixGpt($botId, $messageId))
+			{
+				$dialogId = (string)($messageFields[self::FIELD_DIALOG_ID] ?? '');
+				self::sendError($botId, $dialogId, (string)Loc::getMessage('BIZPROC_IMBOT_BIZPROCBOT_NO_TRIGGERS_ERROR'));
+			}
 		}
 
 		return true;
@@ -382,6 +391,14 @@ class BizprocBot extends Base
 	{
 		foreach ($sentResult->getErrors() as $error)
 		{
+			if ($error->getCode() === self::UNAVAILABLE_TARIFF_ERROR_CODE)
+			{
+				return self::sendError(
+					(int)$messageFields[self::FIELD_BOT_ID],
+					(string)$messageFields[self::FIELD_DIALOG_ID],
+					(string)Loc::getMessage('BIZPROC_IMBOT_BIZPROCBOT_UNAVAILABLE_BY_TARIFF'),
+				);
+			}
 			if ($error->getCode() === self::ACCESS_DENIED_CODE)
 			{
 				return self::sendError(
@@ -576,5 +593,112 @@ class BizprocBot extends Base
 		$error = \CFile::CheckImageFile($fileArray, $maxSize, $maxWidth, $maxHeight);
 
 		return empty($error);
+	}
+
+	/**
+	 * @param int $botId
+	 * @param int $messageId
+	 *
+	 * @return bool true — answer initiated; false — need to call NO_TRIGGERS_ERROR.
+	 * @throws ArgumentException
+	 * @throws LoaderException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	private static function answerWithBitrixGpt(int $botId, int $messageId): bool
+	{
+		if (!Loader::includeModule('aiassistant'))
+		{
+			return false;
+		}
+
+		if (!\Bitrix\AiAssistant\Config\Feature::getInstance()->isBitrixGptV2Available())
+		{
+			return false;
+		}
+
+		if (!self::hasLaunchedTemplateForBot($botId))
+		{
+			return false;
+		}
+
+		$original = \Bitrix\AiAssistant\Core\Im\ImBot::getMessageById($messageId);
+		if ($original === null)
+		{
+			return false;
+		}
+
+		$dto = new \Bitrix\AiAssistant\Core\Dto\MessageDto(
+			id: $original->id,
+			chatId: $original->chatId,
+			authorId: $original->authorId,
+			type: $original->type,
+			content: $original->content,
+			params: [...$original->params, 'senderBotId' => $botId],
+			dateCreate: $original->dateCreate,
+		);
+
+		try
+		{
+			\Bitrix\Main\DI\ServiceLocator::getInstance()
+				->get(\Bitrix\AiAssistant\Core\Service\AiBot::class)
+				->handleIncomingMessage($dto);
+		}
+		catch (\Throwable $e)
+		{
+			(new \Bitrix\Main\Diag\LoggerFactory())->createById('bizproc.imbot')?->warning(
+				'BitrixGPT fallback failed for botId={botId}, messageId={messageId}: {error}',
+				['botId' => $botId, 'messageId' => $messageId, 'error' => $e->getMessage()],
+			);
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * @throws LoaderException
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	private static function hasLaunchedTemplateForBot(int $botId): bool
+	{
+		if (!Loader::includeModule('imbot'))
+		{
+			return false;
+		}
+
+		$botRow = BotTable::query()
+			->where(self::FIELD_BOT_ID, $botId)
+			->where(self::FIELD_CLASS, self::class)
+			->setSelect(['CODE'])
+			->fetch()
+		;
+
+		if (!$botRow)
+		{
+			return false;
+		}
+
+		$code = (string)($botRow['CODE'] ?? '');
+		if (!preg_match('/\d+/', $code, $matches))
+		{
+			return false;
+		}
+
+		$templateId = (int)$matches[0];
+		if ($templateId <= 0)
+		{
+			return false;
+		}
+
+		$template = \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable::getRow([
+			'filter' => ['=ID' => $templateId],
+			'select' => ['ID'],
+		]);
+
+		return $template !== null;
 	}
 }

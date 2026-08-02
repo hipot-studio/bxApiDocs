@@ -24,6 +24,7 @@ class UpdateConfig
 	private ?string $eventGuid;
 	private RuntimeData $runtime;
 	private ?AnalyticsData $analyticsData;
+	private bool $fromAi;
 
 	public function __construct(
 		int $userId,
@@ -42,6 +43,7 @@ class UpdateConfig
 		?string $eventGuid = null,
 		RuntimeData $runtime = new RuntimeData(),
 		?AnalyticsData $analyticsData = null,
+		bool $fromAi = false,
 	)
 	{
 		$this->userId = $userId;
@@ -60,6 +62,7 @@ class UpdateConfig
 		$this->eventGuid = $eventGuid;
 		$this->runtime = $runtime;
 		$this->analyticsData = $analyticsData;
+		$this->fromAi = $fromAi;
 	}
 
 	public static function createFromArray(
@@ -205,6 +208,11 @@ class UpdateConfig
 	public function isSkipPush(): bool
 	{
 		return $this->skipPush;
+	}
+
+	public function isFromAi(): bool
+	{
+		return $this->fromAi;
 	}
 
 	public function getEventGuid(): ?string

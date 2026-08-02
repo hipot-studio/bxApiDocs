@@ -2,21 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Bitrix\Anonymizer\Provider;
+namespace Bitrix\Disk\Integration\Anonymizer;
 
-use Bitrix\Anonymizer\Replacement;
+use Bitrix\Anonymizer\Internal\Entities\Replacement\ReplacementDto;
+use Bitrix\Anonymizer\Internal\Services\Replacement\Storage;
 use Bitrix\DocumentGenerator\Body\Data\DocxNodesDto;
 use Bitrix\DocumentGenerator\Body\Data\XmlNodesDto;
 
-// dbg do
-class DocxReplacer
+/**
+ * Applies replacement offsets (from flattened DOCX text) to document XML nodes.
+ */
+final class DocxReplacer
 {
 	/** @var DocxNodesDto[] */
 	private array $nodes;
 
 	private int $position;
 	private string $currentNodeValue;
-	private Replacement\ReplacementDto $currentReplacement;
+	private ReplacementDto $currentReplacement;
 	private bool $replaceStarted = false;
 
 	/**
@@ -35,20 +38,17 @@ class DocxReplacer
 		return $this->nodes;
 	}
 
-	/**
-	 * @param Replacement\Storage $replacementStorage
-	 * @return bool
-	 */
-	public function applyReplacements(Replacement\Storage $replacementStorage): bool
+	public function applyReplacements(Storage $replacementStorage): bool
 	{
 		$this->position = 0;
 
 		$changed = false;
 		$replacements = $replacementStorage->sortByPosition()->getReplacements();
-		if (empty($replacements))
+		if ($replacements === [])
 		{
 			return $changed;
 		}
+
 		$this->currentReplacement = array_shift($replacements);
 
 		foreach ($this->nodes as $docNodes)
@@ -56,7 +56,7 @@ class DocxReplacer
 			foreach ($docNodes->nodes as $node)
 			{
 				$this->currentNodeValue = trim($node->value);
-				if (empty($this->currentNodeValue))
+				if ($this->currentNodeValue === '')
 				{
 					continue;
 				}
@@ -77,7 +77,7 @@ class DocxReplacer
 					if ($this->isReplaceEnd($this->currentReplacement))
 					{
 						unset($this->currentReplacement);
-						if (empty($replacements))
+						if ($replacements === [])
 						{
 							return $changed;
 						}
@@ -97,19 +97,19 @@ class DocxReplacer
 		return $changed;
 	}
 
-	private function isReplaceStart(Replacement\ReplacementDto $replacement): bool
+	private function isReplaceStart(ReplacementDto $replacement): bool
 	{
 		return
 			$replacement->start >= $this->position
 			&& $replacement->start <= $this->position + mb_strlen($this->currentNodeValue);
 	}
 
-	private function isReplaceEnd(Replacement\ReplacementDto $replacement): bool
+	private function isReplaceEnd(ReplacementDto $replacement): bool
 	{
 		return $replacement->end <= $this->position + mb_strlen($this->currentNodeValue) + 1;
 	}
 
-	private function replaceNode(XmlNodesDto $node, Replacement\ReplacementDto $replacement): void
+	private function replaceNode(XmlNodesDto $node, ReplacementDto $replacement): void
 	{
 		$startAtThisNode = $replacement->start >= $this->position;
 		$endAtThisNode = $replacement->end <= ($this->position + mb_strlen($this->currentNodeValue) + 1);
@@ -121,7 +121,6 @@ class DocxReplacer
 			return;
 		}
 
-		// second nodes
 		if ($startAtThisNode)
 		{
 			$this->replaceStarted = true;
@@ -140,7 +139,6 @@ class DocxReplacer
 			$this->replaceStarted = false;
 			$node->value = str_replace($replacedChunk, '', $node->value);
 		}
-		// middle node
 		else
 		{
 			$node->value = null;

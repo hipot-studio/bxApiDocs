@@ -2,9 +2,11 @@
 
 namespace Bitrix\Bizproc;
 
+use Bitrix\Bizproc\Api\Enum\ErrorMessage;
+use Bitrix\Bizproc\Public\Service\Workflow\StarterService;
+use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
 use Bitrix\Main\DB\DuplicateEntryException;
-use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Loader;
 use Bitrix\Rest\AppLangTable;
 use Bitrix\Rest\AppTable;
@@ -794,12 +796,22 @@ class RestService extends \IRestService
 			throw new RestException('Empty TEMPLATE_ID', self::ERROR_WRONG_WORKFLOW_ID);
 		}
 		$templateId = (int)$params['TEMPLATE_ID'];
-		$tplDocumentType = self::getTemplateDocumentType($templateId);
+		$templateInfo = self::getTemplateInfoForStart($templateId);
 
-		if (!$tplDocumentType)
+		if (!$templateInfo)
 		{
 			throw new RestException('Template not found', self::ERROR_WRONG_WORKFLOW_ID);
 		}
+
+		if ((int)($templateInfo['AUTO_EXECUTE'] ?? 0) === \CBPDocumentEventType::Script)
+		{
+			throw new RestException(
+				ErrorMessage::SCRIPT_START_NOT_SUPPORTED->get(),
+				self::ERROR_WRONG_WORKFLOW_ID,
+			);
+		}
+
+		$tplDocumentType = [$templateInfo['MODULE_ID'], $templateInfo['ENTITY'], $templateInfo['DOCUMENT_TYPE']];
 
 		//hotfix #0120474
 		$getParams = array_change_key_case($_GET, CASE_UPPER);
@@ -829,19 +841,44 @@ class RestService extends \IRestService
 
 		self::checkStartWorkflowPermissions($documentId, $templateId);
 
+		$currentUserId = self::getCurrentUserId();
 		$workflowParameters = isset($params['PARAMETERS']) && is_array($params['PARAMETERS']) ? $params['PARAMETERS'] : [];
+		$starterService = new StarterService();
+		$document = new DocumentDto(complexDocumentId: $documentId, complexDocumentType: $documentType);
+		$isAutomationTemplate = ((int)($templateInfo['AUTO_EXECUTE'] ?? 0)) === \CBPDocumentEventType::Automation;
 
-		$workflowParameters[\CBPDocument::PARAM_TAGRET_USER] = 'user_' . self::getCurrentUserId();
+		$starter = (
+			$isAutomationTemplate
+				? $starterService->getAutomationStarterForManualRestDocumentScenario(
+					templateIds: [$templateId],
+					document: $document,
+					userId: $currentUserId,
+					parameters: $workflowParameters,
+				)
+				: $starterService->getProcessStarterForManualRestDocumentScenario(
+					templateIds: [$templateId],
+					document: $document,
+					userId: $currentUserId,
+					parameters: $workflowParameters,
+				)
+		)
+			->setValidateParameters(false)
+		;
 
-		$errors = [];
-		$workflowId = \CBPDocument::startWorkflow($templateId, $documentId, $workflowParameters, $errors);
+		$startResult = $starter->start();
 
-		if (!$workflowId)
+		if ($startResult->isSuccess())
 		{
-			throw new RestException($errors[0]['message']);
+			$workflowId = current($startResult->getWorkflowIds()) ?: null;
+			if ($workflowId !== null)
+			{
+				return $workflowId;
+			}
+
+			throw new RestException(ErrorMessage::CREATE_WORKFLOW->get(), self::ERROR_WRONG_WORKFLOW_ID);
 		}
 
-		return $workflowId;
+		throw new RestException($startResult->getErrorMessages()[0]);
 	}
 
 	private static function checkStartWorkflowPermissions(array $documentId, $templateId)
@@ -1824,18 +1861,14 @@ class RestService extends \IRestService
 		return null;
 	}
 
-	private static function getTemplateDocumentType(int $id): ?array
+	private static function getTemplateInfoForStart(int $id): ?array
 	{
 		$tpl = WorkflowTemplateTable::getList([
-			'select' => ['MODULE_ID', 'ENTITY', 'DOCUMENT_TYPE'],
+			'select' => ['MODULE_ID', 'ENTITY', 'DOCUMENT_TYPE', 'AUTO_EXECUTE'],
 			'filter' => ['=ID' => $id],
 		])->fetch();
 
-		if ($tpl)
-		{
-			return [$tpl['MODULE_ID'], $tpl['ENTITY'], $tpl['DOCUMENT_TYPE']];
-		}
-		return null;
+		return $tpl ?: null;
 	}
 
 	private static function validateTemplateName($name)

@@ -37,6 +37,9 @@ class Task extends BaseController
 			withCheckLists: $withCheckLists,
 			withAttachments: $withAttachments,
 			withRelatedTasks: $withRelatedTasks,
+			withReplication: true,
+			requestReplicate: $task->replicate,
+			requestReplicateParams: $task->replicateParams,
 			targetTaskId: $targetTask?->getId(),
 		);
 

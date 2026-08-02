@@ -829,7 +829,7 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			'text',
 			$blockPosition,
 			$itemPosition,
-			'BIZPROC_SETUP_TEMPLATE_ACTIVITY_LABEL_TITLE_ITEM',
+			'BIZPROC_SETUP_TEMPLATE_ACTIVITY_LABEL_NAME_ITEM',
 			$errors
 		);
 
@@ -864,6 +864,36 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 		];
 	}
 
+	/**
+	 * Fills in default values for setup-block constants that were not passed by the caller.
+	 *
+	 * Needed for scenario/auto-start flows (e.g. DayPlannerStarter) that submit setup without
+	 * constant values: required constants with a configured default must pass validation instead
+	 * of failing the "required & empty" check before defaults are applied in setConstants().
+	 * Scoped to block constants only, so template-only constants are not added to the input and
+	 * do not trigger the "unknown id" diff in validateConstants().
+	 */
+	private function appendBlockConstantsDefaults(array $constantValues, BlockCollection $blocks): array
+	{
+		foreach ($blocks as $block)
+		{
+			foreach ($block->items as $item)
+			{
+				if (!$item instanceof Constant)
+				{
+					continue;
+				}
+
+				if (!array_key_exists($item->id, $constantValues))
+				{
+					$constantValues[$item->id] = $item->default;
+				}
+			}
+		}
+
+		return $constantValues;
+	}
+
 	private function appendOtherTemplateConstantsDefaults(array $constantValues): array
 	{
 		$constants = (array)\CBPWorkflowTemplateLoader::getTemplateConstants($this->getWorkflowTemplateId());
@@ -883,7 +913,12 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 		return $allConstantValues;
 	}
 
-	private function validateConstants(array $constants, int $userId, BlockCollection $blocks): ErrorCollection
+	private function validateConstants(
+		array $constants,
+		int $userId,
+		BlockCollection $blocks,
+		bool $skipAccessValidation = false,
+	): ErrorCollection
 	{
 		$errors = [];
 		$constantIdList = [];
@@ -944,10 +979,13 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 					$errors[] = new Error($error[self::ERROR_MESSAGE], $error[self::ERROR_CODE], $customDataError);
 				}
 
-				$accessValidationResult = (new AccessValidationService())
-					->isUserHasAccessToValue($fieldType->getTypeClass(), $userId, $value)
-				;
-				$errors = array_merge($errors, $accessValidationResult->getErrorCollection()->getValues());
+				if (!$skipAccessValidation)
+				{
+					$accessValidationResult = (new AccessValidationService())
+						->isUserHasAccessToValue($fieldType->getTypeClass(), $userId, $value)
+					;
+					$errors = array_merge($errors, $accessValidationResult->getErrorCollection()->getValues());
+				}
 			}
 		}
 
@@ -1129,7 +1167,7 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			'text',
 			$blockPosition,
 			$itemPosition,
-			'BIZPROC_SETUP_TEMPLATE_ACTIVITY_LABEL_TITLE_ITEM',
+			'BIZPROC_SETUP_TEMPLATE_ACTIVITY_LABEL_NAME_ITEM',
 			$errors
 		);
 
@@ -1305,6 +1343,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 		$userId = $eventParameters[1] ?? null;
 		$templateId = $eventParameters[2] ?? null;
 		$constantValues = (array)($eventParameters[3] ?? []);
+		$skipAccessValidation = (bool)($eventParameters[4] ?? false);
+		$applyDefaults = (bool)($eventParameters[5] ?? false);
 		if (
 			$templateId !== $this->getWorkflowTemplateId()
 			|| $userId !== $this->getUserIdOnExecute()
@@ -1323,7 +1363,12 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			return false;
 		}
 
-		$errors = $this->validateConstants($constantValues, $userId, $blocks);
+		if ($applyDefaults)
+		{
+			$constantValues = $this->appendBlockConstantsDefaults($constantValues, $blocks);
+		}
+
+		$errors = $this->validateConstants($constantValues, $userId, $blocks, $skipAccessValidation);
 		if (!$errors->isEmpty())
 		{
 			$this->sendValidationEvent($errors);

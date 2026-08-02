@@ -17,7 +17,19 @@ abstract class SocialNetwork extends \Bitrix\Tasks\Integration\Integration
 {
 	const MODULE_NAME = 'socialnetwork';
 
+	private const GROUP_CHAT_ENTITY_TYPE = 'SONET_GROUP';
+
 	private static $enabled = true;
+
+	/**
+	 * Checks that the chat entity points to the group's own chat.
+	 */
+	public static function isGroupChat(string $entityType, string $entityId, int $groupId): bool
+	{
+		return $groupId > 0
+			&& $entityType === self::GROUP_CHAT_ENTITY_TYPE
+			&& (int)$entityId === $groupId;
+	}
 
 	public static function enable()
 	{

@@ -37,6 +37,8 @@ class FindResourceService
 		Booking|null $existingBooking = null,
 	): FindResourceServiceResult
 	{
+		$resourceFilter['SHORT_SLOTS_ONLY'] = true;
+
 		$resourceCollection = $this->resourceRepository->getList(
 			filter: new ResourceFilter($resourceFilter),
 			select: (new ResourceSelect(['SETTINGS']))->prepareSelect(),

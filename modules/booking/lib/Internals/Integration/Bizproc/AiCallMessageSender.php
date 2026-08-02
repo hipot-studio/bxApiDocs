@@ -9,6 +9,7 @@ use Bitrix\Booking\Internals\Integration\Crm\ClientExtractor;
 use Bitrix\Booking\Internals\Integration\Crm\CrmBindingsBuilder;
 use Bitrix\Booking\Internals\Integration\Pull\PushService;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
+use Bitrix\Booking\Internals\Service\Notifications\AiCallAvailabilityService;
 use Bitrix\Booking\Internals\Service\Notifications\BookingMessageStatus;
 use Bitrix\Booking\Internals\Service\Notifications\Entity\BookingMessage;
 use Bitrix\Booking\Internals\Service\AiAssistant\ContextProvider;
@@ -20,14 +21,10 @@ use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Result\StartResult;
 use Bitrix\Bizproc\Starter\Starter;
-use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
-use Bitrix\Main\ModuleManager;
-use Bitrix\Main\Config\Option;
-use Bitrix\Bitrix24\Feature;
 
 Loc::loadMessages(
 	$_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/booking/lib/Integration/Booking/Message/MessageStatus.php'
@@ -35,6 +32,8 @@ Loc::loadMessages(
 
 class AiCallMessageSender extends BaseMessageSender
 {
+	public const CODE = 'ai_call';
+
 	private const FAILURE_RETRY_AFTER_SECONDS = 60 * 60;
 
 	public function __construct(
@@ -44,6 +43,8 @@ class AiCallMessageSender extends BaseMessageSender
 		private readonly AiAgentTemplateQuery $aiAgentTemplateQuery,
 		private readonly ClientExtractor $clientExtractor,
 		private readonly CrmBindingsBuilder $crmBindingsBuilder,
+		private readonly AiCallAvailabilityService $aiCallAvailabilityService,
+		private readonly AiAgentProvider $aiAgentProvider,
 	)
 	{
 		parent::__construct($bookingMessageRepository, $pushService);
@@ -51,37 +52,14 @@ class AiCallMessageSender extends BaseMessageSender
 
 	public function canUse(): bool
 	{
-		$isBitrix24 = Loader::includeModule('bitrix24');
-		if ($isBitrix24)
-		{
-			$canUse = (
-				Feature::isFeatureEnabled('crm_automation_designer')
-				&& (
-					\CBitrix24::IsLicensePaid()
-					|| \CBitrix24::IsNfrLicense()
-				)
-			);
-		}
-		else
-		{
-			$canUse = (bool)Option::get('booking', 'ai_call_message_sender_enabled', false);
-		}
-
-		return (
-			ModuleManager::isModuleInstalled('bizproc')
-			&& ModuleManager::isModuleInstalled('aiassistant')
-			&& (
-				Loader::includeModule('voximplant')
-				&& \CVoxImplantOutgoing::CanUseAiCall() === true
-			)
-			&& (Application::getInstance()->getLicense()->getRegion() ?? 'en') === 'ru'
-			&& $canUse
-		);
+		return $this->aiCallAvailabilityService->isAvailable()
+			&& $this->aiAgentProvider->getAiAgentData() !== null
+		;
 	}
 
 	public function getCode(): string
 	{
-		return 'ai_call';
+		return self::CODE;
 	}
 
 	public function getMessageStatus(string $messageId): MessageStatus

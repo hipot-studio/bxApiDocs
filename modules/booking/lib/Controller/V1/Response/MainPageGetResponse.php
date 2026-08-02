@@ -23,6 +23,7 @@ class MainPageGetResponse implements \JsonSerializable
 		public readonly array $catalogSkuEntityOptions,
 		public readonly array $senders,
 		public readonly bool $shouldShowWhatsAppEmergency = false,
+		public readonly string|null $aiCallBannerMode = null,
 	)
 	{
 	}
@@ -43,6 +44,7 @@ class MainPageGetResponse implements \JsonSerializable
 			'catalogSkuEntityOptions' => $this->catalogSkuEntityOptions,
 			'senders' => $this->senders,
 			'shouldShowWhatsAppEmergency' => $this->shouldShowWhatsAppEmergency,
+			'aiCallBannerMode' => $this->aiCallBannerMode,
 		];
 	}
 }

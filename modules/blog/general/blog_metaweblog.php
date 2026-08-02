@@ -3,6 +3,7 @@
 IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Main\Text\HtmlFilter;
+use Bitrix\Main\Web\Uri;
 
 class CBlogMetaWeblog
 {
@@ -537,7 +538,7 @@ class CBlogMetaWeblog
 									<member>
 									<name>url</name>
 									<value>
-									<string>'.CHTTP::URN2URI($path, $serverName).'</string>
+									<string>' . (new Uri($path))->toAbsolute($serverName) . '</string>
 									</value>
 									</member>
 									</struct>

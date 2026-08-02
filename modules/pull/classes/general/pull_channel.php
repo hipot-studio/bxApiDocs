@@ -145,10 +145,10 @@ class CPullChannel
 	 * and warms self::$staticCache with the results so subsequent per-user Get() calls in the same request are cache-hits.
 	 *
 	 * @param int[] $userIds
-	 * @param string $channelType
+	 * @param string|null $channelType
 	 * @return array<int, array{CHANNEL_ID: string, CHANNEL_PUBLIC_ID: ?string, CHANNEL_TYPE: string, CHANNEL_DT: int, LAST_ID: int}>
 	 */
-	public static function getMany(array $userIds, string $channelType = self::TYPE_PRIVATE): array
+	public static function getMany(array $userIds, ?string $channelType = self::TYPE_PRIVATE): array
 	{
 		if (!CPullOptions::GetQueueServerStatus())
 		{
@@ -503,6 +503,46 @@ class CPullChannel
 		CPullStack::AddByChannel($channelId, $arMessage);
 
 		return true;
+	}
+
+	/**
+	 * Terminates the users' channels in bulk: one chunked DELETE, no per-user `channel_expire`
+	 * (that command accompanies rotation, not termination). Delivery stops with the rows;
+	 * callers must notify clients BEFORE calling if they need an immediate reaction.
+	 *
+	 * User channels only: USER_ID=0 (shared channel) is skipped — a shared channel needs a
+	 * replacement on removal, use {@see self::DeleteByUser()} for it. An empty $channelType
+	 * matches legacy ''/NULL rows, mirroring DeleteByUser().
+	 *
+	 * @param int[] $userIds
+	 */
+	public static function DeleteByUsers(array $userIds, string $channelType = self::TYPE_PRIVATE): void
+	{
+		$userIds = array_values(array_unique(array_filter(
+			array_map('intval', $userIds),
+			static fn (int $userId): bool => $userId > 0,
+		)));
+		if ($userIds === [])
+		{
+			return;
+		}
+
+		$connection = \Bitrix\Main\Application::getConnection();
+		$channelTypeSql = $channelType === ''
+			? "(CHANNEL_TYPE = '' OR CHANNEL_TYPE IS NULL)"
+			: "CHANNEL_TYPE = '" . $connection->getSqlHelper()->forSql($channelType) . "'";
+		foreach (array_chunk($userIds, 500) as $chunk)
+		{
+			$ids = implode(',', $chunk);
+			$connection->queryExecute(
+				"DELETE FROM b_pull_channel WHERE USER_ID IN ({$ids}) AND {$channelTypeSql}"
+			);
+		}
+
+		foreach ($userIds as $userId)
+		{
+			unset(self::$staticCache[self::getLockKey($userId, $channelType)]);
+		}
 	}
 
 	public static function Send($channelId, $message, $options = array())

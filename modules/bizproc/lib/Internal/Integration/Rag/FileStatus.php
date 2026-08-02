@@ -11,11 +11,12 @@ enum FileStatus: string
 
 	public function getPriority(): int
 	{
-		return match ($this) {
-			self::Uploading => 1,
-			self::Processing => 2,
-			self::Success => 3,
-			self::FailedUpload => 4,
+		return match ($this)
+		{
+			self::FailedUpload => 1,
+			self::Uploading => 2,
+			self::Processing => 3,
+			self::Success => 4,
 		};
 	}
 }

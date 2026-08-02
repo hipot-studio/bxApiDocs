@@ -4,6 +4,7 @@ use Bitrix\HumanResources\Compatibility\Utils\DepartmentBackwardAccessCode;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\MemberSubordinateRelationType;
+use Bitrix\HumanResources\Util\StructureHelper;
 use Bitrix\Main;
 use Bitrix\Bitrix24;
 use Bitrix\Bizproc;
@@ -2210,18 +2211,22 @@ class CBPHelper
 
 	public static function stripUserPrefix($value)
 	{
-		if (is_array($value) && !CBPHelper::IsAssociativeArray($value))
+		if (is_array($value) && !static::isAssociativeArray($value))
 		{
 			foreach ($value as &$v)
 			{
-				if (mb_substr($v, 0, 5) == "user_")
-					$v = mb_substr($v, 5);
+				if (self::hasStringRepresentation($v) && str_starts_with((string)$v, 'user_'))
+				{
+					$v = mb_substr((string)$v, 5);
+				}
 			}
 		}
 		elseif (is_string($value))
 		{
-			if (mb_substr($value, 0, 5) == "user_")
+			if (str_starts_with($value, 'user_'))
+			{
 				$value = mb_substr($value, 5);
+			}
 		}
 
 		return $value;
@@ -2283,6 +2288,15 @@ class CBPHelper
 			if ($node)
 			{
 				return ($node->name ?? '') . ($appendId ? ' [HR' . ($match[1] === 'dr' ? 'R' : '') . $node->id . ']' : '');
+			}
+		}
+
+		if ($group === 'ua' && Loader::includeModule('humanresources'))
+		{
+			$node = StructureHelper::getRootStructureDepartment();
+			if ($node)
+			{
+				return ($node->name ?? '') . ($appendId ? ' [HRR' . $node->id . ']' : '');
 			}
 		}
 

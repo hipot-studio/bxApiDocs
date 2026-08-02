@@ -13,6 +13,8 @@ use Bitrix\Tasks\Scrum;
 use Bitrix\Tasks\V2\Internal\Access\Factory\ControllerFactoryInterface;
 use Bitrix\Tasks\V2\Internal\Access\Factory\Type;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
+use Bitrix\Tasks\V2\Internal\Access\Service\TemplateAccessService;
+use Bitrix\Tasks\V2\Internal\Access\Service\TemplateRightService;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Group;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
@@ -46,6 +48,8 @@ class TaskProvider
 	protected readonly DiskArchiveLinkService $diskArchiveLinkService;
 	protected readonly ViewService $viewService;
 	protected readonly EmailAccessService $emailAccessService;
+	protected readonly TemplateAccessService $templateAccessService;
+	protected readonly TemplateRightService $templateRightService;
 	protected readonly Scrum\Service\TaskService $scrumTaskService;
 
 	public function __construct(
@@ -61,6 +65,8 @@ class TaskProvider
 		$this->diskArchiveLinkService = Container::getInstance()->get(DiskArchiveLinkService::class);
 		$this->viewService = Container::getInstance()->get(ViewService::class);
 		$this->emailAccessService = Container::getInstance()->get(EmailAccessService::class);
+		$this->templateAccessService = Container::getInstance()->get(TemplateAccessService::class);
+		$this->templateRightService = Container::getInstance()->get(TemplateRightService::class);
 		$this->scrumTaskService = new Scrum\Service\TaskService(); //todo
 	}
 
@@ -118,6 +124,7 @@ class TaskProvider
 			userFields: $taskParams->userFields,
 			email: $taskParams->email,
 			scenarios: $taskParams->scenarios,
+			templateReplication: $taskParams->templateReplication,
 		);
 
 		$task = $this->taskRepository->getById(
@@ -144,6 +151,8 @@ class TaskProvider
 			fn (): array => $this->prepareArchiveLink($task),
 			fn (): array => $this->prepareStage($taskParams, $task),
 			fn (): array => $this->prepareEmail($taskParams, $task),
+			fn (): array => $this->prepareReplicateTemplate($taskParams, $task),
+			fn (): array => $this->prepareForkedByTemplate($taskParams, $task),
 		];
 
 		$data = [];
@@ -212,6 +221,7 @@ class TaskProvider
 			name: $task->group->name,
 			image: $task->group->image,
 			type: $task->group->type,
+			isRestrictedView: true,
 		);
 
 		return ['group' => $group->toArray()];
@@ -358,5 +368,65 @@ class TaskProvider
 		}
 
 		return ['description' => $description];
+	}
+
+	protected function prepareReplicateTemplate(TaskParams $taskParams, Task $task): array
+	{
+		$template = $task->replicateTemplate;
+		if ($template === null)
+		{
+			return [];
+		}
+
+		$templateId = (int)$template->getId();
+		if ($templateId <= 0)
+		{
+			return [];
+		}
+
+		if (!$this->templateAccessService->canRead($taskParams->userId, $templateId))
+		{
+			return [
+				'replicateTemplate' => null,
+			];
+		}
+
+		$templateEditRight = $this->templateRightService->get(
+			rules: ['edit' => ActionDictionary::ACTION_TEMPLATE_EDIT],
+			taskId: $templateId,
+			userId: $taskParams->userId,
+		);
+
+		return ['replicateTemplate' => $template->cloneWith(['rights' => $templateEditRight])->toArray()];
+	}
+
+	protected function prepareForkedByTemplate(TaskParams $taskParams, Task $task): array
+	{
+		$template = $task->forkedByTemplate;
+		if ($template === null)
+		{
+			return [];
+		}
+
+		$templateId = (int)$template->getId();
+		if ($templateId <= 0)
+		{
+			return [];
+		}
+
+		if (!$this->templateAccessService->canRead($taskParams->userId, $templateId))
+		{
+			return [
+				'forkedByTemplate' => null,
+			];
+		}
+
+		$templateEditRight = $this->templateRightService->get(
+			rules: ['edit' => ActionDictionary::ACTION_TEMPLATE_EDIT],
+			taskId: $templateId,
+			userId: $taskParams->userId,
+		);
+
+		return ['forkedByTemplate' => $template->cloneWith(['rights' => $templateEditRight])->toArray()];
 	}
 }

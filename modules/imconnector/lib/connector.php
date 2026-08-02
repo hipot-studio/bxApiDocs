@@ -760,7 +760,7 @@ class Connector
 			$expiresTime =  new DateTime($info['EXPIRES']);
 			if ($expiresTime->getTimestamp() < time())
 			{
-				InfoConnectors::addSingleLineUpdateAgent($info['LINE_ID'], Library::LOCAL_AGENT_EXEC_INTERVAL);
+				InfoConnectors::addSingleLineUpdateAgent($info['LINE_ID']);
 			}
 		}
 		elseif ($deferUpdate)
@@ -803,17 +803,27 @@ class Connector
 
 	/**
 	 * Returns information about all connected connectors specific open line from connector server.
+	 * The result carries both the filtered line data and the transport success signal, so callers
+	 * can tell an authoritative empty answer apart from a failed server call.
 	 *
-	 * @param $lineId
+	 * @param int $lineId
 	 *
-	 * @return array
+	 * @return Result
 	 */
-	public static function getOutputInfoConnectorsLine($lineId)
+	public static function getOutputInfoConnectorsLine(int $lineId): Result
 	{
-		$result = [];
-		$rawInfo = Output::infoConnectorsLine($lineId);
-		$infoConnectors = $rawInfo->getData();
+		$result = new Result();
+		$data = [];
 
+		$rawInfo = Output::infoConnectorsLine($lineId);
+		if (!$rawInfo->isSuccess())
+		{
+			$result->addErrors($rawInfo->getErrors());
+
+			return $result;
+		}
+
+		$infoConnectors = $rawInfo->getData();
 		if (!empty($infoConnectors))
 		{
 			$connectors = self::getListActiveConnector();
@@ -822,16 +832,18 @@ class Connector
 			{
 				if (!empty($infoConnectors[$connectorId]))
 				{
-					$result[$connectorId] = $infoConnectors[$connectorId];
-					if (empty($result[$connectorId]['name']))
+					$data[$connectorId] = $infoConnectors[$connectorId];
+					if (empty($data[$connectorId]['name']))
 					{
-						$result[$connectorId]['name'] = $value;
+						$data[$connectorId]['name'] = $value;
 					}
 
-					$result[$connectorId]['connector_name'] = $value;
+					$data[$connectorId]['connector_name'] = $value;
 				}
 			}
 		}
+
+		$result->setData($data);
 
 		return $result;
 	}

@@ -8,9 +8,11 @@ use Bitrix\Booking\Entity;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
 use Bitrix\Booking\Provider\Params\FilterInterface;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\ORM\Query\Query;
 
 interface ResourceRepositoryInterface
 {
+	public function getQuery(FilterInterface|null $filter = null): Query;
 	public function getList(
 		int|null $limit = null,
 		int|null $offset = null,

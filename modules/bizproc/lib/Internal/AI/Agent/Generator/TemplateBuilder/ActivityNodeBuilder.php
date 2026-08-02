@@ -22,6 +22,7 @@ final class ActivityNodeBuilder
 		array $properties,
 		Position $position,
 		?string $id = null,
+		?string $nodeTitle = null,
 	): array
 	{
 		$name = $id ?? $this->generateNextId();
@@ -30,6 +31,8 @@ final class ActivityNodeBuilder
 		$ports = $this->registry->getDefaultPorts($activityType);
 		$icon = $this->registry->getIcon($activityType);
 		$colorIndex = $this->registry->getColorIndex($activityType);
+
+		$displayTitle = $nodeTitle ?? $properties['Title'] ?? '';
 
 		return [
 			'Name' => $name,
@@ -45,7 +48,7 @@ final class ActivityNodeBuilder
 				'ports' => $ports,
 				'node' => [
 					'type' => $nodeType->value,
-					'title' => $properties['Title'] ?? '',
+					'title' => $displayTitle,
 					'colorIndex' => $colorIndex,
 					'frameColorName' => null,
 					'frameTextAlign' => null,

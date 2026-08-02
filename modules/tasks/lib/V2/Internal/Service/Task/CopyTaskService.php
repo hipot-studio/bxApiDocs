@@ -8,21 +8,26 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Exception\TaskAddException;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Service\Task\CopyFileService;
+use Bitrix\Tasks\V2\Internal\LoggerInterface;
 use Bitrix\Tasks\V2\Internal\Repository\RelatedTaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\SubTaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateReplicateParamsRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\CheckList\CopyCheckListService;
 use Bitrix\Tasks\V2\Internal\Service\AddTaskService;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskAccessService;
 use Bitrix\Tasks\V2\Internal\Service\Reminder\CopyReminderService;
+use Bitrix\Tasks\V2\Internal\Service\ReplicationService;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Copy\Config\CopyConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Gantt\CopyGanttDependenceService;
+use Throwable;
 
 class CopyTaskService
 {
 	private const MAX_TASKS_TO_COPY = 50;
+	private const REPLICATION_LOG_MARKER = 'TASKS_COPY_REPLICATION_DEBUG';
 
 	public function __construct(
 		private readonly TaskRepositoryInterface $taskRepository,
@@ -34,6 +39,9 @@ class CopyTaskService
 		private readonly CopyGanttDependenceService $copyGanttDependenceService,
 		private readonly TaskAccessService $taskAccessService,
 		private readonly CopyFileService $copyFileService,
+		private readonly ReplicationService $replicationService,
+		private readonly TemplateReplicateParamsRepositoryInterface $templateReplicateParamsRepository,
+		private readonly LoggerInterface $logger,
 	)
 	{
 	}
@@ -75,7 +83,7 @@ class CopyTaskService
 				$parentTaskId = null;
 			}
 
-			$rootTask = $this->createTaskCopy($task, $config, $parentTaskId);
+			$rootTask = $this->createTaskCopy($task, $config, $parentTaskId, isRoot: true);
 			if (!$rootTask)
 			{
 				$message =
@@ -109,7 +117,10 @@ class CopyTaskService
 		{
 			[$sourceTask, $copiedTask] = array_shift($queue);
 
-			$sourceSubTasks = $this->subTaskRepository->getByParentId($sourceTask->getId());
+			$sourceSubTasks = $this->subTaskRepository->getByParentId(
+				parentId: $sourceTask->getId(),
+				withMembers: true,
+			);
 
 			foreach ($sourceSubTasks as $sourceSubTask)
 			{
@@ -141,6 +152,7 @@ class CopyTaskService
 		CopyConfig $config,
 		?int $parentTaskId = null,
 		?Entity\Task $rootTask = null,
+		bool $isRoot = false,
 	): ?Entity\Task
 	{
 		$preparedTask = $this->prepareTask(
@@ -169,7 +181,71 @@ class CopyTaskService
 			config: $config,
 		);
 
+		$this->materializeRegularity(
+			originalNode: $originalTask,
+			copiedTask: $copiedTask,
+			config: $config,
+			isRoot: $isRoot,
+		);
+
 		return $copiedTask;
+	}
+
+	private function materializeRegularity(
+		Entity\Task $originalNode,
+		Entity\Task $copiedTask,
+		CopyConfig $config,
+		bool $isRoot,
+	): void
+	{
+		if (!$config->withReplication)
+		{
+			return;
+		}
+
+		$params = null;
+
+		if ($isRoot)
+		{
+			$signal = $config->requestReplicate;
+			if ($signal === false)
+			{
+				return;
+			}
+
+			if ($signal === true)
+			{
+				$params = $config->requestReplicateParams;
+			}
+		}
+
+		if ($params === null)
+		{
+			$params = $this->templateReplicateParamsRepository
+				->getByTaskId((int)$originalNode->getId())
+				?->replicateParams
+			;
+		}
+
+		if ($params === null)
+		{
+			return;
+		}
+
+		$taskForTemplate = $copiedTask->cloneWith(['replicateParams' => $params]);
+
+		try
+		{
+			$this->replicationService->createTemplate($taskForTemplate, $config->userId);
+		}
+		catch (Throwable $e)
+		{
+			$this->logger->logWarning(
+				'CopyTaskService: failed to materialize regularity for copied task '
+				. $copiedTask->getId() . ': ' . $e->getMessage(),
+				self::REPLICATION_LOG_MARKER,
+			);
+		}
 	}
 
 	private function copyRelatedEntities(

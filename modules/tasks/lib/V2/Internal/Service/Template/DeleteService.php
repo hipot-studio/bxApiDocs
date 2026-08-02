@@ -9,6 +9,7 @@ use Bitrix\Tasks\Control\Exception\TemplateStopDeleteException;
 use Bitrix\Tasks\Control\Exception\WrongTemplateIdException;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateReplicateParamsRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\Config\DeleteConfig;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\FullDeleteRelations;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Delete\MoveToRecyclebin;
@@ -22,6 +23,7 @@ class DeleteService
 {
 	public function __construct(
 		private readonly TemplateRepositoryInterface $templateRepository,
+		private readonly TemplateReplicateParamsRepositoryInterface $templateReplicateParamsRepository,
 	)
 	{
 	}
@@ -80,6 +82,7 @@ class DeleteService
 
 		(new ResetCache())();
 
+		$this->templateReplicateParamsRepository->invalidateByTemplateId((int)$fullTemplateData['ID']);
 		$this->templateRepository->invalidate($fullTemplateData['ID']);
 
 		return true;

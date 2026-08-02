@@ -46,6 +46,12 @@ class CBPBookingAiCallResultActivity extends CBPActivity
 				'Type' => FieldType::STRING,
 				'Required' => true,
 			],
+			'CallResultCode' => [
+				'Name' => Loc::getMessage('BOOKING_AICR_MAP_CALL_RESULT_CODE'),
+				'FieldName' => 'call_result_code',
+				'Type' => FieldType::STRING,
+				'Required' => false,
+			],
 		];
 	}
 

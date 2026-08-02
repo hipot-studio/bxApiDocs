@@ -53,6 +53,7 @@ class ResourceProvider
 			filter: (new ResourceFilter([
 				'WITH_SKUS_YANDEX' => true,
 				'HAS_SKUS_YANDEX' => $serviceIds,
+				'SHORT_SLOTS_ONLY' => true,
 			])),
 			select: (new ResourceSelect([
 				'TYPE',

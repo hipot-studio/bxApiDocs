@@ -43,15 +43,11 @@ class ResourceSkuRelationsService
 
 	public function get(): ResourceCollection
 	{
-		$resourceFilter =
-			$this->isSaved()
-				? [
-					'WITH_SKUS_YANDEX' => true,
-				]
-				: [
-					'IS_MAIN' => true,
-				]
-		;
+		$resourceFilter = $this->isSaved()
+			? ['WITH_SKUS_YANDEX' => true]
+			: ['IS_MAIN' => true];
+
+		$resourceFilter['SHORT_SLOTS_ONLY'] = true;
 
 		$list = $this->resourceRepository->getList(
 			filter: (new ResourceFilter($resourceFilter)),

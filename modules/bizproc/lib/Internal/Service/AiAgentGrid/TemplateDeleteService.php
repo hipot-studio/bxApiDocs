@@ -15,10 +15,17 @@ use CBPWorkflowTemplateUser;
 class TemplateDeleteService
 {
 	private readonly AiAgentProvider $aiAgentProvider;
+	private ChatbotDeleteService $chatbotDeleteService;
+	private AgentChatbotsExtractor $chatbotsExtractor;
 
-	public function __construct()
+	public function __construct(
+		?ChatbotDeleteService $chatbotDeleteService = null,
+		?AgentChatbotsExtractor $chatbotsExtractor = null,
+	)
 	{
 		$this->aiAgentProvider = ServiceLocator::getInstance()->get(AiAgentProvider::class);
+		$this->chatbotDeleteService = $chatbotDeleteService ?? ServiceLocator::getInstance()->get(ChatbotDeleteService::class);
+		$this->chatbotsExtractor = $chatbotsExtractor ?? ServiceLocator::getInstance()->get(AgentChatbotsExtractor::class);
 	}
 
 	/**
@@ -37,15 +44,15 @@ class TemplateDeleteService
 				'WORKFLOW_TEMPLATE_ID',
 			])
 			->whereIn('WORKFLOW_TEMPLATE_ID', $templateIds)
-			->fetchAll()
+			->exec()
 		;
 
-		foreach ($workflowInstances as $workflowInstance)
+		while ($workflowInstance = $workflowInstances->fetch())
 		{
 			$documentId = [
 				$workflowInstance['MODULE_ID'],
 				$workflowInstance['ENTITY'],
-				$workflowInstance['DOCUMENT_ID']
+				$workflowInstance['DOCUMENT_ID'],
 			];
 
 			$errorsAfterKillingWorkflow = \CBPDocument::killWorkflow(
@@ -68,7 +75,11 @@ class TemplateDeleteService
 	/**
 	 * @param list<int> $templateIds
 	 */
-	public function deleteTemplates(array $templateIds, CBPWorkflowTemplateUser $initiator): Result
+	public function deleteTemplates(
+		array $templateIds,
+		CBPWorkflowTemplateUser $initiator,
+		bool $deleteChatbots = false,
+	): Result
 	{
 		$result = new Result();
 
@@ -95,18 +106,63 @@ class TemplateDeleteService
 			return $result;
 		}
 
+		$botIdsToDelete = [
+			AgentChatbotsExtractor::KIND_BIZPROC => [],
+			AgentChatbotsExtractor::KIND_OPENLINES => [],
+		];
+
 		try
 		{
-			foreach ($templateIds as $templateId)
+			foreach ($agentIds as $agentId)
 			{
-				\CBPWorkflowTemplateLoader::delete($templateId);
+				$agentBotIds = $deleteChatbots
+					? $this->chatbotsExtractor->getCreatedBotIds([$agentId])
+					: null;
+
+				\CBPWorkflowTemplateLoader::delete($agentId);
+
+				if ($agentBotIds !== null)
+				{
+					$botIdsToDelete[AgentChatbotsExtractor::KIND_BIZPROC] = [
+						...$botIdsToDelete[AgentChatbotsExtractor::KIND_BIZPROC],
+						...$agentBotIds[AgentChatbotsExtractor::KIND_BIZPROC],
+					];
+					$botIdsToDelete[AgentChatbotsExtractor::KIND_OPENLINES] = [
+						...$botIdsToDelete[AgentChatbotsExtractor::KIND_OPENLINES],
+						...$agentBotIds[AgentChatbotsExtractor::KIND_OPENLINES],
+					];
+				}
 			}
 		}
-		catch (\Exception $e)
+		catch (\Exception)
 		{
 			$result->addError(ErrorMessage::AI_AGENT_DELETE_ERROR->getError());
 		}
+		finally
+		{
+			$this->deleteChatbotsSafe($deleteChatbots, $botIdsToDelete);
+		}
 
 		return $result;
+	}
+
+	/**
+	 * @param array{bizproc: list<int>, openlines: list<int>} $botIds
+	 */
+	private function deleteChatbotsSafe(bool $deleteChatbots, array $botIds): void
+	{
+		if (!$deleteChatbots)
+		{
+			return;
+		}
+
+		try
+		{
+			$this->chatbotDeleteService->deleteBots($botIds);
+		}
+		catch (\Exception)
+		{
+			// Bot cleanup is best-effort: agents are already deleted, don't fail the whole operation.
+		}
 	}
 }

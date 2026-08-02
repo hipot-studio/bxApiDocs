@@ -16,6 +16,8 @@ use \Bitrix\ImConnector\Output,
 
 class ImConnectorAvito extends CBitrixComponent
 {
+	private const ERROR_CONNECTOR_AVITO_TARIFF_REQUIRED = 'CONNECTOR_AVITO_TARIFF_REQUIRED';
+
 	private $cacheId;
 	private $connector = 'avito';
 	private $error = array();
@@ -177,6 +179,34 @@ class ImConnectorAvito extends CBitrixComponent
 						if ($registerResult->isSuccess())
 						{
 							$this->setStatus(true);
+						}
+						else
+						{
+							$hasTariffError = false;
+							foreach ($registerResult->getErrors() as $registerError)
+							{
+								if ($registerError->getCode() === self::ERROR_CONNECTOR_AVITO_TARIFF_REQUIRED)
+								{
+									$hasTariffError = true;
+									break;
+								}
+							}
+
+							if ($hasTariffError)
+							{
+								$this->error[] = Loc::getMessage('IMCONNECTOR_COMPONENT_AVITO_TARIFF_REQUIRED');
+								$this->setStatus(false, false);
+								$this->status->setError(true);
+								$this->arResult['ERROR_STATUS'] = true;
+							}
+							else
+							{
+								$this->error[] = Loc::getMessage('IMCONNECTOR_COMPONENT_AVITO_NO_REGISTER');
+							}
+
+							$this->arResult['CONNECTOR'] = $this->connector;
+							$cache->abortDataCache();
+							return;
 						}
 					}
 					$cache->endDataCache($this->arResult['FORM']);

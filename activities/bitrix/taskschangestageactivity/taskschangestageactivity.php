@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Tasks\Integration\BizProc\NodeFilter\TargetDocumentResolverTrait;
 use Bitrix\Tasks;
 
 use Bitrix\Main\Loader;
@@ -11,8 +12,12 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)
 	die();
 }
 
+\Bitrix\Main\Loader::includeModule('tasks');
+
 class CBPTasksChangeStageActivity extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+
 	private static $cycleCounter = [];
 
 	public function __construct($name)
@@ -31,8 +36,8 @@ class CBPTasksChangeStageActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentId = $this->getDocumentId();
-		$documentType = $this->getDocumentType();
+		$documentId = $this->resolveTargetDocumentId();
+		$documentType = $this->resolveTargetDocumentType($documentId);
 		$targetStage = (int) $this->TargetStage;
 
 		$target = Tasks\Integration\Bizproc\Automation\Factory::createTarget($documentType[2], $documentId[2]);
@@ -73,6 +78,11 @@ class CBPTasksChangeStageActivity extends CBPActivity
 
 	private function endExecution($message = null)
 	{
+		if ($this->getRootActivity() instanceof \CBPNodeWorkflowActivity)
+		{
+			return CBPActivityExecutionStatus::Closed;
+		}
+
 		if (!$message)
 		{
 			$message = GetMessage('TASKS_CHANGE_STAGE_TERMINATED');
@@ -80,7 +90,7 @@ class CBPTasksChangeStageActivity extends CBPActivity
 
 		CBPDocument::TerminateWorkflow(
 			$this->GetWorkflowInstanceId(),
-			$this->GetDocumentId(),
+			$this->resolveTargetDocumentId(),
 			$errors,
 			$message
 		);
@@ -92,7 +102,8 @@ class CBPTasksChangeStageActivity extends CBPActivity
 
 	private function checkCycling($targetStage)
 	{
-		$documentTag = $this->GetDocumentType()[2] .'|'. $this->GetDocumentId()[2];
+		$documentId = $this->resolveTargetDocumentId();
+		$documentTag = $this->resolveTargetDocumentType($documentId)[2] .'|'. $documentId[2];
 
 		if (!isset(self::$cycleCounter[$documentTag]))
 		{

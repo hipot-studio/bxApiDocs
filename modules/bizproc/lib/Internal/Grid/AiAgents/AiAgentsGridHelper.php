@@ -35,6 +35,7 @@ use Bitrix\Main\Engine\Response\Converter;
 
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Settings\AiAgentsSettings;
+use Bitrix\Bizproc\Internal\Grid\AiAgents\Visibility\HiddenAiAgentsRegistry;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable;
 
@@ -52,10 +53,12 @@ class AiAgentsGridHelper
 	private const IM_BOT_PARAM_BOT_ID = 'BotId';
 	private string $navParamName;
 	private ?AiAgentsGrid $grid = null;
+	private HiddenAiAgentsRegistry $hiddenAiAgents;
 
-	public function __construct()
+	public function __construct(?HiddenAiAgentsRegistry $hiddenAiAgents = null)
 	{
 		$this->navParamName = self::GRID_ID . '_nav';
+		$this->hiddenAiAgents = $hiddenAiAgents ?? ServiceLocator::getInstance()->get(HiddenAiAgentsRegistry::class);
 
 		Loader::requireModule('humanresources');
 	}
@@ -232,6 +235,7 @@ class AiAgentsGridHelper
 				'SYSTEM_CODE',
 				'ACTIVATED_BY',
 				'ACTIVATED_AT',
+				'CREATE_SOURCE',
 			])
 			->registerRuntimeField(
 				'SECTION',
@@ -248,6 +252,17 @@ class AiAgentsGridHelper
 				'ID' => 'DESC',
 			])
 		;
+
+		$hiddenSystemCodes = $this->hiddenAiAgents->getHiddenSystemCodes();
+		if ($hiddenSystemCodes)
+		{
+			$query->where(
+				Query::filter()
+					->logic('or')
+					->where('SYSTEM_CODE', null)
+					->whereNotIn('SYSTEM_CODE', $hiddenSystemCodes),
+			);
+		}
 
 		if (!is_null($limit))
 		{

@@ -8,6 +8,8 @@ use Bitrix\Tasks\Helper\Analytics;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Slider\Path\TaskPathMaker;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\Grid\ReplicationHintService;
 
 /**
  * Class Title
@@ -78,17 +80,50 @@ class Title extends Content
 		$priorityLayout = ($taskPriority === \Bitrix\Tasks\Internals\Task\Priority::HIGH ? '<span class="task-priority-high"></span> ' : '');
 
 		$countFiles = (int) ($row['COUNT_FILES'] ?? 0);
+
 		$checkListComplete = (int) ($row['CHECK_LIST']['COMPLETE'] ?? 0);
 		$checkListWork = (int) ($row['CHECK_LIST']['WORK'] ?? 0);
 		$checkListAll = ($checkListComplete + $checkListWork);
-		$isRegular = ($row['REPLICATE'] ?? '') === 'Y' || (int)($row['FORKED_BY_TEMPLATE_ID'] ?? 0) > 0;
+
+		$isTaskReplicate = ($row['REPLICATE'] ?? '') === 'Y';
+		$forkedByTemplateId = (int)($row['FORKED_BY_TEMPLATE_ID'] ?? 0);
+		$isRegular = $isTaskReplicate || $forkedByTemplateId > 0;
 
 		$filesIcon = "<div class='task-attachment-counter ui-label ui-label-sm ui-label-light'><span class='ui-label-inner'>{$countFiles}</span></div>";
 		$checkListIcon = "<div class='task-checklist-counter ui-label ui-label-sm ui-label-light'><span class='ui-label-inner'>{$checkListComplete}/{$checkListAll}</span></div>";
-		$regularIcon = "<div class='task-regular-icon ui-icon-set --o-repeat'></div>";
+
+		$regularIcon = null;
+		$templateReplicateParamsByTaskId = $parameters['TEMPLATE_REPLICATE_PARAMS_BY_TASK_ID'] ?? null;
+
+		if ($isRegular)
+		{
+			if (is_array($templateReplicateParamsByTaskId) && isset($templateReplicateParamsByTaskId[$taskId]))
+			{
+				$regularIcon =
+					Container::getInstance()
+						->get(ReplicationHintService::class)
+						->renderFromTemplateReplicateParams(
+							$templateReplicateParamsByTaskId[$taskId],
+							$userId,
+						)
+				;
+			}
+			else
+			{
+				$regularIcon =
+					Container::getInstance()
+						->get(ReplicationHintService::class)
+						->renderForTask(
+							taskId: $taskId,
+							forkedByTemplateId: $forkedByTemplateId,
+							userId: $userId,
+						)
+				;
+			}
+		}
 
 		$postfixIcons = "<span class='task-title-indicators'>{$priorityLayout}"
-			. ($isRegular ? $regularIcon : '')
+			. ($regularIcon ?? '')
 			.($countFiles > 0 ? $filesIcon : '')
 			.($checkListAll > 0 ? $checkListIcon : '')
 			."</span>";

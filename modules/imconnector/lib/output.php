@@ -60,6 +60,14 @@ Library::loadMessages();
  */
 final class Output
 {
+	/**
+	 * Static line commands that are grouped by connector proxying for the imconnectorserver provider.
+	 */
+	private const LINE_GROUP_COMMANDS = [
+		'infoconnectorsline',
+		'deleteline',
+	];
+
 	/*** @var Result */
 	protected $result;
 
@@ -151,11 +159,45 @@ final class Output
 		$result = new Result();
 		$resultsCall = [];
 
-		$providers = Provider::getAllProviderForAllOutput();
+		$isLineGroupCommand = in_array(mb_strtolower($name), self::LINE_GROUP_COMMANDS, true);
+
+		// A line command is answered only by the providers actually present on the line, so an
+		// optional module missing for an unrelated provider cannot flip the whole command to failure.
+		// The line connectors are read once here and reused for both provider selection and grouping.
+		$lineId = 0;
+		$lineConnectorIds = [];
+		if ($isLineGroupCommand)
+		{
+			$lineId = (int)($arguments[0] ?? 0);
+			$lineConnectorIds = self::getLineConnectorIds($lineId);
+			// A connector present on the line that fails to resolve to a provider must poison the whole
+			// line command: otherwise the missing data would read as a successful partial answer and the
+			// caller would prune that channel from the read-model.
+			$providersResult = Provider::getProvidersForLineOutput($lineConnectorIds);
+			if (!$providersResult->isSuccess())
+			{
+				$result->addErrors($providersResult->getErrors());
+			}
+			$providers = $providersResult->getResult() ?: [];
+		}
+		else
+		{
+			$providers = Provider::getAllProviderForAllOutput();
+		}
 
 		foreach ($providers as $provider)
 		{
-			$resultCall = $provider->call($name, $arguments);
+			if ($isLineGroupCommand && $provider instanceof Provider\ImConnectorServer\Output)
+			{
+				// The imconnectorserver provider no longer sends a single CONNECTOR='all' lump:
+				// its connectors of the line are split into groups by needProxy() and each
+				// non-empty group is sent as one request carrying the connector set and the line id.
+				$resultCall = self::callImConnectorServerGrouped($name, $lineId, $lineConnectorIds);
+			}
+			else
+			{
+				$resultCall = $provider->call($name, $arguments);
+			}
 
 			if (!empty($resultCall->getData()))
 			{
@@ -174,6 +216,112 @@ final class Output
 	}
 
 	/**
+	 * Runs a line command (infoConnectorsLine/deleteLine) for the imconnectorserver provider by
+	 * splitting the line connectors into two groups by their proxying flag and sending one request
+	 * per non-empty group with the group's connector set and the line id. The connector ids are read
+	 * once by the caller and passed in, so the grouping does not re-query the line statuses.
+	 *
+	 * @param string $command Command name.
+	 * @param int $lineId Open line ID.
+	 * @param string[] $connectorIds Connector ids registered on the line.
+	 * @return Result
+	 */
+	private static function callImConnectorServerGrouped(string $command, int $lineId, array $connectorIds): Result
+	{
+		$result = new Result();
+		$data = [];
+
+		$groups = self::splitConnectorsByProxying($connectorIds);
+
+		foreach ($groups as $groupConnectorIds)
+		{
+			if (empty($groupConnectorIds))
+			{
+				continue;
+			}
+
+			$providerResult = Provider::getProviderForConnectorSetOutput(implode(',', $groupConnectorIds), $lineId);
+			if (!$providerResult->isSuccess())
+			{
+				$result->addErrors($providerResult->getErrors());
+				continue;
+			}
+
+			/** @var Provider\Base\Output $provider */
+			$provider = $providerResult->getResult();
+			$resultCall = $provider->call($command, [$lineId]);
+
+			if (!empty($resultCall->getData()))
+			{
+				$data = array_merge($data, $resultCall->getData());
+			}
+
+			if (!$resultCall->isSuccess())
+			{
+				$result->addErrors($resultCall->getErrors());
+			}
+		}
+
+		$result->setData($data);
+
+		return $result;
+	}
+
+	/**
+	 * Reads the connector ids registered on the line once, for reuse by both provider selection
+	 * and the imconnectorserver grouping of a line command.
+	 *
+	 * @param int $lineId Open line ID.
+	 * @return string[]
+	 */
+	private static function getLineConnectorIds(int $lineId): array
+	{
+		$connectorIds = [];
+		foreach (Status::getInstanceAllConnector($lineId) as $status)
+		{
+			$connectorIds[] = (string)$status->getConnector();
+		}
+
+		return $connectorIds;
+	}
+
+	/**
+	 * Splits a list of connector ids into the proxy/local buckets by their proxying flag.
+	 * Only connectors served by the imconnectorserver provider take part; connectors of other
+	 * providers are ignored here (they are handled through their own provider path).
+	 *
+	 * @param string[] $connectorIds Connector ids.
+	 * @return array{proxy: string[], local: string[]}
+	 */
+	private static function splitConnectorsByProxying(array $connectorIds): array
+	{
+		$groups = ['proxy' => [], 'local' => []];
+
+		foreach ($connectorIds as $connectorId)
+		{
+			$connectorId = (string)$connectorId;
+			if ($connectorId === '' || !Provider::isImConnectorServerConnector($connectorId))
+			{
+				continue;
+			}
+
+			$bucket = self::connectorNeedProxy($connectorId) ? 'proxy' : 'local';
+			$groups[$bucket][] = $connectorId;
+		}
+
+		return $groups;
+	}
+
+	/**
+	 * @param string $connectorId Connector id.
+	 * @return bool
+	 */
+	private static function connectorNeedProxy(string $connectorId): bool
+	{
+		return Connector::initConnectorHandler($connectorId)->needProxy();
+	}
+
+	/**
 	 * The removal of the open line of this website from the remote server connectors.
 	 *
 	 * @param string $lineId ID of the deleted lines.
@@ -181,8 +329,13 @@ final class Output
 	 */
 	public static function deleteLine($lineId): Result
 	{
+		// The grouped deleteLine enumerates the line connectors from Status, so the request to the
+		// server must be built before the local Status is wiped — otherwise no connector set is
+		// collected and the server keeps the line's connectors orphaned.
+		$result = self::__callStatic('deleteLine', [$lineId]);
+
 		Status::deleteAll((int)$lineId);
 
-		return self::__callStatic('deleteLine', [$lineId]);
+		return $result;
 	}
 }

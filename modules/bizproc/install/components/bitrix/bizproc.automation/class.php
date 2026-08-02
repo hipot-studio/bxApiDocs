@@ -344,7 +344,10 @@ class BizprocAutomationComponent extends \Bitrix\Bizproc\Automation\Component\Ba
 		$tplUser = new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
 		$this->arResult = [
 			'CAN_EDIT' => $canEdit,
-			'CAN_DEBUG' => Debugger\Session\Manager::canUserDebugAutomation($tplUser->getId(), $documentType),
+			'CAN_DEBUG' =>
+				is_array($documentType)
+				&& Debugger\Session\Manager::canUserDebugAutomation($tplUser->getId(), $documentType)
+			,
 			'TITLE_VIEW' => $this->getTitleView(),
 			'TITLE_EDIT' => $this->getTitleEdit(),
 			'DOCUMENT_STATUS' => $target ? $target->getDocumentStatus() : null,

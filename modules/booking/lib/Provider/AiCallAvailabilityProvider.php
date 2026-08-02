@@ -10,6 +10,6 @@ class AiCallAvailabilityProvider
 {
 	public static function isAvailable(): bool
 	{
-		return Container::getAiCallMessageSender()->canUse();
+		return Container::getAiCallAvailabilityService()->isAvailable();
 	}
 }

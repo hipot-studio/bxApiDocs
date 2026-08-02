@@ -30,17 +30,27 @@ class KnowledgeBaseFileStatusDtoCollection extends AbstractCollection implements
 			return null;
 		}
 
-		$list = $this->items;
-		usort(
-			$list,
-			function (KnowledgeBaseFileStatusDto $a, KnowledgeBaseFileStatusDto $b): bool {
-				return $a->status->getPriority() > $b->status->getPriority();
+		return array_reduce(
+			$this->items,
+			function (?FileStatus $carry, KnowledgeBaseFileStatusDto $item): ?FileStatus
+			{
+				$status = $item->status;
+
+				if ($status === null)
+				{
+					return $carry;
+				}
+
+				if ($carry === null)
+				{
+					return $status;
+				}
+
+				return $status->getPriority() < $carry->getPriority()
+					? $status
+					: $carry
+				;
 			}
 		);
-
-		/** @var KnowledgeBaseFileStatusDto $lastElement */
-		$lastElement = end($list);
-
-		return $lastElement?->status;
 	}
 }

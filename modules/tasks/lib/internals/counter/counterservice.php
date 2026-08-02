@@ -18,6 +18,7 @@ use Bitrix\Tasks\V2\Internal\DI\Container;
 class CounterService
 {
 	private const LOCK_KEY = 'tasks.countlock';
+	private const DEADLOCK_LOG_MARKER = 'TASKS_COUNTER_DEADLOCK';
 
 	private static $instance;
 	private static $jobOn = false;
@@ -97,7 +98,7 @@ class CounterService
 	 */
 	private function handleLostEvents(): void
 	{
-		if (!Application::getConnection()->lock(self::LOCK_KEY))
+		if (!$this->getLock())
 		{
 			return;
 		}
@@ -272,5 +273,37 @@ class CounterService
 	private function generateHid(): string
 	{
 		return sha1(microtime(true) . mt_rand(10000, 99999));
+	}
+
+	private function getLock(): bool
+	{
+		$connection = Application::getConnection();
+
+		try
+		{
+			$successLocked = $connection->lock(self::LOCK_KEY);
+		}
+		catch (Main\DB\SqlQueryException $exception)
+		{
+			$container = Container::getInstance();
+			if ($container->getDeadlockInspector()->isDeadlock($connection, $exception))
+			{
+				$container->getLogger()
+					->logWarning(
+						[
+							'lockKey' => self::LOCK_KEY,
+							'dbType' => $connection->getType(),
+							'databaseMessage' => $exception->getDatabaseMessage(),
+						],
+						self::DEADLOCK_LOG_MARKER,
+					);
+
+				return false;
+			}
+
+			throw $exception;
+		}
+
+		return $successLocked;
 	}
 }

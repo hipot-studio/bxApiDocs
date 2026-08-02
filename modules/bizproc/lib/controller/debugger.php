@@ -453,7 +453,7 @@ class Debugger extends Base
 		[$documentType, $documentCategoryId] = \CBPDocument::unSignParameters($documentSigned);
 		$userId = (int)$this->getCurrentUser()->getId();
 
-		if (!Manager::canUserDebugAutomation($userId, $documentType))
+		if (!(is_array($documentType) && Manager::canUserDebugAutomation($userId, $documentType)))
 		{
 			$this->addError(new Error(Loc::getMessage('BIZPROC_CONTROLLER_DEBUGGER_CAN_DEBUG_ERROR')));
 

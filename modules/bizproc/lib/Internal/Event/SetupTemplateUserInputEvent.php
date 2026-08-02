@@ -12,6 +12,8 @@ class SetupTemplateUserInputEvent extends Event
 	public const PARAMETER_TEMPLATE_ID = 'templateId';
 	public const PARAMETER_USER_ID = 'userId';
 	public const PARAMETER_INSTANCE_ID = 'instanceId';
+	public const PARAMETER_SKIP_ACCESS_VALIDATION = 'skipAccessValidation';
+	public const PARAMETER_APPLY_DEFAULTS = 'applyDefaults';
 
 	public function __construct(
 		string $moduleId = self::MODULE_ID,

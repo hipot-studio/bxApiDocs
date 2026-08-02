@@ -101,7 +101,7 @@ readonly class PromoBoxResolver extends PromoResolver
 
 		return new PromoDto(
 			type: PromoType::FormWithPopup,
-			params: $this->getFeedbackFormParams(),
+			params: ['formOptions' => $this->getFeedbackFormParams()],
 		);
 	}
 

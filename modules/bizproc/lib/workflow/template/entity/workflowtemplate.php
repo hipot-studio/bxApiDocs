@@ -10,6 +10,7 @@ use Bitrix\Main;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\Web\Json;
+use Bitrix\Bizproc\Api\Enum\Template\CreateSource;
 use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
 
 /**
@@ -162,6 +163,10 @@ class WorkflowTemplateTable extends Main\ORM\Data\DataManager
 			],
 			'ACTIVATED_AT' => [
 				'data_type' => 'datetime',
+			],
+			'CREATE_SOURCE' => [
+				'data_type' => 'enum',
+				'values' => array_column(CreateSource::cases(), 'value'),
 			],
 			new ORM\Fields\Relations\Reference(
 				'UPDATED_USER',

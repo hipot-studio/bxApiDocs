@@ -6,7 +6,13 @@ use Bitrix\Main\Grid\Column;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Flow\FlowFeature;
+use Bitrix\Tasks\V2\Internal\Access\Registry\TemplateAccessCacheLoader;
+use Bitrix\Tasks\V2\Internal\Access\Service\TemplateRightService;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\Template\TemplateReplicateParams;
+use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateReplicateParamsRepositoryInterface;
 use CCrmOwnerType;
 use Bitrix\Tasks\Integration\Extranet\User;
 
@@ -33,8 +39,13 @@ class Grid extends \Bitrix\Tasks\Grid\Grid
 	public function prepareRows(): array
 	{
 		$preparedRows = [];
+		$rows = $this->getRows();
+		$this->setParameters([
+			...$this->getParameters(),
+			'TEMPLATE_REPLICATE_PARAMS_BY_TASK_ID' => $this->fillTemplateReplicateParams($rows),
+		]);
 
-		foreach ($this->getRows() as $key => $data)
+		foreach ($rows as $key => $data)
 		{
 			$row = new Row($data, $this->getParameters());
 			$preparedRows[$key] = [
@@ -361,5 +372,104 @@ class Grid extends \Bitrix\Tasks\Grid\Grid
 		}
 
 		return $this;
+	}
+
+	private function fillTemplateReplicateParams(array $rows): array
+	{
+		$taskIds = [];
+		$templateIdByTaskId = [];
+
+		foreach ($rows as $row)
+		{
+			$taskId = (int)($row['ID'] ?? 0);
+			if ($taskId <= 0)
+			{
+				continue;
+			}
+
+			$forkedByTemplateId = (int)($row['FORKED_BY_TEMPLATE_ID'] ?? 0);
+			$isTaskReplicate = ($row['REPLICATE'] ?? '') === 'Y';
+
+			if ($forkedByTemplateId > 0)
+			{
+				$templateIdByTaskId[$taskId] = $forkedByTemplateId;
+			}
+			elseif ($isTaskReplicate)
+			{
+				$taskIds[] = $taskId;
+			}
+		}
+
+		if ($taskIds === [] && $templateIdByTaskId === [])
+		{
+			return [];
+		}
+
+		return $this->getTemplateReplicateParams(
+			taskIds: $taskIds,
+			templateIdByTaskId: $templateIdByTaskId,
+		);
+	}
+
+	private function getTemplateReplicateParams(array $taskIds, array $templateIdByTaskId): array
+	{
+		$result = [];
+
+		$templateReplicateParamsRepository =
+			Container::getInstance()
+				->get(TemplateReplicateParamsRepositoryInterface::class)
+		;
+
+		$templateReplicateParamsByTaskIds = $templateReplicateParamsRepository->getByTaskIds($taskIds);
+
+		$templateIds = array_values($templateIdByTaskId);
+		$templateReplicateParamsByTemplateIds = $templateReplicateParamsRepository->getByTemplateIds($templateIds);
+
+		foreach ($taskIds as $taskId)
+		{
+			$templateReplicateParams = $templateReplicateParamsByTaskIds[$taskId] ?? null;
+			if ($templateReplicateParams !== null)
+			{
+				$result[$taskId] = $templateReplicateParams;
+			}
+		}
+
+		foreach ($templateIdByTaskId as $taskId => $templateId)
+		{
+			$templateReplicateParams = $templateReplicateParamsByTemplateIds[$templateId] ?? null;
+			if ($templateReplicateParams !== null)
+			{
+				$result[$taskId] = $templateReplicateParams;
+			}
+		}
+
+		$this->preloadTemplateAccess($result);
+
+		return $result;
+	}
+
+	private function preloadTemplateAccess(array $templateReplicateParams): void
+	{
+		$templateIdsMap = [];
+		/** @var TemplateReplicateParams $params */
+		foreach ($templateReplicateParams as $params)
+		{
+			if ($params->templateId > 0)
+			{
+				$templateIdsMap[$params->templateId] = true;
+			}
+		}
+
+		if (empty($templateIdsMap))
+		{
+			return;
+		}
+
+		$templateAccessCacheLoader =
+			Container::getInstance()
+				->get(TemplateAccessCacheLoader::class)
+		;
+
+		$templateAccessCacheLoader->preload(array_keys($templateIdsMap));
 	}
 }

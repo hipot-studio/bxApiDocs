@@ -41,7 +41,7 @@ class MemberService
 			throw new AccessDeniedException();
 		}
 
-		$config = new UpdateConfig($userId);
+		$config = new UpdateConfig($userId, fromAi: true);
 
 		try
 		{
@@ -70,7 +70,7 @@ class MemberService
 			throw new AccessDeniedException();
 		}
 
-		$config = new UpdateConfig($userId);
+		$config = new UpdateConfig($userId, fromAi: true);
 
 		try
 		{
@@ -99,7 +99,7 @@ class MemberService
 			throw new AccessDeniedException();
 		}
 
-		$config = new UpdateConfig($userId);
+		$config = new UpdateConfig($userId, fromAi: true);
 
 		try
 		{
@@ -128,7 +128,7 @@ class MemberService
 			throw new AccessDeniedException();
 		}
 
-		$config = new UpdateConfig($userId);
+		$config = new UpdateConfig($userId, fromAi: true);
 
 		try
 		{

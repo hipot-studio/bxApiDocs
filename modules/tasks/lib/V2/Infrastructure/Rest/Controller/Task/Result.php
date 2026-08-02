@@ -284,7 +284,7 @@ class Result extends RestController
 		}
 
 		$params = $taskResultParamsDirector->produce(
-			new TaskResultParamsFromRequestBuilder($request),
+			new TaskResultParamsFromRequestBuilder($request, $taskId),
 		);
 
 		$results = $taskResultProvider->getList(

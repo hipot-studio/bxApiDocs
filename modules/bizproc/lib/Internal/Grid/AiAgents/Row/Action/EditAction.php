@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Internal\Grid\AiAgents\Row\Action;
 
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Result;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
@@ -39,12 +40,22 @@ class EditAction extends JsGridAction
 			return null;
 		}
 
+		if (!$this->isBpEditorOpen())
+		{
+			return null;
+		}
+
 		return parent::getControl($rawFields);
+	}
+
+	private function isBpEditorOpen(): bool
+	{
+		return Option::get('bizproc', 'designer_v2', 'N') === 'Y';
 	}
 
 	protected function isEnabled(array $rawFields): bool
 	{
-		return !$this->isSystemTemplate($rawFields) && $this->isUserAdmin();
+		return !$this->isSystemTemplate($rawFields);
 	}
 
 	protected function prepareEditUri(int $templateId): string

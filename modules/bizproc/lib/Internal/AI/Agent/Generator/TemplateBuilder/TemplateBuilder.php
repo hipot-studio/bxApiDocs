@@ -12,7 +12,6 @@ use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity;
 
 final class TemplateBuilder
 {
-	private const SETUP_ACTIVITY = 'SetupTemplateActivity';
 	private const ROOT_ACTIVITY = 'NodeWorkflowActivity';
 	private const ROOT_NAME = 'Template';
 
@@ -112,12 +111,14 @@ final class TemplateBuilder
 		$triggerType = $this->registry->resolveActivityType($flow->trigger);
 		$triggerPosition = $this->layout->calculatePosition($stepIndex);
 		$triggerProps = $flow->triggerProps;
-		$triggerProps['Title'] = $this->getActivityTitle($triggerType);
+		$triggerProps['Title'] = $triggerProps['Title'] ?? $this->getActivityTitle($triggerType);
+		$triggerNodeTitle = $this->takeNodeTitle($triggerProps);
 		$triggerNode = $this->nodeBuilder->build(
 			$triggerType,
 			$triggerProps,
 			$triggerPosition,
 			$flow->triggerId,
+			$triggerNodeTitle,
 		);
 		$this->activities[] = $triggerNode;
 		$this->currentTriggerName = $triggerNode['Name'];
@@ -143,18 +144,30 @@ final class TemplateBuilder
 			return $this->buildComposite($step, $stepIndex, $previous);
 		}
 
+		if ($step->isBranches)
+		{
+			return $this->buildBranches($step, $stepIndex, $previous);
+		}
+
 		$activityType = $this->registry->resolveActivityType($step->type);
+
+		if ($this->registry->isComplexWrapper($activityType))
+		{
+			return $this->buildComplexWrapperStep($step, $stepIndex, $previous);
+		}
+
 		$position = $this->layout->calculatePosition($stepIndex);
 
 		$properties = $step->props;
 		$properties['Title'] = $properties['Title'] ?? $this->getActivityTitle($activityType);
+		$nodeTitle = $this->takeNodeTitle($properties);
 
-		if ($activityType === self::SETUP_ACTIVITY)
+		if ($activityType === ActivityRegistry::SETUP_ACTIVITY_TYPE)
 		{
 			$properties = $this->buildSetupTemplateProperties($properties);
 		}
 
-		$node = $this->nodeBuilder->build($activityType, $properties, $position, $step->id);
+		$node = $this->nodeBuilder->build($activityType, $properties, $position, $step->id, $nodeTitle);
 		$this->activities[] = $node;
 		$this->connectAllTerminals($previous, $node['Name']);
 
@@ -162,6 +175,22 @@ final class TemplateBuilder
 		$this->unconnectedOutputs = [$output];
 
 		return $output;
+	}
+
+	/**
+	 * @param array<string, mixed> $properties
+	 */
+	private function takeNodeTitle(array &$properties): ?string
+	{
+		$title = $properties['NodeTitle'] ?? null;
+		unset($properties['NodeTitle']);
+
+		return is_string($title) ? $title : null;
+	}
+
+	private function getActivityTitle(string $activityType): string
+	{
+		return '###' . $this->langPrefix . strtoupper($activityType) . '_TITLE###';
 	}
 
 	private function connectNodes(NodeOutput $from, NodeInput $to): void
@@ -197,14 +226,14 @@ final class TemplateBuilder
 			$step->conditions,
 		);
 
-		$properties = [
-			'Title' => $this->getActivityTitle($activityType),
-			'mixedcondition' => $conditions,
-		];
+		$properties = $step->props;
+		$properties['Title'] = $properties['Title'] ?? $this->getActivityTitle($activityType);
+		$nodeTitle = $this->takeNodeTitle($properties);
+		$properties['mixedcondition'] = $conditions;
 
-		$condNode = $this->nodeBuilder->build($activityType, $properties, $position, $step->id);
+		$condNode = $this->nodeBuilder->build($activityType, $properties, $position, $step->id, $nodeTitle);
 		$this->activities[] = $condNode;
-		$this->connectNodes($previous, NodeInput::standard($condNode['Name']));
+		$this->connectAllTerminals($previous, $condNode['Name']);
 
 		$condName = $condNode['Name'];
 		$trueBranch = $this->buildBranch($step->trueBranch, NodeOutput::conditionTrue($condName), $stepIndex + 1);
@@ -220,11 +249,178 @@ final class TemplateBuilder
 		return $trueBranch->output;
 	}
 
-	private function getActivityTitle(string $activityType): string
+	/**
+	 * Builds a multi-output activity (e.g. AiAssistantAgentComplexActivity) with arbitrary port branches.
+	 * For each branch port (o0, o1, ...), connects port→branchStart, and collects tail outputs.
+	 */
+	private function buildBranches(StepConfig $step, int &$stepIndex, NodeOutput $previous): NodeOutput
 	{
-		$langKey = $this->langPrefix . strtoupper($activityType) . '_TITLE';
+		$activityType = $this->registry->resolveActivityType($step->type);
+		$position = $this->layout->calculatePosition($stepIndex);
 
-		return '###' . $langKey . '###';
+		$properties = $step->props;
+		$properties['Title'] = $properties['Title'] ?? $this->getActivityTitle($activityType);
+		$nodeTitle = $this->takeNodeTitle($properties);
+
+		$node = $this->nodeBuilder->build($activityType, $properties, $position, $step->id, $nodeTitle);
+
+		$innerNames = [];
+		foreach ($this->iterateRuleExpressions($properties['Rules'] ?? null, 'action') as $expr)
+		{
+			$activityData = $expr['activityData'] ?? null;
+			if (is_array($activityData) && !empty($activityData['Name']))
+			{
+				$innerNames[] = $activityData['Name'];
+				$node['Children'][] = $activityData;
+			}
+		}
+		$this->validateInnerNamesMapping($step->id ?? '?', $innerNames, $properties);
+
+		$existingPortIds = array_column($node['Node']['ports'] ?? [], 'id');
+		foreach (array_keys($step->branches) as $port)
+		{
+			if (in_array($port, $existingPortIds, true))
+			{
+				continue;
+			}
+			$title = $this->findPortTitleInRules($properties['Rules'] ?? null, $port)
+				?? $this->defaultBranchPortTitle($port);
+			$node['Node']['ports'][] = [
+				'id' => $port,
+				'title' => $title,
+				'type' => 'output',
+				'isActive' => true,
+			];
+		}
+
+		$this->activities[] = $node;
+		$this->connectAllTerminals($previous, $node['Name']);
+
+		$nodeName = $node['Name'];
+		$tails = [];
+		$maxStepIndex = $stepIndex;
+		$primaryOutput = null;
+		$first = true;
+
+		foreach ($step->branches as $port => $branchSteps)
+		{
+			if (!$first)
+			{
+				$this->layout->shiftRow();
+			}
+			$branch = $this->buildBranch($branchSteps, new NodeOutput($nodeName, $port), $stepIndex + 1);
+			$tails = array_merge($tails, $branch->unconnectedOutputs);
+			$maxStepIndex = max($maxStepIndex, $branch->maxStepIndex);
+			$primaryOutput ??= $branch->output;
+			$first = false;
+		}
+
+		$this->layout->resetRow();
+		$stepIndex = $maxStepIndex;
+		$this->unconnectedOutputs = $tails;
+
+		// If all branches are empty, fall back to the first declared port — never hardcode o0,
+		// because the activity may not even have an o0 output.
+		if ($primaryOutput !== null)
+		{
+			return $primaryOutput;
+		}
+		$ports = array_keys($step->branches);
+		$primaryPort = $ports[0] ?? 'o0';
+
+		return new NodeOutput($nodeName, $primaryPort);
+	}
+
+	/**
+	 * @param list<string> $innerNames
+	 * @param array<string, mixed> $properties
+	 */
+	private function validateInnerNamesMapping(string $stepId, array $innerNames, array $properties): void
+	{
+		$refs = [];
+		foreach ((array)($properties['InputNames'] ?? []) as $ref)
+		{
+			$name = strstr((string)$ref, ':', true);
+			if ($name !== false && $name !== '')
+			{
+				$refs[$name] = 'InputNames';
+			}
+		}
+		foreach (array_keys((array)($properties['OutputNames'] ?? [])) as $ref)
+		{
+			$name = strstr((string)$ref, ':', true);
+			if ($name !== false && $name !== '')
+			{
+				$refs[$name] = $refs[$name] ?? 'OutputNames';
+			}
+		}
+		foreach ($refs as $refName => $where)
+		{
+			if (!in_array($refName, $innerNames, true))
+			{
+				throw new \InvalidArgumentException(sprintf(
+					"Complex activity '%s': %s references '%s' which is not declared as inner activity in Rules. Inner activities found: [%s]",
+					$stepId,
+					$where,
+					$refName,
+					implode(', ', $innerNames),
+				));
+			}
+		}
+	}
+
+	private function defaultBranchPortTitle(string $portId): string
+	{
+		if (preg_match('/^o(\d+)$/', $portId, $m))
+		{
+			return 'O' . ((int)$m[1] + 1);
+		}
+
+		throw new \LogicException("Branch port '$portId' must match /^o\\d+\$/ (validated upstream in StepConfig)");
+	}
+
+	private function findPortTitleInRules(mixed $rules, string $portId): ?string
+	{
+		foreach ($this->iterateRuleExpressions($rules, 'output') as $expr)
+		{
+			if (($expr['portId'] ?? null) === $portId && isset($expr['title']))
+			{
+				return (string)$expr['title'];
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * @return \Generator<array<string, mixed>>
+	 */
+	private function iterateRuleExpressions(mixed $rules, string $constructionType): \Generator
+	{
+		if (!is_array($rules))
+		{
+			return;
+		}
+		foreach ($rules as $inputPortRules)
+		{
+			$cards = is_array($inputPortRules) ? ($inputPortRules['ruleCards'] ?? []) : [];
+			foreach ($cards as $card)
+			{
+				$constructions = is_array($card) ? ($card['constructions'] ?? []) : [];
+				foreach ($constructions as $constr)
+				{
+					if (!is_array($constr) || ($constr['type'] ?? null) !== $constructionType)
+					{
+						continue;
+					}
+					$expr = $constr['expression'] ?? null;
+					if (is_array($expr))
+					{
+						yield $expr;
+					}
+				}
+			}
+		}
 	}
 
 	/**
@@ -238,10 +434,11 @@ final class TemplateBuilder
 
 		$properties = $step->props;
 		$properties['Title'] = $properties['Title'] ?? $this->getActivityTitle($activityType);
+		$nodeTitle = $this->takeNodeTitle($properties);
 
-		$compositeNode = $this->nodeBuilder->build($activityType, $properties, $position, $step->id);
+		$compositeNode = $this->nodeBuilder->build($activityType, $properties, $position, $step->id, $nodeTitle);
 		$this->activities[] = $compositeNode;
-		$this->connectNodes($previous, NodeInput::standard($compositeNode['Name']));
+		$this->connectAllTerminals($previous, $compositeNode['Name']);
 
 		$compositeName = $compositeNode['Name'];
 
@@ -263,6 +460,11 @@ final class TemplateBuilder
 
 		$this->unconnectedOutputs = [];
 		$stepIndex = $childBranch->maxStepIndex;
+
+		if ($activityType === ActivityRegistry::FOREACH_ACTIVITY_TYPE)
+		{
+			$this->layout->reserveCompositeLoopback();
+		}
 
 		return NodeOutput::compositeExit($compositeName);
 	}
@@ -291,14 +493,197 @@ final class TemplateBuilder
 		);
 	}
 
+	private function buildComplexWrapperStep(StepConfig $step, int &$stepIndex, NodeOutput $previous): NodeOutput
+	{
+		if ($step->innerId === null)
+		{
+			throw new \InvalidArgumentException(
+				"Complex wrapper '{$step->type}' requires '_inner_id' in template.source.json",
+			);
+		}
+
+		if ($step->innerType === null)
+		{
+			throw new \InvalidArgumentException(
+				"Complex wrapper '{$step->type}' requires '_inner_type' in template.source.json",
+			);
+		}
+
+		$outerType = $this->registry->resolveActivityType($step->type);
+		$innerType = $step->innerType;
+		$innerId = $step->innerId;
+		$auxPort = $this->registry->getAuxPort($outerType);
+		$position = $this->layout->calculatePosition($stepIndex);
+		$outerTitle = $this->getActivityTitle($outerType);
+
+		$innerProps = $step->props;
+		$innerProps['Title'] = $innerProps['Title'] ?? $outerTitle;
+		$innerProps['EditorComment'] = '';
+		if ($auxPort !== null)
+		{
+			$innerProps['auxPort'] = $auxPort;
+		}
+
+		$outerIdForPrefix = $step->id ?? 'A0000_0000_0000_0000';
+		[$cardId, $actionId, $outputId] = $this->generateComplexNodeRuleIds($outerIdForPrefix);
+
+		$actionExpression = [
+			'actionId' => $innerType,
+			'rawActivityData' => null,
+			'activityData' => [
+				'Name' => $innerId,
+				'Type' => $innerType,
+				'Activated' => 'Y',
+				'Properties' => $innerProps,
+				'ReturnProperties' => $this->buildInnerReturnProperties($outerType, $innerType),
+				'Document' => null,
+			],
+			'document' => null,
+		];
+
+		if ($auxPort !== null)
+		{
+			$actionExpression['auxPortId'] = $auxPort;
+			$actionExpression['auxPortTitle'] = 'T1';
+		}
+
+		$rules = [
+			'i0' => [
+				'portId' => 'i0',
+				'ruleCards' => [
+					[
+						'id' => $cardId,
+						'constructions' => [
+							[
+								'id' => $actionId,
+								'type' => 'action',
+								'expression' => $actionExpression,
+							],
+							[
+								'id' => $outputId,
+								'type' => 'output',
+								'expression' => ['portId' => 'o1', 'title' => 'E1'],
+							],
+						],
+						'isFilled' => true,
+					],
+				],
+			],
+		];
+
+		$returnProperties = $this->buildInnerReturnProperties($outerType, $innerType);
+
+		$outerProperties = [
+			'Title' => $outerTitle,
+			'EditorComment' => '',
+			'Rules' => $rules,
+			'InputNames' => [$innerId . ':i0'],
+			'OutputNames' => [$innerId . ':o0' => 1],
+			'Links' => [],
+		];
+
+		$node = $this->nodeBuilder->build($outerType, $outerProperties, $position, $step->id);
+		$node['Node']['ports'] = $this->buildComplexWrapperPorts($node['Node']['ports'] ?? []);
+		$node['Node']['dimensions']['height'] = 291;
+		$node['Children'] = [
+			[
+				'Name' => $innerId,
+				'Type' => $innerType,
+				'Activated' => 'Y',
+				'Properties' => $innerProps,
+				'ReturnProperties' => $returnProperties,
+				'Document' => null,
+			],
+		];
+
+		$this->activities[] = $node;
+		$this->connectAllTerminals($previous, $node['Name']);
+
+		$output = NodeOutput::compositeExit($node['Name']);
+		$this->unconnectedOutputs = [$output];
+
+		return $output;
+	}
+
+	private function buildComplexWrapperPorts(array $ports): array
+	{
+		$result = [];
+		foreach ($ports as $port)
+		{
+			$result[] = $port;
+			if ($port['id'] === 'i0')
+			{
+				$result[] = ['id' => 'o1', 'title' => 'E1', 'type' => 'output', 'isActive' => true];
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Generates 3 deterministic IDs for rule card, action construction, output construction.
+	 *
+	 * @return array{0: string, 1: string, 2: string}
+	 */
+	private function generateComplexNodeRuleIds(string $outerId): array
+	{
+		if (preg_match('/^A(\d{4})_(\d{4})_(\d{4})_(\d{4})$/', $outerId, $m))
+		{
+			[, $g1, $g2, $g3] = $m;
+		}
+		else
+		{
+			[$g1, $g2, $g3] = ['0000', '0000', '0000'];
+		}
+
+		return [
+			sprintf('A%s_%s_%s_8001', $g1, $g2, $g3),
+			sprintf('A%s_%s_%s_8002', $g1, $g2, $g3),
+			sprintf('A%s_%s_%s_8003', $g1, $g2, $g3),
+		];
+	}
+
+	private function buildInnerReturnProperties(string $complexType, string $innerType): array
+	{
+		$defs = $this->registry->getReturnPropertyDefinitions($innerType);
+		if ($defs === null)
+		{
+			return [];
+		}
+
+		$prefix = $this->langPrefix . strtoupper($complexType) . '_';
+		$result = [];
+
+		foreach ($defs as $id => $def)
+		{
+			$type = is_string($def['TYPE'] ?? null) ? $def['TYPE'] : 'string';
+			$langKeySuffix = strtoupper(preg_replace('/([A-Z])/', '_$1', (string)$id));
+			$result[] = [
+				'Id' => $id,
+				'Type' => $type,
+				'BaseType' => null,
+				'Name' => '###' . $prefix . 'RETURN_' . $langKeySuffix . '###',
+				'Description' => null,
+				'Multiple' => false,
+				'Required' => false,
+				'Options' => null,
+				'Settings' => null,
+				'Default' => null,
+			];
+		}
+
+		return $result;
+	}
+
 	private function buildSetupTemplateProperties(array $existingProps): array
 	{
-		$items = new SetupTemplateActivity\ItemCollection();
+		$blocks = [];
+		$currentItems = new SetupTemplateActivity\ItemCollection();
 
-		$items->add(new SetupTemplateActivity\Title(
+		$currentItems->add(new SetupTemplateActivity\Title(
 			text: $this->wrapLangKey($this->currentConfig->wizardTitle ?? $this->currentConfig->title),
 		));
-		$items->add(new SetupTemplateActivity\Description(
+		$currentItems->add(new SetupTemplateActivity\Description(
 			text: $this->wrapLangKey($this->currentConfig->wizardDescription ?? $this->currentConfig->description),
 		));
 
@@ -307,6 +692,21 @@ final class TemplateBuilder
 			if (!$constant->showInWizard)
 			{
 				continue;
+			}
+
+			if ($constant->wizardTitle !== null)
+			{
+				$blocks[] = (new SetupTemplateActivity\Block(items: $currentItems))->toArray();
+				$currentItems = new SetupTemplateActivity\ItemCollection();
+				$currentItems->add(new SetupTemplateActivity\Title(
+					text: $this->wrapLangKey($constant->wizardTitle),
+				));
+				if ($constant->wizardDescription !== null)
+				{
+					$currentItems->add(new SetupTemplateActivity\Description(
+						text: $this->wrapLangKey($constant->wizardDescription),
+					));
+				}
 			}
 
 			$options = [];
@@ -318,7 +718,7 @@ final class TemplateBuilder
 				];
 			}
 
-			$items->add(new SetupTemplateActivity\Constant(
+			$currentItems->add(new SetupTemplateActivity\Constant(
 				id: $key,
 				name: $this->wrapLangKey($constant->label),
 				constantType: $constant->type,
@@ -334,11 +734,11 @@ final class TemplateBuilder
 			throw new \LogicException('SetupTemplateActivity requires a trigger in the flow');
 		}
 
-		$block = new SetupTemplateActivity\Block(items: $items);
+		$blocks[] = (new SetupTemplateActivity\Block(items: $currentItems))->toArray();
 
 		$properties = $existingProps;
 		$properties['user'] = '{=' . $this->currentTriggerName . ':startedBy}';
-		$properties['blocks'] = [$block->toArray()];
+		$properties['blocks'] = $blocks;
 
 		return $properties;
 	}

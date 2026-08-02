@@ -10,6 +10,7 @@ final class RenderResult
 		private readonly string $content,
 		private readonly int $status,
 		private readonly ?string $redirectUrl = null,
+		private readonly ?string $component = null,
 	) {
 	}
 
@@ -26,5 +27,10 @@ final class RenderResult
 	public function getRedirectUrl(): ?string
 	{
 		return $this->redirectUrl;
+	}
+
+	public function getComponent(): ?string
+	{
+		return $this->component;
 	}
 }

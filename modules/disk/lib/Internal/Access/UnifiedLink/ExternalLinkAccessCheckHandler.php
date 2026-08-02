@@ -12,9 +12,11 @@ class ExternalLinkAccessCheckHandler extends ChainableAccessCheckHandler
 {
 	/**
 	 * @param ExternalLinkProvider $externalLinkProvider
+	 * @param bool $shouldCheckPassword
 	 */
 	public function __construct(
 		protected readonly ExternalLinkProvider $externalLinkProvider,
+		protected readonly bool $shouldCheckPassword,
 	)
 	{
 	}
@@ -23,7 +25,14 @@ class ExternalLinkAccessCheckHandler extends ChainableAccessCheckHandler
 	{
 		$externalLink = $this->externalLinkProvider->getForUnifiedLinkAccessCheck($file->getId());
 
-		if (!$externalLink instanceof ExternalLink || !$this->checkPassword($externalLink))
+		if (
+			!$externalLink instanceof ExternalLink
+			|| (
+				$this->shouldCheckPassword
+				&& $externalLink->hasPassword()
+				&& !$this->checkPassword($externalLink)
+			)
+		)
 		{
 			return UnifiedLinkAccessLevel::Denied;
 		}
@@ -42,11 +51,6 @@ class ExternalLinkAccessCheckHandler extends ChainableAccessCheckHandler
 	 */
 	protected function checkPassword(ExternalLink $externalLink): bool
 	{
-		if (!$externalLink->hasPassword())
-		{
-			return true;
-		}
-
 		$password = $_SESSION['DISK_DATA']['EXT_LINK_PASSWORD'] ?? null;
 
 		if (!$password)

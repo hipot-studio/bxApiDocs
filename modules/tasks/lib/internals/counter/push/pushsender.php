@@ -10,6 +10,8 @@ use Bitrix\Tasks\Integration\Pull\PushService;
 use Bitrix\Tasks\Internals\Counter;
 use Bitrix\Tasks\Internals\Counter\Role;
 use Bitrix\Tasks\Internals\Counter\CounterDictionary;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\FeatureService;
+use Bitrix\Tasks\V2\Internal\Integration\Socialnetwork\Service\ProjectTotalService;
 
 class PushSender
 {
@@ -46,6 +48,7 @@ class PushSender
 				+ $counter->get(CounterDictionary::COUNTER_PROJECTS_TOTAL_COMMENTS)
 				+ $counter->get(CounterDictionary::COUNTER_GROUPS_TOTAL_EXPIRED)
 				+ $counter->get(CounterDictionary::COUNTER_PROJECTS_TOTAL_EXPIRED);
+			$pushData['projects_total'] = (new ProjectTotalService(new FeatureService()))->getTotal($userId);
 
 			$pushData[CounterDictionary::COUNTER_SCRUM_TOTAL_COMMENTS] = $counter->get(CounterDictionary::COUNTER_SCRUM_TOTAL_COMMENTS);
 			// flow

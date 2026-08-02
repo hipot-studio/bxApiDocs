@@ -33,7 +33,7 @@ class BizprocGlobalFieldListComponent extends CBitrixComponent implements \Bitri
 
 	public function onPrepareComponentParams($arParams): array
 	{
-		if (isset($arParams['DOCUMENT_TYPE_SIGNED']) && \Bitrix\Main\Loader::includeModule('bizproc'))
+		if (is_string($arParams['DOCUMENT_TYPE_SIGNED'] ?? null) && \Bitrix\Main\Loader::includeModule('bizproc'))
 		{
 			$arParams['DOCUMENT_TYPE_SIGNED'] = htmlspecialcharsback($arParams['DOCUMENT_TYPE_SIGNED']);
 			$arParams['DOCUMENT_TYPE'] = CBPDocument::unSignDocumentType($arParams['DOCUMENT_TYPE_SIGNED']);

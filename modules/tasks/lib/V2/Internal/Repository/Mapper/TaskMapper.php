@@ -156,6 +156,7 @@ class TaskMapper
 		?string $checksum = null,
 		?Email $email = null,
 		?Entity\Task\ScenarioCollection $scenarios = null,
+		?Entity\Template\TemplateReplicateParams $templateReplication = null,
 	): Entity\Task
 	{
 		return new Entity\Task(
@@ -198,7 +199,11 @@ class TaskMapper
 			durationType: Entity\Task\Duration::tryFrom($taskObject->getDurationType()),
 			startedTs: $taskObject->getDateStart()?->getTimestamp(),
 			estimatedTime: $taskObject->getTimeEstimate(),
-			replicate: $taskObject->getReplicate(),
+			replicate: $templateReplication?->replicate,
+			replicateParams: $templateReplication?->replicateParams,
+			replicateTemplate: $taskObject->getForkedByTemplateId() <= 0 && $templateReplication?->templateId > 0
+				? new Entity\Template($templateReplication->templateId)
+				: null,
 			changedTs: $taskObject->getChangedDate()?->getTimestamp(),
 			changedBy: $members?->findOneById($taskObject->getChangedBy()),
 			statusChangedBy: $members?->findOneById($taskObject->getStatusChangedBy()),

@@ -371,7 +371,16 @@ class CAllUserCounter
 		);
 	}
 
-	protected static function SendPullEvent($user_id, $code = "", $bMultiple = false)
+	/**
+	 * @param int $user_id
+	 * @param string $code
+	 * @param bool $bMultiple match $code as a prefix (LIKE '$code%') instead of exact.
+	 * @param bool $ensureZeroForGroupedCode when true and $code is given, guarantees a
+	 *        "$code => 0" entry per active site even if no counter rows remain — so a
+	 *        realtime "badge dropped to zero" pull is sent after the last row of a
+	 *        grouped code (e.g. '**') was deleted, without persisting zero rows.
+	 */
+	protected static function SendPullEvent($user_id, $code = "", $bMultiple = false, $ensureZeroForGroupedCode = false)
 	{
 		$user_id = (int)$user_id;
 		if ($user_id < 0)
@@ -446,6 +455,17 @@ class CAllUserCounter
 				else
 				{
 					$pullMessage[$row['CHANNEL_ID']][$row['SITE_ID']][$key] = (int)$row['CNT'];
+				}
+			}
+
+			if ($ensureZeroForGroupedCode && $code !== '')
+			{
+				// No counter rows left for this user (e.g. the last '**L*' livefeed code
+				// was just deleted): force an explicit "$code => 0" per active site so the
+				// online client drops the badge in realtime. No zero rows are persisted.
+				foreach ($arSites as $siteId)
+				{
+					$pullMessage[$user_id][$siteId][$code] ??= 0;
 				}
 			}
 
@@ -1071,6 +1091,99 @@ class CAllUserCounter
 		if ($sendPull)
 		{
 			self::SendPullEvent($user_id, $code);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Batch-clears a set of grouped LiveFeed per-entity counters (codes
+	 * '**L<logId>' / '**LC<commentId>') for a user with a SINGLE delete instead of
+	 * a per-code {@see self::Clear} loop.
+	 *
+	 * Unlike Clear(bMultiple=false), which for every code runs prepareMerge() and
+	 * thus UPSERTS a zero CNT row even when the user had no counter for that entity,
+	 * this deletes only the rows that actually exist (no junk zero rows in
+	 * b_user_counter on mass read-all). Mirrors the canonical livefeed delete path
+	 * ({@see self::DeleteByCode} / {@see self::OnSocNetLogDelete}), but scoped to the
+	 * given code set and consolidated: one cache invalidation and one realtime pull
+	 * for the grouped '**' badge ({@see self::SendPullEvent} with bMultiple) after the
+	 * whole batch, regardless of the number of codes.
+	 *
+	 * @param int $userId
+	 * @param string[] $codes grouped livefeed codes, e.g. ['**L10', '**L11']
+	 * @param string|string[] $site_id site id(s) or the self::ALL_SITES marker
+	 */
+	public static function clearLiveFeedCodes(
+		$userId,
+		array $codes,
+		$site_id = SITE_ID,
+		$sendPull = true,
+		$cleanCache = true,
+	): bool
+	{
+		global $CACHE_MANAGER;
+		$connection = \Bitrix\Main\Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
+		$userId = (int)$userId;
+		$codes = array_values(array_unique(array_filter(
+			array_map('strval', $codes),
+			static fn ($code) => $code !== '',
+		)));
+
+		if ($userId < 0 || empty($codes))
+		{
+			return false;
+		}
+
+		if (!is_array($site_id))
+		{
+			$site_id = [$site_id];
+		}
+
+		$sitesSql = implode(', ', array_map(
+			static fn ($site) => "'" . $helper->forSQL((string)$site) . "'",
+			$site_id,
+		));
+		$codesSql = implode(', ', array_map(
+			static fn ($code) => "'" . $helper->forSQL($code) . "'",
+			$codes,
+		));
+
+		$connection->query("
+			DELETE FROM b_user_counter
+			WHERE
+				USER_ID = " . $userId . "
+				AND SITE_ID IN (" . $sitesSql . ")
+				AND CODE IN (" . $codesSql . ")
+		");
+
+		// Drop the whole process cache for this user instead of unsetting the raw
+		// '**L<logId>' keys: getValuesFromDB() groups every '**'-prefixed code into the
+		// single grouped LIVEFEED_CODE ('**') entry (see getGroupedCode()), so the raw
+		// codes are never present in self::$counters and a per-code unset would be a
+		// no-op, leaving a stale grouped '**' badge for the rest of the request. Mirrors
+		// the canonical livefeed delete paths (ClearAll ALL_SITES / DeleteByCode).
+		if (self::$counters && isset(self::$counters[$userId]))
+		{
+			unset(self::$counters[$userId]);
+		}
+
+		if ($cleanCache)
+		{
+			$CACHE_MANAGER->Clean('user_counter' . $userId, 'user_counter');
+		}
+
+		if ($sendPull)
+		{
+			// One consolidated pull for the grouped '**' livefeed badge: sums the
+			// remaining '**L*' rows, or an explicit '** => 0' per active site when the
+			// last unread post was just cleared (no rows left to rebuild the payload
+			// from) - so online clients drop the badge in realtime, without persisting
+			// zero rows. Same payload shape as the canonical feed-open clear
+			// Clear($userId, '**', ..., bMultiple=true).
+			self::SendPullEvent($userId, self::LIVEFEED_CODE, true, true);
 		}
 
 		return true;

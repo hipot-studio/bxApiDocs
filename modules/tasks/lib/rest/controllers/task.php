@@ -340,10 +340,6 @@ final class Task extends Base
 		{
 			$fields = $this->removeReferences($fields);
 			$task->update($fields, $params);
-			if (Loader::includeModule('pull'))
-			{
-				MobileCounter::send($this->getCurrentUser()->getId());
-			}
 
 			if (isset($fields['FLOW_ID']))
 			{

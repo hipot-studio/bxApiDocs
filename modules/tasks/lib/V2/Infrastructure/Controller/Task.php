@@ -60,6 +60,7 @@ class Task extends BaseController
 				userFields: $taskSelect->userFields,
 				checkTaskAccess: false,
 				view: $view,
+				templateReplication: $taskSelect->templateReplication,
 			),
 		);
 	}

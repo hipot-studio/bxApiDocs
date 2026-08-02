@@ -29,6 +29,7 @@ class NodeCatalogItemDtoFactory
 			icon: $description->getIcon(),
 			iconPath: self::getIconPath($description),
 			colorIndex: $description->getColorIndex(),
+			contentBlockColor: $description->getContentBlockColor(),
 			properties: $description->get('PROPERTIES'),
 			returnProperties: self::makeReturnProperties($description->getClass()),
 			defaultSettings: $defaultSettings->toArray(),

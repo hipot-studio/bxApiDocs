@@ -59,14 +59,14 @@ class InMemorySubTaskRepository implements SubTaskRepositoryInterface
 		return $result;
 	}
 
-	public function getByParentId(int $parentId): TaskCollection
+	public function getByParentId(int $parentId, bool $withMembers = false): TaskCollection
 	{
-		if (!isset($this->cache[$parentId]))
+		if (!isset($this->cache[$parentId][$withMembers]))
 		{
-			$this->cache[$parentId] = $this->subTaskRepository->getByParentId($parentId);
+			$this->cache[$parentId][$withMembers] = $this->subTaskRepository->getByParentId($parentId, $withMembers);
 		}
 
-		return $this->cache[$parentId];
+		return $this->cache[$parentId][$withMembers];
 	}
 
 	public function invalidate(int $taskId): void

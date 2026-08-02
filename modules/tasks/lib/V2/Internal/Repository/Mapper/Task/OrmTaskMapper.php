@@ -16,6 +16,7 @@ use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskDurationMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskMarkMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\PriorityMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskStatusMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Mapper\Template\ReplicateParamsMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Trait\CastTrait;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\UserFieldMapper;
 
@@ -31,6 +32,7 @@ class OrmTaskMapper
 		private readonly LinkTypeMapper $linkTypeMapper,
 		private readonly UserFieldMapper $userFieldMapper,
 		private readonly EmailMapper $emailMapper,
+		private readonly ReplicateParamsMapper $replicateParamsMapper,
 	)
 	{
 
@@ -180,6 +182,13 @@ class OrmTaskMapper
 		if (isset($fields['REPLICATE']))
 		{
 			$entityFields['replicate'] = $fields['REPLICATE'] === 'Y' || $fields['REPLICATE'] === true;
+		}
+
+		if (isset($fields['REPLICATE_PARAMS']))
+		{
+			$entityFields['replicateParams'] = $this->replicateParamsMapper->mapToValueObject(
+				$fields['REPLICATE_PARAMS'],
+			);
 		}
 
 		if (isset($fields['DEADLINE']))
@@ -585,6 +594,11 @@ class OrmTaskMapper
 		if ($task->replicate !== null)
 		{
 			$fields['REPLICATE'] = $task->replicate;
+		}
+
+		if ($task->replicateParams !== null)
+		{
+			$fields['REPLICATE_PARAMS'] = $this->replicateParamsMapper->mapFromValueObject($task->replicateParams);
 		}
 
 		if ($task->deadlineTs)

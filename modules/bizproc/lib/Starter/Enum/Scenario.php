@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Starter\Enum;
 
 enum Scenario: string
@@ -11,4 +13,5 @@ enum Scenario: string
 	case onEvent = 'onEvent';
 	case onManual = 'onManual';
 	case onScript = 'onScript';
+	case onRest = 'onRest';
 }

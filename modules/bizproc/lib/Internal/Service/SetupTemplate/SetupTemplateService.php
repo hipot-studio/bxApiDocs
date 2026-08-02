@@ -17,10 +17,14 @@ class SetupTemplateService
 	private ?int $eventHandler = null;
 
 	/**
+	 * @todo Pass parameters by DTO when there will be more of them
+	 *
 	 * @param int $userId User identifier
 	 * @param string $instanceId Identifier of workflow instance
 	 * @param int $templateId Identifier of workflow template
 	 * @param array<string, string> $constantValues [constantId => constantValue, ...]
+	 * @param bool $skipAccessValidation Skip UI-level access checks on constant values (use only for trusted scenario flows).
+	 * @param bool $applyDefaults Fill setup-block constants that were not passed in $constantValues with their configured defaults (use for scenario/auto-start flows).
 	 *
 	 * @return Result
 	 */
@@ -28,11 +32,13 @@ class SetupTemplateService
 		int $userId,
 		int $templateId,
 		string $instanceId,
-		array $constantValues = []
+		array $constantValues = [],
+		bool $skipAccessValidation = false,
+		bool $applyDefaults = false,
 	): Result
 	{
 		$this->listenForValidationEvent($userId, $templateId);
-		$this->sendUserInputEvent($templateId, $userId, $instanceId, $constantValues);
+		$this->sendUserInputEvent($templateId, $userId, $instanceId, $constantValues, $skipAccessValidation, $applyDefaults);
 		$this->stopListenValidationEvent();
 
 		$result = new Result();
@@ -72,6 +78,8 @@ class SetupTemplateService
 		int $userId,
 		string $instanceId,
 		array $constantValues,
+		bool $skipAccessValidation,
+		bool $applyDefaults,
 	): void
 	{
 		(new SetupTemplateUserInputEvent(
@@ -81,6 +89,8 @@ class SetupTemplateService
 				SetupTemplateUserInputEvent::PARAMETER_USER_ID => $userId,
 				SetupTemplateUserInputEvent::PARAMETER_TEMPLATE_ID => $templateId,
 				SetupTemplateUserInputEvent::PARAMETER_CONSTANT_VALUES => $constantValues,
+				SetupTemplateUserInputEvent::PARAMETER_SKIP_ACCESS_VALIDATION => $skipAccessValidation,
+				SetupTemplateUserInputEvent::PARAMETER_APPLY_DEFAULTS => $applyDefaults,
 			]
 		))
 			->send()

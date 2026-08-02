@@ -25,13 +25,6 @@ class SetupTemplate extends Controller
 		$this->aiAgentsFeature = ServiceLocator::getInstance()->get(AiAgentsFeature::class);
 	}
 
-	protected function processBeforeAction(\Bitrix\Main\Engine\Action $action): bool
-	{
-		parent::processBeforeAction($action);
-
-		return $this->isAgentsFeatureAvailable();
-	}
-
 	/**
 	 * @param string $instanceId Identifier of workflow instance
 	 * @param int $templateId Identifier of workflow template
@@ -45,6 +38,11 @@ class SetupTemplate extends Controller
 		array $constantValues = [],
 	): void
 	{
+		if (!$this->isFillAvailable($templateId))
+		{
+			return;
+		}
+
 		$userId = (int)CurrentUser::get()->getId();
 		if ($userId <= 0)
 		{
@@ -57,9 +55,9 @@ class SetupTemplate extends Controller
 		$this->addErrors($result->getErrors());
 	}
 
-	private function isAgentsFeatureAvailable(): bool
+	private function isFillAvailable(int $templateId): bool
 	{
-		$isAiAgentFeatureAvailable = $this->aiAgentsFeature->isAvailable();
+		$isAiAgentFeatureAvailable = $this->aiAgentsFeature->isRestartAvailable($templateId);
 
 		if ($isAiAgentFeatureAvailable)
 		{

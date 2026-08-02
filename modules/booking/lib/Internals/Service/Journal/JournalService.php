@@ -103,7 +103,10 @@ final class JournalService implements JournalServiceInterface
 	{
 		return [
 			new BookingEventProcessor(),
-			new ResourceEventProcessor(Container::getDelayedTaskService()),
+			new ResourceEventProcessor(
+				Container::getDelayedTaskService(),
+				Container::getAiAgentLauncher(),
+			),
 			new ResourceTypeEventProcessor(),
 			new WaitListItemEventProcessor(),
 			new CounterEventProcessor(),

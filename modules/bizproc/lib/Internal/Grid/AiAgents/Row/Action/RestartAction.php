@@ -2,7 +2,9 @@
 
 namespace Bitrix\Bizproc\Internal\Grid\AiAgents\Row\Action;
 
+use Bitrix\Bizproc\Api\Enum\Template\CreateSource;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\AiAgentsActionType;
+use Bitrix\Bizproc\Internal\Service\Tariff\TariffChecker;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
@@ -66,6 +68,7 @@ class RestartAction extends JsGridAction
 	{
 		return [
 			'templateId' => $rawFields['ID'] ?? '',
+			'createSource' => $rawFields['CREATE_SOURCE'] ?? '',
 		];
 	}
 }

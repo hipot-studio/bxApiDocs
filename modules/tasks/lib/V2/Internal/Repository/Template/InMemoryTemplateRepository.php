@@ -11,6 +11,7 @@ class InMemoryTemplateRepository implements TemplateRepositoryInterface
 	private TemplateRepositoryInterface $templateRepository;
 	private array $cache = [];
 	private array $taskIdCache = [];
+	private array $taskByTemplateIdCache = [];
 
 	public function __construct(TemplateRepository $templateRepository)
 	{
@@ -58,8 +59,25 @@ class InMemoryTemplateRepository implements TemplateRepositoryInterface
 		return $template;
 	}
 
+	public function getTaskByTemplateId(int $templateId): ?Entity\Task
+	{
+		if (isset($this->taskByTemplateIdCache[$templateId]))
+		{
+			return $this->taskByTemplateIdCache[$templateId];
+		}
+
+		if (isset($this->cache[$templateId]))
+		{
+			return $this->taskByTemplateIdCache[$templateId] = $this->cache[$templateId]->task;
+		}
+
+		return $this->taskByTemplateIdCache[$templateId] = $this->templateRepository->getTaskByTemplateId($templateId);
+	}
+
 	public function save(Entity\Template $entity): int
 	{
+		unset($this->taskByTemplateIdCache[$entity->getId()]);
+
 		// Remove the template from the cache if it exists
 		if (isset($this->cache[$entity->getId()]))
 		{
@@ -85,11 +103,14 @@ class InMemoryTemplateRepository implements TemplateRepositoryInterface
 		{
 			unset($this->cache[$id]);
 		}
+
+		unset($this->taskByTemplateIdCache[$id]);
 	}
 
 	public function invalidate(int $id): void
 	{
 		unset($this->cache[$id]);
+		unset($this->taskByTemplateIdCache[$id]);
 	}
 
 	public function getReplicateParams(int $templateId): ?array

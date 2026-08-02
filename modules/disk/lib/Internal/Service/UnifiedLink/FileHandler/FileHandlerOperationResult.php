@@ -15,6 +15,7 @@ class FileHandlerOperationResult
 		private readonly ?string $value = null,
 		private readonly ?ErrorCollection $errorCollection = null,
 		private readonly ?string $redirectUrl = null,
+		private readonly ?string $component = null,
 	)
 	{
 	}
@@ -22,11 +23,13 @@ class FileHandlerOperationResult
 	public static function createSuccess(
 		string $value,
 		?string $redirectUrl = null,
+		?string $component = null,
 	): static
 	{
 		return new static(
 			value: $value,
 			redirectUrl: $redirectUrl,
+			component: $component,
 		);
 	}
 
@@ -70,5 +73,10 @@ class FileHandlerOperationResult
 	public function getRedirectUrl(): ?string
 	{
 		return $this->redirectUrl;
+	}
+
+	public function getComponent(): ?string
+	{
+		return $this->component;
 	}
 }

@@ -20,22 +20,24 @@ class Event {
 	/**
 	 * @param string|array{class-string, string} $toClass Class FQCN (with $toMethod) or `[Class::class, 'method']` tuple.
 	 * @param string|null $toMethod Required when $toClass is a string, ignored when $toClass is a tuple.
+	 * @param int|null $sort Handler invocation order; null keeps the default (100).
 	 */
-	public function register(string $fromModuleId, string $eventType, string|array $toClass, ?string $toMethod = null): self
+	public function register(string $fromModuleId, string $eventType, string|array $toClass, ?string $toMethod = null, ?int $sort = null): self
 	{
 		[$toClass, $toMethod] = $this->normalizeHandler($toClass, $toMethod);
 
-		return $this->doRegister(false, $fromModuleId, $eventType, $toClass, $toMethod);
+		return $this->doRegister(false, $fromModuleId, $eventType, $toClass, $toMethod, $sort);
 	}
 
 	/**
 	 * @param string|array{class-string, string} $toClass
+	 * @param int|null $sort Handler invocation order; null keeps the default (100).
 	 */
-	public function registerCompatible(string $fromModuleId, string $eventType, string|array $toClass, ?string $toMethod = null): self
+	public function registerCompatible(string $fromModuleId, string $eventType, string|array $toClass, ?string $toMethod = null, ?int $sort = null): self
 	{
 		[$toClass, $toMethod] = $this->normalizeHandler($toClass, $toMethod);
 
-		return $this->doRegister(true, $fromModuleId, $eventType, $toClass, $toMethod);
+		return $this->doRegister(true, $fromModuleId, $eventType, $toClass, $toMethod, $sort);
 	}
 
 	private function doRegister(
@@ -44,6 +46,7 @@ class Event {
 		string $eventType,
 		string $toClass,
 		string $toMethod,
+		?int $sort,
 	): self
 	{
 		$mode = $this->context->getDatabaseUpdateMode();
@@ -81,6 +84,7 @@ class Event {
 				$this->context->getModuleId(),
 				$toClass,
 				$toMethod,
+				$sort ?? 100,
 			);
 		}
 		else
@@ -91,6 +95,7 @@ class Event {
 				$this->context->getModuleId(),
 				$toClass,
 				$toMethod,
+				$sort ?? 100,
 			);
 		}
 

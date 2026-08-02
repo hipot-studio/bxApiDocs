@@ -435,6 +435,12 @@ class OrmTemplateMapper
 			}
 		}
 
+		$taskId = (int)($fields['TASK_ID'] ?? 0);
+		if ($taskId > 0)
+		{
+			$templateFields['task'] = ['id' => $taskId];
+		}
+
 		return Entity\Template::mapFromArray($templateFields);
 	}
 }

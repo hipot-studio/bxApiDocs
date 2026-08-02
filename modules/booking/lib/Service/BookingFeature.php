@@ -18,6 +18,8 @@ final class BookingFeature
 	public const FEATURE_ID_MULTI_RESOURCE_BOOKING = 'booking_multi';
 	public const FEATURE_ID_CRM_CREATE_BOOKING = 'booking_crm_slider';
 	public const FEATURE_ID_NOTIFICATIONS_SETTINGS = 'booking_notifications_settings';
+	public const FEATURE_ID_NOTIFICATIONS_AI_CALL = 'booking_notifications_ai_call';
+	public const FEATURE_ID_MULTIDAY = 'booking_long';
 
 	private static array $features = [
 		self::FEATURE_ID_BOOKING,
@@ -27,6 +29,12 @@ final class BookingFeature
 		self::FEATURE_ID_MULTI_RESOURCE_BOOKING,
 		self::FEATURE_ID_CRM_CREATE_BOOKING,
 		self::FEATURE_ID_NOTIFICATIONS_SETTINGS,
+		self::FEATURE_ID_NOTIFICATIONS_AI_CALL,
+		self::FEATURE_ID_MULTIDAY,
+	];
+
+	private static array $nonTriableFeatures = [
+		self::FEATURE_ID_NOTIFICATIONS_AI_CALL,
 	];
 
 	private const TRIAL_DAYS = 30;
@@ -98,8 +106,14 @@ final class BookingFeature
 
 	private static function turnOnTrial(): void
 	{
+		$nonTriableFeatures = array_flip(self::$nonTriableFeatures);
 		foreach (self::$features as $featureId)
 		{
+			if (isset($nonTriableFeatures[$featureId]))
+			{
+				continue;
+			}
+
 			self::trialFeature($featureId);
 		}
 

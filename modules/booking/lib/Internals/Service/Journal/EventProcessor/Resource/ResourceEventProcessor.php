@@ -7,6 +7,8 @@ namespace Bitrix\Booking\Internals\Service\Journal\EventProcessor\Resource;
 use Bitrix\Booking\Command\Resource\AddResourceCommand;
 use Bitrix\Booking\Command\Resource\RemoveResourceCommand;
 use Bitrix\Booking\Command\Resource\UpdateResourceCommand;
+use Bitrix\Booking\Internals\Integration\Bizproc\AiAgentLauncher;
+use Bitrix\Booking\Internals\Integration\Bizproc\AiCallMessageSender;
 use Bitrix\Booking\Internals\Model\Enum\ResourceLinkedEntityType;
 use Bitrix\Booking\Internals\Service\DelayedTask\Data\ResourceCalendarDataChanged;
 use Bitrix\Booking\Internals\Service\DelayedTask\Data\ResourceLinkedEntitiesChangedData;
@@ -22,6 +24,7 @@ class ResourceEventProcessor extends AbstractEventProcessor
 {
 	public function __construct(
 		private readonly DelayedTaskService $delayedTaskService,
+		private readonly AiAgentLauncher $aiAgentLauncher,
 	)
 	{
 	}
@@ -45,6 +48,11 @@ class ResourceEventProcessor extends AbstractEventProcessor
 		$this->addResourceCopies($command, $event);
 
 		ModuleOptions::handleResourceAdded();
+
+		$this->ensureAiAgentForAiCallResource(
+			$command->resource->getSenderCode(),
+			(int)($event->data['currentUserId'] ?? 0),
+		);
 
 		$this->sendBitrixEvent(
 			type: 'onResourceAdd',
@@ -71,6 +79,11 @@ class ResourceEventProcessor extends AbstractEventProcessor
 	{
 		$command = UpdateResourceCommand::mapFromArray($event->data);
 
+		$this->ensureAiAgentForAiCallResource(
+			$command->resource->getSenderCode(),
+			(int)($event->data['currentUserId'] ?? 0),
+		);
+
 		$this->sendBitrixEvent(
 			type: 'onResourceUpdate',
 			parameters: ['resource' => $command->resource],
@@ -96,6 +109,16 @@ class ResourceEventProcessor extends AbstractEventProcessor
 			type: $type,
 			parameters: $parameters,
 		))->send();
+	}
+
+	private function ensureAiAgentForAiCallResource(string $senderCode, int $userId): void
+	{
+		if ($senderCode !== AiCallMessageSender::CODE)
+		{
+			return;
+		}
+
+		$this->aiAgentLauncher->ensureRunning($userId);
 	}
 
 	private function processResourceLinkedEntitiesChanged(int $entityId, array $eventData): void

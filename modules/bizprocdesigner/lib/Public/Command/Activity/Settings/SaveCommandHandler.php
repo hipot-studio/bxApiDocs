@@ -58,7 +58,7 @@ class SaveCommandHandler
 		{
 			foreach ($errors as $error)
 			{
-				$result->addError(new Error($error['message'], $error['code']));
+				$result->addError(new Error($error['message'], $error['code'] ?? 'UNKNOWN_ERROR'));
 			}
 
 			return $result;

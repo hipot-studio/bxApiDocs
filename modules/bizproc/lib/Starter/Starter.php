@@ -5,24 +5,24 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Starter;
 
 use Bitrix\Bizproc\Public\Service\Document\InspectorService;
-use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
 use Bitrix\Bizproc\Starter\Constraint\BPDesignerConstraint;
+use Bitrix\Bizproc\Starter\Constraint\ScenarioBPDesignerConstraint;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Dto\MetaDataDto;
+use Bitrix\Bizproc\Starter\Dto\ParentWorkflowDto;
 use Bitrix\Bizproc\Starter\Dto\StarterDto;
 use Bitrix\Bizproc\Starter\Dto\StarterConfigDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Result\StartResult;
 
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\ModuleManager;
 
 final class Starter
 {
-	private ?ProcessStarter $processStarter;
+	private ?ProcessStarterStacker $processStarterStacker;
 	private ?AutomationStarter $automationStarter;
 
 	public static function isEnabled(): bool
@@ -45,6 +45,23 @@ final class Starter
 
 		return match ($scenario)
 		{
+			Scenario::onRest => new self(
+				new StarterDto(
+					process: new StarterConfigDto(
+						scenario: $scenario,
+						checkFeature: false,
+						checkLimits: false,
+						checkConstants: false,
+					),
+					automation: new StarterConfigDto(
+						scenario: $scenario,
+						checkFeature: false,
+						checkLimits: false,
+						validateParameters: false,
+						checkConstants: false,
+					),
+				),
+			),
 			Scenario::onDocumentInnerAdd,
 			Scenario::onDocumentInnerUpdate
 				=> new self(
@@ -68,7 +85,12 @@ final class Starter
 
 	public function __construct(StarterDto $dto)
 	{
-		$this->processStarter = $dto->process ? new ProcessStarter($dto->process) : null;
+		$this->processStarterStacker = $dto->process
+			? new ProcessStarterStacker([
+				new ProcessStarter($dto->process),
+				new ScenarioProcessStarter($this->tweakConfigForScenarioProcessStarter($dto->process)),
+			])
+			: null;
 		$this->automationStarter = $dto->automation ? new AutomationStarter($dto->automation) : null;
 	}
 
@@ -92,7 +114,7 @@ final class Starter
 			$document->setChangedFieldNames($dto->changedFieldNames);
 		}
 
-		$this->processStarter?->setDocument($document);
+		$this->processStarterStacker?->setDocument($document);
 		$this->automationStarter?->setDocument($document);
 
 		return $this;
@@ -111,7 +133,7 @@ final class Starter
 		}
 
 		$parameters = new Parameters($values);
-		$this->processStarter?->setParameters($parameters);
+		$this->processStarterStacker?->setParameters($parameters);
 		$this->automationStarter?->setParameters($parameters);
 
 		return $this;
@@ -119,10 +141,7 @@ final class Starter
 
 	public function setValidateParameters(bool $validateParameters = true): self
 	{
-		if ($this->processStarter)
-		{
-			$this->processStarter->config->validateParameters = $validateParameters;
-		}
+		$this->processStarterStacker?->setValidateParameters($validateParameters);
 
 		if ($this->automationStarter)
 		{
@@ -139,7 +158,7 @@ final class Starter
 			return $this;
 		}
 
-		$this->processStarter?->setUser($userId);
+		$this->processStarterStacker?->setUser($userId);
 		$this->automationStarter?->setUser($userId);
 
 		return $this;
@@ -151,16 +170,25 @@ final class Starter
 			timeToStart: $metaDataDto->timeToStart,
 		);
 
-		$this->processStarter?->setMetaData($metaData);
+		$this->processStarterStacker?->setMetaData($metaData);
 		$this->automationStarter?->setMetaData($metaData);
 
 		return $this;
 	}
+
+	public function setParentWorkflow(ParentWorkflowDto $parentWorkflow): self
+	{
+		$this->processStarterStacker?->setParentWorkflow($parentWorkflow);
+		$this->automationStarter?->setParentWorkflow($parentWorkflow);
+
+		return $this;
+	}
+
 	public function setTemplateIds(array $templateIds): self
 	{
 		Collection::normalizeArrayValuesByInt($templateIds, false);
 
-		$this->processStarter?->setTemplateIds($templateIds);
+		$this->processStarterStacker?->setTemplateIds($templateIds);
 		$this->automationStarter?->setTemplateIds($templateIds);
 
 		return $this;
@@ -168,10 +196,7 @@ final class Starter
 
 	public function setCheckConstants(bool $checkConstants = true): self
 	{
-		if ($this->processStarter)
-		{
-			$this->processStarter->config->checkConstants = $checkConstants;
-		}
+		$this->processStarterStacker?->setCheckConstants($checkConstants);
 
 		// for automation always disable check constants
 
@@ -196,7 +221,7 @@ final class Starter
 			$context->setIsManual();
 		}
 
-		$this->processStarter?->setContext($context);
+		$this->processStarterStacker?->setContext($context);
 		$this->automationStarter?->setContext($context);
 
 		return $this;
@@ -204,7 +229,7 @@ final class Starter
 
 	public function setDelay(?int $delay = null): self
 	{
-		$this->processStarter?->setDelay($delay);
+		$this->processStarterStacker?->setDelay($delay);
 		$this->automationStarter?->setDelay($delay);
 
 		return $this;
@@ -287,7 +312,7 @@ final class Starter
 		?Document $document = null,
 	): void
 	{
-		if ($this->processStarter)
+		if ($this->processStarterStacker)
 		{
 			$event = (new Event($code, $parameters));
 			if ($document)
@@ -298,7 +323,7 @@ final class Starter
 			$event->setEventType($eventType);
 			$event->setUserId($userId);
 
-			$this->processStarter->addEvent($event);
+			$this->processStarterStacker->addEvent($event);
 		}
 	}
 
@@ -311,24 +336,24 @@ final class Starter
 			return $result;
 		}
 
-		$this->startProcessStarter($result);
+		$this->startProcessStarterStacker($result);
 		$this->startAutomationStarter($result);
 
 		return $result;
 	}
 
-	private function startProcessStarter(StartResult $result): void
+	private function startProcessStarterStacker(StartResult $result): void
 	{
-		if ($this->processStarter)
+		if ($this->processStarterStacker)
 		{
-			$processResult = $this->processStarter->run();
-			if (!$processResult->isSuccess())
+			$stackerResult = $this->processStarterStacker->run();
+			if (!$stackerResult->isSuccess())
 			{
-				$result->addErrors($processResult->getErrors());
+				$result->addErrors($stackerResult->getErrors());
 			}
-			$result->addWorkflowIds($processResult->getWorkflowIds());
-			$result->addTemplateWorkflowIds($processResult->getTemplateWorkflowIds());
-			$result->setProcessTriggerApplied($processResult->isTriggerApplied());
+			$result->addWorkflowIds($stackerResult->getWorkflowIds());
+			$result->addTemplateWorkflowIds($stackerResult->getTemplateWorkflowIds());
+			$result->setProcessTriggerApplied($stackerResult->isTriggerApplied());
 		}
 	}
 
@@ -345,5 +370,24 @@ final class Starter
 			$result->addTemplateWorkflowIds($automationResult->getTemplateWorkflowIds());
 			$result->setAutomationTriggerApplied($automationResult->isTriggerApplied());
 		}
+	}
+	
+	private function tweakConfigForScenarioProcessStarter(StarterConfigDto $starterConfigDto): StarterConfigDto
+	{
+		$config = clone $starterConfigDto;
+
+		$config->constraints = [];
+		foreach ($starterConfigDto->constraints as $constraint)
+		{
+			if ($constraint instanceof BPDesignerConstraint)
+			{
+				$config->constraints[] = ServiceLocator::getInstance()->get(ScenarioBPDesignerConstraint::class);
+				continue;
+			}
+
+			$config->constraints[] = $constraint;
+		}
+
+		return $config;
 	}
 }

@@ -226,6 +226,63 @@ class Provider
 	}
 
 	/**
+	 * Output providers that actually serve one of the given line connectors.
+	 * A line command must not be judged by providers absent from the line: an optional module
+	 * missing (e.g. imbot for network, messageservice) makes that provider report an error
+	 * regardless of the line, which would otherwise poison the whole line command result.
+	 * The connector ids are read once by the caller and shared with the grouping step.
+	 *
+	 * A resolution failure is never swallowed: a connector present on the line that maps to no
+	 * provider, or a provider that fails to build, adds an error to the result. Otherwise polling
+	 * would skip that connector, the line command would look like a successful (partial) answer and
+	 * the caller would prune the missing channel from the read-model — the very defect this MR fixes.
+	 *
+	 * @param string[] $connectorIds Connector ids registered on the line.
+	 * @return Result Result carrying Provider\Base\Output[] and any provider-resolution errors.
+	 */
+	public static function getProvidersForLineOutput(array $connectorIds): Result
+	{
+		$result = new Result();
+
+		$idProviders = [];
+		foreach ($connectorIds as $connectorId)
+		{
+			$connectorId = (string)$connectorId;
+			$idProvider = self::getIdProvider(Connector::getConnectorRealId($connectorId));
+			if ($idProvider === '')
+			{
+				$result->addError(new Error(
+					Loc::getMessage('IMCONNECTOR_ERROR_NO_CORRECT_PROVIDER'),
+					Library::ERROR_IMCONNECTOR_NO_CORRECT_PROVIDER,
+					__METHOD__,
+					$connectorId
+				));
+				continue;
+			}
+			$idProviders[$idProvider] = true;
+		}
+
+		$providers = [];
+		foreach (array_keys($idProviders) as $idProvider)
+		{
+			$provider = self::getProviderForAll($idProvider, 'output');
+
+			if ($provider->isSuccess())
+			{
+				$providers[] = $provider->getResult();
+			}
+			else
+			{
+				$result->addErrors($provider->getErrors());
+			}
+		}
+
+		$result->setResult($providers);
+
+		return $result;
+	}
+
+	/**
 	 * @param $connector
 	 * @param string|false $line
 	 * @return Result
@@ -240,6 +297,42 @@ class Provider
 			],
 			'output'
 		);
+	}
+
+	/**
+	 * Output provider for a set of connectors (comma separated ids) of a single line.
+	 * The whole set is expected to belong to the same provider; the provider is resolved
+	 * by the first connector id of the set and constructed with the full set as its
+	 * connector value and the line id.
+	 *
+	 * @param string $connectorSet Comma separated connector ids (e.g. "telegrambot,ok").
+	 * @param string|int|false $line Open line ID.
+	 * @return Result
+	 */
+	public static function getProviderForConnectorSetOutput(string $connectorSet, $line = false): Result
+	{
+		$connectors = explode(',', $connectorSet);
+		$firstConnector = (string)reset($connectors);
+
+		return self::getProviderForConnector(
+			$firstConnector,
+			[
+				$connectorSet,
+				$line
+			],
+			'output'
+		);
+	}
+
+	/**
+	 * Whether the connector is served by the imconnectorserver provider.
+	 *
+	 * @param string $connector Connector id.
+	 * @return bool
+	 */
+	public static function isImConnectorServerConnector(string $connector): bool
+	{
+		return self::getIdProvider(Connector::getConnectorRealId($connector)) === 'imconnectorserver';
 	}
 
 

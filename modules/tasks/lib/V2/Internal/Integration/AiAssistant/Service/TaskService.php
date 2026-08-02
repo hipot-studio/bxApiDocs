@@ -117,7 +117,7 @@ class TaskService
 			throw new AccessDeniedException();
 		}
 
-		$config = new UpdateConfig($userId);
+		$config = new UpdateConfig($userId, fromAi: true);
 
 		try
 		{
@@ -182,7 +182,7 @@ class TaskService
 
 		$task = new Task(id: $dto->taskId, replicate: true);
 
-		$config = new UpdateConfig($userId);
+		$config = new UpdateConfig($userId, fromAi: true);
 
 		try
 		{

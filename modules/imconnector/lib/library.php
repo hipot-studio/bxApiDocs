@@ -70,6 +70,11 @@ class Library
 		LOCAL_AGENT_EXEC_INTERVAL  = 30,
 		INSTANT_AGENT_EXEC_INTERVAL  = 10;
 
+	// Bounded, backed-off retry of a single line info update (transport failure path).
+	public const
+		LINE_UPDATE_RETRY_MAX_ATTEMPTS = 5,
+		LINE_UPDATE_RETRY_MAX_INTERVAL = 600;
+
 	// Endpoint
 	public const PORTAL_PATH = '/pub/imconnector/index.php';
 
@@ -238,7 +243,7 @@ class Library
 			'deny' => [],
 		],
 		self::ID_MAX_CONNECTOR => [
-			'allow' => ['ru', 'by','az', 'am', 'kz', 'kg', 'md', 'tj', 'uz'],
+			'allow' => ['ru', 'by', 'kz', 'kg', 'tj', 'uz'],
 			'deny' => [],
 		],
 	];

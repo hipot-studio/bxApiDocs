@@ -21,6 +21,7 @@ use Bitrix\Booking\Provider\Params\Resource\ResourceFilter;
 use Bitrix\Booking\Provider\Params\Resource\ResourceSelect;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\ORM\Query\QueryHelper;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\SystemException;
@@ -34,6 +35,19 @@ class ResourceRepository implements ResourceRepositoryInterface
 		private readonly ResourceSkuService $resourceSkuService,
 	)
 	{
+	}
+
+	public function getQuery(FilterInterface|null $filter = null): Query
+	{
+		$query = ResourceTable::query();
+
+		if ($filter !== null)
+		{
+			$filter->prepareQuery($query);
+			$query->where($filter->prepareFilter());
+		}
+
+		return $query;
 	}
 
 	public function getList(

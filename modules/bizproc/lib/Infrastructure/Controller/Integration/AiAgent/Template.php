@@ -14,12 +14,15 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\DI\ServiceLocator;
 
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
+use Bitrix\Bizproc\Api\Enum\Template\CreateSource;
 
 use Bitrix\Bizproc\Internal\Grid\AiAgents\AiAgentsGridHelper;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Result\TemplateCreatedResult;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\SystemTemplateActivationService;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\TemplateDeleteService;
 use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
+use Bitrix\Bizproc\Internal\Service\Tariff\TariffChecker;
+use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 
 
 class Template extends JsonController
@@ -39,14 +42,13 @@ class Template extends JsonController
 		$this->aiAgentsFeature = ServiceLocator::getInstance()->get(AiAgentsFeature::class);
 	}
 
-	protected function processBeforeAction(\Bitrix\Main\Engine\Action $action): bool
-	{
-		parent::processBeforeAction($action);
-		return $this->isAgentsFeatureAvailable();
-	}
-
 	public function startAction(int $templateId): array
 	{
+		if (!$this->isRestartAvailable($templateId))
+		{
+			return [];
+		}
+
 		$includeResult = $this->activationService->includeModuleAi();
 
 		if (!$includeResult->isSuccess())
@@ -64,6 +66,15 @@ class Template extends JsonController
 
 	public function copyAndStartAction(int $templateId): array
 	{
+		$createSource = $this->resolveCopyCreateSource($templateId);
+		if (
+			$createSource === CreateSource::User
+			 && !$this->isAgentsFeatureAvailable()
+		)
+		{
+			return [];
+		}
+
 		$includeResult = $this->activationService->includeModuleAi();
 
 		if (!$includeResult->isSuccess())
@@ -88,7 +99,7 @@ class Template extends JsonController
 			return [];
 		}
 
-		$copyResult = $this->activationService->copyTemplate($templateId, $userId);
+		$copyResult = $this->activationService->copyTemplate($templateId, $userId, $this->resolveCopyCreateSource($templateId));
 		if (!$copyResult instanceof TemplateCreatedResult)
 		{
 			$this->addErrors($copyResult->getErrors());
@@ -110,12 +121,13 @@ class Template extends JsonController
 	/**
 	 * @param array<int> $agentIds
 	 */
-	public function deleteAction(array $agentIds): array
+	public function deleteAction(array $agentIds, bool $deleteChatbots = false): array
 	{
 		$currentUser = new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
 		$deleteResult = $this->templateDeleteService->deleteTemplates(
 			templateIds: $agentIds,
 			initiator: $currentUser,
+			deleteChatbots: $deleteChatbots,
 		);
 
 		$this->addErrors($deleteResult->getErrors());
@@ -125,6 +137,11 @@ class Template extends JsonController
 	
 	public function fetchRowAction(int $templateId): array
 	{
+		if (!$this->isRestartAvailable($templateId))
+		{
+			return [];
+		}
+
 		return $this->aiAgentGridHelper->getRowFieldsByTemplateId($templateId);
 	}
 
@@ -158,5 +175,38 @@ class Template extends JsonController
 		$this->addError($error);
 
 		return false;
+	}
+
+	private function isRestartAvailable(int $templateId): bool
+	{
+		$isRestartAvailable = $this->aiAgentsFeature->isRestartAvailable($templateId);
+
+		if ($isRestartAvailable)
+		{
+			return true;
+		}
+
+		$error = $this->aiAgentsFeature->makeUnavailableByTariffError();
+		$this->addError($error);
+
+		return false;
+	}
+
+	/**
+	 * @todo Temporary workaround: for the bitrix_booking_ai_call system template we copy with CreateSource::Scenario.
+	 *       Remove once a generic mechanism for resolving the copy source per template is in place.
+	 */
+	private function resolveCopyCreateSource(int $templateId): CreateSource
+	{
+		$systemCode = WorkflowTemplateTable::getList([
+			'select' => ['SYSTEM_CODE'],
+			'filter' => ['=ID' => $templateId],
+			'limit' => 1,
+		])->fetch()['SYSTEM_CODE'] ?? null;
+
+		return $systemCode === 'bitrix_booking_ai_call'
+			? CreateSource::Scenario
+			: CreateSource::User
+		;
 	}
 }

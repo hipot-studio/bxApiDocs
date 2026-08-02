@@ -83,6 +83,7 @@ class UnifiedLinkController extends Controller
 					$version = Version::loadById((int)$this->request->get('versionId'));
 					$analytics = $this->request->getQuery('analytics') ?? [];
 					$currentUser = $this->getCurrentUser();
+					$isDeferred = $this->request->get('immediate_load') !== 'Y';
 
 					return new UnifiedLinkFileRenderer(
 						file: $file,
@@ -90,6 +91,7 @@ class UnifiedLinkController extends Controller
 						version: $version,
 						analytics: $analytics,
 						currentUser: $currentUser,
+						deferred: $isDeferred,
 					);
 				},
 			),
@@ -157,6 +159,12 @@ class UnifiedLinkController extends Controller
 		if(is_string($redirectUrl))
 		{
 			return $this->redirectTo($redirectUrl);
+		}
+
+		$component = $result->getComponent();
+		if ($component !== null)
+		{
+			return $this->renderComponent($component, withSiteTemplate: false);
 		}
 
 		return (new HttpResponse())

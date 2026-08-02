@@ -1075,37 +1075,16 @@ class DocumentService
 			return $result->addError(new Main\Error('Document status does not allow editing'));
 		}
 
-		$fileId = $diskFile->getFileId();
-		if (!$fileId)
+		$cloneResult = $this->cloneDiskFile($diskFile);
+		if (!$cloneResult->isSuccess())
 		{
 			$this->diskService->deleteDiskFile($diskFile, $userId);
 
-			return $result->addError(new Main\Error('Disk file has no associated CFile'));
+			return $result->addErrors($cloneResult->getErrors());
 		}
+		$clonedFileId = $cloneResult->getData()['fileId'];
 
-		$fileArray = \CFile::MakeFileArray($fileId);
-		if (!$fileArray)
-		{
-			$this->diskService->deleteDiskFile($diskFile, $userId);
-
-			return $result->addError(new Main\Error('Failed to read file from disk'));
-		}
-
-		$diskFileName = $diskFile->getName();
-		if ($diskFileName)
-		{
-			$fileArray['name'] = $diskFileName;
-		}
-
-		$clonedFileId = \CFile::SaveFile($fileArray, 'sign');
-		if (!$clonedFileId)
-		{
-			$this->diskService->deleteDiskFile($diskFile, $userId);
-
-			return $result->addError(new Main\Error('Failed to clone file from disk'));
-		}
-
-		$blankService = Service\Container::instance()->getSignBlankService();
+		$blankService = $this->blankService;
 
 		$blankResult = $blankService->createFromFileIds(
 			[$clonedFileId],
@@ -1123,7 +1102,11 @@ class DocumentService
 
 		$newBlankId = $blankResult->getId();
 
-		$changeResult = $this->changeBlankAndUpload($documentUid, $newBlankId, true);
+		$changeResult = $this->changeBlankAndUpload(
+			$documentUid,
+			$newBlankId,
+			copyBlocksFromPreviousBlank: !$blank->hasPlaceholders,
+		);
 		if (!$changeResult->isSuccess())
 		{
 			$blankService->rollbackById($newBlankId);
@@ -1140,6 +1123,36 @@ class DocumentService
 		]);
 
 		return $result;
+	}
+
+	protected function cloneDiskFile(\Bitrix\Disk\File $diskFile): Main\Result
+	{
+		$result = new Main\Result();
+		$fileId = $diskFile->getFileId();
+		if (!$fileId)
+		{
+			return $result->addError(new Main\Error('Disk file has no associated CFile'));
+		}
+
+		$fileArray = \CFile::MakeFileArray($fileId);
+		if (!$fileArray)
+		{
+			return $result->addError(new Main\Error('Failed to read file from disk'));
+		}
+
+		$diskFileName = $diskFile->getName();
+		if ($diskFileName)
+		{
+			$fileArray['name'] = $diskFileName;
+		}
+
+		$clonedFileId = \CFile::SaveFile($fileArray, 'sign');
+		if (!$clonedFileId)
+		{
+			return $result->addError(new Main\Error('Failed to clone file from disk'));
+		}
+
+		return $result->setData(['fileId' => $clonedFileId]);
 	}
 
 	public function discardEditedFile(int $diskFileId, int $userId): Main\Result

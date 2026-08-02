@@ -2,11 +2,15 @@
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)die();
 
+use Bitrix\Tasks\Integration\BizProc\NodeFilter\TargetDocumentResolverTrait;
 use Bitrix\Tasks;
+use Bitrix\Tasks\Integration\BizProc\NodeFilter\TargetDocumentAccessGuard;
 
 use Bitrix\Main\Loader;
 
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+
+\Bitrix\Main\Loader::includeModule('tasks');
 
 /**
  * @property-read mixed Title
@@ -15,6 +19,8 @@ use Bitrix\Crm\Integration\Analytics\Dictionary;
  */
 class CBPTasksChangeResponsibleActivity extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -32,7 +38,7 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentId = $this->getDocumentId();
+		$documentId = $this->resolveTargetDocumentId();
 
 		if ($documentId[0] !== 'tasks')
 		{
@@ -48,7 +54,7 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentType = $this->getDocumentType();
+		$documentType = $this->resolveTargetDocumentType($documentId);
 
 		$runtime = CBPRuntime::GetRuntime();
 		/** @var CBPDocumentService $ds */
@@ -179,7 +185,14 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 	private function canChangeResponsible(array $documentId): bool
 	{
 		$taskId = $documentId[2];
-		$documentType = $this->getDocumentType()[2];
+		$documentType = $this->resolveTargetDocumentType($documentId)[2];
+
+		$resolvedCheck = $this->canChangeResponsibleResolvedTarget($documentId);
+		if ($resolvedCheck !== null)
+		{
+			return $resolvedCheck;
+		}
+
 		$canChange = false;
 
 		if (
@@ -216,5 +229,17 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 		}
 
 		return $canChange;
+	}
+
+	private function canChangeResponsibleResolvedTarget(array $documentId): ?bool
+	{
+		$rootDocumentId = $this->getRootActivity()->getDocumentId();
+
+		return TargetDocumentAccessGuard::checkResolvedTarget(
+			is_array($rootDocumentId) ? $rootDocumentId : [],
+			$documentId,
+			Tasks\Access\ActionDictionary::ACTION_TASK_CHANGE_RESPONSIBLE,
+			(int)($this->workflow?->getStartedBy() ?? 0),
+		);
 	}
 }

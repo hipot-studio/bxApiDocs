@@ -16,6 +16,7 @@ class ActivityData implements Arrayable
 		public readonly ?array $children = null,
 		public readonly array $returnProperties = [],
 		public readonly ?string $document = null,
+		public readonly ?string $presetId = null,
 	) {}
 
 	public function toArray(): array
@@ -34,6 +35,11 @@ class ActivityData implements Arrayable
 			$result['Children'] = $this->children;
 		}
 
+		if ($this->presetId !== null)
+		{
+			$result['PresetId'] = $this->presetId;
+		}
+
 		return $result;
 	}
 
@@ -49,6 +55,7 @@ class ActivityData implements Arrayable
 			children: $children,
 			returnProperties: (array)($data['ReturnProperties'] ?? []),
 			document: isset($data['Document']) ? (string)$data['Document'] : null,
+			presetId: isset($data['PresetId']) ? (string)$data['PresetId'] : null,
 		);
 	}
 }

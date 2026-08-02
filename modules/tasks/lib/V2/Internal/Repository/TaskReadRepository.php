@@ -28,6 +28,7 @@ use Bitrix\Tasks\V2\Internal\Repository\Task\Filter;
 use Bitrix\Tasks\V2\Internal\Repository\Task\ListSelect;
 use Bitrix\Tasks\V2\Internal\Repository\Task\Order;
 use Bitrix\Tasks\V2\Internal\Repository\Task\Select;
+use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateReplicateParamsRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\ChecksumService;
 use Bitrix\Tasks\V2\Internal\Service\TaskLegacyFeatureService;
 use Bitrix\Tasks\V2\Public\Provider\TaskElapsedTimeProvider;
@@ -61,7 +62,8 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		private readonly TaskElapsedTimeProvider $elapsedTimeProvider,
 		private readonly TaskLegacyFeatureService $taskLegacyFeatureService,
 		private readonly TaskMemberRepositoryInterface $taskMemberRepository,
-		private readonly CrmAccessService $crmAccessService
+		private readonly CrmAccessService $crmAccessService,
+		private readonly TemplateReplicateParamsRepositoryInterface $templateReplicateParamsRepository,
 	)
 	{
 	}
@@ -339,6 +341,20 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			$scenarios = $this->scenarioRepository->getById($id);
 		}
 
+		$templateReplication = null;
+		if ($select->templateReplication)
+		{
+			$forkedByTemplateId = $task->getForkedByTemplateId();
+			if ($forkedByTemplateId > 0)
+			{
+				$templateReplication = $this->templateReplicateParamsRepository->getByTemplateId($forkedByTemplateId);
+			}
+			else
+			{
+				$templateReplication = $this->templateReplicateParamsRepository->getByTaskId($id);
+			}
+		}
+
 		return $this->taskMapper->mapToEntity(
 			taskObject: $task,
 			group: $group,
@@ -356,6 +372,7 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 			checksum: $checksum,
 			email: $email,
 			scenarios: $scenarios,
+			templateReplication: $templateReplication,
 		);
 	}
 

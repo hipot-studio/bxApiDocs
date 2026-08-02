@@ -48,6 +48,7 @@ class ServiceProvider
 		$serviceCollection = new ServiceCollection();
 		$filter = [
 			'WITH_SKUS_YANDEX' => true,
+			'SHORT_SLOTS_ONLY' => true,
 		];
 		if ($resourceId !== null)
 		{

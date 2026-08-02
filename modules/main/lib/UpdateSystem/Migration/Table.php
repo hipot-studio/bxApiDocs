@@ -293,11 +293,19 @@ class Table
 				{
 					return true;
 				}
+				if (!$context->tableExists($tableName))
+				{
+					return true;
+				}
 
 				return !$context->columnExists($tableName, $col->getParams()->getName());
 			},
 			addedIndexFilter: static function(string $_indexName, array $info) use ($context, $tableName): bool {
 				if (!$context->getDatabaseUpdateMode()->usesRealDatabase())
+				{
+					return true;
+				}
+				if (!$context->tableExists($tableName))
 				{
 					return true;
 				}
@@ -314,11 +322,19 @@ class Table
 				{
 					return [];
 				}
+				if (!$context->tableExists($tableName))
+				{
+					return [];
+				}
 
 				return $context->getPrimaryKeyColumns($tableName);
 			},
 			dropIndexNameResolver: static function(array $columnNames) use ($context, $tableName): ?string {
 				if (!$context->getDatabaseUpdateMode()->usesRealDatabase())
+				{
+					return null;
+				}
+				if (!$context->tableExists($tableName))
 				{
 					return null;
 				}

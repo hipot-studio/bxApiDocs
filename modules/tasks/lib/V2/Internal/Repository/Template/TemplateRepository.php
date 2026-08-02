@@ -8,10 +8,11 @@ use Bitrix\Tasks\Control\Exception\TemplateAddException;
 use Bitrix\Tasks\Control\Exception\TemplateDeleteException;
 use Bitrix\Tasks\Control\Exception\TemplateUpdateException;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
+use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\Template;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Template\OrmTemplateMapper;
-use Bitrix\Tasks\V2\Internal\Repository\Trait\ApplicationErrorTrait;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TemplateMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Trait\ApplicationErrorTrait;
 use Bitrix\Tasks\Validation\Validator\SerializedValidator;
 
 class TemplateRepository implements TemplateRepositoryInterface
@@ -70,6 +71,22 @@ class TemplateRepository implements TemplateRepositoryInterface
 		}
 
 		return $this->mapper->mapFromTemplateObject($template);
+	}
+
+	public function getTaskByTemplateId(int $templateId): ?Task
+	{
+		$row =
+			TemplateTable::query()
+				->setSelect(['TASK_ID'])
+				->where('ID', $templateId)
+				->where('ZOMBIE', 'N')
+				->setLimit(1)
+				->fetch()
+		;
+
+		$taskId = (int)($row['TASK_ID'] ?? 0);
+
+		return $taskId > 0 ? new Task(id: $taskId) : null;
 	}
 
 	public function save(Template $entity): int

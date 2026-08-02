@@ -688,6 +688,7 @@ class Provider
 			'features' => Helper::getMobileFeatures(),
 			'mandatoryFeatures' => Helper::getMobileMandatoryFeatures(),
 			'currentUserId' => $this->userId,
+			'shouldSelectHasCollabers' => true,
 		]);
 
 		foreach ($projectIds as $id)

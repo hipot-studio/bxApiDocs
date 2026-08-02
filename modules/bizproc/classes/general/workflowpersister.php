@@ -130,6 +130,11 @@ class CBPWorkflowPersister
 					$DB->Query(
 						'UPDATE b_bp_workflow_instance SET ' . $sqlUpdate . ' WHERE ID = \''.$DB->ForSql($id).'\' '
 					);
+
+					if ($bUnlocked)
+					{
+						$this->unlock($id, false);
+					}
 				}
 				else
 				{
@@ -326,9 +331,14 @@ class CBPWorkflowPersister
 		return $this->lockDb($workflowId);
 	}
 
-	private function unlock(string $workflowId): bool
+	private function unlock(string $workflowId, bool $active = true): bool
 	{
 		if (!$this->useDbLock())
+		{
+			return true;
+		}
+
+		if ($active && $this->shouldHoldLock())
 		{
 			return true;
 		}
@@ -342,10 +352,22 @@ class CBPWorkflowPersister
 
 		if ($use === null)
 		{
-			$use = (Main\Config\Option::get('bizproc', 'workflow_dblock', 'N') === 'Y');
+			$use = (Main\Config\Option::get('bizproc', 'workflow_dblock', 'Y') === 'Y');
 		}
 
 		return $use;
+	}
+
+	private function shouldHoldLock()
+	{
+		static $should;
+
+		if ($should === null)
+		{
+			$should = (Main\Config\Option::get('bizproc', 'workflow_dblock_hold', 'N') === 'Y');
+		}
+
+		return $should;
 	}
 
 	private function lockDb(string $workflowId, bool $release = false): bool

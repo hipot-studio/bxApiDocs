@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Internal\AI\Agent\Generator\AgentConfig;
 
-final class ConditionConfig
+final readonly class ConditionConfig
 {
 	public function __construct(
-		public readonly string $field,
-		public readonly string $operator,
-		public readonly string|int $value,
-		public readonly int $joiner = 0,
-		public readonly string $object,
+		public string $field,
+		public string $operator,
+		public string|int $value,
+		public string $object,
+		public int $joiner = 0,
 	) {}
 
 	public static function fromArray(array $data): self
@@ -36,8 +36,8 @@ final class ConditionConfig
 			field: $data['field'],
 			operator: $data['operator'],
 			value: $data['value'] ?? '',
-			joiner: (int)$joiner,
 			object: $data['object'],
+			joiner: (int)$joiner,
 		);
 	}
 

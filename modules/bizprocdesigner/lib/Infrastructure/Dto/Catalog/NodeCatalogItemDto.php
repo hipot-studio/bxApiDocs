@@ -16,6 +16,7 @@ class NodeCatalogItemDto implements JsonSerializable
 	 * @param string|null $icon
 	 * @param string|null $iconPath
 	 * @param int|null $colorIndex
+	 * @param int|null $contentBlockColor
 	 * @param mixed $properties
 	 * @param array $returnProperties
 	 * @param array{width: int, height: int, ports: array{input: array, output: array}} $defaultSettings
@@ -29,6 +30,7 @@ class NodeCatalogItemDto implements JsonSerializable
 		public readonly ?string $icon,
 		public readonly ?string $iconPath,
 		public readonly ?int $colorIndex,
+		public readonly ?int $contentBlockColor,
 		public readonly mixed $properties,
 		public readonly array $returnProperties,
 		public readonly array $defaultSettings,
@@ -46,6 +48,7 @@ class NodeCatalogItemDto implements JsonSerializable
 			'icon' => $this->icon,
 			'iconPath' => $this->iconPath,
 			'colorIndex' => $this->colorIndex,
+			'contentBlockColor' => $this->contentBlockColor,
 			'properties' => $this->properties,
 			'defaultSettings' => $this->defaultSettings,
 			'returnProperties' => $this->returnProperties,

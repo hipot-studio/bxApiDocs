@@ -43,7 +43,7 @@ class ResourceType implements EntityInterface
 	private string $templateTypeDelayed;
 	private int $delayedNotificationDelay = 300; // 5 minutes
 	private int $delayedCounterDelay = 300; // 5 minutes
-	private string $senderCode = 'bitrix24';
+	private string $senderCode = '';
 
 	public function __construct()
 	{

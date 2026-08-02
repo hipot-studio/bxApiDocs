@@ -61,6 +61,11 @@ class ResourceProvider extends BaseProvider
 		{
 			$this->options['includeDeleted'] = (bool)$options['includeDeleted'];
 		}
+
+		if (isset($options['shortSlotsOnly']))
+		{
+			$this->options['shortSlotsOnly'] = (bool)$options['shortSlotsOnly'];
+		}
 	}
 
 	public function isAvailable(): bool
@@ -75,13 +80,19 @@ class ResourceProvider extends BaseProvider
 			return [];
 		}
 
+		$filter = [
+			'ID' => $ids,
+			'MODULE_ID' => 'booking',
+		];
+
+		if ($this->getOption('shortSlotsOnly') === true)
+		{
+			$filter['SHORT_SLOTS_ONLY'] = true;
+		}
+
 		$resources = $this->resourceProvider->getList(
 			gridParams: new Provider\Params\GridParams(
-				filter: new Provider\Params\Resource\ResourceFilter([
-					'ID' => $ids,
-					'MODULE_ID' => 'booking',
-					'INCLUDE_DELETED' => $this->getOption('includeDeleted'),
-				]),
+				filter: new Provider\Params\Resource\ResourceFilter($filter),
 			),
 			userId: $this->userId,
 		);
@@ -92,10 +103,9 @@ class ResourceProvider extends BaseProvider
 	public function doSearch(SearchQuery $searchQuery, Dialog $dialog): void
 	{
 		$items = $this->getResourceItems(
-			[
-				'searchQuery' => $searchQuery,
-				'includeDeleted' => true,
-			]
+			searchQuery: $searchQuery,
+			includeDeleted: $this->getOption('includeDeleted'),
+			shortSlotsOnly: $this->getOption('shortSlotsOnly'),
 		);
 
 		$dialog->addItems($items);
@@ -103,33 +113,36 @@ class ResourceProvider extends BaseProvider
 
 	public function fillDialog(Dialog $dialog): void
 	{
-		$items = $this->getResourceItems([
-			'includeDeleted' => $this->getOption('includeDeleted'),
-		]);
+		$items = $this->getResourceItems(
+			shortSlotsOnly: $this->getOption('shortSlotsOnly'),
+		);
 
 		$dialog->addRecentItems($items);
 	}
 
-	/**
-	* @param array{
-	*     searchQuery?: SearchQuery,
-	*     includeDeleted?: bool,
-	* } $filterParams
-	*/
-	private function getResourceItems(array $filterParams): array
+	private function getResourceItems(
+		SearchQuery|null $searchQuery = null,
+		bool|null $includeDeleted = null,
+		bool|null $shortSlotsOnly = null,
+	): array
 	{
 		$filter = [
 			'MODULE_ID' => 'booking',
 		];
 
-		if (isset($filterParams['searchQuery']))
+		if ($searchQuery !== null)
 		{
-			$filter['SEARCH_QUERY'] = $filterParams['searchQuery']->getQuery();
+			$filter['SEARCH_QUERY'] = $searchQuery->getQuery();
 		}
 
-		if (isset($filterParams['includeDeleted']))
+		if ($includeDeleted !== null)
 		{
-			$filter['INCLUDE_DELETED'] = $filterParams['includeDeleted'];
+			$filter['INCLUDE_DELETED'] = $includeDeleted;
+		}
+
+		if ($shortSlotsOnly === true)
+		{
+			$filter['SHORT_SLOTS_ONLY'] = true;
 		}
 
 		$resources = $this->resourceProvider->getList(

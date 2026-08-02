@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Script\Queue;
 
+use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Script\Entity\EO_Script;
 use Bitrix\Bizproc\Script\Entity\EO_ScriptQueueDocument;
 use Bitrix\Bizproc\Script\Entity\ScriptQueueTable;
@@ -91,38 +92,30 @@ final class Stepper extends Main\Update\Stepper
 				$startParameters = [];
 			}
 
-			if (Starter::isEnabled())
+			$starter =
+				Starter::getByScenario(Scenario::onScript)
+					->setDocument(new DocumentDto($documentId, $documentType))
+					->setParameters($startParameters)
+					->setValidateParameters(false)
+					->setUser($queue->getStartedBy())
+					->setTemplateIds([$script->getWorkflowTemplateId()])
+					->setContext(new ContextDto('bizproc'))
+			;
+			$result = $starter->start();
+			$workflowId = current($result->getWorkflowIds()) ?: null;
+			if (!$result->isSuccess())
 			{
-				$starter =
-					Starter::getByScenario(Scenario::onScript)
-						->setDocument(new DocumentDto($documentId, $documentType))
-						->setParameters($startParameters)
-						->setValidateParameters(false)
-						->setUser($queue->getStartedBy())
-						->setTemplateIds([$script->getWorkflowTemplateId()])
-						->setContext(new ContextDto('bizproc'))
-				;
-				$result = $starter->start();
-				$workflowId = current($result->getWorkflowIds()) ?: null;
-				if (!$result->isSuccess())
-				{
-					$errors = array_map(static fn($message) => ['message' => $message], $result->getErrorMessages());
-				}
+				$errors = array_map(static fn($message) => ['message' => $message], $result->getErrorMessages());
+			}
 			}
 			else
 			{
-				$startParameters[\CBPDocument::PARAM_TAGRET_USER] = 'user_' . $queue->getStartedBy();
-				$startParameters[\CBPDocument::PARAM_USE_FORCED_TRACKING] = true;
-				$startParameters[\CBPDocument::PARAM_IGNORE_SIMULTANEOUS_PROCESSES_LIMIT] = true;
-				$startParameters[\CBPDocument::PARAM_DOCUMENT_TYPE] = $documentType;
-				$startParameters[\CBPDocument::PARAM_DOCUMENT_EVENT_TYPE] = \CBPDocumentEventType::Script;
-
-				$workflowId = \CBPDocument::StartWorkflow($script->getWorkflowTemplateId(), $documentId, $startParameters, $errors);
+				$errors[] = ['message' => ErrorMessage::START_ACCESS_DENIED->get()];
 			}
-		}
-		else
+
+		if (!$workflowId && !$errors)
 		{
-			$errors[] = ['message' => Main\Localization\Loc::getMessage('BIZPROC_SCRIPT_QUEUE_CAN_START_ERROR')];
+			$errors[] = ['message' => ErrorMessage::CREATE_WORKFLOW->get()];
 		}
 
 		if ($workflowId)
@@ -130,6 +123,7 @@ final class Stepper extends Main\Update\Stepper
 			$document->setWorkflowId($workflowId);
 			$document->setStatus(Status::COMPLETED);
 		}
+
 		if ($errors)
 		{
 			$document->setStatus(Status::FAULT);
@@ -137,6 +131,7 @@ final class Stepper extends Main\Update\Stepper
 		}
 
 		$document->save();
+
 		return self::CONTINUE_EXECUTION;
 	}
 

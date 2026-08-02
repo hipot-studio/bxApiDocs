@@ -18,7 +18,7 @@ class StorageCleanupService
 	{
 		$this->provider = new StorageItemProvider(0);
 		$this->cleanupDays =
-			$cleanupDays ?? (int)\Bitrix\Main\Config\Option::get('bizproc', 'search_cleanup_days', self::CLEANUP_DAYS)
+			$cleanupDays ?? (int)\Bitrix\Main\Config\Option::get('bizproc', 'storage_items_cleanup_days', self::CLEANUP_DAYS)
 		;
 	}
 

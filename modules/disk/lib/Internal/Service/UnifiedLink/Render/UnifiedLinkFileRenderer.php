@@ -34,6 +34,7 @@ class UnifiedLinkFileRenderer
 		private readonly ?Version $version = null,
 		private readonly array $analytics = [],
 		?CurrentUser $currentUser = null,
+		private readonly bool $deferred = false,
 	) {
 		if ($currentUser instanceof CurrentUser && (int)$currentUser->getId() === 0)
 		{
@@ -95,6 +96,7 @@ class UnifiedLinkFileRenderer
 			analytics: $this->analytics,
 			currentUser: $this->currentUser,
 			forceExternal: $shouldRenderExternal,
+			deferred: $this->deferred,
 		);
 
 		$result = match ($accessLevel)
@@ -110,7 +112,12 @@ class UnifiedLinkFileRenderer
 			return new RenderResult($content, 500);
 		}
 
-		return new RenderResult($result->getValue(), 200, $result->getRedirectUrl());
+		return new RenderResult(
+			content: $result->getValue(),
+			status: 200,
+			redirectUrl: $result->getRedirectUrl(),
+			component: $result->getComponent(),
+		);
 	}
 
 	public static function renderAccessDeniedPage(): string

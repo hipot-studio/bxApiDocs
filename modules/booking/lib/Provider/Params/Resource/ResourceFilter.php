@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Provider\Params\Resource;
 
+use Bitrix\Booking\Internals\Model\ResourceSettingsTable;
 use Bitrix\Booking\Internals\Model\ResourceSkuTable;
 use Bitrix\Booking\Internals\Model\ResourceSkuYandexTable;
+use Bitrix\Booking\Internals\Service\Time;
 use Bitrix\Booking\Provider\Params\Filter;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlExpression;
@@ -15,6 +17,8 @@ use Bitrix\Main\ORM\Query\Query;
 
 class ResourceFilter extends Filter
 {
+	private const MAX_SHORT_SLOT_SIZE = 12 * Time::MINUTES_IN_HOUR;
+
 	private array $filter;
 	private string $initAlias;
 
@@ -34,16 +38,35 @@ class ResourceFilter extends Filter
 	{
 		$result = new ConditionTree();
 
+		$resourceIds = [];
 		if (isset($this->filter['ID']))
 		{
-			if (is_array($this->filter['ID']))
+			$resourceIds = is_array($this->filter['ID'])
+				? array_map('intval', $this->filter['ID'])
+				: [(int)$this->filter['ID']];
+		}
+
+		if ($this->filter['SHORT_SLOTS_ONLY'] ?? false)
+		{
+			if (!empty($resourceIds))
 			{
-				$result->whereIn('ID', array_map('intval', $this->filter['ID']));
+				$longSlotResourceIds = $this->getLongSlotResourceIds($resourceIds);
+				$resourceIds = array_diff($resourceIds, $longSlotResourceIds);
+
+				$result->whereIn('ID', empty($resourceIds) ? [0] : array_map('intval', $resourceIds));
 			}
 			else
 			{
-				$result->where('ID', '=', (int)$this->filter['ID']);
+				$longSlotResourceIds = $this->getLongSlotResourceIds([]);
+				if (!empty($longSlotResourceIds))
+				{
+					$result->whereNotIn('ID', array_map('intval', $longSlotResourceIds));
+				}
 			}
+		}
+		elseif (!empty($resourceIds))
+		{
+			$result->whereIn('ID', array_map('intval', $resourceIds));
 		}
 
 		if (isset($this->filter['EXTERNAL_ID']))
@@ -100,6 +123,33 @@ class ResourceFilter extends Filter
 			$result->where('DATA.DESCRIPTION', '=', (string)$this->filter['DESCRIPTION']);
 		}
 
+		if (isset($this->filter['CREATED_BY']))
+		{
+			if (is_array($this->filter['CREATED_BY']))
+			{
+				$result->whereIn('DATA.CREATED_BY', array_map('intval', $this->filter['CREATED_BY']));
+			}
+			else
+			{
+				$result->where('DATA.CREATED_BY', '=', (int)$this->filter['CREATED_BY']);
+			}
+		}
+
+		if (isset($this->filter['SENDER_CODE']))
+		{
+			if (is_array($this->filter['SENDER_CODE']))
+			{
+				$result->whereIn(
+					'NOTIFICATION_SETTINGS.SENDER_CODE',
+					array_map('strval', $this->filter['SENDER_CODE']),
+				);
+			}
+			else
+			{
+				$result->where('NOTIFICATION_SETTINGS.SENDER_CODE', '=', (string)$this->filter['SENDER_CODE']);
+			}
+		}
+
 		$this->applyServicesFilters($result);
 
 		return $result;
@@ -112,6 +162,22 @@ class ResourceFilter extends Filter
 
 		$this->applyWithSkusFilter($result, 'WITH_SKUS_YANDEX', ResourceSkuYandexTable::class);
 		$this->applyHasSkusFilter($result, 'HAS_SKUS_YANDEX', ResourceSkuYandexTable::class);
+	}
+
+	protected function getLongSlotResourceIds(array $resourceIds): array
+	{
+		$query = ResourceSettingsTable::query()
+			->setSelect(['RESOURCE_ID'])
+			->setGroup(['RESOURCE_ID'])
+			->where('SLOT_SIZE', '>', self::MAX_SHORT_SLOT_SIZE)
+		;
+
+		if (!empty($resourceIds))
+		{
+			$query->whereIn('RESOURCE_ID', $resourceIds);
+		}
+
+		return array_column($query->exec()->fetchAll(), 'RESOURCE_ID');
 	}
 
 	/**

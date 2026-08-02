@@ -15,11 +15,6 @@ class Output
 		TYPE_BITRIX24 = 'B24',
 		TYPE_CP = 'CP',
 
-		STATIC_FUNCTIONS = [
-			'deleteline',
-			'infoconnectorsline'
-		],
-
 		DYNAMIC_FUNCTIONS = [
 			'sendmessage',
 			'updatemessage',
@@ -104,23 +99,18 @@ class Output
 
 		if ($result->isSuccess())
 		{
-			if ($this->connector === 'all')
-			{
-				if (in_array(mb_strtolower($name), self::DYNAMIC_FUNCTIONS, false))
-				{
-					$result->addError(new Error(
-						Loc::getMessage('IMCONNECTOR_ERROR_PROVIDER_GENERAL_REQUEST_DYNAMIC_METHOD'),
-						Library::ERROR_IMCONNECTOR_PROVIDER_GENERAL_REQUEST_DYNAMIC_METHOD,
-						__METHOD__,
-						$name
-					));
-				}
-			}
-			elseif (in_array(mb_strtolower($name), self::STATIC_FUNCTIONS, false))
+			// The lump request (CONNECTOR='all') is only allowed for static line commands
+			// (infoConnectorsLine/deleteLine); dynamic per-message methods stay blocked for it.
+			// A concrete connector or a connector set is allowed to call any method,
+			// including the static line commands.
+			if (
+				$this->connector === 'all'
+				&& in_array(mb_strtolower($name), self::DYNAMIC_FUNCTIONS, false)
+			)
 			{
 				$result->addError(new Error(
-					Loc::getMessage('IMCONNECTOR_ERROR_PROVIDER_GENERAL_REQUEST_NOT_DYNAMIC_METHOD'),
-					Library::ERROR_IMCONNECTOR_PROVIDER_GENERAL_REQUEST_NOT_DYNAMIC_METHOD,
+					Loc::getMessage('IMCONNECTOR_ERROR_PROVIDER_GENERAL_REQUEST_DYNAMIC_METHOD'),
+					Library::ERROR_IMCONNECTOR_PROVIDER_GENERAL_REQUEST_DYNAMIC_METHOD,
 					__METHOD__,
 					$name
 				));

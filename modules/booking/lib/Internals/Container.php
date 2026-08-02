@@ -71,7 +71,9 @@ use Bitrix\Booking\Internals\Service\Notifications\MessageSender\DummyMessageSen
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\BookingDataExtractor;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderNotification;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderPicker;
+use Bitrix\Booking\Internals\Service\Notifications\AiCallAvailabilityService;
 use Bitrix\Booking\Internals\Service\Notifications\WhatsAppEmergencyService;
+use Bitrix\Booking\Internals\Service\Promotion\AiCallBanner\AiCallBannerService;
 use Bitrix\Booking\Internals\Service\Overbooking\DateChangeAvailabilityService;
 use Bitrix\Booking\Internals\Service\Overbooking\OverbookingService;
 use Bitrix\Booking\Internals\Service\Overbooking\OverlapPolicy;
@@ -557,6 +559,16 @@ class Container
 		return self::getService(WhatsAppEmergencyService::class);
 	}
 
+	public static function getAiCallBannerService(): AiCallBannerService
+	{
+		return self::getService(AiCallBannerService::class);
+	}
+
+	public static function getAiCallMassSwitcher(): \Bitrix\Booking\Internals\Service\Notifications\AiCallMassSwitcher
+	{
+		return self::getService(\Bitrix\Booking\Internals\Service\Notifications\AiCallMassSwitcher::class);
+	}
+
 	public static function getCrmFormService(): CrmFormService
 	{
 		return self::getService(CrmFormService::class);
@@ -620,6 +632,16 @@ class Container
 	public static function getAiCallMessageSender(): \Bitrix\Booking\Internals\Integration\Bizproc\AiCallMessageSender
 	{
 		return self::getService(\Bitrix\Booking\Internals\Integration\Bizproc\AiCallMessageSender::class);
+	}
+
+	public static function getAiAgentLauncher(): \Bitrix\Booking\Internals\Integration\Bizproc\AiAgentLauncher
+	{
+		return self::getService(\Bitrix\Booking\Internals\Integration\Bizproc\AiAgentLauncher::class);
+	}
+
+	public static function getAiCallAvailabilityService(): AiCallAvailabilityService
+	{
+		return self::getService(AiCallAvailabilityService::class);
 	}
 
 	public static function getLicenseChecker(): LicenseChecker

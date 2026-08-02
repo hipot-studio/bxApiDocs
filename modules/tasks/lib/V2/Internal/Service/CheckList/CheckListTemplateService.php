@@ -11,6 +11,7 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Entity\Template;
 use Bitrix\Tasks\V2\Internal\Logger;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\CheckListMapper;
+use Bitrix\Tasks\V2\Internal\Repository\Template\Select;
 use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateReadRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\CheckList\Prepare\Save\CheckListEntityFieldService;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\Config\UpdateConfig;
@@ -53,7 +54,8 @@ class CheckListTemplateService extends BaseCheckListService
 
 	public function save(array $checkLists, int $templateId, int $userId): Entity\Template
 	{
-		$template = $this->templateReadRepository->getById($templateId);
+		$templateSelect = new Select(members: true);
+		$template = $this->templateReadRepository->getById($templateId, $templateSelect);
 
 		if ($template === null)
 		{
@@ -76,11 +78,14 @@ class CheckListTemplateService extends BaseCheckListService
 			throw new CheckListException($this->getApplicationError());
 		}
 
+		$accomplices = $this->mergeMembers($template->accomplices, $nodes->getAccomplices());
+		$auditors = $this->mergeMembers($template->auditors, $nodes->getAuditors());
+
 		$template = new Entity\Template(
 			id: $templateId,
 			checklist: $this->checkListMapper->mapToArray($nodes),
-			accomplices: UserCollection::mapFromIds($nodes->getAccomplices()),
-			auditors: UserCollection::mapFromIds($nodes->getAuditors()),
+			accomplices: $accomplices,
+			auditors: $auditors,
 		);
 
 		$config = new UpdateConfig(userId: $userId);
@@ -98,5 +103,17 @@ class CheckListTemplateService extends BaseCheckListService
 	protected function getEntityType(): Entity\CheckList\Type
 	{
 		return Entity\CheckList\Type::Template;
+	}
+
+	protected function mergeMembers(UserCollection $templateUserCollection, array $nodeMembers): ?UserCollection
+	{
+		if (!$nodeMembers)
+		{
+			return null;
+		}
+
+		$members = array_unique(array_merge($nodeMembers, $templateUserCollection->getIds()));
+
+		return UserCollection::mapFromIds($members);
 	}
 }

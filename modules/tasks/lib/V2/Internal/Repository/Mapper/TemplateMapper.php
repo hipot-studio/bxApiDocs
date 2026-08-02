@@ -45,6 +45,7 @@ class TemplateMapper
 	{
 		return new Template(
 			id: $templateObject->getId(),
+			task: $templateObject->getTaskId() > 0 ? new Task($templateObject->getTaskId()) : null,
 			title: $templateObject->getTitle(),
 			description: $templateObject->getDescription(),
 			creator: $members?->findOneById($templateObject->getCreatedBy()),

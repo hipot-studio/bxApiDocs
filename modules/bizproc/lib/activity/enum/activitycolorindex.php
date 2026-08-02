@@ -13,4 +13,5 @@ enum ActivityColorIndex: int
 	case GREEN = 4;
 	case CYAN = 5;
 	case YELLOW = 6;
+	case SETTINGS = 8;
 }

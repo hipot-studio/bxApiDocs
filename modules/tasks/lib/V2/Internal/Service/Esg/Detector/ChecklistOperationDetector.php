@@ -169,39 +169,27 @@ class ChecklistOperationDetector
 	{
 		$operations = [];
 		$itemsWithNewFiles = [];
-		$totalNewFiles = 0;
+		$itemsForGrouping = [];
 
 		foreach ($checklistAfter as $afterItem)
 		{
 			$itemId = $this->getItemId($afterItem);
-			$beforeItem = $this->findItemById($checklistBefore, $itemId);
+			$beforeItem = $this->findItemById($checklistBefore, $itemId) ?? [];
 
-			if ($beforeItem)
-			{
-				$beforeFiles = $this->getItemAttachments($beforeItem);
-				$afterFiles = $this->getItemAttachments($afterItem);
+			$beforeFileIds = $this->getItemAttachments($beforeItem);
+			$afterFileIds = $this->getItemAttachments($afterItem);
 
-				$newFilesCount = count($afterFiles) - count($beforeFiles);
-				if ($newFilesCount > 0) {
-					$itemsWithNewFiles[] = $afterItem;
-					$totalNewFiles += $newFilesCount;
-				}
-			}
-			else
+			$addedFileIds = array_diff($afterFileIds, $beforeFileIds);
+			if (!empty($addedFileIds))
 			{
-				// New item with files
-				$files = $this->getItemAttachments($afterItem);
-				if (!empty($files))
-				{
-					$itemsWithNewFiles[] = $afterItem;
-					$totalNewFiles += count($files);
-				}
+				$itemsWithNewFiles[$itemId] = $addedFileIds;
+				$itemsForGrouping[] = $afterItem;
 			}
 		}
 
-		if (!empty($itemsWithNewFiles))
+		if (!empty($itemsForGrouping))
 		{
-			$groupedByChecklist = $this->groupItemsByCheckLists($checklistAfter, $itemsWithNewFiles);
+			$groupedByChecklist = $this->groupItemsByCheckLists($checklistAfter, $itemsForGrouping);
 
 			foreach ($groupedByChecklist as $checkListId => $checkListItems)
 			{
@@ -211,10 +199,17 @@ class ChecklistOperationDetector
 					continue;
 				}
 
+				$checkListFilesCount = 0;
+				foreach ($checkListItems as $checkListItem)
+				{
+					$itemId = $this->getItemId($checkListItem);
+					$checkListFilesCount += count($itemsWithNewFiles[$itemId] ?? []);
+				}
+
 				$operations[] = new ChecklistOperation(
 					type: NotificationType::ChecklistFilesAdded,
 					checklistName: $this->getItemTitle($checkList),
-					itemCount: count($checkListItems),
+					itemCount: $checkListFilesCount,
 					itemId: $checkListId,
 					itemIds: $this->extractItemIds($checkListItems),
 				);
@@ -340,19 +335,18 @@ class ChecklistOperationDetector
 	{
 		$attachments = $item['attachments'] ?? [];
 
-		// Handle different attachment formats
-		if (is_array($attachments)) {
-			// If it's already an array (old format), return as is
-			return $attachments;
-		}
-
-		if (is_object($attachments)
-			|| (is_array($attachments) && !empty($attachments) && !is_numeric(array_keys($attachments)[0])))
+		if (!is_array($attachments))
 		{
-			// If it's an object or associative array (new format), convert to array
-			return array_values((array)$attachments);
+			return [];
 		}
 
-		return [];
+		$first = reset($attachments);
+
+		if (is_array($first))
+		{
+			return array_column($attachments, 'id');
+		}
+
+		return array_map('intval', array_keys($attachments));
 	}
 }

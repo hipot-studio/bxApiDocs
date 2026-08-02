@@ -12,6 +12,7 @@ use Bitrix\Tasks\Control\Exception\TemplateAddException;
 use Bitrix\Tasks\Replication\Template\Option\Options;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateReplicateParamsRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\EnableReplication;
@@ -31,6 +32,7 @@ class UpdateService
 	public function __construct(
 		private readonly ValidationService $validationService,
 		private readonly TemplateRepositoryInterface $templateRepository,
+		private readonly TemplateReplicateParamsRepositoryInterface $templateReplicateParamsRepository,
 	)
 	{
 
@@ -56,6 +58,7 @@ class UpdateService
 		[$template, $fields] = (new EntityFieldService())->prepare($template, $config, $fullTemplateData);
 
 		$isReplicateParamsChanged = $this->isReplicateParametersChanged($fullTemplateData, $fields);
+		[$taskIdBeforeUpdate, $taskIdAfterUpdate] = $this->getTaskIdsBeforeAndAfterUpdate($fullTemplateData, $fields);
 
 		$id = $this->templateRepository->save($template);
 
@@ -75,10 +78,20 @@ class UpdateService
 		// $this->updateParent($fields);
 		(new UpdateParent())($fields);
 
-		if ($isReplicateParamsChanged && !$config->isSkipAgent())
+		if ($isReplicateParamsChanged)
 		{
-			(new EnableReplication())($fields);
-			// $this->enableReplication($fields);
+			if (!$config->isSkipAgent())
+			{
+				(new EnableReplication())($fields);
+				// $this->enableReplication($fields);
+			}
+
+			$this->templateReplicateParamsRepository->invalidateByTemplateId($id);
+		}
+
+		if ($taskIdBeforeUpdate !== $taskIdAfterUpdate)
+		{
+			$this->invalidateByTaskIds($taskIdBeforeUpdate, $taskIdAfterUpdate);
 		}
 
 		(new UpdateParams())($fields);
@@ -191,5 +204,29 @@ class UpdateService
 		}
 
 		return true;
+	}
+
+	private function getTaskIdsBeforeAndAfterUpdate(array $template, array $fields): array
+	{
+		$taskIdBeforeUpdate = (int)($template['TASK_ID'] ?? 0);
+		$taskIdAfterUpdate = isset($fields['TASK_ID']) ? (int)$fields['TASK_ID'] : $taskIdBeforeUpdate;
+
+		return [$taskIdBeforeUpdate, $taskIdAfterUpdate];
+	}
+
+	private function invalidateByTaskIds(int $taskIdBeforeUpdate, int $taskIdAfterUpdate): void
+	{
+		if ($taskIdBeforeUpdate > 0)
+		{
+			$this->templateReplicateParamsRepository->invalidateByTaskId($taskIdBeforeUpdate);
+		}
+
+		if (
+			$taskIdAfterUpdate > 0
+			&& $taskIdAfterUpdate !== $taskIdBeforeUpdate
+		)
+		{
+			$this->templateReplicateParamsRepository->invalidateByTaskId($taskIdAfterUpdate);
+		}
 	}
 }

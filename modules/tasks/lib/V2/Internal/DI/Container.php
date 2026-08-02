@@ -46,6 +46,7 @@ use Bitrix\Tasks\V2\Internal\Repository\Template\TemplateParameterRepositoryInte
 use Bitrix\Tasks\V2\Internal\Repository\ViewedAbsenceRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\AddTaskService;
 use Bitrix\Tasks\V2\Internal\Service\AddTemplateService;
+use Bitrix\Tasks\V2\Internal\Service\Consistency\DeadlockInspector;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\FavoriteTaskRepositoryInterface;
@@ -420,6 +421,11 @@ class Container extends AbstractContainer
 	public function getConsistencyResolver(): ConsistencyResolverInterface
 	{
 		return $this->get(ConsistencyResolverInterface::class);
+	}
+
+	public function getDeadlockInspector(): DeadlockInspector
+	{
+		return $this->get(DeadlockInspector::class);
 	}
 
 	public function getTaskLegacyFeatureService(): TaskLegacyFeatureService

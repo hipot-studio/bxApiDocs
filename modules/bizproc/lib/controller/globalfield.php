@@ -2,25 +2,30 @@
 
 namespace Bitrix\Bizproc\Controller;
 
+use Bitrix\Bizproc\Api\Enum\ErrorMessage;
+
 class GlobalField extends Base
 {
 	public function deleteAction($fieldId, $mode, $documentType): array
 	{
 		$documentType = \CBPDocument::unSignDocumentType($documentType);
-		$fieldId = htmlspecialcharsback($fieldId);
-		switch ($mode)
+		if (!is_array($documentType) || !\CBPHelper::normalizeComplexDocumentId($documentType))
 		{
-			case 'variable':
-				return $this->deleteVariable($fieldId, $documentType);
-			case 'constant':
-				return $this->deleteConstant($fieldId, $documentType);
-			default:
-				return [
-					'error' => \Bitrix\Main\Localization\Loc::getMessage(
-						'BIZPROC_CONTROLLER_GLOBALFIELD_MODE_NOT_DEFINED'
-					),
-				];
+			return ['error' => ErrorMessage::ACCESS_DENIED->getError()->getMessage()];
 		}
+
+		$fieldId = htmlspecialcharsback($fieldId);
+
+		return match ($mode)
+		{
+			'variable' => $this->deleteVariable($fieldId, $documentType),
+			'constant' => $this->deleteConstant($fieldId, $documentType),
+			default => [
+				'error' => \Bitrix\Main\Localization\Loc::getMessage(
+					'BIZPROC_CONTROLLER_GLOBALFIELD_MODE_NOT_DEFINED'
+				),
+			],
+		};
 	}
 
 	private function deleteVariable($variableId, $documentType): array
@@ -98,19 +103,21 @@ class GlobalField extends Base
 	public function upsertAction($fieldId, $property, $documentType, $mode): array
 	{
 		$documentType = \CBPDocument::unSignDocumentType($documentType);
-		switch ($mode)
+		if (!is_array($documentType) || !\CBPHelper::normalizeComplexDocumentId($documentType))
 		{
-			case 'variable':
-				return $this->upsertVariable($fieldId, $property, $documentType);
-			case 'constant':
-				return $this->upsertConstant($fieldId, $property, $documentType);
-			default:
-				return [
-					'error' => \Bitrix\Main\Localization\Loc::getMessage(
-						'BIZPROC_CONTROLLER_GLOBALFIELD_MODE_NOT_DEFINED'
-					),
-				];
+			return ['error' => ErrorMessage::ACCESS_DENIED->getError()->getMessage()];
 		}
+
+		return match ($mode)
+		{
+			'variable' => $this->upsertVariable($fieldId, $property, $documentType),
+			'constant' => $this->upsertConstant($fieldId, $property, $documentType),
+			default => [
+				'error' => \Bitrix\Main\Localization\Loc::getMessage(
+					'BIZPROC_CONTROLLER_GLOBALFIELD_MODE_NOT_DEFINED'
+				),
+			],
+		};
 	}
 
 	private function upsertVariable($variableId, $property, $documentType): array
@@ -201,20 +208,20 @@ class GlobalField extends Base
 	public function reloadAction($mode, $documentTypeSigned): array
 	{
 		$documentType = \CBPDocument::unSignDocumentType($documentTypeSigned);
-
-		switch ($mode)
+		if (!is_array($documentType) || !\CBPHelper::normalizeComplexDocumentId($documentType))
 		{
-			case 'variable':
-				return ['list' => \Bitrix\Bizproc\Workflow\Type\GlobalVar::getAll($documentType)];
-			case 'constant':
-				return ['list' => \Bitrix\Bizproc\Workflow\Type\GlobalConst::getAll($documentType)];
-			default:
-				return [
-					'error' => \Bitrix\Main\Localization\Loc::getMessage(
-						'BIZPROC_CONTROLLER_GLOBALFIELD_MODE_NOT_DEFINED'
-					),
-				];
+			return ['error' => ErrorMessage::ACCESS_DENIED->getError()->getMessage()];
 		}
-	}
 
+		return match ($mode)
+		{
+			'variable' => ['list' => \Bitrix\Bizproc\Workflow\Type\GlobalVar::getAll($documentType)],
+			'constant' => ['list' => \Bitrix\Bizproc\Workflow\Type\GlobalConst::getAll($documentType)],
+			default => [
+				'error' => \Bitrix\Main\Localization\Loc::getMessage(
+					'BIZPROC_CONTROLLER_GLOBALFIELD_MODE_NOT_DEFINED'
+				),
+			],
+		};
+	}
 }

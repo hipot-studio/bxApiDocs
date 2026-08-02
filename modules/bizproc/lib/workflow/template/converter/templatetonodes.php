@@ -91,6 +91,7 @@ final class TemplateToNodes
 					$iconMap[$id] = [
 						'CODE' => $presetActivity->getIcon(),
 						'COLOR' => $presetActivity->getColorIndex(),
+						'CONTENT_BLOCK_COLOR' => $presetActivity->getContentBlockColor(),
 					];
 					$auxCapabilityMap[$id] = $presetActivity->getNodeSettings()?->ports?->aux !== null;
 				}
@@ -100,6 +101,7 @@ final class TemplateToNodes
 				$iconMap[$class] = [
 					'CODE' => $activity->getIcon(),
 					'COLOR' => $activity->getColorIndex(),
+					'CONTENT_BLOCK_COLOR' => $activity->getContentBlockColor(),
 				];
 				$auxCapabilityMap[$class] = $activity->getNodeSettings()?->ports?->aux !== null;
 			}
@@ -148,6 +150,9 @@ final class TemplateToNodes
 						'updated' => $node['node']['updated'] ?? null,
 						'published' => $node['node']['published'] ?? null,
 						'shouldShowAuxPorts' => $shouldShowAuxPorts,
+						'contentBlockColor' => $activityType && isset($iconMap[$activityType]['CONTENT_BLOCK_COLOR'])
+							? $iconMap[$activityType]['CONTENT_BLOCK_COLOR']
+							: null,
 					],
 				];
 			},

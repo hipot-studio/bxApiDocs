@@ -6,6 +6,7 @@ namespace Bitrix\Disk\Internal\Service\OnlyOffice\Promo;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Disk\Internal\Service\Environment;
+use Bitrix\Disk\Internal\Service\OnlyOffice\Promo\Interface\IncreaseLimitRequestMessageResolverInterface;
 use Bitrix\Disk\Internal\Service\OnlyOffice\Promo\Interface\TariffGroupResolverInterface;
 
 readonly class PromoCloudResolver extends PromoResolver
@@ -23,6 +24,7 @@ readonly class PromoCloudResolver extends PromoResolver
 		Environment $environment,
 		protected TariffGroupResolverInterface $tariffGroupResolver,
 		protected BaasSessionBoostService $sessionBoostService,
+		protected IncreaseLimitRequestMessageResolverInterface $increaseLimitRequestMessageResolver,
 	)
 	{
 		parent::__construct($environment);
@@ -72,7 +74,9 @@ readonly class PromoCloudResolver extends PromoResolver
 				: static::LIMIT_SLIDER_EXTENDABLE_TARIFFS
 		;
 
-		return new PromoDto(PromoType::SliderWithPopup, $code);
+		return new PromoDto(PromoType::SliderWithPopup, $code, [
+			'increaseLimitRequest' => $this->increaseLimitRequestMessageResolver->resolve(),
+		]);
 	}
 
 	/**
@@ -86,6 +90,6 @@ readonly class PromoCloudResolver extends PromoResolver
 		}
 
 
-		return new PromoDto(PromoType::Form, null, $this->getFeedbackFormParams());
+		return new PromoDto(PromoType::Form, null, ['formOptions' => $this->getFeedbackFormParams()]);
 	}
 }

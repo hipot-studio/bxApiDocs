@@ -140,6 +140,9 @@ class Filter
 							'id' => 'resource',
 							'dynamicLoad' => true,
 							'dynamicSearch' => true,
+							'options' => [
+								'includeDeleted' => true,
+							],
 						],
 					],
 				],

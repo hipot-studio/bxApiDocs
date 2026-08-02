@@ -243,6 +243,32 @@ class PushTable extends Main\Entity\DataManager
 		return $result;
 	}
 
+	/**
+	 * Drops all device tokens of the users in bulk (one chunked DELETE, no per-row ORM events —
+	 * the entity has no delete-side hooks). Native pushes resolve devices from b_pull_push at
+	 * send time, so this stops them immediately, including messages already sitting in the
+	 * deferred queue.
+	 *
+	 * @param int[] $userIds
+	 */
+	public static function deleteByUsers(array $userIds): void
+	{
+		$userIds = array_values(array_unique(array_filter(
+			array_map('intval', $userIds),
+			static fn (int $userId): bool => $userId > 0,
+		)));
+		if ($userIds === [])
+		{
+			return;
+		}
+
+		$connection = Main\Application::getConnection();
+		foreach (array_chunk($userIds, 500) as $chunk)
+		{
+			$ids = implode(',', $chunk);
+			$connection->queryExecute("DELETE FROM b_pull_push WHERE USER_ID IN ({$ids})");
+		}
+	}
 
 	/**
 	 * Returns validators for DEVICE_ID field.

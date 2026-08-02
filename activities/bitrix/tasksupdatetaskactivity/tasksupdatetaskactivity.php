@@ -6,12 +6,18 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Tasks;
+use Bitrix\Tasks\Integration\BizProc\NodeFilter\TargetDocumentAccessGuard;
+use Bitrix\Tasks\Integration\BizProc\NodeFilter\TargetDocumentResolverTrait;
 
 $runtime = CBPRuntime::GetRuntime();
 $runtime->IncludeActivityFile('SetFieldActivity');
 
+\Bitrix\Main\Loader::includeModule('tasks');
+
 class CBPTasksUpdateTaskActivity extends CBPSetFieldActivity
 {
+	use TargetDocumentResolverTrait;
+
 	public function Execute()
 	{
 		if (!CModule::IncludeModule('tasks'))
@@ -26,53 +32,57 @@ class CBPTasksUpdateTaskActivity extends CBPSetFieldActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentType = $this->GetDocumentType()[2];
-		$documentId = $this->GetDocumentId();
+		$documentId = $this->resolveTargetDocumentId();
+		$documentType = $this->resolveTargetDocumentType($documentId)[2];
 		$taskId = $documentId[2];
 
-		$canUpdate = false;
+		$canUpdate = $this->canUpdateResolvedTaskTarget($documentId, $fieldValue);
+		if ($canUpdate === null)
+		{
+			$canUpdate = false;
 
-		if (
-			Tasks\Integration\Bizproc\Document\Task::isProjectTask($documentType)
-			|| Tasks\Integration\Bizproc\Document\Task::isScrumProjectTask($documentType)
-			|| Tasks\Integration\Bizproc\Document\Task::isBizprocTask($documentType)
-		)
-		{
-			$canUpdate = true;
-		}
-		else
-		{
-			if (Tasks\Integration\Bizproc\Document\Task::isPlanTask($documentType))
+			if (
+				Tasks\Integration\Bizproc\Document\Task::isProjectTask($documentType)
+				|| Tasks\Integration\Bizproc\Document\Task::isScrumProjectTask($documentType)
+				|| Tasks\Integration\Bizproc\Document\Task::isBizprocTask($documentType)
+			)
 			{
-				$ownerId = Tasks\Integration\Bizproc\Document\Task::resolvePlanId($documentType);
+				$canUpdate = true;
 			}
 			else
 			{
-				$ownerId = Tasks\Integration\Bizproc\Document\Task::resolvePersonId($documentType);
-			}
-
-			if ($ownerId > 0)
-			{
-				$res = \CTasks::GetByID($taskId, false);
-				$taskFields = $res ? $res->fetch() : null;
-
-				if ($taskFields)
+				if (Tasks\Integration\Bizproc\Document\Task::isPlanTask($documentType))
 				{
-					$allowedActions = \CTaskItem::getAllowedActionsArray($ownerId, $taskFields, true);
+					$ownerId = Tasks\Integration\Bizproc\Document\Task::resolvePlanId($documentType);
+				}
+				else
+				{
+					$ownerId = Tasks\Integration\Bizproc\Document\Task::resolvePersonId($documentType);
+				}
 
-					$canUpdate = (isset($allowedActions['ACTION_EDIT']) && $allowedActions['ACTION_EDIT'] === true);
+				if ($ownerId > 0)
+				{
+					$res = \CTasks::GetByID($taskId, false);
+					$taskFields = $res ? $res->fetch() : null;
 
-					if (
-						!$canUpdate &&
-						isset($allowedActions['ACTION_CHANGE_DEADLINE']) &&
-						$allowedActions['ACTION_CHANGE_DEADLINE'] === true &&
-						count($fieldValue) === 1 &&
-						array_key_exists('DEADLINE', $fieldValue)
-					)
+					if ($taskFields)
 					{
-						$canUpdate = true;
-					}
+						$allowedActions = \CTaskItem::getAllowedActionsArray($ownerId, $taskFields, true);
 
+						$canUpdate = (isset($allowedActions['ACTION_EDIT']) && $allowedActions['ACTION_EDIT'] === true);
+
+						if (
+							!$canUpdate &&
+							isset($allowedActions['ACTION_CHANGE_DEADLINE']) &&
+							$allowedActions['ACTION_CHANGE_DEADLINE'] === true &&
+							count($fieldValue) === 1 &&
+							array_key_exists('DEADLINE', $fieldValue)
+						)
+						{
+							$canUpdate = true;
+						}
+
+					}
 				}
 			}
 		}
@@ -86,7 +96,7 @@ class CBPTasksUpdateTaskActivity extends CBPSetFieldActivity
 		{
 			if (method_exists($this, 'prepareFieldsValues'))
 			{
-				$fieldValue = $this->prepareFieldsValues($documentId, $this->GetDocumentType(), $fieldValue);
+				$fieldValue = $this->prepareFieldsValues($documentId, $this->resolveTargetDocumentType($documentId), $fieldValue);
 			}
 
 			$documentService = $this->workflow->GetService("DocumentService");
@@ -103,5 +113,41 @@ class CBPTasksUpdateTaskActivity extends CBPSetFieldActivity
 		}
 
 		return CBPActivityExecutionStatus::Closed;
+	}
+
+	private function canUpdateResolvedTaskTarget(array $documentId, array $fieldValue): ?bool
+	{
+		$rootDocumentId = $this->getRootActivity()->getDocumentId();
+		$rootDocumentId = is_array($rootDocumentId) ? $rootDocumentId : [];
+
+		if ($rootDocumentId === $documentId)
+		{
+			return null;
+		}
+
+		$actorId = (int)($this->workflow?->getStartedBy() ?? 0);
+
+		$canEdit = TargetDocumentAccessGuard::checkResolvedTarget(
+			$rootDocumentId,
+			$documentId,
+			Tasks\Access\ActionDictionary::ACTION_TASK_EDIT,
+			$actorId,
+		);
+		if ($canEdit === true)
+		{
+			return true;
+		}
+
+		if (count($fieldValue) === 1 && array_key_exists('DEADLINE', $fieldValue))
+		{
+			return TargetDocumentAccessGuard::checkResolvedTarget(
+				$rootDocumentId,
+				$documentId,
+				Tasks\Access\ActionDictionary::ACTION_TASK_DEADLINE,
+				$actorId,
+			);
+		}
+
+		return $canEdit;
 	}
 }

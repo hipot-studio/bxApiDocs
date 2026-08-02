@@ -51,6 +51,19 @@ class Base
 		$this->userPrefix = $idConnector;
 	}
 
+	/**
+	 * Whether the connector's line commands (infoConnectorsLine/deleteLine) must be
+	 * proxied to another region of the connectors server. By default a connector is
+	 * proxied (current behaviour); a connector that must be resolved in its own region
+	 * overrides this and returns false.
+	 *
+	 * @return bool
+	 */
+	public function needProxy(): bool
+	{
+		return true;
+	}
+
 	//region Input
 
 	/**

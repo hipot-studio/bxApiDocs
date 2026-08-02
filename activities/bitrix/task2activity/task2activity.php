@@ -5,6 +5,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Tasks\Integration\BizProc\NodeFilter\TargetDocumentResolverTrait;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Integration\AiAssistant\ActivityAiPropertyConverter;
@@ -23,11 +24,15 @@ use Bitrix\Tasks\Flow\Provider\Query\ExpandedFlowQuery;
 use Bitrix\Tasks\V2\Internal\Entity\Analytics;
 use Bitrix\Tasks\V2\Internal\Entity\Analytics\AnalyticsData;
 
+\Bitrix\Main\Loader::includeModule('tasks');
+
 class CBPTask2Activity extends CBPActivity implements
 	IBPEventActivity,
 	IBPActivityExternalEventListener,
 	IBPEventDrivenActivity
 {
+	use TargetDocumentResolverTrait;
+
 	private $isInEventActivityMode = false;
 	private static $cycleCounter = [];
 	const CYCLE_LIMIT = 3;
@@ -105,8 +110,8 @@ class CBPTask2Activity extends CBPActivity implements
 
 	public function Execute()
 	{
-		$documentType = $this->getDocumentType();
-		$documentId = $this->getDocumentId();
+		$documentId = $this->resolveTargetDocumentId();
+		$documentType = $this->resolveTargetDocumentType($documentId);
 		$moduleId = $documentId[0] ?? null;
 
 		$this->HoldToClose = CBPHelper::getBool($this->HoldToClose);
@@ -155,8 +160,8 @@ class CBPTask2Activity extends CBPActivity implements
 			return false;
 		}
 
-		$documentId = $this->GetDocumentId();
-		$documentType = $this->GetDocumentType();
+		$documentId = $this->resolveTargetDocumentId();
+		$documentType = $this->resolveTargetDocumentType($documentId);
 
 		$logMap = static::getPropertiesMap($this->getDocumentType());
 
@@ -855,6 +860,8 @@ class CBPTask2Activity extends CBPActivity implements
 		{
 			return;
 		}
+
+		$this->resolveTargetDocumentId();
 
 		if ($this->executionStatus != CBPActivityExecutionStatus::Closed)
 		{

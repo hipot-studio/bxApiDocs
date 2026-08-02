@@ -11,15 +11,12 @@ use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuCreator;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
-use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 use Bitrix\Booking\Internals\Service\CrmForm\CrmFormService;
-use Bitrix\Booking\Provider\Params\Resource\ResourceSelect;
 use Bitrix\Main\Engine\CurrentUser;
 
 class SettingsForm extends BaseController
 {
 	private ServiceSkuProvider $serviceSkuProvider;
-	private ResourceRepositoryInterface $resourceRepository;
 	private CrmFormService $crmFormService;
 
 	protected function init()
@@ -27,7 +24,6 @@ class SettingsForm extends BaseController
 		parent::init();
 
 		$this->serviceSkuProvider = Container::getCatalogServiceSkuProvider();
-		$this->resourceRepository = Container::getResourceRepository();
 		$this->crmFormService = Container::getCrmFormService();
 	}
 
@@ -65,21 +61,11 @@ class SettingsForm extends BaseController
 	{
 		try
 		{
-			$resourceCollection = $this->resourceRepository->getList(
-				select: (new ResourceSelect([
-					'TYPE',
-					'DATA',
-					'SKUS',
-				]))->prepareSelect(),
-			);
-
-			$this->resourceRepository->withSkus($resourceCollection);
-
 			return new GetResponse(
 				catalogPermissions: [
 					'read' => $this->serviceSkuProvider->checkCatalogReadAccess((int)$currentUser->getId()),
 				],
-				resources: $resourceCollection,
+				resources: $this->crmFormService->getDefaultResourceCollectionWithSkus(),
 			);
 		}
 		catch (Exception $exception)

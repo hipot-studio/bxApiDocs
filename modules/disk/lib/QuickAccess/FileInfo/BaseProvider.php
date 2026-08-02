@@ -29,7 +29,7 @@ abstract class BaseProvider implements ProviderInterface
 		$fromClouds = $cloudHandlerId > 0;
 
 		$filename = $fileData['SRC'];
-		$filenameEncoded = Uri::urnEncode($filename, 'UTF-8');
+		$filenameEncoded = Uri::urnEncode($filename);
 
 		if ($fromClouds)
 		{

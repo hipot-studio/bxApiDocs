@@ -39,7 +39,7 @@ class ReplicateParams implements ValueObjectInterface
 		public readonly ?string $endDate = null,
 		public readonly ?int $times = null,
 		public readonly ?string $nextExecutionTime = null,
-		public readonly ?string $deadlineOffset = null,
+		public readonly ?int $deadlineOffset = null,
 	)
 	{
 	}
@@ -104,7 +104,7 @@ class ReplicateParams implements ValueObjectInterface
 			endDate: static::mapString($props, 'endDate'),
 			times: static::mapInteger($props, 'times'),
 			nextExecutionTime: static::mapString($props, 'nextExecutionTime'),
-			deadlineOffset: static::mapString($props, 'deadlineOffset'),
+			deadlineOffset: static::mapInteger($props, 'deadlineOffset'),
 		);
 	}
 }

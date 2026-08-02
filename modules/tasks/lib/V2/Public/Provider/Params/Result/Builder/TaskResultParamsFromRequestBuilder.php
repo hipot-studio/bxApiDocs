@@ -25,6 +25,7 @@ class TaskResultParamsFromRequestBuilder implements TaskResultParamsBuilderInter
 
 	public function __construct(
 		public readonly ListRequest $request,
+		public readonly int $taskId,
 	)
 	{
 	}
@@ -53,15 +54,24 @@ class TaskResultParamsFromRequestBuilder implements TaskResultParamsBuilderInter
 	 */
 	public function buildFilter(): ?TaskResultFilter
 	{
-		$filterCondition = new ConditionTree();
+		$userFilterCondition = null;
 
 		$filter = $this->request?->filter;
 		if ($filter !== null)
 		{
-			$filterCondition = $this->convertFilterStructure($filter);
+			$userFilterCondition = $this->convertFilterStructure($filter);
 		}
 
-		return new TaskResultFilter($filterCondition);
+		$rootCondition = (new ConditionTree())->logic(ConditionTree::LOGIC_AND);
+
+		if ($userFilterCondition !== null)
+		{
+			$rootCondition->where($userFilterCondition);
+		}
+
+		$rootCondition->where('taskId', '=', $this->taskId);
+
+		return new TaskResultFilter($rootCondition);
 	}
 
 	/**

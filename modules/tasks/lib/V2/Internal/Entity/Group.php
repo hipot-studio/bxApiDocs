@@ -19,6 +19,7 @@ class Group extends AbstractEntity
 		/** @see \Bitrix\Socialnetwork\Item\Workgroup\Type */
 		public readonly ?string $type = null,
 		public readonly ?bool $isVisible = null,
+		public readonly ?bool $isRestrictedView = null,
 	)
 	{
 	}
@@ -41,6 +42,7 @@ class Group extends AbstractEntity
 			'image' => $this->image?->toArray(),
 			'type' => $this->type,
 			'isVisible' => $this->isVisible,
+			'isRestrictedView' => $this->isRestrictedView,
 		];
 	}
 
@@ -52,6 +54,7 @@ class Group extends AbstractEntity
 			image: static::mapEntity($props, 'image', File::class),
 			type: static::mapString($props, 'type'),
 			isVisible: static::mapBool($props, 'isVisible'),
+			isRestrictedView: static::mapBool($props, 'isRestrictedView'),
 		);
 	}
 }

@@ -6,6 +6,7 @@ namespace Bitrix\Booking\Internals\Service\CrmForm;
 
 use Bitrix\Booking\Entity\Booking\BookingCollection;
 use Bitrix\Booking\Entity\DatePeriod;
+use Bitrix\Booking\Entity\Resource\Resource;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
 use Bitrix\Booking\Entity\Resource\ResourceSku;
 use Bitrix\Booking\Entity\Resource\ResourceSkuCollection;
@@ -42,7 +43,10 @@ class CrmFormService
 		}
 
 		return $this->resourceRepository->getList(
-			filter: new ResourceFilter(['ID' => array_map('intval', $ids)]),
+			filter: new ResourceFilter([
+				'ID' => array_map('intval', $ids),
+				'SHORT_SLOTS_ONLY' => true,
+			]),
 			select: (new ResourceSelect())->prepareSelect(),
 		);
 	}
@@ -64,7 +68,10 @@ class CrmFormService
 		}
 
 		$resourceCollection = $this->resourceRepository->getList(
-			filter: new ResourceFilter(['ID' => array_keys($resourceSkusMap),]),
+			filter: new ResourceFilter([
+				'ID' => array_keys($resourceSkusMap),
+				'SHORT_SLOTS_ONLY' => true,
+			]),
 			select: (new ResourceSelect([
 				'TYPE',
 				'DATA',
@@ -96,6 +103,24 @@ class CrmFormService
 		return $resourceCollection;
 	}
 
+	public function getDefaultResourceCollectionWithSkus(): ResourceCollection
+	{
+		$resourceCollection = $this->resourceRepository->getList(
+			filter: new ResourceFilter([
+				'SHORT_SLOTS_ONLY' => true,
+			]),
+			select: (new ResourceSelect([
+				'TYPE',
+				'DATA',
+				'SKUS',
+			]))->prepareSelect(),
+		);
+
+		$this->resourceRepository->withSkus($resourceCollection);
+
+		return $resourceCollection;
+	}
+
 	public function getAutoSelectionData(
 		string $timezone,
 		array $resourceIds = []
@@ -110,14 +135,21 @@ class CrmFormService
 				->setTimezone(new \DateTimeZone($timezone))
 		);
 
+		$resourceFilter = ['SHORT_SLOTS_ONLY' => true];
+		if (!empty($resourceIds))
+		{
+			$resourceFilter['ID'] = array_map('intval', $resourceIds);
+		}
+
 		$resourceCollection = $this->resourceRepository->getList(
-			filter: new ResourceFilter(
-				empty($resourceIds)
-					? []
-					: ['ID' => array_map('intval', $resourceIds)]
-			),
+			filter: new ResourceFilter($resourceFilter),
 			select: (new ResourceSelect())->prepareSelect(),
 		);
+
+		if ($resourceCollection->isEmpty())
+		{
+			return new ResourceAutoSelectionSearchResult();
+		}
 
 		$bookingCollection = $this->bookingRepository->getList(
 			filter: new BookingFilter([

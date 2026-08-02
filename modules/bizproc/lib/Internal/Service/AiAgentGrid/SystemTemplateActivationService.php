@@ -15,6 +15,7 @@ use Bitrix\Ai\Integration\Bizproc\Event\Enum\ProcessedEvent;
 use Bitrix\Ai\Integration\Bizproc\Event\Payload\AiListenerParameters;
 
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
+use Bitrix\Bizproc\Api\Enum\Template\CreateSource;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Result\TemplateCreatedResult;
 use Bitrix\Bizproc\Internal\Repository\WorkflowTemplate\AiAgentRepository;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
@@ -45,7 +46,11 @@ class SystemTemplateActivationService
 		return $result;
 	}
 
-	public function copyTemplate(int $templateId, int $userId): Result|TemplateCreatedResult
+	public function copyTemplate(
+		int $templateId,
+		int $userId,
+		CreateSource $source = CreateSource::User,
+	): Result|TemplateCreatedResult
 	{
 		$copier = new \Bitrix\Bizproc\Copy\Implement\WorkflowTemplate();
 		$fields = $copier->getFields($templateId);
@@ -64,6 +69,7 @@ class SystemTemplateActivationService
 		$fields['SYSTEM_CODE'] = null;
 		$fields['ACTIVATED_BY'] = $userId;
 		$fields['ACTIVATED_AT'] = new DateTime();
+		$fields['CREATE_SOURCE'] = $source->value;
 
 		$newTemplateId = (int)$copier->add($fields);
 		if ($newTemplateId <= 0)
@@ -89,7 +95,7 @@ class SystemTemplateActivationService
 		return $result;
 	}
 
-	public function startTemplate(int $templateId): AiAgentStartResult
+	public function startTemplate(int $templateId, ?int $userId = null): AiAgentStartResult
 	{
 		$includeResult = $this->includeModuleAi();
 
@@ -103,7 +109,7 @@ class SystemTemplateActivationService
 			;
 		}
 
-		$userId = (int)CurrentUser::get()->getId();
+		$userId ??= (int)CurrentUser::get()->getId();
 		$setupTemplateDataEvent = null;
 		$eventHandler = EventManager::getInstance()
 			->addEventHandler(
@@ -137,13 +143,19 @@ class SystemTemplateActivationService
 			)
 		;
 
-		if ($startResult->isSuccess())
+		if (
+			!empty($startResult->getTemplateWorkflowIds()[$templateId])
+			&& $startResult->isTriggerApplied()
+		)
 		{
 			$this->markAsActivatedNow($templateId);
+
+			return (new AiAgentStartResult($setupTemplateDataEvent))
+				->setData($startResult->getData())
+			;
 		}
 
 		return (new AiAgentStartResult($setupTemplateDataEvent))
-			->setData($startResult->getData())
 			->addErrors($startResult->getErrors())
 		;
 	}

@@ -16,6 +16,11 @@ class Max extends Base implements MessengerUrl
 {
 	private const MAX_BOT = 'max';
 
+	public function needProxy(): bool
+	{
+		return false;
+	}
+
 	public function sendMessageProcessing(array $message, $line): array
 	{
 		$message['message']['text'] = self::cleanTextOut($message['message']['text']);

@@ -122,7 +122,7 @@ final class ResourceNotificationSettingsTable extends DataManager
 				->configureRequired(),
 
 			(new StringField('SENDER_CODE'))
-				->addValidator(new LengthValidator(1, 255))
+				->addValidator(new LengthValidator(0, 255))
 				->configureRequired(),
 		];
 	}

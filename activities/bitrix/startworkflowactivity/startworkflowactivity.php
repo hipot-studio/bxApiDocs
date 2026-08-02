@@ -1,6 +1,12 @@
 <?php
 
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Public\Service\Workflow\StarterService;
+use Bitrix\Bizproc\Starter\Dto\ContextDto;
+use Bitrix\Bizproc\Starter\Dto\DocumentDto;
+use Bitrix\Bizproc\Starter\Dto\ParentWorkflowDto;
+use Bitrix\Bizproc\Starter\Enum\Face;
+use Bitrix\Bizproc\Starter\Result\StartResult;
 
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 
@@ -243,17 +249,11 @@ class CBPStartWorkflowActivity extends CBPActivity implements IBPEventActivity, 
 			$this->writeDebugInfo($this->getDebugInfo($parameters, $template['PARAMETERS']));
 		}
 
-		$parameters[CBPDocument::PARAM_TAGRET_USER] = $this->GetRootActivity()->{CBPDocument::PARAM_TAGRET_USER};
-
-		$errors = [];
-		$this->wfId = CBPDocument::StartWorkflow(
-			$template['ID'],
-			$documentId,
-			$parameters,
-			$errors,
-			['workflowId' => $this->GetWorkflowInstanceId(), 'templateId' => $templateId]
-		);
-		$this->WorkflowId = $this->wfId;
+		$result = $this->startWorkflow($template, $documentId, $parameters);
+		$errors = $result->getErrors();
+		$workflowIds = $result->getWorkflowIds();
+		$this->wfId = (string)($workflowIds[0] ?? '');
+		$this->WorkflowId = $this->wfId !== '' ? $this->wfId : null;
 		$workflowIsCompleted = false;
 
 		if ($this->wfId && !$errors)
@@ -267,18 +267,18 @@ class CBPStartWorkflowActivity extends CBPActivity implements IBPEventActivity, 
 
 		if ($errors)
 		{
+			$errorMessage = $errors[0]->getMessage();
+
 			if ($this->UseSubscription == 'Y')
 			{
-				throw new Exception($errors[0]['message']);
+				throw new Exception($errorMessage);
 			}
-			else
-			{
-				$this->WriteToTrackingService(
-					Bitrix\Main\Localization\Loc::getMessage("BPSWFA_START_ERROR", ['#MESSAGE#' => $errors[0]['message']]),
-					0,
-					CBPTrackingType::Error
-				);
-			}
+
+			$this->WriteToTrackingService(
+				Bitrix\Main\Localization\Loc::getMessage("BPSWFA_START_ERROR", ['#MESSAGE#' => $errorMessage]),
+				0,
+				CBPTrackingType::Error
+			);
 
 			return CBPActivityExecutionStatus::Closed;
 		}
@@ -303,6 +303,48 @@ class CBPStartWorkflowActivity extends CBPActivity implements IBPEventActivity, 
 		$this->Subscribe($this);
 
 		return CBPActivityExecutionStatus::Executing;
+	}
+
+	protected function startWorkflow(
+		array $template,
+		array $documentId,
+		array $parameters,
+	): StartResult
+	{
+		$rootActivity = $this->getRootActivity();
+		$targetUser = $rootActivity->{CBPDocument::PARAM_TAGRET_USER} ?? null;
+		$parentTemplateId =
+			method_exists($rootActivity, 'getWorkflowTemplateId')
+				? (int)$rootActivity->getWorkflowTemplateId()
+				: 0
+		;
+
+		return (new StarterService())
+			->getStarterForManualDocumentScenario(
+				templateIds: [(int)$template['ID']],
+				context: new ContextDto('bizproc', Face::BIZPROC),
+				document: new DocumentDto(
+					complexDocumentId: $documentId,
+					complexDocumentType: $template['DOCUMENT_TYPE'],
+				),
+				parameters: [(int)$template['ID'] => $parameters],
+			)
+			->setUser($this->extractTargetUserId($targetUser))
+			->setParentWorkflow(new ParentWorkflowDto($this->getWorkflowInstanceId(), $parentTemplateId))
+			->setValidateParameters(false)
+			->setCheckConstants(false)
+			->start()
+		;
+	}
+
+	protected function extractTargetUserId(mixed $targetUser): int
+	{
+		if (!is_scalar($targetUser))
+		{
+			return 0;
+		}
+
+		return (int)CBPHelper::stripUserPrefix((string)$targetUser);
 	}
 
 	public static function GetPropertiesDialog(

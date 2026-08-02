@@ -27,6 +27,7 @@ class Select
 		public readonly bool $userFields = false,
 		public readonly bool $email = false,
 		public readonly bool $scenarios = false,
+		public readonly bool $templateReplication = false,
 	)
 	{
 	}

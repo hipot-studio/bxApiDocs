@@ -12,6 +12,34 @@ abstract class Calendar extends Integration
 {
 	const MODULE_NAME = 'calendar';
 
+	/**
+	 * Checks that the chat entity points to a calendar event that belongs to the given group.
+	 */
+	public static function isGroupEventChat(string $entityType, string $entityId, int $groupId): bool
+	{
+		if (!static::includeModule())
+		{
+			return false;
+		}
+
+		if ($entityType !== \CCalendar::CALENDAR_CHAT_ENTITY_TYPE)
+		{
+			return false;
+		}
+
+		$eventId = (int)$entityId;
+		if ($eventId <= 0 || $groupId <= 0)
+		{
+			return false;
+		}
+
+		$event = \CCalendarEvent::getById($eventId, false);
+
+		return is_array($event)
+			&& ($event['CAL_TYPE'] ?? null) === 'group'
+			&& (int)($event['OWNER_ID'] ?? 0) === $groupId;
+	}
+
 	public static function getSettings()
 	{
 		if (!static::includeModule())

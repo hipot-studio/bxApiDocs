@@ -8,6 +8,7 @@ use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Trait\ConfigTrait;
 use Bitrix\Tasks\V2\Internal\Service\Task\Trait\ParticipantTrait;
 use Bitrix\Tasks\Integration\Pull\PushCommand;
+use Bitrix\Tasks\Integration\Pull\PushParam;
 use Bitrix\Tasks\Integration\Pull\PushService;
 use Bitrix\Tasks\Internals\Log\LogFacade;
 
@@ -86,6 +87,11 @@ class SendPush
 			{
 				$params['AFTER']['STAGE_INFO']['id'] = 0;
 			}
+		}
+
+		if ($this->config->isFromAi())
+		{
+			$params[PushParam::FROM_AI] = true;
 		}
 
 		try

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Internal\AI\Agent\Generator\TemplateBuilder;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityNodeType;
+use Bitrix\Bizproc\Public\Activity\BaseComplexActivity;
 
 final class ActivityRegistry
 {
@@ -14,6 +15,7 @@ final class ActivityRegistry
 
 	public const CONDITION_ACTIVITY_TYPE = 'IfElseBranchActivity';
 	public const FOREACH_ACTIVITY_TYPE = 'ForEachActivity';
+	public const SETUP_ACTIVITY_TYPE = 'SetupTemplateActivity';
 
 	private const TYPE_MAP = [
 		'Condition' => self::CONDITION_ACTIVITY_TYPE,
@@ -26,6 +28,12 @@ final class ActivityRegistry
 	public function resolveActivityType(string $configType): string
 	{
 		return self::TYPE_MAP[$configType] ?? $configType;
+	}
+
+	/** @return bool true if the activity has a body via i1 loopback (composite). */
+	public function isComposite(string $activityType): bool
+	{
+		return $activityType === self::FOREACH_ACTIVITY_TYPE;
 	}
 
 	public function isTrigger(string $activityType): bool
@@ -112,6 +120,41 @@ final class ActivityRegistry
 		return $className !== null && is_subclass_of($className, \IBPConfigurableActivity::class);
 	}
 
+	public function isComplexWrapper(string $activityType): bool
+	{
+		$className = $this->getClassName($activityType);
+
+		return $className !== null && is_subclass_of($className, BaseComplexActivity::class);
+	}
+
+	/**
+	 * Returns the aux port ID if the activity defines one, null otherwise.
+	 */
+	public function getAuxPort(string $activityType): ?string
+	{
+		foreach ($this->getDefaultPorts($activityType) as $port)
+		{
+			if (($port['type'] ?? '') === 'aux')
+			{
+				return $port['id'];
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Returns the RETURN definitions from the activity description (id => ['TYPE' => ..., ...]),
+	 * or null if the activity has no declared return properties.
+	 */
+	public function getReturnPropertyDefinitions(string $activityType): ?array
+	{
+		$desc = $this->getDescription($activityType);
+		$return = $desc['RETURN'] ?? null;
+
+		return is_array($return) && !empty($return) ? $return : null;
+	}
+
 	public function getDialogMap(string $activityType): ?array
 	{
 		$className = $this->getClassName($activityType);
@@ -193,6 +236,11 @@ final class ActivityRegistry
 		{
 			return [];
 		}
+	}
+
+	public function getDisplayName(string $activityType): ?string
+	{
+		return $this->getDescription($activityType)['NAME'] ?? null;
 	}
 
 	private function getDescription(string $activityType): ?array

@@ -6,6 +6,9 @@ use Bitrix\Tasks\UI;
 
 class Options
 {
+	/** @see ExecutionTimeFactory::getTemplateDailyExecutionDate() */
+	public const DAYS_IN_MONTH = 30;
+
 	public static array $allowedFields = [
 		'PERIOD' => true,
 		'EVERY_DAY' => true,
@@ -29,6 +32,7 @@ class Options
 		'TIME' => true,
 		// deprecated, TIMEZONE_OFFSET parameter is always 0 in new templates
 		'TIMEZONE_OFFSET' => true,
+		// deprecated DAILY_MONTH_INTERVAL, daily interval now stores in EVERY_DAY
 		'DAILY_MONTH_INTERVAL' => true,
 		'REPEAT_TILL' => true,
 		'TIMES' => true,
@@ -92,6 +96,17 @@ class Options
 
 		$options['DEADLINE_AFTER'] = (int)($options['DEADLINE_AFTER'] ?? null);
 		$options['DEADLINE_OFFSET'] = (int)($options['DEADLINE_OFFSET'] ?? null);
+
+		/*
+		 * For extreme cases when the stepper ReplicateParamsConverter.php could suddenly break during execution
+		 *
+		 * deprecated DAILY_MONTH_INTERVAL, daily interval now stores in EVERY_DAY
+		*/
+		if (!empty($options['DAILY_MONTH_INTERVAL']))
+		{
+			$options['EVERY_DAY'] += $options['DAILY_MONTH_INTERVAL'] * self::DAYS_IN_MONTH;
+			$options['DAILY_MONTH_INTERVAL'] = 0;
+		}
 
 		return $options;
 	}

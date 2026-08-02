@@ -20,10 +20,12 @@ use Bitrix\Tasks\Replication\Template\Repetition\RegularTemplateTaskRepeater;
 use Bitrix\Tasks\Replication\Template\Repetition\RegularTemplateTaskReplicationChecker;
 use Bitrix\Tasks\Replication\Template\Repetition\Service\TemplateHistoryService;
 use Bitrix\Tasks\Replication\Template\Repetition\Time\Service\ExecutionService;
+use Bitrix\Tasks\Replication\Task\Regularity\Exception\RegularityException;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\AgentManager;
 use CAgent;
 use Throwable;
+use Exception;
 
 class RegularTemplateTaskReplicator extends AbstractReplicator
 {
@@ -109,6 +111,8 @@ class RegularTemplateTaskReplicator extends AbstractReplicator
 		catch (Throwable $t)
 		{
 			LogFacade::logThrowable($t);
+
+			throw new RegularityException($t->getMessage());
 		}
 		finally
 		{
@@ -137,7 +141,7 @@ class RegularTemplateTaskReplicator extends AbstractReplicator
 		$result = $service->getTemplateNextExecutionTime($baseTime);
 		if (!$result->isSuccess())
 		{
-			return null;
+			throw new Exception($result->getError()?->getMessage());
 		}
 		$nextExecutionTime = $result->getData()['time'];
 

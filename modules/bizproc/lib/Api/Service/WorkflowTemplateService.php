@@ -230,14 +230,26 @@ class WorkflowTemplateService
 		if ($request->templateId <= 0)
 		{
 			return WorkflowTemplateResponse\PrepareStartParametersResponse::createError(
-				new Error('negative template id'),
+				ErrorMessage::INVALID_PARAM_ARG->getError(
+					[
+						'#PARAM#' => 'templateId',
+						'#VALUE#' => $request->templateId,
+					],
+					ErrorMessage::INVALID_PARAM_ARG->value,
+				),
 			);
 		}
 
 		if ($request->targetUserId <= 0)
 		{
 			return WorkflowTemplateResponse\PrepareStartParametersResponse::createError(
-				new Error('negative target user id'),
+				ErrorMessage::INVALID_PARAM_ARG->getError(
+					[
+						'#PARAM#' => 'targetUserId',
+						'#VALUE#' => $request->targetUserId,
+					],
+					ErrorMessage::INVALID_PARAM_ARG->value,
+				),
 			);
 		}
 
@@ -267,7 +279,10 @@ class WorkflowTemplateService
 		if (!$template)
 		{
 			return WorkflowTemplateResponse\PrepareStartParametersResponse::createError(
-				new Error('template not found'),
+				ErrorMessage::TEMPLATE_NOT_FOUND->getError(
+					['#ID#' => $request->templateId],
+					ErrorMessage::TEMPLATE_NOT_FOUND->value,
+				),
 			);
 		}
 
@@ -551,6 +566,9 @@ class WorkflowTemplateService
 				'AUTO_EXECUTE',
 				'IS_SYSTEM',
 				'TEMPLATE',
+				'CONSTANTS',
+				'VARIABLES',
+				'PARAMETERS',
 			];
 
 			foreach ($availableFields as $field)

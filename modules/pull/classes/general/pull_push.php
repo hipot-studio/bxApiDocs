@@ -7,6 +7,7 @@ use Bitrix\Main\Web;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Pull\Push\Service\PushService;
 
 
@@ -130,6 +131,9 @@ class CPushManager
 	const RECORD_NOT_FOUND = 'NOT_FOUND';
 
 	public const DEFAULT_APP_ID = "Bitrix24";
+
+	// b_pull_push_queue can be utf8mb3, these fields need emoji converted to ascii-safe tokens
+	private const QUEUE_EMOJI_FIELDS = ['MESSAGE', 'PARAMS', 'ADVANCED_PARAMS'];
 
 	public static ?array $pushServices;
 
@@ -400,7 +404,7 @@ class CPushManager
 
 			$arAdd['APP_ID'] = $arFields['APP_ID'];
 
-			$DB->Add("b_pull_push_queue", $arAdd, ["MESSAGE", "PARAMS", "ADVANCED_PARAMS"]);
+			$DB->Add("b_pull_push_queue", self::encodeQueueRow($arAdd), ["MESSAGE", "PARAMS", "ADVANCED_PARAMS"]);
 
 			CAgent::AddAgent("CPushManager::SendAgent();", "pull", "N", 30, "", "Y", ConvertTimeStamp(time() + CTimeZone::GetOffset() + 30, "FULL"), 100, false, false);
 		}
@@ -473,6 +477,32 @@ class CPushManager
 		$result['APP_ID'] = $fields['APP_ID'];
 
 		return $result;
+	}
+
+	private static function encodeQueueRow(array $row): array
+	{
+		foreach (self::QUEUE_EMOJI_FIELDS as $field)
+		{
+			if (isset($row[$field]) && is_string($row[$field]) && $row[$field] !== '')
+			{
+				$row[$field] = Emoji::encode($row[$field]);
+			}
+		}
+
+		return $row;
+	}
+
+	private static function decodeQueueRow(array $row): array
+	{
+		foreach (self::QUEUE_EMOJI_FIELDS as $field)
+		{
+			if (isset($row[$field]) && is_string($row[$field]) && $row[$field] !== '')
+			{
+				$row[$field] = Emoji::decode($row[$field]);
+			}
+		}
+
+		return $row;
 	}
 
 	/**
@@ -720,7 +750,7 @@ class CPushManager
 			{
 				continue;
 			}
-			if($message["ADVANCED_PARAMS"]["isVoip"])
+			if (!empty($message["ADVANCED_PARAMS"]["isVoip"]))
 			{
 				if (!array_key_exists("USER_" . $message["USER_ID"], $arVoipMessages))
 				{
@@ -967,6 +997,8 @@ class CPushManager
 		$dbRes = $DB->Query($strSql);
 		while ($arRes = $dbRes->Fetch())
 		{
+			$arRes = self::decodeQueueRow($arRes);
+
 			if ($arRes['BADGE'] == '')
 			{
 				$arRes['BADGE'] = \Bitrix\Pull\MobileCounter::get($arRes['USER_ID']);

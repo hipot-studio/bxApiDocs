@@ -24,6 +24,7 @@ final class ActivityDescription implements \JsonSerializable
 	private array $groups = [];
 	private string $icon = '';
 	private ?int $colorIndex = null;
+	private ?int $contentBlockColor = null;
 	private ?int $sort = null;
 	private array $return = [];
 	private array $additionalResult = [];
@@ -170,6 +171,18 @@ final class ActivityDescription implements \JsonSerializable
 	public function setColorIndex(int $index): self
 	{
 		$this->colorIndex = $index;
+
+		return $this;
+	}
+
+	public function getContentBlockColor(): ?int
+	{
+		return $this->contentBlockColor;
+	}
+
+	public function setContentBlockColor(int $index): self
+	{
+		$this->contentBlockColor = $index;
 
 		return $this;
 	}
@@ -419,6 +432,9 @@ final class ActivityDescription implements \JsonSerializable
 			case 'COLOR_INDEX':
 				$this->setColorIndex($value);
 				break;
+			case 'CONTENT_BLOCK_COLOR':
+				$this->setContentBlockColor($value);
+				break;
 			case 'SORT':
 				$this->setSort($value);
 				break;
@@ -479,6 +495,7 @@ final class ActivityDescription implements \JsonSerializable
 			'GROUPS' => $this->getGroups(),
 			'NODE_ICON' => $this->getIcon(),
 			'COLOR_INDEX' => $this->getColorIndex(),
+			'CONTENT_BLOCK_COLOR' => $this->getContentBlockColor(),
 			'SORT' => $this->getSort(),
 			'RETURN' => $this->getReturn(),
 			'PATH_TO_ACTIVITY' => $this->getPathToActivity(),
@@ -513,7 +530,19 @@ final class ActivityDescription implements \JsonSerializable
 			$instance->setColorIndex($activity['COLOR_INDEX']);
 		}
 
-		unset($activity['NAME'], $activity['DESCRIPTION'], $activity['TYPE'], $activity['FILTER'], $activity['COLOR_INDEX']);
+		if (isset($activity['CONTENT_BLOCK_COLOR']) && is_int($activity['CONTENT_BLOCK_COLOR']))
+		{
+			$instance->setContentBlockColor($activity['CONTENT_BLOCK_COLOR']);
+		}
+
+		unset(
+			$activity['NAME'],
+			$activity['DESCRIPTION'],
+			$activity['TYPE'],
+			$activity['FILTER'],
+			$activity['COLOR_INDEX'],
+			$activity['CONTENT_BLOCK_COLOR'],
+		);
 
 		foreach ($activity as $key => $value)
 		{
@@ -580,6 +609,11 @@ final class ActivityDescription implements \JsonSerializable
 		if ($this->getColorIndex() !== null)
 		{
 			$description['COLOR_INDEX'] = $this->getColorIndex();
+		}
+
+		if ($this->getContentBlockColor() !== null)
+		{
+			$description['CONTENT_BLOCK_COLOR'] = $this->getContentBlockColor();
 		}
 
 		if ($this->getPresetId() !== null)

@@ -37,13 +37,18 @@ class ResourceDialog extends BaseController
 		$this->resourceProvider = new Provider\ResourceProvider();
 	}
 
-	public function getMainResourcesAction(): ResourceCollection|null
+	public function getMainResourcesAction(bool $shortSlotsOnly = false): ResourceCollection|null
 	{
 		try
 		{
+			$filter = [
+				'IS_MAIN' => true,
+				'SHORT_SLOTS_ONLY' => $shortSlotsOnly,
+			];
+
 			$resourceCollection = $this->resourceProvider->getList(
 				gridParams: new Provider\Params\GridParams(
-					filter: new Provider\Params\Resource\ResourceFilter(['IS_MAIN' => true]),
+					filter: new Provider\Params\Resource\ResourceFilter($filter),
 				),
 				userId: $this->userId,
 			);

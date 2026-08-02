@@ -39,6 +39,7 @@ class TaskParams
 		public readonly bool $checkParentAccess = true,
 		public readonly bool $view = false,
 		public readonly bool $scenarios = true,
+		public readonly bool $templateReplication = true,
 	)
 	{
 

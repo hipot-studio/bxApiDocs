@@ -11,7 +11,6 @@ use Bitrix\Booking\Internals\Service\Enum\AhaMoment;
 use Bitrix\Booking\Internals\Service\Enum\GridMode;
 use Bitrix\Booking\Provider\OptionProvider;
 use Bitrix\Booking\Service\BookingFeature;
-use Bitrix\Booking\Service\MultidayBookingFeature;
 use Bitrix\Booking\Component;
 use Bitrix\Booking\Internals\Integration\Pull\PushService;
 use Bitrix\Booking\Internals\Service\Journal\EventProcessor\PushPull\PushPullCommandType;
@@ -51,12 +50,7 @@ class BookingComponent extends CBitrixComponent
 
 		$this->arResult['currentUserId'] = $userId;
 
-		$isMultidayFeatureAvailable = MultidayBookingFeature::isOn();
-
-		$this->arResult['isFeatureEnabled'] = BookingFeature::isFeatureEnabled(
-			BookingFeature::FEATURE_ID_BOOKING,
-		);
-		$this->arResult['isMultidayFeatureAvailable'] = $isMultidayFeatureAvailable;
+		$this->arResult['isFeatureEnabled'] = BookingFeature::isFeatureEnabled();
 		$this->arResult['features'] = BookingFeature::getFeatures();
 		$this->arResult['canTurnOnTrial'] = BookingFeature::canTurnOnTrial();
 		$this->arResult['canTurnOnDemo'] = BookingFeature::canTurnOnDemo();
@@ -74,7 +68,7 @@ class BookingComponent extends CBitrixComponent
 		$this->arResult['isCalendarExpanded'] = $optionProvider->isCalendarExpanded($userId);
 		// if wait list item being edited, wait list should be expanded regardless option value
 		$this->arResult['isWaitListExpanded'] = $editingWaitListItemId || $optionProvider->isWaitListExpanded($userId);
-		$this->arResult['gridMode'] = $isMultidayFeatureAvailable
+		$this->arResult['gridMode'] = BookingFeature::isFeatureEnabled(BookingFeature::FEATURE_ID_MULTIDAY)
 			? $optionProvider->getGridMode($userId)
 			: GridMode::Day->value;
 

@@ -75,6 +75,7 @@ class CheckListMapper
 				actions: $this->mapActions($item['ACTION'] ?? null),
 				collapsed: (bool)($item['COLLAPSED'] ?? null) === true,
 				expanded: (bool)($item['EXPANDED'] ?? null) === true,
+				copiedId: (int)($item['COPIED_ID'] ?? 0),
 			);
 		}
 

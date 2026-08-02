@@ -127,6 +127,7 @@ class AvailableTimeSlotsProvider
 		$resourceFilter = [
 			'WITH_SKUS_YANDEX' => true,
 			'HAS_SKUS_YANDEX' => $serviceIds,
+			'SHORT_SLOTS_ONLY' => true,
 		];
 		if ($resourceId !== null)
 		{

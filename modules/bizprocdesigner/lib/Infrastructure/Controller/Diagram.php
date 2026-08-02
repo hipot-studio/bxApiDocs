@@ -170,7 +170,8 @@ class Diagram extends JsonController
 		if ($draftTplData)
 		{
 			$draftId = $draftTplData->getId();
-			$tplData = $draftTplData->getTemplateData()['TEMPLATE'];
+			$draftTemplateData = $draftTplData->getTemplateData();
+			$tplData = $draftTemplateData['TEMPLATE'];
 		}
 		else
 		{
@@ -181,8 +182,21 @@ class Diagram extends JsonController
 		[$blocks, $connections] = (new TemplateToNodes($tplData))->convert();
 		[$publishedBlocks, $publishedConnection] = (new TemplateToNodes($tpl->getTemplate()))->convert();
 
+		$templateMeta = array_merge($tpl->collectValues(), ['TRACK_ON' => $trackOn]);
+		if ($draftTplData)
+		{
+			$draftMetaFields = ['CONSTANTS', 'VARIABLES', 'PARAMETERS'];
+			foreach ($draftMetaFields as $field)
+			{
+				if (isset($draftTemplateData[$field]))
+				{
+					$templateMeta[$field] = $draftTemplateData[$field];
+				}
+			}
+		}
+
 		return [
-			'template' => array_merge($tpl->collectValues(), ['TRACK_ON' => $trackOn]),
+			'template' => $templateMeta,
 			'templateId' => $tpl->getId(),
 			'draftId' => $draftId,
 			'documentType' => $documentType,

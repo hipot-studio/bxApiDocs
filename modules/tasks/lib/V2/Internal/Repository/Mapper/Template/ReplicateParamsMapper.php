@@ -305,6 +305,11 @@ class ReplicateParamsMapper
 			$entityFields['nextExecutionTime'] = (string)$params['NEXT_EXECUTION_TIME'];
 		}
 
+		if (isset($params['DEADLINE_OFFSET']))
+		{
+			$entityFields['deadlineOffset'] = (int)$params['DEADLINE_OFFSET'];
+		}
+
 		return ReplicateParams::mapFromArray($entityFields);
 	}
 }

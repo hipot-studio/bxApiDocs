@@ -74,6 +74,7 @@ class DocumentProvider extends BaseProvider
 						...$documentItem->getCustomData()->get(self::CUSTOM_DATA_FIELD_INFO) ?? [],
 					],
 					self::CUSTOM_DATA_PROPERTY => $field,
+					'fieldKey' => $id,
 				],
 			]);
 			$documentItem->addChild($item);

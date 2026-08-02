@@ -320,7 +320,7 @@ class Storage extends Base
 			return null;
 		}
 
-		$command = new Command\StorageItem\DeleteStorageItemCommand($storageTypeId, $id);
+		$command = new Command\StorageItem\DeleteStorageItemCommand($id);
 
 		$result = $command->run();
 		if (!$result->isSuccess())

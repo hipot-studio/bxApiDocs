@@ -406,11 +406,14 @@ class TemplateTaskProducer implements ProducerInterface
 	{
 		$result = new Result();
 		$template = $this->repository->getEntity();
+		$newReplicationCount = $template->getTparamReplicationCount() + 1;
 		try
 		{
 			(new Template($this->userId))->update($template->getId(), [
-				'TPARAM_REPLICATION_COUNT' => $template->getTparamReplicationCount() + 1,
+				'TPARAM_REPLICATION_COUNT' => $newReplicationCount,
 			]);
+
+			$template->setTparamReplicationCount($newReplicationCount);
 		}
 		catch (Exception $exception)
 		{

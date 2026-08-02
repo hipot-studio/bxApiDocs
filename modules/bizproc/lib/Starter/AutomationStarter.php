@@ -52,6 +52,15 @@ final class AutomationStarter extends BaseTypeStarter
 		return false;
 	}
 
+	protected function runRestScenario(): bool
+	{
+		$startParameters = [
+			\CBPDocument::PARAM_TAGRET_USER => $this->getTargetUserForStartParameters(),
+		];
+
+		return $this->runMultiWorkflows($startParameters);
+	}
+
 	protected function runManualScenario(): bool
 	{
 		// not supported
@@ -256,12 +265,22 @@ final class AutomationStarter extends BaseTypeStarter
 			return []; // no document, no templates for now
 		}
 
-		$filter = ['DOCUMENT_TYPE' => $complexDocumentType, 'ACTIVE' => 'Y'];
-		$filter['AUTO_EXECUTE'] = match ($this->config->scenario)
+		if ($this->config->scenario === Scenario::onRest && !$this->templateIds)
 		{
+			return [];
+		}
+
+		$filter = ['DOCUMENT_TYPE' => $complexDocumentType, 'AUTO_EXECUTE' => match ($this->config->scenario)
+		{
+			Scenario::onRest => \CBPDocumentEventType::Automation,
 			Scenario::onScript => \CBPDocumentEventType::Script,
 			default => \CBPDocumentEventType::Automation,
-		};
+		}];
+
+		if ($this->config->scenario !== Scenario::onRest)
+		{
+			$filter['ACTIVE'] = 'Y';
+		}
 
 		if ($this->templateIds)
 		{

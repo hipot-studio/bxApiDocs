@@ -4,6 +4,7 @@ namespace Bitrix\Bizproc\Starter;
 
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Error;
+use Bitrix\Bizproc\Starter\Dto\ParentWorkflowDto;
 use Bitrix\Bizproc\Starter\Dto\StarterConfigDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Result\StartResult;
@@ -22,6 +23,7 @@ abstract class BaseTypeStarter
 	protected ?Parameters $parameters = null;
 	protected ?MetaData $metaData = null;
 	protected ?Context $context = null;
+	protected ?ParentWorkflowDto $parentWorkflow = null;
 	/** @var array<int, Event>  */
 	protected array $events = [];
 	protected array $templateIds = [];
@@ -70,6 +72,13 @@ abstract class BaseTypeStarter
 	public function setMetaData(MetaData $metaData): self
 	{
 		$this->metaData = $metaData;
+
+		return $this;
+	}
+
+	public function setParentWorkflow(ParentWorkflowDto $parentWorkflow): self
+	{
+		$this->parentWorkflow = $parentWorkflow;
 
 		return $this;
 	}
@@ -126,6 +135,7 @@ abstract class BaseTypeStarter
 
 		$result = match ($this->config->scenario)
 		{
+			Scenario::onRest => $this->runRestScenario(),
 			Scenario::onManual => $this->runManualScenario(),
 			Scenario::onDocumentAdd,
 			Scenario::onDocumentInnerAdd
@@ -142,6 +152,8 @@ abstract class BaseTypeStarter
 
 	abstract protected function checkFeature(?ModuleSettings $moduleSettings = null): bool;
 	abstract protected function isOverLimited(?ModuleSettings $moduleSettings = null): bool;
+
+	abstract protected function runRestScenario(): bool;
 
 	abstract protected function runManualScenario(): bool;
 
@@ -262,7 +274,13 @@ abstract class BaseTypeStarter
 		}
 
 		$parameters[\CBPDocument::PARAM_START_WORKFLOW_DELAY] = $this->delay;
-		$workflowId = \CBPDocument::startWorkflow($templateId, $complexDocumentId, $parameters, $errors);
+		$workflowId = \CBPDocument::startWorkflow(
+			$templateId,
+			$complexDocumentId,
+			$parameters,
+			$errors,
+			$this->parentWorkflow?->toArray(),
+		);
 		if ($errors)
 		{
 			$this->errorCollection->add(

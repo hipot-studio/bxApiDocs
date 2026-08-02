@@ -9,7 +9,7 @@ class BizprocDebuggerStartComponent extends CBitrixComponent
 {
 	public function onPrepareComponentParams($arParams)
 	{
-		if (isset($arParams['DOCUMENT_SIGNED']) && \Bitrix\Main\Loader::includeModule('bizproc'))
+		if (is_string($arParams['DOCUMENT_SIGNED'] ?? null) && \Bitrix\Main\Loader::includeModule('bizproc'))
 		{
 			$arParams['DOCUMENT_SIGNED'] = htmlspecialcharsback($arParams['DOCUMENT_SIGNED']);
 			$arParams['DOCUMENT_UNSIGNED'] = CBPDocument::unSignParameters($arParams['DOCUMENT_SIGNED']);
@@ -32,7 +32,7 @@ class BizprocDebuggerStartComponent extends CBitrixComponent
 
 	public function executeComponent()
 	{
-		if (!$this->getParameterDocumentType())
+		if (!is_array($this->getParameterDocumentType()))
 		{
 			return $this->showError(
 				\Bitrix\Main\Localization\Loc::getMessage('BIZPROC_DEBUGGER_START_ERROR_DOCUMENT_TYPE')
@@ -61,7 +61,7 @@ class BizprocDebuggerStartComponent extends CBitrixComponent
 	{
 		if (!\Bitrix\Main\Loader::includeModule('bizproc'))
 		{
-			return static::showError(\Bitrix\Main\Localization\Loc::getMessage('BIZPROC_MODULE_NOT_INSTALLED'));
+			return $this->showError(\Bitrix\Main\Localization\Loc::getMessage('BIZPROC_MODULE_NOT_INSTALLED'));
 		}
 
 		$module = $this->getModuleId();
@@ -69,7 +69,7 @@ class BizprocDebuggerStartComponent extends CBitrixComponent
 		{
 			$codeMessage = mb_strtoupper($module) . '_MODULE_NOT_INSTALLED';
 
-			return static::showError(\Bitrix\Main\Localization\Loc::getMessage($codeMessage));
+			return $this->showError(\Bitrix\Main\Localization\Loc::getMessage($codeMessage));
 		}
 
 		return true;

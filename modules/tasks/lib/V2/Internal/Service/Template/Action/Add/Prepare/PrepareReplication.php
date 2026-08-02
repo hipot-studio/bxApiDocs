@@ -11,29 +11,34 @@ class PrepareReplication implements PrepareFieldInterface
 {
 	public function __invoke(array $fields): array
 	{
-		if(isset($fields['TPARAM_REPLICATION_COUNT']))
-		{
-			$fields['TPARAM_REPLICATION_COUNT'] = (int) $fields['TPARAM_REPLICATION_COUNT'];
-		}
-		else
-		{
-			$fields['TPARAM_REPLICATION_COUNT'] = 0;
-		}
-
 		if (empty($fields['REPLICATE_PARAMS']))
 		{
-			$fields['REPLICATE_PARAMS'] = [];
+			unset($fields['REPLICATE_PARAMS']);
+
+			return $fields;
 		}
 
-		if(
-			is_string($fields['REPLICATE_PARAMS'])
-			&& !empty($fields['REPLICATE_PARAMS'])
-		)
+		$fields['TPARAM_REPLICATION_COUNT'] = (int)($fields['TPARAM_REPLICATION_COUNT'] ?? 0);
+
+		if(is_string($fields['REPLICATE_PARAMS']))
 		{
 			$fields['REPLICATE_PARAMS'] = Type::unSerializeArray($fields['REPLICATE_PARAMS']);
 		}
 
+		$hasDeadlineOffset = isset($fields['REPLICATE_PARAMS']['DEADLINE_OFFSET']);
+		$isDeadlineAfterProvided = isset($fields['DEADLINE_AFTER']);
+
+		if ($isDeadlineAfterProvided)
+		{
+			$fields['REPLICATE_PARAMS']['DEADLINE_OFFSET'] = (int)$fields['DEADLINE_AFTER'];
+		}
+
 		$fields['REPLICATE_PARAMS'] = Options::validate($fields['REPLICATE_PARAMS']);
+
+		if (!$isDeadlineAfterProvided && $hasDeadlineOffset)
+		{
+			$fields['DEADLINE_AFTER'] = (int)$fields['REPLICATE_PARAMS']['DEADLINE_OFFSET'];
+		}
 
 		return $fields;
 	}

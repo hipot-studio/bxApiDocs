@@ -637,6 +637,13 @@ class UrlPreview
 				);
 			}
 		}
+		elseif (static::isOwnDomain($uriParser) && Router::dispatch($uriParser))
+		{
+			$metadata = array(
+				'URL' => $url,
+				'TYPE' => UrlMetadataTable::TYPE_DYNAMIC,
+			);
+		}
 		else
 		{
 			$metadataRemote = static::getRemoteUrlMetadata($uriParser);
@@ -678,6 +685,21 @@ class UrlPreview
 
 		$host = \Bitrix\Main\Context::getCurrent()->getRequest()->getHttpHost();
 		return $uri->getHost() === $host;
+	}
+
+	/**
+	 * Returns true if given URL points to the portal's own canonical domain
+	 * (SITE_SERVER_NAME / main.server_name).
+	 * @param Uri $uri Absolute URL to be checked.
+	 * @return bool
+	 */
+	protected static function isOwnDomain(Uri $uri)
+	{
+		$serverName = defined('SITE_SERVER_NAME') && SITE_SERVER_NAME !== ''
+			? SITE_SERVER_NAME
+			: Option::get('main', 'server_name', '');
+
+		return $serverName !== '' && $uri->getHost() === $serverName;
 	}
 
 	/**

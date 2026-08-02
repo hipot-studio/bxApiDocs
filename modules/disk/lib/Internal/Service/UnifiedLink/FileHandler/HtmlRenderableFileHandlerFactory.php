@@ -28,6 +28,7 @@ readonly class HtmlRenderableFileHandlerFactory
 		array $analytics = [],
 		?CurrentUser $currentUser = null,
 		bool $forceExternal = false,
+		bool $deferred = false,
 	): HtmlRenderableFileHandler
 	{
 		if (!$currentUser instanceof CurrentUser || $forceExternal)
@@ -45,6 +46,7 @@ readonly class HtmlRenderableFileHandlerFactory
 				documentSource: $documentSource,
 				currentUser: $currentUser,
 				analytics: $analytics,
+				deferred: $deferred,
 			),
 			TypeFile::FLIPCHART => new BoardHtmlRenderableFileHandler($file, $documentSource),
 			TypeFile::IMAGE,
@@ -64,6 +66,7 @@ readonly class HtmlRenderableFileHandlerFactory
 		DocumentSource $documentSource,
 		CurrentUser $currentUser,
 		array $analytics = [],
+		bool $deferred = false,
 	): HtmlRenderableFileHandler
 	{
 		$contentType = $file->getFile()['CONTENT_TYPE'] ?? '';
@@ -80,6 +83,11 @@ readonly class HtmlRenderableFileHandlerFactory
 		if (!$documentHandler)
 		{
 			return new DefaultHtmlRenderableFileHandler($file);
+		}
+
+		if ($deferred)
+		{
+			return new DeferredOnlyOfficeHtmlRenderableFileHandler();
 		}
 
 		return new OnlyOfficeHtmlRenderableFileHandler($file, $documentSource, $analytics);

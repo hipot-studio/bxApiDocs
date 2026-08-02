@@ -5,6 +5,7 @@ namespace Bitrix\Disk\Internal\Service\OnlyOffice\Promo;
 
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Disk\Internal\Service\Environment;
+use Bitrix\Disk\Internal\Service\OnlyOffice\Promo\Interface\IncreaseLimitRequestMessageResolverInterface;
 use Bitrix\Disk\Internal\Service\OnlyOffice\Promo\Interface\PromoResolverInterface;
 use Bitrix\Disk\Public\Provider\CustomServerAvailabilityProvider;
 use Bitrix\Main\DI\Exception\CircularDependencyException;
@@ -57,6 +58,7 @@ readonly class PromoResolverFactory
 			environment: $this->environment,
 			tariffGroupResolver: $this->tariffGroupResolverFactory->makeForCloud(),
 			sessionBoostService: $this->serviceLocator->get(BaasSessionBoostService::class),
+			increaseLimitRequestMessageResolver: $this->serviceLocator->get(IncreaseLimitRequestMessageResolverInterface::class),
 		);
 	}
 

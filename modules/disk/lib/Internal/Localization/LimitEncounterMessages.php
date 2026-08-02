@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Localization;
 
+use Bitrix\Disk\Internal\Service\OnlyOffice\Promo\BoostBuyLink;
 use Bitrix\Main\Localization\Loc;
 use InvalidArgumentException;
 
@@ -32,13 +33,35 @@ final class LimitEncounterMessages
 			. '_REACHED_'
 			. ($isCloud ? 'CLOUD' : 'ON_PREMISE');
 
+		$monthlyBoostBuyLink = BoostBuyLink::monthly()
+			->addParams([
+				'st' => [
+					'tool' => 'docs',
+					'category' => 'infohelper',
+					'event' => 'open_link',
+					'type' => 'docs_boost_month',
+				],
+			])
+		;
+
+		$yearlyBoostBuyLink = BoostBuyLink::yearly()
+			->addParams([
+				'st' => [
+					'tool' => 'docs',
+					'category' => 'infohelper',
+					'event' => 'open_link',
+					'type' => 'docs_boost_year',
+				],
+			])
+		;
+
 		$message = (string)Loc::getMessage(
 			$code,
 			[
 				'#LIMIT_REACHED_COUNT#' => $thresholdValue,
-				'[buymonthlink]' => '[url=/settings/order/make.php?product=PACKAGE_DISK_SESSION_P1_Q10&st[tool]=docs&st[category]=infohelper&st[event]=open_link&st[type]=docs_boost_month]',
+				'[buymonthlink]' => '[url=' . urldecode($monthlyBoostBuyLink->getUri()) . ']',
 				'[/buymonthlink]' => '[/url]',
-				'[buyyearlink]' => '[url=/settings/order/make.php?product=PACKAGE_DISK_SESSION_P12_Q10&st[tool]=docs&st[category]=infohelper&st[event]=open_link&st[type]=docs_boost_year]',
+				'[buyyearlink]' => '[url=' . urldecode($yearlyBoostBuyLink->getUri()) . ']',
 				'[/buyyearlink]' => '[/url]',
 			],
 			$languageId,

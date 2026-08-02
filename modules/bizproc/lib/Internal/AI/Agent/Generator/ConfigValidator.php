@@ -71,6 +71,17 @@ final class ConfigValidator
 			return;
 		}
 
+		$resolvedType = $this->registry->resolveActivityType($step->type);
+		if ($this->registry->isComplexWrapper($resolvedType))
+		{
+			if (!empty($step->props) && $step->innerType !== null)
+			{
+				$this->validateActivityProperties($step->innerType, $step->props, $flowName);
+			}
+
+			return;
+		}
+
 		if (!empty($step->props))
 		{
 			$this->validateActivityProperties($step->type, $step->props, $flowName);

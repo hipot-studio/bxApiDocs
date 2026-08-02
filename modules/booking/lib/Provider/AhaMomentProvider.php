@@ -56,6 +56,7 @@ class AhaMomentProvider
 			AhaMoment::CyclePopup => OptionDictionary::AhaCyclePopup,
 			AhaMoment::SearchNavigation => OptionDictionary::AhaSearchNavigation,
 			AhaMoment::IntegrationMapsYa => OptionDictionary::AhaIntegrationMapsYa,
+			AhaMoment::WeekView => OptionDictionary::AhaWeekView,
 		};
 	}
 }

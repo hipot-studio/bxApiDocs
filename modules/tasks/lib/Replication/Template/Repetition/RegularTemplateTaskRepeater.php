@@ -7,7 +7,9 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Tasks\Control\Template;
+use Bitrix\Tasks\Internals\Task\TemplateTable;
 use Bitrix\Tasks\Internals\Log\Log;
+use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Replication\RepeaterInterface;
 use Bitrix\Tasks\Replication\Template\Repetition\Parameter\ReplicateParameter;
 use Bitrix\Tasks\Replication\RepositoryInterface;
@@ -274,8 +276,38 @@ class RegularTemplateTaskRepeater implements RepeaterInterface
 
 	private function stopReplication(): Result
 	{
+		$this->disableReplication();
+
 		$this->currentResult->setData([RegularTemplateTaskReplicator::getPayloadKey() => RegularTemplateTaskReplicator::EMPTY_AGENT]);
+
 		return $this->currentResult;
+	}
+
+	private function disableReplication(): void
+	{
+		$template = $this->repository->getEntity();
+		if ($template === null)
+		{
+			return;
+		}
+
+		$templateResult = TemplateTable::update($template->getId(), ['REPLICATE' => 'N']);
+		if (!$templateResult->isSuccess())
+		{
+			$this->currentResult->addErrors($templateResult->getErrors());
+		}
+
+		$taskId = $template->getTaskId();
+		if ($taskId <= 0)
+		{
+			return;
+		}
+
+		$taskResult = TaskTable::update($taskId, ['REPLICATE' => 'N']);
+		if (!$taskResult->isSuccess())
+		{
+			$this->currentResult->addErrors($taskResult->getErrors());
+		}
 	}
 
 	private function continueReplication(): Result

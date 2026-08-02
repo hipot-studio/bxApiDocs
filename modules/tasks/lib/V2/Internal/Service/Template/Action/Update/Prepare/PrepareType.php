@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\Prepare;
 
 use Bitrix\Tasks\Control\Handler\Exception\TemplateFieldValidateException;
-use CTaskTemplates;
+use Bitrix\Tasks\V2\Internal\Entity\Template\TypeDictionary;
 
 class PrepareType implements PrepareFieldInterface
 {
@@ -16,17 +16,19 @@ class PrepareType implements PrepareFieldInterface
 			return $fields;
 		}
 
-		if ((int)$fields['TPARAM_TYPE'] !== (int)$fullTemplateData['TPARAM_TYPE'])
+		$newTemplateType = (int)$fields['TPARAM_TYPE'];
+		$currentTemplateType = $fullTemplateData['TPARAM_TYPE'] ?? null;
+		if ($newTemplateType !== (int)$currentTemplateType)
 		{
 			throw new TemplateFieldValidateException('You can not change TYPE of an existing template');
 		}
 
-		if ((int)$fields['TPARAM_TYPE'] !== CTaskTemplates::TYPE_FOR_NEW_USER)
+		if (!in_array($newTemplateType, [TypeDictionary::USUAL, TypeDictionary::NEW_USERS], true))
 		{
 			throw new TemplateFieldValidateException('Unknown template type id passed');
 		}
 
-		if ((int)($fullTemplateData['TPARAM_TYPE'] ?? null) === CTaskTemplates::TYPE_FOR_NEW_USER)
+		if ((int)$currentTemplateType === TypeDictionary::NEW_USERS)
 		{
 			$fields['BASE_TEMPLATE_ID'] = '';
 			$fields['REPLICATE_PARAMS'] = [];

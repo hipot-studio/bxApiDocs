@@ -19,6 +19,7 @@ use Bitrix\Booking\Internals\Repository\CounterRepositoryInterface;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\BaseMessageSender;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderPicker;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
+use Bitrix\Booking\Internals\Service\Promotion\AiCallBanner\AiCallBannerService;
 use Bitrix\Booking\Internals\Service\Notifications\WhatsAppEmergencyService;
 use Bitrix\Booking\Internals\Service\Timezone;
 use Bitrix\Booking\Provider\BookingProvider;
@@ -51,6 +52,7 @@ class MainPage extends BaseController
 	private WaitListItemProvider $waitListItemProvider;
 	private WhatsAppEmergencyService $whatsAppEmergencyService;
 	private MessageSenderPicker $messageSenderPicker;
+	private AiCallBannerService $aiCallBannerService;
 
 	public function __construct(Request $request = null)
 	{
@@ -65,6 +67,7 @@ class MainPage extends BaseController
 		$this->waitListItemProvider = new WaitListItemProvider();
 		$this->whatsAppEmergencyService = Container::getWhatsAppEmergencyService();
 		$this->messageSenderPicker = Container::getMessageSenderPicker();
+		$this->aiCallBannerService = Container::getAiCallBannerService();
 	}
 
 	public function getForBookingAction(
@@ -161,6 +164,7 @@ class MainPage extends BaseController
 					$this->messageSenderPicker->getSenders(),
 				),
 				shouldShowWhatsAppEmergency: $this->whatsAppEmergencyService->shouldNotify($userId),
+				aiCallBannerMode: $this->aiCallBannerService->getMode($userId)?->value,
 			);
 		}
 		catch (Exception $e)

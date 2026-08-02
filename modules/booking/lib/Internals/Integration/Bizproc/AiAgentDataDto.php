@@ -11,7 +11,6 @@ class AiAgentDataDto implements Arrayable
 	public function __construct(
 		public readonly int|null $templateId,
 		public readonly string|null $action,
-		public readonly string|null $error,
 	)
 	{
 	}
@@ -21,7 +20,6 @@ class AiAgentDataDto implements Arrayable
 		return [
 			'templateId' => $this->templateId,
 			'action' => $this->action,
-			'error' => $this->error,
 		];
 	}
 }

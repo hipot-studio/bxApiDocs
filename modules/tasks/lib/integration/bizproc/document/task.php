@@ -650,7 +650,29 @@ class Task implements \IBPWorkflowDocument
 		$documentFields = self::getDocumentFields(null);
 		foreach ($fields as $fieldsName => $fieldValue)
 		{
-			if($documentFields[$fieldsName]['Type'] === 'bool')
+			$property = $documentFields[$fieldsName] ?? null;
+			if (!$property)
+			{
+				continue;
+			}
+
+			if (
+				is_array($fieldValue)
+				&& !\CBPHelper::getBool($property['Multiple'] ?? false)
+				&& in_array($property['Type'] ?? null, ['string', 'text'], true)
+			)
+			{
+				$fieldValue = \CBPHelper::stringify($fieldValue);
+				if ($fieldValue === '')
+				{
+					unset($fields[$fieldsName]);
+					continue;
+				}
+
+				$fields[$fieldsName] = $fieldValue;
+			}
+
+			if($property['Type'] === 'bool')
 			{
 				$isUf = mb_strpos($fieldsName, 'UF_') === 0;
 				$fieldValue = \CBPHelper::getBool($fieldValue);

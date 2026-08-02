@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository\Template;
 
+use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\Template;
 
 interface TemplateRepositoryInterface
@@ -11,6 +12,8 @@ interface TemplateRepositoryInterface
 	public function getById(int $id): ?Template;
 
 	public function getByTaskId(int $taskId): ?Template;
+
+	public function getTaskByTemplateId(int $templateId): ?Task;
 
 	public function save(Template $entity): int;
 

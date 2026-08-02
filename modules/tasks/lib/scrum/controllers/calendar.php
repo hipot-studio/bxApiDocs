@@ -10,6 +10,8 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Item\Workgroup;
+use Bitrix\Tasks\Integration;
+use Bitrix\Tasks\Integration\IM;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
 use Bitrix\Tasks\Scrum\Service\BacklogService;
 use Bitrix\Tasks\Scrum\Service\UserService;
@@ -135,24 +137,49 @@ class Calendar extends Controller
 			return null;
 		}
 
-		$userId = User::getId();
-
-		if ($chatId > 0)
+		if ($chatId <= 0)
 		{
-			$chatData = \CIMChat::getChatData(['ID' => $chatId]);
-			if ($chatData)
-			{
-				$userIds = $chatData['userInChat'][$chatId];
-
-				if (!in_array($userId, $userIds))
-				{
-					$chat = new \CIMChat(0);
-					$chat->addUser($chatId, $userId);
-				}
-			}
+			return $chatId;
 		}
 
+		$chatEntity = IM::getChatEntity($chatId);
+
+		// The chat has not been created yet: read access to the scrum (checked in processBeforeAction)
+		// is enough, the chat is created in the regular flow — keep backward compatibility.
+		if ($chatEntity === null)
+		{
+			return $chatId;
+		}
+
+		// The chat already exists: it must belong to this project — either the project group chat
+		// itself or a calendar chat of one of its meetings.
+		$groupId = $this->getRequestGroupId();
+		$belongsToProject =
+			Integration\SocialNetwork::isGroupChat($chatEntity->type, $chatEntity->id, $groupId)
+			|| Integration\Calendar::isGroupEventChat($chatEntity->type, $chatEntity->id, $groupId);
+
+		if (!$belongsToProject)
+		{
+			$this->errorCollection->setError(
+				new Error(
+					Loc::getMessage('TASKS_CC_ERROR_ACCESS_DENIED'),
+					self::ERROR_ACCESS_DENIED
+				)
+			);
+
+			return null;
+		}
+
+		IM::joinUserToChat($chatId, User::getId());
+
 		return $chatId;
+	}
+
+	private function getRequestGroupId(): int
+	{
+		$groupId = $this->request->getPost('groupId');
+
+		return is_numeric($groupId) ? (int)$groupId : 0;
 	}
 
 	/**

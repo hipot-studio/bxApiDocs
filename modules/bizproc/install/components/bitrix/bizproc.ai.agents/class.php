@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -96,6 +97,8 @@ class BizprocAiAgentsComponent extends \Bitrix\Bizproc\Automation\Component\Base
 
 		$result['IS_AI_AGENTS_AVAILABLE_BY_TARIFF'] = $this->aiAgentFeature->isAvailable();
 		$result['AI_AGENTS_TARIFF_SLIDER_CODE'] = $this->aiAgentFeature->getTariffSliderCode();
+
+		$result['IS_BP_EDITOR_OPEN'] = Option::get('bizproc', 'designer_v2', 'N') === 'Y';
 
 		return $result;
 	}

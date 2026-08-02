@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Controller\V1\Response;
 
-use Bitrix\Booking\Internals\Integration\Bizproc\AiAgentDataDto;
-
 class ResourceWizardResponseResponse implements \JsonSerializable
 {
 	public function __construct(
@@ -16,7 +14,6 @@ class ResourceWizardResponseResponse implements \JsonSerializable
 		public readonly string $companyScheduleUrl,
 		public readonly string $weekStart,
 		public readonly bool $isChannelChoiceAvailable,
-		public readonly AiAgentDataDto|null $aiAgent = null,
 	)
 	{
 	}
@@ -31,7 +28,6 @@ class ResourceWizardResponseResponse implements \JsonSerializable
 			'companyScheduleUrl' => $this->companyScheduleUrl,
 			'weekStart' => $this->weekStart,
 			'isChannelChoiceAvailable' => $this->isChannelChoiceAvailable,
-			'aiAgent' => $this->aiAgent?->toArray(),
 		];
 	}
 }

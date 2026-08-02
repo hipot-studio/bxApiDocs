@@ -568,14 +568,14 @@ class CBPGetUserActivity extends CBPActivity
 			$arCurrentValues['skip_absent'] = 'Y';
 		}
 		$arProperties['SkipAbsent'] = $arCurrentValues['skip_absent'];
-		$arProperties['SkipAbsentReserve'] = ($arCurrentValues['skip_absent_reserve'] !== 'N') ? 'Y' : 'N';
+		$arProperties['SkipAbsentReserve'] = (($arCurrentValues['skip_absent_reserve'] ?? 'N') !== 'N') ? 'Y' : 'N';
 
 		if (!isset($arCurrentValues['skip_timeman']) || !in_array($arCurrentValues['skip_timeman'], ['Y', 'N']))
 		{
 			$arCurrentValues['skip_timeman'] = 'N';
 		}
 		$arProperties['SkipTimeman'] = $arCurrentValues['skip_timeman'];
-		$arProperties['SkipTimemanReserve'] = ($arCurrentValues['skip_timeman_reserve'] !== 'N') ? 'Y' : 'N';
+		$arProperties['SkipTimemanReserve'] = (($arCurrentValues['skip_timeman_reserve'] ?? 'N') !== 'N') ? 'Y' : 'N';
 
 		$arErrors = self::validateProperties(
 			$arProperties,
@@ -624,37 +624,6 @@ class CBPGetUserActivity extends CBPActivity
 				'code' => 'NotExist',
 				'parameter' => 'UserParameter',
 				'message' => Bitrix\Main\Localization\Loc::getMessage('BPARGUA_ACT_PROP_EMPTY1'),
-			];
-		}
-
-		if (!array_key_exists('ReserveUserParameter', $arTestProperties))
-		{
-			$bUsersFieldEmpty = true;
-		}
-		else
-		{
-			if (!is_array($arTestProperties['ReserveUserParameter']))
-			{
-				$arTestProperties['ReserveUserParameter'] = [$arTestProperties['ReserveUserParameter']];
-			}
-
-			$bUsersFieldEmpty = true;
-			foreach ($arTestProperties['ReserveUserParameter'] as $userId)
-			{
-				if ((!is_array($userId) && (trim($userId) !== '')) || (is_array($userId) && (count($userId) > 0)))
-				{
-					$bUsersFieldEmpty = false;
-					break;
-				}
-			}
-		}
-
-		if ($bUsersFieldEmpty)
-		{
-			$arErrors[] = [
-				'code' => 'NotExist',
-				'parameter' => 'ReserveUserParameter',
-				'message' => Bitrix\Main\Localization\Loc::getMessage('BPARGUA_ACT_PROP_EMPTY2'),
 			];
 		}
 

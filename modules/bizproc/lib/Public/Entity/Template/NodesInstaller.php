@@ -15,4 +15,12 @@ class NodesInstaller
 	{
 		return time();
 	}
+
+	public function onInstall(int $templateId): void
+	{
+	}
+
+	public function onUpdate(int $templateId): void
+	{
+	}
 }

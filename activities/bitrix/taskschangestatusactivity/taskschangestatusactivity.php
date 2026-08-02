@@ -5,15 +5,21 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Tasks\Integration\BizProc\NodeFilter\TargetDocumentResolverTrait;
 use Bitrix\Main\Loader;
 
 use Bitrix\Tasks;
+use Bitrix\Tasks\Integration\BizProc\NodeFilter\TargetDocumentAccessGuard;
 use Bitrix\Tasks\Internals\Task\Status;
 
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 
+\Bitrix\Main\Loader::includeModule('tasks');
+
 class CBPTasksChangeStatusActivity extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -31,8 +37,8 @@ class CBPTasksChangeStatusActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentId = $this->getDocumentId();
-		$documentType = $this->getDocumentType();
+		$documentId = $this->resolveTargetDocumentId();
+		$documentType = $this->resolveTargetDocumentType($documentId);
 		$targetStatus = (int) $this->TargetStatus;
 
 		/** @var CBPDocumentService $ds */
@@ -156,8 +162,15 @@ class CBPTasksChangeStatusActivity extends CBPActivity
 
 	private function canChangeStatus(&$targetStatus)
 	{
-		$documentType = $this->GetDocumentType()[2];
-		$taskId = $this->GetDocumentId()[2];
+		$documentId = $this->resolveTargetDocumentId();
+		$documentType = $this->resolveTargetDocumentType($documentId)[2];
+		$taskId = $documentId[2];
+
+		$resolvedCheck = $this->canChangeStatusResolvedTarget($documentId);
+		if ($resolvedCheck !== null)
+		{
+			return $resolvedCheck;
+		}
 
 		$canChange = false;
 
@@ -197,5 +210,17 @@ class CBPTasksChangeStatusActivity extends CBPActivity
 		}
 
 		return $canChange;
+	}
+
+	private function canChangeStatusResolvedTarget(array $documentId): ?bool
+	{
+		$rootDocumentId = $this->getRootActivity()->getDocumentId();
+
+		return TargetDocumentAccessGuard::checkResolvedTarget(
+			is_array($rootDocumentId) ? $rootDocumentId : [],
+			$documentId,
+			Tasks\Access\ActionDictionary::ACTION_TASK_CHANGE_STATUS,
+			(int)($this->workflow?->getStartedBy() ?? 0),
+		);
 	}
 }

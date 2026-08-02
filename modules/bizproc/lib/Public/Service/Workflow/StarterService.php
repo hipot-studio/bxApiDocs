@@ -8,6 +8,8 @@ use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Dto\EventDto;
 use Bitrix\Bizproc\Starter\Dto\MetaDataDto;
+use Bitrix\Bizproc\Starter\Dto\StarterConfigDto;
+use Bitrix\Bizproc\Starter\Dto\StarterDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Starter;
 
@@ -57,6 +59,94 @@ class StarterService
 		}
 
 		return $starter;
+	}
+
+	/**
+	 * Get starter for explicit REST template start.
+	 *
+	 * @param array $templateIds
+	 * @param ContextDto $context
+	 * @param DocumentDto $document
+	 * @param int $userId
+	 * @param array $parameters
+	 *
+	 * @return Starter
+	 */
+	public function getStarterForManualRestDocumentScenario(
+		array $templateIds,
+		DocumentDto $document,
+		ContextDto $context = new ContextDto('bizproc', \Bitrix\Bizproc\Starter\Enum\Face::REST),
+		int $userId = 0,
+		array $parameters = [],
+	): Starter
+	{
+		return
+			$this->getStarterByScenario(Scenario::onRest)
+				->setDocument($document)
+				->setTemplateIds($templateIds)
+				->setContext($context)
+				->setUser($userId)
+				->setParameters($parameters)
+				;
+	}
+
+	public function getProcessStarterForManualRestDocumentScenario(
+		array $templateIds,
+		DocumentDto $document,
+		ContextDto $context = new ContextDto('bizproc', \Bitrix\Bizproc\Starter\Enum\Face::REST),
+		int $userId = 0,
+		array $parameters = [],
+	): Starter
+	{
+		$starter = new Starter(
+			new StarterDto(
+				process: new StarterConfigDto(
+					scenario: Scenario::onRest,
+					checkFeature: false,
+					checkLimits: false,
+					checkConstants: false,
+				),
+			),
+		);
+
+		return
+			$starter
+				->setDocument($document)
+				->setTemplateIds($templateIds)
+				->setContext($context)
+				->setUser($userId)
+				->setParameters($parameters)
+		;
+	}
+
+	public function getAutomationStarterForManualRestDocumentScenario(
+		array $templateIds,
+		DocumentDto $document,
+		ContextDto $context = new ContextDto('bizproc', \Bitrix\Bizproc\Starter\Enum\Face::REST),
+		int $userId = 0,
+		array $parameters = [],
+	): Starter
+	{
+		$starter = new Starter(
+			new StarterDto(
+				automation: new StarterConfigDto(
+					scenario: Scenario::onRest,
+					checkFeature: false,
+					checkLimits: false,
+					validateParameters: false,
+					checkConstants: false,
+				),
+			),
+		);
+
+		return
+			$starter
+				->setDocument($document)
+				->setTemplateIds($templateIds)
+				->setContext($context)
+				->setUser($userId)
+				->setParameters($parameters)
+		;
 	}
 
 	/**
