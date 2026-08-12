@@ -87,20 +87,20 @@ final class ProductId implements ImportEntityFieldInterface
 		return (float)$price;
 	}
 
-	private function getProductQuantity(array $row, FieldBindings $fieldBindings): int
+	private function getProductQuantity(array $row, FieldBindings $fieldBindings): float
 	{
 		$quantityColumnIndex = $fieldBindings->getColumnIndexByFieldId((new ProductQuantity())->getId());
 		if ($quantityColumnIndex === null)
 		{
-			return 1;
+			return 1.0;
 		}
 
 		$quantity = $row[$quantityColumnIndex] ?? null;
-		if (!is_numeric($quantity) || (int)$quantity <= 0)
+		if (!is_numeric($quantity) || (float)$quantity <= 0)
 		{
-			return 1;
+			return 1.0;
 		}
 
-		return (int)$quantity;
+		return (float)$quantity;
 	}
 }

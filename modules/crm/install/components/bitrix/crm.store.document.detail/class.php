@@ -16,7 +16,7 @@ use Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository;
 use Bitrix\Main;
 use Bitrix\Crm\Order;
 use Bitrix\Crm\Service\EditorAdapter;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Sale;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Crm\Component\ComponentError;
@@ -37,6 +37,13 @@ if (!Main\Loader::includeModule('crm'))
 if (!Main\Loader::includeModule('catalog'))
 {
 	ShowError(GetMessage('CATALOG_MODULE_NOT_INSTALLED'));
+
+	return;
+}
+
+if (!Main\Loader::includeModule('sale'))
+{
+	ShowError(GetMessage('SALESCENTER_MODULE_NOT_INSTALLED'));
 
 	return;
 }
@@ -1397,7 +1404,7 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 					{
 						$batchInfo = $shipmentBatchPrices[$shipmentItemStore->getId()];
 						$costPrice = $batchInfo['COST_SUM'] / $batchInfo['AMOUNT'];
-						$precision = (int)Option::get('sale', 'value_precision', 2);
+						$precision = ServiceLocator::getInstance()->get('sale.priceRounder')->getPrecision();
 						$documentProduct['PURCHASING_PRICE'] = round($costPrice, $precision);
 					}
 

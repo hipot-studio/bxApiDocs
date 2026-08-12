@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Bitrix\Bizproc\Internal\Entity\Activity\Interface\FixedDocumentComplexActivity;
+use Bitrix\Bizproc\Public\Activity\Interface\FixedDocumentComplexActivity;
 use Bitrix\Bizproc\Public\Activity\BaseComplexActivity;
 use Bitrix\Main\Loader;
 

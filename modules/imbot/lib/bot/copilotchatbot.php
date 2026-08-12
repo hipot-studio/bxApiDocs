@@ -6,6 +6,7 @@ use Bitrix\AI\Context;
 use Bitrix\Ai\Services\MarkdownToBBCodeTranslationService;
 use Bitrix\AiAssistant\Config\Feature;
 use Bitrix\AiAssistant\Core\Dto\MessageDto;
+use Bitrix\AiAssistant\Core\Im\ImBot as AiAssistantImBot;
 use Bitrix\AiAssistant\Core\Enum\MessageType;
 use Bitrix\AiAssistant\Core\Enum\UserPlatform;
 use Bitrix\AiAssistant\Core\Repository\MessageParamsRepository;
@@ -471,8 +472,7 @@ class CopilotChatBot extends Base
 
 
 		$reasoningIsEnabled = (
-			Im\V2\Application\Features::get()->isCopilotReasoningAvailable
-			&& $targetMessage->getParams()->get(Message\Params::COPILOT_REASONING)->getValue()
+			$targetMessage->getParams()->get(Message\Params::COPILOT_REASONING)->getValue()
 			&& $engine?->supportsReasoning()
 		);
 
@@ -618,12 +618,14 @@ class CopilotChatBot extends Base
 		// Strip bot mention markup [USER=botId]Name[/USER] from the message text
 		$rawContent = $messageFields['MESSAGE_ORIGINAL'] ?? $messageFields['MESSAGE'];
 		$content = trim(preg_replace('/\[USER=' . self::getBotId() . '\][^\[]*\[\/USER\]\s*/u', '', $rawContent));
+		$targetMessage->setMessage($content);
 
 		$params = [
 			'messageType' => MessageType::Default->value,
 			'senderBotId' => self::getBotId(),
 			'beforeMessageId' => $messageId,
 			'chatMode' => 'inline',
+			'agentMode' => ($messageFields['PARAMS']['COPILOT_AGENT_MODE'] ?? null) === 'Y',
 			'userPlatform' => ($messageFields['PLATFORM_CONTEXT'] === Bot::PLATFORM_CONTEXT_MOBILE)
 				? UserPlatform::Mobile->value
 				: UserPlatform::Web->value
@@ -635,7 +637,7 @@ class CopilotChatBot extends Base
 			chatId: $chatId,
 			authorId: $userId,
 			type: MessageType::Default,
-			content: $content,
+			content: AiAssistantImBot::buildMessageTextWithReply($targetMessage),
 			params: $params,
 			dateCreate: $targetMessage->getDateCreate()?->format(\DateTimeInterface::ATOM),
 		);
@@ -670,6 +672,7 @@ class CopilotChatBot extends Base
 			'beforeMessageId' => $messageId,
 			'chatMode' => $chatMode,
 			'forceSearch' => ($messageFields['PARAMS']['COPILOT_FORCE_SEARCH'] ?? null) === 'Y',
+			'agentMode' => ($messageFields['PARAMS']['COPILOT_AGENT_MODE'] ?? null) === 'Y',
 			'userPlatform' => ($messageFields['PLATFORM_CONTEXT'] === Bot::PLATFORM_CONTEXT_MOBILE)
 				? UserPlatform::Mobile->value
 				: UserPlatform::Web->value
@@ -691,7 +694,7 @@ class CopilotChatBot extends Base
 			chatId: $chatId,
 			authorId: $userId,
 			type: MessageType::Default,
-			content: $messageFields['MESSAGE'],
+			content: AiAssistantImBot::buildMessageTextWithReply($targetMessage),
 			params: $params,
 			dateCreate: $targetMessage->getDateCreate()?->format(\DateTimeInterface::ATOM),
 		);
@@ -823,8 +826,7 @@ class CopilotChatBot extends Base
 			}
 
 			if (
-				Im\V2\Application\Features::get()->isCopilotReasoningAvailable
-				&& $params['MESSAGE']->getParams()->get(Message\Params::COPILOT_REASONING)->getValue()
+				$params['MESSAGE']->getParams()->get(Message\Params::COPILOT_REASONING)->getValue()
 				&& $engine->supportsReasoning()
 			)
 			{
@@ -1345,7 +1347,13 @@ class CopilotChatBot extends Base
 			return false;
 		}
 
-		return !empty($messageFields['MESSAGE']);
+		if (!empty($messageFields['MESSAGE']))
+		{
+			return true;
+		}
+
+		// file-only message: allow it only for the AiAssistant branch, which can process attachments
+		return self::isBgptV2Enabled() && !empty($messageFields['FILES']);
 	}
 
 	//endregion

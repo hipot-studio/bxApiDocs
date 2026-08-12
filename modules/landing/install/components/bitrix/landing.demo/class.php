@@ -12,6 +12,7 @@ use Bitrix\Landing\Syspage;
 use Bitrix\Landing\Demos;
 use Bitrix\Landing\Template;
 use Bitrix\Landing\TemplateRef;
+use Bitrix\Landing\LocalTemplates;
 use Bitrix\Landing\Rights;
 use Bitrix\Landing\Landing\Cache;
 use Bitrix\Landing\Hook\Page\Settings;
@@ -1959,23 +1960,7 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 				$pathLocal = '/bitrix/components/bitrix/landing.demo/data/' . $subDir;//@todo make better
 				$path = Manager::getDocRoot() . $pathLocal;
 				$localDirectories = [];
-				$localTemplates = [
-					'empty',
-					'empty-multipage',
-					'wiki-dark',
-					'wiki-light',
-					'store_v3',
-					'store-chats-dark',
-					'clothes',
-					'store-mini-catalog',
-					'store-mini-one-element',
-					'search-result',
-					'search-result2',
-					'search-result3-dark',
-					'news-detail',
-					'requisites',
-					'ent-en',
-				];
+				$localTemplates = LocalTemplates::getActiveList();
 				foreach ($localTemplates as $template)
 				{
 					$descPath = $path . '/' . $template . '/.description.php';

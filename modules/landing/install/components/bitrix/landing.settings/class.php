@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Landing;
+use Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
 use Bitrix\Landing\Rights;
 use Bitrix\Landing\Site\Type;
 use Bitrix\Landing\TemplateRef;
@@ -40,6 +41,10 @@ class LandingSettingsComponent extends LandingBaseComponent
 		'LANDING_EDIT',
 		'LANDING_DESIGN',
 	];
+	protected const DESIGN_PAGES = [
+		self::PAGE_SITE_DESIGN,
+		self::PAGE_LANDING_DESIGN,
+	];
 
 	/**
 	 * Base executable method.
@@ -53,9 +58,15 @@ class LandingSettingsComponent extends LandingBaseComponent
 		$this->checkParam('TYPE', '');
 
 		$this->arResult['ITEMS'] = [];
+		$isAiSiteCreated = $this->isAiSitesEnabled() && $this->isAiSiteCreated();
 
 		foreach (self::AVAILABLE_PAGES as $code)
 		{
+			if ($isAiSiteCreated && in_array($code, self::DESIGN_PAGES, true))
+			{
+				continue;
+			}
+
 			$pageCode = self::PAGE_URL_PREFIX . $code;
 			if ($code === self::PAGE_CATALOG_EDIT)
 			{
@@ -127,6 +138,23 @@ class LandingSettingsComponent extends LandingBaseComponent
 		}
 
 		parent::executeComponent();
+	}
+
+	protected function isAiSiteCreated(): bool
+	{
+		$checker = new CreateAiSiteChecker();
+		$isSiteCreated = $checker->isSiteCreated((int)$this->arParams['SITE_ID']);
+		if ($isSiteCreated)
+		{
+			return true;
+		}
+
+		return $checker->isLandingCreated((int)$this->arParams['LANDING_ID']);
+	}
+
+	protected function isAiSitesEnabled(): bool
+	{
+		return Landing\Copilot\Manager::isAiSitesEnabled();
 	}
 
 	protected function addPlacementsItems(): void

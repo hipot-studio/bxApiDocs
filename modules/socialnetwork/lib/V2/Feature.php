@@ -21,8 +21,10 @@ class Feature
 
 		if ($isOldPortal === null)
 		{
+			$cloudPortalCreationDate = Option::get('socialnetwork', 'new_projects_old_portal_date', '2026-06-30');
+
 			$isOldPortal = Container::getInstance()->getPortalService()->isOld(
-				new DateTime('2026-05-31', 'Y-m-d')
+				new DateTime($cloudPortalCreationDate, 'Y-m-d')
 			);
 		}
 

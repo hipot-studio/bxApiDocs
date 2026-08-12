@@ -6,20 +6,29 @@ use Bitrix\Crm\Entity\EntityManager;
 use Bitrix\Crm\Filter\Activity\CounterFilter;
 use Bitrix\Crm\Filter\Activity\FilterByActivityResponsible;
 use Bitrix\Crm\Filter\FieldsTransform\UserBasedField;
+use Bitrix\Crm\Filter\RelatedEntity\FilterApplier;
 use Bitrix\Crm\Search\SearchContentBuilderFactory;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\CounterSettings;
+use Bitrix\Crm\Settings\InvoiceSettings;
+use Bitrix\Crm\Settings\LeadSettings;
 use Bitrix\HumanResources\Integration\UI\DepartmentProvider;
 use Bitrix\HumanResources\Internals\Enum\Provider\UI\DepartmentProviderSelectMode;
 use Bitrix\Main;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\LoaderException;
+use Bitrix\Main\Localization\Loc;
+use CCrmOwnerType;
+
+Loc::loadMessages(__FILE__);
 
 abstract class EntityDataProvider extends Main\Filter\EntityDataProvider
 {
 	public const QUERY_APPROACH_ORM = 'orm';
 	public const QUERY_APPROACH_BUILDER = 'builder';
+
+	private ?array $supportedRelatedEntityTypeIds = null;
 
 	protected function getFactory(): ?\Bitrix\Crm\Service\Factory
 	{
@@ -257,6 +266,110 @@ abstract class EntityDataProvider extends Main\Filter\EntityDataProvider
 
 	protected function applySettingsDependantFilter(array &$filterFields): void
 	{
+	}
+
+	/**
+	 * Creates the related entities filter field built on top of binding tables.
+	 * Returns null when the current entity has no supported related types, or when the
+	 * localized field caption is missing - the caller must then skip adding the field.
+	 */
+	protected function createRelatedEntitiesField(): ?Main\Filter\Field
+	{
+		if (empty($this->getSupportedRelatedEntityTypeIds()))
+		{
+			return null;
+		}
+
+		$name = (string)Loc::getMessage('CRM_FILTER_RELATED_ENTITIES_LABEL');
+		if ($name === '')
+		{
+			return null;
+		}
+
+		return $this->createField(
+			FilterApplier::FILTER_KEY,
+			[
+				'name' => $name,
+				'type' => 'list',
+				'partial' => true,
+			]
+		);
+	}
+
+	/**
+	 * Returns items[] / params[] payload for the RELATED_ENTITIES field used in prepareFieldData().
+	 * Each supported target entity contributes two options: a "has relation" item and a "no relations" item.
+	 */
+	protected function prepareRelatedEntitiesFieldData(): array
+	{
+		$items = [];
+		$hasTemplateKey = 'CRM_FILTER_RELATED_ENTITIES_HAS';
+		$noTemplateKey = 'CRM_FILTER_RELATED_ENTITIES_NO';
+
+		foreach ($this->getSupportedRelatedEntityTypeIds() as $targetTypeId)
+		{
+			$entityName = CCrmOwnerType::GetCategoryCaption($targetTypeId);
+			$items[FilterApplier::VALUE_PREFIX_HAS . $targetTypeId] =
+				Loc::getMessage($hasTemplateKey, ['#ENTITY#' => $entityName])
+			;
+			$items[FilterApplier::VALUE_PREFIX_NO . $targetTypeId] =
+				Loc::getMessage($noTemplateKey, ['#ENTITY#' => $entityName])
+			;
+		}
+
+		return ['items' => $items];
+	}
+
+	/**
+	 * Resolves the list of related entity type IDs supported by the filter for the current source.
+	 * Caches the result per provider instance because the resolution may go through DynamicTypesMap.
+	 *
+	 * @return int[]
+	 */
+	private function getSupportedRelatedEntityTypeIds(): array
+	{
+		if ($this->supportedRelatedEntityTypeIds !== null)
+		{
+			return $this->supportedRelatedEntityTypeIds;
+		}
+
+		$sourceTypeId = (int)$this->getSettings()->getEntityTypeID();
+		$registry = Container::getInstance()->getRelatedEntityFilterRegistry();
+		$targetTypeIds = $registry->getNonEmptyTargetTypeIds($sourceTypeId);
+
+		$disabledTypeIds = [];
+		if (!LeadSettings::getCurrent()->isEnabled())
+		{
+			$disabledTypeIds[] = CCrmOwnerType::Lead;
+		}
+		if (!InvoiceSettings::getCurrent()->isSmartInvoiceEnabled())
+		{
+			$disabledTypeIds[] = CCrmOwnerType::SmartInvoice;
+		}
+
+		// Hide target types the current user has no read access to. Mirrors the visibility
+		// rule applied to relation tabs in entity detail cards (crm.entity.details/class.php),
+		// so the filter does not advertise relations to entity types the user cannot see.
+		$userPermissions = Container::getInstance()->getUserPermissions();
+		foreach ($targetTypeIds as $typeId)
+		{
+			if (!$userPermissions->entityType()->canReadItems($typeId))
+			{
+				$disabledTypeIds[] = $typeId;
+			}
+		}
+
+		if ($disabledTypeIds !== [])
+		{
+			$targetTypeIds = array_values(
+				array_filter(
+					$targetTypeIds,
+					static fn(int $typeId) => !in_array($typeId, $disabledTypeIds, true)
+				)
+			);
+		}
+
+		return $this->supportedRelatedEntityTypeIds = $targetTypeIds;
 	}
 
 	protected function getCounterExtras(): array

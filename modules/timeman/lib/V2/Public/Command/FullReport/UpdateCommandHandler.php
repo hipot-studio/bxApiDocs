@@ -19,6 +19,8 @@ class UpdateCommandHandler
 		$reportForm = new FullReportForm(
 			reportId: $command->reportId,
 			reportText: $command->reportText,
+			reportExtended: $command->reportExtended,
+			type: $command->type,
 			plansText: $command->plansText,
 			tasks: $command->tasks,
 			events: $command->events,

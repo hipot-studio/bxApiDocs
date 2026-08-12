@@ -7,10 +7,12 @@ namespace Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud;
 // TODO: Remove API from sync when we switch to the new one
 use Bitrix\Calendar\Core\Base\Date;
 use Bitrix\Calendar\Core\Event\Event;
+use Bitrix\Calendar\Core\Section\Section;
 use Bitrix\Calendar\Integration\Dav\ConnectionProvider;
 use Bitrix\Calendar\Internal\Repository\EventRepository;
 use Bitrix\Calendar\Sync\Connection\Connection;
 use Bitrix\Calendar\Sync\Dictionary;
+use Bitrix\Calendar\Sync\Icloud\Helper;
 use Bitrix\Calendar\Synchronization\Internal\Entity\EventConnection;
 use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
 use Bitrix\Calendar\Synchronization\Internal\Exception\ApiException;
@@ -161,9 +163,22 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 			);
 		}
 
+		// A partial vendor response (truncated final multiget) is NOT an authoritative snapshot of the
+		// delta: advancing the sync token here would move the CalDAV sync-collection window past hrefs
+		// that were reported changed but never delivered by the multiget, dropping their update/tombstone
+		// permanently. Keep the stored token so the next scheduled pass re-queries the same delta and
+		// converges once the multiget is complete. Unlike Google pagination (where pageToken MUST advance
+		// or the page repeats forever), the iCloud multiget is an atomic completeness check, so not
+		// advancing is safe and cannot get stuck on a healthy delta.
+		if (!$events->isPartial)
+		{
+			$sectionConnection
+				->setSyncToken($events->nextSyncToken)
+				->setVersionId($events->etag)
+			;
+		}
+
 		$sectionConnection
-			->setSyncToken($events->nextSyncToken)
-			->setVersionId($events->etag)
 			->setLastSyncStatus(Dictionary::SYNC_SECTION_ACTION['success'])
 			->setLastSyncDate(new Date())
 		;
@@ -249,6 +264,11 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		$connection = $this->getUserConnection($ownerId);
 
 		if (!$connection)
+		{
+			return;
+		}
+
+		if (!$this->shouldProcessSection($event->getSection()))
 		{
 			return;
 		}
@@ -598,6 +618,11 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 			return;
 		}
 
+		if (!$this->shouldProcessSection($event->getSection()))
+		{
+			return;
+		}
+
 		$sectionConnection = $this->getSectionConnection(
 			(int)$event->getSection()->getId(),
 			(int)$connection->getId(),
@@ -896,6 +921,11 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		$connection = $this->getUserConnection($ownerId);
 
 		if (!$connection)
+		{
+			return;
+		}
+
+		if (!$this->shouldProcessSection($masterEvent->getSection()))
 		{
 			return;
 		}
@@ -1231,5 +1261,10 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 				$e,
 			);
 		}
+	}
+
+	private function shouldProcessSection(Section $section): bool
+	{
+		return $section->isLocal() || $section->getExternalType() === AbstractICloudSynchronizer::VENDOR_CODE;
 	}
 }

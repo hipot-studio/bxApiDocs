@@ -8,8 +8,8 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
-use Bitrix\Timeman\Model\Worktime\Report\WorktimeReportTable;
 use Bitrix\Timeman\V2\Internal\DI\Container;
+use Bitrix\Timeman\V2\Public\Dto\Report\RecordReportType;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -34,7 +34,7 @@ class CBPGetReportActivity extends CBPActivity
 		$this->arProperties = [
 			self::PROP_USER_ID => null,
 			self::PROP_REPORT_TYPE => Loader::includeModule('timeman')
-				? WorktimeReportTable::REPORT_TYPE_RECORD_REPORT
+				? RecordReportType::REPORT
 				: null,
 			self::PROP_REPORT_TEXT  => null,
 			self::PROP_IS_FOUND   => null,
@@ -112,13 +112,14 @@ class CBPGetReportActivity extends CBPActivity
 				'FieldName' => 'report_type',
 				'Type' => FieldType::SELECT,
 				'Options' => [
-					WorktimeReportTable::REPORT_TYPE_RECORD_REPORT => Loc::getMessage('TIMEMAN_GET_REPORT_PROP_REPORT_TYPE_RECORD'),
-					WorktimeReportTable::REPORT_TYPE_RECORD_AI_REPORT => Loc::getMessage('TIMEMAN_GET_REPORT_PROP_REPORT_TYPE_AI'),
+					RecordReportType::REPORT => Loc::getMessage('TIMEMAN_GET_REPORT_PROP_REPORT_TYPE_RECORD'),
+					RecordReportType::AI_REPORT => Loc::getMessage('TIMEMAN_GET_REPORT_PROP_REPORT_TYPE_AI'),
+					RecordReportType::ROBOT_REPORT => Loc::getMessage('TIMEMAN_GET_REPORT_PROP_REPORT_TYPE_ROBOT'),
 				],
 				'Required' => true,
 				'Multiple' => false,
 				'AllowSelection' => false,
-				'Default' => WorktimeReportTable::REPORT_TYPE_RECORD_REPORT,
+				'Default' => RecordReportType::REPORT,
 			],
 		];
 	}
@@ -250,7 +251,7 @@ class CBPGetReportActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$reportType = (string)($this->{self::PROP_REPORT_TYPE} ?? WorktimeReportTable::REPORT_TYPE_RECORD_REPORT);
+		$reportType = (string)($this->{self::PROP_REPORT_TYPE} ?? RecordReportType::REPORT);
 		$report = Container::getInstance()
 			->getReportRepository()
 			->getByRecordIdAndType($record->getId(), $reportType)

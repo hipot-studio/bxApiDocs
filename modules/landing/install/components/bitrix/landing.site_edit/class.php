@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Landing\Binding\Group;
+use Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
 use \Bitrix\Landing\Hook;
 use Bitrix\Landing\Hook\Page\Theme;
 use Bitrix\Landing\Node\Component;
@@ -158,6 +159,20 @@ class LandingSiteEditComponent extends LandingBaseFormComponent
 	}
 
 	/**
+	 * Returns true, if this site was created by the AI scenario.
+	 * @return bool
+	 */
+	protected function isAiSiteCreated(): bool
+	{
+		return (new CreateAiSiteChecker())->isSiteCreated((int)$this->arParams['SITE_ID']);
+	}
+
+	protected function isAiSitesEnabled(): bool
+	{
+		return \Bitrix\Landing\Copilot\Manager::isAiSitesEnabled();
+	}
+
+	/**
 	 * Base executable method.
 	 * @return void
 	 */
@@ -186,7 +201,8 @@ class LandingSiteEditComponent extends LandingBaseFormComponent
 
 			$this->arResult['SITE'] = $site = $this->getRow();
 			$this->arResult['LANG_CODES'] = $this->getLangCodes();
-			$this->arResult['TEMPLATES'] = $this->getTemplates();
+			$isAiSiteCreated = $this->isAiSitesEnabled() && $this->isAiSiteCreated();
+			$this->arResult['TEMPLATES'] = $isAiSiteCreated ? [] : $this->getTemplates();
 			$this->arResult['IS_INTRANET'] = $this->isIntranet();
 			$this->arResult['SHOW_RIGHTS'] = Rights::isAdmin() && Rights::isExtendedMode();
 			$this->arResult['SETTINGS'] = [];

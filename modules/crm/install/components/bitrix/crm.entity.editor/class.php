@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)
 	die();
 }
 
+use Bitrix\Bizproc\Controller\Workflow\Starter;
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Agent\Requisite\CompanyAddressConvertAgent;
 use Bitrix\Crm\Agent\Requisite\CompanyUfAddressConvertAgent;
@@ -647,35 +648,33 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		//Bizproc
 		$this->arResult['BIZPROC_MANAGER_CONFIG'] = [];
 		$bizprocEventType = $this->entityID === 0 ? CCrmBizProcEventType::Create : CCrmBizProcEventType::Edit;
-		if (CCrmBizProcHelper::HasParameterizedAutoWorkflows($this->entityTypeID, $bizprocEventType))
+		$documentType = CCrmBizProcHelper::ResolveDocumentType($this->entityTypeID);
+
+		$hasBizprocAutoStartParameters = $documentType && CCrmBizProcHelper::HasParameterizedAutoWorkflows(
+			$this->entityTypeID,
+			$bizprocEventType,
+			$this->categoryId
+		);
+
+		if (
+			$documentType
+			&& (
+				$hasBizprocAutoStartParameters
+				|| method_exists(Starter::class, 'hasAutoStartParametersAction')
+			)
+		)
 		{
 			$bizprocStarterData = [
-				'hasParameters' => true,
-				'moduleId' => 'crm',
-				'entity' => CCrmBizProcHelper::ResolveDocumentName($this->entityTypeID),
-				'documentType' => CCrmOwnerType::ResolveName($this->entityTypeID),
+				'hasParameters' => $hasBizprocAutoStartParameters,
 				'autoExecuteType' => $bizprocEventType,
+				'categoryId' => $this->categoryId,
 				'fieldName' => 'bizproc_parameters',
+				'signedDocumentType' => CBPDocument::signDocumentType($documentType)
 			];
 
-			if (class_exists(\Bitrix\Bizproc\Controller\Workflow\Starter::class))
+			if ($this->entityID > 0)
 			{
-				$bizprocStarterData['signedDocumentType'] = CBPDocument::signDocumentType([
-					$bizprocStarterData['moduleId'], $bizprocStarterData['entity'], $bizprocStarterData['documentType']
-				]);
-
-				if ($this->entityID > 0)
-				{
-					$bizprocStarterData['signedDocumentId'] = CBPDocument::signDocumentType(
-						[
-							$bizprocStarterData['moduleId'],
-							$bizprocStarterData['entity'],
-							CCrmBizProcHelper::ResolveDocumentId($this->entityTypeID, $this->entityID),
-						],
-					);
-				}
-
-				unset($bizprocStarterData['moduleId'], $bizprocStarterData['entity'], $bizprocStarterData['documentType']);
+				$bizprocStarterData['signedDocumentId'] = CBPDocument::signDocumentType(CCrmBizProcHelper::ResolveDocumentId($this->entityTypeID, $this->entityID));
 			}
 
 			$this->arResult['BIZPROC_MANAGER_CONFIG'] = $bizprocStarterData;

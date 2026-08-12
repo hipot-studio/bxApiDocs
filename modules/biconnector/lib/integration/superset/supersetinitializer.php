@@ -722,93 +722,156 @@ final class SupersetInitializer
 	 */
 	public static function clearSupersetData(): void
 	{
-		$dashboards = SupersetDashboardTable::getList(['select' => ['*', 'APP']])->fetchCollection();
-		foreach ($dashboards as $dashboard)
+		try
 		{
-			$app = $dashboard->getApp();
-			if ($app && $dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
+			$dashboards = SupersetDashboardTable::getList(['select' => ['*', 'APP']])->fetchCollection();
+			foreach ($dashboards as $dashboard)
 			{
-				AppTable::uninstall($app->getCode());
-				AppTable::update($app->getId(), ['ACTIVE' => 'N', 'INSTALLED' => 'N']);
-			}
-
-			$dashboardId = $dashboard->getId();
-			$deleteResult = $dashboard->delete();
-			if (!$deleteResult->isSuccess())
-			{
-				Logger::logErrors($deleteResult->getErrors(), ['clearSupersetData, deleting dashboard ' . $dashboardId]);
-			}
-		}
-
-		$apps = AppTable::getList()->fetchCollection();
-		foreach ($apps as $app)
-		{
-			if ($app->getCode() && MarketDashboardManager::isDatasetAppByAppCode($app->getCode()))
-			{
-				AppTable::uninstall($app->getCode());
-				AppTable::update($app->getId(), ['ACTIVE' => 'N', 'INSTALLED' => 'N']);
-			}
-		}
-
-		$connection = Application::getInstance()->getConnection();
-		foreach (DatasetManager::getList() as $dataset)
-		{
-			// Don't use DatasetManager::delete because it uses events
-			$datasetDeleteResult = ExternalDatasetTable::delete($dataset->getId());
-			if ($datasetDeleteResult->isSuccess())
-			{
-				if ($dataset->getEnumType() === Type::Csv)
+				$app = $dashboard->getApp();
+				if ($app && $dashboard->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
 				{
-					$tableName = Csv::TABLE_NAME_PREFIX . $dataset->getName();
-					try
-					{
-						$connection->query(sprintf('DROP TABLE IF EXISTS `%s`;', $tableName));
-					}
-					catch (SqlQueryException $exception)
-					{
-						Logger::logErrors([new Error($exception->getMessage())], ['clearSupersetData, deleting dataset ' . $dataset->getId()]);
-					}
+					AppTable::uninstall($app->getId());
+					AppTable::update($app->getId(), ['ACTIVE' => 'N', 'INSTALLED' => 'N']);
+				}
+
+				$dashboardId = $dashboard->getId();
+				$deleteResult = $dashboard->delete();
+				if (!$deleteResult->isSuccess())
+				{
+					Logger::logErrors($deleteResult->getErrors(), ['clearSupersetData, deleting dashboard ' . $dashboardId]);
 				}
 			}
-			else
+		}
+		catch (\Throwable $e)
+		{
+			Logger::logErrors([new Error($e->getMessage())], ['clearSupersetData, deleting dashboards']);
+		}
+
+		try
+		{
+			$apps = AppTable::getList()->fetchCollection();
+			foreach ($apps as $app)
 			{
-				Logger::logErrors($datasetDeleteResult->getErrors(), ['clearSupersetData, deleting dataset ' . $dataset->getId()]);
+				if ($app->getCode() && MarketDashboardManager::isDatasetAppByAppCode($app->getCode()))
+				{
+					AppTable::uninstall($app->getId());
+					AppTable::update($app->getId(), ['ACTIVE' => 'N', 'INSTALLED' => 'N']);
+				}
 			}
 		}
-
-		foreach (SupersetUserTable::getList()->fetchCollection() as $user)
+		catch (\Throwable $e)
 		{
-			$user->delete();
+			Logger::logErrors([new Error($e->getMessage())], ['clearSupersetData, deleting dataset apps']);
 		}
 
-		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_PERIOD_OPTION_NAME]);
-		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_DATE_START_OPTION_NAME]);
-		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_DATE_END_OPTION_NAME]);
-		Option::delete('biconnector', ['name' => self::ERROR_DELETE_INSTANCE_OPTION]);
-		Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME]);
-		Option::delete('biconnector', ['name' => SystemDashboardManager::SYSTEM_DASHBOARDS_DELETED_CODES_OPTION]);
-		Option::delete('biconnector', ['name' => '~superset_init_required_dataset_table_hash']);
-		Option::delete('biconnector', ['name' => '~superset_init_required_dataset_last_attempt']);
-		Option::delete('biconnector', ['name' => DatasetSettings::TYPING_OPTION_NAME]);
-		Option::delete('biconnector', ['name' => DatasetSettings::TYPING_LOCK_OPTION_NAME]);
-		Option::delete('biconnector', ['name' => DataTimezone::OPTION_NAME]);
+		try
+		{
+			$connection = Application::getInstance()->getConnection();
+			foreach (DatasetManager::getList() as $dataset)
+			{
+				// Don't use DatasetManager::delete because it uses events
+				$datasetDeleteResult = ExternalDatasetTable::delete($dataset->getId());
+				if ($datasetDeleteResult->isSuccess())
+				{
+					if ($dataset->getEnumType() === Type::Csv)
+					{
+						$tableName = Csv::TABLE_NAME_PREFIX . $dataset->getName();
+						try
+						{
+							$connection->query(
+								sprintf('DROP TABLE IF EXISTS %s;', $connection->getSqlHelper()->quote($tableName))
+							);
+						}
+						catch (SqlQueryException $exception)
+						{
+							Logger::logErrors([new Error($exception->getMessage())], ['clearSupersetData, deleting dataset ' . $dataset->getId()]);
+						}
+					}
+				}
+				else
+				{
+					Logger::logErrors($datasetDeleteResult->getErrors(), ['clearSupersetData, deleting dataset ' . $dataset->getId()]);
+				}
+			}
+		}
+		catch (\Throwable $e)
+		{
+			Logger::logErrors([new Error($e->getMessage())], ['clearSupersetData, deleting datasets']);
+		}
 
-		\CUserOptions::DeleteOptionsByName('main.ui.filter', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
-		\CUserOptions::DeleteOptionsByName('main.ui.filter.presets', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
-		\CUserOptions::DeleteOptionsByName('biconnector', 'draft_guide');
-		\CUserOptions::DeleteOptionsByName('biconnector', 'top_menu_dashboards');
-		\CUserOptions::DeleteOptionsByName('biconnector', 'grid_pinned_dashboards');
+		try
+		{
+			foreach (SupersetUserTable::getList()->fetchCollection() as $user)
+			{
+				$userId = $user->getId();
+				$userDeleteResult = $user->delete();
+				if (!$userDeleteResult->isSuccess())
+				{
+					Logger::logErrors($userDeleteResult->getErrors(), ['clearSupersetData, deleting superset user ' . $userId]);
+				}
+			}
+		}
+		catch (\Throwable $e)
+		{
+			Logger::logErrors([new Error($e->getMessage())], ['clearSupersetData, deleting superset users']);
+		}
 
-		DomainLinkService::getInstance()->clearUnlinkedStatus();
-		Registrar::getRegistrar()->clear(__CLASS__ . '::' . __FUNCTION__);
+		try
+		{
+			Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_PERIOD_OPTION_NAME]);
+			Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_DATE_START_OPTION_NAME]);
+			Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_DATE_END_OPTION_NAME]);
+			Option::delete('biconnector', ['name' => self::ERROR_DELETE_INSTANCE_OPTION]);
+			Option::delete('biconnector', ['name' => EmbeddedFilter\DateTime::CONFIG_INCLUDE_LAST_FILTER_DATE_OPTION_NAME]);
+			Option::delete('biconnector', ['name' => SystemDashboardManager::SYSTEM_DASHBOARDS_DELETED_CODES_OPTION]);
+			Option::delete('biconnector', ['name' => '~superset_init_required_dataset_table_hash']);
+			Option::delete('biconnector', ['name' => '~superset_init_required_dataset_last_attempt']);
+			Option::delete('biconnector', ['name' => DatasetSettings::TYPING_OPTION_NAME]);
+			Option::delete('biconnector', ['name' => DatasetSettings::TYPING_LOCK_OPTION_NAME]);
+			Option::delete('biconnector', ['name' => DataTimezone::OPTION_NAME]);
 
-		SupersetDashboardTagTable::deleteByFilter(['>ID' => 0]);
+			\CUserOptions::DeleteOptionsByName('main.ui.filter', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
+			\CUserOptions::DeleteOptionsByName('main.ui.filter.presets', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);
+			\CUserOptions::DeleteOptionsByName('biconnector', 'draft_guide');
+			\CUserOptions::DeleteOptionsByName('biconnector', 'top_menu_dashboards');
+			\CUserOptions::DeleteOptionsByName('biconnector', 'grid_pinned_dashboards');
 
-		AccessInstaller::clearRelations();
+			DomainLinkService::getInstance()->clearUnlinkedStatus();
+			Registrar::getRegistrar()->clear(__CLASS__ . '::' . __FUNCTION__);
+		}
+		catch (\Throwable $e)
+		{
+			Logger::logErrors([new Error($e->getMessage())], ['clearSupersetData, deleting options']);
+		}
 
-		self::markSupersetInstanceExists(false);
-		self::markSupersetInstanceSuspended(false);
-		self::clearRebindRequired();
+		try
+		{
+			SupersetDashboardTagTable::deleteByFilter(['>ID' => 0]);
+		}
+		catch (\Throwable $e)
+		{
+			Logger::logErrors([new Error($e->getMessage())], ['clearSupersetData, deleting dashboard tags']);
+		}
+
+		try
+		{
+			AccessInstaller::clearRelations();
+		}
+		catch (\Throwable $e)
+		{
+			Logger::logErrors([new Error($e->getMessage())], ['clearSupersetData, clearing access relations']);
+		}
+
+		try
+		{
+			self::markSupersetInstanceExists(false);
+			self::markSupersetInstanceSuspended(false);
+			self::clearRebindRequired();
+		}
+		catch (\Throwable $e)
+		{
+			Logger::logErrors([new Error($e->getMessage())], ['clearSupersetData, marking instance flags']);
+		}
 	}
 
 	/**

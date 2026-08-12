@@ -33,10 +33,6 @@ final class DashboardGroupRepository extends DashboardRepository
 	{
 		$query = $this->prepareUnionQuery($ormParams);
 
-		$ormParams['order'] ??= [];
-		$ormParams['order'] = array_merge(['ENTITY_TYPE' => 'desc'], $ormParams['order']);
-
-		$query->setUnionOrder($ormParams['order']);
 		$items = $query->exec();
 
 		$rows = [];
@@ -83,7 +79,7 @@ final class DashboardGroupRepository extends DashboardRepository
 		unset($ormParams['order']);
 		$query =
 			$this
-				->prepareUnionQuery($ormParams)
+				->prepareUnionQuery($ormParams, false)
 				->countTotal(true)
 		;
 
@@ -248,7 +244,7 @@ final class DashboardGroupRepository extends DashboardRepository
 		return null;
 	}
 
-	private function prepareUnionQuery(array $ormParams): Query
+	private function prepareUnionQuery(array $ormParams, bool $applyUnionOrder = true): Query
 	{
 		$queryDashboard = SupersetDashboardTable::query()
 			->addSelect(new ExpressionField('ENTITY_TYPE', "'" . self::TYPE_DASHBOARD . "'"))
@@ -403,6 +399,12 @@ final class DashboardGroupRepository extends DashboardRepository
 		}
 
 		$queryGroup->unionAll($queryDashboard);
+
+		if ($applyUnionOrder)
+		{
+			$unionOrder = array_merge(['ENTITY_TYPE' => 'desc'], $ormParams['order'] ?? []);
+			$queryGroup->setUnionOrder($unionOrder);
+		}
 
 		if (!empty($ormParams['limit']) && (int)$ormParams['limit'] > 0)
 		{

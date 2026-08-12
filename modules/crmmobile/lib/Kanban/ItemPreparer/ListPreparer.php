@@ -65,10 +65,18 @@ class ListPreparer extends Base
 		$fields = [];
 		foreach ($params['displayValues'] as $fieldName => $fieldValue)
 		{
+			/** @var \Bitrix\Crm\Field $field */
 			$field = $params['fieldsCollection']->getField($fieldName);
 			if (!$field || !isset($fieldValue['value']) || $this->isExcludedField($field->getName()))
 			{
 				continue;
+			}
+
+			$config = $fieldValue['config'] ?? [];
+			$fieldSettings = $field->getSettings();
+			if (isset($fieldSettings['icon']['url']))
+			{
+				$config['titleIcon']['before']['uri'] = $fieldSettings['icon']['url'];
 			}
 
 			$dtoField = Field::make([
@@ -76,7 +84,7 @@ class ListPreparer extends Base
 				'title' => $field->getTitle(),
 				'type' => $field->getType(),
 				'value' => $fieldValue['value'],
-				'config' => $fieldValue['config'] ?? [],
+				'config' => $config,
 				'multiple' => $field->isMultiple(),
 			]);
 			$this->prepareField($dtoField);

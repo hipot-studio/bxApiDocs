@@ -101,55 +101,28 @@ class IntegrationTable extends Main\Entity\DataManager
 				'validation' => array(__CLASS__, 'validateApp'),
 				'title' => Loc::getMessage('INTEGRATION_ENTITY_APP_ID_FIELD'),
 			),
-			'SCOPE' => array(
-				'data_type' => 'text',
-				'save_data_modification' => function()
-				{
-					return array(
-						function($value)
-						{
-							return is_array($value) ? implode(',', $value) : '';
-						}
-					);
-				},
-				'fetch_data_modification' => function()
-				{
-					return array(
-						function($value)
-						{
-							return explode(',', $value);
-						}
-					);
-				},
-				'title' => Loc::getMessage('INTEGRATION_ENTITY_SCOPE_FIELD'),
-			),
-			'QUERY' => array(
-				'data_type' => 'text',
-				'serialized' => true,
-				'title' => Loc::getMessage('INTEGRATION_ENTITY_QUERY_FIELD'),
-			),
-			'OUTGOING_EVENTS' => array(
-				'data_type' => 'text',
-				'save_data_modification' => function()
-				{
-					return array(
-						function($value)
-						{
-							return is_array($value) ? implode(',', $value) : '';
-						}
-					);
-				},
-				'fetch_data_modification' => function()
-				{
-					return array(
-						function($value)
-						{
-							return explode(',', $value);
-						}
-					);
-				},
-				'title' => Loc::getMessage('INTEGRATION_ENTITY_OUTGOING_EVENTS_FIELD'),
-			),
+			'SCOPE' => (new Main\ORM\Fields\ArrayField('SCOPE'))
+				->configureTitle(Loc::getMessage('INTEGRATION_ENTITY_SCOPE_FIELD'))
+				->configureSerializeCallback(
+					static fn(mixed $value): string => is_array($value) ? implode(',', $value) : '',
+				)
+				->configureUnserializeCallback(
+					static fn(mixed $value): array => is_string($value) ? explode(',', $value) : [],
+				),
+			'QUERY' => (new Main\ORM\Fields\ArrayField('QUERY'))
+				->configureNullable()
+				->configureSerializationPhp()
+				->configureTitle(Loc::getMessage('INTEGRATION_ENTITY_QUERY_FIELD'))
+			,
+			'OUTGOING_EVENTS' => (new Main\ORM\Fields\ArrayField('OUTGOING_EVENTS'))
+				->configureTitle(Loc::getMessage('INTEGRATION_ENTITY_OUTGOING_EVENTS_FIELD'))
+				->configureSerializeCallback(
+					static fn(mixed $value): string => is_array($value) ? implode(',', $value) : '',
+				)
+				->configureUnserializeCallback(
+					static fn(mixed $value): array => is_string($value) ? explode(',', $value) : [],
+				)
+			,
 			'OUTGOING_NEEDED' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateOutgoingQueryNeeded'),
@@ -170,28 +143,15 @@ class IntegrationTable extends Main\Entity\DataManager
 				'validation' => array(__CLASS__, 'validateWidgetHandlerUrl'),
 				'title' => Loc::getMessage('INTEGRATION_ENTITY_WIDGET_HANDLER_URL_FIELD'),
 			),
-			'WIDGET_LIST' => array(
-				'data_type' => 'text',
-				'save_data_modification' => function()
-				{
-					return array(
-						function($value)
-						{
-							return is_array($value) ? implode(',', $value) : '';
-						}
-					);
-				},
-				'fetch_data_modification' => function()
-				{
-					return array(
-						function($value)
-						{
-							return explode(',', $value);
-						}
-					);
-				},
-				'title' => Loc::getMessage('INTEGRATION_ENTITY_WIDGET_LIST_FIELD'),
-			),
+			'WIDGET_LIST' => (new Main\ORM\Fields\ArrayField('WIDGET_LIST'))
+				->configureTitle(Loc::getMessage('INTEGRATION_ENTITY_WIDGET_LIST_FIELD'))
+				->configureSerializeCallback(
+					static fn(mixed $value): string => is_array($value) ? implode(',', $value) : '',
+				)
+				->configureUnserializeCallback(
+					static fn(mixed $value): array => is_string($value) ? explode(',', $value) : [],
+				)
+			,
 			'APPLICATION_TOKEN' => array(
 				'data_type' => 'string',
 				'validation' => array(__CLASS__, 'validateApplicationToken'),

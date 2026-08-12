@@ -2,13 +2,16 @@
 
 namespace Bitrix\Call\Track\Downloader;
 
-use Bitrix\Call\Analytics\FollowUpAnalytics;
+use Bitrix\Call\Analytics\CloudRecordAnalytics;
+use Bitrix\Call\Analytics\TrackAnalytics;
 use Bitrix\Call\Call\Registry;
 use Bitrix\Main\IO;
 use Bitrix\Main\Loader;
 use Bitrix\Call;
 use Bitrix\Call\Track;
 use Bitrix\Call\Track\TrackError;
+use Bitrix\Call\Track\TrackService;
+use Bitrix\Main\Result;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI\CallAISettings;
 
@@ -19,10 +22,42 @@ use Bitrix\Call\Integration\AI\CallAISettings;
  */
 class DownloadAgent
 {
-	private const MAX_RETRY_COUNT = 10;
-	private const SYNC_MAX_RETRIES = 5;
-	private const NETWORK_ERROR_DELAY = 300;
-	private const NETWORK_ERROR_DELAY_EXTENDED = 600;
+	// Default retry/timing values. Overridable via call options (see getters below).
+	public const MAX_RETRY_COUNT = 10;
+	public const SYNC_MAX_RETRIES = 5;
+	public const NETWORK_ERROR_DELAY = 300;
+	public const NETWORK_ERROR_DELAY_EXTENDED = 600;
+
+	private static function getMaxRetryCount(): int
+	{
+		return self::getIntOption('call_download_max_retry_count', self::MAX_RETRY_COUNT);
+	}
+
+	private static function getSyncMaxRetries(): int
+	{
+		return self::getIntOption('call_download_sync_max_retries', self::SYNC_MAX_RETRIES);
+	}
+
+	private static function getNetworkErrorDelay(): int
+	{
+		return self::getIntOption('call_download_network_error_delay', self::NETWORK_ERROR_DELAY);
+	}
+
+	private static function getNetworkErrorDelayExtended(): int
+	{
+		return self::getIntOption('call_download_network_error_delay_extended', self::NETWORK_ERROR_DELAY_EXTENDED);
+	}
+
+	/**
+	 * Option value if a positive int is configured, otherwise the class default.
+	 * Empty/zero/negative falls back to default — these knobs are meaningless at 0.
+	 */
+	private static function getIntOption(string $name, int $default): int
+	{
+		$value = (int)\Bitrix\Main\Config\Option::get('call', $name, $default);
+
+		return $value > 0 ? $value : $default;
+	}
 
 	/**
 	 * Schedule download agent for track
@@ -55,12 +90,7 @@ class DownloadAgent
 		$track = Call\Model\CallTrackTable::getById($trackId)->fetchObject();
 		$call = Registry::getCallWithId($track->getCallId());
 
-		(new FollowUpAnalytics($call))
-			->sendTelemetry(
-				source: null,
-				status: 'success',
-				event: 'download_agent_scheduled_' . $trackId
-			);
+		self::sendTelemetry($call, $track, 'success', 'scheduled');
 
 		/* @see \Bitrix\Call\Track\Downloader\DownloadAgent::run */
 		\CAgent::AddAgent(
@@ -120,23 +150,45 @@ class DownloadAgent
 
 		$call = Registry::getCallWithId($track->getCallId());
 
-		(new FollowUpAnalytics($call))
-			->sendTelemetry(
-				source: null,
-				status: 'success',
-				event: 'download_agent_started_' . $trackId
-			);
+		self::sendTelemetry($call, $track, 'success', 'started');
 
 		if ($track->getDownloaded() === true)
 		{
+			$service = TrackService::getInstance();
+
+			// File is already downloaded, but finalization (Disk attach and/or chat delivery)
+			// may still be pending from a previous failure — e.g. disk attach failed, or the
+			// file is on disk but its chat link was not published. Re-run finalization directly
+			// (it is idempotent) — do NOT go through the downloader, because DOWNLOAD_URL is
+			// already cleared and the factory's HEAD request would fail.
+			if ($service->requiresDisk($track))
+			{
+				$log && $logger->info("DownloadAgent::run: Re-finalizing downloaded track. TrackId: {$trackId}");
+
+				$finalizeResult = $service->finalizeDownload($track);
+				if ($finalizeResult->isSuccess())
+				{
+					self::sendTelemetry($call, $track, 'success', 'finished_success');
+					(new CloudRecordAnalytics($call))->addDownload($track);
+
+					return '';
+				}
+
+				// Mirror the main error path so finalize retries are not invisible in diagnostics.
+				$log && $logger->error(
+					"DownloadAgent::run: Finalization retry failed. TrackId: {$trackId}. "
+					. "Errors: " . implode('; ', $finalizeResult->getErrorMessages())
+				);
+
+				$biErrorCode = $finalizeResult->getErrors()[0]?->getCode() ?? 'unknown';
+				(new CloudRecordAnalytics($call))->addDownload($track, $biErrorCode);
+
+				return self::scheduleRetry($call, $track, $retryCount, $finalizeResult);
+			}
+
 			$log && $logger->info("DownloadAgent::run: Track already downloaded. TrackId: {$trackId}");
 
-			(new FollowUpAnalytics($call))
-				->sendTelemetry(
-					source: null,
-					status: 'success',
-					event: 'download_agent_track_already_downloaded_' . $trackId
-				);
+			self::sendTelemetry($call, $track, 'success', 'track_already_downloaded');
 
 			return '';
 		}
@@ -150,12 +202,7 @@ class DownloadAgent
 			$syncResult = self::checkFileSync($track, $expectedBytes, $syncRetry);
 			if ($syncResult !== null)
 			{
-				(new FollowUpAnalytics($call))
-					->sendTelemetry(
-						source: null,
-						status: 'success',
-						event: 'download_agent_wait_for_sync_' . $trackId
-					);
+				self::sendTelemetry($call, $track, 'success', 'wait_for_sync');
 				return $syncResult;
 			}
 		}
@@ -173,12 +220,7 @@ class DownloadAgent
 			$downloadedBytes = $result->getData()['downloaded_bytes'] ?? 0;
 			$log && $logger->info("DownloadAgent::run: In progress, {$downloadedBytes} bytes. TrackId: {$trackId}");
 
-			(new FollowUpAnalytics($call))
-				->sendTelemetry(
-					source: null,
-					status: 'success',
-					event: 'download_agent_in_progress_' . $trackId
-				);
+			self::sendTelemetry($call, $track, 'success', 'in_progress');
 
 			return self::buildAgentName($trackId, 0, $downloadedBytes, 0, 0);
 		}
@@ -187,12 +229,9 @@ class DownloadAgent
 		{
 			$log && $logger->info("DownloadAgent::run: Success. TrackId: {$trackId}");
 
-			(new FollowUpAnalytics($call))
-				->sendTelemetry(
-					source: null,
-					status: 'success',
-					event: 'download_agent_finished_success_' . $trackId
-				);
+			self::sendTelemetry($call, $track, 'success', 'finished_success');
+
+			(new CloudRecordAnalytics($call))->addDownload($track);
 
 			return '';
 		}
@@ -203,7 +242,28 @@ class DownloadAgent
 			. "Errors: " . implode('; ', $result->getErrorMessages())
 		);
 
-		if ($retryCount <= self::MAX_RETRY_COUNT)
+		$biErrorCode = $result->getErrors()[0]?->getCode() ?? 'unknown';
+		(new CloudRecordAnalytics($call))->addDownload($track, $biErrorCode);
+
+		return self::scheduleRetry($call, $track, $retryCount, $result);
+	}
+
+	/**
+	 * Schedule a retry agent (or stop after MAX_RETRY_COUNT) based on a failed result.
+	 *
+	 * Network errors get a paused reschedule; other errors retry immediately. The retry
+	 * re-runs download from scratch unless the file is already attached, in which case
+	 * the agent's early-exit path drives finalization only.
+	 *
+	 * @return string Agent name to reschedule, or '' to stop.
+	 */
+	private static function scheduleRetry(?Call\Call $call, Track $track, int $retryCount, Result $result): string
+	{
+		$log = CallAISettings::isLoggingEnable();
+		$logger = Logger::getInstance();
+		$trackId = $track->getId();
+
+		if ($retryCount <= self::getMaxRetryCount())
 		{
 			$nextRetry = $retryCount + 1;
 
@@ -219,42 +279,24 @@ class DownloadAgent
 
 			if ($isNetworkError)
 			{
-				$delay = $nextRetry > 2 ? self::NETWORK_ERROR_DELAY_EXTENDED : self::NETWORK_ERROR_DELAY;
+				$delay = $nextRetry > 2 ? self::getNetworkErrorDelayExtended() : self::getNetworkErrorDelay();
 				$pauseUntil = time() + $delay;
 
 				$log && $logger->info("DownloadAgent::run: Network error, pausing for {$delay}s until " . date('c', $pauseUntil) . ". TrackId: {$trackId}");
-				(new FollowUpAnalytics($call))
-					->sendTelemetry(
-						source: null,
-						status: 'error',
-						event: 'download_agent_retried_on_network_error_' . $trackId,
-						error: $result->getError()
-					);
+				self::sendTelemetry($call, $track, 'error', 'retried_on_network_error', $result->getError());
 			}
 			else
 			{
 				$pauseUntil = 0;
 
 				$log && $logger->info("DownloadAgent::run: Retry #{$nextRetry}. TrackId: {$trackId}");
-				(new FollowUpAnalytics($call))
-					->sendTelemetry(
-						source: null,
-						status: 'error',
-						event: 'download_agent_retried_on_error_' . $trackId,
-						error: $result->getError()
-					);
+				self::sendTelemetry($call, $track, 'error', 'retried_on_error', $result->getError());
 			}
 
 			return self::buildAgentName($trackId, $nextRetry, 0, 0, $pauseUntil);
 		}
 
-		(new FollowUpAnalytics($call))
-			->sendTelemetry(
-				source: null,
-				status: 'error',
-				event: 'download_agent_finished_with_max_retries_' . $trackId,
-				error: $result->getError()
-			);
+		self::sendTelemetry($call, $track, 'error', 'finished_with_max_retries', $result->getError());
 
 		$log && $logger->error("DownloadAgent::run: Max retries reached. TrackId: {$trackId}");
 		return '';
@@ -290,12 +332,12 @@ class DownloadAgent
 			return null; // File synced, continue
 		}
 
-		if ($syncRetry < self::SYNC_MAX_RETRIES)
+		if ($syncRetry < self::getSyncMaxRetries())
 		{
 			$nextSyncRetry = $syncRetry + 1;
 			$log && $logger->info(
 				"DownloadAgent::checkFileSync: File not synced. "
-				. "Retry {$nextSyncRetry}/" . self::SYNC_MAX_RETRIES . ". TrackId: {$trackId}"
+				. "Retry {$nextSyncRetry}/" . self::getSyncMaxRetries() . ". TrackId: {$trackId}"
 			);
 
 			return self::buildAgentName($trackId, 0, $expectedBytes, $nextSyncRetry, 0);
@@ -339,6 +381,20 @@ class DownloadAgent
 		]);
 
 		return (bool)$agents->fetch();
+	}
+
+	/**
+	 * Send telemetry about track download pipeline events
+	 */
+	private static function sendTelemetry(
+		?Call\Call $call,
+		Track $track,
+		string $status,
+		string $event,
+		?\Bitrix\Main\Error $error = null
+	): void
+	{
+		(new TrackAnalytics($call))->sendTelemetry(source: $track, status: $status, event: 'download_agent_' . $event, error: $error);
 	}
 
 	/**

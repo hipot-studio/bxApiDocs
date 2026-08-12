@@ -96,7 +96,7 @@ final class GroupLinkMapper extends JointLinkMapper
 	{
 		$user = UserTable::query()
 			->where('ID', $userId)
-			->where('IS_REAL_USER', 'Y')
+			->where('REAL_USER', 'expr', true)
 			->setSelect(['NAME', 'LAST_NAME', 'ID', 'PERSONAL_PHOTO'])
 			->exec()
 			->fetchObject()

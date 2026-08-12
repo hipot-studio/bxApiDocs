@@ -55,4 +55,9 @@ class StorageItemProvider
 	{
 		return $this->repository->findOldStorageItemIds($createdTime, $limit);
 	}
+
+	public function findOldestStorageItemIds(?int $limit = null): array
+	{
+		return $this->repository->findOldestStorageItemIds($limit);
+	}
 }

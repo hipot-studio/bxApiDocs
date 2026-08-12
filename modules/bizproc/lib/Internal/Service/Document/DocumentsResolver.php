@@ -19,6 +19,8 @@ class DocumentsResolver
 
 	public function resolveFromPayload(array $payload): ResolveDocumentsResult
 	{
+		$categoryId = $this->normalizeCategoryId($payload['categoryId'] ?? $payload['category_id'] ?? null);
+
 		if (isset($payload['signedDocuments']))
 		{
 			return $this->resolveManySignedDocuments($payload['signedDocuments']);
@@ -31,7 +33,12 @@ class DocumentsResolver
 
 		if (isset($payload['documentType']) || isset($payload['documentId']))
 		{
-			return $this->resolvePayloadItem($payload['documentType'] ?? null, $payload['documentId'] ?? null);
+			return $this->resolvePayloadItem(
+				$payload['documentType'] ?? null,
+				$payload['documentId'] ?? null,
+				false,
+				$categoryId,
+			);
 		}
 
 		if (isset($payload['signedDocumentType']) || isset($payload['signedDocumentId']))
@@ -40,6 +47,7 @@ class DocumentsResolver
 				$payload['signedDocumentType'] ?? null,
 				$payload['signedDocumentId'] ?? null,
 				true,
+				$categoryId,
 			);
 		}
 
@@ -67,6 +75,7 @@ class DocumentsResolver
 		mixed $documentType,
 		mixed $documentId = null,
 		bool $isSignedPayload = false,
+		?int $categoryId = null,
 	): ResolveDocumentsResult
 	{
 		$complexDocumentType = $this->normalizeDocument($documentType, $isSignedPayload);
@@ -114,6 +123,7 @@ class DocumentsResolver
 							$complexDocumentId[2] ?? '',
 						)
 						: null,
+					categoryId: $categoryId,
 				),
 			]),
 		);
@@ -169,6 +179,7 @@ class DocumentsResolver
 				$documentKey = serialize([
 					$resolvedDocument->complexDocumentType->toArray(),
 					$resolvedDocument->complexDocumentId?->toArray(),
+					$resolvedDocument->categoryId,
 				]);
 
 				if (isset($resolvedDocumentHashes[$documentKey]))
@@ -190,11 +201,13 @@ class DocumentsResolver
 	private function resolveDocumentItem(array $document, bool $forceSignedPayload = false): ResolveDocumentsResult
 	{
 		$isSignedPayload = $forceSignedPayload || array_key_exists('signedDocumentType', $document);
+		$categoryId = $this->normalizeCategoryId($document['categoryId'] ?? $document['category_id'] ?? null);
 
 		return $this->resolvePayloadItem(
 			$document[$isSignedPayload ? 'signedDocumentType' : 'documentType'] ?? null,
 			$document[$isSignedPayload ? 'signedDocumentId' : 'documentId'] ?? null,
 			$isSignedPayload,
+			$categoryId,
 		);
 	}
 
@@ -252,6 +265,21 @@ class DocumentsResolver
 		}
 
 		return $this->normalizePlainDocument(\CBPDocument::unSignDocumentType($value));
+	}
+
+	private function normalizeCategoryId(mixed $value): ?int
+	{
+		if (\CBPHelper::isEmptyValue($value))
+		{
+			return null;
+		}
+
+		if (is_numeric($value))
+		{
+			return (int)$value;
+		}
+
+		return null;
 	}
 
 	private function createRequiredParameterResult(string $parameter = 'documentType'): ResolveDocumentsResult

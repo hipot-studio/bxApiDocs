@@ -32,6 +32,58 @@ class MysqliSqlHelper extends \Bitrix\Main\DB\MysqliSqlHelper implements BiSqlHe
 		);
 	}
 
+	public function getGroupConcatExpression(string $expression, string $orderBy = '', string $separator = ','): string
+	{
+		$escapedSeparator = $this->forSql($separator);
+		if ($orderBy !== '')
+		{
+			return "GROUP_CONCAT({$expression} ORDER BY {$orderBy} SEPARATOR '{$escapedSeparator}')";
+		}
+
+		return "GROUP_CONCAT({$expression} SEPARATOR '{$escapedSeparator}')";
+	}
+
+	public function getSegmentByDelimiter(string $field, string $delimiter, int $n): string
+	{
+		if ($n < 1)
+		{
+			throw new \InvalidArgumentException("Segment index must be >= 1, got {$n}.");
+		}
+
+		$escapedDelimiter = $this->forSql($delimiter);
+		$delimLen = mb_strlen($delimiter, 'UTF-8');
+
+		// Mirror PostgreSQL split_part: NULL field -> NULL, missing N-th segment -> ''.
+		return "IF({$field} IS NULL, NULL, IF("
+			. "(CHAR_LENGTH({$field}) - CHAR_LENGTH(REPLACE({$field}, '{$escapedDelimiter}', ''))) / {$delimLen} >= " . ($n - 1)
+			. ", SUBSTRING_INDEX(SUBSTRING_INDEX({$field}, '{$escapedDelimiter}', {$n}), '{$escapedDelimiter}', -1)"
+			. ", ''))"
+		;
+	}
+
+	public function getDateDiffSecondsExpression(string $start, string $end): string
+	{
+		return "TIMESTAMPDIFF(SECOND, {$start}, {$end})";
+	}
+
+	public function castToInt(string $expr): string
+	{
+		// MySQL coerces text to integer implicitly in numeric comparisons - no SQL change needed.
+		return $expr;
+	}
+
+	public function castIntToChar(string $expr): string
+	{
+		// MySQL coerces int to text implicitly in comparisons - no SQL change needed.
+		return $expr;
+	}
+
+	public function castNumericToChar(string $expr): string
+	{
+		// MySQL coerces numeric to text implicitly in string functions - no SQL change needed.
+		return $expr;
+	}
+
 	private function convertTimezoneOffsetToSeconds(string $timezoneOffset): int
 	{
 		if (

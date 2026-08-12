@@ -3,7 +3,6 @@
 namespace Bitrix\Crm\Service\Timeline\Item\Activity\Sms;
 
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
@@ -142,12 +141,7 @@ class Sms extends Base
 
 	protected function isResendingAvailable(): bool
 	{
-		if (Feature::enabled(Feature\MessageSenderEditor::class))
-		{
-			return (new TimelineMenuBar\Item\Message($this->getMenuBarContext()))->isAvailable();
-		}
-
-		return (new TimelineMenuBar\Item\Sms($this->getMenuBarContext()))->isAvailable();
+		return (new TimelineMenuBar\Item\Message($this->getMenuBarContext()))->isAvailable();
 	}
 
 	protected function isSentByRobot(): bool

@@ -34,13 +34,15 @@ trait ProductDataHelperTrait
 		if (Loader::includeModule('iblock'))
 		{
 			$parentProductQuery = self::getParentProductIdQuery();
+			/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+			$castParentQuery = $parentProductQuery ? $helper->castToInt($parentProductQuery) : null;
 
 			return [
 				'FIELD_NAME' => 'IS1.NAME',
 				'FIELD_TYPE' => 'string',
 				'TABLE_ALIAS' => 'IS1',
 				'LEFT_JOIN' => [
-					'LEFT JOIN b_iblock_element IE ON IE.ID = ' . ($parentProductQuery ? $helper->getIsNullFunction($parentProductQuery, 'PR.PRODUCT_ID') : 'PR.PRODUCT_ID'),
+					'LEFT JOIN b_iblock_element IE ON IE.ID = ' . ($castParentQuery ? $helper->getIsNullFunction($castParentQuery, 'PR.PRODUCT_ID') : 'PR.PRODUCT_ID'),
 					'LEFT JOIN b_iblock_section IS1 ON IS1.ID = IE.IBLOCK_SECTION_ID',
 				],
 			];
@@ -57,13 +59,15 @@ trait ProductDataHelperTrait
 		if (Loader::includeModule('iblock'))
 		{
 			$parentProductQuery = self::getParentProductIdQuery();
+			/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+			$castParentQuery = $parentProductQuery ? $helper->castToInt($parentProductQuery) : null;
 
 			return [
 				'FIELD_NAME' => 'IS2.NAME',
 				'FIELD_TYPE' => 'string',
 				'TABLE_ALIAS' => 'IS2',
 				'LEFT_JOIN' => [
-					'LEFT JOIN b_iblock_element IE ON IE.ID = ' . ($parentProductQuery ? $helper->getIsNullFunction($parentProductQuery, 'PR.PRODUCT_ID') : 'PR.PRODUCT_ID'),
+					'LEFT JOIN b_iblock_element IE ON IE.ID = ' . ($castParentQuery ? $helper->getIsNullFunction($castParentQuery, 'PR.PRODUCT_ID') : 'PR.PRODUCT_ID'),
 					'LEFT JOIN b_iblock_section IS1 ON IS1.ID = IE.IBLOCK_SECTION_ID',
 					'LEFT JOIN b_iblock_section IS2 ON IS2.ID = IS1.IBLOCK_SECTION_ID',
 				],
@@ -81,13 +85,15 @@ trait ProductDataHelperTrait
 		if (Loader::includeModule('iblock'))
 		{
 			$parentProductQuery = self::getParentProductIdQuery();
+			/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+			$castParentQuery = $parentProductQuery ? $helper->castToInt($parentProductQuery) : null;
 
 			return [
 				'FIELD_NAME' => 'IS3.NAME',
 				'FIELD_TYPE' => 'string',
 				'TABLE_ALIAS' => 'IS3',
 				'LEFT_JOIN' => [
-					'LEFT JOIN b_iblock_element IE ON IE.ID = ' . ($parentProductQuery ? $helper->getIsNullFunction($parentProductQuery, 'PR.PRODUCT_ID') : 'PR.PRODUCT_ID'),
+					'LEFT JOIN b_iblock_element IE ON IE.ID = ' . ($castParentQuery ? $helper->getIsNullFunction($castParentQuery, 'PR.PRODUCT_ID') : 'PR.PRODUCT_ID'),
 					'LEFT JOIN b_iblock_section IS1 ON IS1.ID = IE.IBLOCK_SECTION_ID',
 					'LEFT JOIN b_iblock_section IS2 ON IS2.ID = IS1.IBLOCK_SECTION_ID',
 					'LEFT JOIN b_iblock_section IS3 ON IS3.ID = IS2.IBLOCK_SECTION_ID',

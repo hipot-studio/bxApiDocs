@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Internal\Grid\StorageList;
 
 use Bitrix\Bizproc\Internal\Grid\StorageList\Column\Provider\StorageListDataProvider;
+use Bitrix\Bizproc\Internal\Grid\StorageList\Row\Action;
 use Bitrix\Bizproc\Internal\Grid\StorageList\Row\Assembler\StorageListRowAssembler;
 use Bitrix\Main\Grid\Column\Columns;
 use Bitrix\Main\Grid\Grid;
@@ -25,6 +26,7 @@ final class StorageListGrid extends Grid
 	{
 		return new Rows(
 			new StorageListRowAssembler($this->getVisibleColumnsIds()),
+			new Action\StorageListDataProvider($this->getSettings()),
 		);
 	}
 

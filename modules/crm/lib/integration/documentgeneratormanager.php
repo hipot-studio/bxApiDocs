@@ -13,6 +13,7 @@ use Bitrix\Crm\Settings\InvoiceSettings;
 use Bitrix\Crm\Timeline\DocumentController;
 use Bitrix\DocumentGenerator\Body\PlainText;
 use Bitrix\DocumentGenerator\CreationMethod;
+use Bitrix\DocumentGenerator\DataProvider\Filterable;
 use Bitrix\DocumentGenerator\Document;
 use Bitrix\DocumentGenerator\Driver;
 use Bitrix\DocumentGenerator\Model\DocumentBindingTable;
@@ -22,6 +23,7 @@ use Bitrix\DocumentGenerator\Model\TemplateTable;
 use Bitrix\DocumentGenerator\Nameable;
 use Bitrix\DocumentGenerator\Service\ActualizeQueue;
 use Bitrix\DocumentGenerator\VirtualDocument;
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
@@ -780,24 +782,111 @@ class DocumentGeneratorManager
 		$templates = TemplateTable::getListByClassName($sourceProvider);
 		foreach ($templates as $template)
 		{
-			try
+			$bindResult = $this->bindProviderToTemplate($destinationProvider, $template['ID']);
+			if (!$bindResult->isSuccess())
 			{
-				$addResult = TemplateProviderTable::add([
-					'TEMPLATE_ID' => $template['ID'],
-					'PROVIDER' => $destinationProvider,
-				]);
-				if (!$addResult->isSuccess())
-				{
-					$result->addErrors($addResult->getErrors());
-				}
-			}
-			catch (SqlQueryException $exception)
-			{
-				$result->addError(new Error($exception->getMessage()));
+				$result->addErrors($bindResult->getErrors());
 			}
 		}
 
 		return $result;
+	}
+
+	final public function bindToAssociatedInstalledDefaultTemplates(string $provider): Result
+	{
+		if (!$this->isEnabled())
+		{
+			return new Result();
+		}
+
+		$result = new Result();
+		foreach ($this->getAssociatedInstalledDefaultTemplatesIds($provider) as $templateId)
+		{
+			$bindResult = $this->bindProviderToTemplate($provider, $templateId);
+			if (!$bindResult->isSuccess())
+			{
+				$result->addErrors($bindResult->getErrors());
+			}
+		}
+
+		return $result;
+	}
+
+	private function getAssociatedInstalledDefaultTemplatesIds(string $provider): array
+	{
+		if (!$this->isEnabled())
+		{
+			return [];
+		}
+
+		$result = \Bitrix\DocumentGenerator\Controller\Template::getDefaultTemplateList(['MODULE_ID' => 'crm']);
+
+		if (!$result->isSuccess())
+		{
+			return [];
+		}
+
+		$installed = [];
+		foreach ($result->getData() as $template)
+		{
+			$isExists = isset($template['ID']) && $template['ID'] > 0;
+			$isWasDeleted = isset($template['IS_DELETED']) && $template['IS_DELETED'] === 'Y';
+			if ($isExists && !$isWasDeleted && $this->isProviderInList($provider, $template['PROVIDERS'] ?? []))
+			{
+				$installed[] = (int)$template['ID'];
+			}
+		}
+
+		return $installed;
+	}
+
+	/**
+	 * Check if provider is in list by whatever alias (provider_1, provider_category_1).
+	 * We don't call @see Filterable::getExtendedList() here because callsite includes module installation, and DB/runtime state is likely incorrect.
+	 */
+	private function isProviderInList(string $provider, array $providersList): bool
+	{
+		$needleAliases = $this->makeProviderAliases($provider);
+		$haystackAliases = [];
+		foreach ($providersList as $haystackProvider)
+		{
+			$haystackAliases = [...$haystackAliases, ...$this->makeProviderAliases($haystackProvider)];
+		}
+
+		return !empty(array_intersect($haystackAliases, $needleAliases));
+	}
+
+	private function makeProviderAliases(string $provider): array
+	{
+		$aliases = [mb_strtolower($provider)];
+
+		$exploded = explode('_', $provider);
+		if (count($exploded) > 1)
+		{
+			$aliases[] = mb_strtolower($exploded[0]);
+		}
+
+		return $aliases;
+	}
+
+	private function bindProviderToTemplate(string $provider, int $templateId): Result
+	{
+		try
+		{
+			return TemplateProviderTable::add([
+				'TEMPLATE_ID' => $templateId,
+				'PROVIDER' => $provider,
+			]);
+		}
+		catch (DuplicateEntryException)
+		{
+			// well, it means already bound
+			return new Result();
+		}
+		catch (SqlQueryException $exception)
+		{
+			return (new Result())->addError(Error::createFromThrowable($exception));
+		}
 	}
 
 	public function createDocumentActivity(

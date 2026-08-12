@@ -6,6 +6,7 @@ namespace Bitrix\Bizproc\Public\Activity;
 
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Internal\Entity\Workflow\ExecutionPayload;
+use Bitrix\Bizproc\Public\Activity\Interface\FilterResultPropertyResolver;
 use Bitrix\Bizproc\Public\Activity\Structure\FlowDirectedActivity;
 use Bitrix\Bizproc\Internal\Entity\Activity\Interface\FlowCompositeActivity;
 use Bitrix\Bizproc\Internal\Service\Container;
@@ -26,6 +27,9 @@ abstract class BaseComplexActivity extends FlowDirectedActivity implements
 	protected const RULES_PARAM = 'Rules';
 	protected const INPUT_ACTIVITY_NAMES = 'InputNames';
 	protected const OUTPUT_ACTIVITY_NAMES = 'OutputNames';
+	protected const FILTER_SETTINGS = 'FilterSettings';
+	protected const FILTER_RETURN_PROPERTIES_MAP = 'FilterReturnPropertiesMap';
+	protected const FILTER_RESULT_ALL_SUFFIX = '_all';
 	protected const NOT_FILLED_MARK = 'NotFilled';
 
 	protected array $queuePortIds = [];
@@ -40,12 +44,20 @@ abstract class BaseComplexActivity extends FlowDirectedActivity implements
 				static::RULES_PARAM => [],
 				static::INPUT_ACTIVITY_NAMES => [],
 				static::OUTPUT_ACTIVITY_NAMES => [],
+				static::FILTER_SETTINGS => [],
+				static::FILTER_RETURN_PROPERTIES_MAP => [],
 			],
 		);
 
 		$this->setPropertiesTypes([
 			static::RULES_PARAM => [
 				'Type' => FieldType::RULES,
+			],
+			static::FILTER_SETTINGS => [
+				'Type' => FieldType::RULES,
+			],
+			static::FILTER_RETURN_PROPERTIES_MAP => [
+				'Type' => FieldType::JSON,
 			],
 		]);
 	}
@@ -55,6 +67,13 @@ abstract class BaseComplexActivity extends FlowDirectedActivity implements
 		$this->queuePortIds[] = $payload->getInputPort();
 
 		return $this->execute();
+	}
+
+	public function execute(): int
+	{
+		$this->initializeFilterResultProperties();
+
+		return parent::execute();
 	}
 
 	public static function validateChild($childActivity, $bFirstChild = false)
@@ -141,7 +160,7 @@ abstract class BaseComplexActivity extends FlowDirectedActivity implements
 
 		if (($arTestProperties[static::NOT_FILLED_MARK] ?? 'N') === 'Y')
 		{
-			$arErrors[] = $arErrors[] = [
+			$arErrors[] = [
 				'code' => 'NotExist',
 				'message' => Loc::getMessage('BIZPROC_PUBLIC_ACTIVITY_BCA_NOT_FILLED'),
 			];
@@ -157,6 +176,64 @@ abstract class BaseComplexActivity extends FlowDirectedActivity implements
 		return [
 			...$complexActivityService->configureRuleProperty(),
 		];
+	}
+
+	protected function initializeFilterResultProperties(): void
+	{
+		$returnPropertiesMap = $this->getRawProperty(static::FILTER_RETURN_PROPERTIES_MAP);
+		if (!is_array($returnPropertiesMap))
+		{
+			return;
+		}
+
+		foreach (array_keys($returnPropertiesMap) as $propertyId)
+		{
+			$this->arProperties[$propertyId] = null;
+		}
+
+		if (empty($returnPropertiesMap))
+		{
+			return;
+		}
+
+		$propertyTypes = [];
+		foreach ($returnPropertiesMap as $propertyId => $property)
+		{
+			if (is_array($property))
+			{
+				$propertyTypes[$propertyId] = $property;
+			}
+		}
+
+		if (!empty($propertyTypes))
+		{
+			$this->setPropertiesTypes($propertyTypes);
+		}
+
+		$resolver = $this->getFilterResultPropertyResolver();
+		if ($resolver === null)
+		{
+			return;
+		}
+
+		foreach ($resolver->resolveProperties($this) as $filterId => $result)
+		{
+			if (array_key_exists($filterId, $returnPropertiesMap))
+			{
+				$this->arProperties[$filterId] = $result['documentId'] ?? null;
+			}
+
+			$allPropertyId = $filterId . static::FILTER_RESULT_ALL_SUFFIX;
+			if (array_key_exists($allPropertyId, $returnPropertiesMap))
+			{
+				$this->arProperties[$allPropertyId] = $result['documentIds'] ?? [];
+			}
+		}
+	}
+
+	private function getFilterResultPropertyResolver(): ?FilterResultPropertyResolver
+	{
+		return Container::instance()->getFilterResultPropertyResolverRegistry()->resolve($this);
 	}
 
 	public static function getPropertiesDialogValues(

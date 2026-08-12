@@ -35,8 +35,11 @@ use Bitrix\Im\Model\NoRelationPermissionDiskTable;
 use Bitrix\Im\Model\ReactionTable;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\Model\RelationTable;
+use Bitrix\Im\Model\SharingLinkMemberTable;
+use Bitrix\Im\Model\SharingLinkTable;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\SharingLink\Entity\LinkEntityType;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Sync\Event;
@@ -284,8 +287,18 @@ class ChatContentCollector
 			],
 		];
 
+		// Capture before deletion: members' preview pointers may reference a message in this soon-to-be-deleted source.
+		$collabParentToRecompute = $this->getCollabParentIdForPreviewSource($chat);
+
 		$this->writeSyncLog();
 		$this->deleteByColumn(RelationTable::class, [$this->chatId], 'CHAT_ID');
+		// Keyed by ENTITY_TYPE + ENTITY_ID; the type filter keeps same-id non-chat rows intact.
+		$chatEntityFilter = [
+			'@ENTITY_TYPE' => LinkEntityType::chatTypeValues(),
+			'=ENTITY_ID' => (string)$this->chatId,
+		];
+		SharingLinkMemberTable::deleteByFilter($chatEntityFilter);
+		SharingLinkTable::deleteByFilter($chatEntityFilter);
 		$this->deleteByColumn(ChatTable::class, [$this->chatId]);
 		Chat::cleanCache($this->chatId);
 		$this->deleteByColumn(RecentTable::class, [$this->chatId], 'ITEM_CID');
@@ -300,7 +313,29 @@ class ChatContentCollector
 
 		(new Structure($chat))->unlinkAll();
 
+		// Recompute after the source is gone, so the resolver no longer treats it as a candidate.
+		if ($collabParentToRecompute !== null)
+		{
+			\Bitrix\Main\DI\ServiceLocator::getInstance()
+				->get(\Bitrix\Im\V2\Recent\PreviewSource\CollabPreviewSourcePointerService::class)
+				->recomputeForCollabMembers($collabParentToRecompute)
+			;
+		}
+
 		CPullStack::AddShared($arMessage);
+
+		$chat->onAfterDelete();
+	}
+
+	/**
+	 * Returns the parent only when it is a collab. The collab itself is excluded: deleting it removes
+	 * its own recent rows, so there is no pointer left to keep consistent.
+	 */
+	private function getCollabParentIdForPreviewSource(Chat $chat): ?int
+	{
+		$parent = $chat->getParentChat();
+
+		return $parent instanceof Chat\CollabChat ? (int)$parent->getChatId() : null;
 	}
 
 	protected function cleanupCounterCache(): void

@@ -3,6 +3,7 @@
 namespace Bitrix\Calendar\Sync\Util;
 
 use Bitrix\Calendar\Core\Event\Event;
+use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\UserField\ResourceBooking;
 use Bitrix\Main\Localization\Loc;
 
@@ -13,9 +14,16 @@ class EventDescription
 	public function prepareForExport(Event $event): ?string
 	{
 		$languageId = \CCalendar::getUserLanguageId($event->getOwner()?->getId());
-		$description = $this->addAttendeesInfo($event->getDescription(), $event, $languageId);
 
-		return $this->addSpecialInfo($description, $event, $languageId);
+		$description = $event->getDescription() ?? '';
+		if ($event->getSpecialLabel() === Dictionary::EVENT_TYPE['booking'])
+		{
+			$description = $this->addBookingInfo($description, $event, $languageId);
+		}
+		$description = $this->addAttendeesInfo($description, $event, $languageId);
+		$description = $this->addSpecialInfo($description, $event, $languageId);
+
+		return $description;
 	}
 
 	/**
@@ -26,9 +34,12 @@ class EventDescription
 	 */
 	public function prepareAfterImport(string $description, string $languageId): string
 	{
-		$description = $this->removeAttendeesInfo($description, $languageId);
+		$withoutBookingDescription = (new \Bitrix\Calendar\Integration\Booking\EventDescription())
+			->clearOutFromDescription($description, $languageId)
+		;
+		$withoutAttendeesDescription = $this->removeAttendeesInfo($withoutBookingDescription, $languageId);
 
-		return $this->removeSpecialInfo($description, $languageId);
+		return $this->removeSpecialInfo($withoutAttendeesDescription, $languageId);
 	}
 
 	/**
@@ -44,13 +55,8 @@ class EventDescription
 			;
 	}
 
-	private function addAttendeesInfo(?string $description, Event $event, string $languageId): string
+	private function addAttendeesInfo(string $description, Event $event, string $languageId): string
 	{
-		if (!$description)
-		{
-			$description = '';
-		}
-
 		if (
 			$event->getAttendeesCollection()
 			&& ($attendees = $event->getAttendeesCollection()->getAttendeesCodes())
@@ -63,6 +69,25 @@ class EventDescription
 		}
 
 		return $description;
+	}
+
+	private function addBookingInfo(string $description, Event $event, string $languageId): string
+	{
+		$bookingInfo = (new \Bitrix\Calendar\Integration\Booking\EventDescription())
+			->getDescription($event->getId(), $languageId);
+
+		$result = [];
+		if ($bookingInfo !== '')
+		{
+			$result[] = $bookingInfo;
+		}
+
+		if ($description !== '')
+		{
+			$result[] = $description;
+		}
+
+		return implode("\r\n\r\n", $result);
 	}
 
 	/**

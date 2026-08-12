@@ -102,7 +102,7 @@ class Helper
 		$postfix = preg_replace('/[^a-zA-Z0-9_]/', '', $postfix);
 
 		global $USER;
-		if ($USER->IsAuthorized())
+		if (isset($USER) && is_object($USER) && $USER->IsAuthorized())
 		{
 			$user = $USER->GetID();
 		}

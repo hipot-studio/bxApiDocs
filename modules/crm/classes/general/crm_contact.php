@@ -1837,22 +1837,27 @@ class CAllCrmContact
 		return $result;
 	}
 
+	/**
+	 * @deprecated
+	 *
+	 * Method will be removed soon
+	 */
 	static public function BuildEntityAttr($userID, $arAttr = array())
 	{
 		$userID = (int)$userID;
-		$arResult = array("U{$userID}");
+		$arResult = [];
 		if(isset($arAttr['OPENED']) && $arAttr['OPENED'] == 'Y')
 		{
 			$arResult[] = 'O';
 		}
 
-		$arUserAttr = Bitrix\Crm\Service\Container::getInstance()
+		$userBasedEntityAttributes = Bitrix\Crm\Service\Container::getInstance()
 			->getUserPermissions($userID)
 			->getAttributesProvider()
 			->getEntityAttributes()
 		;
 
-		return array_merge($arResult, $arUserAttr['INTRANET']);
+		return array_merge($arResult, $userBasedEntityAttributes);
 	}
 
 	static public function RebuildEntityAccessAttrs($IDs)

@@ -6,6 +6,7 @@ namespace Bitrix\Crm\Service\Display\Field;
 
 use Bitrix\Crm\Service\Display\Options;
 use Bitrix\Crm\Workflow\PaymentStage;
+use Bitrix\UI\Public\System\Label\Style;
 
 final class PaymentStatusField extends StatusField
 {
@@ -79,5 +80,15 @@ final class PaymentStatusField extends StatusField
 		{
 			$this->displayParams['cssPrefix'] = 'crm-list-item-status';
 		}
+	}
+
+	protected function getLabelStyleByPostfix(string $postfix): Style
+	{
+		return match ($postfix)
+		{
+			'paid' => Style::TINTED_SUCCESS,
+			'seen' => Style::TINTED,
+			default => Style::TINTED_NO_ACCENT,
+		};
 	}
 }

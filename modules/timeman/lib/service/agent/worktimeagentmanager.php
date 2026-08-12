@@ -144,7 +144,7 @@ class WorktimeAgentManager
 		}
 		if (isset($params['PARAMS']))
 		{
-			$params['NAME'] .= '(\'' . implode("','", $params['PARAMS']) . '\');';
+			$params['NAME'] = $this->buildAgentName($params['NAME'], $params['PARAMS']);
 			unset($params['PARAMS']);
 		}
 		if (isset($params['NEXT_EXEC']) && $params['NEXT_EXEC'] instanceof \DateTime)
@@ -153,6 +153,18 @@ class WorktimeAgentManager
 		}
 		$resId = \CAgent::add($params);
 		return $resId === false ? 0 : $resId;
+	}
+
+	private function buildAgentName(string $name, array $parameters): string
+	{
+		$exportedParameters = array_map(
+			static function (mixed $parameter): string {
+				return var_export((string)$parameter, true);
+			},
+			$parameters
+		);
+
+		return $name . '(' . implode(',', $exportedParameters) . ');';
 	}
 
 	/**
@@ -449,26 +461,7 @@ class WorktimeAgentManager
 			return;
 		}
 
-		$nextExec = TimeHelper::getInstance()->createUserDateTimeFromFormat(
-			'U',
-			$recordStopUtcTimestamp,
-			$recordManager->getRecord()->getUserId()
-		);
-
-		if (\Bitrix\Timeman\Integration\Stafftrack\CheckIn::isCheckInStartEnabled())
-		{
-			$startDateTime = (new \DateTimeImmutable())->setTimestamp(
-				$recordManager->getRecord()->getRecordedStartTimestamp()
-			);
-			$startOfDay = $startDateTime->setTime(0, 0);
-			$startOfNextDay = $startOfDay->modify('+1 day');
-
-			$nextExec = TimeHelper::getInstance()->createUserDateTimeFromFormat(
-				'U',
-				$startOfNextDay->getTimestamp(),
-				$recordManager->getRecord()->getUserId()
-			);
-		}
+		$nextExec = $this->buildNextExecForAutoClosingAgent($recordManager, $recordStopUtcTimestamp);
 
 		$agentId = $this->addAgent([
 			'PARAMS' => [
@@ -485,6 +478,35 @@ class WorktimeAgentManager
 		{
 			$recordManager->getRecord()->setAutoClosingAgentId($agentId);
 		}
+	}
+
+	private function buildNextExecForAutoClosingAgent(WorktimeRecordManager $recordManager, $recordStopUtcTimestamp)
+	{
+		if (
+			\Bitrix\Timeman\Integration\Stafftrack\CheckIn::isCheckInStartEnabled()
+			&& $recordManager->getSchedule()->isFixed()
+		)
+		{
+			return $this->buildStartOfNextDayByUserTime(
+				$recordManager->getRecord()->getRecordedStartTimestamp(),
+				$recordManager->getRecord()->getUserId()
+			);
+		}
+
+		return TimeHelper::getInstance()->createUserDateTimeFromFormat(
+			'U',
+			$recordStopUtcTimestamp,
+			$recordManager->getRecord()->getUserId()
+		);
+	}
+
+	private function buildStartOfNextDayByUserTime($timestamp, $userId)
+	{
+		$startOfNextDay = TimeHelper::getInstance()->createUserDateTimeFromFormat('U', $timestamp, $userId);
+		$startOfNextDay->setTime(0, 0, 0);
+		$startOfNextDay->add(new \DateInterval('P1D'));
+
+		return $startOfNextDay;
 	}
 
 	public function createAutoClosingAgentForRecords(\Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordCollection $records)

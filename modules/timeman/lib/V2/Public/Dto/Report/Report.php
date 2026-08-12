@@ -17,7 +17,9 @@ final class Report implements Arrayable
 		public readonly int $userId,
 		public readonly string $type,
 		public readonly string $report,
+		public readonly string $reportPlain,
 		public readonly int $timestamp,
+		public readonly ?string $reportExtended = null,
 	)
 	{
 	}
@@ -29,13 +31,15 @@ final class Report implements Arrayable
 
 	public static function mapFromArray(array $props): static
 	{
-		return new static(
-			id: static::mapInteger($props, 'id', 0) ?? 0,
-			recordId: static::mapInteger($props, 'recordId', 0) ?? 0,
-			userId: static::mapInteger($props, 'userId', 0) ?? 0,
-			type: static::mapString($props, 'type', '') ?? '',
-			report: static::mapString($props, 'report', '') ?? '',
-			timestamp: static::mapInteger($props, 'timestamp', 0) ?? 0,
+		return new self(
+			id: self::mapInteger($props, 'id', 0) ?? 0,
+			recordId: self::mapInteger($props, 'recordId', 0) ?? 0,
+			userId: self::mapInteger($props, 'userId', 0) ?? 0,
+			type: self::mapString($props, 'type', '') ?? '',
+			report: self::mapString($props, 'report', '') ?? '',
+			reportPlain: self::mapPlainText($props, 'report', '') ?? '',
+			timestamp: self::mapInteger($props, 'timestamp', 0) ?? 0,
+			reportExtended: self::mapString($props, 'reportExtended'),
 		);
 	}
 
@@ -47,7 +51,10 @@ final class Report implements Arrayable
 			'userId' => $this->userId,
 			'type' => $this->type,
 			'report' => $this->report,
+			'reportPlain' => $this->reportPlain,
 			'timestamp' => $this->timestamp,
+			'reportExtended' => $this->reportExtended,
 		];
 	}
+
 }

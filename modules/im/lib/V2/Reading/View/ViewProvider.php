@@ -99,6 +99,38 @@ class ViewProvider
 		return $result;
 	}
 
+	public function getViewedCount(int $messageId): int
+	{
+		return $this->getViewedCountForMessages([$messageId])[$messageId] ?? 0;
+	}
+
+	/**
+	 * @param int[] $messageIds
+	 * @return array<int, int> messageId => number of users who viewed it
+	 */
+	public function getViewedCountForMessages(array $messageIds): array
+	{
+		$result = array_fill_keys($messageIds, 0);
+		if (empty($messageIds))
+		{
+			return $result;
+		}
+
+		$rows = MessageViewedTable::query()
+			->setSelect(['MESSAGE_ID', 'CNT' => new ExpressionField('CNT', 'COUNT(*)')])
+			->whereIn('MESSAGE_ID', $messageIds)
+			->setGroup(['MESSAGE_ID'])
+			->fetchAll() ?: []
+		;
+
+		foreach ($rows as $row)
+		{
+			$result[(int)$row['MESSAGE_ID']] = (int)$row['CNT'];
+		}
+
+		return $result;
+	}
+
 	protected function getFirstUnviewedMessageId(Message $endMessage, int $userId): int
 	{
 		$id = $this->getLastViewedMessageId($endMessage->getChatId(), $userId);

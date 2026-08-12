@@ -20,6 +20,7 @@ class Feature implements Arrayable
 		public readonly ?string $urlTemplate = null,
 		public readonly bool $isLocked = false,
 		public readonly ?string $restrictionCode = null,
+		public readonly ?string $type = null,
 	)
 	{
 	}
@@ -40,12 +41,13 @@ class Feature implements Arrayable
 			urlTemplate: static::mapString($props, 'urlTemplate'),
 			isLocked: static::mapBool($props, 'isLocked', false),
 			restrictionCode: static::mapString($props, 'restrictionCode'),
+			type: static::mapString($props, 'type'),
 		);
 	}
 
 	public function toArray(): array
 	{
-		return [
+		$result = [
 			'id' => $this->id,
 			'name' => $this->name,
 			'customName' => $this->customName,
@@ -55,5 +57,12 @@ class Feature implements Arrayable
 			'isLocked' => $this->isLocked,
 			'restrictionCode' => $this->restrictionCode,
 		];
+
+		if ($this->type !== null)
+		{
+			$result['type'] = $this->type;
+		}
+
+		return $result;
 	}
 }

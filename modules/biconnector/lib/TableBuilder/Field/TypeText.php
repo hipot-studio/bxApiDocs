@@ -6,6 +6,6 @@ class TypeText extends Base
 {
 	public function getField(): string
 	{
-		return sprintf('`%s` TEXT', $this->getName());
+		return sprintf('%s TEXT', $this->sqlHelper->quote($this->name));
 	}
 }

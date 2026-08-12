@@ -8,6 +8,7 @@ use Bitrix\Landing\File;
 use Bitrix\Landing\Landing;
 use Bitrix\Landing\Repo;
 use Bitrix\Landing\Node;
+use Bitrix\Landing\Sanitizer;
 use Bitrix\Landing\Transfer\AppConfiguration;
 use Bitrix\Landing\Transfer\Requisite\Context;
 use Bitrix\Landing\Transfer\Requisite\Dictionary\RatioPart;
@@ -36,10 +37,13 @@ trait BlockTrait
 					$block,
 					$pending
 				);
-				$blocks[$oldBlockId] = $newBlockId;
-				if ($pending)
+				if ($newBlockId !== null)
 				{
-					$blocksPending[] = $newBlockId;
+					$blocks[$oldBlockId] = $newBlockId;
+					if ($pending)
+					{
+						$blocksPending[] = $newBlockId;
+					}
 				}
 			}
 		}
@@ -134,6 +138,12 @@ trait BlockTrait
 						'INITIATOR_APP_CODE' => $block['repo_block']['app_code'],
 					]
 				);
+				if ($blockId === false)
+				{
+					$pending = false;
+
+					return null;
+				}
 				if ($blockId)
 				{
 					$sort += 500;
@@ -176,11 +186,7 @@ trait BlockTrait
 		];
 		if ($block['full_content'] ?? null)
 		{
-			$blockFields['CONTENT'] = str_replace(
-				['<?', '?>'],
-				['< ?', '? >'],
-				$block['full_content']
-			);
+			$blockFields['CONTENT'] = (string)(new Sanitizer())->sanitizeText($block['full_content']);
 		}
 		if ($block['designed'] ?? null)
 		{
@@ -190,6 +196,10 @@ trait BlockTrait
 			$block['code'],
 			$blockFields
 		);
+		if ($blockId === false)
+		{
+			return null;
+		}
 		if ($blockId)
 		{
 			$sort += 500;
@@ -260,7 +270,7 @@ trait BlockTrait
 			]);
 			while ($row = $res->fetch())
 			{
-				$items[$row['APP_CODE'] . '@' . $row['XML_ID']] = $row['ID'];
+				$items[$row['APP_CODE'] . '@' . $row['XML_ID']] = (int)$row['ID'];
 			}
 		}
 

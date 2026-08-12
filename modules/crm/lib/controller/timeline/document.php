@@ -56,11 +56,24 @@ class Document extends \Bitrix\Crm\Controller\Base
 
 		if (count($bindings) > 1)
 		{
-			\Bitrix\Crm\Timeline\Entity\TimelineBindingTable::delete([
+			$deleteResult = \Bitrix\Crm\Timeline\Entity\TimelineBindingTable::delete([
 				'OWNER_ID' => $id,
 				'ENTITY_ID' => $ownerId,
 				'ENTITY_TYPE_ID' => $ownerTypeId,
 			]);
+			if (!$deleteResult->isSuccess())
+			{
+				$this->addErrors($deleteResult->getErrors());
+
+				return null;
+			}
+
+			\Bitrix\Crm\Timeline\DocumentController::getInstance()->sendPullEventOnDelete(
+				new \Bitrix\Crm\ItemIdentifier($ownerTypeId, $ownerId),
+				$id
+			);
+
+			return true;
 		}
 		else
 		{

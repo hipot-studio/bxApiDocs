@@ -56,6 +56,9 @@ class Flow extends Dataset
 
 	protected function getFields(): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $this->getSqlHelper();
+
 		$creatorJoin = $this->createJoin(
 			'CREATOR',
 			"INNER JOIN b_user CREATOR ON CREATOR.ID = {$this->getAliasFieldName('CREATOR_ID')}",
@@ -103,15 +106,13 @@ class Flow extends Dataset
 			(new StringField('NAME')),
 			(new StringField('FLOW'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('ID')}, ']'), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('ID'), "']'")},
 							nullif({$this->getAliasFieldName('NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 			,
 			(new IntegerField('CREATOR_ID'))
@@ -119,30 +120,26 @@ class Flow extends Dataset
 			,
 			(new StringField('CREATOR_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('CREATOR_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('CREATOR_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$creatorJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$creatorJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$creatorJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($creatorJoin)
 			,
 			(new StringField('CREATOR'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('CREATOR_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('CREATOR_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('CREATOR_ID')}, ']'), 
-							nullif({$creatorJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('CREATOR_ID'), "']'")},
+							nullif({$creatorJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$creatorJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($creatorJoin)
 			,
@@ -151,30 +148,26 @@ class Flow extends Dataset
 			,
 			(new StringField('OWNER_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('OWNER_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('OWNER_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$ownerJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$ownerJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$ownerJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($ownerJoin)
 			,
 			(new StringField('OWNER'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('OWNER_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('OWNER_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('OWNER_ID')}, ']'), 
-							nullif({$ownerJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('OWNER_ID'), "']'")},
+							nullif({$ownerJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$ownerJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($ownerJoin)
 			,
@@ -189,19 +182,11 @@ class Flow extends Dataset
 				]),
 			(new StringField('HAS_TEMPLATE'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('TEMPLATE_ID')} >= 1,
-						'Y',
-						'N'
-					)"
+					CASE WHEN {$this->getAliasFieldName('TEMPLATE_ID')} >= 1 THEN 'Y' ELSE 'N' END"
 				),
 			(new StringField('ACTIVE'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('ACTIVE')} >= 1,
-						'Y',
-						'N'
-					)"
+					CASE WHEN {$this->getAliasFieldName('ACTIVE')} >= 1 THEN 'Y' ELSE 'N' END"
 				),
 			(new IntegerField('GROUP_ID')),
 			(new StringField('GROUP_NAME'))
@@ -210,15 +195,13 @@ class Flow extends Dataset
 			,
 			(new StringField('GROUP_INFO'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('GROUP_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('GROUP_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('GROUP_ID')}, ']'), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('GROUP_ID'), "']'")},
 							nullif({$groupJoin->getJoinFieldName('NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($groupJoin)
 			,

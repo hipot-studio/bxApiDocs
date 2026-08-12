@@ -3,9 +3,9 @@
 namespace Bitrix\StaffTrack\Internal\Model;
 
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields\CryptoField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
-use Bitrix\Main\ORM\Fields\TextField;
 use Bitrix\Main\Type\DateTime;
 
 /**
@@ -77,10 +77,9 @@ class CheckInByDayTable extends DataManager
 					},
 				],
 			),
-			new TextField(
+			new CryptoField(
 				'GEO_DATA',
-				[
-				],
+				['crypto_enabled' => CryptoField::cryptoAvailable()],
 			),
 			new IntegerField(
 				'CNT',

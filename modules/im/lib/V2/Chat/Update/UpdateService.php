@@ -11,11 +11,13 @@ use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Entity\File\ChatAvatar;
 use Bitrix\Im\V2\Guest\GuestLinkService;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
-use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
-use Bitrix\Im\V2\Integration\Socialnetwork\Group;
+use Bitrix\Im\V2\Recent\AncestorContextSender;
+use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Relation\DeleteUserConfig;
+use Bitrix\Im\V2\Relation\Reason;
 use Bitrix\Im\V2\Result;
+use Bitrix\Main\DI\ServiceLocator;
 
 class UpdateService
 {
@@ -48,6 +50,10 @@ class UpdateService
 
 		$this->updateAvatarBeforeSave();
 
+		// captured before save: on detach the new PARENT_ID is 0 and the old parent chain is lost afterwards
+		$oldParentChatId = (int)($this->chat->getParentChatId() ?? 0);
+		$membersToPromoteOnAttach = $this->captureMembersToPromoteOnAttach($oldParentChatId);
+
 		$this->chat->fill($this->getArrayToSave());
 		$result = $this->chat->save();
 
@@ -79,7 +85,9 @@ class UpdateService
 		// being created early and then rewritten. No-op for non-draft/non-copilot chats.
 		CopilotChat::activateDraftIfNeeded($this->chat);
 
-		$this->sendPushUpdateChat();
+		$this->promoteMembersToParentOnAttach($membersToPromoteOnAttach);
+
+		$this->sendPushUpdateChat($oldParentChatId);
 		$this->markCopilotTitleAsCustom();
 		$this->compareAnalyticsData($prevAnalyticsData);
 		$this->revokeStaleGuestLinks($prevAnalyticsData);
@@ -104,12 +112,17 @@ class UpdateService
 		;
 	}
 
+	/**
+	 * Integrity validation of the parent change only (tree consistency).
+	 * Business rules of attach/detach (rights, transitions, departments) live in ChatTreeAttachmentManager.
+	 * parentChatId === null means the parent is not changed; 0 means detach to root.
+	 */
 	protected function validateParent(): Result
 	{
 		$result = new Result();
 		$parentChatId = $this->updateFields->getParentChatId();
 
-		if ($parentChatId === null)
+		if ($parentChatId === null || $parentChatId === 0)
 		{
 			return $result;
 		}
@@ -119,7 +132,7 @@ class UpdateService
 			return $result->addError(new ChatError(ChatError::WRONG_PARENT_CHAT));
 		}
 
-		$parentChat = Chat::getInstance($parentChatId);
+		$parentChat = Chat::getInstance($parentChatId)->withContext($this->chat->getContext());
 		if ($parentChat->getChatId() <= 0)
 		{
 			return $result->addError(new ChatError(ChatError::WRONG_PARENT_CHAT));
@@ -318,11 +331,31 @@ class UpdateService
 		return $this;
 	}
 
-	protected function sendPushUpdateChat(): void
+	protected function sendPushUpdateChat(int $oldParentChatId = 0): void
 	{
 		if (!\Bitrix\Main\Loader::includeModule("pull"))
 		{
 			return;
+		}
+
+		$activeUserIds = $this->chat->getRelations()->filterActiveMembers()->getUserIds();
+		$newParentChatId = $this->updateFields->getParentChatId();
+
+		// The chat ITSELF is not sent a recentUpdate: chatUpdate below carries the new parentChatId and the
+		// client repositions the recent item between sections from it. Only the parent chain gets recent
+		// context here.
+		//
+		// Ancestor recent context must reach the client BEFORE chatUpdate: it pre-fills parent-chain metadata
+		// (info-only). On detach the chat no longer points at its former parent, so walk the FORMER parent
+		// chain (including the old parent) — its preview/last-activity must recompute without this child.
+		$ancestorSender = ServiceLocator::getInstance()->get(AncestorContextSender::class);
+		if ($newParentChatId === 0 && $oldParentChatId > 0)
+		{
+			$ancestorSender->sendForChainIncluding(Chat::getInstance($oldParentChatId), $activeUserIds);
+		}
+		else
+		{
+			$ancestorSender->send($this->chat, $activeUserIds);
 		}
 
 		$pushMessage = [
@@ -340,6 +373,43 @@ class UpdateService
 		{
 			\CPullWatch::AddToStack('IM_PUBLIC_' . $this->chat->getId(), $pushMessage);
 		}
+	}
+
+	/**
+	 * On attach (parent 0 -> N) the chat's members must become members of the parent project. We read
+	 * them while the chat is still parentless so getRelations() is unfiltered — reading the access-filtered
+	 * view after the parent is set would both omit and mark-for-deletion members who are not project
+	 * members yet. Returns [] for any update that is not an attach.
+	 *
+	 * @return int[]
+	 */
+	private function captureMembersToPromoteOnAttach(int $oldParentChatId): array
+	{
+		$newParentChatId = $this->updateFields->getParentChatId();
+		$isAttach = $newParentChatId !== null && $newParentChatId > 0 && $oldParentChatId === 0;
+		if (!$isAttach)
+		{
+			return [];
+		}
+
+		return $this->chat->getRelations()
+			->filterActiveMembers()
+			->filter(static fn (Relation $relation): bool => $relation->getReason() === Reason::DEFAULT)
+			->getUserIds()
+		;
+	}
+
+	private function promoteMembersToParentOnAttach(array $userIds): void
+	{
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		Chat::getInstance((int)$this->updateFields->getParentChatId())
+			->withContext($this->chat->getContext())
+			->addUsers($userIds, new AddUsersConfig())
+		;
 	}
 
 	protected function markCopilotTitleAsCustom(): void

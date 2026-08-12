@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Crm\Activity\Provider;
 
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
@@ -98,6 +99,17 @@ class Request extends Base
 			)
 		;
 
+		$notifyMessageSubjectCallback = static fn (?string $languageId = null) =>
+			Loc::getMessage(
+				'CRM_ACTIVITY_PROVIDER_REQUEST_NOTIFY_SUBJECT',
+				[
+					'#LINK_START#' => '<a href="' . $url . '">',
+					'#LINK_END#' => '</a>',
+				],
+				$languageId,
+			)
+		;
+
 		$notification = array(
 			"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
 			"TO_USER_ID" => (int)($activityFields['RESPONSIBLE_ID'] ?? 0),
@@ -109,6 +121,12 @@ class Request extends Base
 			"NOTIFY_TAG" => "CRM|CRM_REQUEST|" . ($activityFields['ID'] ?? 0),
 			"NOTIFY_MESSAGE" => $notifyMessageCallback,
 			"NOTIFY_MESSAGE_OUT" => $notifyMessageOutCallback,
+			"PARAMS" => [
+				'COMPONENT_ID' => 'CrmEntity',
+				'COMPONENT_PARAMS' => [
+					'SUBJECT' => $notifyMessageSubjectCallback,
+				],
+			],
 		);
 
 		if ($notification['TO_USER_ID'] === $notification['FROM_USER_ID'])

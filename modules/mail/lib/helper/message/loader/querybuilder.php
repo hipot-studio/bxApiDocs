@@ -20,14 +20,19 @@ use Bitrix\Main\SystemException;
 
 class QueryBuilder
 {
+	public const FILTER_KEY_INCLUDE_BINDINGS = '__MAIL_INCLUDE_BINDINGS';
+	public const FILTER_KEY_EXCLUDE_BINDINGS = '__MAIL_EXCLUDE_BINDINGS';
+
 	private const VISIBLE_UID_FILTERS = [
 		'==MESSAGE_UID.DELETE_TIME' => 0,
 		'!@MESSAGE_UID.IS_OLD' => MailMessageUidTable::HIDDEN_STATUSES,
+		'>MESSAGE_UID.MESSAGE_ID' => 0,
 	];
 
 	private const VISIBLE_UID_FILTERS_DRIVER = [
 		'==DELETE_TIME' => 0,
 		'!@IS_OLD' => MailMessageUidTable::HIDDEN_STATUSES,
+		'>MESSAGE_ID' => 0,
 	];
 
 	/*
@@ -62,7 +67,14 @@ class QueryBuilder
 	private const DEFAULT_OFFSET = 0;
 
 	/**
-	 * @param array $filter
+	 * @param array $filter Standard Bitrix-ORM filter. Special pseudo-key
+	 *                      {@see self::FILTER_KEY_INCLUDE_BINDINGS} (array of ENTITY_TYPE values)
+	 *                      includes messages that have a binding of any listed type
+	 *                      via an EXISTS subquery on b_mail_message_access.
+	 *                      Special pseudo-key
+	 *                      {@see self::FILTER_KEY_EXCLUDE_BINDINGS} (array of ENTITY_TYPE values)
+	 *                      excludes messages that have a binding of any listed type
+	 *                      via a NOT EXISTS subquery on b_mail_message_access.
 	 * @param int $limit
 	 * @param int $offset
 	 * @return Query
@@ -99,6 +111,41 @@ class QueryBuilder
 		return true;
 	}
 
+	/**
+	 * Extracts and unsets a bindings pseudo-key from $filter.
+	 *
+	 * @param array $filter passed by reference; the pseudo-key is removed.
+	 * @return string[] List of ENTITY_TYPE values; empty when no exclusion is requested.
+	 */
+	private static function extractBindings(array &$filter, string $key): array
+	{
+		$raw = $filter[$key] ?? null;
+		unset($filter[$key]);
+
+		if (!is_array($raw))
+		{
+			return [];
+		}
+
+		return array_values(array_filter($raw, 'is_string'));
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private static function extractIncludeBindings(array &$filter): array
+	{
+		return self::extractBindings($filter, self::FILTER_KEY_INCLUDE_BINDINGS);
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private static function extractExcludeBindings(array &$filter): array
+	{
+		return self::extractBindings($filter, self::FILTER_KEY_EXCLUDE_BINDINGS);
+	}
+
 	private static function stripUidPrefix(array $filter): array
 	{
 		$result = [];
@@ -115,6 +162,10 @@ class QueryBuilder
 		return $result;
 	}
 
+	/**
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 */
 	private static function buildListQueryFromUid(
 		array $filter,
 		int $limit,
@@ -143,12 +194,19 @@ class QueryBuilder
 		;
 	}
 
+	/**
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 */
 	private static function buildListQueryFromMessage(
 		array $filter,
 		int $limit,
 		int $offset,
 	): Query
 	{
+		$includeBindings = self::extractIncludeBindings($filter);
+		$excludeBindings = self::extractExcludeBindings($filter);
+
 		$accessSubquery = (new Query(MessageAccessTable::getEntity()))
 			->addFilter('=MAILBOX_ID', new SqlExpression('%s'))
 			->addFilter('=MESSAGE_ID', new SqlExpression('%s'))
@@ -159,7 +217,7 @@ class QueryBuilder
 			->addFilter('!=MESSAGE_ID', new SqlExpression('%s'))
 		;
 
-		return MailMessageTable::query()
+		$query = MailMessageTable::query()
 			->registerRuntimeField(
 				new Reference(
 					'MESSAGE_UID',
@@ -206,16 +264,81 @@ class QueryBuilder
 				),
 			)
 			->addSelect('ID', 'DISTINCT_ID')
-			->setFilter(array_merge(
-				self::VISIBLE_UID_FILTERS,
-				$filter,
-			))
+		;
+
+		$finalFilter = array_merge(self::VISIBLE_UID_FILTERS, $filter);
+
+		if ($includeBindings !== [])
+		{
+			if (in_array(MessageAccessTable::ENTITY_TYPE_NO_BIND, $includeBindings, true))
+			{
+				$finalFilter['==MESSAGE_ACCESS_EXISTS'] = false;
+			}
+			else
+			{
+				$includeSubquery = (new Query(MessageAccessTable::getEntity()))
+					->addFilter('=MAILBOX_ID', new SqlExpression('%s'))
+					->addFilter('=MESSAGE_ID', new SqlExpression('%s'))
+					->addFilter('@ENTITY_TYPE', array_values($includeBindings))
+				;
+
+				$query->registerRuntimeField(
+					'INCLUDED_BINDING_EXISTS',
+					new ExpressionField(
+						'INCLUDED_BINDING_EXISTS',
+						"EXISTS(" . $includeSubquery->getQuery() . ")",
+						['MAILBOX_ID', 'ID'],
+					),
+				);
+
+				$finalFilter['==INCLUDED_BINDING_EXISTS'] = true;
+			}
+		}
+
+		if ($excludeBindings !== [])
+		{
+			$excludeSubquery = (new Query(MessageAccessTable::getEntity()))
+				->addFilter('=MAILBOX_ID', new SqlExpression('%s'))
+				->addFilter('=MESSAGE_ID', new SqlExpression('%s'))
+				->addFilter('@ENTITY_TYPE', array_values($excludeBindings))
+			;
+
+			$query->registerRuntimeField(
+				'EXCLUDED_BINDING_EXISTS',
+				new ExpressionField(
+					'EXCLUDED_BINDING_EXISTS',
+					"EXISTS(" . $excludeSubquery->getQuery() . ")",
+					['MAILBOX_ID', 'ID'],
+				),
+			);
+
+			$finalFilter['==EXCLUDED_BINDING_EXISTS'] = false;
+		}
+
+		return $query
+			->setFilter($finalFilter)
 			->addGroup('ID')
 			->addOrder('FIELD_MAX_SORT', 'DESC')
 			->addOrder('ID', 'DESC')
 			->setLimit($limit)
 			->setOffset($offset)
 		;
+	}
+
+	/**
+	 * Counts distinct messages matching the filter, applying the same visibility
+	 * constraints as {@see self::buildMailMessageListQuery}.
+	 *
+	 * @throws ArgumentException
+	 * @throws SystemException
+	 */
+	public static function countMailMessages(array $filter): int
+	{
+		$query = self::buildMailMessageListQuery($filter);
+		$query->setLimit(null);
+		$query->setOffset(null);
+
+		return (int)$query->queryCountTotal();
 	}
 
 	/**
@@ -231,6 +354,9 @@ class QueryBuilder
 		array $filter
 	): Query
 	{
+		self::extractIncludeBindings($filter);
+		self::extractExcludeBindings($filter);
+
 		$sqlHelper = Application::getConnection()->getSqlHelper();
 		$query = MailMessageTable::query()
 			->setSelect([

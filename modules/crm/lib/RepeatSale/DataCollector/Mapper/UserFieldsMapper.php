@@ -4,6 +4,7 @@ namespace Bitrix\Crm\RepeatSale\DataCollector\Mapper;
 
 use Bitrix\Crm\Entity\FieldDataProvider;
 use Bitrix\Main\UserField\Types\BooleanType;
+use Bitrix\Main\UserField\Types\DateTimeType;
 use Bitrix\Main\UserField\Types\DateType;
 use Bitrix\Main\UserField\Types\DoubleType;
 use Bitrix\Main\UserField\Types\EnumType;
@@ -22,7 +23,7 @@ final class UserFieldsMapper extends AbstractFieldsMapper
 		DoubleType::USER_TYPE_ID,
 		BooleanType::USER_TYPE_ID,
 		DateType::USER_TYPE_ID,
-		DateType::USER_TYPE_ID,
+		DateTimeType::USER_TYPE_ID,
 		UrlType::USER_TYPE_ID,
 		EnumType::USER_TYPE_ID,
 		'money',

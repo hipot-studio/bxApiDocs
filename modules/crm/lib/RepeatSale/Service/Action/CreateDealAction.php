@@ -11,7 +11,6 @@ use Bitrix\Crm\RepeatSale\Segment\SegmentItem;
 use Bitrix\Crm\RepeatSale\Service\Context;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
-use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
@@ -27,6 +26,8 @@ final class CreateDealAction implements ActionInterface
 		?SegmentItem $segmentItem = null,
 	): Result
 	{
+		$this->setAnalyticsContext($segmentItem?->getCode());
+
 		$deal = $this->createDeal($assignmentUserId, $segmentItem);
 
 		$entityTypeId = $clientItem->getEntityTypeId();
@@ -57,16 +58,11 @@ final class CreateDealAction implements ActionInterface
 
 		$addResult = $this->getFactory()->getAddOperation($deal)->disableAllChecks()->launch();
 
-		if (!$addResult->isSuccess())
-		{
-			$this->sendAnalyticsEvent($segmentItem?->getCode(), false);
-
+		if (!$addResult->isSuccess()) {
 			return $addResult;
 		}
 
 		$updateResult = $this->replaceDealTitlePlaceholders($deal);
-
-		$this->sendAnalyticsEvent($segmentItem?->getCode(), $updateResult->isSuccess());
 
 		return $updateResult->isSuccess() ? $updateResult->setData(['item' => $deal]) : $updateResult;
 	}
@@ -120,21 +116,15 @@ final class CreateDealAction implements ActionInterface
 		return Container::getInstance()->getFactory(CCrmOwnerType::Deal);
 	}
 
-	private function sendAnalyticsEvent(?string $segmentCode, bool $isSuccess): void
+	private function setAnalyticsContext(?string $segmentCode): void
 	{
-		$event = new AnalyticsEvent(
-			Dictionary::EVENT_ENTITY_CREATE,
-			Dictionary::TOOL_CRM,
-			Dictionary::CATEGORY_ENTITY_OPERATIONS,
-		);
-
-		$event
+		Container::getInstance()
+			->getContext()
+			->getAnalytics()
+			->setEvent(Dictionary::EVENT_ENTITY_CREATE)
 			->setSection(Dictionary::SECTION_REPEAT_SALE)
 			->setSubSection(Dictionary::SUB_SECTION_REPEAT_SALE_SYSTEM)
-			->setType(Dictionary::TYPE_DEAL)
-			->setStatus($isSuccess ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR)
 			->setP5($this->getP5BySegmentCode($segmentCode))
-			->send()
 		;
 	}
 
@@ -142,13 +132,13 @@ final class CreateDealAction implements ActionInterface
 	{
 		return match ($segmentCode)
 		{
-			SegmentCode::SLEEPING_CLIENT->value => 'deal-activity-less-12m',
-			SegmentCode::LOST_CLIENT->value => 'deal-lost-more-12m',
-			SegmentCode::DEAL_EVERY_YEAR->value => 'deal-annual',
-			SegmentCode::DEAL_EVERY_HALF_YEAR->value => 'deal-semiannual',
-			SegmentCode::DEAL_EVERY_MONTH->value => 'deal-month-yr',
-			SegmentCode::AI_SCREENING->value => 'deal-ai-screening',
-			SegmentCode::AI_APPROVE->value => 'deal-ai-approve',
+			SegmentCode::SLEEPING_CLIENT->value => 'segment_deal-activity-less-12m',
+			SegmentCode::LOST_CLIENT->value => 'segment_deal-lost-more-12m',
+			SegmentCode::DEAL_EVERY_YEAR->value => 'segment_deal-annual',
+			SegmentCode::DEAL_EVERY_HALF_YEAR->value => 'segment_deal-semiannual',
+			SegmentCode::DEAL_EVERY_MONTH->value => 'segment_deal-month-yr',
+			SegmentCode::AI_SCREENING->value => 'segment_deal-ai-screening',
+			SegmentCode::AI_APPROVE->value => 'segment_deal-ai-approve',
 			default => '',
 		};
 	}

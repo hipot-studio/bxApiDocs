@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class UnknownAggregateFunctionException extends RestException
+class UnknownAggregateFunctionException extends RestException implements SkipWriteToLogException
 {
 	public function __construct(
 		protected string $function,

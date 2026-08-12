@@ -2,12 +2,14 @@
 
 namespace Bitrix\StaffTrack\Public\Services;
 
+use Bitrix\Main\Application;
+use Bitrix\StaffTrack\Infrastructure\Agent\CheckIn\AddressResolveAgent;
 use Bitrix\StaffTrack\Internal\Geo\Geohash;
 use Bitrix\StaffTrack\Internal\Repository\AddressQueueRepository;
 
 class AddressResolverService
 {
-	private const AGENT_DELAY = 0;
+	private const FALLBACK_AGENT_DELAY = 30;
 
 	public function enqueue(array $checkIns, int $viewerId = 0): void
 	{
@@ -53,9 +55,31 @@ class AddressResolverService
 			}
 		}
 
-		if ($added)
+		if (!$added)
 		{
-			$this->scheduleAgent();
+			return;
+		}
+
+		$this->scheduleAgent();
+		$this->tryProcessImmediately();
+	}
+
+	private function tryProcessImmediately(): bool
+	{
+		$connection = Application::getConnection();
+
+		if (!$connection->lock(AddressResolveAgent::QUEUE_LOCK_NAME, 0))
+		{
+			return false;
+		}
+
+		try
+		{
+			return AddressResolveAgent::runOnceLocked();
+		}
+		finally
+		{
+			$connection->unlock(AddressResolveAgent::QUEUE_LOCK_NAME);
 		}
 	}
 
@@ -71,17 +95,19 @@ class AddressResolverService
 			],
 		)->Fetch();
 
-		if (!$existing)
+		if ($existing)
 		{
-			\CAgent::AddAgent(
-				$agentName,
-				'stafftrack',
-				'N',
-				0,
-				'',
-				'Y',
-				ConvertTimeStamp(time() + self::AGENT_DELAY, 'FULL'),
-			);
+			return;
 		}
+
+		\CAgent::AddAgent(
+			$agentName,
+			'stafftrack',
+			'N',
+			0,
+			'',
+			'Y',
+			ConvertTimeStamp(time() + self::FALLBACK_AGENT_DELAY, 'FULL'),
+		);
 	}
 }

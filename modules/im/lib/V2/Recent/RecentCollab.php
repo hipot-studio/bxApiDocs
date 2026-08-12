@@ -25,6 +25,9 @@ class RecentCollab extends Recent
 		);
 
 		$recentEntities = static::getRecentEntities($recentParams);
-		return static::initByArray($recentEntities);
+		$collection = static::initByArray($recentEntities);
+		$collection->enrichCollabPreviewSources($userId);
+
+		return $collection;
 	}
 }

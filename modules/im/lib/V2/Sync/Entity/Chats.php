@@ -57,9 +57,37 @@ class Chats implements Entity
 			$this->recentChatIds = $entities['chatIds'];
 			$this->messageIds = $entities['messageIds'];
 			$this->dialogIds = $entities['dialogIds'];
+
+			$this->mergeRecentChats();
 		}
 
 		return $this->recent;
+	}
+
+	private function mergeRecentChats(): void
+	{
+		foreach ($this->recent as $item)
+		{
+			$sourceChatId = $item->getSourceChatId();
+			if ($sourceChatId <= 0 || isset($this->chats[$sourceChatId]))
+			{
+				continue;
+			}
+
+			$chat = Chat::getInstance($sourceChatId);
+			if (
+				$chat instanceof Chat\NullChat
+				|| $chat instanceof Chat\NotifyChat
+			)
+			{
+				continue;
+			}
+
+			$this->fillDialogId($chat);
+			$this->chats[$sourceChatId] = $chat;
+		}
+
+		Chat::fillSelfRelations($this->chats);
 	}
 
 	public function getShortInfoChatIds(): array
@@ -74,7 +102,10 @@ class Chats implements Entity
 
 	public function getChatItems(bool $withCounters = false): ChatsSync
 	{
-		return new ChatsSync($this->getChats(), $this->getRecent(), $withCounters);
+		// getRecent() merges preview-source chats into the chat collection, so it must run before getChats().
+		$recent = $this->getRecent();
+
+		return new ChatsSync($this->getChats(), $recent, $withCounters);
 	}
 
 	public function getRecentConfigs(): ChatRecentConfigs

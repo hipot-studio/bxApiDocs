@@ -2,7 +2,6 @@
 
 namespace Bitrix\Market\Rest;
 
-use Bitrix\Landing\Manager;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
@@ -131,10 +130,7 @@ class Transport
 		$fields['lang'] = LANGUAGE_ID;
 		$fields['bsm'] = ModuleManager::isModuleInstalled('intranet') ? '0' : '1';
 
-		if (
-			Loader::includeModule('landing')
-			&& Loader::includeModule('ai')
-		)
+		if (AiSitesFilter::isAvailable())
 		{
 			$fields['landing_copilot_available'] = 'Y';
 		}
@@ -171,6 +167,10 @@ class Transport
 			} catch (ArgumentException $e) {}
 		}
 
-		return is_array($responseData) ? $responseData : [];
+		if (!is_array($responseData)) {
+			return [];
+		}
+
+		return AiSitesFilter::filterResponse($responseData);
 	}
 }

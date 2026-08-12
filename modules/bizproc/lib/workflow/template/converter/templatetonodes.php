@@ -7,6 +7,7 @@ use Bitrix\Bizproc\Activity\Dto\NodePorts;
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Bizproc\Activity\ContentBlockResolver;
 
 final class TemplateToNodes
 {
@@ -205,9 +206,21 @@ final class TemplateToNodes
 
 	private function transformBlockActivities(array $activities): array
 	{
+		$contentBlocks = ContentBlockResolver::resolveForTemplate($activities);
+
 		foreach ($activities as &$activity)
 		{
 			$activity['ReturnProperties'] = $this->getActivityReturnProperties($activity);
+
+			$contentBlock = $contentBlocks[(string)($activity['Name'] ?? '')] ?? null;
+			if ($contentBlock !== null)
+			{
+				$activity['ContentBlock'] = $contentBlock->toArray();
+			}
+			else
+			{
+				unset($activity['ContentBlock']);
+			}
 		}
 
 		return $activities;

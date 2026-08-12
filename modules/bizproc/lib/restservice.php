@@ -23,8 +23,8 @@ class RestService extends \IRestService
 	public const PLACEMENT_ACTIVITY_PROPERTIES_DIALOG = 'BIZPROC_ACTIVITY_PROPERTIES_DIALOG';
 
 	protected static $app;
-	private static $allowedOperations = ['', '!', '<', '<=', '>', '>='];
-	//, '><', '!><', '?', '=', '!=', '%', '!%', ''); May be later?
+	private static $allowedOperations = ['', '!', '=', '!=', '<', '<=', '>', '>='];
+	//, '><', '!><', '?', '%', '!%', ''); May be later?
 
 	const ERROR_ACTIVITY_ALREADY_INSTALLED = 'ERROR_ACTIVITY_ALREADY_INSTALLED';
 	const ERROR_ACTIVITY_ADD_FAILURE = 'ERROR_ACTIVITY_ADD_FAILURE';
@@ -1609,7 +1609,7 @@ class RestService extends \IRestService
 				if (preg_match('/^([^a-zA-Z]*)(.*)/', $key, $matches))
 				{
 					$operation = $matches[1];
-					$field = $matches[2];
+					$field = mb_strtoupper($matches[2]);
 
 					if (in_array($operation, static::$allowedOperations, true) && isset($fields[$field]))
 					{

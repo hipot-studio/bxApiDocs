@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Superset;
 
 use Bitrix\BIConnector\Access\Service\DashboardGroupService;
 use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorInterface;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
@@ -107,6 +108,18 @@ final class MarketDashboardManager
 			: SupersetDashboardTable::DASHBOARD_TYPE_MARKET
 		;
 
+		$dashboard = SupersetDashboardTable::getList([
+			'select' => ['ID', 'APP_ID', 'EXTERNAL_ID', 'STATUS', 'TYPE', 'LANG'],
+			'filter' => [
+				'=APP_ID' => $appCode,
+				'=SOURCE_ID' => null,
+				'=TYPE' => $type,
+			],
+			'limit' => 1,
+		])
+			->fetchObject()
+		;
+
 		if (SupersetInitializer::isSupersetExist())
 		{
 			if (SupersetInitializer::isSupersetPendingDelete())
@@ -116,7 +129,14 @@ final class MarketDashboardManager
 				return $result;
 			}
 
-			$response = $this->integrator->importDashboard($filePath, $appCode, $type);
+			$forceImportDatasets = (
+				$dashboard !== null
+				&& $type === SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM
+				&& $dashboard->getExternalId() > 0
+				&& $dashboard->getLang() !== CultureFormatter::getLanguageCode()
+			);
+
+			$response = $this->integrator->importDashboard($filePath, $appCode, $type, $forceImportDatasets);
 			if ($response->hasErrors())
 			{
 				MarketDashboardLogger::logErrors($response->getErrors(),[
@@ -154,14 +174,6 @@ final class MarketDashboardManager
 			$dashboardTitle = $app->getAppName();
 			$dashboardStatus = SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED;
 		}
-
-		$dashboard = SupersetDashboardTable::getList([
-			'select' => ['ID', 'APP_ID', 'EXTERNAL_ID', 'STATUS'],
-			'filter' => ['=APP_ID' => $appCode],
-			'limit' => 1,
-		])
-			->fetchObject()
-		;
 
 		if (!$dashboard)
 		{

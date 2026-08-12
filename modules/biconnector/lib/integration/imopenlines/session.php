@@ -51,6 +51,9 @@ class Session extends Dataset
 
 	protected function getFields(): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $this->getSqlHelper();
+
 		$clientJoin = $this->createJoin(
 			"UC",
 			"INNER JOIN b_user UC ON UC.ID = {$this->getAliasFieldName('USER_ID')}",
@@ -103,15 +106,13 @@ class Session extends Dataset
 			,
 			(new StringField('CONFIG'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('CONFIG_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('CONFIG_ID')} > 0 THEN
 						concat_ws(
 							' ',
-							concat('[', {$this->getAliasFieldName('CONFIG_ID')}, ']'),
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('CONFIG_ID'), "']'")},
 							nullif({$configJoin->getJoinFieldName('LINE_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($configJoin)
 			,
@@ -120,60 +121,52 @@ class Session extends Dataset
 			,
 			(new StringField('CLIENT_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('USER_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('USER_ID')} > 0 THEN
 						concat_ws(
 							' ',
 							nullif({$clientJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$clientJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($clientJoin)
 			,
 			(new StringField('CLIENT'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('USER_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('USER_ID')} > 0 THEN
 						concat_ws(
 							' ',
-							concat('[', {$this->getAliasFieldName('USER_ID')}, ']'),
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('USER_ID'), "']'")},
 							nullif({$clientJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$clientJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($clientJoin)
 			,
 			(new IntegerField('OPERATOR_ID')),
 			(new StringField('OPERATOR_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('OPERATOR_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('OPERATOR_ID')} > 0 THEN
 						concat_ws(
 							' ',
 							nullif({$operatorJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$operatorJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($operatorJoin)
 			,
 			(new StringField('OPERATOR'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('OPERATOR_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('OPERATOR_ID')} > 0 THEN
 						concat_ws(
 							' ',
-							concat('[', {$this->getAliasFieldName('OPERATOR_ID')}, ']'),
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('OPERATOR_ID'), "']'")},
 							nullif({$operatorJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$operatorJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($operatorJoin)
 			,

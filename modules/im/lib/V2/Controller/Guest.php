@@ -8,12 +8,13 @@ use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Guest\Auth\AuthError;
 use Bitrix\Im\V2\Guest\Auth\Token;
 use Bitrix\Im\V2\Guest\GuestService;
+use Bitrix\Im\V2\Result;
 use Bitrix\Main\Engine\AutoWire\Parameter;
 use Bitrix\Main\Engine\ActionFilter\Authentication;
 
 class Guest extends BaseController
 {
-	public function getAutoWiredParameters()
+	public function getAutoWiredParameters(): array
 	{
 		return array_merge(parent::getAutoWiredParameters(), [
 			new Parameter(
@@ -68,16 +69,21 @@ class Guest extends BaseController
 	}
 
 	/**
-	 * Token is auto-wired from the request (cookie); missing token means invalid session.
+	 * Token is auto-wired from the request (cookie); a missing token means an invalid session.
+	 * Returns the validity flag and, when invalid, the reason as an error code (empty when valid).
 	 *
 	 * @restMethod im.v2.Guest.checkSession
 	 */
 	public function checkSessionAction(string $code, ?Token $token = null): array
 	{
-		$isValid = $token !== null
-			&& GuestService::getInstance()->isGuestSessionValid($code, $token)
+		$result = $token === null
+			? (new Result())->addError(new AuthError(AuthError::GUEST_NOT_FOUND))
+			: GuestService::getInstance()->validateGuestSession($code, $token)
 		;
 
-		return ['isValid' => $isValid];
+		return [
+			'isValid' => $result->isSuccess(),
+			'reason' => $result->isSuccess() ? '' : ($result->getErrors()[0]?->getCode() ?? ''),
+		];
 	}
 }

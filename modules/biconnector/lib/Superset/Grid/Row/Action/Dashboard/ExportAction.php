@@ -6,12 +6,11 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
-final class ExportAction extends BaseAction
+final class ExportAction extends BaseDashboardAction
 {
 
 	public static function getId(): ?string
@@ -54,6 +53,10 @@ final class ExportAction extends BaseAction
 
 		$this->onclick = $onClickHandler;
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-share');
+
+		return $result;
 	}
 }

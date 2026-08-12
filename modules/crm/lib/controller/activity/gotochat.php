@@ -268,7 +268,10 @@ class GoToChat extends Base
 		$hasSelectedOpenLine = false;
 		foreach ($item['LIST'] as $listItem)
 		{
-			if ($listItem['IS_ACTIVE'] !== 'Y' || $listItem['STATUS'] !== 1)
+			if (
+				($listItem['IS_ACTIVE'] ?? null) !== 'Y'
+				|| ($listItem['STATUS'] ?? null) !== 1
+			)
 			{
 				continue;
 			}

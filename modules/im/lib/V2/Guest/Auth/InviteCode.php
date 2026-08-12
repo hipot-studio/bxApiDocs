@@ -18,6 +18,10 @@ class InviteCode
 		protected string $value,
 	)
 	{
+		if (!self::isValid($value))
+		{
+			throw new \InvalidArgumentException("Invalid guest invite code format: value must be a 16-char alphanumeric string");
+		}
 	}
 
 	public static function createFromRequest(): ?static

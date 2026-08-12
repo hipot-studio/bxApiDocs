@@ -11,6 +11,7 @@ use Bitrix\Intranet\Exception\CreationFailedException;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Data\AddResult;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\SystemException;
 
 class InvitationRepository
@@ -170,5 +171,66 @@ class InvitationRepository
 			;
 
 		return $model;
+	}
+
+	public function getInvitationType(array $userIds): array
+	{
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		$userIds = array_values(
+			array_unique(
+				array_filter(
+					array_map('intval', $userIds),
+					static fn(int $userId): bool => $userId > 0,
+				),
+			),
+		);
+
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		$latestRows = InvitationTable::query()
+			->whereIn('USER_ID', $userIds)
+			->registerRuntimeField(new ExpressionField('MAX_ID', 'MAX(%s)', ['ID']))
+			->setSelect(['USER_ID', 'MAX_ID'])
+			->setGroup(['USER_ID'])
+			->fetchAll()
+		;
+		$latestInvitationIds = array_values(
+			array_filter(
+				array_map(static fn(array $row): int => (int)$row['MAX_ID'], $latestRows),
+				static fn(int $invitationId): bool => $invitationId > 0,
+			),
+		);
+
+		if (empty($latestInvitationIds))
+		{
+			return [];
+		}
+
+		$rows = InvitationTable::query()
+			->whereIn('ID', $latestInvitationIds)
+			->setSelect(['ID', 'USER_ID', 'INVITATION_TYPE'])
+			->fetchAll()
+		;
+
+		$result = [];
+		foreach ($rows as $row)
+		{
+			$userId = (int)$row['USER_ID'];
+			if (!isset($result[$userId]))
+			{
+				$result[$userId] = is_string($row['INVITATION_TYPE'])
+					? mb_strtolower($row['INVITATION_TYPE'])
+					: null;
+			}
+		}
+
+		return $result;
 	}
 }

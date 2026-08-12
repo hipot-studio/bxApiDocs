@@ -15,7 +15,6 @@ use Bitrix\Crm\Copilot\AiQueueBuffer\Provider\FillRepeatSaleTipsProvider;
 use Bitrix\Crm\Copilot\Pipeline\OperationRegistry;
 use Bitrix\Crm\Copilot\Pipeline\PipelineExecutor;
 use Bitrix\Crm\Copilot\Pipeline\ScenarioResolver;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
@@ -62,6 +61,7 @@ final class EventHandler
 
 		$items = [];
 		$groups = [];
+		$itemRelations = [];
 
 		if (Engine::getByCategory(self::ENGINE_CATEGORY, Context::getFake()))
 		{
@@ -77,20 +77,17 @@ final class EventHandler
 				'sort' => 600,
 			];
 
-			if (Feature::enabled(Feature\MessageSenderEditor::class))
-			{
-				$items[self::SETTINGS_MESSAGESENDER_EDITOR_ENABLED_CODE] = [
-					'group' => Tuning\Defaults::GROUP_TEXT,
-					'header' => Loc::getMessage(
-						'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_MESSAGESENDER_EDITOR_HEADER',
-						['#COPILOT_NAME#' => AIManager::getCopilotName()],
-					),
-					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_MESSAGESENDER_EDITOR_TITLE'),
-					'type' => Tuning\Type::BOOLEAN,
-					'default' => true,
-					'sort' => 700,
-				];
-			}
+			$items[self::SETTINGS_MESSAGESENDER_EDITOR_ENABLED_CODE] = [
+				'group' => Tuning\Defaults::GROUP_TEXT,
+				'header' => Loc::getMessage(
+					'CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_MESSAGESENDER_EDITOR_HEADER',
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
+				'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_MESSAGESENDER_EDITOR_TITLE'),
+				'type' => Tuning\Type::BOOLEAN,
+				'default' => true,
+				'sort' => 700,
+			];
 		}
 
 		if (AIManager::isAiCallProcessingEnabled())
@@ -107,6 +104,18 @@ final class EventHandler
 				'helpdesk' => 18799442,
 			];
 
+			$quality = new Quality([
+				Quality::QUALITIES['transcribe'],
+			]);
+			$items[self::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_AUDIO_CODE] = array_merge(
+				Tuning\Defaults::getProviderSelectFieldParams(Engine::CATEGORIES['audio'], $quality),
+				[
+					'group' => self::SETTINGS_GROUP_CODE,
+					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_ENGINE_AUDIO_TITLE'),
+					'sort' => 5,
+				],
+			);
+
 			$items[self::SETTINGS_SUMMARIZE_ENABLED_CODE] = [
 				'group' => self::SETTINGS_GROUP_CODE,
 				'title' => Loc::getMessage(
@@ -119,7 +128,7 @@ final class EventHandler
 				),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
-				'sort' => 9,
+				'sort' => 10,
 			];
 
 			$items[self::SETTINGS_FILL_ITEM_FROM_CALL_ENABLED_CODE] = [
@@ -134,20 +143,8 @@ final class EventHandler
 				),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
-				'sort' => 10,
+				'sort' => 20,
 			];
-
-			$quality = new Quality([
-				Quality::QUALITIES['transcribe'],
-			]);
-			$items[self::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_AUDIO_CODE] = array_merge(
-				Tuning\Defaults::getProviderSelectFieldParams(Engine::CATEGORIES['audio'], $quality),
-				[
-					'group' => self::SETTINGS_GROUP_CODE,
-					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_ENGINE_AUDIO_TITLE'),
-					'sort' => 20,
-				],
-			);
 
 			$quality = new Quality([
 				Quality::QUALITIES['fields_highlight'],
@@ -158,9 +155,16 @@ final class EventHandler
 				[
 					'group' => self::SETTINGS_GROUP_CODE,
 					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_ENGINE_TEXT_TITLE'),
-					'sort' => 30,
+					'sort' => 24,
 				],
 			);
+
+			// Trade-off: TEXT engine is shared with Summarize, but tied to FillItemFromCall here
+			// because the Tuning UI (ai-page.js) doesn't support OR-visibility across multiple
+			// parents — registering under both would race show/hide on the same DOM node.
+			$itemRelations[self::SETTINGS_FILL_ITEM_FROM_CALL_ENABLED_CODE] = [
+				self::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_TEXT_CODE,
+			];
 
 			$items[self::SETTINGS_CALL_ASSESSMENT_ENABLED_CODE] = [
 				'group' => self::SETTINGS_GROUP_CODE,
@@ -174,7 +178,7 @@ final class EventHandler
 				),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
-				'sort' => 15,
+				'sort' => 30,
 			];
 
 			$quality = new Quality([
@@ -185,7 +189,11 @@ final class EventHandler
 				...Tuning\Defaults::getProviderSelectFieldParams(Engine::CATEGORIES['text'], $quality),
 				'group' => self::SETTINGS_GROUP_CODE,
 				'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_CALL_ASSESSMENT_ENGINE_TITLE'),
-				'sort' => 31,
+				'sort' => 32,
+			];
+
+			$itemRelations[self::SETTINGS_CALL_ASSESSMENT_ENABLED_CODE] = [
+				self::SETTINGS_CALL_ASSESSMENT_ENGINE_CODE,
 			];
 
 			$availabilityChecker = Container::getInstance()->getRepeatSaleAvailabilityChecker();
@@ -203,7 +211,7 @@ final class EventHandler
 					),
 					'type' => Tuning\Type::BOOLEAN,
 					'default' => true,
-					'sort' => 16,
+					'sort' => 40,
 				];
 
 				$quality = new Quality([
@@ -214,7 +222,11 @@ final class EventHandler
 					...Tuning\Defaults::getProviderSelectFieldParams(Engine::CATEGORIES['text'], $quality),
 					'group' => self::SETTINGS_GROUP_CODE,
 					'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_REPEAT_SALE_ENGINE_TITLE'),
-					'sort' => 33,
+					'sort' => 42,
+				];
+
+				$itemRelations[self::SETTINGS_REPEAT_SALE_ENABLED_CODE] = [
+					self::SETTINGS_REPEAT_SALE_ENGINE_CODE,
 				];
 			}
 
@@ -230,7 +242,7 @@ final class EventHandler
 				),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
-				'sort' => 17,
+				'sort' => 50,
 			];
 
 			$quality = new Quality([
@@ -241,13 +253,20 @@ final class EventHandler
 				...Tuning\Defaults::getProviderSelectFieldParams(Engine::CATEGORIES['text'], $quality),
 				'group' => self::SETTINGS_GROUP_CODE,
 				'title' => Loc::getMessage('CRM_INTEGRATION_AI_EVENTHANDLER_SETTINGS_ANALYZE_COMMUNICATION_ENGINE_TITLE'),
-				'sort' => 32,
+				'sort' => 52,
+			];
+
+			$itemRelations[self::SETTINGS_ANALYZE_COMMUNICATION_ENABLED_CODE] = [
+				self::SETTINGS_ANALYZE_COMMUNICATION_ENGINE_CODE,
 			];
 		}
 
 		$result->modifyFields([
 			'groups' => $groups,
 			'items' => $items,
+			'itemRelations' => [
+				self::SETTINGS_GROUP_CODE => $itemRelations,
+			],
 		]);
 
 		return $result;

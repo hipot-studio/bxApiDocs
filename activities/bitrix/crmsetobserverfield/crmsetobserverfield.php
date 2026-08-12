@@ -1,5 +1,8 @@
 <?php
 
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -7,6 +10,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 class CBPCrmSetObserverField extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	const ACTION_ADD_OBSERVERS = 'add';
 	const ACTION_REMOVE_OBSERVERS = 'remove';
 	const ACTION_REPLACE_OBSERVERS = 'replace';
@@ -28,13 +34,21 @@ class CBPCrmSetObserverField extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentType = $this->GetDocumentType()[2];
-		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($this->GetDocumentId());
-		$observerIds = CBPHelper::ExtractUsers($this->Observers, $this->GetDocumentId());
+		$documentId = $this->resolveTargetDocumentId();
+		$documentType = $this->resolveTargetDocumentType($documentId)[2];
+		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($documentId);
+		$observerIds = CBPHelper::ExtractUsers($this->Observers, $documentId);
 
 		if (!$entityTypeId || !$entityId)
 		{
 			/* not CRM element */
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
 			return CBPActivityExecutionStatus::Closed;
 		}
 

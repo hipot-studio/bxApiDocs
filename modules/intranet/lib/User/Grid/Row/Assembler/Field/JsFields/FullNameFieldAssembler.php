@@ -11,6 +11,7 @@ class FullNameFieldAssembler extends JsExtensionFieldAssembler
 		$userEntity = $this->getUserEntityById($rawValue['ID']);
 
 		return [
+			'userId' => $rawValue['ID'],
 			'profileLink' => str_replace(['#ID#'], $rawValue['ID'], '/company/personal/user/#ID#/'),
 			'fullName' => \CUser::FormatName(\CSite::GetNameFormat(), $rawValue, true, true),
 			'position' => $rawValue['WORK_POSITION'],

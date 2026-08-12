@@ -45,6 +45,17 @@ use CCrmOwnerType;
 abstract class Factory
 {
 	protected const STAGES_CACHE_TTL = 86400;
+	private const PERMISSION_ENTITY_TYPES_CACHE_LIMIT = 64;
+
+	private static array $permissionEntityTypesCache = [];
+
+	/**
+	 * @internal
+	 */
+	public static function clearPermissionEntityTypesCache(): void
+	{
+		self::$permissionEntityTypesCache = [];
+	}
 
 	protected ?Field\Collection $userFieldCollection = null;
 	protected $fieldsCollection;
@@ -489,7 +500,7 @@ abstract class Factory
 			return [];
 		}
 		$filter = $parameters['filter'] ?? [];
-		$entityTypes = $this->collectEntityTypesForPermissions($filter, $userId);
+		$entityTypes = $this->collectEntityTypesForPermissions($filter, $userId, $operation);
 		if ($this->isCategoriesSupported())
 		{
 			$select = $parameters['select'] ?? [];
@@ -509,29 +520,80 @@ abstract class Factory
 		return $this->getItems($parameters);
 	}
 
-	protected function collectEntityTypesForPermissions(array &$filter, ?int $userId = null): array
+	protected function collectEntityTypesForPermissions(
+		array &$filter,
+		?int $userId = null,
+		string $operation = UserPermissions::OPERATION_READ,
+	): array
 	{
 		$userPermissions = Container::getInstance()->getUserPermissions($userId);
 		$permissionEntityTypeHelper = new PermissionEntityTypeHelper($this->getEntityTypeId());
+
+		$categoryOperationInfo = null;
+		if ($this->isCategoriesSupported())
+		{
+			$categoryOperationInfo = EntityHandler::findFieldOperation(
+				Item::FIELD_NAME_CATEGORY_ID,
+				$filter,
+			);
+		}
+
+		$cacheKey = hash('sha256', serialize([
+			'entityTypeId' => $this->getEntityTypeId(),
+			'categoryFilter' => $categoryOperationInfo,
+			'userId' => $userPermissions->getUserId(),
+			'operation' => $operation,
+		]));
+		if (array_key_exists($cacheKey, self::$permissionEntityTypesCache))
+		{
+			$cacheEntry = self::$permissionEntityTypesCache[$cacheKey];
+			$this->applyAvailableCategoriesRestriction($filter, $cacheEntry['availableCategoryIds']);
+
+			return $cacheEntry['entityTypes'];
+		}
+
+		$cacheEntry = $this->buildPermissionEntityTypesCacheEntry(
+			$userPermissions,
+			$permissionEntityTypeHelper,
+			$categoryOperationInfo,
+		);
+		if (count(self::$permissionEntityTypesCache) >= self::PERMISSION_ENTITY_TYPES_CACHE_LIMIT)
+		{
+			array_shift(self::$permissionEntityTypesCache);
+		}
+		self::$permissionEntityTypesCache[$cacheKey] = $cacheEntry;
+
+		$this->applyAvailableCategoriesRestriction($filter, $cacheEntry['availableCategoryIds']);
+
+		return $cacheEntry['entityTypes'];
+	}
+
+	/**
+	 * @return array{entityTypes: string[], availableCategoryIds: ?array}
+	 */
+	protected function buildPermissionEntityTypesCacheEntry(
+		UserPermissions $userPermissions,
+		PermissionEntityTypeHelper $permissionEntityTypeHelper,
+		?array $categoryOperationInfo,
+	): array
+	{
 		$entityTypes = [
-			$permissionEntityTypeHelper->getPermissionEntityTypeForCategory(0)
+			$permissionEntityTypeHelper->getPermissionEntityTypeForCategory(0),
 		];
+		$availableCategoryIds = null;
+
 		if ($this->isCategoriesSupported())
 		{
 			$entityTypes = [];
-			$operationInfo = EntityHandler::findFieldOperation(
-				Item::FIELD_NAME_CATEGORY_ID,
-				$filter
-			);
 			if(
-				is_array($operationInfo)
+				is_array($categoryOperationInfo)
 				&& (
-					$operationInfo['OPERATION'] === '='
-					|| $operationInfo['OPERATION'] === 'IN'
+					$categoryOperationInfo['OPERATION'] === '='
+					|| $categoryOperationInfo['OPERATION'] === 'IN'
 				)
 			)
 			{
-				$categoryIDs = (array)($operationInfo['CONDITION']);
+				$categoryIDs = (array)($categoryOperationInfo['CONDITION']);
 
 				foreach ($categoryIDs as $categoryId)
 				{
@@ -562,22 +624,35 @@ abstract class Factory
 
 				if ($shouldStrictByCategories && !empty($availableCategoriesIds))
 				{
-					if (mb_strtoupper($filter['LOGIC'] ?? '') === 'OR')
-					{
-						$filter = [
-							0 => $filter,
-							'@CATEGORY_ID' => $availableCategoriesIds,
-						];
-					}
-					else
-					{
-						$filter['@CATEGORY_ID'] = $availableCategoriesIds;
-					}
+					$availableCategoryIds = $availableCategoriesIds;
 				}
 			}
 		}
 
-		return $entityTypes;
+		return [
+			'entityTypes' => $entityTypes,
+			'availableCategoryIds' => $availableCategoryIds,
+		];
+	}
+
+	private function applyAvailableCategoriesRestriction(array &$filter, ?array $availableCategoryIds): void
+	{
+		if (empty($availableCategoryIds))
+		{
+			return;
+		}
+
+		if (mb_strtoupper($filter['LOGIC'] ?? '') === 'OR')
+		{
+			$filter = [
+				0 => $filter,
+				'@CATEGORY_ID' => $availableCategoryIds,
+			];
+		}
+		else
+		{
+			$filter['@CATEGORY_ID'] = $availableCategoryIds;
+		}
 	}
 
 	/**
@@ -608,10 +683,13 @@ abstract class Factory
 	 *
 	 * @param array $filter
 	 * @param null|int $ttl
+	 * @param ExpressionField[] $runtimeFields Runtime fields referenced by $filter (e.g. an EXISTS
+	 *     subquery expression). When provided, the count is computed with a query that registers them,
+	 *     because the plain getCount() does not accept runtime fields.
 	 *
 	 * @return int
 	 */
-	public function getItemsCount(array $filter = [], ?int $ttl = null): int
+	public function getItemsCount(array $filter = [], ?int $ttl = null, array $runtimeFields = []): int
 	{
 		$this->addParentFieldsReferences();
 		$tableName = $this->getDataClass()::getTableName();
@@ -622,6 +700,26 @@ abstract class Factory
 
 		$params = $this->replaceCommonFieldNames(['filter' => $filter]);
 		$normalizedFilter = $params['filter'] ?? [];
+
+		if (!empty($runtimeFields))
+		{
+			$query = $this->getDataClass()::query()
+				->addSelect(new ExpressionField('CNT', 'COUNT(1)'))
+				->setFilter($normalizedFilter)
+			;
+			foreach ($runtimeFields as $runtimeField)
+			{
+				$query->registerRuntimeField($runtimeField);
+			}
+			if ($ttl > 0)
+			{
+				$query->setCacheTtl($ttl);
+			}
+
+			$row = $query->fetch();
+
+			return (int)($row['CNT'] ?? 0);
+		}
 
 		$cache = [];
 		if ($ttl > 0)
@@ -670,19 +768,22 @@ abstract class Factory
 	 * @param array $filter - Filter to count items with.
 	 * @param int|null $userId - User identifier to check permissions.
 	 * @param string $operation - Operation type.
+	 * @param ExpressionField[] $runtimeFields - Runtime fields to register on the count query
+	 *     (e.g. for filters that rely on a computed column). Indexed by field name.
 	 * @return int
 	 */
 	public function getItemsCountFilteredByPermissions(
 		array $filter = [],
 		?int $userId = null,
-		string $operation = UserPermissions::OPERATION_READ
+		string $operation = UserPermissions::OPERATION_READ,
+		array $runtimeFields = []
 	): int
 	{
 		$this->addParentFieldsReferences();
 		$params = $this->replaceCommonFieldNames(['filter' => $filter]);
 		$filter = $params['filter'] ?? [];
 
-		$entityTypes = $this->collectEntityTypesForPermissions($filter, $userId);
+		$entityTypes = $this->collectEntityTypesForPermissions($filter, $userId, $operation);
 		$filter = Container::getInstance()->getUserPermissions($userId)->itemsList()->applyAvailableItemsFilter(
 			$filter,
 			$entityTypes,
@@ -690,7 +791,22 @@ abstract class Factory
 		);
 		$filter = $this->prepareFilter($filter);
 
-		return $this->getDataClass()::getCount($filter);
+		if (empty($runtimeFields))
+		{
+			return $this->getDataClass()::getCount($filter);
+		}
+
+		$query = $this->getDataClass()::query()
+			->addSelect(new ExpressionField('CNT', 'COUNT(1)'))
+			->setFilter($filter)
+		;
+		foreach ($runtimeFields as $field)
+		{
+			$query->registerRuntimeField($field);
+		}
+		$row = $query->fetch();
+
+		return (int)($row['CNT'] ?? 0);
 	}
 
 	protected function prepareGetListParameters(array $parameters): array
@@ -1252,6 +1368,7 @@ abstract class Factory
 	public function clearCategoriesCache(): self
 	{
 		$this->categories = null;
+		self::clearPermissionEntityTypesCache();
 
 		return $this;
 	}

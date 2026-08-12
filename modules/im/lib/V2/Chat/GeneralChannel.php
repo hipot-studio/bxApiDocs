@@ -193,7 +193,7 @@ class GeneralChannel extends OpenChannelChat
 		return $matches[1] ?? null;
 	}
 
-	protected function sendBanner(?int $authorId = null): void
+	protected function sendBanner(?int $authorId = null, bool $force = false): void
 	{
 		\CIMMessage::Add([
 			'MESSAGE_TYPE' => self::IM_TYPE_OPEN_CHANNEL,

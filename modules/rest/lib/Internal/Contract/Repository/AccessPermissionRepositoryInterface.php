@@ -15,10 +15,13 @@ interface AccessPermissionRepositoryInterface
 {
 	public function save(EntityInterface $entity): void;
 
+	/**
+	 * @return string[] Access codes removed by this call
+	 */
 	public function deleteByEntityTypeAndPermission(
 		EntityType $entityType,
 		PermissionType $permission,
-	): void;
+	): array;
 
 	/**
 	 * @return string[]

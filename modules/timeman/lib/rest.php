@@ -84,6 +84,11 @@ class Rest extends \IRestService
 			return $result;
 		}
 
+		if (isset($currentInfo['ID']))
+		{
+			$result['ID'] = (int)$currentInfo['ID'];
+		}
+
 		$userOffset = $tmUser->getDayStartOffset($currentInfo) + date('Z');
 
 		if($currentInfo['DATE_START'])

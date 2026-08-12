@@ -224,6 +224,7 @@ class Dashboard extends Controller
 			$groupIds = $dashboard->getOrmObject()->getGroups()?->getIdList() ?? [];
 			DashboardGroupService::saveDashboardGroupBindings($newDashboard->getId(), $groupIds);
 			$newDashboard->getOrmObject()->unsetGroups();
+			DashboardManager::notifyDashboardListChanged();
 
 			$gridRow = DashboardGrid::prepareDashboardRowData($newDashboard, ['IS_ACCESS_ALLOWED' => true]);
 			$data['id'] = $copiedDashboardId;

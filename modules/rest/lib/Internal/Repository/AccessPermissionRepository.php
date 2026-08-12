@@ -36,22 +36,29 @@ class AccessPermissionRepository implements AccessPermissionRepositoryInterface
 		}
 	}
 
+	/**
+	 * @return string[] Access codes removed by this call
+	 */
 	public function deleteByEntityTypeAndPermission(
 		EntityType $entityType,
 		PermissionType $permission,
-	): void
+	): array
 	{
 		$list = AccessPermissionTable::query()
-			->setSelect(['ID'])
+			->setSelect(['ID', 'ACCESS_CODE'])
 			->where('ENTITY_TYPE', $entityType->value)
 			->where('PERMISSION', $permission->value)
 			->fetchCollection()
 		;
 
+		$previousAccessCodes = [];
 		foreach ($list as $item)
 		{
+			$previousAccessCodes[] = $item->getAccessCode();
 			$item->delete();
 		}
+
+		return $previousAccessCodes;
 	}
 
 	/**

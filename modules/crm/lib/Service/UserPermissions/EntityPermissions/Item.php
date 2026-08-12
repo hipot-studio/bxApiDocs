@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Service\UserPermissions\EntityPermissions;
 
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
+use Bitrix\Crm\Component\DisableHelpers\OldInvoiceReadonlyHelper;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Security\EntityPermission\ApproveCustomPermsToExistRole;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
@@ -97,6 +98,10 @@ class Item
 	 */
 	public function canUpdateItemIdentifier(ItemIdentifier $itemIdentifier): bool
 	{
+		if (OldInvoiceReadonlyHelper::isOldInvoiceReadOnly($itemIdentifier->getEntityTypeId()))
+		{
+			return false;
+		}
 
 		if ($this->isAutomatedSolutionEntityLocked($itemIdentifier->getEntityTypeId()))
 		{
@@ -284,9 +289,7 @@ class Item
 
 	public function prepareItemPermissionAttributes(\Bitrix\Crm\Item $item): array
 	{
-		// todo process multiple assigned
-		$assignedById = $item->getAssignedById();
-		$attributes = [UserPermissions::ATTRIBUTES_USER_PREFIX . $assignedById];
+		$attributes = [];
 		if ($item->getOpened())
 		{
 			$attributes[] = UserPermissions::ATTRIBUTES_OPENED;
@@ -315,10 +318,10 @@ class Item
 			$attributes[] = UserPermissions::ATTRIBUTES_READ_ALL;
 		}
 
-		$attributesProvider = Container::getInstance()->getUserPermissions((int)$assignedById)->getAttributesProvider();
-		$userAttributes = $attributesProvider->getEntityAttributes();
+		$attributesProvider = Container::getInstance()->getUserPermissions((int)$item->getAssignedById())->getAttributesProvider();
+		$assignedBasedEntityAttributes = $attributesProvider->getEntityAttributes();
 
-		return array_merge($attributes, $userAttributes['INTRANET']);
+		return array_merge($attributes, $assignedBasedEntityAttributes);
 	}
 
 	/**

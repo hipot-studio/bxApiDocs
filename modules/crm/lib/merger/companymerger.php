@@ -416,10 +416,95 @@ class CompanyMerger extends EntityMerger
 			return implode('<br/>', $messages);
 		};
 
+		$notifyMessageSubjectCallback = static function (?string $languageId = null) use (
+			$collisions,
+			$seed,
+			$targ,
+		): ?string
+		{
+			self::includeLangFile();
+
+			$replacements = [
+				'#SEED_TITLE#' => $seed['TITLE'] ?? '',
+				'#SEED_ID#' => $seed['ID'] ?? '',
+				'#TARG_TITLE#' => $targ['TITLE'] ?? '',
+				'#TARG_ID#' => $targ['ID'] ?? '',
+			];
+
+			$messages = [];
+			if (isset($collisions[EntityMergeCollision::READ_PERMISSION_LACK])
+				|| isset($collisions[EntityMergeCollision::UPDATE_PERMISSION_LACK])
+			)
+			{
+				$messages[] = Loc::getMessage(
+					'CRM_COMPANY_MERGER_COLLISION_SUBJECT',
+					$replacements,
+					$languageId,
+				);
+			}
+
+			if (empty($messages))
+			{
+				return null;
+			}
+
+			return implode('<br/>', $messages);
+		};
+
+		$notifyMessagePlainTextCallback = static function (?string $languageId = null) use (
+			$collisions
+		): ?string
+		{
+			self::includeLangFile();
+
+			$messages = [];
+			if (isset(
+				$collisions[EntityMergeCollision::READ_PERMISSION_LACK],
+				$collisions[EntityMergeCollision::UPDATE_PERMISSION_LACK],
+			))
+			{
+				$messages[] = Loc::getMessage(
+					'CRM_COMPANY_MERGER_COLLISION_READ_UPDATE_PERMISSION_PLAIN_TEXT',
+					null,
+					$languageId,
+				);
+			}
+			elseif (isset($collisions[EntityMergeCollision::READ_PERMISSION_LACK]))
+			{
+				$messages[] = Loc::getMessage(
+					'CRM_COMPANY_MERGER_COLLISION_READ_PERMISSION_PLAIN_TEXT',
+					null,
+					$languageId,
+				);
+			}
+			elseif (isset($collisions[EntityMergeCollision::UPDATE_PERMISSION_LACK]))
+			{
+				$messages[] = Loc::getMessage(
+					'CRM_COMPANY_MERGER_COLLISION_UPDATE_PERMISSION_PLAIN_TEXT',
+					null,
+					$languageId,
+				);
+			}
+
+			if (empty($messages))
+			{
+				return null;
+			}
+
+			return implode('<br/>', $messages);
+		};
+
 		return array(
 			'TO_USER_ID' => isset($seed['ASSIGNED_BY_ID']) ? (int)$seed['ASSIGNED_BY_ID'] : 0,
 			'NOTIFY_MESSAGE' => $notifyMessageCallback,
 			'NOTIFY_MESSAGE_OUT' => $notifyMessageCallback,
+			'PARAMS' => [
+				'COMPONENT_ID' => 'CrmEntity',
+				'COMPONENT_PARAMS' => [
+					'SUBJECT' => $notifyMessageSubjectCallback,
+					'PLAIN_TEXT' => $notifyMessagePlainTextCallback,
+				],
+			],
 		);
 	}
 

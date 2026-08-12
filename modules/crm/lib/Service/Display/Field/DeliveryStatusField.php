@@ -6,6 +6,7 @@ namespace Bitrix\Crm\Service\Display\Field;
 
 use Bitrix\Crm\Order\DeliveryStage;
 use Bitrix\Crm\Service\Display\Options;
+use Bitrix\UI\Public\System\Label\Style;
 
 final class DeliveryStatusField extends StatusField
 {
@@ -63,5 +64,14 @@ final class DeliveryStatusField extends StatusField
 		{
 			$this->displayParams['cssPrefix'] = 'crm-list-item-status';
 		}
+	}
+
+	protected function getLabelStyleByPostfix(string $postfix): Style
+	{
+		return match ($postfix)
+		{
+			'shipped' => Style::TINTED_SUCCESS,
+			default => Style::TINTED_NO_ACCENT,
+		};
 	}
 }

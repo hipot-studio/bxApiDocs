@@ -34,6 +34,7 @@ class Call
 		}
 
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
 
 		$viHistoryMessages = Loc::loadLanguageFile($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/voximplant/classes/general/vi_history.php', $languageId);
@@ -62,7 +63,7 @@ class Call
 				],
 				'PORTAL_USER' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', S.PORTAL_USER_ID, \']\'), nullif(U.NAME, \'\'), nullif(U.LAST_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'S.PORTAL_USER_ID', "']'") . ', nullif(U.NAME, \'\'), nullif(U.LAST_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'U',
 					'JOIN' => 'INNER JOIN b_user U ON U.ID = S.PORTAL_USER_ID',
@@ -273,7 +274,7 @@ class Call
 		}
 
 		$otherStatusName = $viHistoryMessages['VI_STATUS_OTHER'] ? " {$viHistoryMessages['VI_STATUS_OTHER']}" : '';
-		$otherCase = "concat('[', S.CALL_FAILED_CODE, ']', {$helper->convertToDbString($otherStatusName)})";
+		$otherCase = $helper->getConcatFunction("'['", 'S.CALL_FAILED_CODE', "']'", $helper->convertToDbString($otherStatusName));
 
 		if (!empty($cases))
 		{

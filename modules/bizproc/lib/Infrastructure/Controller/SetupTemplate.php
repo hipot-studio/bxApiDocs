@@ -7,15 +7,18 @@ namespace Bitrix\Bizproc\Infrastructure\Controller;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
 use Bitrix\Bizproc\Internal\Service\SetupTemplate\SetupTemplateService;
+use Bitrix\Bizproc\Public\Provider\WorkflowTemplate\AiAgentProvider;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Request;
+use CBPWorkflowTemplateUser;
 
 class SetupTemplate extends Controller
 {
 	private readonly SetupTemplateService $setupTemplateService;
 	private readonly AiAgentsFeature $aiAgentsFeature;
+	private readonly AiAgentProvider $aiAgentProvider;
 
 	public function __construct(?Request $request = null)
 	{
@@ -23,6 +26,7 @@ class SetupTemplate extends Controller
 
 		$this->setupTemplateService = new SetupTemplateService();
 		$this->aiAgentsFeature = ServiceLocator::getInstance()->get(AiAgentsFeature::class);
+		$this->aiAgentProvider = ServiceLocator::getInstance()->get(AiAgentProvider::class);
 	}
 
 	/**
@@ -45,6 +49,14 @@ class SetupTemplate extends Controller
 
 		$userId = (int)CurrentUser::get()->getId();
 		if ($userId <= 0)
+		{
+			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
+
+			return;
+		}
+
+		$currentUser = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
+		if (!$this->aiAgentProvider->canManageLaunchedTemplate($templateId, $userId, $currentUser->isAdmin()))
 		{
 			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
 

@@ -133,7 +133,7 @@ abstract class AbstractProcessStarter extends BaseTypeStarter
 		$code = $event->getCode();
 		if (!$code)
 		{
-			return true; // automation trigger
+			return true; // nothing to run
 		}
 
 		[$moduleId, $entity, $documentType] = $document?->complexType ?? Workflow::getComplexType();
@@ -142,7 +142,6 @@ abstract class AbstractProcessStarter extends BaseTypeStarter
 			WorkflowTemplateTriggerTable::query()
 				->setSelect(['TEMPLATE_ID', 'APPLY_RULES', 'TRIGGER_NAME', 'PARAMETERS' => 'TEMPLATE.PARAMETERS'])
 				->where('TRIGGER_TYPE', $code)
-				->setGroup(['TEMPLATE_ID', 'TEMPLATE.PARAMETERS'])
 				->where('MODULE_ID', $moduleId)
 				->where('ENTITY', $entity)
 				->where('DOCUMENT_TYPE', $documentType)

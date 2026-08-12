@@ -15,6 +15,8 @@ class SearchEmailsTool extends ToolContract
 {
 	public const ACTION_NAME = 'search_emails';
 
+	private const MAX_LIMIT = 100;
+
 	public function __construct(
 		private readonly MessageSearch $messageSearch,
 		TracedLogger $tracedLogger,
@@ -38,8 +40,16 @@ class SearchEmailsTool extends ToolContract
 			. "or 'blogPost' — feed post). Use bindings to detect existing links "
 			. "before creating duplicates. "
 			. "Results are sorted by date descending (newest first). "
+			. "Also returns pagination metadata: totalCount, returnedCount, remainingCount, "
+			. "hasMore, nextOffset, limit, and offset. "
+			. "If hasMore is true, explicitly tell the user that only the current page is shown "
+			. "and remainingCount more messages match; use nextOffset to load the next page. "
 			. "Optional parameters can be omitted; omitted means no filter on that field. "
-			. "If mailboxId is omitted, searches in all user mailboxes."
+			. "If mailboxId is omitted, searches in all user mailboxes. "
+			. "Use 'bindings' to keep only messages that have at least one listed binding type. "
+			. "Use bindings ['NO_BIND'] to find messages without any binding. "
+			. "Use 'excludeBindings' to drop messages that have a binding of any listed type "
+			. "(e.g. ['TASKS_TASK'] returns messages that have no task linked — other links are allowed)."
 		;
 	}
 
@@ -60,13 +70,15 @@ class SearchEmailsTool extends ToolContract
 				],
 				'dateFrom' => [
 					'type' => 'string',
-					'format' => 'date-time',
-					'description' => "Start of the date range in 'Y/m/d H:i' format.",
+					'description' =>
+						'Start of the date range. Use ISO 8601 date (YYYY-MM-DD) or date-time. '
+						. 'A bare date starts at 00:00:00.',
 				],
 				'dateTo' => [
 					'type' => 'string',
-					'format' => 'date-time',
-					'description' => "End of the date range in 'Y/m/d H:i' format.",
+					'description' =>
+						'End of the date range, inclusive. Use ISO 8601 date (YYYY-MM-DD) or date-time. '
+						. 'A bare date ends at 23:59:59.',
 				],
 				'isSeen' => [
 					'type' => 'boolean',
@@ -80,11 +92,42 @@ class SearchEmailsTool extends ToolContract
 					'type' => 'string',
 					'description' => 'Folder name (e.g., INBOX, Sent). Omit for all folders.',
 				],
+				'bindings' => [
+					'type' => 'array',
+					'description' =>
+						"Keep only messages that have a binding of any listed entity type. "
+						. "Use ['NO_BIND'] to find messages without any binding. "
+						. "Omit for no binding filter.",
+					'items' => [
+						'type' => 'string',
+						'enum' => SearchMessagesDto::ALLOWED_BINDINGS,
+					],
+					'uniqueItems' => true,
+					'minItems' => 1,
+				],
+				'excludeBindings' => [
+					'type' => 'array',
+					'description' =>
+						"Drop messages that have a binding of any listed entity type. "
+						. "Example: ['TASKS_TASK'] returns messages without a linked task (other links are allowed). "
+						. "Omit for no exclusion.",
+					'items' => [
+						'type' => 'string',
+						'enum' => SearchMessagesDto::ALLOWED_EXCLUDE_BINDINGS,
+					],
+					'uniqueItems' => true,
+					'minItems' => 1,
+				],
 				'limit' => [
 					'type' => 'integer',
-					'description' => 'Maximum number of messages to return. Defaults to 25.',
+					'description' => 'Maximum number of messages to return. Defaults to ' . SearchMessagesDto::DEFAULT_LIMIT . ', max ' . self::MAX_LIMIT . '.',
 					'minimum' => 1,
-					'maximum' => 100,
+					'maximum' => self::MAX_LIMIT,
+				],
+				'offset' => [
+					'type' => 'integer',
+					'description' => 'Offset by matching messages. Use nextOffset from the previous response when hasMore is true.',
+					'minimum' => 0,
 				],
 			],
 			'required' => [],
@@ -104,11 +147,16 @@ class SearchEmailsTool extends ToolContract
 
 	protected function executeStructured(int $userId, ...$args): array
 	{
-		$dto = SearchMessagesDto::fromArray($args);
-
 		try
 		{
+			$args['limit'] = $this->resolveLimit($args['limit'] ?? null);
+			$args['offset'] = $this->resolveOffset($args['offset'] ?? null);
+
+			$dto = SearchMessagesDto::fromArray($args);
 			$messages = $this->messageSearch->search($dto, $userId);
+			$totalCount = $this->messageSearch->count($dto, $userId);
+			$returnedCount = count($messages);
+			$remainingCount = max(0, $totalCount - ($dto->offset + $returnedCount));
 		}
 		catch (SystemException $e)
 		{
@@ -117,6 +165,29 @@ class SearchEmailsTool extends ToolContract
 
 		return [
 			'messages' => $messages,
+			'totalCount' => $totalCount,
+			'returnedCount' => $returnedCount,
+			'remainingCount' => $remainingCount,
+			'hasMore' => $remainingCount > 0,
+			'nextOffset' => $remainingCount > 0
+				? $dto->offset + $returnedCount
+				: null,
+			'limit' => $dto->limit,
+			'offset' => $dto->offset,
 		];
+	}
+
+	private function resolveLimit(mixed $raw): int
+	{
+		$value = is_numeric($raw) ? (int)$raw : SearchMessagesDto::DEFAULT_LIMIT;
+
+		return max(1, min(self::MAX_LIMIT, $value));
+	}
+
+	private function resolveOffset(mixed $raw): int
+	{
+		$value = is_numeric($raw) ? (int)$raw : 0;
+
+		return max(0, $value);
 	}
 }

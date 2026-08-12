@@ -15,7 +15,7 @@ use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Orm;
+use Bitrix\Main\ORM;
 use Bitrix\Main\UI\Filter\AdditionalDateType;
 use Bitrix\Main\UI\Filter\Type as UiFilterType;
 use Bitrix\Sender\Connector;
@@ -36,16 +36,16 @@ class Helper
 	private const PERSONALIZE_NAMESPACE = "\\Bitrix\\Sender\\Integration\\Crm\\Connectors\\Personalize\\";
 
 	/**
-	 * Create Orm expression field for selecting multi field.
+	 * Create ORM expression field for selecting multi field.
 	 *
 	 * @param string $entityName Entity name.
 	 * @param string $multiFieldTypeId Multi-field type ID.
-	 * @return Orm\Fields\ExpressionField
+	 * @return ORM\Fields\ExpressionField
 	 */
 	public static function createExpressionMultiField($entityName, $multiFieldTypeId)
 	{
 		$sqlHelper = Application::getConnection()->getSqlHelper();
-		return new Orm\Fields\ExpressionField(
+		return new ORM\Fields\ExpressionField(
 			$multiFieldTypeId,
 			'(' . $sqlHelper->getTopSql(
 				"

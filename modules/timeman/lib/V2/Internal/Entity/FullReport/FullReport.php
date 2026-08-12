@@ -7,6 +7,7 @@ namespace Bitrix\Timeman\V2\Internal\Entity\FullReport;
 use Bitrix\Timeman\V2\Internal\Entity\AbstractEntity;
 use Bitrix\Timeman\V2\Internal\Entity\Trait\MapTypeTrait;
 use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReportApprove;
+use Bitrix\Timeman\V2\Internal\Entity\Report\RecordReportType;
 
 class FullReport extends AbstractEntity
 {
@@ -20,6 +21,8 @@ class FullReport extends AbstractEntity
 		public readonly ?int $dateFrom,
 		public readonly ?int $dateTo,
 		public readonly ?string $report,
+		public readonly ?string $reportExtended,
+		public readonly ?string $type,
 		public readonly ?string $plans,
 		public readonly ?array $tasks,
 		public readonly ?array $events,
@@ -49,6 +52,8 @@ class FullReport extends AbstractEntity
 			dateFrom: static::mapInteger($props, 'dateFrom'),
 			dateTo: static::mapInteger($props, 'dateTo'),
 			report: static::mapString($props, 'report', '') ?? '',
+			reportExtended: static::mapString($props, 'reportExtended', '') ?? '',
+			type: RecordReportType::normalize(static::mapString($props, 'type')),
 			plans: static::mapString($props, 'plans'),
 			tasks: static::mapArray($props, 'tasks'),
 			events: static::mapArray($props, 'events'),
@@ -72,6 +77,8 @@ class FullReport extends AbstractEntity
 			'dateFrom' => $this->dateFrom,
 			'dateTo' => $this->dateTo,
 			'report' => $this->report,
+			'reportExtended' => $this->reportExtended,
+			'type' => $this->type,
 			'plans' => $this->plans,
 			'tasks' => $this->tasks,
 			'events' => $this->events,
@@ -90,9 +97,18 @@ class FullReport extends AbstractEntity
 	 */
 	public function withChanges(array $changes): self
 	{
+		$active = array_key_exists('active', $changes)
+			? static::mapBool($changes, 'active')
+			: $this->active;
 		$reportText = array_key_exists('reportText', $changes)
 			? static::mapString($changes, 'reportText', $this->report)
 			: $this->report;
+		$reportExtended = array_key_exists('reportExtended', $changes)
+			? static::mapString($changes, 'reportExtended', $this->reportExtended)
+			: $this->reportExtended;
+		$type = array_key_exists('type', $changes)
+			? static::mapString($changes, 'type', $this->type)
+			: $this->type;
 		$plansText = array_key_exists('plansText', $changes)
 			? static::mapString($changes, 'plansText')
 			: $this->plans;
@@ -127,11 +143,13 @@ class FullReport extends AbstractEntity
 		return new self(
 			id: $this->id,
 			userId: $this->userId,
-			active: $this->active,
+			active: $active,
 			reportDate: $this->reportDate,
 			dateFrom: $dateFrom,
 			dateTo: $dateTo,
 			report: $reportText ?? '',
+			reportExtended: $reportExtended ?? '',
+			type: RecordReportType::normalize($type),
 			plans: $plansText,
 			tasks: $tasks,
 			events: $events,

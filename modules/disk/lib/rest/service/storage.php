@@ -4,7 +4,6 @@ namespace Bitrix\Disk\Rest\Service;
 
 use Bitrix\Disk\User;
 use Bitrix\Disk\Internals\Error\Error;
-use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Rest\AccessException;
@@ -89,7 +88,9 @@ final class Storage extends Base
 	 * Returns list of storages.
 	 * @param array $filter Filter.
 	 * @param array $order  Order.
-	 * @return Disk\Storage[]|null
+	 * @return Disk\Storage[]|null List of storages. When navigation is requested, the list also carries
+	 *                             the keys total and next added by Disk\Rest\RestManager::setNavData();
+	 *                             without navigation (negative start) the plain list is returned.
 	 */
 	protected function getList(array $filter = array(), array $order = array())
 	{
@@ -97,29 +98,23 @@ final class Storage extends Base
 
 		$internalizer = new Disk\Rest\Internalizer(new Entity\Storage, $this);
 		$navData = Disk\Rest\RestManager::getNavData($this->start);
+		$isNavigationRequested = $this->isNavigationRequested($navData);
 		$parameters = array_merge(
 			array(
 				'with' => array('ROOT_OBJECT'),
-				'filter' => array_merge(array(
+				'filter' => array_merge($internalizer->cleanFilter($filter), array(
 					'=ROOT_OBJECT.PARENT_ID' => null,
 					'=MODULE_ID' => Disk\Driver::INTERNAL_MODULE_ID,
-					'=RIGHTS_CHECK' => true,
-				), $internalizer->cleanFilter($filter)),
-				'runtime' => array(
-					new ExpressionField('RIGHTS_CHECK', 'CASE WHEN ' . $securityContext->getSqlExpressionForList('%1$s', '%2$s') . ' THEN 1 ELSE 0 END', array(
-							'ROOT_OBJECT.ID',
-							'ROOT_OBJECT.CREATED_BY'
-						), array('data_type' => 'boolean',))
-				),
+				)),
 				'order' => $order,
-				'count_total' => true,
+				'count_total' => $isNavigationRequested,
 			),
 			$navData
 		);
 
 		$parameters = Disk\Driver::getInstance()
 			->getRightsManager()
-			->addRightsCheck(
+			->addRightsCheckForRootObjects(
 				$securityContext,
 				$parameters,
 				array( 'ROOT_OBJECT.ID', 'ROOT_OBJECT.CREATED_BY')
@@ -145,6 +140,11 @@ final class Storage extends Base
 		}
 		unset($storage);
 
+		if(!$isNavigationRequested)
+		{
+			return $storages;
+		}
+
 		return Disk\Rest\RestManager::setNavData(
 			$storages,
 			array(
@@ -152,6 +152,15 @@ final class Storage extends Base
 				"offset" => $navData['offset'],
 			)
 		);
+	}
+
+	/**
+	 * Disk\Rest\RestManager::getNavData() drops the offset for a negative start, telling that
+	 * the page was asked for without navigation.
+	 */
+	private function isNavigationRequested(array $navData): bool
+	{
+		return array_key_exists('offset', $navData);
 	}
 
 	private function getSecurityContextByUser($user)

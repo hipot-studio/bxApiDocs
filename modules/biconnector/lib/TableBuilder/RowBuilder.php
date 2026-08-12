@@ -56,7 +56,7 @@ class RowBuilder
 
 	private function getTableName(): string
 	{
-		return $this->connection->getSqlHelper()->forSql($this->tableName);
+		return $this->connection->getSqlHelper()->quote($this->tableName);
 	}
 
 	private function getColumns(): array
@@ -84,6 +84,6 @@ class RowBuilder
 
 	private function getTableField(Field\Base $field): string
 	{
-		return sprintf('`%s`', $field->getName());
+		return $this->connection->getSqlHelper()->quote($field->getName());
 	}
 }

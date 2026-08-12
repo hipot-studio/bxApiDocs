@@ -9,7 +9,7 @@ class AddBlockAction extends BaseAction
 {
 	protected const JS_COMMAND = 'addBlock';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		$blockId = (int)$this->params['block'];
 		$landing = Landing::createInstance($this->params['lid']);

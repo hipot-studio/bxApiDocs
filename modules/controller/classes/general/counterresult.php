@@ -18,6 +18,10 @@ class CControllerCounterResult extends CDBResult
 				case 'D':
 					$res['VALUE'] = (string)$res['VALUE_DATE'];
 					break;
+				case 'E':
+					$res['VALUE'] = '';
+					$res['COUNTER_FORMAT'] = 'E';
+					break;
 				default:
 					$res['VALUE'] = $res['VALUE_STRING'];
 					break;

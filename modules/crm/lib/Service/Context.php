@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service;
 
+use Bitrix\Crm\Integration\Analytics\Builder\AnalyticsEventDto;
 use Bitrix\Main\Engine\CurrentUser;
 
 class Context
@@ -16,7 +17,7 @@ class Context
 	protected $userId;
 	protected $scope;
 	protected array $itemOptions = [];
-	protected array $analytics = [];
+	protected AnalyticsEventDto $analytics;
 
 	public function __construct(array $params = [])
 	{
@@ -27,9 +28,11 @@ class Context
 				$this->$name = $value;
 			}
 		}
+
+		$this->analytics = new AnalyticsEventDto();
 	}
 
-	public function setUserId(int $userId): Context
+	public function setUserId(int $userId): self
 	{
 		$this->userId = $userId;
 
@@ -38,15 +41,15 @@ class Context
 
 	public function getUserId(): int
 	{
-		if($this->userId !== null)
+		if ($this->userId !== null)
 		{
-			return (int) $this->userId;
+			return (int)$this->userId;
 		}
 
 		return $this->getCurrentUserId();
 	}
 
-	public function setScope(string $scope): Context
+	public function setScope(string $scope): self
 	{
 		$this->scope = $scope;
 
@@ -55,9 +58,9 @@ class Context
 
 	public function getScope(): string
 	{
-		if($this->scope)
+		if ($this->scope)
 		{
-			return (string) $this->scope;
+			return (string)$this->scope;
 		}
 
 		return static::SCOPE_MANUAL;
@@ -66,9 +69,9 @@ class Context
 	protected function getCurrentUserId(): int
 	{
 		global $USER;
-		if(is_object($USER) && $USER instanceof \CUser)
+		if (is_object($USER) && $USER instanceof \CUser)
 		{
-			return (int) CurrentUser::get()->getId();
+			return (int)CurrentUser::get()->getId();
 		}
 
 		return 0;
@@ -79,9 +82,10 @@ class Context
 		return $this->eventId;
 	}
 
-	public function setEventId(?string $eventId): Context
+	public function setEventId(?string $eventId): self
 	{
 		$this->eventId = $eventId;
+
 		return $this;
 	}
 
@@ -92,7 +96,8 @@ class Context
 	public function getItemOption(string $optionName)
 	{
 		$options = $this->getItemOptions();
-		return ($options[$optionName] ?? null);
+
+		return $options[$optionName] ?? null;
 	}
 
 	public function getItemOptions(): array
@@ -100,26 +105,36 @@ class Context
 		return $this->itemOptions;
 	}
 
-	public function setItemOption(string $optionName, $value): Context
+	public function setItemOption(string $optionName, $value): self
 	{
 		$this->itemOptions[$optionName] = $value;
+
 		return $this;
 	}
 
-	public function setItemOptions(array $itemOptions): Context
+	public function setItemOptions(array $itemOptions): self
 	{
 		$this->itemOptions = $itemOptions;
+
 		return $this;
 	}
 
-	public function getAnalytics(): array
+	public function getAnalytics(): AnalyticsEventDto
 	{
 		return $this->analytics;
 	}
 
-	public function setAnalytics(array $analytics): Context
+	public function setAnalytics(AnalyticsEventDto|array $analytics): self
 	{
-		$this->analytics = $analytics;
+		if (is_array($analytics))
+		{
+			$this->analytics->setFromArray($analytics);
+		}
+		else
+		{
+			$this->analytics = $analytics;
+		}
+
 		return $this;
 	}
 }

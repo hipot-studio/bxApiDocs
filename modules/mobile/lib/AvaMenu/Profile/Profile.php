@@ -13,9 +13,9 @@ class Profile
 	private Context $context;
 	private BaseType $type;
 
-	public function __construct()
+	public function __construct(?Context $context = null)
 	{
-		$this->context = new Context();
+		$this->context = $context ?? new Context();
 		$this->type = $this->getType();
 	}
 
@@ -206,6 +206,10 @@ class Profile
 		if ($this->context->isCollaber)
 		{
 			$profileTypeClass = Type\Collaber::class;
+		}
+		else if ($this->context->isGuest)
+		{
+			$profileTypeClass = Type\Guest::class;
 		}
 		else if ($this->context->extranet)
 		{

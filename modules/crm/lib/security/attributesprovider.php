@@ -3,6 +3,11 @@
 namespace Bitrix\Crm\Security;
 
 use Bitrix\Crm\Integration\HumanResources\DepartmentQueries;
+use Bitrix\HumanResources\Type\AccessCodeType;
+use Bitrix\Main\Loader;
+use Bitrix\Crm\Integration\HumanResources\HumanResources;
+use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\Security\Controller\QueryBuilder\RestrictionByAttributes\AttributesUtils;
 
 class AttributesProvider
 {
@@ -43,6 +48,11 @@ class AttributesProvider
 		return $this->userAttributesCodes;
 	}
 
+	/**
+	 * Returns attributes used to check entity permissions. Assumed that $this->userId contains ASSIGNED_BY_ID of this entity.
+	 *
+	 * @return string[]
+	 */
 	public function getEntityAttributes(): array
 	{
 		if (!$this->entityAttributes)
@@ -57,22 +67,40 @@ class AttributesProvider
 	{
 		$attributesByUser = [];
 
-		$userAccessCodes = $this->getUserAccessCodes();
+		Loader::requireModule('humanresources');
+
+		$userAccessCodes = $this->getRawUserAccessCodes();
+		$hrDepartmentsIds = [];
+		$hrSubDepartmentsIds = [];
+		$hrTeamsIds = [];
+		$hrSubTeamsIds = [];
 		foreach ($userAccessCodes as $accessCode)
 		{
-			if (mb_strpos($accessCode['ACCESS_CODE'], 'DR') !== 0)
+			if (AttributesUtils::tryParseHrDepartment($accessCode['ACCESS_CODE'], $nodeId))
+			{
+				$hrDepartmentsIds[] = $nodeId;
+			}
+			elseif (AttributesUtils::tryParseHrTeam($accessCode['ACCESS_CODE'], $nodeId))
+			{
+				$hrTeamsIds[] = $nodeId;
+			}
+			elseif (
+				mb_strpos($accessCode['ACCESS_CODE'], 'DR') !== 0 // dr ignored!
+				&& mb_strpos($accessCode['ACCESS_CODE'], AccessCodeType::HrDepartmentRecursiveType->value) !== 0 // dr ignored!
+				&& mb_strpos($accessCode['ACCESS_CODE'], AccessCodeType::HrTeamRecursiveType->value) !== 0 // dr ignored!
+			)
 			{
 				$attributesByUser[mb_strtoupper($accessCode['PROVIDER_ID'])][] = $accessCode['ACCESS_CODE'];
 			}
 		}
 
-		if (!empty($attributesByUser['INTRANET']))
+		if (\Bitrix\Crm\Security\Controller\Compatible::isAvailable() && !empty($attributesByUser['INTRANET']))
 		{
 			foreach ($attributesByUser['INTRANET'] as $iDepartment)
 			{
 				if (mb_substr($iDepartment, 0, 1) === 'D')
 				{
-					$departmentTree = $this->getSubDepartmentsIds((int)mb_substr($iDepartment, 1));
+					$departmentTree = $this->getIntranetSubDepartmentsIds((int)mb_substr($iDepartment, 1));
 					foreach ($departmentTree as $departmentId)
 					{
 						$attributesByUser['SUBINTRANET'][] = 'D' . $departmentId;
@@ -81,33 +109,75 @@ class AttributesProvider
 			}
 		}
 
+		if (!empty($hrDepartmentsIds))
+		{
+			$hrSubDepartmentsIds = $this->getHrChildDepartmentNodesIds($hrDepartmentsIds);
+		}
+
+		if (!empty($hrTeamsIds))
+		{
+			$hrSubTeamsIds = $this->getHrChildTeamNodesIds($hrTeamsIds);
+		}
+
+		if (!empty($hrDepartmentsIds))
+		{
+			$attributesByUser['HR_DEPARTMENTS'] = $this->convertIdsToAccessCodes(
+				AccessCodeType::HrDepartmentType,
+				$hrDepartmentsIds,
+			);
+		}
+
+		if (!empty($hrSubDepartmentsIds))
+		{
+			$attributesByUser['HR_SUBDEPARTMENTS'] = $this->convertIdsToAccessCodes(
+				AccessCodeType::HrDepartmentType,
+				$hrSubDepartmentsIds,
+			);
+		}
+
+		if (!empty($hrTeamsIds))
+		{
+			$attributesByUser['HR_TEAMS'] = $this->convertIdsToAccessCodes(
+				AccessCodeType::HrTeamType,
+				$hrTeamsIds,
+			);
+		}
+
+		if (!empty($hrSubTeamsIds))
+		{
+			$attributesByUser['HR_SUBTEAMS'] = $this->convertIdsToAccessCodes(
+				AccessCodeType::HrTeamType,
+				$hrSubTeamsIds,
+			);
+		}
+
 		return $attributesByUser;
 	}
 
 	protected function loadEntityAttributes(): array
 	{
-		$result = [
-			'INTRANET' => [],
-		];
 		$userAttributes = $this->getUserAttributes();
-		if (!empty($userAttributes['INTRANET']))
+
+		$attributes = array_merge(
+			[
+				UserPermissions::ATTRIBUTES_USER_PREFIX . $this->userId,
+			],
+			$userAttributes['HR_DEPARTMENTS'] ?? [],
+			$userAttributes['HR_TEAMS'] ?? [],
+		);
+
+		if (\Bitrix\Crm\Security\Controller\Compatible::isAvailable())
 		{
-			//HACK: Removing intranet subordination relations, otherwise staff will get access to boss's entities
-			foreach ($userAttributes['INTRANET'] as $code)
-			{
-				if (mb_strpos($code, 'IU') !== 0)
-				{
-					$result['INTRANET'][] = $code;
-				}
-			}
-			$userId = $this->getUserId();
-			$result['INTRANET'][] = "IU{$userId}";
+			$attributes = array_merge(
+				$attributes,
+				$userAttributes['INTRANET'] ?? [],
+			);
 		}
 
-		return $result;
+		return $attributes;
 	}
 
-	protected function getUserAccessCodes(): array
+	protected function getRawUserAccessCodes(): array
 	{
 		$userId = $this->getUserId();
 
@@ -158,8 +228,30 @@ class AttributesProvider
 		return $usefulUserAccessCodes;
 	}
 
-	protected function getSubDepartmentsIds($departmentId): array
+	protected function getIntranetSubDepartmentsIds($departmentId): array
 	{
-		return DepartmentQueries::getInstance()->getSubDepartmentsAccessCodesIds($departmentId);
+		return DepartmentQueries::getInstance()->getIntranetSubDepartmentsAccessCodesIds($departmentId);
+	}
+
+	protected function getHrChildDepartmentNodesIds(array $departmentIds): array
+	{
+		return DepartmentQueries::getInstance()->getHrChildNodesIds($departmentIds);
+	}
+
+	protected function getHrChildTeamNodesIds(array $teamIds): array
+	{
+		return DepartmentQueries::getInstance()->getHrChildTeamNodesIds($teamIds);
+	}
+
+	private function convertIdsToAccessCodes(AccessCodeType $accessCodeType, array $nodeIds): array
+	{
+		$humanResources = HumanResources::getInstance();
+		$accessCodes = [];
+		foreach ($nodeIds as $nodeId)
+		{
+			$accessCodes[] = $humanResources->buildAccessCode($accessCodeType->value, $nodeId);
+		}
+
+		return $accessCodes;
 	}
 }

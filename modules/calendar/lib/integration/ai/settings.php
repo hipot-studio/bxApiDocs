@@ -89,11 +89,22 @@ final class Settings
 		$items = [];
 		$groups = [];
 
+		$copilotName = 'CoPilot';
+		if (Loader::includeModule('ai'))
+		{
+			$copilotName = (new \Bitrix\AI\Services\CopilotNameService())->getCopilotName();
+		}
+
 		if (Engine::getByCategory(self::TEXT_CATEGORY, Context::getFake()))
 		{
 			$items[self::TUNING_CODE_TEXT] = [
 				'group' => Tuning\Defaults::GROUP_TEXT,
-				'header' => Loc::getMessage('CALENDAR_AI_SETTINGS_ALLOW_TEXT_COPILOT_DESC'),
+				'header' => Loc::getMessage(
+					'CALENDAR_AI_SETTINGS_ALLOW_TEXT_COPILOT_DESC_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => $copilotName,
+					],
+				),
 				'title' => Loc::getMessage('CALENDAR_AI_SETTINGS_COPILOT_TITLE'),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
@@ -102,7 +113,12 @@ final class Settings
 
 			$items[self::TUNING_CODE_TEXT_COMMENT] = [
 				'group' => Tuning\Defaults::GROUP_TEXT,
-				'header' => Loc::getMessage('CALENDAR_AI_SETTINGS_ALLOW_TEXT_COMMENT_COPILOT_DESC'),
+				'header' => Loc::getMessage(
+					'CALENDAR_AI_SETTINGS_ALLOW_TEXT_COMMENT_COPILOT_DESC_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => $copilotName,
+					],
+				),
 				'title' => Loc::getMessage('CALENDAR_AI_SETTINGS_COPILOT_COMMENT_TITLE'),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
@@ -114,7 +130,12 @@ final class Settings
 		{
 			$items[self::TUNING_CODE_IMAGE] = [
 				'group' => Tuning\Defaults::GROUP_IMAGE,
-				'header' => Loc::getMessage('CALENDAR_AI_SETTINGS_ALLOW_IMAGE_COPILOT_DESC'),
+				'header' => Loc::getMessage(
+					'CALENDAR_AI_SETTINGS_ALLOW_IMAGE_COPILOT_DESC_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => $copilotName,
+					],
+				),
 				'title' => Loc::getMessage('CALENDAR_AI_SETTINGS_COPILOT_TITLE'),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,
@@ -123,7 +144,12 @@ final class Settings
 
 			$items[self::TUNING_CODE_IMAGE_COMMENT] = [
 				'group' => Tuning\Defaults::GROUP_IMAGE,
-				'header' => Loc::getMessage('CALENDAR_AI_SETTINGS_ALLOW_IMAGE_COMMENT_COPILOT_DESC'),
+				'header' => Loc::getMessage(
+					'CALENDAR_AI_SETTINGS_ALLOW_IMAGE_COMMENT_COPILOT_DESC_MSGVER_1',
+					[
+						'#COPILOT_NAME#' => $copilotName,
+					],
+				),
 				'title' => Loc::getMessage('CALENDAR_AI_SETTINGS_COPILOT_COMMENT_TITLE'),
 				'type' => Tuning\Type::BOOLEAN,
 				'default' => true,

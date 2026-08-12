@@ -11,14 +11,15 @@ use Bitrix\BizprocDesigner\Infrastructure\Enum\ConstructionType;
 use Bitrix\BizprocDesigner\Internal\Command\AbstractCommand;
 
 use Bitrix\BizprocDesigner\Internal\Trait\ActivitySettingsDecoder;
+use Bitrix\BizprocDesigner\Internal\Trait\ConditionValueResolver;
 use Bitrix\BizprocDesigner\Public\Command\Activity;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
-use CBPRuntime;
 
 class SaveSingleRuleCommand extends AbstractCommand
 {
 	use ActivitySettingsDecoder;
+	use ConditionValueResolver;
 
 	public function __construct(
 		public readonly PortRuleDto $portRuleDto,
@@ -44,27 +45,6 @@ class SaveSingleRuleCommand extends AbstractCommand
 		}
 
 		return new SaveSingleRuleCommandResult($resultPortRule);
-	}
-
-	private function processConditionExpressions(PortRuleDto $resultPortRule): Result
-	{
-		$conditionExpressionList = $this->extractConditionExpressionList($resultPortRule);
-
-		foreach ($conditionExpressionList as $conditionExpression)
-		{
-			$field = $conditionExpression->field;
-			if (empty($field))
-			{
-				continue;
-			}
-
-			if (!\CBPActivity::isExpression($conditionExpression->value))
-			{
-				$conditionExpression->value = '';
-			}
-		}
-
-		return new Result();
 	}
 
 	private function processActionExpressions(PortRuleDto $resultPortRule): Result
@@ -112,7 +92,10 @@ class SaveSingleRuleCommand extends AbstractCommand
 		{
 			foreach ($rule->constructions as $construction)
 			{
-				if ($construction->constructionType !== ConstructionType::ACTION)
+				if (
+					$construction->constructionType !== ConstructionType::ACTION
+					&& $construction->constructionType !== ConstructionType::FILTER
+				)
 				{
 					continue;
 				}
@@ -129,38 +112,6 @@ class SaveSingleRuleCommand extends AbstractCommand
 		}
 
 		return $actionExpressionList;
-	}
-
-	/**
-	 * @param PortRuleDto $portRuleDto
-	 * @return list<ConditionExpressionDto>
-	 */
-	private function extractConditionExpressionList(PortRuleDto $portRuleDto): array
-	{
-		$conditionExpressionList = [];
-
-		$rules = $portRuleDto->rules;
-		foreach ($rules as $rule)
-		{
-			foreach ($rule->constructions as $construction)
-			{
-				if (!$construction->constructionType->isCondition())
-				{
-					continue;
-				}
-
-				$expression = $construction->expression;
-
-				if (!$expression instanceof ConditionExpressionDto)
-				{
-					continue;
-				}
-
-				$conditionExpressionList[] = $expression;
-			}
-		}
-
-		return $conditionExpressionList;
 	}
 
 	private function getActivitySettings(ActionExpressionDto $actionExpression): Activity\Settings\SaveCommandResult
@@ -201,6 +152,51 @@ class SaveSingleRuleCommand extends AbstractCommand
 		;
 
 		return $result;
+	}
+
+	private function processConditionExpressions(PortRuleDto $resultPortRule): Result
+	{
+		foreach ($this->extractConditionExpressionList($resultPortRule) as $conditionExpression)
+		{
+			$field = $conditionExpression->field;
+			if ($field === null)
+			{
+				continue;
+			}
+
+			$conditionExpression->value = $this->resolveConditionValue(
+				$field,
+				$conditionExpression->value,
+				$this->documentType,
+			);
+		}
+
+		return new Result();
+	}
+
+	/**
+	 * @param PortRuleDto $portRuleDto
+	 * @return list<ConditionExpressionDto>
+	 */
+	private function extractConditionExpressionList(PortRuleDto $portRuleDto): array
+	{
+		$list = [];
+
+		foreach ($portRuleDto->rules as $rule)
+		{
+			foreach ($rule->constructions as $construction)
+			{
+				if (
+					$construction->constructionType->isCondition()
+					&& $construction->expression instanceof ConditionExpressionDto
+				)
+				{
+					$list[] = $construction->expression;
+				}
+			}
+		}
+
+		return $list;
 	}
 
 	private function modifyRawActivityDataTemplate(array $rawActivityData): array

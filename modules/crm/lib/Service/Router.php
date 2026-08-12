@@ -797,6 +797,11 @@ class Router
 	{
 		if ($this->isNewRoutingForListEnabled($entityTypeId))
 		{
+			if (\CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId))
+			{
+				return $this->getActivityUrlViaActivitiesPageWithNewRouting($entityTypeId, $categoryId);
+			}
+
 			return $this->getKanbanActivityUrlWithNewRouting($entityTypeId, $categoryId);
 		}
 
@@ -919,6 +924,20 @@ class Router
 				'entityTypeId' => $entityTypeId,
 				'categoryId' => $categoryId ?? 0,
 				'viewMode' => $viewMode,
+			]
+		);
+	}
+
+	protected function getActivityUrlViaActivitiesPageWithNewRouting(
+		int $entityTypeId,
+		int $categoryId = null
+	): ?Uri
+	{
+		return $this->getUrlForTemplate(
+			'bitrix:crm.item.activities',
+			[
+				'entityTypeId' => $entityTypeId,
+				'categoryId' => $categoryId ?? 0,
 			]
 		);
 	}
@@ -1617,7 +1636,7 @@ class Router
 
 		$url = new Uri($currentUrl);
 		$path = $url->getPath();
-		if (preg_match('#type/(\d+)/(list|kanban)?#', $path, $matches))
+		if (preg_match('#type/(\d+)/(list|kanban|activities|deadlines)?(?:/category/(\d+))?#', $path, $matches))
 		{
 			$entityTypeId = (int)$matches[1];
 			if (!\CCrmOwnerType::isCorrectEntityTypeId($entityTypeId))
@@ -1625,9 +1644,16 @@ class Router
 				return null;
 			}
 
-			if (isset($matches[2]))
+			$categoryId = !empty($matches[3]) ? (int)$matches[3] : null;
+			$viewSlug = $matches[2] ?? '';
+
+			if ($viewSlug !== '')
 			{
-				$viewType = mb_strtoupper($matches[2]);
+				$viewType = mb_strtoupper($viewSlug);
+				if ($viewType === 'ACTIVITIES')
+				{
+					$viewType = static::LIST_VIEW_ACTIVITY;
+				}
 			}
 			else
 			{
@@ -1636,10 +1662,20 @@ class Router
 
 			if ($viewType === static::LIST_VIEW_LIST)
 			{
-				return $this->getItemListUrl($entityTypeId);
+				return $this->getItemListUrl($entityTypeId, $categoryId);
 			}
 
-			return $this->getKanbanUrl($entityTypeId);
+			if ($viewType === static::LIST_VIEW_ACTIVITY)
+			{
+				return $this->getActivityUrl($entityTypeId, $categoryId);
+			}
+
+			if ($viewType === static::LIST_VIEW_DEADLINES)
+			{
+				return $this->getDeadlinesUrl($entityTypeId, $categoryId);
+			}
+
+			return $this->getKanbanUrl($entityTypeId, $categoryId);
 		}
 
 		return null;

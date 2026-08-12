@@ -278,6 +278,10 @@ class DialogSession
 		{
 			$newData['STATUS'] = $params['STATUS'];
 		}
+		elseif (!empty($newData['SESSION_ID']) && (int)$newData['SESSION_ID'] > 0)
+		{
+			$newData['STATUS'] = Network::MULTIDIALOG_STATUS_OPEN;
+		}
 
 		if ($this->primaryId)
 		{
@@ -300,6 +304,7 @@ class DialogSession
 				'DATE_LAST_ACTIVITY',
 				'CLOSE_TERM',
 				'CLOSED',
+				'STATUS',
 				'TELEMETRY_SENT',
 			],
 			'filter' => $filter

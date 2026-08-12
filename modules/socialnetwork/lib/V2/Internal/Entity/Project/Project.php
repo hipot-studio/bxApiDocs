@@ -50,6 +50,13 @@ class Project extends AbstractEntity
 		public readonly ?array $toggleableFeatures = null,
 		public readonly ?array $tagNames = null,
 		public readonly ?bool $publication = null,
+		/**
+		 * Notification type settings from the write path.
+		 * Each entry: ['id' => string, 'counterEnabled' => bool].
+		 *
+		 * @var list<array{id: string, counterEnabled: bool}>|null
+		 */
+		public readonly ?array $notifications = null,
 		// computed flags
 		public readonly ?bool $hasCollabers = null,
 	)

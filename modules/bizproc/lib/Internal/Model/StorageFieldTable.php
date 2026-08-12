@@ -15,6 +15,7 @@ use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\ORM\EntityError;
+use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Repository\Mapper\StorageItemMapper;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 
@@ -55,7 +56,6 @@ class StorageFieldTable extends DataManager
 	use DeleteByFilterTrait;
 
 	public const DEFAULT_SORT = 500;
-	public const MAX_FIELDS_PER_STORAGE = 50;
 	private const CODE_PATTERN = '/^[A-Za-z_][A-Za-z0-9_]*$/';
 
 	public static function getTableName(): string
@@ -132,13 +132,12 @@ class StorageFieldTable extends DataManager
 			return $result;
 		}
 
-		$currentCount = static::getFieldsCountByStorage($storageId);
-
-		if ($currentCount >= static::MAX_FIELDS_PER_STORAGE)
+		$limitsService = Container::getStorageLimitsService();
+		if ($limitsService && !$limitsService->canAddField($storageId))
 		{
 			$result->addError(new EntityError(
 				Loc::getMessage('BIZPROC_STORAGE_FIELD_MODEL_FIELD_LIMIT_EXCEEDED', [
-					'#LIMIT#' => static::MAX_FIELDS_PER_STORAGE,
+					'#LIMIT#' => $limitsService->getMaxFieldsPerStorage(),
 				])
 			));
 		}

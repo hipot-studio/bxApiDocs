@@ -3,10 +3,13 @@
 namespace Bitrix\CrmMobile\Kanban\ControllerStrategy;
 
 use Bitrix\Crm\Category\Entity\Category;
+use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
+use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
 use Bitrix\Crm\Counter\EntityCounterFactory;
 use Bitrix\Crm\Counter\EntityCounterType;
 use Bitrix\Crm\Field\Collection;
-use Bitrix\Crm\Filter\ContactSettings;
+use Bitrix\Crm\Filter\ClientDataProvider;
+use Bitrix\Crm\Filter\ClientUserFieldDataProvider;
 use Bitrix\Crm\Filter\FactoryOptionable;
 use Bitrix\Crm\Filter\Preset\Company;
 use Bitrix\Crm\Filter\Preset\Contact;
@@ -32,10 +35,17 @@ final class ListStrategy extends Base
 
 	protected ?Options $filterOptions = null;
 	protected array $showedFieldsList = [];
+	protected ?Collection $fieldsCollection = null;
+	protected ?array $fieldsMap = null;
 	protected ?\Bitrix\Main\Grid\Options $gridOptions = null;
 	protected array $factories = [];
 	protected ?DataProvider $provider = null;
 	protected ?DataProvider $ufProvider = null;
+	/** @var DataProvider[]|null */
+	protected ?array $clientFilterProviders = null;
+	/** @var Client\ListDataProvider[]|null */
+	protected ?array $clientProviders = null;
+	protected ?FieldRestrictionManager $fieldRestrictionManager = null;
 
 	public function updateItemStage(int $id, int $stageId): Result
 	{
@@ -132,6 +142,75 @@ final class ListStrategy extends Base
 		return $this->ufProvider;
 	}
 
+	/**
+	 * @return DataProvider[]
+	 */
+	protected function getClientFilterProviders(): array
+	{
+		if ($this->clientFilterProviders === null)
+		{
+			$filterFactory = Container::getInstance()->getFilterFactory();
+			$settings = $filterFactory->getSettings($this->getEntityTypeId(), $this->getGridId());
+			$this->clientFilterProviders = $filterFactory->getSupportedClientDataProviders($settings);
+		}
+
+		return $this->clientFilterProviders;
+	}
+
+	/**
+	 * @return Client\ListDataProvider[]
+	 */
+	protected function getClientProviders(): array
+	{
+		if ($this->clientProviders === null)
+		{
+			$clientProviders = [];
+			$factory = $this->getFactory($this->getEntityTypeId());
+			if ($factory->isClientContactEnabled())
+			{
+				$clientProviders[] = $this->createClientProvider(\CCrmOwnerType::Contact);
+			}
+			if ($factory->isClientCompanyEnabled())
+			{
+				$clientProviders[] = $this->createClientProvider(\CCrmOwnerType::Company);
+			}
+
+			$this->clientProviders = $clientProviders;
+		}
+
+		return $this->clientProviders;
+	}
+
+	protected function createClientProvider(int $clientEntityTypeId): Client\ListDataProvider
+	{
+		$dataProvider = new Client\ListDataProvider($clientEntityTypeId);
+		$dataProvider->setGridId($this->getGridId());
+
+		return $dataProvider;
+	}
+
+	final protected function getFieldRestrictionManager(): FieldRestrictionManager
+	{
+		if ($this->fieldRestrictionManager === null)
+		{
+			$restrictionTypes = [
+				FieldRestrictionManagerTypes::OBSERVERS,
+			];
+			if ($this->getFactory($this->getEntityTypeId())->isClientFieldsEnabled())
+			{
+				$restrictionTypes[] = FieldRestrictionManagerTypes::CLIENT;
+			}
+
+			$this->fieldRestrictionManager = new FieldRestrictionManager(
+				FieldRestrictionManager::MODE_KANBAN,
+				$restrictionTypes,
+				$this->getEntityTypeId(),
+			);
+		}
+
+		return $this->fieldRestrictionManager;
+	}
+
 	protected function getPreparedFilter(): array
 	{
 		$filter = [];
@@ -161,12 +240,57 @@ final class ListStrategy extends Base
 		return $filter;
 	}
 
+	protected function setFilterPreset(string $presetId, Options $filterOptions): void
+	{
+		// "filter_rows" do not contain restricted columns, but "fields" still contain
+		// we need to remove restricted columns from "fields" to remove them from actual search conditions
+		$filterSettings = $filterOptions->getFilterSettings($presetId);
+		$isFilterSettingsCheckable =
+			isset($filterSettings['fields'], $filterSettings['filter_rows'])
+			&& is_array($filterSettings['fields'])
+			&& is_string($filterSettings['filter_rows'])
+		;
+		if ($isFilterSettingsCheckable)
+		{
+			$fields = $filterSettings['fields'];
+			$filterRows = explode(',', $filterSettings['filter_rows']);
+			$allowedFields = [];
+			foreach ($fields as $fieldName => $fieldValue)
+			{
+				$isFieldAllowed = in_array($fieldName, $filterRows, true);
+				if (!$isFieldAllowed)
+				{
+					$rowsFromFields = Options::getRowsFromFields([$fieldName => '']);
+					$isFieldAllowed = in_array(reset($rowsFromFields), $filterRows, true);
+				}
+				if ($isFieldAllowed)
+				{
+					$allowedFields[$fieldName] = $fieldValue;
+				}
+			}
+
+			if (count($allowedFields) < count($fields))
+			{
+
+				$filterOptions->setFilterSettings(
+					$presetId,
+					['fields' => $allowedFields],
+					false,
+					false,
+				);
+			}
+		}
+
+		parent::setFilterPreset($presetId, $filterOptions);
+	}
+
 	protected function getFilterOptions(): Options
 	{
 		if (!$this->filterOptions)
 		{
-			$gridId = $this->getGridId();
-			$this->filterOptions = new Options($gridId, $this->getFilterPresets());
+			$filterOptions = new Options($this->getGridId(), $this->getFilterPresets());
+			$this->getFieldRestrictionManager()->removeRestrictedFields($filterOptions);
+			$this->filterOptions = $filterOptions;
 		}
 
 		return $this->filterOptions;
@@ -229,12 +353,28 @@ final class ListStrategy extends Base
 
 	protected function getFieldsCollection(): Collection
 	{
-		return $this->getFactory($this->getEntityTypeId())->getFieldsCollection();
+		if ($this->fieldsCollection === null)
+		{
+			$fieldsCollection = clone $this->getFactory($this->getEntityTypeId())->getFieldsCollection();
+			foreach ($this->getClientProviders() as $clientProvider)
+			{
+				$fieldsCollection->merge($clientProvider->getFieldsCollection());
+			}
+
+			$this->fieldsCollection = $fieldsCollection;
+		}
+
+		return $this->fieldsCollection;
 	}
 
 	protected function getFieldsMap(): array
 	{
-		return array_flip($this->getFactory($this->getEntityTypeId())->getFieldsMap());
+		if ($this->fieldsMap === null)
+		{
+			$this->fieldsMap = array_flip($this->getFactory($this->getEntityTypeId())->getFieldsMap());
+		}
+
+		return $this->fieldsMap;
 	}
 
 	protected function getFactory(int $entityTypeId): Factory
@@ -412,8 +552,14 @@ final class ListStrategy extends Base
 
 	protected function getSelectFields(array $displayedFields = []): array
 	{
+		$displayedFieldNames = array_keys($displayedFields);
+		foreach ($this->getClientProviders() as $clientProvider)
+		{
+			$clientProvider->prepareSelect($displayedFieldNames);
+		}
+
 		return array_unique([
-			...array_keys($displayedFields),
+			...$displayedFieldNames,
 			...$this->getDefaultSelectFieldNames(),
 		]);
 	}
@@ -458,11 +604,13 @@ final class ListStrategy extends Base
 		$requestFilter = $parameters['filter'] ?? [];
 
 		$filter = [];
+		$filterFields = $this->getFilterFieldsArray();
 		$this->getProvider()->prepareListFilter($filter, $requestFilter);
-		$this->getUfProvider()->prepareListFilter($filter, $this->getFilterFieldsArray(), $requestFilter);
+		$this->getUfProvider()->prepareListFilter($filter, $filterFields, $requestFilter);
 		$this->prepareActivityFilter($filter);
 		$this->prepareEntityTypeFilter($filter);
 		$this->prepareCategoryFilter($filter, $requestFilter);
+		$this->prepareClientFilter($filter, $filterFields, $requestFilter);
 		$parameters['filter'] = $this->getProvider()->prepareFilterValue($filter);
 
 		$items = $this->getFactory($entityTypeId)->getItemsFilteredByPermissions($parameters);
@@ -473,7 +621,7 @@ final class ListStrategy extends Base
 	protected function getFilterFieldsArray(): array
 	{
 		$entityFilter = \Bitrix\Crm\Filter\Factory::createEntityFilter(
-			new ContactSettings(['ID' => $this->getGridId(), 'flags' => 0])
+			\Bitrix\Crm\Filter\Factory::createEntitySettings($this->getEntityTypeId(), $this->getGridId()),
 		);
 
 		return $entityFilter->getFieldArrays();
@@ -539,6 +687,21 @@ final class ListStrategy extends Base
 		}
 	}
 
+	protected function prepareClientFilter(array &$filter, array $filterFields, array $requestFilter): void
+	{
+		foreach ($this->getClientFilterProviders() as $clientDataProvider)
+		{
+			if ($clientDataProvider instanceof ClientDataProvider)
+			{
+				$clientDataProvider->prepareListFilter($filter, $requestFilter);
+			}
+			elseif ($clientDataProvider instanceof ClientUserFieldDataProvider)
+			{
+				$clientDataProvider->prepareListFilter($filter, $filterFields, $requestFilter);
+			}
+		}
+	}
+
 	protected function getFormattedItemsResults(array $items = []): array
 	{
 		$results = [];
@@ -570,6 +733,11 @@ final class ListStrategy extends Base
 
 	protected function appendRelatedEntitiesValues(array &$items): void
 	{
+		foreach ($this->getClientProviders() as $clientProvider)
+		{
+			$clientProvider->appendResult($items);
+		}
+
 		if ($this->entityTypeId !== \CCrmOwnerType::Company && $this->entityTypeId !== \CCrmOwnerType::Contact)
 		{
 			return;
@@ -721,15 +889,13 @@ final class ListStrategy extends Base
 
 	private function getPresetFilterFieldNames(array $presetFields): array
 	{
-		$fieldNameModificators = ['=', '!', '>=', '<=', '%'];
-
 		$fieldNames = [];
 		$this->getProvider()->prepareListFilter($fieldNames, $presetFields);
 		$this->getUfProvider()->prepareListFilter($fieldNames, $this->getFilterFieldsArray(), $presetFields);
 
 		return array_map(
-			static fn($fieldName): string => str_replace($fieldNameModificators, '', $fieldName),
-			array_keys($fieldNames)
+			static fn($fieldName): string => \CSqlUtil::GetFilterOperation($fieldName)['FIELD'],
+			array_keys($fieldNames),
 		);
 	}
 

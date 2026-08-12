@@ -1,5 +1,8 @@
 <?php
 
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -7,6 +10,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 class CBPCrmTimelineCommentAdd extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -24,7 +30,22 @@ class CBPCrmTimelineCommentAdd extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentId = $this->GetDocumentId();
+		$documentId = $this->resolveTargetDocumentId();
+
+		if (!is_array($documentId))
+		{
+			$this->WriteToTrackingService(GetMessage('BPCTLCA_INVALID_DOCUMENT_ID'), 0, CBPTrackingType::Error);
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
 		[$ownerTypeId, $ownerId] = CCrmBizProcHelper::resolveEntityId($documentId);
 
 		$authorId = CBPHelper::ExtractUsers($this->CommentUser, $documentId, true);

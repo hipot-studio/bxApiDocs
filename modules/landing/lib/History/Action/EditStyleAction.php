@@ -9,7 +9,7 @@ class EditStyleAction extends BaseAction
 {
 	protected const JS_COMMAND = 'updateStyle';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		$block = new Block((int)$this->params['block']);
 		$selector = $this->params['selector'];

@@ -6,6 +6,7 @@ use Bitrix\Crm\Component\EntityList\ClientFieldHelper;
 use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\Progress;
 use Bitrix\Crm\Controller\ErrorCode;
+use Bitrix\Crm\Filter\RelatedEntity\GridFilterApplier;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ListEntity;
 use Bitrix\Crm\Service\Container;
@@ -319,14 +320,15 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 
 	private function getItemsCount(Factory $factory): int
 	{
-		$filter = $this->data->filter->filter;
+		$parameters = ['filter' => $this->data->filter->filter];
+		GridFilterApplier::getDefault()->apply($parameters, $factory->getEntityTypeId());
 
 		if ($this->isUseOrmApproach($factory))
 		{
-			return $factory->getItemsCount($filter);
+			return $factory->getItemsCount($parameters['filter'], null, $parameters['runtime'] ?? []);
 		}
 
-		return ListEntity\Entity::getInstance($factory->getEntityName())->getCount($filter);
+		return ListEntity\Entity::getInstance($factory->getEntityName())->getCount($parameters['filter']);
 	}
 
 	private function isUseOrmApproach(Factory $factory): bool
@@ -352,9 +354,13 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 
 	private function getItemsToProcessViaOrm(Factory $factory, array $filter): array
 	{
+		$parameters = ['filter' => $filter];
+		GridFilterApplier::getDefault()->apply($parameters, $factory->getEntityTypeId());
+
 		return $factory->getItems([
 			'select' => $this->getSelect(),
-			'filter' => $filter,
+			'filter' => $parameters['filter'],
+			'runtime' => $parameters['runtime'] ?? [],
 			'order' => [
 				'ID' => 'ASC',
 			],
@@ -364,9 +370,12 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 
 	private function getItemsToProcessViaListEntity(Factory $factory, array $filter): array
 	{
+		$parameters = ['filter' => $filter];
+		GridFilterApplier::getDefault()->apply($parameters, $factory->getEntityTypeId());
+
 		$dbResult = ListEntity\Entity::getInstance($factory->getEntityName())->getItems([
 			'select' => ['ID'],
-			'filter' => $filter,
+			'filter' => $parameters['filter'],
 			'order' => [
 				'ID' => 'ASC',
 			],

@@ -277,6 +277,12 @@ class Deal extends Entity
 
 		foreach($ids as $id)
 		{
+			$id = (int)$id;
+			if ($id > 0 && \CCrmDeal::GetCategoryID($id) === $categoryId)
+			{
+				continue;
+			}
+
 			if (!(
 				$id > 0
 				&& $this->userPermissions->item()->canUpdate(\CCrmOwnerType::Deal, $id)

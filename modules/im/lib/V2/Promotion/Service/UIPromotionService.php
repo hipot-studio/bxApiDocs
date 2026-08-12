@@ -181,6 +181,12 @@ class UIPromotionService implements PromotionServiceInterface
 			];
 		}
 
+		$result[] = [
+			"ID" => 'call:sync-promo-popup:05052026:all',
+			"USER_TYPE" => UserType::ALL->value,
+			"DEVICE_TYPE" => DeviceType::WEB->value,
+		];
+
 		if (Locator::getMessenger()->getApplication()->isAirDesignEnabled())
 		{
 			$result[] = [

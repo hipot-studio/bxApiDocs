@@ -203,6 +203,8 @@ class EntityHandler
 				continue;
 			}
 
+			$entityData = self::normalizeEntityDataKeys($entityData);
+
 			if ($isMultiple)
 			{
 				$filter["={$fieldAlias}"] = [];
@@ -243,5 +245,34 @@ class EntityHandler
 				}
 			}
 		}
+	}
+
+	private static function normalizeEntityDataKeys(array $entityData): array
+	{
+		$result = [];
+		foreach ($entityData as $entityKey => $entityValues)
+		{
+			if (is_string($entityKey) && preg_match('/^DYNAMIC_(\d+)$/', $entityKey, $matches))
+			{
+				$resolvedName = \CCrmOwnerType::ResolveName((int)$matches[1]);
+				if ($resolvedName !== '')
+				{
+					$entityKey = $resolvedName;
+				}
+			}
+
+			if (!is_array($entityValues))
+			{
+				continue;
+			}
+
+			if (!isset($result[$entityKey]))
+			{
+				$result[$entityKey] = [];
+			}
+			$result[$entityKey] = array_merge($result[$entityKey], $entityValues);
+		}
+
+		return $result;
 	}
 }

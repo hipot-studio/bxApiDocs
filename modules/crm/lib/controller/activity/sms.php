@@ -6,7 +6,6 @@ use Bitrix\Crm\Activity\Provider\Sms\MessageDto;
 use Bitrix\Crm\Activity\Provider\Sms\PlaceholderContext;
 use Bitrix\Crm\Activity\Provider\Sms\PlaceholderManager;
 use Bitrix\Crm\Controller\Base;
-use Bitrix\Crm\Format\PlaceholderFormatter;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Integration\NotificationsManager;
 use Bitrix\Crm\Integration\SmsManager;
@@ -16,7 +15,6 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\Web\Json;
 use Bitrix\MessageService\Controller\Sender;
@@ -159,16 +157,10 @@ class Sms extends Base
 			return $message->body;
 		}
 
-		$template = $message->body;
-		if ($this->isPlaceholdersInDisplayFormat($params))
-		{
-			$template = PlaceholderFormatter::convertToExternalFormat($ownerTypeId, $template);
-		}
-
 		return DocumentGeneratorManager::getInstance()->replacePlaceholdersInText(
 			$ownerTypeId,
 			$ownerId,
-			PlaceholderFormatter::escapeUnknownPlaceholdersInExternal($ownerTypeId, $template),
+			$message->body,
 			' '
 		) ?? $message->body;
 	}
@@ -186,17 +178,6 @@ class Sms extends Base
 		}
 
 		return DocumentGeneratorManager::getInstance()->isEnabled();
-	}
-
-	private function isPlaceholdersInDisplayFormat(array $params): bool
-	{
-		return (
-			isset($params['isPlaceholdersInDisplayFormat'])
-			&& (
-				$params['isPlaceholdersInDisplayFormat'] === 'true'
-				|| $params['isPlaceholdersInDisplayFormat'] === true
-			)
-		);
 	}
 
 	private function isTemplateWithPlaceholders(array $params): bool
@@ -233,13 +214,15 @@ class Sms extends Base
 			]
 		);
 
-		$entityCategoryId = $context['entityCategoryId'] ?? null;
 		if (!isset($context['entityTypeId']))
 		{
 			return $result;
 		}
 
-		if (!$this->canReadFilledPlaceholders((int)$context['entityTypeId'], $entityCategoryId))
+		$entityTypeId = (int)$context['entityTypeId'];
+		$entityCategoryId = isset($context['entityCategoryId']) && is_numeric($context['entityCategoryId']) ? (int)$context['entityCategoryId'] : null;
+
+		if (!$this->canReadFilledPlaceholders($entityTypeId, $entityCategoryId))
 		{
 			return $result;
 		}
@@ -252,7 +235,7 @@ class Sms extends Base
 			$ids[] = $template['ORIGINAL_ID'];
 		}
 
-		$placeholderContext = PlaceholderContext::createInstance($context['entityTypeId'], $entityCategoryId);
+		$placeholderContext = PlaceholderContext::createInstance($entityTypeId, $entityCategoryId);
 		$filledPlaceholders = $placeholderManager->getPlaceholders($ids, $placeholderContext);
 
 		$result['templates'] = $this->appendTemplateFilledPlaceholders($templates, $filledPlaceholders);
@@ -345,7 +328,7 @@ class Sms extends Base
 			}
 		}
 
-		$isMessageServiceInstalled = ModuleManager::isModuleInstalled('messageservice');
+		$isMessageServiceInstalled = Loader::includeModule('messageservice');
 
 		foreach ($config['senders'] as &$sender)
 		{

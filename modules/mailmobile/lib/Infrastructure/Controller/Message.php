@@ -5,6 +5,8 @@ namespace Bitrix\MailMobile\Infrastructure\Controller;
 use Bitrix\Mail\Helper;
 use Bitrix\Bitrix24\MailCounter;
 use Bitrix\Mail\Helper\Mailbox;
+use Bitrix\Mail\Helper\Mailbox\ProblemMailboxStateService;
+use Bitrix\Mail\Helper\Mailbox\ProviderAccessRestriction;
 use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Helper\MailboxDirectoryHelper;
 use Bitrix\Mail\Helper\MessageFolder;
@@ -133,6 +135,8 @@ class Message extends Controller
 			return ['mailboxIsNotAvailable' => true];
 		}
 
+		$providerRestriction = $this->resolveProviderRestriction($mailboxHelper);
+
 		$mailboxDirsHelper = $mailboxHelper->getDirsHelper();
 		$defaultDirPath = $mailboxDirsHelper->getDefaultDirPath(true);
 		$defaultDir = $mailboxDirsHelper->getDirByPath($defaultDirPath);
@@ -140,7 +144,11 @@ class Message extends Controller
 
 		if (empty($defaultDir) || !$defaultDir->isSync())
 		{
-			return ['mailboxIsNotAvailable' => true];
+			return [
+				'mailboxIsNotAvailable' => true,
+				'currentMailboxId' => $mailboxHelper->getMailboxId(),
+				'providerRestriction' => $providerRestriction,
+			];
 		}
 
 		$mailboxIdsForFilter = $this->applyVirtualFolderFilter($virtualFolderKey, $tabId, $mailboxIdsForFilter, $filterParams);
@@ -165,8 +173,30 @@ class Message extends Controller
 			'currentFolderPath' => $virtualFolderKey === MessageFolder::VIRTUAL_ALL_MESSAGES ? '' : $currentDirPath,
 			'startEmailSender' => $mailboxHelper->getMailbox()['EMAIL'],
 			'mailboxIsNotAvailable' => false,
+			'providerRestriction' => $providerRestriction,
 			'messageCounterInAllMailboxes' => \CUserCounter::GetValue($USER->GetID(), 'mail_unseen'),
 		];
+	}
+
+	/**
+	 * Provider access restriction code for the mailbox or null.
+	 * Non-null only when the mailbox is a problem one (cached status, no live check)
+	 * AND its provider restricts third-party POP3/IMAP/SMTP access.
+	 */
+	private function resolveProviderRestriction(Mailbox $mailboxHelper): ?string
+	{
+		if (!(new ProblemMailboxStateService())->isProblemMailbox($mailboxHelper->getMailboxId()))
+		{
+			return null;
+		}
+
+		$serviceName = $mailboxHelper->getProviderCode();
+		$email = $mailboxHelper->getMailbox()['EMAIL'] ?? null;
+
+		return (ProviderAccessRestriction::isFeatureEnabled() && ProviderAccessRestriction::isRestricted($serviceName, $email))
+			? ProviderAccessRestriction::resolveProviderName($serviceName)
+			: null
+		;
 	}
 
 	/**

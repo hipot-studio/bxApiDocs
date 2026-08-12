@@ -331,7 +331,8 @@ class FixWrongUncompletedDueTimezoneActivityAgent extends AgentBase
 		$result = ActivityTable::query()
 			->setSelect(['ID'])
 			->setLimit(1)
-			->where('CREATED', '>', $this->getMinCreatedDate())
+			->where('LAST_UPDATED', '>', $this->getMinCreatedDate())
+			->setOrder(['ID' => 'asc'])
 			->fetch()
 		;
 

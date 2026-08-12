@@ -35,6 +35,8 @@ class EventImportProcessor extends AbstractEventImportProcessor
 	 */
 	public function import(SectionConnection $sectionConnection, EventListResponse $eventList): void
 	{
+		$this->isPartialResponse = $eventList->isPartial;
+
 		$ids = $this->getEventConnectionIds($eventList->getItems());
 
 		$this->buildLocalEventMap($ids, $sectionConnection);

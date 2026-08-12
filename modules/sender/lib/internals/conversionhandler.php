@@ -31,7 +31,7 @@ class ConversionHandler
 
 	public static function onBeforeProlog()
 	{
-		$id = Context::getCurrent()->getRequest()->getQuery('bx_sender_conversion_id');
+		$id = Context::getCurrent()->getRequest()->getQuery(ExternalUrlSanitizer::CONVERSION_PARAM);
 		if(is_numeric($id) && $id > 0)
 		{
 			$_SESSION[self::CLICK_PARAM_NAME] = $id;

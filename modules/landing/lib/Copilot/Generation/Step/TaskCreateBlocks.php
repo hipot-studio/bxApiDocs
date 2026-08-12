@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Step;
 
-use Bitrix\Landing\Copilot\Connector;
+use Bitrix\Landing\Copilot\Generation\Step\Base\TaskStep;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\PromptGenerator;
 use Bitrix\Landing\Copilot\Generation\PromptTemplateProvider;
@@ -91,8 +91,6 @@ class TaskCreateBlocks extends TaskStep
 
 		$this->updateRequestEntityInTable();
 
-		$this->sendMessage();
-
 		return true;
 	}
 
@@ -115,18 +113,6 @@ class TaskCreateBlocks extends TaskStep
 		}
 
 		return true;
-	}
-
-	/**
-	 * Send a message to the chat that the site has been created.
-	 *
-	 * @return void
-	 */
-	protected function sendMessage(): void
-	{
-		$this->generation->getScenario()?->getChatbot()?->sendGenerationEndMessage(
-			new Connector\Chat\ChatBotMessageDto($this->generation->getChatId(), $this->generation->getId())
-		);
 	}
 
 	/**

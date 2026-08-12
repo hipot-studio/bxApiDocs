@@ -28,6 +28,16 @@ abstract class AbstractEventImportProcessor
 {
 	protected LocalEventMap $map;
 
+	/**
+	 * When the vendor response for the current run is incomplete/truncated, only the prune of
+	 * missing instances (removeDeprecatedInstances()) is suppressed: an instance absent from a
+	 * partial page must not be interpreted as "deleted on the vendor side". Explicit vendor
+	 * deletes stay authoritative and are applied regardless of this flag. Concrete import()
+	 * methods set this per run from the response DTO; the safe default (false) keeps behaviour
+	 * unchanged for callers that do not report partial responses.
+	 */
+	protected bool $isPartialResponse = false;
+
 	public function __construct(
 		protected readonly EventConnectionRepository $eventConnectionRepository,
 		protected readonly EventMapper $eventMapper,
@@ -102,6 +112,10 @@ abstract class AbstractEventImportProcessor
 
 		if ($externalData->getAction() === Dictionary::SYNC_EVENT_ACTION['delete'])
 		{
+			// An explicit vendor delete (Google status=cancelled, iCloud HTTP 404 on a concrete href) is an
+			// authoritative tombstone, not an "event is missing" inference, so it is always applied. The
+			// response-completeness guard lives ONLY in removeDeprecatedInstances() (pruning instances absent
+			// from the response), where an absent element really can be a truncation artifact.
 			if ($externalData->getEvent()->getId() === null)
 			{
 				$this->processExternalInstance($externalData, $masterEventData);
@@ -312,20 +326,68 @@ abstract class AbstractEventImportProcessor
 	{
 		$event = $eventConnection->getEvent();
 
-		// todo handle meeting status
-		if ($event->isInstance())
+		// The role (master/owner vs guest attendee copy) is decided by the LOCAL event, not by the
+		// external vendor one held in $eventConnection: vendors never send the Bitrix PARENT_ID and
+		// SyncEventMergeHandler does not copy parentId onto the external event, so $event->getParentId()
+		// is always null here and could never classify the event. The local event is read from $this->map,
+		// which still holds the DB-hydrated events at this point (it is only mutated on unlink). A
+		// standalone/master event is always present under its own vendorEventId once deletion is reached:
+		// the external id that led us here was merged in from exactly that local event during enrichment.
+		$localEvent = $this->map->get($eventConnection->getVendorEventId())?->getEvent();
+
+		// A recurrence exception instance is not keyed under its own vendorEventId in the map: it is held
+		// inside its master (keyed by recurrenceId). When the direct lookup misses, resolve the instance
+		// through its master so its local role (id === parentId) can still be read — keeping this path
+		// symmetric with removeDeprecatedInstance(), which already deletes an owner instance.
+		if ($localEvent === null)
 		{
-			$this->handleDeleteInstance($eventConnection);
+			$localEvent = $this->getMasterLocalEvent($eventConnection->getRecurrenceId())
+				?->getSameInstance(new EventData($eventConnection))
+				?->getEvent()
+			;
 		}
 
-		$this->eventMapper->delete(
-			$event,
-			[
-				'softDelete' => true,
-				'originalFrom' => $eventConnection->getConnection()->getVendor()->getCode(),
-			],
-		);
+		// Master/owner event (local id === parentId), including a ResourceBooking master: run the regular
+		// soft-delete through the core delete-path. This is intentionally scoped by id === parentId (not by
+		// canBeChanged(), which also returns false for a booking master) so that a booking master flagged as
+		// deleted by the vendor is still deleted.
+		if ($localEvent !== null && $localEvent->getId() === $localEvent->getParentId())
+		{
+			// todo handle meeting status
+			if ($event->isInstance())
+			{
+				$this->handleDeleteInstance($eventConnection);
+			}
 
+			$this->eventMapper->delete(
+				$event,
+				[
+					'softDelete' => true,
+					'originalFrom' => $eventConnection->getConnection()->getVendor()->getCode(),
+				],
+			);
+
+			$this->unlinkEventConnection($eventConnection);
+
+			return;
+		}
+
+		// Guest attendee copy (local id !== parentId), or no local counterpart for this connection: scope
+		// removal to the copy itself — drop only the local connection so the core delete-path never escalates
+		// to the master meeting event and cascades the cancellation to every attendee (see
+		// CCalendarEvent::Delete()). A real master is always found above, so falling through here cannot hide
+		// a master deletion; it only keeps a recurrence instance (keyed under its master) or a repeated delete
+		// signal (whose map entry a prior unlink already dropped) from escalating to the shared meeting.
+		$this->unlinkEventConnection($eventConnection);
+	}
+
+	/**
+	 * Drops the local link to the vendor event without deleting the event itself.
+	 *
+	 * @throws PersistenceException
+	 */
+	private function unlinkEventConnection(EventConnection $eventConnection): void
+	{
 		$this->map->remove($eventConnection->getVendorEventId());
 
 		$eventConnectionId = $eventConnection->getId();
@@ -418,6 +480,14 @@ abstract class AbstractEventImportProcessor
 	 */
 	protected function removeDeprecatedInstances(EventData $localEventData, EventData $externalEventData): void
 	{
+		// On an incomplete/truncated vendor response the missing instances may simply be absent
+		// from a partial page rather than actually deleted. Skip pruning to avoid data loss and
+		// to keep the EventConnections for the next full run.
+		if ($this->isPartialResponse)
+		{
+			return;
+		}
+
 		$externalInstances = $externalEventData->getInstances();
 
 		foreach ($localEventData->getInstances() as $oldInstance)
@@ -426,18 +496,36 @@ abstract class AbstractEventImportProcessor
 
 			if (empty($externalInstances[$key]))
 			{
-				// @todo Query in loop!
-				$this->eventConnectionRepository->delete($oldInstance->eventConnection->getId());
-				$this->eventMapper->delete(
-					$oldInstance->getEvent(),
-					[
-						'softDelete' => false,
-						'originalFrom' => $externalEventData->eventConnection->getConnection()->getVendor()->getCode(),
-						'recursionMode' => 'this',
-					],
-				);
+				$this->removeDeprecatedInstance($oldInstance, $externalEventData);
 			}
 		}
+	}
+
+	/**
+	 * @throws PersistenceException
+	 */
+	private function removeDeprecatedInstance(EventData $oldInstance, EventData $externalEventData): void
+	{
+		// @todo Query in loop!
+		$this->eventConnectionRepository->delete($oldInstance->eventConnection->getId());
+
+		// Guest attendee copy (id !== parentId): scope removal to the copy itself,
+		// do not escalate to the master meeting event (see CCalendarEvent::Delete()).
+		// A master/owner instance (id === parentId), including a ResourceBooking master,
+		// falls through to the regular delete below.
+		if ($oldInstance->getEvent()->getId() !== $oldInstance->getEvent()->getParentId())
+		{
+			return;
+		}
+
+		$this->eventMapper->delete(
+			$oldInstance->getEvent(),
+			[
+				'softDelete' => false,
+				'originalFrom' => $externalEventData->eventConnection->getConnection()->getVendor()->getCode(),
+				'recursionMode' => 'this',
+			],
+		);
 	}
 
 	protected function getInstanceKey(EventData $instance, EventData $eventData): ?string

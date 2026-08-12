@@ -16,6 +16,7 @@ use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\ImOpenLines\Model\SessionCheckTable;
 use Bitrix\Imopenlines\Model\UserRelationTable;
 
+use Bitrix\ImOpenLines\V2\Analytics\Bot\EndBotSessionEventContext;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Config\Option;
@@ -125,7 +126,14 @@ class Agent
 				}
 				else
 				{
-					Queue::transferToNextSession(self::getTimeOutTransferToNextInQueue());
+					$context = (new EndBotSessionEventContext())
+						->setMode(EndBotSessionEventContext::MODE_AUTO)
+					;
+
+					Queue::transferToNextSession(
+						limitTime: self::getTimeOutTransferToNextInQueue(),
+						endBotSessionContext: $context,
+					);
 				}
 			}
 		}

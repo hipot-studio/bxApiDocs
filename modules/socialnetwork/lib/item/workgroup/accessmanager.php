@@ -14,11 +14,17 @@ use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Socialnetwork\EO_UserToGroup;
 use Bitrix\Socialnetwork\EO_Workgroup;
 use Bitrix\Socialnetwork\EO_WorkgroupFavorites;
+use Bitrix\Socialnetwork\Permission\Trait\AccessErrorTrait;
 use Bitrix\Socialnetwork\Permission\User\UserModel;
 use Bitrix\Socialnetwork\UserToGroupTable;
 
 class AccessManager
 {
+	use AccessErrorTrait;
+
+	public const ERROR_EXCLUDE_FROM_STRUCTURE = 'EXCLUDE_DENIED_FROM_STRUCTURE';
+	public const ERROR_LEAVE_FROM_STRUCTURE = 'LEAVE_DENIED_FROM_STRUCTURE';
+
 	protected EO_Workgroup $group;
 	protected ?EO_UserToGroup $targetUserRelation = null;
 	protected ?EO_UserToGroup $currentUserRelation = null;
@@ -42,8 +48,22 @@ class AccessManager
 		if (isset($additionalParams['userId']))
 		{
 			$this->currentUserId = (int)$additionalParams['userId'];
-			$this->isCurrentUserModuleAdmin = \CSocNetUser::IsUserModuleAdmin($this->currentUserId);
 
+			// Phase 0 (task 718250): superadmin project chat access.
+			// For the acting user in a real (stateful) session honor the SONET_ADMIN mode (fail-closed);
+			// REST/webhook/OAuth/CLI and foreign userId keep the non-session grant (fail-open).
+			if (
+				$this->currentUserId > 0
+				&& $this->currentUserId === \Bitrix\Socialnetwork\Helper\User::getCurrentUserId()
+				&& self::isRealSession()
+			)
+			{
+				$this->isCurrentUserModuleAdmin = self::isCurrentUserModuleAdmin(true);
+			}
+			else
+			{
+				$this->isCurrentUserModuleAdmin = \CSocNetUser::IsUserModuleAdmin($this->currentUserId);
+			}
 		}
 		else
 		{
@@ -79,6 +99,16 @@ class AccessManager
 		}
 
 		return $result[$cacheKey];
+	}
+
+	// Phase 0 (task 718250): a real (stateful) session vs a stateless one (REST/webhook/OAuth/CLI).
+	// The reliable signal is the session handler type, not PHP_SAPI or isStarted()/isActive():
+	// a stateless request uses NullSessionHandler (see Bitrix\Main\Session\Session).
+	private static function isRealSession(): bool
+	{
+		$handler = \Bitrix\Main\Application::getInstance()->getSession()->getSessionHandler();
+
+		return !($handler instanceof \Bitrix\Main\Session\Handlers\NullSessionHandler);
 	}
 
 	public function canView(): bool
@@ -413,6 +443,7 @@ class AccessManager
 			'USER_ID',
 			'ROLE',
 			'AUTO_MEMBER',
+			'INITIATED_BY_TYPE',
 		]);
 
 		if (
@@ -431,8 +462,10 @@ class AccessManager
 			return false;
 		}
 
-		if ($this->currentUserRelation->get('AUTO_MEMBER'))
+		if ($this->isCurrentUserAddedFromStructure())
 		{
+			$this->addError(self::ERROR_LEAVE_FROM_STRUCTURE);
+
 			return false;
 		}
 
@@ -536,8 +569,6 @@ class AccessManager
 		if (
 			!$this->targetUserRelation
 			|| !$this->checkRelationGroupId($this->targetUserRelation)
-			|| $this->targetUserRelation->get('AUTO_MEMBER')
-			|| $this->targetUserRelation->get('INITIATED_BY_TYPE') === UserToGroupTable::INITIATED_BY_STRUCTURE
 			|| $this->targetUserRelation->get('USER_ID') === $this->currentUserId
 			|| !in_array($this->targetUserRelation->get('ROLE'), [
 				UserToGroupTable::ROLE_MODERATOR,
@@ -545,6 +576,13 @@ class AccessManager
 			], true)
 		)
 		{
+			return false;
+		}
+
+		if ($this->isTargetAddedFromStructure())
+		{
+			$this->addError(self::ERROR_EXCLUDE_FROM_STRUCTURE);
+
 			return false;
 		}
 
@@ -763,6 +801,28 @@ class AccessManager
 			$this->group->get('PROJECT')
 			&& $relation
 			&& (int)$this->group->get('SCRUM_MASTER_ID') === (int)$relation->get('USER_ID')
+		);
+	}
+
+	protected function isTargetAddedFromStructure(): bool
+	{
+		return (
+			$this->targetUserRelation
+			&& (
+				$this->targetUserRelation->get('AUTO_MEMBER')
+				|| $this->targetUserRelation->get('INITIATED_BY_TYPE') === UserToGroupTable::INITIATED_BY_STRUCTURE
+			)
+		);
+	}
+
+	protected function isCurrentUserAddedFromStructure(): bool
+	{
+		return (
+			$this->currentUserRelation
+			&& (
+				$this->currentUserRelation->get('AUTO_MEMBER')
+				|| $this->currentUserRelation->get('INITIATED_BY_TYPE') === UserToGroupTable::INITIATED_BY_STRUCTURE
+			)
 		);
 	}
 

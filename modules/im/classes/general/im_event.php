@@ -902,6 +902,8 @@ class CIMEvent
 
 		\Bitrix\Im\Bot::unRegister(['BOT_ID' => $ID]);
 
+		IM\V2\SharingLink\SharingLinkMemberService::getInstance()->deleteByUser($ID);
+
 		$strSQL = "DELETE FROM b_im_recent WHERE USER_ID = ".$ID;
 		$DB->Query($strSQL, true);
 

@@ -61,14 +61,14 @@ class EntityStageHistoryMapping
 				],
 				'RESPONSIBLE_BY_NAME' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'if(ESH.RESPONSIBLE_ID is null, null, concat_ws(\' \', nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN ESH.RESPONSIBLE_ID is null THEN null ELSE concat_ws(\' \', nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UR',
 					'LEFT_JOIN' => 'LEFT JOIN b_user UR ON UR.ID = ESH.RESPONSIBLE_ID',
 				],
 				'RESPONSIBLE_BY' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'if(ESH.RESPONSIBLE_ID is null, null, concat_ws(\' \', concat(\'[\', ESH.RESPONSIBLE_ID, \']\'), nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN ESH.RESPONSIBLE_ID is null THEN null ELSE concat_ws(\' \', concat(\'[\', ESH.RESPONSIBLE_ID, \']\'), nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UR',
 					'LEFT_JOIN' => 'LEFT JOIN b_user UR ON UR.ID = ESH.RESPONSIBLE_ID',
@@ -87,14 +87,14 @@ class EntityStageHistoryMapping
 				],
 				'CATEGORY_NAME' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'if(ESH.CATEGORY_ID is null, null, concat_ws(\' \', ifnull(DC.NAME, \'' . $defaultCategoryName . '\')))',
+					'FIELD_NAME' => 'CASE WHEN ESH.CATEGORY_ID is null THEN null ELSE concat_ws(\' \', coalesce(DC.NAME, \'' . $defaultCategoryName . '\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'DC',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_item_category DC ON DC.ID = ESH.CATEGORY_ID',
 				],
 				'CATEGORY' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'if(ESH.CATEGORY_ID is null, null, concat_ws(\' \', concat(\'[\', ESH.CATEGORY_ID, \']\'), ifnull(DC.NAME, \'' . $defaultCategoryName . '\')))',
+					'FIELD_NAME' => 'CASE WHEN ESH.CATEGORY_ID is null THEN null ELSE concat_ws(\' \', concat(\'[\', ESH.CATEGORY_ID, \']\'), coalesce(DC.NAME, \'' . $defaultCategoryName . '\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'DC',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_item_category DC ON DC.ID = ESH.CATEGORY_ID',
@@ -123,7 +123,7 @@ class EntityStageHistoryMapping
 				],
 				'STAGE' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'if(ESH.STAGE_ID is null, null, concat_ws(\' \', concat(\'[\', ESH.STAGE_ID, \']\'), nullif(S.NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN ESH.STAGE_ID is null THEN null ELSE concat_ws(\' \', concat(\'[\', ESH.STAGE_ID, \']\'), nullif(S.NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'S',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_status S ON S.STATUS_ID = ESH.STAGE_ID',

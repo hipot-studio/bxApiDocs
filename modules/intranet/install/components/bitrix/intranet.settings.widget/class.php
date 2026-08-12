@@ -46,7 +46,7 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 		self::$number++;
 	}
 
-	private function getUser(): Intranet\CurrentUser
+	protected function getUser(): Intranet\CurrentUser
 	{
 		$this->user ??= Intranet\CurrentUser::get();
 
@@ -99,37 +99,74 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 		return null;
 	}
 
-	private function initAffiliates(): void
+	protected function canShowWidget(): bool
 	{
-		if (!isset(self::$cachedAffiliates[$this->getUser()->getId()]))
+		if ($this->getUser()->isAdmin())
+		{
+			return true;
+		}
+
+		return
+			$this->isBitrix24
+			&& (
+				count($this->affiliates) > 1
+				|| Bitrix24\Holding\AffiliateProfiled::areMultipleFor($this->getUser()) === true
+			)
+		;
+	}
+
+	protected function getCurrentPortal(): object
+	{
+		return Bitrix24\Holding\CurrentPortal::getInstance();
+	}
+
+	protected function refreshAffiliateProfiledList(Intranet\CurrentUser $user): void
+	{
+		Bitrix24\Holding\AffiliateProfiled::refreshList($user);
+	}
+
+	protected function getAffiliateProfiledList(Intranet\CurrentUser $user): ?array
+	{
+		return Bitrix24\Holding\AffiliateProfiled::getList($user);
+	}
+
+	protected function initAffiliates(bool $refreshList = true): void
+	{
+		$cacheKey = $this->getUser()->getId() . ':' . ($refreshList ? 'full' : 'light');
+		if (!isset(self::$cachedAffiliates[$cacheKey]))
 		{
 			$affiliates = [];
 			$isHolding = false;
 
-			$currentPortal = Bitrix24\Holding\CurrentPortal::getInstance();
+			$currentPortal = $this->getCurrentPortal();
 			if ($currentPortal->isBound())
 			{
-				$isHolding = Bitrix24\Holding\CurrentPortal::getInstance()->isHolding();
+				$user = $this->getUser();
+				$isHolding = $currentPortal->isHolding();
 
-				Bitrix24\Holding\AffiliateProfiled::refreshList($this->getUser());
-				$affiliates = array_filter(
-					Bitrix24\Holding\AffiliateProfiled::getList($this->getUser()) ?? [],
-					fn(Bitrix24\Holding\AffiliateProfiled $affiliate) => (
-						$affiliate->isAvailable() || $this->getUser()->isAdmin() && ($isHolding || $affiliate->isHolding())
-					)
-				);
+				if ($refreshList)
+				{
+					$this->refreshAffiliateProfiledList($user);
+					$affiliates = array_filter(
+						$this->getAffiliateProfiledList($user) ?? [],
+						fn(Bitrix24\Holding\AffiliateProfiled $affiliate) => (
+							$affiliate->isAvailable()
+							|| ($user->isAdmin() && ($isHolding || $affiliate->isHolding()))
+						)
+					);
+				}
 			}
-			elseif ($currentPortal->canBeBound())
+			elseif ($refreshList && $currentPortal->canBeBound())
 			{
 				$isHolding = $currentPortal->canBeHolding();
 			}
 
-			self::$cachedAffiliates[$this->getUser()->getId()] =
+			self::$cachedAffiliates[$cacheKey] =
 				[$isHolding, $affiliates, $currentPortal->canBeHolding(), $currentPortal->canBeAffiliate()]
 			;
 		}
 
-		[$this->isHolding, $this->affiliates, $this->canBeHolding, $this->canBeAffiliate] = self::$cachedAffiliates[$this->getUser()->getId()];
+		[$this->isHolding, $this->affiliates, $this->canBeHolding, $this->canBeAffiliate] = self::$cachedAffiliates[$cacheKey];
 	}
 
 	public function getDataAction(): Bitrix\Main\Response
@@ -206,7 +243,9 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 
 		if ($this->isBitrix24)
 		{
-			$result['IS_RENAMEABLE'] = Bitrix24\Domain::getCurrent()->isRenameable() && $this->user->isAdmin();
+			$this->initAffiliates();
+
+			$result['IS_RENAMEABLE'] = Bitrix24\Domain::getCurrent()->isRenameable() && $this->getUser()->isAdmin();
 			$result['IS_FREE_LICENSE'] = \CBitrix24::isFreeLicense();
 			$result['HOLDING'] = [
 				'isHolding' => $this->isHolding,
@@ -234,7 +273,14 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 			if (Loader::includeModule('bitrix24'))
 			{
 				$this->isBitrix24 = true;
-				$this->initAffiliates();
+				$this->initAffiliates(false);
+				if (
+					!$this->getUser()->isAdmin()
+					&& Bitrix24\Holding\AffiliateProfiled::areMultipleFor($this->getUser()) === null
+				)
+				{
+					$this->initAffiliates();
+				}
 			}
 
 			if (Loader::includeModule('crm') && $this->getUser()->isAdmin())
@@ -242,7 +288,7 @@ class IntranetSettingsWidgetComponent extends CBitrixComponent implements \Bitri
 				$this->isRequisiteAvailable = true;
 			}
 
-			$this->showWidget = $this->getUser()->isAdmin() || count($this->affiliates) > 1;
+			$this->showWidget = $this->canShowWidget();
 			self::$cachedResult['SHOW_WIDGET'] = $this->showWidget;
 
 			if ($this->showWidget)

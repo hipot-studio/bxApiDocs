@@ -1,6 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Bizproc\Starter;
+
+use Bitrix\Bizproc\Starter\Dto\TriggerDescriptorDto;
 
 abstract class ModuleSettings
 {
@@ -18,6 +22,22 @@ abstract class ModuleSettings
 	abstract public function isAutomationLimited(): bool;
 
 	abstract public function isAutomationOverLimited(): bool;
+
+	/**
+	 * @return TriggerDescriptorDto|null
+	 */
+	public function getCreateDocumentTrigger(): ?TriggerDescriptorDto
+	{
+		return null;
+	}
+
+	/**
+	 * @return TriggerDescriptorDto|null
+	 */
+	public function getEditDocumentTrigger(): ?TriggerDescriptorDto
+	{
+		return null;
+	}
 
 	public function getDocumentStatusFieldName(): ?string
 	{

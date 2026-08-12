@@ -9,5 +9,6 @@ final class MakeTemplatePackageDto
 		public readonly string $section,
 		public readonly string $code,
 		public readonly ?string $outputDir = null,
+		public readonly bool $pullAiPrompts = false,
 	){}
 }

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Guest;
 
+use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Guest\Auth\AuthenticationService;
@@ -20,12 +22,14 @@ use Bitrix\Im\V2\Guest\Auth\UserCreator;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
+use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\SharingLink\GuestChatLink;
 use Bitrix\Im\V2\SharingLink\SharingLinkError;
 use Bitrix\Im\V2\SharingLink\SharingLinkFactory;
+use Bitrix\Im\V2\SharingLink\SharingLinkMemberService;
 use Bitrix\Main\Context;
 use Bitrix\Main\Localization\Loc;
 
@@ -88,6 +92,26 @@ class GuestService
 	 */
 	public function joinByCode(string $code, ?Token $token = null, ?string $name = null): AuthResult
 	{
+		// A format-valid but stale token (guest kicked/deactivated, session already gone) must not
+		// dead-end in an auth redirect: drop the stale cookies and continue as a brand-new guest.
+		if ($token !== null && !$this->isGuestTokenValid($token))
+		{
+			AuthorizationService::getInstance()->clearGuestCookies();
+			$token = null;
+		}
+
+		// Same for a stale PHP session: deactivation is lazy, so a kicked/deleted guest may still
+		// be authorized here — must not resurrect as a returning guest.
+		$contextUserId = Locator::getContext()->getUserId();
+		if ($contextUserId > 0)
+		{
+			$contextUser = User::getInstance($contextUserId);
+			if ($contextUser instanceof UserGuest && (!$contextUser->isExist() || !$contextUser->isActive()))
+			{
+				AuthorizationService::getInstance()->invalidateCurrentGuestSession();
+			}
+		}
+
 		$linkResult = $this->resolveGuestLink($code);
 		if (!$linkResult->isSuccess())
 		{
@@ -134,6 +158,16 @@ class GuestService
 			return $result->addError(new SharingLinkError(SharingLinkError::USES_LIMIT_REACHED));
 		}
 
+		// A guest kicked by this link's author is blocked from re-entering through it, even
+		// though the link itself stays live for everyone else.
+		if (
+			$result->getJoinStatus() !== JoinStatus::PORTAL_USER
+			&& SharingLinkMemberService::getInstance()->isBlockedForLink((int)($link->getId() ?? 0), $userId)
+		)
+		{
+			return $result->addError(new SharingLinkError(SharingLinkError::ACCESS_DENIED));
+		}
+
 		if ($result->getJoinStatus() === JoinStatus::NEW_GUEST)
 		{
 			$incrementResult = $link->incrementUsesCount();
@@ -149,34 +183,104 @@ class GuestService
 			return $result->addErrors($addResult->getErrors());
 		}
 
+		(new ChatAnalytics($chat))->addJoinChatByGuestLink($link);
+
 		if ($result->getJoinStatus() !== JoinStatus::PORTAL_USER)
 		{
 			AuthorizationService::getInstance()->setInviteCode($link->getCode());
+			// Returning guests skip authorize(), so a cleared HASH cookie would never heal otherwise.
+			AuthorizationService::getInstance()->refreshGuestCookie();
 		}
 
 		return $result;
 	}
 
 	/**
-	 * Validates the current session against the invite code and guest token from cookies.
-	 * Missing guest token in the request means the session is already invalid even if the
-	 * user is still authorized via PHP session.
+	 * Valid while the hash token resolves to the authorized active user AND at least one joined
+	 * link is still live; the invite-code cookie is not involved.
 	 */
 	public function isCurrentGuestSessionValid(): bool
 	{
-		$code = InviteCode::createFromRequest();
-		if ($code === null)
-		{
-			return false;
-		}
-
 		$token = Token::createFromRequest();
 		if ($token === null)
 		{
 			return false;
 		}
 
-		return $this->isGuestSessionValid($code->getValue(), $token, Locator::getContext()->getUserId());
+		$guestId = Locator::getContext()->getUserId();
+		if ($guestId <= 0 || AuthenticationService::getInstance()->findUserByToken($token) !== $guestId)
+		{
+			return false;
+		}
+
+		return $this->hasValidGuestAccess($guestId);
+	}
+
+	/**
+	 * At least one joined link is still live (not revoked, feature on, still a member,
+	 * inviter may invite). Token-independent.
+	 */
+	public function hasValidGuestAccess(int $guestId): bool
+	{
+		if ($guestId <= 0)
+		{
+			return false;
+		}
+
+		$candidates = SharingLinkMemberService::getInstance()->getActiveLinkCandidatesByUser($guestId);
+		if ($candidates === [])
+		{
+			return false;
+		}
+
+		// One membership query for all candidates — this runs on the hot auth path.
+		$memberChatIds = $this->filterChatIdsGuestBelongsTo(
+			$guestId,
+			array_column($candidates, 'chatId'),
+		);
+		if ($memberChatIds === [])
+		{
+			return false;
+		}
+
+		foreach ($candidates as $candidate)
+		{
+			// Per-link feature/inviter checks run only on the membership-confirmed subset.
+			if (isset($memberChatIds[$candidate['chatId']]) && $this->isGuestCodeValid($candidate['code']))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * @param list<int> $chatIds
+	 * @return array<int, true> chat ids the guest still has a relation in, as a lookup set
+	 */
+	private function filterChatIdsGuestBelongsTo(int $guestId, array $chatIds): array
+	{
+		$chatIds = array_values(array_unique(array_filter($chatIds, static fn (int $id): bool => $id > 0)));
+		if ($chatIds === [])
+		{
+			return [];
+		}
+
+		$rows = RelationTable::query()
+			->setSelect(['CHAT_ID'])
+			->where('USER_ID', $guestId)
+			->whereIn('CHAT_ID', $chatIds)
+			->fetchAll()
+		;
+
+		$memberChatIds = [];
+		foreach ($rows as $row)
+		{
+			$memberChatIds[(int)$row['CHAT_ID']] = true;
+		}
+
+		return $memberChatIds;
 	}
 
 	/**
@@ -195,13 +299,13 @@ class GuestService
 			return null;
 		}
 
-		$code = InviteCode::createFromRequest();
-		if ($code === null)
+		$code = AuthorizationService::getInstance()->getInviteCode();
+		if ($code === null || $code === '')
 		{
 			return null;
 		}
 
-		$link = $this->resolveGuestChatLink($code->getValue());
+		$link = $this->resolveGuestChatLink($code);
 		if ($link === null)
 		{
 			return null;
@@ -231,57 +335,121 @@ class GuestService
 	}
 
 	/**
-	 * Feature is on, link not revoked, chat exists, guest is a member, inviter still can invite.
-	 * Link expiration and exhaustion are intentionally not checked — they guard new joins only.
-	 *
-	 * When $expectedUserId is provided, the token must resolve to that user — guards against
-	 * a token/PHP-session mismatch when called from within an authenticated context.
+	 * Full guest-session validity: valid code + valid token + membership in the link's chat;
+	 * the first error code carries the reason. Expiration/exhaustion guard new joins only,
+	 * $expectedUserId guards against a token/PHP-session mismatch.
 	 */
+	public function validateGuestSession(string $code, Token $token, ?int $expectedUserId = null): Result
+	{
+		$linkResult = $this->resolveValidGuestLink($code);
+		if (!$linkResult->isSuccess())
+		{
+			return $linkResult;
+		}
+
+		$guestResult = $this->resolveGuest($token, $expectedUserId);
+		if (!$guestResult->isSuccess())
+		{
+			return $guestResult;
+		}
+
+		/** @var GuestChatLink $link */
+		$link = $linkResult->getResult();
+		$guestId = $guestResult->getResult();
+		if (Chat::getInstance($link->getChatId())->getRelationByUserId($guestId) === null)
+		{
+			return (new Result())->addError(new ChatError(ChatError::ACCESS_DENIED));
+		}
+
+		return new Result();
+	}
+
 	public function isGuestSessionValid(string $code, Token $token, ?int $expectedUserId = null): bool
 	{
-		$guestId = AuthenticationService::getInstance()->findUserByToken($token);
+		return $this->validateGuestSession($code, $token, $expectedUserId)->isSuccess();
+	}
+
+	/**
+	 * Code side of session validity: feature, link, revocation, chat, inviter rights.
+	 */
+	public function isGuestCodeValid(string $code): bool
+	{
+		return $this->resolveValidGuestLink($code)->isSuccess();
+	}
+
+	/**
+	 * Token side: resolves to an active guest ($expectedUserId — to exactly that user).
+	 */
+	public function isGuestTokenValid(?Token $token, ?int $expectedUserId = null): bool
+	{
+		return $this->resolveGuest($token, $expectedUserId)->isSuccess();
+	}
+
+	/**
+	 * @return Result<int> active guest user id on success
+	 */
+	private function resolveGuest(?Token $token, ?int $expectedUserId = null): Result
+	{
+		$guestId = $token === null
+			? null
+			: AuthenticationService::getInstance()->findUserByToken($token)
+		;
 		if ($guestId === null)
 		{
-			return false;
+			return (new Result())->addError(new AuthError(AuthError::GUEST_NOT_FOUND));
 		}
 
 		if ($expectedUserId !== null && $guestId !== $expectedUserId)
 		{
-			return false;
+			return (new Result())->addError(new AuthError(AuthError::DIFFERENT_GUEST));
 		}
 
+		return (new Result())->setResult($guestId);
+	}
+
+	/**
+	 * Link validity independent of any guest; membership is NOT checked here.
+	 *
+	 * @return Result<GuestChatLink> the valid link on success
+	 */
+	private function resolveValidGuestLink(string $code): Result
+	{
 		$link = $this->resolveGuestChatLink($code);
-		if ($link === null || $link->isRevoked())
+		if ($link === null)
 		{
-			return false;
+			return (new Result())->addError(new SharingLinkError(SharingLinkError::NOT_FOUND));
+		}
+
+		if ($link->isRevoked())
+		{
+			return (new Result())->addError(new SharingLinkError(SharingLinkError::REVOKED));
 		}
 
 		$inviterId = (int)($link->getAuthorId() ?? 0);
 		if ($inviterId <= 0)
 		{
-			return false;
+			return (new Result())->addError(new SharingLinkError(SharingLinkError::ACCESS_DENIED));
 		}
 
 		if (!Features::isChatWithGuestsAvailable($inviterId))
 		{
-			return false;
+			return (new Result())->addError(new AuthError(AuthError::GUEST_FEATURE_DISABLED));
 		}
 
 		$chat = Chat::getInstance($link->getChatId());
 		if (!$chat->isExist())
 		{
-			return false;
-		}
-
-		if ($chat->getRelationByUserId($guestId) === null)
-		{
-			return false;
+			return (new Result())->addError(new ChatError(ChatError::NOT_FOUND));
 		}
 
 		$inviterRole = $chat->getRelationByUserId($inviterId)?->getRole() ?? Chat::ROLE_GUEST;
 		$manageRights = $chat->getManageGuestInvites() ?? Chat::MANAGE_RIGHTS_MANAGERS;
+		if (!Permission::compareRole($inviterRole, $manageRights))
+		{
+			return (new Result())->addError(new SharingLinkError(SharingLinkError::ACCESS_DENIED));
+		}
 
-		return Permission::compareRole($inviterRole, $manageRights);
+		return (new Result())->setResult($link);
 	}
 
 	/**
@@ -312,7 +480,7 @@ class GuestService
 				return (new AuthResult())
 					->setUser($user)
 					->setJoinStatus(JoinStatus::RETURNING_GUEST)
-				;
+					;
 			}
 
 			return (new AuthResult())->setJoinStatus(JoinStatus::PORTAL_USER);
@@ -334,7 +502,7 @@ class GuestService
 			->setUser($authResult->getUser())
 			->setToken($authResult->getToken())
 			->setJoinStatus($joinStatus)
-		;
+			;
 	}
 
 	/**
@@ -387,7 +555,7 @@ class GuestService
 		return (new AuthResult())
 			->setUser($createResult->getUser())
 			->setToken($createResult->getToken())
-		;
+			;
 	}
 
 	private function addUserToChat(Chat $chat, int $userId, GuestChatLink $link): Result
@@ -398,6 +566,18 @@ class GuestService
 		if ($relation === null)
 		{
 			return (new Result())->addError(new AuthError(AuthError::JOIN_CHAT_ERROR));
+		}
+
+		// Guests only: a portal user following a guest link must not land in the sidecar,
+		// or a later revoke would kick a regular member.
+		if (User::getInstance($userId)->isGuest())
+		{
+			SharingLinkMemberService::getInstance()->track(
+				(int)($link->getId() ?? 0),
+				$userId,
+				$link::getEntityType()->value,
+				(string)($link->getEntityId() ?? ''),
+			);
 		}
 
 		Recent::addRecent($chat, $relation);

@@ -10,9 +10,11 @@ use Bitrix\Crm\Item\SmartB2eDocument;
 use Bitrix\Crm\Item\SmartDocument;
 use Bitrix\Crm\Item\SmartInvoice;
 use Bitrix\Crm\Model\AssignedTable;
+use Bitrix\Crm\Model\Field\DefaultValue\CloseDateConfigurator;
 use Bitrix\Crm\ProductRowTable;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Event;
@@ -39,6 +41,9 @@ abstract class PrototypeItem extends Main\UserField\Internal\PrototypeItemDataMa
 		Container::getInstance()->getLocalization()->loadMessages();
 
 		$fieldRepository = Main\DI\ServiceLocator::getInstance()->get('crm.model.fieldRepository');
+
+		$currencyIdField = $fieldRepository->getCurrencyId();
+		$accountCurrencyIdField = $fieldRepository->getAccountCurrencyId();
 
 		return [
 			// be aware that this field map is used for DDL and sql table generation!
@@ -91,7 +96,10 @@ abstract class PrototypeItem extends Main\UserField\Internal\PrototypeItemDataMa
 
 			$fieldRepository->getBeginDate(),
 
-			$fieldRepository->getCloseDate(),
+			$fieldRepository->getCloseDate()
+				// when getMap is called, we yet to know entityTypeId. postpone it to later moment
+				->configureDefaultValue([static::class, 'getDefaultCloseDate'])
+			,
 
 			$fieldRepository->getCompanyId()
 				->configureDefaultValue(0)
@@ -107,41 +115,49 @@ abstract class PrototypeItem extends Main\UserField\Internal\PrototypeItemDataMa
 
 			// common fields are float because of backward compatibility
 			// these fields are decimal to define appropriate column type on DDL generation
-			(new DecimalField('OPPORTUNITY'))
-				->configurePrecision(18)
-				->configureScale(2)
-				->configureDefaultValue($fieldRepository->getOpportunity()->getDefaultValue())
-				->configureTitle($fieldRepository->getOpportunity()->getTitle())
-			,
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				(new DecimalField('OPPORTUNITY'))
+					->configurePrecision(18)
+					->configureScale(2)
+					->configureDefaultValue($fieldRepository->getOpportunity()->getDefaultValue())
+					->configureTitle($fieldRepository->getOpportunity()->getTitle()),
+				$currencyIdField
+			),
 
 			$fieldRepository->getIsManualOpportunity()
 				->configureRequired(false)
 			,
 
-			(new DecimalField('TAX_VALUE'))
-				->configurePrecision(18)
-				->configureScale(2)
-				->configureDefaultValue($fieldRepository->getTaxValue()->getDefaultValue())
-				->configureTitle($fieldRepository->getTaxValue()->getTitle())
-			,
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				(new DecimalField('TAX_VALUE'))
+					->configurePrecision(18)
+					->configureScale(2)
+					->configureDefaultValue($fieldRepository->getTaxValue()->getDefaultValue())
+					->configureTitle($fieldRepository->getTaxValue()->getTitle()),
+				$currencyIdField
+			),
 
-			$fieldRepository->getCurrencyId(),
+			$currencyIdField,
 
-			(new DecimalField('OPPORTUNITY_ACCOUNT'))
-				->configurePrecision(18)
-				->configureScale(2)
-				->configureDefaultValue($fieldRepository->getOpportunityAccount()->getDefaultValue())
-				->configureTitle($fieldRepository->getOpportunityAccount()->getTitle())
-			,
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				(new DecimalField('OPPORTUNITY_ACCOUNT'))
+					->configurePrecision(18)
+					->configureScale(2)
+					->configureDefaultValue($fieldRepository->getOpportunityAccount()->getDefaultValue())
+					->configureTitle($fieldRepository->getOpportunityAccount()->getTitle()),
+				$accountCurrencyIdField
+			),
 
-			(new DecimalField('TAX_VALUE_ACCOUNT'))
-				->configurePrecision(18)
-				->configureScale(2)
-				->configureDefaultValue($fieldRepository->getTaxValueAccount()->getDefaultValue())
-				->configureTitle($fieldRepository->getTaxValueAccount()->getTitle())
-			,
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				(new DecimalField('TAX_VALUE_ACCOUNT'))
+					->configurePrecision(18)
+					->configureScale(2)
+					->configureDefaultValue($fieldRepository->getTaxValueAccount()->getDefaultValue())
+					->configureTitle($fieldRepository->getTaxValueAccount()->getTitle()),
+				$accountCurrencyIdField
+			),
 
-			$fieldRepository->getAccountCurrencyId(),
+			$accountCurrencyIdField,
 
 			$fieldRepository->getMyCompanyId(),
 
@@ -417,9 +433,18 @@ abstract class PrototypeItem extends Main\UserField\Internal\PrototypeItemDataMa
 		return $resolver();
 	}
 
+	public static function getDefaultCloseDate(): Main\Type\Date
+	{
+		return
+			ServiceLocator::getInstance()
+				->get(CloseDateConfigurator::class)
+				?->getDefaultValue(static::getEntityTypeId())
+		;
+	}
+
 	public static function getDefaultStageId(): ?string
 	{
-		$fieldRepository = Main\DI\ServiceLocator::getInstance()->get('crm.model.fieldRepository');
+		$fieldRepository = ServiceLocator::getInstance()->get('crm.model.fieldRepository');
 
 		$resolver = $fieldRepository->getDefaultStageIdResolver(static::getEntityTypeId());
 

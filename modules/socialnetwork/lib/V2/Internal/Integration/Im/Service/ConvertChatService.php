@@ -37,7 +37,7 @@ class ConvertChatService
 		$updateService = $this->getUpdateService($chatId, $fields);
 		if ($updateService === null)
 		{
-			return $result->addError(new Error('Update chat service not found'));
+			return $result->addError(new Error('Can not get update service'));
 		}
 
 		$updateResult = $updateService->updateChat();

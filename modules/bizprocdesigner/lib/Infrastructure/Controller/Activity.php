@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\BizprocDesigner\Infrastructure\Controller;
 
+use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Bizproc\Public\Activity\ActivityControlsBuilder;
+use Bitrix\Bizproc\Public\Activity\Interface\NodeFilterMetadataProvider;
 use Bitrix\BizprocDesigner\Internal\Trait\ActivitySettingsDecoder;
 use Bitrix\BizprocDesigner\Public\Command;
 use Bitrix\Main\Engine\JsonController;
@@ -21,14 +23,72 @@ class Activity extends JsonController
 		Loader::requireModule('bizproc');
 	}
 
+	public function getNodeFilterMetadataAction(
+		string $activityType,
+		array $documentType = [],
+		bool $onlyDynamicEntities = false,
+	): ?array
+	{
+		$user = new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
+		$canWrite = \CBPDocument::CanUserOperateDocumentType(
+			\CBPCanUserOperateOperation::CreateWorkflow,
+			$user->getId(),
+			$documentType,
+		);
+		if (!$canWrite)
+		{
+			$this->errorCollection->setError(ErrorMessage::ACCESS_DENIED->getError());
+
+			return null;
+		}
+
+		if (!Container::instance()->getActivitySearcherService()->includeActivityFile($activityType))
+		{
+			$this->errorCollection->setError(ErrorMessage::ACTIVITY_NOT_FOUND->getError());
+
+			return null;
+		}
+
+		$className = 'CBP' . $activityType;
+		if (!is_a($className, NodeFilterMetadataProvider::class, true))
+		{
+			$this->errorCollection->setError(ErrorMessage::ACTIVITY_NOT_FOUND->getError());
+
+			return null;
+		}
+
+		$metadata = $className::getNodeFilterMetadata($documentType, $onlyDynamicEntities);
+
+		$documentFields = [];
+		$documentName = '';
+		if (count($documentType) >= 2)
+		{
+			$documentFields = array_values(\Bitrix\Bizproc\Automation\Helper::getDocumentFields($documentType));
+			$documentName = (string)\CBPRuntime::getRuntime()
+				->getDocumentService()
+				->getEntityName((string)$documentType[0], (string)$documentType[1])
+			;
+		}
+
+		return [
+			'entityTypeOptions' => $metadata['entityTypeOptions'] ?? [],
+			'filterFieldsMap' => $metadata['filterFieldsMap'] ?? [],
+			'documentTypeMap' => $metadata['documentTypeMap'] ?? [],
+			'documentFields' => $documentFields,
+			'documentName' => $documentName,
+		];
+	}
+
 	public function getSettingsControlsAction(
 		array $documentType,
 		array $activity,
 		array $workflow = [],
+		array $options = [],
 	): ?array
 	{
 		$brokenLinks = [];
 		$activityName = $activity['Name'] ?? '';
+		$hideEditorComment = (bool)($options['hideEditorComment'] ?? false);
 		[
 			'template' => $workflowTemplate,
 			'parameters' => $workflowParameters,
@@ -36,11 +96,11 @@ class Activity extends JsonController
 			'constants' => $workflowConstants,
 		] = $this->decodeActivitySettings($workflow, $documentType);
 
-		$description = \CBPRuntime::getRuntime()->getActivityDescription($activity['Type']);
+		$description = Container::instance()->getActivitySearcherService()->searchByCode((string)$activity['Type']);
 		$result = [
 			'brokenLinks' => $brokenLinks,
 			'controls' => null,
-			'useDocumentContext' => isset($description['FILTER']),
+			'useDocumentContext' => $description?->getFilter() !== null,
 		];
 		$configurator = \CBPActivity::createConfigurator($activity['Type'], $activity['Properties'] ?? []);
 
@@ -64,7 +124,17 @@ class Activity extends JsonController
 		}
 
 		$controlsBuilder = new ActivityControlsBuilder($configurator, $activity);
-		$result['controls'] = $controlsBuilder->build();
+		$controls = $controlsBuilder->build();
+
+		if ($hideEditorComment)
+		{
+			$controls = array_values(array_filter(
+				$controls,
+				static fn($control) => ($control->toArray()['property']['FieldName'] ?? '') !== 'activity_editor_comment',
+			));
+		}
+
+		$result['controls'] = $controls;
 		$result['brokenLinks'] = $brokenLinks;
 
 		return $result;

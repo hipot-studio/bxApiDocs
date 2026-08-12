@@ -8,7 +8,7 @@ class RemoveCardAction extends AddCardAction
 {
 	protected const JS_COMMAND = 'removeCard';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		$block = new Block((int)$this->params['block']);
 		$block->removeCard($this->params['selector'], $this->params['position']);

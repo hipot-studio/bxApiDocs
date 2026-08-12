@@ -92,6 +92,11 @@ final class RecordProvider
 		);
 	}
 
+	public function getRecordIdsForPeriod(int $userId, int $dateFrom, int $dateTo): array
+	{
+		return $this->repository->getRecordIdsForPeriod($userId, $dateFrom, $dateTo);
+	}
+
 	public function canUseTimeMan(?int $userId = null): bool
 	{
 		if ($userId && $this->userChecker->isExtranet($userId))

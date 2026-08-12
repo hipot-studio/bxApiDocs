@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class UnknownFilterOperatorException extends RestException
+class UnknownFilterOperatorException extends RestException implements SkipWriteToLogException
 {
 	public function __construct(
 		protected string $operator,

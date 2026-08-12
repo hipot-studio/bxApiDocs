@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Bizproc\Public\Activity\Interface\ActivityContentBlockProviderInterface;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\SetConstantsRequest;
@@ -45,7 +46,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
-class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, IBPActivityExternalEventListener
+class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, IBPActivityExternalEventListener, ActivityContentBlockProviderInterface
 {
 	private const PARAM_BLOCKS = 'blocks';
 	private const PARAM_BLOCK_ITEMS = 'items';
@@ -70,6 +71,72 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			'Title' => '',
 			self::PARAM_BLOCKS => null,
 		];
+	}
+
+	public static function getContentBlock(array $properties, ?\Bitrix\Bizproc\Activity\Dto\ContentBlockContext $context = null): ?\Bitrix\Bizproc\Activity\Dto\ContentBlock
+	{
+		$constantsCount = count(
+			self::extractBlockItemsByType($properties[self::PARAM_BLOCKS] ?? null, ItemType::Constant)
+		);
+		if ($constantsCount === 0)
+		{
+			return null;
+		}
+
+		return new \Bitrix\Bizproc\Activity\Dto\ContentBlock(
+			(string)Loc::getMessage(
+				'BIZPROC_SETUP_TEMPLATE_ACTIVITY_CONTENT_BLOCK_CONSTANTS',
+				['#count#' => $constantsCount],
+			),
+		);
+	}
+
+	/**
+	 * Leniently extracts raw block items of the given type from the blocks property value.
+	 *
+	 * Unlike validateAndParseBlocks(), performs no validation on purpose: the canvas label must
+	 * degrade gracefully on partially invalid data and stay cheap, since it runs per node on every
+	 * diagram render.
+	 *
+	 * @return list<array>
+	 */
+	private static function extractBlockItemsByType(mixed $rawBlocks, ItemType $type): array
+	{
+		try
+		{
+			$blocks = is_string($rawBlocks) ? Json::decode($rawBlocks) : $rawBlocks;
+		}
+		catch (\Bitrix\Main\ArgumentException)
+		{
+			return [];
+		}
+
+		if (!is_array($blocks))
+		{
+			return [];
+		}
+
+		$items = [];
+		foreach ($blocks as $block)
+		{
+			if (!is_array($block))
+			{
+				continue;
+			}
+
+			foreach ((array)($block[self::PARAM_BLOCK_ITEMS] ?? []) as $item)
+			{
+				if (
+					is_array($item)
+					&& ($item[self::PARAM_BLOCK_ITEMS_ITEM_TYPE] ?? null) === $type->value
+				)
+				{
+					$items[] = $item;
+				}
+			}
+		}
+
+		return $items;
 	}
 
 	public static function validateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null): array

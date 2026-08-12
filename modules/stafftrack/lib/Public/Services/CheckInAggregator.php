@@ -36,6 +36,14 @@ class CheckInAggregator
 			$groups[$dateKey]['checkInIds'][] = (int)$row['ID'];
 
 			$row['DATE_CREATE'] = $row['DATE_CREATE']->getTimestamp();
+			if (isset($row['LATITUDE']))
+			{
+				$row['LATITUDE'] = (float)$row['LATITUDE'];
+			}
+			if (isset($row['LONGITUDE']))
+			{
+				$row['LONGITUDE'] = (float)$row['LONGITUDE'];
+			}
 			$groups[$dateKey]['checkIns'][] = $row;
 		}
 

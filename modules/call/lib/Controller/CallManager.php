@@ -324,7 +324,7 @@ class CallManager extends Engine\Controller
 	 * @param string $entityId
 	 * @return array|null
 	 */
-	public function tryJoinCallAction($type, $provider, $entityType, $entityId): ?array
+	public function tryJoinCallAction(int $type, string $provider, string $entityType, string $entityId): ?array
 	{
 		$call = CallFactory::searchActive($type, $provider, $entityType, $entityId);
 		if (!$call)
@@ -489,6 +489,11 @@ class CallManager extends Engine\Controller
 
 	protected function inviteUsers(\Bitrix\Call\Call $call, $userIds, $isLegacyMobile, $isVideo, $isShow, $isRepeated): void
 	{
+		if (\Bitrix\Im\User::getInstance()->isExtranet())
+		{
+			$userIds = \Bitrix\Im\Integration\Socialnetwork\Extranet::filterUserList($userIds, \Bitrix\Im\User::getInstance()->getId()) ?: [];
+		}
+
 		$usersToInvite = [];
 		$existingUsers = [];
 		foreach ($userIds as $userId)
@@ -530,13 +535,13 @@ class CallManager extends Engine\Controller
 
 		$sendPush = $isRepeated !== true;
 
-		// send invite to the ones being invited.
-		$call->inviteUsers(
-			$this->getCurrentUser()->getId(),
-			$usersToInvite,
-			$isLegacyMobile,
-			$isVideo,
-			$sendPush
+		$call->sendInviteUsers(
+			senderId: $this->getCurrentUser()->getId(),
+			toUserIds: $usersToInvite,
+			isLegacyMobile: $isLegacyMobile,
+			video: $isVideo,
+			sendPush: $sendPush,
+			isRepeated: $isRepeated,
 		);
 
 		// send userInvited to everyone else.
@@ -1150,14 +1155,17 @@ class CallManager extends Engine\Controller
 
 	/**
 	 * @restMethod call.CallManager.getUserState
-	 * @param int $callId
+	 * @param int|null $callId
+	 * @param string|null $callUuid
 	 * @param int $userId
 	 * @return null|array
 	 */
-	public function getUserStateAction(int $callId, int $userId = 0)
+	public function getUserStateAction(?int $callId = null, ?string $callUuid = null, int $userId = 0)
 	{
 		$currentUserId = (int)$this->getCurrentUser()->getId();
-		$call = Registry::getCallWithId($callId);
+		$call = $callId
+			? Registry::getCallWithId($callId)
+			: ($callUuid ? Registry::getCallWithUuid($callUuid) : null);
 
 		if (!$call || !$this->checkCallAccess($call, $currentUserId))
 		{
@@ -1187,8 +1195,8 @@ class CallManager extends Engine\Controller
 	public function getCallLimitsAction(): array
 	{
 		return [
-			'callServerEnabled' => \Bitrix\Call\Call::isCallServerEnabled(),
-			'maxParticipants' => \Bitrix\Call\Call::getMaxParticipants(),
+			'callServerEnabled' => Settings::isCallServerEnabled(),
+			'maxParticipants' => Settings::getMaxParticipants(),
 		];
 	}
 

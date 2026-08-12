@@ -20,6 +20,7 @@ use Bitrix\AI\Limiter\Usage;
 use Bitrix\AI\Payload\IPayload;
 use Bitrix\AI\Services\BitrixGptAgreementService;
 use Bitrix\AI\Services\CopilotAccessCheckerService;
+use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
@@ -27,7 +28,6 @@ use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
 
 Loc::loadMessages(__FILE__);
 
@@ -36,11 +36,12 @@ class Engine
 	private const EVENT_NAME_ENGINE_ADDED = 'onEngineAddedInternal';
 
 	public const CATEGORIES = [
-		'text' => 'text',
-		'image' => 'image',
-		'audio' => 'audio',
-		'call' => 'call',
-		'vision' => 'vision',
+		'text'     => 'text',
+		'image'    => 'image',
+		'audio'    => 'audio',
+		'call'     => 'call',
+		'vision'   => 'vision',
+		'classify' => 'classify',
 	];
 
 	private const CONFIG_PREFIX = 'engine_';
@@ -986,19 +987,40 @@ class Engine
 		{
 			$rewriteErrorMessage = $customData['msgForIm'] = Loc::getMessage(
 				'AI_ENGINE_ERROR_RATE_LIMIT_BAAS_MARKET_MSGVER_1',
-				['#COPILOT_NAME#' => $this->getCopilotName()]
+				['#COPILOT_NAME#' => (new CopilotNameService())->getCopilotName()]
 			);
 			$customData['showSliderWithMsg'] = false;
 		}
 
 		if ($suffixErrorCode === '_BAAS' && Portal::isMarketAvailable())
 		{
+			$msgLimitBaasMarketErrorCode = (Portal::isBitrix24Portal()  && Portal::getRegion() === 'ru')
+				? 'AI_ENGINE_ERROR_LIMIT_BAAS_MARKET_MSGVER_3'
+				: 'AI_ENGINE_ERROR_LIMIT_BAAS_MARKET_MSGVER_2'
+			;
 			$customData['msgForIm'] = Loc::getMessage(
-				'AI_ENGINE_ERROR_LIMIT_BAAS_MARKET_MSGVER_2',
+				$msgLimitBaasMarketErrorCode,
 				[
 					'#LINK#' => '/online/?FEATURE_PROMOTER=limit_subscription_market_access_buy_marketplus',
-					'#COPILOT_NAME#' => $this->getCopilotName(),
+					'#COPILOT_NAME#' => (new CopilotNameService())->getCopilotName(),
 				]
+			);
+			$customData['showSliderWithMsg'] = false;
+		}
+
+		$isWestZone = Portal::isWestZone();
+
+		if (
+			$errorCode === self::ERRORS['LIMIT_IS_EXCEEDED']
+			&& empty($customData['msgForIm'])
+			&& $suffixErrorCode !== '_BAAS'
+			&& $suffixErrorCode !== '_BAAS_RATE_LIMIT'
+			&& $isWestZone
+		)
+		{
+			$customData['msgForIm'] = Loc::getMessage(
+				'AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED_WITH_MORE',
+				['#LINK#' => '/online/?FEATURE_PROMOTER=limit_copilot']
 			);
 			$customData['showSliderWithMsg'] = false;
 		}
@@ -1006,19 +1028,11 @@ class Engine
 		call_user_func(
 			[$this, 'internalErrorCallback'],
 			new Error(
-				$rewriteErrorMessage ?? Loc::getMessage(
-					"AI_ENGINE_ERROR_$errorCode",
-					['#COPILOT_NAME#' => $this->getCopilotName()]
-				),
+				$rewriteErrorMessage ?? Loc::getMessage("AI_ENGINE_ERROR_$errorCode"),
 				$errorCode . $suffixErrorCode,
 				$customData
 			),
 		);
-	}
-
-	private function getCopilotName(): string
-	{
-		return (new CopilotNameService())->getCopilotName();
 	}
 
 	private function getLimitControlService(): LimitControlService

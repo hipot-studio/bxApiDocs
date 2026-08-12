@@ -3,12 +3,11 @@
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dashboard;
 
 use Bitrix\BIConnector\Superset\MarketAccessManager;
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
-final class AddToTopMenuAction extends BaseAction
+final class AddToTopMenuAction extends BaseDashboardAction
 {
 	public static function getId(): string
 	{
@@ -22,7 +21,7 @@ final class AddToTopMenuAction extends BaseAction
 
 	protected function getText(): string
 	{
-		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_ADD_TO_TOP_MENU') ?? '';
+		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_ADD_TO_TOP_MENU_MSGVER_1') ?? '';
 	}
 
 	public function getControl(array $rawFields): ?array
@@ -51,6 +50,8 @@ final class AddToTopMenuAction extends BaseAction
 
 		$result = parent::getControl($rawFields);
 		$result['ACTION_ID'] = self::getId();
+
+		$result['html'] = $this->getMenuItem('--o-pin');
 
 		return $result;
 	}

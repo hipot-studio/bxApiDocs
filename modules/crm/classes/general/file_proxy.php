@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Crm\Integration\StorageType;
+use Bitrix\Main\Web\Uri;
 
 class CCrmFileProxy
 {
@@ -223,7 +224,7 @@ class CCrmFileProxy
 		{
 			$path = CCrmUrlUtil::ToAbsoluteUrl($var);
 			//Parent directories and not secure URLs are not allowed.
-			if($path !== '' && !CHTTP::isPathTraversalUri($path) && CCrmUrlUtil::IsSecureUrl($path))
+			if($path !== '' && !(new Uri($path))->isPathTraversal() && CCrmUrlUtil::IsSecureUrl($path))
 			{
 				$result = CFile::MakeFileArray($path);
 			}

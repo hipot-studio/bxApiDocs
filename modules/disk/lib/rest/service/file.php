@@ -4,6 +4,12 @@ namespace Bitrix\Disk\Rest\Service;
 
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internals\ExternalLinkTable;
+use Bitrix\Disk\Internals\ObjectTable;
+use Bitrix\Disk\Rest\Externalizer;
+use Bitrix\Disk\Rest\RestManager;
+use Bitrix\Disk\Rest\Service\Search;
+use Bitrix\Disk\Search\StorageFileFinder;
+use Bitrix\Disk\Search\StorageFileFinderOptions;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\RestException;
 use Bitrix\Disk\Rest\Entity;
@@ -32,6 +38,72 @@ final class File extends BaseObject
 	protected function getWorkObjectById($id)
 	{
 		return $this->getFileById($id);
+	}
+
+	protected function search($QUERY, $TYPE = null, $FILTER = null)
+	{
+		$requestResult = Search\SearchRequest::create($QUERY, $TYPE, $FILTER, (int)$this->start);
+		if (!$requestResult->isSuccess())
+		{
+			$this->errorCollection->add($requestResult->getErrors());
+
+			return null;
+		}
+
+		/** @var Search\SearchRequest $request */
+		$request = $requestResult->getData()['request'];
+		$scopeResult = (new Search\SearchScopeResolver($this->userId))->resolve($request);
+		if (!$scopeResult->isSuccess())
+		{
+			$this->errorCollection->add($scopeResult->getErrors());
+
+			return null;
+		}
+
+		/** @var Search\SearchScope $scope */
+		$scope = $scopeResult->getData()['scope'];
+		$offset = $request->getOffset();
+		$objectTypes = match ($scope->getType())
+		{
+			Search\SearchType::File => [ObjectTable::TYPE_FILE],
+			Search\SearchType::Folder => [ObjectTable::TYPE_FOLDER],
+			Search\SearchType::All => [ObjectTable::TYPE_FILE, ObjectTable::TYPE_FOLDER],
+		};
+
+		$options = new StorageFileFinderOptions(
+			limit: RestManager::LIST_LIMIT + 1,
+			offset: $offset,
+			objectTypes: $objectTypes,
+			storageId: $scope->getStorageId(),
+			folderId: $scope->getFolderId(),
+			proxyTypes: null,
+			folderExcludedProxyType: \Bitrix\Im\Disk\ProxyType\Im::class,
+		);
+		$objects = (new StorageFileFinder($this->userId, options: $options))->findModelsByText($request->getQuery());
+		$hasNextPage = count($objects) > RestManager::LIST_LIMIT;
+		if ($hasNextPage)
+		{
+			array_pop($objects);
+		}
+
+		$linkPolicy = new Search\SearchResultLinkPolicy();
+		Disk\CrumbStorage::getInstance()->preloadByObjects(array_filter(
+			$objects,
+			[$linkPolicy, 'shouldBuildDetailUrl'],
+		));
+		$externalizer = new Externalizer($this, $this->restServer, [$linkPolicy, 'shouldBuildDetailUrl']);
+		$result = (new Search\SearchResultBuilder($linkPolicy))->build(
+			$objects,
+			static fn(Disk\BaseObject $object): array => $externalizer->getExternalData($object),
+		);
+
+		$nextOffset = $hasNextPage ? $request->getNextOffset(RestManager::LIST_LIMIT) : null;
+		if ($nextOffset !== null)
+		{
+			$result['next'] = $nextOffset;
+		}
+
+		return $result;
 	}
 
 	/**

@@ -229,8 +229,9 @@ final class CBPImOpenLinesBotSettingsActivity extends BaseActivity implements IB
 		}
 
 		$botId = OpenLinesBizprocBot::registerOrUpdate(
-			botCode: $this->getBotCode(),
-			botName: $botName,
+			$this->getBotCode(),
+			$botName,
+			(int)$this->getWorkflowTemplateId(),
 		);
 
 		if ($botId === null)

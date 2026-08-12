@@ -123,6 +123,33 @@ class PublicAction
 	}
 
 	/**
+	 * Get info about method, converting invalid argument type into a regular error.
+	 * @param string $action Full name of action (\Namespace\Class::method).
+	 * @param array $data Array of data.
+	 * @param Error $error Error collector.
+	 * @return array
+	 * @throws \ReflectionException
+	 */
+	private static function getMethodInfoSafe($action, array $data, Error $error): array
+	{
+		try
+		{
+			return self::getMethodInfo($action, $data);
+		}
+		catch (\Bitrix\Main\ArgumentTypeException $e)
+		{
+			$error->addError(
+				'TYPE_ERROR',
+				Loc::getMessage('LANDING_ARGUMENT_TYPE_ERROR', [
+					'#PARAM#' => $e->getParameter()
+				])
+			);
+
+			return [];
+		}
+	}
+
+	/**
 	 * Returns true if current user out of the extranet.
 	 * In extranet case allowed only GROUP scope.
 	 *
@@ -215,7 +242,7 @@ class PublicAction
 			);
 		}
 		// if method::action exist in PublicAction, call it
-		elseif (($action = self::getMethodInfo($action, $data)))
+		elseif (($action = self::getMethodInfoSafe($action, $data, $error)))
 		{
 			if (!$isRest && !check_bitrix_sessid())
 			{

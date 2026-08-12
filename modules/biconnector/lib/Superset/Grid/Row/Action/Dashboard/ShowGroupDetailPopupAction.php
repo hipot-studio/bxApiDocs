@@ -5,12 +5,11 @@ namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dashboard;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
-final class ShowGroupDetailPopupAction extends BaseAction
+final class ShowGroupDetailPopupAction extends BaseDashboardAction
 {
 
 	public static function getId(): ?string
@@ -43,6 +42,10 @@ final class ShowGroupDetailPopupAction extends BaseAction
 		$id = (int)$rawFields['ID'];
 		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.showGroupSettingsPopup('G{$id}');";
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--edit-l');
+
+		return $result;
 	}
 }

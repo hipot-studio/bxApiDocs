@@ -114,6 +114,16 @@ class RecentTable extends Main\Entity\DataManager
 				'required' => true,
 				'default_value' => array(__CLASS__, 'getCurrentDate'),
 			),
+			// Per-user preview-source pointer (0 = the row itself). ITEM_MID is left untouched and still
+			// means "last message of the row's own chat", as writers like Recent::raiseChat rely on it.
+			'PREVIEW_SOURCE_CID' => array(
+				'data_type' => 'integer',
+				'default_value' => 0,
+			),
+			'PREVIEW_SOURCE_MID' => array(
+				'data_type' => 'integer',
+				'default_value' => 0,
+			),
 			'RELATION' => array(
 				'data_type' => 'Bitrix\Im\Model\RelationTable',
 				'reference' => array('=this.ITEM_RID' => 'ref.ID'),

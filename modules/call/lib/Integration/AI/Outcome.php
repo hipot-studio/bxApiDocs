@@ -15,6 +15,10 @@ class Outcome extends EO_CallOutcome
 {
 	private ?EO_CallOutcomeProperty_Collection $propertyCollection = null;
 
+	private Outcome\AISenseContent|string|null $senseContent = null;
+
+	private bool $senseContentBuilt = false;
+
 	/**
 	 * Returns class name for specific sense type.
 	 * @return class-string<Outcome\AISenseContent>|null
@@ -38,13 +42,14 @@ class Outcome extends EO_CallOutcome
 	 */
 	public function getSenseContent(): Outcome\AISenseContent|string|null
 	{
-		$class = $this->getSenseContentClass();
-		if ($class)
+		if (!$this->senseContentBuilt)
 		{
-			return new $class($this);
+			$this->senseContentBuilt = true;
+			$class = $this->getSenseContentClass();
+			$this->senseContent = $class ? new $class($this) : $this->getContent();
 		}
 
-		return $this->getContent();
+		return $this->senseContent;
 	}
 
 	public function setProperty(string $code, mixed $value): self

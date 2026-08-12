@@ -340,6 +340,11 @@ class Manager
 	 */
 	public function getPresetConfig()
 	{
+		if ($this->context->isGuest)
+		{
+			return $this->config['defaultGuestPreset'];
+		}
+
 		if ($this->context->isCollaber)
 		{
 			return $this->config['defaultCollaberPreset'];

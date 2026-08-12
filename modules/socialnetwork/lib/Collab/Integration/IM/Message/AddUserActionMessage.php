@@ -8,6 +8,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageFactory;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
+use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\V2\Feature;
 
 class AddUserActionMessage implements ActionMessageInterface
@@ -40,6 +41,15 @@ class AddUserActionMessage implements ActionMessageInterface
 		if (!$skipChat)
 		{
 			$this->addUsersToChat($this->collabId, $parameters, ...$recipientIds);
+		}
+
+		// Department-initiated adds get a project-phrased announcement (ProjectDepartmentMembersAdded, sent
+		// from EventHandler::announceProjectDepartment), so the per-user list is skipped here — the users
+		// are already added to the chat above.
+		$initiatedByType = $parameters['initiatedByType'] ?? UserToGroupTable::INITIATED_BY_GROUP;
+		if ($initiatedByType === UserToGroupTable::INITIATED_BY_STRUCTURE)
+		{
+			return 0;
 		}
 
 		$recipientNames = [];
@@ -82,7 +92,7 @@ class AddUserActionMessage implements ActionMessageInterface
 			message: $message,
 			senderId: $this->senderId,
 			groupId: $this->collabId,
-			silent: Feature::isNewProjectsOn() ? self::SILENT_WITH_RECENT : self::SILENT_OFF,
+			silent: $this->resolveCounterSilent(ActionType::AddUser, $this->collabId, Feature::isNewProjectsOn() ? self::SILENT_WITH_RECENT : self::SILENT_OFF),
 		);
 	}
 }

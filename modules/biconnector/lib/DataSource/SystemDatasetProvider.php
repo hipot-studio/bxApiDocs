@@ -95,14 +95,18 @@ class SystemDatasetProvider
 	}
 
 	/**
-	 * Returns first N rows of a system table for preview.
+	 * Returns preview rows of a system table.
+	 *
+	 * The query parameters are provided by the connector itself: the base connector returns
+	 * the first N rows, while API-backed connectors (e.g. expenses) load a recent time window.
 	 *
 	 * @param string $name System table name (connector identifier).
 	 * @param int $limit Maximum number of rows to return. Also propagated as SQL-level LIMIT.
 	 * @param array $parameters Extra connector query parameters (e.g. 'dateRange' => ['startDate' => 'YYYY-MM-DD', 'endDate' => 'YYYY-MM-DD']).
+	 *     Values override connector preview defaults.
 	 * @return array[] Indexed array of rows, each row is indexed array of values.
 	 */
-	public function getPreviewData(string $name, int $limit = 20, array $parameters = []): array
+	public function getPreviewData(string $name, int $limit = 30, array $parameters = []): array
 	{
 		$connector = $this->getConnector($name);
 		if ($connector === null)
@@ -110,6 +114,7 @@ class SystemDatasetProvider
 			return [];
 		}
 
+		$parameters = array_merge($connector->getPreviewParameters(), $parameters);
 		$parameters['limit'] = $limit;
 
 		$rows = [];

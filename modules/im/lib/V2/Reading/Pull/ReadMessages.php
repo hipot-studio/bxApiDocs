@@ -18,6 +18,7 @@ class ReadMessages extends BaseChatEvent
 		protected int $userId,
 		protected int $lastId,
 		protected int $counter,
+		protected bool $exact = false,
 	)
 	{
 		parent::__construct($chat);
@@ -38,6 +39,11 @@ class ReadMessages extends BaseChatEvent
 			'unread' => $dialogId !== null && Recent::isUnread($this->userId, $this->chat->getType(), $dialogId),
 			'lines' => $this->chat->getType() === Chat::IM_TYPE_OPEN_LINE,
 			'viewedMessages' => $this->viewedMessages->getIds(),
+			// Exact read (Feed->IM sync): the client clears indication EXACTLY at
+			// viewedMessages, without a sweep "up to max(ID)" and without rolling back
+			// the cursor by lastId. Old clients ignore the flag (graceful degradation —
+			// previous sweep behavior). Badge is always correct via counter.
+			'exact' => $this->exact,
 			'recentConfig' => $this->chat->getRecentConfig()->toPullFormat(),
 		];
 	}

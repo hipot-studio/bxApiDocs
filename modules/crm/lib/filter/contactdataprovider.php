@@ -7,6 +7,7 @@ use Bitrix\Crm\Activity\LastCommunication\LastCommunicationAvailabilityChecker;
 use Bitrix\Crm\Category\EntityTypeRelationsRepository;
 use Bitrix\Crm\Counter\EntityCounterType;
 use Bitrix\Crm\EntityAddress;
+use Bitrix\Crm\Filter\RelatedEntity\FilterApplier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Crm\UI\EntitySelector;
@@ -395,6 +396,12 @@ class ContactDataProvider extends EntityDataProvider implements FactoryOptionabl
 			);
 		}
 
+		$relatedEntitiesField = $this->createRelatedEntitiesField();
+		if ($relatedEntitiesField !== null)
+		{
+			$result[FilterApplier::FILTER_KEY] = $relatedEntitiesField;
+		}
+
 		return $result;
 	}
 
@@ -405,6 +412,11 @@ class ContactDataProvider extends EntityDataProvider implements FactoryOptionabl
 	 */
 	public function prepareFieldData($fieldID)
 	{
+		if ($fieldID === FilterApplier::FILTER_KEY)
+		{
+			return $this->prepareRelatedEntitiesFieldData();
+		}
+
 		if($fieldID === 'SOURCE_ID')
 		{
 			return array(

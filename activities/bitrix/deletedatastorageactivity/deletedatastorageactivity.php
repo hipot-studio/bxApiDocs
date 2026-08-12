@@ -7,6 +7,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Public\Activity\Interface\ActivityContentBlockProviderInterface;
+use Bitrix\Bizproc\Public\Activity\Interface\ContentBlockScopeConsumerInterface;
+use Bitrix\Bizproc\Activity\Dto\ContentBlock;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\Public\Provider\StorageItemProvider;
@@ -25,7 +28,7 @@ use Bitrix\Bizproc\Internal\Service\StorageActivity\StorageActivityService;
  * @property-write string StorageCode
  * @property-write string IsExpanded
  */
-class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurableActivity, IBPEventActivity, IBPActivityExternalEventListener
+class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurableActivity, IBPEventActivity, IBPActivityExternalEventListener, ActivityContentBlockProviderInterface, ContentBlockScopeConsumerInterface
 {
 	use \Bitrix\Bizproc\Activity\Mixins\EntityFilter;
 
@@ -241,6 +244,16 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 		}
 
 		return $result;
+	}
+
+	public static function getContentBlock(array $properties, ?\Bitrix\Bizproc\Activity\Dto\ContentBlockContext $context = null): ?ContentBlock
+	{
+		return StorageActivityService::getContentBlock($properties, $context);
+	}
+
+	public static function getScopeConsumption(): array
+	{
+		return StorageActivityService::getScopeConsumption();
 	}
 
 	public static function getPropertiesMap(array $documentType, array $context = []): array

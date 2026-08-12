@@ -118,8 +118,9 @@ class Permission
 			Action::Call->value => Chat::ROLE_NONE,
 			Action::Delete->value => Chat::ROLE_OWNER,
 			Action::LeaveOwner->value => Chat::ROLE_NONE,
-			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
-			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
+			Action::DeleteOthersMessage->value => Chat::ROLE_NONE,
+			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_NONE,
+			Action::DeleteOwnMessage->value => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Announcement->value] = [
@@ -199,6 +200,7 @@ class Permission
 			Action::ChangeManagers->value => Chat::ROLE_NONE,
 			Action::CreateChildChat->value => Chat::ROLE_MEMBER,
 			Action::AttachToParent->value => Chat::ROLE_NONE,
+			Action::DetachFromParent->value => Chat::ROLE_NONE,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Tasks->value] = [
@@ -239,6 +241,8 @@ class Permission
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::ManageGuestLink->value => Chat::ROLE_MEMBER,
+			Action::AttachToParent->value => Chat::ROLE_OWNER,
+			Action::DetachFromParent->value => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::OpenChat->value] = [
@@ -248,6 +252,11 @@ class Permission
 			Action::DeleteOthersMessage->value => Chat::ROLE_MANAGER,
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::ManageGuestLink->value => Chat::ROLE_MEMBER,
+			// TODO: instead of denying the attach, convert the open chat into a closed one when it is
+			//   attached to a closed project (so its membership becomes consistent with the project),
+			//   then AttachToParent can be re-allowed here (mantis 250071).
+			Action::AttachToParent->value => Chat::ROLE_NONE,
+			Action::DetachFromParent->value => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Videoconference->value] = [
@@ -285,6 +294,7 @@ class Permission
 			Action::CreateMeeting->value => Chat::ROLE_MEMBER,
 			Action::DeleteOthersMessage->value => Chat::ROLE_NONE,
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_NONE,
+			Action::DeleteOwnMessage->value => Chat::ROLE_GUEST,
 			Action::Update->value => Chat::ROLE_NONE,
 			Action::Delete->value => Chat::ROLE_NONE,
 			Action::UpdateInviteLink->value => Chat::ROLE_NONE,
@@ -298,7 +308,8 @@ class Permission
 			Action::ChangeManagers->value => Chat::ROLE_GUEST,
 			Action::ManageSharingLinks->value => Chat::ROLE_NONE,
 			Action::CreateChildChat->value => Chat::ROLE_NONE,
-			Action::AttachToParent->value => Chat::ROLE_OWNER,
+			Action::AttachToParent->value => Chat::ROLE_NONE,
+			Action::DetachFromParent->value => Chat::ROLE_NONE,
 			Action::UpdateSharingLink->value => Chat::ROLE_NONE,
 			Action::ManageGuestLink->value => Chat::ROLE_NONE,
 		];
@@ -393,6 +404,13 @@ class Permission
 				GlobalAction::JoinChat->value => false,
 				GlobalAction::Extend->value => false,
 				GlobalAction::ManageGuestLink->value => false,
+				GlobalAction::CreateAnyTask->value => false,
+				GlobalAction::CreateCalendarEvent->value => false,
+				GlobalAction::SaveFileToDisk->value => false,
+				GlobalAction::EditChat->value => false,
+				GlobalAction::OpenProfile->value => false,
+				GlobalAction::OpenCalendar->value => false,
+				GlobalAction::BeChatManager->value => false,
 			],
 		];
 

@@ -303,8 +303,6 @@ class SectionManager extends AbstractManager implements SectionManagerInterface
 
 			foreach ($connections as $connection)
 			{
-				SynchronizationFeature::setUserId($connection->getOwner()->getId());
-
 				if (SynchronizationFeature::isOn())
 				{
 					self::runNewImport($connection);

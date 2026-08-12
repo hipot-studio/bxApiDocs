@@ -28,6 +28,7 @@ class DynamicItems
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$eventTableName = $params[3];
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
 
 		if (!empty($eventTableName) && !str_starts_with($eventTableName, 'crm_dynamic_items_'))
@@ -79,7 +80,7 @@ class DynamicItems
 					],
 					'CREATED_BY' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', D.CREATED_BY, \']\'), nullif(UC.NAME, \'\'), nullif(UC.LAST_NAME, \'\'))',
+						'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.CREATED_BY', "']'") . ', nullif(UC.NAME, \'\'), nullif(UC.LAST_NAME, \'\'))',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'UC',
 						'JOIN' => 'INNER JOIN b_user UC ON UC.ID = D.CREATED_BY',
@@ -100,7 +101,7 @@ class DynamicItems
 					],
 					'UPDATED_BY' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', D.UPDATED_BY, \']\'), nullif(UU.NAME, \'\'), nullif(UU.LAST_NAME, \'\'))',
+						'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.UPDATED_BY', "']'") . ', nullif(UU.NAME, \'\'), nullif(UU.LAST_NAME, \'\'))',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'UU',
 						'JOIN' => 'INNER JOIN b_user UU ON UU.ID = D.UPDATED_BY',
@@ -121,7 +122,7 @@ class DynamicItems
 					],
 					'MOVED_BY' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', D.MOVED_BY, \']\'), nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\'))',
+						'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.MOVED_BY', "']'") . ', nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\'))',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'UM',
 						'JOIN' => 'INNER JOIN b_user UM ON UM.ID = D.MOVED_BY',
@@ -149,7 +150,7 @@ class DynamicItems
 					],
 					'CATEGORY_NAME' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'if(D.CATEGORY_ID is null, null, concat_ws(\' \', ifnull(DC.NAME, \'' . $helper->forSql(static::getDefaultCategoryName($languageId)) . '\')))',
+						'FIELD_NAME' => 'CASE WHEN D.CATEGORY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getIsNullFunction('DC.NAME', "'" . $helper->forSql(static::getDefaultCategoryName($languageId)) . "'") . ') END',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'DC',
 						'JOIN' => 'INNER JOIN b_crm_item_category DC ON DC.ID = D.CATEGORY_ID',
@@ -157,7 +158,7 @@ class DynamicItems
 					],
 					'CATEGORY' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'if(D.CATEGORY_ID is null, null, concat_ws(\' \', concat(\'[\', D.CATEGORY_ID, \']\'), ifnull(DC.NAME, \'' . $helper->forSql(static::getDefaultCategoryName($languageId)) . '\')))',
+						'FIELD_NAME' => 'CASE WHEN D.CATEGORY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.CATEGORY_ID', "']'") . ', ' . $helper->getIsNullFunction('DC.NAME', "'" . $helper->forSql(static::getDefaultCategoryName($languageId)) . "'") . ') END',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'DC',
 						'JOIN' => 'INNER JOIN b_crm_item_category DC ON DC.ID = D.CATEGORY_ID',
@@ -183,7 +184,7 @@ class DynamicItems
 					],
 					'STAGE' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'if(D.STAGE_ID is null, null, concat_ws(\' \', concat(\'[\', D.STAGE_ID, \']\'), nullif(S.NAME, \'\')))',
+						'FIELD_NAME' => 'CASE WHEN D.STAGE_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.STAGE_ID', "']'") . ', nullif(S.NAME, \'\')) END',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'S',
 						'JOIN' => 'INNER JOIN b_crm_status S ON S.ENTITY_ID like \'' . $statusEntityId . '_STAGE_%\' and S.STATUS_ID = D.STAGE_ID',
@@ -219,7 +220,7 @@ class DynamicItems
 					],
 					'COMPANY' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'if(D.COMPANY_ID is null, null, concat_ws(\' \', concat(\'[\', D.COMPANY_ID, \']\'), nullif(CO.TITLE, \'\')))',
+						'FIELD_NAME' => 'CASE WHEN D.COMPANY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.COMPANY_ID', "']'") . ', nullif(CO.TITLE, \'\')) END',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'CO',
 						'JOIN' => 'INNER JOIN b_crm_company CO ON CO.ID = D.COMPANY_ID',
@@ -240,7 +241,7 @@ class DynamicItems
 					],
 					'CONTACT' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'if(D.CONTACT_ID is null, null, concat_ws(\' \', concat(\'[\', D.CONTACT_ID, \']\'), nullif(C.FULL_NAME, \'\')))',
+						'FIELD_NAME' => 'CASE WHEN D.CONTACT_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.CONTACT_ID', "']'") . ', nullif(C.FULL_NAME, \'\')) END',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'C',
 						'JOIN' => 'INNER JOIN b_crm_contact C ON C.ID = D.CONTACT_ID',
@@ -300,7 +301,7 @@ class DynamicItems
 					],
 					'MYCOMPANY' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'if(D.MYCOMPANY_ID is null, null, concat_ws(\' \', concat(\'[\', D.MYCOMPANY_ID, \']\'), nullif(CM.TITLE, \'\')))',
+						'FIELD_NAME' => 'CASE WHEN D.MYCOMPANY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.MYCOMPANY_ID', "']'") . ', nullif(CM.TITLE, \'\')) END',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'CM',
 						'JOIN' => 'INNER JOIN b_crm_company CM ON CM.ID = D.MYCOMPANY_ID',
@@ -322,7 +323,7 @@ class DynamicItems
 					],
 					'SOURCE' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'if(D.SOURCE_ID is null, null, concat_ws(\' \', concat(\'[\', D.SOURCE_ID, \']\'), nullif(SS.NAME, \'\')))',
+						'FIELD_NAME' => 'CASE WHEN D.SOURCE_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.SOURCE_ID', "']'") . ', nullif(SS.NAME, \'\')) END',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'SS',
 						'JOIN' => 'INNER JOIN b_crm_status SS ON SS.ENTITY_ID = \'SOURCE\' and SS.STATUS_ID = D.SOURCE_ID',
@@ -340,19 +341,19 @@ class DynamicItems
 					],
 					'ASSIGNED_BY_NAME' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'if(D.ASSIGNED_BY_ID is null, null, concat_ws(\' \', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')))',
+						'FIELD_NAME' => 'CASE WHEN D.ASSIGNED_BY_ID is null THEN null ELSE concat_ws(\' \', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')) END',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'UA',
-						'JOIN' => 'INNER JOIN b_user UA ON UA.ID = D.ASSIGNED_BY_ID',
-						'LEFT_JOIN' => 'LEFT JOIN b_user UA ON UA.ID = D.ASSIGNED_BY_ID',
+						'JOIN' => 'INNER JOIN b_user UA ON ' . $helper->castIntToChar('UA.ID') . ' = D.ASSIGNED_BY_ID',
+						'LEFT_JOIN' => 'LEFT JOIN b_user UA ON ' . $helper->castIntToChar('UA.ID') . ' = D.ASSIGNED_BY_ID',
 					],
 					'ASSIGNED_BY' => [
 						'IS_METRIC' => 'N', // 'Y'
-						'FIELD_NAME' => 'if(D.ASSIGNED_BY_ID is null, null, concat_ws(\' \', concat(\'[\', D.ASSIGNED_BY_ID, \']\'), nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')))',
+						'FIELD_NAME' => 'CASE WHEN D.ASSIGNED_BY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.ASSIGNED_BY_ID', "']'") . ', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')) END',
 						'FIELD_TYPE' => 'string',
 						'TABLE_ALIAS' => 'UA',
-						'JOIN' => 'INNER JOIN b_user UA ON UA.ID = D.ASSIGNED_BY_ID',
-						'LEFT_JOIN' => 'LEFT JOIN b_user UA ON UA.ID = D.ASSIGNED_BY_ID',
+						'JOIN' => 'INNER JOIN b_user UA ON ' . $helper->castIntToChar('UA.ID') . ' = D.ASSIGNED_BY_ID',
+						'LEFT_JOIN' => 'LEFT JOIN b_user UA ON ' . $helper->castIntToChar('UA.ID') . ' = D.ASSIGNED_BY_ID',
 					],
 					'WEBFORM_ID' => [
 						'IS_METRIC' => 'N', // 'Y'
@@ -392,21 +393,15 @@ class DynamicItems
 						'FIELD_NAME' => 'D.' . $userField['FIELD_NAME'],
 					];
 
-					$dbType = '';
-					if ($userField['USER_TYPE'] && is_callable([$userField['USER_TYPE']['CLASS_NAME'], 'getdbcolumntype']))
-					{
-						$dbType = call_user_func_array([$userField['USER_TYPE']['CLASS_NAME'], 'getdbcolumntype'], [$userField]);
-					}
-
 					$uf['FIELD_TYPE'] = (
 						$userField['MULTIPLE'] === 'N'
 						&& \Bitrix\BIConnector\Superset\Config\DatasetSettings::isTypingEnabled()
 					) ? $userField['USER_TYPE_ID'] : 'string';
-					$uf['CALLBACK'] = function($value, $dateFormats) use($userField, $dbType)
+					$uf['CALLBACK'] = function($value, $dateFormats) use($userField)
 					{
 						global $USER_FIELD_MANAGER;
 
-						if ($dbType === 'date' || $dbType === 'datetime')
+						if (in_array($userField['USER_TYPE_ID'], ['date', 'datetime'], true))
 						{
 							if ($value === null || $value === '')
 							{
@@ -414,7 +409,7 @@ class DynamicItems
 							}
 
 							$format =
-								$dbType === 'date'
+								$userField['USER_TYPE_ID'] === 'date'
 									? $dateFormats['date_format_php']
 									: $dateFormats['datetime_format_php']
 							;

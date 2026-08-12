@@ -20,11 +20,12 @@ use Bitrix\Call\Model\CallAITaskTable;
 use Bitrix\Call\Model\CallOutcomeTable;
 use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
+use Bitrix\Call\Integration\AI\Outcome\AISenseContent;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
 
 final class CallAIService
 {
-	private const DELAY_WAIT_FOR_RESULT = 43200; // 12 hours
+	private const DELAY_WAIT_FOR_RESULT = 21600; // 6 hours
 	private const FINISH_TASK_DEPTH_DAYS = 60;
 
 	private static ?CallAIService $service = null;
@@ -356,66 +357,77 @@ final class CallAIService
 
 		$outcomeCollection = OutcomeCollection::getOutcomesByCallId($callId);
 
-		// Check transcribe
-		$transcribe = $outcomeCollection?->getOutcomeByType(SenseType::TRANSCRIBE->value);
-		if (!$transcribe)
+		// The latest outcome with meaningful content per type. Any contentful outcome means
+		// that sense is "done" (an empty retry on top of a valid result must not shadow it),
+		// and keeping one source per type prevents relaunching downstream tasks twice or from
+		// a stale source version.
+		$contentfulByType = [];
+		foreach ($outcomeCollection as $outcomeExisting)
 		{
-			// Check transcribe Task
-			$transcribeTask = AITask::getTaskForCall($callId, SenseType::TRANSCRIBE);
-			if ($transcribeTask)
+			$type = $outcomeExisting->getType();
+			if (isset($contentfulByType[$type]))
 			{
-				if ($transcribeTask->isPending())
-				{
-					return $result;// wait more
-				}
+				continue;// the latest contentful outcome of this type is already taken
+			}
+			$sourceSense = $outcomeExisting->getSenseContent();
+			if ($sourceSense instanceof AISenseContent && $sourceSense->hasContent(ignoreComputedCriteria: true))
+			{
+				$contentfulByType[$type] = $outcomeExisting;
+			}
+		}
+
+		// No transcription with content: restart the whole chain from the very beginning.
+		if (!isset($contentfulByType[SenseType::TRANSCRIBE->value]))
+		{
+			$transcribeTask = AITask::getTaskForCall($callId, SenseType::TRANSCRIBE);
+			if ($transcribeTask && $transcribeTask->isPending())
+			{
+				return $result;// wait more
 			}
 
-			// Check track_pack
 			$trackPack = Track::getTrackForCall($callId, Track::TYPE_TRACK_PACK);
 			if (!$trackPack)
 			{
+				// Explicit retry but track pack was never delivered — a delivery failure, not a wait timeout.
 				return $result->addError(new CallAIError(CallAIError::AI_TRACKPACK_NOT_RECEIVED));
 			}
 
 			return $this->processTrack($trackPack);
 		}
 
-		$outcomeCollectionCopy = clone $outcomeCollection;// avoid recursion
-
-		foreach ($outcomeCollection as $outcomeExisting)
+		// Relaunch dependent tasks from the latest contentful source of each type.
+		foreach ($contentfulByType as $outcomeExisting)
 		{
 			$taskToLaunch = $this->getTaskToLaunchByOutcome($outcomeExisting);
 			foreach ($taskToLaunch as $taskSenseType)
 			{
-				$outcome = $outcomeCollectionCopy?->getOutcomeByType($taskSenseType->value);
-				if (!$outcome)
+				if (isset($contentfulByType[$taskSenseType->value]))
 				{
-					// Check Task
-					$task = AITask::getTaskForCall($callId, $taskSenseType);
-					if ($task)
-					{
-						if ($task->isPending() || $task->isFinished())
-						{
-							continue;// wait more
-						}
-					}
+					continue;// the target sense already has meaningful content
+				}
 
-					$taskClass = $taskSenseType->getTaskClass();
-					$task = new $taskClass();
-					$task->setPayload($outcome);
-					if ($outcome->getLanguageId())
+				// The target outcome is missing or semantically empty: relaunch the task
+				$task = AITask::getTaskForCall($callId, $taskSenseType);
+				if ($task && $task->isPending())
+				{
+					continue;// wait more
+				}
+
+				$taskClass = $taskSenseType->getTaskClass();
+				$task = new $taskClass();
+				$task->setPayload($outcomeExisting);
+				if ($outcomeExisting->getLanguageId())
+				{
+					$task->setLanguageId($outcomeExisting->getLanguageId());
+				}
+				$dbResult = $task->save();
+				if ($dbResult->isSuccess())
+				{
+					$launchResult = $this->launchTask($task);
+					if (!$launchResult->isSuccess())
 					{
-						$task->setLanguageId($outcome->getLanguageId());
-					}
-					$dbResult = $task->save();
-					if ($dbResult->isSuccess())
-					{
-						$launchResult = $this->launchTask($task);
-						if (!$launchResult->isSuccess())
-						{
-							$result->addErrors($launchResult->getErrors());
-							break;
-						}
+						$result->addErrors($launchResult->getErrors());
+						break;
 					}
 				}
 			}
@@ -840,6 +852,17 @@ final class CallAIService
 		$notifyService = NotifyService::getInstance();
 
 		$result = $service->checkCallAiTask($callId, $repeat);
+
+		if ($result->isSuccess() && ($result->getData()['restart'] ?? null) === true)
+		{
+			// Relaunch the chain to regenerate semantically empty outcomes
+			$restartResult = $service->restartCallAiTask($callId);
+			if (!$restartResult->isSuccess())
+			{
+				$result = $restartResult->setData(['repeat' => false]);
+			}
+		}
+
 		if (!$result->isSuccess())
 		{
 			$notifyService->sendTaskFailedMessage($result->getError(), $call);
@@ -888,40 +911,78 @@ final class CallAIService
 			}
 		};
 
+		$newestOutcomeByType = [];
+		$contentfulSenseByType = [];
+		foreach (OutcomeCollection::getOutcomesByCallId($callId) as $candidateOutcome)
+		{
+			$type = $candidateOutcome->getType();
+			$newestOutcomeByType[$type] ??= $candidateOutcome;
+			if (isset($contentfulSenseByType[$type]))
+			{
+				continue;
+			}
+			$candidateSenseContent = $candidateOutcome->getSenseContent();
+			if ($candidateSenseContent instanceof AISenseContent && $candidateSenseContent->hasContent(ignoreComputedCriteria: true))
+			{
+				$contentfulSenseByType[$type] = $candidateSenseContent;
+			}
+		}
+
 		// Check all followup tasks
 		$taskCompleted = 0;
 		$waitForTasks = SenseType::cases();
 		foreach ($waitForTasks as $senseType)
 		{
-			$taskOutcome = Outcome::getOutcomeForCall($callId, $senseType);
-			if ($taskOutcome)
+			// "done" if any outcome of this type has content; the newest marks "exists but empty".
+			$senseContent = $contentfulSenseByType[$senseType->value] ?? null;
+			$taskOutcome = $newestOutcomeByType[$senseType->value] ?? null;
+			if ($senseContent instanceof AISenseContent && $senseContent->hasContent(ignoreComputedCriteria: true))
 			{
-				$senseContent = $taskOutcome->getSenseContent();
-				if ($senseContent)
-				{
-					$taskCompleted++;
-					continue;// ok
-				}
+				$taskCompleted++;
+				continue;// ok
 			}
 
+			// The last task may still be in progress: wait for its result
 			$task = AITask::getTaskForCall($callId, $senseType);
-			if ($task)
+			if ($task && $task->isPending())
 			{
-				if ($task->isPending())
+				$log("Check ai task: Call #{$callId}, {$senseType->value} is still pending.");
+
+				return $result->setData(['repeat' => true]);// wait more
+			}
+
+			if ($taskOutcome)
+			{
+				// The outcome exists, but the AI service returned no meaningful content
+				$log("Check ai task: Call #{$callId}, {$senseType->value} outcome has no meaningful content.");
+
+				if ($repeat <= 1)
 				{
-					$log("Check ai task: Call #{$callId}, {$senseType->value} is still pending.");
-
-					return $result->setData(['repeat' => true]);// wait more
+					// Only report the empty sense: the caller decides whether to relaunch the chain
+					return $result->setData([
+						'repeat' => true,
+						'restart' => true,
+					]);
 				}
-				if (!$task->isFinished())
-				{
-					$log("Check ai task: Call #{$callId}, {$senseType->value} task has failed.");
 
-					$error = new CallAIError(CallAIError::AI_OVERVIEW_TASK_ERROR);
-					$error->allowRecover();
+				$error = new CallAIError(
+					$senseType === SenseType::TRANSCRIBE
+						? CallAIError::AI_TRANSCRIBE_TASK_ERROR
+						: CallAIError::AI_OVERVIEW_TASK_ERROR
+				);
+				$error->allowRecover();
 
-					return $result->addError($error);
-				}
+				return $result->addError($error);
+			}
+
+			if ($task && !$task->isFinished())
+			{
+				$log("Check ai task: Call #{$callId}, {$senseType->value} task has failed.");
+
+				$error = new CallAIError(CallAIError::AI_OVERVIEW_TASK_ERROR);
+				$error->allowRecover();
+
+				return $result->addError($error);
 			}
 		}
 		if ($taskCompleted == count($waitForTasks))

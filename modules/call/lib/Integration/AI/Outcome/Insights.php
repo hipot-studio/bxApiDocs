@@ -93,11 +93,16 @@ class Insights extends AISenseContent
 							if (!empty($obj))
 							{
 								$this->{$field}[] = $obj;
+								$this->isEmpty = false;
 							}
 						}
 						else
 						{
 							$this->{$field}[] = $row;
+							if ($this->isEmpty && !empty($row))
+							{
+								$this->isEmpty = false;
+							}
 						}
 					}
 				}
@@ -115,6 +120,10 @@ class Insights extends AISenseContent
 				if ($value)
 				{
 					$this->{$field} = $value->getContent();
+					if ($this->isEmpty && !empty($this->{$field}))
+					{
+						$this->isEmpty = false;
+					}
 				}
 			}
 
@@ -162,6 +171,7 @@ class Insights extends AISenseContent
 								$totalCriteria++;
 							}
 						}
+						$this->isEmpty = $this->isEmpty && ($totalCriteria == 0);
 						if ($totalCriteria > 0)
 						{
 							$analysis->efficiencyValue = ceil(100 / $totalCriteria * $positiveCriteria);
@@ -172,18 +182,9 @@ class Insights extends AISenseContent
 		}
 	}
 
-	public function toRestFormat(string $mentionFormat = 'bb'): array
+	public function toRestFormat(string $mentionFormat = MentionService::FORMAT_BB): array
 	{
-		$mentionService = MentionService::getInstance();
-		$replaceMentions = function (string $value) use ($mentionService, $mentionFormat)
-		{
-			return match ($mentionFormat)
-			{
-				'html' => $mentionService->replaceBBMentions($value),
-				'none' => $mentionService->removeBBMentions($value),
-				default => $value,//bb
-			};
-		};
+		$replaceMentions = fn (string $value): string => $this->applyMentionFormat($value, $mentionFormat);
 
 		$result = ['speakerEvaluationAvailable' => $this->speakerEvaluationAvailable];
 

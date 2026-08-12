@@ -31,10 +31,14 @@ class InviteUserCollectionToGroupCommand implements Command
 	/**
 	 * @throws ArgumentOutOfRangeException
 	 */
-	public function __construct(private readonly int $groupId, private readonly UserCollection $userCollection)
+	public function __construct(
+		private readonly int $groupId,
+		private readonly UserCollection $userCollection,
+		?int $currentUserId = null,
+	)
 	{
-		$this->memberServiceFacade = new Socialnetwork\Group\MemberServiceFacade($this->groupId);
-		$this->currentUserIsIntranet = (new Intranet\User((int)Intranet\CurrentUser::get()->getId()))->isIntranet();
+		$this->memberServiceFacade = new Socialnetwork\Group\MemberServiceFacade($this->groupId, $currentUserId);
+		$this->currentUserIsIntranet = (new Intranet\User($currentUserId ?? (int)Intranet\CurrentUser::get()->getId()))->isIntranet();
 	}
 
 	/**

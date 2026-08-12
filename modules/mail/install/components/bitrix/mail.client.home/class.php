@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Uri;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
@@ -11,7 +12,7 @@ class CMailClientHomeComponent extends CBitrixComponent
 	{
 		global $USER, $APPLICATION;
 
-		$APPLICATION->setTitle(Loc::getMessage('MAIL_CLIENT_HOME_TITLE'));
+		$APPLICATION->setTitle(Loc::getMessage('MAIL_CLIENT_HOME_TITLE_MSGVER_1'));
 
 		if (!is_object($USER) || !$USER->isAuthorized())
 		{
@@ -51,14 +52,11 @@ class CMailClientHomeComponent extends CBitrixComponent
 		$lastViewState = \CUserOptions::getOption('mail', 'last_view_state', \Bitrix\Mail\Helper\MessageFolder::VIEW_STATE_MAILBOX);
 
 		localRedirect(
-			\CHTTP::urlAddParams(
-				$redirect,
-				array_filter(array(
-					'virtual' => ($lastViewState === \Bitrix\Mail\Helper\MessageFolder::VIRTUAL_ALL_MESSAGES && !empty($mailbox)) ? $lastViewState : null,
-					'IFRAME' => isset($_REQUEST['IFRAME']) ? $_REQUEST['IFRAME'] : null,
-					'IFRAME_TYPE' => isset($_REQUEST['IFRAME_TYPE']) ? $_REQUEST['IFRAME_TYPE'] : null,
-				))
-			),
+			(string)(new Uri($redirect))->addParams(array_filter([
+				'virtual' => ($lastViewState === \Bitrix\Mail\Helper\MessageFolder::VIRTUAL_ALL_MESSAGES && !empty($mailbox)) ? $lastViewState : null,
+				'IFRAME' => $_REQUEST['IFRAME'] ?? null,
+				'IFRAME_TYPE' => $_REQUEST['IFRAME_TYPE'] ?? null,
+			])),
 			true
 		);
 

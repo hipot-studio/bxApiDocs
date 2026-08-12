@@ -14,7 +14,6 @@ class SearchOptions
 {
 	// Mode
 	public const SEARCH_RECENT_SECTION_OPTION = 'searchRecentSection';
-	public const SEARCH_RECENT_SECTION_PARENT_ID_OPTION = 'parentId';
 	public const INCLUDE_ONLY_OPTION = 'includeOnly';
 	public const EXCLUDE_OPTION = 'exclude';
 	public const SEARCH_CHAT_TYPES_OPTION = 'searchChatTypes';
@@ -22,6 +21,7 @@ class SearchOptions
 
 	// Filters
 	public const FILL_DIALOG_BY_RECENT_OPTION = 'fillDialogByRecent';
+	public const PARENT_ID_OPTION = 'parentId';
 
 	public const WITH_CHAT_BY_USERS_OPTION = 'withChatByUsers';
 	public const ONLY_WITH_MANAGE_MESSAGES_RIGHT_OPTION = 'onlyWithManageMessagesRight';
@@ -36,7 +36,6 @@ class SearchOptions
 	private FlagOption $flagOption;
 	private ?TypeCondition $chatTypeCondition = null;
 	private bool $isRecentSectionMode = false;
-	private ?int $recentSectionParentId = null;
 	private bool $shouldToFillDefaultItems = true;
 	private ?int $contextChatId = null;
 
@@ -49,6 +48,7 @@ class SearchOptions
 	private bool $fillDialogByRecent = false;
 	private bool $excludeGuests = false;
 	private array $excludeIds = [];
+	private ?int $parentId = null;
 
 	private readonly TypeRegistry $typeRegistry;
 
@@ -145,9 +145,9 @@ class SearchOptions
 		return $this->shouldToFillDefaultItems;
 	}
 
-	public function getRecentSectionParentId(): ?int
+	public function getParentId(): ?int
 	{
-		return $this->recentSectionParentId;
+		return $this->parentId;
 	}
 
 	public function isChatContext(): bool
@@ -193,7 +193,6 @@ class SearchOptions
 	private function resolveAsRecentSectionMode(array $rawOptions): void
 	{
 		$this->isRecentSectionMode = true;
-		$this->recentSectionParentId = $this->resolveRecentSectionParentId($rawOptions);
 		$section = $rawOptions[self::SEARCH_RECENT_SECTION_OPTION] ?? RecentConfigManager::DEFAULT_SECTION_NAME;
 		if ($section !== RecentConfigManager::DEFAULT_SECTION_NAME)
 		{
@@ -219,7 +218,21 @@ class SearchOptions
 			$this->excludeIds = $rawOptions[self::EXCLUDE_IDS_OPTION];
 		}
 
+		$this->applyParentId($rawOptions);
 		$this->applyChatTypeExclusion($rawOptions);
+	}
+
+	private function applyParentId(array $rawOptions): void
+	{
+		if (array_key_exists(self::PARENT_ID_OPTION, $rawOptions))
+		{
+			$this->parentId = $this->normalizeParentId($rawOptions[self::PARENT_ID_OPTION]);
+
+			return;
+		}
+
+		// recent-section search is scoped to root chats unless a parent is passed explicitly
+		$this->parentId = $this->isRecentSectionMode ? 0 : null;
 	}
 
 	private function applyChatTypeExclusion(array $rawOptions): void
@@ -256,14 +269,8 @@ class SearchOptions
 		}
 	}
 
-	private function resolveRecentSectionParentId(array $rawOptions): ?int
+	private function normalizeParentId(mixed $parentId): ?int
 	{
-		if (!array_key_exists(self::SEARCH_RECENT_SECTION_PARENT_ID_OPTION, $rawOptions))
-		{
-			return 0;
-		}
-
-		$parentId = $rawOptions[self::SEARCH_RECENT_SECTION_PARENT_ID_OPTION];
 		if ($parentId === null)
 		{
 			return null;
@@ -281,7 +288,7 @@ class SearchOptions
 
 	private function isNestedRecentSectionSearch(): bool
 	{
-		return $this->isRecentSectionMode && $this->recentSectionParentId !== null && $this->recentSectionParentId > 0;
+		return $this->isRecentSectionMode && $this->parentId !== null && $this->parentId > 0;
 	}
 
 	private function applySearchFlags(array $rawOptions): void

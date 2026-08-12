@@ -129,14 +129,8 @@ class InvitationSent extends Configurable
 		$linkUrl = $this->getSharingLinkUrl($this->getLinkHash());
 		if ($linkUrl)
 		{
-			$result = (new Layout\Footer\IconButton(
-				'qr-code',
-				$this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_QR_CODE_BUTTON'))
-			)
-				->setAction(
-					(new Layout\Action\JsEvent('CalendarSharingInvitationSent:ShowQr'))
-						->addActionParamString('url', $linkUrl)
-				)
+			$result = (new Layout\Footer\IconButton(Layout\Footer\IconButton::ICON_QR_CODE, $this->getMessage('CRM_TIMELINE_CALENDAR_SHARING_QR_CODE_BUTTON')))
+				->setAction((new Layout\Action\JsEvent('CalendarSharingInvitationSent:ShowQr'))->addActionParamString('url', $linkUrl))
 				->setScopeWeb()
 			;
 		}

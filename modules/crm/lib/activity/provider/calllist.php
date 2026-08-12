@@ -293,6 +293,14 @@ class CallList extends Base
 			)
 		;
 
+		$notifySubjectCallback = static fn (?string $languageId = null) =>
+			Loc::getMessage(
+				'CRM_CALL_LIST_RESPONSIBLE_IM_NOTIFY_SUBJECT',
+				[ '#title#' => htmlspecialcharsbx($subject) ],
+				$languageId,
+			)
+		;
+
 		$notification = array(
 			"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
 			"TO_USER_ID" => (int)($activityFields['RESPONSIBLE_ID'] ?? 0),
@@ -304,6 +312,18 @@ class CallList extends Base
 			"NOTIFY_TAG" => "CRM|CALL_LIST|" . ($activityFields['ID'] ?? 0),
 			"NOTIFY_MESSAGE" => $notifyMessageCallback,
 			"NOTIFY_MESSAGE_OUT" => $notifyMessageOutCallback,
+			"PARAMS" => [
+				'COMPONENT_ID' => 'CrmEntity',
+				'COMPONENT_PARAMS' => [
+					'SUBJECT' => $notifySubjectCallback,
+					'ENTITY' => [
+						'TITLE' => htmlspecialcharsbx($subject),
+						'HREF' => $url,
+						'ENTITY_TYPE' => 'call',
+						'CONTENT_TYPE' => 'title',
+					],
+				],
+			],
 		);
 
 		\CIMNotify::Add($notification);

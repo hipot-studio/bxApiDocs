@@ -93,7 +93,7 @@ abstract class AbstractCreateUserField implements AIFunction
 			'USER_TYPE_ID' => $this->getType()->id(),
 			'SETTINGS' => $this->settings(),
 			'ANALYTICS' => new CreateContext(
-				createFrom: CreateContext::MCP_TOOL,
+				source: CreateContext::SOURCE_MCP_TOOL,
 			),
 			...$this->getLabelFields($parameters->label),
 		];

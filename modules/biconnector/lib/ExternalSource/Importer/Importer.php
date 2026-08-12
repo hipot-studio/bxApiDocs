@@ -91,7 +91,9 @@ abstract class Importer
 		$connection = Main\Application::getInstance()->getConnection();
 		try
 		{
-			$connection->query(sprintf('TRUNCATE TABLE `%s`;', $this->getTableName()));
+			$connection->query(
+				sprintf('TRUNCATE TABLE %s;', $connection->getSqlHelper()->quote($this->getTableName()))
+			);
 		}
 		catch (Main\DB\SqlQueryException $exception)
 		{

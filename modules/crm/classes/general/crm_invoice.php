@@ -9,7 +9,9 @@ use Bitrix\Crm\EntityAddressType;
 use Bitrix\Crm\Format\AddressFormatter;
 use Bitrix\Crm\Invoice\Compatible;
 use Bitrix\Crm\Invoice\Invoice;
+use Bitrix\Crm\Model\FieldRepository;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
+use Bitrix\Crm\Service\Accounting;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings;
 use Bitrix\Iblock;
@@ -503,24 +505,30 @@ class CAllCrmInvoice
 		);
 		self::$arCurrentPermType = null;
 
-		return $result;
+		return self::applyQueryResultDecorator($result);
 	}
+
+	/**
+	 * @deprecated
+	 *
+	 * Method will be removed soon
+	 */
 	static public function BuildEntityAttr($userID, $arAttr = array())
 	{
 		$userID = (int)$userID;
-		$arResult = array("U{$userID}");
+		$arResult = [];
 		if(isset($arAttr['OPENED']) && $arAttr['OPENED'] == 'Y')
 		{
 			$arResult[] = 'O';
 		}
 
-		$arUserAttr = Bitrix\Crm\Service\Container::getInstance()
+		$userBasedEntityAttributes = Bitrix\Crm\Service\Container::getInstance()
 			->getUserPermissions($userID)
 			->getAttributesProvider()
 			->getEntityAttributes()
 		;
 
-		return array_merge($arResult, $arUserAttr['INTRANET']);
+		return array_merge($arResult, $userBasedEntityAttributes);
 	}
 	static public function RebuildEntityAccessAttrs($IDs)
 	{
@@ -948,6 +956,13 @@ class CAllCrmInvoice
 		if(!CModule::IncludeModule('sale'))
 		{
 			$this->LAST_ERROR = GetMessage('CRM_MODULE_SALE_NOT_INSTALLED');
+			$GLOBALS['APPLICATION']->ThrowException($this->LAST_ERROR);
+			return false;
+		}
+
+		if (\Bitrix\Crm\Component\DisableHelpers\OldInvoiceReadonlyHelper::isOldInvoiceReadOnly(\CCrmOwnerType::Invoice))
+		{
+			$this->LAST_ERROR = GetMessage('CRM_PERMISSION_DENIED');
 			$GLOBALS['APPLICATION']->ThrowException($this->LAST_ERROR);
 			return false;
 		}
@@ -4379,7 +4394,7 @@ class CAllCrmInvoice
 
 		$result = array(
 			'num' => $totalPaidNumber,
-			'sum' => round($totalPaidSum, 2)
+			'sum' => Accounting::roundPublic($totalPaidSum, $currencyId)
 		);
 
 		return $result;
@@ -6142,6 +6157,75 @@ class CAllCrmInvoice
 		}
 
 		return self::$permissionsAdapter;
+	}
+
+	private static function applyQueryResultDecorator(mixed $result)
+	{
+		if ($result instanceof \Bitrix\Sale\Compatible\CDBResult)
+		{
+			$result->addFetchAdapter(new class implements \Bitrix\Sale\Compatible\FetchAdapter
+			{
+				public function adapt(array $row)
+				{
+					$moneyFields = [
+						'PRICE' => 'CURRENCY',
+						'TAX_VALUE' => 'CURRENCY',
+						'PRICE_DELIVERY' => 'CURRENCY',
+					];
+
+					foreach ($moneyFields as $fieldName => $currencyFieldName)
+					{
+						if (!isset($row[$fieldName]) || $row[$fieldName] === '')
+						{
+							continue;
+						}
+
+						$row[$fieldName] = FieldRepository::getMoneyFieldScaleFetchModifier(
+							$row[$fieldName],
+							$row,
+							$currencyFieldName
+						);
+					}
+
+					return $row;
+				}
+			});
+
+			return $result;
+		}
+
+		if (!$result instanceof \CDBResult)
+		{
+			return $result;
+		}
+
+		return new class($result) extends \CDBResult
+		{
+			protected function AfterFetch(&$res)
+			{
+				parent::AfterFetch($res);
+
+				$moneyFields = [
+					'PRICE' => 'CURRENCY',
+					'TAX_VALUE' => 'CURRENCY',
+					'PRICE_DELIVERY' => 'CURRENCY',
+				];
+
+				foreach ($moneyFields as $fieldName => $currencyFieldName)
+				{
+					if (!isset($res[$fieldName]) || $res[$fieldName] === '')
+					{
+						continue;
+					}
+
+					$res[$fieldName] = FieldRepository::getMoneyFieldScaleFetchModifier(
+						$res[$fieldName],
+						$res,
+						$currencyFieldName
+					);
+				}
+			}
+		};
 	}
 
 }

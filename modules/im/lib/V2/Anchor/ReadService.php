@@ -7,10 +7,12 @@ namespace Bitrix\Im\V2\Anchor;
 use Bitrix\Im\Model\AnchorTable;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Anchor\Push\PushService;
-use Bitrix\Im\V2\Chat\Type;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeFilterFactory;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeScope;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Diag\ExceptionHandler;
 use Bitrix\Main\SystemException;
 
@@ -21,6 +23,7 @@ class ReadService
 	private PushService $pushService;
 	private AnchorProvider $anchorProvider;
 	private ExceptionHandler $exceptionHandler;
+	private readonly ChatTreeFilterFactory $treeFilterFactory;
 
 	public function __construct()
 	{
@@ -141,43 +144,42 @@ class ReadService
 		return $result;
 	}
 
-	public function readByType(Type $type, ?int $userId = null): Result
+	/**
+	 * Returns affected chat IDs in result payload.
+	 *
+	 * @return Result<int[]|null>
+	 */
+	public function readByTreeScope(ChatTreeScope $scope, ?int $userId = null): Result
+	{
+		$userId ??= $this->getContext()->getUserId();
+		if ($userId <= 0 || !$scope->isPossible())
+		{
+			return new Result();
+		}
+
+		$chatIds = $this->getAnchorChatIdsByTreeScope($userId, $scope);
+
+		return $this->readByChatIds($chatIds, $userId);
+	}
+
+	/**
+	 * Returns affected chat IDs in result payload.
+	 *
+	 * @return Result<int[]|null>
+	 */
+	public function readByChatIds(array $chatIds, ?int $userId = null): Result
 	{
 		$result = new Result();
 
 		$userId ??= $this->getContext()->getUserId();
-
-		if ($userId <= 0)
+		if ($userId <= 0 || empty($chatIds))
 		{
 			return $result;
 		}
 
 		try
 		{
-			$query = AnchorTable::query()
-				->setSelect(['ID', 'CHAT_ID'])
-				->where('USER_ID', $userId)
-				->where('CHAT.TYPE', $type->literal);
-
-			if ($type->entityType)
-			{
-				$query->where('CHAT.ENTITY_TYPE', $type->entityType);
-			}
-
-			$queryResult = $query->fetchAll();
-
-			$anchorIds = [];
-			$chatIds = [];
-			foreach ($queryResult as $row)
-			{
-				$anchorIds[(int)$row['ID']] = (int)$row['ID'];
-				$chatIds[(int)$row['CHAT_ID']] = (int)$row['CHAT_ID'];
-			}
-
-			if (!empty($anchorIds))
-			{
-				AnchorTable::deleteByFilter(['ID' => $anchorIds]);
-			}
+			AnchorTable::deleteByFilter(['=USER_ID' => $userId, '=CHAT_ID' => $chatIds]);
 		}
 		catch (SystemException $exception)
 		{
@@ -186,10 +188,32 @@ class ReadService
 			return $result->addError(new AnchorError(AnchorError::UNEXPECTED));
 		}
 
-		$this->pushService->deleteByChatIds($userId, $chatIds);
+		$chatIdsMap = array_combine($chatIds, $chatIds);
+		$this->pushService->deleteByChatIds($userId, $chatIdsMap);
 		$this->anchorProvider->cleanCache($userId);
 
-		return $result;
+		return $result->setResult(array_values($chatIdsMap));
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function getAnchorChatIdsByTreeScope(
+		int $userId,
+		ChatTreeScope $scope,
+	): array
+	{
+		$query = AnchorTable::query()
+			->setSelect(['CHAT_ID'])
+			->setDistinct()
+			->where('USER_ID', $userId)
+		;
+
+		$this->treeFilterFactory->forTreeScope($scope)->apply($query);
+
+		$rows = $query->fetchAll();
+
+		return array_map('intval', array_column($rows, 'CHAT_ID'));
 	}
 
 	public function readByChatId(int $chatId, ?int $userId = null): Result
@@ -226,5 +250,6 @@ class ReadService
 		$this->pushService = AnchorContainer::getInstance()->getPushService();
 		$this->anchorProvider = AnchorContainer::getInstance()->getAnchorProvider();
 		$this->exceptionHandler = Application::getInstance()->getExceptionHandler();
+		$this->treeFilterFactory = ServiceLocator::getInstance()->get(ChatTreeFilterFactory::class);
 	}
 }

@@ -2132,13 +2132,17 @@ abstract class Entity
 					$factory = Service\Container::getInstance()->getFactory($typeId);
 					if ($factory)
 					{
-						if (ServiceLocator::getInstance()->has('crm.kanban.entity.dynamic'))
+						$alias = $viewMode === ViewMode::MODE_ACTIVITIES
+							? 'crm.kanban.entity.dynamic.activities'
+							: 'crm.kanban.entity.dynamic';
+
+						if (ServiceLocator::getInstance()->has($alias))
 						{
-							$instance = clone ServiceLocator::getInstance()->get('crm.kanban.entity.dynamic');
+							$instance = clone ServiceLocator::getInstance()->get($alias);
 						}
 						else
 						{
-							$instance = ServiceLocator::getInstance()->get('crm.kanban.entity.dynamic');
+							$instance = ServiceLocator::getInstance()->get($alias);
 						}
 						$instance->setFactory($factory);
 					}

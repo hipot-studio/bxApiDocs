@@ -14,7 +14,7 @@ class UpdateContentAction extends BaseAction
 		return ['contentBefore', 'contentAfter'];
 	}
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		$block = new Block((int)$this->params['block']);
 		if ($block->exist())

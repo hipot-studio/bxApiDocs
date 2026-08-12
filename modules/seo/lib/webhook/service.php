@@ -10,6 +10,7 @@ use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Web\Json;
 use Bitrix\Seo\Engine\Bitrix as EngineBitrix;
+use Bitrix\Seo\Region\VkAvailability;
 
 /**
  * Class Service
@@ -23,6 +24,7 @@ class Service
 	const ANSWER_ERROR_NO_PAYLOAD = '004';
 	const ANSWER_ERROR_NO_SEC_CODE = '005';
 	const ANSWER_ERROR_WRONG_SEC_CODE = '006';
+	const ANSWER_ERROR_REGION_RESTRICTED = '007';
 
 	/** @var  ErrorCollection $errorCollection Error collection. */
 	protected $errorCollection;
@@ -125,6 +127,12 @@ class Service
 		if (!$type)
 		{
 			self::answerError(self::ANSWER_ERROR_NO_CODE);
+			return;
+		}
+
+		if (VkAvailability::isVkEngineCode($type) && !VkAvailability::isAvailable())
+		{
+			self::answerError(self::ANSWER_ERROR_REGION_RESTRICTED);
 			return;
 		}
 

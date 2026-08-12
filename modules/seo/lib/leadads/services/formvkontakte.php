@@ -18,7 +18,6 @@ use Bitrix\Seo\WebHook;
 use Bitrix\Seo\LeadAds\Response\FormResponse;
 use Bitrix\Seo\LeadAds\Response\Builder\VkontakteFormBuilder;
 
-
 /**
  * Class FormVkontakte
  *
@@ -162,9 +161,26 @@ class FormVkontakte extends LeadAds\Form
 		return $this->removeFormWebHook($this->accountId);
 	}
 
+	public function registerGroup(string $groupId): bool
+	{
+		if (!\Bitrix\Seo\Region\VkAvailability::isAvailable())
+		{
+			return false;
+		}
+
+		return parent::registerGroup($groupId);
+	}
+
 	protected function registerGroupWebHook(): Retargeting\Services\ResponseVkontakte
 	{
 		$response = new Retargeting\Services\ResponseVkontakte();
+
+		if (!\Bitrix\Seo\Region\VkAvailability::isAvailable())
+		{
+			$response->addError(new Error('VKontakte integration is not available in the current portal region.'));
+
+			return $response;
+		}
 
 		$confirmationCodeResponse = $this->getCallbackConfirmationCode();
 		if ($confirmationCodeResponse instanceof Error)

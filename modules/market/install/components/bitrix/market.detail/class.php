@@ -18,6 +18,7 @@ use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Marketplace\Client;
 use Bitrix\Rest\Marketplace\Url;
 use Bitrix\Market\Internal;
+use Bitrix\Market\Loadable;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 {
@@ -26,7 +27,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 
 Loader::includeModule('market');
 
-class RestMarketDetail extends CBitrixComponent
+class RestMarketDetail extends CBitrixComponent implements Loadable
 {
 	private array $appItem;
 	private int $version = 0;
@@ -48,17 +49,7 @@ class RestMarketDetail extends CBitrixComponent
 	{
 		try
 		{
-			$this->prepareInfo();
-			$marketDetail = new MarketDetail($this->arParams['APP_CODE'], DetailType::App);
-			$marketDetail->setVersion($this->version);
-			$marketDetail->setCheckHash($this->arResult['CHECK_HASH']);
-			$marketDetail->setInstallHash($this->arResult['INSTALL_HASH']);
-
-			$this->arResult['APP'] = $marketDetail->getInfo();
-			$this->arResult['ADDITIONAL_CONTENT'] = $marketDetail->getAdditionalContent();
-			$this->arResult['ADDITIONAL_MARKET_ACTION'] = $marketDetail->getAdditionalMarketAction();
-
-			$this->prepareResult();
+			$this->loadDetailResult();
 
 			$this->includeComponentTemplate();
 		}
@@ -68,6 +59,41 @@ class RestMarketDetail extends CBitrixComponent
 
 			$this->includeComponentTemplate('error_template');
 		}
+	}
+
+	public function getAjaxData($params): array
+	{
+		$this->arParams = array_merge($this->arParams, (array)$params);
+
+		try
+		{
+			$this->loadDetailResult();
+		}
+		catch (Internal\Exception\MarketException $exception)
+		{
+			$this->arResult['EXCEPTION'] = $exception;
+			$this->arResult['APP'] = [];
+		}
+
+		return [
+			'params' => $this->arParams,
+			'result' => $this->arResult,
+		];
+	}
+
+	private function loadDetailResult(): void
+	{
+		$this->prepareInfo();
+		$marketDetail = new MarketDetail($this->arParams['APP_CODE'], DetailType::App);
+		$marketDetail->setVersion($this->version);
+		$marketDetail->setCheckHash($this->arResult['CHECK_HASH']);
+		$marketDetail->setInstallHash($this->arResult['INSTALL_HASH']);
+
+		$this->arResult['APP'] = $marketDetail->getInfo();
+		$this->arResult['ADDITIONAL_CONTENT'] = $marketDetail->getAdditionalContent();
+		$this->arResult['ADDITIONAL_MARKET_ACTION'] = $marketDetail->getAdditionalMarketAction();
+
+		$this->prepareResult();
 	}
 
 	private function prepareInfo(): void
@@ -85,14 +111,14 @@ class RestMarketDetail extends CBitrixComponent
 		$this->arResult['INSTALL_HASH'] = false;
 		$this->arResult['START_INSTALL'] = false;
 
-		$version = (int)$this->request->getQuery('ver');
-		$checkHash = $this->request->getQuery('check_hash');
-		$installHash = $this->request->getQuery('install_hash');
+		$version = (int)$this->getRequestValue('ver');
+		$checkHash = $this->getRequestValue('check_hash');
+		$installHash = $this->getRequestValue('install_hash');
 
 		if ($version && $checkHash !== null && $installHash !== null)
 		{
 			$check = md5(
-				rtrim(CHTTP::URN2URI('/'), '/')
+				rtrim((string)(new Uri('/'))->toAbsolute(), '/')
 				. '|'
 				. $version
 				. '|'
@@ -132,6 +158,7 @@ class RestMarketDetail extends CBitrixComponent
 		if (isset($this->arResult['APP']['NAME']))
 		{
 			$APPLICATION->SetTitle(htmlspecialcharsbx($this->arResult['APP']['NAME']));
+			$this->arResult['TITLE'] = $this->arResult['APP']['NAME'];
 		}
 
 		$this->arResult['APP']['IS_FAVORITE'] =
@@ -249,7 +276,7 @@ class RestMarketDetail extends CBitrixComponent
 			$this->arResult['INSTALL_HASH']
 		);
 
-		$installType = $this->request->getQuery('install_type') ?? '';
+		$installType = $this->getRequestValue('install_type');
 		if ($installType === '1c_store_management' && !$this->isAppInstalled())
 		{
 			$this->arResult['APP']['INSTALL_INFO']['INSTALLED_TITLE_CODE'] = 'MARKET_POPUP_INSTALL_JS_APPLICATION_SHORT';
@@ -275,7 +302,7 @@ class RestMarketDetail extends CBitrixComponent
 
 			if ($this->arResult['CHECK_HASH'])
 			{
-				$uri = new Bitrix\Main\Web\Uri($this->arResult['IMPORT_PAGE']);
+				$uri = new Uri($this->arResult['IMPORT_PAGE']);
 				$uri->addParams([
 					'check_hash' => $this->arResult['CHECK_HASH'],
 					'install_hash' => $this->arResult['INSTALL_HASH']
@@ -332,7 +359,7 @@ class RestMarketDetail extends CBitrixComponent
 
 		$shouldStartInstall =
 			($this->arResult['CHECK_HASH'] || !$isAppInstalled)
-			&& $this->request->getQuery('install') === 'Y'
+			&& $this->getRequestValue('install') === 'Y'
 		;
 
 		if (
@@ -347,5 +374,18 @@ class RestMarketDetail extends CBitrixComponent
 		}
 
 		return $shouldStartInstall;
+	}
+
+	private function getRequestValue(string $name, string $fallback = ''): string
+	{
+		$request = $this->arParams['REQUEST'] ?? null;
+		if (is_array($request) && array_key_exists($name, $request))
+		{
+			return is_scalar($request[$name]) ? (string)$request[$name] : $fallback;
+		}
+
+		$value = $this->request->getQuery($name);
+
+		return is_scalar($value) ? (string)$value : $fallback;
 	}
 }

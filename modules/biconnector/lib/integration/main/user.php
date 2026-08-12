@@ -17,7 +17,7 @@ class User
 	public static function onBIConnectorDataSources(\Bitrix\Main\Event $event)
 	{
 		$params = $event->getParameters();
-		//$manager = $params[0];
+		$manager = $params[0];
 		$result = &$params[1];
 		$languageId = $params[2];
 
@@ -87,11 +87,35 @@ class User
 			$result['user']['DICTIONARY'][] = \Bitrix\BIConnector\Dictionary::USER_STRUCTURE_DEPARTMENT;
 			$result['user']['DICTIONARY'][] = \Bitrix\BIConnector\Dictionary::DEPARTMENT_PARENT_AGGREGATION;
 
+			/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+			$helper = $manager->getDatabaseConnection()->getSqlHelper();
+
 			$dshrJoin = 'INNER JOIN b_biconnector_dictionary_data DSHR ON DSHR.DICTIONARY_ID = ' . \Bitrix\BIConnector\Dictionary::USER_STRUCTURE_DEPARTMENT . ' AND DSHR.VALUE_ID = U.ID';
 			$dshrLeftJoin = 'LEFT JOIN b_biconnector_dictionary_data DSHR ON DSHR.DICTIONARY_ID = ' . \Bitrix\BIConnector\Dictionary::USER_STRUCTURE_DEPARTMENT . ' AND DSHR.VALUE_ID = U.ID';
 
-			$departmentJoin =  'INNER JOIN b_biconnector_dict_structure_agg AS SN ON SN.DEP_ID = SUBSTRING_INDEX(DSHR.VALUE_STR, \',\', 1)';
-			$departmentLeftJoin = 'LEFT JOIN b_biconnector_dict_structure_agg AS SN ON SN.DEP_ID = SUBSTRING_INDEX(DSHR.VALUE_STR, \',\', 1)';
+			$seg1OfValueStr = $helper->getSegmentByDelimiter('DSHR.VALUE_STR', ',', 1);
+			$departmentJoin = 'INNER JOIN b_biconnector_dict_structure_agg AS SN ON SN.DEP_ID = ' . $helper->castToInt($seg1OfValueStr);
+			$departmentLeftJoin = 'LEFT JOIN b_biconnector_dict_structure_agg AS SN ON SN.DEP_ID = ' . $helper->castToInt($seg1OfValueStr);
+
+			$dep1IdSeg = $helper->getSegmentByDelimiter('SN.DEP_IDS', ',', 1);
+			$dep2IdSeg = $helper->getSegmentByDelimiter('SN.DEP_IDS', ',', 2);
+			$dep3IdSeg = $helper->getSegmentByDelimiter('SN.DEP_IDS', ',', 3);
+
+			$dep1NameSeg = $helper->getSegmentByDelimiter('SN.DEP_NAMES', ',', 1);
+			$dep2NameSeg = $helper->getSegmentByDelimiter('SN.DEP_NAMES', ',', 2);
+			$dep3NameSeg = $helper->getSegmentByDelimiter('SN.DEP_NAMES', ',', 3);
+
+			$dep1NameIdSeg = $helper->getSegmentByDelimiter('SN.DEP_NAME_IDS', ',', 1);
+			$dep2NameIdSeg = $helper->getSegmentByDelimiter('SN.DEP_NAME_IDS', ',', 2);
+			$dep3NameIdSeg = $helper->getSegmentByDelimiter('SN.DEP_NAME_IDS', ',', 3);
+
+			// Guard levels 2/3: an empty DEP_IDS segment means that level is absent -> NULL.
+			// Safe and equivalent to the old "seg N-1 = seg N" form because DEP_IDS is a
+			// string_agg/GROUP_CONCAT of DISTINCT integer ancestor IDs from the org-structure
+			// closure table b_hr_structure_node_path (no empty or duplicate segments).
+			$dep2Guard = "CASE WHEN {$dep2IdSeg} = '' THEN NULL ELSE";
+			$dep3Guard = "CASE WHEN {$dep3IdSeg} = '' THEN NULL ELSE";
+			$guardEnd = 'END';
 
 			$result['user']['FIELDS'] = array_merge($result['user']['FIELDS'], [
 				'DEPARTMENT_IDS' => [
@@ -128,7 +152,7 @@ class User
 				],
 				'DEPARTMENT_ID_NAME' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'CONCAT(\'[\', SN.DEP_ID, \'] \', SN.DEP_NAME)',
+					'FIELD_NAME' => $helper->getConcatFunction("'['", 'SN.DEP_ID', "'] '", 'SN.DEP_NAME'),
 					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,
@@ -141,7 +165,7 @@ class User
 				],
 				'DEP1' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'SUBSTRING_INDEX(SN.DEP_NAMES, \',\', 1)',
+					'FIELD_NAME' => $dep1NameSeg,
 					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,
@@ -154,11 +178,7 @@ class User
 				],
 				'DEP2' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => '
-					CASE
-		WHEN SUBSTRING_INDEX(SN.DEP_IDS, \',\', 1) = SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 2), \',\', -1)
-			THEN NULL
-		ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_NAMES, \',\', 2), \',\', -1) END',
+					'FIELD_NAME' => "{$dep2Guard} {$dep2NameSeg} {$guardEnd}",
 					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,
@@ -171,10 +191,7 @@ class User
 				],
 				'DEP3' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'CASE
-		WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 2), \',\', -1) = SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 3), \',\', -1)
-			THEN NULL
-		ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_NAMES, \',\', 3), \',\', -1) END',
+					'FIELD_NAME' => "{$dep3Guard} {$dep3NameSeg} {$guardEnd}",
 					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,
@@ -187,7 +204,7 @@ class User
 				],
 				'DEP1_ID' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'SUBSTRING_INDEX(SN.DEP_IDS, \',\', 1)',
+					'FIELD_NAME' => $dep1IdSeg,
 					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,
@@ -200,10 +217,7 @@ class User
 				],
 				'DEP2_ID' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'CASE
-		WHEN SUBSTRING_INDEX(SN.DEP_IDS, \',\', 1) = SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 2), \',\', -1)
-			THEN NULL
-		ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 2), \',\', -1) END',
+					'FIELD_NAME' => "{$dep2Guard} {$dep2IdSeg} {$guardEnd}",
 					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,
@@ -216,10 +230,7 @@ class User
 				],
 				'DEP3_ID' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'CASE
-		WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 2), \',\', -1) = SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 3), \',\', -1)
-			THEN NULL
-		ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 3), \',\', -1) END',
+					'FIELD_NAME' => "{$dep3Guard} {$dep3IdSeg} {$guardEnd}",
 					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,
@@ -232,7 +243,7 @@ class User
 				],
 				'DEP1_N' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'SUBSTRING_INDEX(SN.DEP_NAME_IDS, \',\', 1)',
+					'FIELD_NAME' => $dep1NameIdSeg,
 					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,
@@ -245,10 +256,7 @@ class User
 				],
 				'DEP2_N' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'CASE
-		WHEN SUBSTRING_INDEX(SN.DEP_IDS, \',\', 1) = SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 2), \',\', -1)
-			THEN NULL
-		ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_NAME_IDS, \',\', 2), \',\', -1) END',
+					'FIELD_NAME' => "{$dep2Guard} {$dep2NameIdSeg} {$guardEnd}",
 					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,
@@ -261,10 +269,7 @@ class User
 				],
 				'DEP3_N' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'CASE
-		WHEN SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 2), \',\', -1) = SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_IDS, \',\', 3), \',\', -1)
-			THEN NULL
-		ELSE SUBSTRING_INDEX(SUBSTRING_INDEX(SN.DEP_NAME_IDS, \',\', 3), \',\', -1) END',
+					'FIELD_NAME' => "{$dep3Guard} {$dep3NameIdSeg} {$guardEnd}",
 					'FIELD_TYPE' => 'string',
 					'JOIN' => [
 						$dshrJoin,

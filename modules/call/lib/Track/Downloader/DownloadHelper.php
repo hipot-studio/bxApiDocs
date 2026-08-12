@@ -32,6 +32,7 @@ class DownloadHelper
 		$result = [
 			'supports_range' => false,
 			'file_size' => 0,
+			'content_type' => '',
 			'error' => null,
 		];
 
@@ -50,6 +51,7 @@ class DownloadHelper
 
 		$headers = $httpClient->getHeaders();
 		$result['file_size'] = (int)$headers->get('Content-Length');
+		$result['content_type'] = (string)($headers->get('Content-Type') ?? '');
 		$acceptRanges = $headers->get('Accept-Ranges') ?? '';
 		$result['supports_range'] = (mb_strtolower($acceptRanges) === 'bytes');
 

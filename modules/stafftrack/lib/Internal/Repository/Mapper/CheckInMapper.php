@@ -36,13 +36,16 @@ class CheckInMapper
 
 	public static function createDtoFromEntity(CheckIn $checkIn): CheckInDto
 	{
+		$latitude = $checkIn->getLatitude();
+		$longitude = $checkIn->getLongitude();
+
 		return (new CheckInDto())
 			->setId($checkIn->getId())
 			->setUserId($checkIn->getUserId())
 			->setDateCreate($checkIn->getDateCreate())
 			->setEntityType($checkIn->getEntityType())
-			->setLatitude($checkIn->getLatitude())
-			->setLongitude($checkIn->getLongitude())
+			->setLatitude($latitude !== null ? (float)$latitude : 0.0)
+			->setLongitude($longitude !== null ? (float)$longitude : 0.0)
 			->setDescription($checkIn->getDescription())
 			->setAddress($checkIn->getAddress())
 			->setMessageIds($checkIn->getMessageIds())

@@ -110,6 +110,7 @@ class General extends Base
 			'viewCommonUsers' => true,
 			'enableSound' => true,
 			'enableBigSmile' => true,
+			'defaultReaction' => 'like',/** @see \Bitrix\UI\Public\Enum\Reaction\ReactionName::LIKE */
 			'enableDarkTheme' => 'auto',
 			'isCurrentThemeDark' => false,
 			'enableRichLink' => true,
@@ -768,6 +769,16 @@ class General extends Base
 				case 'chatAlignment':
 					$verifiedSettings[$name] =
 						in_array($value, ['left', 'center'])
+							? $value
+							: $defaultSettings[$name]
+					;
+					break;
+				case 'defaultReaction':
+					$verifiedSettings[$name] =
+						(
+							\Bitrix\Main\Loader::includeModule('ui')
+							&& \Bitrix\UI\Public\Enum\Reaction\ReactionName::tryFrom((string)$value) !== null
+						)
 							? $value
 							: $defaultSettings[$name]
 					;

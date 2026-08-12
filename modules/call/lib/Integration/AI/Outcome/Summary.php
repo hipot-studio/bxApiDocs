@@ -22,8 +22,6 @@ class Summary extends AISenseContent
 	/** @var array<array{start: string, end: string, title: string, summary: string}> */
 	public array $summary = [];
 
-	public bool $isEmpty = true;
-
 	public function __construct(?Integration\AI\Outcome $outcome = null)
 	{
 		if ($outcome)
@@ -57,18 +55,9 @@ class Summary extends AISenseContent
 		}
 	}
 
-	public function toRestFormat(string $mentionFormat = 'bb'): array
+	public function toRestFormat(string $mentionFormat = MentionService::FORMAT_BB): array
 	{
-		$mentionService = MentionService::getInstance();
-		$replaceMentions = function (string $value) use ($mentionService, $mentionFormat)
-		{
-			return match ($mentionFormat)
-			{
-				'html' => $mentionService->replaceBBMentions($value),
-				'name' => $mentionService->removeBBMentions($value),
-				default => $value,//bb
-			};
-		};
+		$replaceMentions = fn (string $value): string => $this->applyMentionFormat($value, $mentionFormat);
 
 		$result = [];
 

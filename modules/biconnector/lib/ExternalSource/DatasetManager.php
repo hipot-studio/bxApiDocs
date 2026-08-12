@@ -74,7 +74,27 @@ class DatasetManager
 
 		$id = null;
 
-		$datasetAddResult = Internal\ExternalDatasetTable::add($dataset);
+		try
+		{
+			$datasetAddResult = Internal\ExternalDatasetTable::add($dataset);
+		}
+		catch (Main\DB\DuplicateEntryException)
+		{
+			$connection->rollbackTransaction();
+
+			$result->addError(
+				new Main\Error(
+					Loc::getMessage(
+						'BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_NAME_EXISTS_ERROR',
+						['#NAME#' => $dataset['NAME']]
+					) ?? '',
+					'NAME_EXISTS'
+				)
+			);
+
+			return $result;
+		}
+
 		if ($datasetAddResult->isSuccess())
 		{
 			$id = $datasetAddResult->getId();
@@ -148,11 +168,33 @@ class DatasetManager
 		else
 		{
 			$datasetName = $dataset['NAME'];
-			if (in_array($datasetName, SupersetServiceIntegration::getTableList(), true))
+			if (!preg_match(Internal\ExternalDatasetTable::TABLE_NAME_REGEXP, (string)$datasetName))
 			{
 				$result->addError(
 					new Main\Error(
-						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_ALREADY_EXIST_ERROR_MSGVER_1') ?? ''
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_NAME_FORMAT_ERROR') ?? '',
+						'NAME_FORMAT'
+					)
+				);
+			}
+			elseif (in_array($datasetName, SupersetServiceIntegration::getTableList(), true))
+			{
+				$result->addError(
+					new Main\Error(
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_ALREADY_EXIST_ERROR_MSGVER_1') ?? '',
+						'DATASET_ALREADY_EXIST'
+					)
+				);
+			}
+			elseif (self::isNameTaken($datasetName))
+			{
+				$result->addError(
+					new Main\Error(
+						Loc::getMessage(
+							'BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_NAME_EXISTS_ERROR',
+							['#NAME#' => $datasetName]
+						) ?? '',
+						'NAME_EXISTS'
 					)
 				);
 			}
@@ -278,8 +320,17 @@ class DatasetManager
 				}
 
 				if (
+					array_key_exists('DESCRIPTION', $fieldToUpdate)
+					&& (string)$fieldToUpdate['DESCRIPTION'] !== (string)$currentField->getDescription()
+				)
+				{
+					$currentField->setDescription($fieldToUpdate['DESCRIPTION']);
+				}
+
+				if (
 					$currentField->isVisibleChanged()
 					|| $currentField->isNameChanged()
+					|| $currentField->isDescriptionChanged()
 				)
 				{
 					$saveFieldResult = $currentField->save();
@@ -407,11 +458,29 @@ class DatasetManager
 			});
 			if ($duplicates)
 			{
-				$result->addError(new Main\Error('Duplicate column names: ' . implode(', ', array_keys($duplicates))));
+				$result->addError(
+					new Main\Error(
+						Loc::getMessage(
+							'BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DUPLICATE_FIELDS_ERROR',
+							['#FIELD_NAMES#' => implode(', ', array_keys($duplicates))]
+						),
+						'DUPLICATE_FIELDS'
+					)
+				);
 			}
 		}
 
 		return $result;
+	}
+
+	private static function isNameTaken(string $name): bool
+	{
+		$row = Internal\ExternalDatasetTable::getRow([
+			'select' => ['ID'],
+			'filter' => ['=NAME' => $name],
+		]);
+
+		return $row !== null;
 	}
 
 	protected static function addFieldsToDataset(int $id, array $fields): Main\Result

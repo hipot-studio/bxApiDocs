@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Intranet\Controller;
 
+use Bitrix\Bitrix24\Integration\Network\Errors\InviteLimitError;
 use Bitrix\Bitrix24\Integration\Network\RegisterSettingsSynchronizer;
 use Bitrix\Bitrix24\Portal\Settings\EmailConfirmationRequirements\Type;
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\InviteLimitControl;
@@ -28,6 +29,8 @@ use CIntranetInviteDialog;
 
 class Invite extends Main\Engine\Controller
 {
+	private const INVITE_LIMIT_ERROR_CODE = 'invite_limit';
+
 	/**
 	 * @throws BinderArgumentException
 	 */
@@ -433,13 +436,17 @@ class Invite extends Main\Engine\Controller
 
 			foreach ($result->getErrors() as $error)
 			{
-				$messageCode = match($error->getMessage()) {
+				$errorKey = $this->getReInviteErrorKey($error);
+				$messageCode = match($errorKey) {
 					'user_is_not_employee' => 'INTRANET_CONTROLLER_INVITE_ERROR_USER_IS_NOT_EMPLOYEE',
 					'user_not_found' => 'INTRANET_CONTROLLER_INVITE_ERROR_USER_NOT_FOUND',
 					'user_already_confirmed' => 'INTRANET_CONTROLLER_INVITE_ERROR_USER_ALREADY_CONFIRMED',
 					'user_login_already_exists' => 'INTRANET_CONTROLLER_INVITE_ERROR_USER_LOGIN_ALREADY_EXISTS',
 					'invalid_response' => 'INTRANET_CONTROLLER_INVITE_ERROR_INVALID_RESPONSE',
-					'invite_limit' => 'INTRANET_CONTROLLER_INVITE_ERROR_INVITE_LIMIT',
+					'profile_add_check_invalid_response' => 'INTRANET_CONTROLLER_INVITE_ERROR_INVALID_RESPONSE',
+					self::INVITE_LIMIT_ERROR_CODE => $this->getInviteLimitMessageCode(
+						$error instanceof InviteLimitError ? $error->getInviteLimitType() : null,
+					),
 					default => null,
 				};
 
@@ -458,7 +465,7 @@ class Invite extends Main\Engine\Controller
 
 				if (isset($messageCode))
 				{
-					$errorCode = $error->getMessage();
+					$errorCode = $errorKey;
 					$errorMessage = Loc::getMessage($messageCode);
 
 					break;
@@ -503,14 +510,16 @@ class Invite extends Main\Engine\Controller
 	{
 		$res = UserTable::getList([
 			'filter' => [
-				'=ID' => $userId
+				'=ID' => $userId,
 			],
 			'select' => [
 				'EMAIL',
 				'CONFIRM_CODE',
 				'PHONE' => 'PHONE_AUTH.PHONE_NUMBER',
-			]
+				'PERSONAL_MOBILE',
+			],
 		]);
+
 		$userFields = $res->fetch();
 		if (
 			!$userFields
@@ -521,45 +530,111 @@ class Invite extends Main\Engine\Controller
 			return null;
 		}
 
-		if (empty($userFields['EMAIL']) && empty($userFields['PHONE']))
+		$phone = $userFields['PHONE'] ?: $userFields['PERSONAL_MOBILE'];
+		if (empty($userFields['EMAIL']) && empty($phone))
 		{
 			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROLLER_INVITE_FAILED'), 'INTRANET_CONTROLLER_INVITE_FAILED'));
 			return null;
 		}
 
-		$isEmployee = (new Intranet\Integration\HumanResources\HrUserService)->isEmployee(new Entity\User(id: $userId));
-		$extranet = Loader::includeModule('extranet') && !$isEmployee;
-		if (!$extranet)
+		if (empty($userFields['EMAIL']))
 		{
-			if ($userFields['EMAIL'])
+			$reInviteResult = CIntranetInviteDialog::reinviteUserByPhone($userId);
+			if (!$reInviteResult->isSuccess())
 			{
-				$result = \CIntranetInviteDialog::reinviteUser(SITE_ID, $userId);
-			}
-			else
-			{
-				$reinviteResult = \CIntranetInviteDialog::reinviteUserByPhone($userId);
-				$result = $reinviteResult->isSuccess();
-				if (!$result && !empty($reinviteResult->getError()?->getMessage()))
+				$hasError = false;
+				foreach ($reInviteResult->getErrors() as $error)
 				{
-					$this->addError($reinviteResult->getError());
-					return null;
+					if ($error->getMessage() === '')
+					{
+						continue;
+					}
+
+					$this->addReInviteError($error);
+					$hasError = true;
 				}
+
+				if (!$hasError)
+				{
+					$this->addError(new Error(Loc::getMessage('INTRANET_CONTROLLER_INVITE_FAILED'), 'INTRANET_CONTROLLER_INVITE_FAILED'));
+				}
+
+				return null;
 			}
-		}
-		else
-		{
-			$result = \CIntranetInviteDialog::reinviteExtranetUser(SITE_ID, $userId);
+
+			return [
+				'result' => true,
+			];
 		}
 
-		if (!$result)
+		$invitationCollection = new Intranet\Public\Type\Collection\InvitationCollection();
+		$invitationCollection->add(
+			new Intranet\Public\Type\EmailInvitation($userFields['EMAIL']),
+		);
+
+		try
 		{
-			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROLLER_INVITE_USER_NOT_FOUND'), 'INTRANET_CONTROLLER_INVITE_USER_NOT_FOUND'));
+			(new Intranet\Public\Facade\Invitation\ReInvitationFacade())
+				->inviteByCollection($invitationCollection)
+			;
+		}
+		catch (Intranet\Exception\ErrorCollectionException $exception)
+		{
+			foreach ($exception->getErrors() as $error)
+			{
+				$this->addReInviteError($error);
+			}
+
+			return null;
+		}
+		catch (\Exception $exception)
+		{
+			$this->addError(new Error($exception->getMessage()));
+
 			return null;
 		}
 
 		return [
-			'result' => $result
+			'result' => true,
 		];
+	}
+
+	private function addReInviteError(Error $error): void
+	{
+		if ($error instanceof InviteLimitError)
+		{
+			$this->addError(
+				new Error(
+					Loc::getMessage($this->getInviteLimitMessageCode($error->getInviteLimitType())),
+					self::INVITE_LIMIT_ERROR_CODE,
+				)
+			);
+
+			return;
+		}
+
+		$this->addError($error);
+	}
+
+	private function getReInviteErrorKey(Error $error): string
+	{
+		$code = $error->getCode();
+		if (is_string($code) && $code !== '')
+		{
+			return $code;
+		}
+
+		return $error->getMessage();
+	}
+
+	private function getInviteLimitMessageCode(?string $inviteLimitType): string
+	{
+		return match ($inviteLimitType)
+		{
+			'by_sms' => 'INTRANET_CONTROLLER_INVITE_ERROR_INVITE_LIMIT_SMS',
+			'by_email' => 'INTRANET_CONTROLLER_INVITE_ERROR_INVITE_LIMIT_EMAIL',
+			default => 'INTRANET_CONTROLLER_INVITE_ERROR_INVITE_LIMIT',
+		};
 	}
 
 	public function deleteInvitationAction(array $params = [])

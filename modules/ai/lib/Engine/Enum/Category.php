@@ -9,9 +9,10 @@ namespace Bitrix\AI\Engine\Enum;
  */
 enum Category: string
 {
-	case TEXT = 'text';
-	case IMAGE = 'image';
-	case AUDIO = 'audio';
-	case CALL = 'call';
-	case VISION = 'vision';
+	case TEXT     = 'text';
+	case IMAGE    = 'image';
+	case AUDIO    = 'audio';
+	case CALL     = 'call';
+	case VISION   = 'vision';
+	case CLASSIFY = 'classify';
 }

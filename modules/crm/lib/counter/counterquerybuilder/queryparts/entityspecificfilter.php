@@ -87,6 +87,11 @@ final class EntitySpecificFilter
 				$query->whereIn('STAGE_ID', $statesIds);
 			}
 
+			if ($factory->isRecurringEnabled())
+			{
+				$query->addFilter('=IS_RECURRING', 'N');
+			}
+
 			if ($categoryId !== null)
 			{
 				$query->where('CATEGORY_ID', $options['CATEGORY_ID']);

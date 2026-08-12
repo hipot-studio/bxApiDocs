@@ -3,6 +3,7 @@
 namespace Bitrix\Call\Controller\Filter;
 
 use Bitrix\Call\Idempotence;
+use Bitrix\Call\Controller\IdempotentReplayable;
 use Bitrix\Call\DTO;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Error;
@@ -31,47 +32,97 @@ use Bitrix\Main\EventResult;
  */
 class UniqueRequestFilter extends Base
 {
+	/**
+	 * Short TTL for high-frequency client-initiated actions (answer, decline,
+	 * invite, share screen, start record, etc.). Clients generate a fresh
+	 * requestId per click.
+	 */
+	public const TTL_HOT_PATH = 60;
+
 	private ?string $claimedKey = null;
+	private int $ttl;
+
+	/**
+	 * @param int $ttl Idempotency key TTL in seconds. 0 (default).
+	 */
+	public function __construct(int $ttl = 0)
+	{
+		parent::__construct();
+		$this->ttl = $ttl;
+	}
 
 	public function onBeforeAction(Event $event)
 	{
-		$arguments = $this->getAction()->getArguments();
-
-		$requestId = null;
-		if (
-			isset($arguments['callRequest'])
-			&& $arguments['callRequest'] instanceof DTO\CallRequest
-			&& $arguments['callRequest']->requestId
-		)
-		{
-			$requestId = (string)$arguments['callRequest']->requestId;
-		}
-		elseif (
-			isset($arguments['pushRequest'])
-			&& $arguments['pushRequest'] instanceof DTO\CallPushRequest
-			&& $arguments['pushRequest']->requestId
-		)
-		{
-			$requestId = (string)$arguments['pushRequest']->requestId;
-		}
-		elseif (
-			isset($arguments['trackFile'])
-			&& $arguments['trackFile'] instanceof DTO\TrackFileRequest
-			&& $arguments['trackFile']->trackId
-		)
-		{
-			$requestId = 'track:' . $arguments['trackFile']->trackId;
-		}
+		$requestId = $this->resolveRequestId($this->getAction()->getArguments());
 
 		if ($requestId !== null)
 		{
-			if (!Idempotence::addKey($requestId))
+			$claimed = $this->ttl > 0
+				? Idempotence::addKey($requestId, $this->ttl)
+				: Idempotence::addKey($requestId)
+			;
+			if (!$claimed)
 			{
+				// Race-aware: only short-circuit as IdempotentReplay when the
+				// original pass has *finished* (state == DONE, set by
+				// onAfterAction success branch). If the original is still
+				// in-flight — or state is not readable (file-cache fallback) —
+				// reject with REQUEST_NOT_UNIQUE so the upstream caller keeps
+				// retrying; otherwise we could ack a duplicate while the
+				// original then fails and releases the key, losing the
+				// callback.
+				if (Idempotence::getState($requestId) === Idempotence::STATE_DONE)
+				{
+					$controller = $this->getAction()->getController();
+					if ($controller instanceof IdempotentReplayable)
+					{
+						$controller->markIdempotentReplay();
+						return null;
+					}
+				}
+
 				$this->addError(new Error("Request is not unique. It has already been processed.", "REQUEST_NOT_UNIQUE"));
 
 				return new EventResult(EventResult::ERROR, null, null, $this);
 			}
 			$this->claimedKey = $requestId;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Resolves the idempotency key for the current action.
+	 *
+	 * Track delivery has no caller-supplied requestId and is keyed by its
+	 * stable external track id instead.
+	 */
+	private function resolveRequestId(array $arguments): ?string
+	{
+		foreach ($arguments as $argument)
+		{
+			if (
+				(
+					$argument instanceof DTO\CallRequest
+					|| $argument instanceof DTO\CallPushRequest
+					|| $argument instanceof DTO\ControllerRequest
+					|| $argument instanceof DTO\TrackErrorRequest
+					|| $argument instanceof DTO\CloudRecordingRequest
+					|| $argument instanceof DTO\CloudRecordingErrorRequest
+					|| $argument instanceof DTO\ProcessingStatusRequest
+					|| $argument instanceof DTO\CallUserRequest
+					|| $argument instanceof DTO\UserRequest
+				)
+				&& $argument->requestId !== ''
+			)
+			{
+				return (string)$argument->requestId;
+			}
+
+			if ($argument instanceof DTO\TrackFileRequest && $argument->trackId)
+			{
+				return 'track:' . $argument->trackId;
+			}
 		}
 
 		return null;
@@ -88,9 +139,22 @@ class UniqueRequestFilter extends Base
 		{
 			Idempotence::clearKey($this->claimedKey);
 		}
-		// Drop the local handle whether or not we cleared the key — on
-		// success the key is intentionally kept for its TTL, and the
-		// destructor must not double-clear it.
+		else
+		{
+			// Promote the key from IN_FLIGHT to DONE so concurrent retransmits
+			// arriving AFTER this point can be short-circuited as replay.
+			// Earlier retransmits saw IN_FLIGHT and were rejected with
+			// REQUEST_NOT_UNIQUE — those retries will see DONE on the next
+			// attempt and replay cleanly. Use the same TTL as the original
+			// claim so DONE inherits the caller's policy (24h default, 60s
+			// for hot-path actions).
+			$this->ttl > 0
+				? Idempotence::markDone($this->claimedKey, $this->ttl)
+				: Idempotence::markDone($this->claimedKey)
+			;
+		}
+		// Drop the local handle — on success the key stays for its TTL as
+		// DONE; the destructor must not double-clear it.
 		$this->claimedKey = null;
 	}
 

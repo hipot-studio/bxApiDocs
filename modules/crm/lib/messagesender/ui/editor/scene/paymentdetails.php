@@ -2,9 +2,10 @@
 
 namespace Bitrix\Crm\MessageSender\UI\Editor\Scene;
 
-use Bitrix\Crm\MessageSender\UI\Editor\Scene;
+use Bitrix\MessageService\Public\UI\MessageEditor\Context;
+use Bitrix\MessageService\Public\UI\SenderCode;
 
-final class PaymentDetails extends Scene
+final class PaymentDetails extends BaseScene
 {
 	public const ID = 'crm.payment.details';
 
@@ -17,7 +18,7 @@ final class PaymentDetails extends Scene
 	{
 		foreach ($providers as $provider)
 		{
-			if ($provider->getKey() === 'crmValues')
+			if ($provider->getId() === 'crmValues')
 			{
 				return [$provider];
 			}
@@ -26,16 +27,19 @@ final class PaymentDetails extends Scene
 		return [];
 	}
 
-	public function filterViewChannels(array $viewChannels): array
+	public function filterViewChannels(array $viewChannels, Context $context): array
 	{
+		$viewChannels = parent::filterViewChannels($viewChannels, $context);
+
 		return array_filter(
 			$viewChannels,
-			static function (\Bitrix\Crm\MessageSender\UI\Editor\ViewChannel $channel): bool {
+			static function (\Bitrix\MessageService\Public\UI\MessageEditor\ViewChannel $channel): bool {
 				$backend = $channel->getBackend();
+				$senderCode = $backend->getSenderCode();
 
 				return (
-					\Bitrix\Crm\MessageSender\UI\Taxonomy::isNotifications($backend)
-					|| (\Bitrix\Crm\MessageSender\UI\Taxonomy::isSmsSender($backend) && !$backend->isTemplatesBased())
+					$senderCode === SenderCode::BITRIX24
+					|| ($senderCode === SenderCode::SMS_PROVIDER && !$backend->isTemplatesBased())
 				);
 			},
 		);

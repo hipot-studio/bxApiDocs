@@ -82,6 +82,7 @@ class AbsenceRepository
 					$xmlId,
 					self::getTypeCaption($xmlId),
 					(int)$absence['ID'],
+					self::dateContainsTime($absence['ACTIVE_TO']),
 				)
 			);
 		}
@@ -224,5 +225,24 @@ class AbsenceRepository
 		}
 
 		return self::$activeVacationTypes;
+	}
+
+	private static function dateContainsTime(mixed $date): bool
+	{
+		$dateString = $date instanceof Date ? $date->toString() : (string)$date;
+		if ($dateString === '')
+		{
+			return false;
+		}
+
+		$matches = [];
+		if (preg_match('/\b\d{1,2}:\d{2}(?::\d{2})?\b/', $dateString, $matches) !== 1)
+		{
+			return false;
+		}
+
+		[$hours, $minutes, $seconds] = array_pad(explode(':', $matches[0]), 3, '0');
+
+		return (int)$hours !== 0 || (int)$minutes !== 0 || (int)$seconds !== 0;
 	}
 }

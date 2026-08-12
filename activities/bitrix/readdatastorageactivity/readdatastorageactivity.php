@@ -7,6 +7,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Public\Activity\Interface\ActivityContentBlockProviderInterface;
+use Bitrix\Bizproc\Public\Activity\Interface\ContentBlockScopeConsumerInterface;
+use Bitrix\Bizproc\Activity\Dto\ContentBlock;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\Public\Provider\StorageFieldProvider;
@@ -19,6 +22,7 @@ use Bitrix\Main\Result;
 use Bitrix\Bizproc\Activity\BaseActivity;
 use Bitrix\Main\Web\Json;
 use Bitrix\Bizproc\Internal\Repository\Mapper\StorageItemMapper;
+use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Service\StorageActivity\StorageActivityService;
 use Bitrix\Bizproc\BaseType\Value\DateTime;
 
@@ -33,7 +37,7 @@ use Bitrix\Bizproc\BaseType\Value\DateTime;
  * @property-write ?array OutputFields
  * @property-write string IsExpanded
  */
-class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurableActivity
+class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurableActivity, ActivityContentBlockProviderInterface, ContentBlockScopeConsumerInterface
 {
 	use \Bitrix\Bizproc\Activity\Mixins\EntityFilter;
 
@@ -148,6 +152,15 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 	protected function internalExecute(): \Bitrix\Main\ErrorCollection
 	{
 		$errors = parent::internalExecute();
+
+//		$limitsService = Container::getStorageLimitsService();
+//		if (!$limitsService->isDiskQuotaReadable())
+//		{
+//			$errors->setError(new Error(Loc::getMessage('BIZPROC_SRA_QUOTA_EXCEEDED')));
+//
+//			return $errors;
+//		}
+
 		$provider = new StorageItemProvider($this->findStorageId());
 
 		$this->arProperties['CollectionJson'] = '';
@@ -473,6 +486,16 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 		}
 
 		return $result;
+	}
+
+	public static function getContentBlock(array $properties, ?\Bitrix\Bizproc\Activity\Dto\ContentBlockContext $context = null): ?ContentBlock
+	{
+		return StorageActivityService::getContentBlock($properties, $context);
+	}
+
+	public static function getScopeConsumption(): array
+	{
+		return StorageActivityService::getScopeConsumption();
 	}
 
 	public static function validateProperties($testProperties = [], \CBPWorkflowTemplateUser $user = null)

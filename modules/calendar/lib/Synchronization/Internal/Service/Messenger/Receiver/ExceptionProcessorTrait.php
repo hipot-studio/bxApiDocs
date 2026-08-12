@@ -12,6 +12,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\Google\RateLimitEx
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NoResponseException;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Command\Exception\CommandException;
+use Bitrix\Main\Messenger\Internals\Exception\Receiver\NoLoggableException;
 use Bitrix\Main\Messenger\Internals\Exception\Receiver\RecoverableMessageException;
 use Bitrix\Main\Messenger\Internals\Exception\Receiver\UnrecoverableMessageException;
 
@@ -19,6 +20,7 @@ trait ExceptionProcessorTrait
 {
 	/**
 	 * @throws CommandException
+	 * @throws NoLoggableException
 	 * @throws RecoverableMessageException
 	 * @throws UnrecoverableMessageException
 	 */
@@ -40,13 +42,21 @@ trait ExceptionProcessorTrait
 			{
 				if (!$previous->isRecoverable())
 				{
-					throw new UnrecoverableMessageException($e->getMessage(), $e->getCode(), $e);
+					throw new UnrecoverableMessageException(
+						$e->getMessage(),
+						$e->getCode(),
+						$e,
+					);
 				}
 
 				if ($previous instanceof NoLogSynchronizerException)
 				{
-					// @todo Change to no loggable exception after adding it's support to main module
-					throw new RecoverableMessageException($e->getMessage(), $e->getCode(), $e, 300);
+					throw new NoLoggableException($e->getMessage(), $e->getCode(), $e);
+				}
+
+				if ($previous->getCode() >= 500 && $previous->getCode() < 600)
+				{
+					throw new NoLoggableException($e->getMessage(), $e->getCode(), $e);
 				}
 
 				$vendorException = $previous->getPrevious();
@@ -61,14 +71,7 @@ trait ExceptionProcessorTrait
 					|| $vendorException instanceof DtoValidationException
 				)
 				{
-					// @todo Change to no loggable exception after adding it's support to main module
-					throw new RecoverableMessageException($e->getMessage(), $e->getCode(), $e, 300);
-				}
-
-				if ($previous->getCode() >= 500 && $previous->getCode() < 600)
-				{
-					// @todo Change to no loggable exception after adding it's support to main module
-					throw new RecoverableMessageException($e->getMessage(), $e->getCode(), $e, 300);
+					throw new NoLoggableException($e->getMessage(), $e->getCode(), $e);
 				}
 			}
 		}

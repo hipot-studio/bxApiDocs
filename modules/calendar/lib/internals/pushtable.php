@@ -70,11 +70,9 @@ class PushTable extends Main\Entity\DataManager
 					'validation' => [__CLASS__, 'validateEntityType']
 				]
 			))
-				->configureTitle(Loc::getMessage('PUSH_ENTITY_ENTITY_TYPE_FIELD'))
 				->configurePrimary(true)
 			,
 			(new IntegerField('ENTITY_ID'))
-				->configureTitle(Loc::getMessage('PUSH_ENTITY_ENTITY_ID_FIELD'))
 				->configurePrimary(true)
 			,
 			(new StringField('CHANNEL_ID',
@@ -82,7 +80,6 @@ class PushTable extends Main\Entity\DataManager
 					'validation' => [__CLASS__, 'validateChannelId']
 				]
 			))
-				->configureTitle(Loc::getMessage('PUSH_ENTITY_CHANNEL_ID_FIELD'))
 				->configureRequired(true)
 			,
 			(new StringField('RESOURCE_ID',
@@ -90,21 +87,16 @@ class PushTable extends Main\Entity\DataManager
 					'validation' => [__CLASS__, 'validateResourceId']
 				]
 			))
-				->configureTitle(Loc::getMessage('PUSH_ENTITY_RESOURCE_ID_FIELD'))
 				->configureRequired(true)
 			,
 			(new DatetimeField('EXPIRES'))
-				->configureTitle(Loc::getMessage('PUSH_ENTITY_EXPIRES_FIELD'))
 				->configureRequired(true)
 			,
 			(new EnumField('NOT_PROCESSED'))
-				->configureTitle(Loc::getMessage('PUSH_ENTITY_NOT_PROCESSED_FIELD'))
 				->configureValues(['N', 'Y', 'B', 'U'])
 				->configureDefaultValue('N')
 			,
-			(new DatetimeField('FIRST_PUSH_DATE'))
-				->configureTitle(Loc::getMessage('PUSH_ENTITY_FIRST_PUSH_DATE_FIELD'))
-			,
+			(new DatetimeField('FIRST_PUSH_DATE')),
 		];
 	}
 

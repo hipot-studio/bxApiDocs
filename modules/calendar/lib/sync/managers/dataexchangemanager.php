@@ -149,8 +149,6 @@ class DataExchangeManager
 				$userIds[] = $ownerId;
 			}
 
-			SynchronizationFeature::setUserId($ownerId);
-
 			if (SynchronizationFeature::isOn())
 			{
 				if ($connection->getAccountType() === Google\Factory::SERVICE_NAME)

@@ -1563,6 +1563,6 @@ abstract class Provider
 
 	private function generateLogIdCacheKey(array $params): string
 	{
-		return md5(serialize($params));
+		return md5(serialize([static::className(), $this->entityId, $params]));
 	}
 }

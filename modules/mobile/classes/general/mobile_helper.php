@@ -1,7 +1,8 @@
-<?
+<?php
 
 use Bitrix\Socialnetwork\LogTable;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Web\Uri;
 
 class CMobileHelper
 {
@@ -472,7 +473,7 @@ class CMobileHelper
 
 							if ($previewImageUrl)
 							{
-								$fileFata['previewImageUrl'] = CHTTP::URN2URI($previewImageUrl);
+								$fileFata['previewImageUrl'] = (string)(new Uri($previewImageUrl))->toAbsolute();
 							}
 
 							$arFileData[] = $fileFata;
@@ -531,7 +532,7 @@ class CMobileHelper
 
 								if ($previewImageUrl)
 								{
-									$fileData['previewImageUrl'] = CHTTP::URN2URI($previewImageUrl);
+									$fileData['previewImageUrl'] = (string)(new Uri($previewImageUrl))->toAbsolute();
 								}
 
 								$arFileData[] = $fileData;
@@ -583,7 +584,7 @@ class CMobileHelper
 
 					if ($previewImageUrl)
 					{
-						$fileData['previewImageUrl'] = CHTTP::URN2URI($previewImageUrl);
+						$fileData['previewImageUrl'] = (string)(new Uri($previewImageUrl))->toAbsolute();
 					}
 
 					$arFileData[] = $fileData;
@@ -914,7 +915,7 @@ class CMobileHelper
 			$params = explode("|", $tag);
 			if ($params[1] == 'CRM' && isset($params[3]))
 			{
-				list($entityTypeName, $entityId) = explode('_', $params[3]);
+				[$entityTypeName, $entityId] = explode('_', $params[3]);
 				$entityTypeName = mb_strtolower($entityTypeName);
 				$entityId = (int)$entityId;
 

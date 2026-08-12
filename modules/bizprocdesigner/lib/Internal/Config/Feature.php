@@ -26,6 +26,11 @@ class Feature
 		return $this->getOptionValue('debugger_available', 'N') === 'Y';
 	}
 
+	public function isNodeFilterAvailable(): bool
+	{
+		return $this->getOptionValue('node_filter_available', 'N') === 'Y';
+	}
+
 	private function getOptionValue(string $option, mixed $defaultValue)
 	{
 		return Main\Config\Option::get(self::MODULE_NAME, $option, $defaultValue);

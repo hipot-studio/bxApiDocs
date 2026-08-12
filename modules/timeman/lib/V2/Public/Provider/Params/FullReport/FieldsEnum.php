@@ -17,6 +17,7 @@ enum FieldsEnum: string
 	case Events = 'events';
 	case Files = 'files';
 	case Report = 'report';
+	case Type = 'type';
 	case Plans = 'plans';
 	case Mark = 'mark';
 	case Approve = 'approve';
@@ -38,6 +39,7 @@ enum FieldsEnum: string
 			self::Events => 'EVENTS',
 			self::Files => 'FILES',
 			self::Report => 'REPORT',
+			self::Type => 'TYPE',
 			self::Plans => 'PLANS',
 			self::Mark => 'MARK',
 			self::Approve => 'APPROVE',
@@ -61,6 +63,7 @@ enum FieldsEnum: string
 			self::Events,
 			self::Files,
 			self::Report,
+			self::Type,
 			self::Plans,
 			self::Mark,
 			self::Approve,

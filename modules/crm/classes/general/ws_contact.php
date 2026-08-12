@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Web\Uri;
+
 if (!CModule::IncludeModule('webservice'))
 	return;
 
@@ -174,7 +176,7 @@ class CCrmContactWS extends IWebService
 		if ($arRes['PHOTO'] <> '')
 		{
 			$arImage = self::InitImage($arRes['PHOTO'], 100, 100);
-			$obRow->setAttribute('ows_Attachments', ';#'.CHTTP::URN2URI($arImage['CACHE']['src']).';#'.self::makeGUID(md5($arRes['PHOTO'])).',1;#');
+			$obRow->setAttribute('ows_Attachments', ';#'.(new Uri($arImage['CACHE']['src']))->toAbsolute().';#'.self::makeGUID(md5($arRes['PHOTO'])).',1;#');
 			$obRow->setAttribute('ows_MetaInfo_AttachProps', '<File Photo="-1">'.$arImage['FILE']['FILE_NAME'].'</File>');
 		}
 		else
@@ -263,7 +265,7 @@ class CCrmContactWS extends IWebService
 		{
 			if ($pos = mb_strpos($changeToken, ';'))
 			{
-				list($newChangeToken, $page, $last_change) = explode(';', $changeToken);
+				[$newChangeToken, $page, $last_change] = explode(';', $changeToken);
 
 				$page++;
 				$changeToken = $newChangeToken;
@@ -398,7 +400,7 @@ class CCrmContactWS extends IWebService
 		{
 			$arImage = self::InitImage($arContact['PHOTO'], 100, 100);
 			$obData->addChild($obAttachment = new CXMLCreator('Attachment'));
-			$obAttachment->setData(CHTTP::URN2URI($arImage['CACHE']['src']));
+			$obAttachment->setData((string)(new Uri($arImage['CACHE']['src']))->toAbsolute());
 		}
 
 		return array('GetAttachmentCollectionResult' => $obData);

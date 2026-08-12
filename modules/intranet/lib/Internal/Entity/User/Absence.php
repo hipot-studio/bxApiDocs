@@ -17,6 +17,7 @@ class Absence implements EntityInterface
 		private readonly string $typeXmlId,
 		private readonly string $name,
 		private ?int $id = null,
+		private readonly bool $dateToContainsTime = true,
 	)
 	{
 	}
@@ -59,6 +60,11 @@ class Absence implements EntityInterface
 	public function getDateTo(): DateTime
 	{
 		return $this->dateTo;
+	}
+
+	public function dateToContainsTime(): bool
+	{
+		return $this->dateToContainsTime;
 	}
 
 	public function getDescription(): string

@@ -41,7 +41,7 @@ class CIMNotifySchema
 	{
 		$config = [
 			"im" => [
-				"NAME" => GetMessage('IM_NS_IM'),
+				"NAME" => GetMessage('IM_NS_IM_MSGVER_1'),
 				"NOTIFY" => [
 					"message" => [
 						"NAME" => GetMessage('IM_NS_MESSAGE_NEW_MSGVER_2'),
@@ -84,7 +84,7 @@ class CIMNotifySchema
 		if (!IsModuleInstalled("b24network"))
 		{
 			$config["main"] = [
-				"NAME" => GetMessage('IM_NS_MAIN'),
+				"NAME" => GetMessage('IM_NS_MAIN_MSGVER_1'),
 				"NOTIFY" => [
 					"rating_vote" => [
 						"NAME" => GetMessage('IM_NS_MAIN_RATING_VOTE'),

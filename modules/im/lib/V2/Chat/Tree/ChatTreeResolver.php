@@ -69,6 +69,8 @@ final class ChatTreeResolver
 					isMuted: ($row['IS_MUTED'] ?? 'N') === 'Y',
 					chatType: (string)($row['CHAT_TYPE'] ?? ''),
 					entityType: isset($row['CHAT_ENTITY_TYPE']) ? (string)$row['CHAT_ENTITY_TYPE'] : null,
+					// No recent row for this user (LEFT join miss) => chat is hidden from the recent list.
+					isHidden: empty($row['RECENT_PRESENT']),
 				);
 
 				$resolved[$node->chatId] = $node;
@@ -111,9 +113,11 @@ final class ChatTreeResolver
 				'CHAT_ENTITY_TYPE' => 'ENTITY_TYPE',
 				'PARENT_ID' => 'PARENT_ID',
 				'IS_MUTED' => 'RELATION.NOTIFY_BLOCK',
+				'RECENT_PRESENT' => 'RECENT.ITEM_CID',
 			])
 			->whereIn('ID', $chatIds)
 			->withRelation($userId, Join::TYPE_INNER)
+			->withRecent($userId)
 		;
 
 		return $query->fetchAll();

@@ -11,5 +11,7 @@ final readonly class ResolvedChatNode
 		public bool $isMuted,
 		public string $chatType,
 		public ?string $entityType,
+		// No recent row for this user => the chat is hidden from the recent list.
+		public bool $isHidden = false,
 	) {}
 }

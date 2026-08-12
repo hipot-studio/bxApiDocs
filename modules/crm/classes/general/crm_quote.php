@@ -14,6 +14,7 @@ use Bitrix\Crm\Format\AddressFormatter;
 use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\Integration\StorageType;
+use Bitrix\Crm\Model\FieldRepository;
 use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
 use Bitrix\Crm\Tracking;
@@ -536,10 +537,15 @@ class CAllCrmQuote
 		return true;
 	}
 
+	/**
+	 * @deprecated
+	 *
+	 * Method will be removed soon
+	 */
 	static public function BuildEntityAttr($userID, $arAttr = array())
 	{
 		$userID = (int)$userID;
-		$arResult = array("U{$userID}");
+		$arResult = [];
 		if(isset($arAttr['OPENED']) && $arAttr['OPENED'] == 'Y')
 		{
 			$arResult[] = 'O';
@@ -551,13 +557,13 @@ class CAllCrmQuote
 			$arResult[] = "STATUS_ID{$statusID}";
 		}
 
-		$arUserAttr = Bitrix\Crm\Service\Container::getInstance()
+		$userBasedEntityAttributes = Bitrix\Crm\Service\Container::getInstance()
 			->getUserPermissions($userID)
 			->getAttributesProvider()
 			->getEntityAttributes()
 		;
 
-		return array_merge($arResult, $arUserAttr['INTRANET']);
+		return array_merge($arResult, $userBasedEntityAttributes);
 	}
 	static public function RebuildEntityAccessAttrs($IDs)
 	{
@@ -2418,7 +2424,7 @@ class CAllCrmQuote
 			array('CCrmQuote', '__AfterPrepareSql')
 		);
 
-		return $lb->Prepare($arOrder, $arFilter, $arGroupBy, $arNavStartParams, $arSelectFields, $arOptions);
+		return self::applyQueryResultDecorator($lb->Prepare($arOrder, $arFilter, $arGroupBy, $arNavStartParams, $arSelectFields, $arOptions));
 	}
 
 	static public function BuildPermSql($sAliasPrefix = self::TABLE_ALIAS, $mPermType = 'READ', $arOptions = [])
@@ -4481,6 +4487,48 @@ class CAllCrmQuote
 	public function getLastErrors(): ?\Bitrix\Main\ErrorCollection
 	{
 		return $this->lastErrors;
+	}
+
+	private static function applyQueryResultDecorator(mixed $result)
+	{
+		if (!$result instanceof \CDBResult)
+		{
+			return $result;
+		}
+
+		return new class($result) extends \CDBResult
+		{
+			protected function AfterFetch(&$res)
+			{
+				parent::AfterFetch($res);
+
+				$moneyFields = [
+					'OPPORTUNITY' => 'CURRENCY_ID',
+					'TAX_VALUE' => 'CURRENCY_ID',
+					'OPPORTUNITY_ACCOUNT' => 'ACCOUNT_CURRENCY_ID',
+					'TAX_VALUE_ACCOUNT' => 'ACCOUNT_CURRENCY_ID',
+				];
+
+				foreach ($moneyFields as $fieldName => $currencyFieldName)
+				{
+					if (!isset($res[$fieldName]) || $res[$fieldName] === '')
+					{
+						continue;
+					}
+
+					$res[$fieldName] = FieldRepository::getMoneyFieldScaleFetchModifier(
+						$res[$fieldName],
+						$res,
+						$currencyFieldName
+					);
+				}
+
+				if (isset($res['EXCH_RATE']) && $res['EXCH_RATE'] !== '')
+				{
+					$res['EXCH_RATE'] = number_format((float)$res['EXCH_RATE'], 2, '.', '');
+				}
+			}
+		};
 	}
 }
 

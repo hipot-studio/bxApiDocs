@@ -1265,9 +1265,10 @@ class ResourceBooking extends \Bitrix\Main\UserField\TypeBase
 
 		if (isset($data['users']))
 		{
-			$userIdList = is_array($data['users']['value'])
-				? $data['users']['value']
-				: explode('|', $data['users']['value']);
+			$users = is_array($data['users']) ? $data['users'] : ['value' => $data['users']];
+			$userIdList = is_array($users['value'])
+				? $users['value']
+				: explode('|', $users['value']);
 			array_walk($userIdList, 'intval');
 
 			$resultData['usersAccessibility'] = [];
@@ -1349,9 +1350,10 @@ class ResourceBooking extends \Bitrix\Main\UserField\TypeBase
 		{
 			$resultData['resourcesAccessibility'] = [];
 
-			$resourceIdList = is_array($data['resources']['value'])
-				? $data['resources']['value']
-				: explode('|', $data['resources']['value']);
+			$resources = is_array($data['resources']) ? $data['resources'] : ['value' => $data['resources']];
+			$resourceIdList = is_array($resources['value'])
+				? $resources['value']
+				: explode('|', $resources['value']);
 
 			array_walk($resourceIdList, 'intval');
 

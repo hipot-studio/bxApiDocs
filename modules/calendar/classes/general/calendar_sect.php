@@ -682,13 +682,14 @@ class CCalendarSect
 	{
 		$res = [];
 		$accessCodes = [];
+		$userId = CCalendar::GetUserId();
+		$isCollabUser = Util::isCollabUser((int)$userId);
+		$accessController = new SectionAccessController($userId);
 
 		foreach ($array as $section)
 		{
 			$sectId = $section['ID'];
-			$userId = CCalendar::GetUserId();
 
-			$accessController = new SectionAccessController($userId);
 			$sectionModel = SectionModel::createFromArray($section);
 
 			$request = [
@@ -714,7 +715,18 @@ class CCalendarSect
 					'access' => $result[ActionDictionary::ACTION_SECTION_ACCESS],
 				];
 
-				if ($getPermissions || $section['PERM']['access'] || $section['CAL_TYPE'] === 'location')
+				$canManageAccess = $result[ActionDictionary::ACTION_SECTION_ACCESS];
+				$canForceAccessForLegacy = $getPermissions || $section['CAL_TYPE'] === 'location';
+				if ($isCollabUser)
+				{
+					$canExposeAccess = $canManageAccess;
+				}
+				else
+				{
+					$canExposeAccess = $canManageAccess || $canForceAccessForLegacy;
+				}
+
+				if ($canExposeAccess)
 				{
 					$section['ACCESS'] = [];
 					if (
@@ -736,6 +748,10 @@ class CCalendarSect
 						$section['ACCESS'] = self::$Permissions[$sectId];
 					}
 				}
+				else
+				{
+					unset($section['ACCESS']);
+				}
 
 				CCalendar::PushAccessNames($accessCodes);
 
@@ -750,7 +766,12 @@ class CCalendarSect
 	{
 		if ($id > 0)
 		{
-			if (!isset(self::$sections[$id]) || $bRerequest)
+			$cacheKey = $checkPermissions
+				? $id . '_' . CCalendar::GetUserId()
+				: $id . '_without_permissions'
+			;
+
+			if (!isset(self::$sections[$cacheKey]) || $bRerequest)
 			{
 				$section = self::GetList([
 					'arFilter' => ['ID' => $id],
@@ -760,14 +781,14 @@ class CCalendarSect
 
 				if ($section && is_array($section) && is_array($section[0]))
 				{
-					self::$sections[$id] = $section[0];
+					self::$sections[$cacheKey] = $section[0];
 
-					return self::$sections[$id];
+					return self::$sections[$cacheKey];
 				}
 			}
 			else
 			{
-				return self::$sections[$id];
+				return self::$sections[$cacheKey];
 			}
 		}
 
@@ -1127,10 +1148,9 @@ class CCalendarSect
 
 		CCalendar::ClearCache(['section_list', 'event_list']);
 
-		if ($id > 0 && isset(self::$Permissions[$id]))
+		if ($id > 0)
 		{
-			unset(self::$Permissions[$id]);
-			self::$arOp = [];
+			self::clearOperationCache((int)$id);
 		}
 
 		if ($isNewSection)
@@ -1373,6 +1393,12 @@ class CCalendarSect
 
 			if ($arFields['ID'] > 0)
 			{
+				if (Util::isCollabUser((int)CCalendar::GetUserId()))
+				{
+					unset($arFields['ACCESS']);
+					$arFields['PERM']['access'] = false;
+				}
+
 				return $arFields;
 			}
 		}
@@ -1405,6 +1431,21 @@ class CCalendarSect
 				$DB->Query($strSql );
 			}
 		}
+	}
+
+	private static function clearOperationCache(int $sectionId): void
+	{
+		unset(self::$Permissions[$sectionId]);
+
+		foreach (self::$userSectionPermissions as $key => $_)
+		{
+			if (str_ends_with((string)$key, '|' . $sectionId))
+			{
+				unset(self::$userSectionPermissions[$key]);
+			}
+		}
+
+		self::$arOp = [];
 	}
 
 	private static function prepareGroupCode($code)
@@ -1680,11 +1721,6 @@ class CCalendarSect
 			return;
 		}
 
-		if ($userId = $params['userId'] ?? $section->getOwnerId())
-		{
-			SynchronizationFeature::setUserId($userId);
-		}
-
 		if (SynchronizationFeature::isOn())
 		{
 			if (empty($originalFrom))
@@ -1763,11 +1799,6 @@ class CCalendarSect
 		}
 
 		$originalFrom = $params['params']['originalFrom'] ?? null;
-
-		if ($userId = $params['userId'] ?? $section->getOwnerId())
-		{
-			SynchronizationFeature::setUserId($userId);
-		}
 
 		if (SynchronizationFeature::isOn())
 		{

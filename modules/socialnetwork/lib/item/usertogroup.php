@@ -21,6 +21,9 @@ use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\Integration;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
+use Bitrix\Socialnetwork\V2\Internal\Service\Notification\CounterDecision;
+use Bitrix\Socialnetwork\V2\Internal\Service\Notification\CounterPolicyResolver;
 
 Loc::loadMessages(__FILE__);
 
@@ -647,13 +650,34 @@ class UserToGroup
 
 		if ($sendMessage)
 		{
-			$chatMessageFields = [
-				"MESSAGE" => $chatMessage,
-				"SYSTEM" => "Y",
-				"INCREMENT_COUNTER" => "N",
-				'SKIP_COUNTER_INCREMENTS' => 'Y',
-				"PUSH" => "N"
-			];
+			$legacyActionType = ($action === self::CHAT_ACTION_IN)
+				? ActionType::JoinUser
+				: ActionType::LeaveUser
+			;
+
+			$counterDecision = static::resolveCounterDecisionForLegacyAction($legacyActionType, $groupId);
+
+			if ($counterDecision === CounterDecision::CounterOn)
+			{
+				$chatMessageFields = [
+					'MESSAGE' => $chatMessage,
+					'SYSTEM' => 'Y',
+					'PUSH' => 'Y',
+				];
+			}
+			else
+			{
+				$chatMessageFields = [
+					'MESSAGE' => $chatMessage,
+					'SYSTEM' => 'Y',
+					'INCREMENT_COUNTER' => 'N',
+					'SKIP_COUNTER_INCREMENTS' => 'Y',
+					'PUSH' => 'N',
+					'PARAMS' => [
+						'NOTIFY' => 'N',
+					],
+				];
+			}
 
 			$availableChatData = Integration\Im\Chat\Workgroup::getChatData([
 				'group_id' => $groupId,
@@ -692,6 +716,18 @@ class UserToGroup
 	private static function getChatActionList(): array
 	{
 		return [self::CHAT_ACTION_IN, self::CHAT_ACTION_OUT];
+	}
+
+	private static function resolveCounterDecisionForLegacyAction(ActionType $actionType, int $groupId): CounterDecision
+	{
+		try
+		{
+			return Container::getInstance()->get(CounterPolicyResolver::class)->resolveByActionType($actionType, $groupId);
+		}
+		catch (\Throwable)
+		{
+			return CounterDecision::Passthrough;
+		}
 	}
 
 	public static function addModerators($params = []): bool

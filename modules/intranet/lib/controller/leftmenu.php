@@ -636,7 +636,7 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 
 		if (
 			!isset($_POST['preset'])
-			|| !in_array($_POST['preset'], array('social', 'crm', 'tasks', 'sites'))
+			|| !in_array($_POST['preset'], array('social', 'crm', 'tasks', 'sites', 'sync'))
 			|| !isset($_POST['mode'])
 		)
 		{
@@ -700,6 +700,11 @@ class LeftMenu extends \Bitrix\Main\Engine\Controller
 
 			case 'social':
 				$firstPageUrl = (new TeamWork())->getLeftMenuPath();
+
+				break;
+
+			case 'sync':
+				$firstPageUrl = SITE_DIR . 'sync/';
 
 				break;
 		}

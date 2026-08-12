@@ -13,6 +13,7 @@ abstract class AbstractCreateIncomingWebhookCommand extends Main\Command\Abstrac
 		public readonly ?string $title,
 		public readonly array $scopes,
 		public readonly array $attributes = [],
+		public readonly ?string $comment = null,
 	)
 	{
 	}
@@ -27,6 +28,7 @@ abstract class AbstractCreateIncomingWebhookCommand extends Main\Command\Abstrac
 			'title' => $this->title,
 			'scopes' => $this->scopes,
 			'attributes' => $this->attributes,
+			'comment' => $this->comment,
 		];
 	}
 }

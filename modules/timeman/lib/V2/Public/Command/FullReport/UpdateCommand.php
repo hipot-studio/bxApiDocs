@@ -21,6 +21,7 @@ class UpdateCommand extends AbstractCommand
 		#[PositiveNumber]
 		public readonly int $reportId,
 		public readonly ?string $reportText = null,
+		public readonly ?string $reportExtended = null,
 		public readonly ?string $plansText = null,
 		public readonly ?array $tasks = null,
 		public readonly ?array $events = null,
@@ -28,6 +29,7 @@ class UpdateCommand extends AbstractCommand
 		public readonly ?int $dateFrom = null,
 		public readonly ?int $dateTo = null,
 		public readonly ?string $mark = null,
+		public readonly ?string $type = null,
 	)
 	{
 	}

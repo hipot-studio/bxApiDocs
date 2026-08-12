@@ -125,6 +125,11 @@ class EventResponse
 			throw new DtoValidationException('Data type should be "calendar#event"');
 		}
 
+		if (!is_array($data['reminders'] ?? null))
+		{
+			$data['reminders'] = [];
+		}
+
 		return new self(
 			$data['id'],
 			$data['etag'],

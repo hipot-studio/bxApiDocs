@@ -16,6 +16,8 @@ use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Dto\EventDto;
 use Bitrix\Bizproc\Starter\Enum\Face;
 use Bitrix\Bizproc\Starter\Starter;
+use Bitrix\Bizproc\Starter\Template\Start\CollectRequest;
+use Bitrix\Bizproc\Starter\Template\Start\CollectorService;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 
@@ -48,6 +50,7 @@ class BizprocWorkflowStart extends \CBitrixComponent
 		$arParams['DOCUMENT_ID'] = trim(
 			empty($arParams['DOCUMENT_ID']) ? ($request->get('document_id') ?? '') : $arParams['DOCUMENT_ID']
 		);
+		$arParams['CATEGORY_ID'] = $arParams['CATEGORY_ID'] ?? null;
 		$arParams['TEMPLATE_ID'] =
 			isset($arParams['TEMPLATE_ID'])
 				? (int)$arParams['TEMPLATE_ID']
@@ -659,16 +662,14 @@ class BizprocWorkflowStart extends \CBitrixComponent
 		$templatesById = [];
 		foreach ($documents as $document)
 		{
-			$documentType = $document['documentType'] ?? null;
+			$documentType = $document['documentType'];
 			if (!is_array($documentType))
 			{
 				continue;
 			}
 
-			$documentId = (isset($document['documentId']) && is_array($document['documentId']))
-				? $document['documentId']
-				: null
-			;
+			$documentId = is_array($document['documentId']) ? $document['documentId'] : null;
+			$categoryId = $document['categoryId'];
 			$documentStates = CBPWorkflowTemplateLoader::getDocumentTypeStates($documentType, $execType);
 			$userGroups = $this->getUserGroupsForAutostartDocument($documentType, $documentId);
 
@@ -680,9 +681,10 @@ class BizprocWorkflowStart extends \CBitrixComponent
 			$accessibleDocuments[] = [
 				'documentType' => $documentType,
 				'documentId' => $documentId,
+				'categoryId' => $categoryId,
 			];
 
-			foreach ($this->getTemplatesWithParametersFromStates($documentStates, $documentType) as $template)
+			foreach ($this->collectTemplatesWithParameters($documentType, $execType, $categoryId) as $template)
 			{
 				$templatesById[$template['ID']] ??= $template;
 			}
@@ -705,32 +707,39 @@ class BizprocWorkflowStart extends \CBitrixComponent
 		];
 	}
 
-	private function getTemplatesWithParametersFromStates(array $documentStates, array $documentType): array
+	private function collectTemplatesWithParameters(array $documentType, int $execType, ?int $categoryId): array
 	{
 		$templates = [];
-		foreach ($documentStates as $template)
-		{
-			if (!is_array($template['TEMPLATE_PARAMETERS']) || !$template['TEMPLATE_PARAMETERS'])
-			{
-				continue;
-			}
+		$collection = (new CollectorService())->collect(
+			new CollectRequest(
+				complexDocumentType: $documentType,
+				eventType: $execType,
+				categoryId: $categoryId,
+				onlyParameterized: true,
+				useAutoExecuteBitmask: true,
+				requireActive: true,
+				excludeSystem: false,
+			),
+		);
 
+		foreach ($collection->getAll() as $template)
+		{
 			$templates[] = [
-				'ID' => $template['TEMPLATE_ID'],
-				'NAME' => $template['TEMPLATE_NAME'],
-				'DESCRIPTION' => $template['TEMPLATE_DESCRIPTION'],
+				'ID' => $template->id,
+				'NAME' => $template->name,
+				'DESCRIPTION' => $template->description,
 				'DOCUMENT_TYPE' => $documentType,
-				'PARAMETERS' => $this->getTemplateParametersFromState($template),
+				'PARAMETERS' => $this->getTemplateParameters($template->parameters, $template->id),
 			];
 		}
 
 		return $templates;
 	}
 
-	private function getTemplateParametersFromState(array $template): array
+	private function getTemplateParameters(array $templateParameters, int $templateId): array
 	{
 		$parameters = [];
-		foreach ($template['TEMPLATE_PARAMETERS'] as $parameterKey => $parameter)
+		foreach ($templateParameters as $parameterKey => $parameter)
 		{
 			if ($parameterKey === 'TargetUser')
 			{
@@ -738,7 +747,7 @@ class BizprocWorkflowStart extends \CBitrixComponent
 			}
 
 			$parameter['Default'] = $this->convertParameterValues($parameter['Default']);
-			$parameters["bizproc{$template['TEMPLATE_ID']}_{$parameterKey}"] = $parameter;
+			$parameters["bizproc{$templateId}_{$parameterKey}"] = $parameter;
 		}
 
 		return $parameters;
@@ -920,6 +929,10 @@ class BizprocWorkflowStart extends \CBitrixComponent
 		return [[
 			'documentType' => $documentType,
 			'documentId' => $this->getComplexDocumentIdOrNull(),
+			'categoryId' => is_numeric($this->arParams['CATEGORY_ID'] ?? null)
+				? (int)$this->arParams['CATEGORY_ID']
+				: null
+			,
 		]];
 	}
 
@@ -991,6 +1004,7 @@ class BizprocWorkflowStart extends \CBitrixComponent
 			$result[$complexDocumentType->getKey()] = [
 				'documentType' => $complexDocumentType->toArray(),
 				'documentId' => $resolvedDocument->complexDocumentId?->toArray(),
+				'categoryId' => $resolvedDocument->categoryId,
 			];
 		}
 
@@ -1028,6 +1042,11 @@ class BizprocWorkflowStart extends \CBitrixComponent
 		if (is_array($documentId))
 		{
 			$arParams['DOCUMENT_ID'] = (string)($documentId[2] ?? '');
+		}
+
+		if (array_key_exists('categoryId', $firstDocument))
+		{
+			$arParams['CATEGORY_ID'] = $firstDocument['categoryId'];
 		}
 	}
 

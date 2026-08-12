@@ -11,6 +11,7 @@ use Bitrix\Mobile\Menu\MenuList;
 use Bitrix\Mobile\Menu\AhaMoment;
 use Bitrix\Mobile\Menu\Service\MenuListCache;
 use Bitrix\Mobile\Menu\Service\SupportBanners;
+use Bitrix\Mobile\Provider\CommonUserDto;
 use Bitrix\Mobile\Provider\UserRepository;
 use Bitrix\Mobile\Provider\ThemeProvider;
 use Bitrix\Timeman\Model\Schedule\Schedule;
@@ -73,7 +74,7 @@ class Menu extends Controller
 		$canUseTimeMan = $this->canUseTimeMan($context);
 
 		$workTime = [];
-		$canManageWorkTimeOnMobile = true;
+		$canManageWorkTimeOnMobile = !$user->isGuest;
 
 		if ($canUseTimeMan)
 		{
@@ -82,23 +83,24 @@ class Menu extends Controller
 			$canManageWorkTimeOnMobile = $this->canManageWorkTimeOnMobile($userId, $forceRefresh);
 		}
 
-		$checkInData = $this->getCheckInData($userId, $context);
+		$checkInData = $this->getCheckInData($user);
 
-		return [
+		$response = [
 			'user' => $user,
-			'menuList' => (new MenuList($context, $cache))->build($forceRefresh),
-			'currentShift' => $this->getCurrentShift($context, $userId),
+			'menuList' => $user->isGuest ? [] : (new MenuList($context, $cache))->build($forceRefresh),
+			'currentShift' => $this->getCurrentShift($user),
 			'workTime' => $workTime,
-			'company' => $this->getCompany($context),
+			'company' => $this->getCompany($user),
 			'helpdeskUrl' => Loader::includeModule('ui') ? \Bitrix\UI\Util::getHelpdeskUrl(true) : null,
 			'supportBotId' => $supportBotId,
 			'supportBanners' => $this->getSupportBanners(),
 			'ahaMoment' => $this->getAhaMoment(),
 			'currentTheme' => $currentTheme,
 			'isNewCheckInEnabled' => $checkInData['isNewCheckInEnabled'],
-			'checkInAmount' => $checkInData['checkInAmount'],
+			'manualCheckIns' => $checkInData['manualCheckIns'],
 
 			'restrictions' => [
+				'canOpenProfile' => !$user->isGuest,
 				'canEditProfile' => $USER->CanDoOperation('edit_own_profile'),
 				'canUseTimeMan' => $canUseTimeMan,
 				'canUseCheckIn' => $checkInData['canUseCheckIn'],
@@ -107,28 +109,33 @@ class Menu extends Controller
 				'canUseTelephony' => \Bitrix\Main\Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
 				'shouldShowWhatsNew' => \Bitrix\Mobile\Config\Feature::isEnabled(\Bitrix\Mobile\Feature\WhatsNewFeature::class),
 				'canManageWorkTimeOnMobile' => $canManageWorkTimeOnMobile,
-				'canUseSecuritySettings' => \Bitrix\Mobile\Config\Feature::isEnabled(\Bitrix\Mobile\Feature\SecuritySettingsFeature::class),
+				'canUseSecuritySettings' => $user->isGuest ? false : \Bitrix\Mobile\Config\Feature::isEnabled(\Bitrix\Mobile\Feature\SecuritySettingsFeature::class),
+				'canUseTabPresetSettings' => !$user->isGuest,
+				'canUseNotificationSettings' => !$user->isGuest,
+				'canGoToWeb' => !$user->isGuest,
 			],
 		];
+
+		return $response;
 	}
 
-	private function getCheckInData(int $userId, Context $context): ?array
+	private function getCheckInData(CommonUserDto $user): ?array
 	{
 		$isNewCheckInEnabled = false;
-		$checkInAmount = null;
-		$canUseCheckIn = $this->canUseCheckIn($context);
+		$manualCheckIns = [];
+		$canUseCheckIn = $this->canUseCheckIn($user);
 
 		if ($canUseCheckIn)
 		{
 			$isNewCheckInEnabled =  Feature::isEnabled(CheckInFeature::class);
-			$checkInAmount = $isNewCheckInEnabled
-				? CheckInProvider::getInstance()->getManualCheckInCountByDate($userId, time())
-				: null;
+			$manualCheckIns = $isNewCheckInEnabled
+				? CheckInProvider::getInstance()->getCurrentUserManualCheckInsByDate($user->id, time())
+				: [];
 		}
 
 		return [
 			'isNewCheckInEnabled' => $isNewCheckInEnabled,
-			'checkInAmount' => $checkInAmount,
+			'manualCheckIns' => $manualCheckIns,
 			'canUseCheckIn' => $canUseCheckIn,
 		];
 	}
@@ -154,14 +161,15 @@ class Menu extends Controller
 			'PERSONAL_PHONE' => $userData['PERSONAL_PHONE'],
 			'PERSONAL_GENDER' => $userData['PERSONAL_GENDER'],
 			'PERSONAL_PHOTO' => $userData['PERSONAL_PHOTO'],
+			'EXTERNAL_AUTH_ID' => $userData['EXTERNAL_AUTH_ID'],
 		];
 
 		return UserRepository::createUserDto($user);
 	}
 
-	private function getCurrentShift(Context $context, int $userId): ?\Bitrix\StaffTrack\Model\Shift
+	private function getCurrentShift(CommonUserDto $user): ?\Bitrix\StaffTrack\Model\Shift
 	{
-		if (!$this->canUseCheckIn($context))
+		if (!$this->canUseCheckIn($user))
 		{
 			return null;
 		}
@@ -170,15 +178,18 @@ class Menu extends Controller
 		$date = \Bitrix\Main\Type\Date::createFromTimestamp(time() + $offset);
 		$dateFormatted = $date->format('d.m.Y');
 
-		return \Bitrix\StaffTrack\Provider\ShiftProvider::getInstance($userId)->findByDate($dateFormatted);
+		return \Bitrix\StaffTrack\Provider\ShiftProvider::getInstance($user->id)->findByDate($dateFormatted);
 	}
 
-	private function canUseCheckIn(Context $context): bool
+	private function canUseCheckIn(CommonUserDto $user): bool
 	{
+		if ($user->isCollaber || $user->isExtranet || $user->isGuest)
+		{
+			return false;
+		}
+
 		return Loader::includeModule('stafftrack')
-			&& \Bitrix\StaffTrack\Feature::isCheckInEnabled()
-			&& !$context->isCollaber
-			&& !$context->extranet;
+			&& \Bitrix\StaffTrack\Feature::isCheckInEnabled();
 	}
 
 	private function getSupportBotId(): int
@@ -217,14 +228,17 @@ class Menu extends Controller
 		;
 	}
 
-	private function getCompany(Context $context): ?array
+	private function getCompany(CommonUserDto $user): ?array
 	{
+		if ($user->isExtranet || $user->isCollaber || $user->isGuest)
+		{
+			return null;
+		}
+
 		if (
 			!Loader::includeModule('intranet')
 			|| !Loader::includeModule('intranetmobile')
 			|| !Loader::includeModule('humanresources')
-			|| $context->extranet
-			|| $context->isCollaber
 		)
 		{
 			return null;
@@ -232,7 +246,7 @@ class Menu extends Controller
 
 		$departmentProvider = new \Bitrix\IntranetMobile\Provider\DepartmentProvider();
 
-		$departmentUserIds = $departmentProvider->getEmployeesFromUserDepartments($context->userId, 4);
+		$departmentUserIds = $departmentProvider->getEmployeesFromUserDepartments($user->id, 4);
 
 		if (count($departmentUserIds) < 4)
 		{
@@ -299,8 +313,18 @@ class Menu extends Controller
 			return [];
 		}
 
+		$user = $this->getUserData($userId);
+		if (!$user)
+		{
+			return [];
+		}
 
-		$context = new Context();
+		$context = new Context([
+			'userId' => $userId,
+			'extranet' => $user->isExtranet,
+			'isCollaber' => $user->isCollaber,
+		]);
+
 		$cache = new MenuListCache($context->userId);
 
 		return [
@@ -309,7 +333,7 @@ class Menu extends Controller
 				'canUseTimeMan' => $this->canUseTimeMan($context),
 			],
 			'ahaMoment' => (new AhaMoment())->getAvatarAhaMoment($userId),
-			'menuList' => (new MenuList($context, $cache))->build(false),
+			'menuList' => $user->isGuest ? [] : (new MenuList($context, $cache))->build(false),
 		];
 	}
 

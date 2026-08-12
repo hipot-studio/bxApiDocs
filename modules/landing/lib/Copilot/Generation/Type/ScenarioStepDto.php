@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Type;
 
-use Bitrix\Landing\Copilot\Generation\Step\IStep;
+use Bitrix\Landing\Copilot\Generation\Step\Base\IStep;
 
 class ScenarioStepDto
 {

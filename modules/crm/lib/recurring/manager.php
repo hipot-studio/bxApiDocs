@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Crm\Recurring;
 
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
@@ -44,6 +45,12 @@ class Manager
 	 */
 	public static function createEntity(array $entityFields, array $recurringParams, $typeEntity = self::INVOICE)
 	{
+		Container::getInstance()
+			->getContext()
+			->getAnalytics()
+			->setSection(Dictionary::SECTION_RECURRING)
+		;
+
 		return Command::execute($typeEntity, __FUNCTION__, array($entityFields, $recurringParams));
 	}
 

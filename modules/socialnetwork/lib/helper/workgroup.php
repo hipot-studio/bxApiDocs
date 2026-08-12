@@ -36,6 +36,7 @@ use Bitrix\Socialnetwork\Item;
 use Bitrix\Socialnetwork\Helper;
 use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
+use Bitrix\Socialnetwork\V2\Public\Provider\ProjectProvider;
 
 class Workgroup
 {
@@ -601,7 +602,7 @@ class Workgroup
 	public static function isGroupCopyFeatureEnabled(): bool
 	{
 		$isB24Installed = ModuleManager::isModuleInstalled('bitrix24') && Loader::includeModule('bitrix24');
-		
+
 		if (!$isB24Installed)
 		{
 			return true;
@@ -1209,6 +1210,7 @@ class Workgroup
 	{
 		$groupId = (int)($fields['groupId'] ?? 0);
 		$userId = (int)($fields['userId'] ?? 0);
+		$currentUserId = ($fields['currentUserId'] ?? null) !== null ? (int)$fields['currentUserId'] : null;
 
 		if ($groupId <= 0)
 		{
@@ -1232,10 +1234,17 @@ class Workgroup
 			throw new \Exception($e->getMessage(), $e->getCode());
 		}
 
-		if (!Helper\Workgroup\Access::canDeleteOutgoingRequest([
+		$accessParams = [
 			'userId' => $userId,
 			'groupId' => $groupId,
-		]))
+		];
+
+		if ($currentUserId > 0)
+		{
+			$accessParams['fromUserId'] = $currentUserId;
+		}
+
+		if (!Helper\Workgroup\Access::canDeleteOutgoingRequest($accessParams))
 		{
 			throw new AccessDeniedException(Loc::getMessage('SOCIALNETWORK_HELPER_WORKGROUP_ERROR_OPERATION_NO_PERMS'));
 		}
@@ -2479,6 +2488,14 @@ class Workgroup
 				)
 			: []
 		);
+		$shouldSelectHasCollabers = (
+			($params['shouldSelectHasCollabers'] ?? false) === true
+			|| ($params['shouldSelectHasCollabers'] ?? null) === 'Y'
+		);
+		$shouldEnsureHasCollabers = (
+			($params['shouldEnsureHasCollabers'] ?? false) === true
+			|| ($params['shouldEnsureHasCollabers'] ?? null) === 'Y'
+		);
 		$currentUserId = (int)($params['currentUserId'] ?? $USER->getId());
 		if (empty($ids))
 		{
@@ -2505,6 +2522,17 @@ class Workgroup
 				'INITIATED_BY_TYPE' => $relationFields['INITIATED_BY_TYPE'],
 			];
 		}
+
+		$hasCollabersMap = $shouldSelectHasCollabers
+			? (
+				$shouldEnsureHasCollabers
+					? (new ProjectProvider())->ensureHasCollabersMap($ids)
+					: Container::getInstance()
+						->getProjectRepository()
+						->getHasCollabersBatch($ids)
+			)
+			: []
+		;
 
 		foreach ($features as $feature)
 		{
@@ -2578,6 +2606,10 @@ class Workgroup
 		{
 			$result[$id]['ROLE'] = ($userRoles[$id]['ROLE'] ?? '');
 			$result[$id]['INITIATED_BY_TYPE'] = ($userRoles[$id]['INITIATED_BY_TYPE'] ?? '');
+			if ($shouldSelectHasCollabers)
+			{
+				$result[$id]['HAS_COLLABERS'] = ($hasCollabersMap[$id] ?? false) === true;
+			}
 		}
 
 		return $result;

@@ -1,13 +1,15 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Crm\MessageSender\UI\Editor\ContentProvider;
 
 use Bitrix\Crm\Integration\SalesCenterManager;
-use Bitrix\Crm\MessageSender\UI\Editor\ContentProvider;
+use Bitrix\MessageService\Public\UI\MessageEditor\Context;
 use Bitrix\Salescenter\Restriction\ToolAvailabilityManager;
 use CCrmOwnerType;
 
-final class SalesCenter extends ContentProvider
+final class SalesCenter extends BaseContentProvider
 {
 	private const EXCLUDED_ENTITY_TYPES = [
 		// sales types
@@ -25,35 +27,47 @@ final class SalesCenter extends ContentProvider
 		CCrmOwnerType::Quote,
 	];
 
-	public function getKey(): string
+	public function __construct(
+		Context $context,
+		private readonly bool $canSendMessage = false,
+	)
+	{
+		parent::__construct($context);
+	}
+
+	public function getId(): string
 	{
 		return 'salescenter';
 	}
 
 	public function isShown(): bool
 	{
-		return
-			$this->getContext()->getEntityTypeId() !== null
-			&& !in_array($this->getContext()->getEntityTypeId(), self::EXCLUDED_ENTITY_TYPES, true)
+		$entityTypeId = $this->getEntityTypeId();
+
+		return $entityTypeId !== null
+			&& !in_array($entityTypeId, self::EXCLUDED_ENTITY_TYPES, true)
 			&& SalesCenterManager::getInstance()->isEnabled()
-		;
+			&& SalesCenterManager::getInstance()->isShowApplicationInSmsEditor();
 	}
 
-	public function isEnabled(): bool
-	{
-		return $this->isShown() && SalesCenterManager::getInstance()->isShowApplicationInSmsEditor();
-	}
-
-	public function isLocked(): bool
-	{
-		return $this->isShown() && !ToolAvailabilityManager::getInstance()->checkSalescenterAvailability();
-	}
-
-	public function jsonSerialize(): array
+	protected function getCustomData(): array
 	{
 		return [
-			...parent::jsonSerialize(),
-			'mode' => $this->getContext()->getEntityTypeId() === \CCrmOwnerType::Deal ? 'payment_delivery' : 'payment',
+			'isLocked' => !ToolAvailabilityManager::getInstance()->checkSalescenterAvailability(),
+			'ownerTypeId' => $this->getEntityTypeId(),
+			'ownerId' => $this->getEntityId(),
+			'mode' => $this->getEntityTypeId() === CCrmOwnerType::Deal
+				? 'payment_delivery'
+				: 'payment',
+			'st' => [
+				'tool' => 'crm',
+				'category' => 'payments',
+				'event' => 'payment_create_click',
+				'c_section' => 'crm_sms',
+				'c_sub_section' => 'web',
+				'type' => 'delivery_payment',
+			],
+			'canSendMessage' => $this->canSendMessage,
 		];
 	}
 }

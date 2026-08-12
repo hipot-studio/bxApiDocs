@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class WrongHttpRequestMethodException extends RestException
+class WrongHttpRequestMethodException extends RestException implements SkipWriteToLogException
 {
 	protected function getMessagePhraseCode(): string
 	{

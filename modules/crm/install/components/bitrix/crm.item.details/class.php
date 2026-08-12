@@ -6,6 +6,7 @@ use Bitrix\Crm\AutomatedSolution\CapabilityAccessChecker;
 use Bitrix\Crm\Component\EntityDetails\FactoryBased;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\IntranetManager;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\UI\Buttons\Button;
@@ -75,6 +76,13 @@ class CrmItemDetailsComponent extends FactoryBased
 		}
 
 		return $config;
+	}
+
+	public function saveAction($data): ?array
+	{
+		Container::getInstance()->getContext()->setAnalytics($data['ANALYTICS'] ?? []);
+
+		return parent::saveAction($data);
 	}
 
 	protected function getSettingsToolbarButton(): SettingsButton

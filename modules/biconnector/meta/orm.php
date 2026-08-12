@@ -1723,6 +1723,16 @@ namespace Bitrix\BIConnector\ExternalSource\Internal {
 	 * @method \Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetField resetVisible()
 	 * @method \Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetField unsetVisible()
 	 * @method \boolean fillVisible()
+	 * @method \string getDescription()
+	 * @method \Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetField setDescription(\string|\Bitrix\Main\DB\SqlExpression $description)
+	 * @method bool hasDescription()
+	 * @method bool isDescriptionFilled()
+	 * @method bool isDescriptionChanged()
+	 * @method \string remindActualDescription()
+	 * @method \string requireDescription()
+	 * @method \Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetField resetDescription()
+	 * @method \Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetField unsetDescription()
+	 * @method \string fillDescription()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -1780,6 +1790,8 @@ namespace Bitrix\BIConnector\ExternalSource\Internal {
 	 * @method \string[] fillExternalCode()
 	 * @method \boolean[] getVisibleList()
 	 * @method \boolean[] fillVisible()
+	 * @method \string[] getDescriptionList()
+	 * @method \string[] fillDescription()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2792,6 +2804,16 @@ namespace Bitrix\BIConnector\ExternalSource\Internal {
 	 * @method \Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnector resetSupportMapping()
 	 * @method \Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnector unsetSupportMapping()
 	 * @method \boolean fillSupportMapping()
+	 * @method \string getSourceCode()
+	 * @method \Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnector setSourceCode(\string|\Bitrix\Main\DB\SqlExpression $sourceCode)
+	 * @method bool hasSourceCode()
+	 * @method bool isSourceCodeFilled()
+	 * @method bool isSourceCodeChanged()
+	 * @method \string remindActualSourceCode()
+	 * @method \string requireSourceCode()
+	 * @method \Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnector resetSourceCode()
+	 * @method \Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnector unsetSourceCode()
+	 * @method \string fillSourceCode()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2860,6 +2882,8 @@ namespace Bitrix\BIConnector\ExternalSource\Internal {
 	 * @method \string[] fillUrlTableDescription()
 	 * @method \boolean[] getSupportMappingList()
 	 * @method \boolean[] fillSupportMapping()
+	 * @method \string[] getSourceCodeList()
+	 * @method \string[] fillSourceCode()
 	 *
 	 * Common methods:
 	 * ---------------

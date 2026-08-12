@@ -16,6 +16,7 @@ use Bitrix\Socialnetwork\V2\Internal\Integration\Calendar\Service\CalendarListSe
 use Bitrix\Socialnetwork\V2\Internal\Integration\Calendar\Service\CalendarSettingsService;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Extranet\Service\ExtranetUserService;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Provider\ProjectChatDataProvider;
+use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\CopilotBotResolver;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\Sync\ProjectChatMemberSyncService;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ProjectChatHider;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ProjectChatResolver;
@@ -252,6 +253,11 @@ class Container extends AbstractContainer
 	public function getProjectChatResolver(): ProjectChatResolver
 	{
 		return $this->get(ProjectChatResolver::class);
+	}
+
+	public function getCopilotBotResolver(): CopilotBotResolver
+	{
+		return $this->get(CopilotBotResolver::class);
 	}
 
 	public function getProjectChatDataProvider(): ProjectChatDataProvider

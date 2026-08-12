@@ -7,9 +7,8 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 
-final class OpenSettingsAction extends BaseAction
+final class OpenSettingsAction extends BaseDashboardAction
 {
 
 	public static function getId(): ?string
@@ -52,6 +51,10 @@ final class OpenSettingsAction extends BaseAction
 			BX.BIConnector.DashboardManager.openSettingsSlider({$dashboardId}, '{$dashboardType}')
 		";
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-settings');
+
+		return $result;
 	}
 }

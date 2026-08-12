@@ -5,13 +5,11 @@ namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dashboard;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
-use Bitrix\Main\Web\Json;
 
-final class DeleteAction extends BaseAction
+final class DeleteAction extends BaseDashboardAction
 {
 
 	public static function getId(): ?string
@@ -45,6 +43,10 @@ final class DeleteAction extends BaseAction
 		$dashboardType = $rawFields['TYPE'];
 		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.deleteDashboard({$dashboardId}, '{$dashboardType}')";
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-trashcan', true);
+
+		return $result;
 	}
 }

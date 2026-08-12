@@ -53,7 +53,6 @@ class RoomCategoryTable extends DataManager
 	{
 		return [
 			(new IntegerField('ID'))
-				->configureTitle(Loc::getMessage('ROOM_CATEGORY_ENTITY_ID_FIELD'))
 				->configurePrimary(true)
 				->configureAutocomplete(true)
 			,
@@ -62,7 +61,6 @@ class RoomCategoryTable extends DataManager
 					'validation' => [__CLASS__, 'validateName']
 				]
 			))
-				->configureTitle(Loc::getMessage('ROOM_CATEGORY_ENTITY_NAME_FIELD'))
 			,
 		];
 	}

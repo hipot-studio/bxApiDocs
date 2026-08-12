@@ -326,6 +326,7 @@ class CBPCreateDocumentActivity extends CBPActivity
 	protected function prepareFieldsValues(array $documentType, array $values): array
 	{
 		$documentService = $this->workflow->getRuntime()->getDocumentService();
+		$documentId = $this->getDocumentId();
 
 		$documentFields = $documentService->getDocumentFields($documentType);
 		$documentFieldsAliasesMap = CBPDocument::getDocumentFieldsAliasesMap($documentFields);
@@ -345,7 +346,10 @@ class CBPCreateDocumentActivity extends CBPActivity
 				$fieldTypeObject = $documentService->getFieldTypeObject($documentType, $property);
 				if ($fieldTypeObject)
 				{
-					$fieldTypeObject->setDocumentId($this->getDocumentId());
+					if (is_array($documentId))
+					{
+						$fieldTypeObject->setDocumentId($documentId);
+					}
 					$fieldTypeObject->setValue($value);
 					$value = $fieldTypeObject->externalizeValue(
 						\Bitrix\Bizproc\FieldType::VALUE_CONTEXT_DOCUMENT,

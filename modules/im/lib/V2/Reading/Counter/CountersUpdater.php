@@ -6,7 +6,6 @@ namespace Bitrix\Im\V2\Reading\Counter;
 use Bitrix\Im\Model\MessageTable;
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\V2\Message;
-use Bitrix\Im\V2\Message\Counter\CounterOverflowService;
 use Bitrix\Im\V2\Reading\Counter\Internal\CountersCache;
 use Bitrix\Im\V2\Reading\Counter\Updater\Delete\ScopeStep;
 use Bitrix\Im\V2\Relation;
@@ -17,7 +16,6 @@ class CountersUpdater
 {
 	public function __construct(
 		protected readonly CountersCache $cache,
-		protected readonly CounterOverflowService $overflowService
 	) {}
 
 	public function addForUsers(Message $message, RelationCollection $relations): void
@@ -45,7 +43,7 @@ class CountersUpdater
 
 	public function delete(): ScopeStep
 	{
-		return new ScopeStep($this->cache, $this->overflowService);
+		return new ScopeStep($this->cache);
 	}
 
 	public function addStartingFrom(int $messageId, Relation $relation): void

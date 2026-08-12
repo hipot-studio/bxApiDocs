@@ -153,11 +153,6 @@ class EntityActivities
 
 	public function calculateTotalForStage(string $stageId, array $filter): int
 	{
-		$entityManager = EntityManager::resolveByTypeID($this->entityTypeId);
-		if (!$entityManager)
-		{
-			return -1;
-		}
 		$stagesIds = array_column($this->getStagesList($this->categoryId), 'STATUS_ID');
 		if (!in_array($stageId, $stagesIds, true))
 		{
@@ -174,9 +169,22 @@ class EntityActivities
 			}
 		}
 
-		if ($this->isStageSkippedByActivitiesFilter($stageId, $this->getActivityCounterFilterValue($filter)))
+		$activityCounterFilter = $this->getActivityCounterFilterValue($filter);
+		if ($this->isStageSkippedByActivitiesFilter($stageId, $activityCounterFilter))
 		{
 			return -1;
+		}
+
+		$entityManager = EntityManager::resolveByTypeID($this->entityTypeId);
+		if (!$entityManager)
+		{
+			// For entity types not supported by EntityManager (e.g. Dynamic/Smart Process types),
+			// resolve the count via the same ORM-query path as getEntityIdsForStage(), so the
+			// USER_IDS filter (currentUserId vs the counter's hardcoded userID=0) is applied
+			// consistently and the count actually matches the items getItems() will return.
+			$ids = $this->getEntityIdsForStage($stageId, $filter);
+
+			return $ids === null ? -1 : count($ids);
 		}
 
 		$stageFilter = $this->prepareCounterFilter($stageId, $filter);
@@ -683,5 +691,68 @@ class EntityActivities
 		return is_array($minDeadlineItem)
 			? $this->getActivityStageIdByDeadlineAndIncoming($minDeadlineItem['MIN_DEADLINE'], $minDeadlineItem['HAS_ANY_INCOMING_CHANEL'] === 'Y')
 			: null;
+	}
+
+	/**
+	 * Returns entity IDs that belong to $stageId for entity types that use ORM (e.g. Dynamic/Smart Process).
+	 * The IDs are fetched directly from the counter's ORM queries without building a SQL subquery string
+	 * (which is incompatible with the D7 ORM factory used by Dynamic entities).
+	 *
+	 * Returns null when the stage is not applicable or counters are not enabled.
+	 */
+	public function getEntityIdsForStage(string $stageId, array $filter): ?array
+	{
+		$activityCounterFilter = $this->getActivityCounterFilterValue($filter);
+		$counter = $this->getEntityCounterForStage($stageId, $activityCounterFilter);
+		if ($counter === null)
+		{
+			return null;
+		}
+
+		$responsibleFieldName = CounterSettings::getInstance()->useActivityResponsible()
+			? 'ACTIVITY_RESPONSIBLE_IDS'
+			: 'ASSIGNED_BY_ID';
+
+		$currentUserId = Container::getInstance()->getContext()->getUserId();
+		$counterUserIds = [];
+		$excludeUsers = false;
+
+		if (isset($filter[$responsibleFieldName]) || isset($filter['!' . $responsibleFieldName]))
+		{
+			/** @var UserBasedField $userFieldPrepare */
+			$userFieldPrepare = ServiceLocator::getInstance()->get('crm.filter.fieldsTransform.userBasedField');
+			$userFieldPrepare->transformAll($filter, [$responsibleFieldName], $currentUserId);
+
+			$extractUsers = new ExtractUsersFromFilter();
+			[$counterUserIds, $excludeUsers] = $extractUsers->extract($filter, $responsibleFieldName);
+		}
+		else
+		{
+			$counterUserIds[] = $currentUserId;
+		}
+
+		// Use ORM query objects (SELECT_TYPE = ENTY) to get entity IDs directly
+		$queries = $counter->getActivityFilterParam([
+			'USER_IDS' => $counterUserIds,
+			'EXCLUDE_USERS' => $excludeUsers,
+		]);
+
+		$entityIds = [];
+		foreach ($queries as $query)
+		{
+			$result = $query->exec();
+			while ($row = $result->fetch())
+			{
+				// ORM counter queries use 'ENTY' as the alias for the entity ID column
+				// (see CounterQueryBuilder\QueryParts\SelectFields::applyForUncompleted/applyForCountable)
+				$entityId = $row['ENTY'] ?? $row['ID'] ?? null;
+				if ($entityId !== null)
+				{
+					$entityIds[] = (int)$entityId;
+				}
+			}
+		}
+
+		return array_values(array_unique($entityIds));
 	}
 }

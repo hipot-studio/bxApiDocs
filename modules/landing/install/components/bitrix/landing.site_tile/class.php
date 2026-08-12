@@ -9,6 +9,8 @@ use Bitrix\Landing\Connector;
 use Bitrix\Landing\Manager;
 use Bitrix\Landing\Restriction;
 use Bitrix\Landing\Help;
+use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Date;
 use \Bitrix\Landing\Rights;
@@ -17,8 +19,10 @@ Loc::loadMessages(__FILE__);
 
 \CBitrixComponent::includeComponentClass('bitrix:landing.base');
 
-class LandingSiteTileComponent extends LandingBaseComponent
+class LandingSiteTileComponent extends LandingBaseComponent implements Controllerable
 {
+	private const AI_FIRST_VISIT_TOOLTIP_OPTION_NAME = 'site_tile_ai_first_visit_tooltip_seen';
+
 	/**
 	 * Domain available statuses.
 	 */
@@ -29,6 +33,33 @@ class LandingSiteTileComponent extends LandingBaseComponent
 		'unknown' => 'unknown',// other status
 		'clock' => 'clock'// wait activation
 	];
+
+	public function configureActions(): array
+	{
+		return [
+			'markAiFirstVisitTooltipSeen' => [
+				'prefilters' => [
+					new ActionFilter\Authentication(),
+					new ActionFilter\Csrf(),
+					new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_POST]),
+				],
+			],
+		];
+	}
+
+	public function markAiFirstVisitTooltipSeenAction(): array
+	{
+		\CUserOptions::setOption('landing', self::AI_FIRST_VISIT_TOOLTIP_OPTION_NAME, 'Y');
+
+		return [
+			'seen' => true,
+		];
+	}
+
+	public static function getAiFirstVisitTooltipOptionName(): string
+	{
+		return self::AI_FIRST_VISIT_TOOLTIP_OPTION_NAME;
+	}
 
 	/**
 	 * Returns site's phone by site id.
@@ -120,6 +151,31 @@ class LandingSiteTileComponent extends LandingBaseComponent
 	}
 
 	/**
+	 * Removes delimiters without visible menu items around them.
+	 * @param array $menuItems Menu item's array.
+	 * @return array
+	 */
+	protected function removeRedundantMenuDelimiters(array $menuItems): array
+	{
+		$preparedMenuItems = [];
+		$previousItemIsDelimiter = true;
+
+		foreach ($menuItems as $menuItem)
+		{
+			$isDelimiter = ($menuItem['delimiter'] ?? false) === true;
+			if ($isDelimiter && $previousItemIsDelimiter)
+			{
+				continue;
+			}
+
+			$preparedMenuItems[] = $menuItem;
+			$previousItemIsDelimiter = $isDelimiter;
+		}
+
+		return $preparedMenuItems;
+	}
+
+	/**
 	 * Prepares item for transfer to js.
 	 * @param array $items Item's array.
 	 * @param array $menuItems Menu item's array.
@@ -132,6 +188,7 @@ class LandingSiteTileComponent extends LandingBaseComponent
 		$newItems = [];
 		$menuItemsOrig = $menuItems;
 		$orderCounts = $this->getSiteOrdersCount(array_keys($items));
+		$aiSitesEnabled = \Bitrix\Landing\Copilot\Manager::isAiSitesEnabled();
 
 		if (!$items)
 		{
@@ -184,6 +241,22 @@ class LandingSiteTileComponent extends LandingBaseComponent
 			$menuItems = $menuItemsOrig;
 			foreach ($menuItems as $i => &$menuItem)
 			{
+				if (
+					($menuItem['code'] ?? null) === 'add-page'
+					&& ($item['IS_CREATED_BY_AI_SCENARIO'] ?? false)
+				)
+				{
+					unset($menuItems[$i]);
+					continue;
+				}
+				if (
+					($menuItem['access'] ?? null) === 'export'
+					&& ($item['IS_CREATED_BY_AI_SCENARIO'] ?? false)
+				)
+				{
+					unset($menuItems[$i]);
+					continue;
+				}
 				if ($menuItem['sidepanel'] ?? false)
 				{
 					$sidepanel[] = $menuItem['href'];
@@ -207,6 +280,7 @@ class LandingSiteTileComponent extends LandingBaseComponent
 				}
 			}
 			unset($menuItem);
+			$menuItems = $this->removeRedundantMenuDelimiters($menuItems);
 			$sidepanel = $this->prepareSideLink($sidepanel);
 			$sidepanelShort = $this->prepareSideLink($sidepanelShort);
 
@@ -258,6 +332,17 @@ class LandingSiteTileComponent extends LandingBaseComponent
 			}
 
 			$accessPublication = $item['ACCESS_PUBLICATION'] === 'Y';
+			$indexEditUrl = ($item['INDEX_EDIT_URI'] ?? '') ?: '';
+			$pagesUrl = $this->replaceLink($this->arParams['PAGE_URL_SITE'], $item);
+			if (
+				($item['IS_CREATED_BY_AI_SCENARIO'] ?? false)
+				&& $aiSitesEnabled
+				&& $indexEditUrl !== ''
+			)
+			{
+				$pagesUrl = $indexEditUrl;
+			}
+
 			$publicationError = [];
 			if (
 				$accessPublication
@@ -291,9 +376,9 @@ class LandingSiteTileComponent extends LandingBaseComponent
 				'domainProvider' => $item['DOMAIN_PROVIDER'],
 				'domainUrl' => $this->replaceLink($this->arParams['PAGE_URL_DOMAIN'], $item),
 				'contactsUrl' => $this->replaceLink($this->arParams['PAGE_URL_CONTACTS'], $item),
-				'pagesUrl' => $this->replaceLink($this->arParams['PAGE_URL_SITE'], $item),
+				'pagesUrl' => $pagesUrl,
 				'ordersUrl' => $this->replaceLink($this->arParams['PAGE_URL_CRM_ORDERS'], $item),
-				'indexEditUrl' => ($item['INDEX_EDIT_URI'] ?? '') ?: '',
+				'indexEditUrl' => $indexEditUrl,
 				'menuItems' => array_values($menuItems),
 				'menuBottomItems' => $menuBottomItems,
 				'access' => [
@@ -307,7 +392,8 @@ class LandingSiteTileComponent extends LandingBaseComponent
 				'error' => [
 					'publication' => $publicationError,
 				],
-				'copilotProcess' => $item['COPILOT_PROCESS'],
+				'copilotProcess' => $aiSitesEnabled ? $item['COPILOT_PROCESS'] : null,
+				'isCreatedByAiScenario' => $aiSitesEnabled && (bool)($item['IS_CREATED_BY_AI_SCENARIO'] ?? false),
 			];
 		}
 
@@ -327,6 +413,12 @@ class LandingSiteTileComponent extends LandingBaseComponent
 		$this->checkParam('PAGE_URL_DOMAIN', '');
 		$this->checkParam('PAGE_URL_SITE_DOMAIN_SWITCH', '');
 		$this->checkParam('PAGE_URL_CRM_ORDERS', '');
+		$this->checkParam('AI_URL', '');
+		$this->checkParam('AI_SITE_CHAT_AVAILABLE', true);
+		if (!\Bitrix\Landing\Copilot\Manager::isAiSitesEnabled())
+		{
+			$this->arParams['AI_SITE_CHAT_AVAILABLE'] = false;
+		}
 		$this->checkParam('ITEMS', []);
 		$this->checkParam('MENU_ITEMS', []);
 		$this->checkParam('~AGREEMENT', []);

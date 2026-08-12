@@ -6,6 +6,7 @@ use Bitrix\Crm\Activity\Entity\ToDo;
 use Bitrix\Crm\Entity\MessageBuilder\ProcessToDoActivityResponsible;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 use CCrmOwnerType;
 
@@ -107,6 +108,27 @@ final class ToDoResponsibleNotification
 		;
 	}
 
+	private function getMessageParams(string $messageType): ?array
+	{
+		$messageBuilder = clone $this->messageBuilder;
+		$messageBuilder->setType($messageType);
+
+		[ $type, $replace ] = $this->getMessageBuilderData($messageType);
+		$notifyMessageSubjectCallback = $messageBuilder->getMessageSubjectCallback($replace);
+
+		if ($notifyMessageSubjectCallback === null)
+		{
+			return null;
+		}
+
+		return [
+			'COMPONENT_ID' => 'CrmEntity',
+			'COMPONENT_PARAMS' => [
+				'SUBJECT' => $notifyMessageSubjectCallback,
+			],
+		];
+	}
+
 	private function getMessageBuilderData(string $messageType): array
 	{
 		$subject = $this->getToDoTitle();
@@ -201,6 +223,7 @@ final class ToDoResponsibleNotification
 		if ($fromUserId)
 		{
 			$notifyData->setFromUserId($fromUserId);
+			$notifyData->setNotifyParams($this->getMessageParams($messageType));
 		}
 		else
 		{

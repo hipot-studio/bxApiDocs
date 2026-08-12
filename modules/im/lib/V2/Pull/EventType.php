@@ -23,7 +23,7 @@ enum EventType: string
 	case ChatMute = 'chatMuteNotify';
 	case RecentUpdate = 'recentUpdate';
 	case ReadAll = 'readAllChats';
-	case ReadAllByType = 'readAllChatsByType';
+	case ReadAllByRecentSection = 'readAllChatsByRecentSection';
 	case StickerPackAdd = 'stickerPackAdd';
 	case StickerAdd = 'stickerAdd';
 	case StickerPackDelete = 'stickerPackDelete';
@@ -53,4 +53,5 @@ enum EventType: string
 	case FolderChatAdd = 'folderChatAdd';
 	case FolderChatDelete = 'folderChatDelete';
 	case UserLogout = 'userLogout';
+	case SettingsUpdate = 'settingsUpdate';
 }

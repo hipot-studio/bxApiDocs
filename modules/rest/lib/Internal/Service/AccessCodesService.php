@@ -9,10 +9,14 @@ use Bitrix\Rest\Internal\Entity\Access\EntityType;
 use Bitrix\Rest\Internal\Entity\Access\PermissionType;
 use Bitrix\Rest\Internal\Contract\Repository\AccessPermissionRepositoryInterface;
 use Bitrix\Rest\Internal\Repository\AccessPermissionRepository;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 
 class AccessCodesService
 {
-	public function __construct(private AccessPermissionRepositoryInterface $repository = new AccessPermissionRepository())
+	public function __construct(
+		private AccessPermissionRepositoryInterface $repository = new AccessPermissionRepository(),
+		private SecurityAuditLogger $securityAuditLogger = new SecurityAuditLogger(),
+	)
 	{
 	}
 
@@ -25,12 +29,19 @@ class AccessCodesService
 		array $accessCodes,
 	): void
 	{
-		$this->repository->deleteByEntityTypeAndPermission($entityType, $permission);
+		$previousAccessCodes = $this->repository->deleteByEntityTypeAndPermission($entityType, $permission);
 
 		foreach ($accessCodes as $accessCode)
 		{
 			$this->repository->save(new AccessPermission($entityType, $accessCode, $permission));
 		}
+
+		$this->securityAuditLogger->logAccessPolicyChanged(
+			$entityType,
+			$permission,
+			$previousAccessCodes,
+			$accessCodes,
+		);
 	}
 
 	/**

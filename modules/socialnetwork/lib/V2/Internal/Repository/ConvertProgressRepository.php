@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Socialnetwork\V2\Internal\Repository;
 
 use Bitrix\Socialnetwork\V2\Internal\Entity\Convert\ConvertProgress;
+use Bitrix\Socialnetwork\V2\Internal\Entity\Convert\ConvertStatus;
 use Bitrix\Socialnetwork\Collab\Internals\CollabOptionTable;
 use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\ConvertProgressMapper;
 
@@ -36,6 +37,25 @@ class ConvertProgressRepository implements ConvertProgressRepositoryInterface
 			collabId: $groupId,
 			options: $options,
 		);
+	}
+
+	public function getStatusByGroupId(int $groupId): ?ConvertStatus
+	{
+		$row = CollabOptionTable::query()
+			->setSelect(['VALUE'])
+			->where('COLLAB_ID', $groupId)
+			->where('NAME', ConvertProgressMapper::CONVERT_STATUS)
+			->setLimit(1)
+			->exec()
+			->fetch()
+		;
+
+		if ($row === false)
+		{
+			return null;
+		}
+
+		return ConvertStatus::tryFrom((string)$row['VALUE']);
 	}
 
 	public function save(ConvertProgress $progress): void

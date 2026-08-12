@@ -6,17 +6,20 @@ use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Result;
 use Bitrix\Rest\Internal\Service\IncomingWebhook\OwnershipService;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 use Bitrix\Rest\Internal\Service\SystemUser\SystemUserCreationService;
 
 class ChangeOwnerCommandHandler
 {
 	private SystemUserCreationService $systemUserCreationService;
 	private OwnershipService $ownershipService;
+	private SecurityAuditLogger $securityAuditLogger;
 
 	public function __construct()
 	{
 		$this->systemUserCreationService = ServiceLocator::getInstance()->get(SystemUserCreationService::class);
 		$this->ownershipService = ServiceLocator::getInstance()->get(OwnershipService::class);
+		$this->securityAuditLogger = new SecurityAuditLogger();
 	}
 
 	public function __invoke(ChangeOwnerCommand $command): Result
@@ -44,6 +47,17 @@ class ChangeOwnerCommandHandler
 		}
 
 		$conn->commitTransaction();
+
+		$updatedWebhookIds = $changeOwnerResult->getData()['updateWebhookIds'] ?? [];
+		if ($updatedWebhookIds !== [])
+		{
+			$this->securityAuditLogger->logWebhookOwnerChanged(
+				actingUserId: $command->userId,
+				fromUserId: $command->userId,
+				toUserId: $newUserId,
+				webhookIds: $updatedWebhookIds,
+			);
+		}
 
 		return $result;
 	}

@@ -6,7 +6,10 @@ namespace Bitrix\Intranet\Infrastructure\Update\Menu;
 
 use CBitrixComponent;
 
+use Bitrix\Bizproc\Public\Service\AiAgent\RegionAvailabilityServiceInterface;
 use Bitrix\Intranet\Integration\Bizproc;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Update\Stepper;
 use Bitrix\Main\UserTable;
 
@@ -27,7 +30,7 @@ class AiAgentMenuConverter extends Stepper
 
 	public function execute(array &$option): bool
 	{
-		if (\Bitrix\Main\Config\Option::get('bizproc', 'feature_ai_agents', 'N') !== 'Y')
+		if (!$this->isAiAgentsAvailable())
 		{
 			return self::FINISH_EXECUTION;
 		}
@@ -59,6 +62,27 @@ class AiAgentMenuConverter extends Stepper
 		$this->clearMenuCache();
 
 		return self::CONTINUE_EXECUTION;
+	}
+
+	protected function isAiAgentsAvailable(): bool
+	{
+		if (\Bitrix\Main\Config\Option::get('bizproc', 'feature_ai_agents', 'N') !== 'Y')
+		{
+			return false;
+		}
+
+		if (!Loader::includeModule('bizproc'))
+		{
+			return false;
+		}
+
+		$serviceLocator = ServiceLocator::getInstance();
+		if (!$serviceLocator->has(RegionAvailabilityServiceInterface::class))
+		{
+			return false;
+		}
+
+		return $serviceLocator->get(RegionAvailabilityServiceInterface::class)->isAvailable();
 	}
 
 	protected function getUserIdsByLastId(int $lastId): array

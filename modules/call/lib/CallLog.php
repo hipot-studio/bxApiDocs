@@ -124,7 +124,11 @@ class CallLog
 			$connection['USER_AVATAR'] = User::getInstance($row['USER_ID'])->getAvatar();
 			$connection['USER_COLOR'] = User::getInstance($row['USER_ID'])->getColor();
 
-			if (defined('IM_CALL_LOG_PATH'))
+			if (defined('IM_CALL_LOG_URL') && defined('IM_CALL_LOG_PATH'))
+			{
+				$connection['LOG_URL'] = IM_CALL_LOG_URL. IM_CALL_LOG_PATH. "{$row['CALL_ID']}-{$row['USER_ID']}.txt";
+			}
+			elseif (defined('IM_CALL_LOG_PATH'))
 			{
 				$connection['LOG_URL'] = IM_CALL_LOG_PATH."{$row['CALL_ID']}-{$row['USER_ID']}.txt";
 			}

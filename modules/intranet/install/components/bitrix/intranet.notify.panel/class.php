@@ -8,6 +8,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Intranet\Internal\Provider\AnnualSummary\FeatureProvider;
 use Bitrix\Intranet\Internal\Service\AnnualSummary\Visibility;
 use Bitrix\Intranet\License\Notification;
+use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\ModuleManager;
@@ -29,6 +30,12 @@ class IntranetNotifyPanelComponent extends \CBitrixComponent implements Controll
 		$this->arResult['config'] = [
 			'isAdmin' => CurrentUser::get()->isAdmin(),
 			'notify' => $this->getNotifyConfiguration(),
+		];
+
+		$request = Application::getInstance()->getContext()->getRequest();
+		$this->arResult['FEATURE'] = [
+			'PROMOTER' => $request->get('feature_promoter') ?? '',
+			'ID' => $request->get('feature_promoter_by_id') ?? '',
 		];
 
 		if ((new Visibility(CurrentUser::get()->getId()))->canForceShow())

@@ -25,7 +25,11 @@ class ProcessEntity extends BaseBuilder
 {
 	public const PROCESS_ADD = 'ADD';
 
-	private string $type;
+	protected string $type;
+	private ?string $postfix;
+	public const POSTFIX_SUBJECT = 'SUBJECT';
+	public const POSTFIX_PLAIN_TEXT = 'PLAIN_TEXT';
+
 
 	public function setType(string $type): self
 	{
@@ -34,23 +38,43 @@ class ProcessEntity extends BaseBuilder
 		return $this;
 	}
 
+	public function setPostfix(string $postfix): self
+	{
+		$this->postfix = $postfix;
+
+		return $this;
+	}
+
 	public function buildCode(): string
 	{
-		return sprintf(
-			"%s_%s_%s",
+		$parts = [
 			static::MESSAGE_BASE_PREFIX,
 			$this->fetchEntityTypeName(),
-			$this->type
-		);
+			$this->type,
+		];
+
+		if (isset($this->postfix))
+		{
+			$parts[] = $this->postfix;
+		}
+
+		return implode('_', $parts);
 	}
 
 	final protected function buildDefaultCode(): string
 	{
-		return sprintf(
-			"%s_DEFAULT_%s",
+		$parts = [
 			static::MESSAGE_BASE_PREFIX,
-			$this->type
-		);
+			'DEFAULT',
+			$this->type,
+		];
+
+		if (isset($this->postfix))
+		{
+			$parts[] = $this->postfix;
+		}
+
+		return implode('_', $parts);
 	}
 
 	public static function getFilePath(): string

@@ -35,14 +35,16 @@ class BulkInviteUsersToCollabAndPortal
 {
 	private Contract\Repository\UserRepository $userRepository;
 	private bool $currentUserIsIntranet;
+	private int $currentUserId;
 
 	/**
 	 * @throws ArgumentOutOfRangeException
 	 */
-	public function __construct()
+	public function __construct(?int $userId = null)
 	{
 		$this->userRepository = ServiceContainer::getInstance()->userRepository();
-		$this->currentUserIsIntranet = (new Intranet\User((int)CurrentUser::get()->getId()))->isIntranet();
+		$this->currentUserId = $userId ?? (int)CurrentUser::get()->getId();
+		$this->currentUserIsIntranet = (new Intranet\User($this->currentUserId ))->isIntranet();
 	}
 
 	/**
@@ -250,6 +252,7 @@ class BulkInviteUsersToCollabAndPortal
 			$inviteToPortalAndGroupResult = Intranet\Public\Service\InvitationService::inviteUsersToGroup(
 				$collabId,
 				$invitationContainer,
+				$this->currentUserId,
 			);
 
 			if (!$inviteToPortalAndGroupResult->isSuccess())
@@ -265,6 +268,7 @@ class BulkInviteUsersToCollabAndPortal
 			$commandToInviteOnlyToGroup = new Command\Invitation\InviteUserCollectionToGroupCommand(
 				groupId: $collabId,
 				userCollection: $userCollectionForInviteOnlyToGroup,
+				currentUserId: $this->currentUserId,
 			);
 			$commandInviteOnlyToGroupResult = $commandToInviteOnlyToGroup->execute();
 
@@ -286,8 +290,8 @@ class BulkInviteUsersToCollabAndPortal
 			$users[] = [
 				'id' => $user->getId(),
 				'status' => isset($userIdsAlreadyInCollabFlipped[$user->getId()])
-					? InvitationStatus::ACTIVE
-					: InvitationStatus::INVITED
+					? InvitationStatus::ACTIVE->value
+					: InvitationStatus::INVITED->value
 				,
 			];
 		}

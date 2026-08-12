@@ -4,6 +4,8 @@
 namespace Bitrix\Market\ListTemplates;
 
 
+use Bitrix\Market\Rest\Actions;
+
 abstract class BaseTemplate
 {
 	protected array $result = [];
@@ -15,6 +17,8 @@ abstract class BaseTemplate
 	protected int $page = 1;
 
 	protected array $requestParams = [];
+
+	protected bool $mobileMarketContext = false;
 
 	public function __construct($requestParams = [])
 	{
@@ -41,5 +45,22 @@ abstract class BaseTemplate
 	public function setPage(int $page): void
 	{
 		$this->page = $page;
+	}
+
+	public function setMobileMarketContext(bool $mobileMarketContext = true): void
+	{
+		$this->mobileMarketContext = $mobileMarketContext;
+	}
+
+	protected function getMobileMarketContextParams(): array
+	{
+		if (!$this->mobileMarketContext)
+		{
+			return [];
+		}
+
+		return [
+			Actions::PARAM_IS_MOBILE_MARKET => 'Y',
+		];
 	}
 }

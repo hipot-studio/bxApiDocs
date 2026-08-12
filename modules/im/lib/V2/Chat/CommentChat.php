@@ -380,7 +380,7 @@ class CommentChat extends GroupChat
 		]);
 	}
 
-	protected function sendBanner(?int $authorId = null): void
+	protected function sendBanner(?int $authorId = null, bool $force = false): void
 	{
 		return;
 	}

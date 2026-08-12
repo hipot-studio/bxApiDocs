@@ -192,7 +192,7 @@ final class OpenLine extends AIActivity
 		{
 			$tags['processedByAiAgent'] = new Tag(
 				title: Loc::getMessage('CRM_TIMELINE_TAG_PROCESSED_BY_AI_AGENT'),
-				type: Tag::TYPE_LAVENDER,
+				type: Tag::TYPE_AI,
 				tagId: OpenLineStatus::PROCESSED_BY_AI_AGENT,
 			);
 		}
@@ -256,7 +256,7 @@ final class OpenLine extends AIActivity
 		;
 		$barItem = (new ActionBarItem())
 			->setSize(ActionBarItem::SIZE_SM)
-			->setDesign(ActionBarItem::DESIGN_COPILOT)
+			->setDesign(ActionBarItem::DESIGN_AI)
 			->setAction($barItemAction)
 			->setText(
 				Loc::getMessage(

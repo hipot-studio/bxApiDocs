@@ -11,7 +11,7 @@ class RemoveBlockAction extends AddBlockAction
 {
 	protected const JS_COMMAND = 'removeBlock';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		$landing = Landing::createInstance($this->params['lid']);
 		if (

@@ -15,8 +15,10 @@ use Bitrix\Call\Controller\Filter\UniqueRequestFilter;
 /**
  * @internal
  */
-class Mixer extends JwtController
+class Mixer extends JwtController implements IdempotentReplayable
 {
+	use IdempotentReplayableTrait;
+
 	public function getAutoWiredParameters(): array
 	{
 		return array_merge([
@@ -45,8 +47,6 @@ class Mixer extends JwtController
 	 */
 	public function processingStatusAction(ProcessingStatusRequest $statusRequest): ?array
 	{
-		Loader::includeModule('im');
-
 		if ($log = CallAISettings::isLoggingEnable())
 		{
 			$logger = Logger::getInstance();

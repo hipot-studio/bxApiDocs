@@ -14,6 +14,12 @@ class Repo extends \Bitrix\Landing\Internals\BaseTable
 	public static $internalClass = 'RepoTable';
 
 	/**
+	 * Per-request cache of self::getBlock.
+	 * @var array
+	 */
+	private static $blockManifestCache = [];
+
+	/**
 	 * Create new record and return it new id.
 	 * @param array $fields Fields array.
 	 * @return \Bitrix\Main\Result
@@ -149,11 +155,9 @@ class Repo extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	public static function getBlock($id)
 	{
-		static $manifest = array();
-
-		if (!isset($manifest[$id]))
+		if (!isset(self::$blockManifestCache[$id]))
 		{
-			$manifest[$id] = array();
+			self::$blockManifestCache[$id] = array();
 			if (($block = self::getById($id)->fetch()))
 			{
 				$manifestLocal = unserialize($block['MANIFEST'], ['allowed_classes' => false]);
@@ -186,12 +190,22 @@ class Repo extends \Bitrix\Landing\Internals\BaseTable
 					$manifestLocal['block']['subtype_params'] = $blockDesc['subtype_params'] ?? [];
 				}
 
-				$manifest[$id] = Type::prepareBlockManifest($manifestLocal);
-				$manifest[$id]['timestamp'] = $block['DATE_MODIFY']->getTimeStamp();
+				self::$blockManifestCache[$id] = Type::prepareBlockManifest($manifestLocal);
+				self::$blockManifestCache[$id]['timestamp'] = $block['DATE_MODIFY']->getTimeStamp();
 			}
 		}
 
-		return $manifest[$id];
+		return self::$blockManifestCache[$id];
+	}
+
+	/**
+	 * Clear per-request cache of self::getBlock for one repo row.
+	 * @param int $id Repo row id.
+	 * @return void
+	 */
+	public static function clearBlockCache(int $id): void
+	{
+		unset(self::$blockManifestCache[$id]);
 	}
 
 	/**

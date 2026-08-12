@@ -25,14 +25,19 @@ class Collab extends PresetAbstract
 
 	public function getStructure(): array
 	{
-		return [
-			'shown' => [
-				'menu_im_messenger',
-				'menu_im_collab',
-				'menu_tasks',
-				'menu_files',
-				'menu_calendar',
-			],
+		$shown = [
+			'menu_im_messenger',
+			'menu_im_collab',
+			'menu_tasks',
+			'menu_files',
+			'menu_calendar',
 		];
+
+		if (Loader::includeModule('call') && \Bitrix\Call\Settings::isSyncPresetEnabled())
+		{
+			array_splice($shown, 2, 0, ['menu_sync']);
+		}
+
+		return ['shown' => $shown];
 	}
 }

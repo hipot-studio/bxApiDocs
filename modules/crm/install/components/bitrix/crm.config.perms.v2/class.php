@@ -110,8 +110,6 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 
 		$this->arResult['options'] = $this->prepareOptions();
 
-		$this->arResult['isSharedCrmPermissionsSlider'] = $this->criterion === AllSelection::CRITERION;
-
 		$shouldDisplayLeftMenu = false;
 		$this->arResult['menuId'] = $this->manager->getMenuId();
 		if ($this->arResult['menuId'])
@@ -356,6 +354,18 @@ class CrmConfigPermsV2 extends Base implements Controllerable
 			->setUserSortConfigName($this->getConfig()->getContext())
 			->setSortConfigForAllUserGroups($this->getConfig()->getUserGroupsSortConfig())
 		;
+		if (Option::get('crm', 'canUseHrInPermissions', 'Y') === 'Y')
+		{
+			$options->getAdditionalMembersParams()
+				->setAddStructureTeamsProviderTab(true)
+				->setUseStructureDepartmentsProviderTab(true)
+				->setAddProjectsProviderTab(true)
+			;
+			if (method_exists($options->getAdditionalMembersParams(), 'setAddStructureRolesProviderTab'))
+			{
+				$options->getAdditionalMembersParams()->setAddStructureRolesProviderTab(true);
+			}
+		}
 
 		return $options;
 	}

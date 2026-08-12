@@ -12,11 +12,18 @@ abstract class AISenseContent
 
 	protected ?MentionService $mentionService = null;
 
-	abstract public function toRestFormat(string $mentionFormat = 'bb'): array;
+	protected bool $isEmpty = true;
+
+	abstract public function toRestFormat(string $mentionFormat = MentionService::FORMAT_BB): array;
 
 	public function getVersion(): int
 	{
 		return $this->version;
+	}
+
+	public function hasContent(bool $ignoreComputedCriteria = false): bool
+	{
+		return !$this->isEmpty;
 	}
 
 	/**
@@ -56,5 +63,20 @@ abstract class AISenseContent
 		}
 
 		return $this->mentionService;
+	}
+
+	/**
+	 * Render @-mentions inside a value per the requested format. Single source for the
+	 * bb/html/none dispatch shared by every toRestFormat() — keeps the mapping from
+	 * drifting per subclass.
+	 */
+	protected function applyMentionFormat(string $value, string $mentionFormat): string
+	{
+		return match ($mentionFormat)
+		{
+			MentionService::FORMAT_HTML => $this->getMentionService()->replaceBBMentions($value),
+			MentionService::FORMAT_NONE => $this->getMentionService()->removeBBMentions($value),
+			default => $value, // bb — keep raw [USER=…]…[/USER]
+		};
 	}
 }

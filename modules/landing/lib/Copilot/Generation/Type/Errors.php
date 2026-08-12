@@ -10,5 +10,7 @@ enum Errors: string
 	case requestError = 'REQUEST_ERROR';
 	case requestInvalid = 'REQUEST_INVALID';
 	case requestNotAllowed = 'REQUEST_NOT_ALLOWED';
+	case requestNotAllowedHard = 'REQUEST_NOT_ALLOWED_HARD';
+	case requestNotAllowedSoft = 'REQUEST_NOT_ALLOWED_SOFT';
 	case requestTimeout = 'REQUEST_TIMEOUT';
 }

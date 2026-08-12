@@ -421,7 +421,7 @@ class GeneralChat extends GroupChat
 		return $connection->query($sql)->fetchAll();
 	}
 
-	protected function sendBanner(?int $authorId = null): void
+	protected function sendBanner(?int $authorId = null, bool $force = false): void
 	{
 		\CIMMessage::Add([
 			'MESSAGE_TYPE' => self::IM_TYPE_CHAT,

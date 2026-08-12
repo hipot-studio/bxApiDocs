@@ -126,9 +126,7 @@ class AttributesManager
 	{
 		if (!isset($this->attributesCache[$userId]))
 		{
-			$attributes = [
-				UserPermissions::ATTRIBUTES_USER_PREFIX . $userId, // U123 for example
-			];
+			$attributes = [];
 
 			if (!empty($this->isOpened))
 			{
@@ -150,12 +148,13 @@ class AttributesManager
 				$attributes[] = UserPermissions::ATTRIBUTES_CONCERNED_USER_PREFIX . $concernedUserId;  // CU123 for example
 			}
 
-			$userAttributes = \Bitrix\Crm\Service\Container::getInstance()
+			$assignedBasedEntityAttributes = \Bitrix\Crm\Service\Container::getInstance()
 				->getUserPermissions($userId)
 				->getAttributesProvider()
-				->getEntityAttributes();
+				->getEntityAttributes()
+			;
 
-			$this->attributesCache[$userId] = array_merge($attributes, $userAttributes['INTRANET']);
+			$this->attributesCache[$userId] = array_merge($attributes, $assignedBasedEntityAttributes);
 		}
 
 		return $this->attributesCache[$userId];

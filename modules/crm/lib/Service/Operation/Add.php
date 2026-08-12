@@ -5,6 +5,13 @@ namespace Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Activity\Entity;
 use Bitrix\Crm\Activity\Provider\ToDo;
 use Bitrix\Crm\Field\Collection;
+use Bitrix\Crm\Integration\Analytics\Builder\AbstractBuilder;
+use Bitrix\Crm\Integration\Analytics\Builder\AnalyticsEventDto;
+use Bitrix\Crm\Integration\Analytics\Builder\Entity\AddEvent;
+use Bitrix\Crm\Integration\Analytics\Builder\Entity\ConvertEvent;
+use Bitrix\Crm\Integration\Analytics\Builder\Entity\CopyEvent;
+use Bitrix\Crm\Integration\Analytics\Builder\Robot\CreateEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Integration\PullManager;
@@ -176,10 +183,14 @@ class Add extends Operation
 
 		if ($viewMode === \Bitrix\Crm\Kanban\ViewMode::MODE_ACTIVITIES)
 		{
-			$factory = $this->getFactory();
-			$stageFieldName = $factory->getEntityFieldNameByMap(Item::FIELD_NAME_STAGE_ID);
-
-			$stageId = $context->getItemOption($stageFieldName);
+			$stageId = $context->getItemOption(\Bitrix\Crm\Kanban\Entity\EntityActivities::ACTIVITY_STAGE_ID);
+			if (!$stageId)
+			{
+				$factory = $this->getFactory();
+				$stageId = $factory
+					? $context->getItemOption($factory->getEntityFieldNameByMap(Item::FIELD_NAME_STAGE_ID))
+					: null;
+			}
 			if (!$stageId)
 			{
 				return;
@@ -250,5 +261,50 @@ class Add extends Operation
 	protected function isClearItemStageCacheNeeded(): bool
 	{
 		return true;
+	}
+
+	protected function sendAnalytics(Result $result): void
+	{
+		$analytics = $this->getContext()->getAnalytics();
+		if ($analytics->isEmpty())
+		{
+			AddEvent::createDefault($this->getItem()->getEntityTypeId())
+				->setSection(Dictionary::SECTION_UNKNOWN)
+				->setStatus($result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR)
+				->buildEvent()
+				->send()
+			;
+
+			return;
+		}
+
+		$event = $this->getAnalyticsEvent($analytics, $this->getItem());
+
+		$analytics->fillEventBuilder($event);
+
+		$status = $result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR;
+		$event
+			->setStatus($status)
+			->buildEvent()
+			->send()
+		;
+	}
+
+	protected function getAnalyticsEvent(AnalyticsEventDto $analytics, Item $item): AbstractBuilder
+	{
+		$event =
+			$analytics->getCategory() === Dictionary::CATEGORY_ROBOT_OPERATIONS
+				? new CreateEvent($item->getEntityTypeId(), $analytics->getType())
+				: null
+		;
+
+		$event ??= match ($analytics->getEvent())
+		{
+			Dictionary::EVENT_ENTITY_COPY => CopyEvent::createDefault($item->getEntityTypeId()),
+			Dictionary::EVENT_ENTITY_CONVERT => ConvertEvent::createDefault($item->getEntityTypeId()),
+			default => AddEvent::createDefault($item->getEntityTypeId()),
+		};
+
+		return $event;
 	}
 }

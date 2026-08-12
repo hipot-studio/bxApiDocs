@@ -259,6 +259,25 @@ class ChatTable extends Entity\DataManager
 		);
 	}
 
+	/**
+	 * Joins the user's recent row so callers can tell whether a chat is present in the user's recent
+	 * list (select RECENT.ITEM_CID). With the default LEFT join it is null when the chat is absent
+	 * from recent (hidden); pass Join::TYPE_INNER to keep only chats that are present in recent.
+	 * Membership is a separate concern handled by withRelation().
+	 */
+	public static function withRecent(Query $query, int $userId, string $joinType = Join::TYPE_LEFT): void
+	{
+		$query->registerRuntimeField(
+			'RECENT',
+			new Reference(
+				'RECENT',
+				RecentTable::class,
+				Join::on('this.ID', 'ref.ITEM_CID')->where('ref.USER_ID', $userId),
+				['join_type' => $joinType]
+			)
+		);
+	}
+
 	public static function onAfterUpdate(\Bitrix\Main\ORM\Event $event)
 	{
 		$fields = $event->getParameter("fields");
@@ -274,6 +293,7 @@ class ChatTable extends Entity\DataManager
 		}
 
 		$chatId = (int)$event->getParameter("id")['ID'];
+
 		if (static::needCacheInvalidate($fields))
 		{
 			Chat::cleanCache($chatId);
@@ -403,6 +423,7 @@ class ChatTable extends Entity\DataManager
 			'MANAGE_UI',
 			'MANAGE_SETTINGS',
 			'CAN_POST',
+			'PARENT_ID',
 		];
 
 		return !empty(array_intersect($cacheUpdatingFields, array_keys($updatedFields)));

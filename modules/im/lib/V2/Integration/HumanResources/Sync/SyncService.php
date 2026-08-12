@@ -9,10 +9,14 @@ use Bitrix\HumanResources\Item\NodeRelation;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Service\NodeRelationService;
 use Bitrix\HumanResources\Type\RelationEntityType;
+use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Tree\Async\UnlinkDepartmentFromDescendantsMessage;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeDepartmentSynchronizer;
 use Bitrix\Im\V2\Common\PeriodAgentTrait;
 use Bitrix\Im\V2\Integration\HumanResources\Sync\Item\EntityType;
 use Bitrix\Im\V2\Integration\HumanResources\Sync\SyncProcessor\Base;
 use Bitrix\Im\V2\Result;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 
@@ -110,6 +114,51 @@ class SyncService
 		(new static(EntityType::CHAT))
 			->startSync(Item\SyncInfo::createFromNodeRelation($relation, Item\SyncDirection::ADD))
 		;
+
+		// Mirror the department onto ancestor chats so the tree invariant holds. Order does not matter for
+		// correctness: each chat adds its own members through its own (gate-exempt) structure sync. Syncing
+		// this chat first also keeps it first in line for the per-request add budget.
+		self::syncDepartmentsToAncestors((int)$relation->entityId);
+	}
+
+	/**
+	 * Maintains the tree invariant: a department/team linked to a chat is mirrored onto its ancestor chats.
+	 * This is the single choke-point — every link path (attach cascade, member-edit, Structure::link, create)
+	 * goes through NodeRelationRepository::create() and raises this OnRelationAdded(CHAT) event.
+	 */
+	private static function syncDepartmentsToAncestors(int $chatId): void
+	{
+		if ($chatId <= 0)
+		{
+			return;
+		}
+
+		$chat = Chat::getInstance($chatId);
+		if ((int)$chat->getChatId() <= 0)
+		{
+			return;
+		}
+
+		ServiceLocator::getInstance()
+			->get(ChatTreeDepartmentSynchronizer::class)
+			->syncToAncestors($chat)
+		;
+	}
+
+	/**
+	 * Down-cascade complement of syncDepartmentsToAncestors: a department unlinked from a chat must be gone
+	 * from its descendants too (e.g. socialnetwork drops the department off the project chat on COLLAB
+	 * unlink — im propagates it down the tree). Offloaded to a queue and processed batch by batch
+	 * (DepartmentTreeSyncReceiver) so a wide/deep tree never blocks the request.
+	 */
+	private static function enqueueDescendantDepartmentUnlink(int $chatId, int $nodeId): void
+	{
+		if ($chatId <= 0 || $nodeId <= 0)
+		{
+			return;
+		}
+
+		(new UnlinkDepartmentFromDescendantsMessage($chatId, $nodeId))->sendToQueue();
 	}
 
 	public static function onRelationDeleted(Event $event): void
@@ -128,6 +177,8 @@ class SyncService
 			$syncService->startSync(
 				Item\SyncInfo::createFromNodeRelation($relation, Item\SyncDirection::DELETE)
 			);
+
+			self::enqueueDescendantDepartmentUnlink((int)$relation->entityId, (int)$relation->nodeId);
 		}
 		else
 		{

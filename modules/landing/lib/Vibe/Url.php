@@ -71,10 +71,12 @@ class Url
 		$url = new Uri(Marketplace::getMainDirectory() . self::MAIN_PAGE_MARKET_CATEGORY_PATH);
 		$url->addParams([
 			'create_uri' => $createUri->getUri(),
-			'st[tool]' => Metrika\Tools::Vibe->value,
-			'st[category]' => Metrika\Categories::Vibe->value,
-			'st[event]' => Metrika\Events::openMarket->value,
-			'st[status]' => Metrika\Statuses::Success->value,
+			'st' => [
+				'tool' => Metrika\Tools::Vibe->value,
+				'category' => Metrika\Categories::Vibe->value,
+				'event' => Metrika\Events::openMarket->value,
+				'status' => Metrika\Statuses::Success->value,
+			]
 		]);
 
 		return $url->getUri();

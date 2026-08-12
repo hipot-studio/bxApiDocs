@@ -7,6 +7,7 @@ namespace Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365;
 use Bitrix\Calendar\Core\Base\BaseException;
 use Bitrix\Calendar\Core\Base\Date;
 use Bitrix\Calendar\Core\Event\Event;
+use Bitrix\Calendar\Core\Section\Section;
 use Bitrix\Calendar\Integration\Dav\ConnectionProvider;
 use Bitrix\Calendar\Internal\Repository\EventRepository;
 use Bitrix\Calendar\Sync\Connection\Connection;
@@ -84,6 +85,11 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 			return;
 		}
 
+		if (!$this->shouldProcessSection($event->getSection()))
+		{
+			return;
+		}
+
 		$sectionConnection = $this->getSectionConnection($event->getSection()->getId(), $connection->getId());
 
 		if (!$sectionConnection)
@@ -153,12 +159,11 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 		Office365EventGateway $gateway,
 	): void
 	{
-		$eventConnection =
-			(new EventConnection())
-				->setEvent($event)
-				->setConnection($connection)
-				// For supporting a legacy logic
-				->setLastSyncStatus(Dictionary::SYNC_STATUS['create'])
+		$eventConnection = (new EventConnection())
+			->setEvent($event)
+			->setConnection($connection)
+			// For supporting a legacy logic
+			->setLastSyncStatus(Dictionary::SYNC_STATUS['create'])
 		;
 
 		try
@@ -203,7 +208,7 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 				sprintf('Office365 API exception: "%s"', $e->getMessage()),
 				$e->getCode(),
 				$e,
-				isRecoverable: false
+				isRecoverable: false,
 			);
 		}
 		catch (ApiException|DtoValidationException $e)
@@ -287,17 +292,11 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 				isRecoverable: false,
 			);
 		}
-		catch (NotFoundException $e)
+		catch (NotFoundException)
 		{
-			// If the event was deleted on the vendor side
+			// The event was already deleted on the vendor's side —
+			// drop the local connection and treat the message as successfully processed
 			$this->eventConnectionRepository->delete($eventConnection->getId());
-
-			throw new SynchronizerException(
-				sprintf('Office365 API exception: "%s"', $e->getMessage()),
-				$e->getCode(),
-				$e,
-				isRecoverable: false
-			);
 		}
 		catch (ApiException|DtoValidationException $e)
 		{
@@ -421,6 +420,11 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 			return;
 		}
 
+		if (!$this->shouldProcessSection($event->getSection()))
+		{
+			return;
+		}
+
 		$sectionConnection = $this->getSectionConnection($event->getSection()->getId(), $connection->getId());
 
 		if (!$sectionConnection)
@@ -487,7 +491,7 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 		Event $event,
 		Connection $connection,
 		Office365EventGateway $gateway,
-		?EventConnection $eventConnection = null
+		?EventConnection $eventConnection = null,
 	): void
 	{
 		$masterEventConnection = $this->getMasterEventConnection($event, $connection);
@@ -625,6 +629,11 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 				isRecoverable: false,
 			);
 		}
+		catch (NotFoundException)
+		{
+			// The event instance was already deleted on the vendor's side —
+			// nothing to update, the message is treated as successfully processed
+		}
 		catch (ApiException|DtoValidationException $e)
 		{
 			if ((int)$e->getCode() !== 400)
@@ -671,6 +680,11 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 			$connection->getId(),
 		);
 
+		if (!$this->shouldProcessSection($event->getSection()))
+		{
+			return;
+		}
+
 		if (!$sectionConnection)
 		{
 			throw new SynchronizerException(
@@ -691,7 +705,7 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 		{
 			throw new SynchronizerException(
 				sprintf('Event connection for event "%s" not found', $event->getId()),
-				isRecoverable: false
+				isRecoverable: false,
 			);
 		}
 
@@ -719,11 +733,9 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 
 			if ($preparedExcludedDate instanceof DateTime)
 			{
-				$excludedTimeZone =
-					$event->getStartTimeZone()
-						? $event->getStartTimeZone()->getTimeZone()
-						: new DateTimeZone('UTC')
-				;
+				$excludedTimeZone = $event->getStartTimeZone()
+					? $event->getStartTimeZone()->getTimeZone()
+					: new DateTimeZone('UTC');
 
 				$preparedExcludedDate = new DateTime(
 					$preparedExcludedDate->format('Ymd 000000'),
@@ -963,5 +975,10 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 		}
 
 		return null;
+	}
+
+	private function shouldProcessSection(Section $section): bool
+	{
+		return $section->isLocal() || $section->getExternalType() === AbstractOffice365Synchronizer::VENDOR_CODE;
 	}
 }

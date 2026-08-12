@@ -8,14 +8,8 @@ final class ServerRequest
 {
 	protected array $scopes = [];
 
-	protected ?string $token = null;
-
 	public function __construct(private string $method, private array $query = [], private HttpRequest $httpRequest)
 	{
-		if (isset($this->query['token']) && !empty($this->query['token']))
-		{
-			$this->token = $this->query['token'];
-		}
 	}
 
 	public function getMethod(): string
@@ -45,11 +39,6 @@ final class ServerRequest
 		$this->scopes = $scopes;
 
 		return $this;
-	}
-
-	public function getToken(): ?string
-	{
-		return $this->token;
 	}
 
 	public function getHttpRequest(): HttpRequest

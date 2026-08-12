@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Calendar\Synchronization\Internal\Model;
 
-use Bitrix\Main\Entity\DataManager;
-use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -44,33 +43,21 @@ class CalendarLogTable extends DataManager
 	 */
 	public static function getMap(): array
 	{
-		/** @noinspection PhpUnhandledExceptionInspection */
 		return [
 			(new IntegerField('ID'))
-				->configureTitle(Loc::getMessage('LOG_ENTITY_ID_FIELD'))
 				->configurePrimary(true)
 				->configureAutocomplete(true)
 			,
-			(new DatetimeField('TIMESTAMP_X'))
-				->configureTitle(Loc::getMessage('LOG_ENTITY_TIMESTAMP_X_FIELD'))
-			,
+			(new DatetimeField('TIMESTAMP_X')),
 			(new StringField('LEVEL'))
 				->configureRequired()
 				->addValidator(new LengthValidator(4, 9))
 				->configureDefaultValue(LogLevel::DEBUG)
 			,
-			(new TextField('MESSAGE'))
-				->configureTitle(Loc::getMessage('LOG_ENTITY_MESSAGE_FIELD'))
-			,
-			(new StringField('TYPE'))
-				->configureTitle(Loc::getMessage('LOG_ENTITY_TYPE_FIELD'))
-			,
-			(new StringField('UUID'))
-				->configureTitle(Loc::getMessage('LOG_ENTITY_UUID_FIELD'))
-			,
-			(new IntegerField('USER_ID'))
-				->configureTitle(Loc::getMessage('LOG_ENTITY_USER_ID_FIELD'))
-			,
+			(new TextField('MESSAGE')),
+			(new StringField('TYPE')),
+			(new StringField('UUID')),
+			(new IntegerField('USER_ID')),
 			(new TextField('CONTEXT')),
 		];
 	}

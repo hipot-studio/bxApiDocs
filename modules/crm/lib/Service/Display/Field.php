@@ -53,6 +53,7 @@ abstract class Field
 	protected $userFieldParams = [];
 	protected $displayParams = [];
 	protected $context;
+	protected mixed $itemContext = null;
 
 	protected function __construct(string $id)
 	{
@@ -145,6 +146,10 @@ abstract class Field
 		if (isset($baseFieldInfo['VALUE_TYPE']))
 		{
 			$displayParams['VALUE_TYPE'] = $baseFieldInfo['VALUE_TYPE'];
+		}
+		if (isset($settings['currencyFieldName']) && is_string($settings['currencyFieldName']))
+		{
+			$displayParams['currencyFieldName'] = $settings['currencyFieldName'];
 		}
 		$field =
 			(self::getInstance($type, $id))
@@ -459,6 +464,39 @@ abstract class Field
 	public function addDisplayParam(string $paramId, $paramValue): Field
 	{
 		$this->displayParams[$paramId] = $paramValue;
+
+		return $this;
+	}
+
+	/**
+	 * Stores the full row of the currently formatted item. Set by {@see Display::processValues()} before
+	 * each call to {@see getFormattedValue()} so that subclasses can read sibling field values
+	 * (e.g. resolve currency code from currencyFieldName).
+	 *
+	 * The value is stored as-is (typically a plain values array on the standard Display path, or an
+	 * \ArrayAccess row such as {@see \Bitrix\Crm\Item} fed by callers like crmmobile's ProviderDecorator).
+	 * Consumers reading it via {@see getItemContext()} must validate the format before use.
+	 */
+	public function setItemContext(mixed $context): Field
+	{
+		$this->itemContext = $context;
+
+		return $this;
+	}
+
+	public function getItemContext(): mixed
+	{
+		return $this->itemContext;
+	}
+
+	/**
+	 * Resets the item-context reference held by this field. Called by {@see Display::processValues()}
+	 * after the inner loop over items to keep the field state predictable and avoid leaking
+	 * the last processed row into subsequent callers that might reuse this field instance.
+	 */
+	public function clearItemContext(): Field
+	{
+		$this->itemContext = null;
 
 		return $this;
 	}

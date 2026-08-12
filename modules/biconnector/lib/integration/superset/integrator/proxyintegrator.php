@@ -714,7 +714,8 @@ class ProxyIntegrator implements IntegratorInterface
 	public function importDashboard(
 		string $filePath,
 		string $appCode,
-		string $type = ''
+		string $type = '',
+		bool $forceImportDatasets = false,
 	): IntegratorResponse
 	{
 
@@ -727,6 +728,7 @@ class ProxyIntegrator implements IntegratorInterface
 					'langCode' => CultureFormatter::getLanguageCode(),
 					'appCode' => $appCode,
 					'requiresSubscription' => $type === SupersetDashboardTable::DASHBOARD_TYPE_MARKET,
+					'forceImportDatasets' => $forceImportDatasets,
 				])
 				->setSenderHttpClientParams([
 					'streamTimeout' => self::PROXY_EXTENDED_STREAM_TIMEOUT,

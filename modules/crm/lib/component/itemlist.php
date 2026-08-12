@@ -603,30 +603,50 @@ abstract class ItemList extends Base
 			$views[] = $this->getIntranetBindingMenuView();
 		}
 
-		if ($this->factory->isStagesEnabled())
+		$isStagesEnabled = $this->factory->isStagesEnabled();
+		$isActivitiesAvailable = $this->factory->isCountersEnabled() && $this->isActivitiesModeSupported();
+
+		if ($isStagesEnabled)
 		{
 			$views[Service\Router::LIST_VIEW_KANBAN] = [
 				'title' => Loc::getMessage('CRM_COMMON_KANBAN'),
 				'url' => $this->router->getKanbanUrl($this->entityTypeId, $this->getCategoryId()),
 				'isActive' => false,
 			];
+		}
+
+		if ($isStagesEnabled || $isActivitiesAvailable)
+		{
 			$views[Service\Router::LIST_VIEW_LIST] = [
 				'title' => Loc::getMessage('CRM_COMMON_LIST'),
 				'url' => $this->router->getItemListUrl($this->entityTypeId, $this->getCategoryId()),
 				'isActive' => true,
 			];
-
-			if ($this->isDeadlinesModeSupported())
-			{
-				$views[Service\Router::LIST_VIEW_DEADLINES] = [
-					'title' => Loc::getMessage('CRM_COMMON_DEADLINES'),
-					'url' => $this->router->getDeadlinesUrl($this->entityTypeId, $this->getCategoryId()),
-					'isActive' => false,
-				];
-			}
 		}
 
-		if (Automation\Factory::isAutomationAvailable($this->entityTypeId) && Loader::includeModule('ui'))
+		if ($isStagesEnabled && $this->isDeadlinesModeSupported())
+		{
+			$views[Service\Router::LIST_VIEW_DEADLINES] = [
+				'title' => Loc::getMessage('CRM_COMMON_DEADLINES'),
+				'url' => $this->router->getDeadlinesUrl($this->entityTypeId, $this->getCategoryId()),
+				'isActive' => false,
+			];
+		}
+
+		if ($isActivitiesAvailable)
+		{
+			$views[Service\Router::LIST_VIEW_ACTIVITY] = [
+				'title'    => Loc::getMessage('CRM_COMMON_ACTIVITY'),
+				'url'      => $this->router->getActivityUrl($this->entityTypeId, $this->getCategoryId()),
+				'isActive' => false,
+			];
+		}
+
+		if (
+			$this->isAutomationButtonAvailable()
+			&& Automation\Factory::isAutomationAvailable($this->entityTypeId)
+			&& Loader::includeModule('ui')
+		)
 		{
 			$dynamicTypesLimit = RestrictionManager::getDynamicTypesLimitRestriction();
 			$isTypeSettingsRestricted = $dynamicTypesLimit->isTypeSettingsRestricted($this->entityTypeId);
@@ -928,6 +948,16 @@ abstract class ItemList extends Base
 	{
 		$supported = [\CCrmOwnerType::SmartInvoice];
 		return in_array($this->entityTypeId, $supported);
+	}
+
+	protected function isActivitiesModeSupported(): bool
+	{
+		return \CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId);
+	}
+
+	protected function isAutomationButtonAvailable(): bool
+	{
+		return true;
 	}
 
 	private function getCounterValue(?int $categoryId = null): int

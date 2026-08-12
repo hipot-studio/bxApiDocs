@@ -6,13 +6,22 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use \Bitrix\Landing\Rights;
 use \Bitrix\Landing\Manager;
+use \Bitrix\Landing\Site\Creator;
 use \Bitrix\Main\Application;
+use \Bitrix\Main\Engine\ActionFilter;
+use \Bitrix\Main\Engine\Contract\Controllerable;
+use \Bitrix\Main\Loader;
+use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\Type\DateTime;
 
 \CBitrixComponent::includeComponentClass('bitrix:landing.base');
 
-class LandingFilterComponent extends LandingBaseComponent
+class LandingFilterComponent extends LandingBaseComponent implements Controllerable
 {
+	private const CREATE_MENU_ITEM_GENERATE_GPT = 'generate_gpt';
+	private const CREATE_MENU_ITEM_SELECT_TEMPLATE = 'select_template';
+	private const CREATE_MENU_ITEM_BUILD_YOURSELF = 'build_yourself';
+
 	/**
 	 * Filter type.
 	 */
@@ -50,6 +59,105 @@ class LandingFilterComponent extends LandingBaseComponent
 	 * @var array
 	 */
 	protected static $externalFilter = [];
+
+	/**
+	 * Configures filter for ajax request.
+	 * @return array
+	 */
+	public function configureActions(): array
+	{
+		return [
+			'createMenuItemClick' => [
+				'prefilters' => [
+					new ActionFilter\Authentication(),
+				],
+			],
+		];
+	}
+
+	/**
+	 * Handles create dropdown menu item click.
+	 * @param string $itemCode Clicked item code.
+	 * @return array
+	 */
+	public function createMenuItemClickAction(string $itemCode): array
+	{
+		if ($itemCode === self::CREATE_MENU_ITEM_GENERATE_GPT)
+		{
+			return $this->handleGenerateGptAction();
+		}
+
+		if ($itemCode === self::CREATE_MENU_ITEM_SELECT_TEMPLATE)
+		{
+			return $this->handleSelectTemplateAction();
+		}
+
+		if ($itemCode === self::CREATE_MENU_ITEM_BUILD_YOURSELF)
+		{
+			return $this->handleBuildYourselfCreateAction();
+		}
+
+		return [
+			'success' => true,
+			'itemCode' => $itemCode,
+		];
+	}
+
+	/**
+	 * Dedicated handler stub for "generate_gpt" menu action.
+	 * @return array
+	 */
+	protected function handleGenerateGptAction(): array
+	{
+		return [
+			'success' => true,
+			'itemCode' => self::CREATE_MENU_ITEM_GENERATE_GPT,
+		];
+	}
+
+	/**
+	 * Dedicated handler stub for "select_template" menu action.
+	 * @return array
+	 */
+	protected function handleSelectTemplateAction(): array
+	{
+		return [
+			'success' => true,
+			'itemCode' => self::CREATE_MENU_ITEM_SELECT_TEMPLATE,
+		];
+	}
+
+	/**
+	 * Dedicated handler for "build_yourself" menu action.
+	 * @return array
+	 */
+	protected function handleBuildYourselfCreateAction(): array
+	{
+		if (!Loader::includeModule('landing'))
+		{
+			return [
+				'success' => false,
+				'itemCode' => self::CREATE_MENU_ITEM_BUILD_YOURSELF,
+				'redirectUrl' => null,
+				'message' => 'Landing module is not installed.',
+			];
+		}
+
+		$createResult = Creator::createEmptySiteWithEmptyPage(
+			(string)($this->arParams['TYPE'] ?? ''),
+			(string)Loc::getMessage('LANDING_FILTER_EMPTY_SITE_TITLE'),
+			(string)Loc::getMessage('LANDING_FILTER_EMPTY_PAGE_TITLE'),
+		);
+
+		$createData = $createResult->getData();
+
+		return [
+			'success' => $createResult->isSuccess(),
+			'itemCode' => self::CREATE_MENU_ITEM_BUILD_YOURSELF,
+			'redirectUrl' => $createData['redirectUrl'] ?? null,
+			'message' => $createResult->isSuccess() ? null : implode('; ', $createResult->getErrorMessages()),
+		];
+	}
 
 	/**
 	 * Allowed or not some type.

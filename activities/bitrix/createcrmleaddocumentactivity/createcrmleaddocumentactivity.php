@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -11,6 +13,8 @@ $runtime->IncludeActivityFile('CreateDocumentActivity');
 /** @property-write string|null ErrorMessage */
 class CBPCreateCrmLeadDocumentActivity extends CBPCreateDocumentActivity
 {
+	use TargetDocumentResolverTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -31,6 +35,8 @@ class CBPCreateCrmLeadDocumentActivity extends CBPCreateDocumentActivity
 		{
 			return CBPActivityExecutionStatus::Closed;
 		}
+
+		$this->resolveTargetDocumentId();
 
 		$documentType = $this->getCreatedDocumentType();
 		$documentService = $this->workflow->GetService('DocumentService');

@@ -54,12 +54,8 @@ class TimelineEntryCategory
 			self::DOCUMENT => Loc::getMessage('CRM_TIMELINE_CATEGORY_DOCUMENT'),
 			self::SMS => Loc::getMessage('CRM_TIMELINE_CATEGORY_SMS'),
 			self::WHATSAPP => Loc::getMessage('CRM_TIMELINE_CATEGORY_WHATSAPP'),
+			self::TELEGRAM => Loc::getMessage('CRM_TIMELINE_CATEGORY_TELEGRAM'),
 		];
-
-		if (Crm\Feature::enabled(Crm\Feature\TelegramActivity::class))
-		{
-			$result[self::TELEGRAM] = Loc::getMessage('CRM_TIMELINE_CATEGORY_TELEGRAM');
-		}
 
 		$result = [
 			...$result,

@@ -6,6 +6,7 @@ use Bitrix\Crm\CompanyTable;
 use Bitrix\Crm\Currency;
 use Bitrix\Crm\Entity\CommentsHelper;
 use Bitrix\Crm\FieldMultiTable;
+use Bitrix\Crm\Format\Money;
 use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
@@ -14,6 +15,7 @@ use Bitrix\Crm\ProductRowTable;
 use Bitrix\Crm\RepeatSale\Log\Entity\RepeatSaleLogTable;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Reservation;
+use Bitrix\Crm\Service\Accounting;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Crm\UtmTable;
@@ -36,6 +38,7 @@ use Bitrix\Main\ORM\Fields\TextField;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Loader;
 
 /**
  * Contains descriptions for common fields in CRM ORM entities
@@ -548,9 +551,7 @@ final class FieldRepository
 	public function getCloseDate(string $fieldName = Item::FIELD_NAME_CLOSE_DATE): ScalarField
 	{
 		$defaultCloseDateResolver = static function (): Date {
-			$currentDate = new Date();
-
-			return $currentDate->add('7D');
+			return (new Date())->add('7D');
 		};
 
 		return
@@ -1053,5 +1054,59 @@ final class FieldRepository
 		}
 
 		return number_format((float)$value, 2, '.', '');
+	}
+
+	/**
+	 * Currency-aware analogue of {@see withNumberFormatFetchModifier()} for money fields.
+	 *
+	 * Attaches a fetch-data modifier to $field that, for every row returned by an ORM query:
+	 * - passes null/empty value through unchanged;
+	 * - reads the currency code from the same row by the name of $currencyField,
+	 *   resolves DECIMALS via {@see Currency::getCurrencyDecimals()} and returns the value
+	 *   formatted with that precision via {@see number_format()};
+	 * - falls back to {@see Accounting::getPricePublicPrecision()} when DECIMALS could not be
+	 *   resolved (the currency column is not in the SELECT, its value is empty, the currency
+	 *   module is unavailable, or the resolved decimals value is empty).
+	 *
+	 * The returned value is a string (from number_format) for every non-null/non-empty input.
+	 *
+	 * Only the name of $currencyField is consumed (via ->getName()); the instance itself is not
+	 * retained or registered. The currency column with the same name must be present in the
+	 * SELECT of the same query for the modifier to read it from a row.
+	 *
+	 * The modifier is appended to the field's modifier chain (does not replace pre-existing modifiers).
+	 *
+	 * @see getMoneyFieldScaleFetchModifier()
+	 */
+	public function withMoneyFieldNumberFormatFetchModifier(
+		FloatField $field,
+		ScalarField $currencyField
+	): FloatField
+	{
+		$currencyFieldName = $currencyField->getName();
+
+		$field->addFetchDataModifier(
+			static function ($value, $query, array $row) use ($currencyFieldName) {
+				return self::getMoneyFieldScaleFetchModifier($value, $row, $currencyFieldName);
+			}
+		);
+
+		return $field;
+	}
+
+	public static function getMoneyFieldScaleFetchModifier(
+		$value,
+		array $row,
+		string $currencyFieldName
+	): null|string|float
+	{
+		if (is_null($value) || $value === '')
+		{
+			return $value;
+		}
+
+		$currencyId = isset($row[$currencyFieldName]) ? (string)$row[$currencyFieldName] : '';
+
+		return Money::toNumberString($value, $currencyId !== '' ? $currencyId : null);
 	}
 }

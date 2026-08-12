@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Crm\Synchronization;
 use Bitrix\Crm\Entity\Traits\VisibilityConfig;
+use Bitrix\Crm\Integration\Analytics\Builder\Userfield\Context\ConvertContext;
 use Bitrix\Crm\Model;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
@@ -376,6 +377,10 @@ class UserFieldSynchronizer
 			{
 				$dstField['HELP_MESSAGE'] = $srcField['HELP_MESSAGE'];
 			}
+
+			$dstField['ANALYTICS'] = (new ConvertContext())
+				->setSourceEntityTypeId($srcEntityTypeID)
+			;
 
 			$ID = $entity->Add($dstField);
 			if($ID === false)

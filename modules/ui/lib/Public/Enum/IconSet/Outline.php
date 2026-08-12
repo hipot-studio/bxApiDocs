@@ -127,6 +127,7 @@ enum Outline: string
 	case FILE_WITH_CHECK_2 = 'o-file-with-check-2';
 	case FILE_WITH_CHECK = 'o-file-with-check';
 	case FILE_WITH_CLOCK = 'o-file-with-clock';
+	case FILE_SETTINGS = 'o-file-settings';
 	case FILE_WITH_CROWN = 'o-file-with-crown';
 	case FILE_WITH_PERSON = 'o-file-with-person';
 	case FILE = 'o-file';

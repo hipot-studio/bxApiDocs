@@ -16,6 +16,11 @@ class CBPCrmChangeDynamicCategoryActivity extends CBPCrmCopyDynamicActivity
 {
 	const CYCLE_LIMIT = 150;
 
+	protected function canAccessResolvedTarget(array $documentId): bool
+	{
+		return $this->canUpdateResolvedTarget($documentId);
+	}
+
 	protected function prepareProperties(Crm\Service\Factory $factory, Crm\Item $item)
 	{
 		$this->preparedProperties = [
@@ -41,7 +46,7 @@ class CBPCrmChangeDynamicCategoryActivity extends CBPCrmCopyDynamicActivity
 			return false;
 		}
 
-		$itemId = mb_split('_(?=[^_]*$)', $this->GetDocumentId()[2])[1];
+		$itemId = mb_split('_(?=[^_]*$)', $this->resolveTargetDocumentId()[2])[1];
 		$item = $factory->getItem($itemId);
 		if ($item->getCategoryId() === $this->preparedProperties['CategoryId'])
 		{
@@ -82,13 +87,13 @@ class CBPCrmChangeDynamicCategoryActivity extends CBPCrmCopyDynamicActivity
 			unset($errorMessages);
 		}
 
-		if ($updateResult->isSuccess())
-		{
-			$documentType = $this->getDocumentType();
-			\CCrmBizProcHelper::sendOperationsAnalytics(
-				Dictionary::EVENT_ENTITY_EDIT,
-				$this,
-				$documentType[2] ?? '',
+			if ($updateResult->isSuccess())
+			{
+				$documentType = $this->resolveTargetDocumentType($this->resolveTargetDocumentId());
+				\CCrmBizProcHelper::sendOperationsAnalytics(
+					Dictionary::EVENT_ENTITY_EDIT,
+					$this,
+					$documentType[2] ?? '',
 			);
 
 			$terminateResult = $this->terminateDocumentWorkflows();
@@ -132,7 +137,7 @@ class CBPCrmChangeDynamicCategoryActivity extends CBPCrmCopyDynamicActivity
 	{
 		$result = new \Bitrix\Main\Result();
 
-		$documentId = $this->GetDocumentId();
+		$documentId = $this->resolveTargetDocumentId();
 		$instanceIds = \CCrmBizProcHelper::getDocumentNotNodesInstanceIds($documentId);
 
 		foreach ($instanceIds as $instanceId)

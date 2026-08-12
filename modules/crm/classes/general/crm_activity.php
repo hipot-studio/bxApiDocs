@@ -7793,6 +7793,13 @@ class CAllCrmActivity
 					$url = CCrmOwnerType::GetEntityShowPath(CCrmOwnerType::Activity, $ID);
 					$absoluteUrl = CCrmUrlUtil::ToAbsoluteUrl($url);
 
+					/**
+					 * Supported phrase codes:
+					 * CRM_ACTIVITY_MEETING_RESPONSIBLE_IM_NOTIFY
+					 * CRM_ACTIVITY_EMAIL_RESPONSIBLE_IM_NOTIFY
+					 * CRM_ACTIVITY_CALL_RESPONSIBLE_IM_NOTIFY
+					 * CRM_ACTIVITY_TASK_RESPONSIBLE_IM_NOTIFY
+					 */
 					$notifyMessage = static fn (?string $languageId = null) =>
 						Loc::getMessage(
 							"CRM_ACTIVITY_{$type}_RESPONSIBLE_IM_NOTIFY",
@@ -7811,6 +7818,24 @@ class CAllCrmActivity
 						return "{$message} ({$absoluteUrl})";
 					};
 
+					/**
+					 * Supported phrase codes:
+					 * CRM_ACTIVITY_MEETING_RESPONSIBLE_IM_NOTIFY_SUBJECT
+					 * CRM_ACTIVITY_EMAIL_RESPONSIBLE_IM_NOTIFY_SUBJECT
+					 * CRM_ACTIVITY_CALL_RESPONSIBLE_IM_NOTIFY_SUBJECT
+					 * CRM_ACTIVITY_TASK_RESPONSIBLE_IM_NOTIFY_SUBJECT
+					 */
+					$notifyMessageSubject = static fn (?string $languageId = null) =>
+						Loc::getMessage(
+							"CRM_ACTIVITY_{$type}_RESPONSIBLE_IM_NOTIFY_SUBJECT",
+							[
+								"#LINK_START#" => '<a href="' . $url . '">',
+								"#LINK_END#" => '</a>',
+							],
+							$languageId,
+						)
+					;
+
 					$arMessageFields = array(
 						"MESSAGE_TYPE" => IM_MESSAGE_SYSTEM,
 						"TO_USER_ID" => $arFields["RESPONSIBLE_ID"],
@@ -7822,6 +7847,12 @@ class CAllCrmActivity
 						"NOTIFY_TAG" => "CRM|ACTIVITY|".$ID,
 						"NOTIFY_MESSAGE" => $notifyMessage,
 						"NOTIFY_MESSAGE_OUT" => $notifyMessageOut,
+						"PARAMS" => [
+							'COMPONENT_ID' => 'DefaultEntity',
+							'COMPONENT_PARAMS' => [
+								'SUBJECT' => $notifyMessageSubject,
+							],
+						]
 					);
 
 					if(!$bHasPermissions)
@@ -7969,6 +8000,13 @@ class CAllCrmActivity
 						if ($bHasPermissions)
 						{
 							$arMessageFields["TO_USER_ID"] = $params['START_RESPONSIBLE_ID'];
+							/**
+							 * Supported phrase codes:
+							 * CRM_ACTIVITY_MEETING_NOT_RESPONSIBLE_IM_NOTIFY
+							 * CRM_ACTIVITY_EMAIL_NOT_RESPONSIBLE_IM_NOTIFY
+							 * CRM_ACTIVITY_CALL_NOT_RESPONSIBLE_IM_NOTIFY
+							 * CRM_ACTIVITY_TASK_NOT_RESPONSIBLE_IM_NOTIFY
+							 */
 							$arMessageFields["NOTIFY_MESSAGE"] = static fn (?string $languageId = null) =>
 								Loc::getMessage(
 									"CRM_ACTIVITY_{$type}_NOT_RESPONSIBLE_IM_NOTIFY",
@@ -7987,6 +8025,52 @@ class CAllCrmActivity
 								return "{$message} ({$absoluteUrl})";
 							};
 
+							/**
+							 * Supported phrase codes:
+							 * CRM_ACTIVITY_MEETING_NOT_RESPONSIBLE_IM_NOTIFY_SUBJECT
+							 * CRM_ACTIVITY_EMAIL_NOT_RESPONSIBLE_IM_NOTIFY_SUBJECT
+							 * CRM_ACTIVITY_CALL_NOT_RESPONSIBLE_IM_NOTIFY_SUBJECT
+							 * CRM_ACTIVITY_TASK_NOT_RESPONSIBLE_IM_NOTIFY_SUBJECT
+							 */
+							$notifyMessageSubject = static fn (?string $languageId = null) =>
+								Loc::getMessage(
+									"CRM_ACTIVITY_{$type}_NOT_RESPONSIBLE_IM_NOTIFY_SUBJECT",
+									null,
+									$languageId,
+								)
+							;
+
+							/**
+							 * Supported phrase codes:
+							 * CRM_ACTIVITY_MEETING_NOT_RESPONSIBLE_IM_NOTIFY_DESCRIPTION
+							 * CRM_ACTIVITY_EMAIL_NOT_RESPONSIBLE_IM_NOTIFY_DESCRIPTION
+							 * CRM_ACTIVITY_CALL_NOT_RESPONSIBLE_IM_NOTIFY_DESCRIPTION
+							 * CRM_ACTIVITY_TASK_NOT_RESPONSIBLE_IM_NOTIFY_DESCRIPTION
+							 */
+							$notifyMessageDescription = static fn (?string $languageId = null) =>
+								Loc::getMessage(
+									"CRM_ACTIVITY_{$type}_NOT_RESPONSIBLE_IM_NOTIFY_DESCRIPTION",
+									null,
+									$languageId,
+								)
+							;
+
+							$arMessageFields['PARAMS'] = [
+								'COMPONENT_ID' => 'CrmEntity',
+								'COMPONENT_PARAMS' => [
+									'SUBJECT' => $notifyMessageSubject,
+									'ENTITY' => [
+										'TITLE' => htmlspecialcharsbx($params['SUBJECT']),
+										'HREF' => $url,
+										'ENTITY_TYPE' => strtolower($type),
+										'CONTENT_TYPE' => 'text',
+										'CONTENT' => [
+											'VALUE' => $notifyMessageDescription,
+										],
+									],
+								],
+							];
+
 							CIMNotify::Add($arMessageFields);
 						}
 					}
@@ -7995,11 +8079,13 @@ class CAllCrmActivity
 					{
 						$bHasPermissions = false;
 						$perms = CCrmPerms::GetUserPermissions($params['FINAL_RESPONSIBLE_ID']);
+						$owner = [];
 						foreach ($arOwners as $arOwner)
 						{
 							if (CCrmActivity::CheckReadPermission($arOwner["OWNER_TYPE_ID"], $arOwner["OWNER_ID"], $perms))
 							{
 								$bHasPermissions = true;
+								$owner = $arOwner;
 								break;
 							}
 						}
@@ -8007,6 +8093,13 @@ class CAllCrmActivity
 						$arMessageFields["TO_USER_ID"] = $params['FINAL_RESPONSIBLE_ID'];
 						if ($bHasPermissions)
 						{
+							/**
+							 * Supported phrase codes:
+							 * CRM_ACTIVITY_MEETING_RESPONSIBLE_IM_NOTIFY
+							 * CRM_ACTIVITY_EMAIL_RESPONSIBLE_IM_NOTIFY
+							 * CRM_ACTIVITY_CALL_RESPONSIBLE_IM_NOTIFY
+							 * CRM_ACTIVITY_TASK_RESPONSIBLE_IM_NOTIFY
+							 */
 							$arMessageFields["NOTIFY_MESSAGE"] = static fn (?string $languageId = null) =>
 								Loc::getMessage(
 									"CRM_ACTIVITY_{$type}_RESPONSIBLE_IM_NOTIFY",
@@ -8023,6 +8116,30 @@ class CAllCrmActivity
 
 								return "{$message} ({$absoluteUrl})";
 							};
+							/**
+							 * Supported phrase codes:
+							 * CRM_ACTIVITY_MEETING_RESPONSIBLE_IM_NOTIFY_SUBJECT
+							 * CRM_ACTIVITY_EMAIL_RESPONSIBLE_IM_NOTIFY_SUBJECT
+							 * CRM_ACTIVITY_CALL_RESPONSIBLE_IM_NOTIFY_SUBJECT
+							 * CRM_ACTIVITY_TASK_RESPONSIBLE_IM_NOTIFY_SUBJECT
+							 */
+							$notifyMessageSubject = static fn (?string $languageId = null) =>
+								Loc::getMessage(
+									"CRM_ACTIVITY_{$type}_RESPONSIBLE_IM_NOTIFY_SUBJECT",
+									[
+										"#LINK_START#" => '<a href="' . $url . '">',
+										"#LINK_END#" => '</a>',
+									],
+									$languageId,
+								)
+							;
+
+							$arMessageFields["PARAMS"] = [
+								'COMPONENT_ID' => 'DefaultEntity',
+								'COMPONENT_PARAMS' => [
+									'SUBJECT' => $notifyMessageSubject,
+								],
+							];
 						}
 						else
 						{

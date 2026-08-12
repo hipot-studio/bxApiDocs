@@ -1,11 +1,13 @@
 <?php
 
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\FieldType;
 
 use Bitrix\Crm;
 use Bitrix\Crm\Integration\BizProc\Document;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 
@@ -27,6 +29,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 class CBPCrmUpdateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 {
 	use \Bitrix\Bizproc\Activity\Mixins\EntityFilter;
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
 
 	protected static $requiredModules = ['crm'];
 
@@ -48,6 +52,8 @@ class CBPCrmUpdateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 
 	protected function prepareProperties(): void
 	{
+		$this->resolveTargetDocumentId();
+
 		parent::prepareProperties();
 
 		if ((int)$this->getRawProperty('DynamicId') !== 0)
@@ -116,6 +122,13 @@ class CBPCrmUpdateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 
 		$documentId = CCrmBizProcHelper::ResolveDocumentId($this->DynamicTypeId, $this->DynamicId);
 		$documentType = $this->getDocumentType();
+
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$errors->setError(new Error($this->getResolvedTargetAccessDeniedMessage()));
+
+			return $errors;
+		}
 
 		$updateResult = static::getDocumentService()->updateDocument($documentId, $this->DynamicEntitiesFields);
 

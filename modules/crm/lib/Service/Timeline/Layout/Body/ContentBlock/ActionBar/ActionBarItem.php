@@ -17,6 +17,7 @@ final class ActionBarItem extends Base
 	public const DESIGN_OUTLINE = 'outline';
 	public const DESIGN_COPILOT = 'outline-copilot';
 	public const DESIGN_DISABLED = 'disabled';
+	public const DESIGN_AI = 'outline-bitrix-gpt';
 
 	private string $size = self::SIZE_SM;
 	private string $design = self::DESIGN_OUTLINE;

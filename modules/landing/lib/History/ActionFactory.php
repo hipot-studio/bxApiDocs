@@ -15,6 +15,7 @@ use Bitrix\Landing\History\Action\EditMapAction;
 use Bitrix\Landing\History\Action\EditStyleAction;
 use Bitrix\Landing\History\Action\EditTextAction;
 use Bitrix\Landing\History\Action\EditComponentAction;
+use Bitrix\Landing\History\Action\MoveBlockAction;
 use Bitrix\Landing\History\Action\RemoveBlockAction;
 use Bitrix\Landing\History\Action\RemoveCardAction;
 use Bitrix\Landing\History\Action\ReplaceLanding;
@@ -45,6 +46,10 @@ class ActionFactory
 		'SORT_BLOCK' => [
 			self::UNDO => SortBlockAction::class,
 			self::REDO => SortBlockAction::class,
+		],
+		'MOVE_BLOCK' => [
+			self::UNDO => MoveBlockAction::class,
+			self::REDO => MoveBlockAction::class,
 		],
 		'ADD_CARD' => [
 			self::UNDO => RemoveCardAction::class,

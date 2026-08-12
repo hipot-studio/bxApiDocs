@@ -1,6 +1,6 @@
 <?php
 
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\AddressQueueTable:stafftrack/lib/internal/model/addressqueuetable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\AddressQueueTable:stafftrack/lib/Internal/Model/AddressQueueTable.php */
 namespace Bitrix\StaffTrack\Internal\Model {
 	/**
 	 * EO_AddressQueue
@@ -19,16 +19,16 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 * @method bool hasViewerId()
 	 * @method bool isViewerIdFilled()
 	 * @method bool isViewerIdChanged()
-	 * @method \string getGeohash()
-	 * @method \Bitrix\StaffTrack\Internal\Model\EO_AddressQueue setGeohash(\string|\Bitrix\Main\DB\SqlExpression $geohash)
-	 * @method bool hasGeohash()
-	 * @method bool isGeohashFilled()
-	 * @method bool isGeohashChanged()
-	 * @method \string remindActualGeohash()
-	 * @method \string requireGeohash()
-	 * @method \Bitrix\StaffTrack\Internal\Model\EO_AddressQueue resetGeohash()
-	 * @method \Bitrix\StaffTrack\Internal\Model\EO_AddressQueue unsetGeohash()
-	 * @method \string fillGeohash()
+	 * @method \string getGeohashKey()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_AddressQueue setGeohashKey(\string|\Bitrix\Main\DB\SqlExpression $geohashKey)
+	 * @method bool hasGeohashKey()
+	 * @method bool isGeohashKeyFilled()
+	 * @method bool isGeohashKeyChanged()
+	 * @method \string remindActualGeohashKey()
+	 * @method \string requireGeohashKey()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_AddressQueue resetGeohashKey()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_AddressQueue unsetGeohashKey()
+	 * @method \string fillGeohashKey()
 	 * @method \int getUserId()
 	 * @method \Bitrix\StaffTrack\Internal\Model\EO_AddressQueue setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
 	 * @method bool hasUserId()
@@ -94,8 +94,8 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 *
 	 * @method \int[] getCheckInIdList()
 	 * @method \int[] getViewerIdList()
-	 * @method \string[] getGeohashList()
-	 * @method \string[] fillGeohash()
+	 * @method \string[] getGeohashKeyList()
+	 * @method \string[] fillGeohashKey()
 	 * @method \int[] getUserIdList()
 	 * @method \int[] fillUserId()
 	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
@@ -159,7 +159,7 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 */
 	class EO_AddressQueue_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\CheckInTable:stafftrack/lib/internal/model/checkintable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\CheckInTable:stafftrack/lib/Internal/Model/CheckInTable.php */
 namespace Bitrix\StaffTrack\Internal\Model {
 	/**
 	 * CheckIn
@@ -203,26 +203,26 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn resetEntityType()
 	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn unsetEntityType()
 	 * @method \int fillEntityType()
-	 * @method null|\float getLatitude()
-	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn setLatitude(null|\float|\Bitrix\Main\DB\SqlExpression $latitude)
+	 * @method null|\string getLatitude()
+	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn setLatitude(null|\string|\Bitrix\Main\DB\SqlExpression $latitude)
 	 * @method bool hasLatitude()
 	 * @method bool isLatitudeFilled()
 	 * @method bool isLatitudeChanged()
-	 * @method null|\float remindActualLatitude()
-	 * @method null|\float requireLatitude()
+	 * @method null|\string remindActualLatitude()
+	 * @method null|\string requireLatitude()
 	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn resetLatitude()
 	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn unsetLatitude()
-	 * @method null|\float fillLatitude()
-	 * @method null|\float getLongitude()
-	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn setLongitude(null|\float|\Bitrix\Main\DB\SqlExpression $longitude)
+	 * @method null|\string fillLatitude()
+	 * @method null|\string getLongitude()
+	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn setLongitude(null|\string|\Bitrix\Main\DB\SqlExpression $longitude)
 	 * @method bool hasLongitude()
 	 * @method bool isLongitudeFilled()
 	 * @method bool isLongitudeChanged()
-	 * @method null|\float remindActualLongitude()
-	 * @method null|\float requireLongitude()
+	 * @method null|\string remindActualLongitude()
+	 * @method null|\string requireLongitude()
 	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn resetLongitude()
 	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn unsetLongitude()
-	 * @method null|\float fillLongitude()
+	 * @method null|\string fillLongitude()
 	 * @method null|\string getDescription()
 	 * @method \Bitrix\StaffTrack\Internal\Model\CheckIn setDescription(null|\string|\Bitrix\Main\DB\SqlExpression $description)
 	 * @method bool hasDescription()
@@ -323,10 +323,10 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
 	 * @method \int[] getEntityTypeList()
 	 * @method \int[] fillEntityType()
-	 * @method null|\float[] getLatitudeList()
-	 * @method null|\float[] fillLatitude()
-	 * @method null|\float[] getLongitudeList()
-	 * @method null|\float[] fillLongitude()
+	 * @method null|\string[] getLatitudeList()
+	 * @method null|\string[] fillLatitude()
+	 * @method null|\string[] getLongitudeList()
+	 * @method null|\string[] fillLongitude()
 	 * @method null|\string[] getDescriptionList()
 	 * @method null|\string[] fillDescription()
 	 * @method null|\string[] getAddressList()
@@ -396,7 +396,7 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 */
 	class EO_CheckIn_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\CheckInDailyStatsTable:stafftrack/lib/internal/model/checkindailystatstable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\CheckInDailyStatsTable:stafftrack/lib/Internal/Model/CheckInDailyStatsTable.php */
 namespace Bitrix\StaffTrack\Internal\Model {
 	/**
 	 * EO_CheckInDailyStats
@@ -573,7 +573,7 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 */
 	class EO_CheckInDailyStats_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\CheckInByDayTable:stafftrack/lib/internal/model/checkinbydaytable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\CheckInByDayTable:stafftrack/lib/Internal/Model/CheckInByDayTable.php */
 namespace Bitrix\StaffTrack\Internal\Model {
 	/**
 	 * EO_CheckInByDay
@@ -750,7 +750,7 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 */
 	class EO_CheckInByDay_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\AddressTable:stafftrack/lib/internal/model/addresstable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Internal\Model\AddressTable:stafftrack/lib/Internal/Model/AddressTable.php */
 namespace Bitrix\StaffTrack\Internal\Model {
 	/**
 	 * EO_Address
@@ -759,11 +759,11 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 * Custom methods:
 	 * ---------------
 	 *
-	 * @method \string getGeohash()
-	 * @method \Bitrix\StaffTrack\Internal\Model\EO_Address setGeohash(\string|\Bitrix\Main\DB\SqlExpression $geohash)
-	 * @method bool hasGeohash()
-	 * @method bool isGeohashFilled()
-	 * @method bool isGeohashChanged()
+	 * @method \string getGeohashKey()
+	 * @method \Bitrix\StaffTrack\Internal\Model\EO_Address setGeohashKey(\string|\Bitrix\Main\DB\SqlExpression $geohashKey)
+	 * @method bool hasGeohashKey()
+	 * @method bool isGeohashKeyFilled()
+	 * @method bool isGeohashKeyChanged()
 	 * @method null|\string getAddress()
 	 * @method \Bitrix\StaffTrack\Internal\Model\EO_Address setAddress(null|\string|\Bitrix\Main\DB\SqlExpression $address)
 	 * @method bool hasAddress()
@@ -857,7 +857,7 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 * Custom methods:
 	 * ---------------
 	 *
-	 * @method \string[] getGeohashList()
+	 * @method \string[] getGeohashKeyList()
 	 * @method null|\string[] getAddressList()
 	 * @method null|\string[] fillAddress()
 	 * @method \int[] getStatusList()
@@ -927,7 +927,7 @@ namespace Bitrix\StaffTrack\Internal\Model {
 	 */
 	class EO_Address_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\UserStatisticsHashTable:stafftrack/lib/model/userstatisticshashtable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\UserStatisticsHashTable:stafftrack/lib/Model/UserStatisticsHashTable.php */
 namespace Bitrix\StaffTrack\Model {
 	/**
 	 * EO_UserStatisticsHash
@@ -1068,7 +1068,7 @@ namespace Bitrix\StaffTrack\Model {
 	 */
 	class EO_UserStatisticsHash_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\ShiftGeoTable:stafftrack/lib/model/shiftgeotable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\ShiftGeoTable:stafftrack/lib/Model/ShiftGeoTable.php */
 namespace Bitrix\StaffTrack\Model {
 	/**
 	 * EO_ShiftGeo
@@ -1221,7 +1221,7 @@ namespace Bitrix\StaffTrack\Model {
 	 */
 	class EO_ShiftGeo_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\ShiftMessageTable:stafftrack/lib/model/shiftmessagetable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\ShiftMessageTable:stafftrack/lib/Model/ShiftMessageTable.php */
 namespace Bitrix\StaffTrack\Model {
 	/**
 	 * EO_ShiftMessage
@@ -1375,7 +1375,7 @@ namespace Bitrix\StaffTrack\Model {
 	 */
 	class EO_ShiftMessage_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\ShiftCancellationTable:stafftrack/lib/model/shiftcancellationtable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\ShiftCancellationTable:stafftrack/lib/Model/ShiftCancellationTable.php */
 namespace Bitrix\StaffTrack\Model {
 	/**
 	 * EO_ShiftCancellation
@@ -1681,7 +1681,7 @@ namespace Bitrix\StaffTrack\Model {
 	 */
 	class EO_Option_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\ShiftTable:stafftrack/lib/model/shifttable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\ShiftTable:stafftrack/lib/Model/ShiftTable.php */
 namespace Bitrix\StaffTrack\Model {
 	/**
 	 * Shift
@@ -2064,7 +2064,7 @@ namespace Bitrix\StaffTrack\Model {
 	 */
 	class EO_Counter_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\HandledChatTable:stafftrack/lib/model/handledchattable.php */
+/* ORMENTITYANNOTATION:Bitrix\StaffTrack\Model\HandledChatTable:stafftrack/lib/Model/HandledChatTable.php */
 namespace Bitrix\StaffTrack\Model {
 	/**
 	 * EO_HandledChat

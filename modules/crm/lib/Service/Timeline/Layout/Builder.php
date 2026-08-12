@@ -137,7 +137,8 @@ class Builder
 		if ($this->item->needShowNotes() && !$this->isRestContext())
 		{
 			$additionalButtons['notes'] = (new Layout\Footer\IconButton(
-				'note', Loc::getMessage('CRM_TIMELINE_NOTES_TITLE')
+				Layout\Footer\IconButton::ICON_NOTE,
+				Loc::getMessage('CRM_TIMELINE_NOTES_TITLE')
 			))
 				->setAction((new Layout\Action\JsEvent('Note:StartEdit')))
 				->setHideIfReadonly()

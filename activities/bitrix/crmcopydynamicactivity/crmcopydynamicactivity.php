@@ -5,14 +5,22 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Crm;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Service;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
 class CBPCrmCopyDynamicActivity extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	protected static array $cycleCounter = [];
 	const CYCLE_LIMIT = 150;
 
@@ -48,7 +56,15 @@ class CBPCrmCopyDynamicActivity extends CBPActivity
 
 		$this->checkCycling();
 
-		$documentId = $this->GetDocumentId();
+		$documentId = $this->resolveTargetDocumentId();
+
+		if (!$this->canAccessResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
 		[$sourceItemType, $sourceItemId] = mb_split('_(?=[^_]*$)', $documentId[2]);
 
 		$factory = static::getFactoryByType($sourceItemType);
@@ -68,6 +84,11 @@ class CBPCrmCopyDynamicActivity extends CBPActivity
 		}
 
 		return CBPActivityExecutionStatus::Closed;
+	}
+
+	protected function canAccessResolvedTarget(array $documentId): bool
+	{
+		return $this->canReadResolvedTarget($documentId);
 	}
 
 	protected function checkCycling()
@@ -111,7 +132,7 @@ class CBPCrmCopyDynamicActivity extends CBPActivity
 			$stageId = $item->getStatusId();
 		}
 
-		$responsibles = CBPHelper::ExtractUsers($this->Responsible, $this->GetDocumentId());
+		$responsibles = CBPHelper::ExtractUsers($this->Responsible, $this->resolveTargetDocumentId());
 		if ($responsibles)
 		{
 			shuffle($responsibles);
@@ -175,16 +196,22 @@ class CBPCrmCopyDynamicActivity extends CBPActivity
 
 		if (isset($newItem))
 		{
-			$this->ItemId = $newItem->getId();
+			$newItemId = $newItem->getId();
+			$this->ItemId = $newItemId;
 
-			if (COption::GetOptionString('crm', 'start_bp_within_bp', 'N') === 'Y')
-			{
-				$CCrmBizProc = new CCrmBizProc($this->GetDocumentType()[2]);
-				if ($CCrmBizProc->CheckFields(false, true))
-				{
-					$CCrmBizProc->StartWorkflow($this->ItemId);
-				}
-			}
+			$starter = new CrmStarter(new DocumentDto($newItem->getEntityTypeId(), $newItemId));
+			$starter
+				->setContextModuleId('bizproc')
+				->runOnInnerDocumentAdd(
+					new RunDataDto(
+						actualFields: Crm\Automation\Helper::prepareCompatibleData(
+							$newItem->getEntityTypeId(),
+							$newItem->getCompatibleData(),
+						),
+					),
+					runAutomation: false
+				)
+			;
 		}
 	}
 

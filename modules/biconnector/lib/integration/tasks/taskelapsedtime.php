@@ -56,6 +56,9 @@ class TaskElapsedTime extends Dataset
 
 	protected function getFields(): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $this->getSqlHelper();
+
 		$authorJoin = $this->createJoin(
 			"U",
 			"INNER JOIN b_user U ON U.ID = {$this->getAliasFieldName('USER_ID')}",
@@ -70,30 +73,26 @@ class TaskElapsedTime extends Dataset
 			(new IntegerField('USER_ID')),
 			(new StringField('USER_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('USER_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('USER_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$authorJoin->getJoinFieldName('NAME')}, ''), 
-							nullif({$authorJoin->getJoinFieldName('LAST_NAME')} , '')
-						),
-						NULL
-					)"
+							' ',
+							nullif({$authorJoin->getJoinFieldName('NAME')}, ''),
+							nullif({$authorJoin->getJoinFieldName('LAST_NAME')}, '')
+						)
+					ELSE NULL END"
 				)
 				->setJoin($authorJoin)
 			,
 			(new StringField('USER'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('USER_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('USER_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('USER_ID')}, ']'), 
-							nullif({$authorJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('USER_ID'), "']'")},
+							nullif({$authorJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$authorJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($authorJoin)
 			,

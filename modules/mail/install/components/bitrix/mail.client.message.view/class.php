@@ -71,7 +71,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 	{
 		global $USER, $APPLICATION;
 
-		$APPLICATION->setTitle(Loc::getMessage('MAIL_CLIENT_HOME_TITLE'));
+		$APPLICATION->setTitle(Loc::getMessage('MAIL_CLIENT_HOME_TITLE_MSGVER_1'));
 
 		if (!is_object($USER) || !$USER->isAuthorized())
 		{

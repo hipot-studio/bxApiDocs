@@ -5,6 +5,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)
 }
 
 use Bitrix\Socialnetwork\V2\Feature;
+use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityType;
 use Bitrix\Socialnetwork\V2\Public\Command\Project\AddProjectCommand;
 use Bitrix\Socialnetwork\V2\Public\Dto\Project\Project;
 
@@ -54,6 +55,7 @@ class CBPCreateWorkGroup
 		{
 			$project = Project::mapFromArray([
 				'name' => $groupName,
+				'members' => $this->buildProjectMembers($users, $ownerId),
 			]);
 
 			$this->createProject($ownerId, $project);
@@ -158,7 +160,28 @@ class CBPCreateWorkGroup
 		return CBPActivityExecutionStatus::Closed;
 	}
 
-	private function createProject(int $userId, Project $project): int
+	private function buildProjectMembers(array $users, int $ownerId): array
+	{
+		// owner is passed to AddProjectCommand as the project owner, so it is excluded from the members list
+		$members = [];
+		foreach ($users as $userId)
+		{
+			$userId = (int)$userId;
+			if ($userId <= 0 || $userId === $ownerId)
+			{
+				continue;
+			}
+
+			$members[] = [
+				'id' => $userId,
+				'type' => MemberEntityType::User->value,
+			];
+		}
+
+		return $members;
+	}
+
+	private function createProject(int $userId, Project $project): void
 	{
 		$result = (new AddProjectCommand(
 			input: $project,
@@ -169,9 +192,10 @@ class CBPCreateWorkGroup
 		if (!$result->isSuccess())
 		{
 			$this->WriteToTrackingService(GetMessage('BPCWG_ERROR_CREATE_GROUP_V2'));
+			return;
 		}
 
-		return CBPActivityExecutionStatus::Closed;
+		$this->GroupId = (int)($result->getData()['projectId'] ?? 0);
 	}
 
 	public static function ValidateProperties($arTestProperties = array(), CBPWorkflowTemplateUser $user = null)

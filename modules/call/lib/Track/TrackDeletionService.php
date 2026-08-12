@@ -8,7 +8,7 @@ use Bitrix\Call\Call\Registry;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Integration\AI\Task\AITask;
-use Bitrix\Call\Analytics\FollowUpAnalytics;
+use Bitrix\Call\Analytics\TrackAnalytics;
 use Bitrix\Main\Result;
 
 final class TrackDeletionService
@@ -102,13 +102,11 @@ final class TrackDeletionService
 		}
 
 		$call = Registry::getCallWithId($track->getCallId());
-		$eventName = implode(
-			'_',
-			['track_deleted_from_mixer', $track->getId(), $track->getType()]
-		);
+		$eventName = 'track_deleted_from_mixer';
 
 		$controllerClient = new Call\ControllerClient();
 		$dropResult = $controllerClient->dropTrack($track);
+
 		if (!$dropResult->isSuccess())
 		{
 			$log && $logger->error("Failed to delete from mixer via controller. Error: " . implode('; ', $dropResult->getErrorMessages()));
@@ -116,13 +114,8 @@ final class TrackDeletionService
 
 			if ($call)
 			{
-				(new FollowUpAnalytics($call))
-					->sendTelemetry(
-						source: null,
-						status: 'error',
-						errorCode: $dropResult->getError(),
-						event: $eventName
-					);
+				(new TrackAnalytics($call))
+					->sendTelemetry(source: $track, status: 'error', event: $eventName, error: $dropResult->getError());
 			}
 		}
 		else
@@ -131,12 +124,8 @@ final class TrackDeletionService
 
 			if ($call)
 			{
-				(new FollowUpAnalytics($call))
-					->sendTelemetry(
-						source: null,
-						status: 'success',
-						event: $eventName
-					);
+				(new TrackAnalytics($call))
+					->sendTelemetry(source: $track, status: 'success', event: $eventName);
 			}
 		}
 

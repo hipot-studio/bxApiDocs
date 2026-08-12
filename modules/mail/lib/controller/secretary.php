@@ -8,6 +8,7 @@ use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Mail\Helper\Message;
 use Bitrix\Mail\Integration\Crm\Activity;
 use Bitrix\Mail\Integration\Im\Chat;
+use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Action;
@@ -56,6 +57,12 @@ class Secretary extends Controller
 					new \Bitrix\Main\Engine\ActionFilter\Csrf(),
 				]
 			],
+			'bindFeedPost' => [
+				'+prefilters' => [
+					new \Bitrix\Main\Engine\ActionFilter\HttpMethod(['POST']),
+					new \Bitrix\Main\Engine\ActionFilter\Csrf(),
+				]
+			],
 		];
 
 		if (Loader::includeModule('intranet'))
@@ -63,6 +70,7 @@ class Secretary extends Controller
 			$config['createChatFromMessage']['+prefilters'][] = new \Bitrix\Intranet\ActionFilter\IntranetUser();
 			$config['onCalendarSave']['+prefilters'][] = new \Bitrix\Intranet\ActionFilter\IntranetUser();
 			$config['getCalendarEventDataFromMessage']['+prefilters'][] = new \Bitrix\Intranet\ActionFilter\IntranetUser();
+			$config['bindFeedPost']['+prefilters'][] = new \Bitrix\Intranet\ActionFilter\IntranetUser();
 		}
 
 		return $config;
@@ -318,6 +326,106 @@ class Secretary extends Controller
 		{
 			$this->addError(new Error('secretary: grant access to message failed'));
 		}
+	}
+
+	/**
+	 * Bind an already published Live Feed post to a mail message.
+	 *
+	 * Access is gated the same way as the neighbouring bind actions — via canBindEntities()
+	 * (mailbox ownership), so the acting user must own the message's mailbox.
+	 *
+	 * Sets the UF_MAIL_MESSAGE user field on the post directly through the user-field manager
+	 * (not \CBlogPost::Update, which would rewrite unrelated post columns such as
+	 * PREVIEW_TEXT_TYPE / ATTACH_IMG via CheckFields). This triggers
+	 * \Bitrix\Mail\MessageUserType::onBeforeSave, which creates the
+	 * Internals\MessageAccessTable(BLOG_POST) record and sends the messageBindingCreated pull
+	 * command. The user field is non-multiple, so a repeated call with the same pair does not
+	 * create duplicates (onBeforeSave clears older rows). The b_blog_post row — and the post
+	 * author — is never touched.
+	 *
+	 * Fail-closed: onBeforeSave only writes the access record when the acting user owns the
+	 * mailbox, so success is confirmed by the presence of the MessageAccessTable(BLOG_POST)
+	 * record for this pair, not by the update result. On its absence the action logs and returns
+	 * null with an error instead of reporting a false success.
+	 *
+	 * @param int $messageId mail message id
+	 * @param int $postId Live Feed (blog) post id
+	 * @return bool|null true on success; null on failure (errors are added to the controller).
+	 */
+	public function bindFeedPostAction(int $messageId, int $postId, CurrentUser $currentUser): ?bool
+	{
+		$userId = (int)$currentUser->getId();
+
+		if (!$this->canBindEntities($messageId, $userId))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_BIND_FEED_POST_NO_ACCESS'), 'ACCESS_DENIED'));
+
+			return null;
+		}
+
+		if (!Loader::includeModule('blog'))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_MODULE_NOT_INSTALLED'), 'MODULE_NOT_INSTALLED'));
+
+			return null;
+		}
+
+		if (!\CBlogPost::CanUserEditPost($postId, $userId))
+		{
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_BIND_FEED_POST_NO_EDIT_RIGHTS'), 'NO_POST_EDIT_RIGHTS'));
+
+			return null;
+		}
+
+		// Write UF_MAIL_MESSAGE straight through the user-field manager. Going through
+		// \CBlogPost::Update would run \CBlogPost::CheckFields, which fills defaults for unrelated
+		// post columns (PREVIEW_TEXT_TYPE, ATTACH_IMG) by reference and rewrites them on the post.
+		// A direct UF update never touches b_blog_post (the author is preserved without any
+		// AUTHOR_ID juggling) and still fires MessageUserType::onBeforeSave. Passing $userId makes
+		// the mailbox-ownership check inside onBeforeSave explicit instead of relying on global $USER.
+		global $USER_FIELD_MANAGER;
+		$USER_FIELD_MANAGER->Update('BLOG_POST', $postId, ['UF_MAIL_MESSAGE' => $messageId], $userId);
+
+		if (!$this->isFeedPostBound($messageId, $postId))
+		{
+			AddMessage2Log(
+				sprintf(
+					'bindFeedPostAction: no MessageAccessTable(BLOG_POST) record after UF update, binding not created: messageId=%d, postId=%d, userId=%d',
+					$messageId,
+					$postId,
+					$userId,
+				),
+				'mail',
+				2,
+				true,
+			);
+
+			$this->addError(new Error(Loc::getMessage('MAIL_SECRETARY_BIND_FEED_POST_UPDATE_FAILED'), 'BIND_FEED_POST_FAILED'));
+
+			return null;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Whether a MessageAccessTable(BLOG_POST) binding exists for the message-post pair.
+	 *
+	 * @param int $messageId mail message id
+	 * @param int $postId Live Feed (blog) post id
+	 * @return bool
+	 */
+	private function isFeedPostBound(int $messageId, int $postId): bool
+	{
+		$binding = MessageAccessTable::query()
+			->where('MESSAGE_ID', $messageId)
+			->where('ENTITY_TYPE', MessageAccessTable::ENTITY_TYPE_BLOG_POST)
+			->where('ENTITY_ID', $postId)
+			->setSelect(['TOKEN'])
+			->setLimit(1)
+			->fetch();
+
+		return $binding !== false && $binding !== null;
 	}
 
 	/**

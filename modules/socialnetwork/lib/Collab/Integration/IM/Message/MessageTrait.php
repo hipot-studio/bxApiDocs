@@ -12,11 +12,15 @@ use Bitrix\Im\V2\Relation\Reason;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Socialnetwork\Collab\Collab;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\ShowHistoryOption;
+use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
 use Bitrix\Socialnetwork\Collab\Integration\Intranet\ServiceContainer;
 use Bitrix\Socialnetwork\Collab\Registry\CollabRegistry;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
+use Bitrix\Socialnetwork\V2\Internal\Service\Notification\CounterDecision;
+use Bitrix\Socialnetwork\V2\Internal\Service\Notification\CounterPolicyResolver;
 use CAllSocNetUser;
 use CIMChat;
 use CUser;
@@ -163,6 +167,29 @@ trait MessageTrait
 		{
 			$chat->deleteUser($recipientId, $config);
 		}
+	}
+
+	/**
+	 * Resolves the counter decision from the policy resolver and translates it
+	 * into a SILENT_* constant. Passthrough preserves the given $passthroughSilent value.
+	 */
+	protected function resolveCounterSilent(ActionType $actionType, int $projectId, int $passthroughSilent): int
+	{
+		try
+		{
+			$decision = Container::getInstance()->get(CounterPolicyResolver::class)->resolveByActionType($actionType, $projectId);
+		}
+		catch (\Throwable)
+		{
+			return $passthroughSilent;
+		}
+
+		return match ($decision)
+		{
+			CounterDecision::CounterOn => self::SILENT_OFF,
+			CounterDecision::CounterOff => self::SILENT_WITH_RECENT,
+			CounterDecision::Passthrough => $passthroughSilent,
+		};
 	}
 
 	protected function sendMessage(

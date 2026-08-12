@@ -102,6 +102,13 @@ AirTemplate::showHeadAssets();
 	.menu-license-all-wrapper {
 		display: none !important;
 	}
+	/* Hide the "Applications" (marketplace) entry for guests: the intranet left_vertical
+	   preset adds menu_marketplace_group (GroupSystem) without guest awareness, just like
+	   the license banner above. The group <li> wraps its section and app sub-items, so
+	   hiding it drops the whole entry. Only present when the portal has marketplace apps. */
+	[data-id="menu_marketplace_group"] {
+		display: none !important;
+	}
 </style>
 <title><?php $APPLICATION->showTitle(); ?></title>
 </head>

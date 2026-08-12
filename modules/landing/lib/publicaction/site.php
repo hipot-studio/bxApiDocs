@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Landing\PublicAction;
 
+use \Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\File;
 use \Bitrix\Landing\Rights;
@@ -13,6 +14,8 @@ Loc::loadMessages(__FILE__);
 
 class Site
 {
+	const ERROR_AI_SITE_EXPORT_NOT_ALLOWED = 'AI_SITE_EXPORT_NOT_ALLOWED';
+
 	/**
 	 * Clear disallow keys from add/update fields.
 	 * @param array $fields Array fields.
@@ -641,6 +644,17 @@ class Site
 	public static function fullExport($id, array $params = array())
 	{
 		$result = new PublicActionResult();
+		$id = (int)$id;
+
+		if ((new CreateAiSiteChecker())->isSiteCreated($id))
+		{
+			$error = new \Bitrix\Landing\Error();
+			$error->addError(self::ERROR_AI_SITE_EXPORT_NOT_ALLOWED, 'AI sites export is not supported.');
+			$result->setResult(false);
+			$result->setError($error);
+
+			return $result;
+		}
 
 		$result->setResult(
 			SiteCore::fullExport($id, $params)

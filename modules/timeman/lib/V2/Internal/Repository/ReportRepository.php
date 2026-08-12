@@ -12,6 +12,7 @@ use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Timeman\Model\Worktime\Report\WorktimeReportTable;
+use Bitrix\Timeman\V2\Internal\Entity\Report\RecordReportType;
 use Bitrix\Timeman\V2\Internal\Entity\Report\Report;
 use Bitrix\Timeman\V2\Internal\Entity\Report\ReportCollection;
 use Bitrix\Timeman\V2\Internal\Repository\Mapper\ReportMapper;
@@ -31,7 +32,7 @@ class ReportRepository
 		?array $sort = null,
 		int $offset = 0,
 		int $limit = 50,
-		string $reportType = WorktimeReportTable::REPORT_TYPE_RECORD_REPORT,
+		string $reportType = RecordReportType::REPORT,
 	): ReportCollection
 	{
 		$query = WorktimeReportTable::query()->setSelect(array_merge(['*'], $select ?: []));
@@ -70,11 +71,16 @@ class ReportRepository
 		return $this->mapper->mapFromOrm($report);
 	}
 
-	public function getByRecordId(int $recordId): ?Report
+	public function getByRecordId(
+		int $recordId,
+		array $reportTypes = [RecordReportType::REPORT],
+	): ?Report
 	{
 		$report = WorktimeReportTable::query()
 			->addSelect('*')
 			->where('ENTRY_ID', $recordId)
+			->whereIn('REPORT_TYPE', $reportTypes)
+			->addOrder('ID', 'DESC')
 			->exec()
 			->fetchObject();
 
@@ -109,11 +115,53 @@ class ReportRepository
 		return $this->mapper->mapFromOrm($report);
 	}
 
+	public function getReportsByRecordIds(
+		int $userId,
+		array $entryIds,
+		array $reportTypes = [RecordReportType::REPORT],
+		bool $activeOnly = true,
+	): ReportCollection
+	{
+		if (empty($entryIds))
+		{
+			return new ReportCollection();
+		}
+
+		$query = WorktimeReportTable::query()
+			->addSelect('*')
+			->where('USER_ID', $userId)
+			->whereIn('ENTRY_ID', $entryIds)
+			->whereIn('REPORT_TYPE', $reportTypes)
+			->addOrder('ENTRY_ID', 'ASC')
+			->addOrder('ID', 'DESC');
+
+		if ($activeOnly)
+		{
+			$query->where('ACTIVE', 'Y');
+		}
+
+		$rows = $query->exec()->fetchAll();
+
+		$reports = [];
+		foreach ($rows as $row)
+		{
+			$entryId = (int)($row['ENTRY_ID'] ?? 0);
+			if (!$entryId || isset($reports[$entryId]))
+			{
+				continue;
+			}
+
+			$reports[$entryId] = $row;
+		}
+
+		return $this->mapper->mapToCollection(array_values($reports));
+	}
+
 	public function upsertRecordReport(
 		int $recordId,
 		int $userId,
 		string $reportText,
-		string $reportType = WorktimeReportTable::REPORT_TYPE_RECORD_REPORT,
+		string $reportType = RecordReportType::REPORT,
 	): Result
 	{
 		$result = new Result();
@@ -158,20 +206,22 @@ class ReportRepository
 	}
 
 	/**
-	 * Returns latest report text per entry ID for given report type.
+	 * Returns report texts by entry ids for given report type.
 	 *
 	 * @param int $userId
 	 * @param int[] $entryIds
-	 * @param string $reportType
+	 * @param string[] $reportTypes
+	 * @param bool $activeOnly
 	 * @return array<int, string> entryId => reportText
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function getLatestRecordReportTextByEntryIds(
+	public function getReportTexts(
 		int $userId,
 		array $entryIds,
-		string $reportType = WorktimeReportTable::REPORT_TYPE_RECORD_REPORT,
+		array $reportTypes = [RecordReportType::REPORT],
+		bool $activeOnly = true,
 	): array
 	{
 		$entryIds = array_values(array_unique(array_filter(array_map('intval', $entryIds), static fn(int $id): bool => $id > 0)));
@@ -180,31 +230,35 @@ class ReportRepository
 			return [];
 		}
 
-		$rows = WorktimeReportTable::query()
+		$query = WorktimeReportTable::query()
 			->addSelect('ID')
 			->addSelect('ENTRY_ID')
 			->addSelect('REPORT')
 			->where('USER_ID', $userId)
 			->whereIn('ENTRY_ID', $entryIds)
-			->where('ACTIVE', 'Y')
-			->where('REPORT_TYPE', $reportType)
+			->whereIn('REPORT_TYPE', $reportTypes)
 			->addOrder('ENTRY_ID', 'ASC')
-			->addOrder('ID', 'DESC')
-			->exec()
-			->fetchAll();
+			->addOrder('ID', 'DESC');
 
-		// Keep latest report per entry.
-		$reportByEntryId = [];
+		if ($activeOnly)
+		{
+			$query->where('ACTIVE', 'Y');
+		}
+
+		$rows = $query->exec()->fetchAll();
+
+		$reportTexts = [];
 		foreach ($rows as $row)
 		{
 			$entryId = (int)($row['ENTRY_ID'] ?? 0);
-			if ($entryId <= 0 || isset($reportByEntryId[$entryId]))
+			if (!$entryId || isset($reportTexts[$entryId]))
 			{
 				continue;
 			}
-			$reportByEntryId[$entryId] = (string)($row['REPORT'] ?? '');
+
+			$reportTexts[$entryId] = (string)($row['REPORT'] ?? '');
 		}
 
-		return $reportByEntryId;
+		return $reportTexts;
 	}
 }

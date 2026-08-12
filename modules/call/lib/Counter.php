@@ -15,7 +15,7 @@ class Counter
 	const CACHE_NAME = 'call_counter_v1';
 	const CACHE_PATH = '/bx/call/counter/';
 
-	const TYPE_CALLLOG = 'calllog';
+	const TYPE_CALLLOG = 'list';
 	const MODULE_ID = 'call';
 
 	/**

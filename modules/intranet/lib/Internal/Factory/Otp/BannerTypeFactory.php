@@ -210,7 +210,9 @@ class BannerTypeFactory
 			return true;
 		}
 
-		if (Loader::includeModule('bitrix24') && (\CBitrix24::isLicensePaid() || \CBitrix24::IsNfrLicense()))
+		$isBitrix24Included = Loader::includeModule('bitrix24');
+
+		if ($isBitrix24Included && (\CBitrix24::isLicensePaid() || \CBitrix24::IsNfrLicense()))
 		{
 			$delayByLicense = (int)Option::get('intranet', 'otp_banner_license_delay', 0);
 
@@ -222,7 +224,18 @@ class BannerTypeFactory
 			return true;
 		}
 
-		if (Application::getInstance()->getLicense()->isTimeBound())
+		if (
+			$isBitrix24Included
+			&& (
+				\CBitrix24::isFreeLicense()
+				|| (\CBitrix24::IsDemoLicense() && \CBitrix24::isLicenseNeverPayed())
+			)
+		)
+		{
+			return false;
+		}
+
+		if (!Application::getInstance()->getLicense()->isDemo())
 		{
 			return true;
 		}

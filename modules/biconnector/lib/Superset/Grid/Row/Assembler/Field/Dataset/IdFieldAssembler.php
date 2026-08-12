@@ -19,7 +19,7 @@ class IdFieldAssembler extends DetailLinkFieldAssembler
 		$link = "
 				<a
 					style='cursor: pointer'
-					onclick='BX.BIConnector.DatasetImport.Slider.open(\"$type\", $id)'
+					onclick='BX.BIConnector.DatasetImportV2.Slider.open(\"$type\", $id)'
 				>
 					{$id}
 				</a>

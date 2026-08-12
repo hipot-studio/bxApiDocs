@@ -22,6 +22,7 @@ use Bitrix\Rest\V3\Interaction\Response\BooleanResponse;
 use Bitrix\Rest\V3\Interaction\Response\DeleteResponse;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
 use Bitrix\Rest\V3\Interaction\Response\ListResponse;
+use Bitrix\Rest\V3\Interaction\Response\TailResponse;
 use Bitrix\Rest\V3\Interaction\Response\UpdateResponse;
 use Bitrix\Rest\V3\Schema\MethodDescription;
 use Bitrix\Rest\V3\Schema\TypeAliasRegistry;
@@ -322,6 +323,25 @@ class DocumentationManager
 
 					return $result;
 				}),
+				TailResponse::class => [
+					'type' => 'object',
+					'properties' => [
+						'items' => [
+							'type' => 'array',
+							'items' => $dto ? [
+								'$ref' => '#/components/schemas/' . TypeAliasRegistry::toPublicType($dto),
+							] : [],
+						],
+						'hasMore' => [
+							'type' => 'boolean',
+						],
+						'cursor' => [
+							'$ref' => '#/components/schemas/' . TypeAliasRegistry::toPublicType(
+								$this->getDtoByClass(\Bitrix\Rest\V3\Interaction\Response\CursorResponseDto::class)
+							),
+						],
+					],
+				],
 				AddResponse::class => [
 					'type' => 'object',
 					'properties' => [
@@ -362,6 +382,11 @@ class DocumentationManager
 		};
 
 		if (in_array($returnTypeClass, self::AVAILABLE_DEFAULT_RESPONSES, true))
+		{
+			return $baseResponse($getResponseByClass($returnTypeClass));
+		}
+
+		if ($returnTypeClass === TailResponse::class)
 		{
 			return $baseResponse($getResponseByClass($returnTypeClass));
 		}

@@ -21,6 +21,8 @@ class CBPCrmSetCompanyField extends CBPSetFieldActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
+		$this->resolveTargetDocumentId();
+
 		$documentId = $this->getCompanyDocumentId();
 		$documentType = CCrmBizProcHelper::ResolveDocumentType(\CCrmOwnerType::Company);
 
@@ -31,6 +33,13 @@ class CBPCrmSetCompanyField extends CBPSetFieldActivity
 				0,
 				\CBPTrackingType::Error
 			);
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
 
 			return CBPActivityExecutionStatus::Closed;
 		}
@@ -142,9 +151,13 @@ class CBPCrmSetCompanyField extends CBPSetFieldActivity
 	{
 		$id = null;
 
-		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($this->getDocumentId());
+		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($this->resolveTargetDocumentId());
 
-		if ($entityTypeId === \CCrmOwnerType::Lead)
+		if ($entityTypeId === \CCrmOwnerType::Company)
+		{
+			$id = (int)$entityId;
+		}
+		elseif ($entityTypeId === \CCrmOwnerType::Lead)
 		{
 			$entity = \CCrmLead::GetByID($entityId, false);
 			if ($entity)

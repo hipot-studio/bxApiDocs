@@ -21,6 +21,18 @@ use Bitrix\Main\ORM\Query\Query;
 
 class ItemsList
 {
+	private const QUERY_RESULT_CACHE_LIMIT = 64;
+
+	private static array $queryResultCache = [];
+
+	/**
+	 * @internal
+	 */
+	public static function clearQueryResultCache(): void
+	{
+		self::$queryResultCache = [];
+	}
+
 	public function __construct(protected readonly UserPermissions $userPermissions)
 	{
 	}
@@ -59,8 +71,7 @@ class ItemsList
 		{
 			$optionsBuilder->setOperations((array)$operation);
 		}
-		$queryBuilder = $this->createQueryBuilder($permissionEntityTypes, $optionsBuilder->build());
-		$result = $queryBuilder->build();
+		$result = $this->buildQueryResult($permissionEntityTypes, $optionsBuilder->build());
 
 		if (!$result->hasRestrictions())
 		{
@@ -100,8 +111,7 @@ class ItemsList
 			$optionsBuilder->setOperations((array)$operation);
 		}
 
-		$queryBuilder = $this->createQueryBuilder($permissionEntityTypes, $optionsBuilder->build());
-		$result = $queryBuilder->build();
+		$result = $this->buildQueryResult($permissionEntityTypes, $optionsBuilder->build());
 
 		if (!$result->hasRestrictions())
 		{
@@ -166,8 +176,7 @@ class ItemsList
 			->setSkipCheckOtherEntityTypes($isSkipOtherEntityTypes)
 			->build();
 
-		$queryBuilder = $this->createQueryBuilder($permissionEntityTypes, $queryBuilderOptions);
-		$result = $queryBuilder->build();
+		$result = $this->buildQueryResult($permissionEntityTypes, $queryBuilderOptions);
 
 		if (!$result->hasRestrictions())
 		{
@@ -210,6 +219,87 @@ class ItemsList
 		);
 
 		return $query->setFilter($filter);
+	}
+
+	private function buildQueryResult(
+		array $permissionEntityTypes,
+		QueryBuilder\QueryBuilderOptions $options,
+	): QueryBuilder\Result
+	{
+		$cacheKey = $this->getQueryResultCacheKey($permissionEntityTypes, $options);
+		if (array_key_exists($cacheKey, self::$queryResultCache))
+		{
+			return $this->cloneQueryResult(self::$queryResultCache[$cacheKey]);
+		}
+
+		$result = $this->createQueryBuilder($permissionEntityTypes, $options)->build();
+		if (count(self::$queryResultCache) >= self::QUERY_RESULT_CACHE_LIMIT)
+		{
+			array_shift(self::$queryResultCache);
+		}
+		self::$queryResultCache[$cacheKey] = $this->cloneQueryResult($result);
+
+		return $result;
+	}
+
+	private function cloneQueryResult(QueryBuilder\Result $result): QueryBuilder\Result
+	{
+		$clone = clone $result;
+		if ($result->getOrmConditions() !== null)
+		{
+			$clone->setOrmConditions(clone $result->getOrmConditions());
+		}
+
+		return $clone;
+	}
+
+	private function getQueryResultCacheKey(
+		array $permissionEntityTypes,
+		QueryBuilder\QueryBuilderOptions $options,
+	): string
+	{
+		$permissionEntityTypes = array_map('strval', $permissionEntityTypes);
+		sort($permissionEntityTypes, SORT_STRING);
+
+		$operations = array_map('strval', $options->getOperations());
+		sort($operations, SORT_STRING);
+
+		$limitByIds = $options->getLimitByIds();
+		if ($limitByIds !== null)
+		{
+			sort($limitByIds, SORT_REGULAR);
+		}
+
+		$resultOption = $options->getResult();
+		$resultOptionState = [
+			'class' => $resultOption::class,
+			'identityColumn' => $resultOption->getIdentityColumnName(),
+		];
+		foreach (
+			[
+				'getOrder' => 'order',
+				'getLimit' => 'limit',
+				'isUseDistinct' => 'useDistinct',
+			] as $method => $key
+		)
+		{
+			if (method_exists($resultOption, $method))
+			{
+				$resultOptionState[$key] = $resultOption->{$method}();
+			}
+		}
+
+		return hash('sha256', serialize([
+			'userId' => $this->userPermissions->getUserId(),
+			'permissionEntityTypes' => $permissionEntityTypes,
+			'operations' => $operations,
+			'resultOption' => $resultOptionState,
+			'aliasPrefix' => $options->getAliasPrefix(),
+			'readAllAllowed' => $options->isReadAllAllowed(),
+			'skipCheckOtherEntityTypes' => $options->canSkipCheckOtherEntityTypes(),
+			'limitByIds' => $limitByIds,
+			'useDistinctUnion' => $options->needUseDistinctUnion(),
+		]));
 	}
 
 	private function addRestrictionFilter(array $filter, string $primary, $restrictExpression): array

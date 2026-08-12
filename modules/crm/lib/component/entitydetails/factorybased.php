@@ -15,6 +15,7 @@ use Bitrix\Crm\EO_Status;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Format\Money;
 use Bitrix\Crm\Integration;
+use Bitrix\Crm\Integration\Analytics\Builder;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig\DynamicDefaultEntityConfig;
@@ -493,11 +494,26 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 		if ($this->factory->isCategoriesEnabled())
 		{
-			$categories = $this->userPermissionsService->category()->filterAvailableForAddingCategories(
-				$this->factory->getCategories(),
-			);
+			$currentCategoryId = $this->categoryId;
+			$isExistingItem = $this->item && $this->item->getId() > 0;
+			$canChangeCategory = !$isExistingItem
+				|| $this->userPermissionsService->item()->canUpdateItem($this->item)
+			;
 
-			$params['categoryId'] = $this->categoryId;
+			if ($canChangeCategory)
+			{
+				$categories = $this->userPermissionsService->category()->filterAvailableForAddingCategoriesWithCurrent(
+					$this->factory->getCategories(),
+					$currentCategoryId,
+				);
+			}
+			else
+			{
+				$currentCategory = $this->factory->getCategory($currentCategoryId);
+				$categories = $currentCategory ? [$currentCategory] : [];
+			}
+
+			$params['categoryId'] = $currentCategoryId;
 			$params['categories'] = array_map(fn(Category $category) => $category->jsonSerialize(), $categories);
 			$params['categorySelectorTarget'] = '#' . self::CATEGORY_SELECTOR_CONTAINER_ID;
 		}
@@ -1161,6 +1177,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				'entity' => $documentType[1],
 				'documentType' => $documentType[2],
 				'documentId' => $documentId[2],
+				'categoryId' => $this->categoryId,
 			];
 		}
 
@@ -1238,26 +1255,12 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 		$editorGuid = $this->getEditorGuid();
 
-		/** @var \Bitrix\Crm\Integration\Analytics\Builder\BuilderContract $analyticsBuilder */
-		if ($this->isCopyMode())
-		{
-			$analyticsBuilder = Integration\Analytics\Builder\Entity\CopyEvent::createDefault($this->entityTypeId);
-		}
-		elseif ($this->isEditMode())
-		{
-			$analyticsBuilder = Integration\Analytics\Builder\Entity\UpdateEvent::createDefault($this->entityTypeId);
-		}
-		elseif ($this->isConversionMode())
-		{
-			$analyticsBuilder =
-				Integration\Analytics\Builder\Entity\ConvertEvent::createDefault($this->entityTypeId)
-					->setSrcEntityTypeId($this->getConversionWizard()->getEntityTypeID())
-			;
-		}
-		else
-		{
-			$analyticsBuilder = Integration\Analytics\Builder\Entity\AddEvent::createDefault($this->entityTypeId);
-		}
+		$analyticsBuilder = $this->getAnalyticsBuilder();
+		$postFormAnalytics =
+			in_array($analyticsBuilder::class, $this->getBuildersWithPostAnalytics(), true)
+				? $analyticsBuilder->buildData()
+				: []
+		;
 
 		return [
 			'ENTITY_TYPE_ID' => $this->getEntityTypeID(),
@@ -1294,6 +1297,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			'COMPONENT_AJAX_DATA' => [
 				'COMPONENT_NAME' => $this->getName(),
 				'ACTION_NAME' => 'save',
+				'POST_FORM_ANALYTICS' => $postFormAnalytics,
 				'SIGNED_PARAMETERS' => $this->getSignedParameters(),
 				'RELOAD_ACTION_NAME' => 'load',
 			],
@@ -1303,9 +1307,46 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			'USER_FIELD_PREFIX' => $this->factory->getUserFieldEntityId(),
 			// this data is used to send analytics when user clicks 'save' button
 			'ANALYTICS_CONFIG' => [
-				'data' => $analyticsBuilder->buildData(),
+				'data' =>
+					in_array($analyticsBuilder::class, $this->getBuildersWithPostAnalytics(), true)
+						? []
+						: $analyticsBuilder->buildData()
+				,
 				'appendParamsFromCurrentUrl' => true,
 			],
+		];
+	}
+
+	private function getAnalyticsBuilder(): Builder\AbstractBuilder
+	{
+		if ($this->isCopyMode())
+		{
+			$analyticsBuilder = Builder\Entity\CopyEvent::createDefault($this->factory->getEntityTypeId());
+		}
+		elseif ($this->isEditMode())
+		{
+			$analyticsBuilder = Builder\Entity\UpdateEvent::createDefault($this->factory->getEntityTypeId());
+		}
+		elseif (isset($this->conversionWizard))
+		{
+			$analyticsBuilder = Builder\Entity\ConvertEvent::createDefault($this->factory->getEntityTypeId())
+				->setSrcEntityTypeId($this->conversionWizard->getEntityTypeID())
+			;
+		}
+		else
+		{
+			$analyticsBuilder = Builder\Entity\AddEvent::createDefault($this->factory->getEntityTypeId());
+		}
+
+		return $analyticsBuilder;
+	}
+
+	private function getBuildersWithPostAnalytics(): array
+	{
+		return [
+			Builder\Entity\AddEvent::class,
+			Builder\Entity\CopyEvent::class,
+			Builder\Entity\ConvertEvent::class,
 		];
 	}
 
@@ -1373,6 +1414,22 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				$this->item->getCurrencyId()
 			);
 		}
+
+		$analyticsBuilder = $this->getAnalyticsBuilder();
+		$postFormAnalytics =
+			in_array($analyticsBuilder::class, $this->getBuildersWithPostAnalytics(), true)
+				? $analyticsBuilder->buildData()
+				: []
+		;
+
+		$controllers[] = [
+			'name' => 'ANALYTICS_CONTROLLER',
+			'type' => 'analytics_controller',
+			'config' => [
+				'postFormAnalytics' => $postFormAnalytics,
+				'appendParamsFromCurrentUrl' => true,
+			],
+		];
 
 		return $controllers;
 	}
@@ -1445,6 +1502,32 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 		// Save to the variable before all actions because after save the item won't be new anyway
 		$isNew = $this->item->isNew();
+
+		$activityViewModeStageId = null;
+		if (
+			$isNew
+			&& ($data['PARAMS']['VIEW_MODE'] ?? null) === \Bitrix\Crm\Kanban\ViewMode::MODE_ACTIVITIES
+		)
+		{
+			$activityStageId = (string)($data['PARAMS'][\Bitrix\Crm\Kanban\Entity\EntityActivities::ACTIVITY_STAGE_ID] ?? '');
+			if ($activityStageId !== '')
+			{
+				$activityViewModeStageId = $activityStageId;
+			}
+
+			if ($this->factory->isStagesSupported())
+			{
+				$stageFieldName = $this->factory->getEntityFieldNameByMap(Item::FIELD_NAME_STAGE_ID);
+				if (!empty($data[$stageFieldName]))
+				{
+					if ($activityViewModeStageId === null)
+					{
+						$activityViewModeStageId = (string)$data[$stageFieldName];
+					}
+					unset($data[$stageFieldName]);
+				}
+			}
+		}
 
 		$processedData = $this->processItemFieldValues($data);
 		foreach($processedData as $name => $value)
@@ -1531,6 +1614,14 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			$context->setEventId($eventId);
 
 			$operation->setContext($context);
+		}
+
+		if ($activityViewModeStageId !== null)
+		{
+			$operation->getContext()
+				->setItemOption('VIEW_MODE', \Bitrix\Crm\Kanban\ViewMode::MODE_ACTIVITIES)
+				->setItemOption(\Bitrix\Crm\Kanban\Entity\EntityActivities::ACTIVITY_STAGE_ID, $activityViewModeStageId)
+			;
 		}
 
 		$result = $operation->launch();

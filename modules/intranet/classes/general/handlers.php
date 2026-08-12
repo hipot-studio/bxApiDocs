@@ -1081,7 +1081,7 @@ class CIntranetEventHandlers
 				'PROPERTY_VALUES' => array(
 					'USER' => $arUser['ID'],
 					'DEPARTMENT' => $arUser['UF_DEPARTMENT'] ?? null,
-					'POST' => $arUser['WORK_POSITION'] ? $arUser['WORK_POSITION'] : $arUser['PERSONAL_PROFESSION'],
+					'POST' => $arUser['WORK_POSITION'] ?? $arUser['PERSONAL_PROFESSION'] ?? '',
 					'STATE' => $ACCEPTED_ENUM_ID
 				),
 			);

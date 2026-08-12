@@ -209,7 +209,10 @@ class CalendarSharing extends Activity
 	{
 		if ($this->isScheduled())
 		{
-			return (new Layout\Footer\IconButton('videoconference', Loc::getMessage('CRM_TIMELINE_ITEM_CALENDAR_SHARING_START_VIDEOCONFERENCE')))
+			return (new Layout\Footer\IconButton(
+				Layout\Footer\IconButton::ICON_VIDEOCONFERENCE,
+				Loc::getMessage('CRM_TIMELINE_ITEM_CALENDAR_SHARING_START_VIDEOCONFERENCE')
+			))
 				->setAction(
 					(new Layout\Action\JsEvent($this->getType() . ':StartVideoconference'))
 						->addActionParamInt('eventId', $this->getEventId())

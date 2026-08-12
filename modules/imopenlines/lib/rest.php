@@ -9,6 +9,8 @@ use	Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\UserConsent\Consent;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Fields\ScalarField;
 
 use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\ImOpenLines\Widget\FormHandler;
@@ -1723,20 +1725,382 @@ class Rest extends \IRestService
 		$arParams['PARAMS'] = !empty($arParams['PARAMS']) && is_array($arParams['PARAMS']) ? $arParams['PARAMS'] : [];
 		$arParams['OPTIONS'] = !empty($arParams['OPTIONS']) && is_array($arParams['OPTIONS']) ? $arParams['OPTIONS'] : [];
 
-		if (isset($arParams['PARAMS']['select']) && !is_array($arParams['PARAMS']['select']))
-		{
-			throw new RestException('A wrong format for the PARAMS field \'select\' is passed', 'INVALID_FORMAT', \CRestServer::STATUS_WRONG_REQUEST);
-		}
-		if (isset($arParams['PARAMS']['order']) && !is_array($arParams['PARAMS']['order']))
-		{
-			throw new RestException('A wrong format for the PARAMS field \'order\' is passed', 'INVALID_FORMAT', \CRestServer::STATUS_WRONG_REQUEST);
-		}
-		if (isset($arParams['PARAMS']['filter']) && !is_array($arParams['PARAMS']['filter']))
-		{
-			throw new RestException('A wrong format for the PARAMS field \'filter\' is passed', 'INVALID_FORMAT', \CRestServer::STATUS_WRONG_REQUEST);
-		}
+		self::validateConfigListParams($arParams['PARAMS']);
+		self::validateConfigListOptions($arParams['OPTIONS']);
 
 		return $config->getList($arParams['PARAMS'], $arParams['OPTIONS']);
+	}
+
+	/**
+	 * @throws RestException
+	 */
+	private static function validateConfigListParams(array $params): void
+	{
+		$unknownParams = array_diff(array_keys($params), ['select', 'filter', 'order', 'limit', 'offset']);
+		if (!empty($unknownParams))
+		{
+			throw new RestException(
+				'Unsupported PARAMS fields are passed: ' . implode(', ', $unknownParams),
+				'INVALID_FORMAT',
+				\CRestServer::STATUS_WRONG_REQUEST,
+			);
+		}
+
+		// the ORM registers select aliases before it parses order and filter, so they are collected first
+		$selectNames = [];
+
+		if (array_key_exists('select', $params))
+		{
+			if (!is_array($params['select']))
+			{
+				throw new RestException('A wrong format for the PARAMS field \'select\' is passed', 'INVALID_FORMAT', \CRestServer::STATUS_WRONG_REQUEST);
+			}
+
+			$selectNames = self::validateConfigListSelect($params['select']);
+		}
+		if (array_key_exists('order', $params))
+		{
+			if (!is_array($params['order']))
+			{
+				throw new RestException('A wrong format for the PARAMS field \'order\' is passed', 'INVALID_FORMAT', \CRestServer::STATUS_WRONG_REQUEST);
+			}
+
+			self::validateConfigListOrder($params['order'], $selectNames);
+		}
+		if (array_key_exists('filter', $params))
+		{
+			if (!is_array($params['filter']))
+			{
+				throw new RestException('A wrong format for the PARAMS field \'filter\' is passed', 'INVALID_FORMAT', \CRestServer::STATUS_WRONG_REQUEST);
+			}
+
+			self::validateConfigListFilter($params['filter'], $selectNames);
+		}
+		if (array_key_exists('limit', $params))
+		{
+			self::validateConfigListPageParam($params['limit'], 'limit');
+		}
+		if (array_key_exists('offset', $params))
+		{
+			self::validateConfigListPageParam($params['offset'], 'offset');
+		}
+	}
+
+	/**
+	 * @throws RestException
+	 */
+	private static function validateConfigListOptions(array $options): void
+	{
+		$unknownOptions = array_diff(array_keys($options), ['QUEUE', 'CONFIG_QUEUE', 'CHECK_PERMISSION']);
+		if (!empty($unknownOptions))
+		{
+			throw new RestException(
+				'Unsupported OPTIONS fields are passed: ' . implode(', ', $unknownOptions),
+				'INVALID_FORMAT',
+				\CRestServer::STATUS_WRONG_REQUEST,
+			);
+		}
+
+		foreach (['QUEUE', 'CONFIG_QUEUE'] as $flag)
+		{
+			if (isset($options[$flag]) && !is_scalar($options[$flag]))
+			{
+				throw new RestException(
+					"A wrong format for the OPTIONS field '{$flag}' is passed",
+					'INVALID_FORMAT',
+					\CRestServer::STATUS_WRONG_REQUEST,
+				);
+			}
+		}
+
+		if (!isset($options['CHECK_PERMISSION']))
+		{
+			return;
+		}
+
+		$linesActions = array_keys(Permissions::getMap()[Permissions::ENTITY_LINES]);
+		if (
+			!is_string($options['CHECK_PERMISSION'])
+			|| !in_array($options['CHECK_PERMISSION'], $linesActions, true)
+		)
+		{
+			throw new RestException(
+				'An unknown value for the OPTIONS field \'CHECK_PERMISSION\' is passed',
+				'INVALID_FORMAT',
+				\CRestServer::STATUS_WRONG_REQUEST,
+			);
+		}
+	}
+
+	/**
+	 * @throws RestException
+	 */
+	private static function validateConfigListPageParam($value, string $section): void
+	{
+		// null is treated by the ORM as an absent parameter
+		if ($value === null)
+		{
+			return;
+		}
+
+		$isNonNegativeInteger =
+			(is_int($value) && $value >= 0)
+			|| (is_string($value) && preg_match('/^\d+$/', $value) === 1)
+		;
+
+		if (!$isNonNegativeInteger)
+		{
+			throw new RestException(
+				"A non-negative integer is expected in the PARAMS field '{$section}'",
+				'INVALID_FORMAT',
+				\CRestServer::STATUS_WRONG_REQUEST,
+			);
+		}
+	}
+
+	/**
+	 * Names the select registers become keys: they are never numeric, so an array key keeps them
+	 * as they are and a name is looked up by isset().
+	 *
+	 * @return array<string, true> aliases and fields a shell pattern expands to
+	 * @throws RestException
+	 */
+	private static function validateConfigListSelect(array $select): array
+	{
+		$registeredNames = [];
+
+		foreach ($select as $alias => $field)
+		{
+			// alias => field form is allowed; Query::buildQuery() reads a numeric key as positional
+			$hasAlias = !is_numeric($alias);
+			if ($hasAlias)
+			{
+				self::validateConfigListAlias($alias);
+			}
+
+			if (self::isConfigListFieldPattern($field))
+			{
+				foreach (self::expandConfigListFieldPattern($field) as $expandedField)
+				{
+					// the ORM prefixes the name of every expanded field with the alias
+					$registeredName = $hasAlias ? $alias . $expandedField : $expandedField;
+
+					if ($hasAlias)
+					{
+						self::validateConfigListAliasCollision($registeredName, $expandedField);
+					}
+
+					$registeredNames[$registeredName] = true;
+				}
+
+				continue;
+			}
+
+			self::validateConfigListField($field, 'select');
+
+			if ($hasAlias)
+			{
+				self::validateConfigListAliasCollision(
+					$alias,
+					Model\ConfigTable::getEntity()->getField($field)->getName()
+				);
+
+				$registeredNames[$alias] = true;
+			}
+		}
+
+		return $registeredNames;
+	}
+
+	private static function isConfigListFieldPattern($field): bool
+	{
+		return is_string($field) && (str_contains($field, '*') || str_contains($field, '?'));
+	}
+
+	/**
+	 * Repeats the expansion of Query::addToSelectChain(): a shell pattern is matched against the
+	 * fields of the entity itself, so nothing but them can get into the query.
+	 *
+	 * @return string[]
+	 * @throws RestException
+	 */
+	private static function expandConfigListFieldPattern(string $pattern): array
+	{
+		$expandedFields = [];
+		$expandsWholeEntity = ($pattern === '*');
+
+		// a pattern with a dot walks the reference graph, which the method does not allow
+		if (!str_contains($pattern, '.'))
+		{
+			foreach (Model\ConfigTable::getEntity()->getFields() as $field)
+			{
+				$isSelectableField = $expandsWholeEntity
+					? $field instanceof ScalarField
+					: ($field instanceof ScalarField || $field instanceof ExpressionField)
+				;
+
+				if (!$isSelectableField || ($field instanceof ScalarField && $field->isPrivate()))
+				{
+					continue;
+				}
+
+				if ($expandsWholeEntity || fnmatch($pattern, $field->getName()))
+				{
+					$expandedFields[] = $field->getName();
+				}
+			}
+		}
+
+		if (empty($expandedFields))
+		{
+			throw new RestException(
+				"An unknown field '{$pattern}' is passed in the PARAMS field 'select'",
+				'INVALID_FORMAT',
+				\CRestServer::STATUS_WRONG_REQUEST,
+			);
+		}
+
+		return $expandedFields;
+	}
+
+	/**
+	 * @throws RestException
+	 */
+	private static function validateConfigListAlias(string $alias): void
+	{
+		// a dot breaks the query: SqlHelper::quote() splits the alias into two identifiers;
+		// quotes and control characters do not survive quoting, an empty alias gives an empty key
+		if ($alias === '' || preg_match('/[.`\'"[:cntrl:]]/', $alias))
+		{
+			throw new RestException(
+				'A wrong field alias is passed in the PARAMS field \'select\'',
+				'INVALID_FORMAT',
+				\CRestServer::STATUS_WRONG_REQUEST,
+			);
+		}
+	}
+
+	/**
+	 * Query::addToSelectChain() denies a name that shadows a field of the entity unless it names
+	 * that very field, so such a select must not reach the ORM.
+	 *
+	 * @param string $registeredName name the select registers: the alias itself, or the alias
+	 *                               followed by the name of a field a pattern expanded to
+	 * @param string $fieldName name of the selected field as the entity map spells it
+	 * @throws RestException
+	 */
+	private static function validateConfigListAliasCollision(string $registeredName, string $fieldName): void
+	{
+		// the ORM compares the names as is, so an alias differing only in case is a collision too
+		if ($registeredName !== $fieldName && Model\ConfigTable::getEntity()->hasField($registeredName))
+		{
+			throw new RestException(
+				"The alias '{$registeredName}' matches an existing field in the PARAMS field 'select'",
+				'INVALID_FORMAT',
+				\CRestServer::STATUS_WRONG_REQUEST,
+			);
+		}
+	}
+
+	/**
+	 * @param array<string, true> $selectNames
+	 * @throws RestException
+	 */
+	private static function validateConfigListOrder(array $order, array $selectNames): void
+	{
+		foreach ($order as $field => $direction)
+		{
+			// Query::setOrder() reads a numeric key as a field name with the default direction
+			if (is_numeric($field))
+			{
+				self::validateConfigListField($direction, 'order', $selectNames);
+
+				continue;
+			}
+
+			self::validateConfigListField($field, 'order', $selectNames);
+
+			// Query::addOrder() normalizes the direction with strtoupper()
+			if (!is_string($direction) || !in_array(strtoupper($direction), ['ASC', 'DESC'], true))
+			{
+				throw new RestException(
+					'A wrong sorting direction is passed in the PARAMS field \'order\'',
+					'INVALID_FORMAT',
+					\CRestServer::STATUS_WRONG_REQUEST,
+				);
+			}
+		}
+	}
+
+	/**
+	 * @param array<string, true> $selectNames
+	 * @throws RestException
+	 */
+	private static function validateConfigListFilter(array $filter, array $selectNames): void
+	{
+		foreach ($filter as $key => $value)
+		{
+			// Query::setFilterChains() reads a numeric key as a nested logical block
+			if (is_numeric($key))
+			{
+				if (!is_array($value))
+				{
+					throw new RestException(
+						'A wrong format for the PARAMS field \'filter\' is passed',
+						'INVALID_FORMAT',
+						\CRestServer::STATUS_WRONG_REQUEST,
+					);
+				}
+
+				self::validateConfigListFilter($value, $selectNames);
+
+				continue;
+			}
+
+			if ($key === 'LOGIC')
+			{
+				continue;
+			}
+
+			$sqlWhere = new \CSQLWhere();
+			$field = $sqlWhere->makeOperation($key)['FIELD'];
+
+			self::validateConfigListField($field, 'filter', $selectNames);
+		}
+	}
+
+	/**
+	 * @param array<string, true> $selectNames
+	 * @throws RestException
+	 */
+	private static function validateConfigListField($field, string $section, array $selectNames = []): void
+	{
+		if (!is_string($field) || $field === '')
+		{
+			throw new RestException(
+				"A wrong field name is passed in the PARAMS field '{$section}'",
+				'INVALID_FORMAT',
+				\CRestServer::STATUS_WRONG_REQUEST,
+			);
+		}
+
+		// order and filter may address a name registered by select, the ORM looks it up as is
+		if (isset($selectNames[$field]))
+		{
+			return;
+		}
+
+		$entity = Model\ConfigTable::getEntity();
+		$entityField = $entity->hasField($field) ? $entity->getField($field) : null;
+
+		if (!($entityField instanceof ScalarField) && !($entityField instanceof ExpressionField))
+		{
+			throw new RestException(
+				"An unknown field '{$field}' is passed in the PARAMS field '{$section}'",
+				'INVALID_FORMAT',
+				\CRestServer::STATUS_WRONG_REQUEST,
+			);
+		}
 	}
 
 	/**

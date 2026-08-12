@@ -178,7 +178,7 @@ class SharingConference
 	 */
 	private function checkPossibilityOfCreatingLink(): bool
 	{
-		return Loader::includeModule('im') && Loader::includeModule('voximplant') && Loader::includeModule('call');
+		return Loader::includeModule('im') && Loader::includeModule('call');
 	}
 
 	/**

@@ -118,7 +118,7 @@ class ControllerClient extends BaseSender
 		{
 			$data = array_merge($data, [
 				'secretKey' => $call->getSecretKey(),
-				'maxParticipants' => Call::getMaxCallServerParticipants(),
+				'maxParticipants' => Settings::getMaxCallServerParticipants(),
 			]);
 			$this->httpClientParameters = [
 				'waitResponse' => true,
@@ -350,6 +350,38 @@ class ControllerClient extends BaseSender
 		];
 
 		return $this->performRequest('callcontroller.InternalApi.aiFollowUpTelemetry', $telemetryData);
+	}
+
+	/**
+	 * @see \Bitrix\CallController\Controller\InternalApi::trackTelemetryAction
+	 * @param array $telemetryData
+	 * @return Result
+	 */
+	public function sendTrackTelemetry(array $telemetryData): Result
+	{
+		$this->httpClientParameters = [
+			'waitResponse' => false,
+			'socketTimeout' => 5,
+			'streamTimeout' => 5,
+		];
+
+		return $this->performRequest('callcontroller.InternalApi.trackTelemetry', $telemetryData);
+	}
+
+	/**
+	 * @see \Bitrix\CallController\Controller\InternalApi::cloudRecordTelemetryAction
+	 * @param array $telemetryData
+	 * @return Result
+	 */
+	public function sendCloudRecordTelemetry(array $telemetryData): Result
+	{
+		$this->httpClientParameters = [
+			'waitResponse' => false,
+			'socketTimeout' => 5,
+			'streamTimeout' => 5,
+		];
+
+		return $this->performRequest('callcontroller.InternalApi.cloudRecordTelemetry', $telemetryData);
 	}
 
 	public function getHttpClientParameters(): array

@@ -7,8 +7,10 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SiteTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
+use Bitrix\Call\Integration\Im\CallFollowupBot;
 
 
 class CallChatMessage
@@ -24,6 +26,12 @@ class CallChatMessage
 		$message = new Message();
 		$message->setMessage($phrase);
 		$message->markAsSystem(true);
+
+		if ($track->getDiskFileId())
+		{
+			$file = new FileItem($track->getDiskFileId(), $chat->getId());
+			$message->addFile($file);
+		}
 
 		$params = $message->getParams();
 		$params->get(Params::COMPONENT_PARAMS)->setValue([
@@ -58,6 +66,29 @@ class CallChatMessage
 			$chat,
 			['#ERROR#' => $errorText]
 		);
+	}
+
+	public static function makeCloudRecordRetryableErrorMessage(Call $call, Chat $chat): Message
+	{
+		$message = self::makeMessageWithCallLink(
+			'CALL_CLOUD_RECORDING_RETRYABLE_ERROR_MESSAGE',
+			$call->getId(),
+			$chat
+		);
+
+		$buttonText = self::getMessage('CALL_RECORDING_RETRY_BUTTON');
+		if ($buttonText !== '')
+		{
+			$keyboard = new \Bitrix\Im\Bot\Keyboard(CallFollowupBot::getBotId());
+			$keyboard->addButton([
+				'COMMAND' => CallFollowupBot::COMMAND_RETRY_CLOUD_RECORDING,
+				'COMMAND_PARAMS' => 'CALL_ID:' . $call->getId(),
+				'TEXT' => $buttonText,
+			]);
+			$message->getParams()->get(Params::KEYBOARD)->setValue($keyboard);
+		}
+
+		return $message;
 	}
 
 	public static function generateOpponentBusyMessage(int $opponentUserId): ?Message
@@ -111,6 +142,21 @@ class CallChatMessage
 		$message = new Message();
 		$message->setMessage($phrase);
 		$message->markAsSystem(true);
+
+		return $message;
+	}
+
+	public static function makeNewUserLimitReachedMessage(int $newUserThreshold = 50): Message
+	{
+		$message = new Message();
+		$message->setMessage(static::getMessage('CALL_NEW_USER_MESSAGE_LIMIT_REACHED', ['#THRESHOLD#' => $newUserThreshold]));
+		$message->markAsSystem(true);
+
+		$params = $message->getParams();
+		$params->get(Params::COMPONENT_PARAMS)->setValue([
+			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_NEW_USER_LIMIT,
+			'CALL_ID' => 0,
+		]);
 
 		return $message;
 	}

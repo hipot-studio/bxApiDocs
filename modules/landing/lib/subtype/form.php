@@ -14,6 +14,7 @@ use Bitrix\Landing\Manager;
 use Bitrix\Landing\Site;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Json;
 use Bitrix\Socialservices\ApClient;
 
 Loc::loadMessages(__FILE__);
@@ -36,6 +37,7 @@ class Form
 	protected const STYLE_SETTING = 'crm-form';
 	protected const REGEXP_FORM_STYLE = '/data-b24form-design *= *[\'"](\{.+\})[\'"]/i';
 	protected const REGEXP_FORM_ID_INLINE = '/data-b24form=["\']#crmFormInline(?<id>[\d]+)["\']/i';
+	protected const DEFAULT_EMBED_CLASSES = 'bitrix24forms g-brd-white-opacity-0_6 u-form-alert-v3';
 
 	public const INLINE_MARKER_PREFIX = '#crmFormInline';
 	public const POPUP_MARKER_PREFIX = '#crmFormPopup';
@@ -50,6 +52,87 @@ class Form
 	];
 
 	private static array $errors = [];
+
+	public static function getDefaultEmbedHtml(array $colors = []): string
+	{
+		$attrs = [
+			'class="' . self::DEFAULT_EMBED_CLASSES . '"',
+			self::ATTR_FORM_USE_STYLE . '="Y"',
+			self::ATTR_FORM_EMBED,
+			self::ATTR_FORM_STYLE . "='" . htmlspecialcharsbx(self::buildDefaultEmbedDesign($colors)) . "'",
+		];
+
+		$marker = self::getDefaultFormMarker();
+		if ($marker !== null)
+		{
+			$attrs[] = self::ATTR_FORM_PARAMS . '="' . htmlspecialcharsbx($marker) . '"';
+		}
+
+		if (!self::isCrm())
+		{
+			$attrs[] = self::ATTR_FORM_FROM_CONNECTOR . '="Y"';
+		}
+
+		return '<div ' . implode(' ', $attrs) . '></div>';
+	}
+
+	private static function buildDefaultEmbedDesign(array $colors): string
+	{
+		$design = [
+			'dark' => true,
+			'style' => 'classic',
+			'shadow' => false,
+			'compact' => false,
+			'color' => self::normalizeEmbedColors($colors),
+			'border' => [
+				'top' => false,
+				'bottom' => false,
+				'left' => false,
+				'right' => false,
+			],
+		];
+
+		return Json::encode($design, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+	}
+
+	private static function normalizeEmbedColors(array $colors): array
+	{
+		$normalized = self::getDefaultEmbedColors();
+		foreach ($normalized as $key => $defaultValue)
+		{
+			$value = $colors[$key] ?? null;
+			if (!is_string($value))
+			{
+				continue;
+			}
+
+			$value = trim($value);
+			if (self::isAllowedEmbedColorValue($value))
+			{
+				$normalized[$key] = $value;
+			}
+		}
+
+		return $normalized;
+	}
+
+	private static function getDefaultEmbedColors(): array
+	{
+		return [
+			'primary' => '#ffffff',
+			'primaryText' => '#333333',
+			'text' => '#ffffff',
+			'background' => '#ffffff00',
+			'fieldBorder' => '#ffffff00',
+			'fieldBackground' => '#00000011',
+			'fieldFocusBackground' => '#00000011',
+		];
+	}
+
+	private static function isAllowedEmbedColorValue(string $value): bool
+	{
+		return (bool)preg_match('/^#[0-9a-fA-F]{3,8}$/', $value);
+	}
 
 	// region replaces for view and public
 
@@ -473,27 +556,12 @@ class Form
 				}
 				else
 				{
-					// try to get 1) default callback form 2) last added form 3) create new form
-					$forms = self::getFormsByFilter([
-						'=XML_ID' => 'crm_preset_fb',
-					], true);
-					$forms = self::prepareFormsToAttrs($forms);
-					if (empty($forms))
-					{
-						$forms = self::getForms(true);  // force to preserve cycle when create form landing block
-						$forms = self::prepareFormsToAttrs($forms);
-						if (empty($forms))
-						{
-							$forms = self::createDefaultForm();
-							$forms = self::prepareFormsToAttrs($forms);
-						}
-					}
-
-					if (!empty($forms))
+					$marker = self::getDefaultFormMarker();
+					if ($marker !== null)
 					{
 						self::setFormIdParam(
 							$block,
-							str_replace(self::INLINE_MARKER_PREFIX, '', $forms[0]['value'])
+							str_replace(self::INLINE_MARKER_PREFIX, '', $marker)
 						);
 					}
 				}
@@ -649,6 +717,30 @@ class Form
 		}
 
 		return $callback + $other;
+	}
+
+	protected static function getDefaultFormMarker(): ?string
+	{
+		$forms = self::getFormsByFilter([
+			'=XML_ID' => 'crm_preset_fb',
+		], true);
+		$forms = self::prepareFormsToAttrs($forms);
+		if (empty($forms))
+		{
+			$forms = self::getForms(true);
+			$forms = self::prepareFormsToAttrs($forms);
+			if (empty($forms))
+			{
+				$forms = self::createDefaultForm();
+				$forms = self::prepareFormsToAttrs($forms);
+			}
+		}
+
+		$form = reset($forms);
+		$marker = is_array($form) ? ($form['value'] ?? null) : null;
+		$marker = is_string($marker) ? trim($marker) : '';
+
+		return $marker !== '' ? $marker : null;
 	}
 	// endregion
 

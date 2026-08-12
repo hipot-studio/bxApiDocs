@@ -14,6 +14,7 @@ use Bitrix\Crm\Security\Role\Manage\Permissions\Permission;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Read;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Write;
+use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\ControlMapper\BaseControlMapper;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\ControlMapper\DependentVariables;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\ControlMapper\Toggler;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\ControlMapper\Variables;
@@ -38,6 +39,8 @@ class PermissionAttrPresets
 					UserDepartmentAndOpened::SELF,
 					UserDepartmentAndOpened::DEPARTMENT,
 					UserDepartmentAndOpened::SUBDEPARTMENTS,
+					UserDepartmentAndOpened::TEAM,
+					UserDepartmentAndOpened::SUBTEAMS,
 					UserDepartmentAndOpened::OPEN,
 					UserDepartmentAndOpened::ALL,
 				],
@@ -45,23 +48,41 @@ class PermissionAttrPresets
 			)
 		;
 
-		return [
-			new Read($variants, $dependentVariablesAsSettings),
-			new Add($variants, $dependentVariablesAsSettings),
-			new Write($variants, $dependentVariablesAsSettings),
-			new Delete($variants, $dependentVariablesAsSettings),
-			new Export($variants, $dependentVariablesAsSettings),
-			new Import($variants, $dependentVariablesAsSettings),
-			new MyCardView(self::allowedYesNo(), (new Toggler())->setDefaultValue(
-				(new MyCardView())->getDefaultAttribute() === UserPermissions::PERMISSION_ALL
-			)),
-		];
+		return self::createCrmEntityPreset($variants, $dependentVariablesAsSettings);
 	}
 
-	public static function crmEntityPresetAutomation(): array
+	public static function crmEntityPresetWithoutTeams(): array
+	{
+		$permissionPreset = (new UserDepartmentAndOpened());
+		$permissionPreset
+			->exclude(UserDepartmentAndOpened::TEAM)
+			->exclude(UserDepartmentAndOpened::SUBTEAMS)
+		;
+		$variants = $permissionPreset->getVariants();
+
+		$dependentVariablesAsSettingsWithoutTeams = (new DependentVariables\UserDepartmentAndOpenedAsSettings())
+			->setPermissionPreset($permissionPreset)
+			->addSelectedVariablesAlias(
+				[
+					UserDepartmentAndOpened::SELF,
+					UserDepartmentAndOpened::DEPARTMENT,
+					UserDepartmentAndOpened::SUBDEPARTMENTS,
+					UserDepartmentAndOpened::OPEN,
+					UserDepartmentAndOpened::ALL,
+				],
+				Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_X'),
+			)
+		;
+
+		return self::createCrmEntityPreset($variants, $dependentVariablesAsSettingsWithoutTeams);
+	}
+
+	public static function crmEntityPresetAutomation(bool $withTeams = true): array
 	{
 		return array_merge(
-			self::crmEntityPreset(),
+			$withTeams
+					? self::crmEntityPreset()
+					: self::crmEntityPresetWithoutTeams(),
 			[
 				new Automation(self::readWrite()),
 			]
@@ -259,5 +280,20 @@ class PermissionAttrPresets
 		$variants->add(BX_CRM_PERM_ALL, (string)GetMessage('CRM_SECURITY_ROLE_PERMS_TYPE_ALLOWED_YES'));
 
 		return $variants;
+	}
+
+	private static function createCrmEntityPreset(Variants $variants, BaseControlMapper $controlMapper): array
+	{
+		return [
+			new Read($variants, $controlMapper),
+			new Add($variants, $controlMapper),
+			new Write($variants, $controlMapper),
+			new Delete($variants, $controlMapper),
+			new Export($variants, $controlMapper),
+			new Import($variants, $controlMapper),
+			new MyCardView(self::allowedYesNo(), (new Toggler())->setDefaultValue(
+				(new MyCardView())->getDefaultAttribute() === UserPermissions::PERMISSION_ALL,
+			)),
+		];
 	}
 }

@@ -33,18 +33,35 @@ class StorageTypeFilter implements FilterInterface
 		if (isset($this->filter['CODE']))
 		{
 			$code = (string)$this->filter['CODE'];
-			$result->where('CODE', '=', $code);
+			$result->whereLike('CODE', "%{$code}%");
 		}
 
-		if (isset($this->filter['NAME']))
+		if (isset($this->filter['TITLE']))
 		{
-			$name = (string)$this->filter['NAME'];
-			$result->whereLike('NAME', "%{$name}%");
+			$title = (string)$this->filter['TITLE'];
+			$result->whereLike('TITLE', "%{$title}%");
 		}
 
 		if (isset($this->filter['DESCRIPTION']))
 		{
-			$result->where('DATA.DESCRIPTION', '=', (string)$this->filter['DESCRIPTION']);
+			$description = (string)$this->filter['DESCRIPTION'];
+			$result->whereLike('DESCRIPTION', "%{$description}%");
+		}
+
+		if (isset($this->filter['FIND']))
+		{
+			$find = trim((string)$this->filter['FIND']);
+			if ($find !== '')
+			{
+				$pattern = '%' . $find . '%';
+				$searchTree = (new ConditionTree())
+					->logic(ConditionTree::LOGIC_OR)
+					->whereLike('TITLE', $pattern)
+					->whereLike('CODE', $pattern)
+					->whereLike('DESCRIPTION', $pattern)
+				;
+				$result->where($searchTree);
+			}
 		}
 
 		if (isset($this->filter['CREATED_BY']))

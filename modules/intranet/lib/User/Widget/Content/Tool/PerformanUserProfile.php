@@ -33,7 +33,7 @@ class PerformanUserProfile extends BaseTool
 
 		return [
 			'title' => Loc::getMessage('INTRANET_USER_WIDGET_CONTENT_TOOL_PERFORMAN_USER_PROFILE_TITLE'),
-			'path' => "/performan/profile/{$userId}/",
+			'path' => '/performan/',
 			'userId' => $userId,
 		];
 	}

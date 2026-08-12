@@ -33,6 +33,7 @@ class DealStageHistory
 		}
 
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
 
 		$statusSemanticsForSql = [];
@@ -111,7 +112,7 @@ class DealStageHistory
 				],
 				'ASSIGNED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(DSH.RESPONSIBLE_ID is null, null, concat_ws(\' \', nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN DSH.RESPONSIBLE_ID is null THEN null ELSE concat_ws(\' \', nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UR',
 					'JOIN' => 'INNER JOIN b_user UR ON UR.ID = DSH.RESPONSIBLE_ID',
@@ -119,7 +120,7 @@ class DealStageHistory
 				],
 				'ASSIGNED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(DSH.RESPONSIBLE_ID is null, null, concat_ws(\' \', concat(\'[\', DSH.RESPONSIBLE_ID, \']\'), nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN DSH.RESPONSIBLE_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'DSH.RESPONSIBLE_ID', "']'") . ', nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UR',
 					'JOIN' => 'INNER JOIN b_user UR ON UR.ID = DSH.RESPONSIBLE_ID',
@@ -141,7 +142,7 @@ class DealStageHistory
 				],
 				'CATEGORY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(DSH.CATEGORY_ID is null, null, concat_ws(\' \', ifnull(DC.NAME, \'' . $helper->forSql(static::getDefaultCategoryName($languageId)) . '\')))',
+					'FIELD_NAME' => 'CASE WHEN DSH.CATEGORY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getIsNullFunction('DC.NAME', "'" . $helper->forSql(static::getDefaultCategoryName($languageId)) . "'") . ') END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'DC',
 					'JOIN' => 'INNER JOIN b_crm_deal_category DC ON DC.ID = DSH.CATEGORY_ID',
@@ -149,7 +150,7 @@ class DealStageHistory
 				],
 				'CATEGORY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(DSH.CATEGORY_ID is null, null, concat_ws(\' \', concat(\'[\', DSH.CATEGORY_ID, \']\'), ifnull(DC.NAME, \'' . $helper->forSql(static::getDefaultCategoryName($languageId)) . '\')))',
+					'FIELD_NAME' => 'CASE WHEN DSH.CATEGORY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'DSH.CATEGORY_ID', "']'") . ', ' . $helper->getIsNullFunction('DC.NAME', "'" . $helper->forSql(static::getDefaultCategoryName($languageId)) . "'") . ') END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'DC',
 					'JOIN' => 'INNER JOIN b_crm_deal_category DC ON DC.ID = DSH.CATEGORY_ID',
@@ -182,7 +183,7 @@ class DealStageHistory
 				],
 				'STAGE' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(DSH.STAGE_ID is null, null, concat_ws(\' \', concat(\'[\', DSH.STAGE_ID, \']\'), nullif(S.NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN DSH.STAGE_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'DSH.STAGE_ID', "']'") . ', nullif(S.NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'S',
 					'JOIN' => 'INNER JOIN b_crm_status S ON S.ENTITY_ID like \'DEAL_STAGE%\' and S.STATUS_ID = DSH.STAGE_ID',

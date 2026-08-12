@@ -9,6 +9,7 @@
 namespace Bitrix\Crm\Agent\Notice;
 
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use CIMNotify;
 
 /**

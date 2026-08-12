@@ -1,9 +1,9 @@
 <?php
 namespace Bitrix\Crm\Recurring\Entity\Item;
 
-use Bitrix\Crm\Automation;
 use Bitrix\Crm\Binding\DealContactTable;
 use Bitrix\Crm\DealRecurTable;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
@@ -174,6 +174,12 @@ class DealExist extends DealEntity
 				return $r;
 			}
 		}
+
+		Container::getInstance()
+			->getContext()
+			->getAnalytics()
+			->setSection(Dictionary::SECTION_RECURRING)
+		;
 
 		$fields = $this->prepareDealFieldsBeforeExpose($this->templateFields);
 		$addResult = $this->addExposingDeal($fields);

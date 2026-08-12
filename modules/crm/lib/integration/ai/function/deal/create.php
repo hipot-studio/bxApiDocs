@@ -2,14 +2,13 @@
 
 namespace Bitrix\Crm\Integration\AI\Function\Deal;
 
-use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Integration\AI\Contract\AIFunction;
 use Bitrix\Crm\Integration\AI\Function\Deal\Dto\CreateParameters;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Item\Deal;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Operation;
-use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Result;
 use CCrmOwnerType;
 
@@ -53,11 +52,19 @@ final class Create implements AIFunction
 		$operation = $this->factory->getAddOperation($deal);
 		$operation
 			->getContext()
-			->setUserId($this->currentUserId);
+			->setUserId($this->currentUserId)
+			->setAnalytics(
+				[
+					'event' => Dictionary::EVENT_ENTITY_CREATE,
+					'c_section' => Dictionary::SECTION_AI,
+				],
+			)
+		;
 
 		$operation
 			->disableCheckFields()
-			->disableCheckRequiredUserFields();
+			->disableCheckRequiredUserFields()
+		;
 
 		return $operation;
 	}

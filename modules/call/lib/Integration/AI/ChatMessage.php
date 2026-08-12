@@ -6,6 +6,7 @@ use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Entity\File\FileItem;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Call\Call;
@@ -16,6 +17,7 @@ use Bitrix\Call\Integration\AI\Outcome\Insights;
 use Bitrix\Call\Integration\AI\Outcome\Overview;
 use Bitrix\Call\Integration\AI\Outcome\Evaluation;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
+use Bitrix\Call\Integration\AI\Outcome\Transcription;
 use Bitrix\Call\Integration\Im\CallFollowupBot;
 
 /**
@@ -131,14 +133,34 @@ class ChatMessage extends CallChatMessage
 
 	public static function generateOverviewMessage(int $callId, OutcomeCollection $outcomeCollection, Chat $chat): ?Message
 	{
-		/** @var Overview $overview */
-		$overview = $outcomeCollection->getOutcomeByType(SenseType::OVERVIEW->value)?->getSenseContent();
+		// Pick the latest outcome with content per type
+		$overview = null;
+		$evaluation = null;
+		$insights = null;
+		foreach ($outcomeCollection as $outcome)
+		{
+			$content = $outcome->getSenseContent();
+			if ($overview === null && $content instanceof Overview && $content->hasContent())
+			{
+				$overview = $content;
+			}
+			elseif ($evaluation === null && $content instanceof Evaluation && $content->hasContent())
+			{
+				$evaluation = $content;
+			}
+			elseif ($insights === null && $content instanceof Insights && $content->hasContent())
+			{
+				$insights = $content;
+			}
+			if ($overview && $evaluation && $insights)
+			{
+				break;
+			}
+		}
 		if (!$overview)
 		{
 			return null;
 		}
-		/** @var Evaluation $evaluation */
-		$evaluation = $outcomeCollection->getOutcomeByType(SenseType::EVALUATION->value)?->getSenseContent();
 
 		$hostUrl = UrlManager::getInstance()->getHostUrl();
 
@@ -186,7 +208,7 @@ class ChatMessage extends CallChatMessage
 		}
 
 		$efficiencyValue = -1;
-		if ($evaluation && $evaluation->efficiencyValue >= 0)
+		if ($evaluation instanceof Evaluation && $evaluation->hasContent() && $evaluation->efficiencyValue >= 0)
 		{
 			$efficiencyValue = $evaluation->efficiencyValue;
 		}
@@ -289,38 +311,61 @@ class ChatMessage extends CallChatMessage
 			}
 		}
 
-		/** @var Insights $insights */
-		$insights = $outcomeCollection->getOutcomeByType(SenseType::INSIGHTS->value)?->getSenseContent();
-		if ($insights)
+		if ($insights instanceof Insights && $insights->hasContent())
 		{
-			if (!empty($insights->insights) || !empty($insights->speakerAnalysis))
+			$insightTexts = [];
+			if ($insights->getVersion() > 1)
+			{
+				$transcription = $outcomeCollection->getOutcomeByType(SenseType::TRANSCRIBE->value)?->getSenseContent();
+				$speakerList = $transcription instanceof Transcription
+					? $transcription->prepareSpeakersList(0)
+					: [];
+
+				$joinedUserIds = [];
+				foreach ($call->getCallUsers() as $userId => $callUser)
+				{
+					if ($callUser->getFirstJoined())
+					{
+						$joinedUserIds[$userId] = true;
+					}
+				}
+
+				foreach ($insights->speakerAnalysis as $analysis)
+				{
+					if (
+						!$analysis->userId
+						|| !isset($speakerList[$analysis->userId])
+						|| !isset($joinedUserIds[$analysis->userId])
+						|| empty($analysis->detailedInsight)
+					)
+					{
+						continue;
+					}
+					$insightTexts[] = $analysis->detailedInsight;
+				}
+			}
+			else
+			{
+				foreach ($insights->insights as $insight)
+				{
+					if (!empty($insight->detailedInsight))
+					{
+						$insightTexts[] = $insight->detailedInsight;
+					}
+				}
+			}
+
+			if (!empty($insightTexts))
 			{
 				$attach->AddDelimiter($delimiter);
 				$attach->AddUser([
 					'NAME' => static::getMessage('CALL_NOTIFY_COPILOT_INSIGHTS'),
 					'AVATAR' => $hostUrl.'/bitrix/js/call/images/copilot-message-insights.svg',
 				]);
-				if ($insights->getVersion() > 1)
+				foreach ($insightTexts as $text)
 				{
-					foreach ($insights->speakerAnalysis as $analysis)
-					{
-						if (!empty($analysis->detailedInsight))
-						{
-							$attach->AddMessage($analysis->detailedInsight . '[br][br]');
-							$attach->AddDelimiter($spacer);
-						}
-					}
-				}
-				else
-				{
-					foreach ($insights->insights as $insight)
-					{
-						if (!empty($insight->detailedInsight))
-						{
-							$attach->AddMessage($insight->detailedInsight . '[br][br]');
-							$attach->AddDelimiter($spacer);
-						}
-					}
+					$attach->AddMessage($text . '[br][br]');
+					$attach->AddDelimiter($spacer);
 				}
 			}
 		}
@@ -504,13 +549,13 @@ class ChatMessage extends CallChatMessage
 		$messages = [];
 		foreach ($trackCollection as $track)
 		{
-			$messageText = $messageText0 . "\n[DISK={$track->getDiskFileId()}]";
-
 			$message = new Message();
-			$message->setContextUser($call->getActionUserId() ?: $call->getInitiatorId());
-			$message->setAuthorId($call->getActionUserId() ?: $call->getInitiatorId());
-			$message->setMessage($messageText);
-			$message->uploadFileFromText();
+			$message->setMessage($messageText0);
+			$message->markAsSystem(true);
+
+			$file = new FileItem($track->getDiskFileId(), $chat->getId());
+			$message->addFile($file);
+
 			$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
 				'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AUDIO_RECORD,
 				'CALL_ID' => $callId,

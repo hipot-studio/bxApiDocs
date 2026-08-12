@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
 use Bitrix\Socialnetwork\V2\Feature;
 
 class LeaveUserActionMessage implements ActionMessageInterface
@@ -48,7 +49,7 @@ class LeaveUserActionMessage implements ActionMessageInterface
 			message: $message,
 			senderId: $this->senderId,
 			groupId: $this->collabId,
-			silent: $isNewProjectsOn ? self::SILENT_WITH_RECENT : self::SILENT_OFF,
+			silent: $this->resolveCounterSilent(ActionType::LeaveUser, $this->collabId, $isNewProjectsOn ? self::SILENT_WITH_RECENT : self::SILENT_OFF),
 		);
 	}
 }

@@ -565,6 +565,11 @@ class Container
 		return ServiceLocator::getInstance()->get('crm.filter.factory');
 	}
 
+	public function getRelatedEntityFilterRegistry(): Filter\RelatedEntity\Registry
+	{
+		return ServiceLocator::getInstance()->get('crm.filter.relatedEntity.registry');
+	}
+
 	public function getAccounting(): Accounting
 	{
 		return ServiceLocator::getInstance()->get('crm.service.accounting');

@@ -15,6 +15,7 @@ use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\GoogleSection
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google\Push\PushManager;
 use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 use CCalendar;
+use Throwable;
 
 class SynchronizeConnectionCommandHandler
 {
@@ -47,9 +48,13 @@ class SynchronizeConnectionCommandHandler
 			$this->eventSynchronizer->importEvents($connection->getOwner()->getId());
 			$this->connectionManager->updateConnection($connection);
 		}
-		catch (\Exception $e)
+		catch (Throwable $e)
 		{
-			throw new Exception($e->getMessage(), $e->getCode(), $e);
+			throw new Exception(
+				'Unable to sync connection for Google: ' . $e->getMessage(),
+				$e->getCode(),
+				$e,
+			);
 		}
 
 		CCalendar::ClearCache();

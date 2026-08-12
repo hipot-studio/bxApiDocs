@@ -38,4 +38,9 @@ class DateTimeConverter extends DateConverter
 	{
 		return new Value\DateTime($timestamp);
 	}
+
+	protected function applyViewerOffset(int $timestamp): int
+	{
+		return $timestamp + $this->getViewerOffset();
+	}
 }

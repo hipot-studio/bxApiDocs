@@ -66,6 +66,10 @@ class PlaceholderProvider extends BaseProvider
 		'REQUISITE.RQ_COMPANY_ID',
 		'CRM_DEAL_RECURRING',
 		'.ID', // TODO: temporary disable show ID field
+		'LAST_ACTIVITY_BY',
+		'LAST_ACTIVITY_TIME',
+		'STAGE_ID',
+		'CATEGORY_ID',
 	];
 	protected const INCLUDE_UF_ITEMS_TO_WHITE_LIST = true;
 
@@ -178,14 +182,16 @@ class PlaceholderProvider extends BaseProvider
 			{
 				$value = $row['VALUE'] ?? '';
 				$isImageType = isset($row['TYPE']) && $row['TYPE'] === 'IMAGE';
-				$isInBlackList = count(
-						array_filter(
-							static::ITEM_ID_BLACK_LIST,
-							static fn(string $word) => str_ends_with($value, $word)
-						)
-					) > 0;
+				$isStampType = isset($row['TYPE']) && $row['TYPE'] === 'STAMP';
+				$isInBlackList = !empty(
+					array_filter(
+						static::ITEM_ID_BLACK_LIST,
+						static fn(string $word) => str_ends_with($value, $word)
+					)
+				);
 				if (
 					$isImageType
+					|| $isStampType
 					|| $isInBlackList
 					|| in_array($value, $duplicatingItems, true)
 				)

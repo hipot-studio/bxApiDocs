@@ -6,4 +6,5 @@ namespace Bitrix\Landing\Copilot\Generation\Type;
 enum RequestEntities: string
 {
 	case Image = 'I';
+	case HtmlBlock = 'H';
 }

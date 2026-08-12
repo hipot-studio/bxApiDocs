@@ -204,6 +204,7 @@ final class AnchorService
 		$chat = $this->message->getChat();
 		$anchorCollection->setParentChatId($chat->getParentChatId());
 		$anchorCollection->setParentMessageId($chat->getParentMessageId());
+		$anchorCollection->setRecentSections($chat->getRecentSections());
 
 		$this->anchorProvider->cleanUsersCache((array)$anchorCollection->getUserIdList());
 
@@ -238,6 +239,7 @@ final class AnchorService
 		$chat = $this->message->getChat();
 		$anchorItem->setParentChatId($chat->getParentChatId());
 		$anchorItem->setParentMessageId($chat->getParentMessageId());
+		$anchorItem->setRecentSections($chat->getRecentSections());
 
 		$this->anchorProvider->cleanCache($anchorItem->getUserId());
 

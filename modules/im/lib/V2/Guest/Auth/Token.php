@@ -18,6 +18,10 @@ class Token
 		protected string $value,
 	)
 	{
+		if (!self::isValid($value))
+		{
+			throw new \InvalidArgumentException("Invalid guest token format: value must be a 32-char alphanumeric string");
+		}
 	}
 
 	public static function createFromRequest(): ?static

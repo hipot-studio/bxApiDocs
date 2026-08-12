@@ -3,8 +3,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Scenario;
 
-use Bitrix\Landing\Copilot\Connector;
-use Bitrix\Landing\Copilot\Connector\Chat\ICopilotChatBot;
 use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Generation\Step;
 use Bitrix\Landing\Metrika;
@@ -15,7 +13,7 @@ class CreateSite extends BaseScenario
 	/**
 	 * @inheritdoc
 	 */
-	public function getMap(): array
+	protected function buildMap(): array
 	{
 		return [
 			10 => new Step\TaskInitSite(),
@@ -32,11 +30,6 @@ class CreateSite extends BaseScenario
 	/**
 	 * @inheritdoc
 	 */
-	public function getChatbot(): ?ICopilotChatBot
-	{
-		return Connector\Chat\Chat::getCreateSiteChatBot();
-	}
-
 	/**
 	 * Returns the number of the scenario step at which to check request limits.
 	 *

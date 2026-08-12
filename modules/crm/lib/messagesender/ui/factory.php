@@ -4,17 +4,25 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\MessageSender\UI;
 
-use Bitrix\Crm\MessageSender\Channel;
-use Bitrix\Crm\MessageSender\SenderRepository;
-use Bitrix\Crm\MessageSender\UI\ConnectionsSlider\Section;
-use Bitrix\Crm\MessageSender\UI\Editor\ContentProvider;
-use Bitrix\Crm\MessageSender\UI\Editor\Context;
-use Bitrix\Crm\MessageSender\UI\Editor\Preferences;
-use Bitrix\Crm\MessageSender\UI\Editor\Scene;
-use Bitrix\Crm\MessageSender\UI\Editor\ViewChannel;
+use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
+use Bitrix\Crm\Item;
+use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\MessageSender\Channel\Correspondents\ToRepository;
 use Bitrix\Crm\MessageSender\UI\Factory\Registry;
+use Bitrix\Crm\Multifield\Type\Phone;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Traits\Singleton;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Loader;
+use Bitrix\Main\ORM\Objectify\EntityObject;
+use Bitrix\MessageService\Public\UI\MessageEditor\Channel\To;
+use Bitrix\MessageService\Public\UI\MessageEditor\ContentProvider;
+use Bitrix\MessageService\Public\UI\MessageEditor\ContentProvider\Copilot;
+use Bitrix\MessageService\Public\UI\MessageEditor\ContentProvider\Files;
+use Bitrix\MessageService\Public\UI\MessageEditor\Context;
+use Bitrix\MessageService\Public\UI\MessageEditor\Scene;
+use Bitrix\MessageService\Public\UI\MessageEditor\ViewChannel;
 
 final class Factory
 {
@@ -24,78 +32,29 @@ final class Factory
 
 	private function __construct()
 	{
-		$this->registry = Registry::getInstance();
+		$this->registry = ServiceLocator::getInstance()->get(Registry::class);
 	}
 
-	public function createConnectionsSlider(?int $userId = null): ConnectionsSlider
+	public function createEditor(Scene $scene, Context $context): \Bitrix\MessageService\Public\UI\MessageEditor\Editor
 	{
-		$userId ??= Container::getInstance()->getContext()->getUserId();
+		$factory = ServiceLocator::getInstance()->get('messageservice.public.ui.factory');
+		$editor = $factory->createEditor($scene, $context);
 
-		$channels = $this->getAllGenericChannels($userId);
-		$sections = $this->getAllConnectionsSliderSections($channels);
-		$pages = $this->getAllConnectionsSliderPages($sections);
-
-		return new ConnectionsSlider($pages);
-	}
-
-	/**
-	 * Creates a fully loaded and ready to use Editor instance. You'll need to define only the renderTo element.
-	 *
-	 * @param Scene $scene Where the editor will be used
-	 * @param Context $context
-	 *
-	 * @return Editor
-	 */
-	public function createEditor(Scene $scene, Context $context): Editor
-	{
-		if ($context->getItemIdentifier())
-		{
-			$repo = Channel\ChannelRepository::createWithPermissions(
-				$context->getItemIdentifier(),
-				$context->getUserId(),
-			);
-
-			$channels = $repo->getAll();
-		}
-		else
-		{
-			$channels = $this->getAllGenericChannels($context->getUserId());
-		}
-
-		$viewChannels = $this->getAllEditorViewChannels($channels);
-
-		if ($context->getEntityTypeId() !== null && !Container::getInstance()->getFactory($context->getEntityTypeId())?->isDocumentGenerationSupported())
-		{
-			$viewChannels = array_filter(
-				$viewChannels,
-				static fn(ViewChannel $vc) => !$vc->getBackend()->isTemplatesBased(),
-			);
-		}
-
-		$sceneViewChannels = $scene->filterViewChannels($viewChannels);
-
-		$promoBanners = null;
-		if ($this->shouldShowPromoInEditor($viewChannels))
-		{
-			$promoBanners = $this->getAllEditorPromoBanners($sceneViewChannels);
-		}
-
-		$onlyConnectedViewChannels = array_filter(
-			$sceneViewChannels,
-			static fn(ViewChannel $vc) => $vc->isConnected(),
+		$editor->setToList($this->getToList($context));
+		$editor->setContentProviders(
+			$this->getContentProviders($context, $editor->getViewChannels() ?? [])
 		);
 
-		return (new Editor($scene, $context))
-			->setDynamicLoad(false)
-			->setViewChannels(array_values($onlyConnectedViewChannels))
-			->setPromoBanners($promoBanners)
-			->setContentProviders($this->getAllContentProviders($context))
-			->setPreferences($this->getPreferences($scene, $context))
-		;
+		return $editor;
 	}
 
 	public function getScene(string $sceneId): ?Scene
 	{
+		if (!Loader::includeModule('messageservice'))
+		{
+			return null;
+		}
+
 		foreach ($this->registry->getScenes() as $scene)
 		{
 			if ($scene->getId() === $sceneId)
@@ -108,175 +67,133 @@ final class Factory
 	}
 
 	/**
-	 * @param Channel[] $channels
-	 * @return Section[]
-	 */
-	private function getAllConnectionsSliderSections(array $channels): array
-	{
-		$allSections = [];
-
-		$remainingChannels = $channels;
-		foreach ($this->registry->getProviders() as $provider)
-		{
-			if (empty($remainingChannels))
-			{
-				break;
-			}
-
-			[$sections, $usedChannels] = $provider->createConnectionsSliderSections($remainingChannels);
-
-			$allSections = [...$allSections, ...$sections];
-			$remainingChannels = array_filter(
-				$remainingChannels,
-				static fn(Channel $channel) => !in_array($channel, $usedChannels, true),
-			);
-		}
-
-		return $allSections;
-	}
-
-	/**
-	 * @return Channel[]
-	 */
-	private function getAllGenericChannels(int $userId): array
-	{
-		$channels = [];
-		foreach (SenderRepository::getAllImplementationsList() as $sender)
-		{
-			// todo hack? what if sender checks that To is not empty?
-			$channels = [
-				...$channels,
-				...$sender::getChannelsList([], $userId),
-			];
-		}
-
-		return $channels;
-	}
-
-	/**
-	 * @param Channel[] $channels
-	 * @return ViewChannel[]
-	 */
-	private function getAllEditorViewChannels(array $channels): array
-	{
-		$allViewChannels = [];
-
-		$remainingChannels = $channels;
-		foreach ($this->registry->getProviders() as $provider)
-		{
-			if (empty($remainingChannels))
-			{
-				break;
-			}
-
-			[$viewChannels, $usedChannels] = $provider->createEditorViewChannels($remainingChannels);
-
-			$allViewChannels = [...$allViewChannels, ...$viewChannels];
-			$remainingChannels = array_filter(
-				$remainingChannels,
-				static fn(Channel $channel) => !in_array($channel, $usedChannels, true),
-			);
-		}
-
-		return $allViewChannels;
-	}
-
-	/**
 	 * @param ViewChannel[] $viewChannels
-	 *
-	 * @return bool
+	 * @return ContentProvider[]
 	 */
-	private function shouldShowPromoInEditor(array $viewChannels): bool
+	private function getContentProviders(Context $context, array $viewChannels): array
 	{
-		foreach ($viewChannels as $viewChannel)
+		$canSendMessage = !empty(array_filter(
+			$viewChannels,
+			static fn(ViewChannel $vc): bool => $vc->isConnected()
+		));
+
+		return [
+			new Files(),
+			new Copilot([
+				'isLocked' => !AIManager::isEnabledInGlobalSettings(GlobalSetting::MessageSenderEditor),
+				'moduleId' => 'crm',
+				'category' => Loader::includeModule('ai') ? \Bitrix\AI\SharePrompt\Enums\Category::CRM_MESSAGE_EDITOR->value : null,
+				'contextId' => 'crm.messagesender.editor',
+			]),
+			new Editor\ContentProvider\CrmValues($context),
+			new Editor\ContentProvider\SalesCenter($context, $canSendMessage),
+			new Editor\ContentProvider\Documents($context),
+		];
+	}
+
+	private function getToList(Context $context): array
+	{
+		$entityTypeId = $context->getCustomDataInt('entityTypeId');
+		$entityId = $context->getCustomDataInt('entityId');
+		$categoryId = $context->getCustomDataInt('categoryId');
+
+		if ($entityTypeId === null || $entityId === null)
 		{
-			if ($viewChannel->isPromo() && $viewChannel->isConnected())
+			return [];
+		}
+
+		$itemIdentifier = ItemIdentifier::createByParams(
+			$entityTypeId,
+			$entityId,
+			$categoryId,
+		);
+
+		if (!$itemIdentifier)
+		{
+			return [];
+		}
+
+		$allCrmTo = ToRepository::create($itemIdentifier)
+			->setUserId($context->getUserId())
+			->getListByType(Phone::ID)
+		;
+
+		$titlesMap = $this->getTitleMap($allCrmTo);
+
+		$toList = [];
+		foreach ($allCrmTo as $crmTo)
+		{
+			$address = $crmTo->getAddress();
+			$addressSource = $crmTo->getAddressSource();
+
+			$title = $titlesMap[$addressSource->getEntityTypeId()][$addressSource->getEntityId()] ?? '';
+
+			$entityTypeName = (string)\CCrmOwnerType::ResolveName($addressSource->getEntityTypeId());
+			$avatar = '/bitrix/js/crm/messagesender/editor/images/' . strtolower($entityTypeName) . '.svg';
+
+			$to = To::fromArray([
+				'id' => (string)$address->getId(),
+				'value' => $address->getValue(),
+				'appearance' => [
+					'caption' => $title . ' ' . $address->getValueFormatted(),
+					'title' => $title,
+					'subtitle' => $address->getValueFormatted() . ', ' . $address->getValueTypeCaption(),
+					'avatar' => $avatar,
+				],
+				'customData' => [
+					'addressSource' => [
+						'entityTypeId' => $addressSource->getEntityTypeId(),
+						'entityId' => $addressSource->getEntityId(),
+					],
+				],
+			]);
+
+			if ($to !== null)
 			{
-				return false;
+				$toList[] = $to;
 			}
 		}
 
-		return true;
-	}
-
-	private function getAllEditorPromoBanners(array $viewChannels): array
-	{
-		$promoBanners = [];
-		foreach ($this->registry->getProviders() as $handler)
-		{
-			$promoBanners = [
-				...$promoBanners,
-				...$handler->createEditorPromoBanners($viewChannels),
-			];
-		}
-
-		return $promoBanners;
-	}
-
-	private function getAllConnectionsSliderPages(array $sections): array
-	{
-		$pages = [];
-		foreach ($this->registry->getPageImplementations() as $pageClass)
-		{
-			/** @var class-string<ConnectionsSlider\Page> $pageClass */
-			$page = $pageClass::create($sections);
-			if ($page !== null)
-			{
-				$pages[] = $page;
-			}
-		}
-
-		return $pages;
+		return $toList;
 	}
 
 	/**
-	 * @return array<ContentProvider>
+	 * @param \Bitrix\Crm\MessageSender\Channel\Correspondents\To[] $toList
+	 * @return array<int, array<int, string>> [entityTypeId => [entityId => title]]
 	 */
-	private function getAllContentProviders(Context $context): array
+	private function getTitleMap(array $toList): array
 	{
-		$providers = [];
-		foreach ($this->registry->getContentProviderImplementations() as $class)
+		$idMap = [];
+		foreach ($toList as $to)
 		{
-			$providers[] = new $class($context);
+			$idMap[$to->getAddressSource()->getEntityTypeId()][$to->getAddressSource()->getEntityId()] = $to->getAddressSource()->getEntityId();
 		}
 
-		return $providers;
-	}
-
-	private function getPreferences(Scene $scene, Context $context): ?Preferences
-	{
-		$preferences = \CUserOptions::GetOption('crm', 'crm.messagesender.editor', false, $context->getUserId());
-		if (empty($preferences) || !is_array($preferences))
+		$addressSourcesData = [];
+		foreach ($idMap as $entityTypeId => $entityIds)
 		{
-			return null;
+			$broker = Container::getInstance()->getEntityBroker($entityTypeId);
+			$factory = Container::getInstance()->getFactory($entityTypeId);
+			if (!$broker || !$factory || !\CCrmOwnerType::isUseFactoryBasedApproach($entityTypeId))
+			{
+				continue;
+			}
+
+			foreach ($broker->getBunchByIds($entityIds) as $item)
+			{
+				if ($item instanceof EntityObject)
+				{
+					$item = $factory->getItemByEntityObject($item);
+				}
+				if (!($item instanceof Item))
+				{
+					continue;
+				}
+
+				$addressSourcesData[$entityTypeId][$item->getId()] = $item->getHeading();
+			}
 		}
 
-		$json = $preferences[$scene->getId()] ?? null;
-		if (!is_string($json))
-		{
-			return null;
-		}
-
-		try
-		{
-			$fields = \Bitrix\Main\Web\Json::decode($json);
-		}
-		catch (\Bitrix\Main\ArgumentException)
-		{
-			return null;
-		}
-
-		if (!is_array($fields))
-		{
-			return null;
-		}
-
-		$preferencesObject = new Preferences($fields);
-		if ($preferencesObject->hasValidationErrors())
-		{
-			return null;
-		}
-
-		return $preferencesObject;
+		return $addressSourcesData;
 	}
 }

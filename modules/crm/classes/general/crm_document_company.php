@@ -1,6 +1,9 @@
 <?php
 
 use Bitrix\Crm;
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Restriction\RestrictionManager;
 
 if (!CModule::IncludeModule('bizproc'))
@@ -457,22 +460,20 @@ class CCrmDocumentCompany extends CCrmDocument implements IBPWorkflowDocument
 		}
 		//endregion
 
-		if (COption::GetOptionString('crm', 'start_bp_within_bp', 'N') == 'Y')
+		$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Company, (int)$ID));
+		$result = $starter
+			->setContextModuleId('bizproc')
+			->runOnInnerDocumentAdd(new RunDataDto(actualFields: $arFields), runAutomation: false)
+		;
+
+		if (!$result->isSuccess())
 		{
-			$CCrmBizProc = new CCrmBizProc(CCrmOwnerType::CompanyName);
-			if ($CCrmBizProc->CheckFields(false, true) === false)
+			if ($useTransaction)
 			{
-				throw new \Bitrix\Main\SystemException($CCrmBizProc->LAST_ERROR);
+				$DB->Rollback();
 			}
 
-			if (!$CCrmBizProc->StartWorkflow($ID))
-			{
-				if ($useTransaction)
-				{
-					$DB->Rollback();
-				}
-				throw new \Bitrix\Main\SystemException($CCrmBizProc->LAST_ERROR);
-			}
+			throw new \Bitrix\Main\SystemException(CBPHelper::stringify($result->getErrorMessages()));
 		}
 
 		if (isset($arFields['TRACKING_SOURCE_ID']))
@@ -600,6 +601,12 @@ class CCrmDocumentCompany extends CCrmDocument implements IBPWorkflowDocument
 			$arFields['MODIFY_BY_ID'] = $modifiedById;
 		}
 
+		$previousFields = null;
+		if (\Bitrix\Main\Config\Option::get('crm', 'start_bp_within_bp', 'N') === 'Y')
+		{
+			$previousFields = static::GetDocument($documentId, null, array_keys($arFields))->toArray();
+		}
+
 		$res = $CCrmEntity->Update(
 			$arDocumentID['ID'],
 			$arFields,
@@ -621,20 +628,26 @@ class CCrmDocumentCompany extends CCrmDocument implements IBPWorkflowDocument
 			throw new \Bitrix\Main\SystemException($CCrmEntity->LAST_ERROR);
 		}
 
-		if (COption::GetOptionString("crm", "start_bp_within_bp", "N") == "Y")
-		{
-			$CCrmBizProc = new CCrmBizProc('COMPANY');
-			if (false === $CCrmBizProc->CheckFields($arDocumentID['ID'], true))
-				throw new \Bitrix\Main\SystemException($CCrmBizProc->LAST_ERROR);
+		$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Company, (int)$arDocumentID['ID']));
+		$result = $starter
+			->setContextModuleId('bizproc')
+			->runOnInnerDocumentUpdate(
+				new RunDataDto(
+					actualFields: $arFields,
+					previousFields: $previousFields,
+				),
+				runAutomation: false,
+			)
+		;
 
-			if ($res && !$CCrmBizProc->StartWorkflow($arDocumentID['ID']))
+		if (!$result->isSuccess())
+		{
+			if ($useTransaction)
 			{
-				if ($useTransaction)
-				{
-					$DB->Rollback();
-				}
-				throw new \Bitrix\Main\SystemException($CCrmBizProc->LAST_ERROR);
+				$DB->Rollback();
 			}
+
+			throw new \Bitrix\Main\SystemException(CBPHelper::stringify($result->getErrorMessages()));
 		}
 
 		if (isset($arFields['TRACKING_SOURCE_ID']))

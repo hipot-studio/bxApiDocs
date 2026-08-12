@@ -2,6 +2,7 @@
 
 namespace Bitrix\ImBot\Bot;
 
+use Bitrix\Bizproc\Integration\ImBot\AiAgentBotAvatar;
 use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
@@ -21,7 +22,7 @@ final class OpenLinesBizprocBot extends Base
 	private static bool $isChatStarted = false;
 
 	/**
-	 * @param array{botName: string, botCode?: string} $params
+	 * @param array{botName: string, botCode?: string, templateId?: int} $params
 	 * @return int|null
 	 */
 	public static function register(array $params = []): ?int
@@ -42,6 +43,18 @@ final class OpenLinesBizprocBot extends Base
 			? Random::getStringByAlphabet(16, Random::ALPHABET_ALPHALOWER)
 			: $botCode;
 
+		$templateId = (int)($params['templateId'] ?? 0);
+
+		$properties = [
+			'NAME' => $botName,
+		];
+
+		$avatar = self::resolveDefaultAvatar($templateId);
+		if ($avatar !== null)
+		{
+			$properties['PERSONAL_PHOTO'] = $avatar;
+		}
+
 		return Bot::register([
 			'CODE' => $botCode,
 			'TYPE' => Bot::TYPE_OPENLINE,
@@ -50,9 +63,7 @@ final class OpenLinesBizprocBot extends Base
 			'METHOD_MESSAGE_ADD' => 'onMessageAdd',/** @see self::onMessageAdd */
 			'METHOD_BOT_DELETE' => 'onBotDelete',/** @see self::onBotDelete */
 			'METHOD_WELCOME_MESSAGE' => 'onChatStart',/** @see self::onChatStart */
-			'PROPERTIES' => [
-				'NAME' => $botName,
-			],
+			'PROPERTIES' => $properties,
 		]);
 	}
 
@@ -91,6 +102,7 @@ final class OpenLinesBizprocBot extends Base
 	public static function registerOrUpdate(
 		string $botCode,
 		string $botName,
+		int $templateId = 0,
 	): ?int
 	{
 		if (!Loader::includeModule('im'))
@@ -104,17 +116,31 @@ final class OpenLinesBizprocBot extends Base
 			return self::register([
 				'botName' => $botName,
 				'botCode' => $botCode,
+				'templateId' => $templateId,
 			]);
+		}
+
+		$botId = $bot->getBotId();
+
+		$updateProperties = [
+			'NAME' => $botName,
+		];
+
+		if (!self::botHasPhoto($botId))
+		{
+			$defaultAvatarId = self::resolveDefaultAvatarId($templateId);
+			if ($defaultAvatarId !== null)
+			{
+				$updateProperties['PERSONAL_PHOTO'] = $defaultAvatarId;
+			}
 		}
 
 		$isUpdated = Bot::update(
 			bot: [
-				'BOT_ID' => $bot->getBotId(),
+				'BOT_ID' => $botId,
 			],
 			updateFields: [
-				'PROPERTIES' => [
-					'NAME' => $botName,
-				],
+				'PROPERTIES' => $updateProperties,
 			],
 		);
 
@@ -123,7 +149,7 @@ final class OpenLinesBizprocBot extends Base
 			return null;
 		}
 
-		return $bot->getBotId();
+		return $botId;
 	}
 
 	/**
@@ -220,6 +246,33 @@ final class OpenLinesBizprocBot extends Base
 			)
 			->start()
 		;
+	}
+
+	/**
+	 * Default agent avatar file array for the create path, or null.
+	 * Resolution lives in bizproc; called only when that module is available.
+	 */
+	private static function resolveDefaultAvatar(int $templateId): ?array
+	{
+		if (!Loader::includeModule('bizproc') || !method_exists(AiAgentBotAvatar::class, 'getFileArrayByTemplateId'))
+		{
+			return null;
+		}
+
+		return AiAgentBotAvatar::getFileArrayByTemplateId($templateId);
+	}
+
+	/**
+	 * Default agent avatar file id for the update path (Bot::update needs an int id), or null.
+	 */
+	private static function resolveDefaultAvatarId(int $templateId): ?int
+	{
+		if (!Loader::includeModule('bizproc') || !method_exists(AiAgentBotAvatar::class, 'getFileIdByTemplateId'))
+		{
+			return null;
+		}
+
+		return AiAgentBotAvatar::getFileIdByTemplateId($templateId);
 	}
 
 	private static function getOpenLinesBotRepository(): OpenLinesBotRepository

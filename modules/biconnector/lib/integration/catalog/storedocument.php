@@ -58,6 +58,9 @@ class StoreDocument extends Dataset
 
 	protected function getFields(): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $this->getSqlHelper();
+
 		$responsibleJoin = $this->createJoin(
 			"CATSDOC_RESPONSIBLE",
 			"INNER JOIN b_user CATSDOC_RESPONSIBLE ON CATSDOC_RESPONSIBLE.ID = {$this->getAliasFieldName('RESPONSIBLE_ID')}",
@@ -106,30 +109,26 @@ class StoreDocument extends Dataset
 			(new IntegerField('RESPONSIBLE_ID')),
 			(new StringField('RESPONSIBLE_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('RESPONSIBLE_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('RESPONSIBLE_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$responsibleJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$responsibleJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$responsibleJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)",
+						)
+					ELSE NULL END",
 				)
 				->setJoin($responsibleJoin)
 			,
 			(new StringField('RESPONSIBLE'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('RESPONSIBLE_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('RESPONSIBLE_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('RESPONSIBLE_ID')}, ']'), 
-							nullif({$responsibleJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('RESPONSIBLE_ID'), "']'")},
+							nullif({$responsibleJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$responsibleJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)",
+						)
+					ELSE NULL END",
 				)
 				->setJoin($responsibleJoin)
 			,

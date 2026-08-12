@@ -22,6 +22,7 @@ enum ActionType: string
 	case ConvertGroupToCollabRich = 'convert_group_to_collab_rich';
 	case CreateProject = 'create_project';
 	case CreateProjectRich = 'create_project_rich';
+	case JoinBySharingLink = 'join_by_sharing_link';
 
 	public static function values(): array
 	{

@@ -48,7 +48,11 @@ class Schedule extends Controller
 		];
 	}
 
-	public function getSchedulesForScheduleFormAction($exceptScheduleId = null, $exceptScheduleAssignmentCodes = [], $checkNestedEntities = false)
+	public function getSchedulesForScheduleFormAction(
+		$exceptScheduleId = null,
+		$exceptScheduleAssignmentCodes = [],
+		$checkNestedEntities = false,
+	)
 	{
 		$scheduleFormHelper = new ScheduleFormHelper();
 		if ($exceptScheduleId <= 0 && empty($exceptScheduleAssignmentCodes))
@@ -70,6 +74,14 @@ class Schedule extends Controller
 		{
 			$schedule = (new ScheduleEntity(false))->setId(0);
 		}
+
+		if (!$this->userPermissionsManager->canReadSchedule($schedule->getId()))
+		{
+			$this->addError(new Main\Error('Access denied', 'TIMEMAN_SCHEDULE_GET_SCHEDULE_ACCESS_DENIED'));
+
+			return [];
+		}
+
 		$schedule->removeAllUserAssignments();
 		$schedule->removeAllDepartmentAssignments();
 		foreach ($exceptScheduleAssignmentCodes as $codeData)
@@ -97,6 +109,11 @@ class Schedule extends Controller
 		$result = [];
 		foreach ((array) ($schedulesForEntityCodes[$entityCode] ?? null) as $schedule)
 		{
+			if (!$this->userPermissionsManager->canReadSchedule($schedule->getId()))
+			{
+				continue;
+			}
+
 			$result[] =
 				array_merge(
 					$schedule->collectRawValues(),
@@ -108,6 +125,7 @@ class Schedule extends Controller
 					]
 				);
 		}
+
 		return [
 			'entityCode' => $entityCode,
 			'schedules' => $result,

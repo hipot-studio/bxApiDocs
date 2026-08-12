@@ -12,12 +12,10 @@ use Bitrix\Main\Localization\Loc;
 class Integrator extends BaseContent
 {
 	private IntegratorInfoDto $integratorInfo;
-	private \Bitrix\Main\License $license;
 
 	public function __construct()
 	{
 		$this->integratorInfo = IntegratorInfoService::createByDefault()->getIntegratorInfo();
-		$this->license = Application::getInstance()->getLicense();
 	}
 
 	public function getName(): string
@@ -27,13 +25,6 @@ class Integrator extends BaseContent
 
 	public function getConfiguration(): array
 	{
-		if (!$this->license->isCis())
-		{
-			return [
-				'isAvailable' => false,
-			];
-		}
-
 		return [
 			'isAvailable' => true,
 			'isConnected' => $this->isIntegratorConnected(),

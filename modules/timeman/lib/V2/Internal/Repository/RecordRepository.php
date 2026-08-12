@@ -233,6 +233,22 @@ class RecordRepository
 		return $this->workTimeRecordMapper->mapToCollectionFromOrm($records, $includeSchedule, $includeShift);
 	}
 
+	/**
+	 * @return int[]
+	 */
+	public function getRecordIdsForPeriod(int $userId, int $dateFrom, int $dateTo): array
+	{
+		$records = WorktimeRecordTable::query()
+			->setSelect(['ID'])
+			->where('USER_ID', $userId)
+			->where('RECORDED_START_TIMESTAMP', '>=', $dateFrom)
+			->where('RECORDED_START_TIMESTAMP', '<=', $dateTo)
+			->exec()
+			->fetchAll();
+
+		return array_map('intval', array_column($records, 'ID'));
+	}
+
 	public function convertFieldsToCompatibility(EO_WorktimeRecord $record): array
 	{
 		return WorktimeRecordTable::convertFieldsCompatible($record->collectValues());

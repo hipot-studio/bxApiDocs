@@ -10,4 +10,5 @@ class CloudRecordingErrorRequest extends Hydrator
 	public string $roomId = '';
 	public string $errorCode = '';
 	public string $errorMessage = '';
+	public string $requestId = '';
 }

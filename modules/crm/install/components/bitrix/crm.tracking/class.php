@@ -181,6 +181,14 @@ class CrmTrackingComponent extends CBitrixComponent
 			return false;
 		}
 
+		$userPermissions = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions();
+		if (!$userPermissions->entityType()->canReadSomeItemsInCrm())
+		{
+			ShowError(Loc::getMessage('CRM_TRACKING_ACCESS_DENIED'));
+
+			return false;
+		}
+
 		if (!$this->prepareResult())
 		{
 			$this->printErrors();

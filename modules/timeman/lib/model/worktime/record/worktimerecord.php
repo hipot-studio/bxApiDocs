@@ -495,6 +495,23 @@ class WorktimeRecord extends EO_WorktimeRecord
 		}
 	}
 
+	public function isFirstStop(): bool
+	{
+		foreach ($this->obtainWorktimeEvents() as $event)
+		{
+			if (in_array($event->getEventType(), [
+				WorktimeEventTable::EVENT_TYPE_STOP,
+				WorktimeEventTable::EVENT_TYPE_EDIT_STOP,
+				WorktimeEventTable::EVENT_TYPE_STOP_WITH_ANOTHER_TIME,
+			], true))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	private function calculateDurationSince($endTimestamp)
 	{
 		$raw = ($endTimestamp - $this->getRecordedStartTimestamp()) - $this->getRecordedBreakLength();

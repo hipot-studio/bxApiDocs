@@ -99,6 +99,7 @@ final class DatasetViewer
 				'externalCode' => $externalCodes[$i],
 				'type' => $type,
 				'visible' => $this->fields[$i]['VISIBLE'] ?? true,
+				'description' => $this->fields[$i]['DESCRIPTION'] ?? '',
 			];
 
 			$result['headers'][] = $headerData;
@@ -160,6 +161,7 @@ final class DatasetViewer
 				'externalCode' => $field['EXTERNAL_CODE'],
 				'type' => FieldType::from($field['TYPE']),
 				'visible' => $field['VISIBLE'],
+				'description' => $field['DESCRIPTION'] ?? '',
 			];
 
 			if (isset($field['ID']) && (int)$field['ID'] > 0)
@@ -227,6 +229,7 @@ final class DatasetViewer
 					'externalCode' => $field['EXTERNAL_CODE'],
 					'type' => FieldType::from($field['TYPE']),
 					'visible' => $field['VISIBLE'],
+					'description' => $field['DESCRIPTION'] ?? '',
 				];
 
 				if (isset($field['ID']) && (int)$field['ID'] > 0)

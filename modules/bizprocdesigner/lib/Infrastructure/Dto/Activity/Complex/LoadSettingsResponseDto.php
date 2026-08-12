@@ -15,6 +15,7 @@ class LoadSettingsResponseDto implements JsonSerializable
 	 * @param array<string, PortRuleDto> $portRuleDtoDictionary
 	 * @param array<string, ActionDictionaryEntryDto> $actionEntryDtoDictionary
 	 * @param array|null $fixedDocumentType
+	 * @param bool $filterSupported
 	 */
 	public function __construct(
 		public string $title,
@@ -22,6 +23,7 @@ class LoadSettingsResponseDto implements JsonSerializable
 		public array $portRuleDtoDictionary,
 		public array $actionEntryDtoDictionary,
 		public ?array $fixedDocumentType = null,
+		public bool $filterSupported = false,
 	)
 	{
 
@@ -35,6 +37,7 @@ class LoadSettingsResponseDto implements JsonSerializable
 			'rules' => $this->portRuleDtoDictionary,
 			'actions' => $this->actionEntryDtoDictionary,
 			'fixedDocumentType' => $this->fixedDocumentType,
+			'filterSupported' => $this->filterSupported,
 		];
 	}
 }

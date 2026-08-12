@@ -371,8 +371,13 @@ class Helper
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
-	public static function getAttendee(int $userId, int $eventParentId, $isRsvp = true): ?Attendee
+	public static function getAttendee(?int $userId, int $eventParentId, $isRsvp = true): ?Attendee
 	{
+		if ($userId === null)
+		{
+			return null;
+		}
+
 		$query = EventTable::query()
 			->setSelect([
 				'MEETING_STATUS',
@@ -380,6 +385,8 @@ class Helper
 				'USER_LAST_NAME' => 'USER.LAST_NAME',
 				'USER_EMAIL' => 'USER.EMAIL',
 			])
+			->where('USER.ID', $userId)
+			->where('PARENT_ID', $eventParentId)
 			->registerRuntimeField(
 				'USER',
 				new ReferenceField(
@@ -389,7 +396,6 @@ class Helper
 					['join_type' => Join::TYPE_INNER]
 				)
 			)
-			->setFilter(['USER.ID'=>$userId, '=PARENT_ID'=>$eventParentId])
 		;
 
 		$attendee = $query->fetch();
@@ -691,7 +697,7 @@ class Helper
 		{
 			return $event;
 		}
-		
+
 		return null;
 	}
 

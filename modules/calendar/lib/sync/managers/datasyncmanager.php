@@ -28,9 +28,11 @@ use Bitrix\Calendar\Util;
 use Bitrix\Dav\Internals\DavConnectionTable;
 use Bitrix\Dav\Internals\EO_DavConnection;
 use Bitrix\Dav\Internals\EO_DavConnection_Collection;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
@@ -166,10 +168,25 @@ class DataSyncManager
 			->setUserId($ownerId)
 		;
 
-		SynchronizationFeature::setUserId($ownerId);
-
 		if (SynchronizationFeature::isOn())
 		{
+			// Serialize import of a single connection to eliminate the race of overlapping
+			// initial imports (duplicate events). Fail-fast lock (default timeout 0): never wait -
+			// a busy connection is already being imported by another process, so skip it here.
+			$lockName = Icloud\Helper::getImportLockName((int)$connection->getId());
+
+			if (!Application::getConnection()->lock($lockName))
+			{
+				// Another process is already importing this connection - skip to avoid
+				// duplicates. Mark the result as failed so SYNCHRONIZED is not updated and
+				// the connection stays at the head of the queue for a later pass.
+				$logger->debug('Import of connection ' . $connection->getName() . ' skipped: already locked');
+
+				$result->addError(new Error('Import is already running for this connection'));
+
+				return $result;
+			}
+
 			try
 			{
 				$logger->debug('Import sections of connection ' . $connection->getName() . ' has been started');
@@ -199,6 +216,10 @@ class DataSyncManager
 				]);
 
 				return $result;
+			}
+			finally
+			{
+				Application::getConnection()->unlock($lockName);
 			}
 
 			$result->setData([

@@ -19,6 +19,7 @@ use Bitrix\Crm\Conversion\QuoteConversionWizard;
 use Bitrix\Crm\Integration\Catalog\WarehouseOnboarding;
 use Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig\DealDefaultEntityConfig;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Model\Field\DefaultValue\CloseDateConfigurator;
 use Bitrix\Crm\Recurring;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Restriction\RestrictionManager;
@@ -1934,7 +1935,13 @@ class CCrmDealDetailsComponent
 			if($this->isFieldHasDefaultValueAttribute($fieldsInfo, 'CLOSEDATE'))
 			{
 				$this->arResult['FIELDS_SET_DEFAULT_VALUE'][] = 'CLOSEDATE';
-				$this->defaultEntityData['CLOSEDATE'] = ConvertTimeStamp($beginDate + 7 * 86400, 'SHORT', SITE_ID);
+
+				$closeDate =
+					Main\DI\ServiceLocator::getInstance()
+						->get(CloseDateConfigurator::class)
+						->getDefaultValue(\CCrmOwnerType::Deal)
+				;
+				$this->defaultEntityData['CLOSEDATE'] = ConvertTimeStamp($closeDate->getTimestamp(), 'SHORT', SITE_ID);
 				if($this->isSetDefaultValueForField($fieldsInfo, $requiredFields, 'CLOSEDATE'))
 				{
 					$this->entityData['CLOSEDATE'] = $this->defaultEntityData['CLOSEDATE'];

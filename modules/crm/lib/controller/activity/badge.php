@@ -85,6 +85,13 @@ class Badge extends Base
 			return null;
 		}
 
+		if (mb_strlen($code) > 30)
+		{
+			$this->addError(new Error('The length of the `code` field must not exceed 30 characters'));
+
+			return null;
+		}
+
 		$result = $this->badgeTable::add([
 			'CODE' => $code,
 			'TITLE' => $title,

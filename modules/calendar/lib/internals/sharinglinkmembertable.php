@@ -59,16 +59,16 @@ class SharingLinkMemberTable extends DataManager
 		return [
 			(new IntegerField('ID',
 				[]
-			))->configureTitle(Loc::getMessage('SHARING_LINK_MEMBER_ENTITY_ID_FIELD'))
+			))
 				->configurePrimary()
 			,
 			(new IntegerField('LINK_ID',
 				[]
-			))->configureTitle(Loc::getMessage('SHARING_LINK_MEMBER_ENTITY_LINK_ID_FIELD'))
+			))
 			,
 			(new IntegerField('MEMBER_ID',
 				[]
-			))->configureTitle(Loc::getMessage('SHARING_LINK_MEMBER_ENTITY_MEMBER_ID_FIELD'))
+			))
 			,
 			(new Reference(
 				'MEMBER',

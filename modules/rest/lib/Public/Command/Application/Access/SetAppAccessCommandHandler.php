@@ -14,15 +14,18 @@ use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
 use Bitrix\Rest\Internal\Exception\Application\ApplicationNotFoundException;
 use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 use Bitrix\Rest\Internal\Service\Application\AccessCacheInvalidator;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 
 class SetAppAccessCommandHandler
 {
 	private AppRepository $appRepository;
+	private SecurityAuditLogger $securityAuditLogger;
 
-	public function __construct(?AppRepository $appRepository = null)
+	public function __construct(?AppRepository $appRepository = null, ?SecurityAuditLogger $securityAuditLogger = null)
 	{
 		$this->appRepository = $appRepository
 			?? ServiceLocator::getInstance()->get('rest.repository.app');
+		$this->securityAuditLogger = $securityAuditLogger ?? new SecurityAuditLogger();
 	}
 
 	/**
@@ -52,6 +55,7 @@ class SetAppAccessCommandHandler
 			throw new AccessDeniedException('User does not have rights to manage access codes of this application');
 		}
 
+		$previousAccessCodes = $appModel->getAccessCodes();
 		$accessCodes = $command->accessCodes;
 		if ($appModel->isPersonal())
 		{
@@ -64,6 +68,15 @@ class SetAppAccessCommandHandler
 
 		$app->setAccess($accessCodes);
 		$this->appRepository->save($app);
+
+		$this->securityAuditLogger->logAppAccessChanged(
+			actingUserId: $command->userId,
+			appId: (int)$app->getId(),
+			clientId: $command->clientId,
+			action: 'set',
+			previousAccessCodes: $previousAccessCodes,
+			newAccessCodes: $accessCodes,
+		);
 
 		AccessCacheInvalidator::clear();
 	}

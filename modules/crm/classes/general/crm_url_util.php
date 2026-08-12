@@ -232,6 +232,7 @@ class CCrmCallToUrl
 	public static function PrepareLinkAttributes($value, $params = array())
 	{
 		$value = self::NormalizeNumberIfRequired($value);
+		$jsValue = CUtil::JSEscape($value);
 		$format = self::GetFormat(self::Bitrix);
 
 		if($format === self::Bitrix)
@@ -243,7 +244,7 @@ class CCrmCallToUrl
 			}
 			return array(
 				'HREF' => "callto://{$value}",
-				'ONCLICK' => "if(typeof(top.BXIM) !== 'undefined') { top.BXIM.phoneTo('{$value}'".$paramsString."); return BX.PreventDefault(event); }"
+				'ONCLICK' => "if(typeof(top.BXIM) !== 'undefined') { top.BXIM.phoneTo('{$jsValue}'".$paramsString."); return BX.PreventDefault(event); }"
 			);
 		}
 
@@ -266,10 +267,9 @@ class CCrmCallToUrl
 			self::$CLICK_HANDLER->SetTemplate(isset($settings['CLICK_HANDLER']) ? $settings['CLICK_HANDLER'] : '');
 		}
 
-		$templateParams = array('PHONE' => $value);
 		return array(
-			'HREF' => self::$URL_TEMPLATE->Build($templateParams),
-			'ONCLICK' => self::$CLICK_HANDLER->Build($templateParams)
+			'HREF' => self::$URL_TEMPLATE->Build(['PHONE' => $value]),
+			'ONCLICK' => self::$CLICK_HANDLER->Build(['PHONE' => $jsValue])
 		);
 	}
 	public static function GetAllDescriptions()

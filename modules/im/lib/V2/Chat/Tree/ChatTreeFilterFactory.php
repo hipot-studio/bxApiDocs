@@ -13,4 +13,25 @@ class ChatTreeFilterFactory
 	{
 		return new SubtreeUnreadFilter($this->navigator, $userId, $maxDepth);
 	}
+
+	public function forTreeScope(ChatTreeScope $scope): ChatAncestorFilter
+	{
+		return new ChatAncestorFilter(
+			$this->navigator,
+			parentId: $scope->parentId,
+			typeCondition: $scope->typeCondition,
+			maxDepth: $scope->maxDepth,
+		);
+	}
+
+	public function forTreeScopeUnreadCounters(ChatTreeScope $scope): ChatAncestorFilter
+	{
+		return new ChatAncestorFilter(
+			$this->navigator,
+			parentId: $scope->parentId,
+			typeCondition: $scope->typeCondition,
+			maxDepth: $scope->maxDepth,
+			origin: TreeOrigin::forUnreadCounters(),
+		);
+	}
 }

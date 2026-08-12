@@ -7,7 +7,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Activity\Dto\ContentBlock;
 use Bitrix\Bizproc\Internal\Entity\StorageItem\StorageItem;
+use Bitrix\Bizproc\Public\Activity\Interface\ActivityContentBlockProviderInterface;
+use Bitrix\Bizproc\Public\Activity\Interface\ContentBlockScopeConsumerInterface;
 use Bitrix\Bizproc\Public\Command\StorageItem\AddStorageItemCommand;
 use Bitrix\Bizproc\Public\Command\StorageItem\UpdateStorageItemCommand;
 use Bitrix\Bizproc\Public\Provider\StorageFieldProvider;
@@ -31,7 +34,7 @@ use Bitrix\Bizproc\Internal\Service\StorageActivity\StorageActivityService;
  * @property-write ?string RewriteMode
  * @property-write string IsExpanded
  */
-class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurableActivity
+class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurableActivity, ActivityContentBlockProviderInterface, ContentBlockScopeConsumerInterface
 {
 	use \Bitrix\Bizproc\Activity\Mixins\EntityFilter;
 
@@ -554,6 +557,16 @@ class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurabl
 		$result->setData($currentValues);
 
 		return $result;
+	}
+
+	public static function getContentBlock(array $properties, ?\Bitrix\Bizproc\Activity\Dto\ContentBlockContext $context = null): ?ContentBlock
+	{
+		return StorageActivityService::getContentBlock($properties, $context);
+	}
+
+	public static function getScopeConsumption(): array
+	{
+		return StorageActivityService::getScopeConsumption();
 	}
 
 	private static function normalizeFieldKeys(mixed $fieldKeys): array

@@ -69,20 +69,14 @@ abstract class UserFieldDataset extends Dataset
 
 		foreach ($this->userFields as $userField)
 		{
-			$dbType = '';
-			if ($userField['USER_TYPE'] && is_callable([$userField['USER_TYPE']['CLASS_NAME'], 'getdbcolumntype']))
-			{
-				$dbType = call_user_func_array([$userField['USER_TYPE']['CLASS_NAME'], 'getdbcolumntype'], [$userField]);
-			}
-
 			$field =
 				($this->fieldTypeFabric($userField['USER_TYPE_ID'], $userField['MULTIPLE'] === 'Y', $userField['FIELD_NAME']))
 					->setCallback(
-						function($value, $dateFormats) use($userField, $dbType)
+						function($value, $dateFormats) use($userField)
 						{
 							global $USER_FIELD_MANAGER;
 
-							if ($dbType === 'date' || $dbType === 'datetime')
+							if (in_array($userField['USER_TYPE_ID'], ['date', 'datetime'], true))
 							{
 								if ($value === null || $value === '')
 								{
@@ -90,7 +84,7 @@ abstract class UserFieldDataset extends Dataset
 								}
 
 								$format =
-									$dbType === 'date'
+									$userField['USER_TYPE_ID'] === 'date'
 										? $dateFormats['date_format_php']
 										: $dateFormats['datetime_format_php']
 								;

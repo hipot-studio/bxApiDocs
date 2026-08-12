@@ -37,6 +37,22 @@ class CopyProjectHandler
 			$dto->dates?->finish,
 		);
 
+		$notifications = null;
+		if ($dto->notifications !== null)
+		{
+			$notifications = [];
+			foreach ($dto->notifications->types as $typeInput)
+			{
+				if ($typeInput->id !== null && $typeInput->counterEnabled !== null)
+				{
+					$notifications[] = [
+						'id' => $typeInput->id,
+						'counterEnabled' => $typeInput->counterEnabled,
+					];
+				}
+			}
+		}
+
 		$project = new Project(
 			name: $dto->name,
 			description: $dto->description,
@@ -56,6 +72,7 @@ class CopyProjectHandler
 			options: $dto->options,
 			tagNames: $dto->tags,
 			publication: $dto->publication,
+			notifications: $notifications,
 		);
 
 		try

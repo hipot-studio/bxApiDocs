@@ -9,7 +9,12 @@ class AddCardAction extends BaseAction
 {
 	protected const JS_COMMAND = 'addCard';
 
-	public function execute(bool $undo = true): bool
+	public static function getSanitizableParamKeys(): array
+	{
+		return ['content'];
+	}
+
+	protected function doExecute(bool $undo = true): bool
 	{
 		$block = new Block((int)$this->params['block']);
 		$block->cloneCard($this->params['selector'], $this->params['position'] - 1, $this->params['content']);

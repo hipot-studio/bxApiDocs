@@ -1,6 +1,11 @@
 <?php
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Timeman\V2\Internal\Integration\HumanResources\Service\NodeSettingsService;
+use Bitrix\Timeman\V2\Internal\Entity\Report\RecordReportType;
+use Bitrix\Timeman\V2\Internal\Service\ReportTextHtmlRenderer;
+use Bitrix\Timeman\V2\Internal\Service\ReportTextNormalizerService;
+use Bitrix\Timeman\V2\Public\Provider\SettingsProvider;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -31,6 +36,8 @@ class CTimeManReportFull
 			"TASKS" => array("FIELD_NAME" => "R.TASKS", "FIELD_TYPE" => "string"),
 			"EVENTS" => array("FIELD_NAME" => "R.EVENTS", "FIELD_TYPE" => "string"),
 			"REPORT" => array("FIELD_NAME" => "R.REPORT", "TYPE" => "string"),
+			"REPORT_EXTENDED" => array("FIELD_NAME" => "R.REPORT_EXTENDED", "TYPE" => "string"),
+			"TYPE" => array("FIELD_NAME" => "R.TYPE", "TYPE" => "string"),
 			"PLANS" => array("FIELD_NAME" => "R.PLANS", "TYPE" => "string"),
 			"MARK" => array("FIELD_NAME" => "R.MARK", "FIELD_TYPE" => "string"),
 			"APPROVE" => array("FIELD_NAME" => "R.APPROVE", "FIELD_TYPE" => "string"),
@@ -76,6 +83,10 @@ class CTimeManReportFull
 		if(isset($arFields['REPORT']))
 		{
 			$arBinds['REPORT'] = $arFields['REPORT'];
+		}
+		if(isset($arFields['REPORT_EXTENDED']))
+		{
+			$arBinds['REPORT_EXTENDED'] = $arFields['REPORT_EXTENDED'];
 		}
 		if(isset($arFields['PLANS']))
 		{
@@ -330,6 +341,14 @@ class CTimeManReportFull
 		{
 			$arFields['REPORT'] = trim($arFields['REPORT']);
 		}
+		if (isset($arFields['REPORT_EXTENDED']))
+		{
+			$arFields['REPORT_EXTENDED'] = trim($arFields['REPORT_EXTENDED']);
+		}
+		if ($action === 'ADD' || isset($arFields['TYPE']))
+		{
+			$arFields['TYPE'] = RecordReportType::normalize($arFields['TYPE'] ?? null);
+		}
 		if (isset($arFields['ACTIVE']))
 		{
 			$arFields['ACTIVE'] = $arFields['ACTIVE'] == 'N' ? 'N' : 'Y';
@@ -402,7 +421,7 @@ class CTimeManReportFull
 			$arFields["DATE_TO"] = $arFields["DATE_FROM"];
 
 		CTimeZone::Disable();
-		$ID = $DB->Add('b_timeman_report_full', $arFields, array('REPORT', 'TASKS', 'EVENTS','FILES'));
+		$ID = $DB->Add('b_timeman_report_full', $arFields, array('REPORT', 'REPORT_EXTENDED', 'TASKS', 'EVENTS','FILES'));
 		CTimeZone::Enable();
 		if ($ID > 0)
 		{
@@ -513,6 +532,8 @@ class CUserReportFull
 	public $month = null;
 
 	private $oneDayTime = 3600 * 24;
+
+	private bool $rawBbcode = false;
 
 	function __construct($USER_ID = 0)
 	{
@@ -815,10 +836,18 @@ class CUserReportFull
 					}
 					else
 					{
-						$fields["DATE_SUBMIT"] = strtotime(
-								"last " . $this->days[$tmDay - 1],
+						$reportDay = $this->days[$tmDay - 1];
+						if ($reportDay === 'sun')
+						{
+							$fields["DATE_SUBMIT"] = CTimeMan::RemoveHoursTS($fields["DATE_TO"]) + $submitDayTime;
+						}
+						else
+						{
+							$fields["DATE_SUBMIT"] = strtotime(
+								"last " . $reportDay,
 								$fields["DATE_TO"]
 							) + $submitDayTime;
+						}
 					}
 				}
 				break;
@@ -1197,14 +1226,24 @@ class CUserReportFull
 	 * @param bool $force
 	 * @return array
 	 */
-	public function GetReportData($force = false)
+	public function GetReportData($force = false, bool $rawBbcode = false)
 	{
+		$this->rawBbcode = $rawBbcode;
+
 		$result = [
 			'REPORT_INFO' => [],
 			'REPORT_DATA' => [],
 		];
 
 		$result['REPORT_INFO'] = $currentReportInfo = $this->getReportInfo();
+
+		$fullFormat = CSite::getDateFormat('FULL', SITE_ID);
+
+		$result['REPORT_INFO']['REPORT_DATE_SUBMIT'] = MakeTimeStamp(
+			$currentReportInfo['DATE_SUBMIT'] ?? '',
+			$fullFormat,
+		);
+		$result['REPORT_INFO']['REPORT_TYPE'] = $currentReportInfo['MODE'] ?? null;
 
 		if ($this->isNeedSkipReport($currentReportInfo, $force))
 		{
@@ -1270,6 +1309,8 @@ class CUserReportFull
 			'TO' => array_values($currentUserManagers),
 			'INFO' => $entriesInfo,
 			'REPORT' => $entriesInfo["REPORT"] ?? null,
+			'REPORT_EXTENDED' => $entriesInfo["REPORT_EXTENDED"] ?? null,
+			'TYPE' => RecordReportType::normalize($entriesInfo["TYPE"] ?? null),
 			'PLANS' => $entriesInfo["PLANS"] ?? null,
 			'REPORT_ID' => $entriesInfo["REPORT_ID"] ?? ''
 		];
@@ -1372,7 +1413,7 @@ class CUserReportFull
 
 	private function getSavedReportFull(int $userId): array
 	{
-		$info = CTimeMan::getRuntimeInfo(true);
+		$info = CTimeMan::getRuntimeInfo(true, $userId);
 
 		$datefomat = CSite::getDateFormat("SHORT",SITE_ID);
 
@@ -1387,8 +1428,14 @@ class CUserReportFull
 			$info["REPORT_DATE_FROM"] = MakeTimeStamp($report["DATE_FROM"], $datefomat);
 			$info["REPORT_DATE_TO"] = MakeTimeStamp($report["DATE_TO"], $datefomat);
 			//$info["TASKS"] = unserialize($report["TASKS"], ['allowed_classes' => false]);
-			$info["REPORT"] = $report["REPORT"];
-			$info["PLANS"] = $report["PLANS"];
+			$info["REPORT"] = $this->rawBbcode
+				? $report["REPORT"]
+				: self::renderReportHtml((string)$report["REPORT"]);
+			$info["REPORT_EXTENDED"] = $report["REPORT_EXTENDED"];
+			$info["TYPE"] = RecordReportType::normalize($report["TYPE"] ?? null);
+			$info["PLANS"] = $this->rawBbcode
+				? $report["PLANS"]
+				: self::renderReportHtml((string)$report["PLANS"]);
 
 			if ($report["FILES"])
 				$info["FILES"] = unserialize($report["FILES"], ['allowed_classes' => false]);
@@ -1513,7 +1560,7 @@ class CUserReportFull
 		)
 		{
 			$entriesInfo["REPORT"] = ($entriesInfo["REPORT"] ?? '')
-				. $this->getReportMessageHtml(
+				. $this->buildReportMessage(
 					$report["REPORT_DATE"],
 					$report["REPORT"]
 				)
@@ -1524,41 +1571,92 @@ class CUserReportFull
 		return [$entriesInfo, $entryIds];
 	}
 
+	public static function renderReportHtml(string $text): string
+	{
+		$text = (new ReportTextNormalizerService())->normalize($text);
+		return (new ReportTextHtmlRenderer())->render($text);
+	}
+
+	public static function renderReportPlain(string $text): string
+	{
+		if ($text === '')
+		{
+			return '';
+		}
+
+		$text = (new ReportTextNormalizerService())->normalize($text);
+		$text = preg_replace('/\[br\s*\/?]/i', "\n", $text) ?? $text;
+		$text = preg_replace('#\[/p]\s*\[p]#iu', "\n\n", $text) ?? $text;
+		$text = preg_replace('#\[/?p]#iu', '', $text) ?? $text;
+		$text = preg_replace('#\[/?(?:b|i|u)]#iu', '', $text) ?? $text;
+		$text = preg_replace('/\n{3,}/', "\n\n", $text) ?? $text;
+
+		return trim($text);
+	}
+
 	private function getReportMessageHtml(string $reportDate, string $message): string
 	{
-		return "<b>".$reportDate."</b><br>".nl2br(htmlspecialcharsbx($message))."<br>";
+		return "<b>".$reportDate."</b><br>".(new ReportTextHtmlRenderer())->render($message)."<br>";
+	}
+
+	private function getReportMessageBbcode(string $reportDate, string $message): string
+	{
+		return "[b]".$reportDate."[/b]\n".$message."\n";
+	}
+
+	private function buildReportMessage(string $reportDate, string $message): string
+	{
+		return $this->rawBbcode
+			? $this->getReportMessageBbcode($reportDate, $message)
+			: $this->getReportMessageHtml($reportDate, $message);
 	}
 
 	private function addCurrentReport(array $entriesInfo, string $dateFrom, string $dateTo): array
 	{
-		$settings = $this->GetSettings();
-		$submitDayTime = CTimeman::MakeShortTS($settings['UF_TM_TIME']);
+		$entryId = (int)($entriesInfo['ID'] ?? 0);
+		if (!$entryId)
+		{
+			return $entriesInfo;
+		}
+
 		$shortFormat = CSite::getDateFormat('SHORT', SITE_ID);
+		$fullFormat = CSite::getDateFormat('FULL', SITE_ID);
 
-		$dateTimeTo = new \Bitrix\Main\Type\DateTime($dateTo);
-		$dateTimeTo = \Bitrix\Main\Type\DateTime::createFromTimestamp(
-			$dateTimeTo->getTimestamp() + $submitDayTime
-		);
+		$dateFromConverted = ConvertTimeStamp(MakeTimeStamp($dateFrom, $shortFormat));
+		$dateToNextDay = ConvertTimeStamp(strtotime('+1 day', MakeTimeStamp($dateTo, $shortFormat)));
 
-		$queryObject = CTimeManReport::getList(
+		$entry = CTimeManEntry::GetList(
 			['ID' => 'ASC'],
 			[
-				'ENTRY_ID' => $entriesInfo['ID'],
-				'REPORT_TYPE' => 'REPORT',
-				'>=TIMESTAMP_X' => (new \Bitrix\Main\Type\Date($dateFrom))->format('Y-m-d'),
-				'<=TIMESTAMP_X' => $dateTimeTo->format('Y-m-d H:i:s'),
-			]
-		);
-		if ($currentReport = $queryObject->fetch())
+				'ID' => $entryId,
+				'USER_ID' => $this->USER_ID,
+				'>=DATE_START' => $dateFromConverted,
+				'<DATE_START' => $dateToNextDay,
+			],
+			false,
+			false,
+			['ID', 'DATE_START'],
+		)->fetch();
+		// The open record belongs to another day than the report period — nothing to add.
+		if (!$entry)
 		{
-			$reportDate = ConvertTimeStamp(MakeTimeStamp($currentReport['TIMESTAMP_X'], $shortFormat));
+			return $entriesInfo;
+		}
+
+		$currentReport = CTimeManReport::getList(
+			['ID' => 'ASC'],
+			[
+				'ENTRY_ID' => $entryId,
+				'REPORT_TYPE' => 'REPORT',
+			]
+		)->fetch();
+		if ($currentReport && ($currentReport['REPORT'] ?? '') !== '')
+		{
+			$reportDate = ConvertTimeStamp(MakeTimeStamp($entry['DATE_START'], $fullFormat), 'SHORT');
 			$entriesInfo['REPORT'] = $entriesInfo['REPORT'] ?? '';
-			if (
-				strpos($entriesInfo['REPORT'], $reportDate) === false
-				&& !empty($currentReport['REPORT'] ?? null)
-			)
+			if (strpos($entriesInfo['REPORT'], $reportDate) === false)
 			{
-				$entriesInfo['REPORT'] .= $this->getReportMessageHtml($reportDate, $currentReport['REPORT']);
+				$entriesInfo['REPORT'] .= $this->buildReportMessage($reportDate, $currentReport['REPORT']);
 			}
 		}
 
@@ -1846,6 +1944,11 @@ class CReportNotifications
 			&& ($arReport = $dbReport->Fetch())
 		)
 		{
+			if ((new SettingsProvider((int)$arReport["USER_ID"]))->isReportsEnabledWithAi())
+			{
+				return false;
+			}
+
 			$date_text = self::getFormatDateRange($arReport["DATE_FROM"], $arReport["DATE_TO"]);
 
 			$message = GetMessage('REPORT_DONE');

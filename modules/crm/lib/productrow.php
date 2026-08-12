@@ -18,7 +18,7 @@ class ProductRow extends EO_ProductRow implements \JsonSerializable
 	public const ERROR_CODE_NORMALIZATION_COMMON_ERROR = 'CRM_PRODUCTROW_NORMALIZATION_CODE_NORMALIZATION_COMMON_ERROR';
 
 	protected const REFERENCE_FIELD_NAME = 'IBLOCK_ELEMENT';
-	protected const REFERENCE_PRODUCT_ROW_RESERVATION_NAME = 'PRODUCT_ROW_RESERVATION';
+	public const REFERENCE_PRODUCT_ROW_RESERVATION_NAME = 'PRODUCT_ROW_RESERVATION';
 
 	/** @var IBlockElementProxyTable */
 	protected static $referenceDataClass = IBlockElementProxyTable::class;

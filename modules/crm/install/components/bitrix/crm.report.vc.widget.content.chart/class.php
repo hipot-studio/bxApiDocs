@@ -297,7 +297,7 @@ class CrmReportVcWidgetContentChartComponent extends VisualConstructor\Views\Com
 							'quantity' => $item['quantity'],
 							'actions' => $initialQuantity,
 						];
-						$summary['SUM'] += round($item['sum'], 2);
+						$summary['SUM'] += $item['sum'];
 					}
 				}
 

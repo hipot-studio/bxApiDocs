@@ -313,6 +313,7 @@ class Block
 			}
 		}
 		$result->setError($landing->getError());
+		$result->setError($error);
 
 		return $result;
 	}
@@ -677,6 +678,7 @@ class Block
 			}
 		}
 		$result->setError($landing->getError());
+		$result->setError($error);
 
 		return $result;
 	}
@@ -782,6 +784,7 @@ class Block
 			}
 		}
 		$result->setError($landing->getError());
+		$result->setError($error);
 
 		return $result;
 	}

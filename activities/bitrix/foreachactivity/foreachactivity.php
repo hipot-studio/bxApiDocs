@@ -7,6 +7,9 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 
 class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEventListener
 {
+	private const VALUE_RETURN_PROPERTIES = 'ValueReturnProperties';
+	private const VALUE_PROPERTY = 'Value';
+
 	private $values;
 	private $valuesKeys;
 
@@ -238,10 +241,57 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 			return false;
 		}
 
+		$valueReturnProperties = self::resolveValueReturnProperties(
+			$arWorkflowTemplate,
+			(string)($properties['Object'] ?? ''),
+			(string)($properties['Variable'] ?? ''),
+		);
+		if ($valueReturnProperties !== null)
+		{
+			$properties[self::VALUE_RETURN_PROPERTIES] = $valueReturnProperties;
+		}
+
 		$arCurrentActivity = &CBPWorkflowTemplateLoader::FindActivityByName($arWorkflowTemplate, $activityName);
 		$arCurrentActivity['Properties'] = $properties;
 
 		return true;
+	}
+
+	private static function resolveValueReturnProperties(array $arWorkflowTemplate, string $object, string $field): ?array
+	{
+		if ($object === '' || $field === '')
+		{
+			return null;
+		}
+
+		$source = &CBPWorkflowTemplateLoader::FindActivityByName($arWorkflowTemplate, $object);
+		if (!is_array($source))
+		{
+			return null;
+		}
+
+		$sourceProperties = CBPRuntime::getRuntime()->getActivityReturnProperties($source);
+		$sourceProperty = $sourceProperties[$field] ?? null;
+		if (
+			!is_array($sourceProperty)
+			|| ($sourceProperty['Type'] ?? null) !== \Bitrix\Bizproc\FieldType::DOCUMENT
+			|| !is_array($sourceProperty['Default'] ?? null)
+			|| ($sourceProperty['Multiple'] ?? false) !== true
+		)
+		{
+			return null;
+		}
+
+		$name = trim((string)($sourceProperty['Name'] ?? ''));
+
+		return [
+			self::VALUE_PROPERTY => [
+				'Type' => \Bitrix\Bizproc\FieldType::DOCUMENT,
+				'Name' => $name !== '' ? $name : GetMessage('BPFEA_DESCR_RETURN_VALUE'),
+				'Default' => $sourceProperty['Default'],
+				'Multiple' => false,
+			],
+		];
 	}
 
 	private static function existField(string $field, string $object, array $documentType, array $wfFields = []): bool

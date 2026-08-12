@@ -6,6 +6,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Seo\BusinessSuite\Utils\QueueRemoveEventHandler;
+use Bitrix\Seo\Region\VkAvailability;
 use Bitrix\Seo\Service;
 use Bitrix\Seo\Service as SeoService;
 
@@ -88,6 +89,11 @@ class AuthAdapter
 
 	public function getAuthUrl()
 	{
+		if (VkAvailability::isVkEngineCode($this->getEngineCode()) && !VkAvailability::isAvailable())
+		{
+			return '';
+		}
+
 		if (!SeoService::isRegistered())
 		{
 			try

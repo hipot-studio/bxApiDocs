@@ -9,10 +9,12 @@ namespace Bitrix\Crm;
 
 use Bitrix\Crm\History\Entity\DealStageHistoryTable;
 use Bitrix\Crm\History\Entity\DealStageHistoryWithSupposedTable;
+use Bitrix\Crm\Model\Field\DefaultValue\CloseDateConfigurator;
 use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\DealSettings;
 use Bitrix\Main;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
@@ -64,6 +66,9 @@ class DealTable extends Main\ORM\Data\DataManager
 		Container::getInstance()->getLocalization()->loadMessages();
 
 		$fieldRepository = Main\DI\ServiceLocator::getInstance()->get('crm.model.fieldRepository');
+
+		$currencyIdField = $fieldRepository->getCurrencyId();
+		$accountCurrencyIdField = $fieldRepository->getAccountCurrencyId();
 
 		$map = [
 			//fields here are sorted by b_crm_deal columns order in install.sql. Please, keep it that way
@@ -264,19 +269,31 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_TYPE_BY_FIELD'))
 			,
 
-			$fieldRepository->withNumberFormatFetchModifier($fieldRepository->getOpportunity()),
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				$fieldRepository->getOpportunity(),
+				$currencyIdField
+			),
 
 			$fieldRepository->getIsManualOpportunity(),
 
-			$fieldRepository->withNumberFormatFetchModifier($fieldRepository->getTaxValue()),
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				$fieldRepository->getTaxValue(),
+				$currencyIdField
+			),
 
-			$fieldRepository->getCurrencyId(),
+			$currencyIdField,
 
-			$fieldRepository->withNumberFormatFetchModifier($fieldRepository->getOpportunityAccount()),
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				$fieldRepository->getOpportunityAccount(),
+				$accountCurrencyIdField
+			),
 
-			$fieldRepository->withNumberFormatFetchModifier($fieldRepository->getTaxValueAccount()),
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				$fieldRepository->getTaxValueAccount(),
+				$accountCurrencyIdField
+			),
 
-			$fieldRepository->getAccountCurrencyId(),
+			$accountCurrencyIdField,
 
 			(new IntegerField('PROBABILITY'))
 				->configureNullable()
@@ -294,7 +311,14 @@ class DealTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_DEAL_ENTITY_BEGINDATE_SHORT_FIELD'))
 			,
 
-			$fieldRepository->getCloseDate(),
+			$fieldRepository
+				->getCloseDate(Item::FIELD_NAME_CLOSE_DATE)
+				->configureDefaultValue(
+					ServiceLocator::getInstance()
+						->get(CloseDateConfigurator::class)
+						?->getDefaultValue(\CCrmOwnerType::Deal)
+				)
+			,
 
 			$fieldRepository->getShortDate(
 				'CLOSEDATE_SHORT',

@@ -318,6 +318,21 @@ final class AutomatedSolutionManager
 		return array_filter($this->automatedSolutions, static fn($item) => $item['SOURCE_ID'] === $sourceId);
 	}
 
+	/**
+	 * @return array<int, array{ID: int, TITLE: string, CODE: string, INTRANET_CUSTOM_SECTION_ID: int, SOURCE_ID: ?int, TYPE_IDS: int[]}>
+	 */
+	public function findAutomatedSolutions(
+		?array $filter = null,
+		?array $order = null,
+		?int $offset = null,
+		?int $limit = null,
+	): array
+	{
+		$result = (new Fetch($filter, $order, $offset, $limit))->execute();
+
+		return $result->getData()['automatedSolutions'] ?? [];
+	}
+
 	public function getAutomatedSolutionsFilteredByPermissions(?int $userId = null): array
 	{
 		$userPermissions = Container::getInstance()->getUserPermissions($userId);

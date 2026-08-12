@@ -6,7 +6,7 @@ use Bitrix\Bizproc\Activity\ActivityDescription;
 use Bitrix\Bizproc\Activity\Enum\ActivityNodeType;
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\FieldType;
-use Bitrix\Bizproc\Internal\Entity\Activity\Interface\FixedDocumentComplexActivity;
+use Bitrix\Bizproc\Public\Activity\Interface\FixedDocumentComplexActivity;
 use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Activities;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;

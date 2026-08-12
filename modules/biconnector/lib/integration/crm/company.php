@@ -22,9 +22,14 @@ class Company
 		}
 
 		$params = $event->getParameters();
-		//$manager = $params[0];
+		$manager = $params[0];
 		$result = &$params[1];
 		$languageId = $params[2];
+
+		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $connection->getSqlHelper();
+		$isPgsql = $connection instanceof \Bitrix\Main\DB\PgsqlConnection;
 
 		$eventTableName = $params[3];
 		if (!empty($eventTableName) && $eventTableName !== 'crm_company')
@@ -70,7 +75,7 @@ class Company
 				],
 				'CREATED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', C.CREATED_BY_ID, \']\'), nullif(UC.NAME, \'\'), nullif(UC.LAST_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'C.CREATED_BY_ID', "']'") . ', nullif(UC.NAME, \'\'), nullif(UC.LAST_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UC',
 					'JOIN' => 'INNER JOIN b_user UC ON UC.ID = C.CREATED_BY_ID',
@@ -84,7 +89,7 @@ class Company
 				],
 				'MODIFIED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(C.MODIFY_BY_ID is null, null, concat_ws(\' \', nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN C.MODIFY_BY_ID is null THEN null ELSE concat_ws(\' \', nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UM',
 					'JOIN' => 'INNER JOIN b_user UM ON UM.ID = C.MODIFY_BY_ID',
@@ -92,7 +97,7 @@ class Company
 				],
 				'MODIFIED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(C.MODIFY_BY_ID is null, null, concat_ws(\' \', concat(\'[\', C.MODIFY_BY_ID, \']\'), nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN C.MODIFY_BY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'C.MODIFY_BY_ID', "']'") . ', nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UM',
 					'JOIN' => 'INNER JOIN b_user UM ON UM.ID = C.MODIFY_BY_ID',
@@ -106,7 +111,7 @@ class Company
 				],
 				'ASSIGNED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(C.ASSIGNED_BY_ID is null, null, concat_ws(\' \', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN C.ASSIGNED_BY_ID is null THEN null ELSE concat_ws(\' \', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UA',
 					'JOIN' => 'INNER JOIN b_user UA ON UA.ID = C.ASSIGNED_BY_ID',
@@ -114,7 +119,7 @@ class Company
 				],
 				'ASSIGNED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(C.ASSIGNED_BY_ID is null, null, concat_ws(\' \', concat(\'[\', C.ASSIGNED_BY_ID, \']\'), nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN C.ASSIGNED_BY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'C.ASSIGNED_BY_ID', "']'") . ', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UA',
 					'JOIN' => 'INNER JOIN b_user UA ON UA.ID = C.ASSIGNED_BY_ID',
@@ -227,7 +232,7 @@ class Company
 				],
 				'COMPANY_TYPE' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(C.COMPANY_TYPE is null, null, concat_ws(\' \', concat(\'[\', C.COMPANY_TYPE, \']\'), nullif(S.NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN C.COMPANY_TYPE is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'C.COMPANY_TYPE', "']'") . ', nullif(S.NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'S',
 					'JOIN' => 'INNER JOIN b_crm_status S ON S.ENTITY_ID = \'COMPANY_TYPE\' and S.STATUS_ID = C.COMPANY_TYPE',
@@ -249,7 +254,7 @@ class Company
 				],
 				'INDUSTRY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(C.INDUSTRY is null, null, concat_ws(\' \', concat(\'[\', C.INDUSTRY, \']\'), nullif(I.NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN C.INDUSTRY is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'C.INDUSTRY', "']'") . ', nullif(I.NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'I',
 					'JOIN' => 'INNER JOIN b_crm_status I ON I.ENTITY_ID = \'INDUSTRY\' and I.STATUS_ID = C.INDUSTRY',
@@ -258,7 +263,9 @@ class Company
 				//REVENUE varchar(255) DEFAULT NULL,
 				'REVENUE' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => '(C.REVENUE + 0.0)',
+					'FIELD_NAME' => $isPgsql
+						? "(CASE WHEN C.REVENUE ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN C.REVENUE ELSE NULL END)::double precision"
+						: '(C.REVENUE + 0.0)',
 					'FIELD_TYPE' => 'double',
 				],
 				//CURRENCY_ID varchar(50) DEFAULT NULL,
@@ -356,7 +363,7 @@ class Company
 					'GROUP_CONCAT' => ', ',
 					'GROUP_KEY' => 'PHONE',
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat(\'[\', FM_PHONE.VALUE_TYPE, \'] \', FM_PHONE.VALUE)',
+					'FIELD_NAME' => $helper->getConcatFunction("'['", 'FM_PHONE.VALUE_TYPE', "'] '", 'FM_PHONE.VALUE'),
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'FM_PHONE',
 					'JOIN' => 'INNER JOIN b_crm_field_multi FM_PHONE  ON FM_PHONE.ENTITY_ID = \'COMPANY\' and FM_PHONE.TYPE_ID = \'' . \CCrmFieldMulti::PHONE . '\' AND FM_PHONE.ELEMENT_ID = C.ID',
@@ -366,7 +373,7 @@ class Company
 					'GROUP_CONCAT' => ', ',
 					'GROUP_KEY' => 'WEB',
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat(\'[\', FM_WEB.VALUE_TYPE, \'] \', FM_WEB.VALUE)',
+					'FIELD_NAME' => $helper->getConcatFunction("'['", 'FM_WEB.VALUE_TYPE', "'] '", 'FM_WEB.VALUE'),
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'FM_WEB',
 					'JOIN' => 'INNER JOIN b_crm_field_multi FM_WEB  ON FM_WEB.ENTITY_ID = \'COMPANY\' and FM_WEB.TYPE_ID = \'' . \CCrmFieldMulti::WEB . '\' AND FM_WEB.ELEMENT_ID = C.ID',
@@ -376,7 +383,7 @@ class Company
 					'GROUP_CONCAT' => ', ',
 					'GROUP_KEY' => 'EMAIL',
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat(\'[\', FM_EMAIL.VALUE_TYPE, \'] \', FM_EMAIL.VALUE)',
+					'FIELD_NAME' => $helper->getConcatFunction("'['", 'FM_EMAIL.VALUE_TYPE', "'] '", 'FM_EMAIL.VALUE'),
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'FM_EMAIL',
 					'JOIN' => 'INNER JOIN b_crm_field_multi FM_EMAIL  ON FM_EMAIL.ENTITY_ID = \'COMPANY\' and FM_EMAIL.TYPE_ID = \'' . \CCrmFieldMulti::EMAIL . '\' AND FM_EMAIL.ELEMENT_ID = C.ID',
@@ -386,7 +393,7 @@ class Company
 					'GROUP_CONCAT' => ', ',
 					'GROUP_KEY' => 'IM',
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat(\'[\', FM_IM.VALUE_TYPE, \'] \', FM_IM.VALUE)',
+					'FIELD_NAME' => $helper->getConcatFunction("'['", 'FM_IM.VALUE_TYPE', "'] '", 'FM_IM.VALUE'),
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'FM_IM',
 					'JOIN' => 'INNER JOIN b_crm_field_multi FM_IM  ON FM_IM.ENTITY_ID = \'COMPANY\' and FM_IM.TYPE_ID = \'' . \CCrmFieldMulti::IM . '\' AND FM_IM.ELEMENT_ID = C.ID',

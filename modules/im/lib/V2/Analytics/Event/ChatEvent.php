@@ -19,6 +19,7 @@ use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Chat\VideoConfChat;
 use Bitrix\Im\V2\Entity\User\UserCollaber;
 use Bitrix\Im\V2\Entity\User\UserExternal;
+use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Integration\AI\EngineManager;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 
@@ -185,6 +186,7 @@ class ChatEvent extends Event
 		$this->p2 = match (true)
 		{
 			$currentUser instanceof UserCollaber => 'user_collaber',
+			$currentUser instanceof UserGuest => 'user_guest',
 			$currentUser instanceof UserExternal => 'user_extranet',
 			default => 'user_intranet',
 		};

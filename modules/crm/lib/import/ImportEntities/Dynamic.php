@@ -22,7 +22,9 @@ use Bitrix\Crm\Import\ImportEntityFields\FactoryBasedField\CurrencyId;
 use Bitrix\Crm\Import\ImportEntityFields\FactoryBasedField\Id;
 use Bitrix\Crm\Import\ImportEntityFields\FactoryBasedField\Opened;
 use Bitrix\Crm\Import\ImportEntityFields\FactoryBasedField\Opportunity;
-use Bitrix\Crm\Import\ImportEntityFields\FactoryBasedField\Products;
+use Bitrix\Crm\Import\ImportEntityFields\Product\ProductId;
+use Bitrix\Crm\Import\ImportEntityFields\Product\ProductPrice;
+use Bitrix\Crm\Import\ImportEntityFields\Product\ProductQuantity;
 use Bitrix\Crm\Import\ImportEntityFields\FactoryBasedField\SourceDescription;
 use Bitrix\Crm\Import\ImportEntityFields\FactoryBasedField\SourceId;
 use Bitrix\Crm\Import\ImportEntityFields\FactoryBasedField\Stage;
@@ -124,7 +126,9 @@ class Dynamic implements ImportEntityInterface, ImportEntityInterface\HasExample
 			$this->fieldCollection->pushList([
 				new Opportunity($this->entityTypeId),
 				new CurrencyId($this->entityTypeId),
-				new Products($this->entityTypeId),
+				new ProductId(),
+				new ProductPrice(),
+				new ProductQuantity(),
 			]);
 		}
 

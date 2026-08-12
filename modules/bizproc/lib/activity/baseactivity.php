@@ -293,16 +293,24 @@ abstract class BaseActivity extends \CBPActivity
 		foreach ($fieldsMap as $propertyKey => $fieldProperties)
 		{
 			$field = $documentService->getFieldTypeObject($dialog->getDocumentType(), $fieldProperties);
-			if(!$field)
+			if ($field)
 			{
-				continue;
+				$properties[$propertyKey] = $field->extractValue(
+					['Field' => $fieldProperties['FieldName']],
+					$currentValues,
+					$errors
+				);
 			}
-
-			$properties[$propertyKey] = $field->extractValue(
-				['Field' => $fieldProperties['FieldName']],
-				$currentValues,
-				$errors
-			);
+			else
+			{
+				$properties[$propertyKey] = $documentService->getFieldInputValue(
+					$dialog->getDocumentType(),
+					$fieldProperties,
+					['Field' => $fieldProperties['FieldName']],
+					$currentValues,
+					$errors
+				);
+			}
 		}
 
 		if ($errors)

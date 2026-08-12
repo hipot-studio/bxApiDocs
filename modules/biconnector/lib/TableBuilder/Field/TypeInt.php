@@ -6,6 +6,6 @@ class TypeInt extends Base
 {
 	public function getField(): string
 	{
-		return sprintf('`%s` BIGINT', $this->getName());
+		return sprintf('%s BIGINT', $this->sqlHelper->quote($this->name));
 	}
 }

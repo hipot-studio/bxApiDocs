@@ -269,10 +269,25 @@ class SmartInvoice extends Dynamic
 						\CCrmOwnerType::SmartInvoice,
 						$factory->getDefaultCategory()->getId()
 					);
+
+					// copy templates from old invoices
 					$copyTemplatesResult = $documentGeneratorManager->copyTemplatesProviders($invoicesProvider, $smartInvoiceProviderCode);
 					if (!$copyTemplatesResult->isSuccess())
 					{
 						$result->addErrors($copyTemplatesResult->getErrors());
+					}
+
+					// in rare case that SmartInvoice is created before documentgenerator agent runs
+					$agentString = \Bitrix\DocumentGenerator\Driver::installDefaultTemplatesForCurrentRegion();
+					if (!empty($agentString))
+					{
+						$result->addError(new Error('Could not install default document templates'));
+					}
+
+					$ensureResult = $documentGeneratorManager->bindToAssociatedInstalledDefaultTemplates($smartInvoiceProviderCode);
+					if (!$ensureResult->isSuccess())
+					{
+						$result->addErrors($ensureResult->getErrors());
 					}
 				}
 

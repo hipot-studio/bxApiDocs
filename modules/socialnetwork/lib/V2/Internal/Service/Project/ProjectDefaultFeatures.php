@@ -15,6 +15,7 @@ final class ProjectDefaultFeatures
 			FeatureDictionary::Calendar->value => true,
 			FeatureDictionary::Files->value => true,
 			FeatureDictionary::LandingKnowledge->value => false,
+			FeatureDictionary::Note->value => false,
 			FeatureDictionary::Marketplace->value => true,
 		];
 	}

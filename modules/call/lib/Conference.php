@@ -155,9 +155,9 @@ class Conference
 		{
 			return self::BROADCAST_USER_LIMIT;
 		}
-		else if (Call::isCallServerEnabled())
+		else if (\Bitrix\Call\Settings::isCallServerEnabled())
 		{
-			return Call::getMaxCallServerParticipants();
+			return \Bitrix\Call\Settings::getMaxCallServerParticipants();
 		}
 		else
 		{
@@ -941,7 +941,7 @@ class Conference
 			\Bitrix\Main\Loader::includeModule('im')
 			&& \Bitrix\Main\Loader::includeModule('pull')
 			&& \CPullOptions::GetPublishWebEnabled()
-			&& Call::isCallServerEnabled()
+			&& \Bitrix\Call\Settings::isCallServerEnabled()
 		);
 	}
 }

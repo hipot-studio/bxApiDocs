@@ -12,13 +12,12 @@ use Bitrix\Catalog\v2\Integration\JS\ProductForm;
 use Bitrix\Catalog\v2\Integration\JS\ProductForm\BasketItem;
 use Bitrix\Catalog\VatTable;
 use Bitrix\Crm;
-use Bitrix\Crm\Feature;
-use Bitrix\Crm\Feature\MessageSenderEditor;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Currency\CurrencyManager;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Contract\Controllerable;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Rest;
@@ -440,13 +439,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		$this->arResult['vatList'] = $this->getProductVatList();
 		$this->arResult['catalogIblockId'] = (int)Crm\Product\Catalog::getDefaultId();
 		$this->arResult['basePriceId'] = Catalog\GroupTable::getBasePriceTypeId();
-		$notificationCenterEnabled = $this->arResult['currentSenderCode'] === \Bitrix\Crm\Integration\NotificationsManager::getSenderCode();
-		$this->arResult['showCompilationModeSwitcher'] =
-			Feature::enabled(MessageSenderEditor::class)
-			|| (!$notificationCenterEnabled && !$this->arResult['compilation'])
-				? 'Y'
-				: 'N'
-		;
+		$this->arResult['showCompilationModeSwitcher'] = 'Y';
 		$this->arResult['showProductDiscounts'] = \CUserOptions::GetOption('catalog.product-form', 'showDiscountBlock', 'Y');
 		$this->arResult['showProductTaxes'] = \CUserOptions::GetOption('catalog.product-form', 'showTaxBlock', 'Y');
 		$collapseOptions = $this->getCollapseOptions();
@@ -570,11 +563,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			);
 		}
 
-		$this->arResult['messageSenderData'] =
-			Feature::enabled(MessageSenderEditor::class)
-				? $this->getMessageSenderData()
-				: null
-		;
+		$this->arResult['messageSenderData'] = $this->getMessageSenderData();
 
 		$this->arResult['isAutomationAvailable'] = Crm\Automation\Factory::isAutomationAvailable($ownerTypeId);
 		$this->arResult['entityStageList'] = $this->getEntityStageList($ownerId, $ownerTypeId);
@@ -2323,7 +2312,7 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			: 'N';
 	}
 
-	private function getMessageSenderData(): ?\Bitrix\Crm\MessageSender\UI\Editor
+	private function getMessageSenderData(): ?\Bitrix\MessageService\Public\UI\MessageEditor\Editor
 	{
 		if (
 			$this->arResult['context'] !== SalesCenter\Component\ContextDictionary::DEAL
@@ -2334,15 +2323,22 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			return null;
 		}
 
+		if (!Loader::includeModule('messageservice'))
+		{
+			return null;
+		}
+
 		$isSmsContext = $this->arResult['context'] === SalesCenter\Component\ContextDictionary::SMS;
-		$context = new \Bitrix\Crm\MessageSender\UI\Editor\Context(
-			(int)($this->arParams['ownerTypeId'] ?? 0),
-			(int)($this->arParams['ownerId'] ?? 0),
+		$context = new \Bitrix\MessageService\Public\UI\MessageEditor\Context(
+			customData: [
+				'entityTypeId' => (int)($this->arParams['ownerTypeId'] ?? 0),
+				'entityId' => (int)($this->arParams['ownerId'] ?? 0),
+			],
 		);
 		$editor =
 			$isSmsContext
-				? new \Bitrix\Crm\MessageSender\UI\Editor(
-					new \Bitrix\Crm\MessageSender\UI\Editor\Scene\NullScene(),
+				? new \Bitrix\MessageService\Public\UI\MessageEditor\Editor(
+					new \Bitrix\MessageService\Public\UI\MessageEditor\Scene\NullScene(),
 					$context
 				)
 				: \Bitrix\Crm\MessageSender\UI\Factory::getInstance()->createEditor(
@@ -2360,17 +2356,17 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 
 		if (!$isSmsContext)
 		{
-			$editor->setNotificationTemplate(
-				(new \Bitrix\Crm\MessageSender\UI\Editor\NotificationTemplate('ORDER_LINK'))
-					->setPlaceholder(
-						(new \Bitrix\Crm\MessageSender\UI\Editor\NotificationTemplate\Placeholder('URL'))
-							->setCaption(Loc::getMessage('SALESCENTER_APP_NOTIFICATION_CAPTION_URL'))
-					)
-					->setPlaceholder(
-						(new \Bitrix\Crm\MessageSender\UI\Editor\NotificationTemplate\Placeholder('NAME'))
-							->setCaption(Loc::getMessage('SALESCENTER_APP_NOTIFICATION_CAPTION_NAME'))
-					)
-			);
+			$template = (new \Bitrix\MessageService\Public\UI\MessageEditor\NotificationTemplate('ORDER_LINK'))
+				->setPlaceholder(
+					(new \Bitrix\MessageService\Public\UI\MessageEditor\NotificationTemplate\Placeholder('URL'))
+						->setCaption(Loc::getMessage('SALESCENTER_APP_NOTIFICATION_CAPTION_URL'))
+				)
+				->setPlaceholder(
+					(new \Bitrix\MessageService\Public\UI\MessageEditor\NotificationTemplate\Placeholder('NAME'))
+						->setCaption(Loc::getMessage('SALESCENTER_APP_NOTIFICATION_CAPTION_NAME'))
+				);
+
+			$editor->setNotificationTemplates([$template]);
 		}
 
 		$editorLayout = $editor->getLayout();

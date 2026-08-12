@@ -4,7 +4,9 @@ namespace Bitrix\Market\Controller;
 
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\Response\AjaxJson;
+use Bitrix\Main\Loader;
 use Bitrix\Market\PricePolicy;
+use Bitrix\Rest\Marketplace\Client;
 
 class Search extends Controller
 {
@@ -36,10 +38,13 @@ class Search extends Controller
 			return;
 		}
 
+		$subscriptionAvailable = Loader::includeModule('rest') && Client::isSubscriptionAvailable();
+
 		foreach ($this->result['APPS'] as &$appItem) {
 			$appItem['PRICE_POLICY'] = PricePolicy::getByApp($appItem);
 			$appItem['PRICE_POLICY_NAME'] = PricePolicy::getName($appItem['PRICE_POLICY']);
 			$appItem['PRICE_POLICY_BLUE'] = ($appItem['PRICE_POLICY'] == PricePolicy::SUBSCRIPTION);
+			$appItem['IS_SUBSCRIPTION_AVAILABLE'] = $subscriptionAvailable ? 'Y' : 'N';
 		}
 		unset($appItem);
 	}

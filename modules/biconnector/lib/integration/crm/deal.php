@@ -33,6 +33,7 @@ class Deal
 		}
 
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
 
 		$statusSemanticsForSql = [];
@@ -88,7 +89,7 @@ class Deal
 				],
 				'CREATED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', D.CREATED_BY_ID, \']\'), nullif(UC.NAME, \'\'), nullif(UC.LAST_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.CREATED_BY_ID', "']'") . ', nullif(UC.NAME, \'\'), nullif(UC.LAST_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UC',
 					'JOIN' => 'INNER JOIN b_user UC ON UC.ID = D.CREATED_BY_ID',
@@ -102,7 +103,7 @@ class Deal
 				],
 				'MODIFIED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.MODIFY_BY_ID is null, null, concat_ws(\' \', nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.MODIFY_BY_ID is null THEN null ELSE concat_ws(\' \', nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UM',
 					'JOIN' => 'INNER JOIN b_user UM ON UM.ID = D.MODIFY_BY_ID',
@@ -110,7 +111,7 @@ class Deal
 				],
 				'MODIFIED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.MODIFY_BY_ID is null, null, concat_ws(\' \', concat(\'[\', D.MODIFY_BY_ID, \']\'), nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.MODIFY_BY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.MODIFY_BY_ID', "']'") . ', nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UM',
 					'JOIN' => 'INNER JOIN b_user UM ON UM.ID = D.MODIFY_BY_ID',
@@ -124,7 +125,7 @@ class Deal
 				],
 				'ASSIGNED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.ASSIGNED_BY_ID is null, null, concat_ws(\' \', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.ASSIGNED_BY_ID is null THEN null ELSE concat_ws(\' \', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UA',
 					'JOIN' => 'INNER JOIN b_user UA ON UA.ID = D.ASSIGNED_BY_ID',
@@ -132,7 +133,7 @@ class Deal
 				],
 				'ASSIGNED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.ASSIGNED_BY_ID is null, null, concat_ws(\' \', concat(\'[\', D.ASSIGNED_BY_ID, \']\'), nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.ASSIGNED_BY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.ASSIGNED_BY_ID', "']'") . ', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UA',
 					'JOIN' => 'INNER JOIN b_user UA ON UA.ID = D.ASSIGNED_BY_ID',
@@ -174,7 +175,7 @@ class Deal
 				],
 				'COMPANY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.COMPANY_ID is null, null, concat_ws(\' \', concat(\'[\', D.COMPANY_ID, \']\'), nullif(CO.TITLE, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.COMPANY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.COMPANY_ID', "']'") . ', nullif(CO.TITLE, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'CO',
 					'JOIN' => 'INNER JOIN b_crm_company CO ON CO.ID = D.COMPANY_ID',
@@ -197,8 +198,8 @@ class Deal
 				'MYCOMPANY' => [
 					'IS_METRIC' => 'N',
 					'FIELD_NAME' =>
-						'if(D.MYCOMPANY_ID is null, null, concat_ws(\' \', '
-						. 'concat(\'[\', D.MYCOMPANY_ID, \']\'), nullif(MCO.TITLE, \'\')))'
+						'CASE WHEN D.MYCOMPANY_ID is null THEN null ELSE concat_ws(\' \', '
+						. $helper->getConcatFunction("'['", 'D.MYCOMPANY_ID', "']'") . ', nullif(MCO.TITLE, \'\')) END'
 					,
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'MCO',
@@ -221,7 +222,7 @@ class Deal
 				],
 				'CONTACT' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.CONTACT_ID is null, null, concat_ws(\' \', concat(\'[\', D.CONTACT_ID, \']\'), nullif(C.FULL_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.CONTACT_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.CONTACT_ID', "']'") . ', nullif(C.FULL_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'C',
 					'JOIN' => 'INNER JOIN b_crm_contact C ON C.ID = D.CONTACT_ID',
@@ -259,7 +260,7 @@ class Deal
 					'GROUP_CONCAT' => ', ',
 					'GROUP_KEY' => 'CRM_PRODUCT_ID',
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', P.ID, \']\'), nullif(P.PRODUCT_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'P.ID', "']'") . ', nullif(P.PRODUCT_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'P',
 					'JOIN' => 'INNER JOIN b_crm_product_row P ON P.OWNER_TYPE = \'D\' AND P.OWNER_ID = D.ID',
@@ -269,7 +270,7 @@ class Deal
 					'GROUP_CONCAT' => ', ',
 					'GROUP_KEY' => 'CRM_PRODUCT_ID',
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'TRIM(TRAILING \'.\' FROM (TRIM(TRAILING \'0\' FROM P.QUANTITY)))',
+					'FIELD_NAME' => 'TRIM(TRAILING \'.\' FROM (TRIM(TRAILING \'0\' FROM ' . $helper->castNumericToChar('P.QUANTITY') . ')))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'P',
 					'JOIN' => 'INNER JOIN b_crm_product_row P ON P.OWNER_TYPE = \'D\' AND P.OWNER_ID = D.ID',
@@ -283,7 +284,7 @@ class Deal
 				],
 				'CATEGORY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.CATEGORY_ID is null, null, concat_ws(\' \', ifnull(DC.NAME, \'' . $helper->forSql(static::getDefaultCategoryName($languageId)) . '\')))',
+					'FIELD_NAME' => 'CASE WHEN D.CATEGORY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getIsNullFunction('DC.NAME', "'" . $helper->forSql(static::getDefaultCategoryName($languageId)) . "'") . ') END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'DC',
 					'JOIN' => 'INNER JOIN b_crm_deal_category DC ON DC.ID = D.CATEGORY_ID',
@@ -291,7 +292,7 @@ class Deal
 				],
 				'CATEGORY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.CATEGORY_ID is null, null, concat_ws(\' \', concat(\'[\', D.CATEGORY_ID, \']\'), ifnull(DC.NAME, \'' . $helper->forSql(static::getDefaultCategoryName($languageId)) . '\')))',
+					'FIELD_NAME' => 'CASE WHEN D.CATEGORY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.CATEGORY_ID', "']'") . ', ' . $helper->getIsNullFunction('DC.NAME', "'" . $helper->forSql(static::getDefaultCategoryName($languageId)) . "'") . ') END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'DC',
 					'JOIN' => 'INNER JOIN b_crm_deal_category DC ON DC.ID = D.CATEGORY_ID',
@@ -313,7 +314,7 @@ class Deal
 				],
 				'STAGE' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.STAGE_ID is null, null, concat_ws(\' \', concat(\'[\', D.STAGE_ID, \']\'), nullif(S.NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.STAGE_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.STAGE_ID', "']'") . ', nullif(S.NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'S',
 					'JOIN' => 'INNER JOIN b_crm_status S ON S.ENTITY_ID like \'DEAL_STAGE%\' and S.STATUS_ID = D.STAGE_ID',
@@ -342,8 +343,8 @@ class Deal
 				'PREVIOUS_STAGE' => [
 					'IS_METRIC' => 'N',
 					'FIELD_NAME' =>
-						'if(D.PREVIOUS_STAGE_ID is null or D.PREVIOUS_STAGE_ID = \'\', null, '
-						. 'concat_ws(\' \', concat(\'[\', D.PREVIOUS_STAGE_ID, \']\'), nullif(SP.NAME, \'\')))'
+						'CASE WHEN D.PREVIOUS_STAGE_ID is null or D.PREVIOUS_STAGE_ID = \'\' THEN null '
+						. 'ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.PREVIOUS_STAGE_ID', "']'") . ', nullif(SP.NAME, \'\')) END'
 					,
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'SP',
@@ -495,7 +496,7 @@ class Deal
 				],
 				'WEBFORM' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.WEBFORM_ID is null, null, concat_ws(\' \', concat(\'[\', D.WEBFORM_ID, \']\'), nullif(WF.NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.WEBFORM_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.WEBFORM_ID', "']'") . ', nullif(WF.NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'WF',
 					'JOIN' => 'INNER JOIN b_crm_webform WF ON WF.ID = D.WEBFORM_ID',
@@ -518,7 +519,7 @@ class Deal
 				],
 				'SOURCE' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.SOURCE_ID is null, null, concat_ws(\' \', concat(\'[\', D.SOURCE_ID, \']\'), nullif(SS.NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.SOURCE_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.SOURCE_ID', "']'") . ', nullif(SS.NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'SS',
 					'JOIN' => 'INNER JOIN b_crm_status SS ON SS.ENTITY_ID = \'SOURCE\' and SS.STATUS_ID = D.SOURCE_ID',
@@ -558,7 +559,7 @@ class Deal
 				],
 				'MOVED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.MOVED_BY_ID is null, null, concat_ws(\' \', nullif(UMV.NAME, \'\'), nullif(UMV.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.MOVED_BY_ID is null THEN null ELSE concat_ws(\' \', nullif(UMV.NAME, \'\'), nullif(UMV.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UMV',
 					'JOIN' => 'INNER JOIN b_user UMV ON UMV.ID = D.MOVED_BY_ID',
@@ -566,7 +567,7 @@ class Deal
 				],
 				'MOVED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(D.MOVED_BY_ID is null, null, concat_ws(\' \', concat(\'[\', D.MOVED_BY_ID, \']\'), nullif(UMV.NAME, \'\'), nullif(UMV.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN D.MOVED_BY_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'D.MOVED_BY_ID', "']'") . ', nullif(UMV.NAME, \'\'), nullif(UMV.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UMV',
 					'JOIN' => 'INNER JOIN b_user UMV ON UMV.ID = D.MOVED_BY_ID',

@@ -6,6 +6,7 @@ use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Entity\StorageType\StorageType;
 use Bitrix\Bizproc\Internal\Entity\StorageType\StorageTypeCollection;
 use Bitrix\Bizproc\Internal\Repository\StorageTypeRepository\StorageTypeRepositoryInterface;
+use Bitrix\Main\Provider\Params\FilterInterface;
 use Bitrix\Main\Provider\Params\GridParams;
 
 class StorageTypeProvider
@@ -32,9 +33,9 @@ class StorageTypeProvider
 		return $this->repository->getType($filter, $select);
 	}
 
-	public function getCount(): int
+	public function getCount(?FilterInterface $filter = null): int
 	{
-		return $this->repository->getCount();
+		return $this->repository->getCount($filter);
 	}
 
 	public function getList(GridParams $gridParams): StorageTypeCollection

@@ -12,6 +12,9 @@ use Bitrix\Bizproc\Controller\Base;
 use Bitrix\Bizproc\Error;
 use Bitrix\Bizproc\Internal\Service\Document\DocumentsResolver;
 use Bitrix\Bizproc\Internal\Service\Document\Dto\ResolvedDocumentDto;
+use Bitrix\Bizproc\Starter\Template\Start\CollectRequest;
+use Bitrix\Bizproc\Starter\Template\Start\CollectorService;
+use Bitrix\Bizproc\Starter\Template\Start\StartableTemplate;
 use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Public\Service\Workflow\StarterService;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
@@ -241,14 +244,20 @@ class Starter extends Base
 		foreach ($accessibleDocuments as $document)
 		{
 			$parametersDocumentType = $document->complexDocumentType->toArray();
-			foreach (\CBPWorkflowTemplateLoader::getDocumentTypeStates($parametersDocumentType, $autoExecuteType) as $template)
+			foreach (
+				$this->collectStartTemplates(
+					$parametersDocumentType,
+					$autoExecuteType,
+					$document->categoryId,
+					onlyParameterized: true,
+				) as $template
+			)
 			{
-				$templateId = (int)($template['TEMPLATE_ID'] ?? 0);
+				$templateId = $template->id;
 				if (
 					$templateId <= 0
 					|| isset($processedTemplateIds[$templateId])
-					|| !is_array($template['TEMPLATE_PARAMETERS'])
-					|| !$template['TEMPLATE_PARAMETERS']
+					|| !$template->hasParameters()
 				)
 				{
 					continue;
@@ -257,7 +266,7 @@ class Starter extends Base
 				$processedTemplateIds[$templateId] = true;
 				$parameters[$templateId] =
 					$this->prepareWorkflowParameters(
-						$template['TEMPLATE_PARAMETERS'],
+						$template->parameters,
 						$parametersDocumentType,
 						"bizproc{$templateId}_",
 					)
@@ -276,6 +285,90 @@ class Starter extends Base
 		}
 
 		return ['parameters' => \CBPDocument::signParameters($parameters)];
+	}
+
+	public function hasAutoStartParametersAction(int $autoExecuteType): ?array
+	{
+		if (!$this->checkBizprocFeature())
+		{
+			return null;
+		}
+
+		if ($autoExecuteType < 0)
+		{
+			$this->addError(new Error(
+				Loc::getMessage('BIZPROC_LIB_API_CONTROLLER_WORKFLOW_STARTER_ERROR_INCORRECT_AUTO_EXECUTE_TYPE') ?? ''
+			));
+
+			return null;
+		}
+
+		$documents = $this->getDocumentsForCheckParameters();
+		if (empty($documents))
+		{
+			return null;
+		}
+
+		$hasAccessibleDocuments = false;
+		foreach ($documents as $document)
+		{
+			if (!$this->canUserStartWorkflowForResolvedDocument($document))
+			{
+				continue;
+			}
+
+			$hasAccessibleDocuments = true;
+			if ((new CollectorService())->hasTemplates(
+				new CollectRequest(
+					complexDocumentType: $document->complexDocumentType->toArray(),
+					eventType: $autoExecuteType,
+					categoryId: $document->categoryId,
+					onlyParameterized: true,
+					useAutoExecuteBitmask: true,
+					requireActive: true,
+					excludeSystem: false,
+				),
+			))
+			{
+				return ['hasParameters' => true];
+			}
+		}
+
+		if (!$hasAccessibleDocuments)
+		{
+			$this->addError(new Error(
+				Loc::getMessage('BIZPROC_LIB_API_CONTROLLER_WORKFLOW_STARTER_ERROR_ACCESS_DENIED') ?? ''
+			));
+
+			return null;
+		}
+
+		return ['hasParameters' => false];
+	}
+
+	/**
+	 * @return list<StartableTemplate>
+	 */
+	private function collectStartTemplates(
+		array $complexDocumentType,
+		int $eventType,
+		?int $categoryId = null,
+		bool $onlyParameterized = false,
+	): array
+	{
+		$collection = (new CollectorService())->collect(
+			new CollectRequest(
+				complexDocumentType: $complexDocumentType,
+				eventType: $eventType,
+				categoryId: $categoryId,
+				onlyParameterized: $onlyParameterized,
+				useAutoExecuteBitmask: true,
+				requireActive: true,
+				excludeSystem: false,
+			),
+		);
+
+		return $collection->getAll();
 	}
 
 	private function getDocumentsForCheckParameters(): array
@@ -321,10 +414,17 @@ class Starter extends Base
 			return true;
 		}
 
+		$parameters = [];
+		if ($document->categoryId !== null)
+		{
+			$parameters['DocumentCategoryId'] = $document->categoryId;
+		}
+
 		return \CBPDocument::canUserOperateDocumentType(
 			\CBPCanUserOperateOperation::StartWorkflow,
 			$currentUserId,
 			$parametersDocumentType,
+			$parameters,
 		);
 	}
 
@@ -396,6 +496,7 @@ class Starter extends Base
 	private function buildRequestDocumentPayload(bool $withDocumentId = false): array
 	{
 		$request = $this->getRequest();
+		$categoryId = $request->get('categoryId') ?? $request->get('category_id');
 		$documentType = $request->get('documentType');
 		$documentId = $request->get('documentId');
 
@@ -406,6 +507,10 @@ class Starter extends Base
 			{
 				$payload['documentId'] = $documentId;
 			}
+			if ($categoryId !== null)
+			{
+				$payload['categoryId'] = $categoryId;
+			}
 
 			return $payload;
 		}
@@ -414,6 +519,10 @@ class Starter extends Base
 		if ($withDocumentId || $request->get('signedDocumentId') !== null)
 		{
 			$payload['signedDocumentId'] = $request->get('signedDocumentId');
+		}
+		if ($categoryId !== null)
+		{
+			$payload['categoryId'] = $categoryId;
 		}
 
 		return $payload;

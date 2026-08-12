@@ -126,7 +126,15 @@ class GoToChat
 			return $result;
 		}
 
-		return $this->sendViaFacilitator($channel, $lineId, $fromCorrespondent, $toCorrespondent);
+		$url = $this->getUrl($lineId, $toCorrespondent);
+		if (!$url)
+		{
+			$result->addError(new Error(Loc::getMessage('CRM_IMOL_INVITATION_WRONG_LINE')));
+
+			return $result;
+		}
+
+		return $this->sendViaFacilitator($channel, $fromCorrespondent, $toCorrespondent, $url);
 	}
 
 	private function checkOwner(): void
@@ -202,14 +210,13 @@ class GoToChat
 
 	private function sendViaFacilitator(
 		Channel $channel,
-		int $lineId,
 		Channel\Correspondents\From $from,
-		Channel\Correspondents\To $to
+		Channel\Correspondents\To $to,
+		string $url
 	): Result
 	{
 		$result = new Result();
 
-		$url = $this->getUrl($lineId, $to);
 		$senderChannelId = $channel->getSender()::getSenderCode();
 
 		if ($senderChannelId === SmsManager::getSenderCode())
@@ -249,7 +256,7 @@ class GoToChat
 		return Loc::getMessage('CRM_IMOL_INVITATION_TEXT', ['#URL#' => $url]);
 	}
 
-	private function getUrl(int $lineId, Channel\Correspondents\To $to): string
+	private function getUrl(int $lineId, Channel\Correspondents\To $to): ?string
 	{
 		$bindings = [];
 		$bindings[] = $to->getRootSource()->toArray();
@@ -260,10 +267,12 @@ class GoToChat
 
 		$tracker = \Bitrix\Main\DI\ServiceLocator::getInstance()->get('ImOpenLines.Services.Tracker');
 
-		return $tracker->getMessengerLink(
+		$messengerLink = $tracker->getMessengerLink(
 			$lineId,
 			$this->connectorId,
 			$bindings
-		)['web'];
+		);
+
+		return $messengerLink['web'] ?? null;
 	}
 }

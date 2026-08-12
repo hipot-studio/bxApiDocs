@@ -14,6 +14,7 @@ final class RunDataDto
 		public readonly string $scope = '',
 		public readonly ?int $delay = null,
 		public readonly bool $isManual = false,
+		public readonly ?int $categoryId = null,
 	)
 	{}
 }

@@ -10,6 +10,7 @@ Loc::loadMessages(__FILE__);
 class Common
 {
 	public const URL_IM_HISTORY = '/online/?IM_HISTORY=imol|#ID#';
+	public const URL_IM_LINES = '/online/?IM_LINES=imol|#ID#';
 
 	/**
 	 * Parses custom code to the components of the data.
@@ -102,5 +103,24 @@ class Common
 	public static function getUrlImHistoryBbCode($sessionId, $textUrl)
 	{
 		return '[URL=' . self::getUrlImHistory($sessionId) . ']' . $textUrl . '[/URL]';
+	}
+
+	/**
+	 * @param $entityId
+	 * @return mixed
+	 */
+	public static function getUrlImLines($entityId)
+	{
+		return str_replace('#ID#', $entityId, self::URL_IM_LINES);
+	}
+
+	/**
+	 * @param $entityId
+	 * @param $textUrl
+	 * @return string
+	 */
+	public static function getUrlImLinesBbCode($entityId, $textUrl)
+	{
+		return '[URL=' . self::getUrlImLines($entityId) . ']' . $textUrl . '[/URL]';
 	}
 }

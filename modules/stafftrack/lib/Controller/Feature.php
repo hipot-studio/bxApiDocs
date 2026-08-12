@@ -26,6 +26,11 @@ class Feature extends Controller
 		$this->userProvider = UserProvider::getInstance();
 	}
 
+	public function isCheckInEnabledAction(): bool
+	{
+		return \Bitrix\StaffTrack\Feature::isCheckInEnabledBySettings();
+	}
+
 	/**
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentOutOfRangeException

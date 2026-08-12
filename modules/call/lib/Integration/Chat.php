@@ -4,6 +4,7 @@ namespace Bitrix\Call\Integration;
 
 use Bitrix\Call\Call;
 use Bitrix\Call\CallUser;
+use Bitrix\Call\Settings;
 use Bitrix\Im\Common;
 use Bitrix\Im\Dialog;
 use Bitrix\Im\V2\Chat\ChatFactory;
@@ -62,7 +63,10 @@ class Chat extends AbstractEntity
 					[
 						'LOGIC' => 'OR',
 						'=IS_REAL_USER' => 'Y',
-						'=EXTERNAL_AUTH_ID' => \Bitrix\Call\Rest\Auth::AUTH_TYPE,
+						'=EXTERNAL_AUTH_ID' => [
+							\Bitrix\Call\Rest\Auth::AUTH_TYPE,
+							\Bitrix\Im\V2\Entity\User\UserGuest::AUTH_ID,
+						],
 					]
 				]
 			])->fetchAll();
@@ -270,7 +274,10 @@ class Chat extends AbstractEntity
 			$users = $this->chatUsers;
 			$users[] = $userId;
 
-			$addResult = ChatFactory::getInstance()->addChat(['USERS' => $users]);
+			$addResult = ChatFactory::getInstance()->addChat([
+				'USERS' => $users,
+				'SKIP_ANALYTICS' => 'Y',
+			]);
 			if (!$addResult->isSuccess())
 			{
 				return false;
@@ -325,6 +332,7 @@ class Chat extends AbstractEntity
 		{
 			$addResult = ChatFactory::getInstance()->addChat([
 				'USERS' => array_values(array_unique(array_merge($this->chatUsers, $userIds))),
+				'SKIP_ANALYTICS' => 'Y',
 			]);
 			if (!$addResult->isSuccess())
 			{
@@ -387,7 +395,7 @@ class Chat extends AbstractEntity
 		return $chat->addUser($chatId, $userIds);
 	}
 
-	public function onStateChange($state, $prevState)
+	public function onStateChange($state, $prevState): void
 	{
 		$initiatorId = $this->call->getInitiatorId();
 		//$initiator = \Bitrix\Im\User::getInstance($initiatorId);
@@ -445,12 +453,23 @@ class Chat extends AbstractEntity
 					*/
 					$message = '';
 				}
-				elseif ($otherUserState == CallUser::STATE_UNAVAILABLE || $otherUserState == CallUser::STATE_CALLING)
+				elseif ($otherUserState == CallUser::STATE_CALLING)
 				{
-					$componentParams['MESSAGE_TYPE'] = 'MISSED';
-					$message = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_MISSED", [
-						'#NAME#' => $otherUser->getFullName(false)
-					]);
+					$callDurationSec = $this->call->getDuration();
+					$invitePeriodSec = (int)(Settings::getCallInvitePeriod() / 1000);
+
+					if ($invitePeriodSec > 0 && $callDurationSec >= $invitePeriodSec)
+					{
+						$componentParams['MESSAGE_TYPE'] = 'MISSED';
+						$message = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_MISSED", [
+							'#NAME#' => $otherUser->getFullName(false)
+						]);
+					}
+					else
+					{
+						$componentParams['MESSAGE_TYPE'] = 'CANCELLED';
+						$message = Loc::getMessage("IM_CALL_INTEGRATION_CHAT_CALL_CANCELLED");
+					}
 					$mute = false;
 					$skipCounterInc = false;
 				}
@@ -573,7 +592,17 @@ class Chat extends AbstractEntity
 
 	public function getCallDuration(): string
 	{
-		$interval = $this->call->getStartDate()->getDiff($this->call->getEndDate());
+		$startTime = $this->call->getStartDate();
+		$endTime = $this->call->getEndDate();
+		if (
+			!($startTime instanceof \Bitrix\Main\Type\DateTime)
+			|| !($endTime instanceof \Bitrix\Main\Type\DateTime)
+		)
+		{
+			return '';
+		}
+
+		$interval = $startTime->getDiff($endTime);
 
 		[$hours, $minutes, $seconds] = explode(' ', $interval->format('%H %I %S'));
 		$result = [];

@@ -6,6 +6,7 @@ use Bitrix\Calendar\Access\Model\TypeModel;
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Calendar\Access\ActionDictionary;
 use Bitrix\Calendar\Access\Rule\Traits\CurrentUserTrait;
+use Bitrix\Calendar\Util;
 use CCalendarType;
 
 class TypeAccessRule extends \Bitrix\Main\Access\Rule\AbstractRule
@@ -15,6 +16,11 @@ class TypeAccessRule extends \Bitrix\Main\Access\Rule\AbstractRule
 	public function execute(AccessibleItem $item = null, $params = null): bool
 	{
 		if (!$item instanceof TypeModel)
+		{
+			return false;
+		}
+
+		if (Util::isCollabUser($this->user->getUserId()))
 		{
 			return false;
 		}

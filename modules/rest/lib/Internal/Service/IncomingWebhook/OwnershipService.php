@@ -56,6 +56,8 @@ final class OwnershipService
 		]);
 		$event->send();
 
+		$result->setData(['updateWebhookIds' => $updateWebhookIds]);
+
 		return $result;
 	}
 }

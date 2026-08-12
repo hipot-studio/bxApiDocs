@@ -85,6 +85,13 @@ class CBPCrmCreateReturnLeadActivity extends CBPActivity
 
 		$leadFields['TITLE'] = $leadTitle;
 
+		Container::getInstance()
+			->getContext()
+			->getAnalytics()
+			->setCategory(Dictionary::CATEGORY_ROBOT_OPERATIONS)
+			->setType(Dictionary::TYPE_CREATE_RETURN_LEAD_ACTIVITY)
+		;
+
 		$leadEntity = new \CCrmLead(false);
 
 		$id = $leadEntity->Add(

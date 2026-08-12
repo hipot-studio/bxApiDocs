@@ -14,6 +14,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Iblock\Url\AdminPage\BuilderManager;
 use Bitrix\Main;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
@@ -308,7 +309,7 @@ final class CCrmOrderProductListComponent extends \CBitrixComponent
 		Price\Calculation::pushConfig();
 		Price\Calculation::setConfig(array(
 			'CURRENCY' => $this->order->getCurrency(),
-			'PRECISION' => (int)Main\Config\Option::get('sale', 'value_precision'),
+			'PRECISION' => ServiceLocator::getInstance()->get('sale.priceRounder')->getPrecision(),
 			'USE_DISCOUNTS' => false,
 			'RESULT_WITH_VAT' => true
 		));

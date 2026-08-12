@@ -819,6 +819,10 @@ class Email extends Activity\Provider\Base
 	 */
 	public static function getFallbackHtmlDescription(string $description): string
 	{
+		// htmlToTxt() и preg_replace ниже работают по большому телу письма —
+		// без поднятия лимита PCRE может вернуть null и нарушить тип возврата.
+		Config\Ini::adjustPcreBacktrackLimit(strlen($description) * 2);
+
 		$textLikeTextBody = html_entity_decode(htmlToTxt($description), ENT_QUOTES | ENT_HTML401);
 
 		return preg_replace('/(\s*(\r\n|\n|\r))+/', '<br>', htmlspecialcharsbx($textLikeTextBody));

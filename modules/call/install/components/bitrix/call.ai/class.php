@@ -7,6 +7,7 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Call\Call;
 use Bitrix\Call\Track\TrackCollection;
 use Bitrix\Call\Integration\AI\MentionService;
+use Bitrix\Call\Integration\AI\Outcome\AISenseContent;
 use Bitrix\Call\Integration\AI\Outcome\Transcription;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
 
@@ -66,6 +67,7 @@ class CallAiComponent extends \CBitrixComponent
 	protected function prepareResult(): bool
 	{
 		$this->arResult['CALL_ID'] = $this->callId;
+		$this->arResult['CALL_UUID'] = $this->call->getUuid();
 
 		$currentUserId = \Bitrix\Main\Engine\CurrentUser::get()->getId();
 		$this->arResult['CURRENT_USER_ID'] = $currentUserId;
@@ -77,6 +79,9 @@ class CallAiComponent extends \CBitrixComponent
 		$mentionService->loadMentionsForCall($this->callId);
 
 		$this->outcomeCollection = OutcomeCollection::getOutcomesByCallId($this->callId);
+		/** @var Transcription|null $transcription */
+		$transcription = null;
+		$this->arResult['OVERVIEW_VERSION'] = 1;
 		foreach ($this->outcomeCollection as $outcome)
 		{
 			$type = strtoupper($outcome->getType());
@@ -86,14 +91,17 @@ class CallAiComponent extends \CBitrixComponent
 			}
 
 			$content = $outcome->getSenseContent();
-			if ($content)
+			if (!($content instanceof AISenseContent))
 			{
-				/** @var Transcription $transcription */
-				if ($content instanceof Transcription)
-				{
-					$transcription = $content;
-				}
-				$this->arResult[$type] = $content->toRestFormat(mentionFormat: 'html');
+				continue;
+			}
+			if ($content instanceof Transcription)
+			{
+				$transcription = $content;
+			}
+			if ($content->hasContent())
+			{
+				$this->arResult[$type] = $content->toRestFormat(mentionFormat: MentionService::FORMAT_HTML);
 				$this->arResult["{$type}_VERSION"] = $content->getVersion();
 			}
 		}
@@ -112,14 +120,6 @@ class CallAiComponent extends \CBitrixComponent
 			&& empty($this->arResult['SUMMARY'])
 			&& empty($this->arResult['TRANSCRIBE'])
 			&& empty($this->arResult['RECORD'])
-		)
-		{
-			$this->showError(Loc::getMessage('CALL_COMPONENT_ERROR_TITLE'), Loc::getMessage('CALL_COMPONENT_ERROR_DESCRIPTION'));
-			return false;
-		}
-		if (
-			($this->arResult['OVERVIEW_VERSION'] > 1)
-			&& empty($this->arResult['EVALUATION'])
 		)
 		{
 			$this->showError(Loc::getMessage('CALL_COMPONENT_ERROR_TITLE'), Loc::getMessage('CALL_COMPONENT_ERROR_DESCRIPTION'));
@@ -154,12 +154,12 @@ class CallAiComponent extends \CBitrixComponent
 		$this->arResult['USER_COUNT'] = count($this->arResult['CALL_USERS']);
 
 		if (
-			$this->arResult['INSIGHTS']['speakerEvaluationAvailable']
+			!empty($this->arResult['INSIGHTS']['speakerEvaluationAvailable'])
 			&& !empty($this->arResult['INSIGHTS']['speakerAnalysis'])
 		)
 		{
 			$speakerAnalysis = [];
-			$speakerList = $transcription->prepareSpeakersList();
+			$speakerList = $transcription?->prepareSpeakersList(0) ?? [];
 			/** @var array{userId: int, efficiencyValue: float} $speaker */
 			foreach ($this->arResult['INSIGHTS']['speakerAnalysis'] as $speaker)
 			{

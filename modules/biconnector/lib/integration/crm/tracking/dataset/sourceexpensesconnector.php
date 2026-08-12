@@ -13,12 +13,33 @@ use Bitrix\Main\Type\Date;
 
 class SourceExpensesConnector extends Base
 {
+	private const PREVIEW_DAYS_WINDOW = 30;
+
 	/**
 	 * @return bool
 	 */
 	protected function isNeedApplyTimezoneOffset(): bool
 	{
 		return false;
+	}
+
+	/**
+	 * Expenses are fetched from an external API, so the preview loads the last 30 days
+	 * instead of the first N rows.
+	 *
+	 * @return array
+	 */
+	public function getPreviewParameters(): array
+	{
+		$endDate = new Date();
+		$startDate = (clone $endDate)->add('-' . self::PREVIEW_DAYS_WINDOW . ' days');
+
+		return [
+			'dateRange' => [
+				'startDate' => $startDate->format('Y-m-d'),
+				'endDate' => $endDate->format('Y-m-d'),
+			],
+		];
 	}
 
 	public function query(

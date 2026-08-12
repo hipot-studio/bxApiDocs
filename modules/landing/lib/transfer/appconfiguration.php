@@ -5,6 +5,7 @@ use \Bitrix\Landing\File;
 use \Bitrix\Landing\Rights;
 use \Bitrix\Landing\Landing;
 use \Bitrix\Landing\Site;
+use \Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
 use \Bitrix\Landing\Restriction;
 use \Bitrix\Landing\Site\Type;
 use \Bitrix\Main\Application;
@@ -80,6 +81,12 @@ class AppConfiguration
 	public static function getEntityList(): array
 	{
 		return static::$entityList;
+	}
+
+	private static function isAiSiteExportDenied(int $siteId): bool
+	{
+		return $siteId > 0
+			&& (new CreateAiSiteChecker())->isSiteCreated($siteId);
 	}
 
 	/**
@@ -166,6 +173,10 @@ class AppConfiguration
 			{
 				$access = !Rights::hasAdditionalRight(Rights::ADDITIONAL_RIGHTS['unexportable'], null, false, true);
 			}
+			if ($access && self::isAiSiteExportDenied((int)$siteId))
+			{
+				$access = false;
+			}
 		}
 		else
 		{
@@ -214,9 +225,15 @@ class AppConfiguration
 	{
 		$code = $event->getParameter('CODE');
 		$manifest = $event->getParameter('MANIFEST');
+		$itemCode = (int)$event->getParameter('ITEM_CODE');
 		$access = array_intersect($manifest['USES'], static::$accessManifest);
 
 		self::$processing = true;
+
+		if (self::isAiSiteExportDenied($itemCode))
+		{
+			return null;
+		}
 
 		if (Restriction\Manager::isAllowed('limit_sites_transfer'))
 		{

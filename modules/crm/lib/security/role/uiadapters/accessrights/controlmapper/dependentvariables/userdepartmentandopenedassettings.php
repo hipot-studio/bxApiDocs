@@ -8,6 +8,11 @@ class UserDepartmentAndOpenedAsSettings extends UserDepartmentAndOpenedBase
 	{
 		if (is_array($settings) && !empty($settings))
 		{
+			if (in_array(\Bitrix\Crm\Security\Role\Manage\AttrPreset\UserDepartmentAndOpened::ALL, $settings, true))
+			{
+				return $this->permissionPreset->getPermissiveSettingsVariantsList();
+			}
+
 			return array_unique($settings);
 		}
 

@@ -58,30 +58,30 @@ class AddressCleanupAgent
 	{
 		$rows = AddressRepository::getStaleResolved(self::STALE_RESOLVED_DAYS, self::BATCH_SIZE);
 
-		$geohashes = array_column($rows, 'GEOHASH');
-		if (empty($geohashes))
+		$geohashKeys = array_column($rows, 'GEOHASH_KEY');
+		if (empty($geohashKeys))
 		{
 			return 0;
 		}
 
-		AddressRepository::deleteByGeohashes($geohashes);
+		AddressRepository::deleteByGeohashKeys($geohashKeys);
 
-		return count($geohashes);
+		return count($geohashKeys);
 	}
 
 	private static function deleteStaleFailed(): int
 	{
 		$rows = AddressRepository::getStaleFailed(self::STALE_FAILED_DAYS, self::BATCH_SIZE);
 
-		$geohashes = array_column($rows, 'GEOHASH');
-		if (empty($geohashes))
+		$geohashKeys = array_column($rows, 'GEOHASH_KEY');
+		if (empty($geohashKeys))
 		{
 			return 0;
 		}
 
-		AddressRepository::deleteByGeohashes($geohashes);
+		AddressRepository::deleteByGeohashKeys($geohashKeys);
 
-		return count($geohashes);
+		return count($geohashKeys);
 	}
 
 	private static function scheduleContinuation(): void

@@ -5,7 +5,6 @@ namespace Bitrix\Im\V2\Reading\Counter\Notification;
 
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\V2\Chat;
-use Bitrix\Im\V2\Message\Counter\CounterOverflowService;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Reading\Counter\Internal\CountersCache;
 use Bitrix\Im\V2\Reading\Counter\Updater\Delete\ScopeStep;
@@ -14,7 +13,6 @@ class CountersUpdater
 {
 	public function __construct(
 		protected readonly CountersCache $cache,
-		protected readonly CounterOverflowService $overflowService,
 	) {}
 
 	public function add(MessageCollection $messages, int $userId): void
@@ -25,7 +23,7 @@ class CountersUpdater
 
 	public function delete(): ScopeStep
 	{
-		return new ScopeStep($this->cache, $this->overflowService);
+		return new ScopeStep($this->cache);
 	}
 
 	protected function getInsertData(MessageCollection $messages, int $userId): array

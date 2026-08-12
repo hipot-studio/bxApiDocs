@@ -43,6 +43,7 @@ class SearchEmailsByTasksTool extends ToolContract
 			. "or 'emails whose tasks were created in a period'. "
 			. "All filters are optional — when omitted, the only constraint is 'email has at least "
 			. "one linked task'. Limit defaults to " . self::DEFAULT_LIMIT . ", max " . self::MAX_LIMIT . ". "
+			. "If hasMore is true, call the tool again with nextOffset to load the next page. "
 			. "Searches across all mailboxes the user has access to via their tasks."
 		;
 	}
@@ -71,13 +72,16 @@ class SearchEmailsByTasksTool extends ToolContract
 				],
 				'taskCreatedFrom' => [
 					'type' => 'string',
-					'format' => 'date-time',
-					'description' => "Lower bound of the task creation date in 'Y/m/d H:i' format.",
+					'description' =>
+						'Lower bound of the task creation date. Use ISO 8601 date (YYYY-MM-DD) or date-time. '
+						. 'A bare date starts at 00:00:00.',
 				],
 				'taskCreatedTo' => [
 					'type' => 'string',
-					'format' => 'date-time',
-					'description' => "Upper bound of the task creation date in 'Y/m/d H:i' format.",
+					'description' =>
+						'Upper bound of the task creation date, inclusive. '
+						. 'Use ISO 8601 date (YYYY-MM-DD) or date-time. '
+						. 'A bare date ends at 23:59:59.',
 				],
 				'taskResponsibleId' => [
 					'type' => 'integer',
@@ -89,6 +93,11 @@ class SearchEmailsByTasksTool extends ToolContract
 					'description' => 'Maximum number of messages to return. Defaults to ' . self::DEFAULT_LIMIT . ', max ' . self::MAX_LIMIT . '.',
 					'minimum' => 1,
 					'maximum' => self::MAX_LIMIT,
+				],
+				'offset' => [
+					'type' => 'integer',
+					'description' => 'Offset by unique messages. Use nextOffset from the previous response when hasMore is true.',
+					'minimum' => 0,
 				],
 			],
 			'required' => [],
@@ -115,10 +124,10 @@ class SearchEmailsByTasksTool extends ToolContract
 
 		$args['limit'] = $this->resolveLimit($args['limit'] ?? null);
 
-		$request = SearchMessagesByTasksRequest::fromArray($args);
-
 		try
 		{
+			$request = SearchMessagesByTasksRequest::fromArray($args);
+
 			return $this->messageByTaskSearch->search($request, $userId);
 		}
 		catch (SystemException $e)

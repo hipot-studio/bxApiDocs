@@ -117,6 +117,20 @@ class CreateEventHandler implements CommandHandler
 		{
 			throw new PermissionDenied();
 		}
+
+		if ($section->isGroup())
+		{
+			$permission = \CCalendar::GetPermissions([
+				'type' => $section->getType(),
+				'ownerId' => $section->getOwnerId(),
+				'userId' => $userId,
+			]);
+
+			if (!$permission['edit'])
+			{
+				throw new PermissionDenied();
+			}
+		}
 	}
 
 	/**

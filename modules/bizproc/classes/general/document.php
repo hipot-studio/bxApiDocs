@@ -9,6 +9,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Uri;
 
 /**
  * Bizproc API Helper for external usage.
@@ -1294,8 +1295,7 @@ class CBPDocument
 
 	public static function _ReplaceTaskURL($str, $documentType)
 	{
-		$chttp = new CHTTP();
-		$baseHref = $chttp->URN2URI('');
+		$baseHref = rtrim((string)(new Uri(''))->toAbsolute(), '/');
 
 		return str_replace(
 			['#HTTP_HOST#', '#TASK_URL#', '#BASE_HREF#'],

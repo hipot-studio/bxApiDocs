@@ -57,6 +57,9 @@ class Task extends Dataset
 
 	protected function getFields(): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $this->getSqlHelper();
+
 		$groupJoin = $this->createJoin(
 			"SGROUP",
 			"INNER JOIN b_sonet_group SGROUP ON SGROUP.ID = {$this->getAliasFieldName('GROUP_ID')}",
@@ -218,15 +221,13 @@ class Task extends Dataset
 			,
 			(new StringField('GROUP_INFO'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('GROUP_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('GROUP_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('GROUP_ID')}, ']'), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('GROUP_ID'), "']'")},
 							nullif({$groupJoin->getJoinFieldName('NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($groupJoin)
 			,
@@ -238,15 +239,13 @@ class Task extends Dataset
 			,
 			(new StringField('STAGE'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('STAGE_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('STAGE_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('STAGE_ID')}, ']'), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('STAGE_ID'), "']'")},
 							nullif({$stageJoin->getJoinFieldName('TITLE')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($stageJoin)
 			,
@@ -255,30 +254,26 @@ class Task extends Dataset
 			,
 			(new StringField('CREATED_BY_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('CREATED_BY')} > 0,
+					CASE WHEN {$this->getAliasFieldName('CREATED_BY')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$createdJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$createdJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$createdJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($createdJoin)
 			,
 			(new StringField('CREATED_BY'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('CREATED_BY')} > 0,
+					CASE WHEN {$this->getAliasFieldName('CREATED_BY')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('CREATED_BY')}, ']'), 
-							nullif({$createdJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('CREATED_BY'), "']'")},
+							nullif({$createdJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$createdJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($createdJoin)
 			,
@@ -286,30 +281,26 @@ class Task extends Dataset
 			(new IntegerField('RESPONSIBLE_ID')),
 			(new StringField('RESPONSIBLE_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('RESPONSIBLE_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('RESPONSIBLE_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$responsibleJoin->getJoinFieldName('NAME')}, ''), 
-							nullif({$responsibleJoin->getJoinFieldName('LAST_NAME')} , '')
-						),
-						NULL
-					)"
+							' ',
+							nullif({$responsibleJoin->getJoinFieldName('NAME')}, ''),
+							nullif({$responsibleJoin->getJoinFieldName('LAST_NAME')}, '')
+						)
+					ELSE NULL END"
 				)
 				->setJoin($responsibleJoin)
 			,
 			(new StringField('RESPONSIBLE'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('RESPONSIBLE_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('RESPONSIBLE_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('RESPONSIBLE_ID')}, ']'), 
-							nullif({$responsibleJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('RESPONSIBLE_ID'), "']'")},
+							nullif({$responsibleJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$responsibleJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($responsibleJoin)
 			,
@@ -320,31 +311,27 @@ class Task extends Dataset
 			,
 			(new StringField('ACCOMPLICES_NAMES'))
 				->setName("
-					if(
-						{$accomplicesUserJoin->getJoinFieldName('USER_ID')} > 0,
+					CASE WHEN {$accomplicesUserJoin->getJoinFieldName('USER_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$accomplicesUserJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$accomplicesUserJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$accomplicesUserJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($accomplicesUserJoin)
 				->setMultiple()
 			,
 			(new StringField('ACCOMPLICES'))
 				->setName("
-					if(
-						{$accomplicesUserJoin->getJoinFieldName('USER_ID')} > 0,
+					CASE WHEN {$accomplicesUserJoin->getJoinFieldName('USER_ID')} > 0 THEN
 						concat_ws(
 							' ',
-							concat('[', {$accomplicesUserJoin->getJoinFieldName('USER_ID')}, ']'), 
-							nullif({$accomplicesUserJoin->getJoinFieldName('NAME')}, ''), 
+							{$helper->getConcatFunction("'['", $accomplicesUserJoin->getJoinFieldName('USER_ID'), "']'")},
+							nullif({$accomplicesUserJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$accomplicesUserJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($accomplicesUserJoin)
 				->setMultiple()
@@ -357,31 +344,27 @@ class Task extends Dataset
 			,
 			(new StringField('AUDITORS_NAMES'))
 				->setName("
-					if(
-						{$auditorsUserJoin->getJoinFieldName('USER_ID')} > 0,
+					CASE WHEN {$auditorsUserJoin->getJoinFieldName('USER_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$auditorsUserJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$auditorsUserJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$auditorsUserJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($auditorsUserJoin)
 				->setMultiple()
 			,
 			(new StringField('AUDITORS'))
 				->setName("
-					if(
-						{$auditorsUserJoin->getJoinFieldName('USER_ID')} > 0,
+					CASE WHEN {$auditorsUserJoin->getJoinFieldName('USER_ID')} > 0 THEN
 						concat_ws(
 							' ',
-							concat('[', {$auditorsUserJoin->getJoinFieldName('USER_ID')}, ']'), 
-							nullif({$auditorsUserJoin->getJoinFieldName('NAME')}, ''), 
+							{$helper->getConcatFunction("'['", $auditorsUserJoin->getJoinFieldName('USER_ID'), "']'")},
+							nullif({$auditorsUserJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$auditorsUserJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($auditorsUserJoin)
 				->setMultiple()
@@ -391,30 +374,26 @@ class Task extends Dataset
 			,
 			(new StringField('CHANGED_BY_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('CHANGED_BY')} > 0,
+					CASE WHEN {$this->getAliasFieldName('CHANGED_BY')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$changedJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$changedJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$changedJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($changedJoin)
 			,
 			(new StringField('CHANGED_BY'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('CHANGED_BY')} > 0,
+					CASE WHEN {$this->getAliasFieldName('CHANGED_BY')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('CHANGED_BY')}, ']'), 
-							nullif({$changedJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('CHANGED_BY'), "']'")},
+							nullif({$changedJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$changedJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($changedJoin)
 			,
@@ -424,30 +403,26 @@ class Task extends Dataset
 			,
 			(new StringField('STATUS_CHANGED_BY_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('STATUS_CHANGED_BY')} > 0,
+					CASE WHEN {$this->getAliasFieldName('STATUS_CHANGED_BY')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$statusChangedJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$statusChangedJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$statusChangedJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($statusChangedJoin)
 			,
 			(new StringField('STATUS_CHANGED_BY'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('STATUS_CHANGED_BY')} > 0,
+					CASE WHEN {$this->getAliasFieldName('STATUS_CHANGED_BY')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('STATUS_CHANGED_BY')}, ']'), 
-							nullif({$statusChangedJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('STATUS_CHANGED_BY'), "']'")},
+							nullif({$statusChangedJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$statusChangedJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($statusChangedJoin)
 			,
@@ -457,30 +432,26 @@ class Task extends Dataset
 			,
 			(new StringField('CLOSED_BY_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('CLOSED_BY')} > 0,
+					CASE WHEN {$this->getAliasFieldName('CLOSED_BY')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$closedJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$closedJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$closedJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($closedJoin)
 			,
 			(new StringField('CLOSED_BY'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('CLOSED_BY')} > 0,
+					CASE WHEN {$this->getAliasFieldName('CLOSED_BY')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('CLOSED_BY')}, ']'), 
-							nullif({$closedJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('CLOSED_BY'), "']'")},
+							nullif({$closedJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$closedJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($closedJoin)
 			,

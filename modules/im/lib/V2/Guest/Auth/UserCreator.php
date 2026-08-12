@@ -14,7 +14,7 @@ use Bitrix\Main\Security\Random;
  */
 class UserCreator
 {
-	protected const NAME_MAX_LENGTH = 100;
+	protected const NAME_MAX_LENGTH = 50;
 
 	/**
 	 * Create a new guest user.

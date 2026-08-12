@@ -1301,6 +1301,11 @@ class CIMMessenger
 			return false;
 		}
 
+		if (!\Bitrix\Im\Common::isDialogId($dialogId))
+		{
+			return false;
+		}
+
 		$message = self::getById($messageId);
 		if (!$message)
 		{

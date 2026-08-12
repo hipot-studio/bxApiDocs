@@ -1,6 +1,8 @@
 <?php
 namespace Bitrix\Landing\History\Action;
 
+use Bitrix\Landing\History\ActionParamsGuard;
+
 abstract class BaseAction
 {
 	protected const JS_COMMAND = '';
@@ -25,7 +27,31 @@ abstract class BaseAction
 		return $this->params;
 	}
 
-	abstract public function execute(bool $undo = true): bool;
+	/**
+	 * Security gate → domain apply. Final: no step may reach its sink bypassing the gate.
+	 * (1) universal raw-`<?` marker over the whole params tree (covers non-declaring actions
+	 * and MULTIPLY children); (2) XSS audit of declared HTML keys, mirroring History::push.
+	 */
+	final public function execute(bool $undo = true): bool
+	{
+		if (ActionParamsGuard::containsUnneutralizedPhpOpenTagDeep($this->params))
+		{
+			return false;
+		}
+
+		$sanitizableParamKeys = static::getSanitizableParamKeys();
+		if (
+			$sanitizableParamKeys !== []
+			&& !ActionParamsGuard::validateParams($this->params, $sanitizableParamKeys, static::class)
+		)
+		{
+			return false;
+		}
+
+		return $this->doExecute($undo);
+	}
+
+	abstract protected function doExecute(bool $undo = true): bool;
 	abstract public static function enrichParams(array $params): array;
 
 	/**

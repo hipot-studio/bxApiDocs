@@ -116,7 +116,7 @@ class WorktimeRecordManager
 
 	public function isEligibleToStop()
 	{
-		return $this->record->getRecordedStopTimestamp() === 0;
+		return $this->record->isActive() || $this->record->getRecordedStopTimestamp() === 0;
 	}
 
 	public function isEligibleToPause()
@@ -196,33 +196,21 @@ class WorktimeRecordManager
 			return $this->getRecommendedStopTimestamp();
 		}
 
-		if ($this->schedule && $this->schedule->isShifted())
+		if ($isCheckInStartEnabled)
+		{
+			return $this->buildStopTimestampForCheckInAutoClose();
+		}
+
+		if ($this->schedule->isShifted())
 		{
 			/** @var Shift $firstRandomShift */
-			$shifts = $this->schedule->obtainShifts();
+			$shifts = $this->schedule->obtainActiveShifts();
 			$firstRandomShift = reset($shifts);
 			if (!$firstRandomShift)
 			{
 				return null;
 			}
 			return $this->record->getRecordedStartTimestamp() + $firstRandomShift->getDuration();
-		}
-
-		if ($isCheckInStartEnabled)
-		{
-			$checkInStopTimeStamp = $this->record->getRecordedStartTimestamp() + (3600 * 9);
-
-			if (
-				!$this->isTimeBeforeMidnightOfStart(
-					$this->record->getRecordedStartTimestamp(),
-					$checkInStopTimeStamp
-				)
-			)
-			{
-				return null;
-			}
-
-			return $checkInStopTimeStamp;
 		}
 
 		return null;
@@ -242,14 +230,84 @@ class WorktimeRecordManager
 		return $this->record->buildRecordedStartDateTime();
 	}
 
-	private function isTimeBeforeMidnightOfStart(int $startTimestamp, int $endTimestamp): bool
+	private function buildStopTimestampForCheckInAutoClose(): ?int
 	{
-		$startDateTime = (new \DateTimeImmutable())->setTimestamp($startTimestamp);
+		if ($this->schedule && $this->schedule->isFlextime())
+		{
+			return $this->record->getRecordedStartTimestamp() + 9 * 3600;
+		}
 
-		$startOfDay = $startDateTime->setTime(0, 0);
+		$shift = $this->buildShiftForAutoClose();
+		if (!$shift)
+		{
+			return null;
+		}
 
-		$startOfNextDay = $startOfDay->modify('+1 day');
+		if ($this->schedule && $this->schedule->isShifted())
+		{
+			return $this->buildShiftEndTimestampForAutoClose($shift);
+		}
 
-		return $endTimestamp < $startOfNextDay->getTimestamp();
+		return $this->record->getRecordedStartTimestamp() + $shift->getDuration();
+	}
+
+	private function buildShiftEndTimestampForAutoClose(Shift $shift): int
+	{
+		$recordStartDateTime = $this->buildRecordStartDateTime();
+
+		$previousShiftDateTime = clone $recordStartDateTime;
+		$previousShiftDateTime->sub(new \DateInterval('P1D'));
+		$previousShiftWithDate = new ShiftWithDate($shift, $this->schedule, $previousShiftDateTime);
+		if (
+			$recordStartDateTime->getTimestamp() >= $previousShiftWithDate->getDateTimeStart()->getTimestamp()
+			&& $recordStartDateTime->getTimestamp() <= $previousShiftWithDate->getDateTimeEnd()->getTimestamp()
+		)
+		{
+			return $previousShiftWithDate->getDateTimeEnd()->getTimestamp();
+		}
+
+		return (new ShiftWithDate($shift, $this->schedule, $recordStartDateTime))
+			->getDateTimeEnd()
+			->getTimestamp()
+		;
+	}
+
+	private function buildShiftForAutoClose(): ?Shift
+	{
+		if ($this->shift)
+		{
+			return $this->shift;
+		}
+
+		if (!$this->schedule)
+		{
+			return null;
+		}
+
+		if ($this->record->getShiftId() > 0)
+		{
+			$shift = $this->schedule->obtainShiftByPrimary($this->record->getShiftId());
+			if ($shift)
+			{
+				return $shift;
+			}
+		}
+
+		if ($this->schedule->isFixed())
+		{
+			return $this->schedule->getShiftByWeekDay(
+				TimeHelper::getInstance()->getDayOfWeek($this->buildRecordStartDateTime())
+			);
+		}
+
+		if ($this->schedule->isShifted())
+		{
+			$shifts = $this->schedule->obtainActiveShifts();
+			$shift = reset($shifts);
+
+			return $shift ?: null;
+		}
+
+		return null;
 	}
 }

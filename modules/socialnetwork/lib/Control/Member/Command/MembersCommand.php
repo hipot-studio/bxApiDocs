@@ -21,6 +21,10 @@ use Bitrix\Socialnetwork\UserToGroupTable;
  * @method int getInitiatorId()
  * @method self setInitiatorId(int $initiatorId)
  * @method bool hasInitiatorId()
+ * @method self setAddBotSilently(bool $addBotSilently)
+ * @method bool getAddBotSilently()
+ * @method self setSharingLinkAuthorId(int $sharingLinkAuthorId)
+ * @method int getSharingLinkAuthorId()
  */
 
 class MembersCommand extends InitiatedCommand
@@ -34,4 +38,8 @@ class MembersCommand extends InitiatedCommand
 
 	#[InArray([null, UserToGroupTable::INITIATED_BY_GROUP, UserToGroupTable::INITIATED_BY_USER, UserToGroupTable::INITIATED_BY_STRUCTURE])]
 	protected ?string $initiatedByType = null;
+
+	protected bool $addBotSilently = false;
+
+	protected int $sharingLinkAuthorId = 0;
 }

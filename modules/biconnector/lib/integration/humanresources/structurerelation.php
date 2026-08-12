@@ -55,6 +55,9 @@ class StructureRelation extends Dataset
 
 	protected function getFields(): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $this->getSqlHelper();
+
 		$childNodeJoin = $this->createJoin(
 			'CHILD_NODE',
 			"INNER JOIN b_hr_structure_node CHILD_NODE ON CHILD_NODE.ID = {$this->getAliasFieldName('CHILD_ID')}",
@@ -80,15 +83,13 @@ class StructureRelation extends Dataset
 			,
 			(new StringField('PARENT_NODE'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('PARENT_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('PARENT_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('PARENT_ID')}, ']'), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('PARENT_ID'), "']'")},
 							nullif({$parentNodeJoin->getJoinFieldName('NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($parentNodeJoin)
 			,
@@ -98,15 +99,13 @@ class StructureRelation extends Dataset
 			,
 			(new StringField('CHILD_NODE'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('CHILD_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('CHILD_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('CHILD_ID')}, ']'), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('CHILD_ID'), "']'")},
 							nullif({$childNodeJoin->getJoinFieldName('NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($childNodeJoin)
 			,

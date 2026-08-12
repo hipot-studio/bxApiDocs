@@ -224,7 +224,7 @@ class RoleManager
 
 		if ($chat instanceof Chat\CopilotChat)
 		{
-			$chat->sendBanner(null, $roleData[$roleCode]['name'], true);
+			$chat->sendBanner(null, false, $roleData[$roleCode]['name'], true);
 		}
 
 		return $result;

@@ -194,17 +194,29 @@ class CBPCallGetFollowUpActivity extends BaseActivity implements IBPConfigurable
 
 		$outcomeCollection = OutcomeCollection::getOutcomesByCallIds($callIds, [SenseType::OVERVIEW->value]);
 
+		// Pick the newest contentful overview per call. The collection is ordered ID DESC, so
+		// the first contentful overview seen for a call is the newest one.
+		$contentfulByCall = [];
+		foreach ($outcomeCollection as $outcome)
+		{
+			$callId = (int)$outcome->getCallId();
+			if (isset($contentfulByCall[$callId]))
+			{
+				continue;
+			}
+			$overview = $outcome->getSenseContent();
+			if ($overview instanceof Overview && $overview->hasContent())
+			{
+				$contentfulByCall[$callId] = $overview;
+			}
+		}
+
 		$overviews = [];
 		foreach ($callIds as $callId)
 		{
-			$overview = $outcomeCollection
-				->getOutcomeByCallIdAndType($callId, SenseType::OVERVIEW->value)
-				?->getSenseContent()
-			;
-
-			if ($overview instanceof Overview)
+			if (isset($contentfulByCall[$callId]))
 			{
-				$overviews[] = $this->formatOverview($overview);
+				$overviews[] = $this->formatOverview($contentfulByCall[$callId]);
 			}
 		}
 
@@ -370,7 +382,7 @@ class CBPCallGetFollowUpActivity extends BaseActivity implements IBPConfigurable
 		return $result;
 	}
 
-	public static function validateProperties($testProperties = [], \CBPWorkflowTemplateUser $user = null): array
+	public static function validateProperties($testProperties = [], ?\CBPWorkflowTemplateUser $user = null): array
 	{
 		$errors = [];
 		$limit = $testProperties[self::PARAM_LIMIT] ?? 0;

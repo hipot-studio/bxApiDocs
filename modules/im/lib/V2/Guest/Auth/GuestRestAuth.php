@@ -33,6 +33,7 @@ class GuestRestAuth
 		'im.chat.user.list',
 		'im.chat.mute',
 		'im.chat.file.get',
+		'im.chat.leave',
 
 		// Messages
 		'im.message.add',
@@ -50,6 +51,7 @@ class GuestRestAuth
 		// Recent
 		'im.recent.get',
 		'im.recent.list',
+		'im.recent.unread',
 
 		// Notifications
 		'im.notify.get',
@@ -76,6 +78,24 @@ class GuestRestAuth
 		'im.chat.file.collection.get',
 		'im.chat.task.get',
 		'im.chat.calendar.get',
+
+		// Call (guest scenario)
+		'call.call.getcalltoken',
+		'call.call.tryjoincall',
+		'call.call.answer',
+		'call.call.decline',
+		'call.call.userstatus',
+		'call.call.finishcall',
+		'call.call.onsharescreen',
+		'call.call.onstartrecord',
+
+		// Call runtime (guest scenario): join/answer/finish paths for the call:calls runtime.
+		// getUserState is the pre-connect guard for the push cold-start branch. Call-start
+		// methods (create/createChildCall/invite) are deliberately excluded — a guest never
+		// initiates a call.
+		'call.callmanager.getuserstate',
+		'call.callmanager.getusers',
+		'call.callmanager.finish',
 	];
 
 	/**
@@ -98,7 +118,7 @@ class GuestRestAuth
 
 		if ($isSessionGuest && !GuestService::getInstance()->isCurrentGuestSessionValid())
 		{
-			AuthorizationService::getInstance()->terminate();
+			AuthorizationService::getInstance()->invalidateCurrentGuestSession();
 
 			$res = self::buildErrorResult(
 				AuthError::GUEST_SESSION_TERMINATED,
@@ -151,7 +171,7 @@ class GuestRestAuth
 		// a revoked link cannot squeeze a single V1-REST call through on token alone.
 		if (!GuestService::getInstance()->isCurrentGuestSessionValid())
 		{
-			AuthorizationService::getInstance()->terminate();
+			AuthorizationService::getInstance()->invalidateCurrentGuestSession();
 
 			$res = self::buildErrorResult(
 				AuthError::GUEST_SESSION_TERMINATED,

@@ -1,9 +1,8 @@
 <?php
 
-use Bitrix\Main\Loader;
+use Bitrix\Crm\Format\Money;
 use Bitrix\Sale;
 use Bitrix\Sale\Helpers\Admin\Correction;
-use Bitrix\Sale\PriceMaths;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)die();
 
@@ -66,7 +65,10 @@ class CorrectionCheckExport extends CBitrixComponent
 		$entries = [];
 		while ($entry = $queryResult->fetch())
 		{
-			$entry['SUM'] = PriceMaths::roundPrecision($entry['SUM']);
+			$entry['SUM'] = Money::toNumberString(
+				$entry['SUM'],
+				$entry['CURRENCY']
+			);
 			$entries[] = $entry;
 		}
 		$this->arResult['ENTRIES'] = $entries;

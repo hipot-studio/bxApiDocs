@@ -345,6 +345,15 @@ class UserList extends Controller
 			{
 				$this->addError(new Error($exception->getMessage()));
 			}
+
+			if ($this->hasErrors())
+			{
+				return AjaxJson::createError($this->errorCollection, [
+					'skippedActiveUsers' => $skippedActiveUsers,
+					'skippedFiredUsers' => $skippedFiredUsers,
+					'skippedWaitingUsers' => $skippedWaitingUsers,
+				]);
+			}
 		}
 
 		return AjaxJson::createSuccess([

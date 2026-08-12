@@ -35,6 +35,8 @@ Loc::loadMessages(__FILE__);
  * CRM_ACTIVITY_TODO_DEFAULT_BECOME_RESPONSIBLE_EMPTY_SUBJECT
  * CRM_ACTIVITY_TODO_DEFAULT_NO_LONGER_RESPONSIBLE_EMPTY_SUBJECT
  *
+ * CRM_ACTIVITY_TODO_RESPONSIBLE_SUBJECT
+ * CRM_ACTIVITY_TODO_RESPONSIBLE_SUBJECT_EMPTY
  */
 final class ProcessToDoActivityResponsible extends ProcessEntity
 {
@@ -50,5 +52,24 @@ final class ProcessToDoActivityResponsible extends ProcessEntity
 	public static function getFilePath(): string
 	{
 		return __FILE__;
+	}
+
+	public function getMessageSubjectCallback(array $replace = []): ?callable
+	{
+		if ($this->type === self::BECOME)
+		{
+			$code = isset($replace['#TODO_ID#'])
+				? 'CRM_ACTIVITY_TODO_RESPONSIBLE_SUBJECT_EMPTY'
+				: 'CRM_ACTIVITY_TODO_RESPONSIBLE_SUBJECT'
+			;
+
+			return static fn(?string $languageId = null) => Loc::getMessage(
+				$code,
+				$replace,
+				$languageId
+			);
+		}
+
+		return null;
 	}
 }

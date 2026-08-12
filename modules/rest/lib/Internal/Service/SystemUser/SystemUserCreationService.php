@@ -11,6 +11,7 @@ use Bitrix\Rest\Internal\Entity\SystemUser\ResourceType;
 use Bitrix\Rest\Internal\Integration\HumanResources\MemberService;
 use Bitrix\Rest\Internal\Repository\SystemUser\SystemUserRepository;
 use Bitrix\Rest\Internal\Repository\User\UserRepository;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 use Bitrix\Rest\Public\Event\SystemUser\SystemUserActivatedEvent;
 use Bitrix\Rest\Public\Event\SystemUser\SystemUserCreatedEvent;
 use Bitrix\Rest\Public\Event\SystemUser\SystemUserDeactivatedEvent;
@@ -22,6 +23,7 @@ final class SystemUserCreationService
 		private readonly UserRepository $userRepository,
 		private readonly UserCredentialsGenerator $userCredentialsGenerator,
 		private readonly MemberService $memberService,
+		private readonly SecurityAuditLogger $securityAuditLogger = new SecurityAuditLogger(),
 	)
 	{
 	}
@@ -86,17 +88,11 @@ final class SystemUserCreationService
 
 		$this->userRepository->save($newUser);
 
-		\CEventLog::Log(
-			\CEventLog::SEVERITY_SECURITY,
-			'USER_REGISTER',
-			'rest',
-			$newUser->getId(),
-			json_encode([
-				'originalUserId' => $originalUserId,
-				'newUserId' => $newUser->getId(),
-				'resourceId' => $resourceId,
-				'resourceType' => $resourceType->value,
-			]),
+		$this->securityAuditLogger->logSystemUserRegistered(
+			newUserId: (int)$newUser->getId(),
+			originalUserId: $originalUserId,
+			resourceId: $resourceId,
+			resourceType: $resourceType->value,
 		);
 
 		try {
@@ -124,6 +120,12 @@ final class SystemUserCreationService
 		);
 
 		$this->userRepository->save($user);
+
+		$this->securityAuditLogger->logSystemUserDeactivated(
+			systemUserId: (int)$systemUser->getUserId(),
+			resourceId: (int)$systemUser->getResourceId(),
+			resourceType: $systemUser->getResourceType()?->value ?? '',
+		);
 	}
 
 	public function deactivateForApplication(int $applicationId): void
@@ -151,6 +153,13 @@ final class SystemUserCreationService
 		);
 
 		$this->userRepository->save($user);
+
+		$this->securityAuditLogger->logSystemUserActivated(
+			systemUserId: (int)$systemUser->getUserId(),
+			resourceId: (int)$systemUser->getResourceId(),
+			resourceType: $systemUser->getResourceType()?->value ?? '',
+			originalUserId: $originalUser?->getId(),
+		);
 
 		$event = new SystemUserActivatedEvent($systemUser, $originalUser);
 		$event->send();

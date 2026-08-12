@@ -64,9 +64,15 @@ class ProjectChatMemberSyncService
 			$lastDeleteUserId,
 		);
 
+		$projectManagerIds = $this->projectMemberRepository->getModeratorUserIds($groupId);
+
 		if (!empty($toAdd))
 		{
-			$addResult = $this->addUsersToChat($chat, $toAdd);
+			$addResult = $this->addUsersToChat(
+				chat: $chat,
+				toAdd: $toAdd,
+				possibleChatManagerIds: $projectManagerIds,
+			);
 			$result->addErrors($addResult->getErrors());
 		}
 		if (!empty($toDelete))
@@ -80,10 +86,13 @@ class ProjectChatMemberSyncService
 
 		[$projectUserIds, $chatUserIds] = $this->reloadUserIds($groupId, $chatId);
 
+		$roleResult = $this->reconcileManagerRoles($chat, $chatId, $projectUserIds, $chatUserIds, $projectManagerIds);
+
 		$result
 			->setLastAddUserId($lastAddUserId)
 			->setLastDeleteUserId($lastDeleteUserId)
 			->addErrors($this->getSyncValidationResult($projectUserIds, $chatUserIds, $toAdd, $toDelete)->getErrors())
+			->addErrors($roleResult->getErrors())
 			->setHasMore($this->hasMore($projectUserIds, $chatUserIds, $lastAddUserId, $lastDeleteUserId))
 		;
 
@@ -188,11 +197,14 @@ class ProjectChatMemberSyncService
 		return $result;
 	}
 
-	private function addUsersToChat(Im\V2\Chat $chat, array $toAdd): ProjectChatMemberSyncResult
+	private function addUsersToChat(Im\V2\Chat $chat, array $toAdd, array $possibleChatManagerIds): ProjectChatMemberSyncResult
 	{
 		$result = new ProjectChatMemberSyncResult();
 
+		$managerIds = array_values(array_intersect($toAdd, $possibleChatManagerIds));
+
 		$config = new Relation\AddUsersConfig(
+			managerIds: $managerIds,
 			hideHistory: false,
 			withMessage: false,
 			skipRecent: true,
@@ -241,6 +253,82 @@ class ProjectChatMemberSyncService
 			{
 				$result->addError(new Error($exception->getMessage()));
 			}
+		}
+
+		return $result;
+	}
+
+	private function reconcileManagerRoles(
+		Im\V2\Chat $chat,
+		int $chatId,
+		array $projectUserIds,
+		array $chatUserIds,
+		array $projectManagerIds,
+	): ProjectChatMemberSyncResult
+	{
+		$result = new ProjectChatMemberSyncResult();
+
+		$projectManagerIds = array_values(array_map('intval', $projectManagerIds));
+		$chatManagerIds = array_values(array_map('intval', $this->chatMemberRepository->getManagerUserIds($chatId)));
+
+		$existingMemberIds = array_values(array_map('intval', array_intersect($projectUserIds, $chatUserIds)));
+
+		$toPromote = array_values(array_diff(array_intersect($existingMemberIds, $projectManagerIds), $chatManagerIds));
+		$toDemote = array_values(array_diff(array_intersect($existingMemberIds, $chatManagerIds), $projectManagerIds));
+
+		if (empty($toPromote) && empty($toDemote))
+		{
+			return $result;
+		}
+
+		if (!($chat instanceof Im\V2\Chat\GroupChat))
+		{
+			return $result->addError(new Error(sprintf(
+				'Role reconciliation is not supported for chat type of chat %d',
+				$chatId,
+			)));
+		}
+
+		$managersMap = [];
+		foreach ($toPromote as $userId)
+		{
+			$managersMap[$userId] = true;
+		}
+		foreach ($toDemote as $userId)
+		{
+			$managersMap[$userId] = false;
+		}
+
+		try
+		{
+			$chatWithContext = $chat->withContextUser(self::CONTEXT_USER);
+			$chatWithContext->changeManagersByMap($managersMap, sendPush: false);
+		}
+		catch (\Throwable $exception)
+		{
+			$result->addError(new Error($exception->getMessage()));
+
+			return $result;
+		}
+
+		$rereadChatManagerIds = array_values(array_map('intval', $this->chatMemberRepository->getManagerUserIds($chatId)));
+
+		$failedPromote = array_values(array_diff($toPromote, $rereadChatManagerIds));
+		$failedDemote = array_values(array_intersect($toDemote, $rereadChatManagerIds));
+
+		if (!empty($failedPromote))
+		{
+			$result->addError(new Error(sprintf(
+				'Unable to promote users to chat manager: %s',
+				implode(', ', $failedPromote),
+			)));
+		}
+		if (!empty($failedDemote))
+		{
+			$result->addError(new Error(sprintf(
+				'Unable to demote users from chat manager: %s',
+				implode(', ', $failedDemote),
+			)));
 		}
 
 		return $result;

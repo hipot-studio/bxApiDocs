@@ -2,12 +2,22 @@
 namespace Bitrix\Landing\Hook\Page;
 
 use \Bitrix\Landing\Field;
+use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeEligibilityService;
 use \Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
 
 class CssBlock extends \Bitrix\Landing\Hook\Page
 {
+	private const AI_TAILWIND_RUNTIME_CSS_MARKER = 'ai-tailwind-runtime=1';
+
+	private int $landingId = 0;
+
+	public function setLandingId(int $landingId): void
+	{
+		$this->landingId = max(0, $landingId);
+	}
+
 	/**
 	 * Map of the field.
 	 * @return array
@@ -67,7 +77,9 @@ class CssBlock extends \Bitrix\Landing\Hook\Page
 	 */
 	public function enabledInEditMode()
 	{
-		return false;
+		$cssFile = trim((string)$this->fields['FILE']->getValue());
+
+		return $this->isTailwindRuntimeCssFile($cssFile) && $this->isTailwindRuntimeAllowed();
 	}
 
 	/**
@@ -90,7 +102,22 @@ class CssBlock extends \Bitrix\Landing\Hook\Page
 		}
 		if ($cssFile != '')
 		{
+			if ($this->isTailwindRuntimeCssFile($cssFile) && !$this->isTailwindRuntimeAllowed())
+			{
+				return;
+			}
+
 			echo '<link href="' . \htmlspecialcharsbx($cssFile) . '" type="text/css"  rel="stylesheet" />';
 		}
+	}
+
+	private function isTailwindRuntimeCssFile(string $cssFile): bool
+	{
+		return $cssFile !== '' && mb_stripos($cssFile, self::AI_TAILWIND_RUNTIME_CSS_MARKER) !== false;
+	}
+
+	private function isTailwindRuntimeAllowed(): bool
+	{
+		return $this->landingId > 0 && (new TailwindRuntimeEligibilityService())->isLandingSupported($this->landingId);
 	}
 }

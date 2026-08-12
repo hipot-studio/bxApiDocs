@@ -33,26 +33,42 @@ class CSocNetFeaturesPerms extends CAllSocNetFeaturesPerms
 		$ID = false;
 		if ($arInsert[0] <> '')
 		{
-			$strSql =
-				"INSERT INTO b_sonet_features2perms(".$arInsert[0].") ".
-				"VALUES(".$arInsert[1].")";
-			$DB->Query($strSql);
+			$connection = \Bitrix\Main\Application::getConnection();
+			$strSql = $connection->getSqlHelper()->getInsertIgnore(
+				"b_sonet_features2perms",
+				"(".$arInsert[0].")",
+				"VALUES(".$arInsert[1].")"
+			);
+			$result = $DB->Query($strSql);
 
-			$ID = intval($DB->LastID());
-
-			$events = GetModuleEvents("socialnetwork", "OnSocNetFeaturesPermsAdd");
-			while ($arEvent = $events->Fetch())
+			if ($result->AffectedRowsCount() > 0)
 			{
-				ExecuteModuleEventEx($arEvent, array($ID, $arFields));
+				$ID = intval($DB->LastID());
+
+				$events = GetModuleEvents("socialnetwork", "OnSocNetFeaturesPermsAdd");
+				while ($arEvent = $events->Fetch())
+				{
+					ExecuteModuleEventEx($arEvent, array($ID, $arFields));
+				}
+
+				if (
+					intval($arFields["FEATURE_ID"]) > 0
+					&& defined("BX_COMP_MANAGED_CACHE")
+				)
+				{
+					$CACHE_MANAGER->ClearByTag('sonet_features2perms');
+					$CACHE_MANAGER->ClearByTag("sonet_feature_".$arFields["FEATURE_ID"]);
+				}
 			}
-
-			if (
-				intval($arFields["FEATURE_ID"]) > 0
-				&& defined("BX_COMP_MANAGED_CACHE")
-			)
+			else
 			{
-				$CACHE_MANAGER->ClearByTag('sonet_features2perms');
-				$CACHE_MANAGER->ClearByTag("sonet_feature_".$arFields["FEATURE_ID"]);
+				$dbRes = $DB->Query(
+					"SELECT ID FROM b_sonet_features2perms ".
+					"WHERE FEATURE_ID = ".intval($arFields["FEATURE_ID"])." ".
+					"AND OPERATION_ID = '".$DB->ForSql($arFields["OPERATION_ID"])."'"
+				);
+				$row = $dbRes->Fetch();
+				$ID = $row ? intval($row["ID"]) : false;
 			}
 		}
 

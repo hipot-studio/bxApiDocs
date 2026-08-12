@@ -16,6 +16,8 @@ use Bitrix\Mail\Public\Service\Access\MessageAccessService;
 class MessageByTaskSearch
 {
 	private const DATE_FORMAT = 'Y/m/d H:i';
+	private const MIN_TASK_BATCH_LIMIT = 100;
+	private const TASK_BATCH_LIMIT_MULTIPLIER = 4;
 
 	public function __construct(
 		private readonly TaskFinder $taskFinder,
@@ -26,20 +28,11 @@ class MessageByTaskSearch
 
 	public function search(SearchMessagesByTasksRequest $request, int $userId): array
 	{
-		$tasks = $this->taskFinder->findTasksLinkedToMail(
-			userId: $userId,
-			state: $this->mapState($request->taskState),
-			overdued: $request->taskOverdued,
-			createdFrom: $request->taskCreatedFrom,
-			createdTo: $request->taskCreatedTo,
-			responsibleId: $request->taskResponsibleId,
-			limit: $request->limit,
-		);
-
-		$tasksByEmailId = $this->indexTasksByEmailId($tasks, $request->limit);
+		$pagination = $this->collectTasksByEmailPage($request, $userId);
+		$tasksByEmailId = $pagination['tasksByEmailId'];
 		if (empty($tasksByEmailId))
 		{
-			return ['messages' => []];
+			return $this->createResponse([], false, null, $request);
 		}
 
 		$messageRows = $this->loadMessages(array_keys($tasksByEmailId));
@@ -48,7 +41,12 @@ class MessageByTaskSearch
 		$messageRows = $this->filterAccessibleRows($messageRows, $tasksByEmailId, $accessByMessageTask, $userId);
 		$messageUrls = $this->buildMessageUrls($messageRows, $tasksByEmailId, $accessByMessageTask, $userId);
 
-		return ['messages' => $this->formatMessages($messageRows, $tasksByEmailId, $messageUrls)];
+		return $this->createResponse(
+			$this->formatMessages($messageRows, $tasksByEmailId, $messageUrls),
+			$pagination['hasMore'],
+			$pagination['nextOffset'],
+			$request,
+		);
 	}
 
 	private function mapState(?string $state): ?string
@@ -61,28 +59,184 @@ class MessageByTaskSearch
 		};
 	}
 
-	/**
-	 * Groups tasks by their linked emailId, capped at $limit unique emails.
-	 *
-	 * @return array<int, array<int, array>> emailId => list of tasks
-	 */
-	private function indexTasksByEmailId(array $tasks, int $limit): array
+	private function createResponse(array $messages, bool $hasMore, ?int $nextOffset, SearchMessagesByTasksRequest $request): array
 	{
-		$index = [];
+		return [
+			'messages' => $messages,
+			'hasMore' => $hasMore,
+			'nextOffset' => $nextOffset,
+			'limit' => $request->limit,
+			'offset' => $request->offset,
+		];
+	}
+
+	/**
+	 * Collects a page by accessible unique email messages, not by linked task rows.
+	 *
+	 * @return array{
+	 *   tasksByEmailId: array<int, array<int, array>>,
+	 *   hasMore: bool,
+	 *   nextOffset: int|null
+	 * }
+	 */
+	private function collectTasksByEmailPage(SearchMessagesByTasksRequest $request, int $userId): array
+	{
+		$limit = max(1, $request->limit);
+		$offset = max(0, $request->offset);
+		$requiredAccessibleCount = $offset + $limit + 1;
+		$taskBatchLimit = $this->resolveTaskBatchLimit($limit);
+		$taskOffset = 0;
+		$tasksByEmailId = [];
+		$accessibleMessageIds = [];
+		$accessibilityByMessageId = [];
+
+		do
+		{
+			$tasks = $this->findTasksBatch($request, $userId, $taskBatchLimit, $taskOffset);
+			$taskOffset += count($tasks);
+			$hasMoreTasks = count($tasks) === $taskBatchLimit;
+
+			$changedMessageIds = $this->appendTasksByEmailId($tasksByEmailId, $tasks);
+			if (!empty($changedMessageIds))
+			{
+				$changedTasksByEmailId = $this->filterTasksByMessageIds($tasksByEmailId, $changedMessageIds);
+				$changedAccessibleMessageIds = $this->getAccessibleMessageIds($changedTasksByEmailId, $userId);
+				$changedAccessibleMap = array_fill_keys($changedAccessibleMessageIds, true);
+
+				foreach ($changedMessageIds as $messageId)
+				{
+					$accessibilityByMessageId[$messageId] = isset($changedAccessibleMap[$messageId]);
+				}
+
+				$accessibleMessageIds = $this->filterAccessibleMessageIds(
+					array_keys($tasksByEmailId),
+					$accessibilityByMessageId,
+				);
+			}
+		}
+		while ($hasMoreTasks && count($accessibleMessageIds) < $requiredAccessibleCount);
+
+		$pageMessageIds = array_slice($accessibleMessageIds, $offset, $limit);
+		$hasMore = count($accessibleMessageIds) > $offset + count($pageMessageIds);
+
+		return [
+			'tasksByEmailId' => $this->filterTasksByMessageIds($tasksByEmailId, $pageMessageIds),
+			'hasMore' => $hasMore,
+			'nextOffset' => $hasMore ? $offset + count($pageMessageIds) : null,
+		];
+	}
+
+	private function resolveTaskBatchLimit(int $messageLimit): int
+	{
+		return max(self::MIN_TASK_BATCH_LIMIT, $messageLimit * self::TASK_BATCH_LIMIT_MULTIPLIER);
+	}
+
+	private function findTasksBatch(
+		SearchMessagesByTasksRequest $request,
+		int $userId,
+		int $limit,
+		int $offset,
+	): array
+	{
+		return $this->taskFinder->findTasksLinkedToMail(
+			userId: $userId,
+			state: $this->mapState($request->taskState),
+			overdued: $request->taskOverdued,
+			createdFrom: $request->taskCreatedFrom,
+			createdTo: $request->taskCreatedTo,
+			responsibleId: $request->taskResponsibleId,
+			limit: $limit,
+			offset: $offset,
+		);
+	}
+
+	/**
+	 * @param array<int, array<int, array>> $tasksByEmailId
+	 * @return int[]
+	 */
+	private function appendTasksByEmailId(array &$tasksByEmailId, array $tasks): array
+	{
+		$changedMessageIds = [];
+
 		foreach ($tasks as $task)
 		{
-			$emailId = $task['emailId'];
-			if (!isset($index[$emailId]) && count($index) >= $limit)
+			$emailId = (int)($task['emailId'] ?? 0);
+			if ($emailId <= 0)
 			{
 				continue;
 			}
-			$index[$emailId][] = $task;
+
+			$tasksByEmailId[$emailId][] = $task;
+			$changedMessageIds[$emailId] = true;
 		}
 
-		return $index;
+		return array_keys($changedMessageIds);
 	}
 
-	private function loadMessages(array $messageIds): array
+	/**
+	 * @param array<int, array<int, array>> $tasksByEmailId
+	 * @return int[]
+	 */
+	private function getAccessibleMessageIds(array $tasksByEmailId, int $userId): array
+	{
+		if (empty($tasksByEmailId))
+		{
+			return [];
+		}
+
+		$messageRows = $this->loadMessages(array_keys($tasksByEmailId));
+		$accessByMessageTask = $this->loadAccessByMessageTask($tasksByEmailId);
+		$accessibleRows = $this->filterAccessibleRows($messageRows, $tasksByEmailId, $accessByMessageTask, $userId);
+
+		$accessibleMap = [];
+		foreach ($accessibleRows as $row)
+		{
+			$messageId = (int)($row['MESSAGE_ID'] ?? 0);
+			if ($messageId > 0)
+			{
+				$accessibleMap[$messageId] = true;
+			}
+		}
+
+		return array_values(array_filter(
+			array_keys($tasksByEmailId),
+			static fn (int $messageId): bool => isset($accessibleMap[$messageId]),
+		));
+	}
+
+	/**
+	 * @param array<int, array<int, array>> $tasksByEmailId
+	 * @param int[] $messageIds
+	 * @return array<int, array<int, array>>
+	 */
+	private function filterTasksByMessageIds(array $tasksByEmailId, array $messageIds): array
+	{
+		$result = [];
+		foreach ($messageIds as $messageId)
+		{
+			if (isset($tasksByEmailId[$messageId]))
+			{
+				$result[$messageId] = $tasksByEmailId[$messageId];
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param int[] $messageIds
+	 * @param array<int, bool> $accessibilityByMessageId
+	 * @return int[]
+	 */
+	private function filterAccessibleMessageIds(array $messageIds, array $accessibilityByMessageId): array
+	{
+		return array_values(array_filter(
+			$messageIds,
+			static fn (int $messageId): bool => ($accessibilityByMessageId[$messageId] ?? false) === true,
+		));
+	}
+
+	protected function loadMessages(array $messageIds): array
 	{
 		if (empty($messageIds))
 		{
@@ -94,7 +248,7 @@ class MessageByTaskSearch
 		return $query->fetchAll();
 	}
 
-	private function loadAccessByMessageTask(array $tasksByEmailId): array
+	protected function loadAccessByMessageTask(array $tasksByEmailId): array
 	{
 		$messageIds = array_keys($tasksByEmailId);
 		$taskIds = array_values(array_unique(array_map(
@@ -124,7 +278,7 @@ class MessageByTaskSearch
 		return $result;
 	}
 
-	private function filterAccessibleRows(array $rows, array $tasksByEmailId, array $accessByMessageTask, int $userId): array
+	protected function filterAccessibleRows(array $rows, array $tasksByEmailId, array $accessByMessageTask, int $userId): array
 	{
 		$mailboxAccess = [];
 		$isMailboxAccessible = static function (int $mailboxId) use (&$mailboxAccess, $userId): bool {
@@ -164,7 +318,7 @@ class MessageByTaskSearch
 		}));
 	}
 
-	private function buildMessageUrls(array $rows, array $tasksByEmailId, array $accessByMessageTask, int $userId): array
+	protected function buildMessageUrls(array $rows, array $tasksByEmailId, array $accessByMessageTask, int $userId): array
 	{
 		$urls = [];
 

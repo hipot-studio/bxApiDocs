@@ -8,10 +8,12 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Crm\Component\Base;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Model\Dynamic\Type;
+use Bitrix\Crm\Model\Field\DefaultValue\CloseDateConfigurator;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\UserField\UserFieldManager;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -187,6 +189,23 @@ class CrmTypeDetailComponent extends Base
 	public function getType(): Type
 	{
 		return $this->type;
+	}
+
+	public function getDaysBeforeClose(): int
+	{
+		$typeDaysBeforeClose = $this->type->getDaysBeforeClose();
+		if ($typeDaysBeforeClose !== null)
+		{
+			return $typeDaysBeforeClose;
+		}
+
+		$defaultDaysBeforeClose =
+			ServiceLocator::getInstance()
+				->get(CloseDateConfigurator::class)
+				?->resolveDefaultCloseDateDays($this->type->getEntityTypeId())
+		;
+
+		return $defaultDaysBeforeClose ?? CloseDateConfigurator::DEFAULT_VALUE;
 	}
 
 	protected function getRelations(): array

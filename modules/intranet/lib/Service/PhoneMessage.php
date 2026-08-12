@@ -5,8 +5,8 @@ namespace Bitrix\Intranet\Service;
 use Bitrix\Bitrix24\Integration\Network\ProfileService;
 use Bitrix\Intranet\Contract\SendableContract;
 use Bitrix\Intranet\Entity\User;
+use Bitrix\Intranet\Exception\InvitationFailedException;
 use Bitrix\Main\Loader;
-use Bitrix\Main\SystemException;
 
 class PhoneMessage implements SendableContract
 {
@@ -42,7 +42,7 @@ class PhoneMessage implements SendableContract
 			;
 			if (!$result->isSuccess())
 			{
-				throw new SystemException('Error sending SMS: '.implode(', ', $result->getErrorMessages()));
+				throw new InvitationFailedException($result->getErrorCollection());
 			}
 		}
 	}

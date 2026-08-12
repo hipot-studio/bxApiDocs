@@ -4,16 +4,24 @@ namespace Bitrix\Crm\Integration\BizProc\Document;
 
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Crm;
+use Bitrix\Crm\Automation\Helper;
 use Bitrix\Crm\Category\Entity\Category;
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Integration\Intranet\CustomSectionProvider;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\Operation;
+use Bitrix\Crm\Service\Operation\Add;
+use Bitrix\Crm\Service\Operation\Update;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Objectify\Values;
 use Bitrix\Main\Result;
 
 if (!Loader::includeModule('bizproc'))
@@ -248,26 +256,33 @@ class Item extends \CCrmDocument implements \IBPWorkflowDocument
 		}
 
 		$isBizProcEnabled = $operation->isBizProcEnabled();
+		$isInnerDocumentOperation = $operation instanceof Add || $operation instanceof Update;
 
 		// BizProc is disabled because it will be launched differently further
 		$operation->disableBizProc()->disableCheckFields()->disableCheckAccess();
 		$operationResult = $operation->launch();
 
-		if (
-			$operationResult->isSuccess()
-			&& $isBizProcEnabled
-			&& \COption::GetOptionString('crm', 'start_bp_within_bp', 'N') === 'Y'
-		)
+		if ($isBizProcEnabled && $isInnerDocumentOperation && $operationResult->isSuccess())
 		{
-			$item = $operation->getItem();
-			$itemType = \CCrmOwnerType::ResolveName($item->getEntityTypeId());
-			$itemId = $item->isNew() ? false : $item->getId();
-			$documentId = $item->isNew() ? false : $itemType . '_' . $item->getId();
-
-			$bizProc = new \CCrmBizProc($itemType);
-			if (!$bizProc->CheckFields($documentId, true) || !$bizProc->StartWorkflow($itemId))
+			try
 			{
-				$operationResult->addError(new Error($bizProc->LAST_ERROR));
+				$starter = new CrmStarter(new DocumentDto(
+					$operation->getItem()->getEntityTypeId(),
+					$operation->getItem()->getId()
+				));
+				$starter->setContextModuleId('bizproc');
+				$runData = static::prepareStarterRunData($operation);
+
+				$starterResult = $operation instanceof Add
+					? $starter->runOnInnerDocumentAdd($runData, runAutomation: false)
+					: $starter->runOnInnerDocumentUpdate($runData, runAutomation: false)
+				;
+
+				$operationResult->addErrors($starterResult->getErrors());
+			}
+			catch (ArgumentException $exception)
+			{
+				$operationResult->addError(new Error($exception->getMessage()));
 			}
 		}
 
@@ -277,6 +292,48 @@ class Item extends \CCrmDocument implements \IBPWorkflowDocument
 		}
 
 		return $operationResult;
+	}
+
+	protected static function prepareStarterRunData(Operation $operation): RunDataDto
+	{
+		$context = $operation->getContext();
+		$scope = '';
+		if ($context->getScope() === Context::SCOPE_AUTOMATION)
+		{
+			$scope = CrmStarter::AUTOMATION_SCOPE;
+		}
+		elseif ($context->getScope() === Context::SCOPE_REST)
+		{
+			$scope = CrmStarter::REST_SCOPE;
+		}
+
+		$actualFields = null;
+		$previousFields = null;
+		$itemBeforeSave = $operation->getItemBeforeSave();
+		if ($itemBeforeSave)
+		{
+			$entityTypeId = $itemBeforeSave->getEntityTypeId();
+			$actualFields = Helper::prepareCompatibleData(
+				$entityTypeId,
+				$itemBeforeSave->getCompatibleData(Values::CURRENT)
+			);
+
+			if ($operation instanceof Update)
+			{
+				$previousFields = Helper::prepareCompatibleData(
+					$entityTypeId,
+					$itemBeforeSave->getCompatibleData(Values::ACTUAL)
+				);
+			}
+		}
+
+		return new RunDataDto(
+			actualFields: $actualFields,
+			previousFields: $previousFields,
+			userId: $context->getScope() === Context::SCOPE_AUTOMATION ? 0 : $context->getUserId(),
+			scope: $scope,
+			categoryId: $operation->getItem()->isCategoriesSupported() ? $operation->getItem()->getCategoryId() : null,
+		);
 	}
 
 	protected static function getContext(int $userId = 0): Crm\Service\Context

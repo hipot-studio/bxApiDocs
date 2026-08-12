@@ -287,12 +287,8 @@ class UserSettings
 
 	public static function getSectionCustomization($userId = false)
 	{
-		/*
-		 * \CUserOptions::setOption("calendar", "section_customization", serialize(['tasks' => ['name' => 'Custom task name', 'color' =>
-		 '#FF22FF']]), false, $userId);
-		*/
-
 		$result = [];
+
 		$str = \CUserOptions::getOption("calendar", "section_customization", false, $userId);
 		if ($str !== false && CheckSerializedData($str))
 		{

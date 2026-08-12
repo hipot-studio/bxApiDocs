@@ -8,6 +8,7 @@ enum Statuses: string
 	case Success = 'success';
 	case Error = 'error';
 	case ErrorContentPolicy = 'error_content_policy';
+	case SoftBlockContentPolicy = 'soft_block_content_policy';
 	case ErrorB24 = 'error_b24';
 	case ErrorProvider = 'error_provider';
 	case ErrorLimitDaily = 'error_limit_daily';

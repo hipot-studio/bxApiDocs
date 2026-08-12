@@ -4,8 +4,10 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Reading\Counter\Updater\Delete;
 
 use Bitrix\Im\Model\MessageUnreadTable;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeFilterFactory;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeScope;
 use Bitrix\Im\V2\Message\Counter\CounterOverflowService;
-use Bitrix\Im\V2\Chat;
+use Bitrix\Main\DI\ServiceLocator;
 
 class Executor
 {
@@ -19,12 +21,12 @@ class Executor
 	public function execute(): DeleteResult
 	{
 		$filter = $this->buildFilter();
+		$chatIds = $this->getChatIds() ?? [];
 		if (empty($filter))
 		{
-			return new DeleteResult(0, []);
+			return new DeleteResult(chatIds: $chatIds);
 		}
 
-		$chatIds = $this->getChatIds();
 		$deletedCount = MessageUnreadTable::deleteByFilter($filter);
 		$this->deleteOverflow();
 		$this->clearCache();
@@ -98,13 +100,10 @@ class Executor
 			return $this->resolvedArray;
 		}
 
-		if ($this->scope->getParentId() !== null)
+		$treeScope = $this->scope->getTreeScope();
+		if ($treeScope !== null)
 		{
-			$this->resolvedArray = $this->getChatIdsByParent();
-		}
-		else if ($this->scope->getType() !== null)
-		{
-			$this->resolvedArray = $this->getChatIdsByType($this->scope->getType());
+			$this->resolvedArray = $this->getChatIdsByTreeScope($treeScope);
 		}
 		else
 		{
@@ -114,37 +113,30 @@ class Executor
 		return $this->resolvedArray;
 	}
 
-	protected function getChatIdsByParent(): array
+	protected function getChatIdsByTreeScope(ChatTreeScope $treeScope): array
 	{
-		$query = MessageUnreadTable::query()
-			->setSelect(['CHAT_ID'])
-			->where('PARENT_ID', $this->scope->getParentId())
-			->addGroup('CHAT_ID')
-		;
-
-		if ($this->audience->getUserId() !== null)
+		if (!$treeScope->isPossible())
 		{
-			$query->where('USER_ID', $this->audience->getUserId());
+			return [];
 		}
 
-		return array_map('intval', array_column($query->fetchAll() ?: [], 'CHAT_ID'));
-	}
+		$userId = $this->audience->getUserId();
 
-	protected function getChatIdsByType(Chat\Type $type): array
-	{
 		$query = MessageUnreadTable::query()
 			->setSelect(['CHAT_ID'])
 			->setDistinct()
-			->where('CHAT_TYPE', $type->literal)
 		;
-		if ($type->entityType)
+
+		if ($userId !== null)
 		{
-			$query->where('CHAT.ENTITY_TYPE', $type->entityType);
+			$query->where('USER_ID', $userId);
 		}
-		if ($this->audience->getUserId() !== null)
-		{
-			$query->where('USER_ID', $this->audience->getUserId());
-		}
+
+		ServiceLocator::getInstance()
+			->get(ChatTreeFilterFactory::class)
+			->forTreeScopeUnreadCounters($treeScope)
+			->apply($query)
+		;
 
 		$rows = $query->fetchAll();
 

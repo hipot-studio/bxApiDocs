@@ -9,8 +9,11 @@ final readonly class TreeOrigin
 		public string $parentRef,
 		public string $idExpression,
 		public ?string $chatAlias = null,
+		public string $typeField = 'TYPE',
+		public string $entityTypeField = 'ENTITY_TYPE',
 	) {}
 
+	// Navigator cache depends only on ancestor join shape.
 	public function equals(self $other): bool
 	{
 		return $this->parentRef === $other->parentRef
@@ -23,14 +26,35 @@ final readonly class TreeOrigin
 	{
 		if ($alias !== null)
 		{
-			return new self("{$alias}.PARENT_ID", "{$alias}.ID", $alias);
+			return new self(
+				"{$alias}.PARENT_ID",
+				"{$alias}.ID",
+				$alias,
+				"{$alias}.TYPE",
+				"{$alias}.ENTITY_TYPE",
+			);
 		}
 
-		return new self('PARENT_ID', 'ID');
+		return new self('PARENT_ID', 'ID', null, 'TYPE', 'ENTITY_TYPE');
 	}
 
-	public static function forFields(string $id, string $parent): self
+	public static function forFields(
+		string $id,
+		string $parent,
+		string $typeField = 'TYPE',
+		string $entityTypeField = 'ENTITY_TYPE',
+	): self
 	{
-		return new self($parent, $id);
+		return new self($parent, $id, null, $typeField, $entityTypeField);
+	}
+
+	public static function forUnreadCounters(): self
+	{
+		return self::forFields(
+			id: 'CHAT_ID',
+			parent: 'PARENT_ID',
+			typeField: 'CHAT_TYPE',
+			entityTypeField: 'CHAT.ENTITY_TYPE',
+		);
 	}
 }

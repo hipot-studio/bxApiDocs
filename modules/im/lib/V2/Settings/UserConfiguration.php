@@ -2,16 +2,14 @@
 
 namespace Bitrix\Im\V2\Settings;
 
-use Bitrix\Im\Common;
 use Bitrix\Im\Configuration\Configuration;
 use Bitrix\Im\Configuration\General;
+use Bitrix\Im\Configuration\Manager;
 use Bitrix\Im\Model\OptionUserTable;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Settings\Preset\Preset;
 use Bitrix\Im\V2\Settings\Preset\PresetError;
-use Bitrix\Pull\Event;
-use CModule;
 
 class UserConfiguration
 {
@@ -111,6 +109,10 @@ class UserConfiguration
 		}
 
 		$this->generalPreset->general->updateSetting($settingsConfiguration);
+		Manager::sendPullGeneralSettingsUpdate(
+			$this->userId,
+			[$settingsConfiguration['name'] => $settingsConfiguration['value']]
+		);
 		$this->perfomSideEffect($settingsConfiguration, $settingsBeforeUpdate);
 
 		if (!$this->generalPreset->general->shouldUpdateSimpleNotifySettings($settingsConfiguration))
@@ -198,7 +200,6 @@ class UserConfiguration
 	protected function perfomSideEffect(array $settingConfiguration, ?array $settingsBeforeUpdate)
 	{
 		$this->updateUserSearch($settingConfiguration);
-		$this->openDesktopFromPanel($settingConfiguration);
 
 		if (isset($settingsBeforeUpdate))
 		{
@@ -257,25 +258,6 @@ class UserConfiguration
 		}
 
 		CacheManager::getUserCache($this->userId)->clearCache();
-	}
-
-	private function openDesktopFromPanel(array $settingsConfiguration): void
-	{
-		if (
-			$settingsConfiguration['name'] === Entity\General::OPEN_DESKTOP_FROM_PANEL
-			&& CModule::IncludeModule('pull')
-		)
-		{
-			Event::add($this->userId, [
-				'module_id' => 'im',
-				'command' => 'settingsUpdate',
-				'expiry' => 5,
-				'params' => [
-					'openDesktopFromPanel' => $settingsConfiguration['value'],
-				],
-				'extra' => Common::getPullExtra()
-			]);
-		}
 	}
 
 	public function checkIsPersonalGeneralPreset(): bool

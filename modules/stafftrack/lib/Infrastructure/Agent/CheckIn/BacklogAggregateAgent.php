@@ -12,7 +12,7 @@ class BacklogAggregateAgent
 	{
 		self::processAndContinueIfNeeded();
 
-		return '\\Bitrix\\StaffTrack\\Infrastructure\\Agent\\CheckIn\\BacklogAggregateAgent::run();';
+		return 'Bitrix\\StaffTrack\\Infrastructure\\Agent\\CheckIn\\BacklogAggregateAgent::run();';
 	}
 
 	public static function runContinuation(): string
@@ -21,7 +21,7 @@ class BacklogAggregateAgent
 
 		if ($hasMore)
 		{
-			return '\\Bitrix\\StaffTrack\\Infrastructure\\Agent\\CheckIn\\BacklogAggregateAgent::runContinuation();';
+			return 'Bitrix\\StaffTrack\\Infrastructure\\Agent\\CheckIn\\BacklogAggregateAgent::runContinuation();';
 		}
 
 		return '';
@@ -50,7 +50,7 @@ class BacklogAggregateAgent
 
 	private static function scheduleContinuation(): void
 	{
-		$agentName = '\\Bitrix\\StaffTrack\\Infrastructure\\Agent\\CheckIn\\BacklogAggregateAgent::runContinuation();';
+		$agentName = 'Bitrix\\StaffTrack\\Infrastructure\\Agent\\CheckIn\\BacklogAggregateAgent::runContinuation();';
 
 		\CAgent::RemoveAgent($agentName, 'stafftrack');
 		\CAgent::AddAgent(

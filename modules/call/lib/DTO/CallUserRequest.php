@@ -17,4 +17,5 @@ class CallUserRequest extends Hydrator
 	public int $code = 0;
 	public array $connectedUsers = [];
 	public array $disconnectedUsers = [];
+	public string $requestId = '';
 }

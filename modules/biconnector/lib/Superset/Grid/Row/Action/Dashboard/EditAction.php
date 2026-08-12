@@ -16,6 +16,9 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
 
+/**
+ * @deprecated This class is deprecated.
+ */
 final class EditAction extends BaseAction
 {
 

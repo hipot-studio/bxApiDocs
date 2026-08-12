@@ -12,9 +12,10 @@ class StagesMapping
 {
 	public static function getMapping(MysqliSqlHelper|PgsqlSqlHelper $helper, string $languageId): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$entityIdSql = DbHelper::getSqlByDbType(
 			'SUBSTRING_INDEX(SUBSTRING_INDEX(S.ENTITY_ID, "_", 2), "_", -1)',
-			'split_part(S."ENTITY_ID", \'_\', 2)'
+			$helper->castToInt('split_part(S.ENTITY_ID, \'_\', 2)')
 		);
 
 		return [
@@ -83,10 +84,10 @@ class StagesMapping
 				],
 				'CATEGORY_NAME' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'CASE  
-    WHEN S.ENTITY_ID LIKE \'DEAL_STAGE%\' THEN ifnull(CDC.NAME, \'' . $helper->forSql(static::getDefaultDealCategoryName($languageId)) . '\')
+					'FIELD_NAME' => 'CASE
+    WHEN S.ENTITY_ID LIKE \'DEAL_STAGE%\' THEN coalesce(CDC.NAME, \'' . $helper->forSql(static::getDefaultDealCategoryName($languageId)) . '\')
     WHEN (LEFT(S.ENTITY_ID, 7) = \'DYNAMIC\') THEN CIC.NAME
-    ELSE \'\' 
+    ELSE \'\'
     END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'multiple_join',

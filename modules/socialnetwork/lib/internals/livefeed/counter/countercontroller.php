@@ -217,6 +217,46 @@ class CounterController
 		];
 		UserContentViewTable::set($viewParams);
 		UserProcessor::getInstance($this->userId)->readAll($groupId);
+
+		$this->notifyImReadAll($groupId);
+	}
+
+	/**
+	 * Dispatches public event socialnetwork::onSpaceLiveFeedReadAll to sync
+	 * "feed read-all -> project (collab) chat". im subscribes to it
+	 * (LiveFeedReadAllHandler) and clears unread on the user's linked system messages.
+	 *
+	 * Mirrors the single-post onContentViewed model: bulk read-all does NOT emit
+	 * onContentViewed (see MarkFeedPostsSeenTrait), so read-all needs its own public hook.
+	 *
+	 * chatId is resolved once here without side effects and passed into the event: the link
+	 * table has an index on IM_CHAT_ID but none on GROUP_ID. Gate: collab with new projects on.
+	 */
+	private function notifyImReadAll(int $groupId): void
+	{
+		if ($groupId <= 0 || !\Bitrix\Socialnetwork\V2\Feature::isNewProjectsOn())
+		{
+			return;
+		}
+
+		$chatId = \Bitrix\Socialnetwork\V2\Internal\DI\Container::getInstance()
+			->getProjectChatResolver()
+			->getByProjectId($groupId)
+		;
+		if (!$chatId)
+		{
+			return;
+		}
+
+		(new \Bitrix\Main\Event(
+			'socialnetwork',
+			'onSpaceLiveFeedReadAll',
+			[
+				'userId' => $this->userId,
+				'groupId' => $groupId,
+				'imChatId' => $chatId,
+			]
+		))->send();
 	}
 
 	private function isSameValueCached(int $value): bool

@@ -15,8 +15,14 @@ class NotifyLiveFeedPostAdd implements MessageDataInterface
 	public function __construct(
 		private readonly ?User $contextUser,
 		private readonly string $url,
+		private readonly int $logId = 0,
 	)
 	{
+	}
+
+	public function getLogId(): int
+	{
+		return $this->logId;
 	}
 
 	public function getText(): string

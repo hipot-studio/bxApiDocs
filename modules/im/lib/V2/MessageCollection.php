@@ -56,6 +56,7 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	protected bool $isUrlsFilled = false;
 	protected bool $isUnreadFilled = false;
 	protected bool $isViewedFilled = false;
+	protected bool $isViewedCountFilled = false;
 	protected bool $isReactionsFilled = false;
 	protected bool $isBuilderFilled = false;
 
@@ -575,6 +576,26 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return $this;
 	}
 
+	public function fillViewedCount(): self
+	{
+		if ($this->isViewedCountFilled)
+		{
+			return $this;
+		}
+
+		$provider = ServiceLocator::getInstance()->get(ViewProvider::class);
+		$counts = $provider->getViewedCountForMessages($this->getIds());
+
+		foreach ($this as $message)
+		{
+			$message->setViewedCount($counts[$message->getMessageId()] ?? 0);
+		}
+
+		$this->isViewedCountFilled = true;
+
+		return $this;
+	}
+
 	public function fillReactions(): self
 	{
 		if ($this->isReactionsFilled)
@@ -637,6 +658,14 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		if (!$onlyCommonInfo)
 		{
 			$this->fillUnread()->fillViewed();
+		}
+
+		// viewedCount is emitted only for the full payload (see Message::toRestFormat):
+		// the fill condition must match the output gate exactly to avoid both a wasted
+		// COUNT (fill without output) and an N+1 lazy load (output without fill).
+		if (!$shortInfo && !$onlyCommonInfo)
+		{
+			$this->fillViewedCount();
 		}
 
 		return $this
@@ -804,7 +833,7 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 			new UserPopupItem($this->getUserIds()),
 			new FilePopupItem($this->getFiles()),
 			new AdditionalMessagePopupItem($additionalMessageIds),
-			CopilotPopupItem::getInstanceByMessages($this),
+			CopilotPopupItem::getInstanceByChatIdsAndMessages($this, $this->getChatIds()),
 			$this->getStickers(),
 		];
 

@@ -16,6 +16,8 @@ use Bitrix\Main\Type\DateTime;
 
 class AbsenceProvider
 {
+	private const DAY_END_OFFSET_SECONDS = 86399;
+
 	private AbsenceRepository $absenceRepository;
 	private int $iblockId;
 
@@ -55,10 +57,14 @@ class AbsenceProvider
 		$day ??= new Date();
 		$dateStr = $day->format('Y-m-d');
 
-		$dateFrom = new DateTime($dateStr . ' 00:00:00', "Y-m-d H:i:s");
-		$dateTo = new DateTime($dateStr . ' 23:59:59', "Y-m-d H:i:s");
+		$dateFrom = new DateTime($dateStr . ' 00:00:00', 'Y-m-d H:i:s');
+		$dateTo = new DateTime($dateStr . ' 23:59:59', 'Y-m-d H:i:s');
 
-		return $this->absenceRepository->getCollection($userId, $this->iblockId, $dateFrom, $dateTo);
+		return $this->sortByDayIntersection(
+			$this->absenceRepository->getCollection($userId, $this->iblockId, $dateFrom, $dateTo),
+			$dateFrom,
+			$dateTo,
+		);
 	}
 
 	public function addUserAbsence(
@@ -88,5 +94,81 @@ class AbsenceProvider
 		UserAbsence::cleanCache();
 
 		return $result;
+	}
+
+	private function sortByDayIntersection(
+		EntityCollection $collection,
+		DateTime $dateFrom,
+		DateTime $dateTo,
+	): EntityCollection
+	{
+		$absences = [];
+		foreach ($collection as $absence)
+		{
+			if (self::getDayIntersectionDuration($absence, $dateFrom, $dateTo) > 0)
+			{
+				$absences[] = $absence;
+			}
+		}
+
+		if (count($collection) < 2 && count($absences) === count($collection))
+		{
+			return $collection;
+		}
+
+		usort(
+			$absences,
+			static function (Absence $left, Absence $right) use ($dateFrom, $dateTo): int
+			{
+				$durationCompare =
+					self::getDayIntersectionDuration($right, $dateFrom, $dateTo)
+					<=> self::getDayIntersectionDuration($left, $dateFrom, $dateTo)
+				;
+
+				if ($durationCompare !== 0)
+				{
+					return $durationCompare;
+				}
+
+				$startCompare = $right->getDateFrom()->getTimestamp() <=> $left->getDateFrom()->getTimestamp();
+				if ($startCompare !== 0)
+				{
+					return $startCompare;
+				}
+
+				return ($left->getId() ?? 0) <=> ($right->getId() ?? 0);
+			}
+		);
+
+		$sortedCollection = new EntityCollection();
+		foreach ($absences as $absence)
+		{
+			$sortedCollection->add($absence);
+		}
+
+		return $sortedCollection;
+	}
+
+	private static function getDayIntersectionDuration(
+		Absence $absence,
+		DateTime $dateFrom,
+		DateTime $dateTo,
+	): int
+	{
+		$absenceFrom = $absence->getDateFrom()->getTimestamp();
+		$absenceTo = $absence->getDateTo()->getTimestamp();
+
+		if (
+			$absenceTo >= $absenceFrom
+			&& !$absence->dateToContainsTime()
+		)
+		{
+			$absenceTo += self::DAY_END_OFFSET_SECONDS;
+		}
+
+		$intersectionStart = max($absenceFrom, $dateFrom->getTimestamp());
+		$intersectionEnd = min($absenceTo, $dateTo->getTimestamp());
+
+		return max(0, $intersectionEnd - $intersectionStart);
 	}
 }

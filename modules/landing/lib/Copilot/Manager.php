@@ -4,8 +4,10 @@ declare(strict_types=1);
 namespace Bitrix\Landing\Copilot;
 
 use Bitrix\AI\Tuning;
+use Bitrix\AiAssistant\Config;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Landing;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Rest\Marketplace\Client;
 
@@ -14,6 +16,8 @@ use Bitrix\Rest\Marketplace\Client;
  */
 class Manager
 {
+	private const OPTION_AI_SITES_ENABLED = 'landing_ai_sites_enabled';
+
 	/**
 	 * Check is feature available (by option, tariff etc.)
 	 *
@@ -27,6 +31,18 @@ class Manager
 		}
 
 		return Loader::includeModule('ai');
+	}
+
+	public static function isAiSitesEnabled(): bool
+	{
+		return Option::get('landing', self::OPTION_AI_SITES_ENABLED, 'N', '') === 'Y'
+			&& self::isAiAssistantAiSitesAvailable()
+		;
+	}
+
+	public static function getAiSitesDisabledErrorCode(): string
+	{
+		return 'ai_sites_disabled_by_option';
 	}
 
 	/**
@@ -120,5 +136,13 @@ class Manager
 	public static function getUnactiveSliderCode(): string
 	{
 		return Landing\Copilot\Connector\AI\Type\SliderCode::CopilotOff->value;
+	}
+
+	private static function isAiAssistantAiSitesAvailable(): bool
+	{
+		return Loader::includeModule('aiassistant')
+			&& Config\Feature::getInstance()->isBitrixGptV2Available()
+			&& Config\Feature::getInstance()->isCopilotTriggersEnabled()
+		;
 	}
 }

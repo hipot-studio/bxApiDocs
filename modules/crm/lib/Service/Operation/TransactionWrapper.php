@@ -167,6 +167,9 @@ final class TransactionWrapper
 					),
 					parameters: is_array($workflowParameters) || is_string($workflowParameters) ? $workflowParameters : null,
 					scope: $scope,
+					categoryId: $this->operation->getItem()->isCategoriesSupported()
+						? $this->operation->getItem()->getCategoryId()
+						: null,
 				),
 				$bizProcEventType,
 			);

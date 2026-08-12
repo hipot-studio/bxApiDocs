@@ -5,7 +5,14 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Landing\Copilot;
+use Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
+use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeEligibilityService;
 use Bitrix\Landing\Folder;
+use Bitrix\Landing\Integration\AiAssistant\Contract\AiSiteChatBindingContract;
+use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteBindingService;
+use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatAvailabilityService;
+use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatContextService;
+use Bitrix\Landing\Integration\AiAssistant\WidgetDataProvider;
 use Bitrix\Landing\Manager;
 use Bitrix\Landing\Site;
 use Bitrix\Landing\Landing;
@@ -21,9 +28,12 @@ use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Intranet;
+use Bitrix\Main\Web\Uri;
 
+Loc::loadMessages(__FILE__);
 
 \CBitrixComponent::includeComponentClass('bitrix:landing.base');
 
@@ -71,6 +81,15 @@ class LandingViewComponent extends LandingBaseComponent
 			}
 
 			$url = $landing->getPublicUrl(false, true, $this->arParams['DRAFT_MODE'] !== 'Y');
+
+			// Mark the device-preview URL with the editor-context flag (MARKER-01). Its value is
+			// the parent portal origin, which the injected preview responder uses to validate
+			// incoming postMessage commands. Built via Uri, never string concatenation.
+			$parentOrigin = (Manager::isHttps() ? 'https://' : 'http://')
+				. mb_strtolower(\Bitrix\Main\Context::getCurrent()->getServer()->getHttpHost());
+			$previewUri = new Uri($url);
+			$previewUri->addParams(['landing_device_preview' => $parentOrigin]);
+			$url = $previewUri->getUri();
 		}
 
 		\Bitrix\Landing\Landing::setPreviewMode(false);
@@ -103,7 +122,7 @@ class LandingViewComponent extends LandingBaseComponent
 			$url = $landing->getPublicUrl(false, true, true);
 			if ($this->arParams['DONT_LEAVE_AFTER_PUBLICATION'] == 'Y')
 			{
-				$uriPreview = new \Bitrix\Main\Web\Uri($url);
+				$uriPreview = new Uri($url);
 				$uriPreview->addParams([
 					'IFRAME' => 'Y'
 				]);
@@ -211,12 +230,11 @@ class LandingViewComponent extends LandingBaseComponent
 					$rights
 				) && $this->arResult['FAKE_PUBLICATION']
 			],
-			'helperFrameOpenUrl' => !$uiInstalled ? null : \CHTTP::urlAddParams(\Bitrix\UI\Util::getHelpdeskUrl(true) . '/widget2/', [
-				'url' => urlencode(
-					(Manager::isHttps() ? 'https://' : 'http://') .
+			'helperFrameOpenUrl' => !$uiInstalled ? null : (string)(new Uri(\Bitrix\UI\Util::getHelpdeskUrl(true) . '/widget2/'))->addParams([
+				'url' => (Manager::isHttps() ? 'https://' : 'http://') .
 					Manager::getHttpHost() .
 					Manager::getApplication()->getCurPageParam()
-				),
+				,
 				'user_id' => Manager::getUserId(),
 				'is_cloud' => ModuleManager::isModuleInstalled('bitrix24') ? '1' : '0',
 				'action' => 'open'
@@ -293,7 +311,7 @@ class LandingViewComponent extends LandingBaseComponent
 		if ($landing->exist())
 		{
 			// display agreement
-			$uriSave = new \Bitrix\Main\Web\Uri(
+			$uriSave = new Uri(
 				$request->getRequestUri()
 			);
 			$uriSave->deleteParams(array(
@@ -669,16 +687,27 @@ class LandingViewComponent extends LandingBaseComponent
 				$options['ai_text_available'] = $arResult['AI_TEXT_AVAILABLE'];
 				$options['copilot_available'] = $arResult['COPILOT_AVAILABLE'];
 				$options['copilot_name'] = Copilot\Services\NameService::getCopilotName();
+				$options['editor_ai_action_title'] = Copilot\Services\NameService::replaceCopilotName(
+					Loc::getMessage('LANDING_TITLE_OF_EDITOR_ACTION_BITRIX_GPT')
+				);
 				$options['ai_text_active'] = $arResult['AI_TEXT_ACTIVE'];
 				$options['ai_image_available'] = $arResult['AI_IMAGE_AVAILABLE'];
 				$options['ai_image_active'] = $arResult['AI_IMAGE_ACTIVE'];
 				$options['ai_unactive_info_code'] = $arResult['AI_UNACTIVE_INFO_CODE'];
 				$options['google_images_available'] = Manager::isB24();
+				$options['vkVideoAvailable'] = Manager::availableOnlyForZone('ru');
 				$options['allow_minisites'] = \Bitrix\Landing\Restriction\Form::isMinisitesAllowed();
+				$isAiSiteCreated = (new CreateAiSiteChecker())->isSiteCreated($landing->getSiteId());
 				$options['folder_id'] = $landing->getFolderId();
 				$options['version'] = Manager::getVersion();
 				$options['default_section'] = $this->getCurrentBlockSection($type);
+				$options['blockControlsEnabled'] = !Copilot\Manager::isAiSitesEnabled() || !$isAiSiteCreated;
+				$options['tailwindRuntimeEnabled'] = (new TailwindRuntimeEligibilityService())->isLandingSupported((int)$landing->getId());
 				$options['specialType'] = $this->arResult['SPECIAL_TYPE'];
+				$options['autoPublicationEnabled'] =
+					$this->arResult['SPECIAL_TYPE'] === Type::PSEUDO_SCOPE_CODE_FORMS ||
+					\CUserOptions::getOption('landing', 'auto_publication', 'Y') === 'Y'
+				;
 				if (
 					$options['specialType'] === Type::PSEUDO_SCOPE_CODE_FORMS
 					&& Loader::includeModule('crm')
@@ -942,7 +971,7 @@ class LandingViewComponent extends LandingBaseComponent
 	 * Gets get some system urls for template.
 	 * @param Landing $landing Landing instance.
 	 * @param array $site Site row.
-	 * @return \Bitrix\Main\Web\Uri[]
+	 * @return Uri[]
 	 */
 	protected function getUrls(Landing $landing, $site = null)
 	{
@@ -1019,45 +1048,45 @@ class LandingViewComponent extends LandingBaseComponent
 		foreach ($urlsConfig as $code => $config)
 		{
 			$config['action'] = $code;
-			$uri = new \Bitrix\Main\Web\Uri($curUrl);
+			$uri = new Uri($curUrl);
 			$uri->addParams($config);
 			$urls[$code] = $uri;
 		}
 
-		$urls['preview_device'] = new \Bitrix\Main\Web\Uri(
+		$urls['preview_device'] = new Uri(
 			$this->getDevicePreview($landing->getId())
 		);
-		$urls['landings'] = new \Bitrix\Main\Web\Uri(
+		$urls['landings'] = new Uri(
 			$replaceParamUrl('site_show')
 		);
-		$urls['landingView'] = new \Bitrix\Main\Web\Uri(
+		$urls['landingView'] = new Uri(
 			$replaceParamUrl('landing_view')
 		);
-		$urls['designBlock'] = new \Bitrix\Main\Web\Uri(
+		$urls['designBlock'] = new Uri(
 			str_replace('#', '__', $this->arParams['PARAMS']['sef_url']['landing_view'] ?? '')
 		);
 		$urls['designBlock']->addParams([
 			'design_block' => '__block_id__'
 		]);
-		$urls['landingEdit'] = new \Bitrix\Main\Web\Uri(
+		$urls['landingEdit'] = new Uri(
 			$replaceParamUrl('landing_edit')
 		);
-		$urls['landingDesign'] = new \Bitrix\Main\Web\Uri(
+		$urls['landingDesign'] = new Uri(
 			$replaceParamUrl('landing_design')
 		);
-		$urls['landingSiteEdit'] = new \Bitrix\Main\Web\Uri(
+		$urls['landingSiteEdit'] = new Uri(
 			$replaceParamUrl('site_edit')
 		);
-		$urls['landingSiteDesign'] = new \Bitrix\Main\Web\Uri(
+		$urls['landingSiteDesign'] = new Uri(
 			$replaceParamUrl('site_design')
 		);
-		$urls['landingCatalogEdit'] = new \Bitrix\Main\Web\Uri(
+		$urls['landingCatalogEdit'] = new Uri(
 			$replaceParamUrl('site_edit')
 		);
 		$urls['landingCatalogEdit']->addParams([
 			'tpl' => 'catalog'
 		]);
-		$urls['landingFrame'] = new \Bitrix\Main\Web\Uri(
+		$urls['landingFrame'] = new Uri(
 			$replaceParamUrl('landing_view')
 		);
 		$urls['landingFrame']->addParams([
@@ -1069,14 +1098,8 @@ class LandingViewComponent extends LandingBaseComponent
 				'IFRAME' => 'Y'
 			]);
 		}
-		if (isset($_GET['site_generated']))
-		{
-			$urls['landingFrame']->addParams([
-				 'site_generated' => $_GET['site_generated']
-			]);
-		}
-		if (isset($_GET['newLanding']) && $_GET['newLanding'] === 'Y')
-		{
+			if (isset($_GET['newLanding']) && $_GET['newLanding'] === 'Y')
+			{
 			$urls['landingFrame']->addParams([
 				'newLanding' => 'Y'
 			]);
@@ -1139,6 +1162,115 @@ class LandingViewComponent extends LandingBaseComponent
 		return $conditions;
 	}
 
+	private function isAiAssistantPanelSupportedSiteType(): bool
+	{
+		return in_array(
+			$this->arParams['TYPE'],
+			['PAGE', 'STORE'],
+			true,
+		);
+	}
+
+	private function prepareAiSiteEditorTriggerData(
+		int $siteId,
+		int $pageId,
+		string $siteTitle,
+		string $pageTitle,
+		bool $isAiSiteCreated,
+		bool $canEditSite,
+		bool $isEditorShellContext,
+	): void
+	{
+		$this->arResult['AI_SITE_BINDING_ID'] = 0;
+		$this->arResult['AI_SITE_TRIGGER_CODE'] = AiSiteChatBindingContract::TRIGGER_CODE;
+		$this->arResult['AI_SITE_TRIGGER_CONTEXT'] = [];
+		$this->arResult['AI_SITE_TRIGGER_ENABLED'] = false;
+
+		if (
+			!$isAiSiteCreated
+			|| !$canEditSite
+			|| !$isEditorShellContext
+			|| !($this->arResult['SHOW_AI_ASSISTANT_PANEL'] ?? false)
+			|| !$this->isAiSiteProductAvailable()
+			|| $siteId <= 0
+			|| $pageId <= 0
+		)
+		{
+			return;
+		}
+
+		$userId = $this->getCurrentUserId();
+		if ($userId <= 0)
+		{
+			return;
+		}
+
+		$bindingId = $this->getAiSiteBindingService()->getOrCreateForSite($userId, $siteId);
+		$this->arResult['AI_SITE_BINDING_ID'] = $bindingId;
+		$this->arResult['AI_SITE_TRIGGER_CONTEXT'] = $this->getAiSiteChatContextService()->getEditorContext(
+			$bindingId,
+			$siteId,
+			$pageId,
+			$siteTitle,
+			$pageTitle,
+		);
+		$this->arResult['AI_SITE_TRIGGER_ENABLED'] =
+			$bindingId > 0
+			&& $this->isAiSiteTriggerIntegrationAvailable($bindingId)
+		;
+	}
+
+	private function isAiSiteEditorShellContext(): bool
+	{
+		return $this->request('landing_mode') === ''
+			&& $this->request('action') !== 'preview'
+		;
+	}
+
+	private function isAiSiteTriggerIntegrationAvailable(int $bindingId): bool
+	{
+		$override = $this->getAiSiteTriggerIntegrationAvailableOverride();
+		if ($override !== null)
+		{
+			return $override;
+		}
+
+		return $this->getAiSiteChatAvailabilityService()->isTriggerAvailable($bindingId);
+	}
+
+	protected function isAiSiteProductAvailable(): bool
+	{
+		return $this->getAiSiteChatAvailabilityService()
+			->checkSitesAiProductAvailability()
+			->isAvailable()
+		;
+	}
+
+	protected function getCurrentUserId(): int
+	{
+		return Manager::getUserId();
+	}
+
+	protected function getAiSiteBindingService(): AiSiteBindingService
+	{
+		return new AiSiteBindingService();
+	}
+
+	protected function getAiSiteChatContextService(): AiSiteChatContextService
+	{
+		return new AiSiteChatContextService();
+	}
+
+	protected function getAiSiteChatAvailabilityService(): AiSiteChatAvailabilityService
+	{
+		return new AiSiteChatAvailabilityService();
+	}
+
+	protected function getAiSiteTriggerIntegrationAvailableOverride(): ?bool
+	{
+		return null;
+	}
+
 	/**
 	 * Base executable method.
 	 * @return void
@@ -1177,7 +1309,6 @@ class LandingViewComponent extends LandingBaseComponent
 
 			// ai
 			$this->arResult['AI_TEXT_AVAILABLE'] = \Bitrix\Landing\Connector\Ai::isTextAvailable();
-			$this->arResult['AI_CHAT_ID'] = (new Copilot\Connector\Chat\Chat())->getChatForSite($this->arParams['SITE_ID']);
 			$this->arResult['COPILOT_AVAILABLE'] = \Bitrix\Landing\Connector\Ai::isCopilotAvailable();
 			$this->arResult['AI_TEXT_ACTIVE'] = \Bitrix\Landing\Connector\Ai::isTextActive();
 			$this->arResult['AI_IMAGE_AVAILABLE'] = \Bitrix\Landing\Connector\Ai::isImageAvailable();
@@ -1190,26 +1321,6 @@ class LandingViewComponent extends LandingBaseComponent
 			$this->arResult['FAKE_PUBLICATION'] = !$this->arResult['AUTO_PUBLICATION_ENABLED']
 			                                      || ($this->arParams['DRAFT_MODE'] === 'Y')
 			                                      || $landing->fakePublication();
-
-			if (Loader::includeModule('ai'))
-			{
-				// force chatbot registration
-				/**
-				 * @var Copilot\Connector\Chat\ChangeBlockChatBot $chatbot
-				 */
-				$chatbot = Copilot\Connector\Chat\Chat::getChangeBlockChatBot();
-				if (
-					$chatbot
-					&& isset($this->arResult['AI_CHAT_ID'])
-					&& $this->arResult['AI_CHAT_ID'] > 0
-				)
-				{
-					$chatbot->sendWelcomeMessage(
-						new Copilot\Connector\Chat\ChatBotMessageDto($this->arResult['AI_CHAT_ID'])
-					);
-					$chatbot->applyToChat($this->arResult['AI_CHAT_ID']);
-				}
-			}
 
 			if (
 				$this->arParams['TYPE'] === Site\Type::SCOPE_CODE_VIBE
@@ -1288,6 +1399,27 @@ class LandingViewComponent extends LandingBaseComponent
 				{
 					\localRedirect($this->getRealFile());
 				}
+				$this->arResult['IS_CREATED_BY_AI_SCENARIO'] = (new CreateAiSiteChecker())->isSiteCreated($landing->getSiteId());
+				$aiSitesEnabled = Copilot\Manager::isAiSitesEnabled();
+				$isAiSiteUiEnabled = (bool)$this->arResult['IS_CREATED_BY_AI_SCENARIO'] && $aiSitesEnabled;
+				$this->arResult['SHOW_AI_ASSISTANT_PANEL'] =
+					$aiSitesEnabled
+					&& $this->isAiAssistantPanelSupportedSiteType()
+					&& $this->arResult['SPECIAL_TYPE'] !== Site\Type::PSEUDO_SCOPE_CODE_FORMS
+				;
+				if ($this->arResult['SHOW_AI_ASSISTANT_PANEL'])
+				{
+					$widgetDataProvider = new WidgetDataProvider();
+					$this->arResult += $isAiSiteUiEnabled
+						? $widgetDataProvider->getDataWithoutRecentDialog()
+						: $widgetDataProvider->getData()
+					;
+				}
+				else
+				{
+					$this->arResult['AI_ASSISTANT_DIALOG_ID'] = '';
+					$this->arResult['IM_APPLICATION_DATA'] = [];
+				}
 				// disable optimisation
 				if (\Bitrix\Landing\Manager::isB24())
 				{
@@ -1340,6 +1472,15 @@ class LandingViewComponent extends LandingBaseComponent
 				$this->arResult['CAN_EDIT_SITE'] = in_array(
 					Rights::ACCESS_TYPES['edit'],
 					$rights
+				);
+				$this->prepareAiSiteEditorTriggerData(
+					(int)$landing->getSiteId(),
+					(int)$landing->getId(),
+					(string)($this->arResult['SITE']['TITLE'] ?? ''),
+					(string)$landing->getTitle(),
+					$isAiSiteUiEnabled,
+					(bool)$this->arResult['CAN_EDIT_SITE'],
+					$this->isAiSiteEditorShellContext(),
 				);
 				$this->arResult['TOP_PANEL_CONFIG'] = $this->getTopPanelConfig(
 					$landing,

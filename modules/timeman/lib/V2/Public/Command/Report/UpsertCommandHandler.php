@@ -19,6 +19,8 @@ class UpsertCommandHandler
 			$command->recordId,
 			$command->userId,
 			$command->reportText,
+			$command->type,
+			$command->scheduleAiReport,
 		);
 	}
 }

@@ -7,12 +7,11 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
 use Bitrix\BIConnector\Superset\MarketAccessManager;
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
-final class CopyAction extends BaseAction
+final class CopyAction extends BaseDashboardAction
 {
 	public static function getId(): ?string
 	{
@@ -26,7 +25,7 @@ final class CopyAction extends BaseAction
 
 	protected function getText(): string
 	{
-		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_COPY') ?? '';
+		return Loc::getMessage('BICONNECTOR_DASHBOARD_GRID_ACTION_COPY_MSGVER_1') ?? '';
 	}
 
 	public function getControl(array $rawFields): ?array
@@ -67,6 +66,10 @@ final class CopyAction extends BaseAction
 
 		$this->onclick = $onClickHandler;
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-copy');
+
+		return $result;
 	}
 }

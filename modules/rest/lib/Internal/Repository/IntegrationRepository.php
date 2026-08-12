@@ -23,14 +23,14 @@ class IntegrationRepository implements RepositoryInterface
 
 	public function getById(mixed $id): ?Integration
 	{
-		$ormModel = IntegrationTable::getById($id)->fetch();
+		$ormModel = IntegrationTable::getById($id)->fetchObject();
 
 		if (!$ormModel)
 		{
 			return null;
 		}
 
-		return $this->mapper->convertFromArray($ormModel);
+		return $this->mapper->convertFromOrm($ormModel);
 	}
 
 	public function getByApplicationExternalId(string $externalApplicationId): ?Integration
@@ -48,7 +48,7 @@ class IntegrationRepository implements RepositoryInterface
 			)
 			->where('APPLICATION.CLIENT_ID', $externalApplicationId)
 			->setLimit(1)
-			->fetch()
+			->fetchObject()
 		;
 
 		if (!$ormModel)
@@ -56,7 +56,7 @@ class IntegrationRepository implements RepositoryInterface
 			return null;
 		}
 
-		return $this->mapper->convertFromArray($ormModel);
+		return $this->mapper->convertFromOrm($ormModel);
 	}
 
 	public function getByIncomingWebhookPasswordId(int $passwordId): ?Integration
@@ -65,7 +65,7 @@ class IntegrationRepository implements RepositoryInterface
 			->setSelect(['*'])
 			->where('PASSWORD_ID', $passwordId)
 			->setLimit(1)
-			->fetch()
+			->fetchObject()
 		;
 
 		if (!$ormModel)
@@ -73,7 +73,7 @@ class IntegrationRepository implements RepositoryInterface
 			return null;
 		}
 
-		return $this->mapper->convertFromArray($ormModel);
+		return $this->mapper->convertFromOrm($ormModel);
 	}
 
 	/**
@@ -83,15 +83,7 @@ class IntegrationRepository implements RepositoryInterface
 	{
 		try
 		{
-			$data = $this->mapper->convertToArray($entity);
-			if ($entity->getId() !== null)
-			{
-				$result = IntegrationTable::update($entity->getId(), $data);
-			}
-			else
-			{
-				$result = IntegrationTable::add($data);
-			}
+			$result = $this->mapper->convertToOrm($entity)->save();
 		}
 		catch (\Exception $e)
 		{

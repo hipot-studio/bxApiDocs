@@ -6,12 +6,11 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
-final class DeleteGroupAction extends BaseAction
+final class DeleteGroupAction extends BaseDashboardAction
 {
 	public static function getId(): ?string
 	{
@@ -48,6 +47,10 @@ final class DeleteGroupAction extends BaseAction
 		$groupId = (int)$rawFields['ID'];
 		$this->onclick = "BX.BIConnector.SupersetDashboardGridManager.Instance.deleteGroup({$groupId})";
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-trashcan', true);
+
+		return $result;
 	}
 }

@@ -2,7 +2,6 @@
 namespace Bitrix\Timeman\Service\Worktime;
 
 use Bitrix\Bizproc\Public\Activity\Trigger\ContextFields\TimemanStartWorktimeTrigger;
-use Bitrix\Bizproc\Public\Activity\Trigger\ContextFields\TimemanStopWorktimeTrigger;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Result\StartResult;
@@ -15,6 +14,7 @@ use Bitrix\Main\ORM\Objectify\Values;
 use Bitrix\Main\Result;
 use Bitrix\Timeman\Form\Worktime\WorktimeRecordForm;
 use Bitrix\Timeman\Helper\TimeHelper;
+use Bitrix\Timeman\Integration\Bizproc\StopWorktimeTrigger;
 use Bitrix\Timeman\Integration\Pull\PushEvent;
 use Bitrix\Timeman\Integration\Pull\PushService;
 use Bitrix\Timeman\Model\Schedule\Schedule;
@@ -254,7 +254,23 @@ class WorktimeService extends BaseService
 			}
 
 			if ($actionListResult->getWorktimeAction()->isStop()) {
-				$this->addStopWorkTimeTrigger($actualRecord->getUserId(), $actualRecord->getId());
+				$this->addStopWorkTimeTrigger(
+					$actualRecord->getUserId(),
+					$actualRecord->getId(),
+					$actualRecord->isFirstStop()
+				);
+			}
+
+			if (
+				$actionListResult->getWorktimeAction()->isEdit()
+				&& $actualRecord->isClosed()
+				&& $actualRecord->isFirstStop()
+			) {
+				$this->addStopWorkTimeTrigger(
+					$actualRecord->getUserId(),
+					$actualRecord->getId(),
+					true
+				);
 			}
 
 			if ($actionListResult->getSchedule())
@@ -499,19 +515,17 @@ class WorktimeService extends BaseService
 		;
 	}
 
-	private function addStopWorkTimeTrigger(int $userId, int $recordId): ?StartResult
+	private function addStopWorkTimeTrigger(int $userId, int $recordId, bool $isFirstStop): ?StartResult
 	{
-		if (
-			!Loader::includeModule('bizproc')
-			|| !class_exists(TimemanStopWorktimeTrigger::class)
-		)
+		if (!Loader::includeModule('bizproc'))
 		{
 			return null;
 		}
 
 		$fields = [
-			TimemanStopWorktimeTrigger::FIELD_USER_ID => $userId,
-			TimemanStopWorktimeTrigger::FIELD_RECORD_ID => $recordId,
+			StopWorktimeTrigger::FIELD_USER_ID => $userId,
+			StopWorktimeTrigger::FIELD_RECORD_ID => $recordId,
+			StopWorktimeTrigger::FIELD_IS_FIRST_STOP => $isFirstStop,
 		];
 
 		return Starter::getByScenario(Scenario::onEvent)

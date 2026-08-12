@@ -39,9 +39,11 @@ class MailMessage
 	public int $chatBindId = 0;
 	public int $taskBindId = 0;
 	public int $eventBindId = 0;
+	public int $blogPostBindId = 0;
 	public int $crmBindTypeId = 0;
 	public string $ownerType;
 	public int $direction;
+	public bool $readOnly = false;
 	public ?string $body = '';
 	public int $withAttachments = 0;
 	public array $attachments = [];

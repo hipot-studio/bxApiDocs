@@ -3,9 +3,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Public\Facade\Invitation;
 
+use Bitrix\Bitrix24\Integration\Network\Errors\InviteLimitError;
 use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\Intranet\Contract\Strategy\InvitationMessageFactoryContract;
 use Bitrix\Intranet\Entity\Collection\UserCollection;
+use Bitrix\Intranet\Exception\ErrorCollectionException;
+use Bitrix\Intranet\Exception\InvitationFailedException;
 use Bitrix\Intranet\Public\Type\BaseInvitation;
 use Bitrix\Intranet\Public\Type\Collection\InvitationCollection;
 use Bitrix\Intranet\Entity\User;
@@ -20,9 +23,12 @@ use Bitrix\Intranet\Internal\Factory\Message\ExtranetInvitationMessageFactory;
 use Bitrix\Intranet\Internal\Factory\Message\IntranetInvitationMessageFactory;
 use Bitrix\Intranet\Internal\Strategy\Registration\ReInviteRegistrationStrategy;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Error;
+use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Collab\Collab;
 
 class ReInvitationFacade extends InvitationFacade
@@ -30,7 +36,9 @@ class ReInvitationFacade extends InvitationFacade
 	/**
 	 * @throws ArgumentException
 	 */
-	public function __construct()
+	public function __construct(
+		private ?Collab $collab = null,
+	)
 	{
 		parent::__construct(new InvitationService(
 			new UserRepository(),
@@ -55,12 +63,58 @@ class ReInvitationFacade extends InvitationFacade
 
 		if ($invitationType === InvitationType::EMAIL)
 		{
-			$messageFactory->createEmailEvent()->sendImmediately();
+			$this->sendInviteMessage($messageFactory->createEmailEvent());
 		}
 		elseif ($invitationType === InvitationType::PHONE)
 		{
-			$messageFactory->createSmsEvent()->sendImmediately();
+			$this->sendInviteMessage($messageFactory->createSmsEvent());
 		}
+	}
+
+	private function sendInviteMessage(\Bitrix\Intranet\Contract\SendableContract $message): void
+	{
+		try
+		{
+			$message->sendImmediately();
+		}
+		catch (ErrorCollectionException $exception)
+		{
+			$inviteLimitError = $exception->getErrors()->getErrorByCode(InviteLimitError::CODE);
+			if ($inviteLimitError === null)
+			{
+				throw $exception;
+			}
+
+			$inviteLimitType = $inviteLimitError instanceof InviteLimitError
+				? $inviteLimitError->getInviteLimitType()
+				: null
+			;
+
+			$errors = new ErrorCollection();
+			$errors->setError(new Error(
+				$this->getInviteLimitMessage($inviteLimitType),
+				InviteLimitError::CODE,
+			));
+
+			throw new InvitationFailedException($errors);
+		}
+	}
+
+	private function getInviteLimitMessage(?string $inviteLimitType): string
+	{
+		$messageCode = match ($inviteLimitType)
+		{
+			'by_sms' => 'INTRANET_CONTROLLER_INVITE_ERROR_INVITE_LIMIT_SMS',
+			'by_email' => 'INTRANET_CONTROLLER_INVITE_ERROR_INVITE_LIMIT_EMAIL',
+			default => '',
+		};
+
+		if (empty($messageCode))
+		{
+			return 'Invite limit exceeded';
+		}
+
+		return Loc::getMessage($messageCode);
 	}
 
 	private function getFirstUserCollab(User $user): ?Collab
@@ -92,17 +146,16 @@ class ReInvitationFacade extends InvitationFacade
 				$departmentCollection,
 			);
 		}
-		elseif (
+
+		if (
 			Loader::includeModule('extranet')
 			&& ServiceContainer::getInstance()->getCollaberService()->isCollaberById($user->getId())
-			&& $collab = $this->getFirstUserCollab($user)
+			&& $collab = ($this->collab ?? $this->getFirstUserCollab($user))
 		)
 		{
 			return new CollabInvitationMessageFactory($user, $collab);
 		}
-		else
-		{
-			return new ExtranetInvitationMessageFactory($user);
-		}
+
+		return new ExtranetInvitationMessageFactory($user);
 	}
 }

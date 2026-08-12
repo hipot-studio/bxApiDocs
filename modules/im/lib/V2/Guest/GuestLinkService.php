@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Guest;
 
-use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\Model\SharingLinkTable;
 use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
@@ -14,6 +13,8 @@ use Bitrix\Im\V2\Guest\Auth\AuthError;
 use Bitrix\Im\V2\Integration\Notifications\NotificationService;
 use Bitrix\Im\V2\Permission;
 use Bitrix\Im\V2\Guest\Pull\UserLogout;
+use Bitrix\Im\V2\Relation\DeleteUserConfig;
+use Bitrix\Im\V2\SharingLink\SharingLinkMemberService;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\SharingLink\Dto\CreateDto;
 use Bitrix\Im\V2\SharingLink\Entity\LinkEntityType;
@@ -21,8 +22,11 @@ use Bitrix\Im\V2\SharingLink\GuestChatLink;
 use Bitrix\Im\V2\SharingLink\GuestInviteService;
 use Bitrix\Im\V2\SharingLink\SharingLinkError;
 use Bitrix\Im\V2\SharingLink\SharingLinkFactory;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Event;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\UserAuthActionTable;
 use Bitrix\Main\UserTable;
 
 /**
@@ -98,7 +102,7 @@ class GuestLinkService
 			(string)$chat->getId(),
 			$authorId
 		);
-		$deactivatedCode = $existingLink?->getCode();
+		$revokedLinkId = $existingLink?->getId();
 
 		$generateResult = $factory->generateLink(
 			dto: $this->buildIndividualLinkDto($chat, $authorId),
@@ -107,9 +111,9 @@ class GuestLinkService
 
 		if ($generateResult->isSuccess())
 		{
-			if ($deactivatedCode !== null)
+			if ($revokedLinkId !== null)
 			{
-				$this->notifyGuestsCodesDeactivated($chat, [$deactivatedCode]);
+				$this->kickGuestsByRevokedLinks($chat, [$revokedLinkId]);
 			}
 			if ($withMessage)
 			{
@@ -144,14 +148,14 @@ class GuestLinkService
 			return $result->addError(new SharingLinkError(SharingLinkError::NOT_FOUND));
 		}
 
-		$deactivatedCode = $existingLink->getCode();
+		$revokedLinkId = $existingLink->getId();
 		$revokeResult = $existingLink->revoke();
 
 		if ($revokeResult->isSuccess())
 		{
-			if ($deactivatedCode !== null)
+			if ($revokedLinkId !== null)
 			{
-				$this->notifyGuestsCodesDeactivated($chat, [$deactivatedCode]);
+				$this->kickGuestsByRevokedLinks($chat, [$revokedLinkId]);
 			}
 			if ($withMessage)
 			{
@@ -278,7 +282,7 @@ class GuestLinkService
 		}
 
 		$links = SharingLinkTable::query()
-			->setSelect(['ID', 'AUTHOR_ID', 'CODE'])
+			->setSelect(['ID', 'AUTHOR_ID'])
 			->where('ENTITY_TYPE', LinkEntityType::GuestChat->value)
 			->where('ENTITY_ID', (string)$chatId)
 			->where('IS_REVOKED', 'N')
@@ -298,7 +302,6 @@ class GuestLinkService
 		$relations = $chat->getRelationsByUserIds(array_keys($linksByAuthor));
 
 		$ineligibleLinkIds = [];
-		$deactivatedCodes = [];
 		foreach ($linksByAuthor as $authorId => $authorLinks)
 		{
 			$authorRole = $relations->getByUserId($authorId, $chatId)?->getRole() ?? Chat::ROLE_GUEST;
@@ -309,7 +312,6 @@ class GuestLinkService
 			foreach ($authorLinks as $link)
 			{
 				$ineligibleLinkIds[] = $link->getId();
-				$deactivatedCodes[] = $link->getCode();
 			}
 		}
 		if ($ineligibleLinkIds === [])
@@ -319,7 +321,7 @@ class GuestLinkService
 
 		SharingLinkTable::updateMulti($ineligibleLinkIds, ['IS_REVOKED' => 'Y'], true);
 
-		$this->notifyGuestsCodesDeactivated($chat, $deactivatedCodes);
+		$this->kickGuestsByRevokedLinks($chat, $ineligibleLinkIds);
 	}
 
 	public function onChatMemberDeleted(Chat $chat, int $userId): void
@@ -331,7 +333,7 @@ class GuestLinkService
 		}
 
 		$links = SharingLinkTable::query()
-			->setSelect(['ID', 'CODE'])
+			->setSelect(['ID'])
 			->where('ENTITY_TYPE', LinkEntityType::GuestChat->value)
 			->where('ENTITY_ID', (string)$chatId)
 			->where('AUTHOR_ID', $userId)
@@ -344,16 +346,14 @@ class GuestLinkService
 		}
 
 		$ids = [];
-		$deactivatedCodes = [];
 		foreach ($links as $link)
 		{
 			$ids[] = $link->getId();
-			$deactivatedCodes[] = $link->getCode();
 		}
 
 		SharingLinkTable::updateMulti($ids, ['IS_REVOKED' => 'Y'], true);
 
-		$this->notifyGuestsCodesDeactivated($chat, $deactivatedCodes);
+		$this->kickGuestsByRevokedLinks($chat, $ids);
 	}
 
 	/**
@@ -371,11 +371,10 @@ class GuestLinkService
 	}
 
 	/**
-	 * One-shot cleanup on feature disable: synchronously push userLogout to all active
-	 * guests (cheap — indexed lookup + one Pull batch) so their open tabs redirect right
-	 * away, and defer the heavy bulk-revoke UPDATE to a one-shot agent so the Save-handler
-	 * does not block. Security holds in the meantime via the lazy check
-	 * {@see Features::isChatWithGuestsAvailable()} inside {@see GuestService::isGuestSessionValid}.
+	 * Kill-switch: push userLogout to all active guests, sever their sessions, pull channels
+	 * and push tokens, defer the bulk revoke to a one-shot agent. Security holds meanwhile via
+	 * the lazy feature check; the guests themselves are deactivated later by the periodic
+	 * {@see CleanupService} sweep.
 	 */
 	private function onFeatureDisabled(): void
 	{
@@ -384,11 +383,8 @@ class GuestLinkService
 	}
 
 	/**
-	 * Chunked one-shot agent. The $lastSeenId cursor is encoded in the agent name on
-	 * each reschedule — keeps every batch's SELECT to a flat O(B) PRIMARY range scan
-	 * instead of O(N) re-scan over already-revoked rows.
-	 * Returns its own (cursor-bumped) name to reschedule, or '' to unregister itself.
-	 * If the feature got re-enabled while the cleanup was in progress — bail out.
+	 * Chunked one-shot agent; the $lastSeenId cursor lives in the agent name (keyset, no re-scan).
+	 * Returns its cursor-bumped name to reschedule, '' to unregister; bails out if the feature is back on.
 	 */
 	public static function revokeAllGuestLinksAgent(int $lastSeenId = 0): string
 	{
@@ -426,8 +422,7 @@ class GuestLinkService
 	}
 
 	/**
-	 * @return int|null the new cursor (max ID processed) when the batch was full and
-	 * there may be more; null when nothing left to do.
+	 * @return int|null next cursor when the batch was full; null when done
 	 */
 	private function revokeNextGuestLinksBatch(int $lastSeenId): ?int
 	{
@@ -461,54 +456,153 @@ class GuestLinkService
 		return max($ids);
 	}
 
+	/**
+	 * Keyset batches: the portal-wide guest list is unbounded, one giant pull event on the
+	 * option Save-handler hit is not.
+	 */
 	private function logoutAllActiveGuests(): void
 	{
-		$rows = UserTable::query()
-			->setSelect(['ID'])
-			->where('EXTERNAL_AUTH_ID', UserGuest::AUTH_ID)
-			->where('ACTIVE', 'Y')
-			->fetchAll()
-		;
-
-		$userIds = array_values(array_map(static fn (array $row): int => (int)$row['ID'], $rows));
-		if ($userIds === [])
+		$lastSeenId = 0;
+		do
 		{
-			return;
-		}
+			$userIds = [];
+			$result = UserTable::query()
+				->setSelect(['ID'])
+				->where('EXTERNAL_AUTH_ID', UserGuest::AUTH_ID)
+				->where('ACTIVE', 'Y')
+				->where('ID', '>', $lastSeenId)
+				->setOrder(['ID' => 'ASC'])
+				->setLimit(self::REVOKE_BATCH_SIZE)
+				->exec()
+			;
+			while ($row = $result->fetch())
+			{
+				$userId = (int)$row['ID'];
+				$userIds[] = $userId;
+				$lastSeenId = $userId;
+			}
+			if ($userIds === [])
+			{
+				return;
+			}
 
-		(new UserLogout($userIds))->send();
+			(new UserLogout($userIds))->send();
+			$this->severGuestSessions($userIds);
+			$this->dropGuestPullChannels($userIds);
+			$this->dropGuestPushTokens($userIds);
+		}
+		while (count($userIds) === self::REVOKE_BATCH_SIZE);
 	}
 
 	/**
-	 * Push deactivated invite codes to all active guests of the chat. We don't store
-	 * who joined via which code, so the cast is chat-wide; guests sitting on a different
-	 * live link will pass {@see \Bitrix\Im\V2\Guest\GuestService::isCurrentGuestSessionValid}
-	 * on the next request and keep their session.
+	 * The guest's PHP session survives the kill-switch until the {@see CleanupService} sweep
+	 * deactivates the user, and mobile-native paths ('/mobile/' in the im_guest_mobile scope)
+	 * let a live app re-register its push token with nothing but IsAuthorized(). A logout auth
+	 * action kills the session in the prolog of the guest's very next hit — before any token
+	 * re-registration action runs.
 	 *
-	 * @param list<string> $deactivatedCodes
+	 * Rows mirror {@see UserAuthActionTable::addLogoutAction()}, batched into one multi-INSERT;
+	 * addMulti() cleans the entity cache, so cached CheckAuthActions reads see the action at once.
+	 *
+	 * @param list<int> $userIds
 	 */
-	private function notifyGuestsCodesDeactivated(Chat $chat, array $deactivatedCodes): void
+	private function severGuestSessions(array $userIds): void
+	{
+		$actionDate = new DateTime();
+		$rows = [];
+		foreach ($userIds as $userId)
+		{
+			$rows[] = [
+				'USER_ID' => $userId,
+				'PRIORITY' => UserAuthActionTable::PRIORITY_HIGH,
+				'ACTION' => UserAuthActionTable::ACTION_LOGOUT,
+				'ACTION_DATE' => $actionDate,
+			];
+		}
+
+		UserAuthActionTable::addMulti($rows, true);
+	}
+
+	/**
+	 * Relations survive the kill-switch, so an open channel would keep receiving fan-out until
+	 * TTL (~12h) — terminating the channels cuts non-cooperative clients too. Runs strictly
+	 * AFTER the userLogout flush: recipients' channels are resolved at send time.
+	 *
+	 * @param list<int> $userIds
+	 */
+	private function dropGuestPullChannels(array $userIds): void
+	{
+		if (!Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		\Bitrix\Pull\Event::send();
+		\CPullChannel::DeleteByUsers($userIds);
+	}
+
+	/**
+	 * Native pushes resolve recipients from surviving relations and devices from b_pull_push
+	 * at send time, ignoring pull channels entirely; guests stay ACTIVE until the periodic
+	 * {@see CleanupService} sweep — so the tokens must go now, or "silent" mobile guests keep
+	 * receiving pushes until an app restart.
+	 *
+	 * @param list<int> $userIds
+	 */
+	private function dropGuestPushTokens(array $userIds): void
+	{
+		if (!Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		\Bitrix\Pull\Model\PushTable::deleteByUsers($userIds);
+	}
+
+	/**
+	 * Kicks exactly the guests that joined via the revoked links; a guest with another live link
+	 * to this chat keeps the seat. Full logout happens inside deleteUser only when no access remains.
+	 *
+	 * @param list<int> $revokedLinkIds
+	 */
+	private function kickGuestsByRevokedLinks(Chat $chat, array $revokedLinkIds): void
 	{
 		$chatId = $chat->getId() ?? 0;
-		if ($chatId <= 0 || $deactivatedCodes === [])
+		$revokedLinkIds = array_values(array_filter(
+			array_map(static fn ($id): int => (int)$id, $revokedLinkIds),
+			static fn (int $id): bool => $id > 0,
+		));
+		if ($chatId <= 0 || $revokedLinkIds === [])
 		{
 			return;
 		}
 
-		$rows = RelationTable::query()
-			->setSelect(['USER_ID'])
-			->where('CHAT_ID', $chatId)
-			->where('USER.EXTERNAL_AUTH_ID', UserGuest::AUTH_ID)
-			->where('USER.ACTIVE', true)
-			->fetchAll()
-		;
+		$memberService = SharingLinkMemberService::getInstance();
+		$userIds = $memberService->getUserIdsByLinkIds($revokedLinkIds);
+		$usersToKeep = $memberService->getUsersWithAnotherActiveLinkInChat($userIds, $chatId, $revokedLinkIds);
 
-		$userIds = array_values(array_map(static fn (array $row): int => (int)$row['USER_ID'], $rows));
-		if ($userIds === [])
+		foreach ($userIds as $userId)
 		{
-			return;
+			if (isset($usersToKeep[$userId]))
+			{
+				continue;
+			}
+
+			$deleteResult = $chat->deleteUser($userId, new DeleteUserConfig(withMessage: false, withNotification: false));
+			if (!$deleteResult->isSuccess())
+			{
+				// Failed kick leaves a member on a revoked link; access dies lazily — log it.
+				(new LoggerFactory())->createById('im.Guest.Kick')?->error(
+					'Failed to kick guest by revoked link',
+					[
+						'chatId' => $chatId,
+						'userId' => $userId,
+						'errors' => $deleteResult->getErrorMessages(),
+					],
+				);
+			}
 		}
 
-		(new UserLogout($userIds, $deactivatedCodes))->send();
+		$memberService->deleteByLinkIds($revokedLinkIds);
 	}
 }

@@ -16,6 +16,7 @@ use Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ConvertRuleCommand;
 use Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ConvertRuleCommandResult;
 use Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\SaveSingleRuleCommand;
 use Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\SaveSingleRuleCommandResult;
+use Bitrix\BizprocDesigner\Internal\Config\Feature;
 use Bitrix\BizprocDesigner\Internal\Entity\ActivityData;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Loader;
@@ -68,6 +69,7 @@ class Complex extends \Bitrix\Main\Engine\JsonController
 		}
 
 		$complexActivityService = Container::instance()->getComplexActivityService();
+		$fixedDocumentType = $complexActivityService->getFixedDocumentTypeForNodeAction($activity->type);
 
 		$complexActivityName = strtolower($activity->type);
 		$nodeActionCollection = $complexActivityService
@@ -98,7 +100,12 @@ class Complex extends \Bitrix\Main\Engine\JsonController
 			description: $activity->properties['EditorComment'] ?? '',
 			portRuleDtoDictionary: $portRuleDtoDictionary,
 			actionEntryDtoDictionary: $actionDictionary,
-			fixedDocumentType: $complexActivityService->getFixedDocumentTypeForNodeAction($activity->type),
+			fixedDocumentType: $fixedDocumentType,
+			filterSupported: Feature::instance()->isNodeFilterAvailable()
+				&& Container::instance()
+					->getFilterResultPropertyResolverRegistry()
+					->supportsModule((string)($fixedDocumentType[0] ?? ''))
+			,
 		);
 	}
 

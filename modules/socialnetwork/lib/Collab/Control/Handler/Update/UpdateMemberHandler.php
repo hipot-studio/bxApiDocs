@@ -118,12 +118,36 @@ class UpdateMemberHandler implements UpdateHandlerInterface
 		}
 
 		$actionParameters = ['initiatedByType' => $command->getInitiatedByType()];
+		$botActionParameters = $actionParameters;
 
-		ActionMessageBuffer::getInstance()
-			->put(ActionType::AddUser, $command->getId(), $command->getInitiatorId(), $employeeIds, $actionParameters)
-			->put(ActionType::AddGuest, $command->getId(), $command->getInitiatorId(), $guestIds, $actionParameters)
-			->put(ActionType::AddBot, $command->getId(), $command->getInitiatorId(), $botIds, $actionParameters)
-		;
+		if ($command->getAddBotSilently())
+		{
+			$botActionParameters['withoutMessage'] = true;
+		}
+
+		$sharingLinkAuthorId = $command->getSharingLinkAuthorId();
+
+		if ($sharingLinkAuthorId > 0)
+		{
+			$sharingLinkParameters = array_merge($actionParameters, [
+				'authorId' => $sharingLinkAuthorId,
+				'initiatedByType' => $command->getInitiatedByType(),
+			]);
+
+			ActionMessageBuffer::getInstance()
+				->put(ActionType::JoinBySharingLink, $command->getId(), $command->getInitiatorId(), $employeeIds, $sharingLinkParameters)
+				->put(ActionType::JoinBySharingLink, $command->getId(), $command->getInitiatorId(), $guestIds, $sharingLinkParameters)
+				->put(ActionType::AddBot, $command->getId(), $command->getInitiatorId(), $botIds, $botActionParameters)
+			;
+		}
+		else
+		{
+			ActionMessageBuffer::getInstance()
+				->put(ActionType::AddUser, $command->getId(), $command->getInitiatorId(), $employeeIds, $actionParameters)
+				->put(ActionType::AddGuest, $command->getId(), $command->getInitiatorId(), $guestIds, $actionParameters)
+				->put(ActionType::AddBot, $command->getId(), $command->getInitiatorId(), $botIds, $botActionParameters)
+			;
+		}
 
 		$writeToLogResult = $this->writeAddMemberLog(
 			$membersToAdd,
@@ -163,6 +187,15 @@ class UpdateMemberHandler implements UpdateHandlerInterface
 			->getAccessCodeIdList()
 		;
 
+		// Capture structure-initiated members before deletion: their removal is announced project-wide by the
+		// department message (ProjectDepartmentMembersRemoved from the humanresources EventHandler), so they are
+		// excluded from the per-user exclusion message below. Covers both removal paths that reach this handler:
+		// chat-member sync (OnAfterUsersDeleteEvent) and the COLLAB-relation unlink (StructureSyncService).
+		$structureInitiatedIds = Container::getInstance()
+			->getProjectMemberRepository()
+			->getStructureInitiatedMemberIds($command->getId(), $delete)
+		;
+
 		$handlerResult = $this->deleteMembers($command->getId(), ...$delete);
 
 		if (!$handlerResult->isSuccess())
@@ -183,10 +216,14 @@ class UpdateMemberHandler implements UpdateHandlerInterface
 			);
 		}
 
-		ActionMessageFactory::getInstance()
-			->getActionMessage(ActionType::ExcludeUser, $command->getId(), $command->getInitiatorId())
-			->send($delete)
-		;
+		$excludeRecipients = array_values(array_diff($delete, $structureInitiatedIds));
+		if (!empty($excludeRecipients))
+		{
+			ActionMessageFactory::getInstance()
+				->getActionMessage(ActionType::ExcludeUser, $command->getId(), $command->getInitiatorId())
+				->send($excludeRecipients)
+			;
+		}
 
 		$writeToLogResult = $this->writeDeleteMemberLog($delete, $entityAfter, $command->getInitiatorId());
 

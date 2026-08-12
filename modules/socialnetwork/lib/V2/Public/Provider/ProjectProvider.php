@@ -9,24 +9,28 @@ use Bitrix\Main\Type\Collection;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Socialnetwork\Collab\Registry\CollabRegistry;
+use Bitrix\Socialnetwork\V2\Internal\Access\Service\ProjectAccessService;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntity;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityType;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Project;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\ProjectCollection;
 use Bitrix\Socialnetwork\V2\Internal\Entity\UserCollection;
+use Bitrix\Socialnetwork\V2\Internal\Integration;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Provider\ProjectChatDataProvider;
 use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectFeatureRepository;
 use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectRepositoryInterface;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\FeatureAvailabilityService;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\FeatureDictionary;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\FeatureService;
+use Bitrix\Socialnetwork\V2\Internal\Service\Notification\ProjectNotificationSettingsService;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\HasCollabersService;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectCreateFeatures;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectFeatureToggleService;
 use Bitrix\Socialnetwork\V2\Internal\Service\UserServiceInterface;
 use Bitrix\Socialnetwork\V2\Public\Dto\Project\FeatureCollection;
 use Bitrix\Socialnetwork\V2\Public\Dto\Project\Feature;
+use Bitrix\Socialnetwork\V2\Public\Dto\Project\NotificationCatalogResponse;
 use Bitrix\Socialnetwork\V2\Public\Dto\Project\ProjectResponse;
 use Bitrix\Socialnetwork\V2\Public\Mapper\ProjectMapper;
 use Bitrix\Socialnetwork\V2\Public\Provider\Params\Project\ProjectParams;
@@ -44,6 +48,9 @@ class ProjectProvider
 	private UserServiceInterface $userService;
 	private ProjectChatDataProvider $projectChatDataProvider;
 	private ?HasCollabersService $hasCollabersService;
+	private ProjectAccessService $projectAccessService;
+	private ProjectNotificationSettingsService $notificationSettingsService;
+	private Integration\Landing\Service\Project $landingProjectService;
 
 	public function __construct(
 		?ProjectRepositoryInterface $projectRepository = null,
@@ -56,6 +63,9 @@ class ProjectProvider
 		?UserServiceInterface $userService = null,
 		?ProjectChatDataProvider $projectChatDataProvider = null,
 		?HasCollabersService $hasCollabersService = null,
+		?ProjectAccessService $projectAccessService = null,
+		?ProjectNotificationSettingsService $notificationSettingsService = null,
+		?Integration\Landing\Service\Project $landingProjectService = null,
 	)
 	{
 		$container = Container::getInstance();
@@ -71,6 +81,9 @@ class ProjectProvider
 		$this->userService = $userService ?? $container->getUserService();
 		$this->projectChatDataProvider = $projectChatDataProvider ?? $container->getProjectChatDataProvider();
 		$this->hasCollabersService = $hasCollabersService ?? $container->getHasCollabersService();
+		$this->projectAccessService = $projectAccessService ?? $container->getProjectAccessService();
+		$this->notificationSettingsService = $notificationSettingsService ?? $container->get(ProjectNotificationSettingsService::class);
+		$this->landingProjectService = $landingProjectService ?? $container->get(Integration\Landing\Service\Project::class);
 	}
 
 	/**
@@ -83,6 +96,15 @@ class ProjectProvider
 	public function isProject(int $groupId): bool
 	{
 		return (CollabRegistry::getInstance()->get($groupId) !== null);
+	}
+
+	/**
+	 * Opens the project knowledge base when the page is hit by a direct link to it.
+	 * An ordinary hit costs nothing: landing is loaded only after the hit is recognized as a deep link.
+	 */
+	public function processKnowledgeDeepLink(int $projectId): void
+	{
+		$this->landingProjectService->processKnowledgeDeepLink($projectId);
 	}
 
 	public function getById(int $projectId): ?ProjectResponse
@@ -102,7 +124,21 @@ class ProjectProvider
 		$entity = $this->hydrateOwner($entity);
 		$entity = $this->sanitizeMembersForResponse($entity);
 
-		return $this->projectMapper->toResponse($entity);
+		$response = $this->projectMapper->toResponse($entity);
+		$response->setNotificationCatalog(
+			$this->notificationSettingsService->buildCatalog($projectId),
+		);
+
+		return $response;
+	}
+
+	/**
+	 * Returns the default notification catalog for the project create-form.
+	 * New projects are always NotRequired, so defaults are always present.
+	 */
+	public function getNotificationCatalogDefaults(): NotificationCatalogResponse
+	{
+		return $this->notificationSettingsService->buildDefaultCatalog();
 	}
 
 	/**
@@ -154,8 +190,34 @@ class ProjectProvider
 			$isCurrentUserModuleAdmin,
 		);
 
-		return FeatureCollection::mapFromArray(
-			$features->toArray(),
+		return FeatureCollection::mapFromArray($features->toArray());
+	}
+
+	public function getFeatureMenuItems(
+		int $projectId,
+		int $userId,
+		bool $isCurrentUserModuleAdmin,
+	): FeatureCollection
+	{
+		$collection = $this->getAvailableFeatures($projectId, $userId, $isCurrentUserModuleAdmin);
+
+		if (
+			\Bitrix\Socialnetwork\V2\Feature::isOldPortalForNewProject()
+			&& $this->projectAccessService->canUpdate($userId, $projectId)
+		)
+		{
+			$collection->add($this->buildStartupToolActionItem());
+		}
+
+		return $collection;
+	}
+
+	private function buildStartupToolActionItem(): Feature
+	{
+		return new Feature(
+			id: 'settings_startup_tool',
+			title: FeatureDictionary::getStartupToolTitle(),
+			type: 'action',
 		);
 	}
 

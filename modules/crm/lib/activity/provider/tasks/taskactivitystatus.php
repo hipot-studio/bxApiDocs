@@ -95,7 +95,7 @@ class TaskActivityStatus
 					self::STATUS_CONTROL_WAITING,
 					self::STATUS_FINISHED,
 				],
-				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_CREATED),
+				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_CREATED . '_MSGVER_1'),
 				'icon' => Tag::TYPE_SECONDARY,
 			],
 			self::STATUS_VIEWED => [
@@ -109,7 +109,7 @@ class TaskActivityStatus
 					self::STATUS_CONTROL_WAITING,
 					self::STATUS_FINISHED,
 				],
-				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_VIEWED),
+				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_VIEWED . '_MSGVER_1'),
 				'icon' => Tag::TYPE_PRIMARY,
 			],
 			self::STATUS_UPDATED => [
@@ -122,7 +122,7 @@ class TaskActivityStatus
 					self::STATUS_CONTROL_WAITING,
 					self::STATUS_FINISHED,
 				],
-				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_UPDATED),
+				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_UPDATED . '_MSGVER_1'),
 				'icon' => Tag::TYPE_SECONDARY,
 			],
 			self::STATUS_IN_PROGRESS => [
@@ -136,7 +136,7 @@ class TaskActivityStatus
 					self::STATUS_CONTROL_WAITING,
 					self::STATUS_FINISHED,
 				],
-				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_IN_PROGRESS),
+				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_IN_PROGRESS . '_MSGVER_1'),
 				'icon' => Tag::TYPE_PRIMARY,
 			],
 			self::STATUS_WAITING => [
@@ -150,7 +150,7 @@ class TaskActivityStatus
 					self::STATUS_CONTROL_WAITING,
 					self::STATUS_FINISHED,
 				],
-				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_WAITING),
+				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_WAITING . '_MSGVER_1'),
 				'icon' => Tag::TYPE_PRIMARY,
 			],
 			self::STATUS_DEADLINE_CHANGED => [
@@ -163,7 +163,7 @@ class TaskActivityStatus
 					self::STATUS_CONTROL_WAITING,
 					self::STATUS_FINISHED,
 				],
-				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_DEADLINE_CHANGED),
+				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_DEADLINE_CHANGED . '_MSGVER_1'),
 				'icon' => Tag::TYPE_PRIMARY,
 			],
 			self::STATUS_RESULT_ADDED => [
@@ -176,7 +176,7 @@ class TaskActivityStatus
 					self::STATUS_CONTROL_WAITING,
 					self::STATUS_FINISHED,
 				],
-				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_RESULT_ADDED),
+				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_RESULT_ADDED . '_MSGVER_1'),
 				'icon' => Tag::TYPE_PRIMARY,
 			],
 			self::STATUS_EXPIRED => [
@@ -185,7 +185,7 @@ class TaskActivityStatus
 					self::STATUS_FINISHED,
 					self::STATUS_DEADLINE_CHANGED,
 				],
-				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_EXPIRED),
+				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_EXPIRED . '_MSGVER_1'),
 				'icon' => Tag::TYPE_FAILURE,
 			],
 			self::STATUS_CONTROL_WAITING => [
@@ -195,14 +195,14 @@ class TaskActivityStatus
 					self::STATUS_EXPIRED,
 					self::STATUS_FINISHED,
 				],
-				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_CONTROL_WAITING),
+				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_CONTROL_WAITING . '_MSGVER_1'),
 				'icon' => Tag::TYPE_PRIMARY,
 			],
 			self::STATUS_FINISHED => [
 				'next' => [
 					self::STATUS_WAITING,
 				],
-				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_FINISHED),
+				'loc' => Loc::getMessage('TASKS_TASK_INTEGRATION_STATUS_' . self::STATUS_FINISHED . '_MSGVER_1'),
 				'icon' => Tag::TYPE_SUCCESS,
 			],
 		];

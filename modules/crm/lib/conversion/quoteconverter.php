@@ -5,7 +5,9 @@ namespace Bitrix\Crm\Conversion;
 use Bitrix\Crm;
 use Bitrix\Crm\Binding\EntityBinding;
 use Bitrix\Crm\EntityRequisite;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Requisite\EntityLink;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\ConversionSettings;
 use Bitrix\Crm\Synchronization\UserFieldSynchronizer;
 use Bitrix\Main;
@@ -190,6 +192,13 @@ class QuoteConverter extends EntityConverter
 			/** @var \CCrmPerms $permissions */
 			$permissions = $this->getUserPermissions();
 			$entityID = isset($this->contextData[$entityTypeName]) ? $this->contextData[$entityTypeName] : 0;
+
+			Container::getInstance()
+				->getContext()
+				->getAnalytics()
+				->setEvent(Dictionary::EVENT_ENTITY_CONVERT)
+				->setP2(['from', Dictionary::getAnalyticsEntityType(\CCrmOwnerType::Quote)])
+			;
 
 			if($entityID > 0)
 			{

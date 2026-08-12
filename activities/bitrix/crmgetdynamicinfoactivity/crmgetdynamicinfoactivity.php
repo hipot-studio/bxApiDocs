@@ -8,7 +8,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Public\Activity\Interface\NodeFilterMetadataProvider;
 use Bitrix\Crm;
+use Bitrix\Crm\Integration\BizProc\NodeFilter\RelatedEntityTypeProvider;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Error;
@@ -23,7 +25,7 @@ use Bitrix\Main\Result;
  * @property-write string OnlyDynamicEntities
  * @property-write array|null DynamicEntityFields
  */
-class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
+class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity implements NodeFilterMetadataProvider
 {
 	use \Bitrix\Bizproc\Activity\Mixins\EntityFilter;
 
@@ -390,5 +392,91 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 			},
 			ARRAY_FILTER_USE_KEY
 		);
+	}
+
+	public static function getNodeFilterMetadata(
+		array $contextDocumentType,
+		bool $onlyDynamicEntities = false,
+		bool $includeRelatedEntityTypes = false,
+	): array
+	{
+		$propertiesMap = static::getPropertiesDialogMap();
+		$allEntityTypeOptions = (array)($propertiesMap['DynamicTypeId']['Options'] ?? []);
+		$allFilterFieldsMap = (array)($propertiesMap['DynamicFilterFields']['Map'] ?? []);
+
+		if ($onlyDynamicEntities)
+		{
+			$entityTypeOptions = array_filter(
+				$allEntityTypeOptions,
+				static fn(mixed $title, mixed $entityTypeId): bool
+					=> CCrmOwnerType::isPossibleDynamicTypeId((int)$entityTypeId),
+				ARRAY_FILTER_USE_BOTH,
+			);
+		}
+		elseif ($includeRelatedEntityTypes)
+		{
+			$entityTypeOptions = [];
+		}
+		else
+		{
+			$entityTypeOptions = $allEntityTypeOptions;
+		}
+
+		if ($includeRelatedEntityTypes)
+		{
+			$entityTypeOptions = static::appendRelatedEntityTypeOptions(
+				$entityTypeOptions,
+				$allEntityTypeOptions,
+				$contextDocumentType,
+			);
+		}
+
+		$filterFieldsMap = array_intersect_key($allFilterFieldsMap, $entityTypeOptions);
+
+		$documentTypeMap = [];
+		foreach (array_keys($entityTypeOptions) as $entityTypeId)
+		{
+			$entityDocumentType = CCrmBizProcHelper::ResolveDocumentType((int)$entityTypeId);
+			if (is_array($entityDocumentType))
+			{
+				$documentTypeMap[(string)$entityTypeId] = $entityDocumentType;
+			}
+		}
+
+		return [
+			'entityTypeOptions' => $entityTypeOptions,
+			'filterFieldsMap' => $filterFieldsMap,
+			'documentTypeMap' => $documentTypeMap,
+		];
+	}
+
+	/**
+	 * Appends the context entity type and its related entity types to the entity type options,
+	 * sourced from {@see RelatedEntityTypeProvider} to stay consistent with the runtime node-filter resolver.
+	 */
+	private static function appendRelatedEntityTypeOptions(
+		array $entityTypeOptions,
+		array $allEntityTypeOptions,
+		array $contextDocumentType,
+	): array
+	{
+		$orderedTypeIds = array_merge(
+			[RelatedEntityTypeProvider::resolveContextEntityTypeId($contextDocumentType)],
+			RelatedEntityTypeProvider::getRelatedEntityTypeIds($contextDocumentType),
+		);
+
+		foreach ($orderedTypeIds as $entityTypeId)
+		{
+			if (
+				$entityTypeId > 0
+				&& !isset($entityTypeOptions[$entityTypeId])
+				&& isset($allEntityTypeOptions[$entityTypeId])
+			)
+			{
+				$entityTypeOptions[$entityTypeId] = $allEntityTypeOptions[$entityTypeId];
+			}
+		}
+
+		return $entityTypeOptions;
 	}
 }

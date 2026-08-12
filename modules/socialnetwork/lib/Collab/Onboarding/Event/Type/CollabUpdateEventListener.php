@@ -35,6 +35,11 @@ class CollabUpdateEventListener extends AbstractEventListener
 		$collabId = $command->getId();
 		$initiatorId = $command->getInitiatorId();
 
+		if ($initiatorId < 1 && $command->getAddBotSilently())
+		{
+			return new EventResult(EventResult::SUCCESS);
+		}
+
 		if ($this->mayCreateCollabEntityJobs($initiatorId, $collabId))
 		{
 			$jobCollection->merge($this->getCollabEntityJobs($command));

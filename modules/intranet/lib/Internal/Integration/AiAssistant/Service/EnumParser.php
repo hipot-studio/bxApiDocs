@@ -48,4 +48,24 @@ class EnumParser
 
 		return $enum;
 	}
+
+	public static function parseArray(string $name, string $enumClass, array $values): array
+	{
+		$enums = [];
+		foreach (ArrayParser::parse($values, $name) as $index => $item)
+		{
+			$enum = self::parseNullableStringEnum(
+				$item,
+				"{$name}[$index]",
+				$enumClass,
+			);
+
+			if ($enum !== null)
+			{
+				$enums[$enum->value] = $enum;
+			}
+		}
+
+		return array_values($enums);
+	}
 }

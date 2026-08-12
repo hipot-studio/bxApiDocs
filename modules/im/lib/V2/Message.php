@@ -142,6 +142,8 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 
 	protected ?bool $isViewed = null;
 
+	protected ?int $viewedCount = null;
+
 	/** Message additional parameters. */
 	protected Params $params;
 
@@ -519,6 +521,26 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	public function isViewedByOthers(): bool
 	{
 		return $this->isNotifyRead() ?? false;
+	}
+
+	public function setViewedCount(int $viewedCount): self
+	{
+		$this->viewedCount = $viewedCount;
+
+		return $this;
+	}
+
+	public function getViewedCount(): int
+	{
+		if ($this->viewedCount !== null)
+		{
+			return $this->viewedCount;
+		}
+
+		$provider = ServiceLocator::getInstance()->get(ViewProvider::class);
+		$this->viewedCount = $provider->getViewedCount($this->getMessageId());
+
+		return $this->viewedCount;
 	}
 
 	public function setBotId(int $botId): self
@@ -1937,6 +1959,11 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 				'unread' => $this->isUnread(),
 				'viewed' => $this->isViewed(),
 			]);
+
+			if (!$messageShortInfo)
+			{
+				$rest['viewedCount'] = $this->getViewedCount();
+			}
 		}
 
 		return $rest;
@@ -2063,10 +2090,18 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 			;
 		}
 
+		$rolesData = $roleManager->getRoles($roles);
+		if ($rolesData !== null && $chat instanceof Im\V2\Chat\GroupChat)
+		{
+			$rolesData = (new Im\V2\Integration\AI\ProjectCopilotPrompts())
+				->substituteForChats($rolesData, [$chat])
+			;
+		}
+
 		return [
 			'chats' => $chatData,
 			'messages' => $messageRole ? [['id' => $this->getId(), 'role' => $messageRole]] : null,
-			'roles' => $roleManager->getRoles($roles),
+			'roles' => $rolesData,
 			'engines' => $engineData,
 		];
 	}

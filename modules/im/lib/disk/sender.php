@@ -3,6 +3,8 @@ namespace Bitrix\Im\Disk;
 
 use Bitrix\Disk\File;
 use Bitrix\Im\Model\ChatTable;
+use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Message\Reply\ReplyValidator;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Event;
@@ -152,6 +154,19 @@ class Sender
 			return $result->addError(new Error("Getting chat error"));
 		}
 
+		$replyId = (int)($params['REPLY_ID'] ?? 0);
+		if ($replyId > 0)
+		{
+			$targetChat = Chat::getInstance($chatId);
+			$replyValidator = new ReplyValidator();
+			$replyValidation = $replyValidator->validate($replyId, $targetChat);
+			if (!$replyValidation->isSuccess())
+			{
+				return $result->addErrors($replyValidation->getErrors());
+			}
+			$params['REPLY_ID'] = $replyValidation->getResult()['REPLY_ID'] ?? 0;
+		}
+
 		$attach = new \CIMMessageParamAttach(null, \CIMMessageParamAttach::CHAT);
 		$attach->AddMessage($text);
 		$addResult = \CIMMessenger::Add([
@@ -249,13 +264,30 @@ class Sender
 		$attach = new \CIMMessageParamAttach(null, \CIMMessageParamAttach::CHAT);
 		$attach->AddMessage($this->text);
 
+		$params = $this->params;
+
+		$replyId = (int)($params['REPLY_ID'] ?? 0);
+		if ($replyId > 0)
+		{
+			$targetChat = Chat::getInstance($this->chat['ID']);
+			$replyValidator = new ReplyValidator();
+			$replyValidation = $replyValidator->validate($replyId, $targetChat);
+			if (!$replyValidation->isSuccess())
+			{
+				$this->errorCollection->add($replyValidation->getErrors());
+
+				return false;
+			}
+			$params['REPLY_ID'] = $replyValidation->getResult()['REPLY_ID'] ?? 0;
+		}
+
 		$uploadResult = \CIMDisk::UploadFileFromDisk(
 			$this->chat['ID'],
 			[$fileIdWithPrefix],
 			'',
 			[
 				'SYMLINK' => true,
-				'PARAMS' => $this->params,
+				'PARAMS' => $params,
 				'ATTACH' => $attach
 			]
 		);

@@ -240,6 +240,15 @@ class ICloudEventGateway extends AbstractICloudGateway
 
 		$filledEventListResponse = EventListResponse::fromXml($this->client->getResult());
 
+		// Defense-in-depth: the final multiget (REPORT) must return every requested event.
+		// If fewer valid items came back than were requested, the response is truncated or
+		// partially failed and must not be treated as authoritative for deletions:
+		// a missing event is not the same as a deleted one.
+		if (count($filledEventListResponse->getItems()) < count($eventsResponsesHrefs))
+		{
+			$filledEventListResponse->isPartial = true;
+		}
+
 		if ($initialSync && $initialSyncTokenResponse)
 		{
 			$filledEventListResponse->etag = $initialSyncTokenResponse->etag;

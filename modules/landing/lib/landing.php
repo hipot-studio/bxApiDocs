@@ -1783,6 +1783,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 		{
 			if ($hook->enabled())
 			{
+				$hook = $this->prepareHook($hook);
 				$hooksExec[$hook->getCode()] = $hook;
 			}
 		}
@@ -1801,9 +1802,13 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 
 	protected function prepareHook($hook)
 	{
-		if ($hook->getCode() === 'GMAP')
+		if (method_exists($hook, 'setSiteId'))
 		{
 			$hook->setSiteId($this->siteId);
+		}
+		if (method_exists($hook, 'setLandingId'))
+		{
+			$hook->setLandingId($this->id);
 		}
 
 		return $hook;

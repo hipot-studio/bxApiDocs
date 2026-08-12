@@ -119,6 +119,16 @@ class MessageFilter
 			$this->addDir($dto->folder);
 		}
 
+		if ($dto->bindings !== null && $dto->bindings !== [])
+		{
+			$this->addIncludeBindings($dto->bindings);
+		}
+
+		if ($dto->excludeBindings !== null && $dto->excludeBindings !== [])
+		{
+			$this->addExcludeBindings($dto->excludeBindings);
+		}
+
 		return $this;
 	}
 
@@ -189,6 +199,30 @@ class MessageFilter
 	public function addNoBind(): self
 	{
 		$this->filter['==MESSAGE_ACCESS.ENTITY_TYPE'] = null;
+
+		return $this;
+	}
+
+	/**
+	 * Includes messages that have a binding of the listed entity types.
+	 *
+	 * @param string[] $entityTypes
+	 */
+	public function addIncludeBindings(array $entityTypes): self
+	{
+		$this->filter[QueryBuilder::FILTER_KEY_INCLUDE_BINDINGS] = array_values($entityTypes);
+
+		return $this;
+	}
+
+	/**
+	 * Excludes messages that have a binding of the listed entity types.
+	 *
+	 * @param string[] $entityTypes
+	 */
+	public function addExcludeBindings(array $entityTypes): self
+	{
+		$this->filter[QueryBuilder::FILTER_KEY_EXCLUDE_BINDINGS] = array_values($entityTypes);
 
 		return $this;
 	}

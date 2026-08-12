@@ -15,6 +15,7 @@ use Bitrix\Crm\Component\EntityList\UserField\GridHeaders;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Filter\FieldsTransform;
+use Bitrix\Crm\Filter\RelatedEntity;
 use Bitrix\Crm\Filter\UiFilterOptions;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Integration\Analytics\Builder\Entity\AddOpenEvent;
@@ -80,6 +81,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 	private ?Grid\Panel\Panel $panel = null;
 	private ?NearestActivity\Manager $nearestActivityManager = null;
 	private bool $enableNextPage = false;
+	protected bool $isExportProductFields = false;
 
 	public function configureActions()
 	{
@@ -97,8 +99,14 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory($entityTypeId);
 		$listFilter = $this->prepareTotalActionFilter($this->unsignParams($listFilter));
+		$applied = $this->applyRelatedEntitiesFilter($listFilter, $entityTypeId);
 
-		$totalCountRow = $factory->getItemsCountFilteredByPermissions($listFilter);
+		$totalCountRow = $factory->getItemsCountFilteredByPermissions(
+			$applied['filter'],
+			null,
+			\Bitrix\Crm\Service\UserPermissions::OPERATION_READ,
+			$applied['runtime']
+		);
 
 		return Loc::getMessage('CRM_LIST_ALL_COUNT', ['#COUNT#' => $totalCountRow]);
 	}
@@ -122,6 +130,25 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		return $filter;
 	}
 
+	/**
+	 * Pulls the related-entities filter out of $listFilter and returns the prepared
+	 * (filter, runtime) tuple. Counting and exporting need both pieces to be applied
+	 * symmetrically with the grid query - without this, the count endpoint and the
+	 * export bypass RELATED_ENTITIES and return unfiltered totals.
+	 *
+	 * @return array{filter: array, runtime: array}
+	 */
+	private function applyRelatedEntitiesFilter(array $listFilter, int $entityTypeId): array
+	{
+		$parameters = ['filter' => $listFilter];
+		RelatedEntity\GridFilterApplier::getDefault()->apply($parameters, $entityTypeId);
+
+		return [
+			'filter' => $parameters['filter'],
+			'runtime' => $parameters['runtime'] ?? [],
+		];
+	}
+
 	protected function init(): void
 	{
 		parent::init();
@@ -143,6 +170,13 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		{
 			$this->exportType = $this->arParams['EXPORT_TYPE'];
 		}
+
+		$this->isExportProductFields = (
+			$this->isExportMode()
+			&& isset($this->arParams['STEXPORT_INITIAL_OPTIONS']['EXPORT_PRODUCT_FIELDS'])
+			&& $this->arParams['STEXPORT_INITIAL_OPTIONS']['EXPORT_PRODUCT_FIELDS'] === 'Y'
+			&& $this->factory->isLinkWithProductsEnabled()
+		);
 
 		if (!$this->isExportMode())
 		{
@@ -247,6 +281,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			'backendUrl' => $this->arParams['backendUrl'] ?? null,
 			'isIframe' => $this->isIframe(),
 			'isEmbedded' => $this->isEmbedded(),
+			'isLinkWithProductsEnabled' => $this->factory->isLinkWithProductsEnabled(),
 			'settingsButtonExtenderParams' => $settingsButtonExtenderParams,
 			'analytics' => [
 				'c_section' => Dictionary::getSectionByEntityType($this->entityTypeId),
@@ -428,14 +463,17 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		else
 		{
 			$order = $this->validateOrder($gridSort['sort']);
+			$applied = $this->applyRelatedEntitiesFilter($listFilter, $this->factory->getEntityTypeId());
+			$factoryParameters = [
+				'select' => $this->getSelect(),
+				'order' => $order,
+				'offset' => $pageNavigation->getOffset(),
+				'limit' => $pageNavigation->getLimit() + 1,
+				'filter' => $applied['filter'],
+				'runtime' => $applied['runtime'],
+			];
 			$list = $this->factory->getItemsFilteredByPermissions(
-				[
-					'select' => $this->getSelect(),
-					'order' => $order,
-					'offset' => $pageNavigation->getOffset(),
-					'limit' => $pageNavigation->getLimit() + 1,
-					'filter' => $listFilter,
-				],
+				$factoryParameters,
 				$this->userPermissions->getUserId(),
 				$this->isExportMode()
 					? \Bitrix\Crm\Service\UserPermissions::OPERATION_EXPORT
@@ -929,10 +967,12 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		$listFilter = $this->getListFilter();
 		if (!isset($this->arParams['STEXPORT_TOTAL_ITEMS']) || $this->arParams['STEXPORT_TOTAL_ITEMS'] <= 0)
 		{
+			$applied = $this->applyRelatedEntitiesFilter($listFilter, $this->factory->getEntityTypeId());
 			$totalCount = $this->factory->getItemsCountFilteredByPermissions(
-				$listFilter,
+				$applied['filter'],
 				$this->userPermissions->getUserId(),
-				$this->userPermissions::OPERATION_EXPORT
+				$this->userPermissions::OPERATION_EXPORT,
+				$applied['runtime']
 			);
 			$lastExportedId = -1;
 		}
@@ -977,6 +1017,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 		$this->arResult['FIRST_EXPORT_PAGE'] = $pageNumber <= 1;
 		$this->arResult['LAST_EXPORT_PAGE'] = $pageNumber >= $lastPageNumber;
+		$this->arResult['EXPORT_PRODUCT_FIELDS'] = $this->isExportProductFields;
 		$this->includeComponentTemplate();
 
 		return [
@@ -1154,23 +1195,28 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 					}
 				}
 			}
-			$isLoadProducts = $this->isColumnVisible(Item::FIELD_NAME_PRODUCTS.'.PRODUCT_ID');
+			$isLoadProducts = $this->isColumnVisible(Item::FIELD_NAME_PRODUCTS . '.PRODUCT_ID');
 			$itemProducts = [];
-			if ($isLoadProducts)
+			if ($isLoadProducts || $this->isExportProductFields)
 			{
-				foreach($list as $item)
+				foreach ($list as $item)
 				{
 					$itemProducts[$item->getId()] = [];
 				}
 				if (!empty($itemProducts))
 				{
+					$select = ['PRODUCT_NAME', 'OWNER_ID'];
+					if ($this->isExportProductFields)
+					{
+						$select[] = 'PRICE';
+						$select[] = 'QUANTITY';
+					}
 					$products = \Bitrix\Crm\ProductRowTable::getList([
-						'select' => [
-							'PRODUCT_NAME',
-							'OWNER_ID'
-						],
+						'select' => $select,
 						'filter' => [
-							'=OWNER_TYPE' => \CCrmOwnerTypeAbbr::ResolveByTypeID($this->factory->getEntityTypeId()),
+							'=OWNER_TYPE' => \CCrmOwnerTypeAbbr::ResolveByTypeID(
+								$this->factory->getEntityTypeId()
+							),
 							'@OWNER_ID' => array_keys($itemProducts),
 						],
 					]);
@@ -1213,7 +1259,24 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 					$this->appendOptionalColumns($item, $itemColumn, $display);
 					if (!empty($itemProducts[$item->getId()]))
 					{
-						$itemColumn[Item::FIELD_NAME_PRODUCTS.'.PRODUCT_ID'] = $this->getProductsItemColumn($itemProducts[$item->getId()]);
+						if ($this->isExportProductFields)
+						{
+							$itemColumn['EXPORT_PRODUCT_ROWS'] = [];
+							foreach ($itemProducts[$item->getId()] as $product)
+							{
+								$itemColumn['EXPORT_PRODUCT_ROWS'][] = [
+									'PRODUCT_NAME' => $product->getProductName(),
+									'PRICE' => $product->getPrice(),
+									'QUANTITY' => $product->getQuantity(),
+								];
+							}
+							$itemColumn['EXPORT_CURRENCY_ID'] = (string)$item->getCurrencyId();
+						}
+						else
+						{
+							$itemColumn[Item::FIELD_NAME_PRODUCTS . '.PRODUCT_ID'] =
+								$this->getProductsItemColumn($itemProducts[$item->getId()]);
+						}
 					}
 				}
 

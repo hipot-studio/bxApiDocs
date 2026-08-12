@@ -16,6 +16,7 @@ use Bitrix\Socialnetwork\Collab\Integration\IM\Message\AcceptUserActionMessage;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\ExcludeUserActionMessage;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\InviteGuestActionMessage;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\InviteUserActionMessage;
+use Bitrix\Socialnetwork\Collab\Integration\IM\Message\JoinBySharingLinkActionMessage;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\JoinUserActionMessage;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\LeaveUserActionMessage;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\ProjectCreateActionMessage;
@@ -46,6 +47,7 @@ class ActionMessageFactory
 			ActionType::ConvertGroupToCollabRich => new ConvertGroupToCollabMessageRich($collabId, $senderId),
 			ActionType::CreateProject => new ProjectCreateActionMessage($collabId, $senderId),
 			ActionType::CreateProjectRich => new ProjectCreateActionMessageRich($collabId, $senderId),
+			ActionType::JoinBySharingLink => new JoinBySharingLinkActionMessage($collabId, $senderId),
 			default => new JoinUserActionMessage($collabId, $senderId),
 		};
 	}

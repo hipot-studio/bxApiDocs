@@ -19,6 +19,8 @@ class AddCommandHandler
 		$reportForm = new FullReportForm(
 			userId: $command->userId,
 			reportText: $command->reportText,
+			reportExtended: $command->reportExtended,
+			type: $command->type,
 			plansText: $command->plansText,
 			tasks: $command->tasks,
 			events: $command->events,

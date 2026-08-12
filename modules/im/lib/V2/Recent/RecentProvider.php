@@ -38,6 +38,8 @@ class RecentProvider
 
 		$this->mergeFixedItems($recent, $params->filter->userId, $meta);
 
+		$recent->enrichCollabPreviewSources($params->filter->userId);
+
 		return new RecentSection($recent, $meta, $hasNextPage);
 	}
 
@@ -133,6 +135,8 @@ class RecentProvider
 				'DATE_LAST_ACTIVITY',
 				'DATE_UPDATE',
 				'RELATION.LAST_ID',
+				'PREVIEW_SOURCE_CID',
+				'PREVIEW_SOURCE_MID',
 			])
 			->where('USER_ID', $userId)
 			->where('ITEM_CID', $chatId)

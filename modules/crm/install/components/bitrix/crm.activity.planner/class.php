@@ -4,6 +4,7 @@ use Bitrix\Crm\Activity;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Main;
+use Bitrix\Main\Config\Ini;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text\Emoji;
 
@@ -1918,7 +1919,9 @@ class CrmActivityPlannerComponent extends \Bitrix\Crm\Component\Base
 			$html = Activity\Provider\Email::getDescriptionHtmlByActivityFields($activity);
 		}
 
-		return Emoji::decode($html);
+		Ini::adjustPcreBacktrackLimit(strlen($html) * 2);
+
+		return Emoji::decode($html) ?? $html;
 	}
 
 
@@ -1936,16 +1939,19 @@ class CrmActivityPlannerComponent extends \Bitrix\Crm\Component\Base
 			$cached = (new Activity\Mail\SanitizedDescriptionCache())->get($activity['ID']);
 			if ($cached)
 			{
+				Ini::adjustPcreBacktrackLimit(strlen($cached) * 2);
+
 				return [
-					'DESCRIPTION_HTML' => Emoji::decode($cached),
+					'DESCRIPTION_HTML' => Emoji::decode($cached) ?? $cached,
 				];
 			}
 
 			$fallbackHtml = Activity\Provider\Email::getFallbackHtmlDescription($activity['DESCRIPTION'] ?? '');
+			Ini::adjustPcreBacktrackLimit(strlen($fallbackHtml) * 2);
 
 			return [
 				'IS_AJAX_EMAIL_BODY' => true,
-				'DESCRIPTION_HTML' => Emoji::decode($fallbackHtml),
+				'DESCRIPTION_HTML' => Emoji::decode($fallbackHtml) ?? $fallbackHtml,
 			];
 		}
 

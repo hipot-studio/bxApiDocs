@@ -8,6 +8,7 @@ use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Timeman\V2\Internal\Entity\Trait\MapTypeTrait;
 use Bitrix\Timeman\V2\Public\Command\FullReport\AddCommand;
+use Bitrix\Timeman\V2\Public\Dto\Report\RecordReportType;
 
 final class Create implements Arrayable
 {
@@ -18,6 +19,7 @@ final class Create implements Arrayable
 		#[PositiveNumber]
 		public readonly int $userId,
 		public readonly ?string $reportText = null,
+		public readonly ?string $reportExtended = null,
 		public readonly ?string $plansText = null,
 		/** @var list<array<string, int|string|float|bool|null>>|null */
 		public readonly ?array $tasks = null,
@@ -25,9 +27,10 @@ final class Create implements Arrayable
 		public readonly ?array $events = null,
 		/** @var list<array<string, int|string|float|bool|null>>|null */
 		public readonly ?array $files = null,
-		public readonly bool $autoFillDailyReports = true,
+		public readonly bool $autoFillDailyReports = false,
 		public readonly ?int $dateFrom = null,
 		public readonly ?int $dateTo = null,
+		public readonly string $type = RecordReportType::REPORT,
 	)
 	{
 	}
@@ -42,13 +45,15 @@ final class Create implements Arrayable
 		return new self(
 			userId: self::mapInteger($props, 'userId'),
 			reportText: self::mapString($props, 'reportText'),
+			reportExtended: self::mapString($props, 'reportExtended'),
 			plansText: self::mapString($props, 'plansText'),
 			tasks: self::mapTasks($props),
 			events: self::mapEvents($props),
 			files: self::mapFiles($props),
-			autoFillDailyReports: self::mapBool($props, 'autoFillDailyReports', true) ?? true,
+			autoFillDailyReports: self::mapBool($props, 'autoFillDailyReports', false) ?? false,
 			dateFrom: self::mapInteger($props, 'dateFrom'),
 			dateTo: self::mapInteger($props, 'dateTo'),
+			type: RecordReportType::normalize(self::mapString($props, 'type')),
 		);
 	}
 
@@ -57,6 +62,7 @@ final class Create implements Arrayable
 		return [
 			'userId' => $this->userId,
 			'reportText' => $this->reportText,
+			'reportExtended' => $this->reportExtended,
 			'plansText' => $this->plansText,
 			'tasks' => $this->tasks,
 			'events' => $this->events,
@@ -64,6 +70,7 @@ final class Create implements Arrayable
 			'autoFillDailyReports' => $this->autoFillDailyReports,
 			'dateFrom' => $this->dateFrom,
 			'dateTo' => $this->dateTo,
+			'type' => $this->type,
 		];
 	}
 
@@ -72,6 +79,7 @@ final class Create implements Arrayable
 		return new AddCommand(
 			userId: $this->userId,
 			reportText: $this->reportText,
+			reportExtended: $this->reportExtended,
 			plansText: $this->plansText,
 			tasks: $this->tasks,
 			events: $this->events,
@@ -79,6 +87,7 @@ final class Create implements Arrayable
 			autoFillDailyReports: $this->autoFillDailyReports,
 			dateFrom: $this->dateFrom,
 			dateTo: $this->dateTo,
+			type: $this->type,
 		);
 	}
 }

@@ -88,6 +88,14 @@ class FeatureAvailabilityService
 			),
 			FeatureDictionary::Marketplace->value => $this->restProjectService->isAvailable(),
 			FeatureDictionary::LandingKnowledge->value => $this->landingProjectService->canReadKnowledge($projectId),
+			FeatureDictionary::Note->value => (
+				$isCurrentUserModuleAdmin
+				|| \in_array(
+					\CSocNetUserToGroup::getUserRole($userId, $projectId),
+					\Bitrix\Socialnetwork\UserToGroupTable::getRolesMember(),
+					true,
+				)
+			),
 			default => true,
 		};
 	}

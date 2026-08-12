@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Filter;
 use Bitrix\Crm;
 use Bitrix\Crm\Counter\EntityCounterType;
 use Bitrix\Crm\EntityAddress;
+use Bitrix\Crm\Filter\RelatedEntity\FilterApplier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Crm\UI\EntitySelector;
@@ -401,6 +402,12 @@ class CompanyDataProvider extends EntityDataProvider implements FactoryOptionabl
 
 		(new Crm\Filter\Field\LastCommunicationField())->addLastCommunicationField($this, $result);
 
+		$relatedEntitiesField = $this->createRelatedEntitiesField();
+		if ($relatedEntitiesField !== null)
+		{
+			$result[FilterApplier::FILTER_KEY] = $relatedEntitiesField;
+		}
+
 		return $result;
 	}
 
@@ -411,6 +418,11 @@ class CompanyDataProvider extends EntityDataProvider implements FactoryOptionabl
 	 */
 	public function prepareFieldData($fieldID)
 	{
+		if ($fieldID === FilterApplier::FILTER_KEY)
+		{
+			return $this->prepareRelatedEntitiesFieldData();
+		}
+
 		if($fieldID === 'COMPANY_TYPE')
 		{
 			return array(

@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Controller;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Guest\Auth\AuthenticationService;
+use Bitrix\Im\V2\Guest\Auth\AuthError;
 use Bitrix\Im\V2\Guest\Auth\AuthorizationService;
 use Bitrix\Im\V2\Guest\Auth\Token;
 use Bitrix\Im\V2\Guest\GuestService;
@@ -40,9 +41,15 @@ class AuthorizationPrefilter extends Base
 
 		if ($this->shouldTerminateGuestSession())
 		{
-			AuthorizationService::getInstance()->terminate();
+			// Non-rotating invalidation: a real Logout() here would call regenerateId() on every
+			// request of the messenger's concurrent burst and race the file-backed session start
+			// ("Could not start session by PHP"). We drop the cookies, notify the client (redirect),
+			// and reject the action; the session is torn down cleanly on the single redirect to '/'.
+			AuthorizationService::getInstance()->invalidateCurrentGuestSession();
 
-			return null;
+			$this->addError(new AuthError(AuthError::GUEST_SESSION_TERMINATED));
+
+			return new EventResult(EventResult::ERROR, null, null, $this);
 		}
 
 		return $this->checkGuestAccess();

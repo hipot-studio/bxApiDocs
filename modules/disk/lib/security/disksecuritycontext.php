@@ -184,14 +184,8 @@ class DiskSecurityContext extends SecurityContext
 
 	public function getSqlExpressionForList($columnObjectId, $columnCreatedBy)
 	{
-		if ($this->userId === static::GUEST_USER)
-		{
-			return '1 = 0';
-		}
-
-		$userId = (int)$this->userId;
-		$readableTaskIds = Driver::getInstance()->getRightsManager()->getReadableTaskIds();
-		if (empty($readableTaskIds))
+		$readableTaskIdsSql = $this->getReadableTaskIdsSql();
+		if ($readableTaskIdsSql === null)
 		{
 			return '1 = 0';
 		}
@@ -199,11 +193,8 @@ class DiskSecurityContext extends SecurityContext
 		$tableDiskSimpleRight = SimpleRightTable::getTableName();
 		$tableDiskRight = RightTable::getTableName();
 		$tableObjectPath = ObjectPathTable::getTableName();
-		$tableUserAccess = UserAccessTable::getTableName();
-		$readableTaskIdsSql = implode(', ', array_map('intval', $readableTaskIds));
 
-		$accessCodeCreator = AccessCodeEnum::CREATOR->value;
-		$accessCodeAuthorizedUser = AccessCodeEnum::AUTHORIZED_USER->value;
+		$accessCodePredicate = $this->buildAccessCodePredicate($columnCreatedBy, 3);
 
 		return  <<<SQL
 			EXISTS (
@@ -223,17 +214,84 @@ class DiskSecurityContext extends SecurityContext
 					LIMIT 1
 				)
 				  AND (
-					  (simple_right.ACCESS_CODE = '$accessCodeCreator' AND $columnCreatedBy = $userId)
-		
-					  OR simple_right.ACCESS_CODE = '$accessCodeAuthorizedUser'
-		
-					  OR simple_right.ACCESS_CODE IN (
-						  SELECT ACCESS_CODE
-						  FROM $tableUserAccess
-						  WHERE USER_ID = $userId
-					  )
+		$accessCodePredicate
 				  )
 			)
 		SQL;
+	}
+
+	public function getSqlExpressionForRootObjectList(string $columnObjectId, string $columnCreatedBy): string
+	{
+		$readableTaskIdsSql = $this->getReadableTaskIdsSql();
+		if ($readableTaskIdsSql === null)
+		{
+			return '1 = 0';
+		}
+
+		$tableDiskSimpleRight = SimpleRightTable::getTableName();
+		$tableDiskRight = RightTable::getTableName();
+
+		$accessCodePredicate = $this->buildAccessCodePredicate($columnCreatedBy, 4);
+
+		return <<<SQL
+			(
+				EXISTS (
+					SELECT 1
+					FROM $tableDiskRight readable_right
+					WHERE readable_right.OBJECT_ID = $columnObjectId
+					  AND readable_right.TASK_ID IN ($readableTaskIdsSql)
+				)
+				AND EXISTS (
+					SELECT 1
+					FROM $tableDiskSimpleRight simple_right
+					WHERE simple_right.OBJECT_ID = $columnObjectId
+					  AND (
+		$accessCodePredicate
+					  )
+				)
+			)
+		SQL;
+	}
+
+	/**
+	 * Access code rule shared by every rights expression of the module.
+	 * $indentLevel aligns the predicate with the SQL block it is embedded into.
+	 */
+	private function buildAccessCodePredicate(string $columnCreatedBy, int $indentLevel): string
+	{
+		$userId = (int)$this->userId;
+		$tableUserAccess = UserAccessTable::getTableName();
+
+		$accessCodeCreator = AccessCodeEnum::CREATOR->value;
+		$accessCodeAuthorizedUser = AccessCodeEnum::AUTHORIZED_USER->value;
+		$indent = str_repeat("\t", $indentLevel);
+
+		return <<<SQL
+		{$indent}  (simple_right.ACCESS_CODE = '$accessCodeCreator' AND $columnCreatedBy = $userId)
+
+		{$indent}  OR simple_right.ACCESS_CODE = '$accessCodeAuthorizedUser'
+
+		{$indent}  OR simple_right.ACCESS_CODE IN (
+		{$indent}	  SELECT ACCESS_CODE
+		{$indent}	  FROM $tableUserAccess
+		{$indent}	  WHERE USER_ID = $userId
+		{$indent}  )
+		SQL;
+	}
+
+	private function getReadableTaskIdsSql(): ?string
+	{
+		if ($this->userId === static::GUEST_USER)
+		{
+			return null;
+		}
+
+		$readableTaskIds = Driver::getInstance()->getRightsManager()->getReadableTaskIds();
+		if (empty($readableTaskIds))
+		{
+			return null;
+		}
+
+		return implode(', ', array_map('intval', $readableTaskIds));
 	}
 }

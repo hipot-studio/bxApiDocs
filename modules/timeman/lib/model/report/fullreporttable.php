@@ -7,6 +7,10 @@ use Bitrix\Main\ORM\Data\DataManager;
 
 class FullReportTable extends DataManager
 {
+	public const REPORT_TYPE_RECORD_REPORT = 'REPORT';
+	public const REPORT_TYPE_RECORD_AI_REPORT = 'AI_REPORT';
+	public const REPORT_TYPE_RECORD_ROBOT_REPORT = 'ROBOT_REPORT';
+
 	public static function getTableName()
 	{
 		return 'b_timeman_report_full';
@@ -35,6 +39,9 @@ class FullReportTable extends DataManager
 			(new Fields\TextField('EVENTS')),
 			(new Fields\TextField('FILES')),
 			(new Fields\TextField('REPORT')),
+			(new Fields\TextField('REPORT_EXTENDED')),
+			(new Fields\StringField('TYPE'))
+				->configureDefaultValue(self::REPORT_TYPE_RECORD_REPORT),
 			(new Fields\TextField('PLANS')),
 
 			(new Fields\StringField('MARK'))

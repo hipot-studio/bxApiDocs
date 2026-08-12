@@ -3,6 +3,8 @@ namespace Bitrix\Crm\Security;
 
 use Bitrix\Crm\Agent\Security\DynamicTypes\AttrConvertOptions;
 use Bitrix\Crm\Security\Controller\DynamicItem;
+use Bitrix\Crm\Security\Controller\Order;
+use Bitrix\Crm\Security\Controller\Quote;
 use Bitrix\Main;
 use Bitrix\Crm\Security\Controller\Contact;
 use Bitrix\Crm\Security\Controller\Company;
@@ -26,6 +28,8 @@ class Manager
 				new Company(),
 				new Lead(),
 				new Deal(),
+				new Quote(),
+				new Order(),
 				new Compatible(), // should be last
 			];
 		}

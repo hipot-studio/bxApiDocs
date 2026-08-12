@@ -118,6 +118,50 @@ class CallFactory
 	}
 
 	/**
+	 * Finds an active call (STATE NEW or INVITING, within ACTIVE_CALLS_DEPTH_HOURS)
+	 * by chat ID only, without requiring provider or call type.
+	 * Used by the guest join flow where provider/type are unknown.
+	 *
+	 * @return Call|BitrixCall|null
+	 */
+	public static function searchActiveByChatId(int $chatId): ?Call
+	{
+		if ($chatId <= 0)
+		{
+			return null;
+		}
+
+		$depthHours = Recent::ACTIVE_CALLS_DEPTH_HOURS;
+		$date = (new DateTime())->add("-{$depthHours} hour");
+
+		$fields = CallTable::query()
+			->setSelect(array_keys(CallTable::getEntity()->getScalarFields()))
+			->where('CHAT_ID', $chatId)
+			->whereIn('STATE', [Call::STATE_NEW, Call::STATE_INVITING])
+			->where('START_DATE', '>=', $date)
+			->whereNull('END_DATE')
+			->setOrder(['ID' => 'DESC'])
+			->setLimit(1)
+			->exec()
+			->fetch()
+		;
+
+		if (!$fields)
+		{
+			return null;
+		}
+
+		$instance = self::getCallInstance($fields['PROVIDER'] ?? Call::PROVIDER_PLAIN, $fields);
+
+		if ($instance->hasReadyUsers())
+		{
+			return $instance;
+		}
+
+		return null;
+	}
+
+	/**
 	 * Gets list active calls of a user on portal.
 	 * @return array
 	 */
@@ -328,7 +372,7 @@ class CallFactory
 	{
 		$depthHours = Recent::ACTIVE_CALLS_DEPTH_HOURS;
 		$query = CallTable::query()
-			->addSelect('*')
+			->setSelect(array_keys(CallTable::getEntity()->getScalarFields()))
 			->where('TYPE', $type)
 			->where('PROVIDER', $provider)
 			->where('ENTITY_TYPE', $entityType)
@@ -348,7 +392,7 @@ class CallFactory
 	protected static function searchByUuid(string $uuid): ?array
 	{
 		$callFields = CallTable::query()
-			->addSelect("*")
+			->setSelect(array_keys(CallTable::getEntity()->getScalarFields()))
 			->where("UUID", $uuid)
 			->setLimit(1)
 			->exec()

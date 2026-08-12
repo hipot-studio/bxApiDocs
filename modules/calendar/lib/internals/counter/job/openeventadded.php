@@ -11,6 +11,7 @@ use Bitrix\Calendar\Internals\Log\Logger;
 use Bitrix\Calendar\OpenEvents\Internals\OpenEventCategoryAttendeeTable;
 use Bitrix\Calendar\OpenEvents\Provider\CategoryBanProvider;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Update\Stepper;
 use Bitrix\Main\UserTable;
 
@@ -102,12 +103,17 @@ final class OpenEventAdded extends Stepper
 		$query = UserTable::query()
 			->setSelect(['ID'])
 			->where('ACTIVE', 'Y')
-			->where('IS_REAL_USER', 'Y')
-			->where('UF_DEPARTMENT', '!=', false)
+			->where('REAL_USER', 'expr', true)
 			->setOffset($offset)
 			->setLimit($this->getLimit())
-			->exec()
 		;
+
+		if (Loader::includeModule('humanresources'))
+		{
+			$query->where('UF_DEPARTMENT', '!=', false);
+		}
+
+		$query->exec();
 
 		while ($item = $query->fetch())
 		{

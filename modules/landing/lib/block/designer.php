@@ -84,6 +84,7 @@ class Designer
 
 		foreach (Hook::getForSite($this->block->getSiteId()) as $hook)
 		{
+			$hook = $this->prepareHook($hook);
 			if ($hook->enabled())
 			{
 				$hooksExec[$hook->getCode()] = $hook;
@@ -92,6 +93,7 @@ class Designer
 
 		foreach (Hook::getForLanding($this->block->getLandingId()) as $hook)
 		{
+			$hook = $this->prepareHook($hook);
 			if ($hook->enabled())
 			{
 				$hooksExec[$hook->getCode()] = $hook;
@@ -105,6 +107,20 @@ class Designer
 				$hook->exec();
 			}
 		}
+	}
+
+	private function prepareHook(\Bitrix\Landing\Hook\Page $hook): \Bitrix\Landing\Hook\Page
+	{
+		if (method_exists($hook, 'setSiteId'))
+		{
+			$hook->setSiteId($this->block->getSiteId());
+		}
+		if (method_exists($hook, 'setLandingId'))
+		{
+			$hook->setLandingId($this->block->getLandingId());
+		}
+
+		return $hook;
 	}
 
 	/**

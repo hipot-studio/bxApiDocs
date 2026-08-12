@@ -803,6 +803,20 @@ class CCrmCompanyDetailsComponent
 				'enableAttributes' => false
 			),
 			array(
+				'name' => 'DATE_CREATE',
+				'title' => Loc::getMessage('CRM_COMPANY_FIELD_DATE_CREATE'),
+				'type' => 'datetime',
+				'editable' => false,
+				'enableAttributes' => false
+			),
+			array(
+				'name' => 'DATE_MODIFY',
+				'title' => Loc::getMessage('CRM_COMPANY_FIELD_DATE_MODIFY'),
+				'type' => 'datetime',
+				'editable' => false,
+				'enableAttributes' => false
+			),
+			array(
 				'name' => 'TITLE',
 				'title' => Loc::getMessage('CRM_COMPANY_FIELD_TITLE'),
 				'type' => 'text',

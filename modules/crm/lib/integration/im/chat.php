@@ -150,6 +150,11 @@ class Chat
 			return;
 		}
 
+		if(!self::checkPermission((int)$entityInfo['ENTITY_TYPE_ID'], (int)$entityInfo['ENTITY_ID']))
+		{
+			return;
+		}
+
 		if($entityInfo['ENTITY_TYPE_ID'] === \CCrmOwnerType::Deal)
 		{
 			\CCrmDeal::AddObserverIDs($entityInfo['ENTITY_ID'], $userIDs);

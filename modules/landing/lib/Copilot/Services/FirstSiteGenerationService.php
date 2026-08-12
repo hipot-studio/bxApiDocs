@@ -53,6 +53,7 @@ class FirstSiteGenerationService
 
 		if (
 			$generationId === null
+			|| AiSiteDevBypassService::isGenerationIdMarked($generationId)
 			|| self::$isFirstSiteGenerationIdCacheLoaded === false
 			|| self::$firstSiteGenerationIdCache !== null
 		)
@@ -64,7 +65,7 @@ class FirstSiteGenerationService
 	}
 
 	/**
-	 * Get the id of the first site generation for the create-site scenario.
+	 * Get the id of the first site generation for the free site scenario.
 	 *
 	 * The method caches the result in memory for the current request.
 	 * Returns null when no generations exist.
@@ -110,15 +111,33 @@ class FirstSiteGenerationService
 	 */
 	private static function getFirstSiteGenerationIdFromDb(): ?int
 	{
-		$row = Copilot\Model\GenerationsTable::query()
-			->setSelect(['ID'])
-			->where('SCENARIO', '=', Copilot\Generation\Scenario\CreateSite::class)
+		$query = Copilot\Model\GenerationsTable::query()
+			->setSelect(['ID', 'DATA'])
+			->where('SCENARIO', '=', self::getFirstSiteGenerationScenarioClass())
 			->setOrder(['ID' => 'ASC'])
-			->setLimit(1)
 			->setCacheTtl(86400)
-			->fetch()
+			->exec()
 		;
 
-		return $row ? (int)$row['ID'] : null;
+		while ($row = $query->fetch())
+		{
+			if (AiSiteDevBypassService::isGenerationDataMarked($row['DATA'] ?? null))
+			{
+				continue;
+			}
+
+			return (int)$row['ID'];
+		}
+
+		return null;
+	}
+
+	/**
+	 * Legacy AI site generation used CreateSite; Sites AI 2.0 intentionally starts
+	 * a new first-free counter with CreateAiSite.
+	 */
+	private static function getFirstSiteGenerationScenarioClass(): string
+	{
+		return Copilot\Generation\Scenario\CreateAiSite::class;
 	}
 }

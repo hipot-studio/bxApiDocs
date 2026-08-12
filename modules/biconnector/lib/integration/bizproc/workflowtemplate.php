@@ -54,10 +54,13 @@ class WorkflowTemplate extends Dataset
 
 	protected function getFields(): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $this->getSqlHelper();
+
 		$userJoin = $this->createJoin(
-			'USER',
-			"INNER JOIN b_user USER ON USER.ID = {$this->getAliasFieldName('USER_ID')}",
-			"LEFT JOIN b_user USER ON USER.ID = {$this->getAliasFieldName('USER_ID')}"
+			'BP_USER',
+			"INNER JOIN b_user BP_USER ON BP_USER.ID = {$this->getAliasFieldName('USER_ID')}",
+			"LEFT JOIN b_user BP_USER ON BP_USER.ID = {$this->getAliasFieldName('USER_ID')}"
 		);
 
 		return [
@@ -66,15 +69,13 @@ class WorkflowTemplate extends Dataset
 			,
 			(new StringField('WORKFLOW_TEMPLATE'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('ID')}, ']'), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('ID'), "']'")},
 							nullif({$this->getAliasFieldName('NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 			,
 			(new StringField('MODULE_ID')),
@@ -93,60 +94,44 @@ class WorkflowTemplate extends Dataset
 			,
 			(new StringField('IS_MODIFIED'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('IS_MODIFIED')} = 'Y',
-						'Y',
-						'N'
-					)"
+					CASE WHEN {$this->getAliasFieldName('IS_MODIFIED')} = 'Y' THEN 'Y' ELSE 'N' END"
 				)
 			,
 			(new IntegerField('USER_ID')),
 			(new StringField('USER_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('USER_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('USER_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$userJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$userJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$userJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($userJoin)
 			,
 			(new StringField('USER'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('USER_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('USER_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('USER_ID')}, ']'), 
-							nullif({$userJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('USER_ID'), "']'")},
+							nullif({$userJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$userJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($userJoin)
 			,
 			(new StringField('SYSTEM_CODE')),
 			(new StringField('IS_SYSTEM'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('IS_SYSTEM')} = 'Y',
-						'Y',
-						'N'
-					)"
+					CASE WHEN {$this->getAliasFieldName('IS_SYSTEM')} = 'Y' THEN 'Y' ELSE 'N' END"
 				)
 			,
 			(new StringField('ACTIVE'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('ACTIVE')} = 'Y',
-						'Y',
-						'N'
-					)"
+					CASE WHEN {$this->getAliasFieldName('ACTIVE')} = 'Y' THEN 'Y' ELSE 'N' END"
 				)
 			,
 			(new StringField('TYPE')),

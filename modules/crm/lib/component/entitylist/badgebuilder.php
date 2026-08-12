@@ -2,6 +2,8 @@
 
 namespace Bitrix\Crm\Component\EntityList;
 
+use Bitrix\Crm\Badge\ValueItemOptions;
+
 final class BadgeBuilder
 {
 	private static bool $isHintInitiated = false;
@@ -9,39 +11,48 @@ final class BadgeBuilder
 	public static function render(array $badges): string
 	{
 		$badge = current($badges);
-		$titleText = htmlspecialcharsbx($badge['fieldName']);
-		$fieldClass = 'crm-kanban-item-badges-item-value crm-kanban-item-badges-status';
-		$hint = htmlspecialcharsbx($badge['hint'] ?? '');
+		if (!$badge)
+		{
+			return '';
+		}
 
-		$backgroundColor = $badge['backgroundColor'];
-		$textColor = $badge['textColor'];
-		$style = "background-color: $backgroundColor;border-color:$backgroundColor;color:$textColor;";
+		$titleText = htmlspecialcharsbx($badge['fieldName']);
+		$hint = htmlspecialcharsbx($badge['hint'] ?? '');
+		$style = $badge['style'] ?? ValueItemOptions::STYLE_TINTED_NO_ACCENT;
 		$text = htmlspecialcharsbx($badge['textValue']);
+
+		$hintAttr = $hint !== '' ? " data-badgehint=\"{$hint}\"" : '';
 
 		$html = <<<HTML
 			<div class="crm-kanban-item-badges">
-				<div class="crm-kanban-item-badges-item-title">
-					<div class="crm-kanban-item-badges-item-title-text">$titleText</div>
-				</div>
 				<div class="crm-kanban-item-badges-item">
-					<div class="$fieldClass" style="$style" data-badgehint="$hint">$text</div>
+					<div class="crm-kanban-item-badges-item-title">
+						<div class="crm-kanban-item-badges-item-title-text">{$titleText}</div>
+					</div>
+					<div class="crm-kanban-item-badges-item-value"{$hintAttr}>
+						<div class="ui-system-label --size-md --style-{$style}" title="{$text}">
+							<div class="ui-system-label__inner">
+								<div class="ui-system-label__value">{$text}</div>
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 HTML;
 
 		$js = '';
-		if (!empty($hint) && !self::$isHintInitiated)
+		if ($hint !== '' && !self::$isHintInitiated)
 		{
 			self::$isHintInitiated = true;
 
 			$js = <<<JS
 				<script type="text/javascript">
-    				BX.ready(() => {
-						document.querySelectorAll('.crm-kanban-item-badges-item-value').forEach((item) => {
+					BX.ready(() => {
+						document.querySelectorAll('.crm-kanban-item-badges [data-badgehint]').forEach((item) => {
 							const badge = new BX.Crm.Badge(item);
 							badge.init();
 						});
-    				});
+					});
 				</script>
 JS;
 		}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\V2\Internal\Service\Project;
 
+use Bitrix\Socialnetwork\Collab\Integration\Note\CollabKnowledgeService;
 use Bitrix\Socialnetwork\V2\Internal\Entity\EntityType;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Feature;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\FeatureCollection;
@@ -12,12 +13,16 @@ use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectFeatureRepository;
 
 class FeatureService
 {
+	/** @var array<string, array{available: bool, collectionId: int|null, canView: bool, restriction: string|null}> */
+	private array $knowledgeSectionCache = [];
+
 	public function __construct(
 		private readonly FeatureLinkBuilder $linkBuilder,
 		private readonly ProjectFeatureRepository $featureRepository,
 		private readonly Integration\Tasks\Flow\Service\Project $flowProjectService,
 		private readonly Integration\Rest\Service\Placement $restPlacementService,
 		private readonly Integration\Landing\Service\Project $landingProjectService,
+		private readonly CollabKnowledgeService $collabKnowledgeService,
 	)
 	{
 	}
@@ -26,7 +31,7 @@ class FeatureService
 	{
 		$storedFeatureNames = $this->getStoredFeatureNames($projectId);
 		$storedFeatureNames = $this->appendPersistedActiveFeatureNames($projectId, $storedFeatureNames);
-		$specialFeatureIds = $this->getSpecialFeatureIds($projectId);
+		$specialFeatureIds = $this->getSpecialFeatureIds($projectId, $userId, $storedFeatureNames);
 		if ($storedFeatureNames === [] && $specialFeatureIds === [])
 		{
 			return new FeatureCollection();
@@ -39,7 +44,7 @@ class FeatureService
 		{
 			$url = $this->linkBuilder->build($featureId, $projectId, $userId);
 
-			$restrictionCode = $this->resolveRestrictionCode($featureId);
+			$restrictionCode = $this->resolveRestrictionCode($featureId, $projectId, $userId);
 			$isLocked = ($restrictionCode !== null);
 			if ($isLocked)
 			{
@@ -75,14 +80,29 @@ class FeatureService
 
 	private function shouldIncludeFeatureWithoutUrl(string $featureId): bool
 	{
-		return $featureId === FeatureDictionary::Chat->value;
+		// Note: the knowledge-base feature is always shown in the menu even before its
+		// collection exists — provisioning is deferred to the first click (the front-end
+		// resolves the section URL lazily via socialnetwork.collab.note.resolveSection).
+		return in_array(
+			$featureId,
+			[
+				FeatureDictionary::Chat->value,
+				FeatureDictionary::Note->value,
+			],
+			true,
+		);
 	}
 
-	private function resolveRestrictionCode(string $featureId): ?string
+	private function resolveRestrictionCode(string $featureId, int $projectId, int $userId): ?string
 	{
 		if ($featureId === FeatureDictionary::LandingKnowledge->value)
 		{
 			return $this->landingProjectService->getKnowledgeRestrictionCode();
+		}
+
+		if ($featureId === FeatureDictionary::Note->value)
+		{
+			return $this->resolveKnowledgeSection($projectId, $userId)['restriction'];
 		}
 
 		return null;
@@ -208,18 +228,53 @@ class FeatureService
 		return $storedFeatureNames;
 	}
 
-	private function getSpecialFeatureIds(int $projectId): array
+	private function getSpecialFeatureIds(int $projectId, int $userId, array $storedFeatureNames): array
 	{
-		if (!$this->hasProjectFlows($projectId))
+		$specialFeatureIds = [];
+
+		if ($this->hasProjectFlows($projectId))
 		{
-			return [];
+			$specialFeatureIds[] = FeatureDictionary::Flows->value;
 		}
 
-		return [FeatureDictionary::Flows->value];
+		// Do not add the new collab knowledge base (note) when the legacy landing-based
+		// knowledge base (landing_knowledge) is already active for this project — showing
+		// both would duplicate the Knowledge Base entry in the project tools menu.
+		$hasLegacyKnowledgeBase = array_key_exists(FeatureDictionary::LandingKnowledge->value, $storedFeatureNames);
+		if (!$hasLegacyKnowledgeBase && $this->hasKnowledgeSection($projectId, $userId))
+		{
+			$specialFeatureIds[] = FeatureDictionary::Note->value;
+		}
+
+		return $specialFeatureIds;
 	}
 
 	private function hasProjectFlows(int $projectId): bool
 	{
 		return $this->flowProjectService->hasFlows($projectId);
+	}
+
+	private function hasKnowledgeSection(int $projectId, int $userId): bool
+	{
+		$section = $this->resolveKnowledgeSection($projectId, $userId);
+
+		// Include the feature when the section is reachable (available)
+		// or when it is locked behind a tariff (restriction !== null) so the
+		// generic feature-menu upsell can be rendered.
+		return $section['available'] === true || $section['restriction'] !== null;
+	}
+
+	/**
+	 * @return array{available: bool, collectionId: int|null, canView: bool, restriction: string|null}
+	 */
+	private function resolveKnowledgeSection(int $projectId, int $userId): array
+	{
+		$cacheKey = $projectId . ':' . $userId;
+		if (!isset($this->knowledgeSectionCache[$cacheKey]))
+		{
+			$this->knowledgeSectionCache[$cacheKey] = $this->collabKnowledgeService->resolveSection($projectId, $userId);
+		}
+
+		return $this->knowledgeSectionCache[$cacheKey];
 	}
 }

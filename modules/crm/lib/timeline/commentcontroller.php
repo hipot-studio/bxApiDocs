@@ -375,6 +375,13 @@ class CommentController extends EntityController
 					$languageId,
 				);
 			};
+			$notifyMessageSubjectCallback = static fn (?string $languageId = null) =>
+				Loc::getMessage(
+					'CRM_ACTIVITY_PROVIDER_REQUEST_NOTIFY_SUBJECT',
+					null,
+					$languageId,
+				)
+			;
 
 			$oldMentionList = $data['OLD_MENTION_LIST'] ?? [];
 			foreach ($mentionList as $mentionId)
@@ -390,7 +397,22 @@ class CommentController extends EntityController
 					'NOTIFY_MODULE' => 'crm',
 					'NOTIFY_EVENT' => 'mention',
 					'NOTIFY_TAG' => 'CRM|MESSAGE_TIMELINE_MENTION|' . $id,
-					'NOTIFY_MESSAGE' => $notifyMessageCallback
+					'NOTIFY_MESSAGE' => $notifyMessageCallback,
+					'PARAMS' => [
+						'COMPONENT_ID' => 'CrmEntity',
+						'COMPONENT_PARAMS' => [
+							'SUBJECT' => $notifyMessageSubjectCallback,
+							'ENTITY' => [
+								'TITLE' => htmlspecialcharsbx($info['CAPTION']),
+								'HREF' => $info['LINK'],
+								'ENTITY_TYPE' => 'default',
+								'CONTENT_TYPE' => 'text',
+								'CONTENT' => [
+									'VALUE' => $cuttedComment,
+								],
+							],
+						],
+					],
 				));
 			}
 		}

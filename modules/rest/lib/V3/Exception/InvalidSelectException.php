@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class InvalidSelectException extends RestException
+class InvalidSelectException extends RestException implements SkipWriteToLogException
 {
 	public function __construct(
 		protected mixed $select,

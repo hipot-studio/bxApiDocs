@@ -114,7 +114,10 @@ final class InventoryManagement
 		$processInventoryManagementResult = null;
 		if ($semanticId === Crm\PhaseSemantics::SUCCESS)
 		{
-			if (EntityFactory::make(Deal::CODE)->getAutoWriteOffOnFinalize())
+			if (
+				EntityFactory::make(Deal::CODE)->getAutoWriteOffOnFinalize()
+				&& !\CCrmSaleHelper::isInventoryManagedExternally()
+			)
 			{
 				$processInventoryManagementResult = $this->ship();
 				if ($processInventoryManagementResult->isSuccess())

@@ -8,6 +8,7 @@ use Bitrix\Main\EventManager;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\ORM\EntityError;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Event\Dto\ChatDto;
 use Bitrix\Call\Model\CallUserTable;
 use Bitrix\Call\Model\CallUserLogTable;
 use Bitrix\Call\Service\CallLogService;
@@ -69,6 +70,27 @@ class EventHandler
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @event 'im:OnAfterChatDelete'
+	 * @see \Bitrix\Im\V2\Chat\Event\AfterDeleteEvent
+	 */
+	public static function onAfterChatDelete(Event $event): EventResult
+	{
+		$chatDto = $event->getParameter('chat');
+		if (!$chatDto instanceof ChatDto)
+		{
+			return new EventResult();
+		}
+
+		$chatId = $chatDto->id;
+		if ($chatId > 0)
+		{
+			(new CallLogService())->deleteByChatId($chatId);
+		}
+
+		return new EventResult();
 	}
 
 	/**
@@ -162,7 +184,7 @@ class EventHandler
 	public static function broadcastCallLogFinish(int $callId, array $userIds): void
 	{
 		$existing = CallUserLogTable::getList([
-			'select' => ['USER_ID', 'STATUS'],
+			'select' => ['USER_ID', 'STATUS', 'STATUS_TIME'],
 			'filter' => [
 				'=SOURCE_TYPE' => CallUserLogTable::SOURCE_TYPE_CALL,
 				'=SOURCE_CALL_ID' => $callId,
@@ -182,7 +204,8 @@ class EventHandler
 				CallUserLogTable::SOURCE_TYPE_CALL,
 				$callId,
 				(int)$row['USER_ID'],
-				$row['STATUS']
+				$row['STATUS'],
+				$row['STATUS_TIME']
 			);
 		}
 	}

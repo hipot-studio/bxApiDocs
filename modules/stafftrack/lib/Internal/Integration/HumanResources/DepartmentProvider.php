@@ -60,6 +60,34 @@ class DepartmentProvider
 		return HrPublicContainer::getUserDepartmentService()->getSubordinateUserIds($userId);
 	}
 
+	/**
+	 * IDs of DEPARTMENT nodes where the user is head or deputy head (no subtree).
+	 *
+	 * @return int[]
+	 */
+	public static function getManagedDepartmentIds(int $userId): array
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return [];
+		}
+
+		return HrPublicContainer::getUserDepartmentService()
+			->getNodeMembersWhereUserIsHeadOrDeputy($userId)
+			->getNodeIds()
+		;
+	}
+
+	public static function isHeadOrDeputyOfDepartment(int $userId): bool
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return false;
+		}
+
+		return HrPublicContainer::getUserDepartmentService()->isHeadOrDeputyOfDepartment($userId);
+	}
+
 	private static function getAdminIds(): array
 	{
 		$adminIds = [];

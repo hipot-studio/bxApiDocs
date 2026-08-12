@@ -20,6 +20,7 @@ class TrackError extends \Bitrix\Call\Error
 		MIXER_DELETE_ERROR = 'MIXER_DELETE_ERROR',
 		PREVIEW_ALREADY_EXISTS = 'preview_already_exists',
 		STATIC_PREVIEW_NOT_FOUND = 'static_preview_not_found',
-		FILE_ARRAY_ERROR = 'file_array_error'
+		FILE_ARRAY_ERROR = 'file_array_error',
+		FINALIZE_FAILED = 'FINALIZE_FAILED'
 	;
 }

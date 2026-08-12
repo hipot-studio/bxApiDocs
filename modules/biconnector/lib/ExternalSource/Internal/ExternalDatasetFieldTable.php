@@ -11,6 +11,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Fields\TextField;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 use Bitrix\Main\ORM\Query\Join;
@@ -27,6 +28,7 @@ use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
  * <li> NAME string(512) mandatory
  * <li> EXTERNAL_CODE string(512) optional
  * <li> VISIBLE bool mandatory default 'Y'
+ * <li> DESCRIPTION text optional
  * </ul>
  *
  * @package Bitrix\BIConnector\ExternalSource\Internal
@@ -146,6 +148,12 @@ class ExternalDatasetFieldTable extends DataManager
 					'values' => ['N', 'Y'],
 					'default' => 'Y',
 					'title' => Loc::getMessage('EXTERNAL_DATASET_FIELDS_ENTITY_VISIBLE_FIELD'),
+				]
+			),
+			new TextField(
+				'DESCRIPTION',
+				[
+					'title' => Loc::getMessage('EXTERNAL_DATASET_FIELDS_ENTITY_DESCRIPTION_FIELD'),
 				]
 			),
 		];

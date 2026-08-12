@@ -194,7 +194,7 @@ class CopilotChat extends GroupChat
 		return;
 	}
 
-	public function sendBanner(?int $authorId = null, ?string $copilotName = null, bool $isUpdate = false): void
+	public function sendBanner(?int $authorId = null, bool $force = false, ?string $copilotName = null, bool $isUpdate = false): void
 	{
 		$roleManager = (new Im\V2\Integration\AI\RoleManager())->setContextUser($this->getContext()->getUser());
 		$copilotCode = $roleManager->getValidRoleCode($roleManager->getMainRole($this->getChatId()));
@@ -202,10 +202,12 @@ class CopilotChat extends GroupChat
 
 		if (
 			!$isUpdate
+			&& !$force
 			&& Features::get()->isBitrixGptV2Available
 			&& Features::get()->isCopilotDraftChatAvailable
 			&& $defaultRoleCode !== null
 			&& $copilotCode === $defaultRoleCode
+			&& !($this->hasParent() && $this->getParentChat() instanceof CollabChat)
 		)
 		{
 			return;

@@ -22,12 +22,20 @@ class RecentItem implements RestConvertible
 	protected ?DateTime $dateLastActivity = null;
 	protected array $options = [];
 	protected array $invited = [];
+	// Internal only, not serialized: which source chat to add to the normalized chats[] collection.
+	protected int $sourceChatId = 0;
+	// Preview-source pointers loaded verbatim from the recent row. A zero value means the source is the row itself.
+	protected int $previewSourceCid = 0;
+	protected int $previewSourceMid = 0;
+	// The row's own last message id, captured before the read-path overlay may redirect $messageId to a preview source.
+	protected int $ownMessageId = 0;
 
 	public static function initByEntity(EO_Recent $entity): self
 	{
 		$recentItem = new static();
 		$recentItem
 			->setMessageId($entity->getItemMid())
+			->setOwnMessageId($entity->getItemMid())
 			->setChatId($entity->getItemCid())
 			->setDialogId('chat' . $entity->getItemCid()) // TODO: replace
 			->setUnread($entity->getUnread())
@@ -35,6 +43,8 @@ class RecentItem implements RestConvertible
 			->setLastReadMessageId((int)$entity->getRelation()?->getLastId())
 			->setDateUpdate($entity->getDateUpdate())
 			->setDateLastActivity($entity->getDateLastActivity())
+			->setPreviewSourceCid((int)$entity->getPreviewSourceCid())
+			->setPreviewSourceMid((int)$entity->getPreviewSourceMid())
 		;
 
 		return $recentItem;
@@ -46,6 +56,7 @@ class RecentItem implements RestConvertible
 
 		$recentItem
 			->setMessageId($entity["ITEM_MID"] ?? 0)
+			->setOwnMessageId($entity["ITEM_MID"] ?? 0)
 			->setChatId($entity["ITEM_CID"] ?? 0)
 			->setDialogId('chat' . $entity["ITEM_CID"]) // TODO: replace
 			->setUnread($entity["UNREAD"] === 'Y')
@@ -53,6 +64,8 @@ class RecentItem implements RestConvertible
 			->setLastReadMessageId((int)$entity['RELATION.LAST_ID'])
 			->setDateUpdate($entity['DATE_UPDATE'])
 			->setDateLastActivity($entity['DATE_LAST_ACTIVITY'])
+			->setPreviewSourceCid((int)($entity['PREVIEW_SOURCE_CID'] ?? 0))
+			->setPreviewSourceMid((int)($entity['PREVIEW_SOURCE_MID'] ?? 0))
 		;
 
 		return $recentItem;
@@ -88,6 +101,17 @@ class RecentItem implements RestConvertible
 	public function setMessageId(int $messageId): RecentItem
 	{
 		$this->messageId = $messageId;
+		return $this;
+	}
+
+	public function getOwnMessageId(): int
+	{
+		return $this->ownMessageId;
+	}
+
+	public function setOwnMessageId(int $ownMessageId): RecentItem
+	{
+		$this->ownMessageId = $ownMessageId;
 		return $this;
 	}
 
@@ -190,6 +214,39 @@ class RecentItem implements RestConvertible
 		return $this;
 	}
 
+	public function getSourceChatId(): int
+	{
+		return $this->sourceChatId;
+	}
+
+	public function setSourceChatId(int $sourceChatId): self
+	{
+		$this->sourceChatId = $sourceChatId;
+		return $this;
+	}
+
+	public function getPreviewSourceCid(): int
+	{
+		return $this->previewSourceCid;
+	}
+
+	public function setPreviewSourceCid(int $previewSourceCid): self
+	{
+		$this->previewSourceCid = $previewSourceCid;
+		return $this;
+	}
+
+	public function getPreviewSourceMid(): int
+	{
+		return $this->previewSourceMid;
+	}
+
+	public function setPreviewSourceMid(int $previewSourceMid): self
+	{
+		$this->previewSourceMid = $previewSourceMid;
+		return $this;
+	}
+
 	public function getMarkedId(): int
 	{
 		return $this->markedId;
@@ -218,7 +275,7 @@ class RecentItem implements RestConvertible
 
 	public function toRestFormat(array $option = []): array
 	{
-		return [
+		$rest = [
 			'dialogId' => $this->dialogId,
 			'chatId' => $this->chatId,
 			'messageId' => $this->messageId,
@@ -231,5 +288,15 @@ class RecentItem implements RestConvertible
 			'dateUpdate' => $this->dateUpdate,
 			'dateLastActivity' => $this->dateLastActivity,
 		];
+
+		// Always emit ownMessageId (the row's own last message) so the client never has to derive it.
+		// For non-redirected rows it equals messageId; that is harmless and only the collab fixed-row
+		// forceOwnMessage path reads it.
+		if ($this->ownMessageId > 0)
+		{
+			$rest['ownMessageId'] = $this->ownMessageId;
+		}
+
+		return $rest;
 	}
 }

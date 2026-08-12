@@ -33,6 +33,7 @@ class WorkflowState
 		}
 
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
 
 		$modulesSql = static::mapDictionarytoSqlCase(static::getModulesNames(), $helper);
@@ -62,7 +63,7 @@ class WorkflowState
 				],
 				'STARTED_BY' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', US.ID, \']\'), nullif(US.NAME, \'\'), nullif(US.LAST_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'US.ID', "']'") . ', nullif(US.NAME, \'\'), nullif(US.LAST_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'US',
 					'JOIN' => 'INNER JOIN b_user US ON US.ID = WS.STARTED_BY',
@@ -75,7 +76,7 @@ class WorkflowState
 				],
 				'COMPLETED' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'if(WI.ID is null, \'Y\', \'N\')',
+					'FIELD_NAME' => 'CASE WHEN WI.ID IS NULL THEN \'Y\' ELSE \'N\' END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'WI',
 					'JOIN' => 'INNER JOIN b_bp_workflow_instance WI ON WI.ID = WS.ID',
@@ -88,7 +89,7 @@ class WorkflowState
 				],
 				'DURATION' => [
 					'IS_METRIC' => 'Y',
-					'FIELD_NAME' => 'TIMESTAMPDIFF(SECOND, WS.STARTED, WS.MODIFIED)',
+					'FIELD_NAME' => $helper->getDateDiffSecondsExpression('WS.STARTED', 'WS.MODIFIED'),
 					'FIELD_TYPE' => 'int',
 				],
 				/* TODO: aggregate from bizpoc_task DURATION
@@ -162,7 +163,7 @@ class WorkflowState
 				],
 				'MODIFIED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', UM.ID, \']\'), nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'UM.ID', "']'") . ', nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UM',
 					'JOIN' => [

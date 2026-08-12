@@ -16,6 +16,7 @@ class CrmDocumentTypeFilter extends DocumentTypeFilter
 			'onlyDynamic' => false,
 			'onlyAutomatedSolution' => false,
 			'onlyBasic' => false,
+			'onlyBizProcEnabled' => false,
 			'onlyEntities' => null,
 		];
 	}
@@ -28,6 +29,7 @@ class CrmDocumentTypeFilter extends DocumentTypeFilter
 				isset($parameters['onlyAutomatedSolution']) && (bool)$parameters['onlyAutomatedSolution']
 			,
 			'onlyBasic' => isset($parameters['onlyBasic']) && (bool)$parameters['onlyBasic'],
+			'onlyBizProcEnabled' => isset($parameters['onlyBizProcEnabled']) && (bool)$parameters['onlyBizProcEnabled'],
 			'onlyEntities' =>
 				isset($parameters['onlyEntities']) && is_array($parameters['onlyEntities'])
 					? $parameters['onlyEntities']
@@ -49,6 +51,11 @@ class CrmDocumentTypeFilter extends DocumentTypeFilter
 	public function isOnlyBasic(): bool
 	{
 		return (bool)($this->parameters['onlyBasic'] ?? false);
+	}
+
+	public function isOnlyBizProcEnabled(): bool
+	{
+		return (bool)($this->parameters['onlyBizProcEnabled'] ?? false);
 	}
 
 	public function isOnlyCertainEntities(): bool

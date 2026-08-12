@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Service\UserPermissions\EntityPermissions;
 
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
+use Bitrix\Crm\Component\DisableHelpers\OldInvoiceReadonlyHelper;
 use Bitrix\Crm\Security\Role\PermissionsManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
@@ -131,6 +132,11 @@ class Type
 	 */
 	public function canAddItems(int $entityTypeId): bool
 	{
+		if (OldInvoiceReadonlyHelper::isOldInvoiceReadOnly($entityTypeId))
+		{
+			return false;
+		}
+
 		if (CatalogEntityItem::isCatalogEntity($entityTypeId))
 		{
 			return $this->catalogEntityItem->canAddItems($this, $entityTypeId);
@@ -162,6 +168,11 @@ class Type
 	 */
 	public function canAddItemsInCategory(int $entityTypeId, int $categoryId): bool
 	{
+		if (OldInvoiceReadonlyHelper::isOldInvoiceReadOnly($entityTypeId))
+		{
+			return false;
+		}
+
 		if (CatalogEntityItem::isCatalogEntity($entityTypeId))
 		{
 			return $this->catalogEntityItem->canAddItems($this, $entityTypeId);
@@ -189,6 +200,11 @@ class Type
 	 */
 	public function canUpdateItems(int $entityTypeId): bool
 	{
+		if (OldInvoiceReadonlyHelper::isOldInvoiceReadOnly($entityTypeId))
+		{
+			return false;
+		}
+
 		if (CatalogEntityItem::isCatalogEntity($entityTypeId))
 		{
 			return $this->catalogEntityItem->canUpdateItems($this, $entityTypeId);
@@ -215,6 +231,11 @@ class Type
 	 */
 	public function canUpdateItemsInCategory(int $entityTypeId, int $categoryId): bool
 	{
+		if (OldInvoiceReadonlyHelper::isOldInvoiceReadOnly($entityTypeId))
+		{
+			return false;
+		}
+
 		if (CatalogEntityItem::isCatalogEntity($entityTypeId))
 		{
 			return $this->catalogEntityItem->canUpdateItems($this, $entityTypeId);
@@ -307,6 +328,11 @@ class Type
 
 	public function canImportItems(int $entityTypeId): bool
 	{
+		if (OldInvoiceReadonlyHelper::isOldInvoiceReadOnly($entityTypeId))
+		{
+			return false;
+		}
+
 		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
 		{
 			return false;
@@ -317,6 +343,11 @@ class Type
 
 	public function canImportItemsInCategory(int $entityTypeId, int $categoryId): bool
 	{
+		if (OldInvoiceReadonlyHelper::isOldInvoiceReadOnly($entityTypeId))
+		{
+			return false;
+		}
+
 		if ($this->isAutomatedSolutionEntityLocked($entityTypeId))
 		{
 			return false;

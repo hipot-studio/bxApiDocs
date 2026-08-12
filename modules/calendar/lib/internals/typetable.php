@@ -61,7 +61,6 @@ class TypeTable extends Main\Entity\DataManager
 					'validation' => [__CLASS__, 'validateXmlId']
 				]
 			))
-				->configureTitle(Loc::getMessage('TYPE_ENTITY_XML_ID_FIELD'))
 				->configurePrimary(true)
 			,
 			(new StringField('NAME',
@@ -69,20 +68,16 @@ class TypeTable extends Main\Entity\DataManager
 					'validation' => [__CLASS__, 'validateName']
 				]
 			))
-				->configureTitle(Loc::getMessage('TYPE_ENTITY_NAME_FIELD'))
 			,
 			(new TextField('DESCRIPTION'))
-				->configureTitle(Loc::getMessage('TYPE_ENTITY_DESCRIPTION_FIELD'))
 			,
 			(new StringField('EXTERNAL_ID',
 				[
 					'validation' => [__CLASS__, 'validateExternalId']
 				]
 			))
-				->configureTitle(Loc::getMessage('TYPE_ENTITY_EXTERNAL_ID_FIELD'))
 			,
 			(new BooleanField('ACTIVE'))
-				->configureTitle(Loc::getMessage('TYPE_ENTITY_ACTIVE_FIELD'))
 				->configureValues('N', 'Y')
 				->configureDefaultValue('Y')
 			,

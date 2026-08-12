@@ -28,7 +28,7 @@ class CallLogPushService
 			'module_id' => 'call',
 			'command' => 'Call::callLog' . $command,
 			'params' => $params,
-			'extra' => \Bitrix\Im\Common::getPullExtra()
+			'extra' => \Bitrix\Im\Common::getPullExtra(),
 		];
 
 		\Bitrix\Pull\Event::add([$params['userId']], $pushMessage);
@@ -54,9 +54,12 @@ class CallLogPushService
 			'command' => 'Call::callLogCounterUpdate',
 			'params' => [
 				'counterValue' => $counterValue,
-				'callIds' => $calls
+				'callIds' => $calls,
 			],
-			'extra' => \Bitrix\Im\Common::getPullExtra()
+			'extra' => \Bitrix\Im\Common::getPullExtra(),
+			'push' => [
+				'send_immediately' => 'Y',
+			],
 		];
 
 		\Bitrix\Pull\Event::add([$userId], $pushMessage);

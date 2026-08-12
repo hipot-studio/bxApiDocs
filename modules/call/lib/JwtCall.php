@@ -438,7 +438,7 @@ class JwtCall
 			'portalId' => Settings::getPortalId(),
 			'chatId' => $chatId,
 			'tokenVersion' => $tokenVersion,
-			'usersLimit' => Call::getMaxCallServerParticipants(),
+			'usersLimit' => Settings::getMaxCallServerParticipants(),
 			'portalType' => Client::getPortalType(),
 			'portalUrl' => Client::getServerName(),
 			'controllerUrl' => (new ControllerClient())->getServiceUrl(),

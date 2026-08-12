@@ -9,7 +9,9 @@ use Bitrix\Crm\Security\Role\Manage\DTO\Restrictions;
 use Bitrix\Crm\Security\Role\Model\RolePermissionTable;
 use Bitrix\Crm\Security\Role\Model\RoleRelationTable;
 use Bitrix\Crm\Security\Role\Model\RoleTable;
+use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\Service\UserPermissions\EntityPermissions\ItemsList;
 use Bitrix\Crm\Traits\Singleton;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
@@ -127,6 +129,7 @@ class PermissionRepository
 			RolePermissionTable::appendPermissions($roleId, $changedPerms);
 
 			$connection->commitTransaction();
+			$this->clearItemListRuntimeCaches();
 		}
 		catch (\Exception $e)
 		{
@@ -194,7 +197,14 @@ class PermissionRepository
 		if ($existedRelations !== $relations)
 		{
 			RoleRelationTable::updateForRole($roleId, $relations);
+			$this->clearItemListRuntimeCaches();
 		}
+	}
+
+	private function clearItemListRuntimeCaches(): void
+	{
+		Factory::clearPermissionEntityTypesCache();
+		ItemsList::clearQueryResultCache();
 	}
 
 	public function updateRole(int $id, string $name): void

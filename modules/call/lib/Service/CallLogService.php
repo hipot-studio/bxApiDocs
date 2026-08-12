@@ -4,8 +4,10 @@ namespace Bitrix\Call\Service;
 
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Call\Model\CallTable;
 use Bitrix\Call\Model\CallUserLogTable;
 use Bitrix\Call\Model\CallUserLogCountersTable;
+use Bitrix\Call\Model\CallUserLogIndexTable;
 use Bitrix\Call\Counter;
 use Bitrix\Call\Call;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
@@ -456,7 +458,7 @@ class CallLogService
 		$startDate = $call->getStartDate();
 		$endDate = $call->getEndDate();
 
-		if (!$startDate instanceof \DateTime || !$endDate instanceof \DateTime)
+		if (!$startDate instanceof DateTime || !$endDate instanceof DateTime)
 		{
 			return 0;
 		}
@@ -581,6 +583,70 @@ class CallLogService
 		}
 	}
 
+	/**
+	 * Delete all call log entries linked to the given chat.
+	 * Triggered by im:OnAfterChatDelete to clean up userlog records for calls whose chat no longer exists.
+	 */
+	public function deleteByChatId(int $chatId): void
+	{
+		if ($chatId <= 0)
+		{
+			return;
+		}
+
+		$connection    = Application::getConnection();
+		$userlogTable  = CallUserLogTable::getTableName();
+		$countersTable = CallUserLogCountersTable::getTableName();
+		$indexTable    = CallUserLogIndexTable::getTableName();
+		$sessionTable  = CallTable::getTableName();
+		$callType      = $connection->getSqlHelper()->forSql(CallUserLogTable::SOURCE_TYPE_CALL);
+
+		$userlogFilter = "WHERE SOURCE_TYPE = '{$callType}' AND SOURCE_CALL_ID IN (SELECT ID FROM {$sessionTable} WHERE CHAT_ID = {$chatId})";
+
+		$affectedUsers = array_column(
+			$connection->query("SELECT DISTINCT USER_ID FROM {$userlogTable} {$userlogFilter}")->fetchAll(),
+			'USER_ID'
+		);
+		if (empty($affectedUsers))
+		{
+			return;
+		}
+
+		$userlogIdsSubquery = "SELECT ID FROM {$userlogTable} {$userlogFilter}";
+
+		$connection->startTransaction();
+		try
+		{
+			$connection->queryExecute("DELETE FROM {$countersTable} WHERE USERLOG_ID IN ({$userlogIdsSubquery})");
+			$connection->queryExecute("DELETE FROM {$indexTable} WHERE USERLOG_ID IN ({$userlogIdsSubquery})");
+			$connection->queryExecute("DELETE FROM {$userlogTable} {$userlogFilter}");
+			$connection->commitTransaction();
+		}
+		catch (\Throwable $exception)
+		{
+			$connection->rollbackTransaction();
+			Logger::getInstance()->error("Failed to delete call log for chat {$chatId}: {$exception->getMessage()}");
+
+			return;
+		}
+
+		foreach ($affectedUsers as $userId)
+		{
+			$userIdInt = (int)$userId;
+			try
+			{
+				Counter::clearCache($userIdInt);
+				CallLogPushService::sendCounterUpdate($userIdInt, $this->getMissedCounter($userIdInt));
+			}
+			catch (\Throwable $exception)
+			{
+				Logger::getInstance()->error(
+					"Failed to send call log counter update for user {$userIdInt} after chat {$chatId} delete: {$exception->getMessage()}"
+				);
+			}
+		}
+	}
+
 	protected function getLockName(string $sourceType, int $sourceCallId, int $userId): string
 	{
 		return "userlog_{$sourceType}_{$sourceCallId}_{$userId}";
@@ -680,6 +746,7 @@ class CallLogService
 
 			$command = $isUpdate ? 'Update' : 'Add';
 			CallLogPushService::sendCallLog($command, $callLogData);
+			CallLogPushService::sendCounterUpdate($userId, $this->getMissedCounter($userId));
 
 			return $eventId;
 		}
@@ -713,9 +780,6 @@ class CallLogService
 		}
 
 		Counter::clearCache($userId);
-
-		$newCounterValue = $this->getMissedCounter($userId);
-		CallLogPushService::sendCounterUpdate($userId, $newCounterValue);
 	}
 
 

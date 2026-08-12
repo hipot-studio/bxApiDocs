@@ -82,6 +82,7 @@ class ChatFactory
 			...$this->getCommonFields(),
 			...self::getUniqueCollabChatFields(),
 			'TYPE' => ChatType::getCollabType($this->group->isOpened()),
+			'MANAGERS' => $this->group->getModeratorMemberIds(),
 		];
 	}
 
@@ -129,6 +130,7 @@ class ChatFactory
 		$fields = $this->getCommonFields();
 
 		$fields['TYPE'] = IM_MESSAGE_CHAT;
+		$fields['MANAGERS'] = $this->group->getModeratorMemberIds();
 
 		return $fields;
 	}

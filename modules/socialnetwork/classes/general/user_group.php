@@ -2547,9 +2547,17 @@ class CAllSocNetUserToGroup
 		return $bSuccess;
 	}
 
-	public static function SetOwner($userId, $groupId, $groupFields = [], bool $skipChatMessage = false): bool
+	public static function SetOwner(
+		$userId,
+		$groupId,
+		$groupFields = [],
+		bool $skipChatMessage = false,
+		bool $skipNotifications = false,
+	): bool
 	{
 		global $DB, $APPLICATION, $USER;
+
+		$initiatedByUserId = ($USER instanceof CUser && $USER->IsAuthorized()) ? (int)$USER->GetID() : $userId;
 
 		if (empty($groupFields))
 		{
@@ -2603,7 +2611,7 @@ class CAllSocNetUserToGroup
 				"ROLE" => $role,
 				"=DATE_UPDATE" => CDatabase::CurrentTimeFunction(),
 				"INITIATED_BY_TYPE" => SONET_INITIATED_BY_USER,
-				"INITIATED_BY_USER_ID" => $USER->GetID(),
+				"INITIATED_BY_USER_ID" => $initiatedByUserId,
 			);
 
 			if (!CSocNetUserToGroup::Update($existingRelationFields["ID"], $relationFields))
@@ -2642,7 +2650,7 @@ class CAllSocNetUserToGroup
 				"ROLE" => UserToGroupTable::ROLE_OWNER,
 				"=DATE_UPDATE" => CDatabase::CurrentTimeFunction(),
 				"INITIATED_BY_TYPE" => SONET_INITIATED_BY_USER,
-				"INITIATED_BY_USER_ID" => $USER->GetID(),
+				"INITIATED_BY_USER_ID" => $initiatedByUserId,
 				"AUTO_MEMBER" => "N"
 			);
 
@@ -2686,7 +2694,7 @@ class CAllSocNetUserToGroup
 				"=DATE_CREATE" => CDatabase::CurrentTimeFunction(),
 				"=DATE_UPDATE" => CDatabase::CurrentTimeFunction(),
 				"INITIATED_BY_TYPE" => SONET_INITIATED_BY_USER,
-				"INITIATED_BY_USER_ID" => $USER->GetID(),
+				"INITIATED_BY_USER_ID" => $initiatedByUserId,
 				"MESSAGE" => false,
 			);
 
@@ -2749,7 +2757,7 @@ class CAllSocNetUserToGroup
 		}
 
 		// send message to the old owner
-		if ($bIMIncluded)
+		if ($bIMIncluded && !$skipNotifications)
 		{
 			$arTmp = CSocNetLogTools::ProcessPath(
 				array(
@@ -2776,7 +2784,7 @@ class CAllSocNetUserToGroup
 			}
 			$messageFields = array(
 				"TO_USER_ID" => $groupFields["OWNER_ID"],
-				"FROM_USER_ID" => $USER->GetID(),
+				"FROM_USER_ID" => $initiatedByUserId,
 				"NOTIFY_TYPE" => IM_NOTIFY_FROM,
 				"NOTIFY_MODULE" => "socialnetwork",
 				"NOTIFY_EVENT" => "owner_group",
@@ -2804,7 +2812,7 @@ class CAllSocNetUserToGroup
 		}
 
 		// send message to the new owner
-		if ($bIMIncluded)
+		if ($bIMIncluded && !$skipNotifications)
 		{
 			$arTmp = CSocNetLogTools::ProcessPath(
 				array(
@@ -2838,7 +2846,7 @@ class CAllSocNetUserToGroup
 
 			$messageFields = array(
 				"TO_USER_ID" => $userId,
-				"FROM_USER_ID" => $USER->GetID(),
+				"FROM_USER_ID" => $initiatedByUserId,
 				"NOTIFY_TYPE" => IM_NOTIFY_FROM,
 				"NOTIFY_MODULE" => "socialnetwork",
 				"NOTIFY_EVENT" => "owner_group",
@@ -2864,15 +2872,18 @@ class CAllSocNetUserToGroup
 			CIMNotify::Add($messageFields);
 		}
 
-		$notificationParams = array(
-			"TYPE" => "owner",
-			"RELATION_ID" => $existingRelationFields["ID"] ?? null,
-			"USER_ID" => $userId,
-			"GROUP_ID" => $groupId,
-			"GROUP_NAME" => htmlspecialcharsbx($groupFields["NAME"]),
-			"EXCLUDE_USERS" => array($userId, $groupFields["OWNER_ID"], $USER->GetID())
-		);
-		CSocNetUserToGroup::NotifyImToModerators($notificationParams);
+		if (!$skipNotifications)
+		{
+			$notificationParams = array(
+				"TYPE" => "owner",
+				"RELATION_ID" => $existingRelationFields["ID"] ?? null,
+				"USER_ID" => $userId,
+				"GROUP_ID" => $groupId,
+				"GROUP_NAME" => htmlspecialcharsbx($groupFields["NAME"]),
+				"EXCLUDE_USERS" => array($userId, $groupFields["OWNER_ID"], $initiatedByUserId)
+			);
+			CSocNetUserToGroup::NotifyImToModerators($notificationParams);
+		}
 
 		CSocNetSubscription::Set($userId, "SG".$groupId, "Y");
 

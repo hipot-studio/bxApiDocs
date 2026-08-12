@@ -8,8 +8,12 @@ use Bitrix\Main\Error;
 
 class FilterUsersByAccessEvent extends ChatEvent
 {
-	public function __construct(ExternalChat $chat, array $userIds)
+	private FilterContext $context;
+
+	public function __construct(ExternalChat $chat, array $userIds, FilterContext $context = FilterContext::Interactive)
 	{
+		$this->context = $context;
+
 		$parameters = ['userIds' => $userIds];
 
 		parent::__construct($chat, $parameters);
@@ -18,6 +22,11 @@ class FilterUsersByAccessEvent extends ChatEvent
 	protected function getActionName(): string
 	{
 		return 'FilterUsersByAccess';
+	}
+
+	public function isBatchRelationFilterContext(): bool
+	{
+		return $this->context === FilterContext::BatchRelationFilter;
 	}
 
 	public function getUserIds(): array

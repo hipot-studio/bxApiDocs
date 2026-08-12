@@ -10,6 +10,7 @@ use Bitrix\Crm\Order\Internals\ShipmentRealizationTable;
 use Bitrix\Sale\Internals\ShipmentItemTable;
 use Bitrix\Main;
 use Bitrix\Main\Context;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
@@ -17,7 +18,6 @@ use Bitrix\Main\Web\Uri;
 use Bitrix\Crm;
 use Bitrix\Main\Web\Json;
 use Bitrix\Sale\Internals\ShipmentTable;
-use Bitrix\Sale\Tax\VatCalculator;
 use Bitrix\UI;
 use Bitrix\Catalog;
 use Bitrix\Catalog\Access\Model\StoreDocument;
@@ -1170,13 +1170,15 @@ class CrmStoreDocumentListComponent extends CBitrixComponent implements Controll
 			}
 
 			$priceWithVat = (float)$shipmentItem['PRICE'];
-			if ($shipmentItem['VAT_RATE'] !== null)
+			if ($shipmentItem['VAT_RATE'] !== null && $shipmentItem['VAT_INCLUDED'] !== 'Y')
 			{
-				$vatCalculator = new VatCalculator((float)$shipmentItem['VAT_RATE']);
-
-				$priceWithVat = ($shipmentItem['VAT_INCLUDED'] === 'Y')
-					? $priceWithVat
-					: $vatCalculator->accrue($priceWithVat);
+				$serviceLocator = ServiceLocator::getInstance();
+				$input = $serviceLocator->get('sale.basketItemInputFactory')->createFromArray([
+					'basePrice' => $priceWithVat,
+					'vatRate' => (float)$shipmentItem['VAT_RATE'] * 100,
+					'vatIncluded' => false,
+				]);
+				$priceWithVat = $serviceLocator->get('sale.vatCalculator')->accrueVat($input);
 			}
 
 			$this->documentTotals[$shipmentItem['ORDER_DELIVERY_ID']] += $priceWithVat * $shipmentItem['QUANTITY'];

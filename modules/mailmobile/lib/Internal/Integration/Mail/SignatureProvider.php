@@ -10,42 +10,33 @@ use Bitrix\Main\SystemException;
 
 class SignatureProvider
 {
+	/** @var array<int, array<string, string>> [userId => [normalizedSender => signature]] */
+	private array $signaturesByUser = [];
+
+	/** @var array<int, true> */
+	private array $warmedUsers = [];
+
 	/**
 	 * @throws ArgumentException|ObjectPropertyException|SystemException
 	 */
 	public function getSignature(string $email, string $name, ?int $userId = null): string
 	{
-		if (!$userId)
+		$userId = $this->resolveUserId($userId);
+		$this->warmUp($userId);
+
+		$nameEmailKey = $this->normalizeSender(trim($name) . ' <' . trim($email) . '>');
+		if (isset($this->signaturesByUser[$userId][$nameEmailKey]))
 		{
-			$userId = (int)CurrentUser::get()->getId();
+			return $this->signaturesByUser[$userId][$nameEmailKey];
 		}
 
-		$signatureList = UserSignatureTable::getList([
-			'select' => ['SIGNATURE'],
-			'order' => ['ID' => 'desc'],
-			'filter' => [
-				'=SENDER' => (trim($name) . ' <' . trim($email) . '>'),
-				'=USER_ID' => $userId,
-			],
-			'limit' => 1,
-		])->fetchAll();
-
-		if (isset($signatureList[0]['SIGNATURE']))
+		$emailKey = $this->normalizeSender(trim($email));
+		if (isset($this->signaturesByUser[$userId][$emailKey]))
 		{
-			return $signatureList[0]['SIGNATURE'];
+			return $this->signaturesByUser[$userId][$emailKey];
 		}
 
-		$signatureList = UserSignatureTable::getList([
-			'select' => ['SIGNATURE'],
-			'order' => ['ID' => 'desc'],
-			'filter' => [
-				'=SENDER' => trim($email),
-				'=USER_ID' => $userId,
-			],
-			'limit' => 1,
-		])->fetchAll();
-
-		return $signatureList[0]['SIGNATURE'] ?? $this->getGeneralSignature($userId);
+		return $this->getGeneralSignature($userId);
 	}
 
 	/**
@@ -53,21 +44,63 @@ class SignatureProvider
 	 */
 	public function getGeneralSignature(?int $userId = null): string
 	{
-		if (!$userId)
+		$userId = $this->resolveUserId($userId);
+		$this->warmUp($userId);
+
+		return $this->signaturesByUser[$userId][''] ?? '';
+	}
+
+	private function resolveUserId(?int $userId): int
+	{
+		if ($userId)
 		{
-			$userId = (int)CurrentUser::get()->getId();
+			return $userId;
 		}
 
-		$signatureList = UserSignatureTable::getList([
-			'select' => ['SIGNATURE'],
-			'order' => ['ID' => 'desc'],
-			'filter' => [
-				'=SENDER' => '',
-				'USER_ID' => $userId,
-			],
-			'limit' => 1,
-		])->fetchAll();
+		return (int)CurrentUser::get()->getId();
+	}
 
-		return $signatureList[0]['SIGNATURE'] ?? '';
+	/**
+	 * Mirrors how the old SQL filter '=SENDER' compared on MySQL: a *_ci
+	 * collation is case-insensitive and VARCHAR PADSPACE semantics ignore
+	 * trailing spaces. The key must be normalized identically on warm-up and on
+	 * lookup; otherwise the strict isset() silently drops a personal signature
+	 * whenever the stored SENDER differs from the recomputed key by case or
+	 * trailing whitespace.
+	 */
+	private function normalizeSender(string $sender): string
+	{
+		return mb_strtolower(rtrim($sender, ' '));
+	}
+
+	/**
+	 * @throws ArgumentException|ObjectPropertyException|SystemException
+	 */
+	private function warmUp(int $userId): void
+	{
+		if (isset($this->warmedUsers[$userId]))
+		{
+			return;
+		}
+
+		$this->signaturesByUser[$userId] = [];
+
+		$rows = UserSignatureTable::getList([
+			'select' => ['SENDER', 'SIGNATURE'],
+			'filter' => ['=USER_ID' => $userId],
+			'order' => ['ID' => 'ASC'],
+		]);
+
+		while ($row = $rows->fetch())
+		{
+			if ($row['SENDER'] === null || $row['SIGNATURE'] === null)
+			{
+				continue;
+			}
+
+			$this->signaturesByUser[$userId][$this->normalizeSender((string)$row['SENDER'])] = (string)$row['SIGNATURE'];
+		}
+
+		$this->warmedUsers[$userId] = true;
 	}
 }

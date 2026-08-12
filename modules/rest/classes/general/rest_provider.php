@@ -874,6 +874,11 @@ class CRestProvider extends IRestService
 	public static function OnAppEvent($arParams, $arHandler)
 	{
 		$arEventFields = $arParams[0];
+		if ($arEventFields instanceof \Bitrix\Main\Event)
+		{
+			$arEventFields = $arEventFields->getParameters();
+		}
+
 		if($arEventFields['APP_ID'] == $arHandler['APP_ID'] || $arEventFields['APP_ID'] == $arHandler['APP_CODE'])
 		{
 			$arEventFields["LANGUAGE_ID"] = CRestUtil::getLanguage();

@@ -3,7 +3,7 @@
 namespace Bitrix\Crm\Component\EntityDetails\Traits;
 
 use Bitrix\Crm\Attribute\FieldAttributeManager;
-use Bitrix\Crm\Integration\Analytics\Builder\Entity\CloseEvent;
+use Bitrix\Crm\Integration\Analytics\Builder\Entity;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service\Container;
 
@@ -22,27 +22,22 @@ trait EditorConfig
 		$editorGuid = "{$this->arResult['GUID']}_editor";
 		$componentNameWithoutBitrixPrefix = mb_substr($this->getDetailComponentName(), 7);
 		$sessionId = bitrix_sessid_get();
+		$analyticsBuilder = $this->getAnalyticsBuilder();
+		$postFormAnalytics =
+			in_array($analyticsBuilder::class, $this->getBuildersWithPostAnalytics(), true)
+				? $analyticsBuilder->buildData()
+				: []
+		;
+		$entityControllers = $this->arResult['ENTITY_CONTROLLERS'] ?? [];
+		$entityControllers[] = [
+			'name' => 'ANALYTICS_CONTROLLER',
+			'type' => 'analytics_controller',
+			'config' => [
+				'postFormAnalytics' => $postFormAnalytics,
+				'appendParamsFromCurrentUrl' => true,
+			],
+		];
 
-		/** @var \Bitrix\Crm\Integration\Analytics\Builder\BuilderContract $analyticsBuilder */
-		if ($this->isCopyMode)
-		{
-			$analyticsBuilder = \Bitrix\Crm\Integration\Analytics\Builder\Entity\CopyEvent::createDefault($this->factory->getEntityTypeId());
-		}
-		elseif ($this->isEditMode)
-		{
-			$analyticsBuilder = \Bitrix\Crm\Integration\Analytics\Builder\Entity\UpdateEvent::createDefault($this->factory->getEntityTypeId());
-		}
-		elseif (isset($this->conversionWizard))
-		{
-			$analyticsBuilder =
-				\Bitrix\Crm\Integration\Analytics\Builder\Entity\ConvertEvent::createDefault($this->factory->getEntityTypeId())
-					->setSrcEntityTypeId($this->conversionWizard->getEntityTypeID())
-			;
-		}
-		else
-		{
-			$analyticsBuilder = \Bitrix\Crm\Integration\Analytics\Builder\Entity\AddEvent::createDefault($this->factory->getEntityTypeId());
-		}
 		//@codingStandardsIgnoreStart
 		return [
 			'ENTITY_TYPE_ID' => $entityTypeId,
@@ -58,7 +53,7 @@ trait EditorConfig
 			'CONFIG_ID' => $this->arResult['EDITOR_CONFIG_ID'],
 			'ENTITY_CONFIG' => $this->arResult['ENTITY_CONFIG'],
 			'DUPLICATE_CONTROL' => $this->arResult['DUPLICATE_CONTROL'] ?? [],
-			'ENTITY_CONTROLLERS' => $this->arResult['ENTITY_CONTROLLERS'],
+			'ENTITY_CONTROLLERS' => $entityControllers,
 			'ENTITY_FIELDS' => $this->arResult['ENTITY_FIELDS'],
 			'ENTITY_DATA' => $this->arResult['ENTITY_DATA'],
 			'ENTITY_VALIDATORS' => $this->arResult['ENTITY_VALIDATORS'],
@@ -79,15 +74,20 @@ trait EditorConfig
 			'COMPONENT_AJAX_DATA' => [
 				'RELOAD_ACTION_NAME' => 'LOAD',
 				'RELOAD_FORM_DATA' => [
-						'ACTION_ENTITY_ID' => $this->arResult['ENTITY_ID'],
-					] + $this->arResult['CONTEXT'],
+					'ACTION_ENTITY_ID' => $this->arResult['ENTITY_ID'],
+				] + $this->arResult['CONTEXT'],
+				'POST_FORM_ANALYTICS' => $postFormAnalytics,
 			],
 			'SHOW_EMPTY_FIELDS' => !empty($this->arParams['SHOW_EMPTY_FIELDS']),
 			'ENABLE_PAGE_TITLE_CONTROLS' => true,
 			'ENABLE_PAGE_TITLE_EDIT' => $this->isPageTitleEditable(),
 			// this data is used to send analytics when user clicks 'save' button
 			'ANALYTICS_CONFIG' => [
-				'data' => $analyticsBuilder->buildData(),
+				'data' =>
+					in_array($analyticsBuilder::class, $this->getBuildersWithPostAnalytics(), true)
+						? []
+						: $analyticsBuilder->buildData()
+				,
 
 				'appendParamsFromCurrentUrl' => true,
 				'entityClose' => $this->getCloseEventConfig()?->buildData(),
@@ -142,16 +142,46 @@ trait EditorConfig
 		return $finalStages;
 	}
 
-	/**
-	 * @return CloseEvent|null
-	 */
-	public function getCloseEventConfig(): ?CloseEvent
+	public function getCloseEventConfig(): ?Entity\CloseEvent
 	{
 		if (!$this->factory || !$this->factory->isStagesSupported() || !$this->factory->isStagesEnabled())
 		{
 			return null;
 		}
 
-		return  CloseEvent::createDefault($this->factory->getEntityTypeId());
+		return Entity\CloseEvent::createDefault($this->factory->getEntityTypeId());
+	}
+
+	private function getAnalyticsBuilder(): \Bitrix\Crm\Integration\Analytics\Builder\AbstractBuilder
+	{
+		if ($this->isCopyMode)
+		{
+			$analyticsBuilder = Entity\CopyEvent::createDefault($this->factory->getEntityTypeId());
+		}
+		elseif ($this->isEditMode)
+		{
+			$analyticsBuilder = Entity\UpdateEvent::createDefault($this->factory->getEntityTypeId());
+		}
+		elseif (isset($this->conversionWizard))
+		{
+			$analyticsBuilder = Entity\ConvertEvent::createDefault($this->factory->getEntityTypeId())
+				->setSrcEntityTypeId($this->conversionWizard->getEntityTypeID())
+			;
+		}
+		else
+		{
+			$analyticsBuilder = Entity\AddEvent::createDefault($this->factory->getEntityTypeId());
+		}
+
+		return $analyticsBuilder;
+	}
+
+	private function getBuildersWithPostAnalytics(): array
+	{
+		return [
+			Entity\AddEvent::class,
+			Entity\CopyEvent::class,
+			Entity\ConvertEvent::class,
+		];
 	}
 }

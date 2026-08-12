@@ -7,6 +7,7 @@ use Bitrix\Crm\Integration\HumanResources\HumanResources;
 use Bitrix\Main\Application;
 use Bitrix\Main\UserField\Access\Permission\UserFieldPermissionTable;
 use COption;
+use Bitrix\HumanResources\Type\AccessCodeType;
 
 final class AccessCodesConverter
 {
@@ -54,7 +55,7 @@ final class AccessCodesConverter
 		$humanResources = HumanResources::getInstance();
 		foreach ($items as $item)
 		{
-			$department = $departmentsQueries->getDepartmentByAccessCode($item['ACCESS_CODE']);
+			$department = $departmentsQueries->getHrDepartmentByIntranetAccessCode($item['ACCESS_CODE']);
 			if (!$department)
 			{
 				continue;
@@ -63,7 +64,7 @@ final class AccessCodesConverter
 			UserFieldPermissionTable::add([
 				'ENTITY_TYPE_ID' => $item['ENTITY_TYPE_ID'],
 				'USER_FIELD_ID' => $item['USER_FIELD_ID'],
-				'ACCESS_CODE' => $humanResources->buildAccessCode('SNDR', $department->id),
+				'ACCESS_CODE' => $humanResources->buildAccessCode(AccessCodeType::HrTeamRecursiveType->value, $department->id),
 				'PERMISSION_ID' => $item['PERMISSION_ID'],
 				'VALUE' => $item['VALUE'],
 			]);

@@ -6,6 +6,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Crm;
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
@@ -13,6 +16,9 @@ use Bitrix\Main\Localization\Loc;
 
 class CBPCrmCopyDealActivity extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	private static array $cycleCounter = [];
 	public const CYCLE_LIMIT = 3;
 
@@ -51,7 +57,15 @@ class CBPCrmCopyDealActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentId = $this->getDocumentId();
+		$documentId = $this->resolveTargetDocumentId();
+
+		if (!$this->canReadResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
 		$this->checkCycling($documentId);
 
 		$sourceDealId = explode('_', $documentId[2])[1];
@@ -85,7 +99,7 @@ class CBPCrmCopyDealActivity extends CBPActivity
 		$merger = new Crm\Merger\DealMerger(1, false);
 		$merger->mergeFields($sourceFields, $fields, true);
 
-		$responsibles = CBPHelper::ExtractUsers($this->Responsible, $this->GetDocumentId());
+		$responsibles = CBPHelper::ExtractUsers($this->Responsible, $documentId);
 		if (count($responsibles) > 1)
 		{
 			shuffle($responsibles);
@@ -132,6 +146,13 @@ class CBPCrmCopyDealActivity extends CBPActivity
 		$fields['TITLE'] = $dealTitle;
 		$fields['ASSIGNED_BY_ID'] = $responsibles[0];
 		$fields['CONTACT_IDS'] = Crm\Binding\DealContactTable::getDealContactIDs($sourceDealId);
+
+		Crm\Service\Container::getInstance()
+			->getContext()
+			->getAnalytics()
+			->setCategory(Dictionary::CATEGORY_ROBOT_OPERATIONS)
+			->setType(Dictionary::TYPE_COPY_DEAL_ACTIVITY)
+		;
 
 		$entity = new \CCrmDeal(false);
 		$newDealId = $entity->Add(

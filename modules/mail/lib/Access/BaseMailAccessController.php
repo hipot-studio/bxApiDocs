@@ -14,6 +14,8 @@ use Bitrix\Main\Access\User\AccessibleUser;
 
 abstract class BaseMailAccessController extends BaseAccessController
 {
+	private array $ruleHandler = [];
+
 	public function __construct(int $userId)
 	{
 		parent::__construct($userId);
@@ -27,14 +29,11 @@ abstract class BaseMailAccessController extends BaseAccessController
 	{
 		$params[MailBaseRule::PERMISSION_ID_KEY] = MailActionDictionary::getActionPermissionMap()[$action] ?? null;
 
-		static $ruleHandler = [];
-
-		if (!isset($ruleHandler[$action]))
-		{
-			$ruleHandler[$action] = $this->ruleFactory->createFromAction($action, $this);
-		}
-
-		$rule = $ruleHandler[$action] ?? null;
+		// The cache must stay on the controller instance (one controller per user):
+		// a rule is bound to the controller's user, so a process-wide static cache
+		// leaks the first user's context into checks for other users.
+		$this->ruleHandler[$action] ??= $this->ruleFactory->createFromAction($action, $this);
+		$rule = $this->ruleHandler[$action];
 
 		if (!$rule)
 		{

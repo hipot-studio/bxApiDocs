@@ -19,11 +19,13 @@ final class Dictionary
 	public const CATEGORY_KANBAN_OPERATIONS = 'kanban_operations';
 	public const CATEGORY_SETTINGS_OPERATIONS = 'settings_operations';
 	public const CATEGORY_ACTIVITY_OPERATIONS = 'activity_operations';
+	public const CATEGORY_ROBOT_OPERATIONS = 'robot_operations';
 	public const CATEGORY_COMMUNICATION = 'communication';
 	public const CATEGORY_BANNERS = 'banners';
 	public const CATEGORY_SYSTEM_INFORM = 'system_inform';
 	public const CATEGORY_FUNNELS = 'funnels';
 	public const CATEGORY_IMPORT_OPERATIONS = 'import_operations';
+	public const CATEGORY_USERFIELD_OPERATIONS = 'userfields';
 
 	// region Event const
 	public const EVENT_ENTITY_ADD_OPEN = 'entity_add_open';
@@ -72,6 +74,8 @@ final class Dictionary
 	public const EVENT_IMPORT_EDIT = 'edit';
 	public const EVENT_IMPORT_CREATE = 'create';
 	public const EVENT_IMPORT_CANCEL = 'cancel';
+	public const EVENT_USERFIELD_CREATE = 'userfields_create';
+	public const EVENT_USERFIELD_CONVERT = 'userfields_convert';
 	// endregion
 
 	// region Type const
@@ -90,7 +94,12 @@ final class Dictionary
 	public const TYPE_WA_CONNECT = 'wa_connect';
 	public const TYPE_WA_ACTIVITY_CREATE = 'wa_activity_create';
 	public const TYPE_WA_ACTIVITY_DELETE = 'wa_activity_delete';
-	public const TYPE_USERFIELD = 'field';
+
+	// Important! Type for robot events must be equal to the corresponding activity name
+	public const TYPE_CREATE_DYNAMIC_ACTIVITY = 'CrmCreateDynamicActivity';
+	public const TYPE_COPY_DEAL_ACTIVITY = 'CrmCopyDealActivity';
+	public const TYPE_CONVERT_DOCUMENT_ACTIVITY = 'CrmConvertDocumentActivity';
+	public const TYPE_CREATE_RETURN_LEAD_ACTIVITY = 'CrmCreateReturnLeadActivity';
 
 	// endregion
 
@@ -129,6 +138,9 @@ final class Dictionary
 	public const SECTION_DOCUMENT = 'document_section';
 	public const SIGN_CONTACT_SECTION = 'sign_contact_section';
 	public const SECTION_SALESCENTER_SLIDER = 'sale_center_slider_section';
+	public const SECTION_UNKNOWN = 'unknown';
+	public const SECTION_RECURRING = 'recurring';
+	public const SECTION_IMPORT = 'import'; // todo: Clarify markdown with analytic
 	// endregion
 
 	// region Sub Section const
@@ -148,9 +160,6 @@ final class Dictionary
 	public const SUB_SECTION_GRID_ROW_MENU = 'grid_row_menu';
 	public const SUB_SECTION_REPEAT_SALE_SYSTEM = 'repeat_sale_sys';
 	public const SUB_SECTION_FUNNEL = 'funnel';
-
-	public const SUB_SECTION_USERFIELD_DEFAULT = 'unknown';
-	public const SUB_SECTION_USERFIELD_MCP_TOOL = 'ai';
 	// endregion
 
 	// region Element const
@@ -208,6 +217,8 @@ final class Dictionary
 	public const STATUS_ERROR_B24 = 'error_b24';
 	public const STATUS_ERROR_FILLING_FIELDS = 'error_fillingFields';
 	// endregion
+
+	public const UNKNOWN = 'unknown';
 
 	private function __construct()
 	{

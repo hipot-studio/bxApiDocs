@@ -7,6 +7,7 @@ namespace Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Google;
 use Bitrix\Calendar\Core\Base\BaseException;
 use Bitrix\Calendar\Core\Base\Date;
 use Bitrix\Calendar\Core\Event\Event;
+use Bitrix\Calendar\Core\Section\Section;
 use Bitrix\Calendar\Integration\Dav\ConnectionProvider;
 use Bitrix\Calendar\Internal\Repository\EventRepository;
 use Bitrix\Calendar\Sync\Connection\Connection;
@@ -85,9 +86,14 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 			return;
 		}
 
+		if (!$this->shouldProcessSection($event->getSection()))
+		{
+			return;
+		}
+
 		$sectionConnection = $this->sectionConnectionRepository->findOneBySectionAndConnectionId(
 			$event->getSection()->getId(),
-			$connection->getId()
+			$connection->getId(),
 		);
 
 		if (!$sectionConnection)
@@ -427,9 +433,14 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 			return;
 		}
 
+		if (!$this->shouldProcessSection($event->getSection()))
+		{
+			return;
+		}
+
 		$sectionConnection = $this->sectionConnectionRepository->findOneBySectionAndConnectionId(
 			$event->getSection()->getId(),
-			$connection->getId()
+			$connection->getId(),
 		);
 
 		if (!$sectionConnection)
@@ -649,9 +660,14 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 			return;
 		}
 
+		if (!$this->shouldProcessSection($event->getSection()))
+		{
+			return;
+		}
+
 		$sectionConnection = $this->sectionConnectionRepository->findOneBySectionAndConnectionId(
 			$event->getSection()->getId(),
-			$connection->getId()
+			$connection->getId(),
 		);
 
 		if (!$sectionConnection)
@@ -1218,5 +1234,15 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 
 			throw $e;
 		}
+	}
+
+	private function shouldProcessSection(Section $section): bool
+	{
+		return $section->isLocal()
+			|| in_array(
+				$section->getExternalType(),
+				\Bitrix\Calendar\Sync\Google\Dictionary::ACCESS_ROLE_TO_EXTERNAL_TYPE,
+				true,
+			);
 	}
 }

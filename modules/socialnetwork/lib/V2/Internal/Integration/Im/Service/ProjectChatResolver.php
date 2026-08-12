@@ -38,4 +38,13 @@ class ProjectChatResolver
 	{
 		return $this->projectChatDataProvider->getProjectIdByChatId($chatId);
 	}
+
+	/**
+	 * @param int[] $chatIds
+	 * @return array<int, int> map chatId => projectId (only resolved project chats)
+	 */
+	public function getProjectIdsByChatIds(array $chatIds): array
+	{
+		return $this->projectChatDataProvider->getProjectIdsByChatIds($chatIds);
+	}
 }

@@ -19,7 +19,7 @@ use Bitrix\Main\Result;
 
 final class SetCategoryChildAction extends GroupChildAction
 {
-	public function __construct(private Factory $factory)
+	public function __construct(private Factory $factory, private ?int $categoryId = null)
 	{
 		if (!$this->factory->isCategoriesEnabled())
 		{
@@ -59,13 +59,43 @@ final class SetCategoryChildAction extends GroupChildAction
 
 		$categoriesList = [];
 		$permissions = Container::getInstance()->getUserPermissions();
+		$canUpdateInCurrent = $this->categoryId === null
+			|| $permissions->entityType()->canUpdateItemsInCategory(
+				$this->factory->getEntityTypeId(),
+				$this->categoryId,
+			)
+		;
+		$hasCurrentCategory = false;
 		foreach ($this->factory->getCategories() as $category)
 		{
-			if ($permissions->entityType()->canAddItemsInCategory($this->factory->getEntityTypeId(), $category->getId()))
+			$isCurrentCategory = $this->categoryId !== null && $category->getId() === $this->categoryId;
+			$canAddInCategory =
+				$canUpdateInCurrent
+				&& $permissions->entityType()->canAddItemsInCategory($this->factory->getEntityTypeId(), $category->getId())
+			;
+
+			if ($isCurrentCategory || $canAddInCategory)
 			{
 				$categoriesList[] = [
 					'NAME' => $category->getName(),
 					'VALUE' => $category->getId(),
+				];
+
+				if ($isCurrentCategory)
+				{
+					$hasCurrentCategory = true;
+				}
+			}
+		}
+
+		if (!$hasCurrentCategory && $this->categoryId !== null)
+		{
+			$currentCategory = $this->factory->getCategory($this->categoryId);
+			if ($currentCategory)
+			{
+				$categoriesList[] = [
+					'NAME' => $currentCategory->getName(),
+					'VALUE' => $currentCategory->getId(),
 				];
 			}
 		}

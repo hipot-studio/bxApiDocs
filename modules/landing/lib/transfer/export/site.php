@@ -2,6 +2,7 @@
 
 namespace Bitrix\Landing\Transfer\Export;
 
+use \Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
 use \Bitrix\Landing\Landing as LandingCore;
 use \Bitrix\Landing\Site as SiteCore;
 use \Bitrix\Landing\Hook;
@@ -133,6 +134,12 @@ class Site
 		return [];
 	}
 
+	private function isAiSiteExportDenied(int $siteId): bool
+	{
+		return $siteId > 0
+			&& (new CreateAiSiteChecker())->isSiteCreated($siteId);
+	}
+
 	/**
 	 * Inner method to run operations into object context
 	 * @param Event $event
@@ -193,6 +200,12 @@ class Site
 		]);
 		if ($row = $res->fetch())
 		{
+			if ($this->isAiSiteExportDenied((int)$row['SITE_ID']))
+			{
+				$next['ID'] = $row['ID'];
+
+				return ['NEXT' => serialize($next)];
+			}
 			if (!in_array($row['SITE_ID'], $next['EXPORTED_SITES_META']))
 			{
 				$exportSiteMeta = $this->exportSiteMeta($row['SITE_ID']);

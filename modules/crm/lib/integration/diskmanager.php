@@ -9,7 +9,7 @@
 namespace Bitrix\Crm\Integration;
 
 use Bitrix\Crm\Integration\Disk\MailTemplateConnector;
-use Bitrix\Crm\Integration\Disk\ScopeToken;
+use Bitrix\Crm\Integration\Disk\QuickAccessFileParam;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
@@ -25,6 +25,8 @@ use Bitrix\Main\Web\Uri;
 
 class DiskManager
 {
+	private static ?QuickAccessFileParam $quickAccessFileParam = null;
+
 	private static function getDefaultSiteID()
 	{
 		return \Bitrix\Crm\Integration\Main\Site::getPortalSiteId();
@@ -138,12 +140,7 @@ class DiskManager
 			&& $isSupportedFile
 		)
 		{
-			$tokenService = new ScopeToken('owner_id_' . $ownerTypeID);
-			$tokenParams = $tokenService->getUrlParamsForFile($file);
-			if (isset($tokenParams))
-			{
-				$viewUri->addParams($tokenParams);
-			}
+			self::getQuickAccessFileParam()->add($viewUri, $file);
 
 			$previewUrl = clone $viewUri;
 			$previewUrl->addParams(['preview' => 'Y']);
@@ -489,5 +486,15 @@ class DiskManager
 				'CLASS' => Disk\QuoteConnector::className(),
 			],
 		]);
+	}
+
+	private static function getQuickAccessFileParam(): QuickAccessFileParam
+	{
+		if (self::$quickAccessFileParam === null)
+		{
+			self::$quickAccessFileParam = new QuickAccessFileParam();
+		}
+
+		return self::$quickAccessFileParam;
 	}
 }

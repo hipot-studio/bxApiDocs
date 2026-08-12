@@ -169,6 +169,11 @@ final class Converter
 							$db->query('CREATE TABLE ' . $newTableName . ' LIKE ' . $name);
 							$db->query('INSERT INTO ' . $newTableName . ' SELECT * FROM ' . $name);
 						}
+						elseif ($db->getType() === 'pgsql')
+						{
+							$db->query('CREATE TABLE ' . $newTableName . ' (LIKE ' . $name . ' INCLUDING ALL)');
+							$db->query('INSERT INTO ' . $newTableName . ' SELECT * FROM ' . $name);
+						}
 					}
 				}
 			}

@@ -379,11 +379,17 @@ class EventHandler
 		{
 			$list[] = 'Bitrix\Sender\Integration\Seo\Ads\TransportYa';
 			$list[] = 'Bitrix\Sender\Integration\Seo\Ads\TransportGa';
-			$list[] = 'Bitrix\Sender\Integration\Seo\Ads\TransportVk';
+			if (Bitrix24\Service::isAdVisibleInRegion(Seo\Ads\MessageBase::CODE_ADS_VK))
+			{
+				$list[] = 'Bitrix\Sender\Integration\Seo\Ads\TransportVk';
+			}
 			$list[] = 'Bitrix\Sender\Integration\Seo\Ads\TransportFb';
 			$list[] = 'Bitrix\Sender\Integration\Seo\Ads\TransportMarketingFb';
 			$list[] = 'Bitrix\Sender\Integration\Seo\Ads\TransportMarketingInstagram';
-			$list[] = 'Bitrix\Sender\Integration\Seo\Ads\TransportLookalikeVk';
+			if (Bitrix24\Service::isAdVisibleInRegion(Seo\Ads\MessageBase::CODE_ADS_LOOKALIKE_VK))
+			{
+				$list[] = 'Bitrix\Sender\Integration\Seo\Ads\TransportLookalikeVk';
+			}
 			$list[] = 'Bitrix\Sender\Integration\Seo\Ads\TransportLookalikeFb';
 			$list[] = \Bitrix\Sender\Integration\Seo\Ads\TransportLookalikeYandex::class;
 		}

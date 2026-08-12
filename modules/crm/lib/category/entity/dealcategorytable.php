@@ -83,39 +83,21 @@ class DealCategoryTable extends Entity\DataManager
 	{
 		try
 		{
-			if(DocumentGeneratorManager::getInstance()->isEnabled())
+			$manager = DocumentGeneratorManager::getInstance();
+
+			if ($manager->isEnabled())
 			{
 				$categoryId = $event->getParameter('primary')['ID'];
+
 				$category = DealCategory::get($categoryId);
-				if(!is_array($category))
+				if (!is_array($category))
 				{
 					return;
 				}
-				$codes = [];
-				$controller = new \Bitrix\DocumentGenerator\Controller\Template();
-				$result = $controller::getDefaultTemplateList(['MODULE_ID' => 'crm']);
-				if($result->isSuccess())
-				{
-					$codes = array_keys($result->getData());
-				}
-				if(empty($codes))
-				{
-					return new Main\ORM\EventResult();
-				}
+
 				$provider = Deal::getExtendedProviderByCategory($category);
-				$templates = \Bitrix\DocumentGenerator\Model\TemplateTable::getList([
-					'select' => ['ID'],
-					'filter' => [
-						'@CODE' => $codes,
-					]
-				]);
-				while($template = $templates->fetch())
-				{
-					\Bitrix\DocumentGenerator\Model\TemplateProviderTable::add([
-						'TEMPLATE_ID' => $template['ID'],
-						'PROVIDER' => $provider['PROVIDER'],
-					]);
-				}
+
+				$manager->bindToAssociatedInstalledDefaultTemplates($provider['PROVIDER']);
 			}
 		}
 		finally

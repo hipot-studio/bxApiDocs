@@ -74,8 +74,34 @@ class Track extends EO_CallTrack
 		return $result->setData(['fileId' => $fileId, 'fileSize' => (int)$attachFile['size']]);
 	}
 
+	/**
+	 * [DEBUG] Consume one forced-failure attempt for the given option.
+	 * Returns true while the counter is positive, decrementing it so the finalize flow
+	 * self-recovers after N attempts and the option resets to 0. Disabled by default (0).
+	 * Toggle: \Bitrix\Main\Config\Option::set('call', $optionName, '2').
+	 */
+	private static function consumeDebugErrorAttempt(string $optionName): bool
+	{
+		$attempts = (int)\Bitrix\Main\Config\Option::get('call', $optionName, 0);
+		if ($attempts <= 0)
+		{
+			return false;
+		}
+
+		\Bitrix\Main\Config\Option::set('call', $optionName, (string)($attempts - 1));
+
+		return true;
+	}
+
 	public function attachTempFile(): Result
 	{
+		if (self::consumeDebugErrorAttempt('debug_force_save_error_attempts'))
+		{
+			return (new Result())
+				->setData(['debug_forced_error' => true])
+				->addError(new TrackError(TrackError::SAVE_FILE_ERROR, 'Track: forced SAVE_FILE_ERROR for testing'));
+		}
+
 		$tempPath = $this->getTempPath();
 		if (!$tempPath)
 		{
@@ -107,12 +133,24 @@ class Track extends EO_CallTrack
 
 	public function attachToDisk(): Result
 	{
+		if (self::consumeDebugErrorAttempt('debug_force_disk_error_attempts'))
+		{
+			return (new Result())
+				->setData(['debug_forced_error' => true])
+				->addError(new TrackError(TrackError::DISK_ATTACH_ERROR, 'Track: forced DISK_ATTACH_ERROR for testing'));
+		}
+
 		$result = new Result();
 
 		$chatId = $this->fillCall()?->getChatId();
 		if ($chatId)
 		{
 			$callInitiatorId = $this->getCall()->getInitiatorId();
+
+			// Pre-existing diskFileId means this is a retry: only then can a chat link already
+			// exist (from a prior attempt or the audio-record message), so only then is the
+			// getByDiskFileId lookup below worth doing.
+			$diskFilePreExisted = (bool)$this->getDiskFileId();
 
 			if ($this->getDiskFileId())
 			{
@@ -133,10 +171,57 @@ class Track extends EO_CallTrack
 			{
 				$this->setDiskFileId($diskFileId)->save();
 
+				// For video records the chat "recording ready" message attaches this file and owns
+				// the media entry. Creating a link here would duplicate it in chat "Media & files".
+				// Other disk types have no such message, so the explicit link is their only surface.
+				if ($this->getType() === self::TYPE_VIDEO_RECORD)
+				{
+					$result->setData([
+						'diskFileId' => $diskFileId,
+						'chatDelivered' => true,
+						'chatReason' => 'message_owned',
+					]);
+
+					return $result;
+				}
+
+				// The disk file id may have pre-existed (retry path), in which case im was not
+				// loaded above — ensure it before touching im V2 link classes.
+				if (!Loader::includeModule('im'))
+				{
+					return $result
+						->setData(['diskFileId' => $diskFileId, 'chatDelivered' => false, 'chatReason' => 'im_unavailable'])
+						->addError(new TrackError(TrackError::DISK_ATTACH_ERROR, 'Can not create chat file link: im module unavailable'));
+				}
+
+				// Idempotency / no duplication: on a retry a chat file link for this disk file may
+				// already exist in THIS chat — created by a previous finalize attempt or by the
+				// audio-record chat message (which attaches the same file and auto-creates a link).
+				// Creating a second one would duplicate it in chat "Media & files", so reuse it.
+				// Scope by CHAT_ID: the same disk file can be linked in other chats, and that must
+				// not be mistaken for delivery to the current chat. On the first pass the diskFileId
+				// was just created here, so the lookup is skipped.
+				$existingLink = $diskFilePreExisted
+					? \Bitrix\Im\Model\LinkFileTable::query()
+						->setSelect(['ID'])
+						->where('DISK_FILE_ID', $diskFileId)
+						->where('CHAT_ID', $chatId)
+						->setLimit(1)
+						->fetchObject()
+					: null
+				;
+				if ($existingLink)
+				{
+					return $result->setData([
+						'diskFileId' => $diskFileId,
+						'chatDelivered' => true,
+						'chatReason' => 'link_exists',
+					]);
+				}
+
 				$type = match (true)
 				{
 					$this->getType() == self::TYPE_RECORD => \Bitrix\Im\V2\Link\File\FileItem::AUDIO_SUBTYPE,
-					$this->getType() == self::TYPE_VIDEO_RECORD => \Bitrix\Im\V2\Link\File\FileItem::MEDIA_SUBTYPE,
 					$this->getType() == self::TYPE_VIDEO_PREVIEW => \Bitrix\Im\V2\Link\File\FileItem::MEDIA_SUBTYPE,
 					str_contains($this->getFileMimeType(), 'audio/') => \Bitrix\Im\V2\Link\File\FileItem::AUDIO_SUBTYPE,
 					str_contains($this->getFileMimeType(), 'video/') => \Bitrix\Im\V2\Link\File\FileItem::MEDIA_SUBTYPE,
@@ -150,14 +235,46 @@ class Track extends EO_CallTrack
 					->setChatId($this->getCall()->getChatId())
 					->setEntity($file)
 				;
-				if ($link->save()->isSuccess())
+				$linkSaved = $link->save()->isSuccess();
+				if ($linkSaved)
 				{
 					\Bitrix\Im\V2\Link\Push::getInstance()
 						->sendFull($link, 'fileAdd', ['CHAT_ID' => $link->getChatId()]);
-				}
 
-				$result->setData(['diskFileId' => $diskFileId]);
+					$result->setData([
+						'diskFileId' => $diskFileId,
+						'chatDelivered' => true,
+						'chatReason' => null,
+					]);
+				}
+				else
+				{
+					// The file is on disk but the chat link failed to save — report it as a disk
+					// error so finalizeDownload fails and the download agent retries delivery.
+					// The retry is idempotent: getByDiskFileId above prevents a duplicate link.
+					$result
+						->setData(['diskFileId' => $diskFileId, 'chatDelivered' => false, 'chatReason' => 'link_save_failed'])
+						->addError(new TrackError(TrackError::DISK_ATTACH_ERROR, 'Chat file link save failed'));
+				}
 			}
+			else
+			{
+				// Upload returned an empty disk file id — report as a disk error so finalizeDownload
+				// hits the explicit disk-failure branch (fireTrackErrorEvent + finalize_disk_failed),
+				// consistent with the module-unavailable case above.
+				return $result
+					->setData(['chatDelivered' => false, 'chatReason' => 'disk_upload_failed'])
+					->addError(new TrackError(TrackError::DISK_ATTACH_ERROR, 'Disk upload returned empty file id'));
+			}
+		}
+		else
+		{
+			// A disk-requiring record without a chat is an anomaly: report it as a disk error so
+			// finalizeDownload takes the explicit disk-failure branch instead of a silent success
+			// that the agent would keep retrying while emitting duplicate telemetry.
+			return $result
+				->setData(['chatDelivered' => false, 'chatReason' => 'no_chat_id'])
+				->addError(new TrackError(TrackError::DISK_ATTACH_ERROR, 'No chat ID for disk attachment'));
 		}
 
 		return $result;

@@ -623,7 +623,10 @@ class Notification
 
 		$notifyMessage = self::getNotificationMessageCallback(
 			$notifyMessageCode,
-			['#EMAIL#' => $safeEmail],
+			[
+				'#EMAIL#' => $safeEmail,
+				'#VIEW_URL#' => $url,
+			],
 		);
 
 		$subjectCode = self::getPhraseKeyWithGenderSuffix(

@@ -2,7 +2,10 @@
 
 namespace Bitrix\Call\Rest;
 
+use Bitrix\Call\CallChatMessage;
+use Bitrix\Call\NotifyService;
 use Bitrix\Im\Chat;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Rest\RestException;
@@ -93,13 +96,17 @@ class Handler extends \IRestService
 		//3. authorize
 		Auth::authorizeById($userData['ID'], true, true);
 
+		$userCount = (int)\CIMChat::GetUserCount($aliasData['ENTITY_ID']);
+		$newUserMessageThreshold = (int)Option::get('call', 'call_suppress_new_user_message_count', 50);
+		$suppressNewUserMessage = $userCount > $newUserMessageThreshold;
+
 		//4. add to dialog
 		$chat = new \CIMChat(0);
 		$chat->AddUser(
 			chatId: $aliasData['ENTITY_ID'],
 			userId: $userData['ID'],
 			hideHistory: null,
-			skipMessage: true,
+			skipMessage: $suppressNewUserMessage,
 			skipRecent: true
 		);
 		if ($exception = $APPLICATION->GetException())
@@ -112,6 +119,11 @@ class Handler extends \IRestService
 					\CRestServer::STATUS_WRONG_REQUEST
 				);
 			}
+		}
+
+		if ($suppressNewUserMessage && $userCount === $newUserMessageThreshold + 1)
+		{
+			self::sendNewUserLimitMessage((int)$aliasData['ENTITY_ID'], (int)$userData['ID'], $newUserMessageThreshold);
 		}
 
 		//5. return id and hash
@@ -244,12 +256,16 @@ class Handler extends \IRestService
 			throw new RestException("You cannot rename this user", "WRONG_USER_AUTH_TYPE", \CRestServer::STATUS_WRONG_REQUEST);
 		}
 
+		$relations = \Bitrix\Im\Chat::getRelation($params['CHAT_ID'], ['WITHOUT_COUNTERS' => 'Y']);
+		if (!isset($relations[$params['USER_ID']]))
+		{
+			throw new RestException("User is not a member of this chat", "USER_NOT_IN_CHAT", \CRestServer::STATUS_WRONG_REQUEST);
+		}
+
 		$userManager = new \CUser;
 		$userManager->Update($params['USER_ID'], [
 			'NAME' => $params['NAME']
 		]);
-
-		$relations = \Bitrix\Im\Chat::getRelation($params['CHAT_ID'], ['WITHOUT_COUNTERS' => 'Y']);
 
 		if (Loader::includeModule('pull'))
 		{
@@ -454,17 +470,26 @@ class Handler extends \IRestService
 			$isUserInChat = Chat::isUserInChat($conference->getChatId());
 			if ($currentUserId && !$isUserInChat)
 			{
+				$userCount = (int)\CIMChat::GetUserCount($conference->getChatId());
+				$newUserMessageThreshold = (int)Option::get('call', 'call_suppress_new_user_message_count', 50);
+				$suppressNewUserMessage = $userCount > $newUserMessageThreshold;
+
 				$chat = new \CIMChat(0);
 				$addingResult = $chat->AddUser(
 					chatId: $conference->getChatId(),
 					userId: $currentUserId,
 					hideHistory: null,
-					skipMessage: true,
+					skipMessage: $suppressNewUserMessage,
 					skipRecent: true
 				);
 				if (!$addingResult)
 				{
 					throw new RestException("Error during adding user to chat", "ADDING_TO_CHAT_ERROR", \CRestServer::STATUS_WRONG_REQUEST);
+				}
+
+				if ($suppressNewUserMessage && $userCount === $newUserMessageThreshold + 1)
+				{
+					self::sendNewUserLimitMessage($conference->getChatId(), (int)$currentUserId, $newUserMessageThreshold);
 				}
 			}
 
@@ -472,5 +497,29 @@ class Handler extends \IRestService
 		}
 
 		return false;
+	}
+
+	private static function sendNewUserLimitMessage(int $chatId, int $userId, int $newUserThreshold = 50): void
+	{
+		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+		if (!$chat || $chat instanceof \Bitrix\Im\V2\Chat\NullChat)
+		{
+			return;
+		}
+
+		if (NotifyService::getInstance()->findMessage($chatId, 0, NotifyService::MESSAGE_TYPE_NEW_USER_LIMIT) !== null)
+		{
+			return;
+		}
+
+		$message = CallChatMessage::makeNewUserLimitReachedMessage($newUserThreshold);
+
+		$sendingConfig = (new \Bitrix\Im\V2\Message\Send\SendingConfig())
+			->enableSkipCounterIncrements()
+			->enableSkipUrlIndex()
+		;
+		$context = (new \Bitrix\Im\V2\Service\Context())->setUser($userId);
+
+		NotifyService::getInstance()->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 	}
 }

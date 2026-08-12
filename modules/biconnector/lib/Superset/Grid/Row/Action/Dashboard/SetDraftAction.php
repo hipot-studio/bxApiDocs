@@ -6,12 +6,11 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
-final class SetDraftAction extends BaseAction
+final class SetDraftAction extends BaseDashboardAction
 {
 
 	public static function getId(): ?string
@@ -67,6 +66,10 @@ final class SetDraftAction extends BaseAction
 
 		$this->onclick = $onClickHandler;
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-document-sign');
+
+		return $result;
 	}
 }

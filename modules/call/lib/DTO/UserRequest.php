@@ -21,4 +21,5 @@ class UserRequest extends Hydrator
 	public int $callType = 0;
 	public string $entityType = '';
 	public string $entityId = '';
+	public string $requestId = '';
 }

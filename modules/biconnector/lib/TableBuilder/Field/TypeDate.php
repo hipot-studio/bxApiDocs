@@ -6,6 +6,6 @@ class TypeDate extends Base
 {
 	public function getField(): string
 	{
-		return sprintf('`%s` DATE', $this->getName());
+		return sprintf('%s DATE', $this->sqlHelper->quote($this->name));
 	}
 }

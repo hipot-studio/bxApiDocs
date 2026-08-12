@@ -28,6 +28,8 @@ use Bitrix\Bizproc\Internal\Repository\WorkflowStateRepository\WorkflowStateRepo
 use Bitrix\Bizproc\Internal\Repository\WorkflowTemplate\WorkflowTemplateRepository;
 use Bitrix\Bizproc\Internal\Service\Debugger\DebugServiceInterface;
 use Bitrix\Bizproc\Internal\Service\Debugger\DebugSessionService;
+use Bitrix\Bizproc\Internal\Service\Trigger\SectionService;
+use Bitrix\Bizproc\Internal\Service\Storage\StorageLimitsService;
 use Bitrix\Bizproc\Public\Command\WorkflowState\ClearStuckWorkflowCommand\ClearStuckWorkflowCommandHandler;
 use Bitrix\Bizproc\Internal\Service\StorageField\StorageFieldValidatorService;
 use Bitrix\Bizproc\Public\Service\Task\ArchiveTaskService;
@@ -87,6 +89,11 @@ class Container
 	public static function getWorkflowTemplateRepository(): ?WorkflowTemplateRepository
 	{
 		return self::getService('bizproc.workflow.template.repository');
+	}
+
+	public static function getSectionService(): SectionService
+	{
+		return self::getService('bizproc.trigger.section.service');
 	}
 
 	public static function getStorageTypeRepositoryMapper(): ?StorageTypeMapper
@@ -202,5 +209,10 @@ class Container
 	public static function getStorageRecordDataManager(): ?StorageRecordDataTable
 	{
 		return self::getService('bizproc.storage.item.model');
+	}
+
+	public static function getStorageLimitsService(): ?StorageLimitsService
+	{
+		return self::getService('bizproc.service.storage.limits');
 	}
 }

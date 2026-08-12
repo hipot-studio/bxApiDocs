@@ -77,7 +77,7 @@ class Product
 				'PARENT_ID' => self::getParentIdDescription($crmCatalogIblockOfferId),
 				'MEASURE' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'IF(M.SYMBOL_RUS IS NULL OR M.SYMBOL_RUS = \'\', M.SYMBOL_INTL, M.SYMBOL_RUS)',
+					'FIELD_NAME' => 'CASE WHEN M.SYMBOL_RUS IS NULL OR M.SYMBOL_RUS = \'\' THEN M.SYMBOL_INTL ELSE M.SYMBOL_RUS END',
 					'FIELD_TYPE' => 'string',
 					'LEFT_JOIN' => 'LEFT JOIN b_catalog_measure M ON M.ID = P.MEASURE',
 				],

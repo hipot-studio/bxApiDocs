@@ -23,7 +23,13 @@ class DynamicImportSettings extends AbstractImportSettings
 	{
 		$values = parent::applyDefaultValues($values);
 
-		$values[Item::FIELD_NAME_IS_MANUAL_OPPORTUNITY] = true;
+		// Manual opportunity only when there is an explicit non-zero amount and no products to recalculate from.
+		$hasProducts = !empty($values[Item::FIELD_NAME_PRODUCTS]);
+		$opportunity = (float)($values[Item::FIELD_NAME_OPPORTUNITY] ?? 0);
+		if (!$hasProducts && abs($opportunity) >= 0.01)
+		{
+			$values[Item::FIELD_NAME_IS_MANUAL_OPPORTUNITY] = true;
+		}
 
 		return $values;
 	}

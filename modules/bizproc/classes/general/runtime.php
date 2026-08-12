@@ -32,7 +32,7 @@ class CBPRuntime
 
 	public const REST_ACTIVITY_PREFIX = 'rest_';
 
-	public const ACTIVITY_API_VERSION = 2;
+	public const ACTIVITY_API_VERSION = 3;
 
 	private $isStarted = false;
 	/** @var CBPRuntime $instance*/

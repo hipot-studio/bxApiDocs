@@ -52,6 +52,13 @@ enum FieldsEnum: string
 
 	public static function allowedForFilterList(): array
 	{
-		return self::allowedForSelectList();
+		return [
+			self::Id,
+			self::EntryId,
+			self::UserId,
+			self::Active,
+			self::ReportType,
+			self::Report,
+		];
 	}
 }

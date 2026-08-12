@@ -20,4 +20,14 @@ class ExtranetService
 
 		return \CExtranet::IsExtranetSite();
 	}
+
+	public function isCollaberInvitationEnabled(): bool
+	{
+		if (!Loader::includeModule('extranet'))
+		{
+			return false;
+		}
+
+		return \Bitrix\Extranet\PortalSettings::getInstance()->isEnabledCollabersInvitation();
+	}
 }

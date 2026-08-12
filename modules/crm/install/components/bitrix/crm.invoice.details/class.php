@@ -7,6 +7,7 @@ use Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig\SmartInvoiceDefau
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Kanban\Entity\Deadlines\DeadlinesStageManager;
 use Bitrix\Crm\Kanban\ViewMode;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -145,6 +146,9 @@ class CrmSmartInvoiceDetailsComponent extends FactoryBased
 	public function saveAction(array $data): ?array
 	{
 		$data = $this->calculateDefaultDataValues($data);
+
+		Container::getInstance()->getContext()->setAnalytics($data['ANALYTICS'] ?? []);
+
 		$result = parent::saveAction($data);
 
 		if (!$this->getErrors() && $this->item && !$this->isNewItem())

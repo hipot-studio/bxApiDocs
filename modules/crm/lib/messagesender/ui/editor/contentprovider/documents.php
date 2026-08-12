@@ -1,26 +1,47 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Crm\MessageSender\UI\Editor\ContentProvider;
 
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
-use Bitrix\Crm\MessageSender\UI\Editor\ContentProvider;
 
-final class Documents extends ContentProvider
+final class Documents extends BaseContentProvider
 {
-	public function getKey(): string
+	private ?string $provider = null;
+	private bool $providerResolved = false;
+
+	public function getId(): string
 	{
 		return 'documents';
 	}
 
-	public function isEnabled(): bool
+	public function isShown(): bool
 	{
-		return DocumentGeneratorManager::getInstance()->isDocumentButtonAvailable() && $this->getProvider();
+		return DocumentGeneratorManager::getInstance()->isDocumentButtonAvailable()
+			&& $this->getProvider() !== null;
+	}
+
+	protected function getCustomData(): array
+	{
+		return [
+			'moduleId' => 'crm',
+			'provider' => $this->getProvider(),
+			'value' => $this->getEntityId(),
+		];
 	}
 
 	private function getProvider(): ?string
 	{
-		$entityTypeId = $this->getContext()->getEntityTypeId();
-		if ($entityTypeId === null)
+		if ($this->providerResolved)
+		{
+			return $this->provider;
+		}
+
+		$this->providerResolved = true;
+
+		$entityTypeId = $this->getEntityTypeId();
+		if (!\CCrmOwnerType::IsDefined($entityTypeId))
 		{
 			return null;
 		}
@@ -31,14 +52,8 @@ final class Documents extends ContentProvider
 			return null;
 		}
 
-		return $manager->getCrmOwnerTypeProvider($entityTypeId);
-	}
+		$this->provider = $manager->getCrmOwnerTypeProvider($entityTypeId);
 
-	public function jsonSerialize(): array
-	{
-		return [
-			...parent::jsonSerialize(),
-			'provider' => $this->getProvider(),
-		];
+		return $this->provider;
 	}
 }

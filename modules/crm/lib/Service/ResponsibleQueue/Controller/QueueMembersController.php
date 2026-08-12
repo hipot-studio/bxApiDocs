@@ -290,10 +290,10 @@ final class QueueMembersController
 	private function getDepartmentUsersList(int $departmentId): array
 	{
 		$subDepartments = DepartmentQueries::getInstance()
-			->getSubDepartmentsAccessCodesIds($departmentId)
+			->getIntranetSubDepartmentsAccessCodesIds($departmentId)
 		;
 
-		return DepartmentQueries::getInstance()->queryUserIdsByDepartments(
+		return DepartmentQueries::getInstance()->getUserIdsByIntranetDepartmentsAccessCodes(
 			[...[$departmentId], ...$subDepartments],
 			true
 		);

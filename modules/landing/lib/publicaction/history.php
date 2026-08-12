@@ -2,6 +2,9 @@
 
 namespace Bitrix\Landing\PublicAction;
 
+use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeInitService;
+use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeEligibilityService;
+use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeStateService;
 use Bitrix\Landing;
 use Bitrix\Landing\PublicActionResult;
 use Bitrix\Landing\Template;
@@ -168,7 +171,7 @@ class History
 			$command = $history->getJsCommand();
 			if ($history->undo())
 			{
-				$result->setResult($command);
+				$result->setResult(self::prepareCommandAfterHistory($command, $entityType, $entityId));
 			}
 			else
 			{
@@ -204,7 +207,7 @@ class History
 			$command = $history->getJsCommand(false);
 			if ($history->redo())
 			{
-				$result->setResult($command);
+				$result->setResult(self::prepareCommandAfterHistory($command, $entityType, $entityId));
 			}
 			else
 			{
@@ -225,6 +228,68 @@ class History
 		}
 
 		return $result;
+	}
+
+	private static function prepareCommandAfterHistory(array $command, string $entityType, int $entityId): array
+	{
+		$tailwindRuntime = self::prepareTailwindRuntimeAfterLandingHistory($entityType, $entityId);
+		if ($tailwindRuntime !== [])
+		{
+			$command['tailwindRuntime'] = $tailwindRuntime;
+		}
+
+		return $command;
+	}
+
+	private static function prepareTailwindRuntimeAfterLandingHistory(string $entityType, int $entityId): array
+	{
+		if ($entityType !== Landing\History::ENTITY_TYPE_LANDING || $entityId <= 0)
+		{
+			return [];
+		}
+		if (!(new TailwindRuntimeEligibilityService())->isLandingSupported($entityId))
+		{
+			return [];
+		}
+
+		$stateService = new TailwindRuntimeStateService();
+		$currentState = $stateService->getLandingState($entityId);
+		$currentStage = trim((string)($currentState['stage'] ?? ''));
+		if (!in_array($currentStage, [
+			TailwindRuntimeStateService::STAGE_RUNTIME_INITIALIZED,
+			TailwindRuntimeStateService::STAGE_CSS_SAVED,
+		], true))
+		{
+			return [];
+		}
+
+		try
+		{
+			$runtimeState = (new TailwindRuntimeInitService($stateService))->initializeLanding($entityId, true);
+		}
+		catch (\Throwable $exception)
+		{
+			return [
+				'rebuildRequired' => false,
+				'landingId' => $entityId,
+				'success' => false,
+				'error' => 'tailwind_runtime_init_failed',
+				'message' => trim((string)$exception->getMessage()),
+			];
+		}
+
+		$runtimeStage = trim((string)($runtimeState['stage'] ?? ''));
+		$success = !empty($runtimeState['success']) || in_array($runtimeStage, [
+			TailwindRuntimeStateService::STAGE_RUNTIME_INITIALIZED,
+			TailwindRuntimeStateService::STAGE_CSS_SAVED,
+		], true);
+
+		return [
+			'rebuildRequired' => $success,
+			'landingId' => $entityId,
+			'success' => $success,
+			'state' => $runtimeState,
+		];
 	}
 
 	protected static function pushForEntity(

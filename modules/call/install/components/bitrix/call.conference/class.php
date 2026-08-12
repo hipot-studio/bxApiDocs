@@ -194,7 +194,12 @@ class ImComponentConference extends CBitrixComponent
 		}
 
 		$this->arResult['CALL_TOKEN'] = '';
-		if ($this->chatId > 0 && \Bitrix\Call\Settings::isNewCallsEnabled())
+		if (
+			$this->chatId > 0
+			&& empty($this->startupErrorCode)
+			&& !$this->isPasswordRequired
+			&& \Bitrix\Call\Settings::isNewCallsEnabled()
+		)
 		{
 			$this->arResult['CALL_TOKEN'] = \Bitrix\Call\JwtCall::getCallToken($this->chatId);
 		}

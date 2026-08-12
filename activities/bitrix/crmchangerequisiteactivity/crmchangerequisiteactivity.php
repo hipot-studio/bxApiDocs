@@ -9,12 +9,15 @@ use \Bitrix\Crm\EntityRequisite;
 use \Bitrix\Crm\EntityBankDetail;
 
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 
 $runtime = CBPRuntime::GetRuntime();
 $runtime->IncludeActivityFile('CrmGetRequisitesInfoActivity');
 
 class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 {
+	use ChecksResolvedTargetAccessTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -29,6 +32,7 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
+		$this->resolveTargetDocumentId();
 		$documentType = $this->getDocumentType();
 
 		[$this->CrmEntityType, $this->CrmEntityId] = $this->defineCrmEntityWithRequisites();
@@ -38,6 +42,14 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 		if ($executionStatus !== CBPActivityExecutionStatus::Executing)
 		{
 			return $executionStatus;
+		}
+
+		$targetDocumentId = CCrmBizProcHelper::ResolveDocumentId($this->CrmEntityType, $this->CrmEntityId);
+		if (is_array($targetDocumentId) && !$this->canUpdateResolvedTarget($targetDocumentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
 		}
 
 		$fieldsValues = self::normalizeFieldsValues($this->FieldsValues);

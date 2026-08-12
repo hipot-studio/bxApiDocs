@@ -147,7 +147,7 @@ final class FilterStructure extends Structure
 	 * @throws UnknownFilterOperatorException
 	 * @throws InvalidFilterException
 	 */
-	private function createCondition(mixed $column, Operator|string $operator, mixed $value): Condition
+	private function createCondition(mixed $column, Operator|string|null $operator, mixed $value): Condition
 	{
 		$operator = $operator instanceof Operator ? $operator : FilterValidator::validateOperator($operator);
 
@@ -449,7 +449,7 @@ final class FilterStructure extends Structure
 	 * @throws InvalidFilterException
 	 * @throws UnknownFilterOperatorException
 	 */
-	private static function createConditionWithOperatorAndValue(Dto $dto, mixed $fieldName, Operator|string $operator, mixed $value): Condition
+	private static function createConditionWithOperatorAndValue(Dto $dto, mixed $fieldName, Operator|string|null $operator, mixed $value): Condition
 	{
 		$operator = $operator instanceof Operator ? $operator : FilterValidator::validateOperator($operator);
 

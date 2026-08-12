@@ -77,7 +77,7 @@ class MeetingEvaluationTask extends AITask
 		$transcription = $outcomeCollection->getOutcomeByType(SenseType::TRANSCRIBE->value)?->getSenseContent();
 		if (
 			!($transcription instanceof Transcription)
-			|| $transcription->isEmpty
+			|| !$transcription->hasContent()
 		)
 		{
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content

@@ -44,12 +44,12 @@ class ActivityControlsBuilder
 	{
 		return new ActivityControlDto(
 			[
-				'Name' => Loc::getMessage('BIZPROC_ACTIVITY_CONTROLS_BUILDER_TITLE') ?? '',
+				'Name' => Loc::getMessage('BIZPROC_ACTIVITY_CONTROLS_BUILDER_TITLE_MSGVER_1') ?? '',
 				'Type' => \Bitrix\Bizproc\FieldType::STRING,
 				'Required' => true,
-				'FieldName' => 'title'
+				'FieldName' => 'title',
 			],
-			$this->getCurrentValue('Title')
+			$this->getCurrentValue('Title'),
 		);
 	}
 
@@ -63,7 +63,7 @@ class ActivityControlsBuilder
 				'Hidden' => true,
 				'FieldName' => 'activity_id',
 			],
-			$this->activity['Name'] ?? null
+			$this->activity['Name'] ?? null,
 		);
 	}
 
@@ -71,13 +71,13 @@ class ActivityControlsBuilder
 	{
 		return new ActivityControlDto(
 			[
-				'Name' => Loc::getMessage('BIZPROC_ACTIVITY_CONTROLS_BUILDER_COMMENT') ?? '',
+				'Name' => Loc::getMessage('BIZPROC_ACTIVITY_CONTROLS_BUILDER_COMMENT_MSGVER_1') ?? '',
 				'Type' => \Bitrix\Bizproc\FieldType::STRING,
 				'Required' => false,
 				'Hidden' => true,
 				'FieldName' => 'activity_editor_comment',
 			],
-			$this->getCurrentValue('EditorComment')
+			$this->getCurrentValue('EditorComment'),
 		);
 	}
 
@@ -91,7 +91,7 @@ class ActivityControlsBuilder
 			$property['FieldName'] ??= $key;
 			$properties[] = new ActivityControlDto(
 				$property,
-				$this->getCurrentValue($key, $property)
+				$this->getCurrentValue($key, $property),
 			);
 		}
 

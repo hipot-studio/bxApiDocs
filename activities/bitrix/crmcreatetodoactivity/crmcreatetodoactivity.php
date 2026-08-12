@@ -6,6 +6,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Bizproc;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Crm;
 use Bitrix\Crm\Activity\Provider\ToDo\BlocksManager;
 use Bitrix\Crm\Entity\MessageBuilder\ProcessToDoActivityResponsible;
@@ -19,6 +21,8 @@ use Bitrix\Main\Localization\Loc;
 
 class CBPCrmCreateToDoActivity extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
 
 	private const ATTACHMENT_TYPE_FILE = 'file';
 	private const ATTACHMENT_TYPE_DISK = 'disk';
@@ -57,9 +61,17 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		[$ownerTypeId, $ownerId] = \CCrmBizProcHelper::resolveEntityId($this->getDocumentId());
+		$documentId = $this->resolveTargetDocumentId();
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
 
-		$responsibleId = $this->getResponsibleId($ownerTypeId, $ownerId);
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		[$ownerTypeId, $ownerId] = \CCrmBizProcHelper::resolveEntityId($documentId);
+
+		$responsibleId = $this->getResponsibleId($ownerTypeId, $ownerId, $documentId);
 		$deadline = $this->getDateTimeObjectFromProperty($this->Deadline, $responsibleId);
 		$description = CBPHelper::stringify($this->Description);
 		$subject =
@@ -71,7 +83,7 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 		$address = CBPHelper::stringify($this->Address);
 		$link = CBPHelper::stringify($this->Link);
 		$locationId = $this->getNumFromProperty($this->LocationId);
-		$colleaguesIds = (array)CBPHelper::extractUsers($this->Colleagues, $this->getDocumentId());
+		$colleaguesIds = (array)CBPHelper::extractUsers($this->Colleagues, $documentId);
 		$colleaguesIds[] = (string)$responsibleId;
 		$duration = $this->getNumFromProperty($this->Duration);
 		$notification = !is_null($this->Notification) ? $this->getIntValuesArray($this->Notification) : null;
@@ -141,7 +153,7 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 
 		if ($this->Client === 'Y')
 		{
-			$clientSettings = $this->prepareClientSettings();
+			$clientSettings = $this->prepareClientSettings($documentId);
 			if ($clientSettings)
 			{
 				$settings[] = $clientSettings;
@@ -204,7 +216,7 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 		return CBPActivityExecutionStatus::Closed;
 	}
 
-	private function getResponsibleId($ownerTypeId, $ownerId)
+	private function getResponsibleId($ownerTypeId, $ownerId, array $documentId)
 	{
 		$id = $this->Responsible;
 		if (!$id)
@@ -212,7 +224,7 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 			return CCrmOwnerType::GetResponsibleID($ownerTypeId, $ownerId, false);
 		}
 
-		return CBPHelper::ExtractUsers($id, $this->GetDocumentId(), true);
+		return CBPHelper::ExtractUsers($id, $documentId, true);
 	}
 
 	private function getDateTimeObjectFromProperty($property, $userId): \Bitrix\Main\Type\DateTime
@@ -312,9 +324,9 @@ class CBPCrmCreateToDoActivity extends CBPActivity
 		return $calendarSettings;
 	}
 
-	private function prepareClientSettings(): ?array
+	private function prepareClientSettings(array $documentId): ?array
 	{
-		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($this->getDocumentId());
+		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($documentId);
 		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory($entityTypeId);
 		$entity = $factory?->getItem($entityId);
 		$clients = $this->getClients($entity);

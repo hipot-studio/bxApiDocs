@@ -97,7 +97,8 @@ class GuestChatLink extends ChatLink
 		}
 		else
 		{
-			$url = \Bitrix\Im\Common::getPublicDomain() . '/guest/' . $guestCode;
+			// Trailing slash: cloud nginx rejects the extension-less path without it before PHP routing.
+			$url = \Bitrix\Im\Common::getPublicDomain() . '/guest/' . $guestCode . '/';
 		}
 
 		$query = [];
@@ -170,5 +171,14 @@ class GuestChatLink extends ChatLink
 	public function getChatId(): int
 	{
 		return (int)$this->getEntityId();
+	}
+
+	public function getInviteMethod(): InviteMethod
+	{
+		return match ($this->getType())
+		{
+			Type::Custom => check_email((string)$this->getName()) ? InviteMethod::Email : InviteMethod::Phone,
+			default => InviteMethod::Link,
+		};
 	}
 }

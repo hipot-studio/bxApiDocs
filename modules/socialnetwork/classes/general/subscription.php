@@ -1,12 +1,20 @@
 <?php
 
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Text\Emoji;
+use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
 use Bitrix\Socialnetwork\Integration;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\V2\Feature;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
+use Bitrix\Socialnetwork\V2\Internal\Entity\Notification\NotificationType;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ChatMessageSender;
+use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\LogImMessageLinkService;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\Message\NotifyLiveFeedPostAdd;
+use Bitrix\Socialnetwork\V2\Internal\Service\Notification\CounterDecision;
+use Bitrix\Socialnetwork\V2\Internal\Service\Notification\CounterPolicyResolver;
 use Bitrix\Socialnetwork\V2\Internal\Service\UserService;
 
 class CAllSocNetSubscription
@@ -258,7 +266,7 @@ class CAllSocNetSubscription
 					continue;
 				}
 
-				$sendChatIds[] = $chatId;
+				$sendChatIds[(int)$groupId] = $chatId;
 			}
 
 			if (
@@ -608,16 +616,94 @@ class CAllSocNetSubscription
 				: $userCollection->getFirstEntity();
 		}
 
+		$logId = (int)($arFields['LOG_ID'] ?? 0);
+
 		$message = new NotifyLiveFeedPostAdd(
 			contextUser: $user,
 			url: $chatUrl,
+			logId: $logId,
 		);
 
 		$messageSender = $locator->get(ChatMessageSender::class);
 
-		foreach ($chatIds as $chatId)
+		try
 		{
-			$messageSender->sendMessage((int)$chatId, $message);
+			$counterPolicyResolver = Container::getInstance()->get(CounterPolicyResolver::class);
+		}
+		catch (\Throwable)
+		{
+			$counterPolicyResolver = null;
+		}
+
+		$linkAllowed = $logId > 0 && Feature::isNewProjectsOn();
+
+		foreach ($chatIds as $groupId => $chatId)
+		{
+			$silent = $counterPolicyResolver !== null
+				&& self::shouldSuppressFeedCounter((int)$groupId, $counterPolicyResolver);
+
+			$messageId = $messageSender->sendMessage((int)$chatId, $message, $silent);
+
+			if (
+				$linkAllowed
+				&& $messageId !== null
+				&& $messageId > 0
+			)
+			{
+				self::linkLogToImMessage($logId, $messageId, (int)$chatId, (int)$groupId);
+			}
+		}
+	}
+
+	private static function shouldSuppressFeedCounter(
+		int $projectId,
+		CounterPolicyResolver $counterPolicyResolver,
+	): bool
+	{
+		if ($projectId <= 0)
+		{
+			return false;
+		}
+
+		try
+		{
+			$decision = $counterPolicyResolver->resolveById(NotificationType::ContentFeedPost->value, $projectId);
+
+			return $decision === CounterDecision::CounterOff;
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
+	private static function linkLogToImMessage(int $logId, int $imMessageId, int $imChatId, int $groupId): void
+	{
+		try
+		{
+			if (!CollabProvider::getInstance()->isCollab($groupId))
+			{
+				return;
+			}
+
+			ServiceLocator::getInstance()
+				->get(LogImMessageLinkService::class)
+				->link($logId, $imMessageId, $imChatId, $groupId)
+			;
+		}
+		catch (\Throwable $e)
+		{
+			// best-effort: counter desync is fixed by backfill, don't fail the message send
+			(new LoggerFactory())
+				->createById('socialnetwork.integration.im.log_link')
+				?->error('Failed to link livefeed post with chat system message: {message}', [
+					'message' => $e->getMessage(),
+					'logId' => $logId,
+					'imMessageId' => $imMessageId,
+					'imChatId' => $imChatId,
+					'groupId' => $groupId,
+				])
+			;
 		}
 	}
 

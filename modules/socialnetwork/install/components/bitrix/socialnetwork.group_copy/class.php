@@ -12,7 +12,6 @@ use Bitrix\Lists\Copy\Integration\Group as ListsFeature;
 use Bitrix\Main\AccessDeniedException;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\Contract\Controllerable;
@@ -31,7 +30,7 @@ use Bitrix\Photogallery\Copy\Integration\Group as PhotoFeature;
 use Bitrix\Socialnetwork\Component\WorkgroupForm;
 use Bitrix\Socialnetwork\Copy\GroupManager;
 use Bitrix\Socialnetwork\Item\Workgroup;
-use Bitrix\Socialnetwork\V2\Public\Provider\ProjectProvider;
+use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Socialnetwork\WorkgroupSiteTable;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Tasks\Copy\Integration\Group as TasksFeature;
@@ -73,8 +72,7 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 		{
 			$this->checkModules();
 
-			$projectProvider = new ProjectProvider();
-			if ($projectProvider->isProject($this->arParams["GROUP_ID"]))
+			if (Feature::isNewProjectsOn())
 			{
 				throw new SystemException("System error");
 			}
@@ -129,6 +127,11 @@ class SocialnetworkGroupCopy extends CBitrixComponent implements Controllerable,
 
 		$groupId = $post["id"];
 		$groupIdsToCopy = [$groupId];
+
+		if (Feature::isNewProjectsOn())
+		{
+			throw new SystemException("System error");
+		}
 
 		$this->checkAccess($executiveUserId, $groupId);
 

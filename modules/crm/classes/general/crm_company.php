@@ -21,6 +21,7 @@ use Bitrix\Crm\Integrity\DuplicateIndexMismatch;
 use Bitrix\Crm\Integrity\DuplicateManager;
 use Bitrix\Crm\Integrity\DuplicateRequisiteCriterion;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Model\FieldRepository;
 use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
 use Bitrix\Crm\Service\Container;
@@ -594,7 +595,8 @@ class CAllCrmCompany
 			array('CCrmCompany', 'BuildPermSql'),
 			array('CCrmCompany', '__AfterPrepareSql')
 		);
-		return $lb->Prepare($arOrder, $arFilter, $arGroupBy, $arNavStartParams, $arSelectFields, $arOptions);
+
+		return self::applyQueryResultDecorator($lb->Prepare($arOrder, $arFilter, $arGroupBy, $arNavStartParams, $arSelectFields, $arOptions));
 	}
 
 	public static function CreateListBuilder(array $arFieldOptions = null)
@@ -1123,7 +1125,8 @@ class CAllCrmCompany
 
 		$obRes = $DB->Query($sSql);
 		$obRes->SetUserFields($USER_FIELD_MANAGER->GetUserFields(self::$sUFEntityID));
-		return $obRes;
+
+		return self::applyQueryResultDecorator($obRes);
 	}
 
 	public static function GetByID($ID, $bCheckPerms = true)
@@ -1732,10 +1735,15 @@ class CAllCrmCompany
 		];
 	}
 
+	/**
+	 * @deprecated
+	 *
+	 * Method will be removed soon
+	 */
 	static public function BuildEntityAttr($userID, $arAttr = array())
 	{
 		$userID = (int)$userID;
-		$arResult = array("U{$userID}");
+		$arResult = [];
 		if(isset($arAttr['OPENED']) && $arAttr['OPENED'] == 'Y')
 		{
 			$arResult[] = 'O';
@@ -1746,13 +1754,13 @@ class CAllCrmCompany
 			$arResult[] = CCrmPerms::ATTR_READ_ALL;
 		}
 
-		$arUserAttr = Bitrix\Crm\Service\Container::getInstance()
+		$userBasedEntityAttributes = Bitrix\Crm\Service\Container::getInstance()
 			->getUserPermissions($userID)
 			->getAttributesProvider()
 			->getEntityAttributes()
 		;
 
-		return array_merge($arResult, $arUserAttr['INTRANET']);
+		return array_merge($arResult, $userBasedEntityAttributes);
 	}
 
 	public function Update($ID, array &$arFields, $bCompare = true, $bUpdateSearch = true, $arOptions = array())
@@ -3630,5 +3638,39 @@ class CAllCrmCompany
 	public function getLastError(): string
 	{
 		return (string)$this->LAST_ERROR;
+	}
+
+	private static function applyQueryResultDecorator(mixed $result)
+	{
+		if (!$result instanceof \CDBResult)
+		{
+			return $result;
+		}
+
+		return new class($result) extends \CDBResult
+		{
+			protected function AfterFetch(&$res)
+			{
+				parent::AfterFetch($res);
+
+				$moneyFields = [
+					'REVENUE' => 'CURRENCY_ID',
+				];
+
+				foreach ($moneyFields as $fieldName => $currencyFieldName)
+				{
+					if (!isset($res[$fieldName]) || $res[$fieldName] === '')
+					{
+						continue;
+					}
+
+					$res[$fieldName] = FieldRepository::getMoneyFieldScaleFetchModifier(
+						$res[$fieldName],
+						$res,
+						$currencyFieldName
+					);
+				}
+			}
+		};
 	}
 }

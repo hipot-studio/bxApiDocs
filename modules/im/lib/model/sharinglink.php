@@ -4,6 +4,7 @@ namespace Bitrix\Im\Model;
 
 use Bitrix\Im\V2\SharingLink\Type;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\EnumField;
@@ -12,6 +13,8 @@ use Bitrix\Main\ORM\Fields\StringField;
 
 class SharingLinkTable extends DataManager
 {
+	use DeleteByFilterTrait;
+
 	/**
 	 * Returns DB table name for entity.
 	 *

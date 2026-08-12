@@ -29,6 +29,12 @@ class TriggerLazyProjectConvert
 			return;
 		}
 
+		$userId = $event->getUserId();
+		if ($userId <= 0)
+		{
+			return;
+		}
+
 		$groupId = (int)$chat->getEntityId();
 		if ($groupId <= 0 || isset(self::$seen[$groupId]))
 		{
@@ -38,7 +44,7 @@ class TriggerLazyProjectConvert
 
 		try
 		{
-			(new ConvertToProjectCommand($groupId, $event->getUserId()))->run();
+			(new ConvertToProjectCommand($groupId, $userId))->run();
 		}
 		catch (Throwable $t)
 		{

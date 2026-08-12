@@ -38,6 +38,7 @@ class TaskFinder
 		?DateTime $createdTo = null,
 		?int $responsibleId = null,
 		?int $limit = 200,
+		int $offset = 0,
 	): array
 	{
 		if (!Loader::includeModule('tasks'))
@@ -81,10 +82,11 @@ class TaskFinder
 
 		$params = new TaskListParams(
 			userId: $userId,
-			pagination: new Pager(max(1, $limit ?? 200)),
+			pagination: new Pager(max(1, $limit ?? 200), max(0, $offset)),
 			filter: new TaskListArrayFilter($conditions),
 			sort: new TaskListSort([
 				FieldsEnum::CreatedDate->value => SortDirection::Desc->value,
+				FieldsEnum::Id->value => SortDirection::Desc->value,
 			]),
 			select: new TaskListSelect([
 				FieldsEnum::Id->value,

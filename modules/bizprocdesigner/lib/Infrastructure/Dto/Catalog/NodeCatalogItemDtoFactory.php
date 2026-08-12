@@ -82,7 +82,7 @@ class NodeCatalogItemDtoFactory
 				],
 			],
 			ActivityNodeType::COMPLEX->value => [
-				'width' => 230,
+				'width' => 260,
 				'height' => 46,
 				'ports' => [
 					'input' => [

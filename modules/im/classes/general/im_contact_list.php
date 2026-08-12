@@ -1436,6 +1436,25 @@ class CAllIMContactList
 		$strSQL = "DELETE FROM b_im_recent WHERE USER_ID = {$userId} AND {$itemType} AND {$sqlEntityId}";
 		$DB->Query($strSQL);
 
+		// Recent rows affect counters (recentSections of parent chats), so reset the counters cache.
+		\Bitrix\Main\DI\ServiceLocator::getInstance()
+			->get(IM\V2\Reading\Counter\Internal\CountersCache::class)
+			->remove((int)$userId);
+
+		// Refresh the parent collab preview pointer when a source chat leaves recent (single-id form only).
+		if (
+			$isChat
+			&& !is_array($entityId)
+			&& $chat instanceof Chat
+			&& !($chat instanceof Chat\NullChat)
+		)
+		{
+			\Bitrix\Main\DI\ServiceLocator::getInstance()
+				->get(IM\V2\Recent\PreviewSource\CollabPreviewSourcePointerService::class)
+				->recomputeForRemovedSourceChat($chat, (int)$userId)
+			;
+		}
+
 		if (!$withoutRead && $chat?->isExist())
 		{
 			$reader = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(IM\V2\Reading\Reader::class);

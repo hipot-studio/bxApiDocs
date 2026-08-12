@@ -13,6 +13,7 @@ use Bitrix\Mail\Helper\RecipientHelper;
 use Bitrix\Mail\Helper\Message\MessageSender;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\SystemException;
 use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Controller\RestController;
@@ -75,8 +76,8 @@ class Message extends RestController
 	 * - filter:
 	 *   - int    mailboxId       Filter by mailbox ID
 	 *   - string searchQuery     Full-text search query
-	 *   - string dateFrom        Start date (Y/m/d H:i)
-	 *   - string dateTo          End date (Y/m/d H:i)
+	 *   - string dateFrom        Start date (ISO 8601)
+	 *   - string dateTo          End date (ISO 8601)
 	 *   - bool   isSeen          Read/unread filter
 	 *   - bool   hasAttachments  Has attachments filter
 	 *   - string folder          Folder name or path
@@ -84,7 +85,11 @@ class Message extends RestController
 	 *   - int limit   Results per page (1-100, default 25)
 	 *   - int offset  Offset from start
 	 *
+	 * @param ListRequest $request
 	 * @return ListResponse {result: MessageDto[]}
+	 * @throws RequestValidationException
+	 * @throws SystemException
+	 * @throws LoaderException
 	 */
 	public function listAction(ListRequest $request): ListResponse
 	{
@@ -94,20 +99,29 @@ class Message extends RestController
 		$limit = min($request->pagination?->getLimit() ?? SearchMessagesDto::DEFAULT_LIMIT, self::MAX_LIMIT);
 		$offset = $request->pagination?->getOffset() ?? 0;
 
-		$dto = SearchMessagesDto::fromArray([
-			'mailboxId' => $params->getInt('mailboxId'),
-			'searchQuery' => $params->getString('searchQuery'),
-			'dateFrom' => $this->convertIsoDateToInternal($params->getString('dateFrom'), 'dateFrom'),
-			'dateTo' => $this->convertIsoDateToInternal($params->getString('dateTo'), 'dateTo'),
-			'isSeen' => $params->getNullableBool('isSeen'),
-			'hasAttachments' => $params->getNullableBool('hasAttachments'),
-			'folder' => $params->getString('folder'),
-			'limit' => $limit,
-			'offset' => max(0, $offset),
-		]);
+		try
+		{
+			$dto = SearchMessagesDto::fromArray([
+				'mailboxId' => $params->getInt('mailboxId'),
+				'searchQuery' => $params->getString('searchQuery'),
+				'dateFrom' => $params->getString('dateFrom'),
+				'dateTo' => $params->getString('dateTo'),
+				'isSeen' => $params->getNullableBool('isSeen'),
+				'hasAttachments' => $params->getNullableBool('hasAttachments'),
+				'folder' => $params->getString('folder'),
+				'limit' => $limit,
+				'offset' => max(0, $offset),
+			]);
 
-		$provider = new MessageSearch();
-		$messages = $provider->search($dto, $userId);
+			$provider = new MessageSearch();
+			$messages = $provider->search($dto, $userId);
+		}
+		catch (SystemException $e)
+		{
+			throw new RequestValidationException([
+				new Error($e->getMessage(), 'MESSAGE_LIST_FAILED'),
+			]);
+		}
 
 		$collection = new DtoCollection(MessageDto::class);
 
@@ -655,32 +669,6 @@ class Message extends RestController
 			'postId' => $data['postId'],
 			'messageId' => $messageId,
 		]);
-	}
-
-	/**
-	 * Accepts ISO 8601 (DATE_ATOM) from REST client, converts to the internal
-	 * SearchMessagesDto format ('Y/m/d H:i'). Throws on malformed input instead
-	 * of silently dropping the filter.
-	 */
-	private function convertIsoDateToInternal(?string $iso, string $fieldName): ?string
-	{
-		if ($iso === null || $iso === '')
-		{
-			return null;
-		}
-
-		$dt = \DateTime::createFromFormat(DATE_ATOM, $iso);
-		if ($dt === false)
-		{
-			throw new RequestValidationException([
-				new Error(
-					"Parameter \"{$fieldName}\" must be in ISO 8601 (DATE_ATOM) format, e.g. \"2026-01-01T00:00:00+00:00\".",
-					'INVALID_' . strtoupper($fieldName),
-				),
-			]);
-		}
-
-		return $dt->format('Y/m/d H:i');
 	}
 
 	private function mapMessageToDto(array $message): MessageDto

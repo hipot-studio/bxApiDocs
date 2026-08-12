@@ -12,6 +12,7 @@ use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Bitrix24\Feature;
 
 use Bitrix\Crm\Communication;
+use Bitrix\Crm\Engine\ActionFilter\CheckSomeItemsReadPermission;
 use Bitrix\Crm\Tracking;
 use Bitrix\Crm\UI\Webpack;
 
@@ -251,7 +252,23 @@ class CrmTrackingChannelPoolComponent extends \CBitrixComponent implements Contr
 
 	public function configureActions()
 	{
-		return [];
+		return [
+			'removeItem' => [
+				'+prefilters' => [
+					new CheckSomeItemsReadPermission(),
+				]
+			],
+			'addItem' => [
+				'+prefilters' => [
+					new CheckSomeItemsReadPermission(),
+				]
+			],
+			'startTesting' => [
+				'+prefilters' => [
+					new CheckSomeItemsReadPermission(),
+				]
+			],
+		];
 	}
 
 	public function removeItemAction($typeId, $value)

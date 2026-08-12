@@ -96,23 +96,8 @@ class BitrixCall extends \Bitrix\Call\Call
 		];
 	}
 
-	public function inviteUsers(int $senderId, array $toUserIds, $isLegacyMobile, $video = false, $sendPush = true): void
-	{
-		foreach ($toUserIds as $toUserId)
-		{
-			$this->getSignaling()->sendInviteToUser(
-				$senderId,
-				$toUserId,
-				$toUserIds,
-				$isLegacyMobile,
-				$video,
-				$sendPush
-			);
-		}
-	}
-
 	public function getMaxUsers(): int
 	{
-		return parent::getMaxCallServerParticipants();
+		return \Bitrix\Call\Settings::getMaxCallServerParticipants();
 	}
 }

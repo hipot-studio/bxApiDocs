@@ -43,17 +43,5 @@ class LogSubscribe
 		{
 			return false;
 		}
-
-		$res = LogSubscribeTable::getList(array(
-			'filter' => array(
-				'=LOG_ID' => $logId,
-				'=TYPE' => LogSubscribeTable::TYPE_COUNTER_COMMENT_PUSH
-			),
-			'select' => array('USER_ID')
-		));
-		while($subscribeFields = $res->fetch())
-		{
-			\Bitrix\Pull\MobileCounter::send($subscribeFields['USER_ID']);
-		}
 	}
 }

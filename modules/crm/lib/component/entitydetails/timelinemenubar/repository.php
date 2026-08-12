@@ -14,14 +14,11 @@ use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Meeting;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Message;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\RestPlacement;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Sharing;
-use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Sms;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Task;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\ToDo;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Visit;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Wait;
-use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\WhatsApp;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Zoom;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\Rest\AppPlacement;
 use Bitrix\Main\Loader;
 use Bitrix\Rest\PlacementTable;
@@ -53,28 +50,11 @@ final class Repository
 		$items = [
 			new ToDo($context),
 			new Comment($context),
-		];
-
-		if (Feature::enabled(Feature\MessageSenderEditor::class))
-		{
-			$items[] = new Message($context);
-		}
-
-		$items = [
-			...$items,
+			new Message($context),
 			new Booking($context),
 			new Task($context),
 			new Sharing($context),
 		];
-
-		if (!Feature::enabled(Feature\MessageSenderEditor::class))
-		{
-			$items = [
-				...$items,
-				new WhatsApp($context),
-				new Sms($context),
-			];
-		}
 
 		return [
 			...$items,

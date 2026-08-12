@@ -7,6 +7,7 @@ use Bitrix\Crm\Activity\ToDo\CalendarSettings\CalendarSettingsProvider;
 use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Color\PhaseColorScheme;
 use Bitrix\Crm\Filter\FieldsTransform\UserBasedField;
+use Bitrix\Crm\Filter\RelatedEntity;
 use Bitrix\Crm\Format\PersonNameFormatter;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Kanban\Entity;
@@ -496,6 +497,16 @@ abstract class Kanban
 			{
 				$filter['STAGE_SEMANTIC_ID'] = $this->allowSemantics;
 			}
+
+			// Apply the related-entities filter to the totals path too. Kanban::getItems()
+			// goes through applyRelatedEntitiesFilter() below, but fillStageTotalSums() runs
+			// a separate ORM/legacy query for column sums and counts; without applying the
+			// filter here, Dynamic getList() crashes with "Unknown field definition
+			// RELATED_ENTITIES" and legacy entities lose the EXISTS predicate from totals.
+			$totalsParameters = ['filter' => $filter, 'runtime' => $runtime];
+			$this->applyRelatedEntitiesFilter($totalsParameters);
+			$filter = $totalsParameters['filter'];
+			$runtime = $totalsParameters['runtime'] ?? $runtime;
 
 			//get sums and counts
 			$this->entity->fillStageTotalSums($filter, $runtime, $columns);
@@ -1318,6 +1329,8 @@ abstract class Kanban
 			$parameters['filter']['STAGE_SEMANTIC_ID'] = $this->allowSemantics;
 		}
 
+		$this->applyRelatedEntitiesFilter($parameters);
+
 		$res = $this->entity->getItems($parameters);
 
 		$rows = [];
@@ -1359,8 +1372,14 @@ abstract class Kanban
 		$apiVersion = $this->getApiVersion();
 		$entity = $this->getEntity();
 
+		$isAllCategoriesView =
+			$entity->getCategoryId() < 0
+			|| (\CCrmOwnerType::isPossibleDynamicTypeId($entity->getTypeId()) && $entity->getCategoryId() === 0);
+
 		$lastActivityInfo = $entity->prepareMultipleItemsLastActivity($rows, $apiVersion >= 2);
-		$pingSettingsInfo = ($apiVersion <= 1 ? $entity->prepareMultipleItemsPingSettings($entity->getTypeId()) : null);
+		$pingSettingsInfo = ($apiVersion <= 1 || $isAllCategoriesView)
+			? $entity->prepareMultipleItemsPingSettings($entity->getTypeId())
+			: null;
 		$colorSettings = ($apiVersion <= 1 ? (new ColorSettingsProvider())->fetchForJsComponent() : null);
 		$calendarSettings = ($apiVersion <= 1 ? (new CalendarSettingsProvider())->fetchForJsComponent() : null);
 
@@ -1527,6 +1546,11 @@ abstract class Kanban
 				if (empty($item['contactType']))
 				{
 					unset($item['contactType']);
+				}
+
+				if ($isAllCategoriesView && isset($row['CATEGORY_ID']))
+				{
+					$item['pingSettings'] = $pingSettingsInfo[$row['CATEGORY_ID']] ?? null;
 				}
 			}
 
@@ -2144,4 +2168,8 @@ abstract class Kanban
 		return $this->disableMoreFields;
 	}
 
+	private function applyRelatedEntitiesFilter(array &$parameters): void
+	{
+		RelatedEntity\GridFilterApplier::getDefault()->apply($parameters, $this->entity->getTypeId());
+	}
 }

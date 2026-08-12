@@ -1060,7 +1060,7 @@ class Rights
 		{
 			$type = mb_strtolower($type);
 			//todo: need fix it: remove if() and add 'mainpage_admin', 'mainpage_menu24' in ADDITIONAL_RIGHTS and check preview.bitrix24.site
-			if ($type == mb_strtolower(Site\Type::SCOPE_CODE_VIBE))
+			if ($type == mb_strtolower(Site\Type::SCOPE_CODE_VIBE) && !$strict)
 			{
 				return true;
 			}

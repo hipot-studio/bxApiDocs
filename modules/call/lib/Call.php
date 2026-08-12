@@ -929,6 +929,25 @@ class Call
 			|| (($states[CallUser::STATE_READY] ?? 0) >= 1 && ($states[CallUser::STATE_CALLING] ?? 0) >= 1);
 	}
 
+	/**
+	 * Returns true when at least one participant is in STATE_READY (i.e. the host
+	 * has already connected). Used by the guest join flow to decide whether a call
+	 * is worth joining without requiring the >=2 participants rule of hasActiveUsers.
+	 */
+	public function hasReadyUsers(): bool
+	{
+		$this->loadUsers();
+		foreach ($this->users as $user)
+		{
+			if ($user->getState() === CallUser::STATE_READY)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	//endregion
 
 	public function getSignaling(): Signaling
@@ -1182,14 +1201,18 @@ class Call
 		return $this;
 	}
 
-	public function inviteUsers(int $senderId, array $toUserIds, $isLegacyMobile, $video = false, $sendPush = true): void
+	/**
+	 * @deprecated Use {@see self::sendInviteUsers()} — it routes by scheme and keeps busy-filter parity across JWT and classic transports.
+	 */
+	public function inviteUsers(int $senderId, array $toUserIds, $isLegacyMobile, $video = false, $sendPush = true, bool $isRepeated = false): void
 	{
-		$this->getSignaling()->sendInvite(
-			$senderId,
-			$toUserIds,
-			$isLegacyMobile,
-			$video,
-			$sendPush
+		$this->sendInviteUsers(
+			senderId: $senderId,
+			toUserIds: $toUserIds,
+			isLegacyMobile: $isLegacyMobile,
+			video: $video,
+			sendPush: $sendPush,
+			isRepeated: $isRepeated,
 		);
 	}
 
@@ -1200,18 +1223,40 @@ class Call
 		$video = false,
 		$sendPush = true,
 		string $sendMode = Signaling::MODE_ALL,
+		bool $isRepeated = false,
 		?array $usersInOtherCalls = null
 	): void
 	{
 		$usersInOtherCalls ??= CallFactory::filterUsersInActiveCalls($toUserIds, $this->getId());
-		$this->getSignaling()->sendCallInviteBatch(
+
+		// Scheme routing keeps legacy classic web/desktop clients working —
+		// engine_legacy.js filters pull payload by SCHEME==classic and expects
+		// the legacy fields (publicIds/userData/users/invitedUsers). Switching
+		// classic calls to sendCallInviteBatch would silently drop incoming UI
+		// on those clients. Mobile push is busy-filtered in both branches now.
+		if ($this->scheme === self::SCHEME_JWT)
+		{
+			$this->getSignaling()->sendCallInviteBatch(
+				senderId: $senderId,
+				toUserIds: $toUserIds,
+				isLegacyMobile: $isLegacyMobile,
+				video: $video,
+				sendPush: $sendPush,
+				sendMode: $sendMode,
+				isRepeated: $isRepeated,
+				usersInOtherCalls: $usersInOtherCalls
+			);
+			return;
+		}
+
+		$this->getSignaling()->sendInvite(
 			senderId: $senderId,
 			toUserIds: $toUserIds,
 			isLegacyMobile: $isLegacyMobile,
 			video: $video,
 			sendPush: $sendPush,
-			sendMode: $sendMode,
-			usersInOtherCalls: $usersInOtherCalls
+			isRepeated: $isRepeated,
+			usersInOtherCalls: $usersInOtherCalls,
 		);
 	}
 
@@ -1567,19 +1612,9 @@ class Call
 		AddEventToStatFile("im","im_call_finish", $this->id, $finishStatus, "status", 0);
 	}
 
-	public static function isFeedbackAllowed(): bool
-	{
-		if (Loader::includeModule('bitrix24'))
-		{
-			return \CBitrix24::getPortalZone() == 'ru';
-		}
-
-		return Option::get('call', 'allow_call_feedback', 'N') === 'Y';
-	}
-
 	public function getMaxUsers(): int
 	{
-		return self::getMaxParticipants();
+		return Settings::getMaxParticipants();
 	}
 
 	public function getLogToken(int $userId = 0, int $ttl = 3600) : string
@@ -1613,38 +1648,20 @@ class Call
 		);
 	}
 
-	public static function getLogService() : string
-	{
-		return Option::get('call', 'call_log_service', '');
-	}
-
+	/**
+	 * @deprecated use {@see \Bitrix\Call\Settings::getMaxParticipants} instead
+	 */
 	public static function getMaxParticipants(): int
 	{
-		if (static::isCallServerEnabled())
-		{
-			return static::getMaxCallServerParticipants();
-		}
-
-		return (int)Option::get('call', 'turn_server_max_users');
+		return Settings::getMaxParticipants();
 	}
 
+	/**
+	 * @deprecated use {@see \Bitrix\Call\Settings::getMaxCallServerParticipants} instead
+	 */
 	public static function getMaxCallServerParticipants(): int
 	{
-		if (Loader::includeModule('bitrix24'))
-		{
-			return (int)\Bitrix\Bitrix24\Feature::getVariable('im_max_call_participants');
-		}
-		return (int)Option::get('call', 'call_server_max_users');
-	}
-
-	public static function getMaxCallLimit(): int
-	{
-		if (!\Bitrix\Main\Loader::includeModule('bitrix24'))
-		{
-			return 0;
-		}
-
-		return (int)\Bitrix\Bitrix24\Feature::getVariable('im_call_extensions_limit');
+		return Settings::getMaxCallServerParticipants();
 	}
 
 	/**
@@ -1890,47 +1907,12 @@ class Call
 		return null;
 	}
 
+	/**
+	 * @deprecated use {@see \Bitrix\Call\Settings::isCallServerEnabled} instead
+	 */
 	public static function isCallServerEnabled(): bool
 	{
-		if (!Loader::includeModule('call'))
-		{
-			return false;
-		}
-
-		return (bool)Option::get('call', 'call_server_enabled');
-	}
-
-	public static function getTurnServer(): string
-	{
-		if (Settings::isSelfTurnServerEnabled())
-		{
-			$turnServer = Option::get('call', 'turn_server');
-		}
-		else
-		{
-			if (\Bitrix\Main\Application::getInstance()->getLicense()->isCis())
-			{
-				$turnServer = 'turn.bitrix24.tech';
-			}
-			else
-			{
-				$turnServer = 'turn.calls.bitrix24.com';
-			}
-		}
-
-		return $turnServer;
-	}
-
-	public static function isBitrixCallEnabled(): bool
-	{
-		return self::isCallServerEnabled();
-	}
-
-	public static function isIosBetaEnabled(): bool
-	{
-		$isEnabled = Option::get('call', 'call_beta_ios', 'N');
-
-		return $isEnabled === 'Y';
+		return Settings::isCallServerEnabled();
 	}
 
 	protected function getCurrentUserId() : int

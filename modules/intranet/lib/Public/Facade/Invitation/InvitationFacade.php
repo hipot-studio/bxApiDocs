@@ -31,8 +31,8 @@ abstract class InvitationFacade
 	 * @throws ArgumentException
 	 * @throws \Exception
 	 */
-	public function inviteByCollection(InvitationCollection $collection): UserCollection
+	public function inviteByCollection(InvitationCollection $collection, ?int $currentUserId = null): UserCollection
 	{
-		return $this->invitationService->inviteByCollection($collection);
+		return $this->invitationService->inviteByCollection($collection, $currentUserId);
 	}
 }

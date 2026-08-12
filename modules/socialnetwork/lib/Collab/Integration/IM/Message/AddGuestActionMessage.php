@@ -77,6 +77,11 @@ class AddGuestActionMessage implements ActionMessageInterface
 			],
 		);
 
-		return $this->sendMessage($message, $this->senderId, $this->collabId);
+		return $this->sendMessage(
+			message: $message,
+			senderId: $this->senderId,
+			groupId: $this->collabId,
+			silent: $this->resolveCounterSilent(ActionType::AddGuest, $this->collabId, self::SILENT_OFF),
+		);
 	}
 }

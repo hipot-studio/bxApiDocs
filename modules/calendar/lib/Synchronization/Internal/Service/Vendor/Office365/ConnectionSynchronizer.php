@@ -10,6 +10,7 @@ use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Common\AbstractConne
 use Bitrix\Calendar\Synchronization\Internal\Exception\Exception;
 use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Push\PushManager;
+use Throwable;
 
 class ConnectionSynchronizer extends AbstractConnectionSynchronizer
 {
@@ -43,9 +44,13 @@ class ConnectionSynchronizer extends AbstractConnectionSynchronizer
 			$this->eventSynchronizer->importEvents($connection->getOwner()->getId());
 			$this->connectionManager->updateConnection($connection);
 		}
-		catch (\Exception $e)
+		catch (Throwable $e)
 		{
-			throw new Exception($e->getMessage(), $e->getCode(), $e);
+			throw new Exception(
+				'Unable to sync connection for Office 365: ' . $e->getMessage(),
+				$e->getCode(),
+				$e,
+			);
 		}
 
 		\CCalendar::ClearCache();

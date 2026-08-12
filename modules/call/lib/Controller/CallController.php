@@ -19,15 +19,16 @@ use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\Integration\AI\CallAIError;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Integration\AI\CallAIService;
-use Bitrix\Call\Idempotence;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
 use Bitrix\Call\Controller\Filter\UniqueRequestFilter;
 
 /**
  * @internal
  */
-class CallController extends BaseReceiver
+class CallController extends BaseReceiver implements IdempotentReplayable
 {
+	use IdempotentReplayableTrait;
+
 	public function getAutoWiredParameters(): array
 	{
 		return array_merge([
@@ -64,7 +65,22 @@ class CallController extends BaseReceiver
 	public function configureActions(): array
 	{
 		return [
+			'finishCall' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(),
+				],
+			],
+			'disconnectUser' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(),
+				],
+			],
 			'trackReady' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(),
+				],
+			],
+			'trackError' => [
 				'+prefilters' => [
 					new UniqueRequestFilter(),
 				],
@@ -120,8 +136,6 @@ class CallController extends BaseReceiver
 	 */
 	public function trackReadyAction(TrackFileRequest $trackFile): ?array
 	{
-		Loader::includeModule('im');
-
 		if ($log = CallAISettings::isLoggingEnable())
 		{
 			$logger = Logger::getInstance();
@@ -213,11 +227,6 @@ class CallController extends BaseReceiver
 			$log && $logger->error("Save track error: ".implode('; ', $saveResult->getErrorMessages()));
 			$this->addErrors($saveResult->getErrors());
 			return null;
-		}
-
-		if ($trackFile->trackId)
-		{
-			Idempotence::addKey('track:' . $trackFile->trackId);
 		}
 
 		(new FollowUpAnalytics($call))

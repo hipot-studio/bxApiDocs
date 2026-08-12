@@ -26,6 +26,19 @@ class UserToGroup extends Base
 		$params = []
 	)
 	{
+		$groupId = (int)($filter['GROUP_ID'] ?? 0);
+		if ($groupId <= 0)
+		{
+			$this->addError(new Error('GROUP_ID is required', 'SONET_CONTROLLER_USERTOGROUP_NO_GROUP'));
+			return null;
+		}
+
+		if (!Helper\Workgroup\Access::canView(['groupId' => $groupId]))
+		{
+			$this->addError(new Error('Access denied', 'SONET_CONTROLLER_USERTOGROUP_ACCESS_DENIED'));
+			return null;
+		}
+
 		$relations = [];
 
 		$query = UserToGroupTable::query();
@@ -91,8 +104,6 @@ class UserToGroup extends Base
 			'USER_SECOND_NAME',
 			'USER_WORK_POSITION',
 			'USER_LOGIN',
-			'USER_EMAIL',
-			'USER_CONFIRM_CODE',
 			'USER_PERSONAL_PHOTO',
 			'USER_PERSONAL_GENDER',
 			'USER_LID',
@@ -186,6 +197,29 @@ class UserToGroup extends Base
 			$query->whereMatch(
 				'USER.INDEX.SEARCH_ADMIN_CONTENT',
 				Filter\Helper::matchAgainstWildcard(Content::prepareStringToken(trim($filter['SEARCH_INDEX'])))
+			);
+		}
+
+		$permissions = Helper\Workgroup::getPermissions(['groupId' => (int)$filter['GROUP_ID']]);
+		$canSeeAllRequests = $permissions['UserCanProcessRequestsIn'] || $permissions['UserCanModifyGroup'];
+		if (!$canSeeAllRequests)
+		{
+			$currentUserId = (int)$this->getCurrentUser()->getId();
+
+			$query->where(
+				Query::filter()
+					->logic('or')
+					->where('ROLE', '!=', UserToGroupTable::ROLE_REQUEST)
+					->where(
+						Query::filter()
+							->where('ROLE', UserToGroupTable::ROLE_REQUEST)
+							->where(
+								Query::filter()
+									->logic('or')
+									->where('USER_ID', $currentUserId)
+									->where('INITIATED_BY_USER_ID', $currentUserId)
+							)
+					)
 			);
 		}
 

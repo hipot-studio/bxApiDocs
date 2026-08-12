@@ -92,7 +92,8 @@ final class SupersetDashboardTable extends DataManager
 	{
 		return [
 			(new Fields\IntegerField('ID'))
-				->configurePrimary(),
+				->configurePrimary()
+				->configureAutocomplete(),
 			(new Fields\IntegerField('EXTERNAL_ID')),
 
 			(new Fields\EnumField('STATUS'))

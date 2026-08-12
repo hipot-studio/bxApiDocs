@@ -43,7 +43,7 @@ class EventResponse
 			$data['@odata.etag'],
 			$data['changeKey'] ?? null,
 			$data['seriesMasterId'] ?? null,
-			new DateTimeDto($item['start'] ?? []),
+			new DateTimeDto($data['start'] ?? []),
 			static::prepareCustomData($data),
 		);
 	}

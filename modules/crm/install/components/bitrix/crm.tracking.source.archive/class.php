@@ -10,6 +10,7 @@ use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\UI\PageNavigation;
 
 use Bitrix\Intranet;
+use Bitrix\Crm\Engine\ActionFilter\CheckSomeItemsReadPermission;
 use Bitrix\Crm\Tracking;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
@@ -254,6 +255,7 @@ class CrmTrackingSourceArchiveComponent extends CBitrixComponent implements Cont
 			'unarchive' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\IntranetUser(),
+					new CheckSomeItemsReadPermission(),
 				]
 			],
 		];

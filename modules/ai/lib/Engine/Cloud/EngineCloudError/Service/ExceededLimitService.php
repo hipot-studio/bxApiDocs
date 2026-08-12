@@ -17,6 +17,7 @@ class ExceededLimitService
 	protected const SLIDER_CODE_REQUESTS = 'limit_copilot_requests_box';
 	protected const SLIDER_CODE_BOOST = 'limit_boost_copilot_box';
 	protected const SLIDER_CODE_BOX = 'limit_copilot_box';
+	protected const SLIDER_CODE_WEST_TARIFF = 'limit_copilot';
 
 	protected const ERROR_CODE_LIMIT_STANDARD = 'LIMIT_IS_EXCEEDED_MONTHLY';
 	protected const ERROR_CODE_LIMIT_BAAS = 'LIMIT_IS_EXCEEDED_BAAS';
@@ -67,7 +68,8 @@ class ExceededLimitService
 		$errorData = $errorLimit->getCustomData();
 		$isAvailableBaas = $this->isBaasAvailable();
 		$errorCode = $this->getErrorCode($errorData, $isAvailableBaas);
-		$sliderCode = static::SLIDER_CODE_REQUESTS;
+		$isWestZone = Portal::isWestZone();
+		$sliderCode = $isWestZone ? static::SLIDER_CODE_WEST_TARIFF : static::SLIDER_CODE_REQUESTS;
 
 		$msgForIm = Loc::getMessage(
 			'AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED_WITH_MORE',
@@ -88,7 +90,14 @@ class ExceededLimitService
 			);
 		}
 
-		$sliderCode = $isAvailableBaas ? static::SLIDER_CODE_BOOST : static::SLIDER_CODE_BOX;
+		if ($isWestZone)
+		{
+			$sliderCode = $isAvailableBaas ? static::SLIDER_CODE_BOOST : static::SLIDER_CODE_WEST_TARIFF;
+		}
+		else
+		{
+			$sliderCode = $isAvailableBaas ? static::SLIDER_CODE_BOOST : static::SLIDER_CODE_BOX;
+		}
 		$showSliderWithMsg = !$isAvailableBaas;
 
 		if ($errorCode === static::ERROR_CODE_LIMIT_BAAS_RATE_LIMIT && Portal::isMarketAvailable())

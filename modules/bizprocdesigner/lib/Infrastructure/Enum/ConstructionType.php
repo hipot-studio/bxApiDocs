@@ -11,6 +11,7 @@ enum ConstructionType: string
 	case OR_CONDITION = 'condition:or';
 
 	case ACTION = 'action';
+	case FILTER = 'filter';
 	case OUTPUT = 'output';
 
 	public function isCondition(): bool

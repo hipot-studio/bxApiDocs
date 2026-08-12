@@ -5266,6 +5266,30 @@ class CCrmLiveFeed
 					])
 			;
 
+			$notifyMessageSubjectCallback = static function (?string $languageId = null) use ($item)
+			{
+				$entityTypeName = CCrmOwnerType::isPossibleDynamicTypeId($item->getEntityTypeId())
+					? CCrmOwnerType::CommonDynamicName
+					: CCrmOwnerType::ResolveName($item->getEntityTypeId());
+
+				/**
+				 * Supported phrase codes:
+				 * CRM_PROCESS_ENTITY_LEAD_STAGE_CHANGE_SUBJECT
+				 * CRM_PROCESS_ENTITY_DEAL_STAGE_CHANGE_SUBJECT
+				 * CRM_PROCESS_ENTITY_ORDER_STAGE_CHANGE_SUBJECT
+				 * CRM_PROCESS_ENTITY_SMART_INVOICE_STAGE_CHANGE_SUBJECT
+				 * CRM_PROCESS_ENTITY_QUOTE_STAGE_CHANGE_SUBJECT
+				 * CRM_PROCESS_ENTITY_DYNAMIC_STAGE_CHANGE_SUBJECT
+				 * CRM_PROCESS_ENTITY_DEFAULT_STAGE_CHANGE_SUBJECT
+				 */
+				return Loc::getMessage(
+					"CRM_PROCESS_ENTITY_{$entityTypeName}_STAGE_CHANGE_SUBJECT",
+					['#ENTITY_TYPE_CAPTION#' => htmlspecialcharsbx(CCrmOwnerType::GetDescription($item->getEntityTypeId()))],
+					$languageId,
+				)
+				;
+			};
+
 			$url = Container::getInstance()->getRouter()->getItemDetailUrl($item->getEntityTypeId(), $item->getId());
 			$absoluteUrl = static::transformRelativeUrlToAbsolute($url);
 
@@ -5280,6 +5304,22 @@ class CCrmLiveFeed
 				'NOTIFY_TAG' => "CRM|{$entityTypeName}_PROGRESS|" . $item->getId(),
 				'NOTIFY_MESSAGE' => $getMessageCallback($url),
 				'NOTIFY_MESSAGE_OUT' => $getMessageCallback($absoluteUrl),
+				'PARAMS' => [
+					'COMPONENT_ID' => 'CrmEntity',
+					'COMPONENT_PARAMS' => [
+						'SUBJECT' => $notifyMessageSubjectCallback,
+						'ENTITY' => [
+							'TITLE' => htmlspecialcharsbx($item->getHeading()),
+							'HREF' => $url,
+							'ENTITY_TYPE' => mb_strtolower($factory->getEntityName()),
+							'CONTENT_TYPE' => 'changed',
+							'CONTENT' => [
+								'PREV' => $previousStage ? htmlspecialcharsbx($previousStage->getName()) : '',
+								'NEXT' => $currentStage ? htmlspecialcharsbx($currentStage->getName()) : '',
+							],
+						],
+					],
+				],
 			]);
 		}
 	}

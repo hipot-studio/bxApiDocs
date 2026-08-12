@@ -16,6 +16,7 @@ enum FeatureDictionary: string
 	case Photo = 'photo';
 	case Marketplace = 'marketplace';
 	case LandingKnowledge = 'landing_knowledge';
+	case Note = 'note';
 	case Flows = 'flows';
 	case Blog = 'blog';
 	case Forum = 'forum';
@@ -81,6 +82,11 @@ enum FeatureDictionary: string
 		return self::tryFrom($featureId)?->getDefaultName() ?? $featureId;
 	}
 
+	public static function getStartupToolTitle(): string
+	{
+		return Loc::getMessage('SOCIALNETWORK_V2_PROJECT_FEATURE_SETTINGS_STARTUP_TOOL') ?? 'Set up starting tool';
+	}
+
 	public function getDefaultName(): string
 	{
 		return Loc::getMessage($this->getLocMessageCode()) ?? $this->value;
@@ -126,7 +132,7 @@ enum FeatureDictionary: string
 
 	private static function getSpecialFeatures(): array
 	{
-		return [self::Flows];
+		return [self::Flows, self::Note];
 	}
 
 	private function getLocMessageCode(): string
@@ -140,6 +146,7 @@ enum FeatureDictionary: string
 			self::Photo => 'SOCIALNETWORK_V2_PROJECT_FEATURE_PHOTO',
 			self::Marketplace => 'SOCIALNETWORK_V2_PROJECT_FEATURE_MARKETPLACE',
 			self::LandingKnowledge => 'SOCIALNETWORK_V2_PROJECT_FEATURE_LANDING_KNOWLEDGE',
+			self::Note => 'SOCIALNETWORK_V2_PROJECT_FEATURE_NOTE',
 			self::Flows => 'SOCIALNETWORK_V2_PROJECT_FEATURE_FLOWS',
 			self::Blog => 'SOCIALNETWORK_V2_PROJECT_FEATURE_BLOG',
 			self::Forum => 'SOCIALNETWORK_V2_PROJECT_FEATURE_FORUM',
@@ -163,6 +170,7 @@ enum FeatureDictionary: string
 			self::Wiki => 'group_wiki_path_template',
 			self::Chat,
 			self::LandingKnowledge,
+			self::Note,
 			self::Flows => null,
 		};
 	}

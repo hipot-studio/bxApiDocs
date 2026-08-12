@@ -8,6 +8,7 @@ class ValueItem
 	private string $textValue;
 	private string $textColor;
 	private string $backgroundColor;
+	private string $style;
 	private ?string $hint = null;
 
 	public function __construct(
@@ -16,6 +17,7 @@ class ValueItem
 		string $textColor,
 		string $backgroundColor,
 		?string $hint = null,
+		?string $style = null,
 	)
 	{
 		$this->value = $value;
@@ -23,6 +25,9 @@ class ValueItem
 		$this->textColor = $textColor;
 		$this->backgroundColor = $backgroundColor;
 		$this->hint = $hint;
+		$this->style = $style !== null
+			? ValueItemOptions::ensureValidStyle($style)
+			: ValueItemOptions::resolveStyleByBackgroundColor($backgroundColor);
 	}
 
 	public function toArray(): array
@@ -32,6 +37,7 @@ class ValueItem
 			'textValue' => $this->getTextValue(),
 			'textColor' => $this->getTextColor(),
 			'backgroundColor' => $this->getBackgroundColor(),
+			'style' => $this->getStyle(),
 			'hint' => $this->getHint(),
 		];
 	}
@@ -43,7 +49,7 @@ class ValueItem
 
 	public function getTextValue(): string
 	{
-		return mb_strtoupper($this->textValue);
+		return $this->textValue;
 	}
 
 	public function getTextColor(): string
@@ -54,6 +60,11 @@ class ValueItem
 	public function getBackgroundColor(): string
 	{
 		return $this->backgroundColor;
+	}
+
+	public function getStyle(): string
+	{
+		return $this->style;
 	}
 
 	public function getHint(): ?string

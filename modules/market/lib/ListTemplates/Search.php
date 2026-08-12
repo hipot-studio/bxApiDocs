@@ -32,6 +32,7 @@ class Search extends BaseTemplate
 			'page' => $this->page,
 			'show_categories' => 'Y',
 		];
+		$params = array_merge($params, $this->getMobileMarketContextParams());
 		if (!empty($this->filter)) {
 			$params['filter'] = $this->filter;
 		}
@@ -45,8 +46,12 @@ class Search extends BaseTemplate
 				$params,
 			],
 		];
-		if (!$isAjax && empty(Categories::get())) {
-			$batch[Actions::METHOD_GET_CATEGORIES_V2] = [Actions::METHOD_GET_CATEGORIES_V2];
+		if (!$isAjax && empty(Categories::get($this->mobileMarketContext)))
+		{
+			$batch[Actions::METHOD_GET_CATEGORIES_V2] = [
+				Actions::METHOD_GET_CATEGORIES_V2,
+				$this->getMobileMarketContextParams(),
+			];
 		}
 
 		$response = Transport::instance()->batch($batch);
@@ -69,8 +74,8 @@ class Search extends BaseTemplate
 		}
 
 		if (!empty($response[Actions::METHOD_GET_CATEGORIES_V2])) {
-			Categories::saveCache($response[Actions::METHOD_GET_CATEGORIES_V2]);
-			$this->result['CATEGORIES'] = Categories::get();
+			Categories::saveCache($response[Actions::METHOD_GET_CATEGORIES_V2], $this->mobileMarketContext);
+			$this->result['CATEGORIES'] = Categories::get($this->mobileMarketContext);
 		}
 	}
 }

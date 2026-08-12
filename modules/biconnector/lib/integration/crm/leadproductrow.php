@@ -33,6 +33,7 @@ class LeadProductRow
 		}
 
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
 
 		$discountForSql = [];
@@ -102,7 +103,7 @@ class LeadProductRow
 				//TODO: OWNER_TYPE CHAR(3) NOT NULL,
 				//PRODUCT_ID INT(1) NOT NULL,
 				'PRODUCT' => [
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', PR.PRODUCT_ID, \']\'), nullif(PR.PRODUCT_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'PR.PRODUCT_ID', "']'") . ', nullif(PR.PRODUCT_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 				],
 				'PRODUCT_ID' => [
@@ -142,7 +143,7 @@ class LeadProductRow
 				],
 				//DISCOUNT_TYPE_ID TINYINT(1) UNSIGNED NULL,
 				'DISCOUNT_TYPE' => [
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', PR.DISCOUNT_TYPE_ID, \']\'), ' . str_replace('#FIELD_NAME#', 'PR.DISCOUNT_TYPE_ID', $discountSql) . ')',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'PR.DISCOUNT_TYPE_ID', "']'") . ', ' . str_replace('#FIELD_NAME#', 'PR.DISCOUNT_TYPE_ID', $discountSql) . ')',
 					'FIELD_TYPE' => 'string',
 				],
 				'DISCOUNT_TYPE_ID' => [
@@ -180,7 +181,7 @@ class LeadProductRow
 				],
 				//MEASURE_CODE INT(1) UNSIGNED NULL,
 				'MEASURE' => [
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', PR.MEASURE_CODE, \']\'), nullif(PR.MEASURE_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'PR.MEASURE_CODE', "']'") . ', nullif(PR.MEASURE_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 				],
 				'MEASURE_CODE' => [

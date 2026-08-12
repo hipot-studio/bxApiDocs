@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Service\Display\Field\Sign\B2e;
 use Bitrix\Crm\Service\Display\Field\StatusField;
 use Bitrix\Crm\Service\Display\Options;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\UI\Public\System\Label\Style;
 
 final class ResultStatusField extends StatusField
 {
@@ -75,5 +76,14 @@ final class ResultStatusField extends StatusField
 		{
 			$this->displayParams['cssPrefix'] = 'crm-list-item-status';
 		}
+	}
+
+	protected function getLabelStyleByPostfix(string $postfix): Style
+	{
+		return match ($postfix)
+		{
+			'sign-b2e-done' => Style::TINTED_SUCCESS,
+			default => Style::TINTED_NO_ACCENT,
+		};
 	}
 }

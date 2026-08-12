@@ -4,18 +4,17 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Internal\Entity\Message;
 
-use Bitrix\Main\ObjectException;
+use Bitrix\Mail\Internal\Service\DateTime\DateTimeParser;
 use Bitrix\Main\Type\DateTime;
 
 class SearchMessagesByTasksRequest
 {
-	private const DATE_FORMAT = 'Y/m/d H:i';
-
 	public const TASK_STATE_OPEN = 'open';
 	public const TASK_STATE_CLOSED = 'closed';
 
 	public function __construct(
 		public readonly int $limit,
+		public readonly int $offset = 0,
 		public readonly ?string $taskState = null,
 		public readonly ?bool $taskOverdued = null,
 		public readonly ?DateTime $taskCreatedFrom = null,
@@ -25,6 +24,9 @@ class SearchMessagesByTasksRequest
 	{
 	}
 
+	/**
+	 * @throws \Bitrix\Main\SystemException
+	 */
 	public static function fromArray(array $props): self
 	{
 		$state = self::getString($props, 'taskState');
@@ -33,12 +35,17 @@ class SearchMessagesByTasksRequest
 			$state = null;
 		}
 
+		$taskCreatedFrom = DateTimeParser::getNullableLowerBound($props, 'taskCreatedFrom');
+		$taskCreatedTo = DateTimeParser::getNullableUpperBound($props, 'taskCreatedTo');
+		DateTimeParser::validateRange($taskCreatedFrom, $taskCreatedTo, 'taskCreatedFrom', 'taskCreatedTo');
+
 		return new self(
 			limit: self::getInt($props, 'limit') ?? 0,
+			offset: max(0, self::getInt($props, 'offset') ?? 0),
 			taskState: $state,
 			taskOverdued: self::getBool($props, 'taskOverdued'),
-			taskCreatedFrom: self::getDateTime($props, 'taskCreatedFrom'),
-			taskCreatedTo: self::getDateTime($props, 'taskCreatedTo'),
+			taskCreatedFrom: $taskCreatedFrom,
+			taskCreatedTo: $taskCreatedTo,
 			taskResponsibleId: self::getInt($props, 'taskResponsibleId'),
 		);
 	}
@@ -71,23 +78,5 @@ class SearchMessagesByTasksRequest
 		}
 
 		return $props[$key];
-	}
-
-	private static function getDateTime(array $props, string $key): ?DateTime
-	{
-		$value = self::getString($props, $key);
-		if ($value === null)
-		{
-			return null;
-		}
-
-		try
-		{
-			return new DateTime($value, self::DATE_FORMAT);
-		}
-		catch (ObjectException)
-		{
-			return null;
-		}
 	}
 }

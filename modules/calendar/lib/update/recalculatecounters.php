@@ -5,6 +5,7 @@ namespace Bitrix\Calendar\Update;
 use Bitrix\Calendar\Internals\Counter\CounterService;
 use Bitrix\Calendar\Internals\Counter\Event\EventDictionary;
 use Bitrix\Calendar\Internals\Log\Logger;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Update\Stepper;
 use Bitrix\Main\UserTable;
 
@@ -98,9 +99,14 @@ final class ReCalculateCounters extends Stepper
 			->setSelect(['ID'])
 			->where('ID', '>', $this->lastId)
 			->where('ACTIVE', 'Y')
-			->where('IS_REAL_USER', 'Y')
-			->where('UF_DEPARTMENT', '!=', false)
-			->setLimit($this->getLimit());
+			->where('REAL_USER', 'expr', true)
+			->setLimit($this->getLimit())
+		;
+
+		if (Loader::includeModule('humanresources'))
+		{
+			$query->where('UF_DEPARTMENT', '!=', false);
+		}
 
 		return $query->exec()->fetchAll();
 	}

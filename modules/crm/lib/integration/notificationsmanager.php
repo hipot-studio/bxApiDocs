@@ -10,15 +10,12 @@ use Bitrix\Crm\MessageSender\NotificationsPromoManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\ImConnector;
 use Bitrix\ImOpenLines\Common;
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\PhoneNumber\Format;
 use Bitrix\Main\PhoneNumber\Formatter;
 use Bitrix\Main\PhoneNumber\Parser;
-use Bitrix\Main\Security\Sign\BadSignatureException;
-use Bitrix\Main\Security\Sign\TimeSigner;
-use Bitrix\Main\Web\Json;
+use Bitrix\MessageService\Public\UI\MessageEditor\NotificationTemplate;
 use Bitrix\Notifications\Account;
 use Bitrix\Notifications\Billing;
 use Bitrix\Notifications\FeatureStatus;
@@ -45,9 +42,6 @@ Loc::loadMessages(__FILE__);
 class NotificationsManager implements ICanSendMessage
 {
 	private const CONTACT_NAME_TEMPLATE_PLACEHOLDER = 'NAME';
-
-	private const SALT = 'crm_notifications_template';
-	private const SIGNATURE_TTL = '+7 days';
 
 	/** @var bool */
 	private static $canUse;
@@ -640,60 +634,43 @@ class NotificationsManager implements ICanSendMessage
 
 	/**
 	 * @param string $templateCode
-	 * @param array<array{name: string, value: string|null>|null $placeholders
+	 * @param array<array{name: string, value?: string|null}>|null $placeholders
 	 * @return string
 	 */
-	final public static function signTemplate(string $templateCode, ?array $placeholders): string
+	final public static function signTemplate(string $templateCode, ?array $placeholders = null): string
 	{
-		$payload = [
-			'template' => $templateCode,
-		];
-		if (is_array($placeholders))
+		if (!Loader::includeModule('messageservice'))
 		{
-			$payload['placeholders'] = self::normalizeSignablePlaceholders($placeholders);
+			return '';
 		}
 
-		$serializedPayload = base64_encode(Json::encode($payload));
-
-		$signer = new TimeSigner();
-
-		return $signer->sign($serializedPayload, self::SIGNATURE_TTL, self::SALT);
-	}
-
-	private static function normalizeSignablePlaceholders(array $placeholders): array
-	{
-		$result = [];
-
-		foreach ($placeholders as $placeholder)
+		$notificationTemplate = new NotificationTemplate($templateCode);
+		if (is_array($placeholders))
 		{
-			if (!is_array($placeholder))
+			foreach ($placeholders as $placeholder)
 			{
-				continue;
-			}
-
-			if (!isset($placeholder['name']) || !is_string($placeholder['name']))
-			{
-				continue;
-			}
-
-			$normalized = ['name' => $placeholder['name']];
-
-			if (array_key_exists('value', $placeholder))
-			{
-				$value = $placeholder['value'];
-
-				if (!is_string($value) && !is_null($value))
+				if (!isset($placeholder['name']) || !is_string($placeholder['name']))
 				{
 					continue;
 				}
 
-				$normalized['value'] = $value;
-			}
+				$placeholderObject = new NotificationTemplate\Placeholder($placeholder['name']);
+				if (array_key_exists('value', $placeholder))
+				{
+					$value = $placeholder['value'];
+					if (!is_string($value) && !is_null($value))
+					{
+						continue;
+					}
 
-			$result[] = $normalized;
+					$placeholderObject->setValue($value);
+				}
+
+				$notificationTemplate->setPlaceholder($placeholderObject);
+			}
 		}
 
-		return $result;
+		return $notificationTemplate->getSigned();
 	}
 
 
@@ -701,49 +678,34 @@ class NotificationsManager implements ICanSendMessage
 	 * @param string $signedTemplate
 	 * @return null|array{
 	 *     template: string,
-	 *     placeholders?: array<array{name: string, value: string|null}>
+	 *     placeholders: array<array{name: string, value?: string|null}>
 	 * } - null on error
 	 */
 	final public static function unsignTemplate(string $signedTemplate): ?array
 	{
-		$signer = new TimeSigner();
-
-		try
-		{
-			$serializedPayload = $signer->unsign($signedTemplate, self::SALT);
-		}
-		catch (BadSignatureException)
+		if (!Loader::includeModule('messageservice'))
 		{
 			return null;
 		}
 
-		try
-		{
-			$payload = Json::decode(base64_decode($serializedPayload));
-		}
-		catch (ArgumentException)
+		$unsigned = NotificationTemplate::unsign($signedTemplate);
+
+		if ($unsigned === null)
 		{
 			return null;
 		}
 
-		if (!is_array($payload))
-		{
-			return null;
-		}
-
-		if (!isset($payload['template']) || !is_string($payload['template']))
-		{
-			return null;
-		}
-
-		$normalizedPayload = [
-			'template' => $payload['template'],
+		return [
+			'template' => $unsigned->getCode(),
+			'placeholders' => array_map(
+				static function (NotificationTemplate\Placeholder $placeholder) {
+					return [
+						'name' => $placeholder->getName(),
+						'value' => $placeholder->getValue(),
+					];
+				},
+				$unsigned->getPlaceholders(),
+			),
 		];
-		if (isset($payload['placeholders']) && is_array($payload['placeholders']))
-		{
-			$normalizedPayload['placeholders'] = self::normalizeSignablePlaceholders($payload['placeholders']);
-		}
-
-		return $normalizedPayload;
 	}
 }

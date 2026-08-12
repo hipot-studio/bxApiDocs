@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Folder\Pin\PinService;
 use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Chat\Add\ChatCreateFields;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeAttachmentManager;
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Controller\Chat\Dto\ChatCreateFieldsDto;
 use Bitrix\Im\V2\Controller\Chat\Dto\ChatUpdateFieldsDto;
@@ -71,6 +72,18 @@ class Chat extends BaseController
 						extractor: fn(array $args) => ($args['updateFields'] ?? null)?->getAvatar()
 					),
 					new CheckActionAccess(Permission\Action::Update),
+					new ChatTypeFilter([GroupChat::class]),
+				],
+			],
+			'attachToParent' => [
+				'+prefilters' => [
+					new CheckActionAccess(Permission\Action::AttachToParent),
+					new ChatTypeFilter([GroupChat::class]),
+				],
+			],
+			'detachFromParent' => [
+				'+prefilters' => [
+					new CheckActionAccess(Permission\Action::DetachFromParent),
 					new ChatTypeFilter([GroupChat::class]),
 				],
 			],
@@ -379,6 +392,9 @@ class Chat extends BaseController
 		$userId = (int)$filter['userId'];
 		$chats = \Bitrix\Im\V2\Chat::getSharedChatsWithUser($userId, $this->getLimit($limit), $offset);
 		\Bitrix\Im\V2\Chat::fillSelfRelations($chats);
+		// Phase 0 (task 718250): superadmin project chat access.
+		// hasManageCapability = rights of the current viewer over the shared chat, not of $filter['userId'].
+		\Bitrix\Im\V2\Chat::fillManageCapability($chats);
 		$result = ['chats' => []];
 
 		foreach ($chats as $chat)
@@ -430,18 +446,17 @@ class Chat extends BaseController
 	}
 
 	/**
-	 * @restMethod im.v2.Chat.readByType
+	 * @restMethod im.v2.Chat.readByRecentSection
 	 */
-	public function readByTypeAction(CurrentUser $user, Reader $reader, string $type): ?array
+	public function readByRecentSectionAction(
+		CurrentUser $user,
+		Reader $reader,
+		string $recentSection,
+		?int $parentId = null
+	): ?array
 	{
 		$userId = (int)$user->getId();
-		$normalizedType = FormatConverter::normalizeToUpperSnakeCase($type);
-		$types = ServiceLocator::getInstance()->get(TypeRegistry::class)->getAllByExtendedType($normalizedType);
-
-		foreach ($types as $typeItem)
-		{
-			$reader->readAllByType($typeItem, $userId);
-		}
+		$reader->readAllByRecentSection($recentSection, $userId, $parentId);
 
 		return ['result' => true];
 	}
@@ -500,6 +515,38 @@ class Chat extends BaseController
 		$updateService = new UpdateService($chat, $updateFields);
 
 		$result = $updateService->updateChat();
+		if (!$result->isSuccess())
+		{
+			$this->addError($result->getErrors()[0]);
+
+			return null;
+		}
+
+		return ['result' => true];
+	}
+
+	/**
+	 * @restMethod im.v2.Chat.attachToParent
+	 */
+	public function attachToParentAction(CurrentUser $user, GroupChat $chat, int $parentChatId, ChatTreeAttachmentManager $attachmentManager): ?array
+	{
+		$result = $attachmentManager->attachToParent($chat, $parentChatId, (int)$user->getId());
+		if (!$result->isSuccess())
+		{
+			$this->addError($result->getErrors()[0]);
+
+			return null;
+		}
+
+		return ['result' => true];
+	}
+
+	/**
+	 * @restMethod im.v2.Chat.detachFromParent
+	 */
+	public function detachFromParentAction(CurrentUser $user, GroupChat $chat, ChatTreeAttachmentManager $attachmentManager): ?array
+	{
+		$result = $attachmentManager->detachFromParent($chat, (int)$user->getId());
 		if (!$result->isSuccess())
 		{
 			$this->addError($result->getErrors()[0]);
@@ -594,7 +641,10 @@ class Chat extends BaseController
 	 */
 	public function deleteUserAction(\Bitrix\Im\V2\Chat $chat, int $userId): ?array
 	{
-		$result = $chat->deleteUser($userId);
+		$result = $chat->deleteUser(
+			$userId,
+			new \Bitrix\Im\V2\Relation\DeleteUserConfig(blockGuestRejoin: true),
+		);
 
 		if (!$result->isSuccess())
 		{

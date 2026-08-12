@@ -34,6 +34,7 @@ final class NodesExport extends Command
 			->addArgument('id', InputArgument::REQUIRED, 'Workflow template ID')
 			->addOption('section', 's', InputOption::VALUE_REQUIRED, 'Target template section', 'bp')
 			->addOption('code', 'c', InputOption::VALUE_REQUIRED, 'Target template code', 'system')
+			->addOption('pull-ai-prompts', 'p', InputOption::VALUE_NONE, 'Export AI system prompts to prompt/ru.php')
 		;
 	}
 
@@ -44,8 +45,9 @@ final class NodesExport extends Command
 		$id = (int)$input->getArgument('id');
 		$section = $this->askOrGetOption('section', $input, $output);
 		$code = $this->askOrGetOption('code', $input, $output);
+		$pullAiPrompts = (bool)$input->getOption('pull-ai-prompts');
 
-		$request = new MakeTemplatePackageDto($id, $section, $code);
+		$request = new MakeTemplatePackageDto($id, $section, $code, pullAiPrompts: $pullAiPrompts);
 
 		try
 		{

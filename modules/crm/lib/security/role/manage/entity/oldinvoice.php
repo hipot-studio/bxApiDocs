@@ -11,7 +11,7 @@ class OldInvoice implements PermissionEntity
 {
 	private function permissions(): array
 	{
-		return PermissionAttrPresets::crmEntityPreset();
+		return PermissionAttrPresets::crmEntityPresetWithoutTeams();
 	}
 
 	public function make(): array

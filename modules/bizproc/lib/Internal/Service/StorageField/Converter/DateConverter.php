@@ -62,10 +62,23 @@ class DateConverter implements TypeConverterInterface
 			return $value;
 		}
 
-		$userOffset = \CTimeZone::GetOffset();
-		$ts += $userOffset;
+		$ts = $this->applyViewerOffset($ts);
 
 		return $this->createValueObject($ts);
+	}
+
+	/**
+	 * A pure date has no time-of-day (it is always 00:00:00 of the day), so the viewer
+	 * timezone must not shift it onto an adjacent day. Overridden for datetime values.
+	 */
+	protected function applyViewerOffset(int $timestamp): int
+	{
+		return $timestamp;
+	}
+
+	protected function getViewerOffset(): int
+	{
+		return (int)\CTimeZone::GetOffset();
 	}
 
 	protected function createValueObject(int $timestamp): Value\Date

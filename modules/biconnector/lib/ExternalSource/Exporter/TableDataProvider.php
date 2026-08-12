@@ -14,20 +14,23 @@ class TableDataProvider implements DataProvider
 
 	public function getTotalSize(): int
 	{
-		return (int)Application::getInstance()->getConnection()->query(
+		$connection = Application::getInstance()->getConnection();
+
+		return (int)$connection->query(
 			sprintf(
-				'SELECT count(*) as COUNT FROM `%s`',
-				$this->tableName
+				'SELECT count(*) as COUNT FROM %s',
+				$connection->getSqlHelper()->quote($this->tableName)
 			)
 		)->fetch()['COUNT'];
 	}
 
 	public function fetchChunk(int $chunkSize, int $chunkOffset): iterable
 	{
-		$res = Application::getInstance()->getConnection()->query(
+		$connection = Application::getInstance()->getConnection();
+		$res = $connection->query(
 			sprintf(
-				"SELECT * FROM `%s` LIMIT %d OFFSET %d",
-				$this->tableName,
+				"SELECT * FROM %s LIMIT %d OFFSET %d",
+				$connection->getSqlHelper()->quote($this->tableName),
 				$chunkSize,
 				$chunkOffset,
 			)

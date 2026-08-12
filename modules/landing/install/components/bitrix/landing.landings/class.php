@@ -12,6 +12,7 @@ use Bitrix\Landing\Manager;
 use Bitrix\Landing\Rights;
 use Bitrix\Landing\Site\Type;
 use Bitrix\Landing\TemplateRef;
+use Bitrix\Landing\Copilot\Services\CreateAiSiteChecker;
 use Bitrix\Landing\Internals\TemplateRefTable;
 use Bitrix\Main\Entity;
 
@@ -395,6 +396,23 @@ class LandingLandingsComponent extends LandingBaseComponent
 				$filter['FOLDER_ID'] = false;
 				$this->arResult['TITLE'] = $sites[$siteId]['TITLE'];
 			}
+
+			$sitePagesOnboardingPopupOption = 'site_pages_onboarding_popup_seen';
+			$createAiSiteChecker = new CreateAiSiteChecker();
+			$this->arResult['SHOW_SITE_PAGES_ONBOARDING_POPUP'] =
+				$this->arParams['TYPE'] === 'PAGE'
+				&& !$this->arResult['IS_DELETED']
+				&& !$folderId
+				&& \Bitrix\Landing\Copilot\Manager::isAiSitesEnabled()
+				&& !$createAiSiteChecker->isSiteCreated((int)$siteId)
+				&& !$createAiSiteChecker->hasCreatedSites()
+				&& \CUserOptions::getOption('landing', $sitePagesOnboardingPopupOption, 'N') !== 'Y'
+			;
+			if ($this->arResult['SHOW_SITE_PAGES_ONBOARDING_POPUP'])
+			{
+				\CUserOptions::setOption('landing', $sitePagesOnboardingPopupOption, 'Y');
+			}
+
 			$this->arResult['FOLDERS'] = Site::getFolders($siteId, [
 				'TITLE' => $filter[0]['TITLE'] ?? '%',
 				'PARENT_ID' => $folderId,

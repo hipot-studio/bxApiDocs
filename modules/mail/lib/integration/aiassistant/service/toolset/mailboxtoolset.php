@@ -18,6 +18,7 @@ use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\CreateTaskFromEmail
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\ForwardEmailTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\GetEmailContentTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\GetEmailThreadTool;
+use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\GetMailStatisticsTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\MoveEmailsToFolderTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\RemoveCrmEmailActivityTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\ReplyToEmailTool;
@@ -34,6 +35,7 @@ class MailboxToolSet extends BaseToolSet
 		SearchEmailsByTasksTool::class,
 		GetEmailContentTool::class,
 		GetEmailThreadTool::class,
+		GetMailStatisticsTool::class,
 		ListMailboxesTool::class,
 		ListMailSendersTool::class,
 		ListMailRecipientsTool::class,

@@ -10,6 +10,7 @@ class NotifySchema
 	{
 		return [
 			'bizproc' => [
+				'NAME' => Loc::getMessage('BIZPROC_NOTIFY_SCHEMA_GROUP'),
 				'NOTIFY' => [
 					'activity' => [
 						'NAME' => Loc::getMessage('BIZPROC_NOTIFY_SCHEMA_ACTIVITY'),

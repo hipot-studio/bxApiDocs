@@ -1,4 +1,7 @@
-<?
+<?php
+
+use Bitrix\Main\Web\Uri;
+
 if (!CModule::IncludeModule('webservice'))
 	return;
 
@@ -194,7 +197,7 @@ class CIntranetContactsWS extends IWebService
 		{
 			$arImage = self::InitImage($arRes['PERSONAL_PHOTO'], 100, 100);
 
-			$obRow->setAttribute('ows_Attachments', ';#'.CHTTP::URN2URI($arImage['CACHE']['src']).';#'.CIntranetUtils::makeGUID(md5($arRes['PERSONAL_PHOTO'])).',1;#');
+			$obRow->setAttribute('ows_Attachments', ';#'.(new Uri($arImage['CACHE']['src']))->toAbsolute().';#'.CIntranetUtils::makeGUID(md5($arRes['PERSONAL_PHOTO'])).',1;#');
 			$obRow->setAttribute('ows_MetaInfo_AttachProps', '<File Photo="-1">'.$arImage['FILE']['FILE_NAME'].'</File>');
 		}
 		else
@@ -310,7 +313,7 @@ class CIntranetContactsWS extends IWebService
 		{
 			if ($pos = mb_strpos($changeToken, ';'))
 			{
-				list($newChangeToken, $page, $last_change) = explode(';', $changeToken);
+				[$newChangeToken, $page, $last_change] = explode(';', $changeToken);
 
 				$page++;
 				$changeToken = $newChangeToken;
@@ -514,7 +517,7 @@ class CIntranetContactsWS extends IWebService
 		{
 			$arImage = self::InitImage($arUser['PERSONAL_PHOTO'], 100, 100);
 			$obData->addChild($obAttachment = new CXMLCreator('Attachment'));
-			$obAttachment->setData(CHTTP::URN2URI($arImage['CACHE']['src']));
+			$obAttachment->setData((string)(new Uri($arImage['CACHE']['src']))->toAbsolute());
 
 			//$data = '<Attachments><Attachment>http://'.$_SERVER['SERVER_NAME'].$arImage['CACHE']['src'].'</Attachment></Attachments>';
 		}

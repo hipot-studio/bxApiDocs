@@ -12,6 +12,7 @@ readonly class ResolvedDocumentDto
 	public function __construct(
 		public DocumentComplexType $complexDocumentType,
 		public ?DocumentComplexId $complexDocumentId = null,
+		public ?int $categoryId = null,
 	)
 	{}
 }

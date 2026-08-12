@@ -22,6 +22,7 @@ final class CreateSystemIncomingWebhookCommandHandler
 			title: $command->title,
 			scopes: $command->scopes,
 			attributes: $command->attributes,
+			comment: $command->comment,
 		);
 	}
 }

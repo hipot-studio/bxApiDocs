@@ -27,6 +27,11 @@ class BookingStrategy extends RelationStrategy
 			throw new RelationException('Booking module not found');
 		}
 
+		if (!class_exists(CalendarEventItemType::class))
+		{
+			throw new RelationException('Booking module of 25.800.0 version or upper is required');
+		}
+		
 		$eventId = $this->event->getId();
 
 		$relation = new Relation($eventId);

@@ -8,7 +8,7 @@ class SortBlockAction extends BaseAction
 {
 	protected const JS_COMMAND = 'sortBlock';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		$up = (bool)$this->params['up'];
 		$blockId = (int)$this->params['block'];

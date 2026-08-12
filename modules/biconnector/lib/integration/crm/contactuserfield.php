@@ -62,12 +62,6 @@ class ContactUserField
 		];
 		foreach ($userFields as $userField)
 		{
-			$dbType = '';
-			if ($userField['USER_TYPE'] && is_callable([$userField['USER_TYPE']['CLASS_NAME'], 'getdbcolumntype']))
-			{
-				$dbType = call_user_func_array([$userField['USER_TYPE']['CLASS_NAME'], 'getdbcolumntype'], [$userField]);
-			}
-
 			$result['crm_contact_uf']['FIELDS'][$userField['FIELD_NAME']] = [
 				'FIELD_DESCRIPTION' => $userField['EDIT_FORM_LABEL'],
 				'IS_METRIC' => 'N',
@@ -76,11 +70,11 @@ class ContactUserField
 					$userField['MULTIPLE'] === 'N'
 					&& \Bitrix\BIConnector\Superset\Config\DatasetSettings::isTypingEnabled()
 				) ? $userField['USER_TYPE_ID'] : 'string',
-				'CALLBACK' => function($value, $dateFormats) use($userField, $dbType)
+				'CALLBACK' => function($value, $dateFormats) use($userField)
 				{
 					global $USER_FIELD_MANAGER;
 
-					if ($dbType === 'date' || $dbType === 'datetime')
+					if (in_array($userField['USER_TYPE_ID'], ['date', 'datetime'], true))
 					{
 						if ($value === null || $value === '')
 						{
@@ -88,7 +82,7 @@ class ContactUserField
 						}
 
 						$format =
-							$dbType === 'date'
+							$userField['USER_TYPE_ID'] === 'date'
 								? $dateFormats['date_format_php']
 								: $dateFormats['datetime_format_php']
 						;

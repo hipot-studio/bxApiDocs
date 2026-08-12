@@ -2,15 +2,12 @@
 
 namespace Bitrix\Crm\RepeatSale\DataCollector;
 
-use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\UserPermissions;
 use CCrmOwnerType;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
 final class AiScreeningDataCollectorManager
 {
-	private UserPermissions $userPermissions;
 	private ?EntityDataCollector $itemsCollector = null;
 	private ?LoggerInterface $logger = null;
 	private const ITEMS_COLLECTION_LIMIT = 6;
@@ -19,28 +16,15 @@ final class AiScreeningDataCollectorManager
 		private readonly AiScreeningDataCollectorConfig $dataCollectorConfig,
 	)
 	{
-		$userId = $this->dataCollectorConfig->getUserId();
-		$this->userPermissions = Container::getInstance()->getUserPermissions($userId);
-
 		$this->logger = $this->dataCollectorConfig->getLogger();
 	}
 
 	public function collectCopilotData(): array
 	{
+		// Screening is a system background process: candidates are selected without
+		// per-user permission checks (see DealsProvider), so data collection must run
+		// with system-level access too and must not depend on the launching user's rights.
 		$targetItemIdentifier = $this->dataCollectorConfig->getTargetItemIdentifier();
-		$isItemPermitted = $this->userPermissions->item()->canReadItemIdentifier($targetItemIdentifier);
-
-		if (!$isItemPermitted)
-		{
-			$this->logger->error(
-				'{date}: Failed to collect copilot data: access denied to {entity}' . PHP_EOL,
-				[
-					'entity' => $targetItemIdentifier,
-				],
-			);
-
-			return [];
-		}
 
 		try
 		{

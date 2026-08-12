@@ -478,7 +478,25 @@ class DynamicController extends BaseController
 				&& !$field->isValueEmpty($value)
 			)
 			{
-				if (is_array($value))
+				if ($field->isUserField())
+				{
+					if (is_array($value))
+					{
+						$values = [];
+						foreach ($value as $singleValue)
+						{
+							$values[] = is_string($singleValue)
+								? new Main\Type\DateTime($singleValue)
+								: $singleValue;
+						}
+						$fields[$name] = $values;
+					}
+					elseif (is_string($value))
+					{
+						$fields[$name] = new Main\Type\DateTime($value);
+					}
+				}
+				elseif (is_array($value))
 				{
 					$values = [];
 					foreach ($value as $singleValue)

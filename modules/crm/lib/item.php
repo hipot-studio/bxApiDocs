@@ -1358,8 +1358,16 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 			return new Result();
 		}
 
+		$isAllowedReservations = \CCrmSaleHelper::isAllowedReservation(
+			$this->getEntityTypeId(),
+			$this->getCategoryId() ?? 0,
+		);
 		foreach ($productRows as $product)
 		{
+			if (!$isAllowedReservations)
+			{
+				$product->unset(ProductRow::REFERENCE_PRODUCT_ROW_RESERVATION_NAME);
+			}
 			$results[] = $this->normalizeProduct($product);
 		}
 

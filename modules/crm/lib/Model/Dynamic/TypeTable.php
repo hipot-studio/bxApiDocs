@@ -259,6 +259,11 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			->configureStorageValues('N', 'Y')
 			->configureDefaultValue('N')
 		;
+		$fieldsMap[] = (new ORM\Fields\IntegerField('DAYS_BEFORE_CLOSE'))
+			->configureNullable()
+			->configureDefaultValue(null)
+			->addValidator([static::class, 'validateDaysBeforeClose'])
+		;
 
 		return $fieldsMap;
 	}
@@ -1160,6 +1165,10 @@ class TypeTable extends UserField\Internal\TypeDataManager
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::Immutable],
 				'TITLE' => Loc::getMessage('CRM_TYPE_CUSTOM_SECTION_ID_TITLE'),
 			],
+			'DAYS_BEFORE_CLOSE' => [
+				'TYPE' => Field::TYPE_INTEGER,
+				'TITLE' => Loc::getMessage('CRM_TYPE_DAYS_BEFORE_CLOSE_TITLE'),
+			],
 			'IS_CATEGORIES_ENABLED' => [
 				'TYPE' => Field::TYPE_BOOLEAN,
 				'TITLE' => Loc::getMessage('CRM_TYPE_TYPE_IS_CATEGORIES_ENABLED_TITLE'),
@@ -1249,6 +1258,29 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		}
 
 		return 'EntityTypeId should be more or equal than 128 and less than 192';
+	}
+
+	public static function validateDaysBeforeClose(mixed $value): true|string
+	{
+		if (
+			(
+				is_numeric($value)
+				&& (int)$value >= Field\CloseDate::MIN_DAYS_BEFORE_CLOSE
+				&& (int)$value <= Field\CloseDate::MAX_DAYS_BEFORE_CLOSE
+			)
+			|| $value === null
+		)
+		{
+			return true;
+		}
+
+		return Loc::getMessage(
+			'CRM_TYPE_TABLE_FIELD_DAYS_BEFORE_CLOSE_VALIDATION_ERROR',
+			[
+				'#MIN_DAYS_BEFORE_CLOSE#' => Field\CloseDate::MIN_DAYS_BEFORE_CLOSE,
+				'#MAX_DAYS_BEFORE_CLOSE#' => Field\CloseDate::MAX_DAYS_BEFORE_CLOSE,
+			],
+		);
 	}
 
 	private static function wereLastActivityColumnsAddedSuccessfullyOnModuleUpdate(int $entityTypeId): bool

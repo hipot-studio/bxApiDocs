@@ -6,6 +6,7 @@ use Bitrix\Bizproc\Public\Event\Document\OnGetDocumentFieldTypesEvent\OnGetDocum
 use Bitrix\Bizproc\Public\Event\Document\OnGetDocumentTypeEvent\OnGetDocumentTypeEvent;
 use Bitrix\Crm;
 use Bitrix\Crm\Integration\BizProc\Events\OnGetDocumentType\CrmDocumentTypeFilter;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Event;
 use Bitrix\Crm\Activity\Provider\Bizproc;
 use Bitrix\Main\EventResult;
@@ -127,7 +128,7 @@ class EventHandler
 
 		if ($parameters->isOnlyBasic())
 		{
-			$event->addResult(new EventResult(EventResult::SUCCESS, ['documentTypes' => $basic]));
+			$event->addResult(static::createDocumentTypesResult($basic, $parameters));
 
 			return;
 		}
@@ -154,14 +155,14 @@ class EventHandler
 
 		if ($parameters->isOnlyDynamic())
 		{
-			$event->addResult(new EventResult(EventResult::SUCCESS, ['documentTypes' => $dynamic]));
+			$event->addResult(static::createDocumentTypesResult($dynamic, $parameters));
 
 			return;
 		}
 
 		if ($parameters->isOnlyAutomatedSolution())
 		{
-			$event->addResult(new EventResult(EventResult::SUCCESS, ['documentTypes' => $automatedSolution]));
+			$event->addResult(static::createDocumentTypesResult($automatedSolution, $parameters));
 
 			return;
 		}
@@ -182,19 +183,39 @@ class EventHandler
 				return isset($item[2]) && in_array($item[2], $certainEntities, true);
 			});
 
-			$event->addResult(
-				new EventResult(
-					EventResult::SUCCESS, ['documentTypes' => array_merge($basic, $dynamic, $automatedSolution)]
-				)
-			);
+			$event->addResult(static::createDocumentTypesResult(
+				array_merge($basic, $dynamic, $automatedSolution),
+				$parameters
+			));
 
 			return;
 		}
 
 		$event->addResult(
-			new EventResult(
-				EventResult::SUCCESS, ['documentTypes' => array_merge($basic, $dynamic, $automatedSolution)]
+			static::createDocumentTypesResult(
+				array_merge($basic, $dynamic, $automatedSolution),
+				$parameters
 			)
+		);
+	}
+
+	private static function createDocumentTypesResult(array $documentTypes, CrmDocumentTypeFilter $parameters): EventResult
+	{
+		if ($parameters->isOnlyBizProcEnabled())
+		{
+			$documentTypes = array_values(
+				array_filter($documentTypes, static function (array $documentType): bool {
+					$entityTypeId = CCrmOwnerType::ResolveID($documentType[2]);
+					$factory = Container::getInstance()->getFactory($entityTypeId);
+
+					return $factory?->isBizProcEnabled() ?? false;
+				})
+			);
+		}
+
+		return new EventResult(
+			EventResult::SUCCESS,
+			['documentTypes' => $documentTypes]
 		);
 	}
 }

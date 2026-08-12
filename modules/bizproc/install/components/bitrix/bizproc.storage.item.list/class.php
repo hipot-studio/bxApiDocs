@@ -21,6 +21,8 @@ use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Application;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Grid\Panel\Actions;
+use Bitrix\Main\Grid\Panel\Types;
 use Bitrix\UI\Toolbar\ButtonLocation;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons;
@@ -99,6 +101,8 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 		$this->setTitle($title ?? Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_TITLE') ?? '');
 
 		$this->addToolbarButtons();
+//		$limitsService = Container::getStorageLimitsService();
+//		$this->arResult['quotaExceeded'] = !$limitsService->isDiskQuotaReadable();
 		$this->loadGridData();
 		$this->includeComponentTemplate();
 	}
@@ -201,7 +205,7 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 	{
 		$fieldColumns = [
 			'ID' => (int)$field['id'],
-			'CODE' => htmlspecialcharsbx($field['code']),
+			'CODE' => htmlspecialcharsbx($field['code'] ?? null),
 			'WORKFLOW_ID' => htmlspecialcharsbx($field['workflowId']),
 			'DOCUMENT_ID' => htmlspecialcharsbx($field['documentId']),
 			'TEMPLATE_ID' => (int)$field['templateId'],
@@ -336,16 +340,76 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 			''
 		);
 		$grid['SHOW_PAGESIZE'] = true;
+		$grid['SHOW_SELECTED_COUNTER'] = true;
+		$grid['SHOW_ROW_CHECKBOXES'] = true;
+		$grid['SHOW_CHECK_ALL_CHECKBOXES'] = true;
+		$grid['SHOW_ACTION_PANEL'] = true;
+		$grid['ACTION_PANEL'] = $this->buildGridActions();
 		$grid['PAGE_SIZES'] = [
 			['NAME' => '10', 'VALUE' => '10'],
 			['NAME' => '20', 'VALUE' => '20'],
 			['NAME' => '50', 'VALUE' => '50']
 		];
-		$grid['SHOW_ROW_CHECKBOXES'] = false;
-		$grid['SHOW_CHECK_ALL_CHECKBOXES'] = false;
-		$grid['SHOW_ACTION_PANEL'] = false;
 
 		return $grid;
+	}
+
+	protected function buildGridActions(): array
+	{
+		return [
+			'GROUPS' => [
+				[
+					'ITEMS' => [
+						[
+							'TYPE' => Types::DROPDOWN,
+							'ID' => $this->getGridId() . '_group_action',
+							'NAME' => 'groupAction',
+							'ITEMS' => [
+								[
+									'NAME' => Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_ACTION_PANEL_PLACEHOLDER_BUTTON') ?? '',
+									'VALUE' => 'default',
+									'ONCHANGE' => [
+										['ACTION' => Actions::RESET_CONTROLS],
+									],
+								],
+								[
+									'TYPE' => Types::BUTTON,
+									'ID' => $this->getGridId() . '_delete_button',
+									'NAME' => Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_ACTION_PANEL_DELETE_BUTTON') ?? '',
+									'VALUE' => 'delete',
+									'ONCHANGE' => [
+										[
+											'ACTION' => Actions::CREATE,
+											'DATA' => [
+												[
+													'TYPE' => Types::BUTTON,
+													'ID' => $this->getGridId() . '_delete_apply_button',
+													'CLASS' => 'ui-btn-primary',
+													'TEXT' => Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_ACTION_PANEL_APPLY') ?? '',
+													'ONCHANGE' => [
+														[
+															'ACTION' => Actions::CALLBACK,
+															'CONFIRM' => true,
+															'CONFIRM_MESSAGE' => Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_DELETE_CONFIRM') ?? '',
+															'CONFIRM_APPLY_BUTTON' => Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_DELETE_CONFIRM_OK') ?? '',
+															'DATA' => [
+																[
+																	'JS' => 'BX.Bizproc.Component.StorageItemList.instance.deleteSelectedItems()',
+																],
+															],
+														],
+													],
+												],
+											],
+										],
+									],
+								],
+							],
+						],
+					],
+				],
+			],
+		];
 	}
 
 	protected function getUserNames(array $userIds): array

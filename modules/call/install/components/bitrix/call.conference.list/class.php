@@ -2,6 +2,7 @@
 
 use Bitrix\Call\Call;
 use Bitrix\Call\Conference;
+use Bitrix\Call\Settings;
 use Bitrix\Im\User;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
@@ -36,7 +37,7 @@ class ImComponentConferenceList extends CBitrixComponent
 		$this->arResult['FILTERS'] = $this->getFilter();
 		$this->arResult['FILTER_PRESETS'] = $this->getFilterPresets();
 		$this->arResult['SLIDER_WIDTH'] = 800;
-		$this->arResult['USER_LIMIT'] = Call::getMaxCallServerParticipants();
+		$this->arResult['USER_LIMIT'] = Settings::getMaxCallServerParticipants();
 
 		$this->arResult['ROWS'] = [];
 

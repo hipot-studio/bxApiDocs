@@ -1,7 +1,9 @@
 <?php
 
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Crm;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -10,6 +12,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 class CBPCrmChangeStatusActivity extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	private static $counter = [];
 
 	public function __construct($name)
@@ -29,7 +34,16 @@ class CBPCrmChangeStatusActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentId = $this->GetDocumentId();
+		$documentId = $this->resolveTargetDocumentId();
+		$documentType = $this->resolveTargetDocumentType($documentId);
+
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
 		$targetStatus = (string)$this->TargetStatus;
 		if (is_numeric($targetStatus))
 		{
@@ -55,6 +69,11 @@ class CBPCrmChangeStatusActivity extends CBPActivity
 				0,
 				CBPTrackingType::Error
 			);
+
+			if ($this->getRootActivity() instanceof \CBPNodeWorkflowActivity)
+			{
+				return CBPActivityExecutionStatus::Closed;
+			}
 
 			$errors = [];
 			CBPDocument::TerminateWorkflow(
@@ -130,7 +149,6 @@ class CBPCrmChangeStatusActivity extends CBPActivity
 				$this->ModifiedBy
 			);
 
-			$documentType = $this->getDocumentType();
 			\CCrmBizProcHelper::sendOperationsAnalytics(
 				Dictionary::EVENT_ENTITY_EDIT,
 				$this,
@@ -152,6 +170,17 @@ class CBPCrmChangeStatusActivity extends CBPActivity
 		);
 
 		return CBPActivityExecutionStatus::Closed;
+	}
+
+	protected function getResolvedTargetAccessActorId(): int
+	{
+		$modifiedBy = (int)CBPHelper::ExtractUsers(
+			$this->ModifiedBy,
+			$this->getRootActivity()->getDocumentId(),
+			true,
+		);
+
+		return $modifiedBy > 0 ? $modifiedBy : $this->getRootStartedByUserId();
 	}
 
 	public static function ValidateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null)

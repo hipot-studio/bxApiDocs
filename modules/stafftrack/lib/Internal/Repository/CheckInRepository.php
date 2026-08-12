@@ -58,6 +58,18 @@ class CheckInRepository
 		;
 	}
 
+	public function getUserManualCheckInByPeriod(int $userId, DateTime $dateStart, DateTime $dateEnd): CheckInCollection
+	{
+		return CheckInTable::query()
+			->setSelect(self::ALL_FIELDS)
+			->where('USER_ID', $userId)
+			->where('ENTITY_TYPE', self::ENTITY_TYPE['MANUAL'])
+			->whereBetween('DATE_CREATE', $dateStart, $dateEnd)
+			->setOrder(['DATE_CREATE' => 'ASC'])
+			->fetchCollection()
+		;
+	}
+
 	/**
 	 * @param int $userId
 	 * @param DateTime $dateStart
@@ -110,6 +122,11 @@ class CheckInRepository
 		return $this->fetchAggregatedPoints([$userId], $dateStart, $dateEnd);
 	}
 
+	public function getUserAggregatedManualPointsByPeriod(int $userId, DateTime $dateStart, DateTime $dateEnd): array
+	{
+		return $this->fetchAggregatedPoints([$userId], $dateStart, $dateEnd, self::ENTITY_TYPE['MANUAL']);
+	}
+
 	/**
 	 * @param array $userIds
 	 * @param DateTime $dateStart
@@ -127,7 +144,7 @@ class CheckInRepository
 		return $this->fetchAggregatedPoints($userIds, $dateStart, $dateEnd);
 	}
 
-	private function fetchAggregatedPoints(array $userIds, DateTime $dateStart, DateTime $dateEnd): array
+	private function fetchAggregatedPoints(array $userIds, DateTime $dateStart, DateTime $dateEnd, ?int $entityType = null): array
 	{
 		$routes = CheckInByDayTable::query()
 			->setSelect([
@@ -164,10 +181,17 @@ class CheckInRepository
 			foreach ($geoData as $point)
 			{
 				$ts = (int)($point['DATE_CREATE'] ?? 0);
-				if ($ts >= $startTs && $ts <= $endTs)
+				if ($ts < $startTs || $ts > $endTs)
 				{
-					$points[] = $point;
+					continue;
 				}
+
+				if ($entityType !== null && (int)($point['ENTITY_TYPE'] ?? 0) !== $entityType)
+				{
+					continue;
+				}
+
+				$points[] = $point;
 			}
 		}
 

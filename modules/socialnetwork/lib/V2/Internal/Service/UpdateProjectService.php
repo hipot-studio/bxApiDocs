@@ -9,12 +9,14 @@ use Bitrix\Main\Error;
 use Bitrix\Socialnetwork\Collab\Control\CollabResult;
 use Bitrix\Socialnetwork\Collab\Control\CollabService;
 use Bitrix\Socialnetwork\Collab\Control\Command\CollabUpdateCommand;
+use Bitrix\Socialnetwork\Collab\Control\Option\OptionFactory;
 use Bitrix\Socialnetwork\Control\Enum\ViewMode;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ConvertChatService;
 use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectTagRepositoryInterface;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Project;
 use Bitrix\Socialnetwork\V2\Internal\Entity\PrivacyType;
+use Bitrix\Socialnetwork\V2\Internal\Service\Notification\ProjectNotificationSettingsService;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectAvatarLegacyPayloadBuilder;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\InitiatorMemberTrait;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectFeatureToggleService;
@@ -32,6 +34,7 @@ class UpdateProjectService
 		private readonly ProjectMemberDiffBuilder $projectMemberDiffBuilder,
 		private readonly ProjectFeatureToggleService $projectFeatureToggleService,
 		private readonly ConvertChatService $convertChatService,
+		private readonly ProjectNotificationSettingsService $notificationSettingsService,
 	)
 	{
 	}
@@ -85,7 +88,15 @@ class UpdateProjectService
 
 		if ($project->options !== null)
 		{
-			$data['options'] = $project->options;
+			$allowedOptionNames = array_keys(OptionFactory::DEFAULT_OPTIONS);
+			$filteredOptions = array_intersect_key(
+				$project->options,
+				array_flip($allowedOptionNames),
+			);
+			if ($filteredOptions !== [])
+			{
+				$data['options'] = $filteredOptions;
+			}
 		}
 
 		$featureStates = [];
@@ -168,6 +179,11 @@ class UpdateProjectService
 			{
 				return (new Result())->addErrors($baseFeatureResult->getErrors());
 			}
+		}
+
+		if ($project->notifications !== null)
+		{
+			$this->notificationSettingsService->save($projectId, $project->notifications);
 		}
 
 		return (new Result())->setData(['projectId' => $collab->getId()]);

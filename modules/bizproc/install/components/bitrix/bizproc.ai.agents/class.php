@@ -11,9 +11,11 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 
+use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateSection;
 use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\AiAgentsGrid;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\AiAgentsGridHelper;
+use Bitrix\Bizproc\Public\Service\AiAgent\RegionAvailabilityServiceInterface;
 
 Loc::loadMessages(__FILE__);
 
@@ -115,10 +117,15 @@ class BizprocAiAgentsComponent extends \Bitrix\Bizproc\Automation\Component\Base
 
 	public function executeComponent(): void
 	{
+		if (!ServiceLocator::getInstance()->get(RegionAvailabilityServiceInterface::class)->isAvailable())
+		{
+			return;
+		}
+
 		if ($this->loadModules())
 		{
 			(new \Bitrix\Bizproc\Public\Service\Template\NodesInstallerService())
-				->trySyncSection('AI_AGENT')
+				->trySyncSection(WorkflowTemplateSection::AiAgent->value)
 			;
 
 			$this->arResult = $this->prepareData();

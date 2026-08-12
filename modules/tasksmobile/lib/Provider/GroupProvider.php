@@ -55,9 +55,11 @@ final class GroupProvider
 				$originalImage = $resizedImage100 = $avatarTypes[$group['AVATAR_TYPE']]['mobileUrl'];
 			}
 
+			$chatId = (int)($chatData[$group['ID']] ?? 0);
 			$additionalData = [
 				...($group['ADDITIONAL_DATA'] ?? []),
-				'DIALOG_ID' => Dialog::getDialogId($chatData[$group['ID']] ?? 0),
+				'CHAT_ID' => $chatId,
+				'DIALOG_ID' => Dialog::getDialogId($chatId),
 			];
 
 			$groups[] = new GroupDto(

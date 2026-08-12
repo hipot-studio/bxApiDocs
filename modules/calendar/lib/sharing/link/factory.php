@@ -1,8 +1,10 @@
 <?php
 namespace Bitrix\Calendar\Sharing\Link;
 
+use Bitrix\Calendar\Internal\Integration\Socialnetwork\MemberFilterService;
 use Bitrix\Calendar\Internals\SharingLinkTable;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Calendar\Sharing;
 use Bitrix\Calendar\Sharing\Link\Member\Member;
@@ -381,10 +383,17 @@ class Factory
 			return (int)$memberId;
 		}, $memberIds);
 
+		$memberIds = $this->filterAccessibleMemberIds($memberIds);
+
+		if (empty($memberIds))
+		{
+			return [];
+		}
+
 		$result = [];
 		$users = UserTable::query()
 			->whereIn('ID', $memberIds)
-			->where('IS_REAL_USER', 'Y')
+			->where('REAL_USER', 'expr', true)
 			->setSelect(['NAME', 'LAST_NAME', 'ID', 'PERSONAL_PHOTO'])
 			->exec()
 			->fetchCollection()
@@ -426,6 +435,13 @@ class Factory
 		$memberIds = array_map(static function ($memberId) {
 			return (int)$memberId;
 		}, $memberIds);
+
+		$memberIds = $this->filterAccessibleMemberIds($memberIds);
+
+		if (empty($memberIds))
+		{
+			return null;
+		}
 
 		sort($memberIds);
 		$implodedUsers = $prefix . implode('|', $memberIds) . '|' .  $userId;
@@ -631,6 +647,17 @@ class Factory
 		}
 
 		return $this->getCrmDealLinkMapper()->getByEntityObject($sharingLinkEO);
+	}
+
+	/**
+	 * @param int[] $memberIds
+	 * @return int[]
+	 */
+	private function filterAccessibleMemberIds(array $memberIds): array
+	{
+		$memberFilterService = ServiceLocator::getInstance()->get(MemberFilterService::class);
+
+		return $memberFilterService->filterAccessibleMemberIds($memberIds);
 	}
 
 	private function getUserLinkMapper(): UserLinkMapper

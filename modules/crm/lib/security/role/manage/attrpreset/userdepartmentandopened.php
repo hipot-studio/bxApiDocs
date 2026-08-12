@@ -13,6 +13,8 @@ class UserDepartmentAndOpened
 	public const  SELF = 'SELF';
 	public const  DEPARTMENT = 'DEPARTMENT';
 	public const  SUBDEPARTMENTS = 'SUBDEPARTMENTS';
+	public const  TEAM = 'TEAM';
+	public const  SUBTEAMS = 'SUBTEAMS';
 	public const  OPEN = 'OPEN';
 	public const  ALL = 'ALL';
 	public const  INHERIT = 'INHERIT';
@@ -22,6 +24,8 @@ class UserDepartmentAndOpened
 		self::SELF => self::SELF,
 		self::DEPARTMENT => self::DEPARTMENT,
 		self::SUBDEPARTMENTS => self::SUBDEPARTMENTS,
+		self::TEAM => self::TEAM,
+		self::SUBTEAMS => self::SUBTEAMS,
 		self::OPEN => self::OPEN,
 		self::ALL => self::ALL,
 		self::INHERIT => self::INHERIT,
@@ -75,6 +79,8 @@ class UserDepartmentAndOpened
 						self::SELF,
 						self::DEPARTMENT,
 						self::SUBDEPARTMENTS,
+						self::TEAM,
+						self::SUBTEAMS,
 						self::OPEN,
 						self::ALL,
 						self::INHERIT,
@@ -102,6 +108,9 @@ class UserDepartmentAndOpened
 				self::DEPARTMENT,
 				(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_MULTI_D'),
 				[
+					'dependant' => $this->filterOutNotIncluded([
+						self::SUBDEPARTMENTS,
+					]),
 					'requires' => $this->filterOutNotIncluded([
 						self::SELF,
 					]),
@@ -129,6 +138,44 @@ class UserDepartmentAndOpened
 			);
 		}
 
+		if ($this->isIncluded(self::TEAM))
+		{
+			$variants->add(
+				self::TEAM,
+				(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_MULTI_T'),
+				[
+					'dependant' => $this->filterOutNotIncluded([
+						self::SUBTEAMS,
+					]),
+					'requires' => $this->filterOutNotIncluded([
+						self::SELF,
+					]),
+					'conflictsWith' => $this->filterOutNotIncluded([
+						self::INHERIT,
+					]),
+					'hint' => Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_MULTI_T_DESCRIPTION'),
+				]
+			);
+		}
+
+		if ($this->isIncluded(self::SUBTEAMS))
+		{
+			$variants->add(
+				self::SUBTEAMS,
+				(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_MULTI_ST'),
+				[
+					'requires' => $this->filterOutNotIncluded([
+						self::SELF,
+						self::TEAM,
+					]),
+					'conflictsWith' => $this->filterOutNotIncluded([
+						self::INHERIT,
+					]),
+					'hint' => Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_MULTI_ST_DESCRIPTION'),
+				]
+			);
+		}
+
 		if ($this->isIncluded(self::OPEN))
 		{
 			$variants->add(
@@ -141,6 +188,7 @@ class UserDepartmentAndOpened
 					'conflictsWith' => $this->filterOutNotIncluded([
 						self::INHERIT,
 					]),
+					'hint' => Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_MULTI_O_DESCRIPTION'),
 				]
 			);
 		}
@@ -155,6 +203,8 @@ class UserDepartmentAndOpened
 						self::SELF,
 						self::DEPARTMENT,
 						self::SUBDEPARTMENTS,
+						self::TEAM,
+						self::SUBTEAMS,
 						self::OPEN,
 					]),
 					'conflictsWith' => $this->filterOutNotIncluded([
@@ -180,6 +230,8 @@ class UserDepartmentAndOpened
 						self::OPEN,
 						self::SUBDEPARTMENTS,
 						self::DEPARTMENT,
+						self::TEAM,
+						self::SUBTEAMS,
 						self::ALL,
 					]),
 					'isUseGroupHeadValuesInHint' => true,
@@ -241,6 +293,8 @@ class UserDepartmentAndOpened
 					self::SELF,
 					self::DEPARTMENT,
 					self::SUBDEPARTMENTS,
+					self::TEAM,
+					self::SUBTEAMS,
 					self::OPEN,
 					self::ALL,
 				]);

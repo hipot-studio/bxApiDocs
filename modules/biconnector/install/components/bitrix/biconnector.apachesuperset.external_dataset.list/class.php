@@ -127,16 +127,16 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 				],
 			]);
 
-			$button->getMainButton()->getAttributeCollection()['onclick'] = 'BX.BIConnector.DatasetImport.Slider.open("csv")';
+			$button->getMainButton()->getAttributeCollection()['onclick'] = 'BX.BIConnector.DatasetImportV2.Slider.open("csv")';
 
 			$menuItems = [
 				[
 					'text' => Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DATASET_GRID_MENU_ITEM_IMPORT_CSV_MSGVER_1'),
-					'onclick' => new Buttons\JsCode('this.close(); BX.BIConnector.DatasetImport.Slider.open("csv")'),
+					'onclick' => new Buttons\JsCode('this.close(); BX.BIConnector.DatasetImportV2.Slider.open("csv")'),
 				],
 				[
 					'text' => Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DATASET_GRID_MENU_ITEM_EXTERNAL_CONNECTION'),
-					'onclick' => new Buttons\JsCode('this.close(); BX.BIConnector.DatasetImport.Slider.open("1c")'),
+					'onclick' => new Buttons\JsCode('this.close(); BX.BIConnector.DatasetImportV2.Slider.open("1c")'),
 				],
 			];
 
@@ -161,7 +161,7 @@ class ApacheSupersetExternalDatasetListComponent extends CBitrixComponent
 				],
 			]);
 
-			$button->getAttributeCollection()['onclick'] = 'BX.BIConnector.DatasetImport.Slider.open("csv")';
+			$button->getAttributeCollection()['onclick'] = 'BX.BIConnector.DatasetImportV2.Slider.open("csv")';
 		}
 
 		Toolbar::addButton($button, ButtonLocation::AFTER_TITLE);

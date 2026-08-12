@@ -4,6 +4,7 @@ namespace Bitrix\Landing\Assets\PreProcessing;
 use \Bitrix\Landing\Block;
 use \Bitrix\Landing\Site;
 use \Bitrix\Landing\Manager;
+use \Bitrix\Landing\LocalTemplates;
 
 class Theme
 {
@@ -44,6 +45,13 @@ class Theme
 	 */
 	private static function getThemeManifest(string $tplCode): array
 	{
+		// TPL_CODE must exactly match one of the known local demo template codes — a
+		// closed whitelist, not a character-class check (LFI, #250845).
+		if (!LocalTemplates::isLocalTemplate($tplCode))
+		{
+			return [];
+		}
+
 		$path = self::FILE_PATH_SITE_MANIFEST;
 		$path = Manager::getDocRoot() . str_replace('#code#', $tplCode, $path);
 		if (file_exists($path))

@@ -784,7 +784,7 @@ class CCrmConfigSaleSettings extends \CBitrixComponent implements Controllerable
 			"value" => Option::get("sale", "format_quantity", "AUTO")
 		);
 		$options[] = array(
-			"id" => $this->optionPrefix."value_precision",
+			"id" => $this->optionPrefix."value_precision_v2",
 			"name" => Loc::getMessage("CRM_CF_VALUE_PRECISION"),
 			"type" => "list",
 			"items" => array(
@@ -792,9 +792,13 @@ class CCrmConfigSaleSettings extends \CBitrixComponent implements Controllerable
 				"1" => Loc::getMessage("CRM_CF_VALUE_PRECISION_1"),
 				"2" => Loc::getMessage("CRM_CF_VALUE_PRECISION_2"),
 				"3" => Loc::getMessage("CRM_CF_VALUE_PRECISION_3"),
-				"4" => Loc::getMessage("CRM_CF_VALUE_PRECISION_4")
+				"4" => Loc::getMessage("CRM_CF_VALUE_PRECISION_4"),
+				"5" => Loc::getMessage("CRM_CF_VALUE_PRECISION_5"),
+				"6" => Loc::getMessage("CRM_CF_VALUE_PRECISION_6"),
+				"7" => Loc::getMessage("CRM_CF_VALUE_PRECISION_7"),
+				"8" => Loc::getMessage("CRM_CF_VALUE_PRECISION_8")
 			),
-			"value" => Option::get("sale", "value_precision", 2)
+			"value" => Option::get("sale", "value_precision_v2", 8)
 		);
 		$options[] = array(
 			"id" => $this->optionPrefix."COUNT_DELIVERY_TAX",
@@ -1251,7 +1255,7 @@ class CCrmConfigSaleSettings extends \CBitrixComponent implements Controllerable
 	{
 		return array(
 			"sale" => array(
-				"format_quantity", "value_precision", "product_reserve_condition",
+				"format_quantity", "value_precision_v2", "product_reserve_condition",
 				"product_reserve_clear_period", "COUNT_DELIVERY_TAX", "check_type_on_pay",
 				"default_currency", "SHOP_SITE", "hideNumeratorSettings", "subscribe_prod", "ADDRESS_different_set",
 				"SALE_ADMIN_NEW_PRODUCT", "WEIGHT_different_set", "tracking_check_switch"

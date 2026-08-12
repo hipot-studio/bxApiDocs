@@ -68,7 +68,7 @@ class CalendarEventViewForm extends Controller
 			$entry['CAL_TYPE'],
 			$entry['OWNER_ID'],
 			$entry['ID'],
-			$entry['DATE_FROM']
+			$entry['DATE_FROM'] ?? ''
 		);
 		$responseParams['dayOfWeekMonthFormat'] = (
 			\Bitrix\Main\Context::getCurrent()

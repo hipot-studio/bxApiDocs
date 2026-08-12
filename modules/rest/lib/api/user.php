@@ -121,6 +121,7 @@ class User extends \IRestService
 	private static $entityUser = 'USER';
 	private static $nameFieldFullPrefix = 'UF_USR_';
 	private static $userUserFieldList;
+	private static ?array $userFieldDateTypes = null;
 
 	protected static $allowedUserFields = array(
 		'ID',
@@ -343,6 +344,41 @@ class User extends \IRestService
 		}
 
 		return static::$userUserFieldList;
+	}
+
+	/**
+	 * Map of USER user field code => USER_TYPE_ID for date/datetime fields.
+	 * Used to normalize filter values of custom UF date/datetime fields, which
+	 * prepareUserValue (a name-based switch) does not cover.
+	 */
+	private static function getUserFieldDateTypes(): array
+	{
+		if (static::$userFieldDateTypes === null)
+		{
+			static::$userFieldDateTypes = [];
+			global $USER_FIELD_MANAGER;
+
+			$fields = $USER_FIELD_MANAGER->GetUserFields(static::$entityUser);
+			foreach ($fields as $code => $field)
+			{
+				if (in_array($field['USER_TYPE_ID'], ['date', 'datetime'], true))
+				{
+					static::$userFieldDateTypes[$code] = $field['USER_TYPE_ID'];
+				}
+			}
+		}
+
+		return static::$userFieldDateTypes;
+	}
+
+	private static function unConvertDateValue(string $userTypeId, $value)
+	{
+		return match ($userTypeId)
+		{
+			'datetime' => \CRestUtil::unConvertDateTime($value),
+			'date' => \CRestUtil::unConvertDate($value),
+			default => $value,
+		};
 	}
 
 	protected static function checkAllowedFields()
@@ -1003,10 +1039,8 @@ class User extends \IRestService
 		switch ($params['USER_TYPE_ID'])
 		{
 			case 'datetime':
-				$result = \CRestUtil::unConvertDateTime($data);
-				break;
 			case 'date':
-				$result = \CRestUtil::unConvertDate($data);
+				$result = static::unConvertDateValue($params['USER_TYPE_ID'], $data);
 				break;
 			case 'file':
 				if (is_array($data))
@@ -1113,6 +1147,12 @@ class User extends \IRestService
 			case 'AUTO_TIME_ZONE':
 				$value = $value === 'Y'? 'Y' : 'N';
 				break;
+			case 'TIMESTAMP_X':
+			case 'DATE_REGISTER':
+			case 'LAST_LOGIN':
+			case 'LAST_ACTIVITY_DATE':
+				$value = \CRestUtil::unConvertDateTime($value);
+				break;
 			case 'PERSONAL_BIRTHDAY':
 				$value = \CRestUtil::unConvertDate($value);
 				break;
@@ -1186,7 +1226,17 @@ class User extends \IRestService
 					$filterType = '=';
 				}
 
-				$filter[$filterType . $code] = static::prepareUserValue($code, $value);
+				if (str_starts_with($code, 'UF_'))
+				{
+					$userFieldDateTypes = static::getUserFieldDateTypes();
+					$filter[$filterType . $code] = isset($userFieldDateTypes[$code])
+						? static::unConvertDateValue($userFieldDateTypes[$code], $value)
+						: static::prepareUserValue($code, $value);
+				}
+				else
+				{
+					$filter[$filterType . $code] = static::prepareUserValue($code, $value);
+				}
 			}
 		}
 

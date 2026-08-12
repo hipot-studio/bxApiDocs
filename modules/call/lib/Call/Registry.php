@@ -17,7 +17,7 @@ class Registry
 	 */
 	public static function getCallWithId(int $id): ?Call
 	{
-		if (static::$calls[$id] instanceof \Bitrix\Call\Call)
+		if (isset(static::$calls[$id]) && static::$calls[$id] instanceof \Bitrix\Call\Call)
 		{
 			return static::$calls[$id];
 		}

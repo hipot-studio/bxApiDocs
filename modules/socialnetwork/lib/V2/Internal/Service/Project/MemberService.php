@@ -34,6 +34,8 @@ class MemberService
 		MemberEntityCollection $members,
 		int $userId,
 		?string $initiatedByType = null,
+		bool $addBotSilently = false,
+		int $sharingLinkAuthorId = 0,
 	): void
 	{
 		$command = $this->buildMembersCommand($projectId, $members, $userId);
@@ -42,6 +44,9 @@ class MemberService
 		{
 			return;
 		}
+
+		$command->setAddBotSilently($addBotSilently);
+		$command->setSharingLinkAuthorId($sharingLinkAuthorId);
 
 		if ($initiatedByType !== null)
 		{

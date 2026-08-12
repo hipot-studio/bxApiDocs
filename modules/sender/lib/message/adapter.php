@@ -654,6 +654,18 @@ class Adapter implements iBase
 	{
 		if ($this->message instanceof iAds)
 		{
+			$vkCodes = [
+				Integration\Seo\Ads\MessageBase::CODE_ADS_VK,
+				Integration\Seo\Ads\MessageBase::CODE_ADS_LOOKALIKE_VK,
+			];
+			if (
+				in_array($this->getCode(), $vkCodes, true)
+				&& !Integration\Bitrix24\Service::isAdVisibleInRegion($this->getCode())
+			)
+			{
+				return false;
+			}
+
 			return Integration\Bitrix24\Service::isAdAvailable();
 		}
 

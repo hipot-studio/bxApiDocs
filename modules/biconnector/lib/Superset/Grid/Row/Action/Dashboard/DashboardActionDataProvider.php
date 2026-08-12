@@ -31,16 +31,14 @@ class DashboardActionDataProvider extends DataProvider
 	public function prepareDashboardActions(): array
 	{
 		return [
-			new OpenAction(),
-			new EditAction(),
-			new CopyAction(),
-			new DeleteAction(),
-			new PublishAction(),
-			new SetDraftAction(),
 			new OpenSettingsAction(),
+			new CopyAction(),
 			new ExportAction(),
+			new SetDraftAction(),
+			new PublishAction(),
 			new AddToTopMenuAction(),
 			new DeleteFromTopMenuAction(),
+			new DeleteAction(),
 		];
 	}
 
@@ -69,7 +67,6 @@ class DashboardActionDataProvider extends DataProvider
 		if ($rawFields['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
 		{
 			return [
-				new OpenAction(),
 				new OpenSettingsAction(),
 				new AddToTopMenuAction(),
 				new DeleteFromTopMenuAction(),
@@ -80,7 +77,6 @@ class DashboardActionDataProvider extends DataProvider
 		if (SupersetInitializer::isSupersetLoading())
 		{
 			return [
-				new OpenAction(),
 				new OpenSettingsAction(),
 				new AddToTopMenuAction(),
 				new DeleteFromTopMenuAction(),

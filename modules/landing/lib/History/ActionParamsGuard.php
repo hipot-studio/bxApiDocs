@@ -11,6 +11,35 @@ use Bitrix\Landing\Sanitizer;
 final class ActionParamsGuard
 {
 	/**
+	 * Universal fail-closed RCE marker: reports whether any string leaf of an
+	 * ACTION_PARAMS tree carries a raw PHP open tag (<?), recursing through nested
+	 * arrays including MULTIPLY children. Non-mutating and does not run the XSS
+	 * auditor, so it is safe and linear over settings/CSS/URL values.
+	 */
+	public static function containsUnneutralizedPhpOpenTagDeep(mixed $value): bool
+	{
+		if (is_array($value))
+		{
+			foreach ($value as $item)
+			{
+				if (self::containsUnneutralizedPhpOpenTagDeep($item))
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		if (is_string($value))
+		{
+			return Sanitizer::containsUnneutralizedPhpOpenTag($value);
+		}
+
+		return false;
+	}
+
+	/**
 	 * @param list<string> $keys
 	 * @param class-string<BaseAction> $actionClass
 	 */

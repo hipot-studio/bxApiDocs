@@ -43,11 +43,7 @@ final class RoleUtil extends Main\Access\Role\RoleUtil
 		}
 
 		$connection = \Bitrix\Main\Application::getConnection();
-		$helper = $connection->getSqlHelper();
-		foreach ($helper->prepareMergeMultiple(PermissionTable::getTableName(), ['ROLE_ID', 'PERMISSION_ID', 'VALUE'], $valuesData) as $sql)
-		{
-			$connection->query($sql);
-		}
+		$connection->addMulti(PermissionTable::getTableName(), $valuesData);
 	}
 
 	public static function getDashboardPermissions(int $dashboardId): array

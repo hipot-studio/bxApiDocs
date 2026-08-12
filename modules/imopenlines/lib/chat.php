@@ -4,6 +4,7 @@ namespace Bitrix\ImOpenLines;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\Rest\RestAdapter;
+use Bitrix\ImOpenLines\V2\Analytics\Bot\EndBotSessionEventContext;
 use Bitrix\ImOpenLines\V2\Status\StatusGroup;
 use Bitrix\Main;
 use Bitrix\Main\Event;
@@ -597,7 +598,7 @@ class Chat
 	 *
 	 * @return bool
 	 */
-	public function endBotSession(): bool
+	public function endBotSession(?EndBotSessionEventContext $endBotSessionEventContext = null): bool
 	{
 		$result = false;
 
@@ -635,7 +636,7 @@ class Chat
 					]);
 
 					$session->update(['STATUS' => Session::STATUS_SKIP]);
-					$session->transferToNextInQueue(false);
+					$session->transferToNextInQueue(false, $endBotSessionEventContext);
 
 					$result =  true;
 				}
@@ -891,6 +892,11 @@ class Chat
 				}
 
 				$session->transferToNextInQueue(false);
+
+				if ((int)$queueId !== (int)$lineFromId)
+				{
+					$this->sendPullUpdateLine((int)$queueId);
+				}
 
 				$messageId = Im::addMessage([
 					'TO_CHAT_ID' => $this->chat['ID'],
@@ -1530,6 +1536,53 @@ class Chat
 				'crm' => $crm,
 			],
 		]);
+	}
+
+	/**
+	 * Builds a Pull push payload for the connector (line) update event.
+	 * Pure function - no side effects, no DB, no module dependencies.
+	 */
+	private static function buildLineUpdatePullEvent(int $chatId, string $dialogId, int $lineId): array
+	{
+		return [
+			'module_id' => 'imopenlines',
+			'command' => 'updateConnector',
+			'params' => [
+				'chatId' => $chatId,
+				'dialogId' => $dialogId,
+				'connector' => [
+					'lineId' => $lineId,
+				],
+			],
+		];
+	}
+
+	/**
+	 * Sends a Pull push notifying chat participants that the connector line has changed.
+	 */
+	public function sendPullUpdateLine(int $lineId): void
+	{
+		if (!Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		$chat = \Bitrix\Im\V2\Chat::getInstance((int)$this->chat['ID']);
+		$users = $chat->getPullRecipients()->getUserIds();
+
+		if (empty($users))
+		{
+			return;
+		}
+
+		Pull\Event::add(
+			$users,
+			self::buildLineUpdatePullEvent(
+				(int)$this->chat['ID'],
+				(string)$chat->getDialogId(),
+				$lineId
+			)
+		);
 	}
 
 	private function getRecipientUserIds(): array
@@ -3397,13 +3450,16 @@ class Chat
 	{
 		return [
 			"imopenlines" => [
-				"rating_client" => [
-					"NAME" => Loc::getMessage('IMOL_CHAT_NOTIFY_SCHEMA_RATING_CLIENT_new'),
-					"LIFETIME" => 86400*7
-				],
-				"rating_head" => [
-					"NAME" => Loc::getMessage('IMOL_CHAT_NOTIFY_SCHEMA_RATING_HEAD'),
-					"LIFETIME" => 86400*7
+				"NAME" => Loc::getMessage('IMOL_CHAT_NOTIFY_SCHEMA_GROUP'),
+				"NOTIFY" => [
+					"rating_client" => [
+						"NAME" => Loc::getMessage('IMOL_CHAT_NOTIFY_SCHEMA_RATING_CLIENT_new'),
+						"LIFETIME" => 86400*7
+					],
+					"rating_head" => [
+						"NAME" => Loc::getMessage('IMOL_CHAT_NOTIFY_SCHEMA_RATING_HEAD'),
+						"LIFETIME" => 86400*7
+					],
 				],
 			],
 		];

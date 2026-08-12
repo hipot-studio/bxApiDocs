@@ -305,7 +305,28 @@ class GoogleEventGateway extends AbstractGoogleGateway
 
 		if ($this->isRequestSuccess())
 		{
-			return EventListResponse::fromJson($this->client->getResult());
+			$response = EventListResponse::fromJson($this->client->getResult());
+
+			// Defense-in-depth: during an initial (full) sync Google paginates the whole calendar, so
+			// ANY paginated request returns only a slice and must not drive deprecated-instance pruning -
+			// otherwise instances delivered on an earlier page look "removed" once a later page omits them
+			// (an initial sync IS NOT empty after its first page: earlier pages already persisted events).
+			// A page is a slice when either more pages follow (nextPageToken present) OR the request itself
+			// carried a pageToken (a continuation page - including the final one, whose nextPageToken is
+			// already empty). Only a single-page initial sync (no pageToken in, no nextPageToken out) is a
+			// complete snapshot and may prune. Explicit vendor tombstones stay authoritative - they are not
+			// gated by isPartial; only the "missing instance" inference is suppressed and reconciled on the
+			// next full pass. Incremental syncs (syncToken present) deliver each change once per page, so
+			// they are left untouched to keep normal pagination and deletion delivery intact.
+			if (
+				empty($sectionConnection->getSyncToken())
+				&& (!empty($sectionConnection->getPageToken()) || !empty($response->nextPageToken))
+			)
+			{
+				$response->isPartial = true;
+			}
+
+			return $response;
 		}
 
 		$this->processErrors('Events list was not retrieved from Google');

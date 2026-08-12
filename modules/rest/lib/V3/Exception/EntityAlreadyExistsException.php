@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class EntityAlreadyExistsException extends RestException
+class EntityAlreadyExistsException extends RestException implements SkipWriteToLogException
 {
 	public function __construct(
 		protected string $id,

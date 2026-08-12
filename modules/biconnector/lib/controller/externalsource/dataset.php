@@ -30,6 +30,18 @@ class Dataset extends Controller
 	private const FILE_ROWS_LIMIT = 300000;
 	private const LOG_FILE_SIZE_LIMIT_MB = 10;
 	private const MAX_ERRORS_COUNT = 200;
+	private const DATASET_NAME_MAX_LENGTH = 30;
+
+	/**
+	 * Manager error codes that carry a safe, user-facing reason and may be shown as-is.
+	 * Any other manager error is treated as unexpected/internal and replaced with a generic message.
+	 */
+	private const SAFE_SAVE_ERROR_CODES = [
+		'DATASET_ALREADY_EXIST',
+		'DUPLICATE_FIELDS',
+		'NAME_EXISTS',
+		'NAME_FORMAT',
+	];
 
 	private static array $fileMap = [
 		'encoding' => 'encoding',
@@ -51,6 +63,7 @@ class Dataset extends Controller
 		'name' => 'NAME',
 		'externalCode' => 'EXTERNAL_CODE',
 		'visible' => 'VISIBLE',
+		'description' => 'DESCRIPTION',
 	];
 
 	protected function processBeforeAction(Action $action): bool
@@ -119,7 +132,7 @@ class Dataset extends Controller
 
 		$reader = ExternalSource\FileReader\Factory::getReader(Type::Csv, $file);
 		$rulesMap = RulesProvider::getRules(Type::Csv, $datasetSettings);
-		$validator = new ImportDataValidator($rulesMap, $datasetFields);
+		$validator = new ImportDataValidator($rulesMap, $datasetFields, false);
 		$rowsCount = 0;
 
 		$filePath = \CTempFile::GetFileName('errors.html');
@@ -183,19 +196,20 @@ class Dataset extends Controller
 						$logFile->putContents($batchContent, IO\File::APPEND);
 						$batchCount = 0;
 						$batchContent = '';
+
+						// The log grows only on flush, so the size limit is checked here rather than per row.
+						if (($logFile->getSize() / 1024 / 1024) > self::LOG_FILE_SIZE_LIMIT_MB)
+						{
+							ob_start();
+
+							$APPLICATION->IncludeComponent('bitrix:biconnector.dataset.import.errors', '', ['part' => 'footer_overflow']);
+
+							$logFile->putContents(ob_get_clean(), IO\File::APPEND);
+
+							return $logFile->getContents();
+						}
 					}
 				}
-			}
-
-			if ($batchCount === 0 && ($logFile->getSize() / 1024 / 1024) > self::LOG_FILE_SIZE_LIMIT_MB)
-			{
-				ob_start();
-
-				$APPLICATION->IncludeComponent('bitrix:biconnector.dataset.import.errors', '', ['part' => 'footer_overflow']);
-
-				$logFile->putContents(ob_get_clean(), IO\File::APPEND);
-
-				return $logFile->getContents();
 			}
 		}
 
@@ -211,6 +225,35 @@ class Dataset extends Controller
 		$logFile->putContents(ob_get_clean(), IO\File::APPEND);
 
 		return $logFile->getContents();
+	}
+
+	/**
+	 * Adds dataset save errors (from DatasetManager::add/update) to the controller response.
+	 *
+	 * Known validation errors are surfaced as-is so the user sees the real reason.
+	 * Any other error is replaced with a generic localized message keeping the stable code,
+	 * so raw ORM/SQL details never reach the client.
+	 *
+	 * @param Error[] $errors
+	 * @param string $fallbackMessageCode
+	 * @param string $fallbackCode
+	 * @return void
+	 */
+	private function addDatasetSaveErrors(array $errors, string $fallbackMessageCode, string $fallbackCode): void
+	{
+		$knownErrors = array_filter(
+			$errors,
+			static fn(Error $error): bool => in_array($error->getCode(), self::SAFE_SAVE_ERROR_CODES, true)
+		);
+
+		if (!empty($knownErrors))
+		{
+			$this->addErrors(array_values($knownErrors));
+
+			return;
+		}
+
+		$this->addError(new Error(Loc::getMessage($fallbackMessageCode) ?? '', $fallbackCode));
 	}
 
 	/**
@@ -243,7 +286,7 @@ class Dataset extends Controller
 		$addResult = ExternalSource\DatasetManager::add($dataset, $datasetFields, $datasetSettings, $sourceId);
 		if (!$addResult->isSuccess())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_ADD_ERROR_MSGVER_1') ?? '', 'ADD_ERROR'));
+			$this->addDatasetSaveErrors($addResult->getErrors(), 'BICONNECTOR_EXTERNAL_SOURCE_DATASET_ADD_ERROR_MSGVER_1', 'ADD_ERROR');
 
 			return null;
 		}
@@ -331,7 +374,19 @@ class Dataset extends Controller
 			$dataset['NAME'] = $this->getDefaultDatasetName($enumType);
 		}
 
-		if (in_array($dataset['NAME'], ExternalSource\SupersetServiceIntegration::getTableList(), true))
+		if (mb_strlen($dataset['NAME']) > self::DATASET_NAME_MAX_LENGTH)
+		{
+			$result->addError(
+				new Error(
+					Loc::getMessage(
+						'BICONNECTOR_EXTERNAL_SOURCE_DATASET_NAME_LONG_ERROR',
+						['#MAX_LENGTH#' => self::DATASET_NAME_MAX_LENGTH],
+					) ?? '',
+					'NAME_LENGTH'
+				)
+			);
+		}
+		elseif (in_array($dataset['NAME'], ExternalSource\SupersetServiceIntegration::getTableList(), true))
 		{
 			$result->addError(
 				new Error(
@@ -391,7 +446,7 @@ class Dataset extends Controller
 		$updateResult = ExternalSource\DatasetManager::update($id, $dataset, $datasetFields, $datasetSettings);
 		if (!$updateResult->isSuccess())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UPDATE_ERROR_MSGVER_1') ?? '', 'UPDATE_ERROR'));
+			$this->addDatasetSaveErrors($updateResult->getErrors(), 'BICONNECTOR_EXTERNAL_SOURCE_DATASET_UPDATE_ERROR_MSGVER_1', 'UPDATE_ERROR');
 
 			return null;
 		}
@@ -671,7 +726,7 @@ class Dataset extends Controller
 		return $result;
 	}
 
-	public function checkFileAction(string $type, array $fields): ?array
+	public function checkFileAction(string $type, array $fields, ?int $rowsLimit = null): ?array
 	{
 		$checkBeforeFileCheckResult = $this->checkAndPrepareBeforeFileCheck($type, $fields);
 		if (!$checkBeforeFileCheckResult->isSuccess())
@@ -704,6 +759,11 @@ class Dataset extends Controller
 		foreach ($reader->readAllRowsByOne() as $row)
 		{
 			$rowsCount++;
+			if ($rowsLimit !== null && $rowsCount > $rowsLimit)
+			{
+				break;
+			}
+
 			if ($rowsCount > self::FILE_ROWS_LIMIT)
 			{
 				$this->addError(
@@ -837,6 +897,7 @@ class Dataset extends Controller
 				'NAME' => $field->getName(),
 				'EXTERNAL_CODE' => $field->getExternalCode(),
 				'VISIBLE' => $field->getVisible(),
+				'DESCRIPTION' => $field->getDescription(),
 			];
 		}
 
@@ -1064,7 +1125,8 @@ class Dataset extends Controller
 							FieldType::DateTime => ExternalSource\Const\DateTime::Ymd_dash_His_colon->value,
 							FieldType::Double => ExternalSource\Const\DoubleDelimiter::DOT->value,
 							FieldType::Money => ExternalSource\Const\MoneyDelimiter::DOT->value,
-							default => '',
+							// Unknown field type: keep the incoming value instead of failing on a new enum case.
+							default => $value,
 						};
 					}
 					elseif (

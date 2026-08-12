@@ -137,9 +137,9 @@ class ExternalDatasetFieldFormatTable extends DataManager
 		{
 			self::deleteByFilter(['=DATASET_ID' => $datasetId]);
 		}
-		catch (\Exception $exception)
+		catch (\Exception)
 		{
-			$result->addError(new Error($exception->getMessage()));
+			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_DATASET_SETTINGS_DELETE_ERROR')));
 		}
 
 		return $result;

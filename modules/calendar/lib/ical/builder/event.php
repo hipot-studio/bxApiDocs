@@ -477,7 +477,7 @@ class Event extends BasicComponent implements BuilderComponent, EventFactoryInte
 			->setWithTime(!$event['SKIP_TIME'])
 			->setOrganizer(
 				$event['ICAL_ORGANIZER'],
-				$event['ORGANIZER_MAIL']['MAILTO'] ?? $event['ORGANIZER_MAIL']['EMAIL']
+				$event['ORGANIZER_MAIL']['MAILTO'] ?? $event['ORGANIZER_MAIL']['EMAIL'] ?? ''
 			)
 			->setTransparent(Dictionary::TRANSPARENT[$event['ACCESSIBILITY']] ?? Dictionary::TRANSPARENT['busy'])
 			->setSequence(((int)$event['VERSION']))

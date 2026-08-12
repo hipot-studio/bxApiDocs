@@ -14,6 +14,7 @@ use Bitrix\Socialnetwork\V2\Internal\Entity\PrivacyType;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Project;
 use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\MemberEntityMapper;
 use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectTagRepositoryInterface;
+use Bitrix\Socialnetwork\V2\Internal\Service\Notification\ProjectNotificationSettingsService;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\FeatureDictionary;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\InitiatorMemberTrait;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectAvatarLegacyPayloadBuilder;
@@ -35,6 +36,7 @@ class AddProjectService
 		private readonly ProjectAvatarLegacyPayloadBuilder $projectAvatarLegacyPayloadBuilder,
 		private readonly ProjectInputNormalizer $projectInputNormalizer,
 		private readonly WorkgroupFieldService $workgroupFieldService,
+		private readonly ProjectNotificationSettingsService $notificationSettingsService,
 	)
 	{
 	}
@@ -140,6 +142,11 @@ class AddProjectService
 				dates: null,
 				publication: $project->publication,
 			);
+		}
+
+		if ($project->notifications !== null)
+		{
+			$this->notificationSettingsService->save($projectId, $project->notifications);
 		}
 
 		return (new Result())->setData(['projectId' => $projectId]);

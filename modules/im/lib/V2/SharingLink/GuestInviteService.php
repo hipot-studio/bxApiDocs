@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\SharingLink;
 
 use Bitrix\Im\Model\SharingLinkTable;
+use Bitrix\Im\V2\Analytics\ChatAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Integration\Notifications\NotificationService;
 use Bitrix\Im\V2\Result;
@@ -68,6 +69,8 @@ class GuestInviteService
 
 		$sharingLink = $linkResult->getResult();
 
+		(new ChatAnalytics($chat))->addInviteGuest(InviteMethod::Email);
+
 		$emailResult = Locator::getGuestInviteEmailTransport()->sendEmail(
 			$email,
 			$sharingLink->getInviteUrl($name),
@@ -118,6 +121,8 @@ class GuestInviteService
 		}
 
 		$sharingLink = $linkResult->getResult();
+
+		(new ChatAnalytics($chat))->addInviteGuest(InviteMethod::Phone);
 
 		$smsResult = Locator::getGuestInviteSmsTransport()->sendSms(
 			$phoneE164,

@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\Report\Handler;
 
 use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\DealTable;
+use Bitrix\Crm\Format\Money;
 use Bitrix\Crm\History\Entity\DealStageHistoryWithSupposedTable;
 use Bitrix\Crm\Integration\Report\View\ColumnFunnel;
 use Bitrix\Crm\Integration\Report\View\ComparePeriods;
@@ -1641,10 +1642,7 @@ class Deal extends Base implements IReportSingleData, IReportMultipleData, IRepo
 			case self::WHAT_WILL_CALCULATE_DEAL_WON_SUM:
 			case self::WHAT_WILL_CALCULATE_RETURN_DEAL_WON_SUM:
 			case self::WHAT_WILL_CALCULATE_DEAL_LOSES_SUM:
-				$amount['value'] = \CCrmCurrency::MoneyToString(
-					round($amountCalculateItem, 2),
-					$currencyOfFirstElement
-				);
+				$amount['value'] = Money::format((float)$amountCalculateItem, (string)$currencyOfFirstElement);
 				break;
 			default:
 				$amount['value'] = $amountCalculateItem;

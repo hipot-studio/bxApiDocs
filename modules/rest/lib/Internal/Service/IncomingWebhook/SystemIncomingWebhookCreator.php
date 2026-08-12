@@ -7,6 +7,7 @@ namespace Bitrix\Rest\Internal\Service\IncomingWebhook;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectNotFoundException;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest\APAuth\PasswordTable;
 use Bitrix\Rest\APAuth\PermissionTable;
 use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
@@ -17,11 +18,13 @@ use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhookExternalAttribute
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\WebhookType;
 use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
 use Bitrix\Rest\Preset\EventController;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 
 final class SystemIncomingWebhookCreator
 {
 	public function __construct(
 		private readonly IncomingWebhookRepositoryInterface $repository = new IncomingWebhookRepository(),
+		private readonly SecurityAuditLogger $securityAuditLogger = new SecurityAuditLogger(),
 	)
 	{
 	}
@@ -35,6 +38,7 @@ final class SystemIncomingWebhookCreator
 		?string $title,
 		array $scopes,
 		array $attributes = [],
+		?string $comment = null,
 	): IncomingWebhook
 	{
 		$this->requireUser($userId);
@@ -52,6 +56,8 @@ final class SystemIncomingWebhookCreator
 				password: PasswordTable::generatePassword(),
 				active: true,
 				title: $title,
+				comment: ($comment !== '' ? $comment : null),
+				dateCreate: new DateTime(),
 				scopes: $scopes,
 				externalAttributes: $this->buildAttributeCollection($attributes),
 				type: WebhookType::System,
@@ -77,10 +83,19 @@ final class SystemIncomingWebhookCreator
 			EventController::enableEvents();
 			$connection->commitTransaction();
 
+			$this->securityAuditLogger->logWebhookCreated(
+				actingUserId: $userId,
+				webhookId: $passwordId,
+				ownerUserId: $userId,
+				scopes: $scopes,
+				webhookType: WebhookType::System,
+			);
+
 			return $reloaded;
 		}
 		catch (\Throwable $exception)
 		{
+			EventController::enableEvents();
 			$connection->rollbackTransaction();
 
 			throw $exception;

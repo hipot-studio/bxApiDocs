@@ -23,11 +23,12 @@ abstract class BaseTrigger extends \CBPActivity implements \IBPTriggerActivity, 
 		&$errors,
 	): bool
 	{
+		$currentValues = is_array($currentValues) ? $currentValues : [];
 		$errors = [];
 		$properties = [];
 
 		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
-		$map = static::getPropertiesMap($documentType, is_array($currentValues) ? $currentValues : []);
+		$map = static::getPropertiesMap($documentType, $currentValues);
 
 		foreach ($map as $id => $property)
 		{
@@ -54,10 +55,20 @@ abstract class BaseTrigger extends \CBPActivity implements \IBPTriggerActivity, 
 			return false;
 		}
 
+		$properties = static::preparePropertiesDialogValues($documentType, $properties, $currentValues);
 		$currentActivity = &\CBPWorkflowTemplateLoader::findActivityByName($workflowTemplate, $activityName);
 		$currentActivity['Properties'] = $properties;
 
 		return true;
+	}
+
+	protected static function preparePropertiesDialogValues(
+		array $documentType,
+		array $properties,
+		array $currentValues,
+	): array
+	{
+		return $properties;
 	}
 
 	public function createApplyRules(): array

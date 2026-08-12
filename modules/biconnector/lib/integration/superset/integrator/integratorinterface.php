@@ -196,9 +196,10 @@ interface IntegratorInterface
 	 * @param string $filePath
 	 * @param string $appCode
 	 * @param string $type
+	 * @param bool $forceImportDatasets
 	 * @return IntegratorResponse<Dto\Dashboard>
 	 */
-	public function importDashboard(string $filePath, string $appCode, string $type = ''): IntegratorResponse;
+	public function importDashboard(string $filePath, string $appCode, string $type = '', bool $forceImportDatasets = false,): IntegratorResponse;
 
 	/**
 	 * Returns response with created dashboard result.

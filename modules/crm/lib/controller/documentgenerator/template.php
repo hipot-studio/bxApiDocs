@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Controller\DocumentGenerator;
 
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\DocumentGenerator\DataProvider\Filterable;
 use Bitrix\DocumentGenerator\Model\FileTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Response\DataType\ContentUri;
@@ -186,6 +187,57 @@ class Template extends Base
 		return $filter;
 	}
 
+	private function convertEntityTypeIdsToProviders(array $entityTypeIds): array
+	{
+		$lookup = $this->buildEntityTypeIdToProviderLookup();
+
+		$providers = [];
+		foreach ($entityTypeIds as $typeId)
+		{
+			$key = (string)$typeId;
+			if (isset($lookup[$key]))
+			{
+				$providers[] = $lookup[$key];
+			}
+		}
+
+		return $providers;
+	}
+
+	private function buildEntityTypeIdToProviderLookup(): array
+	{
+		$providersMap = DocumentGeneratorManager::getInstance()->getCrmOwnerTypeProvidersMap();
+
+		$lookup = [];
+		foreach ($providersMap as $entityTypeId => $providerString)
+		{
+			$lookup[(string)$entityTypeId] = $providerString;
+
+			if (!is_subclass_of($providerString, Filterable::class))
+			{
+				continue;
+			}
+
+			foreach ($providerString::getExtendedList() as $extension)
+			{
+				$extendedProvider = $extension['PROVIDER'] ?? null;
+				if (!is_string($extendedProvider) || $extendedProvider === '')
+				{
+					continue;
+				}
+
+				// Replace the unique class substring with the numeric entityTypeId —
+				// the same direction prepareTemplateData() uses, so READ and WRITE stay
+				// symmetric. The class string is a single deterministic occurrence,
+				// so str_ireplace here is unambiguous.
+				$key = str_ireplace($providerString, (string)$entityTypeId, $extendedProvider);
+				$lookup[$key] = $extendedProvider;
+			}
+		}
+
+		return $lookup;
+	}
+
 	/**
 	 * @see \Bitrix\DocumentGenerator\Controller\Template::deleteAction()
 	 * @param \Bitrix\DocumentGenerator\Template $template
@@ -234,8 +286,7 @@ class Template extends Base
 		$fields['fileId'] = $fileId;
 		$fields['moduleId'] = static::MODULE_ID;
 
-		$providersMap = DocumentGeneratorManager::getInstance()->getCrmOwnerTypeProvidersMap();
-		$fields['providers'] = str_ireplace(array_keys($providersMap), array_values($providersMap), $fields['entityTypeId']);
+		$fields['providers'] = $this->convertEntityTypeIdsToProviders((array)$fields['entityTypeId']);
 
 		$result = $this->proxyAction('addAction', [$fields]);
 		if(is_array($result))
@@ -285,10 +336,9 @@ class Template extends Base
 			$fileId = $template->FILE_ID;
 		}
 		$fields['moduleId'] = static::MODULE_ID;
-		$providersMap = DocumentGeneratorManager::getInstance()->getCrmOwnerTypeProvidersMap();
-		if(isset($fields['entityTypeId']) && is_array($fields['entityTypeId']))
+		if (isset($fields['entityTypeId']) && is_array($fields['entityTypeId']))
 		{
-			$fields['providers'] = str_ireplace(array_keys($providersMap), array_values($providersMap), $fields['entityTypeId']);
+			$fields['providers'] = $this->convertEntityTypeIdsToProviders($fields['entityTypeId']);
 		}
 
 		$result = $this->proxyAction('updateAction', [$template, $fields]);

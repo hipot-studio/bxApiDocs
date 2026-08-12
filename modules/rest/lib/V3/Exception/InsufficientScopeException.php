@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class InsufficientScopeException extends RestException
+class InsufficientScopeException extends RestException implements SkipWriteToLogException
 {
 	protected const STATUS = \CRestServer::STATUS_FORBIDDEN;
 

@@ -709,8 +709,10 @@ class CrmQuoteDetailsComponent extends FactoryBased
 		return array_merge(StorageManager::getFileInfo($attachmentFileId), ['STORAGE_TYPE_ID' => $storageTypeId]);
 	}
 
-	public function convertAction(int $entityTypeId, int $entityId): Response\Json
+	public function convertAction(int $entityTypeId, int $entityId, array $ANALYTICS = []): Response\Json
 	{
+		$analytics = $ANALYTICS;
+
 		$this->arParams['ENTITY_TYPE_ID'] = $entityTypeId;
 		$this->arParams['ENTITY_ID'] = $entityId;
 		$this->init();
@@ -751,6 +753,8 @@ class CrmQuoteDetailsComponent extends FactoryBased
 				return $this->returnSyncRequiredJson($configs, $fieldNames);
 			}
 		}
+
+		Container::getInstance()->getContext()->setAnalytics($analytics);
 
 		$operation = $this->factory->getConversionOperation($this->item, $configs);
 		$conversionResult = $operation->launch();
@@ -994,7 +998,10 @@ class CrmQuoteDetailsComponent extends FactoryBased
 
 	public function saveAction(array $data): ?array
 	{
+		Container::getInstance()->getContext()->setAnalytics($data['ANALYTICS'] ?? []);
+
 		$data = $this->calculateDefaultDataValues($data);
+
 		return parent::saveAction($data);
 	}
 

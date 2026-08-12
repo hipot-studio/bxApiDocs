@@ -19,6 +19,7 @@ use Bitrix\Call\DTO;
 use Bitrix\Call\JwtCall;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Controller\Filter\UniqueRequestFilter;
+use Bitrix\Im\V2\Guest\GuestLinkService;
 use Bitrix\Im\V2\Chat;
 
 /**
@@ -27,6 +28,10 @@ use Bitrix\Im\V2\Chat;
 class Call extends JwtController
 {
 	protected const LOCK_TTL = 10; // in seconds
+
+	protected const CHILD_CHAT_CACHE_TTL = 3600; // in seconds
+
+	protected const CHILD_CHAT_CACHE_DIR = '/call/child_chat';
 
 	public function getAutoWiredParameters(): array
 	{
@@ -91,6 +96,41 @@ class Call extends JwtController
 				'+prefilters' => [
 					new UniqueRequestFilter()
 				]
+			],
+			'answer' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(UniqueRequestFilter::TTL_HOT_PATH),
+				],
+			],
+			'decline' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(UniqueRequestFilter::TTL_HOT_PATH),
+				],
+			],
+			'invite' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(UniqueRequestFilter::TTL_HOT_PATH),
+				],
+			],
+			'createChatForChildCall' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(UniqueRequestFilter::TTL_HOT_PATH),
+				],
+			],
+			'onShareScreen' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(UniqueRequestFilter::TTL_HOT_PATH),
+				],
+			],
+			'onStartRecord' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(UniqueRequestFilter::TTL_HOT_PATH),
+				],
+			],
+			'tryJoinCall' => [
+				'+prefilters' => [
+					new UniqueRequestFilter(UniqueRequestFilter::TTL_HOT_PATH),
+				],
 			],
 		];
 	}
@@ -321,6 +361,7 @@ class Call extends JwtController
 
 				if (
 					$call->getType() != $call::TYPE_PERMANENT
+					&& !empty($users)
 					&& empty($availableUsers)
 				)
 				{
@@ -352,20 +393,34 @@ class Call extends JwtController
 			// block answer/finish of peers who already see Call::incoming.
 			$call->getSignaling()->sendLogToken($userId);
 
-			// Initiator's active-calls cache is rebuilt together with the invited
-			// set inside dispatchInviteBroadcasts — one background job instead of two.
-			$this->inviteUsers(
-				call: $call,
-				userIds: $availableUsers,
-				isVideo: $callRequest->video,
-				isLegacyMobile: false,
-				isShow: true,
-				isRepeated: false,
-				sendMode: Signaling::MODE_WEB,
-				usersInOtherCalls: $usersInOtherCalls,
-				extraCacheUsers: [$userId],
-				earlyFlush: true,
-			);
+			if (!empty($availableUsers))
+			{
+				// Initiator's active-calls cache is rebuilt together with the invited
+				// set inside dispatchInviteBroadcasts — one background job instead of two.
+				$this->inviteUsers(
+					call: $call,
+					userIds: $availableUsers,
+					isVideo: $callRequest->video,
+					isLegacyMobile: false,
+					isShow: true,
+					isRepeated: false,
+					sendMode: Signaling::MODE_WEB,
+					usersInOtherCalls: $usersInOtherCalls,
+					extraCacheUsers: [$userId],
+					earlyFlush: true,
+				);
+			}
+			else
+			{
+				// Solo start (e.g. the Sync page or any empty-chat call): there is
+				// nobody to invite yet, so the invite tail is skipped. Calling it with
+				// an empty set would make dispatchInviteBroadcasts raise a bogus
+				// "empty_users" error, which turns the whole startCall response into
+				// status:error and makes the media server reject the room. The
+				// initiator's active-calls cache is still warmed up here — the same
+				// work dispatchInviteBroadcasts would otherwise do for the initiator.
+				Recent::scheduleUpdateUsersActiveCallsCache([$userId]);
+			}
 
 			$aiAvailability = CallAISettings::checkAIAvailabilityInCall();
 
@@ -534,6 +589,17 @@ class Call extends JwtController
 					'result' => false,
 					'errorCode' => 'call_not_found',
 					'errorMessage' => 'Call not found',
+				];
+			}
+
+			$currentUserId = (int)($callRequest->userId ?: $call->getInitiatorId());
+			if (!$call->checkAccess($currentUserId))
+			{
+				$this->addError(new Error('access_denied', 'You do not have access to the call'));
+				return [
+					'result' => false,
+					'errorCode' => 'access_denied',
+					'errorMessage' => 'You do not have access to the call',
 				];
 			}
 
@@ -713,6 +779,7 @@ class Call extends JwtController
 				video: $isVideo,
 				sendPush: $sendPush,
 				sendMode: $sendMode,
+				isRepeated: $isRepeated,
 				usersInOtherCalls: $usersInOtherCalls
 			);
 
@@ -985,6 +1052,12 @@ class Call extends JwtController
 			];
 		}
 
+		$currentUserId = (int)$callUserRequest->userId;
+		if ($currentUserId > 0 && !$call->checkAccess($currentUserId))
+		{
+			return null;
+		}
+
 		if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
 		{
 			$this->addError(new Error('call_finished', 'Call already finished'));
@@ -1216,42 +1289,255 @@ class Call extends JwtController
 			return null;
 		}
 
-		$lockName = static::getLockNameWithCallId('user'.$currentUserId, $callUuid);
+		if (!$call->checkAccess($currentUserId))
+		{
+			$this->addError(new Error('access_denied', 'Access to call denied'));
+			return null;
+		}
+
+		$parentUuid = $call->getUuid();
+
+		$lockName = static::getLockNameWithCallId('child_chat', $parentUuid);
 		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
 		{
 			$this->addError(new Error('could_not_lock', 'Could not get exclusive lock'));
 			return null;
 		}
 
-		$users = array_merge($call->getUsers(), $userRequest->users);
-		$result = \Bitrix\Im\V2\Chat\ChatFactory::getInstance()->addChat([
-			'TYPE' => \Bitrix\Im\V2\Chat::IM_TYPE_CHAT,
-			'AUTHOR_ID' =>$currentUserId,
-			'USERS' => $users,
-		]);
+		try
+		{
+			$chatId = static::getCachedChildChatId($parentUuid);
+			if ($chatId)
+			{
+				$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+				if (!empty($userRequest->users))
+				{
+					$chat->addUsers(
+						$userRequest->users,
+						(new \Bitrix\Im\V2\Relation\AddUsersConfig())->setWithMessage(false)
+					);
+				}
+			}
+			else
+			{
+				$result = \Bitrix\Im\V2\Chat\ChatFactory::getInstance()->addChat([
+					'TYPE' => \Bitrix\Im\V2\Chat::IM_TYPE_CHAT,
+					'AUTHOR_ID' => $currentUserId,
+					'USERS' => array_merge($call->getUsers(), $userRequest->users),
+					'SKIP_ANALYTICS' => 'Y',
+				]);
 
-		if (!$result->isSuccess() || !$result->hasResult())
+				if (!$result->isSuccess() || !$result->hasResult())
+				{
+					return ['result' => false];
+				}
+
+				$chat = $result->getResult()['CHAT'] ?? null;
+				$chatId = $chat?->getChatId();
+				if (!$chatId)
+				{
+					return ['result' => false];
+				}
+
+				static::setCachedChildChatId($parentUuid, $chatId);
+			}
+		}
+		finally
 		{
 			Application::getConnection()->unlock($lockName);
-			return ['result' => false];
 		}
 
-		$chat = $result->getResult()['CHAT'];
-		$chatId = $chat->getChatId();
-		if (!$chatId)
-		{
-			Application::getConnection()->unlock($lockName);
-			return ['result' => false];
-		}
-		$callToken = JwtCall::getCallToken($chatId, ['parentUuid' => $callUuid]);
-
-		Application::getConnection()->unlock($lockName);
+		$callToken = JwtCall::getCallToken($chatId, ['parentUuid' => $parentUuid]);
 
 		return [
 			'result' => true,
 			'token' => $callToken,
 			'chatId' => $chatId,
 		];
+	}
+
+	/**
+	 * Reads the cached child-call chat id for the given parent call uuid.
+	 *
+	 * @param string $parentUuid
+	 * @return int|null chat id, or null on cache miss.
+	 */
+	protected static function getCachedChildChatId(string $parentUuid): ?int
+	{
+		$cache = \Bitrix\Main\Data\Cache::createInstance();
+		if (!$cache->initCache(static::CHILD_CHAT_CACHE_TTL, md5($parentUuid), static::CHILD_CHAT_CACHE_DIR))
+		{
+			return null;
+		}
+
+		$vars = $cache->getVars();
+		$chatId = (int)($vars['chatId'] ?? 0);
+
+		return $chatId > 0 ? $chatId : null;
+	}
+
+	/**
+	 * Stores the child-call chat id in the cache keyed by the parent call uuid.
+	 *
+	 * @param string $parentUuid
+	 * @param int $chatId
+	 * @return void
+	 */
+	protected static function setCachedChildChatId(string $parentUuid, int $chatId): void
+	{
+		$cache = \Bitrix\Main\Data\Cache::createInstance();
+		if ($cache->startDataCache(static::CHILD_CHAT_CACHE_TTL, md5($parentUuid), static::CHILD_CHAT_CACHE_DIR))
+		{
+			$cache->endDataCache(['chatId' => $chatId]);
+		}
+	}
+
+	/**
+	 * @restMethod call.Call.createChatForCall
+	 *
+	 * @return array|null
+	 */
+	public function createChatForCallAction(): array|null
+	{
+		Loader::includeModule('im');
+		$currentUserId = $this->getCurrentUser()->getId();
+
+		$lockName = "sync_call_user_{$currentUserId}";
+		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+		{
+			$this->addError(new \Bitrix\Main\Error('Could not get exclusive lock', 'could_not_lock'));
+			return null;
+		}
+
+		try
+		{
+			$result = \Bitrix\Im\V2\Chat\ChatFactory::getInstance()->addChat([
+				'TYPE' => \Bitrix\Im\V2\Chat::IM_TYPE_CHAT,
+				'AUTHOR_ID' => $currentUserId,
+				'USERS' => [$currentUserId],
+				'SKIP_ANALYTICS' => 'Y',
+			]);
+
+			if (!$result->isSuccess() || !$result->hasResult())
+			{
+				$this->addError(new \Bitrix\Main\Error('Could not create chat', 'chat_create_failed'));
+				return ['result' => false];
+			}
+
+			$chat = $result->getResult()['CHAT'];
+			$chatId = $chat->getChatId();
+			if (!$chatId)
+			{
+				$this->addError(new \Bitrix\Main\Error('Chat ID is missing after creation', 'chat_id_missing'));
+				return ['result' => false];
+			}
+
+			$callToken = JwtCall::getCallToken($chatId);
+
+			$guestLink = null;
+
+			try
+			{
+				$linkResult = GuestLinkService::getInstance()->getOrCreateLink(
+					$chat,
+					$currentUserId
+				);
+
+				if (!$linkResult->isSuccess())
+				{
+					$errors = $linkResult->getErrors();
+					foreach ($errors as $error)
+					{
+						\Bitrix\Call\Logger\Logger::getInstance()->warning(
+							'createChatForCallAction: getOrCreateLink failed: [' . $error->getCode() . '] ' . $error->getMessage()
+						);
+					}
+				}
+				else
+				{
+					$guestLink = $linkResult->getResult()->getInviteUrl();
+				}
+			}
+			catch (\Throwable $e)
+			{
+				\Bitrix\Call\Logger\Logger::getInstance()->error(
+					'createChatForCallAction: exception during guest link generation: '
+					. get_class($e) . ': ' . $e->getMessage()
+				);
+			}
+
+			return [
+				'result' => true,
+				'token' => $callToken,
+				'chatId' => $chatId,
+				'dialogId' => $chat->getDialogId(),
+				'guestLink' => $guestLink,
+			];
+		}
+		finally
+		{
+			Application::getConnection()->unlock($lockName);
+		}
+	}
+
+	/**
+	 * @restMethod call.Call.getGuestLink
+	 *
+	 * @param int $chatId
+	 * @return array|null
+	 */
+	public function getGuestLinkAction(int $chatId): ?array
+	{
+		Loader::includeModule('im');
+		$userId = (int)$this->getCurrentUser()->getId();
+
+		if ($chatId <= 0)
+		{
+			return ['guestLink' => null];
+		}
+
+		$chat = Chat::getInstance($chatId);
+
+		if ($chat->getChatId() === null || $chat->getChatId() <= 0)
+		{
+			return ['guestLink' => null];
+		}
+
+		$role = $chat->getRole();
+
+		if ($role === Chat::ROLE_NONE || $role === Chat::ROLE_GUEST)
+		{
+			return ['guestLink' => null];
+		}
+
+		try
+		{
+			$linkResult = GuestLinkService::getInstance()->getOrCreateLink($chat, $userId);
+
+			if ($linkResult->isSuccess())
+			{
+				return ['guestLink' => $linkResult->getResult()->getInviteUrl()];
+			}
+
+			$errors = $linkResult->getErrors();
+			foreach ($errors as $error)
+			{
+				\Bitrix\Call\Logger\Logger::getInstance()->warning(
+					'getGuestLinkAction: getOrCreateLink failed: [' . $error->getCode() . '] ' . $error->getMessage()
+				);
+			}
+
+			return ['guestLink' => null];
+		}
+		catch (\Throwable $e)
+		{
+			\Bitrix\Call\Logger\Logger::getInstance()->error(
+				'getGuestLinkAction: exception during guest link generation: '
+				. get_class($e) . ': ' . $e->getMessage()
+			);
+
+			return ['guestLink' => null];
+		}
 	}
 
 	/**
@@ -1352,9 +1638,16 @@ class Call extends JwtController
 			$userRequest->callType,
 			$userRequest->provider,
 			$userRequest->entityType,
-			$userRequest->entityId,
-			$currentUserId
+			$userRequest->entityId
 		);
+		if (!$call && $userRequest->entityType === 'chat')
+		{
+			$chatId = (int)\Bitrix\Im\Dialog::getChatId($userRequest->entityId, $currentUserId);
+			if ($chatId > 0)
+			{
+				$call = CallFactory::searchActiveByChatId($chatId);
+			}
+		}
 		if (!$call)
 		{
 			return ['success' => false];

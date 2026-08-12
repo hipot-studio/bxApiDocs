@@ -585,6 +585,11 @@ class CBPHelper
 			$key = mb_substr($key, 1);
 			$strOperation = "QUERY";
 		}
+		elseif (mb_substr($key, 0, 1) == "=")
+		{
+			$key = mb_substr($key, 1);
+			$strOperation = "=";
+		}
 		else
 		{
 			$strOperation = "=";

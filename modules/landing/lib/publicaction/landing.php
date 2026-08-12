@@ -2,6 +2,7 @@
 namespace Bitrix\Landing\PublicAction;
 
 use Bitrix\Landing\Hook;
+use Bitrix\Landing\Hook\Page\Fonts;
 use Bitrix\Landing\Manager;
 use Bitrix\Landing\File;
 use Bitrix\Landing\Folder;
@@ -13,7 +14,6 @@ use Bitrix\Landing\TemplateRef;
 use Bitrix\Landing\Landing as LandingCore;
 use Bitrix\Landing\PublicActionResult;
 use Bitrix\Landing\Internals\BlockFavouriteTable;
-use Bitrix\Landing\Internals\HookDataTable;
 use Bitrix\Landing\History;
 use Bitrix\Main\Localization\Loc;
 
@@ -1205,57 +1205,7 @@ class Landing
 				return $result;
 			}
 
-			// fix module security
-			$content = str_replace('<st yle', '<style', $content);
-			$content = str_replace('<li nk ', '<link ', $content);
-
-			$fields = array(
-				'ENTITY_ID' => $lid,
-				'ENTITY_TYPE' => \Bitrix\Landing\Hook::ENTITY_TYPE_LANDING,
-				'HOOK' => 'FONTS',
-				'CODE' => 'CODE',
-				'PUBLIC' => 'N'
-			);
-			$res = HookDataTable::getList(array(
-				'select' => array(
-					'ID', 'VALUE'
-				),
-				'filter' => $fields
-			));
-			if ($row = $res->fetch())
-			{
-				$existsContent = $row['VALUE'];
-
-				// concat new fonts to the exists
-				$found = preg_match_all(
-					'#(<noscript>.*?<style.*?data-id="([^"]+)"[^>]*>[^<]+</style>)#is',
-					$content,
-					$newFonts
-				);
-				if ($found)
-				{
-					foreach ($newFonts[1] as $i => $newFont)
-					{
-						if (mb_strpos($existsContent, '"' . $newFonts[2][$i] . '"') === false)
-						{
-							$existsContent .= $newFont;
-						}
-					}
-				}
-
-				if ($existsContent != $row['VALUE'])
-				{
-					HookDataTable::update(
-						$row['ID'],
-						['VALUE' => $existsContent]
-					);
-				}
-			}
-			else
-			{
-				$fields['VALUE'] = $content;
-				HookDataTable::add($fields);
-			}
+			Fonts::saveFontsForLanding($lid, $content);
 
 			if (Manager::getOption('public_hook_on_save') === 'Y')
 			{
@@ -1271,3 +1221,4 @@ class Landing
 		return $result;
 	}
 }
+

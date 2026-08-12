@@ -75,22 +75,18 @@ class ResourceTable extends Main\Entity\DataManager
 	{
 		return [
 			(new IntegerField('ID'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_ID_FIELD'))
 				->configurePrimary(true)
 				->configureAutocomplete(true)
 			,
 			(new IntegerField('EVENT_ID'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_EVENT_ID_FIELD'))
 			,
 			(new StringField('CAL_TYPE',
 				[
 					'validation' => [__CLASS__, 'validateCalType']
 				]
 			))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_CAL_TYPE_FIELD'))
 			,
 			(new IntegerField('RESOURCE_ID'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_RESOURCE_ID_FIELD'))
 				->configureRequired(true)
 			,
 			(new StringField('PARENT_TYPE',
@@ -98,73 +94,56 @@ class ResourceTable extends Main\Entity\DataManager
 					'validation' => [__CLASS__, 'validateParentType']
 				]
 			))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_PARENT_TYPE_FIELD'))
 			,
 			(new IntegerField('PARENT_ID'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_PARENT_ID_FIELD'))
 				->configureRequired(true)
 			,
 			(new IntegerField('UF_ID'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_UF_ID_FIELD'))
 			,
 			(new DatetimeField('DATE_FROM_UTC'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_DATE_FROM_UTC_FIELD'))
 			,
 			(new DatetimeField('DATE_TO_UTC'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_DATE_TO_UTC_FIELD'))
 			,
 			(new DatetimeField('DATE_FROM'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_DATE_FROM_FIELD'))
 			,
 			(new DatetimeField('DATE_TO'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_DATE_TO_FIELD'))
 			,
 			(new IntegerField('DURATION'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_DURATION_FIELD'))
 			,
 			(new StringField('SKIP_TIME',
 				[
 					'validation' => [__CLASS__, 'validateSkipTime']
 				]
 			))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_SKIP_TIME_FIELD'))
 			,
 			(new StringField('TZ_FROM',
 				[
 					'validation' => [__CLASS__, 'validateTzFrom']
 				]
 			))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_TZ_FROM_FIELD'))
 			,
 			(new StringField('TZ_TO',
 				[
 					'validation' => [__CLASS__, 'validateTzTo']
 				]
 			))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_TZ_TO_FIELD'))
 			,
 			(new IntegerField('TZ_OFFSET_FROM'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_TZ_OFFSET_FROM_FIELD'))
 			,
 			(new IntegerField('TZ_OFFSET_TO'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_TZ_OFFSET_TO_FIELD'))
 			,
 			(new IntegerField('CREATED_BY'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_CREATED_BY_FIELD'))
 				->configureRequired(true)
 			,
 			(new DatetimeField('DATE_CREATE'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_DATE_CREATE_FIELD'))
 			,
 			(new DatetimeField('TIMESTAMP_X'))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_TIMESTAMP_X_FIELD'))
 			,
 			(new StringField('SERVICE_NAME',
 				[
 					'validation' => [__CLASS__, 'validateServiceName']
 				]
 			))
-				->configureTitle(Loc::getMessage('RESOURCE_ENTITY_SERVICE_NAME_FIELD'))
 			,
 		];
 	}

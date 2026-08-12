@@ -131,12 +131,17 @@ abstract class EntityProvider extends BaseProvider
 		return $this->makeItemsByIds($ids);
 	}
 
+	protected function getRecentItemsCount(array $recentItemsByEntityId): int
+	{
+		return Entity::ITEMS_LIMIT - count($recentItemsByEntityId);
+	}
+
 	public function fillDialog(Dialog $dialog): void
 	{
 		$itemEntityId = $this->getItemEntityId();
 		$recentItems = $this->withoutRecentItems ? $dialog->cleanRecentItems() : $dialog->getRecentItems();
 		$recentItemsByEntityId = $recentItems->getEntityItems($itemEntityId);
-		$remainingItemsCount = Entity::ITEMS_LIMIT - count($recentItemsByEntityId);
+		$remainingItemsCount = $this->getRecentItemsCount($recentItemsByEntityId);
 
 		if ($remainingItemsCount > 0 && !$this->withoutGlobalRecentItems)
 		{
@@ -187,7 +192,12 @@ abstract class EntityProvider extends BaseProvider
 	{
 		$searchProvider = Search\Result\Factory::createProvider($this->getEntityTypeId());
 		$searchProvider->setLimit(CrmDynamics::LIMIT_SEARCH);
-		$searchProvider->setAdditionalFilter($this->getAdditionalFilter());
+		$additionalFilter = $this->getAdditionalFilter();
+		$searchProvider->setAdditionalFilter($additionalFilter);
+		if (array_key_exists('=CATEGORY_ID', $additionalFilter))
+		{
+			$searchProvider->setAffectedCategories([(int)$additionalFilter['=CATEGORY_ID']]);
+		}
 
 		$result = $searchProvider->getSearchResult($searchQuery->getQuery());
 

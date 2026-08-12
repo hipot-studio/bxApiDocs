@@ -8,7 +8,7 @@ class RecentSyncItem extends RecentItem
 {
 	public function toRestFormat(array $option = []): array
 	{
-		return [
+		$rest = [
 			'dialogId' => $this->dialogId,
 			'chatId' => $this->chatId,
 			'messageId' => $this->messageId,
@@ -17,5 +17,14 @@ class RecentSyncItem extends RecentItem
 			'dateUpdate' => $this->dateUpdate,
 			'dateLastActivity' => $this->dateLastActivity,
 		];
+
+		// This override uses a sync-specific field set, so ownMessageId must be re-emitted here.
+		// Always emit it (mirrors the parent): the client never derives it, derive is gone.
+		if ($this->ownMessageId > 0)
+		{
+			$rest['ownMessageId'] = $this->ownMessageId;
+		}
+
+		return $rest;
 	}
 }

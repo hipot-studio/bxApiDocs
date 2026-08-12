@@ -1,6 +1,5 @@
 <?php
 
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Format;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
@@ -245,7 +244,7 @@ class CrmDocumentViewComponent extends ViewComponent
 				'isInsertLinkInMessage' => true,
 				'isConfigurable' => true,
 				'signedTemplate' => $this->getSignedTemplate(),
-				'needCommonPhoneChannel' => Feature::enabled(Feature\MessageSenderEditor::class),
+				'needCommonPhoneChannel' => true,
 				'messageSenderSceneId' => 'crm.document.view',
 				'analytics' => [
 					'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_DOCUMENT,

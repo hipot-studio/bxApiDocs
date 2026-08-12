@@ -338,8 +338,9 @@ final class CCalendarRestService extends IRestService
 	 * $params['timezone_to'] - string, timezone, default value - timezone of current user
 	 * $params['from_ts'] - timestamp, "from" limit, can be set instead of $params['from']
 	 * $params['to_ts'] - timestamp, "to" limit, can be set instead of $params['to']
-	 * $params['section'] - (required if $params['auto_detect_section'] is not "Y"), number, id of the section
-	 * $params['auto_detect_section'] - "Y" | "N", if "Y" $params['section'] could be skipped
+	 * $params['section'] - number, id of the section
+	 * $params['auto_detect_section'] - "Y" | "N", if "Y" section will be auto-detected.
+	 * Section is still auto-detected when $params['section'] is empty, even if this option is "N".
 	 * $params['name'] - (required), string, name of the event
 	 * $params['skip_time'] - "Y"|"N",
 	 * $params['description'] - string, description of the event
@@ -422,8 +423,7 @@ final class CCalendarRestService extends IRestService
 
 		if ($skipTime)
 		{
-			unset($params['timezone_from']);
-			unset($params['timezone_to']);
+			unset($params['timezone_from'], $params['timezone_to']);
 		}
 
 		if (isset($params['from']))
@@ -432,7 +432,7 @@ final class CCalendarRestService extends IRestService
 
 			if (!$skipTime)
 			{
-				if (self::isDateStringContainsTimezone($params['from']))
+				if (is_string($params['from']) && self::isDateStringContainsTimezone($params['from']))
 				{
 					unset($params['timezone_from']);
 				}
@@ -452,7 +452,7 @@ final class CCalendarRestService extends IRestService
 
 			if (!$skipTime)
 			{
-				if (self::isDateStringContainsTimezone($params['to']))
+				if (is_string($params['to']) && self::isDateStringContainsTimezone($params['to']))
 				{
 					unset($params['timezone_to']);
 				}
@@ -481,13 +481,8 @@ final class CCalendarRestService extends IRestService
 			'to',
 			'name',
 			'ownerId',
-			'type'
+			'type',
 		];
-
-		if (isset($params['auto_detect_section']) && $params['auto_detect_section'] !== "Y")
-		{
-			$necessaryParams[] = 'section';
-		}
 
 		foreach ($necessaryParams as $param)
 		{
@@ -636,20 +631,18 @@ final class CCalendarRestService extends IRestService
 			// set creator as attendee if no presented
 			$arFields['ATTENDEES'] = $requestAttendees ?: [$defaultAttendeeId];
 			$arFields['ATTENDEES_CODES'] = [];
-			if (is_array($arFields['ATTENDEES']))
+
+			foreach($arFields['ATTENDEES'] as $attendeeId)
 			{
-				foreach($arFields['ATTENDEES'] as $attendeeId)
+				$code = 'U'. (int)$attendeeId;
+				if (!in_array($code, $arFields['ATTENDEES_CODES'], true))
 				{
-					$code = 'U'. (int)$attendeeId;
-					if (!in_array($code, $arFields['ATTENDEES_CODES'], true))
-					{
-						$arFields['ATTENDEES_CODES'][] = $code;
-					}
+					$arFields['ATTENDEES_CODES'][] = $code;
 				}
 			}
 
 			$meeting = $params['meeting'] ?? [];
-			$arFields['MEETING_HOST'] = isset($params['host']) ? (int)$params['host'] : $defaultAttendeeId;
+			$arFields['MEETING_HOST'] = $userId ?: $defaultAttendeeId;
 			$arFields['MEETING'] = [
 				'HOST_NAME' => CCalendar::GetUserName($arFields['MEETING_HOST']),
 				'NOTIFY' => (bool)($meeting['notify'] ?? false),
@@ -660,7 +653,7 @@ final class CCalendarRestService extends IRestService
 				'LANGUAGE_ID' => CCalendar::getUserLanguageId($defaultAttendeeId),
 			];
 
-			$saveParams['userId'] = $arFields['MEETING_HOST'];
+			$saveParams['userId'] = $userId;
 		}
 
 		if (empty($arFields['ATTENDEES']))
@@ -711,17 +704,25 @@ final class CCalendarRestService extends IRestService
 		}
 
 		$saveParams['arFields'] = $arFields;
-		if (isset($params['auto_detect_section']) && $params['auto_detect_section'] === 'Y')
+		if ($sectionId <= 0 || ($params['auto_detect_section'] ?? null) === 'Y')
 		{
 			$saveParams['autoDetectSection'] = true;
 			$saveParams['autoCreateSection'] = true;
 		}
 
+		CCalendar::GetAndClearErrors();
+
 		$newId = CCalendar::SaveEvent($saveParams);
 
 		if (!$newId)
 		{
-			throw new RestException(Loc::getMessage("CAL_REST_EVENT_NEW_ERROR"));
+			$errors = CCalendar::GetAndClearErrors();
+			if (in_array(Loc::getMessage('EC_ACCESS_DENIED'), $errors, true))
+			{
+				throw new RestException(Loc::getMessage('CAL_REST_ACCESS_DENIED'));
+			}
+
+			throw new RestException(Loc::getMessage('CAL_REST_EVENT_NEW_ERROR'));
 		}
 
 		return (int)$newId;
@@ -866,7 +867,7 @@ final class CCalendarRestService extends IRestService
 
 			if (!$skipTime)
 			{
-				if (self::isDateStringContainsTimezone($params['from']))
+				if (is_string($params['from']) && self::isDateStringContainsTimezone($params['from']))
 				{
 					unset($params['timezone_from']);
 				}
@@ -886,7 +887,7 @@ final class CCalendarRestService extends IRestService
 
 			if (!$skipTime)
 			{
-				if (self::isDateStringContainsTimezone($params['to']))
+				if (is_string($params['to']) && self::isDateStringContainsTimezone($params['to']))
 				{
 					unset($params['timezone_to']);
 				}

@@ -4,8 +4,12 @@ namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ExternalChat\Config;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterAttachChildEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterCreateEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterDetachChildEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterLoadEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeAttachChildEvent;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeDetachChildEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterMuteEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeCreateEvent;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\AfterUsersDeleteEvent;
@@ -151,11 +155,11 @@ class ExternalChat extends GroupChat
 		return parent::addUsers($userIds, $config);
 	}
 
-	protected function processUpdateStateOnRelationsChanged(RelationChangeSet $changes): Result
+	protected function processUpdateStateOnRelationsChanged(RelationChangeSet $changes, ?AddUsersConfig $config = null): Result
 	{
-		(new Chat\ExternalChat\Event\AfterUsersAddEvent($this, $changes))->send();
+		(new Chat\ExternalChat\Event\AfterUsersAddEvent($this, $changes, $config))->send();
 
-		return parent::processUpdateStateOnRelationsChanged($changes);
+		return parent::processUpdateStateOnRelationsChanged($changes, $config);
 	}
 
 	public function deleteUser(int $userId, DeleteUserConfig $config = new DeleteUserConfig()): Result
@@ -288,9 +292,47 @@ class ExternalChat extends GroupChat
 		(new AfterLoadEvent($this, $userId))->send();
 	}
 
+	public function onBeforeAttachChild(GroupChat $childChat, int $userId): Result
+	{
+		$event = new BeforeAttachChildEvent($this, $childChat, $userId);
+		$event->send();
+		if ($event->isCancelled())
+		{
+			return (new Result())->addError(new ChatError(ChatError::FROM_OTHER_MODULE));
+		}
+
+		return new Result();
+	}
+
+	public function onAfterAttachChild(GroupChat $childChat, int $userId): void
+	{
+		(new AfterAttachChildEvent($this, $childChat, $userId))->send();
+	}
+
+	public function onBeforeDetachChild(GroupChat $childChat, int $userId): Result
+	{
+		$event = new BeforeDetachChildEvent($this, $childChat, $userId);
+		$event->send();
+		if ($event->isCancelled())
+		{
+			return (new Result())->addError(new ChatError(ChatError::FROM_OTHER_MODULE));
+		}
+
+		return new Result();
+	}
+
+	public function onAfterDetachChild(GroupChat $childChat, int $userId): void
+	{
+		(new AfterDetachChildEvent($this, $childChat, $userId))->send();
+	}
+
 	public function onAfterAllMessagesRead(int $readerId): Result
 	{
-		(new AfterReadAllMessagesEvent($this, $readerId))->send();
+		// Snapshot the read boundary (chat's last message id at read-all time) so the
+		// deferred IM->Feed sync marks only posts whose system message existed now, not
+		// ones cross-posted into the gap before the background job runs.
+		$lastMessageId = (int)$this->getLastMessageId();
+		(new AfterReadAllMessagesEvent($this, $readerId, $lastMessageId))->send();
 
 		return parent::onAfterAllMessagesRead($readerId);
 	}

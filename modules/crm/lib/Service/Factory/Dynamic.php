@@ -303,11 +303,18 @@ class Dynamic extends Service\Factory
 				'CLASS' => Field\Opportunity::class,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
 				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_CURRENCY_ID,
+				],
 			];
 			$info[Item::FIELD_NAME_TAX_VALUE] = [
 				'TYPE' => Field::TYPE_DOUBLE,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
 				'CLASS' => Field\TaxValue::class,
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_CURRENCY_ID,
+				],
 			];
 			$info[Item::FIELD_NAME_OPPORTUNITY_ACCOUNT] = [
 				'TYPE' => Field::TYPE_DOUBLE,
@@ -317,6 +324,10 @@ class Dynamic extends Service\Factory
 					\CCrmFieldInfoAttr::ReadOnly,
 				],
 				'CLASS' => Field\OpportunityAccount::class,
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_ACCOUNT_CURRENCY_ID,
+				],
 			];
 			$info[Item::FIELD_NAME_TAX_VALUE_ACCOUNT] = [
 				'TYPE' => Field::TYPE_DOUBLE,
@@ -326,6 +337,10 @@ class Dynamic extends Service\Factory
 					\CCrmFieldInfoAttr::ReadOnly,
 				],
 				'CLASS' => Field\TaxValueAccount::class,
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_ACCOUNT_CURRENCY_ID,
+				],
 			];
 		}
 

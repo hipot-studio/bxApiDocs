@@ -12,6 +12,7 @@ class RequestEntityDto
 		public ?int $position,
 		public ?string $prompt,
 		public ?int $requestId = null,
+		public ?array $promptMarkers = null,
 	)
 	{
 	}

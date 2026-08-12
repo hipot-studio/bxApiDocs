@@ -4,7 +4,6 @@ use Bitrix\Im\Common;
 use Bitrix\Im\Configuration\General;
 use Bitrix\Im\Configuration\Manager;
 use Bitrix\Im\Configuration\Notification;
-use Bitrix\Pull\Event;
 
 class CIMSettings
 {
@@ -105,18 +104,7 @@ class CIMSettings
 		{
 			CIMStatus::Set($userId, ['STATUS' => $value[self::STATUS]]);
 		}
-		if (isset($value['openDesktopFromPanel']) && CModule::IncludeModule('pull'))
-		{
-			Event::add($userId, [
-				'module_id' => 'im',
-				'command' => 'settingsUpdate',
-				'expiry' => 5,
-				'params' => [
-					'openDesktopFromPanel' => $value['openDesktopFromPanel'],
-				],
-				'extra' => Common::getPullExtra()
-			]);
-		}
+		Manager::sendPullGeneralSettingsUpdate($userId, $value);
 
 		$arDefault = self::GetDefaultSettings($type);
 		foreach ($value as $key => $val)
@@ -182,21 +170,7 @@ class CIMSettings
 		{
 			CIMStatus::Set($userId, ['STATUS' => $value[self::STATUS]]);
 		}
-		if (isset($value['openDesktopFromPanel']) && CModule::IncludeModule('pull'))
-		{
-			Event::add(
-				$userId,
-				[
-					'module_id' => 'im',
-					'command' => 'settingsUpdate',
-					'expiry' => 5,
-					'params' => [
-						'openDesktopFromPanel' => $value['openDesktopFromPanel'],
-					],
-					'extra' => Common::getPullExtra()
-				]
-			);
-		}
+		Manager::sendPullGeneralSettingsUpdate($userId, $value);
 
 		$arDefault = self::GetDefaultSettings($type);
 		foreach ($arSettings as $key => $val)
@@ -417,6 +391,17 @@ class CIMSettings
 				{
 					\Bitrix\Main\Loader::includeModule('call');
 					$checkedValues[$key] = in_array($value[$key], \Bitrix\Call\VideoStrategyType::getList())? $value[$key]: $default;
+				}
+				else if ($key === 'defaultReaction')
+				{
+					$checkedValues[$key] =
+						(
+							\Bitrix\Main\Loader::includeModule('ui')
+							&& \Bitrix\UI\Public\Enum\Reaction\ReactionName::tryFrom((string)($value[$key] ?? '')) !== null
+						)
+							? $value[$key]
+							: $default
+					;
 				}
 				else if (array_key_exists($key, $value))
 				{

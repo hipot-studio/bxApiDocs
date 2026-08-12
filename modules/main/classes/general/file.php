@@ -197,6 +197,8 @@ class CFile
 	public static function SaveFile($arFile, $strSavePath, $forceRandom = false, $skipExtension = false, $dirAdd = '')
 	{
 		$arFile["name"] = (string)($arFile["name"] ?? '');
+		$forceRandom = (bool)$forceRandom;
+		$skipExtension = (bool)$skipExtension;
 
 		if (isset($arFile["del"]) && $arFile["del"] <> '')
 		{
@@ -1599,7 +1601,7 @@ class CFile
 		}
 
 		//translit, replace unsafe chars, etc.
-		$result = static::transformName($arFile, $bForceMD5, $bSkipExt);
+		$result = static::transformName($arFile, (bool)$bForceMD5, (bool)$bSkipExt);
 		if (!$result->isSuccess())
 		{
 			return $result->getError()->getMessage();

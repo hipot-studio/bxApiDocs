@@ -1,8 +1,10 @@
 <?php
+
 namespace Bitrix\Landing\Internals;
 
-use \Bitrix\Main\Localization\Loc;
-use \Bitrix\Main\Entity;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields;
 
 Loc::loadMessages(__FILE__);
 
@@ -22,7 +24,7 @@ Loc::loadMessages(__FILE__);
  * @method static \Bitrix\Landing\Internals\EO_HookData wakeUpObject($row)
  * @method static \Bitrix\Landing\Internals\EO_HookData_Collection wakeUpCollection($rows)
  */
-class HookDataTable extends Entity\DataManager
+class HookDataTable extends DataManager
 {
 	/**
 	 * Returns DB table name for entity.
@@ -39,37 +41,37 @@ class HookDataTable extends Entity\DataManager
 	 */
 	public static function getMap()
 	{
-		return array(
-			'ID' => new Entity\IntegerField('ID', array(
+		return [
+			'ID' => new Fields\IntegerField('ID', [
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => 'ID'
-			)),
-			'ENTITY_ID' => new Entity\IntegerField('ENTITY_ID', array(
+				'title' => 'ID',
+			]),
+			'ENTITY_ID' => new Fields\IntegerField('ENTITY_ID', [
 				'title' => Loc::getMessage('LANDING_TABLE_FIELD_ENTITY_ID'),
-				'required' => true
-			)),
-			'ENTITY_TYPE' => new Entity\StringField('ENTITY_TYPE', array(
+				'required' => true,
+			]),
+			'ENTITY_TYPE' => new Fields\StringField('ENTITY_TYPE', [
 				'title' => Loc::getMessage('LANDING_TABLE_FIELD_ENTITY_TYPE'),
-				'required' => true
-			)),
-			'HOOK' => new Entity\StringField('HOOK', array(
+				'required' => true,
+			]),
+			'HOOK' => new Fields\StringField('HOOK', [
 				'title' => Loc::getMessage('LANDING_TABLE_FIELD_HOOK'),
-				'required' => true
-			)),
-			'CODE' => new Entity\StringField('CODE', array(
+				'required' => true,
+			]),
+			'CODE' => new Fields\StringField('CODE', [
 				'title' => Loc::getMessage('LANDING_TABLE_FIELD_CODE'),
-				'required' => true
-			)),
-			'VALUE' => new Entity\StringField('VALUE', array(
+				'required' => true,
+			]),
+			'VALUE' => new Fields\StringField('VALUE', [
 				'title' => Loc::getMessage('LANDING_TABLE_FIELD_VALUE'),
-				'save_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getSaveModificator'),
-				'fetch_data_modification' => array('\Bitrix\Main\Text\Emoji', 'getFetchModificator')
-			)),
-			'PUBLIC' => new Entity\StringField('PUBLIC', array(
+				'save_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getSaveModificator'],
+				'fetch_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getFetchModificator'],
+			]),
+			'PUBLIC' => new Fields\StringField('PUBLIC', [
 				'title' => Loc::getMessage('LANDING_TABLE_FIELD_PUBLIC'),
-				'default_value' => 'N'
-			))
-		);
+				'default_value' => 'N',
+			]),
+		];
 	}
 }

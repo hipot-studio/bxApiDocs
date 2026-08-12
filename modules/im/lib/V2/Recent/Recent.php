@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Recent;
 
 use Bitrix\Im\Model\RecentTable;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\UserPopupItem;
@@ -35,6 +36,19 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 			$messageIds[] = $item->getMessageId();
 			$chats[] = Chat::getInstance($item->getChatId());
 			$chatIds[] = $item->getChatId();
+
+			$ownMessageId = $item->getOwnMessageId();
+			if ($ownMessageId > 0 && $ownMessageId !== $item->getMessageId())
+			{
+				$messageIds[] = $ownMessageId;
+			}
+
+			$sourceChatId = $item->getSourceChatId();
+			if ($sourceChatId > 0 && $sourceChatId !== $item->getChatId())
+			{
+				$chats[] = Chat::getInstance($sourceChatId);
+				$chatIds[] = $sourceChatId;
+			}
 
 			if ($item->getType() === RecentType::User)
 			{
@@ -132,6 +146,8 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 			'DATE_LAST_ACTIVITY',
 			'DATE_UPDATE',
 			'RELATION.LAST_ID',
+			'PREVIEW_SOURCE_CID',
+			'PREVIEW_SOURCE_MID',
 		]);
 
 		$recentParams->apply($query);
@@ -149,5 +165,38 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 		}
 
 		return $recent;
+	}
+
+	/**
+	 * Overlays each collab row's preview-source pointer onto $messageId (and source chat id), so the row
+	 * shows the freshest child-chat message instead of its own last message. No-op when the feature is off.
+	 *
+	 * $userId is unused here; kept for signature compatibility with the RecentSync override.
+	 */
+	public function enrichCollabPreviewSources(int $userId): void
+	{
+		unset($userId);
+
+		if (!Features::isCollabPreviewSourceEnabled())
+		{
+			return;
+		}
+
+		foreach ($this as $item)
+		{
+			$sourceMessageId = $item->getPreviewSourceMid();
+			if ($sourceMessageId <= 0)
+			{
+				continue;
+			}
+
+			$item->setMessageId($sourceMessageId);
+
+			$sourceChatId = $item->getPreviewSourceCid();
+			if ($sourceChatId > 0)
+			{
+				$item->setSourceChatId($sourceChatId);
+			}
+		}
 	}
 }

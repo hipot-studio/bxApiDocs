@@ -448,7 +448,13 @@ final class QueueJob
 	 */
 	public function fail(mixed $rawError): void
 	{
-		$this->error = new Error($rawError['message'] ?? 'Unknown Error', $rawError['code'] ?? '');
+		$errorMessage = $rawError['message'] ?? null;
+		if (!is_string($errorMessage) || $errorMessage === '')
+		{
+			$errorField = $rawError['error'] ?? null;
+			$errorMessage = is_string($errorField) ? $errorField : 'Unknown Error';
+		}
+		$this->error = new Error($errorMessage, $rawError['code'] ?? '');
 		$this->engine->writeErrorInHistory($this->error);
 
 		if (isset($rawError['api_request_completed']))
@@ -468,7 +474,6 @@ final class QueueJob
 		{
 			$this->error = new Error(Loc::getMessage('AI_ENGINE_ERROR_OTHER'),'AI_ENGINE_ERROR_OTHER');
 		}
-
 
 		$this->sendBackendEvent(new Result(null, null), self::EVENT_FAIL);
 		$this->sendFrontendEvent(new Result(null, null), self::EVENT_FAIL);

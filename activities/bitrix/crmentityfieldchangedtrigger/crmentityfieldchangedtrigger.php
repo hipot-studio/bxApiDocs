@@ -133,6 +133,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			CCrmOwnerType::ContactName,
 			CCrmOwnerType::LeadName,
 			CCrmOwnerType::QuoteName,
+			CCrmOwnerType::SmartInvoiceName,
 		];
 	}
 
@@ -157,6 +158,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 				'entity' => [
 					'options' => [
 						'moduleIds' => ['crm'],
+						'crm' => ['onlyBizProcEnabled' => true],
 					],
 				],
 			];
@@ -170,15 +172,19 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			if (in_array($type, $presetEntities, true))
 			{
 				$map['Document']['Hidden'] = true;
-				$map['Document']['Settings']['entity']['options']['crm'] = ['onlyEntities' => [$type]];
+				$map['Document']['Settings']['entity']['options']['crm']['onlyEntities'] = [$type];
 			}
 			else
 			{
-				$map['Document']['Settings']['entity']['options']['crm'] =
-					$isAutomatedSolution
-						? ['onlyAutomatedSolution' => true]
-						: ['onlyDynamic' => true]
-				;
+				if ($isAutomatedSolution)
+				{
+					$map['Document']['Settings']['entity']['options']['crm']['onlyAutomatedSolution'] = true;
+				}
+				else
+				{
+					$map['Document']['Settings']['entity']['options']['crm']['onlyDynamic'] = true;
+				}
+
 				if ($isAutomatedSolution)
 				{
 					$map['IsAutomatedSolution'] = [

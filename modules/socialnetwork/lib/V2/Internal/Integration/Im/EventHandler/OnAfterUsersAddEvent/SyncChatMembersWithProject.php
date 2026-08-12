@@ -29,7 +29,11 @@ class SyncChatMembersWithProject
 		$structureMemberIds = self::resolveStructureMemberIds($chat, $newMemberIds);
 
 		self::synchronizeStructureFromChatToProject($chat, $structureMemberIds);
-		self::addMembersToProject($chat, $newMemberIds, $structureMemberIds);
+
+		$config = $event->getAddUsersConfig();
+		$sharingLinkAuthorId = $config?->bySharingLink() ? (int)($config->sharingLink?->getAuthorId() ?? 0) : 0;
+
+		self::addMembersToProject($chat, $newMemberIds, $structureMemberIds, $sharingLinkAuthorId);
 	}
 
 	private static function synchronizeStructureFromChatToProject(CollabChat $chat, array $structureMemberIds): void
@@ -52,7 +56,7 @@ class SyncChatMembersWithProject
 		;
 	}
 
-	private static function addMembersToProject(CollabChat $chat, array $newMemberIds, array $structureMemberIds): void
+	private static function addMembersToProject(CollabChat $chat, array $newMemberIds, array $structureMemberIds, int $sharingLinkAuthorId = 0): void
 	{
 		$projectId = (int)$chat->getEntityId();
 
@@ -76,6 +80,7 @@ class SyncChatMembersWithProject
 				members: $structureMembers,
 				userId: $initiatorId,
 				initiatedByType: UserToGroupTable::INITIATED_BY_STRUCTURE,
+				sharingLinkAuthorId: $sharingLinkAuthorId,
 			);
 		}
 
@@ -85,6 +90,7 @@ class SyncChatMembersWithProject
 				projectId: $projectId,
 				members: $nonStructureMembers,
 				userId: $initiatorId,
+				sharingLinkAuthorId: $sharingLinkAuthorId,
 			);
 		}
 	}

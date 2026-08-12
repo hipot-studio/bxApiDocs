@@ -287,19 +287,149 @@ class SocialNetwork
 		$request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
 		if ($request->get('tab') == self::SETTINGS_CODE_SHORT)
 		{
-			if ($request->get('page'))
-			{
-				$url = $request->get('page');
-			}
-			$asset = \Bitrix\Main\Page\Asset::getInstance();
-			$asset->addString(
-				$asset->insertJs(
-					'BX.ready(function(){BX.SidePanel.Instance.open(\'' . \CUtil::jsEscape($url) . '\');});',
-			 		'',
-		 			true
-				)
-			);
+			$requestedPage = $request->get('page');
+			$url = self::resolveKnowledgeDeepLinkUrl($url, is_string($requestedPage) ? $requestedPage : null);
+			self::insertSliderOpenScript($url);
 		}
+	}
+
+	/**
+	 * Opens knowledge base of the group in the slider, if current hit is a deep link to it.
+	 * Repeats all conditions of the group menu item: no menu item - no opening.
+	 * @param int $groupId Group id.
+	 * @return void
+	 */
+	public static function processGroupKnowledgeDeepLink(int $groupId): void
+	{
+		$request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
+		if ($request->get('tab') !== self::SETTINGS_CODE_SHORT)
+		{
+			return;
+		}
+		if ($groupId <= 0)
+		{
+			return;
+		}
+
+		// knowledge base of the group is still being copied
+		if (Option::get(Group::MODULE_ID, Group::CHECKER_OPTION . $groupId, '') == 'Y')
+		{
+			return;
+		}
+
+		// tool is available on the portal
+		if (
+			Loader::includeModule('intranet')
+			&& !Restriction\ToolAvailabilityManager::getInstance()->check('knowledge_base')
+		)
+		{
+			return;
+		}
+
+		// feature is active for the group
+		$activeFeatures = \CSocNetFeatures::getActiveFeaturesNames(SONET_ENTITY_GROUP, $groupId);
+		if (!is_array($activeFeatures) || !array_key_exists(self::SETTINGS_CODE, $activeFeatures))
+		{
+			return;
+		}
+
+		// tariff limits
+		if (!Restriction\Manager::isAllowed('limit_crm_free_knowledge_base_project'))
+		{
+			return;
+		}
+
+		// binding exists and is readable
+		$binding = self::getBindingRow($groupId, false);
+		if (empty($binding) || !self::canPerformOperation($groupId, Rights::ACCESS_TYPES['read']))
+		{
+			return;
+		}
+
+		$requestedPage = $request->get('page');
+		$url = self::resolveKnowledgeDeepLinkUrl(
+			$binding['PUBLIC_URL'],
+			is_string($requestedPage) ? $requestedPage : null
+		);
+		self::insertSliderOpenScript($url);
+	}
+
+	/**
+	 * Returns url of knowledge base to open in the slider.
+	 * Requested page is accepted only as a relative path inside the public url of the same knowledge base.
+	 * @param string $publicUrl Public url of the group knowledge base.
+	 * @param string|null $requestedPage Page path from the request.
+	 * @return string
+	 */
+	public static function resolveKnowledgeDeepLinkUrl(string $publicUrl, ?string $requestedPage): string
+	{
+		$page = trim((string)$requestedPage);
+		if ($page === '')
+		{
+			return $publicUrl;
+		}
+
+		// relative path only, '//host/...' leads to the external host
+		if (!str_starts_with($page, '/') || str_starts_with($page, '//'))
+		{
+			return $publicUrl;
+		}
+
+		$basePath = (new \Bitrix\Main\Web\Uri($publicUrl))->getPath();
+		if ($basePath === '')
+		{
+			return $publicUrl;
+		}
+		$basePath = rtrim($basePath, '/') . '/';
+
+		// public url degraded to the site root bounds nothing
+		if ($basePath === '/')
+		{
+			return $publicUrl;
+		}
+
+		$pagePath = (new \Bitrix\Main\Web\Uri($page))->getPath();
+		if (self::hasParentDirectorySegment($pagePath))
+		{
+			return $publicUrl;
+		}
+
+		return str_starts_with($pagePath, $basePath) ? $pagePath : $publicUrl;
+	}
+
+	/**
+	 * Returns true, if path contains a parent directory segment and can be resolved outside of its own prefix.
+	 * Separators and dots are decoded first: browser and server resolve the encoded ones on opening.
+	 * @param string $path Url path.
+	 * @return bool
+	 */
+	private static function hasParentDirectorySegment(string $path): bool
+	{
+		$segments = preg_split('#[/\\\\]#', rawurldecode($path));
+
+		return in_array('..', $segments, true);
+	}
+
+	/**
+	 * Inserts script for opening url in the slider into the current page.
+	 * @param string $url Url for opening.
+	 * @return void
+	 */
+	private static function insertSliderOpenScript(string $url): void
+	{
+		if ($url === '')
+		{
+			return;
+		}
+
+		$asset = \Bitrix\Main\Page\Asset::getInstance();
+		$asset->addString(
+			$asset->insertJs(
+				'BX.ready(function(){BX.SidePanel.Instance.open(' . \Bitrix\Main\Web\Json::encode($url) . ');});',
+				'',
+				true
+			)
+		);
 	}
 
 	/**

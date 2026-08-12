@@ -7,6 +7,7 @@
  */
 namespace Bitrix\Crm\WebForm;
 
+use Bitrix\Crm\Service\Accounting;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Crm;
@@ -368,8 +369,8 @@ class Manager
 					$oldCurrency = $data['OLD_CURRENCY'] ?? null;
 					$newCurrency = $data['CURRENCY'] ?? null;
 
-					$oldPrice = self::getRoundedPrice($oldPrice, $oldCurrency);
-					$newPrice = self::getRoundedPrice($newPrice, $newCurrency);
+					$oldPrice = Accounting::roundPublic($oldPrice, $oldCurrency);
+					$newPrice = Accounting::roundPublic($newPrice, $newCurrency);
 
 					if ($oldPrice !== $newPrice || $oldCurrency !== $newCurrency)
 					{
@@ -378,25 +379,6 @@ class Manager
 				}
 			}
 		}
-	}
-
-	/**
-	 * Workaround for precision issues from price update event.
-	 *
-	 * @param float $price
-	 * @param string $currency currency ISO code
-	 * @return float
-	 */
-	private static function getRoundedPrice(float $price, string $currency)
-	{
-		if (Loader::includeModule('currency'))
-		{
-			$price = \CCurrencyLang::CurrencyFormat($price, $currency, false);
-			$price = \CCurrencyLang::getUnFormattedValue($price, $currency);
-			return (float)str_replace(' ', '', $price);
-		}
-
-		return round($price, 2);
 	}
 
 	private static function updateProductFormsWithNewPrice(int $productId, float $oldPrice, float $newPrice, string $oldCurrency, string $newCurrency)

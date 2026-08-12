@@ -22,11 +22,12 @@ class ICalUtil
 
 	public static function getUserIdByEmail(array $userInfo): ?string
 	{
-		$user = UserTable::getList([
-			'filter' => ['EMAIL' => $userInfo['EMAIL']],
-			'select' => ['ID'],
-			'limit' => 1,
-		])->fetch();
+		$user = UserTable::query()
+			->setSelect(['ID'])
+			->where('EMAIL', $userInfo['EMAIL'])
+			->setLimit(1)
+			->fetch()
+		;
 
 		if (!empty($user))
 		{

@@ -11,4 +11,5 @@ class CloudRecordingRequest extends Hydrator
 	public string $roomId = '';
 	public ?array $recording = [];
 	public ?array $preview = [];
+	public string $requestId = '';
 }

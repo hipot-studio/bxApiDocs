@@ -6,7 +6,7 @@ class RemoveNodeAction extends BaseAction
 {
 	protected const JS_COMMAND = 'removeNode';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		return true;
 	}

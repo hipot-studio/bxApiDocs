@@ -24,6 +24,7 @@ use Bitrix\Main\Result;
 use Bitrix\Main\Web\MimeType;
 use Bitrix\StaffTrack\Internal\Geo\Geohash;
 use Bitrix\StaffTrack\Public\Services\AddressCache;
+use Bitrix\StaffTrack\Public\Services\SnapshotCache;
 
 class GeoProvider
 {
@@ -34,9 +35,10 @@ class GeoProvider
 	private const IMAGE_HEIGHT = 169;
 	private const IMAGE_ZOOM = 15;
 	private const ADDRESS_ZOOM = 18;
+	private const SNAPSHOT_COORD_PRECISION = 4;
 
-	private const DEFAULT_TEMPLATE = '[", ",[STREET,BUILDING]]';
-	private const DEFAULT_ADDRESS_LINE_TEMPLATE = '[", ",[STREET,BUILDING]]';
+	private const DEFAULT_TEMPLATE = '[", ",[ADDRESS_LINE_1,LOCALITY]]';
+	private const DEFAULT_ADDRESS_LINE_TEMPLATE = '[" ",[STREET,BUILDING]]';
 	private const SHORT_TEMPLATE = '[", ",[LOCALITY,ADM_LEVEL_1,COUNTRY]]';
 
 	public function __construct(
@@ -73,7 +75,17 @@ class GeoProvider
 			return $result->addError(new Error('Static map service is not supported by the source'));
 		}
 
-		$point = new Point($this->latitude, $this->longitude);
+		$latitude = self::roundSnapshotCoordinate($this->latitude);
+		$longitude = self::roundSnapshotCoordinate($this->longitude);
+		$hash = self::buildSnapshotHash($source->getCode(), $latitude, $longitude);
+
+		$cachedPath = $this->resolveCachedSnapshot($hash);
+		if ($cachedPath !== null)
+		{
+			return $result->setData(['snapshotUrl' => $cachedPath]);
+		}
+
+		$point = new Point($latitude, $longitude);
 		$snapshot = $sourceStaticMapService->getStaticMap(
 			$point,
 			self::IMAGE_ZOOM,
@@ -86,17 +98,49 @@ class GeoProvider
 			return $result->addErrors($snapshot->getErrors());
 		}
 
-		$filePath = $this->saveStaticMapToFile($snapshot, $source);
-		if (!$filePath)
+		$fileId = $this->saveStaticMapToFile($snapshot, $hash);
+		if (!$fileId)
 		{
 			return $result->addError(new Error('Failed to save static map image'));
 		}
 
-		$result->setData([
-			'snapshotUrl' => $filePath,
-		]);
+		SnapshotCache::setFileId($hash, $fileId);
 
-		return $result;
+		$filePath = \CFile::GetPath($fileId);
+		if (!$filePath)
+		{
+			return $result->addError(new Error('Failed to resolve static map image path'));
+		}
+
+		return $result->setData(['snapshotUrl' => $filePath]);
+	}
+
+	private function resolveCachedSnapshot(string $hash): ?string
+	{
+		$fileId = SnapshotCache::getFileId($hash);
+		if ($fileId === null)
+		{
+			return null;
+		}
+
+		return \CFile::GetPath($fileId) ?: null;
+	}
+
+	private static function roundSnapshotCoordinate(float $coordinate): float
+	{
+		return round($coordinate, self::SNAPSHOT_COORD_PRECISION);
+	}
+
+	private static function buildSnapshotHash(string $sourceCode, float $latitude, float $longitude): string
+	{
+		return sha1(implode(';', [
+			$sourceCode,
+			$longitude,
+			$latitude,
+			self::IMAGE_ZOOM,
+			self::IMAGE_WIDTH,
+			self::IMAGE_HEIGHT,
+		]));
 	}
 
 	public function getAddress(): Result
@@ -249,19 +293,10 @@ class GeoProvider
 		return $source;
 	}
 
-	private function saveStaticMapToFile(StaticMapResult $mapResult, Source $source): ?string
+	private function saveStaticMapToFile(StaticMapResult $mapResult, string $hash): ?int
 	{
 		$content = $mapResult->getContent();
 		$mimeType = $mapResult->getMimeType();
-
-		$hash = sha1(implode(';', [
-			$source->getCode(),
-			$this->longitude,
-			$this->latitude,
-			self::IMAGE_ZOOM,
-			self::IMAGE_WIDTH,
-			self::IMAGE_HEIGHT,
-		]));
 
 		$extension = '';
 		foreach (MimeType::getMimeTypeList() as $ext => $mime)
@@ -284,12 +319,7 @@ class GeoProvider
 			'stafftrack/static_map',
 		);
 
-		if (!$fileId)
-		{
-			return null;
-		}
-
-		return \CFile::GetPath($fileId) ?: null;
+		return $fileId ?: null;
 	}
 
 	/**

@@ -49,9 +49,6 @@ class GenerationsTable extends DataManager
 				->configureRequired()
 			,
 			(new Fields\IntegerField('STEP')),
-			(new Fields\IntegerField('CHAT_ID'))
-				->configureNullable()
-			,
 			(new Fields\IntegerField('SITE_ID'))
 				->configureNullable()
 			,
@@ -64,6 +61,11 @@ class GenerationsTable extends DataManager
 				->addFetchDataModifier([EmojiDataProcessor::class, 'decode'])
 			,
 			(new Fields\ArrayField('DATA'))
+				->configureSerializationPhp()
+				->configureNullable()
+				->configureDefaultValue(null)
+			,
+			(new Fields\ArrayField('HTML_BLOCKS'))
 				->configureSerializationPhp()
 				->configureNullable()
 				->configureDefaultValue(null)

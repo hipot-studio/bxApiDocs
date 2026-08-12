@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\ImOpenLines;
 
+use Bitrix\ImOpenLines\V2\Analytics\Bot\EndBotSessionEventContext;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Application;
@@ -79,8 +80,9 @@ class Queue
 	 * @param int $limitTime
 	 * @param int $limit
 	 * @param int $lineId
+	 * @param EndBotSessionEventContext|null $endBotSessionContext
 	 */
-	public static function transferToNextSession($limitTime = 60, $limit = 0, $lineId = 0)
+	public static function transferToNextSession($limitTime = 60, $limit = 0, $lineId = 0, ?EndBotSessionEventContext $endBotSessionContext = null)
 	{
 		$time = new Tools\Time;
 
@@ -162,7 +164,7 @@ class Queue
 				$session = new Session();
 				$session->loadByArray($fields, $configs[$fields['CONFIG_ID']], $chats[$fields['CHAT_ID']]);
 
-				$resultTransfer = $session->transferToNextInQueue(false);
+				$resultTransfer = $session->transferToNextInQueue(false, $endBotSessionContext);
 
 				if ($resultTransfer == true)
 				{

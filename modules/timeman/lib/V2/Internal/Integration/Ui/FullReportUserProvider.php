@@ -19,12 +19,11 @@ final class FullReportUserProvider extends UserProvider
 
 	public function isAvailable(): bool
 	{
-		return (
+		return
 			is_object($GLOBALS['USER'])
 			&& $GLOBALS['USER']->isAuthorized()
 			&& self::getCurrentUserId() > 0
-			&& parent::isAvailable()
-		);
+			&& parent::isAvailable();
 	}
 
 	protected function prepareOptions(array $options = []): void

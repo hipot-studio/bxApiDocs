@@ -23,6 +23,7 @@ use Bitrix\Crm;
 use Bitrix\Crm\Component\EntityDetails\ProductList;
 use Bitrix\Crm\Discount;
 use Bitrix\Crm\Product\Url\ProductBuilder;
+use Bitrix\Crm\Service\Accounting;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Sale\Reservation\ReservationService;
 use Bitrix\Iblock;
@@ -204,6 +205,8 @@ final class CCrmEntityProductListComponent
 		{
 			return null;
 		}
+
+		$this->crmSettings['PRICE_PRECISION'] = Accounting::getPricePublicPrecision($currencyId);
 
 		$totalDiscount = 0;
 
@@ -2112,8 +2115,9 @@ final class CCrmEntityProductListComponent
 			}
 		}
 
-		$this->crmSettings['PRICE_PRECISION'] = 2;
-		$this->crmSettings['PRICE_CALCULATION_PRECISION'] = 8;
+		$currencyPricision = (int)($this->currency['FORMAT']['DECIMALS'] ?? 2);
+		$this->crmSettings['PRICE_PRECISION'] = $currencyPricision;
+		$this->crmSettings['PRICE_CALCULATION_PRECISION'] = Accounting::getPricePrecision();
 		$this->crmSettings['QUANTITY_PRECISION'] = 4;
 		$this->crmSettings['COMMON_PRECISION'] = 2;
 

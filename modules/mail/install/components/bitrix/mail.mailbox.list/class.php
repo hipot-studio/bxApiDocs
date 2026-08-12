@@ -80,6 +80,17 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$result['GRID_PARAMS']['SHOW_TOTAL_COUNTER'] = false;
 		$result['GRID_PARAMS']['SHOW_PAGESIZE'] = true;
 
+		$result['GRID_PARAMS']['SHOW_ACTION_PANEL'] = false;
+
+		$result['BULK_ACTIONS_AVAILABLE'] = Feature::isMailboxGridBulkActionsAvailable();
+		if ($result['BULK_ACTIONS_AVAILABLE'])
+		{
+			$result['GRID_PARAMS']['TOP_ACTION_PANEL_RENDER_TO'] = '.mail-mailbox-list-actionpanel-container';
+			$result['GRID_PARAMS']['TOP_ACTION_PANEL_PINNED_MODE'] = true;
+			$result['GRID_PARAMS']['TOP_ACTION_PANEL_CLASS'] = 'mail-mailbox-list-action-panel';
+			$result['GRID_PARAMS']['ACTION_PANEL_OPTIONS'] = ['MAX_HEIGHT' => 56];
+		}
+
 		return $result;
 	}
 

@@ -33,6 +33,7 @@ class Activity
 		}
 
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
 
 		$ownerTypeNames = [];
@@ -148,7 +149,7 @@ class Activity
 				],
 				'RESPONSIBLE' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', A.RESPONSIBLE_ID, \']\'), nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'A.RESPONSIBLE_ID', "']'") . ', nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UR',
 					'JOIN' => 'INNER JOIN b_user UR ON UR.ID = A.RESPONSIBLE_ID',
@@ -260,7 +261,7 @@ class Activity
 				],
 				'AUTHOR' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', A.AUTHOR_ID, \']\'), nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'A.AUTHOR_ID', "']'") . ', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UA',
 					'JOIN' => 'INNER JOIN b_user UA ON UA.ID = A.AUTHOR_ID',
@@ -282,7 +283,7 @@ class Activity
 				],
 				'EDITOR' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', A.EDITOR_ID, \']\'), nullif(UE.NAME, \'\'), nullif(UE.LAST_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'A.EDITOR_ID', "']'") . ', nullif(UE.NAME, \'\'), nullif(UE.LAST_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UE',
 					'JOIN' => 'INNER JOIN b_user UE ON UE.ID = A.EDITOR_ID',
@@ -342,7 +343,9 @@ class Activity
 			}
 			else
 			{
-				$dictionaryForSql[] = 'when #FIELD_NAME# is null or #FIELD_NAME# = \'\' then \'' . $helper->forSql($value) . '\'';
+				// Compare against the actual dictionary key (0) instead of '': on MySQL both coerce to 0
+				// (behaviour unchanged), while on PG the literal '0' coerces to integer but '' raises 22P02.
+				$dictionaryForSql[] = 'when #FIELD_NAME# is null or #FIELD_NAME# = \'' . $helper->forSql($id) . '\' then \'' . $helper->forSql($value) . '\'';
 			}
 		}
 		$dictionarySql = 'case ' . implode("\n", $dictionaryForSql) . ' else null end';

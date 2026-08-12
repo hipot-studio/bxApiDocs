@@ -91,8 +91,18 @@ class ChatLink extends SharingLink implements ChatActionAccessCheckable, ChatHol
 
 	public function apply(int $userId): Result
 	{
-		$this->getChat()->joinBySharingLink($this, $userId);
+		$result = new Result();
+		$chat = $this->getChat();
+		$authorId = (int)($this->getAuthorId() ?? 0);
+		$inviteRole = Permission::getRoleForActionByType($chat->getExtendedType(false), Action::Extend);
 
-		return new Result();
+		if ($inviteRole !== Chat::ROLE_NONE && ($authorId <= 0 || !$chat->withContextUser($authorId)->canDo(Action::Extend)))
+		{
+			return $result->addError(new SharingLinkError(SharingLinkError::AUTHOR_CANNOT_INVITE));
+		}
+
+		$chat->joinBySharingLink($this, $userId);
+
+		return $result;
 	}
 }

@@ -25,6 +25,7 @@ class DefaultPolicy implements ActionAccessPolicy
 			ActionGroup::ManageMessages => $chat->getManageMessages(),
 			ActionGroup::ManageMessagesAutoDelete => $chat->getManageMessagesAutoDelete(),
 			ActionGroup::ManageGuestInvites => $chat->getManageGuestInvites(),
+			ActionGroup::ManageDelete => $chat->getManageDelete(),
 			default => Chat::ROLE_GUEST,
 		};
 

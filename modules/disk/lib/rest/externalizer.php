@@ -19,18 +19,21 @@ final class Externalizer
 	private $restServer;
 	/** @var Service\Base */
 	private $service;
+	/** @var \Closure|null */
+	private $detailUrlPolicy;
 
 	/**
 	 * Constructor of Externalizer.
 	 * @param Service\Base $service Service which provides methods for REST.
 	 * @param \CRestServer $restServer REST server object.
 	 */
-	public function __construct(Service\Base $service, \CRestServer $restServer)
+	public function __construct(Service\Base $service, \CRestServer $restServer, ?callable $detailUrlPolicy = null)
 	{
 		$this->urlManager = Disk\Driver::getInstance()->getUrlManager();
 		$this->host = $this->urlManager->getHostUrl();
 		$this->restServer = $restServer;
 		$this->service = $service;
+		$this->detailUrlPolicy = $detailUrlPolicy !== null ? \Closure::fromCallable($detailUrlPolicy) : null;
 	}
 
 	/**
@@ -118,7 +121,11 @@ final class Externalizer
 		if($model instanceof Disk\File)
 		{
 			$toArray['DOWNLOAD_URL'] = \CRestUtil::getDownloadUrl(array('id' => $model->getId()), $this->restServer);
-			if($model->getStorage()->getProxyType() instanceof Disk\ProxyType\RestApp)
+			if(!$this->shouldBuildDetailUrl($model))
+			{
+				$toArray['DETAIL_URL'] = null;
+			}
+			elseif($model->getStorage()->getProxyType() instanceof Disk\ProxyType\RestApp)
 			{
 				$toArray['DETAIL_URL'] = null;
 				if (isModuleInstalled('bitrix24') && ($this->isImage($model) || $this->isXml($model)))
@@ -137,7 +144,10 @@ final class Externalizer
 		}
 		elseif($model instanceof Disk\Folder)
 		{
-			if($model->getStorage()->getProxyType() instanceof Disk\ProxyType\RestApp)
+			if(
+				!$this->shouldBuildDetailUrl($model)
+				|| $model->getStorage()->getProxyType() instanceof Disk\ProxyType\RestApp
+			)
 			{
 				$toArray['DETAIL_URL'] = null;
 			}
@@ -157,6 +167,11 @@ final class Externalizer
 		}
 
 		return $toArray;
+	}
+
+	private function shouldBuildDetailUrl(Disk\BaseObject $object): bool
+	{
+		return $this->detailUrlPolicy === null || ($this->detailUrlPolicy)($object);
 	}
 
 	private function toArray($item)

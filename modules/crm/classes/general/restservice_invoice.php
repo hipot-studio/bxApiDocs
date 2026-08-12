@@ -716,7 +716,7 @@ class CCrmInvoiceRestService extends IRestService
 			throw new RestException('Invalid identifier.');
 
 		$invoice = new CCrmInvoice();
-		if(!CCrmInvoice::CheckUpdatePermission($ID))
+		if(!CCrmInvoice::CheckDeletePermission($ID))
 			throw new RestException('Access denied.');
 
 		$DB->StartTransaction();

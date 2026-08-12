@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class InvalidOrderException extends RestException
+class InvalidOrderException extends RestException implements SkipWriteToLogException
 {
 	public function __construct(
 		protected mixed $order,

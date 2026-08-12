@@ -58,7 +58,7 @@ class QuoteMapping
 				],
 				'MODIFIED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(Q.MODIFY_BY_ID is null, null, concat_ws(\' \', nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN Q.MODIFY_BY_ID is null THEN null ELSE concat_ws(\' \', nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UM',
 					'JOIN' => 'INNER JOIN b_user UM ON UM.ID = Q.MODIFY_BY_ID',
@@ -66,7 +66,7 @@ class QuoteMapping
 				],
 				'MODIFIED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(Q.MODIFY_BY_ID is null, null, concat_ws(\' \', concat(\'[\', Q.MODIFY_BY_ID, \']\'), nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN Q.MODIFY_BY_ID is null THEN null ELSE concat_ws(\' \', concat(\'[\', Q.MODIFY_BY_ID, \']\'), nullif(UM.NAME, \'\'), nullif(UM.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UM',
 					'JOIN' => 'INNER JOIN b_user UM ON UM.ID = Q.MODIFY_BY_ID',
@@ -80,7 +80,7 @@ class QuoteMapping
 				],
 				'ASSIGNED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(Q.ASSIGNED_BY_ID is null, null, concat_ws(\' \', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN Q.ASSIGNED_BY_ID is null THEN null ELSE concat_ws(\' \', nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UA',
 					'JOIN' => 'INNER JOIN b_user UA ON UA.ID = Q.ASSIGNED_BY_ID',
@@ -88,7 +88,7 @@ class QuoteMapping
 				],
 				'ASSIGNED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(Q.ASSIGNED_BY_ID is null, null, concat_ws(\' \', concat(\'[\', Q.ASSIGNED_BY_ID, \']\'), nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN Q.ASSIGNED_BY_ID is null THEN null ELSE concat_ws(\' \', concat(\'[\', Q.ASSIGNED_BY_ID, \']\'), nullif(UA.NAME, \'\'), nullif(UA.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UA',
 					'JOIN' => 'INNER JOIN b_user UA ON UA.ID = Q.ASSIGNED_BY_ID',
@@ -136,7 +136,7 @@ class QuoteMapping
 				],
 				'COMPANY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(Q.COMPANY_ID is null, null, concat_ws(\' \', concat(\'[\', Q.COMPANY_ID, \']\'), nullif(CO.TITLE, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN Q.COMPANY_ID is null THEN null ELSE concat_ws(\' \', concat(\'[\', Q.COMPANY_ID, \']\'), nullif(CO.TITLE, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'CO',
 					'JOIN' => 'INNER JOIN b_crm_company CO ON CO.ID = Q.COMPANY_ID',
@@ -158,7 +158,7 @@ class QuoteMapping
 				],
 				'CONTACT' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(Q.CONTACT_ID is null, null, concat_ws(\' \', concat(\'[\', Q.CONTACT_ID, \']\'), nullif(C.FULL_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN Q.CONTACT_ID is null THEN null ELSE concat_ws(\' \', concat(\'[\', Q.CONTACT_ID, \']\'), nullif(C.FULL_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'C',
 					'JOIN' => 'INNER JOIN b_crm_contact C ON C.ID = Q.CONTACT_ID',
@@ -186,7 +186,7 @@ class QuoteMapping
 				],
 				'MYCOMPANY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(Q.MYCOMPANY_ID is null, null, concat_ws(\' \', concat(\'[\', Q.MYCOMPANY_ID, \']\'), nullif(MCO.TITLE, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN Q.MYCOMPANY_ID is null THEN null ELSE concat_ws(\' \', concat(\'[\', Q.MYCOMPANY_ID, \']\'), nullif(MCO.TITLE, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'MCO',
 					'JOIN' => 'INNER JOIN b_crm_company MCO ON MCO.ID = Q.MYCOMPANY_ID',
@@ -214,7 +214,7 @@ class QuoteMapping
 				],
 				'STATUS' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(Q.STATUS_ID is null, null, concat_ws(\' \', concat(\'[\', Q.STATUS_ID, \']\'), nullif(S.NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN Q.STATUS_ID is null THEN null ELSE concat_ws(\' \', concat(\'[\', Q.STATUS_ID, \']\'), nullif(S.NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'S',
 					'JOIN' => 'INNER JOIN b_crm_status S ON S.ENTITY_ID like \'QUOTE_STATUS\' and S.STATUS_ID = Q.STATUS_ID',

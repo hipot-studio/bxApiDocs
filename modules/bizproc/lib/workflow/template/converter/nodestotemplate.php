@@ -60,7 +60,8 @@ final class NodesToTemplate
 			$node['content'],
 			$node['updated'],
 			$node['published'],
-			$activity['ReturnProperties']
+			$activity['ReturnProperties'],
+			$activity['ContentBlock'],
 		);
 		$activity['Node'] = $node;
 

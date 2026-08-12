@@ -18,7 +18,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 				<div class="dataset-title-wrapper">
 					<a
 						style="cursor: pointer"
-						onclick="BX.BIConnector.DatasetImport.Slider.open('system', 0, {}, {}, {tableName: '{$jsName}'})"
+						onclick="BX.BIConnector.DatasetImportV2.Slider.open('system', 0, {tableName: '{$jsName}'})"
 					>{$title}</a>
 				</div>
 			HTML;
@@ -30,7 +30,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		$link = "
 				<a
 					style='cursor: pointer'
-					onclick='BX.BIConnector.DatasetImport.Slider.open(\"$type\", $id)'
+					onclick='BX.BIConnector.DatasetImportV2.Slider.open(\"$type\", $id)'
 				>{$title}</a>
 			";
 

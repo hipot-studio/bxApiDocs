@@ -10,6 +10,13 @@ use Bitrix\Main\Web\Json;
 class EventListResponse
 {
 	/**
+	 * Whether the vendor response is known to be incomplete/truncated.
+	 * When true, the import must not treat missing events as deletions.
+	 * Default (false) means a complete, authoritative response.
+	 */
+	public bool $isPartial = false;
+
+	/**
 	 * @var EventResponse[]
 	 */
 	private array $items = [];

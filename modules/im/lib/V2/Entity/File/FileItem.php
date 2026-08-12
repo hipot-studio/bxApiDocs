@@ -510,7 +510,7 @@ class FileItem implements RestEntity, PopupDataAggregatable
 		}
 		catch (Throwable $e)
 		{
-			(new Logger('file_item_unable_to_get_encrypted_scope_for_quick_access'))->logThrowable($e);
+			//(new Logger('file_item_unable_to_get_encrypted_scope_for_quick_access'))->logThrowable($e);
 			return null;
 		}
 	}

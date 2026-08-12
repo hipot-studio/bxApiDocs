@@ -6,11 +6,12 @@ use Bitrix\Crm\Integration\Analytics\Dictionary;
 
 final class CreateContext
 {
-	public const DEFAULT = Dictionary::SUB_SECTION_USERFIELD_DEFAULT;
-	public const MCP_TOOL = Dictionary::SUB_SECTION_USERFIELD_MCP_TOOL;
+	public const SOURCE_DEFAULT = Dictionary::UNKNOWN;
+	public const SOURCE_MCP_TOOL = 'ai';
+	public const SOURCE_MANUAL = 'manual';
 
 	public function __construct(
-		public readonly string $createFrom = self::DEFAULT,
+		public readonly string $source = self::SOURCE_DEFAULT,
 	)
 	{
 	}

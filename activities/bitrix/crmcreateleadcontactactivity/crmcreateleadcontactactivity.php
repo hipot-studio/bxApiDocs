@@ -1,5 +1,13 @@
-<?
-if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)die();
+<?php
+
+if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
+{
+	die();
+}
+
+use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
+use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 
 class CBPCrmCreateLeadContactActivity
 	extends CBPActivity
@@ -118,14 +126,13 @@ class CBPCrmCreateLeadContactActivity
 					]
 				]);
 
-			if (\COption::GetOptionString("crm", "start_bp_within_bp", "N") == "Y")
-			{
-				$CCrmBizProc = new \CCrmBizProc('CONTACT');
-				if ($CCrmBizProc->CheckFields(false, true))
-				{
-					$CCrmBizProc->StartWorkflow($id);
-				}
-			}
+			$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Contact, (int)$id));
+			$starter
+				->setContextModuleId('bizproc')
+				->runOnInnerDocumentAdd(
+					new RunDataDto(actualFields: $contactFields),
+					runAutomation: false
+				);
 		}
 
 		return CBPActivityExecutionStatus::Closed;

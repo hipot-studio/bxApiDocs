@@ -53,6 +53,8 @@ final class MailboxConnector
 	public const CRM_MAX_AGE = 7;
 	public const MESSAGE_MAX_AGE = 7;
 
+	private const DEFAULT_PERIOD_CHECK = 60 * 24;
+
 	public const RESPONSE_ERROR_CODE_IMAP_CONNECTION = 'imap_connection';
 	public const RESPONSE_ERROR_CODE_WRONG_AUTH = 'auth';
 	public const RESPONSE_ERROR_CODE_SMTP_CONNECTION = 'smtp_connection';
@@ -750,7 +752,7 @@ final class MailboxConnector
 			'PORT'        => $mailboxConnectDTO->service['PORT'] ?: $mailboxConnectDTO->port,
 			'USE_TLS'     => $mailboxConnectDTO->service['ENCRYPTION'] ?: $useTls,
 			'LINK' => $mailboxConnectDTO->service['LINK'] ?? trim($mailboxConnectDTO->link),
-			'PERIOD_CHECK' => 60 * 24,
+			'PERIOD_CHECK' => self::DEFAULT_PERIOD_CHECK,
 			'OPTIONS'     => [
 				'flags'     => [],
 				'sync_from' => time(),
@@ -873,19 +875,29 @@ final class MailboxConnector
 		$mailboxData['OPTIONS'][CrmOption::SyncFrom->value] = strtotime(sprintf('-%u days', $syncDays));
 	}
 
+	private function defaultCrmOptionValues(int $ownerUserId): array
+	{
+		return [
+			CrmOption::SyncFrom->value     => strtotime(sprintf('-%u days', self::CRM_MAX_AGE)),
+			CrmOption::NewEntityIn->value  => CrmEntityType::Lead->value,
+			CrmOption::NewEntityOut->value => CrmEntityType::Contact->value,
+			CrmOption::LeadSource->value   => 'EMAIL',
+			CrmOption::LeadResp->value     => [$ownerUserId],
+		];
+	}
+
 	private function setDefaultCrmOptions(array $mailboxData): array
 	{
 		global $USER;
 
 		if ($this->isCrmIntegrationAvailableForCurrentUser())
 		{
-				$maxAge = self::CRM_MAX_AGE;
-				$mailboxData['OPTIONS']['flags'][] = CrmFlag::Connect->value;
-				$mailboxData['OPTIONS'][CrmOption::SyncFrom->value] = strtotime(sprintf('-%u days', $maxAge));
-				$mailboxData['OPTIONS'][CrmOption::NewEntityIn->value] = CrmEntityType::Lead->value;
-				$mailboxData['OPTIONS'][CrmOption::NewEntityOut->value] = CrmEntityType::Contact->value;
-				$mailboxData['OPTIONS'][CrmOption::LeadSource->value] = 'EMAIL';
-				$mailboxData['OPTIONS'][CrmOption::LeadResp->value] = [empty($mailboxData) ? $USER->getId() : $mailboxData['USER_ID']];
+			$mailboxData['OPTIONS']['flags'][] = CrmFlag::Connect->value;
+			$ownerUserId = empty($mailboxData) ? $USER->getId() : $mailboxData['USER_ID'];
+			foreach ($this->defaultCrmOptionValues((int)$ownerUserId) as $k => $v)
+			{
+				$mailboxData['OPTIONS'][$k] = $v;
+			}
 		}
 
 		return $mailboxData;
@@ -893,17 +905,17 @@ final class MailboxConnector
 
 	private function isCrmIntegrationAvailableForCurrentUser(): bool
 	{
-		if (!Loader::includeModule('crm'))
+		static $isCrmAvailable = null;
+		if ($isCrmAvailable !== null)
 		{
-			return false;
+			return $isCrmAvailable;
 		}
 
-		if (!MailboxAccess::hasCurrentUserAccessToEditMailboxIntegrationCrm())
-		{
-			return false;
-		}
-
-		return Feature::isCrmAvailable();
+		return $isCrmAvailable =
+			Loader::includeModule('crm')
+			&& MailboxAccess::hasCurrentUserAccessToEditMailboxIntegrationCrm()
+			&& Feature::isCrmAvailable()
+		;
 	}
 
 	private function deleteMailboxSenders(int $mailboxId): void
@@ -1371,6 +1383,7 @@ final class MailboxConnector
 	 *     userId: int,
 	 *     periodCheck: int,
 	 *     lastMailCheck: array{date: int|null, isSuccess: bool},
+	 *     providerRestriction: string|null,
 	 *     options: array,
 	 * }|null
 	 */
@@ -1412,6 +1425,15 @@ final class MailboxConnector
 			? (string)$passwordlessSmtp['senderName']
 			: (string)($mailbox['USERNAME'] ?? '');
 
+		$serviceName = $service['NAME'] ?? null;
+		$providerRestriction = (
+			ProviderAccessRestriction::isFeatureEnabled()
+			&& ProviderAccessRestriction::isRestricted($serviceName, $mailbox['EMAIL'] ?? null)
+		)
+			? ProviderAccessRestriction::resolveProviderName($serviceName)
+			: null
+		;
+
 		return [
 			'imap' => $this->getImapData($mailbox),
 			'smtp' => $this->getSmtpData($mailboxId, $mailbox),
@@ -1440,6 +1462,7 @@ final class MailboxConnector
 			'userId' => (int)$mailbox['USER_ID'],
 			'periodCheck' => (int)$mailbox['PERIOD_CHECK'],
 			'lastMailCheck' => $this->getLastMailCheckData($mailboxId, (int)$mailbox['USER_ID']),
+			'providerRestriction' => $providerRestriction,
 			'options' => $options,
 		];
 	}
@@ -2210,7 +2233,11 @@ final class MailboxConnector
 		}
 
 		$accessState = $this->updateMailboxShareAccess($mailboxId, $mailboxData, $shareAccess);
-		$this->updateCrmFilters($mailboxId, $mailboxData, $existingData);
+		$this->syncCrmImapFilter(
+			$mailboxId,
+			$mailboxData['OPTIONS']['flags'] ?? [],
+			$existingData['options']['flags'] ?? [],
+		);
 
 		if ($accessState !== null)
 		{
@@ -2330,10 +2357,10 @@ final class MailboxConnector
 		return $this->applyMailboxShareAccess($shareAccess, (int)$mailboxData['USER_ID'], $mailboxId);
 	}
 
-	private function updateCrmFilters(int $mailboxId, array $mailboxData, array $existingData): void
+	private function syncCrmImapFilter(int $mailboxId, array $newFlags, array $oldFlags): void
 	{
-		$hasCrmConnect = in_array(CrmFlag::Connect->value, $mailboxData['OPTIONS']['flags'] ?? [], true);
-		$hadCrmConnect = in_array(CrmFlag::Connect->value, $existingData['options']['flags'] ?? [], true);
+		$hasCrmConnect = in_array(CrmFlag::Connect->value, $newFlags, true);
+		$hadCrmConnect = in_array(CrmFlag::Connect->value, $oldFlags, true);
 
 		if ($hasCrmConnect === $hadCrmConnect)
 		{
@@ -2454,8 +2481,6 @@ final class MailboxConnector
 	{
 		$result = new Main\Result();
 
-		global $USER;
-
 		$mailbox = Mail\MailboxTable::getList(array(
 			'filter' => array(
 				'=ID' => $id,
@@ -2484,13 +2509,271 @@ final class MailboxConnector
 
 		self::deleteMailboxSender((int)$mailbox['ID'], $mailbox['EMAIL']);
 
-		\CUserCounter::clear($USER->getId(), 'mail_unseen', $mailbox['LID']);
+		\CUserCounter::clear((int)$mailbox['USER_ID'], 'mail_unseen', $mailbox['LID']);
 
 		$mailboxSyncManager = new MailboxSyncManager($mailbox['USER_ID']);
 
 		$mailboxSyncManager->deleteSyncData($mailbox['ID']);
 
 		\CAgent::addAgent(sprintf('Bitrix\Mail\Helper::deleteMailboxAgent(%u);', $mailbox['ID']), 'mail', 'N', 60);
+
+		return $result;
+	}
+
+	public function updateCalendarOptions(int $mailboxId, bool $enabled): Main\Result
+	{
+		$result = new Main\Result();
+
+		if (!MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
+		{
+			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_REMOVE_DELETE_ERROR_DENIED')));
+		}
+
+		$mailbox = Mail\MailboxTable::query()
+			->setSelect(['OPTIONS'])
+			->where('ID', $mailboxId)
+			->whereIn('ACTIVE', [MailboxStatus::Active->value, MailboxStatus::Pending->value])
+			->where('SERVER_TYPE', 'imap')
+			->fetch()
+		;
+
+		if (empty($mailbox))
+		{
+			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_REMOVE_DELETE_ERROR_NO_MAILBOX')));
+		}
+
+		$options = $mailbox['OPTIONS'] ?? [];
+		$currentIcalAccess = (($options['ical_access'] ?? 'N') === 'Y') ? 'Y' : 'N';
+		$targetIcalAccess = $enabled ? 'Y' : 'N';
+		if ($currentIcalAccess === $targetIcalAccess)
+		{
+			return $result->setData([
+				'skipped' => true,
+				'reason' => $enabled ? 'Calendar integration already enabled' : 'Calendar integration already disabled',
+			]);
+		}
+
+		if ($enabled && !Loader::includeModule('calendar'))
+		{
+			return $result->addError(new Error('Calendar module is not available'));
+		}
+
+		$options['ical_access'] = $targetIcalAccess;
+
+		$updateResult = \CMailbox::update($mailboxId, ['OPTIONS' => $options]);
+		if (!$updateResult)
+		{
+			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_FORM_ERROR')));
+		}
+
+		return $result;
+	}
+
+	public function updateCrmOptions(int $mailboxId, CrmOptions $crmOptions): Main\Result
+	{
+		$result = new Main\Result();
+
+		if (!MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
+		{
+			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_REMOVE_DELETE_ERROR_DENIED')));
+		}
+
+		$mailbox = Mail\MailboxTable::query()
+			->setSelect(['OPTIONS', 'PERIOD_CHECK', 'USER_ID'])
+			->where('ID', $mailboxId)
+			->whereIn('ACTIVE', [MailboxStatus::Active->value, MailboxStatus::Pending->value])
+			->where('SERVER_TYPE', 'imap')
+			->fetch()
+		;
+
+		if (empty($mailbox))
+		{
+			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_REMOVE_DELETE_ERROR_NO_MAILBOX')));
+		}
+
+		$options = $mailbox['OPTIONS'] ?? [];
+
+		$allCrmFlagValues = CrmFlag::values();
+		$existingFlags = (array)($options['flags'] ?? []);
+		$wasPublic = in_array(CrmFlag::PublicBind->value, $existingFlags, true);
+		$nonCrmFlags = array_values(array_filter(
+			$existingFlags,
+			static fn(string $flag): bool => !in_array($flag, $allCrmFlagValues, true),
+		));
+
+		if (!$this->isCrmIntegrationAvailableForCurrentUser())
+		{
+			return $result->addError(new Error(
+				'CRM integration is not available for current user',
+				'CRM_ACCESS_DENIED',
+			));
+		}
+
+		if ($crmOptions->enabled)
+		{
+			$crmFlags = [CrmFlag::Connect->value];
+
+			if ($crmOptions->public)
+			{
+				$crmFlags[] = CrmFlag::PublicBind->value;
+			}
+
+			if (empty($crmOptions->newEntityIn))
+			{
+				$crmFlags[] = CrmFlag::DenyEntityIn->value;
+			}
+
+			if (empty($crmOptions->newEntityOut))
+			{
+				$crmFlags[] = CrmFlag::DenyEntityOut->value;
+			}
+
+			if (!$crmOptions->vcf)
+			{
+				$crmFlags[] = CrmFlag::DenyNewContact->value;
+			}
+
+			$options['flags'] = array_values(array_merge($nonCrmFlags, $crmFlags));
+
+			$options[CrmOption::NewEntityIn->value] = $crmOptions->newEntityIn?->value;
+			$options[CrmOption::NewEntityOut->value] = $crmOptions->newEntityOut?->value;
+			$options[CrmOption::LeadSource->value] = $crmOptions->leadSource;
+			$options[CrmOption::LeadResp->value] = !empty($crmOptions->leadResp)
+				? $crmOptions->leadResp
+				: [(int)$mailbox['USER_ID']];
+			$options[CrmOption::Public->value] = $crmOptions->public;
+			$options[CrmOption::Vcf->value] = $crmOptions->vcf;
+			$options[CrmOption::SyncDays->value] = $crmOptions->syncDays;
+
+			if (!empty($crmOptions->newLeadFor))
+			{
+				$validEmails = [];
+				foreach ($crmOptions->newLeadFor as $item)
+				{
+					$address = new Address($item, ['checkingPunycode' => true]);
+					if ($address->validate())
+					{
+						$validEmails[] = $address->getEmail();
+					}
+				}
+				$options[CrmOption::NewLeadFor->value] = array_values(array_unique($validEmails));
+			}
+			else
+			{
+				$options[CrmOption::NewLeadFor->value] = [];
+			}
+
+			$syncDays = $crmOptions->syncDays ?? self::CRM_MAX_AGE;
+			if ($syncDays < 0)
+			{
+				unset($options[CrmOption::SyncFrom->value]);
+			}
+			else
+			{
+				$options[CrmOption::SyncFrom->value] = strtotime(sprintf('-%u days', $syncDays));
+			}
+		}
+		else
+		{
+			if (empty(array_intersect($existingFlags, $allCrmFlagValues)))
+			{
+				return $result->setData([
+					'skipped' => true,
+					'reason' => 'CRM already disabled',
+				]);
+			}
+
+			$options['flags'] = $nonCrmFlags;
+		}
+
+		$existingDataForFilter = ['options' => $mailbox['OPTIONS'] ?? []];
+
+		$periodCheck = (int)$mailbox['PERIOD_CHECK'];
+		if ($crmOptions->enabled && $crmOptions->public)
+		{
+			$periodCheck = ((int)Option::get('mail', 'public_mailbox_sync_interval', 0)) ?: 10;
+		}
+		elseif ($wasPublic)
+		{
+			$periodCheck = self::DEFAULT_PERIOD_CHECK;
+		}
+
+		$updateFields = ['OPTIONS' => $options, 'PERIOD_CHECK' => $periodCheck];
+
+		$updateResult = \CMailbox::update($mailboxId, $updateFields);
+		if (!$updateResult)
+		{
+			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_FORM_ERROR')));
+		}
+
+		$this->syncCrmImapFilter(
+			$mailboxId,
+			$options['flags'] ?? [],
+			$existingDataForFilter['options']['flags'] ?? [],
+		);
+
+		return $result;
+	}
+
+	public function enableCrmWithDefaults(int $mailboxId): Main\Result
+	{
+		$result = new Main\Result();
+
+		if (!MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
+		{
+			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_REMOVE_DELETE_ERROR_DENIED')));
+		}
+
+		$mailbox = Mail\MailboxTable::query()
+			->setSelect(['OPTIONS', 'USER_ID'])
+			->where('ID', $mailboxId)
+			->whereIn('ACTIVE', [MailboxStatus::Active->value, MailboxStatus::Pending->value])
+			->where('SERVER_TYPE', 'imap')
+			->fetch()
+		;
+
+		if (empty($mailbox))
+		{
+			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_REMOVE_DELETE_ERROR_NO_MAILBOX')));
+		}
+
+		if (!$this->isCrmIntegrationAvailableForCurrentUser())
+		{
+			return $result->addError(new Error('CRM integration is not available for current user'));
+		}
+
+		$existingFlags = (array)($mailbox['OPTIONS']['flags'] ?? []);
+		if (in_array(CrmFlag::Connect->value, $existingFlags, true))
+		{
+			return $result->setData(['skipped' => true, 'reason' => 'CRM already enabled']);
+		}
+
+		$options = (array)($mailbox['OPTIONS'] ?? []);
+
+		$allCrmFlagValues = CrmFlag::values();
+		$nonCrmFlags = array_values(array_filter(
+			$existingFlags,
+			static fn(string $flag): bool => !in_array($flag, $allCrmFlagValues, true),
+		));
+		$options['flags'] = array_values(array_merge($nonCrmFlags, [CrmFlag::Connect->value]));
+
+		foreach ($this->defaultCrmOptionValues((int)$mailbox['USER_ID']) as $k => $v)
+		{
+			$options[$k] = $v;
+		}
+
+		$existingDataForFilter = ['options' => (array)($mailbox['OPTIONS'] ?? [])];
+
+		if (!\CMailbox::update($mailboxId, ['OPTIONS' => $options]))
+		{
+			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_FORM_ERROR')));
+		}
+
+		$this->syncCrmImapFilter(
+			$mailboxId,
+			$options['flags'] ?? [],
+			$existingDataForFilter['options']['flags'] ?? [],
+		);
 
 		return $result;
 	}

@@ -5,8 +5,9 @@ namespace Bitrix\Landing\Copilot\Generation\Scenario;
 
 use Bitrix\Landing\Copilot\Connector;
 use Bitrix\Landing\Copilot\Connector\AI\RequestLimiter;
-use Bitrix\Landing\Copilot\Connector\Chat\ChatBotMessageDto;
 use Bitrix\Landing\Copilot\Generation;
+use Bitrix\Landing\Copilot\Generation\Step\Base\IStep;
+use Bitrix\Landing\Copilot\Generation\Step\Base\RuntimeRequestQuotaProvider;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
@@ -37,6 +38,10 @@ class Scenarist
 	 * @var ScenarioStepDto[] Array of scenario steps indexed by step ID.
 	 */
 	private array $steps;
+	/**
+	 * @var array<int, list<int>>|null
+	 */
+	private ?array $normalizedAsyncRelations = null;
 
 	/**
 	 * @var callable|null Callback invoked when the step ID changes and must be saved.
@@ -119,21 +124,76 @@ class Scenarist
 	}
 
 	/**
-	 * Checks if all scenario steps are finished.
+	 * Checks if the scenario is finished.
 	 *
-	 * @return bool True if all steps are finished, false otherwise.
+	 * Relies on persisted step rows only, so steps added to the scenario map
+	 * after a generation was completed do not mark it as unfinished.
+	 *
+	 * @return bool True if the scenario is finished, false otherwise.
 	 */
 	public function isFinished(): bool
 	{
+		return $this->isFinishedByPersistedSteps();
+	}
+
+	private function isFinishedByPersistedSteps(): bool
+	{
+		$hasPersistedSteps = false;
 		foreach ($this->steps as $step)
 		{
+			if (!isset($step->entityId))
+			{
+				continue;
+			}
+
+			$hasPersistedSteps = true;
 			if ($step->status !== StepStatuses::Finished)
 			{
 				return false;
 			}
 		}
 
-		return true;
+		if (!$hasPersistedSteps)
+		{
+			return false;
+		}
+
+		$pointerStep = $this->stepId !== null ? ($this->steps[$this->stepId] ?? null) : null;
+		if (
+			$pointerStep === null
+			|| !isset($pointerStep->entityId)
+			|| $pointerStep->status !== StepStatuses::Finished
+		)
+		{
+			return false;
+		}
+
+		return !$this->hasExecutableAhead($this->stepId);
+	}
+
+	private function hasExecutableAhead(int $pointer): bool
+	{
+		$currentId = $pointer;
+		$visited = [$pointer => true];
+
+		while (true)
+		{
+			$nextId = $this->scenario->getNextStepId($currentId);
+			if ($nextId === null || isset($visited[$nextId]) || !$this->scenario->checkStep($nextId))
+			{
+				return false;
+			}
+
+			$visited[$nextId] = true;
+			$nextStep = $this->steps[$nextId] ?? null;
+			if (isset($nextStep->entityId) && $nextStep->status === StepStatuses::Finished)
+			{
+				$currentId = $nextId;
+				continue;
+			}
+
+			return true;
+		}
 	}
 
 	/**
@@ -320,11 +380,14 @@ class Scenarist
 
 			if (
 				$this->changeStep($stepDto)
+				|| $stepDto->step->isChanged()
 				|| $stepDto->step->isFinished()
 			)
 			{
 				$this->callOnSave();
 			}
+
+			$this->generation->getEvent()->send(self::EVENT_STEP);
 		}
 
 		if ($this->isFinished())
@@ -344,7 +407,7 @@ class Scenarist
 			return false;
 		}
 
-		$relations = $this->scenario->getAsyncRelations();
+		$relations = $this->getNormalizedAsyncRelations();
 		if ($relations)
 		{
 			foreach ($relations as $parent => $dependents)
@@ -388,11 +451,29 @@ class Scenarist
 
 	private function getNextStep(int $stepId): ?int
 	{
-		$scenario = $this->scenario;
-		$recursiveGetNext = function ($currentId) use ($scenario, &$recursiveGetNext)
+		$relations = $this->getNormalizedAsyncRelations();
+		$currentId = $stepId;
+		$visited = [$stepId => true];
+		$iterationsLeft = count($this->steps) + 1;
+		$lastFinishedCandidate = null;
+
+		while ($iterationsLeft-- > 0)
 		{
-			$nextId = $scenario->getNextStepId($currentId);
-			$relations = $scenario->getAsyncRelations();
+			$nextId = $this->scenario->getNextStepId($currentId);
+			if ($nextId === null || !$this->scenario->checkStep($nextId) || isset($visited[$nextId]))
+			{
+				return $lastFinishedCandidate;
+			}
+
+			$visited[$nextId] = true;
+			if (($this->steps[$nextId]?->status ?? null) === StepStatuses::Finished)
+			{
+				$lastFinishedCandidate = $nextId;
+				$currentId = $nextId;
+				continue;
+			}
+
+			$isBlockedByAsyncParent = false;
 			if ($relations)
 			{
 				foreach ($relations as $parent => $dependents)
@@ -402,15 +483,64 @@ class Scenarist
 						&& !$this->steps[$parent]?->step->isFinished()
 					)
 					{
-						return $recursiveGetNext($nextId);
+						$isBlockedByAsyncParent = true;
+						break;
 					}
 				}
 			}
 
-			return $nextId;
-		};
+			if (!$isBlockedByAsyncParent)
+			{
+				return $nextId;
+			}
 
-		return $recursiveGetNext($stepId);
+			$currentId = $nextId;
+		}
+
+		return $lastFinishedCandidate;
+	}
+
+	/**
+	 * @return array<int, list<int>>
+	 */
+	private function getNormalizedAsyncRelations(): array
+	{
+		if ($this->normalizedAsyncRelations !== null)
+		{
+			return $this->normalizedAsyncRelations;
+		}
+
+		$relations = $this->scenario->getAsyncRelations();
+		if (!is_array($relations) || $relations === [])
+		{
+			$this->normalizedAsyncRelations = [];
+
+			return $this->normalizedAsyncRelations;
+		}
+
+		$validStepIds = array_fill_keys(array_keys($this->steps), true);
+		$normalized = [];
+		foreach ($relations as $parent => $dependents)
+		{
+			$parentId = (int)$parent;
+			if (!isset($validStepIds[$parentId]) || !is_array($dependents))
+			{
+				continue;
+			}
+
+			$normalizedDependents = array_values(array_unique(array_filter(
+				array_map('intval', $dependents),
+				static fn(int $dependentId): bool => $dependentId > 0 && isset($validStepIds[$dependentId]),
+			)));
+			if ($normalizedDependents !== [])
+			{
+				$normalized[$parentId] = $normalizedDependents;
+			}
+		}
+
+		$this->normalizedAsyncRelations = $normalized;
+
+		return $this->normalizedAsyncRelations;
 	}
 
 	/**
@@ -438,9 +568,12 @@ class Scenarist
 	 */
 	private function executeStep(ScenarioStepDto $step): void
 	{
+		$quotaCalculateStep = $this->scenario->getQuotaCalculateStep();
 		if (
-			!$step->step->isStarted()
-			&& $step->stepId === $this->scenario->getQuotaCalculateStep()
+			self::isRequestQuotaPreflightEnabled()
+			&& $quotaCalculateStep !== null
+			&& !$step->step->isStarted()
+			&& $step->stepId === $quotaCalculateStep
 			&& $this->checkRequestQuotas()
 		)
 		{
@@ -474,13 +607,11 @@ class Scenarist
 				$this->sendMetrikaStepSuccess($step);
 			}
 		}
+	}
 
-		if ($step->step->isChanged() || $step->step->isFinished())
-		{
-			$this->callOnSave();
-		}
-
-		$this->generation->getEvent()->send(self::EVENT_STEP);
+	private static function isRequestQuotaPreflightEnabled(): bool
+	{
+		return true;
 	}
 
 	/**
@@ -529,19 +660,9 @@ class Scenarist
 			return false;
 		}
 
-		if (
-			!$this->generation->getChatId()
-			|| $this->generation->getChatId() <= 0
-		)
-		{
-			return false;
-		}
-
 		if (FirstSiteGenerationService::isFirstSiteGeneration())
 		{
-			$this->sendQuotaOkMessage();
-
-			return true;
+			return false;
 		}
 
 		$requestLimiter = $this->getRequestLimiter();
@@ -550,21 +671,9 @@ class Scenarist
 		if (!$requestLimiter->checkQuota($this->getRequestQuotasSum()))
 		{
 			$isRequestQuotaExceeded = false;
-			// todo: can change to this->scenario?
-			$this->sendQuotaOkMessage();
 		}
 
 		return $isRequestQuotaExceeded;
-	}
-
-	private function sendQuotaOkMessage(): void
-	{
-		$this->generation->getScenario()?->getChatbot()?->onRequestQuotaOk(
-			new ChatBotMessageDto(
-				$this->generation->getChatId(),
-				$this->generation->getId(),
-			)
-		);
 	}
 
 	/**
@@ -574,29 +683,48 @@ class Scenarist
 	 */
 	private function getRequestQuotas(): array
 	{
-		/**
-		 * @var RequestQuotaDto[] $quotas
-		 */
 		$quotas = [];
-		foreach ($this->scenario->getMap() as $step)
+		foreach ($this->steps as $scenarioStep)
 		{
-			$stepQuota = $step::getRequestQuota($this->generation->getSiteData());
-			if (!$stepQuota)
-			{
-				continue;
-			}
-
-			if (isset($quotas[$stepQuota->connectorClass]))
-			{
-				$quotas[$stepQuota->connectorClass]->requestCount += $stepQuota->requestCount;
-			}
-			else
-			{
-				$quotas[$stepQuota->connectorClass] = $stepQuota;
-			}
+			$step = $scenarioStep->step;
+			$this->appendQuota(
+				$quotas,
+				$step::getRequestQuota($this->generation->getSiteData())
+					?? $this->getRuntimeRequestQuota($step)
+			);
 		}
 
 		return $quotas;
+	}
+
+	private function getRuntimeRequestQuota(IStep $step): ?RequestQuotaDto
+	{
+		if (!$step instanceof RuntimeRequestQuotaProvider)
+		{
+			return null;
+		}
+
+		return $step->getRuntimeRequestQuota($this->generation->getSiteData());
+	}
+
+	/**
+	 * @param array<string, RequestQuotaDto> $quotas
+	 */
+	private function appendQuota(array &$quotas, ?RequestQuotaDto $stepQuota): void
+	{
+		if (!$stepQuota)
+		{
+			return;
+		}
+
+		if (isset($quotas[$stepQuota->connectorClass]))
+		{
+			$quotas[$stepQuota->connectorClass]->requestCount += $stepQuota->requestCount;
+		}
+		else
+		{
+			$quotas[$stepQuota->connectorClass] = $stepQuota;
+		}
 	}
 
 	/**

@@ -7,6 +7,7 @@ use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReport;
 use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReportCollection;
 use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReportApprove;
 use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReportMark;
+use Bitrix\Timeman\V2\Internal\Entity\Report\RecordReportType;
 
 class FullReportMapper
 {
@@ -36,8 +37,10 @@ class FullReportMapper
 			reportDate: $reportDate,
 			dateFrom: $dateFrom,
 			dateTo: $dateTo,
-			report: (string)($data['REPORT'] ?? ''),
-			plans: isset($data['PLANS']) ? (string)$data['PLANS'] : null,
+			report: $this->normalizeText($data['REPORT'] ?? null),
+			reportExtended: $this->normalizeText($data['REPORT_EXTENDED'] ?? null),
+			type: $this->normalizeType($data['TYPE'] ?? null),
+			plans: $this->normalizeText($data['PLANS'] ?? null),
 			tasks: $this->deserializePayloadList($data['TASKS'] ?? null),
 			events: $this->deserializePayloadList($data['EVENTS'] ?? null),
 			files: $this->deserializePayloadList($data['FILES'] ?? null),
@@ -55,14 +58,16 @@ class FullReportMapper
 		$fields = [
 			'USER_ID' => $report->userId,
 			'ACTIVE' => $report->active ? 'Y' : 'N',
-			'REPORT' => $report->report,
+			'REPORT' => $this->normalizeText($report->report),
+			'TYPE' => $this->normalizeType($report->type),
 			'FORUM_TOPIC_ID' => $report->forumTopicId,
 		];
 
 		$this->setField($fields, 'REPORT_DATE', $this->dateTimeFromTimestamp($report->reportDate), $forUpdate);
 		$this->setField($fields, 'DATE_FROM', $this->dateTimeFromTimestamp($report->dateFrom), $forUpdate);
 		$this->setField($fields, 'DATE_TO', $this->dateTimeFromTimestamp($report->dateTo), $forUpdate);
-		$this->setField($fields, 'PLANS', $report->plans, $forUpdate);
+		$this->setField($fields, 'REPORT_EXTENDED', $this->normalizeText($report->reportExtended), $forUpdate);
+		$this->setField($fields, 'PLANS', $this->normalizeText($report->plans), $forUpdate);
 		$this->setField($fields, 'TASKS', $this->serializePayloadList($report->tasks), $forUpdate);
 		$this->setField($fields, 'EVENTS', $this->serializePayloadList($report->events), $forUpdate);
 		$this->setField($fields, 'FILES', $this->serializePayloadList($report->files), $forUpdate);
@@ -89,6 +94,16 @@ class FullReportMapper
 		}
 
 		return DateTime::createFromTimestamp($timestamp);
+	}
+
+	private function normalizeText(mixed $value): string
+	{
+		return is_string($value) ? $value : '';
+	}
+
+	private function normalizeType(mixed $type): string
+	{
+		return RecordReportType::normalize(is_string($type) ? $type : null);
 	}
 
 	private function setField(array &$fields, string $key, mixed $value, bool $forUpdate): void

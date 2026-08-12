@@ -15,10 +15,13 @@ use Bitrix\Timeman\V2\Internal\Repository\ScheduleRepository;
 use Bitrix\Timeman\V2\Internal\Repository\ShiftRepository;
 use Bitrix\Timeman\V2\Internal\Repository\UserRepository;
 use Bitrix\Timeman\V2\Internal\Service\FullReportFacade;
+use Bitrix\Timeman\V2\Internal\Service\FullReportService;
 use Bitrix\Timeman\V2\Internal\Service\FullReportUserService;
 use Bitrix\Timeman\V2\Internal\Service\NameService;
 use Bitrix\Timeman\V2\Internal\Service\PhotoService;
 use Bitrix\Timeman\V2\Internal\Service\RecordService;
+use Bitrix\Timeman\V2\Internal\Service\ReportTextNormalizerService;
+use Bitrix\Timeman\V2\Internal\Service\ScheduledActionService;
 use Bitrix\Timeman\V2\Internal\Service\UserService;
 
 class Container extends AbstractContainer
@@ -33,9 +36,19 @@ class Container extends AbstractContainer
 		return $this->get(ReportRepository::class);
 	}
 
+	public function getFullReportService(): FullReportService
+	{
+		return $this->get(FullReportService::class);
+	}
+
 	public function getFullReportRepository(): FullReportRepository
 	{
 		return $this->get(FullReportRepository::class);
+	}
+
+	public function getScheduledActionService(): ScheduledActionService
+	{
+		return $this->get(ScheduledActionService::class);
 	}
 
 	public function getFullReportFacade(): FullReportFacade
@@ -101,5 +114,10 @@ class Container extends AbstractContainer
 	public function getShiftRepository(): ShiftRepository
 	{
 		return $this->get(ShiftRepository::class);
+	}
+
+	public function getReportTextNormalizerService(): ReportTextNormalizerService
+	{
+		return $this->get(ReportTextNormalizerService::class);
 	}
 }

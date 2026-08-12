@@ -2756,12 +2756,14 @@ class CIMChat
 			return false;
 		}
 
+		// blockGuestRejoin: legacy kick must leave the same tombstone as V2 (self-leave is skipped inside).
 		$config = new IM\V2\Relation\DeleteUserConfig(
 			!$skipMessage,
 			$skipRecent,
 			true,
 			false,
-			$withoutRead
+			$withoutRead,
+			true,
 		);
 		$result = $chat->deleteUser($userId, $config);
 

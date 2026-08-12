@@ -10,7 +10,7 @@ class EditImgAction extends BaseAction
 {
 	protected const JS_COMMAND = 'editImage';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		$block = new Block((int)$this->params['block']);
 		$selector = $this->params['selector'] ?: '';
@@ -38,10 +38,11 @@ class EditImgAction extends BaseAction
 
 	public static function enrichParams(array $params): array
 	{
-		/**
-		 * @var $block Block
-		 */
-		$block = $params['block'];
+		$block = $params['block'] ?? null;
+		if (!$block instanceof Block)
+		{
+			return [];
+		}
 
 		unset($params['valueAfter']['type']);
 		if (!$params['src2x'])

@@ -13,6 +13,7 @@ use Bitrix\Crm\Multifield\Assembler;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
+use Bitrix\Crm\Service\ItemList\CountCache;
 use Bitrix\Crm\Settings\RestSettings;
 use Bitrix\Main\Component\ParameterSigner;
 use Bitrix\Main\Engine\ActionFilter\Csrf;
@@ -164,7 +165,14 @@ class Item extends Base
 			}
 		}
 
-		if (!$this->validateFilter($parameters['filter'], $allowedFields))
+		$allowedFilterFields = $allowedFields;
+		$allowedSortFields = $allowedFields;
+		if (($index = array_search('CONTACT_IDS', $allowedSortFields, true)) !== false)
+		{
+			unset($allowedSortFields[$index]);
+		}
+
+		if (!$this->validateFilter($parameters['filter'], $allowedFilterFields))
 		{
 			return null;
 		}
@@ -174,10 +182,15 @@ class Item extends Base
 			$parameters['filter']['OBSERVERS.USER_ID'] = is_null($parameters['filter']['OBSERVERS']) ? null : (array)$parameters['filter']['OBSERVERS'];
 			unset($parameters['filter']['OBSERVERS']);
 		}
-		if ($hasContactIdsField && !empty($parameters['filter']['CONTACT_IDS']))
+
+		$contactIdsFilterFieldVariants = ['CONTACT_IDS', '@CONTACT_IDS', '!@CONTACT_IDS'];
+		foreach ($contactIdsFilterFieldVariants as $contactIdsFilterFieldVariant)
 		{
-			$parameters['filter']['CONTACT_BINDINGS.CONTACT_ID'] = (array)$parameters['filter']['CONTACT_IDS'];
-			unset($parameters['filter']['CONTACT_IDS']);
+			if ($hasContactIdsField && !empty($parameters['filter'][$contactIdsFilterFieldVariant]))
+			{
+				$parameters['filter']['CONTACT_BINDINGS.CONTACT_ID'] = (array)$parameters['filter'][$contactIdsFilterFieldVariant];
+				unset($parameters['filter'][$contactIdsFilterFieldVariant]);
+			}
 		}
 
 		// @todo ***recurring need?
@@ -190,7 +203,7 @@ class Item extends Base
 				Converter::TO_UPPER | Converter::VALUES
 			);
 
-			if (!$this->validateOrder($parameters['order'], $allowedFields))
+			if (!$this->validateOrder($parameters['order'], $allowedSortFields))
 			{
 				return null;
 			}
@@ -202,16 +215,97 @@ class Item extends Base
 			$parameters['limit'] = $pageNavigation->getLimit();
 		}
 
+		$countFilter = $parameters['filter'];
+		$offset = $pageNavigation ? (int)$parameters['offset'] : null;
+		$limit = $pageNavigation ? (int)$parameters['limit'] : null;
+
 		$items = $factory->getItemsFilteredByPermissions($parameters);
 		$items = array_values($this->getJsonForItems($factory, $items, $select, $isUseOriginalFieldNames));
+
+		$rowsCount = count($items);
 
 		return new Page(
 			'items',
 			$items,
-			function() use($parameters, $factory) {
-				return $factory->getItemsCountFilteredByPermissions($parameters['filter']);
-			}
+			function() use (
+				$factory,
+				$entityTypeId,
+				$countFilter,
+				$rowsCount,
+				$offset,
+				$limit,
+			) {
+				return $this->calculateTotal(
+					$rowsCount,
+					$offset,
+					$limit,
+					function() use (
+						$factory,
+						$entityTypeId,
+						$countFilter,
+						$rowsCount,
+						$offset,
+					) {
+						$countCache = new CountCache();
+						$userId = Container::getInstance()->getUserPermissions()->getUserId();
+						$forceRefresh = $rowsCount === 0 && $offset !== null && $offset > 0;
+						$isRealCountUsed = false;
+
+						if (!$forceRefresh)
+						{
+							$count = $countCache->getOrLoad(
+								$entityTypeId,
+								$userId,
+								$countFilter,
+								static function () use ($factory, $countFilter, &$isRealCountUsed): int {
+									$isRealCountUsed = true;
+
+									return $factory->getItemsCountFilteredByPermissions($countFilter);
+								},
+							);
+
+							if (
+								$isRealCountUsed
+								|| !$this->isCountRefreshRequired($count, $rowsCount, $offset)
+							)
+							{
+								return $count;
+							}
+						}
+
+						$count = $factory->getItemsCountFilteredByPermissions($countFilter);
+						$countCache->set(
+							$entityTypeId,
+							$userId,
+							$countFilter,
+							$count,
+						);
+
+						return $count;
+					},
+				);
+			},
 		);
+	}
+
+	private function calculateTotal(int $rowsCount, ?int $offset, ?int $limit, callable $realCount): int
+	{
+		if ($offset === null || $limit === null)
+		{
+			return $rowsCount;
+		}
+
+		if ($rowsCount === 0 && $offset === 0)
+		{
+			return 0;
+		}
+
+		return (int)$realCount();
+	}
+
+	private function isCountRefreshRequired(int $count, int $rowsCount, ?int $offset): bool
+	{
+		return $rowsCount > 0 && $count <= (int)$offset + $rowsCount;
 	}
 
 	/**
@@ -475,12 +569,14 @@ class Item extends Base
 		}
 
 		$operation = $factory->getAddOperation($item);
-		if (
-			$this->getScope() === static::SCOPE_REST
-			&& !RestSettings::getCurrent()?->isRequiredUserFieldCheckEnabled()
-		)
+		if ($this->getScope() === static::SCOPE_REST)
 		{
-			$operation->disableCheckRequiredUserFields();
+			if (!RestSettings::getCurrent()?->isRequiredUserFieldCheckEnabled())
+			{
+				$operation->disableCheckRequiredUserFields();
+			}
+
+			$operation->getContext()->setAnalytics(['c_section' => Dictionary::SECTION_REST]);
 		}
 
 		$result = $operation->launch();
@@ -799,6 +895,20 @@ class Item extends Base
 			$editorConfig['CONTEXT']['DEADLINE_STAGE'] = $stageId;
 		}
 
+		// In ACTIVITIES mode, propagate viewMode through CONTEXT.PARAMS so the editor
+		// merges it into the save payload. saveAction() consumes it to drive auto-TODO
+		// creation matching the activity column the user clicked "+".
+		if ($viewMode === ViewMode::MODE_ACTIVITIES)
+		{
+			$editorConfig['CONTEXT']['PARAMS'] = array_merge(
+				(array)($editorConfig['CONTEXT']['PARAMS'] ?? []),
+				[
+					'VIEW_MODE' => ViewMode::MODE_ACTIVITIES,
+					\Bitrix\Crm\Kanban\Entity\EntityActivities::ACTIVITY_STAGE_ID => $stageId,
+				]
+			);
+		}
+
 		$forceDefaultConfig = $params['forceDefaultConfig'] ?? 'N';
 		$editorConfig['FORCE_DEFAULT_CONFIG'] = ($forceDefaultConfig === 'Y');
 		$editorConfig['IS_EMBEDDED'] = ($params['IS_EMBEDDED'] ?? 'Y') === 'Y';
@@ -816,6 +926,11 @@ class Item extends Base
 		if (isset($params['ANALYTICS_CONFIG']) && is_array($params['ANALYTICS_CONFIG']))
 		{
 			$editorConfig['ANALYTICS_CONFIG'] = $params['ANALYTICS_CONFIG'];
+		}
+
+		if (isset($params['POST_FORM_ANALYTICS_DATA']['data']) && is_array($params['POST_FORM_ANALYTICS_DATA']['data']))
+		{
+			$editorConfig['COMPONENT_AJAX_DATA']['POST_FORM_ANALYTICS'] = $params['POST_FORM_ANALYTICS_DATA']['data'];
 		}
 
 		$disabledOptions = [

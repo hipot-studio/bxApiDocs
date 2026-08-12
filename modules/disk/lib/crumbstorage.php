@@ -2,7 +2,7 @@
 
 namespace Bitrix\Disk;
 
-
+use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Main\Entity\Event;
 use Bitrix\Main\EventManager;
 
@@ -96,6 +96,89 @@ class CrumbStorage
 		}
 
 		return array_slice($this->crumbsByObjectId[$object->getId()], 0, -1, true);
+	}
+
+	/**
+	 * Preloads crumbs for objects in a single query.
+	 *
+	 * @param BaseObject[] $objects Objects.
+	 * @return void
+	 */
+	public function preloadByObjects(array $objects): void
+	{
+		$objectsToLoad = [];
+		$rootObjectIds = [];
+		foreach ($objects as $object)
+		{
+			$objectId = $object->getId();
+			if (isset($this->crumbsByObjectId[$objectId]))
+			{
+				continue;
+			}
+
+			$parentId = $object->getParentId();
+			if (!$parentId)
+			{
+				$this->crumbsByObjectId[$objectId] = [$this->fetchNameByObject($object)];
+
+				continue;
+			}
+
+			if (isset($this->crumbsByObjectId[$parentId]))
+			{
+				$this->crumbsByObjectId[$objectId] = $this->crumbsByObjectId[$parentId];
+				$this->crumbsByObjectId[$objectId][$objectId] = $this->fetchNameByObject($object);
+
+				continue;
+			}
+
+			$objectsToLoad[$objectId] = $object;
+			$rootObjectIds[$objectId] = $object->getStorage()->getRootObjectId();
+		}
+
+		if (!$objectsToLoad)
+		{
+			return;
+		}
+
+		$crumbsByObjectId = array_fill_keys(array_keys($objectsToLoad), []);
+		$rows = ObjectTable::query()
+			->setSelect([
+				'ID',
+				'NAME',
+				'TYPE',
+				'TARGET_OBJECT_ID' => 'PATH_PARENT.OBJECT_ID',
+				'DEPTH_LEVEL' => 'PATH_PARENT.DEPTH_LEVEL',
+			])
+			->whereIn('PATH_PARENT.OBJECT_ID', array_keys($objectsToLoad))
+			->where('PATH_PARENT.DEPTH_LEVEL', '>', 0)
+			->where('DELETED_TYPE', ObjectTable::DELETED_TYPE_NONE)
+			->setOrder(['PATH_PARENT.DEPTH_LEVEL' => 'DESC'])
+			->exec()
+		;
+		while ($row = $rows->fetch())
+		{
+			$objectId = (int)$row['TARGET_OBJECT_ID'];
+			$parentId = (int)$row['ID'];
+			if ($parentId === (int)$rootObjectIds[$objectId])
+			{
+				continue;
+			}
+
+			$parent = BaseObject::buildFromArray([
+				'ID' => $row['ID'],
+				'NAME' => $row['NAME'],
+				'TYPE' => $row['TYPE'],
+			]);
+			$crumbsByObjectId[$objectId][$parentId] = $parent->getName();
+		}
+
+		foreach ($objectsToLoad as $objectId => $object)
+		{
+			$this->crumbsByObjectId[$objectId] = $crumbsByObjectId[$objectId];
+			$this->crumbsByObjectId[$object->getParentId()] = $crumbsByObjectId[$objectId];
+			$this->crumbsByObjectId[$objectId][$objectId] = $this->fetchNameByObject($object);
+		}
 	}
 
 	/**

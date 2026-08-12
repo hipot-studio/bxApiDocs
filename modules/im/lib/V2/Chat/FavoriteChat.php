@@ -215,7 +215,7 @@ class FavoriteChat extends PrivateChat
 		return Loc::getMessage('IM_CHAT_FAVORITE_TITLE_V3') ?? '';
 	}
 
-	protected function sendBanner(): void
+	protected function sendBanner(?int $authorId = null, bool $force = false): void
 	{
 		$messageText = Loc::getMessage('IM_CHAT_FAVORITE_CREATE_WELCOME_MSGVER_1');
 		\CIMMessage::Add([

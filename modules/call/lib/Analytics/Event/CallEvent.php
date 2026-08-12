@@ -68,11 +68,6 @@ class CallEvent extends Event
 		return $this;
 	}
 
-	protected function getTool(): string
-	{
-		return 'im';
-	}
-
 	protected function getCategory(string $eventName): string
 	{
 		return 'call';

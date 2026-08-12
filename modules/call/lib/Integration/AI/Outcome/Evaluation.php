@@ -62,16 +62,27 @@ class Evaluation extends AISenseContent
 			{
 				$this->efficiencyValue = ceil(100 / $totalCriteria * $positiveCriteria);
 			}
+
+			$this->isEmpty = ($this->efficiencyValue < 0);
 		}
+	}
+
+	public function hasContent(bool $ignoreComputedCriteria = false): bool
+	{
+		if ($ignoreComputedCriteria)
+		{
+			// Restart decision: the auto-seeded calendar criterion must not count as content.
+			return !empty($this->meetingEvaluation);
+		}
+
+		return parent::hasContent();
 	}
 
 	/**
 	 * @return array
 	 */
-	public function toRestFormat(string $mentionFormat = 'bb'): array
+	public function toRestFormat(string $mentionFormat = MentionService::FORMAT_BB): array
 	{
-		$mentionService = MentionService::getInstance();
-
 		$result = [
 			'efficiencyValue' =>  $this->efficiencyValue,
 		];
@@ -90,12 +101,7 @@ class Evaluation extends AISenseContent
 					$result[$key] = [
 						'value' => $value['value'],
 						'criteria' => $value['criteria'],
-						'thoughts' => match ($mentionFormat)
-						{
-							'html' => $mentionService->replaceBBMentions($value['thoughts']),
-							'none' => $mentionService->removeBBMentions($value['thoughts']),
-							default => $value['thoughts'],//bb
-						},
+						'thoughts' => $this->applyMentionFormat($value['thoughts'], $mentionFormat),
 						'title' => $this->getCriteriaTitle($value['criteria']),
 					];
 				}

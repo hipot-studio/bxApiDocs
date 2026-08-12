@@ -36,6 +36,9 @@ class WorktimeReportTable extends Main\ORM\Data\DataManager
 	public const REPORT_TYPE_REPORT_DURATION = 'REPORT_DURATION';
 	public const REPORT_TYPE_RECORD_REPORT = 'REPORT';
 	public const REPORT_TYPE_RECORD_AI_REPORT = 'AI_REPORT';
+	public const REPORT_TYPE_RECORD_ROBOT_REPORT = 'ROBOT_REPORT';
+	public const REPORT_TYPE_AI_DAY_PLAN = 'AI_DAY_PLAN';
+	public const REPORT_TYPE_ROBOT_DAY_PLAN = 'ROBOT_DAY_PLAN';
 
 	public static function getObjectClass()
 	{

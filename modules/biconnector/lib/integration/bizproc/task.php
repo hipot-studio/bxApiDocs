@@ -32,6 +32,7 @@ class Task
 		}
 
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
 
 		$taskStatusesSql = static::mapDictionarytoSqlCase(static::getTaskStatuses(), $helper);
@@ -87,7 +88,7 @@ class Task
 				],
 				'DURATION' => [
 					'IS_METRIC' => 'Y',
-					'FIELD_NAME' => 'TIMESTAMPDIFF(SECOND, T.CREATED_DATE, T.MODIFIED)',
+					'FIELD_NAME' => $helper->getDateDiffSecondsExpression('T.CREATED_DATE', 'T.MODIFIED'),
 					'FIELD_TYPE' => 'int',
 				],
 				'APPROVE_TYPE' => [
@@ -139,7 +140,7 @@ class Task
 				],
 				'USER' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'concat_ws(\' \', concat(\'[\', U.ID, \']\'), nullif(U.NAME, \'\'), nullif(U.LAST_NAME, \'\'))',
+					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'U.ID', "']'") . ', nullif(U.NAME, \'\'), nullif(U.LAST_NAME, \'\'))',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'U',
 					'JOIN' => [
@@ -216,7 +217,7 @@ class Task
 
 			$sqlId = $helper->forSql($id);
 			$sqlValue = $helper->forSql($value);
-			$dictionaryForSql[] = "when LOCATE('{$sqlId}', #FIELD_NAME#) > 0 then '{$sqlValue}'";
+			$dictionaryForSql[] = "when POSITION('{$sqlId}' IN #FIELD_NAME#) > 0 then '{$sqlValue}'";
 		}
 
 		return 'case ' . implode("\n", $dictionaryForSql) . ' else ' . $default . ' end';

@@ -259,14 +259,18 @@ class CSocNetGroup extends CAllSocNetGroup
 
 			if(!empty($arSiteID))
 			{
+				$connection = \Bitrix\Main\Application::getConnection();
+
 				$strSql = "DELETE FROM b_sonet_group_site WHERE GROUP_ID=".$ID;
 				$DB->Query($strSql);
 
-				$strSql =
-					"INSERT INTO b_sonet_group_site(GROUP_ID, SITE_ID) ".
+				$strSql = $connection->getSqlHelper()->getInsertIgnore(
+					"b_sonet_group_site",
+					"(GROUP_ID, SITE_ID)",
 					"SELECT ".$ID.", LID ".
 					"FROM b_lang ".
-					"WHERE LID IN (".$str_SiteID.") ";
+					"WHERE LID IN (".$str_SiteID.") "
+				);
 				$DB->Query($strSql);
 
 				$arLogID = array();
@@ -283,12 +287,13 @@ class CSocNetGroup extends CAllSocNetGroup
 				{
 					$DB->Query("DELETE FROM b_sonet_log_site WHERE LOG_ID = ".$arResult["ID"]."");
 
-					$DB->Query("
-						INSERT INTO b_sonet_log_site(LOG_ID, SITE_ID)
-						SELECT ".$arResult["ID"].", LID
-						FROM b_lang
-						WHERE LID IN (".$str_SiteID.")
-					");
+					$DB->Query($connection->getSqlHelper()->getInsertIgnore(
+						"b_sonet_log_site",
+						"(LOG_ID, SITE_ID)",
+						"SELECT ".$arResult["ID"].", LID ".
+						"FROM b_lang ".
+						"WHERE LID IN (".$str_SiteID.")"
+					));
 
 					$arLogID[] = $arResult["ID"];
 				}

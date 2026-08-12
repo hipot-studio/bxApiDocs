@@ -10,12 +10,14 @@ use Bitrix\Rest\Internal\Entity\Application\AppScopeRequestState;
 use Bitrix\Rest\Internal\Entity\Application\AppScopeRequestStatus;
 use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 use Bitrix\Rest\Internal\Repository\AppScopeRequestRepository;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 
 final class AppScopeRequestService
 {
 	public function __construct(
 		private readonly AppScopeRequestRepository $appScopeRequestRepository = new AppScopeRequestRepository(),
 		private readonly AppRepository $appRepository = new AppRepository(),
+		private readonly SecurityAuditLogger $securityAuditLogger = new SecurityAuditLogger(),
 	) {}
 
 	/**
@@ -23,7 +25,17 @@ final class AppScopeRequestService
 	 */
 	public function approve(int $scopeRequestId, string $comment = ''): AppScopeRequest
 	{
-		return $this->appScopeRequestRepository->addState($scopeRequestId, AppScopeRequestStatus::Approved, $comment);
+		$appScopeRequest = $this->appScopeRequestRepository->addState($scopeRequestId, AppScopeRequestStatus::Approved, $comment);
+
+		$this->securityAuditLogger->logScopeApproved(
+			actingUserId: $this->resolveActingUserId(),
+			appId: $appScopeRequest->getAppId(),
+			requestId: (int)$appScopeRequest->getId(),
+			scopes: $appScopeRequest->getScopes(),
+			comment: $comment,
+		);
+
+		return $appScopeRequest;
 	}
 
 	/**
@@ -37,7 +49,17 @@ final class AppScopeRequestService
 			throw new \InvalidArgumentException('Rejection reason (comment) is required');
 		}
 
-		return $this->appScopeRequestRepository->addState($scopeRequestId, AppScopeRequestStatus::Rejected, $comment);
+		$appScopeRequest = $this->appScopeRequestRepository->addState($scopeRequestId, AppScopeRequestStatus::Rejected, $comment);
+
+		$this->securityAuditLogger->logScopeRejected(
+			actingUserId: $this->resolveActingUserId(),
+			appId: $appScopeRequest->getAppId(),
+			requestId: (int)$appScopeRequest->getId(),
+			scopes: $appScopeRequest->getScopes(),
+			comment: $comment,
+		);
+
+		return $appScopeRequest;
 	}
 
 	/**
@@ -118,6 +140,13 @@ final class AppScopeRequestService
 		);
 		$this->appScopeRequestRepository->save($appScopeRequest);
 
+		$this->securityAuditLogger->logScopeRequested(
+			appId: $appId,
+			requestId: (int)$appScopeRequest->getId(),
+			scopes: $newScopes,
+			comment: $comment,
+		);
+
 		return $appScopeRequest;
 	}
 
@@ -145,5 +174,22 @@ final class AppScopeRequestService
 	public function getApprovedScopes(int $appId): array
 	{
 		return $this->collectScopes($this->appScopeRequestRepository->getApprovedList($appId));
+	}
+
+	private function resolveActingUserId(): int
+	{
+		$userId = (int)\Bitrix\Main\Engine\CurrentUser::get()->getId();
+		if ($userId > 0)
+		{
+			return $userId;
+		}
+
+		global $USER;
+		if (is_object($USER) && $USER->IsAuthorized())
+		{
+			return (int)$USER->GetID();
+		}
+
+		return 0;
 	}
 }

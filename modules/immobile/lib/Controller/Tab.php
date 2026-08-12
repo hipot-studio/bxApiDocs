@@ -32,6 +32,31 @@ abstract class Tab extends BaseController
 	protected const OFFSET = 0;
 	protected const LIMIT = 50;
 
+	/**
+	 * Methods a guest user is allowed to request via loadAction.
+	 *
+	 * Whitelist principle:
+	 * - Own-user / public-flag data (counters of self, active calls of self, mobile promotions,
+	 *   tariff restrictions, desktop status of self) — allowed.
+	 * - Workspace-wide listings (channels, collabs, openlines, tasks, copilot, folders, nested,
+	 *   department colleagues) — stripped: guest has no legitimate access to portal-wide entities,
+	 *   and per-method handlers don't all gate on user type internally.
+	 */
+	private const GUEST_ALLOWED_METHODS = [
+		'recentList',
+		'userData',
+		'imCounters',
+		'mobileRevision',
+		'serverTime',
+		'anchors',
+		'chatsList',
+		'tariffRestriction',
+		'portalCounters',
+		'activeCalls',
+		'promotion',
+		'desktopStatus',
+	];
+
 	protected array $options;
 	protected CurrentUser $currentUser;
 
@@ -50,6 +75,8 @@ abstract class Tab extends BaseController
 	{
 		$this->options = $options;
 		$this->currentUser = $currentUser;
+
+		$methodList = $this->filterMethodListByUserType($methodList);
 
 		$data = [];
 		foreach ($methodList as $method)
@@ -440,4 +467,15 @@ abstract class Tab extends BaseController
 	}
 
 	abstract protected function getRecentList(): array;
+
+	private function filterMethodListByUserType(array $methodList): array
+	{
+		$user = User::getInstance((int)$this->currentUser->getId());
+		if (!$user->isGuest())
+		{
+			return $methodList;
+		}
+
+		return array_values(array_intersect($methodList, self::GUEST_ALLOWED_METHODS));
+	}
 }

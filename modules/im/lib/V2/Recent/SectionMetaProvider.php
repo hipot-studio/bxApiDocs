@@ -13,17 +13,14 @@ class SectionMetaProvider
 		$parentChat = Chat::getInstance($parentChatId);
 
 		$fixedChatIds = $this->resolveFixedChatIds($parentChat, $recentSection, $userId);
-		$collabInfo = $this->resolveCollabInfo($parentChat, $recentSection);
+		$collabInfo = $this->resolveCollabInfo($parentChat);
 
 		return new SectionMeta(fixedChatIds: $fixedChatIds, collabInfo: $collabInfo);
 	}
 
-	private function resolveCollabInfo(Chat $parentChat, ?string $recentSection): ?CollabInfo
+	private function resolveCollabInfo(Chat $parentChat): ?CollabInfo
 	{
-		if (
-			$recentSection === 'collabDefault'
-			&& $parentChat instanceof Chat\CollabChat
-		)
+		if ($parentChat instanceof Chat\CollabChat)
 		{
 			return new CollabInfo($parentChat);
 		}

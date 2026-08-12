@@ -3,6 +3,7 @@
 namespace Bitrix\Bizproc\Workflow\Template\Converter;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityNodeType;
+use Bitrix\Bizproc\Starter\Dto\TriggerDescriptorDto;
 use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Result;
 use Bitrix\Bizproc\Internal\Helper\Activity\ActivityHelper;
@@ -23,6 +24,7 @@ class SequentialToNodeWorkflow
 	private int $autoExecute = \CBPDocumentEventType::None;
 	private array $positions = [];
 	private ?string $startTrigger = null;
+	private ?array $documentType = null;
 
 	public function __construct(array $template)
 	{
@@ -52,7 +54,17 @@ class SequentialToNodeWorkflow
 		$row = WorkflowTemplateTable::query()
 			->where('ID', $templateId)
 			->setSelect([
-				'TEMPLATE', 'IS_SYSTEM', 'AUTO_EXECUTE', 'NAME', 'DESCRIPTION', 'PARAMETERS', 'VARIABLES', 'CONSTANTS'
+				'TEMPLATE',
+				'IS_SYSTEM',
+				'AUTO_EXECUTE',
+				'NAME',
+				'DESCRIPTION',
+				'PARAMETERS',
+				'VARIABLES',
+				'CONSTANTS',
+				'MODULE_ID',
+				'ENTITY',
+				'DOCUMENT_TYPE',
 			])
 			->exec()
 			->fetch()
@@ -66,6 +78,7 @@ class SequentialToNodeWorkflow
 		$instance = new static($row['TEMPLATE']);
 		$instance->setIsSystem($row['IS_SYSTEM'] === 'Y');
 		$instance->setAutoExecute((int)$row['AUTO_EXECUTE']);
+		$instance->setDocumentType([$row['MODULE_ID'], $row['ENTITY'], $row['DOCUMENT_TYPE']]);
 
 		return $instance;
 	}
@@ -134,6 +147,13 @@ class SequentialToNodeWorkflow
 		return $this;
 	}
 
+	public function setDocumentType(?array $documentType): self
+	{
+		$this->documentType = $documentType;
+
+		return $this;
+	}
+
 	public function convert(): array
 	{
 		[$startName, $startLinks, $startChildren] = $this->createTriggers();
@@ -179,20 +199,32 @@ class SequentialToNodeWorkflow
 
 		if (!is_null($this->startTrigger))
 		{
-			$triggers[] = $this->startTrigger;
-		}
-		if ($this->autoExecute & CBPDocumentEventType::Create)
-		{
-			$triggers[] = self::CREATE_DOCUMENT_TRIGGER;
-		}
-		if ($this->autoExecute & CBPDocumentEventType::Edit)
-		{
-			$triggers[] = self::EDIT_DOCUMENT_TRIGGER;
+			$triggers[] = [
+				'type' => $this->startTrigger,
+				'descriptor' => null,
+			];
 		}
 
-		foreach ($triggers as $triggerType)
+		if ($this->autoExecute & CBPDocumentEventType::Create)
 		{
-			$trigger = $this->createTrigger($triggerType);
+			$descriptor = $this->resolveCreateStartTriggerDescriptor();
+			$triggers[] = [
+				'type' => $descriptor?->triggerType ?? self::CREATE_DOCUMENT_TRIGGER,
+				'descriptor' => $descriptor,
+			];
+		}
+
+		if ($this->autoExecute & CBPDocumentEventType::Edit)
+		{
+			$triggers[] = [
+				'type' => self::EDIT_DOCUMENT_TRIGGER,
+				'descriptor' => null,
+			];
+		}
+
+		foreach ($triggers as $triggerConfig)
+		{
+			$trigger = $this->createTrigger($triggerConfig['type'], $triggerConfig['descriptor']);
 			$children[] = $trigger;
 			$links[] = $this->createLink($trigger['Name'], $merge['Name']);
 
@@ -205,25 +237,44 @@ class SequentialToNodeWorkflow
 		return [$merge['Name'], $links, $children];
 	}
 
-	private function createTrigger(string $type): array
+	private function resolveCreateStartTriggerDescriptor(): ?TriggerDescriptorDto
 	{
-		$activityDescription = \CBPRuntime::getRuntime()->getActivityDescription($type);
+		if (!$this->documentType)
+		{
+			return null;
+		}
+
+		$moduleSettings = \CBPRuntime::getRuntime()->getDocumentService()->getStarterModuleSettings($this->documentType);
+
+		return $moduleSettings?->getCreateDocumentTrigger();
+	}
+
+	private function createTrigger(string $type, ?TriggerDescriptorDto $descriptor = null): array
+	{
+		$activityDescription = \CBPRuntime::getRuntime()->getActivityDescription($type) ?? [];
 
 		$name = ActivityHelper::generateName();
 
-		$title = $activityDescription['NAME'] ?? null;
-		$icon = $activityDescription['NODE_ICON'] ?? null;
+		$title = $descriptor?->title ?? ($activityDescription['NAME'] ?? null);
+		$icon = $descriptor?->icon ?? ($activityDescription['NODE_ICON'] ?? null);
 		$colorIndex = $activityDescription['COLOR_INDEX'] ?? null;
+		$properties = $descriptor?->properties ?? [];
+		$properties['Title'] = $title;
+		$properties['Icon'] = $icon;
+		$properties['ColorIndex'] = $colorIndex;
 
-		return [
+		$trigger = [
 			'Type' => $type,
 			'Name' => $name,
-			'Properties' => [
-				'Title' => $title,
-				'Icon' => $icon,
-				'ColorIndex' => $colorIndex,
-			],
+			'Properties' => $properties,
 		];
+
+		if ($descriptor?->presetId !== null)
+		{
+			$trigger['PresetId'] = $descriptor->presetId;
+		}
+
+		return $trigger;
 	}
 
 	protected function optimizeChildren(array $links, array $children): array

@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Message\BlocksBuilder\BuilderService;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Param\ParamError;
 use Bitrix\Im\V2\Message\Params;
+use Bitrix\Im\V2\Message\Reply\ReplyValidator;
 use Bitrix\Im\V2\Message\Sticker\PackType;
 use Bitrix\Im\V2\Message\Sticker\StickerError;
 use Bitrix\Im\V2\Message\Sticker\StickerService;
@@ -349,31 +350,23 @@ class FieldsValidationService
 
 	private function checkReply(): Result
 	{
-		$result = new Result();
+		$replyId = isset($this->fields['REPLY_ID']) ? (int)$this->fields['REPLY_ID'] : 0;
 
-		if (!isset($this->fields['REPLY_ID']) || (int)$this->fields['REPLY_ID'] <= 0)
+		$validator = new ReplyValidator();
+		$validationResult = $validator->validate($replyId, $this->chat);
+
+		if (!$validationResult->isSuccess())
 		{
-			return $result;
+			return $validationResult;
 		}
 
-		$message = new \Bitrix\Im\V2\Message((int)$this->fields['REPLY_ID']);
-		$messageAccess = $message->checkAccess();
-		if (!$messageAccess->isSuccess())
+		$validated = $validationResult->getResult();
+		if (isset($validated['REPLY_ID']))
 		{
-			return $result->addErrors($messageAccess->getErrors());
+			$this->fields['PARAMS']['REPLY_ID'] = (int)$validated['REPLY_ID'];
 		}
 
-		if ($message->getChat()->getId() !== $this->chat->getId())
-		{
-			return $result->addError(new MessageError(
-					MessageError::REPLY_ERROR,
-					'You can only reply to a message within the same chat')
-			);
-		}
-
-		$this->fields['PARAMS']['REPLY_ID'] = $message->getId();
-
-		return $result;
+		return $validationResult;
 	}
 
 	private function checkParams(): Result

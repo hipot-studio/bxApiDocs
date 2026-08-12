@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Bizproc\FieldType;
 
 use Bitrix\Main\Loader;
@@ -16,6 +18,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 /** @property-write string|null ErrorMessage */
 class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEventListener
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -35,8 +40,15 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 
 	public function execute()
 	{
-		$documentId = $this->getDocumentId();
-		$documentType = $this->getDocumentType();
+		$documentId = $this->resolveTargetDocumentId();
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		$documentType = $this->resolveTargetDocumentType($documentId);
 
 		$fieldValue = $this->FieldValue;
 
@@ -85,6 +97,17 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 		}
 
 		return CBPActivityExecutionStatus::Closed;
+	}
+
+	protected function getResolvedTargetAccessActorId(): int
+	{
+		$modifiedBy = (int)CBPHelper::ExtractUsers(
+			$this->ModifiedBy,
+			$this->getRootActivity()->getDocumentId(),
+			true,
+		);
+
+		return $modifiedBy > 0 ? $modifiedBy : $this->getRootStartedByUserId();
 	}
 
 	protected function reInitialize()
@@ -161,8 +184,7 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 	{
 		if ($this->executionStatus != CBPActivityExecutionStatus::Closed)
 		{
-			$rootActivity = $this->getRootActivity();
-			$documentId = $rootActivity->GetDocumentId();
+			$documentId = $this->resolveTargetDocumentId();
 
 			$documentService = $this->workflow->GetService('DocumentService');
 			if ($documentService->IsDocumentLocked($documentId, $this->getWorkflowInstanceId()))
@@ -173,8 +195,19 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 			$fieldValue = $this->FieldValue;
 			if (is_array($fieldValue) && count($fieldValue) > 0)
 			{
-				$resultFields = $this->prepareFieldsValues($documentId, $this->getDocumentType(), $fieldValue);
-				$documentService->UpdateDocument($documentId, $resultFields);
+				if ($this->canUpdateResolvedTarget($documentId))
+				{
+					$resultFields = $this->prepareFieldsValues(
+						$documentId,
+						$this->resolveTargetDocumentType($documentId),
+						$fieldValue,
+					);
+					$documentService->UpdateDocument($documentId, $resultFields);
+				}
+				else
+				{
+					$this->logResolvedTargetAccessDenied();
+				}
 			}
 
 			$documentService->UnsubscribeOnUnlockDocument($documentId, $this->getWorkflowInstanceId(), $this->name);

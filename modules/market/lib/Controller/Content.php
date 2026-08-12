@@ -5,6 +5,7 @@ namespace Bitrix\Market\Controller;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\Response\AjaxJson;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Market\Internal\Services\Mobile\PageResolver as MobilePageResolver;
 use Bitrix\Market\PageRules;
 
 class Content extends Controller
@@ -21,34 +22,37 @@ class Content extends Controller
 			$path .= "index.php";
 		}
 
-		$pageRules = new PageRules($path, $this->getQueryParams($uri->getQuery()));
+		$pageRules = $this->createPageRules($path, $this->getQueryParams($uri->getQuery()));
 		$data = $pageRules->getComponentData();
 
 		return AjaxJson::createSuccess([
-			'params' => $data['params'],
-			'result' => $data['result'],
+			'params' => is_array($data['params'] ?? null) ? $data['params'] : [],
+			'result' => is_array($data['result'] ?? null) ? $data['result'] : [],
 		]);
+	}
+
+	private function createPageRules(string $path, array $queryParams): object
+	{
+		if ($this->isMobilePage($path))
+		{
+			return new MobilePageResolver($path, $queryParams);
+		}
+
+		return new PageRules($path, $queryParams);
+	}
+
+	private function isMobilePage(string $path): bool
+	{
+		return MobilePageResolver::isMobilePagePath($path);
 	}
 
 	private function getQueryParams($query): array
 	{
 		$params = [];
 
-		if (!empty($query)) {
-			foreach (explode('&', $query) as $param) {
-				$queryParameter = explode('=', $param);
-				if (empty($queryParameter) || !is_array($queryParameter) || count($queryParameter) != 2) {
-					continue;
-				}
-
-				if (strpos($queryParameter[0], '[')) {
-					$parameter = explode('[', $queryParameter[0]);
-					$params[$parameter[0]][] = $queryParameter[1];
-					continue;
-				}
-
-				$params[$queryParameter[0]] = $queryParameter[1];
-			}
+		if (!empty($query))
+		{
+			parse_str($query, $params);
 		}
 
 		return $params;

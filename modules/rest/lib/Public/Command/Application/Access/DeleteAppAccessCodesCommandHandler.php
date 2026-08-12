@@ -14,15 +14,18 @@ use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
 use Bitrix\Rest\Internal\Exception\Application\ApplicationNotFoundException;
 use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 use Bitrix\Rest\Internal\Service\Application\AccessCacheInvalidator;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 
 class DeleteAppAccessCodesCommandHandler
 {
 	private AppRepository $appRepository;
+	private SecurityAuditLogger $securityAuditLogger;
 
-	public function __construct(?AppRepository $appRepository = null)
+	public function __construct(?AppRepository $appRepository = null, ?SecurityAuditLogger $securityAuditLogger = null)
 	{
 		$this->appRepository = $appRepository
 			?? ServiceLocator::getInstance()->get('rest.repository.app');
+		$this->securityAuditLogger = $securityAuditLogger ?? new SecurityAuditLogger();
 	}
 
 	/**
@@ -68,6 +71,15 @@ class DeleteAppAccessCodesCommandHandler
 
 		$app->setAccess($remainingCodes);
 		$this->appRepository->save($app);
+
+		$this->securityAuditLogger->logAppAccessChanged(
+			actingUserId: $command->userId,
+			appId: (int)$app->getId(),
+			clientId: $command->clientId,
+			action: 'delete',
+			previousAccessCodes: $currentCodes,
+			newAccessCodes: $remainingCodes,
+		);
 
 		AccessCacheInvalidator::clear();
 	}

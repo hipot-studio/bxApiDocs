@@ -2,6 +2,11 @@
 
 namespace Bitrix\Landing\Assets;
 
+use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeAssetPolicy;
+use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeEligibilityService;
+use Bitrix\Landing\Hook;
+use Bitrix\Landing\Landing;
+use Bitrix\Landing\Manager as LandingManager;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main;
@@ -13,6 +18,8 @@ abstract class Builder
 	protected const TYPE_WEBPACK = 'WEBPACK';
 
 	protected const PACKAGE_NAME = 'landing_assets';
+	private const AI_TAILWIND_RUNTIME_CSS_MARKER = 'ai-tailwind-runtime=1';
+	private const AI_TAILWIND_RUNTIME_CSS_INIT_MARKER = 'ai-tailwind-runtime=0';
 
 	/**
 	 * @var ResourceCollection
@@ -74,6 +81,7 @@ abstract class Builder
 	public function attachToLanding(int $lid): void
 	{
 		$this->landingId = (int)$lid;
+		$this->removeConflictingTemplateCssForTailwindLanding();
 	}
 
 	/**
@@ -122,5 +130,84 @@ abstract class Builder
 		{
 			Main\Page\Asset::getInstance()->addString($string, false, Main\Page\AssetLocation::AFTER_JS);
 		}
+	}
+
+	private function removeConflictingTemplateCssForTailwindLanding(): void
+	{
+		$templatePath = \getLocalPath(
+			'templates/' . LandingManager::getTemplateId(LandingManager::getMainSiteId())
+		);
+		if (!is_string($templatePath) || $templatePath === '')
+		{
+			return;
+		}
+
+		$tailwindRuntimeFiles = TailwindRuntimeAssetPolicy::getRuntimeHelperPaths($templatePath);
+
+		$tailwindMode = $this->landingId > 0 ? $this->resolveTailwindRuntimeMode() : 'none';
+		if ($tailwindMode === 'none')
+		{
+			$this->resources->remove($tailwindRuntimeFiles);
+			return;
+		}
+
+		if ($tailwindMode === 'init')
+		{
+			$this->addTailwindRuntimeFiles($tailwindRuntimeFiles);
+		}
+
+		$filesToRemove = [
+			$templatePath . '/assets/vendor/bootstrap/bootstrap.css',
+			$templatePath . '/theme.css',
+			$templatePath . '/assets/css/custom.css',
+			$templatePath . '/assets/vendor/animate.css',
+		];
+
+		if ($tailwindMode === 'runtime')
+		{
+			$filesToRemove = array_merge($filesToRemove, $tailwindRuntimeFiles);
+		}
+
+		$this->resources->remove($filesToRemove);
+	}
+
+	private function addTailwindRuntimeFiles(array $tailwindRuntimeFiles): void
+	{
+		foreach ($tailwindRuntimeFiles as $tailwindRuntimeFile)
+		{
+			$this->resources->add($tailwindRuntimeFile, Types::TYPE_JS, Location::LOCATION_TEMPLATE);
+		}
+	}
+
+	private function resolveTailwindRuntimeMode(): string
+	{
+		if (!(new TailwindRuntimeEligibilityService())->isLandingSupported($this->landingId))
+		{
+			return 'none';
+		}
+
+		$previousHookEditMode = Hook::getEditMode();
+
+		try
+		{
+			Hook::setEditMode(Landing::getEditMode());
+			$hookData = Hook::getData($this->landingId, Hook::ENTITY_TYPE_LANDING, true);
+		}
+		finally
+		{
+			Hook::setEditMode($previousHookEditMode);
+		}
+
+		$cssFile = trim((string)($hookData['CSSBLOCK']['FILE']['VALUE'] ?? ''));
+		if ($cssFile !== '' && mb_stripos($cssFile, self::AI_TAILWIND_RUNTIME_CSS_MARKER) !== false)
+		{
+			return 'runtime';
+		}
+		if ($cssFile !== '' && mb_stripos($cssFile, self::AI_TAILWIND_RUNTIME_CSS_INIT_MARKER) !== false)
+		{
+			return 'init';
+		}
+
+		return 'none';
 	}
 }

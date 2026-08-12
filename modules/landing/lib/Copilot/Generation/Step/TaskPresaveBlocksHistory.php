@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Step;
 
+use Bitrix\Landing\Copilot\Generation\Step\Base\TaskStep;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\History;
 use Bitrix\Landing\Rights;
@@ -22,19 +23,25 @@ class TaskPresaveBlocksHistory extends TaskStep
 		parent::execute();
 
 		Rights::setGlobalOff();
-		$historyState = History::isActive();
-		History::deactivate();
-
-		$blockContents = $this->getBlockContents();
-		if (!empty($blockContents))
+		$historyState = false;
+		try
 		{
-			$this->generation->setData(self::DATA_KEY, $blockContents);
+			$historyState = History::isActive();
+			History::deactivate();
+
+			$blockContents = $this->getBlockContents();
+			if ($blockContents !== [])
+			{
+				$this->generation->setData(self::DATA_KEY, $blockContents);
+			}
 		}
-
-		Rights::setGlobalOn();
-		if ($historyState)
+		finally
 		{
-			History::activate();
+			Rights::setGlobalOn();
+			if ($historyState)
+			{
+				History::activate();
+			}
 		}
 
 		return true;
@@ -42,18 +49,17 @@ class TaskPresaveBlocksHistory extends TaskStep
 
 	private function getBlockContents(): array
 	{
-		$blockContents = [];
-
 		$landing = $this->siteData->getLandingInstance();
 		if (!$landing)
 		{
-			return $blockContents;
+			return [];
 		}
 
+		$blockContents = [];
 		foreach ($this->siteData->getBlocks() as $blockData)
 		{
-			$blockId = $blockData->getId();
-			if (!$blockId || $blockId <= 0)
+			$blockId = (int)$blockData->getId();
+			if ($blockId <= 0)
 			{
 				continue;
 			}

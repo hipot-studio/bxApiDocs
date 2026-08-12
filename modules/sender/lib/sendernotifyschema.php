@@ -8,16 +8,19 @@ class SenderNotifySchema
 	{
 		return [
 			"sender" => [
-				"group_prepared" => [
-					"NAME" => GetMessage("SENDER_SEGMENT_NOTIFY"),
-					"SITE" => "Y",
-					"MAIL" => "N",
-					"XMPP" => "N",
-					"PUSH" => "N",
-					"DISABLED" => [
-						IM_NOTIFY_FEATURE_XMPP,
-						IM_NOTIFY_FEATURE_MAIL,
-						IM_NOTIFY_FEATURE_PUSH,
+				"NAME" => GetMessage("SENDER_NOTIFY_SCHEMA_GROUP"),
+				"NOTIFY" => [
+					"group_prepared" => [
+						"NAME" => GetMessage("SENDER_SEGMENT_NOTIFY"),
+						"SITE" => "Y",
+						"MAIL" => "N",
+						"XMPP" => "N",
+						"PUSH" => "N",
+						"DISABLED" => [
+							IM_NOTIFY_FEATURE_XMPP,
+							IM_NOTIFY_FEATURE_MAIL,
+							IM_NOTIFY_FEATURE_PUSH,
+						],
 					],
 				],
 			],

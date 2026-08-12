@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Analytics\MessageContent;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Link\Task\TaskService;
 use Bitrix\Im\V2\Link\Url\UrlService;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Permission\Action;
@@ -194,6 +195,8 @@ class DeleteService
 
 		$this->deleteAnchors();
 
+		$this->deleteLinkedAutoTasks();
+
 		$this->sendAnalyticsData();
 	}
 
@@ -308,37 +311,36 @@ class DeleteService
 			return;
 		}
 
+		// "complete" deletion mode, but CommentChat always deletes "soft"
+		$fullDeletionMode = $this->chat instanceof Chat\CommentChat ? DeletionMode::Soft : DeletionMode::Complete;
+
 		// case of deletion other users messages
 		if ($this->chat->canDo(Action::DeleteOthersMessage))
 		{
-			$deletionModeOtherMessage = $this->chat instanceof Chat\CommentChat ? DeletionMode::Soft : DeletionMode::Complete;
-			$this->setDeletionMode(MessageType::OtherMessage, $deletionModeOtherMessage)
-				->setDeletionMode(MessageType::OwnMessageUnread, $deletionModeOtherMessage)
-				->setDeletionMode(MessageType::OwnMessageRead, $deletionModeOtherMessage)
+			$this->setDeletionMode(MessageType::OtherMessage, $fullDeletionMode);
+		}
+
+		if (
+			($this->chat instanceof Chat\ChannelChat || $this->chat instanceof Chat\GeneralChat)
+			&& $this->chat->canDo(Action::Send)
+		)
+		{
+			$this->setDeletionMode(MessageType::OwnMessageUnread, DeletionMode::Complete)
+				->setDeletionMode(MessageType::OwnMessageRead, DeletionMode::Complete)
 			;
 
 			return;
 		}
 
-		// case of deletion own messages(read/unread) in ChannelChat and GeneralChat
-		if ($this->chat instanceof Chat\ChannelChat || $this->chat instanceof Chat\GeneralChat)
+		if ($this->chat->canDo(Action::DeleteOwnMessage))
 		{
-			if ($this->chat->canDo(Action::Send))
-			{
-				$this->setDeletionMode(MessageType::OwnMessageUnread, DeletionMode::Complete)
-					->setDeletionMode(MessageType::OwnMessageRead, DeletionMode::Complete)
-				;
-			}
-
-			return;
+			$this->setDeletionMode(MessageType::OwnMessageUnread, $fullDeletionMode);
+			$canFullyDeleteOwnRead = $this->chat->canDo(Action::DeleteCompleteOwnMessage);
+			$this->setDeletionMode(
+				MessageType::OwnMessageRead,
+				$canFullyDeleteOwnRead ? $fullDeletionMode : DeletionMode::Soft
+			);
 		}
-
-		// if viewed by others -> "soft"
-		// if not viewed by others -> "complete"(CommentChat - "soft")
-		$deletionModeSelfMessage = $this->chat instanceof Chat\CommentChat ? DeletionMode::Soft : DeletionMode::Complete;
-		$this->setDeletionMode(MessageType::OwnMessageRead, DeletionMode::Soft)
-			->setDeletionMode(MessageType::OwnMessageUnread, $deletionModeSelfMessage)
-		;
 	}
 
 	protected function fillPermissionsForOpenLine(): void
@@ -797,5 +799,25 @@ class DeleteService
 		$readService = AnchorContainer::getInstance()->getReadService()->setContext($this->getContext());
 
 		$readService->readByMessageIds($this->messages->getIds());
+	}
+
+	private function deleteLinkedAutoTasks(): void
+	{
+		if (!Loader::includeModule('tasks'))
+		{
+			return;
+		}
+
+		$taskService = new TaskService();
+		$taskService->setContext($this->getContext());
+
+		foreach ($this->messagesForEvent as $messageForEvent)
+		{
+			$triggerMessageId = (int)($messageForEvent['PARAMS'][Message\Params::AI_TASK_TRIGGER_MESSAGE_ID] ?? 0);
+			if ($triggerMessageId > 0)
+			{
+				$taskService->deleteLinkedAutoTask($triggerMessageId);
+			}
+		}
 	}
 }

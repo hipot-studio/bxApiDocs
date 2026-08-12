@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Catalog\Config\Feature;
+use Bitrix\Crm\Service\Accounting;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
@@ -156,7 +158,7 @@ class CCrmSaleHelper
 
 		if ($bTaxMode)
 		{
-			$totalTax = isset($result['TAX_VALUE']) ? round((float)$result['TAX_VALUE'], 2) : 0.0;
+			$totalTax = isset($result['TAX_VALUE']) ? Accounting::roundPublic($result['TAX_VALUE'], $currencyID) : 0.0;
 			$totalModified = false;
 			$taxes = (is_array($result['TAX_LIST'])) ? $result['TAX_LIST'] : null;
 			$moneyFormat = CCurrencyLang::GetCurrencyFormat($currencyID);
@@ -239,7 +241,7 @@ class CCrmSaleHelper
 			$item['CRM_PR_FIELDS']['DISCOUNT_RATE'] = isset($v['DISCOUNT_RATE']) ?
 				round((float)$v['DISCOUNT_RATE'], 2) : 0.0;
 			$item['CRM_PR_FIELDS']['DISCOUNT_SUM'] = isset($v['DISCOUNT_SUM']) ?
-				round((float)$v['DISCOUNT_SUM'], 2) : 0.0;
+				Accounting::roundPublic($v['DISCOUNT_SUM'], $currencyID) : 0.0;
 
 			// tax info
 			$allowLDTax = CCrmTax::isTaxMode();
@@ -279,7 +281,7 @@ class CCrmSaleHelper
 					$priceNetto = $exclusivePrice + $discoutSum;
 				}
 			}
-			$item['CRM_PR_FIELDS']['PRICE_NETTO'] = round($priceNetto, 2);
+			$item['CRM_PR_FIELDS']['PRICE_NETTO'] = Accounting::roundPublic($priceNetto, $currencyID);
 
 			if ($item['CRM_PR_FIELDS']['DISCOUNT_SUM'] === 0.0)
 			{
@@ -289,13 +291,13 @@ class CCrmSaleHelper
 			{
 				if (isset($v['PRICE_BRUTTO']) && $v['PRICE_BRUTTO'] != 0.0)
 				{
-					$item['CRM_PR_FIELDS']['PRICE_BRUTTO'] = round((float)$v['PRICE_BRUTTO'], 2);
+					$item['CRM_PR_FIELDS']['PRICE_BRUTTO'] = Accounting::roundPublic($v['PRICE_BRUTTO'], $currencyID);
 				}
 				else
 				{
-					$item['CRM_PR_FIELDS']['PRICE_BRUTTO'] = round(
+					$item['CRM_PR_FIELDS']['PRICE_BRUTTO'] = Accounting::roundPublic(
 						CCrmProductRow::CalculateInclusivePrice($priceNetto, $item['CRM_PR_FIELDS']['TAX_RATE']),
-						2
+						$currencyID
 					);
 				}
 			}
@@ -421,6 +423,17 @@ class CCrmSaleHelper
 		if (self::isCacheAccess($userId, $role))
 		{
 			return self::getCacheAccess($userId, $role);
+		}
+
+		if (
+			!Feature::isAccessControllerCheckingEnabled()
+			&& $role === 'admin'
+			&& !AccessController::getCurrent()->isAdmin()
+		)
+		{
+			self::addToCacheAccess($userId, $role, false);
+
+			return false;
 		}
 
 		$action =
@@ -1324,6 +1337,14 @@ class CCrmSaleHelper
 				ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY,
 				StoreDocumentTable::TYPE_SALES_ORDERS
 			)
+		;
+	}
+
+	public static function isInventoryManagedExternally(): bool
+	{
+		return
+			Loader::includeModule('catalog')
+			&& EnableWizard\Manager::isOnecMode()
 		;
 	}
 

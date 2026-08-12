@@ -148,15 +148,10 @@ class Builder
 		}
 
 		return sprintf(
-			"CREATE TABLE IF NOT EXISTS `%s` (%s);",
-			$this->getTableName(),
+			"CREATE TABLE IF NOT EXISTS %s (%s);",
+			$this->connection->getSqlHelper()->quote($this->tableName),
 			implode(",\n", $fields)
 		);
-	}
-
-	private function getTableName(): string
-	{
-		return $this->connection->getSqlHelper()->forSql($this->tableName);
 	}
 
 	private function getTableField(Field\Base $field): string

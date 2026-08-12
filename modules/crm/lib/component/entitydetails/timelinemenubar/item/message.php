@@ -7,11 +7,12 @@ namespace Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\SmsManager;
-use Bitrix\Crm\MessageSender\UI\Editor;
+use Bitrix\Crm\MessageSender\UI\Editor\Scene\ItemDetails;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Tour\EntityDetailsMenubar;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
+use Bitrix\MessageService\Public\UI\MessageEditor\Context;
+use Bitrix\MessageService\Public\UI\MessageEditor\Editor;
 use CCrmOwnerType;
 
 final class Message extends Item
@@ -65,14 +66,16 @@ final class Message extends Item
 
 		$analytics = $this->getAnalytics();
 
-		$context = new Editor\Context(
-			$this->getEntityTypeId(),
-			$this->getEntityId(),
-			$this->getEntityCategoryId(),
+		$context = new Context(
+			customData: [
+				'entityTypeId' => $this->getEntityTypeId(),
+				'entityId' => $this->getEntityId(),
+				'categoryId' => $this->getEntityCategoryId(),
+			],
 		);
 
 		$editor = (new Editor(
-			new Editor\Scene\ItemDetails(),
+			new ItemDetails(),
 			$context,
 		))
 			->setDynamicLoad(true)
@@ -85,7 +88,6 @@ final class Message extends Item
 			'shouldRender' => true,
 			'editor' => $editor,
 			'analytics' => $analytics,
-			'tours' => $this->getTours(),
 		];
 	}
 
@@ -102,19 +104,11 @@ final class Message extends Item
 		];
 	}
 
-	private function getTours(): array
-	{
-		return [
-			EntityDetailsMenubar\Message::getInstance()->build(),
-			EntityDetailsMenubar\Message\NewChannelsAvailable::getInstance()->build(),
-		];
-	}
-
 	public function loadAssets(): void
 	{
 		if ($this->shouldRender())
 		{
-			Extension::load('crm.messagesender.editor.skeleton');
+			Extension::load('messageservice.message.editor.skeleton');
 		}
 	}
 }

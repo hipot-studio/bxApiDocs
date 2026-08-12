@@ -578,6 +578,11 @@ class Dynamic extends Kanban\Entity
 				continue;
 			}
 
+			if ($item->getCategoryId() === $categoryId)
+			{
+				continue;
+			}
+
 			if (!$this->userPermissions->entityType()->canAddItemsInCategory($this->getTypeId(), $categoryId))
 			{
 				$result->addError(new Error(Loc::getMessage('CRM_COMMON_ERROR_ACCESS_DENIED')));

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Helper\Config;
 
-use Bitrix\Im\V2\Application\Features as ImFeatures;
 use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -18,6 +17,11 @@ class Feature
 		return true;
 	}
 
+	public static function isMailboxGridBulkActionsAvailable(): bool
+	{
+		return Option::get('mail', 'enable_list_improvements', 'N') === 'Y';
+	}
+
 	public static function isPasswordlessConnectAvailable(): bool
 	{
 		return true;
@@ -25,9 +29,7 @@ class Feature
 
 	public static function isMailboxConnectionRequestAvailable(): bool
 	{
-		return Loader::includeModule('im')
-			&& ImFeatures::isMessageBuilderAvailable()
-		;
+		return Loader::includeModule('im');
 	}
 
 	public static function isMailboxConfigRedesignAvailable(): bool

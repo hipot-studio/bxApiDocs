@@ -3,6 +3,7 @@
 namespace Bitrix\Mobile\Provider;
 
 use Bitrix\Extranet\Service\ServiceContainer;
+use Bitrix\Intranet\Enum\UserRole;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\UserTable;
@@ -31,6 +32,7 @@ class UserRepository
 			'PERSONAL_GENDER',
 			'TIME_ZONE',
 			'DATE_REGISTER',
+			'EXTERNAL_AUTH_ID',
 		];
 	}
 
@@ -120,11 +122,13 @@ class UserRepository
 			isRootAdmin: self::isRootAdmin($userId),
 			isCollaber: self::isCollaber($userId),
 			isExtranet: self::isExtranet($userId),
+			isGuest: ($user['EXTERNAL_AUTH_ID'] ?? null) === UserRole::IM_GUEST->value,
 			personalMobile: $user['PERSONAL_MOBILE'] ?? null,
 			personalPhone: $user['PERSONAL_PHONE'] ?? null,
 			lastActivityDate: $lastActivityDate ?? null,
 			timezone: $timezone ?? null,
 			personalGender: $user['PERSONAL_GENDER'] ?? null,
+			dateRegister: ($user['DATE_REGISTER'] ?? null)?->getTimestamp(),
 		);
 	}
 

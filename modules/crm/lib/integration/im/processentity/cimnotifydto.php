@@ -11,6 +11,8 @@ class CIMNotifyDTO
 	public ?string $notifyModule;
 	public ?string $notifyEvent;
 	public ?string $notifyTag;
+	public ?string $notifyTitle = null;
+	public ?array $notifyParams = null;
 
 	/** @var string|callable|null */
 	protected mixed $notifyMessage;
@@ -130,6 +132,30 @@ class CIMNotifyDTO
 		return $this;
 	}
 
+	public function getNotifyTitle(): ?string
+	{
+		return $this->notifyTitle;
+	}
+
+	public function setNotifyTitle(string $notifyTitle): self
+	{
+		$this->notifyTitle = $notifyTitle;
+
+		return $this;
+	}
+
+	public function getNotifyParams(): ?array
+	{
+		return $this->notifyParams;
+	}
+
+	public function setNotifyParams(?array $notifyParams): self
+	{
+		$this->notifyParams = $notifyParams;
+
+		return $this;
+	}
+
 	public function toArray(): array
 	{
 		return [
@@ -142,6 +168,8 @@ class CIMNotifyDTO
 			'NOTIFY_TAG' => $this->getNotifyTag(),
 			'NOTIFY_MESSAGE' => $this->getNotifyMessage(),
 			'NOTIFY_MESSAGE_OUT' => $this->getNotifyMessageOut(),
+			'NOTIFY_TITLE' => $this->getNotifyTitle(),
+			'PARAMS' => $this->getNotifyParams(),
 		];
 	}
 }

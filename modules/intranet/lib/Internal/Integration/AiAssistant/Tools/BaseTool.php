@@ -8,14 +8,16 @@ use Bitrix\AiAssistant\Definition\Tool\Contract\ToolContract;
 use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\Intranet\Entity\Collection\BaseCollection;
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
-use Bitrix\Intranet\Integration\HumanResources\Department;
 use Bitrix\Intranet\Integration\HumanResources\PermissionInvitation;
+use Bitrix\Intranet\Internal\Integration\AiAssistant\Service\DepartmentInvitationAccessService;
+use Bitrix\Intranet\Internal\Integration\AiAssistant\Service\InvitationAvailabilityService;
 use Bitrix\Intranet\User;
-use Bitrix\Main\Config\Option;
-use Bitrix\Main\Loader;
 
 abstract class BaseTool extends ToolContract
 {
+	private ?InvitationAvailabilityService $invitationAvailabilityService = null;
+	private ?DepartmentInvitationAccessService $departmentInvitationAccessService = null;
+
 	public function canList(int $userId): bool
 	{
 		return
@@ -38,26 +40,17 @@ abstract class BaseTool extends ToolContract
 
 	protected function isRegisterByLinkAllowed(): bool
 	{
-		return
-			Loader::includeModule('socialservices')
-			&& Option::get('socialservices', 'new_user_registration_network', 'Y') === 'Y'
-		;
+		return $this->getInvitationAvailabilityService()->isRegisterByLinkAllowed();
 	}
 
 	protected function isPhoneInviteAllowed(): bool
 	{
-		return
-			Loader::includeModule('bitrix24')
-			&& Option::get('bitrix24', 'phone_invite_allowed', 'N') === 'Y'
-		;
+		return $this->getInvitationAvailabilityService()->isPhoneInviteAllowed();
 	}
 
 	protected function isLocalEmailProgram(): bool
 	{
-		return
-			Loader::includeModule("bitrix24")
-			&& Option::get('intranet', 'useInviteLocalEmailProgram', 'N') === 'Y'
-		;
+		return $this->getInvitationAvailabilityService()->isLocalEmailProgram();
 	}
 
 	protected function findSingle(
@@ -82,80 +75,21 @@ abstract class BaseTool extends ToolContract
 
 	protected function resolveDepartmentCollection(int $userId, ?int $departmentId): DepartmentCollection
 	{
-		$permission = new PermissionInvitation($userId);
-
-		if ($departmentId !== null)
-		{
-			$departmentCollection = (new Department())->getByIds([$departmentId]);
-			if ($departmentCollection->count() > 1)
-			{
-				throw new McpException("Department with ID {$departmentId} has multiple entries");
-			}
-
-			$department = $departmentCollection->first();
-			if ($department === null)
-			{
-				throw new McpException("Department with ID {$departmentId} was not found.");
-			}
-
-			if (!$permission->canInviteToDepartment($department))
-			{
-				throw new McpException("Current user cannot invite employees to department {$departmentId}.");
-			}
-
-			return $departmentCollection;
-		}
-
-		$departmentCollection = new DepartmentCollection();
-		$defaultDepartment = $permission->findFirstPossibleAvailableDepartment();
-
-		if ($defaultDepartment !== null)
-		{
-			$departmentCollection->add($defaultDepartment);
-		}
-
-		return $departmentCollection;
+		return $this->getDepartmentInvitationAccessService()->resolveDepartmentCollection($userId, $departmentId);
 	}
 
 	protected function resolveDepartmentCollectionByIds(int $userId, array $departmentIds): DepartmentCollection
 	{
-		if (empty($departmentIds))
-		{
-			return new DepartmentCollection();
-		}
+		return $this->getDepartmentInvitationAccessService()->resolveDepartmentCollectionByIds($userId, $departmentIds);
+	}
 
-		$permission = new PermissionInvitation($userId);
-		$departmentCollection = (new Department())->getByIds($departmentIds);
+	private function getInvitationAvailabilityService(): InvitationAvailabilityService
+	{
+		return $this->invitationAvailabilityService ??= new InvitationAvailabilityService();
+	}
 
-		$foundIds = array_flip(
-			$departmentCollection->map(
-				static fn($department) => $department->getId(),
-			),
-		);
-
-		foreach ($departmentIds as $departmentId)
-		{
-			if (!is_int($departmentId))
-			{
-				throw new McpException('Each department ID must be an integer.');
-			}
-
-			if (!isset($foundIds[$departmentId]))
-			{
-				throw new McpException("Department with ID {$departmentId} was not found.");
-			}
-		}
-
-		foreach ($departmentCollection as $department)
-		{
-			if (!$permission->canInviteToDepartment($department))
-			{
-				throw new McpException(
-					"Current user cannot invite employees to department {$department->getId()}."
-				);
-			}
-		}
-
-		return $departmentCollection;
+	private function getDepartmentInvitationAccessService(): DepartmentInvitationAccessService
+	{
+		return $this->departmentInvitationAccessService ??= new DepartmentInvitationAccessService();
 	}
 }

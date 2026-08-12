@@ -21,6 +21,10 @@ use Bitrix\SocialNetwork\Validation\Rule\NotContainsUrl;
  * @method CollabOptions|null getOptions()
  * @method self setInitiatedByType(string|null $type)
  * @method string getInitiatedByType()
+ * @method self setAddBotSilently(bool $addBotSilently)
+ * @method bool getAddBotSilently()
+ * @method self setSharingLinkAuthorId(int $sharingLinkAuthorId)
+ * @method int getSharingLinkAuthorId()
  */
 #[AccessController(CollabAccessController::class)]
 class CollabUpdateCommand extends UpdateCommand
@@ -35,6 +39,10 @@ class CollabUpdateCommand extends UpdateCommand
 
 	#[InArray([null, UserToGroupTable::INITIATED_BY_GROUP, UserToGroupTable::INITIATED_BY_USER, UserToGroupTable::INITIATED_BY_STRUCTURE])]
 	protected ?string $initiatedByType = null;
+
+	protected bool $addBotSilently = false;
+
+	protected int $sharingLinkAuthorId = 0;
 
 	public function addOption(AbstractOption $option): static
 	{

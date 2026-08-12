@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class UnknownDtoPropertyException extends RestException
+class UnknownDtoPropertyException extends RestException implements SkipWriteToLogException
 {
 	public function __construct(
 		public string $dtoShortName,

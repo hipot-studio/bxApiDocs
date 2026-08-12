@@ -86,6 +86,10 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				$this->editAction(false);
 
 				break;
+			case 'crm-mass':
+				$this->crmMassAction();
+
+				break;
 			default:
 				$this->defaultAction();
 		}
@@ -506,6 +510,50 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		}
 
 		$this->includeComponentTemplate('edit');
+	}
+
+	protected function crmMassAction(): void
+	{
+		if (!Feature::isMailboxGridBulkActionsAvailable())
+		{
+			$this->includeComponentTemplate('access_denied');
+
+			return;
+		}
+
+		global $APPLICATION;
+
+		if (!MailboxAccess::hasCurrentUserAccessToViewMailboxIntegrationCrm())
+		{
+			$this->includeComponentTemplate('access_denied');
+
+			return;
+		}
+
+		$APPLICATION->setTitle(Loc::getMessage('MAIL_CLIENT_CRM_MASS_TITLE'));
+
+		$rawIds = (string)($this->request->getQuery('ids') ?? '');
+		$mailboxIds = [];
+		if ($rawIds !== '')
+		{
+			foreach (explode(',', $rawIds) as $idStr)
+			{
+				$id = (int)trim($idStr);
+				if ($id > 0)
+				{
+					$mailboxIds[] = $id;
+				}
+			}
+		}
+
+		$settingsConfig = MailboxSettingsConfig::getClientConfig();
+
+		$this->arParams['CRM_MASS_MAILBOX_IDS'] = $mailboxIds;
+		$this->arParams['CRM_AVAILABLE'] = $settingsConfig['crmAvailable'];
+		$this->arParams['CAN_EDIT_CRM_INTEGRATION'] = $settingsConfig['canEditCrmIntegration'];
+		$this->arParams['CRM_SETTINGS_CONFIG'] = $settingsConfig;
+
+		$this->includeComponentTemplate('crm_mass_config');
 	}
 
 	public function checkAvailabilityEMailAction($serviceId,$email,$oauthUid)

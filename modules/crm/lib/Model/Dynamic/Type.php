@@ -19,6 +19,8 @@ use Bitrix\Main\UserField;
  * @method Type setIsStagesEnabled(bool $isStagesEnabled)
  * @method bool|null getIsBeginCloseDatesEnabled()
  * @method Type setIsBeginCloseDatesEnabled(bool $isBeginCloseDatesEnabled)
+ * @method int|null getDaysBeforeClose()
+ * @method Type setDaysBeforeClose(?int $daysBeforeClose)
  * @method bool|null getIsClientEnabled()
  * @method bool|null getIsUseInUserfieldEnabled()
  * @method Type setIsClientEnabled(bool $isClientEnabled)

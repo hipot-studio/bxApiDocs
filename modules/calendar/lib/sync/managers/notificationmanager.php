@@ -42,9 +42,10 @@ class NotificationManager
 				'FROM_USER_ID' => $userId,
 				'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
 				'NOTIFY_MODULE' => 'calendar',
+				'NOTIFY_EVENT' => 'finished_sync',
 				'NOTIFY_TAG' => 'CALENDAR|SYNC_FINISH|'.$userId,
 				'NOTIFY_SUB_TAG' => 'CALENDAR|SYNC_FINISH|'.$userId,
-				'NOTIFY_MESSAGE' => $notificationCallback
+				'NOTIFY_MESSAGE' => $notificationCallback,
 			]);
 		}
 	}
@@ -76,9 +77,10 @@ class NotificationManager
 				'FROM_USER_ID' => $userId,
 				'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
 				'NOTIFY_MODULE' => 'calendar',
+				'NOTIFY_EVENT' => 'rollback_sync',
 				'NOTIFY_TAG' => 'CALENDAR|SYNC_ROLLBACK|'.$userId,
 				'NOTIFY_SUB_TAG' => 'CALENDAR|SYNC_ROLLBACK|'.$userId,
-				'NOTIFY_MESSAGE' => $notificationCallback
+				'NOTIFY_MESSAGE' => $notificationCallback,
 			]);
 		}
 	}

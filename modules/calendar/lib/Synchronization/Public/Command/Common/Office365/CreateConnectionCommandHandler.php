@@ -53,7 +53,11 @@ class CreateConnectionCommandHandler
 		}
 		catch (Throwable $e)
 		{
-			throw new Exception('Unable to create connection for Office 365', $e->getCode(), $e);
+			throw new Exception(
+				'Unable to create connection for Office 365: ' . $e->getMessage(),
+				$e->getCode(),
+				$e,
+			);
 		}
 	}
 }

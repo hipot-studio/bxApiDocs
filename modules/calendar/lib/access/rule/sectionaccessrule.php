@@ -10,6 +10,7 @@ use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Calendar\Access\ActionDictionary;
 use Bitrix\Calendar\Access\Rule\Traits\CurrentUserTrait;
 use Bitrix\Calendar\Access\Rule\Traits\SectionTrait;
+use Bitrix\Calendar\Util;
 use CCalendarSect;
 
 class SectionAccessRule extends \Bitrix\Main\Access\Rule\AbstractRule
@@ -19,6 +20,11 @@ class SectionAccessRule extends \Bitrix\Main\Access\Rule\AbstractRule
 	public function execute(AccessibleItem $item = null, $params = null): bool
 	{
 		if (!$item instanceof SectionModel)
+		{
+			return false;
+		}
+
+		if (Util::isCollabUser($this->user->getUserId()))
 		{
 			return false;
 		}

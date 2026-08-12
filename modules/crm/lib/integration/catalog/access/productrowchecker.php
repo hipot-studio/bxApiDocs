@@ -6,8 +6,6 @@ use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Crm\Discount;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Order\BasketItem;
-use Bitrix\Crm\ProductRow;
-use Bitrix\Crm\Reservation\ProductRowReservation;
 use Bitrix\Crm\Service\Accounting;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
@@ -111,49 +109,6 @@ class ProductRowChecker
 			}
 		}
 
-		return $result;
-	}
-
-	protected function isReserveMode(Item $item): bool
-	{
-		return \CCrmSaleHelper::isReserveMode($item->getEntityTypeId());
-	}
-
-	protected function hasReserveAccess(Item $item): bool
-	{
-		return \CCrmSaleHelper::hasReserveAccess($item->getCategoryId() ?? 0);
-	}
-
-	public function checkReservationRights(Item $item): Result
-	{
-		$result = new Result();
-
-		if (!$this->isReserveMode($item) || $this->hasReserveAccess($item))
-		{
-			return $result;
-		}
-
-		$productRowsCollection = $item->getProductRows();
-		if (!$productRowsCollection)
-		{
-			return new Result();
-		}
-
-		/** @var ProductRow $productRow */
-		foreach ($productRowsCollection as $productRow)
-		{
-			/** @var ProductRowReservation $reservation */
-			$reservation = $productRow->getProductRowReservation();
-			if (!$reservation)
-			{
-				continue;
-			}
-
-			if ($reservation->hasChangedFields())
-			{
-				return $result->addError($this->getReserveError());
-			}
-		}
 
 		return $result;
 	}
@@ -506,7 +461,19 @@ class ProductRowChecker
 					return false;
 				}
 			}
-			elseif ((float)$productRow[$key] !== (float)$value)
+			/**
+			 *
+			 * First condition is needed to compare 0.0 and -0.0
+			 * @see \Bitrix\Main\ORM\Objectify\EntityObject::sysSetValue
+			 * "if ($field->cast($value) === $this->_actualValues[$fieldName]"
+			 *
+			 * Second condition convert float to string to match the string-based validation before saving
+			 * @see \Bitrix\Main\DB\SqlHelper::convertToDbFloat
+			 */
+			elseif (
+				(float)$productRow[$key] !== (float)$value
+				&& (string)(float)$productRow[$key] !== (string)(float)$value
+			)
 			{
 				return false;
 			}
@@ -523,10 +490,5 @@ class ProductRowChecker
 	private function getDiscountError(): Error
 	{
 		return new Error(Loc::getMessage('PRODUCT_ROW_CHECKER_DISCOUNT_ERROR'));
-	}
-
-	private function getReserveError(): Error
-	{
-		return new Error(Loc::getMessage('PRODUCT_ROW_CHECKER_RESERVE_ERROR'));
 	}
 }

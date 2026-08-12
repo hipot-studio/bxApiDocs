@@ -1,9 +1,10 @@
-<?
+<?php
+
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage seo
- * @copyright 2001-2013 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Seo\Engine;
@@ -52,7 +53,6 @@ class Yandex extends Engine\YandexBase implements IEngine
 	private static $verificationTypes = array('DNS', 'HTML_FILE', 'META_TAG', 'WHOIS', 'TXT_FILE');
 	
 	protected $engineId = 'yandex';
-	protected $arServiceList = array();
 	private $userId = NULL;
 	private $hostIds = array();
 	
@@ -435,56 +435,7 @@ class Yandex extends Engine\YandexBase implements IEngine
 			throw new Engine\YandexException($queryResult);
 		}
 	}
-	
-	
-	/**
-	 * @deprecated by query
-	 * @param $scope
-	 * @param string $method
-	 * @param null $data
-	 * @param bool $skipRefreshAuth
-	 * @return \CHTTP
-	 */
-	protected function queryOld($scope, $method = "GET", $data = NULL, $skipRefreshAuth = false)
-	{
-		if ($this->engineSettings['AUTH'])
-		{
-			$http = new \CHTTP();
-			$http->setAdditionalHeaders(
-				array(
-					'Authorization' => 'OAuth ' . $this->engineSettings['AUTH']['access_token'],
-				)
-			);
-			$http->setFollowRedirect(false);
-			
-			switch ($method)
-			{
-				case 'GET':
-					$result = $http->get($scope);
-					break;
-				case 'POST':
-					$result = $http->post($scope, $data);
-					break;
-				case 'PUT':
-					$result = $http->httpQuery($method, $scope, $http->prepareData($data));
-					break;
-				case 'DELETE':
-					
-					break;
-			}
-			
-			if ($http->status == 401 && !$skipRefreshAuth)
-			{
-				if ($this->checkAuthExpired())
-				{
-					$this->queryOld($scope, $method, $data, true);
-				}
-			}
-			
-			return $http;
-		}
-	}
-	
+
 	/**
 	 * Create HTTP client, set necessary headers and set request
 	 *
@@ -526,5 +477,3 @@ class Yandex extends Engine\YandexBase implements IEngine
 		}
 	}
 }
-
-?>

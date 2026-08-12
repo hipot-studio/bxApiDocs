@@ -19,6 +19,12 @@ class Signaling
 
 	private const LARGE_CHAT_NOTIFICATION_THRESHOLD = 20; /** @var Call @see call/install/js/call/core/src/controller.js:110 */
 
+	/**
+	 * TTL for the recovery-broadcast suppression key. On a large call after the
+	 * original Call::finish, hundreds of stuck clients may trigger CallManager.finish
+	 */
+	private const FINISH_RECOVERY_TTL = 60;
+
 	protected Call $call;
 
 	private ?array $inviteContext = null;
@@ -30,7 +36,7 @@ class Signaling
 		$this->call = $call;
 	}
 
-	public function sendInviteToUser(int $senderId, int $toUserId, $invitedUsers, $isLegacyMobile, bool $video = false, bool $sendPush = true)
+	public function sendInviteToUser(int $senderId, int $toUserId, $invitedUsers, $isLegacyMobile, bool $video = false, bool $sendPush = true, bool $isRepeated = false)
 	{
 		$users = $this->call->getUsers();
 
@@ -51,6 +57,7 @@ class Signaling
 			'isLegacyMobile' => $isLegacyMobile,
 			'video' => $video,
 			'logToken' => $this->call->getLogToken($toUserId),
+			'isRepeated' => $isRepeated,
 		];
 		$connectionData = $this->call->getConnectionData($toUserId);
 		if ($connectionData !== null)
@@ -58,8 +65,12 @@ class Signaling
 			$config['connectionData'] = $connectionData;
 		}
 
+		// Skip mobile invite entirely for users already in another call
+		$flags = $this->resolveActiveCallFlags($parentCall, $toUserId, null);
+		$isAlreadyInCall = $flags['isAlreadyInCall'];
+
 		$push = null;
-		if (!isset($skipPush[$toUserId]) && $sendPush && !$isBroadcast)
+		if (!isset($skipPush[$toUserId]) && $sendPush && !$isBroadcast && !$isAlreadyInCall)
 		{
 			$push = $this->getInvitePush($senderId, $toUserId, $isLegacyMobile, $video);
 		}
@@ -67,7 +78,10 @@ class Signaling
 		$this->send('Call::incoming', $toUserId, $config, $push);
 	}
 
-	public function sendInvite(int $senderId, array $toUserIds, $isLegacyMobile, bool $video = false, bool $sendPush = true)
+	/**
+	 * @param int[]|null $usersInOtherCalls
+	 */
+	public function sendInvite(int $senderId, array $toUserIds, $isLegacyMobile, bool $video = false, bool $sendPush = true, bool $isRepeated = false, ?array $usersInOtherCalls = null)
 	{
 		$toUserIds = array_values(array_unique(array_map('intval', $toUserIds)));
 		if ($toUserIds === [])
@@ -113,6 +127,7 @@ class Signaling
 		{
 			$perUser = [
 				'logToken' => $this->call->getLogToken($toUserId),
+				'isRepeated' => $isRepeated,
 			];
 			$connectionData = $this->call->getConnectionData($toUserId);
 			if ($connectionData !== null)
@@ -134,9 +149,16 @@ class Signaling
 		// per recipient for 1:1 chats and embeds a per-user logToken.
 		if ($sendPush && !$isBroadcast)
 		{
+			$usersBusy = $usersInOtherCalls !== null ? array_flip($usersInOtherCalls) : null;
 			foreach ($toUserIds as $toUserId)
 			{
 				if (isset($skipPush[$toUserId]))
+				{
+					continue;
+				}
+				// Skip mobile invite entirely for users already in another call
+				$flags = $this->resolveActiveCallFlags($parentCall, $toUserId, $usersBusy);
+				if ($flags['isAlreadyInCall'])
 				{
 					continue;
 				}
@@ -389,10 +411,34 @@ class Signaling
 
 	/**
 	 * @param bool $forRecovery When true, bypasses the FINISH_BROADCAST_TTL
-	 *        suppression, re-broadcast to clean up clients that missed the original finish.
+	 *        suppression to re-broadcast for clients that missed the original
+	 *        finish. Recovery has its own rate-limit (FINISH_RECOVERY_TTL) so
+	 *        a flood of CallManager.finish recovery requests from many stuck
+	 *        clients collapses to a single broadcast.
 	 */
 	public function sendFinish(bool $forRecovery = false)
 	{
+		if ($forRecovery)
+		{
+			$recoveryKey = 'call_finish_recovery_' . $this->call->getId();
+			if (!Idempotence::addKey($recoveryKey, self::FINISH_RECOVERY_TTL))
+			{
+				return false;
+			}
+
+			// Release the recovery key on push failure so the next stuck-client
+			// recovery attempt within the TTL window gets another chance to
+			// broadcast — otherwise late clients would silently be denied the
+			// finish-event for up to FINISH_RECOVERY_TTL seconds.
+			$result = $this->sendFinishInternal($this->call->getUsers(), true, $forRecovery);
+			if (!$result)
+			{
+				Idempotence::clearKey($recoveryKey);
+			}
+
+			return $result;
+		}
+
 		return $this->sendFinishInternal($this->call->getUsers(), true, $forRecovery);
 	}
 
@@ -581,6 +627,7 @@ class Signaling
 		bool $sendPush = true,
 		string $sendMode = self::MODE_ALL,
 		array $usersInOtherCalls = [],
+		bool $isRepeated = false,
 	): void
 	{
 		$toUserIds = array_values(array_unique(array_map('intval', $toUserIds)));
@@ -641,6 +688,7 @@ class Signaling
 					'isLegacyMobile' => $isLegacyMobile,
 					'video' => $video,
 					'callId' => $this->call->getId(),
+					'isRepeated' => $isRepeated,
 				];
 
 				Pull\Event::add($recipients, [
@@ -660,15 +708,15 @@ class Signaling
 					{
 						continue;
 					}
-					$push = $this->getCallInvitePush($senderId, $toUserId, $isLegacyMobile, $video);
-					$flags = $this->resolveActiveCallFlags($parentCall, $toUserId, $usersInOtherCalls);
+					$flags = $this->resolveActiveCallFlags($parentCall, $toUserId, $usersBusy);
 					if ($flags['isAlreadyInCall'])
 					{
-						$push['sound'] = '';
-						$push['advanced_params']['useVibration'] = false;
-						$push['advanced_params']['isVoip'] = false;
-						$push['advanced_params']['callkit'] = false;
+						// User is busy in another call — skip mobile invite entirely.
+						// Silencing flags (callkit/isVoip/sound) only mute the OS-level
+						// notification on iOS and don't stop the native call screen on either platform.
+						continue;
 					}
+					$push = $this->getCallInvitePush($senderId, $toUserId, $isLegacyMobile, $video);
 					$this->sendToMobile($toUserId, $push);
 				}
 			}
@@ -747,6 +795,7 @@ class Signaling
 		$parentCallUser = $parentCall?->getUser($toUserId);
 		if ($parentCallUser?->getState() === CallUser::STATE_READY)
 		{
+			$isAlreadyInCall = true;
 			$activeCallPlatform = $parentCallUser->isUaMobile() ? 'mobile' : 'web';
 		}
 		elseif ($usersInOtherCalls !== null)
@@ -816,11 +865,15 @@ class Signaling
 			'video' => $video,
 			'logToken' => $this->call->getLogToken($toUserId),
 			'isAlreadyInCall' => $isAlreadyInCall,
-			'activeCallPlatform' => $isAlreadyInCall ? ($parentCall->isUaMobile() ? 'mobile' : 'web') : null,
+			'activeCallPlatform' => $activeCallPlatform,
 		];
 
 		$push = null;
-		if (!isset($skipPush[$toUserId]) && $sendPush && !$isBroadcast)
+		// Skip mobile invite entirely for users already in another call:
+		// silencing flags don't stop CallKit on iOS or callservice on Android,
+		// so the native incoming screen would still grab audio from the
+		// active call. Web-pull stays — busy device declines via controller.
+		if (!isset($skipPush[$toUserId]) && $sendPush && !$isBroadcast && !$isAlreadyInCall)
 		{
 			$push = $this->getCallInvitePush($senderId, $toUserId, $isLegacyMobile, $video);
 		}
@@ -831,7 +884,10 @@ class Signaling
 				$this->sendToWeb('Call::incoming', $toUserId, $config);
 				break;
 			case self::MODE_MOBILE:
-				$this->sendToMobile($toUserId, $push);
+				if ($push !== null)
+				{
+					$this->sendToMobile($toUserId, $push);
+				}
 				break;
 			case self::MODE_ALL:
 			default:

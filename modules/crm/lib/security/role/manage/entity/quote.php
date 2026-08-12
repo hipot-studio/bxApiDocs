@@ -13,7 +13,10 @@ class Quote implements PermissionEntity
 	private function permissions(): array
 	{
 		return array_merge(
-			PermissionAttrPresets::crmEntityPreset(),
+			\Bitrix\Crm\Security\Controller\Quote::enabled()
+				? PermissionAttrPresets::crmEntityPreset()
+				: PermissionAttrPresets::crmEntityPresetWithoutTeams()
+			,
 			PermissionAttrPresets::crmEntityKanbanHideSum(),
 			PermissionAttrPresets::crmStageTransition(CCrmStatus::GetStatusListEx('QUOTE_STATUS'))
 		);

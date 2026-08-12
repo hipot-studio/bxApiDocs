@@ -3,7 +3,6 @@
 namespace Bitrix\BIConnector\Integration\Report;
 
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Report\ReportTable;
 use Bitrix\Report\VisualConstructor\AnalyticBoard;
 use Bitrix\Report\VisualConstructor\AnalyticBoardBatch;
 use Bitrix\Report\VisualConstructor\BoardButton;

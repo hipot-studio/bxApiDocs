@@ -22,11 +22,13 @@ use Bitrix\Socialnetwork\Collab\Control\Handler\Add\AddModeratorsHandler;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Add\AddOptionsHandler;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Add\AddThemeHandler;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Delete\DeleteChatHandler;
+use Bitrix\Socialnetwork\Collab\Control\Handler\Delete\DeleteNoteCollectionHandler;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Delete\DeleteOptionsHandler;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Update\UpdateInviteHandler;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Update\UpdateLogEntryHandler;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Update\UpdateMemberHandler;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Update\UpdateModeratorsHandler;
+use Bitrix\Socialnetwork\Collab\Control\Handler\Update\UpdateNotePermissionsHandler;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Update\UpdateOptionsHandler;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Update\UpdateOwnerHandler;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageBuffer;
@@ -71,12 +73,14 @@ class CollabService extends AbstractGroupService
 			new UpdateMemberHandler(),
 			new UpdateModeratorsHandler(),
 			new UpdateLogEntryHandler(),
+			new UpdateNotePermissionsHandler(),
 		];
 	}
 
 	protected function getDeleteHandlers(): array
 	{
 		return [
+			new DeleteNoteCollectionHandler(),
 			new DeleteOptionsHandler(),
 			new DeleteChatHandler(),
 		];

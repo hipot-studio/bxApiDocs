@@ -43,8 +43,8 @@ class AddressQueueTable extends DataManager
 				->configurePrimary(true)
 				->configureDefaultValue(0)
 			,
-			(new StringField('GEOHASH'))
-				->configureSize(8)
+			(new StringField('GEOHASH_KEY'))
+				->configureSize(64)
 				->configureRequired(true)
 			,
 			(new IntegerField('USER_ID'))

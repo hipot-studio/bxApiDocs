@@ -190,6 +190,9 @@ class CCrmCurrency
 		return mb_strtoupper(trim((string)$currencyID));
 	}
 
+	/**
+	 * @deprecated Use {@see \Bitrix\Crm\Currency::getBaseCurrencyId()}.
+	 */
 	public static function GetBaseCurrencyID()
 	{
 		if (!Loader::includeModule('currency'))
@@ -215,7 +218,11 @@ class CCrmCurrency
 		return CCurrency::SetBaseCurrency($currencyID);
 	}
 
-	// Is used in reports only
+	/**
+	 * Is used in reports only.
+	 *
+	 * @deprecated Use {@see \Bitrix\Crm\Currency::getAccountCurrencyId()}.
+	 */
 	public static function GetAccountCurrencyID()
 	{
 		if (!self::$ACCOUNT_CURRENCY_ID)
@@ -620,6 +627,11 @@ class CCrmCurrency
 		return $currencyText;
 	}
 
+	/**
+	 * @deprecated Use {@see \Bitrix\Crm\Format\Money::format()} for default formatting,
+	 * or {@see \Bitrix\Crm\Format\Money::formatWithCustomTemplate()} when a custom template
+	 * (including '#' = no template) is needed.
+	 */
 	public static function MoneyToString($sum, $currencyID, $formatStr = '')
 	{
 		if (!Loader::includeModule('currency'))
@@ -636,6 +648,12 @@ class CCrmCurrency
 		return $result;
 	}
 
+	/**
+	 * @deprecated Use {@see \Bitrix\Crm\Currency\Conversion::toSpecifiedCurrency()}.
+	 * Note: the legacy $srcExchRate > 0 branch (explicit src→base→dst rate) is currently
+	 * not covered by the modern facade — keep using this method for that case until the
+	 * facade is extended.
+	 */
 	public static function ConvertMoney($sum, $srcCurrencyID, $dstCurrencyID, $srcExchRate = -1)
 	{
 		$sum = (float)$sum;
@@ -674,6 +692,9 @@ class CCrmCurrency
 		return round($result, $formatInfo['DECIMALS']);
 	}
 
+	/**
+	 * @deprecated Use {@see \Bitrix\Crm\Currency::getCurrencyDecimals()}.
+	 */
 	public static function GetCurrencyDecimals($currencyID)
 	{
 		$formatInfo = CCurrencyLang::GetFormatDescription($currencyID);
@@ -681,6 +702,9 @@ class CCrmCurrency
 		return $formatInfo['DECIMALS'];
 	}
 
+	/**
+	 * @deprecated Use {@see \Bitrix\Crm\Currency\Conversion::getConversionRateToBaseCurrency()}.
+	 */
 	public static function GetExchangeRate($currencyID)
 	{
 		if (!Loader::includeModule('currency'))
@@ -712,6 +736,7 @@ class CCrmCurrency
 	private static function ClearCache(): void
 	{
 		self::$CURRENCY_BY_LANG = [];
+		self::$CURRENCY_FORMAT_BY_LANG = [];
 	}
 
 	public static function GetLastError()

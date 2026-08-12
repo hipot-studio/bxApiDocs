@@ -6,7 +6,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Bizproc\Activity\PropertiesDialog;
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Error;
@@ -18,6 +20,9 @@ $runtime->IncludeActivityFile('CrmGetRelationsInfoActivity');
 
 class CBPCrmChangeRelationsActivity extends CBPCrmGetRelationsInfoActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	// protected const ADD_RELATION_ACTION = 'add';
 	protected const REMOVE_RELATION_ACTION = 'remove';
 	protected const REPLACE_RELATION_ACTION = 'replace';
@@ -75,7 +80,15 @@ class CBPCrmChangeRelationsActivity extends CBPCrmGetRelationsInfoActivity
 	{
 		$errors = new \Bitrix\Main\ErrorCollection();
 
-		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($this->GetDocumentId());
+		$documentId = $this->resolveTargetDocumentId();
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$errors->setError(new Error($this->getResolvedTargetAccessDeniedMessage()));
+
+			return $errors;
+		}
+
+		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($documentId);
 		$childElement = new ItemIdentifier($entityTypeId, $entityId);
 
 		if ($this->Action === self::REMOVE_RELATION_ACTION)

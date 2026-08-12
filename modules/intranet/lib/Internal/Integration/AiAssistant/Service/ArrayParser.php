@@ -22,4 +22,5 @@ class ArrayParser
 
 		return $value;
 	}
+
 }

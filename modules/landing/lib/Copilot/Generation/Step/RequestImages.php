@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Step;
 
+use Bitrix\Landing\Copilot\Generation\Step\Request\RequestMultiple;
 use Bitrix\Landing\Copilot\Connector\AI;
 use Bitrix\Landing\Copilot\Connector\AI\Prompt;
 use Bitrix\Landing\Copilot\Data\Site;
@@ -233,13 +234,21 @@ class RequestImages extends RequestMultiple
 
 			$prompt = new Prompt($entity->prompt);
 			// todo: add size and ratio
-			$prompt->setMarkers(['format' => 'square']);
+				$prompt->setMarkers(['format' => 'square']);
 
-			$request = new Request($this->generation->getId(), $this->stepId);
-			if ($request->send($prompt, $this->connector))
-			{
-				$this->requests[$request->getId()] = $request;
-				$entity->requestId = $request->getId();
+				$request = $this->sendEntityRequestWithRetry(
+					$entity,
+					function () use ($prompt): ?Request
+					{
+						$request = new Request($this->generation->getId(), $this->stepId);
+
+						return $request->send($prompt, $this->connector) ? $request : null;
+					},
+				);
+				if ($request)
+				{
+					$this->requests[$request->getId()] = $request;
+					$entity->requestId = $request->getId();
 
 				RequestToEntitiesTable::add([
 					'REQUEST_ID' => $request->getId(),
@@ -253,6 +262,11 @@ class RequestImages extends RequestMultiple
 		}
 
 		return true;
+	}
+
+	protected function handleEntitySendFailure(RequestEntityDto $entity, string $reason): bool
+	{
+		return $this->attachAppliedEntityErrorRequest($entity, RequestEntities::Image, $reason);
 	}
 
 	protected function applyResponses(): bool

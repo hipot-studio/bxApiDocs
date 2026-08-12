@@ -7,6 +7,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Entity\Event;
 use Bitrix\Main\Entity\ExpressionField;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\MergeByDefaultTrait;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -31,6 +32,8 @@ use Bitrix\Main\DB\SqlQueryException;
  */
 class EntityRelationTable extends DataManager
 {
+	use MergeByDefaultTrait;
+
 	public static function getTableName(): string
 	{
 		return 'b_crm_entity_relation';

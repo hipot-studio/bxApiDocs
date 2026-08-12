@@ -19,6 +19,7 @@ use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhookAttributeCollecti
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhookExternalAttribute;
 use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
 use Bitrix\Rest\Internal\Repository\IntegrationRepository;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 use Bitrix\Rest\Preset\Provider;
 
 /**
@@ -35,6 +36,7 @@ abstract class AbstractCreateIncomingWebhookCommandHandler
 	public function __construct(
 		protected IncomingWebhookRepositoryInterface $repository = new IncomingWebhookRepository(),
 		protected IntegrationRepository $integrationRepository = new IntegrationRepository(),
+		protected SecurityAuditLogger $securityAuditLogger = new SecurityAuditLogger(),
 	)
 	{
 	}
@@ -79,6 +81,7 @@ abstract class AbstractCreateIncomingWebhookCommandHandler
 		?string $title,
 		array $scopes,
 		array $attributes,
+		?string $comment = null,
 	): IncomingWebhook {
 		$connection = Application::getConnection();
 		$connection->startTransaction();
@@ -89,7 +92,6 @@ abstract class AbstractCreateIncomingWebhookCommandHandler
 				[
 					'TITLE' => $title,
 					'SCOPE' => $scopes,
-					'QUERY' => 'Y',
 				],
 				ElementCodeType::IN_WEBHOOK->value,
 				null,
@@ -121,14 +123,22 @@ abstract class AbstractCreateIncomingWebhookCommandHandler
 				throw new ObjectNotFoundException('Incoming webhook was not found after creation');
 			}
 
+			$needsSave = false;
 			$hasExternalAttributes = !empty($attributes);
+
+			if ($comment !== null && $comment !== '')
+			{
+				$savedWebhook->setComment($comment);
+				$needsSave = true;
+			}
+
 			if ($ownerUserId !== $initiatorUserId)
 			{
 				$integration->setUserId($ownerUserId);
 				$this->integrationRepository->save($integration);
 
 				$savedWebhook->setUserId($ownerUserId);
-				if (!$hasExternalAttributes)
+				if (!$hasExternalAttributes && !$needsSave)
 				{
 					try
 					{
@@ -155,11 +165,23 @@ abstract class AbstractCreateIncomingWebhookCommandHandler
 				}
 
 				$savedWebhook->setExternalAttributes($externalAttributes);
+				$needsSave = true;
+			}
+
+			if ($needsSave)
+			{
 				$this->repository->save($savedWebhook);
 				$savedWebhook = $this->repository->getById($savedWebhookId) ?? $savedWebhook;
 			}
 
 			$connection->commitTransaction();
+
+			$this->securityAuditLogger->logWebhookCreated(
+				actingUserId: $initiatorUserId,
+				webhookId: (int)$savedWebhook->getId(),
+				ownerUserId: $ownerUserId,
+				scopes: $scopes,
+			);
 
 			return $savedWebhook;
 		}

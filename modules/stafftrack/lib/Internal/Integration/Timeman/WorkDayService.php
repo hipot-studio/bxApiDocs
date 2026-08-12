@@ -1,31 +1,24 @@
 <?php
+
 namespace Bitrix\StaffTrack\Internal\Integration\Timeman;
 
-use Bitrix\Main\LoaderException;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Provider\Params\Pager;
 use Bitrix\StaffTrack\Dictionary\Option;
+use Bitrix\StaffTrack\Helper\DateHelper;
 use Bitrix\StaffTrack\Provider\OptionProvider;
 use Bitrix\StaffTrack\Service\OptionService;
 use Bitrix\Timeman\Model\Schedule\ScheduleTable;
 use Bitrix\Timeman\V2\Public\Provider\Params\ListParams;
 use Bitrix\Timeman\V2\Public\Provider\Params\Record\Filter;
 use Bitrix\Timeman\V2\Public\Provider\RecordProvider;
+use Bitrix\Timeman\V2\Public\Provider\SettingsProvider;
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 
-class WorkDayService
+class WorkDayService extends BaseService
 {
 	/** @var ?\CTimeManUser */
 	private static $timeManUser = null;
-
-	/**
-	 * @return bool
-	 * @throws LoaderException
-	 */
-	public static function isAvailable(): bool
-	{
-		return \CBXFeatures::IsFeatureEnabled('timeman')
-			&& \CModule::IncludeModule('timeman')
-			&& \CTimeMan::CanUse();
-	}
 
 	public static function getWorkTime(int $userId): array
 	{
@@ -41,15 +34,40 @@ class WorkDayService
 
 		return [
 			'isTimeManIntegrationEnabled' => static::shouldStartWorkDay(),
+			'isNotWorkingDay' => self::isNotWorkingDay($userId),
 			'record' => $record?->toArray(),
 		];
 	}
 
-	public static function isDayClosed(int $userId, int $timestamp, int $timezoneOffset): bool
+	public static function isNotWorkingDay(int $userId): bool
 	{
 		if (!self::isAvailable())
 		{
 			return false;
+		}
+
+		try
+		{
+			$dateHelper = DateHelper::getInstance();
+
+			return $dateHelper->isNotWorkingDay($dateHelper->getOffsetDate($userId));
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
+	public static function isDayClosed(int $userId, int $timestamp, int $timezoneOffset): bool
+	{
+		return self::getDayCloseTimestamp($userId, $timestamp, $timezoneOffset) !== null;
+	}
+
+	public static function getDayCloseTimestamp(int $userId, int $timestamp, int $timezoneOffset): ?int
+	{
+		if (!self::isAvailable())
+		{
+			return null;
 		}
 
 		$localDate = date('Y-m-d', $timestamp + $timezoneOffset);
@@ -59,7 +77,12 @@ class WorkDayService
 		{
 			$record = (new RecordProvider())->getCurrentRecord($userId);
 
-			return $record?->state->status->value === 'closed';
+			if ($record?->state->status->value !== 'closed')
+			{
+				return null;
+			}
+
+			return $record?->endTime;
 		}
 
 		$windowStart = strtotime($localDate . ' 00:00:00 UTC') - $timezoneOffset;
@@ -86,11 +109,11 @@ class WorkDayService
 				&& $endTime < $windowEnd
 			)
 			{
-				return true;
+				return $endTime;
 			}
 		}
 
-		return false;
+		return null;
 	}
 
 	public static function shouldStartWorkDay(): bool
@@ -132,6 +155,45 @@ class WorkDayService
 		}
 	}
 
+	public static function enableWorkShiftOption(): void
+	{
+		if (self::isAvailable())
+		{
+			(new SettingsProvider())->enableShifts();
+		}
+	}
+
+	public static function isDayStartCheckInEnabled(): bool
+	{
+		return self::isAvailable() && (new SettingsProvider())->isDayStartCheckInEnabled();
+	}
+
+	public static function isDayStartCheckInEnabledInSettings(): bool
+	{
+		return self::isAvailable() && (new SettingsProvider())->isDayStartCheckInEnabledInSettings();
+	}
+
+	public static function canChangeDayStartCheckIn(): bool
+	{
+		return self::isAvailable() && (new SettingsProvider())->canChangeDayStartCheckIn();
+	}
+
+	public static function enableDayStartCheckIn(): void
+	{
+		if (self::isAvailable())
+		{
+			(new SettingsProvider())->enableDayStartCheckIn();
+		}
+	}
+
+	public static function disableDayStartCheckIn(): void
+	{
+		if (self::isAvailable())
+		{
+			(new SettingsProvider())->disableDayStartCheckIn();
+		}
+	}
+
 	private static function getTimeManUser(): ?\CTimeManUser
 	{
 		if (self::$timeManUser === null)
@@ -152,5 +214,15 @@ class WorkDayService
 		;
 
 		return !$value || $value === 'Y';
+	}
+
+	public static function isWorkTimeToolAvailable(): bool
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return false;
+		}
+
+		return (ToolsManager::getInstance())->checkAvailabilityByToolId('worktime');
 	}
 }

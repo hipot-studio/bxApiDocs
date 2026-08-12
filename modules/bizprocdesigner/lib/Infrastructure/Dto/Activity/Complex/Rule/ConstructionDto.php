@@ -26,6 +26,7 @@ class ConstructionDto implements JsonSerializable
 			match ($data['type'])
 			{
 				ConstructionType::ACTION->value => ActionExpressionDto::fromArray($data['expression']),
+				ConstructionType::FILTER->value => ActionExpressionDto::fromArray($data['expression']),
 				ConstructionType::OUTPUT->value => OutputExpressionDto::fromArray($data['expression']),
 				ConstructionType::IF_CONDITION->value,
 				ConstructionType::AND_CONDITION->value,

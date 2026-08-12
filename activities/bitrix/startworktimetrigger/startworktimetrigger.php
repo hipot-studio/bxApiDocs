@@ -60,7 +60,7 @@ class CBPStartWorkTimeTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 				'Name' => Loc::getMessage('START_WORK_TIME_TRIGGER_PROPERTY_USER_IDS'),
 				'FieldName' => self::PARAM_USER_IDS,
 				'Type' => FieldType::USER,
-				'Required' => true,
+				'Required' => false,
 				'Multiple' => true,
 			],
 		];
@@ -172,6 +172,11 @@ class CBPStartWorkTimeTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 
 	public function checkApplyRules(array $rules, TriggerParameters $parameters): Result
 	{
+		if (CBPHelper::isEmptyValue($this->{self::PARAM_USER_IDS}))
+		{
+			return Result::createOk();
+		}
+
 		$userId = (int)$parameters->get(TimemanStartWorktimeTrigger::FIELD_USER_ID);
 
 		$allowedUserIds = CBPHelper::ExtractUsers(

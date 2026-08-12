@@ -55,8 +55,27 @@ abstract class JwtController extends Controller
 
 	protected function decodeJwtParameter(): \Closure
 	{
-		return function ($className, string $jwt)
+		return function ($className, string $jwt = '')
 		{
+			if ($jwt === '')
+			{
+				// Parse jwt out of the raw body when Content-Type is JSON
+				$contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+				if (str_contains($contentType, 'application/json'))
+				{
+					try
+					{
+						$body = (string)file_get_contents('php://input');
+						$decoded = $body !== '' ? \Bitrix\Main\Web\Json::decode($body) : null;
+						if (is_array($decoded) && isset($decoded['jwt']) && is_string($decoded['jwt']))
+						{
+							$jwt = $decoded['jwt'];
+						}
+					}
+					catch (\Throwable $e) {}
+				}
+			}
+
 			try
 			{
 				$payload = JWT::decode($jwt, base64_decode(Settings::getPrivateKey()), ['HS256']);

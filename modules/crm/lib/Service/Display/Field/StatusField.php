@@ -5,6 +5,8 @@ namespace Bitrix\Crm\Service\Display\Field;
 
 
 use Bitrix\Crm\Service\Display\Options;
+use Bitrix\UI\Public\System\Label\Label;
+use Bitrix\UI\Public\System\Label\Style;
 
 class StatusField extends StringField
 {
@@ -31,9 +33,15 @@ class StatusField extends StringField
 			return '';
 		}
 
-		$cssPrefix = $this->getDisplayParam('cssPrefix', '');
-		$classes = $cssPrefix . ' ' . $cssPrefix . '-' . $valueConfig['cssPostfix'];
+		return Label::create([
+			'value' => $text,
+			'style' => $this->getLabelStyleByPostfix((string)($valueConfig['cssPostfix'] ?? '')),
+			'title' => $text,
+		])->render();
+	}
 
-		return '<div class="' . $classes .'">' . $text . '</div>';
+	protected function getLabelStyleByPostfix(string $postfix): Style
+	{
+		return Style::TINTED_NO_ACCENT;
 	}
 }

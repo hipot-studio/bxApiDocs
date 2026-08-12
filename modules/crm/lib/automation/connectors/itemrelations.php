@@ -60,12 +60,11 @@ class ItemRelations
 			 *
 			 * @noinspection PhpUnhandledExceptionInspection
 			 */
-			return
-				$this
-					->relationManager
-					->getRelation(new RelationIdentifier($parentTypeId, $this->item->getEntityTypeId()))
-					->getParentElements($this->item)
-			;
+			$relation = $this->relationManager->getRelation(
+				new RelationIdentifier($parentTypeId, $this->item->getEntityTypeId())
+			);
+
+			return $relation ? $relation->getParentElements($this->item) : [];
 		}
 		else
 		{

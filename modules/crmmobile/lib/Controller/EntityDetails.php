@@ -717,7 +717,8 @@ class EntityDetails extends Controller
 		array $data,
 		?int $categoryId = null,
 		bool $isCreationFromSelector = false,
-		?array $client = []
+		?array $client = [],
+		?array $analyticsData = null,
 	): ?int
 	{
 		// setCompatibleData overrides all previous filled fields, so we need to fill category explicitly
@@ -726,7 +727,7 @@ class EntityDetails extends Controller
 			$data[Item::FIELD_NAME_CATEGORY_ID] = $categoryId;
 		}
 		$entityTypeName = $factory->getEntityName();
-
+		Container::getInstance()->getContext()->getAnalytics()->setFromArray($analyticsData ?? []);
 		//When converting from a lead, you do not need to create a link between the elements, because it happens in crm.lead.show
 		$isNeedAttachConversionItem = true;
 		$conversionWizard = $this->getConversionWizard();

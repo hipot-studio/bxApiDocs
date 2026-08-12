@@ -174,15 +174,18 @@ final class FullReportUserService
 		return $this->accessibleToReadUserIdsCache[$userId] = $this->normalizeUserIds($accessibleUserIds);
 	}
 
-	public function getReportApprover(int $userId): int
+	/**
+	 * @return array<int, int>
+	 */
+	public function getManagerIds(int $userId): array
 	{
-		$participantUserIds = $this->getParticipantUserIds($userId);
-		if (!empty($participantUserIds['toUserIds']))
-		{
-			return current($participantUserIds['toUserIds']);
-		}
+		$managerIds = (array)\CTimeMan::getUserManagers($userId);
+		Collection::normalizeArrayValuesByInt($managerIds, false);
 
-		return 0;
+		return array_values(array_filter(
+			array_unique($managerIds),
+			static fn (int $managerId): bool => $managerId > 0 && $managerId !== $userId,
+		));
 	}
 
 	/**
@@ -195,12 +198,7 @@ final class FullReportUserService
 			return $this->participantUserIdsCache[$userId];
 		}
 
-		$managerIds = array_slice((array)\CTimeMan::getUserManagers($userId), 0, 1);
-		Collection::normalizeArrayValuesByInt($managerIds, false);
-		$managerIds = array_values(array_filter(
-			array_unique($managerIds),
-			static fn (int $managerId): bool => $managerId > 0 && $managerId !== $userId,
-		));
+		$managerIds = array_slice($this->getManagerIds($userId), 0, 1);
 
 		if (empty($managerIds))
 		{

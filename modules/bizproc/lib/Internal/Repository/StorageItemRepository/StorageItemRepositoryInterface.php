@@ -87,6 +87,12 @@ interface StorageItemRepositoryInterface
 	public function findOldStorageItemIds(DateTime $createdTime, ?int $limit = null): array;
 
 	/**
+	 * @param ?int $limit
+	 * @return array
+	 */
+	public function findOldestStorageItemIds(?int $limit = null): array;
+
+	/**
 	 * @param array $ids
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentException

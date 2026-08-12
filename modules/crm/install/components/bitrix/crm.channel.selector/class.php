@@ -13,6 +13,9 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
+use Bitrix\MessageService\Sender\Sms\EdnaruImHpx;
+use Bitrix\MessageService\Sender\Sms\SmsEdnaru;
+use Bitrix\MessageService\Sender\Sms\Twilio;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -371,32 +374,39 @@ class CrmChannelSelectorComponent extends Base
 
 	protected function getDefaultConfig(): array
 	{
-		return [
+		$config = [
 			[
 				'id' => 'message-sender-editor',
 				'isHidden' => false,
 			],
-			[
-				'id' => 'twilio',
-				'isHidden' => false,
-			],
-			[
-				'id' => 'smsednaru',
-				'isHidden' => false,
-			],
-			[
-				'id' => 'ednaruimhpx',
-				'isHidden' => false,
-			],
-			[
-				'id' => 'EMAIL',
-				'isHidden' => false,
-			],
-			[
-				'id' => 'IM',
-				'isHidden' => false,
-			],
 		];
+
+		if (Loader::includeModule('messageservice'))
+		{
+			$config[] = [
+				'id' => Twilio::ID,
+				'isHidden' => false,
+			];
+			$config[] = [
+				'id' => SmsEdnaru::ID,
+				'isHidden' => false,
+			];
+			$config[] = [
+				'id' => EdnaruImHpx::ID,
+				'isHidden' => false,
+			];
+		}
+
+		$config[] = [
+			'id' => 'EMAIL',
+			'isHidden' => false,
+		];
+		$config[] = [
+			'id' => 'IM',
+			'isHidden' => false,
+		];
+
+		return $config;
 	}
 
 	protected function collectIdentifiers(): array

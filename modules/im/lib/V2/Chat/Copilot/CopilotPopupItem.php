@@ -4,6 +4,7 @@ namespace Bitrix\Im\V2\Chat\Copilot;
 
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Integration\AI\EngineManager;
+use Bitrix\Im\V2\Integration\AI\ProjectCopilotPrompts;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Registry;
@@ -187,7 +188,9 @@ class CopilotPopupItem implements PopupDataItem
 			$this->roleCodes = $chatRoleCodes + $messagesRoleCodes;
 		}
 
-		return (new RoleManager())->getRoles(array_values($this->roleCodes)) ?? [];
+		$roles = (new RoleManager())->getRoles(array_values($this->roleCodes)) ?? [];
+
+		return (new ProjectCopilotPrompts())->substituteForChats($roles, $this->getChats());
 	}
 
 	protected function getEnginesForRest(): array

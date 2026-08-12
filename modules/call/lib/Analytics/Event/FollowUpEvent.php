@@ -9,21 +9,12 @@ class FollowUpEvent extends Event
 {
 	protected function setDefaultParams(): self
 	{
-		if ($this->call->getId() !== null)
+		if ($this->call->getUuid() !== null)
 		{
 			$this->setP5('callId_' . $this->call->getUuid());
 		}
 
 		return $this;
-	}
-
-	/**
-	 * Parameter st[tool].
-	 * @return string
-	 */
-	protected function getTool(): string
-	{
-		return 'im';
 	}
 
 	/**

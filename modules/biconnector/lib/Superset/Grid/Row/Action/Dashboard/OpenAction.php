@@ -9,6 +9,9 @@ use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
+/**
+ * @deprecated This class is deprecated.
+ */
 final class OpenAction extends BaseAction
 {
 

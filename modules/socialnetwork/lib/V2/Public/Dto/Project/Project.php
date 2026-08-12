@@ -43,6 +43,7 @@ class Project implements EntityInterface
 		public readonly ?array $tags = null,
 		public readonly ?bool $publication = null,
 		public readonly ?Avatar $avatar = null,
+		public readonly ?NotificationsInput $notifications = null,
 	)
 	{
 	}
@@ -67,6 +68,12 @@ class Project implements EntityInterface
 				);
 		}
 
+		$notifications = null;
+		if (isset($props['notifications']) && is_array($props['notifications']))
+		{
+			$notifications = NotificationsInput::mapFromArray($props['notifications']);
+		}
+
 		return new static(
 			id: static::mapInteger($props, 'id'),
 			name: static::mapString($props, 'name'),
@@ -85,6 +92,7 @@ class Project implements EntityInterface
 			tags: static::mapArray($props, 'tags'),
 			publication: static::mapBool($props, 'publication'),
 			avatar: $avatar,
+			notifications: $notifications,
 		);
 	}
 

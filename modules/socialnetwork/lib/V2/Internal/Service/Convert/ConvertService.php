@@ -13,6 +13,8 @@ use Bitrix\Socialnetwork\V2\Internal\Entity\Convert\ConvertTrackedHandler;
 use Bitrix\Socialnetwork\V2\Internal\Repository\ConvertProgressRepositoryInterface;
 use Bitrix\Socialnetwork\V2\Internal\Service\Convert\Handler\Factory\HandlerFactoryInterface;
 use Bitrix\Socialnetwork\V2\Internal\Service\Convert\Handler\ConvertChat;
+use Bitrix\Socialnetwork\V2\Internal\Service\Convert\Handler\EnsureChat;
+use Bitrix\Socialnetwork\V2\Internal\Service\Convert\Handler\EnsureProjectOwner;
 use Bitrix\Socialnetwork\V2\Internal\Service\Convert\Handler\SendConverterEvent;
 use Bitrix\Socialnetwork\V2\Internal\Service\Convert\Handler\SendConverterPushEvent;
 use Bitrix\Socialnetwork\V2\Internal\Service\Convert\Handler\SetProjectOptions;
@@ -64,6 +66,8 @@ class ConvertService
 
 		try
 		{
+			$this->handlerFactory->create(EnsureProjectOwner::class)($groupBefore);
+
 			$this->handlerFactory->create(UpdateGroupFields::class)($groupBefore);
 
 			$this->handlerFactory->create(StoreFeatureStatesOnConvert::class)($groupBefore);
@@ -71,6 +75,8 @@ class ConvertService
 			$this->handlerFactory->create(UpdateFeatures::class)($groupBefore);
 
 			$this->handlerFactory->create(UpdateFeaturePermissions::class)($groupBefore);
+
+			$this->handlerFactory->create(EnsureChat::class)($groupBefore);
 
 			$this->handlerFactory->create(SetProjectOptions::class)($groupBefore, $progress);
 		}

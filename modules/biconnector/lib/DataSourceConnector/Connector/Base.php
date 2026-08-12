@@ -490,6 +490,20 @@ abstract class Base
 	}
 
 	/**
+	 * Extra query parameters used when building the preview (e.g. for the dataset import slider).
+	 *
+	 * By default returns no extra parameters, so the preview shows the first N rows.
+	 * Connectors that fetch data from an external API (e.g. expenses) override this
+	 * to load a recent time window instead.
+	 *
+	 * @return array
+	 */
+	public function getPreviewParameters(): array
+	{
+		return [];
+	}
+
+	/**
 	 * @param array $parameters
 	 * @param int $limit
 	 * @param array $dateFormats

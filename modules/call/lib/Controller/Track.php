@@ -273,6 +273,7 @@ class Track extends Engine\Controller
 		$call = Registry::getCallWithId($callId);
 		if (!$call)
 		{
+			\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus(404);
 			$this->addError(new Error("call_not_found", "Call not found"));
 			return null;
 		}
@@ -282,6 +283,7 @@ class Track extends Engine\Controller
 			$tokenData = ExternalAccessTokenManager::validateToken($token);
 			if (!$tokenData || $tokenData['track_id'] != $trackId || $tokenData['call_id'] != $callId)
 			{
+				\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus(403);
 				$this->addError(new Error("invalid_token", "Invalid or expired token"));
 				return null;
 			}
@@ -292,12 +294,14 @@ class Track extends Engine\Controller
 			$currentUserId = $this->getCurrentUser()?->getId();
 			if (!$currentUserId)
 			{
+				\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus(403);
 				$this->addError(new Error("access_denied", "User not found"));
 				return null;
 			}
 
 			if (!$this->checkCallAccess($call, $currentUserId))
 			{
+				\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus(403);
 				return null;
 			}
 		}
@@ -305,17 +309,28 @@ class Track extends Engine\Controller
 		$track = TrackCollection::getTrackById($callId, $trackId);
 		if (!$track)
 		{
+			\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus(403);
 			$this->addError(new Error("track_not_found", "Track not found"));
 			return null;
 		}
 
 		if (!$track->getFileId())
 		{
+			\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus(404);
 			$this->addError(new Error("track_file_not_found", "Track file not found"));
 			return null;
 		}
 
-		return BFile::createByFileId($track->getFileId(), $track->getFileName())->showInline(!$forceDownload);
+		try
+		{
+			return BFile::createByFileId($track->getFileId(), $track->getFileName())->showInline(!$forceDownload);
+		}
+		catch (\Bitrix\Main\ObjectNotFoundException $e)
+		{
+			\Bitrix\Main\Context::getCurrent()->getResponse()->setStatus(404);
+			$this->addError(new Error($e->getMessage(), $e->getCode()));
+			return null;
+		}
 	}
 
 

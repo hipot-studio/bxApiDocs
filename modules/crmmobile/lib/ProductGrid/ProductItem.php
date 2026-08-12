@@ -11,9 +11,25 @@ final class ProductItem
 	{
 		$sourceFields = $source->toArray();
 		$result = ProductRow::createFromArray(array_merge($sourceFields, $mutations));
-		$entityResult = $result->isNew()
-			? $entity->addToProductRows($result)
-			: $entity->updateProductRow((int)$sourceFields['PRODUCT_ID'], $result->toArray());
+
+		if ($result->isNew())
+		{
+			$entityResult = $entity->addToProductRows($result);
+		}
+		else
+		{
+			$rowId = $result->getId();
+
+			$fields = $result->toArray();
+			unset($fields['ID']);
+
+			$entityResult = $entity->updateProductRow($rowId, $fields);
+
+			if ($entityResult->isSuccess())
+			{
+				$result = $entity->getProductRows()->getByPrimary($rowId) ?? $result;
+			}
+		}
 
 		if (!$entityResult->isSuccess())
 		{

@@ -4,8 +4,9 @@ namespace Bitrix\Calendar\Core\Section;
 
 use Bitrix\Calendar\Core\Base\Date;
 use Bitrix\Calendar\Core\Base\EntityInterface;
+use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Role\Role;
-use Bitrix\Calendar\Sync\Google\Dictionary;
+use Bitrix\Calendar\Sync\Google;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Text\Emoji;
@@ -556,7 +557,7 @@ class Section implements EntityInterface, Arrayable
 
 	public function isLocal(): bool
 	{
-		return $this->externalType === Section::LOCAL_EXTERNAL_TYPE;
+		return $this->externalType === self::LOCAL_EXTERNAL_TYPE;
 	}
 
 	/**
@@ -587,13 +588,23 @@ class Section implements EntityInterface, Arrayable
 		return $this->isCollab;
 	}
 
+	public function isGroup(): bool
+	{
+		return $this->type === Dictionary::CALENDAR_TYPE['group'];
+	}
+
+	public function isCompany(): bool
+	{
+		return $this->type === Dictionary::CALENDAR_TYPE['company'];
+	}
+
 	public function isVirtual(): bool
 	{
 		return in_array(
 			$this->externalType,
 			[
-				Dictionary::ACCESS_ROLE_TO_EXTERNAL_TYPE['reader'],
-				Dictionary::ACCESS_ROLE_TO_EXTERNAL_TYPE['freeBusyOrder'],
+				Google\Dictionary::ACCESS_ROLE_TO_EXTERNAL_TYPE['reader'],
+				Google\Dictionary::ACCESS_ROLE_TO_EXTERNAL_TYPE['freeBusyOrder'],
 			],
 			true
 		);

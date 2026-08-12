@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class RateLimitException extends RestException
+class RateLimitException extends RestException implements SkipWriteToLogException
 {
 	protected const STATUS = \CRestServer::STATUS_TO_MANY_REQUESTS;
 

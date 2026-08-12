@@ -35,6 +35,8 @@ class CollabMemberFacade extends AbstractMemberService
 			->setInitiatorId($command->getInitiatorId())
 			->setId($command->getGroupId())
 			->setInitiatedByType($command->getInitiatedByType())
+			->setAddBotSilently($command->getAddBotSilently())
+			->setSharingLinkAuthorId($command->getSharingLinkAuthorId())
 		;
 
 		$updateResult = $this->collabService->update($updateCommand);

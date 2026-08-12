@@ -1,6 +1,7 @@
 <?
 namespace Bitrix\Crm\Tracking\Internals;
 
+use Bitrix\Crm\Service\Accounting;
 use Bitrix\Main;
 
 /**
@@ -158,8 +159,8 @@ class SourceExpensesTable extends Main\ORM\Data\DataManager
 			return;
 		}
 
-		$stepSum = round($sum / $days, 2);
-		$stepSumModulo = round($sum - $stepSum * $days, 2);
+		$stepSum = Accounting::roundPublic($sum / $days, $currencyId);
+		$stepSumModulo = Accounting::roundPublic($sum - $stepSum * $days, $currencyId);
 
 		$stepActions = (int) ($actions / $days);
 		$stepActionModulo = $actions - $stepActions * $days;

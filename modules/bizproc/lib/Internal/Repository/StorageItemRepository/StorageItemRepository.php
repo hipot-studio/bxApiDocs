@@ -122,6 +122,27 @@ class StorageItemRepository implements StorageItemRepositoryInterface
 		return $ids;
 	}
 
+	public function findOldestStorageItemIds(?int $limit = null): array
+	{
+		$dataManager = Container::getStorageRecordDataManager();
+		$query = $dataManager::query()
+			->setSelect(['ID'])
+			->setOrder(['CREATED_TIME' => 'ASC'])
+		;
+		if ($limit !== null)
+		{
+			$query->setLimit($limit);
+		}
+
+		$ids = [];
+		foreach ($query->exec() as $row)
+		{
+			$ids[] = (int)$row['ID'];
+		}
+
+		return $ids;
+	}
+
 	public function saveItem(
 		int $storageTypeId,
 		Entity\StorageItem\StorageItem $item,

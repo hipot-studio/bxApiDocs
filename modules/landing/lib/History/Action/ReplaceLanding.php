@@ -15,7 +15,7 @@ class ReplaceLanding extends BaseAction
 {
 	protected const JS_COMMAND = 'replaceLanding';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		$landing = Landing::createInstance($this->params['lid']);
 		if ($landing->exist())

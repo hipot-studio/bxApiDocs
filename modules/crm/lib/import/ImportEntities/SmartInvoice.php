@@ -7,8 +7,10 @@ use Bitrix\Crm\Import\Contract\ImportEntityFieldInterface;
 use Bitrix\Crm\Import\Dto\Entity\AbstractImportSettings;
 use Bitrix\Crm\Import\Dto\Entity\ImportSettings\SmartInvoiceImportSettings;
 use Bitrix\Crm\Import\ImportEntityFields\FactoryBasedField\Comments;
+use Bitrix\Crm\Import\ImportEntityFields\FactoryBasedField\ParentField;
 use Bitrix\Crm\Item;
 use Bitrix\Main\Localization\Loc;
+use CCrmOwnerType;
 
 final class SmartInvoice extends Dynamic
 {
@@ -30,6 +32,7 @@ final class SmartInvoice extends Dynamic
 
 		$this->fieldCollection = parent::getFields();
 		$this->fieldCollection->push(new Comments($this->entityTypeId));
+		$this->fieldCollection->push(new ParentField($this->entityTypeId, CCrmOwnerType::Deal));
 
 		return $this->fieldCollection;
 	}

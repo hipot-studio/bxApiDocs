@@ -1,9 +1,12 @@
 <?php
 
+use Bitrix\Bizproc\Starter\Template\Start\CollectRequest;
+use Bitrix\Bizproc\Starter\Template\Start\CollectorService;
 use Bitrix\Bizproc;
-use Bitrix\Crm\Activity\Analytics\EventName;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\Mode;
 use Bitrix\Main\Analytics\AnalyticsEvent;
+use Bitrix\Main\Loader;
 
 class CCrmBizProcHelper
 {
@@ -146,60 +149,90 @@ class CCrmBizProcHelper
 
 		return true;
 	}
-	public static function HasAutoWorkflows($ownerTypeID, $eventType)
+	public static function HasAutoWorkflows($ownerTypeID, $eventType, ?int $categoryId = null)
 	{
-		if (!(IsModuleInstalled('bizproc') && CModule::IncludeModule('bizproc') && CBPRuntime::isFeatureEnabled()))
-		{
-			return false;
-		}
-
-		$ownerTypeID = (int)$ownerTypeID;
-		$eventType = (int)$eventType;
-
-		$docName = self::ResolveDocumentName($ownerTypeID);
-		if($docName === '')
-		{
-			return false;
-		}
-
-		$ownerTypeName = CCrmOwnerType::ResolveName($ownerTypeID);
-		if($ownerTypeName === '')
-		{
-			return false;
-		}
-
-		$ary = \CBPWorkflowTemplateLoader::SearchTemplatesByDocumentType(array('crm', $docName, $ownerTypeName), $eventType);
-		return !empty($ary);
+		return static::hasCollectedStartTemplates($ownerTypeID, $eventType, $categoryId);
 	}
-	public static function HasParameterizedAutoWorkflows($ownerTypeID, $eventType)
+	public static function HasParameterizedAutoWorkflows($ownerTypeID, $eventType, ?int $categoryId = null)
 	{
-		if (!(IsModuleInstalled('bizproc') && CModule::IncludeModule('bizproc') && CBPRuntime::isFeatureEnabled()))
+		return static::hasCollectedStartTemplates($ownerTypeID, $eventType, $categoryId, true);
+	}
+
+	private static function hasCollectedStartTemplates(
+		int $ownerTypeID,
+		int $eventType,
+		?int $categoryId = null,
+		bool $onlyParameterized = false
+	): bool
+	{
+		if (!(
+			IsModuleInstalled('bizproc')
+			&& Loader::includeModule('bizproc')
+			&& CBPRuntime::isFeatureEnabled()
+		))
 		{
 			return false;
 		}
 
-		$ownerTypeID = (int)$ownerTypeID;
-		$eventType = (int)$eventType;
-
-		$docName = self::ResolveDocumentName($ownerTypeID);
-		if($docName === '')
+		$complexDocumentType = static::ResolveDocumentType($ownerTypeID);
+		if ($complexDocumentType === null)
 		{
 			return false;
 		}
 
-		$ownerTypeName = CCrmOwnerType::ResolveName($ownerTypeID);
-		if($ownerTypeName === '')
+		if (class_exists(CollectorService::class))
 		{
-			return false;
+			return (new CollectorService())->hasTemplates(
+				new CollectRequest(
+					complexDocumentType: $complexDocumentType,
+					eventType: $eventType,
+					categoryId: $categoryId,
+					onlyParameterized: $onlyParameterized,
+					useAutoExecuteBitmask: true,
+					requireActive: $onlyParameterized,
+					excludeSystem: false,
+				),
+			);
 		}
 
-		$filter = array(
-			'DOCUMENT_TYPE' => array('crm', $docName, $ownerTypeName),
-			'AUTO_EXECUTE' => $eventType,
-			'ACTIVE' => 'Y',
-			'!PARAMETERS' => null,
+		return static::hasLegacyStartTemplates($complexDocumentType, $eventType, $onlyParameterized);
+	}
+
+	private static function hasLegacyStartTemplates(
+		array $complexDocumentType,
+		int $eventType,
+		bool $onlyParameterized = false
+	): bool
+	{
+		if (!$onlyParameterized)
+		{
+			$templates = \CBPWorkflowTemplateLoader::searchTemplatesByDocumentType($complexDocumentType, $eventType);
+
+			return !empty($templates);
+		}
+
+		$templateList = \CBPWorkflowTemplateLoader::getList(
+			[],
+			[
+				'DOCUMENT_TYPE' => $complexDocumentType,
+				'AUTO_EXECUTE' => $eventType,
+				'ACTIVE' => 'Y',
+				'!PARAMETERS' => null,
+			],
+			false,
+			false,
+			['ID', 'PARAMETERS'],
 		);
-		return (\CBPWorkflowTemplateLoader::getList(array(), $filter, array()) > 0);
+
+		while ($template = $templateList->fetch())
+		{
+			if (!empty($template['PARAMETERS']))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 	public static function HasRunningWorkflows($ownerTypeID, $ownerID)
 	{
@@ -331,7 +364,7 @@ class CCrmBizProcHelper
 
 	public static function getActiveDebugEntityIds(int $entityTypeId): array
 	{
-		if (!\Bitrix\Main\Loader::includeModule('bizproc'))
+		if (!Loader::includeModule('bizproc'))
 		{
 			return [];
 		}
@@ -369,7 +402,7 @@ class CCrmBizProcHelper
 			return false;
 		}
 
-		$factory = \Bitrix\Crm\Service\Container::getInstance()->getFactory($entityTypeId);
+		$factory = Container::getInstance()->getFactory($entityTypeId);
 
 		return $factory && $factory->isLinkWithProductsEnabled();
 	}
@@ -401,7 +434,7 @@ class CCrmBizProcHelper
 
 	public static function getBpStarterConfig(int $entityTypeId, ?int $entityId = null): array
 	{
-		if (!\Bitrix\Main\Loader::includeModule('bizproc') || !CBPRuntime::isFeatureEnabled())
+		if (!Loader::includeModule('bizproc') || !CBPRuntime::isFeatureEnabled())
 		{
 			return [];
 		}
@@ -465,7 +498,7 @@ class CCrmBizProcHelper
 	{
 		$result = [];
 		$crmDynamicTypesMap =
-			\Bitrix\Crm\Service\Container::getInstance()
+			Container::getInstance()
 				->getDynamicTypesMap()
 				->load(['isLoadStages' => false, 'isLoadCategories' => false])
 		;

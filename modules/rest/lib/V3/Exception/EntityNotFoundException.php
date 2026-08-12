@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class EntityNotFoundException extends RestException
+class EntityNotFoundException extends RestException implements SkipWriteToLogException
 {
 	public function __construct(
 		protected int $id,

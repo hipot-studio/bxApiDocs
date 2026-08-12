@@ -2,15 +2,13 @@
 
 namespace Bitrix\Im\Configuration;
 
-use Bitrix\Im\Common;
+use Bitrix\Im\V2\Pull\Event\SettingsUpdate;
 use Bitrix\Im\V2\Settings\CacheManager;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
-use Bitrix\Pull\Event;
-use CModule;
 use COption;
 
 class Manager
@@ -20,6 +18,12 @@ class Manager
 
 	private const PRIVACY_SEARCH = 'privacySearch';
 	private const STATUS = 'status';
+
+	/** General settings whose change is broadcast to the user's other devices in realtime. */
+	private const SYNCED_GENERAL_SETTINGS = [
+		\Bitrix\Im\V2\Settings\Entity\General::OPEN_DESKTOP_FROM_PANEL,
+		\Bitrix\Im\V2\Settings\Entity\General::DEFAULT_REACTION,
+	];
 
 	public static function getUserSettings(int $userId): Result
 	{
@@ -60,7 +64,7 @@ class Manager
 
 		self::updateUserStatus($userId, $settings['general']);
 
-		self::sendSettingsChangeEvent($userId, $settings['general']);
+		self::sendPullGeneralSettingsUpdate($userId, $settings['general']);
 
 		self::disableUserSearch($userId, $settings['general']);
 
@@ -131,7 +135,7 @@ class Manager
 		{
 			self::updateUserStatus($userId, $settings);
 
-			self::sendSettingsChangeEvent($userId, $settings);
+			self::sendPullGeneralSettingsUpdate($userId, $settings);
 
 			self::disableUserSearch($userId, $settings);
 
@@ -196,21 +200,30 @@ class Manager
 		return (new Notification($moduleId, $eventId))->isAllowed($userId, $type);
 	}
 
-	private static function sendSettingsChangeEvent(int $userId, array $generalSettings): void
+	public static function sendPullGeneralSettingsUpdate(int $userId, array $generalSettings): void
 	{
-		// TODO: refactoring required for the new interface
-		if (isset($generalSettings['openDesktopFromPanel']) && CModule::IncludeModule('pull'))
+		$syncedSettings = array_intersect_key(
+			$generalSettings,
+			array_flip(self::SYNCED_GENERAL_SETTINGS)
+		);
+		if ($syncedSettings === [])
 		{
-			Event::add($userId, [
-				'module_id' => 'im',
-				'command' => 'settingsUpdate',
-				'expiry' => 5,
-				'params' => [
-					'openDesktopFromPanel' => $generalSettings['openDesktopFromPanel'],
-				],
-				'extra' => Common::getPullExtra()
-			]);
+			return;
 		}
+
+		// Broadcast the persisted values: checkingValues normalizes input exactly as the write path does.
+		$verifiedSettings = General::checkingValues($syncedSettings);
+		if ($verifiedSettings === [])
+		{
+			return;
+		}
+
+		self::sendPullSettingsUpdate($userId, $verifiedSettings);
+	}
+
+	private static function sendPullSettingsUpdate(int $userId, array $settings): void
+	{
+		(new SettingsUpdate($userId, $settings))->send();
 	}
 
 	private static function disableUserSearch(int $userId, array $generalSettings): void

@@ -3,7 +3,9 @@
 namespace Bitrix\Crm\UserField;
 
 use Bitrix\Crm\Entity\FieldDataProvider;
+use Bitrix\Crm\Integration\Analytics\Builder\Userfield\Context\ConvertContext;
 use Bitrix\Crm\Integration\Analytics\Builder\Userfield\Context\CreateContext;
+use Bitrix\Crm\Integration\Analytics\Builder\Userfield\ConvertEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\Userfield\CreateEvent;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
@@ -111,11 +113,36 @@ class UserFieldHistory
 			return;
 		}
 
-		$event = (new CreateEvent());
-		if (isset($fields['ANALYTICS']) && $fields['ANALYTICS'] instanceof CreateContext)
+		$excludeEntityIds = [
+			'CRM_INVOICE',
+			'CRM_ACTIVITY',
+		];
+
+		$entity = $fields['ENTITY_ID'] ?? null;
+		if (in_array($entity, $excludeEntityIds, true))
 		{
-			$event->fillByContext($fields['ANALYTICS']);
+			return;
 		}
+
+		$excludeFieldNames = [
+			'UF_LOGO',
+			'UF_STAMP',
+			'UF_DIRECTOR_SIGN',
+			'UF_ACCOUNTANT_SIGN',
+		];
+
+		$field = $fields['FIELD_NAME'] ?? null;
+		if (in_array($field, $excludeFieldNames, true))
+		{
+			return;
+		}
+
+		$context = $fields['ANALYTICS'] ?? null;
+		$event = match (true) {
+			$context instanceof CreateContext => (new CreateEvent())->fillByContext($context),
+			$context instanceof ConvertContext => (new ConvertEvent())->fillByContext($context),
+			default => new CreateEvent(),
+		};
 
 		if (!$event->validate()->isSuccess())
 		{

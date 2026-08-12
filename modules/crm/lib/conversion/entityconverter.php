@@ -465,6 +465,7 @@ class EntityConverter
 			{
 				$context = new Crm\Service\Context();
 				$context->setUserId((int)$userId);
+				$context->setAnalytics(Container::getInstance()->getContext()->getAnalytics());
 			}
 			else
 			{

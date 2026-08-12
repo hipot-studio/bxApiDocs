@@ -18,6 +18,7 @@ class EmployeeCardFieldAssembler extends JsExtensionFieldAssembler
 		$userEntity = $this->getUserEntityById($rawValue['ID']);
 
 		return [
+			'userId' => $rawValue['ID'],
 			'photoUrl' => $this->getUserPhotoUrl($rawValue),
 			'profileLink' => str_replace(['#ID#'], $rawValue['ID'], '/company/personal/user/#ID#/'),
 			'fullName' => \CUser::FormatName(\CSite::GetNameFormat(), $rawValue, true, true),

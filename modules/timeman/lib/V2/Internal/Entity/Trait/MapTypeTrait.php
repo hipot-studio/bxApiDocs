@@ -44,6 +44,28 @@ trait MapTypeTrait
 		return $value;
 	}
 
+	public static function mapPlainText(array $props, string $key, ?string $default = null): ?string
+	{
+		$value = self::mapString($props, $key, $default);
+		if ($value === null || $value === '')
+		{
+			return $value;
+		}
+
+		$value = preg_replace('#<br\b[^>]*>#i', "\n", $value);
+		$value = preg_replace('/<[^>]+>/', ' ', (string)$value);
+		$value = strip_tags((string)$value);
+		$value = preg_replace('/\[\/?[a-z][^\]]*\]/iu', ' ', $value);
+		$value = html_entity_decode((string)$value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+		$lines = array_map(
+			static fn(string $line): string => trim(preg_replace('/\s+/u', ' ', $line)),
+			explode("\n", $value),
+		);
+
+		return implode("\n", array_filter($lines, static fn(string $line): bool => $line !== ''));
+	}
+
 	/**
 	 * @param class-string<BackedEnum> $enumClass
 	 */
@@ -106,7 +128,7 @@ trait MapTypeTrait
 		array $props,
 		string $key,
 		string $entityClass,
-		?AbstractEntity $default = null
+		?AbstractEntity $default = null,
 	): ?AbstractEntity
 	{
 		if (!isset($props[$key]))
@@ -141,7 +163,7 @@ trait MapTypeTrait
 		array $props,
 		string $key,
 		string $valueObjectClass,
-		?ValueObjectInterface $default = null
+		?ValueObjectInterface $default = null,
 	): ?ValueObjectInterface
 	{
 		if (!isset($props[$key]))
@@ -171,7 +193,7 @@ trait MapTypeTrait
 		array $props,
 		string $key,
 		string $entityCollectionClass,
-		?AbstractEntityCollection $default = null
+		?AbstractEntityCollection $default = null,
 	): ?AbstractEntityCollection
 	{
 		if (!isset($props[$key]))

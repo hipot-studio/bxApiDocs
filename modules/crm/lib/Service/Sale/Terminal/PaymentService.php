@@ -10,8 +10,10 @@ use Bitrix\Crm\ClientInfo;
 use Bitrix\Crm\Order\Configuration;
 use Bitrix\Crm\Order\Order;
 use Bitrix\Crm\Order\Payment;
+use Bitrix\Crm\Service\Accounting;
 use Bitrix\Crm\Terminal\OrderProperty;
 use Bitrix\Currency\CurrencyManager;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\AddResult;
 use Bitrix\Main\Entity\ReferenceField;
@@ -24,7 +26,6 @@ use Bitrix\Sale;
 use Bitrix\Sale\Internals\Entity;
 use Bitrix\Sale\PaySystem;
 use Bitrix\Sale\Repository\PaymentRepository;
-use Bitrix\Sale\Tax\VatCalculator;
 use Bitrix\Crm\Order\TradingPlatform\DynamicEntity;
 
 final class PaymentService
@@ -394,7 +395,7 @@ final class PaymentService
 		{
 			// probably a temporary solution since taxes are a mess, as usual
 			$price = $this->getProductPrice($product);
-			$paymentSum += Sale\PriceMaths::roundPrecision($product['QUANTITY'] * $price);
+			$paymentSum += $product['QUANTITY'] * $price;
 
 			$payment['PRODUCT'][] = [
 				'BASKET_CODE' => $index,
@@ -402,7 +403,7 @@ final class PaymentService
 			];
 		}
 
-		$payment['SUM'] = $paymentSum;
+		$payment['SUM'] = Accounting::round($paymentSum);
 		$data['PAYMENT'][] = $payment;
 
 		if ($createOptions->getEntity() && !$orderId)
@@ -530,10 +531,16 @@ final class PaymentService
 			if ($vatRate > 0)
 			{
 				// price with tax
-				$price = (new VatCalculator($vatRate))->accrue($price);
+				$serviceLocator = ServiceLocator::getInstance();
+				$input = $serviceLocator->get('sale.basketItemInputFactory')->createFromArray([
+					'basePrice' => $price,
+					'vatRate' => $vatRate * 100,
+					'vatIncluded' => false,
+				]);
+				$price = $serviceLocator->get('sale.vatCalculator')->accrueVat($input);
 			}
 		}
-		
+
 		return $price;
 	}
 

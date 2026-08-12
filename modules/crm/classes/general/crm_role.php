@@ -8,6 +8,8 @@ use Bitrix\Crm\Security\Role\Model\RoleRelationTable;
 use Bitrix\Crm\Security\Role\Repositories\PermissionRepository;
 use Bitrix\Crm\Security\Role\RolePermission;
 use Bitrix\Crm\Security\Role\Utils\RolePermissionLogContext;
+use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\UserPermissions\EntityPermissions\ItemsList;
 use Bitrix\Main;
 
 class CCrmRole
@@ -257,6 +259,8 @@ class CCrmRole
 		// Clean up cached permissions
 		RoleRelationTable::cleanCache();
 		RolePermissionTable::cleanCache();
+		Factory::clearPermissionEntityTypesCache();
+		ItemsList::clearQueryResultCache();
 
 		CrmClearMenuCache();
 	}

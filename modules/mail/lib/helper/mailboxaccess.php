@@ -8,6 +8,8 @@ use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Integration\Intranet\UserService;
 use Bitrix\Mail\Internals\MailboxAccessTable;
 use Bitrix\Mail\MailboxTable;
+use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\SystemException;
 
 class MailboxAccess extends MailAccess
 {
@@ -49,6 +51,102 @@ class MailboxAccess extends MailAccess
 		}
 
 		return self::isMailboxOwner($mailboxId, $userId);
+	}
+
+	/**
+	 * @return int[]
+	 * @throws SystemException
+	 */
+	public static function resolveUserMailboxIds(
+		?int $mailboxId,
+		int $userId,
+		bool $withSharedMailboxes = true
+	): array
+	{
+		if ($mailboxId === null)
+		{
+			return array_map('intval', array_keys(MailboxTable::getUserMailboxes($userId)));
+		}
+
+		if ($mailboxId <= 0)
+		{
+			throw new SystemException('mailboxId must be a positive integer.');
+		}
+
+		if (!self::hasUserAccessToMailbox($mailboxId, $userId, $withSharedMailboxes))
+		{
+			throw new SystemException('The selected mailbox is not available to the current user.');
+		}
+
+		return [$mailboxId];
+	}
+
+	/**
+	 * @param int $ownerId
+	 * @param int $userId
+	 * @param bool $withSharedMailboxes
+	 * @return int[]
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public static function getAccessibleOwnerMailboxIds(
+		int $ownerId,
+		int $userId,
+		bool $withSharedMailboxes = true
+	): array
+	{
+		if ($ownerId <= 0 || $userId <= 0)
+		{
+			return [];
+		}
+
+		$ownedMailboxIds = array_map('intval', array_keys(MailboxTable::getTheOwnersMailboxes($ownerId, true)));
+		if ($ownedMailboxIds === [])
+		{
+			return [];
+		}
+
+		if ($ownerId === $userId)
+		{
+			return $ownedMailboxIds;
+		}
+
+		if (!$withSharedMailboxes)
+		{
+			return [];
+		}
+
+		return self::filterSharedMailboxIds($ownedMailboxIds, $userId);
+	}
+
+	/**
+	 * @param int[] $mailboxIds
+	 * @param int $userId
+	 * @return int[]
+	 * @throws SystemException
+	 * @throws ObjectPropertyException
+	 */
+	private static function filterSharedMailboxIds(array $mailboxIds, int $userId): array
+	{
+		$accessCodes = \CAccess::GetUserCodesArray($userId) ?? [];
+		if ($accessCodes === [])
+		{
+			return [];
+		}
+
+		$rows = MailboxAccessTable::query()
+			->setSelect(['MAILBOX_ID'])
+			->whereIn('MAILBOX_ID', $mailboxIds)
+			->whereIn('ACCESS_CODE', $accessCodes)
+			->fetchAll()
+		;
+
+		$accessibleMailboxIds = array_fill_keys(array_map('intval', array_column($rows, 'MAILBOX_ID')), true);
+
+		return array_values(array_filter(
+			$mailboxIds,
+			static fn (int $mailboxId): bool => isset($accessibleMailboxIds[$mailboxId]),
+		));
 	}
 
 	public static function hasCurrentUserAccessToMailbox(int $mailboxId, bool $withSharedMailboxes = false): bool

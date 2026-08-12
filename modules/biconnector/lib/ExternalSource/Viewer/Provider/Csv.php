@@ -9,7 +9,7 @@ use Bitrix\BIConnector\ExternalSource\FileReader;
 
 final class Csv implements Provider
 {
-	private const N_FIRST = 20;
+	private const N_FIRST = 300;
 
 	private ?array $file = null;
 

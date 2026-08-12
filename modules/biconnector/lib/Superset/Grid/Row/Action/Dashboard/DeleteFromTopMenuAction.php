@@ -3,12 +3,11 @@
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dashboard;
 
 use Bitrix\BIConnector\Superset\MarketAccessManager;
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
-final class DeleteFromTopMenuAction extends BaseAction
+final class DeleteFromTopMenuAction extends BaseDashboardAction
 {
 	public static function getId(): string
 	{
@@ -51,6 +50,8 @@ final class DeleteFromTopMenuAction extends BaseAction
 
 		$result = parent::getControl($rawFields);
 		$result['ACTION_ID'] = self::getId();
+
+		$result['html'] = $this->getMenuItem('--o-unpin');
 
 		return $result;
 	}

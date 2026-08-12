@@ -8,7 +8,6 @@ use Bitrix\Main\Loader;
 use Bitrix\Security\Mfa\Otp;
 use Bitrix\Security\Mfa\OtpType;
 use CBitrix24;
-use CHTTP;
 
 class Auth
 {
@@ -72,7 +71,7 @@ class Auth
 	{
 		global $APPLICATION, $USER;
 
-		$userData = CHTTP::ParseAuthRequest();
+		$userData = Context::getCurrent()->getServer()->parseAuthRequest();
 		$login = $userData["basic"]["username"];
 		if (!$login)
 		{
@@ -139,6 +138,7 @@ class Auth
 					if ($userId > 0)
 					{
 						$result['canLoginBySms'] = $otpService->canLoginBySms($userId);
+						$result['canLoginByEmail'] = $otpService->canLoginByEmail($userId);
 					}
 					$result['canUseRecoveryCodes'] = $otpService->isRecoveryCodesEnabled();
 				}

@@ -6,6 +6,8 @@ class TypeDouble extends Base
 {
 	public function getField(): string
 	{
-		return sprintf('`%s` DOUBLE', $this->getName());
+		$type = ($this->sqlHelper instanceof \Bitrix\Main\DB\PgsqlSqlHelper) ? 'DOUBLE PRECISION' : 'DOUBLE';
+
+		return sprintf('%s %s', $this->sqlHelper->quote($this->name), $type);
 	}
 }

@@ -94,6 +94,7 @@ final class TaskProvider
 	public const PRESET_NONE = 'none';
 	public const ORDER_ACTIVITY = 'ACTIVITY';
 	public const ORDER_DEADLINE = 'DEADLINE';
+	public const ORDER_NAME = 'NAME';
 
 	private int $userId;
 	private string $order;
@@ -539,13 +540,16 @@ final class TaskProvider
 			}
 		}
 
-		if ($this->order === TaskProvider::ORDER_DEADLINE)
+		match ($this->order)
 		{
-			$order['DEADLINE'] = $ASC.',NULLS';
-		}
-		else
+			TaskProvider::ORDER_DEADLINE => $order['DEADLINE'] = $ASC.',NULLS',
+			TaskProvider::ORDER_NAME => $order['TITLE'] = $ASC,
+			default => $order['ACTIVITY_DATE'] = $ASC,
+		};
+
+		if ($this->order !== TaskProvider::ORDER_NAME)
 		{
-			$order['ACTIVITY_DATE'] = $ASC;
+			$order['TITLE'] = 'ASC';
 		}
 
 		$order['ID'] = $ASC;

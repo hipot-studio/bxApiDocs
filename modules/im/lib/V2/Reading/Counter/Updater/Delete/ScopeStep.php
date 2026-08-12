@@ -3,9 +3,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Reading\Counter\Updater\Delete;
 
-use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeScope;
 use Bitrix\Im\V2\Message;
-use Bitrix\Im\V2\Message\Counter\CounterOverflowService;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Reading\Counter\Internal\CountersCache;
 
@@ -14,17 +13,16 @@ class ScopeStep
 	private ?array $chatIds = null;
 	private ?array $messageIds = null;
 	private ?array $excludeMessageIds = null;
-	private ?int $parentId = null;
+	private ?ChatTreeScope $treeScope = null;
 	private ?int $toMessageId = null;
-	private ?Chat\Type $type = null;
 
 	public function __construct(
 		private readonly CountersCache $cache,
-		private readonly CounterOverflowService $overflowService
 	) {}
 
 	public function toMessage(Message $message, int $userId): Executor
 	{
+		$this->resetSelection();
 		$this->toMessageId = $message->getId();
 		$this->chatIds = [$message->getChatId()];
 		$audience = new AudienceStep($this);
@@ -32,20 +30,17 @@ class ScopeStep
 		return $audience->forUser($userId);
 	}
 
-	public function byParent(int $parentId): AudienceStep
+	public function byTreeScope(ChatTreeScope $treeScope): AudienceStep
 	{
-		$this->parentId = $parentId;
-		return new AudienceStep($this);
-	}
+		$this->resetSelection();
+		$this->treeScope = $treeScope;
 
-	public function byType(Chat\Type $type): AudienceStep
-	{
-		$this->type = $type;
 		return new AudienceStep($this);
 	}
 
 	public function byChat(int $chatId, ?array $excludeMessageIds = null): AudienceStep
 	{
+		$this->resetSelection();
 		$this->chatIds = [$chatId];
 		$this->excludeMessageIds = $excludeMessageIds;
 		return new AudienceStep($this);
@@ -53,12 +48,14 @@ class ScopeStep
 
 	public function byChats(array $chatIds): AudienceStep
 	{
+		$this->resetSelection();
 		$this->chatIds = $chatIds;
 		return new AudienceStep($this);
 	}
 
 	public function byMessage(Message $message): AudienceStep
 	{
+		$this->resetSelection();
 		$this->messageIds = [$message->getId()];
 		$this->chatIds = [$message->getChatId()];
 		return new AudienceStep($this);
@@ -66,6 +63,7 @@ class ScopeStep
 
 	public function byMessages(MessageCollection $messages): AudienceStep
 	{
+		$this->resetSelection();
 		$this->messageIds = $messages->getIds();
 		// Note: chat_id filter is redundant for correctness but needed for overflow/cache reset
 		$this->chatIds = $messages->getChatIds();
@@ -74,18 +72,13 @@ class ScopeStep
 
 	public function all(): AudienceStep
 	{
-		$this->chatIds = null;
+		$this->resetSelection();
 		return new AudienceStep($this);
 	}
 
-	public function getParentId(): ?int
+	public function getTreeScope(): ?ChatTreeScope
 	{
-		return $this->parentId;
-	}
-
-	public function getType(): ?Chat\Type
-	{
-		return $this->type;
+		return $this->treeScope;
 	}
 
 	public function getChatIds(): ?array
@@ -108,13 +101,17 @@ class ScopeStep
 		return $this->cache;
 	}
 
-	public function getOverflowService(): CounterOverflowService
-	{
-		return $this->overflowService;
-	}
-
 	public function getExcludeMessageIds(): ?array
 	{
 		return $this->excludeMessageIds;
+	}
+
+	private function resetSelection(): void
+	{
+		$this->chatIds = null;
+		$this->messageIds = null;
+		$this->excludeMessageIds = null;
+		$this->treeScope = null;
+		$this->toMessageId = null;
 	}
 }

@@ -11,7 +11,7 @@ class MultiplyAction extends BaseAction
 {
 	protected const JS_COMMAND = 'multiply';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		foreach ($this->params as $param)
 		{

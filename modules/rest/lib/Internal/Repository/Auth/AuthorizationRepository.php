@@ -6,7 +6,7 @@ namespace Bitrix\Rest\Internal\Repository\Auth;
 
 use Bitrix\Main;
 use Bitrix\Main\Application;
-use Bitrix\Rest\Internal\Model;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 
 class AuthorizationRepository
 {
@@ -16,10 +16,12 @@ class AuthorizationRepository
 	private const CACHE_ID = 'rest_auth_log';
 	private const CACHE_TTL = 3600;
 	private Main\Data\ManagedCache $managedCache;
+	private SecurityAuditLogger $securityAuditLogger;
 
-	public function __construct()
+	public function __construct(?SecurityAuditLogger $securityAuditLogger = null)
 	{
 		$this->managedCache = Application::getInstance()->getManagedCache();
+		$this->securityAuditLogger = $securityAuditLogger ?? new SecurityAuditLogger();
 	}
 
 	public function saveAuthorization(int $userId, string $applicationType, int $applicationId, Main\Type\DateTime $time): void
@@ -36,18 +38,11 @@ class AuthorizationRepository
 
 		if ($this->lock($userId))
 		{
-			\CEventLog::Log(
-				\CEventLog::SEVERITY_SECURITY,
-				'USER_AUTHORIZE',
-				'rest',
-				$userId,
-				json_encode([
-					'userId' => $userId,
-					'method' => 'rest',
-					'applicationType' => $applicationType,
-					'applicationId' => $applicationId,
-					'timePeriod' => $time->format('Y-m-d H'),
-				])
+			$this->securityAuditLogger->logUserAuthorized(
+				userId: $userId,
+				applicationType: $applicationType,
+				applicationId: $applicationId,
+				timePeriod: $time->format('Y-m-d H'),
 			);
 
 			$this->unlock($userId);

@@ -2,18 +2,20 @@
 
 declare(strict_types=1);
 
+use Bitrix\Ai\Services\MarkdownToBBCodeTranslationService;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Main\Command\Exception\CommandException;
 use Bitrix\Main\Command\Exception\CommandValidationException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
-use Bitrix\Timeman\Model\Worktime\Report\WorktimeReportTable;
 use Bitrix\Timeman\V2\Internal\DI\Container;
 use Bitrix\Timeman\V2\Public\Command\Report\UpsertAiReportCommand;
 use Bitrix\Timeman\V2\Public\Command\Report\UpsertCommand;
+use Bitrix\Timeman\V2\Public\Dto\Report\RecordReportType;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -36,7 +38,7 @@ class CBPSaveReportActivity extends CBPActivity
 		$this->arProperties = [
 			self::PROP_USER_ID => null,
 			self::PROP_REPORT_TYPE => Loader::includeModule('timeman')
-				? WorktimeReportTable::REPORT_TYPE_RECORD_REPORT
+				? RecordReportType::REPORT
 				: null,
 			self::PROP_REPORT_TEXT => null,
 		];
@@ -115,13 +117,14 @@ class CBPSaveReportActivity extends CBPActivity
 				'FieldName' => 'report_type',
 				'Type' => FieldType::SELECT,
 				'Options' => [
-					WorktimeReportTable::REPORT_TYPE_RECORD_REPORT => Loc::getMessage('TIMEMAN_SAVE_REPORT_PROP_REPORT_TYPE_RECORD'),
-					WorktimeReportTable::REPORT_TYPE_RECORD_AI_REPORT => Loc::getMessage('TIMEMAN_SAVE_REPORT_PROP_REPORT_TYPE_AI'),
+					RecordReportType::REPORT => Loc::getMessage('TIMEMAN_SAVE_REPORT_PROP_REPORT_TYPE_RECORD'),
+					RecordReportType::AI_REPORT => Loc::getMessage('TIMEMAN_SAVE_REPORT_PROP_REPORT_TYPE_AI'),
+					RecordReportType::ROBOT_REPORT => Loc::getMessage('TIMEMAN_SAVE_REPORT_PROP_REPORT_TYPE_ROBOT'),
 				],
 				'Required' => true,
 				'Multiple' => false,
 				'AllowSelection' => false,
-				'Default' => WorktimeReportTable::REPORT_TYPE_RECORD_REPORT,
+				'Default' => RecordReportType::REPORT,
 			],
 		];
 	}
@@ -269,10 +272,12 @@ class CBPSaveReportActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$reportType = (string)($this->{self::PROP_REPORT_TYPE} ?? WorktimeReportTable::REPORT_TYPE_RECORD_REPORT);
-		$command = $reportType === WorktimeReportTable::REPORT_TYPE_RECORD_AI_REPORT
+		$reportText = $this->convertMarkdownToBbCode($reportText);
+
+		$reportType = (string)($this->{self::PROP_REPORT_TYPE} ?? RecordReportType::REPORT);
+		$command = $reportType === RecordReportType::AI_REPORT
 			? new UpsertAiReportCommand($record->getId(), $userId, $reportText)
-			: new UpsertCommand($record->getId(), $userId, $reportText);
+			: new UpsertCommand($record->getId(), $userId, $reportText, RecordReportType::normalize($reportType));
 
 		$result = $command->run();
 
@@ -292,5 +297,21 @@ class CBPSaveReportActivity extends CBPActivity
 	private static function checkAdminPermissions(): bool
 	{
 		return (new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser))->isAdmin();
+	}
+
+	private function convertMarkdownToBbCode(string $text): string
+	{
+		if (
+			!Loader::includeModule('ai')
+			|| !class_exists(MarkdownToBBCodeTranslationService::class)
+		)
+		{
+			return $text;
+		}
+
+		return ServiceLocator::getInstance()
+			->get(MarkdownToBBCodeTranslationService::class)
+			->convert($text)
+		;
 	}
 }

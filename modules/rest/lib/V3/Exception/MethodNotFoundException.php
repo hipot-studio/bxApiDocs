@@ -4,7 +4,7 @@ namespace Bitrix\Rest\V3\Exception;
 
 use CRestServer;
 
-class MethodNotFoundException extends RestException
+class MethodNotFoundException extends RestException implements SkipWriteToLogException
 {
 	protected const STATUS = CRestServer::STATUS_NOT_FOUND;
 

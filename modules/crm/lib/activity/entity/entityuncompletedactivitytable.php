@@ -7,6 +7,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\MergeByDefaultTrait;
 
 /**
  * Class EntityUncompletedActivityTable
@@ -26,6 +27,8 @@ use Bitrix\Main\ORM\Fields\IntegerField;
  */
 class EntityUncompletedActivityTable extends \Bitrix\Main\Entity\DataManager
 {
+	use MergeByDefaultTrait;
+
 	public static function getTableName()
 	{
 		return 'b_crm_entity_uncompleted_act';

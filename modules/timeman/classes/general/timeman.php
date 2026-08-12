@@ -43,11 +43,11 @@ class CTimeMan
 		return $userPermissionManager->canUpdateWorktimeAll() || $userPermissionManager->canManageWorktimeAll();
 	}
 
-	public static function getRuntimeInfo($bFull = false)
+	public static function getRuntimeInfo($bFull = false, int $userId = 0)
 	{
 		global $USER;
 
-		$TMUSER = CTimeManUser::instance();
+		$TMUSER = CTimeManUser::instance($userId);
 		$STATE = $TMUSER->State();
 
 		$info = ['ID' => '', 'STATE' => $STATE, 'CAN_EDIT' => 'N'];
@@ -489,7 +489,7 @@ class CTimeMan
 		}
 
 		$subordinateEmployees = (new SubordinateAccessUsersResolver())
-			->getSubordinateAccessUsers((int)$USER_ID);
+			->getDirectSubordinateAccessUsers((int)$USER_ID);
 		if (!empty($subordinateEmployees))
 		{
 			$arEmployees = array_merge($arEmployees, $subordinateEmployees);

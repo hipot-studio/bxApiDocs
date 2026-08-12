@@ -22,9 +22,19 @@ class DepartmentProvider
 		return InternalDepartmentProvider::getSubordinateIds($userId);
 	}
 
+	public static function getManagedDepartmentIds(int $userId): array
+	{
+		return InternalDepartmentProvider::getManagedDepartmentIds($userId);
+	}
+
 	public static function hasSubordinates(int $userId): bool
 	{
 		return !empty(self::getSubordinateIds($userId));
+	}
+
+	public static function isHeadOrDeputyOfDepartment(int $userId): bool
+	{
+		return InternalDepartmentProvider::isHeadOrDeputyOfDepartment($userId);
 	}
 
 	public static function isMySubordinate(int $targetUserId): bool

@@ -1297,6 +1297,16 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 		];
 		$this->internalizeFields($fields, $fieldsInfo, array());
 
+		Container::getInstance()
+			->getContext()
+			->setAnalytics(
+				[
+					'event' => Dictionary::EVENT_ENTITY_CREATE,
+					'c_section' => Dictionary::SECTION_REST,
+				],
+			)
+		;
+
 		$errors = array();
 		$result = $this->innerAdd($fields, $errors, $params);
 		if(!$this->isValidID($result))
@@ -1334,6 +1344,14 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 	}
 	public function getList($order, $filter, $select, $start)
 	{
+		// Field names in select must be strings. Malformed REST requests (e.g. SELECT[][]=ID)
+		// may pass nested arrays, which crash later on array_key_exists() in
+		// CUserTypeSQL::SetSelect() with "Illegal offset type".
+		if (is_array($select))
+		{
+			$select = array_values(array_filter($select, 'is_string'));
+		}
+
 		$this->prepareListParams($order, $filter, $select);
 
 		$navigation = CCrmRestService::getNavData($start);
@@ -1378,6 +1396,75 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 		}
 
 		throw new RestException(implode("\n", $errors));
+	}
+
+	/**
+	 * Performance-oriented list helper shared by REST proxies that bypass innerGetList.
+	 *
+	 * @param callable(array): array $accessCallback Performs access check and returns possibly mutated filter; throws RestException on access denied.
+	 * @param callable(array): mixed $listCallback Receives params array (order/filter/select/limit/offset) and returns an iterator with fetch().
+	 * @param callable(array): int $countCallback Receives the final filter and returns the total row count.
+	 */
+	protected function getListInternal(
+		$order,
+		$filter,
+		$select,
+		$start,
+		callable $accessCallback,
+		callable $listCallback,
+		callable $countCallback
+	)
+	{
+		$this->prepareListParams($order, $filter, $select);
+		$navigation = CCrmRestService::getNavData($start, true);
+
+		$fieldsInfo = $this->getFieldsInfo();
+		$this->internalizeFilterFields($filter, $fieldsInfo);
+
+		if (!is_array($filter))
+		{
+			$filter = [];
+		}
+
+		$filter = $accessCallback($filter);
+
+		$limit = (int)($navigation['limit'] ?? CCrmRestService::LIST_LIMIT);
+		$offset = (int)($navigation['offset'] ?? 0);
+
+		if (!is_array($select))
+		{
+			$select = [];
+		}
+
+		if (empty($select))
+		{
+			$select = array_keys($fieldsInfo);
+		}
+
+		$iterator = $listCallback([
+			'order' => $order,
+			'filter' => $filter,
+			'select' => $select,
+			'limit' => $limit,
+			'offset' => $offset,
+		]);
+
+		$result = [];
+		while ($item = $iterator->fetch())
+		{
+			$this->externalizeFields($item, $fieldsInfo);
+			$result[] = $item;
+		}
+
+		if ($start < 0)
+		{
+			return $result;
+		}
+
+		return CCrmRestService::setNavData(
+			$result,
+			['offset' => $offset, 'count' => $countCallback($filter)]
+		);
 	}
 
 	private function findSelectedFmTypeIds(array $select): array
@@ -1610,6 +1697,31 @@ abstract class CCrmRestProxyBase implements ICrmRestProxy
 	{
 		return $this->getCurrentUser()->GetID();
 	}
+
+	protected function runRestBizProc(int $ownerTypeID, int $entityID, int $bizProcEventType): array
+	{
+		if (\CCrmBizProcHelper::ResolveDocumentName($ownerTypeID) === '')
+		{
+			return [];
+		}
+
+		$bizProcResult = (
+			new \Bitrix\Crm\Integration\BizProc\Starter\CrmStarter(
+				new \Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto($ownerTypeID, $entityID)
+			)
+		)
+			->runProcess(
+				new \Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto(
+					userId: (int)$this->getCurrentUserID(),
+					scope: \Bitrix\Crm\Integration\BizProc\Starter\CrmStarter::REST_SCOPE,
+				),
+				$bizProcEventType
+			)
+		;
+
+		return $bizProcResult->getErrorMessages();
+	}
+
 	public function getServer()
 	{
 		return $this->server;
@@ -5864,11 +5976,13 @@ class CCrmLeadRestProxy extends CCrmRestProxyBase
 			self::traceEntity(\CCrmOwnerType::Lead, $result, $fields);
 			if (self::isBizProcEnabled() && !$isImportMode)
 			{
-				CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Lead,
-					$result,
-					CCrmBizProcEventType::Create,
-					$errors
+				$errors = array_merge(
+					$errors,
+					$this->runRestBizProc(
+						\CCrmOwnerType::Lead,
+						(int)$result,
+						\CCrmBizProcEventType::Create
+					)
 				);
 			}
 			//Region automation
@@ -6029,11 +6143,13 @@ class CCrmLeadRestProxy extends CCrmRestProxyBase
 			self::traceEntity(\CCrmOwnerType::Lead, $ID, $fields, true);
 			if(self::isBizProcEnabled())
 			{
-				CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Lead,
-					$ID,
-					CCrmBizProcEventType::Edit,
-					$errors
+				$errors = array_merge(
+					$errors,
+					$this->runRestBizProc(
+						\CCrmOwnerType::Lead,
+						(int)$ID,
+						\CCrmBizProcEventType::Edit
+					)
 				);
 			}
 			//Region automation
@@ -6292,11 +6408,13 @@ class CCrmDealRestProxy extends CCrmRestProxyBase
 			self::traceEntity(\CCrmOwnerType::Deal, $result, $fields);
 			if (self::isBizProcEnabled())
 			{
-				CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Deal,
-					$result,
-					CCrmBizProcEventType::Create,
-					$errors
+				$errors = array_merge(
+					$errors,
+					$this->runRestBizProc(
+						\CCrmOwnerType::Deal,
+						(int)$result,
+						\CCrmBizProcEventType::Create
+					)
 				);
 			}
 			//Region automation
@@ -6455,11 +6573,13 @@ class CCrmDealRestProxy extends CCrmRestProxyBase
 			self::traceEntity(\CCrmOwnerType::Deal, $ID, $fields, true);
 			if(self::isBizProcEnabled())
 			{
-				CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Deal,
-					$ID,
-					CCrmBizProcEventType::Edit,
-					$errors
+				$errors = array_merge(
+					$errors,
+					$this->runRestBizProc(
+						\CCrmOwnerType::Deal,
+						(int)$ID,
+						\CCrmBizProcEventType::Edit
+					)
 				);
 			}
 			//Region automation
@@ -6709,6 +6829,23 @@ class CCrmDealCategoryProxy extends CCrmRestProxyBase
 		}
 		return $this->FIELDS_INFO;
 	}
+
+	protected function prepareListParams(&$order, &$filter, &$select)
+	{
+		$fieldsInfo = $this->getFieldsInfo();
+		if(!is_array($order) || empty($order))
+		{
+			return;
+		}
+		foreach ($order as $field => $value)
+		{
+			if (!isset($fieldsInfo[$field]))
+			{
+				unset($order[$field]);
+			}
+		}
+	}
+
 	protected function innerGet($ID, &$errors)
 	{
 		if(!CCrmDeal::CheckReadPermission(0))
@@ -8013,14 +8150,17 @@ class CCrmCompanyRestProxy extends CCrmRestProxyBase
 			self::traceEntity(\CCrmOwnerType::Company, $result, $fields);
 			if (self::isBizProcEnabled() && !$isImportMode)
 			{
-				CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Company,
-					$result,
-					CCrmBizProcEventType::Create,
-					$errors
+				$errors = array_merge(
+					$errors,
+					$this->runRestBizProc(
+						\CCrmOwnerType::Company,
+						(int)$result,
+						\CCrmBizProcEventType::Create
+					)
 				);
 			}
 		}
+
 		return $result;
 	}
 	protected function innerGet($ID, &$errors)
@@ -8169,11 +8309,13 @@ class CCrmCompanyRestProxy extends CCrmRestProxyBase
 			self::traceEntity(\CCrmOwnerType::Company, $ID, $fields, true);
 			if(self::isBizProcEnabled())
 			{
-				CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Company,
-					$ID,
-					CCrmBizProcEventType::Edit,
-					$errors
+				$errors = array_merge(
+					$errors,
+					$this->runRestBizProc(
+						\CCrmOwnerType::Company,
+						(int)$ID,
+						\CCrmBizProcEventType::Edit
+					)
 				);
 			}
 		}
@@ -8325,11 +8467,13 @@ class CCrmContactRestProxy extends CCrmRestProxyBase
 			self::traceEntity(\CCrmOwnerType::Contact, $result, $fields);
 			if (self::isBizProcEnabled() && !$isImportMode)
 			{
-				CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Contact,
-					$result,
-					CCrmBizProcEventType::Create,
-					$errors
+				$errors = array_merge(
+					$errors,
+					$this->runRestBizProc(
+						\CCrmOwnerType::Contact,
+						(int)$result,
+						\CCrmBizProcEventType::Create
+					)
 				);
 			}
 		}
@@ -8476,11 +8620,13 @@ class CCrmContactRestProxy extends CCrmRestProxyBase
 			self::traceEntity(\CCrmOwnerType::Contact, $ID, $fields, true);
 			if(self::isBizProcEnabled())
 			{
-				CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Contact,
-					$ID,
-					CCrmBizProcEventType::Edit,
-					$errors
+				$errors = array_merge(
+					$errors,
+					$this->runRestBizProc(
+						\CCrmOwnerType::Contact,
+						(int)$ID,
+						\CCrmBizProcEventType::Edit
+					)
 				);
 			}
 		}
@@ -12466,51 +12612,31 @@ class CCrmRequisitePresetRestProxy extends CCrmRestProxyBase
 
 		return $r;
 	}
-	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
-	{
-		if(!EntityPreset::checkReadPermissionOwnerEntity())
-		{
-			$errors[] = 'Access denied.';
-			return false;
-		}
 
+	public function getList($order, $filter, $select, $start)
+	{
 		$entity = self::getEntity();
 
-		$filter['=ENTITY_TYPE_ID'] = EntityPreset::Requisite;
+		return $this->getListInternal(
+			$order,
+			$filter,
+			$select,
+			$start,
+			static function (array $filter): array {
+				if (!EntityPreset::checkReadPermissionOwnerEntity())
+				{
+					throw new RestException('Access denied.');
+				}
 
-		$page = isset($navigation['iNumPage']) ? (int)$navigation['iNumPage'] : 1;
-		$limit = isset($navigation['nPageSize']) ? (int)$navigation['nPageSize'] : CCrmRestService::LIST_LIMIT;
-		$offset = $limit * $page;
+				$filter['=ENTITY_TYPE_ID'] = EntityPreset::Requisite;
 
-		if(!is_array($select))
-			$select = array();
-
-		if(empty($select))
-			$select = array_keys($this->getFieldsInfo());
-
-		$result = $entity->getList(
-			array(
-				'order' => $order,
-				'filter' => $filter,
-				'select' => $select,
-				'offset' => $offset,
-				'count_total' => true
-			)
+				return $filter;
+			},
+			static fn (array $params) => $entity->getList($params),
+			static fn (array $filter) => $entity->getCountByFilter($filter),
 		);
-
-		if (is_object($result))
-		{
-			$dbResult = new CDBResult($result);
-		}
-		else
-		{
-			$dbResult = new CDBResult();
-			$dbResult->InitFromArray(array());
-		}
-		$dbResult->NavStart($limit, false, $page);
-
-		return $dbResult;
 	}
+
 	protected function innerUpdate($ID, &$fields, &$errors, array $params = null)
 	{
 		$r = $this->getById($ID);
@@ -13243,11 +13369,13 @@ class CCrmRequisiteRestProxy extends CCrmRestProxyBase
 
 			if(self::isBizProcEnabled())
 			{
-				CCrmBizProcHelper::AutoStartWorkflows(
-						CCrmOwnerType::Requisite,
-						$result->getId(),
-						CCrmBizProcEventType::Create,
-						$errors
+				$errors = array_merge(
+					$errors,
+					$this->runRestBizProc(
+						\CCrmOwnerType::Requisite,
+						(int)($result?->getId()),
+						\CCrmBizProcEventType::Create
+					)
 				);
 			}
 		}
@@ -13271,70 +13399,57 @@ class CCrmRequisiteRestProxy extends CCrmRestProxyBase
 
 		return $r;
 	}
-	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
+
+	public function getList($order, $filter, $select, $start)
 	{
-		$permissionOwner = false;
-
-		if(!isset($filter['ENTITY_TYPE_ID']))
-		{
-			if(EntityRequisite::checkReadPermissionOwnerEntity())
-			{
-				$permissionOwner = true;
-				//Required for prevent selection of the suspended entities (SuspendedContact, SuspendedCompany)
-				$filter['@ENTITY_TYPE_ID'] = [CCrmOwnerType::Company, CCrmOwnerType::Contact];
-			}
-			else
-			{
-				if(EntityRequisite::checkReadPermissionOwnerEntity(CCrmOwnerType::Company))
-				{
-					$permissionOwner = true;
-					$filter['ENTITY_TYPE_ID'] = CCrmOwnerType::Company;
-				}
-				elseif(EntityRequisite::checkReadPermissionOwnerEntity(CCrmOwnerType::Contact))
-				{
-					$permissionOwner = true;
-					$filter['ENTITY_TYPE_ID'] = CCrmOwnerType::Contact;
-				}
-			}
-		}
-		else
-		{
-			$permissionOwner = EntityRequisite::checkReadPermissionOwnerEntity($filter['ENTITY_TYPE_ID']);
-		}
-
-		if($permissionOwner == false)
-		{
-			$errors[] = 'Access denied.';
-			return false;
-		}
-
 		$entity = self::getEntity();
 
-		$page = isset($navigation['iNumPage']) ? (int)$navigation['iNumPage'] : 1;
-		$limit = isset($navigation['nPageSize']) ? (int)$navigation['nPageSize'] : CCrmRestService::LIST_LIMIT;
-		$offset = $limit * $page;
+		return $this->getListInternal(
+			$order,
+			$filter,
+			$select,
+			$start,
+			static function (array $filter): array {
+				$permissionOwner = false;
 
-		if(!is_array($select))
-			$select = array();
+				if (!isset($filter['ENTITY_TYPE_ID']))
+				{
+					if (EntityRequisite::checkReadPermissionOwnerEntity())
+					{
+						$permissionOwner = true;
+						$filter['@ENTITY_TYPE_ID'] = [CCrmOwnerType::Company, CCrmOwnerType::Contact];
+					}
+					else
+					{
+						if (EntityRequisite::checkReadPermissionOwnerEntity(CCrmOwnerType::Company))
+						{
+							$permissionOwner = true;
+							$filter['=ENTITY_TYPE_ID'] = CCrmOwnerType::Company;
+						}
+						elseif (EntityRequisite::checkReadPermissionOwnerEntity(CCrmOwnerType::Contact))
+						{
+							$permissionOwner = true;
+							$filter['=ENTITY_TYPE_ID'] = CCrmOwnerType::Contact;
+						}
+					}
+				}
+				else
+				{
+					$permissionOwner = EntityRequisite::checkReadPermissionOwnerEntity($filter['ENTITY_TYPE_ID']);
+				}
 
-		if(empty($select))
-			$select = array_keys($this->getFieldsInfo());
+				if ($permissionOwner === false)
+				{
+					throw new RestException('Access denied.');
+				}
 
-		$result = $entity->getList(
-				array(
-						'order' => $order,
-						'filter' => $filter,
-						'select' => $select,
-						'offset' => $offset,
-						'count_total' => true
-				)
+				return $filter;
+			},
+			static fn (array $params) => $entity->getList($params),
+			static fn (array $filter) => $entity->getCountByFilter($filter),
 		);
-
-		$dbResult = new CDBResult($result);
-		$dbResult->NavStart($limit, false, $page);
-
-		return $dbResult;
 	}
+
 	protected function innerUpdate($ID, &$fields, &$errors, array $params = null)
 	{
 		$r = $this->getById($ID);
@@ -13391,11 +13506,13 @@ class CCrmRequisiteRestProxy extends CCrmRestProxyBase
 			CCrmEntityHelper::NormalizeUserFields($fields, EntityRequisite::$sUFEntityID, $GLOBALS['USER_FIELD_MANAGER'], array('IS_NEW' => false));
 			$GLOBALS['USER_FIELD_MANAGER']->Update(EntityRequisite::$sUFEntityID, $ID, $fields);
 
-			CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Company,
-					$result->getId(),
-					CCrmBizProcEventType::Edit,
-					$errors
+			$errors = array_merge(
+				$errors,
+				$this->runRestBizProc(
+					\CCrmOwnerType::Company,
+					(int)($result?->getId()),
+					\CCrmBizProcEventType::Edit
+				)
 			);
 		}
 		return $result->isSuccess();
@@ -13583,11 +13700,13 @@ class CCrmRequisiteBankDetailRestProxy extends CCrmRestProxyBase
 		}
 		elseif(self::isBizProcEnabled())
 		{
-			CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Requisite,
-					$result->getId(),
-					CCrmBizProcEventType::Create,
-					$errors
+			$errors = array_merge(
+				$errors,
+				$this->runRestBizProc(
+					\CCrmOwnerType::Requisite,
+					(int)($result?->getId()),
+					\CCrmBizProcEventType::Create
+				)
 			);
 		}
 		return $result->getId();
@@ -13609,40 +13728,26 @@ class CCrmRequisiteBankDetailRestProxy extends CCrmRestProxyBase
 
 		return $r;
 	}
-	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
+	public function getList($order, $filter, $select, $start)
 	{
-		if(!EntityBankDetail::checkReadPermissionOwnerEntity())
-		{
-			$errors[] = 'Access denied.';
-			return false;
-		}
-
 		$entity = self::getEntity();
 
-		$page = isset($navigation['iNumPage']) ? (int)$navigation['iNumPage'] : 1;
-		$limit = isset($navigation['nPageSize']) ? (int)$navigation['nPageSize'] : CCrmRestService::LIST_LIMIT;
-		$offset = $limit * $page;
+		return $this->getListInternal(
+			$order,
+			$filter,
+			$select,
+			$start,
+			static function (array $filter): array {
+				if (!EntityBankDetail::checkReadPermissionOwnerEntity())
+				{
+					throw new RestException('Access denied.');
+				}
 
-		if(!is_array($select))
-			$select = array();
-
-		if(empty($select))
-			$select = array_keys($this->getFieldsInfo());
-
-		$result = $entity->getList(
-				array(
-						'order' => $order,
-						'filter' => $filter,
-						'select' => $select,
-						'offset' => $offset,
-						'count_total' => true
-				)
+				return $filter;
+			},
+			static fn (array $params) => $entity->getList($params),
+			static fn (array $filter) => $entity->getCountByFilter($filter),
 		);
-
-		$dbResult = new CDBResult($result);
-		$dbResult->NavStart($limit, false, $page);
-
-		return $dbResult;
 	}
 	protected function innerUpdate($ID, &$fields, &$errors, array $params = null)
 	{
@@ -13691,11 +13796,13 @@ class CCrmRequisiteBankDetailRestProxy extends CCrmRestProxyBase
 		}
 		elseif(self::isBizProcEnabled())
 		{
-			CCrmBizProcHelper::AutoStartWorkflows(
-					CCrmOwnerType::Company,
-					$result->getId(),
-					CCrmBizProcEventType::Edit,
-					$errors
+			$errors = array_merge(
+				$errors,
+				$this->runRestBizProc(
+					\CCrmOwnerType::Company,
+					(int)($result->getId()),
+					\CCrmBizProcEventType::Edit
+				)
 			);
 		}
 		return $result->isSuccess();
@@ -13814,62 +13921,47 @@ class CCrmRequisiteLinkRestProxy extends CCrmRestProxyBase
 		return true;
 	}
 
-	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
+	public function getList($order, $filter, $select, $start)
 	{
-		$entityTypeId = 0;
-		$entityId = 0;
+		return $this->getListInternal(
+			$order,
+			$filter,
+			$select,
+			$start,
+			static function (array $filter): array {
+				$entityTypeId = 0;
+				$entityId = 0;
 
-		if (is_array($filter))
-		{
-			if (isset($filter['=ENTITY_TYPE_ID']))
-			{
-				$entityTypeId = (int)$filter['=ENTITY_TYPE_ID'];
-			}
-			else if (isset($filter['ENTITY_TYPE_ID']))
-			{
-				$entityTypeId = (int)$filter['ENTITY_TYPE_ID'];
-			}
+				if (isset($filter['=ENTITY_TYPE_ID']))
+				{
+					$entityTypeId = (int)$filter['=ENTITY_TYPE_ID'];
+				}
+				elseif (isset($filter['ENTITY_TYPE_ID']))
+				{
+					$entityTypeId = (int)$filter['ENTITY_TYPE_ID'];
+				}
 
-			if (isset($filter['=ENTITY_ID']))
-			{
-				$entityId = (int)$filter['=ENTITY_ID'];
-			}
-			else if (isset($filter['ENTITY_ID']))
-			{
-				$entityId = (int)$filter['ENTITY_ID'];
-			}
-		}
+				if (isset($filter['=ENTITY_ID']))
+				{
+					$entityId = (int)$filter['=ENTITY_ID'];
+				}
+				elseif (isset($filter['ENTITY_ID']))
+				{
+					$entityId = (int)$filter['ENTITY_ID'];
+				}
 
-		if (!Requisite\EntityLink::checkReadPermissionOwnerEntity($entityTypeId, $entityId))
-		{
-			$errors[] = 'Access denied.';
-			return false;
-		}
+				if (!Requisite\EntityLink::checkReadPermissionOwnerEntity($entityTypeId, $entityId))
+				{
+					throw new RestException('Access denied.');
+				}
 
-		unset($entityTypeId, $entityId);
-
-		$page = isset($navigation['iNumPage']) ? (int)$navigation['iNumPage'] : 1;
-		$limit = isset($navigation['nPageSize']) ? (int)$navigation['nPageSize'] : CCrmRestService::LIST_LIMIT;
-		$offset = $limit * $page;
-
-		if(empty($select))
-			$select = array_keys($this->getFieldsInfo());
-
-		$result = Requisite\EntityLink::getList(
-			array(
-				'order' => $order,
-				'filter' => $filter,
-				'select' => $select,
-				'offset' => $offset,
-				'count_total' => true
-			)
+				return $filter;
+			},
+			static fn (array $params) => Requisite\EntityLink::getList($params),
+			static fn (array $filter) => Requisite\LinkTable::getCount($filter),
 		);
-
-		$dbResult = new CDBResult($result);
-		$dbResult->NavStart($limit, false, $page);
-
-		return $dbResult;
 	}
+
 	protected function innerRegister(&$fields, &$errors, array $params = null)
 	{
 		$entityTypeId = $this->resolveParam($fields, 'ENTITY_TYPE_ID');
@@ -14376,68 +14468,39 @@ class CCrmAddressRestProxy extends CCrmRestProxyBase
 
 	public function getList($order, $filter, $select, $start)
 	{
-		$this->prepareListParams($order, $filter, $select);
-
-		$navigation = CCrmRestService::getNavData($start, true);
-
-		$fieldsInfo = $this->getFieldsInfo();
-		$this->internalizeFilterFields($filter, $fieldsInfo);
-
-		if(!EntityAddress::checkReadPermissionOwnerEntity())
-		{
-			throw new RestException('Access denied.');
-		}
-
 		$entity = self::getEntity();
 
-		$limit = (int)($navigation['limit'] ?? CCrmRestService::LIST_LIMIT);
-		$offset = (int)($navigation['offset'] ?? 0);
+		return $this->getListInternal(
+			$order,
+			$filter,
+			$select,
+			$start,
+			static function (array $filter): array {
+				if (!EntityAddress::checkReadPermissionOwnerEntity())
+				{
+					throw new RestException('Access denied.');
+				}
 
-		if(!is_array($select))
-		{
-			$select = [];
-		}
+				//For backward compatibility only
+				if (isset($filter['ENTITY_TYPE_ID'])
+					&& ($filter['ENTITY_TYPE_ID'] == CCrmOwnerType::Company
+						|| $filter['ENTITY_TYPE_ID'] == CCrmOwnerType::Contact))
+				{
+					$filter['=ANCHOR_TYPE_ID'] = $filter['ENTITY_TYPE_ID'];
+					unset($filter['ENTITY_TYPE_ID']);
 
-		if(empty($select))
-		{
-			$select = array_keys($this->getFieldsInfo());
-		}
+					if (isset($filter['ENTITY_ID']))
+					{
+						$filter['=ANCHOR_ID'] = $filter['ENTITY_ID'];
+						unset($filter['ENTITY_ID']);
+					}
+				}
 
-		//For backward compatibility only
-		if(isset($filter['ENTITY_TYPE_ID']) &&
-			($filter['ENTITY_TYPE_ID'] == CCrmOwnerType::Company || $filter['ENTITY_TYPE_ID'] == CCrmOwnerType::Contact))
-		{
-			$filter['ANCHOR_TYPE_ID'] = $filter['ENTITY_TYPE_ID'];
-			unset($filter['ENTITY_TYPE_ID']);
-
-			if(isset($filter['ENTITY_ID']))
-			{
-				$filter['ANCHOR_ID'] = $filter['ENTITY_ID'];
-				unset($filter['ENTITY_ID']);
-			}
-		}
-
-		$iterator = $entity->getList([
-			'order' => $order,
-			'filter' => $filter,
-			'select' => $select,
-			'limit' => $limit,
-			'offset' => $offset,
-		]);
-
-		$result = [];
-		while ($item = $iterator->fetch())
-		{
-			$this->externalizeFields($item, $fieldsInfo);
-			$result[] = $item;
-		}
-
-		if ($start < 0)
-		{
-			return $result;
-		}
-
-		return CCrmRestService::setNavData($result, ['offset' => $offset, 'count' => $entity->getCount($filter)]);
+				return $filter;
+			},
+			static fn (array $params) => $entity->getList($params),
+			static fn (array $filter) => $entity->getCount($filter),
+		);
 	}
 
 	public function processMethodRequest($name, $nameDetails, $arParams, $nav, $server)
@@ -14827,39 +14890,19 @@ class CCrmExternalChannelConnectorRestProxy  extends CCrmRestProxyBase
 		return $this->FIELDS_INFO;
 	}
 
-	protected function innerGetList($order, $filter, $select, $navigation, &$errors)
+	public function getList($order, $filter, $select, $start)
 	{
 		$entity = self::getEntity();
 
-		$page = isset($navigation['iNumPage']) ? (int)$navigation['iNumPage'] : 1;
-		$limit = isset($navigation['nPageSize']) ? (int)$navigation['nPageSize'] : CCrmRestService::LIST_LIMIT;
-		$offset = $limit * $page;
-
-		if(empty($select))
-			$select = array_keys($this->getFieldsInfo());
-
-		$result = $entity->getList(
-				array(
-						'order' => $order,
-						'filter' => $filter,
-						'select' => $select,
-						'offset' => $offset,
-						'count_total' => true
-				)
+		return $this->getListInternal(
+			$order,
+			$filter,
+			$select,
+			$start,
+			static fn (array $filter): array => $filter,
+			static fn (array $params) => $entity->getList($params),
+			static fn (array $filter) => \Bitrix\Crm\ExternalChannelConnectorTable::getCount($filter),
 		);
-
-		if (is_object($result))
-		{
-			$dbResult = new CDBResult($result);
-		}
-		else
-		{
-			$dbResult = new CDBResult();
-			$dbResult->InitFromArray(array());
-		}
-		$dbResult->NavStart($limit, false, $page);
-
-		return $dbResult;
 	}
 
 	public function processMethodRequest($name, $nameDetails, $arParams, $nav, $server)

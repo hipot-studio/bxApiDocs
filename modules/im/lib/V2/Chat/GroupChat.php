@@ -152,7 +152,7 @@ class GroupChat extends Chat
 		if ($needToSendGreetingMessages)
 		{
 			$chat->sendGreetingMessage($this->getContext()->getUserId());
-			$chat->sendBanner($this->getContext()->getUserId());
+			$chat->sendBanner($this->getContext()->getUserId(), force: $forceSendGreetingMessages);
 		}
 
 		if (!$skipAddMessage)
@@ -537,7 +537,7 @@ class GroupChat extends Chat
 		]);
 	}
 
-	protected function sendBanner(?int $authorId = null): void
+	protected function sendBanner(?int $authorId = null, bool $force = false): void
 	{
 		if (!$authorId)
 		{

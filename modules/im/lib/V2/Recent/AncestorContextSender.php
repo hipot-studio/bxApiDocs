@@ -23,20 +23,40 @@ class AncestorContextSender
 	 */
 	public function send(Chat $childChat, array $userIds): void
 	{
+		$this->sendForChain($this->ancestorIterator->ancestorsOf($childChat), $userIds);
+	}
+
+	/**
+	 * Like send(), but the walk starts from (and includes) $fromChat itself. Used on detach: the detached
+	 * chat no longer points at its former parent, so the former parent chain is walked explicitly.
+	 *
+	 * @param int[] $userIds
+	 */
+	public function sendForChainIncluding(Chat $fromChat, array $userIds): void
+	{
+		$this->sendForChain($this->ancestorIterator->selfAndAncestorsOf($fromChat), $userIds);
+	}
+
+	/**
+	 * @param iterable<int, Chat> $chats
+	 * @param int[] $userIds
+	 */
+	private function sendForChain(iterable $chats, array $userIds): void
+	{
 		if (empty($userIds))
 		{
 			return;
 		}
 
-		foreach ($this->ancestorIterator->ancestorsOf($childChat) as $ancestor)
+		foreach ($chats as $chat)
 		{
-			$levelRelations = $ancestor->getRelationsByUserIds($userIds);
+			$levelRelations = $chat->getRelationsByUserIds($userIds);
 			if ($levelRelations->isEmpty())
 			{
 				break;
 			}
 
-			(new RecentUpdateMeta($ancestor, $levelRelations->getUserIds()))->send();
+			(new RecentUpdateMeta($chat, $levelRelations->getUserIds()))->send();
 			$userIds = $levelRelations->getUserIds();
 		}
 	}

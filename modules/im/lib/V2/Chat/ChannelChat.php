@@ -86,7 +86,7 @@ class ChannelChat extends GroupChat
 		return self::MANAGE_RIGHTS_MANAGERS;
 	}
 
-	protected function sendBanner(?int $authorId = null): void
+	protected function sendBanner(?int $authorId = null, bool $force = false): void
 	{
 		\CIMMessage::Add([
 			'MESSAGE_TYPE' => $this->getType(),

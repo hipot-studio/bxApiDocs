@@ -9,9 +9,6 @@ use Bitrix\Call\Model\EO_CallOutcome_Collection;
 
 class OutcomeCollection extends EO_CallOutcome_Collection
 {
-	/** @var array<string, Outcome>|null Lazy index: "{callId}:{type}" => Outcome */
-	private ?array $callTypeIndex = null;
-
 	public static function getOutcomesByCallId(int $callId, array $outcomeTypes = []): static
 	{
 		return static::getOutcomesByCallIds([$callId], $outcomeTypes);
@@ -70,23 +67,64 @@ class OutcomeCollection extends EO_CallOutcome_Collection
 		return null;
 	}
 
-	public function getOutcomeByCallIdAndType(int $callId, string $type): ?Outcome
+	/**
+	 * The newest outcome of the given type that carries meaningful content.
+	 *
+	 * The collection is ordered ID DESC (see getOutcomesByCallIds), so the first contentful
+	 * match in iteration is the newest one: an empty latest retry never shadows an older
+	 * contentful result. Uses the default hasContent() so a calendar-only Evaluation still
+	 * counts as content for read/display consumers.
+	 *
+	 * Precondition: the collection must belong to a single call. This method groups by TYPE
+	 * only and does not scope by CALL_ID; for multi-call collections, group by CALL_ID first.
+	 */
+	public function getLatestContentfulByType(string $type): ?Outcome
 	{
-		if ($this->callTypeIndex === null)
-		{
-			$this->buildCallTypeIndex();
-		}
-
-		return $this->callTypeIndex[$callId . ':' . $type] ?? null;
-	}
-
-	private function buildCallTypeIndex(): void
-	{
-		$this->callTypeIndex = [];
 		foreach ($this as $outcome)
 		{
-			$key = $outcome->getCallId() . ':' . $outcome->getType();
-			$this->callTypeIndex[$key] ??= $outcome;
+			if ((string)$outcome->getType() !== $type)
+			{
+				continue;
+			}
+			$sense = $outcome->getSenseContent();
+			if ($sense instanceof AISenseContent && $sense->hasContent())
+			{
+				return $outcome;// the first contentful outcome is the newest
+			}
 		}
+
+		return null;
+	}
+
+	/**
+	 * The newest contentful outcome for every type, keyed by type.
+	 *
+	 * Same invariant as getLatestContentfulByType applied in bulk: iterating the ID DESC
+	 * collection, the first contentful outcome per type wins and an empty later retry cannot
+	 * override it.
+	 *
+	 * Precondition: the collection must belong to a single call. This method groups by TYPE
+	 * only and does not scope by CALL_ID; for multi-call collections, group by CALL_ID first.
+	 *
+	 * @return array<string, Outcome>
+	 */
+	public function mapLatestContentfulByType(): array
+	{
+		$result = [];
+		foreach ($this as $outcome)
+		{
+			$type = (string)$outcome->getType();
+			if (isset($result[$type]))
+			{
+				continue;
+			}
+			$sense = $outcome->getSenseContent();
+			if ($sense instanceof AISenseContent && $sense->hasContent())
+			{
+				$result[$type] = $outcome;
+			}
+		}
+
+		return $result;
 	}
 }

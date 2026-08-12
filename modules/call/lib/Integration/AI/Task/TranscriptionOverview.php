@@ -109,7 +109,7 @@ class TranscriptionOverview extends AITask
 		$transcription = $outcome->getSenseContent();
 		if (
 			!($transcription instanceof Transcription)
-			|| $transcription->isEmpty
+			|| !$transcription->hasContent()
 		)
 		{
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content

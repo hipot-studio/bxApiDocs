@@ -7,6 +7,7 @@ use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeScopeFactory;
 use Bitrix\Im\V2\Integration\Socialnetwork\Collab\Collab;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Permission;
@@ -176,7 +177,11 @@ class Converter
 		ServiceLocator::getInstance()
 			->get(CountersUpdater::class)
 			->delete()
-			->byParent($this->getChat()->getId())
+			->byTreeScope(
+				ServiceLocator::getInstance()
+					->get(ChatTreeScopeFactory::class)
+					->forParentDirectChildren($this->getChat()->getId())
+			)
 			->forAllUsers()
 			->execute()
 		;

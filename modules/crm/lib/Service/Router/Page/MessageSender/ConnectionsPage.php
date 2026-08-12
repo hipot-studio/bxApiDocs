@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Router\Page\MessageSender;
 
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Router\AbstractPage;
 use Bitrix\Crm\Service\Router\Component\Component;
 use Bitrix\Crm\Service\Router\Component\SidePanelWrapper;
@@ -9,14 +10,27 @@ use Bitrix\Crm\Service\Router\Contract;
 use Bitrix\Crm\Service\Router\Dto\SidePanelAnchorOptions;
 use Bitrix\Crm\Service\Router\Dto\SidePanelAnchorRule;
 use Bitrix\Crm\Service\Router\Enum\Scope;
+use Bitrix\Crm\Service\Router\PageValidator\ModuleIncludedValidator;
+use Bitrix\Crm\Service\Router\PageValidator\PermissionValidator;
 use Bitrix\Crm\Service\Router\Route;
 
 final class ConnectionsPage extends AbstractPage
 {
+	protected function getPageValidators(): array
+	{
+		return [
+			...parent::getPageValidators(),
+			new PermissionValidator(static function (): bool {
+				return Container::getInstance()->getUserPermissions()->messageSender()->canConfigureChannels();
+			}),
+			new ModuleIncludedValidator('messageservice'),
+		];
+	}
+
 	public function component(): Contract\Component
 	{
 		return new Component(
-			'bitrix:crm.messagesender.connections',
+			'bitrix:messageservice.connections',
 			parameters: [
 				'analytics' => $this->request->get('analytics'),
 			],

@@ -64,13 +64,13 @@ class Session
 		return Im::addMessage($messageFields);
 	}
 
-	public static function sendMessageStartSessionByMultiDialogToParentChat(int $chatIdParent, int $sessionId, int $chatIdChild): ?bool
+	public static function sendMessageStartSessionByMultiDialogToParentChat(int $chatIdParent, int $sessionId, string $childChatEntityId): ?bool
 	{
 		$messageFields = [
 			'SYSTEM' => 'Y',
 			'TO_CHAT_ID' => $chatIdParent,
 			'MESSAGE' => Loc::getMessage('IMOL_MESSAGE_SESSION_START_BY_MULTI_DIALOG_SOURCE', [
-				'#LINK#' => ImOpenLines\Chat::getUrlImChat($chatIdChild, $sessionId)
+				'#LINK#' => ImOpenLines\Session\Common::getUrlImLinesBbCode($childChatEntityId, $sessionId)
 			]),
 			'PARAMS' => [
 				'CLASS' => 'bx-messenger-content-item-ol-start',
@@ -86,14 +86,14 @@ class Session
 	 * @param $sessionIdParent
 	 * @return bool|int
 	 */
-	public static function sendMessageNewMultidialog($sessionId, $chatId, $parentChatId, $parentSessionId)
+	public static function sendMessageNewMultidialog($sessionId, $chatId, $parentChatEntityId, $parentSessionId)
 	{
 		$messageFields = [
 			'SYSTEM' => 'Y',
 			'TO_CHAT_ID' => $chatId,
 			'MESSAGE' => Loc::getMessage('IMOL_MESSAGE_SESSION_START_BY_MESSAGE_MULTI_MSGVER_1', [
 				'#LINK1#' => ImOpenLines\Session\Common::getUrlImHistoryBbCode($sessionId, $sessionId),
-				'#LINK2#' => ImOpenLines\Chat::getUrlImChat($parentChatId, $parentSessionId),
+				'#LINK2#' => ImOpenLines\Session\Common::getUrlImLinesBbCode($parentChatEntityId, $parentSessionId),
 			]),
 			'PARAMS' => [
 				'CLASS' => 'bx-messenger-content-item-ol-start',

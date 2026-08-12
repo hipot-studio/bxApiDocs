@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Filter;
 
 use Bitrix\Crm;
 use Bitrix\Crm\Counter\EntityCounterType;
+use Bitrix\Crm\Filter\RelatedEntity\FilterApplier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Crm\UI\EntitySelector;
@@ -383,6 +384,12 @@ class QuoteDataProvider extends EntityDataProvider implements FactoryOptionable
 
 		(new Crm\Filter\Field\LastCommunicationField())->addLastCommunicationField($this, $result);
 
+		$relatedEntitiesField = $this->createRelatedEntitiesField();
+		if ($relatedEntitiesField !== null)
+		{
+			$result[FilterApplier::FILTER_KEY] = $relatedEntitiesField;
+		}
+
 		return $result;
 	}
 
@@ -393,6 +400,11 @@ class QuoteDataProvider extends EntityDataProvider implements FactoryOptionable
 	 */
 	public function prepareFieldData($fieldID)
 	{
+		if ($fieldID === FilterApplier::FILTER_KEY)
+		{
+			return $this->prepareRelatedEntitiesFieldData();
+		}
+
 		if($fieldID === 'CURRENCY_ID')
 		{
 			return array(

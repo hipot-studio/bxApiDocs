@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Filter;
 use Bitrix\Crm;
 use Bitrix\Crm\Counter\EntityCounterType;
 use Bitrix\Crm\EntityAddress;
+use Bitrix\Crm\Filter\RelatedEntity\FilterApplier;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\ParentFieldManager;
@@ -528,6 +529,12 @@ class LeadDataProvider extends EntityDataProvider implements FactoryOptionable
 
 		(new Crm\Filter\Field\LastCommunicationField())->addLastCommunicationField($this, $result);
 
+		$relatedEntitiesField = $this->createRelatedEntitiesField();
+		if ($relatedEntitiesField !== null)
+		{
+			$result[FilterApplier::FILTER_KEY] = $relatedEntitiesField;
+		}
+
 		return $result;
 	}
 
@@ -539,6 +546,11 @@ class LeadDataProvider extends EntityDataProvider implements FactoryOptionable
 	 */
 	public function prepareFieldData($fieldID)
 	{
+		if ($fieldID === FilterApplier::FILTER_KEY)
+		{
+			return $this->prepareRelatedEntitiesFieldData();
+		}
+
 		if($fieldID === 'SOURCE_ID')
 		{
 			return array(

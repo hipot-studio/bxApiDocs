@@ -4,8 +4,8 @@ namespace Bitrix\StaffTrack\Internal\Model;
 
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+use Bitrix\Main\ORM\Fields\CryptoField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
-use Bitrix\Main\ORM\Fields\FloatField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\JsonField;
@@ -60,19 +60,18 @@ class CheckInTable extends DataManager
 			(new IntegerField('ENTITY_TYPE'))
 				->configureRequired(true)
 			,
-			(new FloatField('LATITUDE'))
-				->configureNullable(true)
+			(new CryptoField('LATITUDE', ['crypto_enabled' => CryptoField::cryptoAvailable()]))
+				->configureNullable()
 			,
-			(new FloatField('LONGITUDE'))
-				->configureNullable(true)
+			(new CryptoField('LONGITUDE', ['crypto_enabled' => CryptoField::cryptoAvailable()]))
+				->configureNullable()
 			,
 			(new StringField('DESCRIPTION'))
 				->configureSize(255)
-				->configureNullable(true)
+				->configureNullable()
 			,
-			(new StringField('ADDRESS'))
-				->configureSize(255)
-				->configureNullable(true)
+			(new CryptoField('ADDRESS', ['crypto_enabled' => CryptoField::cryptoAvailable()]))
+				->configureNullable()
 			,
 			(new JsonField('MESSAGE_IDS'))
 				->configureNullable()

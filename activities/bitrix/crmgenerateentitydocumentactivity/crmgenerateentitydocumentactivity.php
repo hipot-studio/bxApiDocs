@@ -6,9 +6,11 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Bizproc\BaseType\Value;
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Crm\EntityRequisite;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\DocumentGenerator;
 use Bitrix\Main\Loader;
@@ -33,6 +35,9 @@ class CBPCrmGenerateEntityDocumentActivity
 	extends CBPActivity
 	implements IBPEventActivity, IBPActivityExternalEventListener
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -101,7 +106,16 @@ class CBPCrmGenerateEntityDocumentActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$itemIdentifier = $this->extractItemIdentifier($this->GetDocumentId());
+		$documentId = $this->resolveTargetDocumentId();
+
+		if (!$this->canReadResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		$itemIdentifier = $this->extractItemIdentifier($documentId);
 		if (!$itemIdentifier)
 		{
 			$this->WriteToTrackingService('Could not parse entities', 0, CBPTrackingType::Error);
@@ -167,7 +181,11 @@ class CBPCrmGenerateEntityDocumentActivity
 
 		DocumentGenerator\CreationMethod::markDocumentAsCreatedByAutomation($document);
 
-		$targetUserId = CBPHelper::ExtractUsers($this->GetRootActivity()->{CBPDocument::PARAM_TAGRET_USER}, $this->GetDocumentId(), true);
+		$targetUserId = CBPHelper::ExtractUsers(
+			$this->GetRootActivity()->{CBPDocument::PARAM_TAGRET_USER},
+			$documentId,
+			true
+		);
 		if (!$targetUserId)
 		{
 			$targetUserId = $this->getResponsibleId();
@@ -250,7 +268,7 @@ class CBPCrmGenerateEntityDocumentActivity
 
 	protected function getResponsibleId()
 	{
-		$itemIdentifier = $this->extractItemIdentifier($this->GetDocumentId());
+		$itemIdentifier = $this->extractItemIdentifier($this->resolveTargetDocumentId());
 		if ($itemIdentifier)
 		{
 			return CCrmOwnerType::GetResponsibleID(

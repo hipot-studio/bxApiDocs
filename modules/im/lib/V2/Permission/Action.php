@@ -24,6 +24,7 @@ enum Action: string
 	case CreateMeeting = 'CREATE_MEETING';
 	case DeleteOthersMessage = 'DELETE_OTHERS_MESSAGE';
 	case DeleteCompleteOwnMessage = 'DELETE_COMPLETE_OWN_MESSAGE';
+	case DeleteOwnMessage = 'DELETE_OWN_MESSAGE';
 	case Update = 'UPDATE';
 	case Delete = 'DELETE';
 	case UpdateInviteLink = 'UPDATE_INVITE_LINK';
@@ -36,6 +37,7 @@ enum Action: string
 	case UpdateSharingLink = 'UPDATE_SHARING_LINK';
 	case CreateChildChat = 'CREATE_CHILD_CHAT';
 	case AttachToParent = 'ATTACH_TO_PARENT';
+	case DetachFromParent = 'DETACH_FROM_PARENT';
 	case ManageGuestLink = 'MANAGE_GUEST_LINK';
 	case UnpinChat = 'UNPIN_CHAT';
 	case ReadChat = 'READ_CHAT';

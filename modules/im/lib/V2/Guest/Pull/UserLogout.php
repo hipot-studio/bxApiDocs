@@ -9,18 +9,16 @@ use Bitrix\Im\V2\Pull\BaseEvent;
 use Bitrix\Im\V2\Pull\EventType;
 
 /**
- * Tells the listed user(s) to drop their session and redirect.
- * `deactivatedCodes` — guest invite codes the recipient should drop from local storage.
+ * Tells the listed user(s) to drop their session and redirect; the recipient list is
+ * authoritative, the client redirects unconditionally.
  */
 class UserLogout extends BaseEvent
 {
 	/**
 	 * @param list<int> $userIds
-	 * @param list<string> $deactivatedCodes
 	 */
 	public function __construct(
 		private readonly array $userIds,
-		private readonly array $deactivatedCodes = [],
 	)
 	{
 		parent::__construct();
@@ -48,9 +46,7 @@ class UserLogout extends BaseEvent
 
 	protected function getBasePullParamsInternal(): array
 	{
-		return [
-			'deactivatedCodes' => $this->deactivatedCodes,
-		];
+		return [];
 	}
 
 	protected function getType(): EventType

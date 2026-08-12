@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\BizprocDesigner\Internal\Command\Activity\Complex;
 
 use Bitrix\Bizproc\Automation\Helper;
+use Bitrix\Bizproc\Public\Activity\Interface\NodeFilterMetadataProvider;
 use Bitrix\Bizproc\Public\Service\Activity\ActivityNameGeneratorService;
 use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\PortRuleDto;
 use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\Rule\ActionExpressionDto;
@@ -14,6 +15,7 @@ use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\Rule\OutputExpres
 use Bitrix\BizprocDesigner\Infrastructure\Enum\ConstructionType;
 use Bitrix\BizprocDesigner\Internal\Command\AbstractCommand;
 use Bitrix\BizprocDesigner\Internal\Entity\ActivityData;
+use Bitrix\BizprocDesigner\Internal\Trait\ConditionValueResolver;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
@@ -22,12 +24,21 @@ use CBPRuntime;
 
 class ConvertRuleCommand extends AbstractCommand
 {
+	use ConditionValueResolver;
+
+	private const FILTER_RETURN_PROPERTIES_MAP = 'FilterReturnPropertiesMap';
+	private const TARGET_FILTER_ID_PROPERTY = 'TargetFilterId';
+
 	private ActivityNameGeneratorService $nameGeneratorService;
 
 	private array $childrenActivities = [];
 	private array $inputNames = [];
 	private array $outputNames = [];
 	private array $links = [];
+	private array $filterSettings = [];
+	private array $filterReturnProperties = [];
+	private array $returnProperties = [];
+	private array $returnPropertyIndexes = [];
 
 	/**
 	 * @param ActivityData $activity
@@ -97,6 +108,26 @@ class ConvertRuleCommand extends AbstractCommand
 			],
 		];
 
+		if (!empty($this->filterSettings))
+		{
+			$activity['Properties']['FilterSettings'] = $this->filterSettings;
+		}
+		else
+		{
+			unset($activity['Properties']['FilterSettings']);
+		}
+
+		if (!empty($this->filterReturnProperties))
+		{
+			$activity['Properties'][self::FILTER_RETURN_PROPERTIES_MAP] = $this->filterReturnProperties;
+			$activity['ReturnProperties'] = $this->returnProperties;
+		}
+		else
+		{
+			unset($activity['Properties'][self::FILTER_RETURN_PROPERTIES_MAP]);
+			unset($activity['ReturnProperties']);
+		}
+
 		return new ConvertRuleCommandResult(ActivityData::createFromArray($activity));
 	}
 
@@ -111,6 +142,7 @@ class ConvertRuleCommand extends AbstractCommand
 			$inputActivity = null;
 			/** @var ?ActivityData $prevActivity */
 			$prevActivity = null;
+			$previousFilterId = null;
 
 			$constructions = $rule->constructions;
 			foreach ($constructions as $position => $construction)
@@ -119,15 +151,41 @@ class ConvertRuleCommand extends AbstractCommand
 				$currentActivity = null;
 
 				$expression = $construction->expression;
+				if (
+					$construction->constructionType === ConstructionType::FILTER
+					&& $expression instanceof ActionExpressionDto
+				)
+				{
+					$filterSettings = $this->extractFilterSettings($construction, $expression, $previousFilterId);
+					if ($filterSettings !== null)
+					{
+						$this->filterSettings[] = $filterSettings;
+						$previousFilterId = $filterSettings['id'];
+
+						$filterReturnProperty = $this->extractFilterReturnProperty($expression, $filterSettings['id']);
+						if ($filterReturnProperty !== null)
+						{
+							$this->registerFilterReturnProperty($filterSettings['id'], $filterReturnProperty);
+						}
+					}
+
+					continue;
+				}
+
 				if ($expression instanceof ActionExpressionDto)
 				{
-					$currentActivity = ActivityData::createFromArray($expression->activityData);
+					$activityData = $this->prepareActionActivityData(
+						$expression->activityData ?? [],
+						$this->resolveTargetFilterIdForAction($expression),
+					);
+
 					if (!empty($expression->auxPortId))
 					{
-						$activityArray = $currentActivity->toArray();
-						$activityArray['Properties']['auxPort'] = $expression->auxPortId;
-						$currentActivity = ActivityData::createFromArray($activityArray);
+						$activityData['Properties'] ??= [];
+						$activityData['Properties']['auxPort'] = $expression->auxPortId;
 					}
+
+					$currentActivity = ActivityData::createFromArray($activityData);
 				}
 
 				if (
@@ -184,7 +242,174 @@ class ConvertRuleCommand extends AbstractCommand
 			$this->inputNames[$inputPortNumber] = "$inputActivity->name:$inputPortId";
 		}
 	}
-	
+
+	private function extractFilterSettings(
+		ConstructionDto $construction,
+		ActionExpressionDto $expression,
+		?string $previousFilterId,
+	): ?array
+	{
+		$activityData = $expression->activityData ?? [];
+		$activityType = (string)($activityData['Type'] ?? '');
+		if (!self::isNodeFilterBackingActivity($activityType))
+		{
+			return null;
+		}
+
+		$properties = is_array($activityData['Properties'] ?? null) ? $activityData['Properties'] : [];
+		$conditions = is_array($properties['DynamicFilterFields'] ?? null)
+			? $properties['DynamicFilterFields']
+			: ['items' => []]
+		;
+		$filterId = is_string($activityData['Name'] ?? null) && $activityData['Name'] !== ''
+			? $activityData['Name']
+			: $construction->id
+		;
+
+		$filterSettings = [
+			'id' => $filterId,
+			'targetEntityTypeId' => (int)($properties['DynamicTypeId'] ?? 0),
+			'sourceMode' => $previousFilterId ? 'filter' : 'workflow',
+			'conditions' => $conditions,
+		];
+
+		if ($previousFilterId)
+		{
+			$filterSettings['sourceFilterId'] = $previousFilterId;
+		}
+
+		return $filterSettings;
+	}
+
+	private static function isNodeFilterBackingActivity(string $activityType): bool
+	{
+		if ($activityType === '')
+		{
+			return false;
+		}
+
+		if (!CBPRuntime::getRuntime()->includeActivityFile($activityType))
+		{
+			return false;
+		}
+
+		return is_subclass_of('CBP' . $activityType, NodeFilterMetadataProvider::class, true);
+	}
+
+	private function extractFilterReturnProperty(ActionExpressionDto $expression, string $filterId): ?array
+	{
+		$activityData = $expression->activityData ?? [];
+		$returnProperties = is_array($activityData['ReturnProperties'] ?? null)
+			? $activityData['ReturnProperties']
+			: []
+		;
+
+		$documentProperty = null;
+		foreach ($returnProperties as $property)
+		{
+			if (
+				is_array($property)
+				&& ($property['Id'] ?? null) === 'Document'
+				&& is_array($property['Default'] ?? null)
+			)
+			{
+				$documentProperty = $property;
+				break;
+			}
+		}
+
+		if ($documentProperty === null)
+		{
+			return null;
+		}
+
+		$documentTitle = trim((string)($documentProperty['Name'] ?? ''));
+		$filterTitle = trim((string)($activityData['Properties']['Title'] ?? ''));
+		$title = $documentTitle;
+		if ($title !== '' && $filterTitle !== '')
+		{
+			$title .= " ({$filterTitle})";
+		}
+		elseif ($filterTitle !== '')
+		{
+			$title = $filterTitle;
+		}
+
+		return [
+			'Name' => $title !== '' ? $title : $filterId,
+			'Type' => \Bitrix\Bizproc\FieldType::DOCUMENT,
+			'Multiple' => (bool)($documentProperty['Multiple'] ?? false),
+			'Default' => $documentProperty['Default'],
+		];
+	}
+
+	private function registerFilterReturnProperty(string $filterId, array $property): void
+	{
+		$this->filterReturnProperties[$filterId] = $property;
+
+		$returnProperty = ['Id' => $filterId, ...$property];
+		if (isset($this->returnPropertyIndexes[$filterId]))
+		{
+			$this->returnProperties[$this->returnPropertyIndexes[$filterId]] = $returnProperty;
+
+			return;
+		}
+
+		$this->returnPropertyIndexes[$filterId] = count($this->returnProperties);
+		$this->returnProperties[] = $returnProperty;
+	}
+
+	private function prepareActionActivityData(array $activityData, ?string $targetFilterId): array
+	{
+		$properties = is_array($activityData['Properties'] ?? null) ? $activityData['Properties'] : [];
+
+		if ($targetFilterId !== null)
+		{
+			$properties[self::TARGET_FILTER_ID_PROPERTY] = $targetFilterId;
+		}
+		else
+		{
+			unset($properties[self::TARGET_FILTER_ID_PROPERTY]);
+		}
+
+		$activityData['Properties'] = $properties;
+
+		return $activityData;
+	}
+
+	private function resolveTargetFilterIdForAction(ActionExpressionDto $expression): ?string
+	{
+		$document = $expression->document;
+		if (!is_string($document) || $document === '')
+		{
+			return null;
+		}
+
+		$parsedExpression = \CBPActivity::parseExpression($document);
+		if ($parsedExpression === null)
+		{
+			return null;
+		}
+
+		foreach ([$parsedExpression['object'] ?? null, $parsedExpression['field'] ?? null] as $candidateFilterId)
+		{
+			if (!is_string($candidateFilterId) || $candidateFilterId === '')
+			{
+				continue;
+			}
+
+			foreach ($this->filterSettings as $filter)
+			{
+				if (($filter['id'] ?? null) === $candidateFilterId)
+				{
+					return $candidateFilterId;
+				}
+			}
+		}
+
+		return null;
+	}
+
 	private function convertConditionExpressionToMixedConditionEntry(
 		ConditionExpressionDto $expression,
 		ConstructionType $constructionType,
@@ -192,26 +417,11 @@ class ConvertRuleCommand extends AbstractCommand
 	{
 		$field = $expression->field;
 
-		// Handle fieldId of document typed properties
-		$fieldId = str_replace('.', '', $field->fieldId);
-
-		$errors = [];
-		$value = CBPRuntime::getRuntime()
-			->getDocumentService()
-			->getFieldInputValue(
-				$this->documentType,
-				[
-					'Multiple' => $field->multiple,
-					'Id' => $fieldId,
-					'Type' => $field->type,
-				],
-				$fieldId,
-				[
-					$fieldId . '_text' => $expression->value,
-				],
-			$errors,
-			) ?? ''
-		;
+		$value = $this->resolveConditionValue(
+			$field,
+			$expression->value ?? '',
+			$this->documentType,
+		);
 
 		return [
 			'object' => $field->object,
@@ -249,6 +459,11 @@ class ConvertRuleCommand extends AbstractCommand
 				&& $construction->expression instanceof ConditionExpressionDto
 			)
 			{
+				if ($construction->expression->field === null)
+				{
+					continue;
+				}
+
 				$mixedConditions[] = $this->convertConditionExpressionToMixedConditionEntry(
 					$construction->expression,
 					$construction->constructionType,

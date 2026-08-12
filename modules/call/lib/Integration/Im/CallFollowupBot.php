@@ -17,6 +17,12 @@ use Bitrix\Call\Call\Registry;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\Integration\AI\ChatMessage;
 use Bitrix\Call\Integration\AI\CallAIService;
+use Bitrix\Call\Track;
+use Bitrix\Call\Track\TrackService;
+use Bitrix\Call\Track\CloudRecordExpectationAgent;
+use Bitrix\Call\Logger\Logger;
+use Bitrix\Call\Integration\AI\CallAISettings;
+use Bitrix\Call\Analytics\CloudRecordAnalytics;
 
 \Bitrix\Main\Loader::includeModule('imbot');
 
@@ -28,6 +34,7 @@ class CallFollowupBot extends ImBot\Bot\Base
 	public const MODULE_ID = 'call';
 	public const BOT_CODE = 'CallFollowupBot';
 	public const COMMAND_CONTINUE_FOLLOWUP = 'continueFollowup';
+	public const COMMAND_RETRY_CLOUD_RECORDING = 'retryCloudRecording';
 
 	protected const BOT_PROPERTIES = [
 		'CODE' => self::BOT_CODE,
@@ -104,6 +111,100 @@ class CallFollowupBot extends ImBot\Bot\Base
 			}
 
 			self::disableMessageButtons((int)$messageId);
+
+			return true;
+		}
+
+		if ($messageFields['COMMAND'] === self::COMMAND_RETRY_CLOUD_RECORDING)
+		{
+			$log = CallAISettings::isLoggingEnable();
+			$logger = Logger::getInstance();
+
+			$disableButtons = true;
+
+			if (preg_match("/CALL_ID:([0-9]+)/i", $messageFields['COMMAND_PARAMS'], $matches))
+			{
+				$callId = (int)$matches[1];
+				$call = Registry::getCallWithId($callId);
+				if ($call)
+				{
+					$log && $logger->info("CallFollowupBot: retryCloudRecording clicked. CallId: {$callId}");
+					self::sendRetryButtonTelemetry($call, 'success', 'clicked');
+
+					$trackService = TrackService::getInstance();
+					$attemptedCount = 0;
+					$scheduledCount = 0;
+					foreach ([Track::TYPE_VIDEO_RECORD, Track::TYPE_VIDEO_PREVIEW] as $type)
+					{
+						foreach (Track::getTracksForCall($callId, $type) as $track)
+						{
+							if (!$track->getDownloadUrl() || $track->getDownloaded())
+							{
+								continue;
+							}
+
+							$attemptedCount++;
+							self::sendRetryButtonTelemetry($call, 'success', 'track_pending', source: $track);
+
+							$downloadResult = $trackService->downloadTrackFile($track, true);
+							if ($downloadResult->isSuccess())
+							{
+								$scheduledCount++;
+								self::sendRetryButtonTelemetry($call, 'success', 'track_scheduled', source: $track);
+							}
+							else
+							{
+								$errorCodes = [];
+								foreach ($downloadResult->getErrors() as $error)
+								{
+									$code = $error->getCode();
+									if ($code !== '' && $code !== null)
+									{
+										$errorCodes[] = (string)$code;
+									}
+								}
+								$errorCode = $errorCodes ? implode(',', $errorCodes) : 'schedule_failed';
+
+								$errors = implode('; ', $downloadResult->getErrorMessages());
+								$log && $logger->error("CallFollowupBot: retryCloudRecording — downloadTrackFile failed. TrackId: {$track->getId()}, Errors: {$errors}");
+								self::sendRetryButtonTelemetry($call, 'error', 'track_schedule_failed', $errorCode, $track);
+							}
+						}
+					}
+
+					if ($attemptedCount === 0)
+					{
+						$log && $logger->info("CallFollowupBot: retryCloudRecording — no retryable tracks. CallId: {$callId}");
+						self::sendRetryButtonTelemetry($call, 'error', 'no_tracks', 'no_retryable_tracks');
+					}
+					elseif ($scheduledCount === 0)
+					{
+						// All download schedules failed — keep the button so the user can try again
+						$log && $logger->error("CallFollowupBot: retryCloudRecording — all schedule attempts failed. CallId: {$callId}");
+						self::sendRetryButtonTelemetry($call, 'error', 'schedule_failed', 'all_attempts_failed');
+						$disableButtons = false;
+					}
+					else
+					{
+						CloudRecordExpectationAgent::scheduleAgent($callId);
+						$log && $logger->info("CallFollowupBot: retryCloudRecording — scheduled {$scheduledCount} track(s). CallId: {$callId}");
+						self::sendRetryButtonTelemetry($call, 'success', 'scheduled');
+					}
+				}
+				else
+				{
+					$log && $logger->error("CallFollowupBot: retryCloudRecording — call not found. CallId: {$callId}");
+				}
+			}
+			else
+			{
+				$log && $logger->error("CallFollowupBot: retryCloudRecording — CALL_ID missing in COMMAND_PARAMS");
+			}
+
+			if ($disableButtons)
+			{
+				self::disableMessageButtons((int)$messageId);
+			}
 
 			return true;
 		}
@@ -229,21 +330,29 @@ class CallFollowupBot extends ImBot\Bot\Base
 	 */
 	public static function getCommandList(): array
 	{
+		$context = [
+			[
+				'COMMAND_CONTEXT' => 'KEYBOARD',
+				'MESSAGE_TYPE' => 'C', /** @see \IM_MESSAGE_CHAT */
+			],
+			[
+				'COMMAND_CONTEXT' => 'KEYBOARD',
+				'MESSAGE_TYPE' => 'P', /** @see \IM_MESSAGE_PRIVATE */
+			],
+		];
+
 		return [
 			self::COMMAND_CONTINUE_FOLLOWUP => [
 				'command' => self::COMMAND_CONTINUE_FOLLOWUP,
 				'handler' => 'onCommandAdd',/** @see CallFollowupBot::onCommandAdd */
 				'visible' => false,
-				'context' => [
-					[
-						'COMMAND_CONTEXT' => 'KEYBOARD',
-						'MESSAGE_TYPE' => 'C', /** @see \IM_MESSAGE_CHAT */
-					],
-					[
-						'COMMAND_CONTEXT' => 'KEYBOARD',
-						'MESSAGE_TYPE' => 'P', /** @see \IM_MESSAGE_PRIVATE */
-					],
-				],
+				'context' => $context,
+			],
+			self::COMMAND_RETRY_CLOUD_RECORDING => [
+				'command' => self::COMMAND_RETRY_CLOUD_RECORDING,
+				'handler' => 'onCommandAdd',/** @see CallFollowupBot::onCommandAdd */
+				'visible' => false,
+				'context' => $context,
 			],
 		];
 	}
@@ -374,6 +483,22 @@ class CallFollowupBot extends ImBot\Bot\Base
 	protected static function disableMessageButtons(int $messageId, bool $sendPullNotify = true): bool
 	{
 		return self::switchButtonsAvailability(false, $messageId, $sendPullNotify);
+	}
+
+	private static function sendRetryButtonTelemetry(
+		\Bitrix\Call\Call $call,
+		string $status,
+		string $event,
+		?string $errorCode = null,
+		?Track $source = null,
+	): void
+	{
+		(new CloudRecordAnalytics($call))->sendTelemetry(
+			source: $source,
+			status: $status,
+			errorCode: $errorCode,
+			event: 'cloud_record_retry_button_' . $event,
+		);
 	}
 
 	/**

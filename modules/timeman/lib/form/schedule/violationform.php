@@ -202,7 +202,7 @@ class ViolationForm extends BaseForm
 				->configureMin(1)
 			,
 			(new Filter\Validator\RegularExpressionValidator('entityCode'))
-				->configurePattern("#[UD]{1}[R]{0,1}[1-9]+#")
+				->configurePattern('#^(?:U|DR)[1-9][0-9]*$#')
 			,
 			(new Filter\Validator\StringValidator(
 				'maxExactStartFormatted',

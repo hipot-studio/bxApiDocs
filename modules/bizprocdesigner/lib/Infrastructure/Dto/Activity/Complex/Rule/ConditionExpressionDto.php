@@ -11,11 +11,12 @@ use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 class ConditionExpressionDto extends BaseExpressionDto
 {
 	public function __construct(
+		#[NotEmpty]
 		#[Validatable]
 		public ?FieldDto $field = null,
 		#[NotEmpty]
 		public ?string $operator = null,
-		public ?string $value = null,
+		public mixed $value = null,
 	)
 	{
 

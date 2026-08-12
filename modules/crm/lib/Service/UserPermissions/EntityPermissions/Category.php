@@ -79,6 +79,23 @@ class Category
 	/**
 	 * @return int[]
 	 */
+	public function getAvailableForAddingCategoriesIdsWithCurrent(int $entityTypeId, int $currentCategoryId): array
+	{
+		$factory = Container::getInstance()->getFactory($entityTypeId);
+		if (!$factory || !$factory->isCategoriesSupported())
+		{
+			return [];
+		}
+
+		return array_map(
+			fn($category) => $category->getId(),
+			$this->filterAvailableForAddingCategoriesWithCurrent($factory->getCategories(), $currentCategoryId),
+		);
+	}
+
+	/**
+	 * @return int[]
+	 */
 	public function getAvailableForUpdatingCategoriesIds(int $entityTypeId): array
 	{
 		$factory = Container::getInstance()->getFactory($entityTypeId);
@@ -96,6 +113,18 @@ class Category
 	public function filterAvailableForAddingCategories(array $categories): array
 	{
 		return array_values(array_filter($categories, [$this, 'canAddItems']));
+	}
+
+	/**
+	 * @param \Bitrix\Crm\Category\Entity\Category[] $categories
+	 * @return \Bitrix\Crm\Category\Entity\Category[]
+	 */
+	public function filterAvailableForAddingCategoriesWithCurrent(array $categories, int $currentCategoryId): array
+	{
+		return array_values(array_filter(
+			$categories,
+			fn($category) => $category->getId() === $currentCategoryId || $this->canAddItems($category),
+		));
 	}
 
 	/**

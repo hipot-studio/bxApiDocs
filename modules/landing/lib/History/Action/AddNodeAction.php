@@ -6,7 +6,7 @@ class AddNodeAction extends BaseAction
 {
 	protected const JS_COMMAND = 'addNode';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		return true;
 	}

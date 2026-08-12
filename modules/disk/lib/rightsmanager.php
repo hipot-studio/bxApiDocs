@@ -1353,12 +1353,45 @@ class RightsManager implements IErrorable
 		array $parameters,
 		array $specificColumns,
 	): array {
+		return $this->addRightsCheckByExpression(
+			$securityContext->getSqlExpressionForList('%1$s', '%2$s'),
+			$parameters,
+			$specificColumns,
+		);
+	}
+
+	/**
+	 * Add to parameters rights check by security context for use in getList over root objects only.
+	 * Every candidate row of the query must be an object with PARENT_ID IS NULL.
+	 *
+	 * @param Security\SecurityContext $securityContext
+	 * @param array                    $parameters
+	 * @param array                    $specificColumns List of columns to use in $securityContext->getSqlExpressionForRootObjectList.
+	 * @return array<string, mixed>
+	 */
+	public function addRightsCheckForRootObjects(
+		Security\SecurityContext $securityContext,
+		array $parameters,
+		array $specificColumns,
+	): array {
+		return $this->addRightsCheckByExpression(
+			$securityContext->getSqlExpressionForRootObjectList('%1$s', '%2$s'),
+			$parameters,
+			$specificColumns,
+		);
+	}
+
+	private function addRightsCheckByExpression(
+		string $rightsExpression,
+		array $parameters,
+		array $specificColumns,
+	): array {
 		$parameters['filter'] ??= [];
 		$parameters['runtime'] ??= [];
 
 		$parameters['runtime'][] = new ExpressionField(
 			'RIGHTS_CHECK',
-			'CASE WHEN ' . $securityContext->getSqlExpressionForList('%1$s', '%2$s') . ' THEN 1 ELSE 0 END',
+			'CASE WHEN ' . $rightsExpression . ' THEN 1 ELSE 0 END',
 			$specificColumns,
 			['data_type' => 'boolean'],
 		);

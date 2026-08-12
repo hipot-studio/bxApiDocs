@@ -247,6 +247,7 @@ class CopyProjectService
 			options: $this->resolveOptions($sourceProjectId, $project),
 			tagNames: $project->tagNames,
 			publication: $project->publication,
+			notifications: $project->notifications,
 		);
 	}
 
@@ -280,7 +281,8 @@ class CopyProjectService
 			|| $project->options !== null
 			|| $project->dates !== null
 			|| $project->tagNames !== null
-			|| $project->publication !== null;
+			|| $project->publication !== null
+			|| $project->notifications !== null;
 	}
 
 	private function resolveEffectiveDates(Project $project, ?array $projectTerm): ?ProjectDates

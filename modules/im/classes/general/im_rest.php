@@ -4326,7 +4326,8 @@ class CIMRestService extends IRestService
 
 		$arParams['SILENT_MODE'] = $arParams['SILENT_MODE'] == 'Y';
 
-		$chatRelation = \Bitrix\Im\V2\Chat::getInstance($chatId)->getRelations();
+		$targetChat = \Bitrix\Im\V2\Chat::getInstance($chatId);
+		$chatRelation = $targetChat->getRelations();
 		if (!$chatRelation->hasUser(CIMDisk::GetUserId(), $chatId))
 		{
 			throw new Bitrix\Rest\RestException("You don't have access to this chat", "ACCESS_ERROR", CRestServer::STATUS_WRONG_REQUEST);
@@ -4338,6 +4339,22 @@ class CIMRestService extends IRestService
 		)
 		{
 			throw new Bitrix\Rest\RestException("Action unavailable", "ACCESS_ERROR", CRestServer::STATUS_FORBIDDEN);
+		}
+
+		$replyId = isset($arParams['REPLY_ID']) ? (int)$arParams['REPLY_ID'] : 0;
+		if ($replyId > 0)
+		{
+			$replyValidation = (new \Bitrix\Im\V2\Message\Reply\ReplyValidator())->validate($replyId, $targetChat);
+			if (!$replyValidation->isSuccess())
+			{
+				$replyError = $replyValidation->getErrors()[0];
+				throw new Bitrix\Rest\RestException(
+					$replyError->getMessage(),
+					$replyError->getCode(),
+					CRestServer::STATUS_WRONG_REQUEST
+				);
+			}
+			$replyId = (int)$replyValidation->getResult()['REPLY_ID'];
 		}
 
 		$files = Array();
@@ -4395,7 +4412,7 @@ class CIMRestService extends IRestService
 			$arParams['FILE_TEMPLATE_ID'] = mb_substr((string)$arParams['FILE_TEMPLATE_ID'], 0, 255);
 		}
 
-		$result = CIMDisk::UploadFileFromDisk($chatId, array_values($files), $arParams['MESSAGE'], [
+		$uploadOptions = [
 			'LINES_SILENT_MODE' => $arParams['SILENT_MODE'],
 			'TEMPLATE_ID' => $arParams['TEMPLATE_ID']?:'',
 			'FILE_TEMPLATE_ID' => $arParams['FILE_TEMPLATE_ID']?:'',
@@ -4403,7 +4420,12 @@ class CIMRestService extends IRestService
 			'AS_FILE' => $arParams['AS_FILE'] ?? 'N',
 			'WAIT_FULL_EXECUTION' => 'N',
 			'FILE_PARAMS' => $arParams['FILE_PARAMS'] ?? null,
-		]);
+		];
+		if ($replyId > 0)
+		{
+			$uploadOptions['PARAMS']['REPLY_ID'] = $replyId;
+		}
+		$result = CIMDisk::UploadFileFromDisk($chatId, array_values($files), $arParams['MESSAGE'], $uploadOptions);
 		if (!$result)
 		{
 			throw new Bitrix\Rest\RestException("Error during saving file to chat", "SAVE_ERROR", CRestServer::STATUS_WRONG_REQUEST);

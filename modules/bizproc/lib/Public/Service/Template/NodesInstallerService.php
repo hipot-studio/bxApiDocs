@@ -31,6 +31,12 @@ class NodesInstallerService
 	private const INSTALLER_FILE_NAME = 'installer.php';
 	private const TEMPLATE_FILE_NAME = 'template.json';
 	private const TEMPLATE_LOC_FILE_NAME = 'template.json.php';
+	private const PROMPT_DIR_NAME = 'prompt';
+	private const PROMPT_FILE_NAME_RU = 'ru.json';
+	private const PROMPT_FILE_NAME_EN = 'en.json';
+	private const SYSTEM_PROMPT_PROPERTY = 'systemPrompt';
+	private const PROMPT_PLACEHOLDER_WRAPPER = '@@@';
+	private const RU_PROMPT_LANG_IDS = ['ru', 'kz', 'by'];
 	private const SHOULD_TRY_CACHE_TAG = 'bizproc_nodes_installer';
 	private const SHOULD_TRY_TTL = 86400; // 1 day
 
@@ -123,13 +129,21 @@ class NodesInstallerService
 	private function makeFilesData(array $template, MakeTemplatePackageDto $request): array
 	{
 		$files = [];
+		$prompts = $request->pullAiPrompts ? $this->pullSystemPrompts($template, $request) : [];
 		$messages = $this->pullMessages($template, $request);
 
-		$files[self::TEMPLATE_FILE_NAME] = $this->makeTemplateFileContents($template);
+		$files[self::TEMPLATE_FILE_NAME] = $this->makeJsonFileContents($template);
 
 		if (!empty($messages))
 		{
 			$files['lang/ru/' . self::TEMPLATE_LOC_FILE_NAME] = $this->makeLangFileContents($messages);
+		}
+
+		if (!empty($prompts))
+		{
+			$files[self::PROMPT_DIR_NAME . '/' . self::PROMPT_FILE_NAME_RU] =
+				$this->makeJsonFileContents($prompts)
+			;
 		}
 
 		$files[self::INSTALLER_FILE_NAME] = $this->makeInstallerFileContents($request);
@@ -149,7 +163,7 @@ class NodesInstallerService
 		return implode(PHP_EOL, $langFileContent);
 	}
 
-	private function makeTemplateFileContents(array $template): string
+	private function makeJsonFileContents(array $template): string
 	{
 		return Json::encode($template, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 	}
@@ -248,6 +262,63 @@ PHP;
 		return $messages;
 	}
 
+	private function pullSystemPrompts(array &$template, MakeTemplatePackageDto $request): array
+	{
+		$promptPrefix = 'SYSTEMPROMPT_';
+		$prompts = [];
+
+		$getPromptCode = function () use (&$prompts, $promptPrefix): string
+		{
+			$i = 1;
+
+			do
+			{
+				$code = $promptPrefix . $i;
+				++$i;
+			}
+			while (isset($prompts[$code]));
+
+			return $code;
+		};
+
+		$createPrompt = static function (string $text) use (&$prompts, $getPromptCode): string
+		{
+			$code = array_search($text, $prompts, true);
+			if ($code === false)
+			{
+				$code = $getPromptCode();
+			}
+			$prompts[$code] = $text;
+
+			return self::PROMPT_PLACEHOLDER_WRAPPER . $code . self::PROMPT_PLACEHOLDER_WRAPPER;
+		};
+
+		$pull = static function (array &$item) use (&$pull, $createPrompt): void
+		{
+			$properties = $item['Properties'] ?? null;
+			$systemPrompt = is_array($properties) ? ($properties[self::SYSTEM_PROMPT_PROPERTY] ?? null) : null;
+
+			if (is_string($systemPrompt))
+			{
+				$item['Properties'][self::SYSTEM_PROMPT_PROPERTY] = $createPrompt($systemPrompt);
+			}
+
+			foreach ($item as &$child)
+			{
+				if (is_array($child))
+				{
+					$pull($child);
+				}
+			}
+			unset($child);
+		};
+
+		$pull($template);
+		ksort($prompts);
+
+		return $prompts;
+	}
+
 	private function wasTriedRecently(string $sectionId): bool
 	{
 		$cache = Application::getInstance()->getManagedCache();
@@ -283,6 +354,16 @@ PHP;
 		{
 			$langFile = new IO\File($langDir->getPhysicalPath() . "/{$langId}/" . self::TEMPLATE_LOC_FILE_NAME);
 			if (!$langFile->isExists())
+			{
+				return; // template does not support this language
+			}
+		}
+
+		$promptDir = new IO\Directory($dir->getPhysicalPath() . '/' . self::PROMPT_DIR_NAME);
+		if ($promptDir->isExists())
+		{
+			$promptFile = new IO\File($promptDir->getPhysicalPath() . '/' . $this->getPromptFileName($langId));
+			if (!$promptFile->isExists())
 			{
 				return; // template does not support this language
 			}
@@ -348,6 +429,7 @@ PHP;
 		}
 
 		$template = $this->replaceMessages($dir, $template, $langId);
+		$template = $this->replaceSystemPrompts($dir, $template, $langId);
 
 		if (!$template)
 		{
@@ -449,6 +531,82 @@ PHP;
 		return $template;
 	}
 
+	private function replaceSystemPrompts(IO\DirectoryEntry $dir, array $template, string $langId): array
+	{
+		$promptFileName = $this->getPromptFileName($langId);
+		$prompts = $this->loadSystemPromptFile(
+			$dir->getPath() . '/' . self::PROMPT_DIR_NAME . '/' . $promptFileName
+		);
+
+		if (empty($prompts))
+		{
+			return $template;
+		}
+
+		$replace = static function (array &$item) use (&$replace, $prompts): void
+		{
+			$properties = $item['Properties'] ?? null;
+			$systemPrompt = is_array($properties) ? ($properties[self::SYSTEM_PROMPT_PROPERTY] ?? null) : null;
+
+			if (
+				is_string($systemPrompt)
+				&& str_starts_with(
+					$systemPrompt,
+					self::PROMPT_PLACEHOLDER_WRAPPER
+				)
+				&& str_ends_with(
+					$systemPrompt,
+					self::PROMPT_PLACEHOLDER_WRAPPER
+				)
+			)
+			{
+				$wrapperLength = strlen(self::PROMPT_PLACEHOLDER_WRAPPER);
+				$code = substr(
+					$systemPrompt,
+					$wrapperLength,
+					-$wrapperLength
+				);
+				if (isset($prompts[$code]))
+				{
+					$item['Properties'][self::SYSTEM_PROMPT_PROPERTY] = $prompts[$code];
+				}
+			}
+
+			foreach ($item as &$child)
+			{
+				if (is_array($child))
+				{
+					$replace($child);
+				}
+			}
+			unset($child);
+		};
+
+		$replace($template);
+
+		return $template;
+	}
+
+	private function loadSystemPromptFile(string $path): array
+	{
+		$file = new File($path);
+		if (!$file->isExists())
+		{
+			return [];
+		}
+
+		try
+		{
+			$prompts = Json::decode($file->getContents());
+		}
+		catch (ArgumentException $e)
+		{
+			return [];
+		}
+
+		return is_array($prompts) ? $prompts : [];
+	}
+
 	private function upsertTpl(int $id, array $data): ?int
 	{
 		if ($id > 0)
@@ -475,5 +633,17 @@ PHP;
 		$nodesDir = $request->outputDir ?? $this->getNodesDir();
 
 		return "{$nodesDir}/{$request->section}/{$request->code}";
+	}
+
+	/**
+	 * @param string $langId
+	 * @return string
+	 */
+	private function getPromptFileName(string $langId): string
+	{
+		return in_array(strtolower($langId), self::RU_PROMPT_LANG_IDS, true)
+			? self::PROMPT_FILE_NAME_RU
+			: self::PROMPT_FILE_NAME_EN
+		;
 	}
 }

@@ -270,6 +270,10 @@ class Lead extends Service\Factory
 				'TYPE' => Field::TYPE_DOUBLE,
 				'CLASS' => Field\Opportunity::class,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_CURRENCY_ID,
+				],
 			],
 			Item::FIELD_NAME_OPPORTUNITY_ACCOUNT => [
 				'TYPE' => Field::TYPE_DOUBLE,
@@ -279,6 +283,10 @@ class Lead extends Service\Factory
 					\CCrmFieldInfoAttr::ReadOnly,
 				],
 				'CLASS' => Field\OpportunityAccount::class,
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_ACCOUNT_CURRENCY_ID,
+				],
 			],
 			Item::FIELD_NAME_OPENED => [
 				'TYPE' => Field::TYPE_BOOLEAN,

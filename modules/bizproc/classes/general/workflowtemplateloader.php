@@ -2,6 +2,7 @@
 
 use Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
+use Bitrix\Bizproc\Internal\Service\WorkflowTemplate\AutoExecuteFilter;
 use Bitrix\Bizproc\Workflow\Template\Converter\NodesToTemplate;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
@@ -1343,16 +1344,7 @@ class CBPWorkflowTemplateLoader
 
 		if (array_key_exists('AUTO_EXECUTE', $filter))
 		{
-			$filter['AUTO_EXECUTE'] = match ((int)$filter['AUTO_EXECUTE'])
-			{
-				CBPDocumentEventType::None => 0,
-				CBPDocumentEventType::Create => [1, 3, 5, 7],
-				CBPDocumentEventType::Edit => [2, 3, 6, 7],
-				CBPDocumentEventType::Delete => [4, 5, 6, 7],
-				CBPDocumentEventType::Automation => 8,
-				CBPDocumentEventType::Script => 32,
-				default => [-1],
-			};
+			$filter['AUTO_EXECUTE'] = AutoExecuteFilter::getFilterValue((int)$filter['AUTO_EXECUTE']);
 		}
 	}
 

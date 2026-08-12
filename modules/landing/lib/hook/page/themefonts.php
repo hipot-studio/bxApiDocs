@@ -33,6 +33,7 @@ class ThemeFonts extends Hook\Page
 			'USE' => new Field\Checkbox('USE', [
 				'title' => Loc::getMessage('LNDNGHOOK_THEMEFONTS_USE_2'),
 			]),
+			'SKIP_H_FONT' => new Field\Hidden('SKIP_H_FONT'),
 			'CODE_H' => new Field\Text('CODE_H', [
 				'title' => Loc::getMessage('LNDNGHOOK_THEMEFONTS_FONT_BASE_2'),
 				'default' => 'Open Sans',
@@ -143,10 +144,18 @@ class ThemeFonts extends Hook\Page
 		}
 
 		$this->setThemeFont();
-		$this->setHFontTheme();
+		if (!$this->shouldSkipHFontTheme())
+		{
+			$this->setHFontTheme();
+		}
 		$this->setSize();
 		$this->setColors();
 		$this->setTypo();
+	}
+
+	private function shouldSkipHFontTheme(): bool
+	{
+		return ($this->fields['SKIP_H_FONT']->getValue() ?? null) === 'Y';
 	}
 
 	protected function getField(string $name): ?string

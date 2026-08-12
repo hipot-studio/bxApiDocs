@@ -36,7 +36,7 @@ class UserFieldTypeMapper
 	{
 		return match($type)
 		{
-			'text', 'string', 'string_formatted' => StringField::class,
+			'text', 'string', 'string_formatted', 'rich_text' => StringField::class,
 			'phone' => PhoneField::class,
 			'date' => DateField::class,
 			'datetime' => DateTimeField::class,

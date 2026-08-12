@@ -9,7 +9,6 @@ use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Mobile\Provider\UserRepository;
 use Bitrix\StaffTrack\Controller\Trait\ErrorResponseTrait;
-use Bitrix\StaffTrack\Feature;
 use Bitrix\StaffTrack\Public\Command\CheckInDto;
 use Bitrix\StaffTrack\Public\Provider\ChatProvider;
 use Bitrix\StaffTrack\Public\Provider\CheckInFormProvider;
@@ -140,9 +139,13 @@ final class CheckIn extends Controller
 		$timezoneOffset = \CTimeZone::GetOffset();
 		$userId = (int)$this->getCurrentUser()?->getId();
 
+		['checkIns' => $checkIns, 'stats' => $stats] = $provider->getLatestUsersCheckInByDepartment($timezoneOffset, $timestamp);
+
 		return [
-			'checkIns' => $provider->getLatestUsersCheckInByDepartment($timezoneOffset, $timestamp),
+			'checkIns' => $checkIns,
+			'stats' => $stats,
 			'hasSubordinates' => DepartmentProvider::hasSubordinates($userId),
+			'users' => UserRepository::getByIds(array_column($checkIns, 'userId')),
 			'isWesternPortal' => Feature::isWesternPortal(),
 		];
 	}
@@ -203,44 +206,20 @@ final class CheckIn extends Controller
 	}
 
 	/**
-	 * @restMethod stafftrackmobile.v2.CheckIn.isEnabledBySettings
-	 * @return bool
-	 */
-	#[CloseSession]
-	#[IntranetOnly]
-	public function isEnabledBySettingsAction(): bool
-	{
-		return Feature::isCheckInEnabledBySettings();
-	}
-
-	/**
-	 * @restMethod stafftrackmobile.v2.CheckIn.getSettings
-	 * @return array
-	 */
-	#[CloseSession]
-	#[IntranetOnly]
-	#[NewCheckInEnabled]
-	public function getSettingsAction(): array
-	{
-		$userId = (int)$this->getCurrentUser()?->getId();
-
-		return CheckInProvider::getInstance()->getSettings($userId);
-	}
-
-	/**
 	 * @restMethod stafftrackmobile.v2.CheckIn.getManualCheckInCount
 	 * @return array
 	 */
 	#[CloseSession]
 	#[IntranetOnly]
-	#[MultiCheckInEnabled]
+	#[NewCheckInEnabled]
 	public function getManualCheckInCountAction(): array
 	{
 		$userId = (int)$this->getCurrentUser()?->getId();
 		$timezoneOffset = \CTimeZone::GetOffset();
 
 		$count = CheckInProvider::getInstance()
-			->getManualCheckInCountByDate($userId, time(), $timezoneOffset);
+			->getManualCheckInCountByDate($userId, time(), $timezoneOffset)
+		;
 
 		return ['count' => $count];
 	}

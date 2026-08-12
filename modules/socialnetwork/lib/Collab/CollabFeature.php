@@ -10,6 +10,7 @@ use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\Integration\Intranet\Settings;
+use Bitrix\Socialnetwork\V2\Feature;
 
 class CollabFeature
 {
@@ -28,7 +29,16 @@ class CollabFeature
 
 	public static function isFeatureEnabledInPortalSettings(): bool
 	{
-		return (new Settings())->isToolAvailable(Settings::SONET_TOOLS['collab']);
+		$settings = new Settings();
+		if (
+			Feature::isNewProjectsOn()
+			&& $settings->isToolAvailable(Settings::SONET_TOOLS['workgroups'])
+		)
+		{
+			return true;
+		}
+
+		return $settings->isToolAvailable(Settings::SONET_TOOLS['collab']);
 	}
 
 	public static function isOn(): bool

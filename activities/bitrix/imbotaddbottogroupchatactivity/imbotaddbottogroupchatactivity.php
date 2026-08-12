@@ -4,6 +4,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
 }
+
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -148,7 +149,7 @@ class CBPImBotAddBotToGroupChatActivity extends CBPActivity implements IBPConfig
 			return null;
 		}
 
-		if((int)$chatId > 0)
+		if ((int)$chatId > 0)
 		{
 			return (int)$chatId;
 		}
@@ -199,20 +200,29 @@ class CBPImBotAddBotToGroupChatActivity extends CBPActivity implements IBPConfig
 						'id' => 'im-recent-v2',
 						'dynamicLoad' => true,
 						'dynamicSearch' => true,
+						"searchable" => true,
+						"fillRecentItems" => true,
 						'options' => [
-							'includeSubtitle' => true,
-							'fillDialogByRecent' => true,
-							'searchChatTypes' => [
-								Chat::IM_TYPE_CHAT,
-								Chat::IM_TYPE_OPEN,
-								Chat::IM_TYPE_COLLAB,
+							'excludeChatTypes' => [
+								Chat::IM_TYPE_COPILOT,
 							],
+							'fillDialogByRecent' => true,
 							'includeOnly' => ['chats'],
 						],
 					],
 					'dialogOptions' => [
 						'width' => 445,
 						'height' => 300,
+						'recentTabOptions' => [
+							'itemOrder' => [
+								'sort' => 'desc',
+							],
+						],
+						'searchTabOptions' => [
+							'itemOrder' => [
+								'sort' => 'desc',
+							],
+						],
 					],
 				],
 				'Required' => true,

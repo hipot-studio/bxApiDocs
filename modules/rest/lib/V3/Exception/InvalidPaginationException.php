@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class InvalidPaginationException extends RestException
+class InvalidPaginationException extends RestException implements SkipWriteToLogException
 {
 	public function __construct(
 		protected mixed $page,

@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integration\UI\EntitySelector;
 
 use Bitrix\Crm\CompanyTable;
+use Bitrix\Crm\Controller\Entity;
 use Bitrix\Crm\Integration\UI\EntitySelector\Traits\FilterByIds;
 use Bitrix\Crm\Integration\UI\EntitySelector\Traits\FilterByEmails;
 use Bitrix\Crm\Multifield\Type\Email;
@@ -49,12 +50,17 @@ class CompanyProvider extends EntityProvider
 	{
 		if ($this->enableMyCompanyOnly || $this->excludeMyCompany || $this->isFilterByIds())
 		{
+			$filter = $this->getCompanyFilter();
+			if (!$this->options['allowAllCategories'] && $this->getCategoryId() > 0)
+			{
+				$filter['=CATEGORY_ID'] = $this->getCategoryId();
+			}
 			$ids = CompanyTable::getList([
 				'select' => ['ID'],
 				'order' => [
 					'ID' => 'ASC',
 				],
-				'filter' => $this->getCompanyFilter(),
+				'filter' => $filter,
 			])->fetchCollection()->getIdList();
 		}
 		elseif ($this->notLinkedOnly)
@@ -188,5 +194,20 @@ class CompanyProvider extends EntityProvider
 	protected function getDefaultItemAvatar(): ?string
 	{
 		return '/bitrix/images/crm/entity_provider_icons/company.svg';
+	}
+
+	protected function getRecentItemsCount(array $recentItemsByEntityId): int
+	{
+		if (!$this->options['allowAllCategories'] && $this->getCategoryId() > 0)
+		{
+			$companiesCount = CompanyTable::getCount([
+				'=ID' => array_keys($recentItemsByEntityId),
+				'=CATEGORY_ID' => $this->getCategoryId(),
+			]);
+
+			return Entity::ITEMS_LIMIT - $companiesCount;
+		}
+
+		return Entity::ITEMS_LIMIT - count($recentItemsByEntityId);
 	}
 }

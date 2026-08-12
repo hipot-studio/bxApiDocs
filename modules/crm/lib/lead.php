@@ -66,6 +66,9 @@ class LeadTable extends Main\ORM\Data\DataManager
 
 		$fieldRepository = Main\DI\ServiceLocator::getInstance()->get('crm.model.fieldRepository');
 
+		$currencyIdField = $fieldRepository->getCurrencyId();
+		$accountCurrencyIdField = $fieldRepository->getAccountCurrencyId();
+
 		$map = [
 			//fields here are sorted by b_crm_lead columns order in install.sql. Please, keep it that way
 
@@ -165,13 +168,19 @@ class LeadTable extends Main\ORM\Data\DataManager
 				->configureTitle(Loc::getMessage('CRM_LEAD_ENTITY_PRODUCT_ID_FIELD'))
 			,
 
-			$fieldRepository->getOpportunity(),
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				$fieldRepository->getOpportunity(),
+				$currencyIdField
+			),
 
-			$fieldRepository->getCurrencyId(),
+			$currencyIdField,
 
-			$fieldRepository->getOpportunityAccount(),
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				$fieldRepository->getOpportunityAccount(),
+				$accountCurrencyIdField
+			),
 
-			$fieldRepository->getAccountCurrencyId(),
+			$accountCurrencyIdField,
 
 			$fieldRepository->getSourceId(),
 

@@ -21,4 +21,11 @@ class CheckIn
 	{
 		return self::isEnabled() && Feature::isCheckInStartEnabled();
 	}
+
+	public static function isGeoAvailable(): bool
+	{
+		return self::isEnabled()
+			&& method_exists(Feature::class, 'isGeoFeaturesAvailableByRegion')
+			&& Feature::isGeoFeaturesAvailableByRegion();
+	}
 }

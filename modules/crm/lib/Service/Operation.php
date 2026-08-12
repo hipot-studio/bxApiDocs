@@ -218,7 +218,10 @@ abstract class Operation
 
 		if ($result->isSuccess())
 		{
-			if($this->getItem()->isStagesEnabled())
+			if (
+				$this->getItem()->isStagesEnabled()
+				|| $this->getContext()->getItemOption('VIEW_MODE') === \Bitrix\Crm\Kanban\ViewMode::MODE_ACTIVITIES
+			)
 			{
 				$this->createToDoActivity();
 			}
@@ -625,6 +628,7 @@ abstract class Operation
 					),
 					parameters: is_array($workflowParameters) || is_string($workflowParameters) ? $workflowParameters : null,
 					scope: $scope,
+					categoryId: $this->item->isCategoriesSupported() ? $this->item->getCategoryId() : null,
 				),
 				$this->bizProcEventType,
 			);

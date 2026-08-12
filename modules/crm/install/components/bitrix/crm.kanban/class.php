@@ -39,6 +39,7 @@ class CrmKanbanComponent extends CBitrixComponent
 	protected const OPTION_NAME_HIDE_CONTACT_CENTER = 'kanban_cc_hide';
 	protected const OPTION_NAME_HIDE_REST_DEMO = 'kanban_rest_hide';
 	protected const COLUMN_NAME_DELETED = 'DELETED';
+	private const MODE_NOT_AVAILABLE_ERROR_CODE = 'MODE_NOT_AVAILABLE';
 
 	/** @var Desktop */
 	protected Kanban $kanban;
@@ -222,6 +223,32 @@ class CrmKanbanComponent extends CBitrixComponent
 	}
 
 	/**
+	 * Returns error array if ACTIVITIES mode is no longer available for the current entity, null otherwise.
+	 * Used to protect AJAX calls when the admin disables counters after the user has opened the Activities view.
+	 */
+	private function checkActivitiesModeAvailability(): ?array
+	{
+		if (($this->arParams['VIEW_MODE'] ?? '') !== ViewMode::MODE_ACTIVITIES)
+		{
+			return null;
+		}
+
+		$factory = Container::getInstance()->getFactory($this->getEntityTypeId());
+		if (
+			!($factory instanceof \Bitrix\Crm\Service\Factory\Dynamic)
+			|| $factory->isCountersEnabled()
+		)
+		{
+			return null;
+		}
+
+		return [
+			'ERROR' => Loc::getMessage('CRM_KANBAN_MODE_NOT_AVAILABLE'),
+			'ERROR_CODE' => self::MODE_NOT_AVAILABLE_ERROR_CODE,
+		];
+	}
+
+	/**
 	 * Make some actions (set, update, etc.).
 	 * @return void
 	 */
@@ -341,7 +368,25 @@ class CrmKanbanComponent extends CBitrixComponent
 				];
 			}
 
+			$modeError = $this->checkActivitiesModeAvailability();
+			if ($modeError !== null)
+			{
+				return $modeError;
+			}
+
 			return $this->{'action' . $action}();
+		}
+
+		$modeError = $this->checkActivitiesModeAvailability();
+		if ($modeError !== null)
+		{
+			$this->arResult['ERROR'] = $modeError['ERROR'];
+			$this->arResult['ERROR_CODE'] = $modeError['ERROR_CODE'];
+
+			if ($this->arParams['IS_AJAX'] === 'Y')
+			{
+				return $this->arResult;
+			}
 		}
 
 		$this->processRequestActions();
@@ -446,7 +491,19 @@ class CrmKanbanComponent extends CBitrixComponent
 
 			if ($entity->isCategoriesSupported())
 			{
-				$this->arResult['CATEGORIES'] = $entity->getCategoriesWithAddPermissions($userPermissions);
+				$canUpdateInCurrent = Container::getInstance()
+					->getUserPermissions()
+					->entityType()
+					->canUpdateItemsInCategory(
+						$entity->getTypeId(),
+						$entity->getCategoryId(),
+					)
+				;
+				$this->arResult['CATEGORIES'] = $canUpdateInCurrent
+					? $entity->getCategoriesWithAddPermissions($userPermissions)
+					: []
+				;
+				$this->ensureCurrentCategoryVisible($entity);
 			}
 		}
 
@@ -509,6 +566,38 @@ class CrmKanbanComponent extends CBitrixComponent
 		$GLOBALS['APPLICATION']->setTitle($entity->getTitle());
 
 		return $this->IncludeComponentTemplate();
+	}
+
+	private function ensureCurrentCategoryVisible(\Bitrix\Crm\Kanban\Entity $entity): void
+	{
+		$currentCategoryId = $entity->getCategoryId();
+		if ($currentCategoryId < 0 || isset($this->arResult['CATEGORIES'][$currentCategoryId]))
+		{
+			return;
+		}
+
+		$factory = Container::getInstance()->getFactory($entity->getTypeId());
+		$category = $factory?->getCategory($currentCategoryId);
+		if (!$category)
+		{
+			return;
+		}
+
+		$router = Container::getInstance()->getRouter();
+		$this->arResult['CATEGORIES'][$currentCategoryId] = $category->getData();
+		$this->arResult['CATEGORIES'][$currentCategoryId]['url'] =
+			$router->getKanbanUrl($entity->getTypeId(), $currentCategoryId);
+
+		$orderedCategories = [];
+		foreach ($factory->getCategories() as $factoryCategory)
+		{
+			$factoryCategoryId = $factoryCategory->getId();
+			if (isset($this->arResult['CATEGORIES'][$factoryCategoryId]))
+			{
+				$orderedCategories[$factoryCategoryId] = $this->arResult['CATEGORIES'][$factoryCategoryId];
+			}
+		}
+		$this->arResult['CATEGORIES'] = $orderedCategories;
 	}
 
 	protected function getPreparedItemsConfigParams(): array
@@ -680,6 +769,20 @@ class CrmKanbanComponent extends CBitrixComponent
 						$languageId,
 					)
 				;
+				$notifySubject = static fn (?string $languageId = null) =>
+					Loc::getMessage(
+						'CRM_ACCESS_NOTIFY_MESSAGE_SUBJECT',
+						[ '#URL#' => $pathColumnEdit ],
+						$languageId,
+					)
+				;
+				$notifyPlainText = static fn (?string $languageId = null) =>
+					Loc::getMessage(
+						'CRM_ACCESS_NOTIFY_MESSAGE_PLAIN_TEXT',
+						null,
+						$languageId,
+					)
+				;
 
 				CIMNotify::Add([
 					'TO_USER_ID' => $userId,
@@ -689,6 +792,13 @@ class CrmKanbanComponent extends CBitrixComponent
 					'NOTIFY_EVENT' => 'admin_notification',
 					'NOTIFY_TAG' => 'CRM|NOTIFY_ADMIN|' . $userId . '|' . $this->currentUserID,
 					'NOTIFY_MESSAGE' => $notifyMessageCallback,
+					'PARAMS' => [
+						'COMPONENT_ID' => 'CrmEntity',
+						'COMPONENT_PARAMS' => [
+							'SUBJECT' => $notifySubject,
+							'PLAIN_TEXT' => $notifyPlainText,
+						],
+					]
 				]);
 			}
 		}

@@ -11,6 +11,9 @@ use Bitrix\Main\Type\Date;
 
 class CloseDate extends Field
 {
+	public const MIN_DAYS_BEFORE_CLOSE = 0;
+	public const MAX_DAYS_BEFORE_CLOSE = 365;
+
 	protected function processLogic(Item $item, Context $context = null): Result
 	{
 		$result = new Result();

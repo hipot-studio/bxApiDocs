@@ -37,6 +37,7 @@ class Site
 	private ?int $landingId = null;
 	private string $siteTitle;
 	private string $pageTitle;
+	private string $pageMetaTitle;
 	private string $pageDescription;
 	private string $siteTopic;
 	private string $imageStyle;
@@ -51,11 +52,21 @@ class Site
 	/**
 	 * Site constructor.
 	 */
-	public function __construct()
+	public function __construct(bool $useLocalizedDefaults = true)
 	{
-		$this->siteTitle = NameService::replaceCopilotName(Loc::getMessage('LANDING_COPILOT_DEFAULT_SITE_TITLE_MSGVER_1'));
-		$this->pageTitle = NameService::replaceCopilotName(Loc::getMessage('LANDING_COPILOT_DEFAULT_PAGE_TITLE_MSGVER_1'));
-		$this->pageDescription = NameService::replaceCopilotName(Loc::getMessage('LANDING_COPILOT_DEFAULT_PAGE_DESCRIPTION_MSGVER_1'));
+		$this->siteTitle = $useLocalizedDefaults
+			? NameService::replaceCopilotName(Loc::getMessage('LANDING_COPILOT_DEFAULT_SITE_TITLE_MSGVER_1'))
+			: ''
+		;
+		$this->pageTitle = $useLocalizedDefaults
+			? NameService::replaceCopilotName(Loc::getMessage('LANDING_COPILOT_DEFAULT_PAGE_TITLE_MSGVER_1'))
+			: ''
+		;
+		$this->pageMetaTitle = $this->pageTitle;
+		$this->pageDescription = $useLocalizedDefaults
+			? NameService::replaceCopilotName(Loc::getMessage('LANDING_COPILOT_DEFAULT_PAGE_DESCRIPTION_MSGVER_1'))
+			: ''
+		;
 		$this->siteTopic = '';
 		$this->imageStyle = '';
 
@@ -182,16 +193,11 @@ class Site
 				continue;
 			}
 
-			switch ($nodeType)
-			{
-				case 'text':
-					$nodesData = Text::getNode($blockInstance, $node['code']);
-					foreach ($nodesData as $nodeData)
-					{
-						$nodeValues[] = $nodeData;
-					}
-					$nodeValues = array_merge($nodeValues, $nodesData);
-					break;
+				switch ($nodeType)
+				{
+					case 'text':
+						$nodeValues = Text::getNode($blockInstance, $node['code']);
+						break;
 
 				case 'link':
 					$nodesData = Link::getNode($blockInstance, $node['code']);
@@ -347,6 +353,13 @@ class Site
 		return $this;
 	}
 
+	public function setPageMetaTitle(string $title): self
+	{
+		$this->pageMetaTitle = $title;
+
+		return $this;
+	}
+
 	/**
 	 * Sets the page description from the provided data.
 	 *
@@ -421,6 +434,11 @@ class Site
 	public function getPageTitle(): string
 	{
 		return $this->pageTitle;
+	}
+
+	public function getPageMetaTitle(): string
+	{
+		return $this->pageMetaTitle !== '' ? $this->pageMetaTitle : $this->pageTitle;
 	}
 
 	/**
@@ -613,7 +631,6 @@ class Site
 	 */
 	public function getSiteId(): ?int
 	{
-		// todo: cant return not init param
 		return $this->siteId;
 	}
 
@@ -698,6 +715,7 @@ class Site
 
 		$data['siteTitle'] = $this->siteTitle;
 		$data['pageTitle'] = $this->pageTitle;
+		$data['pageMetaTitle'] = $this->pageMetaTitle;
 		$data['pageDescription'] = $this->pageDescription;
 		$data['siteTopic'] = $this->siteTopic;
 		$data['imageStyle'] = $this->imageStyle;
@@ -729,7 +747,7 @@ class Site
 	 */
 	public static function fromArray(array $data): self
 	{
-		$siteData = new Site();
+		$siteData = new Site(false);
 
 		$siteData->setWishes(Wishes::fromArray($data['wishes'] ?? []));
 
@@ -742,9 +760,10 @@ class Site
 			$siteData->setLandingId($data['landingId']);
 		}
 
-		$siteData->setSiteTitle($data['siteTitle']);
-		$siteData->setPageTitle($data['pageTitle']);
-		$siteData->setPageDescription($data['pageDescription']);
+		$siteData->setSiteTitle((string)($data['siteTitle'] ?? ''));
+		$siteData->setPageTitle((string)($data['pageTitle'] ?? ''));
+		$siteData->setPageMetaTitle((string)($data['pageMetaTitle'] ?? ($data['pageTitle'] ?? '')));
+		$siteData->setPageDescription((string)($data['pageDescription'] ?? ''));
 		if (isset($data['siteTopic']))
 		{
 			$siteData->setSiteTopic($data['siteTopic']);
@@ -753,7 +772,7 @@ class Site
 		{
 			$siteData->setImageStyle($data['imageStyle']);
 		}
-		$siteData->setKeywords($data['keywords']);
+		$siteData->setKeywords((string)($data['keywords'] ?? ''));
 
 		if (isset($data['preview']['prompt']))
 		{
@@ -764,7 +783,7 @@ class Site
 			$siteData->setPreviewImageSrc($data['preview']['src']);
 		}
 
-		foreach ($data['blocks'] as $block)
+		foreach (($data['blocks'] ?? []) as $block)
 		{
 			$block = Data\Block::fromArray($block);
 			$siteData->addBlock($block);
@@ -772,8 +791,14 @@ class Site
 
 		$siteData->setTitleStyleClass($data['titleStyleClass'] ?? '');
 
-		$siteData->setColors($data['colors']);
-		$siteData->setFonts($data['fonts']);
+		if (($data['colors'] ?? null) instanceof ColorsDto)
+		{
+			$siteData->setColors($data['colors']);
+		}
+		if (($data['fonts'] ?? null) instanceof FontsDto)
+		{
+			$siteData->setFonts($data['fonts']);
+		}
 
 		return $siteData;
 	}

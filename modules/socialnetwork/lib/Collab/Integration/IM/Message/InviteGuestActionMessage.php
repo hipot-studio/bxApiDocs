@@ -82,7 +82,7 @@ class InviteGuestActionMessage implements ActionMessageInterface
 			message: $message,
 			senderId: $this->senderId,
 			groupId: $this->collabId,
-			silent: Feature::isNewProjectsOn() ? self::SILENT_WITH_RECENT : self::SILENT_OFF,
+			silent: $this->resolveCounterSilent(ActionType::InviteGuest, $this->collabId, Feature::isNewProjectsOn() ? self::SILENT_WITH_RECENT : self::SILENT_OFF),
 		);
 	}
 }

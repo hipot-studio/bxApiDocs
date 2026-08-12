@@ -13,7 +13,7 @@ class FollowUpTaskEvent extends Event
 {
 	protected function setDefaultParams(): self
 	{
-		if ($this->call->getId() !== null)
+		if ($this->call->getUuid() !== null)
 		{
 			$userCount = 0;
 			foreach ($this->call->getCallUsers() as $user)

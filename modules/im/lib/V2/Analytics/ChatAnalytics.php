@@ -8,9 +8,12 @@ use Bitrix\Disk\Analytics\DiskAnalytics;
 use Bitrix\Disk\Analytics\Enum\ImSection;
 use Bitrix\Disk\File;
 use Bitrix\Im\V2\Analytics\Event\ChatEvent;
+use Bitrix\Im\V2\Analytics\Event\GuestInviteEvent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
+use Bitrix\Im\V2\SharingLink\GuestChatLink;
+use Bitrix\Im\V2\SharingLink\InviteMethod;
 use Bitrix\ImBot\Bot\Support24;
 use Bitrix\Main\Loader;
 
@@ -28,6 +31,8 @@ class ChatAnalytics extends AbstractAnalytics
 	protected const SET_TYPE = 'set_type';
 	protected const AUTODELETE_ON = 'autodelete_on';
 	protected const AUTODELETE_OFF = 'autodelete_off';
+	protected const JOIN_CHAT = 'join_chat';
+	protected const INVITE_GUEST = 'invite_guest';
 
 	protected static array $oneTimeEvents = [];
 	protected static array|bool $blockSingleUserEvents = [];
@@ -122,6 +127,40 @@ class ChatAnalytics extends AbstractAnalytics
 				->send()
 			;
 		});
+	}
+
+	public function addJoinChatByGuestLink(GuestChatLink $link): void
+	{
+		$this->async(function () use ($link) {
+			$this
+				->createChatEvent(self::JOIN_CHAT)
+				?->setType($link->getInviteMethod()->value)
+				->send()
+			;
+		});
+	}
+
+	public function addInviteGuest(InviteMethod $method): void
+	{
+		$this->async(function () use ($method) {
+			$this
+				->createGuestInviteEvent(self::INVITE_GUEST)
+				?->setType($method->value)
+				->setP4(null)
+				->setP5(null)
+				->send()
+			;
+		});
+	}
+
+	protected function createGuestInviteEvent(string $eventName): ?GuestInviteEvent
+	{
+		if (!$this->isChatTypeAllowed($this->chat, $eventName))
+		{
+			return null;
+		}
+
+		return new GuestInviteEvent($eventName, $this->chat, $this->getContext()->getUserId());
 	}
 
 	protected function addChatEditEvent(string $eventName): void

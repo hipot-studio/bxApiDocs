@@ -36,6 +36,7 @@ use Bitrix\Main\ObjectException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\SystemException;
+use Throwable;
 
 class CreateConnectionCommandHandler
 {
@@ -118,6 +119,14 @@ class CreateConnectionCommandHandler
 
 			$this->eventSynchronizer->exportEvents($userId);
 			$this->addPullEvent($connection, MasterPushHandler::MASTER_STAGE[3]);
+		}
+		catch (Throwable $e)
+		{
+			throw new Exception(
+				'Unable to create connection for Google: ' . $e->getMessage(),
+				$e->getCode(),
+				$e,
+			);
 		}
 		finally
 		{

@@ -6,7 +6,7 @@ use Bitrix\Main;
 
 abstract class Base
 {
-	private Main\DB\PgsqlSqlHelper|Main\DB\MysqliSqlHelper $sqlHelper;
+	protected Main\DB\PgsqlSqlHelper|Main\DB\MysqliSqlHelper $sqlHelper;
 
 	public function __construct(
 		readonly protected string $name,

@@ -3,14 +3,16 @@
 namespace Bitrix\Crm\Integration;
 
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Communications;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\MessageSender\Channel;
 use Bitrix\Crm\MessageSender\Channel\Correspondents\From;
 use Bitrix\Crm\MessageSender\ICanSendMessage;
-use Bitrix\Crm\MessageSender\UI\Taxonomy;
 use Bitrix\Crm\Settings;
 use Bitrix\Main;
+use Bitrix\Main\ORM\Data\AddResult;
+use Bitrix\Main\Result;
 use Bitrix\MessageService;
+use Bitrix\MessageService\Sender\Sms\Ednaru;
+use Bitrix\MessageService\Sender\Sms\Wazzup;
 
 /**
  * Class SmsManager
@@ -241,9 +243,7 @@ class SmsManager implements ICanSendMessage
 
 	public static function isEdnaWhatsAppSendingEnabled(string $senderId): bool
 	{
-		return $senderId === 'ednaru'
-			&& Settings\Crm::isWhatsAppScenarioEnabled()
-		;
+		return static::canUse() && $senderId === Ednaru::ID;
 	}
 
 	public static function getSenderShortName($senderId)
@@ -305,7 +305,7 @@ class SmsManager implements ICanSendMessage
 
 	/**
 	 * @param array $messageFields
-	 * @return Main\Entity\AddResult|false
+	 * @return Result|AddResult|false
 	 */
 	public static function sendMessage(array $messageFields)
 	{
@@ -530,16 +530,46 @@ class SmsManager implements ICanSendMessage
 
 	final public static function getActivityProviderId(string $channelId, ?string $fromType): string
 	{
-		if (Taxonomy::isWhatsAppByParams(self::getSenderCode(), $channelId, $fromType))
+		if (!self::canUse())
+		{
+			return \Bitrix\Crm\Activity\Provider\Sms::getId();
+		}
+
+		if (self::isWhatsAppByParams($channelId, $fromType))
 		{
 			return \Bitrix\Crm\Activity\Provider\WhatsApp::getId();
 		}
 
-		if (Feature::enabled(Feature\TelegramActivity::class) && Taxonomy::isTelegramByParams(self::getSenderCode(), $channelId, $fromType))
+		if (self::isTelegramByParams($channelId, $fromType))
 		{
 			return \Bitrix\Crm\Activity\Provider\Telegram::getId();
 		}
 
 		return \Bitrix\Crm\Activity\Provider\Sms::getId();
+	}
+
+	private static function isWhatsAppByParams(string $channelId, ?string $fromType): bool
+	{
+		if ($channelId === Ednaru::ID)
+		{
+			return true;
+		}
+
+		if ($channelId === Wazzup::ID)
+		{
+			return (string)$fromType === Wazzup::CHANNEL_TYPE_WHATSAPP;
+		}
+
+		return false;
+	}
+
+	private static function isTelegramByParams(string $channelId, ?string $fromType): bool
+	{
+		if ($channelId !== Wazzup::ID)
+		{
+			return false;
+		}
+
+		return (string)$fromType === Wazzup::CHANNEL_TYPE_TGAPI || (string)$fromType === 'telegram';
 	}
 }

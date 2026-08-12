@@ -1,11 +1,13 @@
 <?php
 namespace Bitrix\Crm\Settings;
 
+use Bitrix\Crm\Component\DisableHelpers\OldInvoiceReadonlyHelper;
 use Bitrix\Crm\Conversion\ConversionManager;
 use Bitrix\Crm\Conversion\EntityConversionConfig;
 use Bitrix\Crm\Integration\Bitrix24Manager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\ModuleManager;
 
 class InvoiceSettings
@@ -198,6 +200,12 @@ class InvoiceSettings
 		foreach (ConversionManager::getSourceEntityTypeIDs(\CCrmOwnerType::Invoice) as $sourceEntityTypeID)
 		{
 			EntityConversionConfig::removeByEntityTypeId($sourceEntityTypeID);
+		}
+
+		if (!$this->isOldInvoicesEnabled())
+		{
+			Option::delete('crm', ['name' => OldInvoiceReadonlyHelper::INSTALL_DATE_OPTION]);
+			\CUserOptions::DeleteOptionsByName('crm', OldInvoiceReadonlyHelper::WARNING_LAST_SHOWN_FIELD);
 		}
 	}
 

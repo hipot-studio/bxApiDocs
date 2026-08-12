@@ -3,15 +3,20 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Step;
 
+use Bitrix\Landing\Copilot\Generation\Step\Request\RequestSingle;
 use Bitrix\Landing\Copilot\Connector\AI;
 use Bitrix\Landing\Copilot\Connector\AI\Prompt;
 use Bitrix\Landing\Copilot\Data\Block\Collector;
 use Bitrix\Landing\Copilot\Data\Node\Node;
 use Bitrix\Landing\Copilot\Data\Site;
 use Bitrix\Landing\Copilot\Data\Type\NodeType;
+use Bitrix\Landing\Copilot\Generation\Error;
+use Bitrix\Landing\Copilot\Generation\GenerationException;
+use Bitrix\Landing\Copilot\Generation\Log;
 use Bitrix\Landing\Copilot\Generation\Request;
-use Bitrix\Landing\Copilot\Generation\Type;
+use Bitrix\Landing\Copilot\Generation\Type\Errors;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntities;
+use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Model\RequestToEntitiesTable;
 use Bitrix\Landing\Landing;
@@ -19,13 +24,90 @@ use Bitrix\Landing\Rights;
 
 class RequestPreviewImage extends RequestSingle
 {
+	private const DATA_RETRY_COUNT_KEY = 'previewImageRetryCount';
+	private const MAX_RETRY_ATTEMPTS = 1;
+	private const TIMEOUT_ERROR_MESSAGE = 'timeout waiting AI preview image response';
+
 	public function __construct()
 	{
 		parent::__construct();
-		if (class_exists(self::getConnectorClass()))
+		$this->initializeConnector();
+	}
+
+	public function execute(): bool
+	{
+		if (!isset($this->generation, $this->siteData, $this->stepId, $this->connector))
 		{
-			$this->connector = new (self::getConnectorClass())();
+			return false;
 		}
+
+		if (
+			isset($this->request)
+			&& $this->request->isTimeIsOver()
+		)
+		{
+			$this->markTimedOutRequestAsError();
+		}
+
+		if (!isset($this->request))
+		{
+			$this->request = $this->sendPreviewRequest();
+
+			return true;
+		}
+
+		if ($this->request->getError())
+		{
+			if ($this->canRetryPreviewRequest())
+			{
+				$this->retryPreviewRequest();
+			}
+			else
+			{
+				$this->finishWithoutPreview();
+			}
+
+			return true;
+		}
+
+		if ($this->request->isReceived())
+		{
+			try
+			{
+				$this->verifyResponse();
+			}
+			catch (GenerationException)
+			{
+				if ($this->canRetryPreviewRequest())
+				{
+					$this->retryPreviewRequest();
+				}
+				else
+				{
+					$this->finishWithoutPreview();
+				}
+
+				return true;
+			}
+
+			if ($this->applyResponse())
+			{
+				$this->request->setApplied();
+				$this->resetPreviewRetryCount();
+			}
+			elseif ($this->canRetryPreviewRequest())
+			{
+				$this->retryPreviewRequest();
+			}
+			else
+			{
+				$this->finishWithoutPreview();
+			}
+
+			$this->changed = true;
+		}
+
+		return true;
 	}
 
 	/**
@@ -54,103 +136,6 @@ class RequestPreviewImage extends RequestSingle
 
 	protected const EVENT_NAME = 'onPreviewImageCreate';
 
-	/**
-	 * @inheritdoc
-	 */
-	protected function getEntityToRequest(): array
-	{
-		if (!isset($this->siteData))
-		{
-			return [];
-		}
-
-		static $entities = null;
-		if (isset($entities))
-		{
-			return $entities;
-		}
-
-		$entities = [];
-
-		$landingId = $this->siteData->getLandingId();
-		$prompt = $this->siteData->getPreviewImagePromptText();
-
-		$entity = [];
-		$key = self::createEntityKey($landingId);
-		$entity[$key] = [
-			'landingId' => $landingId,
-			'prompt' => $prompt,
-		];
-
-		// mark sent requests
-		if (!empty($entity))
-		{
-			$generationId = $this->generation->getId();
-
-			$res = RequestToEntitiesTable::query()
-				->setSelect([
-					'REQUEST_ID',
-					'LANDING_ID',
-				])
-				->where('LANDING_ID', '=', $landingId)
-				->where('STEP_REF.GENERATION_ID', '=', $generationId)
-				->where('STEP_REF.STEP', '=', $this->stepId)
-				->where('REQUEST_REF.DELETED', '=', 'N')
-				->exec()
-			;
-
-			while ($row = $res->fetch())
-			{
-				$key = self::createEntityKey($row['LANDING_ID']);
-				if (isset($entity[$key]))
-				{
-					$entity[$key]['requestId'] = (int)$row['REQUEST_ID'];
-				}
-			}
-		}
-
-		return $entity;
-	}
-
-	protected static function createEntityKey(int $landingId): string
-	{
-		return "l{$landingId}_preview";
-	}
-
-	protected function sendRequest(): bool
-	{
-		if (!isset($this->siteData, $this->stepId))
-		{
-			return false;
-		}
-
-		$entity = $this->getEntityToRequest();
-		if (!isset($entity['landingId'], $entity['prompt']))
-		{
-			return false;
-		}
-
-		if (isset($entity['requestId']))
-		{
-			return false;
-		}
-
-		$prompt = new Prompt($entity['prompt']);
-		$prompt->setMarkers(['format' => 'square']);
-
-		$request = new Request($this->generation->getId(), $this->stepId);
-		if ($request->send($prompt, $this->connector))
-		{
-			RequestToEntitiesTable::add([
-				'REQUEST_ID' => $request->getId(),
-				'ENTITY_TYPE' => Type\RequestEntities::Image->value,
-				'LANDING_ID' => $entity['landingId'],
-			]);
-		}
-
-		return true;
-	}
-
 	protected function applyResponse(): bool
 	{
 		$responseApplied = false;
@@ -163,46 +148,80 @@ class RequestPreviewImage extends RequestSingle
 		{
 			$result = $this->request->getResult();
 
-			if (isset($result[0]))
+			if (isset($result[0]) && $this->isValidPreviewSrc($result[0]))
 			{
-				$previewSrc = $result[0];
+				$previewSrc = trim((string)$result[0]);
 				$isNeedSetPreviewImageSrcToNode = true;
+				$responseApplied = true;
 			}
-
-			$responseApplied = true;
 		}
 
 		if ($responseApplied === false)
 		{
 			$fixedPreview = $this->fixPreview();
-			if ($fixedPreview !== null)
+			if ($this->isValidPreviewSrc($fixedPreview))
 			{
-				$previewSrc = $fixedPreview;
+				$previewSrc = trim((string)$fixedPreview);
 				$responseApplied = true;
 			}
 		}
 
-		if ($previewSrc && $previewSrc !== $this->siteData->getPreviewImageSrc())
+		if ($isNeedSetPreviewImageSrcToNode && Log::isEnabled())
 		{
-			$this->siteData->setPreviewImageSrc($previewSrc);
-			if ($isNeedSetPreviewImageSrcToNode)
-			{
-				$this->setPreviewImageSrcToNode();
-			}
+			(new Log($this->generation->getId()))->addResponse(
+				(int)$this->stepId,
+				'AI response: preview image',
+				$this->request->getResult(),
+			);
+		}
 
-			$landingId = $this->siteData->getLandingId();
-			if ($landingId > 0)
-			{
-				$additionalFields = [
-					'METAOG_IMAGE' => $previewSrc,
-				];
-				Rights::setGlobalOff();
-				Landing::saveAdditionalFields($this->siteData->getLandingId(), $additionalFields);
-				Rights::setGlobalOn();
-			}
+		if ($previewSrc)
+		{
+			$this->applyPreviewSrc($previewSrc, $isNeedSetPreviewImageSrcToNode);
 		}
 
 		return $responseApplied;
+	}
+
+	private function applyPreviewSrc(string $previewSrc, bool $isNeedSetPreviewImageSrcToNode): void
+	{
+		if ($previewSrc === $this->siteData->getPreviewImageSrc())
+		{
+			return;
+		}
+
+		$this->siteData->setPreviewImageSrc($previewSrc);
+		if ($isNeedSetPreviewImageSrcToNode)
+		{
+			$this->setPreviewImageSrcToNode();
+		}
+
+		$landingId = $this->siteData->getLandingId();
+		if ($landingId <= 0)
+		{
+			return;
+		}
+
+		$additionalFields = [
+			'METAOG_IMAGE' => $previewSrc,
+		];
+		$rightsBefore = Rights::isOn();
+		Rights::setGlobalOff();
+		try
+		{
+			Landing::saveAdditionalFields($landingId, $additionalFields);
+		}
+		finally
+		{
+			if ($rightsBefore)
+			{
+				Rights::setGlobalOn();
+			}
+			else
+			{
+				Rights::setGlobalOff();
+			}
+		}
 	}
 
 	private function fixPreview(): ?string
@@ -276,14 +295,36 @@ class RequestPreviewImage extends RequestSingle
 	 */
 	protected function setPreviewImageSrcToNode(): void
 	{
-		$isFindFirstNode = false;
+		$targetNode = $this->findFirstNodeUsePreviewImage();
+		if ($targetNode === null)
+		{
+			return;
+		}
+
+		//todo: add 2x
+		$previewImageSrc = $this->siteData->getPreviewImageSrc();
+		if ($previewImageSrc === null)
+		{
+			return;
+		}
+
+		$position = 0;
+		$targetNode['node']
+			->setImageFromPath($previewImageSrc, $position)
+			->toLanding($position);
+
+		$this->ensureRequestToEntityRecordExists($targetNode['blockId'], $targetNode['codeNode'], $position);
+		$this->syncNodeWithExistingLandingBlock($targetNode['block'], $targetNode['node'], $targetNode['blockId'], $targetNode['codeNode']);
+	}
+
+	/**
+	 * @return array{block: object, node: object, codeNode: string, blockId: int}|null
+	 */
+	private function findFirstNodeUsePreviewImage(): ?array
+	{
 		$imgNodesUsesPreviewImage = Collector::getImgNodesUsePreviewImage();
 		foreach ($this->siteData->getBlocks() as $block)
 		{
-			if ($isFindFirstNode)
-			{
-				break;
-			}
 			$codeBlock = $block->getCode();
 			foreach ($block->getNodes() as $node)
 			{
@@ -294,63 +335,210 @@ class RequestPreviewImage extends RequestSingle
 					&& method_exists($node, 'setImageFromPath')
 				)
 				{
-					//todo: add 2x
-					$previewImageSrc = $this->siteData->getPreviewImageSrc();
-					if ($previewImageSrc === null)
-					{
-						return;
-					}
-
-					$position = 0;
-					$node
-						->setImageFromPath($previewImageSrc, $position)
-						->toLanding($position);
-
-					$isFindFirstNode = true;
-					$blockId = $block->getId();
-
-					$requestId = $this->request->getId();
-					$existingRecord = RequestToEntitiesTable::getList([
-						'filter' => [
-							'REQUEST_ID' => $requestId,
-							'ENTITY_TYPE' => RequestEntities::Image->value,
-							'BLOCK_ID' => $blockId,
-							'NODE_CODE' =>$codeNode,
-							'POSITION' => $position,
-						],
-					])->fetch();
-
-					if (!$existingRecord)
-					{
-						RequestToEntitiesTable::add([
-							'REQUEST_ID' => $requestId,
-							'ENTITY_TYPE' => RequestEntities::Image->value,
-							'LANDING_ID' => null,
-							'BLOCK_ID' => $blockId,
-							'NODE_CODE' => $codeNode,
-							'POSITION' => 0,
-						]);
-					}
-
-					//if the block has already been created
-					if ($blockId > 0)
-					{
-						$blockInstance = $this->siteData->getLandingInstance()?->getBlockById($blockId);
-						$blockNodes = $block->getNodes();
-						if ($blockInstance && $blockNodes)
-						{
-							$nodesArray[$codeNode] = $node->getValues();
-							$blockInstance->updateNodes($nodesArray);
-							$blockInstance->save();
-						}
-					}
-					break;
+					return [
+						'block' => $block,
+						'node' => $node,
+						'codeNode' => $codeNode,
+						'blockId' => $block->getId(),
+					];
 				}
 			}
+		}
+
+		return null;
+	}
+
+	private function ensureRequestToEntityRecordExists(int $blockId, string $codeNode, int $position): void
+	{
+		$requestId = $this->request->getId();
+		$existingRecord = RequestToEntitiesTable::getList([
+			'filter' => [
+				'REQUEST_ID' => $requestId,
+				'ENTITY_TYPE' => RequestEntities::Image->value,
+				'BLOCK_ID' => $blockId,
+				'NODE_CODE' => $codeNode,
+				'POSITION' => $position,
+			],
+		])->fetch();
+
+		if (!$existingRecord)
+		{
+			RequestToEntitiesTable::add([
+				'REQUEST_ID' => $requestId,
+				'ENTITY_TYPE' => RequestEntities::Image->value,
+				'LANDING_ID' => null,
+				'BLOCK_ID' => $blockId,
+				'NODE_CODE' => $codeNode,
+				'POSITION' => 0,
+			]);
+		}
+	}
+
+	private function syncNodeWithExistingLandingBlock($block, $node, int $blockId, string $codeNode): void
+	{
+		//if the block has already been created
+		if ($blockId <= 0)
+		{
+			return;
+		}
+
+		$blockInstance = $this->siteData->getLandingInstance()?->getBlockById($blockId);
+		$blockNodes = $block->getNodes();
+		if ($blockInstance && $blockNodes)
+		{
+			$nodesArray[$codeNode] = $node->getValues();
+			$blockInstance->updateNodes($nodesArray);
+			$blockInstance->save();
 		}
 	}
 
 	public function verifyResponse(): void
 	{
+		$result = $this->request->getResult();
+		if (!is_array($result))
+		{
+			throw new GenerationException(
+				GenerationErrors::notCorrectResponse,
+				'Preview image response must be an array.',
+			);
+		}
+
+		if (isset($result[0]) && !$this->isValidPreviewSrc($result[0]))
+		{
+			throw new GenerationException(
+				GenerationErrors::notCorrectResponse,
+				'Preview image response contains invalid src.',
+			);
+		}
+	}
+
+	private function isValidPreviewSrc(mixed $src): bool
+	{
+		if (!is_string($src))
+		{
+			return false;
+		}
+
+		$src = trim($src);
+		if ($src === '')
+		{
+			return false;
+		}
+
+		return
+			(str_starts_with($src, 'http://') || str_starts_with($src, 'https://'))
+			|| str_starts_with($src, '/')
+		;
+	}
+
+	protected function sendPreviewRequest(): Request
+	{
+		$request = new Request($this->generation->getId(), $this->stepId);
+		$prompt = $this->getPrompt();
+		if (Log::isEnabled())
+		{
+			(new Log($this->generation->getId()))->addRequestPrompt(
+				(int)$this->stepId,
+				'AI request: preview image',
+				$prompt->getCode(),
+			);
+		}
+
+		if (!$request->send($prompt, $this->connector))
+		{
+			throw new GenerationException(
+				GenerationErrors::notSendRequest,
+				"Failed to send request for generation {$this->generation->getId()}, step {$this->stepId}.",
+			);
+		}
+
+		return $request;
+	}
+
+	private function markTimedOutRequestAsError(): void
+	{
+		if (!isset($this->request))
+		{
+			return;
+		}
+
+		$error = Error::createError(Errors::requestFail);
+		$error->message .= ': ' . self::TIMEOUT_ERROR_MESSAGE;
+		if (!$this->request->saveError($error))
+		{
+			throw new GenerationException(
+				GenerationErrors::errorInRequest,
+				"Failed to save timeout error for preview image request in generation {$this->generation->getId()}, step {$this->stepId}.",
+			);
+		}
+	}
+
+	private function retryPreviewRequest(): void
+	{
+		if (!isset($this->request))
+		{
+			return;
+		}
+
+		$failedRequest = $this->request;
+		$this->incrementPreviewRetryCount();
+
+		try
+		{
+			$this->request = $this->sendPreviewRequest();
+			$failedRequest->setDeleted();
+		}
+		catch (GenerationException)
+		{
+			$this->request = $failedRequest;
+			$this->finishWithoutPreview();
+		}
+
+		$this->changed = true;
+	}
+
+	private function finishWithoutPreview(): void
+	{
+		if (!isset($this->request))
+		{
+			return;
+		}
+
+		$fixedPreview = $this->fixPreview();
+		if ($this->isValidPreviewSrc($fixedPreview))
+		{
+			$this->applyPreviewSrc(trim((string)$fixedPreview), false);
+		}
+
+		if (!$this->request->setApplied())
+		{
+			throw new GenerationException(
+				GenerationErrors::errorInRequest,
+				"Failed to apply preview image request fallback for generation {$this->generation->getId()}, step {$this->stepId}.",
+			);
+		}
+
+		$this->resetPreviewRetryCount();
+		$this->changed = true;
+	}
+
+	private function canRetryPreviewRequest(): bool
+	{
+		return $this->getPreviewRetryCount() < self::MAX_RETRY_ATTEMPTS;
+	}
+
+	private function getPreviewRetryCount(): int
+	{
+		return max(0, (int)$this->generation->getData(self::DATA_RETRY_COUNT_KEY));
+	}
+
+	private function incrementPreviewRetryCount(): void
+	{
+		$this->generation->setData(self::DATA_RETRY_COUNT_KEY, $this->getPreviewRetryCount() + 1);
+	}
+
+	private function resetPreviewRetryCount(): void
+	{
+		$this->generation->deleteData(self::DATA_RETRY_COUNT_KEY);
 	}
 }

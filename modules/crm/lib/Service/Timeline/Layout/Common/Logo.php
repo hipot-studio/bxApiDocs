@@ -38,6 +38,7 @@ class Logo
 	public const CHANNEL_EDNA = 'channel-edna';
 	public const CHANNEL_WHATSAPP = 'channel-whatsapp';
 	public const MAIL_OUTCOME = 'mail-outcome';
+	public const EMAIL = 'email';
 	public const LIST_CHECK = 'list-check';
 	public const SHOP = 'shop';
 	public const NOTIFICATION = 'notification';
@@ -100,13 +101,14 @@ class Logo
 		switch ($this->getCode())
 		{
 			case self::CALL_PLAY_RECORD:
+				return (new Body\Logo($this->getCode()));
+
 			case self::DOCUMENT:
 			case self::DOCUMENT_PRINT:
 			case self::DOCUMENT_SIGNED:
 			case self::DOCUMENT_DRAFT:
 			case self::MAIL_OUTCOME:
-				return (new Body\Logo($this->getCode()));
-
+			case self::EMAIL:
 			case self::CALL_INCOMING:
 			case self::CALL_DEFAULT:
 			case self::CALL_OUTGOING:

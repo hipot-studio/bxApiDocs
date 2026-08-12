@@ -8,6 +8,12 @@ class Helper
 	public const ACCOUNT_TYPE = 'icloud';
 	public const CONNECTION_NAME = 'ICloud (#NAME#)';
 
+	/**
+	 * Cross-process advisory lock key prefix. It serializes the initial import
+	 * of a single iCloud connection so every import caller site contends on the same key.
+	 */
+	public const IMPORT_LOCK_NAME_PREFIX = 'calendar:icloud:sync:';
+
 	public const EXCLUDED_CALENDARS = [
 		'inbox',
 		'outbox',
@@ -15,6 +21,11 @@ class Helper
 		'tasks',
 		'calendars',
 	];
+
+	public static function getImportLockName(int $connectionId): string
+	{
+		return self::IMPORT_LOCK_NAME_PREFIX . $connectionId;
+	}
 
 	/**
 	 * @param string $accountType

@@ -3,6 +3,7 @@
 namespace Bitrix\Call;
 
 use Bitrix\Call\Integration\AI\ChatMessage;
+use Bitrix\Call\Analytics\CloudRecordAnalytics;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatFactory;
@@ -26,6 +27,7 @@ class NotifyService
 		MESSAGE_TYPE_DECLINED = 'DECLINED',
 		MESSAGE_TYPE_BUSY = 'BUSY',
 		MESSAGE_TYPE_MISSED = 'MISSED',
+		MESSAGE_TYPE_CANCELLED = 'CANCELLED',
 		MESSAGE_TYPE_ERROR = 'ERROR',
 		MESSAGE_TYPE_AI_OVERVIEW = 'AI_OVERVIEW',
 		MESSAGE_TYPE_AI_START = 'AI_START',
@@ -35,7 +37,8 @@ class NotifyService
 		MESSAGE_TYPE_AI_DESTROY = 'AI_DESTROY',
 		MESSAGE_TYPE_AUDIO_RECORD = 'AUDIO_RECORD',
 		MESSAGE_TYPE_CLOUD_RECORD_PREPARE = 'CLOUD_RECORD_PREPARE',
-		MESSAGE_TYPE_CLOUD_RECORD_READY = 'CLOUD_RECORD_READY'
+		MESSAGE_TYPE_CLOUD_RECORD_READY = 'CLOUD_RECORD_READY',
+		MESSAGE_TYPE_NEW_USER_LIMIT = 'NEW_USER_LIMIT'
 	;
 
 	public const ADMIN_NOTIFICATION_TAG = 'call_registration';
@@ -333,34 +336,14 @@ class NotifyService
 			return;
 		}
 
-		$userId = $call->getActionUserId() ?: $call->getInitiatorId();
-
-		if ($track->getFileId() && !$track->getDiskFileId())
+		if (!$track->getDiskFileId())
 		{
-			$diskFileIds = \CIMDisk::UploadFileFromMain(
-				$call->getChatId(),
-				[$track->getFileId()],
-				$userId
-			);
-
-			if (!$diskFileIds || empty($diskFileIds[0]))
+			$diskResult = $track->attachToDisk();
+			if (!$diskResult->isSuccess())
 			{
+				(new CloudRecordAnalytics($call))->addSendMessage($track, 'disk_upload_error');
 				return;
 			}
-
-			$diskFileId = $diskFileIds[0];
-			$track->setDiskFileId($diskFileId);
-			$track->save();
-		}
-
-		if ($track->getDiskFileId())
-		{
-			\CIMDisk::UploadFileFromDisk(
-				$call->getChatId(),
-				['upload' . $track->getDiskFileId()],
-				'',
-				['USER_ID' => $userId]
-			);
 		}
 
 		$message = CallChatMessage::makeCloudRecordReadyMessage($call, $chat, $track);
@@ -372,6 +355,8 @@ class NotifyService
 		$context = (new Context())->setUser($call->getInitiatorId());
 
 		$this->sendMessageDeferred($chat, $message, $sendingConfig, $context);
+
+		(new CloudRecordAnalytics($call))->addSendMessage($track);
 	}
 
 	public function sendAudioRecordMessage(Call $call): self

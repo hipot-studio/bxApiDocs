@@ -3,15 +3,17 @@
 namespace Bitrix\Crm\Service;
 
 use Bitrix\Crm;
+use Bitrix\Crm\Currency;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\ProductRow;
 use Bitrix\Crm\ProductRowTable;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\InvalidOperationException;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
-use Bitrix\Main\Config\Option;
 
 class Accounting
 {
@@ -235,12 +237,37 @@ class Accounting
 
 	public static function getPricePrecision(): int
 	{
+		if (Loader::includeModule('sale'))
+		{
+			return ServiceLocator::getInstance()->get('sale.priceRounder')->getPrecision();
+		}
+
 		return self::PRICE_MAX_PRECISION;
 	}
 
-	public static function getPricePublicPrecision(): int
+	/**
+	 * Returns DECIMALS for public-facing price formatting/rounding.
+	 *
+	 * When $currencyId is provided and non-empty — returns DECIMALS of that currency
+	 * (e.g. JPY → 0, RUB → 2). Otherwise falls back to DECIMALS of the base currency.
+	 * If the `currency` module is unavailable, returns {@see self::PRICE_PUBLIC_PRECISION}.
+	 *
+	 * @param string|null $currencyId Currency code or null/empty for the base-currency fallback.
+	 */
+	public static function getPricePublicPrecision(?string $currencyId = null): int
 	{
-		return (int)Option::get('sale', 'value_precision', self::PRICE_PUBLIC_PRECISION);
+		if (Loader::includeModule('currency'))
+		{
+			$resolvedCurrencyId =
+				($currencyId !== null && $currencyId !== '')
+					? $currencyId
+					: Currency::getBaseCurrencyId()
+			;
+
+			return Currency::getCurrencyDecimals($resolvedCurrencyId);
+		}
+
+		return self::PRICE_PUBLIC_PRECISION;
 	}
 
 	public static function getRatePrecision(): int
@@ -259,6 +286,21 @@ class Accounting
 	): float
 	{
 		return round((float)$value, $precision ?? static::getPricePrecision());
+	}
+
+	/**
+	 * Rounds $value to the public-facing precision of $currencyId
+	 * (or of the base currency when $currencyId is null/empty).
+	 *
+	 * Use this for sums that are about to be displayed/persisted in user-visible
+	 * places (UI cells, REST payloads, exports), where precision must match the
+	 * currency's DECIMALS — e.g. 2 for RUB/USD, 0 for JPY/KRW.
+	 *
+	 * Replaces hardcoded {@see round()} calls with the magic constant 2.
+	 */
+	public static function roundPublic(mixed $value, ?string $currencyId = null): float
+	{
+		return static::round($value, static::getPricePublicPrecision($currencyId));
 	}
 
 	private static function getProductRowFieldNames(): array

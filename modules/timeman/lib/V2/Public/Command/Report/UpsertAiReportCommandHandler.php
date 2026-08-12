@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Timeman\V2\Public\Command\Report;
 
 use Bitrix\Main\Result;
-use Bitrix\Timeman\Model\Worktime\Report\WorktimeReportTable;
 use Bitrix\Timeman\V2\Internal\Service\ReportService;
+use Bitrix\Timeman\V2\Public\Dto\Report\RecordReportType;
 
 class UpsertAiReportCommandHandler
 {
@@ -20,7 +20,7 @@ class UpsertAiReportCommandHandler
 			$command->recordId,
 			$command->userId,
 			$command->reportText,
-			WorktimeReportTable::REPORT_TYPE_RECORD_AI_REPORT,
+			RecordReportType::AI_REPORT,
 		);
 	}
 }

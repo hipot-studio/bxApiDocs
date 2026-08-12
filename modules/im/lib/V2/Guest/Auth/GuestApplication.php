@@ -68,12 +68,17 @@ class GuestApplication extends Application
 	}
 
 	/**
-	 * Mirrors {@see \Bitrix\Intranet\PublicApplication::onApplicationScopeError}: only log
-	 * the guest out when the scope error is on '/' (the guest is actively trying to navigate
-	 * into the portal). For any other off-scope script — analytics counter, asset endpoint,
-	 * stray legacy script — fall through and let the prolog return its default 403. Calling
-	 * Logout() on every scope mismatch destroys the session via regenerateId() and races
-	 * against the JS bundle's AJAX burst, producing the intermittent 401/500 cascade.
+	 * Two off-scope cases get special handling; everything else falls through to the prolog's
+	 * default 403:
+	 *
+	 * - Employee profile ('/company/personal/user/...'): a guest can't pass the page's file-level
+	 *   access (no Read on /company), so the intranet profile component — and its "no access"
+	 *   stub — is never reached. Render that stub here instead of a blank 403 / login form.
+	 * - Portal root ('/'): the guest is actively navigating into the portal — log out and redirect.
+	 *
+	 * For any other off-scope script (analytics counter, asset endpoint, stray legacy script) we
+	 * fall through. Logout() must not run on those: Logout()→regenerateId() destroys the session
+	 * and races the JS bundle's AJAX burst (the 401/500/"Could not start session" cascade).
 	 */
 	public static function onApplicationScopeError(Event $event): void
 	{
@@ -83,7 +88,31 @@ class GuestApplication extends Application
 		}
 
 		$request = MainApplication::getInstance()->getContext()->getRequest();
-		if ($request->getDecodedUri() !== '/')
+		$uri = (string)$request->getDecodedUri();
+
+		if (str_starts_with($uri, '/company/personal/user/'))
+		{
+			// The profile opens inside a SidePanel iframe (IFRAME=Y) over the guest messenger —
+			// render the stub there. A full-page load of the same URL (reload / direct hit) carries
+			// no IFRAME param and would strand the guest on a bare stub without the messenger; send
+			// them back into the chat by invite code so reload stays navigable, like the portal.
+			if ($request->get('IFRAME') !== 'Y')
+			{
+				$code = InviteCode::createFromRequest();
+				if ($code !== null)
+				{
+					// Trailing slash: cloud nginx rejects the extension-less path without it before PHP routing.
+					\LocalRedirect(\Bitrix\Im\V2\Guest\GuestService::ROUTE_PATH . $code->getValue() . '/');
+				}
+			}
+
+			global $APPLICATION;
+			$APPLICATION->RestartBuffer();
+			require __DIR__ . '/../Controller/views/guest_profile_stub.php';
+			die();
+		}
+
+		if ($uri !== '/')
 		{
 			return;
 		}

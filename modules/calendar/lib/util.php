@@ -173,18 +173,18 @@ class Util
 						'id' => 'all-users'
 					];
 				}
-				elseif (mb_substr($code, 0, 1) == 'U')
+				elseif (str_starts_with($code, 'U'))
 				{
 					$entityList[] = [
 						'entityId' => 'user',
-						'id' => intval(mb_substr($code, 1))
+						'id' => (int)mb_substr($code, 1)
 					];
 				}
-				if (mb_substr($code, 0, 2) == 'DR')
+				if (str_starts_with($code, 'DR'))
 				{
 					$entityList[] = [
 						'entityId' => 'department',
-						'id' => intval(mb_substr($code, 2))
+						'id' => (int)mb_substr($code, 2)
 					];
 				}
 				elseif (preg_match('/^SG([0-9]+)_?([AEKMO])?$/', $code, $match) && isset($match[2]))
@@ -195,11 +195,11 @@ class Util
 						'id' => mb_substr($code, 2)
 					];
 				}
-				elseif (mb_substr($code, 0, 2) == 'SG')
+				elseif (str_starts_with($code, 'SG'))
 				{
 					$entityList[] = [
 						'entityId' => 'project',
-						'id' => intval(mb_substr($code, 2))
+						'id' => (int)mb_substr($code, 2)
 					];
 				}
 			}

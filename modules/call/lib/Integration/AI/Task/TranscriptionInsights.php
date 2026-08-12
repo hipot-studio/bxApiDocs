@@ -125,7 +125,7 @@ class TranscriptionInsights extends AITask
 		$transcription = $outcomeCollection->getOutcomeByType(SenseType::TRANSCRIBE->value)?->getSenseContent();
 		if (
 			!($transcription instanceof Transcription)
-			|| $transcription->isEmpty
+			|| !$transcription->hasContent()
 		)
 		{
 			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content
@@ -142,7 +142,7 @@ class TranscriptionInsights extends AITask
 		/** @var Overview $overview */
 		$overview = $outcome->getSenseContent();
 		$meetingType = 'undefined';
-		if (empty($overview?->meetingType?->typeTag))
+		if (!empty($overview?->meetingType?->typeTag))
 		{
 			$meetingType = $overview->meetingType->typeTag;
 		}

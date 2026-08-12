@@ -26,6 +26,7 @@ use Bitrix\ImOpenLines\Model\SessionCheckTable;
 use Bitrix\Imopenlines\Model\SessionIndexTable;
 use Bitrix\ImOpenLines\Model\SessionAutomaticTasksTable;
 use Bitrix\Imopenlines\Model\ConfigAutomaticMessagesTable;
+use Bitrix\ImOpenLines\V2\Analytics\Bot\EndBotSessionEventContext;
 
 use Bitrix\ImConnector;
 use Bitrix\ImConnector\InteractiveMessage;
@@ -130,6 +131,11 @@ class Session
 			$this->crmManager = new Crm($this);
 		}
 		return $this->crmManager;
+	}
+
+	private function isCrmActive(): bool
+	{
+		return $this->config['CRM'] == 'Y' && $this->getCrmManager()->isLoaded();
 	}
 
 	/**
@@ -414,16 +420,16 @@ class Session
 					->setCrmManager($crmManager)
 				;
 
+				$isExpectationBound = false;
 				if ($fields['MODE'] == self::MODE_INPUT)
 				{
 					if (
 						!empty($params['CRM_TRACKER_REF'])
-						&& $this->config['CRM'] == 'Y'
-						&& $crmManager->isLoaded()
+						&& $this->isCrmActive()
 					)
 					{
 						$tracker = new ImOpenLines\Tracker();
-						$tracker
+						$isExpectationBound = $tracker
 							->setSession($this)
 							->bindExpectationToChat(
 								$params['CRM_TRACKER_REF'],
@@ -460,14 +466,14 @@ class Session
 					if (isset($params['CONNECTOR']['message']['extraData']['SOURCE_SESSION_ID']))
 					{
 						$parentSession = SessionTable::getRow([
-							'select' => ['CHAT_ID'],
+							'select' => ['USER_CODE'],
 							'filter' => ['ID' => $params['CONNECTOR']['message']['extraData']['SOURCE_SESSION_ID']],
 						]);
 
 						$messageId = Messages\Session::sendMessageNewMultidialog(
 							$fields['SESSION_ID'],
 							$fields['CHAT_ID'],
-							$parentSession['CHAT_ID'],
+							(string)$parentSession['USER_CODE'],
 							$params['CONNECTOR']['message']['extraData']['SOURCE_SESSION_ID']
 						);
 					}
@@ -628,8 +634,7 @@ class Session
 					{
 						if (
 							!Connector::isEnableGroupByChat($fields['SOURCE'])
-							&& $this->config['CRM'] == 'Y'
-							&& $crmManager->isLoaded()
+							&& $this->isCrmActive()
 						)
 						{
 							$crmManager->getFields()->setTitle($this->chat->getData('TITLE'));
@@ -643,10 +648,14 @@ class Session
 							$crmManager->setDefaultFlags();
 						}
 					}
+					elseif ($isExpectationBound)
+					{
+						$crmManager->sendCrmImMessages();
+					}
 				}
 				elseif ($fields['MODE'] == self::MODE_OUTPUT)
 				{
-					if ($this->config['CRM'] == 'Y' && $crmManager->isLoaded())
+					if ($this->isCrmActive())
 					{
 						$crmManager->getFields()->setTitle($this->chat->getData('TITLE'));
 
@@ -972,6 +981,10 @@ class Session
 								'DATE_CREATE' => $this->session['DATE_CREATE']->getTimestamp()
 							],
 						]);
+
+						Connector::onSessionStart(
+							new Main\Event('imopenlines', 'OnSessionStart', ['RUNTIME_SESSION' => $this])
+						);
 					}
 					elseif (!$this->chat->isNowCreated())
 					{
@@ -1812,9 +1825,10 @@ class Session
 	 * Transfer session to the next operator in the queue.
 	 *
 	 * @param bool $manual
+	 * @param EndBotSessionEventContext|null $endBotSessionEventContext
 	 * @return bool
 	 */
-	public function transferToNextInQueue($manual = true)
+	public function transferToNextInQueue($manual = true, ?EndBotSessionEventContext $endBotSessionEventContext = null)
 	{
 		$result = false;
 
@@ -1823,7 +1837,13 @@ class Session
 		$queueManager = $this->getQueueManager();
 		if ($queueManager)
 		{
+			$endBotSessionEventContext = $this->prepareBotEndSessionEventContext($endBotSessionEventContext);
 			$result = $queueManager->transferToNext($manual);
+		}
+
+		if ($result && $endBotSessionEventContext !== null)
+		{
+			$this->sendBotEndSessionAnalyticsEvent($endBotSessionEventContext);
 		}
 
 		return $result;
@@ -2935,5 +2955,40 @@ class Session
 	public function getLanguage(): ?string
 	{
 		return $this->session['USER_LANG'];
+	}
+
+	private function sendBotEndSessionAnalyticsEvent(?EndBotSessionEventContext $context = null): void
+	{
+		(new ImOpenLines\V2\Analytics\Bot\EndBotSessionEvent())
+			->setContext($context)
+			->send()
+		;
+	}
+
+	private function prepareBotEndSessionEventContext(?EndBotSessionEventContext $context): ?EndBotSessionEventContext
+	{
+		if ($context === null)
+		{
+			return null;
+		}
+
+		$operator = User::getInstance((int)($this->session['OPERATOR_ID'] ?? null));
+		if (
+			($this->config['WELCOME_BOT_ENABLE'] ?? false) !== 'Y'
+			|| !$operator->isBot()
+		)
+		{
+			return null;
+		}
+
+		$botCode = $operator->getFields()['bot_data']['code'] ?? null;
+		if (!is_string($botCode))
+		{
+			return null;
+		}
+
+		return (clone $context)
+			->setBotCode($botCode)
+		;
 	}
 }

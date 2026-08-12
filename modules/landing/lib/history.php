@@ -96,6 +96,8 @@ class History
 	public static function unsetMultiplyMode(): void
 	{
 		self::$multiplyMode = false;
+		self::$multiplyId = null;
+		self::$multiplyStep = null;
 	}
 
 	/**
@@ -151,7 +153,6 @@ class History
 			if (!is_array($row['ACTION_PARAMS']))
 			{
 				$this->fixBrokenStep($step, $row['ID']);
-
 				continue;
 			}
 
@@ -188,6 +189,7 @@ class History
 						'ACTION_PARAMS' => $row['ACTION_PARAMS'],
 					];
 					$this->stack[$step - 1]['MULTIPLY'][] = $row['ID'];
+					continue;
 				}
 			}
 			else
@@ -394,6 +396,7 @@ class History
 		$this->stack = $newStack;
 	}
 
+
 	/**
 	 * Remove history records older X days. And save new step.
 	 * @param int $days
@@ -593,6 +596,11 @@ class History
 		}
 		$action->setParams($params);
 
+		if (History\ActionParamsGuard::containsUnneutralizedPhpOpenTagDeep($action->getParams()))
+		{
+			return false;
+		}
+
 		$sanitizableParamKeys = $action::getSanitizableParamKeys();
 		if (
 			$sanitizableParamKeys !== []
@@ -641,7 +649,8 @@ class History
 		$nextStep =
 			(self::$multiplyMode && self::$multiplyStep !== null)
 				? self::$multiplyStep
-				: $this->step + 1;
+				: $this->step + 1
+		;
 
 		if (!$this->saveStep($nextStep))
 		{
@@ -678,7 +687,12 @@ class History
 			$action = $this->getActionForStep($this->step, true);
 			if ($action && $action->execute())
 			{
-				return $this->saveStep($this->step - 1);
+				if ($this->saveStep($this->step - 1))
+				{
+					$this->touchLandingAfterHistoryCommand();
+
+					return true;
+				}
 			}
 		}
 
@@ -701,11 +715,33 @@ class History
 			$action = $this->getActionForStep($this->step + 1, false);
 			if ($action && $action->execute(false))
 			{
-				return $this->saveStep($this->step + 1);
+				if ($this->saveStep($this->step + 1))
+				{
+					$this->touchLandingAfterHistoryCommand();
+
+					return true;
+				}
 			}
 		}
 
 		return false;
+	}
+
+	private function touchLandingAfterHistoryCommand(): void
+	{
+		if ($this->entityType !== self::ENTITY_TYPE_LANDING)
+		{
+			return;
+		}
+
+		$landing = Landing::createInstance($this->entityId, [
+			'skip_blocks' => true,
+			'check_permissions' => false,
+		]);
+		if ($landing->exist())
+		{
+			$landing->touch();
+		}
 	}
 
 	protected function canRedo(): bool

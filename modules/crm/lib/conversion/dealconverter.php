@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Conversion;
 
 use Bitrix\Crm\Binding\EntityBinding;
 use Bitrix\Crm\EntityRequisite;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\ConversionSettings;
@@ -157,6 +158,13 @@ class DealConverter extends EntityConverter
 	 */
 	public function executePhase()
 	{
+		Container::getInstance()
+			->getContext()
+			->getAnalytics()
+			->setEvent(Dictionary::EVENT_ENTITY_CONVERT)
+			->setP2(['from', Dictionary::getAnalyticsEntityType(\CCrmOwnerType::Deal)])
+		;
+
 		if (parent::executePhase())
 		{
 			return true;

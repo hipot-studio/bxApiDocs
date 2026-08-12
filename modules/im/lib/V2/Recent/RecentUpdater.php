@@ -3,28 +3,40 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Recent;
 
-use Bitrix\Im\V2\Recent\Internal\RecentItemCache;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeFilterFactory;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeScope;
+use Bitrix\Im\V2\Recent\Internal\RecentItemCache;
+use Bitrix\Main\Type\DateTime;
 
 class RecentUpdater
 {
 	public function __construct(
 		private readonly RecentItemCache $cache,
+		private readonly ChatTreeFilterFactory $treeFilterFactory,
 	) {}
 
+	/**
+	 * @param array{PREVIEW_SOURCE_CID:int,PREVIEW_SOURCE_MID:int}|null $previewSourceColumns
+	 *        preview-source pointer to update on the same row; null leaves the pointer untouched.
+	 */
 	public function update(
 		int $forUserId,
 		?int $forChatId = null,
 		?bool $unread = null,
 		?int $markedId = null,
+		?array $previewSourceColumns = null,
 	): void
 	{
 		[$filter, $fields] = $this->prepareBaseFilterAndFields($forUserId, $unread, $markedId);
 		if ($forChatId !== null)
 		{
 			$filter['=ITEM_CID'] = $forChatId;
+		}
+		if ($previewSourceColumns !== null)
+		{
+			$fields += $previewSourceColumns;
 		}
 		RecentTable::updateByFilter($filter, $fields);
 		$this->cache->remove($forUserId, $forChatId);
@@ -52,46 +64,47 @@ class RecentUpdater
 		$this->cache->remove($forUserId, $chatId);
 	}
 
-	public function updateByType(
-		int $forUserId,
-		Chat\Type $forType,
-		?bool $unread = null,
-		?int $markedId = null,
-	): void
+	public function updateByTreeScope(int $forUserId, ChatTreeScope $scope): array
 	{
-		[$filter, $fields] = $this->prepareBaseFilterAndFields($forUserId, $unread, $markedId);
-
-		if ($forType->entityType)
+		if (!$scope->isPossible())
 		{
-			$chatIds = $this->getUnreadChatIdsByType($forUserId, $forType);
-			if (empty($chatIds))
-			{
-				return;
-			}
+			return [];
+		}
 
-			$filter['=ITEM_CID'] = $chatIds;
-		}
-		else
+		$chatIds = $this->getUnreadRecentChatIdsByTreeScope($forUserId, $scope);
+		if (empty($chatIds))
 		{
-			$filter['=ITEM_TYPE'] = $forType->literal;
+			return [];
 		}
+
+		[$filter, $fields] = $this->prepareBaseFilterAndFields($forUserId, unread: false);
+		$filter['=ITEM_CID'] = $chatIds;
 
 		RecentTable::updateByFilter($filter, $fields);
 		$this->cache->remove($forUserId);
+
+		return $chatIds;
 	}
 
-	private function getUnreadChatIdsByType(int $forUserId, Chat\Type $forType): array
+	/**
+	 * @return int[]
+	 */
+	private function getUnreadRecentChatIdsByTreeScope(
+		int $forUserId,
+		ChatTreeScope $scope,
+	): array
 	{
-		$chatIds = RecentTable::query()
+		$query = RecentTable::query()
 			->setSelect(['ITEM_CID'])
 			->where('USER_ID', $forUserId)
 			->where('UNREAD', 'Y')
-			->where('ITEM_TYPE', $forType->literal)
-			->where('CHAT.ENTITY_TYPE', $forType->entityType)
-			->fetchAll()
 		;
 
-		return array_map('intval', array_column($chatIds, 'ITEM_CID'));
+		$this->treeFilterFactory->forTreeScope($scope)->apply($query);
+
+		$rows = $query->fetchAll();
+
+		return array_map('intval', array_column($rows, 'ITEM_CID'));
 	}
 
 	private function prepareBaseFilterAndFields(int $forUserId, ?bool $unread = null, ?int $markedId = null): array

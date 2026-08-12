@@ -37,6 +37,8 @@ class ChatsSync extends Chat\ChatPopupItem implements PopupDataAggregatable
 		$rest = [];
 
 		$this->fillAllForRest();
+		// Phase 0 (task 718250): superadmin project chat access
+		Chat::fillManageCapability($this->chats);
 		$this->fillDialogIds();
 
 		foreach ($this->chats as $chat)

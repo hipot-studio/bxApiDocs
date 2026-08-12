@@ -10,12 +10,12 @@ use Bitrix\Crm\Integration\DocumentGenerator\ProductLoader;
 use Bitrix\Crm\Integration\DocumentGenerator\Value\Money;
 use Bitrix\Crm\Integration\DocumentGenerator\Value\TaxRate;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
+use Bitrix\Crm\Service\Accounting;
 use Bitrix\DocumentGenerator\DataProvider\HashDataProvider;
 use Bitrix\DocumentGenerator\DataProviderManager;
 use Bitrix\DocumentGenerator\Value;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Sale\PriceMaths;
 
 class Product extends HashDataProvider
 {
@@ -522,12 +522,7 @@ class Product extends HashDataProvider
 
 	protected function round(float $value): float
 	{
-		if(Loader::includeModule('sale'))
-		{
-			return PriceMaths::roundPrecision($value);
-		}
-
-		return round($value, 2);
+		return Accounting::round($value);
 	}
 
 	/**

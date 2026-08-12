@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Step;
 
+use Bitrix\Landing\Copilot\Generation\Step\Request\RequestSingle;
 use Bitrix\Landing\Copilot\Connector\AI;
 use Bitrix\Landing\Copilot\Connector\AI\Prompt;
 use Bitrix\Landing\Copilot\Connector\Schema;

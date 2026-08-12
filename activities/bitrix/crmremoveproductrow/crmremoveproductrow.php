@@ -1,6 +1,8 @@
 <?php
 
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -9,6 +11,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 class CBPCrmRemoveProductRow extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -24,9 +29,17 @@ class CBPCrmRemoveProductRow extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentType = $this->getDocumentType();
+			$documentId = $this->resolveTargetDocumentId();
+			$documentType = $this->resolveTargetDocumentType($documentId);
 
-		[$entityTypeId, $entityId] = \CCrmBizProcHelper::resolveEntityId($this->GetDocumentId());
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		[$entityTypeId, $entityId] = \CCrmBizProcHelper::resolveEntityId($documentId);
 
 		$currentIds = $this->workflow->isDebug() ? $this->getCurrentIds($entityTypeId, $entityId) : [];
 

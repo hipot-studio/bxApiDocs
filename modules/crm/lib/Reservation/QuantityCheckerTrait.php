@@ -32,6 +32,11 @@ trait QuantityCheckerTrait
 	{
 		$result = new Result();
 
+		if (\CCrmSaleHelper::isInventoryManagedExternally())
+		{
+			return $result;
+		}
+
 		if (empty($productRows))
 		{
 			return $result;

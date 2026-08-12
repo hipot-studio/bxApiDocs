@@ -15,6 +15,8 @@ class FieldDto implements JsonSerializable
 		public string $fieldId,
 		public ?string $type = null,
 		public ?int $multiple = null,
+		public ?array $options = null,
+		public ?array $settings = null,
 	) {
 	}
 
@@ -25,6 +27,8 @@ class FieldDto implements JsonSerializable
 			$data['fieldId'],
 			$data['type'] ?? null,
 			isset($data['multiple']) ? (int)$data['multiple'] : null,
+			is_array($data['options'] ?? null) ? $data['options'] : null,
+			is_array($data['settings'] ?? null) ? $data['settings'] : null,
 		);
 	}
 
@@ -35,6 +39,8 @@ class FieldDto implements JsonSerializable
 			'fieldId' => $this->fieldId,
 			'type' => $this->type,
 			'multiple' => $this->multiple,
+			'options' => $this->options,
+			'settings' => $this->settings,
 		];
 	}
 }

@@ -17,10 +17,16 @@ use Bitrix\Rest\V3\Structure\Filtering\Expressions\Expression;
 class FilterValidator
 {
 	/**
+	 * @throws InvalidFilterException
 	 * @throws UnknownFilterOperatorException
 	 */
-	public static function validateOperator(string $operator): Operator
+	public static function validateOperator(?string $operator): Operator
 	{
+		if ($operator === null)
+		{
+			throw new InvalidFilterException('Filter operator can not be null.');
+		}
+
 		$validOperator = Operator::tryFrom($operator);
 		if (!$validOperator)
 		{

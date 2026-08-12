@@ -2,6 +2,11 @@
 
 class CCrmAccountingHelper
 {
+	/**
+	 * @deprecated Use {@see \Bitrix\Crm\Currency\Conversion::toAccountCurrency()} for the
+	 * converted sum, and {@see \Bitrix\Crm\Currency::getAccountCurrencyId()} for the account
+	 * currency code.
+	 */
 	public static function PrepareAccountingData($arFields)
 	{
 		$accountCurrencyID = CCrmCurrency::GetAccountCurrencyID();

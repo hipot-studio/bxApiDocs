@@ -490,9 +490,11 @@ class MailMessageUidTable extends Entity\DataManager
 			),
 			'DIR_UIDV' => array(
 				'data_type' => 'integer',
+				'size' => 8,
 			),
 			'MSG_UID' => array(
 				'data_type' => 'integer',
+				'size' => 8,
 			),
 			'INTERNALDATE' => array(
 				'data_type' => 'datetime',

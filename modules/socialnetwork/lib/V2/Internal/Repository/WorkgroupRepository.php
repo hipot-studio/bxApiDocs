@@ -10,9 +10,11 @@ use Bitrix\Main\Type\Collection;
 use Bitrix\Socialnetwork\Internals\Group\GroupEntityCollection;
 use Bitrix\Socialnetwork\Provider\GroupProvider;
 use Bitrix\Socialnetwork\WorkgroupTable;
+use Bitrix\Socialnetwork\V2\Internal\Entity\UF\UserField;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Workgroup\WorkgroupPinMode;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Extranet\Service\ExtranetUserService;
 use Bitrix\Socialnetwork\V2\Internal\Repository\Workgroup\WorkgroupQueryTrait;
+use CUserTypeManager;
 
 /**
  * Repository for ALL workgroup types (projects, scrums, collabs, groups).
@@ -117,15 +119,18 @@ class WorkgroupRepository
 	 */
 	public function getLegacyDepartmentIds(int $groupId): array
 	{
-		$row =
-			WorkgroupTable::query()
-				->setSelect(['UF_SG_DEPT'])
-				->where('ID', $groupId)
-				->exec()
-				->fetch()
-		;
+		$fields = $this->getUfManager()->getUserFields(
+			WorkgroupTable::getUfId(),
+			$groupId,
+			selectFields: [UserField::GROUP_LEGACY_DEPARTMENT],
+		);
 
-		$departmentIds = $row['UF_SG_DEPT'] ?? [];
+		$departmentIds = $fields[UserField::GROUP_LEGACY_DEPARTMENT]['VALUE'] ?? [];
+		if (!is_array($departmentIds))
+		{
+			return [];
+		}
+
 		Collection::normalizeArrayValuesByInt($departmentIds, false);
 
 		return $departmentIds;
@@ -139,5 +144,12 @@ class WorkgroupRepository
 	protected function getExtranetUserService(): ExtranetUserService
 	{
 		return $this->extranetUserService;
+	}
+
+	private function getUfManager(): CUserTypeManager
+	{
+		global $USER_FIELD_MANAGER;
+
+		return $USER_FIELD_MANAGER;
 	}
 }

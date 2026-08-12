@@ -177,6 +177,13 @@ class RecentProvider extends BaseProvider
 			return [];
 		}
 
+		// Default items come from department/workgroup helpers and bypass getIntranetFilter,
+		// so the guest visibility scope would not apply here — gate guests to an empty default.
+		if ($this->getContext()->getUser() instanceof UserGuest)
+		{
+			return [];
+		}
+
 		return match (true)
 		{
 			!$this->getContext()->getUser()->isExtranet() => Department::getInstance()->getColleagues(),
@@ -632,7 +639,7 @@ class RecentProvider extends BaseProvider
 			$query->whereNotIn('ID', $this->searchOptions->getExcludeIds());
 		}
 
-		if ($this->searchOptions->isRecentSectionMode())
+		if ($this->searchOptions->isRecentSectionMode() || $this->searchOptions->getParentId() !== null)
 		{
 			$this->applyRecentSectionScope($query);
 		}
@@ -663,7 +670,7 @@ class RecentProvider extends BaseProvider
 
 	private function applyRecentSectionScope(Query $query): void
 	{
-		$parentId = $this->searchOptions->getRecentSectionParentId();
+		$parentId = $this->searchOptions->getParentId();
 		if ($parentId === 0)
 		{
 			$query->where(
@@ -681,7 +688,7 @@ class RecentProvider extends BaseProvider
 
 	private function shouldApplyParentChainFilter(): bool
 	{
-		return !$this->searchOptions->isRecentSectionMode() || $this->searchOptions->getRecentSectionParentId() !== 0;
+		return $this->searchOptions->getParentId() !== 0;
 	}
 
 	private function getRelationFilter(): ConditionTree
@@ -884,6 +891,13 @@ class RecentProvider extends BaseProvider
 	private function getIntranetFilter(): ConditionTree
 	{
 		$filter = Query::filter();
+
+		$currentUser = User::getCurrent();
+		if ($currentUser instanceof UserGuest)
+		{
+			return $filter->whereIn('ID', $currentUser->getCommonChatPartnersQuery());
+		}
+
 		if (!Loader::includeModule('intranet'))
 		{
 			return $filter->where($this->getRealUserOrBotCondition());

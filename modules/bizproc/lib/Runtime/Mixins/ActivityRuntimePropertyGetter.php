@@ -257,7 +257,11 @@ trait ActivityRuntimePropertyGetter
 
 		$result = $activity->__get($field);
 
-		if (($property['Type'] ?? '') === Bizproc\FieldType::DOCUMENT && $documentFieldName)
+		if (
+			($property['Type'] ?? '') === Bizproc\FieldType::DOCUMENT
+			&& $documentFieldName
+			&& is_array($result)
+		)
 		{
 			$docId = CBPHelper::normalizeComplexDocumentId($result);
 			if ($docId)
@@ -269,7 +273,6 @@ trait ActivityRuntimePropertyGetter
 					$docId,
 					$documentFieldName,
 					$documentType,
-					[$documentFieldName]
 				);
 				$documentFields = $documentService->getDocumentFields($documentType);
 

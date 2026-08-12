@@ -36,6 +36,14 @@ final class ItemGroupAction extends BaseItemGroupAction
 		{
 			$actions = array_merge($actions, $this->getActionsForUserWithUpdateAccess());
 		}
+		else
+		{
+			$setCategoryAction = $this->getSetCategoryAction();
+			if ($setCategoryAction !== null)
+			{
+				$actions[] = $setCategoryAction;
+			}
+		}
 
 		if (
 			Exclusion\Manager::isEntityTypeSupported($this->factory->getEntityTypeId())
@@ -80,12 +88,10 @@ final class ItemGroupAction extends BaseItemGroupAction
 				$actions[] = new SetStageChildAction($this->factory, $this->gridSettings->getCategoryId());
 			}
 
-			if (
-				$this->factory->isCategoriesEnabled()
-				&& !$this->isInSystemCategory() // don't show on sign contr-agents and catalog suppliers
-			)
+			$setCategoryAction = $this->getSetCategoryAction();
+			if ($setCategoryAction !== null)
 			{
-				$actions[] = new SetCategoryChildAction($this->factory);
+				$actions[] = $setCategoryAction;
 			}
 		}
 
@@ -144,6 +150,20 @@ final class ItemGroupAction extends BaseItemGroupAction
 		}
 
 		return $actions;
+	}
+
+	private function getSetCategoryAction(): ?SetCategoryChildAction
+	{
+		if (
+			$this->gridSettings->isAllItemsCategory()
+			|| !$this->factory->isCategoriesEnabled()
+			|| $this->isInSystemCategory() // don't show on sign contr-agents and catalog suppliers
+		)
+		{
+			return null;
+		}
+
+		return new SetCategoryChildAction($this->factory, $this->gridSettings->getCategoryId());
 	}
 
 	private function isInSystemCategory(): bool

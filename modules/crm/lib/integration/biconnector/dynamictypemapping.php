@@ -34,7 +34,7 @@ class DynamicTypeMapping
 				],
 				'AUTOMATED_SOLUTION_DATASET_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(DT.CUSTOM_SECTION_ID is null, "crm_smart_proc", concat_ws(\'\', "crm_automated_solution_", DT.CUSTOM_SECTION_ID))',
+					'FIELD_NAME' => 'CASE WHEN DT.CUSTOM_SECTION_ID is null THEN \'crm_smart_proc\' ELSE concat_ws(\'\', \'crm_automated_solution_\', DT.CUSTOM_SECTION_ID) END',
 					'FIELD_TYPE' => 'string',
 				],
 				'CUSTOM_SECTION_ID' => [
@@ -44,14 +44,14 @@ class DynamicTypeMapping
 				],
 				'CUSTOM_SECTION_TITLE' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(DT.CUSTOM_SECTION_ID is null, "CRM", CS.TITLE)',
+					'FIELD_NAME' => 'CASE WHEN DT.CUSTOM_SECTION_ID is null THEN \'CRM\' ELSE CS.TITLE END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'CS',
 					'JOIN' => 'INNER JOIN b_crm_automated_solution CS ON CS.ID = DT.CUSTOM_SECTION_ID',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_automated_solution CS ON CS.ID = DT.CUSTOM_SECTION_ID',
 				],
 				'PRODUCT_DATASET_NAME' => [
-					'FIELD_NAME' => 'concat_ws(\'\', "crm_dynamic_items_prod_", DT.ENTITY_TYPE_ID)',
+					'FIELD_NAME' => 'concat_ws(\'\', \'crm_dynamic_items_prod_\', DT.ENTITY_TYPE_ID)',
 					'FIELD_TYPE' => 'string',
 				],
 				//  `CREATED_BY` int unsigned NOT NULL,
@@ -82,7 +82,7 @@ class DynamicTypeMapping
 				//  `UPDATED_TIME` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 				//  `UPDATED_BY` int unsigned NOT NULL,
 				'USER_FIELDS' => [
-					'GROUP_CONCAT' => ', ',  // сепаратор
+					'GROUP_CONCAT' => ', ',
 					'GROUP_KEY' => 'USER_FIELDS',
 					'IS_METRIC' => 'N',
 					'FIELD_NAME' => 'UF.FIELD_NAME',

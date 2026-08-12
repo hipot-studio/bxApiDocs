@@ -7,6 +7,7 @@ use Bitrix\Rest\Exceptions\ArgumentException;
 use Bitrix\Rest\RestException;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\Exceptions\ArgumentNullException;
+use Bitrix\Main\Web\Uri;
 
 class CBitrixRestEntity extends IRestService
 {
@@ -1768,7 +1769,7 @@ class CBitrixRestEntity extends IRestService
 		$arFile = CFile::GetFileArray($fileId);
 		if(is_array($arFile))
 		{
-			return \CHTTP::URN2URI($arFile['SRC']);
+			return (string)(new Uri($arFile['SRC']))->toAbsolute();
 		}
 		else
 		{

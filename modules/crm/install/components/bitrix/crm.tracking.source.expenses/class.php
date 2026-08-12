@@ -9,6 +9,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Error;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Intranet;
+use Bitrix\Crm\Engine\ActionFilter\CheckSomeItemsReadPermission;
 
 use Bitrix\Crm\Tracking;
 
@@ -304,16 +305,19 @@ class CrmTrackingExpensesComponent extends \CBitrixComponent implements Controll
 			'addExpenses' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\IntranetUser(),
+					new CheckSomeItemsReadPermission(),
 				]
 			],
 			'remove' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\IntranetUser(),
+					new CheckSomeItemsReadPermission(),
 				]
 			],
 			'removeList' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\IntranetUser(),
+					new CheckSomeItemsReadPermission(),
 				]
 			],
 		];

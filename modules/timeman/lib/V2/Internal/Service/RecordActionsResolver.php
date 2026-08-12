@@ -28,19 +28,21 @@ final class RecordActionsResolver
 	public function getStateForRecord(WorktimeRecord $record): RecordState
 	{
 		$status = RecordStatus::fromRecord($record);
+		$recommendedCloseTime = null;
 
 		try
 		{
 			$this->actionList->buildPossibleActionsListForUser((int)$record->getUserId());
 
 			$actions = $this->buildActionsFromLegacyList($this->actionList);
+			$recommendedCloseTime = $this->extractRecommendedCloseTime($record);
 		}
 		catch (\Throwable $e)
 		{
 			$actions = RecordActions::none();
 		}
 
-		return new RecordState($status, $actions);
+		return new RecordState($status, $actions, $recommendedCloseTime);
 	}
 
 	private function buildActionsFromLegacyList(WorktimeActionList $actionList): RecordActions
@@ -53,5 +55,22 @@ final class RecordActionsResolver
 			canReopen: !empty($actionList->getReopenActions()),
 			canEdit: !empty($actionList->getEditActions()),
 		);
+	}
+
+	private function extractRecommendedCloseTime(WorktimeRecord $record): ?int
+	{
+		foreach ($this->actionList->getStopActions() as $stopAction)
+		{
+			if (
+				$stopAction->getRecord()
+				&& $stopAction->getRecord()->getId() === $record->getId()
+				&& $stopAction->getRecordManager()
+			)
+			{
+				return $stopAction->getRecordManager()->getRecommendedStopTimestamp();
+			}
+		}
+
+		return null;
 	}
 }

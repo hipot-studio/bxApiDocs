@@ -21,6 +21,7 @@ use Bitrix\ImBot;
 use Bitrix\ImBot\Log;
 use Bitrix\ImBot\DialogSession;
 use Bitrix\Imopenlines\MessageParameter;
+use Bitrix\Main\Web\Uri;
 
 class Network extends Base implements NetworkBot
 {
@@ -853,7 +854,7 @@ class Network extends Base implements NetworkBot
 			return false;
 		}
 
-		$error = (new \Bitrix\Main\Web\Uri($publicUrl))->convertToPunycode();
+		$error = (new Uri($publicUrl))->convertToPunycode();
 		if ($error instanceof \Bitrix\Main\Error)
 		{
 			$message = Loc::getMessage('IMBOT_NETWORK_ERROR_CONVERTING_PUNYCODE', ['#HOST#' => $host, '#ERROR#' => $error->getMessage()]);
@@ -1108,6 +1109,15 @@ class Network extends Base implements NetworkBot
 		// operator OL session start
 		else if($command === self::COMMAND_START_DIALOG_SESSION)
 		{
+			if (!Im\Common::isDialogId($params['DIALOG_ID'] ?? ''))
+			{
+				return new ImBot\Error(
+					__METHOD__,
+					'INVALID_DIALOG_ID',
+					'Invalid dialog ID'
+				);
+			}
+
 			Log::write($params, 'NETWORK: startDialogSession');
 
 			static::startDialogSession([
@@ -1122,6 +1132,15 @@ class Network extends Base implements NetworkBot
 		// operator OL session finish
 		else if($command === self::COMMAND_FINISH_DIALOG_SESSION)
 		{
+			if (!Im\Common::isDialogId($params['DIALOG_ID'] ?? ''))
+			{
+				return new ImBot\Error(
+					__METHOD__,
+					'INVALID_DIALOG_ID',
+					'Invalid dialog ID'
+				);
+			}
+
 			Log::write($params, 'NETWORK: finishDialogSession');
 
 			static::finishDialogSession([
@@ -1357,7 +1376,8 @@ class Network extends Base implements NetworkBot
 	{
 		$messageFields['MESSAGE'] = self::removeMentions($messageFields['MESSAGE'] ?? '');
 
-		if ($relatedMessages = (new \CIMHistory)->getRelatedMessages($messageId, 1, 0, false, false))
+		$historyUserId = (int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']);
+		if ($relatedMessages = (new \CIMHistory($historyUserId))->getRelatedMessages($messageId, 1, 0, false, false))
 		{
 			$relatedMessageText = '';
 			foreach ($relatedMessages['message'] as $message)
@@ -2366,7 +2386,8 @@ class Network extends Base implements NetworkBot
 
 		$messageParams = $messageFields['PARAMS'] ?? [];
 
-		if ($relatedMessages = (new \CIMHistory)->getRelatedMessages($messageId, 1, 0, false, false))
+		$historyUserId = (int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']);
+		if ($relatedMessages = (new \CIMHistory($historyUserId))->getRelatedMessages($messageId, 1, 0, false, false))
 		{
 			foreach ($relatedMessages['message'] as $message)
 			{
@@ -2984,7 +3005,6 @@ class Network extends Base implements NetworkBot
 		$activeChats = [];
 		$botData = self::getBotSessionData($botId);
 
-		$chats[] = \Bitrix\Im\V2\Chat::getInstance($botData['chatId']);
 		$botData['statusSort'] = ($botData['status'] == mb_strtolower(self::MULTIDIALOG_STATUS_CLOSE)) ? 0 : 1;
 		foreach ($sessions as $session)
 		{
@@ -2999,6 +3019,12 @@ class Network extends Base implements NetworkBot
 			}
 		}
 		$result['multidialogs'][] = $botData;
+
+		if (!empty($botData['chatId']))
+		{
+			$result['chats'][(int)$botData['chatId']] = \Bitrix\Im\V2\Chat::getInstance($botData['chatId'])
+				->toRestFormat(['CHAT_SHORT_FORMAT' => true]);
+		}
 
 		foreach ($chats as $key => $chat)
 		{
@@ -3504,7 +3530,7 @@ class Network extends Base implements NetworkBot
 						? $fileTmp['src']
 						: ImBot\Http::getServerAddress(). $fileTmp['src'];
 
-					$avatarUrl = \CHTTP::urnEncode($avatarUrl);
+					$avatarUrl = Uri::urnEncode($avatarUrl);
 				}
 			}
 
@@ -4201,7 +4227,7 @@ class Network extends Base implements NetworkBot
 				$send['AVATAR'] = mb_substr($fileTmp['src'], 0, 4) == 'http'
 					? $fileTmp['src']
 					: ImBot\Http::getServerAddress().$fileTmp['src'];
-				$send['AVATAR'] = Main\Web\Uri::urnEncode($send['AVATAR']);
+				$send['AVATAR'] = Uri::urnEncode($send['AVATAR']);
 			}
 		}
 
@@ -4299,7 +4325,7 @@ class Network extends Base implements NetworkBot
 					$update['FIELDS']['AVATAR'] = mb_substr($fileTmp['src'], 0, 4) == 'http'
 						? $fileTmp['src']
 						: ImBot\Http::getServerAddress(). $fileTmp['src'];
-					$update['FIELDS']['AVATAR'] = Main\Web\Uri::urnEncode($update['FIELDS']['AVATAR']);
+					$update['FIELDS']['AVATAR'] = Uri::urnEncode($update['FIELDS']['AVATAR']);
 				}
 			}
 		}
@@ -4416,7 +4442,19 @@ class Network extends Base implements NetworkBot
 			return false;
 		}
 
-		return self::instanceDialogSession((int)$params['BOT_ID'], $params['DIALOG_ID'])->start($params);
+		$result = self::instanceDialogSession((int)$params['BOT_ID'], $params['DIALOG_ID'])->start($params);
+
+		if ($result && !empty($params['SESSION_ID']) && (int)$params['SESSION_ID'] > 0)
+		{
+			ImBot\Pull::changeMultidialogStatus(
+				$params['DIALOG_ID'],
+				ImBot\Bot\Network::MULTIDIALOG_STATUS_OPEN,
+				(int)$params['SESSION_ID'],
+				(int)$params['BOT_ID']
+			);
+		}
+
+		return $result;
 	}
 
 	/**
@@ -4862,7 +4900,10 @@ class Network extends Base implements NetworkBot
 	 */
 	public static function scheduleAction($target, $action, $code = '', $delayMinutes = 1): void
 	{
-		$agentName = "scheduledActionAgent('{$target}', '{$action}', '{$code}')";
+		$escapedTarget = EscapePHPString($target, "'");
+		$escapedAction = EscapePHPString($action, "'");
+		$escapedCode = EscapePHPString($code, "'");
+		$agentName = "scheduledActionAgent('{$escapedTarget}', '{$escapedAction}', '{$escapedCode}')";
 		self::deleteAgent(['agent' => $agentName]);
 		self::addAgent([
 			'class' => $params['class'] ?? static::class,
@@ -4889,17 +4930,21 @@ class Network extends Base implements NetworkBot
 		}
 		else
 		{
+			$escapedTarget = EscapePHPString($target, "'");
+			$escapedAction = EscapePHPString($action, "'");
+			$escapedCode = EscapePHPString($code, "'");
+
 			if ($action && $code)
 			{
-				$filter['agent'] = "scheduledActionAgent('{$target}', '{$action}', '{$code}')";
+				$filter['agent'] = "scheduledActionAgent('{$escapedTarget}', '{$escapedAction}', '{$escapedCode}')";
 			}
 			else if ($action)
 			{
-				$filter['mask'] = "scheduledActionAgent('{$target}', '{$action}',";
+				$filter['mask'] = "scheduledActionAgent('{$escapedTarget}', '{$escapedAction}',";
 			}
 			else
 			{
-				$filter['mask'] = "scheduledActionAgent('{$target}',";
+				$filter['mask'] = "scheduledActionAgent('{$escapedTarget}',";
 			}
 		}
 

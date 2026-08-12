@@ -1692,7 +1692,8 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 		}
 
 		// add menu action
-		if ($relatedMessages = (new \CIMHistory)->getRelatedMessages($messageId, 1, 0, false, false))
+		$historyUserId = (int)($messageFields['FROM_USER_ID'] ?? $messageFields['AUTHOR_ID']);
+		if ($relatedMessages = (new \CIMHistory($historyUserId))->getRelatedMessages($messageId, 1, 0, false, false))
 		{
 			foreach ($relatedMessages['message'] as $message)
 			{
@@ -2733,7 +2734,7 @@ class Support24 extends Network implements MenuBot, SupportBot, SupportQuestion
 	 */
 	public static function onAfterUserAuthorize($params)
 	{
-		$auth = \CHTTP::parseAuthRequest();
+		$auth = Main\Context::getCurrent()->getServer()->parseAuthRequest();
 		if (
 			isset($auth["basic"])
 			&& $auth["basic"]["username"] <> ''

@@ -542,9 +542,9 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function importDashboard(string $filePath, string $appCode, string $type = ''): IntegratorResponse
+	public function importDashboard(string $filePath, string $appCode, string $type = '', bool $forceImportDatasets = false): IntegratorResponse
 	{
-		$handler = function () use ($filePath, $appCode, $type): IntegratorResponse {
+		$handler = function () use ($filePath, $appCode, $type, $forceImportDatasets): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
@@ -559,6 +559,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 					CultureFormatter::getLanguageCode(),
 					$appCode,
 					$type === SupersetDashboardTable::DASHBOARD_TYPE_MARKET,
+					$forceImportDatasets,
 				))->run();
 
 			if (!$result->isSuccess())

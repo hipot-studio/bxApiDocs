@@ -16,6 +16,94 @@ class MarkdownToBBCodeTranslationService
 	];
 
 	/**
+	 * LaTeX command name (without the leading backslash) => Unicode symbol.
+	 * Used by processLatexMath() to render inline math the model emits as "$...$".
+	 */
+	private const LATEX_SYMBOLS_MAP = [
+		// arrows
+		'rightarrow' => '→',
+		'to' => '→',
+		'Rightarrow' => '⇒',
+		'leftarrow' => '←',
+		'Leftarrow' => '⇐',
+		'leftrightarrow' => '↔',
+		'Leftrightarrow' => '⇔',
+		'uparrow' => '↑',
+		'downarrow' => '↓',
+		'mapsto' => '↦',
+		// relations
+		'leq' => '≤',
+		'le' => '≤',
+		'geq' => '≥',
+		'ge' => '≥',
+		'neq' => '≠',
+		'ne' => '≠',
+		'approx' => '≈',
+		'equiv' => '≡',
+		// operators
+		'times' => '×',
+		'div' => '÷',
+		'pm' => '±',
+		'mp' => '∓',
+		'cdot' => '·',
+		// sets and logic
+		'in' => '∈',
+		'notin' => '∉',
+		'subset' => '⊂',
+		'subseteq' => '⊆',
+		'cup' => '∪',
+		'cap' => '∩',
+		'emptyset' => '∅',
+		'forall' => '∀',
+		'exists' => '∃',
+		'land' => '∧',
+		'lor' => '∨',
+		// calculus and misc
+		'infty' => '∞',
+		'partial' => '∂',
+		'nabla' => '∇',
+		'sum' => '∑',
+		'prod' => '∏',
+		'int' => '∫',
+		'sqrt' => '√',
+		'ldots' => '…',
+		'degree' => '°',
+		// greek lower-case
+		'alpha' => 'α',
+		'beta' => 'β',
+		'gamma' => 'γ',
+		'delta' => 'δ',
+		'epsilon' => 'ε',
+		'zeta' => 'ζ',
+		'eta' => 'η',
+		'theta' => 'θ',
+		'kappa' => 'κ',
+		'lambda' => 'λ',
+		'mu' => 'μ',
+		'nu' => 'ν',
+		'xi' => 'ξ',
+		'pi' => 'π',
+		'rho' => 'ρ',
+		'sigma' => 'σ',
+		'tau' => 'τ',
+		'phi' => 'φ',
+		'chi' => 'χ',
+		'psi' => 'ψ',
+		'omega' => 'ω',
+		// greek upper-case
+		'Gamma' => 'Γ',
+		'Delta' => 'Δ',
+		'Theta' => 'Θ',
+		'Lambda' => 'Λ',
+		'Xi' => 'Ξ',
+		'Pi' => 'Π',
+		'Sigma' => 'Σ',
+		'Phi' => 'Φ',
+		'Psi' => 'Ψ',
+		'Omega' => 'Ω',
+	];
+
+	/**
 	 * Whitespace characters to normalize to regular space
 	 * Based on HTML attribute whitespace specification plus additional problematic characters:
 	 */
@@ -59,6 +147,7 @@ class MarkdownToBBCodeTranslationService
 	{
 		$this->text = $text;
 		$this->extractCodeBlocks();
+		$this->processLatexMath();
 		$this->processUnicodeEscapes();
 		$this->normalizeWhitespace();
 		$this->processAutoLinks();
@@ -77,6 +166,37 @@ class MarkdownToBBCodeTranslationService
 		$this->restoreImages();
 
 		return $this->text;
+	}
+
+	/**
+	 * Converts inline LaTeX math ($...$) into plain Unicode symbols.
+	 *
+	 * Runs BEFORE processUnicodeEscapes() because that step would otherwise
+	 * mangle commands like \rightarrow / \times / \nabla (their \r, \t, \n
+	 * prefixes are treated as escape sequences). Only spans that actually
+	 * contain a backslash command are touched, so plain currency such as
+	 * "$5 ... $10" stays intact. Every backslash command inside a matched span
+	 * is consumed (mapped to a symbol, or reduced to its bare name when
+	 * unknown), so nothing reaches the escape pass corrupted.
+	 */
+	private function processLatexMath(): void
+	{
+		// The {0,200} bounds keep the pattern linear: an inline math span is short,
+		// so a long unclosed "$..." opener cannot trigger catastrophic backtracking
+		// (which would otherwise make preg_replace_callback() return null).
+		$this->text = preg_replace_callback(
+			'/\$(?=[^$\n]{0,200}\\\\[a-zA-Z])([^$\n]{1,200}?)\$/',
+			static function (array $m): string {
+				$inner = preg_replace_callback(
+					'/\\\\([a-zA-Z]+)/',
+					static fn(array $cmd): string => self::LATEX_SYMBOLS_MAP[$cmd[1]] ?? $cmd[1],
+					$m[1],
+				);
+
+				return trim($inner);
+			},
+			$this->text,
+		);
 	}
 
 	private function processUnicodeEscapes(): void

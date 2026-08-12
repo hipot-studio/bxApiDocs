@@ -11,7 +11,6 @@ use Bitrix\Mail\Helper\Message\Loader\MessageFilter;
 use Bitrix\Mail\Helper\Message\Loader\QueryBuilder;
 use Bitrix\Mail\Helper\MessageFolder;
 use Bitrix\Mail\Internals\MessageAccessTable;
-use Bitrix\Mail\MailboxTable;
 use Bitrix\Mail\MailMessageTable;
 use Bitrix\Mail\MailMessageUidTable;
 use Bitrix\Main\LoaderException;
@@ -27,18 +26,11 @@ class MessageSearch
 	 */
 	public function search(SearchMessagesDto $dto, int $userId): array
 	{
-		$mailboxIds = $this->resolveMailboxIds($dto->mailboxId, $userId);
-
-		if (empty($mailboxIds))
+		$filter = $this->buildFilterFromDto($dto, $userId);
+		if ($filter === null)
 		{
 			return [];
 		}
-
-		$dto = $this->resolveFolderInDto($dto, $mailboxIds);
-
-		$messageFilter = (new MessageFilter($mailboxIds, []));
-		$messageFilter->applyFromDto($dto);
-		$filter = $messageFilter->getArray();
 
 		$listQuery = QueryBuilder::buildMailMessageListQuery(
 			$filter,
@@ -61,27 +53,28 @@ class MessageSearch
 	}
 
 	/**
+	 * Counts messages across user's mailboxes using the same filters as {@see self::search()}.
+	 *
+	 * @throws SystemException|LoaderException
+	 */
+	public function count(SearchMessagesDto $dto, int $userId): int
+	{
+		$filter = $this->buildFilterFromDto($dto, $userId);
+		if ($filter === null)
+		{
+			return 0;
+		}
+
+		return QueryBuilder::countMailMessages($filter);
+	}
+
+	/**
 	 * @return int[]
 	 * @throws SystemException
 	 */
 	private function resolveMailboxIds(?int $mailboxId, int $userId): array
 	{
-		if (is_null($mailboxId))
-		{
-			return array_keys(MailboxTable::getUserMailboxes($userId));
-		}
-
-		if ($mailboxId <= 0)
-		{
-			throw new SystemException('Invalid mailboxId.');
-		}
-
-		if (!MailboxAccess::hasUserAccessToMailbox($mailboxId, $userId, true))
-		{
-			throw new SystemException('User does not have access to this mailbox');
-		}
-
-		return [$mailboxId];
+		return MailboxAccess::resolveUserMailboxIds($mailboxId, $userId);
 	}
 
 	private function resolveFolderInDto(SearchMessagesDto $dto, array $mailboxIds): SearchMessagesDto
@@ -105,9 +98,30 @@ class MessageSearch
 			isSeen: $dto->isSeen,
 			hasAttachments: $dto->hasAttachments,
 			folder: $resolvedPath,
+			bindings: $dto->bindings,
+			excludeBindings: $dto->excludeBindings,
 			limit: $dto->limit,
 			offset: $dto->offset,
 		);
+	}
+
+	/**
+	 * @throws SystemException
+	 */
+	private function buildFilterFromDto(SearchMessagesDto $dto, int $userId): ?array
+	{
+		$mailboxIds = $this->resolveMailboxIds($dto->mailboxId, $userId);
+		if (empty($mailboxIds))
+		{
+			return null;
+		}
+
+		$dto = $this->resolveFolderInDto($dto, $mailboxIds);
+
+		$messageFilter = (new MessageFilter($mailboxIds, []));
+		$messageFilter->applyFromDto($dto);
+
+		return $messageFilter->getArray();
 	}
 
 	private function resolveFolderPath(string $folder, array $mailboxIds): ?string
@@ -301,6 +315,11 @@ class MessageSearch
 
 			if (isset($messages[$messageId]))
 			{
+				$messages[$messageId]['bindings'] = $this->mergeBindings(
+					$messages[$messageId]['bindings'],
+					$this->formatBindings($row),
+				);
+
 				continue;
 			}
 
@@ -322,5 +341,25 @@ class MessageSearch
 		}
 
 		return array_values($messages);
+	}
+
+	private function mergeBindings(array $current, array $new): array
+	{
+		$indexed = [];
+		foreach (array_merge($current, $new) as $binding)
+		{
+			$key = implode(
+				':',
+				[
+					$binding['type'] ?? '',
+					(string)($binding['entityTypeId'] ?? ''),
+					(string)($binding['entityId'] ?? ''),
+				],
+			);
+
+			$indexed[$key] = $binding;
+		}
+
+		return array_values($indexed);
 	}
 }

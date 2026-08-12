@@ -11,6 +11,35 @@ use Bitrix\Main;
 final class UserAccessItem extends Main\Access\User\UserModel
 {
 	private ?array $permissions = null;
+	private ?bool $isAdminResolved = null;
+
+	public function isAdmin(): bool
+	{
+		if ($this->isAdminResolved !== null)
+		{
+			return $this->isAdminResolved;
+		}
+
+		if ($this->userId <= 0)
+		{
+			$this->isAdminResolved = false;
+
+			return $this->isAdminResolved;
+		}
+
+		$this->isAdminResolved =
+			parent::isAdmin()
+			|| (
+				Main\Loader::includeModule('bitrix24')
+				&& (
+					\CBitrix24::IsPortalAdmin($this->userId)
+					|| \Bitrix\Bitrix24\Integrator::isIntegrator($this->userId)
+				)
+			)
+		;
+
+		return $this->isAdminResolved;
+	}
 
 	public function getRoles(): array
 	{

@@ -9,6 +9,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserTable;
 use CBitrix24;
@@ -63,6 +64,21 @@ class Portal
 		return DateTime::createFromTimestamp($timestamp);
 	}
 
+	public static function isWestZone(): bool
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			return Bitrix24::isWestZone();
+		}
+
+		if (Loader::includeModule('intranet'))
+		{
+			return Intranet::isWestZone();
+		}
+
+		return false;
+	}
+
 	public static function getRegion(): string
 	{
 		return Application::getInstance()->getLicense()->getRegion() ?? self::DEFAULT_REGION;
@@ -71,5 +87,10 @@ class Portal
 	public static function isMarketAvailable(): bool
 	{
 		return ServiceLocator::getInstance()->get(BaasTokenService::class)?->isMarketAvailable() ?? false;
+	}
+
+	public static function isBitrix24Portal(): bool
+	{
+		return ModuleManager::isModuleInstalled('bitrix24');
 	}
 }

@@ -6,7 +6,6 @@ use Bitrix\Crm\Badge\SourceIdentifier;
 use Bitrix\Crm\Feature;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Settings;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Query;
 
@@ -53,6 +52,8 @@ class ProviderManager
 			CallList::getId() => CallList::className(),
 			Email::getId() => Email::className(),
 			Sms::getId() => Sms::className(),
+			WhatsApp::getId() => WhatsApp::className(),
+			Telegram::getId() => Telegram::className(),
 			Notification::getId() => Notification::className(),
 			OpenLine::getId() => OpenLine::className(),
 			WebForm::getId() => WebForm::className(),
@@ -79,11 +80,6 @@ class ProviderManager
 			EntityExclusion::getId() => EntityExclusion::class,
 		];
 
-		if (Settings\Crm::isWhatsAppScenarioEnabled())
-		{
-			$providersList[Whatsapp::getId()] = Whatsapp::className();
-		}
-
 		if(!$checkAvailable || Visit::isAvailable())
 		{
 			$providersList[Visit::getId()] = Visit::className();
@@ -97,11 +93,6 @@ class ProviderManager
 		if (Feature::enabled(Feature\RepeatSale::class))
 		{
 			$providersList[RepeatSale::getId()] = RepeatSale::className();
-		}
-
-		if (Feature::enabled(Feature\TelegramActivity::class))
-		{
-			$providersList[Telegram::getId()] = Telegram::className();
 		}
 
 		return array_merge($providersList, self::anotherProviders());

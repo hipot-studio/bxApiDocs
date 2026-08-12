@@ -12,6 +12,7 @@ use Bitrix\Crm\Timeline\LogMessageController;
 use Bitrix\Crm\Timeline\LogMessageType;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use CCrmActivity;
@@ -168,6 +169,7 @@ class PingAgent extends AgentBase
 			'NOTIFY_TAG' => 'CRM|PING_TODO_ACTIVITY|' . $activity['ID'],
 			'NOTIFY_MESSAGE' => $getMessageCallback($url),
 			'NOTIFY_MESSAGE_OUT' => $getMessageCallback(static::transformRelativeUrlToAbsolute($url)),
+			'NOTIFY_TITLE' => Loc::getMessage('CRM_NOTIFY_TITLE'),
 		]);
 	}
 

@@ -5,6 +5,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 use Bitrix\Main;
 
 /**
@@ -17,6 +19,9 @@ use Bitrix\Main;
  */
 class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigurableActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	private const GETTER_TYPE_RANDOM = 'r';
 	private const GETTER_TYPE_FIRST = 'f';
 	private const GETTER_TYPE_SEQUENCE = 's';
@@ -41,11 +46,19 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigur
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$documentId = $this->GetDocumentId();
-		$responsibleFieldName = $this->getResponsibleFieldName($documentId);
-		$currentResponsibleId = (int)$this->getCurrentResponsibleId($responsibleFieldName);
+		$documentId = $this->resolveTargetDocumentId();
 
-		$newResponsibleId = $this->getTargetResponsibleId($currentResponsibleId);
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		$responsibleFieldName = $this->getResponsibleFieldName($documentId);
+		$currentResponsibleId = (int)$this->getCurrentResponsibleId($responsibleFieldName, $documentId);
+
+		$newResponsibleId = $this->getTargetResponsibleId($currentResponsibleId, $documentId);
 
 		if ($this->workflow->isDebug())
 		{
@@ -82,10 +95,20 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigur
 		return CBPActivityExecutionStatus::Closed;
 	}
 
-	private function getCurrentResponsibleId($responsibleFieldName): ?int
+	protected function getResolvedTargetAccessActorId(): int
+	{
+		$modifiedBy = (int)CBPHelper::ExtractUsers(
+			$this->ModifiedBy,
+			$this->getRootActivity()->getDocumentId(),
+			true,
+		);
+
+		return $modifiedBy > 0 ? $modifiedBy : $this->getRootStartedByUserId();
+	}
+
+	private function getCurrentResponsibleId($responsibleFieldName, array $documentId): ?int
 	{
 		$ds = $this->workflow->GetRuntime()->getDocumentService();
-		$documentId = $this->GetDocumentId();
 
 		if (defined('\CBPDocument::PARAM_USED_DOCUMENT_FIELDS'))
 		{
@@ -104,9 +127,8 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigur
 		return null;
 	}
 
-	private function getTargetResponsibleId($current): ?int
+	private function getTargetResponsibleId($current, array $documentId): ?int
 	{
-		$documentId = $this->GetDocumentId();
 		$target = CBPHelper::ExtractUsers($this->Responsible, $documentId);
 
 		if (!$target)

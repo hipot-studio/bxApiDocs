@@ -9,6 +9,7 @@ use Bitrix\Main\Result;
 use Bitrix\Socialnetwork\Copy\GroupManager;
 use Bitrix\Socialnetwork\V2\Internal\Entity\PrivacyType;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Project;
+use Bitrix\Socialnetwork\V2\Internal\Entity\UF\UserField;
 use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectRepositoryInterface;
 
 class LegacyProjectCopyService
@@ -36,7 +37,7 @@ class LegacyProjectCopyService
 		$copyManager->setMarkerUsers(false);
 		// Departments are linked through V2 NodeRelation in CopyProjectService::copy(),
 		// the legacy UF_SG_DEPT channel must stay clean to avoid a duplicate sync source.
-		$copyManager->setUfIgnoreList(['UF_SG_DEPT']);
+		$copyManager->setUfIgnoreList([UserField::GROUP_LEGACY_DEPARTMENT]);
 		$copyManager->setChangedFields($this->buildChangedFields(
 			project: $project,
 			siteIds: $siteIds,

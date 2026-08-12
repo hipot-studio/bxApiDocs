@@ -174,6 +174,12 @@ class HiddenStorage
 				continue;
 			}
 
+			$securityContext = $sourceFile->getStorage()->getSecurityContext($this->userId);
+			if (!$sourceFile->canRead($securityContext))
+			{
+				continue;
+			}
+
 			$file = $sourceFile->copyTo($folder, $this->userId, true);
 
 			if ($file instanceof File)

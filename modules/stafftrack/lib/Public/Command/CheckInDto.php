@@ -25,6 +25,7 @@ use Bitrix\StaffTrack\Internals\Attribute\Range;
  * @method self setUserTimezone(int $userTimezone)
  * @method self setAddress(string $address)
  * @method self setFileIds(array $fileIds)
+ * @method self setSkipWorkDayStart(bool $skipWorkDayStart)
  */
 final class CheckInDto extends AbstractDto
 {
@@ -33,6 +34,13 @@ final class CheckInDto extends AbstractDto
 		if ($property->getName() === 'dateCreate' && is_numeric($value) && $value > 0)
 		{
 			$property->setValue($this, DateTime::createFromTimestamp((int)$value));
+
+			return;
+		}
+
+		if ($property->getName() === 'skipWorkDayStart' && !is_bool($value))
+		{
+			$property->setValue($this, filter_var($value, FILTER_VALIDATE_BOOLEAN));
 
 			return;
 		}
@@ -88,4 +96,6 @@ final class CheckInDto extends AbstractDto
 
 	#[Nullable]
 	public ?string $locationSourceCode = null;
+
+	public bool $skipWorkDayStart = false;
 }

@@ -7,6 +7,7 @@ use Bitrix\Intranet\Contract\Repository\UserRepository;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\Collection\UserCollection;
 use Bitrix\Intranet\Internal\Entity\Invitation;
+use Bitrix\Intranet\Exception\ErrorCollectionException;
 use Bitrix\Intranet\Public\Type\BaseInvitation;
 use Bitrix\Intranet\Public\Type\Collection\InvitationCollection;
 use Bitrix\Intranet\Entity\Type\InvitationsContainer;
@@ -46,7 +47,7 @@ class InvitationService
 	/**
 	 * @throws \Exception
 	 */
-	public function inviteByCollection(InvitationCollection $collection): UserCollection
+	public function inviteByCollection(InvitationCollection $collection, ?int $currentUserId = null): UserCollection
 	{
 		$userCollection = new UserCollection();
 		$errorCollection = new ErrorCollection();
@@ -55,8 +56,12 @@ class InvitationService
 		{
 			try
 			{
-				$user = $this->invite($invitation);
+				$user = $this->invite($invitation, $currentUserId);
 				$userCollection->add($user);
+			}
+			catch (ErrorCollectionException $exception)
+			{
+				$errorCollection->add($exception->getErrors()->getValues());
 			}
 			catch (\Exception $exception)
 			{
@@ -68,7 +73,7 @@ class InvitationService
 			'intranet',
 			'onUserInvited',
 			[
-				'originatorId' => CurrentUser::get()->getId(),
+				'originatorId' => $currentUserId ?? CurrentUser::get()->getId(),
 				'userId' =>$userCollection->getIds(), //is backward compatibility
 				'invitedUsers' => $userCollection,
 			],
@@ -91,7 +96,7 @@ class InvitationService
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public function invite(BaseInvitation $invitation): User
+	public function invite(BaseInvitation $invitation, ?int $currentUserId = null): User
 	{
 		try
 		{
@@ -120,7 +125,7 @@ class InvitationService
 						isIntegrator: $invitation->getFormType() === 'integrator',
 						isRegister: $invitation->getFormType() === 'register',
 						id: null,
-						originatorId: CurrentUser::get()->getId(),
+						originatorId: $currentUserId ?? CurrentUser::get()->getId(),
 						type: $invitation->getType(),
 					)
 				);
@@ -132,7 +137,7 @@ class InvitationService
 					'intranet',
 					'onUserInvited',
 					[
-						'originatorId' => CurrentUser::get()->getId(),
+						'originatorId' =>  $currentUserId ?? CurrentUser::get()->getId(),
 						'userId' => [$user->getId()], //is backward compatibility
 						'invitedUsers' => new UserCollection($user),
 					],
@@ -208,7 +213,7 @@ class InvitationService
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
 	 */
-	public static function inviteUsersToGroup(int $groupId, InvitationsContainer $inviteData): Result
+	public static function inviteUsersToGroup(int $groupId, InvitationsContainer $inviteData, ?int $currentUserId = null): Result
 	{
 		$result = new Result();
 
@@ -235,8 +240,7 @@ class InvitationService
 		try
 		{
 			$collabInvitation = new CollabInvitationFacade($group);
-			$userCollection = $collabInvitation->inviteByCollection($inviteData->getInvitationCollection());
-
+			$userCollection = $collabInvitation->inviteByCollection($inviteData->getInvitationCollection(), $currentUserId);
 		}
 		catch (InvitationFailedException $exception)
 		{
@@ -251,6 +255,7 @@ class InvitationService
 		$inviteCommand = new Command\Invitation\InviteUserCollectionToGroupCommand(
 			groupId: $groupId,
 			userCollection: $userCollection,
+			currentUserId: $currentUserId,
 		);
 		$inviteToGroupResult = $inviteCommand->execute();
 

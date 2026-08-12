@@ -10,7 +10,7 @@ use Bitrix\Market\Rest\Actions;
 use Bitrix\Market\Toolbar;
 use Bitrix\Market\Rest\Transport;
 
-Loc::loadMessages(__DIR__.'/../../install/components/bitrix/market.main/class.php');
+Loc::loadMessages(__DIR__ . '/../../install/components/bitrix/market.main/class.php');
 
 class Category extends BaseTemplate
 {
@@ -24,17 +24,27 @@ class Category extends BaseTemplate
 	public function setResult(bool $isAjax = false)
 	{
 		$title = Loc::getMessage('MARKET_MAIN_PAGE_TITLE_MSGVER_1');
+		$selectedCategory = $this->getSelectedCategory();
+		$selectedCategoryTag = $this->getSelectedCategoryTag();
 
 		$params = [
 			'category' => $this->categoryCode,
 			'page' => $this->page,
 		];
-		if (!empty($this->filter['tag'])) {
-			$params['category'] = $this->filter['tag'];
-		} else if (!empty($this->filter['categoryTag'])) {
-			$params['filter_tag'] = $this->filter['categoryTag'];
+		$params = array_merge($params, $this->getMobileMarketContextParams());
+
+		if ($selectedCategory !== '')
+		{
+			$params['category'] = $selectedCategory;
+			$this->result['SELECTED_TAG'] = $selectedCategory;
 		}
-		if (!empty($this->order)) {
+		elseif ($selectedCategoryTag !== '')
+		{
+			$params['filter_tag'] = $selectedCategoryTag;
+			$this->result['SELECTED_TAG'] = $selectedCategoryTag;
+		}
+		if (!empty($this->order))
+		{
 			$params['custom_sort'] = $this->order;
 		}
 
@@ -45,10 +55,15 @@ class Category extends BaseTemplate
 			],
 			Actions::METHOD_TOTAL_APPS => [
 				Actions::METHOD_TOTAL_APPS,
+				$this->getMobileMarketContextParams(),
 			],
 		];
-		if (!$isAjax && empty(Categories::get())) {
-			$batch[Actions::METHOD_GET_CATEGORIES_V2] = [Actions::METHOD_GET_CATEGORIES_V2];
+		if (!$isAjax && empty(Categories::get($this->mobileMarketContext)))
+		{
+			$batch[Actions::METHOD_GET_CATEGORIES_V2] = [
+				Actions::METHOD_GET_CATEGORIES_V2,
+				$this->getMobileMarketContextParams(),
+			];
 		}
 
 		$response = Transport::instance()->batch($batch);
@@ -78,8 +93,8 @@ class Category extends BaseTemplate
 		}
 
 		if (!empty($response[Actions::METHOD_GET_CATEGORIES_V2])) {
-			Categories::saveCache($response[Actions::METHOD_GET_CATEGORIES_V2]);
-			$this->result['CATEGORIES'] = Categories::get();
+			Categories::saveCache($response[Actions::METHOD_GET_CATEGORIES_V2], $this->mobileMarketContext);
+			$this->result['CATEGORIES'] = Categories::get($this->mobileMarketContext);
 		}
 
 		$this->result['TITLE'] = $title;
@@ -121,13 +136,49 @@ class Category extends BaseTemplate
 		return $result;
 	}
 
+	private function getSelectedCategory(): string
+	{
+		if (!empty($this->filter['tag']) && is_string($this->filter['tag']))
+		{
+			return $this->filter['tag'];
+		}
+
+		if (!empty($this->requestParams['tag']) && is_string($this->requestParams['tag']))
+		{
+			return $this->requestParams['tag'];
+		}
+
+		return '';
+	}
+
+	private function getSelectedCategoryTag(): string
+	{
+		if (!empty($this->filter['categoryTag']) && is_string($this->filter['categoryTag']))
+		{
+			return $this->filter['categoryTag'];
+		}
+
+		if (!empty($this->requestParams['categoryTag']) && is_string($this->requestParams['categoryTag']))
+		{
+			return $this->requestParams['categoryTag'];
+		}
+
+		if (!empty($this->requestParams['filter_tag']) && is_string($this->requestParams['filter_tag']))
+		{
+			return $this->requestParams['filter_tag'];
+		}
+
+		return '';
+	}
+
 	private function getAppsCount(): int
 	{
-		if (!isset(Categories::get()['ITEMS'])) {
+		$categories = Categories::get($this->mobileMarketContext);
+		if (!isset($categories['ITEMS'])) {
 			return 0;
 		}
 
-		foreach (Categories::get()['ITEMS'] as $item) {
+		foreach ($categories['ITEMS'] as $item) {
 			if ($item['CODE'] === $this->categoryCode) {
 				return (int)$item['CNT'];
 			}

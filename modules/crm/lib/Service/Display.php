@@ -150,6 +150,7 @@ class Display
 				}
 
 				$displayedField->prepareField();
+				$displayedField->setItemContext($item);
 
 				$result[$itemId][$fieldId] = $displayedField->getFormattedValue(
 					$fieldValue,
@@ -157,6 +158,8 @@ class Display
 					$this->displayOptions
 				);
 			}
+
+			$displayedField->clearItemContext();
 		}
 
 		return $result;

@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
 
 class AddBotActionMessage implements ActionMessageInterface
 {
@@ -39,6 +40,13 @@ class AddBotActionMessage implements ActionMessageInterface
 			$this->addUsersToChat($this->collabId, $parameters, ...$recipientIds);
 		}
 
+		$withoutMessage = $parameters['withoutMessage'] ?? false;
+
+		if ($withoutMessage)
+		{
+			return 0;
+		}
+
 		$recipientNames = [];
 		foreach ($recipientIds as $recipientId)
 		{
@@ -63,7 +71,12 @@ class AddBotActionMessage implements ActionMessageInterface
 			],
 		);
 
-		return $this->sendMessage($message, $this->senderId, $this->collabId);
+		return $this->sendMessage(
+			message: $message,
+			senderId: $this->senderId,
+			groupId: $this->collabId,
+			silent: $this->resolveCounterSilent(ActionType::AddBot, $this->collabId, self::SILENT_OFF),
+		);
 	}
 
 	private function getMessageCode(bool $hasMultipleRecipients): string

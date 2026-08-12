@@ -13,6 +13,7 @@ enum ActionGroup: string
 	case ManageMessages = 'MANAGE_MESSAGES';
 	case ManageMessagesAutoDelete = 'MANAGE_MESSAGES_AUTO_DELETE';
 	case ManageGuestInvites = 'MANAGE_GUEST_INVITES';
+	case ManageDelete = 'MANAGE_DELETE';
 
 	public static function tryFromAction(Action $action): ?ActionGroup
 	{
@@ -48,6 +49,7 @@ enum ActionGroup: string
 			self::ManageMessages => [Action::Send->value, Action::PinMessage->value],
 			self::ManageMessagesAutoDelete => [Action::ChangeMessagesAutoDeleteDelay->value],
 			self::ManageGuestInvites => [Action::ManageGuestLink->value],
+			self::ManageDelete => [Action::Delete->value],
 		};
 	}
 
@@ -73,6 +75,7 @@ enum ActionGroup: string
 			self::ManageMessages->value => Chat::ROLE_MEMBER,
 			self::ManageMessagesAutoDelete->value => Chat::ROLE_OWNER,
 			self::ManageGuestInvites->value => Chat::ROLE_MANAGER,
+			self::ManageDelete->value => Chat::ROLE_MEMBER,
 		];
 	}
 }

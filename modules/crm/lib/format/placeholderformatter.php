@@ -44,62 +44,52 @@ final class PlaceholderFormatter
 		return strtr($displayInput, $replaceMap);
 	}
 
-	public static function escapeUnknownPlaceholdersInExternal(int $entityTypeId, string $externalInput): string
+	/**
+	 * Converts display-format placeholders to BBCode format.
+	 * {Deal: ID} → [placeholder code=DealId]Deal: ID[/placeholder]
+	 */
+	public static function convertDisplayToBBCodeFormat(int $entityTypeId, string $displayInput): string
 	{
-		if (!self::hasPlaceholders($externalInput))
+		if (!self::hasPlaceholders($displayInput))
 		{
-			return $externalInput;
+			return $displayInput;
 		}
 
 		$placeholders = self::getPlaceholders($entityTypeId);
+		$replaceMap = [];
 
-		$len = strlen($externalInput);
-		$keep = array_fill(0, $len, false);
-
-		// Mark known placeholders only (full "{externalPlaceholder}" tokens). All other braces will be escaped.
-		if (!empty($placeholders))
+		foreach ($placeholders as $code => $placeholder)
 		{
-			foreach (array_keys($placeholders) as $externalPlaceholder)
-			{
-				$needle = '{' . $externalPlaceholder . '}';
-				$needleLen = strlen($needle);
-				$offset = 0;
-				while (($idx = strpos($externalInput, $needle, $offset)) !== false)
-				{
-					$end = $idx + $needleLen - 1; // inclusive end index of the token
-					for ($p = $idx; $p <= $end; $p++)
-					{
-						$keep[$p] = true;
-					}
-					$offset = $idx + 1; // continue search allowing overlaps
-				}
-			}
+			$replaceMap["{{$placeholder}}"] = "[placeholder code={$code}]{$placeholder}[/placeholder]";
 		}
 
-		// Build resulting string: escape every brace not marked to keep
-		$out = '';
-		for ($i = 0; $i < $len; $i++)
+		return strtr($displayInput, $replaceMap);
+	}
+
+	/**
+	 * Converts BBCode placeholder tags to external format for document generator.
+	 * [placeholder code=DealId]Deal: ID[/placeholder] → {DealId}
+	 *
+	 * Mandatory parts mirror the frontend PlaceholderService contract:
+	 * a non-empty `code=` attribute and a caption that is not empty or
+	 * whitespace-only. Tags missing either are not considered placeholders
+	 * and are left unchanged.
+	 */
+	public static function convertBBCodeToExternalFormat(string $text): string
+	{
+		// A quick check to avoid the overhead of regex when no placeholders are present.
+		if (!str_contains($text, '[placeholder'))
 		{
-			$ch = $externalInput[$i];
-			if ($keep[$i])
-			{
-				$out .= $ch;
-			}
-			elseif ($ch === '{')
-			{
-				$out .= '&#123;';
-			}
-			elseif ($ch === '}')
-			{
-				$out .= '&#125;';
-			}
-			else
-			{
-				$out .= $ch;
-			}
+			return $text;
 		}
 
-		return $out;
+		// The negative lookahead `(?!\s*\[/placeholder\])` after the opening `]`
+		// rejects both empty and whitespace-only captions in one step.
+		return preg_replace_callback(
+			'/\[placeholder\s+[^\]]*?\bcode=(?:"([^"]+)"|([^\s"\]]+))[^\]]*\](?!\s*\[\/placeholder\]).+?\[\/placeholder\]/s',
+			static fn(array $matches) => '{' . ($matches[1] !== '' ? $matches[1] : $matches[2]) . '}',
+			$text,
+		);
 	}
 
 	/**

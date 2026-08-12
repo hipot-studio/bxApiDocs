@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Internal\Grid\StorageList\Row\Assembler;
 
 use Bitrix\Bizproc\Internal\Grid\StorageList\Row\Assembler\Field\TitleFieldAssembler;
+use Bitrix\Main\Grid\Row\Assembler\Field\StringFieldAssembler;
 use Bitrix\Main\Grid\Row\RowAssembler;
 
 class StorageListRowAssembler extends RowAssembler
@@ -13,6 +14,7 @@ class StorageListRowAssembler extends RowAssembler
 	{
 		return [
 			new TitleFieldAssembler(['TITLE']),
+			new StringFieldAssembler(['DESCRIPTION', 'CODE']),
 		];
 	}
 }

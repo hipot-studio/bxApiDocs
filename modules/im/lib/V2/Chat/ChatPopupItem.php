@@ -42,6 +42,8 @@ class ChatPopupItem implements PopupDataItem
 		$rest = [];
 
 		Chat::fillSelfRelations($this->chats);
+		// Phase 0 (task 718250): superadmin project chat access
+		Chat::fillManageCapability($this->chats);
 		$this->fillDialogIds();
 
 		foreach ($this->chats as $chat)

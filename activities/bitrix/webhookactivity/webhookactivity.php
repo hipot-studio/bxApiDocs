@@ -6,8 +6,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Main\Loader;
-use \Bitrix\Rest\Sqs;
+use Bitrix\Rest\Sqs;
 use Bitrix\Rest;
+use Bitrix\Main\Web\Uri;
 
 class CBPWebHookActivity extends CBPActivity implements IBPConfigurableActivity
 {
@@ -61,7 +62,7 @@ class CBPWebHookActivity extends CBPActivity implements IBPConfigurableActivity
 				}
 				if (isset($handlerData['path']))
 				{
-					$target .= CHTTP::urnEncode($handlerData['path']);
+					$target .= Uri::urnEncode($handlerData['path']);
 				}
 				if (isset($handlerData['query']))
 				{
@@ -70,7 +71,7 @@ class CBPWebHookActivity extends CBPActivity implements IBPConfigurableActivity
 				}
 				if (isset($handlerData['fragment']))
 				{
-					$target .= '#'.CHTTP::urnEncode($handlerData['fragment']);
+					$target .= '#' . Uri::urnEncode($handlerData['fragment']);
 				}
 
 				$queryItem = Sqs::queryItem(

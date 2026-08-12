@@ -23,11 +23,13 @@ final class CommonUserDto extends Dto
 		public ?bool $isRootAdmin = null,
 		public ?bool $isCollaber = null,
 		public ?bool $isExtranet = null,
+		public ?bool $isGuest = null,
 		public ?string $personalMobile = null,
 		public ?string $personalPhone = null,
 		public ?string $lastActivityDate = null,
 		public ?\DateTimeZone $timezone = null,
 		public ?string $personalGender = null,
+		public ?int $dateRegister = null,
 	)
 	{
 		parent::__construct();

@@ -8,5 +8,6 @@ namespace Bitrix\Crm\Component\DisableHelpers;
 enum AlertContent: string
 {
 	case OLD_ENTITY_DISABLE = 'old-entity-disable';
+	case OLD_INVOICE_WARNING = 'old-invoice-warning';
 	case OLD_INVOICE_READONLY = 'old-invoice-readonly';
 }

@@ -1,26 +1,39 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\Crm\MessageSender\UI\Editor\ContentProvider;
 
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
-use Bitrix\Crm\MessageSender\UI\Editor\ContentProvider;
 use Bitrix\Crm\Service\Container;
 
-final class CrmValues extends ContentProvider
+final class CrmValues extends BaseContentProvider
 {
-	public function getKey(): string
+	public function getId(): string
 	{
 		return 'crmValues';
 	}
 
-	public function isEnabled(): bool
+	public function isShown(): bool
 	{
-		$manager = DocumentGeneratorManager::getInstance();
+		$entityTypeId = $this->getEntityTypeId();
+		if (!\CCrmOwnerType::IsDefined($entityTypeId))
+		{
+			return false;
+		}
 
-		return (
-			$manager->isEnabled()
-			&& $this->getContext()->getEntityTypeId() !== null
-			&& Container::getInstance()->getFactory($this->getContext()->getEntityTypeId())?->isDocumentGenerationSupported()
-		);
+		return DocumentGeneratorManager::getInstance()->isEnabled()
+			&& Container::getInstance()->getFactory($entityTypeId)?->isDocumentGenerationSupported();
+	}
+
+	protected function getCustomData(): array
+	{
+		return [
+			'placeholdersOptions' => [
+				'entityTypeId' => $this->getEntityTypeId(),
+				'entityId' => $this->getEntityId(),
+				'categoryId' => $this->getCategoryId(),
+			],
+		];
 	}
 }

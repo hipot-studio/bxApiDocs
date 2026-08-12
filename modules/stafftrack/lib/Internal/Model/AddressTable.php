@@ -4,6 +4,7 @@ namespace Bitrix\StaffTrack\Internal\Model;
 
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+use Bitrix\Main\ORM\Fields\CryptoField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
@@ -37,12 +38,11 @@ class AddressTable extends DataManager
 	public static function getMap(): array
 	{
 		return [
-			(new StringField('GEOHASH'))
-				->configureSize(8)
+			(new StringField('GEOHASH_KEY'))
+				->configureSize(64)
 				->configurePrimary(true)
 			,
-			(new StringField('ADDRESS'))
-				->configureSize(255)
+			(new CryptoField('ADDRESS', ['crypto_enabled' => CryptoField::cryptoAvailable()]))
 				->configureNullable(true)
 			,
 			(new IntegerField('STATUS'))

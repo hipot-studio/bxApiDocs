@@ -16,6 +16,8 @@ class Feature
 	const PROJECTS_ACCESS_PERMISSIONS = 'socialnetwork_projects_access_permissions';
 	const PROJECTS_COPY = 'socialnetwork_copy_project';
 
+	public const PROJECTS_TRIAL_DAYS = 15;
+
 	const FIRST_ERA = 'socialnetwork_first_era';
 
 	public static function isFeatureEnabled(string $featureName, int $groupId = 0): bool
@@ -59,6 +61,35 @@ class Feature
 		);
 	}
 
+	/**
+	 * @return array{startTs: int, tillTs: int}|null
+	 */
+	public static function getTrialInfo(string $featureName): ?array
+	{
+		if (!Loader::includeModule('bitrix24'))
+		{
+			return null;
+		}
+
+		$trialInfo = Bitrix24\Feature::getTrialFeatureInfo($featureName);
+		if ($trialInfo === null)
+		{
+			return null;
+		}
+
+		$startTs = strtotime((string)($trialInfo['startDate'] ?? ''));
+		$tillTs = strtotime((string)($trialInfo['tillDate'] ?? ''));
+		if ($startTs === false || $tillTs === false)
+		{
+			return null;
+		}
+
+		return [
+			'startTs' => $startTs,
+			'tillTs' => $tillTs,
+		];
+	}
+
 	public static function isFeaturePromo(string $featureName): bool
 	{
 		return (
@@ -69,10 +100,17 @@ class Feature
 
 	public static function canTurnOnTrial(string $featureName): bool
 	{
-		if (
-			self::isFeatureEnabled(self::FIRST_ERA)
-			|| self::isFeatureEnabled($featureName)
-		)
+		if (self::isFeatureEnabled($featureName))
+		{
+			return false;
+		}
+
+		if ($featureName === self::PROJECTS_GROUPS)
+		{
+			return !self::isDemoFeatureWasEnabled($featureName);
+		}
+
+		if (self::isFeatureEnabled(self::FIRST_ERA))
 		{
 			return false;
 		}
@@ -80,7 +118,7 @@ class Feature
 		return !self::isDemoFeatureWasEnabled($featureName);
 	}
 
-	public static function turnOnTrial($featureName, int $trialDays = 15): void
+	public static function turnOnTrial($featureName, int $trialDays = self::PROJECTS_TRIAL_DAYS): void
 	{
 		Bitrix24\Feature::setFeatureTrialable($featureName, [
 			'days' => $trialDays,

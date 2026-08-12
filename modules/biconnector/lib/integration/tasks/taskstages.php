@@ -69,6 +69,9 @@ class TaskStages extends Dataset
 
 	protected function getFields(): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $this->getSqlHelper();
+
 		$systemScrumTitles = [];
 		$stages = StagesTable::getStages();
 		foreach ($stages as $stage)
@@ -84,11 +87,9 @@ class TaskStages extends Dataset
 		{
 			$titleField->setDictionary($systemScrumTitles);
 			$titleField->setName("
-				if(
-					{$this->getAliasFieldName('TITLE')} is NULL,
-					{$titleField->mapDictionaryToSqlCase($this->getAliasFieldName('SYSTEM_TYPE'))},
-					{$this->getAliasFieldName('TITLE')}
-				)
+				CASE WHEN {$this->getAliasFieldName('TITLE')} is NULL THEN
+					{$titleField->mapDictionaryToSqlCase($this->getAliasFieldName('SYSTEM_TYPE'))}
+				ELSE {$this->getAliasFieldName('TITLE')} END
 			");
 		}
 
@@ -114,15 +115,13 @@ class TaskStages extends Dataset
 			,
 			(new StringField('GROUP_INFO'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('ENTITY_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('ENTITY_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							concat('[', {$this->getAliasFieldName('ENTITY_ID')}, ']'), 
+							' ',
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('ENTITY_ID'), "']'")},
 							nullif({$groupJoin->getJoinFieldName('NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($groupJoin)
 			,

@@ -28,6 +28,7 @@ final class RecentUpdateMeta extends RecentUpdate
 
 	protected function getBasePullParamsInternal(): array
 	{
-		return $this->getBaseRecentPreviewParams($this->chat, $this->chat->getLastMessage(), null);
+		// Reuse the parent builder so the collab base drops `message` too (avoids cross-chat params leak).
+		return $this->buildBasePreviewParams(null);
 	}
 }

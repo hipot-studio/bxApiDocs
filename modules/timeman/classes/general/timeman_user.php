@@ -11,6 +11,7 @@ use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordTable;
 use Bitrix\Timeman\Service\DependencyManager;
 use Bitrix\Timeman\UseCase\Worktime\Manage;
 use Bitrix\Timeman\Service\Worktime\Result\WorktimeServiceResult;
+use Bitrix\Timeman\V2\Internal\DI\Container;
 
 class CTimeManUser
 {
@@ -24,19 +25,24 @@ class CTimeManUser
 	protected $bTasksEnabled;
 	protected $UF_DEPARTMENT;
 
-	protected static $instance = null;
+	/** @var array<int, CTimeManUser> */
+	protected static array $instances = [];
 	protected static $LAST_ENTRY = [];
 
 	private static array $currentRecordStatus = [];
 
-	public static function instance()
+	public static function instance(int $userId = 0)
 	{
-		if (!self::$instance)
+		global $USER;
+
+		$resolvedUserId = $userId > 0 ? $userId : (int)($USER?->GetID() ?? 0);
+
+		if (!isset(self::$instances[$resolvedUserId]))
 		{
-			self::$instance = new CTimeManUser();
+			self::$instances[$resolvedUserId] = new CTimeManUser($resolvedUserId);
 		}
 
-		return self::$instance;
+		return self::$instances[$resolvedUserId];
 	}
 
 	public function __construct($USER_ID = 0, $site_id = SITE_ID)
@@ -463,6 +469,11 @@ class CTimeManUser
 					return $arRes;
 				}
 
+				if (trim($report ?? ''))
+				{
+					$this->scheduleGenerationAiReport($USER->GetID());
+				}
+
 				$arFields = ['REPORT' => $report];
 				if (!CTimeManReport::Update($ID, $arFields))
 				{
@@ -479,6 +490,11 @@ class CTimeManUser
 					'REPORT' => $report,
 				];
 
+				if (trim($report ?? ''))
+				{
+					$this->scheduleGenerationAiReport($USER->GetID());
+				}
+
 				if (!($ID = CTimeManReport::Add($arFields)))
 				{
 					return false;
@@ -492,6 +508,15 @@ class CTimeManUser
 		{
 			$APPLICATION->ThrowException('No entry', 'SAVE_REPORT_NO_ENTRY');
 		}
+	}
+
+	public function scheduleGenerationAiReport(int $userId): void
+	{
+		$container = Container::getInstance();
+
+		$fullReportService = $container->getFullReportService();
+
+		$fullReportService->scheduleGenerationAiReport($userId);
 	}
 
 	public function GetCurrentInfo($clear = false)

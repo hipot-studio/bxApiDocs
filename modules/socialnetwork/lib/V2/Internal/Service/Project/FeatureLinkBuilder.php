@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\V2\Internal\Service\Project;
 
+use Bitrix\Socialnetwork\Collab\Integration\Note\CollabKnowledgeService;
 use Bitrix\Socialnetwork\Helper\Path;
 use Bitrix\Socialnetwork\V2\Internal\Integration;
 
@@ -12,6 +13,7 @@ class FeatureLinkBuilder
 	public function __construct(
 		private readonly Integration\Landing\Service\Project $landingProjectService,
 		private readonly Integration\Tasks\Flow\Service\Path $flowPathService,
+		private readonly CollabKnowledgeService $collabKnowledgeService,
 	)
 	{
 	}
@@ -54,6 +56,11 @@ class FeatureLinkBuilder
 			return $this->buildFlowsUrl($projectId, $userId);
 		}
 
+		if ($featureId === FeatureDictionary::Note->value)
+		{
+			return $this->buildNoteUrl($projectId, $userId);
+		}
+
 		if ($featureId === FeatureDictionary::Files->value)
 		{
 			return \CComponentEngine::makePathFromTemplate(
@@ -88,6 +95,22 @@ class FeatureLinkBuilder
 	private function buildLandingKnowledgeUrl(int $projectId): ?string
 	{
 		return $this->landingProjectService->getKnowledgeUrl($projectId);
+	}
+
+	private function buildNoteUrl(int $projectId, int $userId): ?string
+	{
+		$section = $this->collabKnowledgeService->resolveSection($projectId, $userId);
+
+		$collectionId = $section['collectionId'];
+		if ($section['available'] !== true || $section['canView'] !== true || $collectionId === null)
+		{
+			return null;
+		}
+
+		// Q-1: scoped-section URL until note exposes a single-collection launch contract.
+		// note's SPA is history-mode (base /note/, route /workspace/{id}/), so the path resolves
+		// without a hash; the catch-all /note/* page renders the SPA.
+		return '/note/workspace/' . $collectionId . '/';
 	}
 
 	private function buildFlowsUrl(int $projectId, int $userId): ?string

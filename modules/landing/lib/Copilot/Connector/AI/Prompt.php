@@ -11,7 +11,7 @@ class Prompt
 {
 	private const DEFAULT_REQUEST_TEMPERATURE = 0.7;
 	private string $code;
-	private array $markers;
+	private array $markers = [];
 	private ?Schema $schema = null;
 	private ?int $cost = null;
 	private float $temperature;
@@ -29,7 +29,7 @@ class Prompt
 
 	public function setMarkers($markers): self
 	{
-		$this->markers = $markers;
+		$this->markers = is_array($markers) ? $this->normalizeMarkers($markers) : [];
 
 		return $this;
 	}
@@ -37,6 +37,60 @@ class Prompt
 	public function getMarkers(): array
 	{
 		return $this->markers;
+	}
+
+	private function normalizeMarkers(array $markers): array
+	{
+		$normalized = [];
+		foreach ($markers as $key => $value)
+		{
+			if (!is_string($key))
+			{
+				$normalized[$key] = $value;
+				continue;
+			}
+
+			foreach ($this->getMarkerAliases($key) as $alias)
+			{
+				if (!array_key_exists($alias, $normalized))
+				{
+					$normalized[$alias] = $value;
+				}
+			}
+		}
+
+		return $normalized;
+	}
+
+	private function getMarkerAliases(string $key): array
+	{
+		$trimmedKey = trim($key);
+		if (preg_match('/^\{\{([a-zA-Z0-9_]+)\}\}$/', $trimmedKey, $matches))
+		{
+			return [
+				'{' . $matches[1] . '}',
+				$matches[1],
+				$key,
+			];
+		}
+
+		if (preg_match('/^\{([a-zA-Z0-9_]+)\}$/', $trimmedKey, $matches))
+		{
+			return [
+				$key,
+				$matches[1],
+			];
+		}
+
+		if (preg_match('/^[a-zA-Z0-9_]+$/', $trimmedKey))
+		{
+			return [
+				'{' . $trimmedKey . '}',
+				$key,
+			];
+		}
+
+		return [$key];
 	}
 
 	public function setSchema(Schema $schema): self

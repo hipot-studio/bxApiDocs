@@ -93,6 +93,11 @@ class Social extends PresetAbstract
 			array_splice($structure['shown']['menu_teamwork'], 1, 0, ['menu_im_copilot']);
 		}
 
+		if (\Bitrix\Main\Loader::includeModule('call') && \Bitrix\Call\Settings::isSyncPresetEnabled())
+		{
+			array_splice($structure['shown']['menu_teamwork'], 3, 0, ['menu_sync']);
+		}
+
 		$found = false;
 		$filler = function(&$item, $key) use (&$filler, &$found) {
 			if ($key === 'menu_marketplace_group')

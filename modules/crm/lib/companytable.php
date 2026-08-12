@@ -69,6 +69,8 @@ class CompanyTable extends DataManager
 
 		$fieldRepository = ServiceLocator::getInstance()->get('crm.model.fieldRepository');
 
+		$currencyIdField = $fieldRepository->getCurrencyId();
+
 		$map = [
 			//fields here are sorted by b_crm_company columns order in install.sql. Please, keep it that way
 
@@ -163,12 +165,14 @@ class CompanyTable extends DataManager
 				->configureTitle(Loc::getMessage('CRM_COMPANY_ENTITY_INDUSTRY_BY_FIELD'))
 			,
 
-			(new FloatField('REVENUE'))
-				->configureDefaultValue(0)
-				->configureTitle(Loc::getMessage('CRM_COMPANY_ENTITY_REVENUE_FIELD'))
-			,
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				(new FloatField('REVENUE'))
+					->configureDefaultValue(0)
+					->configureTitle(Loc::getMessage('CRM_COMPANY_ENTITY_REVENUE_FIELD')),
+				$currencyIdField
+			),
 
-			$fieldRepository->getCurrencyId(),
+			$currencyIdField,
 
 			$fieldRepository->getTypeId('EMPLOYEES', StatusTable::ENTITY_ID_EMPLOYEES)
 				->configureTitle(Loc::getMessage('CRM_COMPANY_ENTITY_EMPLOYEES_BY_FIELD'))

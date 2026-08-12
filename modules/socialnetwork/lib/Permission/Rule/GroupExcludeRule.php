@@ -41,9 +41,18 @@ class GroupExcludeRule extends AbstractRule
 			return false;
 		}
 
-		if (!$this->getAccessManager($item, $target, $this->user->getUserId())->canExclude())
+		$accessManager = $this->getAccessManager($item, $target, $this->user->getUserId());
+		if (!$accessManager->canExclude())
 		{
-			$this->controller->addError(static::class, 'Access denied by permissions');
+			$errors = $accessManager->getErrors();
+			if ($errors)
+			{
+				$this->controller->addErrors(...$errors);
+			}
+			else
+			{
+				$this->controller->addError(static::class, 'Access denied by permissions');
+			}
 
 			return false;
 		}

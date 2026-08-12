@@ -2,47 +2,45 @@
 
 namespace Bitrix\SalesCenter\Integration;
 
+use Bitrix\Crm;
 use Bitrix\Crm\Activity\Provider\BaseMessage;
-use Bitrix\Crm\Integration\NotificationsManager;
-use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\AddressTable;
+use Bitrix\Crm\Automation;
 use Bitrix\Crm\Binding\DealContactTable;
+use Bitrix\Crm\ClientInfo;
 use Bitrix\Crm\EntityAddress;
 use Bitrix\Crm\EntityAddressType;
 use Bitrix\Crm\EntityRequisite;
-use Bitrix\Crm\Feature;
-use Bitrix\Crm\Feature\MessageSenderEditor;
 use Bitrix\Crm\Format\PlaceholderFormatter;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
+use Bitrix\Crm\Integration\NotificationsManager;
+use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\Item;
+use Bitrix\Crm\Item\Deal;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Order;
 use Bitrix\Crm\Order\BindingsMaker\ActivityBindingsMaker;
 use Bitrix\Crm\Order\ContactCompanyEntity;
 use Bitrix\Crm\RelationIdentifier;
+use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Restriction\OrderRestriction;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Main;
-use Bitrix\Crm\Automation;
-use Bitrix\Crm\Order;
 use Bitrix\Crm\Settings\ContactSettings;
 use Bitrix\Crm\Settings\DealSettings;
-use Bitrix\Crm\WebForm\Internals\FormTable;
 use Bitrix\Crm\Timeline;
+use Bitrix\Crm\WebForm\Internals\FormTable;
+use Bitrix\Crm\Workflow\PaymentStage;
+use Bitrix\Crm\Workflow\PaymentWorkflow;
+use Bitrix\Main;
 use Bitrix\Main\Loader;
-use Bitrix\Crm\Requisite\EntityLink;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\PhoneNumber\Parser;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Sale\Payment;
 use Bitrix\Salescenter\Analytics;
-use Bitrix\Main\PhoneNumber\Parser;
-use Bitrix\Crm;
-use Bitrix\Crm\ClientInfo;
-use Bitrix\Crm\Workflow\PaymentWorkflow;
-use Bitrix\Crm\Workflow\PaymentStage;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Crm\Item\Deal;
 use Bitrix\SalesCenter\Component\PaymentSlip;
 use Bitrix\Salescenter\PaymentSlip\PaymentSlipManager;
 use CCrmOwnerType;
-use Bitrix\Main\Text\Emoji;
 
 Main\Localization\Loc::loadMessages(__FILE__);
 
@@ -651,10 +649,7 @@ class CrmManager extends Base
 	): bool
 	{
 		$activityProviderId = null;
-		if (
-			Feature::enabled(MessageSenderEditor::class)
-			&& $messageData
-		)
+		if ($messageData)
 		{
 			$messageData = $this->parseMessageData($messageData);
 			if (!$messageData)
@@ -704,20 +699,6 @@ class CrmManager extends Base
 			{
 				$this->saveSmsTemplate($messageBody, self::SMS_MODE_COMPILATION);
 			}
-
-			if ($dealId)
-			{
-				$messageBody = PlaceholderFormatter::convertToExternalFormat(
-					CCrmOwnerType::Deal,
-					$messageBody,
-				);
-				$messageBody = DocumentGeneratorManager::getInstance()->replacePlaceholdersInText(
-					CCrmOwnerType::Deal,
-					$dealId,
-					PlaceholderFormatter::escapeUnknownPlaceholdersInExternal(CCrmOwnerType::Deal, $messageBody),
-					' '
-				) ?? $messageBody;
-			}
 		}
 		else
 		{
@@ -728,6 +709,18 @@ class CrmManager extends Base
 			$messageBody = $sendingInfo['text'] ?? '';
 			$senderId = (mb_strpos($sendingInfo['provider'], '|') === false) ? $sendingInfo['provider'] : 'rest';
 			$messageFrom = $senderId === 'rest' ? $sendingInfo['provider'] : null;
+		}
+
+		$messageBody = PlaceholderFormatter::convertBBCodeToExternalFormat($messageBody);
+
+		if ($dealId)
+		{
+			$messageBody = DocumentGeneratorManager::getInstance()->replacePlaceholdersInText(
+				CCrmOwnerType::Deal,
+				$dealId,
+				$messageBody,
+				' '
+			) ?? $messageBody;
 		}
 
 		$linkForMessage = $compilationLink['link'];
@@ -910,10 +903,7 @@ class CrmManager extends Base
 		$order = $payment->getOrder();
 		$activityProviderId = null;
 
-		if (
-			Feature::enabled(MessageSenderEditor::class)
-			&& $messageData
-		)
+		if ($messageData)
 		{
 			$messageData = $this->parseMessageData($messageData);
 			if (!$messageData)
@@ -953,20 +943,6 @@ class CrmManager extends Base
 					$this->saveSmsTemplate($messageBody);
 				}
 			}
-
-			$binding = $order->getEntityBinding();
-			$ownerId = $binding->getOwnerId();
-			$ownerTypeId = $binding->getOwnerTypeId();
-			if ($ownerId && $ownerTypeId)
-			{
-				$messageBody = PlaceholderFormatter::convertToExternalFormat($ownerTypeId, $messageBody);
-				$messageBody = DocumentGeneratorManager::getInstance()->replacePlaceholdersInText(
-					$ownerTypeId,
-					$ownerId,
-					PlaceholderFormatter::escapeUnknownPlaceholdersInExternal($ownerTypeId, $messageBody),
-					' '
-				) ?? $messageBody;
-			}
 		}
 		else
 		{
@@ -986,6 +962,21 @@ class CrmManager extends Base
 			$currentSenderCode = null;
 			$senderId = (mb_strpos($sendingInfo['provider'], '|') === false) ? $sendingInfo['provider'] : 'rest';
 			$messageFrom = $senderId === 'rest' ? $sendingInfo['provider'] : null;
+		}
+
+		$messageBody = PlaceholderFormatter::convertBBCodeToExternalFormat($messageBody);
+
+		$binding = $order->getEntityBinding();
+		$ownerId = $binding->getOwnerId();
+		$ownerTypeId = $binding->getOwnerTypeId();
+		if ($ownerId && $ownerTypeId)
+		{
+			$messageBody = DocumentGeneratorManager::getInstance()->replacePlaceholdersInText(
+				$ownerTypeId,
+				$ownerId,
+				$messageBody,
+				' '
+			) ?? $messageBody;
 		}
 
 		$urlInfoByOrder = LandingManager::getInstance()->getUrlInfoByOrder(

@@ -2,11 +2,11 @@
 
 namespace Bitrix\Crm\MessageSender\UI\Editor\Scene;
 
-use Bitrix\Crm\MessageSender\UI\Editor\Scene;
-use Bitrix\Crm\MessageSender\UI\Editor\ViewChannel;
-use Bitrix\Crm\MessageSender\UI\Taxonomy;
+use Bitrix\MessageService\Public\UI\MessageEditor\Context;
+use Bitrix\MessageService\Public\UI\MessageEditor\ViewChannel;
+use Bitrix\MessageService\Public\UI\SenderCode;
 
-final class ItemDetails extends Scene
+final class ItemDetails extends BaseScene
 {
 	public const ID = 'crm.item.details';
 
@@ -15,8 +15,13 @@ final class ItemDetails extends Scene
 		return self::ID;
 	}
 
-	public function filterViewChannels(array $viewChannels): array
+	public function filterViewChannels(array $viewChannels, Context $context): array
 	{
-		return array_filter($viewChannels, static fn(ViewChannel $vc) => Taxonomy::isSmsSender($vc->getBackend()));
+		$viewChannels = parent::filterViewChannels($viewChannels, $context);
+
+		return array_filter(
+			$viewChannels,
+			static fn(ViewChannel $vc): bool => $vc->getBackend()->getSenderCode() === SenderCode::SMS_PROVIDER,
+		);
 	}
 }

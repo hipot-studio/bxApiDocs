@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -12,6 +14,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 class CBPDeleteDocumentActivity extends CBPActivity implements IBPConfigurableActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -23,8 +28,15 @@ class CBPDeleteDocumentActivity extends CBPActivity implements IBPConfigurableAc
 
 	public function Execute()
 	{
-		$documentId = $this->getDocumentId();
-		$documentType = $this->getDocumentType();
+		$documentId = $this->resolveTargetDocumentId();
+		if (!$this->canDeleteResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		$documentType = $this->resolveTargetDocumentType($documentId);
 
 		$documentService = $this->workflow->GetService('DocumentService');
 		$result = $documentService->DeleteDocument($documentId);

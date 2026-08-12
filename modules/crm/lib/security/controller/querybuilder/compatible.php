@@ -95,40 +95,6 @@ class Compatible extends QueryBuilder
 			->getUserAttributes()
 		;
 
-		$intranetAttrs = [];
-		$allIntranetAttrs =
-			isset($userAccessAttributes['INTRANET']) && is_array($userAccessAttributes['INTRANET'])
-				? $userAccessAttributes['INTRANET']
-				: [];
-
-		if (!empty($allIntranetAttrs))
-		{
-			foreach ($allIntranetAttrs as $attr)
-			{
-				if (preg_match('/^D\d+$/', $attr))
-				{
-					$intranetAttrs[] = "'{$attr}'";
-				}
-			}
-		}
-
-		$subIntranetAttrs = [];
-		$allSubIntranetAttrs =
-			isset($userAccessAttributes['SUBINTRANET']) && is_array($userAccessAttributes['SUBINTRANET'])
-				? $userAccessAttributes['SUBINTRANET']
-				: [];
-
-		if (!empty($allSubIntranetAttrs))
-		{
-			foreach ($allSubIntranetAttrs as $attr)
-			{
-				if (preg_match('/^D\d+$/', $attr))
-				{
-					$subIntranetAttrs[] = "'{$attr}'";
-				}
-			}
-		}
-
 		$permissionSets = [];
 		foreach ($entityListAttributes as &$attrs)
 		{

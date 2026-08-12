@@ -9,6 +9,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\LeadSettings;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 
 abstract class Notification
@@ -54,6 +55,7 @@ abstract class Notification
 		if (!$fromUserId)
 		{
 			$notifyDto->setNotifyType(IM_NOTIFY_SYSTEM);
+			$notifyDto->setNotifyTitle(Loc::getMessage('CRM_NOTIFY_TITLE'));
 		}
 
 		$receivers = $this->getReceivers();
@@ -62,6 +64,11 @@ abstract class Notification
 			if ($fromUserId === $receiver->getId())
 			{
 				continue;
+			}
+
+			if ($fromUserId)
+			{
+				$notifyDto->setNotifyParams($this->getNotifyParams($receiver->getMessageType()));
 			}
 
 			$notifyDto = $notifyDto
@@ -187,6 +194,34 @@ abstract class Notification
 	protected function getNotifyMessage(?string $type): callable
 	{
 		return $this->getMessage($type, $this->getUrl());
+	}
+
+	protected function getNotifyParams(?string $type): ?array
+	{
+		$messageBuilder = clone $this->messageBuilder;
+		$messageBuilder
+			->setType($type)
+			->setPostfix($messageBuilder::POSTFIX_SUBJECT)
+		;
+		if (!$messageBuilder->hasMessage())
+		{
+			return null;
+		}
+
+		$notifyMessageSubjectCallback = $messageBuilder->getMessageCallback();
+
+		return [
+			'COMPONENT_ID' => 'CrmEntity',
+			'COMPONENT_PARAMS' => [
+				'SUBJECT' => $notifyMessageSubjectCallback,
+				'ENTITY' => [
+					'TITLE' => htmlspecialcharsbx($this->difference->getCurrentValue($this->getTitleFieldName())),
+					'HREF' => $this->getUrl(),
+					'ENTITY_TYPE' => strtolower(\CCrmOwnerType::ResolveName($this->entityTypeId)),
+					'CONTENT_TYPE' => 'title',
+				],
+			],
+		];
 	}
 
 	protected function getNotifyMessageOut(?string $type): callable

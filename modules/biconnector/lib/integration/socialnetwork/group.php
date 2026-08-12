@@ -22,9 +22,13 @@ class Group
 		}
 
 		$params = $event->getParameters();
-		//$manager = $params[0];
+		$manager = $params[0];
 		$result = &$params[1];
 		$languageId = $params[2];
+
+		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $connection->getSqlHelper();
 
 		$eventTableName = $params[3];
 		if (!empty($eventTableName) && $eventTableName !== 'socialnetwork_group')
@@ -114,7 +118,7 @@ class Group
 				],
 				'OWNER_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(G.OWNER_ID is null, null, concat_ws(\' \', nullif(UO.NAME, \'\'), nullif(UO.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN G.OWNER_ID is null THEN null ELSE concat_ws(\' \', nullif(UO.NAME, \'\'), nullif(UO.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UO',
 					'JOIN' => 'INNER JOIN b_user UO ON UO.ID = G.OWNER_ID',
@@ -122,7 +126,7 @@ class Group
 				],
 				'OWNER' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(G.OWNER_ID is null, null, concat_ws(\' \', concat(\'[\', G.OWNER_ID, \']\'), nullif(UO.NAME, \'\'), nullif(UO.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN G.OWNER_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'G.OWNER_ID', "']'") . ', nullif(UO.NAME, \'\'), nullif(UO.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UO',
 					'JOIN' => 'INNER JOIN b_user UO ON UO.ID = G.OWNER_ID',
@@ -171,18 +175,11 @@ class Group
 				'TYPE' => [
 					'IS_METRIC' => 'N',
 					'FIELD_NAME' =>
-						'if(
-							G.TYPE is null,
-							if(
-								G.SCRUM_MASTER_ID is null,
-								if(
-									G.PROJECT = \'Y\',
-									\'project\',
-									\'group\'
-								),
-								\'scrum\'
-							),
-							G.TYPE)',
+						'CASE WHEN G.TYPE is null THEN
+							CASE WHEN G.SCRUM_MASTER_ID is null THEN
+								CASE WHEN G.PROJECT = \'Y\' THEN \'project\' ELSE \'group\' END
+							ELSE \'scrum\' END
+						ELSE G.TYPE END',
 					'FIELD_TYPE' => 'string',
 				],
 				//NUMBER_OF_MEMBERS int not null default 0,
@@ -229,7 +226,7 @@ class Group
 				],
 				'SCRUM_MASTER_NAME' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'if(G.SCRUM_MASTER_ID is null, null, concat_ws(\' \', nullif(USM.NAME, \'\'), nullif(USM.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN G.SCRUM_MASTER_ID is null THEN null ELSE concat_ws(\' \', nullif(USM.NAME, \'\'), nullif(USM.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'USM',
 					'JOIN' => 'INNER JOIN b_user USM ON USM.ID = G.SCRUM_MASTER_ID',
@@ -237,7 +234,7 @@ class Group
 				],
 				'SCRUM_MASTER' => [
 					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'if(G.SCRUM_MASTER_ID is null, null, concat_ws(\' \', concat(\'[\', G.SCRUM_MASTER_ID, \']\'), nullif(USM.NAME, \'\'), nullif(USM.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN G.SCRUM_MASTER_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'G.SCRUM_MASTER_ID', "']'") . ', nullif(USM.NAME, \'\'), nullif(USM.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'USM',
 					'JOIN' => 'INNER JOIN b_user USM ON USM.ID = G.SCRUM_MASTER_ID',

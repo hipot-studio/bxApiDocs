@@ -10,4 +10,9 @@ interface ChatMemberRepositoryInterface
 	 * @return int[]
 	 */
 	public function getMemberUserIds(int $chatId): array;
+
+	/**
+	 * @return int[]
+	 */
+	public function getManagerUserIds(int $chatId): array;
 }

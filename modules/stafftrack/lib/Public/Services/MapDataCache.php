@@ -2,18 +2,21 @@
 
 namespace Bitrix\StaffTrack\Public\Services;
 
-use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
+use Bitrix\Main\ORM\Fields\CryptoField;
+use Bitrix\Main\Security\Cipher;
+use Bitrix\Main\Security\SecurityException;
 use Bitrix\StaffTrack\Public\Provider\DepartmentProvider;
 
 class MapDataCache
 {
 	private const CACHE_TTL = 2592000;
 	private const CACHE_DIR = '/stafftrack/map_data';
-	private const SHARD_BUCKETS = 100;
+	private const ENC_PREFIX = 'enc:';
 
 	/**
 	 * @param int[] $contributorUserIds
+	 * @return array{checkIns: array<int, array>, stats: array<int, int>}|null
 	 */
 	public static function get(int $currentUserId, string $localDate, array $contributorUserIds): ?array
 	{
@@ -24,23 +27,37 @@ class MapDataCache
 
 		$cache = Cache::createInstance();
 		$cacheId = self::getCacheId($currentUserId, $localDate, $contributorUserIds);
-		$cacheDir = self::getCacheDir($currentUserId, $cacheId);
+		$cacheDir = self::getCacheDir($currentUserId);
 
 		if (!$cache->initCache(self::CACHE_TTL, $cacheId, $cacheDir))
 		{
 			return null;
 		}
 
-		$data = $cache->getVars();
-		$checkIns = is_array($data['checkIns'] ?? null) ? $data['checkIns'] : null;
+		$vars = $cache->getVars();
+		$payload = self::decodePayload(is_array($vars) ? ($vars['payload'] ?? null) : null);
 
-		return $checkIns;
+		if ($payload === null || !isset($payload['checkIns']) || !is_array($payload['checkIns']))
+		{
+			return null;
+		}
+
+		if (!isset($payload['stats']) || !is_array($payload['stats']))
+		{
+			return null;
+		}
+
+		return [
+			'checkIns' => $payload['checkIns'],
+			'stats' => $payload['stats'],
+		];
 	}
 
 	/**
 	 * @param int[] $contributorUserIds
+	 * @param array{checkIns: array<int, array>, stats: array<int, int>} $data
 	 */
-	public static function set(int $currentUserId, string $localDate, array $contributorUserIds, array $checkIns): void
+	public static function set(int $currentUserId, string $localDate, array $contributorUserIds, array $data): void
 	{
 		if ($currentUserId <= 0)
 		{
@@ -49,29 +66,32 @@ class MapDataCache
 
 		$cache = Cache::createInstance();
 		$cacheId = self::getCacheId($currentUserId, $localDate, $contributorUserIds);
-		$cacheDir = self::getCacheDir($currentUserId, $cacheId);
+		$cacheDir = self::getCacheDir($currentUserId);
 
 		if (!$cache->startDataCache(self::CACHE_TTL, $cacheId, $cacheDir))
 		{
 			return;
 		}
 
-		$taggedCache = Application::getInstance()->getTaggedCache();
-		$taggedCache->startTagCache($cacheDir);
-		$taggedCache->registerTag(self::getViewerTag($currentUserId));
-		$taggedCache->endTagCache();
+		$encoded = self::encodePayload($data);
+		if ($encoded === null)
+		{
+			$cache->abortDataCache();
 
-		$cache->endDataCache(['checkIns' => $checkIns]);
+			return;
+		}
+
+		$cache->endDataCache(['payload' => $encoded]);
 	}
 
 	public static function invalidateForViewers(array $viewerIds): void
 	{
-		$taggedCache = Application::getInstance()->getTaggedCache();
+		$cache = Cache::createInstance();
 		foreach (array_unique(array_map('intval', $viewerIds)) as $viewerId)
 		{
 			if ($viewerId > 0)
 			{
-				$taggedCache->clearByTag(self::getViewerTag($viewerId));
+				$cache->cleanDir(self::getCacheDir($viewerId));
 			}
 		}
 	}
@@ -114,16 +134,68 @@ class MapDataCache
 		return 'map_' . $currentUserId . '_' . $localDate . '_' . md5(implode(',', $normalized));
 	}
 
-	private static function getCacheDir(int $currentUserId, string $cacheId): string
+	private static function getCacheDir(int $viewerId): string
 	{
-		return self::CACHE_DIR
-			. '/' . ($currentUserId % self::SHARD_BUCKETS)
-			. '/' . substr(md5($cacheId), 2, 2)
-			. '/' . $cacheId . '/';
+		return self::CACHE_DIR . '/' . $viewerId;
 	}
 
-	private static function getViewerTag(int $viewerId): string
+	/**
+	 * @param array{checkIns: array<int, array>, stats: array<int, int>} $data
+	 */
+	private static function encodePayload(array $data): ?string
 	{
-		return 'stafftrack_map_viewer_' . $viewerId;
+		$json = json_encode($data);
+		if ($json === false)
+		{
+			return null;
+		}
+
+		if (!CryptoField::cryptoAvailable())
+		{
+			return $json;
+		}
+
+		try
+		{
+			$cipher = new Cipher();
+			$encrypted = $cipher->encrypt($json, (string)CryptoField::getDefaultKey());
+		}
+		catch (SecurityException)
+		{
+			return null;
+		}
+
+		return self::ENC_PREFIX . base64_encode($encrypted);
+	}
+
+	private static function decodePayload($stored): ?array
+	{
+		if (!is_string($stored) || $stored === '')
+		{
+			return null;
+		}
+
+		if (str_starts_with($stored, self::ENC_PREFIX))
+		{
+			$raw = base64_decode(substr($stored, strlen(self::ENC_PREFIX)), true);
+			if ($raw === false)
+			{
+				return null;
+			}
+
+			try
+			{
+				$cipher = new Cipher();
+				$stored = $cipher->decrypt($raw, (string)CryptoField::getDefaultKey());
+			}
+			catch (SecurityException)
+			{
+				return null;
+			}
+		}
+
+		$data = json_decode($stored, true);
+
+		return is_array($data) ? $data : null;
 	}
 }

@@ -51,8 +51,8 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		return [
 			'getTimezoneList' => [
 				'-prefilters' => [
-					Authentication::class
-				]
+					Authentication::class,
+				],
 			],
 			'editCalendarSection' => [
 				'+prefilters' => [
@@ -270,16 +270,16 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			\CCalendarSect::Edit([
 				'arFields' => [
 					'ID' => $id,
-					'ACTIVE' => 'N'
-				]
+					'ACTIVE' => 'N',
+				],
 			]);
 
 			// Check if it's last section from connection - remove it
 			$sections = \CCalendarSect::GetList([
 				'arFilter' => [
 					'CAL_DAV_CON' => $section['CAL_DAV_CON'],
-					'ACTIVE' => 'Y'
-				]
+					'ACTIVE' => 'Y',
+				],
 			]);
 
 			if (empty($sections))
@@ -308,7 +308,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			$userIds = $request->get('userIdList');
 			$ormRes = \Bitrix\Main\UserTable::getList([
 				'filter' => ['=ID' => $userIds],
-				'select' => ['ID', 'LOGIN', 'NAME', 'LAST_NAME', 'SECOND_NAME']
+				'select' => ['ID', 'LOGIN', 'NAME', 'LAST_NAME', 'SECOND_NAME'],
 			]);
 			while ($user = $ormRes->fetch())
 			{
@@ -355,7 +355,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 					{
 						$sections[] = \CCalendarSect::createDefault([
 							'type' => 'group',
-							'ownerId' => $groupId
+							'ownerId' => $groupId,
 						]);
 					}
 				}
@@ -382,7 +382,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 
 		return [
 			'users' => $users,
-			'sections' => $sections
+			'sections' => $sections,
 		];
 	}
 
@@ -442,6 +442,44 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 
 			$entry = \CCalendarEvent::getEventForEditInterface($entryId, ['eventDate' => \CCalendar::Date($fromTs)]);
 			$entryId = is_array($entry) && isset($entry['ID']) ? (int)$entry['ID'] : $entryId;
+
+			if (!empty($entry) && is_array($entry))
+			{
+				$isCreator = (int)($entry['CREATED_BY'] ?? 0) === $userId;
+				$isOwner = ($entry['CAL_TYPE'] ?? '') === 'user'
+					&& (int)($entry['OWNER_ID'] ?? 0) === $userId;
+
+				$isAttendee = false;
+
+				if (!empty($entry['IS_MEETING']) && is_array($entry['ATTENDEE_LIST'] ?? null))
+				{
+					foreach ($entry['ATTENDEE_LIST'] as $attendee)
+					{
+						if ((int)$attendee['id'] === $userId)
+						{
+							$isAttendee = true;
+							break;
+						}
+					}
+				}
+
+				if (!$isCreator && !$isOwner && !$isAttendee)
+				{
+					$accessController = new EventAccessController($userId);
+					$eventModel = \CCalendarEvent::getEventModelForPermissionCheck(
+						$entryId,
+						$entry,
+						$userId,
+					);
+
+					if (!$accessController->check(ActionDictionary::ACTION_EVENT_VIEW_FULL, $eventModel))
+					{
+						$this->addError(new Error('Access denied'));
+
+						return [];
+					}
+				}
+			}
 		}
 		else
 		{
@@ -461,12 +499,32 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				|| Feature::isFeatureEnabled("absence"))
 			;
 			$responseParams['formSettings'] = UserSettings::getFormSettings($formType);
+
+			$isUserEvent = $type === Dictionary::CALENDAR_TYPE['user'];
 			$isOpenEvent = $type === Dictionary::CALENDAR_TYPE['open_event'];
+			$isGroupEvent = $type === Dictionary::CALENDAR_TYPE['group'];
 			$isCollabUser = Util::isCollabUser($userId);
 
 			if ($type)
 			{
+				if ($ownerId && $isGroupEvent)
+				{
+					$permission = \CCalendar::GetPermissions([
+						'type' => $type,
+						'ownerId' => $ownerId,
+						'userId' => $userId,
+					]);
+
+					if (!$permission['edit'])
+					{
+						$this->addError(new Error('access denied'));
+
+						return [];
+					}
+				}
+
 				$sectionList = [];
+
 				if ($isOpenEvent)
 				{
 					$sectionList = \CCalendar::getSectionList([
@@ -491,17 +549,20 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 						'OWNER_ID' => $userCollabIds,
 						'ACTIVE' => 'Y',
 						'checkPermissions' => true,
-						'getPermissions' => true
+						'getPermissions' => true,
 					]);
 				}
-				else if (($type === 'user' && $ownerId !== $userId) || $type !== 'user')
+				else if (
+					($isUserEvent && $ownerId !== $userId)
+					|| !$isUserEvent
+				)
 				{
 					$sectionList = \CCalendar::getSectionList([
 						'CAL_TYPE' => $type,
 						'OWNER_ID' => $ownerId,
 						'ACTIVE' => 'Y',
 						'checkPermissions' => true,
-						'getPermissions' => true
+						'getPermissions' => true,
 					]);
 				}
 
@@ -528,13 +589,13 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				}
 
 				if (
-					$type === Dictionary::CALENDAR_TYPE['group']
+					$isGroupEvent
 					&& (empty($sections) || !$hasCurrentCalendarInSections)
 				)
 				{
 					$sections[] = \CCalendarSect::createDefault([
 						'type' => $type,
-						'ownerId' => $ownerId
+						'ownerId' => $ownerId,
 					]);
 
 					\CCalendarSect::setClearOperationCache();
@@ -566,13 +627,13 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 
 			if (
 				empty($responseParams['sections'])
-				&& $type === Dictionary::CALENDAR_TYPE['user']
+				&& $isUserEvent
 				&& !empty($ownerId)
 			)
 			{
 				$responseParams['sections'][] = \CCalendarSect::createDefault([
 					'type' => $type,
-					'ownerId' => $ownerId
+					'ownerId' => $ownerId,
 				]);
 
 				\CCalendarSect::setClearOperationCache();
@@ -728,7 +789,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				[
 					'eventDate' => $request->get('dateFrom'),
 					'timezoneOffset' => (int)$request->get('timezoneOffset'),
-					'userId' => $userId
+					'userId' => $userId,
 				]
 			);
 		}
@@ -764,7 +825,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 					'ACTIVE' => 'Y',
 				],
 				'checkPermissions' => false,
-				'getPermissions' => true
+				'getPermissions' => true,
 			]);
 
 			$responseParams['section'] = isset($sections[0]) ? $sections[0] : null;
@@ -779,7 +840,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 					'sectionName' => $_REQUEST['section_name'],
 					'bIntranet' => \CCalendar::IsIntranetEnabled(),
 					'bSocNet' => \CCalendar::IsSocNet(),
-					'AVATAR_SIZE' => 21
+					'AVATAR_SIZE' => 21,
 				],
 				$responseParams
 			);
@@ -804,7 +865,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				[
 					"bVarsFromForm" => false,
 					"arUserField" => $crmUF,
-					"form_name" => 'event_edit_form'
+					"form_name" => 'event_edit_form',
 				],
 				$additionalResponseParams
 			);
@@ -825,7 +886,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		$isExtranetUser = Loader::includeModule('intranet') && !\Bitrix\Intranet\Util::isIntranetUser($userId);
 
 		$hostId = (int)$request['hostId'];
-		if (!$hostId && $type === 'user' && !$entryId)
+		if (!$hostId && $type === Dictionary::CALENDAR_TYPE['user'] && !$entryId)
 		{
 			$hostId = $ownerId;
 		}
@@ -869,11 +930,13 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			$codes = ['U' . $userId];
 		}
 
+		$codes = $this->prepareCodesForPlanner($codes);
+
 		$prevUserList = is_array($request['prevUserList']) ? $request['prevUserList'] : [];
 		$skipFeatureCheck = ($request['skipFeatureCheck'] ?? null) === 'Y';
 
-		$dateFrom = isset($request['dateFrom']) ? $request['dateFrom'] : $request['date_from'];
-		$dateTo = isset($request['dateTo']) ? $request['dateTo'] : $request['date_to'];
+		$dateFrom = $request['dateFrom'] ?? $request['date_from'];
+		$dateTo = $request['dateTo'] ?? $request['date_to'];
 
 		return \CCalendarPlanner::prepareData([
 			'parent_id' => $parentId,
@@ -894,6 +957,42 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		]);
 	}
 
+	private function prepareCodesForPlanner(array $codes): array
+	{
+		$entities = Util::convertCodesToEntities($codes);
+		$currentUserId = \CCalendar::getCurUserId();
+
+		$filteredEntities = [];
+
+		foreach ($entities as $entity)
+		{
+			if ($entity['entityId'] !== 'project')
+			{
+				$filteredEntities[] = $entity;
+
+				continue;
+			}
+
+			if ($entity['id'] <= 0)
+			{
+				continue;
+			}
+
+			$permission = \CCalendar::GetPermissions([
+				'type' => 'group',
+				'ownerId' => $entity['id'],
+				'userId' => $currentUserId,
+			]);
+
+			if ($permission['view'])
+			{
+				$filteredEntities[] = $entity;
+			}
+		}
+
+		return Util::convertEntitiesToCodes($filteredEntities);
+	}
+
 	public function getPlannerAction()
 	{
 		$request = $this->getRequest();
@@ -910,7 +1009,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			true,
 			[
 				'recursionMode' => $recursionMode,
-				'requestUid' => (int)$requestUid
+				'requestUid' => (int)$requestUid,
 			]
 		);
 
@@ -944,7 +1043,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				$id = \CCalendar::SaveEvent([
 					'arFields' => [
 						"ID" => $event["ID"],
-						"RRULE" => $event['RRULE']
+						"RRULE" => $event['RRULE'],
 					],
 					'silentErrorMode' => false,
 					'recursionEditMode' => 'skip',
@@ -977,7 +1076,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 						$id = \CCalendar::SaveEvent([
 							'arFields' => [
 								"ID" => $recParentEvent["ID"],
-								"RRULE" => $recParentEvent['RRULE']
+								"RRULE" => $recParentEvent['RRULE'],
 							],
 							'silentErrorMode' => false,
 							'recursionEditMode' => 'skip',
@@ -1029,7 +1128,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		$sectionList = SectionTable::getList([
 				'filter' => [
 					'=ACTIVE' => 'Y',
-					'=ID' => (int)$id
+					'=ID' => (int)$id,
 				],
 				'limit' => 1,
 			]
@@ -1086,7 +1185,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				'parentId' => (int)$request->getPost('entryParentId'),
 				'status' => $request->getPost('status'),
 				'reccurentMode' => $request->getPost('recursionMode'),
-				'currentDateFrom' => $request->getPost('currentDateFrom')
+				'currentDateFrom' => $request->getPost('currentDateFrom'),
 			]);
 		}
 
@@ -1121,7 +1220,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			$response['id'] = \CCalendar::SaveEvent([
 				'arFields' => [
 					'ID' => $entry['ID'],
-					'REMIND' => $entry['REMIND']
+					'REMIND' => $entry['REMIND'],
 				],
 				'updateReminders' => true,
 				'checkPermission' => false,
@@ -1213,9 +1312,15 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		$uid = preg_replace('/\W/', '', $uid);
 
 		$userId = \CCalendar::getCurUserId();
+		$isCollabUser = Util::isCollabUser($userId);
+		$canShowAccessControl = !$isCollabUser && (
+			$showAccessControl === 'Y'
+			|| $showGeneralSettings === 'Y'
+		);
+
 		$additionalResponseParams = [
 			'uid' => $uid,
-			'mailboxList' => \Bitrix\Calendar\Integration\Sender\AllowedSender::getList($userId)
+			'mailboxList' => \Bitrix\Calendar\Integration\Sender\AllowedSender::getList($userId),
 		];
 
 		$listLockedFeatures = [];
@@ -1241,7 +1346,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				'id' => $uid,
 				'is_personal' => $showPersonalSettings === 'Y',
 				'show_general_settings' => $showGeneralSettings === 'Y',
-				'show_access_control' => $showAccessControl === 'Y',
+				'show_access_control' => $canShowAccessControl,
 				'list_locked_features' => $listLockedFeatures,
 			],
 			$additionalResponseParams
@@ -1256,7 +1361,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			'',
 			[],
 			[
-				'mailboxList' => \Bitrix\Calendar\Integration\Sender\AllowedSender::getList($userId)
+				'mailboxList' => \Bitrix\Calendar\Integration\Sender\AllowedSender::getList($userId),
 			]
 		);
 	}
@@ -1265,7 +1370,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 	{
 		$userId = \CCalendar::getCurUserId();
 		return [
-			'mailboxList' => \Bitrix\Calendar\Integration\Sender\AllowedSender::getList($userId)
+			'mailboxList' => \Bitrix\Calendar\Integration\Sender\AllowedSender::getList($userId),
 		];
 	}
 
@@ -1285,7 +1390,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 	public function getSectionListAction($type, $ownerId): array
 	{
 		return [
-			'sections' => \CCalendarSect::prepareSectionListResponse($type, (int)$ownerId)
+			'sections' => \CCalendarSect::prepareSectionListResponse($type, (int)$ownerId),
 		];
 	}
 
@@ -1317,8 +1422,11 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 	{
 	}
 
-	public function saveSettingsAction(string $type, array $user_settings = [], string $user_timezone_name = '',
-		array $settings = []): void
+	public function saveSettingsAction(
+		string $type,
+		array $user_settings = [],
+		array $settings = []
+	): void
 	{
 		$request = $this->getRequest();
 		$userId = \CCalendar::GetCurUserId();
@@ -1343,16 +1451,10 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				\CCalendarType::Edit([
 					'arFields' => [
 						'XML_ID' => $type,
-						'ACCESS' => $request['type_access']
-					]
+						'ACCESS' => $request['type_access'],
+					],
 				]);
 			}
-		}
-
-		if (!empty($user_timezone_name))
-		{
-			\CCalendar::SaveUserTimezoneName($userId, $user_timezone_name);
-			\CCalendar::ClearCache('event_list');
 		}
 	}
 

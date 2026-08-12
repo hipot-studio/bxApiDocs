@@ -6,13 +6,18 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Crm;
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Catalog;
 use Bitrix\Sale\Basket;
 use Bitrix\Crm\Activity\Access\CatalogAccessChecker;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 use Bitrix\Main;
 
 class CBPCrmAddProductRow extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -32,7 +37,16 @@ class CBPCrmAddProductRow extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		[$entityTypeId, $entityId] = \CCrmBizProcHelper::resolveEntityId($this->GetDocumentId());
+		$documentId = $this->resolveTargetDocumentId();
+
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		[$entityTypeId, $entityId] = \CCrmBizProcHelper::resolveEntityId($documentId);
 
 		if (
 			$entityTypeId === \CCrmOwnerType::Order
@@ -87,7 +101,7 @@ class CBPCrmAddProductRow extends CBPActivity
 
 		$this->calculatePrices($row, $price);
 
-		$entity = $this->getDocumentId()[1];
+		$entity = $documentId[1];
 		$addResult = false;
 
 		if ($entityTypeId === CCrmOwnerType::Deal)
@@ -97,7 +111,7 @@ class CBPCrmAddProductRow extends CBPActivity
 		elseif (class_exists($entity) && method_exists($entity, 'addProductRows'))
 		{
 			$productRow = Crm\ProductRow::createFromArray($row);
-			$addResult = $entity::addProductRows($this->getDocumentId()[2], [$productRow])->isSuccess();
+			$addResult = $entity::addProductRows($documentId[2], [$productRow])->isSuccess();
 		}
 		elseif ($entityTypeId === CCrmOwnerType::Order)
 		{

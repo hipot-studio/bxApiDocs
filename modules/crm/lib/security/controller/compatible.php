@@ -125,4 +125,13 @@ class Compatible extends Crm\Security\Controller
 
 		$connection->query("DELETE FROM b_crm_entity_perms WHERE ENTITY = '{$entityType}' AND ENTITY_ID = {$entityId}");
 	}
+
+	/**
+	 * @deprecated
+	 * Method will be removed when old invoices will be disabled
+	 */
+	public static function isAvailable(): bool
+	{
+		return true;
+	}
 }

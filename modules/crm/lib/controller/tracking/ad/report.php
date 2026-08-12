@@ -5,6 +5,7 @@ use Bitrix\Main;
 use Bitrix\Main\Loader;
 use Bitrix\Intranet;
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Crm\Engine\ActionFilter\CheckSomeItemsReadPermission;
 use Bitrix\Crm\Tracking;
 
 /**
@@ -13,6 +14,14 @@ use Bitrix\Crm\Tracking;
  */
 class Report extends Main\Engine\JsonController
 {
+	protected function getDefaultPreFilters()
+	{
+		$preFilters = parent::getDefaultPreFilters();
+		$preFilters[] = new CheckSomeItemsReadPermission();
+
+		return $preFilters;
+	}
+
 	/**
 	 * Configure actions.
 	 *

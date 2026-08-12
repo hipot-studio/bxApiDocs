@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integration\UI\EntitySelector;
 
 use Bitrix\Crm\ContactTable;
+use Bitrix\Crm\Controller\Entity;
 use Bitrix\Crm\Integration\UI\EntitySelector\Traits\FilterByIds;
 use Bitrix\Crm\Integration\UI\EntitySelector\Traits\FilterByEmails;
 use Bitrix\Crm\Multifield\Type\Email;
@@ -87,12 +88,17 @@ class ContactProvider extends EntityProvider
 	{
 		if ($this->isFilterByIds())
 		{
+			$filter = $this->getFilterIds();
+			if (!$this->options['allowAllCategories'] && $this->getCategoryId() > 0)
+			{
+				$filter['=CATEGORY_ID'] = $this->getCategoryId();
+			}
 			$ids = ContactTable::getList([
 				'select' => ['ID'],
 				'order' => [
 					'ID' => 'ASC',
 				],
-				'filter' => $this->getFilterIds(),
+				'filter' => $filter,
 			])->fetchCollection()->getIdList();
 		}
 		elseif ($this->notLinkedOnly)
@@ -167,5 +173,20 @@ class ContactProvider extends EntityProvider
 	protected function getDefaultItemAvatar(): ?string
 	{
 		return '/bitrix/images/crm/entity_provider_icons/contact.svg';
+	}
+
+	protected function getRecentItemsCount(array $recentItemsByEntityId): int
+	{
+		if (!$this->options['allowAllCategories'] && $this->getCategoryId() > 0)
+		{
+			$contactsCount = ContactTable::getCount([
+				'=ID' => array_keys($recentItemsByEntityId),
+				'=CATEGORY_ID' => $this->getCategoryId(),
+			]);
+
+			return Entity::ITEMS_LIMIT - $contactsCount;
+		}
+
+		return Entity::ITEMS_LIMIT - count($recentItemsByEntityId);
 	}
 }

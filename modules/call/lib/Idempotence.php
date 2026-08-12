@@ -10,6 +10,18 @@ use Bitrix\Main\Data\Cache\KeyValueEngine;
  */
 class Idempotence
 {
+	/**
+	 * Two-state idempotency value. A key transitions IN_FLIGHT -> DONE on the
+	 * action's first successful pass via {@see self::markDone()}, or is
+	 * removed via {@see self::clearKey()} on failure. The filter inspects the
+	 * value to decide whether a concurrent retransmit can be safely
+	 * short-circuited as a replay (DONE) or must wait (IN_FLIGHT).
+	 */
+	public const
+		STATE_IN_FLIGHT = '1',
+		STATE_DONE = '2'
+	;
+
 	private const
 		CACHE_TTL = 86400,
 		CACHE_DIR = '/call/idempotence';
@@ -37,7 +49,7 @@ class Idempotence
 		$engine = self::getKvCacheEngine();
 		if ($engine !== null)
 		{
-			return $engine->setNotExists(self::engineKey($key), $ttl, '1');
+			return $engine->setNotExists(self::engineKey($key), $ttl, self::STATE_IN_FLIGHT);
 		}
 
 		$cache = Cache::createInstance();
@@ -47,6 +59,52 @@ class Idempotence
 		}
 		$cache->endDataCache(['key' => $key]);
 		return true;
+	}
+
+	/**
+	 * Promotes a previously claimed key from IN_FLIGHT to DONE. Called by
+	 * the filter once the action body has completed successfully. Concurrent
+	 * retransmits arriving AFTER this transition are short-circuited as
+	 * replay; retransmits arriving while the original is still in-flight see
+	 * IN_FLIGHT (or no readable state on no-KV installs) and get REJECTED
+	 * via REQUEST_NOT_UNIQUE so they keep retrying — that prevents the race
+	 * where a duplicate is acked as success while the original then fails
+	 * and releases the key, losing the callback.
+	 *
+	 * No-op on file-cache fallback: state values are not readable there, so
+	 * concurrent retransmits always go through the conservative
+	 * REQUEST_NOT_UNIQUE branch — safe by default, just more retries on
+	 * no-KV inst.
+	 *
+	 * @param string $key
+	 * @param int $ttl Cache TTL in seconds, defaults to self::CACHE_TTL (24h).
+	 * @return void
+	 */
+	public static function markDone(string $key, int $ttl = self::CACHE_TTL): void
+	{
+		$engine = self::getKvCacheEngine();
+		if ($engine !== null)
+		{
+			$engine->set(self::engineKey($key), $ttl, self::STATE_DONE);
+		}
+	}
+
+	/**
+	 * Reads the current state of a claimed key, or null if the key does not
+	 * exist / its value is not readable (file-cache fallback).
+	 *
+	 * @param string $key
+	 * @return string|null one of self::STATE_* constants, or null.
+	 */
+	public static function getState(string $key): ?string
+	{
+		$engine = self::getKvCacheEngine();
+		if ($engine !== null)
+		{
+			$value = $engine->get(self::engineKey($key));
+			return is_string($value) ? $value : null;
+		}
+		return null;
 	}
 
 	/**

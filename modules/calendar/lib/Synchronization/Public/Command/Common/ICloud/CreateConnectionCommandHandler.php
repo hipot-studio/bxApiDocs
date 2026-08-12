@@ -63,7 +63,11 @@ class CreateConnectionCommandHandler
 		}
 		catch (Throwable $e)
 		{
-			throw new Exception('Unable to create connection for iCloud', $e->getCode(), $e);
+			throw new Exception(
+				'Unable to create connection for iCloud: ' . $e->getMessage(),
+				$e->getCode(),
+				$e,
+			);
 		}
 
 		if ($connection)

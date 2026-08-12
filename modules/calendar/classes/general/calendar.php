@@ -20,6 +20,7 @@ use Bitrix\Calendar\Integration\SocialNetwork\Collab\UserCollabs;
 use Bitrix\Calendar\Integration\SocialNetwork;
 use Bitrix\Calendar\Integration\Tasks\TaskQueryParameter;
 use Bitrix\Calendar\Internals\EventTable;
+use Bitrix\Calendar\Internals\SectionTable;
 use Bitrix\Calendar\Sharing\SharingEventManager;
 use Bitrix\Calendar\Sync;
 use Bitrix\Calendar\Sync\Factories\FactoriesCollection;
@@ -39,13 +40,15 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\SiteTable;
 use Bitrix\Main\Type;
+use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Calendar\Integration\Bitrix24Manager;
 use Bitrix\Calendar\Rooms;
 use Bitrix\Calendar\Sharing;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Provider\TaskList;
-use Bitrix\Tasks\Provider\TaskQuery;
+use Bitrix\Tasks\Provider\Query\TaskQuery;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -123,7 +126,8 @@ class CCalendar
 		$errors = [],
 		$timezones = [],
 		$userLanguageId = [],
-		$userList = []
+		$userList = [],
+		$sectionsAvailableForUsers = null
 	;
 
 	function Init($params)
@@ -298,11 +302,11 @@ class CCalendar
 				if ($startupEvent)
 				{
 					$eventFromTs = self::Timestamp($startupEvent['DATE_FROM']);
-					$currentDateTs = self::Timestamp($_GET['EVENT_DATE'] ?? null);
+					$requestEventDate = $_GET['EVENT_DATE'] ?? null;
+					$currentDateTs = self::Timestamp($requestEventDate);
 
 					if ($currentDateTs > $eventFromTs)
 					{
-						$startupEvent['~CURRENT_DATE'] = self::Date($currentDateTs, false);
 						$init_month = date('m', $currentDateTs);
 						$init_year = date('Y', $currentDateTs);
 					}
@@ -311,6 +315,12 @@ class CCalendar
 						$init_month = date('m', $eventFromTs);
 						$init_year = date('Y', $eventFromTs);
 					}
+
+					if ($requestEventDate)
+					{
+						$startupEvent['~CURRENT_DATE'] = self::Date($currentDateTs, false);
+					}
+					unset($requestEventDate);
 				}
 			}
 		}
@@ -768,7 +778,12 @@ class CCalendar
 			}
 		}
 		$typeAccessController = new TypeAccessController(self::$userId);
-		if ($typeAccessController->check(ActionDictionary::ACTION_TYPE_EDIT, TypeModel::createFromXmlId(self::$type)))
+		$typeModel = TypeModel::createFromXmlId(self::$type);
+
+		if (
+			!$isCollabUser
+			&& $typeAccessController->check(ActionDictionary::ACTION_TYPE_EDIT, $typeModel)
+		)
 		{
 			$JSConfig['new_section_access'] = CCalendarSect::GetDefaultAccess(self::$type, self::$ownerId);
 		}
@@ -1264,9 +1279,9 @@ class CCalendar
 		if (!isset(self::$arUserDepartment[$userId]))
 		{
 			$rsUser = CUser::GetByID($userId);
-			if($arUser = $rsUser->Fetch())
+			if ($arUser = $rsUser->Fetch())
 			{
-				self::SetUserDepartment($userId, $arUser["UF_DEPARTMENT"]);
+				self::SetUserDepartment($userId, $arUser["UF_DEPARTMENT"] ?? []);
 			}
 		}
 
@@ -1506,20 +1521,25 @@ class CCalendar
 	public static function GetTimezoneOffset($timezoneId, $dateTimestamp = false)
 	{
 		$offset = 0;
+
+		if (!\CTimeZone::OptionEnabled())
+		{
+			return $offset;
+		}
+
 		if ($timezoneId)
 		{
 			try
 			{
 				$oTz = new DateTimeZone($timezoneId);
-				if ($oTz)
-				{
-					$offset = $oTz->getOffset(new DateTime($dateTimestamp ? "@$dateTimestamp" : "now", $oTz));
-				}
+
+				$offset = $oTz->getOffset(new DateTime($dateTimestamp ? "@$dateTimestamp" : "now", $oTz));
 			}
-			catch(Exception $e)
+			catch(Exception)
 			{
 			}
 		}
+
 		return $offset;
 	}
 
@@ -1636,7 +1656,7 @@ class CCalendar
 		}
 
 		$accessController = new TypeAccessController($curUserId);
-		if (!$accessController->check(ActionDictionary::ACTION_TYPE_VIEW, TypeModel::createFromXmlId($type)))
+		if (empty($type) || !$accessController->check(ActionDictionary::ACTION_TYPE_VIEW, TypeModel::createFromXmlId($type)))
 		{
 			return 'access_denied';
 		}
@@ -2049,32 +2069,14 @@ class CCalendar
 				$arFields['DATE_TO'] = $curEvent['DATE_TO'];
 			}
 
-			$canChangeDateRecurrenceEvent = isset($params['recursionEditMode'])
-				&& in_array($params['recursionEditMode'], ['all', ''], true)
-				&& (($arFields['DATE_FROM'] ?? null) !== ($curEvent['DATE_FROM'] ?? null))
-				&& ($arFields['RRULE']['FREQ'] ?? null) !== 'NONE'
+			$isSkipTime = isset($arFields['SKIP_TIME']) || isset($arFields['DT_SKIP_TIME'])
+				? (
+					($arFields['SKIP_TIME'] ?? null) === true
+					|| ($arFields['SKIP_TIME'] ?? null) === 'Y'
+					|| ($arFields['DT_SKIP_TIME'] ?? null) === 'Y'
+				)
+				: (($curEvent['DT_SKIP_TIME'] ?? null) === 'Y')
 			;
-
-			if ($canChangeDateRecurrenceEvent)
-			{
-				$arFields['DATE_FROM'] = self::GetOriginalDate(
-					$arFields['DATE_FROM'],
-					$curEvent['DATE_FROM'],
-					$arFields['TZ_FROM'] ?? null
-				);
-				$arFields['DATE_TO'] = self::GetOriginalDate(
-					$arFields['DATE_TO'],
-					$curEvent['DATE_TO'],
-					$arFields['TZ_TO'] ?? null
-				);
-			}
-
-			$bPersonal = $bPersonal && self::IsPersonal($curEvent['CAL_TYPE'], $curEvent['OWNER_ID'], $userId);
-
-			$arFields['CAL_TYPE'] = $curEvent['CAL_TYPE'];
-			$arFields['OWNER_ID'] = $curEvent['OWNER_ID'];
-			$arFields['CREATED_BY'] = $curEvent['CREATED_BY'];
-			$arFields['ACTIVE'] = $curEvent['ACTIVE'] ?? null;
 
 			$eventModel = CCalendarEvent::getEventModelForPermissionCheck((int)($curEvent['ID'] ?? 0), $curEvent, $userId);
 
@@ -2085,6 +2087,95 @@ class CCalendar
 			{
 				return Loc::getMessage('EC_ACCESS_DENIED');
 			}
+
+			$canChangeDateRecurrenceEvent = isset($params['recursionEditMode'])
+				&& in_array($params['recursionEditMode'], ['all', ''], true)
+				&& (($arFields['DATE_FROM'] ?? null) !== ($curEvent['DATE_FROM'] ?? null))
+				&& ($arFields['RRULE']['FREQ'] ?? null) !== 'NONE'
+			;
+
+			if ($canChangeDateRecurrenceEvent)
+			{
+				if (($params['recursionEditMode'] ?? null) === 'all')
+				{
+					$recurrentDateDelta = self::getRecurrentEventTimestampDelta(
+						$params['currentEventDateFrom'] ?? null,
+						$arFields['DATE_FROM'],
+						$curEvent['DATE_FROM'],
+						$isSkipTime
+					);
+					$params['recurrentDateDelta'] = $recurrentDateDelta;
+					$recurrentDayDelta = self::getRecurrentEventDayDelta(
+						$params['currentEventDateFrom'] ?? null,
+						$arFields['DATE_FROM'],
+						$curEvent['DATE_FROM']
+					);
+					$params['recurrentDayDelta'] = $recurrentDayDelta;
+					$arFields['EXDATE'] = self::shiftRecurrentExDatesByDays(
+						$arFields['EXDATE'] ?? $curEvent['EXDATE'] ?? null,
+						$recurrentDayDelta
+					);
+					$newDuration = self::Timestamp($arFields['DATE_TO'], false)
+						- self::Timestamp($arFields['DATE_FROM'], false)
+					;
+					$newDurationDays = self::getRecurrentEventDayDuration(
+						$arFields['DATE_FROM'],
+						$arFields['DATE_TO']
+					);
+
+					if ($isSkipTime)
+					{
+						$arFields['DATE_FROM'] = self::shiftRecurrentDateByDays(
+							$curEvent['DATE_FROM'],
+							$recurrentDayDelta,
+							false
+						);
+						$arFields['DATE_TO'] = self::shiftRecurrentDateByDays(
+							$arFields['DATE_FROM'],
+							$newDurationDays,
+							false
+						);
+					}
+					else
+					{
+						$newDateFromTimestamp = self::Timestamp(
+							self::shiftRecurrentDateByDays(
+								$curEvent['DATE_FROM'],
+								$recurrentDayDelta,
+								true
+							),
+							false
+						);
+						$newDateFromTimestamp = self::DateWithNewTime(
+							self::Timestamp($arFields['DATE_FROM'], false),
+							$newDateFromTimestamp
+						);
+
+						$arFields['DATE_FROM'] = self::Date($newDateFromTimestamp);
+						$arFields['DATE_TO'] = self::Date($newDateFromTimestamp + $newDuration);
+					}
+				}
+				else
+				{
+					$arFields['DATE_FROM'] = self::GetOriginalDate(
+						$arFields['DATE_FROM'],
+						$curEvent['DATE_FROM'],
+						$arFields['TZ_FROM'] ?? null
+					);
+					$arFields['DATE_TO'] = self::GetOriginalDate(
+						$arFields['DATE_TO'],
+						$curEvent['DATE_TO'],
+						$arFields['TZ_TO'] ?? null
+					);
+				}
+			}
+
+			$bPersonal = $bPersonal && self::IsPersonal($curEvent['CAL_TYPE'], $curEvent['OWNER_ID'], $userId);
+
+			$arFields['CAL_TYPE'] = $curEvent['CAL_TYPE'];
+			$arFields['OWNER_ID'] = $curEvent['OWNER_ID'];
+			$arFields['CREATED_BY'] = $curEvent['CREATED_BY'];
+			$arFields['ACTIVE'] = $curEvent['ACTIVE'] ?? null;
 
 			if (!isset($arFields['NAME']))
 			{
@@ -2253,54 +2344,34 @@ class CCalendar
 				$params['currentEvent'] = $curEvent;
 			}
 		}
-		// $bPersonal should not be reason to skip section rights check
-		// but if it removed, extranet users can not create events in groups, cause EventAddRule:42
-		// there section model creation contains bug, which not respect owner_id specific for groups
-		elseif ($checkPermission && $sectionId > 0 && !$bPersonal)
-		{
-			$section = CCalendarSect::GetList(['arFilter' => ['ID' => $sectionId],
-				'checkPermissions' => false,
-				'getPermissions' => false,
-			])[0] ?? null;
-
-			if ($section)
-			{
-				$arFields['CAL_TYPE'] = $section['CAL_TYPE'];
-			}
-			else
-			{
-				return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
-			}
-
-			if (($section['IS_COLLAB'] ?? null) && Util::isCollabUser($userId))
-			{
-				$userCollabIds = UserCollabs::getInstance()->getIds($userId);
-				if (!in_array((int)$section['OWNER_ID'], $userCollabIds, true))
-				{
-					return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
-				}
-			}
-			else
-			{
-				$newEventModel =
-					EventModel::createNew()
-						->setOwnerId((int)$arFields['OWNER_ID'])
-						->setSectionId((int)$sectionId)
-						->setSectionType($arFields['CAL_TYPE']);
-
-				if (!$accessController->check(ActionDictionary::ACTION_EVENT_ADD, $newEventModel))
-				{
-					return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
-				}
-			}
-		}
 
 		if ($params['autoDetectSection'] && $sectionId <= 0)
 		{
 			$sectionId = false;
 			if ($arFields['CAL_TYPE'] === 'user')
 			{
-				$sectionId = self::GetMeetingSection($arFields['OWNER_ID'], true);
+				$autoCreateUserSection = array_key_exists('autoCreateSection', $params)
+					? (bool)$params['autoCreateSection']
+					: true
+				;
+
+				$sectionId = self::GetMeetingSection($arFields['OWNER_ID'], false);
+				if (
+					!$sectionId
+					&& $autoCreateUserSection
+				)
+				{
+					if (
+						$checkPermission
+						&& !self::canAutoCreateSectionForEvent($arFields, (int)$userId)
+					)
+					{
+						return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
+					}
+
+					$sectionId = self::GetMeetingSection($arFields['OWNER_ID'], true);
+				}
+
 				if ($sectionId)
 				{
 					$res = CCalendarSect::GetList(
@@ -2340,8 +2411,28 @@ class CCalendar
 				$sectRes = CCalendarSect::GetSectionForOwner(
 					$arFields['CAL_TYPE'],
 					$arFields['OWNER_ID'],
-					$params['autoCreateSection']
+					false
 				);
+				if (
+					!($sectRes['sectionId'] > 0)
+					&& ($params['autoCreateSection'] ?? false)
+				)
+				{
+					if (
+						$checkPermission
+						&& !self::canAutoCreateSectionForEvent($arFields, (int)$userId)
+					)
+					{
+						return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
+					}
+
+					$sectRes = CCalendarSect::GetSectionForOwner(
+						$arFields['CAL_TYPE'],
+						$arFields['OWNER_ID'],
+						true
+					);
+				}
+
 				if ($sectRes['sectionId'] > 0)
 				{
 					$sectionId = $sectRes['sectionId'];
@@ -2355,6 +2446,32 @@ class CCalendar
 				{
 					return false;
 				}
+			}
+		}
+
+		if (
+			$bNew
+			&& $checkPermission
+			&& $sectionId > 0
+		)
+		{
+			$section = is_array($sectRes['section'] ?? null) ? $sectRes['section'] : null;
+			if ($section === null || (int)($section['ID'] ?? 0) !== (int)$sectionId)
+			{
+				$section = self::normalizeEventSectionFields((int)$sectionId, $arFields);
+			}
+			else
+			{
+				$arFields['CAL_TYPE'] = $section['CAL_TYPE'];
+				$arFields['OWNER_ID'] = $section['OWNER_ID'];
+			}
+
+			if (
+				$section === null
+				|| !self::checkSectionAddPermission((int)$sectionId, $section, $accessController, $userId)
+			)
+			{
+				return self::ThrowError(Loc::getMessage('EC_ACCESS_DENIED'));
 			}
 		}
 
@@ -2412,43 +2529,6 @@ class CCalendar
 				? $curEvent['VERSION'] + 1
 				: 1
 			;
-		}
-
-		if ($params['autoDetectSection'] && $sectionId <= 0 && $arFields['OWNER_ID'] > 0)
-		{
-			$res = CCalendarSect::GetList(
-				[
-					'arFilter' => [
-						'CAL_TYPE' => $arFields['CAL_TYPE'],
-						'OWNER_ID' => $arFields['OWNER_ID'],
-					],
-					'checkPermissions' => false,
-					'getPermissions' => false,
-				]
-			);
-			if ($res && is_array($res) && isset($res[0]))
-			{
-				$sectionId = $res[0]['ID'];
-			}
-			else
-			{
-				$defCalendar = CCalendarSect::CreateDefault(array(
-					'type' => $arFields['CAL_TYPE'],
-					'ownerId' => $arFields['OWNER_ID'],
-				));
-				$sectionId = $defCalendar['ID'];
-				self::SetCurUserMeetingSection($defCalendar['ID']);
-
-				$params['bAffectToDav'] = false;
-			}
-			if ($sectionId > 0)
-			{
-				$arFields['SECTIONS'] = [$sectionId];
-			}
-			else
-			{
-				return false;
-			}
 		}
 
 		$bExchange = self::IsExchangeEnabled() && $arFields['CAL_TYPE'] === 'user';
@@ -2744,7 +2824,9 @@ class CCalendar
 					$countParams = [
 						'rrule' => $newParams['arFields']['RRULE'],
 						'dateFrom' => $curEvent['DATE_FROM'],
-						'dateTo' => $newParams['arFields']['DATE_FROM'],
+						'dateTo' => !empty($params['currentEventDateFrom'])
+							? $params['currentEventDateFrom']
+							: $newParams['arFields']['DATE_FROM'],
 						'timeZone' => $curEvent['TZ_FROM'],
 					];
 
@@ -2761,8 +2843,8 @@ class CCalendar
 				{
 					$currentDate = new Type\Date($params['currentEventDateFrom']);
 					$currentFromDate = new Type\Date($newParams['arFields']['DATE_FROM']);
-					$currentDateWeekday = self::WeekDayByInd($currentDate->format('N'));
-					$currentFromDateWeekday = self::WeekDayByInd($currentFromDate->format('N'));
+					$currentDateWeekday = self::WeekDayByInd($currentDate->format('w'));
+					$currentFromDateWeekday = self::WeekDayByInd($currentFromDate->format('w'));
 
 					if (isset($newParams['arFields']['RRULE']['BYDAY'][$currentDateWeekday]))
 					{
@@ -3045,12 +3127,22 @@ class CCalendar
 //				}
 
 				$currentFromTs = self::Timestamp($params['arFields']['DATE_FROM'], false);
-				$length = self::Timestamp($params['arFields']['DATE_TO'], false) - self::Timestamp($params['arFields']['DATE_FROM'], false);
+				$length = self::Timestamp($params['arFields']['DATE_TO'], false)
+					- self::Timestamp($params['arFields']['DATE_FROM'], false)
+				;
+				$allDayDurationDays = self::getRecurrentEventDayDuration(
+					$params['arFields']['DATE_FROM'],
+					$params['arFields']['DATE_TO']
+				);
 
 				if (!isset($params['arFields']['DATE_FROM'], $params['arFields']['DATE_TO']))
 				{
 					$length = $curEvent['DT_LENGTH'];
 					$currentFromTs = self::Timestamp($curEvent['DATE_FROM']);
+					$allDayDurationDays = self::getRecurrentEventDayDuration(
+						$curEvent['DATE_FROM'],
+						$curEvent['DATE_TO']
+					);
 				}
 
 				// Check location changes
@@ -3059,6 +3151,8 @@ class CCalendar
 				$isRecurrentNameChanged = !empty($params['arFields']['NAME']) && ($curEvent['NAME'] !== $params['arFields']['NAME']);
 				// Check time changes
 				$isRecurrentTimeChanged = (self::Timestamp($curEvent['DATE_FROM'], false) % self::DAY_LENGTH) !== ($currentFromTs % self::DAY_LENGTH);
+				$recurrentDateDelta = (int)($params['recurrentDateDelta'] ?? 0);
+				$recurrentDayDelta = (int)($params['recurrentDayDelta'] ?? 0);
 				// Check attendees changes
 				$isRecurrentAttendeesChanged = self::checkRecurrenceAttendeesChanges($params, $curEvent);
 
@@ -3091,14 +3185,23 @@ class CCalendar
 					$newParams['arFields']['RECURRENCE_ID'] = $ev['RECURRENCE_ID'];
 					$newParams['arFields']['DAV_XML_ID'] = $ev['DAV_XML_ID'];
 					$newParams['arFields']['G_EVENT_ID'] = $ev['G_EVENT_ID'];
-					$newParams['arFields']['ORIGINAL_DATE_FROM'] = self::GetOriginalDate($arFields['DATE_FROM'], $ev['ORIGINAL_DATE_FROM'], $arFields['TZ_FROM']);
+					$newParams['arFields']['ORIGINAL_DATE_FROM'] = self::shiftRecurrentOriginalDate(
+						$ev['ORIGINAL_DATE_FROM'] ?? null,
+						$recurrentDateDelta,
+						$recurrentDayDelta,
+						(bool)($ev['DT_SKIP_TIME'] === 'Y'),
+						$arFields['DATE_FROM'] ?? null,
+						$arFields['TZ_FROM'] ?? null
+					);
 					$newParams['arFields']['CAL_DAV_LABEL'] = $ev['CAL_DAV_LABEL'];
 					$newParams['arFields']['RRULE'] = CCalendarEvent::ParseRRULE($ev['RRULE']);
 					$newParams['recursionEditMode'] = 'skip';
 					$newParams['currentEvent'] = $ev;
 
-					$eventFromTs = self::Timestamp($ev['DATE_FROM']);
 					$instanceLength = $ev['DT_LENGTH'] ?? $length;
+					$shiftedEventFromTs = self::Timestamp(
+						self::shiftRecurrentDateByDays($ev['DATE_FROM'], $recurrentDayDelta, true)
+					);
 
 					/*
 					 * Set correct date for related
@@ -3108,19 +3211,27 @@ class CCalendar
 					 */
 					if ($newParams['arFields']['SKIP_TIME'])
 					{
-						$newParams['arFields']['DATE_FROM'] = $ev['DATE_FROM'];
-						$newParams['arFields']['DATE_TO'] = self::Date($eventFromTs + $length, false);
+						$newParams['arFields']['DATE_FROM'] = self::shiftRecurrentDateByDays(
+							$ev['DATE_FROM'],
+							$recurrentDayDelta,
+							false
+						);
+						$newParams['arFields']['DATE_TO'] = self::shiftRecurrentDateByDays(
+							$newParams['arFields']['DATE_FROM'],
+							$allDayDurationDays,
+							false
+						);
 					}
 					else if ($isRecurrentTimeChanged)
 					{
-						$newFromTs = self::DateWithNewTime($currentFromTs, $eventFromTs);
+						$newFromTs = self::DateWithNewTime($currentFromTs, $shiftedEventFromTs);
 						$newParams['arFields']['DATE_FROM'] = self::Date($newFromTs);
 						$newParams['arFields']['DATE_TO'] = self::Date($newFromTs + $length);
 					}
 					else
 					{
-						$newParams['arFields']['DATE_FROM'] = self::Date($eventFromTs);
-						$newParams['arFields']['DATE_TO'] = self::Date($eventFromTs + $instanceLength);
+						$newParams['arFields']['DATE_FROM'] = self::Date($shiftedEventFromTs);
+						$newParams['arFields']['DATE_TO'] = self::Date($shiftedEventFromTs + $instanceLength);
 					}
 
 					/*
@@ -3163,7 +3274,10 @@ class CCalendar
 
 					if (isset($ev['EXDATE']) && $ev['EXDATE'])
 					{
-						$newParams['arFields']['EXDATE'] = $ev['EXDATE'];
+						$newParams['arFields']['EXDATE'] = self::shiftRecurrentExDatesByDays(
+							$ev['EXDATE'],
+							$recurrentDayDelta
+						);
 					}
 
 					if (isset($newParams['arFields']['RELATIONS']['ORIGINAL_RECURSION_ID']))
@@ -3197,13 +3311,284 @@ class CCalendar
 		return $result;
 	}
 
+	private static function canAutoCreateSectionForEvent(array $arFields, int $userId): bool
+	{
+		$calendarType = (string)($arFields['CAL_TYPE'] ?? '');
+		$ownerId = (int)($arFields['OWNER_ID'] ?? 0);
+
+		if ($calendarType !== Dictionary::CALENDAR_TYPE['group'])
+		{
+			$sectionAccessController = new SectionAccessController($userId);
+			$sectionModel =
+				SectionModel::createNew()
+					->setType($calendarType)
+					->setOwnerId($ownerId)
+			;
+
+			return $sectionAccessController->check(ActionDictionary::ACTION_SECTION_ADD, $sectionModel);
+		}
+
+		if ($ownerId <= 0 || $userId <= 0)
+		{
+			return false;
+		}
+
+		if (!Loader::includeModule('socialnetwork'))
+		{
+			return false;
+		}
+
+		if (CSocNetUser::IsUserModuleAdmin($userId))
+		{
+			return true;
+		}
+
+		$member = UserToGroupTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=USER_ID' => $userId,
+				'=GROUP_ID' => $ownerId,
+				'@ROLE' => UserToGroupTable::getRolesMember(),
+			],
+			'limit' => 1,
+		])->fetch();
+
+		return (bool)$member;
+	}
+
+	private static function checkSectionAddPermission(
+		int $sectionId,
+		array $section,
+		EventAccessController $accessController,
+		int $userId
+	): bool
+	{
+		if (($section['IS_COLLAB'] ?? null) && Util::isCollabUser($userId))
+		{
+			$userCollabIds = UserCollabs::getInstance()->getIds($userId);
+			if (!in_array((int)$section['OWNER_ID'], $userCollabIds, true))
+			{
+				return false;
+			}
+		}
+		else
+		{
+			$newEventModel =
+				EventModel::createNew()
+					->setOwnerId((int)$section['OWNER_ID'])
+					->setSectionId((int)$sectionId)
+					->setSectionType($section['CAL_TYPE']);
+
+			if (!$accessController->check(ActionDictionary::ACTION_EVENT_ADD, $newEventModel))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static function normalizeEventSectionFields(int $sectionId, array &$arFields): ?array
+	{
+		$section = SectionTable::query()
+			->setSelect(['ID', 'CAL_TYPE', 'OWNER_ID'])
+			->where('ID', $sectionId)
+			->setLimit(1)
+			->fetch()
+		;
+
+		if (!$section)
+		{
+			return null;
+		}
+
+		$section['IS_COLLAB'] = false;
+		if ($section['CAL_TYPE'] === Dictionary::CALENDAR_TYPE['group'])
+		{
+			$collabIds = Collabs::getInstance()->getCollabIdsByGroupIds([(int)$section['OWNER_ID']]);
+			$section['IS_COLLAB'] = in_array((int)$section['OWNER_ID'], $collabIds, true);
+		}
+
+		$arFields['CAL_TYPE'] = $section['CAL_TYPE'];
+		$arFields['OWNER_ID'] = $section['OWNER_ID'];
+
+		return $section;
+	}
+
 	private static function CountNumberFollowEvents($params)
 	{
 		$curCount = self::CountPastEvents($params);
 
-		$count = (int)$params['rrule']['COUNT'] - $curCount;
+		$count = max(1, (int)$params['rrule']['COUNT'] - $curCount);
 
 		return (string)$count;
+	}
+
+	private static function getRecurrentEventTimestampDelta($currentEventDateFrom, $newDateFrom, $parentDateFrom, bool $skipTime): int
+	{
+		if (empty($newDateFrom) || empty($parentDateFrom))
+		{
+			return 0;
+		}
+
+		$currentEventDateFrom = $currentEventDateFrom ?: $parentDateFrom;
+
+		if ($skipTime)
+		{
+			$currentEventTimestamp = self::Timestamp($currentEventDateFrom, false, false);
+			$newDateTimestamp = self::Timestamp($newDateFrom, false, false);
+
+			return $newDateTimestamp - $currentEventTimestamp;
+		}
+
+		$currentEventTimestamp = self::DateWithNewTime(
+			self::Timestamp($parentDateFrom, false),
+			self::Timestamp($currentEventDateFrom, false)
+		);
+		$newDateTimestamp = self::Timestamp($newDateFrom, false);
+
+		return $newDateTimestamp - $currentEventTimestamp;
+	}
+
+	private static function getRecurrentEventDayDelta($currentEventDateFrom, $newDateFrom, $parentDateFrom): int
+	{
+		if (empty($newDateFrom) || empty($parentDateFrom))
+		{
+			return 0;
+		}
+
+		$currentEventDateFrom = $currentEventDateFrom ?: $parentDateFrom;
+
+		$currentDate = self::createDateTimeObjectFromString(
+			self::Date(self::Timestamp($currentEventDateFrom, false), false, false)
+		);
+		$newDate = self::createDateTimeObjectFromString(
+			self::Date(self::Timestamp($newDateFrom, false), false, false)
+		);
+
+		return (int)$currentDate->diff($newDate)->format('%r%a');
+	}
+
+	private static function getRecurrentEventDayDuration($dateFrom, $dateTo): int
+	{
+		if (empty($dateFrom) || empty($dateTo))
+		{
+			return 0;
+		}
+
+		$fromDate = self::createDateTimeObjectFromString(
+			self::Date(self::Timestamp($dateFrom, false), false, false)
+		);
+		$toDate = self::createDateTimeObjectFromString(
+			self::Date(self::Timestamp($dateTo, false), false, false)
+		);
+
+		return max(0, (int)$fromDate->diff($toDate)->format('%r%a'));
+	}
+
+	private static function shiftRecurrentDateByDays($date, int $dayDelta, bool $withTime): ?string
+	{
+		if (empty($date))
+		{
+			return null;
+		}
+
+		if ($dayDelta === 0)
+		{
+			return (string)$date;
+		}
+
+		$timestamp = self::Timestamp($date, false, $withTime);
+		$shiftedTimestamp = mktime(
+			(int)date('H', $timestamp),
+			(int)date('i', $timestamp),
+			(int)date('s', $timestamp),
+			(int)date('m', $timestamp),
+			(int)date('d', $timestamp) + $dayDelta,
+			(int)date('Y', $timestamp)
+		);
+
+		return self::Date($shiftedTimestamp, $withTime, false);
+	}
+
+	private static function shiftRecurrentExDatesByDays($exDate, int $dayDelta): string
+	{
+		if (empty($exDate) || $dayDelta === 0)
+		{
+			return (string)$exDate;
+		}
+
+		$shiftedExDates = [];
+		foreach (CCalendarEvent::GetExDate($exDate) as $date)
+		{
+			$shiftedExDates[] = self::shiftRecurrentDateByDays($date, $dayDelta, false);
+		}
+
+		return CCalendarEvent::SetExDate($shiftedExDates);
+	}
+
+	private static function shiftRecurrentOriginalDate(
+		$originalDateFrom,
+		int $timestampDelta,
+		int $dayDelta,
+		bool $skipTime,
+		?string $parentDateFrom = null,
+		?string $timeZone = null
+	): ?string
+	{
+		if (empty($originalDateFrom))
+		{
+			return null;
+		}
+
+		if ($timestampDelta === 0 && $dayDelta === 0)
+		{
+			return (string)$originalDateFrom;
+		}
+
+		if ($skipTime)
+		{
+			return self::shiftRecurrentDateByDays($originalDateFrom, $dayDelta, false);
+		}
+
+		if (!empty($parentDateFrom))
+		{
+			$shiftedOriginalDateFrom = self::shiftRecurrentDateByDays($originalDateFrom, $dayDelta, true);
+
+			return self::GetOriginalDate($parentDateFrom, $shiftedOriginalDateFrom, $timeZone);
+		}
+
+		return self::Date(
+			self::Timestamp($originalDateFrom, false, !$skipTime) + $timestampDelta,
+			!$skipTime
+		);
+	}
+
+	public static function normalizeRRuleByDay($byDay): array
+	{
+		if (is_string($byDay))
+		{
+			$byDay = explode(',', $byDay);
+		}
+
+		if (!is_array($byDay))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($byDay as $key => $value)
+		{
+			$day = is_string($value) && $value !== '' ? $value : $key;
+			$day = mb_strtoupper((string)$day);
+
+			if (preg_match('/(SU|MO|TU|WE|TH|FR|SA)$/', $day, $matches))
+			{
+				$result[$matches[1]] = $matches[1];
+			}
+		}
+
+		return $result;
 	}
 
 	public static function getUserLanguageId(?int $userId): string
@@ -3233,6 +3618,7 @@ class CCalendar
 	public static function CountPastEvents($params)
 	{
 		$curCount = 0;
+		$interval = max(1, (int)($params['rrule']['INTERVAL'] ?? 1));
 
 		$dateFromTz = !empty($params['timeZone']) ? new \DateTimeZone($params['timeZone']) : new \DateTimeZone("UTC");
 		$dateToTz = !empty($params['timeZone']) ? new \DateTimeZone($params['timeZone']) : new \DateTimeZone("UTC");
@@ -3244,23 +3630,39 @@ class CCalendar
 		$dateTo->setTime($parentEventHours, $parentEventMinutes);
 
 		$diff = $dateFrom->getDiff($dateTo);
+		if ($diff->invert === 1)
+		{
+			return 0;
+		}
 
 		if ($params['rrule']['FREQ'] === 'DAILY')
 		{
 			$diff = (int)$diff->format('%a');
-			$curCount = $diff / (int)$params['rrule']['INTERVAL'];
+			$curCount = (int)floor($diff / $interval);
 		}
 
 		if ($params['rrule']['FREQ'] === 'WEEKLY')
 		{
 			$diff = (int)$diff->format('%a');
+			$byDay = self::normalizeRRuleByDay($params['rrule']['BYDAY'] ?? null);
+			if (empty($byDay))
+			{
+				$weekday = self::WeekDayByInd((int)$dateFrom->format('w'));
+				if ($weekday)
+				{
+					$byDay[$weekday] = $weekday;
+				}
+			}
+			$startWeekDate = clone $dateFrom;
+			$startWeekDate->setTime(0, 0);
+			$startWeekDate = $startWeekDate->add('-' . (((int)$dateFrom->format('w') + 6) % 7) . ' day');
 
 			for ($i = 0; $i < $diff; $i++)
 			{
-				$weekday = $dateFrom->format('D');
-				$weekdayCode = mb_strtoupper(mb_substr($weekday, 0, 2));
+				$weekIndex = (int)floor(((int)$startWeekDate->getDiff($dateFrom)->format('%a')) / 7);
+				$weekdayCode = self::WeekDayByInd((int)$dateFrom->format('w'));
 
-				if (in_array($weekdayCode, $params['rrule']['BYDAY'], true))
+				if ($weekdayCode && isset($byDay[$weekdayCode]) && $weekIndex % $interval === 0)
 				{
 					$curCount++;
 				}
@@ -3271,14 +3673,14 @@ class CCalendar
 
 		if ($params['rrule']['FREQ'] === 'MONTHLY')
 		{
-			$diff = (int)$diff->format('%m');
-			$curCount = $diff / (int)$params['rrule']['INTERVAL'];
+			$diff = ((int)$diff->format('%y') * 12) + (int)$diff->format('%m');
+			$curCount = (int)floor($diff / $interval);
 		}
 
 		if ($params['rrule']['FREQ'] === 'YEARLY')
 		{
 			$diff = (int)$diff->format('%y');
-			$curCount = $diff / (int)$params['rrule']['INTERVAL'];
+			$curCount = (int)floor($diff / $interval);
 		}
 
 		return $curCount;
@@ -3300,6 +3702,14 @@ class CCalendar
 	public static function GetErrors()
 	{
 		return self::$errors;
+	}
+
+	public static function GetAndClearErrors()
+	{
+		$errors = self::$errors;
+		self::$errors = [];
+
+		return $errors;
 	}
 
 	private static ?array $tasksForUpdateUFRights = null;
@@ -4443,6 +4853,7 @@ class CCalendar
 		return $DESTINATION;
 	}
 
+	/** @deprecated now using TIME_ZONE field in b_user */
 	public static function SaveUserTimezoneName($user, $tzName = '')
 	{
 		if (!is_array($user) && (int)$user > 0)
@@ -4450,7 +4861,7 @@ class CCalendar
 			$user = self::GetUser($user, true);
 		}
 
-		CUserOptions::SetOption("calendar", "timezone".self::GetCurrentOffsetUTC($user['ID']), $tzName, false, $user['ID']);
+		CUserOptions::SetOption("calendar", "timezone" . self::GetCurrentOffsetUTC($user['ID']), $tzName, false, $user['ID']);
 	}
 
 	public static function OnSocNetGroupDelete($groupId)
@@ -5173,6 +5584,23 @@ class CCalendar
 			return null;
 		}
 
+		$parentLink = null;
+		$parentLinkHash = $eventLink->getParentLinkHash();
+		if (!empty($parentLinkHash))
+		{
+			$parentLink = (new Sharing\Link\Factory)->getLinkByHash($parentLinkHash);
+		}
+
+		$canView =
+			(new Sharing\DeletedSharedEventAccessChecker())
+				->canView(self::GetCurUserId(), $eventLink, $parentLink)
+		;
+
+		if (!$canView)
+		{
+			return null;
+		}
+
 		$result = EventTable::query()
 			->setSelect(['*'])
 			->where('OWNER_ID', $eventLink->getOwnerId())
@@ -5219,7 +5647,7 @@ class CCalendar
 		$timestamp = MakeTimeStamp($date, self::TSFormat($bTime ? "FULL" : "SHORT"));
 		if ($bRound)
 		{
-			$timestamp = self::RoundTimestamp($timestamp);
+			$timestamp = (int)self::RoundTimestamp($timestamp);
 		}
 
 		return $timestamp;
@@ -5400,7 +5828,7 @@ class CCalendar
 			$userId = self::$userId;
 		}
 
-		return (int)(date("Z") + self::GetOffset($userId));
+		return (new DateTime())->getOffset() + self::GetOffset($userId);
 	}
 
 	public static function GetOffset($userId = false)
@@ -5447,31 +5875,40 @@ class CCalendar
 			$user = self::GetUser((int)$user, true);
 		}
 
-		if (\CTimezone::OptionEnabled() && $user && is_array($user))
+		$localOffset = (new DateTime())->getOffset();
+		$offset = $localOffset;
+
+		if (
+			$user
+			&& is_array($user)
+			&& \CTimezone::OptionEnabled()
+		)
 		{
-			$offset = isset($user['TIME_ZONE_OFFSET'])
-				? (int)(date('Z') + $user['TIME_ZONE_OFFSET'])
-				: self::GetCurrentOffsetUTC($user['ID']);
-
-			$tzName = CUserOptions::GetOption(
-				"calendar",
-				"timezone" . $offset,
-				false,
-				$user['ID']
-			);
-
-			if ($tzName === 'undefined' || $tzName === 'false')
-			{
-				$tzName = false;
-			}
-			if (!$tzName && ($user['AUTO_TIME_ZONE'] ?? '') !== 'Y' && $user['TIME_ZONE'])
+			if (!empty($user['TIME_ZONE']))
 			{
 				$tzName = $user['TIME_ZONE'];
+			}
+			else // deprecated, compatibility
+			{
+				$offset = isset($user['TIME_ZONE_OFFSET'])
+					? $localOffset + $user['TIME_ZONE_OFFSET']
+					: self::GetCurrentOffsetUTC($user['ID']);
+
+				$tzName = CUserOptions::GetOption(
+					"calendar",
+					"timezone" . $offset,
+					false,
+					$user['ID']
+				);
+
+				if ($tzName === 'undefined' || $tzName === 'false')
+				{
+					$tzName = false;
+				}
 			}
 		}
 		else
 		{
-			$offset = date('Z');
 			$tzName = date_default_timezone_get();
 		}
 
@@ -5508,6 +5945,8 @@ class CCalendar
 	public static function GetUserList(array $userIdList): array
 	{
 		$result = [];
+
+		self::handleCurrentUserForList($userIdList);
 		$userIdToRequest = self::GetNotRequestedUserIdList($userIdList);
 
 		if (!empty($userIdToRequest))
@@ -5568,18 +6007,90 @@ class CCalendar
 		return $result;
 	}
 
+	private static function handleCurrentUserForList(array $userIdList): void
+	{
+		$currentUserId = self::GetCurUserId();
+		if ($currentUserId <= 0)
+		{
+			return;
+		}
+
+		if (!in_array($currentUserId, array_map('intval', $userIdList), true))
+		{
+			return;
+		}
+
+		if (isset(self::$userList[$currentUserId]))
+		{
+			return;
+		}
+
+		$currentUser = \CUser::GetByID($currentUserId)->Fetch();
+		if ($currentUser === null)
+		{
+			return;
+		}
+
+		$userId = (int)($currentUser['ID'] ?? 0);
+		$user = [
+			'ID' => $userId,
+			'NAME' => $currentUser['NAME'] ?? '',
+			'LAST_NAME' => $currentUser['LAST_NAME'] ?? '',
+			'SECOND_NAME' => $currentUser['SECOND_NAME'] ?? '',
+			'LOGIN' => $currentUser['LOGIN'] ?? '',
+			'PERSONAL_PHOTO' => $currentUser['PERSONAL_PHOTO'] ?? '',
+			'TIME_ZONE' => $currentUser['TIME_ZONE'] ?? '',
+			'EMAIL' => $currentUser['EMAIL'] ?? '',
+			'EXTERNAL_AUTH_ID' => $currentUser['EXTERNAL_AUTH_ID'] ?? '',
+			'COLLAB_USER' => Util::isCollabUser($userId),
+			'NOTIFICATION_LANGUAGE_ID' => self::resolveNotificationLanguageId($currentUser['LANGUAGE_ID'] ?? null),
+		];
+
+		self::$userList[$currentUser['ID']] = $user;
+	}
+
+	private static function resolveNotificationLanguageId(?string $userLanguageId): string
+	{
+		$userLanguageId = (string)$userLanguageId;
+		if ($userLanguageId === '')
+		{
+			return SiteTable::getDefaultLanguageId() ?? LANGUAGE_ID;
+		}
+
+		if (self::isActiveLanguageId($userLanguageId))
+		{
+			return $userLanguageId;
+		}
+
+		return SiteTable::getDefaultLanguageId() ?? LANGUAGE_ID;
+	}
+
+	private static function isActiveLanguageId(string $languageId): bool
+	{
+		$language = \Bitrix\Main\Localization\LanguageTable::query()
+			->setSelect(['LID', 'ACTIVE'])
+			->where('LID', $languageId)
+			->setLimit(1)
+			->setCacheTtl(86400)
+			->exec()
+			->fetch()
+		;
+
+		return is_array($language) && ($language['ACTIVE'] ?? null) === 'Y';
+	}
+
 	public static function GetGoodTimezoneForOffset($offset)
 	{
 		$timezones = self::GetTimezoneList();
 		$goodTz = [];
 		$result = false;
 
-		foreach($timezones as $tz)
+		foreach ($timezones as $tz)
 		{
 			if ($tz['offset'] == $offset)
 			{
 				$goodTz[] = $tz;
-				if (LANGUAGE_ID == 'ru')
+				if (LANGUAGE_ID === 'ru')
 				{
 					if (preg_match('/(kaliningrad|moscow|samara|yekaterinburg|novosibirsk|krasnoyarsk|irkutsk|yakutsk|vladivostok)/i', $tz['timezone_id']))
 					{
@@ -5588,7 +6099,7 @@ class CCalendar
 						break;
 					}
 				}
-				elseif (mb_strpos($tz['timezone_id'], 'Europe') !== false)
+				elseif (str_contains($tz['timezone_id'], 'Europe'))
 				{
 					$result = $tz['timezone_id'];
 					break;
@@ -5615,11 +6126,12 @@ class CCalendar
 		{
 			self::$timezones = [];
 			$aExcept = ["Etc/", "GMT", "UCT", "HST", "PST", "MST", "CST", "EST", "CET", "MET", "WET", "EET", "PRC", "ROC", "ROK", "W-SU"];
+
 			foreach(DateTimeZone::listIdentifiers() as $tz)
 			{
 				foreach($aExcept as $ex)
 				{
-					if(str_starts_with($tz, $ex))
+					if (str_starts_with($tz, $ex))
 					{
 						continue 2;
 					}
@@ -5711,7 +6223,7 @@ class CCalendar
 	{
 		if ($bRound)
 		{
-			$timestamp = self::RoundTimestamp($timestamp);
+			$timestamp = (int)self::RoundTimestamp($timestamp);
 		}
 
 		$format = self::DFormat($bTime);
@@ -5750,7 +6262,7 @@ class CCalendar
 			return false;
 		}
 
-		if (isset(self::$meetingSections[$userId]))
+		if (isset(self::$meetingSections[$userId]) && (self::$meetingSections[$userId] || !$autoCreate))
 		{
 			return self::$meetingSections[$userId];
 		}
@@ -6396,13 +6908,20 @@ class CCalendar
 
 	public static function getSectionListAvailableForUser($userId, $additionalSectionIdList = [], $params = [])
 	{
-		return self::GetSectionList([
+		if (empty($additionalSectionIdList) && self::$sectionsAvailableForUsers !== null)
+		{
+			return self::$sectionsAvailableForUsers;
+		}
+
+		self::$sectionsAvailableForUsers = self::GetSectionList([
 			'CAL_TYPE' => 'user',
 			'OWNER_ID' => $userId,
 			'ACTIVE' => 'Y',
 			'ADDITIONAL_IDS' => array_merge($additionalSectionIdList, UserSettings::getFollowedSectionIdList($userId)),
 			...$params,
 		]);
+
+		return self::$sectionsAvailableForUsers;
 	}
 
 	public static function setOwnerId($userId)
@@ -6504,8 +7023,6 @@ class CCalendar
 				);
 			}
 		}
-
-		SynchronizationFeature::setUserId($event->getOwner()->getId());
 
 		if (SynchronizationFeature::isOn())
 		{
@@ -6665,8 +7182,11 @@ class CCalendar
 		/** @var Core\Section\Section $oldSection */
 		$oldSection = $mapperFactory->getSection()->getById($currentEvent['SECTION_ID']);
 
-		$oldFactories = FactoriesCollection::createBySection($oldSection);
-		if ($oldFactories->count() > 0)
+		$oldFactories = $oldSection
+			? FactoriesCollection::createBySection($oldSection)
+			: null;
+
+		if ($oldFactories && $oldFactories->count() > 0)
 		{
 			$syncManager = new Synchronization($oldFactories);
 			$context = new Context();

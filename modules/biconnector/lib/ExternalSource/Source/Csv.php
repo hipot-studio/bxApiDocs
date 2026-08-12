@@ -74,7 +74,11 @@ class Csv extends Base
 
 		$fullTableName = self::getFullTableName($entityName);
 
-		$query = sprintf('SELECT * FROM %s LIMIT %d', $fullTableName, $n);
+		$query = sprintf(
+			'SELECT * FROM %s LIMIT %d',
+			$this->connection->getSqlHelper()->quote($fullTableName),
+			$n
+		);
 		try
 		{
 			$queryResult = $this->connection->query($query);
@@ -119,7 +123,9 @@ class Csv extends Base
 		$connection = Main\Application::getInstance()->getConnection();
 		try
 		{
-			$connection->query(sprintf('DROP TABLE IF EXISTS `%s`;', self::getFullTableName($name)));
+			$connection->query(
+				sprintf('DROP TABLE IF EXISTS %s;', $connection->getSqlHelper()->quote(self::getFullTableName($name)))
+			);
 		}
 		catch (Main\DB\SqlQueryException $exception)
 		{

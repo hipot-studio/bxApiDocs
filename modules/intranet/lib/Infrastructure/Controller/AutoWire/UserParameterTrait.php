@@ -42,7 +42,8 @@ trait UserParameterTrait
 				'CONFIRM_CODE',
 				'LOGIN',
 				'EMAIL',
-				'LAST_LOGIN'
+				'LAST_LOGIN',
+				'EXTERNAL_AUTH_ID',
 			]);
 	}
 }

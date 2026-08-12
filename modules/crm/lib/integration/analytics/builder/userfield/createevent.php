@@ -8,11 +8,11 @@ use Bitrix\Crm\Integration\Analytics\Dictionary;
 
 final class CreateEvent extends AbstractBuilder
 {
-	private string $creationContext = Dictionary::SUB_SECTION_USERFIELD_DEFAULT;
+	private string $source = CreateContext::SOURCE_DEFAULT;
 
-	public function setCreationContext(string $creationContext): self
+	public function setSource(string $source): self
 	{
-		$this->creationContext = $creationContext;
+		$this->source = $source;
 
 		return $this;
 	}
@@ -22,21 +22,21 @@ final class CreateEvent extends AbstractBuilder
 		return Dictionary::TOOL_CRM;
 	}
 
-	public function fillByContext(CreateContext $context): self
+	public function fillByContext(CreateContext $createContext): self
 	{
-		$this->setCreationContext($context->createFrom);
+		$this->setSource($createContext->source);
 
 		return $this;
 	}
 
 	protected function buildCustomData(): array
 	{
-		$this->setSection($this->creationContext);
+		$this->setSection(Dictionary::UNKNOWN);
 
 		return [
-			'category' => Dictionary::CATEGORY_ENTITY_OPERATIONS,
-			'event' => Dictionary::EVENT_ENTITY_CREATE,
-			'type' => Dictionary::TYPE_USERFIELD,
+			'category' => Dictionary::CATEGORY_USERFIELD_OPERATIONS,
+			'event' => Dictionary::EVENT_USERFIELD_CREATE,
+			'type' => $this->source,
 		];
 	}
 }

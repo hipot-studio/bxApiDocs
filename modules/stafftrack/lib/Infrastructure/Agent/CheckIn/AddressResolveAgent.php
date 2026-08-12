@@ -2,7 +2,7 @@
 
 namespace Bitrix\StaffTrack\Infrastructure\Agent\CheckIn;
 
-use Bitrix\StaffTrack\Internal\Geo\Geohash;
+use Bitrix\Main\Application;
 use Bitrix\StaffTrack\Internal\Integration\Pull;
 use Bitrix\StaffTrack\Internal\Repository\AddressQueueRepository;
 use Bitrix\StaffTrack\Internal\Repository\AddressRepository;
@@ -13,6 +13,8 @@ use Bitrix\StaffTrack\Public\Services\MapDataCache;
 
 class AddressResolveAgent
 {
+	public const QUEUE_LOCK_NAME = 'stafftrack_address_resolve';
+
 	private const BATCH_SIZE = 50;
 	private const CONTINUATION_DELAY = 5;
 
@@ -35,8 +37,36 @@ class AddressResolveAgent
 		return '';
 	}
 
+	/**
+	 * Caller MUST hold the QUEUE_LOCK_NAME lock.
+	 */
+	public static function runOnceLocked(): bool
+	{
+		try
+		{
+			if (self::processBatch())
+			{
+				self::scheduleContinuation();
+			}
+
+			return true;
+		}
+		catch (\Throwable $e)
+		{
+			AddMessage2Log('AddressResolveAgent::runOnceLocked error: ' . $e->getMessage());
+
+			return false;
+		}
+	}
+
 	private static function processAndContinueIfNeeded(): bool
 	{
+		$connection = Application::getConnection();
+		if (!$connection->lock(self::QUEUE_LOCK_NAME, 0))
+		{
+			return false;
+		}
+
 		$hasMore = false;
 
 		try
@@ -52,64 +82,73 @@ class AddressResolveAgent
 		{
 			AddMessage2Log('AddressResolveAgent error: ' . $e->getMessage());
 		}
+		finally
+		{
+			$connection->unlock(self::QUEUE_LOCK_NAME);
+		}
 
 		return $hasMore;
 	}
 
 	private static function processBatch(): bool
 	{
-		$geohashes = AddressQueueRepository::getUniqueGeohashes(self::BATCH_SIZE);
-		if (empty($geohashes))
+		$rows = AddressQueueRepository::getUniqueKeysWithSampleCoords(self::BATCH_SIZE);
+		if (empty($rows))
 		{
 			return false;
 		}
 
 		$repository = new CheckInRepository();
 
-		foreach ($geohashes as $geohash)
+		foreach ($rows as $row)
 		{
+			$key = (string)$row['GEOHASH_KEY'];
+			$lat = $row['LATITUDE'];
+			$lon = $row['LONGITUDE'];
+
 			try
 			{
-				$address = self::resolveGeohash($geohash);
+				if ($lat === null || $lon === null)
+				{
+					AddMessage2Log('AddressResolveAgent: missing coords for key [' . $key . ']');
+					AddressQueueRepository::deleteByGeohashKey($key);
+					continue;
+				}
+
+				$address = self::resolveByCoords($key, (float)$lat, (float)$lon);
 
 				if ($address !== null)
 				{
-					$userCheckIns = self::applyAddressFromQueue($repository, $geohash, $address);
+					$userCheckIns = self::applyAddressFromQueue($repository, $key, $address);
 					self::sendPushToUsers($userCheckIns);
 				}
 				else
 				{
-					AddressQueueRepository::deleteByGeohash($geohash);
+					AddressQueueRepository::deleteByGeohashKey($key);
 				}
 			}
 			catch (\Throwable $e)
 			{
-				AddMessage2Log('AddressResolveAgent resolve error [' . $geohash . ']: ' . $e->getMessage());
-				AddressQueueRepository::deleteByGeohash($geohash);
+				AddMessage2Log('AddressResolveAgent resolve error [' . $key . ']: ' . $e->getMessage());
+				AddressQueueRepository::deleteByGeohashKey($key);
 			}
 		}
 
-		return count($geohashes) >= self::BATCH_SIZE;
+		return count($rows) >= self::BATCH_SIZE;
 	}
 
-	private static function resolveGeohash(string $geohash): ?string
+	private static function resolveByCoords(string $key, float $lat, float $lon): ?string
 	{
-		$existing = AddressRepository::findByGeohash($geohash);
+		$existing = AddressRepository::findByKey($key);
 		if ($existing !== null && ($existing['ADDRESS'] ?? '') !== '')
 		{
 			return $existing['ADDRESS'];
 		}
 
-		$decoded = Geohash::decode($geohash);
-		if ($decoded['latErr'] >= 90.0 || $decoded['lonErr'] >= 180.0)
-		{
-			return null;
-		}
-
-		$geoProvider = new GeoProvider($decoded['lat'], $decoded['lon']);
+		$geoProvider = new GeoProvider($lat, $lon);
 		$result = $geoProvider->generateAddress();
 
-		$address =  '';
+		$address = '';
 		if ($result->isSuccess())
 		{
 			$address = $result->getData()['address'] ?? '';
@@ -118,22 +157,22 @@ class AddressResolveAgent
 		if ($address === '')
 		{
 			$existing !== null
-				? AddressRepository::markFailed($geohash)
-				: AddressRepository::createFailed($geohash);
+				? AddressRepository::markFailedByKey($key)
+				: AddressRepository::createFailedByKey($key);
 
 			return null;
 		}
 
 		$saveResult = $existing !== null
-			? AddressRepository::markResolved($geohash, $address)
-			: AddressRepository::createResolved($geohash, $address);
+			? AddressRepository::markResolvedByKey($key, $address)
+			: AddressRepository::createResolvedByKey($key, $address);
 
 		if (!$saveResult->isSuccess())
 		{
 			return null;
 		}
 
-		AddressCache::set($geohash, $address);
+		AddressCache::setByKey($key, $address);
 
 		return $address;
 	}
@@ -141,9 +180,9 @@ class AddressResolveAgent
 	/**
 	 * @return array<int, array<int, string>> recipientId => [checkinId => address]
 	 */
-	private static function applyAddressFromQueue(CheckInRepository $repository, string $geohash, string $address): array
+	private static function applyAddressFromQueue(CheckInRepository $repository, string $key, string $address): array
 	{
-		$queueItems = AddressQueueRepository::getByGeohash($geohash);
+		$queueItems = AddressQueueRepository::getByGeohashKey($key);
 		if (empty($queueItems))
 		{
 			return [];
@@ -167,7 +206,7 @@ class AddressResolveAgent
 
 		$repository->updateAddressByIds(array_keys($checkInIds), $address);
 
-		AddressQueueRepository::deleteByGeohash($geohash);
+		AddressQueueRepository::deleteByGeohashKey($key);
 
 		MapDataCache::invalidateForEmployees(array_keys($authorIds));
 

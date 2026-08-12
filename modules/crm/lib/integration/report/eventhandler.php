@@ -607,6 +607,12 @@ class EventHandler
 
 	protected static function appendCrossCuttingPageList(array &$analyticPageList): void
 	{
+		$userPermissions = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions();
+		if (!$userPermissions->entityType()->canReadSomeItemsInCrm())
+		{
+			return;
+		}
+
 		$board = new AnalyticBoard();
 		$board->setTitle(Loc::getMessage('CRM_REPORT_ADVERTISE_SUM_EFFECT_BOARD_TITLE'));
 		$board->setBoardKey(Dashboard\Ad\AdPayback::BOARD_KEY);

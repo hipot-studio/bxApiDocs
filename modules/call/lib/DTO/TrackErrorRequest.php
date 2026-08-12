@@ -9,4 +9,5 @@ class TrackErrorRequest extends Hydrator
 {
 	public string $callUuid = '';
 	public string $errorCode = '';
+	public string $requestId = '';
 }

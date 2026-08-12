@@ -218,14 +218,14 @@ final class UserBasedField
 		$departmentQueries = HumanResources\DepartmentQueries::getInstance();
 		foreach ($shallowDepartmentIds as $departmentId)
 		{
-			$departmentMembers = $departmentQueries->getUsersByDepartmentId($departmentId, false);
+			$departmentMembers = $departmentQueries->getUserIdsByHrDepartmentId($departmentId, false, false);
 
 			$userIds = array_merge($userIds, $departmentMembers);
 		}
 
 		foreach ($deepDepartmentIds as $departmentId)
 		{
-			$departmentMembers = $departmentQueries->getUsersByDepartmentId($departmentId, true);
+			$departmentMembers = $departmentQueries->getUserIdsByHrDepartmentId($departmentId, false, true);
 
 			$userIds = array_merge($userIds, $departmentMembers);
 		}

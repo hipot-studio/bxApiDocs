@@ -86,6 +86,9 @@ class Structure extends Dataset
 
 	protected function getFields(): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $this->getSqlHelper();
+
 		$parentJoin = $this->createJoin(
 			"SNP",
 			"INNER JOIN b_hr_structure_node SNP ON SNP.ID = {$this->getAliasFieldName('PARENT_ID')}",
@@ -103,7 +106,7 @@ class Structure extends Dataset
 					"
 						concat_ws(
 							' ',
-							concat('[', {$this->getAliasFieldName('ID')}, ']'),
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('ID'), "']'")},
 							nullif({$this->getAliasFieldName('NAME')}, '')
 						)
 					"
@@ -119,15 +122,13 @@ class Structure extends Dataset
 			(new StringField('ID_PARENT_NAME'))
 				->setName(
 					"
-						if(
-							{$this->getAliasFieldName('PARENT_ID')} > 0,
+						CASE WHEN {$this->getAliasFieldName('PARENT_ID')} > 0 THEN
 							concat_ws(
 								' ',
-								concat('[', {$this->getAliasFieldName('PARENT_ID')}, ']'),
+								{$helper->getConcatFunction("'['", $this->getAliasFieldName('PARENT_ID'), "']'")},
 								nullif({$parentJoin->getJoinFieldName('NAME')}, '')
-							),
-							NULL
-						)
+							)
+						ELSE NULL END
 					"
 				)
 				->setJoin($parentJoin)

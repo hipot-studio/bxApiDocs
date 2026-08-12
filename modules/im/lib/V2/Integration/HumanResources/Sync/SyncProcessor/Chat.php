@@ -2,6 +2,7 @@
 
 namespace Bitrix\Im\V2\Integration\HumanResources\Sync\SyncProcessor;
 
+use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Chat\NullChat;
 use Bitrix\Im\V2\Chat\OpenChannelChat;
 use Bitrix\Im\V2\Integration\HumanResources\Sync\Item\EntityType;
@@ -87,7 +88,9 @@ class Chat extends Base
 	protected function sendFinishMessage(QueueItem $item): void
 	{
 		$chat = \Bitrix\Im\V2\Chat::getInstance($item->syncInfo->entityId);
-		if ($chat instanceof OpenChannelChat)
+		// CollabChat is a project chat — its department announcement is project-phrased and sent by
+		// socialnetwork (EventHandler::announceProjectDepartment), not by this chat-phrased finish message.
+		if ($chat instanceof OpenChannelChat || $chat instanceof CollabChat)
 		{
 			return;
 		}

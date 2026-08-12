@@ -32,6 +32,7 @@ use Bitrix\Im\V2\Reading\Counter\CountersProvider;
 use Bitrix\Im\V2\Reading\Counter\Entity\ChatsCounterMap;
 use Bitrix\Im\V2\Reading\RecentReader;
 use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
+use Bitrix\Im\V2\Recent\PreviewSource\CollabPreviewSourcePiggyback;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Settings\UserConfiguration;
@@ -436,6 +437,7 @@ class Recent
 		$copilotData = [];
 		$chatsIds = [];
 		$messagesAutoDeleteConfigs = [];
+		$collabPreviewEntries = [];
 
 		$rows = $orm->fetchAll();
 		$rows = self::prepareRows($rows, $userId, $shortInfo, $withCounters);
@@ -490,7 +492,25 @@ class Recent
 				$copilotData['messages'][(int)$item['MESSAGE']['ID']] = true;
 			}
 
-			if ($shortInfo && $options['JSON'])
+			$isCollabRow = in_array(
+				$row['ITEM_TYPE'],
+				[\Bitrix\Im\V2\Chat::IM_TYPE_COLLAB, \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_COLLAB],
+				true
+			);
+			if ($isCollabRow)
+			{
+				// Keep collab rows raw (UPPER_CASE) so post-loop enrichment can rewrite the displayed
+				// MESSAGE to the source message before any snake_case JSON conversion.
+				$collabPreviewEntries[$id] = [
+					'collabChatId' => (int)$row['ITEM_CID'],
+					'previewSourceCid' => (int)($row['PREVIEW_SOURCE_CID'] ?? 0),
+					'previewSourceMid' => (int)($row['PREVIEW_SOURCE_MID'] ?? 0),
+					// Own last message id, captured before the redirect overwrites MESSAGE with the source.
+					'ownMessageId' => (int)($row['ITEM_MID'] ?? 0),
+				];
+				$result[$id] = $item;
+			}
+			elseif ($shortInfo && $options['JSON'])
 			{
 				$result[$id] = self::jsonRow($item);
 			}
@@ -499,6 +519,20 @@ class Recent
 				$result[$id] = $item;
 			}
 		}
+
+		$collabOwnMessages = [];
+		$collabOwnIds = [];
+		$collabPreviewSources = self::enrichCollabPreviewSources(
+			$result,
+			$collabPreviewEntries,
+			[
+				'GET_ORIGINAL_TEXT' => $options['GET_ORIGINAL_TEXT'] ?? null,
+				'PARSE_TEXT' => $parseText,
+			],
+			$shortInfo,
+			$collabOwnMessages,
+			$collabOwnIds
+		);
 
 		$copilotData = self::prepareCopilotData($copilotData, $userId, $shortInfo);
 
@@ -524,13 +558,16 @@ class Recent
 
 		if ($options['JSON'])
 		{
-			if (!$shortInfo)
+			foreach ($result as $index => $item)
 			{
-				foreach ($result as $index => $item)
+				// Short path already jsonRow'd everything except the deferred collab rows kept raw above.
+				if (!$shortInfo || self::isRawCollabResultItem($item))
 				{
 					$result[$index] = self::jsonRow($item);
 				}
 			}
+
+			self::injectCollabPreviewSources($result, $collabPreviewSources, false, $collabOwnMessages, $collabOwnIds);
 
 			$objectToReturn = [
 				'items' => $result,
@@ -548,6 +585,8 @@ class Recent
 			return $objectToReturn;
 		}
 
+		self::injectCollabPreviewSources($result, $collabPreviewSources, true, $collabOwnMessages, $collabOwnIds);
+
 		$converter = new Converter(Converter::TO_SNAKE | Converter::TO_UPPER | Converter::KEYS);
 
 		return [
@@ -557,6 +596,259 @@ class Recent
 			'COPILOT' => !empty($copilotData) ? $converter->process($copilotData) : null,
 			'MESSAGES_AUTO_DELETE_CONFIGS' => $converter->process($messagesAutoDeleteConfigs) ?? [],
 		];
+	}
+
+	/**
+	 * Redirects the displayed MESSAGE of collab rows to the per-user preview source (batch resolve) and
+	 * builds the inline nestedChat identity for rows whose source is a child chat. The collab row stays
+	 * the root row; only its MESSAGE payload is redirected. nestedChat is emitted only for a child source;
+	 * for a main-chat source the row's own CHAT block already describes it.
+	 *
+	 * @param array $result keyed by recent result id; collab rows are stored raw (UPPER_CASE)
+	 * @param array<int|string,array{collabChatId:int,previewSourceCid:int,previewSourceMid:int,ownMessageId:int}> $collabEntries
+	 * @param array<int,array{ownMessageId:int,ownMessage:array}> $ownByCollab OUT: collabChatId => own last
+	 *        message id + the own MESSAGE block (UPPER_CASE, pre-jsonRow), child-source rows only
+	 * @param array<int,int> $ownIdByCollab OUT: collabChatId => own last message id, for EVERY collab row
+	 *        with a positive own message (the redirect-independent ownMessageId pointer the client reads).
+	 * @return array<int,array> collabChatId => nestedChat identity array (camelCase)
+	 */
+	private static function enrichCollabPreviewSources(
+		array &$result,
+		array $collabEntries,
+		array $messageOptions,
+		bool $shortInfo,
+		array &$ownByCollab = [],
+		array &$ownIdByCollab = []
+	): array
+	{
+		$ownByCollab = [];
+		$ownIdByCollab = [];
+
+		// Always expose the row's own last message id (redirect-independent) for every collab row, mirroring
+		// the V2 contract. The client reads this only on the collab fixed-row forceOwnMessage path.
+		foreach ($collabEntries as $entry)
+		{
+			$collabChatId = (int)($entry['collabChatId'] ?? 0);
+			$ownMessageId = (int)($entry['ownMessageId'] ?? 0);
+			if ($collabChatId > 0 && $ownMessageId > 0)
+			{
+				$ownIdByCollab[$collabChatId] = $ownMessageId;
+			}
+		}
+
+		if (empty($collabEntries) || !\Bitrix\Im\V2\Application\Features::isCollabPreviewSourceEnabled())
+		{
+			return [];
+		}
+
+		$sourceMessageIds = [];
+		foreach ($collabEntries as $entry)
+		{
+			$mid = (int)($entry['previewSourceMid'] ?? 0);
+			if ($mid > 0)
+			{
+				$sourceMessageIds[$mid] = $mid;
+			}
+		}
+
+		if (empty($sourceMessageIds))
+		{
+			return [];
+		}
+
+		$messageBlocks = self::buildCollabPreviewMessageRows(array_values($sourceMessageIds), $messageOptions, $shortInfo);
+
+		$nestedChatByCollab = [];
+		foreach ($collabEntries as $resultKey => $entry)
+		{
+			$collabChatId = (int)($entry['collabChatId'] ?? 0);
+			$sourceMessageId = (int)($entry['previewSourceMid'] ?? 0);
+			$sourceChatId = (int)($entry['previewSourceCid'] ?? 0);
+
+			// 0 = source is the row itself (main chat): leave the row untouched.
+			if ($sourceMessageId <= 0 || !isset($result[$resultKey]))
+			{
+				continue;
+			}
+
+			// Snapshot the row's own last message BEFORE the redirect overwrites MESSAGE with the source block.
+			$ownMessageId = (int)($entry['ownMessageId'] ?? 0);
+			$ownMessageBlock = $result[$resultKey]['MESSAGE'] ?? null;
+
+			$redirectOccurred = isset($messageBlocks[$sourceMessageId]);
+			if ($redirectOccurred)
+			{
+				$result[$resultKey]['MESSAGE'] = $messageBlocks[$sourceMessageId];
+			}
+
+			// Inline nestedChat identity is needed ONLY for a child source: when the source is the collab
+			// main chat the row's own CHAT block already describes it.
+			if ($sourceChatId <= 0 || $sourceChatId === $collabChatId)
+			{
+				continue;
+			}
+
+			// Carry the captured own message inline alongside nestedChat. The $redirectOccurred guard avoids
+			// duplication: without a redirect the displayed MESSAGE already IS the own message (own == message).
+			if ($redirectOccurred && $ownMessageId > 0 && $ownMessageId !== $sourceMessageId && is_array($ownMessageBlock))
+			{
+				$ownByCollab[$collabChatId] = [
+					'ownMessageId' => $ownMessageId,
+					'ownMessage' => $ownMessageBlock,
+				];
+			}
+
+			$sourceChat = \Bitrix\Im\V2\Chat::getInstance($sourceChatId);
+			if ($sourceChat instanceof \Bitrix\Im\V2\Chat\NullChat)
+			{
+				continue;
+			}
+
+			$nestedChatByCollab[$collabChatId] = [
+				'id' => $sourceChatId,
+				'dialogId' => (string)$sourceChat->getDialogId(),
+				'type' => $sourceChat->getExtendedType(),
+				'name' => (string)$sourceChat->getTitle(),
+				'avatar' => $sourceChat->getAvatar(),
+				'color' => $sourceChat->getColor(true),
+				'extranet' => $sourceChat->getExtranet() ?? false,
+				'entityType' => $sourceChat->getEntityType() ?? '',
+				'parentChatId' => $sourceChat->getParentChatId(),
+			];
+		}
+
+		return $nestedChatByCollab;
+	}
+
+	/**
+	 * Loads several preview-source messages at once and formats each one into the same MESSAGE block
+	 * shape used for the row's own last message (so the client renders it identically).
+	 *
+	 * @param int[] $messageIds
+	 * @return array<int,array> messageId => formatted MESSAGE block (UPPER_CASE, pre-jsonRow)
+	 */
+	private static function buildCollabPreviewMessageRows(array $messageIds, array $messageOptions, bool $shortInfo): array
+	{
+		if (empty($messageIds))
+		{
+			return [];
+		}
+
+		$messageRows = \Bitrix\Im\Model\MessageTable::query()
+			->setSelect(['ID', 'CHAT_ID', 'AUTHOR_ID', 'MESSAGE', 'DATE_CREATE', 'NOTIFY_READ', 'UUID_VALUE' => 'UUID.UUID'])
+			->whereIn('ID', $messageIds)
+			->fetchAll()
+		;
+
+		$params = $shortInfo ? [] : self::getMessageParams($messageIds);
+
+		$blocks = [];
+		foreach ($messageRows as $messageRow)
+		{
+			$messageId = (int)$messageRow['ID'];
+			$param = $params[$messageId] ?? [];
+
+			$row = [
+				'ITEM_MID' => $messageId,
+				'MESSAGE_ID' => $messageId,
+				// Source chat id: lets the mobile client resolve the source chat via message.chatId.
+				'MESSAGE_CHAT_ID' => (int)($messageRow['CHAT_ID'] ?? 0),
+				'MESSAGE_TEXT' => $messageRow['MESSAGE'] ?? '',
+				'MESSAGE_AUTHOR_ID' => (int)($messageRow['AUTHOR_ID'] ?? 0),
+				'DATE_MESSAGE' => $messageRow['DATE_CREATE'] ?? null,
+				'DATE_UPDATE' => $messageRow['DATE_CREATE'] ?? null,
+				'DATE_LAST_ACTIVITY' => $messageRow['DATE_CREATE'] ?? null,
+				'CHAT_LAST_MESSAGE_STATUS' => ($messageRow['NOTIFY_READ'] ?? 'N') === 'Y'
+					? \IM_MESSAGE_STATUS_DELIVERED
+					: \IM_MESSAGE_STATUS_RECEIVED,
+				'MESSAGE_UUID_VALUE' => $messageRow['UUID_VALUE'] ?? null,
+				'MESSAGE_CODE' => $param['CODE'] ?? null,
+				'MESSAGE_ATTACH' => $param['ATTACH']['VALUE'] ?? null,
+				'MESSAGE_ATTACH_JSON' => $param['ATTACH']['JSON'] ?? null,
+				'MESSAGE_FILE' => $param['MESSAGE_FILE'] ?? false,
+				'MESSAGE_STICKER' => $param['STICKER'] ?? null,
+				'BLOCK' => $param['BLOCK'] ?? false,
+			];
+
+			$blocks[$messageId] = self::formatMessage($row, $messageOptions, $shortInfo);
+		}
+
+		return $blocks;
+	}
+
+	/**
+	 * Detects a deferred collab row on the SHORT_INFO+JSON path by its surviving UPPER_CASE key (non-collab
+	 * rows were already jsonRow'd in the loop). Must not be gated by the nestedChat map: that map is empty
+	 * for a main-chat source (e.g. feature flag off), yet the raw row must still be converted.
+	 */
+	private static function isRawCollabResultItem(array $item): bool
+	{
+		return array_key_exists('CHAT_ID', $item);
+	}
+
+	/**
+	 * Injects the inline nestedChat identity and the additive own last message into matching collab rows
+	 * AFTER any snake_case jsonRow conversion, so the camelCase nested keys reach the client verbatim.
+	 * Key names follow the path casing: camelCase on the JSON path, UPPER_CASE on the non-JSON path.
+	 *
+	 * @param array<int,array> $collabPreviewSources collabChatId => nestedChat identity array
+	 * @param bool $upperKeys true for the non-JSON path (UPPER_CASE item keys), false for JSON output
+	 * @param array<int,array{ownMessageId:int,ownMessage:array}> $collabOwnMessages collabChatId => own last
+	 *        message id + own MESSAGE block (UPPER_CASE, pre-jsonRow), child-source rows only (redirect path)
+	 * @param array<int,int> $ownIdByCollab collabChatId => own last message id, for EVERY collab row; the
+	 *        ownMessageId pointer is emitted unconditionally so the client never derives it.
+	 */
+	private static function injectCollabPreviewSources(
+		array &$result,
+		array $collabPreviewSources,
+		bool $upperKeys,
+		array $collabOwnMessages = [],
+		array $ownIdByCollab = []
+	): void
+	{
+		if (empty($collabPreviewSources) && empty($collabOwnMessages) && empty($ownIdByCollab))
+		{
+			return;
+		}
+
+		$chatIdKey = $upperKeys ? 'CHAT_ID' : 'chat_id';
+		$nestedChatKey = $upperKeys ? 'NESTED_CHAT' : 'nestedChat';
+		$ownMessageIdKey = $upperKeys ? 'OWN_MESSAGE_ID' : 'ownMessageId';
+		$ownMessageKey = $upperKeys ? 'OWN_MESSAGE' : 'ownMessage';
+
+		foreach ($result as $index => $item)
+		{
+			if (!is_array($item) || !isset($item[$chatIdKey]))
+			{
+				continue;
+			}
+
+			$collabChatId = (int)$item[$chatIdKey];
+			if (isset($collabPreviewSources[$collabChatId]))
+			{
+				$result[$index][$nestedChatKey] = $collabPreviewSources[$collabChatId];
+			}
+
+			// Always emit the ownMessageId id (redirect-independent). The ownMessage OBJECT below stays
+			// gated by the redirect path, where own != displayed message.
+			if (isset($ownIdByCollab[$collabChatId]))
+			{
+				$result[$index][$ownMessageIdKey] = (int)$ownIdByCollab[$collabChatId];
+			}
+
+			if (isset($collabOwnMessages[$collabChatId]))
+			{
+				$own = $collabOwnMessages[$collabChatId];
+				$ownMessageBlock = $own['ownMessage'];
+				// On the JSON path convert the own block too, so its inner keys match the displayed message.
+				if (!$upperKeys)
+				{
+					$ownMessageBlock = self::jsonRow($ownMessageBlock);
+				}
+
+				$result[$index][$ownMessageKey] = $ownMessageBlock;
+			}
+		}
 	}
 
 	private static function fillCopilotMessageRoles(array $messageIdsWithCopilotRole): array
@@ -754,6 +1046,8 @@ class Recent
 			'ITEM_ID',
 			'ITEM_MID',
 			'ITEM_CID',
+			'PREVIEW_SOURCE_CID',
+			'PREVIEW_SOURCE_MID',
 			'PINNED',
 			'UNREAD',
 			'DATE_MESSAGE',
@@ -773,6 +1067,7 @@ class Recent
 			'CHAT_CAN_POST' => 'CHAT.CAN_POST',
 			'CHAT_EXTRANET' => 'CHAT.EXTRANET',
 			'USER_LAST_ACTIVITY_DATE' => 'USER.LAST_ACTIVITY_DATE',
+			'USER_ACTIVE' => 'USER.ACTIVE',
 		];
 
 		$additionalInfoFields = [
@@ -1028,17 +1323,27 @@ class Recent
 	{
 		$row['DATE_MESSAGE'] ??= null;
 
+		// Emitted only when the caller pinned an explicit source chat id; absent for the own last message,
+		// keeping the legacy shape unchanged.
+		$messageChatId = isset($row['MESSAGE_CHAT_ID']) ? (int)$row['MESSAGE_CHAT_ID'] : null;
+
 		if ($shortInfo)
 		{
-			return [
+			$shortMessage = [
 				'ID' => (int)($row['ITEM_MID'] ?? 0),
 				'DATE' => $row['DATE_MESSAGE'] ?: $row['DATE_LAST_ACTIVITY'],
 			];
+			if ($messageChatId !== null)
+			{
+				$shortMessage['CHAT_ID'] = $messageChatId;
+			}
+
+			return $shortMessage;
 		}
 
 		if (!$row['ITEM_MID'] || !$row['MESSAGE_ID'])
 		{
-			return [
+			$emptyMessage = [
 				'ID' => (int)($row['ITEM_MID'] ?? 0),
 				'TEXT' => "",
 				'FILE' => false,
@@ -1049,6 +1354,12 @@ class Recent
 				'DATE' => $row['DATE_MESSAGE']?: $row['DATE_UPDATE'],
 				'STATUS' => $row['CHAT_LAST_MESSAGE_STATUS'],
 			];
+			if ($messageChatId !== null)
+			{
+				$emptyMessage['CHAT_ID'] = $messageChatId;
+			}
+
+			return $emptyMessage;
 		}
 
 		$attach = false;
@@ -1104,7 +1415,7 @@ class Recent
 
 		$sticker = self::getStickerParams($row['MESSAGE_STICKER'] ?? null);
 
-		return [
+		$message = [
 			'ID' => (int)$row['ITEM_MID'],
 			'TEXT' => $text,
 			'FILE' => $row['MESSAGE_FILE'],
@@ -1116,6 +1427,12 @@ class Recent
 			'STATUS' => $row['CHAT_LAST_MESSAGE_STATUS'],
 			'UUID' => $row['MESSAGE_UUID_VALUE'],
 		];
+		if ($messageChatId !== null)
+		{
+			$message['CHAT_ID'] = $messageChatId;
+		}
+
+		return $message;
 	}
 
 	private static function formatItem(
@@ -1330,7 +1647,7 @@ class Recent
 			}
 
 			if (
-				(!$user['ACTIVE'] && $item['COUNTER'] <= 0)
+				(!$user['ACTIVE'] && (int)$row['COUNTER'] <= 0 && !$item['UNREAD'])
 				&& !$user['BOT']
 				&& !$user['CONNECTOR']
 				&& !$user['NETWORK']
@@ -1613,7 +1930,13 @@ class Recent
 		RecentTable::updateByFilter($filter, $fields);
 	}
 
-	public static function raiseChat(\Bitrix\Im\V2\Chat $chat, RelationCollection $relations, ?DateTime $lastActivity = null, int $depth = 0): void
+	public static function raiseChat(
+		\Bitrix\Im\V2\Chat $chat,
+		RelationCollection $relations,
+		?DateTime $lastActivity = null,
+		int $depth = 0,
+		?CollabPreviewSourcePiggyback $previewSource = null
+	): void
 	{
 		$userIds = $relations->getUserIds();
 		if (empty($userIds))
@@ -1624,6 +1947,15 @@ class Recent
 		$dateMessage = $message->getDateCreate() ?? new DateTime();
 		$dateCreate = $lastActivity ?? $dateMessage;
 		$fields = [];
+
+		// When this raised level is the collab parent the message belongs to, piggyback the preview-source
+		// pointer onto the same MERGE: into both the insert fields and the update set (the collab row almost
+		// always already exists, so the update set is what maintains the pointer on send).
+		$previewUpdate = [];
+		if ($previewSource !== null && $previewSource->appliesTo((int)$chat->getId()))
+		{
+			$previewUpdate = $previewSource->getColumns() ?? [];
+		}
 
 		foreach ($relations as $relation)
 		{
@@ -1640,24 +1972,47 @@ class Recent
 					'DATE_MESSAGE' => $dateMessage,
 					'DATE_UPDATE' => $dateCreate,
 					'DATE_LAST_ACTIVITY' => $dateCreate,
-				];
+				] + $previewUpdate;
 			}
 		}
 
-		static::merge($fields, ['DATE_LAST_ACTIVITY' => $dateCreate, 'DATE_UPDATE' => $dateCreate]);
+		static::merge(
+			$fields,
+			['DATE_LAST_ACTIVITY' => $dateCreate, 'DATE_UPDATE' => $dateCreate] + $previewUpdate
+		);
+
+		// raiseChat writes RecentTable directly via multiplyMerge and bypasses addRecent, so the
+		// request-scoped RecentItemCache would keep stale RecentItems for the affected users/chat.
+		$recentItemCache = ServiceLocator::getInstance()->get(\Bitrix\Im\V2\Recent\Internal\RecentItemCache::class);
+		foreach ($userIds as $affectedUserId)
+		{
+			$recentItemCache->remove((int)$affectedUserId, $chat->getId());
+		}
+
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $chat->getId()),
 			$userIds,
 			$chat
 		);
 
-		(new RecentUpdate($chat, $userIds, $dateCreate))->send();
+		// Pass the in-process direct-send hint to RecentUpdate only at the collab parent level, so it builds
+		// the preview from the on-hand source objects and skips the per-recipient DB re-hydration. Other
+		// levels get no hint and keep the existing DB read path.
+		$levelPreviewHint =
+			$previewSource !== null
+			&& $previewSource->appliesTo((int)$chat->getId())
+			&& $previewSource->hasObjectHint()
+				? $previewSource
+				: null
+		;
+
+		(new RecentUpdate($chat, $userIds, $dateCreate, $levelPreviewHint))->send();
 
 		if ($chat->hasParent() && $depth < self::MAX_RAISE_DEPTH)
 		{
 			$parentChat = $chat->getParentChat();
 			$parentRelations = $parentChat->getRelationsByUserIds($userIds);
-			static::raiseChat($parentChat, $parentRelations, $lastActivity, $depth + 1);
+			static::raiseChat($parentChat, $parentRelations, $lastActivity, $depth + 1, $previewSource);
 		}
 	}
 
@@ -2012,6 +2367,15 @@ class Recent
 		{
 			$counters = ServiceLocator::getInstance()->get(CountersProvider::class)->getForUserByChatIds($userId, $chatIds);
 		}
+		elseif (!$shortInfo)
+		{
+			$inactiveChatIds = self::getInactiveChatIds($rows);
+			$counters =
+				ServiceLocator::getInstance()
+					->get(CountersProvider::class)
+					->getForUserByChatIds($userId, $inactiveChatIds)
+			;
+		}
 		$params = $shortInfo ? [] : self::getMessageParams($messageIds);
 
 		return self::fillRows($rows, $params, $counters, $userId);
@@ -2036,6 +2400,28 @@ class Recent
 		}
 
 		return [$messageIds, $chatIds];
+	}
+
+	/**
+	 * @param array $rows
+	 * @return array
+	 */
+	protected static function getInactiveChatIds(array $rows): array
+	{
+		$inactiveChatIds = [];
+
+		foreach ($rows as $row)
+		{
+			if (
+				isset($row['CHAT_ID']) && $row['CHAT_ID'] > 0
+				&& isset($row['USER_ACTIVE']) && $row['USER_ACTIVE'] === 'N'
+			)
+			{
+				$inactiveChatIds[] = (int)$row['CHAT_ID'];
+			}
+		}
+
+		return $inactiveChatIds;
 	}
 
 	protected static function getMessageParams(array $messageIds): array

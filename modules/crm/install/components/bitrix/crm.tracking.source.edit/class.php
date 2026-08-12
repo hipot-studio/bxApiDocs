@@ -15,6 +15,7 @@ use Bitrix\Bitrix24\Feature;
 
 use Bitrix\Seo;
 use Bitrix\Intranet;
+use Bitrix\Crm\Engine\ActionFilter\CheckSomeItemsReadPermission;
 use Bitrix\Crm\Tracking;
 use Bitrix\Crm\UI\Webpack;
 
@@ -184,16 +185,19 @@ class CrmTrackingSourceEditComponent  extends \CBitrixComponent implements Contr
 			'disconnect' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\IntranetUser(),
+					new CheckSomeItemsReadPermission(),
 				]
 			],
 			'getAccounts' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\IntranetUser(),
+					new CheckSomeItemsReadPermission(),
 				]
 			],
 			'getProvider' => [
 				'+prefilters' => [
 					new Intranet\ActionFilter\IntranetUser(),
+					new CheckSomeItemsReadPermission(),
 				]
 			],
 		];

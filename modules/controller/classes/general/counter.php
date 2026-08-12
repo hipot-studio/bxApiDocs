@@ -10,31 +10,34 @@ class CControllerCounter
 			'F' => GetMessage('CTRL_COUNTER_TYPE_FLOAT'),
 			'S' => GetMessage('CTRL_COUNTER_TYPE_STRING'),
 			'D' => GetMessage('CTRL_COUNTER_TYPE_DATETIME'),
+			'E' => GetMessage('CTRL_COUNTER_TYPE_EMPTY'),
 		];
 	}
 
 	public static function GetTypeColumn($TYPE)
 	{
-		switch ($TYPE)
+		return match ($TYPE)
 		{
-			case 'I': return 'VALUE_INT';
-			case 'F': return 'VALUE_FLOAT';
-			case 'D': return 'VALUE_DATE';
-			case 'S': return 'VALUE_STRING';
-			default: return 'VALUE_STRING';
-		}
+			'I' => 'VALUE_INT',
+			'F' => 'VALUE_FLOAT',
+			'D' => 'VALUE_DATE',
+			'S' => 'VALUE_STRING',
+			'E' => '',
+			default => 'VALUE_STRING'
+		};
 	}
 
 	public static function GetTypeUserType($TYPE)
 	{
-		switch ($TYPE)
+		return match ($TYPE)
 		{
-			case 'I': return 'int';
-			case 'F': return 'float';
-			case 'D': return 'datetime';
-			case 'S': return 'string';
-			default: return 'string';
-		}
+			'I' => 'int',
+			'F' => 'float',
+			'D' => 'datetime',
+			'S' => 'string',
+			'E' => '',
+			default => 'string'
+		};
 	}
 
 	public static function CheckFields(&$arFields, $ID = false)
@@ -209,28 +212,31 @@ class CControllerCounter
 
 	public static function DeleteValuesAgent($COUNTER_ID)
 	{
-		global $DB;
-
 		$COUNTER_ID = intval($COUNTER_ID);
-		$agentDeleteLimit = COption::GetOptionInt('controller', 'delete_agent_limit');
-		$agentTimeLimit = COption::GetOptionInt('controller', 'delete_agent_time');
+		$agentDeleteLimit = intval(\Bitrix\Main\Config\Option::get('controller', 'delete_agent_limit'));
+		$agentTimeLimit = intval(\Bitrix\Main\Config\Option::get('controller', 'delete_agent_time'));
 
 		if ($COUNTER_ID <= 0 || $agentDeleteLimit <= 0 || $agentTimeLimit <= 0)
 		{
 			return '';
 		}
 
+		$connection = \Bitrix\Main\Application::getConnection();
+		$sql = $connection->getSqlHelper()->prepareDeleteLimit(
+			'b_controller_counter_value',
+			['CONTROLLER_MEMBER_ID', 'CONTROLLER_COUNTER_ID'],
+			'CONTROLLER_COUNTER_ID = ' . $COUNTER_ID,
+			[],
+			$agentDeleteLimit
+		);
+
 		while (static::$agentTotalTime < $agentTimeLimit)
 		{
-			$stime = microtime(1);
-			$rs = $DB->Query('
-				DELETE FROM b_controller_counter_value
-				WHERE CONTROLLER_COUNTER_ID = ' . $COUNTER_ID . '
-				limit ' . $agentDeleteLimit . '
-			');
-			$etime = microtime(1);
+			$stime = microtime(true);
+			$connection->queryExecute($sql);
+			$etime = microtime(true);
 			static::$agentTotalTime += $etime - $stime;
-			if (!$rs->AffectedRowsCount())
+			if ($connection->getAffectedRowsCount() <= 0)
 			{
 				return '';
 			}
@@ -298,6 +304,12 @@ class CControllerCounter
 				'FIELD_TYPE' => 'int',
 				'JOIN' => false,
 			],
+			'COUNTER_TYPE' => [
+				'TABLE_ALIAS' => 'cc',
+				'FIELD_NAME' => 'cc.COUNTER_TYPE',
+				'FIELD_TYPE' => 'string',
+				'JOIN' => false,
+			],
 			'CONTROLLER_GROUP_ID' => [
 				'TABLE_ALIAS' => 'ccg',
 				'FIELD_NAME' => 'ccg.CONTROLLER_GROUP_ID',
@@ -333,7 +345,7 @@ class CControllerCounter
 			';
 		}
 
-		if (count($arQueryOrder) > 0)
+		if ($arQueryOrder)
 		{
 			$strSql .= '
 				ORDER BY
@@ -387,11 +399,14 @@ class CControllerCounter
 
 	public static function UpdateMemberValues($CONTROLLER_MEMBER_ID, $arValues, $preserve = false)
 	{
-		global $DB;
 		CTimeZone::Disable();
+
 		$CONTROLLER_MEMBER_ID = intval($CONTROLLER_MEMBER_ID);
 
-		$res = $DB->Query('
+		$connection = \Bitrix\Main\Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+
+		$res = $connection->query('
 			SELECT
 				cc.ID as CONTROLLER_COUNTER_ID
 			FROM
@@ -400,33 +415,41 @@ class CControllerCounter
 				INNER JOIN b_controller_counter cc ON cc.ID = ccg.CONTROLLER_COUNTER_ID
 			WHERE
 				cm.ID = ' . $CONTROLLER_MEMBER_ID . '
+				and cc.COUNTER_TYPE <> \'E\'
 		');
 		$memberCounters = [];
-		while ($ar = $res->Fetch())
+		while ($ar = $res->fetch())
 		{
 			$CONTROLLER_COUNTER_ID = intval($ar['CONTROLLER_COUNTER_ID']);
 			$memberCounters[$CONTROLLER_COUNTER_ID] = true;
 		}
 
-		$res = $DB->Query('
+		$res = $connection->query('
 			SELECT *
 			FROM b_controller_counter_value
 			WHERE CONTROLLER_MEMBER_ID = ' . $CONTROLLER_MEMBER_ID . '
 			ORDER BY CONTROLLER_COUNTER_ID
 		');
 		$memberCounterValues = [];
-		while ($ar = $res->Fetch())
+		while ($ar = $res->fetch())
 		{
 			$CONTROLLER_COUNTER_ID = intval($ar['CONTROLLER_COUNTER_ID']);
+			// D7 fetch converts a datetime column into Type\DateTime; normalize it back to the
+			// canonical string used on the new-values side so the change-detection stays correct.
+			$dbValueDate = $ar['VALUE_DATE'];
+			if ($dbValueDate instanceof \Bitrix\Main\Type\Date)
+			{
+				$dbValueDate = $dbValueDate->format('Y-m-d H:i:s');
+			}
 			$memberCounterValues[$CONTROLLER_COUNTER_ID] = [
 				'VALUE_INT' => intval($ar['VALUE_INT']),
 				'VALUE_FLOAT' => roundDB($ar['VALUE_FLOAT']),
-				'VALUE_DATE' => $ar['VALUE_DATE'],
+				'VALUE_DATE' => $dbValueDate,
 				'VALUE_STRING' => $ar['VALUE_STRING'],
 			];
 		}
 
-		$insertValues = [];
+		$insertRows = [];
 		$counters = array_keys($arValues);
 		sort($counters);
 		foreach ($counters as $CONTROLLER_COUNTER_ID)
@@ -435,34 +458,35 @@ class CControllerCounter
 			$CONTROLLER_COUNTER_ID = intval($CONTROLLER_COUNTER_ID);
 			if ($CONTROLLER_COUNTER_ID > 0)
 			{
-				$newValues = [
-					'VALUE_INT' => intval($value),
-					'VALUE_FLOAT' => roundDB($value),
-					'VALUE_DATE' => null,
-					'VALUE_STRING' => mb_substr($value, 0, 255),
-				];
-
+				$valueDate = null;
 				if (isset($arValues['DATE_FORMAT']) && CheckDateTime($value, $arValues['DATE_FORMAT']))
 				{
-					$sqlDate = $DB->CharToDateFunction($DB->FormatDate($value, $arValues['DATE_FORMAT'], CLang::GetDateFormat('FULL', LANGUAGE_ID)));
-					$newValues['VALUE_DATE'] = $DB->FormatDate($value, $arValues['DATE_FORMAT'], 'YYYY-MM-DD HH:MI:SS');
+					$valueDate = \Bitrix\Main\Type\DateTime::tryParse($value, \Bitrix\Main\Type\Date::convertFormatToPhp($arValues['DATE_FORMAT']));
 				}
 				elseif (CheckDateTime($value, 'YYYY-MM-DD HH:MI:SS'))
 				{
-					$sqlDate = $DB->CharToDateFunction($DB->FormatDate($value, 'YYYY-MM-DD HH:MI:SS', CLang::GetDateFormat('FULL', LANGUAGE_ID)));
-					$newValues['VALUE_DATE'] = $value;
+					$valueDate = \Bitrix\Main\Type\DateTime::tryParse($value, \Bitrix\Main\Type\Date::convertFormatToPhp('YYYY-MM-DD HH:MI:SS'));
 				}
-				else
-				{
-					$sqlDate = 'NULL';
-					$newValues['VALUE_DATE'] = null;
-				}
+
+				$newValues = [
+					'VALUE_INT' => intval($value),
+					'VALUE_FLOAT' => roundDB($value),
+					'VALUE_DATE' => $valueDate?->format('Y-m-d H:i:s'),
+					'VALUE_STRING' => mb_substr($value, 0, 255),
+				];
 
 				if (isset($memberCounters[$CONTROLLER_COUNTER_ID]))
 				{
 					if (!isset($memberCounterValues[$CONTROLLER_COUNTER_ID]) || $newValues !== $memberCounterValues[$CONTROLLER_COUNTER_ID])
 					{
-						$insertValues[$CONTROLLER_COUNTER_ID] = '(' . $CONTROLLER_MEMBER_ID . ',' . $CONTROLLER_COUNTER_ID . ',' . intval($value) . ',' . roundDB($value) . ',' . $sqlDate . ',\'' . $DB->ForSql($value, 255) . '\')';
+						$insertRows[$CONTROLLER_COUNTER_ID] = [
+							'CONTROLLER_MEMBER_ID' => $CONTROLLER_MEMBER_ID,
+							'CONTROLLER_COUNTER_ID' => $CONTROLLER_COUNTER_ID,
+							'VALUE_INT' => $newValues['VALUE_INT'],
+							'VALUE_FLOAT' => $newValues['VALUE_FLOAT'],
+							'VALUE_DATE' => $valueDate,
+							'VALUE_STRING' => $newValues['VALUE_STRING'],
+						];
 					}
 					unset($memberCounterValues[$CONTROLLER_COUNTER_ID]);
 				}
@@ -471,21 +495,24 @@ class CControllerCounter
 
 		if (!$preserve && $memberCounterValues)
 		{
-			$DB->Query('
+			$connection->queryExecute('
 				DELETE FROM b_controller_counter_value
 				WHERE CONTROLLER_MEMBER_ID = ' . $CONTROLLER_MEMBER_ID . '
-				AND CONTROLLER_COUNTER_ID in (' . implode(',', array_keys($memberCounterValues)) . ')
+				AND CONTROLLER_COUNTER_ID IN (' . implode(',', array_keys($memberCounterValues)) . ')
 			');
 		}
 
-		if ($insertValues)
+		if ($insertRows)
 		{
-			$DB->Query('
-				INSERT INTO b_controller_counter_value
-				(CONTROLLER_MEMBER_ID, CONTROLLER_COUNTER_ID, VALUE_INT, VALUE_FLOAT, VALUE_DATE, VALUE_STRING)
-				VALUES ' . implode(',', $insertValues) . '
-				ON DUPLICATE KEY UPDATE VALUE_INT = VALUES(VALUE_INT), VALUE_FLOAT = VALUES(VALUE_FLOAT), VALUE_DATE = VALUES(VALUE_DATE), VALUE_STRING = VALUES(VALUE_STRING)
-			');
+			$mergeQueries = $sqlHelper->prepareMergeMultiple(
+				'b_controller_counter_value',
+				['CONTROLLER_MEMBER_ID', 'CONTROLLER_COUNTER_ID'],
+				array_values($insertRows)
+			);
+			foreach ($mergeQueries as $mergeQuery)
+			{
+				$connection->queryExecute($mergeQuery);
+			}
 		}
 
 		CTimeZone::Enable();
@@ -503,14 +530,12 @@ class CControllerCounter
 
 	public static function FormatValue($value, $format)
 	{
-		if ($format === 'F')
+		return match ($format)
 		{
-			return CFile::FormatSize($value);
-		}
-		else
-		{
-			return $value;
-		}
+			'F' => CFile::FormatSize($value),
+			'E' => GetMessage('CTRL_COUNTER_EMPTY'),
+			default => $value
+		};
 	}
 
 	public static function GetHistory($arFilter)

@@ -270,10 +270,7 @@ final class Document extends Configurable
 			$action->setAnimation(Layout\Action\Animation::disableBlock()->setForever());
 		}
 
-		return
-			(new Layout\Footer\IconButton('print', Loc::getMessage('CRM_COMMON_ACTION_PRINT')))
-				->setAction($action)
-		;
+		return (new Layout\Footer\IconButton(Layout\Footer\IconButton::ICON_PRINT, Loc::getMessage('CRM_COMMON_ACTION_PRINT')))->setAction($action);
 	}
 
 	/**

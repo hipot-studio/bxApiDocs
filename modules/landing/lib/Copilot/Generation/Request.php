@@ -13,6 +13,7 @@ use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Model\EO_Requests;
 use Bitrix\Landing\Copilot\Model\RequestsTable;
 use Bitrix\Landing\Copilot\Model\RequestToStepTable;
+use Bitrix\Landing\Copilot\Services\AiSiteDevBypassService;
 use Bitrix\Landing\Copilot\Services\FirstSiteGenerationService;
 use Bitrix\Main;
 use Bitrix\Main\ORM\Query\Query;
@@ -30,7 +31,7 @@ use Exception;
 class Request
 {
 	// todo: get individual time from step
-	private const MAX_EXPECTED_TIME = 75;
+	private const MAX_EXPECTED_TIME = 120;
 
 	private int $generationId;
 	private int $stepId;
@@ -80,7 +81,10 @@ class Request
 			return false;
 		}
 
-		if (FirstSiteGenerationService::isFirstSiteGeneration())
+		if (
+			self::isForceZeroCostEnabled($this->generationId)
+			|| FirstSiteGenerationService::isFirstSiteGeneration()
+		)
 		{
 			$prompt->setCost(0);
 		}
@@ -103,25 +107,17 @@ class Request
 		}
 
 		// is realtime answer
-		if (isset($data['result']) && $data['result'])
+		if (is_array($data) && array_key_exists('result', $data))
 		{
-			$result = null;
-			if (is_string($data['result']))
+			$result = $this->normalizeResultPayload($data['result']);
+			if ($result !== null)
 			{
-				try
-				{
-					$result = Converter\Json::expandJsonString($data['result']);
-					$result = Web\Json::decode($result);
-				}
-				catch (Exception)
-				{
-					$error = Generation\Error::createError(Errors::requestError);
-
-					return $this->saveError($error);
-				}
+				return $this->saveResult($result);
 			}
 
-			return $this->saveResult($result);
+			$error = Generation\Error::createError(Errors::requestError);
+
+			return $this->saveError($error);
 		}
 
 		if (isset($data['error']) && $data['error'])
@@ -133,6 +129,54 @@ class Request
 		}
 
 		return false;
+	}
+
+	private static function isForceZeroCostEnabled(int $generationId): bool
+	{
+		static $cache = [];
+
+		if ($generationId <= 0)
+		{
+			return false;
+		}
+
+		if (!array_key_exists($generationId, $cache))
+		{
+			$generation = new Generation();
+			$cache[$generationId] = $generation->initById($generationId)
+				&& AiSiteDevBypassService::isGenerationMarked($generation)
+			;
+		}
+
+		return $cache[$generationId];
+	}
+
+	/**
+	 * @return array|null
+	 */
+	private function normalizeResultPayload(mixed $rawResult): ?array
+	{
+		if (is_array($rawResult))
+		{
+			return $rawResult;
+		}
+
+		if (!is_string($rawResult))
+		{
+			return null;
+		}
+
+		try
+		{
+			$expanded = Converter\Json::expandJsonString($rawResult);
+			$decoded = Web\Json::decode($expanded);
+		}
+		catch (Exception)
+		{
+			return null;
+		}
+
+		return is_array($decoded) ? $decoded : null;
 	}
 
 	/**
@@ -493,13 +537,6 @@ class Request
 			);
 			$request->initByEntity($entity);
 
-			if ($request->isTimeIsOver())
-			{
-				$request->setDeleted();
-
-				continue;
-			}
-
 			$exists[$entity->getId()] = $request;
 		}
 
@@ -550,7 +587,7 @@ class Request
 		{
 			$step->fillApplied();
 			$this->stepRelationId = $step->getId();
-			if (!empty($this->result) && $step->getApplied())
+			if ($step->getApplied() && $this->status === Type\RequestStatus::Received)
 			{
 				$this->status = Generation\Type\RequestStatus::Applied;
 			}
@@ -564,7 +601,7 @@ class Request
 	 *
 	 * @return bool True if time is over, false otherwise.
 	 */
-	private function isTimeIsOver(): bool
+	public function isTimeIsOver(): bool
 	{
 		if (
 			isset($this->dateReceive)

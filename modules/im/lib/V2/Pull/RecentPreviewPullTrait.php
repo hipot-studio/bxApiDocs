@@ -8,7 +8,9 @@ use Bitrix\Im\V2\Chat\PrivateChat;
 use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\MessagePopupItem;
+use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Recent\PreviewSource\PreviewSource;
 use Bitrix\Im\V2\Recent\RecentProvider;
 use Bitrix\Im\V2\Rest\RestAdapter;
 use Bitrix\Main\DI\ServiceLocator;
@@ -65,6 +67,73 @@ trait RecentPreviewPullTrait
 		];
 	}
 
+	/**
+	 * @return array message override (+ normalized `chats` for a child source) to be deep-merged over the base pull params
+	 */
+	protected function getCollabPreviewUserDiffParams(Chat $chat, PreviewSource $previewSource): array
+	{
+		if (!$this->hasChildPreviewSource($chat, $previewSource))
+		{
+			return [];
+		}
+
+		$sourceChat = Chat::getInstance($previewSource->sourceChatId);
+		$sourceMessage = new Message($previewSource->messageId);
+
+		return $this->buildCollabPreviewDiff($chat, $previewSource, $sourceChat, $sourceMessage);
+	}
+
+	private function hasChildPreviewSource(Chat $chat, PreviewSource $previewSource): bool
+	{
+		return $previewSource->sourceChatId !== $chat->getId();
+	}
+
+	/**
+	 * Reuses the source chat/message already held by the send-path instead of re-hydrating them from DB.
+	 */
+	protected function getCollabPreviewUserDiffParamsFromObjects(
+		Chat $chat,
+		PreviewSource $previewSource,
+		Chat $sourceChat,
+		Message $sourceMessage,
+	): array
+	{
+		return $this->buildCollabPreviewDiff($chat, $previewSource, $sourceChat, $sourceMessage);
+	}
+
+	/**
+	 * @return array message override (+ normalized `chats` for a child source) to be deep-merged over the base pull params
+	 */
+	private function buildCollabPreviewDiff(
+		Chat $chat,
+		PreviewSource $previewSource,
+		Chat $sourceChat,
+		?Message $sourceMessage,
+	): array
+	{
+		if (!$this->hasChildPreviewSource($chat, $previewSource))
+		{
+			return [];
+		}
+
+		$diff = [];
+
+		$resolvedSourceMessage = $this->resolveRecentPreviewMessage($sourceMessage);
+		if ($resolvedSourceMessage !== null)
+		{
+			// Build from the source chat, not the collab: the source message author may not be a member
+			// of the collab main chat, so a collab-scoped users-block could miss them in the push.
+			$messagePayload = $this->buildRecentPreviewRestPayload($sourceChat, $resolvedSourceMessage);
+			$diff['message'] = $messagePayload['message'];
+			$diff['users'] = $messagePayload['users'];
+			$diff['files'] = $messagePayload['files'];
+		}
+
+		$diff['chats'] = [$previewSource->sourceChatId => $sourceChat->toPullFormat()];
+
+		return $diff;
+	}
+
 	private function resolveRecentPreviewMessage(?Message $message): ?Message
 	{
 		return (($message?->getId() ?? 0) > 0) ? $message : null;
@@ -72,7 +141,9 @@ trait RecentPreviewPullTrait
 
 	private function buildRecentPreviewRestPayload(Chat $chat, ?Message $message): array
 	{
-		$restAdapter = new RestAdapter($this->getUsersForRest($chat));
+		// The explicit users entity wins over the message popup users in RestAdapter::toRestFormat (both
+		// map to the `users` REST key), so it must carry the message author too, else it is dropped.
+		$restAdapter = new RestAdapter($this->getUsersForRest($chat, $message));
 
 		if ($message !== null)
 		{
@@ -99,14 +170,48 @@ trait RecentPreviewPullTrait
 		return $payload;
 	}
 
-	private function getUsersForRest(Chat $chat): UserCollection
+	private function getUsersForRest(Chat $chat, ?Message $message = null): UserCollection
 	{
-		if ($chat instanceof PrivateChat)
+		$userIds = $chat instanceof PrivateChat
+			? $chat->getRelations()->getUsers()->getIds()
+			: [];
+
+		// Only the message author (+ forward author) is needed to render the preview row. Avoid
+		// Message::getUserIds(): it folds in mentions, and a `[USER=all]` mention would expand to the
+		// whole chat membership, bloating the users-block of every recent-preview push.
+		if ($message !== null)
 		{
-			return $chat->getRelations()->getUsers();
+			$userIds = array_merge($userIds, $this->getPreviewMessageAuthorIds($message));
 		}
 
-		return new UserCollection();
+		return new UserCollection(array_values(array_unique($userIds)));
+	}
+
+	/**
+	 * Message author and, for a forward, the original author. Excludes mentions.
+	 *
+	 * @return int[]
+	 */
+	private function getPreviewMessageAuthorIds(Message $message): array
+	{
+		$userIds = [];
+
+		if ($message->getAuthorId() !== 0)
+		{
+			$userIds[] = $message->getAuthorId();
+		}
+
+		$params = $message->getParams();
+		if ($params->isSet(Params::FORWARD_USER_ID))
+		{
+			$forwardUserId = (int)$params->get(Params::FORWARD_USER_ID)->getValue();
+			if ($forwardUserId !== 0)
+			{
+				$userIds[] = $forwardUserId;
+			}
+		}
+
+		return $userIds;
 	}
 
 	private function extractRecentPreviewMessage(array $payload): ?array

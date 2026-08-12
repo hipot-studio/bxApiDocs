@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Anchor;
 
 use Bitrix\Im\Model\ChatTable;
+use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DI\ServiceLocator;
 
 class AnchorProvider
 {
 	use ContextCustomer;
 
-	private const CACHE_ID = 'user_anchors_';
+	private const CACHE_ID = 'user_anchors_v2_';
 	private const CACHE_DIR = '/bx/imc/anchors/';
 	private const CACHE_TTL = 60 * 60 * 24 * 30; // 1 month
 
@@ -53,20 +56,26 @@ class AnchorProvider
 		}
 	}
 
-	public function getParentMap(array $chatIds): array
+	public function getChatDataMap(array $chatIds): array
 	{
 		if (empty($chatIds))
 		{
 			return [];
 		}
 
-		$map = array_fill_keys($chatIds, ['PARENT_CHAT_ID' => 0, 'PARENT_MESSAGE_ID' => 0]);
+		$map = array_fill_keys(
+			$chatIds,
+			['PARENT_CHAT_ID' => 0, 'PARENT_MESSAGE_ID' => 0, 'RECENT_SECTIONS' => []]
+		);
 
 		$rows = ChatTable::query()
-			->setSelect(['ID', 'PARENT_ID', 'PARENT_MID'])
+			->setSelect(['ID', 'PARENT_ID', 'PARENT_MID', 'TYPE', 'ENTITY_TYPE'])
 			->whereIn('ID', $chatIds)
 			->fetchAll()
 		;
+
+		$recentConfigManager = RecentConfigManager::getInstance();
+		$typeRegistry = ServiceLocator::getInstance()->get(TypeRegistry::class);
 
 		foreach ($rows as $row)
 		{
@@ -74,9 +83,16 @@ class AnchorProvider
 			$chatParentId = (int)($row['PARENT_ID'] ?? 0);
 			$messageParentId = (int)($row['PARENT_MID'] ?? 0);
 
+			$type = $typeRegistry->getByLiteralAndEntity($row['TYPE'] ?? '', $row['ENTITY_TYPE'] ?? null);
+			$extendedType = $type->getExtendedType(false);
+			$recentSections = $chatParentId > 0
+				? $recentConfigManager->getAllRecentSectionsByType($extendedType)
+				: $recentConfigManager->getBaseRecentSections($extendedType);
+
 			$map[$chatId] = [
 				'PARENT_CHAT_ID' => $chatParentId,
-				'PARENT_MESSAGE_ID' => $messageParentId
+				'PARENT_MESSAGE_ID' => $messageParentId,
+				'RECENT_SECTIONS' => $recentSections,
 			];
 		}
 
@@ -103,8 +119,8 @@ class AnchorProvider
 		{
 			$anchorCollection = AnchorCollection::find(['USER_ID' => $userId]);
 
-			$parents = $this->getParentMap((array)$anchorCollection->getChatIdList());
-			$anchorCollection->fillParents($parents);
+			$chatDataMap = $this->getChatDataMap((array)$anchorCollection->getChatIdList());
+			$anchorCollection->fillChatData($chatDataMap);
 
 			$anchors = $anchorCollection->toRestFormat();
 

@@ -85,10 +85,13 @@ class DocumentSaleOrder extends Dataset
 
 	protected function getFields(): array
 	{
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $this->getSqlHelper();
+
 		$userJoin = $this->createJoin(
-			'USER',
-			"INNER JOIN b_user USER ON USER.ID = {$this->getAliasFieldName('RESPONSIBLE_ID')}",
-			"LEFT JOIN b_user USER ON USER.ID = {$this->getAliasFieldName('RESPONSIBLE_ID')}"
+			'ORDER_USER',
+			"INNER JOIN b_user ORDER_USER ON ORDER_USER.ID = {$this->getAliasFieldName('RESPONSIBLE_ID')}",
+			"LEFT JOIN b_user ORDER_USER ON ORDER_USER.ID = {$this->getAliasFieldName('RESPONSIBLE_ID')}"
 		);
 
 		return [
@@ -108,29 +111,25 @@ class DocumentSaleOrder extends Dataset
 			(new IntegerField('RESPONSIBLE_ID')),
 			(new StringField('RESPONSIBLE_NAME'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('RESPONSIBLE_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('RESPONSIBLE_ID')} > 0 THEN
 						concat_ws(
-							' ', 
-							nullif({$userJoin->getJoinFieldName('NAME')}, ''), 
+							' ',
+							nullif({$userJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$userJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($userJoin),
 			(new StringField('RESPONSIBLE'))
 				->setName("
-					if(
-						{$this->getAliasFieldName('RESPONSIBLE_ID')} > 0,
+					CASE WHEN {$this->getAliasFieldName('RESPONSIBLE_ID')} > 0 THEN
 						concat_ws(
 							' ',
-							concat('[', {$this->getAliasFieldName('RESPONSIBLE_ID')}, ']'), 
-							nullif({$userJoin->getJoinFieldName('NAME')}, ''), 
+							{$helper->getConcatFunction("'['", $this->getAliasFieldName('RESPONSIBLE_ID'), "']'")},
+							nullif({$userJoin->getJoinFieldName('NAME')}, ''),
 							nullif({$userJoin->getJoinFieldName('LAST_NAME')}, '')
-						),
-						NULL
-					)"
+						)
+					ELSE NULL END"
 				)
 				->setJoin($userJoin),
 		];

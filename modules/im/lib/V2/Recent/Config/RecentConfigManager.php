@@ -126,7 +126,7 @@ class RecentConfigManager
 				))
 				->addComposedChildSection('collabChat', new ComposedSection(
 					include: [self::DEFAULT_SECTION_NAME],
-					exclude: ['tasksTask', 'calendar'],
+					exclude: ['tasksTask', 'calendar', 'copilot'],
 				))
 		;
 		$this->configByTypes[ExtendedType::Lines->value] =

@@ -10,6 +10,11 @@ use Bitrix\Im\User;
 
 final class MentionService
 {
+	public const
+		FORMAT_BB = 'bb',
+		FORMAT_HTML = 'html',
+		FORMAT_NONE = 'none';
+
 	private static ?MentionService $service = null;
 
 	private array $mentionsAi = [];
@@ -40,12 +45,14 @@ final class MentionService
 			foreach ($this->searchBb as $userId => $regExp)
 			{
 				$userName = $this->getUserName($userId);
-				$text = preg_replace("#{$regExp}#iu", $userName, $text);
+				$text = preg_replace_callback(
+					"#{$regExp}#iu",
+					static fn (): string => $userName,
+					$text,
+				);
 			}
-			if (preg_match("#\[user=([0-9]+])\](.+?)\[/user\]#iu", $text))
-			{
-				$text = preg_replace("#\[user=([0-9]+])\](.+?)\[/user\]#iu", "$2", $text);
-			}
+			// strip any remaining tag to its raw inline label
+			$text = preg_replace("#\[user=([0-9]+)\](.+?)\[/user\]#iu", "$2", $text);
 		}
 
 		return $text;
@@ -57,12 +64,14 @@ final class MentionService
 		{
 			foreach ($this->searchBb as $userId => $regExp)
 			{
-				$text = preg_replace("#{$regExp}#iu", $this->getPageMention($userId), $text);
+				$text = preg_replace_callback(
+					"#{$regExp}#iu",
+					fn (): string => $this->getPageMention($userId),
+					$text,
+				);
 			}
-			if (preg_match("#\[user=([0-9]+])\](.+?)\[/user\]#iu", $text))
-			{
-				$text = preg_replace("#\[user=([0-9]+])\](.+?)\[/user\]#iu", "$2", $text);
-			}
+			// strip the tag to its inline label
+			$text = preg_replace("#\[user=([0-9]+)\](.+?)\[/user\]#iu", "$2", $text);
 		}
 
 		return $text;
@@ -107,9 +116,9 @@ final class MentionService
 					return $userId;
 				}
 			}
-			if (preg_match("#\[user=([0-9]+])\](.+?)\[/user\]#iu", $text, $matches))
+			if (preg_match("#\[user=([0-9]+)\](.+?)\[/user\]#iu", $text, $matches))
 			{
-				if (isset($this->searchBb[(int)$mentions[1]]))
+				if (isset($this->searchBb[(int)$matches[1]]))
 				{
 					return (int)$matches[1];
 				}
@@ -221,7 +230,7 @@ final class MentionService
 		$tag = $tag ?: "<span class=\"bx-call-mention\" bx-tooltip-user-id=\"%d\">%s</span>";
 		if (!isset($this->mentionsPage[$userId]))
 		{
-			$userName = $this->getUserName($userId);
+			$userName = htmlspecialcharsbx($this->getUserName($userId));
 			$this->mentionsPage[$userId] = sprintf($tag, $userId, $userName);
 		}
 		return $this->mentionsPage[$userId];

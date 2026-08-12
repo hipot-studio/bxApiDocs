@@ -80,6 +80,10 @@ class CIMDisk
 	 * @param string $text
 	 * @param false $linesSilentMode
 	 * @return array|false
+	 *
+	 * Note: REPLY_ID is NOT handled at the registration phase (placeholder message).
+	 * In the legacy 2-phase upload flow, reply is carried via REG_PARAMS['REPLY_ID']
+	 * and applied in the UploadFile phase where the final message is sent.
 	 */
 	public static function UploadFileRegister($chatId, $files, $text = '', $linesSilentMode = false)
 	{
@@ -142,14 +146,15 @@ class CIMDisk
 
 		$result['MESSAGE_ID'] = 0;
 		$arChat = \CIMChat::GetChatData(Array('ID' => $chatId));
+		$messageParams = Array(
+			'FILE_ID' => $messageFileId
+		);
 		$ar = Array(
 			"TO_CHAT_ID" => $chatId,
 			"FROM_USER_ID" => self::GetUserId(),
 			"MESSAGE_TYPE" => $arChat['chat'][$chatId]['message_type'],
 			"SILENT_CONNECTOR" => $linesSilentMode?'Y':'N',
-			"PARAMS" => Array(
-				'FILE_ID' => $messageFileId
-			),
+			"PARAMS" => $messageParams,
 			"FILE_MODELS" => $filesModels
 		);
 
@@ -252,15 +257,30 @@ class CIMDisk
 			$error = Loc::getMessage('IM_DISK_ERR_UPLOAD').' (E108)';
 			return false;
 		}
+		$uploadOptions = [
+			'LINES_SILENT_MODE' => $isMessageHidden,
+			'TEMPLATE_ID' => $messageTmpId,
+			'FILE_TEMPLATE_ID' => $fileTmpId
+		];
+
+		$replyId = (int)($post['PARAMS']['REPLY_ID'] ?? 0);
+		if ($replyId > 0)
+		{
+			$replyValidator = new IM\V2\Message\Reply\ReplyValidator();
+			$replyValidation = $replyValidator->validate($replyId, $chat);
+			if (!$replyValidation->isSuccess())
+			{
+				$error = Loc::getMessage('IM_DISK_ERR_UPLOAD').' (E110)';
+				return false;
+			}
+			$uploadOptions['PARAMS']['REPLY_ID'] = $replyValidation->getResult()['REPLY_ID'] ?? 0;
+		}
+
 		$uploadRealResult = self::UploadFileFromDisk(
 			$chatId,
 			['upload'.$fileModel->getId()],
 			$post['PARAMS']['TEXT'],
-			[
-				'LINES_SILENT_MODE' => $isMessageHidden,
-				'TEMPLATE_ID' => $messageTmpId,
-				'FILE_TEMPLATE_ID' => $fileTmpId
-			]
+			$uploadOptions
 		);
 
 		if (!$uploadRealResult)

@@ -27,7 +27,10 @@ class RecentSync extends Recent
 		$queryFilter = RecentFilter::fromArray($filter);
 
 		$recentEntities = static::getSyncRecentEntities(filter: $queryFilter);
-		return static::initByArray($recentEntities);
+		$recent = static::initByArray($recentEntities);
+		$recent->enrichCollabPreviewSources($userId);
+
+		return $recent;
 	}
 
 	protected static function getSyncRecentEntities(RecentFilter $filter): array
@@ -44,6 +47,8 @@ class RecentSync extends Recent
 			'DATE_LAST_ACTIVITY',
 			'DATE_UPDATE',
 			'MARKED_ID',
+			'PREVIEW_SOURCE_CID',
+			'PREVIEW_SOURCE_MID',
 		]);
 
 		$params = new RecentParams($filter);
@@ -61,6 +66,8 @@ class RecentSync extends Recent
 			$recentItem = new RecentSyncItem();
 			$recentItem
 				->setMessageId((int)$entity['ITEM_MID'])
+				// Keep the row's own last message: enrichCollabPreviewSources() may redirect messageId to a source, but not ownMessageId.
+				->setOwnMessageId((int)$entity['ITEM_MID'])
 				->setChatId((int)$entity['ITEM_CID'])
 				->setDialogId(self::getDialogId((int)$entity['ITEM_ID'], $entity['ITEM_TYPE']))
 				->setUnread(($entity['UNREAD'] ?? 'N') === 'Y')
@@ -68,6 +75,8 @@ class RecentSync extends Recent
 				->setDateUpdate($entity['DATE_UPDATE'] ?? null)
 				->setDateLastActivity($entity['DATE_LAST_ACTIVITY'] ?? null)
 				->setMarkedId($entity['MARKED_ID'] ?? 0)
+				->setPreviewSourceCid((int)($entity['PREVIEW_SOURCE_CID'] ?? 0))
+				->setPreviewSourceMid((int)($entity['PREVIEW_SOURCE_MID'] ?? 0))
 			;
 			$recent[] = $recentItem;
 		}
@@ -85,7 +94,16 @@ class RecentSync extends Recent
 		{
 			$chatIds[$entity->getChatId()] = $entity->getChatId();
 			$dialogIds[$entity->getChatId()] = $entity->getDialogId();
+
+			// The source chat is hydrated via Chats::mergeRecentChats() from sourceChatId, not here: it has no recent row of its own and must not leak into addedRecent.
 			$messageIds[$entity->getMessageId()] = $entity->getMessageId();
+
+			// When messageId was redirected to a source, also load the row's own last message.
+			$ownMessageId = $entity->getOwnMessageId();
+			if ($ownMessageId > 0 && $ownMessageId !== $entity->getMessageId())
+			{
+				$messageIds[$ownMessageId] = $ownMessageId;
+			}
 		}
 
 		return [
@@ -93,6 +111,44 @@ class RecentSync extends Recent
 			'messageIds' => $messageIds,
 			'dialogIds' => $dialogIds,
 		];
+	}
+
+	/**
+	 * Redirects collab recent rows to their materialized preview source: messageId to PREVIEW_SOURCE_MID
+	 * and the source-chat hint to PREVIEW_SOURCE_CID. A disabled feature or a 0 pointer leaves the row as is.
+	 *
+	 * $userId is kept only for signature stability with the V2 read-path; the pointer is materialized on the row.
+	 */
+	public function enrichCollabPreviewSources(int $userId): void
+	{
+		unset($userId);
+
+		if (!\Bitrix\Im\V2\Application\Features::isCollabPreviewSourceEnabled())
+		{
+			return;
+		}
+
+		foreach ($this as $item)
+		{
+			if (!$item instanceof RecentSyncItem)
+			{
+				continue;
+			}
+
+			$sourceMessageId = $item->getPreviewSourceMid();
+			if ($sourceMessageId <= 0)
+			{
+				continue;
+			}
+
+			$item->setMessageId($sourceMessageId);
+
+			$sourceChatId = $item->getPreviewSourceCid();
+			if ($sourceChatId > 0)
+			{
+				$item->setSourceChatId($sourceChatId);
+			}
+		}
 	}
 
 	protected static function getDialogId(int $itemId, string $itemType): string

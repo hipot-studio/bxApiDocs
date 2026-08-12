@@ -33,9 +33,18 @@ class GroupLeaveRule extends AbstractRule
 			return false;
 		}
 
-		if (!$this->getAccessManager($item, null, $this->user->getUserId())->canLeave())
+		$accessManager = $this->getAccessManager($item, null, $this->user->getUserId());
+		if (!$accessManager->canLeave())
 		{
-			$this->controller->addError(static::class, 'Access denied by permissions');
+			$errors = $accessManager->getErrors();
+			if ($errors)
+			{
+				$this->controller->addErrors(...$errors);
+			}
+			else
+			{
+				$this->controller->addError(static::class, 'Access denied by permissions');
+			}
 
 			return false;
 		}

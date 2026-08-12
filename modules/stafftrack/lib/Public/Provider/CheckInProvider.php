@@ -5,17 +5,13 @@ namespace Bitrix\StaffTrack\Public\Provider;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\StaffTrack\Dictionary\Option;
-use Bitrix\StaffTrack\Feature;
 use Bitrix\StaffTrack\Internal\Integration\Disk\FileResolver;
-use Bitrix\StaffTrack\Provider\OptionProvider;
 use Bitrix\StaffTrack\Internal\Integration\Pull;
 use Bitrix\StaffTrack\Internal\Integration\Timeman\WorkDayService;
 use Bitrix\StaffTrack\Internal\Entity\CheckInType;
 use Bitrix\StaffTrack\Internal\Repository\CheckInRepository;
 use Bitrix\StaffTrack\Public\Services\DailyStatsUpdater;
 use Bitrix\StaffTrack\Public\Services\MapDataCache;
-use Bitrix\Mobile\Provider\UserRepository;
 
 class CheckInProvider
 {
@@ -23,6 +19,7 @@ class CheckInProvider
 	private const MAX_TIMEZONE_OFFSET = 50400;
 
 	private static ?self $instance = null;
+
 	private CheckInRepository $repository;
 
 	public function __construct()
@@ -43,41 +40,20 @@ class CheckInProvider
 		return self::$instance;
 	}
 
-	/**
-	 * @param int $userId
-	 * @return array
-	 */
-	public function getSettings(int $userId): array
-	{
-		$value =
-			OptionProvider::getInstance()
-				->getOption($userId, Option::TIMEMAN_INTEGRATION_ENABLED)
-				?->getValue()
-		;
-
-		return [
-			'isEnabledBySettings' => Feature::isCheckInEnabledBySettings(),
-			'isTimemanAvailable' => WorkDayService::isAvailable(),
-			'isTimemanIntegrationEnabled' => ($value ?? 'Y') === 'Y',
-		];
-	}
-
 	private function subscribeToPush(int $userId): void
 	{
 		Pull\PushSender::subscribeToTag(Pull\Tag::getUserTag($userId));
 	}
 
 	/**
-	 * @param int $timezoneOffset
-	 * @param int $timestamp
-	 * @return array
+	 * @return array{checkIns: array<int, array>, stats: array<int, int>}
 	 */
 	public function getLatestUsersCheckInByDepartment(int $timezoneOffset = 0, int $timestamp = 0): array
 	{
 		$currentUserId = (int)CurrentUser::get()->getId();
 		if ($currentUserId <= 0)
 		{
-			return [];
+			return ['checkIns' => [], 'stats' => []];
 		}
 
 		$this->subscribeToPush($currentUserId);
@@ -100,51 +76,16 @@ class CheckInProvider
 			$cached = MapDataCache::get($currentUserId, $requestedDate, $userIds);
 			if ($cached !== null)
 			{
-				return self::attachUsers($cached);
+				return $cached;
 			}
 
-			$result = $this->getLatestUsersCheckIn($userIds, $timezoneOffset, $timestamp);
+			$result = $this->collectLatestCheckInsWithStats($userIds, $timezoneOffset, $timestamp);
 			MapDataCache::set($currentUserId, $requestedDate, $userIds, $result);
 
-			return self::attachUsers($result);
+			return $result;
 		}
 
-		return self::attachUsers(
-			$this->getLatestUsersCheckIn($userIds, $timezoneOffset, $timestamp),
-		);
-	}
-
-	private static function attachUsers(array $checkIns): array
-	{
-		$userIds = [];
-		foreach ($checkIns as $checkIn)
-		{
-			$userId = (int)($checkIn['userId'] ?? 0);
-			if ($userId > 0)
-			{
-				$userIds[$userId] = true;
-			}
-		}
-
-		if (empty($userIds))
-		{
-			return $checkIns;
-		}
-
-		$usersById = [];
-		foreach (UserRepository::getByIds(array_keys($userIds)) as $userDto)
-		{
-			$usersById[$userDto->id] = $userDto;
-		}
-
-		foreach ($checkIns as &$checkIn)
-		{
-			$userId = (int)($checkIn['userId'] ?? 0);
-			$checkIn['user'] = isset($usersById[$userId]) ? [$usersById[$userId]] : [];
-		}
-		unset($checkIn);
-
-		return $checkIns;
+		return $this->collectLatestCheckInsWithStats($userIds, $timezoneOffset, $timestamp);
 	}
 
 	private function isPastLocalDate(string $requestedDate, int $timezoneOffset): bool
@@ -180,9 +121,17 @@ class CheckInProvider
 
 		$result = $this->filterAndNormalizeCheckIns($checkInCollection, $aggregatedCheckIns, $requestedDate, $timezoneOffset, $currentUserId);
 
+		$statsByUser = $this->getDailyStatsByUsers([$userId], $timezoneOffset, $timestamp);
+		$stats = [];
+		foreach ($statsByUser as $statRow)
+		{
+			$stats[(int)$statRow['USER_ID']] = (int)$statRow['CNT'] + (int)$statRow['HAS_OPEN_ENTER'];
+		}
+
 		return [
 			'route' => $result,
 			'isDayClosed' => WorkDayService::isDayClosed($userId, $timestamp, $timezoneOffset),
+			'stats' => $stats,
 		];
 	}
 
@@ -208,10 +157,12 @@ class CheckInProvider
 		$aggregatedCheckIns = $this->repository->getAggregatedPointsByPeriod($userId, $dateStart, $dateEnd);
 
 		$result = $this->filterAndNormalizeCheckIns($checkInCollection, $aggregatedCheckIns, $requestedDate, $timezoneOffset, $currentUserId);
+		$dayCloseTimestamp = WorkDayService::getDayCloseTimestamp($userId, $timestamp, $timezoneOffset);
 
 		return [
 			'checkIns' => $result,
-			'isDayClosed' => WorkDayService::isDayClosed($userId, $timestamp, $timezoneOffset),
+			'isDayClosed' => $dayCloseTimestamp !== null,
+			'dayCloseTimestamp' => $dayCloseTimestamp,
 		];
 	}
 
@@ -246,29 +197,68 @@ class CheckInProvider
 	}
 
 	/**
-	 * @param array $userIds
-	 * @param int $timezoneOffset
+	 * @param int $userId
 	 * @param int $timestamp
-	 * @return array
+	 * @param int|null $timezoneOffset
+	 * @return array<int, array>
 	 */
-	private function getLatestUsersCheckIn(array $userIds, int $timezoneOffset = 0, int $timestamp = 0): array
+	public function getCurrentUserManualCheckInsByDate(int $userId, int $timestamp, ?int $timezoneOffset = null): array
+	{
+		$timezoneOffset ??= \CTimeZone::GetOffset();
+
+		$requestedDate = $this->getRequestedDate($timestamp, $timezoneOffset);
+		[$dateStart, $dateEnd] = $this->getWideDayBoundaries($requestedDate);
+
+		$checkInCollection = $this->repository->getUserManualCheckInByPeriod($userId, $dateStart, $dateEnd);
+		$aggregatedCheckIns = $this->repository->getUserAggregatedManualPointsByPeriod($userId, $dateStart, $dateEnd);
+
+		return $this->filterAndNormalizeCheckIns(
+			$checkInCollection,
+			$aggregatedCheckIns,
+			$requestedDate,
+			$timezoneOffset,
+			$userId,
+		);
+	}
+
+	/**
+	 * @param int[] $userIds
+	 * @return array{checkIns: array<int, array>, stats: array<int, int>}
+	 */
+	private function collectLatestCheckInsWithStats(array $userIds, int $timezoneOffset, int $timestamp): array
 	{
 		$userIds = array_values(array_unique(array_map('intval', $userIds)));
 		if (empty($userIds))
 		{
-			return [];
+			return ['checkIns' => [], 'stats' => []];
 		}
 
 		$statsByUser = $this->getDailyStatsByUsers($userIds, $timezoneOffset, $timestamp);
 		if (empty($statsByUser))
 		{
-			return [];
+			return ['checkIns' => [], 'stats' => []];
 		}
 
 		$lastCheckInIds = $this->extractLastCheckInIds($statsByUser);
 		$checkInsById = $this->resolveLastCheckIns($lastCheckInIds, $userIds, $timezoneOffset, $timestamp);
 
-		return $this->buildLatestCheckInResult($statsByUser, $checkInsById, $timezoneOffset);
+		$checkIns = [];
+		$stats = [];
+		foreach ($statsByUser as $statRow)
+		{
+			$userId = (int)$statRow['USER_ID'];
+			$stats[$userId] = (int)$statRow['CNT'] + (int)$statRow['HAS_OPEN_ENTER'];
+
+			$checkIn = $checkInsById[(int)$statRow['LAST_CHECK_IN_ID']] ?? null;
+			if ($checkIn === null)
+			{
+				continue;
+			}
+
+			$checkIns[] = CheckInNormalizer::normalize($checkIn, $timezoneOffset);
+		}
+
+		return ['checkIns' => $checkIns, 'stats' => $stats];
 	}
 
 	/**
@@ -343,34 +333,6 @@ class CheckInProvider
 		}
 
 		return $found;
-	}
-
-	/**
-	 * @param array<int, array> $statsByUser
-	 * @param array<int, array> $checkInsById
-	 * @return array<int, array>
-	 */
-	private function buildLatestCheckInResult(array $statsByUser, array $checkInsById, int $timezoneOffset): array
-	{
-		$result = [];
-		foreach ($statsByUser as $stats)
-		{
-			$checkIn = $checkInsById[$stats['LAST_CHECK_IN_ID']] ?? null;
-			if ($checkIn === null)
-			{
-				continue;
-			}
-
-			$normalized = CheckInNormalizer::normalize($checkIn, $timezoneOffset, false);
-			unset($normalized['description']);
-			$normalized['totalCountByDay'] = (int)$stats['CNT']
-				+ (int)$stats['HAS_OPEN_ENTER']
-			;
-
-			$result[] = $normalized;
-		}
-
-		return $result;
 	}
 
 	/**
@@ -454,7 +416,8 @@ class CheckInProvider
 			}
 		}
 
-		usort($filteredData, static function ($a, $b) {
+		usort($filteredData, static function ($a, $b)
+		{
 			$tsA = $a['DATE_CREATE'] instanceof DateTime ? $a['DATE_CREATE']->getTimestamp() : (int)$a['DATE_CREATE'];
 			$tsB = $b['DATE_CREATE'] instanceof DateTime ? $b['DATE_CREATE']->getTimestamp() : (int)$b['DATE_CREATE'];
 
@@ -470,7 +433,7 @@ class CheckInProvider
 		foreach ($filteredData as $item)
 		{
 			$checkInId = (int)($item['ID'] ?? 0);
-			$result[] = CheckInNormalizer::normalize($item, $timezoneOffset, false, $filesMap[$checkInId] ?? []);
+			$result[] = CheckInNormalizer::normalize($item, $timezoneOffset, $filesMap[$checkInId] ?? []);
 		}
 
 		return $result;
@@ -523,11 +486,12 @@ class CheckInProvider
 				continue;
 			}
 
-			usort($allCheckIns, static function ($a, $b) {
-				$tsA = $a['DATE_CREATE'] instanceof DateTime ? $a['DATE_CREATE']->getTimestamp() : (int)$a['DATE_CREATE'];
-				$tsB = $b['DATE_CREATE'] instanceof DateTime ? $b['DATE_CREATE']->getTimestamp() : (int)$b['DATE_CREATE'];
+			usort($allCheckIns, static function ($a, $b)
+			{
+				$tsA = ($a['DATE_CREATE'] instanceof DateTime ? $a['DATE_CREATE']->getTimestamp() : (int)$a['DATE_CREATE']) + (int)($a['USER_TIMEZONE'] ?? 0);
+				$tsB = ($b['DATE_CREATE'] instanceof DateTime ? $b['DATE_CREATE']->getTimestamp() : (int)$b['DATE_CREATE']) + (int)($b['USER_TIMEZONE'] ?? 0);
 
-				return $tsA <=> $tsB;
+				return $tsA <=> $tsB ?: ((int)($a['ID'] ?? 0) <=> (int)($b['ID'] ?? 0));
 			});
 
 			$statsUpdater->backFillForUser($userId, $allCheckIns, $localDate);

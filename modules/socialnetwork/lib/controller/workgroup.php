@@ -233,6 +233,8 @@ class Workgroup extends Base
 					'features' => ($params['features'] ?? []),
 					'mandatoryFeatures' => ($params['mandatoryFeatures'] ?? []),
 					'currentUserId' => (int)$this->getCurrentUser()->getId(),
+					'shouldSelectHasCollabers' => ($params['shouldSelectHasCollabers'] ?? false),
+					'shouldEnsureHasCollabers' => ($params['shouldEnsureHasCollabers'] ?? false),
 				]);
 
 				$groupFields['ADDITIONAL_DATA'] = ($additionalData[$groupId] ?? []) ;
@@ -392,6 +394,8 @@ class Workgroup extends Base
 				'features' => ($params['features'] ?? []),
 				'mandatoryFeatures' => ($params['mandatoryFeatures'] ?? []),
 				'currentUserId' => (int)$this->getCurrentUser()->getId(),
+				'shouldSelectHasCollabers' => ($params['shouldSelectHasCollabers'] ?? false),
+				'shouldEnsureHasCollabers' => ($params['shouldEnsureHasCollabers'] ?? false),
 			]);
 
 			foreach (array_keys($workgroups) as $id)
@@ -1258,6 +1262,16 @@ class Workgroup extends Base
 
 			return false;
 		}
+	}
+
+	public function getProjectsTrialStateAction(): array
+	{
+		$trialInfo = Helper\Feature::getTrialInfo(Helper\Feature::PROJECTS_GROUPS);
+
+		return [
+			'isActive' => $trialInfo !== null && $trialInfo['tillTs'] >= time(),
+			'endTs' => $trialInfo['tillTs'] ?? null,
+		];
 	}
 
 	private function getColoredDefaultAvatar(string $color): string

@@ -1,6 +1,7 @@
 <?php
 
 namespace Bitrix\Mobile\Rest;
+
 use Bitrix\Intranet\Util;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -17,6 +18,7 @@ use CModule;
 use CRestServer;
 use CSite;
 use CUser;
+use Bitrix\Main\Web\Uri;
 
 class User extends \IRestService
 {
@@ -322,10 +324,10 @@ class User extends \IRestService
 				{
 					$fileArray = CFile::GetFileArray($id);
 					$resizeResult = CFile::ResizeImageGet($fileArray, $size, BX_RESIZE_IMAGE_EXACT, false, false, false, 70);
-					$result['PERSONAL_PHOTO'] = CHTTP::URN2URI($resizeResult['src']);
+					$result['PERSONAL_PHOTO'] = (string)(new Uri($resizeResult['src']))->toAbsolute();
 				}
 
-				$result['PERSONAL_PHOTO_ORIGINAL'] = CHTTP::URN2URI(CFile::GetFileSrc($arRes));
+				$result['PERSONAL_PHOTO_ORIGINAL'] = (string)(new Uri(CFile::GetFileSrc($arRes)))->toAbsolute();
 			}
 		}
 

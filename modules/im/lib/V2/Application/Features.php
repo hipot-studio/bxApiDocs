@@ -77,7 +77,11 @@ class Features
 		public readonly bool $isAiAssistantAgentModeAvailable,
 		public readonly bool $isChatFoldersAvailable,
 		public readonly bool $isAiAssistantRegenerateAvailable,
+		public readonly bool $collabPreviewSourceEnabled,
+		public readonly bool $isMarkdownAvailable,
 		public readonly bool $isCopilotDraftChatAvailable,
+		public readonly bool $isAttachChatToProjectAvailable,
+		public readonly bool $isReplyWithMediaAvailable,
 	){}
 
 	public static function get(): self
@@ -144,7 +148,11 @@ class Features
 			isAiAssistantAgentModeAvailable: self::isAiAssistantAgentModeAvailable(),
 			isChatFoldersAvailable: self::isChatFoldersAvailable(),
 			isAiAssistantRegenerateAvailable: self::isAiAssistantRegenerateAvailable(),
+			collabPreviewSourceEnabled: self::isCollabPreviewSourceEnabled(),
+			isMarkdownAvailable: self::isMarkdownAvailable(),
 			isCopilotDraftChatAvailable: self::isCopilotDraftChatAvailable(),
+			isAttachChatToProjectAvailable: self::isAttachChatToProjectAvailable(),
+			isReplyWithMediaAvailable: self::isReplyWithMediaAvailable(),
 		);
 	}
 
@@ -367,8 +375,33 @@ class Features
 		return Option::get('im', 'ai_assistant_regenerate_available', 'N') === 'Y';
 	}
 
+	public static function isReplyWithMediaAvailable(): bool
+	{
+		return Option::get('im', 'reply_with_media_available', 'N') === 'Y';
+	}
+
+	public static function isCollabPreviewSourceEnabled(): bool
+	{
+		return Option::get('im', 'collab_preview_source_enabled', 'N') === 'Y';
+	}
+
+	public static function isMarkdownAvailable(): bool
+	{
+		return Option::get('im', 'markdown_available', 'N') === 'Y';
+	}
+
 	public static function isCopilotDraftChatAvailable(): bool
 	{
 		return Option::get('im', 'copilot_draft_chat_available', 'N') === 'Y';
+	}
+
+	public static function isAttachChatToProjectAvailable(): bool
+	{
+		if (!Collab::isNewProjectsAvailable())
+		{
+			return false;
+		}
+
+		return Option::get('im', 'attach_chat_to_project_available', 'N') === 'Y';
 	}
 }

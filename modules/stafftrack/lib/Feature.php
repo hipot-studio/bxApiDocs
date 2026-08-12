@@ -5,6 +5,7 @@ namespace Bitrix\StaffTrack;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
+use Bitrix\StaffTrack\Service\CheckIn\RegionAvailabilityService;
 
 class Feature
 {
@@ -23,6 +24,14 @@ class Feature
 			&& Loader::includeModule('mobileapp')
 			&& Loader::includeModule('stafftrackmobile')
 		;
+	}
+
+	/**
+	 * @return bool
+	 */
+	public static function isGeoFeaturesAvailableByRegion(): bool
+	{
+		return (new RegionAvailabilityService())->isGeoFeaturesAvailableByRegion();
 	}
 
 	/**

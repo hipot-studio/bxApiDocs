@@ -603,7 +603,7 @@ class Access
 				'=GROUP_ID' => $groupId,
 				'=USER_ID' => $userId,
 			],
-			'select' => [ 'ID', 'ROLE', 'USER_ID', 'GROUP_ID', 'AUTO_MEMBER' ],
+			'select' => [ 'ID', 'ROLE', 'USER_ID', 'GROUP_ID', 'AUTO_MEMBER', 'INITIATED_BY_TYPE' ],
 		])->fetchObject();
 
 		$accessManager = new AccessManager(

@@ -14,6 +14,7 @@ use Bitrix\Crm\Import\File\Row;
 use Bitrix\Crm\Import\Result\DuplicateControlProcessResult;
 use Bitrix\Crm\Import\Result\Error\RowsErrorPack;
 use Bitrix\Crm\Import\Result\ImportOperationResult;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Requisite\ImportHelper;
 use Bitrix\Crm\Service\Container;
@@ -261,10 +262,15 @@ final class ImportOperation
 			}
 
 			$item = $this->createItem($factory, $importItem);
-			$itemSaveResult = $factory
-				->getImportOperation($item)
-				->launch()
+
+			$importOperation = $factory->getImportOperation($item);
+			$importOperation
+				->getContext()
+				->getAnalytics()
+				->setSection(Dictionary::SECTION_IMPORT)
 			;
+
+			$itemSaveResult = $importOperation->launch();
 
 			if (!$itemSaveResult->isSuccess())
 			{

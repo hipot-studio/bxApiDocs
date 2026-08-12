@@ -40,6 +40,8 @@ final class AnchorItem implements RegistryEntry, ActiveRecord, RestConvertible
 	// runtime fields
 	private int $parentChatId = 0;
 	private int $parentMessageId = 0;
+	/** @var string[] */
+	private array $recentSections = [];
 
 	public function getPrimaryId(): ?int
 	{
@@ -149,6 +151,24 @@ final class AnchorItem implements RegistryEntry, ActiveRecord, RestConvertible
 		return $this;
 	}
 
+	/**
+	 * @return string[]
+	 */
+	public function getRecentSections(): array
+	{
+		return $this->recentSections;
+	}
+
+	/**
+	 * @param string[] $recentSections
+	 */
+	public function setRecentSections(array $recentSections): self
+	{
+		$this->recentSections = $recentSections;
+
+		return $this;
+	}
+
 	public static function getDataClass(): string
 	{
 		return AnchorTable::class;
@@ -171,6 +191,7 @@ final class AnchorItem implements RegistryEntry, ActiveRecord, RestConvertible
 			'subType' => $converter->process($this->getSubType()),
 			'parentChatId' => $this->getParentChatId(),
 			'parentMessageId' => $this->getParentMessageId(),
+			'recentSections' => $this->getRecentSections(),
 		];
 	}
 

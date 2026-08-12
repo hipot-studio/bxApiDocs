@@ -194,6 +194,9 @@ class Company extends Service\Factory
 			Item\Company::FIELD_NAME_REVENUE => [
 				'TYPE' => Field::TYPE_DOUBLE,
 				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_CURRENCY_ID,
+				],
 			],
 			Item::FIELD_NAME_OPENED => [
 				'TYPE' => Field::TYPE_BOOLEAN,

@@ -7,6 +7,13 @@ class IconButton extends \Bitrix\Crm\Service\Timeline\Layout\Button
 	public const COLOR_PRIMARY = 'primary';
 	public const COLOR_DEFAULT = 'default';
 
+	public const ICON_NOTE = 'note';
+	public const ICON_PRINT = 'print';
+	public const ICON_SCRIPT = 'script';
+	public const ICON_QR_CODE = 'qr-code';
+	public const ICON_VIDEOCONFERENCE = 'videoconference';
+	public const ICON_DOTS = 'dots';
+
 	protected string $icon;
 	protected ?string $color = null;
 

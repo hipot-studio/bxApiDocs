@@ -4,8 +4,6 @@ namespace Bitrix\Crm\Service\Timeline\Item\Activity\Sms;
 
 use Bitrix\Crm\Activity\Provider\Sms\PlaceholderContext;
 use Bitrix\Crm\Activity\Provider\Sms\PlaceholderManager;
-use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Layout\Body\Logo;
@@ -33,16 +31,6 @@ final class Whatsapp extends Sms
 	public function getLogo(): ?Logo
 	{
 		return Common\Logo::getInstance(Common\Logo::CHANNEL_WHATSAPP)->createLogo();
-	}
-
-	protected function isResendingAvailable(): bool
-	{
-		if (Feature::enabled(Feature\MessageSenderEditor::class))
-		{
-			return (new TimelineMenuBar\Item\Message($this->getMenuBarContext()))->isAvailable();
-		}
-
-		return (new TimelineMenuBar\Item\WhatsApp($this->getMenuBarContext()))->isAvailable();
 	}
 
 	protected function getResendData(): array

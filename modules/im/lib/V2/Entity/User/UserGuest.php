@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Chat\ChatError;
 use Bitrix\Im\V2\Result;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
 
 class UserGuest extends UserExternal
 {
@@ -38,8 +39,23 @@ class UserGuest extends UserExternal
 
 	protected function hasCommonChat(int $otherUserId): bool
 	{
-		$row = RelationTable::query()
-			->setSelect(['CHAT_ID'])
+		return $this->getCommonChatPartnersQuery()
+			->where('OTHER.USER_ID', $otherUserId)
+			->setLimit(1)
+			->fetch() !== false
+		;
+	}
+
+	/**
+	 * Users sharing at least one chat with this guest, private 1-1 dialogs included
+	 * (a direct dialog is itself a shared context, so its partner stays findable).
+	 * Single source of truth for guest visibility — used both for access checks
+	 * and to scope user search to people the guest already talks to.
+	 */
+	public function getCommonChatPartnersQuery(): Query
+	{
+		return RelationTable::query()
+			->setSelect(['PARTNER_ID' => 'OTHER.USER_ID'])
 			->registerRuntimeField(
 				'OTHER',
 				new Reference(
@@ -50,12 +66,7 @@ class UserGuest extends UserExternal
 				)
 			)
 			->where('USER_ID', $this->getId())
-			->where('OTHER.USER_ID', $otherUserId)
-			->whereNot('MESSAGE_TYPE', \IM_MESSAGE_PRIVATE)
-			->setLimit(1)
-			->fetch()
+			->whereNot('OTHER.USER_ID', $this->getId())
 		;
-
-		return $row !== false;
 	}
 }

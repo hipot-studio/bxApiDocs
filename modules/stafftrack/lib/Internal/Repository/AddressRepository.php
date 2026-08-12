@@ -6,6 +6,7 @@ use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Data\UpdateResult;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\StaffTrack\Internal\Dictionary\AddressStatus;
+use Bitrix\StaffTrack\Internal\Geo\GeohashKey;
 use Bitrix\StaffTrack\Internal\Model\AddressTable;
 
 class AddressRepository
@@ -14,7 +15,7 @@ class AddressRepository
 	{
 		return AddressTable::getRow([
 			'filter' => [
-				'=GEOHASH' => $geohash,
+				'=GEOHASH_KEY' => GeohashKey::hash($geohash),
 			],
 		]);
 	}
@@ -23,7 +24,7 @@ class AddressRepository
 	{
 		return AddressTable::getRow([
 			'filter' => [
-				'=GEOHASH' => $geohash,
+				'=GEOHASH_KEY' => GeohashKey::hash($geohash),
 				'=STATUS' => AddressStatus::RESOLVED->value,
 			],
 		]);
@@ -32,7 +33,7 @@ class AddressRepository
 	public static function createResolved(string $geohash, string $address): AddResult
 	{
 		return AddressTable::add([
-			'GEOHASH' => $geohash,
+			'GEOHASH_KEY' => GeohashKey::hash($geohash),
 			'STATUS' => AddressStatus::RESOLVED->value,
 			'ADDRESS' => $address,
 			'DATE_RESOLVE' => new DateTime(),
@@ -42,7 +43,7 @@ class AddressRepository
 	public static function createFailed(string $geohash): AddResult
 	{
 		return AddressTable::add([
-			'GEOHASH' => $geohash,
+			'GEOHASH_KEY' => GeohashKey::hash($geohash),
 			'STATUS' => AddressStatus::FAILED->value,
 			'DATE_RESOLVE' => new DateTime(),
 		]);
@@ -50,7 +51,7 @@ class AddressRepository
 
 	public static function markResolved(string $geohash, string $address): UpdateResult
 	{
-		return AddressTable::update($geohash, [
+		return AddressTable::update(GeohashKey::hash($geohash), [
 			'STATUS' => AddressStatus::RESOLVED->value,
 			'ADDRESS' => $address,
 			'DATE_RESOLVE' => new DateTime(),
@@ -59,7 +60,7 @@ class AddressRepository
 
 	public static function markFailed(string $geohash): UpdateResult
 	{
-		return AddressTable::update($geohash, [
+		return AddressTable::update(GeohashKey::hash($geohash), [
 			'STATUS' => AddressStatus::FAILED->value,
 			'DATE_RESOLVE' => new DateTime(),
 		]);
@@ -67,7 +68,7 @@ class AddressRepository
 
 	public static function touchLastUsed(string $geohash): void
 	{
-		AddressTable::update($geohash, [
+		AddressTable::update(GeohashKey::hash($geohash), [
 			'LAST_USED' => new DateTime(),
 		]);
 	}
@@ -77,7 +78,7 @@ class AddressRepository
 		$threshold = DateTime::createFromTimestamp(time() - $days * 86400);
 
 		return AddressTable::getList([
-			'select' => ['GEOHASH'],
+			'select' => ['GEOHASH_KEY'],
 			'filter' => [
 				'<LAST_USED' => $threshold,
 			],
@@ -90,7 +91,7 @@ class AddressRepository
 		$threshold = DateTime::createFromTimestamp(time() - $days * 86400);
 
 		return AddressTable::getList([
-			'select' => ['GEOHASH'],
+			'select' => ['GEOHASH_KEY'],
 			'filter' => [
 				'STATUS' => AddressStatus::FAILED->value,
 				'<DATE_RESOLVE' => $threshold,
@@ -99,11 +100,56 @@ class AddressRepository
 		])->fetchAll();
 	}
 
-	public static function deleteByGeohashes(array $geohashes): void
+	public static function deleteByGeohashKeys(array $geohashKeys): void
 	{
-		if (!empty($geohashes))
+		if (!empty($geohashKeys))
 		{
-			AddressTable::deleteByFilter(['@GEOHASH' => $geohashes]);
+			AddressTable::deleteByFilter(['@GEOHASH_KEY' => $geohashKeys]);
 		}
+	}
+
+	public static function findByKey(string $geohashKey): ?array
+	{
+		return AddressTable::getRow([
+			'filter' => [
+				'=GEOHASH_KEY' => $geohashKey,
+			],
+		]);
+	}
+
+	public static function createResolvedByKey(string $geohashKey, string $address): AddResult
+	{
+		return AddressTable::add([
+			'GEOHASH_KEY' => $geohashKey,
+			'STATUS' => AddressStatus::RESOLVED->value,
+			'ADDRESS' => $address,
+			'DATE_RESOLVE' => new DateTime(),
+		]);
+	}
+
+	public static function createFailedByKey(string $geohashKey): AddResult
+	{
+		return AddressTable::add([
+			'GEOHASH_KEY' => $geohashKey,
+			'STATUS' => AddressStatus::FAILED->value,
+			'DATE_RESOLVE' => new DateTime(),
+		]);
+	}
+
+	public static function markResolvedByKey(string $geohashKey, string $address): UpdateResult
+	{
+		return AddressTable::update($geohashKey, [
+			'STATUS' => AddressStatus::RESOLVED->value,
+			'ADDRESS' => $address,
+			'DATE_RESOLVE' => new DateTime(),
+		]);
+	}
+
+	public static function markFailedByKey(string $geohashKey): UpdateResult
+	{
+		return AddressTable::update($geohashKey, [
+			'STATUS' => AddressStatus::FAILED->value,
+			'DATE_RESOLVE' => new DateTime(),
+		]);
 	}
 }

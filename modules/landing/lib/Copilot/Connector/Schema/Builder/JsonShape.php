@@ -109,6 +109,10 @@ class JsonShape implements IBuilder
 		{
 			$schema['const'] = $structureNode->params['const'];
 		}
+		if (isset($structureNode->params['enum']) && is_array($structureNode->params['enum']))
+		{
+			$schema['enum'] = array_values($structureNode->params['enum']);
+		}
 
 		return $schema;
 	}
@@ -126,10 +130,13 @@ class JsonShape implements IBuilder
 		$count = (int)($structureNode->params['count'] ?? 0);
 		$result = [
 			'type' => 'array',
-			'minItems' => $count,
-			'maxItems' => $count,
 			'items' => [],
 		];
+		if ($count > 0)
+		{
+			$result['minItems'] = $count;
+			$result['maxItems'] = $count;
+		}
 
 		if (!isset($structureNode->params['items']))
 		{

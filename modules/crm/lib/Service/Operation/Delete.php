@@ -278,11 +278,9 @@ class Delete extends Operation
 		$analytics = $this->getContext()->getAnalytics();
 		$status = $result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR;
 
-		DeleteEvent::createDefault($item->getEntityTypeId())
-			->setSection($analytics['c_section'])
-			->setSubsection($analytics['c_sub_section'])
-			->setStatus($status)
-			->buildEvent()
-			->send();
+		$event = DeleteEvent::createDefault($item->getEntityTypeId());
+		$analytics->setStatus($status)->fillEventBuilder($event);
+
+		$event->buildEvent()->send();
 	}
 }

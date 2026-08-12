@@ -30,6 +30,14 @@ final class DashboardManager
 		);
 	}
 
+	public static function notifyDashboardListChanged(): void
+	{
+		PullManager::getNotifyer()->notifyByTag(
+			self::DASHBOARD_NOTIFY_TAG,
+			'onDashboardListChanged',
+		);
+	}
+
 	/**
 	 * Notify client-side that particular dashboard changed his status
 	 *

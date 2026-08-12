@@ -27,6 +27,7 @@ use Bitrix\Socialnetwork\Helper\Analytics\ProjectAnalytics;
 use Bitrix\Socialnetwork\Internals\EventService\Push\PullDictionary;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Socialnetwork\WorkgroupFavoritesTable;
 use Bitrix\Socialnetwork\WorkgroupSiteTable;
 use Bitrix\Socialnetwork\WorkgroupTable;
@@ -1402,6 +1403,11 @@ class CSocialnetworkGroupListComponent extends WorkgroupList
 
 	public function executeComponent()
 	{
+		if (Feature::isNewProjectsOn())
+		{
+			throw new SystemException("System error");
+		}
+
 		$this->initPageFilterData();
 
 		$this->setTitle();
@@ -1620,6 +1626,11 @@ class CSocialnetworkGroupListComponent extends WorkgroupList
 
 	public function checkExistenceAction(array $groupIdList): ?array
 	{
+		if (Feature::isNewProjectsOn())
+		{
+			return [];
+		}
+
 		$result = [];
 
 		if (empty($groupIdList))

@@ -11,6 +11,7 @@ use Bitrix\Rest\Internal\Entity\Application\AppAttributeCode;
 use Bitrix\Rest\Internal\Exception\Application\ApplicationNotInstalledException;
 use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 use Bitrix\Rest\Internal\Repository\IntegrationRepository;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 use Bitrix\Rest\Preset\Provider;
 use Bitrix\Rest\Enum\Integration\ElementCodeType;
 
@@ -20,6 +21,7 @@ class ApplicationInstaller
 		private readonly AppRepository
 		$appRepository,
 		private readonly IntegrationRepository $integrationRepository = new IntegrationRepository(),
+		private readonly SecurityAuditLogger $securityAuditLogger = new SecurityAuditLogger(),
 	) {}
 
 	/**
@@ -78,6 +80,14 @@ class ApplicationInstaller
 		$this->appRepository->save($savedApp);
 
 		$this->fireApplicationInstalled($integration->getId(), (int)$savedApp->getId(), $userId);
+
+		$this->securityAuditLogger->logAppInstalled(
+			actingUserId: $userId,
+			appId: (int)$savedApp->getId(),
+			clientId: (string)$savedApp->getClientId(),
+			scopes: $savedApp->getScope(),
+			installType: 'local',
+		);
 
 		return $savedApp;
 	}
@@ -153,6 +163,14 @@ class ApplicationInstaller
 		$this->appRepository->save($savedApp);
 
 		$this->fireApplicationInstalled($integration->getId(), (int)$savedApp->getId(), $userId);
+
+		$this->securityAuditLogger->logAppInstalled(
+			actingUserId: $userId,
+			appId: (int)$savedApp->getId(),
+			clientId: (string)$savedApp->getClientId(),
+			scopes: $savedApp->getScope(),
+			installType: 'personal',
+		);
 
 		return $savedApp;
 	}

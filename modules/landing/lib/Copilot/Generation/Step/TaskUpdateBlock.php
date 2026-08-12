@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Step;
 
+use Bitrix\Landing\Copilot\Generation\Step\Base\TaskStep;
 use Bitrix\Landing\Copilot\Data;
 use Bitrix\Landing\Hook\Page\Fonts;
 use Bitrix\Landing\Landing;

@@ -6,6 +6,7 @@ use Bitrix\Bizproc\Public\Provider\Params;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Provider\Params\GridParams;
 use Bitrix\Main\Provider\Params\Pager;
+use Bitrix\Main\Type\Collection;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Bizproc\Internal\Exception\ErrorBuilder;
 use Bitrix\Bizproc\Internal\Exception\Exception;
@@ -172,6 +173,35 @@ class Storage extends Base
 		return $result->getData();
 	}
 
+	public function deleteListAction(array $ids): ?array
+	{
+		if (!$this->checkAdminAccess())
+		{
+			return null;
+		}
+
+		Collection::normalizeArrayValuesByInt($ids, false);
+		$normalizedIds = $ids;
+
+		if (empty($normalizedIds))
+		{
+			$this->addError(ErrorBuilder::build('Storage type identifiers are not specified.'));
+
+			return null;
+		}
+
+		foreach ($normalizedIds as $id)
+		{
+			$result = (new Command\StorageType\DeleteStorageTypeCommand($id))->run();
+			if (!$result->isSuccess())
+			{
+				$this->addErrors($result->getErrors());
+			}
+		}
+
+		return [];
+	}
+
 	public function getItemsAction(
 		int $storageTypeId,
 		PageNavigation $navigation,
@@ -315,12 +345,24 @@ class Storage extends Base
 
 	public function deleteItemAction(int $storageTypeId, int $id): ?array
 	{
+		return $this->deleteItemsAction([$id]);
+	}
+
+	public function deleteItemsAction(array $ids): ?array
+	{
 		if (!$this->checkAdminAccess())
 		{
 			return null;
 		}
 
-		$command = new Command\StorageItem\DeleteStorageItemCommand($id);
+		if (!$ids)
+		{
+			$this->addError(ErrorBuilder::build('Storage item identifiers are not specified.'));
+
+			return null;
+		}
+
+		$command = new Command\StorageItem\DeleteStorageItemCommand($ids);
 
 		$result = $command->run();
 		if (!$result->isSuccess())

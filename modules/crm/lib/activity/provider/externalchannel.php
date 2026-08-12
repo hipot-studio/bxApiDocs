@@ -3,6 +3,7 @@ namespace Bitrix\Crm\Activity\Provider;
 
 use Bitrix\Crm\Activity\CommunicationStatistics;
 use Bitrix\Crm\ExternalChannelConnectorTable;
+use Bitrix\Crm\Format\Money;
 use Bitrix\Crm\Rest\CCrmExternalChannelActivityType;
 use Bitrix\Crm\Rest\CCrmExternalChannelConnector;
 use Bitrix\Crm\Rest\CCrmExternalChannelImport;
@@ -290,7 +291,7 @@ class ExternalChannel extends Base
 				);
 				$description = Loc::getMessage('CRM_REST_EXTERNAL_CHANNEL_'.$activity['PROVIDER_TYPE_ID'].'_LABEL_TEXT', array(
 								'#START_TIME#' => $activity['START_TIME'],
-								'#RESULT_SUM_CURRENCY#' => \CCrmCurrency::MoneyToString(round($activity['RESULT_SUM'], 2), $activity['RESULT_CURRENCY_ID']))
+								'#RESULT_SUM_CURRENCY#' => Money::format((float)$activity['RESULT_SUM'], (string)$activity['RESULT_CURRENCY_ID']))
 				);
 				break;
 			case  CCrmExternalChannelActivityType::ActivityFaceCardName:
@@ -299,7 +300,7 @@ class ExternalChannel extends Base
 
 				$description .= ''.Loc::getMessage('CRM_REST_EXTERNAL_CHANNEL_ACTIVITY_FACE_CARD_EVENT').$activity['START_TIME'];
 				$description .= isset($external['RESULT_PERCENT']) ? '<br><br>'.Loc::getMessage('CRM_REST_EXTERNAL_CHANNEL_ACTIVITY_FACE_CARD_RESULT_PERCENT').round($external['RESULT_PERCENT'], 2).'%':'';
-				$description .= '<br><br>'.Loc::getMessage('CRM_REST_EXTERNAL_CHANNEL_ACTIVITY_FACE_CARD_RESULT_SUM').\CCrmCurrency::MoneyToString(round($activity['RESULT_SUM'], 2), $activity['RESULT_CURRENCY_ID']);
+				$description .= '<br><br>'.Loc::getMessage('CRM_REST_EXTERNAL_CHANNEL_ACTIVITY_FACE_CARD_RESULT_SUM').Money::format((float)$activity['RESULT_SUM'], (string)$activity['RESULT_CURRENCY_ID']);
 				$description .= $manager<>'' ? '<br><br>'.Loc::getMessage('CRM_REST_EXTERNAL_CHANNEL_ACTIVITY_FACE_CARD_MANGER').$manager:'';
 
 				break;

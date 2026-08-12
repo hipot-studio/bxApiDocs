@@ -48,55 +48,45 @@ class SectionConnectionTable extends DataManager
 			(new IntegerField('ID'))
 				->configurePrimary()
 				->configureAutocomplete()
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_ID'))
 			,
 			(new IntegerField('SECTION_ID'))
 				->configureRequired()
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_SECTION_ID'))
 			,
 			(new IntegerField('CONNECTION_ID'))
 				->configureRequired()
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_CONNECTION_ID'))
 			,
 			(new StringField('VENDOR_SECTION_ID'))
 				->configureRequired()
 				->configureSize(255)
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_VENDOR_SECTION_ID'))
 			,
 			(new TextField('SYNC_TOKEN'))
 				->configureNullable()
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_SYNC_TOKEN'))
 			,
 			(new TextField('PAGE_TOKEN'))
 				->configureNullable()
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_PAGE_TOKEN'))
+
 			,
 			(new BooleanField('ACTIVE'))
 				->configureRequired()
 				->configureStorageValues('N', 'Y')
 				->configureDefaultValue('Y')
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_ACTIVE'))
 			,
 			(new DatetimeField('LAST_SYNC_DATE'))
 				->configureNullable()
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_LAST_SYNC_DATE'))
 			,
 			(new StringField('LAST_SYNC_STATUS'))
 				->configureNullable()
 				->configureSize(10)
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_LAST_SYNC_STATUS'))
 			,
 			(new StringField('VERSION_ID'))
 				->configureNullable()
 				->configureSize(255)
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_VERSION'))
 			,
 			(new ReferenceField(
 				'SECTION',
 				SectionTable::class,
 				Join::on('this.SECTION_ID', 'ref.ID'),
 			))
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_SECTION'))
 			,
 			(new ReferenceField(
 				'CONNECTION',
@@ -108,7 +98,6 @@ class SectionConnectionTable extends DataManager
 				->configureRequired()
 				->configureStorageValues('N', 'Y')
 				->configureDefaultValue('N')
-				->configureTitle(Loc::getMessage('CALENDAR_SYNC_SCONNECTION_FIELD_ACTIVE'))
 			,
 		];
 	}

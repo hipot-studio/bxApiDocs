@@ -72,6 +72,13 @@ class Binding extends Base
 			return null;
 		}
 
+		if (!$this->canAccessActivity($bindings))
+		{
+			$this->addError(ErrorCode::getAccessDeniedError());
+
+			return null;
+		}
+
 		$bindings = $this->addBinding($bindings, $entityTypeId, $entityId);
 		if (is_null($bindings))
 		{
@@ -256,6 +263,19 @@ class Binding extends Base
 	protected function canEdit(int $entityTpeId, int $entityId): bool
 	{
 		return $this->userPermissions->item()->canUpdate($entityTpeId, $entityId);
+	}
+
+	protected function canAccessActivity(array $bindings): bool
+	{
+		foreach ($bindings as $binding)
+		{
+			if ($this->canView((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	protected function updateBindings(int $activityId, array $bindings, array $moveBindingsMap = []): ?bool

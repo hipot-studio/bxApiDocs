@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Filter;
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationAvailabilityChecker;
 use Bitrix\Crm\Counter\EntityCounterType;
 use Bitrix\Crm\Currency;
+use Bitrix\Crm\Filter\RelatedEntity\FilterApplier;
 use Bitrix\Crm\Integration\Main\UISelector;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Model\AssignedTable;
@@ -741,6 +742,12 @@ class ItemDataProvider extends EntityDataProvider
 			\Bitrix\Crm\Tracking\UI\Filter::appendFields($result, $this);
 		}
 
+		$relatedEntitiesField = $this->createRelatedEntitiesField();
+		if ($relatedEntitiesField !== null)
+		{
+			$result[FilterApplier::FILTER_KEY] = $relatedEntitiesField;
+		}
+
 		return $result;
 	}
 
@@ -854,6 +861,11 @@ class ItemDataProvider extends EntityDataProvider
 	 */
 	public function prepareFieldData($fieldID): ?array
 	{
+		if ($fieldID === FilterApplier::FILTER_KEY)
+		{
+			return $this->prepareRelatedEntitiesFieldData();
+		}
+
 		$result = null;
 
 		if (
@@ -1066,6 +1078,15 @@ class ItemDataProvider extends EntityDataProvider
 	{
 		$listFilter = new ListFilter($this->getEntityTypeId(), $this->getFieldsToDisplay(static::DISPLAY_IN_FILTER));
 		$listFilter->prepareListFilter($filter, $requestFilter);
+
+		// RELATED_ENTITIES is a custom dropdown registered via createRelatedEntitiesField in
+		// prepareFields(), but not in getFieldsInfo() schema. ListFilter only processes fields
+		// listed in getFieldsToDisplay(DISPLAY_IN_FILTER) which derives from getFieldsInfo(),
+		// so the value would be dropped. Pass it through to let FilterApplier pick it up.
+		if (!empty($requestFilter[FilterApplier::FILTER_KEY]))
+		{
+			$filter[FilterApplier::FILTER_KEY] = $requestFilter[FilterApplier::FILTER_KEY];
+		}
 	}
 
 	public function prepareFilterValue(array $rawFilterValue): array

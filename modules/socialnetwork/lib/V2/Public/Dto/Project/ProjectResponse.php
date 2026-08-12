@@ -37,6 +37,7 @@ class ProjectResponse implements Arrayable
 		public readonly ?bool $hasCollabers = null,
 		public readonly ?bool $publication = null,
 		public readonly ?array $options = null,
+		public ?NotificationCatalogResponse $notificationCatalog = null,
 	)
 	{
 	}
@@ -96,11 +97,21 @@ class ProjectResponse implements Arrayable
 			$result['publication'] = $this->publication;
 		}
 
+		if ($this->notificationCatalog !== null)
+		{
+			$result['notificationCatalog'] = $this->notificationCatalog->toArray();
+		}
+
 		return $result;
 	}
 
 	public function setAvailableFeatures(?array $availableFeatures): void
 	{
 		$this->availableFeatures = $availableFeatures;
+	}
+
+	public function setNotificationCatalog(?NotificationCatalogResponse $catalog): void
+	{
+		$this->notificationCatalog = $catalog;
 	}
 }

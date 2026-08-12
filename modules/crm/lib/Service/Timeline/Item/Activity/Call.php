@@ -289,10 +289,15 @@ class Call extends AIActivity
 		$callInfo = $this->fetchInfo();
 		if ($this->isTranscribed($callInfo))
 		{
-			return (new IconButton('script', Loc::getMessage('CRM_TIMELINE_BUTTON_TIP_TRANSCRIPT')))
+			return (new IconButton(
+				IconButton::ICON_SCRIPT,
+				Loc::getMessage('CRM_TIMELINE_BUTTON_TIP_TRANSCRIPT')
+			))
 				->setScopeWeb()
-				->setAction((new JsEvent('Call:OpenTranscript'))
-					->addActionParamString('callId', $callInfo['CALL_ID']))
+				->setAction(
+					(new JsEvent('Call:OpenTranscript'))
+						->addActionParamString('callId', $callInfo['CALL_ID'])
+				)
 			;
 		}
 
@@ -453,7 +458,7 @@ class Call extends AIActivity
 
 		return (new ActionBarItem())
 			->setSize(ActionBarItem::SIZE_SM)
-			->setDesign(ActionBarItem::DESIGN_COPILOT)
+			->setDesign(ActionBarItem::DESIGN_AI)
 			->setAction($barItemAction)
 			->setText(
 				Loc::getMessage(
@@ -972,7 +977,7 @@ class Call extends AIActivity
 
 	private function fetchTranscriptionState(): ?string
 	{
-		if (!$this->isAIScope() || $this->isMissedCall())
+		if (!$this->areAIActionsAvailable() || $this->isMissedCall())
 		{
 			return null;
 		}

@@ -8,13 +8,17 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Timeman\Helper\TimeHelper;
-use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReportForm;
+use Bitrix\Timeman\V2\Internal\Agent\FullReportAiGenerator;
 use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReport;
 use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReportApprove;
+use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReportForm;
+use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReportMark;
+use Bitrix\Timeman\V2\Internal\Entity\ScheduledAction\ScheduledActionStatus;
+use Bitrix\Timeman\V2\Internal\Entity\ScheduledAction\ScheduledActionType;
+use Bitrix\Timeman\V2\Internal\Entity\Report\RecordReportType;
 use Bitrix\Timeman\V2\Internal\Repository\FullReportRepository;
 use Bitrix\Timeman\V2\Internal\Repository\RecordRepository;
 use Bitrix\Timeman\V2\Internal\Repository\ReportRepository;
-use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReportMark;
 
 class FullReportService
 {
@@ -23,6 +27,9 @@ class FullReportService
 		private readonly RecordRepository $recordRepository,
 		private readonly ReportRepository $reportRepository,
 		private readonly FullReportUserService $fullReportUserService,
+		private readonly FullReportSendNotifier $fullReportSendNotifier,
+		private readonly FullReportFacade $fullReportFacade,
+		private readonly ScheduledActionService $scheduledActionService,
 	)
 	{
 	}
@@ -67,19 +74,21 @@ class FullReportService
 		$report = new FullReport(
 			id: 0,
 			userId: $userId,
-			active: true,
+			active: false,
 			reportDate: time(),
 			dateFrom: $dateFrom->getTimestamp(),
 			dateTo: $dateTo->getTimestamp(),
 			report: $reportCombined,
+			reportExtended: $reportForm->reportExtended,
+			type: $this->normalizeType($reportForm->type),
 			plans: $reportForm->plansText,
 			tasks: $reportForm->tasks,
 			events: $reportForm->events,
 			files: $reportForm->files,
-			mark: FullReportMark::POSITIVE->value,
-			approve: FullReportApprove::YES->value,
-			approveDate: time(),
-			approver: $this->fullReportUserService->getReportApprover($userId),
+			mark: FullReportMark::NEUTRAL->value,
+			approve: FullReportApprove::NO->value,
+			approveDate: null,
+			approver: 0,
 			forumTopicId: 0,
 			timestamp: null,
 		);
@@ -98,6 +107,8 @@ class FullReportService
 			'dateFrom' => $dateFrom->getTimestamp(),
 			'dateTo' => $dateTo->getTimestamp(),
 		]);
+
+		$this->clearReportInfoCache($userId);
 
 		return $result;
 	}
@@ -151,6 +162,84 @@ class FullReportService
 			'dateTo' => $to?->getTimestamp(),
 		]);
 
+		$this->clearReportInfoCache($currentReport->userId);
+
+		return $result;
+	}
+
+	public function send(int $reportId, int $senderId): Result
+	{
+		$result = new Result();
+
+		if ($reportId <= 0)
+		{
+			return $result->addError(new Error('Report ID is required'));
+		}
+
+		if ($senderId <= 0)
+		{
+			return $result->addError(new Error('Sender ID is required'));
+		}
+
+		$currentReport = $this->fullReportRepository->getById($reportId);
+		if ($currentReport === null)
+		{
+			return $result->addError(new Error('Report not found'));
+		}
+
+		if ($currentReport->active === true)
+		{
+			$result->setData(['id' => $reportId]);
+			$this->clearReportInfoCache($currentReport->userId);
+
+			return $result;
+		}
+
+		$approverIds = $this->fullReportUserService->getManagerIds($currentReport->userId);
+		$externalApproverIds = array_values(array_filter(
+			$approverIds,
+			static fn (int $approverId): bool => $approverId > 0 && $approverId !== $currentReport->userId,
+		));
+		$fields = [
+			'active' => true,
+			'mark' => FullReportMark::NEUTRAL->value,
+		];
+
+		if (!empty($externalApproverIds))
+		{
+			$fields['approve'] = FullReportApprove::NO->value;
+			$fields['approveDate'] = null;
+			$fields['approver'] = 0;
+		}
+		else
+		{
+			$fields['approve'] = FullReportApprove::YES->value;
+			$fields['approveDate'] = time();
+			$fields['approver'] = $currentReport->userId;
+		}
+
+		$updatedReport = $currentReport->withChanges($fields);
+		$updateResult = $this->fullReportRepository->update($updatedReport);
+		if (!$updateResult->isSuccess())
+		{
+			$result->addErrors($updateResult->getErrors());
+
+			return $result;
+		}
+
+		$this->clearDelay($currentReport->userId);
+		$this->clearReportInfoCache($currentReport->userId);
+		if (!empty($externalApproverIds))
+		{
+			$this->fullReportSendNotifier->notifyManagerAboutSentReport(
+				report: $updatedReport,
+				senderId: $senderId,
+				managerIds: $externalApproverIds,
+			);
+		}
+
+		$result->setData(['id' => $reportId]);
+
 		return $result;
 	}
 
@@ -161,7 +250,70 @@ class FullReportService
 
 	public function reject(int $reportId, int $approverId): Result
 	{
-		return $this->setDecision($reportId, $approverId, FullReportMark::NEGATIVE);
+		return $this->setDecision($reportId, $approverId, FullReportMark::NEUTRAL);
+	}
+
+	public function scheduleGenerationAiReport(int $userId): void
+	{
+		$reportToSend = $this->fullReportFacade->getReportToSend($userId, true);
+		$reportDate = (int)($reportToSend['reportDate'] ?? 0);
+		if ($reportDate)
+		{
+			$this->addFullReportAiGeneratorAgent($userId, $reportDate);
+		}
+	}
+
+	private function addFullReportAiGeneratorAgent(int $userId, int $reportDateTimestamp): void
+	{
+		$executeTime = $this->buildFullReportAiGeneratorExecuteTime($reportDateTimestamp);
+
+		$registrationResult = $this->scheduledActionService->register(
+			type: ScheduledActionType::FullReportAiGenerate->value,
+			userId: $userId,
+			executeTime: $executeTime,
+			status: ScheduledActionStatus::Pending,
+		);
+		if (
+			!$registrationResult->isCreated()
+			|| !$registrationResult->actionId
+		)
+		{
+			return;
+		}
+
+		$agentName = FullReportAiGenerator::class . '::execute(' . $userId . ', ' . $executeTime . ');';
+
+		\CAgent::addAgent(
+			$agentName,
+			'timeman',
+			'N',
+			60,
+			'',
+			'Y',
+			$this->buildAgentNextExec($executeTime),
+			100,
+			false,
+			false,
+		);
+	}
+
+	private function buildFullReportAiGeneratorExecuteTime(int $reportDateTimestamp): int
+	{
+		$utcDateTime = (new \DateTimeImmutable('@' . $reportDateTimestamp))
+			->setTimezone(new \DateTimeZone('UTC'));
+
+		$secondsFromDayStart = ((int)$utcDateTime->format('G') * 3600)
+			+ ((int)$utcDateTime->format('i') * 60)
+			+ (int)$utcDateTime->format('s');
+
+		$offsetInSeconds = (int)floor($secondsFromDayStart / 4);
+
+		return $reportDateTimestamp - $offsetInSeconds;
+	}
+
+	private function buildAgentNextExec(int $executeTime): string
+	{
+		return \ConvertTimeStamp($executeTime + \CTimeZone::GetOffset(), 'FULL');
 	}
 
 	private function buildUpdateFields(FullReportForm $reportForm): array
@@ -171,6 +323,14 @@ class FullReportService
 		if ($reportForm->reportText !== null)
 		{
 			$fields['reportText'] = $reportForm->reportText;
+		}
+		if ($reportForm->reportExtended !== null)
+		{
+			$fields['reportExtended'] = $reportForm->reportExtended;
+		}
+		if ($reportForm->type !== null)
+		{
+			$fields['type'] = $this->normalizeType($reportForm->type);
 		}
 		if ($reportForm->plansText !== null)
 		{
@@ -190,6 +350,11 @@ class FullReportService
 		}
 
 		return $fields;
+	}
+
+	private function normalizeType(?string $type): string
+	{
+		return RecordReportType::normalize($type);
 	}
 
 	/**
@@ -222,9 +387,9 @@ class FullReportService
 			return [null, null];
 		}
 
-		[$from, $to] = $this->buildPeriodFromUtc(
-			dateFromUtc: $dateFrom,
-			dateToUtc: $dateTo,
+		[$from, $to] = $this->buildPeriodFromTimestamps(
+			dateFromTimestamp: $dateFrom,
+			dateToTimestamp: $dateTo,
 			fallbackFrom: $currentFrom,
 			fallbackTo: $currentTo,
 		);
@@ -294,9 +459,9 @@ class FullReportService
 	{
 		if ($dateFrom && $dateTo)
 		{
-			return $this->buildPeriodFromUtc(
-				dateFromUtc: $dateFrom,
-				dateToUtc: $dateTo
+			return $this->buildPeriodFromTimestamps(
+				dateFromTimestamp: $dateFrom,
+				dateToTimestamp: $dateTo
 			);
 		}
 
@@ -327,27 +492,27 @@ class FullReportService
 	}
 
 	/**
-	 * Builds a normalized report period from UTC timestamps.
+	 * Builds a normalized report period from timestamps.
 	 *
 	 * - Applies 00:00:00 time to both dates
 	 * - If both bounds are present and inverted, swaps them
 	 * - If some bound is missing, falls back to provided DateTime values (if any)
 	 *
-	 * @param int|null $dateFromUtc
-	 * @param int|null $dateToUtc
+	 * @param int|null $dateFromTimestamp
+	 * @param int|null $dateToTimestamp
 	 * @param DateTime|null $fallbackFrom
 	 * @param DateTime|null $fallbackTo
 	 * @return array{0: ?DateTime, 1: ?DateTime}
 	 */
-	private function buildPeriodFromUtc(
-		?int $dateFromUtc,
-		?int $dateToUtc,
+	private function buildPeriodFromTimestamps(
+		?int $dateFromTimestamp,
+		?int $dateToTimestamp,
 		?DateTime $fallbackFrom = null,
 		?DateTime $fallbackTo = null
 	): array
 	{
-		$from = $this->buildReportDateFromUtc($dateFromUtc, $fallbackFrom);
-		$to = $this->buildReportDateFromUtc($dateToUtc, $fallbackTo);
+		$from = $this->buildReportDateFromTimestamp($dateFromTimestamp, $fallbackFrom);
+		$to = $this->buildReportDateFromTimestamp($dateToTimestamp, $fallbackTo);
 
 		if ($from && $to && $from->getTimestamp() > $to->getTimestamp())
 		{
@@ -357,23 +522,22 @@ class FullReportService
 		return [$from, $to];
 	}
 
-	private function buildReportDateFromUtc(?int $utcTimestamp, ?DateTime $fallback): ?DateTime
+	private function buildReportDateFromTimestamp(?int $timestamp, ?DateTime $fallback): ?DateTime
 	{
-		if ($utcTimestamp === null)
+		if ($timestamp === null)
 		{
 			return $fallback ? clone $fallback : null;
 		}
 
-		if ($utcTimestamp <= 0)
+		if ($timestamp <= 0)
 		{
 			return null;
 		}
 
-		// Treat timestamps as true UTC instants.
-		// Store DATE_FROM/DATE_TO as midnight for the UTC calendar date.
-		$ymd = gmdate('Y-m-d', $utcTimestamp);
+		$date = DateTime::createFromTimestamp($timestamp);
+		$date->setTime(0, 0, 0);
 
-		return new DateTime($ymd . ' 00:00:00', 'Y-m-d H:i:s');
+		return $date;
 	}
 
 	private function shiftPeriodAfterOverlaps(int $userId, DateTime $dateFrom, DateTime $dateTo): array
@@ -457,8 +621,8 @@ class FullReportService
 			return '';
 		}
 
-		$reportByEntryId = $this->reportRepository->getLatestRecordReportTextByEntryIds($userId, $entryIds);
-		if (empty($reportByEntryId))
+		$reportTexts = $this->reportRepository->getReportTexts($userId, $entryIds);
+		if (empty($reportTexts))
 		{
 			return '';
 		}
@@ -466,11 +630,11 @@ class FullReportService
 		$lines = [];
 		foreach ($entryIds as $entryId)
 		{
-			if (!array_key_exists($entryId, $reportByEntryId))
+			if (!array_key_exists($entryId, $reportTexts))
 			{
 				continue;
 			}
-			$text = trim($reportByEntryId[$entryId]);
+			$text = trim($reportTexts[$entryId]);
 			if ($text === '')
 			{
 				continue;
@@ -486,7 +650,7 @@ class FullReportService
 			return '';
 		}
 
-		return "Daily reports:\n" . implode("\n", $lines);
+		return implode("\n", $lines);
 	}
 
 	private function setDecision(int $reportId, int $approverId, FullReportMark $mark): Result
@@ -509,9 +673,11 @@ class FullReportService
 
 		$fields = ['mark' => $mark->value];
 
-		if ($mark === FullReportMark::UNCONFIRMED)
+		if (
+			$mark === FullReportMark::UNCONFIRMED
+			|| $mark === FullReportMark::NEUTRAL
+		)
 		{
-			// Legacy meaning: unconfirm the report.
 			$fields['approve'] = FullReportApprove::NO->value;
 			$fields['approveDate'] = null;
 			$fields['approver'] = 0;
@@ -538,6 +704,45 @@ class FullReportService
 		}
 
 		$result->setData(['id' => (int)$reportId, 'mark' => $mark->value]);
+		$this->clearReportInfoCache($currentReport->userId);
+
+		return $result;
+	}
+
+	private function clearDelay(int $userId): void
+	{
+		$user = new \CUser();
+		$user->Update($userId, ['UF_DELAY_TIME' => '']);
+		\CReportSettings::clearCache($userId);
+	}
+
+	private function clearReportInfoCache(int $userId): void
+	{
+		\CUserReportFull::clearReportCache($userId);
+	}
+
+	public function postpone(int $userId, int $seconds = 3600): Result
+	{
+		$result = new Result();
+
+		if ($userId <= 0)
+		{
+			$result->addError(new Error('User ID is required'));
+
+			return $result;
+		}
+
+		if ($seconds <= 0)
+		{
+			$result->addError(new Error('Seconds must be positive'));
+
+			return $result;
+		}
+
+		$user = new \CUser();
+		$user->Update($userId, ['UF_DELAY_TIME' => time() + $seconds]);
+		\CReportSettings::clearCache($userId);
+		$this->clearReportInfoCache($userId);
 
 		return $result;
 	}

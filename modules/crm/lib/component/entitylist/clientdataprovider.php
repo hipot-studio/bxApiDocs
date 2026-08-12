@@ -7,6 +7,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Display\Field;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Main\Web\Uri;
 
 abstract class ClientDataProvider
 {
@@ -691,7 +692,7 @@ abstract class ClientDataProvider
 		{
 			if ($arFile = \CFile::GetFileArray($value))
 			{
-				return \CHTTP::URN2URI($arFile['SRC']);
+				return (string)(new Uri($arFile['SRC']))->toAbsolute();
 			}
 		}
 		else

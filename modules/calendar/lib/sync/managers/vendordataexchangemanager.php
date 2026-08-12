@@ -197,8 +197,6 @@ class VendorDataExchangeManager
 	 */
 	public function updateConnection(Connection $connection): self
 	{
-		SynchronizationFeature::setUserId($connection->getOwner()->getId());
-
 		if (SynchronizationFeature::isOn())
 		{
 			ServiceLocator::getInstance()->get(ConnectionManager::class)

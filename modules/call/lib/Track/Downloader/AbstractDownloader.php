@@ -4,7 +4,10 @@ namespace Bitrix\Call\Track\Downloader;
 
 use Bitrix\Main\Result;
 use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Call\Track;
+use Bitrix\Call\Track\TrackError;
+use Bitrix\Call\Track\TrackService;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI\CallAISettings;
 
@@ -46,11 +49,54 @@ abstract class AbstractDownloader
 
 		$log && $logger->info("AbstractDownloader::complete: Firing event. TrackId: {$track->getId()}");
 
-		// Fire event instead of calling callback
+		// Fire event instead of calling callback. The handler (TrackService::finalizeDownload)
+		// mutates this same $track instance, so its result is visible right after send().
 		$event = new Event('call', 'onCallTrackDownloadCompleted', ['track' => $track]);
 		$event->send();
 
+		// The finalize handler is the source of truth: a record may have file+disk set yet still
+		// not be finalized (e.g. its chat link failed to publish). Honor its verdict so the agent
+		// retries, then fall back to the persisted-state check.
+		foreach ($event->getResults() as $eventResult)
+		{
+			if ($eventResult->getType() === EventResult::ERROR)
+			{
+				$log && $logger->error("AbstractDownloader::complete: Finalization reported failure. TrackId: {$track->getId()}");
+				$result->addError(new TrackError(TrackError::FINALIZE_FAILED, 'Track finalization failed'));
+
+				return $this->fail($result);
+			}
+		}
+
+		// Do not report success unless the track was actually finalized (attached to file/disk).
+		// Otherwise DownloadAgent would emit finished_success and stop, silently losing the track.
+		if (!$this->isFinalized($track))
+		{
+			$log && $logger->error("AbstractDownloader::complete: Finalization failed. TrackId: {$track->getId()}");
+			$result->addError(new TrackError(TrackError::FINALIZE_FAILED, 'Track finalization failed'));
+
+			return $this->fail($result);
+		}
+
 		return $result->setData(['status' => 'completed']);
+	}
+
+	/**
+	 * Whether the track has been fully finalized: file attached, and disk attached when required.
+	 */
+	private function isFinalized(Track $track): bool
+	{
+		if (!$track->getFileId())
+		{
+			return false;
+		}
+
+		if (TrackService::getInstance()->requiresDisk($track) && !$track->getDiskFileId())
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	/**

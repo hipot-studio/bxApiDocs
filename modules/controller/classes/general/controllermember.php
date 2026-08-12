@@ -833,13 +833,17 @@ class CControllerMember
 		$rsCounters = CControllerCounter::GetList();
 		while ($arCounter = $rsCounters->Fetch())
 		{
-			$arFields['COUNTER_' . $arCounter['ID']] = [
-				'FIELD_NAME' => 'CCV_' . $arCounter['ID'] . '.' . CControllerCounter::GetTypeColumn($arCounter['COUNTER_TYPE']),
-				'FIELD_TYPE' => CControllerCounter::GetTypeUserType($arCounter['COUNTER_TYPE']),
-				'TABLE_ALIAS' => 'CCV_' . $arCounter['ID'],
-				'JOIN' => 'INNER JOIN b_controller_counter_value CCV_' . $arCounter['ID'] . ' ON CCV_' . $arCounter['ID'] . '.CONTROLLER_COUNTER_ID = ' . $arCounter['ID'] . ' AND CCV_' . $arCounter['ID'] . '.CONTROLLER_MEMBER_ID = M.ID',
-				'LEFT_JOIN' => 'LEFT JOIN b_controller_counter_value CCV_' . $arCounter['ID'] . ' ON CCV_' . $arCounter['ID'] . '.CONTROLLER_COUNTER_ID = ' . $arCounter['ID'] . ' AND CCV_' . $arCounter['ID'] . '.CONTROLLER_MEMBER_ID = M.ID',
-			];
+			$counterValueColumn = CControllerCounter::GetTypeColumn($arCounter['COUNTER_TYPE']);
+			if ($counterValueColumn)
+			{
+				$arFields['COUNTER_' . $arCounter['ID']] = [
+					'FIELD_NAME' => 'CCV_' . $arCounter['ID'] . '.' . $counterValueColumn,
+					'FIELD_TYPE' => CControllerCounter::GetTypeUserType($arCounter['COUNTER_TYPE']),
+					'TABLE_ALIAS' => 'CCV_' . $arCounter['ID'],
+					'JOIN' => 'INNER JOIN b_controller_counter_value CCV_' . $arCounter['ID'] . ' ON CCV_' . $arCounter['ID'] . '.CONTROLLER_COUNTER_ID = ' . $arCounter['ID'] . ' AND CCV_' . $arCounter['ID'] . '.CONTROLLER_MEMBER_ID = M.ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_controller_counter_value CCV_' . $arCounter['ID'] . ' ON CCV_' . $arCounter['ID'] . '.CONTROLLER_COUNTER_ID = ' . $arCounter['ID'] . ' AND CCV_' . $arCounter['ID'] . '.CONTROLLER_MEMBER_ID = M.ID',
+				];
+			}
 		}
 
 		$obWhere = new CSQLWhere;

@@ -19,4 +19,11 @@ enum GlobalAction: string
 	case JoinChat = 'JOIN_CHAT';
 	case Extend = 'EXTEND';
 	case ManageGuestLink = 'MANAGE_GUEST_LINK';
+	case CreateAnyTask = 'CREATE_ANY_TASK';
+	case CreateCalendarEvent = 'CREATE_CALENDAR_EVENT';
+	case SaveFileToDisk = 'SAVE_FILE_TO_DISK';
+	case EditChat = 'EDIT_CHAT';
+	case OpenProfile = 'OPEN_PROFILE';
+	case OpenCalendar = 'OPEN_CALENDAR';
+	case BeChatManager = 'BE_CHAT_MANAGER';
 }

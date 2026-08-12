@@ -16,6 +16,7 @@ use Bitrix\Rest\Internal\Contract\Repository\IncomingWebhookRepositoryInterface;
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhook;
 use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
 use Bitrix\Rest\Internal\Repository\IntegrationRepository;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 use Bitrix\Rest\Preset\Provider;
 
 class UpdateIncomingWebhookCommandHandler
@@ -23,6 +24,7 @@ class UpdateIncomingWebhookCommandHandler
 	public function __construct(
 		private IncomingWebhookRepositoryInterface $repository = new IncomingWebhookRepository(),
 		private IntegrationRepository $integrationRepository = new IntegrationRepository(),
+		private SecurityAuditLogger $securityAuditLogger = new SecurityAuditLogger(),
 	)
 	{
 	}
@@ -79,17 +81,28 @@ class UpdateIncomingWebhookCommandHandler
 			throw new ObjectNotFoundException('Integration for incoming webhook not found');
 		}
 
+		$previousScopes = $webhook->getScopes();
+		$newTitle = $command->title ?? $webhook->getTitle();
+
 		Provider::saveIntegration(
 			[
 				'PASSWORD_ID' => $webhook->getId(),
-				'TITLE' => $command->title ?? $webhook->getTitle(),
+				'TITLE' => $newTitle,
 				'SCOPE' => $scopes,
-				'QUERY' => 'Y',
 				'MODE' => 'INCOMING_WEBHOOK',
 			],
 			ElementCodeType::IN_WEBHOOK->value,
 			$integration->getId(),
 			$user->getId(),
+		);
+
+		$this->securityAuditLogger->logWebhookUpdated(
+			actingUserId: $command->userId,
+			webhookId: (int)$webhook->getId(),
+			ownerUserId: $webhook->getUserId(),
+			previousScopes: $previousScopes,
+			newScopes: $scopes,
+			title: $newTitle,
 		);
 
 		return $this->repository->getByWebhookId($command->webHookPassword);

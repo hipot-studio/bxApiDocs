@@ -226,6 +226,28 @@ abstract class Base implements ChatBot
 	}
 
 	/**
+	 * Whether the bot has a photo (PERSONAL_PHOTO) set.
+	 *
+	 * @param int $botId
+	 *
+	 * @return bool
+	 */
+	protected static function botHasPhoto(int $botId): bool
+	{
+		if ($botId <= 0)
+		{
+			return false;
+		}
+
+		$row = \Bitrix\Main\UserTable::getRow([
+			'select' => ['PERSONAL_PHOTO'],
+			'filter' => ['=ID' => $botId],
+		]);
+
+		return !empty($row['PERSONAL_PHOTO']);
+	}
+
+	/**
 	 * @return \Bitrix\ImBot\Bot\Base|string
 	 */
 	protected static function getClassName()

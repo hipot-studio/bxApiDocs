@@ -8,6 +8,7 @@ use Bitrix\Main\Command\AbstractCommand;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Timeman\V2\Internal\DI\Container;
+use Bitrix\Timeman\V2\Public\Dto\Report\RecordReportType;
 
 class UpsertCommand extends AbstractCommand
 {
@@ -15,6 +16,8 @@ class UpsertCommand extends AbstractCommand
 		public readonly int $recordId,
 		public readonly int $userId,
 		public readonly string $reportText,
+		public readonly string $type = RecordReportType::REPORT,
+		public readonly bool $scheduleAiReport = true,
 	)
 	{
 	}

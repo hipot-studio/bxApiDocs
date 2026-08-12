@@ -22,6 +22,7 @@ use Bitrix\Main\ORM\Query\Query;
  *
  * @method self setParentChatId(int $parentChatId);
  * @method self setParentMessageId(int $parentMessageId);
+ * @method self setRecentSections(array $recentSections);
  */
 final class AnchorCollection extends Collection implements RestConvertible
 {
@@ -68,22 +69,23 @@ final class AnchorCollection extends Collection implements RestConvertible
 		return $rest;
 	}
 
-	public function fillParents(array $map): void
+	public function fillChatData(array $map): void
 	{
 		foreach ($this as $anchorItem)
 		{
 			/** @var AnchorItem $anchorItem */
-			$parent = $map[$anchorItem->getChatId()] ?? null;
-			if (empty($parent))
+			$chatData = $map[$anchorItem->getChatId()] ?? null;
+			if (empty($chatData))
 			{
 				continue;
 			}
 
-			$parentChatId = (int)($parent['PARENT_CHAT_ID'] ?? 0);
-			$parentMessageId = (int)($parent['PARENT_MESSAGE_ID'] ?? 0);
+			$parentChatId = (int)($chatData['PARENT_CHAT_ID'] ?? 0);
+			$parentMessageId = (int)($chatData['PARENT_MESSAGE_ID'] ?? 0);
 
 			$anchorItem->setParentChatId($parentChatId);
 			$anchorItem->setParentMessageId($parentMessageId);
+			$anchorItem->setRecentSections($chatData['RECENT_SECTIONS'] ?? []);
 		}
 	}
 

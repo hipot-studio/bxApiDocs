@@ -106,6 +106,41 @@ class OpenlinesMenuExample
 		$menu0->addItem(1, 'Text', Itr\Item::sendText('Text message (for #USER_NAME#)'));
 		$menu0->addItem(2, 'Text without menu', Itr\Item::sendText('Text message without menu', true));
 		$menu0->addItem(3, 'Open menu #1', Itr\Item::openMenu(1));
+		$menu0->addItem(4, 'Join my operator', Itr\Item::execFunction(function($context){
+			if (!\Bitrix\Main\Loader::includeModule('imopenlines'))
+			{
+				return;
+			}
+			$chatId = (int)mb_substr((string)$context->dialogId, 4);
+			if ($chatId <= 0)
+			{
+				return;
+			}
+
+			$operatorId = 1; // hardcoded operator id for the test
+			(new \Bitrix\Imopenlines\Chat($chatId))->join($operatorId);
+
+			$session = \Bitrix\ImOpenLines\Model\SessionTable::getList([
+				'filter' => ['=CHAT_ID' => $chatId, '=CLOSED' => 'N'],
+				'order' => ['ID' => 'DESC'],
+				'limit' => 1,
+				'select' => ['ID'],
+			])->fetch();
+			if ($session)
+			{
+				$sessionId = (int)$session['ID'];
+				\Bitrix\ImOpenLines\Model\SessionTable::update($sessionId, [
+					'STATUS' => \Bitrix\ImOpenLines\Session::STATUS_CLIENT, // WORK group
+					'WAIT_ANSWER' => 'N',
+					'WAIT_ACTION' => 'N',
+				]);
+				// keep the dialog frozen on the bot (don't let the queue agent redistribute it)
+				if (\Bitrix\ImOpenLines\Model\SessionCheckTable::getRowById($sessionId))
+				{
+					\Bitrix\ImOpenLines\Model\SessionCheckTable::delete($sessionId);
+				}
+			}
+		}, 'Operator added, session moved to work'));
 		$menu0->addItem(0, 'Wait operator answer', Itr\Item::sendText('Wait operator answer', true));
 
 		$menu1 = new Itr\Menu(1);

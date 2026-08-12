@@ -92,6 +92,51 @@ class ProjectChatDataProvider
 		return $result;
 	}
 
+	/**
+	 * @param int[] $chatIds
+	 * @return array<int, int> map chatId => projectId (only resolved project chats)
+	 */
+	public function getProjectIdsByChatIds(array $chatIds): array
+	{
+		if ($chatIds === [] || !$this->isAvailable())
+		{
+			return [];
+		}
+
+		Collection::normalizeArrayValuesByInt($chatIds, false);
+		$chatIds = array_values(array_unique(array_filter(
+			$chatIds,
+			static fn (int $chatId): bool => $chatId > 0,
+		)));
+
+		if ($chatIds === [])
+		{
+			return [];
+		}
+
+		$result = [];
+
+		$res = ChatTable::getList([
+			'select' => ['ID', 'ENTITY_ID'],
+			'filter' => [
+				'=ENTITY_TYPE' => self::CHAT_ENTITY_TYPE,
+				'@ID' => $chatIds,
+			],
+		]);
+
+		while ($chat = $res->fetch())
+		{
+			$chatId = (int)($chat['ID'] ?? 0);
+			$projectId = (int)($chat['ENTITY_ID'] ?? 0);
+			if ($chatId > 0 && $projectId > 0)
+			{
+				$result[$chatId] = $projectId;
+			}
+		}
+
+		return $result;
+	}
+
 	public function getProjectIdByChatId(int $chatId): ?int
 	{
 		if ($chatId <= 0 || !$this->isAvailable())

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Bitrix\Bizproc\Public\Activity\Interface\ActivityContentBlockProviderInterface;
+use Bitrix\Bizproc\Public\Activity\Interface\ContentBlockScopeProducerInterface;
 use Bitrix\Bizproc\Internal\Exception\ErrorBuilder;
 use Bitrix\Bizproc\Internal\Exception\Exception;
 use Bitrix\Main\Localization\Loc;
@@ -35,7 +37,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
  * @property-write string Mode
  * @property-write ?string CreateErrorText
  */
-class CBPCreateStorageNode extends BaseActivity implements IBPConfigurableActivity
+class CBPCreateStorageNode extends BaseActivity implements IBPConfigurableActivity, ActivityContentBlockProviderInterface, ContentBlockScopeProducerInterface
 {
 	public function __construct($name)
 	{
@@ -59,6 +61,22 @@ class CBPCreateStorageNode extends BaseActivity implements IBPConfigurableActivi
 			'StorageId' => ['Type' => FieldType::INT],
 			'CreateErrorText' => ['Type' => FieldType::STRING],
 		]);
+	}
+
+	public static function getContentBlock(array $properties, ?\Bitrix\Bizproc\Activity\Dto\ContentBlockContext $context = null): ?\Bitrix\Bizproc\Activity\Dto\ContentBlock
+	{
+		return StorageActivityService::makeStorageContentBlock((string)($properties['StorageTitle'] ?? ''));
+	}
+
+	public static function getScopeContribution(): array
+	{
+		// Publish the dynamic storage title (code => title) so read/write/delete nodes referencing it
+		// by code can render its name at design time, before the storage exists in the catalog.
+		return [
+			'namespace' => StorageActivityService::CONTENT_BLOCK_SCOPE_NAMESPACE,
+			'keyProperty' => 'StorageCode',
+			'labelProperty' => 'StorageTitle',
+		];
 	}
 
 	protected function internalExecute(): \Bitrix\Main\ErrorCollection

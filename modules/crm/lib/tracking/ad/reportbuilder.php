@@ -211,7 +211,7 @@ class ReportBuilder extends Builder
 		$query
 			->addSelect('CNT')
 			->addSelect('INCOME')
-			->registerRuntimeField(new Orm\Fields\Relations\Reference(
+			->registerRuntimeField(new ORM\Fields\Relations\Reference(
 				'TRACE_ENTITY',
 				Tracking\Internals\TraceEntityTable::class,
 				[
@@ -219,10 +219,10 @@ class ReportBuilder extends Builder
 					'=this.ID' => 'ref.ENTITY_ID'
 				]
 			))
-			->registerRuntimeField(new Orm\Fields\ExpressionField(
+			->registerRuntimeField(new ORM\Fields\ExpressionField(
 				'CNT', 'COUNT(*)'
 			))
-			->registerRuntimeField(new Orm\Fields\ExpressionField(
+			->registerRuntimeField(new ORM\Fields\ExpressionField(
 				'INCOME', 'SUM(%s)', 'OPPORTUNITY_ACCOUNT'
 			))
 			->where('DATE_CREATE', '>=', $this->dateFrom)

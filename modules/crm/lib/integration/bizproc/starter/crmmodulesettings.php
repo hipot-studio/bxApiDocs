@@ -4,10 +4,9 @@ namespace Bitrix\Crm\Integration\BizProc\Starter;
 
 use Bitrix\Bizproc\Starter\Document;
 use Bitrix\Bizproc\Starter\ModuleSettings;
+use Bitrix\Bizproc\Starter\Dto\TriggerDescriptorDto;
 use Bitrix\Crm\Automation\Factory;
 use Bitrix\Crm\Automation\Trigger\BaseTrigger;
-use Bitrix\Crm\Automation\Trigger\FieldChangedTrigger;
-use Bitrix\Crm\Automation\Trigger\ResponsibleChangedTrigger;
 use Bitrix\Crm\Integration\BizProc\Starter\Mixins\Dto\TriggerBindingDocumentsDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Mixins\TriggerBindingDocumentsTrait;
 use CCrmOwnerType;
@@ -23,6 +22,8 @@ if (
 final class CrmModuleSettings extends ModuleSettings
 {
 	use TriggerBindingDocumentsTrait;
+
+	private const CREATE_DOCUMENT_TRIGGER = 'CrmEntityCreateTrigger';
 
 	private int $entityTypeId;
 
@@ -52,6 +53,23 @@ final class CrmModuleSettings extends ModuleSettings
 	public function isAutomationOverLimited(): bool
 	{
 		return Factory::isOverLimited($this->entityTypeId);
+	}
+
+	public function getCreateDocumentTrigger(): ?TriggerDescriptorDto
+	{
+		$preset = $this->resolveCreateDocumentTriggerPreset();
+		if ($preset === null)
+		{
+			return null;
+		}
+
+		return new TriggerDescriptorDto(
+			triggerType: self::CREATE_DOCUMENT_TRIGGER,
+			title: is_string($preset['NAME'] ?? null) ? $preset['NAME'] : null,
+			icon: $preset['NODE_ICON'],
+			properties: $this->getCreateDocumentTriggerProperties($preset),
+			presetId: $preset['ID'],
+		);
 	}
 
 	public function getDocumentStatusFieldName(): string
@@ -112,5 +130,23 @@ final class CrmModuleSettings extends ModuleSettings
 		[, $entityId] = \CCrmBizProcHelper::resolveEntityIdByDocumentId($documentId);
 
 		Factory::doAutocompleteActivities($this->entityTypeId, $entityId);
+	}
+
+	private function resolveCreateDocumentTriggerPreset(): ?array
+	{
+		if (!\CBPRuntime::getRuntime()->includeActivityFile(mb_strtolower(self::CREATE_DOCUMENT_TRIGGER)))
+		{
+			return null;
+		}
+
+		return \CBPCrmEntityCreateTrigger::getPresetByComplexDocumentType($this->complexType);
+	}
+
+	private function getCreateDocumentTriggerProperties(?array $preset): array
+	{
+		$properties = is_array($preset['PROPERTIES'] ?? null) ? $preset['PROPERTIES'] : [];
+		$properties['Document'] = implode('@', $this->complexType);
+
+		return $properties;
 	}
 }

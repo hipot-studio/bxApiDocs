@@ -9,6 +9,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Timeman\V2\Internal\DI\Container;
+use Bitrix\Timeman\V2\Public\Dto\Report\RecordReportType;
 
 class AddCommand extends AbstractCommand
 {
@@ -22,13 +23,15 @@ class AddCommand extends AbstractCommand
 		#[PositiveNumber]
 		public readonly int $userId,
 		public readonly ?string $reportText = null,
+		public readonly ?string $reportExtended = null,
 		public readonly ?string $plansText = null,
 		public readonly ?array $tasks = null,
 		public readonly ?array $events = null,
 		public readonly ?array $files = null,
-		public readonly bool $autoFillDailyReports = true,
+		public readonly bool $autoFillDailyReports = false,
 		public readonly ?int $dateFrom = null,
 		public readonly ?int $dateTo = null,
+		public readonly string $type = RecordReportType::REPORT,
 	)
 	{
 	}

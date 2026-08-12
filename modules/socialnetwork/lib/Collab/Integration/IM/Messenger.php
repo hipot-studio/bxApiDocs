@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Socialnetwork\Collab\Integration\IM;
 
 use Bitrix\Im\V2\Chat\CollabChat;
+use Bitrix\Im\V2\Chat\NullChat;
 use Bitrix\Im\V2\Chat\Update\UpdateFields;
 use Bitrix\Im\V2\Chat\Update\UpdateService;
 use Bitrix\Main\Loader;
@@ -36,8 +37,12 @@ class Messenger
 			return null;
 		}
 
-		$updateFields = UpdateFields::create($fields);
+		if ($chat instanceof NullChat)
+		{
+			return null;
+		}
 
+		$updateFields = UpdateFields::create($fields);
 
 		return new UpdateService($chat, $updateFields);
 	}

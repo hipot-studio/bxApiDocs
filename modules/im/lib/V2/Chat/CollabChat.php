@@ -11,13 +11,16 @@ use Bitrix\Im\V2\Chat\Collab\GuestCounter;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserCollaber;
 use Bitrix\Im\V2\Integration\Socialnetwork\Group;
+use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Permission\ActionGroup;
 use Bitrix\Im\V2\Relation\DeleteUserConfig;
 use Bitrix\Im\V2\RelationCollection;
 use Bitrix\Im\V2\Recent\Initializer;
+use Bitrix\Im\V2\Recent\PreviewSource\CollabPreviewSourcePointerService;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Result;
+use Bitrix\Main\DI\ServiceLocator;
 
 class CollabChat extends ExternalChat
 {
@@ -55,6 +58,21 @@ class CollabChat extends ExternalChat
 		return parent::getPopupData($excludedList)->add(new CollabInfo($this));
 	}
 
+	/**
+	 * Detaching a child chat from the project can leave this collab's recent rows pointing at a message
+	 * in a chat that is no longer part of the project, so the materialized preview-source pointer must be
+	 * recomputed for every member (the detached child is no longer a resolver candidate).
+	 */
+	public function onAfterDetachChild(GroupChat $childChat, int $userId): void
+	{
+		parent::onAfterDetachChild($childChat, $userId);
+
+		ServiceLocator::getInstance()
+			->get(CollabPreviewSourcePointerService::class)
+			->recomputeForDetachedChild($this)
+		;
+	}
+
 	public function getStorageId(): int
 	{
 		return Group::getStorageId((int)$this->getEntityId()) ?? 0;
@@ -85,6 +103,12 @@ class CollabChat extends ExternalChat
 	public function canHaveChild(Chat $child): bool
 	{
 		return !($child instanceof CommentChat);
+	}
+
+	public function isAutoJoinEnabled(): bool
+	{
+		// Phase 0 (task 718250): enable silent auto-join for closed project chat
+		return true;
 	}
 
 	public function canDo(Action $action, mixed $target = null): bool
@@ -149,5 +173,49 @@ class CollabChat extends ExternalChat
 	protected function filterCollabers(array $userIds): array
 	{
 		return array_filter($userIds, fn (int $userId) => User::getInstance($userId) instanceof UserCollaber);
+	}
+
+	protected function updateRecentItems(Message $message): void
+	{
+		parent::updateRecentItems($message);
+
+		$this->resetPreviewSourceForNotifySubscribed();
+	}
+
+	protected function resetPreviewSourceForNotifySubscribed(): void
+	{
+		if (!\Bitrix\Im\V2\Application\Features::isCollabPreviewSourceEnabled())
+		{
+			return;
+		}
+
+		$notifySubscribedUserIds = $this->getRelations()->filterNotifySubscribed()->getUserIds();
+		if (empty($notifySubscribedUserIds))
+		{
+			return;
+		}
+
+		// Hot path: to skip muted members (AC-005) we materialize the non-muted user ids and issue an
+		// UPDATE with USER_ID IN (...). On very large collabs that IN list grows; IX_IM_REC_7 (ITEM_CID,
+		// USER_ID) covers it. If this needs tuning, replace the materialization with a correlated NOT EXISTS
+		// on b_im_relation (NOTIFY_BLOCK).
+		\Bitrix\Im\Model\RecentTable::updateByFilter(
+			[
+				'=ITEM_CID' => $this->getId(),
+				'=USER_ID' => array_values($notifySubscribedUserIds),
+			],
+			[
+				'PREVIEW_SOURCE_CID' => 0,
+				'PREVIEW_SOURCE_MID' => 0,
+			],
+		);
+
+		// updateByFilter writes RecentTable directly, so the request-scoped RecentItemCache would keep
+		// stale RecentItems for the affected users/chat.
+		$cache = ServiceLocator::getInstance()->get(\Bitrix\Im\V2\Recent\Internal\RecentItemCache::class);
+		foreach ($notifySubscribedUserIds as $userId)
+		{
+			$cache->remove((int)$userId, $this->getId());
+		}
 	}
 }

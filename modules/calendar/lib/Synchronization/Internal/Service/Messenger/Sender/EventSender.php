@@ -22,6 +22,8 @@ use Bitrix\Calendar\Synchronization\Internal\Service\Messenger\Message\RecreateR
 use Bitrix\Calendar\Synchronization\Internal\Service\Messenger\Queue;
 use Bitrix\Calendar\Synchronization\Internal\Repository\EventConnectionRepository;
 use Bitrix\Calendar\Synchronization\Internal\Repository\SectionConnectionRepository;
+use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\AbstractICloudSynchronizer;
+use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\AbstractOffice365Synchronizer;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\ConfigurationException;
 use Bitrix\Main\Entity\EntityCollection;
@@ -100,7 +102,7 @@ class EventSender
 				$event->getId(),
 				$event->getOwner()->getId(),
 				$eventConnection->getVendorEventId(),
-				$sectionConnectionMap[$vendorCode]->getVendorSectionId()
+				$sectionConnectionMap[$vendorCode]->getVendorSectionId(),
 			);
 
 			$this->sendMessageForVendor($event, $message, $vendorCode);
@@ -231,7 +233,7 @@ class EventSender
 			$connections = $this->connectionProvider->getActiveConnections(
 				$event->getOwner()->getId(),
 				'user',
-				$this->getVendorCodes($excludedVendorCodes)
+				$this->getVendorCodes($excludedVendorCodes),
 			);
 		}
 		catch (SystemException|LoaderException $e)
@@ -239,13 +241,18 @@ class EventSender
 			throw new MessageSendingException(
 				sprintf('Unable to select user connections: %s""', $e->getMessage()),
 				$e->getCode(),
-				$e
+				$e,
 			);
 		}
 
 		foreach ($connections as $connection)
 		{
 			$vendorCode = $connection->getAccountType();
+
+			if (!$this->shouldSendSectionMessageForVendor($event->getSection(), $vendorCode))
+			{
+				continue;
+			}
 
 			$this->sendMessageForVendor($event, $message, $vendorCode);
 		}
@@ -388,5 +395,30 @@ class EventSender
 		}
 
 		return $vendorCodes;
+	}
+
+	private function shouldSendSectionMessageForVendor(Section $section, string $vendorCode): bool
+	{
+		if ($section->isLocal())
+		{
+			return true;
+		}
+
+		$externalType = $section->getExternalType();
+
+		if (!$externalType)
+		{
+			return false;
+		}
+
+		$dictionary = [
+			\Bitrix\Calendar\Sync\Google\Factory::SERVICE_NAME => \Bitrix\Calendar\Sync\Google\Dictionary::ACCESS_ROLE_TO_EXTERNAL_TYPE,
+			\Bitrix\Calendar\Sync\Icloud\Factory::SERVICE_NAME => [AbstractICloudSynchronizer::VENDOR_CODE],
+			\Bitrix\Calendar\Sync\Office365\Factory::SERVICE_NAME => [AbstractOffice365Synchronizer::VENDOR_CODE],
+		];
+
+		$types = $dictionary[$vendorCode] ?? [];
+
+		return in_array($externalType, $types, true);
 	}
 }

@@ -94,11 +94,15 @@ class UserCountersCollector
 		foreach ($parentChats as $chat)
 		{
 			$type = $this->getType($chat);
-			$counters->addParentChat(
-				$chat,
-				$this->getRecentSections($type, (int)($chat['PARENT_ID'] ?? 0)),
-				$type,
-			);
+			// A parent the user belongs to but which is absent from their recent list is flagged
+			// hidden centrally by ChatTreeResolver (RecentTable LEFT join). Empty its recentSections
+			// so child counters don't "bubble up" into the default/collab badge through an invisible
+			// parent. The parent stays in the registry, so the child is not orphaned.
+			$sections = ($chat['IS_HIDDEN'] ?? false)
+				? []
+				: $this->getRecentSections($type, (int)($chat['PARENT_ID'] ?? 0));
+
+			$counters->addParentChat($chat, $sections, $type);
 		}
 
 		$counters->removeOrphaned();
@@ -218,6 +222,7 @@ class UserCountersCollector
 				'CHAT_ENTITY_TYPE' => $node->entityType,
 				'PARENT_ID' => $node->parentChatId,
 				'IS_MUTED' => $node->isMuted ? 'Y' : 'N',
+				'IS_HIDDEN' => $node->isHidden,
 			],
 			$this->chatTreeResolver->resolveForUser($userId, array_values($unknownParentIds), array_keys($knownIds)),
 		);

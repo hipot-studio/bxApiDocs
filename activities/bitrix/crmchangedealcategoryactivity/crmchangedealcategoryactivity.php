@@ -1,8 +1,10 @@
 <?php
 
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Bizproc\WorkflowInstanceTable;
 use Bitrix\Crm;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 use Bitrix\Main\Localization\Loc;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -12,6 +14,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 class CBPCrmChangeDealCategoryActivity extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	private static $cycleCounter = [];
 	const CYCLE_LIMIT = 3;
 
@@ -34,10 +39,17 @@ class CBPCrmChangeDealCategoryActivity extends CBPActivity
 
 		$this->logDebug();
 
-		$documentId = $this->GetDocumentId();
+		$documentId = $this->resolveTargetDocumentId();
 		//check deal only.
 		if (!CBPHelper::isEqualDocumentEntity($documentId, ['crm', 'CCrmDocumentDeal']))
 		{
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		if (!$this->canUpdateResolvedTarget($documentId))
+		{
+			$this->logResolvedTargetAccessDenied();
+
 			return CBPActivityExecutionStatus::Closed;
 		}
 
@@ -75,13 +87,13 @@ class CBPCrmChangeDealCategoryActivity extends CBPActivity
 			]
 		);
 
-		if ($resultError === Crm\Category\DealCategoryChangeError::NONE)
-		{
-			$documentType = $this->getDocumentType();
-			\CCrmBizProcHelper::sendOperationsAnalytics(
-				Dictionary::EVENT_ENTITY_EDIT,
-				$this,
-				$documentType[2] ?? '',
+			if ($resultError === Crm\Category\DealCategoryChangeError::NONE)
+			{
+				$documentType = $this->resolveTargetDocumentType($documentId);
+				\CCrmBizProcHelper::sendOperationsAnalytics(
+					Dictionary::EVENT_ENTITY_EDIT,
+					$this,
+					$documentType[2] ?? '',
 			);
 
 			$this->terminateDocumentWorkflows($documentId);

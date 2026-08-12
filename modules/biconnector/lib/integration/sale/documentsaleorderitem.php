@@ -103,6 +103,18 @@ class DocumentSaleOrderItem extends Dataset
 		$batchNumeratorField = $shipmentBatchJoin->getJoinFieldName('COST_NUMERATOR');
 		$batchDenominatorField = $shipmentBatchJoin->getJoinFieldName('COST_DENOMINATOR');
 
+		$ratio = "SUM({$batchNumeratorField}) / NULLIF(SUM({$batchDenominatorField}), 0)";
+		$isPgsql = $this->getDataConnection() instanceof \Bitrix\Main\DB\PgsqlConnection;
+		if ($isPgsql)
+		{
+			// PG: round(x::numeric, 4) rounds half-away-from-zero (HALF_UP), matching MySQL DECIMAL(18,4) behaviour.
+			$costPriceExpression = "round(({$ratio})::numeric, 4)";
+		}
+		else
+		{
+			$costPriceExpression = "CAST({$ratio} AS DECIMAL(18,4))";
+		}
+
 		return [
 			(new IntegerField('ID'))
 				->setPrimary()
@@ -126,12 +138,7 @@ class DocumentSaleOrderItem extends Dataset
 				->setExpression("SUM({$shipmentStoreJoin->getJoinFieldName('QUANTITY')})")
 				->setJoin($shipmentStoreJoin),
 			(new DoubleField('COST_PRICE'))
-				->setExpression("
-					CAST(
-						SUM({$batchNumeratorField}) / NULLIF(SUM({$batchDenominatorField}), 0)
-						AS DECIMAL(18,4)
-					)
-				")
+				->setExpression($costPriceExpression)
 				->setJoin($shipmentBatchJoin),
 			(new StringField('COST_CURRENCY'))
 				->setExpression("MAX({$shipmentBatchJoin->getJoinFieldName('BATCH_CURRENCY')})")

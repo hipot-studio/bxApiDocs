@@ -108,6 +108,74 @@ class LandingPubComponent extends LandingBaseComponent
 	}
 
 	/**
+	 * Reads the editor-context marker (MARKER-01) from the request and returns the
+	 * validated parent portal origin for the device-preview postMessage responder,
+	 * or an empty string when the marker is absent or malformed. The value is echoed
+	 * into an inline script by the template, so only a strict scheme://host[:port]
+	 * origin is allowed here — a raw request string is never trusted.
+	 * @return string
+	 */
+	private function getDevicePreviewParentOrigin(): string
+	{
+		// is_string(): the request value is an array for ?landing_device_preview[]=...
+		$raw = $this->request('landing_device_preview');
+		if (!is_string($raw) || $raw === '')
+		{
+			return '';
+		}
+
+		return $this->sanitizeOrigin($raw);
+	}
+
+	/**
+	 * Validates a string as a bare web origin (scheme://host[:port]) and returns it
+	 * normalized, or an empty string when it is not a well-formed origin.
+	 * @param string $value Raw candidate.
+	 * @return string
+	 */
+	private function sanitizeOrigin(string $value): string
+	{
+		$parts = parse_url($value);
+		if (
+			!is_array($parts)
+			|| !isset($parts['scheme'], $parts['host'])
+			|| isset($parts['user'])
+			|| isset($parts['pass'])
+			|| isset($parts['query'])
+			|| isset($parts['fragment'])
+			|| (isset($parts['path']) && $parts['path'] !== '')
+		)
+		{
+			return '';
+		}
+
+		$scheme = mb_strtolower($parts['scheme']);
+		if ($scheme !== 'http' && $scheme !== 'https')
+		{
+			return '';
+		}
+
+		$host = mb_strtolower($parts['host']);
+		if (!preg_match('/^[a-z0-9.\-\[\]:]+$/', $host))
+		{
+			return '';
+		}
+
+		$origin = $scheme . '://' . $host;
+		if (isset($parts['port']))
+		{
+			$port = (int)$parts['port'];
+			if ($port < 1 || $port > 65535)
+			{
+				return '';
+			}
+			$origin .= ':' . $port;
+		}
+
+		return $origin;
+	}
+
+	/**
 	 * Can reinit current domain zone
 	 * @param string $zone
 	 * @return void
@@ -1587,6 +1655,9 @@ class LandingPubComponent extends LandingBaseComponent
 				$this->arResult['ADV_CODE'] = $this->getAdvCode();
 				$this->arResult['SEARCH_RESULT_QUERY'] = $this->request('q');
 				$this->arResult['CAN_EDIT'] = 'N';
+				// MARKER-01: expose the validated parent portal origin so the template can inject
+				// the device-preview postMessage responder only for the editor device preview.
+				$this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'] = $this->getDevicePreviewParentOrigin();
 				// if landing found
 				if ($landing->exist())
 				{

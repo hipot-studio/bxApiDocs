@@ -522,7 +522,7 @@ class CBPImGetUserChatMessagesActivity extends BaseActivity implements IBPConfig
 				'Name' => Loc::getMessage('IM_ACTIVITIES_GET_USER_MESSAGES_ACTIVITY_PROPERTY_RECENT_CHAT_SELECTION_FROM_DATE'),
 				'FieldName' => 'recent_chat_selection_from_date',
 				'Type' => Bizproc\FieldType::DATE,
-				'Required' => true,
+				'Required' => false,
 				'Default' => "{{=dateadd({=System:Date}, '-${defaultChatActivityBoundaryDays}d')}}",
 			],
 			self::PARAM_CHAT_COUNT_LIMIT => [
@@ -537,8 +537,8 @@ class CBPImGetUserChatMessagesActivity extends BaseActivity implements IBPConfig
 				'Name' => Loc::getMessage('IM_ACTIVITIES_GET_USER_MESSAGES_ACTIVITY_PROPERTY_CHAT_MESSAGE_SELECTION_FROM_DATE'),
 				'FieldName' => 'chat_message_selection_from_date',
 				'Type' => Bizproc\FieldType::DATE,
-				'Required' => true,
-				'Default' => "{{=dateadd({=System:Date}, '-${defaultMessageActivityBoundaryDays}d}')}}",
+				'Required' => false,
+				'Default' => "{{=dateadd({=System:Date}, '-${defaultMessageActivityBoundaryDays}d')}}",
 			],
 			self::PARAM_MESSAGE_COUNT_LIMIT => [
 				'Name' => Loc::getMessage('IM_ACTIVITIES_GET_USER_MESSAGES_ACTIVITY_PROPERTY_MESSAGE_COUNT_LIMIT'),

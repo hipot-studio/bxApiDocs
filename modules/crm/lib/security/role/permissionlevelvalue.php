@@ -78,4 +78,14 @@ class PermissionLevelValue
 	{
 		return in_array(UserDepartmentAndOpened::SUBDEPARTMENTS, $this->settings, true);
 	}
+
+	public function hasTeamPermissions(): bool
+	{
+		return in_array(UserDepartmentAndOpened::TEAM, $this->settings, true);
+	}
+
+	public function hasSubTeamPermissions(): bool
+	{
+		return in_array(UserDepartmentAndOpened::SUBTEAMS, $this->settings, true);
+	}
 }

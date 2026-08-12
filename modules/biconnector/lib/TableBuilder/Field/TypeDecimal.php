@@ -9,6 +9,6 @@ class TypeDecimal extends Base
 
 	public function getField(): string
 	{
-		return sprintf('`%s` DECIMAL(%d,%d)', $this->getName(), self::INTEGER, self::DECIMAL);
+		return sprintf('%s DECIMAL(%d,%d)', $this->sqlHelper->quote($this->name), self::INTEGER, self::DECIMAL);
 	}
 }

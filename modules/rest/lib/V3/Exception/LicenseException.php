@@ -2,7 +2,7 @@
 
 namespace Bitrix\Rest\V3\Exception;
 
-class LicenseException extends RestException
+class LicenseException extends RestException implements SkipWriteToLogException
 {
 	protected function getMessagePhraseCode(): string
 	{

@@ -16,6 +16,7 @@ class General extends BaseSettings
 
 	public const PRIVACY_SEARCH = 'privacySearch';
 	public const OPEN_DESKTOP_FROM_PANEL = 'openDesktopFromPanel';
+	public const DEFAULT_REACTION = 'defaultReaction';
 
 
 	public static function getRestEntityName(): string

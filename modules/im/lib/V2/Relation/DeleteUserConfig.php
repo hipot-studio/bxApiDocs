@@ -9,13 +9,15 @@ final class DeleteUserConfig
 	public readonly bool $withNotification;
 	public readonly bool $skipCheckReason;
 	public readonly bool $withoutRead;
+	public readonly bool $blockGuestRejoin;
 
 	public function __construct(
 		bool $withMessage = true,
 		bool $skipRecent = false,
 		bool $withNotification = true,
 		bool $skipCheckReason = false,
-		bool $withoutRead = false
+		bool $withoutRead = false,
+		bool $blockGuestRejoin = false
 	)
 	{
 		$this->withMessage = $withMessage;
@@ -23,5 +25,6 @@ final class DeleteUserConfig
 		$this->withNotification = $withNotification;
 		$this->skipCheckReason = $skipCheckReason;
 		$this->withoutRead = $withoutRead;
+		$this->blockGuestRejoin = $blockGuestRejoin;
 	}
 }

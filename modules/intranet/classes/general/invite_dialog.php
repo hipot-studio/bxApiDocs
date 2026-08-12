@@ -28,8 +28,6 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Bitrix24\Integration;
 use Bitrix\Bitrix24\Public\Command\Network\SendNetworkException;
 use Bitrix\Main\Web\Uri;
-use Bitrix\Socialnetwork\Collab\Provider\CollabProvider;
-use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 
 Loc::loadMessages(__FILE__);
 
@@ -1980,7 +1978,9 @@ class CIntranetInviteDialog
 			)
 		);
 
-		return CHTTP::URN2URI("/bitrix/tools/intranet_invite_dialog.php?user_id=".$arUser["ID"]."&checkword=".urlencode($arUser["CONFIRM_CODE"]), $serverName);
+		$url = "/bitrix/tools/intranet_invite_dialog.php?user_id=".$arUser["ID"]."&checkword=".urlencode($arUser["CONFIRM_CODE"]);
+
+		return (string)(new Uri($url))->toAbsolute($serverName);
 	}
 
 	public static function getInviteMessageText()

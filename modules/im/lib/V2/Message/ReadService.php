@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Message;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeScopeFactory;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\MessageCollection;
@@ -61,9 +62,12 @@ class ReadService
 		$chat->onAfterAllMessagesRead($userId);
 		if ($chat instanceof Chat\ChannelChat)
 		{
-			$parentChatId = $chat->getId();
+			$childrenScope = ServiceLocator::getInstance()
+				->get(ChatTreeScopeFactory::class)
+				->forParent($chat->getId())
+			;
 			Application::getInstance()->addBackgroundJob(
-				fn () => $countersUpdater->delete()->byParent($parentChatId)->forUser($userId)->execute()
+				fn () => $countersUpdater->delete()->byTreeScope($childrenScope)->forUser($userId)->execute()
 			);
 		}
 

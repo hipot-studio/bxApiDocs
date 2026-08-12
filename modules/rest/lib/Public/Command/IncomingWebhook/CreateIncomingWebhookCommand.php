@@ -13,10 +13,11 @@ class CreateIncomingWebhookCommand extends AbstractCreateIncomingWebhookCommand
 		?string $title,
 		array $scopes,
 		array $attributes = [],
+		?string $comment = null,
 		public readonly ?int $ownerUserId = null,
 	)
 	{
-		parent::__construct($userId, $title, $scopes, $attributes);
+		parent::__construct($userId, $title, $scopes, $attributes, $comment);
 	}
 
 	protected function execute(): Main\Result

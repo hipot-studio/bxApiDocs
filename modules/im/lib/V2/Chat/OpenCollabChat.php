@@ -9,6 +9,12 @@ class OpenCollabChat extends CollabChat
 		return self::IM_TYPE_OPEN_COLLAB;
 	}
 
+	public function isAutoJoinEnabled(): bool
+	{
+		// Phase 0 (task 718250): keep open project chats relationless (no auto-join)
+		return false;
+	}
+
 	public function getRecentSectionsForGuest(): array
 	{
 		return [];

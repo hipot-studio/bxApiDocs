@@ -25,6 +25,10 @@ class FeedbackFormProvider
 		'phone_model' => FILTER_SANITIZE_FULL_SPECIAL_CHARS,
 		'contextId' => FILTER_SANITIZE_FULL_SPECIAL_CHARS,
 		'message' => FILTER_SANITIZE_FULL_SPECIAL_CHARS,
+		'sending_time' => FILTER_SANITIZE_FULL_SPECIAL_CHARS,
+		'chat_id' => FILTER_VALIDATE_INT,
+		'message_id' => FILTER_VALIDATE_INT,
+		'user_id' => FILTER_VALIDATE_INT,
 	];
 
 	public const FORMS = [
@@ -85,6 +89,21 @@ class FeedbackFormProvider
 				'formId' => 836,
 				'sec' => 'frcsm3',
 				'lang' => 'de',
+			],
+			'en' => [
+				'isDefault' => true,
+				'portalZones' => ['en'],
+				'formId' => 834,
+				'sec' => 'qnauno',
+				'lang' => 'en',
+			],
+		],
+		'aiAssistantV2' => [
+			'ru-kz-by-uz' => [
+				'portalZones' => ['ru', 'kz', 'by', 'uz'],
+				'formId' => 2982,
+				'sec' => 'vqmcxn',
+				'lang' => 'ru',
 			],
 			'en' => [
 				'isDefault' => true,
@@ -278,6 +297,7 @@ class FeedbackFormProvider
 			$result['b24_type'] = false;
 		}
 
+		$result['db_name'] = \Bitrix\Main\Application::getConnection()->getDatabase();
 		$result['mobile_module_ver'] = (string)ModuleManager::getVersion('mobile');
 
 		return $result;

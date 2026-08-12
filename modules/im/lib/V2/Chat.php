@@ -58,6 +58,8 @@ use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Im\V2\Chat\ChatFactory;
 use Bitrix\Im\V2\Chat\ChatError;
+use Bitrix\Im\V2\Chat\Event\AfterDeleteEvent;
+use Bitrix\Im\V2\Chat\Event\Dto\ChatDto;
 use Bitrix\Im\V2\Chat\Access\ParentChainFilterFactory;
 use Bitrix\Im\V2\Chat\Tree\TreeOrigin;
 use Bitrix\Im\V2\Common\ContextCustomer;
@@ -166,7 +168,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	// Keeping them in the Chat cache lets fill() rerun their side-effecting setters on
 	// cache-load and, if the cached value is stale, wipes the param from the shared
 	// Params singleton. Access is served lazily from Params.
-	private const CHAT_PARAM_BACKED_FIELDS = ['MANAGE_MESSAGES_AUTO_DELETE', 'MANAGE_GUEST_INVITES'];
+	private const CHAT_PARAM_BACKED_FIELDS = ['MANAGE_MESSAGES_AUTO_DELETE', 'MANAGE_GUEST_INVITES', 'MANAGE_DELETE'];
 
 	public const
 		MANAGE_RIGHTS_NONE = 'NONE',
@@ -221,6 +223,18 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	protected int $parentMessageId = 0;
 
 	protected ?bool $extranet = null;
+
+	// Phase 0 (task 718250): superadmin project chat access
+	protected ?bool $hasManageCapability = null;
+
+	/**
+	 * Request-scoped cache for the lazy {@see self::getHasManageCapability()} path, keyed by
+	 * "chatId:viewerId". Collapses repeated lazy resolutions of the same chat for the same viewer
+	 * (e.g. the same chat re-serialized through several instances) into a single event dispatch.
+	 * @var array<string, bool>
+	 */
+	// Phase 0 (task 718250): superadmin project chat access
+	private static array $manageCapabilityCache = [];
 
 	protected ?int $avatarId = null;
 
@@ -713,18 +727,54 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	public function onAfterMessagesDelete(MessageCollection $messages, DeletionMode $deletionMode): Result
 	{
+		$this->recomputeCollabPreviewSourceAfterMessagesDelete($messages);
+
 		return new Result();
 	}
 
+	protected function recomputeCollabPreviewSourceAfterMessagesDelete(MessageCollection $messages): void
+	{
+		if ($this->getCollabAncestorIdForPreviewSource() === null)
+		{
+			return;
+		}
+
+		$deletedMessageIds = $messages->getIds();
+		if (empty($deletedMessageIds))
+		{
+			return;
+		}
+
+		ServiceLocator::getInstance()
+			->get(Im\V2\Recent\PreviewSource\CollabPreviewSourcePointerService::class)
+			->recomputeForDeletedMessages((int)$this->getChatId(), $deletedMessageIds)
+		;
+	}
+
 	public function onAfterMessagesRead(MessageCollection $messages, int $readerId): Result
+	{
+		$this->logReadToSync($readerId);
+
+		return new Result();
+	}
+
+	/**
+	 * Writes a read sync record (Sync\Event ADD_EVENT / CHAT_ENTITY) for catch-up sync
+	 * of clients — including the mobile app local DB via im.v2.Sync.list (an offline
+	 * device that missed the pull restores state on the next sync session).
+	 *
+	 * Extracted from {@see onAfterMessagesRead} so that programmatic event-free read
+	 * primitives ({@see \Bitrix\Im\V2\Reading\Reader::readExactly}) can give a durable
+	 * sync signal WITHOUT publishing a typed read event (loop-safety: the typed event is
+	 * sent by {@see \Bitrix\Im\V2\Chat\ExternalChat::onAfterMessagesRead}).
+	 */
+	public function logReadToSync(int $readerId): void
 	{
 		Sync\Logger::getInstance()->add(
 			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::CHAT_ENTITY, $this->getChatId()),
 			$readerId,
 			$this
 		);
-
-		return new Result();
 	}
 
 	public function onAfterAllMessagesRead(int $readerId): Result
@@ -736,6 +786,14 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		);
 
 		return new Result();
+	}
+
+	/**
+	 * @see \Bitrix\Im\V2\Chat\Cleanup\ChatContentCollector::cleanupChatBasics
+	 */
+	public function onAfterDelete(): void
+	{
+		(new AfterDeleteEvent(ChatDto::fromChat($this)))->send();
 	}
 
 	protected function onBeforeMessageSend(Message $message, SendingConfig $config): Result
@@ -878,11 +936,70 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$metaUserIds = $counterRecipientRelations->filterExcludingUserIds($raiseUserIds)->getUserIds();
 
 		$parentChat = $this->getParentChat();
-		Recent::raiseChat($parentChat, $parentChat->getRelationsByUserIds($raiseUserIds), new DateTime());
+		Recent::raiseChat(
+			$parentChat,
+			$parentChat->getRelationsByUserIds($raiseUserIds),
+			new DateTime(),
+			previewSource: $this->buildCollabPreviewSourcePiggyback($message),
+		);
 
 		ServiceLocator::getInstance()->get(AncestorContextSender::class)->send($this, $metaUserIds);
 
 		return new Result();
+	}
+
+	protected function buildCollabPreviewSourcePiggyback(Message $message): ?Im\V2\Recent\PreviewSource\CollabPreviewSourcePiggyback
+	{
+		if (!Im\V2\Application\Features::isCollabPreviewSourceEnabled())
+		{
+			return null;
+		}
+
+		$newMessageId = (int)$message->getId();
+		if ($newMessageId <= 0)
+		{
+			return null;
+		}
+
+		$parentChat = $this->getParentChat();
+		if ($parentChat === null)
+		{
+			return null;
+		}
+
+		// Direct send into a collab direct child: this chat is the source, the new message is the winner.
+		// Attach the message as an in-process hint so the realtime update builds the preview directly,
+		// skipping the per-recipient pointer read and Message re-hydration.
+		if ($this->isCollabType($parentChat->getType()))
+		{
+			return Im\V2\Recent\PreviewSource\CollabPreviewSourcePiggyback::forNewMessage(
+				(int)$parentChat->getId(),
+				(int)$this->getChatId(),
+				$newMessageId,
+				$message,
+			);
+		}
+
+		// Thread send: the winner is the parent channel; displayed is the channel's own last message,
+		// since thread replies do not change the channel's own messages (uniform across recipients).
+		$collabChat = $parentChat->getParentChat();
+		if ($collabChat !== null && $this->isCollabType($collabChat->getType()))
+		{
+			$channelLastOwnMessageId = (int)($parentChat->getLastMessageId() ?? 0);
+
+			return Im\V2\Recent\PreviewSource\CollabPreviewSourcePiggyback::forChannelRollup(
+				(int)$collabChat->getId(),
+				(int)$parentChat->getId(),
+				$channelLastOwnMessageId,
+			);
+		}
+
+		return null;
+	}
+
+	protected function isCollabType(string $type): bool
+	{
+		return $type === self::IM_TYPE_COLLAB || $type === self::IM_TYPE_OPEN_COLLAB;
 	}
 
 	protected function updateChatAfterMessageSend(Message $message): Result
@@ -1154,6 +1271,107 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		foreach ($chats as $chat)
 		{
 			$chat->getRelationFacade()?->preloadUserRelation($userId, $relations->getByUserId($userId, $chat->getId()));
+		}
+	}
+
+	// Phase 0 (task 718250): superadmin project chat access
+	public function setManageCapability(bool $hasManageCapability): self
+	{
+		$this->hasManageCapability = $hasManageCapability;
+
+		return $this;
+	}
+
+	// Phase 0 (task 718250): superadmin project chat access
+	public function getHasManageCapability(): bool
+	{
+		if ($this->hasManageCapability !== null)
+		{
+			return $this->hasManageCapability;
+		}
+
+		if (!($this instanceof Chat\ExternalChat))
+		{
+			$this->hasManageCapability = false;
+
+			return $this->hasManageCapability;
+		}
+
+		// capability = rights of the current viewer, i.e. the chat context user
+		$viewerId = $this->getContext()->getUserId();
+		$cacheKey = $this->getId() . ':' . $viewerId;
+		if (isset(self::$manageCapabilityCache[$cacheKey]))
+		{
+			$this->hasManageCapability = self::$manageCapabilityCache[$cacheKey];
+
+			return $this->hasManageCapability;
+		}
+
+		$event = new Chat\ExternalChat\Event\ResolveManageCapabilityEvent(
+			$this->getEntityType() ?? '',
+			$viewerId,
+			[$this->getId()],
+		);
+		$event->send();
+
+		$this->hasManageCapability = $event->getCapabilities()[$this->getId()] ?? false;
+		self::$manageCapabilityCache[$cacheKey] = $this->hasManageCapability;
+
+		return $this->hasManageCapability;
+	}
+
+	/**
+	 * Batch-fill {@see self::getHasManageCapability()} for a list of chats: one event dispatch
+	 * per entity type and viewer, so serialization of chat lists does not degrade into N+1.
+	 *
+	 * The viewer defaults to each chat's own context user, matching the lazy
+	 * {@see self::getHasManageCapability()} path, so both resolve the capability for the
+	 * same "current viewer". An explicit $userId overrides this for every chat.
+	 *
+	 * @param static[] $chats
+	 */
+	// Phase 0 (task 718250): superadmin project chat access
+	public static function fillManageCapability(array $chats, ?int $userId = null): void
+	{
+		$chatIdsByEntityTypeAndViewer = [];
+		$externalChats = [];
+		foreach ($chats as $chat)
+		{
+			if (!($chat instanceof Chat\ExternalChat))
+			{
+				continue;
+			}
+
+			$entityType = $chat->getEntityType();
+			if ($entityType === null || $entityType === '')
+			{
+				continue;
+			}
+
+			$viewerId = $userId ?? $chat->getContext()->getUserId();
+			$chatIdsByEntityTypeAndViewer[$entityType][$viewerId][] = $chat->getId();
+			$externalChats[$chat->getId()] = $chat;
+		}
+
+		if ($externalChats === [])
+		{
+			return;
+		}
+
+		$capabilities = [];
+		foreach ($chatIdsByEntityTypeAndViewer as $entityType => $chatIdsByViewer)
+		{
+			foreach ($chatIdsByViewer as $viewerId => $chatIds)
+			{
+				$event = new Chat\ExternalChat\Event\ResolveManageCapabilityEvent($entityType, (int)$viewerId, $chatIds);
+				$event->send();
+				$capabilities += $event->getCapabilities();
+			}
+		}
+
+		foreach ($externalChats as $chatId => $chat)
+		{
+			$chat->setManageCapability($capabilities[$chatId] ?? false);
 		}
 	}
 
@@ -1546,6 +1764,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 				'get' => 'getManageGuestInvites',  /** @see Chat::getManageGuestInvites */
 				'set' => 'setManageGuestInvites',  /** @see Chat::setManageGuestInvites */
 				'default' => 'getDefaultManageGuestInvites', /** @see Chat::getDefaultManageGuestInvites */
+				'skipSave' => true,
+			],
+			'MANAGE_DELETE' => [
+				'get' => 'getManageDelete',  /** @see Chat::getManageDelete */
+				'set' => 'setManageDelete',  /** @see Chat::setManageDelete */
+				'default' => 'getDefaultManageDelete', /** @see Chat::getDefaultManageDelete */
 				'skipSave' => true,
 			],
 			'USERS' => [
@@ -2072,6 +2296,24 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	public function canHaveChild(Chat $child): bool
 	{
 		return false;
+	}
+
+	public function onBeforeAttachChild(Chat\GroupChat $childChat, int $userId): Result
+	{
+		return new Result();
+	}
+
+	public function onAfterAttachChild(Chat\GroupChat $childChat, int $userId): void
+	{
+	}
+
+	public function onBeforeDetachChild(Chat\GroupChat $childChat, int $userId): Result
+	{
+		return new Result();
+	}
+
+	public function onAfterDetachChild(Chat\GroupChat $childChat, int $userId): void
+	{
 	}
 
 	// parent message
@@ -2788,6 +3030,52 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	}
 
 	/**
+	 * @param string $manageDelete NONE|MEMBER|OWNER|MANAGER
+	 * @return self
+	 */
+	public function setManageDelete(string $manageDelete): self
+	{
+		$manageDelete = mb_strtoupper($manageDelete);
+
+		if (!in_array(
+			$manageDelete,
+			[
+				self::MANAGE_RIGHTS_NONE,
+				self::MANAGE_RIGHTS_MEMBER,
+				self::MANAGE_RIGHTS_OWNER,
+				self::MANAGE_RIGHTS_MANAGERS,
+			],
+			true
+		))
+		{
+			return $this;
+		}
+
+		$manageDelete === $this->getDefaultManageDelete()
+			? $this->getChatParams()?->deleteParam(Params::MANAGE_DELETE, false)
+			: $this->getChatParams()?->addParamByName(Params::MANAGE_DELETE, $manageDelete, false)
+		;
+
+		return $this;
+	}
+
+	public function getManageDelete(): ?string
+	{
+		$manageDelete = $this->getChatParams()?->get(Params::MANAGE_DELETE);
+
+		return
+			isset($manageDelete)
+			? (string)$manageDelete->getValue()
+			: $this->getDefaultManageDelete()
+		;
+	}
+
+	public function getDefaultManageDelete(): string
+	{
+		return self::MANAGE_RIGHTS_MEMBER;
+	}
+
+	/**
 	 * Whether the new chat manage-rights value is stricter than the old one.
 	 * Lattice (low → high strictness): MEMBER < MANAGER < OWNER < NONE.
 	 */
@@ -2922,7 +3210,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 		$this->addUsersToParentCascade($userIds, $config);
 
-		if ($this->hasParent() && $this->requiresParentMembership())
+		// The HR structure sync is the authoritative source of a chat's department membership, so it is not
+		// subject to the parent-membership gate: every ancestor receives the same department (tree invariant,
+		// see ChatTreeDepartmentSynchronizer) and adds those members through its own structure sync, so the
+		// "child members ⊆ parent members" requirement holds without an add-time ordering dependency.
+		// Display still respects it via the query-time ParentChainFor*Filter.
+		if ($this->hasParent() && $this->requiresParentMembership() && $config->reason !== Reason::STRUCTURE)
 		{
 			$userIds = $this->getParentChat()->getRelationsByUserIds($userIds)->getUserIds();
 			if (empty($userIds))
@@ -2943,7 +3236,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		if (!$config->isFakeAdd)
 		{
 			$this->addUsersToRelation($changes->getNewRelations(), $config);
-			$this->processUpdateStateOnRelationsChanged($changes);
+			$this->processUpdateStateOnRelationsChanged($changes, $config);
 		}
 
 		$this->sendPushUsersAdd($changes->getAll(), $relations);
@@ -2984,7 +3277,11 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	private function shouldAddUsersToParentCascade(AddUsersConfig $config): bool
 	{
+		// Structure (department/team) members are not pushed up the tree: each ancestor chat receives them
+		// through its own mirrored department link + HR sync, which also removes them on department leave.
+		// Pushing them up here would double-add with a conflicting reason and leave them stuck on ancestors.
 		return $config->cascadeToParent
+			&& $config->reason !== Reason::STRUCTURE
 			&& $this->hasParent()
 			&& $this->requiresParentMembership()
 			&& !$config->isFakeAdd
@@ -2992,7 +3289,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		;
 	}
 
-	protected function processUpdateStateOnRelationsChanged(RelationChangeSet $changes): Result
+	protected function processUpdateStateOnRelationsChanged(RelationChangeSet $changes, ?AddUsersConfig $config = null): Result
 	{
 		$this->updateStateAfterRelationsAdd($changes->getNewRelations());
 		$this->updateStateAfterMembersAdd($changes->getNewMembers());
@@ -3389,10 +3686,32 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 		(new Im\V2\Analytics\ChatAnalytics($this))->addDeleteUser();
 
-		Im\V2\Guest\Auth\AuthorizationService::getInstance()->invalidateGuestUser($userId, $this->getId() ?? 0);
-		Im\V2\Guest\GuestLinkService::getInstance()->onChatMemberDeleted($this, $userId);
+		$this->cleanupGuestAfterUserDelete($userId, $config);
 
 		return new Result();
+	}
+
+	/**
+	 * Guest-link side effects of a member removal: drop the user's bindings, optionally block
+	 * re-entry via the kicker's links, revoke the leaver's authored links, tear the guest
+	 * session down when no valid access remains. Harmless for plain members.
+	 */
+	protected function cleanupGuestAfterUserDelete(int $userId, DeleteUserConfig $config): void
+	{
+		$memberService = Im\V2\SharingLink\SharingLinkMemberService::getInstance();
+
+		if ($config->blockGuestRejoin)
+		{
+			$actorId = $this->getContext()->getUserId();
+			if ($actorId > 0 && $actorId !== $userId && Entity\User\User::getInstance($userId)->isGuest())
+			{
+				$memberService->blockGuestForChatLinksOfAuthor($userId, $this->getId() ?? 0, $actorId);
+			}
+		}
+
+		$memberService->deleteByChatAndUser($this->getId() ?? 0, $userId);
+		Im\V2\Guest\Auth\AuthorizationService::getInstance()->invalidateGuestUser($userId);
+		Im\V2\Guest\GuestLinkService::getInstance()->onChatMemberDeleted($this, $userId);
 	}
 
 	public function hideUser(int $userId): Result
@@ -3798,6 +4117,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'manageMessages' => mb_strtolower($this->getManageMessages()),
 			'manageMessagesAutoDelete' => mb_strtolower($this->getManageMessagesAutoDelete()),
 			'manageGuestInvites' => mb_strtolower($this->getManageGuestInvites()),
+			'manageDelete' => mb_strtolower($this->getManageDelete()),
 			'canPost' => mb_strtolower($this->getManageMessages()),
 		];
 	}
@@ -3838,6 +4158,8 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'type' => $this->getExtendedType(),
 			'entityLink' => $this->getEntityLink()->toRestFormat($option),
 			'permissions' => $this->getPermissions(),
+			// Phase 0 (task 718250): superadmin project chat access
+			'hasManageCapability' => $this->getHasManageCapability(),
 			'isNew' => $this->isNew(),
 			'textFieldEnabled' => $this->getTextFieldEnabled()->get(),
 			'backgroundId' => $this->getBackground()->get(),
@@ -4072,7 +4394,41 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		(new Im\V2\Pull\Event\ChatMute($this, $userId, $isMuted, $counter))->send();
 		(new Im\V2\Chat\Event\Legacy\AfterChatMuteNotifyEvent($this, $userId, $isMuted))->send();
 
+		$this->recomputeCollabPreviewSourceAfterMute($userId);
+
 		return new Result();
+	}
+
+	protected function recomputeCollabPreviewSourceAfterMute(int $userId): void
+	{
+		$collabChatId = $this->getCollabAncestorIdForPreviewSource();
+		if ($collabChatId === null)
+		{
+			return;
+		}
+
+		ServiceLocator::getInstance()
+			->get(Im\V2\Recent\PreviewSource\CollabPreviewSourcePointerService::class)
+			->recomputeForUser($collabChatId, $userId)
+		;
+	}
+
+	// Collab ancestor for the preview-source pointer: this chat if it is a collab, or its direct parent if
+	// that is a collab (collab direct children hang directly off the collab); null otherwise.
+	protected function getCollabAncestorIdForPreviewSource(): ?int
+	{
+		if ($this instanceof Im\V2\Chat\CollabChat)
+		{
+			return (int)$this->getChatId();
+		}
+
+		$parent = $this->getParentChat();
+		if ($parent instanceof Im\V2\Chat\CollabChat)
+		{
+			return (int)$parent->getChatId();
+		}
+
+		return null;
 	}
 
 	/**

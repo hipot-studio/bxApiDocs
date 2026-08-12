@@ -8,21 +8,18 @@ use Bitrix\Tasks\V2\Internal\DI\Container;
 
 class EnableReplication
 {
-	public function __invoke(array $fields): void
+	public function __invoke(array $fields, bool $isReplicationEnabled): void
 	{
 		$replicator = Container::getInstance()->getRegularReplicator();
 
-		$replicator->stopReplication($fields['ID']);
-
-		if (
-			!array_key_exists('REPLICATE', $fields)
-			|| $fields['REPLICATE'] !== true
-		)
+		if (!$isReplicationEnabled)
 		{
+			$replicator->stopReplication($fields['ID']);
+
 			return;
 		}
 
-
+		$replicator->stopReplication($fields['ID']);
 		$replicator->startReplicationAndUpdateTemplate($fields['ID'], $fields['REPLICATE_PARAMS']);
 	}
 }

@@ -23,6 +23,7 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 	private const PARAM_AS_ERROR = 'asError';
 	private const PARAM_CHAT_ID = 'chatId';
 	private const PARAM_AI_WARNING = 'aiWarning';
+	private const PARAM_EXPAND_URL_PREVIEW = 'expandUrlPreview';
 
 	public function __construct($name)
 	{
@@ -36,6 +37,7 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 			self::PARAM_AS_ERROR => null,
 			self::PARAM_CHAT_ID => null,
 			self::PARAM_AI_WARNING => null,
+			self::PARAM_EXPAND_URL_PREVIEW => null,
 		];
 	}
 
@@ -198,6 +200,11 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 				'FieldName' => self::PARAM_AI_WARNING,
 				'Type' => FieldType::BOOL,
 			],
+			self::PARAM_EXPAND_URL_PREVIEW => [
+				'Name' => Loc::getMessage('IMBOT_MESSAGE_ACTIVITY_PROPERTY_EXPAND_URL_PREVIEW'),
+				'FieldName' => self::PARAM_EXPAND_URL_PREVIEW,
+				'Type' => FieldType::BOOL,
+			],
 		];
 	}
 
@@ -254,9 +261,10 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 		$message = $this->prepareMessageToSend($message);
 		$chatId = (int)$this->{self::PARAM_CHAT_ID};
 		$aiWarning = CBPHelper::getBool($this->{self::PARAM_AI_WARNING});
+		$expandUrlPreview = CBPHelper::getBool($this->{self::PARAM_EXPAND_URL_PREVIEW});
 		if ($chatId > 0)
 		{
-			$this->sendAndTrackError($botId, "chat{$chatId}", $message, $asError, $aiWarning);
+			$this->sendAndTrackError($botId, "chat{$chatId}", $message, $asError, $aiWarning, $expandUrlPreview);
 
 			return CBPActivityExecutionStatus::Closed;
 		}
@@ -271,7 +279,7 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 
 		foreach ($recipients as $recipient)
 		{
-			$this->sendAndTrackError($botId, (string)$recipient, $message, $asError, $aiWarning);
+			$this->sendAndTrackError($botId, (string)$recipient, $message, $asError, $aiWarning, $expandUrlPreview);
 		}
 
 		return CBPActivityExecutionStatus::Closed;
@@ -283,9 +291,10 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 		string $message,
 		bool $asError,
 		bool $aiWarning,
+		bool $expandUrlPreview,
 	): void
 	{
-		$sent = $this->sendByDialogId($botId, $dialogId, $message, $asError, $aiWarning);
+		$sent = $this->sendByDialogId($botId, $dialogId, $message, $asError, $aiWarning, $expandUrlPreview);
 		if (!$sent)
 		{
 			$this->trackErrorFromGlobalVariables();
@@ -298,6 +307,7 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 		string $message,
 		bool $asError,
 		bool $aiWarning,
+		bool $expandUrlPreview,
 	): bool
 	{
 		$botIdentifier = ['BOT_ID' => $botId];
@@ -313,6 +323,11 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 		elseif ($aiWarning)
 		{
 			$messageFields['PARAMS'] = ['COMPONENT_ID' => 'AiBizprocMessage'];
+		}
+
+		if (!$expandUrlPreview)
+		{
+			$messageFields['URL_PREVIEW'] = 'N';
 		}
 
 		return (bool)Bot::addMessage($botIdentifier, $messageFields);

@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Order\Import;
 
 use Bitrix\Crm\Order\Import\Internals\ProductTable;
+use Bitrix\Crm\Service\Accounting;
 use Bitrix\Iblock\ElementTable;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
@@ -479,7 +480,7 @@ class Instagram
 			}
 		}
 
-		return round($price / $exchangeRate, 2);
+		return Accounting::roundPublic($price / $exchangeRate, $to);
 	}
 
 	public static function onAfterIblockElementDelete($fields)

@@ -52,6 +52,7 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 			'contextId' => $this->getContext()->getContextId(),
 			'userId' => $this->getContext()->getUserId(),
 		];
+
 		try
 		{
 			$payload = $this->getPayload();

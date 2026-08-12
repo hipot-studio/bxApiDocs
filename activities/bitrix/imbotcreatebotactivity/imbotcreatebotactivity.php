@@ -194,11 +194,17 @@ class CBPImBotCreateBotActivity extends CBPActivity implements IBPConfigurableAc
 			return CBPActivityExecutionStatus::Closed;
 		}
 
+		$templateIdKey = defined(BizprocBot::class . '::REGISTER_PARAM_TEMPLATE_ID')
+			? BizprocBot::REGISTER_PARAM_TEMPLATE_ID
+			: 'templateId'
+		;
+
 		$botId = BizprocBot::registerOrUpdateByCode([
 			BizprocBot::REGISTER_PARAM_NAME => $this->{self::PARAM_BOT_NAME},
 			BizprocBot::REGISTER_PARAM_POSITION => $this->{self::PARAM_WORK_POSITION},
 			BizprocBot::REGISTER_PARAM_AVATAR => $this->getAvatarFileId(),
 			BizprocBot::REGISTER_PARAM_CODE => (string)$this->{self::PARAM_BOT_CODE},
+			$templateIdKey => (int)$this->getWorkflowTemplateId(),
 		]);
 
 		if (empty($botId))

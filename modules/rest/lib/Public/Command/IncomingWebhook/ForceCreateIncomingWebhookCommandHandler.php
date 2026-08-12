@@ -21,6 +21,7 @@ final class ForceCreateIncomingWebhookCommandHandler extends AbstractCreateIncom
 			title: $command->title,
 			scopes: $scopes,
 			attributes: $command->attributes,
+			comment: $command->comment,
 		);
 	}
 

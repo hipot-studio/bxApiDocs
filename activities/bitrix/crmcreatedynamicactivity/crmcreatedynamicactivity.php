@@ -1,6 +1,8 @@
 <?php
 
 use Bitrix\Bizproc\Activity\PropertiesDialog;
+use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Result\ResultDto;
 use Bitrix\Crm;
@@ -23,6 +25,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
  */
 class CBPCrmCreateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 {
+	use TargetDocumentResolverTrait;
+	use ChecksResolvedTargetAccessTrait;
+
 	protected static $requiredModules = ['crm'];
 
 	public function __construct($name)
@@ -54,6 +59,8 @@ class CBPCrmCreateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 
 	protected function prepareProperties(): void
 	{
+		$this->resolveTargetDocumentId();
+
 		parent::prepareProperties();
 
 		$entityFieldsValues = [];
@@ -69,6 +76,13 @@ class CBPCrmCreateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 		{
 			$this->writeDebugInfo($this->getDebugInfo());
 		}
+
+		Crm\Service\Container::getInstance()
+			->getContext()
+			->getAnalytics()
+			->setCategory(Dictionary::CATEGORY_ROBOT_OPERATIONS)
+			->setType(Dictionary::TYPE_CREATE_DYNAMIC_ACTIVITY)
+		;
 	}
 
 	protected function checkProperties(): \Bitrix\Main\ErrorCollection
@@ -100,11 +114,21 @@ class CBPCrmCreateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 				$moduleId = $this->getDocumentType()[0] ?? '';
 				if (is_int($creationResult) && $moduleId === 'crm')
 				{
-					[$currentEntityTypeId, $currentEntityId] = CCrmBizProcHelper::resolveEntityId($this->getDocumentId());
-					$this->bindElements(
-						new Crm\ItemIdentifier($currentEntityTypeId, $currentEntityId),
-						new Crm\ItemIdentifier($this->DynamicTypeId, $creationResult),
-					);
+					$currentDocumentId = $this->resolveTargetDocumentId();
+					if ($this->canUpdateResolvedTarget($currentDocumentId))
+					{
+						[$currentEntityTypeId, $currentEntityId] = CCrmBizProcHelper::resolveEntityId(
+							$currentDocumentId,
+						);
+						$this->bindElements(
+							new Crm\ItemIdentifier($currentEntityTypeId, $currentEntityId),
+							new Crm\ItemIdentifier($this->DynamicTypeId, $creationResult),
+						);
+					}
+					else
+					{
+						$this->logResolvedTargetAccessDenied();
+					}
 				}
 			}
 		}
@@ -131,12 +155,6 @@ class CBPCrmCreateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 
 		if ($this->ItemId)
 		{
-			\CCrmBizProcHelper::sendOperationsAnalytics(
-				Dictionary::EVENT_ENTITY_CREATE,
-				$this,
-				$documentType[2] ?? '',
-			);
-
 			$this->fixResult($this->makeResultFromId($this->ItemId));
 		}
 
@@ -189,17 +207,17 @@ class CBPCrmCreateDynamicActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 				$fieldTypeObject = $documentService->getFieldTypeObject($documentType, $property);
 				if ($fieldTypeObject)
 				{
-					$fieldTypeObject->setDocumentId($this->getDocumentId());
+					$fieldTypeObject->setDocumentId($this->resolveTargetDocumentId());
 					$fieldTypeObject->setValue($value);
 					$value = $fieldTypeObject->externalizeValue(
 						\Bitrix\Bizproc\FieldType::VALUE_CONTEXT_DOCUMENT,
 						$fieldTypeObject->getValue()
 					);
+				}
 
-					if (isset($value))
-					{
-						$resultFields[$key] = $value;
-					}
+				if (isset($value))
+				{
+					$resultFields[$key] = $value;
 				}
 			}
 		}

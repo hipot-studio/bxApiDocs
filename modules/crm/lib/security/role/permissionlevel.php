@@ -241,37 +241,37 @@ class PermissionLevel
 
 		$userAttributes = $this->attributesProvider->getUserAttributes();
 
-		if (
-			isset($userAttributes['INTRANET'])
-			&& is_array($userAttributes['INTRANET'])
-			&& $permissionLevelValue->hasDepartmentPermissions()
-		)
+		$userAttributesToCheck = [];
+		if (!empty($userAttributes['HR_DEPARTMENTS']) && $permissionLevelValue->hasDepartmentPermissions())
 		{
-			foreach ($userAttributes['INTRANET'] as $departmentAccessCode)
-			{
-				if (in_array($departmentAccessCode, $entityAttributes, true))
-				{
-					return true;
-				}
-			}
+			$userAttributesToCheck = array_merge(
+				$userAttributesToCheck,
+				$userAttributes['HR_DEPARTMENTS']
+			);
+		}
+		if (!empty($userAttributes['HR_SUBDEPARTMENTS']) && $permissionLevelValue->hasSubDepartmentsPermissions())
+		{
+			$userAttributesToCheck = array_merge(
+				$userAttributesToCheck,
+				$userAttributes['HR_SUBDEPARTMENTS']
+			);
+		}
+		if (!empty($userAttributes['HR_TEAMS']) && $permissionLevelValue->hasTeamPermissions())
+		{
+			$userAttributesToCheck = array_merge(
+				$userAttributesToCheck,
+				$userAttributes['HR_TEAMS']
+			);
+		}
+		if (!empty($userAttributes['HR_SUBTEAMS']) && $permissionLevelValue->hasSubTeamPermissions())
+		{
+			$userAttributesToCheck = array_merge(
+				$userAttributesToCheck,
+				$userAttributes['HR_SUBTEAMS']
+			);
 		}
 
-		if (
-			isset($userAttributes['SUBINTRANET'])
-			&& is_array($userAttributes['SUBINTRANET'])
-			&& $permissionLevelValue->hasSubDepartmentsPermissions()
-		)
-		{
-			foreach ($userAttributes['SUBINTRANET'] as $departmentAccessCode)
-			{
-				if (in_array($departmentAccessCode, $entityAttributes, true))
-				{
-					return true;
-				}
-			}
-		}
-
-		return false;
+		return count(array_intersect($userAttributesToCheck, $entityAttributes)) > 0;
 	}
 
 	/**
@@ -444,6 +444,8 @@ class PermissionLevel
 				$permissionLevelValue->hasSelfPermissions()
 				|| $permissionLevelValue->hasDepartmentPermissions()
 				|| $permissionLevelValue->hasSubDepartmentsPermissions()
+				|| $permissionLevelValue->hasTeamPermissions()
+				|| $permissionLevelValue->hasSubTeamPermissions()
 				|| $permissionLevelValue->hasOpenedPermissions()
 			)
 			{
@@ -452,41 +454,80 @@ class PermissionLevel
 					$result[] =  $statusRestriction ? [$statusRestriction, $userId] : [$userId];
 				}
 			}
-			if (isset($userAttributes['INTRANET'])
-				&& (
-					$permissionLevelValue->hasDepartmentPermissions()
-					|| $permissionLevelValue->hasSubDepartmentsPermissions()
-				)
-			)
-			{
-				foreach ($userAttributes['INTRANET'] as $departmentAccessCode)
-				{
-					//HACK: SKIP IU code it is not required for this method
-					if ($departmentAccessCode != '' && mb_substr($departmentAccessCode, 0, 2) === 'IU')
-					{
-						continue;
-					}
 
-					if (!in_array($departmentAccessCode, $partOfResult))
+			if (\Bitrix\Crm\Security\Controller\Compatible::isAvailable())
+			{
+				if (isset($userAttributes['INTRANET'])
+					&& (
+						$permissionLevelValue->hasDepartmentPermissions()
+						|| $permissionLevelValue->hasSubDepartmentsPermissions()
+					)
+				)
+				{
+					foreach ($userAttributes['INTRANET'] as $departmentAccessCode)
 					{
-						$partOfResult[] = $departmentAccessCode;
+						//HACK: SKIP IU code it is not required for this method
+						if ($departmentAccessCode != '' && mb_substr($departmentAccessCode, 0, 2) === 'IU')
+						{
+							continue;
+						}
+
+						if (!in_array($departmentAccessCode, $partOfResult))
+						{
+							$partOfResult[] = $departmentAccessCode;
+						}
+					}
+				}
+				if (isset($userAttributes['SUBINTRANET']) && $permissionLevelValue->hasSubDepartmentsPermissions())
+				{
+					foreach ($userAttributes['SUBINTRANET'] as $departmentAccessCode)
+					{
+						if ($departmentAccessCode != '' && mb_substr($departmentAccessCode, 0, 2) === 'IU')
+						{
+							continue;
+						}
+
+						if (!in_array($departmentAccessCode, $partOfResult))
+						{
+							$partOfResult[] = $departmentAccessCode;
+						}
 					}
 				}
 			}
-			if (isset($userAttributes['SUBINTRANET']) && $permissionLevelValue->hasSubDepartmentsPermissions())
-			{
-				foreach ($userAttributes['SUBINTRANET'] as $departmentAccessCode)
-				{
-					if ($departmentAccessCode != '' && mb_substr($departmentAccessCode, 0, 2) === 'IU')
-					{
-						continue;
-					}
 
-					if (!in_array($departmentAccessCode, $partOfResult))
-					{
-						$partOfResult[] = $departmentAccessCode;
-					}
-				}
+			if (
+				$permissionLevelValue->hasDepartmentPermissions()
+				|| $permissionLevelValue->hasSubDepartmentsPermissions()
+			)
+			{
+				$partOfResult = $this->appendAttributes(
+					$partOfResult,
+					$userAttributes['HR_DEPARTMENTS'] ?? []
+				);
+			}
+			if ($permissionLevelValue->hasSubDepartmentsPermissions())
+			{
+				$partOfResult = $this->appendAttributes(
+					$partOfResult,
+					$userAttributes['HR_SUBDEPARTMENTS'] ?? []
+				);
+			}
+			if (
+				$permissionLevelValue->hasTeamPermissions()
+				|| $permissionLevelValue->hasSubTeamPermissions()
+			)
+			{
+				$partOfResult = $this->appendAttributes(
+					$partOfResult,
+					$userAttributes['HR_TEAMS'] ?? []
+				);
+			}
+			if ($permissionLevelValue->hasSubTeamPermissions())
+			{
+				$partOfResult = $this->appendAttributes(
+					$partOfResult,
+					$userAttributes['HR_SUBTEAMS'] ?? []
+				);
 			}
 			if ($permissionLevelValue->hasOpenedPermissions())
 			{
@@ -571,5 +612,18 @@ class PermissionLevel
 			$maxAttributeValue,
 			array_keys($settingsRoles)
 		);
+	}
+
+	private function appendAttributes(array $partOfResult, array $attributes): array
+	{
+		foreach ($attributes as $attribute)
+		{
+			if (!in_array($attribute, $partOfResult))
+			{
+				$partOfResult[] = $attribute;
+			}
+		}
+
+		return $partOfResult;
 	}
 }

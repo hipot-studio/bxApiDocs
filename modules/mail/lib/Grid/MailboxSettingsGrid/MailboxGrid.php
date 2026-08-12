@@ -3,11 +3,14 @@
 namespace Bitrix\Mail\Grid\MailboxSettingsGrid;
 
 use Bitrix\Mail\Grid\MailboxSettingsGrid\Column\Provider\MailboxDataProvider;
+use Bitrix\Mail\Grid\MailboxSettingsGrid\Panel\MailboxPanelProvider;
+use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Grid\MailboxSettingsGrid\Row\Assembler\MailboxRowAssembler;
 use Bitrix\Main\Grid\Column\Columns;
 use Bitrix\Main\Grid\Grid;
 use Bitrix\Main\Grid\Pagination\LazyLoadTotalCount;
 use Bitrix\Main\Grid\Pagination\PaginationFactory;
+use Bitrix\Main\Grid\Panel\Panel;
 use Bitrix\Mail\Grid\MailboxSettingsGrid\Row\MailboxRows;
 use Bitrix\Main\UI\PageNavigation;
 
@@ -33,6 +36,16 @@ final class MailboxGrid extends Grid
 		$actionsProvider = new Row\Action\MailboxDataProvider($this->getSettings());
 
 		return new MailboxRows($rowAssembler, $actionsProvider);
+	}
+
+	protected function createPanel(): ?Panel
+	{
+		if (!Feature::isMailboxGridBulkActionsAvailable())
+		{
+			return null;
+		}
+
+		return new Panel(new MailboxPanelProvider($this->getSettings()));
 	}
 
 	protected function createFilter(): ?\Bitrix\Main\Filter\Filter

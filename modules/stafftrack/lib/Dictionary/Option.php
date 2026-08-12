@@ -14,4 +14,7 @@ enum Option: string
 	case SELECTED_DEPARTMENT_ID = 'selected_department_id';
 	case IS_FIRST_HELP_VIEWED = 'is_first_help_viewed';
 	case TIMEMAN_INTEGRATION_ENABLED = 'timeman_integration_enabled';
+	case CHECKIN_ONBOARDING_ENABLED = 'checkin_onboarding_enabled';
+	case CHECKIN_ONBOARDING_BANNER_COUNT = 'checkin_onboarding_banner_count';
+	case CHECKIN_ONBOARDING_BANNER_LAST_SHOWN_AT = 'checkin_onboarding_banner_last_shown_at';
 }

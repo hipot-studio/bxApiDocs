@@ -289,11 +289,19 @@ class Deal extends Factory
 				'TYPE' => Field::TYPE_DOUBLE,
 				'CLASS' => Field\Opportunity::class,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_CURRENCY_ID,
+				],
 			],
 			Item::FIELD_NAME_TAX_VALUE => [
 				'TYPE' => Field::TYPE_DOUBLE,
 				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
 				'CLASS' => Field\TaxValue::class,
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_CURRENCY_ID,
+				],
 			],
 			Item::FIELD_NAME_OPPORTUNITY_ACCOUNT => [
 				'TYPE' => Field::TYPE_DOUBLE,
@@ -303,6 +311,10 @@ class Deal extends Factory
 					\CCrmFieldInfoAttr::ReadOnly,
 				],
 				'CLASS' => Field\OpportunityAccount::class,
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_ACCOUNT_CURRENCY_ID,
+				],
 			],
 			Item::FIELD_NAME_TAX_VALUE_ACCOUNT => [
 				'TYPE' => Field::TYPE_DOUBLE,
@@ -312,6 +324,10 @@ class Deal extends Factory
 					\CCrmFieldInfoAttr::ReadOnly,
 				],
 				'CLASS' => Field\TaxValueAccount::class,
+				'VALUE_TYPE' => Field::VALUE_TYPE_MONEY,
+				'SETTINGS' => [
+					'currencyFieldName' => Item::FIELD_NAME_ACCOUNT_CURRENCY_ID,
+				],
 			],
 			Item::FIELD_NAME_COMPANY_ID => [
 				'TYPE' => Field::TYPE_CRM_COMPANY,

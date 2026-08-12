@@ -10,9 +10,11 @@ use Bitrix\Mobile\Context;
 use Bitrix\Mobile\Tab\Tabable;
 use Bitrix\Mobile\Tab\Utils;
 use Bitrix\MobileApp\Janative\Manager;
+use Bitrix\StaffTrack\Public\Provider\CheckInSettingsProvider;
 use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
 use Bitrix\Timeman\V2\Public\Provider\FullReportProvider;
 use Bitrix\TimemanMobile\Public\Features\WorkReportsFeature;
+use Bitrix\Main\Config\Option;
 
 class CheckInTab implements Tabable
 {
@@ -141,6 +143,29 @@ class CheckInTab implements Tabable
 	private function getTabsComponent(): array
 	{
 		$hasPendingDraftReport = $this->hasPendingDraftReport();
+		$settingsProvider = new CheckInSettingsProvider();
+		$isTimemanAvailable = (
+			$settingsProvider->isTimemanAvailable()
+			&& Loader::includeModule('timemanmobile')
+			&& $settingsProvider->isWorkTimeToolAvailable()
+		);
+
+		$isTimemanAllowedByLicense = $settingsProvider->isTimemanAllowedByLicense();
+
+		$timemanDependentTabs = [];
+		if ($isTimemanAvailable || $isTimemanAllowedByLicense)
+		{
+			$timemanDependentTabs = array_values(array_filter([
+				$this->getWorkDaysTab(),
+				$this->getWorkReportsTab($hasPendingDraftReport),
+			]));
+		}
+
+		$items = array_merge([$this->getShiftsTab()], $timemanDependentTabs);
+
+		$unavailableTabIds = $isTimemanAvailable
+			? []
+			: array_column($timemanDependentTabs, 'id');
 
 		return [
 			'name' => 'JSStackComponent',
@@ -156,12 +181,7 @@ class CheckInTab implements Tabable
 					'grabSearch' => true,
 					'useLargeTitleMode' => true,
 					'tabs' => [
-						'items' => array_values(
-							array_filter([
-								$this->getShiftsTab(),
-								$this->getWorkReportsTab($hasPendingDraftReport),
-							]),
-						),
+						'items' => $items,
 					],
 				],
 			],
@@ -169,6 +189,7 @@ class CheckInTab implements Tabable
 				'COMPONENT_CODE' => 'stafftrack.check-in-v2.tabs',
 				'USER_ID' => $this->context->userId,
 				'SITE_ID' => $this->context->siteId,
+				'UNAVAILABLE_TAB_IDS' => $unavailableTabIds,
 			],
 		];
 	}
@@ -183,7 +204,16 @@ class CheckInTab implements Tabable
 			return false;
 		}
 
-		return (new FullReportProvider())->getPendingDraft($this->context->userId) !== null;
+		$provider = new FullReportProvider();
+		if (!method_exists($provider, 'getReportToSend'))
+		{
+			return false;
+		}
+
+		return $provider
+			->getReportToSend($this->context->userId, true, true)
+			->isReadyForSubmit === true
+		;
 	}
 
 	private function getShiftsTab(): array
@@ -204,7 +234,7 @@ class CheckInTab implements Tabable
 
 	private function getWorkReportsTab(bool $hasPendingDraftReport = false): array
 	{
-		if (!Feature::isEnabled(WorkReportsFeature::class))
+		if (Option::get('timemanmobile', 'work_reports_enabled', 'N') !== 'Y')
 		{
 			return [];
 		}
@@ -216,6 +246,21 @@ class CheckInTab implements Tabable
 			'widget' => [
 				'name' => 'layout',
 				'code' => 'work-reports',
+				'settings' => [
+					'objectName' => 'layout',
+				],
+			],
+		];
+	}
+
+	private function getWorkDaysTab(): array
+	{
+		return [
+			'id' => 'work-days',
+			'title' => Loc::getMessage('STAFFTRACKMOBILE_TAB_NAVIGATION_TAB_WORK_DAYS'),
+			'widget' => [
+				'name' => 'layout',
+				'code' => 'work-days',
 				'settings' => [
 					'objectName' => 'layout',
 				],

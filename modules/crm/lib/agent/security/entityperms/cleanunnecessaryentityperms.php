@@ -24,6 +24,8 @@ class CleanUnnecessaryEntityPerms
 
 		if (empty($ids))
 		{
+			Option::delete('crm.agent', ['name' => '~CRM_CLEAN_UNNECESSARY_ENTITY_PERMS_ENTITY_TYPES']);
+
 			return self::DONE;
 		}
 
@@ -57,7 +59,20 @@ class CleanUnnecessaryEntityPerms
 		$ct = new ConditionTree();
 		$ct->logic(ConditionTree::LOGIC_OR);
 
-		foreach (self::ENTITY_CODES_TO_CLEAN as $entityCode)
+		$entityTypesToClean = explode(
+			',',
+			Option::get(
+				'crm.agent',
+				'~CRM_CLEAN_UNNECESSARY_ENTITY_PERMS_ENTITY_TYPES',
+				implode(',', self::ENTITY_CODES_TO_CLEAN)
+			)
+		);
+		if (empty($entityTypesToClean))
+		{
+			return [];
+		}
+
+		foreach ($entityTypesToClean as $entityCode)
 		{
 			$ct->whereLike('ENTITY', $entityCode . '%');
 		}
@@ -86,5 +101,4 @@ class CleanUnnecessaryEntityPerms
 
 		return $limit > 0 ? $limit : self::BATCH_SIZE;
 	}
-
 }

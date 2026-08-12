@@ -14,6 +14,7 @@ use Bitrix\Crm\Activity\Provider\OpenLine;
 use Bitrix\Im\Dialog;
 use Bitrix\ImOpenLines\Chat;
 use Bitrix\ImOpenLines\Session;
+use Bitrix\ImOpenLines\V2\Analytics\Bot\EndBotSessionEventContext;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -67,7 +68,11 @@ final class CBPImOpenLinesBotEndSessionActivity extends BaseActivity implements 
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$isEndSession = $chat->endBotSession();
+		$context = (new EndBotSessionEventContext())
+			->setMode(EndBotSessionEventContext::MODE_MANUAL)
+		;
+
+		$isEndSession = $chat->endBotSession($context);
 		if (!$isEndSession)
 		{
 			$this->trackError(Loc::getMessage('IMOL_BOT_END_SESSION_ACTIVITY_ERROR_CANNOT_END_SESSION'));

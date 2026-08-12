@@ -12,6 +12,7 @@ class Tag extends Button
 	public const TYPE_PRIMARY = 'primary';
 	public const TYPE_SECONDARY = 'secondary';
 	public const TYPE_LAVENDER = 'lavender';
+	public const TYPE_AI = 'ai';
 
 	protected string $type;
 	protected string $hint = '';

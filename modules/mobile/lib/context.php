@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mobile;
 
+use Bitrix\Intranet\Enum\UserRole;
 use Bitrix\Main\Loader;
 
 class Context
@@ -12,6 +13,9 @@ class Context
 	public $siteDir;
 	public $version;
 	public readonly bool $isCollaber;
+	public readonly bool $isGuest;
+	public bool $requestGuestName = false;
+	public readonly ?string $guestCode;
 
 	private static $defaultContext;
 
@@ -32,6 +36,11 @@ class Context
 		$this->isCollaber = isset($options['isCollaber'])
 			? (bool)$options['isCollaber']
 			: self::autodetectCollaber();
+		$this->isGuest = isset($options['isGuest']) ? (bool)$options['isGuest'] : false;
+		$this->requestGuestName = (bool)($options['requestGuestName'] ?? false);
+		$this->guestCode = isset($options['guestCode']) && is_string($options['guestCode'])
+			? $options['guestCode']
+			: null;
 	}
 
 	public static function autodetectContext()
@@ -44,8 +53,9 @@ class Context
 			$siteDir = SITE_DIR;
 			$isExtranetUser = false;
 			$isCollaber = self::autodetectCollaber();
+			$isGuest = self::autodetectIsGuest();
 
-			if ($USER->isAuthorized())
+			if ($USER->isAuthorized() && !$isGuest)
 			{
 				$isExtranetModuleInstalled = Loader::includeModule('extranet');
 
@@ -64,7 +74,7 @@ class Context
 					[ 'SELECT' => [ 'UF_DEPARTMENT' ]]
 				);
 				$user = $users->fetch();
-				$isExtranetUser = ($isExtranetModuleInstalled && (int)$user['UF_DEPARTMENT'][0] <= 0);
+				$isExtranetUser = $isExtranetModuleInstalled && (int)$user['UF_DEPARTMENT'][0] <= 0;
 
 				if ($isExtranetUser)
 				{
@@ -94,10 +104,19 @@ class Context
 				'siteDir' => $siteDir,
 				'version' => $moduleVersion,
 				'isCollaber' => $isCollaber,
+				'isGuest' => $isGuest,
 			];
 		}
 
 		return self::$defaultContext;
+	}
+
+	private static function autodetectIsGuest(): bool
+	{
+		global $USER;
+
+		return $USER->IsAuthorized()
+			&& $USER->GetParam('EXTERNAL_AUTH_ID') === UserRole::IM_GUEST->value;
 	}
 
 	private static function autodetectCollaber(): bool

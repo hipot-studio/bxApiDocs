@@ -80,7 +80,6 @@ class SectionTable extends Main\Entity\DataManager
 	{
 		return [
 			(new IntegerField('ID'))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_ID_FIELD'))
 				->configurePrimary(true)
 				->configureAutocomplete(true)
 			,
@@ -89,60 +88,51 @@ class SectionTable extends Main\Entity\DataManager
 					'validation' => [__CLASS__, 'validateName']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_NAME_FIELD'))
 			,
 			(new StringField('XML_ID',
 				[
 					'validation' => [__CLASS__, 'validateXmlId']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_XML_ID_FIELD'))
 			,
 			(new StringField('EXTERNAL_ID',
 				[
 					'validation' => [__CLASS__, 'validateExternalId']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_EXTERNAL_ID_FIELD'))
 			,
 			(new StringField('GAPI_CALENDAR_ID',
 				[
 					'validation' => [__CLASS__, 'validateGapiCalendarId']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_GAPI_CALENDAR_ID_FIELD'))
 			,
 			(new BooleanField('ACTIVE'))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_ACTIVE_FIELD'))
 				->configureValues('N', 'Y')
 				->configureDefaultValue('Y')
 			,
 			(new TextField('DESCRIPTION'))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_DESCRIPTION_FIELD'))
 			,
 			(new StringField('COLOR',
 				[
 					'validation' => [__CLASS__, 'validateColor']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_COLOR_FIELD'))
 			,
 			(new StringField('TEXT_COLOR',
 				[
 					'validation' => [__CLASS__, 'validateTextColor']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_TEXT_COLOR_FIELD'))
 			,
 			(new StringField('EXPORT',
 				[
 					'validation' => [__CLASS__, 'validateExport']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_EXPORT_FIELD'))
 			,
 			(new IntegerField('SORT'))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_SORT_FIELD'))
+
 				->configureDefaultValue(100)
 			,
 			(new StringField('CAL_TYPE',
@@ -150,86 +140,71 @@ class SectionTable extends Main\Entity\DataManager
 					'validation' => [__CLASS__, 'validateCalType']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_CAL_TYPE_FIELD'))
 			,
 			(new IntegerField('OWNER_ID'))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_OWNER_ID_FIELD'))
 			,
 			(new IntegerField('CREATED_BY'))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_CREATED_BY_FIELD'))
 				->configureRequired(true)
 			,
 			(new IntegerField('PARENT_ID'))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_PARENT_ID_FIELD'))
 			,
 			(new DatetimeField('DATE_CREATE'))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_DATE_CREATE_FIELD'))
 			,
 			(new DatetimeField('TIMESTAMP_X'))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_TIMESTAMP_X_FIELD'))
 			,
 			(new StringField('DAV_EXCH_CAL',
 				[
 					'validation' => [__CLASS__, 'validateDavExchCal']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_DAV_EXCH_CAL_FIELD'))
 			,
 			(new StringField('DAV_EXCH_MOD',
 				[
 					'validation' => [__CLASS__, 'validateDavExchMod']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_DAV_EXCH_MOD_FIELD'))
 			,
 			(new StringField('CAL_DAV_CON',
 				[
 					'validation' => [__CLASS__, 'validateCalDavCon']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_CAL_DAV_CON_FIELD'))
 			,
 			(new StringField('CAL_DAV_CAL',
 				[
 					'validation' => [__CLASS__, 'validateCalDavCal']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_CAL_DAV_CAL_FIELD'))
 			,
 			(new StringField('CAL_DAV_MOD',
 				[
 					'validation' => [__CLASS__, 'validateCalDavMod']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_CAL_DAV_MOD_FIELD'))
 			,
 			(new StringField('IS_EXCHANGE',
 				[
 					'validation' => [__CLASS__, 'validateIsExchange']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_IS_EXCHANGE_FIELD'))
 			,
 			(new StringField('SYNC_TOKEN',
 				[
 					'validation' => [__CLASS__, 'validateSyncToken']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_SYNC_TOKEN_FIELD'))
 			,
 			(new StringField('PAGE_TOKEN',
 				[
 					'validation' => [__CLASS__, 'validatePageToken']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_PAGE_TOKEN_FIELD'))
 			,
 			(new StringField('EXTERNAL_TYPE',
 				[
 					'validation' => [__CLASS__, 'validateExternalType']
 				]
 			))
-				->configureTitle(Loc::getMessage('SECTION_ENTITY_EXTERNAL_TYPE_FIELD'))
 			,
 		];
 	}

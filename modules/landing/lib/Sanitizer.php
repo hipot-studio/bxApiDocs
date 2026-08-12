@@ -117,6 +117,16 @@ class Sanitizer
 	}
 
 	/**
+	 * Validates a physical block CODE (format "namespace:code" or just "code") before it is
+	 * used to build an include path. Not for theme TPL_CODE — those go through the closed
+	 * LocalTemplates whitelist instead.
+	 */
+	public static function isValidBlockCode(string $code): bool
+	{
+		return (bool)preg_match('/^[A-Za-z0-9_.:-]+$/', $code);
+	}
+
+	/**
 	 * Replaces some specific for landing substitutions back after sanitize
 	 */
 	private function reverseSanitizeText(string $text): string

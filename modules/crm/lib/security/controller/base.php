@@ -200,21 +200,17 @@ abstract class Base extends Crm\Security\Controller
 	protected function preparePermissionAttributes(array $fields): array
 	{
 		$results = [];
-		$assignedByID = isset($fields['ASSIGNED_BY_ID']) ? (int)$fields['ASSIGNED_BY_ID'] : 0;
+		$assignedByID = $this->extractAssignedByFromFields($fields);
+
 		if ($assignedByID > 0)
 		{
-			$results[] = "U{$assignedByID}";
-
-			$userAttrs = \Bitrix\Crm\Service\Container::getInstance()
+			$assignedBasedEntityAttributes = \Bitrix\Crm\Service\Container::getInstance()
 				->getUserPermissions($assignedByID)
 				->getAttributesProvider()
 				->getEntityAttributes()
 			;
 
-			if (isset($userAttrs['INTRANET']) && is_array($userAttrs['INTRANET']))
-			{
-				$results = array_merge($results, $userAttrs['INTRANET']);
-			}
+			$results = array_merge($results, $assignedBasedEntityAttributes);
 		}
 
 		if (isset($fields['OPENED']) && $fields['OPENED'] === 'Y')

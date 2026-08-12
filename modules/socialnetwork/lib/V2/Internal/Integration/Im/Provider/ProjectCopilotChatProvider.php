@@ -26,6 +26,16 @@ final class ProjectCopilotChatProvider
 			return 0;
 		}
 
+		// Phase 0 (task 718250): a hidden (admin-access) participant is not a real project member.
+		// Creating a per-author copilot chat cascades the author into the parent project chat as a
+		// visible member, which would promote them into the project (Bug B). Skip such users; a real
+		// member (present, not hidden) still gets the copilot chat as before.
+		$parentRelation = Chat::getInstance($parentChatId)->getRelationByUserId($userId);
+		if ($parentRelation === null || $parentRelation->isHidden())
+		{
+			return 0;
+		}
+
 		$cacheManager = Application::getInstance()->getManagedCache();
 		$cacheId = $this->getCacheId($userId, $projectId);
 
@@ -48,6 +58,7 @@ final class ProjectCopilotChatProvider
 			'PARENT_ID' => $parentChatId,
 			'USERS' => [$userId],
 			'SEND_GREETING_MESSAGES' => 'Y',
+			'MANAGE_DELETE' => Chat::MANAGE_RIGHTS_NONE,
 		];
 
 		$title = Loc::getMessage(self::CHAT_TITLE_MESSAGE_CODE);

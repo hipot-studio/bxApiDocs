@@ -65,7 +65,7 @@ class TaskTable extends DataManager
 				->configureNullable(),
 
 			(new Entity\StringField('NAME'))
-				->addValidator(new LengthValidator(1, 128)),
+				->addValidator(new LengthValidator(1, 255)),
 
 			(new Entity\TextField('DESCRIPTION'))
 				->configureNullable(),

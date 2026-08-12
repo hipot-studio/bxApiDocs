@@ -10,7 +10,7 @@ class ChangeNodeNameAction extends BaseAction
 {
 	protected const JS_COMMAND = 'changeNodeName';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		$block = new Block((int)$this->params['block']);
 		$value = $undo ? $this->params['valueBefore'] : $this->params['valueAfter'];

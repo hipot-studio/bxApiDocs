@@ -15,6 +15,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\LineOfTextBlocks;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Mail\ContactList;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Crm\Service\Timeline\Layout\Body\Logo;
+use Bitrix\Crm\Service\Timeline\Layout\Common\Logo as CommonLogo;
 use Bitrix\Crm\Service\Timeline\Layout\Footer\Button;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
@@ -67,7 +68,7 @@ class Email extends Activity
 	public function getLogo(): ?Logo
 	{
 		$direction = (int)$this->getAssociatedEntityModel()->get('DIRECTION');
-		$logo = new Logo('email');
+		$logo = (new Logo(CommonLogo::EMAIL))->setInCircle();
 		switch ($direction)
 		{
 			case CCrmActivityDirection::Incoming:

@@ -12,7 +12,7 @@ final class TemporaryFileFactory
 {
 	private const TEMPLATE = 'temporary_import_filename_#USER_ID#_#TYPE#_#IMPORT_FILE_ID#';
 
-	private const TTL = 3600 * 2; // 2 hours
+	private const TTL = 3600 * 12; // 12 hours
 	private const TTL_IN_HOURS = self::TTL / 3600;
 
 	public function __construct(
@@ -27,7 +27,7 @@ final class TemporaryFileFactory
 		Extension $extension,
 	): string
 	{
-		$dir = CTempFile::GetDirectoryName(hours_to_keep_files: self::TTL_IN_HOURS);
+		$dir = CTempFile::GetDirectoryName(hours_to_keep_files: self::TTL_IN_HOURS, subdir: 'crm');
 		CheckDirPath($dir);
 
 		$filename = $dir . "{$type->value}.{$extension->value}";

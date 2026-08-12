@@ -404,6 +404,10 @@ abstract class Base extends ValueCollection
 				{
 					$this->document[$userFieldName] = $fieldValue > 0 ? $fieldValue : null;
 				}
+				elseif ($fieldTypeID === 'iblock_element' || $fieldTypeID === 'iblock_section')
+				{
+					$this->document[$userFieldName] = $fieldValue > 0 ? $fieldValue : null;
+				}
 				elseif (!isset($this->document[$userFieldName]))
 				{
 					$this->document[$userFieldName] = $fieldValue;

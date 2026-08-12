@@ -169,7 +169,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 				onclick="event.stopPropagation(); BX.BIConnector.SupersetDashboardGridManager.Instance.renameDashboard({$dashboardId})"
 			>
 				<i
-					class="ui-icon-set --pencil-60 dashboard-edit-icon"
+					class="ui-icon-set --edit-l dashboard-edit-icon"
 				></i>
 			</a>
 		HTML;
@@ -182,7 +182,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 			return '';
 		}
 
-		$iconClass = $isPinned ? '--pin-2 dashboard-unpin-icon' : '--pin-1 dashboard-pin-icon';
+		$iconClass = $isPinned ? '--pin-2 dashboard-unpin-icon' : '--o-pin-list dashboard-pin-icon';
 		$method =
 			$isPinned
 				? 'BX.BIConnector.SupersetDashboardGridManager.Instance.unpin'

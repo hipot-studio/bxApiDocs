@@ -17,7 +17,7 @@ class Integration implements EntityInterface
 		private ?int $passwordId = null,
 		private ?int $appId = null,
 		private array $scope = [],
-		private ?string $query = null,
+		private ?array $query = null,
 		private array $outgoingEvents = [],
 		private bool $outgoingNeeded = false,
 		private ?string $outgoingHandlerUrl = null,
@@ -117,12 +117,12 @@ class Integration implements EntityInterface
 		return $this;
 	}
 
-	public function getQuery(): ?string
+	public function getQuery(): ?array
 	{
 		return $this->query;
 	}
 
-	public function setQuery(?string $query): self
+	public function setQuery(?array $query): self
 	{
 		$this->query = $query;
 

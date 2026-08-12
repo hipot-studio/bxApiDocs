@@ -177,6 +177,17 @@ class StorageItemFilter implements FilterInterface
 					return;
 				}
 
+				if ($value !== null && \CBPHelper::isEmptyValue($value) && in_array($operator, ['!', '!='], true))
+				{
+					$sub = new ConditionTree();
+					$sub->logic('and');
+					$sub->whereNotNull($alias);
+					$sub->where($alias, '!=', '');
+					$node->where($sub);
+
+					return;
+				}
+
 				if ($value !== null && $this->isNegationOperator($operator))
 				{
 					$sub = new ConditionTree();

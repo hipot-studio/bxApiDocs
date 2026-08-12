@@ -3,16 +3,34 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Scenario;
 
+use Bitrix\Landing\Copilot\Generation\Step\Base\IStep;
 use Bitrix\Landing\Metrika;
 
 abstract class BaseScenario implements IScenario
 {
 	/**
-	 * Returns the number of the scenario step at which to check request limits.
-	 *
-	 * @return int
+	 * @var array<int, IStep>|null
 	 */
-	abstract public function getQuotaCalculateStep(): int;
+	private ?array $mapCache = null;
+
+	/**
+	 * Build scenario map once per scenario instance.
+	 *
+	 * @return array<int, IStep>
+	 */
+	abstract protected function buildMap(): array;
+
+	public function getMap(): array
+	{
+		if ($this->mapCache === null)
+		{
+			$this->mapCache = $this->buildMap();
+		}
+
+		return $this->mapCache;
+	}
+
+	abstract public function getQuotaCalculateStep(): ?int;
 
 	abstract public function getAnalyticCategory(): Metrika\Categories;
 

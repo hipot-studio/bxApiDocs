@@ -22,10 +22,6 @@ class RestrictionsByAttributes
 	{
 		$restrictionData = [];
 
-		$userId = $attributesCollection->getUserId();
-
-		$userDepartmentIDs = $this->getUserDepartmentIDs($userId);
-
 		$permissionEntityTypes = $attributesCollection->getAllowedEntityTypes();
 
 		foreach ($permissionEntityTypes as $permissionEntityType)
@@ -36,7 +32,7 @@ class RestrictionsByAttributes
 				continue;
 			}
 
-			$permissionSets = $this->createPermissionSets($entityAttributes, $userId, $userDepartmentIDs);
+			$permissionSets = $this->createPermissionSets($entityAttributes);
 
 			$permissionSets = $this->joinPermissionSetsProgressSteps($permissionSets);
 
@@ -97,18 +93,9 @@ class RestrictionsByAttributes
 	 * @param array $departmentIds
 	 * @return int[]
 	 */
-	protected function getDepartmentsUsers(array $departmentIds): array
+	protected function getHrDepartmentUsers(array $departmentIds): array
 	{
-		return $this->departmentProvider->getDepartmentsUsers($departmentIds);
-	}
-
-	/**
-	 * @param int $userId
-	 * @return int[]
-	 */
-	protected function getUserDepartmentIDs(int $userId): array
-	{
-		return $this->departmentProvider->getUserDepartmentIDs($userId);
+		return $this->departmentProvider->getHrDepartmentUsers($departmentIds);
 	}
 
 	protected function addTypeAndCategoryToRestrictionMap(
@@ -186,7 +173,7 @@ class RestrictionsByAttributes
 			}
 			$hash = md5(
 				'U:' . $userID
-				. 'D:' . (!empty($departmentIDs) ? implode(',', $departmentIDs) : '-')
+				. 'HR:' . (!empty($departmentIDs) ? implode(',', $departmentIDs) : '-')
 				. 'O:' . ($isOpened ? 'Y' : 'N'));
 
 			if (!isset($permissionFurl[$hash]))
@@ -208,7 +195,7 @@ class RestrictionsByAttributes
 		return array_values($permissionFurl);
 	}
 
-	public function createPermissionSets(array $entityAttributes, int $userId, array $userDepartmentIDs): array
+	public function createPermissionSets(array $entityAttributes): array
 	{
 		$permissionSets = [];
 		foreach ($entityAttributes as $attributes) {
@@ -247,7 +234,14 @@ class RestrictionsByAttributes
 					$permissionSet['USER_ID'] = (int)$parsedAttributeValue;
 				}
 				elseif (
-					AttributesUtils::tryParseDepartment($attributeValue, $parsedAttributeValue)
+					AttributesUtils::tryParseHrDepartment($attributeValue, $parsedAttributeValue)
+					&& $parsedAttributeValue > 0
+				)
+				{
+					$permissionSet['DEPARTMENT_IDS'][] = (int)$parsedAttributeValue;
+				}
+				elseif (
+					AttributesUtils::tryParseHrTeam($attributeValue, $parsedAttributeValue)
 					&& $parsedAttributeValue > 0
 				)
 				{
@@ -310,7 +304,7 @@ class RestrictionsByAttributes
 				$restriction['USER_IDS'] = array_unique(
 					array_merge(
 						$restriction['USER_IDS'],
-						$this->getDepartmentsUsers($permissionSet['DEPARTMENT_IDS'])
+						$this->getHrDepartmentUsers($permissionSet['DEPARTMENT_IDS'])
 					)
 				);
 			}

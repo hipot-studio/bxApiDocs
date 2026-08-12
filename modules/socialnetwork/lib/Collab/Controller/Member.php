@@ -142,7 +142,7 @@ class Member extends Controller
 
 		if (!$this->accessController->check(CollabDictionary::EXCLUDE, $model))
 		{
-			$this->addError(new Error('Access denied'));
+			$this->addError(new Error('Access denied', $this->accessController->getDeniedReasonCode()));
 
 			return null;
 		}
@@ -172,7 +172,7 @@ class Member extends Controller
 
 		if (!$this->accessController->check(CollabDictionary::LEAVE, $model))
 		{
-			$this->addError(new Error('Access denied'));
+			$this->addError(new Error('Access denied', $this->accessController->getDeniedReasonCode()));
 
 			return null;
 		}

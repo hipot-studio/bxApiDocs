@@ -25,6 +25,9 @@ use Bitrix\Calendar\Internals;
 use Bitrix\Calendar\Ui\CalendarFilter;
 use Bitrix\Calendar\UserSettings;
 use Bitrix\Calendar\Util;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ArgumentNullException;
+use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
@@ -854,7 +857,7 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 			$reminderList,
 			(int)$request['meeting_host'] ?: $userId,
 			(int)($request['chat_id'] ?? null),
-			$request['attendeesEntityList'] ?? null,
+			is_array($request['attendeesEntityList']) ? $request['attendeesEntityList'] : null,
 			$request['exclude_users'] ?? null,
 			($request['meeting_notify'] ?? 'N') === 'Y',
 			($request['meeting_reinvite'] ?? 'N') === 'Y',
@@ -1051,11 +1054,6 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 			$tzTo = $request['default_tz'];
 		}
 
-		if (isset($request['default_tz']) && (string)$request['default_tz'] !== '')
-		{
-			\CCalendar::SaveUserTimezoneName(\CCalendar::GetUserId(), $request['default_tz']);
-		}
-
 		return [
 			'timezone_from' => $tzFrom,
 			'timezone_to' => $tzTo,
@@ -1116,7 +1114,12 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 		return IcalIcsBuilder::buildFromEvent($event)->getContent();
 	}
 
-	public function getIcsFileAction(CurrentUser $currentUser, int $eventId): string|HttpResponse
+	/**
+	 * @throws ArgumentNullException
+	 * @throws ArgumentTypeException
+	 * @throws ArgumentException
+	 */
+	public function getIcsFileAction(CurrentUser $currentUser, int $eventId): ?HttpResponse
 	{
 		return $this->prepareIcsResponse($currentUser, $eventId);
 	}
@@ -1141,6 +1144,11 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 		return $this->prepareIcsResponse($currentUser, $eventId);
 	}
 
+	/**
+	 * @throws ArgumentNullException
+	 * @throws ArgumentTypeException
+	 * @throws ArgumentException
+	 */
 	private function prepareIcsResponse(
 		CurrentUser $currentUser,
 		int $eventId,
@@ -1162,16 +1170,22 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 
 		$event = (new Mappers\Event())->getById($eventId);
 
+		if (empty($event))
+		{
+			$this->addError(new Error('Event not found'));
+
+			return null;
+		}
+
 		$fileContent = IcalIcsBuilder::buildFromEvent($event)->getContent();
 
 		$fileType = 'ics';
 		$mimeType = MimeType::getByFileExtension($fileType);
 
-		$httpResponse = new HttpResponse();
-		$httpResponse->addHeader('Content-Type', "{$mimeType}; charset=utf-8");
-		$httpResponse->addHeader('Content-Disposition', "attachment;filename=event.{$fileType}");
-		$httpResponse->setContent($fileContent);
-
-		return $httpResponse;
+		return (new HttpResponse())
+			->addHeader('Content-Type', "$mimeType; charset=utf-8")
+			->addHeader('Content-Disposition', "attachment;filename=event.$fileType")
+			->setContent($fileContent)
+		;
 	}
 }

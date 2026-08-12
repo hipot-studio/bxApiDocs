@@ -63,6 +63,7 @@ class ProductPropertyValue
 		;
 
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
 
 		if ($crmCatalogIblockVersion === 1 && $crmCatalogIblockOfferVersion === 1)
@@ -106,8 +107,8 @@ class ProductPropertyValue
 						'IS_METRIC' => 'N',
 						'FIELD_NAME' => 'COALESCE(IPE.VALUE, IEP.VALUE)',
 						'FIELD_TYPE' => 'string',
-						'JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = IPE.ID',
-						'LEFT_JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = IPE.ID',
+						'JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = ' . $helper->castIntToChar('IPE.ID'),
+						'LEFT_JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = ' . $helper->castIntToChar('IPE.ID'),
 					],
 				],
 			];
@@ -152,8 +153,8 @@ class ProductPropertyValue
 						'IS_METRIC' => 'N',
 						'FIELD_NAME' => 'COALESCE(IPE.VALUE, IEP.VALUE)',
 						'FIELD_TYPE' => 'string',
-						'JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = IPE.ID',
-						'LEFT_JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = IPE.ID',
+						'JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = ' . $helper->castIntToChar('IPE.ID'),
+						'LEFT_JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = ' . $helper->castIntToChar('IPE.ID'),
 					],
 				],
 				'UNIONS' => [
@@ -202,8 +203,8 @@ class ProductPropertyValue
 						'IS_METRIC' => 'N',
 						'FIELD_NAME' => 'COALESCE(IPE.VALUE, IEP.VALUE)',
 						'FIELD_TYPE' => 'string',
-						'JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = IPE.ID',
-						'LEFT_JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = IPE.ID',
+						'JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = ' . $helper->castIntToChar('IPE.ID'),
+						'LEFT_JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = ' . $helper->castIntToChar('IPE.ID'),
 					],
 				],
 				'UNIONS' => [
@@ -241,8 +242,8 @@ class ProductPropertyValue
 						'IS_METRIC' => 'N',
 						'FIELD_NAME' => 'COALESCE(IPE.VALUE, IEP.VALUE)',
 						'FIELD_TYPE' => 'string',
-						'JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = IPE.ID',
-						'LEFT_JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = IPE.ID',
+						'JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = ' . $helper->castIntToChar('IPE.ID'),
+						'LEFT_JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = ' . $helper->castIntToChar('IPE.ID'),
 					],
 				],
 				'UNIONS' => [
@@ -338,7 +339,7 @@ class ProductPropertyValue
 				],
 				'VALUE_NAME' => [
 					'FIELD_NAME' => 'COALESCE(IPE.VALUE, IEP.VALUE)',
-					'LEFT_JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = IPE.ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_iblock_property_enum IPE ON IEP.IBLOCK_PROPERTY_ID = IPE.PROPERTY_ID AND IEP.VALUE = ' . $helper->castIntToChar('IPE.ID'),
 				],
 			],
 		];

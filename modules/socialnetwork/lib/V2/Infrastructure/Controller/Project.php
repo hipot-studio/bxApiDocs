@@ -9,6 +9,7 @@ use Bitrix\Main\Error;
 use Bitrix\Socialnetwork\V2\Infrastructure\Controller\Trait\ProjectAutoWireTrait;
 use Bitrix\Socialnetwork\V2\Internal\Access\Project\Permission;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
+use Bitrix\Socialnetwork\V2\Internal\Integration\Bitrix24\Service\ProjectsTrialService;
 use Bitrix\Socialnetwork\V2\Public\Command\Project\AddProjectCommand;
 use Bitrix\Socialnetwork\V2\Public\Command\Project\ArchiveProjectCommand;
 use Bitrix\Socialnetwork\V2\Public\Command\Project\CopyProjectCommand;
@@ -116,7 +117,21 @@ class Project extends BaseController
 			return null;
 		}
 
+		$this->turnOnProjectsTrialIfNeeded();
+
 		return $projectProvider->getById($projectId);
+	}
+
+	private function turnOnProjectsTrialIfNeeded(): void
+	{
+		try
+		{
+			Container::getInstance()->get(ProjectsTrialService::class)->turnOnTrialIfNeeded();
+		}
+		catch (\Throwable $e)
+		{
+			$this->writeToLogException($e);
+		}
 	}
 
 	/**
@@ -318,7 +333,7 @@ class Project extends BaseController
 	{
 		$isCurrentUserModuleAdmin = CSocNetUser::isCurrentUserModuleAdmin();
 
-		return $projectProvider->getAvailableFeatures(
+		return $projectProvider->getFeatureMenuItems(
 			$project->id,
 			$this->userId,
 			$isCurrentUserModuleAdmin,

@@ -161,7 +161,7 @@ class DictionaryManager
 			SELECT UPDATE_DATE
 			FROM ' . DictionaryCacheTable::getTableName() . '
 			WHERE DICTIONARY_ID = ' . $dictionaryId . '
-			AND DATE_ADD(UPDATE_DATE, INTERVAL TTL SECOND) > ' . $helper->getCurrentDateTimeFunction() . '
+			AND ' . $helper->addSecondsToDateTime('TTL', 'UPDATE_DATE') . ' > ' . $helper->getCurrentDateTimeFunction() . '
 		';
 		$updateDate = $connection->queryScalar($sql);
 		if ($updateDate)
@@ -245,6 +245,8 @@ class DictionaryManager
 	{
 		$manager = Manager::getInstance();
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $connection->getSqlHelper();
 		$structureIblockId = (int)$connection->queryScalar(
 			"
 				select value
@@ -259,6 +261,14 @@ class DictionaryManager
 			&& $connection->isTableExists('b_iblock_section')
 		)
 		{
+			$concatParentIdName = $helper->getConcatFunction("'['", 'p.id', "'] '", 'p.name');
+			$concatChildIdName = $helper->getConcatFunction("'['", 'c.id', "'] '", 'c.name');
+			$concatParentPathAndChild = $helper->getConcatFunction(
+				$helper->getGroupConcatExpression($concatParentIdName, 'p.left_margin', ' / '),
+				"' / '",
+				$concatChildIdName,
+			);
+
 			return '
 					select
 						'
@@ -278,12 +288,9 @@ class DictionaryManager
 							select
 								c.id DEPARTMENT_ID
 								,case
-									when p.id is not null
-									then concat(
-										group_concat(concat('[',p.id,'] ',p.name) order by p.left_margin separator ' / '),
-										' / [', c.id, '] ',
-										c.name)
-									else concat('[', c.id, '] ', c.name)
+									when count(p.id) > 0
+									then {$concatParentPathAndChild}
+									else {$concatChildIdName}
 								end DEPARTMENT_PATH
 							from
 								b_iblock_section c
@@ -312,6 +319,8 @@ class DictionaryManager
 	{
 		$manager = Manager::getInstance();
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $connection->getSqlHelper();
 
 		if (!Loader::includeModule('humanresources'))
 		{
@@ -329,12 +338,14 @@ class DictionaryManager
 			return  '';
 		}
 
+		$groupConcatEntityIds = $helper->getGroupConcatExpression('hsnm.ENTITY_ID', '', ',');
+
 		return '
 		SELECT '
 			. Dictionary::USER_DEPARTMENT_HEAD
 			. ' AS DICTIONARY_ID
 			,NODE_ID as VALUE_ID
-			,GROUP_CONCAT(hsnm.ENTITY_ID) as VALUE_ID
+			,' . $groupConcatEntityIds . ' as VALUE_ID
 		FROM b_user bu
 			JOIN b_hr_structure_node_member hsnm ON bu.ID = hsnm.ENTITY_ID AND hsnm.ENTITY_TYPE = \'' .
 					MemberEntityType::USER->value . '\' AND hsnm.ACTIVE = \'Y\'
@@ -349,6 +360,8 @@ class DictionaryManager
 	{
 		$manager = Manager::getInstance();
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $connection->getSqlHelper();
 
 		if (
 			!Loader::includeModule('humanresources')
@@ -358,13 +371,15 @@ class DictionaryManager
 			return '';
 		}
 
+		$groupConcatIds = $helper->getGroupConcatExpression('bhsn.ID', '', ',');
+
 		return 'SELECT '
 			. Dictionary::USER_STRUCTURE_DEPARTMENT . ' AS DICTIONARY_ID,
 			U.ID AS VALUE_ID,
-			GROUP_CONCAT(bhsn.ID) AS DEPARTMENT_PATH
+			' . $groupConcatIds . ' AS DEPARTMENT_PATH
 			FROM b_user U
 					 INNER JOIN b_hr_structure_node_member bhsnm ON bhsnm.ENTITY_TYPE = \'' . MemberEntityType::USER->value . '\'
-											   AND bhsnm.ENTITY_ID = U.ID
+									   AND bhsnm.ENTITY_ID = U.ID
 					 LEFT JOIN b_hr_structure_node bhsn ON bhsn.ID = bhsnm.NODE_ID
 			WHERE bhsn.TYPE = \'' . NodeEntityType::DEPARTMENT->value . '\'
 			GROUP BY U.ID
@@ -375,6 +390,8 @@ class DictionaryManager
 	{
 		$manager = Manager::getInstance();
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
+		$helper = $connection->getSqlHelper();
 
 		if (
 			!Loader::includeModule('humanresources')
@@ -384,12 +401,17 @@ class DictionaryManager
 			return '';
 		}
 
+		$concatIdName = $helper->getConcatFunction("'['", 'SN2.ID', "'] '", 'SN2.NAME');
+		$groupConcatIds = $helper->getGroupConcatExpression('SN2.ID', 'bhsnp.DEPTH DESC', ',');
+		$groupConcatNames = $helper->getGroupConcatExpression('SN2.NAME', 'bhsnp.DEPTH DESC', ',');
+		$groupConcatIdNames = $helper->getGroupConcatExpression($concatIdName, 'bhsnp.DEPTH DESC', ',');
+
 		return 'SELECT
 			SN.ID as DEP_ID,
 			SN.NAME as DEP_NAME,
-			GROUP_CONCAT(SN2.ID ORDER BY bhsnp.DEPTH DESC) AS DEP_IDS,
-			GROUP_CONCAT(SN2.NAME ORDER BY bhsnp.DEPTH DESC) AS DEP_NAMES,
-			GROUP_CONCAT(CONCAT(\'[\', SN2.ID, \'] \', SN2.NAME) ORDER BY bhsnp.DEPTH DESC) AS DEP_NAME_IDS
+			' . $groupConcatIds . ' AS DEP_IDS,
+			' . $groupConcatNames . ' AS DEP_NAMES,
+			' . $groupConcatIdNames . ' AS DEP_NAME_IDS
 		FROM
 			b_hr_structure_node SN
 			INNER JOIN b_hr_structure_node_path bhsnp ON SN.ID = bhsnp.CHILD_ID

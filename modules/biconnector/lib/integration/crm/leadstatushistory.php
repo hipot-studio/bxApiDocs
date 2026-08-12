@@ -33,6 +33,7 @@ class LeadStatusHistory
 		}
 
 		$connection = $manager->getDatabaseConnection();
+		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
 
 		$statusSemanticsForSql = [];
@@ -92,7 +93,7 @@ class LeadStatusHistory
 				],
 				'ASSIGNED_BY_NAME' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(LSH.RESPONSIBLE_ID is null, null, concat_ws(\' \', nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN LSH.RESPONSIBLE_ID is null THEN null ELSE concat_ws(\' \', nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UR',
 					'JOIN' => 'INNER JOIN b_user UR ON UR.ID = LSH.RESPONSIBLE_ID',
@@ -100,7 +101,7 @@ class LeadStatusHistory
 				],
 				'ASSIGNED_BY' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(LSH.RESPONSIBLE_ID is null, null, concat_ws(\' \', concat(\'[\', LSH.RESPONSIBLE_ID, \']\'), nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN LSH.RESPONSIBLE_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'LSH.RESPONSIBLE_ID', "']'") . ', nullif(UR.NAME, \'\'), nullif(UR.LAST_NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'UR',
 					'JOIN' => 'INNER JOIN b_user UR ON UR.ID = LSH.RESPONSIBLE_ID',
@@ -141,7 +142,7 @@ class LeadStatusHistory
 				],
 				'STATUS' => [
 					'IS_METRIC' => 'N', // 'Y'
-					'FIELD_NAME' => 'if(LSH.STATUS_ID is null, null, concat_ws(\' \', concat(\'[\', LSH.STATUS_ID, \']\'), nullif(S.NAME, \'\')))',
+					'FIELD_NAME' => 'CASE WHEN LSH.STATUS_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'LSH.STATUS_ID', "']'") . ', nullif(S.NAME, \'\')) END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'S',
 					'JOIN' => 'INNER JOIN b_crm_status S ON S.ENTITY_ID = \'STATUS\' and S.STATUS_ID = LSH.STATUS_ID',

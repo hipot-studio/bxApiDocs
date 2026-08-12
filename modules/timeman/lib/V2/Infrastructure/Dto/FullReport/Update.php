@@ -19,6 +19,7 @@ final class Update implements Arrayable
 		#[PositiveNumber]
 		public readonly int $reportId,
 		public readonly ?string $reportText = null,
+		public readonly ?string $reportExtended = null,
 		public readonly ?string $plansText = null,
 		/** @var list<array<string, int|string|float|bool|null>>|null */
 		public readonly ?array $tasks = null,
@@ -29,6 +30,7 @@ final class Update implements Arrayable
 		public readonly ?int $dateFrom = null,
 		public readonly ?int $dateTo = null,
 		public readonly ?string $mark = null,
+		public readonly ?string $type = null,
 	)
 	{
 	}
@@ -38,11 +40,12 @@ final class Update implements Arrayable
 		return $this->reportId;
 	}
 
-	public static function mapFromArray(array $props): self
+	public static function mapFromArray(array $props): static
 	{
 		return new self(
 			reportId: self::mapInteger($props, 'reportId'),
 			reportText: self::mapString($props, 'reportText'),
+			reportExtended: self::mapString($props, 'reportExtended'),
 			plansText: self::mapString($props, 'plansText'),
 			tasks: self::mapTasks($props),
 			events: self::mapEvents($props),
@@ -50,6 +53,7 @@ final class Update implements Arrayable
 			dateFrom: self::mapInteger($props, 'dateFrom'),
 			dateTo: self::mapInteger($props, 'dateTo'),
 			mark: self::mapMark($props),
+			type: self::mapString($props, 'type'),
 		);
 	}
 
@@ -69,6 +73,7 @@ final class Update implements Arrayable
 		return [
 			'reportId' => $this->reportId,
 			'reportText' => $this->reportText,
+			'reportExtended' => $this->reportExtended,
 			'plansText' => $this->plansText,
 			'tasks' => $this->tasks,
 			'events' => $this->events,
@@ -76,6 +81,7 @@ final class Update implements Arrayable
 			'dateFrom' => $this->dateFrom,
 			'dateTo' => $this->dateTo,
 			'mark' => $this->mark,
+			'type' => $this->type,
 		];
 	}
 
@@ -84,6 +90,7 @@ final class Update implements Arrayable
 		return new UpdateCommand(
 			reportId: $this->reportId,
 			reportText: $this->reportText,
+			reportExtended: $this->reportExtended,
 			plansText: $this->plansText,
 			tasks: $this->tasks,
 			events: $this->events,
@@ -91,6 +98,7 @@ final class Update implements Arrayable
 			dateFrom: $this->dateFrom,
 			dateTo: $this->dateTo,
 			mark: $this->mark,
+			type: $this->type,
 		);
 	}
 }

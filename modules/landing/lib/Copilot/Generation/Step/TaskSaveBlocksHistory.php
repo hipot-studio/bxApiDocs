@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Step;
 
+use Bitrix\Landing\Copilot\Generation\Step\Base\TaskStep;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\History;
 use Bitrix\Landing\Rights;
@@ -20,27 +21,30 @@ class TaskSaveBlocksHistory extends TaskStep
 		parent::execute();
 
 		$contentsBefore = $this->generation->getData(TaskPresaveBlocksHistory::DATA_KEY);
-		if (
-			!is_array($contentsBefore)
-			|| empty($contentsBefore)
-		)
+		if (!is_array($contentsBefore) || $contentsBefore === [])
 		{
 			return true;
 		}
 
 		Rights::setGlobalOff();
-		$historyState = History::isActive();
-		History::activate();
-
-		if ($this->saveHistory($contentsBefore))
+		$historyState = false;
+		try
 		{
-			$this->generation->deleteData(TaskPresaveBlocksHistory::DATA_KEY);
+			$historyState = History::isActive();
+			History::activate();
+
+			if ($this->saveHistory($contentsBefore))
+			{
+				$this->generation->deleteData(TaskPresaveBlocksHistory::DATA_KEY);
+			}
 		}
-
-		Rights::setGlobalOn();
-		if (!$historyState)
+		finally
 		{
-			History::deactivate();
+			Rights::setGlobalOn();
+			if (!$historyState)
+			{
+				History::deactivate();
+			}
 		}
 
 		return true;
@@ -58,6 +62,12 @@ class TaskSaveBlocksHistory extends TaskStep
 
 		foreach ($contentsBefore as $blockId => $contentBefore)
 		{
+			$blockId = (int)$blockId;
+			if ($blockId <= 0)
+			{
+				continue;
+			}
+
 			$block = $landing->getBlockById($blockId);
 			if (!$block)
 			{

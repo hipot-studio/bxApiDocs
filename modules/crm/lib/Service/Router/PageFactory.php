@@ -37,6 +37,7 @@ final class PageFactory implements Router\Contract\PageFactory
 			Page\Item\RecurListPage::class,
 			Page\Item\KanbanPage::class,
 			Page\Item\DeadlinesPage::class,
+			Page\Item\ActivitiesPage::class,
 			Page\Item\AutomationPage::class,
 			Page\Item\ImportPage::class,
 			Page\Type\ListPage::class,

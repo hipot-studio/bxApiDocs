@@ -139,7 +139,7 @@ class CRestApiServer extends CRestServer
 
 		$request = $this->getRequestByMethodDescription($request, $methodDescription);
 
-		$this->initRequestScope($request);
+		$this->initRequestScope($request, $methodDescription);
 
 		$this->checkServerAuth($request);
 
@@ -189,18 +189,9 @@ class CRestApiServer extends CRestServer
 		return true;
 	}
 
-	protected function initRequestScope(ServerRequest $request): void
+	protected function initRequestScope(ServerRequest $request, MethodDescription $methodDescription): void
 	{
-		if ($request->getToken() !== null)
-		{
-			[$scope] = explode(CRestUtil::TOKEN_DELIMITER, $request->getToken(), 2);
-			$request->setScopes([$scope ?: CRestUtil::GLOBAL_SCOPE]);
-		}
-		else
-		{
-			$methodDescription = $this->getMethodDescription($request->getMethod());
-			$request->setScopes($methodDescription->scopes);
-		}
+		$request->setScopes($methodDescription->scopes);
 	}
 
 	protected function initServerExecution(ServerRequest $request): void

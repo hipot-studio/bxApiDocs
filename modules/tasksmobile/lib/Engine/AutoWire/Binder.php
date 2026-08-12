@@ -5,6 +5,7 @@ namespace Bitrix\TasksMobile\Engine\AutoWire;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\AutoWire\Parameter;
 use Bitrix\TasksMobile\Dto\FlowRequestFilter;
+use Bitrix\TasksMobile\Dto\ProjectV2RequestFilter;
 use Bitrix\TasksMobile\Dto\TaskRequestFilter;
 use Bitrix\TasksMobile\Settings;
 
@@ -26,6 +27,15 @@ final class Binder
 				'flowSearchParams',
 				static function ($className, array $flowSearchParams = []) {
 					return FlowRequestFilter::make($flowSearchParams);
+				}
+			)
+		);
+
+		\Bitrix\Main\Engine\AutoWire\Binder::registerGlobalAutoWiredParameter(new ExactParameter(
+				ProjectV2RequestFilter::class,
+				'projectSearchParams',
+				static function ($className, array $projectSearchParams = []) {
+					return ProjectV2RequestFilter::make($projectSearchParams);
 				}
 			)
 		);

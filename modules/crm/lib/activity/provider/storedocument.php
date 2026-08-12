@@ -104,8 +104,30 @@ class StoreDocument extends Base
 			+ $fields
 		;
 
+		if (self::hasOpenActivity($ownerTypeId, $ownerId, (string)$fields['PROVIDER_TYPE_ID']))
+		{
+			return null;
+		}
+
 		$activityId = (int)\CCrmActivity::add($fields, false);
 		return $activityId > 0 ? $activityId : null;
+	}
+
+	private static function hasOpenActivity(int $ownerTypeId, int $ownerId, string $providerTypeId): bool
+	{
+		$activity = Crm\ActivityTable::getRow([
+			'select' => ['ID'],
+			'filter' => [
+				'=OWNER_TYPE_ID' => $ownerTypeId,
+				'=OWNER_ID' => $ownerId,
+				'=TYPE_ID' => \CCrmActivityType::Provider,
+				'=PROVIDER_ID' => self::PROVIDER_TYPE_DEFAULT,
+				'=PROVIDER_TYPE_ID' => $providerTypeId,
+				'=COMPLETED' => 'N',
+			],
+		]);
+
+		return $activity !== null;
 	}
 
 	/**

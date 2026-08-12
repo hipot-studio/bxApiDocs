@@ -12,6 +12,7 @@ use Bitrix\Rest\Internal\Contract\Repository\IncomingWebhookRepositoryInterface;
 use Bitrix\Rest\Internal\Exception\IncomingWebhook\IncomingWebhookNotFoundException;
 use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
 use Bitrix\Rest\Internal\Repository\IntegrationRepository;
+use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 use Bitrix\Rest\Preset\Provider;
 
 class DeleteIncomingWebhookCommandHandler
@@ -19,6 +20,7 @@ class DeleteIncomingWebhookCommandHandler
 	public function __construct(
 		private IncomingWebhookRepositoryInterface $repository = new IncomingWebhookRepository(),
 		private IntegrationRepository $integrationRepository = new IntegrationRepository(),
+		private SecurityAuditLogger $securityAuditLogger = new SecurityAuditLogger(),
 
 	)
 	{
@@ -58,5 +60,12 @@ class DeleteIncomingWebhookCommandHandler
 		}
 
 		Provider::deleteIntegration($integration->getId(), $command->userId);
+
+		$this->securityAuditLogger->logWebhookDeleted(
+			actingUserId: $command->userId,
+			webhookId: (int)$webhook->getId(),
+			ownerUserId: $webhook->getUserId(),
+			scopes: $webhook->getScopes(),
+		);
 	}
 }

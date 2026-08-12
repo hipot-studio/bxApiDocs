@@ -128,7 +128,7 @@ class FollowUpAnalytics extends AbstractAnalytics
 
 	/**
 	 * Send telemetry data about AI follow-up or call events to callcontroller.
-	 * @param AITask|null $source Task object for AI events or Call object for general call events.
+	 * @param AITask|null $source Task object for AI events or null for general call events.
 	 * @param string $status Allows 'success' or 'error'.
 	 * @param string|null $errorCode
 	 * @param string $event Event type identifier.
@@ -143,49 +143,22 @@ class FollowUpAnalytics extends AbstractAnalytics
 		Error|null $error = null
 	): self
 	{
-		$this->async(function () use ($source, $status, $errorCode, $event, $error)
+		$sourceData = [];
+		if ($source instanceof AITask)
 		{
-			$telemetry = [
-				'callId' => $this->call->getId(),
-				'roomId' => $this->call->getUuid(),
-				'status' => $status,
-				'userId' => $this->call->getInitiatorId() ?: 0,
-				'event' => $event,
-				'timestamp' => time(),
-			];
+			$sourceData['taskId'] = $source->getId();
+			$sourceData['taskType'] = $source->getAISenseType();
+			$sourceData['taskHash'] = $source->getHash();
+			$sourceData['taskLanguage'] = $source->getLanguageId();
+		}
 
-			$data = [];
-			if ($source instanceof AITask)
-			{
-				$data['taskId'] = $source->getId();
-				$data['taskType'] = $source->getAISenseType();
-				$data['taskHash'] = $source->getHash();
-				$data['taskLanguage'] = $source->getLanguageId();
-			}
-			if ($errorCode !== null)
-			{
-				$data['errorCode'] = $errorCode;
-			}
-			if ($error instanceof Error)
-			{
-				$data['errorCode'] = $error->getCode();
-				if (
-					$error instanceof \Bitrix\Call\Error
-					&& $error->getDescription()
-				)
-				{
-					$data['error'] = $error->getDescription();
-				}
-				else
-				{
-					$data['error'] = $error->getMessage();
-				}
-			}
-			$telemetry['data'] = $data;
-
-			(new ControllerClient())->sendAIFollowUpTelemetry($telemetry);
-		});
+		$this->baseSendTelemetry($sourceData, $status, $errorCode, $event, $error);
 
 		return $this;
+	}
+
+	protected function sendTelemetryRequest(array $telemetryData): void
+	{
+		(new ControllerClient())->sendAIFollowUpTelemetry($telemetryData);
 	}
 }

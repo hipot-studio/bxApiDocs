@@ -167,9 +167,12 @@ abstract class CBPActivityCondition
 			}
 			else
 			{
+				$conditionValue = $condition['value'];
 				$multiple = $fieldType->isMultiple();
 				$fieldType->setMultiple(true);
-				$formattedValue = $fieldType->formatValue($condition['value']);
+				$formattedValue = $fieldType->formatValue(
+					is_array($conditionValue) ? $conditionValue : [$conditionValue]
+				);
 				$fieldType->setMultiple($multiple);
 			}
 

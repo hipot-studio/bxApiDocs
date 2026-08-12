@@ -6,6 +6,8 @@ class TypeDateTime extends Base
 {
 	public function getField(): string
 	{
-		return sprintf('`%s` DATETIME', $this->getName());
+		$type = ($this->sqlHelper instanceof \Bitrix\Main\DB\PgsqlSqlHelper) ? 'TIMESTAMP' : 'DATETIME';
+
+		return sprintf('%s %s', $this->sqlHelper->quote($this->name), $type);
 	}
 }

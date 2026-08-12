@@ -239,6 +239,7 @@ class EventHandler
 								"NOTIFY_TYPE" => IM_NOTIFY_SYSTEM,
 								"NOTIFY_MODULE" => "crm",
 								"NOTIFY_MESSAGE" => $notifyMessageCallback,
+								"NOTIFY_TITLE" => Loc::getMessage('CRM_NOTIFY_TITLE'),
 							]);
 						}
 					}

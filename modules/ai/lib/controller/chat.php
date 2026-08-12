@@ -6,6 +6,7 @@ use Bitrix\AI\Chatbot\Dto\ChatInitDto;
 use Bitrix\AI\Chatbot\Enum\ChatInputStatus;
 use Bitrix\AI\Chatbot\Message;
 use Bitrix\AI\Chatbot\Service\ChatService;
+use Bitrix\AI\Controller\ActionFilter\CheckChatInitPermissions;
 use Bitrix\AI\Controller\ActionFilter\CheckChatPermissions;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\Parameter\DefaultParameter;
@@ -24,6 +25,11 @@ class Chat extends Controller
 	public function configureActions(): array
 	{
 		return [
+			'init' => [
+				'+prefilters' => [
+					new CheckChatInitPermissions(),
+				],
+			],
 			'getMessages' => [
 				'+prefilters' => [
 					new CheckChatPermissions(),

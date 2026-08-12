@@ -9,6 +9,8 @@ use Bitrix\Rest\EventTable;
 use Bitrix\Rest\Public;
 use Bitrix\Rest;
 use Bitrix\Main;
+use Bitrix\Main\Config\Option;
+use Bitrix\Main\Web\Uri;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -183,7 +185,7 @@ class CRestUtil
 
 	public static function getInstallAccessList()
 	{
-		$accessList = \Bitrix\Main\Config\Option::get('rest', 'install_access_list', '');
+		$accessList = Option::get('rest', 'install_access_list', '');
 
 		return $accessList === '' ? array() : explode(",", $accessList);
 	}
@@ -199,7 +201,7 @@ class CRestUtil
 			$value = '';
 		}
 
-		\Bitrix\Main\Config\Option::set('rest', 'install_access_list', $value);
+		Option::set('rest', 'install_access_list', $value);
 	}
 
 	public static function notifyInstall($appInfo)
@@ -388,11 +390,11 @@ class CRestUtil
 				if($resizeParam !== false)
 				{
 					$resizeResult = \CFile::ResizeImageGet($file["ID"], $resizeParam, BX_RESIZE_IMAGE_PROPORTIONAL_ALT, false, false, false);
-					$fileSrc[$file['ID']] = \CHTTP::URN2URI($resizeResult['src']);
+					$fileSrc[$file['ID']] = (string)(new Uri($resizeResult['src']))->toAbsolute();
 				}
 				else
 				{
-					$fileSrc[$file['ID']] = \CHTTP::URN2URI(\CFile::GetFileSrc($file));
+					$fileSrc[$file['ID']] = (string)(new Uri(\CFile::GetFileSrc($file)))->toAbsolute();
 				}
 			}
 		}
@@ -1060,7 +1062,7 @@ class CRestUtil
 
 	public static function getEndpoint()
 	{
-		return \CHTTP::URN2URI(\Bitrix\Main\Config\Option::get('rest', 'rest_server_path', '/rest').'/');
+		return (string)(new Uri(Option::get('rest', 'rest_server_path', '/rest').'/'))->toAbsolute();
 	}
 
 	public static function getAdministratorIdList()

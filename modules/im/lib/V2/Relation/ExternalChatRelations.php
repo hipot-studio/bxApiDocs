@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Relation;
 
 use Bitrix\Im\V2\Chat\ExternalChat;
+use Bitrix\Im\V2\Chat\ExternalChat\Event\FilterContext;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\FilterUsersByAccessEvent;
 
 class ExternalChatRelations extends ChatRelations
@@ -19,7 +20,8 @@ class ExternalChatRelations extends ChatRelations
 			return $userIds;
 		}
 
-		$event = new FilterUsersByAccessEvent($chat, $userIds);
+		// Phase 0 (task 718250): superadmin project chat access
+		$event = new FilterUsersByAccessEvent($chat, $userIds, FilterContext::BatchRelationFilter);
 		$event->send();
 		if (!$event->hasResult())
 		{

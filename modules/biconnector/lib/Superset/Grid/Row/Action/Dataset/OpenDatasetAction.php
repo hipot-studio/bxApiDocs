@@ -32,7 +32,7 @@ final class OpenDatasetAction extends BaseAction
 		if (!empty($rawFields['IS_SYSTEM']))
 		{
 			$name = \CUtil::JSEscape($rawFields['NAME']);
-			$this->onclick = "BX.BIConnector.DatasetImport.Slider.open('system', 0, {}, {}, {tableName: '{$name}'})";
+			$this->onclick = "BX.BIConnector.DatasetImportV2.Slider.open('system', 0, {tableName: '{$name}'})";
 
 			return parent::getControl($rawFields);
 		}
@@ -42,7 +42,7 @@ final class OpenDatasetAction extends BaseAction
 			return null;
 		}
 
-		$this->onclick = "BX.BIConnector.DatasetImport.Slider.open(\"{$datasetType}\", $datasetId)";
+		$this->onclick = "BX.BIConnector.DatasetImportV2.Slider.open(\"{$datasetType}\", $datasetId)";
 
 		return parent::getControl($rawFields);
 	}

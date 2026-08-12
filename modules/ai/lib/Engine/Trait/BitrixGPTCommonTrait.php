@@ -183,7 +183,59 @@ trait BitrixGPTCommonTrait
 			'enable_thinking' => $enableThinking,
 		];
 
+		$params = $this->addLiteLLMContextMetadata($params);
+
 		return $params;
+	}
+
+	private function addLiteLLMContextMetadata(array $params): array
+	{
+		$metadata = $this->getLiteLLMContextMetadata();
+		if (empty($metadata))
+		{
+			return $params;
+		}
+
+		$params['metadata'] = $metadata;
+		if (isset($metadata['user_id']))
+		{
+			$params['user'] = (string)$metadata['user_id'];
+		}
+
+		return $params;
+	}
+
+	private function getLiteLLMContextMetadata(): array
+	{
+		$metadata = [];
+
+		$metadata['user_id'] = $this->getContext()->getUserId();
+
+		$contextParameters = $this->getContext()->getParameters();
+		if (!is_array($contextParameters))
+		{
+			return $metadata;
+		}
+
+		$map = [
+			'chatId' => 'chat_id',
+			'messageId' => 'message_id',
+		];
+
+		foreach ($map as $contextParameterKey => $metadataKey)
+		{
+			$value = filter_var(
+				$contextParameters[$contextParameterKey] ?? null,
+				FILTER_VALIDATE_INT,
+				['options' => ['min_range' => 1]]
+			);
+			if ($value !== false)
+			{
+				$metadata[$metadataKey] = $value;
+			}
+		}
+
+		return $metadata;
 	}
 
 	protected function getTokenizer(): GPT

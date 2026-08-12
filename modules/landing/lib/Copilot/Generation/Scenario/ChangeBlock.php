@@ -3,8 +3,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Scenario;
 
-use Bitrix\Landing\Copilot\Connector;
-use Bitrix\Landing\Copilot\Connector\Chat\ICopilotChatBot;
 use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Generation\Step;
 use Bitrix\Landing\Metrika;
@@ -16,7 +14,7 @@ class ChangeBlock extends BaseScenario
 	/**
 	 * @inheritdoc
 	 */
-	public function getMap(): array
+	protected function buildMap(): array
 	{
 		return [
 			10 => new Step\RequestBlockContent(),
@@ -31,11 +29,6 @@ class ChangeBlock extends BaseScenario
 	/**
 	 * @inheritdoc
 	 */
-	public function getChatbot(): ?ICopilotChatBot
-	{
-		return Connector\Chat\Chat::getChangeBlockChatBot();
-	}
-
 	/**
 	 * Returns the number of the scenario step at which to check request limits.
 	 *
@@ -65,15 +58,6 @@ class ChangeBlock extends BaseScenario
 	 */
 	public function onFinish(Generation $generation): void
 	{
-		$chatId = $generation->getChatId();
-		if (!isset($chatId) || $chatId <= 0)
-		{
-			return;
-		}
-
-		$this->getChatbot()?->sendGenerationEndMessage(
-			new Connector\Chat\ChatBotMessageDto($chatId, $generation->getId())
-		);
 		$generation->getEvent()->send(
 			self::EVENT_FINISH,
 			[

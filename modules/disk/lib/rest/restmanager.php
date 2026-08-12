@@ -62,6 +62,7 @@ final class RestManager extends IRestService implements IErrorable
 
 			'disk.file.getFields',
 			'disk.file.get',
+			'disk.file.search',
 			'disk.file.copyTo',
 			'disk.file.moveTo',
 			'disk.file.rename',

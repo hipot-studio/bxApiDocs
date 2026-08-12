@@ -6,6 +6,7 @@ use Bitrix\Catalog\Config\State;
 use Bitrix\Crm;
 use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\Counter\EntityCounterType;
+use Bitrix\Crm\Filter\RelatedEntity\FilterApplier;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\ParentFieldManager;
@@ -89,7 +90,7 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 			;
 		}
 
-		return $name;
+		return $name ?? '';
 	}
 
 	/**
@@ -642,6 +643,12 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 			}
 		}
 
+		$relatedEntitiesField = $this->createRelatedEntitiesField();
+		if ($relatedEntitiesField !== null)
+		{
+			$result[FilterApplier::FILTER_KEY] = $relatedEntitiesField;
+		}
+
 		return $result;
 	}
 
@@ -653,6 +660,11 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 	 */
 	public function prepareFieldData($fieldID)
 	{
+		if ($fieldID === FilterApplier::FILTER_KEY)
+		{
+			return $this->prepareRelatedEntitiesFieldData();
+		}
+
 		if ($fieldID === 'CURRENCY_ID')
 		{
 			return array(

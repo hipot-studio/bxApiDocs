@@ -19,7 +19,10 @@ class LoadLimiter
 	private const MODULE_ID = 'rest';
 	private const BITRIX24_CONNECTOR_NAME = 'cache.redis';
 	private const CACHE_EXPIRE_TIME_PREFIX = 'expire';
+	private const BAN_KEY_PREFIX = 'ban';
+	private const BAN_DURATION = 300; // sec, fixed ban duration on limit exceeded
 	private const DEFAULT_DOMAIN = 'default';
+	private const BATCH_TIME_WEIGHT = 0.5; // batch requests are counted with a reduced weight
 	private static int $version = 2;
 	private static int $bucketSize = 60; //sec
 	private static int $bucketCount = 10;
@@ -28,9 +31,6 @@ class LoadLimiter
 	private static string $domain = '';
 	private static ?bool $isActive = null;
 	private static bool $isFinaliseInit = false;
-	private static array $ignoreMethod = [
-		Client::METHOD_BATCH,
-	];
 	private static array $limitedEntityTypes = [
 		APAuth\Auth::AUTH_TYPE,
 		OAuth\Auth::AUTH_TYPE,
@@ -48,7 +48,7 @@ class LoadLimiter
 		if (Loader::includeModule('bitrix24'))
 		{
 			$result = static::$limitTime;
-			$seconds = (int)Feature::getVariable('rest_load_limiter_seconds');
+			$seconds = (int) Feature::getVariable('rest_load_limiter_seconds');
 			if ($seconds > 0)
 			{
 				$result = $seconds;
@@ -56,7 +56,7 @@ class LoadLimiter
 		}
 		else
 		{
-			$result = (int)Option::get(static::MODULE_ID, 'load_limiter_second_limit', static::$limitTime);
+			$result = (int) Option::get(self::MODULE_ID, 'load_limiter_second_limit', static::$limitTime);
 		}
 
 		return $result;
@@ -78,7 +78,7 @@ class LoadLimiter
 			}
 			else
 			{
-				static::$isActive = Option::get(static::MODULE_ID, 'load_limiter_active', 'N') === 'Y';
+				static::$isActive = Option::get(self::MODULE_ID, 'load_limiter_active', 'N') === 'Y';
 			}
 		}
 
@@ -95,7 +95,7 @@ class LoadLimiter
 			}
 			else
 			{
-				static::$domain = static::DEFAULT_DOMAIN;
+				static::$domain = self::DEFAULT_DOMAIN;
 			}
 		}
 
@@ -108,12 +108,11 @@ class LoadLimiter
 	 * @param $entity
 	 * @param $method
 	 */
-	public static function registerStarting($entityType, $entity, $method): void
+	public static function registerStarting(?string $entityType, ?string $entity, ?string $method): void
 	{
 		if (
 			static::isActive()
-			|| in_array($entityType, static::$limitedEntityTypes, true)
-			|| !in_array($method, static::$ignoreMethod, true)
+			&& in_array($entityType, static::$limitedEntityTypes, true)
 		)
 		{
 			$key = static::getKey($entityType, $entity, $method);
@@ -139,12 +138,11 @@ class LoadLimiter
 	 * @param $entity
 	 * @param $method
 	 */
-	public static function registerEnding($entityType, $entity, $method): void
+	public static function registerEnding(?string $entityType, ?string $entity, ?string $method): void
 	{
 		if (
 			static::isActive()
 			&& in_array($entityType, static::$limitedEntityTypes, true)
-			&& !in_array($method, static::$ignoreMethod, true)
 		)
 		{
 			$key = static::getKey($entityType, $entity, $method);
@@ -169,20 +167,41 @@ class LoadLimiter
 	 * @return bool ( true - block, false - don't block)
 	 * @throws \Bitrix\Main\LoaderException
 	 */
-	public static function is($entityType, $entity, $method): bool
+	public static function is(?string $entityType, ?string $entity, ?string $method): bool
 	{
 		if (
 			!static::isActive()
 			|| !in_array($entityType, static::$limitedEntityTypes, true)
-			|| in_array($method, static::$ignoreMethod, true)
 		)
 		{
 			return false;
 		}
 
+		$resource = static::getConnectionResource();
+		$banKey = static::getKey(entityType: $entityType, entity: $entity, method: $method, prefix: self::BAN_KEY_PREFIX);
+
+		if ($resource && $resource->exists($banKey))
+		{
+			return true;
+		}
+
 		$totalTime = static::getRestTime($entityType, $entity, $method);
 		if ($totalTime > static::getLimitTime())
 		{
+			if ($resource)
+			{
+				// Set the ban before clearing the buckets so a concurrent request can never
+				// observe an empty window with no active ban and slip through. Clear the counted
+				// buckets only when the ban is actually stored: otherwise the overage would be
+				// forgotten without an active ban and the next request would get a full budget.
+				if ($resource->setEx($banKey, self::BAN_DURATION, '1'))
+				{
+					// Buckets stay in Redis for up to $bucketCount * $bucketSize seconds, well
+					// past BAN_DURATION, and would otherwise trigger an immediate re-ban.
+					static::resetBuckets($resource, $entityType, $entity, $method);
+				}
+			}
+
 			if (Loader::includeModule('bitrix24') && function_exists('saveRestStat'))
 			{
 				saveRestStat(static::getDomain(), $entityType, $entity, $method, $totalTime);
@@ -191,14 +210,38 @@ class LoadLimiter
 			return true;
 		}
 
+		// Re-check the ban: a concurrent request may have set it and cleared the buckets
+		// between the first check and getRestTime(), leaving this request to read an empty
+		// window and slip through while the ban is active.
+		if ($resource && $resource->exists($banKey))
+		{
+			return true;
+		}
+
 		return false;
 	}
 
-	private static function getKey($entityType, $entity, $method, $bucketNum = null): string
+	private static function resetBuckets(object $resource, ?string $entityType, ?string $entity, ?string $method): void
+	{
+		$numBucket = static::getNumBucket();
+		$key = static::getKey(entityType: $entityType, entity: $entity, method: $method);
+		$keyExpire = static::getKey(entityType: $entityType, entity: $entity, method: $method, prefix: self::CACHE_EXPIRE_TIME_PREFIX);
+
+		$keysToDelete = [];
+		for ($i = 0; $i < static::$bucketCount; $i++)
+		{
+			$keysToDelete[] = $key . ($numBucket - $i);
+			$keysToDelete[] = $keyExpire . ($numBucket - $i);
+		}
+
+		$resource->del($keysToDelete);
+	}
+
+	private static function getKey(?string $entityType, ?string $entity, ?string $method, ?int $bucketNum = null, string $prefix = ''): string
 	{
 		return
-			static::getDomain() . '|v' . static::$version . '|'
-			. sha1($entityType . '|' .$entity . '|' . $method)
+			static::getDomain() . '|v' . static::$version . '|' . ($prefix !== '' ? $prefix . '|' : '') . '{'
+			. sha1($entityType . '|' .$entity . '|' . $method) . '}'
 			. '|' . $bucketNum;
 	}
 
@@ -212,7 +255,7 @@ class LoadLimiter
 	 * @return int|null
 	 * @throws \Bitrix\Main\LoaderException
 	 */
-	public static function getResetTime($entityType, $entity, $method): ?int
+	public static function getResetTime(?string $entityType, ?string $entity, ?string $method): ?int
 	{
 		$result = null;
 
@@ -221,15 +264,53 @@ class LoadLimiter
 			$resource = static::getConnectionResource();
 			if ($resource)
 			{
+				// While the ban is active the buckets are already cleared, so report the ban
+				// expiration as the reset time instead of falling back to null.
+				$banKey = static::getKey(
+					entityType: $entityType,
+					entity: $entity,
+					method: $method,
+					prefix: self::BAN_KEY_PREFIX
+				);
+				$banTtl = (int) $resource->ttl($banKey);
+				if ($banTtl > 0)
+				{
+					return time() + $banTtl;
+				}
+
 				$numBucket = static::getNumBucket();
-				$key =  static::getKey($entityType, $entity, $method);
-				$keyExpire =  static::CACHE_EXPIRE_TIME_PREFIX . '|' . $key;
+				$key =  static::getKey(
+					entityType: $entityType,
+					entity: $entity,
+					method: $method
+				);
+
+				$keyExpire =  static::getKey(
+					entityType: $entityType,
+					entity: $entity,
+					method: $method,
+					prefix: self::CACHE_EXPIRE_TIME_PREFIX
+				);
+
+				$bucketKeys = [];
+				$bucketKeysExpire = [];
 				for ($i = static::$bucketCount - 1; $i >= 0; $i--)
 				{
-					$time = (float)$resource->get($key . ($numBucket - $i));
-					if ($time > 0 && $resource->exists($keyExpire . ($numBucket - $i)))
+					$bucketKeys[] = $key . ($numBucket - $i);
+					$bucketKeysExpire[] = $keyExpire . ($numBucket - $i);
+				}
+
+				$allKeys = array_merge($bucketKeys, $bucketKeysExpire);
+				$values = static::rawMultiGet($resource, $allKeys);
+
+				$times = array_slice($values, 0, static::$bucketCount);
+				$expireTimes = array_slice($values, static::$bucketCount);
+
+				foreach ($times as $index => $time)
+				{
+					if ((float) $time > 0 && $expireTimes[$index] !== false && $expireTimes[$index] !== null)
 					{
-						$result = (int)$resource->get($keyExpire . ($numBucket - $i));
+						$result = (int) $expireTimes[$index];
 						break;
 					}
 				}
@@ -251,7 +332,7 @@ class LoadLimiter
 		return $result;
 	}
 
-	protected static function getNumBucket()
+	protected static function getNumBucket(): int
 	{
 		if (!static::$numBucket)
 		{
@@ -269,20 +350,28 @@ class LoadLimiter
 	 * @return float
 	 * @throws \Bitrix\Main\LoaderException
 	 */
-	public static function getRestTime($entityType, $entity, $method): float
+	public static function getRestTime(?string $entityType, ?string $entity, ?string $method): float
 	{
 		$result = [];
 		if (static::isActive())
 		{
 			$numBucket = static::getNumBucket();
 
-			$key = static::getKey($entityType, $entity, $method);
+			$key = static::getKey(entityType: $entityType, entity: $entity, method: $method);
 			$resource = static::getConnectionResource();
 			if ($resource)
 			{
+				$bucketKeys = [];
 				for ($i = 0; $i < static::$bucketCount; $i++)
 				{
-					$result[] = (float)$resource->get($key . ($numBucket - $i));
+					$bucketKeys[] = $key . ($numBucket - $i);
+				}
+
+				$values = static::rawMultiGet($resource, $bucketKeys);
+
+				foreach ($values as $value)
+				{
+					$result[] = (float) $value;
 				}
 			}
 			if (!empty(static::$timeRegistered[$key]['timeStart']))
@@ -292,6 +381,10 @@ class LoadLimiter
 					if (static::$timeRegistered[$key]['timeFinish'][$k] ?? null)
 					{
 						$time = static::$timeRegistered[$key]['timeFinish'][$k] - $timeStart;
+						if (static::$timeRegistered[$key]['method'] === Client::METHOD_BATCH)
+						{
+							$time *= self::BATCH_TIME_WEIGHT;
+						}
 						if ($time > static::$minimalFixTime)
 						{
 							$result[] = $time;
@@ -328,9 +421,20 @@ class LoadLimiter
 						}
 					}
 
+					if ($item['method'] === Client::METHOD_BATCH)
+					{
+						$time *= self::BATCH_TIME_WEIGHT;
+					}
+
 					if ($time > static::$minimalFixTime)
 					{
-						$key = static::getKey($item['entityType'], $item['entity'], $item['method'], static::getNumBucket());
+						$key = static::getKey(
+							entityType: $item['entityType'],
+							entity: $item['entity'],
+							method: $item['method'],
+							bucketNum: static::getNumBucket()
+						);
+
 						if ($resource->exists($key))
 						{
 							$resource->incrByFloat($key, $time);
@@ -339,11 +443,18 @@ class LoadLimiter
 						{
 							$expireAt = $firstTime + static::$bucketCount * static::$bucketSize;
 							$resource->incrByFloat($key, $time);
-							$resource->expire($key, $expireAt);
+							$resource->expireAt($key, (int) $expireAt);
 
-							$keyExpire = static::CACHE_EXPIRE_TIME_PREFIX . '|' . $key;
+							$keyExpire = static::getKey(
+								entityType: $item['entityType'],
+								entity: $item['entity'],
+								method: $item['method'],
+								bucketNum: static::getNumBucket(),
+								prefix: self::CACHE_EXPIRE_TIME_PREFIX
+							);
+
 							$resource->incrByFloat($keyExpire, $expireAt);
-							$resource->expire($keyExpire, $expireAt);
+							$resource->expireAt($keyExpire, (int) $expireAt);
 						}
 					}
 				}
@@ -352,9 +463,37 @@ class LoadLimiter
 		}
 	}
 
-	private static function getConnectionResource(): ?object
+	/**
+	 * Executes MGET via rawCommand, bypassing the connection's value serializer/compressor:
+	 * bucket values are written by incrByFloat() as plain uncompressed floats, so a regular
+	 * mGet() would try (and fail) to decompress them when compression is enabled.
+	 */
+	private static function rawMultiGet(object $resource, array $keys): array
 	{
-		$result = null;
+		if (empty($keys))
+		{
+			return [];
+		}
+
+		$values = $resource instanceof \RedisCluster
+			? $resource->rawCommand($keys[0], 'MGET', ...$keys)
+			: $resource->rawCommand('MGET', ...$keys)
+		;
+
+		return is_array($values) ? $values : array_fill(0, count($keys), false);
+	}
+
+	protected static function getConnectionResource(): ?object
+	{
+		static $isInitialized = false;
+		static $resource = null;
+
+		if ($isInitialized)
+		{
+			return $resource;
+		}
+
+		$isInitialized = true;
 		$connectionName = static::getConnectionName();
 		if ($connectionName)
 		{
@@ -362,22 +501,26 @@ class LoadLimiter
 				->getConnectionPool()
 				->getConnection($connectionName);
 
-			if ($connection && $connection->isConnected() === true)
+			if ($connection)
 			{
-				$result = $connection->getResource();
+				$resource = $connection->getResource();
+				if ($connection->isConnected() !== true)
+				{
+					$resource = null;
+				}
 			}
 		}
 
-		return $result;
+		return $resource;
 	}
 
 	private static function getConnectionName(): string
 	{
 		if (Loader::includeModule('bitrix24'))
 		{
-			return static::BITRIX24_CONNECTOR_NAME;
+			return self::BITRIX24_CONNECTOR_NAME;
 		}
 
-		return '';
+		return Option::get(self::MODULE_ID, 'load_limiter_connection_name', '');
 	}
 }

@@ -91,7 +91,13 @@ class Settings
 
 	public static function isMarkdownParserEnabled(): bool
 	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'markdown_parser_enabled', 'N') === 'Y';
+		// Unified flag with the web messenger: im.markdown_available (see Im\V2\Application\Features)
+		if (!\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		return Features::isMarkdownAvailable();
 	}
 
 	public static function isOpenlinesInMessengerV2Available(): bool

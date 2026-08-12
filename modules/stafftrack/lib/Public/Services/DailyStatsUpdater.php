@@ -3,8 +3,10 @@
 namespace Bitrix\StaffTrack\Public\Services;
 
 use Bitrix\Main\Type\Date;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\StaffTrack\Internal\Entity\CheckInType;
 use Bitrix\StaffTrack\Internal\Model\CheckInDailyStatsTable;
+use Bitrix\StaffTrack\Internal\Model\CheckInTable;
 
 class DailyStatsUpdater
 {
@@ -19,11 +21,55 @@ class DailyStatsUpdater
 		$hasOpenEnter = (bool)$stats['HAS_OPEN_ENTER'];
 		[$cntDelta, $newHasOpenEnter] = $this->calculateDelta($entityType, $description, $hasOpenEnter);
 
-		CheckInDailyStatsTable::update($stats['ID'], [
+		$updateFields = [
 			'CNT' => $stats['CNT'] + $cntDelta,
 			'HAS_OPEN_ENTER' => $newHasOpenEnter ? 1 : 0,
-			'LAST_CHECK_IN_ID' => $checkInId,
-		]);
+		];
+
+		$isClosingLeave =
+			$entityType !== CheckInType::MANUAL->value
+			&& $description === self::DESCRIPTION_LEAVE
+			&& $hasOpenEnter;
+
+		if (!$isClosingLeave && $this->isNewerThanLast((int)($stats['LAST_CHECK_IN_ID'] ?? 0), $timestamp + $userTimezone))
+		{
+			$updateFields['LAST_CHECK_IN_ID'] = $checkInId;
+		}
+
+		CheckInDailyStatsTable::update($stats['ID'], $updateFields);
+	}
+
+	private function isNewerThanLast(int $lastCheckInId, int $localTimestamp): bool
+	{
+		if ($lastCheckInId <= 0)
+		{
+			return true;
+		}
+
+		$lastLocalTimestamp = $this->getCheckInLocalTimestamp($lastCheckInId);
+		if ($lastLocalTimestamp === null)
+		{
+			return true;
+		}
+
+		return $localTimestamp > $lastLocalTimestamp;
+	}
+
+	private function getCheckInLocalTimestamp(int $checkInId): ?int
+	{
+		$row = CheckInTable::query()
+			->setSelect(['DATE_CREATE', 'USER_TIMEZONE'])
+			->where('ID', $checkInId)
+			->setLimit(1)
+			->exec()
+			->fetch();
+
+		if (!$row || !($row['DATE_CREATE'] instanceof DateTime))
+		{
+			return null;
+		}
+
+		return $row['DATE_CREATE']->getTimestamp() + (int)($row['USER_TIMEZONE'] ?? 0);
 	}
 
 	/**
@@ -72,8 +118,18 @@ class DailyStatsUpdater
 			$description = (string)($row['DESCRIPTION'] ?? '');
 			[$cntDelta, $newHasOpenEnter] = $this->calculateDelta($entityType, $description, $hasOpenEnter);
 			$cnt += $cntDelta;
+
+			$isClosingLeave =
+				$entityType !== CheckInType::MANUAL->value
+				&& $description === self::DESCRIPTION_LEAVE
+				&& $hasOpenEnter;
+
+			if (!$isClosingLeave)
+			{
+				$lastCheckInId = (int)($row['ID'] ?? 0);
+			}
+
 			$hasOpenEnter = $newHasOpenEnter;
-			$lastCheckInId = (int)($row['ID'] ?? 0);
 		}
 
 		CheckInDailyStatsTable::add([
@@ -88,7 +144,7 @@ class DailyStatsUpdater
 	private function findStats(int $userId, Date $localDate): ?array
 	{
 		$row = CheckInDailyStatsTable::query()
-			->setSelect(['ID', 'CNT', 'HAS_OPEN_ENTER'])
+			->setSelect(['ID', 'CNT', 'HAS_OPEN_ENTER', 'LAST_CHECK_IN_ID'])
 			->where('USER_ID', $userId)
 			->where('LOCAL_DATE', $localDate)
 			->setLimit(1)

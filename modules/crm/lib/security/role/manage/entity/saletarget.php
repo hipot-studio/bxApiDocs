@@ -19,6 +19,8 @@ class SaleTarget implements PermissionEntity
 	{
 		$hierarchy = (new UserDepartmentAndOpened())
 			->exclude(UserDepartmentAndOpened::OPEN)
+			->exclude(UserDepartmentAndOpened::TEAM)
+			->exclude(UserDepartmentAndOpened::SUBTEAMS)
 		;
 
 		return [

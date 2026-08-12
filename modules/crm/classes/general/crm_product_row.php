@@ -376,7 +376,7 @@ class CAllCrmProductRow
 
 			if($regEvent)
 			{
-				self::RegisterUpdateEvent($ownerType, $ownerID, $arFields, $arParams, $checkPerms);
+				self::RegisterUpdateEvent($ownerType, $ownerID, $arFields, $arParams, $checkPerms, $arFields['CURRENCY_ID'] ?? null);
 			}
 		}
 		return true;
@@ -1061,7 +1061,7 @@ class CAllCrmProductRow
 				if($arPresentRow)
 				{
 					// Row was modified
-					self::RegisterUpdateEvent($ownerType, $ownerID, $arRow, $arPresentRow, $checkPerms);
+					self::RegisterUpdateEvent($ownerType, $ownerID, $arRow, $arPresentRow, $checkPerms, $currencyID);
 				}
 			}
 			unset($arRow);
@@ -1343,7 +1343,7 @@ class CAllCrmProductRow
 		return self::RegisterEvents($ownerType, $ownerID, array($arFields), $checkPerms);
 	}
 
-	private static function RegisterUpdateEvent($ownerType, $ownerID, $arRow, $arPresentRow, $checkPerms)
+	private static function RegisterUpdateEvent($ownerType, $ownerID, $arRow, $arPresentRow, $checkPerms, ?string $currencyID = null)
 	{
 		IncludeModuleLangFile(__FILE__);
 
@@ -1394,8 +1394,9 @@ class CAllCrmProductRow
 				$productName = $arPresentRow['ORIGINAL_PRODUCT_NAME'];
 			}
 
-			$price = $accounter->round((float)$arRow['PRICE'], $accounter->getPricePublicPrecision());
-			$presentPrice = $accounter->round((float)$arPresentRow['PRICE'], $accounter->getPricePublicPrecision());
+			$pricePublicPrecision = $accounter->getPricePublicPrecision($currencyID);
+			$price = $accounter->round((float)$arRow['PRICE'], $pricePublicPrecision);
+			$presentPrice = $accounter->round((float)$arPresentRow['PRICE'], $pricePublicPrecision);
 			if($presentPrice !== $price)
 			{
 				// Product price was changed
@@ -1418,8 +1419,8 @@ class CAllCrmProductRow
 				);
 			}
 
-			$discountSum = $accounter->round((float)$arRow['DISCOUNT_SUM'], $accounter->getPricePublicPrecision());
-			$presentDiscountSum = $accounter->round((float)$arPresentRow['DISCOUNT_SUM'], $accounter->getPricePublicPrecision());
+			$discountSum = $accounter->round((float)$arRow['DISCOUNT_SUM'], $pricePublicPrecision);
+			$presentDiscountSum = $accounter->round((float)$arPresentRow['DISCOUNT_SUM'], $pricePublicPrecision);
 			if($discountSum !== $presentDiscountSum)
 			{
 				// Product  discount was changed
@@ -1711,6 +1712,27 @@ class CAllCrmProductRow
 			isset($arRow['QUANTITY'])
 				? Crm\Service\Accounting::round((float)$arRow['QUANTITY'], Crm\Service\Accounting::getQuantityPrecision())
 				: $default
+		;
+	}
+
+	public static function GetRowSum($arRow)
+	{
+		return round(self::GetPrice($arRow) * self::GetQuantity($arRow), 2);
+	}
+
+	public static function ResolveExportRowSum(array $productRow, $fallback = '')
+	{
+		return empty($productRow)
+			? (string)$fallback
+			: (string)self::GetRowSum($productRow)
+		;
+	}
+
+	public static function ResolveExportRowSumWithCurrency(array $productRow, string $currencyId, $fallback = '')
+	{
+		return empty($productRow)
+			? (string)$fallback
+			: \Bitrix\Crm\Format\Money::format(self::GetRowSum($productRow), $currencyId)
 		;
 	}
 

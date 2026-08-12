@@ -3,7 +3,7 @@
 namespace Bitrix\Call\Controller;
 
 use Bitrix\Main\Loader;
-use Bitrix\Main\Engine;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\ActionFilter\Scope;
@@ -13,28 +13,61 @@ use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Call\Call;
 use Bitrix\Call\Call\Registry;
+use Bitrix\Call\Controller\ActionFilter\CallFollowUpAccess;
+use Bitrix\Call\Controller\Exception\FollowUpNotAccessibleException;
+use Bitrix\Call\Controller\Exception\InvalidDateRangeException;
+use Bitrix\Call\Controller\Exception\InvalidOrderException;
+use Bitrix\Call\Controller\Exception\InvalidPaginationException;
+use Bitrix\Call\Controller\Exception\InvalidSelectFieldException;
+use Bitrix\Call\Controller\Request\GetFollowUpRequest;
+use Bitrix\Call\Controller\Request\ListFollowUpRequest;
+use Bitrix\Call\DTO\FollowUp\FollowUpDto;
 use Bitrix\Call\Error;
 use Bitrix\Call\NotifyService;
+use Bitrix\Call\Service\FollowUpReader;
 use Bitrix\Call\Track\TrackCollection;
 use Bitrix\Call\Integration\AI\CallAIService;
 use Bitrix\Call\Integration\AI\ChatEventLog;
 use Bitrix\Call\Integration\AI\ChatMessage;
+use Bitrix\Call\Integration\AI\Outcome\AISenseContent;
 use Bitrix\Call\Integration\AI\Outcome\Transcription;
 use Bitrix\Call\Integration\AI\Outcome\OutcomeCollection;
 use Bitrix\Call\Model\CallTrackTable;
 use Bitrix\Call\Model\CallAITaskTable;
 use Bitrix\Call\Model\CallOutcomePropertyTable;
+use Bitrix\Rest\V3\Attribute\DtoType;
+use Bitrix\Rest\V3\Controller\RestController;
+use Bitrix\Rest\V3\DefaultLanguage;
+use Bitrix\Rest\V3\Exception\EntityNotFoundException;
+use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
+use Bitrix\Rest\V3\Interaction\Response\ArrayResponse;
+use Bitrix\Rest\V3\Schema\Scope as V3Scope;
 
-/**
- * @internal
- */
-class FollowUp extends Engine\Controller
+#[DtoType(FollowUpDto::class)]
+class FollowUp extends RestController
 {
 	protected function init(): void
 	{
 		parent::init();
 		Loader::includeModule('call');
 		Loader::includeModule('im');
+
+		if (!isset($this->responseLanguage))
+		{
+			$this->setResponseLanguage(DefaultLanguage::get());
+		}
+		if (!isset($this->processedScope))
+		{
+			$this->setProcessedScope(new V3Scope(''));
+		}
+	}
+
+	protected function getDefaultPreFilters(): array
+	{
+		return [
+			...parent::getDefaultPreFilters(),
+			new CallFollowUpAccess(),
+		];
 	}
 
 	/**
@@ -43,6 +76,14 @@ class FollowUp extends Engine\Controller
 	public function configureActions()
 	{
 		return [
+			// REST + AJAX endpoints
+			'get' => [
+				'+prefilters' => [new Scope(Scope::AJAX | Scope::REST)]
+			],
+			'list' => [
+				'+prefilters' => [new Scope(Scope::AJAX | Scope::REST)]
+			],
+			// AJAX endpoints
 			'drop' => [
 				'+prefilters' => [new Scope(Scope::AJAX)]
 			],
@@ -64,17 +105,167 @@ class FollowUp extends Engine\Controller
 		];
 	}
 
-	protected function canDeleteFollowUp(Call $call, int $userId): bool
+	/**
+	 * Returns full Follow-up payload for one call. REST V3 + AJAX.
+	 *
+	 * @restMethod call.followup.get
+	 */
+	public function getAction(GetFollowUpRequest $request): ArrayResponse
 	{
-		$roles = $call->getUserRoles([$userId]);
-		if (isset($roles[$userId]) && in_array($roles[$userId], ['ADMIN', 'MANAGER'], true))
+		$user = CurrentUser::get();
+		$userId = (int)$user->getId();
+		$isAdmin = (bool)$user->isAdmin();
+
+		$call = Registry::getCallWithId($request->callId);
+		if (!$call)
+		{
+			// Anti-enumeration: non-admins get a 403 indistinguishable from "exists but no access".
+			throw $isAdmin
+				? new EntityNotFoundException($request->callId)
+				: new FollowUpNotAccessibleException();
+		}
+		if (!$isAdmin && !$call->checkAccess($userId))
+		{
+			throw new FollowUpNotAccessibleException();
+		}
+
+		// Optional `select` — same vocabulary as call.followup.list. When omitted, the
+		// legacy contract holds: full FollowUpDto with every null field preserved.
+		$reader = $this->reader();
+		$normalizedSelect = null;
+		if ($request->select !== null)
+		{
+			$selectResult = $reader->validateSelect($request->select);
+			if (!$selectResult->isSuccess())
+			{
+				$error = $selectResult->getErrors()[0];
+				$field = (string)($error->getCustomData()['field'] ?? '');
+				throw new InvalidSelectFieldException($field);
+			}
+			$normalizedSelect = $selectResult->getData();
+		}
+
+		$result = $reader->get(
+			$request->callId,
+			(string)($request->mentionFormat ?? ''),
+			$normalizedSelect,
+		);
+		if (!$result->isSuccess())
+		{
+			throw $isAdmin
+				? new EntityNotFoundException($request->callId)
+				: new FollowUpNotAccessibleException();
+		}
+
+		/** @var FollowUpDto $dto */
+		$dto = $result->getData()['followUp'];
+
+		return new ArrayResponse(['item' => $dto]);
+	}
+
+	/**
+	 * Returns a paginated list of Follow-ups with filters and optional select. REST V3 + AJAX.
+	 *
+	 * @restMethod call.followup.list
+	 */
+	public function listAction(ListFollowUpRequest $request): ArrayResponse
+	{
+		$user = CurrentUser::get();
+		$userId = (int)$user->getId();
+		$isAdmin = (bool)$user->isAdmin();
+
+		$reader = $this->reader();
+
+		$selectResult = $reader->validateSelect($request->select);
+		if (!$selectResult->isSuccess())
+		{
+			$error = $selectResult->getErrors()[0];
+			$field = (string)($error->getCustomData()['field'] ?? '');
+			throw new InvalidSelectFieldException($field);
+		}
+		$normalizedSelect = $selectResult->getData();
+
+		$dateResult = $reader->parseDateRange($request->filter);
+		if (!$dateResult->isSuccess())
+		{
+			throw new InvalidDateRangeException($dateResult->getErrors()[0]->getMessage());
+		}
+		['from' => $dateFrom, 'to' => $dateTo] = $dateResult->getData();
+
+		$rawParticipantId = 0;
+		if (is_array($request->filter) && array_key_exists('participantId', $request->filter))
+		{
+			$rawParticipantId = $request->filter['participantId'];
+			if (!is_int($rawParticipantId))
+			{
+				throw new InvalidRequestFieldTypeException('filter.participantId', 'int');
+			}
+		}
+		$participantFilter = $this->resolveParticipantFilter(
+			$rawParticipantId,
+			$userId,
+			$isAdmin,
+		);
+
+		$orderResult = $reader->validateOrder($request->order);
+		if (!$orderResult->isSuccess())
+		{
+			throw new InvalidOrderException($request->order);
+		}
+		$paginationResult = $reader->validatePagination($request->pagination);
+		if (!$paginationResult->isSuccess())
+		{
+			throw new InvalidPaginationException($request->pagination);
+		}
+
+		$result = $reader->list(
+			normalizedSelect: $normalizedSelect,
+			dateFrom: $dateFrom,
+			dateTo: $dateTo,
+			participantFilter: $participantFilter,
+			order: $request->order,
+			pagination: $request->pagination,
+			mentionFormat: (string)($request->mentionFormat ?? ''),
+		);
+
+		return new ArrayResponse([
+			'items' => $result['items'],
+			'hasMore' => $result['hasMore'],
+			'afterCursor' => $result['afterCursor'],
+		]);
+	}
+
+	/**
+	 * Decide whose calls the requester may see in list().
+	 * Admin can scope to any user (or all when participantId is 0).
+	 * Regular user is silently forced to themselves so ID enumeration is impossible.
+	 */
+	private function resolveParticipantFilter(int $requestedParticipantId, int $currentUserId, bool $isAdmin): int
+	{
+		if ($isAdmin)
+		{
+			return $requestedParticipantId > 0 ? $requestedParticipantId : 0;
+		}
+		return $currentUserId;
+	}
+
+	private function reader(): FollowUpReader
+	{
+		return new FollowUpReader();
+	}
+
+	/**
+	 * Can the caller drop this Follow-up
+	 */
+	private function canDeleteFollowUp(Call $call, int $userId, bool $isAdmin = false): bool
+	{
+		if ($isAdmin)
 		{
 			return true;
 		}
+		$roles = $call->getUserRoles([$userId]);
 
-		$this->addError(new Error('access_denied', "You do not have access to this action"));
-
-		return false;
+		return isset($roles[$userId]) && in_array($roles[$userId], ['ADMIN', 'MANAGER'], true);
 	}
 
 	/**
@@ -90,8 +281,9 @@ class FollowUp extends Engine\Controller
 			return null;
 		}
 
-		if (!$this->canDeleteFollowUp($call, $this->getCurrentUser()->getId()))
+		if (!$this->canDeleteFollowUp($call, $this->getCurrentUser()->getId(), false))
 		{
+			$this->addError(new Error('access_denied', "You do not have access to this action"));
 			return null;
 		}
 
@@ -293,24 +485,34 @@ class FollowUp extends Engine\Controller
 		$outcomeCollection = OutcomeCollection::getOutcomesByCallId($callId);
 		foreach ($outcomeCollection as $outcome)
 		{
-			$content = $outcome->getSenseContent();
-			if ($content)
+			if (isset($outcomes[$outcome->getType()]))
 			{
-				if ($content instanceof Transcription)
-				{
-					$transcription = $content;
-				}
-				$outcomes[$outcome->getType()] = $content->toRestFormat(mentionFormat: 'bb');
+				continue;// take only the latest outcome with content for each type
+			}
+
+			$content = $outcome->getSenseContent();
+			if (!($content instanceof AISenseContent))
+			{
+				continue;
+			}
+			/** @var Transcription $transcription */
+			if ($content instanceof Transcription)
+			{
+				$transcription = $content;
+			}
+			if ($content->hasContent())
+			{
+				$outcomes[$outcome->getType()] = $content->toRestFormat(mentionFormat: FollowUpReader::MENTION_FORMAT_BB);
 				$outcomes['version'] = max($outcomes['version'], $content->getVersion());
 			}
 		}
 
 		if (
-			$outcomes['insights']['speakerEvaluationAvailable']
+			!empty($outcomes['insights']['speakerEvaluationAvailable'])
 			&& !empty($outcomes['insights']['speakerAnalysis'])
 		)
 		{
-			$speakerList = $transcription->prepareSpeakersList();
+			$speakerList = $transcription?->prepareSpeakersList(0) ?? [];
 			$speakerAnalysis = [];
 			/** @var array{userId: int, efficiencyValue: float} $speaker */
 			foreach ($outcomes['insights']['speakerAnalysis'] as $speaker)

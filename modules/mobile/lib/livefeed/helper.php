@@ -12,6 +12,7 @@ use Bitrix\Main\ModuleManager;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\IO;
+use Bitrix\Main\Web\Uri;
 
 class Helper
 {
@@ -304,7 +305,7 @@ class Helper
 										BX_RESIZE_IMAGE_EXACT,
 										false
 									);
-									$result['PostGratitudeData']['employees'][$key]['imageUrl'] = \CHTTP::URN2URI(\CHTTP::urnEncode($file['src']));
+									$result['PostGratitudeData']['employees'][$key]['imageUrl'] = (string)(new Uri(Uri::urnEncode($file['src'])))->toAbsolute();
 								}
 							}
 						}

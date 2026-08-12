@@ -24,7 +24,7 @@ abstract class BaseOptionsHelper
 
 	/**
 	 * @param string[] $propertyNames
-	 * @return array<string, string> map propertyName => value (отсутствуют ключи без записей)
+	 * @return array<string, string> map propertyName => value (properties without stored records are omitted)
 	 */
 	public static function getValues(
 		int $mailboxId,

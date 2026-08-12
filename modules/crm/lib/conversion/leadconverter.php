@@ -12,6 +12,7 @@ use Bitrix\Crm\Merger\ContactMerger;
 use Bitrix\Crm\Requisite\AddressRequisiteConverter;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Requisite\RequisiteConvertException;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\ConversionSettings;
 use Bitrix\Crm\Synchronization\UserFieldSynchronizer;
 use Bitrix\Main;
@@ -298,6 +299,12 @@ class LeadConverter extends EntityConverter
 			}
 
 			$this->analytics?->setDstEntityTypeId($entityTypeID);
+			Container::getInstance()
+				->getContext()
+				->getAnalytics()
+				->setEvent(Dictionary::EVENT_ENTITY_CONVERT)
+				->setP2(['from', Dictionary::getAnalyticsEntityType(\CCrmOwnerType::Lead)])
+			;
 
 			$entityTypeName = \CCrmOwnerType::ResolveName($entityTypeID);
 			$config = $this->config->getItem($entityTypeID);

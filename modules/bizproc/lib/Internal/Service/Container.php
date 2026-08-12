@@ -4,6 +4,9 @@ namespace Bitrix\Bizproc\Internal\Service;
 
 use Bitrix\Bizproc\Internal\Service\Activity\ComplexActivityService;
 use Bitrix\Bizproc\Internal\Trait\SingletonTrait;
+use Bitrix\Bizproc\Public\Activity\Registry\FilterResultPropertyResolverRegistry;
+use Bitrix\Bizproc\Public\Activity\Registry\TargetDocumentAccessGuardRegistry;
+use Bitrix\Bizproc\Public\Activity\Registry\TargetDocumentResolverRegistry;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
 use Bitrix\Main\DI\ServiceLocator;
 use Psr\Container\ContainerInterface;
@@ -53,5 +56,20 @@ class Container
 	public function getEvalService(): EvalService
 	{
 		return static::getService('bizproc.service.eval');
+	}
+
+	public function getTargetDocumentResolverRegistry(): TargetDocumentResolverRegistry
+	{
+		return static::getService('bizproc.service.activity.targetDocumentResolverRegistry');
+	}
+
+	public function getTargetDocumentAccessGuardRegistry(): TargetDocumentAccessGuardRegistry
+	{
+		return static::getService('bizproc.service.activity.targetDocumentAccessGuardRegistry');
+	}
+
+	public function getFilterResultPropertyResolverRegistry(): FilterResultPropertyResolverRegistry
+	{
+		return static::getService('bizproc.service.activity.filterResultPropertyResolverRegistry');
 	}
 }

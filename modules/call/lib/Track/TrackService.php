@@ -11,20 +11,26 @@ use Bitrix\Main\Result;
 use Bitrix\Main\SystemException;
 use Bitrix\Call;
 use Bitrix\Call\Call\Registry;
+use Bitrix\Call\Settings;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI;
 use Bitrix\Call\Integration\AI\CallAIError;
 use Bitrix\Call\Integration\AI\CallAISettings;
-use Bitrix\Call\Integration\AI\Task\AITask;
+use Bitrix\Call\Analytics\TrackAnalytics;
 use Bitrix\Call\Analytics\FollowUpAnalytics;
-use Bitrix\Call\Track\Downloader\AbstractDownloader;
+use Bitrix\Call\Analytics\CloudRecordAnalytics;
 use Bitrix\Main\Application;
 use Bitrix\Main\IO\File;
 
 
 final class TrackService
 {
+	private const DISK_ATTACH_TYPES = [
+		Call\Track::TYPE_RECORD,
+		Call\Track::TYPE_VIDEO_RECORD,
+	];
+
 	private static ?TrackService $service = null;
 
 	private function __construct()
@@ -47,15 +53,21 @@ final class TrackService
 		;
 	}
 
+	/**
+	 * Whether the track type must be attached to chat Disk (audio/video records).
+	 */
+	public function requiresDisk(Call\Track $track): bool
+	{
+		return in_array($track->getType(), self::DISK_ATTACH_TYPES, true);
+	}
+
 	public function doNeedNeedAttachToDisk(Call\Track $track): bool
 	{
-		if ($track->getType() != Call\Track::TYPE_RECORD)
-		{
-			return false;
-		}
-
+		// Note: the !diskFileId gate is intentionally omitted — attachToDisk is idempotent
+		// (reuses an existing diskFileId and never duplicates the chat link), so re-running it
+		// on retry lets a failed-only chat delivery (e.g. link_save_failed) self-heal.
 		return
-			!$track->getDiskFileId()
+			$this->requiresDisk($track)
 			&& $track->getFileId()
 		;
 	}
@@ -108,8 +120,8 @@ final class TrackService
 			));
 		}
 
-		//TODO: required preview support for other regions
-		$previewPath = Application::getDocumentRoot() . '/bitrix/images/call/cloud/preview_ru.png';
+		$previewFileName = Settings::isCisRegion() ? 'preview_ru.png' : 'preview_en.png';
+		$previewPath = Application::getDocumentRoot() . '/bitrix/images/call/cloud/' . $previewFileName;
 		if (!File::isFileExists($previewPath))
 		{
 			$log && $logger->error("TrackService::createDefaultPreview: Static file not found: {$previewPath}");
@@ -226,12 +238,12 @@ final class TrackService
 		$call = Registry::getCallWithId($track->getCallId());
 		if ($call)
 		{
-			(new FollowUpAnalytics($call))
+			(new CloudRecordAnalytics($call))
 				->sendTelemetry(
 					source: null,
 					status: 'error',
 					errorCode: 'unsupported_mime_type',
-					event: 'cloud_track_processing_error_' . $track->getId(),
+					event: 'cloud_track_processing_error',
 				);
 		}
 
@@ -314,12 +326,21 @@ final class TrackService
 			$records = [$track];
 		}
 
-		$knownPreview = $track->getType() === Track::TYPE_VIDEO_PREVIEW ? $track : null;
-		$preview = $this->resolvePreview($callId, $knownPreview);
-		if (!$preview)
+		// The preview may still be downloading in parallel with the record. Don't treat it as
+		// stuck (resolvePreview would delete it and substitute a default) — wait instead. The
+		// preview's own download completion re-enters this method and delivers the records with
+		// the real preview. Safe when processing the preview itself: it is already downloaded.
+		if ($this->isPreviewDownloadInProgress($callId))
 		{
+			$log && $logger->info("Preview still downloading, waiting before delivery. CallId: {$callId}");
 			return $result;
 		}
+
+		$knownPreview = $track->getType() === Track::TYPE_VIDEO_PREVIEW ? $track : null;
+		// May be null only if a default preview could not be created (e.g. static image missing).
+		// In that case still deliver the record below — without a preview image — so the video
+		// does not silently vanish from chat.
+		$preview = $this->resolvePreview($callId, $knownPreview);
 
 		foreach ($records as $record)
 		{
@@ -334,19 +355,39 @@ final class TrackService
 		return $result;
 	}
 
-	protected function processVideoRecordWithPreview(Call\Track $record, Call\Track $preview, int $callId): void
+	/**
+	 * Whether the call's video preview track exists but is still being downloaded by an agent.
+	 */
+	private function isPreviewDownloadInProgress(int $callId): bool
+	{
+		$preview = Track::getTrackForCall($callId, Track::TYPE_VIDEO_PREVIEW);
+
+		return $preview
+			&& !$preview->getDownloaded()
+			&& CloudRecordExpectationAgent::hasDownloadAgentForTrack($preview->getId())
+		;
+	}
+
+	protected function processVideoRecordWithPreview(Call\Track $record, ?Call\Track $preview, int $callId): void
 	{
 		if ($log = CallAISettings::isLoggingEnable())
 		{
 			$logger = Logger::getInstance();
 		}
 
-		$log && $logger->info("Attaching preview to record. RecordFileId: {$record->getFileId()}, PreviewFileId: {$preview->getFileId()}");
+		if ($preview)
+		{
+			$log && $logger->info("Attaching preview to record. RecordFileId: {$record->getFileId()}, PreviewFileId: {$preview->getFileId()}");
 
-		(new \Bitrix\Main\UI\Viewer\PreviewManager())->setPreviewImageId(
-			$record->getFileId(),
-			$preview->getFileId()
-		);
+			(new \Bitrix\Main\UI\Viewer\PreviewManager())->setPreviewImageId(
+				$record->getFileId(),
+				$preview->getFileId()
+			);
+		}
+		else
+		{
+			$log && $logger->warning("Delivering record without preview. RecordFileId: {$record->getFileId()}, CallId: {$callId}");
+		}
 
 		$call = Registry::getCallWithId($callId);
 		if ($call)
@@ -499,41 +540,86 @@ final class TrackService
 	}
 
 	/**
-	 * Finalize download: attach to storage, fire events, process track.
+	 * Finalize download: attach to storage and Disk, then process track.
 	 *
 	 * File validation is performed in AbstractDownloader::complete() before this method is called.
 	 *
+	 * Idempotent: safe to call again on retry — skips already completed steps (attachTempFile is
+	 * not re-run once FILE_ID is set; attachToDisk reuses an existing DISK_FILE_ID). This lets a
+	 * disk-only failure be retried without re-downloading the file.
+	 *
 	 * @param Call\Track $track
+	 * @return Result Success only when the track is fully finalized.
 	 */
-	public function finalizeDownload(Call\Track $track): void
+	public function finalizeDownload(Call\Track $track): Result
 	{
+		$result = new Result();
 		$log = CallAISettings::isLoggingEnable();
 		$logger = Logger::getInstance();
 
 		$log && $logger->info("finalizeDownload: Starting. TrackId: {$track->getId()}");
 
-		// Attach to file storage
-		$attachResult = $track->attachTempFile();
-		if (!$attachResult->isSuccess())
+		// Attach to file storage (skip if already attached — attachTempFile is not idempotent)
+		if (!$track->getFileId())
 		{
-			$log && $logger->error("finalizeDownload: attachTempFile failed. TrackId: {$track->getId()}");
-			$this->fireTrackErrorEvent($track, $attachResult->getError());
-			return;
+			$attachResult = $track->attachTempFile();
+			if (!$attachResult->isSuccess())
+			{
+				$log && $logger->error("finalizeDownload: attachTempFile failed. TrackId: {$track->getId()}");
+				$this->fireTrackErrorEvent($track, $attachResult->getError());
+				$forced = (bool)($attachResult->getData()['debug_forced_error'] ?? false);
+				$this->sendFinalizeTelemetry($track, 'error', 'finalize_save_failed' . ($forced ? '_debug' : ''), $attachResult->getError());
+
+				return $result->addError(new TrackError(TrackError::FINALIZE_FAILED, 'Attach temp file failed'));
+			}
+
+			// file_id just appeared
+			$this->sendTrackTelemetry($track, 'success', 'file_attached', context: ['fileId' => $track->getFileId()]);
 		}
 
-		// Attach to Disk (for audio records)
+		// Attach to Disk (for audio/video records)
 		if ($this->doNeedNeedAttachToDisk($track))
 		{
+			$hadDiskFile = (bool)$track->getDiskFileId();
+
 			$diskResult = $track->attachToDisk();
 			if (!$diskResult->isSuccess())
 			{
 				$log && $logger->error("finalizeDownload: attachToDisk failed. TrackId: {$track->getId()}");
 				$this->fireTrackErrorEvent($track, $diskResult->getError());
-				return;
+				$forced = (bool)($diskResult->getData()['debug_forced_error'] ?? false);
+				$this->sendFinalizeTelemetry($track, 'error', 'finalize_disk_failed' . ($forced ? '_debug' : ''), $diskResult->getError());
+
+				return $result->addError(new TrackError(TrackError::FINALIZE_FAILED, 'Attach to disk failed'));
+			}
+
+			// disk_file_id just appeared (don't re-emit on an idempotent re-finalize)
+			if (!$hadDiskFile && $track->getDiskFileId())
+			{
+				$this->sendTrackTelemetry($track, 'success', 'disk_file_attached', context: ['diskFileId' => $track->getDiskFileId()]);
+			}
+
+			// Record delivery to chat (file appears in chat files). On a successful attachToDisk
+			// chatDelivered is always true (message_owned / link_exists / link saved); every
+			// not-delivered path returns an error and exits above, so there is no skipped branch.
+			if (($diskResult->getData()['chatDelivered'] ?? false) === true)
+			{
+				$this->sendTrackTelemetry($track, 'success', 'record_chat_delivered');
 			}
 		}
 
+		// Verify the track is fully finalized before declaring success
+		if (!$track->getFileId() || ($this->requiresDisk($track) && !$track->getDiskFileId()))
+		{
+			$log && $logger->error("finalizeDownload: Not finalized. TrackId: {$track->getId()}");
+			$this->sendFinalizeTelemetry($track, 'error', 'finalize_failed');
+
+			return $result->addError(new TrackError(TrackError::FINALIZE_FAILED, 'Track not finalized'));
+		}
+
 		$log && $logger->info("finalizeDownload: Success. TrackId: {$track->getId()}, FileId: {$track->getFileId()}");
+
+		$this->sendFinalizeTelemetry($track, 'success', 'finalize_success');
 
 		$this->checkAiTasksExecution($track);
 
@@ -543,16 +629,66 @@ final class TrackService
 			$call = Registry::getCallWithId($track->getCallId());
 			if ($call)
 			{
-				(new FollowUpAnalytics($call))
-					->sendTelemetry(
-						source: null,
-						status: 'error',
-						event: 'track_processing_error_' . $track->getId(),
-						error: $processResult->getError()
-					)
-				;
+				(new TrackAnalytics($call))->sendTelemetry(
+					source: $track,
+					status: 'error',
+					event: 'track_processing_error',
+					error: $processResult->getError()
+				);
 			}
 		}
+
+		return $result;
+	}
+
+	/**
+	 * Send track download pipeline telemetry for the finalization stage.
+	 */
+	private function sendFinalizeTelemetry(
+		Call\Track $track,
+		string $status,
+		string $event,
+		?\Bitrix\Main\Error $error = null
+	): void
+	{
+		$call = Registry::getCallWithId($track->getCallId());
+		if (!$call)
+		{
+			return;
+		}
+
+		(new TrackAnalytics($call))->sendTelemetry(
+			source: $track,
+			status: $status,
+			event: 'download_agent_' . $event,
+			error: $error
+		);
+	}
+
+	/**
+	 * Send generic track telemetry (no download_agent_ prefix), with optional errorCode/context.
+	 */
+	private function sendTrackTelemetry(
+		Call\Track $track,
+		string $status,
+		string $event,
+		?string $errorCode = null,
+		array $context = []
+	): void
+	{
+		$call = Registry::getCallWithId($track->getCallId());
+		if (!$call)
+		{
+			return;
+		}
+
+		(new TrackAnalytics($call))->sendTelemetry(
+			source: $track,
+			status: $status,
+			errorCode: $errorCode,
+			event: $event,
+			context: $context
+		);
 	}
 
 	/**
@@ -619,6 +755,17 @@ final class TrackService
 
 		$aiService = AI\CallAIService::getInstance();
 		$aiResult = $aiService->checkCallAiTask($track->getCallId());
+
+		if (
+			$aiResult->isSuccess()
+			&& ($aiResult->getData()['restart'] ?? null) === true
+			&& !$aiService->hasExpectationAgent($track->getCallId())
+		)
+		{
+			$log && $logger->info("AI outcome is empty, relaunching AI chain for call #{$track->getCallId()}");
+			$aiResult = $aiService->restartCallAiTask($track->getCallId());
+		}
+
 		if (!$aiResult->isSuccess() && !$aiService->hasExpectationAgent($track->getCallId()))
 		{
 			$log && $logger->info("AI task failed and no expectation agent found for call #{$track->getCallId()}");
@@ -661,9 +808,12 @@ final class TrackService
 		}
 
 		$service = self::getInstance();
-		$service->finalizeDownload($track);
+		$finalizeResult = $service->finalizeDownload($track);
 
-		return new EventResult(EventResult::SUCCESS);
+		// Report the finalize verdict so AbstractDownloader::complete() can retry the download
+		// agent when finalization failed for a reason not visible in the track state alone
+		// (e.g. file+disk are set but the chat link was not published).
+		return new EventResult($finalizeResult->isSuccess() ? EventResult::SUCCESS : EventResult::ERROR);
 	}
 
 	/**

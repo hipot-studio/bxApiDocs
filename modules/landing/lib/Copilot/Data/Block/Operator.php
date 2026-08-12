@@ -221,14 +221,12 @@ class Operator
 		$blockContent = $blockInstance->getContent();
 
 		$notAllowedSections = [
-			'countdowns',
-			'separator',
-			'menu',
-			'sidebar',
-			'store',
-			'other',
-			'video',
 		];
+		$notAllowedNodeTypes = [];
+		$maxImageElements = null;
+		$denyNotAllowedTags = false;
+		$denyRepoBlocks = false;
+
 		$blockSection = (array)($blockManifest['block']['section'] ?? null);
 		$sectionIntersect = array_intersect($notAllowedSections, $blockSection);
 		if (!empty($sectionIntersect))
@@ -236,9 +234,8 @@ class Operator
 			return false;
 		}
 
-		$notAllowedNodeTypes = ['embed'];
 		$imageElements = 0;
-		foreach ($blockManifest['nodes'] as $node)
+		foreach ((array)($blockManifest['nodes'] ?? []) as $node)
 		{
 			if (isset($node['type']) && in_array($node['type'], $notAllowedNodeTypes, true))
 			{
@@ -253,17 +250,17 @@ class Operator
 			}
 		}
 
-		if ($imageElements > 4)
+		if ($maxImageElements !== null && $imageElements > $maxImageElements)
 		{
 			return false;
 		}
 
-		if (self::hasNotAllowedTagInBlockContent($blockContent))
+		if ($denyNotAllowedTags && self::hasNotAllowedTagInBlockContent($blockContent))
 		{
 			return false;
 		}
 
-		if ($blockInstance->getRepoId())
+		if ($denyRepoBlocks && $blockInstance->getRepoId())
 		{
 			return false;
 		}

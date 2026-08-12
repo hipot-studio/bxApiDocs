@@ -1,8 +1,8 @@
 <?php
 
+use Bitrix\Bizproc\Integration\QuickAccessFileParam;
 use Bitrix\Bizproc\Public\Service\Task\UnArchiveTaskService;
 use Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable;
-use Bitrix\Bizproc\Integration\ScopeTokenService;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Bizproc\Result\Entity\ResultTable;
@@ -15,7 +15,7 @@ class CBPViewHelper
 	private static $cachedTasks = array();
 	private const COMPLETED_STATUS = 'COMPLETED';
 	private const RUNNING_STATUS = 'RUNNING';
-	private static ScopeTokenService $scopeTokenService;
+	private static ?QuickAccessFileParam $quickAccessFileParam = null;
 
 	public const DESKTOP_CONTEXT = 'desktop';
 	public const MOBILE_CONTEXT = 'mobile';
@@ -407,8 +407,8 @@ class CBPViewHelper
 			{
 				try
 				{
-					$url = $matches[1].$matches[2];
-					$url = self::getScopeTokenService()->tokenizeUrl($url, $fileId) ?? $url;
+					$url = $matches[1] . $matches[2];
+					$url = self::getQuickAccessFileParam()->add($url, $fileId);
 
 					$attributes = ItemAttributes::buildByFileId($fileId, $url);
 
@@ -476,8 +476,8 @@ class CBPViewHelper
 				{
 					try
 					{
-						$url = $matches[1].$matches[2];
-						$url = self::getScopeTokenService()->tokenizeUrl($url, $attach) ?? $url;
+						$url = $matches[1] . $matches[2];
+						$url = self::getQuickAccessFileParam()->add($url, $attach);
 
 						$attributes = ItemAttributes::buildByFileId($attach->getFileId(), $url);
 
@@ -603,13 +603,13 @@ class CBPViewHelper
 		HTML;
 	}
 
-	private static function getScopeTokenService(): ScopeTokenService
+	private static function getQuickAccessFileParam(): QuickAccessFileParam
 	{
-		if (!isset(self::$scopeTokenService))
+		if (self::$quickAccessFileParam === null)
 		{
-			self::$scopeTokenService = new ScopeTokenService();
+			self::$quickAccessFileParam = new QuickAccessFileParam();
 		}
 
-		return self::$scopeTokenService;
+		return self::$quickAccessFileParam;
 	}
 }

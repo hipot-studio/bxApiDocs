@@ -33,6 +33,7 @@ use Bitrix\Main\UserTable;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Engine\Response\Converter;
 
+use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateSection;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Settings\AiAgentsSettings;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Visibility\HiddenAiAgentsRegistry;
@@ -46,7 +47,6 @@ use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable;
 class AiAgentsGridHelper
 {
 	private const GRID_ID = 'BIZPROC_AI_AGENTS_GRID';
-	private const AI_SECTION_ID = 'AI_AGENT';
 	private const DEFAULT_PAGE_SIZE = 20;
 	private const IM_BOT_NEW_MESSAGE_TRIGGER = 'ImBotNewMessageTrigger';
 	private const IM_BOT_PARAM_BOT_CODE = 'BotCode';
@@ -245,7 +245,7 @@ class AiAgentsGridHelper
 					Join::on('this.ID', 'ref.TEMPLATE_ID'),
 				),
 			)
-			->where('SECTION.SECTION_ID', self::AI_SECTION_ID)
+			->where('SECTION.SECTION_ID', WorkflowTemplateSection::AiAgent->value)
 			->setOrder([
 				'ACTIVE' => 'DESC',
 				'ACTIVATED_AT' => 'DESC',

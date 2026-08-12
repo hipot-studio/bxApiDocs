@@ -9,6 +9,7 @@ namespace Bitrix\Crm;
 
 use Bitrix\Crm\Binding\QuoteContactTable;
 use Bitrix\Crm\Integration\StorageType;
+use Bitrix\Crm\Model\Field\DefaultValue\CloseDateConfigurator;
 use Bitrix\Crm\Model\FieldRepository\FieldCaptionGender;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
@@ -86,6 +87,9 @@ class QuoteTable extends DataManager
 		Container::getInstance()->getLocalization()->loadMessages();
 
 		$fieldRepository = ServiceLocator::getInstance()->get('crm.model.fieldRepository');
+
+		$currencyIdField = $fieldRepository->getCurrencyId();
+		$accountCurrencyIdField = $fieldRepository->getAccountCurrencyId();
 
 		$map = [
 			$fieldRepository->getId(),
@@ -175,19 +179,31 @@ class QuoteTable extends DataManager
 				->configureTitle(Loc::getMessage('CRM_QUOTE_CLOSED_TITLE_MSGVER_1'))
 			,
 
-			$fieldRepository->getOpportunity(),
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				$fieldRepository->getOpportunity(),
+				$currencyIdField
+			),
 
 			$fieldRepository->getIsManualOpportunity(),
 
-			$fieldRepository->getTaxValue(),
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				$fieldRepository->getTaxValue(),
+				$currencyIdField
+			),
 
-			$fieldRepository->getCurrencyId(),
+			$currencyIdField,
 
-			$fieldRepository->getOpportunityAccount(),
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				$fieldRepository->getOpportunityAccount(),
+				$accountCurrencyIdField
+			),
 
-			$fieldRepository->getTaxValueAccount(),
+			$fieldRepository->withMoneyFieldNumberFormatFetchModifier(
+				$fieldRepository->getTaxValueAccount(),
+				$accountCurrencyIdField
+			),
 
-			$fieldRepository->getAccountCurrencyId(),
+			$accountCurrencyIdField,
 
 			$fieldRepository->getComments(),
 
@@ -203,7 +219,14 @@ class QuoteTable extends DataManager
 				['BEGINDATE'],
 			),
 
-			$fieldRepository->getCloseDate(),
+			$fieldRepository
+				->getCloseDate(Item::FIELD_NAME_CLOSE_DATE)
+				->configureDefaultValue(
+					ServiceLocator::getInstance()
+						->get(CloseDateConfigurator::class)
+						?->getDefaultValue(\CCrmOwnerType::Quote)
+				)
+			,
 
 			$fieldRepository->getShortDate(
 				'CLOSEDATE_SHORT',
@@ -299,9 +322,11 @@ class QuoteTable extends DataManager
 			,
 
 			(new DateField(Item\Quote::FIELD_NAME_ACTUAL_DATE))
-				->configureDefaultValue(static function(): Date {
-					return (new Date())->add('7D');
-				})
+				->configureDefaultValue(
+					ServiceLocator::getInstance()
+						->get(CloseDateConfigurator::class)
+						?->getDefaultValue(\CCrmOwnerType::Quote)
+				)
 				->configureTitle(Loc::getMessage('CRM_TYPE_ITEM_FIELD_ACTUAL_DATE'))
 			,
 		];

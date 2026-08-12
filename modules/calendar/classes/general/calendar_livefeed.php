@@ -616,11 +616,6 @@ class CCalendarLiveFeed
 			$entryFields['TZ_TO'] = $entryFields['DEFAULT_TZ'];
 		}
 
-		if (isset($entryFields['DEFAULT_TZ']) && (string)$entryFields['DEFAULT_TZ'] !== '')
-		{
-			CCalendar::SaveUserTimezoneName($params["userId"], $entryFields['DEFAULT_TZ']);
-		}
-
 		if ($entryFields['SECTION'])
 		{
 			$entryFields['SECTIONS'] = array($entryFields['SECTION']);

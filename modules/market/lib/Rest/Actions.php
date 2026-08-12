@@ -4,6 +4,8 @@ namespace Bitrix\Market\Rest;
 
 class Actions
 {
+	public const PARAM_IS_MOBILE_MARKET = 'is_mobile_market';
+
 	public const METHOD_GET_COLLECTIONS = 'get_collections';
 	public const METHOD_GET_FULL_COLLECTION = 'get_full_collection';
 	public const METHOD_GET_SLIDER = 'get_slider';

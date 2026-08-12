@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2\Relation;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
@@ -72,9 +73,25 @@ class ChatRelations
 		// preload
 		$parentChat->getRelationsByUserIds($userIds);
 
+		// An open parent grants checkAccess() to any non-extranet user without membership. A user removed
+		// from an open project would otherwise linger in its nested chats and keep getting pushes / recent
+		// updates (mantis 249947), so for an open parent we additionally require an actual parent relation.
+		// Personal per-user copilot chats are exempt — they must stay accessible after the user leaves the
+		// open project, which is exactly why this check is checkAccess-based rather than relation-based.
+		//
+		// TODO: this is a TEMPORARY, localized fix for mantis 249947. Revisit a cleaner model:
+		//   - mark the per-user project copilot chat as requiresParentMembership=false so it is exempt by
+		//     type, and drop the CopilotChat coupling here (note: requiresParentMembership is read in ~11
+		//     places — counters, ParentChain* SQL filters, ChatTreeResolver — so check the ripple first);
+		//   - and/or eagerly clean up the user's child-chat relations when they are excluded from the
+		//     project, instead of relying on this lazy access-based filtering on the read path.
+		$requireParentMembership = $parentChat->getChatType()->isOpen && !$chat instanceof CopilotChat;
+
 		return array_values(array_filter(
 			$userIds,
-			static fn (int $userId): bool => $parentChat->checkAccess($userId)->isSuccess(),
+			static fn (int $userId): bool =>
+				$parentChat->checkAccess($userId)->isSuccess()
+				&& (!$requireParentMembership || $parentChat->getRelationByUserId($userId) !== null),
 		));
 	}
 
@@ -88,13 +105,30 @@ class ChatRelations
 			return $relations;
 		}
 
-		$allUserIds = $relations->getUserIds();
-		$usersWithAccess = $this->filterUserIdsByAccess($allUserIds);
+		// Structure members are authoritative — they come from a department link mirrored onto every ancestor
+		// (tree invariant), so they are never orphans. Exempt them from the parent-access filter AND from the
+		// cleanup marking; otherwise they stay uncounted, drop out of member-add pulls and even get marked for
+		// deletion. Access for everyone else is enforced as before. Display in a user's own list is still
+		// governed separately by the recent ParentChainForUserFilter.
+		$accessControlledUserIds = [];
+		foreach ($relations as $relation)
+		{
+			if ($relation->getReason() !== Reason::STRUCTURE)
+			{
+				$accessControlledUserIds[] = $relation->getUserId();
+			}
+		}
 
-		$filtered = $relations->filter(fn (Relation $relation) => in_array($relation->getUserId(), $usersWithAccess, true));
+		$usersWithAccess = $this->filterUserIdsByAccess($accessControlledUserIds);
+
+		$filtered = $relations->filter(
+			static fn (Relation $relation): bool =>
+				$relation->getReason() === Reason::STRUCTURE
+				|| in_array($relation->getUserId(), $usersWithAccess, true)
+		);
 
 		$this->markRemovedForDeletion(
-			$this->filterUserIdsForCleanup(array_diff($allUserIds, $usersWithAccess))
+			$this->filterUserIdsForCleanup(array_diff($accessControlledUserIds, $usersWithAccess))
 		);
 
 		return $filtered;

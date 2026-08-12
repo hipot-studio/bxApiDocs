@@ -107,4 +107,9 @@ abstract class BaseBuilder
 			? CCrmOwnerType::CommonDynamicName
 			: CCrmOwnerType::ResolveName($this->entityTypeId);
 	}
+
+	public function hasMessage(): bool
+	{
+		return (bool)Loc::getMessage($this->calculateExistsCode());
+	}
 }

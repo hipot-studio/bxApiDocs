@@ -9,7 +9,7 @@ class EditAttributesAction extends BaseAction
 {
 	protected const JS_COMMAND = 'editAttributes';
 
-	public function execute(bool $undo = true): bool
+	protected function doExecute(bool $undo = true): bool
 	{
 		$block = new Block((int)$this->params['block']);
 		$selector = $this->params['selector'];

@@ -31,7 +31,7 @@ readonly class SubtreeUnreadFilter
 
 	private function addMessageCounterConditions(ConditionTree $filter): void
 	{
-		$origin = TreeOrigin::forFields(id: 'CHAT_ID', parent: 'PARENT_ID');
+		$origin = TreeOrigin::forUnreadCounters();
 
 		for ($depth = 0; $depth <= $this->maxDepth; $depth++)
 		{

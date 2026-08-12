@@ -3,6 +3,7 @@
 namespace Bitrix\Call\Analytics\Event;
 
 use Bitrix\Call\Call;
+use Bitrix\Call\Settings;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Engine\Response\Converter;
 
@@ -36,7 +37,21 @@ abstract class Event
 		return $this->event;
 	}
 
-	abstract protected function getTool(): string;
+	private const PRESET_TOOL_MAP = ['sync' => 'sync'];
+
+	/**
+	 * Returns analytics tool identifier based on current intranet preset.
+	 * @return string
+	 */
+	public static function getAnalyticsTool(): string
+	{
+		return self::PRESET_TOOL_MAP[Settings::getActivePresetCode()] ?? 'im';
+	}
+
+	protected function getTool(): string
+	{
+		return self::getAnalyticsTool();
+	}
 
 	abstract protected function getCategory(string $eventName): string;
 
